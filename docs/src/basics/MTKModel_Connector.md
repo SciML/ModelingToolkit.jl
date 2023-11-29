@@ -29,7 +29,7 @@ equations.
   - `@icon` : for embedding the model icon
   - `@parameters`: for specifying the symbolic parameters
   - `@structural_parameters`: for specifying non-symbolic parameters
-  - `@variables`: for specifing the states
+  - `@variables`: for specifying the states
 
 Let's explore these in more detail with the following example:
 
@@ -104,7 +104,7 @@ end
 
 #### `@structural_parameters` begin block
 
-  - This block is for non symbolic input arguements. These are for inputs that usually are not meant to be part of components; but influence how they are defined. One can list inputs like boolean flags, functions etc... here.
+  - This block is for non symbolic input arguments. These are for inputs that usually are not meant to be part of components; but influence how they are defined. One can list inputs like boolean flags, functions etc... here.
   - Whenever default values are specified, unlike parameters/variables, they are reflected in the keyword argument list.
 
 #### `@parameters` and `@variables` begin block

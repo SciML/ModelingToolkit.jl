@@ -121,7 +121,7 @@ patterns via an abstract interpretation without requiring differentiation.
 
 At the end, the system types have `DEProblem` constructors, like `ODEProblem`,
 which allow for directly generating the problem types required for numerical
-methods. The first argument is always the `AbstractSystem`, and the proceding
+methods. The first argument is always the `AbstractSystem`, and the next
 arguments match the argument order of their original constructors. Whenever an
 array would normally be provided, such as `u0` the initial condition of an
 `ODEProblem`, it is instead replaced with a variable map, i.e., an array of

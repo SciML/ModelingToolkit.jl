@@ -20,7 +20,7 @@ struct ObservableRecordFromSolution{S, T}
     param_end_idxs::Int64
     # The index (in subs_vals) that contain the bifurcation parameter.
     bif_par_idx::Int64
-    # A Vector of pairs (Symbolic => value) with teh default values of all system variables and parameters.
+    # A Vector of pairs (Symbolic => value) with the default values of all system variables and parameters.
     subs_vals::T
 
     function ObservableRecordFromSolution(nsys::NonlinearSystem,
@@ -41,10 +41,10 @@ struct ObservableRecordFromSolution{S, T}
         # Gets the (base) substitution values for observables. 
         subs_vals_obs = [obs.lhs => substitute(obs.rhs,
             [subs_vals_states; subs_vals_params]) for obs in observed(nsys)]
-        # Sometimes observables depend on other observables, hence we make a second upate to this vector.
+        # Sometimes observables depend on other observables, hence we make a second update to this vector.
         subs_vals_obs = [obs.lhs => substitute(obs.rhs,
             [subs_vals_states; subs_vals_params; subs_vals_obs]) for obs in observed(nsys)]
-        # During the bifurcation process, teh value of some states, parameters, and observables may vary (and are calculated in each step). Those that are not are stored in this vector
+        # During the bifurcation process, the value of some states, parameters, and observables may vary (and are calculated in each step). Those that are not are stored in this vector
         subs_vals = [subs_vals_states; subs_vals_params; subs_vals_obs]
 
         param_end_idxs = state_end_idxs + length(parameters(nsys))

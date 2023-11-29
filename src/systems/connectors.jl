@@ -184,7 +184,7 @@ function isframe(sys)
     get(md, :frame, false)
 end
 
-"Return orienation object of a multibody frame."
+"Return orientation object of a multibody frame."
 function ori(sys)
     @assert has_metadata(sys)
     md = get_metadata(sys)

@@ -10,7 +10,7 @@ struct Model{F, S}
     """The constructor that returns ODESystem."""
     f::F
     """
-    The dictionary with metadata like keyword arguements (:kwargs), base
+    The dictionary with metadata like keyword arguments (:kwargs), base
     system this Model extends (:extend), sub-components of the Model (:components),
     variables (:variables), parameters (:parameters), structural parameters
     (:structural_parameters) and equations (:equations).
@@ -327,7 +327,7 @@ end
 
 function extend_args!(a, b, dict, expr, kwargs, varexpr, has_param = false)
     # Whenever `b` is a function call, skip the first arg aka the function name.
-    # Whenver it is a kwargs list, include it.
+    # Whenever it is a kwargs list, include it.
     start = b.head == :call ? 2 : 1
     for i in start:lastindex(b.args)
         arg = b.args[i]

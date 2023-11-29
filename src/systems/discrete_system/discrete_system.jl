@@ -163,7 +163,7 @@ end
 
 function DiscreteSystem(eqs, iv = nothing; kwargs...)
     eqs = scalarize(eqs)
-    # NOTE: this assumes that the order of algebric equations doesn't matter
+    # NOTE: this assumes that the order of algebraic equations doesn't matter
     diffvars = OrderedSet()
     allstates = OrderedSet()
     ps = OrderedSet()
