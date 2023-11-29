@@ -251,3 +251,104 @@ Dict{Symbol, Any} with 7 entries:
   :extend               => Any[[:p2, :p1], Symbol("#mtkmodel__anonymous__ModelB"), :ModelB]
   :equations            => ["model_a.k ~ f(v)"]
 ```
+
+### Using conditional statements
+
+#### Conditional elements of the system
+
+Both `@mtkmodel` and `@connector` support conditionally defining parameters,
+variables, equations, and components.
+
+The if-elseif-else statements can be used inside `@equations`, `@parameters`,
+`@variables`, `@components`.
+
+```@example branches-in-components
+using ModelingToolkit
+
+@mtkmodel C begin end
+
+@mtkmodel BranchInsideTheBlock begin
+    @structural_parameters begin
+        flag = true
+    end
+    @parameters begin
+        if flag
+            a1
+        else
+            a2
+        end
+    end
+    @components begin
+        if flag
+            sys1 = C()
+        else
+            sys2 = C()
+        end
+    end
+end
+```
+
+Alternatively, the `@equations`, `@parameters`, `@variables`, `@components` can be
+used inside the if-elseif-else statements.
+
+```@example branches-in-components
+@mtkmodel BranchOutsideTheBlock begin
+    @structural_parameters begin
+        flag = true
+    end
+    if flag
+        @parameters begin
+            a1
+        end
+        @components begin
+            sys1 = C()
+        end
+        @equations begin
+            a1 ~ 0
+        end
+    else
+        @parameters begin
+            a2
+        end
+        @equations begin
+            a2 ~ 0
+        end
+    end
+end
+```
+
+The conditional parts are reflected in the `structure`. For `BranchOutsideTheBlock`, the metadata is:
+
+```julia
+julia> BranchOutsideTheBlock.structure
+Dict{Symbol, Any} with 5 entries:
+  :components           => Any[(:if, :flag, [[:sys1, :C]], Any[])]
+  :kwargs               => Dict{Symbol, Any}(:flag=>true)
+  :independent_variable => t
+  :parameters           => Dict{Symbol, Dict{Symbol, Any}}(:a1=>Dict(:condition=>(:if, :flag, Dict{Symbol, Any}(:kwargs => Dict{Any, Any}(:a1 => nothing), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a1 => Dict())]), Dict{Symbol, Any}(:kwargs => Dict{Any, Any}(:a2 => nothing), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a2 => Dict())]))
+  :equations            => Any[(:if, :flag, ["a1 ~ 0"], ["a2 ~ 0"])]
+```
+
+Conditional entries are entered in the format of `(branch, condition, [case when it is true], [case when it is false])`;
+where `branch` is either `:if` or `:elseif`.<br>
+The `[case when it is false]` is either an empty vector or `nothing` when only if branch is
+present; it is a vector or dictionary whenever else branch is present; it is a conditional tuple
+whenever elseif branches are present.
+
+For the conditional components and equations these condition tuples are added
+directly, while for parameters and variables these are added as `:condition` metadata.
+
+#### Conditional initial guess of symbolic variables
+
+Using ternary operator or if-elseif-else statement, conditional initial guesses can be assigned to parameters and variables.
+
+```@example branches-in-components
+@mtkmodel DefaultValues begin
+    @structural_parameters begin
+        flag = true
+    end
+    @parameters begin
+        p = flag ? 1 : 2
+    end
+end
+```
