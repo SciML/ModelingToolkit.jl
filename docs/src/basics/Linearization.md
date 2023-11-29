@@ -51,7 +51,7 @@ If linearization is to be performed around multiple operating points, the simpli
 
 ## Symbolic linearization
 
-The function [`ModelingToolkit.linearize_symbolic`](@ref) works simiar to [`ModelingToolkit.linearize`](@ref) but returns symbolic rather than numeric Jacobians. Symbolic linearization have several limitations and no all systems that can be linearized numerically can be linearized symbolically.
+The function [`ModelingToolkit.linearize_symbolic`](@ref) works similar to [`ModelingToolkit.linearize`](@ref) but returns symbolic rather than numeric Jacobians. Symbolic linearization have several limitations and no all systems that can be linearized numerically can be linearized symbolically.
 
 ## Input derivatives
 

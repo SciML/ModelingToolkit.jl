@@ -1,6 +1,6 @@
 # [Bifurcation Diagrams](@id bifurcation_diagrams)
 
-Bifurcation diagrams describes how, for a dynamic system, the quantity and quality of its steady states changes with a parameter's value. These can be computed through the [BifurcationKit.jl](https://github.com/bifurcationkit/BifurcationKit.jl) package. ModelingToolkit provides a simple interface for creating BifurcationKit compatible `BifurcationProblem`s from `NonlinearSystem`s and `ODESystem`s. All teh features provided by BifurcationKit can then be applied to these systems. This tutorial provides a brief introduction for these features, with BifurcationKit.jl providing [a more extensive documentation](https://bifurcationkit.github.io/BifurcationKitDocs.jl/stable/).
+Bifurcation diagrams describes how, for a dynamic system, the quantity and quality of its steady states changes with a parameter's value. These can be computed through the [BifurcationKit.jl](https://github.com/bifurcationkit/BifurcationKit.jl) package. ModelingToolkit provides a simple interface for creating BifurcationKit compatible `BifurcationProblem`s from `NonlinearSystem`s and `ODESystem`s. All the features provided by BifurcationKit can then be applied to these systems. This tutorial provides a brief introduction for these features, with BifurcationKit.jl providing [a more extensive documentation](https://bifurcationkit.github.io/BifurcationKitDocs.jl/stable/).
 
 ### Creating a `BifurcationProblem`
 

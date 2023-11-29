@@ -57,7 +57,7 @@ multithreadedf = eval(ModelingToolkit.build_function(du, u, fillzeros = true,
 MyA = zeros(N, N);
 AMx = zeros(N, N);
 DA = zeros(N, N);
-# Loop to catch syncronization issues
+# Loop to catch synchronization issues
 for i in 1:100
     _du = rand(N, N, 3)
     _u = rand(N, N, 3)

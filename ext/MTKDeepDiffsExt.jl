@@ -72,9 +72,9 @@ function Base.show(io::IO, l::BipartiteAdjacencyListDiff)
     new_nonempty = isnothing(l.new.u) ? nothing : !isempty(l.new.u)
     old_nonempty = isnothing(l.old.u) ? nothing : !isempty(l.old.u)
     if new_nonempty === true && old_nonempty === true
-        if (!isempty(setdiff(l.new.highligh_u, l.new.u)) ||
-            !isempty(setdiff(l.old.highligh_u, l.old.u)))
-            throw(ArgumentError("The provided `highligh_u` must be a sub-graph of `u`."))
+        if (!isempty(setdiff(l.new.highlight_u, l.new.u)) ||
+            !isempty(setdiff(l.old.highlight_u, l.old.u)))
+            throw(ArgumentError("The provided `highlight_u` must be a sub-graph of `u`."))
         end
 
         new_items = Dict(i => HighlightInt(i, :nothing, i === l.new.match) for i in l.new.u)

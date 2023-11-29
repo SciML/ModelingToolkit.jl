@@ -555,7 +555,7 @@ function submodel(; name)
     ODESystem(D(y) ~ sum(A) * y; name = name)
 end
 
-# Buid system
+# Build system
 @named sys1 = submodel()
 @named sys2 = submodel()
 
