@@ -1,5 +1,6 @@
 using SafeTestsets, Test
 
+@safetestset "Quality Assurance" include("qa.jl")
 @safetestset "Linear Algebra Test" include("linalg.jl")
 @safetestset "AbstractSystem Test" include("abstractsystem.jl")
 @safetestset "Variable Scope Tests" include("variable_scope.jl")
