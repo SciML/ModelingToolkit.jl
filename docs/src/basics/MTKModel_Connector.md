@@ -58,6 +58,7 @@ end
     end
     @structural_parameters begin
         f = sin
+        N = 2
     end
     begin
         v_var = 1.0
@@ -69,6 +70,11 @@ end
     @extend ModelB(; p1)
     @components begin
         model_a = ModelA(; k_array)
+        model_array_a = [ModelA(; k = i) for i in 1:N]
+        model_array_b = for i in 1:N
+            k = i^2
+            ModelA(; k)
+        end
     end
     @equations begin
         model_a.k ~ f(v)
@@ -146,6 +152,7 @@ julia> @mtkbuild model_c2 = ModelC(; p1 = 2.0)
 #### `@components` begin block
 
   - Declare the subcomponents within `@components` begin block.
+  - Array of components can be declared with a for loop or a list comprehension.
   - The arguments in these subcomponents are promoted as keyword arguments as `subcomponent_name__argname` with `nothing` as default value.
   - Whenever components are created with `@named` macro, these can be accessed with `.` operator as `subcomponent_name.argname`
   - In the above example, as `k` of `model_a` isn't listed while defining the sub-component in `ModelC`, its default value can't be modified by users. While `k_array` can be set as:
@@ -223,7 +230,7 @@ end
 ```
 
 !!! note
-    
+
     For more examples of usage, checkout [ModelingToolkitStandardLibrary.jl](https://github.com/SciML/ModelingToolkitStandardLibrary.jl/)
 
 ## More on `Model.structure`
@@ -247,14 +254,13 @@ For example, the structure of `ModelC` is:
 ```julia
 julia> ModelC.structure
 Dict{Symbol, Any} with 9 entries:
-  :components            => Any[Union{Expr, Symbol}[:model_a, :ModelA]]
+  :components            => Any[Union{Expr, Symbol}[:model_a, :ModelA], Union{Expr, Symbol}[:model_array_a, :ModelA, :(1:N)], Union{Expr, Symbol}[:model_array_b, :ModelA, :(1:N)]]
   :variables             => Dict{Symbol, Dict{Symbol, Any}}(:v=>Dict(:default=>:v_var, :type=>Real), :v_array=>Dict(:type=>Real, :size=>(2, 3)))
   :icon                  => URI("https://github.com/SciML/SciMLDocs/blob/main/docs/src/assets/logo.png")
-  :constants             => Dict{Symbol, Dict}(:c=>Dict{Symbol, Any}(:value=>1, :type=>Int64, :description=>"Example constant."))
-  :kwargs                => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin), :v=>Dict{Symbol, Union{Nothing, Symbol}}(:value=>:v_var, :type=>Real), :v_array=>Dict(:value=>nothing, :type=>Real), :p1=>Dict(:value=>nothing))
-  :structural_parameters => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin))
+  :kwargs                => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin), :N=>Dict(:value=>2), :v=>Dict{Symbol, Any}(:value=>:v_var, :type=>Real), :v_array=>Dict{Symbol, Union{Nothing, UnionAll}}(:value=>nothing, :type=>AbstractArray{Real}), :p1=>Dict(:value=>nothing))
+  :structural_parameters => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin), :N=>Dict(:value=>2))
   :independent_variable  => t
-  :constants             => Dict{Symbol, Dict}(:c=>Dict(:value=>1))
+  :constants             => Dict{Symbol, Dict}(:c=>Dict{Symbol, Any}(:value=>1, :type=>Int64, :description=>"Example constant."))
   :extend                => Any[[:p2, :p1], Symbol("#mtkmodel__anonymous__ModelB"), :ModelB]
   :equations             => Any["model_a.k ~ f(v)"]
 ```
