@@ -1402,7 +1402,7 @@ function _named(name, call, runtime = false)
     end
 end
 
-function _named_idxs(name::Symbol, idxs, call)
+function _named_idxs(name::Symbol, idxs, call; extra_args = "")
     if call.head !== :->
         throw(ArgumentError("Not an anonymous function"))
     end
@@ -1413,7 +1413,10 @@ function _named_idxs(name::Symbol, idxs, call)
     ex = Base.Cartesian.poplinenum(ex)
     ex = _named(:(Symbol($(Meta.quot(name)), :_, $sym)), ex, true)
     ex = Base.Cartesian.poplinenum(ex)
-    :($name = $map($sym -> $ex, $idxs))
+    :($name = map($sym -> begin
+            $extra_args
+            $ex
+        end, $idxs))
 end
 
 function single_named_expr(expr)

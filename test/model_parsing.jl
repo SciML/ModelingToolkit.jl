@@ -650,3 +650,41 @@ end
 @named m = MyModel()
 @variables x___(t)
 @test isequal(x___, _b[])
+
+@testset "Component array" begin
+    @mtkmodel SubComponent begin
+        @parameters begin
+            sc
+        end
+    end
+
+    @mtkmodel Component begin
+        @structural_parameters begin
+            N = 2
+        end
+        @components begin
+            comprehension = [SubComponent(sc = i) for i in 1:N]
+            written_out_for = for i in 1:N
+                sc = i + 1
+                SubComponent(; sc)
+            end
+            single_sub_component = SubComponent()
+        end
+    end
+
+    @named component = Component()
+    component = complete(component)
+
+    @test nameof.(ModelingToolkit.get_systems(component)) == [
+        :comprehension_1,
+        :comprehension_2,
+        :written_out_for_1,
+        :written_out_for_2,
+        :single_sub_component,
+    ]
+
+    @test getdefault(component.comprehension_1.sc) == 1
+    @test getdefault(component.comprehension_2.sc) == 2
+    @test getdefault(component.written_out_for_1.sc) == 2
+    @test getdefault(component.written_out_for_2.sc) == 3
+end
