@@ -688,3 +688,15 @@ end
     @test getdefault(component.written_out_for_1.sc) == 2
     @test getdefault(component.written_out_for_2.sc) == 3
 end
+
+module GetParentModule
+
+using ModelingToolkit
+
+@mtkmodel Component begin end
+
+end
+
+@testset "Parent module of Models" begin
+    @test parentmodule(GetParentModule.Component) == GetParentModule
+end

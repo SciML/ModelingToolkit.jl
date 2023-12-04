@@ -24,6 +24,8 @@ struct Model{F, S}
 end
 (m::Model)(args...; kw...) = m.f(args...; kw...)
 
+Base.parentmodule(m::Model) = parentmodule(m.f)
+
 for f in (:connector, :mtkmodel)
     isconnector = f == :connector ? true : false
     @eval begin
