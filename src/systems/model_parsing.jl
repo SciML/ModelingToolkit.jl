@@ -110,6 +110,7 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs;
         def = nothing, indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
     metatypes = [(:connection_type, VariableConnectType),
         (:description, VariableDescription),
+        (:label, VariableLabel),
         (:unit, VariableUnit),
         (:bounds, VariableBounds),
         (:noise, VariableNoiseType),
