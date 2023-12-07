@@ -673,7 +673,7 @@ function _parse_components!(exprs, body, kwargs)
     expr = Expr(:block)
     varexpr = Expr(:block)
     # push!(exprs, varexpr)
-    comps = Vector{Symbol}[]
+    comps = Vector{Union{Symbol, Expr}}[]
     comp_names = []
 
     for arg in body.args
@@ -692,7 +692,9 @@ function _parse_components!(exprs, body, kwargs)
                 arg.args[2] = b
                 push!(expr.args, arg)
                 push!(comp_names, a)
-                push!(comps, [a, b.args[1]])
+                if (isa(b.args[1], Symbol) || Meta.isexpr(b.args[1], :.))
+                    push!(comps, [a, b.args[1]])
+                end
             end
             _ => error("Couldn't parse the component body: $arg")
         end
