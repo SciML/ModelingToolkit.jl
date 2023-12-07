@@ -7,6 +7,30 @@ using Unitful
 
 ENV["MTK_ICONS_DIR"] = "$(@__DIR__)/icons"
 
+# Mock module used to test if the `@mtkmodel` macro works with fully-qualified names as well.
+module MyMockModule
+using ..ModelingToolkit, ..Unitful
+
+export Pin
+@connector Pin begin
+    v(t), [unit = u"V"]                    # Potential at the pin [V]
+    i(t), [connect = Flow, unit = u"A"]    # Current flowing into the pin [A]
+    @icon "pin.png"
+end
+
+@mtkmodel Ground begin
+    @components begin
+        g = Pin()
+    end
+    @icon read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
+    @equations begin
+        g.v ~ 0
+    end
+end
+end
+
+using .MyMockModule
+
 @connector RealInput begin
     u(t), [input = true, unit = u"V"]
 end
@@ -27,12 +51,6 @@ end
 
 @variables t [unit = u"s"]
 D = Differential(t)
-
-@connector Pin begin
-    v(t), [unit = u"V"]                    # Potential at the pin [V]
-    i(t), [connect = Flow, unit = u"A"]    # Current flowing into the pin [A]
-    @icon "pin.png"
-end
 
 @named p = Pin(; v = π)
 @test getdefault(p.v) == π
@@ -56,16 +74,6 @@ end
 end
 
 @test OnePort.isconnector == false
-
-@mtkmodel Ground begin
-    @components begin
-        g = Pin()
-    end
-    @icon read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
-    @equations begin
-        g.v ~ 0
-    end
-end
 
 resistor_log = "$(@__DIR__)/logo/resistor.svg"
 @mtkmodel Resistor begin
@@ -127,7 +135,7 @@ end
         capacitor = Capacitor(; C = C_val)
         source = Voltage()
         constant = Constant(; k = k_val)
-        ground = Ground()
+        ground = MyMockModule.Ground()
     end
 
     @equations begin
