@@ -964,7 +964,7 @@ function _named(name, call, runtime = false)
     if length(call.args) >= 2 && call.args[2] isa Expr
         # canonicalize to use `:parameters`
         if call.args[2].head === :kw
-            call.args[2] = Expr(:parameters, Expr(:kw, call.args[2].args...))
+            call = Expr(call.head, call.args[1], Expr(:parameters, call.args[2:end]...))
             has_kw = true
         elseif call.args[2].head === :parameters
             has_kw = true
