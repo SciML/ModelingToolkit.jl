@@ -325,6 +325,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         end
     end
 
+    idx = iip ? 2 : 1
     if length(cstr) > 0
         @named cons_sys = ConstraintsSystem(cstr, dvs, ps)
         cons, lcons_, ucons_ = generate_function(cons_sys, checkbounds = checkbounds,
@@ -332,13 +333,13 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             expression = Val{false})
         if cons_j
             _cons_j = generate_jacobian(cons_sys; expression = Val{false},
-                sparse = cons_sparse)[2]
+                sparse = cons_sparse)[idx]
         else
             _cons_j = nothing
         end
         if cons_h
             _cons_h = generate_hessian(cons_sys; expression = Val{false},
-                sparse = cons_sparse)[2]
+                sparse = cons_sparse)[idx]
         else
             _cons_h = nothing
         end
@@ -374,7 +375,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             hess_prototype = hess_prototype,
             syms = Symbol.(states(sys)),
             paramsyms = Symbol.(parameters(sys)),
-            cons = cons[2],
+            cons = cons[idx],
             cons_j = _cons_j,
             cons_h = _cons_h,
             cons_jac_prototype = cons_jac_prototype,
@@ -554,7 +555,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
             lb = $lb
             ub = $ub
             int = $int
-            cons = $cons[1]
+            cons = $cons[idx]
             lcons = $lcons
             ucons = $ucons
             cons_j = $_cons_j
