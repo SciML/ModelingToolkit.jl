@@ -143,7 +143,7 @@ include("systems/jumps/jumpsystem.jl")
 
 include("systems/nonlinear/nonlinearsystem.jl")
 include("systems/nonlinear/modelingtoolkitize.jl")
-include("systems/nonlinear/initializesys.jl")
+include("systems/nonlinear/initializesystem.jl")
 
 include("systems/optimization/constraints_system.jl")
 include("systems/optimization/optimizationsystem.jl")
@@ -239,7 +239,7 @@ export toexpr, get_variables
 export simplify, substitute
 export build_function
 export modelingtoolkitize
-export initializesys
+export initializesystem
 
 export @variables, @parameters, @constants, @brownian
 export @named, @nonamespace, @namespace, extend, compose, complete

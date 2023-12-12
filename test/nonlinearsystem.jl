@@ -258,7 +258,7 @@ end
     sys_simple = structural_simplify(sys)
 
     # Set up the initialization system
-    sys_init = initializesys(sys_simple)
+    sys_init = initializesystem(sys_simple)
 
     sys_init_simple = structural_simplify(sys_init)
 

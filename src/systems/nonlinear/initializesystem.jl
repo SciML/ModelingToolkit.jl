@@ -3,7 +3,7 @@ $(TYPEDSIGNATURES)
 
 Generate `NonlinearSystem` which initializes an ODE problem from specified initial conditions of an `ODESystem`.
 """
-function initializesys(sys::ODESystem; name = nameof(sys), kwargs...)
+function initializesystem(sys::ODESystem; name = nameof(sys), kwargs...)
     if has_parent(sys) && (parent = get_parent(sys); parent !== nothing)
         sys = parent
     end
