@@ -44,7 +44,12 @@ function initializesys(sys::ODESystem; name = nameof(sys), kwargs...)
     end
 
     pars = parameters(sys)
-    sys_nl = NonlinearSystem(eqs_ics, sts, pars; defaults = Dict(sts .=> u0), name, kwargs...)
+    sys_nl = NonlinearSystem(eqs_ics,
+        sts,
+        pars;
+        defaults = Dict(sts .=> u0),
+        name,
+        kwargs...)
 
     return sys_nl
 end

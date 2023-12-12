@@ -237,7 +237,7 @@ end
 @testset "Initialization System" begin
     # Define the Lotka Volterra system which begins at steady state
     @parameters t
-    pars = @parameters a = 1.5 b = 1.0 c = 3.0 d = 1.0
+    pars = @parameters a=1.5 b=1.0 c=3.0 d=1.0
 
     vars = @variables begin
         dx(t),
@@ -270,8 +270,8 @@ end
     @test sol.retcode == SciMLBase.ReturnCode.Success
 
     # Confirm for all the states of the non-simplified system
-    @test all(.≈(sol[states(sys)], [0,0,0,0]; atol=1e-8))
+    @test all(.≈(sol[states(sys)], [0, 0, 0, 0]; atol = 1e-8))
 
     # Confirm for all the states of the simplified system
-    @test all(.≈(sol[states(sys_simple)], [0,0]; atol=1e-8))
+    @test all(.≈(sol[states(sys_simple)], [0, 0]; atol = 1e-8))
 end
