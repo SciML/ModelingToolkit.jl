@@ -161,10 +161,18 @@ function independent_variable(sys::AbstractSystem)
     isdefined(sys, :iv) ? getfield(sys, :iv) : nothing
 end
 
-#Treat the result as a vector of symbols always
-function SymbolicIndexingInterface.independent_variables(sys::AbstractSystem)
-    systype = typeof(sys)
-    @warn "Please declare ($systype) as a subtype of `AbstractTimeDependentSystem`, `AbstractTimeIndependentSystem` or `AbstractMultivariateSystem`."
+function independent_variables(sys::AbstractTimeDependentSystem)
+    return [getfield(sys, :iv)]
+end
+
+independent_variables(::AbstractTimeIndependentSystem) = []
+
+function independent_variables(sys::AbstractMultivariateSystem)
+    return getfield(sys, :ivs)
+end
+
+function independent_variables(sys::AbstractSystem)
+    @warn "Please declare ($(typeof(sys))) as a subtype of `AbstractTimeDependentSystem`, `AbstractTimeIndependentSystem` or `AbstractMultivariateSystem`."
     if isdefined(sys, :iv)
         return [getfield(sys, :iv)]
     elseif isdefined(sys, :ivs)
@@ -174,13 +182,101 @@ function SymbolicIndexingInterface.independent_variables(sys::AbstractSystem)
     end
 end
 
-function SymbolicIndexingInterface.independent_variables(sys::AbstractTimeDependentSystem)
-    [getfield(sys, :iv)]
+#Treat the result as a vector of symbols always
+function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym)
+    if unwrap(sym) isa Int    # [x, 1] coerces 1 to a Num
+        return unwrap(sym) in 1:length(unknown_states(sys))
+    end
+    return any(isequal(sym), unknown_states(sys)) || hasname(sym) && is_variable(sys, getname(sym))
 end
-SymbolicIndexingInterface.independent_variables(sys::AbstractTimeIndependentSystem) = []
-function SymbolicIndexingInterface.independent_variables(sys::AbstractMultivariateSystem)
-    getfield(sys, :ivs)
+
+function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym::Symbol)
+    return any(isequal(sym), getname.(unknown_states(sys))) || count('₊', string(sym)) == 1 && count(isequal(sym), Symbol.(sys.name, :₊, getname.(unknown_states(sys)))) == 1
 end
+
+function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym)
+    if unwrap(sym) isa Int
+        return unwrap(sym)
+    end
+    idx = findfirst(isequal(sym), unknown_states(sys))
+    if idx === nothing && hasname(sym)
+        idx = variable_index(sys, getname(sym))
+    end
+    return idx
+end
+
+function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym::Symbol)
+    idx = findfirst(isequal(sym), getname.(unknown_states(sys)))
+    if idx !== nothing
+        return idx
+    elseif count('₊', string(sym)) == 1
+        return findfirst(isequal(sym), Symbol.(sys.name, :₊, getname.(unknown_states(sys))))
+    end
+    return nothing
+end
+
+function SymbolicIndexingInterface.variable_symbols(sys::AbstractSystem)
+    return unknown_states(sys)
+end
+
+function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
+    if unwrap(sym) isa Int
+        return unwrap(sym) in 1:length(parameters(sys))
+    end
+
+    return any(isequal(sym), parameters(sys)) || hasname(sym) && is_parameter(sys, getname(sym))
+end
+
+function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Symbol)
+    return any(isequal(sym), getname.(parameters(sys))) ||
+        count('₊', string(sym)) == 1 && count(isequal(sym), Symbol.(sys.name, :₊, getname.(parameters(sys)))) == 1
+end
+
+function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
+    if unwrap(sym) isa Int
+        return unwrap(sym)
+    end
+    idx = findfirst(isequal(sym), parameters(sys))
+    if idx === nothing && hasname(sym)
+        idx = parameter_index(sys, getname(sym))
+    end
+    return idx
+end
+
+function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym::Symbol)
+    idx = findfirst(isequal(sym), getname.(parameters(sys)))
+    if idx !== nothing
+        return idx
+    elseif count('₊', string(sym)) == 1
+        return findfirst(isequal(sym), Symbol.(sys.name, :₊, getname.(parameters(sys))))
+    end
+    return nothing
+end
+
+function SymbolicIndexingInterface.parameter_symbols(sys::AbstractSystem)
+    return parameters(sys)
+end
+
+function SymbolicIndexingInterface.is_independent_variable(sys::AbstractSystem, sym)
+    return any(isequal(sym), independent_variables(sys))
+end
+
+function SymbolicIndexingInterface.is_independent_variable(sys::AbstractSystem, sym::Symbol)
+    return any(isequal(sym), getname.(independent_variables(sys)))
+end
+
+function SymbolicIndexingInterface.independent_variable_symbols(sys::AbstractSystem)
+    return independent_variables(sys)
+end
+
+function SymbolicIndexingInterface.is_observed(sys::AbstractSystem, sym)
+    return !is_variable(sys, sym) && !is_parameter(sys, sym) && !is_independent_variable(sys, sym) && symbolic_type(sym) != NotSymbolic()
+end
+
+SymbolicIndexingInterface.is_time_dependent(::AbstractTimeDependentSystem) = true
+SymbolicIndexingInterface.is_time_dependent(::AbstractTimeIndependentSystem) = false
+
+SymbolicIndexingInterface.constant_structure(::AbstractSystem) = true
 
 iscomplete(sys::AbstractSystem) = isdefined(sys, :complete) && getfield(sys, :complete)
 
@@ -534,11 +630,14 @@ function states(sys::AbstractSystem)
            [sts; reduce(vcat, namespace_variables.(systems))])
 end
 
-function SymbolicIndexingInterface.parameters(sys::AbstractSystem)
+function parameters(sys::AbstractSystem)
     ps = get_ps(sys)
     systems = get_systems(sys)
     unique(isempty(systems) ? ps : [ps; reduce(vcat, namespace_parameters.(systems))])
 end
+
+# required in `src/connectors.jl:437`
+parameters(_) = []
 
 function controls(sys::AbstractSystem)
     ctrls = get_ctrls(sys)
@@ -638,8 +737,6 @@ function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
     return x
 end
 
-SymbolicIndexingInterface.is_indep_sym(sys::AbstractSystem, sym) = isequal(sym, get_iv(sys))
-
 """
 $(SIGNATURES)
 
@@ -651,20 +748,6 @@ function unknown_states(sys::AbstractSystem)
         sts = something(get_unknown_states(sys), sts)
     end
     return sts
-end
-
-function SymbolicIndexingInterface.state_sym_to_index(sys::AbstractSystem, sym)
-    findfirst(isequal(sym), unknown_states(sys))
-end
-function SymbolicIndexingInterface.is_state_sym(sys::AbstractSystem, sym)
-    !isnothing(SymbolicIndexingInterface.state_sym_to_index(sys, sym))
-end
-
-function SymbolicIndexingInterface.param_sym_to_index(sys::AbstractSystem, sym)
-    findfirst(isequal(sym), SymbolicIndexingInterface.parameters(sys))
-end
-function SymbolicIndexingInterface.is_param_sym(sys::AbstractSystem, sym)
-    !isnothing(SymbolicIndexingInterface.param_sym_to_index(sys, sym))
 end
 
 ###
