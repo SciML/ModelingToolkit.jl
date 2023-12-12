@@ -142,6 +142,7 @@ include("systems/jumps/jumpsystem.jl")
 
 include("systems/nonlinear/nonlinearsystem.jl")
 include("systems/nonlinear/modelingtoolkitize.jl")
+include("systems/nonlinear/initializesystem.jl")
 
 include("systems/optimization/constraints_system.jl")
 include("systems/optimization/optimizationsystem.jl")
@@ -201,7 +202,8 @@ export NonlinearSystem, OptimizationSystem, ConstraintsSystem
 export alias_elimination, flatten
 export connect, domain_connect, @connector, Connection, Flow, Stream, instream
 export @component, @mtkmodel, @mtkbuild
-export isinput, isoutput, getbounds, hasbounds, isdisturbance, istunable, getdist, hasdist,
+export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbance,
+    istunable, getdist, hasdist,
     tunable_parameters, isirreducible, getdescription, hasdescription, isbinaryvar,
     isintegervar
 export ode_order_lowering, dae_order_lowering, liouville_transform
@@ -236,6 +238,7 @@ export toexpr, get_variables
 export simplify, substitute
 export build_function
 export modelingtoolkitize
+export initializesystem
 
 export @variables, @parameters, @constants, @brownian
 export @named, @nonamespace, @namespace, extend, compose, complete

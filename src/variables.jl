@@ -425,3 +425,42 @@ macro brownian(xs...)
         xs,
         tobrownian) |> esc
 end
+
+## Guess ======================================================================
+struct VariableGuess end
+Symbolics.option_to_metadata_type(::Val{:guess}) = VariableGuess
+getguess(x::Num) = getguess(Symbolics.unwrap(x))
+
+"""
+    getguess(x)
+
+Get the guess for the initial value associated with symbolic variable `x`.
+Create variables with a guess like this
+
+```
+@variables x [guess=1]
+```
+"""
+function getguess(x)
+    p = Symbolics.getparent(x, nothing)
+    p === nothing || (x = p)
+    Symbolics.getmetadata(x, VariableGuess, nothing)
+end
+
+"""
+    hasguess(x)
+
+Determine whether symbolic variable `x` has a guess associated with it.
+See also [`getguess`](@ref).
+"""
+function hasguess(x)
+    getguess(x) !== nothing
+end
+
+function get_default_or_guess(x)
+    if hasdefault(x) && !((def = getdefault(x)) isa Equation)
+        return def
+    else
+        return getguess(x)
+    end
+end
