@@ -187,11 +187,14 @@ function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym)
     if unwrap(sym) isa Int    # [x, 1] coerces 1 to a Num
         return unwrap(sym) in 1:length(unknown_states(sys))
     end
-    return any(isequal(sym), unknown_states(sys)) || hasname(sym) && is_variable(sys, getname(sym))
+    return any(isequal(sym), unknown_states(sys)) ||
+           hasname(sym) && is_variable(sys, getname(sym))
 end
 
 function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym::Symbol)
-    return any(isequal(sym), getname.(unknown_states(sys))) || count('₊', string(sym)) == 1 && count(isequal(sym), Symbol.(sys.name, :₊, getname.(unknown_states(sys)))) == 1
+    return any(isequal(sym), getname.(unknown_states(sys))) ||
+           count('₊', string(sym)) == 1 &&
+           count(isequal(sym), Symbol.(sys.name, :₊, getname.(unknown_states(sys)))) == 1
 end
 
 function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym)
@@ -224,12 +227,14 @@ function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
         return unwrap(sym) in 1:length(parameters(sys))
     end
 
-    return any(isequal(sym), parameters(sys)) || hasname(sym) && is_parameter(sys, getname(sym))
+    return any(isequal(sym), parameters(sys)) ||
+           hasname(sym) && is_parameter(sys, getname(sym))
 end
 
 function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Symbol)
     return any(isequal(sym), getname.(parameters(sys))) ||
-        count('₊', string(sym)) == 1 && count(isequal(sym), Symbol.(sys.name, :₊, getname.(parameters(sys)))) == 1
+           count('₊', string(sym)) == 1 &&
+           count(isequal(sym), Symbol.(sys.name, :₊, getname.(parameters(sys)))) == 1
 end
 
 function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
@@ -270,7 +275,8 @@ function SymbolicIndexingInterface.independent_variable_symbols(sys::AbstractSys
 end
 
 function SymbolicIndexingInterface.is_observed(sys::AbstractSystem, sym)
-    return !is_variable(sys, sym) && !is_parameter(sys, sym) && !is_independent_variable(sys, sym) && symbolic_type(sym) != NotSymbolic()
+    return !is_variable(sys, sym) && !is_parameter(sys, sym) &&
+           !is_independent_variable(sys, sym) && symbolic_type(sym) != NotSymbolic()
 end
 
 SymbolicIndexingInterface.is_time_dependent(::AbstractTimeDependentSystem) = true

@@ -491,7 +491,7 @@ function (ratemap::JumpSysMajParamMapper{
         U,
         V,
         W,
-    })(params) where {U <: AbstractArray,
+})(params) where {U <: AbstractArray,
         V <: AbstractArray, W}
     updateparams!(ratemap, params)
     [convert(W, value(substitute(paramexpr, ratemap.subdict)))
