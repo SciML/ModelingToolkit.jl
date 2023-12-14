@@ -268,7 +268,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     f = generate_function(sys, checkbounds = checkbounds, linenumbers = linenumbers,
         expression = Val{false})
 
-    obj_expr = toexpr(subs_constants(objective(sys)))
+    obj_expr = subs_constants(objective(sys))
     
     if grad
         grad_oop, grad_iip = generate_gradient(sys, checkbounds = checkbounds,
