@@ -284,7 +284,7 @@ end
     @test sol1.u ≈ sol2.u
 end
 
-@testset "#2323 keep symbolic exressions and xor condition on constraint bounds" begin
+@testset "#2323 keep symbolic expressions and xor condition on constraint bounds" begin
     @variables x y
     @parameters a b
     loss = (a - x)^2 + b * (y - x^2)^2
