@@ -165,7 +165,8 @@ resistor = getproperty(rc, :resistor; namespace = false)
 
 @test get_gui_metadata(rc.resistor).layout == Resistor.structure[:icon] ==
       read(joinpath(ENV["MTK_ICONS_DIR"], "resistor.svg"), String)
-@test get_gui_metadata(rc.ground).layout == read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
+@test get_gui_metadata(rc.ground).layout ==
+      read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
 @test get_gui_metadata(rc.capacitor).layout ==
       URI("https://upload.wikimedia.org/wikipedia/commons/7/78/Capacitor_symbol.svg")
 @test OnePort.structure[:icon] ==
