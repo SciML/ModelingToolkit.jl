@@ -286,6 +286,20 @@ SymbolicIndexingInterface.is_time_dependent(::AbstractTimeIndependentSystem) = f
 
 SymbolicIndexingInterface.constant_structure(::AbstractSystem) = true
 
+function SymbolicIndexingInterface.all_variable_symbols(sys::AbstractSystem)
+    syms = variable_symbols(sys)
+    obs = getproperty.(observed(sys), :lhs)
+    return isempty(obs) ? syms : vcat(syms, obs)
+end
+
+function SymbolicIndexingInterface.all_symbols(sys::AbstractSystem)
+    syms = all_variable_symbols(sys)
+    for other in (parameter_symbols(sys), independent_variable_symbols(sys))
+        isempty(other) || (syms = vcat(syms, other))
+    end
+    return syms
+end
+
 iscomplete(sys::AbstractSystem) = isdefined(sys, :complete) && getfield(sys, :complete)
 
 """
