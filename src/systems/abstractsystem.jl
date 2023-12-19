@@ -627,7 +627,7 @@ function namespace_expr(O, sys, n = nameof(sys); ivs = independent_variables(sys
         O
     end
 end
-
+_nonum(@nospecialize x) = x isa Num ? x.val : x
 function states(sys::AbstractSystem)
     sts = get_states(sys)
     systems = get_systems(sys)
@@ -637,9 +637,13 @@ function states(sys::AbstractSystem)
         system_states = reduce(vcat, namespace_variables.(systems))
         isempty(sts) ? system_states : [sts; system_states]
     end
+    isempty(nonunique_states) && return nonunique_states
     # `Vector{Any}` is incompatible with the `SymbolicIndexingInterface`, which uses
     # `elsymtype = symbolic_type(eltype(_arg))` 
     # which inappropriately returns `NotSymbolic()`
+    if nonunique_states isa Vector{Any}
+        nonunique_states = _nonum.(nonunique_states)
+    end
     @assert typeof(nonunique_states) !== Vector{Any}
     unique(nonunique_states)
 end
