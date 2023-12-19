@@ -162,7 +162,14 @@ Base.isequal(l1::ConnectionElement, l2::ConnectionElement) = l1 == l2
 function Base.:(==)(l1::ConnectionElement, l2::ConnectionElement)
     nameof(l1.sys) == nameof(l2.sys) && isequal(l1.v, l2.v) && l1.isouter == l2.isouter
 end
-Base.hash(e::ConnectionElement, salt::UInt) = e.h ⊻ salt
+function Base.hash(e::ConnectionElement, salt::UInt)
+    @inbounds begin
+        @boundscheck begin
+            @assert e.h === _hash_impl(e.sys, e.v, e.isouter)
+        end
+    end
+    e.h ⊻ salt
+end
 namespaced_var(l::ConnectionElement) = states(l, l.v)
 states(l::ConnectionElement, v) = states(copy(l.sys), v)
 

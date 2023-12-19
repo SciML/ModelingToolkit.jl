@@ -631,9 +631,17 @@ end
 function states(sys::AbstractSystem)
     sts = get_states(sys)
     systems = get_systems(sys)
-    unique(isempty(systems) ?
-           sts :
-           [sts; reduce(vcat, namespace_variables.(systems))])
+    nonunique_states = if isempty(systems)
+        sts
+    else
+        system_states = reduce(vcat, namespace_variables.(systems))
+        isempty(sts) ? system_states : [sts; system_states]
+    end
+    # `Vector{Any}` is incompatible with the `SymbolicIndexingInterface`, which uses
+    # `elsymtype = symbolic_type(eltype(_arg))` 
+    # which inappropriately returns `NotSymbolic()`
+    @assert typeof(nonunique_states) !== Vector{Any}
+    unique(nonunique_states)
 end
 
 function parameters(sys::AbstractSystem)
