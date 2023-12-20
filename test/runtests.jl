@@ -1,5 +1,7 @@
 using SafeTestsets, Test
 
+const GROUP = get(ENV, "GROUP", "All")
+
 function activate_extensions_env()
     Pkg.activate("extensions")
     Pkg.develop(PackageSpec(path = dirname(@__DIR__)))
