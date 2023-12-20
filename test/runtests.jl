@@ -1,4 +1,4 @@
-using SafeTestsets, Test
+using SafeTestsets, Pkg, Test
 
 const GROUP = get(ENV, "GROUP", "All")
 
