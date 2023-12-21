@@ -27,7 +27,7 @@ function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem; kwargs...)
             for i in 1:num_cons
                 if !isinf(prob.lcons[i])
                     if prob.lcons[i] != prob.ucons[i]
-                       push!(cons, prob.lcons[i] ≲ lhs[i])
+                        push!(cons, prob.lcons[i] ≲ lhs[i])
                     else
                         push!(cons, lhs[i] ~ prob.ucons[i])
                     end
