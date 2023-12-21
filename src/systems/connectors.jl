@@ -150,7 +150,7 @@ struct ConnectionElement
     h::UInt
 end
 function _hash_impl(sys, v, isouter)
-    hashcore = hash(nameof(sys)) ⊻ hash(getname(v))
+    hashcore = hash(sys) ⊻ hash(getname(v))
     hashouter = isouter ? hash(true) : hash(false)
     hashcore ⊻ hashouter
 end
@@ -162,11 +162,12 @@ Base.isequal(l1::ConnectionElement, l2::ConnectionElement) = l1 == l2
 function Base.:(==)(l1::ConnectionElement, l2::ConnectionElement)
     nameof(l1.sys) == nameof(l2.sys) && isequal(l1.v, l2.v) && l1.isouter == l2.isouter
 end
+
+const _debug_mode = Base.JLOptions().check_bounds == 1
+
 function Base.hash(e::ConnectionElement, salt::UInt)
-    @inbounds begin
-        @boundscheck begin
-            @assert e.h === _hash_impl(e.sys, e.v, e.isouter)
-        end
+    if _debug_mode
+        @assert e.h === _hash_impl(e.sys, e.v, e.isouter)
     end
     e.h ⊻ salt
 end
