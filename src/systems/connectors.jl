@@ -150,7 +150,7 @@ struct ConnectionElement
     h::UInt
 end
 function _hash_impl(sys, v, isouter)
-    hashcore = hash(sys) ⊻ hash(getname(v))
+    hashcore = hash(nameof(sys)) ⊻ hash(getname(v))
     hashouter = isouter ? hash(true) : hash(false)
     hashcore ⊻ hashouter
 end
