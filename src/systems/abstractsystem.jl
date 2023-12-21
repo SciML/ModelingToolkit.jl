@@ -655,6 +655,9 @@ function parameters(sys::AbstractSystem)
     if ps == SciMLBase.NullParameters()
         return []
     end
+    if eltype(ps) <: Pair
+        ps = first.(ps)
+    end
     systems = get_systems(sys)
     unique(isempty(systems) ? ps : [ps; reduce(vcat, namespace_parameters.(systems))])
 end
