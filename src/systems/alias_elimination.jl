@@ -383,8 +383,31 @@ end
 swap!(v, i, j) = v[i], v[j] = v[j], v[i]
 
 function getcoeff(vars, coeffs, var)
-    for (vj, v) in enumerate(vars)
-        v == var && return coeffs[vj]
+    Nvars = length(vars)
+    i = 0
+    chunk_size = 8
+    @inbounds while i < Nvars - chunk_size + 1
+        btup = let vars = vars, var = var, i = i
+            ntuple(Val(chunk_size)) do j
+                @inbounds vars[i + j] == var
+            end
+        end
+        inds = ntuple(Base.Fix2(-, 1), Val(8))
+        eights = ntuple(Returns(8), Val(8))
+        inds = map(ifelse, btup, inds, eights)
+        inds4 = (min(inds[1], inds[5]),
+            min(inds[2], inds[6]),
+            min(inds[3], inds[7]),
+            min(inds[4], inds[8]))
+        inds2 = (min(inds4[1], inds4[3]), min(inds4[2], inds4[4]))
+        ind = min(inds2[1], inds2[2])
+        if ind != 8
+            return coeffs[i + ind + 1]
+        end
+        i += chunk_size
+    end
+    @inbounds for vj in (i + 1):Nvars
+        vars[vj] == var && return coeffs[vj]
     end
     return 0
 end
