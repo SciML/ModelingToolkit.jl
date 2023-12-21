@@ -1,0 +1,4 @@
+[deps]
+BifurcationKit = "0f109fa4-8a5d-4b75-95aa-f515264e7665"
+
+[compat]
