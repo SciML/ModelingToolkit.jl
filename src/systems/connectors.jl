@@ -147,17 +147,38 @@ struct ConnectionElement
     sys::LazyNamespace
     v::Any
     isouter::Bool
+    h::UInt
+end
+function _hash_impl(sys, v, isouter)
+    hashcore = hash(nameof(sys)) ⊻ hash(getname(v))
+    hashouter = isouter ? hash(true) : hash(false)
+    hashcore ⊻ hashouter
+end
+function ConnectionElement(sys::LazyNamespace, v, isouter::Bool)
+    ConnectionElement(sys, v, isouter, _hash_impl(sys, v, isouter))
 end
 Base.nameof(l::ConnectionElement) = renamespace(nameof(l.sys), getname(l.v))
-function Base.hash(l::ConnectionElement, salt::UInt)
-    hash(nameof(l.sys)) ⊻ hash(l.v) ⊻ hash(l.isouter) ⊻ salt
-end
 Base.isequal(l1::ConnectionElement, l2::ConnectionElement) = l1 == l2
 function Base.:(==)(l1::ConnectionElement, l2::ConnectionElement)
     nameof(l1.sys) == nameof(l2.sys) && isequal(l1.v, l2.v) && l1.isouter == l2.isouter
 end
+function Base.hash(e::ConnectionElement, salt::UInt)
+    @inbounds begin
+        @boundscheck begin
+            @assert e.h === _hash_impl(e.sys, e.v, e.isouter)
+        end
+    end
+    e.h ⊻ salt
+end
 namespaced_var(l::ConnectionElement) = states(l, l.v)
 states(l::ConnectionElement, v) = states(copy(l.sys), v)
+
+function withtrueouter(e::ConnectionElement)
+    e.isouter && return e
+    # we undo the xor
+    newhash = (e.h ⊻ hash(false)) ⊻ hash(true)
+    ConnectionElement(e.sys, e.v, true, newhash)
+end
 
 struct ConnectionSet
     set::Vector{ConnectionElement} # namespace.sys, var, isouter
@@ -353,9 +374,7 @@ function partial_merge(csets::AbstractVector{<:ConnectionSet}, allouter = false)
     merged = false
     for (j, cset) in enumerate(csets)
         if allouter
-            cset = ConnectionSet(map(cset.set) do e
-                @set! e.isouter = true
-            end)
+            cset = ConnectionSet(map(withtrueouter, cset.set))
         end
         idx = nothing
         for e in cset.set
@@ -390,7 +409,7 @@ end
 
 function generate_connection_equations_and_stream_connections(csets::AbstractVector{
         <:ConnectionSet,
-    })
+})
     eqs = Equation[]
     stream_connections = ConnectionSet[]
 

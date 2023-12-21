@@ -237,7 +237,7 @@ end
 @testset "Initialization System" begin
     # Define the Lotka Volterra system which begins at steady state
     @parameters t
-    pars = @parameters a=1.5 b=1.0 c=3.0 d=1.0 dx_ss = 1e-5
+    pars = @parameters a=1.5 b=1.0 c=3.0 d=1.0 dx_ss=1e-5
 
     vars = @variables begin
         dx(t),
