@@ -18,11 +18,12 @@ export Pin
     @icon "pin.png"
 end
 
+ground_logo = read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
 @mtkmodel Ground begin
     @components begin
         g = Pin()
     end
-    @icon read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
+    @icon ground_logo
     @equations begin
         g.v ~ 0
     end
@@ -319,6 +320,21 @@ end
     @test A.structure[:equations] == ["e ~ 0"]
     @test A.structure[:kwargs] == Dict(:p => nothing, :v => nothing)
     @test A.structure[:components] == [[:cc, :C]]
+end
+
+# Ensure that modules consisting MTKModels with component arrays and icons of
+# `Expr` type and `unit` metadata can be precompiled.
+@testset "Precompile packages with MTKModels" begin
+    push!(LOAD_PATH, joinpath(@__DIR__, "precompile_test"))
+
+    using ModelParsingPrecompile: ModelWithComponentArray
+
+    @named model_with_component_array = ModelWithComponentArray()
+
+    @test ModelWithComponentArray.structure[:parameters][:R][:unit] == u"Ω"
+    @test lastindex(parameters(model_with_component_array)) == 3
+
+    pop!(LOAD_PATH)
 end
 
 @testset "Conditional statements inside the blocks" begin

@@ -178,15 +178,10 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs;
             (var, def)
         end
         Expr(:ref, a, b...) => begin
+            indices = map(i -> UnitRange(i.args[2], i.args[end]), b)
             parse_variable_def!(dict, mod, a, varclass, kwargs;
-                def, indices = [eval.(b)...])
+                def, indices)
         end
-        #= Expr(:if, condition, a) => begin
-        var, def = [], []
-            for var_def in a.args
-                parse_variable_def!(dict, mod, var_def, varclass, kwargs)
-            end
-        end =#
         _ => error("$arg cannot be parsed")
     end
 end
@@ -301,7 +296,7 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps,
         parse_equations!(exprs, eqs, dict, body)
     elseif mname == Symbol("@icon")
         isassigned(icon) && error("This model has more than one icon.")
-        parse_icon!(icon, dict, body)
+        parse_icon!(body, dict, icon, mod)
     else
         error("$mname is not handled.")
     end
@@ -614,7 +609,7 @@ function parse_equations!(exprs, eqs, dict, body)
     end
 end
 
-function parse_icon!(icon, dict, body::String)
+function parse_icon!(body::String, dict, icon, mod)
     icon_dir = get(ENV, "MTK_ICONS_DIR", joinpath(DEPOT_PATH[1], "mtk_icons"))
     dict[:icon] = icon[] = if isfile(body)
         URI("file:///" * abspath(body))
@@ -633,8 +628,8 @@ function parse_icon!(icon, dict, body::String)
     end
 end
 
-function parse_icon!(icon, dict, body::Expr)
-    parse_icon!(icon, dict, eval(body))
+function parse_icon!(body::Symbol, dict, icon, mod)
+    parse_icon!(getfield(mod, body), dict, icon, mod)
 end
 
 ### Parsing Components:
