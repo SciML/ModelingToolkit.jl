@@ -305,6 +305,7 @@ for prop in [:eqs
     :states
     :ps
     :tspan
+    :name
     :var_to_name
     :ctrls
     :defaults
