@@ -35,6 +35,7 @@ end
         @safetestset "Reduction Test" include("reduction.jl")
         @safetestset "Split Parameters Test" include("split_parameters.jl")
         @safetestset "ODAEProblem Test" include("odaeproblem.jl")
+        @safetestset "StaticArrays Test" include("static_arrays.jl")
         @safetestset "Components Test" include("components.jl")
         @safetestset "Model Parsing Test" include("model_parsing.jl")
         @safetestset "print_tree" include("print_tree.jl")
