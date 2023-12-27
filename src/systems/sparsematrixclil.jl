@@ -323,10 +323,10 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
                 end
                 dobreak && break
             end
-        elseif numivars == 0
+        elseif numkvars > 0
             ivind = 1
             kvv = kvars[kvind += 1]
-        else # numkvars == 0
+        elseif numivars > 0
             kvind = 1
             ivv = ivars[ivind += 1]
         end
