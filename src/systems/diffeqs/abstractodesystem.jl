@@ -912,6 +912,10 @@ function DiffEqBase.ODEProblem(sys::AbstractODESystem, args...; kwargs...)
     ODEProblem{true}(sys, args...; kwargs...)
 end
 
+function DiffEqBase.ODEProblem(sys::AbstractODESystem, u0map::StaticArray, args...; kwargs...)
+    ODEProblem{false, SciMLBase.FullSpecialize}(sys, u0map, args...; kwargs...)
+end
+
 function DiffEqBase.ODEProblem{true}(sys::AbstractODESystem, args...; kwargs...)
     ODEProblem{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
 end

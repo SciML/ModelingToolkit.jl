@@ -1,4 +1,4 @@
-using Catalyst, StaticArrays, Test
+using ModelingToolkit, StaticArrays, Test
 
 @parameters σ ρ β
 @variables t x(t) y(t) z(t)
@@ -21,7 +21,8 @@ p = @SVector [σ => 28.0,
     β => 8 / 3]
 
 tspan = (0.0, 100.0)
-prob_mtk = ODEProblem{false, SciMLBase.FullSpecialize}(sys, u0, tspan, p)
+prob_mtk = ODEProblem(sys, u0, tspan, p)
 
+@test !SciMLBase.isinplace(prob_mtk)
 @test prob_mtk.u0 isa SArray
 @test prob_mtk.p isa SArray
