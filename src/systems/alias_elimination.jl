@@ -153,7 +153,7 @@ the `constraint`.
         mask,
         constraint)
     eadj = M.row_cols
-    for i in range
+    @inbounds for i in range
         vertices = eadj[i]
         if constraint(length(vertices))
             for (j, v) in enumerate(vertices)
@@ -170,7 +170,7 @@ end
         range,
         mask,
         constraint)
-    for i in range
+    @inbounds for i in range
         row = @view M[i, :]
         if constraint(count(!iszero, row))
             for (v, val) in enumerate(row)
