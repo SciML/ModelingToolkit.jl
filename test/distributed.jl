@@ -33,4 +33,4 @@ end
 solve_lorenz(ode_prob)
 
 future = @spawn solve_lorenz(ode_prob)
-@test_broken fetch(future)
+fetch(future)
