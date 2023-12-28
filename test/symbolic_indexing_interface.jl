@@ -77,3 +77,25 @@ analytic_function = (ps, t, x) -> -ps[1] * x * (x - 1) * sin(x) * exp(-2 * ps[1]
 @test isequal(pdesys.ps, [h => 1])
 @test isequal(parameter_symbols(pdesys), [h])
 @test isequal(parameters(pdesys), [h])
+
+# Test systems with symbols that don't have a valid `getname`
+dt = 0.1
+@variables t x(t) y(t) u(t) yd(t) ud(t) r(t)
+@parameters kp
+D = Differential(t)
+# u(n + 1) := f(u(n))
+
+eqs = [yd ~ Sample(t, dt)(y)
+    ud ~ kp * (r - yd)
+    r ~ 1.0
+
+# plant (time continuous part)
+    u ~ Hold(ud)
+    D(x) ~ -x + u
+    y ~ x]
+@named sys = ODESystem(eqs)
+ss = structural_simplify(sys) # has `Hold()(ud(t))` as a parameter
+
+@test parameter_index(ss, :kp) == 1
+@test parameter_index(ss, Symbol(Hold(ud))) == 2
+@test parameter_index(ss, Sample(t, dt)(y)) == 3

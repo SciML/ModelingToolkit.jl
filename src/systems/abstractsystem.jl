@@ -191,11 +191,15 @@ function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym)
            hasname(sym) && is_variable(sys, getname(sym))
 end
 
+function _syms_as_symbols(syms)
+    return [hasname(sym) ? getname(sym) : Symbol(sym) for sym in syms]
+end
+
 function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym::Symbol)
-    return any(isequal(sym), getname.(variable_symbols(sys))) ||
+    vars = _syms_as_symbols(variable_symbols(sys))
+    return any(isequal(sym), vars) ||
            count('₊', string(sym)) == 1 &&
-           count(isequal(sym), Symbol.(nameof(sys), :₊, getname.(variable_symbols(sys)))) ==
-           1
+           count(isequal(sym), Symbol.(nameof(sys), :₊, vars)) == 1
 end
 
 function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym)
@@ -210,12 +214,12 @@ function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym)
 end
 
 function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym::Symbol)
-    idx = findfirst(isequal(sym), getname.(variable_symbols(sys)))
+    vars = _syms_as_symbols(variable_symbols(sys))
+    idx = findfirst(isequal(sym), vars)
     if idx !== nothing
         return idx
     elseif count('₊', string(sym)) == 1
-        return findfirst(isequal(sym),
-            Symbol.(nameof(sys), :₊, getname.(variable_symbols(sys))))
+        return findfirst(isequal(sym), Symbol.(nameof(sys), :₊, vars))
     end
     return nothing
 end
@@ -236,10 +240,10 @@ function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
 end
 
 function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Symbol)
-    return any(isequal(sym), getname.(parameter_symbols(sys))) ||
+    vars = _syms_as_symbols(parameter_symbols(sys))
+    return any(isequal(sym), vars) ||
            count('₊', string(sym)) == 1 &&
-           count(isequal(sym),
-        Symbol.(nameof(sys), :₊, getname.(parameter_symbols(sys)))) == 1
+           count(isequal(sym), Symbol.(nameof(sys), :₊, vars)) == 1
 end
 
 function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
@@ -254,12 +258,12 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
 end
 
 function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym::Symbol)
-    idx = findfirst(isequal(sym), getname.(parameter_symbols(sys)))
+    vars = _syms_as_symbols(parameter_symbols(sys))
+    idx = findfirst(isequal(sym), vars)
     if idx !== nothing
         return idx
     elseif count('₊', string(sym)) == 1
-        return findfirst(isequal(sym),
-            Symbol.(nameof(sys), :₊, getname.(parameter_symbols(sys))))
+        return findfirst(isequal(sym), Symbol.(nameof(sys), :₊, vars))
     end
     return nothing
 end
