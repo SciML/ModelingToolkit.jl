@@ -1,4 +1,4 @@
-using ModelingToolkit, StaticArrays, Test
+using ModelingToolkit, SciMLBase, StaticArrays, Test
 
 @parameters σ ρ β
 @variables t x(t) y(t) z(t)
