@@ -2106,9 +2106,9 @@ version = "0.6.12"
 
 [[deps.RecursiveArrayTools]]
 deps = ["Adapt", "ArrayInterface", "DocStringExtensions", "GPUArraysCore", "IteratorInterfaceExtensions", "LinearAlgebra", "RecipesBase", "Requires", "SparseArrays", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface", "Tables"]
-git-tree-sha1 = "17bc8c517dd0ced987f7c6c89baabf798b74d9f0"
+git-tree-sha1 = "4da78e9b73a8d585e1c520e60d46601af9828275"
 uuid = "731186ca-8d62-57ce-b412-fbd966d074cd"
-version = "3.3.0"
+version = "3.3.1"
 
     [deps.RecursiveArrayTools.extensions]
     RecursiveArrayToolsFastBroadcastExt = "FastBroadcast"
