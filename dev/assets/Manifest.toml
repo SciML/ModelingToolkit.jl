@@ -2,7 +2,7 @@
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "6e05114dd1e853670b57fc631e42cf8a516c7ca9"
+project_hash = "6ed19aab61fe371720dfe429a7888d8b3d332483"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "41c37aa88889c171f1300ceac1313c06e891d245"
@@ -2492,9 +2492,9 @@ version = "0.6.16"
 
 [[deps.StructuralIdentifiability]]
 deps = ["AbstractAlgebra", "BenchmarkTools", "Combinatorics", "DataStructures", "Dates", "Groebner", "IterTools", "LinearAlgebra", "Logging", "MacroTools", "ModelingToolkit", "Nemo", "ParamPunPam", "PrecompileTools", "Primes", "Random", "SpecialFunctions", "SymbolicUtils", "Symbolics", "TimerOutputs"]
-git-tree-sha1 = "0089d3dce676fd9073bf8d9fa07e120c6f201634"
+git-tree-sha1 = "89c89df38b553883308ca232d8ec5c83abd03eab"
 uuid = "220ca800-aa68-49bb-acd8-6037fa93a544"
-version = "0.4.16"
+version = "0.5.1"
 
 [[deps.SuiteSparse]]
 deps = ["Libdl", "LinearAlgebra", "Serialization", "SparseArrays"]
