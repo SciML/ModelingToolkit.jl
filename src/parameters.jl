@@ -105,7 +105,6 @@ function split_parameters_by_type(ps)
             parrs = map(x-> SArray{Tuple{size(x)...}}(x), split_ps)
             split_ps = SArray{Tuple{size(parrs)...}}(parrs)
         end
-        @show typeof(split_ps)
         if length(split_ps) == 1  #Tuple not needed, only 1 type
             return split_ps[1], split_idxs
         else
