@@ -194,7 +194,7 @@ end
 function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym::Symbol)
     return any(isequal(sym), getname.(variable_symbols(sys))) ||
            count('₊', string(sym)) == 1 &&
-           count(isequal(sym), Symbol.(sys.name, :₊, getname.(variable_symbols(sys)))) == 1
+           count(isequal(sym), Symbol.(nameof(sys), :₊, getname.(variable_symbols(sys)))) == 1
 end
 
 function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym)
@@ -213,7 +213,7 @@ function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym::Symb
     if idx !== nothing
         return idx
     elseif count('₊', string(sym)) == 1
-        return findfirst(isequal(sym), Symbol.(sys.name, :₊, getname.(variable_symbols(sys))))
+        return findfirst(isequal(sym), Symbol.(nameof(sys), :₊, getname.(variable_symbols(sys))))
     end
     return nothing
 end
@@ -236,7 +236,7 @@ end
 function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Symbol)
     return any(isequal(sym), getname.(parameter_symbols(sys))) ||
            count('₊', string(sym)) == 1 &&
-           count(isequal(sym), Symbol.(sys.name, :₊, getname.(parameter_symbols(sys)))) == 1
+           count(isequal(sym), Symbol.(nameof(sys), :₊, getname.(parameter_symbols(sys)))) == 1
 end
 
 function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
@@ -255,7 +255,7 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym::Sym
     if idx !== nothing
         return idx
     elseif count('₊', string(sym)) == 1
-        return findfirst(isequal(sym), Symbol.(sys.name, :₊, getname.(parameter_symbols(sys))))
+        return findfirst(isequal(sym), Symbol.(nameof(sys), :₊, getname.(parameter_symbols(sys))))
     end
     return nothing
 end
@@ -656,7 +656,7 @@ function states(sys::AbstractSystem)
     end
     isempty(nonunique_states) && return nonunique_states
     # `Vector{Any}` is incompatible with the `SymbolicIndexingInterface`, which uses
-    # `elsymtype = symbolic_type(eltype(_arg))` 
+    # `elsymtype = symbolic_type(eltype(_arg))`
     # which inappropriately returns `NotSymbolic()`
     if nonunique_states isa Vector{Any}
         nonunique_states = _nonum.(nonunique_states)
