@@ -84,8 +84,6 @@ function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
         container_type = Array
     end
 
-    @show container_type
-
     vals = if eltype(varmap) <: Pair # `varmap` is a dict or an array of pairs
         varmap = todict(varmap)
         _varmap_to_vars(varmap, varlist; defaults = defaults, check = check,
