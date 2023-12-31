@@ -34,11 +34,11 @@ struct ObservableRecordFromSolution{S, T}
         param_end_idxs = state_end_idxs + length(parameters(nsys))
 
         bif_par_idx = state_end_idxs + bif_idx
-        # Gets the (base) substitution values for states. 
+        # Gets the (base) substitution values for states.
         subs_vals_states = Pair.(states(nsys), u0_vals)
-        # Gets the (base) substitution values for parameters. 
+        # Gets the (base) substitution values for parameters.
         subs_vals_params = Pair.(parameters(nsys), p_vals)
-        # Gets the (base) substitution values for observables. 
+        # Gets the (base) substitution values for observables.
         subs_vals_obs = [obs.lhs => substitute(obs.rhs,
             [subs_vals_states; subs_vals_params]) for obs in observed(nsys)]
         # Sometimes observables depend on other observables, hence we make a second update to this vector.
@@ -136,7 +136,7 @@ function BifurcationKit.BifurcationProblem(osys::ODESystem, args...; kwargs...)
     nsys = NonlinearSystem([0 ~ eq.rhs for eq in equations(osys)],
         states(osys),
         parameters(osys);
-        name = osys.name)
+        name = nameof(osys))
     return BifurcationKit.BifurcationProblem(nsys, args...; kwargs...)
 end
 

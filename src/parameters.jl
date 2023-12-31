@@ -102,7 +102,7 @@ function split_parameters_by_type(ps)
         split_ps = tighten_types.(Base.Fix1(getindex, ps).(split_idxs))
 
         if ps isa StaticArray
-            parrs = map(x-> SArray{Tuple{size(x)...}}(x), split_ps)
+            parrs = map(x -> SArray{Tuple{size(x)...}}(x), split_ps)
             split_ps = SArray{Tuple{size(parrs)...}}(parrs)
         end
         if length(split_ps) == 1  #Tuple not needed, only 1 type
