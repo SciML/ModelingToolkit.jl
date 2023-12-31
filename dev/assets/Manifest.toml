@@ -622,9 +622,9 @@ version = "2.2.6"
 
 [[deps.ExceptionUnwrapping]]
 deps = ["Test"]
-git-tree-sha1 = "e90caa41f5a86296e014e148ee061bd6c3edec96"
+git-tree-sha1 = "dcb08a0d93ec0b1cdc4af184b26b591e9695423a"
 uuid = "460bff9d-24e4-43bc-9d9f-a8973cb893f4"
-version = "0.1.9"
+version = "0.1.10"
 
 [[deps.Expat_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -741,9 +741,9 @@ version = "0.2.0"
 
 [[deps.FiniteDiff]]
 deps = ["ArrayInterface", "LinearAlgebra", "Requires", "Setfield", "SparseArrays"]
-git-tree-sha1 = "c6e4a1fbe73b31a3dea94b1da449503b8830c306"
+git-tree-sha1 = "73d1214fec245096717847c62d389a5d2ac86504"
 uuid = "6a86dc24-6348-571c-b903-95158fe2bd41"
-version = "2.21.1"
+version = "2.22.0"
 
     [deps.FiniteDiff.extensions]
     FiniteDiffBandedMatricesExt = "BandedMatrices"
@@ -1812,9 +1812,9 @@ version = "1.6.3"
 
 [[deps.OrdinaryDiffEq]]
 deps = ["ADTypes", "Adapt", "ArrayInterface", "DataStructures", "DiffEqBase", "DocStringExtensions", "ExponentialUtilities", "FastBroadcast", "FastClosures", "FillArrays", "FiniteDiff", "ForwardDiff", "FunctionWrappersWrappers", "IfElse", "InteractiveUtils", "LineSearches", "LinearAlgebra", "LinearSolve", "Logging", "LoopVectorization", "MacroTools", "MuladdMacro", "NonlinearSolve", "Polyester", "PreallocationTools", "PrecompileTools", "Preferences", "RecursiveArrayTools", "Reexport", "SciMLBase", "SciMLOperators", "SimpleNonlinearSolve", "SimpleUnPack", "SparseArrays", "SparseDiffTools", "StaticArrayInterface", "StaticArrays", "TruncatedStacktraces"]
-git-tree-sha1 = "7857772d839bf0773f5db9e456149c832ba5facb"
+git-tree-sha1 = "96ae028da53cdfe24712ab015a6f854cfd7609c0"
 uuid = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
-version = "6.65.0"
+version = "6.66.0"
 
 [[deps.PCRE2_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -2106,9 +2106,9 @@ version = "0.6.12"
 
 [[deps.RecursiveArrayTools]]
 deps = ["Adapt", "ArrayInterface", "DocStringExtensions", "GPUArraysCore", "IteratorInterfaceExtensions", "LinearAlgebra", "RecipesBase", "Requires", "SparseArrays", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface", "Tables"]
-git-tree-sha1 = "4da78e9b73a8d585e1c520e60d46601af9828275"
+git-tree-sha1 = "27ee1c03e732c488ecce1a25f0d7da9b5d936574"
 uuid = "731186ca-8d62-57ce-b412-fbd966d074cd"
-version = "3.3.1"
+version = "3.3.3"
 
     [deps.RecursiveArrayTools.extensions]
     RecursiveArrayToolsFastBroadcastExt = "FastBroadcast"
@@ -2211,9 +2211,9 @@ version = "0.6.42"
 
 [[deps.SciMLBase]]
 deps = ["ADTypes", "ArrayInterface", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "EnumX", "FillArrays", "FunctionWrappersWrappers", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "PrecompileTools", "Preferences", "Printf", "RecipesBase", "RecursiveArrayTools", "Reexport", "RuntimeGeneratedFunctions", "SciMLOperators", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface", "Tables", "TruncatedStacktraces"]
-git-tree-sha1 = "2c3706caa9adab5031f30937699c46e159ae477f"
+git-tree-sha1 = "5fc7b7f3dcffd9a5554ac80e15c300d6f8b07460"
 uuid = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
-version = "2.13.0"
+version = "2.14.0"
 
     [deps.SciMLBase.extensions]
     SciMLBaseChainRulesCoreExt = "ChainRulesCore"
@@ -2530,9 +2530,9 @@ version = "1.5.0"
 
 [[deps.Symbolics]]
 deps = ["ArrayInterface", "Bijections", "ConstructionBase", "DataStructures", "DiffRules", "Distributions", "DocStringExtensions", "DomainSets", "DynamicPolynomials", "Groebner", "IfElse", "LaTeXStrings", "LambertW", "Latexify", "Libdl", "LinearAlgebra", "LogExpFunctions", "MacroTools", "Markdown", "NaNMath", "PrecompileTools", "RecipesBase", "Reexport", "Requires", "RuntimeGeneratedFunctions", "SciMLBase", "Setfield", "SparseArrays", "SpecialFunctions", "StaticArrays", "SymbolicIndexingInterface", "SymbolicUtils"]
-git-tree-sha1 = "80e67b76699b1ec130ac60946b3d06017f58141f"
+git-tree-sha1 = "280cde7b8e2100911fbab2f507df67042c297ca4"
 uuid = "0c5d862f-8b57-4792-8d23-62f2024744c7"
-version = "5.13.0"
+version = "5.14.0"
 
     [deps.Symbolics.extensions]
     SymbolicsSymPyExt = "SymPy"
