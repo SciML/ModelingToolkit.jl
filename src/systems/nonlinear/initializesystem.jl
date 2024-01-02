@@ -14,7 +14,7 @@ function initializesystem(sys::ODESystem; name = nameof(sys), guesses = Dict(), 
     u0 = Vector{Pair}(undef, 0)
     defs = ModelingToolkit.defaults(sys)
 
-    full_states = [sts;getfield.((observed(sys)),:lhs)]
+    full_states = [sts; getfield.((observed(sys)), :lhs)]
 
     # Refactor to ODESystem construction
     # should be ModelingToolkit.guesses(sys)
@@ -28,26 +28,28 @@ function initializesystem(sys::ODESystem; name = nameof(sys), guesses = Dict(), 
             def = defs[st]
 
             if def isa Equation
-                st ∉ keys(guesses) && error("Invalid setup: unknown $(st) has an initial condition equation with no guess.")
-                push!(eqs_ics,def)
-                push!(u0,st => guesses[st])
+                st ∉ keys(guesses) &&
+                    error("Invalid setup: unknown $(st) has an initial condition equation with no guess.")
+                push!(eqs_ics, def)
+                push!(u0, st => guesses[st])
             else
-                push!(eqs_ics,st ~ def)
+                push!(eqs_ics, st ~ def)
                 push!(u0, st => def)
             end
         elseif st ∈ keys(guesses)
-            push!(u0,st => guesses[st])
+            push!(u0, st => guesses[st])
         else
             error("Invalid setup: unknown $(st) has no default value or initial guess")
         end
     end
 
     pars = parameters(sys)
+    nleqs = [eqs_ics; observed(sys)]
 
-    sys_nl = NonlinearSystem([eqs_ics; observed(sys)],
+    sys_nl = NonlinearSystem(nleqs,
         full_states,
         pars;
-        defaults = merge(ModelingToolkit.defaults(sys),todict(u0)),
+        defaults = merge(ModelingToolkit.defaults(sys), todict(u0)),
         name,
         kwargs...)
 

@@ -423,7 +423,7 @@ return `false` may not be matched.
 """
 function maximal_matching(g::BipartiteGraph, srcfilter = vsrc -> true,
         dstfilter = vdst -> true, ::Type{U} = Unassigned) where {U}
-    matching = Matching{U}(ndsts(g))
+    matching = Matching{U}(max(nsrcs(g), ndsts(g)))
     foreach(Iterators.filter(srcfilter, 𝑠vertices(g))) do vsrc
         construct_augmenting_path!(matching, g, vsrc, dstfilter)
     end
