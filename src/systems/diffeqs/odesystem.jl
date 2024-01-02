@@ -163,7 +163,7 @@ struct ODESystem <: AbstractODESystem
             check_equations(equations(cevents), iv)
         end
         if checks == true || (checks & CheckUnits) > 0
-            u = __get_unit_type(dvs, ps, iv)
+            u = __get_unit_type(dvs, ps)
             check_units(u, deqs)
         end
         new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,

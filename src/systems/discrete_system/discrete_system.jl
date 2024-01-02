@@ -103,7 +103,7 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
             check_parameters(ps, iv)
         end
         if checks == true || (checks & CheckUnits) > 0
-            u = __get_unit_type(dvs, ps, iv, ctrls)
+            u = __get_unit_type(dvs, ps, ctrls)
             check_units(u, discreteEqs)
         end
         new(tag, discreteEqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, name,
