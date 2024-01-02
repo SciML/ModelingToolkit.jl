@@ -142,11 +142,19 @@ function SciMLBase.process_p_u0_symbolic(prob::Union{SciMLBase.AbstractDEProblem
         hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :ps) ||
             throw(ArgumentError("This problem does not support symbolic maps with `remake`, i.e. it does not have a symbolic origin." *
                                 " Please use `remake` with the `p` keyword argument as a vector of values, paying attention to parameter order."))
+        p = [
+            (sym isa Symbol ? parameter_symbols(prob)[parameter_index(prob, sym)] : sym) => val
+            for (sym, val) in p
+        ]
     end
     if eltype(u0) <: Pair
         hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :states) ||
             throw(ArgumentError("This problem does not support symbolic maps with `remake`, i.e. it does not have a symbolic origin." *
                                 " Please use `remake` with the `u0` keyword argument as a vector of values, paying attention to state order."))
+        u0 = [
+            (sym isa Symbol ? variable_symbols(prob)[variable_index(prob, sym)] : sym) => val
+            for (sym, val) in u0
+        ]
     end
 
     sys = prob.f.sys
@@ -165,7 +173,10 @@ function SciMLBase.process_p_u0_symbolic(prob::Union{SciMLBase.AbstractDEProblem
     sts = states(sys)
     defs = mergedefaults(defs, prob.u0, sts)
     defs = mergedefaults(defs, u0, sts)
-    u0, p, defs = get_u0_p(sys, defs)
+
+    u0_defs = Dict(sym => val for (sym, val) in defs if is_variable(prob, sym))
+    ps_defs = Dict(sym => val for (sym, val) in defs if is_parameter(prob, sym))
+    u0, p, defs = get_u0_p(sys, u0_defs, ps_defs)
 
     return p, u0
 end

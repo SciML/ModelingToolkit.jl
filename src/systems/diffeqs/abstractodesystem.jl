@@ -822,6 +822,9 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     if p isa Tuple
         ps = Base.Fix1(getindex, parameters(sys)).(split_idxs)
         ps = (ps...,) #if p is Tuple, ps should be Tuple
+    else
+        # if there is only one type, we don't need split_idxs
+        split_idxs = nothing
     end
 
     if implicit_dae && du0map !== nothing
