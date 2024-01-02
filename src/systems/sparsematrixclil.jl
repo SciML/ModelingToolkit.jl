@@ -130,7 +130,7 @@ end
 nonzerosmap(a::CLILVector) = NonZeros(a)
 
 findfirstequal(vpivot, ivars) = findfirst(isequal(vpivot), ivars)
-function findfirstequal(vpivot::Int64, ivars::AbstractVector{Int64})
+function findfirstequal(vpivot::Int64, ivars::Vector{Int64})
     GC.@preserve ivars begin
         ret = Base.llvmcall(("""
                            declare i8 @llvm.cttz.i8(i8, i1);
