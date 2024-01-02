@@ -197,3 +197,22 @@ maj2 = MassActionJump(γ, [I => 1], [I => -1, R => 1])
 maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
 maj2 = MassActionJump(γ, [S => 1], [S => -1])
 @named js4 = JumpSystem([maj1, maj2], t, [S], [β, γ])
+
+using DynamicQuantities: @us_str
+vals1 = @variables begin
+    ρ, [unit = us"g/m^3"]
+    μ, [unit = us"g/m/s"]
+    u, [unit = us"m/s"]
+    ℓ, [unit = us"m"]
+end
+
+vals2 = @variables begin
+    ℓ, [unit = us"m"]
+    g, [unit = 9.8us"m/s^2"]
+    m, [unit = us"g"]
+    T, [unit = us"s"]
+    v, [unit = us"m/s"]
+    θ
+end
+@test isequal(ModelingToolkit.buckingham_pi(vals1), [μ / (u * ρ * ℓ)])
+@test isequal(ModelingToolkit.buckingham_pi(vals2), [g * (T^2) / ℓ, v^2 / (g * ℓ), θ])

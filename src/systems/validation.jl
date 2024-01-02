@@ -278,3 +278,62 @@ function check_units(eqs...)
         throw(ValidationError("Some equations had invalid units. See warnings for details."))
 end
 all_dimensionless(states) = all(x -> safe_get_unit(x, "") in (unitless, nothing), states)
+
+using DynamicQuantities: @us_str, expand_units, DynamicQuantities, SymbolicDimensions
+const UNITLESS_UNIT = DynamicQuantities.Quantity(1, SymbolicDimensions)
+const UNITLESS_SI = expand_units(UNITLESS_UNIT)
+const N_UNIT_DIMS = nfields(DynamicQuantities.dimension(UNITLESS_SI))
+function _get_unit(x)
+    getmetadata(ModelingToolkit.unwrap(x), ModelingToolkit.VariableUnit, UNITLESS_UNIT)
+end
+
+"""
+    buckingham_pi(vals)
+
+Compute dimensionless quantities using the Buckingham pi approach. It takes
+symbolic units `us""` from `DynamicQuantities`.
+
+Examples:
+
+```julia-repl
+julia> using ModelingToolkit; using DynamicQuantities: @us_str
+
+julia> vals1 = @variables begin
+           ρ, [unit = us"g/m^3"]
+           μ, [unit = us"g/m/s"]
+           u, [unit = us"m/s"]
+           ℓ, [unit = us"m"]
+       end;
+
+julia> vals2 = @variables begin
+           ℓ, [unit = us"m"]
+           g, [unit = 9.8us"m/s^2"]
+           m, [unit = us"g"]
+           T, [unit = us"s"]
+           v, [unit = us"m/s"]
+           θ
+       end;
+
+julia> ModelingToolkit.buckingham_pi(vals1)
+1-element Vector{Num}:
+ μ / (u*ρ*ℓ)
+
+julia> ModelingToolkit.buckingham_pi(vals2)
+3-element Vector{Num}:
+ (g*(T^2)) / ℓ
+ (v^2) / (g*ℓ)
+             θ
+```
+"""
+function buckingham_pi(vals)
+    us = _get_unit.(vals)
+    M = [convert(Rational, getfield(DynamicQuantities.dimension(expand_units(u)), p))
+         for u in us, p in 1:N_UNIT_DIMS]
+    s = lcm(denominator.(M))
+    Mt = convert.(Int, isone(s) ? M' : M' * s)
+    coeffs = ModelingToolkit.nullspace(Mt)
+    for c in eachcol(coeffs)
+        c .= c .÷ gcd(c)
+    end
+    vec(prod(vals .^ coeffs, dims = 1))
+end
