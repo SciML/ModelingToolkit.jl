@@ -100,16 +100,6 @@ D = Differential(t)
 eqs = D.(x) .~ v
 ODESystem(eqs, name = :sys)
 
-# Difference equation
-@parameters t [unit = u"s"] a [unit = u"s"^-1]
-@variables x(t) [unit = u"kg"]
-δ = Differential(t)
-D = Difference(t; dt = 0.1u"s")
-eqs = [
-    δ(x) ~ a * x,
-]
-de = ODESystem(eqs, t, [x], [a], name = :sys)
-
 # Nonlinear system
 @parameters a [unit = u"kg"^-1]
 @variables x [unit = u"kg"]

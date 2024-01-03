@@ -144,7 +144,6 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys), ps = par
         ddvs = implicit_dae ? map(Differential(get_iv(sys)), dvs) :
                nothing,
         isdde = false,
-        has_difference = false,
         kwargs...)
     if isdde
         eqs = delay_to_function(sys)
@@ -167,8 +166,7 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys), ps = par
     if isdde
         build_function(rhss, u, DDE_HISTORY_FUN, p, t; kwargs...)
     else
-        pre, sol_states = get_substitutions_and_solved_unknowns(sys,
-            no_postprocess = has_difference)
+        pre, sol_states = get_substitutions_and_solved_unknowns(sys)
 
         if implicit_dae
             build_function(rhss, ddvs, u, p, t; postprocess_fbody = pre,
@@ -224,52 +222,6 @@ function delay_to_function(expr, iv, sts, ps, h)
     else
         return expr
     end
-end
-
-function generate_difference_cb(sys::ODESystem, dvs = unknowns(sys), ps = parameters(sys);
-        kwargs...)
-    eqs = equations(sys)
-    check_operator_variables(eqs, Difference)
-
-    var2eq = Dict(arguments(eq.lhs)[1] => eq for eq in eqs if isdifference(eq.lhs))
-
-    u = map(x -> time_varying_as_func(value(x), sys), dvs)
-    p = map(x -> time_varying_as_func(value(x), sys), ps)
-    t = get_iv(sys)
-
-    body = map(dvs) do v
-        eq = get(var2eq, v, nothing)
-        eq === nothing && return v
-        d = operation(eq.lhs)
-        d.update ? eq.rhs : eq.rhs + v
-    end
-
-    pre = get_postprocess_fbody(sys)
-    cpre = get_preprocess_constants(body)
-    pre2 = x -> pre(cpre(x))
-    f_oop, f_iip = build_function(body, u, p, t; expression = Val{false},
-        postprocess_fbody = pre2, kwargs...)
-
-    cb_affect! = let f_oop = f_oop, f_iip = f_iip
-        function cb_affect!(integ)
-            if DiffEqBase.isinplace(integ.sol.prob)
-                tmp, = DiffEqBase.get_tmp_cache(integ)
-                f_iip(tmp, integ.u, integ.p, integ.t) # aliasing `integ.u` would be bad.
-                copyto!(integ.u, tmp)
-            else
-                integ.u = f_oop(integ.u, integ.p, integ.t)
-            end
-            return nothing
-        end
-    end
-
-    getdt(eq) = operation(eq.lhs).dt
-    deqs = values(var2eq)
-    dt = getdt(first(deqs))
-    all(dt == getdt(eq) for eq in deqs) ||
-        error("All difference variables should have same time steps.")
-
-    PeriodicCallback(cb_affect!, first(dt))
 end
 
 function calculate_massmatrix(sys::AbstractODESystem; simplify = false)
@@ -940,11 +892,11 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
         check_length = true,
         kwargs...) where {iip, specialize}
     has_difference = any(isdifferenceeq, equations(sys))
+    has_difference && error("The operators Difference and DiscreteUpdate are deprecated. Use ShiftIndex instead.")
     f, u0, p = process_DEProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
-        has_difference = has_difference,
         check_length, kwargs...)
-    cbs = process_events(sys; callback, has_difference, kwargs...)
+    cbs = process_events(sys; callback, kwargs...)
     inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
         affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
@@ -1010,23 +962,17 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
         parammap = DiffEqBase.NullParameters();
         check_length = true, kwargs...) where {iip}
     has_difference = any(isdifferenceeq, equations(sys))
+    has_difference && error("The operators Difference and DiscreteUpdate are deprecated. Use ShiftIndex instead.")
     f, du0, u0, p = process_DEProblem(DAEFunction{iip}, sys, u0map, parammap;
-        implicit_dae = true, du0map = du0map,
-        has_difference = has_difference, check_length,
+        implicit_dae = true, du0map = du0map, check_length,
         kwargs...)
     diffvars = collect_differential_variables(sys)
     sts = unknowns(sys)
     differential_vars = map(Base.Fix2(in, diffvars), sts)
     kwargs = filter_kwargs(kwargs)
 
-    if has_difference
-        DAEProblem{iip}(f, du0, u0, tspan, p;
-            difference_cb = generate_difference_cb(sys; kwargs...),
-            differential_vars = differential_vars, kwargs...)
-    else
-        DAEProblem{iip}(f, du0, u0, tspan, p; differential_vars = differential_vars,
+    DAEProblem{iip}(f, du0, u0, tspan, p; differential_vars = differential_vars,
             kwargs...)
-    end
 end
 
 function generate_history(sys::AbstractODESystem, u0; kwargs...)
@@ -1043,15 +989,15 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         check_length = true,
         kwargs...) where {iip}
     has_difference = any(isdifferenceeq, equations(sys))
+    has_difference && error("The operators Difference and DiscreteUpdate are deprecated. Use ShiftIndex instead.")
     f, u0, p = process_DEProblem(DDEFunction{iip}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
-        has_difference = has_difference,
         symbolic_u0 = true,
         check_length, kwargs...)
     h_oop, h_iip = generate_history(sys, u0)
     h = h_oop
     u0 = h(p, tspan[1])
-    cbs = process_events(sys; callback, has_difference, kwargs...)
+    cbs = process_events(sys; callback, kwargs...)
     inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
         affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
@@ -1103,16 +1049,16 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         sparsenoise = nothing,
         kwargs...) where {iip}
     has_difference = any(isdifferenceeq, equations(sys))
+    has_difference && error("The operators Difference and DiscreteUpdate are deprecated. Use ShiftIndex instead.")
     f, u0, p = process_DEProblem(SDDEFunction{iip}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
-        has_difference = has_difference,
         symbolic_u0 = true,
         check_length, kwargs...)
     h_oop, h_iip = generate_history(sys, u0)
     h(out, p, t) = h_iip(out, p, t)
     h(p, t) = h_oop(p, t)
     u0 = h(p, tspan[1])
-    cbs = process_events(sys; callback, has_difference, kwargs...)
+    cbs = process_events(sys; callback, kwargs...)
     inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
         affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)

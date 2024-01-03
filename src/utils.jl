@@ -1,5 +1,4 @@
 get_iv(D::Differential) = D.x
-get_iv(D::Difference) = D.t
 
 function make_operation(@nospecialize(op), args)
     if op === (*)
@@ -184,7 +183,7 @@ function check_equations(eqs, iv)
     end
 end
 """
-Get all the independent variables with respect to which differentials/differences are taken.
+Get all the independent variables with respect to which differentials are taken.
 """
 function collect_ivs_from_nested_operator!(ivs, x, target_op)
     if !istree(x)
@@ -195,10 +194,8 @@ function collect_ivs_from_nested_operator!(ivs, x, target_op)
         push!(ivs, get_iv(op))
         x = if target_op <: Differential
             op.x
-        elseif target_op <: Difference
-            op.t
         else
-            error("Unknown target op type in collect_ivs $target_op. Pass Difference or Differential")
+            error("Unknown target op type in collect_ivs $target_op. Pass Differential")
         end
         collect_ivs_from_nested_operator!(ivs, x, target_op)
     end
@@ -261,7 +258,7 @@ Throw error when difference/derivative operation occurs in the R.H.S.
 """
 @noinline function throw_invalid_operator(opvar, eq, op::Type)
     if op === Difference
-        optext = "difference"
+        error("The Difference operator is deprecated, use ShiftIndex instead")        
     elseif op === Differential
         optext = "derivative"
     end
@@ -293,8 +290,7 @@ function check_operator_variables(eqs, op::T) where {T}
         if length(tmp) == 1
             x = only(tmp)
             if op === Differential
-                # Having a difference is fine for ODEs
-                is_tmp_fine = isdifferential(x) || isdifference(x)
+                is_tmp_fine = isdifferential(x)
             else
                 is_tmp_fine = istree(x) && !(operation(x) isa op)
             end
@@ -319,23 +315,6 @@ isoperator(op) = expr -> isoperator(expr, op)
 isdifferential(expr) = isoperator(expr, Differential)
 isdiffeq(eq) = isdifferential(eq.lhs)
 
-isdifference(expr) = isoperator(expr, Difference)
-isdifferenceeq(eq) = isdifference(eq.lhs)
-
-function iv_from_nested_difference(x::Symbolic)
-    istree(x) || return x
-    operation(x) isa Difference ? iv_from_nested_difference(arguments(x)[1]) :
-    arguments(x)[1]
-end
-iv_from_nested_difference(x) = nothing
-
-var_from_nested_difference(x, i = 0) = (nothing, nothing)
-function var_from_nested_difference(x::Symbolic, i = 0)
-    istree(x) && operation(x) isa Difference ?
-    var_from_nested_difference(arguments(x)[1], i + 1) :
-    (x, i)
-end
-
 isvariable(x::Num)::Bool = isvariable(value(x))
 function isvariable(x)::Bool
     x isa Symbolic || return false
@@ -350,7 +329,6 @@ end
 Return a `Set` containing all variables in `x` that appear in
 
   - differential equations if `op = Differential`
-  - difference equations if `op = Differential`
 
 Example:
 
@@ -390,9 +368,6 @@ function vars!(vars, O; op = Differential)
     return vars
 end
 
-difference_vars(x) = vars(x; op = Difference)
-difference_vars!(vars, O) = vars!(vars, O; op = Difference)
-
 function collect_operator_variables(sys::AbstractSystem, args...)
     collect_operator_variables(equations(sys), args...)
 end
@@ -404,7 +379,7 @@ end
     collect_operator_variables(eqs::AbstractVector{Equation}, op)
 
 Return a `Set` containing all variables that have Operator `op` applied to them.
-See also [`collect_differential_variables`](@ref), [`collect_difference_variables`](@ref).
+See also [`collect_differential_variables`](@ref).
 """
 function collect_operator_variables(eqs::AbstractVector{Equation}, op)
     vars = Set()
@@ -420,7 +395,6 @@ function collect_operator_variables(eqs::AbstractVector{Equation}, op)
     return diffvars
 end
 collect_differential_variables(sys) = collect_operator_variables(sys, Differential)
-collect_difference_variables(sys) = collect_operator_variables(sys, Difference)
 
 """
     collect_applied_operators(x, op)
@@ -471,19 +445,6 @@ function collect_vars!(unknowns, parameters, expr, iv)
     return nothing
 end
 
-function collect_vars_difference!(unknowns, parameters, expr, iv)
-    if issym(expr)
-        collect_var!(unknowns, parameters, expr, iv)
-    else
-        for var in vars(expr)
-            if istree(var) && operation(var) isa Difference
-                var, _ = var_from_nested_difference(var)
-            end
-            collect_var!(unknowns, parameters, var, iv)
-        end
-    end
-    return nothing
-end
 
 function collect_var!(unknowns, parameters, var, iv)
     isequal(var, iv) && return nothing
