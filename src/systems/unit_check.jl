@@ -20,7 +20,7 @@ function __get_literal_unit(x)
     end
     v = value(x)
     u = getmetadata(v, VariableUnit, nothing)
-    u === nothing ? nothing : screen_unit(u)
+    u isa DQ.AbstractQuantity ? screen_unit(u) : u
 end
 function __get_scalar_unit_type(v)
     u = __get_literal_unit(v)
