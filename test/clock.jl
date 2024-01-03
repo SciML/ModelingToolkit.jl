@@ -310,3 +310,26 @@ if VERSION >= v"1.7"
 
     @test sol.u ≈ sol2.u
 end
+
+# RealtimeClock
+dt = 0.01
+@variables t x(t)=0 y(t)=0 u(t)=0 yd(t)=0 ud(t)=0 r(t)=1
+@parameters kp = 1
+D = Differential(t)
+d = ModelingToolkit.RealtimeClock(dt)
+# u(n + 1) := f(u(n))
+
+eqs = [yd ~ Sample(d)(y)
+    ud ~ kp * (r - yd)
+    r ~ 1.0
+
+# plant (time continuous part)
+    u ~ Hold(ud)
+    D(x) ~ -x + u
+    y ~ x]
+@named sys = ODESystem(eqs)
+prob = ODEProblem(structural_simplify(sys), [], (0.0, 3.0))
+solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
+execution_time = @elapsed solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
+@test_skip execution_time≈3 atol=10 * dt # Very crude test that can be evaluated locally but not on CI
+@test execution_time >= 3 - dt # This can be evaluated on CI as well since it only tests a lower bound

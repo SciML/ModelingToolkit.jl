@@ -236,3 +236,28 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
     defaults = Dict{Any, Any}(v => 0.0 for v in Iterators.flatten(inputs))
     return affects, clocks, svs, appended_parameters, defaults
 end
+
+function generate_discrete_callback(affect, clock, sv)
+    error("$clock is not a supported clock type.")
+end # Fallback
+
+function generate_discrete_callback(affect, clock::Clock, sv)
+    PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)
+end
+
+function generate_discrete_callback(affect, clock::RealtimeClock, sv)
+    start_time = time() # Set start time before simulation starts
+    function realtime_affect!(integrator, saved_values)
+        # This is a closure that closes over start_time
+        affect(integrator, saved_values)
+        execution_time = time() - start_time
+        sleep_time = clock.dt - execution_time
+        if sleep_time < 0
+            @debug "RealtimeClock failed to meet deadline dt = $(clock.dt), execution time = $execution_time at simulation time t = $(t)"
+        end
+        Libc.systemsleep(max(0, sleep_time))
+        start_time = time() # Update start time to current time
+        nothing
+    end
+    PeriodicCallback(DiscreteSaveAffect(realtime_affect!, sv), clock.dt)
+end
