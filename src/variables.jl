@@ -143,7 +143,7 @@ function SciMLBase.process_p_u0_symbolic(prob::Union{SciMLBase.AbstractDEProblem
             throw(ArgumentError("This problem does not support symbolic maps with `remake`, i.e. it does not have a symbolic origin." *
                                 " Please use `remake` with the `p` keyword argument as a vector of values, paying attention to parameter order."))
         p = [
-            (sym isa Symbol ? parameter_symbols(prob)[parameter_index(prob, sym)] : sym) => val
+            (symbolic_type(sym) != NotSymbolic() ? parameter_symbols(prob)[parameter_index(prob, sym)] : sym) => val
             for (sym, val) in p
         ]
     end
@@ -152,7 +152,7 @@ function SciMLBase.process_p_u0_symbolic(prob::Union{SciMLBase.AbstractDEProblem
             throw(ArgumentError("This problem does not support symbolic maps with `remake`, i.e. it does not have a symbolic origin." *
                                 " Please use `remake` with the `u0` keyword argument as a vector of values, paying attention to state order."))
         u0 = [
-            (sym isa Symbol ? variable_symbols(prob)[variable_index(prob, sym)] : sym) => val
+            (symbolic_type(sym) != NotSymbolic() ? variable_symbols(prob)[variable_index(prob, sym)] : sym) => val
             for (sym, val) in u0
         ]
     end
