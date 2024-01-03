@@ -19,7 +19,8 @@ function __get_literal_unit(x)
         return nothing
     end
     v = value(x)
-    getmetadata(v, VariableUnit, nothing)
+    u = getmetadata(v, VariableUnit, nothing)
+    u === nothing ? nothing : screen_unit(u)
 end
 function __get_scalar_unit_type(v)
     u = __get_literal_unit(v)

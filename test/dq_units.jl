@@ -59,16 +59,11 @@ end
 end
 @named p1 = Pin()
 @named p2 = Pin()
-@named op = OtherPin()
+@test_throws MT.ValidationError @named op = OtherPin()
 @named lp = LongPin()
 good_eqs = [connect(p1, p2)]
-bad_eqs = [connect(p1, p2, op)]
-bad_length_eqs = [connect(op, lp)]
 @test MT.validate(good_eqs)
-@test !MT.validate(bad_eqs)
-@test !MT.validate(bad_length_eqs)
 @named sys = ODESystem(good_eqs, t, [], [])
-@test_throws MT.ValidationError ODESystem(bad_eqs, t, [], []; name = :sys)
 
 # Array variables
 @variables t [unit = u"s"] x(t)[1:3] [unit = u"m"]
