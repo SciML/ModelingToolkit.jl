@@ -151,7 +151,7 @@ include("systems/optimization/modelingtoolkitize.jl")
 include("systems/pde/pdesystem.jl")
 
 include("systems/sparsematrixclil.jl")
-include("systems/discrete_system/discrete_system.jl")
+
 include("systems/unit_check.jl")
 include("systems/validation.jl")
 include("systems/dependency_graphs.jl")
@@ -198,7 +198,7 @@ export NonlinearProblem, BlockNonlinearProblem, NonlinearProblemExpr
 export OptimizationProblem, OptimizationProblemExpr, constraints
 export AutoModelingToolkit
 export SteadyStateProblem, SteadyStateProblemExpr
-export JumpProblem, DiscreteProblem
+export JumpProblem
 export NonlinearSystem, OptimizationSystem, ConstraintsSystem
 export alias_elimination, flatten
 export connect, domain_connect, @connector, Connection, Flow, Stream, instream
@@ -216,9 +216,6 @@ export SymScope, LocalScope, ParentScope, DelayParentScope, GlobalScope
 export independent_variable, equations, controls,
     observed, structure, full_equations
 export structural_simplify, expand_connections, linearize, linearization_function
-export DiscreteSystem,
-    DiscreteProblem, DiscreteProblemExpr, DiscreteFunction,
-    DiscreteFunctionExpr
 
 export calculate_jacobian, generate_jacobian, generate_function
 export calculate_control_jacobian, generate_control_jacobian
@@ -229,7 +226,6 @@ export calculate_hessian, generate_hessian
 export calculate_massmatrix, generate_diffusion_function
 export stochastic_integral_transform
 export TearingState, StateSelectionState
-export generate_difference_cb
 
 export BipartiteGraph, equation_dependencies, variable_dependencies
 export eqeq_dependencies, varvar_dependencies

@@ -501,50 +501,6 @@ sol = solve(prob, Tsit5())
     map((x, y) -> x[2] .+ 2y, sol[x], sol[y]),
     map((x, y) -> x[3] .+ 3y, sol[x], sol[y]))
 
-# Mixed Difference Differential equations
-@parameters t a b c d
-@variables x(t) y(t)
-δ = Differential(t)
-Δ = Difference(t; dt = 0.1)
-U = DiscreteUpdate(t; dt = 0.1)
-eqs = [δ(x) ~ a * x - b * x * y
-    δ(y) ~ -c * y + d * x * y
-    Δ(x) ~ y
-    U(y) ~ x + 1]
-@named de = ODESystem(eqs, t, [x, y], [a, b, c, d])
-@test generate_difference_cb(de) isa ModelingToolkit.DiffEqCallbacks.DiscreteCallback
-
-# doesn't work with ODEFunction
-# prob = ODEProblem(ODEFunction{false}(de),[1.0,1.0],(0.0,1.0),[1.5,1.0,3.0,1.0])
-
-prob = ODEProblem(de, [1.0, 1.0], (0.0, 1.0), [1.5, 1.0, 3.0, 1.0], check_length = false)
-@test prob.kwargs[:callback] isa ModelingToolkit.DiffEqCallbacks.DiscreteCallback
-
-sol = solve(prob, Tsit5(); callback = prob.kwargs[:callback],
-    tstops = prob.tspan[1]:0.1:prob.tspan[2], verbose = false)
-
-# Direct implementation
-function lotka(du, u, p, t)
-    x = u[1]
-    y = u[2]
-    du[1] = p[1] * x - p[2] * x * y
-    du[2] = -p[3] * y + p[4] * x * y
-end
-
-prob2 = ODEProblem(lotka, [1.0, 1.0], (0.0, 1.0), [1.5, 1.0, 3.0, 1.0])
-function periodic_difference_affect!(int)
-    int.u = [int.u[1] + int.u[2], int.u[1] + 1]
-    return nothing
-end
-
-difference_cb = ModelingToolkit.PeriodicCallback(periodic_difference_affect!, 0.1)
-
-sol2 = solve(prob2, Tsit5(); callback = difference_cb,
-    tstops = collect(prob.tspan[1]:0.1:prob.tspan[2])[2:end], verbose = false)
-
-@test_broken sol(0:0.01:1)[x] ≈ sol2(0:0.01:1)[1, :]
-@test_broken sol(0:0.01:1)[y] ≈ sol2(0:0.01:1)[2, :]
-
 using ModelingToolkit
 
 function submodel(; name)
