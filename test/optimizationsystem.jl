@@ -283,3 +283,23 @@ end
 
     @test sol1.u ≈ sol2.u
 end
+
+@testset "#2323 keep symbolic expressions and xor condition on constraint bounds" begin
+    @variables x y
+    @parameters a b
+    loss = (a - x)^2 + b * (y - x^2)^2
+    @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = [x^2 + y^2 ≲ 0.0])
+    @test_throws ArgumentError OptimizationProblem(sys,
+        [x => 0.0, y => 0.0],
+        [a => 1.0, b => 100.0],
+        lcons = [0.0])
+    @test_throws ArgumentError OptimizationProblem(sys,
+        [x => 0.0, y => 0.0],
+        [a => 1.0, b => 100.0],
+        ucons = [0.0])
+
+    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0])
+    @test prob.f.expr isa Symbolics.Symbolic
+    @test all(prob.f.cons_expr[i].lhs isa Symbolics.Symbolic
+              for i in 1:length(prob.f.cons_expr))
+end

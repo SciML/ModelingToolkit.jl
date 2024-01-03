@@ -327,7 +327,7 @@ plot(solve(prob))
 
 More on this topic may be found in [Composing Models and Building Reusable Components](@ref acausal).
 
-## Inital Guess
+## Initial Guess
 
 It is often a good idea to specify reasonable values for the initial state and the
 parameters of a model component. Then, these do not have to be explicitly specified when constructing the `ODEProblem`.
@@ -347,7 +347,7 @@ end
 ```
 
 While defining the model `UnitstepFOLFactory`, an initial guess of 0.0 is assigned to `x(t)` and 1.0 to `τ`.
-Additionaly, these initial guesses can be modified while creating instances of `UnitstepFOLFactory` by passing arguements.
+Additionally, these initial guesses can be modified while creating instances of `UnitstepFOLFactory` by passing arguments.
 
 ```@example ode2
 @named fol = UnitstepFOLFactory(; x = 0.1)

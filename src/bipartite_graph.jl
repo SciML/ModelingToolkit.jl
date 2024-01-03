@@ -203,7 +203,7 @@ end
 # Matrix whose only purpose is to pretty-print the bipartite graph
 struct BipartiteAdjacencyList
     u::Union{Vector{Int}, Nothing}
-    highligh_u::Union{Set{Int}, Nothing}
+    highlight_u::Union{Set{Int}, Nothing}
     match::Union{Int, Bool, Unassigned}
 end
 function BipartiteAdjacencyList(u::Union{Vector{Int}, Nothing})
@@ -236,13 +236,13 @@ function Base.show(io::IO, l::BipartiteAdjacencyList)
         printstyled(io, '⋅', color = :light_black)
     elseif isempty(l.u)
         printstyled(io, '∅', color = :light_black)
-    elseif l.highligh_u === nothing
+    elseif l.highlight_u === nothing
         print(io, l.u)
     else
         match = l.match
         isa(match, Bool) && (match = unassigned)
         function choose_color(i)
-            solvable = i in l.highligh_u
+            solvable = i in l.highlight_u
             matched = i == match
             if !matched && solvable
                 :default
@@ -254,10 +254,10 @@ function Base.show(io::IO, l::BipartiteAdjacencyList)
                 :magenta
             end
         end
-        if !isempty(setdiff(l.highligh_u, l.u))
+        if !isempty(setdiff(l.highlight_u, l.u))
             # Only for debugging, shouldn't happen in practice
             print(io,
-                map(union(l.u, l.highligh_u)) do i
+                map(union(l.u, l.highlight_u)) do i
                     HighlightInt(i, !(i in l.u) ? :light_red : choose_color(i),
                         i == match)
                 end)

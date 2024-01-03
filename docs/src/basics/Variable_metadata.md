@@ -83,6 +83,19 @@ hasbounds(u)
 getbounds(u)
 ```
 
+## Guess
+
+Specify an initial guess for custom initial conditions of an `ODESystem`.
+
+```@example metadata
+@variables u [guess = 1]
+hasguess(u)
+```
+
+```@example metadata
+getguess(u)
+```
+
 ## Mark input as a disturbance
 
 Indicate that an input is not available for control, i.e., it's a disturbance input.

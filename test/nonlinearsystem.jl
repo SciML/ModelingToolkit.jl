@@ -4,6 +4,7 @@ using DiffEqBase, SparseArrays
 using Test
 using NonlinearSolve
 using ModelingToolkit: value
+using ModelingToolkit: get_default_or_guess
 
 canonequal(a, b) = isequal(simplify(a), simplify(b))
 
@@ -231,4 +232,46 @@ testdict = Dict([:test => 1])
     prob_ = remake(prob, u0 = Dict(y => 2.0), p = Dict(a => 2.0))
     @test prob_.u0 == [1.0, 2.0, 1.0]
     @test prob_.p == [2.0, 1.0, 1.0]
+end
+
+@testset "Initialization System" begin
+    # Define the Lotka Volterra system which begins at steady state
+    @parameters t
+    pars = @parameters a=1.5 b=1.0 c=3.0 d=1.0 dx_ss=1e-5
+
+    vars = @variables begin
+        dx(t),
+        dy(t),
+        (x(t) = dx ~ dx_ss), [guess = 0.5]
+        (y(t) = dy ~ 0), [guess = -0.5]
+    end
+
+    D = Differential(t)
+
+    eqs = [dx ~ a * x - b * x * y
+        dy ~ -c * y + d * x * y
+        D(x) ~ dx
+        D(y) ~ dy]
+
+    @named sys = ODESystem(eqs, t, vars, pars)
+
+    sys_simple = structural_simplify(sys)
+
+    # Set up the initialization system
+    sys_init = initializesystem(sys_simple)
+
+    sys_init_simple = structural_simplify(sys_init)
+
+    prob = NonlinearProblem(sys_init_simple, get_default_or_guess.(states(sys_init_simple)))
+
+    @test prob.u0 == [0.5, -0.5]
+
+    sol = solve(prob)
+    @test sol.retcode == SciMLBase.ReturnCode.Success
+
+    # Confirm for all the states of the non-simplified system
+    @test all(.≈(sol[states(sys)], [1e-5, 0, 1e-5 / 1.5, 0]; atol = 1e-8))
+
+    # Confirm for all the states of the simplified system
+    @test all(.≈(sol[states(sys_simple)], [1e-5 / 1.5, 0]; atol = 1e-8))
 end
