@@ -9,7 +9,7 @@ ENV["MTK_ICONS_DIR"] = "$(@__DIR__)/icons"
 
 # Mock module used to test if the `@mtkmodel` macro works with fully-qualified names as well.
 module MyMockModule
-using ..ModelingToolkit, ..Unitful
+using ModelingToolkit, DynamicQuantities
 
 export Pin
 @connector Pin begin
@@ -328,6 +328,8 @@ end
 
 # Ensure that modules consisting MTKModels with component arrays and icons of
 # `Expr` type and `unit` metadata can be precompiled.
+module PrecompilationTest
+using Unitful, Test, ModelingToolkit
 @testset "Precompile packages with MTKModels" begin
     push!(LOAD_PATH, joinpath(@__DIR__, "precompile_test"))
 
@@ -339,6 +341,7 @@ end
     @test lastindex(parameters(model_with_component_array)) == 3
 
     pop!(LOAD_PATH)
+end
 end
 
 @testset "Conditional statements inside the blocks" begin
