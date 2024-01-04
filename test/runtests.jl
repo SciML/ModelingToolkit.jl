@@ -23,6 +23,7 @@ end
         @safetestset "Clock Test" include("clock.jl")
         @safetestset "DiscreteSystem Test" include("discretesystem.jl")
         @safetestset "ODESystem Test" include("odesystem.jl")
+        @safetestset "Dynamic Quantities Test" include("dq_units.jl")
         @safetestset "Unitful Quantities Test" include("units.jl")
         @safetestset "LabelledArrays Test" include("labelledarrays.jl")
         @safetestset "Mass Matrix Test" include("mass_matrix.jl")

@@ -1,7 +1,6 @@
 module ModelParsingPrecompile
 
-using ModelingToolkit
-using Unitful
+using ModelingToolkit, Unitful
 
 @mtkmodel ModelWithComponentArray begin
     @parameters begin

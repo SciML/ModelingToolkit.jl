@@ -1,52 +1,29 @@
-using ModelingToolkit, OrdinaryDiffEq, JumpProcesses, IfElse, Unitful
+using ModelingToolkit, OrdinaryDiffEq, JumpProcesses, IfElse, DynamicQuantities
 using Test
 MT = ModelingToolkit
-UMT = ModelingToolkit.UnitfulUnitCheck
-@parameters τ [unit = u"ms"] γ
-@variables t [unit = u"ms"] E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
+@parameters τ [unit = u"s"] γ
+@variables t [unit = u"s"] E(t) [unit = u"J"] P(t) [unit = u"W"]
 D = Differential(t)
 
-#This is how equivalent works:
-@test UMT.equivalent(u"MW", u"kJ/ms")
-@test !UMT.equivalent(u"m", u"cm")
-@test UMT.equivalent(UMT.get_unit(P^γ), UMT.get_unit((E / τ)^γ))
-
 # Basic access
-@test UMT.get_unit(t) == u"ms"
-@test UMT.get_unit(E) == u"kJ"
-@test UMT.get_unit(τ) == u"ms"
-@test UMT.get_unit(γ) == UMT.unitless
-@test UMT.get_unit(0.5) == UMT.unitless
-@test UMT.get_unit(UMT.SciMLBase.NullParameters()) == UMT.unitless
+@test MT.get_unit(t) == u"s"
+@test MT.get_unit(E) == u"J"
+@test MT.get_unit(τ) == u"s"
+@test MT.get_unit(γ) == MT.unitless
+@test MT.get_unit(0.5) == MT.unitless
+@test MT.get_unit(MT.SciMLBase.NullParameters()) == MT.unitless
 
 # Prohibited unit types
-@parameters β [unit = u"°"] α [unit = u"°C"] γ [unit = 1u"s"]
-@test_throws UMT.ValidationError UMT.get_unit(β)
-@test_throws UMT.ValidationError UMT.get_unit(α)
-@test_throws UMT.ValidationError UMT.get_unit(γ)
-
-# Non-trivial equivalence & operators
-@test UMT.get_unit(τ^-1) == u"ms^-1"
-@test UMT.equivalent(UMT.get_unit(D(E)), u"MW")
-@test UMT.equivalent(UMT.get_unit(E / τ), u"MW")
-@test UMT.get_unit(2 * P) == u"MW"
-@test UMT.get_unit(t / τ) == UMT.unitless
-@test UMT.equivalent(UMT.get_unit(P - E / τ), u"MW")
-@test UMT.equivalent(UMT.get_unit(D(D(E))), u"MW/ms")
-@test UMT.get_unit(IfElse.ifelse(t > t, P, E / τ)) == u"MW"
-@test UMT.get_unit(1.0^(t / τ)) == UMT.unitless
-@test UMT.get_unit(exp(t / τ)) == UMT.unitless
-@test UMT.get_unit(sin(t / τ)) == UMT.unitless
-@test UMT.get_unit(sin(1u"rad")) == UMT.unitless
-@test UMT.get_unit(t^2) == u"ms^2"
+@parameters γ [unit = 1u"ms"]
+@test_throws MT.ValidationError MT.get_unit(γ)
 
 eqs = [D(E) ~ P - E / τ
     0 ~ P]
-@test UMT.validate(eqs)
+@test MT.validate(eqs)
 @named sys = ODESystem(eqs)
 
-@test !UMT.validate(D(D(E)) ~ P)
-@test !UMT.validate(0 ~ P + E * τ)
+@test !MT.validate(D(D(E)) ~ P)
+@test !MT.validate(0 ~ P + E * τ)
 
 # Disabling unit validation/checks selectively
 @test_throws MT.ArgumentError ODESystem(eqs, t, [E, P, t], [τ], name = :sys)
@@ -77,21 +54,16 @@ end
 @connector function LongPin(; name)
     sts = @variables(v(t)=1.0, [unit = u"V"],
         i(t)=1.0, [unit = u"A", connect = Flow],
-        x(t)=1.0, [unit = NoUnits])
+        x(t)=1.0)
     ODESystem(Equation[], t, sts, []; name = name)
 end
 @named p1 = Pin()
 @named p2 = Pin()
-@named op = OtherPin()
+@test_throws MT.ValidationError @named op = OtherPin()
 @named lp = LongPin()
 good_eqs = [connect(p1, p2)]
-bad_eqs = [connect(p1, p2, op)]
-bad_length_eqs = [connect(op, lp)]
-@test UMT.validate(good_eqs)
-@test !UMT.validate(bad_eqs)
-@test !UMT.validate(bad_length_eqs)
+@test MT.validate(good_eqs)
 @named sys = ODESystem(good_eqs, t, [], [])
-@test_throws MT.ValidationError ODESystem(bad_eqs, t, [], []; name = :sys)
 
 # Array variables
 @variables t [unit = u"s"] x(t)[1:3] [unit = u"m"]
@@ -119,25 +91,25 @@ eqs = [
 @named nls = NonlinearSystem(eqs, [x], [a])
 
 # SDE test w/ noise vector
-@parameters τ [unit = u"ms"] Q [unit = u"MW"]
-@variables t [unit = u"ms"] E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
+@parameters τ [unit = u"s"] Q [unit = u"W"]
+@variables t [unit = u"s"] E(t) [unit = u"J"] P(t) [unit = u"W"]
 D = Differential(t)
 eqs = [D(E) ~ P - E / τ
     P ~ Q]
 
-noiseeqs = [0.1u"MW",
-    0.1u"MW"]
+noiseeqs = [0.1u"W",
+    0.1u"W"]
 @named sys = SDESystem(eqs, noiseeqs, t, [P, E], [τ, Q])
 
 # With noise matrix
-noiseeqs = [0.1u"MW" 0.1u"MW"
-    0.1u"MW" 0.1u"MW"]
+noiseeqs = [0.1u"W" 0.1u"W"
+    0.1u"W" 0.1u"W"]
 @named sys = SDESystem(eqs, noiseeqs, t, [P, E], [τ, Q])
 
 # Invalid noise matrix
-noiseeqs = [0.1u"MW" 0.1u"MW"
-    0.1u"MW" 0.1u"s"]
-@test !UMT.validate(eqs, noiseeqs)
+noiseeqs = [0.1u"W" 0.1u"W"
+    0.1u"W" 0.1u"s"]
+@test !MT.validate(eqs, noiseeqs)
 
 # Non-trivial simplifications
 @variables t [unit = u"s"] V(t) [unit = u"m"^3] L(t) [unit = u"m"]
