@@ -75,10 +75,14 @@ function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
         end
     end
 
-    # T = typeof(varmap)
-    # We respect the input type (feature removed, not needed with Tuple support)
+    # We respect the input type if it's a static array
+    # otherwise canonicalize to a normal array
     # container_type = T <: Union{Dict,Tuple} ? Array : T
-    container_type = Array
+    if varmap isa StaticArray
+        container_type = typeof(varmap)
+    else
+        container_type = Array
+    end
 
     vals = if eltype(varmap) <: Pair # `varmap` is a dict or an array of pairs
         varmap = todict(varmap)
@@ -424,4 +428,43 @@ macro brownian(xs...)
         Real,
         xs,
         tobrownian) |> esc
+end
+
+## Guess ======================================================================
+struct VariableGuess end
+Symbolics.option_to_metadata_type(::Val{:guess}) = VariableGuess
+getguess(x::Num) = getguess(Symbolics.unwrap(x))
+
+"""
+    getguess(x)
+
+Get the guess for the initial value associated with symbolic variable `x`.
+Create variables with a guess like this
+
+```
+@variables x [guess=1]
+```
+"""
+function getguess(x)
+    p = Symbolics.getparent(x, nothing)
+    p === nothing || (x = p)
+    Symbolics.getmetadata(x, VariableGuess, nothing)
+end
+
+"""
+    hasguess(x)
+
+Determine whether symbolic variable `x` has a guess associated with it.
+See also [`getguess`](@ref).
+"""
+function hasguess(x)
+    getguess(x) !== nothing
+end
+
+function get_default_or_guess(x)
+    if hasdefault(x) && !((def = getdefault(x)) isa Equation)
+        return def
+    else
+        return getguess(x)
+    end
 end

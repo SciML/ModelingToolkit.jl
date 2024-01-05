@@ -293,7 +293,7 @@ function check_operator_variables(eqs, op::T) where {T}
         if length(tmp) == 1
             x = only(tmp)
             if op === Differential
-                # Having a differece is fine for ODEs
+                # Having a difference is fine for ODEs
                 is_tmp_fine = isdifferential(x) || isdifference(x)
             else
                 is_tmp_fine = istree(x) && !(operation(x) isa op)

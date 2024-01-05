@@ -516,9 +516,9 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
         tgrad = _tgrad === nothing ? nothing : _tgrad,
         mass_matrix = _M,
         jac_prototype = jac_prototype,
-        syms = Symbol.(states(sys)),
+        syms = collect(Symbol.(states(sys))),
         indepsym = Symbol(get_iv(sys)),
-        paramsyms = Symbol.(ps),
+        paramsyms = collect(Symbol.(ps)),
         observed = observedfun,
         sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
         analytic = analytic)
@@ -910,6 +910,13 @@ symbolically calculating numerical enhancements.
 """
 function DiffEqBase.ODEProblem(sys::AbstractODESystem, args...; kwargs...)
     ODEProblem{true}(sys, args...; kwargs...)
+end
+
+function DiffEqBase.ODEProblem(sys::AbstractODESystem,
+        u0map::StaticArray,
+        args...;
+        kwargs...)
+    ODEProblem{false, SciMLBase.FullSpecialize}(sys, u0map, args...; kwargs...)
 end
 
 function DiffEqBase.ODEProblem{true}(sys::AbstractODESystem, args...; kwargs...)

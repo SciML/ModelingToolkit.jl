@@ -8,6 +8,14 @@ using ModelingToolkit
 @variables y
 @test !hasbounds(y)
 
+# Guess
+@variables y [guess = 0]
+@test getguess(y) === 0
+@test hasguess(y) === true
+
+@variables y
+@test hasguess(y) === false
+
 # Disturbance
 @variables u [disturbance = true]
 @test isdisturbance(u)

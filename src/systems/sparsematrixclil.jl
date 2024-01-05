@@ -155,7 +155,7 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
     #    algorithm.
     #
     # For point 1, remember that we're working on a system of linear equations,
-    # so it is always legal for us to multiply any row by a sclar without changing
+    # so it is always legal for us to multiply any row by a scalar without changing
     # the underlying system of equations.
     #
     # For point 2, note that the factorization we're now computing is the same

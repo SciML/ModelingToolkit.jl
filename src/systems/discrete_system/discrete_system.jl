@@ -103,7 +103,8 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
             check_parameters(ps, iv)
         end
         if checks == true || (checks & CheckUnits) > 0
-            all_dimensionless([dvs; ps; iv; ctrls]) || check_units(discreteEqs)
+            u = __get_unit_type(dvs, ps, iv, ctrls)
+            check_units(u, discreteEqs)
         end
         new(tag, discreteEqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, name,
             systems,
@@ -163,7 +164,7 @@ end
 
 function DiscreteSystem(eqs, iv = nothing; kwargs...)
     eqs = scalarize(eqs)
-    # NOTE: this assumes that the order of algebric equations doesn't matter
+    # NOTE: this assumes that the order of algebraic equations doesn't matter
     diffvars = OrderedSet()
     allstates = OrderedSet()
     ps = OrderedSet()

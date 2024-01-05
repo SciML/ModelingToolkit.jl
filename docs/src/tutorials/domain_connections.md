@@ -205,7 +205,7 @@ nothing #hide
 
 ![actsys2](https://github.com/SciML/ModelingToolkit.jl/assets/40798837/8ed50035-f6ac-48cb-a585-1ef415154a02)
 
-After running `structural_simplify()` on `actsys2`, the defaults will show that `act.port_a.ρ` points to `fluid_a₊ρ` and `act.port_b.ρ` points to `fluid_b₊ρ`.  This is a special case, in most cases a hydraulic system will have only 1 fluid, however this simple system has 2 separate domain networks.  Therefore, we can connect a single fluid to both networks.  This does not interfer with the mathmatical equations of the system, since no states are connected.
+After running `structural_simplify()` on `actsys2`, the defaults will show that `act.port_a.ρ` points to `fluid_a₊ρ` and `act.port_b.ρ` points to `fluid_b₊ρ`.  This is a special case, in most cases a hydraulic system will have only 1 fluid, however this simple system has 2 separate domain networks.  Therefore, we can connect a single fluid to both networks.  This does not interfere with the mathematical equations of the system, since no states are connected.
 
 ```@example domain
 @component function ActuatorSystem1(; name)
@@ -239,7 +239,7 @@ nothing #hide
 
 ## Special Connection Cases (`domain_connect()`)
 
-In some cases a component will be defined with 2 connectors of the same domain, but they are not connected.  For example the `Restrictor` defined here gives equations to define the behavior of how the 2 connectors `port_a` and `port_b` are physcially connected.
+In some cases a component will be defined with 2 connectors of the same domain, but they are not connected.  For example the `Restrictor` defined here gives equations to define the behavior of how the 2 connectors `port_a` and `port_b` are physically connected.
 
 ```@example domain
 @component function Restrictor(; name, p_int)

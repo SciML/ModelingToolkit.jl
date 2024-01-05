@@ -1,67 +1,90 @@
-module UnitfulUnitCheck
+import DynamicQuantities, Unitful
+const DQ = DynamicQuantities
 
-using ..ModelingToolkit, Symbolics, SciMLBase, Unitful, IfElse, RecursiveArrayTools
-using ..ModelingToolkit: ValidationError,
-    ModelingToolkit, Connection, instream, JumpType, VariableUnit, get_systems,
-    Conditional, Comparison
-using Symbolics: Symbolic, value, issym, isadd, ismul, ispow
-const MT = ModelingToolkit
+#For dispatching get_unit
+const Conditional = Union{typeof(ifelse), typeof(IfElse.ifelse)}
+const Comparison = Union{typeof.([==, !=, ≠, <, <=, ≤, >, >=, ≥])...}
 
-Base.:*(x::Union{Num, Symbolic}, y::Unitful.AbstractQuantity) = x * y
-Base.:/(x::Union{Num, Symbolic}, y::Unitful.AbstractQuantity) = x / y
-
-"""
-Throw exception on invalid unit types, otherwise return argument.
-"""
-function screen_unit(result)
-    result isa Unitful.Unitlike ||
-        throw(ValidationError("Unit must be a subtype of Unitful.Unitlike, not $(typeof(result))."))
-    result isa Unitful.ScalarUnits ||
-        throw(ValidationError("Non-scalar units such as $result are not supported. Use a scalar unit instead."))
-    result == u"°" &&
-        throw(ValidationError("Degrees are not supported. Use radians instead."))
-    result
+struct ValidationError <: Exception
+    message::String
 end
 
-"""
-Test unit equivalence.
+check_units(::Nothing, _...) = true
 
-Example of implemented behavior:
+function __get_literal_unit(x)
+    if x isa Pair
+        x = x[1]
+    end
+    if !(x isa Union{Num, Symbolic})
+        return nothing
+    end
+    v = value(x)
+    u = getmetadata(v, VariableUnit, nothing)
+    u isa DQ.AbstractQuantity ? screen_unit(u) : u
+end
+function __get_scalar_unit_type(v)
+    u = __get_literal_unit(v)
+    if u isa DQ.AbstractQuantity
+        return Val(:DynamicQuantities)
+    elseif u isa Unitful.Unitlike
+        return Val(:Unitful)
+    end
+    return nothing
+end
+function __get_unit_type(vs′...)
+    for vs in vs′
+        if vs isa AbstractVector
+            for v in vs
+                u = __get_scalar_unit_type(v)
+                u === nothing || return u
+            end
+        else
+            v = vs
+            u = __get_scalar_unit_type(v)
+            u === nothing || return u
+        end
+    end
+    return nothing
+end
 
-```julia
-using ModelingToolkit, Unitful
-MT = ModelingToolkit
-@parameters γ P [unit = u"MW"] E [unit = u"kJ"] τ [unit = u"ms"]
-@test MT.equivalent(u"MW", u"kJ/ms") # Understands prefixes
-@test !MT.equivalent(u"m", u"cm") # Units must be same magnitude
-@test MT.equivalent(MT.get_unit(P^γ), MT.get_unit((E / τ)^γ)) # Handles symbolic exponents
-```
-"""
-equivalent(x, y) = isequal(1 * x, 1 * y)
-const unitless = Unitful.unit(1)
+function screen_unit(result)
+    if result isa DQ.AbstractQuantity
+        d = DQ.dimension(result)
+        if d isa DQ.Dimensions
+            if result != oneunit(result)
+                throw(ValidationError("$result uses non SI unit. Please use SI unit only."))
+            end
+            return result
+        elseif d isa DQ.SymbolicDimensions
+            throw(ValidationError("$result uses SymbolicDimensions, please use `u\"m\"` to instantiate SI unit only."))
+        else
+            throw(ValidationError("$result doesn't use SI unit, please use `u\"m\"` to instantiate SI unit only."))
+        end
+    else
+        throw(ValidationError("$result doesn't have any unit."))
+    end
+end
+
+const unitless = DQ.Quantity(1.0)
+get_literal_unit(x) = screen_unit(something(__get_literal_unit(x), unitless))
 
 """
 Find the unit of a symbolic item.
 """
 get_unit(x::Real) = unitless
-get_unit(x::Unitful.Quantity) = screen_unit(Unitful.unit(x))
+get_unit(x::DQ.AbstractQuantity) = screen_unit(oneunit(x))
 get_unit(x::AbstractArray) = map(get_unit, x)
-get_unit(x::Num) = get_unit(value(x))
-function get_unit(x::Union{Symbolics.ArrayOp, Symbolics.Arr, Symbolics.CallWithMetadata})
-    get_literal_unit(x)
-end
+get_unit(x::Num) = get_unit(unwrap(x))
 get_unit(op::Differential, args) = get_unit(args[1]) / get_unit(op.x)
 get_unit(op::Difference, args) = get_unit(args[1]) / get_unit(op.t)
 get_unit(op::typeof(getindex), args) = get_unit(args[1])
 get_unit(x::SciMLBase.NullParameters) = unitless
 get_unit(op::typeof(instream), args) = get_unit(args[1])
 
-get_literal_unit(x) = screen_unit(getmetadata(x, VariableUnit, unitless))
-
 function get_unit(op, args) # Fallback
-    result = op(1 .* get_unit.(args)...)
+    result = op(get_unit.(args)...)
     try
-        unit(result)
+        oneunit(result)
     catch
         throw(ValidationError("Unable to get unit for operation $op with arguments $args."))
     end
@@ -76,9 +99,10 @@ function get_unit(op::Integral, args)
     else
         unit *= get_unit(op.domain.variables)
     end
-    return get_unit(args[1]) * unit
+    return oneunit(get_unit(args[1]) * unit)
 end
 
+equivalent(x, y) = isequal(x, y)
 function get_unit(op::Conditional, args)
     terms = get_unit.(args)
     terms[1] == unitless ||
@@ -104,7 +128,9 @@ function get_unit(op::Comparison, args)
 end
 
 function get_unit(x::Symbolic)
-    if issym(x)
+    if (u = __get_literal_unit(x)) !== nothing
+        screen_unit(u)
+    elseif issym(x)
         get_literal_unit(x)
     elseif isadd(x)
         terms = get_unit.(arguments(x))
@@ -118,7 +144,7 @@ function get_unit(x::Symbolic)
     elseif ispow(x)
         pargs = arguments(x)
         base, expon = get_unit.(pargs)
-        @assert expon isa Unitful.DimensionlessUnits
+        @assert oneunit(expon) == unitless
         if base == unitless
             unitless
         else
@@ -147,7 +173,7 @@ function safe_get_unit(term, info)
     try
         side = get_unit(term)
     catch err
-        if err isa Unitful.DimensionError
+        if err isa DQ.DimensionError
             @warn("$info: $(err.x) and $(err.y) are not dimensionally compatible.")
         elseif err isa ValidationError
             @warn(info*err.message)
@@ -212,15 +238,15 @@ function _validate(conn::Connection; info::String = "")
     valid
 end
 
-function validate(jump::Union{MT.VariableRateJump,
-            MT.ConstantRateJump}, t::Symbolic;
+function validate(jump::Union{VariableRateJump,
+            ConstantRateJump}, t::Symbolic;
         info::String = "")
     newinfo = replace(info, "eq." => "jump")
     _validate([jump.rate, 1 / t], ["rate", "1/t"], info = newinfo) && # Assuming the rate is per time units
         validate(jump.affect!, info = newinfo)
 end
 
-function validate(jump::MT.MassActionJump, t::Symbolic; info::String = "")
+function validate(jump::MassActionJump, t::Symbolic; info::String = "")
     left_symbols = [x[1] for x in jump.reactant_stoch] #vector of pairs of symbol,int -> vector symbols
     net_symbols = [x[1] for x in jump.net_stoch]
     all_symbols = vcat(left_symbols, net_symbols)
@@ -236,18 +262,18 @@ function validate(jumps::ArrayPartition{<:Union{Any, Vector{<:JumpType}}}, t::Sy
     all([validate(jumps.x[idx], t, info = labels[idx]) for idx in 1:3])
 end
 
-function validate(eq::MT.Equation; info::String = "")
+function validate(eq::Equation; info::String = "")
     if typeof(eq.lhs) == Connection
         _validate(eq.rhs; info)
     else
         _validate([eq.lhs, eq.rhs], ["left", "right"]; info)
     end
 end
-function validate(eq::MT.Equation,
-        term::Union{Symbolic, Unitful.Quantity, Num}; info::String = "")
+function validate(eq::Equation,
+        term::Union{Symbolic, DQ.AbstractQuantity, Num}; info::String = "")
     _validate([eq.lhs, eq.rhs, term], ["left", "right", "noise"]; info)
 end
-function validate(eq::MT.Equation, terms::Vector; info::String = "")
+function validate(eq::Equation, terms::Vector; info::String = "")
     _validate(vcat([eq.lhs, eq.rhs], terms),
         vcat(["left", "right"], "noise  #" .* string.(1:length(terms))); info)
 end
@@ -274,9 +300,7 @@ validate(term::Symbolics.SymbolicUtils.Symbolic) = safe_get_unit(term, "") !== n
 """
 Throws error if units of equations are invalid.
 """
-function MT.check_units(::Val{:Unitful}, eqs...)
+function check_units(::Val{:DynamicQuantities}, eqs...)
     validate(eqs...) ||
         throw(ValidationError("Some equations had invalid units. See warnings for details."))
 end
-
-end # module

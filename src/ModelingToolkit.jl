@@ -35,8 +35,7 @@ using PrecompileTools, Reexport
 
     using RecursiveArrayTools
 
-    import SymbolicIndexingInterface
-    import SymbolicIndexingInterface: independent_variables, states, parameters
+    using SymbolicIndexingInterface
     export independent_variables, states, parameters
     import SymbolicUtils
     import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype,
@@ -143,6 +142,7 @@ include("systems/jumps/jumpsystem.jl")
 
 include("systems/nonlinear/nonlinearsystem.jl")
 include("systems/nonlinear/modelingtoolkitize.jl")
+include("systems/nonlinear/initializesystem.jl")
 
 include("systems/optimization/constraints_system.jl")
 include("systems/optimization/optimizationsystem.jl")
@@ -152,6 +152,7 @@ include("systems/pde/pdesystem.jl")
 
 include("systems/sparsematrixclil.jl")
 include("systems/discrete_system/discrete_system.jl")
+include("systems/unit_check.jl")
 include("systems/validation.jl")
 include("systems/dependency_graphs.jl")
 include("clock.jl")
@@ -202,7 +203,8 @@ export NonlinearSystem, OptimizationSystem, ConstraintsSystem
 export alias_elimination, flatten
 export connect, domain_connect, @connector, Connection, Flow, Stream, instream
 export @component, @mtkmodel, @mtkbuild
-export isinput, isoutput, getbounds, hasbounds, isdisturbance, istunable, getdist, hasdist,
+export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbance,
+    istunable, getdist, hasdist,
     tunable_parameters, isirreducible, getdescription, hasdescription, isbinaryvar,
     isintegervar
 export ode_order_lowering, dae_order_lowering, liouville_transform
@@ -237,6 +239,7 @@ export toexpr, get_variables
 export simplify, substitute
 export build_function
 export modelingtoolkitize
+export initializesystem
 
 export @variables, @parameters, @constants, @brownian
 export @named, @nonamespace, @namespace, extend, compose, complete
