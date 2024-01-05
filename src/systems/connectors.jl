@@ -410,7 +410,7 @@ end
 
 function generate_connection_equations_and_stream_connections(csets::AbstractVector{
         <:ConnectionSet,
-})
+    })
     eqs = Equation[]
     stream_connections = ConnectionSet[]
 
