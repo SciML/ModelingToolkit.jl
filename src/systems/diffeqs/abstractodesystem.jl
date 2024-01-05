@@ -892,7 +892,8 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
         check_length = true,
         kwargs...) where {iip, specialize}
     has_difference = any(isdifferenceeq, equations(sys))
-    has_difference && error("The operators Difference and DiscreteUpdate are deprecated. Use ShiftIndex instead.")
+    has_difference &&
+        error("The operators Difference and DiscreteUpdate are deprecated. Use ShiftIndex instead.")
     f, u0, p = process_DEProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
         check_length, kwargs...)
@@ -962,7 +963,8 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
         parammap = DiffEqBase.NullParameters();
         check_length = true, kwargs...) where {iip}
     has_difference = any(isdifferenceeq, equations(sys))
-    has_difference && error("The operators Difference and DiscreteUpdate are deprecated. Use ShiftIndex instead.")
+    has_difference &&
+        error("The operators Difference and DiscreteUpdate are deprecated. Use ShiftIndex instead.")
     f, du0, u0, p = process_DEProblem(DAEFunction{iip}, sys, u0map, parammap;
         implicit_dae = true, du0map = du0map, check_length,
         kwargs...)
@@ -972,7 +974,7 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
     kwargs = filter_kwargs(kwargs)
 
     DAEProblem{iip}(f, du0, u0, tspan, p; differential_vars = differential_vars,
-            kwargs...)
+        kwargs...)
 end
 
 function generate_history(sys::AbstractODESystem, u0; kwargs...)
@@ -989,7 +991,8 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         check_length = true,
         kwargs...) where {iip}
     has_difference = any(isdifferenceeq, equations(sys))
-    has_difference && error("The operators Difference and DiscreteUpdate are deprecated. Use ShiftIndex instead.")
+    has_difference &&
+        error("The operators Difference and DiscreteUpdate are deprecated. Use ShiftIndex instead.")
     f, u0, p = process_DEProblem(DDEFunction{iip}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
         symbolic_u0 = true,
@@ -1049,7 +1052,8 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         sparsenoise = nothing,
         kwargs...) where {iip}
     has_difference = any(isdifferenceeq, equations(sys))
-    has_difference && error("The operators Difference and DiscreteUpdate are deprecated. Use ShiftIndex instead.")
+    has_difference &&
+        error("The operators Difference and DiscreteUpdate are deprecated. Use ShiftIndex instead.")
     f, u0, p = process_DEProblem(SDDEFunction{iip}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
         symbolic_u0 = true,
