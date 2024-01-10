@@ -947,13 +947,7 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     cbs = process_events(sys; callback, has_difference, kwargs...)
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
         affects, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
-        discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
-            if clock isa Clock
-                PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)
-            else
-                error("$clock is not a supported clock type.")
-            end
-        end
+        discrete_cbs = map(ModelingToolkit.generate_discrete_callback, affects, clocks, svs)
         if cbs === nothing
             if length(discrete_cbs) == 1
                 cbs = only(discrete_cbs)

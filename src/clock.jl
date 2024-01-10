@@ -98,11 +98,14 @@ end
 abstract type AbstractClock <: AbstractDiscrete end
 
 """
-    Clock <: AbstractClock
-    Clock([t]; dt)
+    Clock()
+    Clock(dt)
+    Clock(t, dt)
 
 The default periodic clock with independent variables `t` and tick interval `dt`.
 If `dt` is left unspecified, it will be inferred (if possible).
+
+See also [`RealtimeClock`](@ref).
 """
 struct Clock <: AbstractClock
     "Independent variable"
@@ -122,3 +125,25 @@ function Base.:(==)(c1::Clock, c2::Clock)
 end
 
 is_concrete_time_domain(x) = x isa Union{AbstractClock, Continuous}
+
+"""
+    RealtimeClock()
+    RealtimeClock(dt)
+    RealtimeClock(t, dt)
+
+Similar to [`Clock`](@ref), but with with the additional property that the simulation is run no faster than real-time, i.e., a simulation with `tspan = (0, 10)` will take at least 10 seconds of wallclock time to run.
+
+To achieve real-time execution, the wall-clock duration of each integration step is measured, and a call to `Libc.systemsleep` is made to ensure that the next integration step is not started before `dt` seconds of wall-clock time has elapsed. This leads to a simulation that takes at least as long as the length of the time span, but may take longer if the computational load is high enough that one integration step takes more than `dt` seconds.
+"""
+struct RealtimeClock <: AbstractClock
+    clock::Clock
+    RealtimeClock(args...) = new(Clock(args...))
+end
+
+sampletime(c) = sampletime(c.clock)
+Base.hash(c::RealtimeClock, seed::UInt) = hash(c.dt, seed ⊻ 0x9d3d7a9a18874b90)
+Base.:(==)(c1::RealtimeClock, c2::RealtimeClock) = c1.clock == c2.clock
+function Base.getproperty(c::RealtimeClock, s::Symbol)
+    s ∈ fieldnames(typeof(c)) && return getfield(c, s)
+    getproperty(getfield(c, :clock), s)
+end
