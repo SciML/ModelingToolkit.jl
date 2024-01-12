@@ -48,6 +48,8 @@ function _model_macro(mod, name, expr, isconnector)
     eqs = Expr[]
     icon = Ref{Union{String, URI}}()
     ps, sps, vs, = [], [], []
+    c_evts = []
+    d_evts = []
     kwargs = Set()
     where_types = Expr[]
 
@@ -61,7 +63,7 @@ function _model_macro(mod, name, expr, isconnector)
     for arg in expr.args
         if arg.head == :macrocall
             parse_model!(exprs.args, comps, ext, eqs, icon, vs, ps,
-                sps, dict, mod, arg, kwargs, where_types)
+                sps, c_evts, d_evts, dict, mod, arg, kwargs, where_types)
         elseif arg.head == :block
             push!(exprs.args, arg)
         elseif arg.head == :if
@@ -116,6 +118,12 @@ function _model_macro(mod, name, expr, isconnector)
     isconnector && push!(exprs.args,
         :($Setfield.@set!(var"#___sys___".connector_type=$connector_type(var"#___sys___"))))
 
+    !(c_evts==[]) && push!(exprs.args,
+        :($Setfield.@set!(var"#___sys___".continuous_events=$SymbolicContinuousCallback.([$(c_evts...)]))))
+
+    !(d_evts==[]) && push!(exprs.args,
+        :($Setfield.@set!(var"#___sys___".discrete_events=$SymbolicDiscreteCallback.([$(d_evts...)]))))
+
     f = if length(where_types) == 0
         :($(Symbol(:__, name, :__))(; name, $(kwargs...)) = $exprs)
     else
@@ -124,6 +132,7 @@ function _model_macro(mod, name, expr, isconnector)
             :($(Symbol(:__, name, :__))(; name, $(kwargs...))), where_types...)
         :($f_with_where = $exprs)
     end
+
     :($name = $Model($f, $dict, $isconnector))
 end
 
@@ -341,7 +350,7 @@ function get_var(mod::Module, b)
     end
 end
 
-function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps,
+function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps, c_evts, d_evts,
         dict, mod, arg, kwargs, where_types)
     mname = arg.args[1]
     body = arg.args[end]
@@ -359,6 +368,10 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps,
         parse_equations!(exprs, eqs, dict, body)
     elseif mname == Symbol("@constants")
         parse_constants!(exprs, dict, body, mod)
+    elseif mname == Symbol("@continuous_events")
+        parse_continuous_events!(c_evts, dict, body)
+    elseif mname == Symbol("@discrete_events")
+        parse_discrete_events!(d_evts, dict, body)
     elseif mname == Symbol("@icon")
         isassigned(icon) && error("This model has more than one icon.")
         parse_icon!(body, dict, icon, mod)
@@ -750,6 +763,23 @@ function parse_equations!(exprs, eqs, dict, body)
                 push!(dict[:equations], readable_code.(eqs)...)
             end
         end
+    end
+end
+
+function parse_continuous_events!(c_evts, dict, body)
+    dict[:continuous_events] = []
+    Base.remove_linenums!(body)
+    for arg in body.args
+        push!(c_evts, arg)
+        push!(dict[:continuous_events], readable_code.(c_evts)...)
+    end
+end
+
+function parse_discrete_events!(d_evts, dict, body)
+    dict[:discrete_events] = []
+    Base.remove_linenums!(body)
+    for arg in body.args
+        push!(dict[:discrete_events], readable_code.(d_evts)...)
     end
 end
 
