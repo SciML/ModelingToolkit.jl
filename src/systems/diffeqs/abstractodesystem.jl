@@ -757,7 +757,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
             sparsity = $(sparsity ? jacobian_sparsity(sys) : nothing),
             observed = $observedfun_exp)
     end
-    !linenumbers ? striplines(ex) : ex
+    !linenumbers ? Base.remove_linenums!(ex) : ex
 end
 
 """
@@ -886,7 +886,7 @@ function DAEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
         $_f
         ODEFunction{$iip}($fsym)
     end
-    !linenumbers ? striplines(ex) : ex
+    !linenumbers ? Base.remove_linenums!(ex) : ex
 end
 
 function DAEFunctionExpr(sys::AbstractODESystem, args...; kwargs...)
@@ -1179,7 +1179,7 @@ function ODEProblemExpr{iip}(sys::AbstractODESystem, u0map, tspan,
         p = $p
         $odep
     end
-    !linenumbers ? striplines(ex) : ex
+    !linenumbers ? Base.remove_linenums!(ex) : ex
 end
 
 function ODEProblemExpr(sys::AbstractODESystem, args...; kwargs...)
@@ -1228,7 +1228,7 @@ function DAEProblemExpr{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
         differential_vars = $differential_vars
         $prob
     end
-    !linenumbers ? striplines(ex) : ex
+    !linenumbers ? Base.remove_linenums!(ex) : ex
 end
 
 function DAEProblemExpr(sys::AbstractODESystem, args...; kwargs...)
@@ -1298,7 +1298,7 @@ function SteadyStateProblemExpr{iip}(sys::AbstractODESystem, u0map,
         p = $p
         $prob
     end
-    !linenumbers ? striplines(ex) : ex
+    !linenumbers ? Base.remove_linenums!(ex) : ex
 end
 
 function SteadyStateProblemExpr(sys::AbstractODESystem, args...; kwargs...)

@@ -13,7 +13,6 @@ using PrecompileTools, Reexport
     using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
     using InteractiveUtils
     using Latexify, Unitful, ArrayInterface
-    using MacroTools
     using Setfield, ConstructionBase
     using JumpProcesses
     using DataStructures
@@ -23,7 +22,7 @@ using PrecompileTools, Reexport
     using Base.Threads
     using DiffEqCallbacks
     using Graphs
-    import MacroTools: splitdef, combinedef, postwalk, striplines
+    import ExprTools: splitdef, combinedef
     import Libdl
     using DocStringExtensions
     using Base: RefValue

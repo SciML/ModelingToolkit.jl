@@ -318,7 +318,7 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = states(sys),
             syms = $(Symbol.(states(sys))),
             paramsyms = $(Symbol.(parameters(sys))))
     end
-    !linenumbers ? striplines(ex) : ex
+    !linenumbers ? Base.remove_linenums!(ex) : ex
 end
 
 function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, parammap;
@@ -406,7 +406,7 @@ function NonlinearProblemExpr{iip}(sys::NonlinearSystem, u0map,
         p = $p
         NonlinearProblem(f, u0, p; $(filter_kwargs(kwargs)...))
     end
-    !linenumbers ? striplines(ex) : ex
+    !linenumbers ? Base.remove_linenums!(ex) : ex
 end
 
 function flatten(sys::NonlinearSystem, noeqs = false)
