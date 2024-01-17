@@ -329,7 +329,7 @@ end
 # Ensure that modules consisting MTKModels with component arrays and icons of
 # `Expr` type and `unit` metadata can be precompiled.
 module PrecompilationTest
-using Unitful, Test, ModelingToolkit
+using Unitful, Test, ModelParsingPrecompile
 @testset "Precompile packages with MTKModels" begin
     push!(LOAD_PATH, joinpath(@__DIR__, "precompile_test"))
 
@@ -539,3 +539,16 @@ end
     @test Equation[ternary_true.ternary_parameter_true ~ 0] == equations(ternary_true)
     @test Equation[ternary_false.ternary_parameter_false ~ 0] == equations(ternary_false)
 end
+
+_b = Ref{Any}()
+@mtkmodel MyModel begin
+    @variables begin
+        x___(t) = 0
+    end
+    begin
+        _b[] = x___
+    end
+end
+@named m = MyModel()
+@variables t x___(t)
+@test isequal(x___, _b[])
