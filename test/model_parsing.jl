@@ -450,7 +450,7 @@ end
     u0 = [model.x => 10, model.y => 0, model.z => 0]
 
     prob = ODEProblem(model, u0, (0, 5.0))
-    sol = solve(prob, tstops = [1.5])
+    sol = solve(prob, Tsit5(), tstops = [1.5])
 
     @test isequal(sol[model.y][end], 1.0)
     @test isequal(sol[model.z][end], 2.0)
