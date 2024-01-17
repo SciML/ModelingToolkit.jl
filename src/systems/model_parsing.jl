@@ -219,7 +219,7 @@ function generate_var!(dict, a, b, varclass;
     vd isa Vector && (vd = first(vd))
     vd[a] = Dict{Symbol, Any}()
     var = if indices === nothing
-        Symbolics.variable(a, T = SymbolicUtils.FnType{Tuple{Real}, Real})(iv)
+        Symbolics.variable(a, T = SymbolicUtils.FnType{Tuple{Any}, Real})(iv)
     else
         vd[a][:size] = Tuple(lastindex.(indices))
         first(@variables $a(iv)[indices...])
