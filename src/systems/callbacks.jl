@@ -145,21 +145,33 @@ function continuous_events(sys::AbstractSystem)
     filter(!isempty, cbs)
 end
 
-#################################### continuous events #####################################
+#################################### discrete events #####################################
 
-struct SymbolicDiscreteCallback
+"Abstract super type to conveniently inject custom symbolic callbacks."
+abstract type AbstractSpecialDiscreteCallback end
+
+struct SymbolicDiscreteCallback{T <: Union{Nothing, AbstractSpecialDiscreteCallback}}
     # condition can be one of:
     #   Δt::Real - Periodic with period Δt
     #   Δts::Vector{Real} - events trigger in this times (Preset)
     #   condition::Vector{Equation} - event triggered when condition is true
-    # TODO: Iterative
     condition::Any
     affects::Any
 
-    function SymbolicDiscreteCallback(condition, affects = NULL_AFFECT)
+    # The field `wrapped` allows to inject callbacks of custom symbolic callback types 
+    # into the vector provided for the `discrete_events` keyword argument of system constructors.
+    # By default, if some `sdcb:: AbstractSpecialDiscreteCallback` is encountered, then 
+    # `condition` and `affects` are set to nothing by the outer constructor.
+    # Therefore, `generate_discrete_callback` has to use `T` for dispatch and implement its 
+    # own logic for compilation of `sdcb` into a `DiscreteCallback`.
+    wrapped::T
+
+    function SymbolicDiscreteCallback(condition, affects = NULL_AFFECT,
+                                      wrapped::T = nothing) where {T}
         c = scalarize_condition(condition)
         a = scalarize_affects(affects)
-        new(c, a)
+        # TODO warn about effects of `wrapped` if its not `nothing`?
+        new{T}(c, a, wrapped)
     end # Default affect to nothing
 end
 
@@ -183,17 +195,25 @@ scalarize_affects(affects::FunctionalAffect) = affects
 
 SymbolicDiscreteCallback(p::Pair) = SymbolicDiscreteCallback(p[1], p[2])
 SymbolicDiscreteCallback(cb::SymbolicDiscreteCallback) = cb # passthrough
+function SymbolicDiscreteCallback(sdcb::AbstractSpecialDiscreteCallback)
+    SymbolicDiscreteCallback(nothing, nothing, sdcb)
+end
 
 function Base.show(io::IO, db::SymbolicDiscreteCallback)
     println(io, "condition: ", db.condition)
     println(io, "affects:")
-    if db.affects isa FunctionalAffect
+    if db.affects isa FunctionalAffect || isnothing(db.affects)
         # TODO
         println(io, " ", db.affects)
     else
         for affect in db.affects
             println(io, "  ", affect)
         end
+    end
+    if !isnothing(db.wrapped)
+        # TODO
+        println(io, "wrapper for:")
+        println(io, db.wrapped)
     end
 end
 
@@ -227,6 +247,9 @@ SymbolicDiscreteCallbacks(cbs::Vector) = SymbolicDiscreteCallback.(cbs)
 SymbolicDiscreteCallbacks(cb::SymbolicDiscreteCallback) = [cb]
 SymbolicDiscreteCallbacks(cbs::Vector{<:SymbolicDiscreteCallback}) = cbs
 SymbolicDiscreteCallbacks(::Nothing) = SymbolicDiscreteCallback[]
+function SymbolicDiscreteCallbacks(sbc::AbstractSpecialDiscreteCallback)
+    [SymbolicDiscreteCallback(sbc)]
+end
 
 function discrete_events(sys::AbstractSystem)
     obs = get_discrete_events(sys)
@@ -514,4 +537,288 @@ function process_events(sys; callback = nothing, has_difference = false, kwargs.
     cb = merge_cb(contin_cb, difference_cb)
     cb = merge_cb(cb, callback)
     (discrete_cb === nothing) ? cb : CallbackSet(cb, discrete_cb...)
+end
+
+################################# special discrete callbacks ####################################
+"""
+    SymbolicIterativeCallback(time_choice_tuple, user_affect!_tuple, initial_affect=false)
+
+Define an iterative Callback based on the arguments `time_choice_tuple` and 
+`user_affect!_tuple`.
+
+# Arguments
+- `time_choice_tuple` is a (optionally named) tuple of the form   
+   `(time_choice, sts, pars, ctx)`.
+- `user_affect!_tuple` is a tuple of the form `(user_affect!, sts, pars, ctx)`.
+- `initial_affect::Bool=false` indicates whether or not to apply the affect at `t0`.
+
+Both `time_choice` and `user_affect!` should have signatures 
+`(integrator, sys_states, sys_params, ctx)`.
+Within the respective function body, the value of a system state `v` can then be accessed by
+`integrator.u[sys_states.v]`. It works the same for parameters. The time is `integrator.t`.
+Both functions are compiled to suit the requirements of their counterparts for 
+`DiffEqCallbacks.IterativeCallback`.
+
+# Example
+Below, we model the growth of some population with size ``N(t)``.
+If we start with ``N(0) = 0``, then the population will approximate
+``α`` in the limit, i.e., ``N(t) ↗ α`` for ``t → ∞``.
+With some calculus, we find that ``N(t) ≈ 50`` at ``t = \\ln(2)``.
+At this point in time, we decide to inject ``M = 60`` individuals
+to the population. A short while later, we can check if that was 
+successful:
+```jldoctest; output=false
+using ModelingToolkit, OrdinaryDiffEq
+
+@parameters α=100 M=60
+@variables t N(t)
+Dt = Differential(t)
+eqs = [Dt(N) ~ α - N]
+
+t_inject = log(2)
+t_check = t_inject + 1e-6
+t_ref = Base.RefValue{Union{Nothing, Float64}}(-1.0)
+
+function time_choice(integ, sts, pars, ctx)
+    if t_ref[] < 0
+        t_ref[] = t_inject
+    elseif t_ref[] == t_inject
+        t_ref[] = t_check
+    else
+        t_ref[] = nothing
+    end
+    return t_ref[]
+end
+
+function user_affect!(integ, sts, pars, ctx)
+    if integ.t == t_inject
+        integ.u[ sts.N ] += integ.p[ pars.M ]
+    elseif integ.t == t_check
+        @assert integ.u[ sts.N ] > integ.p[ pars.α ]
+    end
+end
+
+# define discrete symbolic callback
+cb = ModelingToolkit.SymbolicIterativeCallback(
+    (time_choice, [], [], nothing),
+    (user_affect!, [N], [α, M], nothing)
+)
+
+# setup system, problem, and solve:
+@named osys = ODESystem(
+    eqs, t, [N], [α, M]; discrete_events=[cb]
+)
+u0 = [N => 0.0]
+tspan = (0.0, 20.0)
+oprob = ODEProblem(osys, u0, tspan)
+sol = solve(oprob, Tsit5())
+
+# output
+
+retcode: Success
+Interpolation: specialized 4th order "free" interpolation
+[...]
+```
+
+See also [`DiffEqCallbacks.IterativeCallback`](@ref).
+"""
+struct SymbolicIterativeCallback <: AbstractSpecialDiscreteCallback
+    time_choice::Any
+    user_affect!::Any
+
+    initial_affect::Bool
+
+    function SymbolicIterativeCallback(time_choice, user_affect!,
+                                       initial_affect::Bool = false)
+        _time_choice = scalarize_affects(time_choice)
+        _user_affect! = scalarize_affects(user_affect!)
+        return new(_time_choice, _user_affect!, initial_affect)
+    end
+end
+
+function generate_discrete_callback(cb::SymbolicDiscreteCallback{T}, sys, dvs, ps;
+                                    postprocess_affect_expr! = nothing,
+                                    kwargs...) where {T <: SymbolicIterativeCallback}
+    time_choice = compile_affect(cb.wrapped.time_choice, sys, dvs, ps;
+                                 expression = Val{false},
+                                 postprocess_affect_expr!, kwargs...)
+    user_affect! = compile_affect(cb.wrapped.user_affect!, sys, dvs, ps;
+                                  expression = Val{false}, postprocess_affect_expr!,
+                                  kwargs...)
+    return DiffEqCallbacks.IterativeCallback(time_choice, user_affect!;
+                                             initial_affect = cb.wrapped.initial_affect)
+end
+
+"""
+    SymbolicPeriodicCallback(
+        Δt, user_affect!_tuple, initial_affect=false, final_affect=false
+    )
+
+Define a peridic Callback based on the arguments `Δt::Real` and `user_affect!_tuple`.
+The affect is applied at times `tspan[1]`, `tspan[1] + Δt`, `tspan[1] + 2*Δt`, etc.
+
+# Arguments
+- `Δt::Real` is the periodicity of the event, i.e., the time between event occurrences.
+- `user_affect!_tuple` is a tuple of the form `(user_affect!, sts, pars, ctx)`  
+  `user_affect!` should have signatures `(integrator, sys_states, sys_params, ctx)`.  
+   Within the respective function body, the value of a system state `v` can then be accessed  
+   by `integrator.u[sys_states.v]`. It works the same for parameters.   
+   The time is `integrator.t`. This function is compiled to suit the requirements of its  
+   counterparts for `DiffEqCallbacks.PeriodicCallback`.
+- `initial_affect::Bool=false` Whether or not to apply affect at `tspan[1]`.
+- `final_affect::Bool=false` Whether or not to apply affect at `tspan[2]`.
+
+# Example
+Below, we model the growth of some population with size ``N(t)``.
+If we start with ``N(0) = 0``, then the population will approximate
+``α`` in the limit, i.e., ``N(t) ↗ α`` for ``t → ∞``.
+But we now imagine some periodic event afflicting our population.
+If at that point in time, the population is too big, it is reduced by 
+substracting ``m=20`` via `user_affect!`:
+```jldoctest; output=false
+using ModelingToolkit, OrdinaryDiffEq
+
+@parameters α=100 m=20
+@variables t N(t)
+Dt = Differential(t)
+eqs = [Dt(N) ~ α - N]
+
+del_t = log(2)/2
+
+function user_affect!(integ, sts, pars, ctx)
+    N = integ.u[ sts.N ]
+    if N > 70
+        integ.u[ sts.N ] -= integ.p[ pars.m ]
+    end
+end
+
+# define discrete symbolic callback
+cb = ModelingToolkit.SymbolicPeriodicCallback(
+    del_t, (user_affect!, [N], [m], nothing)
+)
+
+# setup system, problem, and solve:
+@named osys = ODESystem(
+    eqs, t, [N], [α, m]; discrete_events=[cb]
+)
+
+u0 = [N => 0.0]
+tspan = (0.0, 20.0)
+oprob = ODEProblem(osys, u0, tspan)
+sol = solve(oprob, Tsit5())
+
+# output
+
+retcode: Success
+Interpolation: specialized 4th order "free" interpolation
+[...]
+```
+
+See also [`DiffEqCallbacks.PeriodicCallback`](@ref).
+"""
+struct SymbolicPeriodicCallback <: AbstractSpecialDiscreteCallback
+    del_t::Real
+    affect::Any
+
+    initial_affect::Bool
+    final_affect::Bool
+    function SymbolicPeriodicCallback(del_t, affect, initial_affect = false,
+                                      final_affect = false)
+        _affect = scalarize_affects(affect)
+        return new(del_t, _affect, initial_affect, final_affect)
+    end
+end
+
+function generate_discrete_callback(cb::SymbolicDiscreteCallback{T}, sys, dvs, ps;
+                                    postprocess_affect_expr! = nothing,
+                                    kwargs...) where {T <: SymbolicPeriodicCallback}
+    spc = cb.wrapped
+    aff = compile_affect(spc.affect, sys, dvs, ps;
+                         expression = Val{false}, postprocess_affect_expr!, kwargs...)
+    return PeriodicCallback(aff, spc.del_t;
+                            initial_affect = spc.initial_affect,
+                            final_affect = spc.final_affect)
+end
+
+"""
+    SymbolicPresetTimeCallback(tstops, user_affect!_tuple, filter_tstops=true)
+
+Define a Callback with preset times based on the arguments `tstops::Vector{Real}` and 
+`user_affect!_tuple`. 
+
+# Arguments
+- `tstops::Vector{Real}` are the time stops for event occurrences.
+- `user_affect!_tuple` is a tuple of the form `(user_affect!, sts, pars, ctx)`  
+  `user_affect!` should have signatures `(integrator, sys_states, sys_params, ctx)`.  
+   Within the respective function body, the value of a system state `v` can then be accessed  
+   by `integrator.u[sys_states.v]`. It works the same for parameters.   
+   The time is `integrator.t`. This function is compiled to suit the requirements of its  
+   counterparts for `DiffEqCallbacks.PeriodicCallback`.
+- `filter_tstops::Bool=true` Whether or not to filter out tstops beyond `tspan[2]`.
+
+# Example
+Below, we model the growth of some population with size ``N(t)``.
+If we start with ``N(0) = 0``, then the population will approximate
+``α`` in the limit, i.e., ``N(t) ↗ α`` for ``t → ∞``.
+At preset times we want to check if ``N(t) > 70`.
+If that is the case, we substract ``m=20``:
+```jldoctest; output=false
+using ModelingToolkit, OrdinaryDiffEq
+
+@parameters α=100 m=20
+@variables t N(t)
+Dt = Differential(t)
+eqs = [Dt(N) ~ α - N]
+
+tspan = (0.0, 20.0)
+tstops = LinRange(tspan[1], tspan[2], 100)
+
+function user_affect!(integ, sts, pars, ctx)
+    N = integ.u[ sts.N ]
+    if N > 70
+        integ.u[ sts.N ] -= integ.p[ pars.m ]
+    end
+end
+
+# define discrete symbolic callback
+cb = ModelingToolkit.SymbolicPresetTimeCallback(
+    tstops, (user_affect!, [N], [m], nothing)
+)
+
+# setup system, problem, and solve:
+@named osys = ODESystem(
+    eqs, t, [N], [α, m]; discrete_events=[cb]
+)
+u0 = [N => 0.0]
+oprob = ODEProblem(osys, u0, tspan)
+sol = solve(oprob, Tsit5())
+
+# output
+
+retcode: Success
+Interpolation: specialized 4th order "free" interpolation
+[...]
+```
+
+See also [`DiffEqCallbacks.PresetTimeCallback`](@ref).
+"""
+struct SymbolicPresetTimeCallback <: AbstractSpecialDiscreteCallback
+    tstops::Any # allow for iterators too (?)
+    user_affect!::Any
+    filter_tstops::Bool
+
+    function SymbolicPresetTimeCallback(tstops, user_affect!, filter_tstops = true)
+        _affect = scalarize_affects(user_affect!)
+        return new(tstops, _affect, filter_tstops)
+    end
+end
+
+function generate_discrete_callback(cb::SymbolicDiscreteCallback{T}, sys, dvs, ps;
+                                    postprocess_affect_expr! = nothing,
+                                    kwargs...) where {T <: SymbolicPresetTimeCallback}
+    sptc = cb.wrapped
+    aff = compile_affect(sptc.user_affect!, sys, dvs, ps;
+                         expression = Val{false}, postprocess_affect_expr!, kwargs...)
+    return DiffEqCallbacks.PresetTimeCallback(sptc.tstops, aff;
+                                              filter_tstops = sptc.filter_tstops)
 end
