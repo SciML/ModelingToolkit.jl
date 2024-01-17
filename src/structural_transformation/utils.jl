@@ -55,6 +55,69 @@ function error_reporting(state, bad_idxs, n_highest_vars, iseqs, orig_inputs)
     end
 end
 
+using ..SystemStructures: MatchedSystemStructure
+function algebraic_loop_show(io::IO, mss::MatchedSystemStructure, old_var_eq_matching;
+                             var_label = u -> string(u), is_dummy = u -> false)
+    @unpack structure, var_eq_matching = mss
+    @unpack graph, solvable_graph = structure
+    var_sccs = find_var_sccs(graph, old_var_eq_matching)
+    vargraph = DiCMOBiGraph{true}(graph)
+    is_solved = !(v -> var_eq_matching[v] === unassigned && !isempty(𝑑neighbors(graph, v)))
+    algebraic_loops = filter(x -> any(!is_solved, x), var_sccs)
+    loop_vars = reduce(vcat, algebraic_loops)
+    dig = DiCMOBiGraph{true}(mss)
+
+    print(io, """strict digraph {
+        compound=true;
+        rankdir=LR;
+        layout=dot;
+    """)
+    for (i, vs) in enumerate(algebraic_loops)
+        solved = Int[]
+        not_solved = Int[]
+        for v in vs
+            is_solved(v) ? push!(solved, v) : push!(not_solved, v)
+        end
+        @show solved, not_solved
+        # The dashed block represents the nodes that have to be evaulated in the nonlinear solve loop
+        println(io, "\tsubgraph cluster_", i, " { style=dashed;")
+        if !isempty(solved)
+            println(io, "\t\t", join(solved, ';'), ";")
+        end
+        # The solid block represents the states that the nonlinear solver has to make guesses for
+        println(io, "\t\tsubgraph cluster_", i, "_tear { style=solid; ")
+        println(io, "\t\t\t", join(not_solved, ';'), ";")
+        println(io, "\t\t}")
+        println(io, "\t}")
+    end
+    function is_diff(u)
+        du = invview(mss.structure.var_to_diff)[u]
+        du !== nothing
+    end
+    for loop in algebraic_loops, u in loop
+        in_nbrs = Graphs.inneighbors(dig, u)
+        out_nbrs = Graphs.outneighbors(dig, u)
+        if is_diff(u)
+            print(io,
+                  "\t$(string(u)) [style=filled, fillcolor=\"#0006FF\",label=\"$(var_label(u)) $u\"];")
+        elseif is_dummy(u)
+            print(io,
+                  "\t$(string(u)) [style=filled, fillcolor=\"#FF0000\",label=\"$(var_label(u)) $u\"];")
+        else
+            # Skip non-selected states that have no outward connections
+            if length(out_nbrs) == 0 && length(in_nbrs) == 0
+                continue
+            end
+            print(io, "\t", u, "[label=\"", var_label(u), " ", u, "\"];")
+        end
+        out_nbrs = intersect(out_nbrs, loop)
+        if length(out_nbrs) > 0
+            println(io, "\t" * string(u) * " -> {" * join(out_nbrs, ',') * "};")
+        end
+    end
+    print(io, "}")
+end
+
 ###
 ### Structural check
 ###
