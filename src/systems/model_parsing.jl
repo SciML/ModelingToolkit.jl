@@ -118,11 +118,15 @@ function _model_macro(mod, name, expr, isconnector)
     isconnector && push!(exprs.args,
         :($Setfield.@set!(var"#___sys___".connector_type=$connector_type(var"#___sys___"))))
 
-    !(c_evts==[]) && push!(exprs.args,
-        :($Setfield.@set!(var"#___sys___".continuous_events=$SymbolicContinuousCallback.([$(c_evts...)]))))
+    !(c_evts == []) && push!(exprs.args,
+        :($Setfield.@set!(var"#___sys___".continuous_events=$SymbolicContinuousCallback.([
+            $(c_evts...),
+        ]))))
 
-    !(d_evts==[]) && push!(exprs.args,
-        :($Setfield.@set!(var"#___sys___".discrete_events=$SymbolicDiscreteCallback.([$(d_evts...)]))))
+    !(d_evts == []) && push!(exprs.args,
+        :($Setfield.@set!(var"#___sys___".discrete_events=$SymbolicDiscreteCallback.([
+            $(d_evts...),
+        ]))))
 
     f = if length(where_types) == 0
         :($(Symbol(:__, name, :__))(; name, $(kwargs...)) = $exprs)
@@ -779,6 +783,7 @@ function parse_discrete_events!(d_evts, dict, body)
     dict[:discrete_events] = []
     Base.remove_linenums!(body)
     for arg in body.args
+        push!(d_evts, arg)
         push!(dict[:discrete_events], readable_code.(d_evts)...)
     end
 end

@@ -426,6 +426,36 @@ end
     @test A.structure[:components] == [[:cc, :C]]
 end
 
+@testset "Event handeling in MTKModel" begin
+    @mtkmodel M begin
+        @variables begin
+            x(t)
+            y(t)
+            z(t)
+        end
+        @equations begin
+            x ~ -D(x)
+            D(y) ~ 0
+            D(z) ~ 0
+        end
+        @continuous_events begin
+            [x ~ 1.5] => [x ~ 5, y ~ 1]
+        end
+        @discrete_events begin
+            (t == 1.5) => [x ~ x + 5, z ~ 2]
+        end
+    end
+
+    @mtkbuild model = M()
+    u0 = [model.x => 10, model.y => 0, model.z => 0]
+
+    prob = ODEProblem(model, u0, (0, 5.0))
+    sol = solve(prob, tstops = [1.5])
+
+    @test isequal(sol[model.y][end], 1.0)
+    @test isequal(sol[model.z][end], 2.0)
+end
+
 # Ensure that modules consisting MTKModels with component arrays and icons of
 # `Expr` type and `unit` metadata can be precompiled.
 module PrecompilationTest
