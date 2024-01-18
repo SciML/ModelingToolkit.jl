@@ -426,7 +426,7 @@ end
     @test A.structure[:components] == [[:cc, :C]]
 end
 
-@testset "Event handeling in MTKModel" begin
+@testset "Event handling in MTKModel" begin
     @mtkmodel M begin
         @variables begin
             x(t)
