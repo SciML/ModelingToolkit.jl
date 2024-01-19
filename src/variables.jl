@@ -75,10 +75,14 @@ function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
         end
     end
 
-    # T = typeof(varmap)
-    # We respect the input type (feature removed, not needed with Tuple support)
+    # We respect the input type if it's a static array
+    # otherwise canonicalize to a normal array
     # container_type = T <: Union{Dict,Tuple} ? Array : T
-    container_type = Array
+    if varmap isa StaticArray
+        container_type = typeof(varmap)
+    else
+        container_type = Array
+    end
 
     vals = if eltype(varmap) <: Pair # `varmap` is a dict or an array of pairs
         varmap = todict(varmap)

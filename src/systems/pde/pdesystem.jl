@@ -98,7 +98,8 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
             checks::Union{Bool, Int} = true,
             name)
         if checks == true || (checks & CheckUnits) > 0
-            all_dimensionless([dvs; ivs; ps]) || check_units(eqs)
+            u = __get_unit_type(dvs, ivs, ps)
+            check_units(u, eqs)
         end
 
         eqs = eqs isa Vector ? eqs : [eqs]

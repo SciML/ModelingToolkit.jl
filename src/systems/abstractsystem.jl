@@ -185,23 +185,24 @@ end
 #Treat the result as a vector of symbols always
 function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym)
     if unwrap(sym) isa Int    # [x, 1] coerces 1 to a Num
-        return unwrap(sym) in 1:length(unknown_states(sys))
+        return unwrap(sym) in 1:length(variable_symbols(sys))
     end
-    return any(isequal(sym), unknown_states(sys)) ||
+    return any(isequal(sym), variable_symbols(sys)) ||
            hasname(sym) && is_variable(sys, getname(sym))
 end
 
 function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym::Symbol)
-    return any(isequal(sym), getname.(unknown_states(sys))) ||
+    return any(isequal(sym), getname.(variable_symbols(sys))) ||
            count('₊', string(sym)) == 1 &&
-           count(isequal(sym), Symbol.(sys.name, :₊, getname.(unknown_states(sys)))) == 1
+           count(isequal(sym), Symbol.(nameof(sys), :₊, getname.(variable_symbols(sys)))) ==
+           1
 end
 
 function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym)
     if unwrap(sym) isa Int
         return unwrap(sym)
     end
-    idx = findfirst(isequal(sym), unknown_states(sys))
+    idx = findfirst(isequal(sym), variable_symbols(sys))
     if idx === nothing && hasname(sym)
         idx = variable_index(sys, getname(sym))
     end
@@ -209,14 +210,17 @@ function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym)
 end
 
 function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym::Symbol)
-    idx = findfirst(isequal(sym), getname.(unknown_states(sys)))
+    idx = findfirst(isequal(sym), getname.(variable_symbols(sys)))
     if idx !== nothing
         return idx
     elseif count('₊', string(sym)) == 1
-        return findfirst(isequal(sym), Symbol.(sys.name, :₊, getname.(unknown_states(sys))))
+        return findfirst(isequal(sym),
+            Symbol.(nameof(sys), :₊, getname.(variable_symbols(sys))))
     end
     return nothing
 end
+
+SymbolicIndexingInterface.variable_symbols(sys::AbstractMultivariateSystem) = sys.dvs
 
 function SymbolicIndexingInterface.variable_symbols(sys::AbstractSystem)
     return unknown_states(sys)
@@ -224,24 +228,25 @@ end
 
 function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
     if unwrap(sym) isa Int
-        return unwrap(sym) in 1:length(parameters(sys))
+        return unwrap(sym) in 1:length(parameter_symbols(sys))
     end
 
-    return any(isequal(sym), parameters(sys)) ||
+    return any(isequal(sym), parameter_symbols(sys)) ||
            hasname(sym) && is_parameter(sys, getname(sym))
 end
 
 function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Symbol)
-    return any(isequal(sym), getname.(parameters(sys))) ||
+    return any(isequal(sym), getname.(parameter_symbols(sys))) ||
            count('₊', string(sym)) == 1 &&
-           count(isequal(sym), Symbol.(sys.name, :₊, getname.(parameters(sys)))) == 1
+           count(isequal(sym),
+        Symbol.(nameof(sys), :₊, getname.(parameter_symbols(sys)))) == 1
 end
 
 function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
     if unwrap(sym) isa Int
         return unwrap(sym)
     end
-    idx = findfirst(isequal(sym), parameters(sys))
+    idx = findfirst(isequal(sym), parameter_symbols(sys))
     if idx === nothing && hasname(sym)
         idx = parameter_index(sys, getname(sym))
     end
@@ -249,11 +254,12 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
 end
 
 function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym::Symbol)
-    idx = findfirst(isequal(sym), getname.(parameters(sys)))
+    idx = findfirst(isequal(sym), getname.(parameter_symbols(sys)))
     if idx !== nothing
         return idx
     elseif count('₊', string(sym)) == 1
-        return findfirst(isequal(sym), Symbol.(sys.name, :₊, getname.(parameters(sys))))
+        return findfirst(isequal(sym),
+            Symbol.(nameof(sys), :₊, getname.(parameter_symbols(sys))))
     end
     return nothing
 end
@@ -263,7 +269,7 @@ function SymbolicIndexingInterface.parameter_symbols(sys::AbstractSystem)
 end
 
 function SymbolicIndexingInterface.is_independent_variable(sys::AbstractSystem, sym)
-    return any(isequal(sym), independent_variables(sys))
+    return any(isequal(sym), independent_variable_symbols(sys))
 end
 
 function SymbolicIndexingInterface.is_independent_variable(sys::AbstractSystem, sym::Symbol)
@@ -284,6 +290,20 @@ SymbolicIndexingInterface.is_time_dependent(::AbstractTimeIndependentSystem) = f
 
 SymbolicIndexingInterface.constant_structure(::AbstractSystem) = true
 
+function SymbolicIndexingInterface.all_variable_symbols(sys::AbstractSystem)
+    syms = variable_symbols(sys)
+    obs = getproperty.(observed(sys), :lhs)
+    return isempty(obs) ? syms : vcat(syms, obs)
+end
+
+function SymbolicIndexingInterface.all_symbols(sys::AbstractSystem)
+    syms = all_variable_symbols(sys)
+    for other in (parameter_symbols(sys), independent_variable_symbols(sys))
+        isempty(other) || (syms = vcat(syms, other))
+    end
+    return syms
+end
+
 iscomplete(sys::AbstractSystem) = isdefined(sys, :complete) && getfield(sys, :complete)
 
 """
@@ -303,6 +323,7 @@ for prop in [:eqs
     :states
     :ps
     :tspan
+    :name
     :var_to_name
     :ctrls
     :defaults
@@ -639,7 +660,7 @@ function states(sys::AbstractSystem)
     end
     isempty(nonunique_states) && return nonunique_states
     # `Vector{Any}` is incompatible with the `SymbolicIndexingInterface`, which uses
-    # `elsymtype = symbolic_type(eltype(_arg))` 
+    # `elsymtype = symbolic_type(eltype(_arg))`
     # which inappropriately returns `NotSymbolic()`
     if nonunique_states isa Vector{Any}
         nonunique_states = _nonum.(nonunique_states)
@@ -650,6 +671,12 @@ end
 
 function parameters(sys::AbstractSystem)
     ps = get_ps(sys)
+    if ps == SciMLBase.NullParameters()
+        return []
+    end
+    if eltype(ps) <: Pair
+        ps = first.(ps)
+    end
     systems = get_systems(sys)
     unique(isempty(systems) ? ps : [ps; reduce(vcat, namespace_parameters.(systems))])
 end

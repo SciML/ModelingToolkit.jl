@@ -3,13 +3,13 @@ using ModelingToolkit: get_gui_metadata, get_systems, get_connector_type,
     get_ps, getdefault, getname, scalarize, VariableDescription, RegularConnector
 using URIs: URI
 using Distributions
-using Unitful
+using DynamicQuantities, OrdinaryDiffEq
 
 ENV["MTK_ICONS_DIR"] = "$(@__DIR__)/icons"
 
 # Mock module used to test if the `@mtkmodel` macro works with fully-qualified names as well.
 module MyMockModule
-using ..ModelingToolkit, ..Unitful
+using ModelingToolkit, DynamicQuantities
 
 export Pin
 @connector Pin begin
@@ -18,11 +18,12 @@ export Pin
     @icon "pin.png"
 end
 
+ground_logo = read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
 @mtkmodel Ground begin
     @components begin
         g = Pin()
     end
-    @icon read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
+    @icon ground_logo
     @equations begin
         g.v ~ 0
     end
@@ -150,6 +151,10 @@ C_val = 20
 R_val = 20
 res__R = 100
 @mtkbuild rc = RC(; C_val, R_val, resistor.R = res__R)
+prob = ODEProblem(rc, [], (0, 1e9))
+sol = solve(prob, Rodas5P())
+defs = ModelingToolkit.defaults(rc)
+@test sol[rc.capacitor.v, end] ≈ defs[rc.constant.k]
 resistor = getproperty(rc, :resistor; namespace = false)
 @test getname(rc.resistor) === getname(resistor)
 @test getname(rc.resistor.R) === getname(resistor.R)
@@ -319,6 +324,24 @@ end
     @test A.structure[:equations] == ["e ~ 0"]
     @test A.structure[:kwargs] == Dict(:p => nothing, :v => nothing)
     @test A.structure[:components] == [[:cc, :C]]
+end
+
+# Ensure that modules consisting MTKModels with component arrays and icons of
+# `Expr` type and `unit` metadata can be precompiled.
+module PrecompilationTest
+using Unitful, Test, ModelingToolkit
+@testset "Precompile packages with MTKModels" begin
+    push!(LOAD_PATH, joinpath(@__DIR__, "precompile_test"))
+
+    using ModelParsingPrecompile: ModelWithComponentArray
+
+    @named model_with_component_array = ModelWithComponentArray()
+
+    @test ModelWithComponentArray.structure[:parameters][:R][:unit] == u"Ω"
+    @test lastindex(parameters(model_with_component_array)) == 3
+
+    pop!(LOAD_PATH)
+end
 end
 
 @testset "Conditional statements inside the blocks" begin

@@ -88,7 +88,8 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
             tearing_state = nothing, substitutions = nothing,
             complete = false, parent = nothing; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
-            all_dimensionless([states; ps]) || check_units(eqs)
+            u = __get_unit_type(states, ps)
+            check_units(u, eqs)
         end
         new(tag, eqs, states, ps, var_to_name, observed, jac, name, systems, defaults,
             connector_type, metadata, gui_metadata, tearing_state, substitutions, complete,

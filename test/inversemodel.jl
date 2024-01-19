@@ -2,6 +2,7 @@ using ModelingToolkit
 using ModelingToolkitStandardLibrary
 using ModelingToolkitStandardLibrary.Blocks
 using OrdinaryDiffEq
+using SymbolicIndexingInterface
 using Test
 using ControlSystemsMTK: tf, ss, get_named_sensitivity, get_named_comp_sensitivity
 
@@ -144,7 +145,7 @@ sol = solve(prob, Rodas5P())
 # plot(sol, idxs=[model.tank.xc, model.tank.xT, model.controller.ctr_output.u], layout=3, sp=[1 2 3])
 # hline!([prob[cm.ref.k]], label="ref", sp=1)
 
-@test sol(tspan[2], idxs = cm.tank.xc)≈prob[cm.ref.k] atol=1e-2 # Test that the inverse model led to the correct reference
+@test sol(tspan[2], idxs = cm.tank.xc)≈getp(prob, cm.ref.k)(prob) atol=1e-2 # Test that the inverse model led to the correct reference
 
 Sf, simplified_sys = Blocks.get_sensitivity_function(model, :y) # This should work without providing an operating opint containing a dummy derivative
 x, p = ModelingToolkit.get_u0_p(simplified_sys, op)

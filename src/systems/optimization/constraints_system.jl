@@ -77,7 +77,8 @@ struct ConstraintsSystem <: AbstractTimeIndependentSystem
             tearing_state = nothing, substitutions = nothing;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
-            all_dimensionless([states; ps]) || check_units(constraints)
+            u = __get_unit_type(states, ps)
+            check_units(u, constraints)
         end
         new(tag, constraints, states, ps, var_to_name, observed, jac, name, systems,
             defaults,
