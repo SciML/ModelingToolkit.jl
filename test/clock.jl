@@ -465,7 +465,7 @@ y = res.y[:]
     @test_broken sol(timevec .+ 1e-10, idxs = model.controller.output.u)≈y rtol=1e-8 # Broken due to discrete observed
     # plot([y sol(timevec .+ 1e-12, idxs=model.controller.output.u)], lab=["CS" "MTK"])
 
-    # TODO: test the same system, but with the PI contorller implemented as 
+    # TODO: test the same system, but with the PI controller implemented as
     # x(k) ~ x(k-1) + ki * u
     # y ~ x(k-1) + kp * u
     # Instead. This should be equivalent to the above, but gve me an error when I tried
