@@ -144,7 +144,7 @@ function SciMLBase.process_p_u0_symbolic(prob::Union{SciMLBase.AbstractDEProblem
                                 " Please use `remake` with the `p` keyword argument as a vector of values, paying attention to parameter order."))
     end
     if eltype(u0) <: Pair
-        hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :states) ||
+        hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :unknowns) ||
             throw(ArgumentError("This problem does not support symbolic maps with `remake`, i.e. it does not have a symbolic origin." *
                                 " Please use `remake` with the `u0` keyword argument as a vector of values, paying attention to state order."))
     end
@@ -162,7 +162,7 @@ function SciMLBase.process_p_u0_symbolic(prob::Union{SciMLBase.AbstractDEProblem
         defs = mergedefaults(defs, prob.p, ps)
     end
     defs = mergedefaults(defs, p, ps)
-    sts = states(sys)
+    sts = unknowns(sys)
     defs = mergedefaults(defs, prob.u0, sts)
     defs = mergedefaults(defs, u0, sts)
     u0, p, defs = get_u0_p(sys, defs)
@@ -229,7 +229,7 @@ function isdisturbance(x)
 end
 
 function disturbances(sys)
-    [filter(isdisturbance, states(sys)); filter(isdisturbance, parameters(sys))]
+    [filter(isdisturbance, unknowns(sys)); filter(isdisturbance, parameters(sys))]
 end
 
 ## Tunable =====================================================================
@@ -326,7 +326,7 @@ Create parameters with bounds like this
 @parameters p [bounds=(-1, 1)]
 ```
 
-To obtain state bounds, call `getbounds(sys, states(sys))`
+To obtain state bounds, call `getbounds(sys, unknowns(sys))`
 """
 function getbounds(sys::ModelingToolkit.AbstractSystem, p = parameters(sys))
     Dict(p .=> getbounds.(p))

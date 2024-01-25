@@ -61,12 +61,12 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """The independent variable, usually time."""
     iv::Any
     """The dependent variables, representing the state of the system.  Must not contain the independent variable."""
-    states::Vector
+    unknowns::Vector
     """The parameters of the system. Must not contain the independent variable."""
     ps::Vector
     """Array variables."""
     var_to_name::Any
-    """Observed states."""
+    """Observed variables."""
     observed::Vector{Equation}
     """The name of the system."""
     name::Symbol
@@ -102,25 +102,25 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
     complete::Bool
 
-    function JumpSystem{U}(tag, ap::U, iv, states, ps, var_to_name, observed, name, systems,
+    function JumpSystem{U}(tag, ap::U, iv, unknowns, ps, var_to_name, observed, name, systems,
             defaults, connector_type, devents,
             metadata = nothing, gui_metadata = nothing,
             complete = false;
             checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
         if checks == true || (checks & CheckComponents) > 0
-            check_variables(states, iv)
+            check_variables(unknowns, iv)
             check_parameters(ps, iv)
         end
         if checks == true || (checks & CheckUnits) > 0
-            u = __get_unit_type(states, ps, iv)
+            u = __get_unit_type(unknowns, ps, iv)
             check_units(u, ap, iv)
         end
-        new{U}(tag, ap, iv, states, ps, var_to_name, observed, name, systems, defaults,
+        new{U}(tag, ap, iv, unknowns, ps, var_to_name, observed, name, systems, defaults,
             connector_type, devents, metadata, gui_metadata, complete)
     end
 end
 
-function JumpSystem(eqs, iv, states, ps;
+function JumpSystem(eqs, iv, unknowns, ps;
         observed = Equation[],
         systems = JumpSystem[],
         default_u0 = Dict(),
@@ -160,9 +160,9 @@ function JumpSystem(eqs, iv, states, ps;
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
-    states, ps = value.(states), value.(ps)
+    unknowns, ps = value.(unknowns), value.(ps)
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, states)
+    process_variables!(var_to_name, defaults, unknowns)
     process_variables!(var_to_name, defaults, ps)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
     (continuous_events === nothing) ||
@@ -170,7 +170,7 @@ function JumpSystem(eqs, iv, states, ps;
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
 
     JumpSystem{typeof(ap)}(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-        ap, value(iv), states, ps, var_to_name, observed, name, systems,
+        ap, value(iv), unknowns, ps, var_to_name, observed, name, systems,
         defaults, connector_type, disc_callbacks, metadata, gui_metadata,
         checks = checks)
 end
@@ -181,7 +181,7 @@ function generate_rate_function(js::JumpSystem, rate)
         csubs = Dict(c => getdefault(c) for c in consts)
         rate = substitute(rate, csubs)
     end
-    rf = build_function(rate, states(js), parameters(js),
+    rf = build_function(rate, unknowns(js), parameters(js),
         get_iv(js),
         expression = Val{true})
 end
@@ -192,7 +192,7 @@ function generate_affect_function(js::JumpSystem, affect, outputidxs)
         csubs = Dict(c => getdefault(c) for c in consts)
         affect = substitute(affect, csubs)
     end
-    compile_affect(affect, js, states(js), parameters(js); outputidxs = outputidxs,
+    compile_affect(affect, js, unknowns(js), parameters(js); outputidxs = outputidxs,
         expression = Val{true}, checkvars = false)
 end
 
@@ -297,7 +297,7 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
         checkbounds = false,
         use_union = true,
         kwargs...)
-    dvs = states(sys)
+    dvs = unknowns(sys)
     ps = parameters(sys)
 
     defs = defaults(sys)
@@ -320,7 +320,7 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
         end
     end
 
-    df = DiscreteFunction{true, true}(f; syms = Symbol.(states(sys)),
+    df = DiscreteFunction{true, true}(f; syms = Symbol.(unknowns(sys)),
         indepsym = Symbol(get_iv(sys)),
         paramsyms = Symbol.(ps), sys = sys,
         observed = observedfun)
@@ -353,7 +353,7 @@ function DiscreteProblemExpr{iip}(sys::JumpSystem, u0map, tspan::Union{Tuple, No
         parammap = DiffEqBase.NullParameters();
         use_union = false,
         kwargs...) where {iip}
-    dvs = states(sys)
+    dvs = unknowns(sys)
     ps = parameters(sys)
     defs = defaults(sys)
 
@@ -365,7 +365,7 @@ function DiscreteProblemExpr{iip}(sys::JumpSystem, u0map, tspan::Union{Tuple, No
         u0 = $u0
         p = $p
         tspan = $tspan
-        df = DiscreteFunction{true, true}(f; syms = $(Symbol.(states(sys))),
+        df = DiscreteFunction{true, true}(f; syms = $(Symbol.(unknowns(sys))),
             indepsym = $(Symbol(get_iv(sys))),
             paramsyms = $(Symbol.(parameters(sys))))
         DiscreteProblem(df, u0, tspan, p)
@@ -388,7 +388,7 @@ sol = solve(jprob, SSAStepper())
 """
 function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = nothing,
         kwargs...)
-    statetoid = Dict(value(state) => i for (i, state) in enumerate(states(js)))
+    statetoid = Dict(value(state) => i for (i, state) in enumerate(unknowns(js)))
     eqs = equations(js)
     invttype = prob.tspan[1] === nothing ? Float64 : typeof(1 / prob.tspan[2])
 

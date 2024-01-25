@@ -38,18 +38,18 @@ same keyword arguments, which are:
 
 Each `AbstractSystem` has lists of variables in context, such as distinguishing
 parameters vs states. In addition, an `AbstractSystem` can also hold other
-`AbstractSystem` types. Direct accessing of the values, such as `sys.states`,
-gives the immediate list, while the accessor functions `states(sys)` gives the
+`AbstractSystem` types. Direct accessing of the values, such as `sys.unknowns`,
+gives the immediate list, while the accessor functions `unknowns(sys)` gives the
 total set, which includes that of all systems held inside.
 
 The values which are common to all `AbstractSystem`s are:
 
   - `equations(sys)`: All equations that define the system and its subsystems.
-  - `states(sys)`: All the states in the system and its subsystems.
+  - `unknowns(sys)`: All the unknowns in the system and its subsystems.
   - `parameters(sys)`: All parameters of the system and its subsystems.
   - `nameof(sys)`: The name of the current-level system.
   - `get_eqs(sys)`: Equations that define the current-level system.
-  - `get_states(sys)`: States that are in the current-level system.
+  - `get_unknowns(sys)`: States that are in the current-level system.
   - `get_ps(sys)`: Parameters that are in the current-level system.
   - `get_systems(sys)`: Subsystems of the current-level system.
 

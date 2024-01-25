@@ -147,12 +147,12 @@ end
 
 @named odesys = System()
 esys = ModelingToolkit.expand_connections(odesys)
-@test length(equations(esys)) == length(states(esys))
+@test length(equations(esys)) == length(unknowns(esys))
 
 csys = complete(odesys)
 
 sys = structural_simplify(odesys)
-@test length(equations(sys)) == length(states(sys))
+@test length(equations(sys)) == length(unknowns(sys))
 
 sys_defs = ModelingToolkit.defaults(sys)
 @test Symbol(sys_defs[csys.vol.port.ρ]) == Symbol(csys.fluid.ρ)

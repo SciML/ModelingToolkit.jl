@@ -180,7 +180,7 @@ p = [9.8, 1]
 tspan = (0, 10.0)
 pendulum_prob = ODEProblem(pendulum_fun!, u0, tspan, p)
 pendulum_sys_org = modelingtoolkitize(pendulum_prob)
-sts = states(pendulum_sys_org)
+sts = unknowns(pendulum_sys_org)
 pendulum_sys = dae_index_lowering(pendulum_sys_org)
 prob = ODEProblem(pendulum_sys, Pair[], tspan)
 sol = solve(prob, Rodas4())
@@ -254,7 +254,7 @@ sys = modelingtoolkitize(problem)
 
 @parameters t
 @test all(isequal.(parameters(sys), getproperty.(@variables(β, η, ω, φ, σ, μ), :val)))
-@test all(isequal.(Symbol.(states(sys)), Symbol.(@variables(S(t), I(t), R(t), C(t)))))
+@test all(isequal.(Symbol.(unknowns(sys)), Symbol.(@variables(S(t), I(t), R(t), C(t)))))
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/1158
 
@@ -287,7 +287,7 @@ params = OrderedDict(:a => 10, :b => 20)
 u0 = [1, 2.0]
 prob = ODEProblem(ode_prob_dict, u0, (0.0, 1.0), params)
 sys = modelingtoolkitize(prob)
-@test [ModelingToolkit.defaults(sys)[s] for s in states(sys)] == u0
+@test [ModelingToolkit.defaults(sys)[s] for s in unknowns(sys)] == u0
 @test [ModelingToolkit.defaults(sys)[s] for s in parameters(sys)] == [10, 20]
 @test ModelingToolkit.has_tspan(sys)
 

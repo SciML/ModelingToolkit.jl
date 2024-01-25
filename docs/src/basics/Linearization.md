@@ -38,7 +38,7 @@ The named tuple `matrices` contains the matrices of the linear statespace repres
 
 ```@example LINEARIZE
 using ModelingToolkit: inputs, outputs
-[states(simplified_sys); inputs(simplified_sys); outputs(simplified_sys)]
+[unknowns(simplified_sys); inputs(simplified_sys); outputs(simplified_sys)]
 ```
 
 ## Operating point

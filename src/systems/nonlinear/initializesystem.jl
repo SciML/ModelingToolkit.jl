@@ -7,7 +7,7 @@ function initializesystem(sys::ODESystem; name = nameof(sys), kwargs...)
     if has_parent(sys) && (parent = get_parent(sys); parent !== nothing)
         sys = parent
     end
-    sts, eqs = states(sys), equations(sys)
+    sts, eqs = unknowns(sys), equations(sys)
 
     idxs_diff = isdiffeq.(eqs)
     idxs_alge = .!idxs_diff

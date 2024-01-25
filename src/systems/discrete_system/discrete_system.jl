@@ -34,7 +34,7 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     """Independent variable."""
     iv::BasicSymbolic{Real}
     """Dependent (state) variables. Must not contain the independent variable."""
-    states::Vector
+    unknowns::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
     """Time span."""
@@ -43,7 +43,7 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     var_to_name::Any
     """Control parameters (some subset of `ps`)."""
     ctrls::Vector
-    """Observed states."""
+    """Observed variables."""
     observed::Vector{Equation}
     """
     The name of the system
@@ -214,7 +214,7 @@ function SciMLBase.DiscreteProblem(sys::DiscreteSystem, u0map = [], tspan = get_
         eval_expression = true,
         use_union = false,
         kwargs...)
-    dvs = states(sys)
+    dvs = unknowns(sys)
     ps = parameters(sys)
     eqs = equations(sys)
     eqs = linearize_eqs(sys, eqs)
@@ -240,10 +240,10 @@ function SciMLBase.DiscreteProblem(sys::DiscreteSystem, u0map = [], tspan = get_
 end
 
 function linearize_eqs(sys, eqs = get_eqs(sys); return_max_delay = false)
-    unique_states = unique(operation.(states(sys)))
+    unique_states = unique(operation.(unknowns(sys)))
     max_delay = Dict(v => 0.0 for v in unique_states)
 
-    r = @rule ~t::(t -> istree(t) && any(isequal(operation(t)), operation.(states(sys))) && is_delay_var(get_iv(sys), t)) => begin
+    r = @rule ~t::(t -> istree(t) && any(isequal(operation(t)), operation.(unknowns(sys))) && is_delay_var(get_iv(sys), t)) => begin
         delay = get_delay_val(get_iv(sys), first(arguments(~t)))
         if delay > max_delay[operation(~t)]
             max_delay[operation(~t)] = delay
@@ -290,7 +290,7 @@ function get_delay_val(iv, x)
     return -delay
 end
 
-function generate_function(sys::DiscreteSystem, dvs = states(sys), ps = parameters(sys);
+function generate_function(sys::DiscreteSystem, dvs = unknowns(sys), ps = parameters(sys);
         kwargs...)
     eqs = equations(sys)
     check_operator_variables(eqs, Difference)
@@ -307,7 +307,7 @@ end
 
 """
 ```julia
-SciMLBase.DiscreteFunction{iip}(sys::DiscreteSystem, dvs = states(sys),
+SciMLBase.DiscreteFunction{iip}(sys::DiscreteSystem, dvs = unknowns(sys),
                                 ps = parameters(sys);
                                 version = nothing,
                                 kwargs...) where {iip}
@@ -330,7 +330,7 @@ function SciMLBase.DiscreteFunction{false}(sys::DiscreteSystem, args...; kwargs.
 end
 
 function SciMLBase.DiscreteFunction{iip, specialize}(sys::DiscreteSystem,
-        dvs = states(sys),
+        dvs = unknowns(sys),
         ps = parameters(sys),
         u0 = nothing;
         version = nothing,
@@ -367,7 +367,7 @@ function SciMLBase.DiscreteFunction{iip, specialize}(sys::DiscreteSystem,
 
     DiscreteFunction{iip, specialize}(f;
         sys = sys,
-        syms = Symbol.(states(sys)),
+        syms = Symbol.(unknowns(sys)),
         indepsym = Symbol(get_iv(sys)),
         paramsyms = Symbol.(ps),
         observed = observedfun,
@@ -376,7 +376,7 @@ end
 
 """
 ```julia
-DiscreteFunctionExpr{iip}(sys::DiscreteSystem, dvs = states(sys),
+DiscreteFunctionExpr{iip}(sys::DiscreteSystem, dvs = unknowns(sys),
                           ps = parameters(sys);
                           version = nothing,
                           kwargs...) where {iip}
@@ -394,7 +394,7 @@ end
 (f::DiscreteFunctionClosure)(u, p, t) = f.f_oop(u, p, t)
 (f::DiscreteFunctionClosure)(du, u, p, t) = f.f_iip(du, u, p, t)
 
-function DiscreteFunctionExpr{iip}(sys::DiscreteSystem, dvs = states(sys),
+function DiscreteFunctionExpr{iip}(sys::DiscreteSystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
         version = nothing, p = nothing,
         linenumbers = false,
@@ -408,7 +408,7 @@ function DiscreteFunctionExpr{iip}(sys::DiscreteSystem, dvs = states(sys),
     ex = quote
         $_f
         DiscreteFunction{$iip}($fsym,
-            syms = $(Symbol.(states(sys))),
+            syms = $(Symbol.(unknowns(sys))),
             indepsym = $(QuoteNode(Symbol(get_iv(sys)))),
             paramsyms = $(Symbol.(parameters(sys))))
     end
@@ -427,7 +427,7 @@ function process_DiscreteProblem(constructor, sys::DiscreteSystem, u0map, paramm
         tofloat = !use_union,
         kwargs...)
     eqs = equations(sys)
-    dvs = states(sys)
+    dvs = unknowns(sys)
     ps = parameters(sys)
 
     u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union)

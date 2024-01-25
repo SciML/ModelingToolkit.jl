@@ -577,7 +577,7 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
                 dist_io = merge_io(io, inputs[i])
                 ss, = _structural_simplify!(state, dist_io; simplify, check_consistency,
                     fully_determined, kwargs...)
-                append!(appended_parameters, inputs[i], states(ss))
+                append!(appended_parameters, inputs[i], unknowns(ss))
                 discrete_subsystems[i] = ss
             end
             @set! sys.discrete_subsystems = discrete_subsystems, inputs, continuous_id,
@@ -613,7 +613,7 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
     else
         sys = ModelingToolkit.tearing(sys, state; simplify, mm, check_consistency)
     end
-    fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
+    fullstates = [map(eq -> eq.lhs, observed(sys)); unknowns(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullstates)
     ModelingToolkit.invalidate_cache!(sys), input_idxs
 end

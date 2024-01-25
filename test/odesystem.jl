@@ -40,7 +40,7 @@ function test_diffeq_inference(name, sys, iv, dvs, ps)
     @testset "ODESystem construction: $name" begin
         @test isequal(independent_variables(sys)[1], value(iv))
         @test length(independent_variables(sys)) == 1
-        @test isempty(setdiff(Set(states(sys)), Set(value.(dvs))))
+        @test isempty(setdiff(Set(unknowns(sys)), Set(value.(dvs))))
         @test isempty(setdiff(Set(parameters(sys)), Set(value.(ps))))
     end
 end
@@ -163,7 +163,7 @@ lowered_eqs = [D(uˍtt) ~ 2uˍtt + uˍt + xˍt + 1
 # issue #219
 @test all(isequal.([ModelingToolkit.var_from_nested_derivative(eq.lhs)[1]
                     for eq in equations(de1)],
-    states(@named lowered = ODESystem(lowered_eqs))))
+    unknowns(@named lowered = ODESystem(lowered_eqs))))
 
 test_diffeq_inference("first-order transform", de1, t, [uˍtt, xˍt, uˍt, u, x], [])
 du = zeros(5)
@@ -248,7 +248,7 @@ prob13 = ODEProblem(sys, u0, tspan, (0.04, 3e7, 1e4))
 prob14 = ODEProblem(sys, u0, tspan, p2)
 for p in [prob1, prob14]
     @test Set(Num.(parameters(sys)) .=> p.p) == Set([k₁ => 0.04, k₂ => 3e7, k₃ => 1e4])
-    @test Set(Num.(states(sys)) .=> p.u0) == Set([y₁ => 1, y₂ => 0, y₃ => 0])
+    @test Set(Num.(unknowns(sys)) .=> p.u0) == Set([y₁ => 1, y₂ => 0, y₃ => 0])
 end
 # test remake with symbols
 p3 = [k₁ => 0.05,
@@ -259,7 +259,7 @@ prob_pmap = remake(prob14; p = p3, u0 = u01)
 prob_dpmap = remake(prob14; p = Dict(p3), u0 = Dict(u01))
 for p in [prob_pmap, prob_dpmap]
     @test Set(Num.(parameters(sys)) .=> p.p) == Set([k₁ => 0.05, k₂ => 2e7, k₃ => 1.1e4])
-    @test Set(Num.(states(sys)) .=> p.u0) == Set([y₁ => 1, y₂ => 1, y₃ => 1])
+    @test Set(Num.(unknowns(sys)) .=> p.u0) == Set([y₁ => 1, y₂ => 1, y₃ => 1])
 end
 sol_pmap = solve(prob_pmap, Rodas5())
 sol_dpmap = solve(prob_dpmap, Rodas5())
@@ -323,7 +323,7 @@ eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x - β * y,
     x + z ~ y]
 @named sys = ODESystem(eqs)
-@test all(isequal.(states(sys), [x, y, z]))
+@test all(isequal.(unknowns(sys), [x, y, z]))
 @test all(isequal.(parameters(sys), [σ, β]))
 @test equations(sys) == eqs
 @test ModelingToolkit.isautonomous(sys)
@@ -372,7 +372,7 @@ eqs = [
 ]
 @named sys = ODESystem(eqs, t)
 @test isequal(ModelingToolkit.get_iv(sys), t)
-@test isequal(states(sys), [x1, x2])
+@test isequal(unknowns(sys), [x1, x2])
 @test isempty(parameters(sys))
 
 # one equation ODESystem test
@@ -870,11 +870,11 @@ let
     sys = structural_simplify(sys)
 
     u0 = ModelingToolkit.missing_variable_defaults(sys)
-    u0_expected = Pair[s => 0.0 for s in states(sys)]
+    u0_expected = Pair[s => 0.0 for s in unknowns(sys)]
     @test string(u0) == string(u0_expected)
 
     u0 = ModelingToolkit.missing_variable_defaults(sys, [1, 2])
-    u0_expected = Pair[s => i for (i, s) in enumerate(states(sys))]
+    u0_expected = Pair[s => i for (i, s) in enumerate(unknowns(sys))]
     @test string(u0) == string(u0_expected)
 
     @test_nowarn ODEProblem(sys, u0, (0, 1))
@@ -970,7 +970,7 @@ let
     @named sys4 = ODESystem([der(x) ~ -y; der(y) ~ 1 + pp * y + x], t)
     sys4s = structural_simplify(sys4)
     prob = ODAEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
-    @test string.(states(prob.f.sys)) == ["x(t)", "y(t)"]
+    @test string.(unknowns(prob.f.sys)) == ["x(t)", "y(t)"]
     @test string.(parameters(prob.f.sys)) == ["pp"]
     @test string.(independent_variables(prob.f.sys)) == ["t"]
 end
@@ -1041,7 +1041,7 @@ vars_sub2 = @variables s2(t)
 @named sub = extend(partial_sub, sub)
 
 new_sys2 = complete(substitute(sys2, Dict(:sub => sub)))
-Set(states(new_sys2)) == Set([new_sys2.x1, new_sys2.sys1.x1,
+Set(unknowns(new_sys2)) == Set([new_sys2.x1, new_sys2.sys1.x1,
     new_sys2.sys1.sub.s1, new_sys2.sys1.sub.s2,
     new_sys2.sub.s1, new_sys2.sub.s2])
 

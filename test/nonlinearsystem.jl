@@ -15,7 +15,7 @@ canonequal(a, b) = isequal(simplify(a), simplify(b))
 
 function test_nlsys_inference(name, sys, vs, ps)
     @testset "NonlinearSystem construction: $name" begin
-        @test Set(states(sys)) == Set(value.(vs))
+        @test Set(unknowns(sys)) == Set(value.(vs))
         @test Set(parameters(sys)) == Set(value.(ps))
     end
 end
@@ -166,7 +166,7 @@ end
 
     @test isequal(union(Set(parameters(sys1)), Set(parameters(sys2))),
         Set(parameters(sys3)))
-    @test isequal(union(Set(states(sys1)), Set(states(sys2))), Set(states(sys3)))
+    @test isequal(union(Set(unknowns(sys1)), Set(unknowns(sys2))), Set(unknowns(sys3)))
     @test isequal(union(Set(equations(sys1)), Set(equations(sys2))), Set(equations(sys3)))
 end
 
@@ -199,7 +199,7 @@ eq = [v1 ~ sin(2pi * t * h)
         u[4] ~ h]
 
     sys = NonlinearSystem(eqs, collect(u[1:4]), Num[], defaults = Dict([]), name = :test)
-    prob = NonlinearProblem(sys, ones(length(states(sys))))
+    prob = NonlinearProblem(sys, ones(length(unknowns(sys))))
 
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
 
@@ -223,7 +223,7 @@ testdict = Dict([:test => 1])
         0 ~ x * (b - z) - y,
         0 ~ x * y - c * z]
     @named sys = NonlinearSystem(eqs, [x, y, z], [a, b, c], defaults = Dict(x => 2.0))
-    prob = NonlinearProblem(sys, ones(length(states(sys))))
+    prob = NonlinearProblem(sys, ones(length(unknowns(sys))))
 
     prob_ = remake(prob, u0 = [1.0, 2.0, 3.0], p = [1.1, 1.2, 1.3])
     @test prob_.u0 == [1.0, 2.0, 3.0]
@@ -262,7 +262,7 @@ end
 
     sys_init_simple = structural_simplify(sys_init)
 
-    prob = NonlinearProblem(sys_init_simple, get_default_or_guess.(states(sys_init_simple)))
+    prob = NonlinearProblem(sys_init_simple, get_default_or_guess.(unknowns(sys_init_simple)))
 
     @test prob.u0 == [0.5, -0.5]
 
@@ -270,8 +270,8 @@ end
     @test sol.retcode == SciMLBase.ReturnCode.Success
 
     # Confirm for all the states of the non-simplified system
-    @test all(.≈(sol[states(sys)], [1e-5, 0, 1e-5 / 1.5, 0]; atol = 1e-8))
+    @test all(.≈(sol[unknowns(sys)], [1e-5, 0, 1e-5 / 1.5, 0]; atol = 1e-8))
 
     # Confirm for all the states of the simplified system
-    @test all(.≈(sol[states(sys_simple)], [1e-5 / 1.5, 0]; atol = 1e-8))
+    @test all(.≈(sol[unknowns(sys_simple)], [1e-5 / 1.5, 0]; atol = 1e-8))
 end

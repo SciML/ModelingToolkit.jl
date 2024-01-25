@@ -298,7 +298,7 @@ function build_torn_function(sys;
         rhss)
 
     states = Any[fullvars[i] for i in states_idxs]
-    @set! sys.unknown_states = states
+    @set! sys.solved_unknowns = states
     syms = map(Symbol, states)
 
     pre = get_postprocess_fbody(sys)
@@ -410,9 +410,9 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
     required_algvars = Set(intersect(algvars, vars))
     obs = observed(sys)
     observed_idx = Dict(x.lhs => i for (i, x) in enumerate(obs))
-    namespaced_to_obs = Dict(states(sys, x.lhs) => x.lhs for x in obs)
-    namespaced_to_sts = Dict(states(sys, x) => x for x in states(sys))
-    sts = Set(states(sys))
+    namespaced_to_obs = Dict(unknowns(sys, x.lhs) => x.lhs for x in obs)
+    namespaced_to_sts = Dict(unknowns(sys, x) => x for x in unknowns(sys))
+    sts = Set(unknowns(sys))
 
     # FIXME: This is a rather rough estimate of dependencies. We assume
     # the expression depends on everything before the `maxidx`.

@@ -108,5 +108,5 @@ eqs = [osc1.jcn ~ osc2.delx,
 for coupledOsc in [coupledOsc, coupledOsc2]
     local sys = structural_simplify(coupledOsc)
     @test length(equations(sys)) == 4
-    @test length(states(sys)) == 4
+    @test length(unknowns(sys)) == 4
 end

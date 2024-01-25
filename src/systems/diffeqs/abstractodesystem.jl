@@ -22,7 +22,7 @@ function calculate_tgrad(sys::AbstractODESystem;
     # t + u(t)`.
     rhs = [detime_dvs(eq.rhs) for eq in full_equations(sys)]
     iv = get_iv(sys)
-    xs = states(sys)
+    xs = unknowns(sys)
     rule = Dict(map((x, xt) -> xt => x, detime_dvs.(xs), xs))
     rhs = substitute.(rhs, Ref(rule))
     tgrad = [expand_derivatives(Differential(iv)(r), simplify) for r in rhs]
@@ -33,8 +33,8 @@ function calculate_tgrad(sys::AbstractODESystem;
 end
 
 function calculate_jacobian(sys::AbstractODESystem;
-        sparse = false, simplify = false, dvs = states(sys))
-    if isequal(dvs, states(sys))
+        sparse = false, simplify = false, dvs = unknowns(sys))
+    if isequal(dvs, unknowns(sys))
         cache = get_jac(sys)[]
         if cache isa Tuple && cache[2] == (sparse, simplify)
             return cache[1]
@@ -51,7 +51,7 @@ function calculate_jacobian(sys::AbstractODESystem;
         jac = jacobian(rhs, dvs, simplify = simplify)
     end
 
-    if isequal(dvs, states(sys))
+    if isequal(dvs, unknowns(sys))
         get_jac(sys)[] = jac, (sparse, simplify) # cache Jacobian
     end
 
@@ -80,7 +80,7 @@ function calculate_control_jacobian(sys::AbstractODESystem;
     return jac
 end
 
-function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
+function generate_tgrad(sys::AbstractODESystem, dvs = unknowns(sys), ps = parameters(sys);
         simplify = false, kwargs...)
     tgrad = calculate_tgrad(sys, simplify = simplify)
     pre = get_preprocess_constants(tgrad)
@@ -101,7 +101,7 @@ function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = paramete
     end
 end
 
-function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
+function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys), ps = parameters(sys);
         simplify = false, sparse = false, kwargs...)
     jac = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
     pre = get_preprocess_constants(jac)
@@ -117,21 +117,21 @@ function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = param
     end
 end
 
-function generate_control_jacobian(sys::AbstractODESystem, dvs = states(sys),
+function generate_control_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys);
         simplify = false, sparse = false, kwargs...)
     jac = calculate_control_jacobian(sys; simplify = simplify, sparse = sparse)
     return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
 end
 
-function generate_dae_jacobian(sys::AbstractODESystem, dvs = states(sys),
+function generate_dae_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys); simplify = false, sparse = false,
         kwargs...)
     jac_u = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
-    derivatives = Differential(get_iv(sys)).(states(sys))
+    derivatives = Differential(get_iv(sys)).(unknowns(sys))
     jac_du = calculate_jacobian(sys; simplify = simplify, sparse = sparse,
         dvs = derivatives)
-    dvs = states(sys)
+    dvs = unknowns(sys)
     @variables ˍ₋gamma
     jac = ˍ₋gamma * jac_du + jac_u
     pre = get_preprocess_constants(jac)
@@ -139,7 +139,7 @@ function generate_dae_jacobian(sys::AbstractODESystem, dvs = states(sys),
         postprocess_fbody = pre, kwargs...)
 end
 
-function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
+function generate_function(sys::AbstractODESystem, dvs = unknowns(sys), ps = parameters(sys);
         implicit_dae = false,
         ddvs = implicit_dae ? map(Differential(get_iv(sys)), dvs) :
                nothing,
@@ -201,7 +201,7 @@ const DDE_HISTORY_FUN = Sym{Symbolics.FnType{Tuple{Any, <:Real}, Vector{Real}}}(
 function delay_to_function(sys::AbstractODESystem, eqs = full_equations(sys))
     delay_to_function(eqs,
         get_iv(sys),
-        Dict{Any, Int}(operation(s) => i for (i, s) in enumerate(states(sys))),
+        Dict{Any, Int}(operation(s) => i for (i, s) in enumerate(unknowns(sys))),
         parameters(sys),
         DDE_HISTORY_FUN)
 end
@@ -226,7 +226,7 @@ function delay_to_function(expr, iv, sts, ps, h)
     end
 end
 
-function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = parameters(sys);
+function generate_difference_cb(sys::ODESystem, dvs = unknowns(sys), ps = parameters(sys);
         kwargs...)
     eqs = equations(sys)
     check_operator_variables(eqs, Difference)
@@ -274,7 +274,7 @@ end
 
 function calculate_massmatrix(sys::AbstractODESystem; simplify = false)
     eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
-    dvs = states(sys)
+    dvs = unknowns(sys)
     M = zeros(length(eqs), length(eqs))
     state2idx = Dict(s => i for (i, s) in enumerate(dvs))
     for (i, eq) in enumerate(eqs)
@@ -297,13 +297,13 @@ function jacobian_sparsity(sys::AbstractODESystem)
     sparsity === nothing || return sparsity
 
     jacobian_sparsity([eq.rhs for eq in full_equations(sys)],
-        [dv for dv in states(sys)])
+        [dv for dv in unknowns(sys)])
 end
 
 function jacobian_dae_sparsity(sys::AbstractODESystem)
     J1 = jacobian_sparsity([eq.rhs for eq in full_equations(sys)],
-        [dv for dv in states(sys)])
-    derivatives = Differential(get_iv(sys)).(states(sys))
+        [dv for dv in unknowns(sys)])
+    derivatives = Differential(get_iv(sys)).(unknowns(sys))
     J2 = jacobian_sparsity([eq.rhs for eq in full_equations(sys)],
         [dv for dv in derivatives])
     J1 + J2
@@ -316,7 +316,7 @@ end
 
 """
 ```julia
-DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
+DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
                             ps = parameters(sys);
                             version = nothing, tgrad = false,
                             jac = false,
@@ -342,7 +342,7 @@ function DiffEqBase.ODEFunction{false}(sys::AbstractODESystem, args...;
     ODEFunction{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
-function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = states(sys),
+function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
         version = nothing, tgrad = false,
         jac = false, p = nothing,
@@ -516,7 +516,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
         tgrad = _tgrad === nothing ? nothing : _tgrad,
         mass_matrix = _M,
         jac_prototype = jac_prototype,
-        syms = collect(Symbol.(states(sys))),
+        syms = collect(Symbol.(unknowns(sys))),
         indepsym = Symbol(get_iv(sys)),
         paramsyms = collect(Symbol.(ps)),
         observed = observedfun,
@@ -526,7 +526,7 @@ end
 
 """
 ```julia
-DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
+DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
                             ps = parameters(sys);
                             version = nothing, tgrad = false,
                             jac = false,
@@ -542,7 +542,7 @@ function DiffEqBase.DAEFunction(sys::AbstractODESystem, args...; kwargs...)
     DAEFunction{true}(sys, args...; kwargs...)
 end
 
-function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
+function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
         ddvs = map(diff2term ∘ Differential(get_iv(sys)), dvs),
         version = nothing, p = nothing,
@@ -598,7 +598,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
         uElType = u0 === nothing ? Float64 : eltype(u0)
         if jac
             J1 = calculate_jacobian(sys, sparse = sparse)
-            derivatives = Differential(get_iv(sys)).(states(sys))
+            derivatives = Differential(get_iv(sys)).(unknowns(sys))
             J2 = calculate_jacobian(sys; sparse = sparse, dvs = derivatives)
             similar(J1 + J2, uElType)
         else
@@ -622,7 +622,7 @@ function DiffEqBase.DDEFunction(sys::AbstractODESystem, args...; kwargs...)
     DDEFunction{true}(sys, args...; kwargs...)
 end
 
-function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
+function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
         eval_module = @__MODULE__,
         checkbounds = false,
@@ -646,7 +646,7 @@ function DiffEqBase.SDDEFunction(sys::AbstractODESystem, args...; kwargs...)
     SDDEFunction{true}(sys, args...; kwargs...)
 end
 
-function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
+function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
         eval_module = @__MODULE__,
         checkbounds = false,
@@ -673,7 +673,7 @@ end
 
 """
 ```julia
-ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
+ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
                      ps = parameters(sys);
                      version = nothing, tgrad = false,
                      jac = false,
@@ -694,7 +694,7 @@ end
 (f::ODEFunctionClosure)(u, p, t) = f.f_oop(u, p, t)
 (f::ODEFunctionClosure)(du, u, p, t) = f.f_iip(du, u, p, t)
 
-function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
+function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
         version = nothing, tgrad = false,
         jac = false, p = nothing,
@@ -751,7 +751,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
             tgrad = $tgradsym,
             mass_matrix = M,
             jac_prototype = $jp_expr,
-            syms = $(Symbol.(states(sys))),
+            syms = $(Symbol.(unknowns(sys))),
             indepsym = $(QuoteNode(Symbol(get_iv(sys)))),
             paramsyms = $(Symbol.(parameters(sys))),
             sparsity = $(sparsity ? jacobian_sparsity(sys) : nothing),
@@ -771,7 +771,7 @@ function get_u0_p(sys,
         use_union = true,
         tofloat = true,
         symbolic_u0 = false)
-    dvs = states(sys)
+    dvs = unknowns(sys)
     ps = parameters(sys)
 
     defs = defaults(sys)
@@ -804,7 +804,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         u0_constructor = identity,
         kwargs...)
     eqs = equations(sys)
-    dvs = states(sys)
+    dvs = unknowns(sys)
     ps = parameters(sys)
     iv = get_iv(sys)
 
@@ -850,7 +850,7 @@ end
 
 """
 ```julia
-DAEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
+DAEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
                      ps = parameters(sys);
                      version = nothing, tgrad = false,
                      jac = false,
@@ -871,7 +871,7 @@ end
 (f::DAEFunctionClosure)(du, u, p, t) = f.f_oop(du, u, p, t)
 (f::DAEFunctionClosure)(out, du, u, p, t) = f.f_iip(out, du, u, p, t)
 
-function DAEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
+function DAEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
         version = nothing, tgrad = false,
         jac = false, p = nothing,
@@ -1015,7 +1015,7 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
         has_difference = has_difference, check_length,
         kwargs...)
     diffvars = collect_differential_variables(sys)
-    sts = states(sys)
+    sts = unknowns(sys)
     differential_vars = map(Base.Fix2(in, diffvars), sts)
     kwargs = filter_kwargs(kwargs)
 
@@ -1235,7 +1235,7 @@ function DAEProblemExpr{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
         kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
     diffvars = collect_differential_variables(sys)
-    sts = states(sys)
+    sts = unknowns(sys)
     differential_vars = map(Base.Fix2(in, diffvars), sts)
     kwargs = filter_kwargs(kwargs)
     kwarg_params = gen_quoted_kwargs(kwargs)
@@ -1346,7 +1346,7 @@ function isisomorphic(sys1::AbstractODESystem, sys2::AbstractODESystem)
 
     iv2 = only(independent_variables(sys2))
     sys1 = convert_system(ODESystem, sys1, iv2)
-    s1, s2 = states(sys1), states(sys2)
+    s1, s2 = unknowns(sys1), unknowns(sys2)
     p1, p2 = parameters(sys1), parameters(sys2)
 
     (length(s1) != length(s2)) || (length(p1) != length(p2)) && return false

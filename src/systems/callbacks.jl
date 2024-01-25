@@ -37,8 +37,8 @@ func(f::FunctionalAffect) = f.f
 context(a::FunctionalAffect) = a.ctx
 parameters(a::FunctionalAffect) = a.pars
 parameters_syms(a::FunctionalAffect) = a.pars_syms
-states(a::FunctionalAffect) = a.sts
-states_syms(a::FunctionalAffect) = a.sts_syms
+unknowns(a::FunctionalAffect) = a.sts
+unknowns_syms(a::FunctionalAffect) = a.sts_syms
 
 function Base.:(==)(a1::FunctionalAffect, a2::FunctionalAffect)
     isequal(a1.f, a2.f) && isequal(a1.sts, a2.sts) && isequal(a1.pars, a2.pars) &&
@@ -60,8 +60,8 @@ has_functional_affect(cb) = affects(cb) isa FunctionalAffect
 namespace_affect(affect, s) = namespace_equation(affect, s)
 function namespace_affect(affect::FunctionalAffect, s)
     FunctionalAffect(func(affect),
-        renamespace.((s,), states(affect)),
-        states_syms(affect),
+        renamespace.((s,), unknowns(affect)),
+        unknowns_syms(affect),
         renamespace.((s,), parameters(affect)),
         parameters_syms(affect),
         context(affect))
@@ -295,7 +295,7 @@ Notes
   - `expression = Val{true}`, causes the generated function to be returned as an expression.
     If  set to `Val{false}` a `RuntimeGeneratedFunction` will be returned.
   - `outputidxs`, a vector of indices of the output variables which should correspond to
-    `states(sys)`. If provided, checks that the LHS of affect equations are variables are
+    `unknowns(sys)`. If provided, checks that the LHS of affect equations are variables are
     dropped, i.e. it is assumed these indices are correct and affect equations are
     well-formed.
   - `kwargs` are passed through to `Symbolics.build_function`.
@@ -361,14 +361,14 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
     end
 end
 
-function generate_rootfinding_callback(sys::AbstractODESystem, dvs = states(sys),
+function generate_rootfinding_callback(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys); kwargs...)
     cbs = continuous_events(sys)
     isempty(cbs) && return nothing
     generate_rootfinding_callback(cbs, sys, dvs, ps; kwargs...)
 end
 
-function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = states(sys),
+function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys); kwargs...)
     eqs = map(cb -> cb.eqs, cbs)
     num_eqs = length.(eqs)
@@ -430,14 +430,14 @@ end
 
 function compile_user_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
     dvs_ind = Dict(reverse(en) for en in enumerate(dvs))
-    v_inds = map(sym -> dvs_ind[sym], states(affect))
+    v_inds = map(sym -> dvs_ind[sym], unknowns(affect))
 
     ps_ind = Dict(reverse(en) for en in enumerate(ps))
     p_inds = map(sym -> ps_ind[sym], parameters(affect))
 
     # HACK: filter out eliminated symbols. Not clear this is the right thing to do
     # (MTK should keep these symbols)
-    u = filter(x -> !isnothing(x[2]), collect(zip(states_syms(affect), v_inds))) |>
+    u = filter(x -> !isnothing(x[2]), collect(zip(unknowns_syms(affect), v_inds))) |>
         NamedTuple
     p = filter(x -> !isnothing(x[2]), collect(zip(parameters_syms(affect), p_inds))) |>
         NamedTuple
@@ -480,7 +480,7 @@ function generate_discrete_callback(cb, sys, dvs, ps; postprocess_affect_expr! =
     end
 end
 
-function generate_discrete_callbacks(sys::AbstractSystem, dvs = states(sys),
+function generate_discrete_callbacks(sys::AbstractSystem, dvs = unknowns(sys),
         ps = parameters(sys); kwargs...)
     has_discrete_events(sys) || return nothing
     symcbs = discrete_events(sys)

@@ -32,7 +32,7 @@ traced_sys = modelingtoolkitize(pendulum_prob)
 pendulum_sys = structural_simplify(dae_index_lowering(traced_sys))
 prob = ODAEProblem(pendulum_sys, [], tspan)
 sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
-plot(sol, idxs = states(traced_sys))
+plot(sol, idxs = unknowns(traced_sys))
 ```
 
 ## Explanation
@@ -154,10 +154,10 @@ prob = ODEProblem(pendulum_sys, Pair[], tspan)
 sol = solve(prob, Rodas4())
 
 using Plots
-plot(sol, idxs = states(traced_sys))
+plot(sol, idxs = unknowns(traced_sys))
 ```
 
-Note that plotting using `states(traced_sys)` is done so that any
+Note that plotting using `unknowns(traced_sys)` is done so that any
 variables which are symbolically eliminated, or any variable reordering
 done for enhanced parallelism/performance, still show up in the resulting
 plot and the plot is shown in the same order as the original numerical
@@ -173,7 +173,7 @@ traced_sys = modelingtoolkitize(pendulum_prob)
 pendulum_sys = structural_simplify(dae_index_lowering(traced_sys))
 prob = ODAEProblem(pendulum_sys, Pair[], tspan)
 sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
-plot(sol, idxs = states(traced_sys))
+plot(sol, idxs = unknowns(traced_sys))
 ```
 
 And there you go: this has transformed the model from being too hard to

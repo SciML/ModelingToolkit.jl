@@ -163,7 +163,7 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
         needed_cont_to_disc_obs = map(v -> arguments(v)[1], input)
         # TODO: filter the needed ones
         fullvars = Set{Any}(eq.lhs for eq in observed(sys))
-        for s in states(sys)
+        for s in unknowns(sys)
             push!(fullvars, s)
         end
         needed_disc_to_cont_obs = []
@@ -175,7 +175,7 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
                 push!(disc_to_cont_idxs, param_to_idx[v])
             end
         end
-        append!(appended_parameters, input, states(sys))
+        append!(appended_parameters, input, unknowns(sys))
         cont_to_disc_obs = build_explicit_observed_function(syss[continuous_id],
             needed_cont_to_disc_obs,
             throw = false,
@@ -187,10 +187,10 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
             expression = true,
             output_type = SVector)
         ni = length(input)
-        ns = length(states(sys))
+        ns = length(unknowns(sys))
         disc = Func([
                 out,
-                DestructuredArgs(states(sys)),
+                DestructuredArgs(unknowns(sys)),
                 DestructuredArgs(appended_parameters),
                 get_iv(sys),
             ], [],

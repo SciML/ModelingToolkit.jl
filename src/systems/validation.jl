@@ -185,10 +185,10 @@ function _validate(conn::Connection; info::String = "")
     valid = true
     syss = get_systems(conn)
     sys = first(syss)
-    st = states(sys)
+    st = unknowns(sys)
     for i in 2:length(syss)
         s = syss[i]
-        sst = states(s)
+        sst = unknowns(s)
         if length(st) != length(sst)
             valid = false
             @warn("$info: connected systems $(nameof(sys)) and $(nameof(s)) have $(length(st)) and $(length(sst)) states, cannor connect.")

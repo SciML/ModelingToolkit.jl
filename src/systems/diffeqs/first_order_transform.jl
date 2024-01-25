@@ -6,17 +6,17 @@ form by defining new variables which represent the N-1 derivatives.
 """
 function ode_order_lowering(sys::ODESystem)
     iv = get_iv(sys)
-    eqs_lowered, new_vars = ode_order_lowering(equations(sys), iv, states(sys))
+    eqs_lowered, new_vars = ode_order_lowering(equations(sys), iv, unknowns(sys))
     @set! sys.eqs = eqs_lowered
-    @set! sys.states = new_vars
+    @set! sys.unknowns = new_vars
     return sys
 end
 
 function dae_order_lowering(sys::ODESystem)
     iv = get_iv(sys)
-    eqs_lowered, new_vars = dae_order_lowering(equations(sys), iv, states(sys))
+    eqs_lowered, new_vars = dae_order_lowering(equations(sys), iv, unknowns(sys))
     @set! sys.eqs = eqs_lowered
-    @set! sys.states = new_vars
+    @set! sys.unknowns = new_vars
     return sys
 end
 

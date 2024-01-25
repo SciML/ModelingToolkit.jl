@@ -84,7 +84,7 @@ connections = [f.y ~ c.r # filtered reference to controller reference
 
 lsys0, ssys = linearize(cl, [f.u], [p.x])
 desired_order = [f.x, p.x]
-lsys = ModelingToolkit.reorder_states(lsys0, states(ssys), desired_order)
+lsys = ModelingToolkit.reorder_states(lsys0, unknowns(ssys), desired_order)
 
 @test lsys.A == [-2 0; 1 -2]
 @test lsys.B == reshape([1, 0], 2, 1)
@@ -110,7 +110,7 @@ Nd = 10
 lsys0, ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u])
 @unpack int, der = pid
 desired_order = [int.x, der.x]
-lsys = ModelingToolkit.reorder_states(lsys0, states(ssys), desired_order)
+lsys = ModelingToolkit.reorder_states(lsys0, unknowns(ssys), desired_order)
 
 @test lsys.A == [0 0; 0 -10]
 @test lsys.B == [2 -2; 10 -10]
@@ -126,7 +126,7 @@ lsyss, _ = ModelingToolkit.linearize_symbolic(pid, [reference.u, measurement.u],
 @test substitute(lsyss.D, ModelingToolkit.defaults(pid)) == lsys.D
 
 # Test with the reverse desired state order as well to verify that similarity transform and reoreder_states really works
-lsys = ModelingToolkit.reorder_states(lsys, states(ssys), reverse(desired_order))
+lsys = ModelingToolkit.reorder_states(lsys, unknowns(ssys), reverse(desired_order))
 
 @test lsys.A == [-10 0; 0 0]
 @test lsys.B == [10 -10; 2 -2]
@@ -245,7 +245,7 @@ if VERSION >= v"1.8"
     lsyss, sysss = ModelingToolkit.linearize_symbolic(model, lin_inputs, lin_outputs;
         allow_input_derivatives = true)
 
-    dummyder = setdiff(states(sysss), states(model))
+    dummyder = setdiff(unknowns(sysss), unknowns(model))
     def = merge(def, Dict(x => 0.0 for x in dummyder))
     def[link1.fy1] = -def[link1.g] * def[link1.m]
 

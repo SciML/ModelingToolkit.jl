@@ -36,7 +36,7 @@ using PrecompileTools, Reexport
     using RecursiveArrayTools
 
     using SymbolicIndexingInterface
-    export independent_variables, states, parameters
+    export independent_variables, unknowns, parameters
     import SymbolicUtils
     import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype,
         Symbolic, isadd, ismul, ispow, issym, FnType,
@@ -196,7 +196,6 @@ export ODEProblem, SDEProblem
 export NonlinearFunction, NonlinearFunctionExpr
 export NonlinearProblem, BlockNonlinearProblem, NonlinearProblemExpr
 export OptimizationProblem, OptimizationProblemExpr, constraints
-export AutoModelingToolkit
 export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem, DiscreteProblem
 export NonlinearSystem, OptimizationSystem, ConstraintsSystem

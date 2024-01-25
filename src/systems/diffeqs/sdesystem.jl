@@ -39,7 +39,7 @@ struct SDESystem <: AbstractODESystem
     """Independent variable."""
     iv::BasicSymbolic{Real}
     """Dependent (state) variables. Must not contain the independent variable."""
-    states::Vector
+    unknowns::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
     """Time span."""
@@ -48,7 +48,7 @@ struct SDESystem <: AbstractODESystem
     var_to_name::Any
     """Control parameters (some subset of `ps`)."""
     ctrls::Vector
-    """Observed states."""
+    """Observed variables."""
     observed::Vector{Equation}
     """
     Time-derivative matrix. Note: this field will not be defined until
@@ -198,7 +198,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
 end
 
 function SDESystem(sys::ODESystem, neqs; kwargs...)
-    SDESystem(equations(sys), neqs, get_iv(sys), states(sys), parameters(sys); kwargs...)
+    SDESystem(equations(sys), neqs, get_iv(sys), unknowns(sys), parameters(sys); kwargs...)
 end
 
 function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
@@ -209,12 +209,12 @@ function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
         isequal(nameof(sys1), nameof(sys2)) &&
         isequal(get_eqs(sys1), get_eqs(sys2)) &&
         isequal(get_noiseeqs(sys1), get_noiseeqs(sys2)) &&
-        _eq_unordered(get_states(sys1), get_states(sys2)) &&
+        _eq_unordered(get_unknowns(sys1), get_unknowns(sys2)) &&
         _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
         all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
 end
 
-function generate_diffusion_function(sys::SDESystem, dvs = states(sys),
+function generate_diffusion_function(sys::SDESystem, dvs = unknowns(sys),
         ps = parameters(sys); isdde = false, kwargs...)
     eqs = get_noiseeqs(sys)
     if isdde
@@ -239,8 +239,8 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
     # use the general interface
     if typeof(get_noiseeqs(sys)) <: Vector
         eqs = vcat([equations(sys)[i].lhs ~ get_noiseeqs(sys)[i]
-                    for i in eachindex(states(sys))]...)
-        de = ODESystem(eqs, get_iv(sys), states(sys), parameters(sys), name = name,
+                    for i in eachindex(unknowns(sys))]...)
+        de = ODESystem(eqs, get_iv(sys), unknowns(sys), parameters(sys), name = name,
             checks = false)
 
         jac = calculate_jacobian(de, sparse = false, simplify = false)
@@ -248,12 +248,12 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
 
         deqs = vcat([equations(sys)[i].lhs ~ equations(sys)[i].rhs +
                                              correction_factor * ∇σσ′[i]
-                     for i in eachindex(states(sys))]...)
+                     for i in eachindex(unknowns(sys))]...)
     else
         dimstate, m = size(get_noiseeqs(sys))
         eqs = vcat([equations(sys)[i].lhs ~ get_noiseeqs(sys)[i]
-                    for i in eachindex(states(sys))]...)
-        de = ODESystem(eqs, get_iv(sys), states(sys), parameters(sys), name = name,
+                    for i in eachindex(unknowns(sys))]...)
+        de = ODESystem(eqs, get_iv(sys), unknowns(sys), parameters(sys), name = name,
             checks = false)
 
         jac = calculate_jacobian(de, sparse = false, simplify = false)
@@ -261,8 +261,8 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
         for k in 2:m
             eqs = vcat([equations(sys)[i].lhs ~ get_noiseeqs(sys)[Int(i +
                                                                       (k - 1) * dimstate)]
-                        for i in eachindex(states(sys))]...)
-            de = ODESystem(eqs, get_iv(sys), states(sys), parameters(sys), name = name,
+                        for i in eachindex(unknowns(sys))]...)
+            de = ODESystem(eqs, get_iv(sys), unknowns(sys), parameters(sys), name = name,
                 checks = false)
 
             jac = calculate_jacobian(de, sparse = false, simplify = false)
@@ -271,10 +271,10 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
 
         deqs = vcat([equations(sys)[i].lhs ~ equations(sys)[i].rhs +
                                              correction_factor * ∇σσ′[i]
-                     for i in eachindex(states(sys))]...)
+                     for i in eachindex(unknowns(sys))]...)
     end
 
-    SDESystem(deqs, get_noiseeqs(sys), get_iv(sys), states(sys), parameters(sys),
+    SDESystem(deqs, get_noiseeqs(sys), get_iv(sys), unknowns(sys), parameters(sys),
         name = name, checks = false)
 end
 
@@ -341,7 +341,7 @@ function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
 
     # determine the adjustable parameters `d` given `u`
     # gradient of u with respect to states
-    grad = Symbolics.gradient(u, states(sys))
+    grad = Symbolics.gradient(u, unknowns(sys))
 
     noiseeqs = get_noiseeqs(sys)
     if noiseeqs isa Vector
@@ -356,7 +356,7 @@ function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
     # drift function for state is modified
     # θ has zero drift
     deqs = vcat([equations(sys)[i].lhs ~ equations(sys)[i].rhs - drift_correction[i]
-                 for i in eachindex(states(sys))]...)
+                 for i in eachindex(unknowns(sys))]...)
     deqsθ = D(θ) ~ 0
     push!(deqs, deqsθ)
 
@@ -378,7 +378,7 @@ function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
         noiseeqs = [Array(noiseeqs); noiseqsθ']
     end
 
-    state = [states(sys); θ]
+    state = [unknowns(sys); θ]
 
     # return modified SDE System
     SDESystem(deqs, noiseeqs, get_iv(sys), state, parameters(sys);
@@ -386,7 +386,7 @@ function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
         name = name, checks = false)
 end
 
-function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys),
+function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
         ps = parameters(sys),
         u0 = nothing;
         version = nothing, tgrad = false, sparse = false,
@@ -463,7 +463,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys),
         end
     end
 
-    sts = states(sys)
+    sts = unknowns(sys)
     SDEFunction{iip}(f, g,
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
@@ -471,7 +471,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys),
         Wfact = _Wfact === nothing ? nothing : _Wfact,
         Wfact_t = _Wfact_t === nothing ? nothing : _Wfact_t,
         mass_matrix = _M,
-        syms = Symbol.(states(sys)),
+        syms = Symbol.(unknowns(sys)),
         indepsym = Symbol(get_iv(sys)),
         paramsyms = Symbol.(ps),
         observed = observedfun)
@@ -479,7 +479,7 @@ end
 
 """
 ```julia
-DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps;
+DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.unknowns, ps = sys.ps;
                             version = nothing, tgrad = false, sparse = false,
                             jac = false, Wfact = false, kwargs...) where {iip}
 ```
@@ -494,7 +494,7 @@ end
 
 """
 ```julia
-DiffEqBase.SDEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
+DiffEqBase.SDEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
                                 ps = parameters(sys);
                                 version = nothing, tgrad = false,
                                 jac = false, Wfact = false,
@@ -509,7 +509,7 @@ variable and parameter vectors, respectively.
 """
 struct SDEFunctionExpr{iip} end
 
-function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
+function SDEFunctionExpr{iip}(sys::SDESystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
         version = nothing, tgrad = false,
         jac = false, Wfact = false,
@@ -558,7 +558,7 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
             Wfact = Wfact,
             Wfact_t = Wfact_t,
             mass_matrix = M,
-            syms = $(Symbol.(states(sys))),
+            syms = $(Symbol.(unknowns(sys))),
             indepsym = $(Symbol(get_iv(sys))),
             paramsyms = $(Symbol.(parameters(sys))))
     end

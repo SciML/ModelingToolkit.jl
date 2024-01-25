@@ -82,7 +82,7 @@ function calculate_hessian end
 
 """
 ```julia
-generate_tgrad(sys::AbstractTimeDependentSystem, dvs = states(sys), ps = parameters(sys),
+generate_tgrad(sys::AbstractTimeDependentSystem, dvs = unknowns(sys), ps = parameters(sys),
                expression = Val{true}; kwargs...)
 ```
 
@@ -93,7 +93,7 @@ function generate_tgrad end
 
 """
 ```julia
-generate_gradient(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys),
+generate_gradient(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
                   expression = Val{true}; kwargs...)
 ```
 
@@ -104,7 +104,7 @@ function generate_gradient end
 
 """
 ```julia
-generate_jacobian(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys),
+generate_jacobian(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
                   expression = Val{true}; sparse = false, kwargs...)
 ```
 
@@ -115,7 +115,7 @@ function generate_jacobian end
 
 """
 ```julia
-generate_factorized_W(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys),
+generate_factorized_W(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
                       expression = Val{true}; sparse = false, kwargs...)
 ```
 
@@ -126,7 +126,7 @@ function generate_factorized_W end
 
 """
 ```julia
-generate_hessian(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys),
+generate_hessian(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
                  expression = Val{true}; sparse = false, kwargs...)
 ```
 
@@ -137,7 +137,7 @@ function generate_hessian end
 
 """
 ```julia
-generate_function(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys),
+generate_function(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
                   expression = Val{true}; kwargs...)
 ```
 
@@ -320,7 +320,7 @@ for prop in [:eqs
     :tag
     :noiseeqs
     :iv
-    :states
+    :unknowns
     :ps
     :tspan
     :name
@@ -352,7 +352,7 @@ for prop in [:eqs
     :metadata
     :gui_metadata
     :discrete_subsystems
-    :unknown_states
+    :solved_unknowns
     :split_idxs
     :parent]
     fname1 = Symbol(:get_, prop)
@@ -417,7 +417,7 @@ function Base.propertynames(sys::AbstractSystem; private = false)
         for s in get_systems(sys)
             push!(names, getname(s))
         end
-        has_states(sys) && for s in get_states(sys)
+        has_unknowns(sys) && for s in get_unknowns(sys)
             push!(names, getname(s))
         end
         has_ps(sys) && for s in get_ps(sys)
@@ -454,7 +454,7 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
         v = get(avs, name, nothing)
         v === nothing || return namespace ? renamespace(sys, v) : v
     else
-        sts = get_states(sys)
+        sts = get_unknowns(sys)
         i = findfirst(x -> getname(x) == name, sts)
         if i !== nothing
             return namespace ? renamespace(sys, sts[i]) : sts[i]
@@ -469,7 +469,7 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
         end
     end
 
-    sts = get_states(sys)
+    sts = get_unknowns(sys)
     i = findfirst(x -> getname(x) == name, sts)
     if i !== nothing
         return namespace ? renamespace(sys, sts[i]) : sts[i]
@@ -493,7 +493,7 @@ function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
     idx = findfirst(s -> getname(s) == prop, params);
     idx !== nothing)
         get_defaults(sys)[params[idx]] = value(val)
-    elseif (sts = states(sys);
+    elseif (sts = unknowns(sys);
     idx = findfirst(s -> getname(s) == prop, sts);
     idx !== nothing)
         get_defaults(sys)[sts[idx]] = value(val)
@@ -589,13 +589,13 @@ function renamespace(sys, x)
     end
 end
 
-namespace_variables(sys::AbstractSystem) = states(sys, states(sys))
+namespace_variables(sys::AbstractSystem) = unknowns(sys, unknowns(sys))
 namespace_parameters(sys::AbstractSystem) = parameters(sys, parameters(sys))
 namespace_controls(sys::AbstractSystem) = controls(sys, controls(sys))
 
 function namespace_defaults(sys)
     defs = defaults(sys)
-    Dict((isparameter(k) ? parameters(sys, k) : states(sys, k)) => namespace_expr(v, sys)
+    Dict((isparameter(k) ? parameters(sys, k) : unknowns(sys, k)) => namespace_expr(v, sys)
          for (k, v) in pairs(defs))
 end
 
@@ -649,8 +649,8 @@ function namespace_expr(O, sys, n = nameof(sys); ivs = independent_variables(sys
     end
 end
 _nonum(@nospecialize x) = x isa Num ? x.val : x
-function states(sys::AbstractSystem)
-    sts = get_states(sys)
+function unknowns(sys::AbstractSystem)
+    sts = get_unknowns(sys)
     systems = get_systems(sys)
     nonunique_states = if isempty(systems)
         sts
@@ -713,9 +713,9 @@ function defaults(sys::AbstractSystem)
     isempty(systems) ? defs : mapfoldr(namespace_defaults, merge, systems; init = defs)
 end
 
-states(sys::Union{AbstractSystem, Nothing}, v) = renamespace(sys, v)
-parameters(sys::Union{AbstractSystem, Nothing}, v) = toparam(states(sys, v))
-for f in [:states, :parameters]
+unknowns(sys::Union{AbstractSystem, Nothing}, v) = renamespace(sys, v)
+parameters(sys::Union{AbstractSystem, Nothing}, v) = toparam(unknowns(sys, v))
+for f in [:unknowns, :parameters]
     @eval function $f(sys::AbstractSystem, vs::AbstractArray)
         map(v -> $f(sys, v), vs)
     end
@@ -759,13 +759,13 @@ end
 function islinear(sys::AbstractSystem)
     rhs = [eq.rhs for eq in equations(sys)]
 
-    all(islinear(r, states(sys)) for r in rhs)
+    all(islinear(r, unknowns(sys)) for r in rhs)
 end
 
 function isaffine(sys::AbstractSystem)
     rhs = [eq.rhs for eq in equations(sys)]
 
-    all(isaffine(r, states(sys)) for r in rhs)
+    all(isaffine(r, unknowns(sys)) for r in rhs)
 end
 
 function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
@@ -788,9 +788,9 @@ $(SIGNATURES)
 Return a list of actual states needed to be solved by solvers.
 """
 function unknown_states(sys::AbstractSystem)
-    sts = states(sys)
-    if has_unknown_states(sys)
-        sts = something(get_unknown_states(sys), sts)
+    sts = unknowns(sys)
+    if has_solved_unknowns(sys)
+        sts = something(get_solved_unknowns(sys), sts)
     end
     return sts
 end
@@ -887,7 +887,7 @@ function toexpr(sys::AbstractSystem)
     end
 
     stsname = gensym(:sts)
-    sts = states(sys)
+    sts = unknowns(sys)
     push_vars!(stmt, stsname, Symbol("@variables"), sts)
     psname = gensym(:ps)
     ps = parameters(sys)
@@ -940,7 +940,7 @@ end
 
 # TODO: what about inputs?
 function n_extra_equations(sys::AbstractSystem)
-    isconnector(sys) && return length(get_states(sys))
+    isconnector(sys) && return length(get_unknowns(sys))
     sys, (csets, _) = generate_connection_set(sys)
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
     n_outer_stream_variables = 0
@@ -960,7 +960,7 @@ function n_extra_equations(sys::AbstractSystem)
     #end
     #for m in get_systems(sys)
     #    isconnector(m) || continue
-    #    n_toplevel_unused_flows += count(x->get_connection_type(x) === Flow && !(x in toplevel_flows), get_states(m))
+    #    n_toplevel_unused_flows += count(x->get_connection_type(x) === Flow && !(x in toplevel_flows), get_unknowns(m))
     #end
 
     nextras = n_outer_stream_variables + length(ceqs)
@@ -968,7 +968,7 @@ end
 
 function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem)
     eqs = equations(sys)
-    vars = states(sys)
+    vars = unknowns(sys)
     nvars = length(vars)
     if eqs isa AbstractArray && eltype(eqs) <: Equation
         neqs = count(eq -> !(eq.lhs isa Connection), eqs)
@@ -1397,7 +1397,7 @@ y &= h(x, z, u)
 \\end{aligned}
 ```
 
-where `x` are differential state variables, `z` algebraic variables, `u` inputs and `y` outputs. To obtain a linear statespace representation, see [`linearize`](@ref). The input argument `variables` is a vector defining the operating point, corresponding to `states(simplified_sys)` and `p` is a vector corresponding to the parameters of `simplified_sys`. Note: all variables in `inputs` have been converted to parameters in `simplified_sys`.
+where `x` are differential state variables, `z` algebraic variables, `u` inputs and `y` outputs. To obtain a linear statespace representation, see [`linearize`](@ref). The input argument `variables` is a vector defining the operating point, corresponding to `unknowns(simplified_sys)` and `p` is a vector corresponding to the parameters of `simplified_sys`. Note: all variables in `inputs` have been converted to parameters in `simplified_sys`.
 
 The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The states of this system also indicate the order of the states that holds for the linearized matrices.
 
@@ -1425,7 +1425,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         simplify,
         kwargs...)
     if zero_dummy_der
-        dummyder = setdiff(states(ssys), states(sys))
+        dummyder = setdiff(unknowns(ssys), unknowns(sys))
         defs = Dict(x => 0.0 for x in dummyder)
         @set! ssys.defaults = merge(defs, defaults(ssys))
         op = merge(defs, op)
@@ -1443,8 +1443,8 @@ function linearization_function(sys::AbstractSystem, inputs,
     lin_fun = let diff_idxs = diff_idxs,
         alge_idxs = alge_idxs,
         input_idxs = input_idxs,
-        sts = states(sys),
-        fun = ODEFunction{true, SciMLBase.FullSpecialize}(sys, states(sys), ps; p = p),
+        sts = unknowns(sys),
+        fun = ODEFunction{true, SciMLBase.FullSpecialize}(sys, unknowns(sys), ps; p = p),
         h = build_explicit_observed_function(sys, outputs),
         chunk = ForwardDiff.Chunk(input_idxs)
 
@@ -1514,7 +1514,7 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
         kwargs...)
     sys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs; simplify,
         kwargs...)
-    sts = states(sys)
+    sts = unknowns(sys)
     t = get_iv(sys)
     p = parameters(sys)
 
@@ -1700,7 +1700,7 @@ connections = [f.y ~ c.r # filtered reference to controller reference
 
 lsys0, ssys = linearize(cl, [f.u], [p.x])
 desired_order = [f.x, p.x]
-lsys = ModelingToolkit.reorder_states(lsys0, states(ssys), desired_order)
+lsys = ModelingToolkit.reorder_states(lsys0, unknowns(ssys), desired_order)
 
 @assert lsys.A == [-2 0; 1 -2]
 @assert lsys.B == [1; 0;;]
@@ -1808,8 +1808,8 @@ Example:
 
 ```
 lsys, ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u])
-desired_order = [int.x, der.x] # States that are present in states(ssys)
-lsys = ModelingToolkit.reorder_states(lsys, states(ssys), desired_order)
+desired_order = [int.x, der.x] # States that are present in unknowns(ssys)
+lsys = ModelingToolkit.reorder_states(lsys, unknowns(ssys), desired_order)
 ```
 
 See also [`ModelingToolkit.similarity_transform`](@ref)
@@ -1889,7 +1889,7 @@ end
 function Base.hash(sys::AbstractSystem, s::UInt)
     s = hash(nameof(sys), s)
     s = foldr(hash, get_systems(sys), init = s)
-    s = foldr(hash, get_states(sys), init = s)
+    s = foldr(hash, get_unknowns(sys), init = s)
     s = foldr(hash, get_ps(sys), init = s)
     if sys isa OptimizationSystem
         s = hash(get_op(sys), s)
@@ -1924,7 +1924,7 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
     end
 
     eqs = union(get_eqs(basesys), get_eqs(sys))
-    sts = union(get_states(basesys), get_states(sys))
+    sts = union(get_unknowns(basesys), get_unknowns(sys))
     ps = union(get_ps(basesys), get_ps(sys))
     obs = union(get_observed(basesys), get_observed(sys))
     cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
@@ -1976,7 +1976,7 @@ returns a `Vector{Pair}` of variables set to `default` which are missing from `g
 function missing_variable_defaults(sys::AbstractSystem, default = 0.0)
     varmap = get_defaults(sys)
     varmap = Dict(Symbolics.diff2term(value(k)) => value(varmap[k]) for k in keys(varmap))
-    missingvars = setdiff(states(sys), keys(varmap))
+    missingvars = setdiff(unknowns(sys), keys(varmap))
     ds = Pair[]
 
     n = length(missingvars)
