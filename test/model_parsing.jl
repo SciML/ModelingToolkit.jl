@@ -329,10 +329,9 @@ end
 # Ensure that modules consisting MTKModels with component arrays and icons of
 # `Expr` type and `unit` metadata can be precompiled.
 module PrecompilationTest
-using Unitful, Test, ModelParsingPrecompile
+push!(LOAD_PATH, joinpath(@__DIR__, "precompile_test"))
+using Unitful, Test, ModelParsingPrecompile, ModelingToolkit
 @testset "Precompile packages with MTKModels" begin
-    push!(LOAD_PATH, joinpath(@__DIR__, "precompile_test"))
-
     using ModelParsingPrecompile: ModelWithComponentArray
 
     @named model_with_component_array = ModelWithComponentArray()
