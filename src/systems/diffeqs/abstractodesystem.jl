@@ -945,8 +945,9 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
         has_difference = has_difference,
         check_length, kwargs...)
     cbs = process_events(sys; callback, has_difference, kwargs...)
+    inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
+        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
         discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
             if clock isa Clock
                 PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)
@@ -976,7 +977,13 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     if svs !== nothing
         kwargs1 = merge(kwargs1, (disc_saved_values = svs,))
     end
-    ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...)
+    prob = ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...)
+    if !isempty(inits)
+        for init in inits
+            init(prob.p, tspan[1])
+        end
+    end
+    prob
 end
 get_callback(prob::ODEProblem) = prob.kwargs[:callback]
 
@@ -1045,8 +1052,9 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     h = h_oop
     u0 = h(p, tspan[1])
     cbs = process_events(sys; callback, has_difference, kwargs...)
+    inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
+        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
         discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
             if clock isa Clock
                 PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)
@@ -1075,7 +1083,13 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     if svs !== nothing
         kwargs1 = merge(kwargs1, (disc_saved_values = svs,))
     end
-    DDEProblem{iip}(f, u0, h, tspan, p; kwargs1..., kwargs...)
+    prob = DDEProblem{iip}(f, u0, h, tspan, p; kwargs1..., kwargs...)
+    if !isempty(inits)
+        for init in inits
+            init(prob.p, tspan[1])
+        end
+    end
+    prob
 end
 
 function DiffEqBase.SDDEProblem(sys::AbstractODESystem, args...; kwargs...)
@@ -1099,8 +1113,9 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     h(p, t) = h_oop(p, t)
     u0 = h(p, tspan[1])
     cbs = process_events(sys; callback, has_difference, kwargs...)
+    inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
+        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
         discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
             if clock isa Clock
                 PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)
@@ -1140,8 +1155,15 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     else
         noise_rate_prototype = zeros(eltype(u0), size(noiseeqs))
     end
-    SDDEProblem{iip}(f, f.g, u0, h, tspan, p; noise_rate_prototype =
+    prob = SDDEProblem{iip}(f, f.g, u0, h, tspan, p;
+        noise_rate_prototype =
         noise_rate_prototype, kwargs1..., kwargs...)
+    if !isempty(inits)
+        for init in inits
+            init(prob.p, tspan[1])
+        end
+    end
+    prob
 end
 
 """
