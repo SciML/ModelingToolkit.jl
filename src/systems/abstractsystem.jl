@@ -921,7 +921,7 @@ function toexpr(sys::AbstractSystem)
                 name = $name, checks = false)))
     end
 
-    striplines(expr) # keeping the line numbers is never helpful
+    Base.remove_linenums!(expr) # keeping the line numbers is never helpful
 end
 
 Base.write(io::IO, sys::AbstractSystem) = write(io, readable_code(toexpr(sys)))

@@ -412,7 +412,7 @@ function DiscreteFunctionExpr{iip}(sys::DiscreteSystem, dvs = states(sys),
             indepsym = $(QuoteNode(Symbol(get_iv(sys)))),
             paramsyms = $(Symbol.(parameters(sys))))
     end
-    !linenumbers ? striplines(ex) : ex
+    !linenumbers ? Base.remove_linenums!(ex) : ex
 end
 
 function DiscreteFunctionExpr(sys::DiscreteSystem, args...; kwargs...)
@@ -460,5 +460,5 @@ function DiscreteProblemExpr{iip}(sys::DiscreteSystem, u0map, tspan,
         tspan = $tspan
         DiscreteProblem(f, u0, tspan, p; $(filter_kwargs(kwargs)...))
     end
-    !linenumbers ? striplines(ex) : ex
+    !linenumbers ? Base.remove_linenums!(ex) : ex
 end

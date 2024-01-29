@@ -562,7 +562,7 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
             indepsym = $(Symbol(get_iv(sys))),
             paramsyms = $(Symbol.(parameters(sys))))
     end
-    !linenumbers ? striplines(ex) : ex
+    !linenumbers ? Base.remove_linenums!(ex) : ex
 end
 
 function SDEFunctionExpr(sys::SDESystem, args...; kwargs...)
@@ -656,7 +656,7 @@ function SDEProblemExpr{iip}(sys::SDESystem, u0map, tspan,
         SDEProblem(f, u0, tspan, p; noise_rate_prototype = noise_rate_prototype,
             $(kwargs...))
     end
-    !linenumbers ? striplines(ex) : ex
+    !linenumbers ? Base.remove_linenums!(ex) : ex
 end
 
 function SDEProblemExpr(sys::SDESystem, args...; kwargs...)
