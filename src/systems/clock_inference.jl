@@ -150,6 +150,7 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
     param_to_idx = Dict{Any, Int}(reverse(en) for en in enumerate(appended_parameters))
     offset = length(appended_parameters)
     affect_funs = []
+    init_funs = []
     svs = []
     clocks = TimeDomain[]
     for (i, (sys, input)) in enumerate(zip(syss, inputs))
@@ -202,6 +203,18 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
             push!(save_vec.args, :(p[$(input_offset + i)]))
         end
         empty_disc = isempty(disc_range)
+
+        disc_init = :(function (p, t)
+            d2c_obs = $disc_to_cont_obs
+            d2c_view = view(p, $disc_to_cont_idxs)
+            disc_state = view(p, $disc_range)
+            copyto!(d2c_view, d2c_obs(disc_state, p, t))
+        end)
+
+        # @show disc_to_cont_idxs
+        # @show cont_to_disc_idxs
+        # @show disc_range
+
         affect! = :(function (integrator, saved_values)
             @unpack u, p, t = integrator
             c2d_obs = $cont_to_disc_obs
@@ -212,27 +225,42 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
             d2c_view = view(p, $disc_to_cont_idxs)
             disc_state = view(p, $disc_range)
             disc = $disc
-            # Write continuous into to discrete: handles `Sample`
-            copyto!(c2d_view, c2d_obs(integrator.u, p, t))
-            # Write discrete into to continuous
-            # get old discrete states
-            copyto!(d2c_view, d2c_obs(disc_state, p, t))
+
             push!(saved_values.t, t)
             push!(saved_values.saveval, $save_vec)
-            # update discrete states
+
+            # Write continuous into to discrete: handles `Sample`
+            # Write discrete into to continuous
+            # Update discrete states
+
+            # At a tick, c2d must come first
+            # state update comes in the middle
+            # d2c comes last
+            # @show t
+            # @show "incoming", p
+            copyto!(c2d_view, c2d_obs(integrator.u, p, t))
+            # @show "after c2d", p
             $empty_disc || disc(disc_state, disc_state, p, t)
+            # @show "after state update", p
+            copyto!(d2c_view, d2c_obs(disc_state, p, t))
+            # @show "after d2c", p
         end)
         sv = SavedValues(Float64, Vector{Float64})
         push!(affect_funs, affect!)
+        push!(init_funs, disc_init)
         push!(svs, sv)
     end
     if eval_expression
         affects = map(affect_funs) do a
             drop_expr(@RuntimeGeneratedFunction(eval_module, toexpr(LiteralExpr(a))))
         end
+        inits = map(init_funs) do a
+            drop_expr(@RuntimeGeneratedFunction(eval_module, toexpr(LiteralExpr(a))))
+        end
     else
         affects = map(a -> toexpr(LiteralExpr(a)), affect_funs)
+        inits = map(a -> toexpr(LiteralExpr(a)), init_funs)
     end
     defaults = Dict{Any, Any}(v => 0.0 for v in Iterators.flatten(inputs))
-    return affects, clocks, svs, appended_parameters, defaults
+    return affects, inits, clocks, svs, appended_parameters, defaults
 end
