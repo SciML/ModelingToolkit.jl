@@ -322,7 +322,7 @@ parammap = [
     β => 1.0
 ]
 
-probmod = SDEProblem(demod,u0modmap,(0.0,1.0),parammap)
+probmod = SDEProblem(complete(demod),u0modmap,(0.0,1.0),parammap)
 ensemble_probmod = EnsembleProblem(probmod;
           output_func = (sol,i) -> (g(sol[x,end])*sol[demod.weight,end],false),
           )

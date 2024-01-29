@@ -27,6 +27,6 @@ using ModelingToolkit, NonlinearSolve
 vars = union(ModelingToolkit.vars.(eqs)...)
 @named ns = NonlinearSystem(eqs, vars, [])
 
-prob = NonlinearProblem(ns, [1.0, 1.0, 1.0])
+prob = NonlinearProblem(complete(ns), [1.0, 1.0, 1.0])
 sol = solve(prob, NewtonRaphson())
 ```

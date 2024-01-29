@@ -289,7 +289,7 @@ using DiffEqBase, JumpProcesses
 u₀map = [S => 999, I => 1, R => 0]
 parammap = [β => 0.1 / 1000, γ => 0.01]
 tspan = (0.0, 250.0)
-dprob = DiscreteProblem(js, u₀map, tspan, parammap)
+dprob = DiscreteProblem(complete(js), u₀map, tspan, parammap)
 ```
 """
 function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing},
@@ -347,7 +347,7 @@ using DiffEqBase, JumpProcesses
 u₀map = [S => 999, I => 1, R => 0]
 parammap = [β => 0.1 / 1000, γ => 0.01]
 tspan = (0.0, 250.0)
-dprob = DiscreteProblem(js, u₀map, tspan, parammap)
+dprob = DiscreteProblem(complete(js), u₀map, tspan, parammap)
 ```
 """
 struct DiscreteProblemExpr{iip} end
@@ -388,7 +388,7 @@ Generates a JumpProblem from a JumpSystem.
 Continuing the example from the [`DiscreteProblem`](@ref) definition:
 
 ```julia
-jprob = JumpProblem(js, dprob, Direct())
+jprob = JumpProblem(complete(js), dprob, Direct())
 sol = solve(jprob, SSAStepper())
 ```
 """
