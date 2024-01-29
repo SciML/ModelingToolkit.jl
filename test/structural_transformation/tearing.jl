@@ -155,7 +155,9 @@ newdaesys = structural_simplify(daesys)
 @test equations(newdaesys) == [D(x) ~ z; 0 ~ y + sin(z) - p * t]
 @test equations(tearing_substitution(newdaesys)) == [D(x) ~ z; 0 ~ x + sin(z) - p * t]
 @test isequal(unknowns(newdaesys), [x, z])
-prob = ODAEProblem(newdaesys, [x => 1.0], (0, 1.0), [p => 0.2])
+@test isequal(states(newdaesys), [x, z])
+@test_deprecated ODAEProblem(newdaesys, [x => 1.0], (0, 1.0), [p => 0.2])
+prob = ODEProblem(newdaesys, [x => 1.0], (0, 1.0), [p => 0.2])
 du = [0.0];
 u = [1.0];
 pr = 0.2;
@@ -166,7 +168,7 @@ prob.f(du, u, pr, tt)
 
 # test the initial guess is respected
 @named sys = ODESystem(eqs, t, defaults = Dict(z => Inf))
-infprob = ODAEProblem(structural_simplify(sys), [x => 1.0], (0, 1.0), [p => 0.2])
+infprob = ODEProblem(structural_simplify(sys), [x => 1.0], (0, 1.0), [p => 0.2])
 @test_throws Any infprob.f(du, u, pr, tt)
 
 sol1 = solve(prob, Tsit5())
@@ -214,6 +216,6 @@ u0 = [mass.s => 0.0
 sys = structural_simplify(ms_model)
 @test ModelingToolkit.get_jac(sys)[] === ModelingToolkit.EMPTY_JAC
 @test ModelingToolkit.get_tgrad(sys)[] === ModelingToolkit.EMPTY_TGRAD
-prob_complex = ODAEProblem(sys, u0, (0, 1.0))
+prob_complex = ODEProblem(sys, u0, (0, 1.0))
 sol = solve(prob_complex, Tsit5())
 @test all(sol[mass.v] .== 1)

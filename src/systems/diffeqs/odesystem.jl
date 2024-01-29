@@ -135,8 +135,7 @@ struct ODESystem <: AbstractODESystem
     """
     discrete_subsystems::Any
     """
-    A list of actual unknowns needed to be solved by solvers. Only
-    used for ODAEProblem.
+    A list of actual unknowns needed to be solved by solvers.
     """
     solved_unknowns::Union{Nothing, Vector{Any}}
     """
