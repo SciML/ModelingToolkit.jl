@@ -538,7 +538,7 @@ function Base.show(io::IO, mime::MIME"text/plain", ms::MatchedSystemStructure)
     printstyled(io, "(Unsolvable + Matched)", color = :magenta)
     print(io, " | ")
     printstyled(io, " ∫", color = :cyan)
-    printstyled(io, " SelectedState")
+    printstyled(io, " SelectedUnknown")
 end
 
 # TODO: clean up

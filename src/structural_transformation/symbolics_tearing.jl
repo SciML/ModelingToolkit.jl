@@ -18,7 +18,7 @@ function substitution_graph(graph, slist, dlist, var_eq_matching)
 
     newmatching = Matching(ns)
     for (v, e) in enumerate(var_eq_matching)
-        (e === unassigned || e === SelectedState()) && continue
+        (e === unassigned || e === SelectedUnknown()) && continue
         iv = vrename[v]
         ie = erename[e]
         iv == 0 && continue
@@ -228,7 +228,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
     # A general DAE is in the form of `F(u'(t), u(t), p, t) == 0`. We can
     # characterize variables in `u(t)` into two classes: differential variables
     # (denoted `v(t)`) and algebraic variables (denoted `z(t)`). Differential
-    # variables are marked as `SelectedState` and they are differentiated in the
+    # variables are marked as `SelectedUnknown` and they are differentiated in the
     # DAE system, i.e. `v'(t)` are all the variables in `u'(t)` that actually
     # appear in the system. Algebraic variables are variables that are not
     # differential variables.
@@ -255,7 +255,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
     for var in 1:length(fullvars)
         dv = var_to_diff[var]
         dv === nothing && continue
-        if var_eq_matching[var] !== SelectedState()
+        if var_eq_matching[var] !== SelectedUnknown()
             dd = fullvars[dv]
             v_t = setio(diff2term(unwrap(dd)), false, false)
             for eq in 𝑑neighbors(graph, dv)
@@ -283,7 +283,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
         end
     end
 
-    # `SelectedState` information is no longer needed past here. State selection
+    # `SelectedUnknown` information is no longer needed past here. State selection
     # is done. All non-differentiated variables are algebraic variables, and all
     # variables that appear differentiated are differential variables.
 
@@ -567,10 +567,10 @@ function tearing(state::TearingState; kwargs...)
     var_eq_matching′, = tear_graph_modia(state.structure;
         varfilter = var -> var in algvars,
         eqfilter = eq -> eq in aeqs)
-    var_eq_matching = Matching{Union{Unassigned, SelectedState}}(var_eq_matching′)
+    var_eq_matching = Matching{Union{Unassigned, SelectedUnknown}}(var_eq_matching′)
     for var in 1:ndsts(graph)
         if isdiffvar(state.structure, var)
-            var_eq_matching[var] = SelectedState()
+            var_eq_matching[var] = SelectedUnknown()
         end
     end
     var_eq_matching
