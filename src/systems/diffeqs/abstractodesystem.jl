@@ -1138,6 +1138,9 @@ struct ODEProblemExpr{iip} end
 function ODEProblemExpr{iip}(sys::AbstractODESystem, u0map, tspan,
         parammap = DiffEqBase.NullParameters(); check_length = true,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `ODEProblemExpr`")
+    end
     f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap; check_length,
         kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
@@ -1180,6 +1183,9 @@ struct DAEProblemExpr{iip} end
 function DAEProblemExpr{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
         parammap = DiffEqBase.NullParameters(); check_length = true,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEProblemExpr`")
+    end
     f, du0, u0, p = process_DEProblem(DAEFunctionExpr{iip}, sys, u0map, parammap;
         implicit_dae = true, du0map = du0map, check_length,
         kwargs...)
@@ -1260,6 +1266,9 @@ function SteadyStateProblemExpr{iip}(sys::AbstractODESystem, u0map,
         parammap = SciMLBase.NullParameters();
         check_length = true,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `SteadyStateProblemExpr`")
+    end
     f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap;
         steady_state = true,
         check_length, kwargs...)

@@ -422,6 +422,9 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
         linenumbers = false, parallel = SerialForm(),
         use_union = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `OptimizationSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `OptimizationProblemExpr`")
+    end
     if haskey(kwargs, :lcons) || haskey(kwargs, :ucons)
         Base.depwarn("`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
             :OptimizationProblem, force = true)

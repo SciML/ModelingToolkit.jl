@@ -635,6 +635,9 @@ function SDEProblemExpr{iip}(sys::SDESystem, u0map, tspan,
         parammap = DiffEqBase.NullParameters();
         sparsenoise = nothing, check_length = true,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEProblemExpr`")
+    end
     f, u0, p = process_DEProblem(SDEFunctionExpr{iip}, sys, u0map, parammap; check_length,
         kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)

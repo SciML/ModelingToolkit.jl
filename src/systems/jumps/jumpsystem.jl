@@ -356,6 +356,9 @@ function DiscreteProblemExpr{iip}(sys::JumpSystem, u0map, tspan::Union{Tuple, No
         parammap = DiffEqBase.NullParameters();
         use_union = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblemExpr`")
+    end
     dvs = unknowns(sys)
     ps = parameters(sys)
     defs = defaults(sys)
