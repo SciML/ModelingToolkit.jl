@@ -39,6 +39,7 @@ function _model_macro(mod, name, expr, isconnector)
     exprs = Expr(:block)
     dict = Dict{Symbol, Any}(
         :constants => Dict{Symbol, Dict}(),
+        :defaults => Dict{Symbol, Any}(),
         :kwargs => Dict{Symbol, Dict}(),
         :structural_parameters => Dict{Symbol, Dict}()
     )
@@ -54,6 +55,7 @@ function _model_macro(mod, name, expr, isconnector)
     push!(exprs.args, :(parameters = []))
     push!(exprs.args, :(systems = ODESystem[]))
     push!(exprs.args, :(equations = Equation[]))
+    push!(exprs.args, :(defaults = Dict{Num, Union{Number, Symbol, Function}}()))
 
     Base.remove_linenums!(expr)
     for arg in expr.args
@@ -99,8 +101,11 @@ function _model_macro(mod, name, expr, isconnector)
     gui_metadata = isassigned(icon) > 0 ? GUIMetadata(GlobalRef(mod, name), icon[]) :
                    GUIMetadata(GlobalRef(mod, name))
 
+    @inline pop_structure_dict!.(
+        Ref(dict), [:constants, :defaults, :kwargs, :structural_parameters])
+
     sys = :($ODESystem($Equation[equations...], $iv, variables, parameters;
-        name, systems, gui_metadata = $gui_metadata))
+        name, systems, gui_metadata = $gui_metadata, defaults))
 
     if ext[] === nothing
         push!(exprs.args, :(var"#___sys___" = $sys))
@@ -121,6 +126,8 @@ function _model_macro(mod, name, expr, isconnector)
     end
     :($name = $Model($f, $dict, $isconnector))
 end
+
+pop_structure_dict!(dict, key) = length(dict[key]) == 0 && pop!(dict, key)
 
 function update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
         varclass, where_types)
@@ -355,6 +362,8 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps,
     elseif mname == Symbol("@icon")
         isassigned(icon) && error("This model has more than one icon.")
         parse_icon!(body, dict, icon, mod)
+    elseif mname == Symbol("@defaults")
+        parse_system_defaults!(exprs, arg, dict)
     else
         error("$mname is not handled.")
     end
@@ -396,6 +405,28 @@ function parse_constants!(exprs, dict, body, mod)
                 end
                 ```
             """)
+        end
+    end
+end
+
+push_additional_defaults!(dict, a, b::Number) = dict[:defaults][a] = b
+push_additional_defaults!(dict, a, b::QuoteNode) = dict[:defaults][a] = b.value
+function push_additional_defaults!(dict, a, b::Expr)
+    dict[:defaults][a] = readable_code(b)
+end
+
+function parse_system_defaults!(exprs, defaults_body, dict)
+    for default_arg in defaults_body.args[end].args
+        # for arg in default_arg.args
+        MLStyle.@match default_arg begin
+            # For cases like `p => 1` and `p => f()`. In both cases the definitions of
+            # `a`, here `p` and when `b` is a function, here `f` are available while
+            # defining the model
+            Expr(:call, :(=>), a, b) => begin
+                push!(exprs, :(defaults[$a] = $b))
+                push_additional_defaults!(dict, a, b)
+            end
+            _ => error("Invalid `defaults` entry $default_arg $(typeof(a)) $(typeof(b))")
         end
     end
 end
