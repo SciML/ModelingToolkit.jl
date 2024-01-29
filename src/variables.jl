@@ -146,7 +146,7 @@ function SciMLBase.process_p_u0_symbolic(prob::Union{SciMLBase.AbstractDEProblem
     if eltype(u0) <: Pair
         hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :unknowns) ||
             throw(ArgumentError("This problem does not support symbolic maps with `remake`, i.e. it does not have a symbolic origin." *
-                                " Please use `remake` with the `u0` keyword argument as a vector of values, paying attention to state order."))
+                                " Please use `remake` with the `u0` keyword argument as a vector of values, paying attention to unknown variable order."))
     end
 
     sys = prob.f.sys
@@ -326,7 +326,7 @@ Create parameters with bounds like this
 @parameters p [bounds=(-1, 1)]
 ```
 
-To obtain state bounds, call `getbounds(sys, unknowns(sys))`
+To obtain unknown variable bounds, call `getbounds(sys, unknowns(sys))`
 """
 function getbounds(sys::ModelingToolkit.AbstractSystem, p = parameters(sys))
     Dict(p .=> getbounds.(p))
@@ -410,7 +410,7 @@ end
 """
     tobrownian(s::Sym)
 
-Maps the brownianiable to a state.
+Maps the brownianiable to an unknown.
 """
 tobrownian(s::Symbolic) = setmetadata(s, MTKVariableTypeCtx, BROWNIAN)
 tobrownian(s::Num) = Num(tobrownian(value(s)))

@@ -283,7 +283,7 @@ function TearingState(sys; quick_cancel = false, check = true)
         end
         vars!(vars, eq.rhs, op = Symbolics.Operator)
         isalgeq = true
-        statevars = []
+        unknownvars = []
         for var in vars
             ModelingToolkit.isdelay(var, iv) && continue
             set_incidence = true
@@ -295,7 +295,7 @@ function TearingState(sys; quick_cancel = false, check = true)
                 continue
             end
             varidx = addvar!(var)
-            set_incidence && push!(statevars, var)
+            set_incidence && push!(unknownvars, var)
 
             dvar = var
             idx = varidx
@@ -337,8 +337,8 @@ function TearingState(sys; quick_cancel = false, check = true)
                 @goto ANOTHER_VAR
             end
         end
-        push!(symbolic_incidence, copy(statevars))
-        empty!(statevars)
+        push!(symbolic_incidence, copy(unknownvars))
+        empty!(unknownvars)
         empty!(vars)
         if isalgeq
             eqs[i] = eq
@@ -472,7 +472,7 @@ function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
         match = unassigned
         if bgpm.var_eq_matching !== nothing && i - 1 <= length(bgpm.var_eq_matching)
             match = bgpm.var_eq_matching[i - 1]
-            isa(match, Union{Int, Unassigned}) || (match = true) # Selected State
+            isa(match, Union{Int, Unassigned}) || (match = true) # Selected Unknown
         end
         return BipartiteAdjacencyList(i - 1 <= ndsts(bgpm.bpg) ?
                                       𝑑neighbors(bgpm.bpg, i - 1) : nothing,
@@ -613,7 +613,7 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
     else
         sys = ModelingToolkit.tearing(sys, state; simplify, mm, check_consistency)
     end
-    fullstates = [map(eq -> eq.lhs, observed(sys)); unknowns(sys)]
-    @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullstates)
+    fullunknowns = [map(eq -> eq.lhs, observed(sys)); unknowns(sys)]
+    @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)
     ModelingToolkit.invalidate_cache!(sys), input_idxs
 end

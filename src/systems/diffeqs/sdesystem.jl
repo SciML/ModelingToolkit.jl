@@ -38,7 +38,7 @@ struct SDESystem <: AbstractODESystem
     noiseeqs::AbstractArray
     """Independent variable."""
     iv::BasicSymbolic{Real}
-    """Dependent (state) variables. Must not contain the independent variable."""
+    """Dependent variables. Must not contain the independent variable."""
     unknowns::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
@@ -250,7 +250,7 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
                                              correction_factor * ∇σσ′[i]
                      for i in eachindex(unknowns(sys))]...)
     else
-        dimstate, m = size(get_noiseeqs(sys))
+        dimunknowns, m = size(get_noiseeqs(sys))
         eqs = vcat([equations(sys)[i].lhs ~ get_noiseeqs(sys)[i]
                     for i in eachindex(unknowns(sys))]...)
         de = ODESystem(eqs, get_iv(sys), unknowns(sys), parameters(sys), name = name,
@@ -260,7 +260,7 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
         ∇σσ′ = simplify.(jac * get_noiseeqs(sys)[:, 1])
         for k in 2:m
             eqs = vcat([equations(sys)[i].lhs ~ get_noiseeqs(sys)[Int(i +
-                                                                      (k - 1) * dimstate)]
+                                                                      (k - 1) * dimunknowns)]
                         for i in eachindex(unknowns(sys))]...)
             de = ODESystem(eqs, get_iv(sys), unknowns(sys), parameters(sys), name = name,
                 checks = false)
@@ -340,7 +340,7 @@ function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
     @variables θ(t), weight(t)
 
     # determine the adjustable parameters `d` given `u`
-    # gradient of u with respect to states
+    # gradient of u with respect to unknowns
     grad = Symbolics.gradient(u, unknowns(sys))
 
     noiseeqs = get_noiseeqs(sys)
@@ -352,16 +352,16 @@ function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
         drift_correction = noiseeqs * d
     end
 
-    # transformation adds additional state θ: newX = (X,θ)
-    # drift function for state is modified
+    # transformation adds additional unknowns θ: newX = (X,θ)
+    # drift function for unknowns is modified
     # θ has zero drift
     deqs = vcat([equations(sys)[i].lhs ~ equations(sys)[i].rhs - drift_correction[i]
                  for i in eachindex(unknowns(sys))]...)
     deqsθ = D(θ) ~ 0
     push!(deqs, deqsθ)
 
-    # diffusion matrix is of size d x m (d states, m noise), with diagonal noise represented as a d-dimensional vector
-    # for diagonal noise processes with m>1, the noise process will become non-diagonal; extra state component but no new noise process.
+    # diffusion matrix is of size d x m (d unknowns, m noise), with diagonal noise represented as a d-dimensional vector
+    # for diagonal noise processes with m>1, the noise process will become non-diagonal; extra unknown component but no new noise process.
     # new diffusion matrix is of size d+1 x M
     # diffusion for state is unchanged
 
@@ -378,10 +378,10 @@ function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
         noiseeqs = [Array(noiseeqs); noiseqsθ']
     end
 
-    state = [unknowns(sys); θ]
+    unknown_vars = [unknowns(sys); θ]
 
     # return modified SDE System
-    SDESystem(deqs, noiseeqs, get_iv(sys), state, parameters(sys);
+    SDESystem(deqs, noiseeqs, get_iv(sys), unknown_vars, parameters(sys);
         defaults = Dict(θ => θ0), observed = [weight ~ θ / θ0],
         name = name, checks = false)
 end

@@ -94,7 +94,7 @@ using ModelingToolkit, DifferentialEquations
 
 @named sys = ODESystem(eqs, t)
 sys = structural_simplify(sys)
-states(sys)
+unknowns(sys)
 ```
 
 ```julia

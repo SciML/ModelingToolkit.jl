@@ -10,7 +10,7 @@ ModelingToolkit.Model
 
 ## Components
 
-Components are models from various domains. These models contain states and their
+Components are models from various domains. These models contain unknowns and their
 equations.
 
 ### [Defining components with `@mtkmodel`](@id mtkmodel)
@@ -25,11 +25,11 @@ equations.
 
   - `@components`: for listing sub-components of the system
   - `@equations`: for the list of equations
-  - `@extend`: for extending a base system and unpacking its states
+  - `@extend`: for extending a base system and unpacking its unknowns
   - `@icon` : for embedding the model icon
   - `@parameters`: for specifying the symbolic parameters
   - `@structural_parameters`: for specifying non-symbolic parameters
-  - `@variables`: for specifying the states
+  - `@variables`: for specifying the unknowns
 
 Let's explore these in more detail with the following example:
 
@@ -171,7 +171,7 @@ getdefault(model_c4.model_a.k_array[2])
 Connectors are special models that can be used to connect different components together.
 MTK provides 3 distinct connectors:
 
-  - `DomainConnector`: A connector which has only one state which is of `Flow` type,
+  - `DomainConnector`: A connector which has only one unknown which is of `Flow` type,
     specified by `[connect = Flow]`.
   - `StreamConnector`: A connector which has atleast one stream variable, specified by
     `[connect = Stream]`. A `StreamConnector` must have exactly one flow variable.
@@ -228,7 +228,7 @@ end
 `structure` stores metadata that describes composition of a model. It includes:
 
   - `:components`: List of sub-components in the form of [[name, sub_component_name],...].
-  - `:extend`: The list of extended states, name given to the base system, and name of the base system.
+  - `:extend`: The list of extended unknowns, name given to the base system, and name of the base system.
   - `:structural_parameters`: Dictionary of structural parameters mapped to their default values.
   - `:parameters`: Dictionary of symbolic parameters mapped to their metadata. For
     parameter arrays, length is added to the metadata as `:size`.

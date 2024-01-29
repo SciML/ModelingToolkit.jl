@@ -14,7 +14,7 @@ types during tearing.
 
 The optional argument `io` may take a tuple `(inputs, outputs)`.
 This will convert all `inputs` to parameters and allow them to be unconnected, i.e.,
-simplification will allow models where `n_states = n_equations - n_inputs`.
+simplification will allow models where `n_unknowns = n_equations - n_inputs`.
 """
 function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
         kwargs...)

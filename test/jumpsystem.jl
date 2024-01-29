@@ -14,9 +14,9 @@ affect₂ = [I ~ I - 1, R ~ R + 1]
 j₁ = ConstantRateJump(rate₁, affect₁)
 j₂ = VariableRateJump(rate₂, affect₂)
 @named js = JumpSystem([j₁, j₂], t, [S, I, R], [β, γ])
-statetoid = Dict(MT.value(state) => i for (i, state) in enumerate(unknowns(js)))
-mtjump1 = MT.assemble_crj(js, j₁, statetoid)
-mtjump2 = MT.assemble_vrj(js, j₂, statetoid)
+unknowntoid = Dict(MT.value(unknown) => i for (i, unknown) in enumerate(unknowns(js)))
+mtjump1 = MT.assemble_crj(js, j₁, unknowntoid)
+mtjump2 = MT.assemble_vrj(js, j₂, unknowntoid)
 
 # doc version
 rate1(u, p, t) = (0.1 / 1000.0) * u[1] * u[2]

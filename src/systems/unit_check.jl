@@ -217,20 +217,20 @@ function _validate(conn::Connection; info::String = "")
         sst = unknowns(s)
         if length(st) != length(sst)
             valid = false
-            @warn("$info: connected systems $(nameof(sys)) and $(nameof(s)) have $(length(st)) and $(length(sst)) states, cannor connect.")
+            @warn("$info: connected systems $(nameof(sys)) and $(nameof(s)) have $(length(st)) and $(length(sst)) unknowns, cannot connect.")
             continue
         end
         for (i, x) in enumerate(st)
             j = findfirst(isequal(x), sst)
             if j == nothing
                 valid = false
-                @warn("$info: connected systems $(nameof(sys)) and $(nameof(s)) do not have the same states.")
+                @warn("$info: connected systems $(nameof(sys)) and $(nameof(s)) do not have the same unknowns.")
             else
                 aunit = safe_get_unit(x, info * string(nameof(sys)) * "#$i")
                 bunit = safe_get_unit(sst[j], info * string(nameof(s)) * "#$j")
                 if !equivalent(aunit, bunit)
                     valid = false
-                    @warn("$info: connected system states $x and $(sst[j]) have mismatched units.")
+                    @warn("$info: connected system unknowns $x and $(sst[j]) have mismatched units.")
                 end
             end
         end

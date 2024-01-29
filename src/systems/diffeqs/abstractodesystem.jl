@@ -17,7 +17,7 @@ function calculate_tgrad(sys::AbstractODESystem;
         simplify = false)
     isempty(get_tgrad(sys)[]) || return get_tgrad(sys)[]  # use cached tgrad, if possible
 
-    # We need to remove explicit time dependence on the state because when we
+    # We need to remove explicit time dependence on the unknown because when we
     # have `u(t) * t` we want to have the tgrad to be `u(t)` instead of `u'(t) *
     # t + u(t)`.
     rhs = [detime_dvs(eq.rhs) for eq in full_equations(sys)]
@@ -167,7 +167,7 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys), ps = par
     if isdde
         build_function(rhss, u, DDE_HISTORY_FUN, p, t; kwargs...)
     else
-        pre, sol_states = get_substitutions_and_solved_states(sys,
+        pre, sol_states = get_substitutions_and_solved_unknowns(sys,
             no_postprocess = has_difference)
 
         if implicit_dae
@@ -276,11 +276,11 @@ function calculate_massmatrix(sys::AbstractODESystem; simplify = false)
     eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
     dvs = unknowns(sys)
     M = zeros(length(eqs), length(eqs))
-    state2idx = Dict(s => i for (i, s) in enumerate(dvs))
+    unknown2idx = Dict(s => i for (i, s) in enumerate(dvs))
     for (i, eq) in enumerate(eqs)
         if istree(eq.lhs) && operation(eq.lhs) isa Differential
             st = var_from_nested_derivative(eq.lhs)[1]
-            j = state2idx[st]
+            j = unknown2idx[st]
             M[i, j] = 1
         else
             _iszero(eq.lhs) ||

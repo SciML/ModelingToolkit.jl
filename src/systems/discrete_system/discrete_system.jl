@@ -33,7 +33,7 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     eqs::Vector{Equation}
     """Independent variable."""
     iv::BasicSymbolic{Real}
-    """Dependent (state) variables. Must not contain the independent variable."""
+    """Dependent (unknown) variables. Must not contain the independent variable."""
     unknowns::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
@@ -166,7 +166,7 @@ function DiscreteSystem(eqs, iv = nothing; kwargs...)
     eqs = scalarize(eqs)
     # NOTE: this assumes that the order of algebraic equations doesn't matter
     diffvars = OrderedSet()
-    allstates = OrderedSet()
+    allunknowns = OrderedSet()
     ps = OrderedSet()
     # reorder equations such that it is in the form of `diffeq, algeeq`
     diffeq = Equation[]
@@ -183,8 +183,8 @@ function DiscreteSystem(eqs, iv = nothing; kwargs...)
     iv = value(iv)
     iv === nothing && throw(ArgumentError("Please pass in independent variables."))
     for eq in eqs
-        collect_vars_difference!(allstates, ps, eq.lhs, iv)
-        collect_vars_difference!(allstates, ps, eq.rhs, iv)
+        collect_vars_difference!(allunknowns, ps, eq.lhs, iv)
+        collect_vars_difference!(allunknowns, ps, eq.rhs, iv)
         if isdifferenceeq(eq)
             diffvar, _ = var_from_nested_difference(eq.lhs)
             isequal(iv, iv_from_nested_difference(eq.lhs)) ||
@@ -197,7 +197,7 @@ function DiscreteSystem(eqs, iv = nothing; kwargs...)
             push!(algeeq, eq)
         end
     end
-    algevars = setdiff(allstates, diffvars)
+    algevars = setdiff(allunknowns, diffvars)
     # the orders here are very important!
     return DiscreteSystem(append!(diffeq, algeeq), iv,
         collect(Iterators.flatten((diffvars, algevars))), ps; kwargs...)
@@ -240,8 +240,8 @@ function SciMLBase.DiscreteProblem(sys::DiscreteSystem, u0map = [], tspan = get_
 end
 
 function linearize_eqs(sys, eqs = get_eqs(sys); return_max_delay = false)
-    unique_states = unique(operation.(unknowns(sys)))
-    max_delay = Dict(v => 0.0 for v in unique_states)
+    unique_unknowns = unique(operation.(unknowns(sys)))
+    max_delay = Dict(v => 0.0 for v in unique_unknowns)
 
     r = @rule ~t::(t -> istree(t) && any(isequal(operation(t)), operation.(unknowns(sys))) && is_delay_var(get_iv(sys), t)) => begin
         delay = get_delay_val(get_iv(sys), first(arguments(~t)))
@@ -253,20 +253,20 @@ function linearize_eqs(sys, eqs = get_eqs(sys); return_max_delay = false)
     SymbolicUtils.Postwalk(r).(rhss(eqs))
 
     if any(values(max_delay) .> 0)
-        dts = Dict(v => Any[] for v in unique_states)
-        state_ops = Dict(v => Any[] for v in unique_states)
-        for v in unique_states
+        dts = Dict(v => Any[] for v in unique_unknowns)
+        unknown_ops = Dict(v => Any[] for v in unique_unknowns)
+        for v in unique_unknowns
             for eq in eqs
                 if isdifferenceeq(eq) && istree(arguments(eq.lhs)[1]) &&
                    isequal(v, operation(arguments(eq.lhs)[1]))
                     append!(dts[v], [operation(eq.lhs).dt])
-                    append!(state_ops[v], [operation(eq.lhs)])
+                    append!(unknown_ops[v], [operation(eq.lhs)])
                 end
             end
         end
 
-        all(length.(unique.(values(state_ops))) .<= 1) ||
-            error("Each state should be used with single difference operator.")
+        all(length.(unique.(values(unknown_ops))) .<= 1) ||
+            error("Each unknown should be used with single difference operator.")
 
         dts_gcd = Dict()
         for v in keys(dts)
@@ -274,7 +274,7 @@ function linearize_eqs(sys, eqs = get_eqs(sys); return_max_delay = false)
         end
 
         lin_eqs = [v(get_iv(sys) - (t)) ~ v(get_iv(sys) - (t - dts_gcd[v]))
-                   for v in unique_states if max_delay[v] > 0 && dts_gcd[v] !== nothing
+                   for v in unique_unknowns if max_delay[v] > 0 && dts_gcd[v] !== nothing
                    for t in collect(max_delay[v]:(-dts_gcd[v]):0)[1:(end - 1)]]
         eqs = vcat(eqs, lin_eqs)
     end
@@ -301,7 +301,7 @@ function generate_function(sys::DiscreteSystem, dvs = unknowns(sys), ps = parame
     t = get_iv(sys)
 
     build_function(rhss, u, p, t; kwargs...)
-    pre, sol_states = get_substitutions_and_solved_states(sys)
+    pre, sol_states = get_substitutions_and_solved_unknowns(sys)
     build_function(rhss, u, p, t; postprocess_fbody = pre, states = sol_states, kwargs...)
 end
 

@@ -86,7 +86,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     analog to `SciMLBase.DiscreteCallback` that executes an affect when a given condition is
     true at the end of an integration step. Note, one must make sure to call
     `reset_aggregated_jumps!(integrator)` if using a custom affect function that changes any
-    state value or parameter.
+    unknown value or parameter.
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
     """
@@ -196,19 +196,19 @@ function generate_affect_function(js::JumpSystem, affect, outputidxs)
         expression = Val{true}, checkvars = false)
 end
 
-function assemble_vrj(js, vrj, statetoid)
+function assemble_vrj(js, vrj, unknowntoid)
     rate = drop_expr(@RuntimeGeneratedFunction(generate_rate_function(js, vrj.rate)))
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
-    outputidxs = [statetoid[var] for var in outputvars]
+    outputidxs = [unknowntoid[var] for var in outputvars]
     affect = drop_expr(@RuntimeGeneratedFunction(generate_affect_function(js, vrj.affect!,
         outputidxs)))
     VariableRateJump(rate, affect)
 end
 
-function assemble_vrj_expr(js, vrj, statetoid)
+function assemble_vrj_expr(js, vrj, unknowntoid)
     rate = generate_rate_function(js, vrj.rate)
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
-    outputidxs = ((statetoid[var] for var in outputvars)...,)
+    outputidxs = ((unknowntoid[var] for var in outputvars)...,)
     affect = generate_affect_function(js, vrj.affect!, outputidxs)
     quote
         rate = $rate
@@ -217,19 +217,19 @@ function assemble_vrj_expr(js, vrj, statetoid)
     end
 end
 
-function assemble_crj(js, crj, statetoid)
+function assemble_crj(js, crj, unknowntoid)
     rate = drop_expr(@RuntimeGeneratedFunction(generate_rate_function(js, crj.rate)))
     outputvars = (value(affect.lhs) for affect in crj.affect!)
-    outputidxs = [statetoid[var] for var in outputvars]
+    outputidxs = [unknowntoid[var] for var in outputvars]
     affect = drop_expr(@RuntimeGeneratedFunction(generate_affect_function(js, crj.affect!,
         outputidxs)))
     ConstantRateJump(rate, affect)
 end
 
-function assemble_crj_expr(js, crj, statetoid)
+function assemble_crj_expr(js, crj, unknowntoid)
     rate = generate_rate_function(js, crj.rate)
     outputvars = (value(affect.lhs) for affect in crj.affect!)
-    outputidxs = ((statetoid[var] for var in outputvars)...,)
+    outputidxs = ((unknowntoid[var] for var in outputvars)...,)
     affect = generate_affect_function(js, crj.affect!, outputidxs)
     quote
         rate = $rate
@@ -238,35 +238,35 @@ function assemble_crj_expr(js, crj, statetoid)
     end
 end
 
-function numericrstoich(mtrs::Vector{Pair{V, W}}, statetoid) where {V, W}
+function numericrstoich(mtrs::Vector{Pair{V, W}}, unknowntoid) where {V, W}
     rs = Vector{Pair{Int, W}}()
     for (wspec, stoich) in mtrs
         spec = value(wspec)
         if !istree(spec) && _iszero(spec)
             push!(rs, 0 => stoich)
         else
-            push!(rs, statetoid[spec] => stoich)
+            push!(rs, unknowntoid[spec] => stoich)
         end
     end
     sort!(rs)
     rs
 end
 
-function numericnstoich(mtrs::Vector{Pair{V, W}}, statetoid) where {V, W}
+function numericnstoich(mtrs::Vector{Pair{V, W}}, unknowntoid) where {V, W}
     ns = Vector{Pair{Int, W}}()
     for (wspec, stoich) in mtrs
         spec = value(wspec)
         !istree(spec) && _iszero(spec) &&
             error("Net stoichiometry can not have a species labelled 0.")
-        push!(ns, statetoid[spec] => stoich)
+        push!(ns, unknowntoid[spec] => stoich)
     end
     sort!(ns)
 end
 
 # assemble a numeric MassActionJump from a MT symbolics MassActionJumps
-function assemble_maj(majv::Vector{U}, statetoid, pmapper) where {U <: MassActionJump}
-    rs = [numericrstoich(maj.reactant_stoch, statetoid) for maj in majv]
-    ns = [numericnstoich(maj.net_stoch, statetoid) for maj in majv]
+function assemble_maj(majv::Vector{U}, unknowntoid, pmapper) where {U <: MassActionJump}
+    rs = [numericrstoich(maj.reactant_stoch, unknowntoid) for maj in majv]
+    ns = [numericnstoich(maj.net_stoch, unknowntoid) for maj in majv]
     MassActionJump(rs, ns; param_mapper = pmapper, nocopy = true)
 end
 
@@ -388,7 +388,7 @@ sol = solve(jprob, SSAStepper())
 """
 function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = nothing,
         kwargs...)
-    statetoid = Dict(value(state) => i for (i, state) in enumerate(unknowns(js)))
+    unknowntoid = Dict(value(unknown) => i for (i, unknown) in enumerate(unknowns(js)))
     eqs = equations(js)
     invttype = prob.tspan[1] === nothing ? Float64 : typeof(1 / prob.tspan[2])
 
@@ -396,9 +396,9 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = 
     p = (prob.p isa DiffEqBase.NullParameters || prob.p === nothing) ? Num[] : prob.p
 
     majpmapper = JumpSysMajParamMapper(js, p; jseqs = eqs, rateconsttype = invttype)
-    majs = isempty(eqs.x[1]) ? nothing : assemble_maj(eqs.x[1], statetoid, majpmapper)
-    crjs = ConstantRateJump[assemble_crj(js, j, statetoid) for j in eqs.x[2]]
-    vrjs = VariableRateJump[assemble_vrj(js, j, statetoid) for j in eqs.x[3]]
+    majs = isempty(eqs.x[1]) ? nothing : assemble_maj(eqs.x[1], unknowntoid, majpmapper)
+    crjs = ConstantRateJump[assemble_crj(js, j, unknowntoid) for j in eqs.x[2]]
+    vrjs = VariableRateJump[assemble_vrj(js, j, unknowntoid) for j in eqs.x[3]]
     ((prob isa DiscreteProblem) && !isempty(vrjs)) &&
         error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")
     jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, majs)
@@ -424,7 +424,7 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = 
         callback = cbs, kwargs...)
 end
 
-### Functions to determine which states a jump depends on
+### Functions to determine which unknowns a jump depends on
 function get_variables!(dep, jump::Union{ConstantRateJump, VariableRateJump}, variables)
     jr = value(jump.rate)
     (jr isa Symbolic) && get_variables!(dep, jr, variables)
@@ -440,20 +440,20 @@ function get_variables!(dep, jump::MassActionJump, variables)
     dep
 end
 
-### Functions to determine which states are modified by a given jump
-function modified_states!(mstates, jump::Union{ConstantRateJump, VariableRateJump}, sts)
+### Functions to determine which unknowns are modified by a given jump
+function modified_unknowns!(munknowns, jump::Union{ConstantRateJump, VariableRateJump}, sts)
     for eq in jump.affect!
         st = eq.lhs
-        any(isequal(st), sts) && push!(mstates, st)
+        any(isequal(st), sts) && push!(munknowns, st)
     end
-    mstates
+    munknowns
 end
 
-function modified_states!(mstates, jump::MassActionJump, sts)
-    for (state, stoich) in jump.net_stoch
-        any(isequal(state), sts) && push!(mstates, state)
+function modified_unknowns!(munknowns, jump::MassActionJump, sts)
+    for (unknown, stoich) in jump.net_stoch
+        any(isequal(unknown), sts) && push!(munknowns, unknown)
     end
-    mstates
+    munknowns
 end
 
 ###################### parameter mapper ###########################

@@ -170,7 +170,7 @@ function to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar::F,
     end
     rhs = eq.rhs
     if rhs isa Symbolic
-        # Check if the RHS is solvable in all state derivatives and if those
+        # Check if the RHS is solvable in all unknown variable derivatives and if those
         # the linear terms for them are all zero. If so, move them to the
         # LHS.
         dervar::Union{Nothing, Int} = nothing
@@ -238,7 +238,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
     # called dummy derivatives.
 
     # Step 1:
-    # Replace derivatives of non-selected states by dummy derivatives
+    # Replace derivatives of non-selected unknown variables by dummy derivatives
 
     if ModelingToolkit.has_iv(state.sys)
         iv = get_iv(state.sys)
@@ -410,7 +410,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
         eq_var_matching[dummy_eq] = dv
     end
 
-    # Will reorder equations and states to be:
+    # Will reorder equations and unknowns to be:
     # [diffeqs; ...]
     # [diffvars; ...]
     # such that the mass matrix is:

@@ -318,18 +318,18 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
                 error("Non-variable symbolic expression found on the left hand side of an affect equation. Such equations must be of the form variable ~ symbolic expression for the new value of the variable.")
             update_vars = collect(Iterators.flatten(map(ModelingToolkit.vars, lhss))) # these are the ones we're changing
             length(update_vars) == length(unique(update_vars)) == length(eqs) ||
-                error("affected variables not unique, each state can only be affected by one equation for a single `root_eqs => affects` pair.")
+                error("affected variables not unique, each unknown can only be affected by one equation for a single `root_eqs => affects` pair.")
             alleq = all(isequal(isparameter(first(update_vars))),
                 Iterators.map(isparameter, update_vars))
             if !isparameter(first(lhss)) && alleq
-                stateind = Dict(reverse(en) for en in enumerate(dvs))
-                update_inds = map(sym -> stateind[sym], update_vars)
+                unknownind = Dict(reverse(en) for en in enumerate(dvs))
+                update_inds = map(sym -> unknownind[sym], update_vars)
             elseif isparameter(first(lhss)) && alleq
                 psind = Dict(reverse(en) for en in enumerate(ps))
                 update_inds = map(sym -> psind[sym], update_vars)
                 outvar = :p
             else
-                error("Error, building an affect function for a callback that wants to modify both parameters and states. This is not currently allowed in one individual callback.")
+                error("Error, building an affect function for a callback that wants to modify both parameters and unknowns. This is not currently allowed in one individual callback.")
             end
         else
             update_inds = outputidxs

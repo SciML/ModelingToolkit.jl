@@ -130,7 +130,7 @@ julia> ModelingToolkit.missing_variable_defaults(sys, [1,2,3])
  x3ˍtt(t) => 3
 ```
 
-## Change the state vector type
+## Change the unknown variable vector type
 
 Use the `u0_constructor` keyword argument to map an array to the desired
 container type. For example:

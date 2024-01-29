@@ -28,7 +28,7 @@ j₂ = ModelingToolkit.VariableRateJump(rate₂, affect₂)
 # create a JumpSystem using these jumps
 @named jumpsys = JumpSystem([j₁, j₂], t, [S, I, R], [β, γ])
 
-# dependency of each jump rate function on state variables
+# dependency of each jump rate function on unknown variables
 equation_dependencies(jumpsys)
 
 # dependency of each jump rate function on parameters
@@ -148,7 +148,7 @@ function variable_dependencies(sys::AbstractSystem; variables = unknowns(sys),
     deps = Set()
     badjlist = Vector{Vector{Int}}(undef, length(eqs))
     for (eidx, eq) in enumerate(eqs)
-        modified_states!(deps, eq, variables)
+        modified_unknowns!(deps, eq, variables)
         badjlist[eidx] = sort!([vtois[var] for var in deps])
         empty!(deps)
     end
@@ -174,11 +174,11 @@ Convert a [`BipartiteGraph`](@ref) to a `LightGraph.SimpleDiGraph`.
 Notes:
 
   - The resulting `SimpleDiGraph` unifies the two sets of vertices (equations
-    and then states in the case it comes from [`asgraph`](@ref)), producing one
+    and then unknowns in the case it comes from [`asgraph`](@ref)), producing one
     ordered set of integer vertices (`SimpleDiGraph` does not support two distinct
     collections of vertices, so they must be merged).
   - `variables` gives the variables that `g` are associated with (usually the
-    `states` of a system).
+    `unknowns` of a system).
   - `equationsfirst` (default is `true`) gives whether the [`BipartiteGraph`](@ref)
     gives a mapping from equations to variables they depend on (`true`), as calculated
     by [`asgraph`](@ref), or whether it gives a mapping from variables to the equations
@@ -238,7 +238,7 @@ function eqeq_dependencies(eqdeps::BipartiteGraph{T},
     g = SimpleDiGraph{T}(length(eqdeps.fadjlist))
 
     for (eqidx, sidxs) in enumerate(vardeps.badjlist)
-        # states modified by eqidx
+        # unknowns modified by eqidx
         for sidx in sidxs
             # equations depending on sidx
             foreach(v -> add_edge!(g, eqidx, v), eqdeps.badjlist[sidx])

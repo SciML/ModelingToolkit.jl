@@ -35,7 +35,7 @@ lorenz1_aliased = structural_simplify(lorenz1)
 io = IOBuffer();
 show(io, MIME("text/plain"), lorenz1_aliased);
 str = String(take!(io));
-@test all(s -> occursin(s, str), ["lorenz1", "States (2)", "Parameters (3)"])
+@test all(s -> occursin(s, str), ["lorenz1", "Unknowns (2)", "Parameters (3)"])
 reduced_eqs = [D(x) ~ σ * (y - x)
     D(y) ~ β + (ρ - z) * x - y]
 #test_equal.(equations(lorenz1_aliased), reduced_eqs)

@@ -269,9 +269,9 @@ end
     sol = solve(prob)
     @test sol.retcode == SciMLBase.ReturnCode.Success
 
-    # Confirm for all the states of the non-simplified system
+    # Confirm for all the unknowns of the non-simplified system
     @test all(.≈(sol[unknowns(sys)], [1e-5, 0, 1e-5 / 1.5, 0]; atol = 1e-8))
 
-    # Confirm for all the states of the simplified system
+    # Confirm for all the unknowns of the simplified system
     @test all(.≈(sol[unknowns(sys_simple)], [1e-5 / 1.5, 0]; atol = 1e-8))
 end

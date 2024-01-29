@@ -12,7 +12,7 @@ an optional forcing function, and allowing the user to specify the
 forcing later. Here, the library author defines a component named
 `decay`. The user then builds two `decay` components and connects them,
 saying the forcing term of `decay1` is a constant while the forcing term
-of `decay2` is the value of the state variable `x`.
+of `decay2` is the value of the unknown variable `x`.
 
 ```@example composition
 using ModelingToolkit
@@ -70,18 +70,18 @@ subsystems. A model is the composition of itself and its subsystems.
 For example, if we have:
 
 ```julia
-@named sys = compose(ODESystem(eqs, indepvar, states, ps), subsys)
+@named sys = compose(ODESystem(eqs, indepvar, unknowns, ps), subsys)
 ```
 
 the `equations` of `sys` is the concatenation of `get_eqs(sys)` and
-`equations(subsys)`, the states are the concatenation of their states,
+`equations(subsys)`, the unknowns are the concatenation of their unknowns,
 etc. When the `ODEProblem` or `ODEFunction` is generated from this
 system, it will build and compile the functions associated with this
 composition.
 
 The new equations within the higher level system can access the variables
 in the lower level system by namespacing via the `nameof(subsys)`. For
-example, let's say there is a variable `x` in `states` and a variable
+example, let's say there is a variable `x` in `unknowns` and a variable
 `x` in `subsys`. We can declare that these two variables are the same
 by specifying their equality: `x ~ subsys.x` in the `eqs` for `sys`.
 This algebraic relationship can then be simplified by transformations
@@ -133,7 +133,7 @@ sys = ODESystem(
 sys.y = u * 1.1
 ```
 
-In a hierarchical system, variables of the subsystem get namespaced by the name of the system they are in. This prevents naming clashes, but also enforces that every state and parameter is local to the subsystem it is used in. In some cases it might be desirable to have variables and parameters that are shared between subsystems, or even global. This can be accomplished as follows.
+In a hierarchical system, variables of the subsystem get namespaced by the name of the system they are in. This prevents naming clashes, but also enforces that every unknown and parameter is local to the subsystem it is used in. In some cases it might be desirable to have variables and parameters that are shared between subsystems, or even global. This can be accomplished as follows.
 
 ```julia
 @parameters t a b c d e f
@@ -186,12 +186,12 @@ i.e. equations which result in `0~0` expressions, in over-specified systems.
 
 Model inheritance can be done in two ways: implicitly or explicitly. First, one
 can use the `extend` function to extend a base model with another set of
-equations, states, and parameters. An example can be found in the
+equations, unknowns, and parameters. An example can be found in the
 [acausal components tutorial](@ref acausal).
 
 The explicit way is to shadow variables with equality expressions. For example,
 let's assume we have three separate systems which we want to compose to a single
-one. This is how one could explicitly forward all states and parameters to the
+one. This is how one could explicitly forward all unknowns and parameters to the
 higher level system:
 
 ```@example compose
@@ -225,7 +225,7 @@ sir = compose(ODESystem([
             reqn.γ => γ], name = :sir), seqn, ieqn, reqn)
 ```
 
-Note that the states are forwarded by an equality relationship, while
+Note that the unknowns are forwarded by an equality relationship, while
 the parameters are forwarded through a relationship in their default
 values. The user of this model can then solve this model simply by
 specifying the values at the highest level:
@@ -266,7 +266,7 @@ more efficient and more stable.
 ## Components with discontinuous dynamics
 
 When modeling, e.g., impacts, saturations or Coulomb friction, the dynamic
-equations are discontinuous in either the state or one of its derivatives. This
+equations are discontinuous in either the unknown or one of its derivatives. This
 causes the solver to take very small steps around the discontinuity, and
 sometimes leads to early stopping due to `dt <= dt_min`. The correct way to
 handle such dynamics is to tell the solver about the discontinuity by a

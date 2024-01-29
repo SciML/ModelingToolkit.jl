@@ -96,7 +96,7 @@ end
 nothing #hide
 ```
 
-When the system is defined we can generate a fluid component and connect it to the system.  Here `fluid` is connected to the `src.port`, but it could also be connected to `vol.port`, any connection in the network is fine.  Note: we can visualize the system using `ModelingToolkitDesigner.jl`, where a dashed line is used to show the `fluid` connection to represent a domain connection that is only transporting parameters and not states.
+When the system is defined we can generate a fluid component and connect it to the system.  Here `fluid` is connected to the `src.port`, but it could also be connected to `vol.port`, any connection in the network is fine.  Note: we can visualize the system using `ModelingToolkitDesigner.jl`, where a dashed line is used to show the `fluid` connection to represent a domain connection that is only transporting parameters and not unknown variables.
 
 ```@example domain
 @component function System(; name)
@@ -205,7 +205,7 @@ nothing #hide
 
 ![actsys2](https://github.com/SciML/ModelingToolkit.jl/assets/40798837/8ed50035-f6ac-48cb-a585-1ef415154a02)
 
-After running `structural_simplify()` on `actsys2`, the defaults will show that `act.port_a.ρ` points to `fluid_a₊ρ` and `act.port_b.ρ` points to `fluid_b₊ρ`.  This is a special case, in most cases a hydraulic system will have only 1 fluid, however this simple system has 2 separate domain networks.  Therefore, we can connect a single fluid to both networks.  This does not interfere with the mathematical equations of the system, since no states are connected.
+After running `structural_simplify()` on `actsys2`, the defaults will show that `act.port_a.ρ` points to `fluid_a₊ρ` and `act.port_b.ρ` points to `fluid_b₊ρ`.  This is a special case, in most cases a hydraulic system will have only 1 fluid, however this simple system has 2 separate domain networks.  Therefore, we can connect a single fluid to both networks.  This does not interfere with the mathematical equations of the system, since no unknown variables are connected.
 
 ```@example domain
 @component function ActuatorSystem1(; name)
@@ -301,7 +301,7 @@ ModelingToolkit.defaults(sys)[complete(ressys).res.port_b.ρ]
 ModelingToolkit.defaults(sys)[complete(ressys).vol.port.ρ]
 ```
 
-To ensure that the `Restrictor` component does not disrupt the domain network, the [`domain_connect()`](@ref) function can be used, which explicitly only connects the domain network and not the states.
+To ensure that the `Restrictor` component does not disrupt the domain network, the [`domain_connect()`](@ref) function can be used, which explicitly only connects the domain network and not the unknown variables.
 
 ```@example domain
 @component function Restrictor(; name, p_int)

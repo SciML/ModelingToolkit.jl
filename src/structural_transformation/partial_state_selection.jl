@@ -334,8 +334,8 @@ end
 
 function tearing_with_dummy_derivatives(structure, dummy_derivatives)
     @unpack var_to_diff = structure
-    # We can eliminate variables that are not a selected state (differential
-    # variables). Selected states are differentiated variables that are not
+    # We can eliminate variables that are not selected (differential
+    # variables). Selected unknowns are differentiated variables that are not
     # dummy derivatives.
     can_eliminate = falses(length(var_to_diff))
     for (v, dv) in enumerate(var_to_diff)

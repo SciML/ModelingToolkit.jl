@@ -22,7 +22,7 @@ Generally, it follows the order of:
 
  1. Equations
  2. Independent Variables
- 3. Dependent Variables (or States)
+ 3. Dependent Variables (or Unknowns)
  4. Parameters
 
 All other pieces are handled via keyword arguments. `AbstractSystem`s share the
@@ -37,7 +37,7 @@ same keyword arguments, which are:
 ## Composition and Accessor Functions
 
 Each `AbstractSystem` has lists of variables in context, such as distinguishing
-parameters vs states. In addition, an `AbstractSystem` can also hold other
+parameters vs unknowns. In addition, an `AbstractSystem` can also hold other
 `AbstractSystem` types. Direct accessing of the values, such as `sys.unknowns`,
 gives the immediate list, while the accessor functions `unknowns(sys)` gives the
 total set, which includes that of all systems held inside.
@@ -49,7 +49,7 @@ The values which are common to all `AbstractSystem`s are:
   - `parameters(sys)`: All parameters of the system and its subsystems.
   - `nameof(sys)`: The name of the current-level system.
   - `get_eqs(sys)`: Equations that define the current-level system.
-  - `get_unknowns(sys)`: States that are in the current-level system.
+  - `get_unknowns(sys)`: Unknowns that are in the current-level system.
   - `get_ps(sys)`: Parameters that are in the current-level system.
   - `get_systems(sys)`: Subsystems of the current-level system.
 
@@ -129,7 +129,7 @@ pairs `var=>value`, which allows the user to designate the values without having
 to know the order that ModelingToolkit is internally using.
 
 For the value maps, the parameters are allowed to be functions of each other,
-and value maps of states can be functions of the parameters, i.e. you can do:
+and value maps of unknowns can be functions of the parameters, i.e. you can do:
 
 ```
 u0 = [

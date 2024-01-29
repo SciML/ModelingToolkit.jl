@@ -111,7 +111,7 @@ function SIRD_ac!(du, u, p, t)
 
     C = regional_all_contact_matrix
 
-    # State variables
+    # Unknown variables
     S = @view u[(4 * 0 + 1):(4 * 1)]
     I = @view u[(4 * 1 + 1):(4 * 2)]
     R = @view u[(4 * 2 + 1):(4 * 3)]
@@ -214,7 +214,7 @@ using ModelingToolkit
 # ODE model: simple SIR model with seasonally forced contact rate
 function SIR!(du, u, p, t)
 
-    # states
+    # Unknowns
     (S, I, R) = u[1:3]
     N = S + I + R
 
@@ -230,7 +230,7 @@ function SIR!(du, u, p, t)
     βeff = β * (1.0 + η * cos(2.0 * π * (t - φ) / 365.0))
     λ = βeff * I / N
 
-    # change in states
+    # change in unknowns
     du[1] = (μ * N - λ * S - μ * S + ω * R)
     du[2] = (λ * S - σ * I - μ * I)
     du[3] = (σ * I - μ * R - ω * R)

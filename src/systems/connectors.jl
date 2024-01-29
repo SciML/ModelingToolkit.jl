@@ -27,11 +27,11 @@ struct RegularConnector <: AbstractConnectorType end
 struct DomainConnector <: AbstractConnectorType end
 
 function connector_type(sys::AbstractSystem)
-    sts = get_unknowns(sys)
+    unkvars = get_unknowns(sys)
     n_stream = 0
     n_flow = 0
-    n_regular = 0 # state that is not input, output, stream, or flow.
-    for s in sts
+    n_regular = 0 # unknown that is not input, output, stream, or flow.
+    for s in unkvars
         vtype = get_connection_type(s)
         if vtype === Stream
             isarray(s) && error("Array stream variables are not supported. Got $s.")
@@ -44,7 +44,7 @@ function connector_type(sys::AbstractSystem)
     end
     (n_stream > 0 && n_flow > 1) &&
         error("There are multiple flow variables in the stream connector $(nameof(sys))!")
-    if n_flow == 1 && length(sts) == 1
+    if n_flow == 1 && length(unkvars) == 1
         return DomainConnector()
     end
     if n_flow != n_regular && !isframe(sys)
@@ -261,19 +261,19 @@ function connection2set!(connectionsets, namespace, ss, isouter)
         sts1v = [sts1v; orientation_vars]
     end
     sts1 = Set(sts1v)
-    num_statevars = length(sts1)
-    csets = [T[] for _ in 1:num_statevars] # Add 9 orientation variables if connection is between multibody frames
+    num_unknowns = length(sts1)
+    csets = [T[] for _ in 1:num_unknowns] # Add 9 orientation variables if connection is between multibody frames
     for (i, s) in enumerate(ss)
-        sts = unknowns(s)
+        unknown_vars = unknowns(s)
         if isframe(s) # Multibody
             O = ori(s)
             orientation_vars = Symbolics.unwrap.(vec(O.R))
-            sts = [sts; orientation_vars]
+            unknown_vars = [unknown_vars; orientation_vars]
         end
-        i != 1 && ((num_statevars == length(sts) && all(Base.Fix2(in, sts1), sts)) ||
+        i != 1 && ((num_unknowns == length(unknown_vars) && all(Base.Fix2(in, sts1), unknown_vars)) ||
          connection_error(ss))
         io = isouter(s)
-        for (j, v) in enumerate(sts)
+        for (j, v) in enumerate(unknown_vars)
             push!(csets[j], T(LazyNamespace(namespace, s), v, io))
         end
     end
@@ -311,16 +311,16 @@ function generate_connection_set!(connectionsets, domain_csets,
 
     cts = [] # connections
     domain_cts = [] # connections
-    extra_states = []
+    extra_unknowns = []
     for eq in eqs′
         lhs = eq.lhs
         rhs = eq.rhs
         if find !== nothing && find(rhs, _getname(namespace))
-            neweq, extra_state = replace(rhs, _getname(namespace))
-            if extra_state isa AbstractArray
-                append!(extra_states, unwrap.(extra_state))
-            elseif extra_state !== nothing
-                push!(extra_states, extra_state)
+            neweq, extra_unknown = replace(rhs, _getname(namespace))
+            if extra_unknown isa AbstractArray
+                append!(extra_unknowns, unwrap.(extra_unknown))
+            elseif extra_unknown !== nothing
+                push!(extra_unknowns, extra_unknown)
             end
             neweq isa AbstractArray ? append!(eqs, neweq) : push!(eqs, neweq)
         else
@@ -350,8 +350,8 @@ function generate_connection_set!(connectionsets, domain_csets,
     end
 
     # pre order traversal
-    if !isempty(extra_states)
-        @set! sys.unknowns = [get_unknowns(sys); extra_states]
+    if !isempty(extra_unknowns)
+        @set! sys.unknowns = [get_unknowns(sys); extra_unknowns]
     end
     @set! sys.systems = map(s -> generate_connection_set!(connectionsets, domain_csets, s,
             find, replace,

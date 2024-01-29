@@ -208,7 +208,7 @@ resistor's resistance. By doing so, if the resistance of this resistor is not
 overridden by a higher level default or overridden at `ODEProblem` construction
 time, this will be the value of the resistance. Also, note the use of `@extend`.
 For the `Resistor`, we want to simply inherit `OnePort`'s
-equations and states and extend them with a new equation. Note that `v`, `i` are not namespaced as `oneport.v` or `oneport.i`.
+equations and unknowns and extend them with a new equation. Note that `v`, `i` are not namespaced as `oneport.v` or `oneport.i`.
 
 Using our knowledge of circuits, we similarly construct the `Capacitor`:
 
@@ -280,16 +280,16 @@ the parameters or defaults values of variables of subcomponents.
 This model is acausal because we have not specified anything about the causality of the model. We have
 simply specified what is true about each of the variables. This forms a system
 of differential-algebraic equations (DAEs) which define the evolution of each
-state of the system. The equations are:
+unknown of the system. The equations are:
 
 ```@example acausal
 equations(expand_connections(rc_model))
 ```
 
-the states are:
+the unknowns are:
 
 ```@example acausal
-states(rc_model)
+unknowns(rc_model)
 ```
 
 and the parameters are:
@@ -307,9 +307,9 @@ observed(rc_model)
 ## Solving this System
 
 We are left with a system of only two equations
-with two state variables. One of the equations is a differential equation,
+with two unknown variables. One of the equations is a differential equation,
 while the other is an algebraic equation. We can then give the values for the
-initial conditions of our states, and solve the system by converting it to
+initial conditions of our unknowns, and solve the system by converting it to
 an ODEProblem in mass matrix form and solving it with an [ODEProblem mass matrix
 DAE solver](https://docs.sciml.ai/DiffEqDocs/stable/solvers/dae_solve/#OrdinaryDiffEq.jl-(Mass-Matrix)).
 This is done as follows:
@@ -325,7 +325,7 @@ plot(sol)
 
 However, what if we wanted to plot the timeseries of a different variable? Do
 not worry, that information was not thrown away! Instead, transformations
-like `structural_simplify` simply change state variables into observables which are
+like `structural_simplify` simply change unknown variables into observables which are
 defined by `observed` equations.
 
 ```@example acausal
@@ -335,7 +335,7 @@ observed(rc_model)
 These are explicit algebraic equations which can then be used to reconstruct
 the required variables on the fly. This leads to dramatic computational savings
 because implicitly solving an ODE scales like O(n^3), so making there be as
-few states as possible is good!
+few unknowns as possible is good!
 
 The solution object can be accessed via its symbols. For example, let's retrieve
 the voltage of the resistor over time:

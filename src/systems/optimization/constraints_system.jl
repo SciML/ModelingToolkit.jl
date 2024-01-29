@@ -109,7 +109,7 @@ function ConstraintsSystem(constraints, unknowns, ps;
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
 
     cstr = value.(Symbolics.canonical_form.(scalarize(constraints)))
-    states′ = value.(scalarize(unknowns))
+    unknowns′ = value.(scalarize(unknowns))
     ps′ = value.(scalarize(ps))
 
     if !(isempty(default_u0) && isempty(default_p))
@@ -126,7 +126,7 @@ function ConstraintsSystem(constraints, unknowns, ps;
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, states′)
+    process_variables!(var_to_name, defaults, unknowns′)
     process_variables!(var_to_name, defaults, ps′)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
@@ -179,7 +179,7 @@ end
 function generate_function(sys::ConstraintsSystem, dvs = unknowns(sys), ps = parameters(sys);
         kwargs...)
     lhss = generate_canonical_form_lhss(sys)
-    pre, sol_states = get_substitutions_and_solved_states(sys)
+    pre, sol_states = get_substitutions_and_solved_unknowns(sys)
 
     func = build_function(lhss, value.(dvs), value.(ps); postprocess_fbody = pre,
         states = sol_states, kwargs...)

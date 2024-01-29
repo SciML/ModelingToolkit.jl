@@ -175,9 +175,9 @@ f_oop : (x,u,p,t)      -> rhs
 f_ip  : (xout,x,u,p,t) -> nothing
 ```
 
-The return values also include the remaining states and parameters, in the order they appear as arguments to `f`.
+The return values also include the remaining unknowns and parameters, in the order they appear as arguments to `f`.
 
-If `disturbance_inputs` is an array of variables, the generated dynamics function will preserve any state and dynamics associated with disturbance inputs, but the disturbance inputs themselves will not be included as inputs to the generated function. The use case for this is to generate dynamics for state observers that estimate the influence of unmeasured disturbances, and thus require state variables for the disturbance model, but without disturbance inputs since the disturbances are not available for measurement.
+If `disturbance_inputs` is an array of variables, the generated dynamics function will preserve any state and dynamics associated with disturbance inputs, but the disturbance inputs themselves will not be included as inputs to the generated function. The use case for this is to generate dynamics for state observers that estimate the influence of unmeasured disturbances, and thus require unknown variables for the disturbance model, but without disturbance inputs since the disturbances are not available for measurement.
 See [`add_input_disturbance`](@ref) for a higher-level interface to this functionality.
 
 # Example

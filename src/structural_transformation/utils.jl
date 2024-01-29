@@ -263,12 +263,12 @@ function linear_subsys_adjmat!(state::TransformationState; kwargs...)
     for i in eachindex(eqs)
         all_int_vars, rhs = find_eq_solvables!(state, i, to_rm, coeffs; kwargs...)
 
-        # Check if all states in the equation is both linear and homogeneous,
+        # Check if all unknowns in the equation is both linear and homogeneous,
         # i.e. it is in the form of
         #
         #       ``∑ c_i * v_i = 0``,
         #
-        # where ``c_i`` ∈ ℤ and ``v_i`` denotes states.
+        # where ``c_i`` ∈ ℤ and ``v_i`` denotes unknowns.
         if all_int_vars && Symbolics._iszero(rhs)
             push!(linear_equations, i)
             push!(eadj, copy(𝑠neighbors(graph, i)))

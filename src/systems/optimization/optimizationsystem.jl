@@ -93,7 +93,7 @@ function OptimizationSystem(op, unknowns, ps;
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     constraints = value.(scalarize(constraints))
-    states′ = value.(scalarize(unknowns))
+    unknowns′ = value.(scalarize(unknowns))
     ps′ = value.(scalarize(ps))
     op′ = value(scalarize(op))
 
@@ -109,12 +109,12 @@ function OptimizationSystem(op, unknowns, ps;
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, states′)
+    process_variables!(var_to_name, defaults, unknowns′)
     process_variables!(var_to_name, defaults, ps′)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
     OptimizationSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-        op′, states′, ps′, var_to_name,
+        op′, unknowns′, ps′, var_to_name,
         observed,
         constraints,
         name, systems, defaults, metadata, gui_metadata;

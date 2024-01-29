@@ -27,7 +27,7 @@ function torn_system_with_nlsolve_jacobian_sparsity(state, var_eq_matching, var_
     # 0
     # ```
     #
-    # Let 𝑇 be the set of tearing variables and 𝑉 be the set of all *states* in
+    # Let 𝑇 be the set of tearing variables and 𝑉 be the set of all *unknowns* in
     # the residual equations. In the following code, we are going to assume the
     # connection between 𝑇 (the `u` in from above) and 𝑉 ∖ 𝑇 (the `p` in from
     # above) has full incidence.
@@ -37,7 +37,7 @@ function torn_system_with_nlsolve_jacobian_sparsity(state, var_eq_matching, var_
     # from other partitions.
     #
     # We know that partitions are BLT ordered. Hence, the tearing variables in
-    # each partition is unique, and all states in a partition must be
+    # each partition is unique, and all unknowns in a partition must be
     # either differential variables or algebraic tearing variables that are
     # from previous partitions. Hence, we can build the dependency chain as we
     # traverse the partitions.
@@ -250,8 +250,8 @@ function build_torn_function(sys;
     toporder = topological_sort_by_dfs(condensed_graph)
     var_sccs = var_sccs[toporder]
 
-    states_idxs = collect(diffvars_range(state.structure))
-    mass_matrix_diag = ones(length(states_idxs))
+    unknowns_idxs = collect(diffvars_range(state.structure))
+    mass_matrix_diag = ones(length(unknowns_idxs))
 
     assignments, deps, sol_states = tearing_assignments(sys)
     invdeps = map(_ -> BitSet(), deps)
@@ -284,11 +284,11 @@ function build_torn_function(sys;
             needs_extending = true
             append!(eqs_idxs, torn_eqs_idxs)
             append!(rhss, map(x -> x.rhs, eqs[torn_eqs_idxs]))
-            append!(states_idxs, torn_vars_idxs)
+            append!(unknowns_idxs, torn_vars_idxs)
             append!(mass_matrix_diag, zeros(length(torn_eqs_idxs)))
         end
     end
-    sort!(states_idxs)
+    sort!(unknowns_idxs)
 
     mass_matrix = needs_extending ? Diagonal(mass_matrix_diag) : I
 
@@ -297,16 +297,16 @@ function build_torn_function(sys;
         out,
         rhss)
 
-    states = Any[fullvars[i] for i in states_idxs]
-    @set! sys.solved_unknowns = states
-    syms = map(Symbol, states)
+    unknown_vars = Any[fullvars[i] for i in unknowns_idxs]
+    @set! sys.solved_unknowns = unknown_vars
+    syms = map(Symbol, unknown_vars)
 
     pre = get_postprocess_fbody(sys)
     cpre = get_preprocess_constants(rhss)
     pre2 = x -> pre(cpre(x))
 
     expr = SymbolicUtils.Code.toexpr(Func([out
-                DestructuredArgs(states,
+                DestructuredArgs(unknown_vars,
                 inbounds = !checkbounds)
                 DestructuredArgs(parameters(sys),
                 inbounds = !checkbounds)
@@ -318,11 +318,11 @@ function build_torn_function(sys;
                 false))),
         sol_states)
     if expression
-        expr, states
+        expr, unknown_vars
     else
         observedfun = let state = state,
             dict = Dict(),
-            is_solver_state_idxs = insorted.(1:length(fullvars), (states_idxs,)),
+            is_solver_unknown_idxs = insorted.(1:length(fullvars), (unknowns_idxs,)),
             assignments = assignments,
             deps = (deps, invdeps),
             sol_states = sol_states,
@@ -331,7 +331,7 @@ function build_torn_function(sys;
             function generated_observed(obsvar, args...)
                 obs = get!(dict, value(obsvar)) do
                     build_observed_function(state, obsvar, var_eq_matching, var_sccs,
-                        is_solver_state_idxs, assignments, deps,
+                        is_solver_unknown_idxs, assignments, deps,
                         sol_states, var2assignment,
                         checkbounds = checkbounds)
                 end
@@ -352,7 +352,7 @@ function build_torn_function(sys;
                 var_sccs,
                 nlsolve_scc_idxs,
                 eqs_idxs,
-                states_idxs) :
+                unknowns_idxs) :
                        nothing,
             syms = syms,
             paramsyms = Symbol.(parameters(sys)),
@@ -360,7 +360,7 @@ function build_torn_function(sys;
             observed = observedfun,
             mass_matrix = mass_matrix,
             sys = sys),
-        states
+        unknown_vars
     end
 end
 
@@ -382,7 +382,7 @@ function find_solve_sequence(sccs, vars)
 end
 
 function build_observed_function(state, ts, var_eq_matching, var_sccs,
-        is_solver_state_idxs,
+        is_solver_unknown_idxs,
         assignments,
         deps,
         sol_states,
@@ -404,8 +404,8 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
 
     fullvars = state.fullvars
     s = state.structure
-    unknown_states = fullvars[is_solver_state_idxs]
-    algvars = fullvars[.!is_solver_state_idxs]
+    unknown_vars = fullvars[is_solver_unknown_idxs]
+    algvars = fullvars[.!is_solver_unknown_idxs]
 
     required_algvars = Set(intersect(algvars, vars))
     obs = observed(sys)
@@ -437,7 +437,7 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
                     subs[s] = s′
                     continue
                 end
-                throw(ArgumentError("$s is either an observed nor a state variable."))
+                throw(ArgumentError("$s is either an observed nor an unknown variable."))
             end
             continue
         end
@@ -491,7 +491,7 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
     cpre = get_preprocess_constants([obs[1:maxidx];
         isscalar ? ts[1] : MakeArray(ts, output_type)])
     pre2 = x -> pre(cpre(x))
-    ex = Code.toexpr(Func([DestructuredArgs(unknown_states, inbounds = !checkbounds)
+    ex = Code.toexpr(Func([DestructuredArgs(unknown_vars, inbounds = !checkbounds)
                 DestructuredArgs(parameters(sys), inbounds = !checkbounds)
                 independent_variables(sys)],
             [],

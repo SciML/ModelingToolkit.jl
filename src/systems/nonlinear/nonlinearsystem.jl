@@ -193,7 +193,7 @@ end
 function generate_function(sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(sys);
         kwargs...)
     rhss = [deq.rhs for deq in equations(sys)]
-    pre, sol_states = get_substitutions_and_solved_states(sys)
+    pre, sol_states = get_substitutions_and_solved_unknowns(sys)
 
     return build_function(rhss, value.(dvs), value.(ps); postprocess_fbody = pre,
         states = sol_states, kwargs...)

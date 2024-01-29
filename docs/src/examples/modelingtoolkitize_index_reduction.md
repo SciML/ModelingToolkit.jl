@@ -81,7 +81,7 @@ However, one will quickly be greeted with the unfortunate message:
 └ @ OrdinaryDiffEq C:\Users\accou\.julia\packages\OrdinaryDiffEq\yCczp\src\initdt.jl:76
 ┌ Warning: Automatic dt set the starting dt as NaN, causing instability.
 └ @ OrdinaryDiffEq C:\Users\accou\.julia\packages\OrdinaryDiffEq\yCczp\src\solve.jl:485
-┌ Warning: NaN dt detected. Likely a NaN value in the state, parameters, or derivative value caused this outcome.
+┌ Warning: NaN dt detected. Likely a NaN value in the unknowns, parameters, or derivative value caused this outcome.
 └ @ SciMLBase C:\Users\accou\.julia\packages\SciMLBase\DrPil\src\integrator_interface.jl:325
 ```
 
@@ -164,7 +164,7 @@ plot and the plot is shown in the same order as the original numerical
 code.
 
 Note that we can even go a bit further. If we use the `ODAEProblem`
-constructor, we can remove the algebraic equations from the states of the
+constructor, we can remove the algebraic equations from the unknowns of the
 system and fully transform the index-3 DAE into an index-0 ODE which can
 be solved via an explicit Runge-Kutta method:
 

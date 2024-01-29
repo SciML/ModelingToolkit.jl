@@ -20,7 +20,7 @@ function dae_order_lowering(sys::ODESystem)
     return sys
 end
 
-function ode_order_lowering(eqs, iv, states)
+function ode_order_lowering(eqs, iv, unknown_vars)
     var_order = OrderedDict{Any, Int}()
     D = Differential(iv)
     diff_eqs = Equation[]
@@ -53,10 +53,10 @@ function ode_order_lowering(eqs, iv, states)
     end
 
     # we want to order the equations and variables to be `(diff, alge)`
-    return (vcat(diff_eqs, alge_eqs), vcat(diff_vars, setdiff(states, diff_vars)))
+    return (vcat(diff_eqs, alge_eqs), vcat(diff_vars, setdiff(unknown_vars, diff_vars)))
 end
 
-function dae_order_lowering(eqs, iv, states)
+function dae_order_lowering(eqs, iv, unknown_vars)
     var_order = OrderedDict{Any, Int}()
     D = Differential(iv)
     diff_eqs = Equation[]
@@ -102,5 +102,5 @@ function dae_order_lowering(eqs, iv, states)
     end
 
     return ([diff_eqs; substitute.(eqs, (subs,))],
-        vcat(collect(diff_vars), setdiff(states, diff_vars)))
+        vcat(collect(diff_vars), setdiff(unknown_vars, diff_vars)))
 end

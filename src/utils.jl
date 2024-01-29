@@ -33,8 +33,8 @@ function retime_dvs(op, dvs, iv)
     op
 end
 
-function modified_states!(mstates, e::Equation, statelist = nothing)
-    get_variables!(mstates, e.lhs, statelist)
+function modified_unknowns!(munknowns, e::Equation, unknownlist = nothing)
+    get_variables!(munknowns, e.lhs, unknownlist)
 end
 
 macro showarr(x)
@@ -132,7 +132,7 @@ function check_variables(dvs, iv)
         (is_delay_var(iv, dv) || occursin(iv, dv)) ||
             throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
         isparameter(dv) &&
-            throw(ArgumentError("$dv is not a state. It is a parameter."))
+            throw(ArgumentError("$dv is not an unknown. It is a parameter."))
     end
 end
 
@@ -457,44 +457,44 @@ function find_derivatives!(vars, expr, f)
     return vars
 end
 
-function collect_vars!(states, parameters, expr, iv)
+function collect_vars!(unknowns, parameters, expr, iv)
     if issym(expr)
-        collect_var!(states, parameters, expr, iv)
+        collect_var!(unknowns, parameters, expr, iv)
     else
         for var in vars(expr)
             if istree(var) && operation(var) isa Differential
                 var, _ = var_from_nested_derivative(var)
             end
-            collect_var!(states, parameters, var, iv)
+            collect_var!(unknowns, parameters, var, iv)
         end
     end
     return nothing
 end
 
-function collect_vars_difference!(states, parameters, expr, iv)
+function collect_vars_difference!(unknowns, parameters, expr, iv)
     if issym(expr)
-        collect_var!(states, parameters, expr, iv)
+        collect_var!(unknowns, parameters, expr, iv)
     else
         for var in vars(expr)
             if istree(var) && operation(var) isa Difference
                 var, _ = var_from_nested_difference(var)
             end
-            collect_var!(states, parameters, var, iv)
+            collect_var!(unknowns, parameters, var, iv)
         end
     end
     return nothing
 end
 
-function collect_var!(states, parameters, var, iv)
+function collect_var!(unknowns, parameters, var, iv)
     isequal(var, iv) && return nothing
     if isparameter(var) || (istree(var) && isparameter(operation(var)))
         push!(parameters, var)
     elseif !isconstant(var)
-        push!(states, var)
+        push!(unknowns, var)
     end
     # Add also any parameters that appear only as defaults in the var
     if hasdefault(var)
-        collect_vars!(states, parameters, getdefault(var), iv)
+        collect_vars!(unknowns, parameters, getdefault(var), iv)
     end
     return nothing
 end
@@ -609,7 +609,7 @@ function get_cmap(sys)
     return cmap, cs
 end
 
-function get_substitutions_and_solved_states(sys; no_postprocess = false)
+function get_substitutions_and_solved_unknowns(sys; no_postprocess = false)
     cmap, cs = get_cmap(sys)
     if empty_substitutions(sys) && isempty(cs)
         sol_states = Code.LazyState()
@@ -647,7 +647,7 @@ function mergedefaults(defaults, varmap, vars)
 end
 
 @noinline function throw_missingvars_in_sys(vars)
-    throw(ArgumentError("$vars are either missing from the variable map or missing from the system's states/parameters list."))
+    throw(ArgumentError("$vars are either missing from the variable map or missing from the system's unknowns/parameters list."))
 end
 
 function promote_to_concrete(vs; tofloat = true, use_union = true)

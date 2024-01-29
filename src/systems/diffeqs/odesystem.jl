@@ -33,10 +33,10 @@ struct ODESystem <: AbstractODESystem
     """Independent variable."""
     iv::BasicSymbolic{Real}
     """
-    Dependent (state) variables. Must not contain the independent variable.
+    Dependent (unknown) variables. Must not contain the independent variable.
 
     N.B.: If `torn_matching !== nothing`, this includes all variables. Actual
-    ODE states are determined by the `SelectedState()` entries in `torn_matching`.
+    ODE unknowns are determined by the `SelectedState()` entries in `torn_matching`.
     """
     unknowns::Vector
     """Parameter variables. Must not contain the independent variable."""
@@ -135,7 +135,7 @@ struct ODESystem <: AbstractODESystem
     """
     discrete_subsystems::Any
     """
-    A list of actual states needed to be solved by solvers. Only
+    A list of actual unknowns needed to be solved by solvers. Only
     used for ODAEProblem.
     """
     solved_unknowns::Union{Nothing, Vector{Any}}
@@ -235,7 +235,7 @@ function ODESystem(eqs, iv = nothing; kwargs...)
     eqs = scalarize(eqs)
     # NOTE: this assumes that the order of algebraic equations doesn't matter
     diffvars = OrderedSet()
-    allstates = OrderedSet()
+    allunknowns = OrderedSet()
     ps = OrderedSet()
     # reorder equations such that it is in the form of `diffeq, algeeq`
     diffeq = Equation[]
@@ -254,8 +254,8 @@ function ODESystem(eqs, iv = nothing; kwargs...)
     compressed_eqs = Equation[] # equations that need to be expanded later, like `connect(a, b)`
     for eq in eqs
         eq.lhs isa Union{Symbolic, Number} || (push!(compressed_eqs, eq); continue)
-        collect_vars!(allstates, ps, eq.lhs, iv)
-        collect_vars!(allstates, ps, eq.rhs, iv)
+        collect_vars!(allunknowns, ps, eq.lhs, iv)
+        collect_vars!(allunknowns, ps, eq.rhs, iv)
         if isdiffeq(eq)
             diffvar, _ = var_from_nested_derivative(eq.lhs)
             isequal(iv, iv_from_nested_derivative(eq.lhs)) ||
@@ -268,11 +268,11 @@ function ODESystem(eqs, iv = nothing; kwargs...)
             push!(algeeq, eq)
         end
     end
-    for v in allstates
+    for v in allunknowns
         isdelay(v, iv) || continue
-        collect_vars!(allstates, ps, arguments(v)[1], iv)
+        collect_vars!(allunknowns, ps, arguments(v)[1], iv)
     end
-    algevars = setdiff(allstates, diffvars)
+    algevars = setdiff(allunknowns, diffvars)
     # the orders here are very important!
     return ODESystem(Equation[diffeq; algeeq; compressed_eqs], iv,
         collect(Iterators.flatten((diffvars, algevars))), ps; kwargs...)
@@ -377,7 +377,7 @@ function build_explicit_observed_function(sys, ts;
                     continue
                 end
                 if throw
-                    Base.throw(ArgumentError("$s is neither an observed nor a state variable."))
+                    Base.throw(ArgumentError("$s is neither an observed nor an unknown variable."))
                 else
                     # TODO: return variables that don't exist in the system.
                     return nothing
@@ -452,7 +452,7 @@ function convert_system(::Type{<:ODESystem}, sys, t; name = nameof(sys))
         if istree(s)
             args = arguments(s)
             length(args) == 1 ||
-                throw(InvalidSystemException("Illegal state: $s. The state can have at most one argument like `x(t)`."))
+                throw(InvalidSystemException("Illegal unknown: $s. The unknown can have at most one argument like `x(t)`."))
             arg = args[1]
             if isequal(arg, t)
                 newsts[i] = s

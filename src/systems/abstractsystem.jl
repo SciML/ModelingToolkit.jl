@@ -223,7 +223,7 @@ end
 SymbolicIndexingInterface.variable_symbols(sys::AbstractMultivariateSystem) = sys.dvs
 
 function SymbolicIndexingInterface.variable_symbols(sys::AbstractSystem)
-    return unknown_states(sys)
+    return solved_unknowns(sys)
 end
 
 function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
@@ -487,7 +487,7 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
 end
 
 function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
-    # We use this weird syntax because `parameters` and `states` calls are
+    # We use this weird syntax because `parameters` and `unknowns` calls are
     # potentially expensive.
     if (params = parameters(sys);
     idx = findfirst(s -> getname(s) == prop, params);
@@ -652,21 +652,21 @@ _nonum(@nospecialize x) = x isa Num ? x.val : x
 function unknowns(sys::AbstractSystem)
     sts = get_unknowns(sys)
     systems = get_systems(sys)
-    nonunique_states = if isempty(systems)
+    nonunique_unknowns = if isempty(systems)
         sts
     else
-        system_states = reduce(vcat, namespace_variables.(systems))
-        isempty(sts) ? system_states : [sts; system_states]
+        system_unknowns = reduce(vcat, namespace_variables.(systems))
+        isempty(sts) ? system_unknowns : [sts; system_unknowns]
     end
-    isempty(nonunique_states) && return nonunique_states
+    isempty(nonunique_unknowns) && return nonunique_unknowns
     # `Vector{Any}` is incompatible with the `SymbolicIndexingInterface`, which uses
     # `elsymtype = symbolic_type(eltype(_arg))`
     # which inappropriately returns `NotSymbolic()`
-    if nonunique_states isa Vector{Any}
-        nonunique_states = _nonum.(nonunique_states)
+    if nonunique_unknowns isa Vector{Any}
+        nonunique_unknowns = _nonum.(nonunique_unknowns)
     end
-    @assert typeof(nonunique_states) !== Vector{Any}
-    unique(nonunique_states)
+    @assert typeof(nonunique_unknowns) !== Vector{Any}
+    unique(nonunique_unknowns)
 end
 
 function parameters(sys::AbstractSystem)
@@ -769,7 +769,7 @@ function isaffine(sys::AbstractSystem)
 end
 
 function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
-    # if something is not x(t) (the current state)
+    # if something is not x(t) (the current unknown)
     # but is `x(t-1)` or something like that, pass in `x` as a callable function rather
     # than pass in a value in place of x(t).
     #
@@ -785,9 +785,9 @@ end
 """
 $(SIGNATURES)
 
-Return a list of actual states needed to be solved by solvers.
+Return a list of actual unknowns needed to be solved by solvers.
 """
-function unknown_states(sys::AbstractSystem)
+function solved_unknowns(sys::AbstractSystem)
     sts = unknowns(sys)
     if has_solved_unknowns(sys)
         sts = something(get_solved_unknowns(sys), sts)
@@ -991,7 +991,7 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem)
     rows = first(displaysize(io)) ÷ 5
     limit = get(io, :limit, false)
 
-    Base.printstyled(io, "States ($nvars):"; bold = true)
+    Base.printstyled(io, "Unknowns ($nvars):"; bold = true)
     nrows = min(nvars, limit ? rows : nvars)
     limited = nrows < length(vars)
     defs = has_defaults(sys) ? defaults(sys) : nothing
@@ -1264,7 +1264,7 @@ $(SIGNATURES)
 Rewrite `@nonamespace a.b.c` to
 `getvar(getvar(a, :b; namespace = false), :c; namespace = false)`.
 
-This is the default behavior of `getvar`. This should be used when inheriting states from a model.
+This is the default behavior of `getvar`. This should be used when inheriting unknowns from a model.
 """
 macro nonamespace(expr)
     esc(_config(expr, false))
@@ -1397,9 +1397,9 @@ y &= h(x, z, u)
 \\end{aligned}
 ```
 
-where `x` are differential state variables, `z` algebraic variables, `u` inputs and `y` outputs. To obtain a linear statespace representation, see [`linearize`](@ref). The input argument `variables` is a vector defining the operating point, corresponding to `unknowns(simplified_sys)` and `p` is a vector corresponding to the parameters of `simplified_sys`. Note: all variables in `inputs` have been converted to parameters in `simplified_sys`.
+where `x` are differential unknown variables, `z` algebraic variables, `u` inputs and `y` outputs. To obtain a linear statespace representation, see [`linearize`](@ref). The input argument `variables` is a vector defining the operating point, corresponding to `unknowns(simplified_sys)` and `p` is a vector corresponding to the parameters of `simplified_sys`. Note: all variables in `inputs` have been converted to parameters in `simplified_sys`.
 
-The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The states of this system also indicate the order of the states that holds for the linearized matrices.
+The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The unknowns of this system also indicate the order of the unknowns that holds for the linearized matrices.
 
 # Arguments:
 
@@ -1449,9 +1449,9 @@ function linearization_function(sys::AbstractSystem, inputs,
         chunk = ForwardDiff.Chunk(input_idxs)
 
         function (u, p, t)
-            if u !== nothing # Handle systems without states
+            if u !== nothing # Handle systems without unknowns
                 length(sts) == length(u) ||
-                    error("Number of state variables ($(length(sts))) does not match the number of input states ($(length(u)))")
+                    error("Number of unknown variables ($(length(sts))) does not match the number of input unknowns ($(length(u)))")
                 if initialize && !isempty(alge_idxs) # This is expensive and can be omitted if the user knows that the system is already initialized
                     residual = fun(u, p, t)
                     if norm(residual[alge_idxs]) > √(eps(eltype(residual)))
@@ -1469,7 +1469,7 @@ function linearization_function(sys::AbstractSystem, inputs,
                 fg_u = jacobian_wrt_vars(pf, p, input_idxs, chunk)
             else
                 length(sts) == 0 ||
-                    error("Number of state variables (0) does not match the number of input states ($(length(u)))")
+                    error("Number of unknown variables (0) does not match the number of input unknowns ($(length(u)))")
                 fg_xz = zeros(0, 0)
                 h_xz = fg_u = zeros(0, length(inputs))
             end
@@ -1507,7 +1507,7 @@ ẋ &= f(x, z, u) \\\\
 y &= h(x, z, u)
 \\end{aligned}
 ```
-where `x` are differential state variables, `z` algebraic variables, `u` inputs and `y` outputs.
+where `x` are differential unknown variables, `z` algebraic variables, `u` inputs and `y` outputs.
 """
 function linearize_symbolic(sys::AbstractSystem, inputs,
         outputs; simplify = false, allow_input_derivatives = false,
@@ -1636,7 +1636,7 @@ If `allow_input_derivatives = false`, an error will be thrown if input derivativ
 
 `zero_dummy_der` can be set to automatically set the operating point to zero for all dummy derivatives.
 
-See also [`linearization_function`](@ref) which provides a lower-level interface, [`linearize_symbolic`](@ref) and [`ModelingToolkit.reorder_states`](@ref).
+See also [`linearization_function`](@ref) which provides a lower-level interface, [`linearize_symbolic`](@ref) and [`ModelingToolkit.reorder_unknowns`](@ref).
 
 See extended help for an example.
 
@@ -1700,7 +1700,7 @@ connections = [f.y ~ c.r # filtered reference to controller reference
 
 lsys0, ssys = linearize(cl, [f.u], [p.x])
 desired_order = [f.x, p.x]
-lsys = ModelingToolkit.reorder_states(lsys0, unknowns(ssys), desired_order)
+lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
 
 @assert lsys.A == [-2 0; 1 -2]
 @assert lsys.B == [1; 0;;]
@@ -1801,20 +1801,20 @@ function similarity_transform(sys::NamedTuple, T; unitary = false)
 end
 
 """
-    reorder_states(sys::NamedTuple, old, new)
+    reorder_unknowns(sys::NamedTuple, old, new)
 
-Permute the state representation of `sys` obtained from [`linearize`](@ref) so that the state order is changed from `old` to `new`
+Permute the state representation of `sys` obtained from [`linearize`](@ref) so that the state unknown is changed from `old` to `new`
 Example:
 
 ```
 lsys, ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u])
-desired_order = [int.x, der.x] # States that are present in unknowns(ssys)
-lsys = ModelingToolkit.reorder_states(lsys, unknowns(ssys), desired_order)
+desired_order = [int.x, der.x] # Unknowns that are present in unknowns(ssys)
+lsys = ModelingToolkit.reorder_unknowns(lsys, unknowns(ssys), desired_order)
 ```
 
 See also [`ModelingToolkit.similarity_transform`](@ref)
 """
-function reorder_states(sys::NamedTuple, old, new)
+function reorder_unknowns(sys::NamedTuple, old, new)
     nx = length(old)
     length(new) == nx || error("old and new must have the same length")
     perm = [findfirst(isequal(n), old) for n in new]
@@ -1872,13 +1872,13 @@ function check_eqs_u0(eqs, dvs, u0; check_length = true, kwargs...)
     if u0 !== nothing
         if check_length
             if !(length(eqs) == length(dvs) == length(u0))
-                throw(ArgumentError("Equations ($(length(eqs))), states ($(length(dvs))), and initial conditions ($(length(u0))) are of different lengths. To allow a different number of equations than states use kwarg check_length=false."))
+                throw(ArgumentError("Equations ($(length(eqs))), unknowns ($(length(dvs))), and initial conditions ($(length(u0))) are of different lengths. To allow a different number of equations than unknowns use kwarg check_length=false."))
             end
         elseif length(dvs) != length(u0)
-            throw(ArgumentError("States ($(length(dvs))) and initial conditions ($(length(u0))) are of different lengths."))
+            throw(ArgumentError("Unknowns ($(length(dvs))) and initial conditions ($(length(u0))) are of different lengths."))
         end
     elseif check_length && (length(eqs) != length(dvs))
-        throw(ArgumentError("Equations ($(length(eqs))) and states ($(length(dvs))) are of different lengths. To allow these to differ use kwarg check_length=false."))
+        throw(ArgumentError("Equations ($(length(eqs))) and Unknowns ($(length(dvs))) are of different lengths. To allow these to differ use kwarg check_length=false."))
     end
     return nothing
 end

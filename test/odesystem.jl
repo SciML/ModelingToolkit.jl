@@ -223,7 +223,7 @@ prob = ODEProblem(lotka, [1.0, 1.0], (0.0, 1.0), [1.5, 1.0, 3.0, 1.0])
 de = modelingtoolkitize(prob)
 ODEFunction(de)(similar(prob.u0), prob.u0, prob.p, 0.1)
 
-# automatic state detection for DAEs
+# automatic unknown detection for DAEs
 @parameters t k₁ k₂ k₃
 @variables y₁(t) y₂(t) y₃(t)
 D = Differential(t)
