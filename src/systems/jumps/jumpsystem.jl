@@ -297,6 +297,9 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
         checkbounds = false,
         use_union = true,
         kwargs...)
+    if !iscomplete(sys)
+        error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
+    end
     dvs = unknowns(sys)
     ps = parameters(sys)
 
@@ -388,6 +391,9 @@ sol = solve(jprob, SSAStepper())
 """
 function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = nothing,
         kwargs...)
+    if !iscomplete(js)
+        error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `JumpProblem`")
+    end
     unknowntoid = Dict(value(unknown) => i for (i, unknown) in enumerate(unknowns(js)))
     eqs = equations(js)
     invttype = prob.tspan[1] === nothing ? Float64 : typeof(1 / prob.tspan[2])

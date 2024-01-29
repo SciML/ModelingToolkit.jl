@@ -573,6 +573,9 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map = [], tspan = get_tspa
         parammap = DiffEqBase.NullParameters();
         sparsenoise = nothing, check_length = true,
         callback = nothing, kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEProblem`")
+    end
     f, u0, p = process_DEProblem(SDEFunction{iip}, sys, u0map, parammap; check_length,
         kwargs...)
     cbs = process_events(sys; callback)
