@@ -119,6 +119,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             connector_type, devents, metadata, gui_metadata, complete)
     end
 end
+JumpSystem(tag, ap, iv, states, ps, var_to_name, args...; kwargs...) = JumpSystem{typeof(ap)}(tag, ap, iv, states, ps, var_to_name, args...; kwargs...)
 
 function JumpSystem(eqs, iv, unknowns, ps;
         observed = Equation[],
