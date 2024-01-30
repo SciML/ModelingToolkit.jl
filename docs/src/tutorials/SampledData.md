@@ -36,9 +36,9 @@ A few things to note in this basic example:
 
 ```julia
 function discrete_step(x, u)
-    y = x # y is assigned the old value of x
-    x = 0.5x + u # x is updated to a new value
-    return x, y # The state x now refers to x at the next time step, while y refers to x at the current time step
+    y = x # y is assigned the current value of x, y(k) = x(k)
+    x = 0.5x + u # x is updated to a new value, i.e., x(k+1) is computed
+    return x, y # The state x now refers to x at the next time step, x(k+1), while y refers to x at the current time step, y(k) = x(k)
 end
 ```
 
