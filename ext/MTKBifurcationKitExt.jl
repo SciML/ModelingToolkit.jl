@@ -143,7 +143,7 @@ function BifurcationKit.BifurcationProblem(osys::ODESystem, args...; kwargs...)
         unknowns(osys),
         parameters(osys);
         name = nameof(osys))
-    return BifurcationKit.BifurcationProblem(nsys, args...; kwargs...)
+    return BifurcationKit.BifurcationProblem(complete(nsys), args...; kwargs...)
 end
 
 end # module
