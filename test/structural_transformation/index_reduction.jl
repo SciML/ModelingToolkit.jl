@@ -71,7 +71,7 @@ prob = ODEProblem(ODEFunction(first_order_idx1_pendulum),
 sol = solve(prob, Rodas5());
 #plot(sol, idxs=(1, 2))
 
-new_sys = dae_index_lowering(ModelingToolkit.ode_order_lowering(pendulum2))
+new_sys = complete(dae_index_lowering(ModelingToolkit.ode_order_lowering(pendulum2)))
 
 prob_auto = ODEProblem(new_sys,
     [D(x) => 0,
@@ -98,7 +98,7 @@ pendulum2 = ODESystem(eqs2, t, [x, y, T], [L, g], name = :pendulum)
 first_order_sys = ModelingToolkit.ode_order_lowering(pendulum2)
 
 # Perform index reduction to get an Index 1 DAE
-new_sys = dae_index_lowering(first_order_sys)
+new_sys = complete(dae_index_lowering(first_order_sys))
 
 u0 = [
     D(x) => 0.0,

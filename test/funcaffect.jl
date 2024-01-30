@@ -11,7 +11,7 @@ affect1!(integ, u, p, ctx) = integ.u[u.u] += 10
 
 @named sys = ODESystem(eqs, t, [u], [],
     discrete_events = [[4.0] => (affect1!, [u], [], nothing)])
-prob = ODEProblem(sys, [u => 10.0], (0, 10.0))
+prob = ODEProblem(complete(sys), [u => 10.0], (0, 10.0))
 sol = solve(prob, Tsit5())
 i4 = findfirst(==(4.0), sol[:t])
 @test sol.u[i4 + 1][1] > 10.0
@@ -62,7 +62,7 @@ end
 ctx1 = [10.0]
 @named sys = ODESystem(eqs, t, [u], [],
     discrete_events = [[4.0, 8.0] => (affect2!, [u], [], ctx1)])
-prob = ODEProblem(sys, [u => 10.0], (0, 10.0))
+prob = ODEProblem(complete(sys), [u => 10.0], (0, 10.0))
 sol = solve(prob, Tsit5())
 i4 = findfirst(==(4.0), sol[:t])
 @test sol.u[i4 + 1][1] > 10.0
@@ -79,7 +79,7 @@ end
 @parameters a = 10.0
 @named sys = ODESystem(eqs, t, [u], [a],
     discrete_events = [[4.0, 8.0] => (affect3!, [u], [a], nothing)])
-prob = ODEProblem(sys, [u => 10.0], (0, 10.0))
+prob = ODEProblem(complete(sys), [u => 10.0], (0, 10.0))
 
 sol = solve(prob, Tsit5())
 i4 = findfirst(==(4.0), sol[:t])
@@ -97,7 +97,7 @@ end
     discrete_events = [
         [4.0, 8.0] => (affect3!, [u], [a => :b], nothing),
     ])
-prob = ODEProblem(sys, [u => 10.0], (0, 10.0))
+prob = ODEProblem(complete(sys), [u => 10.0], (0, 10.0))
 
 sol = solve(prob, Tsit5())
 i4 = findfirst(==(4.0), sol[:t])
@@ -225,7 +225,7 @@ balls = compose(balls, [ball1, ball2])
 @test ModelingToolkit.has_discrete_events(balls)
 @test length(ModelingToolkit.affects(ModelingToolkit.discrete_events(balls))) == 2
 
-prob = ODEProblem(balls, [ball1.x => 10.0, ball1.v => 0, ball2.x => 10.0, ball2.v => 0],
+prob = ODEProblem(complete(balls), [ball1.x => 10.0, ball1.v => 0, ball2.x => 10.0, ball2.v => 0],
     (0, 3.0))
 sol = solve(prob, Tsit5())
 

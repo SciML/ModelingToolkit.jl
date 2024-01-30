@@ -30,6 +30,8 @@ p = [σ => 28.0,
     β => 8 / 3]
 
 tspan = (0.0, 100.0)
+
+sys = complete(sys)
 prob = ODEProblem(sys, u0, tspan, p, jac = true)
 probexpr = ODEProblemExpr(sys, u0, tspan, p, jac = true)
 sol = solve(prob, Tsit5())
@@ -52,7 +54,7 @@ lorenz2 = ODESystem(eqs, name = :lorenz2)
 @parameters γ
 connections = [0 ~ lorenz1.x + lorenz2.y + α * γ]
 @named connected = ODESystem(connections, t, [α], [γ], systems = [lorenz1, lorenz2])
-
+connected = complete(connected)
 u0 = [lorenz1.x => 1.0,
     lorenz1.y => 0.0,
     lorenz1.z => 0.0,

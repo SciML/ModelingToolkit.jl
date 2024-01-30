@@ -7,6 +7,7 @@ using Test
 D = Differential(t)
 eqs = [D(x) ~ x^2 - r]
 @named de = ODESystem(eqs)
+de = complete(de)
 
 for factor in [1e-1, 1e0, 1e10],
     u0_p in [(2.34, 2.676), (22.34, 1.632), (0.3, 15.676), (0.3, 0.006)]

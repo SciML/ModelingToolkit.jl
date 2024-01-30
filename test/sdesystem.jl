@@ -21,6 +21,7 @@ noiseeqs = [0.1 * x,
 @test SDESystem(sys, noiseeqs, name = :foo) isa SDESystem
 
 @named de = SDESystem(eqs, noiseeqs, t, [x, y, z], [σ, ρ, β], tspan = (0.0, 10.0))
+de = complete(de)
 f = eval(generate_diffusion_function(de)[1])
 @test f(ones(3), rand(3), nothing) == 0.1ones(3)
 
@@ -42,6 +43,7 @@ noiseeqs_nd = [0.01*x 0.01*x*y 0.02*x*z
     σ 0.01*y 0.02*x*z
     ρ β 0.01*z]
 @named de = SDESystem(eqs, noiseeqs_nd, t, [x, y, z], [σ, ρ, β])
+de = complete(de)
 f = eval(generate_diffusion_function(de)[1])
 @test f([1, 2, 3.0], [0.1, 0.2, 0.3], nothing) == [0.01*1 0.01*1*2 0.02*1*3
     0.1 0.01*2 0.02*1*3
@@ -504,13 +506,14 @@ noiseeqs = [0.1 * x]
     ]
 
     @named de = SDESystem(eqs, noiseeqs, t, [x], [α, β], observed = [weight ~ x * 10])
-
+    de = complete(de)
     prob = SDEProblem(de, u0map, (0.0, 1.0), parammap)
     sol = solve(prob, EM(), dt = dt)
     @test observed(de) == [weight ~ x * 10]
     @test sol[weight] == 10 * sol[x]
 
     @named ode = ODESystem(eqs, t, [x], [α, β], observed = [weight ~ x * 10])
+    ode = complete(ode)
     odeprob = ODEProblem(ode, u0map, (0.0, 1.0), parammap)
     solode = solve(odeprob, Tsit5())
     @test observed(ode) == [weight ~ x * 10]
@@ -528,7 +531,7 @@ end
     noiseeqs = [β * x]
 
     @named de = SDESystem(eqs, noiseeqs, t, [x], [α, β])
-
+    de = complete(de)
     g(x) = x[1]^2
     dt = 1 // 2^(7)
     x0 = 0.1
@@ -564,7 +567,7 @@ end
 
     ## Variance reduction method
     u = x
-    demod = ModelingToolkit.Girsanov_transform(de, u; θ0 = 0.1)
+    demod = complete(ModelingToolkit.Girsanov_transform(de, u; θ0 = 0.1))
 
     probmod = SDEProblem(demod, u0map, (0.0, 1.0), parammap)
 
@@ -609,6 +612,7 @@ diffusion_eqs = [s*x 0
     (s * x * z)-s * z 0]
 
 sys2 = SDESystem(drift_eqs, diffusion_eqs, t, sts, ps, name = :sys1)
+sys2 = complete(sys2)
 @test sys1 == sys2
 
 prob = SDEProblem(sys1, sts .=> [1.0, 0.0, 0.0],

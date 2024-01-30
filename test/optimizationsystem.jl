@@ -14,8 +14,8 @@ using ModelingToolkit: get_metadata
     @variables z
     @parameters β
     loss2 = sys1.x - sys2.y + z * β
-    combinedsys = OptimizationSystem(loss2, [z], [β], systems = [sys1, sys2],
-        name = :combinedsys)
+    combinedsys = complete(OptimizationSystem(loss2, [z], [β], systems = [sys1, sys2],
+        name = :combinedsys))
 
     equations(combinedsys)
     unknowns(combinedsys)
@@ -27,7 +27,7 @@ using ModelingToolkit: get_metadata
     generate_gradient(combinedsys)
     generate_hessian(combinedsys)
     hess_sparsity = ModelingToolkit.hessian_sparsity(sys1)
-    sparse_prob = OptimizationProblem(sys1, [x, y], [a, b], grad = true, sparse = true)
+    sparse_prob = OptimizationProblem(complete(sys1), [x, y], [a, b], grad = true, sparse = true)
     @test sparse_prob.f.hess_prototype.rowval == hess_sparsity.rowval
     @test sparse_prob.f.hess_prototype.colptr == hess_sparsity.colptr
 
@@ -57,7 +57,7 @@ end
         x^2 + y^2 ≲ 1.0,
     ]
     @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = cons)
-
+    sys = complete(sys)
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 1.0],
         grad = true, hess = true, cons_j = true, cons_h = true)
     @test prob.f.sys === sys
@@ -149,8 +149,8 @@ end
     ]
     sys1 = OptimizationSystem(o1, [x], [a], name = :sys1, constraints = c1)
     sys2 = OptimizationSystem(o2, [y], [], name = :sys2, constraints = c2)
-    sys = OptimizationSystem(0, [], []; name = :sys, systems = [sys1, sys2],
-        constraints = [sys1.x + sys2.y ~ 2], checks = false)
+    sys = complete(OptimizationSystem(0, [], []; name = :sys, systems = [sys1, sys2],
+        constraints = [sys1.x + sys2.y ~ 2], checks = false))
     prob = OptimizationProblem(sys, [0.0, 0.0])
     @test isequal(constraints(sys), vcat(sys1.x + sys2.y ~ 2, sys1.x ~ 1, sys2.y ~ 1))
     @test isequal(equations(sys), (sys1.x - sys1.a)^2 + (sys2.y - 1 / 2)^2)
@@ -190,8 +190,8 @@ end
     @variables z
     @parameters β
     loss2 = sys1.x - sys2.y + z * β
-    combinedsys = OptimizationSystem(loss2, [z], [β], systems = [sys1, sys2],
-        name = :combinedsys)
+    combinedsys = complete(OptimizationSystem(loss2, [z], [β], systems = [sys1, sys2],
+        name = :combinedsys))
 
     u0 = [sys1.x => 1.0
         sys1.y => 2.0
@@ -243,7 +243,7 @@ end
             x[1]^2 + x[2]^2 ≲ 2.0,
         ])
 
-    prob = OptimizationProblem(sys, [x[1] => 2.0, x[2] => 0.0], [], grad = true,
+    prob = OptimizationProblem(complete(sys), [x[1] => 2.0, x[2] => 0.0], [], grad = true,
         hess = true, cons_j = true, cons_h = true)
     sol = Optimization.solve(prob, Ipopt.Optimizer(); print_level = 0)
     @test sol.u ≈ [1, 0]
@@ -257,7 +257,7 @@ end
     @parameters a b
     loss = (a - x)^2 + b * (y - x^2)^2
     @named sys = OptimizationSystem(loss, [x, y], [a, b, c])
-    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0])
+    prob = OptimizationProblem(complete(sys), [x => 0.0, y => 0.0], [a => 1.0, b => 100.0])
     @test prob.lb == [-Inf, 0.0]
     @test prob.ub == [Inf, Inf]
 end
@@ -269,12 +269,12 @@ end
     cons = [
         x₁^2 + x₂^2 ≲ 1.0,
     ]
-    sys1 = OptimizationSystem(loss, [x₁, x₂], [α₁, α₂], name = :sys1, constraints = cons)
+    sys1 = complete(OptimizationSystem(loss, [x₁, x₂], [α₁, α₂], name = :sys1, constraints = cons))
 
     prob1 = OptimizationProblem(sys1, [x₁ => 0.0, x₂ => 0.0], [α₁ => 1.0, α₂ => 100.0],
         grad = true, hess = true, cons_j = true, cons_h = true)
 
-    sys2 = modelingtoolkitize(prob1)
+    sys2 = complete(modelingtoolkitize(prob1))
     prob2 = OptimizationProblem(sys2, [x₁ => 0.0, x₂ => 0.0], [α₁ => 1.0, α₂ => 100.0],
         grad = true, hess = true, cons_j = true, cons_h = true)
 
@@ -289,6 +289,7 @@ end
     @parameters a b
     loss = (a - x)^2 + b * (y - x^2)^2
     @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = [x^2 + y^2 ≲ 0.0])
+    sys = complete(sys)
     @test_throws ArgumentError OptimizationProblem(sys,
         [x => 0.0, y => 0.0],
         [a => 1.0, b => 100.0],

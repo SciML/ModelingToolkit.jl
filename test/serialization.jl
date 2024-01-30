@@ -5,6 +5,7 @@ using ModelingToolkit, SciMLBase, Serialization, OrdinaryDiffEq
 D = Differential(t)
 
 @named sys = ODESystem([D(x) ~ -0.5 * x], defaults = Dict(x => 1.0))
+sys = complete(sys)
 for prob in [
     eval(ModelingToolkit.ODEProblem{false}(sys, nothing, nothing,
         SciMLBase.NullParameters())),
@@ -37,7 +38,7 @@ sol = solve(prob, ImplicitEuler())
 
 ## Check ODESystem with Observables ----------
 ss_exp = ModelingToolkit.toexpr(ss)
-ss_ = eval(ss_exp)
+ss_ = complete(eval(ss_exp))
 prob_ = ODEProblem(ss_, [], (0, 0.1))
 sol_ = solve(prob_, ImplicitEuler())
 @test sol[all_obs] == sol_[all_obs]
@@ -64,5 +65,5 @@ end)
 probexpr = ODEProblemExpr{true}(ss, [], (0, 0.1); observedfun_exp);
 prob_obs = eval(probexpr)
 sol_obs = solve(prob_obs, ImplicitEuler())
-
+@show all_obs
 @test sol_obs[all_obs] == sol[all_obs]

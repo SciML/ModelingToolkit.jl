@@ -52,7 +52,7 @@ x0 = zeros(2)
 p = [1.0, 100.0]
 
 prob = OptimizationProblem(rosenbrock, x0, p)
-sys = modelingtoolkitize(prob) # symbolicitize me captain!
+sys = complete(modelingtoolkitize(prob)) # symbolicitize me captain!
 
 prob = OptimizationProblem(sys, x0, p, grad = true, hess = true)
 sol = solve(prob, NelderMead())
@@ -141,7 +141,7 @@ problem = ODEProblem(SIRD_ac!, ℬ, 𝒯, 𝒫)
 @time solution = solve(problem, Tsit5(), saveat = 1:final_time);
 
 problem = ODEProblem(SIRD_ac!, ℬ, 𝒯, 𝒫)
-sys = modelingtoolkitize(problem)
+sys = complete(modelingtoolkitize(problem))
 fast_problem = ODEProblem(sys, ℬ, 𝒯, 𝒫)
 @time solution = solve(fast_problem, Tsit5(), saveat = 1:final_time)
 
@@ -179,7 +179,7 @@ u0 = [1.0, 0, 0, 0, 0]
 p = [9.8, 1]
 tspan = (0, 10.0)
 pendulum_prob = ODEProblem(pendulum_fun!, u0, tspan, p)
-pendulum_sys_org = modelingtoolkitize(pendulum_prob)
+pendulum_sys_org = complete(modelingtoolkitize(pendulum_prob))
 sts = unknowns(pendulum_sys_org)
 pendulum_sys = dae_index_lowering(pendulum_sys_org)
 prob = ODEProblem(pendulum_sys, Pair[], tspan)
@@ -250,7 +250,7 @@ u0 = @LArray [9998.0, 1.0, 1.0, 1.0] (:S, :I, :R, :C)
 
 # Initiate ODE problem
 problem = ODEProblem(SIR!, u0, tspan, p)
-sys = modelingtoolkitize(problem)
+sys = complete(modelingtoolkitize(problem))
 
 @parameters t
 @test all(isequal.(parameters(sys), getproperty.(@variables(β, η, ω, φ, σ, μ), :val)))
@@ -304,6 +304,6 @@ noiseeqs = [0.1 * x,
     0.1 * z]
 
 @named sys = SDESystem(eqs, noiseeqs, t, [x, y, z], [sig, rho, beta]; tspan = (0, 1000.0))
-prob = SDEProblem(sys)
+prob = SDEProblem(complete(sys))
 sys = modelingtoolkitize(prob)
 @test ModelingToolkit.has_tspan(sys)
