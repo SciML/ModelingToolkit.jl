@@ -163,7 +163,7 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
         needed_cont_to_disc_obs = map(v -> arguments(v)[1], input)
         # TODO: filter the needed ones
         fullvars = Set{Any}(eq.lhs for eq in observed(sys))
-        for s in states(sys)
+        for s in unknowns(sys)
             push!(fullvars, s)
         end
         needed_disc_to_cont_obs = []
@@ -175,7 +175,7 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
                 push!(disc_to_cont_idxs, param_to_idx[v])
             end
         end
-        append!(appended_parameters, input, states(sys))
+        append!(appended_parameters, input, unknowns(sys))
         cont_to_disc_obs = build_explicit_observed_function(syss[continuous_id],
             needed_cont_to_disc_obs,
             throw = false,
@@ -187,10 +187,10 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
             expression = true,
             output_type = SVector)
         ni = length(input)
-        ns = length(states(sys))
+        ns = length(unknowns(sys))
         disc = Func([
                 out,
-                DestructuredArgs(states(sys)),
+                DestructuredArgs(unknowns(sys)),
                 DestructuredArgs(appended_parameters),
                 get_iv(sys),
             ], [],
@@ -223,7 +223,7 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
             c2d_view = view(p, $cont_to_disc_idxs)
             # Like Hold
             d2c_view = view(p, $disc_to_cont_idxs)
-            disc_state = view(p, $disc_range)
+            disc_unknowns = view(p, $disc_range)
             disc = $disc
 
             push!(saved_values.t, t)
@@ -231,7 +231,7 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
 
             # Write continuous into to discrete: handles `Sample`
             # Write discrete into to continuous
-            # Update discrete states
+            # Update discrete unknowns
 
             # At a tick, c2d must come first
             # state update comes in the middle
@@ -240,9 +240,9 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
             # @show "incoming", p
             copyto!(c2d_view, c2d_obs(integrator.u, p, t))
             # @show "after c2d", p
-            $empty_disc || disc(disc_state, disc_state, p, t)
+            $empty_disc || disc(disc_unknowns, disc_unknowns, p, t)
             # @show "after state update", p
-            copyto!(d2c_view, d2c_obs(disc_state, p, t))
+            copyto!(d2c_view, d2c_obs(disc_unknowns, p, t))
             # @show "after d2c", p
         end)
         sv = SavedValues(Float64, Vector{Float64})

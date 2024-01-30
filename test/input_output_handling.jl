@@ -229,7 +229,7 @@ f, dvs, ps = ModelingToolkit.generate_control_function(model, simplify = true)
 @test length(ps) == length(parameters(model))
 p = ModelingToolkit.varmap_to_vars(ModelingToolkit.defaults(model), ps)
 x = ModelingToolkit.varmap_to_vars(merge(ModelingToolkit.defaults(model),
-        Dict(D.(states(model)) .=> 0.0)), dvs)
+        Dict(D.(unknowns(model)) .=> 0.0)), dvs)
 u = [rand()]
 out = f[1](x, u, p, 1)
 i = findfirst(isequal(u[1]), out)
@@ -328,7 +328,7 @@ eqs = [D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃ + u1
 m_inputs = [u[1], u[2]]
 m_outputs = [y₂]
 sys_simp, input_idxs = structural_simplify(sys, (; inputs = m_inputs, outputs = m_outputs))
-@test isequal(states(sys_simp), collect(x[1:2]))
+@test isequal(unknowns(sys_simp), collect(x[1:2]))
 @test length(input_idxs) == 2
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/1577
@@ -346,7 +346,7 @@ sys_simp, input_idxs = structural_simplify(sys, (; inputs = m_inputs, outputs = 
     t,
     systems = [int, gain, c, fb])
 sys = structural_simplify(model)
-@test length(states(sys)) == length(equations(sys)) == 1
+@test length(unknowns(sys)) == length(equations(sys)) == 1
 
 ## Disturbance models when plant has multiple inputs
 using ModelingToolkit, LinearAlgebra

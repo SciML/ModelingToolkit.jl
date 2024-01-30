@@ -14,7 +14,7 @@ types during tearing.
 
 The optional argument `io` may take a tuple `(inputs, outputs)`.
 This will convert all `inputs` to parameters and allow them to be unconnected, i.e.,
-simplification will allow models where `n_states = n_equations - n_inputs`.
+simplification will allow models where `n_unknowns = n_equations - n_inputs`.
 """
 function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
         kwargs...)
@@ -81,7 +81,7 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
         g = Matrix(sparse(Is, Js, vals))
         sys = state.sys
         @set! sys.eqs = new_eqs
-        @set! sys.states = [v
+        @set! sys.unknowns = [v
                             for (i, v) in enumerate(fullvars)
                                 if !iszero(new_idxs[i]) &&
                                    invview(var_to_diff)[i] === nothing]
@@ -100,7 +100,7 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
         end
 
         return SDESystem(full_equations(ode_sys), sorted_g_rows,
-            get_iv(ode_sys), states(ode_sys), parameters(ode_sys);
+            get_iv(ode_sys), unknowns(ode_sys), parameters(ode_sys);
             name = nameof(ode_sys))
     end
 end

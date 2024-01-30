@@ -189,7 +189,7 @@ sol = solve(prob, Tsit5())
 @test minimum(t -> abs(t - 1), sol.t) < 1e-10 # test that the solver stepped at the first root
 @test minimum(t -> abs(t - 2), sol.t) < 1e-10 # test that the solver stepped at the second root
 
-@named sys = ODESystem(eqs, continuous_events = [x ~ 1, x ~ 2]) # two root eqs using the same state
+@named sys = ODESystem(eqs, continuous_events = [x ~ 1, x ~ 2]) # two root eqs using the same unknown
 prob = ODEProblem(sys, Pair[], (0.0, 3.0))
 @test get_callback(prob) isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
 sol = solve(prob, Tsit5())

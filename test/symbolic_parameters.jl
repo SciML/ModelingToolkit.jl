@@ -39,12 +39,12 @@ res = ModelingToolkit.varmap_to_vars(Dict(), parameters(top),
     defaults = ModelingToolkit.defaults(top))
 @test res == [0.5, 1, 0.1 + 1, (0.1 + 1) * 1.1]
 
-prob = NonlinearProblem(top, [states(ns, u) => 1.0, a => 1.0], [])
+prob = NonlinearProblem(top, [unknowns(ns, u) => 1.0, a => 1.0], [])
 @test prob.u0 == [1.0, 0.5, 1.1, 0.9]
 @show sol = solve(prob, NewtonRaphson())
 
 # test NullParameters+defaults
-prob = NonlinearProblem(top, [states(ns, u) => 1.0, a => 1.0])
+prob = NonlinearProblem(top, [unknowns(ns, u) => 1.0, a => 1.0])
 @test prob.u0 == [1.0, 0.5, 1.1, 0.9]
 @show sol = solve(prob, NewtonRaphson())
 

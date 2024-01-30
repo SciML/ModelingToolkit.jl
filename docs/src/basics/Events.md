@@ -43,7 +43,7 @@ event conditions, and the second vector of equations describes the effect on the
 state. Each affect equation must be of the form
 
 ```julia
-single_state_variable ~ expression_involving_any_variables_or_parameters
+single_unknown_variable ~ expression_involving_any_variables_or_parameters
 ```
 
 or
@@ -151,13 +151,13 @@ of one or more equations, an affect is defined as a `tuple`:
 [x ~ 0] => (affect!, [v, x], [p, q], ctx)
 ```
 
-where, `affect!` is a Julia function with the signature: `affect!(integ, u, p, ctx)`; `[u,v]` and `[p,q]` are the symbolic states (variables) and parameters
+where, `affect!` is a Julia function with the signature: `affect!(integ, u, p, ctx)`; `[u,v]` and `[p,q]` are the symbolic unknowns (variables) and parameters
 that are accessed by `affect!`, respectively; and `ctx` is any context that is
 passed to `affect!` as the `ctx` argument.
 
 `affect!` receives a [DifferentialEquations.jl
 integrator](https://docs.sciml.ai/DiffEqDocs/stable/basics/integrator/)
-as its first argument, which can then be used to access states and parameters
+as its first argument, which can then be used to access unknowns and parameters
 that are provided in the `u` and `p` arguments (implemented as `NamedTuple`s).
 The integrator can also be manipulated more generally to control solution
 behavior, see the [integrator
@@ -167,7 +167,7 @@ documentation. In affect functions, we have that
 ```julia
 function affect!(integ, u, p, ctx)
     # integ.t is the current time
-    # integ.u[u.v] is the value of the state `v` above
+    # integ.u[u.v] is the value of the unknown `v` above
     # integ.p[p.q] is the value of the parameter `q` above
 end
 ```
@@ -222,8 +222,8 @@ where conditions are symbolic expressions that should evaluate to `true` when an
 individual affect should be executed. Here `affect1` and `affect2` are each
 either a vector of one or more symbolic equations, or a functional affect, just
 as for continuous events. As before, for any *one* event the symbolic affect
-equations can either all change states (i.e. variables) or all change
-parameters, but one cannot currently mix state and parameter changes within one
+equations can either all change unknowns (i.e. variables) or all change
+parameters, but one cannot currently mix unknown variable and parameter changes within one
 individual event.
 
 ### Example: Injecting cells into a population

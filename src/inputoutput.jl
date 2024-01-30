@@ -5,7 +5,7 @@ using Symbolics: get_variables
 Return all variables that mare marked as inputs. See also [`unbound_inputs`](@ref)
 See also [`bound_inputs`](@ref), [`unbound_inputs`](@ref)
 """
-inputs(sys) = [filter(isinput, states(sys)); filter(isinput, parameters(sys))]
+inputs(sys) = [filter(isinput, unknowns(sys)); filter(isinput, parameters(sys))]
 
 """
     outputs(sys)
@@ -17,7 +17,7 @@ function outputs(sys)
     o = observed(sys)
     rhss = [eq.rhs for eq in o]
     lhss = [eq.lhs for eq in o]
-    unique([filter(isoutput, states(sys))
+    unique([filter(isoutput, unknowns(sys))
         filter(isoutput, parameters(sys))
         filter(x -> istree(x) && isoutput(x), rhss) # observed can return equations with complicated expressions, we are only looking for single Terms
         filter(x -> istree(x) && isoutput(x), lhss)])
@@ -175,9 +175,9 @@ f_oop : (x,u,p,t)      -> rhs
 f_ip  : (xout,x,u,p,t) -> nothing
 ```
 
-The return values also include the remaining states and parameters, in the order they appear as arguments to `f`.
+The return values also include the remaining unknowns and parameters, in the order they appear as arguments to `f`.
 
-If `disturbance_inputs` is an array of variables, the generated dynamics function will preserve any state and dynamics associated with disturbance inputs, but the disturbance inputs themselves will not be included as inputs to the generated function. The use case for this is to generate dynamics for state observers that estimate the influence of unmeasured disturbances, and thus require state variables for the disturbance model, but without disturbance inputs since the disturbances are not available for measurement.
+If `disturbance_inputs` is an array of variables, the generated dynamics function will preserve any state and dynamics associated with disturbance inputs, but the disturbance inputs themselves will not be included as inputs to the generated function. The use case for this is to generate dynamics for state observers that estimate the influence of unmeasured disturbances, and thus require unknown variables for the disturbance model, but without disturbance inputs since the disturbances are not available for measurement.
 See [`add_input_disturbance`](@ref) for a higher-level interface to this functionality.
 
 # Example
@@ -205,7 +205,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
 
     sys, _ = io_preprocessing(sys, inputs, []; simplify, kwargs...)
 
-    dvs = states(sys)
+    dvs = unknowns(sys)
     ps = parameters(sys)
     ps = setdiff(ps, inputs)
     if disturbance_inputs !== nothing
@@ -300,7 +300,7 @@ function inputs_to_parameters!(state::TransformationState, io)
 
     @set! sys.eqs = isempty(input_to_parameters) ? equations(sys) :
                     fast_substitute(equations(sys), input_to_parameters)
-    @set! sys.states = setdiff(states(sys), keys(input_to_parameters))
+    @set! sys.unknowns = setdiff(unknowns(sys), keys(input_to_parameters))
     ps = parameters(sys)
 
     if io !== nothing

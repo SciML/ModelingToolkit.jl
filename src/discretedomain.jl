@@ -177,7 +177,7 @@ function (xn::Num)(k::ShiftIndex)
     # Verify that the independent variables of k and x match and that the expression doesn't have multiple variables
     vars = Symbolics.get_variables(x)
     length(vars) == 1 ||
-        error("Cannot shift a multivariate expression $x. Either create a new state and shift this, or shift the individual variables in the expression.")
+        error("Cannot shift a multivariate expression $x. Either create a new unknown and shift this, or shift the individual variables in the expression.")
     args = Symbolics.arguments(vars[]) # args should be one element vector with the t in x(t)
     length(args) == 1 ||
         error("Cannot shift an expression with multiple independent variables $x.")

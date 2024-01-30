@@ -30,12 +30,12 @@ struct ObservableRecordFromSolution{S, T}
             p_vals) where {S, T}
         obs_eqs = observed(nsys)
         target_obs_idx = findfirst(isequal(plot_var, eq.lhs) for eq in observed(nsys))
-        state_end_idxs = length(states(nsys))
+        state_end_idxs = length(unknowns(nsys))
         param_end_idxs = state_end_idxs + length(parameters(nsys))
 
         bif_par_idx = state_end_idxs + bif_idx
         # Gets the (base) substitution values for states.
-        subs_vals_states = Pair.(states(nsys), u0_vals)
+        subs_vals_states = Pair.(unknowns(nsys), u0_vals)
         # Gets the (base) substitution values for parameters.
         subs_vals_params = Pair.(parameters(nsys), p_vals)
         # Gets the (base) substitution values for observables.
@@ -95,7 +95,7 @@ function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem,
 
     # Converts the input state guess.
     u0_bif_vals = ModelingToolkit.varmap_to_vars(u0_bif,
-        states(nsys);
+        unknowns(nsys);
         defaults = nsys.defaults)
     p_vals = ModelingToolkit.varmap_to_vars(ps, parameters(nsys); defaults = nsys.defaults)
 
@@ -103,8 +103,8 @@ function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem,
     bif_idx = findfirst(isequal(bif_par), parameters(nsys))
     if !isnothing(plot_var)
         # If the plot var is a normal state.
-        if any(isequal(plot_var, var) for var in states(nsys))
-            plot_idx = findfirst(isequal(plot_var), states(nsys))
+        if any(isequal(plot_var, var) for var in unknowns(nsys))
+            plot_idx = findfirst(isequal(plot_var), unknowns(nsys))
             record_from_solution = (x, p) -> x[plot_idx]
 
             # If the plot var is an observed state.
@@ -134,7 +134,7 @@ end
 # When input is a ODESystem.
 function BifurcationKit.BifurcationProblem(osys::ODESystem, args...; kwargs...)
     nsys = NonlinearSystem([0 ~ eq.rhs for eq in equations(osys)],
-        states(osys),
+        unknowns(osys),
         parameters(osys);
         name = nameof(osys))
     return BifurcationKit.BifurcationProblem(nsys, args...; kwargs...)

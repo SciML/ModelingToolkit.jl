@@ -135,7 +135,7 @@ end
 
 let sys = structural_simplify(pendulum2)
     @test length(equations(sys)) == 5
-    @test length(states(sys)) == 5
+    @test length(unknowns(sys)) == 5
 
     u0 = [
         D(x) => 0.0,

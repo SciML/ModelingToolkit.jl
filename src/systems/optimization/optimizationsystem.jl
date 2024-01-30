@@ -26,7 +26,7 @@ struct OptimizationSystem <: AbstractOptimizationSystem
     """Objective function of the system."""
     op::Any
     """Unknown variables."""
-    states::Vector
+    unknowns::Vector
     """Parameters."""
     ps::Vector
     """Array variables."""
@@ -61,17 +61,17 @@ struct OptimizationSystem <: AbstractOptimizationSystem
     """
     parent::Any
 
-    function OptimizationSystem(tag, op, states, ps, var_to_name, observed,
+    function OptimizationSystem(tag, op, unknowns, ps, var_to_name, observed,
             constraints, name, systems, defaults, metadata = nothing,
             gui_metadata = nothing, complete = false, parent = nothing;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
-            u = __get_unit_type(states, ps)
+            u = __get_unit_type(unknowns, ps)
             unwrap(op) isa Symbolic && check_units(u, op)
             check_units(u, observed)
             check_units(u, constraints)
         end
-        new(tag, op, states, ps, var_to_name, observed,
+        new(tag, op, unknowns, ps, var_to_name, observed,
             constraints, name, systems, defaults, metadata, gui_metadata, complete,
             parent)
     end
@@ -79,7 +79,7 @@ end
 
 equations(sys::AbstractOptimizationSystem) = objective(sys) # needed for Base.show
 
-function OptimizationSystem(op, states, ps;
+function OptimizationSystem(op, unknowns, ps;
         observed = [],
         constraints = [],
         default_u0 = Dict(),
@@ -93,7 +93,7 @@ function OptimizationSystem(op, states, ps;
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     constraints = value.(scalarize(constraints))
-    states′ = value.(scalarize(states))
+    unknowns′ = value.(scalarize(unknowns))
     ps′ = value.(scalarize(ps))
     op′ = value(scalarize(op))
 
@@ -109,12 +109,12 @@ function OptimizationSystem(op, states, ps;
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, states′)
+    process_variables!(var_to_name, defaults, unknowns′)
     process_variables!(var_to_name, defaults, ps′)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
     OptimizationSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-        op′, states′, ps′, var_to_name,
+        op′, unknowns′, ps′, var_to_name,
         observed,
         constraints,
         name, systems, defaults, metadata, gui_metadata;
@@ -122,10 +122,10 @@ function OptimizationSystem(op, states, ps;
 end
 
 function calculate_gradient(sys::OptimizationSystem)
-    expand_derivatives.(gradient(objective(sys), states(sys)))
+    expand_derivatives.(gradient(objective(sys), unknowns(sys)))
 end
 
-function generate_gradient(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys);
+function generate_gradient(sys::OptimizationSystem, vs = unknowns(sys), ps = parameters(sys);
         kwargs...)
     grad = calculate_gradient(sys)
     pre = get_preprocess_constants(grad)
@@ -134,13 +134,13 @@ function generate_gradient(sys::OptimizationSystem, vs = states(sys), ps = param
 end
 
 function calculate_hessian(sys::OptimizationSystem)
-    expand_derivatives.(hessian(objective(sys), states(sys)))
+    expand_derivatives.(hessian(objective(sys), unknowns(sys)))
 end
 
-function generate_hessian(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys);
+function generate_hessian(sys::OptimizationSystem, vs = unknowns(sys), ps = parameters(sys);
         sparse = false, kwargs...)
     if sparse
-        hess = sparsehessian(objective(sys), states(sys))
+        hess = sparsehessian(objective(sys), unknowns(sys))
     else
         hess = calculate_hessian(sys)
     end
@@ -149,7 +149,7 @@ function generate_hessian(sys::OptimizationSystem, vs = states(sys), ps = parame
         kwargs...)
 end
 
-function generate_function(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys);
+function generate_function(sys::OptimizationSystem, vs = unknowns(sys), ps = parameters(sys);
         kwargs...)
     eqs = subs_constants(objective(sys))
     return build_function(eqs, vs, ps;
@@ -195,7 +195,7 @@ function constraints(sys)
     isempty(systems) ? cs : [cs; reduce(vcat, namespace_constraints.(systems))]
 end
 
-hessian_sparsity(sys::OptimizationSystem) = hessian_sparsity(get_op(sys), states(sys))
+hessian_sparsity(sys::OptimizationSystem) = hessian_sparsity(get_op(sys), unknowns(sys))
 
 """
 ```julia
@@ -232,7 +232,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             :OptimizationProblem, force = true)
     end
 
-    dvs = states(sys)
+    dvs = unknowns(sys)
     ps = parameters(sys)
     cstr = constraints(sys)
 
@@ -359,7 +359,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             grad = _grad,
             hess = _hess,
             hess_prototype = hess_prototype,
-            syms = Symbol.(states(sys)),
+            syms = Symbol.(unknowns(sys)),
             paramsyms = Symbol.(parameters(sys)),
             cons = cons[2],
             cons_j = _cons_j,
@@ -377,7 +377,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             SciMLBase.NoAD();
             grad = _grad,
             hess = _hess,
-            syms = Symbol.(states(sys)),
+            syms = Symbol.(unknowns(sys)),
             paramsyms = Symbol.(parameters(sys)),
             hess_prototype = hess_prototype,
             expr = obj_expr,
@@ -424,7 +424,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
             :OptimizationProblem, force = true)
     end
 
-    dvs = states(sys)
+    dvs = unknowns(sys)
     ps = parameters(sys)
     cstr = constraints(sys)
 
@@ -546,7 +546,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
             ucons = $ucons
             cons_j = $_cons_j
             cons_h = $_cons_h
-            syms = $(Symbol.(states(sys)))
+            syms = $(Symbol.(unknowns(sys)))
             paramsyms = $(Symbol.(parameters(sys)))
             _f = OptimizationFunction{iip}(f, SciMLBase.NoAD();
                 grad = grad,
@@ -574,7 +574,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
             lb = $lb
             ub = $ub
             int = $int
-            syms = $(Symbol.(states(sys)))
+            syms = $(Symbol.(unknowns(sys)))
             paramsyms = $(Symbol.(parameters(sys)))
             _f = OptimizationFunction{iip}(f, SciMLBase.NoAD();
                 grad = grad,
@@ -600,7 +600,7 @@ function structural_simplify(sys::OptimizationSystem; kwargs...)
             push!(icons, e)
         end
     end
-    nlsys = NonlinearSystem(econs, states(sys), parameters(sys); name = :___tmp_nlsystem)
+    nlsys = NonlinearSystem(econs, unknowns(sys), parameters(sys); name = :___tmp_nlsystem)
     snlsys = structural_simplify(nlsys; fully_determined = false, kwargs...)
     obs = observed(snlsys)
     subs = Dict(eq.lhs => eq.rhs for eq in observed(snlsys))
@@ -609,11 +609,11 @@ function structural_simplify(sys::OptimizationSystem; kwargs...)
     for (i, eq) in enumerate(Iterators.flatten((seqs, icons)))
         cons_simplified[i] = fixpoint_sub(eq, subs)
     end
-    newsts = setdiff(states(sys), keys(subs))
+    newsts = setdiff(unknowns(sys), keys(subs))
     @set! sys.constraints = cons_simplified
     @set! sys.observed = [observed(sys); obs]
     neweqs = fixpoint_sub.(equations(sys), (subs,))
     @set! sys.op = length(neweqs) == 1 ? first(neweqs) : neweqs
-    @set! sys.states = newsts
+    @set! sys.unknowns = newsts
     return sys
 end

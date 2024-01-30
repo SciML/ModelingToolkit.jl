@@ -555,7 +555,7 @@ end
     seeds = rand(UInt, numtraj)
 
     ensemble_prob = EnsembleProblem(prob;
-        output_func = (sol, i) -> (g(sol[end]), false),
+        output_func = (sol, i) -> (g(sol.u[end]), false),
         prob_func = prob_func)
 
     sim = solve(ensemble_prob, EM(), dt = dt, trajectories = numtraj)

@@ -65,7 +65,7 @@ lb, ub = getbounds(p)
 b = getbounds(sys)
 @test b[T] == (0, Inf)
 
-b = getbounds(sys, states(sys))
+b = getbounds(sys, unknowns(sys))
 @test b[x] == (-10, 10)
 
 p = tunable_parameters(sys, default = true)

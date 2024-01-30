@@ -33,8 +33,8 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     eqs::Vector{Equation}
     """Independent variable."""
     iv::BasicSymbolic{Real}
-    """Dependent (state) variables. Must not contain the independent variable."""
-    states::Vector
+    """Dependent (unknown) variables. Must not contain the independent variable."""
+    unknowns::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
     """Time span."""
@@ -43,7 +43,7 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     var_to_name::Any
     """Control parameters (some subset of `ps`)."""
     ctrls::Vector
-    """Observed states."""
+    """Observed variables."""
     observed::Vector{Equation}
     """
     The name of the system
@@ -166,7 +166,7 @@ function DiscreteSystem(eqs, iv = nothing; kwargs...)
     eqs = scalarize(eqs)
     # NOTE: this assumes that the order of algebraic equations doesn't matter
     diffvars = OrderedSet()
-    allstates = OrderedSet()
+    allunknowns = OrderedSet()
     ps = OrderedSet()
     # reorder equations such that it is in the form of `diffeq, algeeq`
     diffeq = Equation[]
@@ -183,8 +183,8 @@ function DiscreteSystem(eqs, iv = nothing; kwargs...)
     iv = value(iv)
     iv === nothing && throw(ArgumentError("Please pass in independent variables."))
     for eq in eqs
-        collect_vars_difference!(allstates, ps, eq.lhs, iv)
-        collect_vars_difference!(allstates, ps, eq.rhs, iv)
+        collect_vars_difference!(allunknowns, ps, eq.lhs, iv)
+        collect_vars_difference!(allunknowns, ps, eq.rhs, iv)
         if isdifferenceeq(eq)
             diffvar, _ = var_from_nested_difference(eq.lhs)
             isequal(iv, iv_from_nested_difference(eq.lhs)) ||
@@ -197,7 +197,7 @@ function DiscreteSystem(eqs, iv = nothing; kwargs...)
             push!(algeeq, eq)
         end
     end
-    algevars = setdiff(allstates, diffvars)
+    algevars = setdiff(allunknowns, diffvars)
     # the orders here are very important!
     return DiscreteSystem(append!(diffeq, algeeq), iv,
         collect(Iterators.flatten((diffvars, algevars))), ps; kwargs...)
@@ -214,7 +214,7 @@ function SciMLBase.DiscreteProblem(sys::DiscreteSystem, u0map = [], tspan = get_
         eval_expression = true,
         use_union = false,
         kwargs...)
-    dvs = states(sys)
+    dvs = unknowns(sys)
     ps = parameters(sys)
     eqs = equations(sys)
     eqs = linearize_eqs(sys, eqs)
@@ -240,10 +240,10 @@ function SciMLBase.DiscreteProblem(sys::DiscreteSystem, u0map = [], tspan = get_
 end
 
 function linearize_eqs(sys, eqs = get_eqs(sys); return_max_delay = false)
-    unique_states = unique(operation.(states(sys)))
-    max_delay = Dict(v => 0.0 for v in unique_states)
+    unique_unknowns = unique(operation.(unknowns(sys)))
+    max_delay = Dict(v => 0.0 for v in unique_unknowns)
 
-    r = @rule ~t::(t -> istree(t) && any(isequal(operation(t)), operation.(states(sys))) && is_delay_var(get_iv(sys), t)) => begin
+    r = @rule ~t::(t -> istree(t) && any(isequal(operation(t)), operation.(unknowns(sys))) && is_delay_var(get_iv(sys), t)) => begin
         delay = get_delay_val(get_iv(sys), first(arguments(~t)))
         if delay > max_delay[operation(~t)]
             max_delay[operation(~t)] = delay
@@ -253,20 +253,20 @@ function linearize_eqs(sys, eqs = get_eqs(sys); return_max_delay = false)
     SymbolicUtils.Postwalk(r).(rhss(eqs))
 
     if any(values(max_delay) .> 0)
-        dts = Dict(v => Any[] for v in unique_states)
-        state_ops = Dict(v => Any[] for v in unique_states)
-        for v in unique_states
+        dts = Dict(v => Any[] for v in unique_unknowns)
+        unknown_ops = Dict(v => Any[] for v in unique_unknowns)
+        for v in unique_unknowns
             for eq in eqs
                 if isdifferenceeq(eq) && istree(arguments(eq.lhs)[1]) &&
                    isequal(v, operation(arguments(eq.lhs)[1]))
                     append!(dts[v], [operation(eq.lhs).dt])
-                    append!(state_ops[v], [operation(eq.lhs)])
+                    append!(unknown_ops[v], [operation(eq.lhs)])
                 end
             end
         end
 
-        all(length.(unique.(values(state_ops))) .<= 1) ||
-            error("Each state should be used with single difference operator.")
+        all(length.(unique.(values(unknown_ops))) .<= 1) ||
+            error("Each unknown should be used with single difference operator.")
 
         dts_gcd = Dict()
         for v in keys(dts)
@@ -274,7 +274,7 @@ function linearize_eqs(sys, eqs = get_eqs(sys); return_max_delay = false)
         end
 
         lin_eqs = [v(get_iv(sys) - (t)) ~ v(get_iv(sys) - (t - dts_gcd[v]))
-                   for v in unique_states if max_delay[v] > 0 && dts_gcd[v] !== nothing
+                   for v in unique_unknowns if max_delay[v] > 0 && dts_gcd[v] !== nothing
                    for t in collect(max_delay[v]:(-dts_gcd[v]):0)[1:(end - 1)]]
         eqs = vcat(eqs, lin_eqs)
     end
@@ -290,7 +290,7 @@ function get_delay_val(iv, x)
     return -delay
 end
 
-function generate_function(sys::DiscreteSystem, dvs = states(sys), ps = parameters(sys);
+function generate_function(sys::DiscreteSystem, dvs = unknowns(sys), ps = parameters(sys);
         kwargs...)
     eqs = equations(sys)
     check_operator_variables(eqs, Difference)
@@ -301,13 +301,13 @@ function generate_function(sys::DiscreteSystem, dvs = states(sys), ps = paramete
     t = get_iv(sys)
 
     build_function(rhss, u, p, t; kwargs...)
-    pre, sol_states = get_substitutions_and_solved_states(sys)
+    pre, sol_states = get_substitutions_and_solved_unknowns(sys)
     build_function(rhss, u, p, t; postprocess_fbody = pre, states = sol_states, kwargs...)
 end
 
 """
 ```julia
-SciMLBase.DiscreteFunction{iip}(sys::DiscreteSystem, dvs = states(sys),
+SciMLBase.DiscreteFunction{iip}(sys::DiscreteSystem, dvs = unknowns(sys),
                                 ps = parameters(sys);
                                 version = nothing,
                                 kwargs...) where {iip}
@@ -330,7 +330,7 @@ function SciMLBase.DiscreteFunction{false}(sys::DiscreteSystem, args...; kwargs.
 end
 
 function SciMLBase.DiscreteFunction{iip, specialize}(sys::DiscreteSystem,
-        dvs = states(sys),
+        dvs = unknowns(sys),
         ps = parameters(sys),
         u0 = nothing;
         version = nothing,
@@ -367,7 +367,7 @@ function SciMLBase.DiscreteFunction{iip, specialize}(sys::DiscreteSystem,
 
     DiscreteFunction{iip, specialize}(f;
         sys = sys,
-        syms = Symbol.(states(sys)),
+        syms = Symbol.(unknowns(sys)),
         indepsym = Symbol(get_iv(sys)),
         paramsyms = Symbol.(ps),
         observed = observedfun,
@@ -376,7 +376,7 @@ end
 
 """
 ```julia
-DiscreteFunctionExpr{iip}(sys::DiscreteSystem, dvs = states(sys),
+DiscreteFunctionExpr{iip}(sys::DiscreteSystem, dvs = unknowns(sys),
                           ps = parameters(sys);
                           version = nothing,
                           kwargs...) where {iip}
@@ -394,7 +394,7 @@ end
 (f::DiscreteFunctionClosure)(u, p, t) = f.f_oop(u, p, t)
 (f::DiscreteFunctionClosure)(du, u, p, t) = f.f_iip(du, u, p, t)
 
-function DiscreteFunctionExpr{iip}(sys::DiscreteSystem, dvs = states(sys),
+function DiscreteFunctionExpr{iip}(sys::DiscreteSystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
         version = nothing, p = nothing,
         linenumbers = false,
@@ -408,7 +408,7 @@ function DiscreteFunctionExpr{iip}(sys::DiscreteSystem, dvs = states(sys),
     ex = quote
         $_f
         DiscreteFunction{$iip}($fsym,
-            syms = $(Symbol.(states(sys))),
+            syms = $(Symbol.(unknowns(sys))),
             indepsym = $(QuoteNode(Symbol(get_iv(sys)))),
             paramsyms = $(Symbol.(parameters(sys))))
     end
@@ -427,7 +427,7 @@ function process_DiscreteProblem(constructor, sys::DiscreteSystem, u0map, paramm
         tofloat = !use_union,
         kwargs...)
     eqs = equations(sys)
-    dvs = states(sys)
+    dvs = unknowns(sys)
     ps = parameters(sys)
 
     u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union)

@@ -6,7 +6,7 @@ contributors to the library.
 ## Observables and Variable Elimination
 
 In the variable “elimination” algorithms, what is actually done is that variables
-are removed from being states and equations are moved into the `observed` category
+are removed from being unknowns and equations are moved into the `observed` category
 of the system. The `observed` equations are explicit algebraic equations which
 are then substituted out to completely eliminate these variables from the other
 equations, allowing the system to act as though these variables no longer exist.

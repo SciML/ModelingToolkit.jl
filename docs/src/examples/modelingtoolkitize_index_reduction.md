@@ -32,7 +32,7 @@ traced_sys = modelingtoolkitize(pendulum_prob)
 pendulum_sys = structural_simplify(dae_index_lowering(traced_sys))
 prob = ODAEProblem(pendulum_sys, [], tspan)
 sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
-plot(sol, idxs = states(traced_sys))
+plot(sol, idxs = unknowns(traced_sys))
 ```
 
 ## Explanation
@@ -81,7 +81,7 @@ However, one will quickly be greeted with the unfortunate message:
 └ @ OrdinaryDiffEq C:\Users\accou\.julia\packages\OrdinaryDiffEq\yCczp\src\initdt.jl:76
 ┌ Warning: Automatic dt set the starting dt as NaN, causing instability.
 └ @ OrdinaryDiffEq C:\Users\accou\.julia\packages\OrdinaryDiffEq\yCczp\src\solve.jl:485
-┌ Warning: NaN dt detected. Likely a NaN value in the state, parameters, or derivative value caused this outcome.
+┌ Warning: NaN dt detected. Likely a NaN value in the unknowns, parameters, or derivative value caused this outcome.
 └ @ SciMLBase C:\Users\accou\.julia\packages\SciMLBase\DrPil\src\integrator_interface.jl:325
 ```
 
@@ -154,17 +154,17 @@ prob = ODEProblem(pendulum_sys, Pair[], tspan)
 sol = solve(prob, Rodas4())
 
 using Plots
-plot(sol, idxs = states(traced_sys))
+plot(sol, idxs = unknowns(traced_sys))
 ```
 
-Note that plotting using `states(traced_sys)` is done so that any
+Note that plotting using `unknowns(traced_sys)` is done so that any
 variables which are symbolically eliminated, or any variable reordering
 done for enhanced parallelism/performance, still show up in the resulting
 plot and the plot is shown in the same order as the original numerical
 code.
 
 Note that we can even go a bit further. If we use the `ODAEProblem`
-constructor, we can remove the algebraic equations from the states of the
+constructor, we can remove the algebraic equations from the unknowns of the
 system and fully transform the index-3 DAE into an index-0 ODE which can
 be solved via an explicit Runge-Kutta method:
 
@@ -173,7 +173,7 @@ traced_sys = modelingtoolkitize(pendulum_prob)
 pendulum_sys = structural_simplify(dae_index_lowering(traced_sys))
 prob = ODAEProblem(pendulum_sys, Pair[], tspan)
 sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
-plot(sol, idxs = states(traced_sys))
+plot(sol, idxs = unknowns(traced_sys))
 ```
 
 And there you go: this has transformed the model from being too hard to

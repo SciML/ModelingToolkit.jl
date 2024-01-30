@@ -29,7 +29,7 @@ eqs = [0 ~ a
 @named sub1 = NonlinearSystem([], [], [], systems = [sub2])
 @named sys = NonlinearSystem([], [], [], systems = [sub1])
 
-names = ModelingToolkit.getname.(states(sys))
+names = ModelingToolkit.getname.(unknowns(sys))
 @test :d in names
 @test Symbol("sub1₊c") in names
 @test Symbol("sub1₊sub2₊b") in names

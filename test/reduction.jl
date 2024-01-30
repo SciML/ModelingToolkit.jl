@@ -35,11 +35,11 @@ lorenz1_aliased = structural_simplify(lorenz1)
 io = IOBuffer();
 show(io, MIME("text/plain"), lorenz1_aliased);
 str = String(take!(io));
-@test all(s -> occursin(s, str), ["lorenz1", "States (2)", "Parameters (3)"])
+@test all(s -> occursin(s, str), ["lorenz1", "Unknowns (2)", "Parameters (3)"])
 reduced_eqs = [D(x) ~ σ * (y - x)
     D(y) ~ β + (ρ - z) * x - y]
 #test_equal.(equations(lorenz1_aliased), reduced_eqs)
-@test isempty(setdiff(states(lorenz1_aliased), [x, y, z]))
+@test isempty(setdiff(unknowns(lorenz1_aliased), [x, y, z]))
 #test_equal.(observed(lorenz1_aliased), [u ~ 0
 #                                        z ~ x - y
 #                                        a ~ -z])
@@ -76,10 +76,10 @@ __x = x
 reduced_system = structural_simplify(connected)
 reduced_system2 = structural_simplify(tearing_substitution(structural_simplify(tearing_substitution(structural_simplify(connected)))))
 
-@test isempty(setdiff(states(reduced_system), states(reduced_system2)))
+@test isempty(setdiff(unknowns(reduced_system), unknowns(reduced_system2)))
 @test isequal(equations(tearing_substitution(reduced_system)), equations(reduced_system2))
 @test isequal(observed(reduced_system), observed(reduced_system2))
-@test setdiff(states(reduced_system),
+@test setdiff(unknowns(reduced_system),
     [s
         a
         lorenz1.x
@@ -168,7 +168,7 @@ u0 = [u1 => 1
 pp = [2]
 nlprob = NonlinearProblem(reducedsys, u0, pp)
 reducedsol = solve(nlprob, NewtonRaphson())
-residual = fill(100.0, length(states(reducedsys)))
+residual = fill(100.0, length(unknowns(reducedsys)))
 nlprob.f(residual, reducedsol.u, pp)
 @test hypot(nlprob.f.observed(u2, reducedsol.u, pp),
     nlprob.f.observed(u1, reducedsol.u, pp)) *
@@ -228,7 +228,7 @@ eq = [v47 ~ v1
 sys = structural_simplify(sys0)
 @test length(equations(sys)) == 1
 eq = equations(tearing_substitution(sys))[1]
-vv = only(states(sys))
+vv = only(unknowns(sys))
 @test isequal(eq.lhs, D(vv))
 dvv = ModelingToolkit.value(ModelingToolkit.derivative(eq.rhs, vv))
 @test dvv ≈ -60
@@ -299,6 +299,6 @@ ss = structural_simplify(sys)
 eqs = [D(D(x)) ~ -x]
 @named sys = ODESystem(eqs, t, [x], [])
 ss = alias_elimination(sys)
-@test length(equations(ss)) == length(states(ss)) == 1
+@test length(equations(ss)) == length(unknowns(ss)) == 1
 ss = structural_simplify(sys)
-@test length(equations(ss)) == length(states(ss)) == 2
+@test length(equations(ss)) == length(unknowns(ss)) == 2

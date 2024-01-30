@@ -28,7 +28,7 @@ struct ConstraintsSystem <: AbstractTimeIndependentSystem
     """Vector of equations defining the system."""
     constraints::Vector{Union{Equation, Inequality}}
     """Unknown variables."""
-    states::Vector
+    unknowns::Vector
     """Parameters."""
     ps::Vector
     """Array variables."""
@@ -70,17 +70,17 @@ struct ConstraintsSystem <: AbstractTimeIndependentSystem
     """
     substitutions::Any
 
-    function ConstraintsSystem(tag, constraints, states, ps, var_to_name, observed, jac,
+    function ConstraintsSystem(tag, constraints, unknowns, ps, var_to_name, observed, jac,
             name,
             systems,
             defaults, connector_type, metadata = nothing,
             tearing_state = nothing, substitutions = nothing;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
-            u = __get_unit_type(states, ps)
+            u = __get_unit_type(unknowns, ps)
             check_units(u, constraints)
         end
-        new(tag, constraints, states, ps, var_to_name, observed, jac, name, systems,
+        new(tag, constraints, unknowns, ps, var_to_name, observed, jac, name, systems,
             defaults,
             connector_type, metadata, tearing_state, substitutions)
     end
@@ -88,7 +88,7 @@ end
 
 equations(sys::ConstraintsSystem) = constraints(sys) # needed for Base.show
 
-function ConstraintsSystem(constraints, states, ps;
+function ConstraintsSystem(constraints, unknowns, ps;
         observed = [],
         name = nothing,
         default_u0 = Dict(),
@@ -109,7 +109,7 @@ function ConstraintsSystem(constraints, states, ps;
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
 
     cstr = value.(Symbolics.canonical_form.(scalarize(constraints)))
-    states′ = value.(scalarize(states))
+    unknowns′ = value.(scalarize(unknowns))
     ps′ = value.(scalarize(ps))
 
     if !(isempty(default_u0) && isempty(default_p))
@@ -126,12 +126,12 @@ function ConstraintsSystem(constraints, states, ps;
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, states′)
+    process_variables!(var_to_name, defaults, unknowns′)
     process_variables!(var_to_name, defaults, ps′)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
     ConstraintsSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-        cstr, states, ps, var_to_name, observed, jac, name, systems,
+        cstr, unknowns, ps, var_to_name, observed, jac, name, systems,
         defaults,
         connector_type, metadata, checks = checks)
 end
@@ -143,7 +143,7 @@ function calculate_jacobian(sys::ConstraintsSystem; sparse = false, simplify = f
     end
 
     lhss = generate_canonical_form_lhss(sys)
-    vals = [dv for dv in states(sys)]
+    vals = [dv for dv in unknowns(sys)]
     if sparse
         jac = sparsejacobian(lhss, vals, simplify = simplify)
     else
@@ -153,7 +153,7 @@ function calculate_jacobian(sys::ConstraintsSystem; sparse = false, simplify = f
     return jac
 end
 
-function generate_jacobian(sys::ConstraintsSystem, vs = states(sys), ps = parameters(sys);
+function generate_jacobian(sys::ConstraintsSystem, vs = unknowns(sys), ps = parameters(sys);
         sparse = false, simplify = false, kwargs...)
     jac = calculate_jacobian(sys, sparse = sparse, simplify = simplify)
     return build_function(jac, vs, ps; kwargs...)
@@ -161,7 +161,7 @@ end
 
 function calculate_hessian(sys::ConstraintsSystem; sparse = false, simplify = false)
     lhss = generate_canonical_form_lhss(sys)
-    vals = [dv for dv in states(sys)]
+    vals = [dv for dv in unknowns(sys)]
     if sparse
         hess = [sparsehessian(lhs, vals, simplify = simplify) for lhs in lhss]
     else
@@ -170,16 +170,16 @@ function calculate_hessian(sys::ConstraintsSystem; sparse = false, simplify = fa
     return hess
 end
 
-function generate_hessian(sys::ConstraintsSystem, vs = states(sys), ps = parameters(sys);
+function generate_hessian(sys::ConstraintsSystem, vs = unknowns(sys), ps = parameters(sys);
         sparse = false, simplify = false, kwargs...)
     hess = calculate_hessian(sys, sparse = sparse, simplify = simplify)
     return build_function(hess, vs, ps; kwargs...)
 end
 
-function generate_function(sys::ConstraintsSystem, dvs = states(sys), ps = parameters(sys);
+function generate_function(sys::ConstraintsSystem, dvs = unknowns(sys), ps = parameters(sys);
         kwargs...)
     lhss = generate_canonical_form_lhss(sys)
-    pre, sol_states = get_substitutions_and_solved_states(sys)
+    pre, sol_states = get_substitutions_and_solved_unknowns(sys)
 
     func = build_function(lhss, value.(dvs), value.(ps); postprocess_fbody = pre,
         states = sol_states, kwargs...)
@@ -194,12 +194,12 @@ end
 
 function jacobian_sparsity(sys::ConstraintsSystem)
     lhss = generate_canonical_form_lhss(sys)
-    jacobian_sparsity(lhss, states(sys))
+    jacobian_sparsity(lhss, unknowns(sys))
 end
 
 function hessian_sparsity(sys::ConstraintsSystem)
     lhss = generate_canonical_form_lhss(sys)
-    [hessian_sparsity(eq, states(sys)) for eq in lhss]
+    [hessian_sparsity(eq, unknowns(sys)) for eq in lhss]
 end
 
 """

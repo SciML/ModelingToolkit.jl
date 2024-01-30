@@ -111,7 +111,7 @@ function SIRD_ac!(du, u, p, t)
 
     C = regional_all_contact_matrix
 
-    # State variables
+    # Unknown variables
     S = @view u[(4 * 0 + 1):(4 * 1)]
     I = @view u[(4 * 1 + 1):(4 * 2)]
     R = @view u[(4 * 2 + 1):(4 * 3)]
@@ -180,7 +180,7 @@ p = [9.8, 1]
 tspan = (0, 10.0)
 pendulum_prob = ODEProblem(pendulum_fun!, u0, tspan, p)
 pendulum_sys_org = modelingtoolkitize(pendulum_prob)
-sts = states(pendulum_sys_org)
+sts = unknowns(pendulum_sys_org)
 pendulum_sys = dae_index_lowering(pendulum_sys_org)
 prob = ODEProblem(pendulum_sys, Pair[], tspan)
 sol = solve(prob, Rodas4())
@@ -214,7 +214,7 @@ using ModelingToolkit
 # ODE model: simple SIR model with seasonally forced contact rate
 function SIR!(du, u, p, t)
 
-    # states
+    # Unknowns
     (S, I, R) = u[1:3]
     N = S + I + R
 
@@ -230,7 +230,7 @@ function SIR!(du, u, p, t)
     βeff = β * (1.0 + η * cos(2.0 * π * (t - φ) / 365.0))
     λ = βeff * I / N
 
-    # change in states
+    # change in unknowns
     du[1] = (μ * N - λ * S - μ * S + ω * R)
     du[2] = (λ * S - σ * I - μ * I)
     du[3] = (σ * I - μ * R - ω * R)
@@ -254,7 +254,7 @@ sys = modelingtoolkitize(problem)
 
 @parameters t
 @test all(isequal.(parameters(sys), getproperty.(@variables(β, η, ω, φ, σ, μ), :val)))
-@test all(isequal.(Symbol.(states(sys)), Symbol.(@variables(S(t), I(t), R(t), C(t)))))
+@test all(isequal.(Symbol.(unknowns(sys)), Symbol.(@variables(S(t), I(t), R(t), C(t)))))
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/1158
 
@@ -287,7 +287,7 @@ params = OrderedDict(:a => 10, :b => 20)
 u0 = [1, 2.0]
 prob = ODEProblem(ode_prob_dict, u0, (0.0, 1.0), params)
 sys = modelingtoolkitize(prob)
-@test [ModelingToolkit.defaults(sys)[s] for s in states(sys)] == u0
+@test [ModelingToolkit.defaults(sys)[s] for s in unknowns(sys)] == u0
 @test [ModelingToolkit.defaults(sys)[s] for s in parameters(sys)] == [10, 20]
 @test ModelingToolkit.has_tspan(sys)
 
