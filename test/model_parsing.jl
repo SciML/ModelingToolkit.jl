@@ -393,11 +393,11 @@ end
         @parameters begin
             eq = flag == 1 ? 1 : 0
             if flag == 1
-                if_parameter
+                if_parameter = 100
             elseif flag == 2
-                elseif_parameter
+                elseif_parameter = 101
             else
-                else_parameter
+                else_parameter = 102
             end
         end
         @components begin
@@ -433,6 +433,10 @@ end
     @test getname.(parameters(if_in_sys)) == [:if_parameter, :eq]
     @test getname.(parameters(elseif_in_sys)) == [:elseif_parameter, :eq]
     @test getname.(parameters(else_in_sys)) == [:else_parameter, :eq]
+
+    @test getdefault(if_in_sys.if_parameter) == 100
+    @test getdefault(elseif_in_sys.elseif_parameter) == 101
+    @test getdefault(else_in_sys.else_parameter) == 102
 
     @test nameof.(get_systems(if_in_sys)) == [:if_sys, :default_sys]
     @test nameof.(get_systems(elseif_in_sys)) == [:elseif_sys, :default_sys]
@@ -479,7 +483,7 @@ end
 
         if condition == 1
             @parameters begin
-                if_parameter
+                if_parameter = 100
             end
             @equations begin
                 if_parameter ~ 0
@@ -489,7 +493,7 @@ end
             end
         elseif condition == 2
             @parameters begin
-                elseif_parameter
+                elseif_parameter = 101
             end
             @equations begin
                 elseif_parameter ~ 0
@@ -499,7 +503,7 @@ end
             end
         else
             @parameters begin
-                else_parameter
+                else_parameter = 102
             end
             @equations begin
                 else_parameter ~ 0
@@ -522,6 +526,10 @@ end
     @test getname.(parameters(if_out_sys)) == [:if_parameter, :default_parameter]
     @test getname.(parameters(elseif_out_sys)) == [:elseif_parameter, :default_parameter]
     @test getname.(parameters(else_out_sys)) == [:else_parameter, :default_parameter]
+
+    @test getdefault(if_out_sys.if_parameter) == 100
+    @test getdefault(elseif_out_sys.elseif_parameter) == 101
+    @test getdefault(else_out_sys.else_parameter) == 102
 
     @test nameof.(get_systems(if_out_sys)) == [:if_sys, :default_sys]
     @test nameof.(get_systems(elseif_out_sys)) == [:elseif_sys, :default_sys]
