@@ -621,5 +621,6 @@ function structural_simplify(sys::OptimizationSystem; kwargs...)
     neweqs = fixpoint_sub.(equations(sys), (subs,))
     @set! sys.op = length(neweqs) == 1 ? first(neweqs) : neweqs
     @set! sys.unknowns = newsts
+    sys = complete(sys)
     return sys
 end
