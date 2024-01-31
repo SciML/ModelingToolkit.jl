@@ -21,6 +21,7 @@ end
         @safetestset "Linearization Tests" include("linearize.jl")
         @safetestset "Input Output Test" include("input_output_handling.jl")
         @safetestset "Clock Test" include("clock.jl")
+        @safetestset "DiscreteSystem Test" include("discretesystem.jl")
         @safetestset "ODESystem Test" include("odesystem.jl")
         @safetestset "Dynamic Quantities Test" include("dq_units.jl")
         @safetestset "Unitful Quantities Test" include("units.jl")
