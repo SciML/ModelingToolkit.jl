@@ -51,6 +51,7 @@ jac_expr = generate_jacobian(de)
 jac = calculate_jacobian(de)
 jacfun = eval(jac_expr[2])
 
+de = complete(de)
 for f in [
     ODEFunction(de, [x, y, z], [σ, ρ, β], tgrad = true, jac = true),
     eval(ODEFunctionExpr(de, [x, y, z], [σ, ρ, β], tgrad = true, jac = true)),
@@ -167,7 +168,7 @@ lowered_eqs = [D(uˍtt) ~ 2uˍtt + uˍt + xˍt + 1
 
 test_diffeq_inference("first-order transform", de1, t, [uˍtt, xˍt, uˍt, u, x], [])
 du = zeros(5)
-ODEFunction(de1, [uˍtt, xˍt, uˍt, u, x], [])(du, ones(5), nothing, 0.1)
+ODEFunction(complete(de1), [uˍtt, xˍt, uˍt, u, x], [])(du, ones(5), nothing, 0.1)
 @test du == [5.0, 3.0, 1.0, 1.0, 1.0]
 
 # Internal calculations
@@ -182,7 +183,7 @@ jac = calculate_jacobian(de)
 @test ModelingToolkit.jacobian_sparsity(de).colptr == sparse(jac).colptr
 @test ModelingToolkit.jacobian_sparsity(de).rowval == sparse(jac).rowval
 
-f = ODEFunction(de, [x, y, z], [σ, ρ, β])
+f = ODEFunction(complete(de), [x, y, z], [σ, ρ, β])
 
 D = Differential(t)
 @parameters A B C
@@ -208,7 +209,7 @@ function lotka(u, p, t)
 end
 
 prob = ODEProblem(ODEFunction{false}(lotka), [1.0, 1.0], (0.0, 1.0), [1.5, 1.0, 3.0, 1.0])
-de = modelingtoolkitize(prob)
+de = complete(modelingtoolkitize(prob))
 ODEFunction(de)(similar(prob.u0), prob.u0, prob.p, 0.1)
 
 function lotka(du, u, p, t)
@@ -220,7 +221,7 @@ end
 
 prob = ODEProblem(lotka, [1.0, 1.0], (0.0, 1.0), [1.5, 1.0, 3.0, 1.0])
 
-de = modelingtoolkitize(prob)
+de = complete(modelingtoolkitize(prob))
 ODEFunction(de)(similar(prob.u0), prob.u0, prob.p, 0.1)
 
 # automatic unknown detection for DAEs
@@ -579,11 +580,13 @@ eqs = [
 ]
 
 @named sys = ODESystem(eqs, t, [x, y, z], [α, β])
+sys = complete(sys)
 @test_throws Any ODEFunction(sys)
 
 eqs = copy(eqs)
 eqs[end] = D(D(z)) ~ α * x - β * y
 @named sys = ODESystem(eqs, t, [x, y, z], [α, β])
+sys = complete(sys)
 @test_throws Any ODEFunction(sys)
 
 @testset "Preface tests" begin

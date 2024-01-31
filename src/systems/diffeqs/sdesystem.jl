@@ -393,6 +393,9 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
         jac = false, Wfact = false, eval_expression = true,
         checkbounds = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEFunction`")
+    end
     dvs = scalarize.(dvs)
     ps = scalarize.(ps)
 
@@ -515,6 +518,9 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = unknowns(sys),
         jac = false, Wfact = false,
         sparse = false, linenumbers = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEFunctionExpr`")
+    end
     idx = iip ? 2 : 1
     f = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)[idx]
     g = generate_diffusion_function(sys, dvs, ps; expression = Val{true}, kwargs...)[idx]

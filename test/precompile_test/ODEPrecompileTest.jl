@@ -13,6 +13,7 @@ function system(; kwargs...)
         D(z) ~ x * y - β * z]
 
     @named de = ODESystem(eqs)
+    de = complete(de)
     return ODEFunction(de, [x, y, z], [σ, ρ, β]; kwargs...)
 end
 

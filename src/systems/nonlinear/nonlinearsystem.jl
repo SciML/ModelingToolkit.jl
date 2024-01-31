@@ -234,6 +234,9 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
         eval_expression = true,
         sparse = false, simplify = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearFunction`")
+    end
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression}, kwargs...)
     f_oop, f_iip = eval_expression ?
                    (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in f_gen) : f_gen
@@ -296,6 +299,9 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
         linenumbers = false,
         sparse = false, simplify = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearFunctionExpr`")
+    end
     idx = iip ? 2 : 1
     f = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)[idx]
 

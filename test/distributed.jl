@@ -14,6 +14,7 @@ addprocs(2)
     D(z) ~ x * y - β * z]
 
 @everywhere @named de = ODESystem(eqs)
+@everywhere de = complete(de)
 @everywhere ode_func = ODEFunction(de, [x, y, z], [σ, ρ, β])
 
 @everywhere u0 = [19.0, 20.0, 50.0]

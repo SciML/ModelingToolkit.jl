@@ -308,6 +308,9 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = u
         analytic = nothing,
         split_idxs = nothing,
         kwargs...) where {iip, specialize}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEFunction`")
+    end
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression},
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
@@ -504,6 +507,9 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         eval_module = @__MODULE__,
         checkbounds = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEFunction`")
+    end
     f_gen = generate_function(sys, dvs, ps; implicit_dae = true,
         expression = Val{eval_expression},
         expression_module = eval_module, checkbounds = checkbounds,
@@ -579,6 +585,9 @@ function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         eval_module = @__MODULE__,
         checkbounds = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `DDEFunction`")
+    end
     f_gen = generate_function(sys, dvs, ps; isdde = true,
         expression = Val{true},
         expression_module = eval_module, checkbounds = checkbounds,
@@ -603,6 +612,9 @@ function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys
         eval_module = @__MODULE__,
         checkbounds = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `SDDEFunction`")
+    end
     f_gen = generate_function(sys, dvs, ps; isdde = true,
         expression = Val{true},
         expression_module = eval_module, checkbounds = checkbounds,
@@ -656,6 +668,9 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         sparsity = false,
         observedfun_exp = nothing,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEFunctionExpr`")
+    end
     f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
 
     dict = Dict()
@@ -830,6 +845,9 @@ function DAEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         linenumbers = false,
         sparse = false, simplify = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `DAEFunctionExpr`")
+    end
     f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true},
         implicit_dae = true, kwargs...)
     fsym = gensym(:f)
