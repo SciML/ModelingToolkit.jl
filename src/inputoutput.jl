@@ -215,7 +215,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     end
     inputs = map(x -> time_varying_as_func(value(x), sys), inputs)
 
-    eqs = [eq for eq in full_equations(sys) if !isdifferenceeq(eq)]
+    eqs = [eq for eq in full_equations(sys)]
     if disturbance_inputs !== nothing
         # Set all disturbance *inputs* to zero (we just want to keep the disturbance state)
         subs = Dict(disturbance_inputs .=> 0)

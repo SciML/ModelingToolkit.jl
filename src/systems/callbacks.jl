@@ -498,7 +498,7 @@ merge_cb(::Nothing, x) = merge_cb(x, nothing)
 merge_cb(x, ::Nothing) = x
 merge_cb(x, y) = CallbackSet(x, y)
 
-function process_events(sys; callback = nothing, has_difference = false, kwargs...)
+function process_events(sys; callback = nothing, kwargs...)
     if has_continuous_events(sys)
         contin_cb = generate_rootfinding_callback(sys; kwargs...)
     else
@@ -509,9 +509,7 @@ function process_events(sys; callback = nothing, has_difference = false, kwargs.
     else
         discrete_cb = nothing
     end
-    difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
 
-    cb = merge_cb(contin_cb, difference_cb)
-    cb = merge_cb(cb, callback)
-    (discrete_cb === nothing) ? cb : CallbackSet(cb, discrete_cb...)
+    cb = merge_cb(contin_cb, callback)
+    (discrete_cb === nothing) ? cb : CallbackSet(contin_cb, discrete_cb...)
 end

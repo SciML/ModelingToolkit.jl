@@ -1,6 +1,6 @@
 using LinearAlgebra
 
-using ModelingToolkit: isdifferenceeq, process_events, get_preprocess_constants
+using ModelingToolkit: process_events, get_preprocess_constants
 
 const MAX_INLINE_NLSOLVE_SIZE = 8
 
@@ -543,8 +543,7 @@ function ODAEProblem{iip}(sys,
     u0 = ModelingToolkit.varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
     p = ModelingToolkit.varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
 
-    has_difference = any(isdifferenceeq, eqs)
-    cbs = process_events(sys; callback, has_difference, kwargs...)
+    cbs = process_events(sys; callback, kwargs...)
 
     kwargs = filter_kwargs(kwargs)
     if cbs === nothing
