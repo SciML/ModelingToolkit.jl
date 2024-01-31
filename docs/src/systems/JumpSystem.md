@@ -24,7 +24,7 @@ structural_simplify
 ## Problem Constructors
 
 ```@docs; canonical=false
-DiscreteProblem(sys::ModelingToolkit.DiscreteSystem, u0map, tspan)
+DiscreteProblem(sys::JumpSystem, u0map, tspan)
 ```
 
 ```@docs

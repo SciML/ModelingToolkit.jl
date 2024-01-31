@@ -36,7 +36,6 @@ end
 function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
         kwargs...)
     sys = expand_connections(sys)
-    sys isa DiscreteSystem && return sys
     state = TearingState(sys)
 
     @unpack structure, fullvars = state
