@@ -510,5 +510,6 @@ function process_events(sys; callback = nothing, kwargs...)
         discrete_cb = nothing
     end
 
-    (discrete_cb === nothing) ? contin_cb : CallbackSet(contin_cb, discrete_cb...)
+    cb = merge_cb(contin_cb, callback)
+    (discrete_cb === nothing) ? cb : CallbackSet(contin_cb, discrete_cb...)
 end
