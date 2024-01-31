@@ -1,6 +1,6 @@
 using LinearAlgebra
 
-using ModelingToolkit: isdifferenceeq, process_events, get_preprocess_constants
+using ModelingToolkit: process_events, get_preprocess_constants
 
 const MAX_INLINE_NLSOLVE_SIZE = 8
 
