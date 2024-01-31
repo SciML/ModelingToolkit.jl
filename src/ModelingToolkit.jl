@@ -55,7 +55,8 @@ using PrecompileTools, Reexport
     using Symbolics: _parse_vars, value, @derivatives, get_variables,
         exprs_occur_in, solve_for, build_expr, unwrap, wrap,
         VariableSource, getname, variable, Connection, connect,
-        NAMESPACE_SEPARATOR, set_scalar_metadata, setdefaultval
+        NAMESPACE_SEPARATOR, set_scalar_metadata, setdefaultval,
+        initial_state, transition
     import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
         jacobian_sparsity, isaffine, islinear, _iszero, _isone,
         tosymbol, lower_varname, diff2term, var_from_nested_derivative,
@@ -202,6 +203,7 @@ export JumpProblem, DiscreteProblem
 export NonlinearSystem, OptimizationSystem, ConstraintsSystem
 export alias_elimination, flatten
 export connect, domain_connect, @connector, Connection, Flow, Stream, instream
+export initial_state, transition
 export @component, @mtkmodel, @mtkbuild
 export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbance,
     istunable, getdist, hasdist,

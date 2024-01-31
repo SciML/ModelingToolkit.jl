@@ -1,3 +1,4 @@
+using Symbolics: StateMachineOperator
 """
     domain_connect(sys1, sys2, syss...)
 
@@ -328,6 +329,7 @@ function generate_connection_set!(connectionsets, domain_csets,
                 push!(eqs, eq) # split connections and equations
             elseif lhs isa Connection && get_systems(lhs) === :domain
                 connection2set!(domain_csets, namespace, get_systems(rhs), isouter)
+            elseif lhs isa StateMachineOperator
             else
                 push!(cts, get_systems(rhs))
             end
