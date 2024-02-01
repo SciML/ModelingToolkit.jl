@@ -325,13 +325,12 @@ function generate_connection_set!(connectionsets, domain_csets,
             end
             neweq isa AbstractArray ? append!(eqs, neweq) : push!(eqs, neweq)
         else
-            if lhs isa Number || lhs isa Symbolic
-                push!(eqs, eq) # split connections and equations
-            elseif lhs isa Connection && get_systems(lhs) === :domain
+            if lhs isa Connection && get_systems(lhs) === :domain
                 connection2set!(domain_csets, namespace, get_systems(rhs), isouter)
-            elseif lhs isa StateMachineOperator
-            else
+            elseif lhs isa Connection
                 push!(cts, get_systems(rhs))
+            else
+                push!(eqs, eq) # split connections and equations
             end
         end
     end
