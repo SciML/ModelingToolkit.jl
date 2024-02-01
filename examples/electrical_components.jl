@@ -1,7 +1,7 @@
 using Test
 using ModelingToolkit, OrdinaryDiffEq
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@isdefined(t) || @parameters t
 @connector function Pin(; name)
     sts = @variables v(t)=1.0 i(t)=1.0 [connect = Flow]
     ODESystem(Equation[], t, sts, []; name = name)
@@ -37,7 +37,6 @@ end
     @named oneport = OnePort()
     @unpack v, i = oneport
     ps = @parameters C = C
-    D = Differential(t)
     eqs = [
         D(v) ~ i / C,
     ]
@@ -58,7 +57,6 @@ end
     @named oneport = OnePort()
     @unpack v, i = oneport
     ps = @parameters L = L
-    D = Differential(t)
     eqs = [
         D(i) ~ v / L,
     ]
@@ -89,7 +87,6 @@ end
     @parameters rho=rho V=V cp=cp
     C = rho * V * cp
     @named h = HeatPort()
-    D = Differential(t)
     eqs = [
         D(h.T) ~ h.Q_flow / C,
     ]

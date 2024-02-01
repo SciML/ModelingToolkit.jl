@@ -74,6 +74,9 @@ end
 @reexport using UnPack
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
+import DynamicQuantities, Unitful
+const DQ = DynamicQuantities
+
 export @derivatives
 
 for fun in [:toexpr]
@@ -172,11 +175,24 @@ for S in subtypes(ModelingToolkit.AbstractSystem)
     @eval convert_system(::Type{<:$S}, sys::$S) = sys
 end
 
+const t_nounits = let
+    only(@parameters t)
+end
+const t_unitful = let
+    only(@parameters t [unit = Unitful.u"s"])
+end
+const t = let
+    only(@parameters t [unit = DQ.u"s"])
+end
+
+const D_nounits = Differential(t_nounits)
+const D_unitful = Differential(t_unitful)
+const D = Differential(t)
+
 PrecompileTools.@compile_workload begin
     using ModelingToolkit
-    @variables t x(t)
-    D = Differential(t)
-    @named sys = ODESystem([D(x) ~ -x])
+    @variables x(ModelingToolkit.t_nounits)
+    @named sys = ODESystem([ModelingToolkit.D_nounits(x) ~ -x])
     prob = ODEProblem(structural_simplify(sys), [x => 30.0], (0, 100), [], jac = true)
 end
 

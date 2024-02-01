@@ -1,10 +1,10 @@
 using BifurcationKit, ModelingToolkit, Test
-
+using ModelingToolkit: t_nounits as t, D_nounits as D
 # Simple pitchfork diagram, compares solution to native BifurcationKit, checks they are identical.
 # Checks using `jac=false` option.
 let
     # Creates model.
-    @variables t x(t) y(t)
+    @variables x(t) y(t)
     @parameters μ α
     eqs = [0 ~ μ * x - x^3 + α * y,
         0 ~ -y]
@@ -57,8 +57,7 @@ end
 let
     # Creates a Lotka–Volterra model.
     @parameters α a b
-    @variables t x(t) y(t) z(t)
-    D = Differential(t)
+    @variables x(t) y(t) z(t)
     eqs = [D(x) ~ -x + a * y + x^2 * y,
         D(y) ~ b - a * y - x^2 * y]
     @named sys = ODESystem(eqs)
@@ -99,8 +98,7 @@ end
 let
     # Creates model, and uses `structural_simplify` to generate observables.
     @parameters μ p=2
-    @variables t x(t) y(t) z(t)
-    D = Differential(t)
+    @variables x(t) y(t) z(t)
     eqs = [0 ~ μ - x^3 + 2x^2,
         0 ~ p * μ - y,
         0 ~ y - z]
