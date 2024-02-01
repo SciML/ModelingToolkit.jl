@@ -119,7 +119,7 @@ end
 # unknowns: u5
 # solve for
 # 0 = u5 - hypot(sin(u5), hypot(cos(sin(u5)), hypot(sin(u5), cos(sin(u5)))))
-tornsys = tearing(sys)
+tornsys = complete(tearing(sys))
 @test isequal(equations(tornsys), [0 ~ u5 - hypot(u4, u1)])
 prob = NonlinearProblem(tornsys, ones(1))
 sol = solve(prob, NewtonRaphson())

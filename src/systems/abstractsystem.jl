@@ -1330,6 +1330,8 @@ information. E.g.
 ```julia-repl
 julia> sys = debug_system(sys);
 
+julia> sys = complete(sys);
+
 julia> prob = ODEProblem(sys, [], (0, 1.0));
 
 julia> du = zero(prob.u0);

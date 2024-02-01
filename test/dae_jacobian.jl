@@ -49,7 +49,7 @@ du0 = [0.5, -2.0]
 p = [p1 => 1.5,
     p2 => 3.0]
 
-prob = DAEProblem(sys, du0, u0, tspan, p, jac = true, sparse = true)
+prob = DAEProblem(complete(sys), du0, u0, tspan, p, jac = true, sparse = true)
 sol = solve(prob, IDA(linear_solver = :KLU))
 
 @test maximum(sol - sol1) < 1e-12

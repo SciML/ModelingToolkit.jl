@@ -58,5 +58,5 @@ sys = modelingtoolkitize(prob)
 Using this, we can symbolically build the Jacobian and then rebuild the ODEProblem:
 
 ```@example mtkize
-prob_jac = ODEProblem(sys, [], (0.0, 1e5), jac = true)
+prob_jac = ODEProblem(complete(sys), [], (0.0, 1e5), jac = true)
 ```

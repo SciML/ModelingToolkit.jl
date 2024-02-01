@@ -308,6 +308,9 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = u
         analytic = nothing,
         split_idxs = nothing,
         kwargs...) where {iip, specialize}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEFunction`")
+    end
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression},
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
@@ -504,6 +507,9 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         eval_module = @__MODULE__,
         checkbounds = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEFunction`")
+    end
     f_gen = generate_function(sys, dvs, ps; implicit_dae = true,
         expression = Val{eval_expression},
         expression_module = eval_module, checkbounds = checkbounds,
@@ -579,6 +585,9 @@ function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         eval_module = @__MODULE__,
         checkbounds = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `DDEFunction`")
+    end
     f_gen = generate_function(sys, dvs, ps; isdde = true,
         expression = Val{true},
         expression_module = eval_module, checkbounds = checkbounds,
@@ -603,6 +612,9 @@ function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys
         eval_module = @__MODULE__,
         checkbounds = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `SDDEFunction`")
+    end
     f_gen = generate_function(sys, dvs, ps; isdde = true,
         expression = Val{true},
         expression_module = eval_module, checkbounds = checkbounds,
@@ -656,6 +668,9 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         sparsity = false,
         observedfun_exp = nothing,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEFunctionExpr`")
+    end
     f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
 
     dict = Dict()
@@ -830,6 +845,9 @@ function DAEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         linenumbers = false,
         sparse = false, simplify = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `DAEFunctionExpr`")
+    end
     f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true},
         implicit_dae = true, kwargs...)
     fsym = gensym(:f)
@@ -891,6 +909,9 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
         callback = nothing,
         check_length = true,
         kwargs...) where {iip, specialize}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
+    end
     f, u0, p = process_DEProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
         check_length, kwargs...)
@@ -959,6 +980,9 @@ end
 function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
         parammap = DiffEqBase.NullParameters();
         check_length = true, kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEProblem`")
+    end
     f, du0, u0, p = process_DEProblem(DAEFunction{iip}, sys, u0map, parammap;
         implicit_dae = true, du0map = du0map, check_length,
         kwargs...)
@@ -984,6 +1008,9 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         callback = nothing,
         check_length = true,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DDEProblem`")
+    end
     f, u0, p = process_DEProblem(DDEFunction{iip}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
         symbolic_u0 = true,
@@ -1042,6 +1069,9 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         check_length = true,
         sparsenoise = nothing,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `SDDEProblem`")
+    end
     f, u0, p = process_DEProblem(SDDEFunction{iip}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
         symbolic_u0 = true,
@@ -1126,6 +1156,9 @@ struct ODEProblemExpr{iip} end
 function ODEProblemExpr{iip}(sys::AbstractODESystem, u0map, tspan,
         parammap = DiffEqBase.NullParameters(); check_length = true,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `ODEProblemExpr`")
+    end
     f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap; check_length,
         kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
@@ -1168,6 +1201,9 @@ struct DAEProblemExpr{iip} end
 function DAEProblemExpr{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
         parammap = DiffEqBase.NullParameters(); check_length = true,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEProblemExpr`")
+    end
     f, du0, u0, p = process_DEProblem(DAEFunctionExpr{iip}, sys, u0map, parammap;
         implicit_dae = true, du0map = du0map, check_length,
         kwargs...)
@@ -1216,6 +1252,9 @@ end
 function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem, u0map,
         parammap = SciMLBase.NullParameters();
         check_length = true, kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `SteadyStateProblem`")
+    end
     f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap;
         steady_state = true,
         check_length, kwargs...)
@@ -1245,6 +1284,9 @@ function SteadyStateProblemExpr{iip}(sys::AbstractODESystem, u0map,
         parammap = SciMLBase.NullParameters();
         check_length = true,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `SteadyStateProblemExpr`")
+    end
     f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap;
         steady_state = true,
         check_length, kwargs...)

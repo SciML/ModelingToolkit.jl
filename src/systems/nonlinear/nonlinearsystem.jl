@@ -234,6 +234,9 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
         eval_expression = true,
         sparse = false, simplify = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearFunction`")
+    end
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression}, kwargs...)
     f_oop, f_iip = eval_expression ?
                    (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in f_gen) : f_gen
@@ -296,6 +299,9 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
         linenumbers = false,
         sparse = false, simplify = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearFunctionExpr`")
+    end
     idx = iip ? 2 : 1
     f = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)[idx]
 
@@ -366,6 +372,9 @@ end
 function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         parammap = DiffEqBase.NullParameters();
         check_length = true, kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearProblem`")
+    end
     f, u0, p = process_NonlinearProblem(NonlinearFunction{iip}, sys, u0map, parammap;
         check_length, kwargs...)
     pt = something(get_metadata(sys), StandardNonlinearProblem())
@@ -396,6 +405,9 @@ function NonlinearProblemExpr{iip}(sys::NonlinearSystem, u0map,
         parammap = DiffEqBase.NullParameters();
         check_length = true,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearProblemExpr`")
+    end
     f, u0, p = process_NonlinearProblem(NonlinearFunctionExpr{iip}, sys, u0map, parammap;
         check_length, kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)

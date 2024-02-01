@@ -88,6 +88,9 @@ function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem,
         record_from_solution = BifurcationKit.record_sol_default,
         jac = true,
         kwargs...)
+    if !ModelingToolkit.iscomplete(nsys)
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `BifurcationProblem`")
+    end
     # Creates F and J functions.
     ofun = NonlinearFunction(nsys; jac = jac)
     F = ofun.f
@@ -133,11 +136,14 @@ end
 
 # When input is a ODESystem.
 function BifurcationKit.BifurcationProblem(osys::ODESystem, args...; kwargs...)
+    if !ModelingToolkit.iscomplete(osys)
+        error("A completed `ODESystem` is required. Call `complete` or `structural_simplify` on the system before creating a `BifurcationProblem`")
+    end
     nsys = NonlinearSystem([0 ~ eq.rhs for eq in equations(osys)],
         unknowns(osys),
         parameters(osys);
         name = nameof(osys))
-    return BifurcationKit.BifurcationProblem(nsys, args...; kwargs...)
+    return BifurcationKit.BifurcationProblem(complete(nsys), args...; kwargs...)
 end
 
 end # module

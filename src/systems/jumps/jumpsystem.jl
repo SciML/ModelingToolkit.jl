@@ -119,6 +119,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             connector_type, devents, metadata, gui_metadata, complete)
     end
 end
+JumpSystem(tag, ap, iv, states, ps, var_to_name, args...; kwargs...) = JumpSystem{typeof(ap)}(tag, ap, iv, states, ps, var_to_name, args...; kwargs...)
 
 function JumpSystem(eqs, iv, unknowns, ps;
         observed = Equation[],
@@ -289,7 +290,7 @@ using DiffEqBase, JumpProcesses
 u₀map = [S => 999, I => 1, R => 0]
 parammap = [β => 0.1 / 1000, γ => 0.01]
 tspan = (0.0, 250.0)
-dprob = DiscreteProblem(js, u₀map, tspan, parammap)
+dprob = DiscreteProblem(complete(js), u₀map, tspan, parammap)
 ```
 """
 function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing},
@@ -297,6 +298,9 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
         checkbounds = false,
         use_union = true,
         kwargs...)
+    if !iscomplete(sys)
+        error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
+    end
     dvs = unknowns(sys)
     ps = parameters(sys)
 
@@ -344,7 +348,7 @@ using DiffEqBase, JumpProcesses
 u₀map = [S => 999, I => 1, R => 0]
 parammap = [β => 0.1 / 1000, γ => 0.01]
 tspan = (0.0, 250.0)
-dprob = DiscreteProblem(js, u₀map, tspan, parammap)
+dprob = DiscreteProblem(complete(js), u₀map, tspan, parammap)
 ```
 """
 struct DiscreteProblemExpr{iip} end
@@ -353,6 +357,9 @@ function DiscreteProblemExpr{iip}(sys::JumpSystem, u0map, tspan::Union{Tuple, No
         parammap = DiffEqBase.NullParameters();
         use_union = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblemExpr`")
+    end
     dvs = unknowns(sys)
     ps = parameters(sys)
     defs = defaults(sys)
@@ -382,12 +389,15 @@ Generates a JumpProblem from a JumpSystem.
 Continuing the example from the [`DiscreteProblem`](@ref) definition:
 
 ```julia
-jprob = JumpProblem(js, dprob, Direct())
+jprob = JumpProblem(complete(js), dprob, Direct())
 sol = solve(jprob, SSAStepper())
 ```
 """
 function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = nothing,
         kwargs...)
+    if !iscomplete(js)
+        error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `JumpProblem`")
+    end
     unknowntoid = Dict(value(unknown) => i for (i, unknown) in enumerate(unknowns(js)))
     eqs = equations(js)
     invttype = prob.tspan[1] === nothing ? Float64 : typeof(1 / prob.tspan[2])

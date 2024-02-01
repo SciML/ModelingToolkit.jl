@@ -136,6 +136,8 @@ fsys = flatten(sys)
 @test isequal(ModelingToolkit.continuous_events(sys2)[1].eqs[], x ~ 2)
 @test isequal(ModelingToolkit.continuous_events(sys2)[2].eqs[], sys.x ~ 1)
 
+sys = complete(sys)
+sys2 = complete(sys2)
 # Functions should be generated for root-finding equations
 prob = ODEProblem(sys, Pair[], (0.0, 2.0))
 p0 = 0
@@ -190,6 +192,7 @@ sol = solve(prob, Tsit5())
 @test minimum(t -> abs(t - 2), sol.t) < 1e-10 # test that the solver stepped at the second root
 
 @named sys = ODESystem(eqs, continuous_events = [x ~ 1, x ~ 2]) # two root eqs using the same unknown
+sys = complete(sys)
 prob = ODEProblem(sys, Pair[], (0.0, 3.0))
 @test get_callback(prob) isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
 sol = solve(prob, Tsit5())
@@ -341,7 +344,7 @@ sys = structural_simplify(model)
 let
     function testsol(osys, u0, p, tspan; tstops = Float64[], skipparamtest = false,
             kwargs...)
-        oprob = ODEProblem(osys, u0, tspan, p; kwargs...)
+        oprob = ODEProblem(complete(osys), u0, tspan, p; kwargs...)
         sol = solve(oprob, Tsit5(); tstops = tstops, abstol = 1e-10, reltol = 1e-10)
         @test isapprox(sol(1.0000000001)[1] - sol(0.999999999)[1], 1.0; rtol = 1e-6)
         !skipparamtest && (@test oprob.p[1] == 1.0)
@@ -392,7 +395,7 @@ let
     end
     cb2‵‵ = [2.0] => (affect!, [], [k], nothing)
     @named osys4 = ODESystem(eqs, t, [A], [k, t1], discrete_events = [cb1, cb2‵‵])
-    oprob4 = ODEProblem(osys4, u0, tspan, p)
+    oprob4 = ODEProblem(complete(osys4), u0, tspan, p)
     testsol(osys4, u0, p, tspan; tstops = [1.0])
 
     # mixing with symbolic condition in the func affect
@@ -415,7 +418,7 @@ end
 let
     function testsol(ssys, u0, p, tspan; tstops = Float64[], skipparamtest = false,
             kwargs...)
-        sprob = SDEProblem(ssys, u0, tspan, p; kwargs...)
+        sprob = SDEProblem(complete(ssys), u0, tspan, p; kwargs...)
         sol = solve(sprob, RI5(); tstops = tstops, abstol = 1e-10, reltol = 1e-10)
         @test isapprox(sol(1.0000000001)[1] - sol(0.999999999)[1], 1.0; rtol = 1e-4)
         !skipparamtest && (@test sprob.p[1] == 1.0)
@@ -495,6 +498,7 @@ end
 let rng = rng
     function testsol(jsys, u0, p, tspan; tstops = Float64[], skipparamtest = false,
             N = 40000, kwargs...)
+        jsys = complete(jsys)
         dprob = DiscreteProblem(jsys, u0, tspan, p)
         jprob = JumpProblem(jsys, dprob, Direct(); kwargs...)
         sol = solve(jprob, SSAStepper(); tstops = tstops)

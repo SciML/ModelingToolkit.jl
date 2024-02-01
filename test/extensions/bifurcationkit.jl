@@ -9,7 +9,7 @@ let
     eqs = [0 ~ μ * x - x^3 + α * y,
         0 ~ -y]
     @named nsys = NonlinearSystem(eqs, [x, y], [μ, α])
-
+    nsys = complete(nsys)
     # Creates BifurcationProblem 
     bif_par = μ
     p_start = [μ => -1.0, α => 1.0]
@@ -62,7 +62,7 @@ let
     eqs = [D(x) ~ -x + a * y + x^2 * y,
         D(y) ~ b - a * y - x^2 * y]
     @named sys = ODESystem(eqs)
-
+    sys = complete(sys)
     # Creates BifurcationProblem
     bprob = BifurcationProblem(sys,
         [x => 1.5, y => 1.0],

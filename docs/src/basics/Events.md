@@ -73,7 +73,7 @@ function UnitMassWithFriction(k; name)
     ODESystem(eqs, t; continuous_events = [v ~ 0], name) # when v = 0 there is a discontinuity
 end
 @named m = UnitMassWithFriction(0.7)
-prob = ODEProblem(m, Pair[], (0, 10pi))
+prob = ODEProblem(complete(m), Pair[], (0, 10pi))
 sol = solve(prob, Tsit5())
 plot(sol)
 ```
@@ -244,7 +244,7 @@ u0 = [N => 0.0]
 tspan = (0.0, 20.0)
 p = [α => 100.0, tinject => 10.0, M => 50]
 @named osys = ODESystem(eqs, t, [N], [α, M, tinject]; discrete_events = injection)
-oprob = ODEProblem(osys, u0, tspan, p)
+oprob = ODEProblem(complete(osys), u0, tspan, p)
 sol = solve(oprob, Tsit5(); tstops = 10.0)
 plot(sol)
 ```

@@ -55,6 +55,7 @@ Now let's use `modelingtoolkitize` to generate the symbolic version:
 
 ```@example sparsejac
 sys = modelingtoolkitize(prob);
+sys = complete(sys);
 nothing # hide
 ```
 

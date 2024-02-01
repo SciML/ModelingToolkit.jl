@@ -322,7 +322,7 @@ parammap = [
     β => 1.0
 ]
 
-probmod = SDEProblem(demod,u0modmap,(0.0,1.0),parammap)
+probmod = SDEProblem(complete(demod),u0modmap,(0.0,1.0),parammap)
 ensemble_probmod = EnsembleProblem(probmod;
           output_func = (sol,i) -> (g(sol[x,end])*sol[demod.weight,end],false),
           )
@@ -393,6 +393,9 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
         jac = false, Wfact = false, eval_expression = true,
         checkbounds = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEFunction`")
+    end
     dvs = scalarize.(dvs)
     ps = scalarize.(ps)
 
@@ -515,6 +518,9 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = unknowns(sys),
         jac = false, Wfact = false,
         sparse = false, linenumbers = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEFunctionExpr`")
+    end
     idx = iip ? 2 : 1
     f = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)[idx]
     g = generate_diffusion_function(sys, dvs, ps; expression = Val{true}, kwargs...)[idx]
@@ -573,6 +579,9 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map = [], tspan = get_tspa
         parammap = DiffEqBase.NullParameters();
         sparsenoise = nothing, check_length = true,
         callback = nothing, kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEProblem`")
+    end
     f, u0, p = process_DEProblem(SDEFunction{iip}, sys, u0map, parammap; check_length,
         kwargs...)
     cbs = process_events(sys; callback)
@@ -632,6 +641,9 @@ function SDEProblemExpr{iip}(sys::SDESystem, u0map, tspan,
         parammap = DiffEqBase.NullParameters();
         sparsenoise = nothing, check_length = true,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEProblemExpr`")
+    end
     f, u0, p = process_DEProblem(SDEFunctionExpr{iip}, sys, u0map, parammap; check_length,
         kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)

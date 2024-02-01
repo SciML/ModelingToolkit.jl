@@ -66,6 +66,7 @@ eqs = [0 ~ σ * a * h,
     0 ~ x * (ρ - z) - y,
     0 ~ x * y - β * z]
 @named ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
+ns = complete(ns)
 nlsys_func = generate_function(ns, [x, y, z], [σ, ρ, β])
 nf = NonlinearFunction(ns)
 jac = calculate_jacobian(ns)
@@ -98,7 +99,7 @@ eqs1 = [
 
 lorenz = name -> NonlinearSystem(eqs1, [x, y, z, u, F], [σ, ρ, β], name = name)
 lorenz1 = lorenz(:lorenz1)
-@test_throws ArgumentError NonlinearProblem(lorenz1, zeros(5))
+@test_throws ArgumentError NonlinearProblem(complete(lorenz1), zeros(5))
 lorenz2 = lorenz(:lorenz2)
 @named connected = NonlinearSystem([s ~ a + lorenz1.x
         lorenz2.y ~ s * h
@@ -128,7 +129,7 @@ eqs = [0 ~ σ * (y - x),
     0 ~ x * (ρ - z) - y,
     0 ~ x * y - β * z * h]
 @named ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
-np = NonlinearProblem(ns, [0, 0, 0], [1, 2, 3], jac = true, sparse = true)
+np = NonlinearProblem(complete(ns), [0, 0, 0], [1, 2, 3], jac = true, sparse = true)
 @test calculate_jacobian(ns, sparse = true) isa SparseMatrixCSC
 
 # issue #819
@@ -199,6 +200,7 @@ eq = [v1 ~ sin(2pi * t * h)
         u[4] ~ h]
 
     sys = NonlinearSystem(eqs, collect(u[1:4]), Num[], defaults = Dict([]), name = :test)
+    sys = complete(sys)
     prob = NonlinearProblem(sys, ones(length(unknowns(sys))))
 
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
@@ -223,6 +225,7 @@ testdict = Dict([:test => 1])
         0 ~ x * (b - z) - y,
         0 ~ x * y - c * z]
     @named sys = NonlinearSystem(eqs, [x, y, z], [a, b, c], defaults = Dict(x => 2.0))
+    sys = complete(sys)
     prob = NonlinearProblem(sys, ones(length(unknowns(sys))))
 
     prob_ = remake(prob, u0 = [1.0, 2.0, 3.0], p = [1.1, 1.2, 1.3])

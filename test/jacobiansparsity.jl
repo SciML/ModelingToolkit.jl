@@ -40,7 +40,7 @@ end
 u0 = init_brusselator_2d(xyd_brusselator)
 prob_ode_brusselator_2d = ODEProblem(brusselator_2d_loop,
     u0, (0.0, 11.5), p)
-sys = modelingtoolkitize(prob_ode_brusselator_2d)
+sys = complete(modelingtoolkitize(prob_ode_brusselator_2d))
 
 # test sparse jacobian pattern only.
 prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = false)
@@ -74,7 +74,7 @@ f = DiffEqBase.ODEFunction(sys, u0 = nothing, sparse = true, jac = false)
 u0 = similar(init_brusselator_2d(xyd_brusselator), Float32)
 prob_ode_brusselator_2d = ODEProblem(brusselator_2d_loop,
     u0, (0.0, 11.5), p)
-sys = modelingtoolkitize(prob_ode_brusselator_2d)
+sys = complete(modelingtoolkitize(prob_ode_brusselator_2d))
 
 prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = false)
 @test eltype(prob.f.jac_prototype) == Float32

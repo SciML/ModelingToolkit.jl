@@ -227,6 +227,9 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         linenumbers = true, parallel = SerialForm(),
         use_union = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `OptimizationSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `OptimizationProblem`")
+    end
     if haskey(kwargs, :lcons) || haskey(kwargs, :ucons)
         Base.depwarn("`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
             :OptimizationProblem, force = true)
@@ -419,6 +422,9 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
         linenumbers = false, parallel = SerialForm(),
         use_union = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `OptimizationSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `OptimizationProblemExpr`")
+    end
     if haskey(kwargs, :lcons) || haskey(kwargs, :ucons)
         Base.depwarn("`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
             :OptimizationProblem, force = true)
@@ -615,5 +621,6 @@ function structural_simplify(sys::OptimizationSystem; kwargs...)
     neweqs = fixpoint_sub.(equations(sys), (subs,))
     @set! sys.op = length(neweqs) == 1 ? first(neweqs) : neweqs
     @set! sys.unknowns = newsts
+    sys = complete(sys)
     return sys
 end

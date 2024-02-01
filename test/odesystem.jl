@@ -51,6 +51,7 @@ jac_expr = generate_jacobian(de)
 jac = calculate_jacobian(de)
 jacfun = eval(jac_expr[2])
 
+de = complete(de)
 for f in [
     ODEFunction(de, [x, y, z], [σ, ρ, β], tgrad = true, jac = true),
     eval(ODEFunctionExpr(de, [x, y, z], [σ, ρ, β], tgrad = true, jac = true)),
@@ -167,7 +168,7 @@ lowered_eqs = [D(uˍtt) ~ 2uˍtt + uˍt + xˍt + 1
 
 test_diffeq_inference("first-order transform", de1, t, [uˍtt, xˍt, uˍt, u, x], [])
 du = zeros(5)
-ODEFunction(de1, [uˍtt, xˍt, uˍt, u, x], [])(du, ones(5), nothing, 0.1)
+ODEFunction(complete(de1), [uˍtt, xˍt, uˍt, u, x], [])(du, ones(5), nothing, 0.1)
 @test du == [5.0, 3.0, 1.0, 1.0, 1.0]
 
 # Internal calculations
@@ -182,7 +183,7 @@ jac = calculate_jacobian(de)
 @test ModelingToolkit.jacobian_sparsity(de).colptr == sparse(jac).colptr
 @test ModelingToolkit.jacobian_sparsity(de).rowval == sparse(jac).rowval
 
-f = ODEFunction(de, [x, y, z], [σ, ρ, β])
+f = ODEFunction(complete(de), [x, y, z], [σ, ρ, β])
 
 D = Differential(t)
 @parameters A B C
@@ -208,7 +209,7 @@ function lotka(u, p, t)
 end
 
 prob = ODEProblem(ODEFunction{false}(lotka), [1.0, 1.0], (0.0, 1.0), [1.5, 1.0, 3.0, 1.0])
-de = modelingtoolkitize(prob)
+de = complete(modelingtoolkitize(prob))
 ODEFunction(de)(similar(prob.u0), prob.u0, prob.p, 0.1)
 
 function lotka(du, u, p, t)
@@ -220,7 +221,7 @@ end
 
 prob = ODEProblem(lotka, [1.0, 1.0], (0.0, 1.0), [1.5, 1.0, 3.0, 1.0])
 
-de = modelingtoolkitize(prob)
+de = complete(modelingtoolkitize(prob))
 ODEFunction(de)(similar(prob.u0), prob.u0, prob.p, 0.1)
 
 # automatic unknown detection for DAEs
@@ -232,6 +233,7 @@ eqs = [D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃,
     0 ~ y₁ + y₂ + y₃ - 1,
     D(y₂) ~ k₁ * y₁ - k₂ * y₂^2 - k₃ * y₂ * y₃ * κ]
 @named sys = ODESystem(eqs, defaults = [k₁ => 100, k₂ => 3e7, y₁ => 1.0])
+sys = complete(sys)
 u0 = Pair[]
 push!(u0, y₂ => 0.0)
 push!(u0, y₃ => 0.0)
@@ -279,7 +281,7 @@ sol_dpmap = solve(prob_dpmap, Rodas5())
         sys1 = makesys(:sys1)
         sys2 = makesys(:sys2)
         @parameters t b=1.0
-        ODESystem(Equation[], t, [], [b]; systems = [sys1, sys2], name = :foo)
+        complete(ODESystem(Equation[], t, [], [b]; systems = [sys1, sys2], name = :foo))
     end
 
     sys = makecombinedsys()
@@ -435,6 +437,7 @@ default_u0 = [D(x) => 0.0, x => 10.0]
 default_p = [M => 1.0, b => 1.0, k => 1.0]
 @named sys = ODESystem(eqs, t, [x], ps; defaults = [default_u0; default_p], tspan)
 sys = ode_order_lowering(sys)
+sys = complete(sys)
 prob = ODEProblem(sys)
 sol = solve(prob, Tsit5())
 @test sol.t[end] == tspan[end]
@@ -448,6 +451,7 @@ prob = ODEProblem{false}(sys; u0_constructor = x -> SVector(x...))
 D = Differential(t)
 eqs = [D(x1) ~ -x1]
 @named sys = ODESystem(eqs, t, [x1, x2], [])
+sys = complete(sys)
 @test_throws ArgumentError ODEProblem(sys, [1.0, 1.0], (0.0, 1.0))
 @test_nowarn ODEProblem(sys, [1.0, 1.0], (0.0, 1.0), check_length = false)
 
@@ -545,6 +549,7 @@ eqs = [D(x) ~ foo(x, ms); D.(ms) .~ 1]
 @named sys = ODESystem(eqs, t, [x; ms], [])
 @named emptysys = ODESystem(Equation[], t)
 @named outersys = compose(emptysys, sys)
+outersys = complete(outersys)
 prob = ODEProblem(outersys, [sys.x => 1.0; collect(sys.ms) .=> 1:3], (0, 1.0))
 @test_nowarn solve(prob, Tsit5())
 
@@ -575,11 +580,13 @@ eqs = [
 ]
 
 @named sys = ODESystem(eqs, t, [x, y, z], [α, β])
+sys = complete(sys)
 @test_throws Any ODEFunction(sys)
 
 eqs = copy(eqs)
 eqs[end] = D(D(z)) ~ α * x - β * y
 @named sys = ODESystem(eqs, t, [x, y, z], [α, β])
+sys = complete(sys)
 @test_throws Any ODEFunction(sys)
 
 @testset "Preface tests" begin
@@ -631,6 +638,7 @@ eqs[end] = D(D(z)) ~ α * x - β * y
     end
 
     @named sys = ODESystem(eqs, t, us, ps; defaults = defs, preface = preface)
+    sys = complete(sys)
     prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob, Euler(); dt = 0.1)
 
@@ -690,6 +698,7 @@ let
     D = Differential(t)
     eqs = [D(A) ~ -k1 * k2 * A]
     @named sys = ODESystem(eqs, t)
+    sys = complete(sys)
     u0map = [A => 1.0]
     pmap = (k1 => 1.0, k2 => 1)
     tspan = (0.0, 1.0)
@@ -843,6 +852,7 @@ let
     D = Differential(t)
     eqs = [D(A) ~ -k * A]
     @named osys = ODESystem(eqs, t)
+    osys = complete(osys)
     oprob = ODEProblem(osys, [A => 1.0], (0.0, 10.0), [k => 1.0]; check_length = false)
     @test_nowarn sol = solve(oprob, Tsit5())
 end
@@ -958,7 +968,7 @@ testdict = Dict([:name => "test"])
 eqs = [∂t(Q) ~ 1 / sin(P)
     ∂t(P) ~ log(-cos(Q))]
 @named sys = ODESystem(eqs, t, [P, Q], [])
-sys = debug_system(sys);
+sys = complete(debug_system(sys));
 prob = ODEProblem(sys, [], (0, 1.0));
 du = zero(prob.u0);
 if VERSION < v"1.8"

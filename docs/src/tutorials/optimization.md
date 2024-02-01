@@ -50,7 +50,7 @@ u0 = [x => 1.0
 p = [a => 1.0
     b => 100.0]
 
-prob = OptimizationProblem(sys, u0, p, grad = true, hess = true)
+prob = OptimizationProblem(complete(sys), u0, p, grad = true, hess = true)
 solve(prob, GradientDescent())
 ```
 
@@ -71,7 +71,7 @@ cons = [
 @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = cons)
 u0 = [x => 0.14
     y => 0.14]
-prob = OptimizationProblem(sys, u0, grad = true, hess = true, cons_j = true, cons_h = true)
+prob = OptimizationProblem(complete(sys), u0, grad = true, hess = true, cons_j = true, cons_h = true)
 solve(prob, IPNewton())
 ```
 
