@@ -935,7 +935,7 @@ let
     der = Differential(t)
     @named sys4 = ODESystem([der(x) ~ -y; der(y) ~ 1 + pp * y + x], t)
     sys4s = structural_simplify(sys4)
-    prob = ODAEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
+    prob = ODEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
     @test string.(unknowns(prob.f.sys)) == ["x(t)", "y(t)"]
     @test string.(parameters(prob.f.sys)) == ["pp"]
     @test string.(independent_variables(prob.f.sys)) == ["t"]
@@ -988,7 +988,7 @@ let
     der = Differential(t)
     @named sys4 = ODESystem([der(x) ~ -y; der(y) ~ 1 + pp * y + x], t)
     sys4s = structural_simplify(sys4)
-    prob = ODAEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
+    prob = ODEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
     @test !isnothing(prob.f.sys)
 end
 

@@ -30,7 +30,7 @@ tspan = (0, 10.0)
 pendulum_prob = ODEProblem(pendulum_fun!, u0, tspan, p)
 traced_sys = modelingtoolkitize(pendulum_prob)
 pendulum_sys = structural_simplify(dae_index_lowering(traced_sys))
-prob = ODAEProblem(pendulum_sys, [], tspan)
+prob = ODEProblem(pendulum_sys, [], tspan)
 sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
 plot(sol, idxs = unknowns(traced_sys))
 ```
@@ -162,20 +162,3 @@ variables which are symbolically eliminated, or any variable reordering
 done for enhanced parallelism/performance, still show up in the resulting
 plot and the plot is shown in the same order as the original numerical
 code.
-
-Note that we can even go a bit further. If we use the `ODAEProblem`
-constructor, we can remove the algebraic equations from the unknowns of the
-system and fully transform the index-3 DAE into an index-0 ODE which can
-be solved via an explicit Runge-Kutta method:
-
-```@example indexred
-traced_sys = modelingtoolkitize(pendulum_prob)
-pendulum_sys = structural_simplify(dae_index_lowering(traced_sys))
-prob = ODAEProblem(pendulum_sys, Pair[], tspan)
-sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
-plot(sol, idxs = unknowns(traced_sys))
-```
-
-And there you go: this has transformed the model from being too hard to
-solve with implicit DAE solvers, to something that is easily solved with
-explicit Runge-Kutta methods for non-stiff equations.

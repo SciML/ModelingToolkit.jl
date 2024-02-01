@@ -155,34 +155,36 @@ newdaesys = structural_simplify(daesys)
 @test equations(newdaesys) == [D(x) ~ z; 0 ~ y + sin(z) - p * t]
 @test equations(tearing_substitution(newdaesys)) == [D(x) ~ z; 0 ~ x + sin(z) - p * t]
 @test isequal(unknowns(newdaesys), [x, z])
-prob = ODAEProblem(newdaesys, [x => 1.0], (0, 1.0), [p => 0.2])
-du = [0.0];
-u = [1.0];
+@test isequal(states(newdaesys), [x, z])
+@test_deprecated ODAEProblem(newdaesys, [x => 1.0, z => -0.5π], (0, 1.0), [p => 0.2])
+prob = ODEProblem(newdaesys, [x => 1.0, z => -0.5π], (0, 1.0), [p => 0.2])
+du = [0.0, 0.0];
+u = [1.0, -0.5π];
 pr = 0.2;
 tt = 0.1;
 @test_skip (@ballocated $(prob.f)($du, $u, $pr, $tt)) == 0
 prob.f(du, u, pr, tt)
-@test du≈[-asin(u[1] - pr * tt)] atol=1e-5
+@test du ≈ [u[2], u[1] + sin(u[2]) - pr * tt] atol=1e-5
 
 # test the initial guess is respected
 @named sys = ODESystem(eqs, t, defaults = Dict(z => Inf))
-infprob = ODAEProblem(structural_simplify(sys), [x => 1.0], (0, 1.0), [p => 0.2])
-@test_throws Any infprob.f(du, u, pr, tt)
+infprob = ODEProblem(structural_simplify(sys), [x => 1.0], (0, 1.0), [p => 0.2])
+@test_throws Any infprob.f(du, infprob.u0, pr, tt)
 
-sol1 = solve(prob, Tsit5())
+sol1 = solve(prob, RosShamp4(), reltol=8e-7)
 sol2 = solve(ODEProblem{false}((u, p, t) -> [-asin(u[1] - pr * t)],
         [1.0],
         (0, 1.0),
         0.2), Tsit5(), tstops = sol1.t, adaptive = false)
-@test Array(sol1)≈Array(sol2) atol=1e-5
+@test Array(sol1[x])≈Array(sol2[1, :]) atol=1e-5
 
 @test sol1[x] == first.(sol1.u)
 @test sol1[y] == first.(sol1.u)
-@test sin.(sol1[z]) .+ sol1[y]≈pr[1] * sol1.t atol=1e-5
+@test sin.(sol1[z]) .+ sol1[y]≈pr[1] * sol1.t atol=5e-5
 @test sol1[sin(z) + y]≈sin.(sol1[z]) .+ sol1[y] rtol=1e-12
 
 @test sol1[y, :] == sol1[x, :]
-@test (@. sin(sol1[z, :]) + sol1[y, :])≈pr * sol1.t atol=1e-5
+@test (@. sin(sol1[z, :]) + sol1[y, :])≈pr * sol1.t atol=5e-5
 
 # 1426
 function Translational_Mass(; name, m = 1.0)
@@ -214,6 +216,6 @@ u0 = [mass.s => 0.0
 sys = structural_simplify(ms_model)
 @test ModelingToolkit.get_jac(sys)[] === ModelingToolkit.EMPTY_JAC
 @test ModelingToolkit.get_tgrad(sys)[] === ModelingToolkit.EMPTY_TGRAD
-prob_complex = ODAEProblem(sys, u0, (0, 1.0))
+prob_complex = ODEProblem(sys, u0, (0, 1.0))
 sol = solve(prob_complex, Tsit5())
 @test all(sol[mass.v] .== 1)

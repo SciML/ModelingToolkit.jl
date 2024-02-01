@@ -254,10 +254,10 @@ sol[reqn.R]
 
 ## Tearing Problem Construction
 
-Some system types, specifically `ODESystem` and `NonlinearSystem`, can be further
+Some system types (specifically `NonlinearSystem`) can be further
 reduced if `structural_simplify` has already been applied to them. This is done
-by using the alternative problem constructors, `ODAEProblem` and `BlockNonlinearProblem`
-respectively. In these cases, the constructor uses the knowledge of the
+by using the alternative problem constructors (`BlockNonlinearProblem`).
+In these cases, the constructor uses the knowledge of the
 strongly connected components calculated during the process of simplification
 as the basis for building pre-simplified nonlinear systems in the implicit
 solving. In summary: these problems are structurally modified, but could be

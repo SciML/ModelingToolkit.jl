@@ -52,7 +52,7 @@ u0 = [capacitor.v => 0.0
 prob = ODEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
 check_rc_sol(sol)
-prob = ODAEProblem(sys, u0, (0, 10.0))
+prob = ODEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
 check_rc_sol(sol)
 
@@ -80,7 +80,7 @@ let
     params = [param_r1 => 1.0, param_c1 => 1.0]
     tspan = (0.0, 10.0)
 
-    prob = ODAEProblem(sys, u0, tspan, params)
+    prob = ODEProblem(sys, u0, tspan, params)
     @test solve(prob, Tsit5()).retcode == ReturnCode.Success
 end
 
@@ -97,8 +97,8 @@ let
     @named rc_model2 = compose(_rc_model2,
         [resistor, resistor2, capacitor, source, ground])
     sys2 = structural_simplify(rc_model2)
-    prob2 = ODAEProblem(sys2, u0, (0, 10.0))
-    sol2 = solve(prob2, Tsit5())
+    prob2 = ODEProblem(sys2, u0, (0, 10.0))
+    sol2 = solve(prob2, Rosenbrock23())
     @test sol2[source.p.i] ≈ sol2[rc_model2.source.p.i] ≈ -sol2[capacitor.i]
 end
 
@@ -138,7 +138,7 @@ sol_inner_outer = solve(prob, Rodas4())
 u0 = [
     capacitor.v => 0.0,
 ]
-prob = ODAEProblem(sys, u0, (0, 10.0))
+prob = ODEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Tsit5())
 
 @test sol[resistor.p.i] == sol[capacitor.p.i]
@@ -155,7 +155,6 @@ sys = structural_simplify(ll_model)
 @test length(equations(sys)) == 2
 u0 = unknowns(sys) .=> 0
 @test_nowarn ODEProblem(sys, u0, (0, 10.0))
-@test_nowarn ODAEProblem(sys, u0, (0, 10.0))
 prob = DAEProblem(sys, Differential(t).(unknowns(sys)) .=> 0, u0, (0, 0.5))
 sol = solve(prob, DFBDF())
 @test sol.retcode == SciMLBase.ReturnCode.Success
@@ -294,5 +293,5 @@ rc_eqs = [connect(capacitor.n, resistor.p)
 @named rc_model = compose(_rc_model,
     [resistor, capacitor, ground])
 sys = structural_simplify(rc_model)
-prob = ODAEProblem(sys, u0, (0, 10.0))
+prob = ODEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Tsit5())

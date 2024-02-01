@@ -173,7 +173,7 @@ is that, your attempts to parallelize are neigh: performing parallelism after
 structural simplification greatly improves the problem that can be parallelized,
 so this is better than trying to do it by hand.
 
-After performing this, you can construct the `ODEProblem`/`ODAEProblem` and set
+After performing this, you can construct the `ODEProblem` and set
 `parallel_form` to use the exposed parallelism in multithreaded function
 constructions, but this showcases why `structural_simplify` is so important
 to that process.

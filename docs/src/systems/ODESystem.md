@@ -53,12 +53,6 @@ ODEProblem(sys::ModelingToolkit.AbstractODESystem, args...)
 SteadyStateProblem(sys::ModelingToolkit.AbstractODESystem, args...)
 ```
 
-## Torn Problem Constructors
-
-```@docs
-ODAEProblem
-```
-
 ## Expression Constructors
 
 ```@docs

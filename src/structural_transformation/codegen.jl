@@ -505,50 +505,7 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
     expression ? ex : drop_expr(@RuntimeGeneratedFunction(ex))
 end
 
-"""
-    ODAEProblem{iip}(sys, u0map, tspan, parammap = DiffEqBase.NullParameters(); kw...)
-
-This constructor acts similar to the one for [`ODEProblem`](@ref) with the following changes:
-`ODESystem`s can sometimes be further reduced if `structural_simplify` has
-already been applied to them.
-In these cases, the constructor uses the knowledge of the strongly connected
-components calculated during the process of simplification as the basis for
-building pre-simplified nonlinear systems in the implicit solving.
-
-In summary: these problems are structurally modified, but could be
-more efficient and more stable. Note, the returned object is still of type
-[`ODEProblem`](@ref).
-"""
 struct ODAEProblem{iip} end
 
-ODAEProblem(args...; kw...) = ODAEProblem{true}(args...; kw...)
-
-function ODAEProblem{iip}(sys,
-        u0map,
-        tspan,
-        parammap = DiffEqBase.NullParameters();
-        callback = nothing,
-        use_union = true,
-        tofloat = true,
-        check = true,
-        kwargs...) where {iip}
-    eqs = equations(sys)
-    check && ModelingToolkit.check_operator_variables(eqs, Differential)
-    fun, dvs = build_torn_function(sys; kwargs...)
-    ps = parameters(sys)
-    defs = defaults(sys)
-
-    defs = ModelingToolkit.mergedefaults(defs, parammap, ps)
-    defs = ModelingToolkit.mergedefaults(defs, u0map, dvs)
-    u0 = ModelingToolkit.varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
-    p = ModelingToolkit.varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
-
-    cbs = process_events(sys; callback, kwargs...)
-
-    kwargs = filter_kwargs(kwargs)
-    if cbs === nothing
-        ODEProblem{iip}(fun, u0, tspan, p; kwargs...)
-    else
-        ODEProblem{iip}(fun, u0, tspan, p; callback = cbs, kwargs...)
-    end
-end
+@deprecate ODAEProblem(args...; kw...) ODEProblem(args...; kw...)
+@deprecate ODAEProblem{iip}(args...; kw...) where {iip} ODEProblem{iip}(args...; kw...)
