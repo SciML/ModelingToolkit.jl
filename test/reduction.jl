@@ -240,7 +240,7 @@ vars = @variables x(t) y(t) z(t)
 eqs = [D(x) ~ x
     D(y) ~ y
     D(z) ~ t]
-@named model = ODESystem(eqs)
+@named model = ODESystem(eqs, t)
 sys = structural_simplify(model)
 Js = ModelingToolkit.jacobian_sparsity(sys)
 @test size(Js) == (3, 3)
@@ -257,17 +257,17 @@ ss = alias_elimination(sys)
 
 @variables x(t) y(t)
 @named sys = ODESystem([D(x) ~ 1 - x,
-    D(y) + D(x) ~ 0])
+    D(y) + D(x) ~ 0], t)
 new_sys = alias_elimination(sys)
 @test isempty(observed(new_sys))
 
 @named sys = ODESystem([D(x) ~ x,
-    D(y) + D(x) ~ 0])
+    D(y) + D(x) ~ 0], t)
 new_sys = alias_elimination(sys)
 @test isempty(observed(new_sys))
 
 @named sys = ODESystem([D(x) ~ 1 - x,
-    y + D(x) ~ 0])
+    y + D(x) ~ 0], t)
 new_sys = alias_elimination(sys)
 @test isempty(observed(new_sys))
 

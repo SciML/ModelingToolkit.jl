@@ -116,14 +116,14 @@ end
 
 ##
 
-@named sys = ODESystem(eqs, continuous_events = [x ~ 1])
+@named sys = ODESystem(eqs, t, continuous_events = [x ~ 1])
 @test getfield(sys, :continuous_events)[] ==
       SymbolicContinuousCallback(Equation[x ~ 1], NULL_AFFECT)
 @test isequal(equations(getfield(sys, :continuous_events))[], x ~ 1)
 fsys = flatten(sys)
 @test isequal(equations(getfield(fsys, :continuous_events))[], x ~ 1)
 
-@named sys2 = ODESystem([D(x) ~ 1], continuous_events = [x ~ 2], systems = [sys])
+@named sys2 = ODESystem([D(x) ~ 1], t, continuous_events = [x ~ 2], systems = [sys])
 @test getfield(sys2, :continuous_events)[] ==
       SymbolicContinuousCallback(Equation[x ~ 2], NULL_AFFECT)
 @test all(ModelingToolkit.continuous_events(sys2) .== [
@@ -191,7 +191,7 @@ sol = solve(prob, Tsit5())
 @test minimum(t -> abs(t - 1), sol.t) < 1e-10 # test that the solver stepped at the first root
 @test minimum(t -> abs(t - 2), sol.t) < 1e-10 # test that the solver stepped at the second root
 
-@named sys = ODESystem(eqs, continuous_events = [x ~ 1, x ~ 2]) # two root eqs using the same unknown
+@named sys = ODESystem(eqs, t, continuous_events = [x ~ 1, x ~ 2]) # two root eqs using the same unknown
 sys = complete(sys)
 prob = ODEProblem(sys, Pair[], (0.0, 3.0))
 @test get_callback(prob) isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
@@ -288,7 +288,7 @@ eq = [vs ~ sin(2pi * t)
     D(v) ~ vs - v
     D(vmeasured) ~ 0.0]
 ev = [sin(20pi * t) ~ 0.0] => [vmeasured ~ v]
-@named sys = ODESystem(eq, continuous_events = ev)
+@named sys = ODESystem(eq, t, continuous_events = ev)
 sys = structural_simplify(sys)
 prob = ODEProblem(sys, zeros(2), (0.0, 5.1))
 sol = solve(prob, Tsit5())

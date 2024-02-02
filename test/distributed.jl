@@ -13,7 +13,7 @@ addprocs(2)
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-@everywhere @named de = ODESystem(eqs)
+@everywhere @named de = ODESystem(eqs, t)
 @everywhere de = complete(de)
 @everywhere ode_func = ODEFunction(de, [x, y, z], [σ, ρ, β])
 

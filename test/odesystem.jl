@@ -21,7 +21,7 @@ eqs = [D(x) ~ σ * (y - x),
     D(z) ~ x * y - β * z * κ]
 
 ModelingToolkit.toexpr.(eqs)[1]
-@named de = ODESystem(eqs; defaults = Dict(x => 1))
+@named de = ODESystem(eqs, t; defaults = Dict(x => 1))
 subed = substitute(de, [σ => k])
 ssort(eqs) = sort(eqs, by = string)
 @test isequal(ssort(parameters(subed)), [k, β, ρ])
@@ -29,7 +29,7 @@ ssort(eqs) = sort(eqs, by = string)
     [D(x) ~ k * (y - x)
         D(y) ~ (ρ - z) * x - y
         D(z) ~ x * y - β * κ * z])
-@named des[1:3] = ODESystem(eqs)
+@named des[1:3] = ODESystem(eqs, t)
 @test length(unique(x -> ModelingToolkit.get_tag(x), des)) == 1
 
 @test eval(toexpr(de)) == de
@@ -103,7 +103,7 @@ f = eval(ODEFunctionExpr(de, [x, y, z], [σ, ρ, β], sparsity = false))
 eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y * t,
     D(z) ~ x * y - β * z * κ]
-@named de = ODESystem(eqs)
+@named de = ODESystem(eqs, t)
 ModelingToolkit.calculate_tgrad(de)
 
 tgrad_oop, tgrad_iip = eval.(ModelingToolkit.generate_tgrad(de))
@@ -119,7 +119,7 @@ tgrad_iip(du, u, p, t)
 eqs = [D(x) ~ σ′ * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z * κ]
-@named de = ODESystem(eqs)
+@named de = ODESystem(eqs, t)
 test_diffeq_inference("global iv-varying", de, t, (x, y, z), (σ′, ρ, β))
 
 f = eval(generate_function(de, [x, y, z], [σ′, ρ, β])[2])
@@ -131,7 +131,7 @@ f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
 eqs = [D(x) ~ σ(t - 1) * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z * κ]
-@named de = ODESystem(eqs)
+@named de = ODESystem(eqs, t)
 test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ(t - 1), ρ, β))
 f = eval(generate_function(de, [x, y, z], [σ, ρ, β])[2])
 du = [0.0, 0.0, 0.0]
@@ -139,7 +139,7 @@ f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
 @test du ≈ [11, -3, -7]
 
 eqs = [D(x) ~ x + 10σ(t - 1) + 100σ(t - 2) + 1000σ(t^2)]
-@named de = ODESystem(eqs)
+@named de = ODESystem(eqs, t)
 test_diffeq_inference("many internal iv-varying", de, t, (x,), (σ(t - 2), σ(t^2), σ(t - 1)))
 f = eval(generate_function(de, [x], [σ])[2])
 du = [0.0]
@@ -152,7 +152,7 @@ D2 = D^2
 @variables u(t) uˍtt(t) uˍt(t) xˍt(t)
 eqs = [D3(u) ~ 2(D2(u)) + D(u) + D(x) + 1
     D2(x) ~ D(x) + 2]
-@named de = ODESystem(eqs)
+@named de = ODESystem(eqs, t)
 de1 = ode_order_lowering(de)
 lowered_eqs = [D(uˍtt) ~ 2uˍtt + uˍt + xˍt + 1
     D(xˍt) ~ xˍt + 2
@@ -165,7 +165,7 @@ lowered_eqs = [D(uˍtt) ~ 2uˍtt + uˍt + xˍt + 1
 # issue #219
 @test all(isequal.([ModelingToolkit.var_from_nested_derivative(eq.lhs)[1]
                     for eq in equations(de1)],
-    unknowns(@named lowered = ODESystem(lowered_eqs))))
+    unknowns(@named lowered = ODESystem(lowered_eqs, t))))
 
 test_diffeq_inference("first-order transform", de1, t, [uˍtt, xˍt, uˍt, u, x], [])
 du = zeros(5)
@@ -178,7 +178,7 @@ a = y - x
 eqs = [D(x) ~ σ * a,
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z * κ]
-@named de = ODESystem(eqs)
+@named de = ODESystem(eqs, t)
 generate_function(de, [x, y, z], [σ, ρ, β])
 jac = calculate_jacobian(de)
 @test ModelingToolkit.jacobian_sparsity(de).colptr == sparse(jac).colptr
@@ -190,7 +190,7 @@ f = ODEFunction(complete(de), [x, y, z], [σ, ρ, β])
 _x = y / C
 eqs = [D(x) ~ -A * x,
     D(y) ~ A * x - B * _x]
-@named de = ODESystem(eqs)
+@named de = ODESystem(eqs, t)
 @test begin
     local f, du
     f = eval(generate_function(de, [x, y], [A, B, C])[2])
@@ -231,7 +231,7 @@ ODEFunction(de)(similar(prob.u0), prob.u0, prob.p, 0.1)
 eqs = [D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃,
     0 ~ y₁ + y₂ + y₃ - 1,
     D(y₂) ~ k₁ * y₁ - k₂ * y₂^2 - k₃ * y₂ * y₃ * κ]
-@named sys = ODESystem(eqs, defaults = [k₁ => 100, k₂ => 3e7, y₁ => 1.0])
+@named sys = ODESystem(eqs, t, defaults = [k₁ => 100, k₂ => 3e7, y₁ => 1.0])
 sys = complete(sys)
 u0 = Pair[]
 push!(u0, y₂ => 0.0)
@@ -272,7 +272,7 @@ sol_dpmap = solve(prob_dpmap, Rodas5())
     function makesys(name)
         @parameters a=1.0
         @variables x(t) = 0.0
-        ODESystem([D(x) ~ -a * x]; name)
+        ODESystem([D(x) ~ -a * x], t; name)
     end
 
     function makecombinedsys()
@@ -321,7 +321,7 @@ end
 eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x - β * y,
     x + z ~ y]
-@named sys = ODESystem(eqs)
+@named sys = ODESystem(eqs, t)
 @test all(isequal.(unknowns(sys), [x, y, z]))
 @test all(isequal.(parameters(sys), [σ, β]))
 @test equations(sys) == eqs
@@ -331,7 +331,7 @@ eqs = [D(x) ~ σ * (y - x),
 using ModelingToolkit
 @parameters a
 @variables x(t)
-@named sys = ODESystem([D(x) ~ a])
+@named sys = ODESystem([D(x) ~ a], t)
 @test issym(equations(sys)[1].rhs)
 
 # issue 708
@@ -375,7 +375,7 @@ eqs = [
 @parameters r
 @variables x(t)
 eq = D(x) ~ r * x
-@named ode = ODESystem(eq)
+@named ode = ODESystem(eq, t)
 @test equations(ode) == [eq]
 # issue #808
 @testset "Combined system name collisions" begin
@@ -383,7 +383,7 @@ eq = D(x) ~ r * x
         @parameters a
         @variables x(t) f(t)
 
-        ODESystem([D(x) ~ -a * x + f]; name)
+        ODESystem([D(x) ~ -a * x + f], t; name)
     end
 
     function issue808()
@@ -458,7 +458,7 @@ end
 # issue 1109
 let
     @variables x(t)[1:3, 1:3]
-    @named sys = ODESystem(D.(x) .~ x)
+    @named sys = ODESystem(D.(x) .~ x, t)
     @test_nowarn structural_simplify(sys)
 end
 
@@ -493,7 +493,7 @@ function submodel(; name)
     @variables y(t)
     @parameters A[1:5]
     A = collect(A)
-    ODESystem(D(y) ~ sum(A) * y; name = name)
+    ODESystem(D(y) ~ sum(A) * y, t; name = name)
 end
 
 # Build system
@@ -539,7 +539,7 @@ prob = ODEProblem(outersys, [sys.x => 1.0; collect(sys.ms) .=> 1:3], (0, 1.0))
 # observed variable handling
 @variables x(t) RHS(t)
 @parameters τ
-@named fol = ODESystem([D(x) ~ (1 - x) / τ]; observed = [RHS ~ (1 - x) / τ])
+@named fol = ODESystem([D(x) ~ (1 - x) / τ], t; observed = [RHS ~ (1 - x) / τ])
 @test isequal(RHS, @nonamespace fol.RHS)
 RHS2 = RHS
 @unpack RHS = fol
@@ -700,12 +700,6 @@ let
 end
 
 let
-    @variables t s(t) I(t) r(t)
-    @parameters N
-    @test_throws Any @named tmp = ODESystem([s + I + r ~ N])
-end
-
-let
     @parameters C L R
     @variables q(t) p(t) F(t)
 
@@ -722,37 +716,35 @@ let
     eqs_to_lhs(eqs) = eq_to_lhs.(eqs)
 
     @parameters σ=10 ρ=28 β=8 / 3 sigma rho beta
-    @variables t2 x(t)=1 y(t)=0 z(t)=0 x2(t2)=1 y2(t2)=0 z2(t2)=0 u(t2)[1:3]
-
-    D2 = Differential(t2)
+    @variables x(t)=1 y(t)=0 z(t)=0 x2(t)=1 y2(t)=0 z2(t)=0 u(t)[1:3]
 
     eqs = [D(x) ~ σ * (y - x),
         D(y) ~ x * (ρ - z) - y,
         D(z) ~ x * y - β * z]
 
     eqs2 = [
-        D2(y2) ~ x2 * (rho - z2) - y2,
-        D2(x2) ~ sigma * (y2 - x2),
-        D2(z2) ~ x2 * y2 - beta * z2,
+        D(y2) ~ x2 * (rho - z2) - y2,
+        D(x2) ~ sigma * (y2 - x2),
+        D(z2) ~ x2 * y2 - beta * z2,
     ]
 
     # array u
-    eqs3 = [D2(u[1]) ~ sigma * (u[2] - u[1]),
-        D2(u[2]) ~ u[1] * (rho - u[3]) - u[2],
-        D2(u[3]) ~ u[1] * u[2] - beta * u[3]]
+    eqs3 = [D(u[1]) ~ sigma * (u[2] - u[1]),
+        D(u[2]) ~ u[1] * (rho - u[3]) - u[2],
+        D(u[3]) ~ u[1] * u[2] - beta * u[3]]
     eqs3 = eqs_to_lhs(eqs3)
 
     eqs4 = [
-        D2(y2) ~ x2 * (rho - z2) - y2,
-        D2(x2) ~ sigma * (y2 - x2),
-        D2(z2) ~ y2 - beta * z2, # missing x2 term
+        D(y2) ~ x2 * (rho - z2) - y2,
+        D(x2) ~ sigma * (y2 - x2),
+        D(z2) ~ y2 - beta * z2, # missing x2 term
     ]
 
-    @named sys1 = ODESystem(eqs)
-    @named sys2 = ODESystem(eqs2)
-    @named sys3 = ODESystem(eqs3, t2)
+    @named sys1 = ODESystem(eqs, t)
+    @named sys2 = ODESystem(eqs2, t)
+    @named sys3 = ODESystem(eqs3, t)
     ssys3 = structural_simplify(sys3)
-    @named sys4 = ODESystem(eqs4)
+    @named sys4 = ODESystem(eqs4, t)
 
     @test ModelingToolkit.isisomorphic(sys1, sys2)
     @test !ModelingToolkit.isisomorphic(sys1, sys3)
@@ -863,7 +855,7 @@ let
         @variables u(t) x(t) v(t)
 
         eqs = [u ~ kx * x + kv * v]
-        ODESystem(eqs; name)
+        ODESystem(eqs, t; name)
     end
 
     @named ctrl = pd_ctrl()
@@ -874,7 +866,7 @@ let
         @variables u(t) x(t) v(t)
 
         eqs = [D(x) ~ v, D(v) ~ u]
-        ODESystem(eqs; name)
+        ODESystem(eqs, t; name)
     end
 
     @named sys = double_int()
@@ -883,7 +875,7 @@ let
 
     connections = [sys.u ~ ctrl.u, ctrl.x ~ sys.x, ctrl.v ~ sys.v]
 
-    @named connected = ODESystem(connections)
+    @named connected = ODESystem(connections, t)
     @named sys_con = compose(connected, sys, ctrl)
 
     sys_simp = structural_simplify(sys_con)
@@ -909,7 +901,7 @@ let
     ∂t = D
     eqs = [∂t(Q) ~ 0.2P
         ∂t(P) ~ -80.0sin(Q)]
-    @test_throws ArgumentError @named sys = ODESystem(eqs)
+    @test_throws ArgumentError @named sys = ODESystem(eqs, t)
 end
 
 @parameters C L R

@@ -37,13 +37,13 @@ D = Differential(t)
 @test UMT.get_unit(1.0^(t / τ)) == UMT.unitless
 @test UMT.get_unit(exp(t / τ)) == UMT.unitless
 @test UMT.get_unit(sin(t / τ)) == UMT.unitless
-@test UMT.get_unit(sin(1u"rad")) == UMT.unitless
+@test UMT.get_unit(sin(1 * u"rad")) == UMT.unitless
 @test UMT.get_unit(t^2) == u"ms^2"
 
 eqs = [D(E) ~ P - E / τ
     0 ~ P]
 @test UMT.validate(eqs)
-@named sys = ODESystem(eqs)
+@named sys = ODESystem(eqs, t)
 
 @test !UMT.validate(D(D(E)) ~ P)
 @test !UMT.validate(0 ~ P + E * τ)
@@ -53,13 +53,13 @@ eqs = [D(E) ~ P - E / τ
 ODESystem(eqs, t, [E, P, t], [τ], name = :sys, checks = MT.CheckUnits)
 eqs = [D(E) ~ P - E / τ
     0 ~ P + E * τ]
-@test_throws MT.ValidationError ODESystem(eqs, name = :sys, checks = MT.CheckAll)
-@test_throws MT.ValidationError ODESystem(eqs, name = :sys, checks = true)
-ODESystem(eqs, name = :sys, checks = MT.CheckNone)
-ODESystem(eqs, name = :sys, checks = false)
-@test_throws MT.ValidationError ODESystem(eqs, name = :sys,
+@test_throws MT.ValidationError ODESystem(eqs, t, name = :sys, checks = MT.CheckAll)
+@test_throws MT.ValidationError ODESystem(eqs, t, name = :sys, checks = true)
+ODESystem(eqs, t, name = :sys, checks = MT.CheckNone)
+ODESystem(eqs, t, name = :sys, checks = false)
+@test_throws MT.ValidationError ODESystem(eqs, t, name = :sys,
     checks = MT.CheckComponents | MT.CheckUnits)
-@named sys = ODESystem(eqs, checks = MT.CheckComponents)
+@named sys = ODESystem(eqs, t, checks = MT.CheckComponents)
 @test_throws MT.ValidationError ODESystem(eqs, t, [E, P, t], [τ], name = :sys,
     checks = MT.CheckUnits)
 
@@ -98,7 +98,7 @@ bad_length_eqs = [connect(op, lp)]
 @parameters v[1:3]=[1, 2, 3] [unit = u"m/s"]
 D = Differential(t)
 eqs = D.(x) .~ v
-ODESystem(eqs, name = :sys)
+ODESystem(eqs, t, name = :sys)
 
 # Nonlinear system
 @parameters a [unit = u"kg"^-1]
@@ -135,12 +135,12 @@ noiseeqs = [0.1u"MW" 0.1u"MW"
 D = Differential(t)
 eqs = [D(L) ~ v,
     V ~ L^3]
-@named sys = ODESystem(eqs)
+@named sys = ODESystem(eqs, t)
 sys_simple = structural_simplify(sys)
 
 eqs = [D(V) ~ r,
     V ~ L^3]
-@named sys = ODESystem(eqs)
+@named sys = ODESystem(eqs, t)
 sys_simple = structural_simplify(sys)
 
 @variables V [unit = u"m"^3] L [unit = u"m"]

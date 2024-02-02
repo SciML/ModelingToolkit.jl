@@ -22,7 +22,7 @@ eqs = [yd ~ Sample(t, dt)(y)
     u ~ Hold(ud)
     D(x) ~ -x + u
     y ~ x]
-@named sys = ODESystem(eqs)
+@named sys = ODESystem(eqs, t)
 # compute equation and variables' time domains
 #TODO: test linearize
 
@@ -110,7 +110,7 @@ z′(k + 1) ~ z(k) + yd
 z(k + 1)  ~ z′(k)
 =#
 ]
-@named sys = ODESystem(eqs)
+@named sys = ODESystem(eqs, t)
 ss = structural_simplify(sys);
 
 Tf = 1.0
@@ -174,7 +174,7 @@ eqs = [
     u ~ Hold(ud1) + Hold(ud2)
     D(x) ~ -x + u
     y ~ x]
-@named sys = ODESystem(eqs)
+@named sys = ODESystem(eqs, t)
 ci, varmap = infer_clocks(sys)
 
 d = Clock(t, dt)

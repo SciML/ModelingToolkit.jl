@@ -188,7 +188,7 @@ eq = [v1 ~ sin(2pi * t * h)
     v1 - v2 ~ i1
     v2 ~ i2
     i1 ~ i2]
-@named sys = ODESystem(eq)
+@named sys = ODESystem(eq, t)
 @test length(equations(structural_simplify(sys))) == 0
 
 @testset "Issue: 1504" begin
