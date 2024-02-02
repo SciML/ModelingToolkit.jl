@@ -5,7 +5,7 @@ using OrdinaryDiffEq
 using SymbolicIndexingInterface
 using Test
 using ControlSystemsMTK: tf, ss, get_named_sensitivity, get_named_comp_sensitivity
-
+using ModelingToolkit: t_nounits as t, D_nounits as D
 # ==============================================================================
 ## Mixing tank
 # This tests a common workflow in control engineering, the use of an inverse-based
@@ -14,8 +14,6 @@ using ControlSystemsMTK: tf, ss, get_named_sensitivity, get_named_comp_sensitivi
 # ==============================================================================
 
 connect = ModelingToolkit.connect;
-@parameters t;
-D = Differential(t);
 rc = 0.25 # Reference concentration 
 
 @mtkmodel MixingTank begin

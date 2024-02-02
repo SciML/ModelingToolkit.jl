@@ -1,5 +1,6 @@
 using ModelingToolkit
 using Sundials, Test, SparseArrays
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 # Comparing solution obtained by defining explicit Jacobian function with solution obtained from
 # symbolically generated Jacobian
@@ -29,10 +30,8 @@ sol1 = solve(prob1, IDA(linear_solver = :KLU))
 
 # Now MTK style solution with generated Jacobian
 
-@variables t u1(t) u2(t)
+@variables u1(t) u2(t)
 @parameters p1 p2
-
-D = Differential(t)
 
 eqs = [D(u1) ~ p1 * u1 - u1 * u2,
     D(u2) ~ u1 * u2 - p2 * u2]

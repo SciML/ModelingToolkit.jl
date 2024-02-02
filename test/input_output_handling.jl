@@ -2,9 +2,9 @@ using ModelingToolkit, Symbolics, Test
 using ModelingToolkit: get_namespace, has_var, inputs, outputs, is_bound, bound_inputs,
     unbound_inputs, bound_outputs, unbound_outputs, isinput, isoutput,
     ExtraVariablesSystemException
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@variables t xx(t) some_input(t) [input = true]
-D = Differential(t)
+@variables xx(t) some_input(t) [input = true]
 eqs = [D(xx) ~ some_input]
 @named model = ODESystem(eqs, t)
 @test_throws ExtraVariablesSystemException structural_simplify(model, ((), ()))
@@ -14,19 +14,17 @@ if VERSION >= v"1.8"
 end
 
 # Test input handling
-@parameters tv
-D = Differential(tv)
-@variables x(tv) u(tv) [input = true] v(tv)[1:2] [input = true]
+@variables x(t) u(t) [input = true] v(t)[1:2] [input = true]
 @test isinput(u)
 
-@named sys = ODESystem([D(x) ~ -x + u], tv) # both u and x are unbound
-@named sys1 = ODESystem([D(x) ~ -x + v[1] + v[2]], tv) # both v and x are unbound
-@named sys2 = ODESystem([D(x) ~ -sys.x], tv, systems = [sys]) # this binds sys.x in the context of sys2, sys2.x is still unbound
-@named sys21 = ODESystem([D(x) ~ -sys.x], tv, systems = [sys1]) # this binds sys.x in the context of sys2, sys2.x is still unbound
-@named sys3 = ODESystem([D(x) ~ -sys.x + sys.u], tv, systems = [sys]) # This binds both sys.x and sys.u
-@named sys31 = ODESystem([D(x) ~ -sys.x + sys1.v[1]], tv, systems = [sys1]) # This binds both sys.x and sys1.v[1]
+@named sys = ODESystem([D(x) ~ -x + u], t) # both u and x are unbound
+@named sys1 = ODESystem([D(x) ~ -x + v[1] + v[2]], t) # both v and x are unbound
+@named sys2 = ODESystem([D(x) ~ -sys.x], t, systems = [sys]) # this binds sys.x in the context of sys2, sys2.x is still unbound
+@named sys21 = ODESystem([D(x) ~ -sys.x], t, systems = [sys1]) # this binds sys.x in the context of sys2, sys2.x is still unbound
+@named sys3 = ODESystem([D(x) ~ -sys.x + sys.u], t, systems = [sys]) # This binds both sys.x and sys.u
+@named sys31 = ODESystem([D(x) ~ -sys.x + sys1.v[1]], t, systems = [sys1]) # This binds both sys.x and sys1.v[1]
 
-@named sys4 = ODESystem([D(x) ~ -sys.x, u ~ sys.u], tv, systems = [sys]) # This binds both sys.x and sys3.u, this system is one layer deeper than the previous. u is directly forwarded to sys.u, and in this case sys.u is bound while u is not
+@named sys4 = ODESystem([D(x) ~ -sys.x, u ~ sys.u], t, systems = [sys]) # This binds both sys.x and sys3.u, this system is one layer deeper than the previous. u is directly forwarded to sys.u, and in this case sys.u is bound while u is not
 
 @test has_var(x ~ 1, x)
 @test has_var(1 ~ x, x)
@@ -87,14 +85,12 @@ fsys4 = flatten(sys4)
 @test isempty(unbound_inputs(sys3))
 
 # Test output handling
-@parameters tv
-D = Differential(tv)
-@variables x(tv) y(tv) [output = true]
+@variables x(t) y(t) [output = true]
 @test isoutput(y)
-@named sys = ODESystem([D(x) ~ -x, y ~ x], tv) # both y and x are unbound
+@named sys = ODESystem([D(x) ~ -x, y ~ x], t) # both y and x are unbound
 syss = structural_simplify(sys) # This makes y an observed variable
 
-@named sys2 = ODESystem([D(x) ~ -sys.x, y ~ sys.y], tv, systems = [sys])
+@named sys2 = ODESystem([D(x) ~ -sys.x, y ~ sys.y], t, systems = [sys])
 
 @test !is_bound(sys, y)
 @test !is_bound(sys, x)
@@ -121,7 +117,6 @@ syss = structural_simplify(sys2)
 
 using ModelingToolkitStandardLibrary
 using ModelingToolkitStandardLibrary.Mechanical.Rotational
-t = ModelingToolkitStandardLibrary.Mechanical.Rotational.t
 @named inertia1 = Inertia(; J = 1)
 @named inertia2 = Inertia(; J = 1)
 @named spring = Rotational.Spring(; c = 10)
@@ -140,24 +135,25 @@ matrices, ssys = linearize(model, model_inputs, model_outputs)
 @test length(ModelingToolkit.outputs(ssys)) == 4
 
 if VERSION >= v"1.8" # :opaque_closure not supported before
-    matrices, ssys = linearize(model, model_inputs, [y])
-    A, B, C, D = matrices
-    obsf = ModelingToolkit.build_explicit_observed_function(ssys,
-        [y],
-        inputs = [torque.tau.u],
-        drop_expr = identity)
-    x = randn(size(A, 1))
-    u = randn(size(B, 2))
-    p = getindex.(Ref(ModelingToolkit.defaults(ssys)), parameters(ssys))
-    y1 = obsf(x, u, p, 0)
-    y2 = C * x + D * u
-    @test y1[] ≈ y2[]
+    let # Just to have a local scope for D
+        matrices, ssys = linearize(model, model_inputs, [y])
+        A, B, C, D = matrices
+        obsf = ModelingToolkit.build_explicit_observed_function(ssys,
+            [y],
+            inputs = [torque.tau.u],
+            drop_expr = identity)
+        x = randn(size(A, 1))
+        u = randn(size(B, 2))
+        p = getindex.(Ref(ModelingToolkit.defaults(ssys)), parameters(ssys))
+        y1 = obsf(x, u, p, 0)
+        y2 = C * x + D * u
+        @test y1[] ≈ y2[]
+    end
 end
 
 ## Code generation with unbound inputs
 
-@variables t x(t)=0 u(t)=0 [input = true]
-D = Differential(t)
+@variables x(t)=0 u(t)=0 [input = true]
 eqs = [
     D(x) ~ -x + u,
 ]
@@ -236,9 +232,8 @@ i = findfirst(isequal(u[1]), out)
 @test i isa Int
 @test iszero(out[[1:(i - 1); (i + 1):end]])
 
-@parameters t
 @variables x(t) u(t) [input = true]
-eqs = [Differential(t)(x) ~ u]
+eqs = [D(x) ~ u]
 @named sys = ODESystem(eqs, t)
 @test_nowarn structural_simplify(sys)
 
@@ -252,7 +247,6 @@ The test below builds a double-mass model and adds an integrating disturbance to
 using ModelingToolkit
 using ModelingToolkitStandardLibrary.Mechanical.Rotational
 using ModelingToolkitStandardLibrary.Blocks
-@parameters t
 
 # Parameters
 m1 = 1
@@ -313,10 +307,8 @@ xp1 = f_oop(x1, u, pn, 0)
 @test xp0 ≈ matrices.A * x0 + matrices.B * [u; 0]
 @test xp1 ≈ matrices.A * x1 + matrices.B * [u; 0]
 
-@parameters t
 @variables x(t)[1:3] = 0
 @variables u(t)[1:2]
-D = Differential(t)
 y₁, y₂, y₃ = x
 u1, u2 = u
 k₁, k₂, k₃ = 1, 1, 1
@@ -332,7 +324,6 @@ sys_simp, input_idxs = structural_simplify(sys, (; inputs = m_inputs, outputs = 
 @test length(input_idxs) == 2
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/1577
-@parameters t
 @named c = Constant(; k = 2)
 @named gain = Gain(1;)
 @named int = Integrator(; k = 1)

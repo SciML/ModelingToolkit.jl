@@ -3,6 +3,7 @@ using ModelingToolkit, OrdinaryDiffEq
 using ModelingToolkit: get_component_type
 using ModelingToolkit.BipartiteGraphs
 using ModelingToolkit.StructuralTransformations
+using ModelingToolkit: t_nounits as t, D_nounits as D
 include("../examples/rc_model.jl")
 
 function check_contract(sys)
@@ -155,7 +156,7 @@ sys = structural_simplify(ll_model)
 @test length(equations(sys)) == 2
 u0 = unknowns(sys) .=> 0
 @test_nowarn ODEProblem(sys, u0, (0, 10.0))
-prob = DAEProblem(sys, Differential(t).(unknowns(sys)) .=> 0, u0, (0, 0.5))
+prob = DAEProblem(sys, D.(unknowns(sys)) .=> 0, u0, (0, 0.5))
 sol = solve(prob, DFBDF())
 @test sol.retcode == SciMLBase.ReturnCode.Success
 
@@ -165,8 +166,7 @@ u0 = unknowns(sys) .=> 0
 prob = ODEProblem(sys, u0, (0, 10.0))
 @test_nowarn sol = solve(prob, FBDF())
 
-@variables t x1(t) x2(t) x3(t) x4(t)
-D = Differential(t)
+@variables x1(t) x2(t) x3(t) x4(t)
 @named sys1_inner = ODESystem([D(x1) ~ x1], t)
 @named sys1_partial = compose(ODESystem([D(x2) ~ x2], t; name = :foo), sys1_inner)
 @named sys1 = extend(ODESystem([D(x3) ~ x3], t; name = :foo), sys1_partial)
@@ -174,8 +174,6 @@ D = Differential(t)
 @test_nowarn sys2.sys1.sys1_inner.x1 # test the correct nesting
 
 # compose tests
-@parameters t
-
 function record_fun(; name)
     pars = @parameters a=10 b=100
     ODESystem(Equation[], t, [], pars; name)

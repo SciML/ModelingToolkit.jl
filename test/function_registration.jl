@@ -7,9 +7,9 @@
 # ------------------------------------------------
 module MyModule
 using ModelingToolkit, DiffEqBase, LinearAlgebra, Test
-@parameters t x
+using ModelingToolkit: t_nounits as t, D_nounits as Dt
+@parameters x
 @variables u(t)
-Dt = Differential(t)
 
 function do_something(a)
     a + 10
@@ -30,9 +30,9 @@ end
 module MyModule2
 module MyNestedModule
 using ModelingToolkit, DiffEqBase, LinearAlgebra, Test
-@parameters t x
+using ModelingToolkit: t_nounits as t, D_nounits as Dt
+@parameters x
 @variables u(t)
-Dt = Differential(t)
 
 function do_something_2(a)
     a + 20
@@ -52,9 +52,9 @@ end
 # TEST: Function registration outside any modules.
 # ------------------------------------------------
 using ModelingToolkit, DiffEqBase, LinearAlgebra, Test
-@parameters t x
+using ModelingToolkit: t_nounits as t, D_nounits as Dt
+@parameters x
 @variables u(t)
-Dt = Differential(t)
 
 function do_something_3(a)
     a + 30
@@ -72,9 +72,8 @@ u0 = 7.0
 # TEST: Function registration works with derivatives.
 # ---------------------------------------------------
 foo(x, y) = sin(x) * cos(y)
-@parameters t;
 @variables x(t) y(t) z(t);
-D = Differential(t);
+D = Dt
 @register_symbolic foo(x, y)
 
 using ModelingToolkit: value, arguments, operation
@@ -97,9 +96,8 @@ function do_something_4(a)
 end
 @register_symbolic do_something_4(a)
 function build_ode()
-    @parameters t x
+    @parameters x
     @variables u(t)
-    Dt = Differential(t)
     eq = Dt(u) ~ do_something_4(x) + (@__MODULE__).do_something_4(x)
     @named sys = ODESystem([eq], t, [u], [x])
     sys = complete(sys)

@@ -1,13 +1,13 @@
 using Test
 using ModelingToolkit, Graphs, JumpProcesses
-
+using ModelingToolkit: t_nounits as t, D_nounits as D
 import ModelingToolkit: value
 
 #################################
 #  testing for Jumps / all dgs
 #################################
 @parameters k1 k2
-@variables t S(t) I(t) R(t)
+@variables S(t) I(t) R(t)
 j₁ = MassActionJump(k1, [0 => 1], [S => 1])
 j₂ = MassActionJump(k1, [S => 1], [S => -1])
 j₃ = MassActionJump(k2, [S => 1, I => 1], [S => -1, I => 1])
@@ -76,8 +76,7 @@ dg4 = varvar_dependencies(depsbg, deps2)
 #       testing for ODE/SDEs
 #####################################
 @parameters k1 k2
-@variables t S(t) I(t) R(t)
-D = Differential(t)
+@variables S(t) I(t) R(t)
 eqs = [D(S) ~ k1 - k1 * S - k2 * S * I - k1 * k2 / (1 + t) * S,
     D(I) ~ k2 * S * I,
     D(R) ~ -k2 * S^2 * R / 2 + k1 * I + k1 * k2 * S / (1 + t)]
@@ -93,7 +92,7 @@ eq_sdeps = [[S, I], [S, I], [S, I, R]]
 @test all(i -> isequal(Set(eq_sdeps[i]), Set(deps[i])), 1:length(deps))
 
 @parameters k1 k2
-@variables t S(t) I(t) R(t)
+@variables S(t) I(t) R(t)
 @named sdes = SDESystem(eqs, noiseeqs, t, [S, I, R], [k1, k2])
 deps = equation_dependencies(sdes)
 @test all(i -> isequal(Set(eq_sdeps[i]), Set(deps[i])), 1:length(deps))

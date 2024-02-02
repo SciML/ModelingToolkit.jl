@@ -1,9 +1,9 @@
 using ModelingToolkit, OrdinaryDiffEq, JumpProcesses, IfElse, DynamicQuantities
 using Test
 MT = ModelingToolkit
+using ModelingToolkit: t, D
 @parameters τ [unit = u"s"] γ
-@variables t [unit = u"s"] E(t) [unit = u"J"] P(t) [unit = u"W"]
-D = Differential(t)
+@variables E(t) [unit = u"J"] P(t) [unit = u"W"]
 
 # Basic access
 @test MT.get_unit(t) == u"s"
@@ -66,21 +66,10 @@ good_eqs = [connect(p1, p2)]
 @named sys = ODESystem(good_eqs, t, [], [])
 
 # Array variables
-@variables t [unit = u"s"] x(t)[1:3] [unit = u"m"]
+@variables x(t)[1:3] [unit = u"m"]
 @parameters v[1:3]=[1, 2, 3] [unit = u"m/s"]
-D = Differential(t)
 eqs = D.(x) .~ v
 ODESystem(eqs, name = :sys)
-
-# Difference equation
-@parameters t [unit = u"s"] a [unit = u"s"^-1]
-@variables x(t) [unit = u"kg"]
-δ = Differential(t)
-D = Difference(t; dt = 0.1u"s")
-eqs = [
-    δ(x) ~ a * x,
-]
-de = ODESystem(eqs, t, [x], [a], name = :sys)
 
 # Nonlinear system
 @parameters a [unit = u"kg"^-1]
@@ -92,8 +81,7 @@ eqs = [
 
 # SDE test w/ noise vector
 @parameters τ [unit = u"s"] Q [unit = u"W"]
-@variables t [unit = u"s"] E(t) [unit = u"J"] P(t) [unit = u"W"]
-D = Differential(t)
+@variables E(t) [unit = u"J"] P(t) [unit = u"W"]
 eqs = [D(E) ~ P - E / τ
     P ~ Q]
 
@@ -112,9 +100,8 @@ noiseeqs = [0.1u"W" 0.1u"W"
 @test !MT.validate(eqs, noiseeqs)
 
 # Non-trivial simplifications
-@variables t [unit = u"s"] V(t) [unit = u"m"^3] L(t) [unit = u"m"]
+@variables V(t) [unit = u"m"^3] L(t) [unit = u"m"]
 @parameters v [unit = u"m/s"] r [unit = u"m"^3 / u"s"]
-D = Differential(t)
 eqs = [D(L) ~ v,
     V ~ L^3]
 @named sys = ODESystem(eqs)
@@ -126,7 +113,7 @@ eqs = [D(V) ~ r,
 sys_simple = structural_simplify(sys)
 
 @variables V [unit = u"m"^3] L [unit = u"m"]
-@parameters v [unit = u"m/s"] r [unit = u"m"^3 / u"s"] t [unit = u"s"]
+@parameters v [unit = u"m/s"] r [unit = u"m"^3 / u"s"]
 eqs = [V ~ r * t,
     V ~ L^3]
 @named sys = NonlinearSystem(eqs, [V, L], [t, r])
@@ -138,7 +125,7 @@ eqs = [L ~ v * t,
 sys_simple = structural_simplify(sys)
 
 #Jump System
-@parameters β [unit = u"(mol^2*s)^-1"] γ [unit = u"(mol*s)^-1"] t [unit = u"s"] jumpmol [
+@parameters β [unit = u"(mol^2*s)^-1"] γ [unit = u"(mol*s)^-1"] jumpmol [
     unit = u"mol",
 ]
 @variables S(t) [unit = u"mol"] I(t) [unit = u"mol"] R(t) [unit = u"mol"]
@@ -164,9 +151,9 @@ maj2 = MassActionJump(γ, [I => 1], [I => -1, R => 1])
 @named js3 = JumpSystem([maj1, maj2], t, [S, I, R], [β, γ])
 
 #Test unusual jump system
-@parameters β γ t
+@parameters β γ
 @variables S(t) I(t) R(t)
 
 maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
 maj2 = MassActionJump(γ, [S => 1], [S => -1])
-@named js4 = JumpSystem([maj1, maj2], t, [S], [β, γ])
+@named js4 = JumpSystem([maj1, maj2], ModelingToolkit.t_nounits, [S], [β, γ])

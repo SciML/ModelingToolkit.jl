@@ -3,11 +3,11 @@ using Graphs
 using DiffEqBase
 using Test
 using UnPack
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 # Define some variables
-@parameters t L g
+@parameters L g
 @variables x(t) y(t) w(t) z(t) T(t) xˍt(t) yˍt(t) xˍˍt(t) yˍˍt(t)
-D = Differential(t)
 
 eqs2 = [D(D(x)) ~ T * x,
     D(D(y)) ~ T * y - g,
@@ -40,9 +40,8 @@ state = TearingState(pendulum)
     [1, 2, 3, 4, 0, 0, 0, 0, 0])
 
 using ModelingToolkit
-@parameters t L g
+@parameters L g
 @variables x(t) y(t) w(t) z(t) T(t) xˍt(t) yˍt(t)
-D = Differential(t)
 idx1_pendulum = [D(x) ~ w,
     D(y) ~ z,
     #0 ~ x^2 + y^2 - L^2,
@@ -85,9 +84,8 @@ sol = solve(prob_auto, Rodas5());
 #plot(sol, idxs=(x, y))
 
 # Define some variables
-@parameters t L g
+@parameters L g
 @variables x(t) y(t) T(t)
-D = Differential(t)
 
 eqs2 = [D(D(x)) ~ T * x,
     D(D(y)) ~ T * y - g,

@@ -1,10 +1,10 @@
 using ModelingToolkit
 using SteadyStateDiffEq
 using Test
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@parameters t r
+@parameters r
 @variables x(t)
-D = Differential(t)
 eqs = [D(x) ~ x^2 - r]
 @named de = ODESystem(eqs)
 de = complete(de)

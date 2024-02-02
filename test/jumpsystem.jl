@@ -1,10 +1,11 @@
 using ModelingToolkit, DiffEqBase, JumpProcesses, Test, LinearAlgebra, StableRNGs
+using ModelingToolkit: t_nounits as t, D_nounits as D
 MT = ModelingToolkit
 
 rng = StableRNG(12345)
 
 # basic MT SIR model with tweaks
-@parameters β γ t
+@parameters β γ
 @constants h = 1
 @variables S(t) I(t) R(t)
 rate₁ = β * S * I * h
@@ -215,7 +216,7 @@ let
     # 3X --> A + 2X
     # B --> X
     # X --> B
-    @variables t A(t) X(t) B(t)
+    @variables A(t) X(t) B(t)
     jumps = [MassActionJump(1.0, [A => 1, X => 2], [A => -1, X => 1]),
         MassActionJump(1.0, [X => 3], [A => 1, X => -1]),
         MassActionJump(1.0, [B => 1], [B => -1, X => 1]),

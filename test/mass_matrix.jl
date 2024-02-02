@@ -1,8 +1,8 @@
 using OrdinaryDiffEq, ModelingToolkit, Test, LinearAlgebra
-@parameters t
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
 @variables y(t)[1:3]
 @parameters k[1:3]
-D = Differential(t)
 
 eqs = [D(y[1]) ~ -k[1] * y[1] + k[3] * y[2] * y[3],
     D(y[2]) ~ k[1] * y[1] - k[3] * y[2] * y[3] - k[2] * y[2]^2,

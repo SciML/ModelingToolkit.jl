@@ -7,12 +7,12 @@ using Test
 using SymbolicUtils: issym
 
 using ModelingToolkit: value
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 # Define some variables
-@parameters t σ ρ β
+@parameters σ ρ β
 @constants κ = 1
 @variables x(t) y(t) z(t)
-D = Differential(t)
 @parameters k
 
 # Define a differential equation
@@ -31,6 +31,7 @@ ssort(eqs) = sort(eqs, by = string)
         D(z) ~ x * y - β * κ * z])
 @named des[1:3] = ODESystem(eqs)
 @test length(unique(x -> ModelingToolkit.get_tag(x), des)) == 1
+
 @test eval(toexpr(de)) == de
 @test hash(deepcopy(de)) == hash(de)
 
@@ -146,8 +147,8 @@ f(du, [1.0], [t -> t + 2], 5.0)
 @test du ≈ [27561]
 
 # Conversion to first-order ODEs #17
-D3 = Differential(t)^3
-D2 = Differential(t)^2
+D3 = D^3
+D2 = D^2
 @variables u(t) uˍtt(t) uˍt(t) xˍt(t)
 eqs = [D3(u) ~ 2(D2(u)) + D(u) + D(x) + 1
     D2(x) ~ D(x) + 2]
@@ -185,7 +186,6 @@ jac = calculate_jacobian(de)
 
 f = ODEFunction(complete(de), [x, y, z], [σ, ρ, β])
 
-D = Differential(t)
 @parameters A B C
 _x = y / C
 eqs = [D(x) ~ -A * x,
@@ -225,9 +225,8 @@ de = complete(modelingtoolkitize(prob))
 ODEFunction(de)(similar(prob.u0), prob.u0, prob.p, 0.1)
 
 # automatic unknown detection for DAEs
-@parameters t k₁ k₂ k₃
+@parameters k₁ k₂ k₃
 @variables y₁(t) y₂(t) y₃(t)
-D = Differential(t)
 # reorder the system just to be a little spicier
 eqs = [D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃,
     0 ~ y₁ + y₂ + y₃ - 1,
@@ -271,16 +270,15 @@ sol_dpmap = solve(prob_dpmap, Rodas5())
 
 @testset "symbolic remake with nested system" begin
     function makesys(name)
-        @parameters t a=1.0
+        @parameters a=1.0
         @variables x(t) = 0.0
-        D = Differential(t)
         ODESystem([D(x) ~ -a * x]; name)
     end
 
     function makecombinedsys()
         sys1 = makesys(:sys1)
         sys2 = makesys(:sys2)
-        @parameters t b=1.0
+        @parameters b=1.0
         complete(ODESystem(Equation[], t, [], [b]; systems = [sys1, sys2], name = :foo))
     end
 
@@ -318,9 +316,8 @@ for prob in [prob4, prob5]
     @test all(x -> ≈(sum(x), 1.0, atol = 1e-12), sol.u)
 end
 
-@parameters t σ β
+@parameters σ β
 @variables x(t) y(t) z(t)
-D = Differential(t)
 eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x - β * y,
     x + z ~ y]
@@ -332,16 +329,14 @@ eqs = [D(x) ~ σ * (y - x),
 
 # issue 701
 using ModelingToolkit
-@parameters t a
+@parameters a
 @variables x(t)
-D = Differential(t)
 @named sys = ODESystem([D(x) ~ a])
 @test issym(equations(sys)[1].rhs)
 
 # issue 708
-@parameters t a
+@parameters a
 @variables x(t) y(t) z(t)
-D = Differential(t)
 @named sys = ODESystem([D(x) ~ y, 0 ~ x + z, 0 ~ x - y], t, [z, y, x], [])
 asys = add_accumulations(sys)
 @variables accumulation_x(t) accumulation_y(t) accumulation_z(t)
@@ -365,8 +360,7 @@ M = ModelingToolkit.calculate_massmatrix(sys2)
 @test M == Diagonal([1, 0, 0])
 
 # issue #609
-@variables t x1(t) x2(t)
-D = Differential(t)
+@variables x1(t) x2(t)
 
 eqs = [
     D(x1) ~ -x1,
@@ -378,18 +372,16 @@ eqs = [
 @test isempty(parameters(sys))
 
 # one equation ODESystem test
-@parameters t r
+@parameters r
 @variables x(t)
-D = Differential(t)
 eq = D(x) ~ r * x
 @named ode = ODESystem(eq)
 @test equations(ode) == [eq]
 # issue #808
 @testset "Combined system name collisions" begin
     function makesys(name)
-        @parameters t a
+        @parameters a
         @variables x(t) f(t)
-        D = Differential(t)
 
         ODESystem([D(x) ~ -a * x + f]; name)
     end
@@ -398,8 +390,6 @@ eq = D(x) ~ r * x
         sys1 = makesys(:sys1)
         sys2 = makesys(:sys1)
 
-        @parameters t
-        D = Differential(t)
         @test_throws ArgumentError ODESystem([sys2.f ~ sys1.x, D(sys1.f) ~ 0], t,
             systems = [sys1, sys2], name = :foo)
     end
@@ -407,12 +397,10 @@ eq = D(x) ~ r * x
 end
 
 #Issue 998
-@parameters t
 pars = []
 vars = @variables((u1,))
-der = Differential(t)
 eqs = [
-    der(u1) ~ 1,
+    D(u1) ~ 1,
 ]
 @test_throws ArgumentError ODESystem(eqs, t, vars, pars, name = :foo)
 
@@ -429,7 +417,6 @@ eqs = [
 @test_throws ArgumentError ModelingToolkit.ODESystem(eqs, t, vars, pars, name = :foo)
 
 @variables x(t)
-D = Differential(t)
 @parameters M b k
 eqs = [D(D(x)) ~ -b / M * D(x) - k / M * x]
 ps = [M, b, k]
@@ -441,14 +428,12 @@ sys = complete(sys)
 prob = ODEProblem(sys)
 sol = solve(prob, Tsit5())
 @test sol.t[end] == tspan[end]
-@test sum(abs, sol[end]) < 1
+@test sum(abs, sol.u[end]) < 1
 prob = ODEProblem{false}(sys; u0_constructor = x -> SVector(x...))
 @test prob.u0 isa SVector
 
 # check_eqs_u0 kwarg test
-@parameters t
 @variables x1(t) x2(t)
-D = Differential(t)
 eqs = [D(x1) ~ -x1]
 @named sys = ODESystem(eqs, t, [x1, x2], [])
 sys = complete(sys)
@@ -457,9 +442,9 @@ sys = complete(sys)
 
 # check inputs
 let
-    @parameters t f k d
+    @parameters f k d
     @variables x(t) ẋ(t)
-    δ = Differential(t)
+    δ = D
 
     eqs = [δ(x) ~ ẋ, δ(ẋ) ~ f - k * x - d * ẋ]
     @named sys = ODESystem(eqs, t, [x, ẋ], [f, d, k]; controls = [f])
@@ -472,8 +457,7 @@ end
 
 # issue 1109
 let
-    @variables t x(t)[1:3, 1:3]
-    D = Differential(t)
+    @variables x(t)[1:3, 1:3]
     @named sys = ODESystem(D.(x) .~ x)
     @test_nowarn structural_simplify(sys)
 end
@@ -481,10 +465,8 @@ end
 # Array vars
 using Symbolics: unwrap, wrap
 using LinearAlgebra
-@variables t
 sts = @variables x(t)[1:3]=[1, 2, 3.0] y(t)=1.0
 ps = @parameters p[1:3] = [1, 2, 3]
-D = Differential(t)
 eqs = [collect(D.(x) .~ x)
     D(y) ~ norm(collect(x)) * y - x[1]]
 @named sys = ODESystem(eqs, t, [sts...;], [ps...;])
@@ -508,10 +490,9 @@ sol = solve(prob, Tsit5())
 using ModelingToolkit
 
 function submodel(; name)
-    @variables t y(t)
+    @variables y(t)
     @parameters A[1:5]
     A = collect(A)
-    D = Differential(t)
     ODESystem(D(y) ~ sum(A) * y; name = name)
 end
 
@@ -519,13 +500,11 @@ end
 @named sys1 = submodel()
 @named sys2 = submodel()
 
-@variables t
 @named sys = ODESystem([0 ~ sys1.y + sys2.y], t; systems = [sys1, sys2])
 
 # DelayDiffEq
 using ModelingToolkit: hist
-@variables t x(t) y(t)
-D = Differential(t)
+@variables x(t) y(t)
 xₜ₋₁ = hist(x, t - 1)
 eqs = [D(x) ~ x * y
     D(y) ~ y * x - xₜ₋₁]
@@ -542,8 +521,7 @@ function foo(a::Num, ms::AbstractVector)
     wrap(term(foo, a, term(SVector, ms...)))
 end
 foo(a, ms::AbstractVector) = a + sum(ms)
-@variables t x(t) ms(t)[1:3]
-D = Differential(t)
+@variables x(t) ms(t)[1:3]
 ms = collect(ms)
 eqs = [D(x) ~ foo(x, ms); D.(ms) .~ 1]
 @named sys = ODESystem(eqs, t, [x; ms], [])
@@ -554,14 +532,13 @@ prob = ODEProblem(outersys, [sys.x => 1.0; collect(sys.ms) .=> 1:3], (0, 1.0))
 @test_nowarn solve(prob, Tsit5())
 
 # x/x
-@variables t x(t)
+@variables x(t)
 @named sys = ODESystem([D(x) ~ x / x], t)
 @test equations(alias_elimination(sys)) == [D(x) ~ 1]
 
 # observed variable handling
-@variables t x(t) RHS(t)
+@variables x(t) RHS(t)
 @parameters τ
-D = Differential(t)
 @named fol = ODESystem([D(x) ~ (1 - x) / τ]; observed = [RHS ~ (1 - x) / τ])
 @test isequal(RHS, @nonamespace fol.RHS)
 RHS2 = RHS
@@ -569,9 +546,8 @@ RHS2 = RHS
 @test isequal(RHS, RHS2)
 
 #1413 and 1389
-@parameters t α β
+@parameters α β
 @variables x(t) y(t) z(t)
-D = Differential(t)
 
 eqs = [
     D(x) ~ 0.1x + 0.9y,
@@ -646,8 +622,6 @@ sys = complete(sys)
 end
 
 let
-    @parameters t
-    D = Differential(t)
     x = map(xx -> xx(t), Symbolics.variables(:x, 1:2, T = SymbolicUtils.FnType))
     @variables y(t) = 0
     @parameters k = 1
@@ -694,8 +668,7 @@ end
 #issue 1475 (mixed numeric type for parameters)
 let
     @parameters k1 k2
-    @variables t A(t)
-    D = Differential(t)
+    @variables A(t)
     eqs = [D(A) ~ -k1 * k2 * A]
     @named sys = ODESystem(eqs, t)
     sys = complete(sys)
@@ -734,8 +707,7 @@ end
 
 let
     @parameters C L R
-    @variables t q(t) p(t) F(t)
-    D = Differential(t)
+    @variables q(t) p(t) F(t)
 
     eqs = [D(q) ~ -p / L - F
         D(p) ~ q / C
@@ -750,9 +722,8 @@ let
     eqs_to_lhs(eqs) = eq_to_lhs.(eqs)
 
     @parameters σ=10 ρ=28 β=8 / 3 sigma rho beta
-    @variables t t2 x(t)=1 y(t)=0 z(t)=0 x2(t2)=1 y2(t2)=0 z2(t2)=0 u(t2)[1:3]
+    @variables t2 x(t)=1 y(t)=0 z(t)=0 x2(t2)=1 y2(t2)=0 z2(t2)=0 u(t2)[1:3]
 
-    D = Differential(t)
     D2 = Differential(t2)
 
     eqs = [D(x) ~ σ * (y - x),
@@ -794,7 +765,6 @@ let
 end
 
 let
-    @variables t
     vars = @variables sP(t) spP(t) spm(t) sph(t)
     pars = @parameters a b
     eqs = [sP ~ 1
@@ -817,10 +787,8 @@ let
 end
 
 let
-    @parameters t
-
     u = collect(first(@variables u(t)[1:4]))
-    Dt = Differential(t)
+    Dt = D
 
     eqs = [Differential(t)(u[2]) - 1.1u[1] ~ 0
         Differential(t)(u[3]) - 1.1u[2] ~ 0
@@ -848,8 +816,7 @@ end
 # https://github.com/SciML/ModelingToolkit.jl/issues/1583
 let
     @parameters k
-    @variables t A(t)
-    D = Differential(t)
+    @variables A(t)
     eqs = [D(A) ~ -k * A]
     @named osys = ODESystem(eqs, t)
     osys = complete(osys)
@@ -893,7 +860,7 @@ let
 
     function pd_ctrl(; name)
         @parameters kx kv
-        @variables t u(t) x(t) v(t)
+        @variables u(t) x(t) v(t)
 
         eqs = [u ~ kx * x + kv * v]
         ODESystem(eqs; name)
@@ -904,8 +871,7 @@ let
     ## double integrator
 
     function double_int(; name)
-        @variables t u(t) x(t) v(t)
-        D = Differential(t)
+        @variables u(t) x(t) v(t)
 
         eqs = [D(x) ~ v, D(v) ~ u]
         ODESystem(eqs; name)
@@ -921,19 +887,16 @@ let
     @named sys_con = compose(connected, sys, ctrl)
 
     sys_simp = structural_simplify(sys_con)
-    D = Differential(t)
     true_eqs = [D(sys.x) ~ sys.v
         D(sys.v) ~ ctrl.kv * sys.v + ctrl.kx * sys.x]
     @test isequal(full_equations(sys_simp), true_eqs)
 end
 
 let
-    @variables t
     @variables x(t) = 1
     @variables y(t) = 1
     @parameters pp = -1
-    der = Differential(t)
-    @named sys4 = ODESystem([der(x) ~ -y; der(y) ~ 1 + pp * y + x], t)
+    @named sys4 = ODESystem([D(x) ~ -y; D(y) ~ 1 + pp * y + x], t)
     sys4s = structural_simplify(sys4)
     prob = ODEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
     @test string.(unknowns(prob.f.sys)) == ["x(t)", "y(t)"]
@@ -942,18 +905,15 @@ let
 end
 
 let
-    @variables t
     @parameters P(t) Q(t)
-    ∂t = Differential(t)
-
+    ∂t = D
     eqs = [∂t(Q) ~ 0.2P
         ∂t(P) ~ -80.0sin(Q)]
     @test_throws ArgumentError @named sys = ODESystem(eqs)
 end
 
 @parameters C L R
-@variables t q(t) p(t) F(t)
-D = Differential(t)
+@variables q(t) p(t) F(t)
 
 eqs = [D(q) ~ -p / L - F
     D(p) ~ q / C
@@ -962,8 +922,8 @@ testdict = Dict([:name => "test"])
 @named sys = ODESystem(eqs, t, metadata = testdict)
 @test get_metadata(sys) == testdict
 
-@variables t P(t)=0 Q(t)=2
-∂t = Differential(t)
+@variables P(t)=0 Q(t)=2
+∂t = D
 
 eqs = [∂t(Q) ~ 1 / sin(P)
     ∂t(P) ~ log(-cos(Q))]
@@ -980,8 +940,6 @@ else
 end
 
 let
-    @variables t
-    D = Differential(t)
     @variables x(t) = 1
     @variables y(t) = 1
     @parameters pp = -1
@@ -992,7 +950,6 @@ let
     @test !isnothing(prob.f.sys)
 end
 
-@parameters t
 # SYS 1:
 vars_sub1 = @variables s1(t)
 @named sub = ODESystem(Equation[], t, vars_sub1, [])
@@ -1014,8 +971,7 @@ Set(unknowns(new_sys2)) == Set([new_sys2.x1, new_sys2.sys1.x1,
 let # Issue https://github.com/SciML/ModelingToolkit.jl/issues/2322
     @parameters a=10 b=a / 10 c=a / 20
 
-    @variables t
-    Dt = Differential(t)
+    Dt = D
 
     @variables x(t)=1 z(t)
 

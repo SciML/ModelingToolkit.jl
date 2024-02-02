@@ -1,11 +1,11 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra, LabelledArrays
 using DiffEqBase, ForwardDiff
 using Test
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 # Define some variables
-@parameters t σ ρ β
+@parameters σ ρ β
 @variables x(t) y(t) z(t)
-D = Differential(t)
 
 # Define a differential equation
 eqs = [D(x) ~ σ * (y - x),

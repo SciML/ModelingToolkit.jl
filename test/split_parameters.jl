@@ -1,6 +1,7 @@
 using ModelingToolkit, Test
 using ModelingToolkitStandardLibrary.Blocks
 using OrdinaryDiffEq
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 x = [1, 2.0, false, [1, 2, 3], Parameter(1.0)]
 
@@ -31,9 +32,6 @@ dt = 4e-4
 t_end = 10.0
 time = 0:dt:t_end
 x = @. time^2 + 1.0
-
-@parameters t
-D = Differential(t)
 
 get_value(data, t, dt) = data[round(Int, t / dt + 1)]
 @register_symbolic get_value(data, t, dt)

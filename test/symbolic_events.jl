@@ -1,13 +1,13 @@
 using ModelingToolkit, OrdinaryDiffEq, StochasticDiffEq, JumpProcesses, Test
 using ModelingToolkit: SymbolicContinuousCallback,
     SymbolicContinuousCallbacks, NULL_AFFECT,
-    get_callback
+    get_callback,
+    t_nounits as t,
+    D_nounits as D
 using StableRNGs
 rng = StableRNG(12345)
 
-@parameters t
 @variables x(t) = 0
-D = Differential(t)
 
 eqs = [D(x) ~ 1]
 affect = [x ~ 0]
@@ -200,8 +200,7 @@ sol = solve(prob, Tsit5())
 @test minimum(t -> abs(t - 2), sol.t) < 1e-10 # test that the solver stepped at the second root
 
 ## Test bouncing ball with equation affect
-@variables t x(t)=1 v(t)=0
-D = Differential(t)
+@variables x(t)=1 v(t)=0
 
 root_eqs = [x ~ 0]
 affect = [v ~ -v]
@@ -222,8 +221,7 @@ sol = solve(prob, Tsit5())
 # plot(sol)
 
 ## Test bouncing ball in 2D with walls
-@variables t x(t)=1 y(t)=0 vx(t)=0 vy(t)=1
-D = Differential(t)
+@variables x(t)=1 y(t)=0 vx(t)=0 vy(t)=1
 
 continuous_events = [[x ~ 0] => [vx ~ -vx]
     [y ~ -1.5, y ~ 1.5] => [vy ~ -vy]]
@@ -298,7 +296,7 @@ sol = solve(prob, Tsit5())
 @test sol([0.25])[vmeasured][] == sol([0.23])[vmeasured][] # test the hold property
 
 ##  https://github.com/SciML/ModelingToolkit.jl/issues/1528
-Dₜ = Differential(t)
+Dₜ = D
 
 @parameters u(t) [input = true]  # Indicate that this is a controlled input
 @parameters y(t) [output = true] # Indicate that this is a measured output
@@ -353,7 +351,7 @@ let
     end
 
     @parameters k t1 t2
-    @variables t A(t) B(t)
+    @variables A(t) B(t)
 
     cond1 = (t == t1)
     affect1 = [A ~ A + 1]
@@ -362,7 +360,7 @@ let
     affect2 = [k ~ 1.0]
     cb2 = cond2 => affect2
 
-    ∂ₜ = Differential(t)
+    ∂ₜ = D
     eqs = [∂ₜ(A) ~ -k * A]
     @named osys = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2])
     u0 = [A => 1.0]
@@ -427,7 +425,7 @@ let
     end
 
     @parameters k t1 t2
-    @variables t A(t) B(t)
+    @variables A(t) B(t)
 
     cond1 = (t == t1)
     affect1 = [A ~ A + 1]
@@ -436,7 +434,7 @@ let
     affect2 = [k ~ 1.0]
     cb2 = cond2 => affect2
 
-    ∂ₜ = Differential(t)
+    ∂ₜ = D
     eqs = [∂ₜ(A) ~ -k * A]
     @named ssys = SDESystem(eqs, Equation[], t, [A], [k, t1, t2],
         discrete_events = [cb1, cb2])
@@ -509,7 +507,7 @@ let rng = rng
     end
 
     @parameters k t1 t2
-    @variables t A(t) B(t)
+    @variables A(t) B(t)
 
     cond1 = (t == t1)
     affect1 = [A ~ A + 1]
@@ -562,9 +560,6 @@ let rng = rng
 end
 
 let
-    @variables t
-    D = Differential(t)
-
     function oscillator_ce(k = 1.0; name)
         sts = @variables x(t)=1.0 v(t)=0.0 F(t)
         ps = @parameters k=k Θ=0.5
