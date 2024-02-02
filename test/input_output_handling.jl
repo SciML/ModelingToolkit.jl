@@ -158,7 +158,7 @@ eqs = [
     D(x) ~ -x + u,
 ]
 
-@named sys = ODESystem(eqs)
+@named sys = ODESystem(eqs, t)
 f, dvs, ps = ModelingToolkit.generate_control_function(sys, simplify = true)
 
 @test isequal(dvs[], x)

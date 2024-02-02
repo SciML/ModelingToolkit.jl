@@ -60,7 +60,7 @@ let
     @variables x(t) y(t) z(t)
     eqs = [D(x) ~ -x + a * y + x^2 * y,
         D(y) ~ b - a * y - x^2 * y]
-    @named sys = ODESystem(eqs)
+    @named sys = ODESystem(eqs, t)
     sys = complete(sys)
     # Creates BifurcationProblem
     bprob = BifurcationProblem(sys,

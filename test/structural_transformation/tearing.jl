@@ -152,7 +152,7 @@ newdaesys = structural_simplify(daesys)
 @test equations(newdaesys) == [D(x) ~ z; 0 ~ y + sin(z) - p * t]
 @test equations(tearing_substitution(newdaesys)) == [D(x) ~ z; 0 ~ x + sin(z) - p * t]
 @test isequal(unknowns(newdaesys), [x, z])
-@test isequal(states(newdaesys), [x, z])
+@test isequal(unknowns(newdaesys), [x, z])
 @test_deprecated ODAEProblem(newdaesys, [x => 1.0, z => -0.5π], (0, 1.0), [p => 0.2])
 prob = ODEProblem(newdaesys, [x => 1.0, z => -0.5π], (0, 1.0), [p => 0.2])
 du = [0.0, 0.0];

@@ -230,7 +230,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         metadata, gui_metadata, checks = checks)
 end
 
-function ODESystem(eqs, iv = nothing; kwargs...)
+function ODESystem(eqs, iv; kwargs...)
     eqs = scalarize(eqs)
     # NOTE: this assumes that the order of algebraic equations doesn't matter
     diffvars = OrderedSet()

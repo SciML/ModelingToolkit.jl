@@ -6,7 +6,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @parameters r
 @variables x(t)
 eqs = [D(x) ~ x^2 - r]
-@named de = ODESystem(eqs)
+@named de = ODESystem(eqs, t)
 de = complete(de)
 
 for factor in [1e-1, 1e0, 1e10],

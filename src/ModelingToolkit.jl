@@ -192,7 +192,7 @@ const D = Differential(t)
 PrecompileTools.@compile_workload begin
     using ModelingToolkit
     @variables x(ModelingToolkit.t_nounits)
-    @named sys = ODESystem([ModelingToolkit.D_nounits(x) ~ -x])
+    @named sys = ODESystem([ModelingToolkit.D_nounits(x) ~ -x], ModelingToolkit.t_nounits)
     prob = ODEProblem(structural_simplify(sys), [x => 30.0], (0, 100), [], jac = true)
 end
 

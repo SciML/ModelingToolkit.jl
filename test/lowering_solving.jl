@@ -8,7 +8,7 @@ eqs = [D(D(x)) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-@named sys′ = ODESystem(eqs)
+@named sys′ = ODESystem(eqs, t)
 sys = ode_order_lowering(sys′)
 
 eqs2 = [0 ~ x * y - k,
@@ -46,8 +46,8 @@ eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-lorenz1 = ODESystem(eqs, name = :lorenz1)
-lorenz2 = ODESystem(eqs, name = :lorenz2)
+lorenz1 = ODESystem(eqs, t, name = :lorenz1)
+lorenz2 = ODESystem(eqs, t, name = :lorenz2)
 
 @variables α(t)
 @parameters γ
