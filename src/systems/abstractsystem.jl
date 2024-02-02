@@ -921,6 +921,7 @@ function toexpr(sys::AbstractSystem)
                 name = $name, checks = false)))
     end
 
+    expr = :(let; $expr; end)
     Base.remove_linenums!(expr) # keeping the line numbers is never helpful
 end
 
