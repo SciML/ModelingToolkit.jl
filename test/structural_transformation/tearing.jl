@@ -5,11 +5,10 @@ using ModelingToolkit.StructuralTransformations: SystemStructure, find_solvables
 using NonlinearSolve
 using LinearAlgebra
 using UnPack
-
+using ModelingToolkit: t_nounits as t, D_nounits as D
 ###
 ### Nonlinear system
 ###
-@parameters t
 @constants h = 1
 @variables u1(t) u2(t) u3(t) u4(t) u5(t)
 eqs = [
@@ -128,7 +127,6 @@ sol = solve(prob, NewtonRaphson())
 ###
 ### Simple test (edge case)
 ###
-@parameters t
 @variables x(t) y(t) z(t)
 eqs = [
     0 ~ x - y,
@@ -144,9 +142,8 @@ newsys = tearing(nlsys)
 ### DAE system
 ###
 using ModelingToolkit, OrdinaryDiffEq, BenchmarkTools
-@parameters t p
+@parameters p
 @variables x(t) y(t) z(t)
-D = Differential(t)
 eqs = [D(x) ~ z * h
     0 ~ x - y
     0 ~ sin(z) + y - p * t]

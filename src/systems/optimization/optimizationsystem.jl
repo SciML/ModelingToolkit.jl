@@ -362,8 +362,6 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             grad = _grad,
             hess = _hess,
             hess_prototype = hess_prototype,
-            syms = Symbol.(unknowns(sys)),
-            paramsyms = Symbol.(parameters(sys)),
             cons = cons[2],
             cons_j = _cons_j,
             cons_h = _cons_h,
@@ -380,8 +378,6 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             SciMLBase.NoAD();
             grad = _grad,
             hess = _hess,
-            syms = Symbol.(unknowns(sys)),
-            paramsyms = Symbol.(parameters(sys)),
             hess_prototype = hess_prototype,
             expr = obj_expr,
             observed = observedfun)
@@ -552,13 +548,9 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
             ucons = $ucons
             cons_j = $_cons_j
             cons_h = $_cons_h
-            syms = $(Symbol.(unknowns(sys)))
-            paramsyms = $(Symbol.(parameters(sys)))
             _f = OptimizationFunction{iip}(f, SciMLBase.NoAD();
                 grad = grad,
                 hess = hess,
-                syms = syms,
-                paramsyms = paramsyms,
                 hess_prototype = hess_prototype,
                 cons = cons,
                 cons_j = cons_j,
@@ -580,13 +572,9 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
             lb = $lb
             ub = $ub
             int = $int
-            syms = $(Symbol.(unknowns(sys)))
-            paramsyms = $(Symbol.(parameters(sys)))
             _f = OptimizationFunction{iip}(f, SciMLBase.NoAD();
                 grad = grad,
                 hess = hess,
-                syms = syms,
-                paramsyms = paramsyms,
                 hess_prototype = hess_prototype,
                 expr = obj_expr)
             OptimizationProblem{$iip}(_f, u0, p; lb = lb, ub = ub, int = int, kwargs...)

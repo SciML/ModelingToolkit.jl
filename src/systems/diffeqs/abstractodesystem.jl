@@ -471,9 +471,6 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = u
         tgrad = _tgrad === nothing ? nothing : _tgrad,
         mass_matrix = _M,
         jac_prototype = jac_prototype,
-        syms = collect(Symbol.(unknowns(sys))),
-        indepsym = Symbol(get_iv(sys)),
-        paramsyms = collect(Symbol.(ps)),
         observed = observedfun,
         sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
         analytic = analytic)
@@ -569,9 +566,6 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
     DAEFunction{iip}(f,
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
-        syms = Symbol.(dvs),
-        indepsym = Symbol(get_iv(sys)),
-        paramsyms = Symbol.(ps),
         jac_prototype = jac_prototype,
         observed = observedfun)
 end
@@ -596,11 +590,7 @@ function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
     f(u, h, p, t) = f_oop(u, h, p, t)
     f(du, u, h, p, t) = f_iip(du, u, h, p, t)
 
-    DDEFunction{iip}(f,
-        sys = sys,
-        syms = Symbol.(dvs),
-        indepsym = Symbol(get_iv(sys)),
-        paramsyms = Symbol.(ps))
+    DDEFunction{iip}(f, sys = sys)
 end
 
 function DiffEqBase.SDDEFunction(sys::AbstractODESystem, args...; kwargs...)
@@ -628,11 +618,7 @@ function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys
     g(u, h, p, t) = g_oop(u, h, p, t)
     g(du, u, h, p, t) = g_iip(du, u, h, p, t)
 
-    SDDEFunction{iip}(f, g,
-        sys = sys,
-        syms = Symbol.(dvs),
-        indepsym = Symbol(get_iv(sys)),
-        paramsyms = Symbol.(ps))
+    SDDEFunction{iip}(f, g, sys = sys)
 end
 
 """
@@ -718,9 +704,6 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
             tgrad = $tgradsym,
             mass_matrix = M,
             jac_prototype = $jp_expr,
-            syms = $(Symbol.(unknowns(sys))),
-            indepsym = $(QuoteNode(Symbol(get_iv(sys)))),
-            paramsyms = $(Symbol.(parameters(sys))),
             sparsity = $(sparsity ? jacobian_sparsity(sys) : nothing),
             observed = $observedfun_exp)
     end

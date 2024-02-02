@@ -1,6 +1,6 @@
 using Test
 using ModelingToolkit
-@variables t
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @connector function TwoPhaseFluidPort(; name, P = 0.0, m_flow = 0.0, h_outflow = 0.0)
     pars = @parameters begin
@@ -362,8 +362,6 @@ function StepSource(; P, name)
 end
 
 function StaticVolume(; P, V, name)
-    D = Differential(t)
-
     pars = @parameters begin
         p_int = P
         vol = V

@@ -1,5 +1,6 @@
 using ModelingToolkit, Test, Setfield, OrdinaryDiffEq, DiffEqCallbacks
 using ModelingToolkit: Continuous
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 function infer_clocks(sys)
     ts = TearingState(sys)
@@ -9,9 +10,8 @@ end
 
 @info "Testing hybrid system"
 dt = 0.1
-@variables t x(t) y(t) u(t) yd(t) ud(t) r(t)
+@variables x(t) y(t) u(t) yd(t) ud(t) r(t)
 @parameters kp
-D = Differential(t)
 # u(n + 1) := f(u(n))
 
 eqs = [yd ~ Sample(t, dt)(y)
@@ -89,9 +89,8 @@ d = Clock(t, dt)
 
 @info "Testing shift normalization"
 dt = 0.1
-@variables t x(t) y(t) u(t) yd(t) ud(t) r(t) z(t)
+@variables x(t) y(t) u(t) yd(t) ud(t) r(t) z(t)
 @parameters kp
-D = Differential(t)
 d = Clock(t, dt)
 k = ShiftIndex(d)
 
@@ -161,9 +160,8 @@ sol2 = solve(prob, Tsit5())
 @info "Testing multi-rate hybrid system"
 dt = 0.1
 dt2 = 0.2
-@variables t x(t) y(t) u(t) r(t) yd1(t) ud1(t) yd2(t) ud2(t)
+@variables x(t) y(t) u(t) r(t) yd1(t) ud1(t) yd2(t) ud2(t)
 @parameters kp
-D = Differential(t)
 
 eqs = [
 # controller (time discrete part `dt=0.1`)
@@ -196,14 +194,12 @@ d2 = Clock(t, dt2)
 @info "test composed systems"
 
 dt = 0.5
-@variables t
 d = Clock(t, dt)
 k = ShiftIndex(d)
 timevec = 0:0.1:4
 
 function plant(; name)
     @variables x(t)=1 u(t)=0 y(t)=0
-    D = Differential(t)
     eqs = [D(x) ~ -x + u
         y ~ x]
     ODESystem(eqs, t; name = name)
@@ -253,9 +249,8 @@ ci, varmap = infer_clocks(cl)
 @info "Testing multi-rate hybrid system"
 dt = 0.1
 dt2 = 0.2
-@variables t x(t)=0 y(t)=0 u(t)=0 yd1(t)=0 ud1(t)=0 yd2(t)=0 ud2(t)=0
+@variables x(t)=0 y(t)=0 u(t)=0 yd1(t)=0 ud1(t)=0 yd2(t)=0 ud2(t)=0
 @parameters kp=1 r=1
-D = Differential(t)
 
 eqs = [
 # controller (time discrete part `dt=0.1`)
@@ -326,7 +321,6 @@ end
 using ModelingToolkitStandardLibrary.Blocks
 
 dt = 0.05
-@variables t
 d = Clock(t, dt)
 k = ShiftIndex(d)
 

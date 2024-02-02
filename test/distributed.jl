@@ -3,11 +3,11 @@ using Distributed
 addprocs(2)
 
 @everywhere using ModelingToolkit, OrdinaryDiffEq
+@everywhere using ModelingToolkit: t_nounits as t, D_nounits as D
 
 # create the Lorenz system
-@everywhere @parameters t σ ρ β
+@everywhere @parameters σ ρ β
 @everywhere @variables x(t) y(t) z(t)
-@everywhere D = Differential(t)
 
 @everywhere eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,

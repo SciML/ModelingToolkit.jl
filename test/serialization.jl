@@ -1,8 +1,7 @@
 using ModelingToolkit, SciMLBase, Serialization, OrdinaryDiffEq
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@parameters t
 @variables x(t)
-D = Differential(t)
 
 @named sys = ODESystem([D(x) ~ -0.5 * x], defaults = Dict(x => 1.0))
 sys = complete(sys)

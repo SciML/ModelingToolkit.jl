@@ -1,7 +1,7 @@
 using ModelingToolkit, OrdinaryDiffEq, Test, NonlinearSolve, LinearAlgebra
-using ModelingToolkit: topsort_equations
+using ModelingToolkit: topsort_equations, t_nounits as t, D_nounits as D
 
-@variables t x(t) y(t) z(t) k(t)
+@variables x(t) y(t) z(t) k(t)
 eqs = [x ~ y + z
     z ~ 2
     y ~ 2z + k]
@@ -17,9 +17,8 @@ ref_eq = [z ~ 2
         z ~ 2
         y ~ 2z + x], [x, y, z, k])
 
-@parameters t σ ρ β
+@parameters σ ρ β
 @variables x(t) y(t) z(t) a(t) u(t) F(t)
-D = Differential(t)
 
 test_equal(a, b) = @test isequal(a, b) || isequal(simplify(a), simplify(b))
 
@@ -122,8 +121,6 @@ prob2 = SteadyStateProblem(reduced_system, u0, pp)
 
 # issue #724 and #716
 let
-    @parameters t
-    D = Differential(t)
     @variables x(t) u(t) y(t)
     @parameters a b c d
     ol = ODESystem([D(x) ~ a * x + b * u; y ~ c * x + d * u], t, name = :ol)
@@ -142,8 +139,6 @@ end
 
 # issue #889
 let
-    @parameters t
-    D = Differential(t)
     @variables x(t)
     @named sys = ODESystem([0 ~ D(x) + x], t, [x], [])
     #@test_throws ModelingToolkit.InvalidSystemException ODEProblem(sys, [1.0], (0, 10.0))
@@ -152,7 +147,6 @@ let
 end
 
 # NonlinearSystem
-@parameters t
 @variables u1(t) u2(t) u3(t)
 @parameters p
 eqs = [u1 ~ u2
@@ -184,9 +178,8 @@ eqs = xs .~ A * xs
 sys = structural_simplify(sys′)
 
 # issue 958
-@parameters t k₁ k₂ k₋₁ E₀
+@parameters k₁ k₂ k₋₁ E₀
 @variables E(t) C(t) S(t) P(t)
-D = Differential(t)
 
 eqs = [D(E) ~ k₋₁ * C - k₁ * E * S
     D(C) ~ k₁ * E * S - k₋₁ * C - k₂ * C
@@ -198,10 +191,8 @@ eqs = [D(E) ~ k₋₁ * C - k₁ * E * S
 @test_throws ModelingToolkit.ExtraEquationsSystemException structural_simplify(sys)
 
 # Example 5 from Pantelides' original paper
-@parameters t
 params = collect(@parameters y1(t) y2(t))
 sts = collect(@variables x(t) u1(t) u2(t))
-D = Differential(t)
 eqs = [0 ~ x + sin(u1 + u2)
     D(x) ~ x + y1
     cos(x) ~ sin(y2)]
@@ -209,8 +200,6 @@ eqs = [0 ~ x + sin(u1 + u2)
 @test_throws ModelingToolkit.InvalidSystemException structural_simplify(sys)
 
 # issue #963
-@parameters t
-D = Differential(t)
 @variables v47(t) v57(t) v66(t) v25(t) i74(t) i75(t) i64(t) i71(t) v1(t) v2(t)
 
 eq = [v47 ~ v1
@@ -234,9 +223,8 @@ dvv = ModelingToolkit.value(ModelingToolkit.derivative(eq.rhs, vv))
 @test dvv ≈ -60
 
 # Don't reduce inputs
-@parameters t σ ρ β
+@parameters σ ρ β
 @variables x(t) y(t) z(t) [input = true] a(t) u(t) F(t)
-D = Differential(t)
 
 eqs = [D(x) ~ σ * (y - x)
     D(y) ~ x * (ρ - z) - y + β
@@ -248,9 +236,7 @@ lorenz1_reduced = structural_simplify(lorenz1)
 @test z in Set(parameters(lorenz1_reduced))
 
 # #2064
-@variables t
 vars = @variables x(t) y(t) z(t)
-D = Differential(t)
 eqs = [D(x) ~ x
     D(y) ~ y
     D(z) ~ t]
@@ -261,7 +247,6 @@ Js = ModelingToolkit.jacobian_sparsity(sys)
 @test Js == Diagonal([1, 1, 0])
 
 # MWE for #1722
-@variables t
 vars = @variables a(t) w(t) phi(t)
 eqs = [a ~ D(w)
     w ~ D(phi)
@@ -270,8 +255,7 @@ eqs = [a ~ D(w)
 ss = alias_elimination(sys)
 @test isempty(observed(ss))
 
-@variables t x(t) y(t)
-D = Differential(t)
+@variables x(t) y(t)
 @named sys = ODESystem([D(x) ~ 1 - x,
     D(y) + D(x) ~ 0])
 new_sys = alias_elimination(sys)

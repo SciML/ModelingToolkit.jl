@@ -1,10 +1,10 @@
 using ModelingToolkit, DiffEqBase, LinearAlgebra, Test
+using ModelingToolkit: t_nounits as t, D_nounits as Dt
 
 # Define some variables
-@parameters t x
+@parameters x
 @constants h = 1
 @variables u(..)
-Dt = Differential(t)
 Dxx = Differential(x)^2
 eq = Dt(u(t, x)) ~ h * Dxx(u(t, x))
 bcs = [u(0, x) ~ -h * x * (x - 1) * sin(x),

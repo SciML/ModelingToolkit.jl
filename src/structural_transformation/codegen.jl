@@ -299,7 +299,6 @@ function build_torn_function(sys;
 
     unknown_vars = Any[fullvars[i] for i in unknowns_idxs]
     @set! sys.solved_unknowns = unknown_vars
-    syms = map(Symbol, unknown_vars)
 
     pre = get_postprocess_fbody(sys)
     cpre = get_preprocess_constants(rhss)
@@ -354,9 +353,6 @@ function build_torn_function(sys;
                 eqs_idxs,
                 unknowns_idxs) :
                        nothing,
-            syms = syms,
-            paramsyms = Symbol.(parameters(sys)),
-            indepsym = Symbol(get_iv(sys)),
             observed = observedfun,
             mass_matrix = mass_matrix,
             sys = sys),

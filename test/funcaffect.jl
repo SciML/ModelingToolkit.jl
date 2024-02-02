@@ -1,9 +1,8 @@
 using ModelingToolkit, Test, OrdinaryDiffEq
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@parameters t
 @constants h=1 zr=0
 @variables u(t)
-D = Differential(t)
 
 eqs = [D(u) ~ -u]
 
@@ -168,7 +167,6 @@ function Capacitor2(; name, C = 1.0)
     @named oneport = OnePort()
     @unpack v, i = oneport
     ps = @parameters C = C
-    D = Differential(t)
     eqs = [
         D(v) ~ i / C,
     ]

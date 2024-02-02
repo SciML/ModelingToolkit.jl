@@ -4,12 +4,14 @@ using ModelingToolkit: get_gui_metadata, get_systems, get_connector_type,
 using URIs: URI
 using Distributions
 using DynamicQuantities, OrdinaryDiffEq
+using ModelingToolkit: t, D
 
 ENV["MTK_ICONS_DIR"] = "$(@__DIR__)/icons"
 
 # Mock module used to test if the `@mtkmodel` macro works with fully-qualified names as well.
 module MyMockModule
 using ModelingToolkit, DynamicQuantities
+using ModelingToolkit: t, D
 
 export Pin
 @connector Pin begin
@@ -49,9 +51,6 @@ end
         output.u ~ k
     end
 end
-
-@variables t [unit = u"s"]
-D = Differential(t)
 
 @named p = Pin(; v = π)
 @test getdefault(p.v) == π
@@ -549,5 +548,5 @@ _b = Ref{Any}()
     end
 end
 @named m = MyModel()
-@variables t x___(t)
+@variables x___(t)
 @test isequal(x___, _b[])

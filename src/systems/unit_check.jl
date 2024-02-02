@@ -1,6 +1,3 @@
-import DynamicQuantities, Unitful
-const DQ = DynamicQuantities
-
 #For dispatching get_unit
 const Conditional = Union{typeof(ifelse), typeof(IfElse.ifelse)}
 const Comparison = Union{typeof.([==, !=, ≠, <, <=, ≤, >, >=, ≥])...}

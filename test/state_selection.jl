@@ -1,9 +1,8 @@
 using ModelingToolkit, OrdinaryDiffEq, IfElse, Test
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@variables t
 sts = @variables x1(t) x2(t) x3(t) x4(t)
 params = @parameters u1(t) u2(t) u3(t) u4(t)
-D = Differential(t)
 eqs = [x1 + x2 + u1 ~ 0
     x1 + x2 + x3 + u2 ~ 0
     x1 + D(x3) + x4 + u3 ~ 0
@@ -27,9 +26,8 @@ end
     @test length(equations(ode_order_lowering(pss))) == 2
 end
 
-@parameters t σ ρ β
+@parameters σ ρ β
 @variables x(t) y(t) z(t) a(t) u(t) F(t)
-D = Differential(t)
 
 eqs = [D(x) ~ σ * (y - x)
     D(y) ~ x * (ρ - z) - y + β
@@ -46,9 +44,6 @@ end
 
 # 1516
 let
-    @variables t
-    D = Differential(t)
-
     @connector function Fluid_port(; name, p = 101325.0, m = 0.0, T = 293.15)
         sts = @variables p(t)=p m(t)=m [connect = Flow] T(t)=T [connect = Stream]
         ODESystem(Equation[], t, sts, []; name = name)
@@ -136,7 +131,6 @@ end
 
 # 1537
 let
-    @variables t
     @variables begin
         p_1(t)
         p_2(t)
@@ -155,8 +149,6 @@ let
     end
 
     @parameters dx=100 f=0.3 pipe_D=0.4
-
-    D = Differential(t)
 
     eqs = [p_1 ~ 1.2e5
         p_2 ~ 1e5
@@ -217,7 +209,6 @@ let
     # --------------------------------------------------------------------------
 
     # modelingtoolkit setup ----------------------------------------------------
-    @parameters t
     params = @parameters l_2f=0.7 damp=1e3
     vars = @variables begin
         p1(t)
@@ -237,7 +228,6 @@ let
         dw(t) = 0
         ddw(t) = 0
     end
-    D = Differential(t)
 
     defs = [p1 => p_1f_0
         p2 => p_2f_0

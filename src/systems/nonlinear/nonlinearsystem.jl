@@ -271,8 +271,6 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
         jac_prototype = sparse ?
                         similar(calculate_jacobian(sys, sparse = sparse),
             Float64) : nothing,
-        syms = Symbol.(unknowns(sys)),
-        paramsyms = Symbol.(parameters(sys)),
         observed = observedfun)
 end
 
@@ -320,9 +318,7 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
         jac = $_jac
         NonlinearFunction{$iip}(f,
             jac = jac,
-            jac_prototype = $jp_expr,
-            syms = $(Symbol.(unknowns(sys))),
-            paramsyms = $(Symbol.(parameters(sys))))
+            jac_prototype = $jp_expr)
     end
     !linenumbers ? Base.remove_linenums!(ex) : ex
 end
@@ -347,7 +343,6 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
 
     f = constructor(sys, dvs, ps, u0; jac = jac, checkbounds = checkbounds,
         linenumbers = linenumbers, parallel = parallel, simplify = simplify,
-        syms = Symbol.(dvs), paramsyms = Symbol.(ps),
         sparse = sparse, eval_expression = eval_expression, kwargs...)
     return f, u0, p
 end

@@ -1,6 +1,7 @@
 using ModelingToolkit
 using NonlinearSolve
 using Test
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @variables x y z u
 @parameters σ ρ β
@@ -52,10 +53,9 @@ prob = NonlinearProblem(top, [unknowns(ns, u) => 1.0, a => 1.0])
 # test initial conditions and parameters at the problem level
 pars = @parameters(begin
     x0
-    t
 end)
 vars = @variables(begin
-    x(t)
+    x(ModelingToolkit.t_nounits)
 end)
 der = Differential(t)
 eqs = [der(x) ~ x]
