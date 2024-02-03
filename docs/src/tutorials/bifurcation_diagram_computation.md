@@ -55,12 +55,9 @@ Let us consider the `BifurcationProblem` from the last section. If we wish to co
 
 ```@example Bif1
 p_span = (-4.0, 6.0)
-opt_newton = NewtonPar(tol = 1e-9, max_iterations = 20)
-opts_br = ContinuationPar(dsmin = 0.001, dsmax = 0.05, ds = 0.01,
-    max_steps = 100, nev = 2, newton_options = opt_newton,
-    p_min = p_span[1], p_max = p_span[2],
-    detect_bifurcation = 3, n_inversion = 4, tol_bisection_eigenvalue = 1e-8,
-    dsmin_bisection = 1e-9);
+opts_br = ContinuationPar(nev = 2,
+    p_min = p_span[1], 
+    p_max = p_span[2])
 ```
 
 Here, `p_span` sets the interval over which we wish to compute the diagram.
