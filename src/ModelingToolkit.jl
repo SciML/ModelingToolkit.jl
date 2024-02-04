@@ -209,7 +209,7 @@ export SystemStructure
 export JumpSystem
 export ODEProblem, SDEProblem
 export NonlinearFunction, NonlinearFunctionExpr
-export NonlinearProblem, BlockNonlinearProblem, NonlinearProblemExpr
+export NonlinearProblem, NonlinearProblemExpr
 export OptimizationProblem, OptimizationProblemExpr, constraints
 export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem
@@ -228,7 +228,7 @@ export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, DelayParentScope, GlobalScope
 export independent_variable, equations, controls,
-    observed, structure, full_equations
+    observed, full_equations
 export structural_simplify, expand_connections, linearize, linearization_function
 
 export calculate_jacobian, generate_jacobian, generate_function
@@ -239,7 +239,7 @@ export calculate_factorized_W, generate_factorized_W
 export calculate_hessian, generate_hessian
 export calculate_massmatrix, generate_diffusion_function
 export stochastic_integral_transform
-export TearingState, StateSelectionState
+export TearingState
 
 export BipartiteGraph, equation_dependencies, variable_dependencies
 export eqeq_dependencies, varvar_dependencies
@@ -254,8 +254,6 @@ export initializesystem
 export @variables, @parameters, @constants, @brownian
 export @named, @nonamespace, @namespace, extend, compose, complete
 export debug_system
-
-export show_with_compare
 
 #export Continuous, Discrete, sampletime, input_timedomain, output_timedomain
 #export has_discrete_domain, has_continuous_domain
