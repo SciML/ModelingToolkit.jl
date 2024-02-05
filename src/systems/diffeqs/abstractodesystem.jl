@@ -162,27 +162,26 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
 
     # TODO: add an optional check on the ordering of observed equations
     u = map(x -> time_varying_as_func(value(x), sys), dvs)
-    p = map(x -> time_varying_as_func(value(x), sys), ps)
+    p = if has_index_cache(sys)
+        reorder_parameters(get_index_cache(sys), ps)
+    else
+        (map(x -> time_varying_as_func(value(x), sys), ps),)
+    end
     t = get_iv(sys)
 
     if isdde
-        build_function(rhss, u, DDE_HISTORY_FUN, p, t; kwargs...)
+        build_function(rhss, u, DDE_HISTORY_FUN, p..., t; kwargs...)
     else
         pre, sol_states = get_substitutions_and_solved_unknowns(sys)
 
         if implicit_dae
-            build_function(rhss, ddvs, u, p, t; postprocess_fbody = pre,
+            build_function(rhss, ddvs, u, p..., t; postprocess_fbody = pre,
                 states = sol_states,
                 kwargs...)
         else
-            if p isa Tuple
-                build_function(rhss, u, p..., t; postprocess_fbody = pre,
-                    states = sol_states,
-                    kwargs...)
-            else
-                build_function(rhss, u, p, t; postprocess_fbody = pre, states = sol_states,
-                    kwargs...)
-            end
+            build_function(rhss, u, p..., t; postprocess_fbody = pre,
+                states = sol_states,
+                kwargs...)
         end
     end
 end
@@ -324,6 +323,10 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         g(u, p, t) = f_oop(u, p..., t)
         g(du, u, p, t) = f_iip(du, u, p..., t)
         f = g
+    elseif p isa MTKParameters
+        h(u, p, t) = f_oop(u, raw_vectors(p)..., t)
+        h(du, u, p, t) = f_iip(du, u, raw_vectors(p)..., t)
+        f = h
     else
         k(u, p, t) = f_oop(u, p, t)
         k(du, u, p, t) = f_iip(du, u, p, t)
@@ -761,7 +764,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     ps = parameters(sys)
     iv = get_iv(sys)
 
-    u0, p, defs = get_u0_p(sys,
+    u0, _, defs = get_u0_p(sys,
         u0map,
         parammap;
         tofloat,
@@ -771,11 +774,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         u0 = u0_constructor(u0)
     end
 
-    p, split_idxs = split_parameters_by_type(p)
-    if p isa Tuple
-        ps = Base.Fix1(getindex, parameters(sys)).(split_idxs)
-        ps = (ps...,) #if p is Tuple, ps should be Tuple
-    end
+    p = MTKParameters(sys, parammap; toterm = default_toterm)
 
     if implicit_dae && du0map !== nothing
         ddvs = map(Differential(iv), dvs)
@@ -792,7 +791,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     f = constructor(sys, dvs, ps, u0; ddvs = ddvs, tgrad = tgrad, jac = jac,
         checkbounds = checkbounds, p = p,
         linenumbers = linenumbers, parallel = parallel, simplify = simplify,
-        sparse = sparse, eval_expression = eval_expression, split_idxs,
+        sparse = sparse, eval_expression = eval_expression,
         kwargs...)
     implicit_dae ? (f, du0, u0, p) : (f, u0, p)
 end

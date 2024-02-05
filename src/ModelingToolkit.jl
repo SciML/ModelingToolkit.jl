@@ -31,6 +31,7 @@ using PrecompileTools, Reexport
     import Distributions
     import FunctionWrappersWrappers
     using URIs: URI
+    using SciMLStructures
 
     using RecursiveArrayTools
 
@@ -132,6 +133,8 @@ include("systems/abstractsystem.jl")
 include("systems/model_parsing.jl")
 include("systems/connectors.jl")
 include("systems/callbacks.jl")
+include("systems/index_cache.jl")
+include("systems/parameter_buffer.jl")
 
 include("systems/diffeqs/odesystem.jl")
 include("systems/diffeqs/sdesystem.jl")

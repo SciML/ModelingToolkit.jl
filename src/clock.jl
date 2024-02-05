@@ -83,7 +83,9 @@ true if `x` contains only discrete-domain signals.
 See also [`has_discrete_domain`](@ref)
 """
 function is_discrete_domain(x)
-    issym(x) && return getmetadata(x, TimeDomain, false) isa Discrete
+    if hasmetadata(x, TimeDomain) || issym(x)
+        return getmetadata(x, TimeDomain, false) isa AbstractDiscrete
+    end
     !has_discrete_domain(x) && has_continuous_domain(x)
 end
 
