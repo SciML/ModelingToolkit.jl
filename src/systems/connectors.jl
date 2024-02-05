@@ -1,4 +1,6 @@
 using Symbolics: StateMachineOperator
+isconnection(_) = false
+isconnection(_::Connection) = true
 """
     domain_connect(sys1, sys2, syss...)
 
@@ -327,7 +329,7 @@ function generate_connection_set!(connectionsets, domain_csets,
         else
             if lhs isa Connection && get_systems(lhs) === :domain
                 connection2set!(domain_csets, namespace, get_systems(rhs), isouter)
-            elseif lhs isa Connection
+            elseif isconnection(rhs)
                 push!(cts, get_systems(rhs))
             else
                 push!(eqs, eq) # split connections and equations
