@@ -81,9 +81,9 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
         sys = state.sys
         @set! sys.eqs = new_eqs
         @set! sys.unknowns = [v
-                            for (i, v) in enumerate(fullvars)
-                                if !iszero(new_idxs[i]) &&
-                                   invview(var_to_diff)[i] === nothing]
+                              for (i, v) in enumerate(fullvars)
+                                  if !iszero(new_idxs[i]) &&
+                                     invview(var_to_diff)[i] === nothing]
         # TODO: IO is not handled.
         ode_sys = structural_simplify(sys, io; simplify, kwargs...)
         eqs = equations(ode_sys)

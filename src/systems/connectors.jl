@@ -270,7 +270,8 @@ function connection2set!(connectionsets, namespace, ss, isouter)
             orientation_vars = Symbolics.unwrap.(vec(O.R))
             unknown_vars = [unknown_vars; orientation_vars]
         end
-        i != 1 && ((num_unknowns == length(unknown_vars) && all(Base.Fix2(in, sts1), unknown_vars)) ||
+        i != 1 && ((num_unknowns == length(unknown_vars) &&
+          all(Base.Fix2(in, sts1), unknown_vars)) ||
          connection_error(ss))
         io = isouter(s)
         for (j, v) in enumerate(unknown_vars)
@@ -410,7 +411,7 @@ end
 
 function generate_connection_equations_and_stream_connections(csets::AbstractVector{
         <:ConnectionSet,
-    })
+})
     eqs = Equation[]
     stream_connections = ConnectionSet[]
 
@@ -605,7 +606,8 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
         vtype = get_connection_type(sv)
         vtype === Stream || continue
         if n_inners == 1 && n_outers == 1
-            push!(additional_eqs, unknowns(cset[1].sys.sys, sv) ~ unknowns(cset[2].sys.sys, sv))
+            push!(additional_eqs,
+                unknowns(cset[1].sys.sys, sv) ~ unknowns(cset[2].sys.sys, sv))
         elseif n_inners == 0 && n_outers == 2
             # we don't expand `instream` in this case.
             v1 = unknowns(cset[1].sys.sys, sv)
@@ -664,7 +666,8 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
 end
 
 function get_current_var(namespace, cele, sv)
-    unknowns(renamespace(unnamespace(namespace, _getname(cele.sys.namespace)), cele.sys.sys),
+    unknowns(renamespace(unnamespace(namespace, _getname(cele.sys.namespace)),
+            cele.sys.sys),
         sv)
 end
 

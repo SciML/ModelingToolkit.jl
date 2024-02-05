@@ -260,7 +260,8 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
         ∇σσ′ = simplify.(jac * get_noiseeqs(sys)[:, 1])
         for k in 2:m
             eqs = vcat([equations(sys)[i].lhs ~ get_noiseeqs(sys)[Int(i +
-                                                                      (k - 1) * dimunknowns)]
+                                                                      (k - 1) *
+                                                                      dimunknowns)]
                         for i in eachindex(unknowns(sys))]...)
             de = ODESystem(eqs, get_iv(sys), unknowns(sys), parameters(sys), name = name,
                 checks = false)

@@ -176,7 +176,8 @@ function generate_hessian(sys::ConstraintsSystem, vs = unknowns(sys), ps = param
     return build_function(hess, vs, ps; kwargs...)
 end
 
-function generate_function(sys::ConstraintsSystem, dvs = unknowns(sys), ps = parameters(sys);
+function generate_function(sys::ConstraintsSystem, dvs = unknowns(sys),
+        ps = parameters(sys);
         kwargs...)
     lhss = generate_canonical_form_lhss(sys)
     pre, sol_states = get_substitutions_and_solved_unknowns(sys)

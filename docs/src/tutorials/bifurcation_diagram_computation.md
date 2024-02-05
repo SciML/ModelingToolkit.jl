@@ -56,7 +56,7 @@ Let us consider the `BifurcationProblem` from the last section. If we wish to co
 ```@example Bif1
 p_span = (-4.0, 6.0)
 opts_br = ContinuationPar(nev = 2,
-    p_min = p_span[1], 
+    p_min = p_span[1],
     p_max = p_span[2])
 ```
 
@@ -111,8 +111,7 @@ bprob = BifurcationProblem(osys,
 
 p_span = (-3.0, 3.0)
 opts_br = ContinuationPar(nev = 2,
-    p_max = p_span[2], p_min = p_span[1],
-    )
+    p_max = p_span[2], p_min = p_span[1])
 
 bf = bifurcationdiagram(bprob, PALC(), 2, (args...) -> opts_br; bothside = true)
 using Plots
@@ -130,21 +129,19 @@ We compute the branch of periodic orbits which is nearby the Hopf Bifurcation. W
 
 ```@example Bif2
 br_po = continuation(bf.γ, 2, opts_br,
-    PeriodicOrbitOCollProblem(20, 5);
-    )
+    PeriodicOrbitOCollProblem(20, 5);)
 
 plot(bf; putspecialptlegend = false,
     markersize = 2,
     plotfold = false,
     xguide = "μ",
     yguide = "x")
-plot!(br_po,  xguide = "μ", yguide = "x", label = "Maximum of periodic orbit")
+plot!(br_po, xguide = "μ", yguide = "x", label = "Maximum of periodic orbit")
 ```
 
 Let's see how to plot the periodic solution we just computed:
 
 ```@example Bif2
 sol = get_periodic_orbit(br_po, 10)
-plot(sol.t, sol[1,:], yguide = "x", xguide = "time", label = "")
+plot(sol.t, sol[1, :], yguide = "x", xguide = "time", label = "")
 ```
-
