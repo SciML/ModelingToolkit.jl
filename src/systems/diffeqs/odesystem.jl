@@ -401,7 +401,9 @@ function build_explicit_observed_function(sys, ts;
     if inputs !== nothing
         ps = setdiff(ps, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
     end
-    if ps isa Tuple
+    if has_index_cache(sys)
+        ps = DestructuredArgs.(reorder_parameters(get_index_cache(sys), ps))
+    elseif ps isa Tuple
         ps = DestructuredArgs.(ps, inbounds = !checkbounds)
     else
         ps = (DestructuredArgs(ps, inbounds = !checkbounds),)

@@ -84,21 +84,19 @@ function generate_tgrad(sys::AbstractODESystem, dvs = unknowns(sys), ps = parame
         simplify = false, kwargs...)
     tgrad = calculate_tgrad(sys, simplify = simplify)
     pre = get_preprocess_constants(tgrad)
-    if ps isa Tuple
-        return build_function(tgrad,
-            dvs,
-            ps...,
-            get_iv(sys);
-            postprocess_fbody = pre,
-            kwargs...)
+    p = if has_index_cache(sys)
+        reorder_parameters(get_index_cache(sys), ps)
+    elseif ps isa Tuple
+        ps
     else
-        return build_function(tgrad,
-            dvs,
-            ps,
-            get_iv(sys);
-            postprocess_fbody = pre,
-            kwargs...)
+        (ps,)
     end
+    return build_function(tgrad,
+        dvs,
+        p...,
+        get_iv(sys);
+        postprocess_fbody = pre,
+        kwargs...)
 end
 
 function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
@@ -136,7 +134,12 @@ function generate_dae_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
     @variables ˍ₋gamma
     jac = ˍ₋gamma * jac_du + jac_u
     pre = get_preprocess_constants(jac)
-    return build_function(jac, derivatives, dvs, ps, ˍ₋gamma, get_iv(sys);
+    p = if has_index_cache(sys)
+        reorder_parameters(get_index_cache(sys), ps)
+    else
+        (ps,)
+    end
+    return build_function(jac, derivatives, dvs, p..., ˍ₋gamma, get_iv(sys);
         postprocess_fbody = pre, kwargs...)
 end
 
@@ -402,15 +405,25 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
                     build_explicit_observed_function(sys, obsvar)
                 end
                 if args === ()
-                    let obs = obs
-                        (u, p, t = Inf) -> if ps isa Tuple
+                    let obs = obs, ps_T = typeof(ps)
+                        (u, p, t = Inf) -> if p isa MTKParameters
+                            obs(u, raw_vectors(p)..., t)
+                        elseif ps_T <: Tuple
                             obs(u, p..., t)
                         else
                             obs(u, p, t)
                         end
                     end
                 else
-                    if ps isa Tuple
+                    if args[2] isa MTKParameters
+                        if length(args) == 2
+                            u, p = args
+                            obs(u, raw_vectors(p)..., Inf)
+                        else
+                            u, p, t = args
+                            obs(u, raw_vectors(p)..., t)
+                        end
+                    elseif ps isa Tuple
                         if length(args) == 2
                             u, p = args
                             obs(u, p..., Inf)
@@ -440,16 +453,21 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
                         ps)
                 end
                 if args === ()
-                    let obs = obs
-                        (u, p, t) -> if ps isa Tuple
+                    let obs = obs, ps_T = typeof(ps)
+                        (u, p, t) -> if p isa MTKParameters
+                            obs(u, raw_vectors(p)..., t)
+                        elseif ps_T <: Tuple
                             obs(u, p..., t)
                         else
                             obs(u, p, t)
                         end
                     end
                 else
-                    if ps isa Tuple # split parameters
+                    u, p, t = args
+                    if p isa MTKParameters
                         u, p, t = args
+                        obs(u, raw_vectors(p)..., t)
+                    elseif ps isa Tuple # split parameters
                         obs(u, p..., t)
                     else
                         obs(args...)
@@ -521,7 +539,9 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
                    (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen) :
                    f_gen
     f(du, u, p, t) = f_oop(du, u, p, t)
+    f(du, u, p::MTKParameters, t) = f_oop(du, u, raw_vectors(p)..., t)
     f(out, du, u, p, t) = f_iip(out, du, u, p, t)
+    f(out, du, u, p::MTKParameters, t) = f_iip(out, du, u, raw_vectors(p)..., t)
 
     if jac
         jac_gen = generate_dae_jacobian(sys, dvs, ps;
@@ -533,8 +553,10 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
                            (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in jac_gen) :
                            jac_gen
         _jac(du, u, p, ˍ₋gamma, t) = jac_oop(du, u, p, ˍ₋gamma, t)
+        _jac(du, u, p::MTKParameters, ˍ₋gamma, t) = jac_oop(du, u, raw_vectors(p)..., ˍ₋gamma, t)
 
         _jac(J, du, u, p, ˍ₋gamma, t) = jac_iip(J, du, u, p, ˍ₋gamma, t)
+        _jac(J, du, u, p::MTKParameters, ˍ₋gamma, t) = jac_iip(J, du, u, raw_vectors(p)..., ˍ₋gamma, t)
     else
         _jac = nothing
     end
@@ -547,10 +569,13 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
             end
             if args === ()
                 let obs = obs
-                    (u, p, t) -> obs(u, p, t)
+                    fun(u, p, t) = obs(u, p, t)
+                    fun(u, p::MTKParameters, t) = obs(u, raw_vectors(p)..., t)
+                    fun
                 end
             else
-                obs(args...)
+                u, p, t = args
+                p isa MTKParameters ? obs(u, raw_vectors(p)..., t) : obs(u, p, t)
             end
         end
     end
@@ -594,7 +619,9 @@ function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         kwargs...)
     f_oop, f_iip = (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen)
     f(u, h, p, t) = f_oop(u, h, p, t)
+    f(u, h, p::MTKParameters, t) = f_oop(u, h, raw_vectors(p)..., t)
     f(du, u, h, p, t) = f_iip(du, u, h, p, t)
+    f(du, u, h, p::MTKParameters, t) = f_iip(du, u, h, raw_vectors(p)..., t)
 
     DDEFunction{iip}(f, sys = sys)
 end
@@ -620,9 +647,13 @@ function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys
         isdde = true, kwargs...)
     g_oop, g_iip = (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in g_gen)
     f(u, h, p, t) = f_oop(u, h, p, t)
+    f(u, h, p::MTKParameters, t) = f_oop(u, h, raw_vectors(p)..., t)
     f(du, u, h, p, t) = f_iip(du, u, h, p, t)
+    f(du, u, h, p::MTKParameters, t) = f_iip(du, u, h, raw_vectors(p)..., t)
     g(u, h, p, t) = g_oop(u, h, p, t)
+    g(u, h, p::MTKParameters, t) = g_oop(u, h, raw_vectors(p)..., t)
     g(du, u, h, p, t) = g_iip(du, u, h, p, t)
+    g(du, u, h, p::MTKParameters, t) = g_iip(du, u, h, raw_vectors(p)..., t)
 
     SDDEFunction{iip}(f, g, sys = sys)
 end

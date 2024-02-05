@@ -77,6 +77,10 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     """
     complete::Bool
     """
+    Cached data for fast symbolic indexing.
+    """
+    index_cache::Union{Nothing, IndexCache}
+    """
     The hierarchical parent system before simplification.
     """
     parent::Any
@@ -86,14 +90,14 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
             defaults, connector_type, metadata = nothing,
             gui_metadata = nothing,
             tearing_state = nothing, substitutions = nothing,
-            complete = false, parent = nothing; checks::Union{Bool, Int} = true)
+            complete = false, index_cache = nothing, parent = nothing; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(unknowns, ps)
             check_units(u, eqs)
         end
         new(tag, eqs, unknowns, ps, var_to_name, observed, jac, name, systems, defaults,
             connector_type, metadata, gui_metadata, tearing_state, substitutions, complete,
-            parent)
+            index_cache, parent)
     end
 end
 
@@ -169,7 +173,12 @@ function generate_jacobian(sys::NonlinearSystem, vs = unknowns(sys), ps = parame
         sparse = false, simplify = false, kwargs...)
     jac = calculate_jacobian(sys, sparse = sparse, simplify = simplify)
     pre = get_preprocess_constants(jac)
-    return build_function(jac, vs, ps; postprocess_fbody = pre, kwargs...)
+    p = if has_index_cache(sys)
+        reorder_parameters(get_index_cache(sys), ps)
+    else
+        (ps,)
+    end
+    return build_function(jac, vs, p...; postprocess_fbody = pre, kwargs...)
 end
 
 function calculate_hessian(sys::NonlinearSystem; sparse = false, simplify = false)
@@ -195,7 +204,12 @@ function generate_function(sys::NonlinearSystem, dvs = unknowns(sys), ps = param
     rhss = [deq.rhs for deq in equations(sys)]
     pre, sol_states = get_substitutions_and_solved_unknowns(sys)
 
-    return build_function(rhss, value.(dvs), value.(ps); postprocess_fbody = pre,
+    p = if has_index_cache(sys)
+        reorder_parameters(get_index_cache(sys), value.(ps))
+    else
+        (value.(ps),)
+    end
+    return build_function(rhss, value.(dvs), p...; postprocess_fbody = pre,
         states = sol_states, kwargs...)
 end
 
@@ -241,7 +255,9 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
     f_oop, f_iip = eval_expression ?
                    (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in f_gen) : f_gen
     f(u, p) = f_oop(u, p)
+    f(u, p::MTKParameters) = f_oop(u, raw_vectors(p)...)
     f(du, u, p) = f_iip(du, u, p)
+    f(du, u, p::MTKParameters) = f_iip(du, u, raw_vectors(p)...)
 
     if jac
         jac_gen = generate_jacobian(sys, dvs, ps;
@@ -251,7 +267,9 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
                            (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in jac_gen) :
                            jac_gen
         _jac(u, p) = jac_oop(u, p)
+        _jac(u, p::MTKParameters) = jac_oop(u, raw_vectors(p)...)
         _jac(J, u, p) = jac_iip(J, u, p)
+        _jac(J, u, p::MTKParameters) = jac_iip(J, u, raw_vectors(p)...)
     else
         _jac = nothing
     end
@@ -261,7 +279,11 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
             obs = get!(dict, value(obsvar)) do
                 build_explicit_observed_function(sys, obsvar)
             end
-            obs(u, p)
+            if p isa MTKParameters
+                obs(u, raw_vectors(p)...)
+            else
+                obs(u, p)
+            end
         end
     end
 
@@ -338,7 +360,7 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
     ps = parameters(sys)
 
     u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union)
-
+    p = MTKParameters(sys, parammap)
     check_eqs_u0(eqs, dvs, u0; kwargs...)
 
     f = constructor(sys, dvs, ps, u0; jac = jac, checkbounds = checkbounds,

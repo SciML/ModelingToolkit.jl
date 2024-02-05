@@ -101,12 +101,16 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     If a model `sys` is complete, then `sys.x` no longer performs namespacing.
     """
     complete::Bool
+    """
+    Cached data for fast symbolic indexing.
+    """
+    index_cache::Union{Nothing, IndexCache}
 
     function JumpSystem{U}(tag, ap::U, iv, unknowns, ps, var_to_name, observed, name,
             systems,
             defaults, connector_type, devents,
             metadata = nothing, gui_metadata = nothing,
-            complete = false;
+            complete = false, index_cache = nothing;
             checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
         if checks == true || (checks & CheckComponents) > 0
             check_variables(unknowns, iv)
@@ -117,7 +121,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             check_units(u, ap, iv)
         end
         new{U}(tag, ap, iv, unknowns, ps, var_to_name, observed, name, systems, defaults,
-            connector_type, devents, metadata, gui_metadata, complete)
+            connector_type, devents, metadata, gui_metadata, complete, index_cache)
     end
 end
 function JumpSystem(tag, ap, iv, states, ps, var_to_name, args...; kwargs...)

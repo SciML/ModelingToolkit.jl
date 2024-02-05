@@ -57,13 +57,17 @@ struct OptimizationSystem <: AbstractOptimizationSystem
     """
     complete::Bool
     """
+    Cached data for fast symbolic indexing.
+    """
+    index_cache::Union{Nothing, IndexCache}
+    """
     The hierarchical parent system before simplification.
     """
     parent::Any
 
     function OptimizationSystem(tag, op, unknowns, ps, var_to_name, observed,
             constraints, name, systems, defaults, metadata = nothing,
-            gui_metadata = nothing, complete = false, parent = nothing;
+            gui_metadata = nothing, complete = false, index_cache = nothing, parent = nothing;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(unknowns, ps)
@@ -73,7 +77,7 @@ struct OptimizationSystem <: AbstractOptimizationSystem
         end
         new(tag, op, unknowns, ps, var_to_name, observed,
             constraints, name, systems, defaults, metadata, gui_metadata, complete,
-            parent)
+            index_cache, parent)
     end
 end
 
@@ -154,7 +158,12 @@ function generate_function(sys::OptimizationSystem, vs = unknowns(sys),
         ps = parameters(sys);
         kwargs...)
     eqs = subs_constants(objective(sys))
-    return build_function(eqs, vs, ps;
+    p = if has_index_cache(sys)
+        reorder_parameters(get_index_cache(sys), ps)
+    else
+        (ps,)
+    end
+    return build_function(eqs, vs, p...;
         kwargs...)
 end
 
