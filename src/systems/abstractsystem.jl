@@ -313,6 +313,9 @@ Mark a system as completed. If a system is complete, the system will no longer
 namespace its subsystems or variables, i.e. `isequal(complete(sys).v.i, v.i)`.
 """
 function complete(sys::AbstractSystem)
+    if has_index_cache(sys)
+        @set! sys.index_cache = IndexCache(sys)
+    end
     isdefined(sys, :complete) ? (@set! sys.complete = true) : sys
 end
 
@@ -354,7 +357,8 @@ for prop in [:eqs
     :discrete_subsystems
     :solved_unknowns
     :split_idxs
-    :parent]
+    :parent
+    :index_cache]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
     @eval begin

@@ -131,6 +131,10 @@ struct ODESystem <: AbstractODESystem
     """
     complete::Bool
     """
+    Cached data for fast symbolic indexing.
+    """
+    index_cache::Union{Nothing, IndexCache}
+    """
     A list of discrete subsystems.
     """
     discrete_subsystems::Any
@@ -152,7 +156,7 @@ struct ODESystem <: AbstractODESystem
             torn_matching, connector_type, preface, cevents,
             devents, metadata = nothing, gui_metadata = nothing,
             tearing_state = nothing,
-            substitutions = nothing, complete = false,
+            substitutions = nothing, complete = false, index_cache = nothing,
             discrete_subsystems = nothing, solved_unknowns = nothing,
             split_idxs = nothing, parent = nothing; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
@@ -168,7 +172,7 @@ struct ODESystem <: AbstractODESystem
         new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, torn_matching,
             connector_type, preface, cevents, devents, metadata, gui_metadata,
-            tearing_state, substitutions, complete, discrete_subsystems,
+            tearing_state, substitutions, complete, index_cache, discrete_subsystems,
             solved_unknowns, split_idxs, parent)
     end
 end
