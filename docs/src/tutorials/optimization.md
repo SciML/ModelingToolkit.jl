@@ -71,7 +71,12 @@ cons = [
 @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = cons)
 u0 = [x => 0.14
     y => 0.14]
-prob = OptimizationProblem(complete(sys), u0, grad = true, hess = true, cons_j = true, cons_h = true)
+prob = OptimizationProblem(complete(sys),
+    u0,
+    grad = true,
+    hess = true,
+    cons_j = true,
+    cons_h = true)
 solve(prob, IPNewton())
 ```
 

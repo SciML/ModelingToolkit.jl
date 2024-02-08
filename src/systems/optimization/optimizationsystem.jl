@@ -125,7 +125,8 @@ function calculate_gradient(sys::OptimizationSystem)
     expand_derivatives.(gradient(objective(sys), unknowns(sys)))
 end
 
-function generate_gradient(sys::OptimizationSystem, vs = unknowns(sys), ps = parameters(sys);
+function generate_gradient(sys::OptimizationSystem, vs = unknowns(sys),
+        ps = parameters(sys);
         kwargs...)
     grad = calculate_gradient(sys)
     pre = get_preprocess_constants(grad)
@@ -149,7 +150,8 @@ function generate_hessian(sys::OptimizationSystem, vs = unknowns(sys), ps = para
         kwargs...)
 end
 
-function generate_function(sys::OptimizationSystem, vs = unknowns(sys), ps = parameters(sys);
+function generate_function(sys::OptimizationSystem, vs = unknowns(sys),
+        ps = parameters(sys);
         kwargs...)
     eqs = subs_constants(objective(sys))
     return build_function(eqs, vs, ps;

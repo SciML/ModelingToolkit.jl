@@ -101,7 +101,8 @@ function generate_tgrad(sys::AbstractODESystem, dvs = unknowns(sys), ps = parame
     end
 end
 
-function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys), ps = parameters(sys);
+function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
+        ps = parameters(sys);
         simplify = false, sparse = false, kwargs...)
     jac = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
     pre = get_preprocess_constants(jac)
@@ -139,7 +140,8 @@ function generate_dae_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
         postprocess_fbody = pre, kwargs...)
 end
 
-function generate_function(sys::AbstractODESystem, dvs = unknowns(sys), ps = parameters(sys);
+function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
+        ps = parameters(sys);
         implicit_dae = false,
         ddvs = implicit_dae ? map(Differential(get_iv(sys)), dvs) :
                nothing,
@@ -294,7 +296,8 @@ function DiffEqBase.ODEFunction{false}(sys::AbstractODESystem, args...;
     ODEFunction{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
-function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = unknowns(sys),
+function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
+        dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
         version = nothing, tgrad = false,
         jac = false, p = nothing,

@@ -265,7 +265,8 @@ end
 
     sys_init_simple = structural_simplify(sys_init)
 
-    prob = NonlinearProblem(sys_init_simple, get_default_or_guess.(unknowns(sys_init_simple)))
+    prob = NonlinearProblem(sys_init_simple,
+        get_default_or_guess.(unknowns(sys_init_simple)))
 
     @test prob.u0 == [0.5, -0.5]
 

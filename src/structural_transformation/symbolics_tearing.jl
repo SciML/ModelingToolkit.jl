@@ -541,8 +541,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
     sys = state.sys
     @set! sys.eqs = neweqs
     @set! sys.unknowns = Any[v
-                           for (i, v) in enumerate(fullvars)
-                               if diff_to_var[i] === nothing && ispresent(i)]
+                             for (i, v) in enumerate(fullvars)
+                                 if diff_to_var[i] === nothing && ispresent(i)]
     @set! sys.substitutions = Substitutions(subeqs, deps)
 
     obs_sub = dummy_sub

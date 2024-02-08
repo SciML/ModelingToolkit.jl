@@ -45,7 +45,8 @@ sys = complete(modelingtoolkitize(prob_ode_brusselator_2d))
 # test sparse jacobian pattern only.
 prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = false)
 JP = prob.f.jac_prototype
-@test findnz(Symbolics.jacobian_sparsity(map(x -> x.rhs, equations(sys)), unknowns(sys)))[1:2] ==
+@test findnz(Symbolics.jacobian_sparsity(map(x -> x.rhs, equations(sys)),
+    unknowns(sys)))[1:2] ==
       findnz(JP)[1:2]
 
 # test sparse jacobian

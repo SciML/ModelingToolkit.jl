@@ -102,7 +102,8 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
     complete::Bool
 
-    function JumpSystem{U}(tag, ap::U, iv, unknowns, ps, var_to_name, observed, name, systems,
+    function JumpSystem{U}(tag, ap::U, iv, unknowns, ps, var_to_name, observed, name,
+            systems,
             defaults, connector_type, devents,
             metadata = nothing, gui_metadata = nothing,
             complete = false;
@@ -119,7 +120,9 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             connector_type, devents, metadata, gui_metadata, complete)
     end
 end
-JumpSystem(tag, ap, iv, states, ps, var_to_name, args...; kwargs...) = JumpSystem{typeof(ap)}(tag, ap, iv, states, ps, var_to_name, args...; kwargs...)
+function JumpSystem(tag, ap, iv, states, ps, var_to_name, args...; kwargs...)
+    JumpSystem{typeof(ap)}(tag, ap, iv, states, ps, var_to_name, args...; kwargs...)
+end
 
 function JumpSystem(eqs, iv, unknowns, ps;
         observed = Equation[],
@@ -498,7 +501,7 @@ function (ratemap::JumpSysMajParamMapper{
         U,
         V,
         W,
-    })(params) where {U <: AbstractArray,
+})(params) where {U <: AbstractArray,
         V <: AbstractArray, W}
     updateparams!(ratemap, params)
     [convert(W, value(substitute(paramexpr, ratemap.subdict)))

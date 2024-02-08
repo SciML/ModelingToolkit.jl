@@ -270,7 +270,7 @@ sol_dpmap = solve(prob_dpmap, Rodas5())
 
 @testset "symbolic remake with nested system" begin
     function makesys(name)
-        @parameters a=1.0
+        @parameters a = 1.0
         @variables x(t) = 0.0
         ODESystem([D(x) ~ -a * x], t; name)
     end
@@ -278,7 +278,7 @@ sol_dpmap = solve(prob_dpmap, Rodas5())
     function makecombinedsys()
         sys1 = makesys(:sys1)
         sys2 = makesys(:sys2)
-        @parameters b=1.0
+        @parameters b = 1.0
         complete(ODESystem(Equation[], t, [], [b]; systems = [sys1, sys2], name = :foo))
     end
 

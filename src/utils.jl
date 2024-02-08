@@ -445,7 +445,6 @@ function collect_vars!(unknowns, parameters, expr, iv)
     return nothing
 end
 
-
 function collect_var!(unknowns, parameters, var, iv)
     isequal(var, iv) && return nothing
     if isparameter(var) || (istree(var) && isparameter(operation(var)))

@@ -257,17 +257,17 @@ ss = alias_elimination(sys)
 
 @variables x(t) y(t)
 @named sys = ODESystem([D(x) ~ 1 - x,
-    D(y) + D(x) ~ 0], t)
+        D(y) + D(x) ~ 0], t)
 new_sys = alias_elimination(sys)
 @test isempty(observed(new_sys))
 
 @named sys = ODESystem([D(x) ~ x,
-    D(y) + D(x) ~ 0], t)
+        D(y) + D(x) ~ 0], t)
 new_sys = alias_elimination(sys)
 @test isempty(observed(new_sys))
 
 @named sys = ODESystem([D(x) ~ 1 - x,
-    y + D(x) ~ 0], t)
+        y + D(x) ~ 0], t)
 new_sys = alias_elimination(sys)
 @test isempty(observed(new_sys))
 
