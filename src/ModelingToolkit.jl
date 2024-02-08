@@ -63,7 +63,7 @@ using PrecompileTools, Reexport
         ParallelForm, SerialForm, MultithreadedForm, build_function,
         rhss, lhss, prettify_expr, gradient,
         jacobian, hessian, derivative, sparsejacobian, sparsehessian,
-        substituter, scalarize, getparent
+        substituter, scalarize, getparent, hasderiv, hasdiff
 
     import DiffEqBase: @add_kwonly
     import OrdinaryDiffEq

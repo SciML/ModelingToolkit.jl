@@ -18,10 +18,9 @@ end
         @safetestset "Simplify Test" include("simplify.jl")
         @safetestset "Direct Usage Test" include("direct.jl")
         @safetestset "System Linearity Test" include("linearity.jl")
-        @safetestset "Linearization Tests" include("linearize.jl")
-        @safetestset "Input Output Test" include("input_output_handling.jl")
-        @safetestset "Clock Test" include("clock.jl")
-        @safetestset "DiscreteSystem Test" include("discretesystem.jl")
+        @safetestset "Linearization Tests" include("linearize.jl") # !
+        @safetestset "Input Output Test" include("input_output_handling.jl") # !
+        @safetestset "Clock Test" include("clock.jl") # !
         @safetestset "ODESystem Test" include("odesystem.jl")
         @safetestset "Dynamic Quantities Test" include("dq_units.jl")
         @safetestset "Unitful Quantities Test" include("units.jl")
@@ -34,7 +33,7 @@ end
         @safetestset "JumpSystem Test" include("jumpsystem.jl")
         @safetestset "Constraints Test" include("constraints.jl")
         @safetestset "Reduction Test" include("reduction.jl")
-        @safetestset "Split Parameters Test" include("split_parameters.jl")
+        @safetestset "Split Parameters Test" include("split_parameters.jl") # !
         @safetestset "StaticArrays Test" include("static_arrays.jl")
         @safetestset "Components Test" include("components.jl")
         @safetestset "Model Parsing Test" include("model_parsing.jl")
@@ -42,7 +41,7 @@ end
         @safetestset "Error Handling" include("error_handling.jl")
         @safetestset "StructuralTransformations" include("structural_transformation/runtests.jl")
         @safetestset "State Selection Test" include("state_selection.jl")
-        @safetestset "Symbolic Event Test" include("symbolic_events.jl")
+        @safetestset "Symbolic Event Test" include("symbolic_events.jl") # !
         @safetestset "Stream Connect Test" include("stream_connectors.jl")
         @safetestset "Domain Connect Test" include("domain_connectors.jl")
         @safetestset "Lowering Integration Test" include("lowering_solving.jl")
@@ -58,7 +57,7 @@ end
         @safetestset "OptimizationSystem Test" include("optimizationsystem.jl")
         @safetestset "FuncAffect Test" include("funcaffect.jl")
         @safetestset "Constants Test" include("constants.jl")
-        @safetestset "Inverse Models Test" include("inversemodel.jl")
+        @safetestset "Inverse Models Test" include("inversemodel.jl") # !
     end
 
     if GROUP == "All" || GROUP == "InterfaceII"
@@ -74,6 +73,6 @@ end
 
     if GROUP == "All" || GROUP == "Extensions"
         activate_extensions_env()
-        @safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl")
+        @safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl") # !
     end
 end

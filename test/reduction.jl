@@ -160,7 +160,7 @@ u0 = [u1 => 1
     u2 => 1
     u3 => 0.3]
 pp = [2]
-nlprob = NonlinearProblem(reducedsys, u0, pp)
+nlprob = NonlinearProblem(reducedsys, u0, [p => pp[1]])
 reducedsol = solve(nlprob, NewtonRaphson())
 residual = fill(100.0, length(unknowns(reducedsys)))
 nlprob.f(residual, reducedsol.u, pp)

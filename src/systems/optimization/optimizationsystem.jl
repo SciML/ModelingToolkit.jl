@@ -134,7 +134,8 @@ function generate_gradient(sys::OptimizationSystem, vs = unknowns(sys),
         kwargs...)
     grad = calculate_gradient(sys)
     pre = get_preprocess_constants(grad)
-    return build_function(grad, vs, ps; postprocess_fbody = pre,
+    p = reorder_parameters(sys, ps)
+    return build_function(grad, vs, p...; postprocess_fbody = pre,
         kwargs...)
 end
 
@@ -150,7 +151,8 @@ function generate_hessian(sys::OptimizationSystem, vs = unknowns(sys), ps = para
         hess = calculate_hessian(sys)
     end
     pre = get_preprocess_constants(hess)
-    return build_function(hess, vs, ps; postprocess_fbody = pre,
+    p = reorder_parameters(sys, ps)
+    return build_function(hess, vs, p...; postprocess_fbody = pre,
         kwargs...)
 end
 
@@ -271,7 +273,13 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     defs = mergedefaults(defs, u0map, dvs)
 
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    if parammap isa MTKParameters
+        p = parammap
+    elseif has_index_cache(sys) && get_index_cache(sys) !== nothing
+        p = MTKParameters(sys, parammap)
+    else
+        p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    end
     lb = varmap_to_vars(dvs .=> lb, dvs; defaults = defs, tofloat = false, use_union)
     ub = varmap_to_vars(dvs .=> ub, dvs; defaults = defs, tofloat = false, use_union)
 
@@ -280,28 +288,39 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         ub = nothing
     end
 
-    f = generate_function(sys, checkbounds = checkbounds, linenumbers = linenumbers,
+    f = let _f = generate_function(sys, checkbounds = checkbounds, linenumbers = linenumbers,
         expression = Val{false})
-
+        __f(u, p) = _f(u, p)
+        __f(u, p::MTKParameters) = _f(u, p...)
+        __f
+    end
     obj_expr = subs_constants(objective(sys))
 
     if grad
-        grad_oop, grad_iip = generate_gradient(sys, checkbounds = checkbounds,
+        _grad = let (grad_oop, grad_iip) = generate_gradient(sys, checkbounds = checkbounds,
             linenumbers = linenumbers,
             parallel = parallel, expression = Val{false})
-        _grad(u, p) = grad_oop(u, p)
-        _grad(J, u, p) = (grad_iip(J, u, p); J)
+            _grad(u, p) = grad_oop(u, p)
+            _grad(J, u, p) = (grad_iip(J, u, p); J)
+            _grad(u, p::MTKParameters) = grad_oop(u, p...)
+            _grad(J, u, p::MTKParameters) = (grad_iip(J, u, p...); J)
+            _grad
+        end
     else
         _grad = nothing
     end
 
     if hess
-        hess_oop, hess_iip = generate_hessian(sys, checkbounds = checkbounds,
+        _hess = let (hess_oop, hess_iip) = generate_hessian(sys, checkbounds = checkbounds,
             linenumbers = linenumbers,
             sparse = sparse, parallel = parallel,
             expression = Val{false})
-        _hess(u, p) = hess_oop(u, p)
-        _hess(J, u, p) = (hess_iip(J, u, p); J)
+            _hess(u, p) = hess_oop(u, p)
+            _hess(J, u, p) = (hess_iip(J, u, p); J)
+            _hess(u, p::MTKParameters) = hess_oop(u, p...)
+            _hess(J, u, p::MTKParameters) = (hess_iip(J, u, p...); J)
+            _hess
+        end
     else
         _hess = nothing
     end
@@ -319,10 +338,17 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             end
             if args === ()
                 let obs = obs
-                    (u, p) -> obs(u, p)
+                    _obs(u, p) = obs(u, p)
+                    _obs(u, p::MTKParameters) = obs(u, p...)
+                    _obs
                 end
             else
-                obs(args...)
+                u, p = args
+                if p isa MTKParameters
+                    obs(u, p...)
+                else
+                    obs(u, p)
+                end
             end
         end
     end
@@ -462,7 +488,11 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
     defs = mergedefaults(defs, u0map, dvs)
 
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        p = MTKParameters(sys, parammap)
+    else
+        p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    end
     lb = varmap_to_vars(dvs .=> lb, dvs; defaults = defs, tofloat = false, use_union)
     ub = varmap_to_vars(dvs .=> ub, dvs; defaults = defs, tofloat = false, use_union)
 

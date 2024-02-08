@@ -833,3 +833,11 @@ function fast_substitute(expr, pair::Pair)
 end
 
 normalize_to_differential(s) = s
+
+function restrict_array_to_union(arr)
+    isempty(arr) && return arr
+    T = foldl(arr; init = Union{}) do prev, cur
+        Union{prev, typeof(cur)}
+    end
+    return Array{T, ndims(arr)}(arr)
+end

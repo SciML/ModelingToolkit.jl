@@ -29,7 +29,7 @@ using ModelingToolkit: get_metadata
     hess_sparsity = ModelingToolkit.hessian_sparsity(sys1)
     sparse_prob = OptimizationProblem(complete(sys1),
         [x, y],
-        [a, b],
+        [a => 0.0, b => 0.0],
         grad = true,
         sparse = true)
     @test sparse_prob.f.hess_prototype.rowval == hess_sparsity.rowval
@@ -166,7 +166,7 @@ end
 
     prob_ = remake(prob, u0 = Dict(sys1.x => 1.0), p = Dict(sys1.a => 2.0))
     @test isequal(prob_.u0, [1.0, 0.0])
-    @test isequal(prob_.p, [2.0])
+    @test isequal((prob_.p...,)[1], [2.0])
 end
 
 @testset "nested systems" begin

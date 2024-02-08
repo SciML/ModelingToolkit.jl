@@ -189,7 +189,8 @@ function generate_rate_function(js::JumpSystem, rate)
         csubs = Dict(c => getdefault(c) for c in consts)
         rate = substitute(rate, csubs)
     end
-    rf = build_function(rate, unknowns(js), parameters(js),
+    p = reorder_parameters(js, parameters(js))
+    rf = build_function(rate, unknowns(js), p...,
         get_iv(js),
         expression = Val{true})
 end
@@ -316,7 +317,11 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
     defs = mergedefaults(defs, u0map, dvs)
 
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        p = MTKParameters(sys, parammap)
+    else
+        p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    end
 
     f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
 
@@ -369,7 +374,11 @@ function DiscreteProblemExpr{iip}(sys::JumpSystem, u0map, tspan::Union{Tuple, No
     defs = defaults(sys)
 
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        p = MTKParameters(sys, parammap)
+    else
+        p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    end
     # identity function to make syms works
     quote
         f = DiffEqBase.DISCRETE_INPLACE_DEFAULT

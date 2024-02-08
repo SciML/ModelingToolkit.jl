@@ -34,11 +34,11 @@ time = 0:dt:t_end
 x = @. time^2 + 1.0
 
 get_value(data, t, dt) = data[round(Int, t / dt + 1)]
-@register_symbolic get_value(data, t, dt)
+@register_symbolic get_value(data::Vector, t, dt)
 
-function Sampled(; name, data = Float64[], dt = 0.0)
+function Sampled(; name, dt = 0.0, n = length(data))
     pars = @parameters begin
-        data = data
+        data[1:n]
         dt = dt
     end
 
@@ -51,12 +51,12 @@ function Sampled(; name, data = Float64[], dt = 0.0)
         output.u ~ get_value(data, t, dt),
     ]
 
-    return ODESystem(eqs, t, vars, pars; name, systems,
+    return ODESystem(eqs, t, vars, [data..., dt]; name, systems,
         defaults = [output.u => data[1]])
 end
 
 vars = @variables y(t)=1 dy(t)=0 ddy(t)=0
-@named src = Sampled(; data = Float64[], dt)
+@named src = Sampled(; dt, n = length(x))
 @named int = Integrator()
 
 eqs = [y ~ src.output.u

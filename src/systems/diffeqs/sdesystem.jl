@@ -225,7 +225,7 @@ function generate_diffusion_function(sys::SDESystem, dvs = unknowns(sys),
         eqs = delay_to_function(sys, eqs)
     end
     u = map(x -> time_varying_as_func(value(x), sys), dvs)
-    p = if has_index_cache(sys)
+    p = if has_index_cache(sys) && get_index_cache(sys) !== nothing
         reorder_parameters(get_index_cache(sys), ps)
     else
         (map(x -> time_varying_as_func(value(x), sys), ps),)
@@ -417,13 +417,13 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
                    (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in g_gen) : g_gen
 
     f(u, p, t) = f_oop(u, p, t)
-    f(u, p::MTKParameters, t) = f_oop(u, raw_vectors(p)..., t)
+    f(u, p::MTKParameters, t) = f_oop(u, p..., t)
     f(du, u, p, t) = f_iip(du, u, p, t)
-    f(du, u, p::MTKParameters, t) = f_iip(du, u, raw_vectors(p)..., t)
+    f(du, u, p::MTKParameters, t) = f_iip(du, u, p..., t)
     g(u, p, t) = g_oop(u, p, t)
-    g(u, p::MTKParameters, t) = g_oop(u, raw_vectors(p)..., t)
+    g(u, p::MTKParameters, t) = g_oop(u, p..., t)
     g(du, u, p, t) = g_iip(du, u, p, t)
-    g(du, u, p::MTKParameters, t) = g_iip(du, u, raw_vectors(p)..., t)
+    g(du, u, p::MTKParameters, t) = g_iip(du, u, p..., t)
 
     if tgrad
         tgrad_gen = generate_tgrad(sys, dvs, ps; expression = Val{eval_expression},
@@ -432,9 +432,9 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
                                (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in tgrad_gen) :
                                tgrad_gen
         _tgrad(u, p, t) = tgrad_oop(u, p, t)
-        _tgrad(u, p::MTKParameters, t) = tgrad_oop(u, raw_vectors(p)..., t)
+        _tgrad(u, p::MTKParameters, t) = tgrad_oop(u, p..., t)
         _tgrad(J, u, p, t) = tgrad_iip(J, u, p, t)
-        _tgrad(J, u, p::MTKParameters, t) = tgrad_iip(J, u, raw_vectors(p)..., t)
+        _tgrad(J, u, p::MTKParameters, t) = tgrad_iip(J, u, p..., t)
     else
         _tgrad = nothing
     end
@@ -446,9 +446,9 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
                            (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in jac_gen) :
                            jac_gen
         _jac(u, p, t) = jac_oop(u, p, t)
-        _jac(u, p::MTKParameters, t) = jac_oop(u, raw_vectors(p)..., t)
+        _jac(u, p::MTKParameters, t) = jac_oop(u, p..., t)
         _jac(J, u, p, t) = jac_iip(J, u, p, t)
-        _jac(J, u, p::MTKParameters, t) = jac_iip(J, u, raw_vectors(p)..., t)
+        _jac(J, u, p::MTKParameters, t) = jac_iip(J, u, p..., t)
     else
         _jac = nothing
     end
@@ -463,13 +463,13 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
                                    (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in tmp_Wfact_t) :
                                    tmp_Wfact_t
         _Wfact(u, p, dtgamma, t) = Wfact_oop(u, p, dtgamma, t)
-        _Wfact(u, p::MTKParameters, dtgamma, t) = Wfact_oop(u, raw_vectors(p)..., dtgamma, t)
+        _Wfact(u, p::MTKParameters, dtgamma, t) = Wfact_oop(u, p..., dtgamma, t)
         _Wfact(W, u, p, dtgamma, t) = Wfact_iip(W, u, p, dtgamma, t)
-        _Wfact(W, u, p::MTKParameters, dtgamma, t) = Wfact_iip(W, u, raw_vectors(p)..., dtgamma, t)
+        _Wfact(W, u, p::MTKParameters, dtgamma, t) = Wfact_iip(W, u, p..., dtgamma, t)
         _Wfact_t(u, p, dtgamma, t) = Wfact_oop_t(u, p, dtgamma, t)
-        _Wfact_t(u, p::MTKParameters, dtgamma, t) = Wfact_oop_t(u, raw_vectors(p)..., dtgamma, t)
+        _Wfact_t(u, p::MTKParameters, dtgamma, t) = Wfact_oop_t(u, p..., dtgamma, t)
         _Wfact_t(W, u, p, dtgamma, t) = Wfact_iip_t(W, u, p, dtgamma, t)
-        _Wfact_t(W, u, p::MTKParameters, dtgamma, t) = Wfact_iip_t(W, u, raw_vectors(p)..., dtgamma, t)
+        _Wfact_t(W, u, p::MTKParameters, dtgamma, t) = Wfact_iip_t(W, u, p..., dtgamma, t)
     else
         _Wfact, _Wfact_t = nothing, nothing
     end
@@ -484,7 +484,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
                 build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
             end
             if p isa MTKParameters
-                obs(u, raw_vectors(p)..., t)
+                obs(u, p..., t)
             else
                 obs(u, p, t)
             end

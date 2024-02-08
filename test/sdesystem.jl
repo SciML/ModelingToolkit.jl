@@ -3,7 +3,7 @@ using StochasticDiffEq, OrdinaryDiffEq, SparseArrays
 using Random, Test
 using Statistics
 # imported as tt because `t` is used extensively below
-using ModelingToolkit: t_nounits as tt, D_nounits as D
+using ModelingToolkit: t_nounits as tt, D_nounits as D, MTKParameters
 
 # Define some variables
 @parameters σ ρ β
@@ -46,19 +46,19 @@ noiseeqs_nd = [0.01*x 0.01*x*y 0.02*x*z
 @named de = SDESystem(eqs, noiseeqs_nd, tt, [x, y, z], [σ, ρ, β])
 de = complete(de)
 f = eval(generate_diffusion_function(de)[1])
-@test f([1, 2, 3.0], [0.1, 0.2, 0.3], nothing) == [0.01*1 0.01*1*2 0.02*1*3
+p = MTKParameters(de, [σ => 0.1, ρ => 0.2, β => 0.3])
+@test f([1, 2, 3.0], p..., nothing) == [0.01*1 0.01*1*2 0.02*1*3
     0.1 0.01*2 0.02*1*3
     0.2 0.3 0.01*3]
 
 f = eval(generate_diffusion_function(de)[2])
 du = ones(3, 3)
-f(du, [1, 2, 3.0], [0.1, 0.2, 0.3], nothing)
+f(du, [1, 2, 3.0], p..., nothing)
 @test du == [0.01*1 0.01*1*2 0.02*1*3
     0.1 0.01*2 0.02*1*3
     0.2 0.3 0.01*3]
 
-f = SDEFunction(de)
-prob = SDEProblem(SDEFunction(de), [1.0, 0.0, 0.0], (0.0, 100.0), (10.0, 26.0, 2.33),
+prob = SDEProblem(de, [1.0, 0.0, 0.0], (0.0, 100.0), (σ => 10.0, ρ => 26.0, β => 2.33),
     noise_rate_prototype = zeros(3, 3))
 sol = solve(prob, EM(), dt = 0.001)
 
@@ -89,7 +89,8 @@ sol = solve(prob, EM(), dt = 0.001)
 function test_SDEFunction_no_eval()
     # Need to test within a function scope to trigger world age issues
     f = SDEFunction(de, eval_expression = false)
-    @test f([1.0, 0.0, 0.0], (10.0, 26.0, 2.33), (0.0, 100.0)) ≈ [-10.0, 26.0, 0.0]
+    p = MTKParameters(de, [σ => 10.0, ρ => 26.0, β => 2.33])
+    @test f([1.0, 0.0, 0.0], p..., (0.0, 100.0)) ≈ [-10.0, 26.0, 0.0]
 end
 test_SDEFunction_no_eval()
 
