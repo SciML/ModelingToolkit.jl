@@ -255,6 +255,8 @@ export @variables, @parameters, @constants, @brownian
 export @named, @nonamespace, @namespace, extend, compose, complete
 export debug_system
 
+export getp, setp
+
 export show_with_compare
 
 #export Continuous, Discrete, sampletime, input_timedomain, output_timedomain
