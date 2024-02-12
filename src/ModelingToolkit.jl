@@ -56,7 +56,8 @@ using PrecompileTools, Reexport
         exprs_occur_in, solve_for, build_expr, unwrap, wrap,
         VariableSource, getname, variable, Connection, connect,
         NAMESPACE_SEPARATOR, set_scalar_metadata, setdefaultval,
-        initial_state, transition
+        initial_state, transition, activeState, entry, ticksInState,
+        timeInState
     import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
         jacobian_sparsity, isaffine, islinear, _iszero, _isone,
         tosymbol, lower_varname, diff2term, var_from_nested_derivative,
