@@ -39,6 +39,14 @@ help?> u
   Symbolics.VariableSource: (:variables, :u)
 ```
 
+## Label
+
+Label is descriptive name of a symbolic variable. It can be defined as:
+
+```@example metadata
+@parameters R [label = "Resistance"]
+```
+
 ## Connect
 
 Variables in connectors can have `connect` metadata which describes the type of connections.

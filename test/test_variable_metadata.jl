@@ -84,6 +84,15 @@ sp = Set(p)
 @test getdescription(u) == ""
 @test !hasdescription(u)
 
+## Labels
+@variables l [label = "Label"]
+@test getlabel(l) == "Label"
+@test haslabel(l)
+
+@variables l
+@test getlabel(l) == ""
+@test !haslabel(l)
+
 @parameters t
 @variables u(t) [description = "A short description of u"]
 @parameters p [description = "A description of p"]

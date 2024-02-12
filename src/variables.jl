@@ -372,6 +372,25 @@ function hasdescription(x)
     getdescription(x) != ""
 end
 
+## Label =================================================================
+struct VariableLabel end
+Symbolics.option_to_metadata_type(::Val{:label}) = VariableLabel
+
+getlabel(x::Num) = getlabel(Symbolics.unwrap(x))
+
+"""
+    getlabel(x)
+
+Return labels attached to variables `x`. If no label is attached, an empty string is returned.
+"""
+function getlabel(x)
+    p = Symbolics.getparent(x, nothing)
+    p === nothing || (x = p)
+    Symbolics.getmetadata(x, VariableLabel, "")
+end
+
+haslabel(x) = (getlabel(x) != "")
+
 ## binary variables =================================================================
 struct VariableBinary end
 Symbolics.option_to_metadata_type(::Val{:binary}) = VariableBinary
