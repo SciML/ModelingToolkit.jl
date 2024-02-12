@@ -16,8 +16,12 @@ struct IndexCache
     unknown_idx::Dict{UInt, Int}
     discrete_idx::Dict{UInt, Int}
     param_idx::Dict{UInt, Int}
+    constant_idx::Dict{UInt, Int}
+    dependent_idx::Dict{UInt, Int}
     discrete_buffer_sizes::Vector{BufferTemplate}
     param_buffer_sizes::Vector{BufferTemplate}
+    constant_buffer_sizes::Vector{BufferTemplate}
+    dependent_buffer_sizes::Vector{BufferTemplate}
 end
 
 function IndexCache(sys::AbstractSystem)
@@ -31,6 +35,8 @@ function IndexCache(sys::AbstractSystem)
 
     disc_buffers = Dict{DataType, Set{BasicSymbolic}}()
     tunable_buffers = Dict{DataType, Set{BasicSymbolic}}()
+    constant_buffers = Dict{DataType, Set{BasicSymbolic}}()
+    dependent_buffers = Dict{DataType, Set{BasicSymbolic}}()
 
     function insert_by_type!(buffers::Dict{DataType, Set{BasicSymbolic}}, sym)
         sym = unwrap(sym)
@@ -53,40 +59,64 @@ function IndexCache(sys::AbstractSystem)
         end
     end
 
+    all_ps = Set(unwrap.(parameters(sys)))
+    for (sym, value) in defaults(sys)
+        sym = unwrap(sym)
+        if sym in all_ps && symbolic_type(unwrap(value)) !== NotSymbolic()
+            insert_by_type!(dependent_buffers, sym)
+        end
+    end
+
     for p in parameters(sys)
         p = unwrap(p)
         ctype = concrete_symtype(p)
         haskey(disc_buffers, ctype) && p in disc_buffers[ctype] && continue
-        
-        insert_by_type!(is_discrete_domain(p) ? disc_buffers : tunable_buffers, p)
+        haskey(dependent_buffers, ctype) && p in dependent_buffers[ctype] && continue
+
+        insert_by_type!(
+            if is_discrete_domain(p)
+                disc_buffers
+            elseif istunable(p, true)
+                tunable_buffers
+            else
+                constant_buffers
+            end,
+            p
+        )
     end
 
-    disc_idxs = Dict{UInt, Int}()
-    discrete_buffer_sizes = BufferTemplate[]
-    didx = 1
-    for (T, buf) in disc_buffers
-        for p in buf
-            h = hash(p)
-            setmetadata(p, SymbolHash, h)
-            disc_idxs[h] = didx
-            didx += 1
+    function get_buffer_sizes_and_idxs(buffers::Dict{DataType, Set{BasicSymbolic}})
+        idxs = Dict{UInt, Int}()
+        buffer_sizes = BufferTemplate[]
+        idx = 1
+        for (T, buf) in buffers
+            for p in buf
+                h = hash(p)
+                setmetadata(p, SymbolHash, h)
+                idxs[h] = idx
+                idx += 1
+            end
+            push!(buffer_sizes, BufferTemplate(T, length(buf)))
         end
-        push!(discrete_buffer_sizes, BufferTemplate(T, length(buf)))
-    end
-    param_idxs = Dict{UInt, Int}()
-    param_buffer_sizes = BufferTemplate[]
-    pidx = 1
-    for (T, buf) in tunable_buffers
-        for p in buf
-            h = hash(p)
-            setmetadata(p, SymbolHash, h)
-            param_idxs[h] = pidx
-            pidx += 1
-        end
-        push!(param_buffer_sizes, BufferTemplate(T, length(buf)))
+        return idxs, buffer_sizes
     end
 
-    return IndexCache(unk_idxs, disc_idxs, param_idxs, discrete_buffer_sizes, param_buffer_sizes)
+    disc_idxs, discrete_buffer_sizes = get_buffer_sizes_and_idxs(disc_buffers)
+    param_idxs, param_buffer_sizes = get_buffer_sizes_and_idxs(tunable_buffers)
+    const_idxs, const_buffer_sizes = get_buffer_sizes_and_idxs(constant_buffers)
+    dependent_idxs, dependent_buffer_sizes = get_buffer_sizes_and_idxs(dependent_buffers)
+
+    return IndexCache(
+        unk_idxs,
+        disc_idxs,
+        param_idxs,
+        const_idxs,
+        dependent_idxs,
+        discrete_buffer_sizes,
+        param_buffer_sizes,
+        const_buffer_sizes,
+        dependent_buffer_sizes,
+    )
 end
 
 function reorder_parameters(sys::AbstractSystem, ps; kwargs...)
@@ -102,6 +132,8 @@ end
 function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
     param_buf = ArrayPartition((fill(variable(:DEF), temp.length) for temp in ic.param_buffer_sizes)...)
     disc_buf = ArrayPartition((fill(variable(:DEF), temp.length) for temp in ic.discrete_buffer_sizes)...)
+    const_buf = ArrayPartition((fill(variable(:DEF), temp.length) for temp in ic.constant_buffer_sizes)...)
+    dep_buf = ArrayPartition((fill(variable(:DEF), temp.length) for temp in ic.dependent_buffer_sizes)...)
 
     for p in ps
         h = getsymbolhash(p)
@@ -109,12 +141,16 @@ function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
             disc_buf[ic.discrete_idx[h]] = unwrap(p)
         elseif haskey(ic.param_idx, h)
             param_buf[ic.param_idx[h]] = unwrap(p)
+        elseif haskey(ic.constant_idx, h)
+            const_buf[ic.constant_idx[h]] = unwrap(p)
+        elseif haskey(ic.dependent_idx, h)
+            dep_buf[ic.dependent_idx[h]] = unwrap(p)
         else
             error("Invalid parameter $p")
         end
     end
 
-    result = broadcast.(unwrap, (param_buf.x..., disc_buf.x...))
+    result = broadcast.(unwrap, (param_buf.x..., disc_buf.x..., const_buf.x..., dep_buf.x...))
     if drop_missing
         result = map(result) do buf
             filter(buf) do sym

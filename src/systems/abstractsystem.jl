@@ -255,11 +255,14 @@ function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         ic = get_index_cache(sys)
         h = getsymbolhash(sym)
-        return if haskey(ic.param_idx, h) || haskey(ic.discrete_idx, h)
+        return if haskey(ic.param_idx, h) || haskey(ic.discrete_idx, h) ||
+                haskey(ic.constant_idx, h) || haskey(ic.dependent_idx, h)
             true
         else
             h = getsymbolhash(default_toterm(sym))
-            haskey(ic.param_idx, h) || haskey(ic.discrete_idx, h) || hasname(sym) && is_parameter(sys, getname(sym))
+            haskey(ic.param_idx, h) || haskey(ic.discrete_idx, h) ||
+                haskey(ic.constant_idx, h) || haskey(ic.dependent_idx, h) ||
+                hasname(sym) && is_parameter(sys, getname(sym))
         end
     end
     return any(isequal(sym), parameter_symbols(sys)) ||
@@ -284,12 +287,20 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
             ParameterIndex(SciMLStructures.Tunable(), ic.param_idx[h])
         elseif haskey(ic.discrete_idx, h)
             ParameterIndex(SciMLStructures.Discrete(), ic.discrete_idx[h])
+        elseif haskey(ic.constant_idx, h)
+            ParameterIndex(SciMLStructures.Constants(), ic.constant_idx[h])
+        elseif haskey(ic.dependent_idx, h)
+            ParameterIndex(nothing, ic.dependent_idx[h])
         else
             h = getsymbolhash(default_toterm(sym))
             if haskey(ic.param_idx, h)
                 ParameterIndex(SciMLStructures.Tunable(), ic.param_idx[h])
             elseif haskey(ic.discrete_idx, h)
                 ParameterIndex(SciMLStructures.Discrete(), ic.discrete_idx[h])
+            elseif haskey(ic.constant_idx, h)
+                ParameterIndex(SciMLStructures.Constants(), ic.constant_idx[h])
+            elseif haskey(ic.dependent_idx, h)
+                ParameterIndex(nothing, ic.dependent_idx[h])
             else
                 nothing
             end
