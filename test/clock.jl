@@ -116,7 +116,7 @@ ss = structural_simplify(sys);
 Tf = 1.0
 prob = ODEProblem(ss, [x => 0.0, y => 0.0], (0.0, Tf),
     [kp => 1.0; z => 3.0; z(k + 1) => 2.0])
-@test sort(prob.p) == [0, 1.0, 2.0, 3.0, 4.0] # yd, kp, z(k+1), z(k), ud
+@test sort(vcat(prob.p...)) == [0, 1.0, 2.0, 3.0, 4.0] # yd, kp, z(k+1), z(k), ud
 sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 # For all inputs in parameters, just initialize them to 0.0, and then set them
 # in the callback.

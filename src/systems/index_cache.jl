@@ -28,9 +28,8 @@ function IndexCache(sys::AbstractSystem)
     unks = solved_unknowns(sys)
     unk_idxs = Dict{UInt, Int}()
     for (i, sym) in enumerate(unks)
-        h = hash(unwrap(sym))
+        h = getsymbolhash(sym)
         unk_idxs[h] = i
-        setmetadata(sym, SymbolHash, h)
     end
 
     disc_buffers = Dict{DataType, Set{BasicSymbolic}}()
@@ -56,6 +55,13 @@ function IndexCache(sys::AbstractSystem)
                 is_parameter(sys, disc) || error("Expected discrete variable $disc in callback to be a parameter")
                 insert_by_type!(disc_buffers, disc)
             end
+        end
+    end
+    if has_discrete_subsystems(sys) && get_discrete_subsystems(sys) !== nothing
+        _, inputs, continuous_id, _ = get_discrete_subsystems(sys)
+        for par in inputs[continuous_id]
+            is_parameter(sys, par) || error("Discrete subsytem input is not a parameter")
+            insert_by_type!(disc_buffers, par)
         end
     end
 
@@ -91,8 +97,9 @@ function IndexCache(sys::AbstractSystem)
         idx = 1
         for (T, buf) in buffers
             for p in buf
-                h = hash(p)
-                setmetadata(p, SymbolHash, h)
+                h = getsymbolhash(p)
+                idxs[h] = idx
+                h = getsymbolhash(default_toterm(p))
                 idxs[h] = idx
                 idx += 1
             end

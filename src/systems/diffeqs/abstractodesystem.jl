@@ -803,7 +803,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         u0 = u0_constructor(u0)
     end
 
-    p = MTKParameters(sys, parammap; toterm = default_toterm)
+    p = MTKParameters(sys, parammap)
 
     if implicit_dae && du0map !== nothing
         ddvs = map(Differential(iv), dvs)
@@ -934,7 +934,7 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     cbs = process_events(sys; callback, kwargs...)
     inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
+        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(sys, dss...)
         discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
             if clock isa Clock
                 PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)
@@ -1038,7 +1038,7 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     cbs = process_events(sys; callback, kwargs...)
     inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
+        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(sys, dss...)
         discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
             if clock isa Clock
                 PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)
@@ -1100,7 +1100,7 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     cbs = process_events(sys; callback, kwargs...)
     inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
+        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(sys, dss...)
         discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
             if clock isa Clock
                 PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)

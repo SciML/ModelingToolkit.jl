@@ -6,23 +6,26 @@ struct MTKParameters{T, D, C, E, F}
     dependent_update::F
 end
 
-function MTKParameters(sys::AbstractSystem, p; toterm = default_toterm, tofloat = false, use_union = false)
+function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = false)
     ic = if has_index_cache(sys) && get_index_cache(sys) !== nothing
         get_index_cache(sys)
     else
         error("Cannot create MTKParameters if system does not have index_cache")
     end
     all_ps = Set(unwrap.(parameters(sys)))
+    union!(all_ps, default_toterm.(unwrap.(parameters(sys))))
     if p isa Vector && !(eltype(p) <: Pair) && !isempty(p)
         ps = parameters(sys)
         length(p) == length(ps) || error("Invalid parameters")
         p = ps .=> p
     end
-    defs = Dict(unwrap(k) => v for (k, v) in defaults(sys) if unwrap(k) in all_ps)
+    defs = Dict(default_toterm(unwrap(k)) => v for (k, v) in defaults(sys) if unwrap(k) in all_ps)
     if p isa SciMLBase.NullParameters
         p = defs
     else
-        p = merge(defs, Dict(unwrap(k) => v for (k, v) in p))
+        extra_params = Dict(unwrap(k) => v for (k, v) in p if !in(unwrap(k), all_ps))
+        p = merge(defs, Dict(default_toterm(unwrap(k)) => v for (k, v) in p))
+        p = Dict(k => fixpoint_sub(v, extra_params) for (k, v) in p if !haskey(extra_params, unwrap(k)))
     end
 
     tunable_buffer = ArrayPartition((Vector{temp.type}(undef, temp.length) for temp in ic.param_buffer_sizes)...)
@@ -41,6 +44,10 @@ function MTKParameters(sys::AbstractSystem, p; toterm = default_toterm, tofloat 
         elseif haskey(ic.dependent_idx, h)
             dep_buffer[ic.dependent_idx[h]] = val
             dependencies[wrap(sym)] = wrap(p[sym])
+        elseif !isequal(default_toterm(sym), sym)
+            set_value(default_toterm(sym), val)
+        else
+            error("Symbol $sym does not have an index")
         end
     end
 

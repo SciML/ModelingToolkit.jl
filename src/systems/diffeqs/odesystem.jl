@@ -172,8 +172,8 @@ struct ODESystem <: AbstractODESystem
         new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, torn_matching,
             connector_type, preface, cevents, devents, metadata, gui_metadata,
-            tearing_state, substitutions, complete, index_cache, discrete_subsystems,
-            solved_unknowns, split_idxs, parent)
+            tearing_state, substitutions, complete, index_cache,
+            discrete_subsystems, solved_unknowns, split_idxs, parent)
     end
 end
 
