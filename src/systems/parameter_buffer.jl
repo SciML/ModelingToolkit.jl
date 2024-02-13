@@ -24,7 +24,7 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
         p = defs
     else
         extra_params = Dict(unwrap(k) => v for (k, v) in p if !in(unwrap(k), all_ps))
-        p = merge(defs, Dict(default_toterm(unwrap(k)) => v for (k, v) in p))
+        p = merge(defs, Dict(default_toterm(unwrap(k)) => v for (k, v) in p if unwrap(k) in all_ps))
         p = Dict(k => fixpoint_sub(v, extra_params) for (k, v) in p if !haskey(extra_params, unwrap(k)))
     end
 
@@ -196,7 +196,7 @@ function Base.setindex!(buf::MTKParameters, val, i)
     else
         buf.constant[i - length(buf.tunable) - length(buf.discrete)] = val
     end
-    buf.dependent_update(p.dependent, p.tunable.x..., p.discrete.x..., p.constant.x...)
+    buf.dependent_update(buf.dependent, buf.tunable.x..., buf.discrete.x..., buf.constant.x...)
 end
 
 function Base.iterate(buf::MTKParameters, state = 1)

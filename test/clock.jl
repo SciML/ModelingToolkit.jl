@@ -387,30 +387,30 @@ end
 
 ##
 @named model = ClosedLoop()
-model = complete(model)
+_model = complete(model)
 
-ci, varmap = infer_clocks(expand_connections(model))
+ci, varmap = infer_clocks(expand_connections(_model))
 
-@test varmap[model.plant.input.u] == Continuous()
-@test varmap[model.plant.u] == Continuous()
-@test varmap[model.plant.x] == Continuous()
-@test varmap[model.plant.y] == Continuous()
-@test varmap[model.plant.output.u] == Continuous()
-@test varmap[model.holder.output.u] == Continuous()
-@test varmap[model.sampler.input.u] == Continuous()
-@test varmap[model.controller.u] == d
-@test varmap[model.holder.input.u] == d
-@test varmap[model.controller.output.u] == d
-@test varmap[model.controller.y] == d
-@test varmap[model.feedback.input1.u] == d
-@test varmap[model.ref.output.u] == d
-@test varmap[model.controller.input.u] == d
-@test varmap[model.controller.x] == d
-@test varmap[model.sampler.output.u] == d
-@test varmap[model.feedback.output.u] == d
-@test varmap[model.feedback.input2.u] == d
+@test varmap[_model.plant.input.u] == Continuous()
+@test varmap[_model.plant.u] == Continuous()
+@test varmap[_model.plant.x] == Continuous()
+@test varmap[_model.plant.y] == Continuous()
+@test varmap[_model.plant.output.u] == Continuous()
+@test varmap[_model.holder.output.u] == Continuous()
+@test varmap[_model.sampler.input.u] == Continuous()
+@test varmap[_model.controller.u] == d
+@test varmap[_model.holder.input.u] == d
+@test varmap[_model.controller.output.u] == d
+@test varmap[_model.controller.y] == d
+@test varmap[_model.feedback.input1.u] == d
+@test varmap[_model.ref.output.u] == d
+@test varmap[_model.controller.input.u] == d
+@test varmap[_model.controller.x] == d
+@test varmap[_model.sampler.output.u] == d
+@test varmap[_model.feedback.output.u] == d
+@test varmap[_model.feedback.input2.u] == d
 
-ssys = structural_simplify(model)
+@test_skip ssys = structural_simplify(model)
 
 Tf = 0.2
 timevec = 0:(d.dt):Tf

@@ -28,7 +28,7 @@ struct Shift <: Operator
     Shift(t, steps = 1) = new(value(t), steps)
 end
 Shift(steps::Int) = new(nothing, steps)
-normalize_to_differential(s::Shift) = Differential(s.t)^abs(s.steps)
+normalize_to_differential(s::Shift) = Differential(s.t)^s.steps
 function (D::Shift)(x, allow_zero = false)
     !allow_zero && D.steps == 0 && return x
     Term{symtype(x)}(D, Any[x])

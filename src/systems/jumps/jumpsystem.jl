@@ -201,12 +201,16 @@ function generate_affect_function(js::JumpSystem, affect, outputidxs)
         csubs = Dict(c => getdefault(c) for c in consts)
         affect = substitute(affect, csubs)
     end
-    compile_affect(affect, js, unknowns(js), parameters(js); outputidxs = outputidxs,
+    p = reorder_parameters(js, parameters(js))
+    compile_affect(affect, js, unknowns(js), p...; outputidxs = outputidxs,
         expression = Val{true}, checkvars = false)
 end
 
 function assemble_vrj(js, vrj, unknowntoid)
-    rate = drop_expr(@RuntimeGeneratedFunction(generate_rate_function(js, vrj.rate)))
+    _rate = drop_expr(@RuntimeGeneratedFunction(generate_rate_function(js, vrj.rate)))
+    rate(u, p, t) = _rate(u, p, t)
+    rate(u, p::MTKParameters, t) = _rate(u, p..., t)
+    
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
     affect = drop_expr(@RuntimeGeneratedFunction(generate_affect_function(js, vrj.affect!,
@@ -220,14 +224,20 @@ function assemble_vrj_expr(js, vrj, unknowntoid)
     outputidxs = ((unknowntoid[var] for var in outputvars)...,)
     affect = generate_affect_function(js, vrj.affect!, outputidxs)
     quote
-        rate = $rate
+        _rate = $rate
+        rate(u, p, t) = _rate(u, p, t)
+        rate(u, p::MTKParameters, t) = _rate(u, p..., t)
+        
         affect = $affect
         VariableRateJump(rate, affect)
     end
 end
 
 function assemble_crj(js, crj, unknowntoid)
-    rate = drop_expr(@RuntimeGeneratedFunction(generate_rate_function(js, crj.rate)))
+    _rate = drop_expr(@RuntimeGeneratedFunction(generate_rate_function(js, crj.rate)))
+    rate(u, p, t) = _rate(u, p, t)
+    rate(u, p::MTKParameters, t) = _rate(u, p..., t)
+
     outputvars = (value(affect.lhs) for affect in crj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
     affect = drop_expr(@RuntimeGeneratedFunction(generate_affect_function(js, crj.affect!,
@@ -241,7 +251,10 @@ function assemble_crj_expr(js, crj, unknowntoid)
     outputidxs = ((unknowntoid[var] for var in outputvars)...,)
     affect = generate_affect_function(js, crj.affect!, outputidxs)
     quote
-        rate = $rate
+        _rate = $rate
+        rate(u, p, t) = _rate(u, p, t)
+        rate(u, p::MTKParameters, t) = _rate(u, p..., t)
+
         affect = $affect
         ConstantRateJump(rate, affect)
     end
@@ -332,7 +345,7 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
             obs = get!(dict, value(obsvar)) do
                 build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
             end
-            obs(u, p, t)
+            p isa MTKParameters ? obs(u, p..., t) : obs(u, p, t)
         end
     end
 
@@ -488,8 +501,8 @@ end
 function JumpSysMajParamMapper(js::JumpSystem, p; jseqs = nothing, rateconsttype = Float64)
     eqs = (jseqs === nothing) ? equations(js) : jseqs
     paramexprs = [maj.scaled_rates for maj in eqs.x[1]]
-    psyms = parameters(js)
-    paramdict = Dict(value(k) => value(v) for (k, v) in zip(psyms, p))
+    psyms = reduce(vcat, reorder_parameters(js, parameters(js)))
+    paramdict = Dict(value(k) => value(v) for (k, v) in zip(psyms, vcat(p...)))
     JumpSysMajParamMapper{typeof(paramexprs), typeof(psyms), rateconsttype}(paramexprs,
         psyms,
         paramdict)
@@ -498,6 +511,15 @@ end
 function updateparams!(ratemap::JumpSysMajParamMapper{U, V, W},
         params) where {U <: AbstractArray, V <: AbstractArray, W}
     for (i, p) in enumerate(params)
+        sympar = ratemap.sympars[i]
+        ratemap.subdict[sympar] = p
+    end
+    nothing
+end
+
+function updateparams!(ratemap::JumpSysMajParamMapper{U, V, W},
+        params::MTKParameters) where {U <: AbstractArray, V <: AbstractArray, W}
+    for (i, p) in enumerate(ArrayPartition(params...))
         sympar = ratemap.sympars[i]
         ratemap.subdict[sympar] = p
     end
