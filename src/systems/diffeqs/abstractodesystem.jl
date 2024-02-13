@@ -178,7 +178,11 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
             if p isa Tuple
                 build_function(rhss, u, p..., t; postprocess_fbody = pre,
                     states = sol_states,
-                    kwargs...)
+                               kwargs...)
+            elseif (length(p) > 1)
+                p = arguments(p[1])[1]
+                build_function(rhss, u, p, t; postprocess_fbody = pre, states = sol_states,
+                               kwargs...)
             else
                 build_function(rhss, u, p, t; postprocess_fbody = pre, states = sol_states,
                     kwargs...)
