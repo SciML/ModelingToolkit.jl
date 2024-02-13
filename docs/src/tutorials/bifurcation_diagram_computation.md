@@ -12,8 +12,7 @@ using ModelingToolkit
 @parameters μ α
 eqs = [0 ~ μ * x - x^3 + α * y,
     0 ~ -y]
-@named nsys = NonlinearSystem(eqs, [x, y], [μ, α])
-nsys = complete(nsys)
+@mtkbuild nsys = NonlinearSystem(eqs, [x, y], [μ, α])
 ```
 
 we wish to compute a bifurcation diagram for this system as we vary the parameter `μ`. For this, we need to provide the following information:
@@ -94,8 +93,7 @@ using BifurcationKit, ModelingToolkit, Plots
 D = Differential(t)
 eqs = [D(x) ~ μ * x - y - x * (x^2 + y^2),
     D(y) ~ x + μ * y - y * (x^2 + y^2)]
-@named osys = ODESystem(eqs, t)
-osys = complete(osys)
+@mtkbuild osys = ODESystem(eqs, t)
 
 bif_par = μ
 plot_var = x
