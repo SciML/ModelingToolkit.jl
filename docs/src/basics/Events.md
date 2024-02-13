@@ -93,10 +93,8 @@ D = Differential(t)
 root_eqs = [x ~ 0]  # the event happens at the ground x(t) = 0
 affect = [v ~ -v] # the effect is that the velocity changes sign
 
-@named ball = ODESystem([D(x) ~ v
+@mtkbuild ball = ODESystem([D(x) ~ v
         D(v) ~ -9.8], t; continuous_events = root_eqs => affect) # equation => affect
-
-ball = structural_simplify(ball)
 
 tspan = (0.0, 5.0)
 prob = ODEProblem(ball, Pair[], tspan)
@@ -116,14 +114,12 @@ D = Differential(t)
 continuous_events = [[x ~ 0] => [vx ~ -vx]
     [y ~ -1.5, y ~ 1.5] => [vy ~ -vy]]
 
-@named ball = ODESystem([
+@mtkbuild ball = ODESystem([
         D(x) ~ vx,
         D(y) ~ vy,
         D(vx) ~ -9.8 - 0.1vx, # gravity + some small air resistance
         D(vy) ~ -0.1vy,
     ], t; continuous_events)
-
-ball = structural_simplify(ball)
 
 tspan = (0.0, 10.0)
 prob = ODEProblem(ball, Pair[], tspan)
@@ -197,10 +193,9 @@ end
 
 reflect = [x ~ 0] => (bb_affect!, [v], [], nothing)
 
-@named bb_model = ODESystem(bb_eqs, t, sts, par,
+@mtkbuild bb_sys = ODESystem(bb_eqs, t, sts, par,
     continuous_events = reflect)
 
-bb_sys = structural_simplify(bb_model)
 u0 = [v => 0.0, x => 1.0]
 
 bb_prob = ODEProblem(bb_sys, u0, (0, 5.0))

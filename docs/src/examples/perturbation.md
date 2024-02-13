@@ -92,8 +92,7 @@ We are nearly there! From this point on, the rest is standard ODE solving proced
 ```julia
 using ModelingToolkit, DifferentialEquations
 
-@named sys = ODESystem(eqs, t)
-sys = structural_simplify(sys)
+@mtkbuild sys = ODESystem(eqs, t)
 unknowns(sys)
 ```
 
@@ -158,8 +157,7 @@ eqs = [substitute(first(v), subs) ~ substitute(last(v), subs) for v in vals]
 We continue with converting 'eqs' to an `ODEProblem`, solving it, and finally plot the results against the exact solution to the original problem, which is $x(t, \epsilon) = (1 - \epsilon)^{-1/2} e^{-\epsilon t} \sin((1- \epsilon^2)^{1/2}t)$,
 
 ```julia
-@named sys = ODESystem(eqs, t)
-sys = structural_simplify(sys)
+@mtkbuild sys = ODESystem(eqs, t)
 ```
 
 ```julia
