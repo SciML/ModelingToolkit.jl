@@ -1504,7 +1504,7 @@ function linearization_function(sys::AbstractSystem, inputs,
     x0 = merge(defaults(sys), Dict(missing_variable_defaults(sys)), op)
     u0, _p, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        p = (MTKParameters(sys, p)...,)
+        p = MTKParameters(sys, p)
         ps = reorder_parameters(sys, parameters(sys))
     else
         p = _p
@@ -1515,7 +1515,6 @@ function linearization_function(sys::AbstractSystem, inputs,
             ps = (ps...,) #if p is Tuple, ps should be Tuple
         end
     end
-
     lin_fun = let diff_idxs = diff_idxs,
         alge_idxs = alge_idxs,
         input_idxs = input_idxs,
@@ -1550,7 +1549,9 @@ function linearization_function(sys::AbstractSystem, inputs,
                 h_xz = fg_u = zeros(0, length(inputs))
             end
             hp = let u = u, t = t
-                p -> h(u, p, t)
+                _hp(p) = h(u, p, t)
+                _hp(p::MTKParameters) = h(u, p..., t)
+                _hp
             end
             h_u = jacobian_wrt_vars(hp, p, input_idxs, chunk)
             (f_x = fg_xz[diff_idxs, diff_idxs],
@@ -1592,13 +1593,14 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
         kwargs...)
     sts = unknowns(sys)
     t = get_iv(sys)
-    p = parameters(sys)
+    ps = parameters(sys)
+    p = reorder_parameters(sys, ps)
 
-    fun = generate_function(sys, sts, p; expression = Val{false})[1]
-    dx = fun(sts, p, t)
+    fun = generate_function(sys, sts, ps; expression = Val{false})[1]
+    dx = fun(sts, p..., t)
 
     h = build_explicit_observed_function(sys, outputs)
-    y = h(sts, p, t)
+    y = h(sts, p..., t)
 
     fg_xz = Symbolics.jacobian(dx, sts)
     fg_u = Symbolics.jacobian(dx, inputs)
@@ -1794,6 +1796,15 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
     x0 = merge(defaults(sys), op)
     u0, p2, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        if p isa SciMLBase.NullParameters
+            p = op
+        elseif p isa Dict
+            p = merge(p, op)
+        elseif p isa Vector && eltype(p) <: Pair
+            p = merge(Dict(p), op)
+        elseif p isa Vector
+            p = merge(Dict(parameters(sys) .=> p), op)
+        end
         p2 = MTKParameters(sys, p)
     end
     linres = lin_fun(u0, p2, t)

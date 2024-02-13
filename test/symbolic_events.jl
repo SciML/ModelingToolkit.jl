@@ -498,7 +498,6 @@ let rng = rng
     function testsol(jsys, u0, p, tspan; tstops = Float64[], paramtotest = nothing,
             N = 40000, kwargs...)
         jsys = complete(jsys)
-        @show ModelingToolkit.get_index_cache(jsys)
         dprob = DiscreteProblem(jsys, u0, tspan, p)
         jprob = JumpProblem(jsys, dprob, Direct(); kwargs...)
         sol = solve(jprob, SSAStepper(); tstops = tstops)

@@ -1,9 +1,10 @@
-struct MTKParameters{T, D, C, E, F}
+struct MTKParameters{T, D, C, E, F, G}
     tunable::T
     discrete::D
     constant::C
     dependent::E
-    dependent_update::F
+    dependent_update_iip::F
+    dependent_update_oop::G
 end
 
 function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = false)
@@ -19,12 +20,12 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
         length(p) == length(ps) || error("Invalid parameters")
         p = ps .=> p
     end
-    defs = Dict(default_toterm(unwrap(k)) => v for (k, v) in defaults(sys) if unwrap(k) in all_ps)
+    defs = Dict(default_toterm(unwrap(k)) => v for (k, v) in defaults(sys) if unwrap(k) in all_ps || default_toterm(unwrap(k)) in all_ps)
     if p isa SciMLBase.NullParameters
         p = defs
     else
-        extra_params = Dict(unwrap(k) => v for (k, v) in p if !in(unwrap(k), all_ps))
-        p = merge(defs, Dict(default_toterm(unwrap(k)) => v for (k, v) in p if unwrap(k) in all_ps))
+        extra_params = Dict(unwrap(k) => v for (k, v) in p if !in(unwrap(k), all_ps) && !in(default_toterm(unwrap(k)), all_ps))
+        p = merge(defs, Dict(default_toterm(unwrap(k)) => v for (k, v) in p if unwrap(k) in all_ps || default_toterm(unwrap(k)) in all_ps))
         p = Dict(k => fixpoint_sub(v, extra_params) for (k, v) in p if !haskey(extra_params, unwrap(k)))
     end
 
@@ -74,39 +75,41 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
         dep_exprs[idx] = wrap(fixpoint_sub(val, dependencies))
     end
     p = reorder_parameters(ic, parameters(sys))[begin:end-length(dep_buffer.x)]
-    update_function = if isempty(dep_exprs.x)
-        (_...) -> ()
+    update_function_iip, update_function_oop = if isempty(dep_exprs.x)
+        nothing, nothing
     else
-        RuntimeGeneratedFunctions.@RuntimeGeneratedFunction(build_function(dep_exprs, p...)[2])
+        oop, iip = build_function(dep_exprs, p...)
+        RuntimeGeneratedFunctions.@RuntimeGeneratedFunction(iip), RuntimeGeneratedFunctions.@RuntimeGeneratedFunction(oop)
     end
     # everything is an ArrayPartition so it's easy to figure out how many
     # distinct vectors we have for each portion as `ArrayPartition.x`
     if isempty(tunable_buffer.x)
-        tunable_buffer = ArrayPartition(Float64[])
+        tunable_buffer = Float64[]
     end
     if isempty(disc_buffer.x)
-        disc_buffer = ArrayPartition(Float64[])
+        disc_buffer = Float64[]
     end
     if isempty(const_buffer.x)
-        const_buffer = ArrayPartition(Float64[])
+        const_buffer = Float64[]
     end
     if isempty(dep_buffer.x)
-        dep_buffer = ArrayPartition(Float64[])
+        dep_buffer = Float64[]
     end
     if use_union
-        tunable_buffer = ArrayPartition(restrict_array_to_union(tunable_buffer))
-        disc_buffer = ArrayPartition(restrict_array_to_union(disc_buffer))
-        const_buffer = ArrayPartition(restrict_array_to_union(const_buffer))
-        dep_buffer = ArrayPartition(restrict_array_to_union(dep_buffer))
+        tunable_buffer = restrict_array_to_union(tunable_buffer)
+        disc_buffer = restrict_array_to_union(disc_buffer)
+        const_buffer = restrict_array_to_union(const_buffer)
+        dep_buffer = restrict_array_to_union(dep_buffer)
     elseif tofloat
-        tunable_buffer = ArrayPartition(Float64.(tunable_buffer))
-        disc_buffer = ArrayPartition(Float64.(disc_buffer))
-        const_buffer = ArrayPartition(Float64.(const_buffer))
-        dep_buffer = ArrayPartition(Float64.(dep_buffer))
+        tunable_buffer = Float64.(tunable_buffer)
+        disc_buffer = Float64.(disc_buffer)
+        const_buffer = Float64.(const_buffer)
+        dep_buffer = Float64.(dep_buffer)
     end
     return MTKParameters{typeof(tunable_buffer), typeof(disc_buffer), typeof(const_buffer),
-                         typeof(dep_buffer), typeof(update_function)}(tunable_buffer,
-                         disc_buffer, const_buffer, dep_buffer, update_function)
+                         typeof(dep_buffer), typeof(update_function_iip), typeof(update_function_oop)}(
+                         tunable_buffer, disc_buffer, const_buffer, dep_buffer, update_function_iip,
+                         update_function_oop)
 end
 
 SciMLStructures.isscimlstructure(::MTKParameters) = true
@@ -121,19 +124,27 @@ for (Portion, field) in [
     @eval function SciMLStructures.canonicalize(::$Portion, p::MTKParameters)
         function repack(values)
             p.$field .= values
-            p.dependent_update(p.dependent, p.tunable.x..., p.discrete.x..., p.constant.x...)
+            if p.dependent_update_iip !== nothing
+                p.dependent_update_iip(p.dependent, p...)
+            end
+            p
         end
         return p.$field, repack, true
     end
 
     @eval function SciMLStructures.replace(::$Portion, p::MTKParameters, newvals)
         @set! p.$field = newvals
-        p.dependent_update(p.dependent, p.tunable.x..., p.discrete.x..., p.constant.x...)
+        if p.dependent_update_oop !== nothing
+            @set! p.dependent = ArrayPartition(p.dependent_update_oop(p...))
+        end
+        p
     end
 
     @eval function SciMLStructures.replace!(::$Portion, p::MTKParameters, newvals)
         p.$field .= newvals
-        p.dependent_update(p.dependent, p.tunable.x..., p.discrete.x..., p.constant.x...)
+        if p.dependent_update_iip !== nothing
+            p.dependent_update_iip(p.dependent, p...)
+        end
         nothing
     end
 end
@@ -166,26 +177,32 @@ function SymbolicIndexingInterface.set_parameter!(p::MTKParameters, val, idx::Pa
     else
         error("Unhandled portion $portion")
     end
-    p.dependent_update(p.dependent, p.tunable.x..., p.discrete.x..., p.constant.x...)
+    if p.dependent_update_iip !== nothing
+        p.dependent_update_iip(p.dependent, p...)
+    end
 end
 
+_subarrays(v::AbstractVector) = isempty(v) ? () : (v,)
+_subarrays(v::ArrayPartition) = v.x
+_num_subarrays(v::AbstractVector) = 1
+_num_subarrays(v::ArrayPartition) = length(v.x)
 # for compiling callbacks
 # getindex indexes the vectors, setindex! linearly indexes values
 # it's inconsistent, but we need it to be this way
 function Base.getindex(buf::MTKParameters, i)
     if !isempty(buf.tunable)
-        i <= length(buf.tunable.x) && return buf.tunable.x[i]
-        i -= length(buf.tunable.x)
+        i <= _num_subarrays(buf.tunable) && return _subarrays(buf.tunable)[i]
+        i -= _num_subarrays(buf.tunable)
     end
     if !isempty(buf.discrete)
-        i <= length(buf.discrete.x) && return buf.discrete.x[i]
-        i -= length(buf.discrete.x)
+        i <= _num_subarrays(buf.discrete) && return _subarrays(buf.discrete)[i]
+        i -= _num_subarrays(buf.discrete)
     end
     if !isempty(buf.constant)
-        i <= length(buf.constant.x) && return buf.constant.x[i]
-        i -= length(buf.constant.x)
+        i <= _num_subarrays(buf.constant) && return _subarrays(buf.constant)[i]
+        i -= _num_subarrays(buf.constant)
     end
-    isempty(buf.dependent) || return buf.dependent.x[i]
+    isempty(buf.dependent) || return _subarrays(buf.dependent)[i]
     throw(BoundsError(buf, i))
 end
 function Base.setindex!(buf::MTKParameters, val, i)
@@ -196,15 +213,17 @@ function Base.setindex!(buf::MTKParameters, val, i)
     else
         buf.constant[i - length(buf.tunable) - length(buf.discrete)] = val
     end
-    buf.dependent_update(buf.dependent, buf.tunable.x..., buf.discrete.x..., buf.constant.x...)
+    if buf.dependent_update_iip !== nothing
+        buf.dependent_update_iip(buf.dependent, buf...)
+    end
 end
 
 function Base.iterate(buf::MTKParameters, state = 1)
     total_len = 0
-    isempty(buf.tunable) || (total_len += length(buf.tunable.x))
-    isempty(buf.discrete) || (total_len += length(buf.discrete.x))
-    isempty(buf.constant) || (total_len += length(buf.constant.x))
-    isempty(buf.dependent) || (total_len += length(buf.dependent.x))
+    isempty(buf.tunable) || (total_len += _num_subarrays(buf.tunable))
+    isempty(buf.discrete) || (total_len += _num_subarrays(buf.discrete))
+    isempty(buf.constant) || (total_len += _num_subarrays(buf.constant))
+    isempty(buf.dependent) || (total_len += _num_subarrays(buf.dependent))
     if state <= total_len
         return (buf[state], state + 1)
     else
@@ -229,14 +248,24 @@ function jacobian_wrt_vars(pf::F, p::MTKParameters, input_idxs, chunk::C) where 
         p_big = p_big
 
         function (p_small_inner)
-            tunable, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p_big)
-            tunable[input_idxs] .= p_small_inner
-            p_big = repack(tunable)
-            pf(p_big)
+            for (i, val) in zip(input_idxs, p_small_inner)
+                set_parameter!(p_big, val, i)
+            end
+            # tunable, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p_big)
+            # tunable[input_idxs] .= p_small_inner
+            # p_big = repack(tunable)
+            return if pf isa SciMLBase.ParamJacobianWrapper
+                buffer = similar(p_big.tunable, size(pf.u))
+                pf(buffer, p_big)
+                buffer
+            else
+                pf(p_big)
+            end
         end
     end
-    tunable, _, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)
-    p_small = tunable[input_idxs]
+    # tunable, _, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)
+    # p_small = tunable[input_idxs]
+    p_small = parameter_values.((p,), input_idxs)
     cfg = ForwardDiff.JacobianConfig(p_closure, p_small, chunk, tag)
     ForwardDiff.jacobian(p_closure, p_small, cfg, Val(false))
 end
