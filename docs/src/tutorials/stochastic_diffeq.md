@@ -23,8 +23,7 @@ noiseeqs = [0.1 * x,
     0.1 * y,
     0.1 * z]
 
-@named de = SDESystem(eqs, noiseeqs, t, [x, y, z], [σ, ρ, β])
-de = complete(de)
+@mtkbuild de = SDESystem(eqs, noiseeqs, t, [x, y, z], [σ, ρ, β])
 
 u0map = [
     x => 1.0,

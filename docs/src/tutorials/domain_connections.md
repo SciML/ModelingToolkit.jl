@@ -135,7 +135,7 @@ To see how the domain works, we can examine the set parameter values for each of
 
 ```@repl domain
 sys = structural_simplify(odesys)
-ModelingToolkit.defaults(sys)[complete(odesys).vol.port.ρ]
+ModelingToolkit.defaults(sys)[odesys.vol.port.ρ]
 ```
 
 ## Multiple Domain Networks
@@ -280,8 +280,7 @@ Adding the `Restrictor` to the original system example will cause a break in the
     ODESystem(eqs, t, [], []; systems, name)
 end
 
-@named ressys = RestrictorSystem()
-sys = structural_simplify(ressys)
+@mtkbuild ressys = RestrictorSystem()
 nothing #hide
 ```
 
@@ -296,9 +295,9 @@ nothing #hide
 When `structural_simplify()` is applied to this system it can be seen that the defaults are missing for `res.port_b` and `vol.port`.
 
 ```@repl domain
-ModelingToolkit.defaults(sys)[complete(ressys).res.port_a.ρ]
-ModelingToolkit.defaults(sys)[complete(ressys).res.port_b.ρ]
-ModelingToolkit.defaults(sys)[complete(ressys).vol.port.ρ]
+ModelingToolkit.defaults(ressys)[ressys.res.port_a.ρ]
+ModelingToolkit.defaults(ressys)[ressys.res.port_b.ρ]
+ModelingToolkit.defaults(ressys)[ressys.vol.port.ρ]
 ```
 
 To ensure that the `Restrictor` component does not disrupt the domain network, the [`domain_connect()`](@ref) function can be used, which explicitly only connects the domain network and not the unknown variables.
@@ -322,15 +321,14 @@ To ensure that the `Restrictor` component does not disrupt the domain network, t
     ODESystem(eqs, t, [], pars; systems, name)
 end
 
-@named ressys = RestrictorSystem()
-sys = structural_simplify(ressys)
+@mtkbuild ressys = RestrictorSystem()
 nothing #hide
 ```
 
 Now that the `Restrictor` component is properly defined using `domain_connect()`, the defaults for `res.port_b` and `vol.port` are properly defined.
 
 ```@repl domain
-ModelingToolkit.defaults(sys)[complete(ressys).res.port_a.ρ]
-ModelingToolkit.defaults(sys)[complete(ressys).res.port_b.ρ]
-ModelingToolkit.defaults(sys)[complete(ressys).vol.port.ρ]
+ModelingToolkit.defaults(ressys)[ressys.res.port_a.ρ]
+ModelingToolkit.defaults(ressys)[ressys.res.port_b.ρ]
+ModelingToolkit.defaults(ressys)[ressys.vol.port.ρ]
 ```

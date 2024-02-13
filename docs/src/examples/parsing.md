@@ -25,8 +25,8 @@ nonlinear solve:
 ```@example parsing
 using ModelingToolkit, NonlinearSolve
 vars = union(ModelingToolkit.vars.(eqs)...)
-@named ns = NonlinearSystem(eqs, vars, [])
+@mtkbuild ns = NonlinearSystem(eqs, vars, [])
 
-prob = NonlinearProblem(complete(ns), [1.0, 1.0, 1.0])
+prob = NonlinearProblem(ns, [1.0, 1.0, 1.0])
 sol = solve(prob, NewtonRaphson())
 ```

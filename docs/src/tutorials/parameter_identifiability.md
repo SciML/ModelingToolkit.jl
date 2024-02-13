@@ -63,8 +63,7 @@ D = Differential(t)
 end
 
 # define the system
-@named de = Biohydrogenation()
-de = complete(de)
+@mtkbuild de = Biohydrogenation()
 ```
 
 After that, we are ready to check the system for local identifiability:
@@ -185,8 +184,7 @@ D = Differential(t)
     end
 end
 
-@named ode = GoodwinOscillator()
-ode = complete(ode)
+@mtkbuild ode = GoodwinOscillator()
 
 # check only 2 parameters
 to_check = [ode.b, ode.c]

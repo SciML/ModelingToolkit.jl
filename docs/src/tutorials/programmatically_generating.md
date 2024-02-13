@@ -44,7 +44,7 @@ eqs = [D(x) ~ (h - x) / τ] # create an array of equations
 
 # Perform the standard transformations and mark the model complete
 # Note: Complete models cannot be subsystems of other models!
-fol_model = complete(structural_simplify(fol_model))
+fol_model = structural_simplify(model)
 ```
 
 As you can see, generating an ODESystem is as simple as creating the array of equations

@@ -16,8 +16,7 @@ using ModelingToolkit, NonlinearSolve
 eqs = [0 ~ σ * (y - x),
     0 ~ x * (ρ - z) - y,
     0 ~ x * y - β * z]
-@named ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
-ns = complete(ns)
+@mtkbuild ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
 
 guess = [x => 1.0,
     y => 0.0,
