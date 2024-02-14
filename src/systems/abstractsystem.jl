@@ -373,8 +373,8 @@ $(TYPEDSIGNATURES)
 Mark a system as completed. If a system is complete, the system will no longer
 namespace its subsystems or variables, i.e. `isequal(complete(sys).v.i, v.i)`.
 """
-function complete(sys::AbstractSystem)
-    if has_index_cache(sys)
+function complete(sys::AbstractSystem; split = true)
+    if split && has_index_cache(sys)
         @set! sys.index_cache = IndexCache(sys)
     end
     isdefined(sys, :complete) ? (@set! sys.complete = true) : sys
@@ -1380,12 +1380,19 @@ macro component(expr)
     esc(component_post_processing(expr, false))
 end
 
-macro mtkbuild(expr)
+macro mtkbuild(exprs...)
+    expr = exprs[1]
     named_expr = ModelingToolkit.named_expr(expr)
     name = named_expr.args[1]
+    kwargs = if length(exprs) > 1
+        NamedTuple{Tuple(ex.args[1] for ex in Base.tail(exprs))}(Tuple(ex.args[2] for ex in Base.tail(exprs)))
+    else
+        (;)
+    end
+        @show kwargs
     esc(quote
         $named_expr
-        $name = $structural_simplify($name)
+        $name = $structural_simplify($name; $(kwargs)...)
     end)
 end
 
