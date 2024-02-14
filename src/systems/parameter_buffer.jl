@@ -182,6 +182,24 @@ function SymbolicIndexingInterface.set_parameter!(p::MTKParameters, val, idx::Pa
     end
 end
 
+function _set_parameter_unchecked!(p::MTKParameters, val, idx::ParameterIndex)
+    @unpack portion, idx = idx
+    update_dependent = true
+    if portion isa SciMLStructures.Tunable
+        p.tunable[idx] = val
+    elseif portion isa SciMLStructures.Discrete
+        p.discrete[idx] = val
+    elseif portion isa SciMLStructures.Constants
+        p.constant[idx] = val
+    elseif portion === nothing
+        p.dependent[idx] = val
+        update_dependent = false
+    else
+        error("Unhandled portion $portion")
+    end
+    update_dependent && p.dependent_update_iip !== nothing && p.dependent_update_iip(p.dependent, p...)
+end
+
 _subarrays(v::AbstractVector) = isempty(v) ? () : (v,)
 _subarrays(v::ArrayPartition) = v.x
 _num_subarrays(v::AbstractVector) = 1
@@ -249,7 +267,7 @@ function jacobian_wrt_vars(pf::F, p::MTKParameters, input_idxs, chunk::C) where 
 
         function (p_small_inner)
             for (i, val) in zip(input_idxs, p_small_inner)
-                set_parameter!(p_big, val, i)
+                _set_parameter_unchecked!(p_big, val, i)
             end
             # tunable, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p_big)
             # tunable[input_idxs] .= p_small_inner
