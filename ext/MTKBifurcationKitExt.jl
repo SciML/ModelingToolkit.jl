@@ -91,6 +91,7 @@ function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem,
     if !ModelingToolkit.iscomplete(nsys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `BifurcationProblem`")
     end
+    @set! nsys.index_cache = nothing # force usage of a parameter vector instead of `MTKParameters`
     # Creates F and J functions.
     ofun = NonlinearFunction(nsys; jac = jac)
     F = ofun.f

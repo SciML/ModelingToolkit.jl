@@ -84,21 +84,19 @@ function generate_tgrad(sys::AbstractODESystem, dvs = unknowns(sys), ps = parame
         simplify = false, kwargs...)
     tgrad = calculate_tgrad(sys, simplify = simplify)
     pre = get_preprocess_constants(tgrad)
-    if ps isa Tuple
-        return build_function(tgrad,
-            dvs,
-            ps...,
-            get_iv(sys);
-            postprocess_fbody = pre,
-            kwargs...)
+    p = if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        reorder_parameters(get_index_cache(sys), ps)
+    elseif ps isa Tuple
+        ps
     else
-        return build_function(tgrad,
-            dvs,
-            ps,
-            get_iv(sys);
-            postprocess_fbody = pre,
-            kwargs...)
+        (ps,)
     end
+    return build_function(tgrad,
+        dvs,
+        p...,
+        get_iv(sys);
+        postprocess_fbody = pre,
+        kwargs...)
 end
 
 function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
@@ -106,23 +104,25 @@ function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
         simplify = false, sparse = false, kwargs...)
     jac = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
     pre = get_preprocess_constants(jac)
-    if ps isa Tuple
-        return build_function(jac,
-            dvs,
-            ps...,
-            get_iv(sys);
-            postprocess_fbody = pre,
-            kwargs...)
+    p = if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        reorder_parameters(get_index_cache(sys), ps)
     else
-        return build_function(jac, dvs, ps, get_iv(sys); postprocess_fbody = pre, kwargs...)
+        (ps,)
     end
+    return build_function(jac,
+        dvs,
+        p...,
+        get_iv(sys);
+        postprocess_fbody = pre,
+        kwargs...)
 end
 
 function generate_control_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys);
         simplify = false, sparse = false, kwargs...)
     jac = calculate_control_jacobian(sys; simplify = simplify, sparse = sparse)
-    return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
+    p = reorder_parameters(sys, ps)
+    return build_function(jac, dvs, p..., get_iv(sys); kwargs...)
 end
 
 function generate_dae_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
@@ -136,7 +136,12 @@ function generate_dae_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
     @variables ˍ₋gamma
     jac = ˍ₋gamma * jac_du + jac_u
     pre = get_preprocess_constants(jac)
-    return build_function(jac, derivatives, dvs, ps, ˍ₋gamma, get_iv(sys);
+    p = if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        reorder_parameters(get_index_cache(sys), ps)
+    else
+        (ps,)
+    end
+    return build_function(jac, derivatives, dvs, p..., ˍ₋gamma, get_iv(sys);
         postprocess_fbody = pre, kwargs...)
 end
 
@@ -162,27 +167,26 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
 
     # TODO: add an optional check on the ordering of observed equations
     u = map(x -> time_varying_as_func(value(x), sys), dvs)
-    p = map(x -> time_varying_as_func(value(x), sys), ps)
+    p = if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        reorder_parameters(get_index_cache(sys), ps isa Tuple ? reduce(vcat, ps) : ps)
+    else
+        (map(x -> time_varying_as_func(value(x), sys), ps),)
+    end
     t = get_iv(sys)
 
     if isdde
-        build_function(rhss, u, DDE_HISTORY_FUN, p, t; kwargs...)
+        build_function(rhss, u, DDE_HISTORY_FUN, p..., t; kwargs...)
     else
         pre, sol_states = get_substitutions_and_solved_unknowns(sys)
 
         if implicit_dae
-            build_function(rhss, ddvs, u, p, t; postprocess_fbody = pre,
+            build_function(rhss, ddvs, u, p..., t; postprocess_fbody = pre,
                 states = sol_states,
                 kwargs...)
         else
-            if p isa Tuple
-                build_function(rhss, u, p..., t; postprocess_fbody = pre,
-                    states = sol_states,
-                    kwargs...)
-            else
-                build_function(rhss, u, p, t; postprocess_fbody = pre, states = sol_states,
-                    kwargs...)
-            end
+            build_function(rhss, u, p..., t; postprocess_fbody = pre,
+                states = sol_states,
+                kwargs...)
         end
     end
 end
@@ -320,16 +324,15 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
     f_oop, f_iip = eval_expression ?
                    (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen) :
                    f_gen
-    if p isa Tuple
-        g(u, p, t) = f_oop(u, p..., t)
-        g(du, u, p, t) = f_iip(du, u, p..., t)
-        f = g
-    else
-        k(u, p, t) = f_oop(u, p, t)
-        k(du, u, p, t) = f_iip(du, u, p, t)
-        f = k
-    end
-
+    f(u, p, t) = f_oop(u, p, t)
+    f(du, u, p, t) = f_iip(du, u, p, t)
+    f(u, p::Tuple{Vararg{Number}}, t) = f_oop(u, p, t)
+    f(du, u, p::Tuple{Vararg{Number}}, t) = f_iip(du, u, p, t)
+    f(u, p::Tuple, t) = f_oop(u, p..., t)
+    f(du, u, p::Tuple, t) = f_iip(du, u, p..., t)
+    f(u, p::MTKParameters, t) = f_oop(u, p..., t)
+    f(du, u, p::MTKParameters, t) = f_iip(du, u, p..., t)
+    
     if specialize === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
             error("u0, p, and t must be specified for FunctionWrapperSpecialize on ODEFunction.")
@@ -368,15 +371,14 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         jac_oop, jac_iip = eval_expression ?
                            (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in jac_gen) :
                            jac_gen
-        if p isa Tuple
-            __jac(u, p, t) = jac_oop(u, p..., t)
-            __jac(J, u, p, t) = jac_iip(J, u, p..., t)
-            _jac = __jac
-        else
-            ___jac(u, p, t) = jac_oop(u, p, t)
-            ___jac(J, u, p, t) = jac_iip(J, u, p, t)
-            _jac = ___jac
-        end
+        _jac(u, p, t) = jac_oop(u, p, t)
+        _jac(J, u, p, t) = jac_iip(J, u, p, t)
+        _jac(u, p::Tuple{Vararg{Number}}, t) = jac_oop(u, p, t)
+        _jac(J, u, p::Tuple{Vararg{Number}}, t) = jac_iip(J, u, p, t)
+        _jac(u, p::Tuple, t) = jac_oop(u, p..., t)
+        _jac(J, u, p::Tuple, t) = jac_iip(J, u, p..., t)
+        _jac(u, p::MTKParameters, t) = jac_oop(u, p..., t)
+        _jac(J, u, p::MTKParameters, t) = jac_iip(J, u, p..., t)
     else
         _jac = nothing
     end
@@ -399,15 +401,25 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
                     build_explicit_observed_function(sys, obsvar)
                 end
                 if args === ()
-                    let obs = obs
-                        (u, p, t = Inf) -> if ps isa Tuple
+                    let obs = obs, ps_T = typeof(ps)
+                        (u, p, t = Inf) -> if p isa MTKParameters
+                            obs(u, p..., t)
+                        elseif ps_T <: Tuple
                             obs(u, p..., t)
                         else
                             obs(u, p, t)
                         end
                     end
                 else
-                    if ps isa Tuple
+                    if args[2] isa MTKParameters
+                        if length(args) == 2
+                            u, p = args
+                            obs(u, p..., Inf)
+                        else
+                            u, p, t = args
+                            obs(u, p..., t)
+                        end
+                    elseif ps isa Tuple
                         if length(args) == 2
                             u, p = args
                             obs(u, p..., Inf)
@@ -437,16 +449,21 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
                         ps)
                 end
                 if args === ()
-                    let obs = obs
-                        (u, p, t) -> if ps isa Tuple
+                    let obs = obs, ps_T = typeof(ps)
+                        (u, p, t) -> if p isa MTKParameters
+                            obs(u, p..., t)
+                        elseif ps_T <: Tuple
                             obs(u, p..., t)
                         else
                             obs(u, p, t)
                         end
                     end
                 else
-                    if ps isa Tuple # split parameters
+                    u, p, t = args
+                    if p isa MTKParameters
                         u, p, t = args
+                        obs(u, p..., t)
+                    elseif ps isa Tuple # split parameters
                         obs(u, p..., t)
                     else
                         obs(args...)
@@ -518,7 +535,9 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
                    (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen) :
                    f_gen
     f(du, u, p, t) = f_oop(du, u, p, t)
+    f(du, u, p::MTKParameters, t) = f_oop(du, u, p..., t)
     f(out, du, u, p, t) = f_iip(out, du, u, p, t)
+    f(out, du, u, p::MTKParameters, t) = f_iip(out, du, u, p..., t)
 
     if jac
         jac_gen = generate_dae_jacobian(sys, dvs, ps;
@@ -530,8 +549,10 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
                            (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in jac_gen) :
                            jac_gen
         _jac(du, u, p, ˍ₋gamma, t) = jac_oop(du, u, p, ˍ₋gamma, t)
+        _jac(du, u, p::MTKParameters, ˍ₋gamma, t) = jac_oop(du, u, p..., ˍ₋gamma, t)
 
         _jac(J, du, u, p, ˍ₋gamma, t) = jac_iip(J, du, u, p, ˍ₋gamma, t)
+        _jac(J, du, u, p::MTKParameters, ˍ₋gamma, t) = jac_iip(J, du, u, p..., ˍ₋gamma, t)
     else
         _jac = nothing
     end
@@ -544,10 +565,13 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
             end
             if args === ()
                 let obs = obs
-                    (u, p, t) -> obs(u, p, t)
+                    fun(u, p, t) = obs(u, p, t)
+                    fun(u, p::MTKParameters, t) = obs(u, p..., t)
+                    fun
                 end
             else
-                obs(args...)
+                u, p, t = args
+                p isa MTKParameters ? obs(u, p..., t) : obs(u, p, t)
             end
         end
     end
@@ -591,7 +615,9 @@ function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         kwargs...)
     f_oop, f_iip = (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen)
     f(u, h, p, t) = f_oop(u, h, p, t)
+    f(u, h, p::MTKParameters, t) = f_oop(u, h, p..., t)
     f(du, u, h, p, t) = f_iip(du, u, h, p, t)
+    f(du, u, h, p::MTKParameters, t) = f_iip(du, u, h, p..., t)
 
     DDEFunction{iip}(f, sys = sys)
 end
@@ -617,9 +643,13 @@ function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys
         isdde = true, kwargs...)
     g_oop, g_iip = (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in g_gen)
     f(u, h, p, t) = f_oop(u, h, p, t)
+    f(u, h, p::MTKParameters, t) = f_oop(u, h, p..., t)
     f(du, u, h, p, t) = f_iip(du, u, h, p, t)
+    f(du, u, h, p::MTKParameters, t) = f_iip(du, u, h, p..., t)
     g(u, h, p, t) = g_oop(u, h, p, t)
+    g(u, h, p::MTKParameters, t) = g_oop(u, h, p..., t)
     g(du, u, h, p, t) = g_iip(du, u, h, p, t)
+    g(du, u, h, p::MTKParameters, t) = g_iip(du, u, h, p..., t)
 
     SDDEFunction{iip}(f, g, sys = sys)
 end
@@ -646,6 +676,8 @@ struct ODEFunctionClosure{O, I} <: Function
 end
 (f::ODEFunctionClosure)(u, p, t) = f.f_oop(u, p, t)
 (f::ODEFunctionClosure)(du, u, p, t) = f.f_iip(du, u, p, t)
+(f::ODEFunctionClosure)(u, p::MTKParameters, t) = f.f_oop(u, p..., t)
+(f::ODEFunctionClosure)(du, u, p::MTKParameters, t) = f.f_iip(du, u, p..., t)
 
 function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
@@ -761,7 +793,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     ps = parameters(sys)
     iv = get_iv(sys)
 
-    u0, p, defs = get_u0_p(sys,
+    u0, _, defs = get_u0_p(sys,
         u0map,
         parammap;
         tofloat,
@@ -771,11 +803,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         u0 = u0_constructor(u0)
     end
 
-    p, split_idxs = split_parameters_by_type(p)
-    if p isa Tuple
-        ps = Base.Fix1(getindex, parameters(sys)).(split_idxs)
-        ps = (ps...,) #if p is Tuple, ps should be Tuple
-    end
+    p = MTKParameters(sys, parammap)
 
     if implicit_dae && du0map !== nothing
         ddvs = map(Differential(iv), dvs)
@@ -792,7 +820,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     f = constructor(sys, dvs, ps, u0; ddvs = ddvs, tgrad = tgrad, jac = jac,
         checkbounds = checkbounds, p = p,
         linenumbers = linenumbers, parallel = parallel, simplify = simplify,
-        sparse = sparse, eval_expression = eval_expression, split_idxs,
+        sparse = sparse, eval_expression = eval_expression,
         kwargs...)
     implicit_dae ? (f, du0, u0, p) : (f, u0, p)
 end
@@ -823,6 +851,8 @@ struct DAEFunctionClosure{O, I} <: Function
 end
 (f::DAEFunctionClosure)(du, u, p, t) = f.f_oop(du, u, p, t)
 (f::DAEFunctionClosure)(out, du, u, p, t) = f.f_iip(out, du, u, p, t)
+(f::DAEFunctionClosure)(du, u, p::MTKParameters, t) = f.f_oop(du, u, p..., t)
+(f::DAEFunctionClosure)(out, du, u, p::MTKParameters, t) = f.f_iip(out, du, u, p..., t)
 
 function DAEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
@@ -904,7 +934,7 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     cbs = process_events(sys; callback, kwargs...)
     inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
+        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(sys, dss...)
         discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
             if clock isa Clock
                 PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)
@@ -982,7 +1012,8 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
 end
 
 function generate_history(sys::AbstractODESystem, u0; kwargs...)
-    build_function(u0, parameters(sys), get_iv(sys); expression = Val{false}, kwargs...)
+    p = reorder_parameters(sys, parameters(sys))
+    build_function(u0, p..., get_iv(sys); expression = Val{false}, kwargs...)
 end
 
 function DiffEqBase.DDEProblem(sys::AbstractODESystem, args...; kwargs...)
@@ -1007,7 +1038,7 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     cbs = process_events(sys; callback, kwargs...)
     inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
+        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(sys, dss...)
         discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
             if clock isa Clock
                 PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)
@@ -1069,7 +1100,7 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     cbs = process_events(sys; callback, kwargs...)
     inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
+        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(sys, dss...)
         discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
             if clock isa Clock
                 PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)

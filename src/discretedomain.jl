@@ -114,7 +114,7 @@ Base.hash(D::Sample, u::UInt) = hash(D.clock, xor(u, 0x055640d6d952f101))
 
 Returns true if the expression or equation `O` contains [`Sample`](@ref) terms.
 """
-hassample(O) = recursive_hasoperator(Sample, O)
+hassample(O) = recursive_hasoperator(Sample, unwrap(O))
 
 # Hold
 
@@ -140,7 +140,7 @@ Hold(x) = Hold()(x)
 
 Returns true if the expression or equation `O` contains [`Hold`](@ref) terms.
 """
-hashold(O) = recursive_hasoperator(Hold, O)
+hashold(O) = recursive_hasoperator(Hold, unwrap(O))
 
 # ShiftIndex
 

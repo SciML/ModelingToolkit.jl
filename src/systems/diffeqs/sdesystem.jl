@@ -116,6 +116,10 @@ struct SDESystem <: AbstractODESystem
     """
     complete::Bool
     """
+    Cached data for fast symbolic indexing.
+    """
+    index_cache::Union{Nothing, IndexCache}
+    """
     The hierarchical parent system before simplification.
     """
     parent::Any
@@ -125,7 +129,7 @@ struct SDESystem <: AbstractODESystem
             jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
             cevents, devents, metadata = nothing, gui_metadata = nothing,
-            complete = false, parent = nothing;
+            complete = false, index_cache = nothing, parent = nothing;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
@@ -140,7 +144,7 @@ struct SDESystem <: AbstractODESystem
         new(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac,
             Wfact, Wfact_t, name, systems, defaults, connector_type, cevents, devents,
-            metadata, gui_metadata, complete, parent)
+            metadata, gui_metadata, complete, index_cache, parent)
     end
 end
 
@@ -221,11 +225,15 @@ function generate_diffusion_function(sys::SDESystem, dvs = unknowns(sys),
         eqs = delay_to_function(sys, eqs)
     end
     u = map(x -> time_varying_as_func(value(x), sys), dvs)
-    p = map(x -> time_varying_as_func(value(x), sys), ps)
-    if isdde
-        return build_function(eqs, u, DDE_HISTORY_FUN, p, get_iv(sys); kwargs...)
+    p = if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        reorder_parameters(get_index_cache(sys), ps)
     else
-        return build_function(eqs, u, p, get_iv(sys); kwargs...)
+        (map(x -> time_varying_as_func(value(x), sys), ps),)
+    end
+    if isdde
+        return build_function(eqs, u, DDE_HISTORY_FUN, p..., get_iv(sys); kwargs...)
+    else
+        return build_function(eqs, u, p..., get_iv(sys); kwargs...)
     end
 end
 
@@ -409,9 +417,13 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
                    (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in g_gen) : g_gen
 
     f(u, p, t) = f_oop(u, p, t)
+    f(u, p::MTKParameters, t) = f_oop(u, p..., t)
     f(du, u, p, t) = f_iip(du, u, p, t)
+    f(du, u, p::MTKParameters, t) = f_iip(du, u, p..., t)
     g(u, p, t) = g_oop(u, p, t)
+    g(u, p::MTKParameters, t) = g_oop(u, p..., t)
     g(du, u, p, t) = g_iip(du, u, p, t)
+    g(du, u, p::MTKParameters, t) = g_iip(du, u, p..., t)
 
     if tgrad
         tgrad_gen = generate_tgrad(sys, dvs, ps; expression = Val{eval_expression},
@@ -420,7 +432,9 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
                                (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in tgrad_gen) :
                                tgrad_gen
         _tgrad(u, p, t) = tgrad_oop(u, p, t)
+        _tgrad(u, p::MTKParameters, t) = tgrad_oop(u, p..., t)
         _tgrad(J, u, p, t) = tgrad_iip(J, u, p, t)
+        _tgrad(J, u, p::MTKParameters, t) = tgrad_iip(J, u, p..., t)
     else
         _tgrad = nothing
     end
@@ -432,7 +446,9 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
                            (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in jac_gen) :
                            jac_gen
         _jac(u, p, t) = jac_oop(u, p, t)
+        _jac(u, p::MTKParameters, t) = jac_oop(u, p..., t)
         _jac(J, u, p, t) = jac_iip(J, u, p, t)
+        _jac(J, u, p::MTKParameters, t) = jac_iip(J, u, p..., t)
     else
         _jac = nothing
     end
@@ -447,9 +463,13 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
                                    (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in tmp_Wfact_t) :
                                    tmp_Wfact_t
         _Wfact(u, p, dtgamma, t) = Wfact_oop(u, p, dtgamma, t)
+        _Wfact(u, p::MTKParameters, dtgamma, t) = Wfact_oop(u, p..., dtgamma, t)
         _Wfact(W, u, p, dtgamma, t) = Wfact_iip(W, u, p, dtgamma, t)
+        _Wfact(W, u, p::MTKParameters, dtgamma, t) = Wfact_iip(W, u, p..., dtgamma, t)
         _Wfact_t(u, p, dtgamma, t) = Wfact_oop_t(u, p, dtgamma, t)
+        _Wfact_t(u, p::MTKParameters, dtgamma, t) = Wfact_oop_t(u, p..., dtgamma, t)
         _Wfact_t(W, u, p, dtgamma, t) = Wfact_iip_t(W, u, p, dtgamma, t)
+        _Wfact_t(W, u, p::MTKParameters, dtgamma, t) = Wfact_iip_t(W, u, p..., dtgamma, t)
     else
         _Wfact, _Wfact_t = nothing, nothing
     end
@@ -463,11 +483,14 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
             obs = get!(dict, value(obsvar)) do
                 build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
             end
-            obs(u, p, t)
+            if p isa MTKParameters
+                obs(u, p..., t)
+            else
+                obs(u, p, t)
+            end
         end
     end
 
-    sts = unknowns(sys)
     SDEFunction{iip}(f, g,
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,

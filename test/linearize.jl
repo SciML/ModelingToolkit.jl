@@ -170,7 +170,6 @@ function saturation(; y_max, y_min = y_max > 0 ? -y_max : -Inf, name)
     ]
     ODESystem(eqs, t, name = name)
 end
-
 @named sat = saturation(; y_max = 1)
 # inside the linear region, the function is identity
 @unpack u, y = sat

@@ -31,6 +31,7 @@ using PrecompileTools, Reexport
     import Distributions
     import FunctionWrappersWrappers
     using URIs: URI
+    using SciMLStructures
 
     using RecursiveArrayTools
 
@@ -62,7 +63,7 @@ using PrecompileTools, Reexport
         ParallelForm, SerialForm, MultithreadedForm, build_function,
         rhss, lhss, prettify_expr, gradient,
         jacobian, hessian, derivative, sparsejacobian, sparsehessian,
-        substituter, scalarize, getparent
+        substituter, scalarize, getparent, hasderiv, hasdiff
 
     import DiffEqBase: @add_kwonly
     import OrdinaryDiffEq
@@ -128,6 +129,8 @@ include("constants.jl")
 include("utils.jl")
 include("domains.jl")
 
+include("systems/index_cache.jl")
+include("systems/parameter_buffer.jl")
 include("systems/abstractsystem.jl")
 include("systems/model_parsing.jl")
 include("systems/connectors.jl")

@@ -25,4 +25,3 @@ prob_mtk = ODEProblem(sys, u0, tspan, p)
 
 @test !SciMLBase.isinplace(prob_mtk)
 @test prob_mtk.u0 isa SArray
-@test prob_mtk.p isa SArray

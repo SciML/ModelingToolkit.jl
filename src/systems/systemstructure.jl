@@ -558,6 +558,7 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
     if state.sys isa ODESystem
         ci = ModelingToolkit.ClockInference(state)
         ModelingToolkit.infer_clocks!(ci)
+        time_domains = merge(Dict(state.fullvars .=> ci.var_domain), Dict(default_toterm.(state.fullvars) .=> ci.var_domain))
         tss, inputs, continuous_id, id_to_clock = ModelingToolkit.split_system(ci)
         cont_io = merge_io(io, inputs[continuous_id])
         sys, input_idxs = _structural_simplify!(tss[continuous_id], cont_io; simplify,
@@ -586,6 +587,8 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
             @set! sys.defaults = merge(ModelingToolkit.defaults(sys),
                 Dict(v => 0.0 for v in Iterators.flatten(inputs)))
         end
+        ps = [setmetadata(sym, TimeDomain, get(time_domains, sym, Continuous())) for sym in get_ps(sys)]
+        @set! sys.ps = ps
     else
         sys, input_idxs = _structural_simplify!(state, io; simplify, check_consistency,
             fully_determined, kwargs...)

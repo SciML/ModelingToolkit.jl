@@ -138,6 +138,9 @@ function SciMLBase.process_p_u0_symbolic(prob::Union{SciMLBase.AbstractDEProblem
         p,
         u0)
     # check if a symbolic remake is possible
+    if p isa Vector && !(eltype(p) <: Pair)
+        error("Parameter values must be specified as a `Dict` or `Vector{<:Pair}`")
+    end
     if eltype(p) <: Pair
         hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :ps) ||
             throw(ArgumentError("This problem does not support symbolic maps with `remake`, i.e. it does not have a symbolic origin." *
@@ -165,8 +168,8 @@ function SciMLBase.process_p_u0_symbolic(prob::Union{SciMLBase.AbstractDEProblem
     sts = unknowns(sys)
     defs = mergedefaults(defs, prob.u0, sts)
     defs = mergedefaults(defs, u0, sts)
-    u0, p, defs = get_u0_p(sys, defs)
-
+    u0, _, defs = get_u0_p(sys, defs)
+    p = MTKParameters(sys, p)
     return p, u0
 end
 

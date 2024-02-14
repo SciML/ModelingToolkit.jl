@@ -79,7 +79,7 @@ prob_auto = ODEProblem(new_sys,
         y => 0,
         T => 0.0],
     (0, 100.0),
-    [1, 9.8])
+    [L => 1, g => 9.8])
 sol = solve(prob_auto, Rodas5());
 #plot(sol, idxs=(x, y))
 

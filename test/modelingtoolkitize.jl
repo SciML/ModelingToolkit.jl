@@ -142,7 +142,7 @@ problem = ODEProblem(SIRD_ac!, ℬ, 𝒯, 𝒫)
 
 problem = ODEProblem(SIRD_ac!, ℬ, 𝒯, 𝒫)
 sys = complete(modelingtoolkitize(problem))
-fast_problem = ODEProblem(sys, ℬ, 𝒯, 𝒫)
+fast_problem = ODEProblem(sys, ℬ, 𝒯, parameters(sys) .=> 𝒫)
 @time solution = solve(fast_problem, Tsit5(), saveat = 1:final_time)
 
 ## Issue #778

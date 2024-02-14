@@ -187,8 +187,14 @@ function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym)
     if unwrap(sym) isa Int    # [x, 1] coerces 1 to a Num
         return unwrap(sym) in 1:length(variable_symbols(sys))
     end
-    return any(isequal(sym), variable_symbols(sys)) ||
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        ic = get_index_cache(sys)
+        h = getsymbolhash(sym)
+        return haskey(ic.unknown_idx, h) || haskey(ic.unknown_idx, getsymbolhash(default_toterm(sym))) || hasname(sym) && is_variable(sys, getname(sym))
+    else
+        return any(isequal(sym), variable_symbols(sys)) ||
            hasname(sym) && is_variable(sys, getname(sym))
+    end
 end
 
 function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym::Symbol)
@@ -201,6 +207,22 @@ end
 function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym)
     if unwrap(sym) isa Int
         return unwrap(sym)
+    end
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        ic = get_index_cache(sys)
+        h = getsymbolhash(sym)
+        return if haskey(ic.unknown_idx, h)
+            ic.unknown_idx[h]
+        else
+            h = getsymbolhash(default_toterm(sym))
+            if haskey(ic.unknown_idx, h)
+                ic.unknown_idx[h]
+            elseif hasname(sym)
+                variable_index(sys, getname(sym))
+            else
+                nothing
+            end
+        end
     end
     idx = findfirst(isequal(sym), variable_symbols(sys))
     if idx === nothing && hasname(sym)
@@ -230,7 +252,19 @@ function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
     if unwrap(sym) isa Int
         return unwrap(sym) in 1:length(parameter_symbols(sys))
     end
-
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        ic = get_index_cache(sys)
+        h = getsymbolhash(sym)
+        return if haskey(ic.param_idx, h) || haskey(ic.discrete_idx, h) ||
+                haskey(ic.constant_idx, h) || haskey(ic.dependent_idx, h)
+            true
+        else
+            h = getsymbolhash(default_toterm(sym))
+            haskey(ic.param_idx, h) || haskey(ic.discrete_idx, h) ||
+                haskey(ic.constant_idx, h) || haskey(ic.dependent_idx, h) ||
+                hasname(sym) && is_parameter(sys, getname(sym))
+        end
+    end
     return any(isequal(sym), parameter_symbols(sys)) ||
            hasname(sym) && is_parameter(sys, getname(sym))
 end
@@ -246,6 +280,33 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
     if unwrap(sym) isa Int
         return unwrap(sym)
     end
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        ic = get_index_cache(sys)
+        h = getsymbolhash(sym)
+        return if haskey(ic.param_idx, h)
+            ParameterIndex(SciMLStructures.Tunable(), ic.param_idx[h])
+        elseif haskey(ic.discrete_idx, h)
+            ParameterIndex(SciMLStructures.Discrete(), ic.discrete_idx[h])
+        elseif haskey(ic.constant_idx, h)
+            ParameterIndex(SciMLStructures.Constants(), ic.constant_idx[h])
+        elseif haskey(ic.dependent_idx, h)
+            ParameterIndex(nothing, ic.dependent_idx[h])
+        else
+            h = getsymbolhash(default_toterm(sym))
+            if haskey(ic.param_idx, h)
+                ParameterIndex(SciMLStructures.Tunable(), ic.param_idx[h])
+            elseif haskey(ic.discrete_idx, h)
+                ParameterIndex(SciMLStructures.Discrete(), ic.discrete_idx[h])
+            elseif haskey(ic.constant_idx, h)
+                ParameterIndex(SciMLStructures.Constants(), ic.constant_idx[h])
+            elseif haskey(ic.dependent_idx, h)
+                ParameterIndex(nothing, ic.dependent_idx[h])
+            else
+                nothing
+            end
+        end
+    end
+    
     idx = findfirst(isequal(sym), parameter_symbols(sys))
     if idx === nothing && hasname(sym)
         idx = parameter_index(sys, getname(sym))
@@ -313,6 +374,9 @@ Mark a system as completed. If a system is complete, the system will no longer
 namespace its subsystems or variables, i.e. `isequal(complete(sys).v.i, v.i)`.
 """
 function complete(sys::AbstractSystem)
+    if has_index_cache(sys)
+        @set! sys.index_cache = IndexCache(sys)
+    end
     isdefined(sys, :complete) ? (@set! sys.complete = true) : sys
 end
 
@@ -354,7 +418,8 @@ for prop in [:eqs
     :discrete_subsystems
     :solved_unknowns
     :split_idxs
-    :parent]
+    :parent
+    :index_cache]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
     @eval begin
@@ -1437,14 +1502,19 @@ function linearization_function(sys::AbstractSystem, inputs,
     end
     sys = ssys
     x0 = merge(defaults(sys), Dict(missing_variable_defaults(sys)), op)
-    u0, p, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
-    p, split_idxs = split_parameters_by_type(p)
-    ps = parameters(sys)
-    if p isa Tuple
-        ps = Base.Fix1(getindex, ps).(split_idxs)
-        ps = (ps...,) #if p is Tuple, ps should be Tuple
+    u0, _p, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        p = MTKParameters(sys, p)
+        ps = reorder_parameters(sys, parameters(sys))
+    else
+        p = _p
+        p, split_idxs = split_parameters_by_type(p)
+        ps = parameters(sys)
+        if p isa Tuple
+            ps = Base.Fix1(getindex, ps).(split_idxs)
+            ps = (ps...,) #if p is Tuple, ps should be Tuple
+        end
     end
-
     lin_fun = let diff_idxs = diff_idxs,
         alge_idxs = alge_idxs,
         input_idxs = input_idxs,
@@ -1468,7 +1538,7 @@ function linearization_function(sys::AbstractSystem, inputs,
                 uf = SciMLBase.UJacobianWrapper(fun, t, p)
                 fg_xz = ForwardDiff.jacobian(uf, u)
                 h_xz = ForwardDiff.jacobian(let p = p, t = t
-                        xz -> h(xz, p, t)
+                        xz ->  p isa MTKParameters ? h(xz, p..., t) : h(xz, p, t)
                     end, u)
                 pf = SciMLBase.ParamJacobianWrapper(fun, t, u)
                 fg_u = jacobian_wrt_vars(pf, p, input_idxs, chunk)
@@ -1479,7 +1549,9 @@ function linearization_function(sys::AbstractSystem, inputs,
                 h_xz = fg_u = zeros(0, length(inputs))
             end
             hp = let u = u, t = t
-                p -> h(u, p, t)
+                _hp(p) = h(u, p, t)
+                _hp(p::MTKParameters) = h(u, p..., t)
+                _hp
             end
             h_u = jacobian_wrt_vars(hp, p, input_idxs, chunk)
             (f_x = fg_xz[diff_idxs, diff_idxs],
@@ -1521,13 +1593,14 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
         kwargs...)
     sts = unknowns(sys)
     t = get_iv(sys)
-    p = parameters(sys)
+    ps = parameters(sys)
+    p = reorder_parameters(sys, ps)
 
-    fun = generate_function(sys, sts, p; expression = Val{false})[1]
-    dx = fun(sts, p, t)
+    fun = generate_function(sys, sts, ps; expression = Val{false})[1]
+    dx = fun(sts, p..., t)
 
     h = build_explicit_observed_function(sys, outputs)
-    y = h(sts, p, t)
+    y = h(sts, p..., t)
 
     fg_xz = Symbolics.jacobian(dx, sts)
     fg_u = Symbolics.jacobian(dx, inputs)
@@ -1722,7 +1795,18 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
         p = DiffEqBase.NullParameters())
     x0 = merge(defaults(sys), op)
     u0, p2, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
-
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        if p isa SciMLBase.NullParameters
+            p = op
+        elseif p isa Dict
+            p = merge(p, op)
+        elseif p isa Vector && eltype(p) <: Pair
+            p = merge(Dict(p), op)
+        elseif p isa Vector
+            p = merge(Dict(parameters(sys) .=> p), op)
+        end
+        p2 = MTKParameters(sys, p)
+    end
     linres = lin_fun(u0, p2, t)
     f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u = linres
 

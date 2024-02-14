@@ -146,7 +146,8 @@ sol = solve(prob, Rodas5P())
 @test sol(tspan[2], idxs = cm.tank.xc)≈getp(prob, cm.ref.k)(prob) atol=1e-2 # Test that the inverse model led to the correct reference
 
 Sf, simplified_sys = Blocks.get_sensitivity_function(model, :y) # This should work without providing an operating opint containing a dummy derivative
-x, p = ModelingToolkit.get_u0_p(simplified_sys, op)
+x, _ = ModelingToolkit.get_u0_p(simplified_sys, op)
+p = ModelingToolkit.MTKParameters(simplified_sys, op)
 matrices1 = Sf(x, p, 0)
 matrices2, _ = Blocks.get_sensitivity(model, :y; op) # Test that we get the same result when calling the higher-level API
 @test matrices1.f_x ≈ matrices2.A[1:7, 1:7]
@@ -156,7 +157,8 @@ nsys = get_named_sensitivity(model, :y; op) # Test that we get the same result w
 # Test the same thing for comp sensitivities
 
 Sf, simplified_sys = Blocks.get_comp_sensitivity_function(model, :y) # This should work without providing an operating opint containing a dummy derivative
-x, p = ModelingToolkit.get_u0_p(simplified_sys, op)
+x, _ = ModelingToolkit.get_u0_p(simplified_sys, op)
+p = ModelingToolkit.MTKParameters(simplified_sys, op)
 matrices1 = Sf(x, p, 0)
 matrices2, _ = Blocks.get_comp_sensitivity(model, :y; op) # Test that we get the same result when calling the higher-level API
 @test matrices1.f_x ≈ matrices2.A[1:7, 1:7]

@@ -4,7 +4,7 @@ using DiffEqBase, SparseArrays
 using Test
 using NonlinearSolve
 using ModelingToolkit: value
-using ModelingToolkit: get_default_or_guess
+using ModelingToolkit: get_default_or_guess, MTKParameters
 
 canonequal(a, b) = isequal(simplify(a), simplify(b))
 
@@ -82,12 +82,12 @@ sH = calculate_hessian(ns)
 @test getfield.(ModelingToolkit.hessian_sparsity(ns), :rowval) ==
       getfield.(sparse.(sH), :rowval)
 
-prob = NonlinearProblem(ns, ones(3), ones(3))
+prob = NonlinearProblem(ns, ones(3), [σ => 1.0, ρ => 1.0, β => 1.0])
 @test prob.f.sys === ns
 sol = solve(prob, NewtonRaphson())
 @test sol.u[1] ≈ sol.u[2]
 
-@test_throws ArgumentError NonlinearProblem(ns, ones(4), ones(3))
+@test_throws ArgumentError NonlinearProblem(ns, ones(4), [σ => 1.0, ρ => 1.0, β => 1.0])
 
 @variables u F s a
 eqs1 = [
@@ -129,7 +129,7 @@ eqs = [0 ~ σ * (y - x),
     0 ~ x * (ρ - z) - y,
     0 ~ x * y - β * z * h]
 @named ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
-np = NonlinearProblem(complete(ns), [0, 0, 0], [1, 2, 3], jac = true, sparse = true)
+np = NonlinearProblem(complete(ns), [0, 0, 0], [σ => 1, ρ => 2, β => 3], jac = true, sparse = true)
 @test calculate_jacobian(ns, sparse = true) isa SparseMatrixCSC
 
 # issue #819
@@ -228,13 +228,13 @@ testdict = Dict([:test => 1])
     sys = complete(sys)
     prob = NonlinearProblem(sys, ones(length(unknowns(sys))))
 
-    prob_ = remake(prob, u0 = [1.0, 2.0, 3.0], p = [1.1, 1.2, 1.3])
+    prob_ = remake(prob, u0 = [1.0, 2.0, 3.0], p = [a => 1.1, b => 1.2, c => 1.3])
     @test prob_.u0 == [1.0, 2.0, 3.0]
-    @test prob_.p == [1.1, 1.2, 1.3]
+    @test prob_.p == MTKParameters(sys, [a => 1.1, b => 1.2, c => 1.3])
 
     prob_ = remake(prob, u0 = Dict(y => 2.0), p = Dict(a => 2.0))
     @test prob_.u0 == [1.0, 2.0, 1.0]
-    @test prob_.p == [2.0, 1.0, 1.0]
+    @test prob_.p == MTKParameters(sys, [a => 2.0, b => 1.0, c => 1.0])
 end
 
 @testset "Initialization System" begin

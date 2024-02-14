@@ -28,7 +28,8 @@ function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false
     @set! newsys.parent = complete(sys)
     newsys = complete(newsys)
     if newsys′ isa Tuple
-        return newsys, newsys′[2]
+        idxs = [parameter_index(newsys, i) for i in io[1]]
+        return newsys, idxs
     else
         return newsys
     end

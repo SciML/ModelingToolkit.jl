@@ -101,12 +101,16 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     If a model `sys` is complete, then `sys.x` no longer performs namespacing.
     """
     complete::Bool
+    """
+    Cached data for fast symbolic indexing.
+    """
+    index_cache::Union{Nothing, IndexCache}
 
     function JumpSystem{U}(tag, ap::U, iv, unknowns, ps, var_to_name, observed, name,
             systems,
             defaults, connector_type, devents,
             metadata = nothing, gui_metadata = nothing,
-            complete = false;
+            complete = false, index_cache = nothing;
             checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
         if checks == true || (checks & CheckComponents) > 0
             check_variables(unknowns, iv)
@@ -117,7 +121,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             check_units(u, ap, iv)
         end
         new{U}(tag, ap, iv, unknowns, ps, var_to_name, observed, name, systems, defaults,
-            connector_type, devents, metadata, gui_metadata, complete)
+            connector_type, devents, metadata, gui_metadata, complete, index_cache)
     end
 end
 function JumpSystem(tag, ap, iv, states, ps, var_to_name, args...; kwargs...)
@@ -185,7 +189,8 @@ function generate_rate_function(js::JumpSystem, rate)
         csubs = Dict(c => getdefault(c) for c in consts)
         rate = substitute(rate, csubs)
     end
-    rf = build_function(rate, unknowns(js), parameters(js),
+    p = reorder_parameters(js, parameters(js))
+    rf = build_function(rate, unknowns(js), p...,
         get_iv(js),
         expression = Val{true})
 end
@@ -196,12 +201,16 @@ function generate_affect_function(js::JumpSystem, affect, outputidxs)
         csubs = Dict(c => getdefault(c) for c in consts)
         affect = substitute(affect, csubs)
     end
-    compile_affect(affect, js, unknowns(js), parameters(js); outputidxs = outputidxs,
+    p = reorder_parameters(js, parameters(js))
+    compile_affect(affect, js, unknowns(js), p...; outputidxs = outputidxs,
         expression = Val{true}, checkvars = false)
 end
 
 function assemble_vrj(js, vrj, unknowntoid)
-    rate = drop_expr(@RuntimeGeneratedFunction(generate_rate_function(js, vrj.rate)))
+    _rate = drop_expr(@RuntimeGeneratedFunction(generate_rate_function(js, vrj.rate)))
+    rate(u, p, t) = _rate(u, p, t)
+    rate(u, p::MTKParameters, t) = _rate(u, p..., t)
+    
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
     affect = drop_expr(@RuntimeGeneratedFunction(generate_affect_function(js, vrj.affect!,
@@ -215,14 +224,20 @@ function assemble_vrj_expr(js, vrj, unknowntoid)
     outputidxs = ((unknowntoid[var] for var in outputvars)...,)
     affect = generate_affect_function(js, vrj.affect!, outputidxs)
     quote
-        rate = $rate
+        _rate = $rate
+        rate(u, p, t) = _rate(u, p, t)
+        rate(u, p::MTKParameters, t) = _rate(u, p..., t)
+        
         affect = $affect
         VariableRateJump(rate, affect)
     end
 end
 
 function assemble_crj(js, crj, unknowntoid)
-    rate = drop_expr(@RuntimeGeneratedFunction(generate_rate_function(js, crj.rate)))
+    _rate = drop_expr(@RuntimeGeneratedFunction(generate_rate_function(js, crj.rate)))
+    rate(u, p, t) = _rate(u, p, t)
+    rate(u, p::MTKParameters, t) = _rate(u, p..., t)
+
     outputvars = (value(affect.lhs) for affect in crj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
     affect = drop_expr(@RuntimeGeneratedFunction(generate_affect_function(js, crj.affect!,
@@ -236,7 +251,10 @@ function assemble_crj_expr(js, crj, unknowntoid)
     outputidxs = ((unknowntoid[var] for var in outputvars)...,)
     affect = generate_affect_function(js, crj.affect!, outputidxs)
     quote
-        rate = $rate
+        _rate = $rate
+        rate(u, p, t) = _rate(u, p, t)
+        rate(u, p::MTKParameters, t) = _rate(u, p..., t)
+
         affect = $affect
         ConstantRateJump(rate, affect)
     end
@@ -312,7 +330,11 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
     defs = mergedefaults(defs, u0map, dvs)
 
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        p = MTKParameters(sys, parammap)
+    else
+        p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    end
 
     f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
 
@@ -323,7 +345,7 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
             obs = get!(dict, value(obsvar)) do
                 build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
             end
-            obs(u, p, t)
+            p isa MTKParameters ? obs(u, p..., t) : obs(u, p, t)
         end
     end
 
@@ -365,7 +387,11 @@ function DiscreteProblemExpr{iip}(sys::JumpSystem, u0map, tspan::Union{Tuple, No
     defs = defaults(sys)
 
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        p = MTKParameters(sys, parammap)
+    else
+        p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    end
     # identity function to make syms works
     quote
         f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
@@ -475,8 +501,8 @@ end
 function JumpSysMajParamMapper(js::JumpSystem, p; jseqs = nothing, rateconsttype = Float64)
     eqs = (jseqs === nothing) ? equations(js) : jseqs
     paramexprs = [maj.scaled_rates for maj in eqs.x[1]]
-    psyms = parameters(js)
-    paramdict = Dict(value(k) => value(v) for (k, v) in zip(psyms, p))
+    psyms = reduce(vcat, reorder_parameters(js, parameters(js)))
+    paramdict = Dict(value(k) => value(v) for (k, v) in zip(psyms, vcat(p...)))
     JumpSysMajParamMapper{typeof(paramexprs), typeof(psyms), rateconsttype}(paramexprs,
         psyms,
         paramdict)
@@ -485,6 +511,15 @@ end
 function updateparams!(ratemap::JumpSysMajParamMapper{U, V, W},
         params) where {U <: AbstractArray, V <: AbstractArray, W}
     for (i, p) in enumerate(params)
+        sympar = ratemap.sympars[i]
+        ratemap.subdict[sympar] = p
+    end
+    nothing
+end
+
+function updateparams!(ratemap::JumpSysMajParamMapper{U, V, W},
+        params::MTKParameters) where {U <: AbstractArray, V <: AbstractArray, W}
+    for (i, p) in enumerate(ArrayPartition(params...))
         sympar = ratemap.sympars[i]
         ratemap.subdict[sympar] = p
     end
