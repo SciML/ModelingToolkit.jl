@@ -88,7 +88,7 @@ function check_consistency(state::TransformationState, orig_inputs)
     # This is defined to check if Pantelides algorithm terminates. For more
     # details, check the equation (15) of the original paper.
     extended_graph = (@set graph.fadjlist = Vector{Int}[graph.fadjlist;
-        map(collect, edges(var_to_diff))])
+                                                        map(collect, edges(var_to_diff))])
     extended_var_eq_matching = maximal_matching(extended_graph)
 
     unassigned_var = []
@@ -345,8 +345,9 @@ function reordered_matrix(sys, torn_matching)
             append!(J, js)
         end
 
-        e_residual = setdiff([max_matching[v]
-                              for v in vars if max_matching[v] !== unassigned], e_solved)
+        e_residual = setdiff(
+            [max_matching[v]
+             for v in vars if max_matching[v] !== unassigned], e_solved)
         for er in e_residual
             isdiffeq(eqs[er]) && continue
             ii += 1

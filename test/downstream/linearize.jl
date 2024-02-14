@@ -7,8 +7,8 @@ using ModelingToolkit, Test
 D = Differential(t)
 
 eqs = [u ~ kp * (r - y)
-    D(x) ~ -x + u
-    y ~ x]
+       D(x) ~ -x + u
+       y ~ x]
 
 @named sys = ODESystem(eqs, t)
 
@@ -50,7 +50,7 @@ function plant(; name)
     @variables u(t)=0 y(t)=0
     D = Differential(t)
     eqs = [D(x) ~ -x + u
-        y ~ x]
+           y ~ x]
     ODESystem(eqs, t; name = name)
 end
 
@@ -59,7 +59,7 @@ function filt_(; name)
     @variables u(t)=0 [input = true]
     D = Differential(t)
     eqs = [D(x) ~ -2 * x + u
-        y ~ x]
+           y ~ x]
     ODESystem(eqs, t, name = name)
 end
 
@@ -67,7 +67,7 @@ function controller(kp; name)
     @variables y(t)=0 r(t)=0 u(t)=0
     @parameters kp = kp
     eqs = [
-        u ~ kp * (r - y),
+        u ~ kp * (r - y)
     ]
     ODESystem(eqs, t; name = name)
 end
@@ -77,8 +77,8 @@ end
 @named p = plant()
 
 connections = [f.y ~ c.r # filtered reference to controller reference
-    c.u ~ p.u # controller output to plant input
-    p.y ~ c.y]
+               c.u ~ p.u # controller output to plant input
+               p.y ~ c.y]
 
 @named cl = ODESystem(connections, t, systems = [f, c, p])
 
@@ -138,19 +138,19 @@ if VERSION >= v"1.8"
     @test_throws "Some specified inputs were not found" linearize(pid,
         [
             pid.reference.u,
-            pid.measurement.u,
+            pid.measurement.u
         ], [ctr_output.u])
     @test_throws "Some specified outputs were not found" linearize(pid,
         [
             reference.u,
-            measurement.u,
+            measurement.u
         ],
         [pid.ctr_output.u])
 else # v1.6 does not have the feature to match error message
     @test_throws ErrorException linearize(pid,
         [
             pid.reference.u,
-            pid.measurement.u,
+            pid.measurement.u
         ], [ctr_output.u])
     @test_throws ErrorException linearize(pid,
         [reference.u, measurement.u],
@@ -165,8 +165,8 @@ function saturation(; y_max, y_min = y_max > 0 ? -y_max : -Inf, name)
     @parameters y_max=y_max y_min=y_min
     ie = ModelingToolkit.IfElse.ifelse
     eqs = [
-        # The equation below is equivalent to y ~ clamp(u, y_min, y_max)
-        y ~ ie(u > y_max, y_max, ie((y_min < u) & (u < y_max), u, y_min)),
+    # The equation below is equivalent to y ~ clamp(u, y_min, y_max)
+        y ~ ie(u > y_max, y_max, ie((y_min < u) & (u < y_max), u, y_min))
     ]
     ODESystem(eqs, t, name = name)
 end
@@ -215,8 +215,8 @@ if VERSION >= v"1.8"
     @named force = Force(use_support = false)
 
     eqs = [connect(link1.TX1, cart.flange)
-        connect(cart.flange, force.flange)
-        connect(link1.TY1, fixed.flange)]
+           connect(cart.flange, force.flange)
+           connect(link1.TY1, fixed.flange)]
 
     @named model = ODESystem(eqs, t, [], []; systems = [link1, cart, force, fixed])
     def = ModelingToolkit.defaults(model)

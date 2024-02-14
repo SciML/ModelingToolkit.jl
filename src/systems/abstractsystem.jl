@@ -156,7 +156,8 @@ Base.nameof(sys::AbstractSystem) = getfield(sys, :name)
 
 #Deprecated
 function independent_variable(sys::AbstractSystem)
-    Base.depwarn("`independent_variable` is deprecated. Use `get_iv` or `independent_variables` instead.",
+    Base.depwarn(
+        "`independent_variable` is deprecated. Use `get_iv` or `independent_variables` instead.",
         :independent_variable)
     isdefined(sys, :iv) ? getfield(sys, :iv) : nothing
 end
@@ -190,10 +191,12 @@ function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         ic = get_index_cache(sys)
         h = getsymbolhash(sym)
-        return haskey(ic.unknown_idx, h) || haskey(ic.unknown_idx, getsymbolhash(default_toterm(sym))) || hasname(sym) && is_variable(sys, getname(sym))
+        return haskey(ic.unknown_idx, h) ||
+               haskey(ic.unknown_idx, getsymbolhash(default_toterm(sym))) ||
+               hasname(sym) && is_variable(sys, getname(sym))
     else
         return any(isequal(sym), variable_symbols(sys)) ||
-           hasname(sym) && is_variable(sys, getname(sym))
+               hasname(sym) && is_variable(sys, getname(sym))
     end
 end
 
@@ -256,7 +259,7 @@ function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
         ic = get_index_cache(sys)
         h = getsymbolhash(sym)
         return if haskey(ic.param_idx, h) || haskey(ic.discrete_idx, h) ||
-                haskey(ic.constant_idx, h) || haskey(ic.dependent_idx, h)
+                  haskey(ic.constant_idx, h) || haskey(ic.dependent_idx, h)
             true
         else
             h = getsymbolhash(default_toterm(sym))
@@ -306,7 +309,7 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
             end
         end
     end
-    
+
     idx = findfirst(isequal(sym), parameter_symbols(sys))
     if idx === nothing && hasname(sym)
         idx = parameter_index(sys, getname(sym))
@@ -381,45 +384,45 @@ function complete(sys::AbstractSystem)
 end
 
 for prop in [:eqs
-    :tag
-    :noiseeqs
-    :iv
-    :unknowns
-    :ps
-    :tspan
-    :name
-    :var_to_name
-    :ctrls
-    :defaults
-    :observed
-    :tgrad
-    :jac
-    :ctrl_jac
-    :Wfact
-    :Wfact_t
-    :systems
-    :structure
-    :op
-    :constraints
-    :controls
-    :loss
-    :bcs
-    :domain
-    :ivs
-    :dvs
-    :connector_type
-    :connections
-    :preface
-    :torn_matching
-    :tearing_state
-    :substitutions
-    :metadata
-    :gui_metadata
-    :discrete_subsystems
-    :solved_unknowns
-    :split_idxs
-    :parent
-    :index_cache]
+             :tag
+             :noiseeqs
+             :iv
+             :unknowns
+             :ps
+             :tspan
+             :name
+             :var_to_name
+             :ctrls
+             :defaults
+             :observed
+             :tgrad
+             :jac
+             :ctrl_jac
+             :Wfact
+             :Wfact_t
+             :systems
+             :structure
+             :op
+             :constraints
+             :controls
+             :loss
+             :bcs
+             :domain
+             :ivs
+             :dvs
+             :connector_type
+             :connections
+             :preface
+             :torn_matching
+             :tearing_state
+             :substitutions
+             :metadata
+             :gui_metadata
+             :discrete_subsystems
+             :solved_unknowns
+             :split_idxs
+             :parent
+             :index_cache]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
     @eval begin
@@ -504,7 +507,8 @@ end
 function getvar(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
     systems = get_systems(sys)
     if isdefined(sys, name)
-        Base.depwarn("`sys.name` like `sys.$name` is deprecated. Use getters like `get_$name` instead.",
+        Base.depwarn(
+            "`sys.name` like `sys.$name` is deprecated. Use getters like `get_$name` instead.",
             "sys.$name")
         return getfield(sys, name)
     elseif !isempty(systems)
@@ -661,7 +665,7 @@ namespace_controls(sys::AbstractSystem) = controls(sys, controls(sys))
 function namespace_defaults(sys)
     defs = defaults(sys)
     Dict((isparameter(k) ? parameters(sys, k) : unknowns(sys, k)) => namespace_expr(v, sys)
-         for (k, v) in pairs(defs))
+    for (k, v) in pairs(defs))
 end
 
 function namespace_equations(sys::AbstractSystem, ivs = independent_variables(sys))
@@ -759,9 +763,9 @@ function observed(sys::AbstractSystem)
     obs = get_observed(sys)
     systems = get_systems(sys)
     [obs;
-        reduce(vcat,
-        (map(o -> namespace_equation(o, s), observed(s)) for s in systems),
-        init = Equation[])]
+     reduce(vcat,
+         (map(o -> namespace_equation(o, s), observed(s)) for s in systems),
+         init = Equation[])]
 end
 
 Base.@deprecate default_u0(x) defaults(x) false
@@ -795,9 +799,9 @@ function equations(sys::AbstractSystem)
         return eqs
     else
         eqs = Equation[eqs;
-            reduce(vcat,
-            namespace_equations.(get_systems(sys));
-            init = Equation[])]
+                       reduce(vcat,
+                           namespace_equations.(get_systems(sys));
+                           init = Equation[])]
         return eqs
     end
 end
@@ -1071,8 +1075,10 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem)
             val = get(defs, s, nothing)
             if val !== nothing
                 print(io, " [defaults to ")
-                show(IOContext(io, :compact => true, :limit => true,
-                        :displaysize => (1, displaysize(io)[2])), val)
+                show(
+                    IOContext(io, :compact => true, :limit => true,
+                        :displaysize => (1, displaysize(io)[2])),
+                    val)
                 print(io, "]")
             end
             description = getdescription(s)
@@ -1097,8 +1103,10 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem)
             val = get(defs, s, nothing)
             if val !== nothing
                 print(io, " [defaults to ")
-                show(IOContext(io, :compact => true, :limit => true,
-                        :displaysize => (1, displaysize(io)[2])), val)
+                show(
+                    IOContext(io, :compact => true, :limit => true,
+                        :displaysize => (1, displaysize(io)[2])),
+                    val)
                 print(io, "]")
             end
             description = getdescription(s)
@@ -1537,8 +1545,9 @@ function linearization_function(sys::AbstractSystem, inputs,
                 end
                 uf = SciMLBase.UJacobianWrapper(fun, t, p)
                 fg_xz = ForwardDiff.jacobian(uf, u)
-                h_xz = ForwardDiff.jacobian(let p = p, t = t
-                        xz ->  p isa MTKParameters ? h(xz, p..., t) : h(xz, p, t)
+                h_xz = ForwardDiff.jacobian(
+                    let p = p, t = t
+                        xz -> p isa MTKParameters ? h(xz, p..., t) : h(xz, p, t)
                     end, u)
                 pf = SciMLBase.ParamJacobianWrapper(fun, t, u)
                 fg_u = jacobian_wrt_vars(pf, p, input_idxs, chunk)
@@ -1589,7 +1598,8 @@ where `x` are differential unknown variables, `z` algebraic variables, `u` input
 function linearize_symbolic(sys::AbstractSystem, inputs,
         outputs; simplify = false, allow_input_derivatives = false,
         kwargs...)
-    sys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs; simplify,
+    sys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(
+        sys, inputs, outputs; simplify,
         kwargs...)
     sts = unknowns(sys)
     t = get_iv(sys)
@@ -1631,9 +1641,9 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
             error("g_z not invertible, this indicates that the DAE is of index > 1.")
         gzgx = -(gz \ g_x)
         A = [f_x f_z
-            gzgx*f_x gzgx*f_z]
+             gzgx*f_x gzgx*f_z]
         B = [f_u
-            gzgx * f_u] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
+             gzgx * f_u] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
 
         C = [h_x h_z]
         Bs = -(gz \ g_u) # This equation differ from the cited paper, the paper is likely wrong since their equaiton leads to a dimension mismatch.
@@ -1680,12 +1690,14 @@ function markio!(state, orig_inputs, inputs, outputs; check = true)
     if check
         ikeys = keys(filter(!last, inputset))
         if !isempty(ikeys)
-            error("Some specified inputs were not found in system. The following variables were not found ",
+            error(
+                "Some specified inputs were not found in system. The following variables were not found ",
                 ikeys)
         end
     end
     check && (all(values(outputset)) ||
-     error("Some specified outputs were not found in system. The following Dict indicates the found variables ",
+     error(
+        "Some specified outputs were not found in system. The following Dict indicates the found variables ",
         outputset))
     state, orig_inputs
 end
@@ -1829,9 +1841,9 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
             error("g_z not invertible, this indicates that the DAE is of index > 1.")
         gzgx = -(gz \ g_x)
         A = [f_x f_z
-            gzgx*f_x gzgx*f_z]
+             gzgx*f_x gzgx*f_z]
         B = [f_u
-            gzgx * f_u] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
+             gzgx * f_u] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
 
         C = [h_x h_z]
         Bs = -(gz \ g_u) # This equation differ from the cited paper, the paper is likely wrong since their equaiton leads to a dimension mismatch.

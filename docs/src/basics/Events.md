@@ -69,7 +69,7 @@ function UnitMassWithFriction(k; name)
     @variables t x(t)=0 v(t)=0
     D = Differential(t)
     eqs = [D(x) ~ v
-        D(v) ~ sin(t) - k * sign(v)]
+           D(v) ~ sin(t) - k * sign(v)]
     ODESystem(eqs, t; continuous_events = [v ~ 0], name) # when v = 0 there is a discontinuity
 end
 @mtkbuild m = UnitMassWithFriction(0.7)
@@ -94,7 +94,7 @@ root_eqs = [x ~ 0]  # the event happens at the ground x(t) = 0
 affect = [v ~ -v] # the effect is that the velocity changes sign
 
 @mtkbuild ball = ODESystem([D(x) ~ v
-        D(v) ~ -9.8], t; continuous_events = root_eqs => affect) # equation => affect
+                            D(v) ~ -9.8], t; continuous_events = root_eqs => affect) # equation => affect
 
 tspan = (0.0, 5.0)
 prob = ODEProblem(ball, Pair[], tspan)
@@ -112,13 +112,14 @@ Multiple events? No problem! This example models a bouncing ball in 2D that is e
 D = Differential(t)
 
 continuous_events = [[x ~ 0] => [vx ~ -vx]
-    [y ~ -1.5, y ~ 1.5] => [vy ~ -vy]]
+                     [y ~ -1.5, y ~ 1.5] => [vy ~ -vy]]
 
-@mtkbuild ball = ODESystem([
+@mtkbuild ball = ODESystem(
+    [
         D(x) ~ vx,
         D(y) ~ vy,
         D(vx) ~ -9.8 - 0.1vx, # gravity + some small air resistance
-        D(vy) ~ -0.1vy,
+        D(vy) ~ -0.1vy
     ], t; continuous_events)
 
 tspan = (0.0, 10.0)
@@ -185,7 +186,7 @@ affect interface:
 sts = @variables x(t), v(t)
 par = @parameters g = 9.8
 bb_eqs = [D(x) ~ v
-    D(v) ~ -g]
+          D(v) ~ -g]
 
 function bb_affect!(integ, u, p, ctx)
     integ.u[u.v] = -integ.u[u.v]

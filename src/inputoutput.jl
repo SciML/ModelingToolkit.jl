@@ -18,9 +18,9 @@ function outputs(sys)
     rhss = [eq.rhs for eq in o]
     lhss = [eq.lhs for eq in o]
     unique([filter(isoutput, unknowns(sys))
-        filter(isoutput, parameters(sys))
-        filter(x -> istree(x) && isoutput(x), rhss) # observed can return equations with complicated expressions, we are only looking for single Terms
-        filter(x -> istree(x) && isoutput(x), lhss)])
+            filter(isoutput, parameters(sys))
+            filter(x -> istree(x) && isoutput(x), rhss) # observed can return equations with complicated expressions, we are only looking for single Terms
+            filter(x -> istree(x) && isoutput(x), lhss)])
 end
 
 """
@@ -413,7 +413,7 @@ function add_input_disturbance(sys, dist::DisturbanceModel, inputs = nothing)
     end
 
     eqs = [dsys.input.u[1] ~ d
-        dist.input ~ u + dsys.output.u[1]]
+           dist.input ~ u + dsys.output.u[1]]
     augmented_sys = ODESystem(eqs, t, systems = [dsys], name = gensym(:outer))
     augmented_sys = extend(augmented_sys, sys)
 

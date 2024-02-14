@@ -8,6 +8,12 @@ function activate_extensions_env()
     Pkg.instantiate()
 end
 
+function activate_downstream_env()
+    Pkg.activate("downstream")
+    Pkg.develop(PackageSpec(path = dirname(@__DIR__)))
+    Pkg.instantiate()
+end
+
 @time begin
     if GROUP == "All" || GROUP == "InterfaceI"
         @safetestset "Linear Algebra Test" include("linalg.jl")
@@ -18,7 +24,6 @@ end
         @safetestset "Simplify Test" include("simplify.jl")
         @safetestset "Direct Usage Test" include("direct.jl")
         @safetestset "System Linearity Test" include("linearity.jl")
-        @safetestset "Linearization Tests" include("linearize.jl")
         @safetestset "Input Output Test" include("input_output_handling.jl")
         @safetestset "Clock Test" include("clock.jl")
         @safetestset "ODESystem Test" include("odesystem.jl")
@@ -57,7 +62,6 @@ end
         @safetestset "OptimizationSystem Test" include("optimizationsystem.jl")
         @safetestset "FuncAffect Test" include("funcaffect.jl")
         @safetestset "Constants Test" include("constants.jl")
-        @safetestset "Inverse Models Test" include("inversemodel.jl")
     end
 
     if GROUP == "All" || GROUP == "InterfaceII"
@@ -69,6 +73,12 @@ end
 
     if GROUP == "All" || GROUP == "RegressionI"
         @safetestset "Latexify recipes Test" include("latexify.jl")
+    end
+
+    if GROUP == "All" || GROUP == "Downstream"
+        activate_downstream_env()
+        @safetestset "Linearization Tests" include("linearize.jl")
+        @safetestset "Inverse Models Test" include("inversemodel.jl")
     end
 
     if GROUP == "All" || GROUP == "Extensions"

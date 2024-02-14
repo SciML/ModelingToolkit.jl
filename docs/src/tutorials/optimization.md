@@ -46,9 +46,9 @@ Next, the actual `OptimizationProblem` can be created. At this stage, an initial
 
 ```@example rosenbrock_2d
 u0 = [x => 1.0
-    y => 2.0]
+      y => 2.0]
 p = [a => 1.0
-    b => 100.0]
+     b => 100.0]
 
 prob = OptimizationProblem(sys, u0, p, grad = true, hess = true)
 solve(prob, GradientDescent())
@@ -66,11 +66,11 @@ end
 @parameters a=1 b=100
 loss = (a - x)^2 + b * (y - x^2)^2
 cons = [
-    x^2 + y^2 ≲ 1,
+    x^2 + y^2 ≲ 1
 ]
 @mtkbuild sys = OptimizationSystem(loss, [x, y], [a, b], constraints = cons)
 u0 = [x => 0.14
-    y => 0.14]
+      y => 0.14]
 prob = OptimizationProblem(sys,
     u0,
     grad = true,

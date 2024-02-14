@@ -18,8 +18,8 @@ end
     @named n = Pin()
     sts = @variables v(t)=1.0 i(t)=1.0
     eqs = [v ~ p.v - n.v
-        0 ~ p.i + n.i
-        i ~ p.i]
+           0 ~ p.i + n.i
+           i ~ p.i]
     compose(ODESystem(eqs, t, sts, []; name = name), p, n)
 end
 
@@ -28,7 +28,7 @@ end
     @unpack v, i = oneport
     ps = @parameters R = R
     eqs = [
-        v ~ i * R,
+        v ~ i * R
     ]
     extend(ODESystem(eqs, t, [], ps; name = name), oneport)
 end
@@ -38,7 +38,7 @@ end
     @unpack v, i = oneport
     ps = @parameters C = C
     eqs = [
-        D(v) ~ i / C,
+        D(v) ~ i / C
     ]
     extend(ODESystem(eqs, t, [], ps; name = name), oneport)
 end
@@ -48,7 +48,7 @@ end
     @unpack v = oneport
     ps = @parameters V = V
     eqs = [
-        V ~ v,
+        V ~ v
     ]
     extend(ODESystem(eqs, t, [], ps; name = name), oneport)
 end
@@ -58,7 +58,7 @@ end
     @unpack v, i = oneport
     ps = @parameters L = L
     eqs = [
-        D(i) ~ v / L,
+        D(i) ~ v / L
     ]
     extend(ODESystem(eqs, t, [], ps; name = name), oneport)
 end
@@ -75,10 +75,10 @@ end
     @variables v(t) RTherm(t)
     @parameters R=R TAmbient=TAmbient alpha=alpha
     eqs = [RTherm ~ R * (1 + alpha * (h.T - TAmbient))
-        v ~ p.i * RTherm
-        h.Q_flow ~ -v * p.i # -LossPower
-        v ~ p.v - n.v
-        0 ~ p.i + n.i]
+           v ~ p.i * RTherm
+           h.Q_flow ~ -v * p.i # -LossPower
+           v ~ p.v - n.v
+           0 ~ p.i + n.i]
     compose(ODESystem(eqs, t, [v, RTherm], [R, TAmbient, alpha],
             name = name), p, n, h)
 end
@@ -88,7 +88,7 @@ end
     C = rho * V * cp
     @named h = HeatPort()
     eqs = [
-        D(h.T) ~ h.Q_flow / C,
+        D(h.T) ~ h.Q_flow / C
     ]
     compose(ODESystem(eqs, t, [], [rho, V, cp],
             name = name), h)

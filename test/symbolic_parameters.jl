@@ -13,12 +13,12 @@ eqs = [0 ~ σ * (y - x),
 par = [
     σ => 1,
     ρ => 0.1 + σ,
-    β => ρ * 1.1,
+    β => ρ * 1.1
 ]
 u0 = [
     x => u,
     y => σ, # default u0 from default p
-    z => u - 0.1,
+    z => u - 0.1
 ]
 ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β], name = :ns, defaults = [par; u0])
 ns.y = u * 1.1
@@ -62,10 +62,10 @@ eqs = [der(x) ~ x]
 @named sys = ODESystem(eqs, t, vars, [x0])
 sys = complete(sys)
 pars = [
-    x0 => 10.0,
+    x0 => 10.0
 ]
 initialValues = [
-    x => x0,
+    x => x0
 ]
 tspan = (0.0, 1.0)
 problem = ODEProblem(sys, initialValues, tspan, pars)

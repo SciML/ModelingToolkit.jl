@@ -162,7 +162,8 @@ function JumpSystem(eqs, iv, unknowns, ps;
         end
     end
     if !(isempty(default_u0) && isempty(default_p))
-        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
+        Base.depwarn(
+            "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
             :JumpSystem, force = true)
     end
     defaults = todict(defaults)
@@ -210,7 +211,7 @@ function assemble_vrj(js, vrj, unknowntoid)
     _rate = drop_expr(@RuntimeGeneratedFunction(generate_rate_function(js, vrj.rate)))
     rate(u, p, t) = _rate(u, p, t)
     rate(u, p::MTKParameters, t) = _rate(u, p..., t)
-    
+
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
     affect = drop_expr(@RuntimeGeneratedFunction(generate_affect_function(js, vrj.affect!,
@@ -227,7 +228,7 @@ function assemble_vrj_expr(js, vrj, unknowntoid)
         _rate = $rate
         rate(u, p, t) = _rate(u, p, t)
         rate(u, p::MTKParameters, t) = _rate(u, p..., t)
-        
+
         affect = $affect
         VariableRateJump(rate, affect)
     end
@@ -535,7 +536,7 @@ end
 function (ratemap::JumpSysMajParamMapper{
         U,
         V,
-        W,
+        W
 })(params) where {U <: AbstractArray,
         V <: AbstractArray, W}
     updateparams!(ratemap, params)

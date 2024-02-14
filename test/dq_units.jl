@@ -18,7 +18,7 @@ using ModelingToolkit: t, D
 @test_throws MT.ValidationError MT.get_unit(γ)
 
 eqs = [D(E) ~ P - E / τ
-    0 ~ P]
+       0 ~ P]
 @test MT.validate(eqs)
 @named sys = ODESystem(eqs, t)
 
@@ -29,7 +29,7 @@ eqs = [D(E) ~ P - E / τ
 @test_throws MT.ArgumentError ODESystem(eqs, t, [E, P, t], [τ], name = :sys)
 ODESystem(eqs, t, [E, P, t], [τ], name = :sys, checks = MT.CheckUnits)
 eqs = [D(E) ~ P - E / τ
-    0 ~ P + E * τ]
+       0 ~ P + E * τ]
 @test_throws MT.ValidationError ODESystem(eqs, t, name = :sys, checks = MT.CheckAll)
 @test_throws MT.ValidationError ODESystem(eqs, t, name = :sys, checks = true)
 ODESystem(eqs, t, name = :sys, checks = MT.CheckNone)
@@ -43,12 +43,12 @@ ODESystem(eqs, t, name = :sys, checks = false)
 # connection validation
 @connector function Pin(; name)
     sts = @variables(v(t)=1.0, [unit = u"V"],
-        i(t)=1.0, [unit = u"A", connect = Flow])
+        i(t)=1.0,[unit = u"A", connect = Flow])
     ODESystem(Equation[], t, sts, []; name = name)
 end
 @connector function OtherPin(; name)
     sts = @variables(v(t)=1.0, [unit = u"mV"],
-        i(t)=1.0, [unit = u"mA", connect = Flow])
+        i(t)=1.0,[unit = u"mA", connect = Flow])
     ODESystem(Equation[], t, sts, []; name = name)
 end
 @connector function LongPin(; name)
@@ -75,7 +75,7 @@ ODESystem(eqs, t, name = :sys)
 @parameters a [unit = u"kg"^-1]
 @variables x [unit = u"kg"]
 eqs = [
-    0 ~ a * x,
+    0 ~ a * x
 ]
 @named nls = NonlinearSystem(eqs, [x], [a])
 
@@ -83,7 +83,7 @@ eqs = [
 @parameters τ [unit = u"s"] Q [unit = u"W"]
 @variables E(t) [unit = u"J"] P(t) [unit = u"W"]
 eqs = [D(E) ~ P - E / τ
-    P ~ Q]
+       P ~ Q]
 
 noiseeqs = [0.1u"W",
     0.1u"W"]
@@ -91,12 +91,12 @@ noiseeqs = [0.1u"W",
 
 # With noise matrix
 noiseeqs = [0.1u"W" 0.1u"W"
-    0.1u"W" 0.1u"W"]
+            0.1u"W" 0.1u"W"]
 @named sys = SDESystem(eqs, noiseeqs, t, [P, E], [τ, Q])
 
 # Invalid noise matrix
 noiseeqs = [0.1u"W" 0.1u"W"
-    0.1u"W" 0.1u"s"]
+            0.1u"W" 0.1u"s"]
 @test !MT.validate(eqs, noiseeqs)
 
 # Non-trivial simplifications
@@ -126,7 +126,7 @@ sys_simple = structural_simplify(sys)
 
 #Jump System
 @parameters β [unit = u"(mol^2*s)^-1"] γ [unit = u"(mol*s)^-1"] jumpmol [
-    unit = u"mol",
+    unit = u"mol"
 ]
 @variables S(t) [unit = u"mol"] I(t) [unit = u"mol"] R(t) [unit = u"mol"]
 rate₁ = β * S * I

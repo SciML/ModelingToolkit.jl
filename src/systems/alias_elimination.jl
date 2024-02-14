@@ -102,10 +102,10 @@ function alias_elimination!(state::TearingState; kwargs...)
     @set! mm.nparentrows = nsrcs(graph)
     @set! mm.row_cols = eltype(mm.row_cols)[mm.row_cols[i]
                                             for (i, eq) in enumerate(mm.nzrows)
-                                                if old_to_new_eq[eq] > 0]
+                                            if old_to_new_eq[eq] > 0]
     @set! mm.row_vals = eltype(mm.row_vals)[mm.row_vals[i]
                                             for (i, eq) in enumerate(mm.nzrows)
-                                                if old_to_new_eq[eq] > 0]
+                                            if old_to_new_eq[eq] > 0]
     @set! mm.nzrows = Int[old_to_new_eq[eq] for eq in mm.nzrows if old_to_new_eq[eq] > 0]
 
     for old_ieq in to_expand

@@ -20,9 +20,9 @@ ie = ParentScope(1 / e)
 @test getmetadata(arguments(value(ie))[2], SymScope) === ParentScope(LocalScope())
 
 eqs = [0 ~ a
-    0 ~ b
-    0 ~ c
-    0 ~ d]
+       0 ~ b
+       0 ~ c
+       0 ~ d]
 @named sub4 = NonlinearSystem(eqs, [a, b, c, d], [])
 @named sub3 = NonlinearSystem(eqs, [a, b, c, d], [])
 @named sub2 = NonlinearSystem([], [], [], systems = [sub3, sub4])
@@ -38,7 +38,8 @@ names = ModelingToolkit.getname.(unknowns(sys))
 
 @named foo = NonlinearSystem(eqs, [a, b, c, d], [])
 @named bar = NonlinearSystem(eqs, [a, b, c, d], [])
-@test ModelingToolkit.getname(ModelingToolkit.namespace_expr(ModelingToolkit.namespace_expr(b,
+@test ModelingToolkit.getname(ModelingToolkit.namespace_expr(
+    ModelingToolkit.namespace_expr(b,
         foo),
     bar)) == Symbol("bar₊b")
 
@@ -53,11 +54,11 @@ end
 
 @parameters t a b c d e f
 p = [a
-    ParentScope(b)
-    ParentScope(ParentScope(c))
-    DelayParentScope(d)
-    DelayParentScope(e, 2)
-    GlobalScope(f)]
+     ParentScope(b)
+     ParentScope(ParentScope(c))
+     DelayParentScope(d)
+     DelayParentScope(e, 2)
+     GlobalScope(f)]
 
 level0 = ODESystem(Equation[], t, [], p; name = :level0)
 level1 = ODESystem(Equation[], t, [], []; name = :level1) ∘ level0
