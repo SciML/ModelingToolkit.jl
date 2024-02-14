@@ -182,7 +182,8 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem; kwargs...)
     vars = prob.u0 isa Number ? _vars : ArrayInterface.restructure(prob.u0, _vars)
     params = if has_p
         _params = define_params(p)
-        p isa MTKParameters ? _params : p isa Number ? _params[1] :
+        p isa MTKParameters ? _params :
+        p isa Number ? _params[1] :
         (p isa Tuple || p isa NamedTuple ? _params :
          ArrayInterface.restructure(p, _params))
     else

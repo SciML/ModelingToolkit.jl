@@ -102,7 +102,8 @@ function OptimizationSystem(op, unknowns, ps;
     op′ = value(scalarize(op))
 
     if !(isempty(default_u0) && isempty(default_p))
-        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
+        Base.depwarn(
+            "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
             :OptimizationSystem, force = true)
     end
     sysnames = nameof.(systems)
@@ -143,7 +144,8 @@ function calculate_hessian(sys::OptimizationSystem)
     expand_derivatives.(hessian(objective(sys), unknowns(sys)))
 end
 
-function generate_hessian(sys::OptimizationSystem, vs = unknowns(sys), ps = parameters(sys);
+function generate_hessian(
+        sys::OptimizationSystem, vs = unknowns(sys), ps = parameters(sys);
         sparse = false, kwargs...)
     if sparse
         hess = sparsehessian(objective(sys), unknowns(sys))
@@ -244,7 +246,8 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         error("A completed `OptimizationSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `OptimizationProblem`")
     end
     if haskey(kwargs, :lcons) || haskey(kwargs, :ucons)
-        Base.depwarn("`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
+        Base.depwarn(
+            "`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
             :OptimizationProblem, force = true)
     end
 
@@ -288,8 +291,9 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         ub = nothing
     end
 
-    f = let _f = generate_function(sys, checkbounds = checkbounds, linenumbers = linenumbers,
-        expression = Val{false})
+    f = let _f = generate_function(
+            sys, checkbounds = checkbounds, linenumbers = linenumbers,
+            expression = Val{false})
         __f(u, p) = _f(u, p)
         __f(u, p::MTKParameters) = _f(u, p...)
         __f
@@ -297,9 +301,10 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     obj_expr = subs_constants(objective(sys))
 
     if grad
-        _grad = let (grad_oop, grad_iip) = generate_gradient(sys, checkbounds = checkbounds,
-            linenumbers = linenumbers,
-            parallel = parallel, expression = Val{false})
+        _grad = let (grad_oop, grad_iip) = generate_gradient(
+                sys, checkbounds = checkbounds,
+                linenumbers = linenumbers,
+                parallel = parallel, expression = Val{false})
             _grad(u, p) = grad_oop(u, p)
             _grad(J, u, p) = (grad_iip(J, u, p); J)
             _grad(u, p::MTKParameters) = grad_oop(u, p...)
@@ -312,9 +317,9 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
 
     if hess
         _hess = let (hess_oop, hess_iip) = generate_hessian(sys, checkbounds = checkbounds,
-            linenumbers = linenumbers,
-            sparse = sparse, parallel = parallel,
-            expression = Val{false})
+                linenumbers = linenumbers,
+                sparse = sparse, parallel = parallel,
+                expression = Val{false})
             _hess(u, p) = hess_oop(u, p)
             _hess(J, u, p) = (hess_iip(J, u, p); J)
             _hess(u, p::MTKParameters) = hess_oop(u, p...)
@@ -459,7 +464,8 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
         error("A completed `OptimizationSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `OptimizationProblemExpr`")
     end
     if haskey(kwargs, :lcons) || haskey(kwargs, :ucons)
-        Base.depwarn("`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
+        Base.depwarn(
+            "`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
             :OptimizationProblem, force = true)
     end
 
@@ -505,7 +511,8 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
     f = generate_function(sys, checkbounds = checkbounds, linenumbers = linenumbers,
         expression = Val{true})
     if grad
-        _grad = generate_gradient(sys, checkbounds = checkbounds, linenumbers = linenumbers,
+        _grad = generate_gradient(
+            sys, checkbounds = checkbounds, linenumbers = linenumbers,
             parallel = parallel, expression = Val{false})[idx]
     else
         _grad = :nothing
@@ -600,7 +607,8 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
                 cons_hess_prototype = cons_hess_prototype,
                 expr = obj_expr,
                 cons_expr = cons_expr)
-            OptimizationProblem{$iip}(_f, u0, p; lb = lb, ub = ub, int = int, lcons = lcons,
+            OptimizationProblem{$iip}(
+                _f, u0, p; lb = lb, ub = ub, int = int, lcons = lcons,
                 ucons = ucons, kwargs...)
         end
     else

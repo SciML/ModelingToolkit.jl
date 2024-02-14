@@ -41,7 +41,7 @@ D = Differential(t)
 @test UMT.get_unit(t^2) == u"ms^2"
 
 eqs = [D(E) ~ P - E / τ
-    0 ~ P]
+       0 ~ P]
 @test UMT.validate(eqs)
 @named sys = ODESystem(eqs, t)
 
@@ -52,7 +52,7 @@ eqs = [D(E) ~ P - E / τ
 @test_throws MT.ArgumentError ODESystem(eqs, t, [E, P, t], [τ], name = :sys)
 ODESystem(eqs, t, [E, P, t], [τ], name = :sys, checks = MT.CheckUnits)
 eqs = [D(E) ~ P - E / τ
-    0 ~ P + E * τ]
+       0 ~ P + E * τ]
 @test_throws MT.ValidationError ODESystem(eqs, t, name = :sys, checks = MT.CheckAll)
 @test_throws MT.ValidationError ODESystem(eqs, t, name = :sys, checks = true)
 ODESystem(eqs, t, name = :sys, checks = MT.CheckNone)
@@ -66,18 +66,18 @@ ODESystem(eqs, t, name = :sys, checks = false)
 # connection validation
 @connector function Pin(; name)
     sts = @variables(v(t)=1.0, [unit = u"V"],
-        i(t)=1.0, [unit = u"A", connect = Flow])
+        i(t)=1.0,[unit = u"A", connect = Flow])
     ODESystem(Equation[], t, sts, []; name = name)
 end
 @connector function OtherPin(; name)
     sts = @variables(v(t)=1.0, [unit = u"mV"],
-        i(t)=1.0, [unit = u"mA", connect = Flow])
+        i(t)=1.0,[unit = u"mA", connect = Flow])
     ODESystem(Equation[], t, sts, []; name = name)
 end
 @connector function LongPin(; name)
     sts = @variables(v(t)=1.0, [unit = u"V"],
         i(t)=1.0, [unit = u"A", connect = Flow],
-        x(t)=1.0, [unit = NoUnits])
+        x(t)=1.0,[unit = NoUnits])
     ODESystem(Equation[], t, sts, []; name = name)
 end
 @named p1 = Pin()
@@ -104,7 +104,7 @@ ODESystem(eqs, t, name = :sys)
 @parameters a [unit = u"kg"^-1]
 @variables x [unit = u"kg"]
 eqs = [
-    0 ~ a * x,
+    0 ~ a * x
 ]
 @named nls = NonlinearSystem(eqs, [x], [a])
 
@@ -113,7 +113,7 @@ eqs = [
 @variables t [unit = u"ms"] E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
 eqs = [D(E) ~ P - E / τ
-    P ~ Q]
+       P ~ Q]
 
 noiseeqs = [0.1u"MW",
     0.1u"MW"]
@@ -121,12 +121,12 @@ noiseeqs = [0.1u"MW",
 
 # With noise matrix
 noiseeqs = [0.1u"MW" 0.1u"MW"
-    0.1u"MW" 0.1u"MW"]
+            0.1u"MW" 0.1u"MW"]
 @named sys = SDESystem(eqs, noiseeqs, t, [P, E], [τ, Q])
 
 # Invalid noise matrix
 noiseeqs = [0.1u"MW" 0.1u"MW"
-    0.1u"MW" 0.1u"s"]
+            0.1u"MW" 0.1u"s"]
 @test !UMT.validate(eqs, noiseeqs)
 
 # Non-trivial simplifications
@@ -157,7 +157,7 @@ sys_simple = structural_simplify(sys)
 
 #Jump System
 @parameters β [unit = u"(mol^2*s)^-1"] γ [unit = u"(mol*s)^-1"] t [unit = u"s"] jumpmol [
-    unit = u"mol",
+    unit = u"mol"
 ]
 @variables S(t) [unit = u"mol"] I(t) [unit = u"mol"] R(t) [unit = u"mol"]
 rate₁ = β * S * I

@@ -48,7 +48,7 @@ Dₜ = Differential(t)
 @parameters k [tunable = true, bounds = (0, Inf)]
 @parameters k2
 eqs = [Dₜ(x) ~ (-k2 * x + k * u) / T
-    y ~ x]
+       y ~ x]
 sys = ODESystem(eqs, t, name = :tunable_first_order)
 
 p = tunable_parameters(sys)

@@ -18,7 +18,7 @@ function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem; kwargs...)
     elseif p isa MTKParameters
         [variable(:α, i) for i in eachindex(vcat(p...))]
     else
-         ArrayInterface.restructure(p, [variable(:α, i) for i in eachindex(p)])
+        ArrayInterface.restructure(p, [variable(:α, i) for i in eachindex(p)])
     end
 
     eqs = prob.f(vars, params)

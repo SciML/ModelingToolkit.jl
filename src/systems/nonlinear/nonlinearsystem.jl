@@ -90,7 +90,8 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
             defaults, connector_type, metadata = nothing,
             gui_metadata = nothing,
             tearing_state = nothing, substitutions = nothing,
-            complete = false, index_cache = nothing, parent = nothing; checks::Union{Bool, Int} = true)
+            complete = false, index_cache = nothing, parent = nothing; checks::Union{
+                Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(unknowns, ps)
             check_units(u, eqs)
@@ -129,7 +130,8 @@ function NonlinearSystem(eqs, unknowns, ps;
            for x in scalarize(eqs)]
 
     if !(isempty(default_u0) && isempty(default_p))
-        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
+        Base.depwarn(
+            "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
             :NonlinearSystem, force = true)
     end
     sysnames = nameof.(systems)
@@ -213,7 +215,7 @@ end
 
 function hessian_sparsity(sys::NonlinearSystem)
     [hessian_sparsity(eq.rhs,
-        unknowns(sys)) for eq in equations(sys)]
+         unknowns(sys)) for eq in equations(sys)]
 end
 
 """

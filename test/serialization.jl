@@ -9,7 +9,7 @@ for prob in [
     eval(ModelingToolkit.ODEProblem{false}(sys, nothing, nothing,
         SciMLBase.NullParameters())),
     eval(ModelingToolkit.ODEProblemExpr{false}(sys, nothing, nothing,
-        SciMLBase.NullParameters())),
+        SciMLBase.NullParameters()))
 ]
     _fn = tempname()
 

@@ -32,7 +32,9 @@ function FunctionalAffect(f, sts, pars, discretes, ctx = nothing)
     FunctionalAffect(f, vs, vs_syms, ps, ps_syms, discretes, ctx)
 end
 
-FunctionalAffect(; f, sts, pars, discretes, ctx = nothing) = FunctionalAffect(f, sts, pars, discretes, ctx)
+function FunctionalAffect(; f, sts, pars, discretes, ctx = nothing)
+    FunctionalAffect(f, sts, pars, discretes, ctx)
+end
 
 func(f::FunctionalAffect) = f.f
 context(a::FunctionalAffect) = a.ctx
@@ -142,10 +144,10 @@ function continuous_events(sys::AbstractSystem)
 
     systems = get_systems(sys)
     cbs = [obs;
-        reduce(vcat,
-        (map(o -> namespace_callback(o, s), continuous_events(s))
-         for s in systems),
-        init = SymbolicContinuousCallback[])]
+           reduce(vcat,
+               (map(o -> namespace_callback(o, s), continuous_events(s))
+               for s in systems),
+               init = SymbolicContinuousCallback[])]
     filter(!isempty, cbs)
 end
 
@@ -236,39 +238,53 @@ function discrete_events(sys::AbstractSystem)
     obs = get_discrete_events(sys)
     systems = get_systems(sys)
     cbs = [obs;
-        reduce(vcat,
-        (map(o -> namespace_callback(o, s), discrete_events(s)) for s in systems),
-        init = SymbolicDiscreteCallback[])]
+           reduce(vcat,
+               (map(o -> namespace_callback(o, s), discrete_events(s)) for s in systems),
+               init = SymbolicDiscreteCallback[])]
     cbs
 end
 
 ################################# compilation functions ####################################
 
 # handles ensuring that affect! functions work with integrator arguments
-function add_integrator_header(sys::AbstractSystem, integrator = gensym(:MTKIntegrator), out = :u)
+function add_integrator_header(
+        sys::AbstractSystem, integrator = gensym(:MTKIntegrator), out = :u)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         function (expr)
             p = gensym(:p)
-            Func([
-                DestructuredArgs([expr.args[1], p, expr.args[end]],
-                                 integrator, inds = [:u, :p, :t]),
-            ], [], Let([DestructuredArgs([arg.name for arg in expr.args[2:end-1]], p),
-                       expr.args[2:end-1]...], expr.body, false)
+            Func(
+                [
+                    DestructuredArgs([expr.args[1], p, expr.args[end]],
+                    integrator, inds = [:u, :p, :t])
+                ],
+                [],
+                Let(
+                    [DestructuredArgs([arg.name for arg in expr.args[2:(end - 1)]], p),
+                        expr.args[2:(end - 1)]...],
+                    expr.body,
+                    false)
             )
         end,
         function (expr)
             p = gensym(:p)
-            Func([
-                DestructuredArgs([expr.args[1], expr.args[2], p, expr.args[end]],
-                                 integrator, inds = [out, :u, :p, :t]),
-            ], [], Let([DestructuredArgs([arg.name for arg in expr.args[3:end-1]], p),
-                       expr.args[3:end-1]...], expr.body, false)
+            Func(
+                [
+                    DestructuredArgs([expr.args[1], expr.args[2], p, expr.args[end]],
+                    integrator, inds = [out, :u, :p, :t])
+                ],
+                [],
+                Let(
+                    [DestructuredArgs([arg.name for arg in expr.args[3:(end - 1)]], p),
+                        expr.args[3:(end - 1)]...],
+                    expr.body,
+                    false)
             )
         end
     else
         expr -> Func([DestructuredArgs(expr.args, integrator, inds = [:u, :p, :t])], [],
-                expr.body),
-        expr -> Func([DestructuredArgs(expr.args, integrator, inds = [out, :u, :p, :t])], [],
+            expr.body),
+        expr -> Func(
+            [DestructuredArgs(expr.args, integrator, inds = [out, :u, :p, :t])], [],
             expr.body)
     end
 end
@@ -278,7 +294,8 @@ function condition_header(sys::AbstractSystem, integrator = gensym(:MTKIntegrato
         function (expr)
             p = gensym(:p)
             res = Func(
-                [expr.args[1], expr.args[2], DestructuredArgs([p], integrator, inds = [:p])],
+                [expr.args[1], expr.args[2],
+                    DestructuredArgs([p], integrator, inds = [:p])],
                 [],
                 Let(
                     [
@@ -290,8 +307,11 @@ function condition_header(sys::AbstractSystem, integrator = gensym(:MTKIntegrato
             return res
         end
     else
-        expr -> Func([expr.args[1], expr.args[2],
-                    DestructuredArgs(expr.args[3:end], integrator, inds = [:p])], [], expr.body)
+        expr -> Func(
+            [expr.args[1], expr.args[2],
+                DestructuredArgs(expr.args[3:end], integrator, inds = [:p])],
+            [],
+            expr.body)
     end
 end
 
@@ -492,7 +512,7 @@ function compile_user_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
         ps_ind = Dict(reverse(en) for en in enumerate(ps))
         p_inds = map(sym -> ps_ind[sym], parameters(affect))
     end
-    
+
     # HACK: filter out eliminated symbols. Not clear this is the right thing to do
     # (MTK should keep these symbols)
     u = filter(x -> !isnothing(x[2]), collect(zip(unknowns_syms(affect), v_inds))) |>

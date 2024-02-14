@@ -1,6 +1,8 @@
 abstract type SymbolHash end
 
-getsymbolhash(sym) = hasmetadata(sym, SymbolHash) ? getmetadata(sym, SymbolHash) : hash(unwrap(sym))
+function getsymbolhash(sym)
+    hasmetadata(sym, SymbolHash) ? getmetadata(sym, SymbolHash) : hash(unwrap(sym))
+end
 
 struct BufferTemplate
     type::DataType
@@ -52,7 +54,8 @@ function IndexCache(sys::AbstractSystem)
         else
             discs = discretes(affect)
             for disc in discs
-                is_parameter(sys, disc) || error("Expected discrete variable $disc in callback to be a parameter")
+                is_parameter(sys, disc) ||
+                    error("Expected discrete variable $disc in callback to be a parameter")
                 insert_by_type!(disc_buffers, disc)
             end
         end
@@ -122,7 +125,7 @@ function IndexCache(sys::AbstractSystem)
         discrete_buffer_sizes,
         param_buffer_sizes,
         const_buffer_sizes,
-        dependent_buffer_sizes,
+        dependent_buffer_sizes
     )
 end
 
@@ -157,7 +160,8 @@ function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
         end
     end
 
-    result = broadcast.(unwrap, (param_buf.x..., disc_buf.x..., const_buf.x..., dep_buf.x...))
+    result = broadcast.(
+        unwrap, (param_buf.x..., disc_buf.x..., const_buf.x..., dep_buf.x...))
     if drop_missing
         result = map(result) do buf
             filter(buf) do sym

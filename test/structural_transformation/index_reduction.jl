@@ -103,12 +103,12 @@ u0 = [
     D(y) => 0.0,
     x => 1.0,
     y => 0.0,
-    T => 0.0,
+    T => 0.0
 ]
 
 p = [
     L => 1.0,
-    g => 9.8,
+    g => 9.8
 ]
 
 prob_auto = ODEProblem(new_sys, u0, (0.0, 10.0), p)
@@ -142,11 +142,11 @@ let sys = structural_simplify(pendulum2)
         D(D(y)) => 0.0,
         x => sqrt(2) / 2,
         y => sqrt(2) / 2,
-        T => 0.0,
+        T => 0.0
     ]
     p = [
         L => 1.0,
-        g => 9.8,
+        g => 9.8
     ]
 
     prob_auto = ODEProblem(sys, u0, (0.0, 0.5), p)

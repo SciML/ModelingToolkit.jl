@@ -176,7 +176,8 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
         throw(ArgumentError("System names must be unique."))
     end
     if !(isempty(default_u0) && isempty(default_p))
-        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
+        Base.depwarn(
+            "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
             :SDESystem, force = true)
     end
     defaults = todict(defaults)
@@ -559,7 +560,8 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = unknowns(sys),
     end
 
     if Wfact
-        tmp_Wfact, tmp_Wfact_t = generate_factorized_W(sys, dvs, ps; expression = Val{true},
+        tmp_Wfact, tmp_Wfact_t = generate_factorized_W(
+            sys, dvs, ps; expression = Val{true},
             kwargs...)
         _Wfact = tmp_Wfact[idx]
         _Wfact_t = tmp_Wfact_t[idx]

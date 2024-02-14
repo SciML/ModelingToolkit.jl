@@ -139,7 +139,8 @@ function split_system(ci::ClockInference{S}) where {S}
     return tss, inputs, continuous_id, id_to_clock
 end
 
-function generate_discrete_affect(osys::AbstractODESystem, syss, inputs, continuous_id, id_to_clock;
+function generate_discrete_affect(
+        osys::AbstractODESystem, syss, inputs, continuous_id, id_to_clock;
         checkbounds = true,
         eval_module = @__MODULE__, eval_expression = true)
     @static if VERSION < v"1.7"
@@ -147,7 +148,8 @@ function generate_discrete_affect(osys::AbstractODESystem, syss, inputs, continu
     end
     out = Sym{Any}(:out)
     appended_parameters = parameters(syss[continuous_id])
-    param_to_idx = Dict{Any, ParameterIndex}(p => parameter_index(osys, p) for p in appended_parameters)
+    param_to_idx = Dict{Any, ParameterIndex}(p => parameter_index(osys, p)
+    for p in appended_parameters)
     offset = length(appended_parameters)
     affect_funs = []
     init_funs = []
@@ -189,13 +191,15 @@ function generate_discrete_affect(osys::AbstractODESystem, syss, inputs, continu
             expression = true,
             output_type = SVector,
             ps = reorder_parameters(osys, parameters(sys)))
-        disc = Func([
+        disc = Func(
+            [
                 out,
                 DestructuredArgs(unknowns(osys)),
                 DestructuredArgs.(reorder_parameters(osys, parameters(osys)))...,
                 # DestructuredArgs(appended_parameters),
-                get_iv(sys),
-            ], [],
+                get_iv(sys)
+            ],
+            [],
             let_block)
         cont_to_disc_idxs = [parameter_index(osys, sym).idx for sym in input]
         disc_range = [parameter_index(osys, sym).idx for sym in unknowns(sys)]
@@ -207,7 +211,8 @@ function generate_discrete_affect(osys::AbstractODESystem, syss, inputs, continu
         empty_disc = isempty(disc_range)
         disc_init = :(function (p, t)
             d2c_obs = $disc_to_cont_obs
-            discretes, repack, _ = $(SciMLStructures.canonicalize)($(SciMLStructures.Discrete()), p)
+            discretes, repack, _ = $(SciMLStructures.canonicalize)(
+                $(SciMLStructures.Discrete()), p)
             d2c_view = view(discretes, $disc_to_cont_idxs)
             disc_state = view(discretes, $disc_range)
             copyto!(d2c_view, d2c_obs(disc_state, p..., t))
@@ -223,7 +228,8 @@ function generate_discrete_affect(osys::AbstractODESystem, syss, inputs, continu
             c2d_obs = $cont_to_disc_obs
             d2c_obs = $disc_to_cont_obs
             # Like Sample
-            discretes, repack, _ = $(SciMLStructures.canonicalize)($(SciMLStructures.Discrete()), p)
+            discretes, repack, _ = $(SciMLStructures.canonicalize)(
+                $(SciMLStructures.Discrete()), p)
             c2d_view = view(discretes, $cont_to_disc_idxs)
             # Like Hold
             d2c_view = view(discretes, $disc_to_cont_idxs)

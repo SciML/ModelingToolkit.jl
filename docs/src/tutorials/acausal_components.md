@@ -102,7 +102,7 @@ end
 
 @mtkbuild rc_model = RCModel(resistor.R = 2.0)
 u0 = [
-    rc_model.capacitor.v => 0.0,
+    rc_model.capacitor.v => 0.0
 ]
 prob = ODEProblem(rc_model, u0, (0, 10.0))
 sol = solve(prob)
@@ -316,7 +316,7 @@ This is done as follows:
 
 ```@example acausal
 u0 = [rc_model.capacitor.v => 0.0
-    rc_model.capacitor.p.i => 0.0]
+      rc_model.capacitor.p.i => 0.0]
 
 prob = ODEProblem(rc_model, u0, (0, 10.0))
 sol = solve(prob)

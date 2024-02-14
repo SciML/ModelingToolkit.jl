@@ -84,7 +84,8 @@ let
     all([b.x ≈ b.param for b in bif_dia.γ.branch])
 
     # Tests that we get two Hopf bifurcations at the correct positions.
-    hopf_points = sort(getfield.(filter(sp -> sp.type == :hopf, bif_dia.γ.specialpoint),
+    hopf_points = sort(
+        getfield.(filter(sp -> sp.type == :hopf, bif_dia.γ.specialpoint),
             :x);
         by = x -> x[1])
     @test length(hopf_points) == 2

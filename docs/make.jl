@@ -16,7 +16,7 @@ mathengine = MathJax3(Dict(:loader => Dict("load" => ["[tex]/require", "[tex]/ma
             "ams",
             "autoload",
             "mathtools",
-            "require",
+            "require"
         ])))
 
 makedocs(sitename = "ModelingToolkit.jl",

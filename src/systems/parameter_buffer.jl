@@ -20,13 +20,19 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
         length(p) == length(ps) || error("Invalid parameters")
         p = ps .=> p
     end
-    defs = Dict(default_toterm(unwrap(k)) => v for (k, v) in defaults(sys) if unwrap(k) in all_ps || default_toterm(unwrap(k)) in all_ps)
+    defs = Dict(default_toterm(unwrap(k)) => v
+    for (k, v) in defaults(sys)
+    if unwrap(k) in all_ps || default_toterm(unwrap(k)) in all_ps)
     if p isa SciMLBase.NullParameters
         p = defs
     else
-        extra_params = Dict(unwrap(k) => v for (k, v) in p if !in(unwrap(k), all_ps) && !in(default_toterm(unwrap(k)), all_ps))
-        p = merge(defs, Dict(default_toterm(unwrap(k)) => v for (k, v) in p if unwrap(k) in all_ps || default_toterm(unwrap(k)) in all_ps))
-        p = Dict(k => fixpoint_sub(v, extra_params) for (k, v) in p if !haskey(extra_params, unwrap(k)))
+        extra_params = Dict(unwrap(k) => v
+        for (k, v) in p if !in(unwrap(k), all_ps) && !in(default_toterm(unwrap(k)), all_ps))
+        p = merge(defs,
+            Dict(default_toterm(unwrap(k)) => v
+            for (k, v) in p if unwrap(k) in all_ps || default_toterm(unwrap(k)) in all_ps))
+        p = Dict(k => fixpoint_sub(v, extra_params)
+        for (k, v) in p if !haskey(extra_params, unwrap(k)))
     end
 
     tunable_buffer = ArrayPartition((Vector{temp.type}(undef, temp.length) for temp in ic.param_buffer_sizes)...)
@@ -74,12 +80,13 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
         idx = ic.dependent_idx[h]
         dep_exprs[idx] = wrap(fixpoint_sub(val, dependencies))
     end
-    p = reorder_parameters(ic, parameters(sys))[begin:end-length(dep_buffer.x)]
+    p = reorder_parameters(ic, parameters(sys))[begin:(end - length(dep_buffer.x))]
     update_function_iip, update_function_oop = if isempty(dep_exprs.x)
         nothing, nothing
     else
         oop, iip = build_function(dep_exprs, p...)
-        RuntimeGeneratedFunctions.@RuntimeGeneratedFunction(iip), RuntimeGeneratedFunctions.@RuntimeGeneratedFunction(oop)
+        RuntimeGeneratedFunctions.@RuntimeGeneratedFunction(iip),
+        RuntimeGeneratedFunctions.@RuntimeGeneratedFunction(oop)
     end
     # everything is an ArrayPartition so it's easy to figure out how many
     # distinct vectors we have for each portion as `ArrayPartition.x`
@@ -107,20 +114,18 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
         dep_buffer = Float64.(dep_buffer)
     end
     return MTKParameters{typeof(tunable_buffer), typeof(disc_buffer), typeof(const_buffer),
-                         typeof(dep_buffer), typeof(update_function_iip), typeof(update_function_oop)}(
-                         tunable_buffer, disc_buffer, const_buffer, dep_buffer, update_function_iip,
-                         update_function_oop)
+        typeof(dep_buffer), typeof(update_function_iip), typeof(update_function_oop)}(
+        tunable_buffer, disc_buffer, const_buffer, dep_buffer, update_function_iip,
+        update_function_oop)
 end
 
 SciMLStructures.isscimlstructure(::MTKParameters) = true
 
 SciMLStructures.ismutablescimlstructure(::MTKParameters) = true
 
-for (Portion, field) in [
-    (SciMLStructures.Tunable, :tunable)
-    (SciMLStructures.Discrete, :discrete)
-    (SciMLStructures.Constants, :constant)
-]
+for (Portion, field) in [(SciMLStructures.Tunable, :tunable)
+                         (SciMLStructures.Discrete, :discrete)
+                         (SciMLStructures.Constants, :constant)]
     @eval function SciMLStructures.canonicalize(::$Portion, p::MTKParameters)
         function repack(values)
             p.$field .= values
@@ -164,7 +169,8 @@ function SymbolicIndexingInterface.parameter_values(p::MTKParameters, i::Paramet
     end
 end
 
-function SymbolicIndexingInterface.set_parameter!(p::MTKParameters, val, idx::ParameterIndex)
+function SymbolicIndexingInterface.set_parameter!(
+        p::MTKParameters, val, idx::ParameterIndex)
     @unpack portion, idx = idx
     if portion isa SciMLStructures.Tunable
         p.tunable[idx] = val
@@ -197,7 +203,8 @@ function _set_parameter_unchecked!(p::MTKParameters, val, idx::ParameterIndex)
     else
         error("Unhandled portion $portion")
     end
-    update_dependent && p.dependent_update_iip !== nothing && p.dependent_update_iip(p.dependent, p...)
+    update_dependent && p.dependent_update_iip !== nothing &&
+        p.dependent_update_iip(p.dependent, p...)
 end
 
 _subarrays(v::AbstractVector) = isempty(v) ? () : (v,)
@@ -251,7 +258,7 @@ end
 
 function Base.:(==)(a::MTKParameters, b::MTKParameters)
     return a.tunable == b.tunable && a.discrete == b.discrete &&
-        a.constant == b.constant && a.dependent == b.dependent
+           a.constant == b.constant && a.dependent == b.dependent
 end
 
 # to support linearize/linearization_function

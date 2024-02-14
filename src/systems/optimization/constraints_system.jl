@@ -122,7 +122,8 @@ function ConstraintsSystem(constraints, unknowns, ps;
     ps′ = value.(scalarize(ps))
 
     if !(isempty(default_u0) && isempty(default_p))
-        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
+        Base.depwarn(
+            "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
             :ConstraintsSystem, force = true)
     end
     sysnames = nameof.(systems)
@@ -162,7 +163,8 @@ function calculate_jacobian(sys::ConstraintsSystem; sparse = false, simplify = f
     return jac
 end
 
-function generate_jacobian(sys::ConstraintsSystem, vs = unknowns(sys), ps = parameters(sys);
+function generate_jacobian(
+        sys::ConstraintsSystem, vs = unknowns(sys), ps = parameters(sys);
         sparse = false, simplify = false, kwargs...)
     jac = calculate_jacobian(sys, sparse = sparse, simplify = simplify)
     return build_function(jac, vs, ps; kwargs...)

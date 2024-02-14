@@ -438,7 +438,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
             if isdervar(iv)
                 order, lv = var_order(iv)
                 dx = D(lower_varname(fullvars[lv], idep, order - 1))
-                eq = dx ~ ModelingToolkit.fixpoint_sub(Symbolics.solve_for(neweqs[ieq],
+                eq = dx ~ ModelingToolkit.fixpoint_sub(
+                    Symbolics.solve_for(neweqs[ieq],
                         fullvars[iv]),
                     total_sub)
                 for e in 𝑑neighbors(graph, iv)
@@ -465,8 +466,9 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
                 @warn "Tearing: solving $eq for $var is singular!"
             else
                 rhs = -b / a
-                neweq = var ~ ModelingToolkit.fixpoint_sub(simplify ?
-                                                           Symbolics.simplify(rhs) : rhs,
+                neweq = var ~ ModelingToolkit.fixpoint_sub(
+                    simplify ?
+                    Symbolics.simplify(rhs) : rhs,
                     total_sub)
                 push!(subeqs, neweq)
                 push!(solved_equations, ieq)
@@ -495,8 +497,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
     end
     solved_variables_set = BitSet(solved_variables)
     invvarsperm = [diff_vars;
-        setdiff!(setdiff(1:ndsts(graph), diff_vars_set),
-        solved_variables_set)]
+                   setdiff!(setdiff(1:ndsts(graph), diff_vars_set),
+                       solved_variables_set)]
     varsperm = zeros(Int, ndsts(graph))
     for (i, v) in enumerate(invvarsperm)
         varsperm[v] = i
@@ -542,7 +544,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
     @set! sys.eqs = neweqs
     @set! sys.unknowns = Any[v
                              for (i, v) in enumerate(fullvars)
-                                 if diff_to_var[i] === nothing && ispresent(i)]
+                             if diff_to_var[i] === nothing && ispresent(i)]
     @set! sys.substitutions = Substitutions(subeqs, deps)
 
     obs_sub = dummy_sub

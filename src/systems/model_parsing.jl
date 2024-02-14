@@ -831,12 +831,14 @@ end
 function parse_conditional_model_statements(comps, dict, eqs, exprs, kwargs, mod,
         ps, vs, component_blk, equations_blk, parameter_blk, variable_blk)
     parameter_blk !== nothing &&
-        parse_variables!(exprs.args, ps, dict, mod, :(begin
+        parse_variables!(
+            exprs.args, ps, dict, mod, :(begin
                 $parameter_blk
             end), :parameters, kwargs)
 
     variable_blk !== nothing &&
-        parse_variables!(exprs.args, vs, dict, mod, :(begin
+        parse_variables!(
+            exprs.args, vs, dict, mod, :(begin
                 $variable_blk
             end), :variables, kwargs)
 

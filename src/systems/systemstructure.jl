@@ -4,11 +4,11 @@ using SymbolicUtils: istree, operation, arguments, Symbolic
 using SymbolicUtils: quick_cancel, similarterm
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
-    value, InvalidSystemException, isdifferential, _iszero,
-    isparameter, isconstant,
-    independent_variables, SparseMatrixCLIL, AbstractSystem,
-    equations, isirreducible, input_timedomain, TimeDomain,
-    VariableType, getvariabletype, has_equations, ODESystem
+                          value, InvalidSystemException, isdifferential, _iszero,
+                          isparameter, isconstant,
+                          independent_variables, SparseMatrixCLIL, AbstractSystem,
+                          equations, isirreducible, input_timedomain, TimeDomain,
+                          VariableType, getvariabletype, has_equations, ODESystem
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
 using Graphs
@@ -459,8 +459,9 @@ function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
     elseif j == 6
         return Label((i - 1 <= length(bgpm.var_to_diff)) ? string(i - 1) : "")
     elseif j == 4
-        return BipartiteAdjacencyList(i - 1 <= nsrcs(bgpm.bpg) ?
-                                      𝑠neighbors(bgpm.bpg, i - 1) : nothing,
+        return BipartiteAdjacencyList(
+            i - 1 <= nsrcs(bgpm.bpg) ?
+            𝑠neighbors(bgpm.bpg, i - 1) : nothing,
             bgpm.highlight_graph !== nothing &&
             i - 1 <= nsrcs(bgpm.highlight_graph) ?
             Set(𝑠neighbors(bgpm.highlight_graph, i - 1)) :
@@ -474,8 +475,9 @@ function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
             match = bgpm.var_eq_matching[i - 1]
             isa(match, Union{Int, Unassigned}) || (match = true) # Selected Unknown
         end
-        return BipartiteAdjacencyList(i - 1 <= ndsts(bgpm.bpg) ?
-                                      𝑑neighbors(bgpm.bpg, i - 1) : nothing,
+        return BipartiteAdjacencyList(
+            i - 1 <= ndsts(bgpm.bpg) ?
+            𝑑neighbors(bgpm.bpg, i - 1) : nothing,
             bgpm.highlight_graph !== nothing &&
             i - 1 <= ndsts(bgpm.highlight_graph) ?
             Set(𝑑neighbors(bgpm.highlight_graph, i - 1)) :
@@ -558,7 +560,8 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
     if state.sys isa ODESystem
         ci = ModelingToolkit.ClockInference(state)
         ModelingToolkit.infer_clocks!(ci)
-        time_domains = merge(Dict(state.fullvars .=> ci.var_domain), Dict(default_toterm.(state.fullvars) .=> ci.var_domain))
+        time_domains = merge(Dict(state.fullvars .=> ci.var_domain),
+            Dict(default_toterm.(state.fullvars) .=> ci.var_domain))
         tss, inputs, continuous_id, id_to_clock = ModelingToolkit.split_system(ci)
         cont_io = merge_io(io, inputs[continuous_id])
         sys, input_idxs = _structural_simplify!(tss[continuous_id], cont_io; simplify,
@@ -587,7 +590,8 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
             @set! sys.defaults = merge(ModelingToolkit.defaults(sys),
                 Dict(v => 0.0 for v in Iterators.flatten(inputs)))
         end
-        ps = [setmetadata(sym, TimeDomain, get(time_domains, sym, Continuous())) for sym in get_ps(sys)]
+        ps = [setmetadata(sym, TimeDomain, get(time_domains, sym, Continuous()))
+              for sym in get_ps(sys)]
         @set! sys.ps = ps
     else
         sys, input_idxs = _structural_simplify!(state, io; simplify, check_consistency,

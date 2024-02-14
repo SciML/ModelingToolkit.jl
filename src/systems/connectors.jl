@@ -354,7 +354,8 @@ function generate_connection_set!(connectionsets, domain_csets,
     if !isempty(extra_unknowns)
         @set! sys.unknowns = [get_unknowns(sys); extra_unknowns]
     end
-    @set! sys.systems = map(s -> generate_connection_set!(connectionsets, domain_csets, s,
+    @set! sys.systems = map(
+        s -> generate_connection_set!(connectionsets, domain_csets, s,
             find, replace,
             renamespace(namespace, s)),
         subsys)
@@ -498,9 +499,11 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
         tol = 1e-8)
     subsys = get_systems(sys)
     # post order traversal
-    @set! sys.systems = map(s -> expand_instream(csets, s,
+    @set! sys.systems = map(
+        s -> expand_instream(csets, s,
             renamespace(namespace, nameof(s)),
-            namespace; debug, tol), subsys)
+            namespace; debug, tol),
+        subsys)
     subsys = get_systems(sys)
 
     if debug
@@ -666,7 +669,8 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
 end
 
 function get_current_var(namespace, cele, sv)
-    unknowns(renamespace(unnamespace(namespace, _getname(cele.sys.namespace)),
+    unknowns(
+        renamespace(unnamespace(namespace, _getname(cele.sys.namespace)),
             cele.sys.sys),
         sv)
 end

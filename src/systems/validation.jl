@@ -2,8 +2,9 @@ module UnitfulUnitCheck
 
 using ..ModelingToolkit, Symbolics, SciMLBase, Unitful, IfElse, RecursiveArrayTools
 using ..ModelingToolkit: ValidationError,
-    ModelingToolkit, Connection, instream, JumpType, VariableUnit, get_systems,
-    Conditional, Comparison
+                         ModelingToolkit, Connection, instream, JumpType, VariableUnit,
+                         get_systems,
+                         Conditional, Comparison
 using Symbolics: Symbolic, value, issym, isadd, ismul, ispow
 const MT = ModelingToolkit
 

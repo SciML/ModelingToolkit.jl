@@ -23,8 +23,8 @@ guess = [x => 1.0,
     z => 0.0]
 
 ps = [σ => 10.0
-    ρ => 26.0
-    β => 8 / 3]
+      ρ => 26.0
+      β => 8 / 3]
 
 prob = NonlinearProblem(ns, guess, ps)
 sol = solve(prob, NewtonRaphson())
