@@ -60,6 +60,8 @@ jobs:
           - InterfaceI
           - InterfaceII
           - Extensions
+          - Downstream
+          - RegressionI
         version:
           - '1'
     steps:
