@@ -63,8 +63,7 @@ D = Differential(t)
 end
 
 # define the system
-@named de = Biohydrogenation()
-de = complete(de)
+@mtkbuild de = Biohydrogenation()
 ```
 
 After that, we are ready to check the system for local identifiability:
@@ -75,7 +74,7 @@ After that, we are ready to check the system for local identifiability:
 local_id_all = assess_local_identifiability(de, p = 0.99)
 ```
 
-We can see that all states (except $x_7$) and all parameters are locally identifiable with probability 0.99.
+We can see that all unknowns (except $x_7$) and all parameters are locally identifiable with probability 0.99.
 
 Let's try to check specific parameters and their combinations
 
@@ -84,7 +83,7 @@ to_check = [de.k5, de.k7, de.k10 / de.k9, de.k5 + de.k6]
 local_id_some = assess_local_identifiability(de, funcs_to_check = to_check, p = 0.99)
 ```
 
-Notice that in this case, everything (except the state variable $x_7$) is locally identifiable, including combinations such as $k_{10}/k_9, k_5+k_6$
+Notice that in this case, everything (except the unknown variable $x_7$) is locally identifiable, including combinations such as $k_{10}/k_9, k_5+k_6$
 
 ## Global Identifiability
 
@@ -185,8 +184,7 @@ D = Differential(t)
     end
 end
 
-@named ode = GoodwinOscillator()
-ode = complete(ode)
+@mtkbuild ode = GoodwinOscillator()
 
 # check only 2 parameters
 to_check = [ode.b, ode.c]

@@ -1,12 +1,13 @@
 using ModelingToolkit
 using SteadyStateDiffEq
 using Test
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@parameters t r
+@parameters r
 @variables x(t)
-D = Differential(t)
 eqs = [D(x) ~ x^2 - r]
-@named de = ODESystem(eqs)
+@named de = ODESystem(eqs, t)
+de = complete(de)
 
 for factor in [1e-1, 1e0, 1e10],
     u0_p in [(2.34, 2.676), (22.34, 1.632), (0.3, 15.676), (0.3, 0.006)]

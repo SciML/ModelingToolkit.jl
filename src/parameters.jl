@@ -45,7 +45,7 @@ toparam(s::Num) = wrap(toparam(value(s)))
 """
     tovar(s)
 
-Maps the variable to a state.
+Maps the variable to an unknown.
 """
 tovar(s::Symbolic) = setmetadata(s, MTKVariableTypeCtx, VARIABLE)
 tovar(s::Num) = Num(tovar(value(s)))

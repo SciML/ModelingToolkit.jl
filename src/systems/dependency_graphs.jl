@@ -1,6 +1,6 @@
 """
 ```julia
-equation_dependencies(sys::AbstractSystem; variables = states(sys))
+equation_dependencies(sys::AbstractSystem; variables = unknowns(sys))
 ```
 
 Given an `AbstractSystem` calculate for each equation the variables it depends on.
@@ -28,14 +28,14 @@ j₂ = ModelingToolkit.VariableRateJump(rate₂, affect₂)
 # create a JumpSystem using these jumps
 @named jumpsys = JumpSystem([j₁, j₂], t, [S, I, R], [β, γ])
 
-# dependency of each jump rate function on state variables
+# dependency of each jump rate function on unknown variables
 equation_dependencies(jumpsys)
 
 # dependency of each jump rate function on parameters
 equation_dependencies(jumpsys, variables = parameters(jumpsys))
 ```
 """
-function equation_dependencies(sys::AbstractSystem; variables = states(sys))
+function equation_dependencies(sys::AbstractSystem; variables = unknowns(sys))
     eqs = equations(sys)
     deps = Set()
     depeqs_to_vars = Vector{Vector}(undef, length(eqs))
@@ -67,7 +67,7 @@ Continuing the example started in [`equation_dependencies`](@ref)
 
 ```julia
 digr = asgraph(equation_dependencies(jumpsys),
-               Dict(s => i for (i, s) in enumerate(states(jumpsys))))
+               Dict(s => i for (i, s) in enumerate(unknowns(jumpsys))))
 ```
 """
 function asgraph(eqdeps, vtois)
@@ -89,7 +89,7 @@ end
 # could be made to directly generate graph and save memory
 """
 ```julia
-asgraph(sys::AbstractSystem; variables = states(sys),
+asgraph(sys::AbstractSystem; variables = unknowns(sys),
         variablestoids = Dict(convert(Variable, v) => i for (i, v) in enumerate(variables)))
 ```
 
@@ -98,7 +98,7 @@ to the indices of variables they depend on.
 
 Notes:
 
-  - Defaults for kwargs creating a mapping from `equations(sys)` to `states(sys)`
+  - Defaults for kwargs creating a mapping from `equations(sys)` to `unknowns(sys)`
     they depend on.
   - `variables` should provide the list of variables to use for generating
     the dependency graph.
@@ -112,14 +112,14 @@ Continuing the example started in [`equation_dependencies`](@ref)
 digr = asgraph(jumpsys)
 ```
 """
-function asgraph(sys::AbstractSystem; variables = states(sys),
+function asgraph(sys::AbstractSystem; variables = unknowns(sys),
         variablestoids = Dict(v => i for (i, v) in enumerate(variables)))
     asgraph(equation_dependencies(sys, variables = variables), variablestoids)
 end
 
 """
 ```julia
-variable_dependencies(sys::AbstractSystem; variables = states(sys),
+variable_dependencies(sys::AbstractSystem; variables = unknowns(sys),
                       variablestoids = nothing)
 ```
 
@@ -139,7 +139,7 @@ Continuing the example of [`equation_dependencies`](@ref)
 variable_dependencies(jumpsys)
 ```
 """
-function variable_dependencies(sys::AbstractSystem; variables = states(sys),
+function variable_dependencies(sys::AbstractSystem; variables = unknowns(sys),
         variablestoids = nothing)
     eqs = equations(sys)
     vtois = isnothing(variablestoids) ? Dict(v => i for (i, v) in enumerate(variables)) :
@@ -148,7 +148,7 @@ function variable_dependencies(sys::AbstractSystem; variables = states(sys),
     deps = Set()
     badjlist = Vector{Vector{Int}}(undef, length(eqs))
     for (eidx, eq) in enumerate(eqs)
-        modified_states!(deps, eq, variables)
+        modified_unknowns!(deps, eq, variables)
         badjlist[eidx] = sort!([vtois[var] for var in deps])
         empty!(deps)
     end
@@ -165,7 +165,7 @@ end
 
 """
 ```julia
-asdigraph(g::BipartiteGraph, sys::AbstractSystem; variables = states(sys),
+asdigraph(g::BipartiteGraph, sys::AbstractSystem; variables = unknowns(sys),
           equationsfirst = true)
 ```
 
@@ -174,11 +174,11 @@ Convert a [`BipartiteGraph`](@ref) to a `LightGraph.SimpleDiGraph`.
 Notes:
 
   - The resulting `SimpleDiGraph` unifies the two sets of vertices (equations
-    and then states in the case it comes from [`asgraph`](@ref)), producing one
+    and then unknowns in the case it comes from [`asgraph`](@ref)), producing one
     ordered set of integer vertices (`SimpleDiGraph` does not support two distinct
     collections of vertices, so they must be merged).
   - `variables` gives the variables that `g` are associated with (usually the
-    `states` of a system).
+    `unknowns` of a system).
   - `equationsfirst` (default is `true`) gives whether the [`BipartiteGraph`](@ref)
     gives a mapping from equations to variables they depend on (`true`), as calculated
     by [`asgraph`](@ref), or whether it gives a mapping from variables to the equations
@@ -191,7 +191,7 @@ Continuing the example in [`asgraph`](@ref)
 dg = asdigraph(digr, jumpsys)
 ```
 """
-function asdigraph(g::BipartiteGraph, sys::AbstractSystem; variables = states(sys),
+function asdigraph(g::BipartiteGraph, sys::AbstractSystem; variables = unknowns(sys),
         equationsfirst = true)
     neqs = length(equations(sys))
     nvars = length(variables)
@@ -238,7 +238,7 @@ function eqeq_dependencies(eqdeps::BipartiteGraph{T},
     g = SimpleDiGraph{T}(length(eqdeps.fadjlist))
 
     for (eqidx, sidxs) in enumerate(vardeps.badjlist)
-        # states modified by eqidx
+        # unknowns modified by eqidx
         for sidx in sidxs
             # equations depending on sidx
             foreach(v -> add_edge!(g, eqidx, v), eqdeps.badjlist[sidx])

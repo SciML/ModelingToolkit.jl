@@ -1,6 +1,6 @@
 using LinearAlgebra
 
-using ModelingToolkit: isdifferenceeq, process_events, get_preprocess_constants
+using ModelingToolkit: process_events, get_preprocess_constants
 
 const MAX_INLINE_NLSOLVE_SIZE = 8
 
@@ -27,7 +27,7 @@ function torn_system_with_nlsolve_jacobian_sparsity(state, var_eq_matching, var_
     # 0
     # ```
     #
-    # Let 𝑇 be the set of tearing variables and 𝑉 be the set of all *states* in
+    # Let 𝑇 be the set of tearing variables and 𝑉 be the set of all *unknowns* in
     # the residual equations. In the following code, we are going to assume the
     # connection between 𝑇 (the `u` in from above) and 𝑉 ∖ 𝑇 (the `p` in from
     # above) has full incidence.
@@ -37,7 +37,7 @@ function torn_system_with_nlsolve_jacobian_sparsity(state, var_eq_matching, var_
     # from other partitions.
     #
     # We know that partitions are BLT ordered. Hence, the tearing variables in
-    # each partition is unique, and all states in a partition must be
+    # each partition is unique, and all unknowns in a partition must be
     # either differential variables or algebraic tearing variables that are
     # from previous partitions. Hence, we can build the dependency chain as we
     # traverse the partitions.
@@ -194,8 +194,9 @@ function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDic
         funex = MakeArray(rhss, SVector)
         pre = get_preprocess_constants(rhss)
     end
-    f = Func([DestructuredArgs(vars, inbounds = !checkbounds)
-            DestructuredArgs(params, inbounds = !checkbounds)],
+    f = Func(
+        [DestructuredArgs(vars, inbounds = !checkbounds)
+         DestructuredArgs(params, inbounds = !checkbounds)],
         [],
         pre(Let(needed_assignments[inner_idxs],
             funex,
@@ -219,8 +220,8 @@ function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDic
     end
 
     nlsolve_expr = Assignment[preassignments
-        fname ← drop_expr(@RuntimeGeneratedFunction(f))
-        DestructuredArgs(vars, inbounds = !checkbounds) ← solver_call]
+                              fname ← drop_expr(@RuntimeGeneratedFunction(f))
+                              DestructuredArgs(vars, inbounds = !checkbounds) ← solver_call]
 
     nlsolve_expr
 end
@@ -244,14 +245,15 @@ function build_torn_function(sys;
     state = get_or_construct_tearing_state(sys)
     fullvars = state.fullvars
     var_eq_matching, var_sccs = algebraic_variables_scc(state)
-    condensed_graph = MatchedCondensationGraph(DiCMOBiGraph{true}(complete(state.structure.graph),
+    condensed_graph = MatchedCondensationGraph(
+        DiCMOBiGraph{true}(complete(state.structure.graph),
             complete(var_eq_matching)),
         var_sccs)
     toporder = topological_sort_by_dfs(condensed_graph)
     var_sccs = var_sccs[toporder]
 
-    states_idxs = collect(diffvars_range(state.structure))
-    mass_matrix_diag = ones(length(states_idxs))
+    unknowns_idxs = collect(diffvars_range(state.structure))
+    mass_matrix_diag = ones(length(unknowns_idxs))
 
     assignments, deps, sol_states = tearing_assignments(sys)
     invdeps = map(_ -> BitSet(), deps)
@@ -284,11 +286,11 @@ function build_torn_function(sys;
             needs_extending = true
             append!(eqs_idxs, torn_eqs_idxs)
             append!(rhss, map(x -> x.rhs, eqs[torn_eqs_idxs]))
-            append!(states_idxs, torn_vars_idxs)
+            append!(unknowns_idxs, torn_vars_idxs)
             append!(mass_matrix_diag, zeros(length(torn_eqs_idxs)))
         end
     end
-    sort!(states_idxs)
+    sort!(unknowns_idxs)
 
     mass_matrix = needs_extending ? Diagonal(mass_matrix_diag) : I
 
@@ -297,32 +299,33 @@ function build_torn_function(sys;
         out,
         rhss)
 
-    states = Any[fullvars[i] for i in states_idxs]
-    @set! sys.unknown_states = states
-    syms = map(Symbol, states)
+    unknown_vars = Any[fullvars[i] for i in unknowns_idxs]
+    @set! sys.solved_unknowns = unknown_vars
 
     pre = get_postprocess_fbody(sys)
     cpre = get_preprocess_constants(rhss)
     pre2 = x -> pre(cpre(x))
 
-    expr = SymbolicUtils.Code.toexpr(Func([out
-                DestructuredArgs(states,
-                inbounds = !checkbounds)
-                DestructuredArgs(parameters(sys),
-                inbounds = !checkbounds)
-                independent_variables(sys)],
+    expr = SymbolicUtils.Code.toexpr(
+        Func(
+            [out
+             DestructuredArgs(unknown_vars,
+                 inbounds = !checkbounds)
+             DestructuredArgs(parameters(sys),
+                 inbounds = !checkbounds)
+             independent_variables(sys)],
             [],
             pre2(Let([torn_expr;
-                    assignments[is_not_prepended_assignment]],
+                      assignments[is_not_prepended_assignment]],
                 funbody,
                 false))),
         sol_states)
     if expression
-        expr, states
+        expr, unknown_vars
     else
         observedfun = let state = state,
             dict = Dict(),
-            is_solver_state_idxs = insorted.(1:length(fullvars), (states_idxs,)),
+            is_solver_unknown_idxs = insorted.(1:length(fullvars), (unknowns_idxs,)),
             assignments = assignments,
             deps = (deps, invdeps),
             sol_states = sol_states,
@@ -331,7 +334,7 @@ function build_torn_function(sys;
             function generated_observed(obsvar, args...)
                 obs = get!(dict, value(obsvar)) do
                     build_observed_function(state, obsvar, var_eq_matching, var_sccs,
-                        is_solver_state_idxs, assignments, deps,
+                        is_solver_unknown_idxs, assignments, deps,
                         sol_states, var2assignment,
                         checkbounds = checkbounds)
                 end
@@ -345,22 +348,20 @@ function build_torn_function(sys;
             end
         end
 
-        ODEFunction{true, SciMLBase.AutoSpecialize}(drop_expr(@RuntimeGeneratedFunction(expr)),
+        ODEFunction{true, SciMLBase.AutoSpecialize}(
+            drop_expr(@RuntimeGeneratedFunction(expr)),
             sparsity = jacobian_sparsity ?
                        torn_system_with_nlsolve_jacobian_sparsity(state,
                 var_eq_matching,
                 var_sccs,
                 nlsolve_scc_idxs,
                 eqs_idxs,
-                states_idxs) :
+                unknowns_idxs) :
                        nothing,
-            syms = syms,
-            paramsyms = Symbol.(parameters(sys)),
-            indepsym = Symbol(get_iv(sys)),
             observed = observedfun,
             mass_matrix = mass_matrix,
             sys = sys),
-        states
+        unknown_vars
     end
 end
 
@@ -382,7 +383,7 @@ function find_solve_sequence(sccs, vars)
 end
 
 function build_observed_function(state, ts, var_eq_matching, var_sccs,
-        is_solver_state_idxs,
+        is_solver_unknown_idxs,
         assignments,
         deps,
         sol_states,
@@ -404,15 +405,15 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
 
     fullvars = state.fullvars
     s = state.structure
-    unknown_states = fullvars[is_solver_state_idxs]
-    algvars = fullvars[.!is_solver_state_idxs]
+    unknown_vars = fullvars[is_solver_unknown_idxs]
+    algvars = fullvars[.!is_solver_unknown_idxs]
 
     required_algvars = Set(intersect(algvars, vars))
     obs = observed(sys)
     observed_idx = Dict(x.lhs => i for (i, x) in enumerate(obs))
-    namespaced_to_obs = Dict(states(sys, x.lhs) => x.lhs for x in obs)
-    namespaced_to_sts = Dict(states(sys, x) => x for x in states(sys))
-    sts = Set(states(sys))
+    namespaced_to_obs = Dict(unknowns(sys, x.lhs) => x.lhs for x in obs)
+    namespaced_to_sts = Dict(unknowns(sys, x) => x for x in unknowns(sys))
+    sts = Set(unknowns(sys))
 
     # FIXME: This is a rather rough estimate of dependencies. We assume
     # the expression depends on everything before the `maxidx`.
@@ -437,7 +438,7 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
                     subs[s] = s′
                     continue
                 end
-                throw(ArgumentError("$s is either an observed nor a state variable."))
+                throw(ArgumentError("$s is either an observed nor an unknown variable."))
             end
             continue
         end
@@ -464,7 +465,7 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
         for iscc in subset
             torn_vars_idxs = Int[var
                                  for var in var_sccs[iscc]
-                                     if var_eq_matching[var] !== unassigned]
+                                 if var_eq_matching[var] !== unassigned]
             isempty(torn_vars_idxs) || push!(nested_torn_vars_idxs, torn_vars_idxs)
         end
         torn_eqs = [[eqs[var_eq_matching[i]] for i in idxs]
@@ -489,67 +490,27 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
     end
     pre = get_postprocess_fbody(sys)
     cpre = get_preprocess_constants([obs[1:maxidx];
-        isscalar ? ts[1] : MakeArray(ts, output_type)])
+                                     isscalar ? ts[1] : MakeArray(ts, output_type)])
     pre2 = x -> pre(cpre(x))
-    ex = Code.toexpr(Func([DestructuredArgs(unknown_states, inbounds = !checkbounds)
-                DestructuredArgs(parameters(sys), inbounds = !checkbounds)
-                independent_variables(sys)],
+    ex = Code.toexpr(
+        Func(
+            [DestructuredArgs(unknown_vars, inbounds = !checkbounds)
+             DestructuredArgs(parameters(sys), inbounds = !checkbounds)
+             independent_variables(sys)],
             [],
-            pre2(Let([collect(Iterators.flatten(solves))
-                    assignments[is_not_prepended_assignment]
-                    map(eq -> eq.lhs ← eq.rhs, obs[1:maxidx])
-                    subs],
+            pre2(Let(
+                [collect(Iterators.flatten(solves))
+                 assignments[is_not_prepended_assignment]
+                 map(eq -> eq.lhs ← eq.rhs, obs[1:maxidx])
+                 subs],
                 isscalar ? ts[1] : MakeArray(ts, output_type),
-                false))), sol_states)
+                false))),
+        sol_states)
 
     expression ? ex : drop_expr(@RuntimeGeneratedFunction(ex))
 end
 
-"""
-    ODAEProblem{iip}(sys, u0map, tspan, parammap = DiffEqBase.NullParameters(); kw...)
-
-This constructor acts similar to the one for [`ODEProblem`](@ref) with the following changes:
-`ODESystem`s can sometimes be further reduced if `structural_simplify` has
-already been applied to them.
-In these cases, the constructor uses the knowledge of the strongly connected
-components calculated during the process of simplification as the basis for
-building pre-simplified nonlinear systems in the implicit solving.
-
-In summary: these problems are structurally modified, but could be
-more efficient and more stable. Note, the returned object is still of type
-[`ODEProblem`](@ref).
-"""
 struct ODAEProblem{iip} end
 
-ODAEProblem(args...; kw...) = ODAEProblem{true}(args...; kw...)
-
-function ODAEProblem{iip}(sys,
-        u0map,
-        tspan,
-        parammap = DiffEqBase.NullParameters();
-        callback = nothing,
-        use_union = true,
-        tofloat = true,
-        check = true,
-        kwargs...) where {iip}
-    eqs = equations(sys)
-    check && ModelingToolkit.check_operator_variables(eqs, Differential)
-    fun, dvs = build_torn_function(sys; kwargs...)
-    ps = parameters(sys)
-    defs = defaults(sys)
-
-    defs = ModelingToolkit.mergedefaults(defs, parammap, ps)
-    defs = ModelingToolkit.mergedefaults(defs, u0map, dvs)
-    u0 = ModelingToolkit.varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
-    p = ModelingToolkit.varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
-
-    has_difference = any(isdifferenceeq, eqs)
-    cbs = process_events(sys; callback, has_difference, kwargs...)
-
-    kwargs = filter_kwargs(kwargs)
-    if cbs === nothing
-        ODEProblem{iip}(fun, u0, tspan, p; kwargs...)
-    else
-        ODEProblem{iip}(fun, u0, tspan, p; callback = cbs, kwargs...)
-    end
-end
+@deprecate ODAEProblem(args...; kw...) ODEProblem(args...; kw...)
+@deprecate ODAEProblem{iip}(args...; kw...) where {iip} ODEProblem{iip}(args...; kw...)

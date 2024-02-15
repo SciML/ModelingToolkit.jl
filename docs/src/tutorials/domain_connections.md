@@ -46,7 +46,7 @@ The fluid medium setter for `HydralicPort` may be defined as `HydraulicFluid` wi
     end
 
     eqs = [
-        dm ~ 0,
+        dm ~ 0
     ]
 
     ODESystem(eqs, t, vars, pars; name, defaults = [dm => 0])
@@ -88,15 +88,15 @@ end
     p = port.p
 
     eqs = [D(rho) ~ drho
-        rho ~ port.ρ * (1 + p / port.β)
-        dm ~ drho * vol]
+           rho ~ port.ρ * (1 + p / port.β)
+           dm ~ drho * vol]
 
     ODESystem(eqs, t, vars, pars; name, systems)
 end
 nothing #hide
 ```
 
-When the system is defined we can generate a fluid component and connect it to the system.  Here `fluid` is connected to the `src.port`, but it could also be connected to `vol.port`, any connection in the network is fine.  Note: we can visualize the system using `ModelingToolkitDesigner.jl`, where a dashed line is used to show the `fluid` connection to represent a domain connection that is only transporting parameters and not states.
+When the system is defined we can generate a fluid component and connect it to the system.  Here `fluid` is connected to the `src.port`, but it could also be connected to `vol.port`, any connection in the network is fine.  Note: we can visualize the system using `ModelingToolkitDesigner.jl`, where a dashed line is used to show the `fluid` connection to represent a domain connection that is only transporting parameters and not unknown variables.
 
 ```@example domain
 @component function System(; name)
@@ -108,7 +108,7 @@ When the system is defined we can generate a fluid component and connect it to t
     end
 
     eqs = [connect(fluid, src.port)
-        connect(src.port, vol.port)]
+           connect(src.port, vol.port)]
 
     ODESystem(eqs, t, [], []; systems, name)
 end
@@ -135,7 +135,7 @@ To see how the domain works, we can examine the set parameter values for each of
 
 ```@repl domain
 sys = structural_simplify(odesys)
-ModelingToolkit.defaults(sys)[complete(odesys).vol.port.ρ]
+ModelingToolkit.defaults(sys)[odesys.vol.port.ρ]
 ```
 
 ## Multiple Domain Networks
@@ -162,10 +162,10 @@ If we have a more complicated system, for example a hydraulic actuator, with a s
     end
 
     eqs = [D(x) ~ dx
-        D(dx) ~ ddx
-        mass * ddx ~ (port_a.p - port_b.p) * area
-        port_a.dm ~ +(port_a.ρ) * dx * area
-        port_b.dm ~ -(port_b.ρ) * dx * area]
+           D(dx) ~ ddx
+           mass * ddx ~ (port_a.p - port_b.p) * area
+           port_a.dm ~ +(port_a.ρ) * dx * area
+           port_b.dm ~ -(port_b.ρ) * dx * area]
 
     ODESystem(eqs, t, vars, pars; name, systems)
 end
@@ -186,9 +186,9 @@ A system with 2 different fluids is defined and connected to each separate domai
     end
 
     eqs = [connect(fluid_a, src_a.port)
-        connect(fluid_b, src_b.port)
-        connect(src_a.port, act.port_a)
-        connect(src_b.port, act.port_b)]
+           connect(fluid_b, src_b.port)
+           connect(src_a.port, act.port_a)
+           connect(src_b.port, act.port_b)]
 
     ODESystem(eqs, t, [], []; systems, name)
 end
@@ -205,7 +205,7 @@ nothing #hide
 
 ![actsys2](https://github.com/SciML/ModelingToolkit.jl/assets/40798837/8ed50035-f6ac-48cb-a585-1ef415154a02)
 
-After running `structural_simplify()` on `actsys2`, the defaults will show that `act.port_a.ρ` points to `fluid_a₊ρ` and `act.port_b.ρ` points to `fluid_b₊ρ`.  This is a special case, in most cases a hydraulic system will have only 1 fluid, however this simple system has 2 separate domain networks.  Therefore, we can connect a single fluid to both networks.  This does not interfere with the mathematical equations of the system, since no states are connected.
+After running `structural_simplify()` on `actsys2`, the defaults will show that `act.port_a.ρ` points to `fluid_a₊ρ` and `act.port_b.ρ` points to `fluid_b₊ρ`.  This is a special case, in most cases a hydraulic system will have only 1 fluid, however this simple system has 2 separate domain networks.  Therefore, we can connect a single fluid to both networks.  This does not interfere with the mathematical equations of the system, since no unknown variables are connected.
 
 ```@example domain
 @component function ActuatorSystem1(; name)
@@ -218,9 +218,9 @@ After running `structural_simplify()` on `actsys2`, the defaults will show that 
     end
 
     eqs = [connect(fluid, src_a.port)
-        connect(fluid, src_b.port)
-        connect(src_a.port, act.port_a)
-        connect(src_b.port, act.port_b)]
+           connect(fluid, src_b.port)
+           connect(src_a.port, act.port_a)
+           connect(src_b.port, act.port_b)]
 
     ODESystem(eqs, t, [], []; systems, name)
 end
@@ -254,7 +254,7 @@ In some cases a component will be defined with 2 connectors of the same domain, 
     end
 
     eqs = [port_a.dm ~ (port_a.p - port_b.p) * K
-        0 ~ port_a.dm + port_b.dm]
+           0 ~ port_a.dm + port_b.dm]
 
     ODESystem(eqs, t, [], pars; systems, name)
 end
@@ -274,14 +274,13 @@ Adding the `Restrictor` to the original system example will cause a break in the
     end
 
     eqs = [connect(fluid, src.port)
-        connect(src.port, res.port_a)
-        connect(res.port_b, vol.port)]
+           connect(src.port, res.port_a)
+           connect(res.port_b, vol.port)]
 
     ODESystem(eqs, t, [], []; systems, name)
 end
 
-@named ressys = RestrictorSystem()
-sys = structural_simplify(ressys)
+@mtkbuild ressys = RestrictorSystem()
 nothing #hide
 ```
 
@@ -296,12 +295,12 @@ nothing #hide
 When `structural_simplify()` is applied to this system it can be seen that the defaults are missing for `res.port_b` and `vol.port`.
 
 ```@repl domain
-ModelingToolkit.defaults(sys)[complete(ressys).res.port_a.ρ]
-ModelingToolkit.defaults(sys)[complete(ressys).res.port_b.ρ]
-ModelingToolkit.defaults(sys)[complete(ressys).vol.port.ρ]
+ModelingToolkit.defaults(ressys)[ressys.res.port_a.ρ]
+ModelingToolkit.defaults(ressys)[ressys.res.port_b.ρ]
+ModelingToolkit.defaults(ressys)[ressys.vol.port.ρ]
 ```
 
-To ensure that the `Restrictor` component does not disrupt the domain network, the [`domain_connect()`](@ref) function can be used, which explicitly only connects the domain network and not the states.
+To ensure that the `Restrictor` component does not disrupt the domain network, the [`domain_connect()`](@ref) function can be used, which explicitly only connects the domain network and not the unknown variables.
 
 ```@example domain
 @component function Restrictor(; name, p_int)
@@ -316,21 +315,20 @@ To ensure that the `Restrictor` component does not disrupt the domain network, t
     end
 
     eqs = [domain_connect(port_a, port_b) # <-- connect the domain network
-        port_a.dm ~ (port_a.p - port_b.p) * K
-        0 ~ port_a.dm + port_b.dm]
+           port_a.dm ~ (port_a.p - port_b.p) * K
+           0 ~ port_a.dm + port_b.dm]
 
     ODESystem(eqs, t, [], pars; systems, name)
 end
 
-@named ressys = RestrictorSystem()
-sys = structural_simplify(ressys)
+@mtkbuild ressys = RestrictorSystem()
 nothing #hide
 ```
 
 Now that the `Restrictor` component is properly defined using `domain_connect()`, the defaults for `res.port_b` and `vol.port` are properly defined.
 
 ```@repl domain
-ModelingToolkit.defaults(sys)[complete(ressys).res.port_a.ρ]
-ModelingToolkit.defaults(sys)[complete(ressys).res.port_b.ρ]
-ModelingToolkit.defaults(sys)[complete(ressys).vol.port.ρ]
+ModelingToolkit.defaults(ressys)[ressys.res.port_a.ρ]
+ModelingToolkit.defaults(ressys)[ressys.res.port_b.ρ]
+ModelingToolkit.defaults(ressys)[ressys.vol.port.ρ]
 ```

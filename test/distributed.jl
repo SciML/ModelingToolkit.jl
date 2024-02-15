@@ -3,17 +3,18 @@ using Distributed
 addprocs(2)
 
 @everywhere using ModelingToolkit, OrdinaryDiffEq
+@everywhere using ModelingToolkit: t_nounits as t, D_nounits as D
 
 # create the Lorenz system
-@everywhere @parameters t σ ρ β
+@everywhere @parameters σ ρ β
 @everywhere @variables x(t) y(t) z(t)
-@everywhere D = Differential(t)
 
 @everywhere eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-@everywhere @named de = ODESystem(eqs)
+@everywhere @named de = ODESystem(eqs, t)
+@everywhere de = complete(de)
 @everywhere ode_func = ODEFunction(de, [x, y, z], [σ, ρ, β])
 
 @everywhere u0 = [19.0, 20.0, 50.0]

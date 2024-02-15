@@ -113,7 +113,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
             if isnothing(analytic_func)
                 analytic_func = map(analytic) do eq
                     args = arguments(eq.lhs)
-                    p = ps isa SciMLBase.NullParameters ? [] : map(a -> a.first, ps)
+                    p = ps isa SciMLBase.NullParameters ? [] : ps
                     args = vcat(DestructuredArgs(p), args)
                     ex = Func(args, [], eq.rhs) |> toexpr
                     eq.lhs => drop_expr(@RuntimeGeneratedFunction(eval_module, ex))
@@ -133,12 +133,14 @@ end
 function Base.getproperty(x::PDESystem, sym::Symbol)
     if sym == :indvars
         return getfield(x, :ivs)
-        Base.depwarn("`sys.indvars` is deprecated, please use `get_ivs(sys)`", :getproperty,
+        Base.depwarn(
+            "`sys.indvars` is deprecated, please use `get_ivs(sys)`", :getproperty,
             force = true)
 
     elseif sym == :depvars
         return getfield(x, :dvs)
-        Base.depwarn("`sys.depvars` is deprecated, please use `get_dvs(sys)`", :getproperty,
+        Base.depwarn(
+            "`sys.depvars` is deprecated, please use `get_dvs(sys)`", :getproperty,
             force = true)
 
     else

@@ -21,7 +21,7 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
     for (varidx, diff) in edges(var_to_diff)
         # fullvars[diff] = D(fullvars[var])
         vi = out_vars[varidx]
-        @assert vi!==nothing "Something went wrong on reconstructing states from variable association list"
+        @assert vi!==nothing "Something went wrong on reconstructing unknowns from variable association list"
         # `fullvars[i]` needs to be not a `D(...)`, because we want the DAE to be
         # first-order.
         if isdifferential(vi)
@@ -54,7 +54,7 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
         end
         rhs = ModelingToolkit.expand_derivatives(D(eq.rhs))
         substitution_dict = Dict(x.lhs => x.rhs
-                                 for x in out_eqs if x !== nothing && x.lhs isa Symbolic)
+        for x in out_eqs if x !== nothing && x.lhs isa Symbolic)
         sub_rhs = substitute(rhs, substitution_dict)
         out_eqs[diff] = lhs ~ sub_rhs
     end
@@ -65,7 +65,7 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
             out_eqs[sort(filter(x -> x !== unassigned, var_eq_matching))]))
 
     @set! sys.eqs = final_eqs
-    @set! sys.states = final_vars
+    @set! sys.unknowns = final_vars
     return sys
 end
 
@@ -131,7 +131,8 @@ function pantelides!(state::TransformationState; finalize = true, maxiters = 800
     ecolor = falses(neqs)
     var_eq_matching = Matching(nvars)
     neqs′ = neqs
-    nnonemptyeqs = count(eq -> !isempty(𝑠neighbors(graph, eq)) && eq_to_diff[eq] === nothing,
+    nnonemptyeqs = count(
+        eq -> !isempty(𝑠neighbors(graph, eq)) && eq_to_diff[eq] === nothing,
         1:neqs′)
 
     varwhitelist = computed_highest_diff_variables(state.structure)

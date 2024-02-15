@@ -1,10 +1,10 @@
 using ModelingToolkit, DiffEqBase, LinearAlgebra, Test
+using ModelingToolkit: t_nounits as t, D_nounits as Dt
 
 # Define some variables
-@parameters t x
+@parameters x
 @constants h = 1
 @variables u(..)
-Dt = Differential(t)
 Dxx = Differential(x)^2
 eq = Dt(u(t, x)) ~ h * Dxx(u(t, x))
 bcs = [u(0, x) ~ -h * x * (x - 1) * sin(x),
@@ -16,7 +16,7 @@ domains = [t ∈ (0.0, 1.0),
 analytic = [u(t, x) ~ -h * x * (x - 1) * sin(x) * exp(-2 * h * t)]
 analytic_function = (ps, t, x) -> -ps[1] * x * (x - 1) * sin(x) * exp(-2 * ps[1] * t)
 
-@named pdesys = PDESystem(eq, bcs, domains, [t, x], [u], [h => 1], analytic = analytic)
+@named pdesys = PDESystem(eq, bcs, domains, [t, x], [u], [h], analytic = analytic)
 @show pdesys
 
 @test all(isequal.(independent_variables(pdesys), [t, x]))

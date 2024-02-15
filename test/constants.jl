@@ -9,8 +9,8 @@ UMT = ModelingToolkit.UnitfulUnitCheck
 @variables t x(t) w(t)
 D = Differential(t)
 eqs = [D(x) ~ a]
-@named sys = ODESystem(eqs)
-prob = ODEProblem(sys, [0], [0.0, 1.0], [])
+@named sys = ODESystem(eqs, t)
+prob = ODEProblem(complete(sys), [0], [0.0, 1.0], [])
 sol = solve(prob, Tsit5())
 
 newsys = MT.eliminate_constants(sys)
@@ -19,7 +19,7 @@ newsys = MT.eliminate_constants(sys)
 # Test structural_simplify substitutions & observed values
 eqs = [D(x) ~ 1,
     w ~ a]
-@named sys = ODESystem(eqs)
+@named sys = ODESystem(eqs, t)
 # Now eliminate the constants first
 simp = structural_simplify(sys)
 @test equations(simp) == [D(x) ~ 1.0]
@@ -31,7 +31,7 @@ UMT.get_unit(β)
 @variables t [unit = u"s"] x(t) [unit = u"m"]
 D = Differential(t)
 eqs = [D(x) ~ β]
-@named sys = ODESystem(eqs)
+@named sys = ODESystem(eqs, t)
 simp = structural_simplify(sys)
 
 @test isempty(MT.collect_constants(nothing))

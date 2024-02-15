@@ -1,7 +1,8 @@
 using ModelingToolkit, Test
-@parameters t a
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@parameters a
 @variables x y
-D = Differential(t)
 eqs = [D(x) ~ a * x - x * y,
     D(y) ~ -3y + x * y]
 f = build_function([x.rhs for x in eqs], [x, y], [a], t, expression = Val{false},

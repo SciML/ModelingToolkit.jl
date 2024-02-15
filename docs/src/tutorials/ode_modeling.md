@@ -56,7 +56,7 @@ first-order lag element:
 \dot{x} = \frac{f(t) - x(t)}{\tau}
 ```
 
-Here, ``t`` is the independent variable (time), ``x(t)`` is the (scalar) state
+Here, ``t`` is the independent variable (time), ``x(t)`` is the (scalar) unknown
 variable, ``f(t)`` is an external forcing function, and ``\tau`` is a
 parameter.
 In MTK, this system can be modelled as follows. For simplicity, we
@@ -98,7 +98,7 @@ prob = ODEProblem(fol, [fol.x => 0.0], (0.0, 10.0), [fol.τ => 3.0])
 plot(solve(prob))
 ```
 
-The initial state and the parameter values are specified using a mapping
+The initial unknown and the parameter values are specified using a mapping
 from the actual symbolic elements to their values, represented as an array
 of `Pair`s, which are constructed using the `=>` operator.
 
@@ -150,7 +150,7 @@ For more information on this process, see [Observables and Variable Elimination]
 
 MTK still knows how to calculate them out of the information available
 in a simulation result. The intermediate variable `RHS` therefore can be plotted
-along with the state variable. Note that this has to be requested explicitly
+along with the unknown variable. Note that this has to be requested explicitly
 like as follows:
 
 ```@example ode2
@@ -307,11 +307,11 @@ connected_simp = structural_simplify(connected)
 full_equations(connected_simp)
 ```
 
-As expected, only the two state-derivative equations remain,
+As expected, only the two equations with the derivatives of unknowns remain,
 as if you had manually eliminated as many variables as possible from the equations.
 Some observed variables are not expanded unless `full_equations` is used.
 As mentioned above, the hierarchical structure is preserved. So, the
-initial state and the parameter values can be specified accordingly when
+initial unknown and the parameter values can be specified accordingly when
 building the `ODEProblem`:
 
 ```@example ode2
@@ -329,7 +329,7 @@ More on this topic may be found in [Composing Models and Building Reusable Compo
 
 ## Initial Guess
 
-It is often a good idea to specify reasonable values for the initial state and the
+It is often a good idea to specify reasonable values for the initial unknown and the
 parameters of a model component. Then, these do not have to be explicitly specified when constructing the `ODEProblem`.
 
 ```@example ode2
@@ -369,7 +369,7 @@ end
 Note that the defaults can be functions of the other variables, which is then
 resolved at the time of the problem construction. Of course, the factory
 function could accept additional arguments to optionally specify the initial
-state or parameter values, etc.
+unknown or parameter values, etc.
 
 ## Symbolic and sparse derivatives
 

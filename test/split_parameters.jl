@@ -1,6 +1,7 @@
 using ModelingToolkit, Test
 using ModelingToolkitStandardLibrary.Blocks
 using OrdinaryDiffEq
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 x = [1, 2.0, false, [1, 2, 3], Parameter(1.0)]
 
@@ -32,15 +33,12 @@ t_end = 10.0
 time = 0:dt:t_end
 x = @. time^2 + 1.0
 
-@parameters t
-D = Differential(t)
-
 get_value(data, t, dt) = data[round(Int, t / dt + 1)]
-@register_symbolic get_value(data, t, dt)
+@register_symbolic get_value(data::Vector, t, dt)
 
-function Sampled(; name, data = Float64[], dt = 0.0)
+function Sampled(; name, dt = 0.0, n = length(data))
     pars = @parameters begin
-        data = data
+        data[1:n]
         dt = dt
     end
 
@@ -50,21 +48,21 @@ function Sampled(; name, data = Float64[], dt = 0.0)
     end
 
     eqs = [
-        output.u ~ get_value(data, t, dt),
+        output.u ~ get_value(data, t, dt)
     ]
 
-    return ODESystem(eqs, t, vars, pars; name, systems,
+    return ODESystem(eqs, t, vars, [data..., dt]; name, systems,
         defaults = [output.u => data[1]])
 end
 
 vars = @variables y(t)=1 dy(t)=0 ddy(t)=0
-@named src = Sampled(; data = Float64[], dt)
+@named src = Sampled(; dt, n = length(x))
 @named int = Integrator()
 
 eqs = [y ~ src.output.u
-    D(y) ~ dy
-    D(dy) ~ ddy
-    connect(src.output, int.input)]
+       D(y) ~ dy
+       D(dy) ~ ddy
+       connect(src.output, int.input)]
 
 @named sys = ODESystem(eqs, t, vars, []; systems = [int, src])
 s = complete(sys)
@@ -93,8 +91,8 @@ prob′′ = remake(prob; p = [s.src.data => x])
 vars = @variables y(t)=1 dy(t)=0 ddy(t)=0
 pars = @parameters a=1.0 b=2.0 c=3
 eqs = [D(y) ~ dy * a
-    D(dy) ~ ddy * b
-    ddy ~ sin(t) * c]
+       D(dy) ~ ddy * b
+       ddy ~ sin(t) * c]
 
 @named model = ODESystem(eqs, t, vars, pars)
 sys = structural_simplify(model)
@@ -141,8 +139,8 @@ c = 3.0  # Damping coefficient
 
 function SystemModel(u = nothing; name = :model)
     eqs = [connect(torque.flange, inertia1.flange_a)
-        connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
-        connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
+           connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
+           connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
     if u !== nothing
         push!(eqs, connect(torque.tau, u.output))
         return @named model = ODESystem(eqs,
@@ -161,9 +159,9 @@ matrices, ssys = ModelingToolkit.linearize(wr(model), inputs, model_outputs)
 # Design state-feedback gain using LQR
 # Define cost matrices
 x_costs = [model.inertia1.w => 1.0
-    model.inertia2.w => 1.0
-    model.inertia1.phi => 1.0
-    model.inertia2.phi => 1.0]
+           model.inertia2.w => 1.0
+           model.inertia1.phi => 1.0
+           model.inertia2.phi => 1.0]
 L = randn(1, 4) # Post-multiply by `C` to get the correct input to the controller
 
 # This old definition of MatrixGain will work because the parameter space does not include K (an Array term)
@@ -179,8 +177,8 @@ L = randn(1, 4) # Post-multiply by `C` to get the correct input to the controlle
 @named add = Add(; k1 = 1.0, k2 = 1.0) # To add the control signal and the disturbance
 
 connections = [[state_feedback.input.u[i] ~ model_outputs[i] for i in 1:4]
-    connect(d.output, :d, add.input1)
-    connect(add.input2, state_feedback.output)
-    connect(add.output, :u, model.torque.tau)]
+               connect(d.output, :d, add.input1)
+               connect(add.input2, state_feedback.output)
+               connect(add.output, :u, model.torque.tau)]
 @named closed_loop = ODESystem(connections, t, systems = [model, state_feedback, add, d])
 S = get_sensitivity(closed_loop, :u)

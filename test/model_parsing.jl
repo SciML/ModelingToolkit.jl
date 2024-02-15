@@ -1,15 +1,18 @@
 using ModelingToolkit, Test
 using ModelingToolkit: get_gui_metadata, get_systems, get_connector_type,
-    get_ps, getdefault, getname, scalarize, VariableDescription, RegularConnector
+                       get_ps, getdefault, getname, scalarize, VariableDescription,
+                       RegularConnector
 using URIs: URI
 using Distributions
 using DynamicQuantities, OrdinaryDiffEq
+using ModelingToolkit: t, D
 
 ENV["MTK_ICONS_DIR"] = "$(@__DIR__)/icons"
 
 # Mock module used to test if the `@mtkmodel` macro works with fully-qualified names as well.
 module MyMockModule
 using ModelingToolkit, DynamicQuantities
+using ModelingToolkit: t, D
 
 export Pin
 @connector Pin begin
@@ -49,9 +52,6 @@ end
         output.u ~ k
     end
 end
-
-@variables t [unit = u"s"]
-D = Differential(t)
 
 @named p = Pin(; v = π)
 @test getdefault(p.v) == π
@@ -403,17 +403,17 @@ end
     @test all([
         if_in_sys.eq ~ 0,
         if_in_sys.eq ~ 1,
-        if_in_sys.eq ~ 4,
+        if_in_sys.eq ~ 4
     ] .∈ [equations(if_in_sys)])
     @test all([
         elseif_in_sys.eq ~ 0,
         elseif_in_sys.eq ~ 2,
-        elseif_in_sys.eq ~ 5,
+        elseif_in_sys.eq ~ 5
     ] .∈ [equations(elseif_in_sys)])
     @test all([
         else_in_sys.eq ~ 0,
         else_in_sys.eq ~ 3,
-        else_in_sys.eq ~ 5,
+        else_in_sys.eq ~ 5
     ] .∈ [equations(else_in_sys)])
 
     @test getdefault(if_in_sys.eq) == 1
@@ -490,11 +490,11 @@ end
     @test nameof.(get_systems(else_out_sys)) == [:else_sys, :default_sys]
 
     @test Equation[if_out_sys.if_parameter ~ 0
-        if_out_sys.default_parameter ~ 0] == equations(if_out_sys)
+                   if_out_sys.default_parameter ~ 0] == equations(if_out_sys)
     @test Equation[elseif_out_sys.elseif_parameter ~ 0
-        elseif_out_sys.default_parameter ~ 0] == equations(elseif_out_sys)
+                   elseif_out_sys.default_parameter ~ 0] == equations(elseif_out_sys)
     @test Equation[else_out_sys.else_parameter ~ 0
-        else_out_sys.default_parameter ~ 0] == equations(else_out_sys)
+                   else_out_sys.default_parameter ~ 0] == equations(else_out_sys)
 
     @mtkmodel TernaryBranchingOutsideTheBlock begin
         @structural_parameters begin
@@ -549,5 +549,5 @@ _b = Ref{Any}()
     end
 end
 @named m = MyModel()
-@variables t x___(t)
+@variables x___(t)
 @test isequal(x___, _b[])

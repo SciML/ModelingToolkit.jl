@@ -7,8 +7,8 @@ symbolic forms from that? For example, say we had the following system we wanted
 
 ```@example parsing
 ex = [:(y ~ x)
-    :(y ~ -2x + 3 / z)
-    :(z ~ 2)]
+      :(y ~ -2x + 3 / z)
+      :(z ~ 2)]
 ```
 
 We can use the function `parse_expr_to_symbolic` from Symbolics.jl to generate the symbolic
@@ -25,7 +25,7 @@ nonlinear solve:
 ```@example parsing
 using ModelingToolkit, NonlinearSolve
 vars = union(ModelingToolkit.vars.(eqs)...)
-@named ns = NonlinearSystem(eqs, vars, [])
+@mtkbuild ns = NonlinearSystem(eqs, vars, [])
 
 prob = NonlinearProblem(ns, [1.0, 1.0, 1.0])
 sol = solve(prob, NewtonRaphson())

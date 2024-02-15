@@ -35,7 +35,7 @@ function pss_graph_modia!(structure::SystemStructure, maximal_top_matching, varl
     # Find Strongly connected components. Note that after pantelides, we expect
     # a balanced system, so a maximal matching should be possible.
     var_sccs::Vector{Union{Vector{Int}, Int}} = find_var_sccs(graph, maximal_top_matching)
-    var_eq_matching = Matching{Union{Unassigned, SelectedState}}(ndsts(graph))
+    var_eq_matching = Matching{Union{Unassigned, SelectedUnknown}}(ndsts(graph))
     for vars in var_sccs
         # TODO: We should have a way to not have the scc code look at unassigned vars.
         if length(vars) == 1 && maximal_top_matching[vars[1]] === unassigned
@@ -49,7 +49,8 @@ function pss_graph_modia!(structure::SystemStructure, maximal_top_matching, varl
         maxeqlevel = maximum(map(x -> inv_eqlevel[x], eqs))
         maxvarlevel = level = maximum(map(x -> inv_varlevel[x], vars))
         old_level_vars = ()
-        ict = IncrementalCycleTracker(DiCMOBiGraph{true}(graph,
+        ict = IncrementalCycleTracker(
+            DiCMOBiGraph{true}(graph,
                 complete(Matching(ndsts(graph))));
             dir = :in)
 
@@ -71,7 +72,7 @@ function pss_graph_modia!(structure::SystemStructure, maximal_top_matching, varl
                 removed_vars = Int[]
                 for var in old_level_vars
                     old_assign = var_eq_matching[var]
-                    if isa(old_assign, SelectedState)
+                    if isa(old_assign, SelectedUnknown)
                         push!(removed_vars, var)
                         continue
                     elseif !isa(old_assign, Int) ||
@@ -102,8 +103,9 @@ function pss_graph_modia!(structure::SystemStructure, maximal_top_matching, varl
             end
 
             if level != 0
-                remaining_vars = collect(v for v in to_tear_vars
-                                             if var_eq_matching[v] === unassigned)
+                remaining_vars = collect(v
+                for v in to_tear_vars
+                if var_eq_matching[v] === unassigned)
                 if !isempty(remaining_vars)
                     remaining_eqs = setdiff(to_tear_eqs, assigned_eqs)
                     nlsolve_matching = maximal_matching(graph,
@@ -112,7 +114,7 @@ function pss_graph_modia!(structure::SystemStructure, maximal_top_matching, varl
                     for var in remaining_vars
                         if nlsolve_matching[var] === unassigned &&
                            var_eq_matching[var] === unassigned
-                            var_eq_matching[var] = SelectedState()
+                            var_eq_matching[var] = SelectedUnknown()
                         end
                     end
                 end
@@ -125,7 +127,7 @@ function pss_graph_modia!(structure::SystemStructure, maximal_top_matching, varl
     return complete(var_eq_matching)
 end
 
-struct SelectedState end
+struct SelectedUnknown end
 function partial_state_selection_graph!(structure::SystemStructure, var_eq_matching)
     @unpack eq_to_diff, var_to_diff, graph, solvable_graph = structure
     eq_to_diff = complete(eq_to_diff)
@@ -175,7 +177,8 @@ function dummy_derivative_graph!(state::TransformationState, jac = nothing;
     dummy_derivative_graph!(state.structure, var_eq_matching, jac, state_priority, log)
 end
 
-function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac = nothing,
+function dummy_derivative_graph!(
+        structure::SystemStructure, var_eq_matching, jac = nothing,
         state_priority = nothing, ::Val{log} = Val(false)) where {log}
     @unpack eq_to_diff, var_to_diff, graph = structure
     diff_to_eq = invview(eq_to_diff)
@@ -334,8 +337,8 @@ end
 
 function tearing_with_dummy_derivatives(structure, dummy_derivatives)
     @unpack var_to_diff = structure
-    # We can eliminate variables that are not a selected state (differential
-    # variables). Selected states are differentiated variables that are not
+    # We can eliminate variables that are not selected (differential
+    # variables). Selected unknowns are differentiated variables that are not
     # dummy derivatives.
     can_eliminate = falses(length(var_to_diff))
     for (v, dv) in enumerate(var_to_diff)
@@ -346,13 +349,13 @@ function tearing_with_dummy_derivatives(structure, dummy_derivatives)
     end
     var_eq_matching, full_var_eq_matching, var_sccs = tear_graph_modia(structure,
         Base.Fix1(isdiffed, (structure, dummy_derivatives)),
-        Union{Unassigned, SelectedState};
+        Union{Unassigned, SelectedUnknown};
         varfilter = Base.Fix1(getindex, can_eliminate))
     for v in eachindex(var_eq_matching)
         is_present(structure, v) || continue
         dv = var_to_diff[v]
         (dv === nothing || !is_some_diff(structure, dummy_derivatives, dv)) && continue
-        var_eq_matching[v] = SelectedState()
+        var_eq_matching[v] = SelectedUnknown()
     end
     return var_eq_matching, full_var_eq_matching, var_sccs, can_eliminate
 end

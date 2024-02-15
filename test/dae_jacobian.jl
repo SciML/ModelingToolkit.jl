@@ -1,5 +1,6 @@
 using ModelingToolkit
 using Sundials, Test, SparseArrays
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 # Comparing solution obtained by defining explicit Jacobian function with solution obtained from
 # symbolically generated Jacobian
@@ -29,15 +30,13 @@ sol1 = solve(prob1, IDA(linear_solver = :KLU))
 
 # Now MTK style solution with generated Jacobian
 
-@variables t u1(t) u2(t)
+@variables u1(t) u2(t)
 @parameters p1 p2
-
-D = Differential(t)
 
 eqs = [D(u1) ~ p1 * u1 - u1 * u2,
     D(u2) ~ u1 * u2 - p2 * u2]
 
-@named sys = ODESystem(eqs)
+@named sys = ODESystem(eqs, t)
 
 u0 = [u1 => 1.0,
     u2 => 1.0]
@@ -49,7 +48,7 @@ du0 = [0.5, -2.0]
 p = [p1 => 1.5,
     p2 => 3.0]
 
-prob = DAEProblem(sys, du0, u0, tspan, p, jac = true, sparse = true)
+prob = DAEProblem(complete(sys), du0, u0, tspan, p, jac = true, sparse = true)
 sol = solve(prob, IDA(linear_solver = :KLU))
 
 @test maximum(sol - sol1) < 1e-12

@@ -142,7 +142,7 @@ Dₜ = Differential(t)
 @parameters T [tunable = true, bounds = (0, Inf)]
 @parameters k [tunable = true, bounds = (0, Inf)]
 eqs = [Dₜ(x) ~ (-x + k * u) / T # A first-order system with time constant T and gain k
-    y ~ x]
+       y ~ x]
 sys = ODESystem(eqs, t, name = :tunable_first_order)
 ```
 

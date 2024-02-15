@@ -43,7 +43,7 @@ event conditions, and the second vector of equations describes the effect on the
 state. Each affect equation must be of the form
 
 ```julia
-single_state_variable ~ expression_involving_any_variables_or_parameters
+single_unknown_variable ~ expression_involving_any_variables_or_parameters
 ```
 
 or
@@ -69,10 +69,10 @@ function UnitMassWithFriction(k; name)
     @variables t x(t)=0 v(t)=0
     D = Differential(t)
     eqs = [D(x) ~ v
-        D(v) ~ sin(t) - k * sign(v)]
+           D(v) ~ sin(t) - k * sign(v)]
     ODESystem(eqs, t; continuous_events = [v ~ 0], name) # when v = 0 there is a discontinuity
 end
-@named m = UnitMassWithFriction(0.7)
+@mtkbuild m = UnitMassWithFriction(0.7)
 prob = ODEProblem(m, Pair[], (0, 10pi))
 sol = solve(prob, Tsit5())
 plot(sol)
@@ -93,10 +93,8 @@ D = Differential(t)
 root_eqs = [x ~ 0]  # the event happens at the ground x(t) = 0
 affect = [v ~ -v] # the effect is that the velocity changes sign
 
-@named ball = ODESystem([D(x) ~ v
-        D(v) ~ -9.8], t; continuous_events = root_eqs => affect) # equation => affect
-
-ball = structural_simplify(ball)
+@mtkbuild ball = ODESystem([D(x) ~ v
+                            D(v) ~ -9.8], t; continuous_events = root_eqs => affect) # equation => affect
 
 tspan = (0.0, 5.0)
 prob = ODEProblem(ball, Pair[], tspan)
@@ -114,16 +112,15 @@ Multiple events? No problem! This example models a bouncing ball in 2D that is e
 D = Differential(t)
 
 continuous_events = [[x ~ 0] => [vx ~ -vx]
-    [y ~ -1.5, y ~ 1.5] => [vy ~ -vy]]
+                     [y ~ -1.5, y ~ 1.5] => [vy ~ -vy]]
 
-@named ball = ODESystem([
+@mtkbuild ball = ODESystem(
+    [
         D(x) ~ vx,
         D(y) ~ vy,
         D(vx) ~ -9.8 - 0.1vx, # gravity + some small air resistance
-        D(vy) ~ -0.1vy,
+        D(vy) ~ -0.1vy
     ], t; continuous_events)
-
-ball = structural_simplify(ball)
 
 tspan = (0.0, 10.0)
 prob = ODEProblem(ball, Pair[], tspan)
@@ -151,13 +148,13 @@ of one or more equations, an affect is defined as a `tuple`:
 [x ~ 0] => (affect!, [v, x], [p, q], ctx)
 ```
 
-where, `affect!` is a Julia function with the signature: `affect!(integ, u, p, ctx)`; `[u,v]` and `[p,q]` are the symbolic states (variables) and parameters
+where, `affect!` is a Julia function with the signature: `affect!(integ, u, p, ctx)`; `[u,v]` and `[p,q]` are the symbolic unknowns (variables) and parameters
 that are accessed by `affect!`, respectively; and `ctx` is any context that is
 passed to `affect!` as the `ctx` argument.
 
 `affect!` receives a [DifferentialEquations.jl
 integrator](https://docs.sciml.ai/DiffEqDocs/stable/basics/integrator/)
-as its first argument, which can then be used to access states and parameters
+as its first argument, which can then be used to access unknowns and parameters
 that are provided in the `u` and `p` arguments (implemented as `NamedTuple`s).
 The integrator can also be manipulated more generally to control solution
 behavior, see the [integrator
@@ -167,7 +164,7 @@ documentation. In affect functions, we have that
 ```julia
 function affect!(integ, u, p, ctx)
     # integ.t is the current time
-    # integ.u[u.v] is the value of the state `v` above
+    # integ.u[u.v] is the value of the unknown `v` above
     # integ.p[p.q] is the value of the parameter `q` above
 end
 ```
@@ -189,7 +186,7 @@ affect interface:
 sts = @variables x(t), v(t)
 par = @parameters g = 9.8
 bb_eqs = [D(x) ~ v
-    D(v) ~ -g]
+          D(v) ~ -g]
 
 function bb_affect!(integ, u, p, ctx)
     integ.u[u.v] = -integ.u[u.v]
@@ -197,10 +194,9 @@ end
 
 reflect = [x ~ 0] => (bb_affect!, [v], [], nothing)
 
-@named bb_model = ODESystem(bb_eqs, t, sts, par,
+@mtkbuild bb_sys = ODESystem(bb_eqs, t, sts, par,
     continuous_events = reflect)
 
-bb_sys = structural_simplify(bb_model)
 u0 = [v => 0.0, x => 1.0]
 
 bb_prob = ODEProblem(bb_sys, u0, (0, 5.0))
@@ -222,8 +218,8 @@ where conditions are symbolic expressions that should evaluate to `true` when an
 individual affect should be executed. Here `affect1` and `affect2` are each
 either a vector of one or more symbolic equations, or a functional affect, just
 as for continuous events. As before, for any *one* event the symbolic affect
-equations can either all change states (i.e. variables) or all change
-parameters, but one cannot currently mix state and parameter changes within one
+equations can either all change unknowns (i.e. variables) or all change
+parameters, but one cannot currently mix unknown variable and parameter changes within one
 individual event.
 
 ### Example: Injecting cells into a population
@@ -243,7 +239,7 @@ injection = (t == tinject) => [N ~ N + M]
 u0 = [N => 0.0]
 tspan = (0.0, 20.0)
 p = [α => 100.0, tinject => 10.0, M => 50]
-@named osys = ODESystem(eqs, t, [N], [α, M, tinject]; discrete_events = injection)
+@mtkbuild osys = ODESystem(eqs, t, [N], [α, M, tinject]; discrete_events = injection)
 oprob = ODEProblem(osys, u0, tspan, p)
 sol = solve(oprob, Tsit5(); tstops = 10.0)
 plot(sol)
@@ -262,7 +258,7 @@ to
 ```@example events
 injection = ((t == tinject) & (N < 50)) => [N ~ N + M]
 
-@named osys = ODESystem(eqs, t, [N], [M, tinject, α]; discrete_events = injection)
+@mtkbuild osys = ODESystem(eqs, t, [N], [M, tinject, α]; discrete_events = injection)
 oprob = ODEProblem(osys, u0, tspan, p)
 sol = solve(oprob, Tsit5(); tstops = 10.0)
 plot(sol)
@@ -287,7 +283,7 @@ killing = (t == tkill) => [α ~ 0.0]
 
 tspan = (0.0, 30.0)
 p = [α => 100.0, tinject => 10.0, M => 50, tkill => 20.0]
-@named osys = ODESystem(eqs, t, [N], [α, M, tinject, tkill];
+@mtkbuild osys = ODESystem(eqs, t, [N], [α, M, tinject, tkill];
     discrete_events = [injection, killing])
 oprob = ODEProblem(osys, u0, tspan, p)
 sol = solve(oprob, Tsit5(); tstops = [10.0, 20.0])
@@ -315,7 +311,7 @@ injection = [10.0] => [N ~ N + M]
 killing = [20.0] => [α ~ 0.0]
 
 p = [α => 100.0, M => 50]
-@named osys = ODESystem(eqs, t, [N], [α, M];
+@mtkbuild osys = ODESystem(eqs, t, [N], [α, M];
     discrete_events = [injection, killing])
 oprob = ODEProblem(osys, u0, tspan, p)
 sol = solve(oprob, Tsit5())

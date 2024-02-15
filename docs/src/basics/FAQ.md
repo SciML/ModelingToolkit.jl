@@ -130,7 +130,7 @@ julia> ModelingToolkit.missing_variable_defaults(sys, [1,2,3])
  x3ˍtt(t) => 3
 ```
 
-## Change the state vector type
+## Change the unknown variable vector type
 
 Use the `u0_constructor` keyword argument to map an array to the desired
 container type. For example:
@@ -141,7 +141,6 @@ using ModelingToolkit, StaticArrays
 sts = @variables x1(t)=0.0
 D = Differential(t)
 eqs = [D(x1) ~ 1.1 * x1]
-@named sys = ODESystem(eqs, t)
-sys = structural_simplify(sys)
+@mtkbuild sys = ODESystem(eqs, t)
 prob = ODEProblem{false}(sys, [], (0,1); u0_constructor = x->SVector(x...))
 ```

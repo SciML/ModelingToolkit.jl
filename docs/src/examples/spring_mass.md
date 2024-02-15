@@ -26,7 +26,7 @@ end
 
 function connect_spring(spring, a, b)
     [spring.x ~ norm(scalarize(a .- b))
-        scalarize(spring.dir .~ scalarize(a .- b))]
+     scalarize(spring.dir .~ scalarize(a .- b))]
 end
 
 function spring_force(spring)
@@ -43,7 +43,7 @@ g = [0.0, -9.81]
 @named spring = Spring(k = k, l = l)
 
 eqs = [connect_spring(spring, mass.pos, center)
-    scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)]
+       scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)]
 
 @named _model = ODESystem(eqs, t, [spring.x; spring.dir; mass.pos], [])
 @named model = compose(_model, mass, spring)
@@ -96,7 +96,7 @@ We now define functions that help construct the equations for a mass-spring syst
 ```@example component
 function connect_spring(spring, a, b)
     [spring.x ~ norm(scalarize(a .- b))
-        scalarize(spring.dir .~ scalarize(a .- b))]
+     scalarize(spring.dir .~ scalarize(a .- b))]
 end
 ```
 
@@ -125,7 +125,7 @@ We can now create the equations describing this system, by connecting `spring` t
 
 ```@example component
 eqs = [connect_spring(spring, mass.pos, center)
-    scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)]
+       scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)]
 ```
 
 Finally, we can build the model using these equations and components.
@@ -141,10 +141,10 @@ We can take a look at the equations in the model using the `equations` function.
 equations(model)
 ```
 
-The states of this model are:
+The unknowns of this model are:
 
 ```@example component
-states(model)
+unknowns(model)
 ```
 
 And the parameters of this model are:
@@ -162,7 +162,7 @@ sys = structural_simplify(model)
 equations(sys)
 ```
 
-We are left with only 4 equations involving 4 state variables (`mass.pos[1]`,
+We are left with only 4 equations involving 4 unknown variables (`mass.pos[1]`,
 `mass.pos[2]`, `mass.v[1]`, `mass.v[2]`). We can solve the system by converting
 it to an `ODEProblem`. Some observed variables are not expanded by default. To
 view the complete equations, one can do
@@ -179,13 +179,13 @@ sol = solve(prob, Rosenbrock23())
 plot(sol)
 ```
 
-What if we want the timeseries of a different variable? That information is not lost! Instead, `structural_simplify` simply changes state variables into `observed` variables.
+What if we want the timeseries of a different variable? That information is not lost! Instead, `structural_simplify` simply changes unknown variables into `observed` variables.
 
 ```@example component
 observed(sys)
 ```
 
-These are explicit algebraic equations which can be used to reconstruct the required variables on the fly. This leads to dramatic computational savings since implicitly solving an ODE scales as O(n^3), so fewer states are significantly better!
+These are explicit algebraic equations which can be used to reconstruct the required variables on the fly. This leads to dramatic computational savings since implicitly solving an ODE scales as O(n^3), so fewer unknowns are significantly better!
 
 We can access these variables using the solution object. For example, let's retrieve the x-position of the mass over time:
 

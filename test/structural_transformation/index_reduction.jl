@@ -3,11 +3,11 @@ using Graphs
 using DiffEqBase
 using Test
 using UnPack
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 # Define some variables
-@parameters t L g
+@parameters L g
 @variables x(t) y(t) w(t) z(t) T(t) xˍt(t) yˍt(t) xˍˍt(t) yˍˍt(t)
-D = Differential(t)
 
 eqs2 = [D(D(x)) ~ T * x,
     D(D(y)) ~ T * y - g,
@@ -40,9 +40,8 @@ state = TearingState(pendulum)
     [1, 2, 3, 4, 0, 0, 0, 0, 0])
 
 using ModelingToolkit
-@parameters t L g
+@parameters L g
 @variables x(t) y(t) w(t) z(t) T(t) xˍt(t) yˍt(t)
-D = Differential(t)
 idx1_pendulum = [D(x) ~ w,
     D(y) ~ z,
     #0 ~ x^2 + y^2 - L^2,
@@ -59,7 +58,7 @@ idx1_pendulum = [D(x) ~ w,
     # substitute the rhs
     0 ~ 2x * (T * x) + 2 * xˍt * xˍt + 2y * (T * y - g) + 2 * yˍt * yˍt]
 @named idx1_pendulum = ODESystem(idx1_pendulum, t, [x, y, w, z, xˍt, yˍt, T], [L, g])
-first_order_idx1_pendulum = ode_order_lowering(idx1_pendulum)
+first_order_idx1_pendulum = complete(ode_order_lowering(idx1_pendulum))
 
 using OrdinaryDiffEq
 using LinearAlgebra
@@ -71,7 +70,7 @@ prob = ODEProblem(ODEFunction(first_order_idx1_pendulum),
 sol = solve(prob, Rodas5());
 #plot(sol, idxs=(1, 2))
 
-new_sys = dae_index_lowering(ModelingToolkit.ode_order_lowering(pendulum2))
+new_sys = complete(dae_index_lowering(ModelingToolkit.ode_order_lowering(pendulum2)))
 
 prob_auto = ODEProblem(new_sys,
     [D(x) => 0,
@@ -80,14 +79,13 @@ prob_auto = ODEProblem(new_sys,
         y => 0,
         T => 0.0],
     (0, 100.0),
-    [1, 9.8])
+    [L => 1, g => 9.8])
 sol = solve(prob_auto, Rodas5());
 #plot(sol, idxs=(x, y))
 
 # Define some variables
-@parameters t L g
+@parameters L g
 @variables x(t) y(t) T(t)
-D = Differential(t)
 
 eqs2 = [D(D(x)) ~ T * x,
     D(D(y)) ~ T * y - g,
@@ -98,19 +96,19 @@ pendulum2 = ODESystem(eqs2, t, [x, y, T], [L, g], name = :pendulum)
 first_order_sys = ModelingToolkit.ode_order_lowering(pendulum2)
 
 # Perform index reduction to get an Index 1 DAE
-new_sys = dae_index_lowering(first_order_sys)
+new_sys = complete(dae_index_lowering(first_order_sys))
 
 u0 = [
     D(x) => 0.0,
     D(y) => 0.0,
     x => 1.0,
     y => 0.0,
-    T => 0.0,
+    T => 0.0
 ]
 
 p = [
     L => 1.0,
-    g => 9.8,
+    g => 9.8
 ]
 
 prob_auto = ODEProblem(new_sys, u0, (0.0, 10.0), p)
@@ -135,7 +133,7 @@ end
 
 let sys = structural_simplify(pendulum2)
     @test length(equations(sys)) == 5
-    @test length(states(sys)) == 5
+    @test length(unknowns(sys)) == 5
 
     u0 = [
         D(x) => 0.0,
@@ -144,11 +142,11 @@ let sys = structural_simplify(pendulum2)
         D(D(y)) => 0.0,
         x => sqrt(2) / 2,
         y => sqrt(2) / 2,
-        T => 0.0,
+        T => 0.0
     ]
     p = [
         L => 1.0,
-        g => 9.8,
+        g => 9.8
     ]
 
     prob_auto = ODEProblem(sys, u0, (0.0, 0.5), p)

@@ -7,9 +7,9 @@
 # ------------------------------------------------
 module MyModule
 using ModelingToolkit, DiffEqBase, LinearAlgebra, Test
-@parameters t x
+using ModelingToolkit: t_nounits as t, D_nounits as Dt
+@parameters x
 @variables u(t)
-Dt = Differential(t)
 
 function do_something(a)
     a + 10
@@ -18,6 +18,7 @@ end
 
 eq = Dt(u) ~ do_something(x) + MyModule.do_something(x)
 @named sys = ODESystem([eq], t, [u], [x])
+sys = complete(sys)
 fun = ODEFunction(sys)
 
 u0 = 5.0
@@ -29,9 +30,9 @@ end
 module MyModule2
 module MyNestedModule
 using ModelingToolkit, DiffEqBase, LinearAlgebra, Test
-@parameters t x
+using ModelingToolkit: t_nounits as t, D_nounits as Dt
+@parameters x
 @variables u(t)
-Dt = Differential(t)
 
 function do_something_2(a)
     a + 20
@@ -40,6 +41,7 @@ end
 
 eq = Dt(u) ~ do_something_2(x) + MyNestedModule.do_something_2(x)
 @named sys = ODESystem([eq], t, [u], [x])
+sys = complete(sys)
 fun = ODEFunction(sys)
 
 u0 = 3.0
@@ -50,9 +52,9 @@ end
 # TEST: Function registration outside any modules.
 # ------------------------------------------------
 using ModelingToolkit, DiffEqBase, LinearAlgebra, Test
-@parameters t x
+using ModelingToolkit: t_nounits as t, D_nounits as Dt
+@parameters x
 @variables u(t)
-Dt = Differential(t)
 
 function do_something_3(a)
     a + 30
@@ -61,6 +63,7 @@ end
 
 eq = Dt(u) ~ do_something_3(x) + (@__MODULE__).do_something_3(x)
 @named sys = ODESystem([eq], t, [u], [x])
+sys = complete(sys)
 fun = ODEFunction(sys)
 
 u0 = 7.0
@@ -69,9 +72,8 @@ u0 = 7.0
 # TEST: Function registration works with derivatives.
 # ---------------------------------------------------
 foo(x, y) = sin(x) * cos(y)
-@parameters t;
 @variables x(t) y(t) z(t);
-D = Differential(t);
+D = Dt
 @register_symbolic foo(x, y)
 
 using ModelingToolkit: value, arguments, operation
@@ -94,11 +96,11 @@ function do_something_4(a)
 end
 @register_symbolic do_something_4(a)
 function build_ode()
-    @parameters t x
+    @parameters x
     @variables u(t)
-    Dt = Differential(t)
     eq = Dt(u) ~ do_something_4(x) + (@__MODULE__).do_something_4(x)
     @named sys = ODESystem([eq], t, [u], [x])
+    sys = complete(sys)
     fun = ODEFunction(sys, eval_expression = false)
 end
 function run_test()

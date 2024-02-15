@@ -139,7 +139,8 @@ function split_system(ci::ClockInference{S}) where {S}
     return tss, inputs, continuous_id, id_to_clock
 end
 
-function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
+function generate_discrete_affect(
+        osys::AbstractODESystem, syss, inputs, continuous_id, id_to_clock;
         checkbounds = true,
         eval_module = @__MODULE__, eval_expression = true)
     @static if VERSION < v"1.7"
@@ -147,7 +148,8 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
     end
     out = Sym{Any}(:out)
     appended_parameters = parameters(syss[continuous_id])
-    param_to_idx = Dict{Any, Int}(reverse(en) for en in enumerate(appended_parameters))
+    param_to_idx = Dict{Any, ParameterIndex}(p => parameter_index(osys, p)
+    for p in appended_parameters)
     offset = length(appended_parameters)
     affect_funs = []
     init_funs = []
@@ -163,7 +165,7 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
         needed_cont_to_disc_obs = map(v -> arguments(v)[1], input)
         # TODO: filter the needed ones
         fullvars = Set{Any}(eq.lhs for eq in observed(sys))
-        for s in states(sys)
+        for s in unknowns(sys)
             push!(fullvars, s)
         end
         needed_disc_to_cont_obs = []
@@ -172,11 +174,13 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
             vv = arguments(v)[1]
             if vv in fullvars
                 push!(needed_disc_to_cont_obs, vv)
-                push!(disc_to_cont_idxs, param_to_idx[v])
+                # @show param_to_idx[v] v
+                # @assert param_to_idx[v].portion isa SciMLStructures.Discrete # TOOD: remove
+                push!(disc_to_cont_idxs, param_to_idx[v].idx)
             end
         end
-        append!(appended_parameters, input, states(sys))
-        cont_to_disc_obs = build_explicit_observed_function(syss[continuous_id],
+        append!(appended_parameters, input, unknowns(sys))
+        cont_to_disc_obs = build_explicit_observed_function(osys,
             needed_cont_to_disc_obs,
             throw = false,
             expression = true,
@@ -185,30 +189,34 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
         disc_to_cont_obs = build_explicit_observed_function(sys, needed_disc_to_cont_obs,
             throw = false,
             expression = true,
-            output_type = SVector)
-        ni = length(input)
-        ns = length(states(sys))
-        disc = Func([
+            output_type = SVector,
+            ps = reorder_parameters(osys, parameters(sys)))
+        disc = Func(
+            [
                 out,
-                DestructuredArgs(states(sys)),
-                DestructuredArgs(appended_parameters),
-                get_iv(sys),
-            ], [],
+                DestructuredArgs(unknowns(osys)),
+                DestructuredArgs.(reorder_parameters(osys, parameters(osys)))...,
+                # DestructuredArgs(appended_parameters),
+                get_iv(sys)
+            ],
+            [],
             let_block)
-        cont_to_disc_idxs = (offset + 1):(offset += ni)
-        input_offset = offset
-        disc_range = (offset + 1):(offset += ns)
+        cont_to_disc_idxs = [parameter_index(osys, sym).idx for sym in input]
+        disc_range = [parameter_index(osys, sym).idx for sym in unknowns(sys)]
         save_vec = Expr(:ref, :Float64)
-        for i in 1:ns
-            push!(save_vec.args, :(p[$(input_offset + i)]))
+        for unk in unknowns(sys)
+            idx = parameter_index(osys, unk).idx
+            push!(save_vec.args, :(discretes[$idx]))
         end
         empty_disc = isempty(disc_range)
-
         disc_init = :(function (p, t)
             d2c_obs = $disc_to_cont_obs
-            d2c_view = view(p, $disc_to_cont_idxs)
-            disc_state = view(p, $disc_range)
-            copyto!(d2c_view, d2c_obs(disc_state, p, t))
+            discretes, repack, _ = $(SciMLStructures.canonicalize)(
+                $(SciMLStructures.Discrete()), p)
+            d2c_view = view(discretes, $disc_to_cont_idxs)
+            disc_state = view(discretes, $disc_range)
+            copyto!(d2c_view, d2c_obs(disc_state, p..., t))
+            repack(discretes)
         end)
 
         # @show disc_to_cont_idxs
@@ -220,10 +228,12 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
             c2d_obs = $cont_to_disc_obs
             d2c_obs = $disc_to_cont_obs
             # Like Sample
-            c2d_view = view(p, $cont_to_disc_idxs)
+            discretes, repack, _ = $(SciMLStructures.canonicalize)(
+                $(SciMLStructures.Discrete()), p)
+            c2d_view = view(discretes, $cont_to_disc_idxs)
             # Like Hold
-            d2c_view = view(p, $disc_to_cont_idxs)
-            disc_state = view(p, $disc_range)
+            d2c_view = view(discretes, $disc_to_cont_idxs)
+            disc_unknowns = view(discretes, $disc_range)
             disc = $disc
 
             push!(saved_values.t, t)
@@ -231,19 +241,20 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
 
             # Write continuous into to discrete: handles `Sample`
             # Write discrete into to continuous
-            # Update discrete states
+            # Update discrete unknowns
 
             # At a tick, c2d must come first
             # state update comes in the middle
             # d2c comes last
             # @show t
             # @show "incoming", p
-            copyto!(c2d_view, c2d_obs(integrator.u, p, t))
+            copyto!(c2d_view, c2d_obs(integrator.u, p..., t))
             # @show "after c2d", p
-            $empty_disc || disc(disc_state, disc_state, p, t)
+            $empty_disc || disc(disc_unknowns, integrator.u, p..., t)
             # @show "after state update", p
-            copyto!(d2c_view, d2c_obs(disc_state, p, t))
+            copyto!(d2c_view, d2c_obs(disc_unknowns, p..., t))
             # @show "after d2c", p
+            repack(discretes)
         end)
         sv = SavedValues(Float64, Vector{Float64})
         push!(affect_funs, affect!)

@@ -1,18 +1,19 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra, LabelledArrays
 using DiffEqBase, ForwardDiff
 using Test
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 # Define some variables
-@parameters t σ ρ β
+@parameters σ ρ β
 @variables x(t) y(t) z(t)
-D = Differential(t)
 
 # Define a differential equation
 eqs = [D(x) ~ σ * (y - x),
     D(y) ~ t * x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-@named de = ODESystem(eqs)
+@named de = ODESystem(eqs, t)
+de = complete(de)
 ff = ODEFunction(de, [x, y, z], [σ, ρ, β], jac = true)
 
 a = @SVector [1.0, 2.0, 3.0]

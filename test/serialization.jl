@@ -1,15 +1,15 @@
 using ModelingToolkit, SciMLBase, Serialization, OrdinaryDiffEq
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@parameters t
 @variables x(t)
-D = Differential(t)
 
-@named sys = ODESystem([D(x) ~ -0.5 * x], defaults = Dict(x => 1.0))
+@named sys = ODESystem([D(x) ~ -0.5 * x], t, defaults = Dict(x => 1.0))
+sys = complete(sys)
 for prob in [
     eval(ModelingToolkit.ODEProblem{false}(sys, nothing, nothing,
         SciMLBase.NullParameters())),
     eval(ModelingToolkit.ODEProblemExpr{false}(sys, nothing, nothing,
-        SciMLBase.NullParameters())),
+        SciMLBase.NullParameters()))
 ]
     _fn = tempname()
 
@@ -37,7 +37,7 @@ sol = solve(prob, ImplicitEuler())
 
 ## Check ODESystem with Observables ----------
 ss_exp = ModelingToolkit.toexpr(ss)
-ss_ = eval(ss_exp)
+ss_ = complete(eval(ss_exp))
 prob_ = ODEProblem(ss_, [], (0, 0.1))
 sol_ = solve(prob_, ImplicitEuler())
 @test sol[all_obs] == sol_[all_obs]
@@ -50,7 +50,7 @@ for var in all_obs
     f = ModelingToolkit.build_explicit_observed_function(ss, var; expression = true)
     sym = ModelingToolkit.getname(var) |> string
     ex = :(if name == Symbol($sym)
-        return $f(u0, p, t)
+        return $f(u0, p..., t)
     end)
     push!(obs_exps, ex)
 end
@@ -64,5 +64,5 @@ end)
 probexpr = ODEProblemExpr{true}(ss, [], (0, 0.1); observedfun_exp);
 prob_obs = eval(probexpr)
 sol_obs = solve(prob_obs, ImplicitEuler())
-
+@show all_obs
 @test sol_obs[all_obs] == sol[all_obs]

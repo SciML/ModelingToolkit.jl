@@ -13,7 +13,6 @@ using PrecompileTools, Reexport
     using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
     using InteractiveUtils
     using Latexify, Unitful, ArrayInterface
-    using MacroTools
     using Setfield, ConstructionBase
     using JumpProcesses
     using DataStructures
@@ -23,7 +22,7 @@ using PrecompileTools, Reexport
     using Base.Threads
     using DiffEqCallbacks
     using Graphs
-    import MacroTools: splitdef, combinedef, postwalk, striplines
+    import ExprTools: splitdef, combinedef
     import Libdl
     using DocStringExtensions
     using Base: RefValue
@@ -32,16 +31,17 @@ using PrecompileTools, Reexport
     import Distributions
     import FunctionWrappersWrappers
     using URIs: URI
+    using SciMLStructures
 
     using RecursiveArrayTools
 
     using SymbolicIndexingInterface
-    export independent_variables, states, parameters
+    export independent_variables, unknowns, parameters
     import SymbolicUtils
     import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype,
-        Symbolic, isadd, ismul, ispow, issym, FnType,
-        @rule, Rewriters, substitute, metadata, BasicSymbolic,
-        Sym, Term
+                          Symbolic, isadd, ismul, ispow, issym, FnType,
+                          @rule, Rewriters, substitute, metadata, BasicSymbolic,
+                          Sym, Term
     using SymbolicUtils.Code
     import SymbolicUtils.Code: toexpr
     import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
@@ -53,19 +53,19 @@ using PrecompileTools, Reexport
     using Symbolics
     using Symbolics: degree
     using Symbolics: _parse_vars, value, @derivatives, get_variables,
-        exprs_occur_in, solve_for, build_expr, unwrap, wrap,
-        VariableSource, getname, variable, Connection, connect,
-        NAMESPACE_SEPARATOR, set_scalar_metadata, setdefaultval,
-        initial_state, transition, activeState, entry, ticksInState,
-        timeInState
+                     exprs_occur_in, solve_for, build_expr, unwrap, wrap,
+                     VariableSource, getname, variable, Connection, connect,
+                     NAMESPACE_SEPARATOR, set_scalar_metadata, setdefaultval,
+                     initial_state, transition, activeState, entry,
+                     ticksInState, timeInState
     import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
-        jacobian_sparsity, isaffine, islinear, _iszero, _isone,
-        tosymbol, lower_varname, diff2term, var_from_nested_derivative,
-        BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
-        ParallelForm, SerialForm, MultithreadedForm, build_function,
-        rhss, lhss, prettify_expr, gradient,
-        jacobian, hessian, derivative, sparsejacobian, sparsehessian,
-        substituter, scalarize, getparent
+                      jacobian_sparsity, isaffine, islinear, _iszero, _isone,
+                      tosymbol, lower_varname, diff2term, var_from_nested_derivative,
+                      BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
+                      ParallelForm, SerialForm, MultithreadedForm, build_function,
+                      rhss, lhss, prettify_expr, gradient,
+                      jacobian, hessian, derivative, sparsejacobian, sparsehessian,
+                      substituter, scalarize, getparent, hasderiv, hasdiff
 
     import DiffEqBase: @add_kwonly
     import OrdinaryDiffEq
@@ -76,6 +76,9 @@ end
 @reexport using Symbolics
 @reexport using UnPack
 RuntimeGeneratedFunctions.init(@__MODULE__)
+
+import DynamicQuantities, Unitful
+const DQ = DynamicQuantities
 
 export @derivatives
 
@@ -128,6 +131,8 @@ include("constants.jl")
 include("utils.jl")
 include("domains.jl")
 
+include("systems/index_cache.jl")
+include("systems/parameter_buffer.jl")
 include("systems/abstractsystem.jl")
 include("systems/model_parsing.jl")
 include("systems/connectors.jl")
@@ -153,7 +158,7 @@ include("systems/optimization/modelingtoolkitize.jl")
 include("systems/pde/pdesystem.jl")
 
 include("systems/sparsematrixclil.jl")
-include("systems/discrete_system/discrete_system.jl")
+
 include("systems/unit_check.jl")
 include("systems/validation.jl")
 include("systems/dependency_graphs.jl")
@@ -175,41 +180,53 @@ for S in subtypes(ModelingToolkit.AbstractSystem)
     @eval convert_system(::Type{<:$S}, sys::$S) = sys
 end
 
+const t_nounits = let
+    only(@parameters t)
+end
+const t_unitful = let
+    only(@parameters t [unit = Unitful.u"s"])
+end
+const t = let
+    only(@parameters t [unit = DQ.u"s"])
+end
+
+const D_nounits = Differential(t_nounits)
+const D_unitful = Differential(t_unitful)
+const D = Differential(t)
+
 PrecompileTools.@compile_workload begin
     using ModelingToolkit
-    @variables t x(t)
-    D = Differential(t)
-    @named sys = ODESystem([D(x) ~ -x])
+    @variables x(ModelingToolkit.t_nounits)
+    @named sys = ODESystem([ModelingToolkit.D_nounits(x) ~ -x], ModelingToolkit.t_nounits)
     prob = ODEProblem(structural_simplify(sys), [x => 30.0], (0, 100), [], jac = true)
 end
 
 export AbstractTimeDependentSystem,
-    AbstractTimeIndependentSystem,
-    AbstractMultivariateSystem
+       AbstractTimeIndependentSystem,
+       AbstractMultivariateSystem
 
 export ODESystem,
-    ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system,
-    add_accumulations, System
+       ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system,
+       add_accumulations, System
 export DAEFunctionExpr, DAEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDEProblemExpr
 export SystemStructure
 export JumpSystem
 export ODEProblem, SDEProblem
 export NonlinearFunction, NonlinearFunctionExpr
-export NonlinearProblem, BlockNonlinearProblem, NonlinearProblemExpr
+export NonlinearProblem, NonlinearProblemExpr
 export OptimizationProblem, OptimizationProblemExpr, constraints
-export AutoModelingToolkit
 export SteadyStateProblem, SteadyStateProblemExpr
-export JumpProblem, DiscreteProblem
+export JumpProblem
 export NonlinearSystem, OptimizationSystem, ConstraintsSystem
 export alias_elimination, flatten
 export connect, domain_connect, @connector, Connection, Flow, Stream, instream
 export initial_state, transition
 export @component, @mtkmodel, @mtkbuild
 export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbance,
-    istunable, getdist, hasdist,
-    tunable_parameters, isirreducible, getdescription, hasdescription, isbinaryvar,
-    isintegervar
+       istunable, getdist, hasdist,
+       tunable_parameters, isirreducible, getdescription, hasdescription, isbinaryvar,
+       isintegervar
 export ode_order_lowering, dae_order_lowering, liouville_transform
 export PDESystem
 export Differential, expand_derivatives, @derivatives
@@ -217,11 +234,8 @@ export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, DelayParentScope, GlobalScope
 export independent_variable, equations, controls,
-    observed, structure, full_equations
+       observed, full_equations
 export structural_simplify, expand_connections, linearize, linearization_function
-export DiscreteSystem,
-    DiscreteProblem, DiscreteProblemExpr, DiscreteFunction,
-    DiscreteFunctionExpr
 
 export calculate_jacobian, generate_jacobian, generate_function
 export calculate_control_jacobian, generate_control_jacobian
@@ -231,8 +245,7 @@ export calculate_factorized_W, generate_factorized_W
 export calculate_hessian, generate_hessian
 export calculate_massmatrix, generate_diffusion_function
 export stochastic_integral_transform
-export TearingState, StateSelectionState
-export generate_difference_cb
+export TearingState
 
 export BipartiteGraph, equation_dependencies, variable_dependencies
 export eqeq_dependencies, varvar_dependencies
@@ -247,8 +260,6 @@ export initializesystem
 export @variables, @parameters, @constants, @brownian
 export @named, @nonamespace, @namespace, extend, compose, complete
 export debug_system
-
-export show_with_compare
 
 #export Continuous, Discrete, sampletime, input_timedomain, output_timedomain
 #export has_discrete_domain, has_continuous_domain

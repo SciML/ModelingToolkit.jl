@@ -1,22 +1,24 @@
 using OrdinaryDiffEq, ModelingToolkit, Test, LinearAlgebra
-@parameters t
+using ModelingToolkit: t_nounits as t, D_nounits as D, MTKParameters
+
 @variables y(t)[1:3]
 @parameters k[1:3]
-D = Differential(t)
 
 eqs = [D(y[1]) ~ -k[1] * y[1] + k[3] * y[2] * y[3],
     D(y[2]) ~ k[1] * y[1] - k[3] * y[2] * y[3] - k[2] * y[2]^2,
     0 ~ y[1] + y[2] + y[3] - 1]
 
 @named sys = ODESystem(eqs, t, y, k)
+sys = complete(sys)
 @test_throws ArgumentError ODESystem(eqs, y[1])
 M = calculate_massmatrix(sys)
 @test M == [1 0 0
-    0 1 0
-    0 0 0]
+            0 1 0
+            0 0 0]
 
 f = ODEFunction(sys)
-prob_mm = ODEProblem(f, [1.0, 0.0, 0.0], (0.0, 1e5), (0.04, 3e7, 1e4))
+prob_mm = ODEProblem(f, [1.0, 0.0, 0.0], (0.0, 1e5),
+    MTKParameters(sys, (k[1] => 0.04, k[2] => 3e7, k[3] => 1e4)))
 sol = solve(prob_mm, Rodas5(), reltol = 1e-8, abstol = 1e-8)
 
 function rober(du, u, p, t)

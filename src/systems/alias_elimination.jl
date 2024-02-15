@@ -102,10 +102,10 @@ function alias_elimination!(state::TearingState; kwargs...)
     @set! mm.nparentrows = nsrcs(graph)
     @set! mm.row_cols = eltype(mm.row_cols)[mm.row_cols[i]
                                             for (i, eq) in enumerate(mm.nzrows)
-                                                if old_to_new_eq[eq] > 0]
+                                            if old_to_new_eq[eq] > 0]
     @set! mm.row_vals = eltype(mm.row_vals)[mm.row_vals[i]
                                             for (i, eq) in enumerate(mm.nzrows)
-                                                if old_to_new_eq[eq] > 0]
+                                            if old_to_new_eq[eq] > 0]
     @set! mm.nzrows = Int[old_to_new_eq[eq] for eq in mm.nzrows if old_to_new_eq[eq] > 0]
 
     for old_ieq in to_expand
@@ -113,7 +113,6 @@ function alias_elimination!(state::TearingState; kwargs...)
         eqs[ieq] = expand_derivatives(eqs[ieq])
     end
 
-    newstates = []
     diff_to_var = invview(var_to_diff)
     new_graph = BipartiteGraph(n_new_eqs, ndsts(graph))
     new_solvable_graph = BipartiteGraph(n_new_eqs, ndsts(graph))
@@ -405,8 +404,8 @@ julia> ModelingToolkit.topsort_equations(eqs, [x, y, z, k])
  Equation(x(t), y(t) + z(t))
 ```
 """
-function topsort_equations(eqs, states; check = true)
-    graph, assigns = observed2graph(eqs, states)
+function topsort_equations(eqs, unknowns; check = true)
+    graph, assigns = observed2graph(eqs, unknowns)
     neqs = length(eqs)
     degrees = zeros(Int, neqs)
 
@@ -442,9 +441,9 @@ function topsort_equations(eqs, states; check = true)
     return ordered_eqs
 end
 
-function observed2graph(eqs, states)
-    graph = BipartiteGraph(length(eqs), length(states))
-    v2j = Dict(states .=> 1:length(states))
+function observed2graph(eqs, unknowns)
+    graph = BipartiteGraph(length(eqs), length(unknowns))
+    v2j = Dict(unknowns .=> 1:length(unknowns))
 
     # `assigns: eq -> var`, `eq` defines `var`
     assigns = similar(eqs, Int)
@@ -452,7 +451,7 @@ function observed2graph(eqs, states)
     for (i, eq) in enumerate(eqs)
         lhs_j = get(v2j, eq.lhs, nothing)
         lhs_j === nothing &&
-            throw(ArgumentError("The lhs $(eq.lhs) of $eq, doesn't appear in states."))
+            throw(ArgumentError("The lhs $(eq.lhs) of $eq, doesn't appear in unknowns."))
         assigns[i] = lhs_j
         vs = vars(eq.rhs)
         for v in vs

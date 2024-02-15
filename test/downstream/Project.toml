@@ -1,0 +1,7 @@
+[deps]
+ControlSystemsMTK = "687d7614-c7e5-45fc-bfc3-9ee385575c88"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+ModelingToolkitStandardLibrary = "16a59e39-deab-5bd0-87e4-056b12336739"
+OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
+SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"

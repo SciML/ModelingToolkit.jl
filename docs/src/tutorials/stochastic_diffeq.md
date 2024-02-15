@@ -23,18 +23,18 @@ noiseeqs = [0.1 * x,
     0.1 * y,
     0.1 * z]
 
-@named de = SDESystem(eqs, noiseeqs, t, [x, y, z], [σ, ρ, β])
+@mtkbuild de = SDESystem(eqs, noiseeqs, t, [x, y, z], [σ, ρ, β])
 
 u0map = [
     x => 1.0,
     y => 0.0,
-    z => 0.0,
+    z => 0.0
 ]
 
 parammap = [
     σ => 10.0,
     β => 26.0,
-    ρ => 2.33,
+    ρ => 2.33
 ]
 
 prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)

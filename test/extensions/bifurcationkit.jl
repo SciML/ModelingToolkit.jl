@@ -1,15 +1,15 @@
 using BifurcationKit, ModelingToolkit, Test
-
+using ModelingToolkit: t_nounits as t, D_nounits as D
 # Simple pitchfork diagram, compares solution to native BifurcationKit, checks they are identical.
 # Checks using `jac=false` option.
 let
     # Creates model.
-    @variables t x(t) y(t)
+    @variables x(t) y(t)
     @parameters μ α
     eqs = [0 ~ μ * x - x^3 + α * y,
         0 ~ -y]
     @named nsys = NonlinearSystem(eqs, [x, y], [μ, α])
-
+    nsys = complete(nsys)
     # Creates BifurcationProblem 
     bif_par = μ
     p_start = [μ => -1.0, α => 1.0]
@@ -57,12 +57,11 @@ end
 let
     # Creates a Lotka–Volterra model.
     @parameters α a b
-    @variables t x(t) y(t) z(t)
-    D = Differential(t)
+    @variables x(t) y(t) z(t)
     eqs = [D(x) ~ -x + a * y + x^2 * y,
         D(y) ~ b - a * y - x^2 * y]
-    @named sys = ODESystem(eqs)
-
+    @named sys = ODESystem(eqs, t)
+    sys = complete(sys)
     # Creates BifurcationProblem
     bprob = BifurcationProblem(sys,
         [x => 1.5, y => 1.0],
@@ -85,7 +84,8 @@ let
     all([b.x ≈ b.param for b in bif_dia.γ.branch])
 
     # Tests that we get two Hopf bifurcations at the correct positions.
-    hopf_points = sort(getfield.(filter(sp -> sp.type == :hopf, bif_dia.γ.specialpoint),
+    hopf_points = sort(
+        getfield.(filter(sp -> sp.type == :hopf, bif_dia.γ.specialpoint),
             :x);
         by = x -> x[1])
     @test length(hopf_points) == 2
@@ -99,8 +99,7 @@ end
 let
     # Creates model, and uses `structural_simplify` to generate observables.
     @parameters μ p=2
-    @variables t x(t) y(t) z(t)
-    D = Differential(t)
+    @variables x(t) y(t) z(t)
     eqs = [0 ~ μ - x^3 + 2x^2,
         0 ~ p * μ - y,
         0 ~ y - z]

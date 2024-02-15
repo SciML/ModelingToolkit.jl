@@ -1,14 +1,14 @@
 using ModelingToolkit, OrdinaryDiffEq, Test, LinearAlgebra
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@parameters t σ ρ β
+@parameters σ ρ β
 @variables x(t) y(t) z(t) k(t)
-D = Differential(t)
 
 eqs = [D(D(x)) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-@named sys′ = ODESystem(eqs)
+@named sys′ = ODESystem(eqs, t)
 sys = ode_order_lowering(sys′)
 
 eqs2 = [0 ~ x * y - k,
@@ -30,6 +30,8 @@ p = [σ => 28.0,
     β => 8 / 3]
 
 tspan = (0.0, 100.0)
+
+sys = complete(sys)
 prob = ODEProblem(sys, u0, tspan, p, jac = true)
 probexpr = ODEProblemExpr(sys, u0, tspan, p, jac = true)
 sol = solve(prob, Tsit5())
@@ -37,22 +39,21 @@ solexpr = solve(eval(prob), Tsit5())
 @test all(x -> x == 0, Array(sol - solexpr))
 #using Plots; plot(sol,idxs=(:x,:y))
 
-@parameters t σ ρ β
+@parameters σ ρ β
 @variables x(t) y(t) z(t)
-D = Differential(t)
 
 eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-lorenz1 = ODESystem(eqs, name = :lorenz1)
-lorenz2 = ODESystem(eqs, name = :lorenz2)
+lorenz1 = ODESystem(eqs, t, name = :lorenz1)
+lorenz2 = ODESystem(eqs, t, name = :lorenz2)
 
 @variables α(t)
 @parameters γ
 connections = [0 ~ lorenz1.x + lorenz2.y + α * γ]
 @named connected = ODESystem(connections, t, [α], [γ], systems = [lorenz1, lorenz2])
-
+connected = complete(connected)
 u0 = [lorenz1.x => 1.0,
     lorenz1.y => 0.0,
     lorenz1.z => 0.0,
