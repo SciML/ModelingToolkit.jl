@@ -77,8 +77,8 @@ end
 
     if GROUP == "All" || GROUP == "Downstream"
         activate_downstream_env()
-        @safetestset "Linearization Tests" include("linearize.jl")
-        @safetestset "Inverse Models Test" include("inversemodel.jl")
+        @safetestset "Linearization Tests" include("downstream/linearize.jl")
+        @safetestset "Inverse Models Test" include("downstream/inversemodel.jl")
     end
 
     if GROUP == "All" || GROUP == "Extensions"
