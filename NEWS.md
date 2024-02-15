@@ -34,3 +34,7 @@
   - Pass the `split = false` keyword to `structural_simplify`. E.g. `ss = structural_simplify(sys; split = false)`.
   - Pass `split = false` to `@mtkbuild`. E.g. `@mtkbuild sys = ODESystem(...) split = false`.
 - Discrete-time system using `Difference` are unsupported. Instead, use the new `Clock`-based syntax.
+- Automatic scalarization has been removed, meaning that vector variables need to be treated with proper vector
+  equations. For example, `[p[1] => 1.0, p[2] => 2.0]` is no longer allowed in default equations, use
+  `[p => [1.0, 2.0]]` instead. Also, array equations like for `@variables u[1:2]` have `D(u) ~ A*u` as an
+  array equation. If the scalarized version is desired, use `scalarize(u)`.
