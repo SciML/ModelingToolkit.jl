@@ -703,9 +703,9 @@ function namespace_expr(O, sys, n = nameof(sys); ivs = independent_variables(sys
             # metadata from the rescoped variable
             rescoped = renamespace(n, O)
             similarterm(O, operation(rescoped), renamed,
-                metadata = metadata(rescoped))::T
+                metadata = metadata(rescoped))
         else
-            similarterm(O, operation(O), renamed, metadata = metadata(O))::T
+            similarterm(O, operation(O), renamed, metadata = metadata(O))
         end
     elseif isvariable(O)
         renamespace(n, O)

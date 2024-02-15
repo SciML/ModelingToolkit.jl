@@ -195,13 +195,13 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         gui_metadata = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
-    deqs = scalarize(deqs)
+    #deqs = scalarize(deqs)
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
 
-    iv′ = value(scalarize(iv))
-    ps′ = value.(scalarize(ps))
-    ctrl′ = value.(scalarize(controls))
-    dvs′ = value.(scalarize(dvs))
+    iv′ = value(iv)
+    ps′ = value.(ps)
+    ctrl′ = value.(controls)
+    dvs′ = value.(dvs)
     dvs′ = filter(x -> !isdelay(x, iv), dvs′)
 
     if !(isempty(default_u0) && isempty(default_p))

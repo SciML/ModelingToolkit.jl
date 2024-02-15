@@ -268,6 +268,7 @@ function TearingState(sys; quick_cancel = false, check = true)
     end
 
     vars = OrderedSet()
+    varsvec = []
     for (i, eq′) in enumerate(eqs)
         if eq′.lhs isa Connection
             check ? error("$(nameof(sys)) has unexpanded `connect` statements") :
@@ -282,9 +283,18 @@ function TearingState(sys; quick_cancel = false, check = true)
             eq = 0 ~ rhs - lhs
         end
         vars!(vars, eq.rhs, op = Symbolics.Operator)
+        for v in vars
+            v = scalarize(v)
+            if v isa AbstractArray
+                v = setmetadata.(v, VariableIrreducible, true)
+                append!(varsvec, v)
+            else
+                push!(varsvec, v)
+            end
+        end
         isalgeq = true
         unknownvars = []
-        for var in vars
+        for var in varsvec
             ModelingToolkit.isdelay(var, iv) && continue
             set_incidence = true
             @label ANOTHER_VAR
@@ -340,6 +350,7 @@ function TearingState(sys; quick_cancel = false, check = true)
         push!(symbolic_incidence, copy(unknownvars))
         empty!(unknownvars)
         empty!(vars)
+        empty!(varsvec)
         if isalgeq
             eqs[i] = eq
         else
@@ -350,9 +361,10 @@ function TearingState(sys; quick_cancel = false, check = true)
     # sort `fullvars` such that the mass matrix is as diagonal as possible.
     dervaridxs = collect(dervaridxs)
     sorted_fullvars = OrderedSet(fullvars[dervaridxs])
+    var_to_old_var = Dict(zip(fullvars, fullvars))
     for dervaridx in dervaridxs
         dervar = fullvars[dervaridx]
-        diffvar = lower_order_var(dervar)
+        diffvar = var_to_old_var[lower_order_var(dervar)]
         if !(diffvar in sorted_fullvars)
             push!(sorted_fullvars, diffvar)
         end

@@ -517,21 +517,16 @@ eqs = [D(x) ~ x * y
 using StaticArrays
 using SymbolicUtils: term
 using SymbolicUtils.Code
-using Symbolics: unwrap, wrap
-function foo(a::Num, ms::AbstractVector)
-    a = unwrap(a)
-    ms = map(unwrap, ms)
-    wrap(term(foo, a, term(SVector, ms...)))
-end
+using Symbolics: unwrap, wrap, @register_symbolic
 foo(a, ms::AbstractVector) = a + sum(ms)
-@variables x(t) ms(t)[1:3]
-ms = collect(ms)
-eqs = [D(x) ~ foo(x, ms); D.(ms) .~ 1]
+@register_symbolic foo(a, ms::AbstractVector)
+@variables t x(t) ms(t)[1:3]
+D = Differential(t)
+eqs = [D(x) ~ foo(x, ms); D(ms) ~ ones(3)]
 @named sys = ODESystem(eqs, t, [x; ms], [])
 @named emptysys = ODESystem(Equation[], t)
-@named outersys = compose(emptysys, sys)
-outersys = complete(outersys)
-prob = ODEProblem(outersys, [sys.x => 1.0; collect(sys.ms) .=> 1:3], (0, 1.0))
+@mtkbuild outersys = compose(emptysys, sys)
+prob = ODEProblem(outersys, [sys.x => 1.0, sys.ms => 1:3], (0, 1.0))
 @test_nowarn solve(prob, Tsit5())
 
 # x/x

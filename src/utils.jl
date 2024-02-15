@@ -348,19 +348,22 @@ function vars!(vars, eq::Equation; op = Differential)
     (vars!(vars, eq.lhs; op = op); vars!(vars, eq.rhs; op = op); vars)
 end
 function vars!(vars, O; op = Differential)
+    !istree(O) && return vars
+    if operation(O) === (getindex)
+        arr = first(arguments(O))
+        !istree(arr) && return vars
+        operation(arr) isa op && return push!(vars, O)
+        isvariable(operation(O)) && return push!(vars, O)
+    end
+
     if isvariable(O)
         return push!(vars, O)
     end
-    !istree(O) && return vars
 
     operation(O) isa op && return push!(vars, O)
 
-    if operation(O) === (getindex) &&
-       isvariable(first(arguments(O)))
-        return push!(vars, O)
-    end
-
     isvariable(operation(O)) && push!(vars, O)
+
     for arg in arguments(O)
         vars!(vars, arg; op = op)
     end
