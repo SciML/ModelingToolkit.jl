@@ -1521,13 +1521,12 @@ function linearization_function(sys::AbstractSystem, inputs,
     sys = ssys
     x0 = merge(defaults(sys), Dict(missing_variable_defaults(sys)), op)
     u0, _p, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
+    ps = parameters(sys)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         p = MTKParameters(sys, p)
-        ps = reorder_parameters(sys, parameters(sys))
     else
         p = _p
         p, split_idxs = split_parameters_by_type(p)
-        ps = parameters(sys)
         if p isa Tuple
             ps = Base.Fix1(getindex, ps).(split_idxs)
             ps = (ps...,) #if p is Tuple, ps should be Tuple

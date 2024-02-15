@@ -146,6 +146,7 @@ function generate_discrete_affect(
     @static if VERSION < v"1.7"
         error("The `generate_discrete_affect` function requires at least Julia 1.7")
     end
+    has_index_cache(osys) && get_index_cache(osys) !== nothing || error("System must have index_cache for clock support")
     out = Sym{Any}(:out)
     appended_parameters = parameters(syss[continuous_id])
     param_to_idx = Dict{Any, ParameterIndex}(p => parameter_index(osys, p)
@@ -169,14 +170,14 @@ function generate_discrete_affect(
             push!(fullvars, s)
         end
         needed_disc_to_cont_obs = []
-        disc_to_cont_idxs = Int[]
+        disc_to_cont_idxs = ParameterIndex[]
         for v in inputs[continuous_id]
             vv = arguments(v)[1]
             if vv in fullvars
                 push!(needed_disc_to_cont_obs, vv)
                 # @show param_to_idx[v] v
                 # @assert param_to_idx[v].portion isa SciMLStructures.Discrete # TOOD: remove
-                push!(disc_to_cont_idxs, param_to_idx[v].idx)
+                push!(disc_to_cont_idxs, param_to_idx[v])
             end
         end
         append!(appended_parameters, input, unknowns(sys))
@@ -201,39 +202,36 @@ function generate_discrete_affect(
             ],
             [],
             let_block)
-        cont_to_disc_idxs = [parameter_index(osys, sym).idx for sym in input]
-        disc_range = [parameter_index(osys, sym).idx for sym in unknowns(sys)]
+        cont_to_disc_idxs = [parameter_index(osys, sym) for sym in input]
+        disc_range = [parameter_index(osys, sym) for sym in unknowns(sys)]
         save_vec = Expr(:ref, :Float64)
         for unk in unknowns(sys)
-            idx = parameter_index(osys, unk).idx
-            push!(save_vec.args, :(discretes[$idx]))
+            idx = parameter_index(osys, unk)
+            push!(save_vec.args, :($(parameter_values)(p, $idx)))
         end
         empty_disc = isempty(disc_range)
         disc_init = :(function (p, t)
             d2c_obs = $disc_to_cont_obs
+            disc_state = Tuple($(parameter_values)(p, i) for i in $disc_range)
+            result = d2c_obs(disc_state, p..., t)
+            for (val, i) in zip(result, $disc_to_cont_idxs)
+                # prevent multiple updates to dependents
+                _set_parameter_unchecked!(p, val, i; update_dependent = false)
+            end
             discretes, repack, _ = $(SciMLStructures.canonicalize)(
                 $(SciMLStructures.Discrete()), p)
-            d2c_view = view(discretes, $disc_to_cont_idxs)
-            disc_state = view(discretes, $disc_range)
-            copyto!(d2c_view, d2c_obs(disc_state, p..., t))
-            repack(discretes)
+            repack(discretes) # to force recalculation of dependents
         end)
 
         # @show disc_to_cont_idxs
         # @show cont_to_disc_idxs
         # @show disc_range
-
         affect! = :(function (integrator, saved_values)
             @unpack u, p, t = integrator
             c2d_obs = $cont_to_disc_obs
             d2c_obs = $disc_to_cont_obs
-            # Like Sample
-            discretes, repack, _ = $(SciMLStructures.canonicalize)(
-                $(SciMLStructures.Discrete()), p)
-            c2d_view = view(discretes, $cont_to_disc_idxs)
-            # Like Hold
-            d2c_view = view(discretes, $disc_to_cont_idxs)
-            disc_unknowns = view(discretes, $disc_range)
+            # TODO: find a way to do this without allocating
+            disc_unknowns = [$(parameter_values)(p, i) for i in $disc_range]
             disc = $disc
 
             push!(saved_values.t, t)
@@ -248,12 +246,25 @@ function generate_discrete_affect(
             # d2c comes last
             # @show t
             # @show "incoming", p
-            copyto!(c2d_view, c2d_obs(integrator.u, p..., t))
+            result = c2d_obs(integrator.u, p..., t)
+            for (val, i) in zip(result, $cont_to_disc_idxs)
+                $(_set_parameter_unchecked!)(p, val, i; update_dependent = false)
+            end
             # @show "after c2d", p
-            $empty_disc || disc(disc_unknowns, integrator.u, p..., t)
+            if !$empty_disc
+                disc(disc_unknowns, integrator.u, p..., t)
+                for (val, i) in zip(disc_unknowns, $disc_range)
+                    $(_set_parameter_unchecked!)(p, val, i; update_dependent = false)
+                end
+            end
             # @show "after state update", p
-            copyto!(d2c_view, d2c_obs(disc_unknowns, p..., t))
+            result = d2c_obs(disc_unknowns, p..., t)
+            for (val, i) in zip(result, $disc_to_cont_idxs)
+                $(_set_parameter_unchecked!)(p, val, i; update_dependent = false)
+            end
             # @show "after d2c", p
+            discretes, repack, _ = $(SciMLStructures.canonicalize)(
+                $(SciMLStructures.Discrete()), p)
             repack(discretes)
         end)
         sv = SavedValues(Float64, Vector{Float64})

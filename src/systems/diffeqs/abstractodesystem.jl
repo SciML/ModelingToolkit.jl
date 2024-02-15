@@ -183,11 +183,7 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
 
     # TODO: add an optional check on the ordering of observed equations
     u = map(x -> time_varying_as_func(value(x), sys), dvs)
-    p = if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        reorder_parameters(get_index_cache(sys), ps isa Tuple ? reduce(vcat, ps) : ps)
-    else
-        (map(x -> time_varying_as_func(value(x), sys), ps),)
-    end
+    p = map.(x -> time_varying_as_func(value(x), sys), reorder_parameters(sys, ps))
     t = get_iv(sys)
 
     if isdde
@@ -802,6 +798,23 @@ function get_u0_p(sys,
     u0, p, defs
 end
 
+function get_u0(sys, u0map, parammap = nothing; symbolic_u0 = false)
+    dvs = unknowns(sys)
+    ps = parameters(sys)
+    defs = defaults(sys)
+    if parammap !== nothing
+        defs = mergedefaults(defs, parammap, ps)
+    end
+    defs = mergedefaults(defs, u0map, dvs)
+
+    if symbolic_u0
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false, use_union = false)
+    else
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
+    end
+    return u0, defs
+end
+
 function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         implicit_dae = false, du0map = nothing,
         version = nothing, tgrad = false,
@@ -820,20 +833,24 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     ps = parameters(sys)
     iv = get_iv(sys)
 
-    u0, _p, defs = get_u0_p(sys,
-        u0map,
-        parammap;
-        tofloat,
-        use_union,
-        symbolic_u0)
-    if u0 !== nothing
-        u0 = u0_constructor(u0)
-    end
-
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        u0, defs = get_u0(sys, u0map, parammap; symbolic_u0)
         p = MTKParameters(sys, parammap)
     else
-        p = _p
+        u0, p, defs = get_u0_p(sys,
+            u0map,
+            parammap;
+            tofloat,
+            use_union,
+            symbolic_u0)
+        p, split_idxs = split_parameters_by_type(p)
+        if p isa Tuple
+            ps = Base.Fix1(getindex, parameters(sys)).(split_idxs)
+            ps = (ps...,) #if p is Tuple, ps should be Tuple
+        end
+    end
+    if u0 !== nothing
+        u0 = u0_constructor(u0)
     end
 
     if implicit_dae && du0map !== nothing

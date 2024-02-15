@@ -1,8 +1,9 @@
-struct MTKParameters{T, D, C, E, F, G}
+struct MTKParameters{T, D, C, E, N, F, G}
     tunable::T
     discrete::D
     constant::C
     dependent::E
+    nonnumeric::N
     dependent_update_iip::F
     dependent_update_oop::G
 end
@@ -35,22 +36,30 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
         for (k, v) in p if !haskey(extra_params, unwrap(k)))
     end
 
-    tunable_buffer = ArrayPartition((Vector{temp.type}(undef, temp.length) for temp in ic.param_buffer_sizes)...)
-    disc_buffer = ArrayPartition((Vector{temp.type}(undef, temp.length) for temp in ic.discrete_buffer_sizes)...)
-    const_buffer = ArrayPartition((Vector{temp.type}(undef, temp.length) for temp in ic.constant_buffer_sizes)...)
-    dep_buffer = ArrayPartition((Vector{temp.type}(undef, temp.length) for temp in ic.dependent_buffer_sizes)...)
+    tunable_buffer = Tuple(Vector{temp.type}(undef, temp.length) for temp in ic.param_buffer_sizes)
+    disc_buffer = Tuple(Vector{temp.type}(undef, temp.length) for temp in ic.discrete_buffer_sizes)
+    const_buffer = Tuple(Vector{temp.type}(undef, temp.length) for temp in ic.constant_buffer_sizes)
+    dep_buffer = Tuple(Vector{temp.type}(undef, temp.length) for temp in ic.dependent_buffer_sizes)
+    nonnumeric_buffer = Tuple(Vector{temp.type}(undef, temp.length) for temp in ic.nonnumeric_buffer_sizes)
     dependencies = Dict{Num, Num}()
     function set_value(sym, val)
         h = getsymbolhash(sym)
         if haskey(ic.param_idx, h)
-            tunable_buffer[ic.param_idx[h]] = val
+            i, j = ic.param_idx[h]
+            tunable_buffer[i][j] = val
         elseif haskey(ic.discrete_idx, h)
-            disc_buffer[ic.discrete_idx[h]] = val
+            i, j = ic.discrete_idx[h]
+            disc_buffer[i][j] = val
         elseif haskey(ic.constant_idx, h)
-            const_buffer[ic.constant_idx[h]] = val
+            i, j = ic.constant_idx[h]
+            const_buffer[i][j] = val
         elseif haskey(ic.dependent_idx, h)
-            dep_buffer[ic.dependent_idx[h]] = val
+            i, j = ic.dependent_idx[h]
+            dep_buffer[i][j] = val
             dependencies[wrap(sym)] = wrap(p[sym])
+        elseif haskey(ic.nonnumeric_idx, h)
+            i, j = ic.nonnumeric_idx[h]
+            nonnumeric_buffer[i][j] = val
         elseif !isequal(default_toterm(sym), sym)
             set_value(default_toterm(sym), val)
         else
@@ -62,25 +71,16 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
         sym = unwrap(sym)
         ctype = concrete_symtype(sym)
         val = convert(ctype, fixpoint_sub(val, p))
-        if size(sym) == ()
-            set_value(sym, val)
-        else
-            if length(sym) != length(val)
-                error("Size of $sym does not match size of initial value $val")
-            end
-            for (i, j) in zip(eachindex(sym), eachindex(val))
-                set_value(sym[i], val[j])
-            end
-        end
+        set_value(sym, val)
     end
 
-    dep_exprs = ArrayPartition((wrap.(v) for v in dep_buffer.x)...)
+    dep_exprs = ArrayPartition((wrap.(v) for v in dep_buffer)...)
     for (sym, val) in dependencies
         h = getsymbolhash(sym)
-        idx = ic.dependent_idx[h]
-        dep_exprs[idx] = wrap(fixpoint_sub(val, dependencies))
+        i, j = ic.dependent_idx[h]
+        dep_exprs.x[i][j] = wrap(fixpoint_sub(val, dependencies))
     end
-    p = reorder_parameters(ic, parameters(sys))[begin:(end - length(dep_buffer.x))]
+    p = reorder_parameters(ic, parameters(sys))[begin:(end - length(dep_buffer))]
     update_function_iip, update_function_oop = if isempty(dep_exprs.x)
         nothing, nothing
     else
@@ -90,33 +90,39 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
     end
     # everything is an ArrayPartition so it's easy to figure out how many
     # distinct vectors we have for each portion as `ArrayPartition.x`
-    if isempty(tunable_buffer.x)
-        tunable_buffer = Float64[]
-    end
-    if isempty(disc_buffer.x)
-        disc_buffer = Float64[]
-    end
-    if isempty(const_buffer.x)
-        const_buffer = Float64[]
-    end
-    if isempty(dep_buffer.x)
-        dep_buffer = Float64[]
-    end
-    if use_union
-        tunable_buffer = restrict_array_to_union(tunable_buffer)
-        disc_buffer = restrict_array_to_union(disc_buffer)
-        const_buffer = restrict_array_to_union(const_buffer)
-        dep_buffer = restrict_array_to_union(dep_buffer)
-    elseif tofloat
-        tunable_buffer = Float64.(tunable_buffer)
-        disc_buffer = Float64.(disc_buffer)
-        const_buffer = Float64.(const_buffer)
-        dep_buffer = Float64.(dep_buffer)
-    end
+    # if use_union
+    #     tunable_buffer = restrict_array_to_union(ArrayPartition(tunable_buffer))
+    #     disc_buffer = restrict_array_to_union(ArrayPartition(disc_buffer))
+    #     const_buffer = restrict_array_to_union(ArrayPartition(const_buffer))
+    #     dep_buffer = restrict_array_to_union(ArrayPartition(dep_buffer))
+    # elseif tofloat
+    #     tunable_buffer = Float64.(tunable_buffer)
+    #     disc_buffer = Float64.(disc_buffer)
+    #     const_buffer = Float64.(const_buffer)
+    #     dep_buffer = Float64.(dep_buffer)
+    # end
     return MTKParameters{typeof(tunable_buffer), typeof(disc_buffer), typeof(const_buffer),
-        typeof(dep_buffer), typeof(update_function_iip), typeof(update_function_oop)}(
-        tunable_buffer, disc_buffer, const_buffer, dep_buffer, update_function_iip,
-        update_function_oop)
+        typeof(dep_buffer), typeof(nonnumeric_buffer), typeof(update_function_iip),
+        typeof(update_function_oop)}(tunable_buffer, disc_buffer, const_buffer, dep_buffer,
+        nonnumeric_buffer, update_function_iip, update_function_oop)
+end
+
+function buffer_to_arraypartition(buf)
+    return ArrayPartition((eltype(v) isa AbstractArray ? buffer_to_arraypartition(v) : v for v in buf)...)
+end
+
+function split_into_buffers(raw::AbstractArray, buf; recurse = true)
+    idx = 1
+    function _helper(buf_v; recurse = true)
+        if eltype(buf_v) isa AbstractArray && recurse
+            return _helper.(buf_v; recurse = false)
+        else
+            res = raw[idx:idx+length(buf_v)-1]
+            idx += length(buf_v)
+            return res
+        end
+    end
+    return Tuple(_helper(buf_v; recurse) for buf_v in buf)
 end
 
 SciMLStructures.isscimlstructure(::MTKParameters) = true
@@ -127,43 +133,48 @@ for (Portion, field) in [(SciMLStructures.Tunable, :tunable)
                          (SciMLStructures.Discrete, :discrete)
                          (SciMLStructures.Constants, :constant)]
     @eval function SciMLStructures.canonicalize(::$Portion, p::MTKParameters)
-        function repack(values)
-            p.$field .= values
+        function repack(_) # aliases, so we don't need to use the parameter
             if p.dependent_update_iip !== nothing
-                p.dependent_update_iip(p.dependent, p...)
+                p.dependent_update_iip(ArrayPartition(p.dependent), p...)
             end
             p
         end
-        return p.$field, repack, true
+        return buffer_to_arraypartition(p.$field), repack, true
     end
 
     @eval function SciMLStructures.replace(::$Portion, p::MTKParameters, newvals)
-        @set! p.$field = newvals
+        @set! p.$field = split_into_buffers(newvals, p.$field)
         if p.dependent_update_oop !== nothing
-            @set! p.dependent = ArrayPartition(p.dependent_update_oop(p...))
+            raw = p.dependent_update_oop(p...)
+            @set! p.dependent = split_into_buffers(raw, p.dependent; recurse = false)
         end
         p
     end
 
     @eval function SciMLStructures.replace!(::$Portion, p::MTKParameters, newvals)
-        p.$field .= newvals
+        src = split_into_buffers(newvals, p.$field)
+        dst = buffer_to_arraypartition(newvals)
+        dst .= src
         if p.dependent_update_iip !== nothing
-            p.dependent_update_iip(p.dependent, p...)
+            p.dependent_update_iip(ArrayPartition(p.dependent), p...)
         end
         nothing
     end
 end
 
-function SymbolicIndexingInterface.parameter_values(p::MTKParameters, i::ParameterIndex)
-    @unpack portion, idx = i
+function SymbolicIndexingInterface.parameter_values(p::MTKParameters, pind::ParameterIndex)
+    @unpack portion, idx = pind
+    i, j, k... = idx
     if portion isa SciMLStructures.Tunable
-        return p.tunable[idx]
+        return p.tunable[i][j][k...]
     elseif portion isa SciMLStructures.Discrete
-        return p.discrete[idx]
+        return p.discrete[i][j][k...]
     elseif portion isa SciMLStructures.Constants
-        return p.constant[idx]
-    elseif portion === nothing
-        return p.dependent[idx]
+        return p.constant[i][j][k...]
+    elseif portion === DEPENDENT_PORTION
+        return p.dependent[i][j][k...]
+    elseif portion === NONNUMERIC_PORTION
+        return isempty(k) ? p.nonnumeric[i][j] : p.nonnumeric[i][j][k...]
     else
         error("Unhandled portion $portion")
     end
@@ -172,45 +183,88 @@ end
 function SymbolicIndexingInterface.set_parameter!(
         p::MTKParameters, val, idx::ParameterIndex)
     @unpack portion, idx = idx
+    i, j, k... = idx
     if portion isa SciMLStructures.Tunable
-        p.tunable[idx] = val
+        if isempty(k)
+            p.tunable[i][j] = val
+        else
+            p.tunable[i][j][k...] = val
+        end
     elseif portion isa SciMLStructures.Discrete
-        p.discrete[idx] = val
+        if isempty(k)
+            p.discrete[i][j] = val
+        else
+            p.discrete[i][j][k...] = val
+        end
     elseif portion isa SciMLStructures.Constants
-        p.constant[idx] = val
-    elseif portion === nothing
-        error("Cannot set value of parameter: ")
+        if isempty(k)
+            p.constant[i][j] = val
+        else
+            p.constant[i][j][k...] = val
+        end
+    elseif portion === DEPENDENT_PORTION
+        error("Cannot set value of dependent parameter")
+    elseif portion === NONNUMERIC_PORTION
+        if isempty(k)
+            p.nonnumeric[i][j] = val
+        else
+            p.nonnumeric[i][j][k...] = val
+        end
     else
         error("Unhandled portion $portion")
     end
     if p.dependent_update_iip !== nothing
-        p.dependent_update_iip(p.dependent, p...)
+        p.dependent_update_iip(ArrayPartition(p.dependent), p...)
     end
 end
 
-function _set_parameter_unchecked!(p::MTKParameters, val, idx::ParameterIndex)
+function _set_parameter_unchecked!(p::MTKParameters, val, idx::ParameterIndex; update_dependent = true)
     @unpack portion, idx = idx
-    update_dependent = true
+    i, j, k... = idx
     if portion isa SciMLStructures.Tunable
-        p.tunable[idx] = val
+        if isempty(k)
+            p.tunable[i][j] = val
+        else
+            p.tunable[i][j][k...] = val
+        end
     elseif portion isa SciMLStructures.Discrete
-        p.discrete[idx] = val
+        if isempty(k)
+            p.discrete[i][j] = val
+        else
+            p.discrete[i][j][k...] = val
+        end
     elseif portion isa SciMLStructures.Constants
-        p.constant[idx] = val
-    elseif portion === nothing
-        p.dependent[idx] = val
+        if isempty(k)
+            p.constant[i][j] = val
+        else
+            p.constant[i][j][k...] = val
+        end
+    elseif portion === DEPENDENT_PORTION
+        if isempty(k)
+            p.dependent[i][j] = val
+        else
+            p.dependent[i][j][k...] = val
+        end
         update_dependent = false
+    elseif portion === NONNUMERIC_PORTION
+        if isempty(k)
+            p.nonnumeric[i][j] = val
+        else
+            p.nonnumeric[i][j][k...] = val
+        end
     else
         error("Unhandled portion $portion")
     end
     update_dependent && p.dependent_update_iip !== nothing &&
-        p.dependent_update_iip(p.dependent, p...)
+        p.dependent_update_iip(ArrayPartition(p.dependent), p...)
 end
 
 _subarrays(v::AbstractVector) = isempty(v) ? () : (v,)
 _subarrays(v::ArrayPartition) = v.x
+_subarrays(v::Tuple) = v
 _num_subarrays(v::AbstractVector) = 1
 _num_subarrays(v::ArrayPartition) = length(v.x)
+_num_subarrays(v::Tuple) = length(v)
 # for compiling callbacks
 # getindex indexes the vectors, setindex! linearly indexes values
 # it's inconsistent, but we need it to be this way
@@ -227,28 +281,42 @@ function Base.getindex(buf::MTKParameters, i)
         i <= _num_subarrays(buf.constant) && return _subarrays(buf.constant)[i]
         i -= _num_subarrays(buf.constant)
     end
-    isempty(buf.dependent) || return _subarrays(buf.dependent)[i]
+    if !isempty(buf.nonnumeric)
+        i <= _num_subarrays(buf.nonnumeric) && return _subarrays(buf.nonnumeric)[i]
+        i -= _num_subarrays(buf.nonnumeric)
+    end
+    if !isempty(buf.dependent)
+        i <= _num_subarrays(buf.dependent) && return _subarrays(buf.dependent)[i]
+        i -= _num_subarrays(buf.dependent)
+    end
     throw(BoundsError(buf, i))
 end
-function Base.setindex!(buf::MTKParameters, val, i)
-    if i <= length(buf.tunable)
-        buf.tunable[i] = val
-    elseif i <= length(buf.tunable) + length(buf.discrete)
-        buf.discrete[i - length(buf.tunable)] = val
-    else
-        buf.constant[i - length(buf.tunable) - length(buf.discrete)] = val
+function Base.setindex!(p::MTKParameters, val, i)
+    function _helper(buf)
+        done = false
+        for v in buf
+            if i <= length(v)
+                v[i] = val
+                done = true
+            else
+                i -= length(v)
+            end
+        end
+        done
     end
-    if buf.dependent_update_iip !== nothing
-        buf.dependent_update_iip(buf.dependent, buf...)
+    _helper(p.tunable) || _helper(p.discrete) || _helper(p.constant) || _helper(p.nonnumeric) || throw(BoundsError(p, i))
+    if p.dependent_update_iip !== nothing
+        p.dependent_update_iip(ArrayPartition(p.dependent), p...)
     end
 end
 
 function Base.iterate(buf::MTKParameters, state = 1)
     total_len = 0
-    isempty(buf.tunable) || (total_len += _num_subarrays(buf.tunable))
-    isempty(buf.discrete) || (total_len += _num_subarrays(buf.discrete))
-    isempty(buf.constant) || (total_len += _num_subarrays(buf.constant))
-    isempty(buf.dependent) || (total_len += _num_subarrays(buf.dependent))
+    total_len += _num_subarrays(buf.tunable)
+    total_len += _num_subarrays(buf.discrete)
+    total_len += _num_subarrays(buf.constant)
+    total_len += _num_subarrays(buf.nonnumeric)
+    total_len += _num_subarrays(buf.dependent)
     if state <= total_len
         return (buf[state], state + 1)
     else
@@ -258,15 +326,16 @@ end
 
 function Base.:(==)(a::MTKParameters, b::MTKParameters)
     return a.tunable == b.tunable && a.discrete == b.discrete &&
-           a.constant == b.constant && a.dependent == b.dependent
+           a.constant == b.constant && a.dependent == b.dependent &&
+           a.nonnumeric == b.nonnumeric
 end
 
 # to support linearize/linearization_function
 function jacobian_wrt_vars(pf::F, p::MTKParameters, input_idxs, chunk::C) where {F, C}
-    T = eltype(p.tunable)
+    tunable, _, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)
+    T = eltype(tunable)
     tag = ForwardDiff.Tag(pf, T)
     dualtype = ForwardDiff.Dual{typeof(tag), T, ForwardDiff.chunksize(chunk)}
-    tunable, _, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)
     p_big = SciMLStructures.replace(SciMLStructures.Tunable(), p, dualtype.(tunable))
     p_closure = let pf = pf,
         input_idxs = input_idxs,
@@ -280,7 +349,7 @@ function jacobian_wrt_vars(pf::F, p::MTKParameters, input_idxs, chunk::C) where 
             # tunable[input_idxs] .= p_small_inner
             # p_big = repack(tunable)
             return if pf isa SciMLBase.ParamJacobianWrapper
-                buffer = similar(p_big.tunable, size(pf.u))
+                buffer = Array{dualtype}(undef, size(pf.u))
                 pf(buffer, p_big)
                 buffer
             else

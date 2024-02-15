@@ -390,11 +390,8 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
                 if has_index_cache(sys) && get_index_cache(sys) !== nothing
                     ic = get_index_cache(sys)
                     update_inds = map(update_vars) do sym
-                        @unpack portion, idx = parameter_index(sys, sym)
-                        if portion == SciMLStructures.Discrete()
-                            idx += length(ic.param_idx)
-                        end
-                        idx
+                        pind = parameter_index(sys, sym)
+                        discrete_linear_index(ic, pind)
                     end
                 else
                     psind = Dict(reverse(en) for en in enumerate(ps))

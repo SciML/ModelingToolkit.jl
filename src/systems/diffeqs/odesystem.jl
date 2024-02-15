@@ -202,7 +202,6 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     ctrl′ = value.(controls)
     dvs′ = value.(dvs)
     dvs′ = filter(x -> !isdelay(x, iv), dvs′)
-
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn(
             "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
@@ -210,7 +209,6 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     end
     defaults = todict(defaults)
     defaults = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(defaults))
-
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, dvs′)
     process_variables!(var_to_name, defaults, ps′)
@@ -277,7 +275,7 @@ function ODESystem(eqs, iv; kwargs...)
     algevars = setdiff(allunknowns, diffvars)
     # the orders here are very important!
     return ODESystem(Equation[diffeq; algeeq; compressed_eqs], iv,
-        collect(Iterators.flatten((diffvars, algevars))), ps; kwargs...)
+        collect(Iterators.flatten((diffvars, algevars))), collect(ps); kwargs...)
 end
 
 # NOTE: equality does not check cached Jacobian

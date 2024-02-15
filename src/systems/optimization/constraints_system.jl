@@ -119,7 +119,7 @@ function ConstraintsSystem(constraints, unknowns, ps;
 
     cstr = value.(Symbolics.canonical_form.(scalarize(constraints)))
     unknowns′ = value.(scalarize(unknowns))
-    ps′ = value.(scalarize(ps))
+    ps′ = value.(ps)
 
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn(

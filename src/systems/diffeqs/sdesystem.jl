@@ -407,7 +407,6 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
         error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEFunction`")
     end
     dvs = scalarize.(dvs)
-    ps = scalarize.(ps)
 
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression}, kwargs...)
     f_oop, f_iip = eval_expression ?

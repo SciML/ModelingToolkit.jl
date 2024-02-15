@@ -360,7 +360,7 @@ struct VariableDescription end
 Symbolics.option_to_metadata_type(::Val{:description}) = VariableDescription
 
 getdescription(x::Num) = getdescription(Symbolics.unwrap(x))
-
+getdescription(x::Symbolics.Arr) = getdescription(Symbolics.unwrap(x))
 """
     getdescription(x)
 

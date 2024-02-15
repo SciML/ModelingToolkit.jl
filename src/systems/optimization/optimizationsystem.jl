@@ -98,7 +98,7 @@ function OptimizationSystem(op, unknowns, ps;
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     constraints = value.(scalarize(constraints))
     unknowns′ = value.(scalarize(unknowns))
-    ps′ = value.(scalarize(ps))
+    ps′ = value.(ps)
     op′ = value(scalarize(op))
 
     if !(isempty(default_u0) && isempty(default_p))
