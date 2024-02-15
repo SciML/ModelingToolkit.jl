@@ -253,8 +253,8 @@ problem = ODEProblem(SIR!, u0, tspan, p)
 sys = complete(modelingtoolkitize(problem))
 
 @parameters t
-@test all(isequal.(parameters(sys), getproperty.(@variables(β, η, ω, φ, σ,μ), :val)))
-@test all(isequal.(Symbol.(unknowns(sys)), Symbol.(@variables(S(t), I(t), R(t),C(t)))))
+@test all(isequal.(parameters(sys), getproperty.(@variables(β, η, ω, φ, σ, μ), :val)))
+@test all(isequal.(Symbol.(unknowns(sys)), Symbol.(@variables(S(t), I(t), R(t), C(t)))))
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/1158
 
