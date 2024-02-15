@@ -1393,11 +1393,12 @@ macro mtkbuild(exprs...)
     named_expr = ModelingToolkit.named_expr(expr)
     name = named_expr.args[1]
     kwargs = if length(exprs) > 1
-        NamedTuple{Tuple(ex.args[1] for ex in Base.tail(exprs))}(Tuple(ex.args[2] for ex in Base.tail(exprs)))
+        NamedTuple{Tuple(ex.args[1] for ex in Base.tail(exprs))}(Tuple(ex.args[2]
+        for ex in Base.tail(exprs)))
     else
         (;)
     end
-        @show kwargs
+    @show kwargs
     esc(quote
         $named_expr
         $name = $structural_simplify($name; $(kwargs)...)

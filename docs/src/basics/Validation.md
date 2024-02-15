@@ -10,7 +10,7 @@ Units may be assigned with the following syntax.
 using ModelingToolkit, Unitful
 @variables t [unit = u"s"] x(t) [unit = u"m"] g(t) w(t) [unit = "Hz"]
 
-@variables(t, [unit = u"s"], x(t), [unit = u"m"], g(t), w(t),[unit = "Hz"])
+@variables(t, [unit = u"s"], x(t), [unit = u"m"], g(t), w(t), [unit = "Hz"])
 
 @variables(begin
     t, [unit = u"s"],
