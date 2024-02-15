@@ -162,7 +162,8 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
         continuous_events = nothing,
         discrete_events = nothing,
         metadata = nothing,
-        gui_metadata = nothing)
+        gui_metadata = nothing,
+        complete = false)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     deqs = scalarize(deqs)
@@ -199,7 +200,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
     SDESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, neqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
         ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
-        cont_callbacks, disc_callbacks, metadata, gui_metadata; checks = checks)
+        cont_callbacks, disc_callbacks, metadata, gui_metadata, complete; checks = checks)
 end
 
 function SDESystem(sys::ODESystem, neqs; kwargs...)

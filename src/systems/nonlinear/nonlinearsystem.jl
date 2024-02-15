@@ -96,6 +96,7 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
             u = __get_unit_type(unknowns, ps)
             check_units(u, eqs)
         end
+        
         new(tag, eqs, unknowns, ps, var_to_name, observed, jac, name, systems, defaults,
             connector_type, metadata, gui_metadata, tearing_state, substitutions, complete,
             index_cache, parent)
@@ -114,7 +115,8 @@ function NonlinearSystem(eqs, unknowns, ps;
         discrete_events = nothing,   # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
         checks = true,
         metadata = nothing,
-        gui_metadata = nothing)
+        gui_metadata = nothing,
+        complete = false)
     continuous_events === nothing || isempty(continuous_events) ||
         throw(ArgumentError("NonlinearSystem does not accept `continuous_events`, you provided $continuous_events"))
     discrete_events === nothing || isempty(discrete_events) ||
@@ -151,7 +153,8 @@ function NonlinearSystem(eqs, unknowns, ps;
 
     NonlinearSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         eqs, unknowns, ps, var_to_name, observed, jac, name, systems, defaults,
-        connector_type, metadata, gui_metadata, checks = checks)
+        connector_type, metadata, gui_metadata, 
+        nothing, nothing, complete, checks = checks)
 end
 
 function calculate_jacobian(sys::NonlinearSystem; sparse = false, simplify = false)

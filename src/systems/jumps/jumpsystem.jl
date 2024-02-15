@@ -141,6 +141,7 @@ function JumpSystem(eqs, iv, unknowns, ps;
         discrete_events = nothing,
         metadata = nothing,
         gui_metadata = nothing,
+        complete = false,
         kwargs...)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
@@ -181,7 +182,7 @@ function JumpSystem(eqs, iv, unknowns, ps;
     JumpSystem{typeof(ap)}(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         ap, value(iv), unknowns, ps, var_to_name, observed, name, systems,
         defaults, connector_type, disc_callbacks, metadata, gui_metadata,
-        checks = checks)
+        complete, checks = checks)
 end
 
 function generate_rate_function(js::JumpSystem, rate)

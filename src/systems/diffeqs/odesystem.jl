@@ -192,7 +192,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         discrete_events = nothing,
         checks = true,
         metadata = nothing,
-        gui_metadata = nothing)
+        gui_metadata = nothing,
+        complete = false)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     deqs = scalarize(deqs)
@@ -232,7 +233,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
         ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing,
         connector_type, preface, cont_callbacks, disc_callbacks,
-        metadata, gui_metadata, checks = checks)
+        metadata, gui_metadata, 
+        nothing, nothing, complete, checks = checks)
 end
 
 function ODESystem(eqs, iv; kwargs...)
