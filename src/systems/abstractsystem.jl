@@ -1398,7 +1398,6 @@ macro mtkbuild(exprs...)
     else
         (;)
     end
-    @show kwargs
     esc(quote
         $named_expr
         $name = $structural_simplify($name; $(kwargs)...)

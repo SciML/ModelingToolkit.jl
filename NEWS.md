@@ -7,6 +7,7 @@
       + `unknown_states` is now `solved_unknowns`.
       + `get_states` is `get_unknowns`.
       + `get_unknown_states` is now `get_solved_unknowns`.
+
   - The default backend for using units in models is now `DynamicQuantities.jl` instead of
     `Unitful.jl`.
   - ModelingToolkit.jl now exports common definitions of `t` (time independent variable)
