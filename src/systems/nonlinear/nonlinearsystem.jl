@@ -355,7 +355,9 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
     ps = parameters(sys)
 
     u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union)
-    p = MTKParameters(sys, parammap)
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        p = MTKParameters(sys, parammap)
+    end
     check_eqs_u0(eqs, dvs, u0; kwargs...)
 
     f = constructor(sys, dvs, ps, u0; jac = jac, checkbounds = checkbounds,

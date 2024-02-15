@@ -793,7 +793,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     ps = parameters(sys)
     iv = get_iv(sys)
 
-    u0, _, defs = get_u0_p(sys,
+    u0, _p, defs = get_u0_p(sys,
         u0map,
         parammap;
         tofloat,
@@ -803,7 +803,11 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         u0 = u0_constructor(u0)
     end
 
-    p = MTKParameters(sys, parammap)
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        p = MTKParameters(sys, parammap)
+    else
+        p = _p
+    end
 
     if implicit_dae && du0map !== nothing
         ddvs = map(Differential(iv), dvs)

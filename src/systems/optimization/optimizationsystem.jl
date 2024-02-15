@@ -631,7 +631,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
     end
 end
 
-function structural_simplify(sys::OptimizationSystem; kwargs...)
+function structural_simplify(sys::OptimizationSystem; split = true, kwargs...)
     sys = flatten(sys)
     cons = constraints(sys)
     econs = Equation[]
@@ -658,6 +658,6 @@ function structural_simplify(sys::OptimizationSystem; kwargs...)
     neweqs = fixpoint_sub.(equations(sys), (subs,))
     @set! sys.op = length(neweqs) == 1 ? first(neweqs) : neweqs
     @set! sys.unknowns = newsts
-    sys = complete(sys)
+    sys = complete(sys; split)
     return sys
 end
