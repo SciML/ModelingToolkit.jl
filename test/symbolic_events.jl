@@ -138,6 +138,7 @@ fsys = flatten(sys)
 @test isequal(ModelingToolkit.continuous_events(sys2)[2].eqs[], sys.x ~ 1)
 
 sys = complete(sys)
+sys_nosplit = complete(sys; split = false)
 sys2 = complete(sys2)
 # Functions should be generated for root-finding equations
 prob = ODEProblem(sys, Pair[], (0.0, 2.0))
@@ -155,15 +156,22 @@ cond.rf_ip(out, [2], p0, t0)
 @test out[] ≈ 1  # signature is u,p,t
 
 prob = ODEProblem(sys, Pair[], (0.0, 2.0))
+prob_nosplit = ODEProblem(sys_nosplit, Pair[], (0.0, 2.0))
 sol = solve(prob, Tsit5())
+sol_nosplit = solve(prob_nosplit, Tsit5())
 @test minimum(t -> abs(t - 1), sol.t) < 1e-10 # test that the solver stepped at the root
+@test minimum(t -> abs(t - 1), sol_nosplit.t) < 1e-10 # test that the solver stepped at the root
 
 # Test that a user provided callback is respected
 test_callback = DiscreteCallback(x -> x, x -> x)
 prob = ODEProblem(sys, Pair[], (0.0, 2.0), callback = test_callback)
+prob_nosplit = ODEProblem(sys_nosplit, Pair[], (0.0, 2.0), callback = test_callback)
 cbs = get_callback(prob)
+cbs_nosplit = get_callback(prob_nosplit)
 @test cbs isa CallbackSet
 @test cbs.discrete_callbacks[1] == test_callback
+@test cbs_nosplit isa CallbackSet
+@test cbs_nosplit.discrete_callbacks[1] == test_callback
 
 prob = ODEProblem(sys2, Pair[], (0.0, 3.0))
 cb = get_callback(prob)
@@ -234,9 +242,11 @@ continuous_events = [[x ~ 0] => [vx ~ -vx]
      D(vy) ~ -0.01vy], t; continuous_events)
 
 ball = structural_simplify(ball)
+ball_nosplit = structural_simplify(ball; split = false)
 
 tspan = (0.0, 5.0)
 prob = ODEProblem(ball, Pair[], tspan)
+prob_nosplit = ODEProblem(ball_nosplit, Pair[], tspan)
 
 cb = get_callback(prob)
 @test cb isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
@@ -250,9 +260,13 @@ cond.rf_ip(out, [0, 0, 0, 0], p0, t0)
 @test out ≈ [0, 1.5, -1.5]
 
 sol = solve(prob, Tsit5())
+sol_nosplit = solve(prob_nosplit, Tsit5())
 @test 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
 @test minimum(sol[y]) ≈ -1.5 # check wall conditions
 @test maximum(sol[y]) ≈ 1.5  # check wall conditions
+@test 0 <= minimum(sol_nosplit[x]) <= 1e-10 # the ball never went through the floor but got very close
+@test minimum(sol_nosplit[y]) ≈ -1.5 # check wall conditions
+@test maximum(sol_nosplit[y]) ≈ 1.5  # check wall conditions
 
 # tv = sort([LinRange(0, 5, 200); sol.t])
 # plot(sol(tv)[y], sol(tv)[x], line_z=tv)
@@ -270,13 +284,18 @@ continuous_events = [
                          D(vx) ~ -1
                          D(vy) ~ 0], t; continuous_events)
 
+ball_nosplit = structural_simplify(ball)
 ball = structural_simplify(ball)
 
 tspan = (0.0, 5.0)
 prob = ODEProblem(ball, Pair[], tspan)
+prob_nosplit = ODEProblem(ball_nosplit, Pair[], tspan)
 sol = solve(prob, Tsit5())
+sol_nosplit = solve(prob_nosplit, Tsit5())
 @test 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
 @test -minimum(sol[y]) ≈ maximum(sol[y]) ≈ sqrt(2)  # the ball will never go further than √2 in either direction (gravity was changed to 1 to get this particular number)
+@test 0 <= minimum(sol_nosplit[x]) <= 1e-10 # the ball never went through the floor but got very close
+@test -minimum(sol_nosplit[y]) ≈ maximum(sol_nosplit[y]) ≈ sqrt(2)  # the ball will never go further than √2 in either direction (gravity was changed to 1 to get this particular number)
 
 # tv = sort([LinRange(0, 5, 200); sol.t])
 # plot(sol(tv)[y], sol(tv)[x], line_z=tv)
