@@ -810,7 +810,7 @@ end
 function fast_substitute(eq::T, subs::Pair) where {T <: Eq}
     T(fast_substitute(eq.lhs, subs), fast_substitute(eq.rhs, subs))
 end
-fast_substitute(eqs::AbstractArray{<:Eq}, subs) = fast_substitute.(eqs, (subs,))
+fast_substitute(eqs::AbstractArray, subs) = fast_substitute.(eqs, (subs,))
 fast_substitute(a, b) = substitute(a, b)
 function fast_substitute(expr, pair::Pair)
     a, b = pair
