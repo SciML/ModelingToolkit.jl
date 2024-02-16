@@ -152,6 +152,21 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
                nothing,
         isdde = false,
         kwargs...)
+    array_vars = Dict{Any, Vector{Int}}()
+    for (j, x) in enumerate(dvs)
+        if istree(x) && operation(x) == getindex
+            arg = arguments(x)[1]
+            inds = get!(() -> Int[], array_vars, arg)
+            push!(inds, j)
+        end
+    end
+    subs = Dict()
+    for (k, inds) in array_vars
+        if inds == (inds′ = inds[1]:inds[end])
+            inds = inds′
+        end
+        subs[k] = term(view, Sym{Any}(Symbol("ˍ₋arg1")), inds)
+    end
     if isdde
         eqs = delay_to_function(sys)
     else
@@ -164,6 +179,7 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
     # substitute x(t) by just x
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
            [eq.rhs for eq in eqs]
+    rhss = fast_substitute(rhss, subs)
 
     # TODO: add an optional check on the ordering of observed equations
     u = map(x -> time_varying_as_func(value(x), sys), dvs)
@@ -764,6 +780,17 @@ function get_u0_p(sys,
         defs = mergedefaults(defs, parammap, ps)
     end
     defs = mergedefaults(defs, u0map, dvs)
+    for (k, v) in defs
+        if Symbolics.isarraysymbolic(k)
+            ks = scalarize(k)
+            length(ks) == length(v) || error("$k has default value $v with unmatched size")
+            for (kk, vv) in zip(ks, v)
+                if !haskey(defs, kk)
+                    defs[kk] = vv
+                end
+            end
+        end
+    end
 
     if symbolic_u0
         u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false, use_union = false)
