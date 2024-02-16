@@ -107,7 +107,8 @@ function IndexCache(sys::AbstractSystem)
         )
     end
 
-    function get_buffer_sizes_and_idxs(buffers::Dict{DataType, Set{BasicSymbolic}}, track_linear_index = true)
+    function get_buffer_sizes_and_idxs(
+            buffers::Dict{DataType, Set{BasicSymbolic}}, track_linear_index = true)
         idxs = IndexMap()
         buffer_sizes = BufferTemplate[]
         for (i, (T, buf)) in enumerate(buffers)
@@ -139,7 +140,7 @@ function IndexCache(sys::AbstractSystem)
         param_buffer_sizes,
         const_buffer_sizes,
         dependent_buffer_sizes,
-        nonnumeric_buffer_sizes,
+        nonnumeric_buffer_sizes
     )
 end
 
@@ -170,7 +171,9 @@ end
 function discrete_linear_index(ic::IndexCache, idx::ParameterIndex)
     idx.portion isa SciMLStructures.Discrete || error("Discrete variable index expected")
     ind = sum(temp.length for temp in ic.param_buffer_sizes; init = 0)
-    ind += sum(temp.length for temp in Iterators.take(ic.discrete_buffer_sizes, idx.idx[1] - 1); init = 0)
+    ind += sum(
+        temp.length for temp in Iterators.take(ic.discrete_buffer_sizes, idx.idx[1] - 1);
+        init = 0)
     ind += idx.idx[2]
     return ind
 end
@@ -186,11 +189,16 @@ function reorder_parameters(sys::AbstractSystem, ps; kwargs...)
 end
 
 function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
-    param_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:temp.length] for temp in ic.param_buffer_sizes)
-    disc_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:temp.length] for temp in ic.discrete_buffer_sizes)
-    const_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:temp.length] for temp in ic.constant_buffer_sizes)
-    dep_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:temp.length] for temp in ic.dependent_buffer_sizes)
-    nonnumeric_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:temp.length] for temp in ic.nonnumeric_buffer_sizes)
+    param_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
+    for temp in ic.param_buffer_sizes)
+    disc_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
+    for temp in ic.discrete_buffer_sizes)
+    const_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
+    for temp in ic.constant_buffer_sizes)
+    dep_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
+    for temp in ic.dependent_buffer_sizes)
+    nonnumeric_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
+    for temp in ic.nonnumeric_buffer_sizes)
 
     for p in ps
         h = getsymbolhash(p)

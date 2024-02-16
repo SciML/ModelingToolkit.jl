@@ -151,7 +151,8 @@ function generate_discrete_affect(
     appended_parameters = parameters(syss[continuous_id])
     offset = length(appended_parameters)
     param_to_idx = if use_index_cache
-        Dict{Any, ParameterIndex}(p => parameter_index(osys, p) for p in appended_parameters)
+        Dict{Any, ParameterIndex}(p => parameter_index(osys, p)
+        for p in appended_parameters)
     else
         Dict{Any, Int}(reverse(en) for en in enumerate(appended_parameters))
     end
@@ -186,7 +187,8 @@ function generate_discrete_affect(
             end
         end
         append!(appended_parameters, input, unknowns(sys))
-        cont_to_disc_obs = build_explicit_observed_function(use_index_cache ? osys : syss[continuous_id],
+        cont_to_disc_obs = build_explicit_observed_function(
+            use_index_cache ? osys : syss[continuous_id],
             needed_cont_to_disc_obs,
             throw = false,
             expression = true,
@@ -263,14 +265,14 @@ function generate_discrete_affect(
             d2c_obs = $disc_to_cont_obs
             $(
                 if use_index_cache
-                    :(disc_unknowns = [$(parameter_values)(p, i) for i in $disc_range])
-                else
-                    quote
-                        c2d_view = view(p, $cont_to_disc_idxs)
-                        d2c_view = view(p, $disc_to_cont_idxs)
-                        disc_unknowns = view(p, $disc_range)
-                    end
+                :(disc_unknowns = [$(parameter_values)(p, i) for i in $disc_range])
+            else
+                quote
+                    c2d_view = view(p, $cont_to_disc_idxs)
+                    d2c_view = view(p, $disc_to_cont_idxs)
+                    disc_unknowns = view(p, $disc_range)
                 end
+            end
             )
             # TODO: find a way to do this without allocating
             disc = $disc
@@ -289,53 +291,53 @@ function generate_discrete_affect(
             # @show "incoming", p
             $(
                 if use_index_cache
-                    quote
-                        result = c2d_obs(integrator.u, p..., t)
-                        for (val, i) in zip(result, $cont_to_disc_idxs)
-                            $(_set_parameter_unchecked!)(p, val, i; update_dependent = false)
-                        end
+                quote
+                    result = c2d_obs(integrator.u, p..., t)
+                    for (val, i) in zip(result, $cont_to_disc_idxs)
+                        $(_set_parameter_unchecked!)(p, val, i; update_dependent = false)
                     end
-                else
-                    :(copyto!(c2d_view, c2d_obs(integrator.u, p, t)))
                 end
+            else
+                :(copyto!(c2d_view, c2d_obs(integrator.u, p, t)))
+            end
             )
             # @show "after c2d", p
             $(
                 if use_index_cache
-                    quote
-                        if !$empty_disc
-                            disc(disc_unknowns, integrator.u, p..., t)
-                            for (val, i) in zip(disc_unknowns, $disc_range)
-                                $(_set_parameter_unchecked!)(p, val, i; update_dependent = false)
-                            end
+                quote
+                    if !$empty_disc
+                        disc(disc_unknowns, integrator.u, p..., t)
+                        for (val, i) in zip(disc_unknowns, $disc_range)
+                            $(_set_parameter_unchecked!)(p, val, i; update_dependent = false)
                         end
                     end
-                else
-                    :($empty_disc || disc(disc_unknowns, disc_unknowns, p, t))
                 end
+            else
+                :($empty_disc || disc(disc_unknowns, disc_unknowns, p, t))
+            end
             )
             # @show "after state update", p
             $(
                 if use_index_cache
-                    quote
-                        result = d2c_obs(disc_unknowns, p..., t)
-                        for (val, i) in zip(result, $disc_to_cont_idxs)
-                            $(_set_parameter_unchecked!)(p, val, i; update_dependent = false)
-                        end
+                quote
+                    result = d2c_obs(disc_unknowns, p..., t)
+                    for (val, i) in zip(result, $disc_to_cont_idxs)
+                        $(_set_parameter_unchecked!)(p, val, i; update_dependent = false)
                     end
-                else
-                    :(copyto!(d2c_view, d2c_obs(disc_unknowns, p, t)))
                 end
+            else
+                :(copyto!(d2c_view, d2c_obs(disc_unknowns, p, t)))
+            end
             )
             # @show "after d2c", p
             $(
                 if use_index_cache
-                    quote
-                        discretes, repack, _ = $(SciMLStructures.canonicalize)(
-                            $(SciMLStructures.Discrete()), p)
-                        repack(discretes)
-                    end
+                quote
+                    discretes, repack, _ = $(SciMLStructures.canonicalize)(
+                        $(SciMLStructures.Discrete()), p)
+                    repack(discretes)
                 end
+            end
             )
         end)
         sv = SavedValues(Float64, Vector{Float64})

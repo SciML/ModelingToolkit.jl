@@ -36,11 +36,16 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
         for (k, v) in p if !haskey(extra_params, unwrap(k)))
     end
 
-    tunable_buffer = Tuple(Vector{temp.type}(undef, temp.length) for temp in ic.param_buffer_sizes)
-    disc_buffer = Tuple(Vector{temp.type}(undef, temp.length) for temp in ic.discrete_buffer_sizes)
-    const_buffer = Tuple(Vector{temp.type}(undef, temp.length) for temp in ic.constant_buffer_sizes)
-    dep_buffer = Tuple(Vector{temp.type}(undef, temp.length) for temp in ic.dependent_buffer_sizes)
-    nonnumeric_buffer = Tuple(Vector{temp.type}(undef, temp.length) for temp in ic.nonnumeric_buffer_sizes)
+    tunable_buffer = Tuple(Vector{temp.type}(undef, temp.length)
+    for temp in ic.param_buffer_sizes)
+    disc_buffer = Tuple(Vector{temp.type}(undef, temp.length)
+    for temp in ic.discrete_buffer_sizes)
+    const_buffer = Tuple(Vector{temp.type}(undef, temp.length)
+    for temp in ic.constant_buffer_sizes)
+    dep_buffer = Tuple(Vector{temp.type}(undef, temp.length)
+    for temp in ic.dependent_buffer_sizes)
+    nonnumeric_buffer = Tuple(Vector{temp.type}(undef, temp.length)
+    for temp in ic.nonnumeric_buffer_sizes)
     dependencies = Dict{Num, Num}()
     function set_value(sym, val)
         h = getsymbolhash(sym)
@@ -117,7 +122,7 @@ function split_into_buffers(raw::AbstractArray, buf; recurse = true)
         if eltype(buf_v) isa AbstractArray && recurse
             return _helper.(buf_v; recurse = false)
         else
-            res = raw[idx:idx+length(buf_v)-1]
+            res = raw[idx:(idx + length(buf_v) - 1)]
             idx += length(buf_v)
             return res
         end
@@ -218,7 +223,8 @@ function SymbolicIndexingInterface.set_parameter!(
     end
 end
 
-function _set_parameter_unchecked!(p::MTKParameters, val, idx::ParameterIndex; update_dependent = true)
+function _set_parameter_unchecked!(
+        p::MTKParameters, val, idx::ParameterIndex; update_dependent = true)
     @unpack portion, idx = idx
     i, j, k... = idx
     if portion isa SciMLStructures.Tunable
@@ -304,7 +310,8 @@ function Base.setindex!(p::MTKParameters, val, i)
         end
         done
     end
-    _helper(p.tunable) || _helper(p.discrete) || _helper(p.constant) || _helper(p.nonnumeric) || throw(BoundsError(p, i))
+    _helper(p.tunable) || _helper(p.discrete) || _helper(p.constant) ||
+        _helper(p.nonnumeric) || throw(BoundsError(p, i))
     if p.dependent_update_iip !== nothing
         p.dependent_update_iip(ArrayPartition(p.dependent), p...)
     end
