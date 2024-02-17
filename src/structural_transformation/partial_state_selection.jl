@@ -51,7 +51,7 @@ function pss_graph_modia!(structure::SystemStructure, maximal_top_matching, varl
         old_level_vars = ()
         ict = IncrementalCycleTracker(
             DiCMOBiGraph{true}(graph,
-                complete(Matching(ndsts(graph))));
+			       complete(Matching(ndsts(graph)), nsrcs(graph))),
             dir = :in)
 
         while level >= 0
@@ -124,7 +124,7 @@ function pss_graph_modia!(structure::SystemStructure, maximal_top_matching, varl
             level -= 1
         end
     end
-    return complete(var_eq_matching)
+    return complete(var_eq_matching, nsrcs(graph))
 end
 
 struct SelectedUnknown end
