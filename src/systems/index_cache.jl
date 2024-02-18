@@ -77,13 +77,13 @@ function IndexCache(sys::AbstractSystem)
         end
     end
 
-    all_ps = Set(unwrap.(parameters(sys)))
-    for (sym, value) in defaults(sys)
-        sym = unwrap(sym)
-        if sym in all_ps && symbolic_type(unwrap(value)) !== NotSymbolic()
-            insert_by_type!(dependent_buffers, sym)
-        end
-    end
+    # all_ps = Set(unwrap.(parameters(sys)))
+    # for (sym, value) in defaults(sys)
+    #     sym = unwrap(sym)
+    #     if sym in all_ps && symbolic_type(unwrap(value)) !== NotSymbolic()
+    #         insert_by_type!(dependent_buffers, sym)
+    #     end
+    # end
 
     for p in parameters(sys)
         p = unwrap(p)
