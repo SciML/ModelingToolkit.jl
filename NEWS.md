@@ -45,3 +45,7 @@
     equations. For example, `[p[1] => 1.0, p[2] => 2.0]` is no longer allowed in default equations, use
     `[p => [1.0, 2.0]]` instead. Also, array equations like for `@variables u[1:2]` have `D(u) ~ A*u` as an
     array equation. If the scalarized version is desired, use `scalarize(u)`.
+  - Parameter dependencies are now supported. They can be specified using the syntax
+    `(single_parameter => expression_involving_other_parameters)` and a `Vector` of these can be passed to
+    the `parameter_dependencies` keyword argument of `ODESystem`, `SDESystem` and `JumpSystem`. The dependent
+    parameters are updated whenever other parameters are modified, e.g. in callbacks.
