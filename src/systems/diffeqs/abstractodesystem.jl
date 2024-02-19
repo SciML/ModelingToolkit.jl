@@ -807,6 +807,17 @@ function get_u0(sys, u0map, parammap = nothing; symbolic_u0 = false)
         defs = mergedefaults(defs, parammap, ps)
     end
     defs = mergedefaults(defs, u0map, dvs)
+    for (k, v) in defs
+        if Symbolics.isarraysymbolic(k)
+            ks = scalarize(k)
+            length(ks) == length(v) || error("$k has default value $v with unmatched size")
+            for (kk, vv) in zip(ks, v)
+                if !haskey(defs, kk)
+                    defs[kk] = vv
+                end
+            end
+        end
+    end
 
     if symbolic_u0
         u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false, use_union = false)
@@ -1414,4 +1425,20 @@ function isisomorphic(sys1::AbstractODESystem, sys2::AbstractODESystem)
         end
     end
     return false
+end
+
+function flatten_equations(eqs)
+    mapreduce(vcat, eqs; init = Equation[]) do eq
+        islhsarr = eq.lhs isa AbstractArray || Symbolics.isarraysymbolic(eq.lhs)
+        isrhsarr = eq.rhs isa AbstractArray || Symbolics.isarraysymbolic(eq.rhs)
+        if islhsarr || isrhsarr
+            islhsarr && isrhsarr ||
+                error("LHS ($(eq.lhs)) and RHS ($(eq.rhs)) must either both be array expressions or both scalar")
+            size(eq.lhs) == size(eq.rhs) ||
+                error("Size of LHS ($(eq.lhs)) and RHS ($(eq.rhs)) must match: got $(size(eq.lhs)) and $(size(eq.rhs))")
+            return collect(eq.lhs) .~ collect(eq.rhs)
+        else
+            eq
+        end
+    end
 end

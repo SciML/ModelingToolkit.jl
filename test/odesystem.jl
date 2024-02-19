@@ -520,13 +520,27 @@ using SymbolicUtils.Code
 using Symbolics: unwrap, wrap, @register_symbolic
 foo(a, ms::AbstractVector) = a + sum(ms)
 @register_symbolic foo(a, ms::AbstractVector)
-@variables t x(t) ms(t)[1:3]
-D = Differential(t)
+@variables x(t) ms(t)[1:3]
 eqs = [D(x) ~ foo(x, ms); D(ms) ~ ones(3)]
 @named sys = ODESystem(eqs, t, [x; ms], [])
 @named emptysys = ODESystem(Equation[], t)
 @mtkbuild outersys = compose(emptysys, sys)
 prob = ODEProblem(outersys, [sys.x => 1.0, sys.ms => 1:3], (0, 1.0))
+@test_nowarn solve(prob, Tsit5())
+
+# array equations
+bar(x, p) = p * x
+@register_array_symbolic bar(x::AbstractVector, p::AbstractMatrix) begin
+    size = size(x)
+    eltype = promote_type(eltype(x), eltype(p))
+end
+@parameters p[1:3, 1:3]
+eqs = [D(x) ~ foo(x, ms); D(ms) ~ bar(ms, p)]
+@named sys = ODESystem(eqs, t)
+@named emptysys = ODESystem(Equation[], t)
+@mtkbuild outersys = compose(emptysys, sys)
+prob = ODEProblem(
+    outersys, [sys.x => 1.0, sys.ms => 1:3], (0.0, 1.0), [sys.p => ones(3, 3)])
 @test_nowarn solve(prob, Tsit5())
 
 # x/x

@@ -202,7 +202,19 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
-    deqs = reduce(vcat, scalarize(deqs); init = Equation[])
+    deqs = mapreduce(vcat, deqs; init = Equation[]) do eq
+        islhsarr = eq.lhs isa AbstractArray || Symbolics.isarraysymbolic(eq.lhs)
+        isrhsarr = eq.rhs isa AbstractArray || Symbolics.isarraysymbolic(eq.rhs)
+        if islhsarr || isrhsarr
+            islhsarr && isrhsarr ||
+                error("LHS ($(eq.lhs)) and RHS ($(eq.rhs)) must either both be array expressions or both scalar")
+            size(eq.lhs) == size(eq.rhs) ||
+                error("Size of LHS ($(eq.lhs)) and RHS ($(eq.rhs)) must match: got $(size(eq.lhs)) and $(size(eq.rhs))")
+            return collect(eq.lhs) .~ collect(eq.rhs)
+        else
+            eq
+        end
+    end
     iv′ = value(iv)
     ps′ = value.(ps)
     ctrl′ = value.(controls)
@@ -284,7 +296,8 @@ function ODESystem(eqs, iv; kwargs...)
     for p in ps
         if istree(p) && operation(p) === getindex
             par = arguments(p)[begin]
-            if Symbolics.shape(Symbolics.unwrap(par)) !== Symbolics.Unknown() && all(par[i] in ps for i in eachindex(par))
+            if Symbolics.shape(Symbolics.unwrap(par)) !== Symbolics.Unknown() &&
+               all(par[i] in ps for i in eachindex(par))
                 push!(new_ps, par)
             else
                 push!(new_ps, p)

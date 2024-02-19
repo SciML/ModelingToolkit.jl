@@ -151,7 +151,7 @@ function JumpSystem(eqs, iv, unknowns, ps;
         kwargs...)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
-    eqs = scalarize(eqs)
+    eqs = flatten_equations(eqs)
     sysnames = nameof.(systems)
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))

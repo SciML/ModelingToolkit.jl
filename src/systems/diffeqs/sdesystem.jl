@@ -171,7 +171,14 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
         gui_metadata = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
-    deqs = scalarize(deqs)
+    deqs = flatten_equations(deqs)
+    neqs = mapreduce(vcat, neqs) do expr
+        if expr isa AbstractArray || Symbolics.isarraysymbolic(expr)
+            collect(expr)
+        else
+            expr
+        end
+    end
     iv′ = value(iv)
     dvs′ = value.(dvs)
     ps′ = value.(ps)
