@@ -198,7 +198,7 @@ function generate_discrete_affect(
             throw = false,
             expression = true,
             output_type = SVector,
-            ps = reorder_parameters(osys, parameters(sys)))
+            ps = reorder_parameters(osys, full_parameters(sys)))
         ni = length(input)
         ns = length(unknowns(sys))
         disc = Func(
@@ -206,7 +206,7 @@ function generate_discrete_affect(
                 out,
                 DestructuredArgs(unknowns(osys)),
                 if use_index_cache
-                    DestructuredArgs.(reorder_parameters(osys, parameters(osys)))
+                    DestructuredArgs.(reorder_parameters(osys, full_parameters(osys)))
                 else
                     (DestructuredArgs(appended_parameters),)
                 end...,

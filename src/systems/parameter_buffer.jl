@@ -46,7 +46,6 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
     for temp in ic.dependent_buffer_sizes)
     nonnumeric_buffer = Tuple(Vector{temp.type}(undef, temp.length)
     for temp in ic.nonnumeric_buffer_sizes)
-    dependencies = Dict{Num, Num}()
     function set_value(sym, val)
         h = getsymbolhash(sym)
         if haskey(ic.param_idx, h)
@@ -61,7 +60,6 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
         elseif haskey(ic.dependent_idx, h)
             i, j = ic.dependent_idx[h]
             dep_buffer[i][j] = val
-            dependencies[wrap(sym)] = wrap(p[sym])
         elseif haskey(ic.nonnumeric_idx, h)
             i, j = ic.nonnumeric_idx[h]
             nonnumeric_buffer[i][j] = val
@@ -79,37 +77,32 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
         set_value(sym, val)
     end
 
-    dep_exprs = ArrayPartition((wrap.(v) for v in dep_buffer)...)
-    for (sym, val) in dependencies
-        h = getsymbolhash(sym)
-        i, j = ic.dependent_idx[h]
-        dep_exprs.x[i][j] = wrap(fixpoint_sub(val, dependencies))
-    end
-    p = reorder_parameters(ic, parameters(sys))[begin:(end - length(dep_buffer))]
-    update_function_iip, update_function_oop = if isempty(dep_exprs.x)
-        nothing, nothing
-    else
+    if has_parameter_dependencies(sys) &&
+       (pdeps = get_parameter_dependencies(sys)) !== nothing
+        pdeps = Dict(k => fixpoint_sub(v, pdeps) for (k, v) in pdeps)
+        dep_exprs = ArrayPartition((wrap.(v) for v in dep_buffer)...)
+        for (sym, val) in pdeps
+            h = getsymbolhash(sym)
+            i, j = ic.dependent_idx[h]
+            dep_exprs.x[i][j] = wrap(val)
+        end
+        p = reorder_parameters(ic, parameters(sys))
         oop, iip = build_function(dep_exprs, p...)
-        RuntimeGeneratedFunctions.@RuntimeGeneratedFunction(iip),
+        update_function_iip, update_function_oop = RuntimeGeneratedFunctions.@RuntimeGeneratedFunction(iip),
         RuntimeGeneratedFunctions.@RuntimeGeneratedFunction(oop)
+    else
+        update_function_iip = update_function_oop = nothing
     end
-    # everything is an ArrayPartition so it's easy to figure out how many
-    # distinct vectors we have for each portion as `ArrayPartition.x`
-    # if use_union
-    #     tunable_buffer = restrict_array_to_union(ArrayPartition(tunable_buffer))
-    #     disc_buffer = restrict_array_to_union(ArrayPartition(disc_buffer))
-    #     const_buffer = restrict_array_to_union(ArrayPartition(const_buffer))
-    #     dep_buffer = restrict_array_to_union(ArrayPartition(dep_buffer))
-    # elseif tofloat
-    #     tunable_buffer = Float64.(tunable_buffer)
-    #     disc_buffer = Float64.(disc_buffer)
-    #     const_buffer = Float64.(const_buffer)
-    #     dep_buffer = Float64.(dep_buffer)
-    # end
-    return MTKParameters{typeof(tunable_buffer), typeof(disc_buffer), typeof(const_buffer),
+
+    mtkps = MTKParameters{
+        typeof(tunable_buffer), typeof(disc_buffer), typeof(const_buffer),
         typeof(dep_buffer), typeof(nonnumeric_buffer), typeof(update_function_iip),
         typeof(update_function_oop)}(tunable_buffer, disc_buffer, const_buffer, dep_buffer,
         nonnumeric_buffer, update_function_iip, update_function_oop)
+    if mtkps.dependent_update_iip !== nothing
+        mtkps.dependent_update_iip(ArrayPartition(mtkps.dependent), mtkps...)
+    end
+    return mtkps
 end
 
 function buffer_to_arraypartition(buf)
@@ -122,7 +115,7 @@ function split_into_buffers(raw::AbstractArray, buf; recurse = true)
         if eltype(buf_v) isa AbstractArray && recurse
             return _helper.(buf_v; recurse = false)
         else
-            res = raw[idx:(idx + length(buf_v) - 1)]
+            res = reshape(raw[idx:(idx + length(buf_v) - 1)], size(buf_v))
             idx += length(buf_v)
             return res
         end
@@ -158,8 +151,9 @@ for (Portion, field) in [(SciMLStructures.Tunable, :tunable)
 
     @eval function SciMLStructures.replace!(::$Portion, p::MTKParameters, newvals)
         src = split_into_buffers(newvals, p.$field)
-        dst = buffer_to_arraypartition(newvals)
-        dst .= src
+        for i in 1:length(p.$field)
+            (p.$field)[i] .= src[i]
+        end
         if p.dependent_update_iip !== nothing
             p.dependent_update_iip(ArrayPartition(p.dependent), p...)
         end

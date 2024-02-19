@@ -131,7 +131,7 @@ function calculate_gradient(sys::OptimizationSystem)
 end
 
 function generate_gradient(sys::OptimizationSystem, vs = unknowns(sys),
-        ps = parameters(sys);
+        ps = full_parameters(sys);
         kwargs...)
     grad = calculate_gradient(sys)
     pre = get_preprocess_constants(grad)
@@ -145,7 +145,7 @@ function calculate_hessian(sys::OptimizationSystem)
 end
 
 function generate_hessian(
-        sys::OptimizationSystem, vs = unknowns(sys), ps = parameters(sys);
+        sys::OptimizationSystem, vs = unknowns(sys), ps = full_parameters(sys);
         sparse = false, kwargs...)
     if sparse
         hess = sparsehessian(objective(sys), unknowns(sys))
@@ -159,7 +159,7 @@ function generate_hessian(
 end
 
 function generate_function(sys::OptimizationSystem, vs = unknowns(sys),
-        ps = parameters(sys);
+        ps = full_parameters(sys);
         kwargs...)
     eqs = subs_constants(objective(sys))
     p = if has_index_cache(sys)

@@ -286,27 +286,12 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         ic = get_index_cache(sys)
         h = getsymbolhash(sym)
-        return if haskey(ic.param_idx, h)
-            ParameterIndex(SciMLStructures.Tunable(), ic.param_idx[h])
-        elseif haskey(ic.discrete_idx, h)
-            ParameterIndex(SciMLStructures.Discrete(), ic.discrete_idx[h])
-        elseif haskey(ic.constant_idx, h)
-            ParameterIndex(SciMLStructures.Constants(), ic.constant_idx[h])
-        elseif haskey(ic.dependent_idx, h)
-            ParameterIndex(nothing, ic.dependent_idx[h])
+        return if (idx = ParameterIndex(ic, sym)) !== nothing
+            idx
+        elseif (idx = ParameterIndex(ic, default_toterm(sym))) !== nothing
+            idx
         else
-            h = getsymbolhash(default_toterm(sym))
-            if haskey(ic.param_idx, h)
-                ParameterIndex(SciMLStructures.Tunable(), ic.param_idx[h])
-            elseif haskey(ic.discrete_idx, h)
-                ParameterIndex(SciMLStructures.Discrete(), ic.discrete_idx[h])
-            elseif haskey(ic.constant_idx, h)
-                ParameterIndex(SciMLStructures.Constants(), ic.constant_idx[h])
-            elseif haskey(ic.dependent_idx, h)
-                ParameterIndex(nothing, ic.dependent_idx[h])
-            else
-                nothing
-            end
+            nothing
         end
     end
 
@@ -329,7 +314,7 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym::Sym
 end
 
 function SymbolicIndexingInterface.parameter_symbols(sys::AbstractSystem)
-    return parameters(sys)
+    return full_parameters(sys)
 end
 
 function SymbolicIndexingInterface.is_independent_variable(sys::AbstractSystem, sym)
@@ -419,6 +404,7 @@ for prop in [:eqs
              :metadata
              :gui_metadata
              :discrete_subsystems
+             :parameter_dependencies
              :solved_unknowns
              :split_idxs
              :parent
@@ -750,7 +736,29 @@ function parameters(sys::AbstractSystem)
         ps = first.(ps)
     end
     systems = get_systems(sys)
-    unique(isempty(systems) ? ps : [ps; reduce(vcat, namespace_parameters.(systems))])
+    result = unique(isempty(systems) ? ps :
+                    [ps; reduce(vcat, namespace_parameters.(systems))])
+    if has_parameter_dependencies(sys) &&
+       (pdeps = get_parameter_dependencies(sys)) !== nothing
+        filter(result) do sym
+            !haskey(pdeps, sym)
+        end
+    else
+        result
+    end
+end
+
+function dependent_parameters(sys::AbstractSystem)
+    if has_parameter_dependencies(sys) &&
+       (pdeps = get_parameter_dependencies(sys)) !== nothing
+        collect(keys(pdeps))
+    else
+        []
+    end
+end
+
+function full_parameters(sys::AbstractSystem)
+    vcat(parameters(sys), dependent_parameters(sys))
 end
 
 # required in `src/connectors.jl:437`
@@ -1612,7 +1620,7 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
         kwargs...)
     sts = unknowns(sys)
     t = get_iv(sys)
-    ps = parameters(sys)
+    ps = full_parameters(sys)
     p = reorder_parameters(sys, ps)
 
     fun = generate_function(sys, sts, ps; expression = Val{false})[1]
@@ -2122,4 +2130,18 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
     else
         error("substituting symbols is not supported for $(typeof(sys))")
     end
+end
+
+function process_parameter_dependencies(pdeps, ps)
+    pdeps === nothing && return pdeps, ps
+    if pdeps isa Vector && eltype(pdeps) <: Pair
+        pdeps = Dict(pdeps)
+    elseif !(pdeps isa Dict)
+        error("parameter_dependencies must be a `Dict` or `Vector{<:Pair}`")
+    end
+
+    ps = filter(ps) do p
+        !haskey(pdeps, p)
+    end
+    return pdeps, ps
 end

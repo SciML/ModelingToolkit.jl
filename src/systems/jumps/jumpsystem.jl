@@ -90,6 +90,11 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
     """
+    A mapping from dependent parameters to expressions describing how they are calculated from
+    other parameters.
+    """
+    parameter_dependencies::Union{Nothing, Dict}
+    """
     Metadata for the system, to be used by downstream packages.
     """
     metadata::Any
@@ -108,7 +113,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
 
     function JumpSystem{U}(tag, ap::U, iv, unknowns, ps, var_to_name, observed, name,
             systems,
-            defaults, connector_type, devents,
+            defaults, connector_type, devents, parameter_dependencies,
             metadata = nothing, gui_metadata = nothing,
             complete = false, index_cache = nothing;
             checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
@@ -121,7 +126,8 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             check_units(u, ap, iv)
         end
         new{U}(tag, ap, iv, unknowns, ps, var_to_name, observed, name, systems, defaults,
-            connector_type, devents, metadata, gui_metadata, complete, index_cache)
+            connector_type, devents, parameter_dependencies, metadata, gui_metadata,
+            complete, index_cache)
     end
 end
 function JumpSystem(tag, ap, iv, states, ps, var_to_name, args...; kwargs...)
@@ -139,6 +145,7 @@ function JumpSystem(eqs, iv, unknowns, ps;
         checks = true,
         continuous_events = nothing,
         discrete_events = nothing,
+        parameter_dependencies = nothing,
         metadata = nothing,
         gui_metadata = nothing,
         kwargs...)
@@ -177,11 +184,11 @@ function JumpSystem(eqs, iv, unknowns, ps;
     (continuous_events === nothing) ||
         error("JumpSystems currently only support discrete events.")
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
-
+    parameter_dependencies, ps = process_parameter_dependencies(parameter_dependencies, ps)
     JumpSystem{typeof(ap)}(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         ap, value(iv), unknowns, ps, var_to_name, observed, name, systems,
-        defaults, connector_type, disc_callbacks, metadata, gui_metadata,
-        checks = checks)
+        defaults, connector_type, disc_callbacks, parameter_dependencies,
+        metadata, gui_metadata, checks = checks)
 end
 
 function generate_rate_function(js::JumpSystem, rate)
@@ -190,7 +197,7 @@ function generate_rate_function(js::JumpSystem, rate)
         csubs = Dict(c => getdefault(c) for c in consts)
         rate = substitute(rate, csubs)
     end
-    p = reorder_parameters(js, parameters(js))
+    p = reorder_parameters(js, full_parameters(js))
     rf = build_function(rate, unknowns(js), p...,
         get_iv(js),
         expression = Val{true})
@@ -202,8 +209,7 @@ function generate_affect_function(js::JumpSystem, affect, outputidxs)
         csubs = Dict(c => getdefault(c) for c in consts)
         affect = substitute(affect, csubs)
     end
-    p = reorder_parameters(js, parameters(js))
-    compile_affect(affect, js, unknowns(js), p...; outputidxs = outputidxs,
+    compile_affect(affect, js, unknowns(js), full_parameters(js); outputidxs = outputidxs,
         expression = Val{true}, checkvars = false)
 end
 

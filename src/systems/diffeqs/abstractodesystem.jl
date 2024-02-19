@@ -80,7 +80,8 @@ function calculate_control_jacobian(sys::AbstractODESystem;
     return jac
 end
 
-function generate_tgrad(sys::AbstractODESystem, dvs = unknowns(sys), ps = parameters(sys);
+function generate_tgrad(
+        sys::AbstractODESystem, dvs = unknowns(sys), ps = full_parameters(sys);
         simplify = false, kwargs...)
     tgrad = calculate_tgrad(sys, simplify = simplify)
     pre = get_preprocess_constants(tgrad)
@@ -100,7 +101,7 @@ function generate_tgrad(sys::AbstractODESystem, dvs = unknowns(sys), ps = parame
 end
 
 function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys);
+        ps = full_parameters(sys);
         simplify = false, sparse = false, kwargs...)
     jac = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
     pre = get_preprocess_constants(jac)
@@ -118,7 +119,7 @@ function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
 end
 
 function generate_control_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys);
+        ps = full_parameters(sys);
         simplify = false, sparse = false, kwargs...)
     jac = calculate_control_jacobian(sys; simplify = simplify, sparse = sparse)
     p = reorder_parameters(sys, ps)
@@ -146,7 +147,7 @@ function generate_dae_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
 end
 
 function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys);
+        ps = full_parameters(sys);
         implicit_dae = false,
         ddvs = implicit_dae ? map(Differential(get_iv(sys)), dvs) :
                nothing,
@@ -314,7 +315,7 @@ end
 
 function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         dvs = unknowns(sys),
-        ps = parameters(sys), u0 = nothing;
+        ps = full_parameters(sys), u0 = nothing;
         version = nothing, tgrad = false,
         jac = false, p = nothing,
         t = nothing,
@@ -830,7 +831,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         kwargs...)
     eqs = equations(sys)
     dvs = unknowns(sys)
-    ps = parameters(sys)
+    ps = full_parameters(sys)
     iv = get_iv(sys)
 
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
@@ -845,7 +846,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
             symbolic_u0)
         p, split_idxs = split_parameters_by_type(p)
         if p isa Tuple
-            ps = Base.Fix1(getindex, parameters(sys)).(split_idxs)
+            ps = Base.Fix1(getindex, full_parameters(sys)).(split_idxs)
             ps = (ps...,) #if p is Tuple, ps should be Tuple
         end
     end
@@ -997,7 +998,7 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
                 cbs = CallbackSet(discrete_cbs...)
             end
         else
-            cbs = CallbackSet(cbs, discrete_cbs)
+            cbs = CallbackSet(cbs, discrete_cbs...)
         end
     else
         svs = nothing
@@ -1060,7 +1061,7 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
 end
 
 function generate_history(sys::AbstractODESystem, u0; kwargs...)
-    p = reorder_parameters(sys, parameters(sys))
+    p = reorder_parameters(sys, full_parameters(sys))
     build_function(u0, p..., get_iv(sys); expression = Val{false}, kwargs...)
 end
 

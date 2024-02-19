@@ -77,13 +77,13 @@ function IndexCache(sys::AbstractSystem)
         end
     end
 
-    # all_ps = Set(unwrap.(parameters(sys)))
-    # for (sym, value) in defaults(sys)
-    #     sym = unwrap(sym)
-    #     if sym in all_ps && symbolic_type(unwrap(value)) !== NotSymbolic()
-    #         insert_by_type!(dependent_buffers, sym)
-    #     end
-    # end
+    if has_parameter_dependencies(sys) &&
+       (pdeps = get_parameter_dependencies(sys)) !== nothing
+        for (sym, value) in pdeps
+            sym = unwrap(sym)
+            insert_by_type!(dependent_buffers, sym)
+        end
+    end
 
     for p in parameters(sys)
         p = unwrap(p)
@@ -107,8 +107,7 @@ function IndexCache(sys::AbstractSystem)
         )
     end
 
-    function get_buffer_sizes_and_idxs(
-            buffers::Dict{DataType, Set{BasicSymbolic}}, track_linear_index = true)
+    function get_buffer_sizes_and_idxs(buffers::Dict{DataType, Set{BasicSymbolic}})
         idxs = IndexMap()
         buffer_sizes = BufferTemplate[]
         for (i, (T, buf)) in enumerate(buffers)
@@ -144,14 +143,8 @@ function IndexCache(sys::AbstractSystem)
     )
 end
 
-function ParameterIndex(ic::IndexCache, p)
+function ParameterIndex(ic::IndexCache, p, sub_idx = ())
     p = unwrap(p)
-    if istree(p) && operation(p) === getindex
-        sub_idx = Base.tail(arguments(p))
-        p = arguments(p)[begin]
-    else
-        sub_idx = ()
-    end
     h = getsymbolhash(p)
     return if haskey(ic.param_idx, h)
         ParameterIndex(SciMLStructures.Tunable(), (ic.param_idx[h]..., sub_idx...))
@@ -163,6 +156,9 @@ function ParameterIndex(ic::IndexCache, p)
         ParameterIndex(DEPENDENT_PORTION, (ic.dependent_idx[h]..., sub_idx...))
     elseif haskey(ic.nonnumeric_idx, h)
         ParameterIndex(NONNUMERIC_PORTION, (ic.nonnumeric_idx[h]..., sub_idx...))
+    elseif istree(p) && operation(p) === getindex
+        _p, sub_idx... = arguments(p)
+        ParameterIndex(ic, _p, sub_idx)
     else
         nothing
     end
