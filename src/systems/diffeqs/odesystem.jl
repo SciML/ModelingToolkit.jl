@@ -280,10 +280,23 @@ function ODESystem(eqs, iv; kwargs...)
         isdelay(v, iv) || continue
         collect_vars!(allunknowns, ps, arguments(v)[1], iv)
     end
+    new_ps = OrderedSet()
+    for p in ps
+        if istree(p) && operation(p) === getindex
+            par = arguments(p)[begin]
+            if Symbolics.shape(Symbolics.unwrap(par)) !== Symbolics.Unknown() && all(par[i] in ps for i in eachindex(par))
+                push!(new_ps, par)
+            else
+                push!(new_ps, p)
+            end
+        else
+            push!(new_ps, p)
+        end
+    end
     algevars = setdiff(allunknowns, diffvars)
     # the orders here are very important!
     return ODESystem(Equation[diffeq; algeeq; compressed_eqs], iv,
-        collect(Iterators.flatten((diffvars, algevars))), collect(ps); kwargs...)
+        collect(Iterators.flatten((diffvars, algevars))), collect(new_ps); kwargs...)
 end
 
 # NOTE: equality does not check cached Jacobian

@@ -36,6 +36,12 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
         for (k, v) in p if !haskey(extra_params, unwrap(k)))
     end
 
+    for (sym, _) in p
+        if istree(sym) && operation(sym) === getindex && is_parameter(sys, arguments(sym)[begin])
+            # error("Scalarized parameter values are not supported. Instead of `[p[1] => 1.0, p[2] => 2.0]` use `[p => [1.0, 2.0]]`")
+        end
+    end
+
     tunable_buffer = Tuple(Vector{temp.type}(undef, temp.length)
     for temp in ic.param_buffer_sizes)
     disc_buffer = Tuple(Vector{temp.type}(undef, temp.length)
@@ -48,6 +54,7 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
     for temp in ic.nonnumeric_buffer_sizes)
     function set_value(sym, val)
         h = getsymbolhash(sym)
+        done = true
         if haskey(ic.param_idx, h)
             i, j = ic.param_idx[h]
             tunable_buffer[i][j] = val
@@ -64,17 +71,24 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
             i, j = ic.nonnumeric_idx[h]
             nonnumeric_buffer[i][j] = val
         elseif !isequal(default_toterm(sym), sym)
-            set_value(default_toterm(sym), val)
+            done = set_value(default_toterm(sym), val)
         else
-            error("Symbol $sym does not have an index")
+            done = false
         end
+        return done
     end
 
     for (sym, val) in p
         sym = unwrap(sym)
         ctype = concrete_symtype(sym)
         val = convert(ctype, fixpoint_sub(val, p))
-        set_value(sym, val)
+        done = set_value(sym, val)
+        if !done && Symbolics.isarraysymbolic(sym)
+            done = all(set_value.(collect(sym), val))
+        end
+        if !done
+            error("Symbol $sym does not have an index")
+        end
     end
 
     if has_parameter_dependencies(sys) &&

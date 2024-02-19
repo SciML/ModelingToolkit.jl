@@ -192,8 +192,7 @@ function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym)
         ic = get_index_cache(sys)
         h = getsymbolhash(sym)
         return haskey(ic.unknown_idx, h) ||
-               haskey(ic.unknown_idx, getsymbolhash(default_toterm(sym))) ||
-               hasname(sym) && is_variable(sys, getname(sym))
+               haskey(ic.unknown_idx, getsymbolhash(default_toterm(sym)))
     else
         return any(isequal(sym), variable_symbols(sys)) ||
                hasname(sym) && is_variable(sys, getname(sym))
@@ -220,8 +219,6 @@ function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym)
             h = getsymbolhash(default_toterm(sym))
             if haskey(ic.unknown_idx, h)
                 ic.unknown_idx[h]
-            elseif hasname(sym)
-                variable_index(sys, getname(sym))
             else
                 nothing
             end
@@ -264,8 +261,7 @@ function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
         else
             h = getsymbolhash(default_toterm(sym))
             haskey(ic.param_idx, h) || haskey(ic.discrete_idx, h) ||
-                haskey(ic.constant_idx, h) || haskey(ic.dependent_idx, h) ||
-                hasname(sym) && is_parameter(sys, getname(sym))
+                haskey(ic.constant_idx, h) || haskey(ic.dependent_idx, h)
         end
     end
     return any(isequal(sym), parameter_symbols(sys)) ||
