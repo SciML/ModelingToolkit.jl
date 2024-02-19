@@ -342,22 +342,22 @@ v == Set([D(y), u])
 function vars(exprs::Symbolic; op = Differential)
     istree(exprs) ? vars([exprs]; op = op) : Set([exprs])
 end
+vars(exprs::Num; op = Differential) = vars(unwrap(exprs); op)
+vars(exprs::Symbolics.Arr; op = Differential) = vars(unwrap(exprs); op)
 vars(exprs; op = Differential) = foldl((x, y) -> vars!(x, y; op = op), exprs; init = Set())
 vars(eq::Equation; op = Differential) = vars!(Set(), eq; op = op)
 function vars!(vars, eq::Equation; op = Differential)
     (vars!(vars, eq.lhs; op = op); vars!(vars, eq.rhs; op = op); vars)
 end
 function vars!(vars, O; op = Differential)
+    if isvariable(O) && !(istree(O) && operation(O) === getindex)
+        return push!(vars, O)
+    end
+
     !istree(O) && return vars
     if operation(O) === (getindex)
         arr = first(arguments(O))
-        !istree(arr) && return vars
-        operation(arr) isa op && return push!(vars, O)
-        isvariable(operation(O)) && return push!(vars, O)
-    end
-
-    if isvariable(O)
-        return push!(vars, O)
+        return vars!(vars, arr)
     end
 
     operation(O) isa op && return push!(vars, O)

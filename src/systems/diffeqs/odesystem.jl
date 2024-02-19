@@ -195,9 +195,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         gui_metadata = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
-    #deqs = scalarize(deqs)
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
-
+    deqs = reduce(vcat, scalarize(deqs); init = Equation[])
     iv′ = value(iv)
     ps′ = value.(ps)
     ctrl′ = value.(controls)
@@ -236,7 +235,6 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
 end
 
 function ODESystem(eqs, iv; kwargs...)
-    eqs = scalarize(eqs)
     # NOTE: this assumes that the order of algebraic equations doesn't matter
     diffvars = OrderedSet()
     allunknowns = OrderedSet()

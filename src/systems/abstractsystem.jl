@@ -704,6 +704,9 @@ function namespace_expr(O, sys, n = nameof(sys); ivs = independent_variables(sys
             rescoped = renamespace(n, O)
             similarterm(O, operation(rescoped), renamed,
                 metadata = metadata(rescoped))
+        elseif Symbolics.isarraysymbolic(O)
+            # promote_symtype doesn't work for array symbolics
+            similarterm(O, operation(O), renamed, symtype(O), metadata = metadata(O))
         else
             similarterm(O, operation(O), renamed, metadata = metadata(O))
         end
