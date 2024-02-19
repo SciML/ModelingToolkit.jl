@@ -72,7 +72,7 @@ function IndexCache(sys::AbstractSystem)
     if has_discrete_subsystems(sys) && get_discrete_subsystems(sys) !== nothing
         _, inputs, continuous_id, _ = get_discrete_subsystems(sys)
         for par in inputs[continuous_id]
-            is_parameter(sys, par) || error("Discrete subsytem input is not a parameter")
+            is_parameter(sys, par) || error("Discrete subsystem input is not a parameter")
             insert_by_type!(disc_buffers, par)
         end
     end
