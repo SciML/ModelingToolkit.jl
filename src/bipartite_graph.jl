@@ -88,7 +88,7 @@ function Base.push!(m::Matching, v)
     end
 end
 
-function complete(m::Matching{U}, N = length(m.match)) where {U}
+function complete(m::Matching{U}, N = maximum((x for x in m.match if isa(x, Int)); init=0)) where {U}
     m.inv_match !== nothing && return m
     inv_match = Union{U, Int}[unassigned for _ in 1:N]
     for (i, eq) in enumerate(m.match)

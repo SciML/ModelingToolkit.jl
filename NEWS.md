@@ -33,7 +33,10 @@
     `@parameters p::Int`. Array-valued parameters must be array symbolics; `@parameters p = [1.0, 2.0]`
     is now invalid and must be changed to `@parameters p[1:2] = [1.0, 2.0]`. The index of a parameter
     in the system is also not guaranteed to be an `Int`, and will instead be a custom undocumented type.
-    To restore the old behavior:
+    Parameters that have a default value depending on other parameters are now treated as dependent
+    parameters. Their value cannot be modified directly. Whenever a parameter value is changed, dependent
+    parameter values are recalculated. For example, if `@parameters p1 p2 = 3p1` then `p2` can not be
+    modified directly. If `p1` is changed, then `p2` will be updated accordingly. To restore the old behavior:
     
       + Pass the `split = false` keyword to `structural_simplify`. E.g. `ss = structural_simplify(sys; split = false)`.
       + Pass `split = false` to `@mtkbuild`. E.g. `@mtkbuild sys = ODESystem(...) split = false`.
