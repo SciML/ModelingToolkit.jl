@@ -360,7 +360,7 @@ function vars!(vars, O; op = Differential)
     if operation(O) === (getindex)
         arr = first(arguments(O))
         istree(arr) && operation(arr) isa op && return push!(vars, O)
-       isvariable(arr) && return push!(vars, O)
+        isvariable(arr) && return push!(vars, O)
     end
 
     isvariable(operation(O)) && push!(vars, O)
