@@ -251,7 +251,8 @@ function TearingState(sys; quick_cancel = false, check = true)
     sys = flatten(sys)
     ivs = independent_variables(sys)
     iv = length(ivs) == 1 ? ivs[1] : nothing
-    eqs = copy(equations(sys))
+    # scalarize array equations, without scalarizing arguments to registered functions
+    eqs = flatten_equations(copy(equations(sys)))
     neqs = length(eqs)
     dervaridxs = OrderedSet{Int}()
     var2idx = Dict{Any, Int}()
