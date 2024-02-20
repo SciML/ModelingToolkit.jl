@@ -218,7 +218,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     iv′ = value(iv)
     ps′ = value.(ps)
     ctrl′ = value.(controls)
-    dvs′ = value.(dvs)
+    dvs′ = value.(symbolic_type(dvs) === NotSymbolic() ? dvs : [dvs])
     dvs′ = filter(x -> !isdelay(x, iv), dvs′)
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn(
@@ -253,6 +253,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
 end
 
 function ODESystem(eqs, iv; kwargs...)
+    eqs = collect(eqs)
     # NOTE: this assumes that the order of algebraic equations doesn't matter
     diffvars = OrderedSet()
     allunknowns = OrderedSet()
