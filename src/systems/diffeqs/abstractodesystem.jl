@@ -247,11 +247,10 @@ function calculate_massmatrix(sys::AbstractODESystem; simplify = false)
     eqs = [eq for eq in equations(sys)]
     dvs = unknowns(sys)
     M = zeros(length(eqs), length(eqs))
-    unknown2idx = Dict(s => i for (i, s) in enumerate(dvs))
     for (i, eq) in enumerate(eqs)
         if istree(eq.lhs) && operation(eq.lhs) isa Differential
             st = var_from_nested_derivative(eq.lhs)[1]
-            j = unknown2idx[st]
+            j = variable_index(sys, st)
             M[i, j] = 1
         else
             _iszero(eq.lhs) ||
