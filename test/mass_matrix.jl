@@ -8,7 +8,7 @@ eqs = [D(y[1]) ~ -k[1] * y[1] + k[3] * y[2] * y[3],
     D(y[2]) ~ k[1] * y[1] - k[3] * y[2] * y[3] - k[2] * y[2]^2,
     0 ~ y[1] + y[2] + y[3] - 1]
 
-@named sys = ODESystem(eqs, t, y, [k])
+@named sys = ODESystem(eqs, t, collect(y), [k])
 sys = complete(sys)
 @test_throws ArgumentError ODESystem(eqs, y[1])
 M = calculate_massmatrix(sys)
@@ -16,7 +16,7 @@ M = calculate_massmatrix(sys)
             0 1 0
             0 0 0]
 
-prob_mm = ODEProblem(sys, [1.0, 0.0, 0.0], (0.0, 1e5),
+prob_mm = ODEProblem(sys, [y => [1.0, 0.0, 0.0]], (0.0, 1e5),
     [k => [0.04, 3e7, 1e4]])
 sol = solve(prob_mm, Rodas5(), reltol = 1e-8, abstol = 1e-8)
 
@@ -40,6 +40,6 @@ sol2 = solve(prob_mm2, Rodas5(), reltol = 1e-8, abstol = 1e-8, tstops = sol.t,
 # Test mass matrix in the identity case
 eqs = [D(y[1]) ~ y[1], D(y[2]) ~ y[2], D(y[3]) ~ y[3]]
 
-@named sys = ODESystem(eqs, t, y, k)
+@named sys = ODESystem(eqs, t, collect(y), [k])
 
 @test calculate_massmatrix(sys) === I
