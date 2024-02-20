@@ -21,7 +21,7 @@ end
 const IndexMap = Dict{UInt, Tuple{Int, Int}}
 
 struct IndexCache
-    unknown_idx::Dict{UInt, Int}
+    unknown_idx::Dict{UInt, Union{Int, UnitRange{Int}}}
     discrete_idx::IndexMap
     param_idx::IndexMap
     constant_idx::IndexMap
@@ -36,10 +36,17 @@ end
 
 function IndexCache(sys::AbstractSystem)
     unks = solved_unknowns(sys)
-    unk_idxs = Dict{UInt, Int}()
-    for (i, sym) in enumerate(unks)
-        h = getsymbolhash(sym)
-        unk_idxs[h] = i
+    unk_idxs = Dict{UInt, Union{Int, UnitRange{Int}}}()
+    let idx = 1
+        for sym in unks
+            h = getsymbolhash(sym)
+            if Symbolics.isarraysymbolic(sym)
+                unk_idxs[h] = idx:(idx + length(sym) - 1)
+            else
+                unk_idxs[h] = idx
+            end
+            idx += length(sym)
+        end
     end
 
     disc_buffers = Dict{DataType, Set{BasicSymbolic}}()

@@ -192,7 +192,9 @@ function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym)
         ic = get_index_cache(sys)
         h = getsymbolhash(sym)
         return haskey(ic.unknown_idx, h) ||
-               haskey(ic.unknown_idx, getsymbolhash(default_toterm(sym)))
+               haskey(ic.unknown_idx, getsymbolhash(default_toterm(sym))) ||
+               (istree(sym) && operation(sym) === getindex &&
+                is_variable(sys, first(arguments(sym))))
     else
         return any(isequal(sym), variable_symbols(sys)) ||
                hasname(sym) && is_variable(sys, getname(sym))
@@ -213,16 +215,15 @@ function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         ic = get_index_cache(sys)
         h = getsymbolhash(sym)
-        return if haskey(ic.unknown_idx, h)
-            ic.unknown_idx[h]
-        else
-            h = getsymbolhash(default_toterm(sym))
-            if haskey(ic.unknown_idx, h)
-                ic.unknown_idx[h]
-            else
-                nothing
-            end
-        end
+        haskey(ic.unknown_idx, h) && return ic.unknown_idx[h]
+
+        h = getsymbolhash(default_toterm(sym))
+        haskey(ic.unknown_idx, h) && return ic.unknown_idx[h]
+        sym = unwrap(sym)
+        istree(sym) && operation(sym) === getindex || return nothing
+        idx = variable_index(sys, first(arguments(sym)))
+        idx === nothing && return nothing
+        return idx[arguments(sym)[(begin + 1):end]...]
     end
     idx = findfirst(isequal(sym), variable_symbols(sys))
     if idx === nothing && hasname(sym)
