@@ -39,7 +39,7 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
     for (sym, _) in p
         if istree(sym) && operation(sym) === getindex &&
            is_parameter(sys, arguments(sym)[begin])
-            # error("Scalarized parameter values are not supported. Instead of `[p[1] => 1.0, p[2] => 2.0]` use `[p => [1.0, 2.0]]`")
+            error("Scalarized parameter values are not supported. Instead of `[p[1] => 1.0, p[2] => 2.0]` use `[p => [1.0, 2.0]]`")
         end
     end
 
@@ -121,7 +121,7 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
 end
 
 function buffer_to_arraypartition(buf)
-    return ArrayPartition((eltype(v) isa AbstractArray ? buffer_to_arraypartition(v) : v for v in buf)...)
+    return ArrayPartition(Tuple(eltype(v) <: AbstractArray ? buffer_to_arraypartition(v) : v for v in buf))
 end
 
 function split_into_buffers(raw::AbstractArray, buf; recurse = true)
@@ -146,13 +146,19 @@ for (Portion, field) in [(SciMLStructures.Tunable, :tunable)
                          (SciMLStructures.Discrete, :discrete)
                          (SciMLStructures.Constants, :constant)]
     @eval function SciMLStructures.canonicalize(::$Portion, p::MTKParameters)
-        function repack(_) # aliases, so we don't need to use the parameter
-            if p.dependent_update_iip !== nothing
-                p.dependent_update_iip(ArrayPartition(p.dependent), p...)
+        as_vector = buffer_to_arraypartition(p.$field)
+        repack = let as_vector = as_vector, p = p
+            function (new_val) 
+                if new_val !== as_vector
+                    p.$field = split_into_buffers(new_val, p.$field)
+                end
+                if p.dependent_update_iip !== nothing
+                    p.dependent_update_iip(ArrayPartition(p.dependent), p...)
+                end
+                p
             end
-            p
         end
-        return buffer_to_arraypartition(p.$field), repack, true
+        return as_vector, repack, true
     end
 
     @eval function SciMLStructures.replace(::$Portion, p::MTKParameters, newvals)
@@ -174,6 +180,23 @@ for (Portion, field) in [(SciMLStructures.Tunable, :tunable)
         end
         nothing
     end
+end
+
+function Base.copy(p::MTKParameters)
+    tunable = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.tunable)
+    discrete = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.discrete)
+    constant = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.constant)
+    dependent = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.dependent)
+    nonnumeric = copy.(p.nonnumeric)
+    return MTKParameters(
+        tunable,
+        discrete,
+        constant,
+        dependent,
+        nonnumeric,
+        p.dependent_update_iip,
+        p.dependent_update_oop,
+    )
 end
 
 function SymbolicIndexingInterface.parameter_values(p::MTKParameters, pind::ParameterIndex)
