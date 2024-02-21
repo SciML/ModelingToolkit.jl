@@ -97,9 +97,8 @@ function IndexCache(sys::AbstractSystem)
         ctype = concrete_symtype(p)
         haskey(disc_buffers, ctype) && p in disc_buffers[ctype] && continue
         haskey(dependent_buffers, ctype) && p in dependent_buffers[ctype] && continue
-
         insert_by_type!(
-            if ctype <: Real || ctype <: Vector{<:Real}
+            if ctype <: Real || ctype <: AbstractArray{<:Real}
                 if is_discrete_domain(p)
                     disc_buffers
                 elseif istunable(p, true) && size(p) !== Symbolics.Unknown()
@@ -240,5 +239,5 @@ end
 concrete_symtype(x::BasicSymbolic) = concrete_symtype(symtype(x))
 concrete_symtype(::Type{Real}) = Float64
 concrete_symtype(::Type{Integer}) = Int
-concrete_symtype(::Type{Vector{T}}) where {T} = Vector{concrete_symtype(T)}
+concrete_symtype(::Type{A}) where {T, N, A<:Array{T, N}} = Array{concrete_symtype(T), N}
 concrete_symtype(::Type{T}) where {T} = T
