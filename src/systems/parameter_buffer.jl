@@ -121,7 +121,8 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
 end
 
 function buffer_to_arraypartition(buf)
-    return ArrayPartition(Tuple(eltype(v) <: AbstractArray ? buffer_to_arraypartition(v) : v for v in buf))
+    return ArrayPartition(Tuple(eltype(v) <: AbstractArray ? buffer_to_arraypartition(v) :
+                                v for v in buf))
 end
 
 function split_into_buffers(raw::AbstractArray, buf; recurse = true)
@@ -148,7 +149,7 @@ for (Portion, field) in [(SciMLStructures.Tunable, :tunable)
     @eval function SciMLStructures.canonicalize(::$Portion, p::MTKParameters)
         as_vector = buffer_to_arraypartition(p.$field)
         repack = let as_vector = as_vector, p = p
-            function (new_val) 
+            function (new_val)
                 if new_val !== as_vector
                     p.$field = split_into_buffers(new_val, p.$field)
                 end
@@ -195,7 +196,7 @@ function Base.copy(p::MTKParameters)
         dependent,
         nonnumeric,
         p.dependent_update_iip,
-        p.dependent_update_oop,
+        p.dependent_update_oop
     )
 end
 

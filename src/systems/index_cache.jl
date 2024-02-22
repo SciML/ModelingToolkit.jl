@@ -239,5 +239,5 @@ end
 concrete_symtype(x::BasicSymbolic) = concrete_symtype(symtype(x))
 concrete_symtype(::Type{Real}) = Float64
 concrete_symtype(::Type{Integer}) = Int
-concrete_symtype(::Type{A}) where {T, N, A<:Array{T, N}} = Array{concrete_symtype(T), N}
+concrete_symtype(::Type{A}) where {T, N, A <: Array{T, N}} = Array{concrete_symtype(T), N}
 concrete_symtype(::Type{T}) where {T} = T
