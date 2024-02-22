@@ -49,13 +49,13 @@ function IndexCache(sys::AbstractSystem)
         end
     end
 
-    disc_buffers = Dict{DataType, Set{BasicSymbolic}}()
-    tunable_buffers = Dict{DataType, Set{BasicSymbolic}}()
-    constant_buffers = Dict{DataType, Set{BasicSymbolic}}()
-    dependent_buffers = Dict{DataType, Set{BasicSymbolic}}()
-    nonnumeric_buffers = Dict{DataType, Set{BasicSymbolic}}()
+    disc_buffers = Dict{Any, Set{BasicSymbolic}}()
+    tunable_buffers = Dict{Any, Set{BasicSymbolic}}()
+    constant_buffers = Dict{Any, Set{BasicSymbolic}}()
+    dependent_buffers = Dict{Any, Set{BasicSymbolic}}()
+    nonnumeric_buffers = Dict{Any, Set{BasicSymbolic}}()
 
-    function insert_by_type!(buffers::Dict{DataType, Set{BasicSymbolic}}, sym)
+    function insert_by_type!(buffers::Dict{Any, Set{BasicSymbolic}}, sym)
         sym = unwrap(sym)
         ctype = concrete_symtype(sym)
         buf = get!(buffers, ctype, Set{BasicSymbolic}())
@@ -113,7 +113,7 @@ function IndexCache(sys::AbstractSystem)
         )
     end
 
-    function get_buffer_sizes_and_idxs(buffers::Dict{DataType, Set{BasicSymbolic}})
+    function get_buffer_sizes_and_idxs(buffers::Dict{Any, Set{BasicSymbolic}})
         idxs = IndexMap()
         buffer_sizes = BufferTemplate[]
         for (i, (T, buf)) in enumerate(buffers)
