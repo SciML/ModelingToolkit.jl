@@ -101,7 +101,7 @@ function IndexCache(sys::AbstractSystem)
             if ctype <: Real || ctype <: AbstractArray{<:Real}
                 if is_discrete_domain(p)
                     disc_buffers
-                elseif istunable(p, true) && size(p) !== Symbolics.Unknown()
+                elseif istunable(p, true) && Symbolics.shape(p) !== Symbolics.Unknown()
                     tunable_buffers
                 else
                     constant_buffers
