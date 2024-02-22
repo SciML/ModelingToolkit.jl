@@ -175,9 +175,10 @@ function generate_jacobian(
         sys::NonlinearSystem, vs = unknowns(sys), ps = full_parameters(sys);
         sparse = false, simplify = false, kwargs...)
     jac = calculate_jacobian(sys, sparse = sparse, simplify = simplify)
-    pre = get_preprocess_constants(jac)
+    pre, sol_states = get_substitutions_and_solved_unknowns(sys)
     p = reorder_parameters(sys, ps)
-    return build_function(jac, vs, p...; postprocess_fbody = pre, kwargs...)
+    return build_function(
+        jac, vs, p...; postprocess_fbody = pre, states = sol_states, kwargs...)
 end
 
 function calculate_hessian(sys::NonlinearSystem; sparse = false, simplify = false)

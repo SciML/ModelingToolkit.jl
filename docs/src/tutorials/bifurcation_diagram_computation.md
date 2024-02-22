@@ -91,7 +91,7 @@ It is also possible to use `ODESystem`s (rather than `NonlinearSystem`s) as inpu
 using BifurcationKit, ModelingToolkit, Plots
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@variables  x(t) y(t)
+@variables x(t) y(t)
 @parameters μ
 eqs = [D(x) ~ μ * x - y - x * (x^2 + y^2),
     D(y) ~ x + μ * y - y * (x^2 + y^2)]

@@ -49,13 +49,13 @@ function IndexCache(sys::AbstractSystem)
         end
     end
 
-    disc_buffers = Dict{DataType, Set{BasicSymbolic}}()
-    tunable_buffers = Dict{DataType, Set{BasicSymbolic}}()
-    constant_buffers = Dict{DataType, Set{BasicSymbolic}}()
-    dependent_buffers = Dict{DataType, Set{BasicSymbolic}}()
-    nonnumeric_buffers = Dict{DataType, Set{BasicSymbolic}}()
+    disc_buffers = Dict{Any, Set{BasicSymbolic}}()
+    tunable_buffers = Dict{Any, Set{BasicSymbolic}}()
+    constant_buffers = Dict{Any, Set{BasicSymbolic}}()
+    dependent_buffers = Dict{Any, Set{BasicSymbolic}}()
+    nonnumeric_buffers = Dict{Any, Set{BasicSymbolic}}()
 
-    function insert_by_type!(buffers::Dict{DataType, Set{BasicSymbolic}}, sym)
+    function insert_by_type!(buffers::Dict{Any, Set{BasicSymbolic}}, sym)
         sym = unwrap(sym)
         ctype = concrete_symtype(sym)
         buf = get!(buffers, ctype, Set{BasicSymbolic}())
@@ -101,7 +101,7 @@ function IndexCache(sys::AbstractSystem)
             if ctype <: Real || ctype <: AbstractArray{<:Real}
                 if is_discrete_domain(p)
                     disc_buffers
-                elseif istunable(p, true) && size(p) !== Symbolics.Unknown()
+                elseif istunable(p, true) && Symbolics.shape(p) !== Symbolics.Unknown()
                     tunable_buffers
                 else
                     constant_buffers
@@ -113,7 +113,7 @@ function IndexCache(sys::AbstractSystem)
         )
     end
 
-    function get_buffer_sizes_and_idxs(buffers::Dict{DataType, Set{BasicSymbolic}})
+    function get_buffer_sizes_and_idxs(buffers::Dict{Any, Set{BasicSymbolic}})
         idxs = IndexMap()
         buffer_sizes = BufferTemplate[]
         for (i, (T, buf)) in enumerate(buffers)

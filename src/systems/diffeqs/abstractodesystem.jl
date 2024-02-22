@@ -807,7 +807,8 @@ function get_u0(sys, u0map, parammap = nothing; symbolic_u0 = false)
     end
     defs = mergedefaults(defs, u0map, dvs)
     for (k, v) in defs
-        if Symbolics.isarraysymbolic(k)
+        if Symbolics.isarraysymbolic(k) &&
+           Symbolics.shape(unwrap(k)) !== Symbolics.Unknown()
             ks = scalarize(k)
             length(ks) == length(v) || error("$k has default value $v with unmatched size")
             for (kk, vv) in zip(ks, v)

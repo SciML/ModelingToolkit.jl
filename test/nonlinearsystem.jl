@@ -87,6 +87,9 @@ prob = NonlinearProblem(ns, ones(3), [σ => 1.0, ρ => 1.0, β => 1.0])
 sol = solve(prob, NewtonRaphson())
 @test sol.u[1] ≈ sol.u[2]
 
+prob = NonlinearProblem(ns, ones(3), [σ => 1.0, ρ => 1.0, β => 1.0], jac = true)
+@test_nowarn solve(prob, NewtonRaphson())
+
 @test_throws ArgumentError NonlinearProblem(ns, ones(4), [σ => 1.0, ρ => 1.0, β => 1.0])
 
 @variables u F s a
