@@ -6,9 +6,7 @@ A domain in ModelingToolkit.jl is a network of connected components that share p
 
 ```@example domain
 using ModelingToolkit
-
-@parameters t
-D = Differential(t)
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @connector function HydraulicPort(; p_int, name)
     pars = @parameters begin

@@ -102,9 +102,10 @@ end
 This error can come up after running `structural_simplify` on a system that generates dummy derivatives (i.e. variables with `ˍt`).  For example, here even though all the variables are defined with initial values, the `ODEProblem` generation will throw an error that defaults are missing from the variable map.
 
 ```
-@variables t
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
 sts = @variables x1(t)=0.0 x2(t)=0.0 x3(t)=0.0 x4(t)=0.0
-D = Differential(t)
 eqs = [x1 + x2 + 1 ~ 0
        x1 + x2 + x3 + 2 ~ 0
        x1 + D(x3) + x4 + 3 ~ 0
@@ -137,9 +138,9 @@ container type. For example:
 
 ```
 using ModelingToolkit, StaticArrays
-@variables t
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
 sts = @variables x1(t)=0.0
-D = Differential(t)
 eqs = [D(x1) ~ 1.1 * x1]
 @mtkbuild sys = ODESystem(eqs, t)
 prob = ODEProblem{false}(sys, [], (0,1); u0_constructor = x->SVector(x...))

@@ -13,10 +13,10 @@ We utilize the derivative operator twice here to define the second order:
 
 ```@example orderlowering
 using ModelingToolkit, OrdinaryDiffEq
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @parameters σ ρ β
-@variables t x(t) y(t) z(t)
-D = Differential(t)
+@variables x(t) y(t) z(t)
 
 eqs = [D(D(x)) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,

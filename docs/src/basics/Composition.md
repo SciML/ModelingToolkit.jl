@@ -21,7 +21,6 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 function decay(; name)
     @parameters a
     @variables x(t) f(t)
-    D = Differential(t)
     ODESystem([
             D(x) ~ -a * x + f
         ], t;
@@ -31,7 +30,6 @@ end
 @named decay1 = decay()
 @named decay2 = decay()
 
-D = Differential(t)
 connected = compose(
     ODESystem([decay2.f ~ decay1.x
                D(decay1.f) ~ 0], t; name = :connected), decay1, decay2)

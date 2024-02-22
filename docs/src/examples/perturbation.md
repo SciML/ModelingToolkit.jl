@@ -45,8 +45,9 @@ As the first ODE example, we have chosen a simple and well-behaved problem, whic
 with the initial conditions $x(0) = 0$, and $\dot{x}(0) = 1$. Note that for $\epsilon = 0$, this equation transforms back to the standard one. Let's start with defining the variables
 
 ```julia
+using ModelingToolkit: t_nounits as t, D_nounits as D
 n = 3
-@variables ϵ t y[1:n](t) ∂∂y[1:n](t)
+@variables ϵ y[1:n](t) ∂∂y[1:n](t)
 ```
 
 Next, we define $x$.
@@ -82,7 +83,6 @@ vals = solve_coef(eqs, ∂∂y)
 Our system of ODEs is forming. Now is the time to convert `∂∂`s to the correct **Symbolics.jl** form by substitution:
 
 ```julia
-D = Differential(t)
 subs = Dict(∂∂y[i] => D(D(y[i])) for i in eachindex(y))
 eqs = [substitute(first(v), subs) ~ substitute(last(v), subs) for v in vals]
 ```
@@ -147,7 +147,6 @@ vals = solve_coef(eqs, ∂∂y)
 Next, we need to replace `∂`s and `∂∂`s with their **Symbolics.jl** counterparts:
 
 ```julia
-D = Differential(t)
 subs1 = Dict(∂y[i] => D(y[i]) for i in eachindex(y))
 subs2 = Dict(∂∂y[i] => D(D(y[i])) for i in eachindex(y))
 subs = subs1 ∪ subs2

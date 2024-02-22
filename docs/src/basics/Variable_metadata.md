@@ -50,8 +50,9 @@ current in a resistor. These variables sum up to zero in connections.
 
 ```@example connect
 using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@variables t, i(t) [connect = Flow]
+@variables i(t) [connect = Flow]
 @variables k(t) [connect = Stream]
 ```
 
