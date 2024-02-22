@@ -21,9 +21,9 @@ The `linearize` function expects the user to specify the inputs ``u`` and the ou
 
 ```@example LINEARIZE
 using ModelingToolkit
-@variables t x(t)=0 y(t)=0 u(t)=0 r(t)=0
+using ModelingToolkit: t_nounits as t, D_nounits as D
+@variables x(t)=0 y(t)=0 u(t)=0 r(t)=0
 @parameters kp = 1
-D = Differential(t)
 
 eqs = [u ~ kp * (r - y) # P controller
        D(x) ~ -x + u    # First-order plant

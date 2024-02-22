@@ -11,10 +11,9 @@ electrical circuits:
 
 ```@example tearing
 using ModelingToolkit, OrdinaryDiffEq
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 # Basic electric components
-@variables t
-const D = Differential(t)
 @connector function Pin(; name)
     @variables v(t)=1.0 i(t)=1.0 [connect = Flow]
     ODESystem(Equation[], t, [v, i], [], name = name)

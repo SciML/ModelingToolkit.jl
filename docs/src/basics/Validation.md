@@ -83,7 +83,7 @@ second argument.
 ```@example validation2
 using ModelingToolkit, Unitful
 # Composite type parameter in registered function
-@parameters t
+@variables t
 D = Differential(t)
 struct NewType
     f::Any

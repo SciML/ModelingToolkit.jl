@@ -30,9 +30,7 @@ We first define the parameters, variables, differential equations and the output
 
 ```@example SI
 using StructuralIdentifiability, ModelingToolkit
-
-@variables t
-D = Differential(t)
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @mtkmodel Biohydrogenation begin
     @variables begin
@@ -107,9 +105,7 @@ Global identifiability needs information about local identifiability first, but 
 
 ```@example SI2
 using StructuralIdentifiability, ModelingToolkit
-
-@variables t
-D = Differential(t)
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @mtkmodel GoodwinOsc begin
     @parameters begin
@@ -150,9 +146,7 @@ Let us consider the same system but with two inputs, and we will find out identi
 
 ```@example SI3
 using StructuralIdentifiability, ModelingToolkit
-
-@variables t
-D = Differential(t)
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @mtkmodel GoodwinOscillator begin
     @parameters begin

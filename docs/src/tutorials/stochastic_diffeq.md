@@ -9,11 +9,11 @@ it to have multiplicative noise.
 
 ```@example SDE
 using ModelingToolkit, StochasticDiffEq
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 # Define some variables
 @parameters σ ρ β
-@variables t x(t) y(t) z(t)
-D = Differential(t)
+@variables x(t) y(t) z(t)
 
 eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,

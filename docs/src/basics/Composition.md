@@ -16,22 +16,20 @@ of `decay2` is the value of the unknown variable `x`.
 
 ```@example composition
 using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 function decay(; name)
-    @parameters t a
+    @parameters a
     @variables x(t) f(t)
-    D = Differential(t)
     ODESystem([
             D(x) ~ -a * x + f
-        ];
+        ], t;
         name = name)
 end
 
 @named decay1 = decay()
 @named decay2 = decay()
 
-@parameters t
-D = Differential(t)
 connected = compose(
     ODESystem([decay2.f ~ decay1.x
                D(decay1.f) ~ 0], t; name = :connected), decay1, decay2)
@@ -137,7 +135,7 @@ sys.y = u * 1.1
 In a hierarchical system, variables of the subsystem get namespaced by the name of the system they are in. This prevents naming clashes, but also enforces that every unknown and parameter is local to the subsystem it is used in. In some cases it might be desirable to have variables and parameters that are shared between subsystems, or even global. This can be accomplished as follows.
 
 ```julia
-@parameters t a b c d e f
+@parameters a b c d e f
 
 # a is a local variable
 b = ParentScope(b) # b is a variable that belongs to one level up in the hierarchy
@@ -197,19 +195,16 @@ higher level system:
 
 ```@example compose
 using ModelingToolkit, OrdinaryDiffEq, Plots
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 ## Library code
-
-@parameters t
-D = Differential(t)
-
 @variables S(t), I(t), R(t)
 N = S + I + R
 @parameters β, γ
 
-@named seqn = ODESystem([D(S) ~ -β * S * I / N])
-@named ieqn = ODESystem([D(I) ~ β * S * I / N - γ * I])
-@named reqn = ODESystem([D(R) ~ γ * I])
+@named seqn = ODESystem([D(S) ~ -β * S * I / N], t)
+@named ieqn = ODESystem([D(I) ~ β * S * I / N - γ * I], t)
+@named reqn = ODESystem([D(R) ~ γ * I],t )
 
 sir = compose(
     ODESystem(
