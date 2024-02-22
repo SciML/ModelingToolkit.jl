@@ -256,7 +256,7 @@ function fol_factory(separate = false; name)
         D(x) ~ RHS] :
           D(x) ~ (f - x) / τ
 
-    ODESystem(eqs; name)
+    ODESystem(eqs, t; name)
 end
 ```
 
@@ -277,7 +277,7 @@ again are just algebraic relations:
 connections = [fol_1.f ~ 1.5,
     fol_2.f ~ fol_1.x]
 
-connected = compose(ODESystem(connections, name = :connected), fol_1, fol_2)
+connected = compose(ODESystem(connections, t, name = :connected), fol_1, fol_2)
 ```
 
 All equations, variables, and parameters are collected, but the structure of the
