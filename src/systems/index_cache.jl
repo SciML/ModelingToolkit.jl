@@ -1,7 +1,8 @@
 abstract type SymbolHash end
 
 function getsymbolhash(sym)
-    hasmetadata(sym, SymbolHash) ? getmetadata(sym, SymbolHash) : hash(unwrap(sym))
+    sym = unwrap(sym)
+    hasmetadata(sym, SymbolHash) ? getmetadata(sym, SymbolHash) : hash(sym)
 end
 
 struct BufferTemplate
@@ -9,35 +10,50 @@ struct BufferTemplate
     length::Int
 end
 
-struct ParameterIndex{P}
+const DEPENDENT_PORTION = :dependent
+const NONNUMERIC_PORTION = :nonnumeric
+
+struct ParameterIndex{P, I}
     portion::P
-    idx::Int
+    idx::I
 end
 
+const IndexMap = Dict{UInt, Tuple{Int, Int}}
+
 struct IndexCache
-    unknown_idx::Dict{UInt, Int}
-    discrete_idx::Dict{UInt, Int}
-    param_idx::Dict{UInt, Int}
-    constant_idx::Dict{UInt, Int}
-    dependent_idx::Dict{UInt, Int}
+    unknown_idx::Dict{UInt, Union{Int, UnitRange{Int}}}
+    discrete_idx::IndexMap
+    param_idx::IndexMap
+    constant_idx::IndexMap
+    dependent_idx::IndexMap
+    nonnumeric_idx::IndexMap
     discrete_buffer_sizes::Vector{BufferTemplate}
     param_buffer_sizes::Vector{BufferTemplate}
     constant_buffer_sizes::Vector{BufferTemplate}
     dependent_buffer_sizes::Vector{BufferTemplate}
+    nonnumeric_buffer_sizes::Vector{BufferTemplate}
 end
 
 function IndexCache(sys::AbstractSystem)
     unks = solved_unknowns(sys)
-    unk_idxs = Dict{UInt, Int}()
-    for (i, sym) in enumerate(unks)
-        h = getsymbolhash(sym)
-        unk_idxs[h] = i
+    unk_idxs = Dict{UInt, Union{Int, UnitRange{Int}}}()
+    let idx = 1
+        for sym in unks
+            h = getsymbolhash(sym)
+            if Symbolics.isarraysymbolic(sym)
+                unk_idxs[h] = idx:(idx + length(sym) - 1)
+            else
+                unk_idxs[h] = idx
+            end
+            idx += length(sym)
+        end
     end
 
     disc_buffers = Dict{DataType, Set{BasicSymbolic}}()
     tunable_buffers = Dict{DataType, Set{BasicSymbolic}}()
     constant_buffers = Dict{DataType, Set{BasicSymbolic}}()
     dependent_buffers = Dict{DataType, Set{BasicSymbolic}}()
+    nonnumeric_buffers = Dict{DataType, Set{BasicSymbolic}}()
 
     function insert_by_type!(buffers::Dict{DataType, Set{BasicSymbolic}}, sym)
         sym = unwrap(sym)
@@ -63,15 +79,15 @@ function IndexCache(sys::AbstractSystem)
     if has_discrete_subsystems(sys) && get_discrete_subsystems(sys) !== nothing
         _, inputs, continuous_id, _ = get_discrete_subsystems(sys)
         for par in inputs[continuous_id]
-            is_parameter(sys, par) || error("Discrete subsytem input is not a parameter")
+            is_parameter(sys, par) || error("Discrete subsystem input is not a parameter")
             insert_by_type!(disc_buffers, par)
         end
     end
 
-    all_ps = Set(unwrap.(parameters(sys)))
-    for (sym, value) in defaults(sys)
-        sym = unwrap(sym)
-        if sym in all_ps && symbolic_type(unwrap(value)) !== NotSymbolic()
+    if has_parameter_dependencies(sys) &&
+       (pdeps = get_parameter_dependencies(sys)) !== nothing
+        for (sym, value) in pdeps
+            sym = unwrap(sym)
             insert_by_type!(dependent_buffers, sym)
         end
     end
@@ -81,30 +97,31 @@ function IndexCache(sys::AbstractSystem)
         ctype = concrete_symtype(p)
         haskey(disc_buffers, ctype) && p in disc_buffers[ctype] && continue
         haskey(dependent_buffers, ctype) && p in dependent_buffers[ctype] && continue
-
         insert_by_type!(
-            if is_discrete_domain(p)
-                disc_buffers
-            elseif istunable(p, true)
-                tunable_buffers
+            if ctype <: Real || ctype <: AbstractArray{<:Real}
+                if is_discrete_domain(p)
+                    disc_buffers
+                elseif istunable(p, true) && size(p) !== Symbolics.Unknown()
+                    tunable_buffers
+                else
+                    constant_buffers
+                end
             else
-                constant_buffers
+                nonnumeric_buffers
             end,
             p
         )
     end
 
     function get_buffer_sizes_and_idxs(buffers::Dict{DataType, Set{BasicSymbolic}})
-        idxs = Dict{UInt, Int}()
+        idxs = IndexMap()
         buffer_sizes = BufferTemplate[]
-        idx = 1
-        for (T, buf) in buffers
-            for p in buf
+        for (i, (T, buf)) in enumerate(buffers)
+            for (j, p) in enumerate(buf)
                 h = getsymbolhash(p)
-                idxs[h] = idx
+                idxs[h] = (i, j)
                 h = getsymbolhash(default_toterm(p))
-                idxs[h] = idx
-                idx += 1
+                idxs[h] = (i, j)
             end
             push!(buffer_sizes, BufferTemplate(T, length(buf)))
         end
@@ -115,6 +132,7 @@ function IndexCache(sys::AbstractSystem)
     param_idxs, param_buffer_sizes = get_buffer_sizes_and_idxs(tunable_buffers)
     const_idxs, const_buffer_sizes = get_buffer_sizes_and_idxs(constant_buffers)
     dependent_idxs, dependent_buffer_sizes = get_buffer_sizes_and_idxs(dependent_buffers)
+    nonnumeric_idxs, nonnumeric_buffer_sizes = get_buffer_sizes_and_idxs(nonnumeric_buffers)
 
     return IndexCache(
         unk_idxs,
@@ -122,11 +140,44 @@ function IndexCache(sys::AbstractSystem)
         param_idxs,
         const_idxs,
         dependent_idxs,
+        nonnumeric_idxs,
         discrete_buffer_sizes,
         param_buffer_sizes,
         const_buffer_sizes,
-        dependent_buffer_sizes
+        dependent_buffer_sizes,
+        nonnumeric_buffer_sizes
     )
+end
+
+function ParameterIndex(ic::IndexCache, p, sub_idx = ())
+    p = unwrap(p)
+    h = getsymbolhash(p)
+    return if haskey(ic.param_idx, h)
+        ParameterIndex(SciMLStructures.Tunable(), (ic.param_idx[h]..., sub_idx...))
+    elseif haskey(ic.discrete_idx, h)
+        ParameterIndex(SciMLStructures.Discrete(), (ic.discrete_idx[h]..., sub_idx...))
+    elseif haskey(ic.constant_idx, h)
+        ParameterIndex(SciMLStructures.Constants(), (ic.constant_idx[h]..., sub_idx...))
+    elseif haskey(ic.dependent_idx, h)
+        ParameterIndex(DEPENDENT_PORTION, (ic.dependent_idx[h]..., sub_idx...))
+    elseif haskey(ic.nonnumeric_idx, h)
+        ParameterIndex(NONNUMERIC_PORTION, (ic.nonnumeric_idx[h]..., sub_idx...))
+    elseif istree(p) && operation(p) === getindex
+        _p, sub_idx... = arguments(p)
+        ParameterIndex(ic, _p, sub_idx)
+    else
+        nothing
+    end
+end
+
+function discrete_linear_index(ic::IndexCache, idx::ParameterIndex)
+    idx.portion isa SciMLStructures.Discrete || error("Discrete variable index expected")
+    ind = sum(temp.length for temp in ic.param_buffer_sizes; init = 0)
+    ind += sum(
+        temp.length for temp in Iterators.take(ic.discrete_buffer_sizes, idx.idx[1] - 1);
+        init = 0)
+    ind += idx.idx[2]
+    return ind
 end
 
 function reorder_parameters(sys::AbstractSystem, ps; kwargs...)
@@ -140,28 +191,41 @@ function reorder_parameters(sys::AbstractSystem, ps; kwargs...)
 end
 
 function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
-    param_buf = ArrayPartition((fill(variable(:DEF), temp.length) for temp in ic.param_buffer_sizes)...)
-    disc_buf = ArrayPartition((fill(variable(:DEF), temp.length) for temp in ic.discrete_buffer_sizes)...)
-    const_buf = ArrayPartition((fill(variable(:DEF), temp.length) for temp in ic.constant_buffer_sizes)...)
-    dep_buf = ArrayPartition((fill(variable(:DEF), temp.length) for temp in ic.dependent_buffer_sizes)...)
+    param_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
+    for temp in ic.param_buffer_sizes)
+    disc_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
+    for temp in ic.discrete_buffer_sizes)
+    const_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
+    for temp in ic.constant_buffer_sizes)
+    dep_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
+    for temp in ic.dependent_buffer_sizes)
+    nonnumeric_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
+    for temp in ic.nonnumeric_buffer_sizes)
 
     for p in ps
         h = getsymbolhash(p)
         if haskey(ic.discrete_idx, h)
-            disc_buf[ic.discrete_idx[h]] = unwrap(p)
+            i, j = ic.discrete_idx[h]
+            disc_buf[i][j] = unwrap(p)
         elseif haskey(ic.param_idx, h)
-            param_buf[ic.param_idx[h]] = unwrap(p)
+            i, j = ic.param_idx[h]
+            param_buf[i][j] = unwrap(p)
         elseif haskey(ic.constant_idx, h)
-            const_buf[ic.constant_idx[h]] = unwrap(p)
+            i, j = ic.constant_idx[h]
+            const_buf[i][j] = unwrap(p)
         elseif haskey(ic.dependent_idx, h)
-            dep_buf[ic.dependent_idx[h]] = unwrap(p)
+            i, j = ic.dependent_idx[h]
+            dep_buf[i][j] = unwrap(p)
+        elseif haskey(ic.nonnumeric_idx, h)
+            i, j = ic.nonnumeric_idx[h]
+            nonnumeric_buf[i][j] = unwrap(p)
         else
             error("Invalid parameter $p")
         end
     end
 
     result = broadcast.(
-        unwrap, (param_buf.x..., disc_buf.x..., const_buf.x..., dep_buf.x...))
+        unwrap, (param_buf..., disc_buf..., const_buf..., nonnumeric_buf..., dep_buf...))
     if drop_missing
         result = map(result) do buf
             filter(buf) do sym
@@ -175,5 +239,5 @@ end
 concrete_symtype(x::BasicSymbolic) = concrete_symtype(symtype(x))
 concrete_symtype(::Type{Real}) = Float64
 concrete_symtype(::Type{Integer}) = Int
-concrete_symtype(::Type{Vector{T}}) where {T} = Vector{concrete_symtype(T)}
+concrete_symtype(::Type{A}) where {T, N, A <: Array{T, N}} = Array{concrete_symtype(T), N}
 concrete_symtype(::Type{T}) where {T} = T

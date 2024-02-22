@@ -62,6 +62,7 @@ end
         @safetestset "OptimizationSystem Test" include("optimizationsystem.jl")
         @safetestset "FuncAffect Test" include("funcaffect.jl")
         @safetestset "Constants Test" include("constants.jl")
+        @safetestset "Parameter Dependency Test" include("parameter_dependencies.jl")
     end
 
     if GROUP == "All" || GROUP == "InterfaceII"
@@ -77,8 +78,8 @@ end
 
     if GROUP == "All" || GROUP == "Downstream"
         activate_downstream_env()
-        @safetestset "Linearization Tests" include("linearize.jl")
-        @safetestset "Inverse Models Test" include("inversemodel.jl")
+        @safetestset "Linearization Tests" include("downstream/linearize.jl")
+        @safetestset "Inverse Models Test" include("downstream/inversemodel.jl")
     end
 
     if GROUP == "All" || GROUP == "Extensions"

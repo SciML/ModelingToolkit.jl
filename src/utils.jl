@@ -232,7 +232,7 @@ end
 
 function collect_defaults!(defs, vars)
     for v in vars
-        (haskey(defs, v) || !hasdefault(v)) && continue
+        (haskey(defs, v) || !hasdefault(unwrap(v))) && continue
         defs[v] = getdefault(v)
     end
     return defs
@@ -342,6 +342,8 @@ v == Set([D(y), u])
 function vars(exprs::Symbolic; op = Differential)
     istree(exprs) ? vars([exprs]; op = op) : Set([exprs])
 end
+vars(exprs::Num; op = Differential) = vars(unwrap(exprs); op)
+vars(exprs::Symbolics.Arr; op = Differential) = vars(unwrap(exprs); op)
 vars(exprs; op = Differential) = foldl((x, y) -> vars!(x, y; op = op), exprs; init = Set())
 vars(eq::Equation; op = Differential) = vars!(Set(), eq; op = op)
 function vars!(vars, eq::Equation; op = Differential)
@@ -355,9 +357,10 @@ function vars!(vars, O; op = Differential)
 
     operation(O) isa op && return push!(vars, O)
 
-    if operation(O) === (getindex) &&
-       isvariable(first(arguments(O)))
-        return push!(vars, O)
+    if operation(O) === (getindex)
+        arr = first(arguments(O))
+        istree(arr) && operation(arr) isa op && return push!(vars, O)
+        isvariable(arr) && return push!(vars, O)
     end
 
     isvariable(operation(O)) && push!(vars, O)
@@ -807,7 +810,7 @@ end
 function fast_substitute(eq::T, subs::Pair) where {T <: Eq}
     T(fast_substitute(eq.lhs, subs), fast_substitute(eq.rhs, subs))
 end
-fast_substitute(eqs::AbstractArray{<:Eq}, subs) = fast_substitute.(eqs, (subs,))
+fast_substitute(eqs::AbstractArray, subs) = fast_substitute.(eqs, (subs,))
 fast_substitute(a, b) = substitute(a, b)
 function fast_substitute(expr, pair::Pair)
     a, b = pair

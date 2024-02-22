@@ -33,13 +33,24 @@ t_end = 10.0
 time = 0:dt:t_end
 x = @. time^2 + 1.0
 
-get_value(data, t, dt) = data[round(Int, t / dt + 1)]
-@register_symbolic get_value(data::Vector, t, dt)
+struct Interpolator
+    data::Vector{Float64}
+    dt::Float64
+end
 
-function Sampled(; name, dt = 0.0, n = length(data))
+function (i::Interpolator)(t)
+    return i.data[round(Int, t / i.dt + 1)]
+end
+@register_symbolic (i::Interpolator)(t)
+
+get_value(interp::Interpolator, t) = interp(t)
+@register_symbolic get_value(interp::Interpolator, t)
+# get_value(data, t, dt) = data[round(Int, t / dt + 1)]
+# @register_symbolic get_value(data::Vector, t, dt)
+
+function Sampled(; name, interp = Interpolator(Float64[], 0.0))
     pars = @parameters begin
-        data[1:n]
-        dt = dt
+        interpolator::Interpolator = interp
     end
 
     vars = []
@@ -48,15 +59,15 @@ function Sampled(; name, dt = 0.0, n = length(data))
     end
 
     eqs = [
-        output.u ~ get_value(data, t, dt)
+        output.u ~ get_value(interpolator, t)
     ]
 
-    return ODESystem(eqs, t, vars, [data..., dt]; name, systems,
-        defaults = [output.u => data[1]])
+    return ODESystem(eqs, t, vars, [interpolator]; name, systems,
+        defaults = [output.u => interp.data[1]])
 end
 
 vars = @variables y(t)=1 dy(t)=0 ddy(t)=0
-@named src = Sampled(; dt, n = length(x))
+@named src = Sampled(; interp = Interpolator(x, dt))
 @named int = Integrator()
 
 eqs = [y ~ src.output.u
@@ -67,24 +78,20 @@ eqs = [y ~ src.output.u
 @named sys = ODESystem(eqs, t, vars, []; systems = [int, src])
 s = complete(sys)
 sys = structural_simplify(sys)
-prob = ODEProblem(sys, [], (0.0, t_end), [s.src.data => x]; tofloat = false)
-@test prob.p isa Tuple{Vector{Float64}, Vector{Int}, Vector{Vector{Float64}}}
+prob = ODEProblem(
+    sys, [], (0.0, t_end), [s.src.interpolator => Interpolator(x, dt)]; tofloat = false)
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
 @test sol[y][end] == x[end]
 
 #TODO: remake becomes more complicated now, how to improve?
 defs = ModelingToolkit.defaults(sys)
-defs[s.src.data] = 2x
-p′ = ModelingToolkit.varmap_to_vars(defs, parameters(sys); tofloat = false)
-p′, = ModelingToolkit.split_parameters_by_type(p′) #NOTE: we need to ensure this is called now before calling remake()
+defs[s.src.interpolator] = Interpolator(2x, dt)
+p′ = ModelingToolkit.MTKParameters(sys, defs)
 prob′ = remake(prob; p = p′)
 sol = solve(prob′, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
 @test sol[y][end] == 2x[end]
-
-prob′′ = remake(prob; p = [s.src.data => x])
-@test_broken prob′′.p isa Tuple
 
 # ------------------------ Mixed Type Converted to float (default behavior)
 
@@ -95,7 +102,7 @@ eqs = [D(y) ~ dy * a
        ddy ~ sin(t) * c]
 
 @named model = ODESystem(eqs, t, vars, pars)
-sys = structural_simplify(model)
+sys = structural_simplify(model; split = false)
 
 tspan = (0.0, t_end)
 prob = ODEProblem(sys, [], tspan, [])
