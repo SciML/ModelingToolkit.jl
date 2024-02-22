@@ -204,7 +204,7 @@ N = S + I + R
 
 @named seqn = ODESystem([D(S) ~ -β * S * I / N], t)
 @named ieqn = ODESystem([D(I) ~ β * S * I / N - γ * I], t)
-@named reqn = ODESystem([D(R) ~ γ * I],t )
+@named reqn = ODESystem([D(R) ~ γ * I], t)
 
 sir = compose(
     ODESystem(
