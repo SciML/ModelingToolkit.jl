@@ -20,7 +20,7 @@
       + `t_nounits` and `D_nounits` are unitless.
   - `ODAEProblem` is deprecated in favor of `ODEProblem`.
   - Specifying the independent variable for an `ODESystem` is now mandatory. The `ODESystem(eqs)`
-    constructor is removed.
+    constructor is removed. Use `ODESystem(eqs,t)` instead.
   - Systems must be marked as `complete` before creating `*Function`/`*FunctionExpr`/`*Problem`/
     `*ProblemExpr`. Typically this involved using `@mtkbuild` to create the system or calling
     `structural_simplify` on an existing system.
