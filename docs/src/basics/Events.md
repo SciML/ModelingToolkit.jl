@@ -144,12 +144,12 @@ ModelingToolkit therefore supports regular Julia functions as affects: instead
 of one or more equations, an affect is defined as a `tuple`:
 
 ```julia
-[x ~ 0] => (affect!, [v, x], [p, q], ctx)
+[x ~ 0] => (affect!, [v, x], [p, q], [discretes...], ctx)
 ```
 
 where, `affect!` is a Julia function with the signature: `affect!(integ, u, p, ctx)`; `[u,v]` and `[p,q]` are the symbolic unknowns (variables) and parameters
-that are accessed by `affect!`, respectively; and `ctx` is any context that is
-passed to `affect!` as the `ctx` argument.
+that are accessed by `affect!`, respectively; `discretes` are the parameters modified by `affect!`, if any;
+and `ctx` is any context that is passed to `affect!` as the `ctx` argument.
 
 `affect!` receives a [DifferentialEquations.jl
 integrator](https://docs.sciml.ai/DiffEqDocs/stable/basics/integrator/)
@@ -172,7 +172,7 @@ When accessing variables of a sub-system, it can be useful to rename them
 (alternatively, an affect function may be reused in different contexts):
 
 ```julia
-[x ~ 0] => (affect!, [resistor₊v => :v, x], [p, q => :p2], ctx)
+[x ~ 0] => (affect!, [resistor₊v => :v, x], [p, q => :p2], [], ctx)
 ```
 
 Here, the symbolic variable `resistor₊v` is passed as `v` while the symbolic
@@ -191,7 +191,7 @@ function bb_affect!(integ, u, p, ctx)
     integ.u[u.v] = -integ.u[u.v]
 end
 
-reflect = [x ~ 0] => (bb_affect!, [v], [], nothing)
+reflect = [x ~ 0] => (bb_affect!, [v], [], [], nothing)
 
 @mtkbuild bb_sys = ODESystem(bb_eqs, t, sts, par,
     continuous_events = reflect)
