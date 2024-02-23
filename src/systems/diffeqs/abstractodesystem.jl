@@ -775,6 +775,16 @@ function get_u0_p(sys,
     if parammap !== nothing
         defs = mergedefaults(defs, parammap, ps)
     end
+    if u0map isa Vector && eltype(u0map) <: Pair
+        u0map = Dict(u0map)
+    end
+    if u0map isa Dict
+        allobs = Set(getproperty.(observed(sys), :lhs))
+        if any(in(allobs), keys(u0map))
+            u0s_in_obs = filter(in(allobs), keys(u0map))
+            @warn "Observed variables cannot assigned initial values. Initial values for $u0s_in_obs will be ignored."
+        end
+    end
     defs = mergedefaults(defs, u0map, dvs)
     for (k, v) in defs
         if Symbolics.isarraysymbolic(k)
