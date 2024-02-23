@@ -318,7 +318,8 @@ end
     @parameters a b
     loss = (a - x)^2 + b * (y - x^2)^2
     cons2 = [x^2 + y^2 ~ 0, y * sin(x) - x ~ 0]
-    sys = complete(OptimizationSystem(loss, [x, y], [a, b], name = :sys2, constraints = cons2))
+    sys = complete(OptimizationSystem(
+        loss, [x, y], [a, b], name = :sys2, constraints = cons2))
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0],
         grad = true, hess = true, cons_j = true, cons_h = true)
 
@@ -326,10 +327,10 @@ end
     H1 = Array{Float64}(undef, 2, 2)
     J = Array{Float64}(undef, 2, 2)
     H3 = [Array{Float64}(undef, 2, 2), Array{Float64}(undef, 2, 2)]
-    
+
     prob.f.grad(G1, [1.0, 1.0], [1.0, 100.0])
     @test prob.f.grad([1.0, 1.0], [1.0, 100.0]) == G1
-    
+
     prob.f.hess(H1, [1.0, 1.0], [1.0, 100.0])
     @test prob.f.hess([1.0, 1.0], [1.0, 100.0]) == H1
 
