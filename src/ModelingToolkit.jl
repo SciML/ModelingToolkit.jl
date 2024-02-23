@@ -222,8 +222,7 @@ export connect, domain_connect, @connector, Connection, Flow, Stream, instream
 export @component, @mtkmodel, @mtkbuild
 export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbance,
        istunable, getdist, hasdist,
-       tunable_parameters, isirreducible, getdescription, hasdescription, isbinaryvar,
-       isintegervar
+       tunable_parameters, isirreducible, getdescription, hasdescription
 export ode_order_lowering, dae_order_lowering, liouville_transform
 export PDESystem
 export Differential, expand_derivatives, @derivatives

@@ -273,14 +273,14 @@ end
 
 @testset "Metadata in variables" begin
     metadata = Dict(:description => "Variable to test metadata in the Model.structure",
-        :input => true, :bounds => (-1, 1), :connection_type => :Flow, :integer => true,
-        :binary => false, :tunable => false, :disturbance => true, :dist => Normal(1, 1))
+        :input => true, :bounds => (-1, 1), :connection_type => :Flow,
+        :tunable => false, :disturbance => true, :dist => Normal(1, 1))
 
     @connector MockMeta begin
         m(t),
         [description = "Variable to test metadata in the Model.structure",
-            input = true, bounds = (-1, 1), connect = Flow, integer = true,
-            binary = false, tunable = false, disturbance = true, dist = Normal(1, 1)]
+            input = true, bounds = (-1, 1), connect = Flow,
+            tunable = false, disturbance = true, dist = Normal(1, 1)]
     end
 
     for (k, v) in metadata

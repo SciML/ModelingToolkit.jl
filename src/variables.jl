@@ -439,40 +439,6 @@ function hasdescription(x)
     getdescription(x) != ""
 end
 
-## binary variables =================================================================
-struct VariableBinary end
-Symbolics.option_to_metadata_type(::Val{:binary}) = VariableBinary
-
-isbinaryvar(x::Num) = isbinaryvar(Symbolics.unwrap(x))
-
-"""
-    isbinaryvar(x)
-
-Determine if a variable is binary.
-"""
-function isbinaryvar(x)
-    p = Symbolics.getparent(x, nothing)
-    p === nothing || (x = p)
-    return Symbolics.getmetadata(x, VariableBinary, false)
-end
-
-## integer variables =================================================================
-struct VariableInteger end
-Symbolics.option_to_metadata_type(::Val{:integer}) = VariableInteger
-
-isintegervar(x::Num) = isintegervar(Symbolics.unwrap(x))
-
-"""
-    isintegervar(x)
-
-Determine if a variable is an integer.
-"""
-function isintegervar(x)
-    p = Symbolics.getparent(x, nothing)
-    p === nothing || (x = p)
-    return Symbolics.getmetadata(x, VariableInteger, false)
-end
-
 ## Brownian
 """
     tobrownian(s::Sym)
