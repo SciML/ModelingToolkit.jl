@@ -128,7 +128,7 @@ end
 function split_into_buffers(raw::AbstractArray, buf; recurse = true)
     idx = 1
     function _helper(buf_v; recurse = true)
-        if eltype(buf_v) isa AbstractArray && recurse
+        if eltype(buf_v) <: AbstractArray && recurse
             return _helper.(buf_v; recurse = false)
         else
             res = reshape(raw[idx:(idx + length(buf_v) - 1)], size(buf_v))
@@ -137,6 +137,19 @@ function split_into_buffers(raw::AbstractArray, buf; recurse = true)
         end
     end
     return Tuple(_helper(buf_v; recurse) for buf_v in buf)
+end
+
+function update_tuple_of_buffers(raw::AbstractArray, buf)
+    idx = 1
+    function _helper(buf_v)
+        if eltype(buf_v) <: AbstractArray
+            _helper.(buf_v)
+        else
+            copyto!(buf_v, view(raw, idx:(idx + length(buf_v) - 1)))
+            idx += length(buf_v)
+        end
+    end
+    _helper.(buf)
 end
 
 SciMLStructures.isscimlstructure(::MTKParameters) = true
@@ -151,7 +164,7 @@ for (Portion, field) in [(SciMLStructures.Tunable, :tunable)
         repack = let as_vector = as_vector, p = p
             function (new_val)
                 if new_val !== as_vector
-                    p.$field = split_into_buffers(new_val, p.$field)
+                    update_tuple_of_buffers(new_val, p.$field)
                 end
                 if p.dependent_update_iip !== nothing
                     p.dependent_update_iip(ArrayPartition(p.dependent), p...)
