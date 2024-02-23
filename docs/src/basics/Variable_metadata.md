@@ -159,6 +159,9 @@ lb, ub = getbounds(p) # operating on a vector, we get lower and upper bound vect
 b = getbounds(sys) # Operating on the system, we get a dict
 ```
 
+See also: [`ModelingToolkit.dump_variable_metadata`](@ref), [`ModelingToolkit.dump_parameters`](@ref),
+[`ModelingToolkit.dump_unknowns`](@ref).
+
 ## Index
 
 ```@index
@@ -171,4 +174,10 @@ Pages = ["Variable_metadata.md"]
 Modules = [ModelingToolkit]
 Pages = ["variables.jl"]
 Private = false
+```
+
+```@docs
+ModelingToolkit.dump_variable_metadata
+ModelingToolkit.dump_parameters
+ModelingToolkit.dump_unknowns
 ```

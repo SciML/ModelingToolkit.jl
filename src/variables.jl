@@ -15,6 +15,18 @@ Symbolics.option_to_metadata_type(::Val{:irreducible}) = VariableIrreducible
 Symbolics.option_to_metadata_type(::Val{:state_priority}) = VariableStatePriority
 Symbolics.option_to_metadata_type(::Val{:misc}) = VariableMisc
 
+"""
+    dump_variable_metadata(var)
+
+Return all the metadata associated with symbolic variable `var` as a `NamedTuple`.
+
+```@example
+using ModelingToolkit
+
+@parameters p::Int [description = "My description", bounds = (0.5, 1.5)]
+ModelingToolkit.dump_variable_metadata(p)
+```
+"""
 function dump_variable_metadata(var)
     uvar = unwrap(var)
     vartype, name = get(uvar.metadata, VariableSource, (:unknown, :unknown))

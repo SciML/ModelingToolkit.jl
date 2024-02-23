@@ -2147,6 +2147,25 @@ function process_parameter_dependencies(pdeps, ps)
     return pdeps, ps
 end
 
+"""
+    dump_parameters(sys::AbstractSystem)
+
+Return an array of `NamedTuple`s containing the metadata associated with each parameter in
+`sys`. Also includes the default value of the parameter, if provided.
+
+```@example
+using ModelingToolkit
+using DynamicQuantities
+using ModelingToolkit: t, D
+
+@parameters p = 1.0, [description = "My parameter", tunable = false] q = 2.0, [description = "Other parameter"]
+@variables x(t) = 3.0 [unit = u"m"]
+@named sys = ODESystem(Equation[], t, [x], [p, q])
+ModelingToolkit.dump_parameters(sys)
+```
+
+See also: [`ModelingToolkit.dump_variable_metadata`](@ref), [`ModelingToolkit.dump_unknowns`](@ref)
+"""
 function dump_parameters(sys::AbstractSystem)
     defs = defaults(sys)
     map(dump_variable_metadata.(parameters(sys))) do meta
@@ -2157,6 +2176,25 @@ function dump_parameters(sys::AbstractSystem)
     end
 end
 
+"""
+    dump_unknowns(sys::AbstractSystem)
+
+Return an array of `NamedTuple`s containing the metadata associated with each unknown in
+`sys`. Also includes the default value of the unknown, if provided.
+
+```@example
+using ModelingToolkit
+using DynamicQuantities
+using ModelingToolkit: t, D
+
+@parameters p = 1.0, [description = "My parameter", tunable = false] q = 2.0, [description = "Other parameter"]
+@variables x(t) = 3.0 [unit = u"m"]
+@named sys = ODESystem(Equation[], t, [x], [p, q])
+ModelingToolkit.dump_unknowns(sys)
+```
+
+See also: [`ModelingToolkit.dump_variable_metadata`](@ref), [`ModelingToolkit.dump_parameters`](@ref)
+"""
 function dump_unknowns(sys::AbstractSystem)
     defs = defaults(sys)
     map(dump_variable_metadata.(unknowns(sys))) do meta
