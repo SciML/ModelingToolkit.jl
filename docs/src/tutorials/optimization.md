@@ -6,13 +6,13 @@ Let's solve the classical _Rosenbrock function_ in two dimensions.
 
 First, we need to make some imports.
 
-```@example rosenbrock_2d
+```julia
 using ModelingToolkit, Optimization, OptimizationOptimJL
 ```
 
 Now we can define our optimization problem.
 
-```@example rosenbrock_2d
+```julia
 @variables begin
     x, [bounds = (-2.0, 2.0)]
     y, [bounds = (-1.0, 3.0)]
@@ -44,7 +44,7 @@ Every optimization problem consists of a set of _optimization variables_. In thi
 
 Next, the actual `OptimizationProblem` can be created. At this stage, an initial guess `u0` for the optimization variables needs to be provided via map, using the symbols from before. Concrete values for the parameters of the system can also be provided or changed. However, if the parameters have default values assigned, they are used automatically.
 
-```@example rosenbrock_2d
+```julia
 u0 = [x => 1.0
       y => 2.0]
 p = [a => 1.0
@@ -56,7 +56,7 @@ solve(prob, GradientDescent())
 
 ## Rosenbrock Function with Constraints
 
-```@example rosenbrock_2d_cstr
+```julia
 using ModelingToolkit, Optimization, OptimizationOptimJL
 
 @variables begin
