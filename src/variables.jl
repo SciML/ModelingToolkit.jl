@@ -15,6 +15,57 @@ Symbolics.option_to_metadata_type(::Val{:irreducible}) = VariableIrreducible
 Symbolics.option_to_metadata_type(::Val{:state_priority}) = VariableStatePriority
 Symbolics.option_to_metadata_type(::Val{:misc}) = VariableMisc
 
+function dump_variable_metadata(var)
+    uvar = unwrap(var)
+    vartype, name = get(uvar.metadata, VariableSource, (:unknown, :unknown))
+    shape = Symbolics.shape(var)
+    if shape == ()
+        shape = nothing
+    end
+    unit = get(uvar.metadata, VariableUnit, nothing)
+    connect = get(uvar.metadata, VariableConnectType, nothing)
+    noise = get(uvar.metadata, VariableNoiseType, nothing)
+    input = isinput(uvar) || nothing
+    output = isoutput(uvar) || nothing
+    irreducible = get(uvar.metadata, VariableIrreducible, nothing)
+    state_priority = get(uvar.metadata, VariableStatePriority, nothing)
+    misc = get(uvar.metadata, VariableMisc, nothing)
+    bounds = hasbounds(uvar) ? getbounds(uvar) : nothing
+    desc = getdescription(var)
+    if desc == ""
+        desc = nothing
+    end
+    guess = getguess(uvar)
+    disturbance = isdisturbance(uvar) || nothing
+    tunable = istunable(uvar, isparameter(uvar))
+    dist = getdist(uvar)
+    type = symtype(uvar)
+
+    meta = (
+        var = var,
+        vartype,
+        name,
+        shape,
+        unit,
+        connect,
+        noise,
+        input,
+        output,
+        irreducible,
+        state_priority,
+        misc,
+        bounds,
+        desc,
+        guess,
+        disturbance,
+        tunable,
+        dist,
+        type
+    )
+
+    return NamedTuple(k => v for (k, v) in pairs(meta) if v !== nothing)
+end
+
 abstract type AbstractConnectType end
 struct Equality <: AbstractConnectType end # Equality connection
 struct Flow <: AbstractConnectType end     # sum to 0
@@ -243,7 +294,7 @@ Symbolics.option_to_metadata_type(::Val{:tunable}) = VariableTunable
 istunable(x::Num, args...) = istunable(Symbolics.unwrap(x), args...)
 
 """
-    istunable(x, default = false)
+    istunable(x, default = true)
 
 Determine whether symbolic variable `x` is marked as a tunable for an automatic tuning algorithm.
 
@@ -257,7 +308,7 @@ Create a tunable parameter by
 
 See also [`tunable_parameters`](@ref), [`getbounds`](@ref)
 """
-function istunable(x, default = false)
+function istunable(x, default = true)
     p = Symbolics.getparent(x, nothing)
     p === nothing || (x = p)
     Symbolics.getmetadata(x, VariableTunable, default)
@@ -302,7 +353,7 @@ end
 ## System interface
 
 """
-    tunable_parameters(sys, p = parameters(sys); default=false)
+    tunable_parameters(sys, p = parameters(sys); default=true)
 
 Get all parameters of `sys` that are marked as `tunable`.
 
@@ -316,7 +367,7 @@ Create a tunable parameter by
 
 See also [`getbounds`](@ref), [`istunable`](@ref)
 """
-function tunable_parameters(sys, p = parameters(sys); default = false)
+function tunable_parameters(sys, p = parameters(sys); default = true)
     filter(x -> istunable(x, default), p)
 end
 

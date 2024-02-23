@@ -2146,3 +2146,23 @@ function process_parameter_dependencies(pdeps, ps)
     end
     return pdeps, ps
 end
+
+function dump_parameters(sys::AbstractSystem)
+    defs = defaults(sys)
+    map(dump_variable_metadata.(parameters(sys))) do meta
+        if haskey(defs, meta.var)
+            meta = merge(meta, (; default = defs[meta.var]))
+        end
+        meta
+    end
+end
+
+function dump_unknowns(sys::AbstractSystem)
+    defs = defaults(sys)
+    map(dump_variable_metadata.(unknowns(sys))) do meta
+        if haskey(defs, meta.var)
+            meta = merge(meta, (; default = defs[meta.var]))
+        end
+        meta
+    end
+end
