@@ -97,6 +97,10 @@ struct ODESystem <: AbstractODESystem
     """
     torn_matching::Union{Matching, Nothing}
     """
+    The system for performing the initialization.
+    """
+    initializesystem::Union{Nothing, NonlinearSystem}
+    """
     Type of the system.
     """
     connector_type::Any
@@ -163,7 +167,7 @@ struct ODESystem <: AbstractODESystem
 
     function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
             jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses,
-            torn_matching, connector_type, preface, cevents,
+            torn_matching, initializesystem, connector_type, preface, cevents,
             devents, parameter_dependencies, metadata = nothing, gui_metadata = nothing,
             tearing_state = nothing,
             substitutions = nothing, complete = false, index_cache = nothing,
@@ -181,7 +185,7 @@ struct ODESystem <: AbstractODESystem
         end
         new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses, torn_matching,
-            connector_type, preface, cevents, devents, parameter_dependencies, metadata,
+            initializesystem, connector_type, preface, cevents, devents, parameter_dependencies, metadata,
             gui_metadata, tearing_state, substitutions, complete, index_cache,
             discrete_subsystems, solved_unknowns, split_idxs, parent)
     end
@@ -197,6 +201,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
         guesses = Dict(),
+        initializesystem = nothing,
         connector_type = nothing,
         preface = nothing,
         continuous_events = nothing,
@@ -247,7 +252,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         parameter_dependencies, ps′)
     ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
-        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses, nothing,
+        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses, nothing, initializesystem,
         connector_type, preface, cont_callbacks, disc_callbacks, parameter_dependencies,
         metadata, gui_metadata, checks = checks)
 end

@@ -568,7 +568,7 @@ function merge_io(io, inputs)
 end
 
 function structural_simplify!(state::TearingState, io = nothing; simplify = false,
-        check_consistency = true, fully_determined = true,
+        check_consistency = true, fully_determined = true, warn_initialize_determined = true,
         kwargs...)
     if state.sys isa ODESystem
         ci = ModelingToolkit.ClockInference(state)
@@ -615,7 +615,7 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
 end
 
 function _structural_simplify!(state::TearingState, io; simplify = false,
-        check_consistency = true, fully_determined = true,
+        check_consistency = true, fully_determined = true, warn_initialize_determined = true,
         kwargs...)
     check_consistency &= fully_determined
     has_io = io !== nothing
@@ -635,5 +635,19 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
     end
     fullunknowns = [map(eq -> eq.lhs, observed(sys)); unknowns(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)
+
+    if sys isa ODESystem
+        isys = ModelingToolkit.generate_initializesystem(sys)
+        !isempty(equations(isys)) && (isys = structural_simplify(isys; fully_determined = false))
+        @set! sys.initializesystem = isys
+        neqs = length(equations(isys))
+        nunknown = length(unknowns(isys))
+        if warn_initialize_determined && neqs > nunknown
+            @warn "Initialization system is overdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares"
+        end
+        if warn_initialize_determined && neqs < nunknown
+            @warn "Initialization system is underdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares"
+        end
+    end
     ModelingToolkit.invalidate_cache!(sys), input_idxs
 end

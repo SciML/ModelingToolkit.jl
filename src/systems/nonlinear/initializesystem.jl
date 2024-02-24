@@ -3,7 +3,7 @@ $(TYPEDSIGNATURES)
 
 Generate `NonlinearSystem` which initializes an ODE problem from specified initial conditions of an `ODESystem`.
 """
-function initializesystem(sys::ODESystem; name = nameof(sys), guesses = Dict(), kwargs...)
+function generate_initializesystem(sys::ODESystem; name = nameof(sys), guesses = Dict(), check_defguess = false, kwargs...)
     sts, eqs = unknowns(sys), equations(sys)
     idxs_diff = isdiffeq.(eqs)
     idxs_alge = .!idxs_diff
@@ -26,7 +26,7 @@ function initializesystem(sys::ODESystem; name = nameof(sys), guesses = Dict(), 
             def = defs[st]
 
             if def isa Equation
-                st ∉ keys(guesses) &&
+                st ∉ keys(guesses) && check_defguess &&
                     error("Invalid setup: unknown $(st) has an initial condition equation with no guess.")
                 push!(eqs_ics, def)
                 push!(u0, st => guesses[st])
@@ -36,7 +36,7 @@ function initializesystem(sys::ODESystem; name = nameof(sys), guesses = Dict(), 
             end
         elseif st ∈ keys(guesses)
             push!(u0, st => guesses[st])
-        else
+        elseif check_defguess
             error("Invalid setup: unknown $(st) has no default value or initial guess")
         end
     end

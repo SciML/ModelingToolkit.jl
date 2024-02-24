@@ -572,6 +572,7 @@ for prop in [:eqs
              :connections
              :preface
              :torn_matching
+             :initializesystem
              :tearing_state
              :substitutions
              :metadata

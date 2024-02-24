@@ -137,18 +137,17 @@ include("systems/model_parsing.jl")
 include("systems/connectors.jl")
 include("systems/callbacks.jl")
 
+include("systems/nonlinear/nonlinearsystem.jl")
 include("systems/diffeqs/odesystem.jl")
 include("systems/diffeqs/sdesystem.jl")
 include("systems/diffeqs/abstractodesystem.jl")
+include("systems/nonlinear/modelingtoolkitize.jl")
+include("systems/nonlinear/initializesystem.jl")
 include("systems/diffeqs/first_order_transform.jl")
 include("systems/diffeqs/modelingtoolkitize.jl")
 include("systems/diffeqs/basic_transformations.jl")
 
 include("systems/jumps/jumpsystem.jl")
-
-include("systems/nonlinear/nonlinearsystem.jl")
-include("systems/nonlinear/modelingtoolkitize.jl")
-include("systems/nonlinear/initializesystem.jl")
 
 include("systems/optimization/constraints_system.jl")
 include("systems/optimization/optimizationsystem.jl")
@@ -253,7 +252,7 @@ export toexpr, get_variables
 export simplify, substitute
 export build_function
 export modelingtoolkitize
-export initializesystem
+export initializesystem, generate_initializesystem
 
 export @variables, @parameters, @constants, @brownian
 export @named, @nonamespace, @namespace, extend, compose, complete
