@@ -80,7 +80,8 @@ function calculate_control_jacobian(sys::AbstractODESystem;
     return jac
 end
 
-function generate_tgrad(sys::AbstractODESystem, dvs = unknowns(sys), ps = parameters(sys);
+function generate_tgrad(
+        sys::AbstractODESystem, dvs = unknowns(sys), ps = full_parameters(sys);
         simplify = false, kwargs...)
     tgrad = calculate_tgrad(sys, simplify = simplify)
     pre = get_preprocess_constants(tgrad)
@@ -100,7 +101,7 @@ function generate_tgrad(sys::AbstractODESystem, dvs = unknowns(sys), ps = parame
 end
 
 function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys);
+        ps = full_parameters(sys);
         simplify = false, sparse = false, kwargs...)
     jac = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
     pre = get_preprocess_constants(jac)
@@ -118,7 +119,7 @@ function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
 end
 
 function generate_control_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys);
+        ps = full_parameters(sys);
         simplify = false, sparse = false, kwargs...)
     jac = calculate_control_jacobian(sys; simplify = simplify, sparse = sparse)
     p = reorder_parameters(sys, ps)
@@ -146,12 +147,27 @@ function generate_dae_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
 end
 
 function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys);
+        ps = full_parameters(sys);
         implicit_dae = false,
         ddvs = implicit_dae ? map(Differential(get_iv(sys)), dvs) :
                nothing,
         isdde = false,
         kwargs...)
+    array_vars = Dict{Any, Vector{Int}}()
+    for (j, x) in enumerate(dvs)
+        if istree(x) && operation(x) == getindex
+            arg = arguments(x)[1]
+            inds = get!(() -> Int[], array_vars, arg)
+            push!(inds, j)
+        end
+    end
+    subs = Dict()
+    for (k, inds) in array_vars
+        if inds == (inds′ = inds[1]:inds[end])
+            inds = inds′
+        end
+        subs[k] = term(view, Sym{Any}(Symbol("ˍ₋arg1")), inds)
+    end
     if isdde
         eqs = delay_to_function(sys)
     else
@@ -164,14 +180,11 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
     # substitute x(t) by just x
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
            [eq.rhs for eq in eqs]
+    rhss = fast_substitute(rhss, subs)
 
     # TODO: add an optional check on the ordering of observed equations
     u = map(x -> time_varying_as_func(value(x), sys), dvs)
-    p = if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        reorder_parameters(get_index_cache(sys), ps isa Tuple ? reduce(vcat, ps) : ps)
-    else
-        (map(x -> time_varying_as_func(value(x), sys), ps),)
-    end
+    p = map.(x -> time_varying_as_func(value(x), sys), reorder_parameters(sys, ps))
     t = get_iv(sys)
 
     if isdde
@@ -234,11 +247,10 @@ function calculate_massmatrix(sys::AbstractODESystem; simplify = false)
     eqs = [eq for eq in equations(sys)]
     dvs = unknowns(sys)
     M = zeros(length(eqs), length(eqs))
-    unknown2idx = Dict(s => i for (i, s) in enumerate(dvs))
     for (i, eq) in enumerate(eqs)
         if istree(eq.lhs) && operation(eq.lhs) isa Differential
             st = var_from_nested_derivative(eq.lhs)[1]
-            j = unknown2idx[st]
+            j = variable_index(sys, st)
             M[i, j] = 1
         else
             _iszero(eq.lhs) ||
@@ -302,7 +314,7 @@ end
 
 function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         dvs = unknowns(sys),
-        ps = parameters(sys), u0 = nothing;
+        ps = full_parameters(sys), u0 = nothing;
         version = nothing, tgrad = false,
         jac = false, p = nothing,
         t = nothing,
@@ -764,6 +776,17 @@ function get_u0_p(sys,
         defs = mergedefaults(defs, parammap, ps)
     end
     defs = mergedefaults(defs, u0map, dvs)
+    for (k, v) in defs
+        if Symbolics.isarraysymbolic(k)
+            ks = scalarize(k)
+            length(ks) == length(v) || error("$k has default value $v with unmatched size")
+            for (kk, vv) in zip(ks, v)
+                if !haskey(defs, kk)
+                    defs[kk] = vv
+                end
+            end
+        end
+    end
 
     if symbolic_u0
         u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false, use_union = false)
@@ -773,6 +796,35 @@ function get_u0_p(sys,
     p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
     p = p === nothing ? SciMLBase.NullParameters() : p
     u0, p, defs
+end
+
+function get_u0(sys, u0map, parammap = nothing; symbolic_u0 = false)
+    dvs = unknowns(sys)
+    ps = parameters(sys)
+    defs = defaults(sys)
+    if parammap !== nothing
+        defs = mergedefaults(defs, parammap, ps)
+    end
+    defs = mergedefaults(defs, u0map, dvs)
+    for (k, v) in defs
+        if Symbolics.isarraysymbolic(k) &&
+           Symbolics.shape(unwrap(k)) !== Symbolics.Unknown()
+            ks = scalarize(k)
+            length(ks) == length(v) || error("$k has default value $v with unmatched size")
+            for (kk, vv) in zip(ks, v)
+                if !haskey(defs, kk)
+                    defs[kk] = vv
+                end
+            end
+        end
+    end
+
+    if symbolic_u0
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false, use_union = false)
+    else
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
+    end
+    return u0, defs
 end
 
 function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
@@ -790,23 +842,27 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         kwargs...)
     eqs = equations(sys)
     dvs = unknowns(sys)
-    ps = parameters(sys)
+    ps = full_parameters(sys)
     iv = get_iv(sys)
 
-    u0, _p, defs = get_u0_p(sys,
-        u0map,
-        parammap;
-        tofloat,
-        use_union,
-        symbolic_u0)
-    if u0 !== nothing
-        u0 = u0_constructor(u0)
-    end
-
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        u0, defs = get_u0(sys, u0map, parammap; symbolic_u0)
         p = MTKParameters(sys, parammap)
     else
-        p = _p
+        u0, p, defs = get_u0_p(sys,
+            u0map,
+            parammap;
+            tofloat,
+            use_union,
+            symbolic_u0)
+        p, split_idxs = split_parameters_by_type(p)
+        if p isa Tuple
+            ps = Base.Fix1(getindex, full_parameters(sys)).(split_idxs)
+            ps = (ps...,) #if p is Tuple, ps should be Tuple
+        end
+    end
+    if u0 !== nothing
+        u0 = u0_constructor(u0)
     end
 
     if implicit_dae && du0map !== nothing
@@ -953,7 +1009,7 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
                 cbs = CallbackSet(discrete_cbs...)
             end
         else
-            cbs = CallbackSet(cbs, discrete_cbs)
+            cbs = CallbackSet(cbs, discrete_cbs...)
         end
     else
         svs = nothing
@@ -1016,7 +1072,7 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
 end
 
 function generate_history(sys::AbstractODESystem, u0; kwargs...)
-    p = reorder_parameters(sys, parameters(sys))
+    p = reorder_parameters(sys, full_parameters(sys))
     build_function(u0, p..., get_iv(sys); expression = Val{false}, kwargs...)
 end
 
@@ -1369,4 +1425,20 @@ function isisomorphic(sys1::AbstractODESystem, sys2::AbstractODESystem)
         end
     end
     return false
+end
+
+function flatten_equations(eqs)
+    mapreduce(vcat, eqs; init = Equation[]) do eq
+        islhsarr = eq.lhs isa AbstractArray || Symbolics.isarraysymbolic(eq.lhs)
+        isrhsarr = eq.rhs isa AbstractArray || Symbolics.isarraysymbolic(eq.rhs)
+        if islhsarr || isrhsarr
+            islhsarr && isrhsarr ||
+                error("LHS ($(eq.lhs)) and RHS ($(eq.rhs)) must either both be array expressions or both scalar")
+            size(eq.lhs) == size(eq.rhs) ||
+                error("Size of LHS ($(eq.lhs)) and RHS ($(eq.rhs)) must match: got $(size(eq.lhs)) and $(size(eq.rhs))")
+            return collect(eq.lhs) .~ collect(eq.rhs)
+        else
+            eq
+        end
+    end
 end

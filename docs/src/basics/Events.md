@@ -65,9 +65,10 @@ friction
 
 ```@example events
 using ModelingToolkit, OrdinaryDiffEq, Plots
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
 function UnitMassWithFriction(k; name)
-    @variables t x(t)=0 v(t)=0
-    D = Differential(t)
+    @variables x(t)=0 v(t)=0
     eqs = [D(x) ~ v
            D(v) ~ sin(t) - k * sign(v)]
     ODESystem(eqs, t; continuous_events = [v ~ 0], name) # when v = 0 there is a discontinuity
@@ -87,8 +88,7 @@ an `affect!` on the state. We can model the same system using ModelingToolkit
 like this
 
 ```@example events
-@variables t x(t)=1 v(t)=0
-D = Differential(t)
+@variables x(t)=1 v(t)=0
 
 root_eqs = [x ~ 0]  # the event happens at the ground x(t) = 0
 affect = [v ~ -v] # the effect is that the velocity changes sign
@@ -108,8 +108,7 @@ plot(sol)
 Multiple events? No problem! This example models a bouncing ball in 2D that is enclosed by two walls at $y = \pm 1.5$.
 
 ```@example events
-@variables t x(t)=1 y(t)=0 vx(t)=0 vy(t)=2
-D = Differential(t)
+@variables x(t)=1 y(t)=0 vx(t)=0 vy(t)=2
 
 continuous_events = [[x ~ 0] => [vx ~ -vx]
                      [y ~ -1.5, y ~ 1.5] => [vy ~ -vy]]
@@ -229,7 +228,7 @@ Suppose we have a population of `N(t)` cells that can grow and die, and at time
 
 ```@example events
 @parameters M tinject α
-@variables t N(t)
+@variables N(t)
 Dₜ = Differential(t)
 eqs = [Dₜ(N) ~ α - N]
 

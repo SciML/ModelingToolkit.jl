@@ -171,12 +171,14 @@ function calculate_jacobian(sys::NonlinearSystem; sparse = false, simplify = fal
     return jac
 end
 
-function generate_jacobian(sys::NonlinearSystem, vs = unknowns(sys), ps = parameters(sys);
+function generate_jacobian(
+        sys::NonlinearSystem, vs = unknowns(sys), ps = full_parameters(sys);
         sparse = false, simplify = false, kwargs...)
     jac = calculate_jacobian(sys, sparse = sparse, simplify = simplify)
-    pre = get_preprocess_constants(jac)
+    pre, sol_states = get_substitutions_and_solved_unknowns(sys)
     p = reorder_parameters(sys, ps)
-    return build_function(jac, vs, p...; postprocess_fbody = pre, kwargs...)
+    return build_function(
+        jac, vs, p...; postprocess_fbody = pre, states = sol_states, kwargs...)
 end
 
 function calculate_hessian(sys::NonlinearSystem; sparse = false, simplify = false)
@@ -190,7 +192,8 @@ function calculate_hessian(sys::NonlinearSystem; sparse = false, simplify = fals
     return hess
 end
 
-function generate_hessian(sys::NonlinearSystem, vs = unknowns(sys), ps = parameters(sys);
+function generate_hessian(
+        sys::NonlinearSystem, vs = unknowns(sys), ps = full_parameters(sys);
         sparse = false, simplify = false, kwargs...)
     hess = calculate_hessian(sys, sparse = sparse, simplify = simplify)
     pre = get_preprocess_constants(hess)
@@ -198,7 +201,8 @@ function generate_hessian(sys::NonlinearSystem, vs = unknowns(sys), ps = paramet
     return build_function(hess, vs, p...; postprocess_fbody = pre, kwargs...)
 end
 
-function generate_function(sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(sys);
+function generate_function(
+        sys::NonlinearSystem, dvs = unknowns(sys), ps = full_parameters(sys);
         kwargs...)
     rhss = [deq.rhs for deq in equations(sys)]
     pre, sol_states = get_substitutions_and_solved_unknowns(sys)
@@ -221,7 +225,7 @@ end
 """
 ```julia
 SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
-                                 ps = parameters(sys);
+                                 ps = full_parameters(sys);
                                  version = nothing,
                                  jac = false,
                                  sparse = false,
@@ -237,7 +241,7 @@ function SciMLBase.NonlinearFunction(sys::NonlinearSystem, args...; kwargs...)
 end
 
 function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
-        ps = parameters(sys), u0 = nothing;
+        ps = full_parameters(sys), u0 = nothing;
         version = nothing,
         jac = false,
         eval_expression = true,
@@ -294,7 +298,7 @@ end
 """
 ```julia
 SciMLBase.NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
-                                     ps = parameters(sys);
+                                     ps = full_parameters(sys);
                                      version = nothing,
                                      jac = false,
                                      sparse = false,
@@ -308,7 +312,7 @@ variable and parameter vectors, respectively.
 struct NonlinearFunctionExpr{iip} end
 
 function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
-        ps = parameters(sys), u0 = nothing;
+        ps = full_parameters(sys), u0 = nothing;
         version = nothing, tgrad = false,
         jac = false,
         linenumbers = false,

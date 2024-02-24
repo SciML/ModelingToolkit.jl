@@ -20,9 +20,7 @@ But if you want to just see some code and run, here's an example:
 
 ```@example first-mtkmodel
 using ModelingToolkit
-
-@variables t
-D = Differential(t)
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @mtkmodel FOL begin
     @parameters begin
@@ -65,9 +63,7 @@ independent variable ``t`` is automatically added by ``@mtkmodel``.
 
 ```@example ode2
 using ModelingToolkit
-
-@variables t
-D = Differential(t)
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @mtkmodel FOL begin
     @parameters begin
@@ -109,6 +105,7 @@ intermediate variable `RHS`:
 
 ```@example ode2
 using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @mtkmodel FOL begin
     @parameters begin
@@ -117,9 +114,6 @@ using ModelingToolkit
     @variables begin
         x(t) # dependent variables
         RHS(t)
-    end
-    begin
-        D = Differential(t)
     end
     @equations begin
         RHS ~ (1 - x) / τ
@@ -197,9 +191,6 @@ Obviously, one could use an explicit, symbolic function of time:
         x(t) # dependent variables
         f(t)
     end
-    begin
-        D = Differential(t)
-    end
     @equations begin
         f ~ sin(t)
         D(x) ~ (f - x) / τ
@@ -234,9 +225,6 @@ f_fun(t) = t >= 10 ? value_vector[end] : value_vector[Int(floor(t)) + 1]
     @structural_parameters begin
         h = 1
     end
-    begin
-        D = Differential(t)
-    end
     @equations begin
         f ~ f_fun(t)
         D(x) ~ (f - x) / τ
@@ -262,13 +250,13 @@ complex systems from simple ones is even more fun. Best practice for such a
 ```@example ode2
 function fol_factory(separate = false; name)
     @parameters τ
-    @variables t x(t) f(t) RHS(t)
+    @variables x(t) f(t) RHS(t)
 
     eqs = separate ? [RHS ~ (f - x) / τ,
         D(x) ~ RHS] :
           D(x) ~ (f - x) / τ
 
-    ODESystem(eqs; name)
+    ODESystem(eqs, t; name)
 end
 ```
 
@@ -289,7 +277,7 @@ again are just algebraic relations:
 connections = [fol_1.f ~ 1.5,
     fol_2.f ~ fol_1.x]
 
-connected = compose(ODESystem(connections, name = :connected), fol_1, fol_2)
+connected = compose(ODESystem(connections, t, name = :connected), fol_1, fol_2)
 ```
 
 All equations, variables, and parameters are collected, but the structure of the
@@ -358,10 +346,11 @@ In non-DSL definitions, one can pass `defaults` dictionary to set the initial gu
 
 ```@example ode3
 using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 function UnitstepFOLFactory(; name)
     @parameters τ
-    @variables t x(t)
+    @variables x(t)
     ODESystem(D(x) ~ (1 - x) / τ; name, defaults = Dict(x => 0.0, τ => 1.0))
 end
 ```

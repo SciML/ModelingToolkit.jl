@@ -111,6 +111,11 @@ struct ODESystem <: AbstractODESystem
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
     """
+    A mapping from dependent parameters to expressions describing how they are calculated from
+    other parameters.
+    """
+    parameter_dependencies::Union{Nothing, Dict}
+    """
     Metadata for the system, to be used by downstream packages.
     """
     metadata::Any
@@ -154,7 +159,7 @@ struct ODESystem <: AbstractODESystem
     function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
             jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
             torn_matching, connector_type, preface, cevents,
-            devents, metadata = nothing, gui_metadata = nothing,
+            devents, parameter_dependencies, metadata = nothing, gui_metadata = nothing,
             tearing_state = nothing,
             substitutions = nothing, complete = false, index_cache = nothing,
             discrete_subsystems = nothing, solved_unknowns = nothing,
@@ -171,8 +176,8 @@ struct ODESystem <: AbstractODESystem
         end
         new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, torn_matching,
-            connector_type, preface, cevents, devents, metadata, gui_metadata,
-            tearing_state, substitutions, complete, index_cache,
+            connector_type, preface, cevents, devents, parameter_dependencies, metadata,
+            gui_metadata, tearing_state, substitutions, complete, index_cache,
             discrete_subsystems, solved_unknowns, split_idxs, parent)
     end
 end
@@ -190,20 +195,18 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         preface = nothing,
         continuous_events = nothing,
         discrete_events = nothing,
+        parameter_dependencies = nothing,
         checks = true,
         metadata = nothing,
         gui_metadata = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
-    deqs = scalarize(deqs)
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
-
-    iv′ = value(scalarize(iv))
-    ps′ = value.(scalarize(ps))
-    ctrl′ = value.(scalarize(controls))
-    dvs′ = value.(scalarize(dvs))
+    iv′ = value(iv)
+    ps′ = value.(ps)
+    ctrl′ = value.(controls)
+    dvs′ = value.(dvs)
     dvs′ = filter(x -> !isdelay(x, iv), dvs′)
-
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn(
             "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
@@ -211,7 +214,6 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     end
     defaults = todict(defaults)
     defaults = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(defaults))
-
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, dvs′)
     process_variables!(var_to_name, defaults, ps′)
@@ -228,15 +230,17 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     end
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
+    parameter_dependencies, ps′ = process_parameter_dependencies(
+        parameter_dependencies, ps′)
     ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
         ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing,
-        connector_type, preface, cont_callbacks, disc_callbacks,
+        connector_type, preface, cont_callbacks, disc_callbacks, parameter_dependencies,
         metadata, gui_metadata, checks = checks)
 end
 
 function ODESystem(eqs, iv; kwargs...)
-    eqs = scalarize(eqs)
+    eqs = collect(eqs)
     # NOTE: this assumes that the order of algebraic equations doesn't matter
     diffvars = OrderedSet()
     allunknowns = OrderedSet()
@@ -276,10 +280,24 @@ function ODESystem(eqs, iv; kwargs...)
         isdelay(v, iv) || continue
         collect_vars!(allunknowns, ps, arguments(v)[1], iv)
     end
+    new_ps = OrderedSet()
+    for p in ps
+        if istree(p) && operation(p) === getindex
+            par = arguments(p)[begin]
+            if Symbolics.shape(Symbolics.unwrap(par)) !== Symbolics.Unknown() &&
+               all(par[i] in ps for i in eachindex(par))
+                push!(new_ps, par)
+            else
+                push!(new_ps, p)
+            end
+        else
+            push!(new_ps, p)
+        end
+    end
     algevars = setdiff(allunknowns, diffvars)
     # the orders here are very important!
     return ODESystem(Equation[diffeq; algeeq; compressed_eqs], iv,
-        collect(Iterators.flatten((diffvars, algevars))), ps; kwargs...)
+        collect(Iterators.flatten((diffvars, algevars))), collect(new_ps); kwargs...)
 end
 
 # NOTE: equality does not check cached Jacobian
@@ -327,7 +345,7 @@ function build_explicit_observed_function(sys, ts;
         output_type = Array,
         checkbounds = true,
         drop_expr = drop_expr,
-        ps = parameters(sys),
+        ps = full_parameters(sys),
         throw = true)
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]

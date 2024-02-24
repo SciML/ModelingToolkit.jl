@@ -390,11 +390,8 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
                 if has_index_cache(sys) && get_index_cache(sys) !== nothing
                     ic = get_index_cache(sys)
                     update_inds = map(update_vars) do sym
-                        @unpack portion, idx = parameter_index(sys, sym)
-                        if portion == SciMLStructures.Discrete()
-                            idx += length(ic.param_idx)
-                        end
-                        idx
+                        pind = parameter_index(sys, sym)
+                        discrete_linear_index(ic, pind)
                     end
                 else
                     psind = Dict(reverse(en) for en in enumerate(ps))
@@ -436,14 +433,14 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
 end
 
 function generate_rootfinding_callback(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys); kwargs...)
+        ps = full_parameters(sys); kwargs...)
     cbs = continuous_events(sys)
     isempty(cbs) && return nothing
     generate_rootfinding_callback(cbs, sys, dvs, ps; kwargs...)
 end
 
 function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys); kwargs...)
+        ps = full_parameters(sys); kwargs...)
     eqs = map(cb -> cb.eqs, cbs)
     num_eqs = length.(eqs)
     (isempty(eqs) || sum(num_eqs) == 0) && return nothing
@@ -559,7 +556,7 @@ function generate_discrete_callback(cb, sys, dvs, ps; postprocess_affect_expr! =
 end
 
 function generate_discrete_callbacks(sys::AbstractSystem, dvs = unknowns(sys),
-        ps = parameters(sys); kwargs...)
+        ps = full_parameters(sys); kwargs...)
     has_discrete_events(sys) || return nothing
     symcbs = discrete_events(sys)
     isempty(symcbs) && return nothing

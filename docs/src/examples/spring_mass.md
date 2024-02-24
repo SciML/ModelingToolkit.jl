@@ -6,10 +6,8 @@ In this tutorial, we will build a simple component-based model of a spring-mass 
 
 ```@example component
 using ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra
+using ModelingToolkit: t_nounits as t, D_nounits as D
 using Symbolics: scalarize
-
-@variables t
-D = Differential(t)
 
 function Mass(; name, m = 1.0, xy = [0.0, 0.0], u = [0.0, 0.0])
     ps = @parameters m = m

@@ -295,10 +295,12 @@ function connection2set!(connectionsets, namespace, ss, isouter)
     end
 end
 
-function generate_connection_set(sys::AbstractSystem, find = nothing, replace = nothing)
+function generate_connection_set(
+        sys::AbstractSystem, find = nothing, replace = nothing; scalarize = false)
     connectionsets = ConnectionSet[]
     domain_csets = ConnectionSet[]
-    sys = generate_connection_set!(connectionsets, domain_csets, sys, find, replace)
+    sys = generate_connection_set!(
+        connectionsets, domain_csets, sys, find, replace, scalarize)
     csets = merge(connectionsets)
     domain_csets = merge([csets; domain_csets], true)
 
@@ -306,7 +308,7 @@ function generate_connection_set(sys::AbstractSystem, find = nothing, replace = 
 end
 
 function generate_connection_set!(connectionsets, domain_csets,
-        sys::AbstractSystem, find, replace, namespace = nothing)
+        sys::AbstractSystem, find, replace, scalarize, namespace = nothing)
     subsys = get_systems(sys)
 
     isouter = generate_isouter(sys)
@@ -333,7 +335,12 @@ function generate_connection_set!(connectionsets, domain_csets,
             elseif isconnection(rhs)
                 push!(cts, get_systems(rhs))
             else
-                push!(eqs, eq) # split connections and equations
+                # split connections and equations
+                if eq.lhs isa AbstractArray || eq.rhs isa AbstractArray
+                    append!(eqs, Symbolics.scalarize(eq))
+                else
+                    push!(eqs, eq)
+                end
             end
         end
     end
@@ -359,7 +366,7 @@ function generate_connection_set!(connectionsets, domain_csets,
     end
     @set! sys.systems = map(
         s -> generate_connection_set!(connectionsets, domain_csets, s,
-            find, replace,
+            find, replace, scalarize,
             renamespace(namespace, s)),
         subsys)
     @set! sys.eqs = eqs
@@ -474,8 +481,8 @@ function domain_defaults(sys, domain_csets)
 end
 
 function expand_connections(sys::AbstractSystem, find = nothing, replace = nothing;
-        debug = false, tol = 1e-10)
-    sys, (csets, domain_csets) = generate_connection_set(sys, find, replace)
+        debug = false, tol = 1e-10, scalarize = true)
+    sys, (csets, domain_csets) = generate_connection_set(sys, find, replace; scalarize)
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
     _sys = expand_instream(instream_csets, sys; debug = debug, tol = tol)
     sys = flatten(sys, true)

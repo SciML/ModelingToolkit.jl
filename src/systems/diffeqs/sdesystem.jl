@@ -104,6 +104,11 @@ struct SDESystem <: AbstractODESystem
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
     """
+    A mapping from dependent parameters to expressions describing how they are calculated from
+    other parameters.
+    """
+    parameter_dependencies::Union{Nothing, Dict}
+    """
     Metadata for the system, to be used by downstream packages.
     """
     metadata::Any
@@ -128,7 +133,7 @@ struct SDESystem <: AbstractODESystem
             tgrad,
             jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
-            cevents, devents, metadata = nothing, gui_metadata = nothing,
+            cevents, devents, parameter_dependencies, metadata = nothing, gui_metadata = nothing,
             complete = false, index_cache = nothing, parent = nothing;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
@@ -144,7 +149,7 @@ struct SDESystem <: AbstractODESystem
         new(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac,
             Wfact, Wfact_t, name, systems, defaults, connector_type, cevents, devents,
-            metadata, gui_metadata, complete, index_cache, parent)
+            parameter_dependencies, metadata, gui_metadata, complete, index_cache, parent)
     end
 end
 
@@ -161,11 +166,11 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
         checks = true,
         continuous_events = nothing,
         discrete_events = nothing,
+        parameter_dependencies = nothing,
         metadata = nothing,
         gui_metadata = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
-    deqs = scalarize(deqs)
     iv′ = value(iv)
     dvs′ = value.(dvs)
     ps′ = value.(ps)
@@ -195,11 +200,12 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
     Wfact_t = RefValue(EMPTY_JAC)
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
-
+    parameter_dependencies, ps′ = process_parameter_dependencies(
+        parameter_dependencies, ps′)
     SDESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, neqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
         ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
-        cont_callbacks, disc_callbacks, metadata, gui_metadata; checks = checks)
+        cont_callbacks, disc_callbacks, parameter_dependencies, metadata, gui_metadata; checks = checks)
 end
 
 function SDESystem(sys::ODESystem, neqs; kwargs...)
@@ -220,7 +226,7 @@ function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = unknowns(sys),
-        ps = parameters(sys); isdde = false, kwargs...)
+        ps = full_parameters(sys); isdde = false, kwargs...)
     eqs = get_noiseeqs(sys)
     if isdde
         eqs = delay_to_function(sys, eqs)
@@ -285,7 +291,7 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
     end
 
     SDESystem(deqs, get_noiseeqs(sys), get_iv(sys), unknowns(sys), parameters(sys),
-        name = name, checks = false)
+        name = name, parameter_dependencies = get_parameter_dependencies(sys), checks = false)
 end
 
 """
@@ -393,7 +399,8 @@ function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
     # return modified SDE System
     SDESystem(deqs, noiseeqs, get_iv(sys), unknown_vars, parameters(sys);
         defaults = Dict(θ => θ0), observed = [weight ~ θ / θ0],
-        name = name, checks = false)
+        name = name, parameter_dependencies = get_parameter_dependencies(sys),
+        checks = false)
 end
 
 function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
@@ -407,7 +414,6 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
         error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEFunction`")
     end
     dvs = scalarize.(dvs)
-    ps = scalarize.(ps)
 
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression}, kwargs...)
     f_oop, f_iip = eval_expression ?

@@ -118,6 +118,12 @@ prob = ODEProblem(ss, [x => 0.0, y => 0.0], (0.0, Tf),
     [kp => 1.0; z => 3.0; z(k + 1) => 2.0])
 @test sort(vcat(prob.p...)) == [0, 1.0, 2.0, 3.0, 4.0] # yd, kp, z(k+1), z(k), ud
 sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
+
+ss_nosplit = structural_simplify(sys; split = false)
+prob_nosplit = ODEProblem(ss_nosplit, [x => 0.0, y => 0.0], (0.0, Tf),
+    [kp => 1.0; z => 3.0; z(k + 1) => 2.0])
+@test sort(prob_nosplit.p) == [0, 1.0, 2.0, 3.0, 4.0] # yd, kp, z(k+1), z(k), ud
+sol_nosplit = solve(prob_nosplit, Tsit5(), kwargshandle = KeywordArgSilent)
 # For all inputs in parameters, just initialize them to 0.0, and then set them
 # in the callback.
 
@@ -154,8 +160,11 @@ prob = ODEProblem(foo!, [0.0], (0.0, Tf), [1.0, 4.0, 2.0, 3.0], callback = cb)
 #                               ud initializes to kp * (r - yd) + z = 1 * (1 - 0) + 3 = 4
 sol2 = solve(prob, Tsit5())
 @test sol.u == sol2.u
+@test sol_nosplit.u == sol2.u
 @test saved_values.t == sol.prob.kwargs[:disc_saved_values][1].t
+@test saved_values.t == sol_nosplit.prob.kwargs[:disc_saved_values][1].t
 @test saved_values.saveval == sol.prob.kwargs[:disc_saved_values][1].saveval
+@test saved_values.saveval == sol_nosplit.prob.kwargs[:disc_saved_values][1].saveval
 
 @info "Testing multi-rate hybrid system"
 dt = 0.1
@@ -280,10 +289,13 @@ ci, varmap = infer_clocks(cl)
 @test varmap[u] == Continuous()
 
 ss = structural_simplify(cl)
+ss_nosplit = structural_simplify(cl; split = false)
 
 if VERSION >= v"1.7"
     prob = ODEProblem(ss, [x => 0.0], (0.0, 1.0), [kp => 1.0])
+    prob_nosplit = ODEProblem(ss_nosplit, [x => 0.0], (0.0, 1.0), [kp => 1.0])
     sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
+    sol_nosplit = solve(prob_nosplit, Tsit5(), kwargshandle = KeywordArgSilent)
 
     function foo!(dx, x, p, t)
         kp, ud1, ud2 = p
@@ -314,6 +326,7 @@ if VERSION >= v"1.7"
     sol2 = solve(prob, Tsit5())
 
     @test sol.u≈sol2.u atol=1e-6
+    @test sol_nosplit.u≈sol2.u atol=1e-6
 end
 
 ##

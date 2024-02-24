@@ -21,8 +21,8 @@ equalities before solving. Let's see this in action.
 
 ```@example acausal
 using ModelingToolkit, Plots, DifferentialEquations
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@variables t
 @connector Pin begin
     v(t)
     i(t), [connect = Flow]
@@ -62,8 +62,6 @@ end
         v ~ i * R
     end
 end
-
-D = Differential(t)
 
 @mtkmodel Capacitor begin
     @extend OnePort()
@@ -213,8 +211,6 @@ equations and unknowns and extend them with a new equation. Note that `v`, `i` a
 Using our knowledge of circuits, we similarly construct the `Capacitor`:
 
 ```@example acausal
-D = Differential(t)
-
 @mtkmodel Capacitor begin
     @extend OnePort()
     @parameters begin

@@ -8,7 +8,9 @@ Let us first consider a simple `NonlinearSystem`:
 
 ```@example Bif1
 using ModelingToolkit
-@variables t x(t) y(t)
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) y(t)
 @parameters μ α
 eqs = [0 ~ μ * x - x^3 + α * y,
     0 ~ -y]
@@ -87,10 +89,10 @@ It is also possible to use `ODESystem`s (rather than `NonlinearSystem`s) as inpu
 
 ```@example Bif2
 using BifurcationKit, ModelingToolkit, Plots
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@variables t x(t) y(t)
+@variables x(t) y(t)
 @parameters μ
-D = Differential(t)
 eqs = [D(x) ~ μ * x - y - x * (x^2 + y^2),
     D(y) ~ x + μ * y - y * (x^2 + y^2)]
 @mtkbuild osys = ODESystem(eqs, t)
