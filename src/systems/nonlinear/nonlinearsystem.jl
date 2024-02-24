@@ -289,6 +289,7 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
     NonlinearFunction{iip}(f,
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
+        resid_prototype = length(dvs) == length(equations(sys)) ? nothing : zeros(length(equations(sys))),
         jac_prototype = sparse ?
                         similar(calculate_jacobian(sys, sparse = sparse),
             Float64) : nothing,
@@ -333,12 +334,13 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
     end
 
     jp_expr = sparse ? :(similar($(get_jac(sys)[]), Float64)) : :nothing
-
+    resid_expr = length(dvs) == length(equations(sys)) ? :nothing : :(zeros($(length(equations(sys)))))
     ex = quote
         f = $f
         jac = $_jac
         NonlinearFunction{$iip}(f,
             jac = jac,
+            resid_prototype = resid_expr,
             jac_prototype = $jp_expr)
     end
     !linenumbers ? Base.remove_linenums!(ex) : ex
@@ -401,6 +403,35 @@ end
 
 """
 ```julia
+DiffEqBase.NonlinearLeastSquaresProblem{iip}(sys::NonlinearSystem, u0map,
+                                 parammap = DiffEqBase.NullParameters();
+                                 jac = false, sparse = false,
+                                 checkbounds = false,
+                                 linenumbers = true, parallel = SerialForm(),
+                                 kwargs...) where {iip}
+```
+
+Generates an NonlinearProblem from a NonlinearSystem and allows for automatically
+symbolically calculating numerical enhancements.
+"""
+function DiffEqBase.NonlinearLeastSquaresProblem(sys::NonlinearSystem, args...; kwargs...)
+    NonlinearLeastSquaresProblem{true}(sys, args...; kwargs...)
+end
+
+function DiffEqBase.NonlinearLeastSquaresProblem{iip}(sys::NonlinearSystem, u0map,
+        parammap = DiffEqBase.NullParameters();
+        check_length = false, kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearLeastSquaresProblem`")
+    end
+    f, u0, p = process_NonlinearProblem(NonlinearFunction{iip}, sys, u0map, parammap;
+        check_length, kwargs...)
+    pt = something(get_metadata(sys), StandardNonlinearProblem())
+    NonlinearLeastSquaresProblem{iip}(f, u0, p; filter_kwargs(kwargs)...)
+end
+
+"""
+```julia
 DiffEqBase.NonlinearProblemExpr{iip}(sys::NonlinearSystem, u0map,
                                      parammap = DiffEqBase.NullParameters();
                                      jac = false, sparse = false,
@@ -435,6 +466,46 @@ function NonlinearProblemExpr{iip}(sys::NonlinearSystem, u0map,
         u0 = $u0
         p = $p
         NonlinearProblem(f, u0, p; $(filter_kwargs(kwargs)...))
+    end
+    !linenumbers ? Base.remove_linenums!(ex) : ex
+end
+
+"""
+```julia
+DiffEqBase.NonlinearLeastSquaresProblemExpr{iip}(sys::NonlinearSystem, u0map,
+                                     parammap = DiffEqBase.NullParameters();
+                                     jac = false, sparse = false,
+                                     checkbounds = false,
+                                     linenumbers = true, parallel = SerialForm(),
+                                     kwargs...) where {iip}
+```
+
+Generates a Julia expression for a NonlinearProblem from a
+NonlinearSystem and allows for automatically symbolically calculating
+numerical enhancements.
+"""
+struct NonlinearLeastSquaresProblemExpr{iip} end
+
+function NonlinearLeastSquaresProblemExpr(sys::NonlinearSystem, args...; kwargs...)
+    NonlinearLeastSquaresProblemExpr{true}(sys, args...; kwargs...)
+end
+
+function NonlinearLeastSquaresProblemExpr{iip}(sys::NonlinearSystem, u0map,
+        parammap = DiffEqBase.NullParameters();
+        check_length = false,
+        kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearProblemExpr`")
+    end
+    f, u0, p = process_NonlinearProblem(NonlinearFunctionExpr{iip}, sys, u0map, parammap;
+        check_length, kwargs...)
+    linenumbers = get(kwargs, :linenumbers, true)
+
+    ex = quote
+        f = $f
+        u0 = $u0
+        p = $p
+        NonlinearLeastSquaresProblem(f, u0, p; $(filter_kwargs(kwargs)...))
     end
     !linenumbers ? Base.remove_linenums!(ex) : ex
 end
