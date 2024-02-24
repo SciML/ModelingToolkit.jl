@@ -1492,8 +1492,8 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     neqs = length(equations(isys))
     nunknown = length(unknowns(isys))
     if neqs == nunknown
-        NonlinearProblem(isys,u0map,parammap)
+        NonlinearProblem(isys, u0map, parammap)
     else
-        NonlinearLeastSquaresProblem(isys,u0map,parammap)
+        NonlinearLeastSquaresProblem(isys, u0map, parammap)
     end
 end

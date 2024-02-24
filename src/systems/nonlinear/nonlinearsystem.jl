@@ -289,7 +289,8 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
     NonlinearFunction{iip}(f,
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
-        resid_prototype = length(dvs) == length(equations(sys)) ? nothing : zeros(length(equations(sys))),
+        resid_prototype = length(dvs) == length(equations(sys)) ? nothing :
+                          zeros(length(equations(sys))),
         jac_prototype = sparse ?
                         similar(calculate_jacobian(sys, sparse = sparse),
             Float64) : nothing,
@@ -334,7 +335,8 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
     end
 
     jp_expr = sparse ? :(similar($(get_jac(sys)[]), Float64)) : :nothing
-    resid_expr = length(dvs) == length(equations(sys)) ? :nothing : :(zeros($(length(equations(sys)))))
+    resid_expr = length(dvs) == length(equations(sys)) ? :nothing :
+                 :(zeros($(length(equations(sys)))))
     ex = quote
         f = $f
         jac = $_jac

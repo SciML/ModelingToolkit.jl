@@ -3,7 +3,8 @@ $(TYPEDSIGNATURES)
 
 Generate `NonlinearSystem` which initializes an ODE problem from specified initial conditions of an `ODESystem`.
 """
-function generate_initializesystem(sys::ODESystem; name = nameof(sys), guesses = Dict(), check_defguess = false, kwargs...)
+function generate_initializesystem(sys::ODESystem; name = nameof(sys),
+        guesses = Dict(), check_defguess = false, kwargs...)
     sts, eqs = unknowns(sys), equations(sys)
     idxs_diff = isdiffeq.(eqs)
     idxs_alge = .!idxs_diff
@@ -18,7 +19,7 @@ function generate_initializesystem(sys::ODESystem; name = nameof(sys), guesses =
 
     # Refactor to ODESystem construction
     # should be ModelingToolkit.guesses(sys)
-     
+
     guesses = merge(get_guesses(sys), todict(guesses))
 
     for st in full_states

@@ -638,7 +638,8 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
 
     if sys isa ODESystem
         isys = ModelingToolkit.generate_initializesystem(sys)
-        !isempty(equations(isys)) && (isys = structural_simplify(isys; fully_determined = false))
+        !isempty(equations(isys)) &&
+            (isys = structural_simplify(isys; fully_determined = false))
         @set! sys.initializesystem = isys
         neqs = length(equations(isys))
         nunknown = length(unknowns(isys))

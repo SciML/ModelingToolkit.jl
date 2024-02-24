@@ -3,33 +3,33 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @connector Port begin
     p(t)
-    dm(t)=0, [connect = Flow]
+    dm(t) = 0, [connect = Flow]
 end
 
 @connector Flange begin
-    dx(t)=0
+    dx(t) = 0
     f(t), [connect = Flow]
 end
 
 # Components ----
 @mtkmodel Orifice begin
     @parameters begin
-        Cₒ=2.7
-        Aₒ=0.00094
-        ρ₀=1000
-        p′=0
+        Cₒ = 2.7
+        Aₒ = 0.00094
+        ρ₀ = 1000
+        p′ = 0
     end
     @variables begin
-        dm(t)=0
-        p₁(t)=p′
-        p₂(t)=p′
+        dm(t) = 0
+        p₁(t) = p′
+        p₂(t) = p′
     end
     @components begin
-        port₁ = Port(p=p′)
-        port₂ = Port(p=p′)
+        port₁ = Port(p = p′)
+        port₂ = Port(p = p′)
     end
     begin
-        u = dm/(ρ₀*Aₒ)
+        u = dm / (ρ₀ * Aₒ)
     end
     @equations begin
         dm ~ +port₁.dm
@@ -37,31 +37,31 @@ end
         p₁ ~ port₁.p
         p₂ ~ port₂.p
 
-        p₁ - p₂ ~ (1/2)*ρ₀*u^2*Cₒ
+        p₁ - p₂ ~ (1 / 2) * ρ₀ * u^2 * Cₒ
     end
 end
 
 @mtkmodel Volume begin
     @parameters begin
-        A=0.1
-        ρ₀=1000
-        β=2e9
-        direction=+1
+        A = 0.1
+        ρ₀ = 1000
+        β = 2e9
+        direction = +1
         p′
         x′
     end
     @variables begin
-        p(t)=p′
-        x(t)=x′
-        dm(t)=0
-        f(t)=p′ * A
-        dx(t)=0
+        p(t) = p′
+        x(t) = x′
+        dm(t) = 0
+        f(t) = p′ * A
+        dx(t) = 0
         r(t), [guess = 1000]
         dr(t), [guess = 1000]
     end
     @components begin
-        port = Port(p=p′)
-        flange = Flange(f=-p′ * A * direction)
+        port = Port(p = p′)
+        flange = Flange(f = -p′ * A * direction)
     end
     @equations begin
         D(x) ~ dx
@@ -72,8 +72,8 @@ end
         f ~ -flange.f * direction # force is leaving
         dx ~ flange.dx * direction
 
-        r ~ ρ₀*(1 + p/β)
-        dm ~ (r*dx*A) + (dr*x*A)
+        r ~ ρ₀ * (1 + p / β)
+        dm ~ (r * dx * A) + (dr * x * A)
         f ~ p * A
     end
 end
@@ -84,13 +84,13 @@ end
         f′
     end
     @variables begin
-        f(t)=f′
-        x(t)=0
-        dx(t)=0
-        ẍ(t)=f′/m
+        f(t) = f′
+        x(t) = 0
+        dx(t) = 0
+        ẍ(t) = f′ / m
     end
     @components begin
-        flange = Flange(f=f′)
+        flange = Flange(f = f′)
     end
     @equations begin
         D(x) ~ dx
@@ -99,7 +99,7 @@ end
         f ~ flange.f
         dx ~ flange.dx
 
-        m*ẍ ~ f
+        m * ẍ ~ f
     end
 end
 
@@ -109,16 +109,16 @@ end
         p₂′
     end
     begin #constants
-        x′=0.5
-        A=0.1
+        x′ = 0.5
+        A = 0.1
     end
     @components begin
-        port₁ = Port(p=p₁′)
-        port₂ = Port(p=p₂′)
-        vol₁ = Volume(p′=p₁′, x′=x′,  direction=-1)
-        vol₂ = Volume(p′=p₂′, x′=x′,  direction=+1)
-        mass = Mass(f′=(p₂′ - p₁′)*A)
-        flange = Flange(f=0)
+        port₁ = Port(p = p₁′)
+        port₂ = Port(p = p₂′)
+        vol₁ = Volume(p′ = p₁′, x′ = x′, direction = -1)
+        vol₂ = Volume(p′ = p₂′, x′ = x′, direction = +1)
+        mass = Mass(f′ = (p₂′ - p₁′) * A)
+        flange = Flange(f = 0)
     end
     @equations begin
         connect(port₁, vol₁.port)
@@ -132,7 +132,7 @@ end
         p′
     end
     @components begin
-        port = Port(p=p′)
+        port = Port(p = p′)
     end
     @equations begin
         port.p ~ p′
@@ -144,20 +144,20 @@ end
         c = 1000
     end
     @components begin
-        flange = Flange(f=0)
+        flange = Flange(f = 0)
     end
     @equations begin
-        flange.f ~ c*flange.dx
+        flange.f ~ c * flange.dx
     end
 end
 
 @mtkmodel System begin
     @components begin
-        res₁ = Orifice(p′=300e5)
-        res₂ = Orifice(p′=0)
-        act = Actuator(p₁′=300e5, p₂′=0)
-        src = Source(p′=300e5)
-        snk = Source(p′=0)
+        res₁ = Orifice(p′ = 300e5)
+        res₂ = Orifice(p′ = 0)
+        act = Actuator(p₁′ = 300e5, p₂′ = 0)
+        src = Source(p′ = 300e5)
+        snk = Source(p′ = 0)
         dmp = Damper()
     end
     @equations begin
@@ -177,14 +177,14 @@ initsol = solve(initprob, reltol = 1e-12, abstol = 1e-12)
 @test SciMLBase.successful_retcode(initsol)
 
 allinit = unknowns(sys) .=> initsol[unknowns(sys)]
-prob = ODEProblem(sys, allinit, (0,0.1))
+prob = ODEProblem(sys, allinit, (0, 0.1))
 sol = solve(prob, Rodas5P())
 # If initialized incorrectly, then it would be InitialFailure
 @test sol.retcode == SciMLBase.ReturnCode.Unstable
 
 @connector Flange begin
     dx(t), [guess = 0]
-    f(t), [guess = 0, connect=Flow]
+    f(t), [guess = 0, connect = Flow]
 end
 
 @mtkmodel Mass begin
@@ -202,9 +202,9 @@ end
         # connectors
         flange.dx ~ dx
         flange.f ~ -f
-        
+
         # physics
-        f ~ m*D(dx)
+        f ~ m * D(dx)
     end
 end
 
@@ -223,16 +223,16 @@ end
         # connectors
         flange.dx ~ dx
         flange.f ~ -f
-        
+
         # physics
-        f ~ d*dx
+        f ~ d * dx
     end
 end
 
 @mtkmodel MassDamperSystem begin
     @components begin
-        mass = Mass(;dx=100,m=10)
-        damper = Damper(;d=1)
+        mass = Mass(; dx = 100, m = 10)
+        damper = Damper(; d = 1)
     end
     @equations begin
         connect(mass.flange, damper.flange)
@@ -246,7 +246,7 @@ initsol = solve(initprob, reltol = 1e-12, abstol = 1e-12)
 @test SciMLBase.successful_retcode(initsol)
 
 allinit = unknowns(sys) .=> initsol[unknowns(sys)]
-prob = ODEProblem(sys, allinit, (0,0.1))
+prob = ODEProblem(sys, allinit, (0, 0.1))
 sol = solve(prob, Rodas5P())
 # If initialized incorrectly, then it would be InitialFailure
 @test sol.retcode == SciMLBase.ReturnCode.Success
