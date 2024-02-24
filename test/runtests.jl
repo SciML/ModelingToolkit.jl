@@ -34,6 +34,7 @@ end
         @safetestset "SteadyStateSystem Test" include("steadystatesystems.jl")
         @safetestset "SDESystem Test" include("sdesystem.jl")
         @safetestset "NonlinearSystem Test" include("nonlinearsystem.jl")
+        @safetestset "InitializationSystem Test" include("initializationsystem.jl")
         @safetestset "PDE Construction Test" include("pde.jl")
         @safetestset "JumpSystem Test" include("jumpsystem.jl")
         @safetestset "Constraints Test" include("constraints.jl")

@@ -537,6 +537,9 @@ function complete(sys::AbstractSystem; split = true)
     if split && has_index_cache(sys)
         @set! sys.index_cache = IndexCache(sys)
     end
+    if isdefined(sys, :initializationsystem)
+        @set! sys.initializationsystem = complete(get_initializationsystem(sys); split)
+    end
     isdefined(sys, :complete) ? (@set! sys.complete = true) : sys
 end
 

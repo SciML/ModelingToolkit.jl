@@ -1442,3 +1442,58 @@ function flatten_equations(eqs)
         end
     end
 end
+
+struct InitializationProblem{iip, specialization} end
+
+"""
+```julia
+InitializationProblem{iip}(sys::AbstractODESystem, u0map, tspan,
+                           parammap = DiffEqBase.NullParameters();
+                           version = nothing, tgrad = false,
+                           jac = false,
+                           checkbounds = false, sparse = false,
+                           simplify = false,
+                           linenumbers = true, parallel = SerialForm(),
+                           kwargs...) where {iip}
+```
+
+Generates a NonlinearProblem or NonlinearLeastSquaresProblem from an ODESystem 
+which represents the initialization, i.e. the calculation of the consistent
+initial conditions for the given DAE.
+"""
+function InitializationProblem(sys::AbstractODESystem, args...; kwargs...)
+    InitializationProblem{true}(sys, args...; kwargs...)
+end
+
+function InitializationProblem(sys::AbstractODESystem,
+        u0map::StaticArray,
+        args...;
+        kwargs...)
+    InitializationProblem{false, SciMLBase.FullSpecialize}(sys, u0map, args...; kwargs...)
+end
+
+function InitializationProblem{true}(sys::AbstractODESystem, args...; kwargs...)
+    InitializationProblem{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
+end
+
+function InitializationProblem{false}(sys::AbstractODESystem, args...; kwargs...)
+    InitializationProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
+end
+
+function InitializationProblem{iip, specialize}(sys::AbstractODESystem, u0map = [],
+        parammap = DiffEqBase.NullParameters();
+        check_length = true,
+        kwargs...) where {iip, specialize}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
+    end
+
+    isys = get_initializesystem(sys)
+    neqs = length(equations(isys))
+    nunknown = length(unknowns(isys))
+    if neqs == nunknown
+        NonlinearProblem(isys,u0map,parammap)
+    else
+        NonlinearLeastSquaresProblem(isys,u0map,parammap)
+    end
+end
