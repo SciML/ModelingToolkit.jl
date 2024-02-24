@@ -176,6 +176,12 @@ initprob = ModelingToolkit.InitializationProblem(sys)
 initsol = solve(initprob, reltol = 1e-12, abstol = 1e-12)
 @test SciMLBase.successful_retcode(initsol)
 
+allinit = unknowns(sys) .=> initsol[unknowns(sys)]
+prob = ODEProblem(sys, allinit, (0,0.1))
+sol = solve(prob, Rodas5P())
+# If initialized incorrectly, then it would be InitialFailure
+@test sol.retcode == SciMLBase.ReturnCode.Unstable
+
 @connector Flange begin
     dx(t), [guess = 0]
     f(t), [guess = 0, connect=Flow]
@@ -238,3 +244,9 @@ initprob = ModelingToolkit.InitializationProblem(sys)
 @test initprob isa NonlinearProblem
 initsol = solve(initprob, reltol = 1e-12, abstol = 1e-12)
 @test SciMLBase.successful_retcode(initsol)
+
+allinit = unknowns(sys) .=> initsol[unknowns(sys)]
+prob = ODEProblem(sys, allinit, (0,0.1))
+sol = solve(prob, Rodas5P())
+# If initialized incorrectly, then it would be InitialFailure
+@test sol.retcode == SciMLBase.ReturnCode.Success
