@@ -243,7 +243,7 @@ Symbolics.option_to_metadata_type(::Val{:tunable}) = VariableTunable
 istunable(x::Num, args...) = istunable(Symbolics.unwrap(x), args...)
 
 """
-    istunable(x, default = false)
+    istunable(x, default = true)
 
 Determine whether symbolic variable `x` is marked as a tunable for an automatic tuning algorithm.
 
@@ -257,7 +257,7 @@ Create a tunable parameter by
 
 See also [`tunable_parameters`](@ref), [`getbounds`](@ref)
 """
-function istunable(x, default = false)
+function istunable(x, default = true)
     p = Symbolics.getparent(x, nothing)
     p === nothing || (x = p)
     Symbolics.getmetadata(x, VariableTunable, default)
