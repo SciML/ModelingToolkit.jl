@@ -1,3 +1,6 @@
+using Symbolics: StateMachineOperator
+isconnection(_) = false
+isconnection(_::Connection) = true
 """
     domain_connect(sys1, sys2, syss...)
 
@@ -327,17 +330,17 @@ function generate_connection_set!(connectionsets, domain_csets,
             end
             neweq isa AbstractArray ? append!(eqs, neweq) : push!(eqs, neweq)
         else
-            if lhs isa Number || lhs isa Symbolic || eltype(lhs) <: Symbolic
+            if lhs isa Connection && get_systems(lhs) === :domain
+                connection2set!(domain_csets, namespace, get_systems(rhs), isouter)
+            elseif isconnection(rhs)
+                push!(cts, get_systems(rhs))
+            else
                 # split connections and equations
                 if eq.lhs isa AbstractArray || eq.rhs isa AbstractArray
                     append!(eqs, Symbolics.scalarize(eq))
                 else
                     push!(eqs, eq)
                 end
-            elseif lhs isa Connection && get_systems(lhs) === :domain
-                connection2set!(domain_csets, namespace, get_systems(rhs), isouter)
-            else
-                push!(cts, get_systems(rhs))
             end
         end
     end
