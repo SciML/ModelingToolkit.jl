@@ -551,6 +551,7 @@ for prop in [:eqs
              :var_to_name
              :ctrls
              :defaults
+             :guesses
              :observed
              :tgrad
              :jac
@@ -931,6 +932,10 @@ end
 
 function full_parameters(sys::AbstractSystem)
     vcat(parameters(sys), dependent_parameters(sys))
+end
+
+function guesses(sys::AbstractSystem)
+    get_guesses(sys)
 end
 
 # required in `src/connectors.jl:437`

@@ -88,6 +88,11 @@ struct ODESystem <: AbstractODESystem
     """
     defaults::Dict
     """
+    The guesses to use as the initial conditions for the
+    initialization system.
+    """
+    guesses::Dict
+    """
     Tearing result specifying how to solve the system.
     """
     torn_matching::Union{Matching, Nothing}
@@ -157,7 +162,7 @@ struct ODESystem <: AbstractODESystem
     parent::Any
 
     function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
-            jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
+            jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses,
             torn_matching, connector_type, preface, cevents,
             devents, parameter_dependencies, metadata = nothing, gui_metadata = nothing,
             tearing_state = nothing,
@@ -175,7 +180,7 @@ struct ODESystem <: AbstractODESystem
             check_units(u, deqs)
         end
         new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
-            ctrl_jac, Wfact, Wfact_t, name, systems, defaults, torn_matching,
+            ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses, torn_matching,
             connector_type, preface, cevents, devents, parameter_dependencies, metadata,
             gui_metadata, tearing_state, substitutions, complete, index_cache,
             discrete_subsystems, solved_unknowns, split_idxs, parent)
@@ -191,6 +196,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         default_u0 = Dict(),
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
+        guesses = Dict(),
         connector_type = nothing,
         preface = nothing,
         continuous_events = nothing,
@@ -217,6 +223,13 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, dvs′)
     process_variables!(var_to_name, defaults, ps′)
+
+    sysguesses = [ModelingToolkit.getguess(st) for st in dvs′]
+    hasaguess = findall(!isnothing, sysguesses)
+    var_guesses = dvs′[hasaguess] .=> sysguesses[hasaguess]
+    sysguesses = isempty(var_guesses) ? Dict() : todict(var_guesses)
+    guesses = merge(sysguesses, todict(guesses))
+
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
     tgrad = RefValue(EMPTY_TGRAD)
@@ -234,10 +247,11 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         parameter_dependencies, ps′)
     ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
-        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing,
+        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses, nothing,
         connector_type, preface, cont_callbacks, disc_callbacks, parameter_dependencies,
         metadata, gui_metadata, checks = checks)
 end
+
 
 function ODESystem(eqs, iv; kwargs...)
     eqs = collect(eqs)

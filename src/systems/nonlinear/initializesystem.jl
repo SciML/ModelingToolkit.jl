@@ -12,16 +12,14 @@ function initializesystem(sys::ODESystem; name = nameof(sys), guesses = Dict(), 
     # Start the equations list with algebraic equations
     eqs_ics = eqs[idxs_alge]
     u0 = Vector{Pair}(undef, 0)
-    defs = ModelingToolkit.defaults(sys)
+    defs = defaults(sys)
 
     full_states = [sts; getfield.((observed(sys)), :lhs)]
 
     # Refactor to ODESystem construction
     # should be ModelingToolkit.guesses(sys)
-    sysguesses = [ModelingToolkit.getguess(st) for st in full_states]
-    hasaguess = findall(!isnothing, sysguesses)
-    sysguesses = todict(full_states[hasaguess] .=> sysguesses[hasaguess])
-    guesses = merge(sysguesses, todict(guesses))
+     
+    guesses = merge(get_guesses(sys), todict(guesses))
 
     for st in full_states
         if st ∈ keys(defs)
