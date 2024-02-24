@@ -36,7 +36,7 @@ struct ODESystem <: AbstractODESystem
     Dependent (unknown) variables. Must not contain the independent variable.
 
     N.B.: If `torn_matching !== nothing`, this includes all variables. Actual
-    ODE unknowns are determined by the `SelectedUnknown()` entries in `torn_matching`.
+    ODE unknowns are determined by the `SelectedState()` entries in `torn_matching`.
     """
     unknowns::Vector
     """Parameter variables. Must not contain the independent variable."""
