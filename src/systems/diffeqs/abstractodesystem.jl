@@ -862,7 +862,8 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     # TODO: make check for if a DAE cheaper than calculating the mass matrix a second time!
     ci = infer_clocks!(ClockInference(TearingState(sys)))
     # TODO: make it work with clocks
-    if (implicit_dae || calculate_massmatrix(sys) !== I) && all(isequal(Continuous()),ci.var_domain)
+    if (implicit_dae || calculate_massmatrix(sys) !== I) &&
+       all(isequal(Continuous()), ci.var_domain)
         initializeprob = ModelingToolkit.InitializationProblem(
             sys, u0map, parammap; guesses, warn_initialize_determined)
         initializeprobmap = getu(initializeprob, unknowns(sys))
