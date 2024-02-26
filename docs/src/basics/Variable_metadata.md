@@ -142,7 +142,7 @@ In the example below, we define a system with tunable parameters and extract bou
 @variables x(t)=0 u(t)=0 [input = true] y(t)=0 [output = true]
 @parameters T [tunable = true, bounds = (0, Inf)]
 @parameters k [tunable = true, bounds = (0, Inf)]
-eqs = [Dₜ(x) ~ (-x + k * u) / T # A first-order system with time constant T and gain k
+eqs = [D(x) ~ (-x + k * u) / T # A first-order system with time constant T and gain k
        y ~ x]
 sys = ODESystem(eqs, t, name = :tunable_first_order)
 ```
@@ -159,6 +159,9 @@ lb, ub = getbounds(p) # operating on a vector, we get lower and upper bound vect
 b = getbounds(sys) # Operating on the system, we get a dict
 ```
 
+See also: [`ModelingToolkit.dump_variable_metadata`](@ref), [`ModelingToolkit.dump_parameters`](@ref),
+[`ModelingToolkit.dump_unknowns`](@ref).
+
 ## Index
 
 ```@index
@@ -171,4 +174,10 @@ Pages = ["Variable_metadata.md"]
 Modules = [ModelingToolkit]
 Pages = ["variables.jl"]
 Private = false
+```
+
+```@docs
+ModelingToolkit.dump_variable_metadata
+ModelingToolkit.dump_parameters
+ModelingToolkit.dump_unknowns
 ```

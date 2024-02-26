@@ -63,6 +63,7 @@ end
         @safetestset "FuncAffect Test" include("funcaffect.jl")
         @safetestset "Constants Test" include("constants.jl")
         @safetestset "Parameter Dependency Test" include("parameter_dependencies.jl")
+        @safetestset "Generate Custom Function Test" include("generate_custom_function.jl")
     end
 
     if GROUP == "All" || GROUP == "InterfaceII"

@@ -120,9 +120,7 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs;
         (:misc, VariableMisc),
         (:disturbance, VariableDisturbance),
         (:tunable, VariableTunable),
-        (:dist, VariableDistribution),
-        (:binary, VariableBinary),
-        (:integer, VariableInteger)]
+        (:dist, VariableDistribution)]
 
     arg isa LineNumberNode && return
     MLStyle.@match arg begin

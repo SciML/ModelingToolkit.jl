@@ -338,7 +338,7 @@ While defining the model `UnitstepFOLFactory`, an initial guess of 0.0 is assign
 Additionally, these initial guesses can be modified while creating instances of `UnitstepFOLFactory` by passing arguments.
 
 ```@example ode2
-@named fol = UnitstepFOLFactory(; x = 0.1)
+@mtkbuild fol = UnitstepFOLFactory(; x = 0.1)
 sol = ODEProblem(fol, [], (0.0, 5.0), []) |> solve
 ```
 

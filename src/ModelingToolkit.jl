@@ -27,7 +27,6 @@ using PrecompileTools, Reexport
     using DocStringExtensions
     using Base: RefValue
     using Combinatorics
-    import IfElse
     import Distributions
     import FunctionWrappersWrappers
     using URIs: URI
@@ -225,8 +224,7 @@ export initial_state, transition, activeState, entry, ticksInState, timeInState
 export @component, @mtkmodel, @mtkbuild
 export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbance,
        istunable, getdist, hasdist,
-       tunable_parameters, isirreducible, getdescription, hasdescription, isbinaryvar,
-       isintegervar
+       tunable_parameters, isirreducible, getdescription, hasdescription
 export ode_order_lowering, dae_order_lowering, liouville_transform
 export PDESystem
 export Differential, expand_derivatives, @derivatives
@@ -237,7 +235,7 @@ export independent_variable, equations, controls,
        observed, full_equations
 export structural_simplify, expand_connections, linearize, linearization_function
 
-export calculate_jacobian, generate_jacobian, generate_function
+export calculate_jacobian, generate_jacobian, generate_function, generate_custom_function
 export calculate_control_jacobian, generate_control_jacobian
 export calculate_tgrad, generate_tgrad
 export calculate_gradient, generate_gradient

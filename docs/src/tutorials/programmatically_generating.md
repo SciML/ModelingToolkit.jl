@@ -41,7 +41,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 eqs = [D(x) ~ (h - x) / τ] # create an array of equations
 
 # your first ODE, consisting of a single equation, indicated by ~
-@named fol_model = ODESystem(eqs, t)
+@named model = ODESystem(eqs, t)
 
 # Perform the standard transformations and mark the model complete
 # Note: Complete models cannot be subsystems of other models!

@@ -49,3 +49,4 @@
     `(single_parameter => expression_involving_other_parameters)` and a `Vector` of these can be passed to
     the `parameter_dependencies` keyword argument of `ODESystem`, `SDESystem` and `JumpSystem`. The dependent
     parameters are updated whenever other parameters are modified, e.g. in callbacks.
+  - Support for `IfElse.jl` has been dropped. `Base.ifelse` can be used instead.

@@ -1,6 +1,6 @@
 module UnitfulUnitCheck
 
-using ..ModelingToolkit, Symbolics, SciMLBase, Unitful, IfElse, RecursiveArrayTools
+using ..ModelingToolkit, Symbolics, SciMLBase, Unitful, RecursiveArrayTools
 using ..ModelingToolkit: ValidationError,
                          ModelingToolkit, Connection, instream, JumpType, VariableUnit,
                          get_systems,

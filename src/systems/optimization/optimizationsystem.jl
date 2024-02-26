@@ -258,8 +258,9 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     if isnothing(lb) && isnothing(ub) # use the symbolically specified bounds
         lb = first.(getbounds.(dvs))
         ub = last.(getbounds.(dvs))
-        lb[isbinaryvar.(dvs)] .= 0
-        ub[isbinaryvar.(dvs)] .= 1
+        isboolean = symtype.(unwrap.(dvs)) .<: Bool
+        lb[isboolean] .= 0
+        ub[isboolean] .= 1
     else # use the user supplied variable bounds
         xor(isnothing(lb), isnothing(ub)) &&
             throw(ArgumentError("Expected both `lb` and `ub` to be supplied"))
@@ -269,7 +270,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             throw(ArgumentError("Expected both `ub` to be of the same length as the vector of optimization variables"))
     end
 
-    int = isintegervar.(dvs) .| isbinaryvar.(dvs)
+    int = symtype.(unwrap.(dvs)) .<: Integer
 
     defs = defaults(sys)
     defs = mergedefaults(defs, parammap, ps)
@@ -494,8 +495,9 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
     if isnothing(lb) && isnothing(ub) # use the symbolically specified bounds
         lb = first.(getbounds.(dvs))
         ub = last.(getbounds.(dvs))
-        lb[isbinaryvar.(dvs)] .= 0
-        ub[isbinaryvar.(dvs)] .= 1
+        isboolean = symtype.(unwrap.(dvs)) .<: Bool
+        lb[isboolean] .= 0
+        ub[isboolean] .= 1
     else # use the user supplied variable bounds
         xor(isnothing(lb), isnothing(ub)) &&
             throw(ArgumentError("Expected both `lb` and `ub` to be supplied"))
@@ -505,7 +507,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
             throw(ArgumentError("Expected `ub` to be of the same length as the vector of optimization variables"))
     end
 
-    int = isintegervar.(dvs) .| isbinaryvar.(dvs)
+    int = symtype.(unwrap.(dvs)) .<: Integer
 
     defs = defaults(sys)
     defs = mergedefaults(defs, parammap, ps)

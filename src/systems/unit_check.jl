@@ -1,5 +1,5 @@
 #For dispatching get_unit
-const Conditional = Union{typeof(ifelse), typeof(IfElse.ifelse)}
+const Conditional = Union{typeof(ifelse)}
 const Comparison = Union{typeof.([==, !=, ≠, <, <=, ≤, >, >=, ≥])...}
 
 struct ValidationError <: Exception
