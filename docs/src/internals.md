@@ -32,6 +32,6 @@ The call chain typically looks like this, with the function names in the case of
 
  1. Problem constructor ([`ODEProblem`](@ref))
  2. Build an `DEFunction` ([`process_DEProblem`](@ref) -> [`ODEFunction`](@ref)
- 3. Write actual executable code ([`generate_function`](@ref))
+ 3. Write actual executable code ([`generate_function`](@ref) or [`generate_custom_function`](@ref))
 
 Apart from [`generate_function`](@ref), which generates the dynamics function, `ODEFunction` also builds functions for observed equations (`build_explicit_observed_function`) and Jacobians (`generate_jacobian`) etc. These are all stored in the `ODEFunction`.

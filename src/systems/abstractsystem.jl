@@ -145,8 +145,26 @@ Generate a function to evaluate the system's equations.
 """
 function generate_function end
 
+"""
+```julia
+generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys),
+                         ps = full_parameters(sys); kwargs...)
+```
+
+Generate a function to evaluate `exprs`. `exprs` is a symbolic expression or
+array of symbolic expression involving symbolic variables in `sys`. The symbolic variables
+may be subsetted using `dvs` and `ps`. All `kwargs` except `postprocess_fbody` and `states`
+are passed to the internal [`build_function`](@ref) call. The returned function can be called
+as `f(u, p, t)` or `f(du, u, p, t)` for time-dependent systems and `f(u, p)` or `f(du, u, p)`
+for time-independent systems. If `split=true` (the default) was passed to [`complete`](@ref),
+[`structural_simplify`](@ref) or [`@mtkbuild`](@ref), `p` is expected to be an `MTKParameters`
+object.
+"""
 function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys),
         ps = parameters(sys); wrap_code = nothing, kwargs...)
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system.")
+    end
     p = reorder_parameters(sys, ps)
     isscalar = !(exprs isa AbstractArray)
     if wrap_code === nothing
