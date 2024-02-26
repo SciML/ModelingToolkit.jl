@@ -860,7 +860,9 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     # This essentially bypasses the check for if initial conditions are defined for DAEs
     # since they will be checked in the initialization problem's construction
     # TODO: make check for if a DAE cheaper than calculating the mass matrix a second time!
-    if implicit_dae || calculate_massmatrix(sys) !== I
+    ci = infer_clocks!(ClockInference(TearingState(sys)))
+    # TODO: make it work with clocks
+    if (implicit_dae || calculate_massmatrix(sys) !== I) && all(isequal(Continuous()),ci.var_domain)
         initializeprob = ModelingToolkit.InitializationProblem(
             sys, u0map, parammap; guesses, warn_initialize_determined)
         initializeprobmap = getu(initializeprob, unknowns(sys))
