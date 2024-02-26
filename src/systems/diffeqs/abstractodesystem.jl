@@ -867,7 +867,8 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         initializeprob = ModelingToolkit.InitializationProblem(
             sys, u0map, parammap; guesses, warn_initialize_determined)
         initializeprobmap = getu(initializeprob, unknowns(sys))
-        zerovars = setdiff(unknowns(sys), defaults(sys)) .=> 0.0
+
+        zerovars = setdiff(unknowns(sys), keys(defaults(sys))) .=> 0.0
         trueinit = identity.([zerovars; u0map])
     else
         initializeprob = nothing
