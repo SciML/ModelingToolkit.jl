@@ -62,6 +62,7 @@ By inference:
 =>   Shift(x, 0, dt) := (Shift(x, -1, dt) + dt) / (1 - dt) # Discrete system
 =#
 
+
 ci, varmap = infer_clocks(sys)
 eqmap = ci.eq_domain
 tss, inputs = ModelingToolkit.split_system(deepcopy(ci))
