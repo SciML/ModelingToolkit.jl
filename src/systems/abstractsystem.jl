@@ -82,7 +82,7 @@ function calculate_hessian end
 
 """
 ```julia
-generate_tgrad(sys::AbstractTimeDependentSystem, dvs = unknowns(sys), ps = parameters(sys),
+generate_tgrad(sys::AbstractTimeDependentSystem, dvs = unknowns(sys), ps = full_parameters(sys),
                expression = Val{true}; kwargs...)
 ```
 
@@ -93,7 +93,7 @@ function generate_tgrad end
 
 """
 ```julia
-generate_gradient(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
+generate_gradient(sys::AbstractSystem, dvs = unknowns(sys), ps = full_parameters(sys),
                   expression = Val{true}; kwargs...)
 ```
 
@@ -104,7 +104,7 @@ function generate_gradient end
 
 """
 ```julia
-generate_jacobian(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
+generate_jacobian(sys::AbstractSystem, dvs = unknowns(sys), ps = full_parameters(sys),
                   expression = Val{true}; sparse = false, kwargs...)
 ```
 
@@ -115,7 +115,7 @@ function generate_jacobian end
 
 """
 ```julia
-generate_factorized_W(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
+generate_factorized_W(sys::AbstractSystem, dvs = unknowns(sys), ps = full_parameters(sys),
                       expression = Val{true}; sparse = false, kwargs...)
 ```
 
@@ -126,7 +126,7 @@ function generate_factorized_W end
 
 """
 ```julia
-generate_hessian(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
+generate_hessian(sys::AbstractSystem, dvs = unknowns(sys), ps = full_parameters(sys),
                  expression = Val{true}; sparse = false, kwargs...)
 ```
 
@@ -137,13 +137,157 @@ function generate_hessian end
 
 """
 ```julia
-generate_function(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
+generate_function(sys::AbstractSystem, dvs = unknowns(sys), ps = full_parameters(sys),
                   expression = Val{true}; kwargs...)
 ```
 
 Generate a function to evaluate the system's equations.
 """
 function generate_function end
+
+function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys),
+        ps = parameters(sys); wrap_code = nothing, kwargs...)
+    p = reorder_parameters(sys, ps)
+    isscalar = !(exprs isa AbstractArray)
+    if wrap_code === nothing
+        wrap_code = isscalar ? identity : (identity, identity)
+    end
+    pre, sol_states = get_substitutions_and_solved_unknowns(sys)
+
+    if is_time_dependent(sys)
+        return build_function(exprs,
+            dvs,
+            p...,
+            get_iv(sys);
+            kwargs...,
+            postprocess_fbody = pre,
+            states = sol_states,
+            wrap_code = wrap_code .∘ wrap_mtkparameters(sys, isscalar) .∘
+                        wrap_array_vars(sys, exprs; dvs)
+        )
+    else
+        return build_function(exprs,
+            dvs,
+            p...;
+            kwargs...,
+            postprocess_fbody = pre,
+            states = sol_states,
+            wrap_code = wrap_code .∘ wrap_mtkparameters(sys, isscalar) .∘
+                        wrap_array_vars(sys, exprs; dvs)
+        )
+    end
+end
+
+function wrap_array_vars(sys::AbstractSystem, exprs; dvs = unknowns(sys))
+    isscalar = !(exprs isa AbstractArray)
+    allvars = if isscalar
+        Set(get_variables(exprs))
+    else
+        union(get_variables.(exprs)...)
+    end
+    array_vars = Dict{Any, AbstractArray{Int}}()
+    for (j, x) in enumerate(dvs)
+        if istree(x) && operation(x) == getindex
+            arg = arguments(x)[1]
+            arg in allvars || continue
+            inds = get!(() -> Int[], array_vars, arg)
+            push!(inds, j)
+        end
+    end
+    for (k, inds) in array_vars
+        if inds == (inds′ = inds[1]:inds[end])
+            array_vars[k] = inds′
+        end
+    end
+    if isscalar
+        function (expr)
+            Func(
+                expr.args,
+                [],
+                Let(
+                    [k ← :(view($(expr.args[1].name), $v)) for (k, v) in array_vars],
+                    expr.body,
+                    false
+                )
+            )
+        end
+    else
+        function (expr)
+            Func(
+                expr.args,
+                [],
+                Let(
+                    [k ← :(view($(expr.args[1].name), $v)) for (k, v) in array_vars],
+                    expr.body,
+                    false
+                )
+            )
+        end,
+        function (expr)
+            Func(
+                expr.args,
+                [],
+                Let(
+                    [k ← :(view($(expr.args[2].name), $v)) for (k, v) in array_vars],
+                    expr.body,
+                    false
+                )
+            )
+        end
+    end
+end
+
+function wrap_mtkparameters(sys::AbstractSystem, isscalar::Bool)
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        offset = Int(is_time_dependent(sys))
+
+        if isscalar
+            function (expr)
+                p = gensym(:p)
+                Func(
+                    [
+                        expr.args[1],
+                        DestructuredArgs(
+                            [arg.name for arg in expr.args[2:(end - offset)]], p),
+                        (isone(offset) ? (expr.args[end],) : ())...
+                    ],
+                    [],
+                    Let(expr.args[2:(end - offset)], expr.body, false)
+                )
+            end
+        else
+            function (expr)
+                p = gensym(:p)
+                Func(
+                    [
+                        expr.args[1],
+                        DestructuredArgs(
+                            [arg.name for arg in expr.args[2:(end - offset)]], p),
+                        (isone(offset) ? (expr.args[end],) : ())...
+                    ],
+                    [],
+                    Let(expr.args[2:(end - offset)], expr.body, false)
+                )
+            end,
+            function (expr)
+                p = gensym(:p)
+                Func(
+                    [
+                        expr.args[1],
+                        expr.args[2],
+                        DestructuredArgs(
+                            [arg.name for arg in expr.args[3:(end - offset)]], p),
+                        (isone(offset) ? (expr.args[end],) : ())...
+                    ],
+                    [],
+                    Let(expr.args[3:(end - offset)], expr.body, false)
+                )
+            end
+        end
+    else
+        identity
+    end
+end
 
 mutable struct Substitutions
     subs::Vector{Equation}

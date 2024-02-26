@@ -152,22 +152,8 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
         ddvs = implicit_dae ? map(Differential(get_iv(sys)), dvs) :
                nothing,
         isdde = false,
+        wrap_code = nothing,
         kwargs...)
-    array_vars = Dict{Any, Vector{Int}}()
-    for (j, x) in enumerate(dvs)
-        if istree(x) && operation(x) == getindex
-            arg = arguments(x)[1]
-            inds = get!(() -> Int[], array_vars, arg)
-            push!(inds, j)
-        end
-    end
-    subs = Dict()
-    for (k, inds) in array_vars
-        if inds == (inds′ = inds[1]:inds[end])
-            inds = inds′
-        end
-        subs[k] = term(view, Sym{Any}(Symbol("ˍ₋arg1")), inds)
-    end
     if isdde
         eqs = delay_to_function(sys)
     else
@@ -180,13 +166,15 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
     # substitute x(t) by just x
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
            [eq.rhs for eq in eqs]
-    rhss = fast_substitute(rhss, subs)
 
     # TODO: add an optional check on the ordering of observed equations
     u = map(x -> time_varying_as_func(value(x), sys), dvs)
     p = map.(x -> time_varying_as_func(value(x), sys), reorder_parameters(sys, ps))
     t = get_iv(sys)
 
+    if wrap_code === nothing
+        wrap_code = (identity, identity)
+    end
     if isdde
         build_function(rhss, u, DDE_HISTORY_FUN, p..., t; kwargs...)
     else
@@ -195,10 +183,12 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
         if implicit_dae
             build_function(rhss, ddvs, u, p..., t; postprocess_fbody = pre,
                 states = sol_states,
+                wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs),
                 kwargs...)
         else
             build_function(rhss, u, p..., t; postprocess_fbody = pre,
                 states = sol_states,
+                wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs),
                 kwargs...)
         end
     end
