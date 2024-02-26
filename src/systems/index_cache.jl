@@ -40,10 +40,16 @@ function IndexCache(sys::AbstractSystem)
     let idx = 1
         for sym in unks
             h = getsymbolhash(sym)
-            if Symbolics.isarraysymbolic(sym)
-                unk_idxs[h] = idx:(idx + length(sym) - 1)
+            sym_idx = if Symbolics.isarraysymbolic(sym)
+                idx:(idx + length(sym) - 1)
             else
-                unk_idxs[h] = idx
+                idx
+            end
+            unk_idxs[h] = sym_idx
+
+            if hasname(sym)
+                h = hash(getname(sym))
+                unk_idxs[h] = sym_idx
             end
             idx += length(sym)
         end
@@ -122,6 +128,10 @@ function IndexCache(sys::AbstractSystem)
                 idxs[h] = (i, j)
                 h = getsymbolhash(default_toterm(p))
                 idxs[h] = (i, j)
+                if hasname(p)
+                    h = hash(getname(p))
+                    idxs[h] = (i, j)
+                end
             end
             push!(buffer_sizes, BufferTemplate(T, length(buf)))
         end
@@ -151,7 +161,7 @@ end
 
 function ParameterIndex(ic::IndexCache, p, sub_idx = ())
     p = unwrap(p)
-    h = getsymbolhash(p)
+    h = p isa Symbol ? hash(p) : getsymbolhash(p)
     return if haskey(ic.param_idx, h)
         ParameterIndex(SciMLStructures.Tunable(), (ic.param_idx[h]..., sub_idx...))
     elseif haskey(ic.discrete_idx, h)

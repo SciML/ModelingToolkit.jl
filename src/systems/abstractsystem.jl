@@ -346,6 +346,9 @@ function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym)
 end
 
 function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym::Symbol)
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+        return haskey(ic.unknown_idx, hash(sym))
+    end
     return any(isequal(sym), getname.(variable_symbols(sys))) ||
            count('₊', string(sym)) == 1 &&
            count(isequal(sym), Symbol.(nameof(sys), :₊, getname.(variable_symbols(sys)))) ==
@@ -377,6 +380,9 @@ function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym)
 end
 
 function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym::Symbol)
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+        return get(ic.unknown_idx, h, nothing)
+    end
     idx = findfirst(isequal(sym), getname.(variable_symbols(sys)))
     if idx !== nothing
         return idx
@@ -401,12 +407,14 @@ function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
         ic = get_index_cache(sys)
         h = getsymbolhash(sym)
         return if haskey(ic.param_idx, h) || haskey(ic.discrete_idx, h) ||
-                  haskey(ic.constant_idx, h) || haskey(ic.dependent_idx, h)
+                  haskey(ic.constant_idx, h) || haskey(ic.dependent_idx, h) ||
+                  haskey(ic.nonnumeric_idx, h)
             true
         else
             h = getsymbolhash(default_toterm(sym))
             haskey(ic.param_idx, h) || haskey(ic.discrete_idx, h) ||
-                haskey(ic.constant_idx, h) || haskey(ic.dependent_idx, h)
+                haskey(ic.constant_idx, h) || haskey(ic.dependent_idx, h) ||
+                haskey(ic.nonnumeric_idx, h)
         end
     end
     return any(isequal(sym), parameter_symbols(sys)) ||
@@ -414,6 +422,9 @@ function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
 end
 
 function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Symbol)
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+        return ParameterIndex(ic, sym) !== nothing
+    end
     return any(isequal(sym), getname.(parameter_symbols(sys))) ||
            count('₊', string(sym)) == 1 &&
            count(isequal(sym),
@@ -426,7 +437,6 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
     end
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         ic = get_index_cache(sys)
-        h = getsymbolhash(sym)
         return if (idx = ParameterIndex(ic, sym)) !== nothing
             idx
         elseif (idx = ParameterIndex(ic, default_toterm(sym))) !== nothing
@@ -444,6 +454,9 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
 end
 
 function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym::Symbol)
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+        return ParameterIndex(ic, sym)
+    end
     idx = findfirst(isequal(sym), getname.(parameter_symbols(sys)))
     if idx !== nothing
         return idx
