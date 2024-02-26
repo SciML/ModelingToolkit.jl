@@ -2272,7 +2272,8 @@ end
 
 returns a `Vector{Pair}` of variables set to `default` which are missing from `get_defaults(sys)`.  The `default` argument can be a single value or vector to set the missing defaults respectively.
 """
-function missing_variable_defaults(sys::AbstractSystem, default = 0.0; subset = unknowns(sys))
+function missing_variable_defaults(
+        sys::AbstractSystem, default = 0.0; subset = unknowns(sys))
     varmap = get_defaults(sys)
     varmap = Dict(Symbolics.diff2term(value(k)) => value(varmap[k]) for k in keys(varmap))
     missingvars = setdiff(subset, keys(varmap))

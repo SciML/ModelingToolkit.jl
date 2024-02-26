@@ -3,7 +3,7 @@ $(TYPEDSIGNATURES)
 
 Generate `NonlinearSystem` which initializes an ODE problem from specified initial conditions of an `ODESystem`.
 """
-function generate_initializesystem(sys::ODESystem; 
+function generate_initializesystem(sys::ODESystem;
         u0map = Dict(),
         name = nameof(sys),
         guesses = Dict(), check_defguess = false, kwargs...)
@@ -15,7 +15,7 @@ function generate_initializesystem(sys::ODESystem;
     # Start the equations list with algebraic equations
     eqs_ics = eqs[idxs_alge]
     u0 = Vector{Pair}(undef, 0)
-    defs = merge(defaults(sys),todict(u0map))
+    defs = merge(defaults(sys), todict(u0map))
 
     full_states = [sts; getfield.((observed(sys)), :lhs)]
 

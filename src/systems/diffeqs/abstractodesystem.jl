@@ -315,8 +315,8 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         checkbounds = false,
         sparsity = false,
         analytic = nothing,
-        split_idxs = nothing,  
-        initializeprob =  nothing,
+        split_idxs = nothing,
+        initializeprob = nothing,
         initializeprobmap = nothing,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
@@ -530,7 +530,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         sparse = false, simplify = false,
         eval_module = @__MODULE__,
         checkbounds = false,
-        initializeprob =  nothing,
+        initializeprob = nothing,
         initializeprobmap = nothing,
         kwargs...) where {iip}
     if !iscomplete(sys)
@@ -861,12 +861,13 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     # since they will be checked in the initialization problem's construction
     # TODO: make check for if a DAE cheaper than calculating the mass matrix a second time!
     if implicit_dae || calculate_massmatrix(sys) !== I
-        initializeprob =  ModelingToolkit.InitializationProblem(sys, u0map, parammap; guesses, warn_initialize_determined)
+        initializeprob = ModelingToolkit.InitializationProblem(
+            sys, u0map, parammap; guesses, warn_initialize_determined)
         initializeprobmap = getu(initializeprob, unknowns(sys))
-        zerovars = setdiff(unknowns(sys),defaults(sys)) .=> 0.0
-        trueinit =  identity.([zerovars;u0map])
+        zerovars = setdiff(unknowns(sys), defaults(sys)) .=> 0.0
+        trueinit = identity.([zerovars; u0map])
     else
-        initializeprob =  nothing
+        initializeprob = nothing
         initializeprobmap = nothing
         trueinit = u0map
     end
@@ -907,7 +908,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         checkbounds = checkbounds, p = p,
         linenumbers = linenumbers, parallel = parallel, simplify = simplify,
         sparse = sparse, eval_expression = eval_expression,
-        initializeprob = initializeprob, 
+        initializeprob = initializeprob,
         initializeprobmap = initializeprobmap,
         kwargs...)
     implicit_dae ? (f, du0, u0, p) : (f, u0, p)
@@ -1523,7 +1524,8 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     if isempty(u0map)
         isys = get_initializesystem(sys)
     else
-        isys = structural_simplify(generate_initializesystem(sys; u0map); fully_determined = false)
+        isys = structural_simplify(
+            generate_initializesystem(sys; u0map); fully_determined = false)
     end
 
     neqs = length(equations(isys))

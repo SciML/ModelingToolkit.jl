@@ -3,41 +3,44 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @parameters g
 @variables x(t) y(t) [state_priority = 10] λ(t)
-eqs = [
-       D(D(x)) ~ λ * x
+eqs = [D(D(x)) ~ λ * x
        D(D(y)) ~ λ * y - g
-       x^2 + y^2 ~ 1
-      ]
-@mtkbuild pend = ODESystem(eqs,t)
+       x^2 + y^2 ~ 1]
+@mtkbuild pend = ODESystem(eqs, t)
 
-initprob = ModelingToolkit.InitializationProblem(pend, [], [g => 1]; guesses = [ModelingToolkit.missing_variable_defaults(pend); x => 1; y => 0.2])
-conditions = getfield.(equations(initprob.f.sys),:rhs)
+initprob = ModelingToolkit.InitializationProblem(pend, [], [g => 1];
+    guesses = [ModelingToolkit.missing_variable_defaults(pend); x => 1; y => 0.2])
+conditions = getfield.(equations(initprob.f.sys), :rhs)
 
 @test initprob isa NonlinearLeastSquaresProblem
 sol = solve(initprob)
 @test SciMLBase.successful_retcode(sol)
 @test maximum(abs.(sol[conditions])) < 1e-14
 
-initprob = ModelingToolkit.InitializationProblem(pend, [x => 1, y => 0], [g => 1]; guesses = ModelingToolkit.missing_variable_defaults(pend))
+initprob = ModelingToolkit.InitializationProblem(pend, [x => 1, y => 0], [g => 1];
+    guesses = ModelingToolkit.missing_variable_defaults(pend))
 @test initprob isa NonlinearProblem
 sol = solve(initprob)
 @test SciMLBase.successful_retcode(sol)
-@test sol.u == [1.0,0.0,0.0,0.0]
+@test sol.u == [1.0, 0.0, 0.0, 0.0]
 @test maximum(abs.(sol[conditions])) < 1e-14
 
-initprob = ModelingToolkit.InitializationProblem(pend, [], [g => 1]; guesses = ModelingToolkit.missing_variable_defaults(pend))
+initprob = ModelingToolkit.InitializationProblem(
+    pend, [], [g => 1]; guesses = ModelingToolkit.missing_variable_defaults(pend))
 @test initprob isa NonlinearLeastSquaresProblem
 sol = solve(initprob)
 @test !SciMLBase.successful_retcode(sol)
 
-prob = ODEProblem(pend, [x => 1, y => 0], (0.0, 1.5), [g => 1], guesses = ModelingToolkit.missing_variable_defaults(pend))
+prob = ODEProblem(pend, [x => 1, y => 0], (0.0, 1.5), [g => 1],
+    guesses = ModelingToolkit.missing_variable_defaults(pend))
 prob.f.initializeprob isa NonlinearProblem
 sol = solve(prob.f.initializeprob)
 @test maximum(abs.(sol[conditions])) < 1e-14
 sol = solve(prob, Rodas5P())
 @test maximum(abs.(sol[conditions][1])) < 1e-14
 
-prob = ODEProblem(pend, [x => 1], (0.0, 1.5), [g => 1], guesses = ModelingToolkit.missing_variable_defaults(pend))
+prob = ODEProblem(pend, [x => 1], (0.0, 1.5), [g => 1],
+    guesses = ModelingToolkit.missing_variable_defaults(pend))
 prob.f.initializeprob isa NonlinearLeastSquaresProblem
 sol = solve(prob.f.initializeprob)
 @test maximum(abs.(sol[conditions])) < 1e-14
@@ -214,7 +217,7 @@ end
 
 @mtkbuild sys = System()
 initprob = ModelingToolkit.InitializationProblem(sys)
-conditions = getfield.(equations(initprob.f.sys),:rhs)
+conditions = getfield.(equations(initprob.f.sys), :rhs)
 
 @test initprob isa NonlinearLeastSquaresProblem
 @test length(initprob.u0) == 2
@@ -229,7 +232,7 @@ sol = solve(prob, Rodas5P(), initializealg = BrownFullBasicInit())
 @test sol.retcode == SciMLBase.ReturnCode.Unstable
 @test maximum(abs.(initsol[conditions][1])) < 1e-14
 
-prob = ODEProblem(sys, [], (0, 0.1), check=false)
+prob = ODEProblem(sys, [], (0, 0.1), check = false)
 sol = solve(prob, Rodas5P())
 # If initialized incorrectly, then it would be InitialFailure
 @test sol.retcode == SciMLBase.ReturnCode.Unstable
@@ -328,4 +331,4 @@ p = [σ => 28.0,
     β => 8 / 3]
 
 tspan = (0.0, 100.0)
-@test_throws ArgumentError prob = ODEProblem(sys, u0, tspan, p, jac = true)
+@test_throws ArgumentError prob=ODEProblem(sys, u0, tspan, p, jac = true)
