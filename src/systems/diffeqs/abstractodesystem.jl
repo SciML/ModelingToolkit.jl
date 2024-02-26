@@ -856,17 +856,18 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     ps = full_parameters(sys)
     iv = get_iv(sys)
 
-    initializeprob =  ModelingToolkit.InitializationProblem(sys, u0map, parammap; guesses, warn_initialize_determined)
-    initializeprobmap = getu(initializeprob, unknowns(sys))
-
     # Append zeros to the variables which are determined by the initialization system
     # This essentially bypasses the check for if initial conditions are defined for DAEs
     # since they will be checked in the initialization problem's construction
     # TODO: make check for if a DAE cheaper than calculating the mass matrix a second time!
     if implicit_dae || calculate_massmatrix(sys) !== I
+        initializeprob =  ModelingToolkit.InitializationProblem(sys, u0map, parammap; guesses, warn_initialize_determined)
+        initializeprobmap = getu(initializeprob, unknowns(sys))
         zerovars = setdiff(unknowns(sys),defaults(sys)) .=> 0.0
         trueinit =  identity.([zerovars;u0map])
     else
+        initializeprob =  nothing
+        initializeprobmap = nothing
         trueinit = u0map
     end
 
