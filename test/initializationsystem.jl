@@ -181,6 +181,24 @@ prob = ODEProblem(sys, allinit, (0, 0.1))
 sol = solve(prob, Rodas5P())
 # If initialized incorrectly, then it would be InitialFailure
 @test sol.retcode == SciMLBase.ReturnCode.Unstable
+SciMLBase.has_initializeprob(prob.f)
+
+isys = ModelingToolkit.get_initializesystem(sys)
+unknowns(isys)
+
+initprob = ModelingToolkit.InitializationProblem(sys)
+sol = solve(initprob)
+
+unknowns(sys)
+
+[sys.act.vol₁.dr]
+
+getter = ModelingToolkit.getu(initprob, unknowns(sys)[end-1:end])
+getter(sol)
+
+prob.f.initializeprobmap(initsol)
+
+initsol[unknowns(isys)]
 
 @connector Flange begin
     dx(t), [guess = 0]
@@ -250,3 +268,4 @@ prob = ODEProblem(sys, allinit, (0, 0.1))
 sol = solve(prob, Rodas5P())
 # If initialized incorrectly, then it would be InitialFailure
 @test sol.retcode == SciMLBase.ReturnCode.Success
+

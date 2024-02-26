@@ -315,7 +315,9 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         checkbounds = false,
         sparsity = false,
         analytic = nothing,
-        split_idxs = nothing,
+        split_idxs = nothing,  
+        initializeprob =  nothing,
+        initializeprobmap = nothing,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEFunction`")
@@ -487,6 +489,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
     end
 
     @set! sys.split_idxs = split_idxs
+
     ODEFunction{iip, specialize}(f;
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
@@ -495,7 +498,9 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         jac_prototype = jac_prototype,
         observed = observedfun,
         sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
-        analytic = analytic)
+        analytic = analytic,
+        initializeprob = initializeprob,
+        initializeprobmap = initializeprobmap)
 end
 
 """
@@ -525,6 +530,8 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         sparse = false, simplify = false,
         eval_module = @__MODULE__,
         checkbounds = false,
+        initializeprob =  nothing,
+        initializeprobmap = nothing,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEFunction`")
@@ -596,7 +603,9 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
         jac_prototype = jac_prototype,
-        observed = observedfun)
+        observed = observedfun,
+        initializeprob = initializeprob,
+        initializeprobmap = initializeprobmap)
 end
 
 function DiffEqBase.DDEFunction(sys::AbstractODESystem, args...; kwargs...)
@@ -877,10 +886,15 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
 
     check_eqs_u0(eqs, dvs, u0; kwargs...)
 
+    initializeprob =  ModelingToolkit.InitializationProblem(sys, u0map, parammap)
+    initializeprobmap = getu(initializeprob, unknowns(sys))
+
     f = constructor(sys, dvs, ps, u0; ddvs = ddvs, tgrad = tgrad, jac = jac,
         checkbounds = checkbounds, p = p,
         linenumbers = linenumbers, parallel = parallel, simplify = simplify,
         sparse = sparse, eval_expression = eval_expression,
+        initializeprob = initializeprob, 
+        initializeprobmap = initializeprobmap,
         kwargs...)
     implicit_dae ? (f, du0, u0, p) : (f, u0, p)
 end
