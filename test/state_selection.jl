@@ -1,4 +1,4 @@
-using ModelingToolkit, OrdinaryDiffEq, IfElse, Test
+using ModelingToolkit, OrdinaryDiffEq, Test
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 sts = @variables x1(t) x2(t) x3(t) x4(t)
@@ -249,7 +249,7 @@ let
     Δp2 = p2
 
     eqs = [+flow(xm, Δp1) ~ rho1 * dV1 + drho1 * V1
-           0 ~ IfElse.ifelse(w > 0.5,
+           0 ~ ifelse(w > 0.5,
                (0) - (rho2 * dV2 + drho2 * V2),
                (-flow(xm, Δp2)) - (rho2 * dV2 + drho2 * V2))
            V1 ~ (l_1f + w) * A_1f
@@ -265,7 +265,7 @@ let
            D(w) ~ dw
            D(dw) ~ ddw
            xf ~ 20e-3 * (1 - cos(2 * π * 5 * t))
-           0 ~ IfElse.ifelse(w > 0.5,
+           0 ~ ifelse(w > 0.5,
                (m_total * ddw) - (p1 * A_1f - p2 * A_2f - damp * dw),
                (m_total * ddw) - (p1 * A_1f - p2 * A_2f))]
     # ----------------------------------------------------------------------------

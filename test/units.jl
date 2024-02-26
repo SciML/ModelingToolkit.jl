@@ -1,4 +1,4 @@
-using ModelingToolkit, OrdinaryDiffEq, JumpProcesses, IfElse, Unitful
+using ModelingToolkit, OrdinaryDiffEq, JumpProcesses, Unitful
 using Test
 MT = ModelingToolkit
 UMT = ModelingToolkit.UnitfulUnitCheck
@@ -33,7 +33,7 @@ D = Differential(t)
 @test UMT.get_unit(t / τ) == UMT.unitless
 @test UMT.equivalent(UMT.get_unit(P - E / τ), u"MW")
 @test UMT.equivalent(UMT.get_unit(D(D(E))), u"MW/ms")
-@test UMT.get_unit(IfElse.ifelse(t > t, P, E / τ)) == u"MW"
+@test UMT.get_unit(ifelse(t > t, P, E / τ)) == u"MW"
 @test UMT.get_unit(1.0^(t / τ)) == UMT.unitless
 @test UMT.get_unit(exp(t / τ)) == UMT.unitless
 @test UMT.get_unit(sin(t / τ)) == UMT.unitless

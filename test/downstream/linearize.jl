@@ -163,7 +163,7 @@ end
 function saturation(; y_max, y_min = y_max > 0 ? -y_max : -Inf, name)
     @variables u(t)=0 y(t)=0
     @parameters y_max=y_max y_min=y_min
-    ie = ModelingToolkit.IfElse.ifelse
+    ie = ifelse
     eqs = [
     # The equation below is equivalent to y ~ clamp(u, y_min, y_max)
         y ~ ie(u > y_max, y_max, ie((y_min < u) & (u < y_max), u, y_min))

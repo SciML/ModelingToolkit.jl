@@ -1,7 +1,6 @@
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 using Test
-using IfElse: ifelse
 
 @connector function HydraulicPort(; p_int, name)
     pars = @parameters begin

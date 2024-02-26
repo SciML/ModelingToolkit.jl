@@ -27,7 +27,6 @@ using PrecompileTools, Reexport
     using DocStringExtensions
     using Base: RefValue
     using Combinatorics
-    import IfElse
     import Distributions
     import FunctionWrappersWrappers
     using URIs: URI

@@ -1,6 +1,5 @@
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
-using IfElse
 
 @variables x(t) y(t)[1:3]
 @parameters p1=1.0 p2[1:3]=[1.0, 2.0, 3.0] p3::Int=1 p4::Bool=false
@@ -24,9 +23,9 @@ fn3_iip(buffer, u0, p, 1.0)
 @test buffer == [4.0, 6.0, 2.0, 3.0]
 @test fn3_oop(u0, p, 1.0) == [4.0, 6.0, 2.0, 3.0]
 
-fn4 = generate_custom_function(sys, IfElse.ifelse(p4, p1, p2[2]); expression = Val(false))
+fn4 = generate_custom_function(sys, ifelse(p4, p1, p2[2]); expression = Val(false))
 @test fn4(u0, p, 1.0) == 2.0
-fn5 = generate_custom_function(sys, IfElse.ifelse(!p4, p1, p2[2]); expression = Val(false))
+fn5 = generate_custom_function(sys, ifelse(!p4, p1, p2[2]); expression = Val(false))
 @test fn5(u0, p, 1.0) == 1.0
 
 @variables x y[1:3]
@@ -47,7 +46,7 @@ fn3_iip(buffer, u0, p)
 @test buffer == [4.0, 6.0, 2.0]
 @test fn3_oop(u0, p, 1.0) == [4.0, 6.0, 2.0]
 
-fn4 = generate_custom_function(sys, IfElse.ifelse(p4, p1, p2[2]); expression = Val(false))
+fn4 = generate_custom_function(sys, ifelse(p4, p1, p2[2]); expression = Val(false))
 @test fn4(u0, p, 1.0) == 2.0
-fn5 = generate_custom_function(sys, IfElse.ifelse(!p4, p1, p2[2]); expression = Val(false))
+fn5 = generate_custom_function(sys, ifelse(!p4, p1, p2[2]); expression = Val(false))
 @test fn5(u0, p, 1.0) == 1.0

@@ -1,4 +1,4 @@
-using ModelingToolkit, OrdinaryDiffEq, JumpProcesses, IfElse, DynamicQuantities
+using ModelingToolkit, OrdinaryDiffEq, JumpProcesses, DynamicQuantities
 using Test
 MT = ModelingToolkit
 using ModelingToolkit: t, D
