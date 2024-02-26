@@ -364,14 +364,32 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             linenumbers = linenumbers,
             expression = Val{false})
         if cons_j
-            _cons_j = generate_jacobian(cons_sys; expression = Val{false},
-                sparse = cons_sparse)[2]
+            _cons_j = let (cons_jac_oop, cons_jac_iip) = generate_jacobian(cons_sys;
+                    checkbounds = checkbounds,
+                    linenumbers = linenumbers,
+                    parallel = parallel, expression = Val{false},
+                    sparse = cons_sparse)
+                _cons_j(u, p) = cons_jac_oop(u, p)
+                _cons_j(J, u, p) = (cons_jac_iip(J, u, p); J)
+                _cons_j(u, p::MTKParameters) = cons_jac_oop(u, p...)
+                _cons_j(J, u, p::MTKParameters) = (cons_jac_iip(J, u, p...); J)
+                _cons_j
+            end
         else
             _cons_j = nothing
         end
         if cons_h
-            _cons_h = generate_hessian(cons_sys; expression = Val{false},
-                sparse = cons_sparse)[2]
+            _cons_h = let (cons_hess_oop, cons_hess_iip) = generate_hessian(
+                    cons_sys, checkbounds = checkbounds,
+                    linenumbers = linenumbers,
+                    sparse = cons_sparse, parallel = parallel,
+                    expression = Val{false})
+                _cons_h(u, p) = cons_hess_oop(u, p)
+                _cons_h(J, u, p) = (cons_hess_iip(J, u, p); J)
+                _cons_h(u, p::MTKParameters) = cons_hess_oop(u, p...)
+                _cons_h(J, u, p::MTKParameters) = (cons_hess_iip(J, u, p...); J)
+                _cons_h
+            end
         else
             _cons_h = nothing
         end
