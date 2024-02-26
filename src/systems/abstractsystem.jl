@@ -2268,14 +2268,14 @@ function UnPack.unpack(sys::ModelingToolkit.AbstractSystem, ::Val{p}) where {p}
 end
 
 """
-    missing_variable_defaults(sys::AbstractSystem, default = 0.0)
+    missing_variable_defaults(sys::AbstractSystem, default = 0.0; subset = unknowns(sys))
 
 returns a `Vector{Pair}` of variables set to `default` which are missing from `get_defaults(sys)`.  The `default` argument can be a single value or vector to set the missing defaults respectively.
 """
-function missing_variable_defaults(sys::AbstractSystem, default = 0.0)
+function missing_variable_defaults(sys::AbstractSystem, default = 0.0; subset = unknowns(sys))
     varmap = get_defaults(sys)
     varmap = Dict(Symbolics.diff2term(value(k)) => value(varmap[k]) for k in keys(varmap))
-    missingvars = setdiff(unknowns(sys), keys(varmap))
+    missingvars = setdiff(subset, keys(varmap))
     ds = Pair[]
 
     n = length(missingvars)

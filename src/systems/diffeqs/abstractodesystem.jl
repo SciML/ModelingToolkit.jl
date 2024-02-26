@@ -848,18 +848,34 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         tofloat = true,
         symbolic_u0 = false,
         u0_constructor = identity,
+        guesses = Dict(),
+        warn_initialize_determined = true,
         kwargs...)
     eqs = equations(sys)
     dvs = unknowns(sys)
     ps = full_parameters(sys)
     iv = get_iv(sys)
 
+    initializeprob =  ModelingToolkit.InitializationProblem(sys, u0map, parammap; guesses, warn_initialize_determined)
+    initializeprobmap = getu(initializeprob, unknowns(sys))
+
+    # Append zeros to the variables which are determined by the initialization system
+    # This essentially bypasses the check for if initial conditions are defined for DAEs
+    # since they will be checked in the initialization problem's construction
+    # TODO: make check for if a DAE cheaper than calculating the mass matrix a second time!
+    if implicit_dae || calculate_massmatrix(sys) !== I
+        zerovars = setdiff(unknowns(sys),defaults(sys)) .=> 0.0
+        trueinit =  identity.([zerovars;u0map])
+    else
+        trueinit = u0map
+    end
+
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        u0, defs = get_u0(sys, u0map, parammap; symbolic_u0)
+        u0, defs = get_u0(sys, trueinit, parammap; symbolic_u0)
         p = MTKParameters(sys, parammap)
     else
         u0, p, defs = get_u0_p(sys,
-            u0map,
+            trueinit,
             parammap;
             tofloat,
             use_union,
@@ -885,9 +901,6 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     end
 
     check_eqs_u0(eqs, dvs, u0; kwargs...)
-
-    initializeprob =  ModelingToolkit.InitializationProblem(sys, u0map, parammap)
-    initializeprobmap = getu(initializeprob, unknowns(sys))
 
     f = constructor(sys, dvs, ps, u0; ddvs = ddvs, tgrad = tgrad, jac = jac,
         checkbounds = checkbounds, p = p,
@@ -998,13 +1011,14 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
         parammap = DiffEqBase.NullParameters();
         callback = nothing,
         check_length = true,
+        warn_initialize_determined = true,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
     end
     f, u0, p = process_DEProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
-        check_length, kwargs...)
+        check_length, warn_initialize_determined, kwargs...)
     cbs = process_events(sys; callback, kwargs...)
     inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
@@ -1069,13 +1083,14 @@ end
 
 function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
         parammap = DiffEqBase.NullParameters();
+        warn_initialize_determined = true,
         check_length = true, kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEProblem`")
     end
     f, du0, u0, p = process_DEProblem(DAEFunction{iip}, sys, u0map, parammap;
         implicit_dae = true, du0map = du0map, check_length,
-        kwargs...)
+        warn_initialize_determined, kwargs...)
     diffvars = collect_differential_variables(sys)
     sts = unknowns(sys)
     differential_vars = map(Base.Fix2(in, diffvars), sts)
@@ -1496,18 +1511,33 @@ end
 
 function InitializationProblem{iip, specialize}(sys::AbstractODESystem, u0map = [],
         parammap = DiffEqBase.NullParameters();
+        guesses = [],
         check_length = true,
+        warn_initialize_determined = true,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
     end
 
-    isys = get_initializesystem(sys)
+    if isempty(u0map)
+        isys = get_initializesystem(sys)
+    else
+        isys = structural_simplify(generate_initializesystem(sys; u0map); fully_determined = false)
+    end
+
     neqs = length(equations(isys))
     nunknown = length(unknowns(isys))
+
+    if warn_initialize_determined && neqs > nunknown
+        @warn "Initialization system is overdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false."
+    end
+    if warn_initialize_determined && neqs < nunknown
+        @warn "Initialization system is underdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false."
+    end
+
     if neqs == nunknown
-        NonlinearProblem(isys, u0map, parammap)
+        NonlinearProblem(isys, guesses, parammap)
     else
-        NonlinearLeastSquaresProblem(isys, u0map, parammap)
+        NonlinearLeastSquaresProblem(isys, guesses, parammap)
     end
 end

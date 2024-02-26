@@ -1,6 +1,49 @@
 using ModelingToolkit, OrdinaryDiffEq, NonlinearSolve, Test
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
+@parameters g
+@variables x(t) y(t) [state_priority = 10] λ(t)
+eqs = [
+       D(D(x)) ~ λ * x
+       D(D(y)) ~ λ * y - g
+       x^2 + y^2 ~ 1
+      ]
+@mtkbuild pend = ODESystem(eqs,t)
+
+initprob = ModelingToolkit.InitializationProblem(pend, [], [g => 1]; guesses = [ModelingToolkit.missing_variable_defaults(pend); x => 1; y => 0.2])
+conditions = getfield.(equations(initprob.f.sys),:rhs)
+
+@test initprob isa NonlinearLeastSquaresProblem
+sol = solve(initprob)
+@test SciMLBase.successful_retcode(sol)
+@test maximum(abs.(sol[conditions])) < 1e-14
+
+initprob = ModelingToolkit.InitializationProblem(pend, [x => 1, y => 0], [g => 1]; guesses = ModelingToolkit.missing_variable_defaults(pend))
+@test initprob isa NonlinearProblem
+sol = solve(initprob)
+@test SciMLBase.successful_retcode(sol)
+@test sol.u == [1.0,0.0,0.0,0.0]
+@test maximum(abs.(sol[conditions])) < 1e-14
+
+initprob = ModelingToolkit.InitializationProblem(pend, [], [g => 1]; guesses = ModelingToolkit.missing_variable_defaults(pend))
+@test initprob isa NonlinearLeastSquaresProblem
+sol = solve(initprob)
+@test !SciMLBase.successful_retcode(sol)
+
+prob = ODEProblem(pend, [x => 1, y => 0], (0.0, 1.5), [g => 1], guesses = ModelingToolkit.missing_variable_defaults(pend))
+prob.f.initializeprob isa NonlinearProblem
+sol = solve(prob.f.initializeprob)
+@test maximum(abs.(sol[conditions])) < 1e-14
+sol = solve(prob, Rodas5P())
+@test maximum(abs.(sol[conditions][1])) < 1e-14
+
+prob = ODEProblem(pend, [x => 1], (0.0, 1.5), [g => 1], guesses = ModelingToolkit.missing_variable_defaults(pend))
+prob.f.initializeprob isa NonlinearLeastSquaresProblem
+sol = solve(prob.f.initializeprob)
+@test maximum(abs.(sol[conditions])) < 1e-14
+sol = solve(prob, Rodas5P())
+@test maximum(abs.(sol[conditions][1])) < 1e-14
+
 @connector Port begin
     p(t)
     dm(t) = 0, [connect = Flow]
@@ -171,34 +214,26 @@ end
 
 @mtkbuild sys = System()
 initprob = ModelingToolkit.InitializationProblem(sys)
+conditions = getfield.(equations(initprob.f.sys),:rhs)
+
 @test initprob isa NonlinearLeastSquaresProblem
 @test length(initprob.u0) == 2
 initsol = solve(initprob, reltol = 1e-12, abstol = 1e-12)
 @test SciMLBase.successful_retcode(initsol)
+@test maximum(abs.(initsol[conditions])) < 1e-14
 
 allinit = unknowns(sys) .=> initsol[unknowns(sys)]
 prob = ODEProblem(sys, allinit, (0, 0.1))
+sol = solve(prob, Rodas5P(), initializealg = BrownFullBasicInit())
+# If initialized incorrectly, then it would be InitialFailure
+@test sol.retcode == SciMLBase.ReturnCode.Unstable
+@test maximum(abs.(initsol[conditions][1])) < 1e-14
+
+prob = ODEProblem(sys, [], (0, 0.1), check=false)
 sol = solve(prob, Rodas5P())
 # If initialized incorrectly, then it would be InitialFailure
 @test sol.retcode == SciMLBase.ReturnCode.Unstable
-SciMLBase.has_initializeprob(prob.f)
-
-isys = ModelingToolkit.get_initializesystem(sys)
-unknowns(isys)
-
-initprob = ModelingToolkit.InitializationProblem(sys)
-sol = solve(initprob)
-
-unknowns(sys)
-
-[sys.act.vol₁.dr]
-
-getter = ModelingToolkit.getu(initprob, unknowns(sys)[end-1:end])
-getter(sol)
-
-prob.f.initializeprobmap(initsol)
-
-initsol[unknowns(isys)]
+@test maximum(abs.(initsol[conditions][1])) < 1e-14
 
 @connector Flange begin
     dx(t), [guess = 0]
@@ -269,3 +304,28 @@ sol = solve(prob, Rodas5P())
 # If initialized incorrectly, then it would be InitialFailure
 @test sol.retcode == SciMLBase.ReturnCode.Success
 
+prob = ODEProblem(sys, [], (0, 0.1))
+sol = solve(prob, Rodas5P())
+@test sol.retcode == SciMLBase.ReturnCode.Success
+
+### Ensure that non-DAEs still throw for missing variables without the initialize system
+
+@parameters σ ρ β
+@variables x(t) y(t) z(t)
+
+eqs = [D(D(x)) ~ σ * (y - x),
+    D(y) ~ x * (ρ - z) - y,
+    D(z) ~ x * y - β * z]
+
+@mtkbuild sys = ODESystem(eqs, t)
+
+u0 = [D(x) => 2.0,
+    y => 0.0,
+    z => 0.0]
+
+p = [σ => 28.0,
+    ρ => 10.0,
+    β => 8 / 3]
+
+tspan = (0.0, 100.0)
+@test_throws ArgumentError prob = ODEProblem(sys, u0, tspan, p, jac = true)

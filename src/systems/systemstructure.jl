@@ -615,7 +615,7 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
 end
 
 function _structural_simplify!(state::TearingState, io; simplify = false,
-        check_consistency = true, fully_determined = true, warn_initialize_determined = true,
+        check_consistency = true, fully_determined = true, warn_initialize_determined = false,
         kwargs...)
     check_consistency &= fully_determined
     has_io = io !== nothing
@@ -644,7 +644,7 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
         neqs = length(equations(isys))
         nunknown = length(unknowns(isys))
         if warn_initialize_determined && neqs > nunknown
-            @warn "Initialization system is overdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares"
+            @warn "Initialization system is overdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares if $(nunknown - neqs) defaults are not supplied at construction time."
         end
         if warn_initialize_determined && neqs < nunknown
             @warn "Initialization system is underdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares"
