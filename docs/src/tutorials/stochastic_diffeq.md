@@ -34,5 +34,5 @@ parammap = [
 ]
 
 prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
-sol = solve(prob, LambdaEulerHeun())
+sol = solve(prob, LambaEulerHeun())
 ```

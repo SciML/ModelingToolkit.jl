@@ -23,10 +23,11 @@ From there, we can use ModelingToolkit to transform the symbolic equations into 
 nonlinear solve:
 
 ```@example parsing
-using ModelingToolkit, NonlinearSolve
+using ModelingToolkit, SymbolicIndexingInterface, NonlinearSolve
 vars = union(ModelingToolkit.vars.(eqs)...)
 @mtkbuild ns = NonlinearSystem(eqs, vars, [])
 
-prob = NonlinearProblem(ns, [1.0, 1.0, 1.0])
+varmap = Dict(SymbolicIndexingInterface.getname.(vars) .=> vars)
+prob = NonlinearProblem(ns, [varmap[:x] => 1.0, varmap[:y] => 1.0, varmap[:z] => 1.0])
 sol = solve(prob, NewtonRaphson())
 ```

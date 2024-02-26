@@ -142,7 +142,7 @@ In the example below, we define a system with tunable parameters and extract bou
 @variables x(t)=0 u(t)=0 [input = true] y(t)=0 [output = true]
 @parameters T [tunable = true, bounds = (0, Inf)]
 @parameters k [tunable = true, bounds = (0, Inf)]
-eqs = [Dₜ(x) ~ (-x + k * u) / T # A first-order system with time constant T and gain k
+eqs = [D(x) ~ (-x + k * u) / T # A first-order system with time constant T and gain k
        y ~ x]
 sys = ODESystem(eqs, t, name = :tunable_first_order)
 ```

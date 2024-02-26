@@ -59,7 +59,11 @@ ModelingToolkit.validate(eqs[1])
 ```
 
 ```@example validation
-ModelingToolkit.get_unit(eqs[1].rhs)
+try
+    ModelingToolkit.get_unit(eqs[1].rhs)
+catch e
+    showerror(stdout, e)
+end
 ```
 
 An example of an inconsistent system: at present, `ModelingToolkit` requires that the units of all terms in an equation or sum to be equal-valued (`ModelingToolkit.equivalent(u1,u2)`), rather than simply dimensionally consistent. In the future, the validation stage may be upgraded to support the insertion of conversion factors into the equations.
@@ -100,7 +104,8 @@ end
 sts = @variables a(t)=0 [unit = u"cm"]
 ps = @parameters s=-1 [unit = u"cm"] c=c [unit = u"cm"]
 eqs = [D(a) ~ dummycomplex(c, s);]
-sys = ODESystem(eqs, t, [sts...;], [ps...;], name = :sys)
+sys = ODESystem(
+    eqs, t, [sts...;], [ps...;], name = :sys, checks = ~ModelingToolkit.CheckUnits)
 sys_simple = structural_simplify(sys)
 ```
 
