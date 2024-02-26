@@ -638,8 +638,9 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
 
     ci = infer_clocks!(ClockInference(state))
     # TODO: make it work with clocks
-    if sys isa ODESystem && all(isequal(Continuous()), ci.var_domain) && (!has_io ||
-       !all(all(x -> !(typeof(x) <: Union{Sample, Hold, ShiftIndex}), io)))
+    if sys isa ODESystem && all(isequal(Continuous()), ci.var_domain) &&
+       (!has_io ||
+        !all(all(x -> !(typeof(x) <: Union{Sample, Hold, ShiftIndex}), io)))
         isys = ModelingToolkit.generate_initializesystem(sys)
         !isempty(equations(isys)) &&
             (isys = structural_simplify(isys; fully_determined = false))
