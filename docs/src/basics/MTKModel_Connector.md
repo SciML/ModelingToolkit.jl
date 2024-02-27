@@ -220,7 +220,7 @@ end
 ```
 
 !!! note
-    
+
     For more examples of usage, checkout [ModelingToolkitStandardLibrary.jl](https://github.com/SciML/ModelingToolkitStandardLibrary.jl/)
 
 ## More on `Model.structure`
@@ -234,7 +234,7 @@ end
     parameter arrays, length is added to the metadata as `:size`.
   - `:variables`: Dictionary of symbolic variables mapped to their metadata. For
     variable arrays, length is added to the metadata as `:size`.
-  - `:kwargs`: Dictionary of keyword arguments mapped to their default values.
+  - `:kwargs`: Dictionary of keyword arguments mapped to their metadata.
   - `:independent_variable`: Independent variable, which is added while generating the Model.
   - `:equations`: List of equations (represented as strings).
 
@@ -246,7 +246,7 @@ Dict{Symbol, Any} with 7 entries:
   :components           => [[:model_a, :ModelA]]
   :variables            => Dict{Symbol, Dict{Symbol, Any}}(:v=>Dict(:default=>:v_var), :v_array=>Dict(:size=>(2, 3)))
   :icon                 => URI("https://github.com/SciML/SciMLDocs/blob/main/docs/src/assets/logo.png")
-  :kwargs               => Dict{Symbol, Any}(:f=>:sin, :v=>:v_var, :v_array=>nothing, :model_a__k_array=>nothing, :p1=>nothing)
+  :kwargs               => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin), :v=>Dict{Symbol, Union{Nothing, Symbol}}(:value=>:v_var, :type=>nothing), :v_array=>Dict(:value=>nothing, :type=>nothing), :p1=>Dict(:value=>nothing))
   :independent_variable => t
   :extend               => Any[[:p2, :p1], Symbol("#mtkmodel__anonymous__ModelB"), :ModelB]
   :equations            => ["model_a.k ~ f(v)"]
@@ -323,7 +323,7 @@ The conditional parts are reflected in the `structure`. For `BranchOutsideTheBlo
 julia> BranchOutsideTheBlock.structure
 Dict{Symbol, Any} with 5 entries:
   :components           => Any[(:if, :flag, [[:sys1, :C]], Any[])]
-  :kwargs               => Dict{Symbol, Any}(:flag=>true)
+  :kwargs               => Dict{Symbol, Dict}(:flag=>Dict{Symbol, Bool}(:value=>1))
   :independent_variable => t
   :parameters           => Dict{Symbol, Dict{Symbol, Any}}(:a1=>Dict(:condition=>(:if, :flag, Dict{Symbol, Any}(:kwargs => Dict{Any, Any}(:a1 => nothing), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a1 => Dict())]), Dict{Symbol, Any}(:kwargs => Dict{Any, Any}(:a2 => nothing), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a2 => Dict())]))
   :equations            => Any[(:if, :flag, ["a1 ~ 0"], ["a2 ~ 0"])]
