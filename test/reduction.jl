@@ -176,7 +176,7 @@ N = 5
 @variables xs[1:N]
 A = reshape(1:(N^2), N, N)
 eqs = xs .~ A * xs
-@named sys′ = NonlinearSystem(eqs, xs, [])
+@named sys′ = NonlinearSystem(collect(eqs), [xs], [])
 sys = structural_simplify(sys′)
 
 # issue 958
