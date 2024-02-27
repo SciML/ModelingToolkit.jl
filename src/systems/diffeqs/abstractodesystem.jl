@@ -866,7 +866,6 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     if (implicit_dae || calculate_massmatrix(sys) !== I) &&
        all(isequal(Continuous()), ci.var_domain) &&
        ModelingToolkit.get_tearing_state(sys) !== nothing
-       
         if eltype(u0map) <: Number
             u0map = unknowns(sys) .=> u0map
         end
