@@ -1541,8 +1541,6 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
     end
 
-    @show u0map
-
     if isempty(u0map) && get_initializesystem(sys) !== nothing
         isys = get_initializesystem(sys)
     elseif isempty(u0map) && get_initializesystem(sys) === nothing

@@ -636,23 +636,5 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
     fullunknowns = [map(eq -> eq.lhs, observed(sys)); unknowns(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)
 
-    ci = infer_clocks!(ClockInference(state))
-    # TODO: make it work with clocks
-    if sys isa ODESystem && all(isequal(Continuous()), ci.var_domain) &&
-       (!has_io ||
-        !all(all(x -> !(typeof(x) <: Union{Sample, Hold, ShiftIndex}), io)))
-        isys = ModelingToolkit.generate_initializesystem(sys)
-        !isempty(equations(isys)) &&
-            (isys = structural_simplify(isys; fully_determined = false))
-        @set! sys.initializesystem = isys
-        neqs = length(equations(isys))
-        nunknown = length(unknowns(isys))
-        if warn_initialize_determined && neqs > nunknown
-            @warn "Initialization system is overdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares if $(nunknown - neqs) defaults are not supplied at construction time."
-        end
-        if warn_initialize_determined && neqs < nunknown
-            @warn "Initialization system is underdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares"
-        end
-    end
     ModelingToolkit.invalidate_cache!(sys), input_idxs
 end
