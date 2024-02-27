@@ -1528,16 +1528,15 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
     end
 
-    if isempty(u0map)
+    if isempty(u0map) && get_initializesystem(sys) !== nothing
         isys = get_initializesystem(sys)
+    elseif isempty(u0map) && get_initializesystem(sys) === nothing
+        isys = structural_simplify(generate_initializesystem(sys); fully_determined = false)
     else
         isys = structural_simplify(
             generate_initializesystem(sys; u0map); fully_determined = false)
     end
 
-    if equations(isys) === nothing
-        return NonlinearProblem(isys, guesses, parammap)
-    end
     neqs = length(equations(isys))
     nunknown = length(unknowns(isys))
 
