@@ -27,9 +27,7 @@ function structural_simplify(
         newsys = newsys′
     end
     if newsys isa ODESystem
-        schedule = newsys.schedule
         @set! newsys.parent = complete(sys; split)
-        @set! newsys.schedule = schedule
     else
         @set! newsys.parent = complete(sys; split)
     end
