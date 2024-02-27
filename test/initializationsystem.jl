@@ -17,7 +17,7 @@ sol = solve(initprob)
 @test SciMLBase.successful_retcode(sol)
 @test maximum(abs.(sol[conditions])) < 1e-14
 
-initprob = ModelingToolkit.InitializationProblem(pend, [x => 1, y => 0], [g => 1];
+initprob = ModelingToolkit.InitializationProblem(pend, 0.0, [x => 1, y => 0], [g => 1];
     guesses = ModelingToolkit.missing_variable_defaults(pend))
 @test initprob isa NonlinearProblem
 sol = solve(initprob)
@@ -26,7 +26,7 @@ sol = solve(initprob)
 @test maximum(abs.(sol[conditions])) < 1e-14
 
 initprob = ModelingToolkit.InitializationProblem(
-    pend, [], [g => 1]; guesses = ModelingToolkit.missing_variable_defaults(pend))
+    pend, 0.0, [], [g => 1]; guesses = ModelingToolkit.missing_variable_defaults(pend))
 @test initprob isa NonlinearLeastSquaresProblem
 sol = solve(initprob)
 @test !SciMLBase.successful_retcode(sol)
@@ -216,7 +216,7 @@ end
 end
 
 @mtkbuild sys = System()
-initprob = ModelingToolkit.InitializationProblem(sys)
+initprob = ModelingToolkit.InitializationProblem(sys, 0.0)
 conditions = getfield.(equations(initprob.f.sys), :rhs)
 
 @test initprob isa NonlinearLeastSquaresProblem
@@ -296,7 +296,7 @@ end
 end
 
 @mtkbuild sys = MassDamperSystem()
-initprob = ModelingToolkit.InitializationProblem(sys)
+initprob = ModelingToolkit.InitializationProblem(sys, 0.0)
 @test initprob isa NonlinearProblem
 initsol = solve(initprob, reltol = 1e-12, abstol = 1e-12)
 @test SciMLBase.successful_retcode(initsol)

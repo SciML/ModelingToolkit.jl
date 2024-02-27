@@ -1531,7 +1531,7 @@ function InitializationProblem{false}(sys::AbstractODESystem, args...; kwargs...
 end
 
 function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
-        t, u0map = [],
+        t::Number, u0map = [],
         parammap = DiffEqBase.NullParameters();
         guesses = [],
         check_length = true,
