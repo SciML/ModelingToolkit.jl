@@ -300,7 +300,7 @@ prob3 = ODEProblem(sys, u0, tspan, p, jac = true, sparse = true) #SparseMatrixCS
 @test prob3.f.jac_prototype isa SparseMatrixCSC
 prob3 = ODEProblem(sys, u0, tspan, p, jac = true, sparsity = true)
 @test prob3.f.sparsity isa SparseMatrixCSC
-@test_throws DimensionMismatch ODEProblem(sys, zeros(5), tspan, p)
+@test_throws ArgumentError ODEProblem(sys, zeros(5), tspan, p)
 for (prob, atol) in [(prob1, 1e-12), (prob2, 1e-12), (prob3, 1e-12)]
     local sol
     sol = solve(prob, Rodas5())
