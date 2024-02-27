@@ -1535,6 +1535,9 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
             generate_initializesystem(sys; u0map); fully_determined = false)
     end
 
+    if equations(isys) === nothing
+        return NonlinearProblem(isys, guesses, parammap)
+    end
     neqs = length(equations(isys))
     nunknown = length(unknowns(isys))
 
