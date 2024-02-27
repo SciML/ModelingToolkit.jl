@@ -36,6 +36,7 @@ end
 function _model_macro(mod, name, expr, isconnector)
     exprs = Expr(:block)
     dict = Dict{Symbol, Any}(
+        :constants => Dict{Symbol, Dict}(),
         :kwargs => Dict{Symbol, Dict}(),
         :structural_parameters => Dict{Symbol, Dict}()
     )
@@ -347,6 +348,8 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps,
         parse_structural_parameters!(exprs, sps, dict, mod, body, kwargs)
     elseif mname == Symbol("@equations")
         parse_equations!(exprs, eqs, dict, body)
+    elseif mname == Symbol("@constants")
+        parse_constants!(exprs, dict, body, mod)
     elseif mname == Symbol("@icon")
         isassigned(icon) && error("This model has more than one icon.")
         parse_icon!(body, dict, icon, mod)
@@ -355,13 +358,53 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps,
     end
 end
 
+function parse_constants!(exprs, dict, body, mod)
+    Base.remove_linenums!(body)
+    for arg in body.args
+        MLStyle.@match arg begin
+            Expr(:(=), Expr(:(::), a, type), Expr(:tuple, b, metadata)) || Expr(:(=), Expr(:(::), a, type), b) => begin
+                type = getfield(mod, type)
+                b = _type_check!(get_var(mod, b), a, type, :constants)
+                constant = first(@constants $a::type = b)
+                push!(exprs, :($a = $constant))
+                dict[:constants][a] = Dict(:value => b, :type => type)
+                if @isdefined metadata
+                    for data in metadata.args
+                        dict[:constants][a][data.args[1]] = data.args[2]
+                    end
+                end
+            end
+            Expr(:(=), a, Expr(:tuple, b, metadata)) => begin
+                constant = first(@constants $a = b)
+                push!(exprs, :($a = $constant))
+                dict[:constants][a] = Dict{Symbol, Any}(:value => get_var(mod, b))
+                for data in metadata.args
+                    dict[:constants][a][data.args[1]] = data.args[2]
+                end
+            end
+            Expr(:(=), a, b) => begin
+                constant = first(@constants $a = b)
+                push!(exprs, :($a = $constant))
+                dict[:constants][a] = Dict(:value => get_var(mod, b))
+            end
+            _ => error("""Malformed constant definition `$arg`. Please use the following syntax:
+                ```
+                @constants begin
+                    var = value, [description = "This is an example constant."]
+                end
+                ```
+            """)
+        end
+    end
+end
+
 function parse_structural_parameters!(exprs, sps, dict, mod, body, kwargs)
     Base.remove_linenums!(body)
     for arg in body.args
         MLStyle.@match arg begin
             Expr(:(=), Expr(:(::), a, type), b) => begin
-                type = Core.eval(mod, type)
-                b = _type_check!(Core.eval(mod, b), a, type, :structural_parameters)
+                type = getfield(mod, type)
+                b = _type_check!(get_var(mod, b), a, type, :structural_parameters)
                 push!(sps, a)
                 push!(kwargs, Expr(:kw, Expr(:(::), a, type), b))
                 dict[:structural_parameters][a] = dict[:kwargs][a] = Dict(
@@ -922,16 +965,15 @@ function parse_conditional_model_statements(comps, dict, eqs, exprs, kwargs, mod
         end))
 end
 
-function _type_check!(val, a, type, varclass)
+function _type_check!(val, a, type, class)
     if val isa type
         return val
     else
         try
             return convert(type, val)
-        catch
-            (e)
+        catch e
             throw(TypeError(Symbol("`@mtkmodel`"),
-                "`$varclass`, while assigning to `$a`", type, typeof(val)))
+                "`$class`, while assigning to `$a`", type, typeof(val)))
         end
     end
 end
