@@ -185,9 +185,10 @@ let
           mo_1 => 0
           mo_2 => 1
           mo_3 => 2
+          Ek_2 => 2
           Ek_3 => 3]
-    prob1 = ODEProblem(sys, u0, (0.0, 0.1))
-    prob2 = ODEProblem(sys, u0, (0.0, 0.1))
+    prob1 = ODEProblem(sys, [], (0.0, 0.1), guesses = u0)
+    prob2 = ODEProblem(sys, [], (0.0, 0.1), guesses = u0)
     @test solve(prob1, FBDF()).retcode == ReturnCode.Success
     @test solve(prob2, FBDF()).retcode == ReturnCode.Success
 end

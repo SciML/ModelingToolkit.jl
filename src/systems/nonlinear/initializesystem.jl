@@ -27,7 +27,7 @@ function generate_initializesystem(sys::ODESystem;
     dd_guess = if schedule !== nothing
         guessmap = [x[2] => get(guesses, x[1], default_dd_value)
                     for x in schedule.dummy_sub]
-        Dict(filter(x -> !isnothing(x[1]) && x[1] ∈ set_full_states, guessmap))
+        Dict(filter(x -> !isnothing(x[1]), guessmap))
     else
         Dict()
     end
