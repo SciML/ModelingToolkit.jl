@@ -169,13 +169,12 @@ struct ODESystem <: AbstractODESystem
     """
     parent::Any
 
-
     function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
             jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses,
             torn_matching, initializesystem, schedule, connector_type, preface, cevents,
             devents, parameter_dependencies,
             metadata = nothing, gui_metadata = nothing,
-            tearing_state = nothing, 
+            tearing_state = nothing,
             substitutions = nothing, complete = false, index_cache = nothing,
             discrete_subsystems = nothing, solved_unknowns = nothing,
             split_idxs = nothing, parent = nothing; checks::Union{Bool, Int} = true)
@@ -191,7 +190,7 @@ struct ODESystem <: AbstractODESystem
         end
         new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses, torn_matching,
-            initializesystem, schedule, connector_type, preface, cevents, devents, parameter_dependencies, 
+            initializesystem, schedule, connector_type, preface, cevents, devents, parameter_dependencies,
             metadata,
             gui_metadata, tearing_state, substitutions, complete, index_cache,
             discrete_subsystems, solved_unknowns, split_idxs, parent)
@@ -215,7 +214,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         continuous_events = nothing,
         discrete_events = nothing,
         parameter_dependencies = nothing,
-        checks = true,        
+        checks = true,
         metadata = nothing,
         gui_metadata = nothing)
     name === nothing &&

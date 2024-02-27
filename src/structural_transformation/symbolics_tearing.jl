@@ -560,7 +560,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
     # TODO: generalize to SDE
     if sys isa ODESystem
         @set! sys.schedule = Schedule(var_eq_matching, dummy_sub)
-    end   
+    end
     @set! state.sys = sys
     @set! sys.tearing_state = state
     return invalidate_cache!(sys)

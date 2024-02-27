@@ -6,7 +6,7 @@ Generate `NonlinearSystem` which initializes an ODE problem from specified initi
 function generate_initializesystem(sys::ODESystem;
         u0map = Dict(),
         name = nameof(sys),
-        guesses = Dict(), check_defguess = false, 
+        guesses = Dict(), check_defguess = false,
         default_dd_value = 0.0,
         kwargs...)
     sts, eqs = unknowns(sys), equations(sys)
@@ -25,8 +25,9 @@ function generate_initializesystem(sys::ODESystem;
     schedule = getfield(sys, :schedule)
 
     dd_guess = if schedule !== nothing
-        guessmap = [x[2]=>get(guesses, x[1], default_dd_value) for x in schedule.dummy_sub]
-        Dict(filter(x->!isnothing(x[1]) && x[1]∈set_full_states,guessmap))
+        guessmap = [x[2] => get(guesses, x[1], default_dd_value)
+                    for x in schedule.dummy_sub]
+        Dict(filter(x -> !isnothing(x[1]) && x[1] ∈ set_full_states, guessmap))
     else
         Dict()
     end
@@ -55,7 +56,7 @@ function generate_initializesystem(sys::ODESystem;
 
     pars = [parameters(sys); independent_variable(sys)]
     nleqs = [eqs_ics; observed(sys)]
-    
+
     sys_nl = NonlinearSystem(nleqs,
         full_states,
         pars;

@@ -1,6 +1,6 @@
 struct Schedule
-    var_eq_matching
-    dummy_sub
+    var_eq_matching::Any
+    dummy_sub::Any
 end
 
 function filter_kwargs(kwargs)
@@ -1518,7 +1518,8 @@ function InitializationProblem(sys::AbstractODESystem, t,
         u0map::StaticArray,
         args...;
         kwargs...)
-    InitializationProblem{false, SciMLBase.FullSpecialize}(sys, t, u0map, args...; kwargs...)
+    InitializationProblem{false, SciMLBase.FullSpecialize}(
+        sys, t, u0map, args...; kwargs...)
 end
 
 function InitializationProblem{true}(sys::AbstractODESystem, args...; kwargs...)
@@ -1529,7 +1530,7 @@ function InitializationProblem{false}(sys::AbstractODESystem, args...; kwargs...
     InitializationProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
-function InitializationProblem{iip, specialize}(sys::AbstractODESystem, 
+function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         t, u0map = [],
         parammap = DiffEqBase.NullParameters();
         guesses = [],
@@ -1560,8 +1561,9 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     if warn_initialize_determined && neqs < nunknown
         @warn "Initialization system is underdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false."
     end
-    
-    parammap isa DiffEqBase.NullParameters ? [independent_variable(sys) => t] : merge(todict(parammap), Dict(independent_variable(sys) => t))
+
+    parammap isa DiffEqBase.NullParameters ? [independent_variable(sys) => t] :
+    merge(todict(parammap), Dict(independent_variable(sys) => t))
 
     if neqs == nunknown
         NonlinearProblem(isys, guesses, parammap)
