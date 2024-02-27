@@ -37,6 +37,7 @@ function _model_macro(mod, name, expr, isconnector)
     exprs = Expr(:block)
     dict = Dict{Symbol, Any}(
         :kwargs => Dict{Symbol, Dict}(),
+        :structural_parameters => Dict{Symbol, Dict}()
     )
     comps = Symbol[]
     ext = Ref{Any}(nothing)
@@ -332,17 +333,18 @@ function parse_structural_parameters!(exprs, sps, dict, mod, body, kwargs)
                 b = _type_check!(Core.eval(mod, b), a, type)
                 push!(sps, a)
                 push!(kwargs, Expr(:kw, Expr(:(::), a, type), b))
-                dict[:kwargs][a] = Dict(:value => b, :type => type)
+                dict[:structural_parameters][a] = dict[:kwargs][a] = Dict(
+                    :value => b, :type => type)
             end
             Expr(:(=), a, b) => begin
                 push!(sps, a)
                 push!(kwargs, Expr(:kw, a, b))
-                dict[:kwargs][a] = Dict(:value => b)
+                dict[:structural_parameters][a] = dict[:kwargs][a] = Dict(:value => b)
             end
             a => begin
                 push!(sps, a)
                 push!(kwargs, a)
-                dict[:kwargs][a] = Dict(:value => nothing)
+                dict[:structural_parameters][a] = dict[:kwargs][a] = Dict(:value => nothing)
             end
         end
     end
