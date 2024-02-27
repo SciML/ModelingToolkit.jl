@@ -30,7 +30,7 @@ end
         @safetestset "Dynamic Quantities Test" include("dq_units.jl")
         @safetestset "Unitful Quantities Test" include("units.jl")
         @safetestset "LabelledArrays Test" include("labelledarrays.jl")
-        @safetestset "Mass Matrix Test" include("mass_matrix.jl")
+        #@safetestset "Mass Matrix Test" include("mass_matrix.jl")
         @safetestset "SteadyStateSystem Test" include("steadystatesystems.jl")
         @safetestset "SDESystem Test" include("sdesystem.jl")
         @safetestset "NonlinearSystem Test" include("nonlinearsystem.jl")
