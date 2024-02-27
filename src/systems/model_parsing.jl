@@ -35,8 +35,9 @@ end
 
 function _model_macro(mod, name, expr, isconnector)
     exprs = Expr(:block)
-    dict = Dict{Symbol, Any}()
-    dict[:kwargs] = Dict{Symbol, Any}()
+    dict = Dict{Symbol, Any}(
+        :kwargs => Dict{Symbol, Dict}(),
+    )
     comps = Symbol[]
     ext = Ref{Any}(nothing)
     eqs = Expr[]
@@ -107,7 +108,8 @@ function _model_macro(mod, name, expr, isconnector)
 end
 
 function parse_variable_def!(dict, mod, arg, varclass, kwargs;
-        def = nothing, indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
+        def = nothing, indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
+        type::Union{Type, Nothing} = nothing)
     metatypes = [(:connection_type, VariableConnectType),
         (:description, VariableDescription),
         (:unit, VariableUnit),
@@ -127,15 +129,34 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs;
     arg isa LineNumberNode && return
     MLStyle.@match arg begin
         a::Symbol => begin
-            push!(kwargs, Expr(:kw, a, nothing))
+            if type isa Nothing
+                push!(kwargs, Expr(:kw, a, nothing))
+            else
+                push!(kwargs, Expr(:kw, Expr(:(::), a, Union{Nothing, type}), nothing))
+            end
             var = generate_var!(dict, a, varclass; indices)
-            dict[:kwargs][getname(var)] = def
+            dict[:kwargs][getname(var)] = Dict(:value => def, :type => type)
             (var, def)
         end
+        Expr(:(::), a, type) => begin
+            type = Core.eval(mod, type)
+            _type_check!(a, type)
+            parse_variable_def!(dict, mod, a, varclass, kwargs; def, type)
+        end
+        Expr(:(::), Expr(:call, a, b), type) => begin
+            type = Core.eval(mod, type)
+            def = _type_check!(def, a, type)
+            parse_variable_def!(dict, mod, a, varclass, kwargs; def, type)
+        end
         Expr(:call, a, b) => begin
-            push!(kwargs, Expr(:kw, a, nothing))
+            if type isa Nothing
+                push!(kwargs, Expr(:kw, a, nothing))
+            else
+                push!(kwargs, Expr(:kw, Expr(:(::), a, Union{Nothing, type}), nothing))
+            end
             var = generate_var!(dict, a, b, varclass; indices)
-            dict[:kwargs][getname(var)] = def
+            type !== nothing && (dict[varclass][getname(var)][:type] = type)
+            dict[:kwargs][getname(var)] = Dict(:value => def, :type => type)
             (var, def)
         end
         Expr(:(=), a, b) => begin
@@ -306,15 +327,22 @@ function parse_structural_parameters!(exprs, sps, dict, mod, body, kwargs)
     Base.remove_linenums!(body)
     for arg in body.args
         MLStyle.@match arg begin
+            Expr(:(=), Expr(:(::), a, type), b) => begin
+                type = Core.eval(mod, type)
+                b = _type_check!(Core.eval(mod, b), a, type)
+                push!(sps, a)
+                push!(kwargs, Expr(:kw, Expr(:(::), a, type), b))
+                dict[:kwargs][a] = Dict(:value => b, :type => type)
+            end
             Expr(:(=), a, b) => begin
                 push!(sps, a)
                 push!(kwargs, Expr(:kw, a, b))
-                dict[:kwargs][a] = b
+                dict[:kwargs][a] = Dict(:value => b)
             end
             a => begin
                 push!(sps, a)
                 push!(kwargs, a)
-                dict[:kwargs][a] = nothing
+                dict[:kwargs][a] = Dict(:value => nothing)
             end
         end
     end
@@ -338,17 +366,17 @@ function extend_args!(a, b, dict, expr, kwargs, varexpr, has_param = false)
                     end
                 end
                 push!(kwargs, Expr(:kw, x, nothing))
-                dict[:kwargs][x] = nothing
+                dict[:kwargs][x] = Dict(:value => nothing)
             end
             Expr(:kw, x) => begin
                 push!(kwargs, Expr(:kw, x, nothing))
-                dict[:kwargs][x] = nothing
+                dict[:kwargs][x] = Dict(:value => nothing)
             end
             Expr(:kw, x, y) => begin
                 b.args[i] = Expr(:kw, x, x)
                 push!(varexpr.args, :($x = $x === nothing ? $y : $x))
                 push!(kwargs, Expr(:kw, x, nothing))
-                dict[:kwargs][x] = nothing
+                dict[:kwargs][x] = Dict(:value => nothing)
             end
             Expr(:parameters, x...) => begin
                 has_param = true
@@ -852,4 +880,19 @@ function parse_conditional_model_statements(comps, dict, eqs, exprs, kwargs, mod
         parse_equations!(exprs.args, eqs, dict, :(begin
             $equations_blk
         end))
+end
+
+_type_check!(a, type) = return
+function _type_check!(val, a, type)
+    if val isa type
+        return val
+    else
+        try
+            return convert(type, val)
+        catch
+            (e)
+            throw(TypeError(Symbol("`@mtkmodel`"),
+                "`@structural_parameters`, while assigning to `$a`", type, typeof(val)))
+        end
+    end
 end
