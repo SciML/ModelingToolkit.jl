@@ -862,8 +862,11 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     # TODO: make check for if a DAE cheaper than calculating the mass matrix a second time!
     ci = infer_clocks!(ClockInference(TearingState(sys)))
     # TODO: make it work with clocks
+    # ModelingToolkit.get_tearing_state(sys) !== nothing => Requires structural_simplify first
     if (implicit_dae || calculate_massmatrix(sys) !== I) &&
-       all(isequal(Continuous()), ci.var_domain)
+       all(isequal(Continuous()), ci.var_domain) &&
+       ModelingToolkit.get_tearing_state(sys) !== nothing
+       
         if eltype(u0map) <: Number
             u0map = unknowns(sys) .=> u0map
         end
