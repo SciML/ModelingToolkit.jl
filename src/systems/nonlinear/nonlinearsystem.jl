@@ -142,7 +142,6 @@ function NonlinearSystem(eqs, unknowns, ps;
     defaults = todict(defaults)
     defaults = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(defaults))
 
-    unknowns = scalarize(unknowns)
     unknowns, ps = value.(unknowns), value.(ps)
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, unknowns)
@@ -362,9 +361,11 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
     dvs = unknowns(sys)
     ps = parameters(sys)
 
-    u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        u0, defs = get_u0(sys, u0map, parammap)
         p = MTKParameters(sys, parammap)
+    else
+        u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union)
     end
     check_eqs_u0(eqs, dvs, u0; kwargs...)
 
