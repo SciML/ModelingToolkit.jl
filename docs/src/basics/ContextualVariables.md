@@ -20,7 +20,7 @@ All modeling projects have some form of parameters. `@parameters` marks a variab
 as being the parameter of some system, which allows automatic detection algorithms
 to ignore such variables when attempting to find the unknowns of a system.
 
-## Constants
+## [Constants](@id constants)
 
 Constants, defined by e.g. `@constants myconst1` are like parameters that:
 

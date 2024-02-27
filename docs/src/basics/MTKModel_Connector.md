@@ -24,6 +24,7 @@ equations.
 `@mtkmodel` definition contains begin blocks of
 
   - `@components`: for listing sub-components of the system
+  - `@constants`: for declaring constants
   - `@equations`: for the list of equations
   - `@extend`: for extending a base system and unpacking its unknowns
   - `@icon` : for embedding the model icon
@@ -52,6 +53,9 @@ end
 
 @mtkmodel ModelC begin
     @icon "https://github.com/SciML/SciMLDocs/blob/main/docs/src/assets/logo.png"
+    @constants begin
+        c::Int = 1, [description = "Example constant."]
+    end
     @structural_parameters begin
         f = sin
     end
@@ -106,6 +110,12 @@ end
 
   - This block is for non symbolic input arguments. These are for inputs that usually are not meant to be part of components; but influence how they are defined. One can list inputs like boolean flags, functions etc... here.
   - Whenever default values are specified, unlike parameters/variables, they are reflected in the keyword argument list.
+
+#### `@constants` begin block
+
+  - Declare constants in the model definition.
+  - The values of these can't be changed by the user.
+  - This works similar to symbolic constants described [here](@ref constants)
 
 #### `@parameters` and `@variables` begin block
 
@@ -220,7 +230,8 @@ end
 
 `structure` stores metadata that describes composition of a model. It includes:
 
-  - `:components`: List of sub-components in the form of [[name, sub_component_name],...].
+  - `:components`: The list of sub-components in the form of [[name, sub_component_name],...].
+  - `:constants`: Dictionary of constants mapped to its metadata.
   - `:extend`: The list of extended unknowns, name given to the base system, and name of the base system.
   - `:structural_parameters`: Dictionary of structural parameters mapped to their metadata.
   - `:parameters`: Dictionary of symbolic parameters mapped to their metadata. For
@@ -239,6 +250,7 @@ Dict{Symbol, Any} with 9 entries:
   :components            => Any[Union{Expr, Symbol}[:model_a, :ModelA]]
   :variables             => Dict{Symbol, Dict{Symbol, Any}}(:v=>Dict(:default=>:v_var, :type=>Real), :v_array=>Dict(:type=>Real, :size=>(2, 3)))
   :icon                  => URI("https://github.com/SciML/SciMLDocs/blob/main/docs/src/assets/logo.png")
+  :constants             => Dict{Symbol, Dict}(:c=>Dict{Symbol, Any}(:value=>1, :type=>Int64, :description=>"Example constant."))
   :kwargs                => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin), :v=>Dict{Symbol, Union{Nothing, Symbol}}(:value=>:v_var, :type=>Real), :v_array=>Dict(:value=>nothing, :type=>Real), :p1=>Dict(:value=>nothing))
   :structural_parameters => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin))
   :independent_variable  => t
