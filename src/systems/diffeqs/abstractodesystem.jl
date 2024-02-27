@@ -1560,7 +1560,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         @warn "Initialization system is underdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false."
     end
 
-    parammap isa DiffEqBase.NullParameters ? [independent_variable(sys) => t] :
+    parammap isa DiffEqBase.NullParameters || isempty(parammap) ? [independent_variable(sys) => t] :
     merge(todict(parammap), Dict(independent_variable(sys) => t))
 
     if neqs == nunknown
