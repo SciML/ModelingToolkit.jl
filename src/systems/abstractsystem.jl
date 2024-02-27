@@ -576,6 +576,7 @@ for prop in [:eqs
              :preface
              :torn_matching
              :initializesystem
+             :schedule
              :tearing_state
              :substitutions
              :metadata

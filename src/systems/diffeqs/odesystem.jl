@@ -101,6 +101,10 @@ struct ODESystem <: AbstractODESystem
     """
     initializesystem::Union{Nothing, NonlinearSystem}
     """
+    The schedule for the code generation process.
+    """
+    schedule::Any
+    """
     Type of the system.
     """
     connector_type::Any
@@ -165,11 +169,13 @@ struct ODESystem <: AbstractODESystem
     """
     parent::Any
 
+
     function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
             jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses,
-            torn_matching, initializesystem, connector_type, preface, cevents,
-            devents, parameter_dependencies, metadata = nothing, gui_metadata = nothing,
-            tearing_state = nothing,
+            torn_matching, initializesystem, schedule, connector_type, preface, cevents,
+            devents, parameter_dependencies,
+            metadata = nothing, gui_metadata = nothing,
+            tearing_state = nothing, 
             substitutions = nothing, complete = false, index_cache = nothing,
             discrete_subsystems = nothing, solved_unknowns = nothing,
             split_idxs = nothing, parent = nothing; checks::Union{Bool, Int} = true)
@@ -185,7 +191,8 @@ struct ODESystem <: AbstractODESystem
         end
         new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses, torn_matching,
-            initializesystem, connector_type, preface, cevents, devents, parameter_dependencies, metadata,
+            initializesystem, schedule, connector_type, preface, cevents, devents, parameter_dependencies, 
+            metadata,
             gui_metadata, tearing_state, substitutions, complete, index_cache,
             discrete_subsystems, solved_unknowns, split_idxs, parent)
     end
@@ -202,12 +209,13 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         defaults = _merge(Dict(default_u0), Dict(default_p)),
         guesses = Dict(),
         initializesystem = nothing,
+        schedule = nothing,
         connector_type = nothing,
         preface = nothing,
         continuous_events = nothing,
         discrete_events = nothing,
         parameter_dependencies = nothing,
-        checks = true,
+        checks = true,        
         metadata = nothing,
         gui_metadata = nothing)
     name === nothing &&
@@ -253,7 +261,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
         ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses, nothing, initializesystem,
-        connector_type, preface, cont_callbacks, disc_callbacks, parameter_dependencies,
+        schedule, connector_type, preface, cont_callbacks, disc_callbacks, parameter_dependencies,
         metadata, gui_metadata, checks = checks)
 end
 

@@ -1,3 +1,8 @@
+struct Schedule
+    var_eq_matching
+    dummy_sub
+end
+
 function filter_kwargs(kwargs)
     kwargs = Dict(kwargs)
     for key in keys(kwargs)
@@ -326,7 +331,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
     f_oop, f_iip = eval_expression ?
-                   (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen) :
+                   ((@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen) :
                    f_gen
     f(u, p, t) = f_oop(u, p, t)
     f(du, u, p, t) = f_iip(du, u, p, t)
@@ -351,7 +356,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
             expression_module = eval_module,
             checkbounds = checkbounds, kwargs...)
         tgrad_oop, tgrad_iip = eval_expression ?
-                               (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in tgrad_gen) :
+                               ((@RuntimeGeneratedFunction(eval_module, ex)) for ex in tgrad_gen) :
                                tgrad_gen
         if p isa Tuple
             __tgrad(u, p, t) = tgrad_oop(u, p..., t)
@@ -373,7 +378,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
             expression_module = eval_module,
             checkbounds = checkbounds, kwargs...)
         jac_oop, jac_iip = eval_expression ?
-                           (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in jac_gen) :
+                           ((@RuntimeGeneratedFunction(eval_module, ex)) for ex in jac_gen) :
                            jac_gen
         _jac(u, p, t) = jac_oop(u, p, t)
         _jac(J, u, p, t) = jac_iip(J, u, p, t)
@@ -541,7 +546,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
     f_oop, f_iip = eval_expression ?
-                   (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen) :
+                   ((@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen) :
                    f_gen
     f(du, u, p, t) = f_oop(du, u, p, t)
     f(du, u, p::MTKParameters, t) = f_oop(du, u, p..., t)
@@ -555,7 +560,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
             expression_module = eval_module,
             checkbounds = checkbounds, kwargs...)
         jac_oop, jac_iip = eval_expression ?
-                           (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in jac_gen) :
+                           ((@RuntimeGeneratedFunction(eval_module, ex)) for ex in jac_gen) :
                            jac_gen
         _jac(du, u, p, ˍ₋gamma, t) = jac_oop(du, u, p, ˍ₋gamma, t)
         _jac(du, u, p::MTKParameters, ˍ₋gamma, t) = jac_oop(du, u, p..., ˍ₋gamma, t)
@@ -624,7 +629,7 @@ function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         expression = Val{true},
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
-    f_oop, f_iip = (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen)
+    f_oop, f_iip = ((@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen)
     f(u, h, p, t) = f_oop(u, h, p, t)
     f(u, h, p::MTKParameters, t) = f_oop(u, h, p..., t)
     f(du, u, h, p, t) = f_iip(du, u, h, p, t)
@@ -649,10 +654,10 @@ function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys
         expression = Val{true},
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
-    f_oop, f_iip = (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen)
+    f_oop, f_iip = ((@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen)
     g_gen = generate_diffusion_function(sys, dvs, ps; expression = Val{true},
         isdde = true, kwargs...)
-    g_oop, g_iip = (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in g_gen)
+    g_oop, g_iip = ((@RuntimeGeneratedFunction(ex)) for ex in g_gen)
     f(u, h, p, t) = f_oop(u, h, p, t)
     f(u, h, p::MTKParameters, t) = f_oop(u, h, p..., t)
     f(du, u, h, p, t) = f_iip(du, u, h, p, t)
@@ -849,6 +854,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         symbolic_u0 = false,
         u0_constructor = identity,
         guesses = Dict(),
+        t = nothing,
         warn_initialize_determined = true,
         kwargs...)
     eqs = equations(sys)
@@ -870,7 +876,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
             u0map = unknowns(sys) .=> u0map
         end
         initializeprob = ModelingToolkit.InitializationProblem(
-            sys, u0map, parammap; guesses, warn_initialize_determined)
+            sys, t, u0map, parammap; guesses, warn_initialize_determined)
         initializeprobmap = getu(initializeprob, unknowns(sys))
 
         zerovars = setdiff(unknowns(sys), keys(defaults(sys))) .=> 0.0
@@ -1101,6 +1107,7 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
     end
     f, du0, u0, p = process_DEProblem(DAEFunction{iip}, sys, u0map, parammap;
         implicit_dae = true, du0map = du0map, check_length,
+        t = tspan !== nothing ? tspan[1] : tspan,
         warn_initialize_determined, kwargs...)
     diffvars = collect_differential_variables(sys)
     sts = unknowns(sys)
@@ -1277,6 +1284,7 @@ function ODEProblemExpr{iip}(sys::AbstractODESystem, u0map, tspan,
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `ODEProblemExpr`")
     end
     f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap; check_length,
+        t = tspan !== nothing ? tspan[1] : tspan,
         kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
     kwargs = filter_kwargs(kwargs)
@@ -1322,6 +1330,7 @@ function DAEProblemExpr{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEProblemExpr`")
     end
     f, du0, u0, p = process_DEProblem(DAEFunctionExpr{iip}, sys, u0map, parammap;
+        t = tspan !== nothing ? tspan[1] : tspan,
         implicit_dae = true, du0map = du0map, check_length,
         kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
@@ -1505,11 +1514,11 @@ function InitializationProblem(sys::AbstractODESystem, args...; kwargs...)
     InitializationProblem{true}(sys, args...; kwargs...)
 end
 
-function InitializationProblem(sys::AbstractODESystem,
+function InitializationProblem(sys::AbstractODESystem, t,
         u0map::StaticArray,
         args...;
         kwargs...)
-    InitializationProblem{false, SciMLBase.FullSpecialize}(sys, u0map, args...; kwargs...)
+    InitializationProblem{false, SciMLBase.FullSpecialize}(sys, t, u0map, args...; kwargs...)
 end
 
 function InitializationProblem{true}(sys::AbstractODESystem, args...; kwargs...)
@@ -1520,7 +1529,8 @@ function InitializationProblem{false}(sys::AbstractODESystem, args...; kwargs...
     InitializationProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
-function InitializationProblem{iip, specialize}(sys::AbstractODESystem, u0map = [],
+function InitializationProblem{iip, specialize}(sys::AbstractODESystem, 
+        t, u0map = [],
         parammap = DiffEqBase.NullParameters();
         guesses = [],
         check_length = true,
@@ -1529,6 +1539,8 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
     end
+
+    @show u0map
 
     if isempty(u0map) && get_initializesystem(sys) !== nothing
         isys = get_initializesystem(sys)
@@ -1548,6 +1560,8 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     if warn_initialize_determined && neqs < nunknown
         @warn "Initialization system is underdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false."
     end
+    
+    parammap isa DiffEqBase.NullParameters ? [independent_variable(sys) => t] : merge(todict(parammap), Dict(independent_variable(sys) => t))
 
     if neqs == nunknown
         NonlinearProblem(isys, guesses, parammap)
