@@ -50,3 +50,11 @@
     the `parameter_dependencies` keyword argument of `ODESystem`, `SDESystem` and `JumpSystem`. The dependent
     parameters are updated whenever other parameters are modified, e.g. in callbacks.
   - Support for `IfElse.jl` has been dropped. `Base.ifelse` can be used instead.
+  - DAE initailization and the solving for consistent initial conditions has been changed to use a customized
+    initialization solve. This change adds `guess` semantics which are clearly delinated from the behavior of
+    the defaults, where `default` (and `u0`) is designed to be always satisfied and error if unsatisfiable,
+    while `guess` is an initial guess to the initializer. In previous iterations, initialization with the
+    default (`BrownBasicInit`) would treat the initial condition to the algebraic variables as a `guess`,
+    and with `ShampineCollocationInit` would treat all initial conditions as a `guess`. To return to the
+    previous behavior, use the keyword argument `initializealg` in the solve, i.e.
+    `solve(prob;initializealg = BrownBasicInit())`.
