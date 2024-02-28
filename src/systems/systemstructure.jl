@@ -411,7 +411,7 @@ function TearingState(sys; quick_cancel = false, check = true)
 
     return TearingState(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
-            complete(graph), nothing, var_types, false),
+            complete(graph), nothing, var_types, sys isa DiscreteSystem),
         Any[])
 end
 

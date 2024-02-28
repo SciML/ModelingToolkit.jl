@@ -812,7 +812,8 @@ function get_u0_p(sys,
     u0, p, defs
 end
 
-function get_u0(sys, u0map, parammap = nothing; symbolic_u0 = false)
+function get_u0(
+        sys, u0map, parammap = nothing; symbolic_u0 = false, toterm = default_toterm)
     dvs = unknowns(sys)
     ps = parameters(sys)
     defs = defaults(sys)
@@ -821,9 +822,10 @@ function get_u0(sys, u0map, parammap = nothing; symbolic_u0 = false)
     end
     defs = mergedefaults(defs, u0map, dvs)
     if symbolic_u0
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false, use_union = false)
+        u0 = varmap_to_vars(
+            u0map, dvs; defaults = defs, tofloat = false, use_union = false, toterm)
     else
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, toterm)
     end
     return u0, defs
 end

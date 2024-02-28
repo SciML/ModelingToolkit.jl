@@ -147,6 +147,8 @@ include("systems/diffeqs/first_order_transform.jl")
 include("systems/diffeqs/modelingtoolkitize.jl")
 include("systems/diffeqs/basic_transformations.jl")
 
+include("systems/discrete_system/discrete_system.jl")
+
 include("systems/jumps/jumpsystem.jl")
 
 include("systems/optimization/constraints_system.jl")
@@ -209,6 +211,7 @@ export ODESystem,
 export DAEFunctionExpr, DAEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDEProblemExpr
 export SystemStructure
+export DiscreteSystem, DiscreteProblem, DiscreteFunction, DiscreteFunctionExpr
 export JumpSystem
 export ODEProblem, SDEProblem
 export NonlinearFunction, NonlinearFunctionExpr

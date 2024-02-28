@@ -168,6 +168,7 @@ struct ShiftIndex
     steps::Int
     ShiftIndex(clock::TimeDomain = Inferred(), steps::Int = 0) = new(clock, steps)
     ShiftIndex(t::Num, dt::Real, steps::Int = 0) = new(Clock(t, dt), steps)
+    ShiftIndex(t::Num, steps::Int = 0) = new(IntegerSequence(t), steps)
 end
 
 function (xn::Num)(k::ShiftIndex)

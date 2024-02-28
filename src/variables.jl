@@ -104,6 +104,9 @@ state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))
 function default_toterm(x)
     if istree(x) && (op = operation(x)) isa Operator
         if !(op isa Differential)
+            if op isa Shift && op.steps < 0
+                return x
+            end
             x = normalize_to_differential(op)(arguments(x)...)
         end
         Symbolics.diff2term(x)

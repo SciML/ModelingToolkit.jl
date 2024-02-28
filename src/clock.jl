@@ -146,3 +146,8 @@ Base.hash(c::SolverStepClock, seed::UInt) = seed ⊻ 0x953d7b9a18874b91
 function Base.:(==)(c1::SolverStepClock, c2::SolverStepClock)
     ((c1.t === nothing || c2.t === nothing) || isequal(c1.t, c2.t))
 end
+
+struct IntegerSequence <: AbstractClock
+    t::Union{Nothing, Symbolic}
+    IntegerSequence(t::Union{Num, Symbolic}) = new(value(t))
+end
