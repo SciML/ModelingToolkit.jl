@@ -3,51 +3,64 @@ $(TYPEDSIGNATURES)
 
 Generate `NonlinearSystem` which initializes an ODE problem from specified initial conditions of an `ODESystem`.
 """
-function initializesystem(sys::ODESystem; name = nameof(sys), kwargs...)
-    if has_parent(sys) && (parent = get_parent(sys); parent !== nothing)
-        sys = parent
-    end
+function generate_initializesystem(sys::ODESystem;
+        u0map = Dict(),
+        name = nameof(sys),
+        guesses = Dict(), check_defguess = false,
+        default_dd_value = 0.0,
+        kwargs...)
     sts, eqs = unknowns(sys), equations(sys)
-
     idxs_diff = isdiffeq.(eqs)
     idxs_alge = .!idxs_diff
+    num_alge = sum(idxs_alge)
 
-    # Algebraic equations and initial guesses are unchanged
-    eqs_ics = similar(eqs)
-    u0 = Vector{Any}(undef, length(sts))
+    # Start the equations list with algebraic equations
+    eqs_ics = eqs[idxs_alge]
+    u0 = Vector{Pair}(undef, 0)
+    defs = merge(defaults(sys), todict(u0map))
 
-    eqs_ics[idxs_alge] .= eqs[idxs_alge]
-    u0[idxs_alge] .= getmetadata.(unwrap.(sts[idxs_alge]),
-        Symbolics.VariableDefaultValue,
-        nothing)
+    full_states = [sts; getfield.((observed(sys)), :lhs)]
+    set_full_states = Set(full_states)
+    guesses = todict(guesses)
+    schedule = getfield(sys, :schedule)
 
-    for idx in findall(idxs_diff)
-        st = sts[idx]
-        if !hasdefault(st)
-            error("Invalid setup: unknown $(st) has no default value or equation.")
-        end
+    dd_guess = if schedule !== nothing
+        guessmap = [x[2] => get(guesses, x[1], default_dd_value)
+                    for x in schedule.dummy_sub]
+        Dict(filter(x -> !isnothing(x[1]), guessmap))
+    else
+        Dict()
+    end
 
-        def = getdefault(st)
-        if def isa Equation
-            if !hasguess(st)
-                error("Invalid setup: unknown $(st) has an initial condition equation with no guess.")
+    guesses = merge(get_guesses(sys), todict(guesses), dd_guess)
+
+    for st in full_states
+        if st ∈ keys(defs)
+            def = defs[st]
+
+            if def isa Equation
+                st ∉ keys(guesses) && check_defguess &&
+                    error("Invalid setup: unknown $(st) has an initial condition equation with no guess.")
+                push!(eqs_ics, def)
+                push!(u0, st => guesses[st])
+            else
+                push!(eqs_ics, st ~ def)
+                push!(u0, st => def)
             end
-            guess = getguess(st)
-            eqs_ics[idx] = def
-
-            u0[idx] = guess
-        else
-            eqs_ics[idx] = st ~ def
-
-            u0[idx] = def
+        elseif st ∈ keys(guesses)
+            push!(u0, st => guesses[st])
+        elseif check_defguess
+            error("Invalid setup: unknown $(st) has no default value or initial guess")
         end
     end
 
-    pars = parameters(sys)
-    sys_nl = NonlinearSystem(eqs_ics,
-        sts,
+    pars = [parameters(sys); get_iv(sys)]
+    nleqs = [eqs_ics; observed(sys)]
+
+    sys_nl = NonlinearSystem(nleqs,
+        full_states,
         pars;
-        defaults = Dict(sts .=> u0),
+        defaults = merge(ModelingToolkit.defaults(sys), todict(u0), dd_guess),
         name,
         kwargs...)
 

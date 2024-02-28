@@ -537,6 +537,9 @@ function complete(sys::AbstractSystem; split = true)
     if split && has_index_cache(sys)
         @set! sys.index_cache = IndexCache(sys)
     end
+    if isdefined(sys, :initializesystem) && get_initializesystem(sys) !== nothing
+        @set! sys.initializesystem = complete(get_initializesystem(sys); split)
+    end
     isdefined(sys, :complete) ? (@set! sys.complete = true) : sys
 end
 
@@ -551,6 +554,7 @@ for prop in [:eqs
              :var_to_name
              :ctrls
              :defaults
+             :guesses
              :observed
              :tgrad
              :jac
@@ -571,6 +575,8 @@ for prop in [:eqs
              :connections
              :preface
              :torn_matching
+             :initializesystem
+             :schedule
              :tearing_state
              :substitutions
              :metadata
@@ -931,6 +937,10 @@ end
 
 function full_parameters(sys::AbstractSystem)
     vcat(parameters(sys), dependent_parameters(sys))
+end
+
+function guesses(sys::AbstractSystem)
+    get_guesses(sys)
 end
 
 # required in `src/connectors.jl:437`
@@ -2259,14 +2269,15 @@ function UnPack.unpack(sys::ModelingToolkit.AbstractSystem, ::Val{p}) where {p}
 end
 
 """
-    missing_variable_defaults(sys::AbstractSystem, default = 0.0)
+    missing_variable_defaults(sys::AbstractSystem, default = 0.0; subset = unknowns(sys))
 
 returns a `Vector{Pair}` of variables set to `default` which are missing from `get_defaults(sys)`.  The `default` argument can be a single value or vector to set the missing defaults respectively.
 """
-function missing_variable_defaults(sys::AbstractSystem, default = 0.0)
+function missing_variable_defaults(
+        sys::AbstractSystem, default = 0.0; subset = unknowns(sys))
     varmap = get_defaults(sys)
     varmap = Dict(Symbolics.diff2term(value(k)) => value(varmap[k]) for k in keys(varmap))
-    missingvars = setdiff(unknowns(sys), keys(varmap))
+    missingvars = setdiff(subset, keys(varmap))
     ds = Pair[]
 
     n = length(missingvars)

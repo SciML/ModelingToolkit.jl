@@ -26,7 +26,11 @@ function structural_simplify(
     else
         newsys = newsys′
     end
-    @set! newsys.parent = complete(sys; split)
+    if newsys isa ODESystem
+        @set! newsys.parent = complete(sys; split)
+    else
+        @set! newsys.parent = complete(sys; split)
+    end
     newsys = complete(newsys; split)
     if newsys′ isa Tuple
         idxs = [parameter_index(newsys, i) for i in io[1]]

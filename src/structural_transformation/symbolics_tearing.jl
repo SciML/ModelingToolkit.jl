@@ -555,6 +555,12 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
     # TODO: compute the dependency correctly so that we don't have to do this
     obs = [fast_substitute(observed(sys), obs_sub); subeqs]
     @set! sys.observed = obs
+
+    # Only makes sense for time-dependent
+    # TODO: generalize to SDE
+    if sys isa ODESystem
+        @set! sys.schedule = Schedule(var_eq_matching, dummy_sub)
+    end
     @set! state.sys = sys
     @set! sys.tearing_state = state
     return invalidate_cache!(sys)
