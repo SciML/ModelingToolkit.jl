@@ -144,14 +144,13 @@ let sys = structural_simplify(pendulum2)
         D(D(y)) => 0.0,
         x => sqrt(2) / 2,
         y => sqrt(2) / 2,
-        T => 0.0
     ]
     p = [
         L => 1.0,
         g => 9.8
     ]
 
-    prob_auto = ODEProblem(sys, u0, (0.0, 0.5), p)
+    prob_auto = ODEProblem(sys, u0, (0.0, 0.5), p, guesses = [T => 0.0])
     sol = solve(prob_auto, FBDF())
     @test sol.retcode == ReturnCode.Success
     @test norm(sol[x] .^ 2 + sol[y] .^ 2 .- 1) < 1e-2
