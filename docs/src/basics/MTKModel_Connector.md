@@ -229,12 +229,12 @@ end
 
   - `:components`: List of sub-components in the form of [[name, sub_component_name],...].
   - `:extend`: The list of extended unknowns, name given to the base system, and name of the base system.
-  - `:structural_parameters`: Dictionary of structural parameters mapped to their default values.
+  - `:structural_parameters`: Dictionary of structural parameters mapped to their metadata.
   - `:parameters`: Dictionary of symbolic parameters mapped to their metadata. For
     parameter arrays, length is added to the metadata as `:size`.
   - `:variables`: Dictionary of symbolic variables mapped to their metadata. For
     variable arrays, length is added to the metadata as `:size`.
-  - `:kwargs`: Dictionary of keyword arguments mapped to their default values.
+  - `:kwargs`: Dictionary of keyword arguments mapped to their metadata.
   - `:independent_variable`: Independent variable, which is added while generating the Model.
   - `:equations`: List of equations (represented as strings).
 
@@ -243,13 +243,14 @@ For example, the structure of `ModelC` is:
 ```julia
 julia> ModelC.structure
 Dict{Symbol, Any} with 7 entries:
-  :components           => [[:model_a, :ModelA]]
-  :variables            => Dict{Symbol, Dict{Symbol, Any}}(:v=>Dict(:default=>:v_var), :v_array=>Dict(:size=>(2, 3)))
-  :icon                 => URI("https://github.com/SciML/SciMLDocs/blob/main/docs/src/assets/logo.png")
-  :kwargs               => Dict{Symbol, Any}(:f=>:sin, :v=>:v_var, :v_array=>nothing, :model_a__k_array=>nothing, :p1=>nothing)
-  :independent_variable => t
-  :extend               => Any[[:p2, :p1], Symbol("#mtkmodel__anonymous__ModelB"), :ModelB]
-  :equations            => ["model_a.k ~ f(v)"]
+  :components            => [[:model_a, :ModelA]]
+  :variables             => Dict{Symbol, Dict{Symbol, Any}}(:v=>Dict(:default=>:v_var), :v_array=>Dict(:size=>(2, 3)))
+  :icon                  => URI("https://github.com/SciML/SciMLDocs/blob/main/docs/src/assets/logo.png")
+  :kwargs                => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin), :v=>Dict{Symbol, Union{Nothing, Symbol}}(:value=>:v_var, :type=>nothing), :v_array=>Dict(:value=>nothing, :type=>nothing), :p1=>Dict(:value=>nothing))
+  :structural_parameters => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin))
+  :independent_variable  => t
+  :extend                => Any[[:p2, :p1], Symbol("#mtkmodel__anonymous__ModelB"), :ModelB]
+  :equations             => ["model_a.k ~ f(v)"]
 ```
 
 ### Using conditional statements
@@ -322,11 +323,12 @@ The conditional parts are reflected in the `structure`. For `BranchOutsideTheBlo
 ```julia
 julia> BranchOutsideTheBlock.structure
 Dict{Symbol, Any} with 5 entries:
-  :components           => Any[(:if, :flag, [[:sys1, :C]], Any[])]
-  :kwargs               => Dict{Symbol, Any}(:flag=>true)
-  :independent_variable => t
-  :parameters           => Dict{Symbol, Dict{Symbol, Any}}(:a1=>Dict(:condition=>(:if, :flag, Dict{Symbol, Any}(:kwargs => Dict{Any, Any}(:a1 => nothing), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a1 => Dict())]), Dict{Symbol, Any}(:kwargs => Dict{Any, Any}(:a2 => nothing), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a2 => Dict())]))
-  :equations            => Any[(:if, :flag, ["a1 ~ 0"], ["a2 ~ 0"])]
+  :components            => Any[(:if, :flag, [[:sys1, :C]], Any[])]
+  :kwargs                => Dict{Symbol, Dict}(:flag=>Dict{Symbol, Bool}(:value=>1))
+  :structural_parameters => Dict{Symbol, Dict}(:flag=>Dict{Symbol, Bool}(:value=>1))
+  :independent_variable  => t
+  :parameters            => Dict{Symbol, Dict{Symbol, Any}}(:a1=>Dict(:condition=>(:if, :flag, Dict{Symbol, Any}(:kwargs => Dict{Any, Any}(:a1 => nothing), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a1 => Dict())]), Dict{Symbol, Any}(:kwargs => Dict{Any, Any}(:a2 => nothing), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a2 => Dict())]))
+  :equations             => Any[(:if, :flag, ["a1 ~ 0"], ["a2 ~ 0"])]
 ```
 
 Conditional entries are entered in the format of `(branch, condition, [case when it is true], [case when it is false])`;

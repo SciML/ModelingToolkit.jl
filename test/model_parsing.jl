@@ -164,7 +164,7 @@ resistor = getproperty(rc, :resistor; namespace = false)
 # Test that `C_val` passed via argument is set as default of C.
 @test getdefault(rc.capacitor.C) == C_val
 # Test that `k`'s default value is unchanged.
-@test getdefault(rc.constant.k) == RC.structure[:kwargs][:k_val]
+@test getdefault(rc.constant.k) == RC.structure[:kwargs][:k_val][:value]
 @test getdefault(rc.capacitor.v) == 0.0
 
 @test get_gui_metadata(rc.resistor).layout == Resistor.structure[:icon] ==
@@ -239,6 +239,33 @@ resistor = getproperty(rc, :resistor; namespace = false)
     @test all(getdefault.(scalarize(model.l)) .== 2)
     @test isequal(getdefault(model.j), model.jval)
     @test isequal(getdefault(model.k), model.kval)
+end
+
+@testset "Type annotation" begin
+    @mtkmodel TypeModel begin
+        @structural_parameters begin
+            flag::Bool = true
+        end
+        @parameters begin
+            par0::Bool = true
+            par1::Int = 1
+            par2(t)::Int,
+            [description = "Enforced `par4` to be an Int by setting the type to the keyword-arg."]
+            par3(t)::Float64 = 1.0
+            par4(t)::Float64 = 1 # converts 1 to 1.0 of Float64 type
+        end
+    end
+
+    @named type_model = TypeModel()
+
+    @test getname.(parameters(type_model)) == [:par0, :par1, :par2, :par3, :par4]
+
+    @test_throws TypeError TypeModel(; name = :throws, flag = 1)
+    @test_throws TypeError TypeModel(; name = :throws, par0 = 1)
+    @test_throws TypeError TypeModel(; name = :throws, par1 = 1.5)
+    @test_throws TypeError TypeModel(; name = :throws, par2 = 1.5)
+    @test_throws TypeError TypeModel(; name = :throws, par3 = true)
+    @test_throws TypeError TypeModel(; name = :throws, par4 = true)
 end
 
 @testset "Defaults of subcomponents MTKModel" begin
@@ -322,7 +349,9 @@ end
     @test A.structure[:parameters] == Dict(:p => Dict())
     @test A.structure[:extend] == [[:e], :extended_e, :E]
     @test A.structure[:equations] == ["e ~ 0"]
-    @test A.structure[:kwargs] == Dict(:p => nothing, :v => nothing)
+    @test A.structure[:kwargs] ==
+          Dict{Symbol, Dict}(:p => Dict(:value => nothing, :type => nothing),
+        :v => Dict(:value => nothing, :type => nothing))
     @test A.structure[:components] == [[:cc, :C]]
 end
 
@@ -392,9 +421,9 @@ end
     @named else_in_sys = InsideTheBlock(flag = 3)
     else_in_sys = complete(else_in_sys)
 
-    @test nameof.(parameters(if_in_sys)) == [:if_parameter, :eq]
-    @test nameof.(parameters(elseif_in_sys)) == [:elseif_parameter, :eq]
-    @test nameof.(parameters(else_in_sys)) == [:else_parameter, :eq]
+    @test getname.(parameters(if_in_sys)) == [:if_parameter, :eq]
+    @test getname.(parameters(elseif_in_sys)) == [:elseif_parameter, :eq]
+    @test getname.(parameters(else_in_sys)) == [:else_parameter, :eq]
 
     @test nameof.(get_systems(if_in_sys)) == [:if_sys, :default_sys]
     @test nameof.(get_systems(elseif_in_sys)) == [:elseif_sys, :default_sys]
@@ -481,9 +510,9 @@ end
     @named ternary_out_sys = OutsideTheBlock(condition = 4)
     else_out_sys = complete(else_out_sys)
 
-    @test nameof.(parameters(if_out_sys)) == [:if_parameter, :default_parameter]
-    @test nameof.(parameters(elseif_out_sys)) == [:elseif_parameter, :default_parameter]
-    @test nameof.(parameters(else_out_sys)) == [:else_parameter, :default_parameter]
+    @test getname.(parameters(if_out_sys)) == [:if_parameter, :default_parameter]
+    @test getname.(parameters(elseif_out_sys)) == [:elseif_parameter, :default_parameter]
+    @test getname.(parameters(else_out_sys)) == [:else_parameter, :default_parameter]
 
     @test nameof.(get_systems(if_out_sys)) == [:if_sys, :default_sys]
     @test nameof.(get_systems(elseif_out_sys)) == [:elseif_sys, :default_sys]
@@ -529,8 +558,8 @@ end
     @named ternary_false = TernaryBranchingOutsideTheBlock(condition = false)
     ternary_false = complete(ternary_false)
 
-    @test nameof.(parameters(ternary_true)) == [:ternary_parameter_true]
-    @test nameof.(parameters(ternary_false)) == [:ternary_parameter_false]
+    @test getname.(parameters(ternary_true)) == [:ternary_parameter_true]
+    @test getname.(parameters(ternary_false)) == [:ternary_parameter_false]
 
     @test nameof.(get_systems(ternary_true)) == [:ternary_sys_true]
     @test nameof.(get_systems(ternary_false)) == [:ternary_sys_false]
