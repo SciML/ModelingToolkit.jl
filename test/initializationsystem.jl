@@ -8,7 +8,7 @@ eqs = [D(D(x)) ~ λ * x
        x^2 + y^2 ~ 1]
 @mtkbuild pend = ODESystem(eqs, t)
 
-initprob = ModelingToolkit.InitializationProblem(pend, [], [g => 1];
+initprob = ModelingToolkit.InitializationProblem(pend, 0.0, [], [g => 1];
     guesses = [ModelingToolkit.missing_variable_defaults(pend); x => 1; y => 0.2])
 conditions = getfield.(equations(initprob.f.sys), :rhs)
 

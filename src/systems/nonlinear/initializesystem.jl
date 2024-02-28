@@ -54,7 +54,7 @@ function generate_initializesystem(sys::ODESystem;
         end
     end
 
-    pars = [parameters(sys); independent_variable(sys)]
+    pars = [parameters(sys); get_iv(sys)]
     nleqs = [eqs_ics; observed(sys)]
 
     sys_nl = NonlinearSystem(nleqs,
