@@ -45,16 +45,17 @@ end
 # 1516
 let
     @connector function Fluid_port(; name, p = 101325.0, m = 0.0, T = 293.15)
-        sts = @variables p(t) [guess=p] m(t) [guess = m, connect = Flow] T(t) [guess=T, connect = Stream]
+        sts = @variables p(t) [guess = p] m(t) [guess = m, connect = Flow] T(t) [
+            guess = T, connect = Stream]
         ODESystem(Equation[], t, sts, []; name = name)
     end
-    
+
     #this one is for latter
     @connector function Heat_port(; name, Q = 0.0, T = 293.15)
-        sts = @variables T(t) [guess=T] Q(t) [guess = Q, connect = Flow]
+        sts = @variables T(t) [guess = T] Q(t) [guess = Q, connect = Flow]
         ODESystem(Equation[], t, sts, []; name = name)
     end
-    
+
     # like ground but for fluid systems (fluid_port.m is expected to be zero in closed loop)
     function Compensator(; name, p = 101325.0, T_back = 273.15)
         @named fluid_port = Fluid_port()
@@ -63,7 +64,7 @@ let
                fluid_port.T ~ T_back]
         compose(ODESystem(eqs, t, [], ps; name = name), fluid_port)
     end
-    
+
     function Source(; name, delta_p = 100, T_feed = 293.15)
         @named supply_port = Fluid_port() # expected to feed connected pipe -> m<0
         @named return_port = Fluid_port() # expected to receive from connected pipe -> m>0
@@ -74,7 +75,7 @@ let
                return_port.T ~ T_feed]
         compose(ODESystem(eqs, t, [], ps; name = name), [supply_port, return_port])
     end
-    
+
     function Substation(; name, T_return = 343.15)
         @named supply_port = Fluid_port() # expected to receive from connected pipe -> m>0
         @named return_port = Fluid_port() # expected to feed connected pipe -> m<0
@@ -85,12 +86,12 @@ let
                return_port.T ~ T_return]
         compose(ODESystem(eqs, t, [], ps; name = name), [supply_port, return_port])
     end
-    
+
     function Pipe(; name, L = 1000, d = 0.1, N = 100, rho = 1000, f = 1)
         @named fluid_port_a = Fluid_port()
         @named fluid_port_b = Fluid_port()
         ps = @parameters L=L d=d rho=rho f=f N=N
-        sts = @variables v(t) [guess=0.0] dp_z(t) [guess=0.0]
+        sts = @variables v(t) [guess = 0.0] dp_z(t) [guess = 0.0]
         eqs = [fluid_port_a.m ~ -fluid_port_b.m
                fluid_port_a.T ~ instream(fluid_port_a.T)
                fluid_port_b.T ~ fluid_port_a.T
@@ -114,7 +115,7 @@ let
                connect(return_pipe.fluid_port_a, source.return_port)]
         compose(ODESystem(eqs, t, [], ps; name = name), subs)
     end
-    
+
     @named system = System(L = 10)
     @unpack supply_pipe, return_pipe = system
     sys = structural_simplify(system)
@@ -125,7 +126,7 @@ let
     prob1 = ODEProblem(sys, [], (0.0, 10.0), [], guesses = u0)
     prob2 = ODEProblem(sys, [], (0.0, 10.0), [], guesses = u0)
     prob3 = DAEProblem(sys, D.(unknowns(sys)) .=> 0.0, u0, (0.0, 10.0), [])
-    @test solve(prob1, FBDF()).retcode == ReturnCode.Success    
+    @test solve(prob1, FBDF()).retcode == ReturnCode.Success
     #@test solve(prob2, FBDF()).retcode == ReturnCode.Success
     @test solve(prob3, DFBDF()).retcode == ReturnCode.Success
 end

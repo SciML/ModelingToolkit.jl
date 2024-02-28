@@ -155,7 +155,8 @@ include("../examples/serial_inductor.jl")
 sys = structural_simplify(ll_model)
 @test length(equations(sys)) == 2
 u0 = unknowns(sys) .=> 0
-@test_nowarn ODEProblem(sys, [], (0, 10.0), guesses = u0, warn_initialize_determined = false)
+@test_nowarn ODEProblem(
+    sys, [], (0, 10.0), guesses = u0, warn_initialize_determined = false)
 prob = DAEProblem(sys, D.(unknowns(sys)) .=> 0, u0, (0, 0.5))
 sol = solve(prob, DFBDF())
 @test sol.retcode == SciMLBase.ReturnCode.Success

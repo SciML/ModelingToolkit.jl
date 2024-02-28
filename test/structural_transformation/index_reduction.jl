@@ -143,7 +143,7 @@ let sys = structural_simplify(pendulum2)
         D(y) => 0.0,
         D(D(y)) => 0.0,
         x => sqrt(2) / 2,
-        y => sqrt(2) / 2,
+        y => sqrt(2) / 2
     ]
     p = [
         L => 1.0,
