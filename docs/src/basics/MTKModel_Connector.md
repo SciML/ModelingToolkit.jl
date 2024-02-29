@@ -246,7 +246,7 @@ Dict{Symbol, Any} with 7 entries:
   :components            => [[:model_a, :ModelA]]
   :variables             => Dict{Symbol, Dict{Symbol, Any}}(:v=>Dict(:default=>:v_var), :v_array=>Dict(:size=>(2, 3)))
   :icon                  => URI("https://github.com/SciML/SciMLDocs/blob/main/docs/src/assets/logo.png")
-  :kwargs                => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin), :v=>Dict{Symbol, Union{Nothing, Symbol}}(:value=>:v_var, :type=>nothing), :v_array=>Dict(:value=>nothing, :type=>nothing), :p1=>Dict(:value=>nothing))
+  :kwargs                => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin), :v=>Dict{Symbol, Union{Nothing, Symbol}}(:value=>:v_var, :type=>Real), :v_array=>Dict(:value=>nothing, :type=>Real), :p1=>Dict(:value=>nothing))
   :structural_parameters => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin))
   :independent_variable  => t
   :extend                => Any[[:p2, :p1], Symbol("#mtkmodel__anonymous__ModelB"), :ModelB]

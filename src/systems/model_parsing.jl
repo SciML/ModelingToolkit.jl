@@ -110,7 +110,7 @@ end
 
 function parse_variable_def!(dict, mod, arg, varclass, kwargs;
         def = nothing, indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
-        type::Union{Type, Nothing} = nothing)
+        type::Type = Real)
     metatypes = [(:connection_type, VariableConnectType),
         (:description, VariableDescription),
         (:unit, VariableUnit),
@@ -133,7 +133,7 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs;
             else
                 push!(kwargs, Expr(:kw, Expr(:(::), a, Union{Nothing, type}), nothing))
             end
-            var = generate_var!(dict, a, varclass; indices)
+            var = generate_var!(dict, a, varclass; indices, type)
             dict[:kwargs][getname(var)] = Dict(:value => def, :type => type)
             (var, def)
         end
@@ -153,7 +153,7 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs;
             else
                 push!(kwargs, Expr(:kw, Expr(:(::), a, Union{Nothing, type}), nothing))
             end
-            var = generate_var!(dict, a, b, varclass; indices)
+            var = generate_var!(dict, a, b, varclass; indices, type)
             type !== nothing && (dict[varclass][getname(var)][:type] = type)
             dict[:kwargs][getname(var)] = Dict(:value => def, :type => type)
             (var, def)
@@ -161,7 +161,7 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs;
         Expr(:(=), a, b) => begin
             Base.remove_linenums!(b)
             def, meta = parse_default(mod, b)
-            var, def = parse_variable_def!(dict, mod, a, varclass, kwargs; def)
+            var, def = parse_variable_def!(dict, mod, a, varclass, kwargs; def, type)
             dict[varclass][getname(var)][:default] = def
             if meta !== nothing
                 for (type, key) in metatypes
@@ -179,7 +179,7 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs;
             (var, def)
         end
         Expr(:tuple, a, b) => begin
-            var, def = parse_variable_def!(dict, mod, a, varclass, kwargs)
+            var, def = parse_variable_def!(dict, mod, a, varclass, kwargs; type)
             meta = parse_metadata(mod, b)
             if meta !== nothing
                 for (type, key) in metatypes
@@ -200,15 +200,17 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs;
         Expr(:ref, a, b...) => begin
             indices = map(i -> UnitRange(i.args[2], i.args[end]), b)
             parse_variable_def!(dict, mod, a, varclass, kwargs;
-                def, indices)
+                def, indices, type)
         end
         _ => error("$arg cannot be parsed")
     end
 end
 
 function generate_var(a, varclass;
-        indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
-    var = indices === nothing ? Symbolics.variable(a) : first(@variables $a[indices...])
+        indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
+        type = Real)
+    var = indices === nothing ? Symbolics.variable(a; T = type) :
+          first(@variables $a[indices...]::type)
     if varclass == :parameters
         var = toparam(var)
     end
@@ -216,18 +218,21 @@ function generate_var(a, varclass;
 end
 
 function generate_var!(dict, a, varclass;
-        indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
+        indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
+        type = Real)
     vd = get!(dict, varclass) do
         Dict{Symbol, Dict{Symbol, Any}}()
     end
     vd isa Vector && (vd = first(vd))
     vd[a] = Dict{Symbol, Any}()
     indices !== nothing && (vd[a][:size] = Tuple(lastindex.(indices)))
-    generate_var(a, varclass; indices)
+    generate_var(a, varclass; indices, type)
 end
 
 function generate_var!(dict, a, b, varclass;
-        indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
+        indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
+        type = Real)
+    # (type isa Nothing && type = Real)
     iv = generate_var(b, :variables)
     prev_iv = get!(dict, :independent_variable) do
         iv
@@ -239,10 +244,10 @@ function generate_var!(dict, a, b, varclass;
     vd isa Vector && (vd = first(vd))
     vd[a] = Dict{Symbol, Any}()
     var = if indices === nothing
-        Symbolics.variable(a, T = SymbolicUtils.FnType{Tuple{Any}, Real})(iv)
+        Symbolics.variable(a, T = SymbolicUtils.FnType{Tuple{Any}, type})(iv)
     else
         vd[a][:size] = Tuple(lastindex.(indices))
-        first(@variables $a(iv)[indices...])
+        first(@variables $a(iv)[indices...]::type)
     end
     if varclass == :parameters
         var = toparam(var)

@@ -1,7 +1,7 @@
 using ModelingToolkit, Test
 using ModelingToolkit: get_gui_metadata, get_systems, get_connector_type,
-                       get_ps, getdefault, getname, scalarize, VariableDescription,
-                       RegularConnector
+                       get_ps, getdefault, getname, scalarize, symtype,
+                       VariableDescription, RegularConnector
 using URIs: URI
 using Distributions
 using DynamicQuantities, OrdinaryDiffEq
@@ -251,14 +251,23 @@ end
             par1::Int = 1
             par2(t)::Int,
             [description = "Enforced `par4` to be an Int by setting the type to the keyword-arg."]
-            par3(t)::Float64 = 1.0
+            par3(t)::BigFloat = 1.0
             par4(t)::Float64 = 1 # converts 1 to 1.0 of Float64 type
+            par5[1:3]::BigFloat
+            par6(t)[1:3]::BigFloat
+            par7(t)[1:3]::BigFloat = 1.0, [description = "with description"]
         end
     end
 
     @named type_model = TypeModel()
 
-    @test getname.(parameters(type_model)) == [:par0, :par1, :par2, :par3, :par4]
+    @test symtype(type_model.par1) == Int
+    @test symtype(type_model.par2) == Int
+    @test symtype(type_model.par3) == BigFloat
+    @test symtype(type_model.par4) == Float64
+    @test symtype(type_model.par5[1]) == BigFloat
+    @test symtype(type_model.par6[1]) == BigFloat
+    @test symtype(type_model.par7[1]) == BigFloat
 
     @test_throws TypeError TypeModel(; name = :throws, flag = 1)
     @test_throws TypeError TypeModel(; name = :throws, par0 = 1)
@@ -350,8 +359,8 @@ end
     @test A.structure[:extend] == [[:e], :extended_e, :E]
     @test A.structure[:equations] == ["e ~ 0"]
     @test A.structure[:kwargs] ==
-          Dict{Symbol, Dict}(:p => Dict(:value => nothing, :type => nothing),
-        :v => Dict(:value => nothing, :type => nothing))
+          Dict{Symbol, Dict}(:p => Dict(:value => nothing, :type => Real),
+        :v => Dict(:value => nothing, :type => Real))
     @test A.structure[:components] == [[:cc, :C]]
 end
 
