@@ -22,7 +22,7 @@ function generate_initializesystem(sys::ODESystem;
     set_full_states = Set(full_states)
     guesses = todict(guesses)
     schedule = getfield(sys, :schedule)
-    
+
     if schedule !== nothing
         guessmap = [x[2] => get(guesses, x[1], default_dd_value)
                     for x in schedule.dummy_sub]

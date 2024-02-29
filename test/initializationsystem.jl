@@ -331,7 +331,8 @@ p = [σ => 28.0,
     β => 8 / 3]
 
 tspan = (0.0, 100.0)
-@test_throws ModelingToolkit.IncompleteInitializationError prob=ODEProblem(sys, u0, tspan, p, jac = true)
+@test_throws ModelingToolkit.IncompleteInitializationError prob=ODEProblem(
+    sys, u0, tspan, p, jac = true)
 
 # DAE Initialization on ODE with nonlinear system for initial conditions
 # https://github.com/SciML/ModelingToolkit.jl/issues/2508

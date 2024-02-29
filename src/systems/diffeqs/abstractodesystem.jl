@@ -1546,8 +1546,8 @@ const INCOMPLETE_INITIALIZATION_MESSAGE = """
                                 variables:
                                 """
 
-struct IncompleteInitializationError <: Exception 
-    uninit
+struct IncompleteInitializationError <: Exception
+    uninit::Any
 end
 
 function Base.showerror(io::IO, e::IncompleteInitializationError)
@@ -1575,7 +1575,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
             generate_initializesystem(sys; u0map); fully_determined = false)
     end
 
-    uninit = setdiff(unknowns(sys),[unknowns(isys); getfield.(observed(isys),:lhs)])
+    uninit = setdiff(unknowns(sys), [unknowns(isys); getfield.(observed(isys), :lhs)])
     if !isempty(uninit)
         throw(IncompleteInitializationError(uninit))
     end
