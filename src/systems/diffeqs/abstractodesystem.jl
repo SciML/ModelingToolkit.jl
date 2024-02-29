@@ -864,7 +864,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
 
     # TODO: Pass already computed information to varmap_to_vars call
     # in process_u0? That would just be a small optimization
-    varmap = (u0map !== nothing && isempty(u0map)) || eltype(u0map) <: Number ?
+    varmap = u0map === nothing || isempty(u0map) || eltype(u0map) <: Number ?
              defaults(sys) :
              merge(defaults(sys), todict(u0map))
     varlist = collect(map(unwrap, dvs))
