@@ -17,21 +17,23 @@ function generate_initializesystem(sys::ODESystem;
     # Start the equations list with algebraic equations
     eqs_ics = eqs[idxs_alge]
     u0 = Vector{Pair}(undef, 0)
-    defs = merge(defaults(sys), todict(u0map))
 
     full_states = [sts; getfield.((observed(sys)), :lhs)]
     set_full_states = Set(full_states)
     guesses = todict(guesses)
     schedule = getfield(sys, :schedule)
-
-    dd_guess = if schedule !== nothing
+    
+    if schedule !== nothing
         guessmap = [x[2] => get(guesses, x[1], default_dd_value)
                     for x in schedule.dummy_sub]
-        Dict(filter(x -> !isnothing(x[1]), guessmap))
+        dd_guess = Dict(filter(x -> !isnothing(x[1]), guessmap))
+        filtered_u0 = todict([get(schedule.dummy_sub, x[1], x[1]) => x[2] for x in u0map])
     else
-        Dict()
+        dd_guess = Dict()
+        filtered_u0 = u0map
     end
 
+    defs = merge(defaults(sys), filtered_u0)
     guesses = merge(get_guesses(sys), todict(guesses), dd_guess)
 
     for st in full_states

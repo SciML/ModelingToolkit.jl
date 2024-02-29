@@ -1540,6 +1540,21 @@ function InitializationProblem{false}(sys::AbstractODESystem, args...; kwargs...
     InitializationProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
+const INCOMPLETE_INITIALIZATION_MESSAGE = """
+                                Initialization incomplete. Not all of the state variables of the
+                                DAE system can be determined by the initialization. Missing
+                                variables:
+                                """
+
+struct IncompleteInitializationError <: Exception 
+    uninit
+end
+
+function Base.showerror(io::IO, e::IncompleteInitializationError)
+    println(io, INCOMPLETE_INITIALIZATION_MESSAGE)
+    println(io, e.uninit)
+end
+
 function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         t::Number, u0map = [],
         parammap = DiffEqBase.NullParameters();
@@ -1558,6 +1573,11 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     else
         isys = structural_simplify(
             generate_initializesystem(sys; u0map); fully_determined = false)
+    end
+
+    uninit = setdiff(unknowns(sys),[unknowns(isys); getfield.(observed(isys),:lhs)])
+    if !isempty(uninit)
+        throw(IncompleteInitializationError(uninit))
     end
 
     neqs = length(equations(isys))
