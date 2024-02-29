@@ -862,6 +862,10 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     ps = full_parameters(sys)
     iv = get_iv(sys)
 
+    varmap = merge(defaults, todict(u0map))
+    varlist = collect(map(unwrap, dvs))
+    missingvars = setdiff(varlist, collect(keys(varmap)))
+
     # Append zeros to the variables which are determined by the initialization system
     # This essentially bypasses the check for if initial conditions are defined for DAEs
     # since they will be checked in the initialization problem's construction
@@ -869,7 +873,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     ci = infer_clocks!(ClockInference(TearingState(sys)))
     # TODO: make it work with clocks
     # ModelingToolkit.get_tearing_state(sys) !== nothing => Requires structural_simplify first
-    if (implicit_dae || calculate_massmatrix(sys) !== I) &&
+    if (implicit_dae || !isempty(missingvars)) &&
        all(isequal(Continuous()), ci.var_domain) &&
        ModelingToolkit.get_tearing_state(sys) !== nothing
         if eltype(u0map) <: Number
