@@ -27,8 +27,16 @@ function generate_initializesystem(sys::ODESystem;
         guessmap = [x[2] => get(guesses, x[1], default_dd_value)
                     for x in schedule.dummy_sub]
         dd_guess = Dict(filter(x -> !isnothing(x[1]), guessmap))
-        filtered_u0 = u0map === nothing || isempty(u0map) ? u0map :
-                      todict([get(schedule.dummy_sub, x[1], x[1]) => x[2] for x in u0map])
+        if u0map === nothing || isempty(u0map)
+            filtered_u0 = u0map
+        else
+            # TODO: Don't scalarize arrays
+            filtered_u0 = map(u0map) do x
+                y = get(schedule.dummy_sub, x[1], x[1])
+                y isa Symbolics.Arr ? collect(x[1]) .=> x[2] : x[1] => x[2]
+            end
+            filtered_u0 = todict(reduce(vcat, filtered_u0))
+        end
     else
         dd_guess = Dict()
         filtered_u0 = u0map
