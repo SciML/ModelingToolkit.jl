@@ -339,21 +339,19 @@ tspan = (0.0, 100.0)
 using ModelingToolkit, OrdinaryDiffEq, Test
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
-function System(;name)
+function System(; name)
     vars = @variables begin
-        dx(t), [guess=0]
-        ddx(t), [guess=0]
+        dx(t), [guess = 0]
+        ddx(t), [guess = 0]
     end
-    eqs = [
-        D(dx) ~ ddx
-        0 ~ ddx + dx + 1
-    ]
+    eqs = [D(dx) ~ ddx
+           0 ~ ddx + dx + 1]
     return ODESystem(eqs, t, vars, []; name)
 end
 
 @mtkbuild sys = System()
-prob = ODEProblem(sys, [sys.dx => 1], (0,1)) # OK
-prob = ODEProblem(sys, [sys.ddx => -2], (0,1), guesses = [sys.dx => 1])
+prob = ODEProblem(sys, [sys.dx => 1], (0, 1)) # OK
+prob = ODEProblem(sys, [sys.ddx => -2], (0, 1), guesses = [sys.dx => 1])
 sol = solve(prob, Tsit5())
 @test SciMLBase.successful_retcode(sol)
 @test sol[1] == [1.0]
