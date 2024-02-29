@@ -358,7 +358,7 @@ sol = solve(prob, Tsit5())
 
 ## Late binding initialization_eqs
 
-function System(; name)
+function System2(; name)
     vars = @variables begin
         dx(t), [guess = 0]
         ddx(t), [guess = 0]
@@ -371,7 +371,7 @@ function System(; name)
     return ODESystem(eqs, t, vars, []; name, initialization_eqs)
 end
 
-@mtkbuild sys = System()
+@mtkbuild sys = System2()
 prob = ODEProblem(sys, [], (0, 1), guesses = [sys.dx => 1])
 sol = solve(prob, Tsit5())
 @test SciMLBase.successful_retcode(sol)
