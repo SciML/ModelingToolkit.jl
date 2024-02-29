@@ -877,7 +877,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     ci = infer_clocks!(ClockInference(TearingState(sys)))
     # TODO: make it work with clocks
     # ModelingToolkit.get_tearing_state(sys) !== nothing => Requires structural_simplify first
-    if (implicit_dae || !isempty(missingvars)) &&
+    if sys isa ODESystem && (implicit_dae || !isempty(missingvars)) &&
        all(isequal(Continuous()), ci.var_domain) &&
        ModelingToolkit.get_tearing_state(sys) !== nothing
         if eltype(u0map) <: Number
