@@ -3,7 +3,7 @@ using ModelingToolkit, OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @connector function Pin(; name)
-    sts = @variables v(t) [guess=1.0] i(t) [guess=1.0,connect = Flow]
+    sts = @variables v(t) [guess = 1.0] i(t) [guess = 1.0, connect = Flow]
     ODESystem(Equation[], t, sts, []; name = name)
 end
 
@@ -16,7 +16,7 @@ end
 @component function OnePort(; name)
     @named p = Pin()
     @named n = Pin()
-    sts = @variables v(t) [guess=1.0] i(t) [guess=1.0]
+    sts = @variables v(t) [guess = 1.0] i(t) [guess = 1.0]
     eqs = [v ~ p.v - n.v
            0 ~ p.i + n.i
            i ~ p.i]
@@ -64,7 +64,7 @@ end
 end
 
 @connector function HeatPort(; name)
-    @variables T(t) [guess=293.15] Q_flow(t) [guess=0.0, connect = Flow]
+    @variables T(t) [guess = 293.15] Q_flow(t) [guess = 0.0, connect = Flow]
     ODESystem(Equation[], t, [T, Q_flow], [], name = name)
 end
 
