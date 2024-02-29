@@ -399,7 +399,7 @@ end
 
 function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym::Symbol)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        return get(ic.unknown_idx, h, nothing)
+        return get(ic.unknown_idx, hash(sym), nothing)
     end
     idx = findfirst(isequal(sym), getname.(variable_symbols(sys)))
     if idx !== nothing
