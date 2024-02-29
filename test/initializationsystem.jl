@@ -339,7 +339,7 @@ tspan = (0.0, 100.0)
 using ModelingToolkit, OrdinaryDiffEq, Test
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
-function System(; name)
+function System2(; name)
     vars = @variables begin
         dx(t), [guess = 0]
         ddx(t), [guess = 0]
@@ -349,7 +349,7 @@ function System(; name)
     return ODESystem(eqs, t, vars, []; name)
 end
 
-@mtkbuild sys = System()
+@mtkbuild sys = System2()
 prob = ODEProblem(sys, [sys.dx => 1], (0, 1)) # OK
 prob = ODEProblem(sys, [sys.ddx => -2], (0, 1), guesses = [sys.dx => 1])
 sol = solve(prob, Tsit5())
@@ -358,7 +358,7 @@ sol = solve(prob, Tsit5())
 
 ## Late binding initialization_eqs
 
-function System2(; name)
+function System3(; name)
     vars = @variables begin
         dx(t), [guess = 0]
         ddx(t), [guess = 0]
@@ -371,7 +371,7 @@ function System2(; name)
     return ODESystem(eqs, t, vars, []; name, initialization_eqs)
 end
 
-@mtkbuild sys = System2()
+@mtkbuild sys = System3()
 prob = ODEProblem(sys, [], (0, 1), guesses = [sys.dx => 1])
 sol = solve(prob, Tsit5())
 @test SciMLBase.successful_retcode(sol)
