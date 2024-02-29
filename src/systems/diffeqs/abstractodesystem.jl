@@ -889,6 +889,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
 
         zerovars = setdiff(unknowns(sys), keys(defaults(sys))) .=> 0.0
         trueinit = identity.([zerovars; u0map])
+        u0map isa StaticArraysCore.StaticArray && (trueinit = SVector{length(trueinit)}(trueinit))
     else
         initializeprob = nothing
         initializeprobmap = nothing
