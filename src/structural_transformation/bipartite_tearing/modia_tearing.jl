@@ -81,7 +81,7 @@ function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
     var_eq_matching = maximal_matching(graph, eqfilter, varfilter, U)
     var_eq_matching = complete(var_eq_matching,
         max(length(var_eq_matching),
-            maximum(x -> x isa Int ? x : 0, var_eq_matching)))
+            maximum(x -> x isa Int ? x : 0, var_eq_matching, init = 0)))
     full_var_eq_matching = copy(var_eq_matching)
     var_sccs = find_var_sccs(graph, var_eq_matching)
     vargraph = DiCMOBiGraph{true}(graph)
