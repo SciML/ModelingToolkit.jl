@@ -140,7 +140,7 @@ julia> @mtkbuild model_c2 = ModelC(; p1 = 2.0)
   - Whenever components are created with `@named` macro, these can be accessed with `.` operator as `subcomponent_name.argname`
   - In the above example, as `k` of `model_a` isn't listed while defining the sub-component in `ModelC`, its default value can't be modified by users. While `k_array` can be set as:
 
-```julia
+```@example mtkmodel-example
 using ModelingToolkit: getdefault
 
 @mtkbuild model_c3 = ModelC(; model_a.k_array = [1.0, 2.0])
