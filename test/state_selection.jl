@@ -120,12 +120,12 @@ let
     @unpack supply_pipe, return_pipe = system
     sys = structural_simplify(system)
     u0 = [
-        system.supply_pipe.v => 0.1, system.return_pipe.v => 0.1, D(supply_pipe.v) => 0.0,
+        sys.supply_pipe.v => 0.1, sys.return_pipe.v => 0.1, D(supply_pipe.v) => 0.0,
         D(return_pipe.fluid_port_a.m) => 0.0,
         D(supply_pipe.fluid_port_a.m) => 0.0]
     prob1 = ODEProblem(sys, [], (0.0, 10.0), [], guesses = u0)
     prob2 = ODEProblem(sys, [], (0.0, 10.0), [], guesses = u0)
-    prob3 = DAEProblem(sys, D.(unknowns(sys)) .=> 0.0, u0, (0.0, 10.0), [])
+    prob3 = DAEProblem(sys, D.(unknowns(sys)) .=> 0.0, [], (0.0, 10.0), guesses = u0)
     @test solve(prob1, FBDF()).retcode == ReturnCode.Success
     #@test solve(prob2, FBDF()).retcode == ReturnCode.Success
     @test solve(prob3, DFBDF()).retcode == ReturnCode.Success
