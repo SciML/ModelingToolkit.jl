@@ -34,7 +34,7 @@ To illustrate how to perform the initialization, let's take a look at the Cartes
 pendulum:
 
 ```@example init
-using ModelingToolkit, OrdinaryDiffEq, Test
+using ModelingToolkit, OrdinaryDiffEq, Plots
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @parameters g
