@@ -98,9 +98,9 @@ let
     @named rc_model2 = compose(_rc_model2,
         [resistor, resistor2, capacitor, source, ground])
     sys2 = structural_simplify(rc_model2)
-    prob2 = ODEProblem(sys2, [], (0, 10.0), guesses = u0)
+    prob2 = ODEProblem(sys2, [source.p.i => 0.0], (0, 10.0), guesses = u0)
     sol2 = solve(prob2, Rosenbrock23())
-    @test sol2[source.p.i] ≈ sol2[rc_model2.source.p.i] ≈ sol2[capacitor.i]
+    @test sol2[source.p.i] ≈ sol2[rc_model2.source.p.i] ≈ -sol2[capacitor.i]
 end
 
 # Outer/inner connections
