@@ -418,3 +418,14 @@ tspan = (0.0, 10.0)
 prob = ODEProblem(simpsys, [D(x) => 0.0, y => 0.0], tspan, guesses = [x => 0.0])
 sol = solve(prob, Tsit5())
 @test sol[1] == [0.0, 0.0]
+
+# Initialize with an observed variable
+prob = ODEProblem(simpsys, [z => 0.0], tspan, guesses = [x => 2.0, y => 4.0])
+sol = solve(prob, Tsit5())
+@test sol[1] == [0.0, 0.0]
+
+prob = ODEProblem(simpsys, [z => 1.0, y => 1.0], tspan, guesses = [x => 2.0])
+sol = solve(prob, Tsit5())
+@test sol[1] == [0.0, 1.0]
+
+@test_broken @test_warn "Initialization system is underdetermined. 1 equations for 3 unknowns. Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false." prob = ODEProblem(simpsys, [], tspan, guesses = [x => 2.0])
