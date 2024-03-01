@@ -19,7 +19,7 @@ function generate_initializesystem(sys::ODESystem;
     u0 = Vector{Pair}(undef, 0)
 
     eqs_diff = eqs[idxs_diff]
-    diffmap = Dict(getfield.(eqs_diff,:lhs) .=> getfield.(eqs_diff,:rhs))
+    diffmap = Dict(getfield.(eqs_diff, :lhs) .=> getfield.(eqs_diff, :rhs))
 
     full_states = unique([sts; getfield.((observed(sys)), :lhs)])
     set_full_states = Set(full_states)

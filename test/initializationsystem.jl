@@ -391,9 +391,9 @@ eqs = [D(D(x)) ~ σ * (y - x),
 sys = structural_simplify(sys)
 
 u0 = [D(x) => 2.0,
-      x => 1.0,
-      D(y) => 0.0,
-      z => 0.0]
+    x => 1.0,
+    D(y) => 0.0,
+    z => 0.0]
 
 p = [σ => 28.0,
     ρ => 10.0,
@@ -417,4 +417,4 @@ tspan = (0.0, 10.0)
 
 prob = ODEProblem(simpsys, [D(x) => 0.0, y => 0.0], tspan, guesses = [x => 0.0])
 sol = solve(prob, Tsit5())
-@test sol[1] == [0.0,0.0]
+@test sol[1] == [0.0, 0.0]
