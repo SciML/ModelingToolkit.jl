@@ -3,6 +3,7 @@ pages = [
     "tutorials/ode_modeling.md",
     "Tutorials" => Any["tutorials/acausal_components.md",
         "tutorials/nonlinear.md",
+        "tutorials/initialization.md",
         "tutorials/optimization.md",
         "tutorials/modelingtoolkitize.md",
         "tutorials/programmatically_generating.md",
