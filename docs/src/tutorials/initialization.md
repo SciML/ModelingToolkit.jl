@@ -19,7 +19,7 @@ x' = f(x,y,t)\\
 ```
 
 where ``x`` are the differential variables and ``y`` are the algebraic variables.
-An initial condition ``u0 = [x(t_0) y(t_0)]`` is said to be consistent if 
+An initial condition ``u0 = [x(t_0) y(t_0)]`` is said to be consistent if
 ``g(x(t_0),y(t_0),t_0) = 0``.
 
 For ODEs, this is trivially satisfied. However, for more complicated systems it may
@@ -64,13 +64,13 @@ This solves via:
 
 ```@example init
 sol = solve(prob, Rodas5P())
-plot(sol, idxs = (x,y))
+plot(sol, idxs = (x, y))
 ```
 
 and we can check it satisfies our conditions via:
 
 ```@example init
-conditions = getfield.(equations(pend)[3:end],:rhs)
+conditions = getfield.(equations(pend)[3:end], :rhs)
 ```
 
 ```@example init
@@ -93,18 +93,19 @@ We can similarly choose `λ = 0` and solve for `y` to start the system:
 ```@example init
 prob = ODEProblem(pend, [x => 1, λ => 0], (0.0, 1.5), [g => 1], guesses = [y => 1])
 sol = solve(prob, Rodas5P())
-plot(sol, idxs = (x,y))
+plot(sol, idxs = (x, y))
 ```
 
 or choose to satisfy derivative conditions:
 
 ```@example init
-prob = ODEProblem(pend, [x => 1, D(y) => 0], (0.0, 1.5), [g => 1], guesses = [λ => 0, y => 1])
+prob = ODEProblem(
+    pend, [x => 1, D(y) => 0], (0.0, 1.5), [g => 1], guesses = [λ => 0, y => 1])
 sol = solve(prob, Rodas5P())
-plot(sol, idxs = (x,y))
+plot(sol, idxs = (x, y))
 ```
 
-Notice that since a derivative condition is given, we are required to give a 
+Notice that since a derivative condition is given, we are required to give a
 guess for `y`.
 
 We can also directly give equations to be satisfied at the initial point by using
@@ -112,18 +113,19 @@ the `initialization_eqs` keyword argument, for example:
 
 ```@example init
 prob = ODEProblem(pend, [x => 1], (0.0, 1.5), [g => 1], guesses = [λ => 0, y => 1],
-                        initialization_eqs = [y ~ 1])
+    initialization_eqs = [y ~ 1])
 sol = solve(prob, Rodas5P())
-plot(sol, idxs = (x,y))
+plot(sol, idxs = (x, y))
 ```
 
 Additionally, note that the initial conditions are allowed to be functions of other
 variables and parameters:
 
 ```@example init
-prob = ODEProblem(pend, [x => 1, D(y) => g], (0.0, 3.0), [g => 1], guesses = [λ => 0, y => 1])
+prob = ODEProblem(
+    pend, [x => 1, D(y) => g], (0.0, 3.0), [g => 1], guesses = [λ => 0, y => 1])
 sol = solve(prob, Rodas5P())
-plot(sol, idxs = (x,y))
+plot(sol, idxs = (x, y))
 ```
 
 ## Determinability: Underdetermined and Overdetermined Systems
@@ -131,10 +133,10 @@ plot(sol, idxs = (x,y))
 For this system we have 3 conditions to satisfy:
 
 ```@example init
-conditions = getfield.(equations(pend)[3:end],:rhs)
+conditions = getfield.(equations(pend)[3:end], :rhs)
 ```
 
-when we initialize with 
+when we initialize with
 
 ```@example init
 prob = ODEProblem(pend, [x => 1, y => 0], (0.0, 1.5), [g => 1], guesses = [y => 0, λ => 1])
@@ -155,21 +157,22 @@ and thus the solution is not necessarily unique. It can still be solved:
 
 ```@example init
 sol = solve(prob, Rodas5P())
-plot(sol, idxs = (x,y))
+plot(sol, idxs = (x, y))
 ```
 
 and the found initial condition satisfies all constraints which were given. In the opposite
 direction, we may have an overdetermined system:
 
 ```@example init
-prob = ODEProblem(pend, [x => 1, y => 0.0, D(y) => 0], (0.0, 1.5), [g => 1], guesses = [λ => 1])
+prob = ODEProblem(
+    pend, [x => 1, y => 0.0, D(y) => 0], (0.0, 1.5), [g => 1], guesses = [λ => 1])
 ```
 
 Can that be solved?
 
 ```@example init
 sol = solve(prob, Rodas5P())
-plot(sol, idxs = (x,y))
+plot(sol, idxs = (x, y))
 ```
 
 Indeed since we saw `D(y) = 0` at the initial point above, it turns out that this solution
@@ -178,7 +181,8 @@ aren't that lucky. If the set of initial conditions cannot be satisfied, then yo
 a `SciMLBase.ReturnCode.InitialFailure`:
 
 ```@example init
-prob = ODEProblem(pend, [x => 1, y => 0.0, D(y) => 2.0, λ => 1], (0.0, 1.5), [g => 1], guesses = [λ => 1])
+prob = ODEProblem(
+    pend, [x => 1, y => 0.0, D(y) => 2.0, λ => 1], (0.0, 1.5), [g => 1], guesses = [λ => 1])
 sol = solve(prob, Rodas5P())
 ```
 
@@ -216,18 +220,19 @@ with observables, those observables are too treated as initial equations. We can
 resulting simplified system via the command:
 
 ```@example init
-isys = structural_simplify(isys; fully_determined=false)
+isys = structural_simplify(isys; fully_determined = false)
 ```
 
 Note `fully_determined=false` allows for the simplification to occur when the number of equations
 does not match the number of unknowns, which we can use to investigate our overdetermined system:
 
 ```@example init
-isys = ModelingToolkit.generate_initializesystem(pend, u0map = [x => 1, y => 0.0, D(y) => 2.0, λ => 1], guesses = [λ => 1])
+isys = ModelingToolkit.generate_initializesystem(
+    pend, u0map = [x => 1, y => 0.0, D(y) => 2.0, λ => 1], guesses = [λ => 1])
 ```
 
 ```@example init
-isys = structural_simplify(isys; fully_determined=false)
+isys = structural_simplify(isys; fully_determined = false)
 ```
 
 ```@example init
@@ -252,8 +257,8 @@ constructor which acts just like an `ODEProblem` or `NonlinearProblem` construct
 creates the special initialization system for a given `sys`. This is done as follows:
 
 ```@example init
-iprob = ModelingToolkit.InitializationProblem(pend, 0.0, 
-                [x => 1, y => 0.0, D(y) => 2.0, λ => 1], [g => 1], guesses = [λ => 1])
+iprob = ModelingToolkit.InitializationProblem(pend, 0.0,
+    [x => 1, y => 0.0, D(y) => 2.0, λ => 1], [g => 1], guesses = [λ => 1])
 ```
 
 We can see that because the system is overdetermined we receive a NonlinearLeastSquaresProblem,
@@ -266,6 +271,7 @@ sol = solve(iprob)
 ```
 
 !!! note
+    
     For more information on solving NonlinearProblems and NonlinearLeastSquaresProblems,
     check out the [NonlinearSolve.jl tutorials!](https://docs.sciml.ai/NonlinearSolve/stable/tutorials/getting_started/).
 
@@ -293,8 +299,8 @@ to see the problem is not equation 2 but other equations in the system. Meanwhil
 some of the conditions:
 
 ```@example init
-iprob = ModelingToolkit.InitializationProblem(pend, 0.0, 
-                [x => 1, y => 0.0, D(y) => 0.0, λ => 0], [g => 1], guesses = [λ => 1])
+iprob = ModelingToolkit.InitializationProblem(pend, 0.0,
+    [x => 1, y => 0.0, D(y) => 0.0, λ => 0], [g => 1], guesses = [λ => 1])
 ```
 
 gives a NonlinearLeastSquaresProblem which can be solved:
@@ -309,10 +315,9 @@ sol.resid
 
 In comparison, if we have a well-conditioned system:
 
-
 ```@example init
-iprob = ModelingToolkit.InitializationProblem(pend, 0.0, 
-                [x => 1, y => 0.0], [g => 1], guesses = [λ => 1])
+iprob = ModelingToolkit.InitializationProblem(pend, 0.0,
+    [x => 1, y => 0.0], [g => 1], guesses = [λ => 1])
 ```
 
 notice that we instead obtained a NonlinearSystem. In this case we have to use
@@ -348,7 +353,7 @@ by initializing the derivatives to zero:
 
 ```@example init
 prob = ODEProblem(simpsys, [D(x) => 0.0, D(y) => 0.0], tspan, guesses = [x => 1, y => 1])
-sol = solve(prob, Tsit5(), abstol= 1e-16)
+sol = solve(prob, Tsit5(), abstol = 1e-16)
 ```
 
 Notice that this is a "numerical zero", not an exact zero, and thus the solution will leave the
