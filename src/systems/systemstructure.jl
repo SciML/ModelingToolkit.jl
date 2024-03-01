@@ -616,6 +616,7 @@ end
 
 function _structural_simplify!(state::TearingState, io; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = false,
+        dummy_derivative = true,
         kwargs...)
     check_consistency &= fully_determined
     has_io = io !== nothing
@@ -628,7 +629,13 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
     if check_consistency
         ModelingToolkit.check_consistency(state, orig_inputs)
     end
-    if fully_determined
+    if fully_determined && dummy_derivative
+        sys = ModelingToolkit.dummy_derivative(sys, state; simplify, mm, check_consistency)
+    elseif fully_determined
+        var_eq_matching = pantelides!(state; finalize = false, kwargs...)
+        sys = pantelides_reassemble(state, var_eq_matching)
+        state = TearingState(sys)
+        sys, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
         sys = ModelingToolkit.dummy_derivative(sys, state; simplify, mm, check_consistency)
     else
         sys = ModelingToolkit.tearing(sys, state; simplify, mm, check_consistency)
