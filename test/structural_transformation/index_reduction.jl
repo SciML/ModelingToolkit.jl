@@ -160,15 +160,14 @@ let
     @parameters g
     @variables x(t) [state_priority = 10] y(t) λ(t)
 
-    eqs = [
-        D(D(x)) ~ λ * x
-        D(D(y)) ~ λ * y - g
-        x^2 + y^2 ~ 1
-        ]
-    @named pend = ODESystem(eqs,t)
+    eqs = [D(D(x)) ~ λ * x
+           D(D(y)) ~ λ * y - g
+           x^2 + y^2 ~ 1]
+    @named pend = ODESystem(eqs, t)
     sys = complete(structural_simplify(pend; dummy_derivative = false))
-    prob = ODEProblem(sys, [x => 1, y => 0, D(x) => 0.0], (0.0, 10.0), [g => 1], guesses = [λ => 0.0])
-    sol = solve(prob,Rodas5P())
+    prob = ODEProblem(
+        sys, [x => 1, y => 0, D(x) => 0.0], (0.0, 10.0), [g => 1], guesses = [λ => 0.0])
+    sol = solve(prob, Rodas5P())
     @test SciMLBase.successful_retcode(sol)
     @test sol[x^2 + y^2][end] < 1.1
 end
