@@ -631,6 +631,11 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
     end
     if fully_determined && dummy_derivative
         sys = ModelingToolkit.dummy_derivative(sys, state; simplify, mm, check_consistency)
+    elseif fully_determined
+        var_eq_matching = pantelides!(state; finalize = false, kwargs...)
+        sys = pantelides_reassemble(state, var_eq_matching)
+        state = TearingState(sys)
+        sys = ModelingToolkit.dummy_derivative(sys, state; simplify, mm, check_consistency)
     else
         sys = ModelingToolkit.tearing(sys, state; simplify, mm, check_consistency)
     end

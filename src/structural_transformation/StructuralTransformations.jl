@@ -54,7 +54,7 @@ export tearing, partial_state_selection, dae_index_lowering, check_consistency
 export dummy_derivative
 export build_torn_function, build_observed_function, ODAEProblem
 export sorted_incidence_matrix,
-       pantelides!, tearing_reassemble, find_solvables!,
+       pantelides!, pantelides_reassemble, tearing_reassemble, find_solvables!,
        linear_subsys_adjmat!
 export tearing_assignments, tearing_substitution
 export torn_system_jacobian_sparsity
