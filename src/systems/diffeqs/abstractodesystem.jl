@@ -1578,7 +1578,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     uninit = setdiff(unknowns(sys), [unknowns(isys); getfield.(observed(isys), :lhs)])
 
     # TODO: throw on uninitialized arrays
-    filter!(x -> x isa Symbolics.Arr, uninit)
+    filter!(x -> !(x isa Symbolics.Arr), uninit)
     if !isempty(uninit)
         throw(IncompleteInitializationError(uninit))
     end
