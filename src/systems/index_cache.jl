@@ -1,10 +1,3 @@
-abstract type SymbolHash end
-
-function getsymbolhash(sym)
-    sym = unwrap(sym)
-    hasmetadata(sym, SymbolHash) ? getmetadata(sym, SymbolHash) : hash(sym)
-end
-
 struct BufferTemplate
     type::DataType
     length::Int
@@ -18,17 +11,18 @@ struct ParameterIndex{P, I}
     idx::I
 end
 
-const IndexMap = Dict{UInt, Tuple{Int, Int}}
+const ParamIndexMap = Dict{Union{Symbol, BasicSymbolic}, Tuple{Int, Int}}
+const UnknownIndexMap = Dict{Union{Symbol, BasicSymbolic}, Union{Int, UnitRange{Int}}}
 
 struct IndexCache
-    unknown_idx::Dict{UInt, Union{Int, UnitRange{Int}}}
-    discrete_idx::IndexMap
-    param_idx::IndexMap
-    constant_idx::IndexMap
-    dependent_idx::IndexMap
-    nonnumeric_idx::IndexMap
+    unknown_idx::UnknownIndexMap
+    discrete_idx::ParamIndexMap
+    tunable_idx::ParamIndexMap
+    constant_idx::ParamIndexMap
+    dependent_idx::ParamIndexMap
+    nonnumeric_idx::ParamIndexMap
     discrete_buffer_sizes::Vector{BufferTemplate}
-    param_buffer_sizes::Vector{BufferTemplate}
+    tunable_buffer_sizes::Vector{BufferTemplate}
     constant_buffer_sizes::Vector{BufferTemplate}
     dependent_buffer_sizes::Vector{BufferTemplate}
     nonnumeric_buffer_sizes::Vector{BufferTemplate}
@@ -36,20 +30,19 @@ end
 
 function IndexCache(sys::AbstractSystem)
     unks = solved_unknowns(sys)
-    unk_idxs = Dict{UInt, Union{Int, UnitRange{Int}}}()
+    unk_idxs = UnknownIndexMap()
     let idx = 1
         for sym in unks
-            h = getsymbolhash(sym)
+            usym = unwrap(sym)
             sym_idx = if Symbolics.isarraysymbolic(sym)
                 idx:(idx + length(sym) - 1)
             else
                 idx
             end
-            unk_idxs[h] = sym_idx
+            unk_idxs[usym] = sym_idx
 
             if hasname(sym)
-                h = hash(getname(sym))
-                unk_idxs[h] = sym_idx
+                unk_idxs[getname(usym)] = sym_idx
             end
             idx += length(sym)
         end
@@ -120,17 +113,15 @@ function IndexCache(sys::AbstractSystem)
     end
 
     function get_buffer_sizes_and_idxs(buffers::Dict{Any, Set{BasicSymbolic}})
-        idxs = IndexMap()
+        idxs = ParamIndexMap()
         buffer_sizes = BufferTemplate[]
         for (i, (T, buf)) in enumerate(buffers)
             for (j, p) in enumerate(buf)
-                h = getsymbolhash(p)
-                idxs[h] = (i, j)
-                h = getsymbolhash(default_toterm(p))
-                idxs[h] = (i, j)
+                idxs[p] = (i, j)
+                idxs[default_toterm(p)] = (i, j)
                 if hasname(p)
-                    h = hash(getname(p))
-                    idxs[h] = (i, j)
+                    idxs[getname(p)] = (i, j)
+                    idxs[getname(default_toterm(p))] = (i, j)
                 end
             end
             push!(buffer_sizes, BufferTemplate(T, length(buf)))
@@ -139,7 +130,7 @@ function IndexCache(sys::AbstractSystem)
     end
 
     disc_idxs, discrete_buffer_sizes = get_buffer_sizes_and_idxs(disc_buffers)
-    param_idxs, param_buffer_sizes = get_buffer_sizes_and_idxs(tunable_buffers)
+    tunable_idxs, tunable_buffer_sizes = get_buffer_sizes_and_idxs(tunable_buffers)
     const_idxs, const_buffer_sizes = get_buffer_sizes_and_idxs(constant_buffers)
     dependent_idxs, dependent_buffer_sizes = get_buffer_sizes_and_idxs(dependent_buffers)
     nonnumeric_idxs, nonnumeric_buffer_sizes = get_buffer_sizes_and_idxs(nonnumeric_buffers)
@@ -147,31 +138,79 @@ function IndexCache(sys::AbstractSystem)
     return IndexCache(
         unk_idxs,
         disc_idxs,
-        param_idxs,
+        tunable_idxs,
         const_idxs,
         dependent_idxs,
         nonnumeric_idxs,
         discrete_buffer_sizes,
-        param_buffer_sizes,
+        tunable_buffer_sizes,
         const_buffer_sizes,
         dependent_buffer_sizes,
         nonnumeric_buffer_sizes
     )
 end
 
+function SymbolicIndexingInterface.is_variable(ic::IndexCache, sym)
+    return check_index_map(ic.unknown_idx, sym) !== nothing
+end
+
+function SymbolicIndexingInterface.variable_index(ic::IndexCache, sym)
+    return check_index_map(ic.unknown_idx, sym)
+end
+
+function SymbolicIndexingInterface.is_parameter(ic::IndexCache, sym)
+    return check_index_map(ic.tunable_idx, sym) !== nothing ||
+        check_index_map(ic.discrete_idx, sym) !== nothing ||
+        check_index_map(ic.constant_idx, sym) !== nothing ||
+        check_index_map(ic.nonnumeric_idx, sym) !== nothing ||
+        check_index_map(ic.dependent_idx, sym) !== nothing
+end
+
+function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym)
+    return if (idx = check_index_map(ic.tunable_idx, sym)) !== nothing
+        ParameterIndex(SciMLStructures.Tunable(), idx)
+    elseif (idx = check_index_map(ic.discrete_idx, sym)) !== nothing
+        ParameterIndex(SciMLStructures.Discrete(), idx)
+    elseif (idx = check_index_map(ic.constant_idx, sym)) !== nothing
+        ParameterIndex(SciMLStructures.Constants(), idx)
+    elseif (idx = check_index_map(ic.nonnumeric_idx, sym)) !== nothing
+        ParameterIndex(NONNUMERIC_PORTION, idx)
+    elseif (idx = check_index_map(ic.dependent_idx, sym)) !== nothing
+        ParameterIndex(DEPENDENT_PORTION, idx)
+    else
+        nothing
+    end
+end
+
+function check_index_map(idxmap, sym)
+    if (idx = get(idxmap, sym, nothing)) !== nothing
+        return idx
+    elseif hasname(sym) && (idx = get(idxmap, getname(sym), nothing)) !== nothing
+        return idx
+    end
+    dsym = default_toterm(sym)
+    isequal(sym, dsym) && return nothing
+    if (idx = get(idxmap, dsym, nothing)) !== nothing
+        idx
+    elseif hasname(dsym) && (idx = get(idxmap, getname(dsym), nothing)) !== nothing
+        idx
+    else
+        nothing
+    end
+end
+
 function ParameterIndex(ic::IndexCache, p, sub_idx = ())
     p = unwrap(p)
-    h = p isa Symbol ? hash(p) : getsymbolhash(p)
-    return if haskey(ic.param_idx, h)
-        ParameterIndex(SciMLStructures.Tunable(), (ic.param_idx[h]..., sub_idx...))
-    elseif haskey(ic.discrete_idx, h)
-        ParameterIndex(SciMLStructures.Discrete(), (ic.discrete_idx[h]..., sub_idx...))
-    elseif haskey(ic.constant_idx, h)
-        ParameterIndex(SciMLStructures.Constants(), (ic.constant_idx[h]..., sub_idx...))
-    elseif haskey(ic.dependent_idx, h)
-        ParameterIndex(DEPENDENT_PORTION, (ic.dependent_idx[h]..., sub_idx...))
-    elseif haskey(ic.nonnumeric_idx, h)
-        ParameterIndex(NONNUMERIC_PORTION, (ic.nonnumeric_idx[h]..., sub_idx...))
+    return if haskey(ic.tunable_idx, p)
+        ParameterIndex(SciMLStructures.Tunable(), (ic.tunable_idx[p]..., sub_idx...))
+    elseif haskey(ic.discrete_idx, p)
+        ParameterIndex(SciMLStructures.Discrete(), (ic.discrete_idx[p]..., sub_idx...))
+    elseif haskey(ic.constant_idx, p)
+        ParameterIndex(SciMLStructures.Constants(), (ic.constant_idx[p]..., sub_idx...))
+    elseif haskey(ic.dependent_idx, p)
+        ParameterIndex(DEPENDENT_PORTION, (ic.dependent_idx[p]..., sub_idx...))
+    elseif haskey(ic.nonnumeric_idx, p)
+        ParameterIndex(NONNUMERIC_PORTION, (ic.nonnumeric_idx[p]..., sub_idx...))
     elseif istree(p) && operation(p) === getindex
         _p, sub_idx... = arguments(p)
         ParameterIndex(ic, _p, sub_idx)
@@ -182,7 +221,7 @@ end
 
 function discrete_linear_index(ic::IndexCache, idx::ParameterIndex)
     idx.portion isa SciMLStructures.Discrete || error("Discrete variable index expected")
-    ind = sum(temp.length for temp in ic.param_buffer_sizes; init = 0)
+    ind = sum(temp.length for temp in ic.tunable_buffer_sizes; init = 0)
     ind += sum(
         temp.length for temp in Iterators.take(ic.discrete_buffer_sizes, idx.idx[1] - 1);
         init = 0)
@@ -202,7 +241,7 @@ end
 
 function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
     param_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
-    for temp in ic.param_buffer_sizes)
+    for temp in ic.tunable_buffer_sizes)
     disc_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
     for temp in ic.discrete_buffer_sizes)
     const_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
@@ -213,21 +252,20 @@ function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
     for temp in ic.nonnumeric_buffer_sizes)
 
     for p in ps
-        h = getsymbolhash(p)
-        if haskey(ic.discrete_idx, h)
-            i, j = ic.discrete_idx[h]
+        if haskey(ic.discrete_idx, p)
+            i, j = ic.discrete_idx[p]
             disc_buf[i][j] = unwrap(p)
-        elseif haskey(ic.param_idx, h)
-            i, j = ic.param_idx[h]
+        elseif haskey(ic.tunable_idx, p)
+            i, j = ic.tunable_idx[p]
             param_buf[i][j] = unwrap(p)
-        elseif haskey(ic.constant_idx, h)
-            i, j = ic.constant_idx[h]
+        elseif haskey(ic.constant_idx, p)
+            i, j = ic.constant_idx[p]
             const_buf[i][j] = unwrap(p)
-        elseif haskey(ic.dependent_idx, h)
-            i, j = ic.dependent_idx[h]
+        elseif haskey(ic.dependent_idx, p)
+            i, j = ic.dependent_idx[p]
             dep_buf[i][j] = unwrap(p)
-        elseif haskey(ic.nonnumeric_idx, h)
-            i, j = ic.nonnumeric_idx[h]
+        elseif haskey(ic.nonnumeric_idx, p)
+            i, j = ic.nonnumeric_idx[p]
             nonnumeric_buf[i][j] = unwrap(p)
         else
             error("Invalid parameter $p")
