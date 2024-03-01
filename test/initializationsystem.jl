@@ -377,3 +377,44 @@ prob = ODEProblem(sys, [], (0, 1), guesses = [sys.dx => 1])
 sol = solve(prob, Tsit5())
 @test SciMLBase.successful_retcode(sol)
 @test sol[1] == [1.0]
+
+# Steady state initialization
+
+@parameters σ ρ β
+@variables x(t) y(t) z(t)
+
+eqs = [D(D(x)) ~ σ * (y - x),
+    D(y) ~ x * (ρ - z) - y,
+    D(z) ~ x * y - β * z]
+
+@named sys = ODESystem(eqs, t)
+sys = structural_simplify(sys)
+
+u0 = [D(x) => 2.0,
+      x => 1.0,
+      D(y) => 0.0,
+      z => 0.0]
+
+p = [σ => 28.0,
+    ρ => 10.0,
+    β => 8 / 3]
+
+tspan = (0.0, 0.2)
+prob_mtk = ODEProblem(sys, u0, tspan, p)
+sol = solve(prob_mtk, Tsit5())
+@test sol[x * (ρ - z) - y][1] == 0.0
+
+@variables x(t) y(t) z(t)
+@parameters α=1.5 β=1.0 γ=3.0 δ=1.0
+
+eqs = [D(x) ~ α * x - β * x * y
+       D(y) ~ -γ * y + δ * x * y
+       z ~ x + y]
+
+@named sys = ODESystem(eqs, t)
+simpsys = structural_simplify(sys)
+tspan = (0.0, 10.0)
+
+prob = ODEProblem(simpsys, [D(x) => 0.0, y => 0.0], tspan, guesses = [x => 0.0])
+sol = solve(prob, Tsit5())
+@test sol[1] == [0.0,0.0]

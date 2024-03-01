@@ -18,7 +18,10 @@ function generate_initializesystem(sys::ODESystem;
     eqs_ics = eqs[idxs_alge]
     u0 = Vector{Pair}(undef, 0)
 
-    full_states = [sts; getfield.((observed(sys)), :lhs)]
+    eqs_diff = eqs[idxs_diff]
+    diffmap = Dict(getfield.(eqs_diff,:lhs) .=> getfield.(eqs_diff,:rhs))
+
+    full_states = unique([sts; getfield.((observed(sys)), :lhs)])
     set_full_states = Set(full_states)
     guesses = todict(guesses)
     schedule = getfield(sys, :schedule)
@@ -30,10 +33,26 @@ function generate_initializesystem(sys::ODESystem;
         if u0map === nothing || isempty(u0map)
             filtered_u0 = u0map
         else
-            # TODO: Don't scalarize arrays
-            filtered_u0 = map(u0map) do x
+            filtered_u0 = []
+            for x in u0map
                 y = get(schedule.dummy_sub, x[1], x[1])
-                y isa Symbolics.Arr ? collect(x[1]) .=> x[2] : x[1] => x[2]
+                y = get(diffmap, y, y)
+                if y isa Symbolics.Arr
+                    _y = collect(y)
+
+                    # TODO: Don't scalarize arrays
+                    for i in 1:length(_y)
+                        push!(filtered_u0, _y[i] => x[2][i])
+                    end
+                elseif y isa ModelingToolkit.BasicSymbolic
+                    # y is a derivative expression expanded
+                    # add to the initialization equations
+                    push!(eqs_ics, y ~ x[2])
+                elseif y ∈ set_full_states
+                    push!(filtered_u0, y => x[2])
+                else
+                    error("Unreachable. Open an issue")
+                end
             end
             filtered_u0 = reduce(vcat, filtered_u0)
             filtered_u0 = filtered_u0 isa Pair ? todict([filtered_u0]) : todict(filtered_u0)

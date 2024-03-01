@@ -170,8 +170,23 @@ function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
     end
 end
 
+const MISSING_VARIABLES_MESSAGE = """
+                                Initial condition underdefined. Some are missing from the variable map.
+                                Please provide a default (`u0`), initialization equation, or guess
+                                for the following variables:
+                                """
+
+struct MissingVariablesError <: Exception
+    vars::Any
+end
+
+function Base.showerror(io::IO, e::MissingVariablesError)
+    println(io, MISSING_VARIABLES_MESSAGE)
+    println(io, e.vars)
+end
+
 function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false,
-        toterm = Symbolics.diff2term)
+        toterm = Symbolics.diff2term, initialization_phase = false)
     varmap = merge(defaults, varmap) # prefers the `varmap`
     varmap = Dict(toterm(value(k)) => value(varmap[k]) for k in keys(varmap))
     # resolve symbolic parameter expressions
@@ -180,7 +195,7 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false
     end
 
     missingvars = setdiff(varlist, collect(keys(varmap)))
-    check && (isempty(missingvars) || throw_missingvars(missingvars))
+    check && (isempty(missingvars) || throw(MissingVariablesError(missingvars)))
 
     out = [varmap[var] for var in varlist]
 end
