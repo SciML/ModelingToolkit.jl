@@ -862,6 +862,14 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     ps = full_parameters(sys)
     iv = get_iv(sys)
 
+    # TODO: Pass already computed information to varmap_to_vars call
+    # in process_u0? That would just be a small optimization
+    varmap = u0map === nothing || isempty(u0map) || eltype(u0map) <: Number ?
+             defaults(sys) :
+             merge(defaults(sys), todict(u0map))
+    varlist = collect(map(unwrap, dvs))
+    missingvars = setdiff(varlist, collect(keys(varmap)))
+
     # Append zeros to the variables which are determined by the initialization system
     # This essentially bypasses the check for if initial conditions are defined for DAEs
     # since they will be checked in the initialization problem's construction
@@ -869,7 +877,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     ci = infer_clocks!(ClockInference(TearingState(sys)))
     # TODO: make it work with clocks
     # ModelingToolkit.get_tearing_state(sys) !== nothing => Requires structural_simplify first
-    if (implicit_dae || calculate_massmatrix(sys) !== I) &&
+    if sys isa ODESystem && (implicit_dae || !isempty(missingvars)) &&
        all(isequal(Continuous()), ci.var_domain) &&
        ModelingToolkit.get_tearing_state(sys) !== nothing
         if eltype(u0map) <: Number
@@ -881,6 +889,8 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
 
         zerovars = setdiff(unknowns(sys), keys(defaults(sys))) .=> 0.0
         trueinit = identity.([zerovars; u0map])
+        u0map isa StaticArraysCore.StaticArray &&
+            (trueinit = SVector{length(trueinit)}(trueinit))
     else
         initializeprob = nothing
         initializeprobmap = nothing
@@ -1530,6 +1540,21 @@ function InitializationProblem{false}(sys::AbstractODESystem, args...; kwargs...
     InitializationProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
+const INCOMPLETE_INITIALIZATION_MESSAGE = """
+                                Initialization incomplete. Not all of the state variables of the
+                                DAE system can be determined by the initialization. Missing
+                                variables:
+                                """
+
+struct IncompleteInitializationError <: Exception
+    uninit::Any
+end
+
+function Base.showerror(io::IO, e::IncompleteInitializationError)
+    println(io, INCOMPLETE_INITIALIZATION_MESSAGE)
+    println(io, e.uninit)
+end
+
 function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         t::Number, u0map = [],
         parammap = DiffEqBase.NullParameters();
@@ -1548,6 +1573,14 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     else
         isys = structural_simplify(
             generate_initializesystem(sys; u0map); fully_determined = false)
+    end
+
+    uninit = setdiff(unknowns(sys), [unknowns(isys); getfield.(observed(isys), :lhs)])
+
+    # TODO: throw on uninitialized arrays
+    filter!(x -> !(x isa Symbolics.Arr), uninit)
+    if !isempty(uninit)
+        throw(IncompleteInitializationError(uninit))
     end
 
     neqs = length(equations(isys))

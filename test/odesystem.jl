@@ -525,7 +525,8 @@ eqs = [D(x) ~ foo(x, ms); D(ms) ~ ones(3)]
 @named sys = ODESystem(eqs, t, [x; ms], [])
 @named emptysys = ODESystem(Equation[], t)
 @mtkbuild outersys = compose(emptysys, sys)
-prob = ODEProblem(outersys, [sys.x => 1.0, sys.ms => 1:3], (0, 1.0))
+prob = ODEProblem(
+    outersys, [outersys.sys.x => 1.0; collect(outersys.sys.ms .=> 1:3)], (0, 1.0))
 @test_nowarn solve(prob, Tsit5())
 
 # array equations
@@ -670,7 +671,8 @@ let
     @test isapprox(sol[x[1]][end], 2, atol = 1e-3)
 
     # no initial conditions for D(x[1]) and D(x[2]) provided
-    @test_throws ArgumentError prob=DAEProblem(sys, Pair[], Pair[], (0, 50))
+    @test_throws ModelingToolkit.MissingVariablesError prob=DAEProblem(
+        sys, Pair[], Pair[], (0, 50))
 
     prob = ODEProblem(sys, Pair[x[1] => 0], (0, 50))
     sol = solve(prob, Rosenbrock23())
