@@ -33,7 +33,7 @@ function generate_initializesystem(sys::ODESystem;
         if u0map === nothing || isempty(u0map)
             filtered_u0 = u0map
         else
-            filtered_u0 = []
+            filtered_u0 = Pair[]
             for x in u0map
                 y = get(schedule.dummy_sub, x[1], x[1])
                 y = get(diffmap, y, y)
@@ -51,10 +51,9 @@ function generate_initializesystem(sys::ODESystem;
                 elseif y ∈ set_full_states
                     push!(filtered_u0, y => x[2])
                 else
-                    error("Unreachable. Open an issue")
+                    error("Initialization expression $y is currently not supported. If its a higher order derivative expression, then only the dummy derivative expressions are supported.")
                 end
             end
-            filtered_u0 = reduce(vcat, filtered_u0)
             filtered_u0 = filtered_u0 isa Pair ? todict([filtered_u0]) : todict(filtered_u0)
         end
     else
