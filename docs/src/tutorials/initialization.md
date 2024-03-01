@@ -117,6 +117,15 @@ sol = solve(prob, Rodas5P())
 plot(sol, idxs = (x,y))
 ```
 
+Additionally, note that the initial conditions are allowed to be functions of other
+variables and parameters:
+
+```@example init
+prob = ODEProblem(pend, [x => 1, D(y) => g], (0.0, 3.0), [g => 1], guesses = [λ => 0, y => 1])
+sol = solve(prob, Rodas5P())
+plot(sol, idxs = (x,y))
+```
+
 ## Determinability: Underdetermined and Overdetermined Systems
 
 For this system we have 3 conditions to satisfy:
