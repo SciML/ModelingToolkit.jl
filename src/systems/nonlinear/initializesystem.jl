@@ -35,7 +35,8 @@ function generate_initializesystem(sys::ODESystem;
                 y = get(schedule.dummy_sub, x[1], x[1])
                 y isa Symbolics.Arr ? collect(x[1]) .=> x[2] : x[1] => x[2]
             end
-            filtered_u0 = todict(reduce(vcat, filtered_u0))
+            filtered_u0 = reduce(vcat, filtered_u0)
+            filtered_u0 = filtered_u0 isa Pair ? todict([filtered_u0]) : todict(filtered_u0)
         end
     else
         dd_guess = Dict()
