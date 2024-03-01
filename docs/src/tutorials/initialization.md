@@ -2,9 +2,9 @@
 
 While for simple numerical ODEs choosing an initial condition can be an easy
 affair, with ModelingToolkit's more general differential-algebraic equation
-(DAE) system there is more care needed due to the flexability of the solver
+(DAE) system there is more care needed due to the flexibility of the solver
 state. In this tutorial we will walk through the functionality involved in
-initialization of ODESystem and the diagonstics to better understand and
+initialization of ODESystem and the diagnostics to better understand and
 debug the initialization problem.
 
 ## Primer on Initialization of Differential-Algebraic Equations
@@ -256,7 +256,7 @@ iprob = ModelingToolkit.InitializationProblem(pend, 0.0,
                 [x => 1, y => 0.0, D(y) => 2.0, λ => 1], [g => 1], guesses = [λ => 1])
 ```
 
-We can see that because the system is overdetermined we recieve a NonlinearLeastSquaresProblem,
+We can see that because the system is overdetermined we receive a NonlinearLeastSquaresProblem,
 solvable by [NonlinearSolve.jl](https://docs.sciml.ai/NonlinearSolve/stable/). Using NonlinearSolve
 we can recreate the initialization solve directly:
 
