@@ -1053,6 +1053,10 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
         discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
             if clock isa Clock
                 PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)
+            elseif clock isa SolverStepClock
+                affect = DiscreteSaveAffect(affect, sv)
+                DiscreteCallback(Returns(true), affect,
+                    initialize = (c, u, t, integrator) -> affect(integrator))
             else
                 error("$clock is not a supported clock type.")
             end

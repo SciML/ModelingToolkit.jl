@@ -477,3 +477,42 @@ y = res.y[:]
     # y ~ x(k-1) + kp * u
     # Instead. This should be equivalent to the above, but gve me an error when I tried
 end
+
+## Test continuous clock
+
+c = ModelingToolkit.SolverStepClock(t)
+
+@mtkmodel CounterSys begin
+    @variables begin
+        count(t) = 0
+        u(t) = 0
+    end
+    @equations begin
+        count(k + 1) ~ Sample(c)(u)
+    end
+end
+
+@mtkmodel FirstOrderSys begin
+    @variables begin
+        x(t) = 0
+    end
+    @equations begin
+        D(x) ~ -x + sin(t)
+    end
+end
+
+@mtkmodel FirstOrderWithStepCounter begin
+    @components begin
+        counter = CounterSys()
+        fo = FirstOrderSys()
+    end
+    @equations begin
+        counter.u ~ fo.x
+    end
+end
+
+@mtkbuild model = FirstOrderWithStepCounter()
+prob = ODEProblem(model, [], (0.0, 10.0))
+sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
+
+@test sol.prob.kwargs[:disc_saved_values][1].t == sol.t[1:2:end] # Test that the discrete-tiem system executed at every step of the continuous solver. The solver saves each time step twice, one state value before discrete affect and one after.
