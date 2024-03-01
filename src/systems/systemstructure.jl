@@ -635,6 +635,7 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
         var_eq_matching = pantelides!(state; finalize = false, kwargs...)
         sys = pantelides_reassemble(state, var_eq_matching)
         state = TearingState(sys)
+        sys, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
         sys = ModelingToolkit.dummy_derivative(sys, state; simplify, mm, check_consistency)
     else
         sys = ModelingToolkit.tearing(sys, state; simplify, mm, check_consistency)
