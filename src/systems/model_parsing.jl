@@ -162,7 +162,11 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs;
             Base.remove_linenums!(b)
             def, meta = parse_default(mod, b)
             var, def = parse_variable_def!(dict, mod, a, varclass, kwargs; def, type)
-            dict[varclass][getname(var)][:default] = def
+            if dict[varclass] isa Vector
+                dict[varclass][1][getname(var)][:default] = def
+            else
+                dict[varclass][getname(var)][:default] = def
+            end
             if meta !== nothing
                 for (type, key) in metatypes
                     if (mt = get(meta, key, nothing)) !== nothing
@@ -185,7 +189,6 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs;
                 for (type, key) in metatypes
                     if (mt = get(meta, key, nothing)) !== nothing
                         key == VariableConnectType && (mt = nameof(mt))
-                        # @info dict 164
                         if dict[varclass] isa Vector
                             dict[varclass][1][getname(var)][type] = mt
                         else
