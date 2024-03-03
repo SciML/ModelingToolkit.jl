@@ -210,7 +210,7 @@ resistor = getproperty(rc, :resistor; namespace = false)
     end
 
     kval = 5
-    @named model = MockModel(; b2 = 3, kval, cval = 1, func = identity)
+    @named model = MockModel(; b2 = [1, 3], kval, cval = 1, func = identity)
 
     @test lastindex(parameters(model)) == 29
 
@@ -235,7 +235,7 @@ resistor = getproperty(rc, :resistor; namespace = false)
     @test_throws KeyError getdefault(model.e)
     @test getdefault(model.f) == 3
     @test getdefault(model.i) == 4
-    @test all(getdefault.(scalarize(model.b2)) .== 3)
+    @test all(getdefault.(scalarize(model.b2)) .== [1, 3])
     @test all(getdefault.(scalarize(model.l)) .== 2)
     @test isequal(getdefault(model.j), model.jval)
     @test isequal(getdefault(model.k), model.kval)
@@ -255,7 +255,7 @@ end
             par4(t)::Float64 = 1 # converts 1 to 1.0 of Float64 type
             par5[1:3]::BigFloat
             par6(t)[1:3]::BigFloat
-            par7(t)[1:3]::BigFloat = 1.0, [description = "with description"]
+            par7(t)[1:3, 1:3]::BigFloat = 1.0, [description = "with description"]
         end
     end
 
@@ -267,7 +267,7 @@ end
     @test symtype(type_model.par4) == Float64
     @test symtype(type_model.par5[1]) == BigFloat
     @test symtype(type_model.par6[1]) == BigFloat
-    @test symtype(type_model.par7[1]) == BigFloat
+    @test symtype(type_model.par7[1, 1]) == BigFloat
 
     @test_throws TypeError TypeModel(; name = :throws, flag = 1)
     @test_throws TypeError TypeModel(; name = :throws, par0 = 1)
@@ -275,6 +275,37 @@ end
     @test_throws TypeError TypeModel(; name = :throws, par2 = 1.5)
     @test_throws TypeError TypeModel(; name = :throws, par3 = true)
     @test_throws TypeError TypeModel(; name = :throws, par4 = true)
+    # par7 should be an AbstractArray of BigFloat.
+    @test_throws MethodError TypeModel(; name = :throws, par7 = rand(Int, 3, 3))
+
+    # Test that array types are correctly added.
+    @named type_model2 = TypeModel(; par5 = rand(BigFloat, 3))
+    @test symtype(type_model2.par5[1]) == BigFloat
+
+    @named type_model3 = TypeModel(; par7 = rand(BigFloat, 3, 3))
+    @test symtype(type_model3.par7[1, 1]) == BigFloat
+
+    # Ensure that instances of models with conditional arrays with types can be created.
+    @mtkmodel TypeCondition begin
+        @structural_parameters begin
+            flag
+        end
+        if flag
+            @parameters begin
+                k_if(t)[1:3, 1:3]::Float64, [description = "when true"]
+            end
+        else
+            @parameters begin
+                k_else[1:3]::Float64, [description = "when false"]
+            end
+        end
+    end
+
+    @named type_condition1 = TypeCondition(; flag = true, k_if = rand(Float64, 3, 3))
+    @test symtype(type_condition1.k_if[1, 2]) == Float64
+
+    @named type_condition2 = TypeCondition(; flag = false, k_else = rand(Float64, 3))
+    @test symtype(type_condition2.k_else[1]) == Float64
 end
 
 @testset "Defaults of subcomponents MTKModel" begin
@@ -355,7 +386,7 @@ end
 
     @test A.isconnector == true
 
-    @test A.structure[:parameters] == Dict(:p => Dict())
+    @test A.structure[:parameters] == Dict(:p => Dict(:type => Real))
     @test A.structure[:extend] == [[:e], :extended_e, :E]
     @test A.structure[:equations] == ["e ~ 0"]
     @test A.structure[:kwargs] ==

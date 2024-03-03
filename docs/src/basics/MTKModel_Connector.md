@@ -140,7 +140,7 @@ julia> @mtkbuild model_c2 = ModelC(; p1 = 2.0)
   - Whenever components are created with `@named` macro, these can be accessed with `.` operator as `subcomponent_name.argname`
   - In the above example, as `k` of `model_a` isn't listed while defining the sub-component in `ModelC`, its default value can't be modified by users. While `k_array` can be set as:
 
-```julia
+```@example mtkmodel-example
 using ModelingToolkit: getdefault
 
 @mtkbuild model_c3 = ModelC(; model_a.k_array = [1.0, 2.0])
@@ -149,13 +149,6 @@ getdefault(model_c3.model_a.k_array[1])
 # 1.0
 getdefault(model_c3.model_a.k_array[2])
 # 2.0
-
-@mtkbuild model_c4 = ModelC(model_a.k_array = 3.0)
-
-getdefault(model_c4.model_a.k_array[1])
-# 3.0
-getdefault(model_c4.model_a.k_array[2])
-# 3.0
 ```
 
 #### `@equations` begin block
@@ -242,15 +235,16 @@ For example, the structure of `ModelC` is:
 
 ```julia
 julia> ModelC.structure
-Dict{Symbol, Any} with 7 entries:
-  :components            => [[:model_a, :ModelA]]
-  :variables             => Dict{Symbol, Dict{Symbol, Any}}(:v=>Dict(:default=>:v_var), :v_array=>Dict(:size=>(2, 3)))
+Dict{Symbol, Any} with 9 entries:
+  :components            => Any[Union{Expr, Symbol}[:model_a, :ModelA]]
+  :variables             => Dict{Symbol, Dict{Symbol, Any}}(:v=>Dict(:default=>:v_var, :type=>Real), :v_array=>Dict(:type=>Real, :size=>(2, 3)))
   :icon                  => URI("https://github.com/SciML/SciMLDocs/blob/main/docs/src/assets/logo.png")
   :kwargs                => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin), :v=>Dict{Symbol, Union{Nothing, Symbol}}(:value=>:v_var, :type=>Real), :v_array=>Dict(:value=>nothing, :type=>Real), :p1=>Dict(:value=>nothing))
   :structural_parameters => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin))
   :independent_variable  => t
+  :constants             => Dict{Symbol, Dict}(:c=>Dict(:value=>1))
   :extend                => Any[[:p2, :p1], Symbol("#mtkmodel__anonymous__ModelB"), :ModelB]
-  :equations             => ["model_a.k ~ f(v)"]
+  :equations             => Any["model_a.k ~ f(v)"]
 ```
 
 ### Using conditional statements
@@ -322,12 +316,12 @@ The conditional parts are reflected in the `structure`. For `BranchOutsideTheBlo
 
 ```julia
 julia> BranchOutsideTheBlock.structure
-Dict{Symbol, Any} with 5 entries:
-  :components            => Any[(:if, :flag, [[:sys1, :C]], Any[])]
+Dict{Symbol, Any} with 6 entries:
+  :components            => Any[(:if, :flag, Vector{Union{Expr, Symbol}}[[:sys1, :C]], Any[])]
   :kwargs                => Dict{Symbol, Dict}(:flag=>Dict{Symbol, Bool}(:value=>1))
   :structural_parameters => Dict{Symbol, Dict}(:flag=>Dict{Symbol, Bool}(:value=>1))
   :independent_variable  => t
-  :parameters            => Dict{Symbol, Dict{Symbol, Any}}(:a1=>Dict(:condition=>(:if, :flag, Dict{Symbol, Any}(:kwargs => Dict{Any, Any}(:a1 => nothing), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a1 => Dict())]), Dict{Symbol, Any}(:kwargs => Dict{Any, Any}(:a2 => nothing), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a2 => Dict())]))
+  :parameters            => Dict{Symbol, Dict{Symbol, Any}}(:a2 => Dict(:type => AbstractArray{Real}, :condition => (:if, :flag, Dict{Symbol, Any}(:kwargs => Dict{Any, Any}(:a1 => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real)), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a1 => Dict(:type => AbstractArray{Real}))]), Dict{Symbol, Any}(:variables => Any[Dict{Symbol, Dict{Symbol, Any}}()], :kwargs => Dict{Any, Any}(:a2 => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real)), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a2 => Dict(:type => AbstractArray{Real}))]))), :a1 => Dict(:type => AbstractArray{Real}, :condition => (:if, :flag, Dict{Symbol, Any}(:kwargs => Dict{Any, Any}(:a1 => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real)), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a1 => Dict(:type => AbstractArray{Real}))]), Dict{Symbol, Any}(:variables => Any[Dict{Symbol, Dict{Symbol, Any}}()], :kwargs => Dict{Any, Any}(:a2 => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real)), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a2 => Dict(:type => AbstractArray{Real}))]))))
   :equations             => Any[(:if, :flag, ["a1 ~ 0"], ["a2 ~ 0"])]
 ```
 
