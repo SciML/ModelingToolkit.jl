@@ -180,6 +180,23 @@ resistor = getproperty(rc, :resistor; namespace = false)
 
 @test length(equations(rc)) == 1
 
+@testset "Constants" begin
+    @mtkmodel PiModel begin
+        @constants begin
+            _p::Irrational = π, [description = "Value of Pi."]
+        end
+        @parameters begin
+            p = _p, [description = "Assign constant `_p` value."]
+        end
+    end
+
+    @named pi_model = PiModel()
+
+    @test typeof(ModelingToolkit.getdefault(pi_model.p)) <:
+          SymbolicUtils.BasicSymbolic{Irrational}
+    @test getdefault(getdefault(pi_model.p)) == π
+end
+
 @testset "Parameters and Structural parameters in various modes" begin
     @mtkmodel MockModel begin
         @parameters begin
@@ -400,13 +417,18 @@ end
 module PrecompilationTest
 push!(LOAD_PATH, joinpath(@__DIR__, "precompile_test"))
 using Unitful, Test, ModelParsingPrecompile, ModelingToolkit
+using ModelingToolkit: getdefault, scalarize
 @testset "Precompile packages with MTKModels" begin
     using ModelParsingPrecompile: ModelWithComponentArray
 
     @named model_with_component_array = ModelWithComponentArray()
 
-    @test ModelWithComponentArray.structure[:parameters][:R][:unit] == u"Ω"
+    @test ModelWithComponentArray.structure[:parameters][:r][:unit] == u"Ω"
     @test lastindex(parameters(model_with_component_array)) == 3
+
+    # Test the constant `k`. Manually k's value should be kept in sync here
+    # and the ModelParsingPrecompile.
+    @test all(getdefault.(getdefault.(scalarize(model_with_component_array.r))) .== 1)
 
     pop!(LOAD_PATH)
 end
