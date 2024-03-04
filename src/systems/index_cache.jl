@@ -160,10 +160,10 @@ end
 
 function SymbolicIndexingInterface.is_parameter(ic::IndexCache, sym)
     return check_index_map(ic.tunable_idx, sym) !== nothing ||
-        check_index_map(ic.discrete_idx, sym) !== nothing ||
-        check_index_map(ic.constant_idx, sym) !== nothing ||
-        check_index_map(ic.nonnumeric_idx, sym) !== nothing ||
-        check_index_map(ic.dependent_idx, sym) !== nothing
+           check_index_map(ic.discrete_idx, sym) !== nothing ||
+           check_index_map(ic.constant_idx, sym) !== nothing ||
+           check_index_map(ic.nonnumeric_idx, sym) !== nothing ||
+           check_index_map(ic.dependent_idx, sym) !== nothing
 end
 
 function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym)

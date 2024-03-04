@@ -38,7 +38,7 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
 
     for (sym, _) in p
         if istree(sym) && operation(sym) === getindex &&
-            first(arguments(sym)) in all_ps
+           first(arguments(sym)) in all_ps
             error("Scalarized parameter values ($sym) are not supported. Instead of `[p[1] => 1.0, p[2] => 2.0]` use `[p => [1.0, 2.0]]`")
         end
     end

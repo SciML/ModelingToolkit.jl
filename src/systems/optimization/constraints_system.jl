@@ -182,7 +182,8 @@ function calculate_hessian(sys::ConstraintsSystem; sparse = false, simplify = fa
     return hess
 end
 
-function generate_hessian(sys::ConstraintsSystem, vs = unknowns(sys), ps = full_parameters(sys);
+function generate_hessian(
+        sys::ConstraintsSystem, vs = unknowns(sys), ps = full_parameters(sys);
         sparse = false, simplify = false, kwargs...)
     hess = calculate_hessian(sys, sparse = sparse, simplify = simplify)
     p = reorder_parameters(sys, ps)

@@ -429,4 +429,4 @@ sol = solve(prob, Tsit5())
 @test sol.u[1] == [0.0, 1.0]
 
 # This should warn, but logging tests can't be marked as broken
-@test_logs prob=ODEProblem(simpsys, [], tspan, guesses = [x => 2.0])
+@test_logs prob = ODEProblem(simpsys, [], tspan, guesses = [x => 2.0])

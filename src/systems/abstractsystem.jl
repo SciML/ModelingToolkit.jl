@@ -352,8 +352,9 @@ function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym)
         return sym in 1:length(variable_symbols(sys))
     end
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        return is_variable(ic, sym) || istree(sym) && operation(sym) === getindex &&
-            is_variable(ic, first(arguments(sym)))
+        return is_variable(ic, sym) ||
+               istree(sym) && operation(sym) === getindex &&
+               is_variable(ic, first(arguments(sym)))
     end
     return any(isequal(sym), variable_symbols(sys)) ||
            hasname(sym) && is_variable(sys, getname(sym))
@@ -379,8 +380,8 @@ function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym)
         return if (idx = variable_index(ic, sym)) !== nothing
             idx
         elseif istree(sym) && operation(sym) === getindex &&
-            (idx = variable_index(ic, first(arguments(sym)))) !== nothing
-            idx[arguments(sym)[begin + 1:end]...]
+               (idx = variable_index(ic, first(arguments(sym)))) !== nothing
+            idx[arguments(sym)[(begin + 1):end]...]
         else
             nothing
         end
@@ -415,8 +416,9 @@ end
 function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
     sym = unwrap(sym)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        return is_parameter(ic, sym) || istree(sym) && operation(sym) === getindex &&
-            is_parameter(ic, first(arguments(sym)))
+        return is_parameter(ic, sym) ||
+               istree(sym) && operation(sym) === getindex &&
+               is_parameter(ic, first(arguments(sym)))
     end
     if unwrap(sym) isa Int
         return unwrap(sym) in 1:length(parameter_symbols(sys))
@@ -441,8 +443,8 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
         return if (idx = parameter_index(ic, sym)) !== nothing
             idx
         elseif istree(sym) && operation(sym) === getindex &&
-            (idx = parameter_index(ic, first(arguments(sym)))) !== nothing
-            ParameterIndex(idx.portion, (idx.idx..., arguments(sym)[begin+1:end]...))
+               (idx = parameter_index(ic, first(arguments(sym)))) !== nothing
+            ParameterIndex(idx.portion, (idx.idx..., arguments(sym)[(begin + 1):end]...))
         else
             nothing
         end
@@ -1701,7 +1703,6 @@ function linearization_function(sys::AbstractSystem, inputs,
     u0, _p, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
     ps = parameters(sys)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
-            @show p full_parameters(sys)
         p = MTKParameters(sys, p)
     else
         p = _p
