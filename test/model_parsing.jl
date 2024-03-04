@@ -1,7 +1,8 @@
 using ModelingToolkit, Test
-using ModelingToolkit: get_gui_metadata, get_systems, get_connector_type,
-                       get_ps, getdefault, getname, scalarize, symtype,
-                       VariableDescription, RegularConnector
+using ModelingToolkit: get_connector_type, get_defaults, get_gui_metadata,
+                       get_systems, get_ps, getdefault, getname, scalarize, symtype,
+                       VariableDescription,
+                       RegularConnector
 using URIs: URI
 using Distributions
 using DynamicQuantities, OrdinaryDiffEq
@@ -219,17 +220,26 @@ end
             j(t) = jval, [description = "j(t)"]
             k = kval, [description = "k"]
             l(t)[1:2, 1:3] = 2, [description = "l is more than 1D"]
+            n # test defaults with Number input
+            n2 # test defaults with Function input
         end
         @structural_parameters begin
             m = 1
             func
+        end
+        begin
+            g() = 5
+        end
+        @defaults begin
+            n => 1.0
+            n2 => g()
         end
     end
 
     kval = 5
     @named model = MockModel(; b2 = [1, 3], kval, cval = 1, func = identity)
 
-    @test lastindex(parameters(model)) == 29
+    @test lastindex(parameters(model)) == 31
 
     @test all(getdescription.([model.e2...]) .== "e2")
     @test all(getdescription.([model.h2...]) .== "h2(t)")
@@ -256,6 +266,10 @@ end
     @test all(getdefault.(scalarize(model.l)) .== 2)
     @test isequal(getdefault(model.j), model.jval)
     @test isequal(getdefault(model.k), model.kval)
+    @test get_defaults(model)[model.n] == 1.0
+    @test get_defaults(model)[model.n2] == 5
+
+    @test MockModel.structure[:defaults] == Dict(:n => 1.0, :n2 => "g()")
 end
 
 @testset "Type annotation" begin

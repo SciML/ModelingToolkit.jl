@@ -25,6 +25,7 @@ equations.
 
   - `@components`: for listing sub-components of the system
   - `@constants`: for declaring constants
+  - `@defaults`: for passing `defaults` to ODESystem
   - `@equations`: for the list of equations
   - `@extend`: for extending a base system and unpacking its unknowns
   - `@icon` : for embedding the model icon
@@ -66,6 +67,7 @@ end
     @variables begin
         v(t) = v_var
         v_array(t)[1:2, 1:3]
+        v_for_defaults(t)
     end
     @extend ModelB(; p1)
     @components begin
@@ -78,6 +80,9 @@ end
     end
     @equations begin
         model_a.k ~ f(v)
+    end
+    @defaults begin
+        v_for_defaults => 2.0
     end
 end
 ```
@@ -172,6 +177,11 @@ getdefault(model_c3.model_a.k_array[2])
 
   - List all the equations here
 
+#### `@defaults` begin block
+
+  - Default values can be passed as pairs.
+  - This is equivalent to passing `defaults` argument to `ODESystem`.
+
 #### A begin block
 
   - Any other Julia operations can be included with dedicated begin blocks.
@@ -239,6 +249,7 @@ end
 
   - `:components`: The list of sub-components in the form of [[name, sub_component_name],...].
   - `:constants`: Dictionary of constants mapped to its metadata.
+  - `:defaults`: Dictionary of variables and default values specified in the `@defaults`.
   - `:extend`: The list of extended unknowns, name given to the base system, and name of the base system.
   - `:structural_parameters`: Dictionary of structural parameters mapped to their metadata.
   - `:parameters`: Dictionary of symbolic parameters mapped to their metadata. For
@@ -253,15 +264,16 @@ For example, the structure of `ModelC` is:
 
 ```julia
 julia> ModelC.structure
-Dict{Symbol, Any} with 9 entries:
+Dict{Symbol, Any} with 10 entries:
   :components            => Any[Union{Expr, Symbol}[:model_a, :ModelA], Union{Expr, Symbol}[:model_array_a, :ModelA, :(1:N)], Union{Expr, Symbol}[:model_array_b, :ModelA, :(1:N)]]
-  :variables             => Dict{Symbol, Dict{Symbol, Any}}(:v=>Dict(:default=>:v_var, :type=>Real), :v_array=>Dict(:type=>Real, :size=>(2, 3)))
+  :variables             => Dict{Symbol, Dict{Symbol, Any}}(:v=>Dict(:default=>:v_var, :type=>Real), :v_array=>Dict(:type=>Real, :size=>(2, 3)), :v_for_defaults=>Dict(:type=>Real))
   :icon                  => URI("https://github.com/SciML/SciMLDocs/blob/main/docs/src/assets/logo.png")
-  :kwargs                => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin), :N=>Dict(:value=>2), :v=>Dict{Symbol, Any}(:value=>:v_var, :type=>Real), :v_array=>Dict{Symbol, Union{Nothing, UnionAll}}(:value=>nothing, :type=>AbstractArray{Real}), :p1=>Dict(:value=>nothing))
+  :kwargs                => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin), :N=>Dict(:value=>2), :v=>Dict{Symbol, Any}(:value=>:v_var, :type=>Real), :v_array=>Dict{Symbol, Union{Nothing, UnionAll}}(:value=>nothing, :type=>AbstractArray{Real}), :v_for_defaults=>Dict{Symbol, Union{Nothing, DataType}}(:value=>nothing, :type=>Real), :p1=>Dict(:value=>nothing))
   :structural_parameters => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin), :N=>Dict(:value=>2))
   :independent_variable  => t
   :constants             => Dict{Symbol, Dict}(:c=>Dict{Symbol, Any}(:value=>1, :type=>Int64, :description=>"Example constant."))
   :extend                => Any[[:p2, :p1], Symbol("#mtkmodel__anonymous__ModelB"), :ModelB]
+  :defaults              => Dict{Symbol, Any}(:v_for_defaults=>2.0)
   :equations             => Any["model_a.k ~ f(v)"]
 ```
 
@@ -326,6 +338,9 @@ used inside the if-elseif-else statements.
         @equations begin
             a2 ~ 0
         end
+    end
+    @defaults begin
+        a1 => 10
     end
 end
 ```
