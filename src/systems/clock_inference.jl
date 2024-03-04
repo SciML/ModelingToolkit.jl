@@ -95,6 +95,7 @@ function infer_clocks!(ci::ClockInference)
         isempty(idxs) && continue
         if !allequal(var_domain[i] for i in idxs)
             display(fullvars[c′])
+            display(var_domain)
             throw(ClockInferenceException("Clocks are not consistent in connected component $(fullvars[c′])"))
         end
         vd = var_domain[first(idxs)]

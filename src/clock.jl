@@ -147,6 +147,27 @@ function Base.:(==)(c1::SolverStepClock, c2::SolverStepClock)
     ((c1.t === nothing || c2.t === nothing) || isequal(c1.t, c2.t))
 end
 
+
+"""
+    EventClock(t)
+    EventClock(t, root_equation)
+
+A clock that ticks each time the continuously evaluated `root_equation` is true. This clock is used to trigger the exection of a discrete system when a continuous event occurs.
+"""
+struct EventClock <: AbstractClock
+    "Independent variable"
+    t::Union{Nothing, Symbolic}
+    cond::Any
+    EventClock(t::Union{Num, Symbolic}, ex) = new(value(t), ex)
+end
+
+sampletime(c) = nothing
+Base.hash(c::EventClock, seed::UInt) = hash(c.cond, seed ⊻ 0x253d7b9a18874b91)
+function Base.:(==)(c1::EventClock, c2::EventClock)
+    ((c1.t === nothing || c2.t === nothing) || isequal(c1.t, c2.t)) &&
+        isequal(c1.cond, c2.cond)
+end
+
 struct IntegerSequence <: AbstractClock
     t::Union{Nothing, Symbolic}
     IntegerSequence(t::Union{Num, Symbolic}) = new(value(t))

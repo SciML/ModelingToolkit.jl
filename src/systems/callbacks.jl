@@ -470,7 +470,6 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = unknow
     end
 
     rhss = map(x -> x.rhs, eqs)
-    root_eq_vars = unique(collect(Iterators.flatten(map(ModelingToolkit.vars, rhss))))
 
     rf_oop, rf_ip = generate_custom_function(sys, rhss, dvs, ps; expression = Val{false},
         kwargs...)
