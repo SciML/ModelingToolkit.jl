@@ -230,7 +230,7 @@ end
 ```
 
 !!! note
-
+    
     For more examples of usage, checkout [ModelingToolkitStandardLibrary.jl](https://github.com/SciML/ModelingToolkitStandardLibrary.jl/)
 
 ## More on `Model.structure`

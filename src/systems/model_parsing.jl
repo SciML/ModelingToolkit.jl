@@ -844,9 +844,9 @@ function _parse_components!(body, kwargs)
             arg.args[2] = b
             expr = :(@named $arg)
             push!(comp_names, a)
-                if (isa(b.args[1], Symbol) || Meta.isexpr(b.args[1], :.))
+            if (isa(b.args[1], Symbol) || Meta.isexpr(b.args[1], :.))
                 push!(comps, [a, b.args[1]])
-                end
+            end
         end
         _ => error("Couldn't parse the component body: $arg")
     end
