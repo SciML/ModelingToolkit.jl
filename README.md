@@ -46,7 +46,7 @@ eqs = [D(D(x)) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-@mtkbuild sys = ODESystem(eqs,t)
+@mtkbuild sys = ODESystem(eqs, t)
 
 u0 = [D(x) => 2.0,
     x => 1.0,
