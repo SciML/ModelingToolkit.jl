@@ -1,6 +1,10 @@
 # Clocks and Sampled-Data Systems
 A sampled-data system contains both continuous-time and discrete-time components, such as a continuous-time plant model and a discrete-time control system. ModelingToolkit supports the modeling and simulation of sampled-data systems by means of *clocks*.
 
+
+!!! danger "Experimental"
+    The sampled-data interface is currently experimental and at any time subject to breaking changes **not** respecting semantic versioning. 
+
 A clock can be seen as an *even source*, i.e., when the clock ticks, an even is generated. In response to the event the discrete-time logic is executed, for example, a control signal is computed. For basic modeling of sampled-data systems, the user does not have to interact with clocks explicitly, instead, the modeling is performed using the operators
 - [`Sample`](@ref)
 - [`Hold`](@ref)
