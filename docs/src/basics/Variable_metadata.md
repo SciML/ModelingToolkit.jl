@@ -10,6 +10,7 @@ Descriptive strings can be attached to variables using the `[description = "desc
 
 ```@example metadata
 using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables u [description = "This is my input"]
 getdescription(u)
 ```
@@ -17,7 +18,6 @@ getdescription(u)
 When variables with descriptions are present in systems, they will be printed when the system is shown in the terminal:
 
 ```@example metadata
-@parameters t
 @variables u(t) [description = "A short description of u"]
 @parameters p [description = "A description of p"]
 @named sys = ODESystem([u ~ p], t)
@@ -50,8 +50,9 @@ current in a resistor. These variables sum up to zero in connections.
 
 ```@example connect
 using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@variables t, i(t) [connect = Flow]
+@variables i(t) [connect = Flow]
 @variables k(t) [connect = Stream]
 ```
 
@@ -61,6 +62,8 @@ Designate a variable as either an input or an output using the following
 
 ```@example metadata
 using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
 @variables u [input = true]
 isinput(u)
 ```
@@ -136,13 +139,11 @@ For systems that contain parameters with metadata like described above, have som
 In the example below, we define a system with tunable parameters and extract bounds vectors
 
 ```@example metadata
-@parameters t
-Dₜ = Differential(t)
 @variables x(t)=0 u(t)=0 [input = true] y(t)=0 [output = true]
 @parameters T [tunable = true, bounds = (0, Inf)]
 @parameters k [tunable = true, bounds = (0, Inf)]
-eqs = [Dₜ(x) ~ (-x + k * u) / T # A first-order system with time constant T and gain k
-    y ~ x]
+eqs = [D(x) ~ (-x + k * u) / T # A first-order system with time constant T and gain k
+       y ~ x]
 sys = ODESystem(eqs, t, name = :tunable_first_order)
 ```
 
@@ -158,6 +159,9 @@ lb, ub = getbounds(p) # operating on a vector, we get lower and upper bound vect
 b = getbounds(sys) # Operating on the system, we get a dict
 ```
 
+See also: [`ModelingToolkit.dump_variable_metadata`](@ref), [`ModelingToolkit.dump_parameters`](@ref),
+[`ModelingToolkit.dump_unknowns`](@ref).
+
 ## Index
 
 ```@index
@@ -170,4 +174,10 @@ Pages = ["Variable_metadata.md"]
 Modules = [ModelingToolkit]
 Pages = ["variables.jl"]
 Private = false
+```
+
+```@docs
+ModelingToolkit.dump_variable_metadata
+ModelingToolkit.dump_parameters
+ModelingToolkit.dump_unknowns
 ```

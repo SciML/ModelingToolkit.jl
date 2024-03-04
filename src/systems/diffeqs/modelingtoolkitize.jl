@@ -76,7 +76,6 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
     else
         Dict()
     end
-
     de = ODESystem(eqs, t, sts, params,
         defaults = merge(default_u0, default_p);
         name = gensym(:MTKizedODE),
@@ -154,6 +153,18 @@ function define_params(p::NamedTuple)
     NamedTuple(x => toparam(variable(x)) for x in keys(p))
 end
 
+function define_params(p::MTKParameters)
+    bufs = (p...,)
+    i = 1
+    ps = []
+    for buf in bufs
+        for _ in buf
+            push!(ps, toparam(variable(:α, i)))
+        end
+    end
+    return identity.(ps)
+end
+
 """
 $(TYPEDSIGNATURES)
 
@@ -161,7 +172,7 @@ Generate `SDESystem`, dependent variables, and parameters from an `SDEProblem`.
 """
 function modelingtoolkitize(prob::DiffEqBase.SDEProblem; kwargs...)
     prob.f isa DiffEqBase.AbstractParameterizedFunction &&
-        return (prob.f.sys, prob.f.sys.states, prob.f.sys.ps)
+        return (prob.f.sys, prob.f.sys.unknowns, prob.f.sys.ps)
     @parameters t
     p = prob.p
     has_p = !(p isa Union{DiffEqBase.NullParameters, Nothing})
@@ -171,6 +182,7 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem; kwargs...)
     vars = prob.u0 isa Number ? _vars : ArrayInterface.restructure(prob.u0, _vars)
     params = if has_p
         _params = define_params(p)
+        p isa MTKParameters ? _params :
         p isa Number ? _params[1] :
         (p isa Tuple || p isa NamedTuple ? _params :
          ArrayInterface.restructure(p, _params))

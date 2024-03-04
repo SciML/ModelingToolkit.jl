@@ -61,12 +61,12 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """The independent variable, usually time."""
     iv::Any
     """The dependent variables, representing the state of the system.  Must not contain the independent variable."""
-    states::Vector
+    unknowns::Vector
     """The parameters of the system. Must not contain the independent variable."""
     ps::Vector
     """Array variables."""
     var_to_name::Any
-    """Observed states."""
+    """Observed variables."""
     observed::Vector{Equation}
     """The name of the system."""
     name::Symbol
@@ -86,9 +86,14 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     analog to `SciMLBase.DiscreteCallback` that executes an affect when a given condition is
     true at the end of an integration step. Note, one must make sure to call
     `reset_aggregated_jumps!(integrator)` if using a custom affect function that changes any
-    state value or parameter.
+    unknown value or parameter.
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
+    """
+    A mapping from dependent parameters to expressions describing how they are calculated from
+    other parameters.
+    """
+    parameter_dependencies::Union{Nothing, Dict}
     """
     Metadata for the system, to be used by downstream packages.
     """
@@ -101,25 +106,35 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     If a model `sys` is complete, then `sys.x` no longer performs namespacing.
     """
     complete::Bool
+    """
+    Cached data for fast symbolic indexing.
+    """
+    index_cache::Union{Nothing, IndexCache}
 
-    function JumpSystem{U}(tag, ap::U, iv, states, ps, var_to_name, observed, name, systems,
-            defaults, connector_type, devents,
+    function JumpSystem{U}(tag, ap::U, iv, unknowns, ps, var_to_name, observed, name,
+            systems,
+            defaults, connector_type, devents, parameter_dependencies,
             metadata = nothing, gui_metadata = nothing,
-            complete = false;
+            complete = false, index_cache = nothing;
             checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
         if checks == true || (checks & CheckComponents) > 0
-            check_variables(states, iv)
+            check_variables(unknowns, iv)
             check_parameters(ps, iv)
         end
         if checks == true || (checks & CheckUnits) > 0
-            all_dimensionless([states; ps; iv]) || check_units(ap, iv)
+            u = __get_unit_type(unknowns, ps, iv)
+            check_units(u, ap, iv)
         end
-        new{U}(tag, ap, iv, states, ps, var_to_name, observed, name, systems, defaults,
-            connector_type, devents, metadata, gui_metadata, complete)
+        new{U}(tag, ap, iv, unknowns, ps, var_to_name, observed, name, systems, defaults,
+            connector_type, devents, parameter_dependencies, metadata, gui_metadata,
+            complete, index_cache)
     end
 end
+function JumpSystem(tag, ap, iv, states, ps, var_to_name, args...; kwargs...)
+    JumpSystem{typeof(ap)}(tag, ap, iv, states, ps, var_to_name, args...; kwargs...)
+end
 
-function JumpSystem(eqs, iv, states, ps;
+function JumpSystem(eqs, iv, unknowns, ps;
         observed = Equation[],
         systems = JumpSystem[],
         default_u0 = Dict(),
@@ -130,12 +145,13 @@ function JumpSystem(eqs, iv, states, ps;
         checks = true,
         continuous_events = nothing,
         discrete_events = nothing,
+        parameter_dependencies = nothing,
         metadata = nothing,
         gui_metadata = nothing,
         kwargs...)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
-    eqs = scalarize(eqs)
+    eqs = scalarize.(eqs)
     sysnames = nameof.(systems)
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
@@ -153,25 +169,26 @@ function JumpSystem(eqs, iv, states, ps;
         end
     end
     if !(isempty(default_u0) && isempty(default_p))
-        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
+        Base.depwarn(
+            "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
             :JumpSystem, force = true)
     end
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
-    states, ps = value.(states), value.(ps)
+    unknowns, ps = value.(unknowns), value.(ps)
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, states)
+    process_variables!(var_to_name, defaults, unknowns)
     process_variables!(var_to_name, defaults, ps)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
     (continuous_events === nothing) ||
         error("JumpSystems currently only support discrete events.")
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
-
+    parameter_dependencies, ps = process_parameter_dependencies(parameter_dependencies, ps)
     JumpSystem{typeof(ap)}(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-        ap, value(iv), states, ps, var_to_name, observed, name, systems,
-        defaults, connector_type, disc_callbacks, metadata, gui_metadata,
-        checks = checks)
+        ap, value(iv), unknowns, ps, var_to_name, observed, name, systems,
+        defaults, connector_type, disc_callbacks, parameter_dependencies,
+        metadata, gui_metadata, checks = checks)
 end
 
 function generate_rate_function(js::JumpSystem, rate)
@@ -180,7 +197,8 @@ function generate_rate_function(js::JumpSystem, rate)
         csubs = Dict(c => getdefault(c) for c in consts)
         rate = substitute(rate, csubs)
     end
-    rf = build_function(rate, states(js), parameters(js),
+    p = reorder_parameters(js, full_parameters(js))
+    rf = build_function(rate, unknowns(js), p...,
         get_iv(js),
         expression = Val{true})
 end
@@ -191,81 +209,93 @@ function generate_affect_function(js::JumpSystem, affect, outputidxs)
         csubs = Dict(c => getdefault(c) for c in consts)
         affect = substitute(affect, csubs)
     end
-    compile_affect(affect, js, states(js), parameters(js); outputidxs = outputidxs,
+    compile_affect(affect, js, unknowns(js), full_parameters(js); outputidxs = outputidxs,
         expression = Val{true}, checkvars = false)
 end
 
-function assemble_vrj(js, vrj, statetoid)
-    rate = drop_expr(@RuntimeGeneratedFunction(generate_rate_function(js, vrj.rate)))
+function assemble_vrj(js, vrj, unknowntoid)
+    _rate = drop_expr(@RuntimeGeneratedFunction(generate_rate_function(js, vrj.rate)))
+    rate(u, p, t) = _rate(u, p, t)
+    rate(u, p::MTKParameters, t) = _rate(u, p..., t)
+
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
-    outputidxs = [statetoid[var] for var in outputvars]
+    outputidxs = [unknowntoid[var] for var in outputvars]
     affect = drop_expr(@RuntimeGeneratedFunction(generate_affect_function(js, vrj.affect!,
         outputidxs)))
     VariableRateJump(rate, affect)
 end
 
-function assemble_vrj_expr(js, vrj, statetoid)
+function assemble_vrj_expr(js, vrj, unknowntoid)
     rate = generate_rate_function(js, vrj.rate)
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
-    outputidxs = ((statetoid[var] for var in outputvars)...,)
+    outputidxs = ((unknowntoid[var] for var in outputvars)...,)
     affect = generate_affect_function(js, vrj.affect!, outputidxs)
     quote
-        rate = $rate
+        _rate = $rate
+        rate(u, p, t) = _rate(u, p, t)
+        rate(u, p::MTKParameters, t) = _rate(u, p..., t)
+
         affect = $affect
         VariableRateJump(rate, affect)
     end
 end
 
-function assemble_crj(js, crj, statetoid)
-    rate = drop_expr(@RuntimeGeneratedFunction(generate_rate_function(js, crj.rate)))
+function assemble_crj(js, crj, unknowntoid)
+    _rate = drop_expr(@RuntimeGeneratedFunction(generate_rate_function(js, crj.rate)))
+    rate(u, p, t) = _rate(u, p, t)
+    rate(u, p::MTKParameters, t) = _rate(u, p..., t)
+
     outputvars = (value(affect.lhs) for affect in crj.affect!)
-    outputidxs = [statetoid[var] for var in outputvars]
+    outputidxs = [unknowntoid[var] for var in outputvars]
     affect = drop_expr(@RuntimeGeneratedFunction(generate_affect_function(js, crj.affect!,
         outputidxs)))
     ConstantRateJump(rate, affect)
 end
 
-function assemble_crj_expr(js, crj, statetoid)
+function assemble_crj_expr(js, crj, unknowntoid)
     rate = generate_rate_function(js, crj.rate)
     outputvars = (value(affect.lhs) for affect in crj.affect!)
-    outputidxs = ((statetoid[var] for var in outputvars)...,)
+    outputidxs = ((unknowntoid[var] for var in outputvars)...,)
     affect = generate_affect_function(js, crj.affect!, outputidxs)
     quote
-        rate = $rate
+        _rate = $rate
+        rate(u, p, t) = _rate(u, p, t)
+        rate(u, p::MTKParameters, t) = _rate(u, p..., t)
+
         affect = $affect
         ConstantRateJump(rate, affect)
     end
 end
 
-function numericrstoich(mtrs::Vector{Pair{V, W}}, statetoid) where {V, W}
+function numericrstoich(mtrs::Vector{Pair{V, W}}, unknowntoid) where {V, W}
     rs = Vector{Pair{Int, W}}()
     for (wspec, stoich) in mtrs
         spec = value(wspec)
         if !istree(spec) && _iszero(spec)
             push!(rs, 0 => stoich)
         else
-            push!(rs, statetoid[spec] => stoich)
+            push!(rs, unknowntoid[spec] => stoich)
         end
     end
     sort!(rs)
     rs
 end
 
-function numericnstoich(mtrs::Vector{Pair{V, W}}, statetoid) where {V, W}
+function numericnstoich(mtrs::Vector{Pair{V, W}}, unknowntoid) where {V, W}
     ns = Vector{Pair{Int, W}}()
     for (wspec, stoich) in mtrs
         spec = value(wspec)
         !istree(spec) && _iszero(spec) &&
             error("Net stoichiometry can not have a species labelled 0.")
-        push!(ns, statetoid[spec] => stoich)
+        push!(ns, unknowntoid[spec] => stoich)
     end
     sort!(ns)
 end
 
 # assemble a numeric MassActionJump from a MT symbolics MassActionJumps
-function assemble_maj(majv::Vector{U}, statetoid, pmapper) where {U <: MassActionJump}
-    rs = [numericrstoich(maj.reactant_stoch, statetoid) for maj in majv]
-    ns = [numericnstoich(maj.net_stoch, statetoid) for maj in majv]
+function assemble_maj(majv::Vector{U}, unknowntoid, pmapper) where {U <: MassActionJump}
+    rs = [numericrstoich(maj.reactant_stoch, unknowntoid) for maj in majv]
+    ns = [numericnstoich(maj.net_stoch, unknowntoid) for maj in majv]
     MassActionJump(rs, ns; param_mapper = pmapper, nocopy = true)
 end
 
@@ -288,7 +318,7 @@ using DiffEqBase, JumpProcesses
 u₀map = [S => 999, I => 1, R => 0]
 parammap = [β => 0.1 / 1000, γ => 0.01]
 tspan = (0.0, 250.0)
-dprob = DiscreteProblem(js, u₀map, tspan, parammap)
+dprob = DiscreteProblem(complete(js), u₀map, tspan, parammap)
 ```
 """
 function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing},
@@ -296,7 +326,10 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
         checkbounds = false,
         use_union = true,
         kwargs...)
-    dvs = states(sys)
+    if !iscomplete(sys)
+        error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
+    end
+    dvs = unknowns(sys)
     ps = parameters(sys)
 
     defs = defaults(sys)
@@ -304,7 +337,11 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
     defs = mergedefaults(defs, u0map, dvs)
 
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        p = MTKParameters(sys, parammap)
+    else
+        p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    end
 
     f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
 
@@ -315,14 +352,11 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
             obs = get!(dict, value(obsvar)) do
                 build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
             end
-            obs(u, p, t)
+            p isa MTKParameters ? obs(u, p..., t) : obs(u, p, t)
         end
     end
 
-    df = DiscreteFunction{true, true}(f; syms = Symbol.(states(sys)),
-        indepsym = Symbol(get_iv(sys)),
-        paramsyms = Symbol.(ps), sys = sys,
-        observed = observedfun)
+    df = DiscreteFunction{true, true}(f; sys = sys, observed = observedfun)
     DiscreteProblem(df, u0, tspan, p; kwargs...)
 end
 
@@ -343,7 +377,7 @@ using DiffEqBase, JumpProcesses
 u₀map = [S => 999, I => 1, R => 0]
 parammap = [β => 0.1 / 1000, γ => 0.01]
 tspan = (0.0, 250.0)
-dprob = DiscreteProblem(js, u₀map, tspan, parammap)
+dprob = DiscreteProblem(complete(js), u₀map, tspan, parammap)
 ```
 """
 struct DiscreteProblemExpr{iip} end
@@ -352,21 +386,27 @@ function DiscreteProblemExpr{iip}(sys::JumpSystem, u0map, tspan::Union{Tuple, No
         parammap = DiffEqBase.NullParameters();
         use_union = false,
         kwargs...) where {iip}
-    dvs = states(sys)
+    if !iscomplete(sys)
+        error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblemExpr`")
+    end
+    dvs = unknowns(sys)
     ps = parameters(sys)
     defs = defaults(sys)
 
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        p = MTKParameters(sys, parammap)
+    else
+        p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    end
     # identity function to make syms works
     quote
         f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
         u0 = $u0
         p = $p
+        sys = $sys
         tspan = $tspan
-        df = DiscreteFunction{true, true}(f; syms = $(Symbol.(states(sys))),
-            indepsym = $(Symbol(get_iv(sys))),
-            paramsyms = $(Symbol.(parameters(sys))))
+        df = DiscreteFunction{true, true}(f; sys = sys)
         DiscreteProblem(df, u0, tspan, p)
     end
 end
@@ -381,13 +421,16 @@ Generates a JumpProblem from a JumpSystem.
 Continuing the example from the [`DiscreteProblem`](@ref) definition:
 
 ```julia
-jprob = JumpProblem(js, dprob, Direct())
+jprob = JumpProblem(complete(js), dprob, Direct())
 sol = solve(jprob, SSAStepper())
 ```
 """
 function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = nothing,
         kwargs...)
-    statetoid = Dict(value(state) => i for (i, state) in enumerate(states(js)))
+    if !iscomplete(js)
+        error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `JumpProblem`")
+    end
+    unknowntoid = Dict(value(unknown) => i for (i, unknown) in enumerate(unknowns(js)))
     eqs = equations(js)
     invttype = prob.tspan[1] === nothing ? Float64 : typeof(1 / prob.tspan[2])
 
@@ -395,9 +438,9 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = 
     p = (prob.p isa DiffEqBase.NullParameters || prob.p === nothing) ? Num[] : prob.p
 
     majpmapper = JumpSysMajParamMapper(js, p; jseqs = eqs, rateconsttype = invttype)
-    majs = isempty(eqs.x[1]) ? nothing : assemble_maj(eqs.x[1], statetoid, majpmapper)
-    crjs = ConstantRateJump[assemble_crj(js, j, statetoid) for j in eqs.x[2]]
-    vrjs = VariableRateJump[assemble_vrj(js, j, statetoid) for j in eqs.x[3]]
+    majs = isempty(eqs.x[1]) ? nothing : assemble_maj(eqs.x[1], unknowntoid, majpmapper)
+    crjs = ConstantRateJump[assemble_crj(js, j, unknowntoid) for j in eqs.x[2]]
+    vrjs = VariableRateJump[assemble_vrj(js, j, unknowntoid) for j in eqs.x[3]]
     ((prob isa DiscreteProblem) && !isempty(vrjs)) &&
         error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")
     jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, majs)
@@ -423,7 +466,7 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = 
         callback = cbs, kwargs...)
 end
 
-### Functions to determine which states a jump depends on
+### Functions to determine which unknowns a jump depends on
 function get_variables!(dep, jump::Union{ConstantRateJump, VariableRateJump}, variables)
     jr = value(jump.rate)
     (jr isa Symbolic) && get_variables!(dep, jr, variables)
@@ -439,20 +482,20 @@ function get_variables!(dep, jump::MassActionJump, variables)
     dep
 end
 
-### Functions to determine which states are modified by a given jump
-function modified_states!(mstates, jump::Union{ConstantRateJump, VariableRateJump}, sts)
+### Functions to determine which unknowns are modified by a given jump
+function modified_unknowns!(munknowns, jump::Union{ConstantRateJump, VariableRateJump}, sts)
     for eq in jump.affect!
         st = eq.lhs
-        any(isequal(st), sts) && push!(mstates, st)
+        any(isequal(st), sts) && push!(munknowns, st)
     end
-    mstates
+    munknowns
 end
 
-function modified_states!(mstates, jump::MassActionJump, sts)
-    for (state, stoich) in jump.net_stoch
-        any(isequal(state), sts) && push!(mstates, state)
+function modified_unknowns!(munknowns, jump::MassActionJump, sts)
+    for (unknown, stoich) in jump.net_stoch
+        any(isequal(unknown), sts) && push!(munknowns, unknown)
     end
-    mstates
+    munknowns
 end
 
 ###################### parameter mapper ###########################
@@ -465,8 +508,8 @@ end
 function JumpSysMajParamMapper(js::JumpSystem, p; jseqs = nothing, rateconsttype = Float64)
     eqs = (jseqs === nothing) ? equations(js) : jseqs
     paramexprs = [maj.scaled_rates for maj in eqs.x[1]]
-    psyms = parameters(js)
-    paramdict = Dict(value(k) => value(v) for (k, v) in zip(psyms, p))
+    psyms = reduce(vcat, reorder_parameters(js, parameters(js)))
+    paramdict = Dict(value(k) => value(v) for (k, v) in zip(psyms, vcat(p...)))
     JumpSysMajParamMapper{typeof(paramexprs), typeof(psyms), rateconsttype}(paramexprs,
         psyms,
         paramdict)
@@ -475,6 +518,15 @@ end
 function updateparams!(ratemap::JumpSysMajParamMapper{U, V, W},
         params) where {U <: AbstractArray, V <: AbstractArray, W}
     for (i, p) in enumerate(params)
+        sympar = ratemap.sympars[i]
+        ratemap.subdict[sympar] = p
+    end
+    nothing
+end
+
+function updateparams!(ratemap::JumpSysMajParamMapper{U, V, W},
+        params::MTKParameters) where {U <: AbstractArray, V <: AbstractArray, W}
+    for (i, p) in enumerate(ArrayPartition(params...))
         sympar = ratemap.sympars[i]
         ratemap.subdict[sympar] = p
     end
@@ -490,7 +542,7 @@ end
 function (ratemap::JumpSysMajParamMapper{
         U,
         V,
-        W,
+        W
 })(params) where {U <: AbstractArray,
         V <: AbstractArray, W}
     updateparams!(ratemap, params)

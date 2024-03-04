@@ -24,12 +24,11 @@ pnew = varmap_to_vars([β => 3.0, c => 10.0, γ => 2.0], parameters(sys))
 
 ## How do I handle `if` statements in my symbolic forms?
 
-For statements that are in the `if then else` form, use `IfElse.ifelse` from the
-[IfElse.jl](https://github.com/SciML/IfElse.jl) package to represent the code in a
-functional form. For handling direct `if` statements, you can use equivalent boolean
-mathematical expressions. For example, `if x > 0 ...` can be implemented as just
-`(x > 0) * `, where if `x <= 0` then the boolean will evaluate to `0` and thus the
-term will be excluded from the model.
+For statements that are in the `if then else` form, use `Base.ifelse` from the
+to represent the code in a functional form. For handling direct `if` statements,
+you can use equivalent boolean mathematical expressions. For example, `if x > 0 ...`
+can be implemented as just `(x > 0) * `, where if `x <= 0` then the boolean will
+evaluate to `0` and thus the term will be excluded from the model.
 
 ## ERROR: TypeError: non-boolean (Num) used in boolean context?
 
@@ -102,9 +101,10 @@ end
 This error can come up after running `structural_simplify` on a system that generates dummy derivatives (i.e. variables with `ˍt`).  For example, here even though all the variables are defined with initial values, the `ODEProblem` generation will throw an error that defaults are missing from the variable map.
 
 ```
-@variables t
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
 sts = @variables x1(t)=0.0 x2(t)=0.0 x3(t)=0.0 x4(t)=0.0
-D = Differential(t)
 eqs = [x1 + x2 + 1 ~ 0
        x1 + x2 + x3 + 2 ~ 0
        x1 + D(x3) + x4 + 3 ~ 0
@@ -130,18 +130,17 @@ julia> ModelingToolkit.missing_variable_defaults(sys, [1,2,3])
  x3ˍtt(t) => 3
 ```
 
-## Change the state vector type
+## Change the unknown variable vector type
 
 Use the `u0_constructor` keyword argument to map an array to the desired
 container type. For example:
 
 ```
 using ModelingToolkit, StaticArrays
-@variables t
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
 sts = @variables x1(t)=0.0
-D = Differential(t)
 eqs = [D(x1) ~ 1.1 * x1]
-@named sys = ODESystem(eqs, t)
-sys = structural_simplify(sys)
+@mtkbuild sys = ODESystem(eqs, t)
 prob = ODEProblem{false}(sys, [], (0,1); u0_constructor = x->SVector(x...))
 ```

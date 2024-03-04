@@ -15,6 +15,69 @@ Symbolics.option_to_metadata_type(::Val{:irreducible}) = VariableIrreducible
 Symbolics.option_to_metadata_type(::Val{:state_priority}) = VariableStatePriority
 Symbolics.option_to_metadata_type(::Val{:misc}) = VariableMisc
 
+"""
+    dump_variable_metadata(var)
+
+Return all the metadata associated with symbolic variable `var` as a `NamedTuple`.
+
+```@example
+using ModelingToolkit
+
+@parameters p::Int [description = "My description", bounds = (0.5, 1.5)]
+ModelingToolkit.dump_variable_metadata(p)
+```
+"""
+function dump_variable_metadata(var)
+    uvar = unwrap(var)
+    vartype, name = get(uvar.metadata, VariableSource, (:unknown, :unknown))
+    shape = Symbolics.shape(var)
+    if shape == ()
+        shape = nothing
+    end
+    unit = get(uvar.metadata, VariableUnit, nothing)
+    connect = get(uvar.metadata, VariableConnectType, nothing)
+    noise = get(uvar.metadata, VariableNoiseType, nothing)
+    input = isinput(uvar) || nothing
+    output = isoutput(uvar) || nothing
+    irreducible = get(uvar.metadata, VariableIrreducible, nothing)
+    state_priority = get(uvar.metadata, VariableStatePriority, nothing)
+    misc = get(uvar.metadata, VariableMisc, nothing)
+    bounds = hasbounds(uvar) ? getbounds(uvar) : nothing
+    desc = getdescription(var)
+    if desc == ""
+        desc = nothing
+    end
+    guess = getguess(uvar)
+    disturbance = isdisturbance(uvar) || nothing
+    tunable = istunable(uvar, isparameter(uvar))
+    dist = getdist(uvar)
+    type = symtype(uvar)
+
+    meta = (
+        var = var,
+        vartype,
+        name,
+        shape,
+        unit,
+        connect,
+        noise,
+        input,
+        output,
+        irreducible,
+        state_priority,
+        misc,
+        bounds,
+        desc,
+        guess,
+        disturbance,
+        tunable,
+        dist,
+        type
+    )
+
+    return NamedTuple(k => v for (k, v) in pairs(meta) if v !== nothing)
+end
+
 abstract type AbstractConnectType end
 struct Equality <: AbstractConnectType end # Equality connection
 struct Flow <: AbstractConnectType end     # sum to 0
@@ -107,8 +170,23 @@ function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
     end
 end
 
+const MISSING_VARIABLES_MESSAGE = """
+                                Initial condition underdefined. Some are missing from the variable map.
+                                Please provide a default (`u0`), initialization equation, or guess
+                                for the following variables:
+                                """
+
+struct MissingVariablesError <: Exception
+    vars::Any
+end
+
+function Base.showerror(io::IO, e::MissingVariablesError)
+    println(io, MISSING_VARIABLES_MESSAGE)
+    println(io, e.vars)
+end
+
 function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false,
-        toterm = Symbolics.diff2term)
+        toterm = Symbolics.diff2term, initialization_phase = false)
     varmap = merge(defaults, varmap) # prefers the `varmap`
     varmap = Dict(toterm(value(k)) => value(varmap[k]) for k in keys(varmap))
     # resolve symbolic parameter expressions
@@ -117,7 +195,7 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false
     end
 
     missingvars = setdiff(varlist, collect(keys(varmap)))
-    check && (isempty(missingvars) || throw_missingvars(missingvars))
+    check && (isempty(missingvars) || throw(MissingVariablesError(missingvars)))
 
     out = [varmap[var] for var in varlist]
 end
@@ -132,21 +210,25 @@ $(SIGNATURES)
 Intercept the call to `process_p_u0_symbolic` and process symbolic maps of `p` and/or `u0` if the
 user has `ModelingToolkit` loaded.
 """
-function SciMLBase.process_p_u0_symbolic(prob::Union{SciMLBase.AbstractDEProblem,
+function SciMLBase.process_p_u0_symbolic(
+        prob::Union{SciMLBase.AbstractDEProblem,
             NonlinearProblem, OptimizationProblem,
             SciMLBase.AbstractOptimizationCache},
         p,
         u0)
     # check if a symbolic remake is possible
+    if p isa Vector && !(eltype(p) <: Pair)
+        error("Parameter values must be specified as a `Dict` or `Vector{<:Pair}`")
+    end
     if eltype(p) <: Pair
         hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :ps) ||
             throw(ArgumentError("This problem does not support symbolic maps with `remake`, i.e. it does not have a symbolic origin." *
                                 " Please use `remake` with the `p` keyword argument as a vector of values, paying attention to parameter order."))
     end
     if eltype(u0) <: Pair
-        hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :states) ||
+        hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :unknowns) ||
             throw(ArgumentError("This problem does not support symbolic maps with `remake`, i.e. it does not have a symbolic origin." *
-                                " Please use `remake` with the `u0` keyword argument as a vector of values, paying attention to state order."))
+                                " Please use `remake` with the `u0` keyword argument as a vector of values, paying attention to unknown variable order."))
     end
 
     sys = prob.f.sys
@@ -162,11 +244,11 @@ function SciMLBase.process_p_u0_symbolic(prob::Union{SciMLBase.AbstractDEProblem
         defs = mergedefaults(defs, prob.p, ps)
     end
     defs = mergedefaults(defs, p, ps)
-    sts = states(sys)
+    sts = unknowns(sys)
     defs = mergedefaults(defs, prob.u0, sts)
     defs = mergedefaults(defs, u0, sts)
-    u0, p, defs = get_u0_p(sys, defs)
-
+    u0, _, defs = get_u0_p(sys, defs)
+    p = MTKParameters(sys, p)
     return p, u0
 end
 
@@ -229,7 +311,7 @@ function isdisturbance(x)
 end
 
 function disturbances(sys)
-    [filter(isdisturbance, states(sys)); filter(isdisturbance, parameters(sys))]
+    [filter(isdisturbance, unknowns(sys)); filter(isdisturbance, parameters(sys))]
 end
 
 ## Tunable =====================================================================
@@ -239,7 +321,7 @@ Symbolics.option_to_metadata_type(::Val{:tunable}) = VariableTunable
 istunable(x::Num, args...) = istunable(Symbolics.unwrap(x), args...)
 
 """
-    istunable(x, default = false)
+    istunable(x, default = true)
 
 Determine whether symbolic variable `x` is marked as a tunable for an automatic tuning algorithm.
 
@@ -253,7 +335,7 @@ Create a tunable parameter by
 
 See also [`tunable_parameters`](@ref), [`getbounds`](@ref)
 """
-function istunable(x, default = false)
+function istunable(x, default = true)
     p = Symbolics.getparent(x, nothing)
     p === nothing || (x = p)
     Symbolics.getmetadata(x, VariableTunable, default)
@@ -298,7 +380,7 @@ end
 ## System interface
 
 """
-    tunable_parameters(sys, p = parameters(sys); default=false)
+    tunable_parameters(sys, p = parameters(sys); default=true)
 
 Get all parameters of `sys` that are marked as `tunable`.
 
@@ -312,7 +394,7 @@ Create a tunable parameter by
 
 See also [`getbounds`](@ref), [`istunable`](@ref)
 """
-function tunable_parameters(sys, p = parameters(sys); default = false)
+function tunable_parameters(sys, p = parameters(sys); default = true)
     filter(x -> istunable(x, default), p)
 end
 
@@ -326,7 +408,7 @@ Create parameters with bounds like this
 @parameters p [bounds=(-1, 1)]
 ```
 
-To obtain state bounds, call `getbounds(sys, states(sys))`
+To obtain unknown variable bounds, call `getbounds(sys, unknowns(sys))`
 """
 function getbounds(sys::ModelingToolkit.AbstractSystem, p = parameters(sys))
     Dict(p .=> getbounds.(p))
@@ -356,7 +438,7 @@ struct VariableDescription end
 Symbolics.option_to_metadata_type(::Val{:description}) = VariableDescription
 
 getdescription(x::Num) = getdescription(Symbolics.unwrap(x))
-
+getdescription(x::Symbolics.Arr) = getdescription(Symbolics.unwrap(x))
 """
     getdescription(x)
 
@@ -372,45 +454,11 @@ function hasdescription(x)
     getdescription(x) != ""
 end
 
-## binary variables =================================================================
-struct VariableBinary end
-Symbolics.option_to_metadata_type(::Val{:binary}) = VariableBinary
-
-isbinaryvar(x::Num) = isbinaryvar(Symbolics.unwrap(x))
-
-"""
-    isbinaryvar(x)
-
-Determine if a variable is binary.
-"""
-function isbinaryvar(x)
-    p = Symbolics.getparent(x, nothing)
-    p === nothing || (x = p)
-    return Symbolics.getmetadata(x, VariableBinary, false)
-end
-
-## integer variables =================================================================
-struct VariableInteger end
-Symbolics.option_to_metadata_type(::Val{:integer}) = VariableInteger
-
-isintegervar(x::Num) = isintegervar(Symbolics.unwrap(x))
-
-"""
-    isintegervar(x)
-
-Determine if a variable is an integer.
-"""
-function isintegervar(x)
-    p = Symbolics.getparent(x, nothing)
-    p === nothing || (x = p)
-    return Symbolics.getmetadata(x, VariableInteger, false)
-end
-
 ## Brownian
 """
     tobrownian(s::Sym)
 
-Maps the brownianiable to a state.
+Maps the brownianiable to an unknown.
 """
 tobrownian(s::Symbolic) = setmetadata(s, MTKVariableTypeCtx, BROWNIAN)
 tobrownian(s::Num) = Num(tobrownian(value(s)))

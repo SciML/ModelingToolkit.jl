@@ -1,4 +1,4 @@
-function System(eqs::AbstractVector{<:Equation}, iv = nothing, args...; name = nothing,
+function System(eqs::AbstractVector{<:Equation}, iv, args...; name = nothing,
         kw...)
     ODESystem(eqs, iv, args...; name, kw..., checks = false)
 end
@@ -14,9 +14,10 @@ types during tearing.
 
 The optional argument `io` may take a tuple `(inputs, outputs)`.
 This will convert all `inputs` to parameters and allow them to be unconnected, i.e.,
-simplification will allow models where `n_states = n_equations - n_inputs`.
+simplification will allow models where `n_unknowns = n_equations - n_inputs`.
 """
-function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
+function structural_simplify(
+        sys::AbstractSystem, io = nothing; simplify = false, split = true,
         kwargs...)
     newsys′ = __structural_simplify(sys, io; simplify, kwargs...)
     if newsys′ isa Tuple
@@ -25,10 +26,25 @@ function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false
     else
         newsys = newsys′
     end
-    @set! newsys.parent = complete(sys)
-    newsys = complete(newsys)
+    if newsys isa ODESystem
+        @set! newsys.parent = complete(sys; split)
+    else
+        @set! newsys.parent = complete(sys; split)
+    end
+    newsys = complete(newsys; split)
+    if has_defaults(newsys) && (defs = get_defaults(newsys)) !== nothing
+        ks = collect(keys(defs))
+        for k in ks
+            if Symbolics.isarraysymbolic(k) && Symbolics.shape(k) !== Symbolics.Unknown()
+                for i in eachindex(k)
+                    defs[k[i]] = defs[k][i]
+                end
+            end
+        end
+    end
     if newsys′ isa Tuple
-        return newsys, newsys′[2]
+        idxs = [parameter_index(newsys, i) for i in io[1]]
+        return newsys, idxs
     else
         return newsys
     end
@@ -36,7 +52,6 @@ end
 function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
         kwargs...)
     sys = expand_connections(sys)
-    sys isa DiscreteSystem && return sys
     state = TearingState(sys)
 
     @unpack structure, fullvars = state
@@ -81,10 +96,10 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
         g = Matrix(sparse(Is, Js, vals))
         sys = state.sys
         @set! sys.eqs = new_eqs
-        @set! sys.states = [v
-                            for (i, v) in enumerate(fullvars)
-                                if !iszero(new_idxs[i]) &&
-                                   invview(var_to_diff)[i] === nothing]
+        @set! sys.unknowns = [v
+                              for (i, v) in enumerate(fullvars)
+                              if !iszero(new_idxs[i]) &&
+                                 invview(var_to_diff)[i] === nothing]
         # TODO: IO is not handled.
         ode_sys = structural_simplify(sys, io; simplify, kwargs...)
         eqs = equations(ode_sys)
@@ -100,7 +115,7 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
         end
 
         return SDESystem(full_equations(ode_sys), sorted_g_rows,
-            get_iv(ode_sys), states(ode_sys), parameters(ode_sys);
+            get_iv(ode_sys), unknowns(ode_sys), parameters(ode_sys);
             name = nameof(ode_sys))
     end
 end

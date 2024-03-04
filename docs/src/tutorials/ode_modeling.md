@@ -20,9 +20,7 @@ But if you want to just see some code and run, here's an example:
 
 ```@example first-mtkmodel
 using ModelingToolkit
-
-@variables t
-D = Differential(t)
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @mtkmodel FOL begin
     @parameters begin
@@ -56,7 +54,7 @@ first-order lag element:
 \dot{x} = \frac{f(t) - x(t)}{\tau}
 ```
 
-Here, ``t`` is the independent variable (time), ``x(t)`` is the (scalar) state
+Here, ``t`` is the independent variable (time), ``x(t)`` is the (scalar) unknown
 variable, ``f(t)`` is an external forcing function, and ``\tau`` is a
 parameter.
 In MTK, this system can be modelled as follows. For simplicity, we
@@ -65,9 +63,7 @@ independent variable ``t`` is automatically added by ``@mtkmodel``.
 
 ```@example ode2
 using ModelingToolkit
-
-@variables t
-D = Differential(t)
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @mtkmodel FOL begin
     @parameters begin
@@ -98,7 +94,7 @@ prob = ODEProblem(fol, [fol.x => 0.0], (0.0, 10.0), [fol.τ => 3.0])
 plot(solve(prob))
 ```
 
-The initial state and the parameter values are specified using a mapping
+The initial unknown and the parameter values are specified using a mapping
 from the actual symbolic elements to their values, represented as an array
 of `Pair`s, which are constructed using the `=>` operator.
 
@@ -109,6 +105,7 @@ intermediate variable `RHS`:
 
 ```@example ode2
 using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @mtkmodel FOL begin
     @parameters begin
@@ -117,9 +114,6 @@ using ModelingToolkit
     @variables begin
         x(t) # dependent variables
         RHS(t)
-    end
-    begin
-        D = Differential(t)
     end
     @equations begin
         RHS ~ (1 - x) / τ
@@ -150,7 +144,7 @@ For more information on this process, see [Observables and Variable Elimination]
 
 MTK still knows how to calculate them out of the information available
 in a simulation result. The intermediate variable `RHS` therefore can be plotted
-along with the state variable. Note that this has to be requested explicitly
+along with the unknown variable. Note that this has to be requested explicitly
 like as follows:
 
 ```@example ode2
@@ -197,9 +191,6 @@ Obviously, one could use an explicit, symbolic function of time:
         x(t) # dependent variables
         f(t)
     end
-    begin
-        D = Differential(t)
-    end
     @equations begin
         f ~ sin(t)
         D(x) ~ (f - x) / τ
@@ -234,9 +225,6 @@ f_fun(t) = t >= 10 ? value_vector[end] : value_vector[Int(floor(t)) + 1]
     @structural_parameters begin
         h = 1
     end
-    begin
-        D = Differential(t)
-    end
     @equations begin
         f ~ f_fun(t)
         D(x) ~ (f - x) / τ
@@ -262,13 +250,13 @@ complex systems from simple ones is even more fun. Best practice for such a
 ```@example ode2
 function fol_factory(separate = false; name)
     @parameters τ
-    @variables t x(t) f(t) RHS(t)
+    @variables x(t) f(t) RHS(t)
 
     eqs = separate ? [RHS ~ (f - x) / τ,
         D(x) ~ RHS] :
           D(x) ~ (f - x) / τ
 
-    ODESystem(eqs; name)
+    ODESystem(eqs, t; name)
 end
 ```
 
@@ -289,7 +277,7 @@ again are just algebraic relations:
 connections = [fol_1.f ~ 1.5,
     fol_2.f ~ fol_1.x]
 
-connected = compose(ODESystem(connections, name = :connected), fol_1, fol_2)
+connected = compose(ODESystem(connections, t, name = :connected), fol_1, fol_2)
 ```
 
 All equations, variables, and parameters are collected, but the structure of the
@@ -307,11 +295,11 @@ connected_simp = structural_simplify(connected)
 full_equations(connected_simp)
 ```
 
-As expected, only the two state-derivative equations remain,
+As expected, only the two equations with the derivatives of unknowns remain,
 as if you had manually eliminated as many variables as possible from the equations.
 Some observed variables are not expanded unless `full_equations` is used.
 As mentioned above, the hierarchical structure is preserved. So, the
-initial state and the parameter values can be specified accordingly when
+initial unknown and the parameter values can be specified accordingly when
 building the `ODEProblem`:
 
 ```@example ode2
@@ -329,7 +317,7 @@ More on this topic may be found in [Composing Models and Building Reusable Compo
 
 ## Initial Guess
 
-It is often a good idea to specify reasonable values for the initial state and the
+It is often a good idea to specify reasonable values for the initial unknown and the
 parameters of a model component. Then, these do not have to be explicitly specified when constructing the `ODEProblem`.
 
 ```@example ode2
@@ -350,7 +338,7 @@ While defining the model `UnitstepFOLFactory`, an initial guess of 0.0 is assign
 Additionally, these initial guesses can be modified while creating instances of `UnitstepFOLFactory` by passing arguments.
 
 ```@example ode2
-@named fol = UnitstepFOLFactory(; x = 0.1)
+@mtkbuild fol = UnitstepFOLFactory(; x = 0.1)
 sol = ODEProblem(fol, [], (0.0, 5.0), []) |> solve
 ```
 
@@ -358,10 +346,11 @@ In non-DSL definitions, one can pass `defaults` dictionary to set the initial gu
 
 ```@example ode3
 using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 function UnitstepFOLFactory(; name)
     @parameters τ
-    @variables t x(t)
+    @variables x(t)
     ODESystem(D(x) ~ (1 - x) / τ; name, defaults = Dict(x => 0.0, τ => 1.0))
 end
 ```
@@ -369,7 +358,7 @@ end
 Note that the defaults can be functions of the other variables, which is then
 resolved at the time of the problem construction. Of course, the factory
 function could accept additional arguments to optionally specify the initial
-state or parameter values, etc.
+unknown or parameter values, etc.
 
 ## Symbolic and sparse derivatives
 

@@ -13,8 +13,13 @@ function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem; kwargs...)
 
     vars = ArrayInterface.restructure(prob.u0,
         [variable(:x, i) for i in eachindex(prob.u0)])
-    params = p isa DiffEqBase.NullParameters ? [] :
-             ArrayInterface.restructure(p, [variable(:α, i) for i in eachindex(p)])
+    params = if p isa DiffEqBase.NullParameters
+        []
+    elseif p isa MTKParameters
+        [variable(:α, i) for i in eachindex(vcat(p...))]
+    else
+        ArrayInterface.restructure(p, [variable(:α, i) for i in eachindex(p)])
+    end
 
     eqs = prob.f(vars, params)
 

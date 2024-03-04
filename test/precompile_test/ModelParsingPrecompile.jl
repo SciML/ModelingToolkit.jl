@@ -1,11 +1,13 @@
 module ModelParsingPrecompile
 
-using ModelingToolkit
-using Unitful
+using ModelingToolkit, Unitful
 
 @mtkmodel ModelWithComponentArray begin
+    @constants begin
+        k = 1, [description = "Default val of R"]
+    end
     @parameters begin
-        R(t)[1:3] = 1, [description = "Parameter array", unit = u"Ω"]
+        r(t)[1:3] = k, [description = "Parameter array", unit = u"Ω"]
     end
 end
 

@@ -1,6 +1,7 @@
 using ModelingToolkit, Test
 using ModelingToolkitStandardLibrary.Blocks
 using OrdinaryDiffEq
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 x = [1, 2.0, false, [1, 2, 3], Parameter(1.0)]
 
@@ -32,16 +33,24 @@ t_end = 10.0
 time = 0:dt:t_end
 x = @. time^2 + 1.0
 
-@parameters t
-D = Differential(t)
+struct Interpolator
+    data::Vector{Float64}
+    dt::Float64
+end
 
-get_value(data, t, dt) = data[round(Int, t / dt + 1)]
-@register_symbolic get_value(data, t, dt)
+function (i::Interpolator)(t)
+    return i.data[round(Int, t / i.dt + 1)]
+end
+@register_symbolic (i::Interpolator)(t)
 
-function Sampled(; name, data = Float64[], dt = 0.0)
+get_value(interp::Interpolator, t) = interp(t)
+@register_symbolic get_value(interp::Interpolator, t)
+# get_value(data, t, dt) = data[round(Int, t / dt + 1)]
+# @register_symbolic get_value(data::Vector, t, dt)
+
+function Sampled(; name, interp = Interpolator(Float64[], 0.0))
     pars = @parameters begin
-        data = data
-        dt = dt
+        interpolator::Interpolator = interp
     end
 
     vars = []
@@ -50,54 +59,50 @@ function Sampled(; name, data = Float64[], dt = 0.0)
     end
 
     eqs = [
-        output.u ~ get_value(data, t, dt),
+        output.u ~ get_value(interpolator, t)
     ]
 
-    return ODESystem(eqs, t, vars, pars; name, systems,
-        defaults = [output.u => data[1]])
+    return ODESystem(eqs, t, vars, [interpolator]; name, systems,
+        defaults = [output.u => interp.data[1]])
 end
 
 vars = @variables y(t)=1 dy(t)=0 ddy(t)=0
-@named src = Sampled(; data = Float64[], dt)
+@named src = Sampled(; interp = Interpolator(x, dt))
 @named int = Integrator()
 
 eqs = [y ~ src.output.u
-    D(y) ~ dy
-    D(dy) ~ ddy
-    connect(src.output, int.input)]
+       D(y) ~ dy
+       D(dy) ~ ddy
+       connect(src.output, int.input)]
 
 @named sys = ODESystem(eqs, t, vars, []; systems = [int, src])
 s = complete(sys)
 sys = structural_simplify(sys)
-prob = ODEProblem(sys, [], (0.0, t_end), [s.src.data => x]; tofloat = false)
-@test prob.p isa Tuple{Vector{Float64}, Vector{Int}, Vector{Vector{Float64}}}
+prob = ODEProblem(
+    sys, [], (0.0, t_end), [s.src.interpolator => Interpolator(x, dt)]; tofloat = false)
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
 @test sol[y][end] == x[end]
 
 #TODO: remake becomes more complicated now, how to improve?
 defs = ModelingToolkit.defaults(sys)
-defs[s.src.data] = 2x
-p′ = ModelingToolkit.varmap_to_vars(defs, parameters(sys); tofloat = false)
-p′, = ModelingToolkit.split_parameters_by_type(p′) #NOTE: we need to ensure this is called now before calling remake()
+defs[s.src.interpolator] = Interpolator(2x, dt)
+p′ = ModelingToolkit.MTKParameters(sys, defs)
 prob′ = remake(prob; p = p′)
 sol = solve(prob′, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
 @test sol[y][end] == 2x[end]
-
-prob′′ = remake(prob; p = [s.src.data => x])
-@test_broken prob′′.p isa Tuple
 
 # ------------------------ Mixed Type Converted to float (default behavior)
 
 vars = @variables y(t)=1 dy(t)=0 ddy(t)=0
 pars = @parameters a=1.0 b=2.0 c=3
 eqs = [D(y) ~ dy * a
-    D(dy) ~ ddy * b
-    ddy ~ sin(t) * c]
+       D(dy) ~ ddy * b
+       ddy ~ sin(t) * c]
 
 @named model = ODESystem(eqs, t, vars, pars)
-sys = structural_simplify(model)
+sys = structural_simplify(model; split = false)
 
 tspan = (0.0, t_end)
 prob = ODEProblem(sys, [], tspan, [])
@@ -141,8 +146,8 @@ c = 3.0  # Damping coefficient
 
 function SystemModel(u = nothing; name = :model)
     eqs = [connect(torque.flange, inertia1.flange_a)
-        connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
-        connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
+           connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
+           connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
     if u !== nothing
         push!(eqs, connect(torque.tau, u.output))
         return @named model = ODESystem(eqs,
@@ -161,9 +166,9 @@ matrices, ssys = ModelingToolkit.linearize(wr(model), inputs, model_outputs)
 # Design state-feedback gain using LQR
 # Define cost matrices
 x_costs = [model.inertia1.w => 1.0
-    model.inertia2.w => 1.0
-    model.inertia1.phi => 1.0
-    model.inertia2.phi => 1.0]
+           model.inertia2.w => 1.0
+           model.inertia1.phi => 1.0
+           model.inertia2.phi => 1.0]
 L = randn(1, 4) # Post-multiply by `C` to get the correct input to the controller
 
 # This old definition of MatrixGain will work because the parameter space does not include K (an Array term)
@@ -179,8 +184,8 @@ L = randn(1, 4) # Post-multiply by `C` to get the correct input to the controlle
 @named add = Add(; k1 = 1.0, k2 = 1.0) # To add the control signal and the disturbance
 
 connections = [[state_feedback.input.u[i] ~ model_outputs[i] for i in 1:4]
-    connect(d.output, :d, add.input1)
-    connect(add.input2, state_feedback.output)
-    connect(add.output, :u, model.torque.tau)]
+               connect(d.output, :d, add.input1)
+               connect(add.input2, state_feedback.output)
+               connect(add.output, :u, model.torque.tau)]
 @named closed_loop = ODESystem(connections, t, systems = [model, state_feedback, add, d])
 S = get_sensitivity(closed_loop, :u)

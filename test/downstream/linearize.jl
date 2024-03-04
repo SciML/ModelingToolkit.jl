@@ -7,8 +7,8 @@ using ModelingToolkit, Test
 D = Differential(t)
 
 eqs = [u ~ kp * (r - y)
-    D(x) ~ -x + u
-    y ~ x]
+       D(x) ~ -x + u
+       y ~ x]
 
 @named sys = ODESystem(eqs, t)
 
@@ -50,7 +50,7 @@ function plant(; name)
     @variables u(t)=0 y(t)=0
     D = Differential(t)
     eqs = [D(x) ~ -x + u
-        y ~ x]
+           y ~ x]
     ODESystem(eqs, t; name = name)
 end
 
@@ -59,7 +59,7 @@ function filt_(; name)
     @variables u(t)=0 [input = true]
     D = Differential(t)
     eqs = [D(x) ~ -2 * x + u
-        y ~ x]
+           y ~ x]
     ODESystem(eqs, t, name = name)
 end
 
@@ -67,7 +67,7 @@ function controller(kp; name)
     @variables y(t)=0 r(t)=0 u(t)=0
     @parameters kp = kp
     eqs = [
-        u ~ kp * (r - y),
+        u ~ kp * (r - y)
     ]
     ODESystem(eqs, t; name = name)
 end
@@ -77,14 +77,14 @@ end
 @named p = plant()
 
 connections = [f.y ~ c.r # filtered reference to controller reference
-    c.u ~ p.u # controller output to plant input
-    p.y ~ c.y]
+               c.u ~ p.u # controller output to plant input
+               p.y ~ c.y]
 
 @named cl = ODESystem(connections, t, systems = [f, c, p])
 
 lsys0, ssys = linearize(cl, [f.u], [p.x])
 desired_order = [f.x, p.x]
-lsys = ModelingToolkit.reorder_states(lsys0, states(ssys), desired_order)
+lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
 
 @test lsys.A == [-2 0; 1 -2]
 @test lsys.B == reshape([1, 0], 2, 1)
@@ -110,7 +110,7 @@ Nd = 10
 lsys0, ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u])
 @unpack int, der = pid
 desired_order = [int.x, der.x]
-lsys = ModelingToolkit.reorder_states(lsys0, states(ssys), desired_order)
+lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
 
 @test lsys.A == [0 0; 0 -10]
 @test lsys.B == [2 -2; 10 -10]
@@ -125,8 +125,8 @@ lsyss, _ = ModelingToolkit.linearize_symbolic(pid, [reference.u, measurement.u],
 @test substitute(lsyss.C, ModelingToolkit.defaults(pid)) == lsys.C
 @test substitute(lsyss.D, ModelingToolkit.defaults(pid)) == lsys.D
 
-# Test with the reverse desired state order as well to verify that similarity transform and reoreder_states really works
-lsys = ModelingToolkit.reorder_states(lsys, states(ssys), reverse(desired_order))
+# Test with the reverse desired unknown order as well to verify that similarity transform and reoreder_unknowns really works
+lsys = ModelingToolkit.reorder_unknowns(lsys, unknowns(ssys), reverse(desired_order))
 
 @test lsys.A == [-10 0; 0 0]
 @test lsys.B == [10 -10; 2 -2]
@@ -138,19 +138,19 @@ if VERSION >= v"1.8"
     @test_throws "Some specified inputs were not found" linearize(pid,
         [
             pid.reference.u,
-            pid.measurement.u,
+            pid.measurement.u
         ], [ctr_output.u])
     @test_throws "Some specified outputs were not found" linearize(pid,
         [
             reference.u,
-            measurement.u,
+            measurement.u
         ],
         [pid.ctr_output.u])
 else # v1.6 does not have the feature to match error message
     @test_throws ErrorException linearize(pid,
         [
             pid.reference.u,
-            pid.measurement.u,
+            pid.measurement.u
         ], [ctr_output.u])
     @test_throws ErrorException linearize(pid,
         [reference.u, measurement.u],
@@ -163,14 +163,13 @@ end
 function saturation(; y_max, y_min = y_max > 0 ? -y_max : -Inf, name)
     @variables u(t)=0 y(t)=0
     @parameters y_max=y_max y_min=y_min
-    ie = ModelingToolkit.IfElse.ifelse
+    ie = ifelse
     eqs = [
-        # The equation below is equivalent to y ~ clamp(u, y_min, y_max)
-        y ~ ie(u > y_max, y_max, ie((y_min < u) & (u < y_max), u, y_min)),
+    # The equation below is equivalent to y ~ clamp(u, y_min, y_max)
+        y ~ ie(u > y_max, y_max, ie((y_min < u) & (u < y_max), u, y_min))
     ]
     ODESystem(eqs, t, name = name)
 end
-
 @named sat = saturation(; y_max = 1)
 # inside the linear region, the function is identity
 @unpack u, y = sat
@@ -216,8 +215,8 @@ if VERSION >= v"1.8"
     @named force = Force(use_support = false)
 
     eqs = [connect(link1.TX1, cart.flange)
-        connect(cart.flange, force.flange)
-        connect(link1.TY1, fixed.flange)]
+           connect(cart.flange, force.flange)
+           connect(link1.TY1, fixed.flange)]
 
     @named model = ODESystem(eqs, t, [], []; systems = [link1, cart, force, fixed])
     def = ModelingToolkit.defaults(model)
@@ -245,7 +244,7 @@ if VERSION >= v"1.8"
     lsyss, sysss = ModelingToolkit.linearize_symbolic(model, lin_inputs, lin_outputs;
         allow_input_derivatives = true)
 
-    dummyder = setdiff(states(sysss), states(model))
+    dummyder = setdiff(unknowns(sysss), unknowns(model))
     def = merge(def, Dict(x => 0.0 for x in dummyder))
     def[link1.fy1] = -def[link1.g] * def[link1.m]
 

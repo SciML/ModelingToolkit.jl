@@ -26,7 +26,7 @@ struct OptimizationSystem <: AbstractOptimizationSystem
     """Objective function of the system."""
     op::Any
     """Unknown variables."""
-    states::Vector
+    unknowns::Vector
     """Parameters."""
     ps::Vector
     """Array variables."""
@@ -57,28 +57,33 @@ struct OptimizationSystem <: AbstractOptimizationSystem
     """
     complete::Bool
     """
+    Cached data for fast symbolic indexing.
+    """
+    index_cache::Union{Nothing, IndexCache}
+    """
     The hierarchical parent system before simplification.
     """
     parent::Any
 
-    function OptimizationSystem(tag, op, states, ps, var_to_name, observed,
+    function OptimizationSystem(tag, op, unknowns, ps, var_to_name, observed,
             constraints, name, systems, defaults, metadata = nothing,
-            gui_metadata = nothing, complete = false, parent = nothing;
+            gui_metadata = nothing, complete = false, index_cache = nothing, parent = nothing;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
-            unwrap(op) isa Symbolic && check_units(op)
-            check_units(observed)
-            all_dimensionless([states; ps]) || check_units(constraints)
+            u = __get_unit_type(unknowns, ps)
+            unwrap(op) isa Symbolic && check_units(u, op)
+            check_units(u, observed)
+            check_units(u, constraints)
         end
-        new(tag, op, states, ps, var_to_name, observed,
+        new(tag, op, unknowns, ps, var_to_name, observed,
             constraints, name, systems, defaults, metadata, gui_metadata, complete,
-            parent)
+            index_cache, parent)
     end
 end
 
 equations(sys::AbstractOptimizationSystem) = objective(sys) # needed for Base.show
 
-function OptimizationSystem(op, states, ps;
+function OptimizationSystem(op, unknowns, ps;
         observed = [],
         constraints = [],
         default_u0 = Dict(),
@@ -92,12 +97,13 @@ function OptimizationSystem(op, states, ps;
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     constraints = value.(scalarize(constraints))
-    states′ = value.(scalarize(states))
-    ps′ = value.(scalarize(ps))
+    unknowns′ = value.(scalarize(unknowns))
+    ps′ = value.(ps)
     op′ = value(scalarize(op))
 
     if !(isempty(default_u0) && isempty(default_p))
-        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
+        Base.depwarn(
+            "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
             :OptimizationSystem, force = true)
     end
     sysnames = nameof.(systems)
@@ -108,12 +114,12 @@ function OptimizationSystem(op, states, ps;
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, states′)
+    process_variables!(var_to_name, defaults, unknowns′)
     process_variables!(var_to_name, defaults, ps′)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
     OptimizationSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-        op′, states′, ps′, var_to_name,
+        op′, unknowns′, ps′, var_to_name,
         observed,
         constraints,
         name, systems, defaults, metadata, gui_metadata;
@@ -121,37 +127,47 @@ function OptimizationSystem(op, states, ps;
 end
 
 function calculate_gradient(sys::OptimizationSystem)
-    expand_derivatives.(gradient(objective(sys), states(sys)))
+    expand_derivatives.(gradient(objective(sys), unknowns(sys)))
 end
 
-function generate_gradient(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys);
+function generate_gradient(sys::OptimizationSystem, vs = unknowns(sys),
+        ps = full_parameters(sys);
         kwargs...)
     grad = calculate_gradient(sys)
     pre = get_preprocess_constants(grad)
-    return build_function(grad, vs, ps; postprocess_fbody = pre,
+    p = reorder_parameters(sys, ps)
+    return build_function(grad, vs, p...; postprocess_fbody = pre,
         kwargs...)
 end
 
 function calculate_hessian(sys::OptimizationSystem)
-    expand_derivatives.(hessian(objective(sys), states(sys)))
+    expand_derivatives.(hessian(objective(sys), unknowns(sys)))
 end
 
-function generate_hessian(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys);
+function generate_hessian(
+        sys::OptimizationSystem, vs = unknowns(sys), ps = full_parameters(sys);
         sparse = false, kwargs...)
     if sparse
-        hess = sparsehessian(objective(sys), states(sys))
+        hess = sparsehessian(objective(sys), unknowns(sys))
     else
         hess = calculate_hessian(sys)
     end
     pre = get_preprocess_constants(hess)
-    return build_function(hess, vs, ps; postprocess_fbody = pre,
+    p = reorder_parameters(sys, ps)
+    return build_function(hess, vs, p...; postprocess_fbody = pre,
         kwargs...)
 end
 
-function generate_function(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys);
+function generate_function(sys::OptimizationSystem, vs = unknowns(sys),
+        ps = full_parameters(sys);
         kwargs...)
     eqs = subs_constants(objective(sys))
-    return build_function(eqs, vs, ps;
+    p = if has_index_cache(sys)
+        reorder_parameters(get_index_cache(sys), ps)
+    else
+        (ps,)
+    end
+    return build_function(eqs, vs, p...;
         kwargs...)
 end
 
@@ -194,7 +210,7 @@ function constraints(sys)
     isempty(systems) ? cs : [cs; reduce(vcat, namespace_constraints.(systems))]
 end
 
-hessian_sparsity(sys::OptimizationSystem) = hessian_sparsity(get_op(sys), states(sys))
+hessian_sparsity(sys::OptimizationSystem) = hessian_sparsity(get_op(sys), unknowns(sys))
 
 """
 ```julia
@@ -226,20 +242,25 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         linenumbers = true, parallel = SerialForm(),
         use_union = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `OptimizationSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `OptimizationProblem`")
+    end
     if haskey(kwargs, :lcons) || haskey(kwargs, :ucons)
-        Base.depwarn("`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
+        Base.depwarn(
+            "`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
             :OptimizationProblem, force = true)
     end
 
-    dvs = states(sys)
+    dvs = unknowns(sys)
     ps = parameters(sys)
     cstr = constraints(sys)
 
     if isnothing(lb) && isnothing(ub) # use the symbolically specified bounds
         lb = first.(getbounds.(dvs))
         ub = last.(getbounds.(dvs))
-        lb[isbinaryvar.(dvs)] .= 0
-        ub[isbinaryvar.(dvs)] .= 1
+        isboolean = symtype.(unwrap.(dvs)) .<: Bool
+        lb[isboolean] .= 0
+        ub[isboolean] .= 1
     else # use the user supplied variable bounds
         xor(isnothing(lb), isnothing(ub)) &&
             throw(ArgumentError("Expected both `lb` and `ub` to be supplied"))
@@ -249,14 +270,20 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             throw(ArgumentError("Expected both `ub` to be of the same length as the vector of optimization variables"))
     end
 
-    int = isintegervar.(dvs) .| isbinaryvar.(dvs)
+    int = symtype.(unwrap.(dvs)) .<: Integer
 
     defs = defaults(sys)
     defs = mergedefaults(defs, parammap, ps)
     defs = mergedefaults(defs, u0map, dvs)
 
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    if parammap isa MTKParameters
+        p = parammap
+    elseif has_index_cache(sys) && get_index_cache(sys) !== nothing
+        p = MTKParameters(sys, parammap)
+    else
+        p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    end
     lb = varmap_to_vars(dvs .=> lb, dvs; defaults = defs, tofloat = false, use_union)
     ub = varmap_to_vars(dvs .=> ub, dvs; defaults = defs, tofloat = false, use_union)
 
@@ -265,28 +292,41 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         ub = nothing
     end
 
-    f = generate_function(sys, checkbounds = checkbounds, linenumbers = linenumbers,
-        expression = Val{false})
-
+    f = let _f = generate_function(
+            sys, checkbounds = checkbounds, linenumbers = linenumbers,
+            expression = Val{false})
+        __f(u, p) = _f(u, p)
+        __f(u, p::MTKParameters) = _f(u, p...)
+        __f
+    end
     obj_expr = subs_constants(objective(sys))
 
     if grad
-        grad_oop, grad_iip = generate_gradient(sys, checkbounds = checkbounds,
-            linenumbers = linenumbers,
-            parallel = parallel, expression = Val{false})
-        _grad(u, p) = grad_oop(u, p)
-        _grad(J, u, p) = (grad_iip(J, u, p); J)
+        _grad = let (grad_oop, grad_iip) = generate_gradient(
+                sys, checkbounds = checkbounds,
+                linenumbers = linenumbers,
+                parallel = parallel, expression = Val{false})
+            _grad(u, p) = grad_oop(u, p)
+            _grad(J, u, p) = (grad_iip(J, u, p); J)
+            _grad(u, p::MTKParameters) = grad_oop(u, p...)
+            _grad(J, u, p::MTKParameters) = (grad_iip(J, u, p...); J)
+            _grad
+        end
     else
         _grad = nothing
     end
 
     if hess
-        hess_oop, hess_iip = generate_hessian(sys, checkbounds = checkbounds,
-            linenumbers = linenumbers,
-            sparse = sparse, parallel = parallel,
-            expression = Val{false})
-        _hess(u, p) = hess_oop(u, p)
-        _hess(J, u, p) = (hess_iip(J, u, p); J)
+        _hess = let (hess_oop, hess_iip) = generate_hessian(sys, checkbounds = checkbounds,
+                linenumbers = linenumbers,
+                sparse = sparse, parallel = parallel,
+                expression = Val{false})
+            _hess(u, p) = hess_oop(u, p)
+            _hess(J, u, p) = (hess_iip(J, u, p); J)
+            _hess(u, p::MTKParameters) = hess_oop(u, p...)
+            _hess(J, u, p::MTKParameters) = (hess_iip(J, u, p...); J)
+            _hess
+        end
     else
         _hess = nothing
     end
@@ -304,28 +344,54 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             end
             if args === ()
                 let obs = obs
-                    (u, p) -> obs(u, p)
+                    _obs(u, p) = obs(u, p)
+                    _obs(u, p::MTKParameters) = obs(u, p...)
+                    _obs
                 end
             else
-                obs(args...)
+                u, p = args
+                if p isa MTKParameters
+                    obs(u, p...)
+                else
+                    obs(u, p)
+                end
             end
         end
     end
 
     if length(cstr) > 0
         @named cons_sys = ConstraintsSystem(cstr, dvs, ps)
+        cons_sys = complete(cons_sys)
         cons, lcons_, ucons_ = generate_function(cons_sys, checkbounds = checkbounds,
             linenumbers = linenumbers,
             expression = Val{false})
         if cons_j
-            _cons_j = generate_jacobian(cons_sys; expression = Val{false},
-                sparse = cons_sparse)[2]
+            _cons_j = let (cons_jac_oop, cons_jac_iip) = generate_jacobian(cons_sys;
+                    checkbounds = checkbounds,
+                    linenumbers = linenumbers,
+                    parallel = parallel, expression = Val{false},
+                    sparse = cons_sparse)
+                _cons_j(u, p) = cons_jac_oop(u, p)
+                _cons_j(J, u, p) = (cons_jac_iip(J, u, p); J)
+                _cons_j(u, p::MTKParameters) = cons_jac_oop(u, p...)
+                _cons_j(J, u, p::MTKParameters) = (cons_jac_iip(J, u, p...); J)
+                _cons_j
+            end
         else
             _cons_j = nothing
         end
         if cons_h
-            _cons_h = generate_hessian(cons_sys; expression = Val{false},
-                sparse = cons_sparse)[2]
+            _cons_h = let (cons_hess_oop, cons_hess_iip) = generate_hessian(
+                    cons_sys, checkbounds = checkbounds,
+                    linenumbers = linenumbers,
+                    sparse = cons_sparse, parallel = parallel,
+                    expression = Val{false})
+                _cons_h(u, p) = cons_hess_oop(u, p)
+                _cons_h(J, u, p) = (cons_hess_iip(J, u, p); J)
+                _cons_h(u, p::MTKParameters) = cons_hess_oop(u, p...)
+                _cons_h(J, u, p::MTKParameters) = (cons_hess_iip(J, u, p...); J)
+                _cons_h
+            end
         else
             _cons_h = nothing
         end
@@ -358,8 +424,6 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             grad = _grad,
             hess = _hess,
             hess_prototype = hess_prototype,
-            syms = Symbol.(states(sys)),
-            paramsyms = Symbol.(parameters(sys)),
             cons = cons[2],
             cons_j = _cons_j,
             cons_h = _cons_h,
@@ -376,8 +440,6 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             SciMLBase.NoAD();
             grad = _grad,
             hess = _hess,
-            syms = Symbol.(states(sys)),
-            paramsyms = Symbol.(parameters(sys)),
             hess_prototype = hess_prototype,
             expr = obj_expr,
             observed = observedfun)
@@ -418,20 +480,25 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
         linenumbers = false, parallel = SerialForm(),
         use_union = false,
         kwargs...) where {iip}
+    if !iscomplete(sys)
+        error("A completed `OptimizationSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `OptimizationProblemExpr`")
+    end
     if haskey(kwargs, :lcons) || haskey(kwargs, :ucons)
-        Base.depwarn("`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
+        Base.depwarn(
+            "`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
             :OptimizationProblem, force = true)
     end
 
-    dvs = states(sys)
+    dvs = unknowns(sys)
     ps = parameters(sys)
     cstr = constraints(sys)
 
     if isnothing(lb) && isnothing(ub) # use the symbolically specified bounds
         lb = first.(getbounds.(dvs))
         ub = last.(getbounds.(dvs))
-        lb[isbinaryvar.(dvs)] .= 0
-        ub[isbinaryvar.(dvs)] .= 1
+        isboolean = symtype.(unwrap.(dvs)) .<: Bool
+        lb[isboolean] .= 0
+        ub[isboolean] .= 1
     else # use the user supplied variable bounds
         xor(isnothing(lb), isnothing(ub)) &&
             throw(ArgumentError("Expected both `lb` and `ub` to be supplied"))
@@ -441,14 +508,18 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
             throw(ArgumentError("Expected `ub` to be of the same length as the vector of optimization variables"))
     end
 
-    int = isintegervar.(dvs) .| isbinaryvar.(dvs)
+    int = symtype.(unwrap.(dvs)) .<: Integer
 
     defs = defaults(sys)
     defs = mergedefaults(defs, parammap, ps)
     defs = mergedefaults(defs, u0map, dvs)
 
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        p = MTKParameters(sys, parammap)
+    else
+        p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    end
     lb = varmap_to_vars(dvs .=> lb, dvs; defaults = defs, tofloat = false, use_union)
     ub = varmap_to_vars(dvs .=> ub, dvs; defaults = defs, tofloat = false, use_union)
 
@@ -461,7 +532,8 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
     f = generate_function(sys, checkbounds = checkbounds, linenumbers = linenumbers,
         expression = Val{true})
     if grad
-        _grad = generate_gradient(sys, checkbounds = checkbounds, linenumbers = linenumbers,
+        _grad = generate_gradient(
+            sys, checkbounds = checkbounds, linenumbers = linenumbers,
             parallel = parallel, expression = Val{false})[idx]
     else
         _grad = :nothing
@@ -545,13 +617,9 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
             ucons = $ucons
             cons_j = $_cons_j
             cons_h = $_cons_h
-            syms = $(Symbol.(states(sys)))
-            paramsyms = $(Symbol.(parameters(sys)))
             _f = OptimizationFunction{iip}(f, SciMLBase.NoAD();
                 grad = grad,
                 hess = hess,
-                syms = syms,
-                paramsyms = paramsyms,
                 hess_prototype = hess_prototype,
                 cons = cons,
                 cons_j = cons_j,
@@ -560,7 +628,8 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
                 cons_hess_prototype = cons_hess_prototype,
                 expr = obj_expr,
                 cons_expr = cons_expr)
-            OptimizationProblem{$iip}(_f, u0, p; lb = lb, ub = ub, int = int, lcons = lcons,
+            OptimizationProblem{$iip}(
+                _f, u0, p; lb = lb, ub = ub, int = int, lcons = lcons,
                 ucons = ucons, kwargs...)
         end
     else
@@ -573,13 +642,9 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
             lb = $lb
             ub = $ub
             int = $int
-            syms = $(Symbol.(states(sys)))
-            paramsyms = $(Symbol.(parameters(sys)))
             _f = OptimizationFunction{iip}(f, SciMLBase.NoAD();
                 grad = grad,
                 hess = hess,
-                syms = syms,
-                paramsyms = paramsyms,
                 hess_prototype = hess_prototype,
                 expr = obj_expr)
             OptimizationProblem{$iip}(_f, u0, p; lb = lb, ub = ub, int = int, kwargs...)
@@ -587,7 +652,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
     end
 end
 
-function structural_simplify(sys::OptimizationSystem; kwargs...)
+function structural_simplify(sys::OptimizationSystem; split = true, kwargs...)
     sys = flatten(sys)
     cons = constraints(sys)
     econs = Equation[]
@@ -599,7 +664,7 @@ function structural_simplify(sys::OptimizationSystem; kwargs...)
             push!(icons, e)
         end
     end
-    nlsys = NonlinearSystem(econs, states(sys), parameters(sys); name = :___tmp_nlsystem)
+    nlsys = NonlinearSystem(econs, unknowns(sys), parameters(sys); name = :___tmp_nlsystem)
     snlsys = structural_simplify(nlsys; fully_determined = false, kwargs...)
     obs = observed(snlsys)
     subs = Dict(eq.lhs => eq.rhs for eq in observed(snlsys))
@@ -608,11 +673,12 @@ function structural_simplify(sys::OptimizationSystem; kwargs...)
     for (i, eq) in enumerate(Iterators.flatten((seqs, icons)))
         cons_simplified[i] = fixpoint_sub(eq, subs)
     end
-    newsts = setdiff(states(sys), keys(subs))
+    newsts = setdiff(unknowns(sys), keys(subs))
     @set! sys.constraints = cons_simplified
     @set! sys.observed = [observed(sys); obs]
     neweqs = fixpoint_sub.(equations(sys), (subs,))
     @set! sys.op = length(neweqs) == 1 ? first(neweqs) : neweqs
-    @set! sys.states = newsts
+    @set! sys.unknowns = newsts
+    sys = complete(sys; split)
     return sys
 end

@@ -129,6 +129,8 @@ end
 # build something that works for us here and worry about it later.
 nonzerosmap(a::CLILVector) = NonZeros(a)
 
+using FindFirstFunctions: findfirstequal
+
 function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swapto, pivot,
         last_pivot; pivot_equal_optimization = true)
     # for ei in nzrows(>= k)
@@ -168,12 +170,11 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
     # conservative, we leave it at this, as this captures the most important
     # case for MTK (where most pivots are `1` or `-1`).
     pivot_equal = pivot_equal_optimization && abs(pivot) == abs(last_pivot)
-
-    for ei in (k + 1):size(M, 1)
+    @inbounds for ei in (k + 1):size(M, 1)
         # eliminate `v`
         coeff = 0
         ivars = eadj[ei]
-        vj = findfirst(isequal(vpivot), ivars)
+        vj = findfirstequal(vpivot, ivars)
         if vj !== nothing
             coeff = old_cadj[ei][vj]
             deleteat!(old_cadj[ei], vj)
@@ -189,24 +190,118 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
         ivars = eadj[ei]
         icoeffs = old_cadj[ei]
 
-        tmp_incidence = similar(eadj[ei], 0)
-        tmp_coeffs = similar(old_cadj[ei], 0)
-        # TODO: We know both ivars and kvars are sorted, we could just write
-        # a quick iterator here that does this without allocation/faster.
-        vars = sort(union(ivars, kvars))
-
-        for v in vars
-            v == vpivot && continue
-            ck = getcoeff(kvars, kcoeffs, v)
-            ci = getcoeff(ivars, icoeffs, v)
-            p1 = Base.Checked.checked_mul(pivot, ci)
-            p2 = Base.Checked.checked_mul(coeff, ck)
-            ci = exactdiv(Base.Checked.checked_sub(p1, p2), last_pivot)
-            if !iszero(ci)
-                push!(tmp_incidence, v)
-                push!(tmp_coeffs, ci)
+        numkvars = length(kvars)
+        numivars = length(ivars)
+        tmp_incidence = similar(eadj[ei], numkvars + numivars)
+        tmp_coeffs = similar(old_cadj[ei], numkvars + numivars)
+        tmp_len = 0
+        kvind = ivind = 0
+        if _debug_mode
+            # in debug mode, we at least check to confirm we're iterating over
+            # `v`s in the correct order
+            vars = sort(union(ivars, kvars))
+            vi = 0
+        end
+        if numivars > 0 && numkvars > 0
+            kvv = kvars[kvind += 1]
+            ivv = ivars[ivind += 1]
+            dobreak = false
+            while true
+                if kvv == ivv
+                    v = kvv
+                    ck = kcoeffs[kvind]
+                    ci = icoeffs[ivind]
+                    kvind += 1
+                    ivind += 1
+                    if kvind > numkvars
+                        dobreak = true
+                    else
+                        kvv = kvars[kvind]
+                    end
+                    if ivind > numivars
+                        dobreak = true
+                    else
+                        ivv = ivars[ivind]
+                    end
+                    p1 = Base.Checked.checked_mul(pivot, ci)
+                    p2 = Base.Checked.checked_mul(coeff, ck)
+                    ci = exactdiv(Base.Checked.checked_sub(p1, p2), last_pivot)
+                elseif kvv < ivv
+                    v = kvv
+                    ck = kcoeffs[kvind]
+                    kvind += 1
+                    if kvind > numkvars
+                        dobreak = true
+                    else
+                        kvv = kvars[kvind]
+                    end
+                    p2 = Base.Checked.checked_mul(coeff, ck)
+                    ci = exactdiv(Base.Checked.checked_neg(p2), last_pivot)
+                else # kvv > ivv
+                    v = ivv
+                    ci = icoeffs[ivind]
+                    ivind += 1
+                    if ivind > numivars
+                        dobreak = true
+                    else
+                        ivv = ivars[ivind]
+                    end
+                    ci = exactdiv(Base.Checked.checked_mul(pivot, ci), last_pivot)
+                end
+                if _debug_mode
+                    @assert v == vars[vi += 1]
+                end
+                if v != vpivot && !iszero(ci)
+                    tmp_incidence[tmp_len += 1] = v
+                    tmp_coeffs[tmp_len] = ci
+                end
+                dobreak && break
+            end
+        elseif numkvars > 0
+            ivind = 1
+            kvv = kvars[kvind += 1]
+        elseif numivars > 0
+            kvind = 1
+            ivv = ivars[ivind += 1]
+        end
+        if kvind <= numkvars
+            v = kvv
+            while true
+                if _debug_mode
+                    @assert v == vars[vi += 1]
+                end
+                if v != vpivot
+                    ck = kcoeffs[kvind]
+                    p2 = Base.Checked.checked_mul(coeff, ck)
+                    ci = exactdiv(Base.Checked.checked_neg(p2), last_pivot)
+                    if !iszero(ci)
+                        tmp_incidence[tmp_len += 1] = v
+                        tmp_coeffs[tmp_len] = ci
+                    end
+                end
+                (kvind == numkvars) && break
+                v = kvars[kvind += 1]
+            end
+        elseif ivind <= numivars
+            v = ivv
+            while true
+                if _debug_mode
+                    @assert v == vars[vi += 1]
+                end
+                if v != vpivot
+                    p1 = Base.Checked.checked_mul(pivot, icoeffs[ivind])
+                    ci = exactdiv(p1, last_pivot)
+                    if !iszero(ci)
+                        tmp_incidence[tmp_len += 1] = v
+                        tmp_coeffs[tmp_len] = ci
+                    end
+                end
+                (ivind == numivars) && break
+                v = ivars[ivind += 1]
             end
         end
+        resize!(tmp_incidence, tmp_len)
+        resize!(tmp_coeffs, tmp_len)
         eadj[ei] = tmp_incidence
         old_cadj[ei] = tmp_coeffs
     end

@@ -33,12 +33,12 @@ struct ODESystem <: AbstractODESystem
     """Independent variable."""
     iv::BasicSymbolic{Real}
     """
-    Dependent (state) variables. Must not contain the independent variable.
+    Dependent (unknown) variables. Must not contain the independent variable.
 
     N.B.: If `torn_matching !== nothing`, this includes all variables. Actual
-    ODE states are determined by the `SelectedState()` entries in `torn_matching`.
+    ODE unknowns are determined by the `SelectedState()` entries in `torn_matching`.
     """
-    states::Vector
+    unknowns::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
     """Time span."""
@@ -47,7 +47,7 @@ struct ODESystem <: AbstractODESystem
     var_to_name::Any
     """Control parameters (some subset of `ps`)."""
     ctrls::Vector
-    """Observed states."""
+    """Observed variables."""
     observed::Vector{Equation}
     """
     Time-derivative matrix. Note: this field will not be defined until
@@ -88,9 +88,26 @@ struct ODESystem <: AbstractODESystem
     """
     defaults::Dict
     """
+    The guesses to use as the initial conditions for the
+    initialization system.
+    """
+    guesses::Dict
+    """
     Tearing result specifying how to solve the system.
     """
     torn_matching::Union{Matching, Nothing}
+    """
+    The system for performing the initialization.
+    """
+    initializesystem::Union{Nothing, NonlinearSystem}
+    """
+    Extra equations to be enforced during the initialization sequence.
+    """
+    initialization_eqs::Vector{Equation}
+    """
+    The schedule for the code generation process.
+    """
+    schedule::Any
     """
     Type of the system.
     """
@@ -110,6 +127,11 @@ struct ODESystem <: AbstractODESystem
     true at the end of an integration step.
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
+    """
+    A mapping from dependent parameters to expressions describing how they are calculated from
+    other parameters.
+    """
+    parameter_dependencies::Union{Nothing, Dict}
     """
     Metadata for the system, to be used by downstream packages.
     """
@@ -131,14 +153,17 @@ struct ODESystem <: AbstractODESystem
     """
     complete::Bool
     """
+    Cached data for fast symbolic indexing.
+    """
+    index_cache::Union{Nothing, IndexCache}
+    """
     A list of discrete subsystems.
     """
     discrete_subsystems::Any
     """
-    A list of actual states needed to be solved by solvers. Only
-    used for ODAEProblem.
+    A list of actual unknowns needed to be solved by solvers.
     """
-    unknown_states::Union{Nothing, Vector{Any}}
+    solved_unknowns::Union{Nothing, Vector{Any}}
     """
     A vector of vectors of indices for the split parameters.
     """
@@ -149,12 +174,14 @@ struct ODESystem <: AbstractODESystem
     parent::Any
 
     function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
-            jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
-            torn_matching, connector_type, preface, cevents,
-            devents, metadata = nothing, gui_metadata = nothing,
+            jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses,
+            torn_matching, initializesystem, initialization_eqs, schedule,
+            connector_type, preface, cevents,
+            devents, parameter_dependencies,
+            metadata = nothing, gui_metadata = nothing,
             tearing_state = nothing,
-            substitutions = nothing, complete = false,
-            discrete_subsystems = nothing, unknown_states = nothing,
+            substitutions = nothing, complete = false, index_cache = nothing,
+            discrete_subsystems = nothing, solved_unknowns = nothing,
             split_idxs = nothing, parent = nothing; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
@@ -163,13 +190,15 @@ struct ODESystem <: AbstractODESystem
             check_equations(equations(cevents), iv)
         end
         if checks == true || (checks & CheckUnits) > 0
-            all_dimensionless([dvs; ps; iv]) || check_units(deqs)
+            u = __get_unit_type(dvs, ps, iv)
+            check_units(u, deqs)
         end
         new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
-            ctrl_jac, Wfact, Wfact_t, name, systems, defaults, torn_matching,
-            connector_type, preface, cevents, devents, metadata, gui_metadata,
-            tearing_state, substitutions, complete, discrete_subsystems,
-            unknown_states, split_idxs, parent)
+            ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses, torn_matching,
+            initializesystem, initialization_eqs, schedule, connector_type, preface,
+            cevents, devents, parameter_dependencies, metadata,
+            gui_metadata, tearing_state, substitutions, complete, index_cache,
+            discrete_subsystems, solved_unknowns, split_idxs, parent)
     end
 end
 
@@ -182,34 +211,43 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         default_u0 = Dict(),
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
+        guesses = Dict(),
+        initializesystem = nothing,
+        initialization_eqs = Equation[],
+        schedule = nothing,
         connector_type = nothing,
         preface = nothing,
         continuous_events = nothing,
         discrete_events = nothing,
+        parameter_dependencies = nothing,
         checks = true,
         metadata = nothing,
         gui_metadata = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
-    deqs = scalarize(deqs)
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
-
-    iv′ = value(scalarize(iv))
-    ps′ = value.(scalarize(ps))
-    ctrl′ = value.(scalarize(controls))
-    dvs′ = value.(scalarize(dvs))
+    iv′ = value(iv)
+    ps′ = value.(ps)
+    ctrl′ = value.(controls)
+    dvs′ = value.(dvs)
     dvs′ = filter(x -> !isdelay(x, iv), dvs′)
-
     if !(isempty(default_u0) && isempty(default_p))
-        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
+        Base.depwarn(
+            "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
             :ODESystem, force = true)
     end
     defaults = todict(defaults)
     defaults = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(defaults))
-
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, dvs′)
     process_variables!(var_to_name, defaults, ps′)
+
+    sysguesses = [ModelingToolkit.getguess(st) for st in dvs′]
+    hasaguess = findall(!isnothing, sysguesses)
+    var_guesses = dvs′[hasaguess] .=> sysguesses[hasaguess]
+    sysguesses = isempty(var_guesses) ? Dict() : todict(var_guesses)
+    guesses = merge(sysguesses, todict(guesses))
+
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
     tgrad = RefValue(EMPTY_TGRAD)
@@ -223,18 +261,21 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     end
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
+    parameter_dependencies, ps′ = process_parameter_dependencies(
+        parameter_dependencies, ps′)
     ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
-        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing,
-        connector_type, preface, cont_callbacks, disc_callbacks,
+        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses, nothing, initializesystem,
+        initialization_eqs, schedule, connector_type, preface, cont_callbacks,
+        disc_callbacks, parameter_dependencies,
         metadata, gui_metadata, checks = checks)
 end
 
-function ODESystem(eqs, iv = nothing; kwargs...)
-    eqs = scalarize(eqs)
+function ODESystem(eqs, iv; kwargs...)
+    eqs = collect(eqs)
     # NOTE: this assumes that the order of algebraic equations doesn't matter
     diffvars = OrderedSet()
-    allstates = OrderedSet()
+    allunknowns = OrderedSet()
     ps = OrderedSet()
     # reorder equations such that it is in the form of `diffeq, algeeq`
     diffeq = Equation[]
@@ -253,8 +294,8 @@ function ODESystem(eqs, iv = nothing; kwargs...)
     compressed_eqs = Equation[] # equations that need to be expanded later, like `connect(a, b)`
     for eq in eqs
         eq.lhs isa Union{Symbolic, Number} || (push!(compressed_eqs, eq); continue)
-        collect_vars!(allstates, ps, eq.lhs, iv)
-        collect_vars!(allstates, ps, eq.rhs, iv)
+        collect_vars!(allunknowns, ps, eq.lhs, iv)
+        collect_vars!(allunknowns, ps, eq.rhs, iv)
         if isdiffeq(eq)
             diffvar, _ = var_from_nested_derivative(eq.lhs)
             isequal(iv, iv_from_nested_derivative(eq.lhs)) ||
@@ -267,14 +308,28 @@ function ODESystem(eqs, iv = nothing; kwargs...)
             push!(algeeq, eq)
         end
     end
-    for v in allstates
+    for v in allunknowns
         isdelay(v, iv) || continue
-        collect_vars!(allstates, ps, arguments(v)[1], iv)
+        collect_vars!(allunknowns, ps, arguments(v)[1], iv)
     end
-    algevars = setdiff(allstates, diffvars)
+    new_ps = OrderedSet()
+    for p in ps
+        if istree(p) && operation(p) === getindex
+            par = arguments(p)[begin]
+            if Symbolics.shape(Symbolics.unwrap(par)) !== Symbolics.Unknown() &&
+               all(par[i] in ps for i in eachindex(par))
+                push!(new_ps, par)
+            else
+                push!(new_ps, p)
+            end
+        else
+            push!(new_ps, p)
+        end
+    end
+    algevars = setdiff(allunknowns, diffvars)
     # the orders here are very important!
     return ODESystem(Equation[diffeq; algeeq; compressed_eqs], iv,
-        collect(Iterators.flatten((diffvars, algevars))), ps; kwargs...)
+        collect(Iterators.flatten((diffvars, algevars))), collect(new_ps); kwargs...)
 end
 
 # NOTE: equality does not check cached Jacobian
@@ -285,7 +340,7 @@ function Base.:(==)(sys1::ODESystem, sys2::ODESystem)
     isequal(iv1, iv2) &&
         isequal(nameof(sys1), nameof(sys2)) &&
         _eq_unordered(get_eqs(sys1), get_eqs(sys2)) &&
-        _eq_unordered(get_states(sys1), get_states(sys2)) &&
+        _eq_unordered(get_unknowns(sys1), get_unknowns(sys2)) &&
         _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
         all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
 end
@@ -297,7 +352,7 @@ function flatten(sys::ODESystem, noeqs = false)
     else
         return ODESystem(noeqs ? Equation[] : equations(sys),
             get_iv(sys),
-            states(sys),
+            unknowns(sys),
             parameters(sys),
             observed = observed(sys),
             continuous_events = continuous_events(sys),
@@ -322,7 +377,7 @@ function build_explicit_observed_function(sys, ts;
         output_type = Array,
         checkbounds = true,
         drop_expr = drop_expr,
-        ps = parameters(sys),
+        ps = full_parameters(sys),
         throw = true)
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]
@@ -342,12 +397,12 @@ function build_explicit_observed_function(sys, ts;
         obs = map(x -> x.lhs ~ substitute(x.rhs, cmap), obs)
     end
 
-    sts = Set(states(sys))
+    sts = Set(unknowns(sys))
     observed_idx = Dict(x.lhs => i for (i, x) in enumerate(obs))
     param_set = Set(parameters(sys))
-    param_set_ns = Set(states(sys, p) for p in parameters(sys))
-    namespaced_to_obs = Dict(states(sys, x.lhs) => x.lhs for x in obs)
-    namespaced_to_sts = Dict(states(sys, x) => x for x in states(sys))
+    param_set_ns = Set(unknowns(sys, p) for p in parameters(sys))
+    namespaced_to_obs = Dict(unknowns(sys, x.lhs) => x.lhs for x in obs)
+    namespaced_to_sts = Dict(unknowns(sys, x) => x for x in unknowns(sys))
 
     # FIXME: This is a rather rough estimate of dependencies. We assume
     # the expression depends on everything before the `maxidx`.
@@ -376,7 +431,7 @@ function build_explicit_observed_function(sys, ts;
                     continue
                 end
                 if throw
-                    Base.throw(ArgumentError("$s is neither an observed nor a state variable."))
+                    Base.throw(ArgumentError("$s is neither an observed nor an unknown variable."))
                 else
                     # TODO: return variables that don't exist in the system.
                     return nothing
@@ -397,12 +452,14 @@ function build_explicit_observed_function(sys, ts;
     if inputs !== nothing
         ps = setdiff(ps, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
     end
-    if ps isa Tuple
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        ps = DestructuredArgs.(reorder_parameters(get_index_cache(sys), ps))
+    elseif ps isa Tuple
         ps = DestructuredArgs.(ps, inbounds = !checkbounds)
     else
         ps = (DestructuredArgs(ps, inbounds = !checkbounds),)
     end
-    dvs = DestructuredArgs(states(sys), inbounds = !checkbounds)
+    dvs = DestructuredArgs(unknowns(sys), inbounds = !checkbounds)
     if inputs === nothing
         args = [dvs, ps..., ivs...]
     else
@@ -445,13 +502,13 @@ function convert_system(::Type{<:ODESystem}, sys, t; name = nameof(sys))
         throw(ArgumentError("`convert_system` cannot handle reduced model (i.e. observed(sys) is non-empty)."))
     t = value(t)
     varmap = Dict()
-    sts = states(sys)
+    sts = unknowns(sys)
     newsts = similar(sts, Any)
     for (i, s) in enumerate(sts)
         if istree(s)
             args = arguments(s)
             length(args) == 1 ||
-                throw(InvalidSystemException("Illegal state: $s. The state can have at most one argument like `x(t)`."))
+                throw(InvalidSystemException("Illegal unknown: $s. The unknown can have at most one argument like `x(t)`."))
             arg = args[1]
             if isequal(arg, t)
                 newsts[i] = s
@@ -482,7 +539,7 @@ $(SIGNATURES)
 
 Add accumulation variables for `vars`.
 """
-function add_accumulations(sys::ODESystem, vars = states(sys))
+function add_accumulations(sys::ODESystem, vars = unknowns(sys))
     avars = [rename(v, Symbol(:accumulation_, getname(v))) for v in vars]
     add_accumulations(sys, avars .=> vars)
 end
@@ -502,11 +559,11 @@ the cumulative `x + y` and `x^2` would be added to `sys`.
 function add_accumulations(sys::ODESystem, vars::Vector{<:Pair})
     eqs = get_eqs(sys)
     avars = map(first, vars)
-    if (ints = intersect(avars, states(sys)); !isempty(ints))
+    if (ints = intersect(avars, unknowns(sys)); !isempty(ints))
         error("$ints already exist in the system!")
     end
     D = Differential(get_iv(sys))
     @set! sys.eqs = [eqs; Equation[D(a) ~ v[2] for (a, v) in zip(avars, vars)]]
-    @set! sys.states = [get_states(sys); avars]
+    @set! sys.unknowns = [get_unknowns(sys); avars]
     @set! sys.defaults = merge(get_defaults(sys), Dict(a => 0.0 for a in avars))
 end

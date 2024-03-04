@@ -1,64 +1,65 @@
-using ModelingToolkit, Unitful, OrdinaryDiffEq, JumpProcesses, IfElse
+using ModelingToolkit, OrdinaryDiffEq, JumpProcesses, Unitful
 using Test
 MT = ModelingToolkit
+UMT = ModelingToolkit.UnitfulUnitCheck
 @parameters τ [unit = u"ms"] γ
 @variables t [unit = u"ms"] E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
 
 #This is how equivalent works:
-@test MT.equivalent(u"MW", u"kJ/ms")
-@test !MT.equivalent(u"m", u"cm")
-@test MT.equivalent(MT.get_unit(P^γ), MT.get_unit((E / τ)^γ))
+@test UMT.equivalent(u"MW", u"kJ/ms")
+@test !UMT.equivalent(u"m", u"cm")
+@test UMT.equivalent(UMT.get_unit(P^γ), UMT.get_unit((E / τ)^γ))
 
 # Basic access
-@test MT.get_unit(t) == u"ms"
-@test MT.get_unit(E) == u"kJ"
-@test MT.get_unit(τ) == u"ms"
-@test MT.get_unit(γ) == MT.unitless
-@test MT.get_unit(0.5) == MT.unitless
-@test MT.get_unit(MT.SciMLBase.NullParameters()) == MT.unitless
+@test UMT.get_unit(t) == u"ms"
+@test UMT.get_unit(E) == u"kJ"
+@test UMT.get_unit(τ) == u"ms"
+@test UMT.get_unit(γ) == UMT.unitless
+@test UMT.get_unit(0.5) == UMT.unitless
+@test UMT.get_unit(UMT.SciMLBase.NullParameters()) == UMT.unitless
 
 # Prohibited unit types
 @parameters β [unit = u"°"] α [unit = u"°C"] γ [unit = 1u"s"]
-@test_throws MT.ValidationError MT.get_unit(β)
-@test_throws MT.ValidationError MT.get_unit(α)
-@test_throws MT.ValidationError MT.get_unit(γ)
+@test_throws UMT.ValidationError UMT.get_unit(β)
+@test_throws UMT.ValidationError UMT.get_unit(α)
+@test_throws UMT.ValidationError UMT.get_unit(γ)
 
 # Non-trivial equivalence & operators
-@test MT.get_unit(τ^-1) == u"ms^-1"
-@test MT.equivalent(MT.get_unit(D(E)), u"MW")
-@test MT.equivalent(MT.get_unit(E / τ), u"MW")
-@test MT.get_unit(2 * P) == u"MW"
-@test MT.get_unit(t / τ) == MT.unitless
-@test MT.equivalent(MT.get_unit(P - E / τ), u"MW")
-@test MT.equivalent(MT.get_unit(D(D(E))), u"MW/ms")
-@test MT.get_unit(IfElse.ifelse(t > t, P, E / τ)) == u"MW"
-@test MT.get_unit(1.0^(t / τ)) == MT.unitless
-@test MT.get_unit(exp(t / τ)) == MT.unitless
-@test MT.get_unit(sin(t / τ)) == MT.unitless
-@test MT.get_unit(sin(1u"rad")) == MT.unitless
-@test MT.get_unit(t^2) == u"ms^2"
+@test UMT.get_unit(τ^-1) == u"ms^-1"
+@test UMT.equivalent(UMT.get_unit(D(E)), u"MW")
+@test UMT.equivalent(UMT.get_unit(E / τ), u"MW")
+@test UMT.get_unit(2 * P) == u"MW"
+@test UMT.get_unit(t / τ) == UMT.unitless
+@test UMT.equivalent(UMT.get_unit(P - E / τ), u"MW")
+@test UMT.equivalent(UMT.get_unit(D(D(E))), u"MW/ms")
+@test UMT.get_unit(ifelse(t > t, P, E / τ)) == u"MW"
+@test UMT.get_unit(1.0^(t / τ)) == UMT.unitless
+@test UMT.get_unit(exp(t / τ)) == UMT.unitless
+@test UMT.get_unit(sin(t / τ)) == UMT.unitless
+@test UMT.get_unit(sin(1 * u"rad")) == UMT.unitless
+@test UMT.get_unit(t^2) == u"ms^2"
 
 eqs = [D(E) ~ P - E / τ
-    0 ~ P]
-@test MT.validate(eqs)
-@named sys = ODESystem(eqs)
+       0 ~ P]
+@test UMT.validate(eqs)
+@named sys = ODESystem(eqs, t)
 
-@test !MT.validate(D(D(E)) ~ P)
-@test !MT.validate(0 ~ P + E * τ)
+@test !UMT.validate(D(D(E)) ~ P)
+@test !UMT.validate(0 ~ P + E * τ)
 
 # Disabling unit validation/checks selectively
 @test_throws MT.ArgumentError ODESystem(eqs, t, [E, P, t], [τ], name = :sys)
 ODESystem(eqs, t, [E, P, t], [τ], name = :sys, checks = MT.CheckUnits)
 eqs = [D(E) ~ P - E / τ
-    0 ~ P + E * τ]
-@test_throws MT.ValidationError ODESystem(eqs, name = :sys, checks = MT.CheckAll)
-@test_throws MT.ValidationError ODESystem(eqs, name = :sys, checks = true)
-ODESystem(eqs, name = :sys, checks = MT.CheckNone)
-ODESystem(eqs, name = :sys, checks = false)
-@test_throws MT.ValidationError ODESystem(eqs, name = :sys,
+       0 ~ P + E * τ]
+@test_throws MT.ValidationError ODESystem(eqs, t, name = :sys, checks = MT.CheckAll)
+@test_throws MT.ValidationError ODESystem(eqs, t, name = :sys, checks = true)
+ODESystem(eqs, t, name = :sys, checks = MT.CheckNone)
+ODESystem(eqs, t, name = :sys, checks = false)
+@test_throws MT.ValidationError ODESystem(eqs, t, name = :sys,
     checks = MT.CheckComponents | MT.CheckUnits)
-@named sys = ODESystem(eqs, checks = MT.CheckComponents)
+@named sys = ODESystem(eqs, t, checks = MT.CheckComponents)
 @test_throws MT.ValidationError ODESystem(eqs, t, [E, P, t], [τ], name = :sys,
     checks = MT.CheckUnits)
 
@@ -86,9 +87,9 @@ end
 good_eqs = [connect(p1, p2)]
 bad_eqs = [connect(p1, p2, op)]
 bad_length_eqs = [connect(op, lp)]
-@test MT.validate(good_eqs)
-@test !MT.validate(bad_eqs)
-@test !MT.validate(bad_length_eqs)
+@test UMT.validate(good_eqs)
+@test !UMT.validate(bad_eqs)
+@test !UMT.validate(bad_length_eqs)
 @named sys = ODESystem(good_eqs, t, [], [])
 @test_throws MT.ValidationError ODESystem(bad_eqs, t, [], []; name = :sys)
 
@@ -97,23 +98,13 @@ bad_length_eqs = [connect(op, lp)]
 @parameters v[1:3]=[1, 2, 3] [unit = u"m/s"]
 D = Differential(t)
 eqs = D.(x) .~ v
-ODESystem(eqs, name = :sys)
-
-# Difference equation
-@parameters t [unit = u"s"] a [unit = u"s"^-1]
-@variables x(t) [unit = u"kg"]
-δ = Differential(t)
-D = Difference(t; dt = 0.1u"s")
-eqs = [
-    δ(x) ~ a * x,
-]
-de = ODESystem(eqs, t, [x], [a], name = :sys)
+ODESystem(eqs, t, name = :sys)
 
 # Nonlinear system
 @parameters a [unit = u"kg"^-1]
 @variables x [unit = u"kg"]
 eqs = [
-    0 ~ a * x,
+    0 ~ a * x
 ]
 @named nls = NonlinearSystem(eqs, [x], [a])
 
@@ -122,7 +113,7 @@ eqs = [
 @variables t [unit = u"ms"] E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
 eqs = [D(E) ~ P - E / τ
-    P ~ Q]
+       P ~ Q]
 
 noiseeqs = [0.1u"MW",
     0.1u"MW"]
@@ -130,13 +121,13 @@ noiseeqs = [0.1u"MW",
 
 # With noise matrix
 noiseeqs = [0.1u"MW" 0.1u"MW"
-    0.1u"MW" 0.1u"MW"]
+            0.1u"MW" 0.1u"MW"]
 @named sys = SDESystem(eqs, noiseeqs, t, [P, E], [τ, Q])
 
 # Invalid noise matrix
 noiseeqs = [0.1u"MW" 0.1u"MW"
-    0.1u"MW" 0.1u"s"]
-@test !MT.validate(eqs, noiseeqs)
+            0.1u"MW" 0.1u"s"]
+@test !UMT.validate(eqs, noiseeqs)
 
 # Non-trivial simplifications
 @variables t [unit = u"s"] V(t) [unit = u"m"^3] L(t) [unit = u"m"]
@@ -144,12 +135,12 @@ noiseeqs = [0.1u"MW" 0.1u"MW"
 D = Differential(t)
 eqs = [D(L) ~ v,
     V ~ L^3]
-@named sys = ODESystem(eqs)
+@named sys = ODESystem(eqs, t)
 sys_simple = structural_simplify(sys)
 
 eqs = [D(V) ~ r,
     V ~ L^3]
-@named sys = ODESystem(eqs)
+@named sys = ODESystem(eqs, t)
 sys_simple = structural_simplify(sys)
 
 @variables V [unit = u"m"^3] L [unit = u"m"]
@@ -166,7 +157,7 @@ sys_simple = structural_simplify(sys)
 
 #Jump System
 @parameters β [unit = u"(mol^2*s)^-1"] γ [unit = u"(mol*s)^-1"] t [unit = u"s"] jumpmol [
-    unit = u"mol",
+    unit = u"mol"
 ]
 @variables S(t) [unit = u"mol"] I(t) [unit = u"mol"] R(t) [unit = u"mol"]
 rate₁ = β * S * I

@@ -8,11 +8,13 @@ Let us first consider a simple `NonlinearSystem`:
 
 ```@example Bif1
 using ModelingToolkit
-@variables t x(t) y(t)
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) y(t)
 @parameters μ α
 eqs = [0 ~ μ * x - x^3 + α * y,
     0 ~ -y]
-@named nsys = NonlinearSystem(eqs, [x, y], [μ, α])
+@mtkbuild nsys = NonlinearSystem(eqs, [x, y], [μ, α])
 ```
 
 we wish to compute a bifurcation diagram for this system as we vary the parameter `μ`. For this, we need to provide the following information:
@@ -54,12 +56,9 @@ Let us consider the `BifurcationProblem` from the last section. If we wish to co
 
 ```@example Bif1
 p_span = (-4.0, 6.0)
-opt_newton = NewtonPar(tol = 1e-9, max_iterations = 20)
-opts_br = ContinuationPar(dsmin = 0.001, dsmax = 0.05, ds = 0.01,
-    max_steps = 100, nev = 2, newton_options = opt_newton,
-    p_min = p_span[1], p_max = p_span[2],
-    detect_bifurcation = 3, n_inversion = 4, tol_bisection_eigenvalue = 1e-8,
-    dsmin_bisection = 1e-9);
+opts_br = ContinuationPar(nev = 2,
+    p_min = p_span[1],
+    p_max = p_span[2])
 ```
 
 Here, `p_span` sets the interval over which we wish to compute the diagram.
@@ -90,13 +89,13 @@ It is also possible to use `ODESystem`s (rather than `NonlinearSystem`s) as inpu
 
 ```@example Bif2
 using BifurcationKit, ModelingToolkit, Plots
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@variables t x(t) y(t)
+@variables x(t) y(t)
 @parameters μ
-D = Differential(t)
 eqs = [D(x) ~ μ * x - y - x * (x^2 + y^2),
     D(y) ~ x + μ * y - y * (x^2 + y^2)]
-@named osys = ODESystem(eqs, t)
+@mtkbuild osys = ODESystem(eqs, t)
 
 bif_par = μ
 plot_var = x
@@ -111,12 +110,8 @@ bprob = BifurcationProblem(osys,
     jac = false)
 
 p_span = (-3.0, 3.0)
-opt_newton = NewtonPar(tol = 1e-9, max_iterations = 20)
-opts_br = ContinuationPar(dsmin = 0.001, dsmax = 0.05, ds = 0.01,
-    max_steps = 100, nev = 2, newton_options = opt_newton,
-    p_max = p_span[2], p_min = p_span[1],
-    detect_bifurcation = 3, n_inversion = 4, tol_bisection_eigenvalue = 1e-8,
-    dsmin_bisection = 1e-9)
+opts_br = ContinuationPar(nev = 2,
+    p_max = p_span[2], p_min = p_span[1])
 
 bf = bifurcationdiagram(bprob, PALC(), 2, (args...) -> opts_br; bothside = true)
 using Plots
@@ -129,3 +124,24 @@ plot(bf;
 ```
 
 Here, the value of `x` in the steady state does not change, however, at `μ=0` a Hopf bifurcation occur and the steady state turn unstable.
+
+We compute the branch of periodic orbits which is nearby the Hopf Bifurcation. We thus provide the branch `bf.γ`, the index of the Hopf point we want to branch from: 2 in this case and a method `PeriodicOrbitOCollProblem(20, 5)` to compute periodic orbits.
+
+```@example Bif2
+br_po = continuation(bf.γ, 2, opts_br,
+    PeriodicOrbitOCollProblem(20, 5);)
+
+plot(bf; putspecialptlegend = false,
+    markersize = 2,
+    plotfold = false,
+    xguide = "μ",
+    yguide = "x")
+plot!(br_po, xguide = "μ", yguide = "x", label = "Maximum of periodic orbit")
+```
+
+Let's see how to plot the periodic solution we just computed:
+
+```@example Bif2
+sol = get_periodic_orbit(br_po, 10)
+plot(sol.t, sol[1, :], yguide = "x", xguide = "time", label = "")
+```

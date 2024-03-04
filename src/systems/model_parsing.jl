@@ -24,6 +24,8 @@ struct Model{F, S}
 end
 (m::Model)(args...; kw...) = m.f(args...; kw...)
 
+Base.parentmodule(m::Model) = parentmodule(m.f)
+
 for f in (:connector, :mtkmodel)
     isconnector = f == :connector ? true : false
     @eval begin
@@ -35,14 +37,18 @@ end
 
 function _model_macro(mod, name, expr, isconnector)
     exprs = Expr(:block)
-    dict = Dict{Symbol, Any}()
-    dict[:kwargs] = Dict{Symbol, Any}()
-    comps = Symbol[]
+    dict = Dict{Symbol, Any}(
+        :constants => Dict{Symbol, Dict}(),
+        :kwargs => Dict{Symbol, Dict}(),
+        :structural_parameters => Dict{Symbol, Dict}()
+    )
+    comps = Union{Symbol, Expr}[]
     ext = Ref{Any}(nothing)
     eqs = Expr[]
     icon = Ref{Union{String, URI}}()
     ps, sps, vs, = [], [], []
     kwargs = Set()
+    where_types = Expr[]
 
     push!(exprs.args, :(variables = []))
     push!(exprs.args, :(parameters = []))
@@ -53,25 +59,28 @@ function _model_macro(mod, name, expr, isconnector)
     for arg in expr.args
         if arg.head == :macrocall
             parse_model!(exprs.args, comps, ext, eqs, icon, vs, ps,
-                sps, dict, mod, arg, kwargs)
+                sps, dict, mod, arg, kwargs, where_types)
         elseif arg.head == :block
             push!(exprs.args, arg)
         elseif arg.head == :if
             MLStyle.@match arg begin
                 Expr(:if, condition, x) => begin
                     parse_conditional_model_statements(comps, dict, eqs, exprs, kwargs,
-                        mod, ps, vs, parse_top_level_branch(condition, x.args)...)
+                        mod, ps, vs, where_types,
+                        parse_top_level_branch(condition, x.args)...)
                 end
                 Expr(:if, condition, x, y) => begin
                     parse_conditional_model_statements(comps, dict, eqs, exprs, kwargs,
-                        mod, ps, vs, parse_top_level_branch(condition, x.args, y)...)
+                        mod, ps, vs, where_types,
+                        parse_top_level_branch(condition, x.args, y)...)
                 end
                 _ => error("Got an invalid argument: $arg")
             end
         elseif isconnector
             # Connectors can have variables listed without `@variables` prefix or
             # begin block.
-            parse_variable_arg!(exprs.args, vs, dict, mod, arg, :variables, kwargs)
+            parse_variable_arg!(
+                exprs.args, vs, dict, mod, arg, :variables, kwargs, where_types)
         else
             error("$arg is not valid syntax. Expected a macro call.")
         end
@@ -102,12 +111,42 @@ function _model_macro(mod, name, expr, isconnector)
     isconnector && push!(exprs.args,
         :($Setfield.@set!(var"#___sys___".connector_type=$connector_type(var"#___sys___"))))
 
-    f = :($(Symbol(:__, name, :__))(; name, $(kwargs...)) = $exprs)
+    f = if length(where_types) == 0
+        :($(Symbol(:__, name, :__))(; name, $(kwargs...)) = $exprs)
+    else
+        f_with_where = Expr(:where)
+        push!(f_with_where.args,
+            :($(Symbol(:__, name, :__))(; name, $(kwargs...))), where_types...)
+        :($f_with_where = $exprs)
+    end
     :($name = $Model($f, $dict, $isconnector))
 end
 
-function parse_variable_def!(dict, mod, arg, varclass, kwargs;
-        def = nothing, indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
+function update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
+        varclass, where_types)
+    if indices isa Nothing
+        push!(kwargs, Expr(:kw, Expr(:(::), a, Union{Nothing, type}), nothing))
+        dict[:kwargs][getname(var)] = Dict(:value => def, :type => type)
+    else
+        vartype = gensym(:T)
+        push!(kwargs,
+            Expr(:kw,
+                Expr(:(::), a,
+                    Expr(:curly, :Union, :Nothing, Expr(:curly, :AbstractArray, vartype))),
+                nothing))
+        push!(where_types, :($vartype <: $type))
+        dict[:kwargs][getname(var)] = Dict(:value => def, :type => AbstractArray{type})
+    end
+    if dict[varclass] isa Vector
+        dict[varclass][1][getname(var)][:type] = AbstractArray{type}
+    else
+        dict[varclass][getname(var)][:type] = type
+    end
+end
+
+function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
+        def = nothing, indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
+        type::Type = Real)
     metatypes = [(:connection_type, VariableConnectType),
         (:description, VariableDescription),
         (:unit, VariableUnit),
@@ -120,29 +159,41 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs;
         (:misc, VariableMisc),
         (:disturbance, VariableDisturbance),
         (:tunable, VariableTunable),
-        (:dist, VariableDistribution),
-        (:binary, VariableBinary),
-        (:integer, VariableInteger)]
+        (:dist, VariableDistribution)]
 
     arg isa LineNumberNode && return
     MLStyle.@match arg begin
         a::Symbol => begin
-            push!(kwargs, Expr(:kw, a, nothing))
-            var = generate_var!(dict, a, varclass; indices)
-            dict[:kwargs][getname(var)] = def
+            var = generate_var!(dict, a, varclass; indices, type)
+            update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
+                varclass, where_types)
             (var, def)
         end
+        Expr(:(::), a, type) => begin
+            type = getfield(mod, type)
+            parse_variable_def!(dict, mod, a, varclass, kwargs, where_types; def, type)
+        end
+        Expr(:(::), Expr(:call, a, b), type) => begin
+            type = getfield(mod, type)
+            def = _type_check!(def, a, type, varclass)
+            parse_variable_def!(dict, mod, a, varclass, kwargs, where_types; def, type)
+        end
         Expr(:call, a, b) => begin
-            push!(kwargs, Expr(:kw, a, nothing))
-            var = generate_var!(dict, a, b, varclass; indices)
-            dict[:kwargs][getname(var)] = def
+            var = generate_var!(dict, a, b, varclass; indices, type)
+            update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
+                varclass, where_types)
             (var, def)
         end
         Expr(:(=), a, b) => begin
             Base.remove_linenums!(b)
             def, meta = parse_default(mod, b)
-            var, def = parse_variable_def!(dict, mod, a, varclass, kwargs; def)
-            dict[varclass][getname(var)][:default] = def
+            var, def = parse_variable_def!(
+                dict, mod, a, varclass, kwargs, where_types; def, type)
+            if dict[varclass] isa Vector
+                dict[varclass][1][getname(var)][:default] = def
+            else
+                dict[varclass][getname(var)][:default] = def
+            end
             if meta !== nothing
                 for (type, key) in metatypes
                     if (mt = get(meta, key, nothing)) !== nothing
@@ -159,13 +210,13 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs;
             (var, def)
         end
         Expr(:tuple, a, b) => begin
-            var, def = parse_variable_def!(dict, mod, a, varclass, kwargs)
+            var, def = parse_variable_def!(
+                dict, mod, a, varclass, kwargs, where_types; type)
             meta = parse_metadata(mod, b)
             if meta !== nothing
                 for (type, key) in metatypes
                     if (mt = get(meta, key, nothing)) !== nothing
                         key == VariableConnectType && (mt = nameof(mt))
-                        # @info dict 164
                         if dict[varclass] isa Vector
                             dict[varclass][1][getname(var)][type] = mt
                         else
@@ -179,16 +230,18 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs;
         end
         Expr(:ref, a, b...) => begin
             indices = map(i -> UnitRange(i.args[2], i.args[end]), b)
-            parse_variable_def!(dict, mod, a, varclass, kwargs;
-                def, indices)
+            parse_variable_def!(dict, mod, a, varclass, kwargs, where_types;
+                def, indices, type)
         end
         _ => error("$arg cannot be parsed")
     end
 end
 
 function generate_var(a, varclass;
-        indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
-    var = indices === nothing ? Symbolics.variable(a) : first(@variables $a[indices...])
+        indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
+        type = Real)
+    var = indices === nothing ? Symbolics.variable(a; T = type) :
+          first(@variables $a[indices...]::type)
     if varclass == :parameters
         var = toparam(var)
     end
@@ -196,18 +249,21 @@ function generate_var(a, varclass;
 end
 
 function generate_var!(dict, a, varclass;
-        indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
+        indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
+        type = Real)
     vd = get!(dict, varclass) do
         Dict{Symbol, Dict{Symbol, Any}}()
     end
     vd isa Vector && (vd = first(vd))
     vd[a] = Dict{Symbol, Any}()
     indices !== nothing && (vd[a][:size] = Tuple(lastindex.(indices)))
-    generate_var(a, varclass; indices)
+    generate_var(a, varclass; indices, type)
 end
 
 function generate_var!(dict, a, b, varclass;
-        indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
+        indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
+        type = Real)
+    # (type isa Nothing && type = Real)
     iv = generate_var(b, :variables)
     prev_iv = get!(dict, :independent_variable) do
         iv
@@ -219,10 +275,10 @@ function generate_var!(dict, a, b, varclass;
     vd isa Vector && (vd = first(vd))
     vd[a] = Dict{Symbol, Any}()
     var = if indices === nothing
-        Symbolics.variable(a, T = SymbolicUtils.FnType{Tuple{Real}, Real})(iv)
+        Symbolics.variable(a, T = SymbolicUtils.FnType{Tuple{Any}, type})(iv)
     else
         vd[a][:size] = Tuple(lastindex.(indices))
-        first(@variables $a(iv)[indices...])
+        first(@variables $a(iv)[indices...]::type)
     end
     if varclass == :parameters
         var = toparam(var)
@@ -279,7 +335,7 @@ function get_var(mod::Module, b)
 end
 
 function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps,
-        dict, mod, arg, kwargs)
+        dict, mod, arg, kwargs, where_types)
     mname = arg.args[1]
     body = arg.args[end]
     if mname == Symbol("@components")
@@ -287,13 +343,15 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps,
     elseif mname == Symbol("@extend")
         parse_extend!(exprs, ext, dict, mod, body, kwargs)
     elseif mname == Symbol("@variables")
-        parse_variables!(exprs, vs, dict, mod, body, :variables, kwargs)
+        parse_variables!(exprs, vs, dict, mod, body, :variables, kwargs, where_types)
     elseif mname == Symbol("@parameters")
-        parse_variables!(exprs, ps, dict, mod, body, :parameters, kwargs)
+        parse_variables!(exprs, ps, dict, mod, body, :parameters, kwargs, where_types)
     elseif mname == Symbol("@structural_parameters")
         parse_structural_parameters!(exprs, sps, dict, mod, body, kwargs)
     elseif mname == Symbol("@equations")
         parse_equations!(exprs, eqs, dict, body)
+    elseif mname == Symbol("@constants")
+        parse_constants!(exprs, dict, body, mod)
     elseif mname == Symbol("@icon")
         isassigned(icon) && error("This model has more than one icon.")
         parse_icon!(body, dict, icon, mod)
@@ -302,19 +360,67 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps,
     end
 end
 
+function parse_constants!(exprs, dict, body, mod)
+    Base.remove_linenums!(body)
+    for arg in body.args
+        MLStyle.@match arg begin
+            Expr(:(=), Expr(:(::), a, type), Expr(:tuple, b, metadata)) || Expr(:(=), Expr(:(::), a, type), b) => begin
+                type = getfield(mod, type)
+                b = _type_check!(get_var(mod, b), a, type, :constants)
+                constant = first(@constants $a::type = b)
+                push!(exprs, :($a = $constant))
+                dict[:constants][a] = Dict(:value => b, :type => type)
+                if @isdefined metadata
+                    for data in metadata.args
+                        dict[:constants][a][data.args[1]] = data.args[2]
+                    end
+                end
+            end
+            Expr(:(=), a, Expr(:tuple, b, metadata)) => begin
+                constant = first(@constants $a = b)
+                push!(exprs, :($a = $constant))
+                dict[:constants][a] = Dict{Symbol, Any}(:value => get_var(mod, b))
+                for data in metadata.args
+                    dict[:constants][a][data.args[1]] = data.args[2]
+                end
+            end
+            Expr(:(=), a, b) => begin
+                constant = first(@constants $a = b)
+                push!(exprs, :($a = $constant))
+                dict[:constants][a] = Dict(:value => get_var(mod, b))
+            end
+            _ => error("""Malformed constant definition `$arg`. Please use the following syntax:
+                ```
+                @constants begin
+                    var = value, [description = "This is an example constant."]
+                end
+                ```
+            """)
+        end
+    end
+end
+
 function parse_structural_parameters!(exprs, sps, dict, mod, body, kwargs)
     Base.remove_linenums!(body)
     for arg in body.args
         MLStyle.@match arg begin
+            Expr(:(=), Expr(:(::), a, type), b) => begin
+                type = getfield(mod, type)
+                b = _type_check!(get_var(mod, b), a, type, :structural_parameters)
+                push!(sps, a)
+                push!(kwargs, Expr(:kw, Expr(:(::), a, type), b))
+                dict[:structural_parameters][a] = dict[:kwargs][a] = Dict(
+                    :value => b, :type => type)
+            end
             Expr(:(=), a, b) => begin
                 push!(sps, a)
                 push!(kwargs, Expr(:kw, a, b))
-                dict[:kwargs][a] = b
+                dict[:structural_parameters][a] = dict[:kwargs][a] = Dict(:value => b)
             end
             a => begin
                 push!(sps, a)
                 push!(kwargs, a)
-                dict[:kwargs][a] = nothing
+                dict[:structural_parameters][a] = dict[:kwargs][a] = Dict(:value => nothing)
             end
         end
     end
@@ -338,17 +444,17 @@ function extend_args!(a, b, dict, expr, kwargs, varexpr, has_param = false)
                     end
                 end
                 push!(kwargs, Expr(:kw, x, nothing))
-                dict[:kwargs][x] = nothing
+                dict[:kwargs][x] = Dict(:value => nothing)
             end
             Expr(:kw, x) => begin
                 push!(kwargs, Expr(:kw, x, nothing))
-                dict[:kwargs][x] = nothing
+                dict[:kwargs][x] = Dict(:value => nothing)
             end
             Expr(:kw, x, y) => begin
                 b.args[i] = Expr(:kw, x, x)
                 push!(varexpr.args, :($x = $x === nothing ? $y : $x))
                 push!(kwargs, Expr(:kw, x, nothing))
-                dict[:kwargs][x] = nothing
+                dict[:kwargs][x] = Dict(:value => nothing)
             end
             Expr(:parameters, x...) => begin
                 has_param = true
@@ -418,25 +524,27 @@ function parse_extend!(exprs, ext, dict, mod, body, kwargs)
     return nothing
 end
 
-function parse_variable_arg!(exprs, vs, dict, mod, arg, varclass, kwargs)
-    name, ex = parse_variable_arg(dict, mod, arg, varclass, kwargs)
+function parse_variable_arg!(exprs, vs, dict, mod, arg, varclass, kwargs, where_types)
+    name, ex = parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
     push!(vs, name)
     push!(exprs, ex)
 end
 
-function parse_variable_arg(dict, mod, arg, varclass, kwargs)
-    vv, def = parse_variable_def!(dict, mod, arg, varclass, kwargs)
+function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
+    vv, def = parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types)
     name = getname(vv)
     return vv isa Num ? name : :($name...),
     :($name = $name === nothing ? $setdefault($vv, $def) : $setdefault($vv, $name))
 end
 
-function handle_conditional_vars!(arg, conditional_branch, mod, varclass, kwargs)
+function handle_conditional_vars!(
+        arg, conditional_branch, mod, varclass, kwargs, where_types)
     conditional_dict = Dict(:kwargs => Dict(),
         :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}()],
         :variables => Any[Dict{Symbol, Dict{Symbol, Any}}()])
     for _arg in arg.args
-        name, ex = parse_variable_arg(conditional_dict, mod, _arg, varclass, kwargs)
+        name, ex = parse_variable_arg(
+            conditional_dict, mod, _arg, varclass, kwargs, where_types)
         push!(conditional_branch.args, ex)
         push!(conditional_branch.args, :(push!($varclass, $name)))
     end
@@ -494,7 +602,7 @@ function push_conditional_dict!(dict, condition, conditional_dict,
     end
 end
 
-function parse_variables!(exprs, vs, dict, mod, body, varclass, kwargs)
+function parse_variables!(exprs, vs, dict, mod, body, varclass, kwargs, where_types)
     expr = Expr(:block)
     push!(exprs, expr)
     for arg in body.args
@@ -506,7 +614,8 @@ function parse_variables!(exprs, vs, dict, mod, body, varclass, kwargs)
                     conditional_expr.args[2],
                     mod,
                     varclass,
-                    kwargs)
+                    kwargs,
+                    where_types)
                 push!(expr.args, conditional_expr)
                 push_conditional_dict!(dict, condition, conditional_dict, nothing, varclass)
             end
@@ -516,12 +625,13 @@ function parse_variables!(exprs, vs, dict, mod, body, varclass, kwargs)
                     conditional_expr.args[2],
                     mod,
                     varclass,
-                    kwargs)
+                    kwargs,
+                    where_types)
                 conditional_y_expr, conditional_y_tuple = handle_y_vars(y,
                     conditional_dict,
                     mod,
                     varclass,
-                    kwargs)
+                    kwargs, where_types)
                 push!(conditional_expr.args, conditional_y_expr)
                 push!(expr.args, conditional_expr)
                 push_conditional_dict!(dict,
@@ -530,25 +640,28 @@ function parse_variables!(exprs, vs, dict, mod, body, varclass, kwargs)
                     conditional_y_tuple,
                     varclass)
             end
-            _ => parse_variable_arg!(exprs, vs, dict, mod, arg, varclass, kwargs)
+            _ => parse_variable_arg!(
+                exprs, vs, dict, mod, arg, varclass, kwargs, where_types)
         end
     end
 end
 
-function handle_y_vars(y, dict, mod, varclass, kwargs)
+function handle_y_vars(y, dict, mod, varclass, kwargs, where_types)
     conditional_dict = if Meta.isexpr(y, :elseif)
         conditional_y_expr = Expr(:elseif, y.args[1], Expr(:block))
         conditional_dict = handle_conditional_vars!(y.args[2],
             conditional_y_expr.args[2],
             mod,
             varclass,
-            kwargs)
-        _y_expr, _conditional_dict = handle_y_vars(y.args[end], dict, mod, varclass, kwargs)
+            kwargs,
+            where_types)
+        _y_expr, _conditional_dict = handle_y_vars(
+            y.args[end], dict, mod, varclass, kwargs, where_types)
         push!(conditional_y_expr.args, _y_expr)
         (:elseif, y.args[1], conditional_dict, _conditional_dict)
     else
         conditional_y_expr = Expr(:block)
-        handle_conditional_vars!(y, conditional_y_expr, mod, varclass, kwargs)
+        handle_conditional_vars!(y, conditional_y_expr, mod, varclass, kwargs, where_types)
     end
     conditional_y_expr, conditional_dict
 end
@@ -634,7 +747,7 @@ end
 
 ### Parsing Components:
 
-function component_args!(a, b, expr, varexpr, kwargs)
+function component_args!(a, b, varexpr, kwargs; index_name = nothing)
     # Whenever `b` is a function call, skip the first arg aka the function name.
     # Whenever it is a kwargs list, include it.
     start = b.head == :call ? 2 : 1
@@ -643,73 +756,115 @@ function component_args!(a, b, expr, varexpr, kwargs)
         arg isa LineNumberNode && continue
         MLStyle.@match arg begin
             x::Symbol || Expr(:kw, x) => begin
-                _v = _rename(a, x)
-                b.args[i] = Expr(:kw, x, _v)
-                push!(varexpr.args, :((@isdefined $x) && ($_v = $x)))
-                push!(kwargs, Expr(:kw, _v, nothing))
-                # dict[:kwargs][_v] = nothing
+                varname, _varname = _rename(a, x)
+                b.args[i] = Expr(:kw, x, _varname)
+                push!(varexpr.args, :((if $varname !== nothing
+                    $_varname = $varname
+                elseif @isdefined $x
+                    # Allow users to define a var in `structural_parameters` and set
+                    # that as positional arg of subcomponents; it is useful for cases
+                    # where it needs to be passed to multiple subcomponents.
+                    $_varname = $x
+                end)))
+                push!(kwargs, Expr(:kw, varname, nothing))
+                # dict[:kwargs][varname] = nothing
             end
             Expr(:parameters, x...) => begin
-                component_args!(a, arg, expr, varexpr, kwargs)
+                component_args!(a, arg, varexpr, kwargs)
             end
             Expr(:kw, x, y) => begin
-                _v = _rename(a, x)
-                b.args[i] = Expr(:kw, x, _v)
-                push!(varexpr.args, :($_v = $_v === nothing ? $y : $_v))
-                push!(kwargs, Expr(:kw, _v, nothing))
-                # dict[:kwargs][_v] = nothing
+                varname, _varname = _rename(a, x)
+                b.args[i] = Expr(:kw, x, _varname)
+                if isnothing(index_name)
+                    push!(varexpr.args, :($_varname = $varname === nothing ? $y : $varname))
+                else
+                    push!(varexpr.args,
+                        :($_varname = $varname === nothing ? $y : $varname[$index_name]))
+                end
+                push!(kwargs, Expr(:kw, varname, nothing))
+                # dict[:kwargs][varname] = nothing
             end
             _ => error("Could not parse $arg of component $a")
         end
     end
 end
 
-function _parse_components!(exprs, body, kwargs)
-    expr = Expr(:block)
+model_name(name, range) = Symbol.(name, :_, collect(range))
+
+function _parse_components!(body, kwargs)
+    local expr
     varexpr = Expr(:block)
-    # push!(exprs, varexpr)
-    comps = Vector{Union{Symbol, Expr}}[]
+    comps = Vector{Union{Union{Expr, Symbol}, Expr}}[]
     comp_names = []
 
-    for arg in body.args
-        arg isa LineNumberNode && continue
-        MLStyle.@match arg begin
-            Expr(:block) => begin
-                # TODO: Do we need this?
-                error("Multiple `@components` block detected within a single block")
-            end
-            Expr(:(=), a, b) => begin
-                arg = deepcopy(arg)
-                b = deepcopy(arg.args[2])
+    Base.remove_linenums!(body)
+    arg = body.args[end]
 
-                component_args!(a, b, expr, varexpr, kwargs)
+    MLStyle.@match arg begin
+        Expr(:(=), a, Expr(:comprehension, Expr(:generator, b, Expr(:(=), c, d)))) => begin
+            array_varexpr = Expr(:block)
 
-                arg.args[2] = b
-                push!(expr.args, arg)
-                push!(comp_names, a)
-                if (isa(b.args[1], Symbol) || Meta.isexpr(b.args[1], :.))
-                    push!(comps, [a, b.args[1]])
-                end
-            end
-            _ => error("Couldn't parse the component body: $arg")
+            push!(comp_names, :($a...))
+            push!(comps, [a, b.args[1], d])
+            b = deepcopy(b)
+
+            component_args!(a, b, array_varexpr, kwargs; index_name = c)
+
+            expr = _named_idxs(a, d, :($c -> $b); extra_args = array_varexpr)
         end
+        Expr(:(=), a, Expr(:comprehension, Expr(:generator, b, Expr(:filter, e, Expr(:(=), c, d))))) => begin
+            error("List comprehensions with conditional statements aren't supported.")
+        end
+        Expr(:(=), a, Expr(:comprehension, Expr(:generator, b, Expr(:(=), c, d), e...))) => begin
+            # Note that `e` is of the form `Tuple{Expr(:(=), c, d)}`
+            error("More than one index isn't supported while building component array")
+        end
+        Expr(:block) => begin
+            # TODO: Do we need this?
+            error("Multiple `@components` block detected within a single block")
+        end
+        Expr(:(=), a, Expr(:for, Expr(:(=), c, d), b)) => begin
+            Base.remove_linenums!(b)
+            array_varexpr = Expr(:block)
+            push!(array_varexpr.args, b.args[1:(end - 1)]...)
+            push!(comp_names, :($a...))
+            push!(comps, [a, b.args[end].args[1], d])
+            b = deepcopy(b)
+
+            component_args!(a, b.args[end], array_varexpr, kwargs; index_name = c)
+
+            expr = _named_idxs(a, d, :($c -> $(b.args[end])); extra_args = array_varexpr)
+        end
+        Expr(:(=), a, b) => begin
+            arg = deepcopy(arg)
+            b = deepcopy(arg.args[2])
+
+            component_args!(a, b, varexpr, kwargs)
+
+            arg.args[2] = b
+            expr = :(@named $arg)
+            push!(comp_names, a)
+            if (isa(b.args[1], Symbol) || Meta.isexpr(b.args[1], :.))
+                push!(comps, [a, b.args[1]])
+            end
+        end
+        _ => error("Couldn't parse the component body: $arg")
     end
+
     return comp_names, comps, expr, varexpr
 end
 
 function push_conditional_component!(ifexpr, expr_vec, comp_names, varexpr)
     blk = Expr(:block)
     push!(blk.args, varexpr)
-    push!(blk.args, :(@named begin
-        $(expr_vec.args...)
-    end))
+    push!(blk.args, expr_vec)
     push!(blk.args, :($push!(systems, $(comp_names...))))
     push!(ifexpr.args, blk)
 end
 
 function handle_if_x!(mod, exprs, ifexpr, x, kwargs, condition = nothing)
     push!(ifexpr.args, condition)
-    comp_names, comps, expr_vec, varexpr = _parse_components!(ifexpr, x, kwargs)
+    comp_names, comps, expr_vec, varexpr = _parse_components!(x, kwargs)
     push_conditional_component!(ifexpr, expr_vec, comp_names, varexpr)
     comps
 end
@@ -725,7 +880,7 @@ function handle_if_y!(exprs, ifexpr, y, kwargs)
         push!(ifexpr.args, elseifexpr)
         (comps...,)
     else
-        comp_names, comps, expr_vec, varexpr = _parse_components!(exprs, y, kwargs)
+        comp_names, comps, expr_vec, varexpr = _parse_components!(y, kwargs)
         push_conditional_component!(ifexpr, expr_vec, comp_names, varexpr)
         comps
     end
@@ -750,25 +905,23 @@ function parse_components!(exprs, cs, dict, compbody, kwargs)
             Expr(:if, condition, x, y) => begin
                 handle_conditional_components(condition, dict, exprs, kwargs, x, y)
             end
-            Expr(:(=), a, b) => begin
-                comp_names, comps, expr_vec, varexpr = _parse_components!(exprs,
-                    :(begin
+            # Either the arg is top level component declaration or an invalid cause - both are handled by `_parse_components`
+            _ => begin
+                comp_names, comps, expr_vec, varexpr = _parse_components!(:(begin
                         $arg
                     end),
                     kwargs)
                 push!(cs, comp_names...)
                 push!(dict[:components], comps...)
-                push!(exprs, varexpr, :(@named begin
-                    $(expr_vec.args...)
-                end))
+                push!(exprs, varexpr, expr_vec)
             end
-            _ => error("Couldn't parse the component body $compbody")
         end
     end
 end
 
 function _rename(compname, varname)
     compname = Symbol(compname, :__, varname)
+    (compname, Symbol(:_, compname))
 end
 
 # Handle top level branching
@@ -829,16 +982,18 @@ function parse_top_level_branch(condition, x, y = nothing, branch = :if)
 end
 
 function parse_conditional_model_statements(comps, dict, eqs, exprs, kwargs, mod,
-        ps, vs, component_blk, equations_blk, parameter_blk, variable_blk)
+        ps, vs, where_types, component_blk, equations_blk, parameter_blk, variable_blk)
     parameter_blk !== nothing &&
-        parse_variables!(exprs.args, ps, dict, mod, :(begin
+        parse_variables!(
+            exprs.args, ps, dict, mod, :(begin
                 $parameter_blk
-            end), :parameters, kwargs)
+            end), :parameters, kwargs, where_types)
 
     variable_blk !== nothing &&
-        parse_variables!(exprs.args, vs, dict, mod, :(begin
+        parse_variables!(
+            exprs.args, vs, dict, mod, :(begin
                 $variable_blk
-            end), :variables, kwargs)
+            end), :variables, kwargs, where_types)
 
     component_blk !== nothing &&
         parse_components!(exprs.args,
@@ -850,4 +1005,17 @@ function parse_conditional_model_statements(comps, dict, eqs, exprs, kwargs, mod
         parse_equations!(exprs.args, eqs, dict, :(begin
             $equations_blk
         end))
+end
+
+function _type_check!(val, a, type, class)
+    if val isa type
+        return val
+    else
+        try
+            return convert(type, val)
+        catch e
+            throw(TypeError(Symbol("`@mtkmodel`"),
+                "`$class`, while assigning to `$a`", type, typeof(val)))
+        end
+    end
 end

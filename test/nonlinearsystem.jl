@@ -4,7 +4,7 @@ using DiffEqBase, SparseArrays
 using Test
 using NonlinearSolve
 using ModelingToolkit: value
-using ModelingToolkit: get_default_or_guess
+using ModelingToolkit: get_default_or_guess, MTKParameters
 
 canonequal(a, b) = isequal(simplify(a), simplify(b))
 
@@ -15,7 +15,7 @@ canonequal(a, b) = isequal(simplify(a), simplify(b))
 
 function test_nlsys_inference(name, sys, vs, ps)
     @testset "NonlinearSystem construction: $name" begin
-        @test Set(states(sys)) == Set(value.(vs))
+        @test Set(unknowns(sys)) == Set(value.(vs))
         @test Set(parameters(sys)) == Set(value.(ps))
     end
 end
@@ -66,6 +66,7 @@ eqs = [0 ~ σ * a * h,
     0 ~ x * (ρ - z) - y,
     0 ~ x * y - β * z]
 @named ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
+ns = complete(ns)
 nlsys_func = generate_function(ns, [x, y, z], [σ, ρ, β])
 nf = NonlinearFunction(ns)
 jac = calculate_jacobian(ns)
@@ -81,29 +82,34 @@ sH = calculate_hessian(ns)
 @test getfield.(ModelingToolkit.hessian_sparsity(ns), :rowval) ==
       getfield.(sparse.(sH), :rowval)
 
-prob = NonlinearProblem(ns, ones(3), ones(3))
+prob = NonlinearProblem(ns, ones(3), [σ => 1.0, ρ => 1.0, β => 1.0])
 @test prob.f.sys === ns
 sol = solve(prob, NewtonRaphson())
 @test sol.u[1] ≈ sol.u[2]
 
-@test_throws ArgumentError NonlinearProblem(ns, ones(4), ones(3))
+prob = NonlinearProblem(ns, ones(3), [σ => 1.0, ρ => 1.0, β => 1.0], jac = true)
+@test_nowarn solve(prob, NewtonRaphson())
+
+@test_throws ArgumentError NonlinearProblem(ns, ones(4), [σ => 1.0, ρ => 1.0, β => 1.0])
 
 @variables u F s a
 eqs1 = [
     0 ~ σ * (y - x) * h + F,
     0 ~ x * (ρ - z) - u,
     0 ~ x * y - β * z,
-    0 ~ x + y - z - u,
+    0 ~ x + y - z - u
 ]
 
 lorenz = name -> NonlinearSystem(eqs1, [x, y, z, u, F], [σ, ρ, β], name = name)
 lorenz1 = lorenz(:lorenz1)
-@test_throws ArgumentError NonlinearProblem(lorenz1, zeros(5))
+@test_throws ArgumentError NonlinearProblem(complete(lorenz1), zeros(5))
 lorenz2 = lorenz(:lorenz2)
-@named connected = NonlinearSystem([s ~ a + lorenz1.x
-        lorenz2.y ~ s * h
-        lorenz1.F ~ lorenz2.u
-        lorenz2.F ~ lorenz1.u], [s, a], [],
+@named connected = NonlinearSystem(
+    [s ~ a + lorenz1.x
+     lorenz2.y ~ s * h
+     lorenz1.F ~ lorenz2.u
+     lorenz2.F ~ lorenz1.u],
+    [s, a], [],
     systems = [lorenz1, lorenz2])
 @test_nowarn alias_elimination(connected)
 
@@ -128,7 +134,8 @@ eqs = [0 ~ σ * (y - x),
     0 ~ x * (ρ - z) - y,
     0 ~ x * y - β * z * h]
 @named ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
-np = NonlinearProblem(ns, [0, 0, 0], [1, 2, 3], jac = true, sparse = true)
+np = NonlinearProblem(
+    complete(ns), [0, 0, 0], [σ => 1, ρ => 2, β => 3], jac = true, sparse = true)
 @test calculate_jacobian(ns, sparse = true) isa SparseMatrixCSC
 
 # issue #819
@@ -154,10 +161,10 @@ end
     @parameters a b
     @variables x y
     eqs1 = [
-        0 ~ a * x,
+        0 ~ a * x
     ]
     eqs2 = [
-        0 ~ b * y,
+        0 ~ b * y
     ]
 
     @named sys1 = NonlinearSystem(eqs1, [x], [a])
@@ -166,7 +173,7 @@ end
 
     @test isequal(union(Set(parameters(sys1)), Set(parameters(sys2))),
         Set(parameters(sys3)))
-    @test isequal(union(Set(states(sys1)), Set(states(sys2))), Set(states(sys3)))
+    @test isequal(union(Set(unknowns(sys1)), Set(unknowns(sys2))), Set(unknowns(sys3)))
     @test isequal(union(Set(equations(sys1)), Set(equations(sys2))), Set(equations(sys3)))
 end
 
@@ -184,10 +191,10 @@ RHS2 = RHS
 @variables t
 @variables v1(t) v2(t) i1(t) i2(t)
 eq = [v1 ~ sin(2pi * t * h)
-    v1 - v2 ~ i1
-    v2 ~ i2
-    i1 ~ i2]
-@named sys = ODESystem(eq)
+      v1 - v2 ~ i1
+      v2 ~ i2
+      i1 ~ i2]
+@named sys = ODESystem(eq, t)
 @test length(equations(structural_simplify(sys))) == 0
 
 @testset "Issue: 1504" begin
@@ -199,7 +206,8 @@ eq = [v1 ~ sin(2pi * t * h)
         u[4] ~ h]
 
     sys = NonlinearSystem(eqs, collect(u[1:4]), Num[], defaults = Dict([]), name = :test)
-    prob = NonlinearProblem(sys, ones(length(states(sys))))
+    sys = complete(sys)
+    prob = NonlinearProblem(sys, ones(length(unknowns(sys))))
 
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
 
@@ -223,55 +231,14 @@ testdict = Dict([:test => 1])
         0 ~ x * (b - z) - y,
         0 ~ x * y - c * z]
     @named sys = NonlinearSystem(eqs, [x, y, z], [a, b, c], defaults = Dict(x => 2.0))
-    prob = NonlinearProblem(sys, ones(length(states(sys))))
+    sys = complete(sys)
+    prob = NonlinearProblem(sys, ones(length(unknowns(sys))))
 
-    prob_ = remake(prob, u0 = [1.0, 2.0, 3.0], p = [1.1, 1.2, 1.3])
+    prob_ = remake(prob, u0 = [1.0, 2.0, 3.0], p = [a => 1.1, b => 1.2, c => 1.3])
     @test prob_.u0 == [1.0, 2.0, 3.0]
-    @test prob_.p == [1.1, 1.2, 1.3]
+    @test prob_.p == MTKParameters(sys, [a => 1.1, b => 1.2, c => 1.3])
 
     prob_ = remake(prob, u0 = Dict(y => 2.0), p = Dict(a => 2.0))
     @test prob_.u0 == [1.0, 2.0, 1.0]
-    @test prob_.p == [2.0, 1.0, 1.0]
-end
-
-@testset "Initialization System" begin
-    # Define the Lotka Volterra system which begins at steady state
-    @parameters t
-    pars = @parameters a=1.5 b=1.0 c=3.0 d=1.0 dx_ss=1e-5
-
-    vars = @variables begin
-        dx(t),
-        dy(t),
-        (x(t) = dx ~ dx_ss), [guess = 0.5]
-        (y(t) = dy ~ 0), [guess = -0.5]
-    end
-
-    D = Differential(t)
-
-    eqs = [dx ~ a * x - b * x * y
-        dy ~ -c * y + d * x * y
-        D(x) ~ dx
-        D(y) ~ dy]
-
-    @named sys = ODESystem(eqs, t, vars, pars)
-
-    sys_simple = structural_simplify(sys)
-
-    # Set up the initialization system
-    sys_init = initializesystem(sys_simple)
-
-    sys_init_simple = structural_simplify(sys_init)
-
-    prob = NonlinearProblem(sys_init_simple, get_default_or_guess.(states(sys_init_simple)))
-
-    @test prob.u0 == [0.5, -0.5]
-
-    sol = solve(prob)
-    @test sol.retcode == SciMLBase.ReturnCode.Success
-
-    # Confirm for all the states of the non-simplified system
-    @test all(.≈(sol[states(sys)], [1e-5, 0, 1e-5 / 1.5, 0]; atol = 1e-8))
-
-    # Confirm for all the states of the simplified system
-    @test all(.≈(sol[states(sys_simple)], [1e-5 / 1.5, 0]; atol = 1e-8))
+    @test prob_.p == MTKParameters(sys, [a => 2.0, b => 1.0, c => 1.0])
 end

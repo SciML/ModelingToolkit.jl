@@ -1,5 +1,4 @@
 get_iv(D::Differential) = D.x
-get_iv(D::Difference) = D.t
 
 function make_operation(@nospecialize(op), args)
     if op === (*)
@@ -33,8 +32,8 @@ function retime_dvs(op, dvs, iv)
     op
 end
 
-function modified_states!(mstates, e::Equation, statelist = nothing)
-    get_variables!(mstates, e.lhs, statelist)
+function modified_unknowns!(munknowns, e::Equation, unknownlist = nothing)
+    get_variables!(munknowns, e.lhs, unknownlist)
 end
 
 macro showarr(x)
@@ -132,7 +131,7 @@ function check_variables(dvs, iv)
         (is_delay_var(iv, dv) || occursin(iv, dv)) ||
             throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
         isparameter(dv) &&
-            throw(ArgumentError("$dv is not a state. It is a parameter."))
+            throw(ArgumentError("$dv is not an unknown. It is a parameter."))
     end
 end
 
@@ -184,7 +183,7 @@ function check_equations(eqs, iv)
     end
 end
 """
-Get all the independent variables with respect to which differentials/differences are taken.
+Get all the independent variables with respect to which differentials are taken.
 """
 function collect_ivs_from_nested_operator!(ivs, x, target_op)
     if !istree(x)
@@ -195,10 +194,8 @@ function collect_ivs_from_nested_operator!(ivs, x, target_op)
         push!(ivs, get_iv(op))
         x = if target_op <: Differential
             op.x
-        elseif target_op <: Difference
-            op.t
         else
-            error("Unknown target op type in collect_ivs $target_op. Pass Difference or Differential")
+            error("Unknown target op type in collect_ivs $target_op. Pass Differential")
         end
         collect_ivs_from_nested_operator!(ivs, x, target_op)
     end
@@ -235,7 +232,7 @@ end
 
 function collect_defaults!(defs, vars)
     for v in vars
-        (haskey(defs, v) || !hasdefault(v)) && continue
+        (haskey(defs, v) || !hasdefault(unwrap(v))) && continue
         defs[v] = getdefault(v)
     end
     return defs
@@ -261,7 +258,7 @@ Throw error when difference/derivative operation occurs in the R.H.S.
 """
 @noinline function throw_invalid_operator(opvar, eq, op::Type)
     if op === Difference
-        optext = "difference"
+        error("The Difference operator is deprecated, use ShiftIndex instead")
     elseif op === Differential
         optext = "derivative"
     end
@@ -293,8 +290,7 @@ function check_operator_variables(eqs, op::T) where {T}
         if length(tmp) == 1
             x = only(tmp)
             if op === Differential
-                # Having a difference is fine for ODEs
-                is_tmp_fine = isdifferential(x) || isdifference(x)
+                is_tmp_fine = isdifferential(x)
             else
                 is_tmp_fine = istree(x) && !(operation(x) isa op)
             end
@@ -319,23 +315,6 @@ isoperator(op) = expr -> isoperator(expr, op)
 isdifferential(expr) = isoperator(expr, Differential)
 isdiffeq(eq) = isdifferential(eq.lhs)
 
-isdifference(expr) = isoperator(expr, Difference)
-isdifferenceeq(eq) = isdifference(eq.lhs)
-
-function iv_from_nested_difference(x::Symbolic)
-    istree(x) || return x
-    operation(x) isa Difference ? iv_from_nested_difference(arguments(x)[1]) :
-    arguments(x)[1]
-end
-iv_from_nested_difference(x) = nothing
-
-var_from_nested_difference(x, i = 0) = (nothing, nothing)
-function var_from_nested_difference(x::Symbolic, i = 0)
-    istree(x) && operation(x) isa Difference ?
-    var_from_nested_difference(arguments(x)[1], i + 1) :
-    (x, i)
-end
-
 isvariable(x::Num)::Bool = isvariable(value(x))
 function isvariable(x)::Bool
     x isa Symbolic || return false
@@ -350,7 +329,6 @@ end
 Return a `Set` containing all variables in `x` that appear in
 
   - differential equations if `op = Differential`
-  - difference equations if `op = Differential`
 
 Example:
 
@@ -364,6 +342,8 @@ v == Set([D(y), u])
 function vars(exprs::Symbolic; op = Differential)
     istree(exprs) ? vars([exprs]; op = op) : Set([exprs])
 end
+vars(exprs::Num; op = Differential) = vars(unwrap(exprs); op)
+vars(exprs::Symbolics.Arr; op = Differential) = vars(unwrap(exprs); op)
 vars(exprs; op = Differential) = foldl((x, y) -> vars!(x, y; op = op), exprs; init = Set())
 vars(eq::Equation; op = Differential) = vars!(Set(), eq; op = op)
 function vars!(vars, eq::Equation; op = Differential)
@@ -377,9 +357,10 @@ function vars!(vars, O; op = Differential)
 
     operation(O) isa op && return push!(vars, O)
 
-    if operation(O) === (getindex) &&
-       isvariable(first(arguments(O)))
-        return push!(vars, O)
+    if operation(O) === (getindex)
+        arr = first(arguments(O))
+        istree(arr) && operation(arr) isa op && return push!(vars, O)
+        isvariable(arr) && return push!(vars, O)
     end
 
     isvariable(operation(O)) && push!(vars, O)
@@ -389,9 +370,6 @@ function vars!(vars, O; op = Differential)
 
     return vars
 end
-
-difference_vars(x) = vars(x; op = Difference)
-difference_vars!(vars, O) = vars!(vars, O; op = Difference)
 
 function collect_operator_variables(sys::AbstractSystem, args...)
     collect_operator_variables(equations(sys), args...)
@@ -404,7 +382,7 @@ end
     collect_operator_variables(eqs::AbstractVector{Equation}, op)
 
 Return a `Set` containing all variables that have Operator `op` applied to them.
-See also [`collect_differential_variables`](@ref), [`collect_difference_variables`](@ref).
+See also [`collect_differential_variables`](@ref).
 """
 function collect_operator_variables(eqs::AbstractVector{Equation}, op)
     vars = Set()
@@ -420,7 +398,6 @@ function collect_operator_variables(eqs::AbstractVector{Equation}, op)
     return diffvars
 end
 collect_differential_variables(sys) = collect_operator_variables(sys, Differential)
-collect_difference_variables(sys) = collect_operator_variables(sys, Difference)
 
 """
     collect_applied_operators(x, op)
@@ -457,44 +434,30 @@ function find_derivatives!(vars, expr, f)
     return vars
 end
 
-function collect_vars!(states, parameters, expr, iv)
+function collect_vars!(unknowns, parameters, expr, iv)
     if issym(expr)
-        collect_var!(states, parameters, expr, iv)
+        collect_var!(unknowns, parameters, expr, iv)
     else
         for var in vars(expr)
             if istree(var) && operation(var) isa Differential
                 var, _ = var_from_nested_derivative(var)
             end
-            collect_var!(states, parameters, var, iv)
+            collect_var!(unknowns, parameters, var, iv)
         end
     end
     return nothing
 end
 
-function collect_vars_difference!(states, parameters, expr, iv)
-    if issym(expr)
-        collect_var!(states, parameters, expr, iv)
-    else
-        for var in vars(expr)
-            if istree(var) && operation(var) isa Difference
-                var, _ = var_from_nested_difference(var)
-            end
-            collect_var!(states, parameters, var, iv)
-        end
-    end
-    return nothing
-end
-
-function collect_var!(states, parameters, var, iv)
+function collect_var!(unknowns, parameters, var, iv)
     isequal(var, iv) && return nothing
     if isparameter(var) || (istree(var) && isparameter(operation(var)))
         push!(parameters, var)
     elseif !isconstant(var)
-        push!(states, var)
+        push!(unknowns, var)
     end
     # Add also any parameters that appear only as defaults in the var
     if hasdefault(var)
-        collect_vars!(states, parameters, getdefault(var), iv)
+        collect_vars!(unknowns, parameters, getdefault(var), iv)
     end
     return nothing
 end
@@ -609,7 +572,7 @@ function get_cmap(sys)
     return cmap, cs
 end
 
-function get_substitutions_and_solved_states(sys; no_postprocess = false)
+function get_substitutions_and_solved_unknowns(sys; no_postprocess = false)
     cmap, cs = get_cmap(sys)
     if empty_substitutions(sys) && isempty(cs)
         sol_states = Code.LazyState()
@@ -647,7 +610,7 @@ function mergedefaults(defaults, varmap, vars)
 end
 
 @noinline function throw_missingvars_in_sys(vars)
-    throw(ArgumentError("$vars are either missing from the variable map or missing from the system's states/parameters list."))
+    throw(ArgumentError("$vars are either missing from the variable map or missing from the system's unknowns/parameters list."))
 end
 
 function promote_to_concrete(vs; tofloat = true, use_union = true)
@@ -847,7 +810,7 @@ end
 function fast_substitute(eq::T, subs::Pair) where {T <: Eq}
     T(fast_substitute(eq.lhs, subs), fast_substitute(eq.rhs, subs))
 end
-fast_substitute(eqs::AbstractArray{<:Eq}, subs) = fast_substitute.(eqs, (subs,))
+fast_substitute(eqs::AbstractArray, subs) = fast_substitute.(eqs, (subs,))
 fast_substitute(a, b) = substitute(a, b)
 function fast_substitute(expr, pair::Pair)
     a, b = pair
@@ -873,3 +836,11 @@ function fast_substitute(expr, pair::Pair)
 end
 
 normalize_to_differential(s) = s
+
+function restrict_array_to_union(arr)
+    isempty(arr) && return arr
+    T = foldl(arr; init = Union{}) do prev, cur
+        Union{prev, typeof(cur)}
+    end
+    return Array{T, ndims(arr)}(arr)
+end

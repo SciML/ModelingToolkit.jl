@@ -2,6 +2,7 @@ using Test
 using Latexify
 using ModelingToolkit
 using ReferenceTests
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 ### Tips for generating latex tests:
 ### Latexify has an unexported macro:
@@ -19,9 +20,8 @@ using ReferenceTests
 ### Just be sure to remove all such macros before you commit a change since it
 ### will cause issues with Travis.
 
-@parameters t σ ρ β
+@parameters σ ρ β
 @variables x(t) y(t) z(t)
-D = Differential(t)
 
 eqs = [D(x) ~ σ * (y - x) * D(x - y) / D(z),
     0 ~ σ * x * (ρ - z) / 10 - y,
@@ -43,9 +43,7 @@ eqs = [D(u[1]) ~ p[3] * (u[2] - u[1]),
     D(u[3]) ~ u[1] * u[2]^(2 // 3) - p[3] * u[3]]
 
 @test_reference "latexify/30.tex" latexify(eqs)
-@parameters t
 @variables x(t)
-D = Differential(t)
 eqs = [D(x) ~ (1 + cos(t)) / (1 + 2 * x)]
 
 @test_reference "latexify/40.tex" latexify(eqs)

@@ -30,20 +30,22 @@ struct ObservableRecordFromSolution{S, T}
             p_vals) where {S, T}
         obs_eqs = observed(nsys)
         target_obs_idx = findfirst(isequal(plot_var, eq.lhs) for eq in observed(nsys))
-        state_end_idxs = length(states(nsys))
+        state_end_idxs = length(unknowns(nsys))
         param_end_idxs = state_end_idxs + length(parameters(nsys))
 
         bif_par_idx = state_end_idxs + bif_idx
         # Gets the (base) substitution values for states.
-        subs_vals_states = Pair.(states(nsys), u0_vals)
+        subs_vals_states = Pair.(unknowns(nsys), u0_vals)
         # Gets the (base) substitution values for parameters.
         subs_vals_params = Pair.(parameters(nsys), p_vals)
         # Gets the (base) substitution values for observables.
         subs_vals_obs = [obs.lhs => substitute(obs.rhs,
-            [subs_vals_states; subs_vals_params]) for obs in observed(nsys)]
+                             [subs_vals_states; subs_vals_params])
+                         for obs in observed(nsys)]
         # Sometimes observables depend on other observables, hence we make a second update to this vector.
         subs_vals_obs = [obs.lhs => substitute(obs.rhs,
-            [subs_vals_states; subs_vals_params; subs_vals_obs]) for obs in observed(nsys)]
+                             [subs_vals_states; subs_vals_params; subs_vals_obs])
+                         for obs in observed(nsys)]
         # During the bifurcation process, the value of some states, parameters, and observables may vary (and are calculated in each step). Those that are not are stored in this vector
         subs_vals = [subs_vals_states; subs_vals_params; subs_vals_obs]
 
@@ -68,7 +70,8 @@ function (orfs::ObservableRecordFromSolution)(x, p)
 
     # Updates the observable values (in subs_vals).
     for (obs_idx, obs_eq) in enumerate(orfs.obs_eqs)
-        orfs.subs_vals[orfs.param_end_idxs + obs_idx] = orfs.subs_vals[orfs.param_end_idxs + obs_idx][1] => substitute(obs_eq.rhs,
+        orfs.subs_vals[orfs.param_end_idxs + obs_idx] = orfs.subs_vals[orfs.param_end_idxs + obs_idx][1] => substitute(
+            obs_eq.rhs,
             orfs.subs_vals)
     end
 
@@ -88,6 +91,10 @@ function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem,
         record_from_solution = BifurcationKit.record_sol_default,
         jac = true,
         kwargs...)
+    if !ModelingToolkit.iscomplete(nsys)
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `BifurcationProblem`")
+    end
+    @set! nsys.index_cache = nothing # force usage of a parameter vector instead of `MTKParameters`
     # Creates F and J functions.
     ofun = NonlinearFunction(nsys; jac = jac)
     F = ofun.f
@@ -95,7 +102,7 @@ function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem,
 
     # Converts the input state guess.
     u0_bif_vals = ModelingToolkit.varmap_to_vars(u0_bif,
-        states(nsys);
+        unknowns(nsys);
         defaults = nsys.defaults)
     p_vals = ModelingToolkit.varmap_to_vars(ps, parameters(nsys); defaults = nsys.defaults)
 
@@ -103,8 +110,8 @@ function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem,
     bif_idx = findfirst(isequal(bif_par), parameters(nsys))
     if !isnothing(plot_var)
         # If the plot var is a normal state.
-        if any(isequal(plot_var, var) for var in states(nsys))
-            plot_idx = findfirst(isequal(plot_var), states(nsys))
+        if any(isequal(plot_var, var) for var in unknowns(nsys))
+            plot_idx = findfirst(isequal(plot_var), unknowns(nsys))
             record_from_solution = (x, p) -> x[plot_idx]
 
             # If the plot var is an observed state.
@@ -133,11 +140,14 @@ end
 
 # When input is a ODESystem.
 function BifurcationKit.BifurcationProblem(osys::ODESystem, args...; kwargs...)
+    if !ModelingToolkit.iscomplete(osys)
+        error("A completed `ODESystem` is required. Call `complete` or `structural_simplify` on the system before creating a `BifurcationProblem`")
+    end
     nsys = NonlinearSystem([0 ~ eq.rhs for eq in equations(osys)],
-        states(osys),
+        unknowns(osys),
         parameters(osys);
         name = nameof(osys))
-    return BifurcationKit.BifurcationProblem(nsys, args...; kwargs...)
+    return BifurcationKit.BifurcationProblem(complete(nsys), args...; kwargs...)
 end
 
 end # module

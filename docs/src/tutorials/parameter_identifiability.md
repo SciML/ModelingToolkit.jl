@@ -28,11 +28,9 @@ To define the ode system in Julia, we use `ModelingToolkit.jl`.
 
 We first define the parameters, variables, differential equations and the output equations.
 
-```@example SI
+```julia
 using StructuralIdentifiability, ModelingToolkit
-
-@variables t
-D = Differential(t)
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @mtkmodel Biohydrogenation begin
     @variables begin
@@ -63,28 +61,27 @@ D = Differential(t)
 end
 
 # define the system
-@named de = Biohydrogenation()
-de = complete(de)
+@mtkbuild de = Biohydrogenation()
 ```
 
 After that, we are ready to check the system for local identifiability:
 
-```@example SI
+```julia
 # query local identifiability
 # we pass the ode-system
 local_id_all = assess_local_identifiability(de, p = 0.99)
 ```
 
-We can see that all states (except $x_7$) and all parameters are locally identifiable with probability 0.99.
+We can see that all unknowns (except $x_7$) and all parameters are locally identifiable with probability 0.99.
 
 Let's try to check specific parameters and their combinations
 
-```@example SI
+```julia
 to_check = [de.k5, de.k7, de.k10 / de.k9, de.k5 + de.k6]
 local_id_some = assess_local_identifiability(de, funcs_to_check = to_check, p = 0.99)
 ```
 
-Notice that in this case, everything (except the state variable $x_7$) is locally identifiable, including combinations such as $k_{10}/k_9, k_5+k_6$
+Notice that in this case, everything (except the unknown variable $x_7$) is locally identifiable, including combinations such as $k_{10}/k_9, k_5+k_6$
 
 ## Global Identifiability
 
@@ -106,11 +103,9 @@ We will run a global identifiability check on this enzyme dynamics[^3] model. We
 
 Global identifiability needs information about local identifiability first, but the function we chose here will take care of that extra step for us.
 
-```@example SI2
+```julia
 using StructuralIdentifiability, ModelingToolkit
-
-@variables t
-D = Differential(t)
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @mtkmodel GoodwinOsc begin
     @parameters begin
@@ -149,11 +144,9 @@ We can see that only parameters `a, g` are unidentifiable, and everything else c
 
 Let us consider the same system but with two inputs, and we will find out identifiability with probability `0.9` for parameters `c` and `b`:
 
-```@example SI3
+```julia
 using StructuralIdentifiability, ModelingToolkit
-
-@variables t
-D = Differential(t)
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @mtkmodel GoodwinOscillator begin
     @parameters begin
@@ -185,8 +178,7 @@ D = Differential(t)
     end
 end
 
-@named ode = GoodwinOscillator()
-ode = complete(ode)
+@mtkbuild ode = GoodwinOscillator()
 
 # check only 2 parameters
 to_check = [ode.b, ode.c]

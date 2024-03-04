@@ -42,7 +42,7 @@ end
 has_time_domain(x::Num) = has_time_domain(value(x))
 has_time_domain(x) = false
 
-for op in [Differential, Difference]
+for op in [Differential]
     @eval input_timedomain(::$op, arg = nothing) = Continuous()
     @eval output_timedomain(::$op, arg = nothing) = Continuous()
 end
@@ -83,7 +83,9 @@ true if `x` contains only discrete-domain signals.
 See also [`has_discrete_domain`](@ref)
 """
 function is_discrete_domain(x)
-    issym(x) && return getmetadata(x, TimeDomain, false) isa Discrete
+    if hasmetadata(x, TimeDomain) || issym(x)
+        return getmetadata(x, TimeDomain, false) isa AbstractDiscrete
+    end
     !has_discrete_domain(x) && has_continuous_domain(x)
 end
 

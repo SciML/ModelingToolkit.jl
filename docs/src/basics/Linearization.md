@@ -21,29 +21,29 @@ The `linearize` function expects the user to specify the inputs ``u`` and the ou
 
 ```@example LINEARIZE
 using ModelingToolkit
-@variables t x(t)=0 y(t)=0 u(t)=0 r(t)=0
+using ModelingToolkit: t_nounits as t, D_nounits as D
+@variables x(t)=0 y(t)=0 u(t)=0 r(t)=0
 @parameters kp = 1
-D = Differential(t)
 
 eqs = [u ~ kp * (r - y) # P controller
-    D(x) ~ -x + u    # First-order plant
-    y ~ x]           # Output equation
+       D(x) ~ -x + u    # First-order plant
+       y ~ x]           # Output equation
 
 @named sys = ODESystem(eqs, t)
 matrices, simplified_sys = linearize(sys, [r], [y]) # Linearize from r to y
 matrices
 ```
 
-The named tuple `matrices` contains the matrices of the linear statespace representation, while `simplified_sys` is an `ODESystem` that, among other things, indicates the state order in the linear system through
+The named tuple `matrices` contains the matrices of the linear statespace representation, while `simplified_sys` is an `ODESystem` that, among other things, indicates the unknown variable order in the linear system through
 
 ```@example LINEARIZE
 using ModelingToolkit: inputs, outputs
-[states(simplified_sys); inputs(simplified_sys); outputs(simplified_sys)]
+[unknowns(simplified_sys); inputs(simplified_sys); outputs(simplified_sys)]
 ```
 
 ## Operating point
 
-The operating point to linearize around can be specified with the keyword argument `op` like this: `op = Dict(x => 1, r => 2)`. The operating point may include specification of state variables, input variables and parameters. For variables that are not specified in `op`, the default value specified in the model will be used if available, if no value is specified, an error is thrown.
+The operating point to linearize around can be specified with the keyword argument `op` like this: `op = Dict(x => 1, r => 2)`. The operating point may include specification of unknown variables, input variables and parameters. For variables that are not specified in `op`, the default value specified in the model will be used if available, if no value is specified, an error is thrown.
 
 ## Batch linearization and algebraic variables
 

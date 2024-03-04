@@ -10,7 +10,7 @@ the `@variable` which is defined by
 @variables x y(x)
 ```
 
-This is used for the “normal” variable of a given system, like the states of a
+This is used for the “normal” variable of a given system, like the unknowns of a
 differential equation or objective function. All the macros below support
 the same syntax as `@variables`.
 
@@ -18,9 +18,9 @@ the same syntax as `@variables`.
 
 All modeling projects have some form of parameters. `@parameters` marks a variable
 as being the parameter of some system, which allows automatic detection algorithms
-to ignore such variables when attempting to find the states of a system.
+to ignore such variables when attempting to find the unknowns of a system.
 
-## Constants
+## [Constants](@id constants)
 
 Constants, defined by e.g. `@constants myconst1` are like parameters that:
 

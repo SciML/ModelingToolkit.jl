@@ -1,5 +1,5 @@
 using ModelingToolkit, SparseArrays, Test, Optimization, OptimizationOptimJL,
-    OptimizationMOI, Ipopt, AmplNLWriter, Ipopt_jll
+      OptimizationMOI, Ipopt, AmplNLWriter, Ipopt_jll
 using ModelingToolkit: get_metadata
 
 @testset "basic" begin
@@ -14,11 +14,11 @@ using ModelingToolkit: get_metadata
     @variables z
     @parameters β
     loss2 = sys1.x - sys2.y + z * β
-    combinedsys = OptimizationSystem(loss2, [z], [β], systems = [sys1, sys2],
-        name = :combinedsys)
+    combinedsys = complete(OptimizationSystem(loss2, [z], [β], systems = [sys1, sys2],
+        name = :combinedsys))
 
     equations(combinedsys)
-    states(combinedsys)
+    unknowns(combinedsys)
     parameters(combinedsys)
 
     calculate_gradient(combinedsys)
@@ -27,20 +27,24 @@ using ModelingToolkit: get_metadata
     generate_gradient(combinedsys)
     generate_hessian(combinedsys)
     hess_sparsity = ModelingToolkit.hessian_sparsity(sys1)
-    sparse_prob = OptimizationProblem(sys1, [x, y], [a, b], grad = true, sparse = true)
+    sparse_prob = OptimizationProblem(complete(sys1),
+        [x, y],
+        [a => 0.0, b => 0.0],
+        grad = true,
+        sparse = true)
     @test sparse_prob.f.hess_prototype.rowval == hess_sparsity.rowval
     @test sparse_prob.f.hess_prototype.colptr == hess_sparsity.colptr
 
     u0 = [sys1.x => 1.0
-        sys1.y => 2.0
-        sys2.x => 3.0
-        sys2.y => 4.0
-        z => 5.0]
+          sys1.y => 2.0
+          sys2.x => 3.0
+          sys2.y => 4.0
+          z => 5.0]
     p = [sys1.a => 6.0
-        sys1.b => 7.0
-        sys2.a => 8.0
-        sys2.b => 9.0
-        β => 10.0]
+         sys1.b => 7.0
+         sys2.a => 8.0
+         sys2.b => 9.0
+         β => 10.0]
 
     prob = OptimizationProblem(combinedsys, u0, p, grad = true, hess = true, cons_j = true,
         cons_h = true)
@@ -54,10 +58,10 @@ end
     @parameters a b
     loss = (a - x)^2 + b * (y - x^2)^2
     cons = [
-        x^2 + y^2 ≲ 1.0,
+        x^2 + y^2 ≲ 1.0
     ]
     @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = cons)
-
+    sys = complete(sys)
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 1.0],
         grad = true, hess = true, cons_j = true, cons_h = true)
     @test prob.f.sys === sys
@@ -77,8 +81,8 @@ end
     @parameters a b
     loss = (a - x)^2 + b * z^2
     cons = [1.0 ~ x^2 + y^2
-        z ~ y - x^2
-        z^2 + y^2 ≲ 1.0]
+            z ~ y - x^2
+            z^2 + y^2 ≲ 1.0]
     @named sys = OptimizationSystem(loss, [x, y, z], [a, b], constraints = cons)
     sys = structural_simplify(sys)
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, z => 0.0], [a => 1.0, b => 1.0],
@@ -142,19 +146,19 @@ end
     o1 = (x - a)^2
     o2 = (y - 1 / 2)^2
     c1 = [
-        x ~ 1,
+        x ~ 1
     ]
     c2 = [
-        y ~ 1,
+        y ~ 1
     ]
     sys1 = OptimizationSystem(o1, [x], [a], name = :sys1, constraints = c1)
     sys2 = OptimizationSystem(o2, [y], [], name = :sys2, constraints = c2)
-    sys = OptimizationSystem(0, [], []; name = :sys, systems = [sys1, sys2],
-        constraints = [sys1.x + sys2.y ~ 2], checks = false)
+    sys = complete(OptimizationSystem(0, [], []; name = :sys, systems = [sys1, sys2],
+        constraints = [sys1.x + sys2.y ~ 2], checks = false))
     prob = OptimizationProblem(sys, [0.0, 0.0])
     @test isequal(constraints(sys), vcat(sys1.x + sys2.y ~ 2, sys1.x ~ 1, sys2.y ~ 1))
     @test isequal(equations(sys), (sys1.x - sys1.a)^2 + (sys2.y - 1 / 2)^2)
-    @test isequal(states(sys), [sys1.x, sys2.y])
+    @test isequal(unknowns(sys), [sys1.x, sys2.y])
 
     prob_ = remake(prob, u0 = [1.0, 0.0], p = [2.0])
     @test isequal(prob_.u0, [1.0, 0.0])
@@ -162,7 +166,7 @@ end
 
     prob_ = remake(prob, u0 = Dict(sys1.x => 1.0), p = Dict(sys1.a => 2.0))
     @test isequal(prob_.u0, [1.0, 0.0])
-    @test isequal(prob_.p, [2.0])
+    @test isequal((prob_.p...,)[1], [2.0])
 end
 
 @testset "nested systems" begin
@@ -183,26 +187,26 @@ end
     sys1 = OptimizationSystem(loss, [x, y], [a, b], name = :sys1)
 
     cons = [
-        x^2 + y^2 ≲ 1.0,
+        x^2 + y^2 ≲ 1.0
     ]
     sys2 = OptimizationSystem(loss, [x, y], [a, b], name = :sys2, constraints = cons)
 
     @variables z
     @parameters β
     loss2 = sys1.x - sys2.y + z * β
-    combinedsys = OptimizationSystem(loss2, [z], [β], systems = [sys1, sys2],
-        name = :combinedsys)
+    combinedsys = complete(OptimizationSystem(loss2, [z], [β], systems = [sys1, sys2],
+        name = :combinedsys))
 
     u0 = [sys1.x => 1.0
-        sys1.y => 2.0
-        sys2.x => 3.0
-        sys2.y => 4.0
-        z => 5.0]
+          sys1.y => 2.0
+          sys2.x => 3.0
+          sys2.y => 4.0
+          z => 5.0]
     p = [sys1.a => 6.0
-        sys1.b => 7.0
-        sys2.a => 8.0
-        sys2.b => 9.0
-        β => 10.0]
+         sys1.b => 7.0
+         sys2.a => 8.0
+         sys2.b => 9.0
+         β => 10.0]
 
     prob = OptimizationProblem(combinedsys, u0, p, grad = true, hess = true, cons_j = true,
         cons_h = true)
@@ -227,7 +231,7 @@ end
     @variables x
     o1 = (x - 1)^2
     c1 = [
-        x ~ 1,
+        x ~ 1
     ]
     testdict = Dict(["test" => 1])
     sys1 = OptimizationSystem(o1, [x], [], name = :sys1, constraints = c1,
@@ -240,10 +244,10 @@ end
     @named sys = OptimizationSystem(x[1] + x[2], [x...], [];
         constraints = [
             1.0 ≲ x[1]^2 + x[2]^2,
-            x[1]^2 + x[2]^2 ≲ 2.0,
+            x[1]^2 + x[2]^2 ≲ 2.0
         ])
 
-    prob = OptimizationProblem(sys, [x[1] => 2.0, x[2] => 0.0], [], grad = true,
+    prob = OptimizationProblem(complete(sys), [x[1] => 2.0, x[2] => 0.0], [], grad = true,
         hess = true, cons_j = true, cons_h = true)
     sol = Optimization.solve(prob, Ipopt.Optimizer(); print_level = 0)
     @test sol.u ≈ [1, 0]
@@ -257,7 +261,7 @@ end
     @parameters a b
     loss = (a - x)^2 + b * (y - x^2)^2
     @named sys = OptimizationSystem(loss, [x, y], [a, b, c])
-    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0])
+    prob = OptimizationProblem(complete(sys), [x => 0.0, y => 0.0], [a => 1.0, b => 100.0])
     @test prob.lb == [-Inf, 0.0]
     @test prob.ub == [Inf, Inf]
 end
@@ -267,14 +271,18 @@ end
     @parameters α₁ α₂
     loss = (α₁ - x₁)^2 + α₂ * (x₂ - x₁^2)^2
     cons = [
-        x₁^2 + x₂^2 ≲ 1.0,
+        x₁^2 + x₂^2 ≲ 1.0
     ]
-    sys1 = OptimizationSystem(loss, [x₁, x₂], [α₁, α₂], name = :sys1, constraints = cons)
+    sys1 = complete(OptimizationSystem(loss,
+        [x₁, x₂],
+        [α₁, α₂],
+        name = :sys1,
+        constraints = cons))
 
     prob1 = OptimizationProblem(sys1, [x₁ => 0.0, x₂ => 0.0], [α₁ => 1.0, α₂ => 100.0],
         grad = true, hess = true, cons_j = true, cons_h = true)
 
-    sys2 = modelingtoolkitize(prob1)
+    sys2 = complete(modelingtoolkitize(prob1))
     prob2 = OptimizationProblem(sys2, [x₁ => 0.0, x₂ => 0.0], [α₁ => 1.0, α₂ => 100.0],
         grad = true, hess = true, cons_j = true, cons_h = true)
 
@@ -289,6 +297,7 @@ end
     @parameters a b
     loss = (a - x)^2 + b * (y - x^2)^2
     @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = [x^2 + y^2 ≲ 0.0])
+    sys = complete(sys)
     @test_throws ArgumentError OptimizationProblem(sys,
         [x => 0.0, y => 0.0],
         [a => 1.0, b => 100.0],
@@ -301,5 +310,33 @@ end
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0])
     @test prob.f.expr isa Symbolics.Symbolic
     @test all(prob.f.cons_expr[i].lhs isa Symbolics.Symbolic
-              for i in 1:length(prob.f.cons_expr))
+    for i in 1:length(prob.f.cons_expr))
+end
+
+@testset "Derivatives, iip and oop" begin
+    @variables x y
+    @parameters a b
+    loss = (a - x)^2 + b * (y - x^2)^2
+    cons2 = [x^2 + y^2 ~ 0, y * sin(x) - x ~ 0]
+    sys = complete(OptimizationSystem(
+        loss, [x, y], [a, b], name = :sys2, constraints = cons2))
+    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0],
+        grad = true, hess = true, cons_j = true, cons_h = true)
+
+    G1 = Array{Float64}(undef, 2)
+    H1 = Array{Float64}(undef, 2, 2)
+    J = Array{Float64}(undef, 2, 2)
+    H3 = [Array{Float64}(undef, 2, 2), Array{Float64}(undef, 2, 2)]
+
+    prob.f.grad(G1, [1.0, 1.0], [1.0, 100.0])
+    @test prob.f.grad([1.0, 1.0], [1.0, 100.0]) == G1
+
+    prob.f.hess(H1, [1.0, 1.0], [1.0, 100.0])
+    @test prob.f.hess([1.0, 1.0], [1.0, 100.0]) == H1
+
+    prob.f.cons_j(J, [1.0, 1.0], [1.0, 100.0])
+    @test prob.f.cons_j([1.0, 1.0], [1.0, 100.0]) == J
+
+    prob.f.cons_h(H3, [1.0, 1.0], [1.0, 100.0])
+    @test prob.f.cons_h([1.0, 1.0], [1.0, 100.0]) == H3
 end

@@ -1,9 +1,6 @@
 using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 using Test
-using IfElse: ifelse
-
-@parameters t
-D = Differential(t)
 
 @connector function HydraulicPort(; p_int, name)
     pars = @parameters begin
@@ -36,7 +33,7 @@ end
     end
 
     eqs = [
-        dm ~ 0,
+        dm ~ 0
     ]
 
     ODESystem(eqs, t, vars, pars; name, defaults = [dm => 0])
@@ -54,7 +51,7 @@ function FixedPressure(; p, name)
     end
 
     eqs = [
-        port.p ~ p,
+        port.p ~ p
     ]
 
     ODESystem(eqs, t, vars, pars; name, systems)
@@ -80,8 +77,8 @@ function FixedVolume(; vol, p_int, name)
     p = port.p
 
     eqs = [D(rho) ~ drho
-        rho ~ port.ρ * (1 + p / port.β)
-        dm ~ drho * vol]
+           rho ~ port.ρ * (1 + p / port.β)
+           dm ~ drho * vol]
 
     ODESystem(eqs, t, vars, pars; name, systems)
 end
@@ -119,9 +116,9 @@ function Valve2Port(; p_s_int, p_r_int, p_int, name)
 
     # 
     eqs = [domain_connect(port, HS, HR)
-        port.dm ~ -ifelse(x >= 0, +flow(Δp̃_s), -flow(Δp̃_r))
-        HS.dm ~ ifelse(x >= 0, port.dm, 0)
-        HR.dm ~ ifelse(x < 0, port.dm, 0)]
+           port.dm ~ -ifelse(x >= 0, +flow(Δp̃_s), -flow(Δp̃_r))
+           HS.dm ~ ifelse(x >= 0, port.dm, 0)
+           HR.dm ~ ifelse(x < 0, port.dm, 0)]
 
     ODESystem(eqs, t, vars, pars; name, systems)
 end
@@ -137,22 +134,22 @@ function System(; name)
         vol = FixedVolume(; vol = 0.1, p_int = 100)
     end
     eqs = [domain_connect(fluid, src.port)
-        connect(src.port, valve.HS)
-        connect(rtn.port, valve.HR)
-        connect(vol.port, valve.port)
-        valve.x ~ sin(2π * t * 10)]
+           connect(src.port, valve.HS)
+           connect(rtn.port, valve.HR)
+           connect(vol.port, valve.port)
+           valve.x ~ sin(2π * t * 10)]
 
     return ODESystem(eqs, t, vars, pars; systems, name)
 end
 
 @named odesys = System()
 esys = ModelingToolkit.expand_connections(odesys)
-@test length(equations(esys)) == length(states(esys))
+@test length(equations(esys)) == length(unknowns(esys))
 
 csys = complete(odesys)
 
 sys = structural_simplify(odesys)
-@test length(equations(sys)) == length(states(sys))
+@test length(equations(sys)) == length(unknowns(sys))
 
 sys_defs = ModelingToolkit.defaults(sys)
 @test Symbol(sys_defs[csys.vol.port.ρ]) == Symbol(csys.fluid.ρ)

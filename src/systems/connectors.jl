@@ -1,3 +1,6 @@
+using Symbolics: StateMachineOperator
+isconnection(_) = false
+isconnection(_::Connection) = true
 """
     domain_connect(sys1, sys2, syss...)
 
@@ -27,11 +30,11 @@ struct RegularConnector <: AbstractConnectorType end
 struct DomainConnector <: AbstractConnectorType end
 
 function connector_type(sys::AbstractSystem)
-    sts = get_states(sys)
+    unkvars = get_unknowns(sys)
     n_stream = 0
     n_flow = 0
-    n_regular = 0 # state that is not input, output, stream, or flow.
-    for s in sts
+    n_regular = 0 # unknown that is not input, output, stream, or flow.
+    for s in unkvars
         vtype = get_connection_type(s)
         if vtype === Stream
             isarray(s) && error("Array stream variables are not supported. Got $s.")
@@ -44,7 +47,7 @@ function connector_type(sys::AbstractSystem)
     end
     (n_stream > 0 && n_flow > 1) &&
         error("There are multiple flow variables in the stream connector $(nameof(sys))!")
-    if n_flow == 1 && length(sts) == 1
+    if n_flow == 1 && length(unkvars) == 1
         return DomainConnector()
     end
     if n_flow != n_regular && !isframe(sys)
@@ -66,7 +69,7 @@ SymbolicUtils.promote_symtype(::typeof(instream), _) = Real
 isconnector(s::AbstractSystem) = has_connector_type(s) && get_connector_type(s) !== nothing
 
 function flowvar(sys::AbstractSystem)
-    sts = get_states(sys)
+    sts = get_unknowns(sys)
     for s in sts
         vtype = get_connection_type(s)
         vtype === Flow && return s
@@ -171,8 +174,8 @@ function Base.hash(e::ConnectionElement, salt::UInt)
     end
     e.h ⊻ salt
 end
-namespaced_var(l::ConnectionElement) = states(l, l.v)
-states(l::ConnectionElement, v) = states(copy(l.sys), v)
+namespaced_var(l::ConnectionElement) = unknowns(l, l.v)
+unknowns(l::ConnectionElement, v) = unknowns(copy(l.sys), v)
 
 function withtrueouter(e::ConnectionElement)
     e.isouter && return e
@@ -238,9 +241,9 @@ function connection2set!(connectionsets, namespace, ss, isouter)
     # domain connections don't generate any equations
     if domain_ss !== nothing
         cset = ConnectionElement[]
-        dv = only(states(domain_ss))
+        dv = only(unknowns(domain_ss))
         for (i, s) in enumerate(ss)
-            sts = states(s)
+            sts = unknowns(s)
             io = isouter(s)
             for (j, v) in enumerate(sts)
                 vtype = get_connection_type(v)
@@ -254,26 +257,27 @@ function connection2set!(connectionsets, namespace, ss, isouter)
         return connectionsets
     end
     s1 = first(ss)
-    sts1v = states(s1)
+    sts1v = unknowns(s1)
     if isframe(s1) # Multibody
         O = ori(s1)
         orientation_vars = Symbolics.unwrap.(collect(vec(O.R)))
         sts1v = [sts1v; orientation_vars]
     end
     sts1 = Set(sts1v)
-    num_statevars = length(sts1)
-    csets = [T[] for _ in 1:num_statevars] # Add 9 orientation variables if connection is between multibody frames
+    num_unknowns = length(sts1)
+    csets = [T[] for _ in 1:num_unknowns] # Add 9 orientation variables if connection is between multibody frames
     for (i, s) in enumerate(ss)
-        sts = states(s)
+        unknown_vars = unknowns(s)
         if isframe(s) # Multibody
             O = ori(s)
             orientation_vars = Symbolics.unwrap.(vec(O.R))
-            sts = [sts; orientation_vars]
+            unknown_vars = [unknown_vars; orientation_vars]
         end
-        i != 1 && ((num_statevars == length(sts) && all(Base.Fix2(in, sts1), sts)) ||
+        i != 1 && ((num_unknowns == length(unknown_vars) &&
+          all(Base.Fix2(in, sts1), unknown_vars)) ||
          connection_error(ss))
         io = isouter(s)
-        for (j, v) in enumerate(sts)
+        for (j, v) in enumerate(unknown_vars)
             push!(csets[j], T(LazyNamespace(namespace, s), v, io))
         end
     end
@@ -281,7 +285,7 @@ function connection2set!(connectionsets, namespace, ss, isouter)
         v = first(cset).v
         vtype = get_connection_type(v)
         if domain_ss !== nothing && vtype === Flow &&
-           (dv = only(states(domain_ss)); isequal(v, dv))
+           (dv = only(unknowns(domain_ss)); isequal(v, dv))
             push!(cset, T(LazyNamespace(namespace, domain_ss), dv, false))
         end
         for k in 2:length(cset)
@@ -291,10 +295,12 @@ function connection2set!(connectionsets, namespace, ss, isouter)
     end
 end
 
-function generate_connection_set(sys::AbstractSystem, find = nothing, replace = nothing)
+function generate_connection_set(
+        sys::AbstractSystem, find = nothing, replace = nothing; scalarize = false)
     connectionsets = ConnectionSet[]
     domain_csets = ConnectionSet[]
-    sys = generate_connection_set!(connectionsets, domain_csets, sys, find, replace)
+    sys = generate_connection_set!(
+        connectionsets, domain_csets, sys, find, replace, scalarize)
     csets = merge(connectionsets)
     domain_csets = merge([csets; domain_csets], true)
 
@@ -302,7 +308,7 @@ function generate_connection_set(sys::AbstractSystem, find = nothing, replace = 
 end
 
 function generate_connection_set!(connectionsets, domain_csets,
-        sys::AbstractSystem, find, replace, namespace = nothing)
+        sys::AbstractSystem, find, replace, scalarize, namespace = nothing)
     subsys = get_systems(sys)
 
     isouter = generate_isouter(sys)
@@ -311,25 +317,30 @@ function generate_connection_set!(connectionsets, domain_csets,
 
     cts = [] # connections
     domain_cts = [] # connections
-    extra_states = []
+    extra_unknowns = []
     for eq in eqs′
         lhs = eq.lhs
         rhs = eq.rhs
         if find !== nothing && find(rhs, _getname(namespace))
-            neweq, extra_state = replace(rhs, _getname(namespace))
-            if extra_state isa AbstractArray
-                append!(extra_states, unwrap.(extra_state))
-            elseif extra_state !== nothing
-                push!(extra_states, extra_state)
+            neweq, extra_unknown = replace(rhs, _getname(namespace))
+            if extra_unknown isa AbstractArray
+                append!(extra_unknowns, unwrap.(extra_unknown))
+            elseif extra_unknown !== nothing
+                push!(extra_unknowns, extra_unknown)
             end
             neweq isa AbstractArray ? append!(eqs, neweq) : push!(eqs, neweq)
         else
-            if lhs isa Number || lhs isa Symbolic
-                push!(eqs, eq) # split connections and equations
-            elseif lhs isa Connection && get_systems(lhs) === :domain
+            if lhs isa Connection && get_systems(lhs) === :domain
                 connection2set!(domain_csets, namespace, get_systems(rhs), isouter)
-            else
+            elseif isconnection(rhs)
                 push!(cts, get_systems(rhs))
+            else
+                # split connections and equations
+                if eq.lhs isa AbstractArray || eq.rhs isa AbstractArray
+                    append!(eqs, Symbolics.scalarize(eq))
+                else
+                    push!(eqs, eq)
+                end
             end
         end
     end
@@ -339,7 +350,7 @@ function generate_connection_set!(connectionsets, domain_csets,
     for s in subsys
         isconnector(s) || continue
         is_domain_connector(s) && continue
-        for v in states(s)
+        for v in unknowns(s)
             Flow === get_connection_type(v) || continue
             push!(connectionsets, ConnectionSet([T(LazyNamespace(namespace, s), v, false)]))
         end
@@ -350,11 +361,12 @@ function generate_connection_set!(connectionsets, domain_csets,
     end
 
     # pre order traversal
-    if !isempty(extra_states)
-        @set! sys.states = [get_states(sys); extra_states]
+    if !isempty(extra_unknowns)
+        @set! sys.unknowns = [get_unknowns(sys); extra_unknowns]
     end
-    @set! sys.systems = map(s -> generate_connection_set!(connectionsets, domain_csets, s,
-            find, replace,
+    @set! sys.systems = map(
+        s -> generate_connection_set!(connectionsets, domain_csets, s,
+            find, replace, scalarize,
             renamespace(namespace, s)),
         subsys)
     @set! sys.eqs = eqs
@@ -453,7 +465,7 @@ function domain_defaults(sys, domain_csets)
             elseif is_domain_connector(m.sys.sys)
                 error("Domain sources $(nameof(root)) and $(nameof(m)) are connected!")
             else
-                ns_s_def = Dict(states(m.sys.sys, n) => n for (n, v) in s_def)
+                ns_s_def = Dict(unknowns(m.sys.sys, n) => n for (n, v) in s_def)
                 for p in parameters(m.sys.namespace)
                     d_p = get(ns_s_def, p, nothing)
                     if d_p !== nothing
@@ -469,8 +481,8 @@ function domain_defaults(sys, domain_csets)
 end
 
 function expand_connections(sys::AbstractSystem, find = nothing, replace = nothing;
-        debug = false, tol = 1e-10)
-    sys, (csets, domain_csets) = generate_connection_set(sys, find, replace)
+        debug = false, tol = 1e-10, scalarize = true)
+    sys, (csets, domain_csets) = generate_connection_set(sys, find, replace; scalarize)
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
     _sys = expand_instream(instream_csets, sys; debug = debug, tol = tol)
     sys = flatten(sys, true)
@@ -497,9 +509,11 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
         tol = 1e-8)
     subsys = get_systems(sys)
     # post order traversal
-    @set! sys.systems = map(s -> expand_instream(csets, s,
+    @set! sys.systems = map(
+        s -> expand_instream(csets, s,
             renamespace(namespace, nameof(s)),
-            namespace; debug, tol), subsys)
+            namespace; debug, tol),
+        subsys)
     subsys = get_systems(sys)
 
     if debug
@@ -605,11 +619,12 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
         vtype = get_connection_type(sv)
         vtype === Stream || continue
         if n_inners == 1 && n_outers == 1
-            push!(additional_eqs, states(cset[1].sys.sys, sv) ~ states(cset[2].sys.sys, sv))
+            push!(additional_eqs,
+                unknowns(cset[1].sys.sys, sv) ~ unknowns(cset[2].sys.sys, sv))
         elseif n_inners == 0 && n_outers == 2
             # we don't expand `instream` in this case.
-            v1 = states(cset[1].sys.sys, sv)
-            v2 = states(cset[2].sys.sys, sv)
+            v1 = unknowns(cset[1].sys.sys, sv)
+            v2 = unknowns(cset[2].sys.sys, sv)
             push!(additional_eqs, v1 ~ instream(v2))
             push!(additional_eqs, v2 ~ instream(v1))
         else
@@ -617,29 +632,29 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
             s_inners = (s for s in cset if !s.isouter)
             s_outers = (s for s in cset if s.isouter)
             for (q, oscq) in enumerate(s_outers)
-                sq += sum(s -> max(-states(s, fv), 0), s_inners, init = 0)
+                sq += sum(s -> max(-unknowns(s, fv), 0), s_inners, init = 0)
                 for (k, s) in enumerate(s_outers)
                     k == q && continue
-                    f = states(s.sys.sys, fv)
+                    f = unknowns(s.sys.sys, fv)
                     sq += max(f, 0)
                 end
 
                 num = 0
                 den = 0
                 for s in s_inners
-                    f = states(s.sys.sys, fv)
+                    f = unknowns(s.sys.sys, fv)
                     tmp = positivemax(-f, sq; tol = tol)
                     den += tmp
-                    num += tmp * states(s.sys.sys, sv)
+                    num += tmp * unknowns(s.sys.sys, sv)
                 end
                 for (k, s) in enumerate(s_outers)
                     k == q && continue
-                    f = states(s.sys.sys, fv)
+                    f = unknowns(s.sys.sys, fv)
                     tmp = positivemax(f, sq; tol = tol)
                     den += tmp
-                    num += tmp * instream(states(s.sys.sys, sv))
+                    num += tmp * instream(unknowns(s.sys.sys, sv))
                 end
-                push!(additional_eqs, states(oscq.sys.sys, sv) ~ num / den)
+                push!(additional_eqs, unknowns(oscq.sys.sys, sv) ~ num / den)
             end
         end
     end
@@ -664,7 +679,9 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
 end
 
 function get_current_var(namespace, cele, sv)
-    states(renamespace(unnamespace(namespace, _getname(cele.sys.namespace)), cele.sys.sys),
+    unknowns(
+        renamespace(unnamespace(namespace, _getname(cele.sys.namespace)),
+            cele.sys.sys),
         sv)
 end
 

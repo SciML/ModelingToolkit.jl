@@ -1,5 +1,5 @@
 #################################### system operations #####################################
-get_continuous_events(sys::AbstractSystem) = Equation[]
+get_continuous_events(sys::AbstractSystem) = SymbolicContinuousCallback[]
 get_continuous_events(sys::AbstractODESystem) = getfield(sys, :continuous_events)
 has_continuous_events(sys::AbstractSystem) = isdefined(sys, :continuous_events)
 
@@ -15,10 +15,11 @@ struct FunctionalAffect
     sts_syms::Vector{Symbol}
     pars::Vector
     pars_syms::Vector{Symbol}
+    discretes::Vector
     ctx::Any
 end
 
-function FunctionalAffect(f, sts, pars, ctx = nothing)
+function FunctionalAffect(f, sts, pars, discretes, ctx = nothing)
     # sts & pars contain either pairs: resistor.R => R, or Syms: R
     vs = [x isa Pair ? x.first : x for x in sts]
     vs_syms = Symbol[x isa Pair ? Symbol(x.second) : getname(x) for x in sts]
@@ -28,17 +29,20 @@ function FunctionalAffect(f, sts, pars, ctx = nothing)
     ps_syms = Symbol[x isa Pair ? Symbol(x.second) : getname(x) for x in pars]
     length(ps_syms) == length(unique(ps_syms)) || error("Parameters are not unique")
 
-    FunctionalAffect(f, vs, vs_syms, ps, ps_syms, ctx)
+    FunctionalAffect(f, vs, vs_syms, ps, ps_syms, discretes, ctx)
 end
 
-FunctionalAffect(; f, sts, pars, ctx = nothing) = FunctionalAffect(f, sts, pars, ctx)
+function FunctionalAffect(; f, sts, pars, discretes, ctx = nothing)
+    FunctionalAffect(f, sts, pars, discretes, ctx)
+end
 
 func(f::FunctionalAffect) = f.f
 context(a::FunctionalAffect) = a.ctx
 parameters(a::FunctionalAffect) = a.pars
 parameters_syms(a::FunctionalAffect) = a.pars_syms
-states(a::FunctionalAffect) = a.sts
-states_syms(a::FunctionalAffect) = a.sts_syms
+unknowns(a::FunctionalAffect) = a.sts
+unknowns_syms(a::FunctionalAffect) = a.sts_syms
+discretes(a::FunctionalAffect) = a.discretes
 
 function Base.:(==)(a1::FunctionalAffect, a2::FunctionalAffect)
     isequal(a1.f, a2.f) && isequal(a1.sts, a2.sts) && isequal(a1.pars, a2.pars) &&
@@ -52,6 +56,7 @@ function Base.hash(a::FunctionalAffect, s::UInt)
     s = hash(a.sts_syms, s)
     s = hash(a.pars, s)
     s = hash(a.pars_syms, s)
+    s = hash(a.discretes, s)
     hash(a.ctx, s)
 end
 
@@ -60,10 +65,11 @@ has_functional_affect(cb) = affects(cb) isa FunctionalAffect
 namespace_affect(affect, s) = namespace_equation(affect, s)
 function namespace_affect(affect::FunctionalAffect, s)
     FunctionalAffect(func(affect),
-        renamespace.((s,), states(affect)),
-        states_syms(affect),
+        renamespace.((s,), unknowns(affect)),
+        unknowns_syms(affect),
         renamespace.((s,), parameters(affect)),
         parameters_syms(affect),
+        renamespace.((s,), discretes(affect)),
         context(affect))
 end
 
@@ -121,7 +127,7 @@ end
 
 affects(cb::SymbolicContinuousCallback) = cb.affect
 function affects(cbs::Vector{SymbolicContinuousCallback})
-    reduce(vcat, [affects(cb) for cb in cbs])
+    reduce(vcat, [affects(cb) for cb in cbs], init = [])
 end
 
 namespace_affects(af::Vector, s) = Equation[namespace_affect(a, s) for a in af]
@@ -138,10 +144,10 @@ function continuous_events(sys::AbstractSystem)
 
     systems = get_systems(sys)
     cbs = [obs;
-        reduce(vcat,
-        (map(o -> namespace_callback(o, s), continuous_events(s))
-         for s in systems),
-        init = SymbolicContinuousCallback[])]
+           reduce(vcat,
+               (map(o -> namespace_callback(o, s), continuous_events(s))
+               for s in systems),
+               init = SymbolicContinuousCallback[])]
     filter(!isempty, cbs)
 end
 
@@ -213,7 +219,7 @@ end
 affects(cb::SymbolicDiscreteCallback) = cb.affects
 
 function affects(cbs::Vector{SymbolicDiscreteCallback})
-    reduce(vcat, affects(cb) for cb in cbs)
+    reduce(vcat, affects(cb) for cb in cbs; init = [])
 end
 
 function namespace_callback(cb::SymbolicDiscreteCallback, s)::SymbolicDiscreteCallback
@@ -232,25 +238,81 @@ function discrete_events(sys::AbstractSystem)
     obs = get_discrete_events(sys)
     systems = get_systems(sys)
     cbs = [obs;
-        reduce(vcat,
-        (map(o -> namespace_callback(o, s), discrete_events(s)) for s in systems),
-        init = SymbolicDiscreteCallback[])]
+           reduce(vcat,
+               (map(o -> namespace_callback(o, s), discrete_events(s)) for s in systems),
+               init = SymbolicDiscreteCallback[])]
     cbs
 end
 
 ################################# compilation functions ####################################
 
 # handles ensuring that affect! functions work with integrator arguments
-function add_integrator_header(integrator = gensym(:MTKIntegrator), out = :u)
-    expr -> Func([DestructuredArgs(expr.args, integrator, inds = [:u, :p, :t])], [],
-        expr.body),
-    expr -> Func([DestructuredArgs(expr.args, integrator, inds = [out, :u, :p, :t])], [],
-        expr.body)
+function add_integrator_header(
+        sys::AbstractSystem, integrator = gensym(:MTKIntegrator), out = :u)
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        function (expr)
+            p = gensym(:p)
+            Func(
+                [
+                    DestructuredArgs([expr.args[1], p, expr.args[end]],
+                    integrator, inds = [:u, :p, :t])
+                ],
+                [],
+                Let(
+                    [DestructuredArgs([arg.name for arg in expr.args[2:(end - 1)]], p),
+                        expr.args[2:(end - 1)]...],
+                    expr.body,
+                    false)
+            )
+        end,
+        function (expr)
+            p = gensym(:p)
+            Func(
+                [
+                    DestructuredArgs([expr.args[1], expr.args[2], p, expr.args[end]],
+                    integrator, inds = [out, :u, :p, :t])
+                ],
+                [],
+                Let(
+                    [DestructuredArgs([arg.name for arg in expr.args[3:(end - 1)]], p),
+                        expr.args[3:(end - 1)]...],
+                    expr.body,
+                    false)
+            )
+        end
+    else
+        expr -> Func([DestructuredArgs(expr.args, integrator, inds = [:u, :p, :t])], [],
+            expr.body),
+        expr -> Func(
+            [DestructuredArgs(expr.args, integrator, inds = [out, :u, :p, :t])], [],
+            expr.body)
+    end
 end
 
-function condition_header(integrator = gensym(:MTKIntegrator))
-    expr -> Func([expr.args[1], expr.args[2],
-            DestructuredArgs(expr.args[3:end], integrator, inds = [:p])], [], expr.body)
+function condition_header(sys::AbstractSystem, integrator = gensym(:MTKIntegrator))
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        function (expr)
+            p = gensym(:p)
+            res = Func(
+                [expr.args[1], expr.args[2],
+                    DestructuredArgs([p], integrator, inds = [:p])],
+                [],
+                Let(
+                    [
+                        DestructuredArgs([arg.name for arg in expr.args[3:end]], p),
+                        expr.args[3:end]...
+                    ], expr.body, false
+                )
+            )
+            return res
+        end
+    else
+        expr -> Func(
+            [expr.args[1], expr.args[2],
+                DestructuredArgs(expr.args[3:end], integrator, inds = [:p])],
+            [],
+            expr.body)
+    end
 end
 
 """
@@ -267,7 +329,7 @@ Notes
 function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
         expression = Val{true}, kwargs...)
     u = map(x -> time_varying_as_func(value(x), sys), dvs)
-    p = map(x -> time_varying_as_func(value(x), sys), ps)
+    p = map.(x -> time_varying_as_func(value(x), sys), reorder_parameters(sys, ps))
     t = get_iv(sys)
     condit = condition(cb)
     cs = collect_constants(condit)
@@ -275,7 +337,7 @@ function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
         cmap = map(x -> x => getdefault(x), cs)
         condit = substitute(condit, cmap)
     end
-    build_function(condit, u, t, p; expression, wrap_code = condition_header(),
+    build_function(condit, u, t, p...; expression, wrap_code = condition_header(sys),
         kwargs...)
 end
 
@@ -295,7 +357,7 @@ Notes
   - `expression = Val{true}`, causes the generated function to be returned as an expression.
     If  set to `Val{false}` a `RuntimeGeneratedFunction` will be returned.
   - `outputidxs`, a vector of indices of the output variables which should correspond to
-    `states(sys)`. If provided, checks that the LHS of affect equations are variables are
+    `unknowns(sys)`. If provided, checks that the LHS of affect equations are variables are
     dropped, i.e. it is assumed these indices are correct and affect equations are
     well-formed.
   - `kwargs` are passed through to `Symbolics.build_function`.
@@ -318,26 +380,35 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
                 error("Non-variable symbolic expression found on the left hand side of an affect equation. Such equations must be of the form variable ~ symbolic expression for the new value of the variable.")
             update_vars = collect(Iterators.flatten(map(ModelingToolkit.vars, lhss))) # these are the ones we're changing
             length(update_vars) == length(unique(update_vars)) == length(eqs) ||
-                error("affected variables not unique, each state can only be affected by one equation for a single `root_eqs => affects` pair.")
+                error("affected variables not unique, each unknown can only be affected by one equation for a single `root_eqs => affects` pair.")
             alleq = all(isequal(isparameter(first(update_vars))),
                 Iterators.map(isparameter, update_vars))
             if !isparameter(first(lhss)) && alleq
-                stateind = Dict(reverse(en) for en in enumerate(dvs))
-                update_inds = map(sym -> stateind[sym], update_vars)
+                unknownind = Dict(reverse(en) for en in enumerate(dvs))
+                update_inds = map(sym -> unknownind[sym], update_vars)
             elseif isparameter(first(lhss)) && alleq
-                psind = Dict(reverse(en) for en in enumerate(ps))
-                update_inds = map(sym -> psind[sym], update_vars)
+                if has_index_cache(sys) && get_index_cache(sys) !== nothing
+                    ic = get_index_cache(sys)
+                    update_inds = map(update_vars) do sym
+                        pind = parameter_index(sys, sym)
+                        discrete_linear_index(ic, pind)
+                    end
+                else
+                    psind = Dict(reverse(en) for en in enumerate(ps))
+                    update_inds = map(sym -> psind[sym], update_vars)
+                end
                 outvar = :p
             else
-                error("Error, building an affect function for a callback that wants to modify both parameters and states. This is not currently allowed in one individual callback.")
+                error("Error, building an affect function for a callback that wants to modify both parameters and unknowns. This is not currently allowed in one individual callback.")
             end
         else
             update_inds = outputidxs
         end
 
+        ps = reorder_parameters(sys, ps)
         if checkvars
             u = map(x -> time_varying_as_func(value(x), sys), dvs)
-            p = map(x -> time_varying_as_func(value(x), sys), ps)
+            p = map.(x -> time_varying_as_func(value(x), sys), ps)
         else
             u = dvs
             p = ps
@@ -346,8 +417,8 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
         integ = gensym(:MTKIntegrator)
         getexpr = (postprocess_affect_expr! === nothing) ? expression : Val{true}
         pre = get_preprocess_constants(rhss)
-        rf_oop, rf_ip = build_function(rhss, u, p, t; expression = getexpr,
-            wrap_code = add_integrator_header(integ, outvar),
+        rf_oop, rf_ip = build_function(rhss, u, p..., t; expression = getexpr,
+            wrap_code = add_integrator_header(sys, integ, outvar),
             outputidxs = update_inds,
             postprocess_fbody = pre,
             kwargs...)
@@ -361,15 +432,15 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
     end
 end
 
-function generate_rootfinding_callback(sys::AbstractODESystem, dvs = states(sys),
-        ps = parameters(sys); kwargs...)
+function generate_rootfinding_callback(sys::AbstractODESystem, dvs = unknowns(sys),
+        ps = full_parameters(sys); kwargs...)
     cbs = continuous_events(sys)
     isempty(cbs) && return nothing
     generate_rootfinding_callback(cbs, sys, dvs, ps; kwargs...)
 end
 
-function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = states(sys),
-        ps = parameters(sys); kwargs...)
+function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = unknowns(sys),
+        ps = full_parameters(sys); kwargs...)
     eqs = map(cb -> cb.eqs, cbs)
     num_eqs = length.(eqs)
     (isempty(eqs) || sum(num_eqs) == 0) && return nothing
@@ -385,10 +456,10 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = states
     root_eq_vars = unique(collect(Iterators.flatten(map(ModelingToolkit.vars, rhss))))
 
     u = map(x -> time_varying_as_func(value(x), sys), dvs)
-    p = map(x -> time_varying_as_func(value(x), sys), ps)
+    p = map.(x -> time_varying_as_func(value(x), sys), reorder_parameters(sys, ps))
     t = get_iv(sys)
     pre = get_preprocess_constants(rhss)
-    rf_oop, rf_ip = build_function(rhss, u, p, t; expression = Val{false},
+    rf_oop, rf_ip = build_function(rhss, u, p..., t; expression = Val{false},
         postprocess_fbody = pre, kwargs...)
 
     affect_functions = map(cbs) do cb # Keep affect function separate
@@ -400,16 +471,16 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = states
         cond = function (u, t, integ)
             if DiffEqBase.isinplace(integ.sol.prob)
                 tmp, = DiffEqBase.get_tmp_cache(integ)
-                rf_ip(tmp, u, integ.p, t)
+                rf_ip(tmp, u, parameter_values(integ)..., t)
                 tmp[1]
             else
-                rf_oop(u, integ.p, t)
+                rf_oop(u, parameter_values(integ)..., t)
             end
         end
         ContinuousCallback(cond, affect_functions[])
     else
         cond = function (out, u, t, integ)
-            rf_ip(out, u, integ.p, t)
+            rf_ip(out, u, parameter_values(integ)..., t)
         end
 
         # since there may be different number of conditions and affects,
@@ -430,14 +501,18 @@ end
 
 function compile_user_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
     dvs_ind = Dict(reverse(en) for en in enumerate(dvs))
-    v_inds = map(sym -> dvs_ind[sym], states(affect))
+    v_inds = map(sym -> dvs_ind[sym], unknowns(affect))
 
-    ps_ind = Dict(reverse(en) for en in enumerate(ps))
-    p_inds = map(sym -> ps_ind[sym], parameters(affect))
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        p_inds = [parameter_index(sys, sym) for sym in parameters(affect)]
+    else
+        ps_ind = Dict(reverse(en) for en in enumerate(ps))
+        p_inds = map(sym -> ps_ind[sym], parameters(affect))
+    end
 
     # HACK: filter out eliminated symbols. Not clear this is the right thing to do
     # (MTK should keep these symbols)
-    u = filter(x -> !isnothing(x[2]), collect(zip(states_syms(affect), v_inds))) |>
+    u = filter(x -> !isnothing(x[2]), collect(zip(unknowns_syms(affect), v_inds))) |>
         NamedTuple
     p = filter(x -> !isnothing(x[2]), collect(zip(parameters_syms(affect), p_inds))) |>
         NamedTuple
@@ -480,8 +555,8 @@ function generate_discrete_callback(cb, sys, dvs, ps; postprocess_affect_expr! =
     end
 end
 
-function generate_discrete_callbacks(sys::AbstractSystem, dvs = states(sys),
-        ps = parameters(sys); kwargs...)
+function generate_discrete_callbacks(sys::AbstractSystem, dvs = unknowns(sys),
+        ps = full_parameters(sys); kwargs...)
     has_discrete_events(sys) || return nothing
     symcbs = discrete_events(sys)
     isempty(symcbs) && return nothing
@@ -498,7 +573,7 @@ merge_cb(::Nothing, x) = merge_cb(x, nothing)
 merge_cb(x, ::Nothing) = x
 merge_cb(x, y) = CallbackSet(x, y)
 
-function process_events(sys; callback = nothing, has_difference = false, kwargs...)
+function process_events(sys; callback = nothing, kwargs...)
     if has_continuous_events(sys)
         contin_cb = generate_rootfinding_callback(sys; kwargs...)
     else
@@ -509,9 +584,7 @@ function process_events(sys; callback = nothing, has_difference = false, kwargs.
     else
         discrete_cb = nothing
     end
-    difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
 
-    cb = merge_cb(contin_cb, difference_cb)
-    cb = merge_cb(cb, callback)
-    (discrete_cb === nothing) ? cb : CallbackSet(cb, discrete_cb...)
+    cb = merge_cb(contin_cb, callback)
+    (discrete_cb === nothing) ? cb : CallbackSet(contin_cb, discrete_cb...)
 end

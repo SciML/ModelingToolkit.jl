@@ -2,11 +2,11 @@ module MTKDeepDiffsExt
 
 using DeepDiffs, ModelingToolkit
 using ModelingToolkit.BipartiteGraphs: Label,
-    BipartiteAdjacencyList, unassigned,
-    HighlightInt
+                                       BipartiteAdjacencyList, unassigned,
+                                       HighlightInt
 using ModelingToolkit: SystemStructure,
-    MatchedSystemStructure,
-    SystemStructurePrintMatrix
+                       MatchedSystemStructure,
+                       SystemStructurePrintMatrix
 
 """
 A utility struct for displaying the difference between two HighlightInts.
@@ -93,11 +93,13 @@ function Base.show(io::IO, l::BipartiteAdjacencyListDiff)
             end)
         print(IOContext(io, :typeinfo => typeof(highlighted)), highlighted)
     elseif new_nonempty === true
-        printstyled(io, map(l.new.u) do i
+        printstyled(
+            io, map(l.new.u) do i
                 HighlightInt(i, :nothing, i === l.new.match)
             end, color = :light_green)
     elseif old_nonempty === true
-        printstyled(io, map(l.old.u) do i
+        printstyled(
+            io, map(l.old.u) do i
                 HighlightInt(i, :nothing, i === l.old.match)
             end, color = :light_red)
     elseif old_nonempty !== nothing || new_nonempty !== nothing

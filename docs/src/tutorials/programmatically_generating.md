@@ -18,10 +18,11 @@ as demonstrated in the Symbolics.jl documentation. This looks like:
 
 ```@example scripting
 using Symbolics
-@variables t x(t) y(t) # Define variables
-D = Differential(t) # Define a differential operator
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) y(t) # Define variables
 eqs = [D(x) ~ y
-    D(y) ~ x] # Define an array of equations
+       D(y) ~ x] # Define an array of equations
 ```
 
 ## The Non-DSL (non-`@mtkmodel`) Way of Defining an ODESystem
@@ -32,19 +33,19 @@ defining PDESystem etc.
 
 ```@example scripting
 using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@variables t x(t)   # independent and dependent variables
+@variables x(t)   # independent and dependent variables
 @parameters τ       # parameters
 @constants h = 1    # constants
-D = Differential(t) # define an operator for the differentiation w.r.t. time
 eqs = [D(x) ~ (h - x) / τ] # create an array of equations
 
 # your first ODE, consisting of a single equation, indicated by ~
-@named fol_model = ODESystem(eqs, t)
+@named model = ODESystem(eqs, t)
 
 # Perform the standard transformations and mark the model complete
 # Note: Complete models cannot be subsystems of other models!
-fol_model = complete(structural_simplify(fol_model))
+fol_model = structural_simplify(model)
 ```
 
 As you can see, generating an ODESystem is as simple as creating the array of equations
