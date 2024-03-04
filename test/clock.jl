@@ -481,6 +481,7 @@ end
 ## Test continuous clock
 
 c = ModelingToolkit.SolverStepClock(t)
+k = ShiftIndex(c)
 
 @mtkmodel CounterSys begin
     @variables begin
