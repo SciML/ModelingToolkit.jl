@@ -285,6 +285,12 @@ function TearingState(sys; quick_cancel = false, check = true)
         end
         vars!(vars, eq.rhs, op = Symbolics.Operator)
         for v in vars
+            _var, _ = var_from_nested_derivative(v)
+            any(isequal(_var), ivs) && continue
+            if isparameter(_var) ||
+               (istree(_var) && isparameter(operation(_var)) || isconstant(_var))
+                continue
+            end
             v = scalarize(v)
             if v isa AbstractArray
                 v = setmetadata.(v, VariableIrreducible, true)
