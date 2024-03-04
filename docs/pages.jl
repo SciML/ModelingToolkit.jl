@@ -8,6 +8,7 @@ pages = [
         "tutorials/modelingtoolkitize.md",
         "tutorials/programmatically_generating.md",
         "tutorials/stochastic_diffeq.md",
+        "tutorials/discrete_system.md",
         "tutorials/parameter_identifiability.md",
         "tutorials/bifurcation_diagram_computation.md",
         "tutorials/SampledData.md",
