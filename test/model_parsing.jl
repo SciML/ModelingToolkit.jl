@@ -650,3 +650,72 @@ end
 @named m = MyModel()
 @variables x___(t)
 @test isequal(x___, _b[])
+
+@testset "Component array" begin
+    @mtkmodel SubComponent begin
+        @parameters begin
+            sc
+        end
+    end
+
+    @mtkmodel Component begin
+        @structural_parameters begin
+            N = 2
+        end
+        @components begin
+            comprehension = [SubComponent(sc = i) for i in 1:N]
+            written_out_for = for i in 1:N
+                sc = i + 1
+                SubComponent(; sc)
+            end
+            single_sub_component = SubComponent()
+        end
+    end
+
+    @named component = Component()
+    component = complete(component)
+
+    @test nameof.(ModelingToolkit.get_systems(component)) == [
+        :comprehension_1,
+        :comprehension_2,
+        :written_out_for_1,
+        :written_out_for_2,
+        :single_sub_component
+    ]
+
+    @test getdefault(component.comprehension_1.sc) == 1
+    @test getdefault(component.comprehension_2.sc) == 2
+    @test getdefault(component.written_out_for_1.sc) == 2
+    @test getdefault(component.written_out_for_2.sc) == 3
+
+    @mtkmodel ConditionalComponent begin
+        @structural_parameters begin
+            N = 2
+        end
+        @components begin
+            if N == 2
+                if_comprehension = [SubComponent(sc = i) for i in 1:N]
+            elseif N == 3
+                elseif_comprehension = [SubComponent(sc = i) for i in 1:N]
+            else
+                else_comprehension = [SubComponent(sc = i) for i in 1:N]
+            end
+        end
+    end
+
+    @named if_component = ConditionalComponent()
+    @test nameof.(get_systems(if_component)) == [:if_comprehension_1, :if_comprehension_2]
+
+    @named elseif_component = ConditionalComponent(; N = 3)
+    @test nameof.(get_systems(elseif_component)) ==
+          [:elseif_comprehension_1, :elseif_comprehension_2, :elseif_comprehension_3]
+
+    @named else_component = ConditionalComponent(; N = 4)
+    @test nameof.(get_systems(else_component)) ==
+          [:else_comprehension_1, :else_comprehension_2,
+        :else_comprehension_3, :else_comprehension_4]
+end
+
+@testset "Parent module of Models" begin
+    @test parentmodule(MyMockModule.Ground) == MyMockModule
+end
