@@ -786,7 +786,7 @@ function get_u0_p(sys,
         allobs = Set(getproperty.(observed(sys), :lhs))
         if any(in(allobs), keys(u0map))
             u0s_in_obs = filter(in(allobs), keys(u0map))
-            @warn "Observed variables cannot assigned initial values. Initial values for $u0s_in_obs will be ignored."
+            @warn "Observed variables cannot be assigned initial values. Initial values for $u0s_in_obs will be ignored."
         end
     end
     defs = mergedefaults(defs, u0map, dvs)

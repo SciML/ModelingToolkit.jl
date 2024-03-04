@@ -14,10 +14,10 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
     else
         error("Cannot create MTKParameters if system does not have index_cache")
     end
-    all_ps = Set(unwrap.(parameters(sys)))
-    union!(all_ps, default_toterm.(unwrap.(parameters(sys))))
+    all_ps = Set(unwrap.(full_parameters(sys)))
+    union!(all_ps, default_toterm.(unwrap.(full_parameters(sys))))
     if p isa Vector && !(eltype(p) <: Pair) && !isempty(p)
-        ps = parameters(sys)
+        ps = full_parameters(sys)
         length(p) == length(ps) || error("Invalid parameters")
         p = ps .=> p
     end
@@ -38,13 +38,13 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
 
     for (sym, _) in p
         if istree(sym) && operation(sym) === getindex &&
-           is_parameter(sys, arguments(sym)[begin])
-            error("Scalarized parameter values are not supported. Instead of `[p[1] => 1.0, p[2] => 2.0]` use `[p => [1.0, 2.0]]`")
+           first(arguments(sym)) in all_ps
+            error("Scalarized parameter values ($sym) are not supported. Instead of `[p[1] => 1.0, p[2] => 2.0]` use `[p => [1.0, 2.0]]`")
         end
     end
 
     tunable_buffer = Tuple(Vector{temp.type}(undef, temp.length)
-    for temp in ic.param_buffer_sizes)
+    for temp in ic.tunable_buffer_sizes)
     disc_buffer = Tuple(Vector{temp.type}(undef, temp.length)
     for temp in ic.discrete_buffer_sizes)
     const_buffer = Tuple(Vector{temp.type}(undef, temp.length)
@@ -54,22 +54,21 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
     nonnumeric_buffer = Tuple(Vector{temp.type}(undef, temp.length)
     for temp in ic.nonnumeric_buffer_sizes)
     function set_value(sym, val)
-        h = getsymbolhash(sym)
         done = true
-        if haskey(ic.param_idx, h)
-            i, j = ic.param_idx[h]
+        if haskey(ic.tunable_idx, sym)
+            i, j = ic.tunable_idx[sym]
             tunable_buffer[i][j] = val
-        elseif haskey(ic.discrete_idx, h)
-            i, j = ic.discrete_idx[h]
+        elseif haskey(ic.discrete_idx, sym)
+            i, j = ic.discrete_idx[sym]
             disc_buffer[i][j] = val
-        elseif haskey(ic.constant_idx, h)
-            i, j = ic.constant_idx[h]
+        elseif haskey(ic.constant_idx, sym)
+            i, j = ic.constant_idx[sym]
             const_buffer[i][j] = val
-        elseif haskey(ic.dependent_idx, h)
-            i, j = ic.dependent_idx[h]
+        elseif haskey(ic.dependent_idx, sym)
+            i, j = ic.dependent_idx[sym]
             dep_buffer[i][j] = val
-        elseif haskey(ic.nonnumeric_idx, h)
-            i, j = ic.nonnumeric_idx[h]
+        elseif haskey(ic.nonnumeric_idx, sym)
+            i, j = ic.nonnumeric_idx[sym]
             nonnumeric_buffer[i][j] = val
         elseif !isequal(default_toterm(sym), sym)
             done = set_value(default_toterm(sym), val)
@@ -97,11 +96,10 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
         pdeps = Dict(k => fixpoint_sub(v, pdeps) for (k, v) in pdeps)
         dep_exprs = ArrayPartition((wrap.(v) for v in dep_buffer)...)
         for (sym, val) in pdeps
-            h = getsymbolhash(sym)
-            i, j = ic.dependent_idx[h]
+            i, j = ic.dependent_idx[sym]
             dep_exprs.x[i][j] = wrap(val)
         end
-        p = reorder_parameters(ic, parameters(sys))
+        p = reorder_parameters(ic, full_parameters(sys))
         oop, iip = build_function(dep_exprs, p...)
         update_function_iip, update_function_oop = RuntimeGeneratedFunctions.@RuntimeGeneratedFunction(iip),
         RuntimeGeneratedFunctions.@RuntimeGeneratedFunction(oop)

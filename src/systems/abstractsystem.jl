@@ -165,7 +165,7 @@ function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system.")
     end
-    p = reorder_parameters(sys, ps)
+    p = reorder_parameters(sys, unwrap.(ps))
     isscalar = !(exprs isa AbstractArray)
     if wrap_code === nothing
         wrap_code = isscalar ? identity : (identity, identity)
@@ -347,25 +347,23 @@ end
 
 #Treat the result as a vector of symbols always
 function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym)
-    if unwrap(sym) isa Int    # [x, 1] coerces 1 to a Num
-        return unwrap(sym) in 1:length(variable_symbols(sys))
+    sym = unwrap(sym)
+    if sym isa Int    # [x, 1] coerces 1 to a Num
+        return sym in 1:length(variable_symbols(sys))
     end
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        ic = get_index_cache(sys)
-        h = getsymbolhash(sym)
-        return haskey(ic.unknown_idx, h) ||
-               haskey(ic.unknown_idx, getsymbolhash(default_toterm(sym))) ||
-               (istree(sym) && operation(sym) === getindex &&
-                is_variable(sys, first(arguments(sym))))
-    else
-        return any(isequal(sym), variable_symbols(sys)) ||
-               hasname(sym) && is_variable(sys, getname(sym))
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+        return is_variable(ic, sym) ||
+               istree(sym) && operation(sym) === getindex &&
+               is_variable(ic, first(arguments(sym)))
     end
+    return any(isequal(sym), variable_symbols(sys)) ||
+           hasname(sym) && is_variable(sys, getname(sym))
 end
 
 function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym::Symbol)
+    sym = unwrap(sym)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        return haskey(ic.unknown_idx, hash(sym))
+        return is_variable(ic, sym)
     end
     return any(isequal(sym), getname.(variable_symbols(sys))) ||
            count('₊', string(sym)) == 1 &&
@@ -374,21 +372,19 @@ function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym::Symbol)
 end
 
 function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym)
-    if unwrap(sym) isa Int
-        return unwrap(sym)
+    sym = unwrap(sym)
+    if sym isa Int
+        return sym
     end
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        ic = get_index_cache(sys)
-        h = getsymbolhash(sym)
-        haskey(ic.unknown_idx, h) && return ic.unknown_idx[h]
-
-        h = getsymbolhash(default_toterm(sym))
-        haskey(ic.unknown_idx, h) && return ic.unknown_idx[h]
-        sym = unwrap(sym)
-        istree(sym) && operation(sym) === getindex || return nothing
-        idx = variable_index(sys, first(arguments(sym)))
-        idx === nothing && return nothing
-        return idx[arguments(sym)[(begin + 1):end]...]
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+        return if (idx = variable_index(ic, sym)) !== nothing
+            idx
+        elseif istree(sym) && operation(sym) === getindex &&
+               (idx = variable_index(ic, first(arguments(sym)))) !== nothing
+            idx[arguments(sym)[(begin + 1):end]...]
+        else
+            nothing
+        end
     end
     idx = findfirst(isequal(sym), variable_symbols(sys))
     if idx === nothing && hasname(sym)
@@ -399,7 +395,7 @@ end
 
 function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym::Symbol)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        return get(ic.unknown_idx, h, nothing)
+        return variable_index(ic, sym)
     end
     idx = findfirst(isequal(sym), getname.(variable_symbols(sys)))
     if idx !== nothing
@@ -418,22 +414,14 @@ function SymbolicIndexingInterface.variable_symbols(sys::AbstractSystem)
 end
 
 function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
+    sym = unwrap(sym)
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+        return is_parameter(ic, sym) ||
+               istree(sym) && operation(sym) === getindex &&
+               is_parameter(ic, first(arguments(sym)))
+    end
     if unwrap(sym) isa Int
         return unwrap(sym) in 1:length(parameter_symbols(sys))
-    end
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        ic = get_index_cache(sys)
-        h = getsymbolhash(sym)
-        return if haskey(ic.param_idx, h) || haskey(ic.discrete_idx, h) ||
-                  haskey(ic.constant_idx, h) || haskey(ic.dependent_idx, h) ||
-                  haskey(ic.nonnumeric_idx, h)
-            true
-        else
-            h = getsymbolhash(default_toterm(sym))
-            haskey(ic.param_idx, h) || haskey(ic.discrete_idx, h) ||
-                haskey(ic.constant_idx, h) || haskey(ic.dependent_idx, h) ||
-                haskey(ic.nonnumeric_idx, h)
-        end
     end
     return any(isequal(sym), parameter_symbols(sys)) ||
            hasname(sym) && is_parameter(sys, getname(sym))
@@ -441,7 +429,7 @@ end
 
 function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Symbol)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        return ParameterIndex(ic, sym) !== nothing
+        return is_parameter(ic, sym)
     end
     return any(isequal(sym), getname.(parameter_symbols(sys))) ||
            count('₊', string(sym)) == 1 &&
@@ -450,20 +438,21 @@ function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Symbol
 end
 
 function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
-    if unwrap(sym) isa Int
-        return unwrap(sym)
-    end
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        ic = get_index_cache(sys)
-        return if (idx = ParameterIndex(ic, sym)) !== nothing
+    sym = unwrap(sym)
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+        return if (idx = parameter_index(ic, sym)) !== nothing
             idx
-        elseif (idx = ParameterIndex(ic, default_toterm(sym))) !== nothing
-            idx
+        elseif istree(sym) && operation(sym) === getindex &&
+               (idx = parameter_index(ic, first(arguments(sym)))) !== nothing
+            ParameterIndex(idx.portion, (idx.idx..., arguments(sym)[(begin + 1):end]...))
         else
             nothing
         end
     end
 
+    if sym isa Int
+        return sym
+    end
     idx = findfirst(isequal(sym), parameter_symbols(sys))
     if idx === nothing && hasname(sym)
         idx = parameter_index(sys, getname(sym))
@@ -473,7 +462,7 @@ end
 
 function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym::Symbol)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        return ParameterIndex(ic, sym)
+        return parameter_index(ic, sym)
     end
     idx = findfirst(isequal(sym), getname.(parameter_symbols(sys)))
     if idx !== nothing
