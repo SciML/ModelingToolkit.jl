@@ -165,7 +165,7 @@ function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system.")
     end
-    p = reorder_parameters(sys, ps)
+    p = reorder_parameters(sys, unwrap.(ps))
     isscalar = !(exprs isa AbstractArray)
     if wrap_code === nothing
         wrap_code = isscalar ? identity : (identity, identity)
@@ -1701,6 +1701,7 @@ function linearization_function(sys::AbstractSystem, inputs,
     u0, _p, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
     ps = parameters(sys)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
+            @show p full_parameters(sys)
         p = MTKParameters(sys, p)
     else
         p = _p

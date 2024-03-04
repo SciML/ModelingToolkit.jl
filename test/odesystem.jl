@@ -472,7 +472,7 @@ sts = @variables x(t)[1:3]=[1, 2, 3.0] y(t)=1.0
 ps = @parameters p[1:3] = [1, 2, 3]
 eqs = [collect(D.(x) .~ x)
        D(y) ~ norm(collect(x)) * y - x[1]]
-@named sys = ODESystem(eqs, t, [sts...;], [ps...;])
+@named sys = ODESystem(eqs, t, sts, ps)
 sys = structural_simplify(sys)
 @test isequal(@nonamespace(sys.x), x)
 @test isequal(@nonamespace(sys.y), y)

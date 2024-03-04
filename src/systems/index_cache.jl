@@ -240,6 +240,7 @@ function reorder_parameters(sys::AbstractSystem, ps; kwargs...)
 end
 
 function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
+    isempty(ps) && return ()
     param_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
     for temp in ic.tunable_buffer_sizes)
     disc_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
@@ -280,6 +281,9 @@ function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
                 return !isequal(sym, unwrap(variable(:DEF)))
             end
         end
+    end
+    if all(isempty, result)
+        return ()
     end
     return result
 end

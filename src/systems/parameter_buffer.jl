@@ -14,10 +14,10 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
     else
         error("Cannot create MTKParameters if system does not have index_cache")
     end
-    all_ps = Set(unwrap.(parameters(sys)))
-    union!(all_ps, default_toterm.(unwrap.(parameters(sys))))
+    all_ps = Set(unwrap.(full_parameters(sys)))
+    union!(all_ps, default_toterm.(unwrap.(full_parameters(sys))))
     if p isa Vector && !(eltype(p) <: Pair) && !isempty(p)
-        ps = parameters(sys)
+        ps = full_parameters(sys)
         length(p) == length(ps) || error("Invalid parameters")
         p = ps .=> p
     end
@@ -38,7 +38,7 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
 
     for (sym, _) in p
         if istree(sym) && operation(sym) === getindex &&
-           is_parameter(sys, first(arguments(sym)))
+            first(arguments(sym)) in all_ps
             error("Scalarized parameter values ($sym) are not supported. Instead of `[p[1] => 1.0, p[2] => 2.0]` use `[p => [1.0, 2.0]]`")
         end
     end
@@ -99,7 +99,7 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
             i, j = ic.dependent_idx[sym]
             dep_exprs.x[i][j] = wrap(val)
         end
-        p = reorder_parameters(ic, parameters(sys))
+        p = reorder_parameters(ic, full_parameters(sys))
         oop, iip = build_function(dep_exprs, p...)
         update_function_iip, update_function_oop = RuntimeGeneratedFunctions.@RuntimeGeneratedFunction(iip),
         RuntimeGeneratedFunctions.@RuntimeGeneratedFunction(oop)

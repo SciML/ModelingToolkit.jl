@@ -361,6 +361,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
 
     if length(cstr) > 0
         @named cons_sys = ConstraintsSystem(cstr, dvs, ps)
+        cons_sys = complete(cons_sys)
         cons, lcons_, ucons_ = generate_function(cons_sys, checkbounds = checkbounds,
             linenumbers = linenumbers,
             expression = Val{false})

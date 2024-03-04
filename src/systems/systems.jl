@@ -32,6 +32,16 @@ function structural_simplify(
         @set! newsys.parent = complete(sys; split)
     end
     newsys = complete(newsys; split)
+    if has_defaults(newsys) && (defs = get_defaults(newsys)) !== nothing
+        ks = collect(keys(defs))
+        for k in ks
+            if Symbolics.isarraysymbolic(k) && Symbolics.shape(k) !== Symbolics.Unknown()
+                for i in eachindex(k)
+                    defs[k[i]] = defs[k][i]
+                end
+            end
+        end
+    end
     if newsys′ isa Tuple
         idxs = [parameter_index(newsys, i) for i in io[1]]
         return newsys, idxs

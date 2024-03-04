@@ -164,10 +164,11 @@ function calculate_jacobian(sys::ConstraintsSystem; sparse = false, simplify = f
 end
 
 function generate_jacobian(
-        sys::ConstraintsSystem, vs = unknowns(sys), ps = parameters(sys);
+        sys::ConstraintsSystem, vs = unknowns(sys), ps = full_parameters(sys);
         sparse = false, simplify = false, kwargs...)
     jac = calculate_jacobian(sys, sparse = sparse, simplify = simplify)
-    return build_function(jac, vs, ps; kwargs...)
+    p = reorder_parameters(sys, ps)
+    return build_function(jac, vs, p...; kwargs...)
 end
 
 function calculate_hessian(sys::ConstraintsSystem; sparse = false, simplify = false)
@@ -181,19 +182,20 @@ function calculate_hessian(sys::ConstraintsSystem; sparse = false, simplify = fa
     return hess
 end
 
-function generate_hessian(sys::ConstraintsSystem, vs = unknowns(sys), ps = parameters(sys);
+function generate_hessian(sys::ConstraintsSystem, vs = unknowns(sys), ps = full_parameters(sys);
         sparse = false, simplify = false, kwargs...)
     hess = calculate_hessian(sys, sparse = sparse, simplify = simplify)
-    return build_function(hess, vs, ps; kwargs...)
+    p = reorder_parameters(sys, ps)
+    return build_function(hess, vs, p...; kwargs...)
 end
 
 function generate_function(sys::ConstraintsSystem, dvs = unknowns(sys),
-        ps = parameters(sys);
+        ps = full_parameters(sys);
         kwargs...)
     lhss = generate_canonical_form_lhss(sys)
     pre, sol_states = get_substitutions_and_solved_unknowns(sys)
-
-    func = build_function(lhss, value.(dvs), value.(ps); postprocess_fbody = pre,
+    p = reorder_parameters(sys, value.(ps))
+    func = build_function(lhss, value.(dvs), p...; postprocess_fbody = pre,
         states = sol_states, kwargs...)
 
     cstr = constraints(sys)
