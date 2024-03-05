@@ -30,7 +30,9 @@ y(k) = x(k)
 ```
 
 ```@example clocks
-@variables t x(t) y(t) u(t)
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t
+@variables x(t) y(t) u(t)
 dt = 0.1                # Sample interval
 clock = Clock(t, dt)    # A periodic clock with tick rate dt
 k = ShiftIndex(clock)
@@ -142,8 +144,10 @@ Below, we model a simple continuous first-order system called `plant` that is co
 
 ```@example clocks
 using ModelingToolkit, Plots, OrdinaryDiffEq
+using ModelingToolkit: t_nounits as t
+using ModelingToolkit: D_nounits as D
 dt = 0.5 # Sample interval
-@variables t r(t)
+@variables r(t)
 clock = Clock(t, dt)
 k = ShiftIndex(clock)
 
