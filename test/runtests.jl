@@ -1,6 +1,5 @@
 using SafeTestsets, Pkg, Test
 
-#=
 const GROUP = get(ENV, "GROUP", "All")
 
 function activate_extensions_env()
@@ -67,6 +66,7 @@ end
             @safetestset "Constants Test" include("constants.jl")
             @safetestset "Parameter Dependency Test" include("parameter_dependencies.jl")
             @safetestset "Generate Custom Function Test" include("generate_custom_function.jl")
+            @safetestset "Initial Values Test" include("initial_values.jl")
         end
     end
 
@@ -92,7 +92,5 @@ end
         @safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl")
     end
 end
-
-=#
 
 @safetestset "Model Parsing Test" include("model_parsing.jl")

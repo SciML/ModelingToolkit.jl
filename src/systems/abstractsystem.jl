@@ -207,7 +207,7 @@ function wrap_array_vars(sys::AbstractSystem, exprs; dvs = unknowns(sys))
     for (j, x) in enumerate(dvs)
         if istree(x) && operation(x) == getindex
             arg = arguments(x)[1]
-            arg in allvars || continue
+            any(isequal(arg), allvars) || continue
             inds = get!(() -> Int[], array_vars, arg)
             push!(inds, j)
         end

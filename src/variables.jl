@@ -187,17 +187,28 @@ end
 
 function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false,
         toterm = Symbolics.diff2term, initialization_phase = false)
-    varmap = merge(defaults, varmap) # prefers the `varmap`
-    varmap = Dict(toterm(value(k)) => value(varmap[k]) for k in keys(varmap))
-    # resolve symbolic parameter expressions
-    for (p, v) in pairs(varmap)
-        varmap[p] = fixpoint_sub(v, varmap)
+    varmap = canonicalize_varmap(varmap; toterm)
+    defaults = canonicalize_varmap(defaults; toterm)
+    values = Dict()
+    for var in varlist
+        var = unwrap(var)
+        val = unwrap(fixpoint_sub(fixpoint_sub(var, varmap), defaults))
+        if symbolic_type(val) === NotSymbolic()
+            values[var] = val
+        end
     end
-
-    missingvars = setdiff(varlist, collect(keys(varmap)))
+    missingvars = setdiff(varlist, collect(keys(values)))
     check && (isempty(missingvars) || throw(MissingVariablesError(missingvars)))
+    return [values[unwrap(var)] for var in varlist]
+end
 
-    out = [varmap[var] for var in varlist]
+function canonicalize_varmap(varmap; toterm = Symbolics.diff2term)
+    new_varmap = Dict()
+    for (k, v) in varmap
+        new_varmap[unwrap(k)] = unwrap(v)
+        new_varmap[toterm(unwrap(k))] = unwrap(v)
+    end
+    return new_varmap
 end
 
 @noinline function throw_missingvars(vars)
