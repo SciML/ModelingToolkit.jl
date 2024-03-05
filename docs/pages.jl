@@ -10,7 +10,7 @@ pages = [
         "tutorials/stochastic_diffeq.md",
         "tutorials/parameter_identifiability.md",
         "tutorials/bifurcation_diagram_computation.md",
-        "tutorials/SampledData.md"
+        "tutorials/SampledData.md",
         "tutorials/domain_connections.md"],
     "Examples" => Any[
         "Basic Examples" => Any["examples/higher_order.md",
