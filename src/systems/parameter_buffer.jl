@@ -191,10 +191,7 @@ for (Portion, field) in [(SciMLStructures.Tunable, :tunable)
     end
 
     @eval function SciMLStructures.replace!(::$Portion, p::MTKParameters, newvals)
-        src = split_into_buffers(newvals, p.$field)
-        for i in 1:length(p.$field)
-            (p.$field)[i] .= src[i]
-        end
+        update_tuple_of_buffers(newvals, p.$field)
         if p.dependent_update_iip !== nothing
             p.dependent_update_iip(ArrayPartition(p.dependent), p...)
         end
