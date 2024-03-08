@@ -21,11 +21,13 @@ struct IndexCache
     constant_idx::ParamIndexMap
     dependent_idx::ParamIndexMap
     nonnumeric_idx::ParamIndexMap
+    inputs_idx::ParamIndexMap
     discrete_buffer_sizes::Vector{BufferTemplate}
     tunable_buffer_sizes::Vector{BufferTemplate}
     constant_buffer_sizes::Vector{BufferTemplate}
     dependent_buffer_sizes::Vector{BufferTemplate}
     nonnumeric_buffer_sizes::Vector{BufferTemplate}
+    inputs_buffer_sizes::Vector{BufferTemplate}
 end
 
 function IndexCache(sys::AbstractSystem)
@@ -53,6 +55,7 @@ function IndexCache(sys::AbstractSystem)
     constant_buffers = Dict{Any, Set{BasicSymbolic}}()
     dependent_buffers = Dict{Any, Set{BasicSymbolic}}()
     nonnumeric_buffers = Dict{Any, Set{BasicSymbolic}}()
+    inputs_buffers = Dict{Any, Set{BasicSymbolic}}()
 
     function insert_by_type!(buffers::Dict{Any, Set{BasicSymbolic}}, sym)
         sym = unwrap(sym)
@@ -100,6 +103,8 @@ function IndexCache(sys::AbstractSystem)
             if ctype <: Real || ctype <: AbstractArray{<:Real}
                 if is_discrete_domain(p)
                     disc_buffers
+                elseif isinput(p)
+                    inputs_buffers
                 elseif istunable(p, true) && Symbolics.shape(p) !== Symbolics.Unknown()
                     tunable_buffers
                 else
@@ -134,6 +139,7 @@ function IndexCache(sys::AbstractSystem)
     const_idxs, const_buffer_sizes = get_buffer_sizes_and_idxs(constant_buffers)
     dependent_idxs, dependent_buffer_sizes = get_buffer_sizes_and_idxs(dependent_buffers)
     nonnumeric_idxs, nonnumeric_buffer_sizes = get_buffer_sizes_and_idxs(nonnumeric_buffers)
+    inputs_idxs, inputs_buffer_sizes = get_buffer_sizes_and_idxs(inputs_buffers)
 
     return IndexCache(
         unk_idxs,
@@ -142,11 +148,13 @@ function IndexCache(sys::AbstractSystem)
         const_idxs,
         dependent_idxs,
         nonnumeric_idxs,
+        inputs_idx,
         discrete_buffer_sizes,
         tunable_buffer_sizes,
         const_buffer_sizes,
         dependent_buffer_sizes,
-        nonnumeric_buffer_sizes
+        nonnumeric_buffer_sizes,
+        inputs_buffer_sizes,
     )
 end
 

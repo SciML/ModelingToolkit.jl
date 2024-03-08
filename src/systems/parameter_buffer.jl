@@ -1,7 +1,8 @@
-struct MTKParameters{T, D, C, E, N, F, G}
+struct MTKParameters{T, D, C, E, N, I, F, G}
     tunable::T
     discrete::D
     constant::C
+    inputs::I
     dependent::E
     nonnumeric::N
     dependent_update_iip::F
@@ -49,6 +50,8 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
     for temp in ic.discrete_buffer_sizes)
     const_buffer = Tuple(Vector{temp.type}(undef, temp.length)
     for temp in ic.constant_buffer_sizes)
+    inputs_buffer = Tuple(Vector{temp.type}(undef, temp.length)
+    for temp in ic.inputs_buffer_sizes)
     dep_buffer = Tuple(Vector{temp.type}(undef, temp.length)
     for temp in ic.dependent_buffer_sizes)
     nonnumeric_buffer = Tuple(Vector{temp.type}(undef, temp.length)
@@ -64,6 +67,9 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
         elseif haskey(ic.constant_idx, sym)
             i, j = ic.constant_idx[sym]
             const_buffer[i][j] = val
+        elseif haskey(ic.inputs_idx, sym)
+            i, j = ic.inputs_idx[sym]
+            inputs_buffer[i][j] = val
         elseif haskey(ic.dependent_idx, sym)
             i, j = ic.dependent_idx[sym]
             dep_buffer[i][j] = val
@@ -109,9 +115,10 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
 
     mtkps = MTKParameters{
         typeof(tunable_buffer), typeof(disc_buffer), typeof(const_buffer),
-        typeof(dep_buffer), typeof(nonnumeric_buffer), typeof(update_function_iip),
-        typeof(update_function_oop)}(tunable_buffer, disc_buffer, const_buffer, dep_buffer,
-        nonnumeric_buffer, update_function_iip, update_function_oop)
+        typeof(inputs_buffer), typeof(dep_buffer), typeof(nonnumeric_buffer),
+        typeof(update_function_iip), typeof(update_function_oop)}(tunable_buffer,
+        disc_buffer, const_buffer, inputs_buffer, dep_buffer, nonnumeric_buffer,
+        update_function_iip, update_function_oop)
     if mtkps.dependent_update_iip !== nothing
         mtkps.dependent_update_iip(ArrayPartition(mtkps.dependent), mtkps...)
     end
@@ -156,7 +163,8 @@ SciMLStructures.ismutablescimlstructure(::MTKParameters) = true
 
 for (Portion, field) in [(SciMLStructures.Tunable, :tunable)
                          (SciMLStructures.Discrete, :discrete)
-                         (SciMLStructures.Constants, :constant)]
+                         (SciMLStructures.Constants, :constant)
+                         (SciMLStructures.Input, :inputs)]
     @eval function SciMLStructures.canonicalize(::$Portion, p::MTKParameters)
         as_vector = buffer_to_arraypartition(p.$field)
         repack = let as_vector = as_vector, p = p
@@ -198,12 +206,14 @@ function Base.copy(p::MTKParameters)
     tunable = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.tunable)
     discrete = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.discrete)
     constant = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.constant)
+    inputs = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.inputs)
     dependent = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.dependent)
     nonnumeric = copy.(p.nonnumeric)
     return MTKParameters(
         tunable,
         discrete,
         constant,
+        inputs,
         dependent,
         nonnumeric,
         p.dependent_update_iip,
@@ -220,6 +230,8 @@ function SymbolicIndexingInterface.parameter_values(p::MTKParameters, pind::Para
         return p.discrete[i][j][k...]
     elseif portion isa SciMLStructures.Constants
         return p.constant[i][j][k...]
+    elseif portion isa SciMLStructures.Input
+        return p.inputs[i][j][k...]
     elseif portion === DEPENDENT_PORTION
         return p.dependent[i][j][k...]
     elseif portion === NONNUMERIC_PORTION
@@ -250,6 +262,12 @@ function SymbolicIndexingInterface.set_parameter!(
             p.constant[i][j] = val
         else
             p.constant[i][j][k...] = val
+        end
+    elseif portion isa SciMLStructures.Input
+        if isempty(k)
+            p.inputs[i][j] = val
+        else
+            p.inputs[i][j][k...] = val
         end
     elseif portion === DEPENDENT_PORTION
         error("Cannot set value of dependent parameter")
@@ -288,6 +306,12 @@ function _set_parameter_unchecked!(
             p.constant[i][j] = val
         else
             p.constant[i][j][k...] = val
+        end
+    elseif portion isa SciMLStructures.Input
+        if isempty(k)
+            p.inputs[i][j] = val
+        else
+            p.inputs[i][j][k...] = val
         end
     elseif portion === DEPENDENT_PORTION
         if isempty(k)
@@ -331,6 +355,10 @@ function Base.getindex(buf::MTKParameters, i)
         i <= _num_subarrays(buf.constant) && return _subarrays(buf.constant)[i]
         i -= _num_subarrays(buf.constant)
     end
+    if !isempty(buf.inputs)
+        i <= _num_subarrays(buf.inputs) && return _subarrays(buf.inputs)[i]
+        i -= _num_subarrays(buf.inputs)
+    end
     if !isempty(buf.nonnumeric)
         i <= _num_subarrays(buf.nonnumeric) && return _subarrays(buf.nonnumeric)[i]
         i -= _num_subarrays(buf.nonnumeric)
@@ -355,7 +383,7 @@ function Base.setindex!(p::MTKParameters, val, i)
         done
     end
     _helper(p.tunable) || _helper(p.discrete) || _helper(p.constant) ||
-        _helper(p.nonnumeric) || throw(BoundsError(p, i))
+        _helper(p.inputs) || _helper(p.nonnumeric) || throw(BoundsError(p, i))
     if p.dependent_update_iip !== nothing
         p.dependent_update_iip(ArrayPartition(p.dependent), p...)
     end
@@ -366,6 +394,7 @@ function Base.iterate(buf::MTKParameters, state = 1)
     total_len += _num_subarrays(buf.tunable)
     total_len += _num_subarrays(buf.discrete)
     total_len += _num_subarrays(buf.constant)
+    total_len += _num_subarrays(buf.inputs)
     total_len += _num_subarrays(buf.nonnumeric)
     total_len += _num_subarrays(buf.dependent)
     if state <= total_len
@@ -377,8 +406,8 @@ end
 
 function Base.:(==)(a::MTKParameters, b::MTKParameters)
     return a.tunable == b.tunable && a.discrete == b.discrete &&
-           a.constant == b.constant && a.dependent == b.dependent &&
-           a.nonnumeric == b.nonnumeric
+           a.constant == b.constant && a.inputs == b.inputs &&
+           a.dependent == b.dependent && a.nonnumeric == b.nonnumeric
 end
 
 # to support linearize/linearization_function
