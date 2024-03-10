@@ -362,37 +362,50 @@ function Base.setindex!(p::MTKParameters, val, i)
 end
 
 function Base.getindex(p::MTKParameters, pind::ParameterIndex)
-    (;portion, idx) = pind, (i,j) = idx
-    if portion isa SciMLStructures.Tunable
-        p.tunable[i][j]
-    elseif portion isa SciMLStructures.Discrete
-        p.discrete[i][j]
-    elseif portion isa SciMLStructures.Constants
-        p.constant[i][j]
-    elseif portion === DEPENDENT_PORTION
-        p.dependent[i][j]
-    elseif portion === NONNUMERIC_PORTION
-        p.nonnumeric[i][j]
+    (;portion, idx) = pind
+    if length(idx) > 2
+        i, j, k... = idx
+        indexer = (v) -> v[i][j][k...] 
     else
-        error("Unhandled portion $portion")
+        i, j = idx
+        indexer = (v) -> v[i][j]
+    end
+    if portion isa SciMLStructures.Tunable
+        indexer(p.tunable)
+    elseif portion isa SciMLStructures.Discrete
+        indexer(p.discrete)
+    elseif portion isa SciMLStructures.Constants
+        indexer(p.constant)
+    elseif portion === DEPENDENT_PORTION
+        indexer(p.dependent)
+    elseif portion === NONNUMERIC_PORTION
+        indexer(p.nonnumeric)
+    else
+        error("Unhandled portion ", portion)
     end
 end
 
 function Base.setindex!(p::MTKParameters, val, pind::ParameterIndex)
     (;portion, idx) = pind
-    (i,j) = idx
-    if portion isa SciMLStructures.Tunable
-        p.tunable[i][j] = val
-    elseif portion isa SciMLStructures.Discrete
-        p.discrete[i][j] = val
-    elseif portion isa SciMLStructures.Constants
-        p.constant[i][j] = val
-    elseif portion === DEPENDENT_PORTION
-        p.dependent[i][j] = val
-    elseif portion === NONNUMERIC_PORTION
-        p.nonnumeric[i][j] = val
+    if length(idx) > 2
+        i, j, k... = idx
+        setindexer = (v) -> v[i][j][k...] = val
     else
-        error("Unhandled portion $portion")
+        i, j = idx
+        setindexer = (v) -> v[i][j] = val
+    end
+    if portion isa SciMLStructures.Tunable
+        setindexer(p.tunable)
+    elseif portion isa SciMLStructures.Discrete
+        setindexer(p.discrete)
+    elseif portion isa SciMLStructures.Constants
+        setindexer(p.constant)
+    elseif portion === DEPENDENT_PORTION
+        setindexer(p.dependent)
+    elseif portion === NONNUMERIC_PORTION
+        setindexer(p.nonnumeric)
+    else
+        error("Unhandled portion", portion)
     end
 end
 
