@@ -192,7 +192,6 @@ connections = [[state_feedback.input.u[i] ~ model_outputs[i] for i in 1:4]
 @named closed_loop = ODESystem(connections, t, systems = [model, state_feedback, add, d])
 S = get_sensitivity(closed_loop, :u)
 
-
 @testset "Indexing MTKParameters with ParameterIndex" begin
     ps = MTKParameters(([1.0, 2.0], [3, 4]),
         ([true, false], [[1 2; 3 4]]),
@@ -214,4 +213,3 @@ S = get_sensitivity(closed_loop, :u)
     @test ps[ParameterIndex(Tunable(), (1, 2))] === 3.0
     @test ps[ParameterIndex(Discrete(), (2, 1, 2, 2))] === 5
 end
-
