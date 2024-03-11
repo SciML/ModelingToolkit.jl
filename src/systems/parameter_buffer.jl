@@ -362,12 +362,12 @@ function Base.setindex!(p::MTKParameters, val, i)
 end
 
 function Base.getindex(p::MTKParameters, pind::ParameterIndex)
-    (;portion, idx) = pind
+    (; portion, idx) = pind
     i, j, k... = idx
     if isempty(k)
         indexer = (v) -> v[i][j]
     else
-        indexer = (v) -> v[i][j][k...] 
+        indexer = (v) -> v[i][j][k...]
     end
     if portion isa SciMLStructures.Tunable
         indexer(p.tunable)
