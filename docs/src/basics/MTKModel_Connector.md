@@ -32,6 +32,8 @@ equations.
   - `@parameters`: for specifying the symbolic parameters
   - `@structural_parameters`: for specifying non-symbolic parameters
   - `@variables`: for specifying the unknowns
+  - `@continuous_events`: for specifying a list of continuous events
+  - `@discrete_events`: for specifying a list of discrete events
 
 Let's explore these in more detail with the following example:
 
@@ -181,6 +183,59 @@ getdefault(model_c3.model_a.k_array[2])
 
   - Default values can be passed as pairs.
   - This is equivalent to passing `defaults` argument to `ODESystem`.
+
+#### `@continuous_events` begin block
+
+  - Defining continuous events as described [here](https://docs.sciml.ai/ModelingToolkit/stable/basics/Events/#Continuous-Events).
+  - If this block is not defined in the model, no continuous events will be added.
+
+```@example mtkmodel-example
+using ModelingToolkit
+
+@mtkmodel M begin
+    @parameters begin
+        k
+    end
+    @variables begin
+        x(t)
+        y(t)
+    end
+    @equations begin
+        x ~ k * D(x)
+        D(y) ~ -k
+    end
+    @continuous_events begin
+        [x ~ 1.5] => [x ~ 5, y ~ 5]
+        [t ~ 4] => [x ~ 10]
+    end
+end
+```
+
+#### `@discrete_events` begin block
+
+  - Defining discrete events as described [here](https://docs.sciml.ai/ModelingToolkit/stable/basics/Events/#Discrete-events-support).
+  - If this block is not defined in the model, no discrete events will be added.
+
+```@example mtkmodel-example
+using ModelingToolkit
+
+@mtkmodel M begin
+    @parameters begin
+        k
+    end
+    @variables begin
+        x(t)
+        y(t)
+    end
+    @equations begin
+        x ~ k * D(x)
+        D(y) ~ -k
+    end
+    @discrete_events begin
+        (t == 1.5) => [x ~ x + 5, y ~ 5]
+    end
+end
+```
 
 #### A begin block
 
