@@ -3,6 +3,11 @@ struct BufferTemplate
     length::Int
 end
 
+function BufferTemplate(s::Type{<:Symbolics.Struct}, length::Int)
+    T = Symbolics.juliatype(s)
+    BufferTemplate(T, length)
+end
+
 const DEPENDENT_PORTION = :dependent
 const NONNUMERIC_PORTION = :nonnumeric
 

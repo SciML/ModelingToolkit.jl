@@ -1,3 +1,5 @@
+symconvert(::Type{Symbolics.Struct{T}}, x) where {T} = convert(T, x)
+symconvert(::Type{T}, x) where {T} = convert(T, x)
 struct MTKParameters{T, D, C, E, N, F, G}
     tunable::T
     discrete::D
@@ -81,7 +83,7 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
     for (sym, val) in p
         sym = unwrap(sym)
         ctype = concrete_symtype(sym)
-        val = convert(ctype, fixpoint_sub(val, p))
+        val = symconvert(ctype, fixpoint_sub(val, p))
         done = set_value(sym, val)
         if !done && Symbolics.isarraysymbolic(sym)
             done = all(set_value.(collect(sym), val))
