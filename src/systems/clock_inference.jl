@@ -158,7 +158,6 @@ function generate_discrete_affect(
     end
     affect_funs = []
     init_funs = []
-    svs = []
     clocks = TimeDomain[]
     for (i, (sys, input)) in enumerate(zip(syss, inputs))
         i == continuous_id && continue
@@ -222,17 +221,6 @@ function generate_discrete_affect(
             input_offset = offset
             disc_range = (offset + 1):(offset += ns)
         end
-        save_vec = Expr(:ref, :Float64)
-        if use_index_cache
-            for unk in unknowns(sys)
-                idx = parameter_index(osys, unk)
-                push!(save_vec.args, :($(parameter_values)(p, $idx)))
-            end
-        else
-            for i in 1:ns
-                push!(save_vec.args, :(p[$(input_offset + i)]))
-            end
-        end
         empty_disc = isempty(disc_range)
         disc_init = if use_index_cache
             :(function (p, t)
@@ -276,9 +264,6 @@ function generate_discrete_affect(
             )
             # TODO: find a way to do this without allocating
             disc = $disc
-
-            push!(saved_values.t, t)
-            push!(saved_values.saveval, $save_vec)
 
             # Write continuous into to discrete: handles `Sample`
             # Write discrete into to continuous
@@ -340,10 +325,8 @@ function generate_discrete_affect(
             end
             )
         end)
-        sv = SavedValues(Float64, Vector{Float64})
         push!(affect_funs, affect!)
         push!(init_funs, disc_init)
-        push!(svs, sv)
     end
     if eval_expression
         affects = map(affect_funs) do a
@@ -357,5 +340,5 @@ function generate_discrete_affect(
         inits = map(a -> toexpr(LiteralExpr(a)), init_funs)
     end
     defaults = Dict{Any, Any}(v => 0.0 for v in Iterators.flatten(inputs))
-    return affects, inits, clocks, svs, appended_parameters, defaults
+    return affects, inits, clocks, appended_parameters, defaults
 end

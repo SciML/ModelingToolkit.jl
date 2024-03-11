@@ -1036,12 +1036,11 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     cbs = process_events(sys; callback, kwargs...)
     inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(sys, dss...)
-        discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
+        affects, inits, clocks = ModelingToolkit.generate_discrete_affect(sys, dss...)
+        discrete_cbs = map(affects, clocks) do affect, clock
             if clock isa Clock
-                PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)
+                PeriodicCallback(affect, clock.dt)
             elseif clock isa SolverStepClock
-                affect = DiscreteSaveAffect(affect, sv)
                 DiscreteCallback(Returns(true), affect,
                     initialize = (c, u, t, integrator) -> affect(integrator))
             else
@@ -1057,8 +1056,6 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
         else
             cbs = CallbackSet(cbs, discrete_cbs...)
         end
-    else
-        svs = nothing
     end
     kwargs = filter_kwargs(kwargs)
     pt = something(get_metadata(sys), StandardODEProblem())
@@ -1066,9 +1063,6 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     kwargs1 = (;)
     if cbs !== nothing
         kwargs1 = merge(kwargs1, (callback = cbs,))
-    end
-    if svs !== nothing
-        kwargs1 = merge(kwargs1, (disc_saved_values = svs,))
     end
     prob = ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...)
     if !isempty(inits)
@@ -1146,10 +1140,10 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     cbs = process_events(sys; callback, kwargs...)
     inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(sys, dss...)
-        discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
+        affects, inits, clocks  = ModelingToolkit.generate_discrete_affect(sys, dss...)
+        discrete_cbs = map(affects, clocks) do affect, clock
             if clock isa Clock
-                PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)
+                PeriodicCallback(affect, clock.dt)
             else
                 error("$clock is not a supported clock type.")
             end
@@ -1163,17 +1157,12 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         else
             cbs = CallbackSet(cbs, discrete_cbs)
         end
-    else
-        svs = nothing
     end
     kwargs = filter_kwargs(kwargs)
 
     kwargs1 = (;)
     if cbs !== nothing
         kwargs1 = merge(kwargs1, (callback = cbs,))
-    end
-    if svs !== nothing
-        kwargs1 = merge(kwargs1, (disc_saved_values = svs,))
     end
     prob = DDEProblem{iip}(f, u0, h, tspan, p; kwargs1..., kwargs...)
     if !isempty(inits)
@@ -1208,10 +1197,10 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     cbs = process_events(sys; callback, kwargs...)
     inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(sys, dss...)
-        discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
+        affects, inits, clocks = ModelingToolkit.generate_discrete_affect(sys, dss...)
+        discrete_cbs = map(affects, clocks) do affect, clock
             if clock isa Clock
-                PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)
+                PeriodicCallback(affect, clock.dt)
             else
                 error("$clock is not a supported clock type.")
             end
@@ -1233,9 +1222,6 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     kwargs1 = (;)
     if cbs !== nothing
         kwargs1 = merge(kwargs1, (callback = cbs,))
-    end
-    if svs !== nothing
-        kwargs1 = merge(kwargs1, (disc_saved_values = svs,))
     end
 
     noiseeqs = get_noiseeqs(sys)
