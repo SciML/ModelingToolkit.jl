@@ -120,12 +120,12 @@ function _model_macro(mod, name, expr, isconnector)
 
     !(c_evts == []) && push!(exprs.args,
         :($Setfield.@set!(var"#___sys___".continuous_events=$SymbolicContinuousCallback.([
-            $(c_evts...),
+            $(c_evts...)
         ]))))
 
     !(d_evts == []) && push!(exprs.args,
         :($Setfield.@set!(var"#___sys___".discrete_events=$SymbolicDiscreteCallback.([
-            $(d_evts...),
+            $(d_evts...)
         ]))))
 
     f = if length(where_types) == 0

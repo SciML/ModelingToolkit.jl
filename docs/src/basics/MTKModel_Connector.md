@@ -179,7 +179,6 @@ getdefault(model_c3.model_a.k_array[2])
 
   - List all the equations here
 
-
 #### `@defaults` begin block
 
   - Default values can be passed as pairs.
