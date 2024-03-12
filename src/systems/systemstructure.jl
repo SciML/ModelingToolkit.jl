@@ -327,24 +327,6 @@ function TearingState(sys; quick_cancel = false, check = true)
 
             dvar = var
             idx = varidx
-            if ModelingToolkit.isoperator(dvar, ModelingToolkit.Shift)
-                if !(idx in dervaridxs)
-                    push!(dervaridxs, idx)
-                end
-                op = operation(dvar)
-                tt = op.t
-                steps = op.steps
-                v = arguments(dvar)[1]
-                for s in (steps - 1):-1:1
-                    sf = Shift(tt, s)
-                    dvar = sf(v)
-                    idx = addvar!(dvar)
-                    if !(idx in dervaridxs)
-                        push!(dervaridxs, idx)
-                    end
-                end
-                idx = addvar!(v)
-            end
 
             if istree(var) && operation(var) isa Symbolics.Operator &&
                !isdifferential(var) && (it = input_timedomain(var)) !== nothing
@@ -362,6 +344,47 @@ function TearingState(sys; quick_cancel = false, check = true)
             eqs[i] = eq
         else
             eqs[i] = eqs[i].lhs ~ rhs
+        end
+    end
+    lowest_shift = Dict()
+    for var in fullvars
+        if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)
+            steps = operation(var).steps
+            v = arguments(var)[1]
+            lowest_shift[v] = min(get(lowest_shift, v, 0), steps)
+        end
+    end
+    for var in fullvars
+        if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)
+            op = operation(var)
+            steps = op.steps
+            v = arguments(var)[1]
+            lshift = lowest_shift[v]
+            tt = op.t
+        elseif haskey(lowest_shift, var)
+            lshift = lowest_shift[var]
+            steps = 0
+            tt = iv
+            v = var
+            if lshift < 0
+                defs = ModelingToolkit.get_defaults(sys)
+                if (_val = get(defs, var, nothing)) !== nothing
+                    defs[Shift(tt, lshift)(v)] = _val
+                end
+            end
+        else
+            continue
+        end
+        if lshift < steps
+            push!(dervaridxs, var2idx[var])
+        end
+        for s in (steps - 1):-1:(lshift + 1)
+            sf = Shift(tt, s)
+            dvar = sf(v)
+            idx = addvar!(dvar)
+            if !(idx in dervaridxs)
+                push!(dervaridxs, idx)
+            end
         end
     end
 
@@ -418,15 +441,18 @@ end
 function lower_order_var(dervar)
     if isdifferential(dervar)
         diffvar = arguments(dervar)[1]
-    else # shift
+    elseif ModelingToolkit.isoperator(dervar, ModelingToolkit.Shift)
         s = operation(dervar)
         step = s.steps - 1
         vv = arguments(dervar)[1]
-        if step >= 1
+        if step != 0
             diffvar = Shift(s.t, step)(vv)
         else
             diffvar = vv
         end
+    else
+        iv = only(arguments(dervar))
+        return Shift(iv, -1)(dervar)
     end
     diffvar
 end

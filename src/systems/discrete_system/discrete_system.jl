@@ -179,8 +179,6 @@ function DiscreteSystem(eqs, iv; kwargs...)
             eq.lhs in diffvars &&
                 throw(ArgumentError("The shift variable $(eq.lhs) is not unique in the system of equations."))
             push!(diffvars, eq.lhs)
-        else
-            throw(ArgumentError("All equations in a `DiscreteSystem` must be difference equations with positive shifts"))
         end
     end
     new_ps = OrderedSet()

@@ -463,11 +463,11 @@ function observed2graph(eqs, unknowns)
     return graph, assigns
 end
 
-function fixpoint_sub(x, dict)
-    y = fast_substitute(x, dict)
+function fixpoint_sub(x, dict; operator = Nothing)
+    y = fast_substitute(x, dict; operator)
     while !isequal(x, y)
         y = x
-        x = fast_substitute(y, dict)
+        x = fast_substitute(y, dict; operator)
     end
 
     return x

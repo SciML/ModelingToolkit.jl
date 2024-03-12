@@ -799,35 +799,51 @@ end
 # Symbolics needs to call unwrap on the substitution rules, but most of the time
 # we don't want to do that in MTK.
 const Eq = Union{Equation, Inequality}
-function fast_substitute(eq::Eq, subs)
+function fast_substitute(eq::Eq, subs; operator = Nothing)
     if eq isa Inequality
-        Inequality(fast_substitute(eq.lhs, subs), fast_substitute(eq.rhs, subs),
+        Inequality(fast_substitute(eq.lhs, subs; operator),
+            fast_substitute(eq.rhs, subs; operator),
             eq.relational_op)
     else
-        Equation(fast_substitute(eq.lhs, subs), fast_substitute(eq.rhs, subs))
+        Equation(fast_substitute(eq.lhs, subs; operator),
+            fast_substitute(eq.rhs, subs; operator))
     end
 end
-function fast_substitute(eq::T, subs::Pair) where {T <: Eq}
-    T(fast_substitute(eq.lhs, subs), fast_substitute(eq.rhs, subs))
+function fast_substitute(eq::T, subs::Pair; operator = Nothing) where {T <: Eq}
+    T(fast_substitute(eq.lhs, subs; operator), fast_substitute(eq.rhs, subs; operator))
 end
-fast_substitute(eqs::AbstractArray, subs) = fast_substitute.(eqs, (subs,))
-fast_substitute(a, b) = substitute(a, b)
-function fast_substitute(expr, pair::Pair)
+function fast_substitute(eqs::AbstractArray, subs; operator = Nothing)
+    fast_substitute.(eqs, (subs,); operator)
+end
+function fast_substitute(a, b; operator = Nothing)
+    b = Dict(value(k) => value(v) for (k, v) in b)
+    a = value(a)
+    haskey(b, a) && return b[a]
+    for _b in b
+        a = fast_substitute(a, _b; operator)
+    end
+    a
+end
+function fast_substitute(expr, pair::Pair; operator = Nothing)
     a, b = pair
+    a = value(a)
+    b = value(b)
     isequal(expr, a) && return b
 
     istree(expr) || return expr
-    op = fast_substitute(operation(expr), pair)
-    canfold = Ref(!(op isa Symbolic))
-    args = let canfold = canfold
-        map(SymbolicUtils.unsorted_arguments(expr)) do x
-            x′ = fast_substitute(x, pair)
-            canfold[] = canfold[] && !(x′ isa Symbolic)
-            x′
+    op = fast_substitute(operation(expr), pair; operator)
+    args = SymbolicUtils.unsorted_arguments(expr)
+    if !(op isa operator)
+        canfold = Ref(!(op isa Symbolic))
+        args = let canfold = canfold
+            map(args) do x
+                x′ = fast_substitute(x, pair; operator)
+                canfold[] = canfold[] && !(x′ isa Symbolic)
+                x′
+            end
         end
+        canfold[] && return op(args...)
     end
-    canfold[] && return op(args...)
-
     similarterm(expr,
         op,
         args,

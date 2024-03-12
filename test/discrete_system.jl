@@ -16,13 +16,14 @@ end;
 @constants h = 1
 @variables S(t) I(t) R(t)
 k = ShiftIndex(t)
-infection = rate_to_proportion(β * c * I / (S * h + I + R), δt * h) * S
-recovery = rate_to_proportion(γ * h, δt) * I
+infection = rate_to_proportion(
+    β * c * I(k - 1) / (S(k - 1) * h + I(k - 1) + R(k - 1)), δt * h) * S(k - 1)
+recovery = rate_to_proportion(γ * h, δt) * I(k - 1)
 
 # Equations
-eqs = [S(k + 1) ~ S - infection * h,
-    I(k + 1) ~ I + infection - recovery,
-    R(k + 1) ~ R + recovery]
+eqs = [S ~ S(k - 1) - infection * h,
+    I ~ I(k - 1) + infection - recovery,
+    R ~ R(k - 1) + recovery]
 
 # System
 @named sys = DiscreteSystem(eqs, t, [S, I, R], [c, nsteps, δt, β, γ])
@@ -46,7 +47,7 @@ for df in [
 end
 
 # Problem
-u0 = [S => 990.0, I => 10.0, R => 0.0]
+u0 = [S(k - 1) => 990.0, I(k - 1) => 10.0, R(k - 1) => 0.0]
 p = [β => 0.05, c => 10.0, γ => 0.25, δt => 0.1, nsteps => 400]
 tspan = (0.0, ModelingToolkit.value(substitute(nsteps, p))) # value function (from Symbolics) is used to convert a Num to Float64
 prob_map = DiscreteProblem(syss, u0, tspan, p)
@@ -55,18 +56,19 @@ prob_map = DiscreteProblem(syss, u0, tspan, p)
 # Solution
 using OrdinaryDiffEq
 sol_map = solve(prob_map, FunctionMap());
-@test sol_map[S] isa Vector
+@test sol_map[S(k - 1)] isa Vector
 
 # Using defaults constructor
 @parameters c=10.0 nsteps=400 δt=0.1 β=0.05 γ=0.25
 @variables S(t)=990.0 I(t)=10.0 R(t)=0.0
 
-infection2 = rate_to_proportion(β * c * I / (S + I + R), δt) * S
-recovery2 = rate_to_proportion(γ, δt) * I
+infection2 = rate_to_proportion(β * c * I(k - 1) / (S(k - 1) + I(k - 1) + R(k - 1)), δt) *
+             S(k - 1)
+recovery2 = rate_to_proportion(γ, δt) * I(k - 1)
 
-eqs2 = [S(k + 1) ~ S - infection2,
-    I(k + 1) ~ I + infection2 - recovery2,
-    R(k + 1) ~ R + recovery2]
+eqs2 = [S ~ S(k - 1) - infection2,
+    I ~ I(k - 1) + infection2 - recovery2,
+    R ~ R(k - 1) + recovery2]
 
 @mtkbuild sys = DiscreteSystem(
     eqs2, t, [S, I, R], [c, nsteps, δt, β, γ]; controls = [β, γ], tspan)
@@ -137,7 +139,7 @@ sol_map2 = solve(prob_map, FunctionMap());
 @variables x(t) RHS(t)
 @parameters τ
 @named fol = DiscreteSystem(
-    [x(k + 1) ~ (1 - x) / τ], t, [x, RHS], [τ]; observed = [RHS ~ (1 - x) / τ * h])
+    [x ~ (1 - x(k - 1)) / τ], t, [x, RHS], [τ]; observed = [RHS ~ (1 - x) / τ * h])
 @test isequal(RHS, @nonamespace fol.RHS)
 RHS2 = RHS
 @unpack RHS = fol
@@ -199,5 +201,5 @@ RHS2 = RHS
 
 @variables x(t) y(t)
 testdict = Dict([:test => 1])
-@named sys = DiscreteSystem([x ~ 1.0], t, [x], []; metadata = testdict)
+@named sys = DiscreteSystem([x(k + 1) ~ 1.0], t, [x], []; metadata = testdict)
 @test get_metadata(sys) == testdict

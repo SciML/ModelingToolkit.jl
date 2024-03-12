@@ -382,8 +382,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
         dx = fullvars[dv]
         # add `x_t`
         order, lv = var_order(dv)
-        x_t = lower_varname(fullvars[lv], iv, order)
-        push!(fullvars, x_t)
+        x_t = lower_varname_withshift(fullvars[lv], iv, order)
+        push!(fullvars, simplify_shifts(x_t))
         v_t = length(fullvars)
         v_t_idx = add_vertex!(var_to_diff)
         add_vertex!(graph, DST)
@@ -437,11 +437,12 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
             # We cannot solve the differential variable like D(x)
             if isdervar(iv)
                 order, lv = var_order(iv)
-                dx = D(lower_varname(fullvars[lv], idep, order - 1))
-                eq = dx ~ ModelingToolkit.fixpoint_sub(
+                dx = D(simplify_shifts(lower_varname_withshift(
+                    fullvars[lv], idep, order - 1)))
+                eq = dx ~ simplify_shifts(ModelingToolkit.fixpoint_sub(
                     Symbolics.solve_for(neweqs[ieq],
                         fullvars[iv]),
-                    total_sub)
+                    total_sub; operator = ModelingToolkit.Shift))
                 for e in 𝑑neighbors(graph, iv)
                     e == ieq && continue
                     for v in 𝑠neighbors(graph, e)
@@ -450,7 +451,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
                     rem_edge!(graph, e, iv)
                 end
                 push!(diff_eqs, eq)
-                total_sub[eq.lhs] = eq.rhs
+                total_sub[simplify_shifts(eq.lhs)] = eq.rhs
                 push!(diffeq_idxs, ieq)
                 push!(diff_vars, diff_to_var[iv])
                 continue
@@ -469,7 +470,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
                 neweq = var ~ ModelingToolkit.fixpoint_sub(
                     simplify ?
                     Symbolics.simplify(rhs) : rhs,
-                    total_sub)
+                    total_sub; operator = ModelingToolkit.Shift)
                 push!(subeqs, neweq)
                 push!(solved_equations, ieq)
                 push!(solved_variables, iv)

@@ -412,3 +412,58 @@ function numerical_nlsolve(f, u0, p)
     # TODO: robust initial guess, better debugging info, and residual check
     sol.u
 end
+
+###
+### Misc
+###
+
+function lower_varname_withshift(var, iv, order)
+    order == 0 && return var
+    if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)
+        op = operation(var)
+        return Shift(op.t, order)(var)
+    end
+    return lower_varname(var, iv, order)
+end
+
+function isdoubleshift(var)
+    return ModelingToolkit.isoperator(var, ModelingToolkit.Shift) &&
+           ModelingToolkit.isoperator(arguments(var)[1], ModelingToolkit.Shift)
+end
+
+function simplify_shifts(var)
+    ModelingToolkit.hasshift(var) || return var
+    r = @rule ~x::isdoubleshift => begin
+        op1 = operation(~x)
+        vv1 = arguments(~x)[1]
+        op2 = operation(vv1)
+        vv2 = arguments(vv1)[1]
+        s1 = op1.steps
+        s2 = op2.steps
+        t1 = op1.t
+        t2 = op2.t
+        if t1 === nothing
+            ModelingToolkit.Shift(t2, s1 + s2)(vv2)
+        else
+            ModelingToolkit.Shift(t1, s1 + s2)(vv2)
+        end
+    end
+    return Postwalk(PassThrough(r))(var)
+    while ModelingToolkit.isoperator(var, ModelingToolkit.Shift) &&
+        ModelingToolkit.isoperator(arguments(var)[1], ModelingToolkit.Shift)
+        op1 = operation(var)
+        vv1 = arguments(var)[1]
+        op2 = operation(vv1)
+        vv2 = arguments(vv1)[1]
+        s1 = op1.steps
+        s2 = op2.steps
+        t1 = op1.t
+        t2 = op2.t
+        if t1 === nothing
+            var = Shift(t2, s1 + s2)(vv2)
+        else
+            var = Shift(t1, s1 + s2)(vv2)
+        end
+    end
+    return var
+end

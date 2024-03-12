@@ -423,7 +423,7 @@ ci, varmap = infer_clocks(expand_connections(_model))
 @test varmap[_model.feedback.output.u] == d
 @test varmap[_model.feedback.input2.u] == d
 
-@test_skip ssys = structural_simplify(model)
+ssys = structural_simplify(model)
 
 Tf = 0.2
 timevec = 0:(d.dt):Tf
@@ -445,20 +445,20 @@ y = res.y[:]
 # ref = Constant(k = 0.5)
 
 # ; model.controller.x(k-1) => 0.0
-@test_skip begin
-    prob = ODEProblem(ssys,
-        [model.plant.x => 0.0; model.controller.kp => 2.0; model.controller.ki => 2.0],
-        (0.0, Tf))
+prob = ODEProblem(ssys,
+    [model.plant.x => 0.0; model.controller.kp => 2.0; model.controller.ki => 2.0],
+    (0.0, Tf))
 
-    @test prob.p[9] == 1 # constant output * kp issue https://github.com/SciML/ModelingToolkit.jl/issues/2356
-    @test prob.p[10] == 0 # c2d
-    @test prob.p[11] == 0 # disc state
-    sol = solve(prob,
-        Tsit5(),
-        kwargshandle = KeywordArgSilent,
-        abstol = 1e-8,
-        reltol = 1e-8)
-    plot([y sol(timevec, idxs = model.plant.output.u)], m = :o, lab = ["CS" "MTK"])
+@test prob.ps[Hold(ssys.holder.input.u)] == 1 # constant output * kp issue https://github.com/SciML/ModelingToolkit.jl/issues/2356
+@test prob.ps[ssys.controller.x(k - 1)] == 0 # c2d
+@test prob.ps[Sample(d)(ssys.sampler.input.u)] == 0 # disc state
+sol = solve(prob,
+    Tsit5(),
+    kwargshandle = KeywordArgSilent,
+    abstol = 1e-8,
+    reltol = 1e-8)
+@test_skip begin
+    # plot([y sol(timevec, idxs = model.plant.output.u)], m = :o, lab = ["CS" "MTK"])
 
     ##
 
