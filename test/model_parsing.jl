@@ -272,6 +272,31 @@ end
     @test MockModel.structure[:defaults] == Dict(:n => 1.0, :n2 => "g()")
 end
 
+@testset "Defaults for variables of subcomponents" begin
+    @mtkmodel M1 begin
+        @parameters begin
+            p1
+        end
+    end
+
+    @mtkmodel M2 begin
+        @parameters begin
+            p2
+        end
+        @components begin
+            m1 = M1()
+        end
+        @defaults begin
+            m1.p1 => 1.0
+            p2 => 2.0
+        end
+    end
+
+    @named m2 = M2()
+    @test collect(values(m2.defaults)) == [1.0, 2.0]
+    @test M2.structure[:defaults] == Dict(:p2 => 2.0, Symbol("m1.p1") => 1.0)
+end
+
 @testset "Type annotation" begin
     @mtkmodel TypeModel begin
         @structural_parameters begin

@@ -426,9 +426,9 @@ function parse_constants!(exprs, dict, body, mod)
     end
 end
 
-push_additional_defaults!(dict, a, b::Number) = dict[:defaults][a] = b
-push_additional_defaults!(dict, a, b::QuoteNode) = dict[:defaults][a] = b.value
-function push_additional_defaults!(dict, a, b::Expr)
+push_system_defaults!(dict, a, b::Number) = dict[:defaults][a] = b
+push_system_defaults!(dict, a, b::QuoteNode) = dict[:defaults][a] = b.value
+function push_system_defaults!(dict, a, b::Expr)
     dict[:defaults][a] = readable_code(b)
 end
 
@@ -441,7 +441,7 @@ function parse_system_defaults!(exprs, defaults_body, dict)
             # defining the model
             Expr(:call, :(=>), a, b) => begin
                 push!(exprs, :(defaults[$a] = $b))
-                push_additional_defaults!(dict, a, b)
+                push_system_defaults!(dict, Symbol(a), b)
             end
             _ => error("Invalid `defaults` entry $default_arg $(typeof(a)) $(typeof(b))")
         end
