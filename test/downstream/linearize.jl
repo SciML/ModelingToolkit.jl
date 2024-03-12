@@ -19,6 +19,24 @@ lsys, ssys = linearize(sys, [r], [y])
 @test lsys.C[] == 1
 @test lsys.D[] == 0
 
+# With guesses
+@variables t x(t) [guess = 0] y(t) [guess = 1] u(t) [guess = 0] r(t)=0.0 [input = true]
+@parameters kp = 1
+D = Differential(t)
+
+eqs = [u ~ kp * (r - y)
+       D(x) ~ -x + u
+       y ~ x]
+
+@named sys = ODESystem(eqs, t)
+
+lsys, ssys = linearize(sys, [r], [y])
+
+@test lsys.A[] == -2
+@test lsys.B[] == 1
+@test lsys.C[] == 1
+@test lsys.D[] == 0
+
 lsys, ssys = linearize(sys, [r], [r])
 
 @test lsys.A[] == -2

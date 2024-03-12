@@ -1997,7 +1997,7 @@ lsys_sym, _ = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 """
 function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives = false,
         p = DiffEqBase.NullParameters())
-    x0 = merge(defaults(sys), op)
+    x0 = merge(get_guesses(sys), defaults(sys), op)
     u0, p2, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         if p isa SciMLBase.NullParameters
@@ -2038,7 +2038,7 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
              gzgx * f_u] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
 
         C = [h_x h_z]
-        Bs = -(gz \ g_u) # This equation differ from the cited paper, the paper is likely wrong since their equaiton leads to a dimension mismatch.
+        Bs = -(gz \ g_u) # This equation differ from the cited paper, the paper is likely wrong since their equation leads to a dimension mismatch.
         if !iszero(Bs)
             if !allow_input_derivatives
                 der_inds = findall(vec(any(!=(0), Bs, dims = 1)))
