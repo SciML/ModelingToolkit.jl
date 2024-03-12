@@ -630,7 +630,11 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
     if has_io
         ModelingToolkit.markio!(state, orig_inputs, io...)
     end
-    state, input_idxs = ModelingToolkit.inputs_to_parameters!(state, io)
+    if io !== nothing
+        state, input_idxs = ModelingToolkit.inputs_to_parameters!(state, io)
+    else
+        input_idxs = 0:-1 # Empty range
+    end
     sys, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
     if check_consistency
         ModelingToolkit.check_consistency(state, orig_inputs)
