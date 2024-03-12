@@ -2,6 +2,8 @@ using ModelingToolkit, Test
 using ModelingToolkitStandardLibrary.Blocks
 using OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using ModelingToolkit: MTKParameters, ParameterIndex, DEPENDENT_PORTION, NONNUMERIC_PORTION
+using SciMLStructures: Tunable, Discrete, Constants
 
 x = [1, 2.0, false, [1, 2, 3], Parameter(1.0)]
 
@@ -189,3 +191,25 @@ connections = [[state_feedback.input.u[i] ~ model_outputs[i] for i in 1:4]
                connect(add.output, :u, model.torque.tau)]
 @named closed_loop = ODESystem(connections, t, systems = [model, state_feedback, add, d])
 S = get_sensitivity(closed_loop, :u)
+
+@testset "Indexing MTKParameters with ParameterIndex" begin
+    ps = MTKParameters(([1.0, 2.0], [3, 4]),
+        ([true, false], [[1 2; 3 4]]),
+        ([5, 6],),
+        ([7.0, 8.0],),
+        (["hi", "bye"], [:lie, :die]),
+        nothing,
+        nothing)
+    @test ps[ParameterIndex(Tunable(), (1, 2))] === 2.0
+    @test ps[ParameterIndex(Tunable(), (2, 2))] === 4
+    @test ps[ParameterIndex(Discrete(), (2, 1, 2, 2))] === 4
+    @test ps[ParameterIndex(Discrete(), (2, 1))] == [1 2; 3 4]
+    @test ps[ParameterIndex(Constants(), (1, 1))] === 5
+    @test ps[ParameterIndex(DEPENDENT_PORTION, (1, 1))] === 7.0
+    @test ps[ParameterIndex(NONNUMERIC_PORTION, (2, 2))] === :die
+
+    ps[ParameterIndex(Tunable(), (1, 2))] = 3.0
+    ps[ParameterIndex(Discrete(), (2, 1, 2, 2))] = 5
+    @test ps[ParameterIndex(Tunable(), (1, 2))] === 3.0
+    @test ps[ParameterIndex(Discrete(), (2, 1, 2, 2))] === 5
+end

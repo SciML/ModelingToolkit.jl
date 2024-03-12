@@ -363,6 +363,33 @@ function Base.setindex!(p::MTKParameters, val, i)
     end
 end
 
+function Base.getindex(p::MTKParameters, pind::ParameterIndex)
+    (; portion, idx) = pind
+    i, j, k... = idx
+    if isempty(k)
+        indexer = (v) -> v[i][j]
+    else
+        indexer = (v) -> v[i][j][k...]
+    end
+    if portion isa SciMLStructures.Tunable
+        indexer(p.tunable)
+    elseif portion isa SciMLStructures.Discrete
+        indexer(p.discrete)
+    elseif portion isa SciMLStructures.Constants
+        indexer(p.constant)
+    elseif portion === DEPENDENT_PORTION
+        indexer(p.dependent)
+    elseif portion === NONNUMERIC_PORTION
+        indexer(p.nonnumeric)
+    else
+        error("Unhandled portion ", portion)
+    end
+end
+
+function Base.setindex!(p::MTKParameters, val, pind::ParameterIndex)
+    SymbolicIndexingInterface.set_parameter!(p, val, pind)
+end
+
 function Base.iterate(buf::MTKParameters, state = 1)
     total_len = 0
     total_len += _num_subarrays(buf.tunable)
