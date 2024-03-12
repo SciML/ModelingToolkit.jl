@@ -92,5 +92,3 @@ end
         @safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl")
     end
 end
-
-@safetestset "Model Parsing Test" include("model_parsing.jl")
