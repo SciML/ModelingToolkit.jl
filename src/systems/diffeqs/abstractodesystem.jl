@@ -1141,7 +1141,8 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         symbolic_u0 = true,
         check_length, kwargs...)
     h_oop, h_iip = generate_history(sys, u0)
-    h = h_oop
+    h(p, t) = h_oop(p, t)
+    h(p::MTKParameters, t) = h_oop(p..., t)
     u0 = h(p, tspan[1])
     cbs = process_events(sys; callback, kwargs...)
     inits = []
