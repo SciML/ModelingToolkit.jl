@@ -164,7 +164,7 @@ documentation. In affect functions, we have that
 function affect!(integ, u, p, ctx)
     # integ.t is the current time
     # integ.u[u.v] is the value of the unknown `v` above
-    # integ.p[p.q] is the value of the parameter `q` above
+    # integ.ps[p.q] is the value of the parameter `q` above
 end
 ```
 
