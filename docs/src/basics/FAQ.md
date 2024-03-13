@@ -20,17 +20,17 @@ Indexes into the `MTKParameters` object take the form of `ParameterIndex` object
 are similarly undocumented. Following is the list of behaviors that should be relied on for
 `MTKParameters`:
 
-- It implements the SciMLStructures interface.
-- It can be queried for parameters using functions returned from
-  `SymbolicIndexingInterface.getp`.
-- `getindex(::MTKParameters, ::ParameterIndex)` can be used to obtain the value of a
-  parameter with the given index.
-- `setindex!(::MTKParameters, value, ::ParameterIndex)` can be used to set the value of a
-  parameter with the given index.
-- `parameter_values(sys, sym)` will return a `ParameterIndex` object if `sys` has been
-  `complete`d (through `structural_simplify`, `complete` or `@mtkbuild`).
-- `copy(::MTKParameters)` is defined and duplicates the parameter object, including the
-  memory used by the underlying buffers.
+  - It implements the SciMLStructures interface.
+  - It can be queried for parameters using functions returned from
+    `SymbolicIndexingInterface.getp`.
+  - `getindex(::MTKParameters, ::ParameterIndex)` can be used to obtain the value of a
+    parameter with the given index.
+  - `setindex!(::MTKParameters, value, ::ParameterIndex)` can be used to set the value of a
+    parameter with the given index.
+  - `parameter_values(sys, sym)` will return a `ParameterIndex` object if `sys` has been
+    `complete`d (through `structural_simplify`, `complete` or `@mtkbuild`).
+  - `copy(::MTKParameters)` is defined and duplicates the parameter object, including the
+    memory used by the underlying buffers.
 
 Any other behavior of `MTKParameters` (other `getindex`/`setindex!` methods, etc.) is an
 undocumented internal and should not be relied upon.
