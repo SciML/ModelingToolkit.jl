@@ -24,6 +24,7 @@ end
             @safetestset "Parsing Test" include("variable_parsing.jl")
             @safetestset "Simplify Test" include("simplify.jl")
             @safetestset "Direct Usage Test" include("direct.jl")
+            @safetestset "SymbolicIndeingInterface test" include("symbolic_indexing_interface.jl")
             @safetestset "System Linearity Test" include("linearity.jl")
             @safetestset "Input Output Test" include("input_output_handling.jl")
             @safetestset "Clock Test" include("clock.jl")

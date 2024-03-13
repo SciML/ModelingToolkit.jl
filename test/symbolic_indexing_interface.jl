@@ -1,7 +1,7 @@
 using ModelingToolkit, SymbolicIndexingInterface, SciMLBase
 
 @parameters t a b
-@variables x(t) y(t)
+@variables x(t)=1.0 y(t)=2.0
 D = Differential(t)
 eqs = [D(x) ~ a * y + t, D(y) ~ b * t]
 @named odesys = ODESystem(eqs, t, [x, y], [a, b])
@@ -21,6 +21,9 @@ eqs = [D(x) ~ a * y + t, D(y) ~ b * t]
 @test isequal(independent_variable_symbols(odesys), [t])
 @test is_time_dependent(odesys)
 @test constant_structure(odesys)
+@test !isempty(default_values(odesys))
+@test default_values(odesys)[x] == 1.0
+@test default_values(odesys)[y] == 2.0
 
 @variables x y z
 @parameters σ ρ β
