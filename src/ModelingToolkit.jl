@@ -101,6 +101,8 @@ for fun in [:toexpr]
     end
 end
 
+_blah = 1 + 1
+
 """
 $(TYPEDEF)
 
