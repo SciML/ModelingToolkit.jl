@@ -815,21 +815,46 @@ end
 function fast_substitute(eqs::AbstractArray, subs; operator = Nothing)
     fast_substitute.(eqs, (subs,); operator)
 end
-function fast_substitute(a, b; operator = Nothing)
-    b = Dict(value(k) => value(v) for (k, v) in b)
-    a = value(a)
-    haskey(b, a) && return b[a]
-    for _b in b
-        a = fast_substitute(a, _b; operator)
+function fast_substitute(eqs::AbstractArray, subs::Pair; operator = Nothing)
+    fast_substitute.(eqs, (subs,); operator)
+end
+for (exprType, subsType) in Iterators.product((Num, Symbolics.Arr), (Any, Pair))
+    @eval function fast_substitute(expr::$exprType, subs::$subsType; operator = Nothing)
+        fast_substitute(value(expr), subs; operator)
     end
-    a
+end
+function fast_substitute(expr, subs; operator = Nothing)
+    if (_val = get(subs, expr, nothing)) !== nothing
+        return _val
+    end
+    istree(expr) || return expr
+    op = fast_substitute(operation(expr), subs; operator)
+    args = SymbolicUtils.unsorted_arguments(expr)
+    if !(op isa operator)
+        canfold = Ref(!(op isa Symbolic))
+        args = let canfold = canfold
+            map(args) do x
+                x′ = fast_substitute(x, subs; operator)
+                canfold[] = canfold[] && !(x′ isa Symbolic)
+                x′
+            end
+        end
+        canfold[] && return op(args...)
+    end
+    similarterm(expr,
+        op,
+        args,
+        symtype(expr);
+        metadata = metadata(expr))
 end
 function fast_substitute(expr, pair::Pair; operator = Nothing)
     a, b = pair
-    a = value(a)
-    b = value(b)
     isequal(expr, a) && return b
-
+    if a isa AbstractArray
+        for (ai, bi) in zip(a, b)
+            expr = fast_substitute(expr, ai => bi; operator)
+        end
+    end
     istree(expr) || return expr
     op = fast_substitute(operation(expr), pair; operator)
     args = SymbolicUtils.unsorted_arguments(expr)
