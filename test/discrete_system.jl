@@ -7,6 +7,11 @@ using ModelingToolkit, Test
 using ModelingToolkit: t_nounits as t
 using ModelingToolkit: get_metadata, MTKParameters
 
+# Make sure positive shifts error
+@variables x(t)
+k = ShiftIndex(t)
+@test_throws ErrorException @mtkbuild sys = DiscreteSystem([x(k + 1) ~ x + x(k - 1)], t)
+
 @inline function rate_to_proportion(r, t)
     1 - exp(-r * t)
 end;
@@ -15,7 +20,6 @@ end;
 @parameters c nsteps δt β γ
 @constants h = 1
 @variables S(t) I(t) R(t)
-k = ShiftIndex(t)
 infection = rate_to_proportion(
     β * c * I(k - 1) / (S(k - 1) * h + I(k - 1) + R(k - 1)), δt * h) * S(k - 1)
 recovery = rate_to_proportion(γ * h, δt) * I(k - 1)

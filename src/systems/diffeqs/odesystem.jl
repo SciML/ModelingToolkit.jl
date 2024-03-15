@@ -378,6 +378,7 @@ function build_explicit_observed_function(sys, ts;
         checkbounds = true,
         drop_expr = drop_expr,
         ps = full_parameters(sys),
+        op = Differential,
         throw = true)
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]
@@ -385,7 +386,7 @@ function build_explicit_observed_function(sys, ts;
     ts = unwrap.(Symbolics.scalarize(ts))
 
     vars = Set()
-    foreach(Base.Fix1(vars!, vars), ts)
+    foreach(v -> vars!(vars, v; op), ts)
     ivs = independent_variables(sys)
     dep_vars = scalarize(setdiff(vars, ivs))
 

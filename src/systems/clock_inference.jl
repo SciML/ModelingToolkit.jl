@@ -180,9 +180,23 @@ function generate_discrete_affect(
             disc_to_cont_idxs = Int[]
         end
         for v in inputs[continuous_id]
-            vv = arguments(v)[1]
-            if vv in fullvars
-                push!(needed_disc_to_cont_obs, vv)
+            _v = arguments(v)[1]
+            if _v in fullvars
+                push!(needed_disc_to_cont_obs, _v)
+                push!(disc_to_cont_idxs, param_to_idx[v])
+            end
+
+            # In the above case, `_v` was in `observed(sys)`
+            # It may also be in `unknowns(sys)`, in which case it
+            # will be shifted back by one step
+            if istree(v) && (op = operation(v)) isa Shift
+                _v = arguments(_v)[1]
+                _v = Shift(op.t, op.steps - 1)(_v)
+            else
+                _v = Shift(get_iv(sys), -1)(_v)
+            end
+            if _v in fullvars
+                push!(needed_disc_to_cont_obs, _v)
                 push!(disc_to_cont_idxs, param_to_idx[v])
             end
         end
@@ -198,6 +212,7 @@ function generate_discrete_affect(
             throw = false,
             expression = true,
             output_type = SVector,
+            op = Shift,
             ps = reorder_parameters(osys, full_parameters(sys)))
         ni = length(input)
         ns = length(unknowns(sys))
@@ -213,7 +228,7 @@ function generate_discrete_affect(
                 get_iv(sys)
             ],
             [],
-            let_block)
+            let_block) |> toexpr
         if use_index_cache
             cont_to_disc_idxs = [parameter_index(osys, sym) for sym in input]
             disc_range = [parameter_index(osys, sym) for sym in unknowns(sys)]

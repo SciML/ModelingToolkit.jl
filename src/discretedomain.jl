@@ -38,7 +38,9 @@ function (D::Shift)(x::Num, allow_zero = false)
     vt = value(x)
     if istree(vt)
         op = operation(vt)
-        if op isa Shift
+        if op isa Sample
+            error("Cannot shift a `Sample`. Create a variable to represent the sampled value and shift that instead")
+        elseif op isa Shift
             if D.t === nothing || isequal(D.t, op.t)
                 arg = arguments(vt)[1]
                 newsteps = D.steps + op.steps

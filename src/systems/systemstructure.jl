@@ -350,6 +350,9 @@ function TearingState(sys; quick_cancel = false, check = true)
     for var in fullvars
         if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)
             steps = operation(var).steps
+            if steps > 0
+                error("Only non-positive shifts allowed. Found $var with a shift of $steps")
+            end
             v = arguments(var)[1]
             lowest_shift[v] = min(get(lowest_shift, v, 0), steps)
         end
@@ -369,7 +372,7 @@ function TearingState(sys; quick_cancel = false, check = true)
             if lshift < 0
                 defs = ModelingToolkit.get_defaults(sys)
                 if (_val = get(defs, var, nothing)) !== nothing
-                    defs[Shift(tt, lshift)(v)] = _val
+                    defs[Shift(tt, -1)(v)] = _val
                 end
             end
         else
@@ -387,14 +390,13 @@ function TearingState(sys; quick_cancel = false, check = true)
             end
         end
     end
-
     # sort `fullvars` such that the mass matrix is as diagonal as possible.
     dervaridxs = collect(dervaridxs)
     sorted_fullvars = OrderedSet(fullvars[dervaridxs])
     var_to_old_var = Dict(zip(fullvars, fullvars))
     for dervaridx in dervaridxs
         dervar = fullvars[dervaridx]
-        diffvar = var_to_old_var[lower_order_var(dervar)]
+        diffvar = var_to_old_var[lower_order_var(dervar, iv)]
         if !(diffvar in sorted_fullvars)
             push!(sorted_fullvars, diffvar)
         end
@@ -416,7 +418,7 @@ function TearingState(sys; quick_cancel = false, check = true)
     var_to_diff = DiffGraph(nvars, true)
     for dervaridx in dervaridxs
         dervar = fullvars[dervaridx]
-        diffvar = lower_order_var(dervar)
+        diffvar = lower_order_var(dervar, iv)
         diffvaridx = var2idx[diffvar]
         push!(diffvars, diffvar)
         var_to_diff[diffvaridx] = dervaridx
@@ -438,7 +440,7 @@ function TearingState(sys; quick_cancel = false, check = true)
         Any[])
 end
 
-function lower_order_var(dervar)
+function lower_order_var(dervar, t)
     if isdifferential(dervar)
         diffvar = arguments(dervar)[1]
     elseif ModelingToolkit.isoperator(dervar, ModelingToolkit.Shift)
@@ -451,8 +453,7 @@ function lower_order_var(dervar)
             diffvar = vv
         end
     else
-        iv = only(arguments(dervar))
-        return Shift(iv, -1)(dervar)
+        return Shift(t, -1)(dervar)
     end
     diffvar
 end

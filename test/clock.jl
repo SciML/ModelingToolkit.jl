@@ -89,40 +89,31 @@ d = Clock(t, dt)
 
 @info "Testing shift normalization"
 dt = 0.1
-@variables x(t) y(t) u(t) yd(t) ud(t) r(t) z(t)
+@variables x(t) y(t) u(t) yd(t) ud(t)
 @parameters kp
 d = Clock(t, dt)
 k = ShiftIndex(d)
 
 eqs = [yd ~ Sample(t, dt)(y)
-       ud ~ kp * (r - yd) + z(k)
-       r ~ 1.0
+       ud ~ kp * yd + ud(k - 2)
 
        # plant (time continuous part)
        u ~ Hold(ud)
        D(x) ~ -x + u
-       y ~ x
-       z(k + 2) ~ z(k) + yd
-       #=
-       z(k + 2) ~ z(k) + yd
-       =>
-       z′(k + 1) ~ z(k) + yd
-       z(k + 1)  ~ z′(k)
-       =#
-       ]
+       y ~ x]
 @named sys = ODESystem(eqs, t)
 ss = structural_simplify(sys);
 
 Tf = 1.0
 prob = ODEProblem(ss, [x => 0.0, y => 0.0], (0.0, Tf),
-    [kp => 1.0; z => 3.0; z(k + 1) => 2.0])
-@test sort(vcat(prob.p...)) == [0, 1.0, 2.0, 3.0, 4.0] # yd, kp, z(k+1), z(k), ud
+    [kp => 1.0; ud(k - 1) => 2.0; ud(k - 2) => 2.0])
+@test sort(vcat(prob.p...)) == [0, 1.0, 2.0, 2.0, 2.0] # yd, Hold(ud), kp, ud(k - 1)
 sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 
 ss_nosplit = structural_simplify(sys; split = false)
 prob_nosplit = ODEProblem(ss_nosplit, [x => 0.0, y => 0.0], (0.0, Tf),
-    [kp => 1.0; z => 3.0; z(k + 1) => 2.0])
-@test sort(prob_nosplit.p) == [0, 1.0, 2.0, 3.0, 4.0] # yd, kp, z(k+1), z(k), ud
+    [kp => 1.0; ud(k - 1) => 2.0; ud(k - 2) => 2.0])
+@test sort(prob_nosplit.p) == [0, 1.0, 2.0, 2.0, 2.0] # yd, Hold(ud), kp, ud(k - 1)
 sol_nosplit = solve(prob_nosplit, Tsit5(), kwargshandle = KeywordArgSilent)
 # For all inputs in parameters, just initialize them to 0.0, and then set them
 # in the callback.
@@ -134,30 +125,23 @@ function foo!(du, u, p, t)
     du[1] = -x + ud
 end
 function affect!(integrator, saved_values)
-    z_t, z = integrator.p[3], integrator.p[4]
     yd = integrator.u[1]
     kp = integrator.p[1]
-    r = 1.0
+    ud = integrator.p[2]
+    udd = integrator.p[3]
 
     push!(saved_values.t, integrator.t)
-    push!(saved_values.saveval, [z_t, z])
+    push!(saved_values.saveval, [ud, udd])
 
-    # Update the discrete state
-    z_t, z = z + yd, z_t
-    # @show z_t, z
-    integrator.p[3] = z_t
-    integrator.p[4] = z
-
-    ud = kp * (r - yd) + z
-    integrator.p[2] = ud
+    integrator.p[2] = kp * yd + udd
+    integrator.p[3] = ud
 
     nothing
 end
 saved_values = SavedValues(Float64, Vector{Float64})
 cb = PeriodicCallback(Base.Fix2(affect!, saved_values), 0.1)
-#                                           kp   ud   z_t  z
-prob = ODEProblem(foo!, [0.0], (0.0, Tf), [1.0, 4.0, 2.0, 3.0], callback = cb)
-#                               ud initializes to kp * (r - yd) + z = 1 * (1 - 0) + 3 = 4
+#                                           kp   ud
+prob = ODEProblem(foo!, [0.0], (0.0, Tf), [1.0, 2.0, 2.0], callback = cb)
 sol2 = solve(prob, Tsit5())
 @test sol.u == sol2.u
 @test sol_nosplit.u == sol2.u
@@ -217,7 +201,7 @@ end
 function filt(; name)
     @variables x(t)=0 u(t)=0 y(t)=0
     a = 1 / exp(dt)
-    eqs = [x(k + 1) ~ a * x + (1 - a) * u(k)
+    eqs = [x ~ a * x(k - 1) + (1 - a) * u(k - 1)
            y ~ x]
     ODESystem(eqs, t, name = name)
 end
@@ -487,9 +471,11 @@ k = ShiftIndex(c)
     @variables begin
         count(t) = 0
         u(t) = 0
+        ud(t) = 0
     end
     @equations begin
-        count(k + 1) ~ Sample(c)(u)
+        ud ~ Sample(c)(u)
+        count ~ ud(k - 1)
     end
 end
 

@@ -449,21 +449,4 @@ function simplify_shifts(var)
         end
     end
     return Postwalk(PassThrough(r))(var)
-    while ModelingToolkit.isoperator(var, ModelingToolkit.Shift) &&
-        ModelingToolkit.isoperator(arguments(var)[1], ModelingToolkit.Shift)
-        op1 = operation(var)
-        vv1 = arguments(var)[1]
-        op2 = operation(vv1)
-        vv2 = arguments(vv1)[1]
-        s1 = op1.steps
-        s2 = op2.steps
-        t1 = op1.t
-        t2 = op2.t
-        if t1 === nothing
-            var = Shift(t2, s1 + s2)(vv2)
-        else
-            var = Shift(t1, s1 + s2)(vv2)
-        end
-    end
-    return var
 end
