@@ -433,20 +433,18 @@ end
 
 function simplify_shifts(var)
     ModelingToolkit.hasshift(var) || return var
-    r = @rule ~x::isdoubleshift => begin
-        op1 = operation(~x)
-        vv1 = arguments(~x)[1]
+    if isdoubleshift(var)
+        op1 = operation(var)
+        vv1 = arguments(var)[1]
         op2 = operation(vv1)
         vv2 = arguments(vv1)[1]
         s1 = op1.steps
         s2 = op2.steps
         t1 = op1.t
         t2 = op2.t
-        if t1 === nothing
-            ModelingToolkit.Shift(t2, s1 + s2)(vv2)
-        else
-            ModelingToolkit.Shift(t1, s1 + s2)(vv2)
-        end
+        return simplify_shifts(ModelingToolkit.Shift(t1 === nothing ? t2 : t1, s1 + s2)(vv2))
+    else
+        return similarterm(var, operation(var), simplify_shifts.(arguments(var)),
+            Symbolics.symtype(var); metadata = unwrap(var).metadata)
     end
-    return Postwalk(PassThrough(r))(var)
 end
