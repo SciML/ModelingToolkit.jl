@@ -15,13 +15,14 @@ end
 @constants h = 1
 @variables S(t) I(t) R(t)
 k = ShiftIndex(t)
-infection = rate_to_proportion(β * c * I(k-1) / (S(k-1) * h + I(k-1) + R(k-1)), δt * h) * S(k-1)
-recovery = rate_to_proportion(γ * h, δt) * I(k-1)
+infection = rate_to_proportion(
+    β * c * I(k - 1) / (S(k - 1) * h + I(k - 1) + R(k - 1)), δt * h) * S(k - 1)
+recovery = rate_to_proportion(γ * h, δt) * I(k - 1)
 
 # Equations
-eqs = [S(k) ~ S(k-1) - infection * h,
-    I(k) ~ I(k-1) + infection - recovery,
-    R(k) ~ R(k-1) + recovery]
+eqs = [S(k) ~ S(k - 1) - infection * h,
+    I(k) ~ I(k - 1) + infection - recovery,
+    R(k) ~ R(k - 1) + recovery]
 @mtkbuild sys = DiscreteSystem(eqs, t)
 
 u0 = [S(k - 1) => 990.0, I(k - 1) => 10.0, R(k - 1) => 0.0]
@@ -31,13 +32,14 @@ prob = DiscreteProblem(sys, u0, tspan, p)
 sol = solve(prob, FunctionMap())
 ```
 
-All shifts must be negative. If default values are provided, they are treated as the value
-for the variable at the previous timestep. For example, consider the following system to
-generate the Fibonacci series:
+All shifts must be non-positive, i.e., discrete-time variables may only be indexed at index
+`k, k-1, k-2, ...`. If default values are provided, they are treated as the value of the
+variable at the previous timestep. For example, consider the following system to generate
+the Fibonacci series:
 
 ```@example discrete
 @variables x(t) = 1.0
-@mtkbuild sys = DiscreteSystem([x ~ x(k-1) + x(k-2)], t)
+@mtkbuild sys = DiscreteSystem([x ~ x(k - 1) + x(k - 2)], t)
 ```
 
 Note that the default value is treated as the initial value of `x(k-1)`. The value for
