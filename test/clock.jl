@@ -503,3 +503,5 @@ prob = ODEProblem(model, [], (0.0, 10.0))
 sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 
 @test sol.prob.kwargs[:disc_saved_values][1].t == sol.t[1:2:end] # Test that the discrete-tiem system executed at every step of the continuous solver. The solver saves each time step twice, one state value before discrete affect and one after.
+@test_nowarn ModelingToolkit.build_explicit_observed_function(
+    model, model.counter.ud(k - 1))(sol.u[1], prob.p..., sol.t[1])

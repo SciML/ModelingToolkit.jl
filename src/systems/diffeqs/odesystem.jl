@@ -378,7 +378,7 @@ function build_explicit_observed_function(sys, ts;
         checkbounds = true,
         drop_expr = drop_expr,
         ps = full_parameters(sys),
-        op = Differential,
+        op = Operator,
         throw = true)
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]
