@@ -65,4 +65,4 @@ probexpr = ODEProblemExpr{true}(ss, [capacitor.v => 0.0], (0, 0.1); observedfun_
 prob_obs = eval(probexpr)
 sol_obs = solve(prob_obs, ImplicitEuler())
 @show all_obs
-@test_broken sol_obs[all_obs] == sol[all_obs]
+@test sol_obs[all_obs] == sol[all_obs]
