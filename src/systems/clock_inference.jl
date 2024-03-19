@@ -157,7 +157,6 @@ function generate_discrete_affect(
         Dict{Any, Int}(reverse(en) for en in enumerate(appended_parameters))
     end
     affect_funs = []
-    init_funs = []
     svs = []
     clocks = TimeDomain[]
     for (i, (sys, input)) in enumerate(zip(syss, inputs))
@@ -249,27 +248,6 @@ function generate_discrete_affect(
             end
         end
         empty_disc = isempty(disc_range)
-        disc_init = if use_index_cache
-            :(function (p, t)
-                d2c_obs = $disc_to_cont_obs
-                disc_state = Tuple($(parameter_values)(p, i) for i in $disc_range)
-                result = d2c_obs(disc_state, p..., t)
-                for (val, i) in zip(result, $disc_to_cont_idxs)
-                    # prevent multiple updates to dependents
-                    _set_parameter_unchecked!(p, val, i; update_dependent = false)
-                end
-                discretes, repack, _ = $(SciMLStructures.canonicalize)(
-                    $(SciMLStructures.Discrete()), p)
-                repack(discretes) # to force recalculation of dependents
-            end)
-        else
-            :(function (p, t)
-                d2c_obs = $disc_to_cont_obs
-                d2c_view = view(p, $disc_to_cont_idxs)
-                disc_state = view(p, $disc_range)
-                copyto!(d2c_view, d2c_obs(disc_state, p, t))
-            end)
-        end
 
         # @show disc_to_cont_idxs
         # @show cont_to_disc_idxs
@@ -357,20 +335,15 @@ function generate_discrete_affect(
         end)
         sv = SavedValues(Float64, Vector{Float64})
         push!(affect_funs, affect!)
-        push!(init_funs, disc_init)
         push!(svs, sv)
     end
     if eval_expression
         affects = map(affect_funs) do a
             drop_expr(@RuntimeGeneratedFunction(eval_module, toexpr(LiteralExpr(a))))
         end
-        inits = map(init_funs) do a
-            drop_expr(@RuntimeGeneratedFunction(eval_module, toexpr(LiteralExpr(a))))
-        end
     else
         affects = map(a -> toexpr(LiteralExpr(a)), affect_funs)
-        inits = map(a -> toexpr(LiteralExpr(a)), init_funs)
     end
     defaults = Dict{Any, Any}(v => 0.0 for v in Iterators.flatten(inputs))
-    return affects, inits, clocks, svs, appended_parameters, defaults
+    return affects, clocks, svs, appended_parameters, defaults
 end

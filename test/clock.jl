@@ -105,15 +105,15 @@ eqs = [yd ~ Sample(t, dt)(y)
 ss = structural_simplify(sys);
 
 Tf = 1.0
-prob = ODEProblem(ss, [x => 0.0, y => 0.0], (0.0, Tf),
+prob = ODEProblem(ss, [x => 0.1], (0.0, Tf),
     [kp => 1.0; ud(k - 1) => 2.0; ud(k - 2) => 2.0])
-@test sort(vcat(prob.p...)) == [0, 1.0, 2.0, 2.0, 2.0] # yd, Hold(ud), kp, ud(k - 1)
+@test sort(vcat(prob.p...)) == [0.1, 1.0, 2.0, 2.1, 2.1] # yd, kp, ud(k-2), ud(k-1), Hold(ud)
 sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 
 ss_nosplit = structural_simplify(sys; split = false)
-prob_nosplit = ODEProblem(ss_nosplit, [x => 0.0, y => 0.0], (0.0, Tf),
+prob_nosplit = ODEProblem(ss_nosplit, [x => 0.1], (0.0, Tf),
     [kp => 1.0; ud(k - 1) => 2.0; ud(k - 2) => 2.0])
-@test sort(prob_nosplit.p) == [0, 1.0, 2.0, 2.0, 2.0] # yd, Hold(ud), kp, ud(k - 1)
+@test sort(prob_nosplit.p) == [0.1, 1.0, 2.0, 2.1, 2.1] # yd, kp, ud(k-2), ud(k-1), Hold(ud)
 sol_nosplit = solve(prob_nosplit, Tsit5(), kwargshandle = KeywordArgSilent)
 # For all inputs in parameters, just initialize them to 0.0, and then set them
 # in the callback.
@@ -141,7 +141,7 @@ end
 saved_values = SavedValues(Float64, Vector{Float64})
 cb = PeriodicCallback(Base.Fix2(affect!, saved_values), 0.1)
 #                                           kp   ud
-prob = ODEProblem(foo!, [0.0], (0.0, Tf), [1.0, 2.0, 2.0], callback = cb)
+prob = ODEProblem(foo!, [0.1], (0.0, Tf), [1.0, 2.1, 2.0], callback = cb)
 sol2 = solve(prob, Tsit5())
 @test sol.u == sol2.u
 @test sol_nosplit.u == sol2.u
@@ -433,8 +433,8 @@ prob = ODEProblem(ssys,
     [model.plant.x => 0.0; model.controller.kp => 2.0; model.controller.ki => 2.0],
     (0.0, Tf))
 
-@test prob.ps[Hold(ssys.holder.input.u)] == 1 # constant output * kp issue https://github.com/SciML/ModelingToolkit.jl/issues/2356
-@test prob.ps[ssys.controller.x(k - 1)] == 0 # c2d
+@test prob.ps[Hold(ssys.holder.input.u)] == 2 # constant output * kp issue https://github.com/SciML/ModelingToolkit.jl/issues/2356
+@test prob.ps[ssys.controller.x(k - 1)] == 1 # c2d
 @test prob.ps[Sample(d)(ssys.sampler.input.u)] == 0 # disc state
 sol = solve(prob,
     Tsit5(),
