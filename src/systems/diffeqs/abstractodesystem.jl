@@ -870,12 +870,15 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         if eltype(u0map) <: Number
             u0map = unknowns(sys) .=> u0map
         end
+        if isempty(u0map)
+            u0map = Dict()
+        end
         initializeprob = ModelingToolkit.InitializationProblem(
             sys, t, u0map, parammap; guesses, warn_initialize_determined)
         initializeprobmap = getu(initializeprob, unknowns(sys))
 
-        zerovars = setdiff(unknowns(sys), keys(defaults(sys))) .=> 0.0
-        trueinit = identity.([zerovars; u0map])
+        zerovars = Dict(setdiff(unknowns(sys), keys(defaults(sys))) .=> 0.0)
+        trueinit = collect(merge(zerovars, eltype(u0map) <: Pair ? todict(u0map) : u0map))
         u0map isa StaticArraysCore.StaticArray &&
             (trueinit = SVector{length(trueinit)}(trueinit))
     else
@@ -913,7 +916,6 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         du0 = nothing
         ddvs = nothing
     end
-
     check_eqs_u0(eqs, dvs, u0; kwargs...)
 
     f = constructor(sys, dvs, ps, u0; ddvs = ddvs, tgrad = tgrad, jac = jac,
