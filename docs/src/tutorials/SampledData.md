@@ -26,7 +26,7 @@ The [`ShiftIndex`](@ref) operator is used to refer to past and future values of 
 
 ```math
 x(k+1) = 0.5x(k) + u(k)
-y(k) = x(k)
+y(k) = x()
 ```
 
 ```@example clocks
@@ -39,7 +39,7 @@ k = ShiftIndex(clock)
 
 eqs = [
     x(k) ~ 0.5x(k - 1) + u(k - 1),
-    y(k) ~ x(k - 1)
+    y ~ x
 ]
 ```
 
@@ -49,13 +49,13 @@ A few things to note in this basic example:
   - `x` and `u` are automatically inferred to be discrete-time variables, since they appear in an equation with a discrete-time [`ShiftIndex`](@ref) `k`.
   - `y` is also automatically inferred to be a discrete-time-time variable, since it appears in an equation with another discrete-time variable `x`. `x,u,y` all belong to the same discrete-time partition, i.e., they are all updated at the same *instantaneous point in time* at which the clock ticks.
   - The equation `y ~ x` does not use any shift index, this is equivalent to `y(k) ~ x(k)`, i.e., discrete-time variables without shift index are assumed to refer to the variable at the current time step.
-  - The equation `x(k) ~ 0.5x(k-1) + u(k-1)` indicates how `x` is updated, i.e., what the value of `x` will be at the *current* time step in terms of the *past* value. The output `y`, is given by the value of `x` at the *past* time step, i.e., `y(k) ~ x(k-1)`. If this logic was implemented in an imperative programming style, the logic would thus be
+  - The equation `x(k) ~ 0.5x(k-1) + u(k-1)` indicates how `x` is updated, i.e., what the value of `x` will be at the *current* time step in terms of the *past* value. The output `y`, is given by the value of `x` at the *current* time step, i.e., `y(k) ~ x(k)`. If this logic was implemented in an imperative programming style, the logic would thus be
 
 ```julia
 function discrete_step(x, u)
-    y = x # y is assigned the current value of x, y(k) = x(k-1)
     x = 0.5x + u # x is updated to a new value, i.e., x(k) is computed
-    return x, y # The state x now refers to x at the current time step, x(k), while y refers to x at the past time step, y(k) = x(k-1)
+    y = x # y is assigned the current value of x, y(k) = x(k)
+    return x, y # The state x now refers to x at the current time step, x(k), and y equals x, y(k) = x(k)
 end
 ```
 
@@ -68,22 +68,21 @@ eqs = [
 ]
 ```
 
-but the use of positive time shifts is not yet supported.
-Instead, we have *shifted all indices* by `-1`, resulting in exactly the same difference equations. However, the next system is *not equivalent* to the previous one:
+but the use of positive time shifts is not yet supported. Instead, we *shifted all indices* by `-1` above, resulting in exactly the same difference equations. However, the next system is *not equivalent* to the previous one:
 
 ```@example clocks
 eqs = [
-    x(k) ~ 0.5x(k - 1) + u(k - 1),
+    x(k) ~ 0.5x(k - 1) + u(k),
     y ~ x
 ]
 ```
 
-In this last example, `y` refers to the updated `x(k)`, i.e., this system is equivalent to
+In this last example, `u(k)` refers to the input at the new time point `k`., this system is equivalent to
 
 ```
 eqs = [
-    x(k+1) ~ 0.5x(k) + u(k),
-    y(k+1) ~ x(k+1)
+    x(k+1) ~ 0.5x(k) + u(k+1),
+    y(k) ~ x(k)
 ]
 ```
 
