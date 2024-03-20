@@ -164,9 +164,10 @@ prob.f(du, u, pr, tt)
 @test du≈[u[2], u[1] + sin(u[2]) - pr * tt] atol=1e-5
 
 # test the initial guess is respected
-@named sys = ODESystem(eqs, t, defaults = Dict(z => Inf))
+@named sys = ODESystem(eqs, t, defaults = Dict(z => NaN))
 infprob = ODEProblem(structural_simplify(sys), [x => 1.0], (0, 1.0), [p => 0.2])
-@test_throws Any infprob.f(du, infprob.u0, pr, tt)
+infprob.f(du, infprob.u0, pr, tt)
+@test any(isnan, du)
 
 sol1 = solve(prob, RosShamp4(), reltol = 8e-7)
 sol2 = solve(ODEProblem{false}((u, p, t) -> [-asin(u[1] - pr * t)],

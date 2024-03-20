@@ -50,7 +50,7 @@ end
 @test !is_bound(sys31, sys1.v[2])
 
 # simplification turns input variables into parameters
-ssys = structural_simplify(sys)
+ssys, _ = structural_simplify(sys, ([u], []))
 @test ModelingToolkit.isparameter(unbound_inputs(ssys)[])
 @test !is_bound(ssys, u)
 @test u ∈ Set(unbound_inputs(ssys))
@@ -236,7 +236,7 @@ i = findfirst(isequal(u[1]), out)
 @variables x(t) u(t) [input = true]
 eqs = [D(x) ~ u]
 @named sys = ODESystem(eqs, t)
-@test_nowarn structural_simplify(sys)
+@test_nowarn structural_simplify(sys, ([u], []))
 
 #=
 ## Disturbance input handling
