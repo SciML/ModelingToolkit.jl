@@ -433,6 +433,7 @@ end
 
 function simplify_shifts(var)
     ModelingToolkit.hasshift(var) || return var
+    var isa Equation && return simplify_shifts(var.lhs) ~ simplify_shifts(var.rhs)
     if isdoubleshift(var)
         op1 = operation(var)
         vv1 = arguments(var)[1]

@@ -133,7 +133,10 @@ function split_system(ci::ClockInference{S}) where {S}
     tss = similar(cid_to_eq, S)
     for (id, ieqs) in enumerate(cid_to_eq)
         ts_i = system_subset(ts, ieqs)
-        @set! ts_i.structure.only_discrete = id != continuous_id
+        if id != continuous_id
+            ts_i = shift_discrete_system(ts_i)
+            @set! ts_i.structure.only_discrete = true
+        end
         tss[id] = ts_i
     end
     return tss, inputs, continuous_id, id_to_clock
@@ -148,7 +151,7 @@ function generate_discrete_affect(
     end
     use_index_cache = has_index_cache(osys) && get_index_cache(osys) !== nothing
     out = Sym{Any}(:out)
-    appended_parameters = parameters(syss[continuous_id])
+    appended_parameters = full_parameters(syss[continuous_id])
     offset = length(appended_parameters)
     param_to_idx = if use_index_cache
         Dict{Any, ParameterIndex}(p => parameter_index(osys, p)
@@ -157,6 +160,7 @@ function generate_discrete_affect(
         Dict{Any, Int}(reverse(en) for en in enumerate(appended_parameters))
     end
     affect_funs = []
+    init_funs = []
     svs = []
     clocks = TimeDomain[]
     for (i, (sys, input)) in enumerate(zip(syss, inputs))
@@ -183,47 +187,38 @@ function generate_discrete_affect(
             if _v in fullvars
                 push!(needed_disc_to_cont_obs, _v)
                 push!(disc_to_cont_idxs, param_to_idx[v])
+                continue
             end
 
-            # In the above case, `_v` was in `observed(sys)`
-            # It may also be in `unknowns(sys)`, in which case it
-            # will be shifted back by one step
-            if istree(v) && (op = operation(v)) isa Shift
-                _v = arguments(_v)[1]
-                _v = Shift(op.t, op.steps - 1)(_v)
-            else
-                _v = Shift(get_iv(sys), -1)(_v)
-            end
+            # If the held quantity is calculated through observed
+            # it will be shifted forward by 1
+            _v = Shift(get_iv(sys), 1)(_v)
             if _v in fullvars
                 push!(needed_disc_to_cont_obs, _v)
                 push!(disc_to_cont_idxs, param_to_idx[v])
+                continue
             end
         end
-        append!(appended_parameters, input, unknowns(sys))
+        append!(appended_parameters, input)
         cont_to_disc_obs = build_explicit_observed_function(
             use_index_cache ? osys : syss[continuous_id],
             needed_cont_to_disc_obs,
             throw = false,
             expression = true,
             output_type = SVector)
-        @set! sys.ps = appended_parameters
         disc_to_cont_obs = build_explicit_observed_function(sys, needed_disc_to_cont_obs,
             throw = false,
             expression = true,
             output_type = SVector,
             op = Shift,
-            ps = reorder_parameters(osys, full_parameters(sys)))
+            ps = reorder_parameters(osys, appended_parameters))
         ni = length(input)
         ns = length(unknowns(sys))
         disc = Func(
             [
                 out,
                 DestructuredArgs(unknowns(osys)),
-                if use_index_cache
-                    DestructuredArgs.(reorder_parameters(osys, full_parameters(osys)))
-                else
-                    (DestructuredArgs(appended_parameters),)
-                end...,
+                DestructuredArgs.(reorder_parameters(osys, full_parameters(osys)))...,
                 get_iv(sys)
             ],
             [],
@@ -248,6 +243,36 @@ function generate_discrete_affect(
             end
         end
         empty_disc = isempty(disc_range)
+        disc_init = if use_index_cache
+            :(function (u, p, t)
+                c2d_obs = $cont_to_disc_obs
+                d2c_obs = $disc_to_cont_obs
+                result = c2d_obs(u, p..., t)
+                for (val, i) in zip(result, $cont_to_disc_idxs)
+                    $(_set_parameter_unchecked!)(p, val, i; update_dependent = false)
+                end
+
+                disc_state = Tuple($(parameter_values)(p, i) for i in $disc_range)
+                result = d2c_obs(disc_state, p..., t)
+                for (val, i) in zip(result, $disc_to_cont_idxs)
+                    # prevent multiple updates to dependents
+                    _set_parameter_unchecked!(p, val, i; update_dependent = false)
+                end
+                discretes, repack, _ = $(SciMLStructures.canonicalize)(
+                    $(SciMLStructures.Discrete()), p)
+                repack(discretes) # to force recalculation of dependents
+            end)
+        else
+            :(function (u, p, t)
+                c2d_obs = $cont_to_disc_obs
+                d2c_obs = $disc_to_cont_obs
+                c2d_view = view(p, $cont_to_disc_idxs)
+                d2c_view = view(p, $disc_to_cont_idxs)
+                disc_unknowns = view(p, $disc_range)
+                copyto!(c2d_view, c2d_obs(u, p, t))
+                copyto!(d2c_view, d2c_obs(disc_unknowns, p, t))
+            end)
+        end
 
         # @show disc_to_cont_idxs
         # @show cont_to_disc_idxs
@@ -269,9 +294,6 @@ function generate_discrete_affect(
             )
             # TODO: find a way to do this without allocating
             disc = $disc
-
-            push!(saved_values.t, t)
-            push!(saved_values.saveval, $save_vec)
 
             # Write continuous into to discrete: handles `Sample`
             # Write discrete into to continuous
@@ -322,6 +344,10 @@ function generate_discrete_affect(
                 :(copyto!(d2c_view, d2c_obs(disc_unknowns, p, t)))
             end
             )
+
+            push!(saved_values.t, t)
+            push!(saved_values.saveval, $save_vec)
+
             # @show "after d2c", p
             $(
                 if use_index_cache
@@ -335,15 +361,20 @@ function generate_discrete_affect(
         end)
         sv = SavedValues(Float64, Vector{Float64})
         push!(affect_funs, affect!)
+        push!(init_funs, disc_init)
         push!(svs, sv)
     end
     if eval_expression
         affects = map(affect_funs) do a
             drop_expr(@RuntimeGeneratedFunction(eval_module, toexpr(LiteralExpr(a))))
         end
+        inits = map(init_funs) do a
+            drop_expr(@RuntimeGeneratedFunction(eval_module, toexpr(LiteralExpr(a))))
+        end
     else
         affects = map(a -> toexpr(LiteralExpr(a)), affect_funs)
+        inits = map(a -> toexpr(LiteralExpr(a)), init_funs)
     end
     defaults = Dict{Any, Any}(v => 0.0 for v in Iterators.flatten(inputs))
-    return affects, clocks, svs, appended_parameters, defaults
+    return affects, inits, clocks, svs, appended_parameters, defaults
 end

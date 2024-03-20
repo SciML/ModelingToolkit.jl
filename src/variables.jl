@@ -195,7 +195,8 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false
     values = Dict()
     for var in varlist
         var = unwrap(var)
-        val = unwrap(fixpoint_sub(fixpoint_sub(var, varmap), defaults))
+        val = unwrap(fixpoint_sub(fixpoint_sub(var, varmap; operator = Symbolics.Operator),
+            defaults; operator = Symbolics.Operator))
         if symbolic_type(val) === NotSymbolic()
             values[var] = val
         end

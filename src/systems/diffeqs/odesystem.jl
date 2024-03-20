@@ -453,12 +453,15 @@ function build_explicit_observed_function(sys, ts;
     if inputs !== nothing
         ps = setdiff(ps, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
     end
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        ps = DestructuredArgs.(reorder_parameters(get_index_cache(sys), ps))
-    elseif ps isa Tuple
+    if ps isa Tuple
         ps = DestructuredArgs.(ps, inbounds = !checkbounds)
+    elseif has_index_cache(sys) && get_index_cache(sys) !== nothing
+        ps = DestructuredArgs.(reorder_parameters(get_index_cache(sys), ps))
     else
         ps = (DestructuredArgs(ps, inbounds = !checkbounds),)
+    end
+    if isempty(ps)
+        ps = (DestructuredArgs([]),)
     end
     dvs = DestructuredArgs(unknowns(sys), inbounds = !checkbounds)
     if inputs === nothing

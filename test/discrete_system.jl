@@ -51,7 +51,7 @@ for df in [
 end
 
 # Problem
-u0 = [S(k - 1) => 990.0, I(k - 1) => 10.0, R(k - 1) => 0.0]
+u0 = [S => 990.0, I => 10.0, R => 0.0]
 p = [β => 0.05, c => 10.0, γ => 0.25, δt => 0.1, nsteps => 400]
 tspan = (0.0, ModelingToolkit.value(substitute(nsteps, p))) # value function (from Symbolics) is used to convert a Num to Float64
 prob_map = DiscreteProblem(syss, u0, tspan, p)
@@ -60,7 +60,7 @@ prob_map = DiscreteProblem(syss, u0, tspan, p)
 # Solution
 using OrdinaryDiffEq
 sol_map = solve(prob_map, FunctionMap());
-@test sol_map[S(k - 1)] isa Vector
+@test sol_map[S] isa Vector
 
 # Using defaults constructor
 @parameters c=10.0 nsteps=400 δt=0.1 β=0.05 γ=0.25
@@ -207,3 +207,13 @@ RHS2 = RHS
 testdict = Dict([:test => 1])
 @named sys = DiscreteSystem([x(k + 1) ~ 1.0], t, [x], []; metadata = testdict)
 @test get_metadata(sys) == testdict
+
+@variables x(t) y(t) u(t)
+eqs = [u ~ 1
+       x ~ x(k - 1) + u
+       y ~ x + u]
+@mtkbuild de = DiscreteSystem(eqs, t)
+prob = DiscreteProblem(de, [x => 0.0], (0, 10))
+sol = solve(prob, FunctionMap())
+
+@test reduce(vcat, sol.u) == 0:10

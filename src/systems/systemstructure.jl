@@ -369,12 +369,6 @@ function TearingState(sys; quick_cancel = false, check = true)
             steps = 0
             tt = iv
             v = var
-            if lshift < 0
-                defs = ModelingToolkit.get_defaults(sys)
-                if (_val = get(defs, var, nothing)) !== nothing
-                    defs[Shift(tt, -1)(v)] = _val
-                end
-            end
         else
             continue
         end
@@ -434,10 +428,14 @@ function TearingState(sys; quick_cancel = false, check = true)
 
     eq_to_diff = DiffGraph(nsrcs(graph))
 
-    return TearingState(sys, fullvars,
+    ts = TearingState(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
             complete(graph), nothing, var_types, sys isa DiscreteSystem),
         Any[])
+    if sys isa DiscreteSystem
+        ts = shift_discrete_system(ts)
+    end
+    return ts
 end
 
 function lower_order_var(dervar, t)
@@ -456,6 +454,30 @@ function lower_order_var(dervar, t)
         return Shift(t, -1)(dervar)
     end
     diffvar
+end
+
+function shift_discrete_system(ts::TearingState)
+    @unpack fullvars, sys = ts
+    discvars = OrderedSet()
+    eqs = equations(sys)
+    for eq in eqs
+        vars!(discvars, eq; op = Union{Sample, Hold})
+    end
+    iv = get_iv(sys)
+    discmap = Dict(k => StructuralTransformations.simplify_shifts(Shift(iv, 1)(k))
+    for k in discvars
+    if any(isequal(k), fullvars) && !isa(operation(k), Union{Sample, Hold}))
+    for i in eachindex(fullvars)
+        fullvars[i] = StructuralTransformations.simplify_shifts(fast_substitute(
+            fullvars[i], discmap; operator = Union{Sample, Hold}))
+    end
+    for i in eachindex(eqs)
+        eqs[i] = StructuralTransformations.simplify_shifts(fast_substitute(
+            eqs[i], discmap; operator = Union{Sample, Hold}))
+    end
+    @set! ts.sys.eqs = eqs
+    @set! ts.fullvars = fullvars
+    return ts
 end
 
 using .BipartiteGraphs: Label, BipartiteAdjacencyList
