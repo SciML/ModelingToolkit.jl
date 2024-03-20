@@ -9,15 +9,15 @@ k = ShiftIndex(clock)
 
 eqs = [
     x(k) ~ 0.5x(k - 1) + u(k - 1),
-    y(k) ~ x(k - 1)
+    y ~ x
 ]</code></pre><p class="math-container">\[ \begin{align}
 x\left( t \right) =&amp; 0.5 \mathrm{Shift(t, -1)}\left( x\left( t \right) \right) + \mathrm{Shift(t, -1)}\left( u\left( t \right) \right) \\
-y\left( t \right) =&amp; \mathrm{Shift(t, -1)}\left( x\left( t \right) \right)
+y\left( t \right) =&amp; x\left( t \right)
 \end{align}
- \]</p><p>A few things to note in this basic example:</p><ul><li>The equation <code>x(k+1) = 0.5x(k) + u(k)</code> has been rewritten in terms of negative shifts since positive shifts are not yet supported.</li><li><code>x</code> and <code>u</code> are automatically inferred to be discrete-time variables, since they appear in an equation with a discrete-time <a href="@ref"><code>ShiftIndex</code></a> <code>k</code>.</li><li><code>y</code> is also automatically inferred to be a discrete-time-time variable, since it appears in an equation with another discrete-time variable <code>x</code>. <code>x,u,y</code> all belong to the same discrete-time partition, i.e., they are all updated at the same <em>instantaneous point in time</em> at which the clock ticks.</li><li>The equation <code>y ~ x</code> does not use any shift index, this is equivalent to <code>y(k) ~ x(k)</code>, i.e., discrete-time variables without shift index are assumed to refer to the variable at the current time step.</li><li>The equation <code>x(k) ~ 0.5x(k-1) + u(k-1)</code> indicates how <code>x</code> is updated, i.e., what the value of <code>x</code> will be at the <em>current</em> time step in terms of the <em>past</em> value. The output <code>y</code>, is given by the value of <code>x</code> at the <em>past</em> time step, i.e., <code>y(k) ~ x(k-1)</code>. If this logic was implemented in an imperative programming style, the logic would thus be</li></ul><pre><code class="language-julia hljs">function discrete_step(x, u)
-    y = x # y is assigned the current value of x, y(k) = x(k-1)
+ \]</p><p>A few things to note in this basic example:</p><ul><li>The equation <code>x(k+1) = 0.5x(k) + u(k)</code> has been rewritten in terms of negative shifts since positive shifts are not yet supported.</li><li><code>x</code> and <code>u</code> are automatically inferred to be discrete-time variables, since they appear in an equation with a discrete-time <a href="@ref"><code>ShiftIndex</code></a> <code>k</code>.</li><li><code>y</code> is also automatically inferred to be a discrete-time-time variable, since it appears in an equation with another discrete-time variable <code>x</code>. <code>x,u,y</code> all belong to the same discrete-time partition, i.e., they are all updated at the same <em>instantaneous point in time</em> at which the clock ticks.</li><li>The equation <code>y ~ x</code> does not use any shift index, this is equivalent to <code>y(k) ~ x(k)</code>, i.e., discrete-time variables without shift index are assumed to refer to the variable at the current time step.</li><li>The equation <code>x(k) ~ 0.5x(k-1) + u(k-1)</code> indicates how <code>x</code> is updated, i.e., what the value of <code>x</code> will be at the <em>current</em> time step in terms of the <em>past</em> value. The output <code>y</code>, is given by the value of <code>x</code> at the <em>current</em> time step, i.e., <code>y(k) ~ x(k)</code>. If this logic was implemented in an imperative programming style, the logic would thus be</li></ul><pre><code class="language-julia hljs">function discrete_step(x, u)
     x = 0.5x + u # x is updated to a new value, i.e., x(k) is computed
-    return x, y # The state x now refers to x at the current time step, x(k), while y refers to x at the past time step, y(k) = x(k-1)
+    y = x # y is assigned the current value of x, y(k) = x(k)
+    return x, y # The state x now refers to x at the current time step, x(k), and y equals x, y(k) = x(k)
 end</code></pre><p>An alternative and <em>equivalent</em> way of writing the same system is</p><pre><code class="language-julia hljs">eqs = [
     x(k + 1) ~ 0.5x(k) + u(k),
     y(k) ~ x(k)
@@ -25,16 +25,16 @@ end</code></pre><p>An alternative and <em>equivalent</em> way of writing the sam
 \mathrm{Shift(t, 1)}\left( x\left( t \right) \right) =&amp; u\left( t \right) + 0.5 x\left( t \right) \\
 y\left( t \right) =&amp; x\left( t \right)
 \end{align}
- \]</p><p>but the use of positive time shifts is not yet supported. Instead, we have <em>shifted all indices</em> by <code>-1</code>, resulting in exactly the same difference equations. However, the next system is <em>not equivalent</em> to the previous one:</p><pre><code class="language-julia hljs">eqs = [
-    x(k) ~ 0.5x(k - 1) + u(k - 1),
+ \]</p><p>but the use of positive time shifts is not yet supported. Instead, we <em>shifted all indices</em> by <code>-1</code> above, resulting in exactly the same difference equations. However, the next system is <em>not equivalent</em> to the previous one:</p><pre><code class="language-julia hljs">eqs = [
+    x(k) ~ 0.5x(k - 1) + u(k),
     y ~ x
 ]</code></pre><p class="math-container">\[ \begin{align}
-x\left( t \right) =&amp; 0.5 \mathrm{Shift(t, -1)}\left( x\left( t \right) \right) + \mathrm{Shift(t, -1)}\left( u\left( t \right) \right) \\
+x\left( t \right) =&amp; 0.5 \mathrm{Shift(t, -1)}\left( x\left( t \right) \right) + u\left( t \right) \\
 y\left( t \right) =&amp; x\left( t \right)
 \end{align}
- \]</p><p>In this last example, <code>y</code> refers to the updated <code>x(k)</code>, i.e., this system is equivalent to</p><pre><code class="nohighlight hljs">eqs = [
-    x(k+1) ~ 0.5x(k) + u(k),
-    y(k+1) ~ x(k+1)
+ \]</p><p>In this last example, <code>u(k)</code> refers to the input at the new time point <code>k</code>., this system is equivalent to</p><pre><code class="nohighlight hljs">eqs = [
+    x(k+1) ~ 0.5x(k) + u(k+1),
+    y(k) ~ x(k)
 ]</code></pre><h2 id="Higher-order-shifts"><a class="docs-heading-anchor" href="#Higher-order-shifts">Higher-order shifts</a><a id="Higher-order-shifts-1"></a><a class="docs-heading-anchor-permalink" href="#Higher-order-shifts" title="Permalink"></a></h2><p>The expression <code>x(k-1)</code> refers to the value of <code>x</code> at the <em>previous</em> clock tick. Similarly, <code>x(k-2)</code> refers to the value of <code>x</code> at the clock tick before that. In general, <code>x(k-n)</code> refers to the value of <code>x</code> at the <code>n</code>th clock tick before the current one. As an example, the Z-domain transfer function</p><p class="math-container">\[H(z) = \dfrac{b_2 z^2 + b_1 z + b_0}{a_2 z^2 + a_1 z + a_0}\]</p><p>may thus be modeled as</p><pre><code class="language-julia hljs">@variables t y(t) [description = &quot;Output&quot;] u(t) [description = &quot;Input&quot;]
 k = ShiftIndex(Clock(t, dt))
 eqs = [
@@ -97,4 +97,4 @@ c_{+}ud\left( t \right) =&amp; c_{+}kp \left(  - c_{+}yd\left( t \right) + c_{+}
 \frac{\mathrm{d} p_{+}x\left( t \right)}{\mathrm{d}t} =&amp; p_{+}u\left( t \right) - p_{+}x\left( t \right) \\
 p_{+}y\left( t \right) =&amp; p_{+}x\left( t \right)
 \end{align}
- \]</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../bifurcation_diagram_computation/">« Bifurcation Diagrams</a><a class="docs-footer-nextpage" href="../domain_connections/">Domains »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.3.0 on <span class="colophon-date" title="Monday 18 March 2024 02:40">Monday 18 March 2024</span>. Using Julia version 1.10.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ \]</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../bifurcation_diagram_computation/">« Bifurcation Diagrams</a><a class="docs-footer-nextpage" href="../domain_connections/">Domains »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.3.0 on <span class="colophon-date" title="Wednesday 20 March 2024 14:59">Wednesday 20 March 2024</span>. Using Julia version 1.10.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
