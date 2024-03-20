@@ -26,7 +26,7 @@ The [`ShiftIndex`](@ref) operator is used to refer to past and future values of 
 
 ```math
 x(k+1) = 0.5x(k) + u(k)
-y(k) = x()
+y(k) = x(k)
 ```
 
 ```@example clocks
