@@ -10,7 +10,8 @@ struct MTKParameters{T, D, C, E, N, F, G}
     dependent_update_oop::G
 end
 
-function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = false)
+function MTKParameters(
+        sys::AbstractSystem, p, u0 = Dict(); tofloat = false, use_union = false)
     ic = if has_index_cache(sys) && get_index_cache(sys) !== nothing
         get_index_cache(sys)
     else
@@ -23,21 +24,27 @@ function MTKParameters(sys::AbstractSystem, p; tofloat = false, use_union = fals
         length(p) == length(ps) || error("Invalid parameters")
         p = ps .=> p
     end
+    if p isa SciMLBase.NullParameters || isempty(p)
+        p = Dict()
+    end
+    p = todict(p)
     defs = Dict(default_toterm(unwrap(k)) => v
     for (k, v) in defaults(sys)
     if unwrap(k) in all_ps || default_toterm(unwrap(k)) in all_ps)
-    if p isa SciMLBase.NullParameters
-        p = defs
-    else
-        extra_params = Dict(unwrap(k) => v
-        for (k, v) in p if !in(unwrap(k), all_ps) && !in(default_toterm(unwrap(k)), all_ps))
-        p = merge(defs,
-            Dict(default_toterm(unwrap(k)) => v
-            for (k, v) in p if unwrap(k) in all_ps || default_toterm(unwrap(k)) in all_ps))
-        p = Dict(k => fixpoint_sub(v, extra_params)
-        for (k, v) in p if !haskey(extra_params, unwrap(k)))
+    if eltype(u0) <: Pair
+        u0 = todict(u0)
+    elseif u0 isa AbstractArray && !isempty(u0)
+        u0 = Dict(unknowns(sys) .=> vec(u0))
+    elseif u0 === nothing || isempty(u0)
+        u0 = Dict()
     end
-
+    defs = merge(defs, u0)
+    defs = merge(defs, Dict(eq.lhs => eq.rhs for eq in observed(sys)))
+    p = merge(defs, p)
+    p = merge(Dict(unwrap(k) => v for (k, v) in p),
+        Dict(default_toterm(unwrap(k)) => v for (k, v) in p))
+    p = Dict(k => fixpoint_sub(v, p)
+    for (k, v) in p if k in all_ps || default_toterm(k) in all_ps)
     for (sym, _) in p
         if istree(sym) && operation(sym) === getindex &&
            first(arguments(sym)) in all_ps

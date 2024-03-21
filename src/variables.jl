@@ -215,54 +215,6 @@ end
     throw(ArgumentError("$vars are missing from the variable map."))
 end
 
-"""
-$(SIGNATURES)
-
-Intercept the call to `process_p_u0_symbolic` and process symbolic maps of `p` and/or `u0` if the
-user has `ModelingToolkit` loaded.
-"""
-function SciMLBase.process_p_u0_symbolic(
-        prob::Union{SciMLBase.AbstractDEProblem,
-            NonlinearProblem, OptimizationProblem,
-            SciMLBase.AbstractOptimizationCache},
-        p,
-        u0)
-    # check if a symbolic remake is possible
-    if p isa Vector && !(eltype(p) <: Pair)
-        error("Parameter values must be specified as a `Dict` or `Vector{<:Pair}`")
-    end
-    if eltype(p) <: Pair
-        hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :ps) ||
-            throw(ArgumentError("This problem does not support symbolic maps with `remake`, i.e. it does not have a symbolic origin." *
-                                " Please use `remake` with the `p` keyword argument as a vector of values, paying attention to parameter order."))
-    end
-    if eltype(u0) <: Pair
-        hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :unknowns) ||
-            throw(ArgumentError("This problem does not support symbolic maps with `remake`, i.e. it does not have a symbolic origin." *
-                                " Please use `remake` with the `u0` keyword argument as a vector of values, paying attention to unknown variable order."))
-    end
-
-    sys = prob.f.sys
-    defs = defaults(sys)
-    ps = parameters(sys)
-    if has_split_idxs(sys) && (split_idxs = get_split_idxs(sys)) !== nothing
-        for (i, idxs) in enumerate(split_idxs)
-            defs = mergedefaults(defs, prob.p[i], ps[idxs])
-        end
-    else
-        # assemble defaults
-        defs = defaults(sys)
-        defs = mergedefaults(defs, prob.p, ps)
-    end
-    defs = mergedefaults(defs, p, ps)
-    sts = unknowns(sys)
-    defs = mergedefaults(defs, prob.u0, sts)
-    defs = mergedefaults(defs, u0, sts)
-    u0, _, defs = get_u0_p(sys, defs)
-    p = MTKParameters(sys, p)
-    return p, u0
-end
-
 struct IsHistory end
 ishistory(x) = ishistory(unwrap(x))
 ishistory(x::Symbolic) = getmetadata(x, IsHistory, false)

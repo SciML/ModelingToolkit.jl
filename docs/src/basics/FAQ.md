@@ -91,7 +91,7 @@ and the `MTKParameters` constructor for parameters. For example:
 
 ```julia
 unew = varmap_to_vars([x => 1.0, y => 2.0, z => 3.0], unknowns(sys))
-pnew = ModelingToolkit.MTKParameters(sys, [β => 3.0, c => 10.0, γ => 2.0])
+pnew = ModelingToolkit.MTKParameters(sys, [β => 3.0, c => 10.0, γ => 2.0], unew)
 ```
 
 ## How do I handle `if` statements in my symbolic forms?

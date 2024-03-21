@@ -889,7 +889,8 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
 
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         u0, defs = get_u0(sys, trueinit, parammap; symbolic_u0)
-        p = MTKParameters(sys, parammap)
+        check_eqs_u0(eqs, dvs, u0; kwargs...)
+        p = MTKParameters(sys, parammap, trueinit)
     else
         u0, p, defs = get_u0_p(sys,
             trueinit,
