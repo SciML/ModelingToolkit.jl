@@ -78,7 +78,8 @@ Let's try to check specific parameters and their combinations
 
 ```julia
 to_check = [de.k5, de.k7, de.k10 / de.k9, de.k5 + de.k6]
-local_id_some = assess_local_identifiability(de, funcs_to_check = to_check, prob_threshold = 0.99)
+local_id_some = assess_local_identifiability(
+    de, funcs_to_check = to_check, prob_threshold = 0.99)
 ```
 
 Notice that in this case, everything (except the unknown variable $x_7$) is locally identifiable, including combinations such as $k_{10}/k_9, k_5+k_6$

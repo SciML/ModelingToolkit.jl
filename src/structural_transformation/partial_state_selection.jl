@@ -351,7 +351,7 @@ function tearing_with_dummy_derivatives(structure, dummy_derivatives)
         Base.Fix1(isdiffed, (structure, dummy_derivatives)),
         Union{Unassigned, SelectedState};
         varfilter = Base.Fix1(getindex, can_eliminate))
-    for v in eachindex(var_eq_matching)
+    for v in 𝑑vertices(structure.graph)
         is_present(structure, v) || continue
         dv = var_to_diff[v]
         (dv === nothing || !is_some_diff(structure, dummy_derivatives, dv)) && continue
