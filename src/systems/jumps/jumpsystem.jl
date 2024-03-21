@@ -338,7 +338,7 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
 
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        p = MTKParameters(sys, parammap)
+        p = MTKParameters(sys, parammap, u0map)
     else
         p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
     end
@@ -395,7 +395,7 @@ function DiscreteProblemExpr{iip}(sys::JumpSystem, u0map, tspan::Union{Tuple, No
 
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        p = MTKParameters(sys, parammap)
+        p = MTKParameters(sys, parammap, u0map)
     else
         p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
     end

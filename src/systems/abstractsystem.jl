@@ -1708,7 +1708,7 @@ function linearization_function(sys::AbstractSystem, inputs,
     u0, _p, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
     ps = parameters(sys)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        p = MTKParameters(sys, p)
+        p = MTKParameters(sys, p, u0)
     else
         p = _p
         p, split_idxs = split_parameters_by_type(p)
@@ -2011,7 +2011,7 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
         elseif p isa Vector
             p = merge(Dict(parameters(sys) .=> p), op)
         end
-        p2 = MTKParameters(sys, p)
+        p2 = MTKParameters(sys, p, Dict(unknowns(sys) .=> u0))
     end
     linres = lin_fun(u0, p2, t)
     f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u = linres
