@@ -378,6 +378,7 @@ function build_explicit_observed_function(sys, ts;
         checkbounds = true,
         drop_expr = drop_expr,
         ps = full_parameters(sys),
+        op = Operator,
         throw = true)
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]
@@ -385,7 +386,7 @@ function build_explicit_observed_function(sys, ts;
     ts = unwrap.(Symbolics.scalarize(ts))
 
     vars = Set()
-    foreach(Base.Fix1(vars!, vars), ts)
+    foreach(v -> vars!(vars, v; op), ts)
     ivs = independent_variables(sys)
     dep_vars = scalarize(setdiff(vars, ivs))
 
@@ -452,12 +453,15 @@ function build_explicit_observed_function(sys, ts;
     if inputs !== nothing
         ps = setdiff(ps, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
     end
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        ps = DestructuredArgs.(reorder_parameters(get_index_cache(sys), ps))
-    elseif ps isa Tuple
+    if ps isa Tuple
         ps = DestructuredArgs.(ps, inbounds = !checkbounds)
+    elseif has_index_cache(sys) && get_index_cache(sys) !== nothing
+        ps = DestructuredArgs.(reorder_parameters(get_index_cache(sys), ps))
     else
         ps = (DestructuredArgs(ps, inbounds = !checkbounds),)
+    end
+    if isempty(ps)
+        ps = (DestructuredArgs([]),)
     end
     dvs = DestructuredArgs(unknowns(sys), inbounds = !checkbounds)
     if inputs === nothing

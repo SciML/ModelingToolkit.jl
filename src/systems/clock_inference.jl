@@ -133,7 +133,10 @@ function split_system(ci::ClockInference{S}) where {S}
     tss = similar(cid_to_eq, S)
     for (id, ieqs) in enumerate(cid_to_eq)
         ts_i = system_subset(ts, ieqs)
-        @set! ts_i.structure.only_discrete = id != continuous_id
+        if id != continuous_id
+            ts_i = shift_discrete_system(ts_i)
+            @set! ts_i.structure.only_discrete = true
+        end
         tss[id] = ts_i
     end
     return tss, inputs, continuous_id, id_to_clock
@@ -148,7 +151,7 @@ function generate_discrete_affect(
     end
     use_index_cache = has_index_cache(osys) && get_index_cache(osys) !== nothing
     out = Sym{Any}(:out)
-    appended_parameters = parameters(syss[continuous_id])
+    appended_parameters = full_parameters(syss[continuous_id])
     offset = length(appended_parameters)
     param_to_idx = if use_index_cache
         Dict{Any, ParameterIndex}(p => parameter_index(osys, p)
@@ -180,40 +183,46 @@ function generate_discrete_affect(
             disc_to_cont_idxs = Int[]
         end
         for v in inputs[continuous_id]
-            vv = arguments(v)[1]
-            if vv in fullvars
-                push!(needed_disc_to_cont_obs, vv)
+            _v = arguments(v)[1]
+            if _v in fullvars
+                push!(needed_disc_to_cont_obs, _v)
                 push!(disc_to_cont_idxs, param_to_idx[v])
+                continue
+            end
+
+            # If the held quantity is calculated through observed
+            # it will be shifted forward by 1
+            _v = Shift(get_iv(sys), 1)(_v)
+            if _v in fullvars
+                push!(needed_disc_to_cont_obs, _v)
+                push!(disc_to_cont_idxs, param_to_idx[v])
+                continue
             end
         end
-        append!(appended_parameters, input, unknowns(sys))
+        append!(appended_parameters, input)
         cont_to_disc_obs = build_explicit_observed_function(
             use_index_cache ? osys : syss[continuous_id],
             needed_cont_to_disc_obs,
             throw = false,
             expression = true,
             output_type = SVector)
-        @set! sys.ps = appended_parameters
         disc_to_cont_obs = build_explicit_observed_function(sys, needed_disc_to_cont_obs,
             throw = false,
             expression = true,
             output_type = SVector,
-            ps = reorder_parameters(osys, full_parameters(sys)))
+            op = Shift,
+            ps = reorder_parameters(osys, appended_parameters))
         ni = length(input)
         ns = length(unknowns(sys))
         disc = Func(
             [
                 out,
                 DestructuredArgs(unknowns(osys)),
-                if use_index_cache
-                    DestructuredArgs.(reorder_parameters(osys, full_parameters(osys)))
-                else
-                    (DestructuredArgs(appended_parameters),)
-                end...,
+                DestructuredArgs.(reorder_parameters(osys, full_parameters(osys)))...,
                 get_iv(sys)
             ],
             [],
-            let_block)
+            let_block) |> toexpr
         if use_index_cache
             cont_to_disc_idxs = [parameter_index(osys, sym) for sym in input]
             disc_range = [parameter_index(osys, sym) for sym in unknowns(sys)]
@@ -235,8 +244,14 @@ function generate_discrete_affect(
         end
         empty_disc = isempty(disc_range)
         disc_init = if use_index_cache
-            :(function (p, t)
+            :(function (u, p, t)
+                c2d_obs = $cont_to_disc_obs
                 d2c_obs = $disc_to_cont_obs
+                result = c2d_obs(u, p..., t)
+                for (val, i) in zip(result, $cont_to_disc_idxs)
+                    $(_set_parameter_unchecked!)(p, val, i; update_dependent = false)
+                end
+
                 disc_state = Tuple($(parameter_values)(p, i) for i in $disc_range)
                 result = d2c_obs(disc_state, p..., t)
                 for (val, i) in zip(result, $disc_to_cont_idxs)
@@ -248,11 +263,14 @@ function generate_discrete_affect(
                 repack(discretes) # to force recalculation of dependents
             end)
         else
-            :(function (p, t)
+            :(function (u, p, t)
+                c2d_obs = $cont_to_disc_obs
                 d2c_obs = $disc_to_cont_obs
+                c2d_view = view(p, $cont_to_disc_idxs)
                 d2c_view = view(p, $disc_to_cont_idxs)
-                disc_state = view(p, $disc_range)
-                copyto!(d2c_view, d2c_obs(disc_state, p, t))
+                disc_unknowns = view(p, $disc_range)
+                copyto!(c2d_view, c2d_obs(u, p, t))
+                copyto!(d2c_view, d2c_obs(disc_unknowns, p, t))
             end)
         end
 
@@ -276,9 +294,6 @@ function generate_discrete_affect(
             )
             # TODO: find a way to do this without allocating
             disc = $disc
-
-            push!(saved_values.t, t)
-            push!(saved_values.saveval, $save_vec)
 
             # Write continuous into to discrete: handles `Sample`
             # Write discrete into to continuous
@@ -329,6 +344,10 @@ function generate_discrete_affect(
                 :(copyto!(d2c_view, d2c_obs(disc_unknowns, p, t)))
             end
             )
+
+            push!(saved_values.t, t)
+            push!(saved_values.saveval, $save_vec)
+
             # @show "after d2c", p
             $(
                 if use_index_cache

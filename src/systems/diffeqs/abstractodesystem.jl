@@ -812,7 +812,8 @@ function get_u0_p(sys,
     u0, p, defs
 end
 
-function get_u0(sys, u0map, parammap = nothing; symbolic_u0 = false)
+function get_u0(
+        sys, u0map, parammap = nothing; symbolic_u0 = false, toterm = default_toterm)
     dvs = unknowns(sys)
     ps = parameters(sys)
     defs = defaults(sys)
@@ -821,9 +822,10 @@ function get_u0(sys, u0map, parammap = nothing; symbolic_u0 = false)
     end
     defs = mergedefaults(defs, u0map, dvs)
     if symbolic_u0
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false, use_union = false)
+        u0 = varmap_to_vars(
+            u0map, dvs; defaults = defs, tofloat = false, use_union = false, toterm)
     else
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, toterm)
     end
     return u0, defs
 end
@@ -862,6 +864,41 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     # since they will be checked in the initialization problem's construction
     # TODO: make check for if a DAE cheaper than calculating the mass matrix a second time!
     ci = infer_clocks!(ClockInference(TearingState(sys)))
+
+    if eltype(parammap) <: Pair
+        parammap = Dict(unwrap(k) => v for (k, v) in todict(parammap))
+    elseif parammap isa AbstractArray
+        if isempty(parammap)
+            parammap = SciMLBase.NullParameters()
+        else
+            parammap = Dict(unwrap.(parameters(sys)) .=> parammap)
+        end
+    end
+    clockedparammap = Dict()
+    defs = ModelingToolkit.get_defaults(sys)
+    for v in ps
+        v = unwrap(v)
+        is_discrete_domain(v) || continue
+        op = operation(v)
+        if !isa(op, Symbolics.Operator) && parammap != SciMLBase.NullParameters() &&
+           haskey(parammap, v)
+            error("Initial conditions for discrete variables must be for the past state of the unknown. Instead of providing the condition for $v, provide the condition for $(Shift(iv, -1)(v)).")
+        end
+        shiftedv = StructuralTransformations.simplify_shifts(Shift(iv, -1)(v))
+        if parammap != SciMLBase.NullParameters() &&
+           (val = get(parammap, shiftedv, nothing)) !== nothing
+            clockedparammap[v] = val
+        elseif op isa Shift
+            root = arguments(v)[1]
+            haskey(defs, root) || error("Initial condition for $v not provided.")
+            clockedparammap[v] = defs[root]
+        end
+    end
+    parammap = if parammap == SciMLBase.NullParameters()
+        clockedparammap
+    else
+        merge(parammap, clockedparammap)
+    end
     # TODO: make it work with clocks
     # ModelingToolkit.get_tearing_state(sys) !== nothing => Requires structural_simplify first
     if sys isa ODESystem && (implicit_dae || !isempty(missingvars)) &&
@@ -1042,7 +1079,8 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
         affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(sys, dss...)
         discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
             if clock isa Clock
-                PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)
+                PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt;
+                    final_affect = true, initial_affect = true)
             elseif clock isa SolverStepClock
                 affect = DiscreteSaveAffect(affect, sv)
                 DiscreteCallback(Returns(true), affect,
@@ -1073,10 +1111,11 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     if svs !== nothing
         kwargs1 = merge(kwargs1, (disc_saved_values = svs,))
     end
+
     prob = ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...)
     if !isempty(inits)
         for init in inits
-            init(prob.p, tspan[1])
+            # init(prob.u0, prob.p, tspan[1])
         end
     end
     prob
@@ -1148,12 +1187,12 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     h(p::MTKParameters, t) = h_oop(p..., t)
     u0 = h(p, tspan[1])
     cbs = process_events(sys; callback, kwargs...)
-    inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(sys, dss...)
+        affects, clocks, svs = ModelingToolkit.generate_discrete_affect(sys, dss...)
         discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
             if clock isa Clock
-                PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)
+                PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt;
+                    final_affect = true, initial_affect = true)
             else
                 error("$clock is not a supported clock type.")
             end
@@ -1179,13 +1218,7 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     if svs !== nothing
         kwargs1 = merge(kwargs1, (disc_saved_values = svs,))
     end
-    prob = DDEProblem{iip}(f, u0, h, tspan, p; kwargs1..., kwargs...)
-    if !isempty(inits)
-        for init in inits
-            init(prob.p, tspan[1])
-        end
-    end
-    prob
+    DDEProblem{iip}(f, u0, h, tspan, p; kwargs1..., kwargs...)
 end
 
 function DiffEqBase.SDDEProblem(sys::AbstractODESystem, args...; kwargs...)
@@ -1210,12 +1243,12 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     h(p, t) = h_oop(p, t)
     u0 = h(p, tspan[1])
     cbs = process_events(sys; callback, kwargs...)
-    inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(sys, dss...)
+        affects, clocks, svs = ModelingToolkit.generate_discrete_affect(sys, dss...)
         discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
             if clock isa Clock
-                PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)
+                PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt;
+                    final_affect = true, initial_affect = true)
             else
                 error("$clock is not a supported clock type.")
             end
@@ -1252,15 +1285,9 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     else
         noise_rate_prototype = zeros(eltype(u0), size(noiseeqs))
     end
-    prob = SDDEProblem{iip}(f, f.g, u0, h, tspan, p;
+    SDDEProblem{iip}(f, f.g, u0, h, tspan, p;
         noise_rate_prototype =
         noise_rate_prototype, kwargs1..., kwargs...)
-    if !isempty(inits)
-        for init in inits
-            init(prob.p, tspan[1])
-        end
-    end
-    prob
 end
 
 """

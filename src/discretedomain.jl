@@ -38,7 +38,9 @@ function (D::Shift)(x::Num, allow_zero = false)
     vt = value(x)
     if istree(vt)
         op = operation(vt)
-        if op isa Shift
+        if op isa Sample
+            error("Cannot shift a `Sample`. Create a variable to represent the sampled value and shift that instead")
+        elseif op isa Shift
             if D.t === nothing || isequal(D.t, op.t)
                 arg = arguments(vt)[1]
                 newsteps = D.steps + op.steps
@@ -168,6 +170,7 @@ struct ShiftIndex
     steps::Int
     ShiftIndex(clock::TimeDomain = Inferred(), steps::Int = 0) = new(clock, steps)
     ShiftIndex(t::Num, dt::Real, steps::Int = 0) = new(Clock(t, dt), steps)
+    ShiftIndex(t::Num, steps::Int = 0) = new(IntegerSequence(t), steps)
 end
 
 function (xn::Num)(k::ShiftIndex)

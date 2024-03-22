@@ -69,7 +69,10 @@ sss, = ModelingToolkit._structural_simplify!(deepcopy(tss[1]), (inputs[1], ()))
 @test equations(sss) == [D(x) ~ u - x]
 sss, = ModelingToolkit._structural_simplify!(deepcopy(tss[2]), (inputs[2], ()))
 @test isempty(equations(sss))
-@test observed(sss) == [yd ~ Sample(t, dt)(y); r ~ 1.0; ud ~ kp * (r - yd)]
+d = Clock(t, dt)
+k = ShiftIndex(d)
+@test observed(sss) == [yd(k + 1) ~ Sample(t, dt)(y); r(k + 1) ~ 1.0;
+       ud(k + 1) ~ kp * (r(k + 1) - yd(k + 1))]
 
 d = Clock(t, dt)
 # Note that TearingState reorders the equations
@@ -89,40 +92,38 @@ d = Clock(t, dt)
 
 @info "Testing shift normalization"
 dt = 0.1
-@variables x(t) y(t) u(t) yd(t) ud(t) r(t) z(t)
+@variables x(t) y(t) u(t) yd(t) ud(t)
 @parameters kp
 d = Clock(t, dt)
 k = ShiftIndex(d)
 
 eqs = [yd ~ Sample(t, dt)(y)
-       ud ~ kp * (r - yd) + z(k)
-       r ~ 1.0
+       ud ~ kp * yd + ud(k - 2)
 
        # plant (time continuous part)
        u ~ Hold(ud)
        D(x) ~ -x + u
-       y ~ x
-       z(k + 2) ~ z(k) + yd
-       #=
-       z(k + 2) ~ z(k) + yd
-       =>
-       z′(k + 1) ~ z(k) + yd
-       z(k + 1)  ~ z′(k)
-       =#
-       ]
+       y ~ x]
 @named sys = ODESystem(eqs, t)
 ss = structural_simplify(sys);
 
 Tf = 1.0
-prob = ODEProblem(ss, [x => 0.0, y => 0.0], (0.0, Tf),
-    [kp => 1.0; z => 3.0; z(k + 1) => 2.0])
-@test sort(vcat(prob.p...)) == [0, 1.0, 2.0, 3.0, 4.0] # yd, kp, z(k+1), z(k), ud
+prob = ODEProblem(ss, [x => 0.1], (0.0, Tf),
+    [kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0])
+# create integrator so callback is evaluated at t=0 and we can test correct param values
+int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
+@test sort(vcat(int.p...)) == [0.1, 1.0, 2.1, 2.1, 2.1] # yd, kp, ud(k-1), ud, Hold(ud)
+prob = ODEProblem(ss, [x => 0.1], (0.0, Tf),
+    [kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0]) # recreate problem to empty saved values
 sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 
 ss_nosplit = structural_simplify(sys; split = false)
-prob_nosplit = ODEProblem(ss_nosplit, [x => 0.0, y => 0.0], (0.0, Tf),
-    [kp => 1.0; z => 3.0; z(k + 1) => 2.0])
-@test sort(prob_nosplit.p) == [0, 1.0, 2.0, 3.0, 4.0] # yd, kp, z(k+1), z(k), ud
+prob_nosplit = ODEProblem(ss_nosplit, [x => 0.1], (0.0, Tf),
+    [kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0])
+int = init(prob_nosplit, Tsit5(); kwargshandle = KeywordArgSilent)
+@test sort(int.p) == [0.1, 1.0, 2.1, 2.1, 2.1] # yd, kp, ud(k-1), ud, Hold(ud)
+prob_nosplit = ODEProblem(ss_nosplit, [x => 0.1], (0.0, Tf),
+    [kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0]) # recreate problem to empty saved values
 sol_nosplit = solve(prob_nosplit, Tsit5(), kwargshandle = KeywordArgSilent)
 # For all inputs in parameters, just initialize them to 0.0, and then set them
 # in the callback.
@@ -134,30 +135,24 @@ function foo!(du, u, p, t)
     du[1] = -x + ud
 end
 function affect!(integrator, saved_values)
-    z_t, z = integrator.p[3], integrator.p[4]
     yd = integrator.u[1]
     kp = integrator.p[1]
-    r = 1.0
+    ud = integrator.p[2]
+    udd = integrator.p[3]
+
+    integrator.p[2] = kp * yd + udd
+    integrator.p[3] = ud
 
     push!(saved_values.t, integrator.t)
-    push!(saved_values.saveval, [z_t, z])
-
-    # Update the discrete state
-    z_t, z = z + yd, z_t
-    # @show z_t, z
-    integrator.p[3] = z_t
-    integrator.p[4] = z
-
-    ud = kp * (r - yd) + z
-    integrator.p[2] = ud
+    push!(saved_values.saveval, [integrator.p[2], integrator.p[3]])
 
     nothing
 end
 saved_values = SavedValues(Float64, Vector{Float64})
-cb = PeriodicCallback(Base.Fix2(affect!, saved_values), 0.1)
-#                                           kp   ud   z_t  z
-prob = ODEProblem(foo!, [0.0], (0.0, Tf), [1.0, 4.0, 2.0, 3.0], callback = cb)
-#                               ud initializes to kp * (r - yd) + z = 1 * (1 - 0) + 3 = 4
+cb = PeriodicCallback(
+    Base.Fix2(affect!, saved_values), 0.1; final_affect = true, initial_affect = true)
+#                                           kp   ud
+prob = ODEProblem(foo!, [0.1], (0.0, Tf), [1.0, 2.1, 2.0], callback = cb)
 sol2 = solve(prob, Tsit5())
 @test sol.u == sol2.u
 @test sol_nosplit.u == sol2.u
@@ -217,7 +212,7 @@ end
 function filt(; name)
     @variables x(t)=0 u(t)=0 y(t)=0
     a = 1 / exp(dt)
-    eqs = [x(k + 1) ~ a * x + (1 - a) * u(k)
+    eqs = [x ~ a * x(k - 1) + (1 - a) * u(k - 1)
            y ~ x]
     ODESystem(eqs, t, name = name)
 end
@@ -318,8 +313,8 @@ if VERSION >= v"1.7"
         integrator.p[3] = ud2
         nothing
     end
-    cb1 = PeriodicCallback(affect1!, dt)
-    cb2 = PeriodicCallback(affect2!, dt2)
+    cb1 = PeriodicCallback(affect1!, dt; final_affect = true, initial_affect = true)
+    cb2 = PeriodicCallback(affect2!, dt2; final_affect = true, initial_affect = true)
     cb = CallbackSet(cb1, cb2)
     #                                           kp   ud1  ud2
     prob = ODEProblem(foo!, [0.0], (0.0, 1.0), [1.0, 1.0, 1.0], callback = cb)
@@ -423,7 +418,7 @@ ci, varmap = infer_clocks(expand_connections(_model))
 @test varmap[_model.feedback.output.u] == d
 @test varmap[_model.feedback.input2.u] == d
 
-@test_skip ssys = structural_simplify(model)
+ssys = structural_simplify(model)
 
 Tf = 0.2
 timevec = 0:(d.dt):Tf
@@ -445,20 +440,20 @@ y = res.y[:]
 # ref = Constant(k = 0.5)
 
 # ; model.controller.x(k-1) => 0.0
+prob = ODEProblem(ssys,
+    [model.plant.x => 0.0; model.controller.kp => 2.0; model.controller.ki => 2.0],
+    (0.0, Tf))
+int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
+@test int.ps[Hold(ssys.holder.input.u)] == 2 # constant output * kp issue https://github.com/SciML/ModelingToolkit.jl/issues/2356
+@test int.ps[ssys.controller.x] == 1 # c2d
+@test int.ps[Sample(d)(ssys.sampler.input.u)] == 0 # disc state
+sol = solve(prob,
+    Tsit5(),
+    kwargshandle = KeywordArgSilent,
+    abstol = 1e-8,
+    reltol = 1e-8)
 @test_skip begin
-    prob = ODEProblem(ssys,
-        [model.plant.x => 0.0; model.controller.kp => 2.0; model.controller.ki => 2.0],
-        (0.0, Tf))
-
-    @test prob.p[9] == 1 # constant output * kp issue https://github.com/SciML/ModelingToolkit.jl/issues/2356
-    @test prob.p[10] == 0 # c2d
-    @test prob.p[11] == 0 # disc state
-    sol = solve(prob,
-        Tsit5(),
-        kwargshandle = KeywordArgSilent,
-        abstol = 1e-8,
-        reltol = 1e-8)
-    plot([y sol(timevec, idxs = model.plant.output.u)], m = :o, lab = ["CS" "MTK"])
+    # plot([y sol(timevec, idxs = model.plant.output.u)], m = :o, lab = ["CS" "MTK"])
 
     ##
 
@@ -487,9 +482,11 @@ k = ShiftIndex(c)
     @variables begin
         count(t) = 0
         u(t) = 0
+        ud(t) = 0
     end
     @equations begin
-        count(k + 1) ~ Sample(c)(u)
+        ud ~ Sample(c)(u)
+        count ~ ud(k - 1)
     end
 end
 
@@ -517,3 +514,20 @@ prob = ODEProblem(model, [], (0.0, 10.0))
 sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 
 @test sol.prob.kwargs[:disc_saved_values][1].t == sol.t[1:2:end] # Test that the discrete-tiem system executed at every step of the continuous solver. The solver saves each time step twice, one state value before discrete affect and one after.
+@test_nowarn ModelingToolkit.build_explicit_observed_function(
+    model, model.counter.ud)(sol.u[1], prob.p..., sol.t[1])
+
+@variables x(t)=1.0 y(t)=1.0
+eqs = [D(y) ~ Hold(x)
+       x ~ x(k - 1) + x(k - 2)]
+@mtkbuild sys = ODESystem(eqs, t)
+prob = ODEProblem(sys, [], (0.0, 10.0))
+int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
+@test int.ps[x] == 2.0
+@test int.ps[x(k - 1)] == 1.0
+
+@test_throws ErrorException ODEProblem(sys, [], (0.0, 10.0), [x => 2.0])
+prob = ODEProblem(sys, [], (0.0, 10.0), [x(k - 1) => 2.0])
+int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
+@test int.ps[x] == 3.0
+@test int.ps[x(k - 1)] == 2.0

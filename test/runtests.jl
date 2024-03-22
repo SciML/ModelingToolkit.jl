@@ -68,6 +68,7 @@ end
             @safetestset "Parameter Dependency Test" include("parameter_dependencies.jl")
             @safetestset "Generate Custom Function Test" include("generate_custom_function.jl")
             @safetestset "Initial Values Test" include("initial_values.jl")
+            @safetestset "Discrete System" include("discrete_system.jl")
         end
     end
 

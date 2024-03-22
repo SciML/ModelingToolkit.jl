@@ -412,3 +412,40 @@ function numerical_nlsolve(f, u0, p)
     # TODO: robust initial guess, better debugging info, and residual check
     sol.u
 end
+
+###
+### Misc
+###
+
+function lower_varname_withshift(var, iv, order)
+    order == 0 && return var
+    if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)
+        op = operation(var)
+        return Shift(op.t, order)(var)
+    end
+    return lower_varname(var, iv, order)
+end
+
+function isdoubleshift(var)
+    return ModelingToolkit.isoperator(var, ModelingToolkit.Shift) &&
+           ModelingToolkit.isoperator(arguments(var)[1], ModelingToolkit.Shift)
+end
+
+function simplify_shifts(var)
+    ModelingToolkit.hasshift(var) || return var
+    var isa Equation && return simplify_shifts(var.lhs) ~ simplify_shifts(var.rhs)
+    if isdoubleshift(var)
+        op1 = operation(var)
+        vv1 = arguments(var)[1]
+        op2 = operation(vv1)
+        vv2 = arguments(vv1)[1]
+        s1 = op1.steps
+        s2 = op2.steps
+        t1 = op1.t
+        t2 = op2.t
+        return simplify_shifts(ModelingToolkit.Shift(t1 === nothing ? t2 : t1, s1 + s2)(vv2))
+    else
+        return similarterm(var, operation(var), simplify_shifts.(arguments(var)),
+            Symbolics.symtype(var); metadata = unwrap(var).metadata)
+    end
+end

@@ -453,7 +453,7 @@ function observed2graph(eqs, unknowns)
         lhs_j === nothing &&
             throw(ArgumentError("The lhs $(eq.lhs) of $eq, doesn't appear in unknowns."))
         assigns[i] = lhs_j
-        vs = vars(eq.rhs)
+        vs = vars(eq.rhs; op = Symbolics.Operator)
         for v in vs
             j = get(v2j, v, nothing)
             j !== nothing && add_edge!(graph, i, j)
@@ -463,11 +463,11 @@ function observed2graph(eqs, unknowns)
     return graph, assigns
 end
 
-function fixpoint_sub(x, dict)
-    y = fast_substitute(x, dict)
+function fixpoint_sub(x, dict; operator = Nothing)
+    y = fast_substitute(x, dict; operator)
     while !isequal(x, y)
         y = x
-        x = fast_substitute(y, dict)
+        x = fast_substitute(y, dict; operator)
     end
 
     return x

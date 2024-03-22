@@ -61,23 +61,23 @@ end
            u ~ Hold(ud)
            D(x) ~ -x + u
            y ~ x
-           z(k + 2) ~ z(k) + yd]
+           z(k) ~ z(k - 2) + yd(k - 2)]
     @mtkbuild sys = ODESystem(eqs, t; parameter_dependencies = [kq => 2kp])
 
     Tf = 1.0
     prob = ODEProblem(sys, [x => 0.0, y => 0.0], (0.0, Tf),
-        [kp => 1.0; z => 3.0; z(k + 1) => 2.0])
+        [kp => 1.0; z(k - 1) => 3.0; yd(k - 1) => 0.0; z(k - 2) => 4.0; yd(k - 2) => 2.0])
     @test_nowarn solve(prob, Tsit5(); kwargshandle = KeywordArgSilent)
 
     @mtkbuild sys = ODESystem(eqs, t; parameter_dependencies = [kq => 2kp],
         discrete_events = [[0.5] => [kp ~ 2.0]])
     prob = ODEProblem(sys, [x => 0.0, y => 0.0], (0.0, Tf),
-        [kp => 1.0; z => 3.0; z(k + 1) => 2.0])
+        [kp => 1.0; z(k - 1) => 3.0; yd(k - 1) => 0.0; z(k - 2) => 4.0; yd(k - 2) => 2.0])
     @test prob.ps[kp] == 1.0
     @test prob.ps[kq] == 2.0
     @test_nowarn solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
     prob = ODEProblem(sys, [x => 0.0, y => 0.0], (0.0, Tf),
-        [kp => 1.0; z => 3.0; z(k + 1) => 2.0])
+        [kp => 1.0; z(k - 1) => 3.0; yd(k - 1) => 0.0; z(k - 2) => 4.0; yd(k - 2) => 2.0])
     integ = init(prob, Tsit5(), kwargshandle = KeywordArgSilent)
     @test integ.ps[kp] == 1.0
     @test integ.ps[kq] == 2.0

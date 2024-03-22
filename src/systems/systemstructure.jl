@@ -327,24 +327,6 @@ function TearingState(sys; quick_cancel = false, check = true)
 
             dvar = var
             idx = varidx
-            if ModelingToolkit.isoperator(dvar, ModelingToolkit.Shift)
-                if !(idx in dervaridxs)
-                    push!(dervaridxs, idx)
-                end
-                op = operation(dvar)
-                tt = op.t
-                steps = op.steps
-                v = arguments(dvar)[1]
-                for s in (steps - 1):-1:1
-                    sf = Shift(tt, s)
-                    dvar = sf(v)
-                    idx = addvar!(dvar)
-                    if !(idx in dervaridxs)
-                        push!(dervaridxs, idx)
-                    end
-                end
-                idx = addvar!(v)
-            end
 
             if istree(var) && operation(var) isa Symbolics.Operator &&
                !isdifferential(var) && (it = input_timedomain(var)) !== nothing
@@ -364,14 +346,51 @@ function TearingState(sys; quick_cancel = false, check = true)
             eqs[i] = eqs[i].lhs ~ rhs
         end
     end
-
+    lowest_shift = Dict()
+    for var in fullvars
+        if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)
+            steps = operation(var).steps
+            if steps > 0
+                error("Only non-positive shifts allowed. Found $var with a shift of $steps")
+            end
+            v = arguments(var)[1]
+            lowest_shift[v] = min(get(lowest_shift, v, 0), steps)
+        end
+    end
+    for var in fullvars
+        if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)
+            op = operation(var)
+            steps = op.steps
+            v = arguments(var)[1]
+            lshift = lowest_shift[v]
+            tt = op.t
+        elseif haskey(lowest_shift, var)
+            lshift = lowest_shift[var]
+            steps = 0
+            tt = iv
+            v = var
+        else
+            continue
+        end
+        if lshift < steps
+            push!(dervaridxs, var2idx[var])
+        end
+        for s in (steps - 1):-1:(lshift + 1)
+            sf = Shift(tt, s)
+            dvar = sf(v)
+            idx = addvar!(dvar)
+            if !(idx in dervaridxs)
+                push!(dervaridxs, idx)
+            end
+        end
+    end
     # sort `fullvars` such that the mass matrix is as diagonal as possible.
     dervaridxs = collect(dervaridxs)
     sorted_fullvars = OrderedSet(fullvars[dervaridxs])
     var_to_old_var = Dict(zip(fullvars, fullvars))
     for dervaridx in dervaridxs
         dervar = fullvars[dervaridx]
-        diffvar = var_to_old_var[lower_order_var(dervar)]
+        diffvar = var_to_old_var[lower_order_var(dervar, iv)]
         if !(diffvar in sorted_fullvars)
             push!(sorted_fullvars, diffvar)
         end
@@ -393,7 +412,7 @@ function TearingState(sys; quick_cancel = false, check = true)
     var_to_diff = DiffGraph(nvars, true)
     for dervaridx in dervaridxs
         dervar = fullvars[dervaridx]
-        diffvar = lower_order_var(dervar)
+        diffvar = lower_order_var(dervar, iv)
         diffvaridx = var2idx[diffvar]
         push!(diffvars, diffvar)
         var_to_diff[diffvaridx] = dervaridx
@@ -409,26 +428,56 @@ function TearingState(sys; quick_cancel = false, check = true)
 
     eq_to_diff = DiffGraph(nsrcs(graph))
 
-    return TearingState(sys, fullvars,
+    ts = TearingState(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
-            complete(graph), nothing, var_types, false),
+            complete(graph), nothing, var_types, sys isa DiscreteSystem),
         Any[])
+    if sys isa DiscreteSystem
+        ts = shift_discrete_system(ts)
+    end
+    return ts
 end
 
-function lower_order_var(dervar)
+function lower_order_var(dervar, t)
     if isdifferential(dervar)
         diffvar = arguments(dervar)[1]
-    else # shift
+    elseif ModelingToolkit.isoperator(dervar, ModelingToolkit.Shift)
         s = operation(dervar)
         step = s.steps - 1
         vv = arguments(dervar)[1]
-        if step >= 1
+        if step != 0
             diffvar = Shift(s.t, step)(vv)
         else
             diffvar = vv
         end
+    else
+        return Shift(t, -1)(dervar)
     end
     diffvar
+end
+
+function shift_discrete_system(ts::TearingState)
+    @unpack fullvars, sys = ts
+    discvars = OrderedSet()
+    eqs = equations(sys)
+    for eq in eqs
+        vars!(discvars, eq; op = Union{Sample, Hold})
+    end
+    iv = get_iv(sys)
+    discmap = Dict(k => StructuralTransformations.simplify_shifts(Shift(iv, 1)(k))
+    for k in discvars
+    if any(isequal(k), fullvars) && !isa(operation(k), Union{Sample, Hold}))
+    for i in eachindex(fullvars)
+        fullvars[i] = StructuralTransformations.simplify_shifts(fast_substitute(
+            fullvars[i], discmap; operator = Union{Sample, Hold}))
+    end
+    for i in eachindex(eqs)
+        eqs[i] = StructuralTransformations.simplify_shifts(fast_substitute(
+            eqs[i], discmap; operator = Union{Sample, Hold}))
+    end
+    @set! ts.sys.eqs = eqs
+    @set! ts.fullvars = fullvars
+    return ts
 end
 
 using .BipartiteGraphs: Label, BipartiteAdjacencyList
