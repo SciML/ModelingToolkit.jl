@@ -231,3 +231,42 @@ let
     jtoj = eqeq_dependencies(jdeps, vdeps).fadjlist
     @test jtoj == [[1, 2, 4], [1, 2, 4], [1, 2, 3, 4], [1, 2, 3, 4]]
 end
+
+# Create JumpProblems for systems without parameters
+# Issue#2559
+@parameters k
+@variables X(t)
+rate = k
+affect = [X ~ X - 1]
+
+crj = ConstantRateJump(1.0, [X ~ X - 1])
+js1 = complete(JumpSystem([crj], t, [X], [k]; name = :js1))
+js2 = complete(JumpSystem([crj], t, [X], []; name = :js2))
+
+maj = MassActionJump(1.0, [X => 1], [X => -1])
+js3 = complete(JumpSystem([maj], t, [X], [k]; name = :js2))
+js4 = complete(JumpSystem([maj], t, [X], []; name = :js3))
+
+u0 = [X => 10]
+tspan = (0.0, 1.0)
+ps = [k => 1.0]
+
+dp1 = DiscreteProblem(js1, u0, tspan, ps)
+dp2 = DiscreteProblem(js2, u0, tspan)
+dp3 = DiscreteProblem(js3, u0, tspan, ps)
+dp4 = DiscreteProblem(js4, u0, tspan)
+
+@test_nowarn jp1 = JumpProblem(js1, dp1, Direct())
+@test_nowarn jp2 = JumpProblem(js2, dp2, Direct())
+@test_nowarn jp3 = JumpProblem(js3, dp3, Direct())
+@test_nowarn jp4 = JumpProblem(js4, dp4, Direct())
+
+# Ensure `structural_simplify` (and `@mtkbuild`) works on JumpSystem (by doing nothing)
+# Issue#2558
+@parameters k
+@variables X(t)
+rate = k
+affect = [X ~ X - 1]
+
+j1 = ConstantRateJump(k, [X ~ X - 1])
+@test_nowarn @mtkbuild js1 = JumpSystem([j1], t, [X], [k])

@@ -28,7 +28,7 @@ function structural_simplify(
     end
     if newsys isa ODESystem
         @set! newsys.parent = complete(sys; split)
-    else
+    elseif has_parent(newsys)
         @set! newsys.parent = complete(sys; split)
     end
     newsys = complete(newsys; split)
@@ -49,6 +49,11 @@ function structural_simplify(
         return newsys
     end
 end
+
+function __structural_simplify(sys::JumpSystem, args...; kwargs...)
+    return sys
+end
+
 function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
         kwargs...)
     sys = expand_connections(sys)
