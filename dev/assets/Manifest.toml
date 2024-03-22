@@ -1370,9 +1370,9 @@ version = "1.9.3"
 
 [[deps.Optimization]]
 deps = ["ADTypes", "ArrayInterface", "ConsoleProgressMonitor", "DocStringExtensions", "LinearAlgebra", "Logging", "LoggingExtras", "OptimizationBase", "Pkg", "Printf", "ProgressLogging", "Reexport", "SciMLBase", "SparseArrays", "TerminalLoggers"]
-git-tree-sha1 = "aaa2a9f4c9c5d573247dd74b80b2f3d18bbe51c7"
+git-tree-sha1 = "bc659730e7efff07c95218f24ed4c6f472054938"
 uuid = "7f7a1694-90dd-40f0-9382-eb1efda571ba"
-version = "3.24.2"
+version = "3.24.3"
 
 [[deps.OptimizationBase]]
 deps = ["ADTypes", "ArrayInterface", "DocStringExtensions", "LinearAlgebra", "Reexport", "Requires", "SciMLBase", "SparseArrays"]
@@ -1707,9 +1707,9 @@ version = "0.6.42"
 
 [[deps.SciMLBase]]
 deps = ["ADTypes", "ArrayInterface", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "EnumX", "FunctionWrappersWrappers", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "PrecompileTools", "Preferences", "Printf", "RecipesBase", "RecursiveArrayTools", "Reexport", "RuntimeGeneratedFunctions", "SciMLOperators", "SciMLStructures", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface", "Tables"]
-git-tree-sha1 = "48f724c6a3355f11dae5f762983073d367c8b934"
+git-tree-sha1 = "088123999a9a8fa7ff386a82048c6ed24b2b7d07"
 uuid = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
-version = "2.30.1"
+version = "2.30.2"
 
     [deps.SciMLBase.extensions]
     SciMLBaseChainRulesCoreExt = "ChainRulesCore"
