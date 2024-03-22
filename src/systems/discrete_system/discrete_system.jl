@@ -253,6 +253,7 @@ function SciMLBase.DiscreteProblem(
 
     f, u0, p = process_DiscreteProblem(
         DiscreteFunction, sys, u0map, parammap; eval_expression, eval_module)
+    u0 = f(u0, p, tspan[1])
     DiscreteProblem(f, u0, tspan, p; kwargs...)
 end
 

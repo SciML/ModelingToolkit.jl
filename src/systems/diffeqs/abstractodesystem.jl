@@ -1045,7 +1045,7 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
         discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
             if clock isa Clock
                 PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt;
-                    final_affect = true)
+                    final_affect = true, initial_affect = true)
             elseif clock isa SolverStepClock
                 affect = DiscreteSaveAffect(affect, sv)
                 DiscreteCallback(Returns(true), affect,
@@ -1080,7 +1080,7 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     prob = ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...)
     if !isempty(inits)
         for init in inits
-            init(prob.u0, prob.p, tspan[1])
+            # init(prob.u0, prob.p, tspan[1])
         end
     end
     prob

@@ -99,7 +99,7 @@ function sir_map!(u_diff, u, p, t)
     end
     nothing
 end;
-u0 = [990.0, 10.0, 0.0];
+u0 = prob_map2.u0;
 p = [0.05, 10.0, 0.25, 0.1];
 prob_map = DiscreteProblem(sir_map!, u0, tspan, p);
 sol_map2 = solve(prob_map, FunctionMap());
@@ -216,4 +216,4 @@ eqs = [u ~ 1
 prob = DiscreteProblem(de, [x => 0.0], (0, 10))
 sol = solve(prob, FunctionMap())
 
-@test reduce(vcat, sol.u) == 0:10
+@test reduce(vcat, sol.u) == 1:11
