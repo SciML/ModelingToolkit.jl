@@ -42,5 +42,10 @@ the Fibonacci series:
 @mtkbuild sys = DiscreteSystem([x ~ x(k - 1) + x(k - 2)], t)
 ```
 
-Note that the default value is treated as the initial value of `x(k-1)`. The value for
-`x(k-2)` must be provided during problem construction.
+The "default value" here should be interpreted as the value of `x` at all past timesteps.
+For example, here `x(k-1)` and `x(k-2)` will be `1.0`, and the inital value of `x(k)` will
+thus be `2.0`. During problem construction, the _past_ value of a variable should be
+provided. For example, providing `[x => 1.0]` while constructing this problem will error.
+Provide `[x(k-1) => 1.0]` instead. Note that values provided during problem construction
+_do not_ apply to the entire history. Hence, if `[x(k-1) => 2.0]` is provided, the value of
+`x(k-2)` will still be `1.0`.

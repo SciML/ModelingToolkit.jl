@@ -109,21 +109,21 @@ ss = structural_simplify(sys);
 
 Tf = 1.0
 prob = ODEProblem(ss, [x => 0.1], (0.0, Tf),
-    [kp => 1.0; ud => 2.1; ud(k - 1) => 2.0])
+    [kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0])
 # create integrator so callback is evaluated at t=0 and we can test correct param values
 int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
 @test sort(vcat(int.p...)) == [0.1, 1.0, 2.1, 2.1, 2.1] # yd, kp, ud(k-1), ud, Hold(ud)
 prob = ODEProblem(ss, [x => 0.1], (0.0, Tf),
-    [kp => 1.0; ud => 2.1; ud(k - 1) => 2.0]) # recreate problem to empty saved values
+    [kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0]) # recreate problem to empty saved values
 sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 
 ss_nosplit = structural_simplify(sys; split = false)
 prob_nosplit = ODEProblem(ss_nosplit, [x => 0.1], (0.0, Tf),
-    [kp => 1.0; ud => 2.1; ud(k - 1) => 2.0])
+    [kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0])
 int = init(prob_nosplit, Tsit5(); kwargshandle = KeywordArgSilent)
 @test sort(int.p) == [0.1, 1.0, 2.1, 2.1, 2.1] # yd, kp, ud(k-1), ud, Hold(ud)
 prob_nosplit = ODEProblem(ss_nosplit, [x => 0.1], (0.0, Tf),
-    [kp => 1.0; ud => 2.1; ud(k - 1) => 2.0]) # recreate problem to empty saved values
+    [kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0]) # recreate problem to empty saved values
 sol_nosplit = solve(prob_nosplit, Tsit5(), kwargshandle = KeywordArgSilent)
 # For all inputs in parameters, just initialize them to 0.0, and then set them
 # in the callback.
@@ -516,3 +516,18 @@ sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 @test sol.prob.kwargs[:disc_saved_values][1].t == sol.t[1:2:end] # Test that the discrete-tiem system executed at every step of the continuous solver. The solver saves each time step twice, one state value before discrete affect and one after.
 @test_nowarn ModelingToolkit.build_explicit_observed_function(
     model, model.counter.ud)(sol.u[1], prob.p..., sol.t[1])
+
+@variables x(t)=1.0 y(t)=1.0
+eqs = [D(y) ~ Hold(x)
+       x ~ x(k - 1) + x(k - 2)]
+@mtkbuild sys = ODESystem(eqs, t)
+prob = ODEProblem(sys, [], (0.0, 10.0))
+int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
+@test int.ps[x] == 2.0
+@test int.ps[x(k - 1)] == 1.0
+
+@test_throws ErrorException ODEProblem(sys, [], (0.0, 10.0), [x => 2.0])
+prob = ODEProblem(sys, [], (0.0, 10.0), [x(k - 1) => 2.0])
+int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
+@test int.ps[x] == 3.0
+@test int.ps[x(k - 1)] == 2.0

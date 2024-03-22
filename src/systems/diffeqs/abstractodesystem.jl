@@ -864,6 +864,41 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     # since they will be checked in the initialization problem's construction
     # TODO: make check for if a DAE cheaper than calculating the mass matrix a second time!
     ci = infer_clocks!(ClockInference(TearingState(sys)))
+
+    if eltype(parammap) <: Pair
+        parammap = Dict(unwrap(k) => v for (k, v) in todict(parammap))
+    elseif parammap isa AbstractArray
+        if isempty(parammap)
+            parammap = SciMLBase.NullParameters()
+        else
+            parammap = Dict(unwrap.(parameters(sys)) .=> parammap)
+        end
+    end
+    clockedparammap = Dict()
+    defs = ModelingToolkit.get_defaults(sys)
+    for v in ps
+        v = unwrap(v)
+        is_discrete_domain(v) || continue
+        op = operation(v)
+        if !isa(op, Symbolics.Operator) && parammap != SciMLBase.NullParameters() &&
+           haskey(parammap, v)
+            error("Initial conditions for discrete variables must be for the past state of the unknown. Instead of providing the condition for $v, provide the condition for $(Shift(iv, -1)(v)).")
+        end
+        shiftedv = StructuralTransformations.simplify_shifts(Shift(iv, -1)(v))
+        if parammap != SciMLBase.NullParameters() &&
+           (val = get(parammap, shiftedv, nothing)) !== nothing
+            clockedparammap[v] = val
+        elseif op isa Shift
+            root = arguments(v)[1]
+            haskey(defs, root) || error("Initial condition for $v not provided.")
+            clockedparammap[v] = defs[root]
+        end
+    end
+    parammap = if parammap == SciMLBase.NullParameters()
+        clockedparammap
+    else
+        merge(parammap, clockedparammap)
+    end
     # TODO: make it work with clocks
     # ModelingToolkit.get_tearing_state(sys) !== nothing => Requires structural_simplify first
     if sys isa ODESystem && (implicit_dae || !isempty(missingvars)) &&

@@ -243,11 +243,14 @@ function collect_var_to_name!(vars, xs)
         x = unwrap(x)
         if hasmetadata(x, Symbolics.GetindexParent)
             xarr = getmetadata(x, Symbolics.GetindexParent)
+            hasname(xarr) || continue
             vars[Symbolics.getname(xarr)] = xarr
         else
             if istree(x) && operation(x) === getindex
                 x = arguments(x)[1]
             end
+            x = unwrap(x)
+            hasname(x) || continue
             vars[Symbolics.getname(unwrap(x))] = x
         end
     end
@@ -434,11 +437,11 @@ function find_derivatives!(vars, expr, f)
     return vars
 end
 
-function collect_vars!(unknowns, parameters, expr, iv)
+function collect_vars!(unknowns, parameters, expr, iv; op = Differential)
     if issym(expr)
         collect_var!(unknowns, parameters, expr, iv)
     else
-        for var in vars(expr)
+        for var in vars(expr; op)
             if istree(var) && operation(var) isa Differential
                 var, _ = var_from_nested_derivative(var)
             end

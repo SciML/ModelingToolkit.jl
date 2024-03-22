@@ -171,8 +171,8 @@ function DiscreteSystem(eqs, iv; kwargs...)
     ps = OrderedSet()
     iv = value(iv)
     for eq in eqs
-        collect_vars!(allunknowns, ps, eq.lhs, iv)
-        collect_vars!(allunknowns, ps, eq.rhs, iv)
+        collect_vars!(allunknowns, ps, eq.lhs, iv; op = Shift)
+        collect_vars!(allunknowns, ps, eq.rhs, iv; op = Shift)
         if istree(eq.lhs) && operation(eq.lhs) isa Shift
             isequal(iv, operation(eq.lhs).t) ||
                 throw(ArgumentError("A DiscreteSystem can only have one independent variable."))
@@ -205,21 +205,38 @@ function generate_function(
 end
 
 function process_DiscreteProblem(constructor, sys::DiscreteSystem, u0map, parammap;
-        version = nothing,
         linenumbers = true, parallel = SerialForm(),
         eval_expression = true,
         use_union = false,
         tofloat = !use_union,
         kwargs...)
+    iv = get_iv(sys)
     eqs = equations(sys)
     dvs = unknowns(sys)
     ps = parameters(sys)
 
+    trueu0map = Dict()
+    for (k, v) in u0map
+        k = unwrap(k)
+        if !((op = operation(k)) isa Shift)
+            error("Initial conditions must be for the past state of the unknowns. Instead of providing the condition for $k, provide the condition for $(Shift(iv, -1)(k)).")
+        end
+        trueu0map[Shift(iv, op.steps + 1)(arguments(k)[1])] = v
+    end
+    defs = ModelingToolkit.get_defaults(sys)
+    for var in dvs
+        if (op = operation(var)) isa Shift && !haskey(trueu0map, var)
+            root = arguments(var)[1]
+            haskey(defs, root) || error("Initial condition for $var not provided.")
+            trueu0map[var] = defs[root]
+        end
+    end
+    @show trueu0map u0map
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        u0, defs = get_u0(sys, u0map, parammap)
-        p = MTKParameters(sys, parammap)
+        u0, defs = get_u0(sys, trueu0map, parammap)
+        p = MTKParameters(sys, parammap, trueu0map)
     else
-        u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union)
+        u0, p, defs = get_u0_p(sys, trueu0map, parammap; tofloat, use_union)
     end
 
     check_eqs_u0(eqs, dvs, u0; kwargs...)

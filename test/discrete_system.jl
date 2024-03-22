@@ -51,7 +51,7 @@ for df in [
 end
 
 # Problem
-u0 = [S => 990.0, I => 10.0, R => 0.0]
+u0 = [S(k - 1) => 990.0, I(k - 1) => 10.0, R(k - 1) => 0.0]
 p = [β => 0.05, c => 10.0, γ => 0.25, δt => 0.1, nsteps => 400]
 tspan = (0.0, ModelingToolkit.value(substitute(nsteps, p))) # value function (from Symbolics) is used to convert a Num to Float64
 prob_map = DiscreteProblem(syss, u0, tspan, p)
@@ -215,7 +215,22 @@ eqs = [u ~ 1
        x ~ x(k - 1) + u
        y ~ x + u]
 @mtkbuild de = DiscreteSystem(eqs, t)
-prob = DiscreteProblem(de, [x => 0.0], (0, 10))
+prob = DiscreteProblem(de, [x(k - 1) => 0.0], (0, 10))
 sol = solve(prob, FunctionMap())
 
 @test reduce(vcat, sol.u) == 1:11
+
+# test that default values apply to the entire history
+@variables x(t) = 1.0
+@mtkbuild de = DiscreteSystem([x ~ x(k - 1) + x(k - 2)], t)
+prob = DiscreteProblem(de, [], (0, 10))
+@test prob[x] == 2.0
+@test prob[x(k - 1)] == 1.0
+
+# must provide initial conditions for history
+@test_throws ErrorException DiscreteProblem(de, [x => 2.0], (0, 10))
+
+# initial values only affect _that timestep_, not the entire history
+prob = DiscreteProblem(de, [x(k - 1) => 2.0], (0, 10))
+@test prob[x] == 3.0
+@test prob[x(k - 1)] == 2.0
