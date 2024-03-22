@@ -64,7 +64,7 @@ sol_map = solve(prob_map, FunctionMap());
 
 # Using defaults constructor
 @parameters c=10.0 nsteps=400 δt=0.1 β=0.05 γ=0.25
-@variables S(t)=990.0 I(t)=10.0 R(t)=0.0
+@variables S(t)=990.0 I(t)=10.0 R(t)=0.0 R2(t)
 
 infection2 = rate_to_proportion(β * c * I(k - 1) / (S(k - 1) + I(k - 1) + R(k - 1)), δt) *
              S(k - 1)
@@ -72,18 +72,20 @@ recovery2 = rate_to_proportion(γ, δt) * I(k - 1)
 
 eqs2 = [S ~ S(k - 1) - infection2,
     I ~ I(k - 1) + infection2 - recovery2,
-    R ~ R(k - 1) + recovery2]
+    R ~ R(k - 1) + recovery2,
+    R2 ~ R]
 
 @mtkbuild sys = DiscreteSystem(
-    eqs2, t, [S, I, R], [c, nsteps, δt, β, γ]; controls = [β, γ], tspan)
+    eqs2, t, [S, I, R, R2], [c, nsteps, δt, β, γ]; controls = [β, γ], tspan)
 @test ModelingToolkit.defaults(sys) != Dict()
 
 prob_map2 = DiscreteProblem(sys)
-sol_map2 = solve(prob_map, FunctionMap());
+sol_map2 = solve(prob_map2, FunctionMap());
 
-@test sol_map.u == sol_map2.u
+@test sol_map.u ≈ sol_map2.u
 @test sol_map.prob.p == sol_map2.prob.p
-
+@test_throws Any sol_map2[R2]
+@test sol_map2[R2(k + 1)][begin:(end - 1)] == sol_map2[R][(begin + 1):end]
 # Direct Implementation
 
 function sir_map!(u_diff, u, p, t)

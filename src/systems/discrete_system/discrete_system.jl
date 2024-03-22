@@ -303,7 +303,7 @@ function SciMLBase.DiscreteFunction{iip, specialize}(
             obs = get!(dict, value(obsvar)) do
                 build_explicit_observed_function(sys, obsvar)
             end
-            obs(u, p, t)
+            p isa MTKParameters ? obs(u, p..., t) : obs(u, p, t)
         end
     end
 
