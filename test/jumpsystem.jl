@@ -256,7 +256,17 @@ dp2 = DiscreteProblem(js2, u0, tspan)
 dp3 = DiscreteProblem(js3, u0, tspan, ps)
 dp4 = DiscreteProblem(js4, u0, tspan)
 
-jp1 = JumpProblem(js1, dp1, Direct())
-jp2 = JumpProblem(js2, dp2, Direct())
-jp3 = JumpProblem(js3, dp3, Direct())
-jp4 = JumpProblem(js4, dp4, Direct())
+@test_nowarn jp1 = JumpProblem(js1, dp1, Direct())
+@test_nowarn jp2 = JumpProblem(js2, dp2, Direct())
+@test_nowarn jp3 = JumpProblem(js3, dp3, Direct())
+@test_nowarn jp4 = JumpProblem(js4, dp4, Direct())
+
+# Ensure `structural_simplify` (and `@mtkbuild`) works on JumpSystem (by doing nothing)
+# Issue#2558
+@parameters k
+@variables X(t)
+rate = k
+affect = [X ~ X - 1]
+
+j1 = ConstantRateJump(k, [X ~ X - 1])
+@test_nowarn @mtkbuild js1 = JumpSystem([j1], t, [X], [k])
