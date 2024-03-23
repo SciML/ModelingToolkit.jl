@@ -138,6 +138,11 @@ function namespace_callback(cb::SymbolicContinuousCallback, s)::SymbolicContinuo
         namespace_affects(affects(cb), s))
 end
 
+"""
+    continuous_events(sys::AbstractSystem)
+
+Returns a vector of all the `continuous_events` in an abstract system and its component subsystems. 
+"""
 function continuous_events(sys::AbstractSystem)
     obs = get_continuous_events(sys)
     filter(!isempty, obs)
@@ -234,6 +239,11 @@ SymbolicDiscreteCallbacks(cb::SymbolicDiscreteCallback) = [cb]
 SymbolicDiscreteCallbacks(cbs::Vector{<:SymbolicDiscreteCallback}) = cbs
 SymbolicDiscreteCallbacks(::Nothing) = SymbolicDiscreteCallback[]
 
+"""
+    discrete_events(sys::AbstractSystem)
+
+Returns a vector of all the `discrete_events` in an abstract system and its component subsystems. 
+"""
 function discrete_events(sys::AbstractSystem)
     obs = get_discrete_events(sys)
     systems = get_systems(sys)

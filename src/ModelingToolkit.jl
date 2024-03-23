@@ -35,7 +35,7 @@ using PrecompileTools, Reexport
     using RecursiveArrayTools
 
     using SymbolicIndexingInterface
-    export independent_variables, unknowns, parameters, full_parameters
+    export independent_variables, unknowns, parameters, full_parameters, continuous_events, discrete_events
     import SymbolicUtils
     import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype,
                           Symbolic, isadd, ismul, ispow, issym, FnType,
