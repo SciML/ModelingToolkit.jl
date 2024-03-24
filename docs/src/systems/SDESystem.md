@@ -19,6 +19,8 @@ sde = SDESystem(ode, noiseeqs)
   - `get_unknowns(sys)` or `unknowns(sys)`: The set of unknowns in the SDE.
   - `get_ps(sys)` or `parameters(sys)`: The parameters of the SDE.
   - `get_iv(sys)`: The independent variable of the SDE.
+  - `continuous_events(sys)`: The set of continuous events in the SDE
+  - `discrete_events(sys)`: The set of discrete events in the SDE
 
 ## Transformations
 

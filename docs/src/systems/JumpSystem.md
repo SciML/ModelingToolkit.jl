@@ -12,6 +12,7 @@ JumpSystem
   - `get_unknowns(sys)` or `unknowns(sys)`: The set of unknowns in the jump system.
   - `get_ps(sys)` or `parameters(sys)`: The parameters of the jump system.
   - `get_iv(sys)`: The independent variable of the jump system.
+  - `discrete_events(sys)`: The set of discrete events in the jump system.
 
 ## Transformations
 
