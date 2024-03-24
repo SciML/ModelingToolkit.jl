@@ -58,6 +58,10 @@ be handled via more [general functional affects](@ref func_affects).
 
 Finally, multiple events can be encoded via a `Vector{Pair{Vector{Equation}, Vector{Equation}}}`.
 
+Given an `AbstractSystem`, one can fetch its continuous events, and the continuous events of any
+subsystem inside of it using the `continuous_events(::AbstractSystem)` method, returning a vector
+of `ModelingToolkit.SymbolicContinuousCallback` objects.
+
 ### Example: Friction
 
 The system below illustrates how continuous events can be used to model Coulomb
@@ -220,6 +224,10 @@ as for continuous events. As before, for any *one* event the symbolic affect
 equations can either all change unknowns (i.e. variables) or all change
 parameters, but one cannot currently mix unknown variable and parameter changes within one
 individual event.
+
+Given an `AbstractSystem`, one can fetch its discrete events, and the discrete events of any
+subsystem inside of it using the `discrete_events(::AbstractSystem)` method, returning a vector
+of `ModelingToolkit.SymbolicDiscreteCallback` objects.
 
 ### Example: Injecting cells into a population
 
