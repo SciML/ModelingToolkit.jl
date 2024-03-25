@@ -190,14 +190,16 @@ end
 function check_index_map(idxmap, sym)
     if (idx = get(idxmap, sym, nothing)) !== nothing
         return idx
-    elseif hasname(sym) && (idx = get(idxmap, getname(sym), nothing)) !== nothing
+    elseif !isa(sym, Symbol) && (!istree(sym) || operation(sym) !== getindex) &&
+           hasname(sym) && (idx = get(idxmap, getname(sym), nothing)) !== nothing
         return idx
     end
     dsym = default_toterm(sym)
     isequal(sym, dsym) && return nothing
     if (idx = get(idxmap, dsym, nothing)) !== nothing
         idx
-    elseif hasname(dsym) && (idx = get(idxmap, getname(dsym), nothing)) !== nothing
+    elseif !isa(dsym, Symbol) && (!istree(dsym) || operation(dsym) !== getindex) &&
+           hasname(dsym) && (idx = get(idxmap, getname(dsym), nothing)) !== nothing
         idx
     else
         nothing

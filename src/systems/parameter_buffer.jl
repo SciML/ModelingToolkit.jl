@@ -224,13 +224,13 @@ function SymbolicIndexingInterface.parameter_values(p::MTKParameters, pind::Para
     @unpack portion, idx = pind
     i, j, k... = idx
     if portion isa SciMLStructures.Tunable
-        return p.tunable[i][j][k...]
+        return isempty(k) ? p.tunable[i][j] : p.tunable[i][j][k...]
     elseif portion isa SciMLStructures.Discrete
-        return p.discrete[i][j][k...]
+        return isempty(k) ? p.discrete[i][j] : p.discrete[i][j][k...]
     elseif portion isa SciMLStructures.Constants
-        return p.constant[i][j][k...]
+        return isempty(k) ? p.constant[i][j] : p.constant[i][j][k...]
     elseif portion === DEPENDENT_PORTION
-        return p.dependent[i][j][k...]
+        return isempty(k) ? p.dependent[i][j] : p.dependent[i][j][k...]
     elseif portion === NONNUMERIC_PORTION
         return isempty(k) ? p.nonnumeric[i][j] : p.nonnumeric[i][j][k...]
     else
