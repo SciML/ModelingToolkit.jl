@@ -47,7 +47,7 @@ end
         output = RealOutput()
     end
     @parameters begin
-        k, [description = "Constant output value of block"]
+        k, [description = "Constant output value of block", unit = u"V"]
     end
     @equations begin
         output.u ~ k
@@ -426,6 +426,7 @@ end
     @test A.structure[:components] == [[:cc, :C]]
 end
 
+using ModelingToolkit: D_nounits
 @testset "Event handling in MTKModel" begin
     @mtkmodel M begin
         @variables begin
@@ -434,9 +435,9 @@ end
             z(t)
         end
         @equations begin
-            x ~ -D(x)
-            D(y) ~ 0
-            D(z) ~ 0
+            x ~ -D_nounits(x)
+            D_nounits(y) ~ 0
+            D_nounits(z) ~ 0
         end
         @continuous_events begin
             [x ~ 1.5] => [x ~ 5, y ~ 1]
