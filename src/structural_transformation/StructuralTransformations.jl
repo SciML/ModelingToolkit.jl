@@ -3,7 +3,7 @@ module StructuralTransformations
 using Setfield: @set!, @set
 using UnPack: @unpack
 
-using Symbolics: unwrap, linear_expansion
+using Symbolics: unwrap, linear_expansion, fast_substitute
 using SymbolicUtils
 using SymbolicUtils.Code
 using SymbolicUtils.Rewriters
@@ -23,7 +23,7 @@ using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Di
                        IncrementalCycleTracker, add_edge_checked!, topological_sort,
                        invalidate_cache!, Substitutions, get_or_construct_tearing_state,
                        filter_kwargs, lower_varname, setio, SparseMatrixCLIL,
-                       fast_substitute, get_fullvars, has_equations, observed,
+                       get_fullvars, has_equations, observed,
                        Schedule
 
 using ModelingToolkit.BipartiteGraphs

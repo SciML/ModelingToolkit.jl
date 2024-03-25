@@ -81,7 +81,7 @@ function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int)
 end
 
 function tearing_sub(expr, dict, s)
-    expr = ModelingToolkit.fixpoint_sub(expr, dict)
+    expr = Symbolics.fixpoint_sub(expr, dict)
     s ? simplify(expr) : expr
 end
 
@@ -439,7 +439,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
                 order, lv = var_order(iv)
                 dx = D(simplify_shifts(lower_varname_withshift(
                     fullvars[lv], idep, order - 1)))
-                eq = dx ~ simplify_shifts(ModelingToolkit.fixpoint_sub(
+                eq = dx ~ simplify_shifts(Symbolics.fixpoint_sub(
                     Symbolics.solve_for(neweqs[ieq],
                         fullvars[iv]),
                     total_sub; operator = ModelingToolkit.Shift))
@@ -467,7 +467,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
                 @warn "Tearing: solving $eq for $var is singular!"
             else
                 rhs = -b / a
-                neweq = var ~ ModelingToolkit.fixpoint_sub(
+                neweq = var ~ Symbolics.fixpoint_sub(
                     simplify ?
                     Symbolics.simplify(rhs) : rhs,
                     total_sub; operator = ModelingToolkit.Shift)
@@ -481,7 +481,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
             if !(eq.lhs isa Number && eq.lhs == 0)
                 rhs = eq.rhs - eq.lhs
             end
-            push!(alge_eqs, 0 ~ ModelingToolkit.fixpoint_sub(rhs, total_sub))
+            push!(alge_eqs, 0 ~ Symbolics.fixpoint_sub(rhs, total_sub))
             push!(algeeq_idxs, ieq)
         end
     end
