@@ -1,6 +1,7 @@
 module ModelParsingPrecompile
 
 using ModelingToolkit, Unitful
+using ModelingToolkit: t
 
 @mtkmodel ModelWithComponentArray begin
     @constants begin
