@@ -845,6 +845,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         guesses = Dict(),
         t = nothing,
         warn_initialize_determined = true,
+        build_initializeprob = true,
         kwargs...)
     eqs = equations(sys)
     dvs = unknowns(sys)
@@ -901,9 +902,10 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     end
     # TODO: make it work with clocks
     # ModelingToolkit.get_tearing_state(sys) !== nothing => Requires structural_simplify first
-    if sys isa ODESystem && (implicit_dae || !isempty(missingvars)) &&
+    if sys isa ODESystem && build_initializeprob && (implicit_dae || !isempty(missingvars)) &&
        all(isequal(Continuous()), ci.var_domain) &&
        ModelingToolkit.get_tearing_state(sys) !== nothing
+
         if eltype(u0map) <: Number
             u0map = unknowns(sys) .=> u0map
         end
