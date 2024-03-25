@@ -39,6 +39,7 @@ Let's explore these in more detail with the following example:
 
 ```@example mtkmodel-example
 using ModelingToolkit
+using ModelingToolkit: t
 
 @mtkmodel ModelA begin
     @parameters begin
@@ -191,6 +192,7 @@ getdefault(model_c3.model_a.k_array[2])
 
 ```@example mtkmodel-example
 using ModelingToolkit
+using ModelingToolkit: t
 
 @mtkmodel M begin
     @parameters begin
@@ -262,6 +264,7 @@ A simple connector can be defined with syntax similar to following example:
 
 ```@example connector
 using ModelingToolkit
+using ModelingToolkit: t
 
 @connector Pin begin
     v(t) = 0.0, [description = "Voltage"]
