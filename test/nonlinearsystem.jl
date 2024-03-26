@@ -242,3 +242,18 @@ testdict = Dict([:test => 1])
     @test prob_.u0 == [1.0, 2.0, 1.0]
     @test prob_.p == MTKParameters(sys, [a => 2.0, b => 1.0, c => 1.0])
 end
+
+@testset "Observed function generation without parameters" begin
+    @variables x y z
+
+    eqs = [0 ~ x + sin(y),
+        0 ~ z - cos(x),
+        0 ~ x * y]
+    @named ns = NonlinearSystem(eqs, [x, y, z], [])
+    ns = complete(ns)
+    vs = [unknowns(ns); parameters(ns)]
+    ss_mtk = structural_simplify(ns)
+    prob = NonlinearProblem(ss_mtk, vs .=> 1.0)
+    sol = solve(prob)
+    @test_nowarn sol[unknowns(ns)]
+end

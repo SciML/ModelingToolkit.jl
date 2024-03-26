@@ -460,9 +460,6 @@ function build_explicit_observed_function(sys, ts;
     else
         ps = (DestructuredArgs(ps, inbounds = !checkbounds),)
     end
-    if isempty(ps)
-        ps = (DestructuredArgs([]),)
-    end
     dvs = DestructuredArgs(unknowns(sys), inbounds = !checkbounds)
     if inputs === nothing
         args = [dvs, ps..., ivs...]
