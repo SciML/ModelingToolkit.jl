@@ -1,10 +1,10 @@
 using ModelingToolkit, SymbolicIndexingInterface, SciMLBase
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@parameters t a b
-@variables x(t)=1.0 y(t)=2.0
-D = Differential(t)
+@parameters a b
+@variables x(t)=1.0 y(t)=2.0 xy(t)
 eqs = [D(x) ~ a * y + t, D(y) ~ b * t]
-@named odesys = ODESystem(eqs, t, [x, y], [a, b])
+@named odesys = ODESystem(eqs, t, [x, y], [a, b]; observed = [xy ~ x + y])
 
 @test all(is_variable.((odesys,), [x, y, 1, 2, :x, :y]))
 @test all(.!is_variable.((odesys,), [a, b, t, 3, 0, :a, :b]))
@@ -24,6 +24,11 @@ eqs = [D(x) ~ a * y + t, D(y) ~ b * t]
 @test !isempty(default_values(odesys))
 @test default_values(odesys)[x] == 1.0
 @test default_values(odesys)[y] == 2.0
+@test isequal(default_values(odesys)[xy], x + y)
+
+@named odesys = ODESystem(
+    eqs, t, [x, y], [a, b]; defaults = [xy => 3.0], observed = [xy ~ x + y])
+@test default_values(odesys)[xy] == 3.0
 
 @variables x y z
 @parameters σ ρ β
