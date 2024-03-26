@@ -192,11 +192,11 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false
         toterm = Symbolics.diff2term, initialization_phase = false)
     varmap = canonicalize_varmap(varmap; toterm)
     defaults = canonicalize_varmap(defaults; toterm)
+    varmap = merge(defaults, varmap)
     values = Dict()
     for var in varlist
         var = unwrap(var)
-        val = unwrap(fixpoint_sub(fixpoint_sub(var, varmap; operator = Symbolics.Operator),
-            defaults; operator = Symbolics.Operator))
+        val = unwrap(fixpoint_sub(var, varmap; operator = Symbolics.Operator))
         if symbolic_type(val) === NotSymbolic()
             values[var] = val
         end
@@ -211,6 +211,11 @@ function canonicalize_varmap(varmap; toterm = Symbolics.diff2term)
     for (k, v) in varmap
         new_varmap[unwrap(k)] = unwrap(v)
         new_varmap[toterm(unwrap(k))] = unwrap(v)
+        if Symbolics.isarraysymbolic(k) && Symbolics.shape(k) !== Symbolics.Unknown()
+            for i in eachindex(k)
+                new_varmap[k[i]] = v[i]
+            end
+        end
     end
     return new_varmap
 end

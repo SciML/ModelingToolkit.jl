@@ -33,3 +33,16 @@ getter = getu(sys, [x..., y, z...])
 @test getter(get_u0(
     sys, [y => 2w, w => 3.0, z[1] => 2p1, z[2] => 3p2], [p1 => 3.0, p2 => 4.0])[1]) ==
       [1.0, 2.0, 3.0, 6.0, 6.0, 12.0]
+
+# Issue#2566
+@variables X(t)
+@parameters p1 p2 p3
+
+p_vals = [p1 => 1.0, p2 => 2.0]
+u_vals = [X => 3.0]
+
+var_vals = [p1 => 1.0, p2 => 2.0, X => 3.0]
+desired_values = [p1, p2, p3]
+defaults = Dict([p3 => X])
+vals = ModelingToolkit.varmap_to_vars(var_vals, desired_values; defaults = defaults)
+@test vals == [1.0, 2.0, 3.0]
