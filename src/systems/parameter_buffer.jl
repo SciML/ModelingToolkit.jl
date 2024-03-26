@@ -141,18 +141,20 @@ function buffer_to_arraypartition(buf)
                                 v for v in buf))
 end
 
+_split_helper(buf_v::T, recurse, raw, idx) where {T} = _split_helper(eltype(T), buf_v, recurse, raw, idx)
+
+function _split_helper(::Type{<:AbstractArray}, buf_v, recurse, raw, idx)
+    recurse ? map(b -> _split_helper(b, recurse, raw, idx), buf_v) : _split_helper(Any, b, recurse, raw, idx)
+end
+
+function _split_helper(::Any, buf_v, recurse, raw, idx)
+    res = reshape(raw[idx[]:(idx[] + length(buf_v) - 1)], size(buf_v))
+    idx[] += length(buf_v)
+    return res
+end
+
 function split_into_buffers(raw::AbstractArray, buf; recurse = true)
-    idx = 1
-    function _helper(buf_v; recurse = true)
-        if eltype(buf_v) <: AbstractArray && recurse
-            return _helper.(buf_v; recurse = false)
-        else
-            res = reshape(raw[idx:(idx + length(buf_v) - 1)], size(buf_v))
-            idx += length(buf_v)
-            return res
-        end
-    end
-    return Tuple(_helper(buf_v; recurse) for buf_v in buf)
+    ntuple(i->_split_helper(buf[i], recurse, raw, Ref(1)), Val(length(buf)))
 end
 
 function update_tuple_of_buffers(raw::AbstractArray, buf)
