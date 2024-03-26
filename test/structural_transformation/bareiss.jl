@@ -26,3 +26,12 @@ end
         end
     end
 end
+
+# Bareiss regression test for relatively prime matrix
+let M = reshape(collect(Iterators.take(nextprimes(), 9)), 3, 3)
+    morig = ModelingToolkit.SparseMatrixCLIL(M)
+    m = copy(morig)
+    # Primarily we care about that this does not throw, but it does also have full rank,
+    # so let's test that
+    @test ModelingToolkit.do_bareiss!(m, morig, [true for i = 1:3], [true for i = 1:3])[1:3] == (3,3,3)
+end
