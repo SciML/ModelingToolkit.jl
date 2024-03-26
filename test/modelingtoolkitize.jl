@@ -52,7 +52,7 @@ x0 = zeros(2)
 p = [1.0, 100.0]
 
 prob = OptimizationProblem(rosenbrock, x0, p)
-sys = modelingtoolkitize(prob) # symbolicitize me captain!
+sys = complete(modelingtoolkitize(prob)) # symbolicitize me captain!
 
 prob = OptimizationProblem(sys, x0, p, grad = true, hess = true)
 sol = solve(prob, NelderMead())
@@ -76,9 +76,9 @@ i₀ = 0.075 # fraction of initial infected people in every age class
 
 ## regional contact matrix
 regional_all_contact_matrix = [3.45536 0.485314 0.506389 0.123002;
-    0.597721 2.11738 0.911374 0.323385;
-    0.906231 1.35041 1.60756 0.67411;
-    0.237902 0.432631 0.726488 0.979258] # 4x4 contact matrix
+                               0.597721 2.11738 0.911374 0.323385;
+                               0.906231 1.35041 1.60756 0.67411;
+                               0.237902 0.432631 0.726488 0.979258] # 4x4 contact matrix
 
 ## regional population stratified by age
 N = [723208, 874150, 1330993, 1411928] # array of 4 elements, each of which representing the absolute amount of population in the corresponding age class.
@@ -105,13 +105,13 @@ function SIRD_ac!(du, u, p, t)
         0.003 / 100,
         0.004 / 100,
         (0.015 + 0.030 + 0.064 + 0.213 + 0.718) / (5 * 100),
-        (2.384 + 8.466 + 12.497 + 1.117) / (4 * 100),
+        (2.384 + 8.466 + 12.497 + 1.117) / (4 * 100)
     ]
     δ = vcat(repeat([δ₁], 1), repeat([δ₂], 1), repeat([δ₃], 1), repeat([δ₄], 4 - 1 - 1 - 1))
 
     C = regional_all_contact_matrix
 
-    # State variables
+    # Unknown variables
     S = @view u[(4 * 0 + 1):(4 * 1)]
     I = @view u[(4 * 1 + 1):(4 * 2)]
     R = @view u[(4 * 2 + 1):(4 * 3)]
@@ -141,8 +141,8 @@ problem = ODEProblem(SIRD_ac!, ℬ, 𝒯, 𝒫)
 @time solution = solve(problem, Tsit5(), saveat = 1:final_time);
 
 problem = ODEProblem(SIRD_ac!, ℬ, 𝒯, 𝒫)
-sys = modelingtoolkitize(problem)
-fast_problem = ODEProblem(sys, ℬ, 𝒯, 𝒫)
+sys = complete(modelingtoolkitize(problem))
+fast_problem = ODEProblem(sys, ℬ, 𝒯, parameters(sys) .=> 𝒫)
 @time solution = solve(fast_problem, Tsit5(), saveat = 1:final_time)
 
 ## Issue #778
@@ -179,8 +179,8 @@ u0 = [1.0, 0, 0, 0, 0]
 p = [9.8, 1]
 tspan = (0, 10.0)
 pendulum_prob = ODEProblem(pendulum_fun!, u0, tspan, p)
-pendulum_sys_org = modelingtoolkitize(pendulum_prob)
-sts = states(pendulum_sys_org)
+pendulum_sys_org = complete(modelingtoolkitize(pendulum_prob))
+sts = unknowns(pendulum_sys_org)
 pendulum_sys = dae_index_lowering(pendulum_sys_org)
 prob = ODEProblem(pendulum_sys, Pair[], tspan)
 sol = solve(prob, Rodas4())
@@ -214,7 +214,7 @@ using ModelingToolkit
 # ODE model: simple SIR model with seasonally forced contact rate
 function SIR!(du, u, p, t)
 
-    # states
+    # Unknowns
     (S, I, R) = u[1:3]
     N = S + I + R
 
@@ -230,7 +230,7 @@ function SIR!(du, u, p, t)
     βeff = β * (1.0 + η * cos(2.0 * π * (t - φ) / 365.0))
     λ = βeff * I / N
 
-    # change in states
+    # change in unknowns
     du[1] = (μ * N - λ * S - μ * S + ω * R)
     du[2] = (λ * S - σ * I - μ * I)
     du[3] = (σ * I - μ * R - ω * R)
@@ -250,11 +250,11 @@ u0 = @LArray [9998.0, 1.0, 1.0, 1.0] (:S, :I, :R, :C)
 
 # Initiate ODE problem
 problem = ODEProblem(SIR!, u0, tspan, p)
-sys = modelingtoolkitize(problem)
+sys = complete(modelingtoolkitize(problem))
 
 @parameters t
 @test all(isequal.(parameters(sys), getproperty.(@variables(β, η, ω, φ, σ, μ), :val)))
-@test all(isequal.(Symbol.(states(sys)), Symbol.(@variables(S(t), I(t), R(t), C(t)))))
+@test all(isequal.(Symbol.(unknowns(sys)), Symbol.(@variables(S(t), I(t), R(t), C(t)))))
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/1158
 
@@ -287,7 +287,7 @@ params = OrderedDict(:a => 10, :b => 20)
 u0 = [1, 2.0]
 prob = ODEProblem(ode_prob_dict, u0, (0.0, 1.0), params)
 sys = modelingtoolkitize(prob)
-@test [ModelingToolkit.defaults(sys)[s] for s in states(sys)] == u0
+@test [ModelingToolkit.defaults(sys)[s] for s in unknowns(sys)] == u0
 @test [ModelingToolkit.defaults(sys)[s] for s in parameters(sys)] == [10, 20]
 @test ModelingToolkit.has_tspan(sys)
 
@@ -304,6 +304,6 @@ noiseeqs = [0.1 * x,
     0.1 * z]
 
 @named sys = SDESystem(eqs, noiseeqs, t, [x, y, z], [sig, rho, beta]; tspan = (0, 1000.0))
-prob = SDEProblem(sys)
+prob = SDEProblem(complete(sys))
 sys = modelingtoolkitize(prob)
 @test ModelingToolkit.has_tspan(sys)

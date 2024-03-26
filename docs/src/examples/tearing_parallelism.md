@@ -11,10 +11,9 @@ electrical circuits:
 
 ```@example tearing
 using ModelingToolkit, OrdinaryDiffEq
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 # Basic electric components
-@variables t
-const D = Differential(t)
 @connector function Pin(; name)
     @variables v(t)=1.0 i(t)=1.0 [connect = Flow]
     ODESystem(Equation[], t, [v, i], [], name = name)
@@ -32,7 +31,7 @@ function ConstantVoltage(; name, V = 1.0)
     @named n = Pin()
     @parameters V = V
     eqs = [V ~ p.v - n.v
-        0 ~ p.i + n.i]
+           0 ~ p.i + n.i]
     compose(ODESystem(eqs, t, [], [V], name = name), p, n)
 end
 
@@ -48,10 +47,10 @@ function HeatingResistor(; name, R = 1.0, TAmbient = 293.15, alpha = 1.0)
     @variables v(t) RTherm(t)
     @parameters R=R TAmbient=TAmbient alpha=alpha
     eqs = [RTherm ~ R * (1 + alpha * (h.T - TAmbient))
-        v ~ p.i * RTherm
-        h.Q_flow ~ -v * p.i # -LossPower
-        v ~ p.v - n.v
-        0 ~ p.i + n.i]
+           v ~ p.i * RTherm
+           h.Q_flow ~ -v * p.i # -LossPower
+           v ~ p.v - n.v
+           0 ~ p.i + n.i]
     compose(ODESystem(eqs, t, [v, RTherm], [R, TAmbient, alpha],
             name = name), p, n, h)
 end
@@ -61,7 +60,7 @@ function HeatCapacitor(; name, rho = 8050, V = 1, cp = 460, TAmbient = 293.15)
     C = rho * V * cp
     @named h = HeatPort()
     eqs = [
-        D(h.T) ~ h.Q_flow / C,
+        D(h.T) ~ h.Q_flow / C
     ]
     compose(ODESystem(eqs, t, [], [rho, V, cp],
             name = name), h)
@@ -73,8 +72,8 @@ function Capacitor(; name, C = 1.0)
     @variables v(t) = 0.0
     @parameters C = C
     eqs = [v ~ p.v - n.v
-        0 ~ p.i + n.i
-        D(v) ~ p.i / C]
+           0 ~ p.i + n.i
+           D(v) ~ p.i / C]
     compose(ODESystem(eqs, t, [v], [C],
             name = name), p, n)
 end
@@ -85,9 +84,9 @@ function parallel_rc_model(i; name, source, ground, R, C)
     heat_capacitor = HeatCapacitor(name = Symbol(:heat_capacitor, i))
 
     rc_eqs = [connect(source.p, resistor.p)
-        connect(resistor.n, capacitor.p)
-        connect(capacitor.n, source.n, ground.g)
-        connect(resistor.h, heat_capacitor.h)]
+              connect(resistor.n, capacitor.p)
+              connect(capacitor.n, source.n, ground.g)
+              connect(resistor.h, heat_capacitor.h)]
 
     compose(ODESystem(rc_eqs, t, name = Symbol(name, i)),
         [resistor, capacitor, source, ground, heat_capacitor])
@@ -113,7 +112,7 @@ end;
 @variables E(t) = 0.0
 eqs = [
     D(E) ~ sum(((i, sys),) -> getproperty(sys, Symbol(:resistor, i)).h.Q_flow,
-        enumerate(rc_systems)),
+    enumerate(rc_systems))
 ]
 @named _big_rc = ODESystem(eqs, t, [E], [])
 @named big_rc = compose(_big_rc, rc_systems)
@@ -155,7 +154,8 @@ ts = TearingState(expand_connections(big_rc))
 inc_org = BipartiteGraphs.incidence_matrix(ts.structure.graph)
 blt_org = StructuralTransformations.sorted_incidence_matrix(ts, only_algeqs = true,
     only_algvars = true)
-blt_reduced = StructuralTransformations.sorted_incidence_matrix(ModelingToolkit.get_tearing_state(sys),
+blt_reduced = StructuralTransformations.sorted_incidence_matrix(
+    ModelingToolkit.get_tearing_state(sys),
     only_algeqs = true,
     only_algvars = true)
 ```
@@ -173,7 +173,7 @@ is that, your attempts to parallelize are neigh: performing parallelism after
 structural simplification greatly improves the problem that can be parallelized,
 so this is better than trying to do it by hand.
 
-After performing this, you can construct the `ODEProblem`/`ODAEProblem` and set
+After performing this, you can construct the `ODEProblem` and set
 `parallel_form` to use the exposed parallelism in multithreaded function
 constructions, but this showcases why `structural_simplify` is so important
 to that process.

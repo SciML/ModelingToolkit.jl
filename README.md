@@ -37,17 +37,16 @@ for the numerical integrator, and solve it.
 
 ```julia
 using DifferentialEquations, ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @parameters σ ρ β
-@variables t x(t) y(t) z(t)
-D = Differential(t)
+@variables x(t) y(t) z(t)
 
 eqs = [D(D(x)) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-@named sys = ODESystem(eqs)
-sys = structural_simplify(sys)
+@mtkbuild sys = ODESystem(eqs, t)
 
 u0 = [D(x) => 2.0,
     x => 1.0,
@@ -75,23 +74,22 @@ Equation (DAE):
 
 ```julia
 using DifferentialEquations, ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @parameters σ ρ β
-@variables t x(t) y(t) z(t)
-D = Differential(t)
+@variables x(t) y(t) z(t)
 
 eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-@named lorenz1 = ODESystem(eqs)
-@named lorenz2 = ODESystem(eqs)
+@mtkbuild lorenz1 = ODESystem(eqs)
+@mtkbuild lorenz2 = ODESystem(eqs)
 
 @variables a(t)
 @parameters γ
 connections = [0 ~ lorenz1.x + lorenz2.y + a * γ]
-@named connected = ODESystem(connections, t, [a], [γ], systems = [lorenz1, lorenz2])
-sys = structural_simplify(connected)
+@mtkbuild connected = ODESystem(connections, t, [a], [γ], systems = [lorenz1, lorenz2])
 
 u0 = [lorenz1.x => 1.0,
     lorenz1.y => 0.0,
@@ -110,7 +108,7 @@ p = [lorenz1.σ => 10.0,
     γ => 2.0]
 
 tspan = (0.0, 100.0)
-prob = ODEProblem(sys, u0, tspan, p)
+prob = ODEProblem(connected, u0, tspan, p)
 sol = solve(prob)
 
 using Plots

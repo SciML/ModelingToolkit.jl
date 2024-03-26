@@ -33,9 +33,9 @@ sol2 = solve(prob2, alg, reltol = 1e-7, abstol = 1e-10)
 tau = 1
 D = Differential(t)
 eqs = [D(x₀) ~ (v0 / (1 + beta0 * (x₂(t - tau)^2))) * (p0 - q0) * x₀ - d0 * x₀
-    D(x₁) ~ (v0 / (1 + beta0 * (x₂(t - tau)^2))) * (1 - p0 + q0) * x₀ +
-            (v1 / (1 + beta1 * (x₂(t - tau)^2))) * (p1 - q1) * x₁ - d1 * x₁
-    D(x₂(t)) ~ (v1 / (1 + beta1 * (x₂(t - tau)^2))) * (1 - p1 + q1) * x₁ - d2 * x₂(t)]
+       D(x₁) ~ (v0 / (1 + beta0 * (x₂(t - tau)^2))) * (1 - p0 + q0) * x₀ +
+               (v1 / (1 + beta1 * (x₂(t - tau)^2))) * (p1 - q1) * x₁ - d1 * x₁
+       D(x₂(t)) ~ (v1 / (1 + beta1 * (x₂(t - tau)^2))) * (1 - p1 + q1) * x₁ - d2 * x₂(t)]
 @named sys = System(eqs)
 prob = DDEProblem(sys,
     [x₀ => 1.0, x₁ => 1.0, x₂(t) => 1.0],
@@ -108,5 +108,5 @@ eqs = [osc1.jcn ~ osc2.delx,
 for coupledOsc in [coupledOsc, coupledOsc2]
     local sys = structural_simplify(coupledOsc)
     @test length(equations(sys)) == 4
-    @test length(states(sys)) == 4
+    @test length(unknowns(sys)) == 4
 end

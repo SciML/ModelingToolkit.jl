@@ -4,11 +4,11 @@ using SymbolicUtils: istree, operation, arguments, Symbolic
 using SymbolicUtils: quick_cancel, similarterm
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
-    value, InvalidSystemException, isdifferential, _iszero,
-    isparameter, isconstant,
-    independent_variables, SparseMatrixCLIL, AbstractSystem,
-    equations, isirreducible, input_timedomain, TimeDomain,
-    VariableType, getvariabletype, has_equations, ODESystem
+                          value, InvalidSystemException, isdifferential, _iszero,
+                          isparameter, isconstant,
+                          independent_variables, SparseMatrixCLIL, AbstractSystem,
+                          equations, isirreducible, input_timedomain, TimeDomain,
+                          VariableType, getvariabletype, has_equations, ODESystem
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
 using Graphs
@@ -251,7 +251,8 @@ function TearingState(sys; quick_cancel = false, check = true)
     sys = flatten(sys)
     ivs = independent_variables(sys)
     iv = length(ivs) == 1 ? ivs[1] : nothing
-    eqs = copy(equations(sys))
+    # scalarize array equations, without scalarizing arguments to registered functions
+    eqs = flatten_equations(copy(equations(sys)))
     neqs = length(eqs)
     dervaridxs = OrderedSet{Int}()
     var2idx = Dict{Any, Int}()
@@ -268,6 +269,7 @@ function TearingState(sys; quick_cancel = false, check = true)
     end
 
     vars = OrderedSet()
+    varsvec = []
     for (i, eq′) in enumerate(eqs)
         if eq′.lhs isa Connection
             check ? error("$(nameof(sys)) has unexpanded `connect` statements") :
@@ -282,9 +284,24 @@ function TearingState(sys; quick_cancel = false, check = true)
             eq = 0 ~ rhs - lhs
         end
         vars!(vars, eq.rhs, op = Symbolics.Operator)
+        for v in vars
+            _var, _ = var_from_nested_derivative(v)
+            any(isequal(_var), ivs) && continue
+            if isparameter(_var) ||
+               (istree(_var) && isparameter(operation(_var)) || isconstant(_var))
+                continue
+            end
+            v = scalarize(v)
+            if v isa AbstractArray
+                v = setmetadata.(v, VariableIrreducible, true)
+                append!(varsvec, v)
+            else
+                push!(varsvec, v)
+            end
+        end
         isalgeq = true
-        statevars = []
-        for var in vars
+        unknownvars = []
+        for var in varsvec
             ModelingToolkit.isdelay(var, iv) && continue
             set_incidence = true
             @label ANOTHER_VAR
@@ -295,7 +312,7 @@ function TearingState(sys; quick_cancel = false, check = true)
                 continue
             end
             varidx = addvar!(var)
-            set_incidence && push!(statevars, var)
+            set_incidence && push!(unknownvars, var)
 
             dvar = var
             idx = varidx
@@ -310,24 +327,6 @@ function TearingState(sys; quick_cancel = false, check = true)
 
             dvar = var
             idx = varidx
-            if ModelingToolkit.isoperator(dvar, ModelingToolkit.Shift)
-                if !(idx in dervaridxs)
-                    push!(dervaridxs, idx)
-                end
-                op = operation(dvar)
-                tt = op.t
-                steps = op.steps
-                v = arguments(dvar)[1]
-                for s in (steps - 1):-1:1
-                    sf = Shift(tt, s)
-                    dvar = sf(v)
-                    idx = addvar!(dvar)
-                    if !(idx in dervaridxs)
-                        push!(dervaridxs, idx)
-                    end
-                end
-                idx = addvar!(v)
-            end
 
             if istree(var) && operation(var) isa Symbolics.Operator &&
                !isdifferential(var) && (it = input_timedomain(var)) !== nothing
@@ -337,22 +336,61 @@ function TearingState(sys; quick_cancel = false, check = true)
                 @goto ANOTHER_VAR
             end
         end
-        push!(symbolic_incidence, copy(statevars))
-        empty!(statevars)
+        push!(symbolic_incidence, copy(unknownvars))
+        empty!(unknownvars)
         empty!(vars)
+        empty!(varsvec)
         if isalgeq
             eqs[i] = eq
         else
             eqs[i] = eqs[i].lhs ~ rhs
         end
     end
-
+    lowest_shift = Dict()
+    for var in fullvars
+        if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)
+            steps = operation(var).steps
+            if steps > 0
+                error("Only non-positive shifts allowed. Found $var with a shift of $steps")
+            end
+            v = arguments(var)[1]
+            lowest_shift[v] = min(get(lowest_shift, v, 0), steps)
+        end
+    end
+    for var in fullvars
+        if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)
+            op = operation(var)
+            steps = op.steps
+            v = arguments(var)[1]
+            lshift = lowest_shift[v]
+            tt = op.t
+        elseif haskey(lowest_shift, var)
+            lshift = lowest_shift[var]
+            steps = 0
+            tt = iv
+            v = var
+        else
+            continue
+        end
+        if lshift < steps
+            push!(dervaridxs, var2idx[var])
+        end
+        for s in (steps - 1):-1:(lshift + 1)
+            sf = Shift(tt, s)
+            dvar = sf(v)
+            idx = addvar!(dvar)
+            if !(idx in dervaridxs)
+                push!(dervaridxs, idx)
+            end
+        end
+    end
     # sort `fullvars` such that the mass matrix is as diagonal as possible.
     dervaridxs = collect(dervaridxs)
     sorted_fullvars = OrderedSet(fullvars[dervaridxs])
+    var_to_old_var = Dict(zip(fullvars, fullvars))
     for dervaridx in dervaridxs
         dervar = fullvars[dervaridx]
-        diffvar = lower_order_var(dervar)
+        diffvar = var_to_old_var[lower_order_var(dervar, iv)]
         if !(diffvar in sorted_fullvars)
             push!(sorted_fullvars, diffvar)
         end
@@ -374,7 +412,7 @@ function TearingState(sys; quick_cancel = false, check = true)
     var_to_diff = DiffGraph(nvars, true)
     for dervaridx in dervaridxs
         dervar = fullvars[dervaridx]
-        diffvar = lower_order_var(dervar)
+        diffvar = lower_order_var(dervar, iv)
         diffvaridx = var2idx[diffvar]
         push!(diffvars, diffvar)
         var_to_diff[diffvaridx] = dervaridx
@@ -390,26 +428,56 @@ function TearingState(sys; quick_cancel = false, check = true)
 
     eq_to_diff = DiffGraph(nsrcs(graph))
 
-    return TearingState(sys, fullvars,
+    ts = TearingState(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
-            complete(graph), nothing, var_types, false),
+            complete(graph), nothing, var_types, sys isa DiscreteSystem),
         Any[])
+    if sys isa DiscreteSystem
+        ts = shift_discrete_system(ts)
+    end
+    return ts
 end
 
-function lower_order_var(dervar)
+function lower_order_var(dervar, t)
     if isdifferential(dervar)
         diffvar = arguments(dervar)[1]
-    else # shift
+    elseif ModelingToolkit.isoperator(dervar, ModelingToolkit.Shift)
         s = operation(dervar)
         step = s.steps - 1
         vv = arguments(dervar)[1]
-        if step >= 1
+        if step != 0
             diffvar = Shift(s.t, step)(vv)
         else
             diffvar = vv
         end
+    else
+        return Shift(t, -1)(dervar)
     end
     diffvar
+end
+
+function shift_discrete_system(ts::TearingState)
+    @unpack fullvars, sys = ts
+    discvars = OrderedSet()
+    eqs = equations(sys)
+    for eq in eqs
+        vars!(discvars, eq; op = Union{Sample, Hold})
+    end
+    iv = get_iv(sys)
+    discmap = Dict(k => StructuralTransformations.simplify_shifts(Shift(iv, 1)(k))
+    for k in discvars
+    if any(isequal(k), fullvars) && !isa(operation(k), Union{Sample, Hold}))
+    for i in eachindex(fullvars)
+        fullvars[i] = StructuralTransformations.simplify_shifts(fast_substitute(
+            fullvars[i], discmap; operator = Union{Sample, Hold}))
+    end
+    for i in eachindex(eqs)
+        eqs[i] = StructuralTransformations.simplify_shifts(fast_substitute(
+            eqs[i], discmap; operator = Union{Sample, Hold}))
+    end
+    @set! ts.sys.eqs = eqs
+    @set! ts.fullvars = fullvars
+    return ts
 end
 
 using .BipartiteGraphs: Label, BipartiteAdjacencyList
@@ -459,8 +527,9 @@ function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
     elseif j == 6
         return Label((i - 1 <= length(bgpm.var_to_diff)) ? string(i - 1) : "")
     elseif j == 4
-        return BipartiteAdjacencyList(i - 1 <= nsrcs(bgpm.bpg) ?
-                                      𝑠neighbors(bgpm.bpg, i - 1) : nothing,
+        return BipartiteAdjacencyList(
+            i - 1 <= nsrcs(bgpm.bpg) ?
+            𝑠neighbors(bgpm.bpg, i - 1) : nothing,
             bgpm.highlight_graph !== nothing &&
             i - 1 <= nsrcs(bgpm.highlight_graph) ?
             Set(𝑠neighbors(bgpm.highlight_graph, i - 1)) :
@@ -472,10 +541,11 @@ function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
         match = unassigned
         if bgpm.var_eq_matching !== nothing && i - 1 <= length(bgpm.var_eq_matching)
             match = bgpm.var_eq_matching[i - 1]
-            isa(match, Union{Int, Unassigned}) || (match = true) # Selected State
+            isa(match, Union{Int, Unassigned}) || (match = true) # Selected Unknown
         end
-        return BipartiteAdjacencyList(i - 1 <= ndsts(bgpm.bpg) ?
-                                      𝑑neighbors(bgpm.bpg, i - 1) : nothing,
+        return BipartiteAdjacencyList(
+            i - 1 <= ndsts(bgpm.bpg) ?
+            𝑑neighbors(bgpm.bpg, i - 1) : nothing,
             bgpm.highlight_graph !== nothing &&
             i - 1 <= ndsts(bgpm.highlight_graph) ?
             Set(𝑑neighbors(bgpm.highlight_graph, i - 1)) :
@@ -553,11 +623,13 @@ function merge_io(io, inputs)
 end
 
 function structural_simplify!(state::TearingState, io = nothing; simplify = false,
-    check_consistency = true, fully_determined = true,
-    kwargs...)
+        check_consistency = true, fully_determined = true, warn_initialize_determined = true,
+        kwargs...)
     if state.sys isa ODESystem
         ci = ModelingToolkit.ClockInference(state)
         ModelingToolkit.infer_clocks!(ci)
+        time_domains = merge(Dict(state.fullvars .=> ci.var_domain),
+            Dict(default_toterm.(state.fullvars) .=> ci.var_domain))
         tss, inputs, continuous_id, id_to_clock = ModelingToolkit.split_system(ci)
         cont_io = merge_io(io, inputs[continuous_id])
         sys, input_idxs = _structural_simplify!(tss[continuous_id], cont_io; simplify,
@@ -577,7 +649,7 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
                 dist_io = merge_io(io, inputs[i])
                 ss, = _structural_simplify!(state, dist_io; simplify, check_consistency,
                     fully_determined, kwargs...)
-                append!(appended_parameters, inputs[i], states(ss))
+                append!(appended_parameters, inputs[i], unknowns(ss))
                 discrete_subsystems[i] = ss
             end
             @set! sys.discrete_subsystems = discrete_subsystems, inputs, continuous_id,
@@ -586,6 +658,9 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
             @set! sys.defaults = merge(ModelingToolkit.defaults(sys),
                 Dict(v => 0.0 for v in Iterators.flatten(inputs)))
         end
+        ps = [setmetadata(sym, TimeDomain, get(time_domains, sym, Continuous()))
+              for sym in get_ps(sys)]
+        @set! sys.ps = ps
     else
         sys, input_idxs = _structural_simplify!(state, io; simplify, check_consistency,
             fully_determined, kwargs...)
@@ -595,25 +670,37 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
 end
 
 function _structural_simplify!(state::TearingState, io; simplify = false,
-    check_consistency = true, fully_determined = true,
-    kwargs...)
+        check_consistency = true, fully_determined = true, warn_initialize_determined = false,
+        dummy_derivative = true,
+        kwargs...)
     check_consistency &= fully_determined
     has_io = io !== nothing
     orig_inputs = Set()
     if has_io
         ModelingToolkit.markio!(state, orig_inputs, io...)
     end
-    state, input_idxs = ModelingToolkit.inputs_to_parameters!(state, io)
+    if io !== nothing
+        state, input_idxs = ModelingToolkit.inputs_to_parameters!(state, io)
+    else
+        input_idxs = 0:-1 # Empty range
+    end
     sys, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
     if check_consistency
         ModelingToolkit.check_consistency(state, orig_inputs)
     end
-    if fully_determined
+    if fully_determined && dummy_derivative
+        sys = ModelingToolkit.dummy_derivative(sys, state; simplify, mm, check_consistency)
+    elseif fully_determined
+        var_eq_matching = pantelides!(state; finalize = false, kwargs...)
+        sys = pantelides_reassemble(state, var_eq_matching)
+        state = TearingState(sys)
+        sys, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
         sys = ModelingToolkit.dummy_derivative(sys, state; simplify, mm, check_consistency)
     else
         sys = ModelingToolkit.tearing(sys, state; simplify, mm, check_consistency)
     end
-    fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
-    @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullstates)
+    fullunknowns = [map(eq -> eq.lhs, observed(sys)); unknowns(sys)]
+    @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)
+
     ModelingToolkit.invalidate_cache!(sys), input_idxs
 end

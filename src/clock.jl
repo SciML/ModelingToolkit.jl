@@ -42,7 +42,7 @@ end
 has_time_domain(x::Num) = has_time_domain(value(x))
 has_time_domain(x) = false
 
-for op in [Differential, Difference]
+for op in [Differential]
     @eval input_timedomain(::$op, arg = nothing) = Continuous()
     @eval output_timedomain(::$op, arg = nothing) = Continuous()
 end
@@ -83,7 +83,9 @@ true if `x` contains only discrete-domain signals.
 See also [`has_discrete_domain`](@ref)
 """
 function is_discrete_domain(x)
-    issym(x) && return getmetadata(x, TimeDomain, false) isa Discrete
+    if hasmetadata(x, TimeDomain) || issym(x)
+        return getmetadata(x, TimeDomain, false) isa AbstractDiscrete
+    end
     !has_discrete_domain(x) && has_continuous_domain(x)
 end
 
@@ -122,3 +124,30 @@ function Base.:(==)(c1::Clock, c2::Clock)
 end
 
 is_concrete_time_domain(x) = x isa Union{AbstractClock, Continuous}
+
+"""
+    SolverStepClock <: AbstractClock
+    SolverStepClock()
+    SolverStepClock(t)
+
+A clock that ticks at each solver step (sometimes referred to as "continuous sample time"). This clock **does generally not have equidistant tick intervals**, instead, the tick interval depends on the adaptive step-size slection of the continuous solver, as well as any continuous event handling. If adaptivity of the solver is turned off and there are no continuous events, the tick interval will be given by the fixed solver time step `dt`. 
+
+Due to possibly non-equidistant tick intervals, this clock should typically not be used with discrete-time systems that assume a fixed sample time, such as PID controllers and digital filters.
+"""
+struct SolverStepClock <: AbstractClock
+    "Independent variable"
+    t::Union{Nothing, Symbolic}
+    "Period"
+    SolverStepClock(t::Union{Num, Symbolic}) = new(value(t))
+end
+SolverStepClock() = SolverStepClock(nothing)
+
+Base.hash(c::SolverStepClock, seed::UInt) = seed ⊻ 0x953d7b9a18874b91
+function Base.:(==)(c1::SolverStepClock, c2::SolverStepClock)
+    ((c1.t === nothing || c2.t === nothing) || isequal(c1.t, c2.t))
+end
+
+struct IntegerSequence <: AbstractClock
+    t::Union{Nothing, Symbolic}
+    IntegerSequence(t::Union{Num, Symbolic}) = new(value(t))
+end

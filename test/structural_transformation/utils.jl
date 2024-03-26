@@ -3,11 +3,11 @@ using ModelingToolkit
 using Graphs
 using SparseArrays
 using UnPack
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 # Define some variables
-@parameters t L g
+@parameters L g
 @variables x(t) y(t) w(t) z(t) T(t)
-D = Differential(t)
 
 # Simple pendulum in cartesian coordinates
 eqs = [D(x) ~ w,

@@ -38,7 +38,9 @@ function (D::Shift)(x::Num, allow_zero = false)
     vt = value(x)
     if istree(vt)
         op = operation(vt)
-        if op isa Shift
+        if op isa Sample
+            error("Cannot shift a `Sample`. Create a variable to represent the sampled value and shift that instead")
+        elseif op isa Shift
             if D.t === nothing || isequal(D.t, op.t)
                 arg = arguments(vt)[1]
                 newsteps = D.steps + op.steps
@@ -114,7 +116,7 @@ Base.hash(D::Sample, u::UInt) = hash(D.clock, xor(u, 0x055640d6d952f101))
 
 Returns true if the expression or equation `O` contains [`Sample`](@ref) terms.
 """
-hassample(O) = recursive_hasoperator(Sample, O)
+hassample(O) = recursive_hasoperator(Sample, unwrap(O))
 
 # Hold
 
@@ -140,7 +142,7 @@ Hold(x) = Hold()(x)
 
 Returns true if the expression or equation `O` contains [`Hold`](@ref) terms.
 """
-hashold(O) = recursive_hasoperator(Hold, O)
+hashold(O) = recursive_hasoperator(Hold, unwrap(O))
 
 # ShiftIndex
 
@@ -168,6 +170,7 @@ struct ShiftIndex
     steps::Int
     ShiftIndex(clock::TimeDomain = Inferred(), steps::Int = 0) = new(clock, steps)
     ShiftIndex(t::Num, dt::Real, steps::Int = 0) = new(Clock(t, dt), steps)
+    ShiftIndex(t::Num, steps::Int = 0) = new(IntegerSequence(t), steps)
 end
 
 function (xn::Num)(k::ShiftIndex)
@@ -177,7 +180,7 @@ function (xn::Num)(k::ShiftIndex)
     # Verify that the independent variables of k and x match and that the expression doesn't have multiple variables
     vars = Symbolics.get_variables(x)
     length(vars) == 1 ||
-        error("Cannot shift a multivariate expression $x. Either create a new state and shift this, or shift the individual variables in the expression.")
+        error("Cannot shift a multivariate expression $x. Either create a new unknown and shift this, or shift the individual variables in the expression.")
     args = Symbolics.arguments(vars[]) # args should be one element vector with the t in x(t)
     length(args) == 1 ||
         error("Cannot shift an expression with multiple independent variables $x.")

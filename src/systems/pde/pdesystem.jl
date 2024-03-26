@@ -86,19 +86,20 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     """
     gui_metadata::Union{Nothing, GUIMetadata}
     @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
-        ps = SciMLBase.NullParameters();
-        defaults = Dict(),
-        systems = [],
-        connector_type = nothing,
-        metadata = nothing,
-        analytic = nothing,
-        analytic_func = nothing,
-        gui_metadata = nothing,
-        eval_module = @__MODULE__,
-        checks::Union{Bool, Int} = true,
-        name)
+            ps = SciMLBase.NullParameters();
+            defaults = Dict(),
+            systems = [],
+            connector_type = nothing,
+            metadata = nothing,
+            analytic = nothing,
+            analytic_func = nothing,
+            gui_metadata = nothing,
+            eval_module = @__MODULE__,
+            checks::Union{Bool, Int} = true,
+            name)
         if checks == true || (checks & CheckUnits) > 0
-            all_dimensionless([dvs; ivs; ps]) || check_units(eqs)
+            u = __get_unit_type(dvs, ivs, ps)
+            check_units(u, eqs)
         end
 
         eqs = eqs isa Vector ? eqs : [eqs]
@@ -112,7 +113,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
             if isnothing(analytic_func)
                 analytic_func = map(analytic) do eq
                     args = arguments(eq.lhs)
-                    p = ps isa SciMLBase.NullParameters ? [] : map(a -> a.first, ps)
+                    p = ps isa SciMLBase.NullParameters ? [] : ps
                     args = vcat(DestructuredArgs(p), args)
                     ex = Func(args, [], eq.rhs) |> toexpr
                     eq.lhs => drop_expr(@RuntimeGeneratedFunction(eval_module, ex))
@@ -132,12 +133,14 @@ end
 function Base.getproperty(x::PDESystem, sym::Symbol)
     if sym == :indvars
         return getfield(x, :ivs)
-        Base.depwarn("`sys.indvars` is deprecated, please use `get_ivs(sys)`", :getproperty,
+        Base.depwarn(
+            "`sys.indvars` is deprecated, please use `get_ivs(sys)`", :getproperty,
             force = true)
 
     elseif sym == :depvars
         return getfield(x, :dvs)
-        Base.depwarn("`sys.depvars` is deprecated, please use `get_dvs(sys)`", :getproperty,
+        Base.depwarn(
+            "`sys.depvars` is deprecated, please use `get_dvs(sys)`", :getproperty,
             force = true)
 
     else

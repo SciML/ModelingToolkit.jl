@@ -2,11 +2,11 @@ module MTKDeepDiffsExt
 
 using DeepDiffs, ModelingToolkit
 using ModelingToolkit.BipartiteGraphs: Label,
-    BipartiteAdjacencyList, unassigned,
-    HighlightInt
+                                       BipartiteAdjacencyList, unassigned,
+                                       HighlightInt
 using ModelingToolkit: SystemStructure,
-    MatchedSystemStructure,
-    SystemStructurePrintMatrix
+                       MatchedSystemStructure,
+                       SystemStructurePrintMatrix
 
 """
 A utility struct for displaying the difference between two HighlightInts.
@@ -72,9 +72,9 @@ function Base.show(io::IO, l::BipartiteAdjacencyListDiff)
     new_nonempty = isnothing(l.new.u) ? nothing : !isempty(l.new.u)
     old_nonempty = isnothing(l.old.u) ? nothing : !isempty(l.old.u)
     if new_nonempty === true && old_nonempty === true
-        if (!isempty(setdiff(l.new.highligh_u, l.new.u)) ||
-            !isempty(setdiff(l.old.highligh_u, l.old.u)))
-            throw(ArgumentError("The provided `highligh_u` must be a sub-graph of `u`."))
+        if (!isempty(setdiff(l.new.highlight_u, l.new.u)) ||
+            !isempty(setdiff(l.old.highlight_u, l.old.u)))
+            throw(ArgumentError("The provided `highlight_u` must be a sub-graph of `u`."))
         end
 
         new_items = Dict(i => HighlightInt(i, :nothing, i === l.new.match) for i in l.new.u)
@@ -93,11 +93,13 @@ function Base.show(io::IO, l::BipartiteAdjacencyListDiff)
             end)
         print(IOContext(io, :typeinfo => typeof(highlighted)), highlighted)
     elseif new_nonempty === true
-        printstyled(io, map(l.new.u) do i
+        printstyled(
+            io, map(l.new.u) do i
                 HighlightInt(i, :nothing, i === l.new.match)
             end, color = :light_green)
     elseif old_nonempty === true
-        printstyled(io, map(l.old.u) do i
+        printstyled(
+            io, map(l.old.u) do i
                 HighlightInt(i, :nothing, i === l.old.match)
             end, color = :light_red)
     elseif old_nonempty !== nothing || new_nonempty !== nothing
@@ -179,7 +181,7 @@ function Base.getindex(ssdpm::SystemStructureDiffPrintMatrix, i::Integer, j::Int
 end
 
 function DeepDiffs.deepdiff(old::Union{MatchedSystemStructure, SystemStructure},
-    new::Union{MatchedSystemStructure, SystemStructure})
+        new::Union{MatchedSystemStructure, SystemStructure})
     new_sspm = SystemStructurePrintMatrix(new)
     old_sspm = SystemStructurePrintMatrix(old)
     Base.print_matrix(stdout, SystemStructureDiffPrintMatrix(new_sspm, old_sspm))

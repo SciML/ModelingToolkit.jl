@@ -7,7 +7,7 @@ ModelingToolkit.jl provides extensive functionality for model validation and uni
 Units may be assigned with the following syntax.
 
 ```@example validation
-using ModelingToolkit, Unitful
+using ModelingToolkit, DynamicQuantities
 @variables t [unit = u"s"] x(t) [unit = u"m"] g(t) w(t) [unit = "Hz"]
 
 @variables(t, [unit = u"s"], x(t), [unit = u"m"], g(t), w(t), [unit = "Hz"])
@@ -45,7 +45,7 @@ ModelingToolkit.get_unit
 Example usage below. Note that `ModelingToolkit` does not force unit conversions to preferred units in the event of nonstandard combinations -- it merely checks that the equations are consistent.
 
 ```@example validation
-using ModelingToolkit, Unitful
+using ModelingToolkit, DynamicQuantities
 @parameters τ [unit = u"ms"]
 @variables t [unit = u"ms"] E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
@@ -59,13 +59,17 @@ ModelingToolkit.validate(eqs[1])
 ```
 
 ```@example validation
-ModelingToolkit.get_unit(eqs[1].rhs)
+try
+    ModelingToolkit.get_unit(eqs[1].rhs)
+catch e
+    showerror(stdout, e)
+end
 ```
 
 An example of an inconsistent system: at present, `ModelingToolkit` requires that the units of all terms in an equation or sum to be equal-valued (`ModelingToolkit.equivalent(u1,u2)`), rather than simply dimensionally consistent. In the future, the validation stage may be upgraded to support the insertion of conversion factors into the equations.
 
 ```@example validation
-using ModelingToolkit, Unitful
+using ModelingToolkit, DynamicQuantities
 @parameters τ [unit = u"ms"]
 @variables t [unit = u"ms"] E(t) [unit = u"J"] P(t) [unit = u"MW"]
 D = Differential(t)
@@ -81,10 +85,9 @@ expect an object type, while two-parameter calls expect a function type as the f
 second argument.
 
 ```@example validation2
-using ModelingToolkit, Unitful
+using ModelingToolkit, DynamicQuantities
+using ModelingToolkit: t_nounits as t, D_nounits as D
 # Composite type parameter in registered function
-@parameters t
-D = Differential(t)
 struct NewType
     f::Any
 end
@@ -101,16 +104,17 @@ end
 sts = @variables a(t)=0 [unit = u"cm"]
 ps = @parameters s=-1 [unit = u"cm"] c=c [unit = u"cm"]
 eqs = [D(a) ~ dummycomplex(c, s);]
-sys = ODESystem(eqs, t, [sts...;], [ps...;], name = :sys)
+sys = ODESystem(
+    eqs, t, [sts...;], [ps...;], name = :sys, checks = ~ModelingToolkit.CheckUnits)
 sys_simple = structural_simplify(sys)
 ```
 
-## `Unitful` Literals
+## `DynamicQuantities` Literals
 
 In order for a function to work correctly during both validation & execution, the function must be unit-agnostic. That is, no unitful literals may be used. Any unitful quantity must either be a `parameter` or `variable`. For example, these equations will not validate successfully.
 
 ```julia
-using ModelingToolkit, Unitful
+using ModelingToolkit, DynamicQuantities
 @variables t [unit = u"ms"] E(t) [unit = u"J"] P(t) [unit = u"MW"]
 D = Differential(t)
 eqs = [D(E) ~ P - E / 1u"ms"]
@@ -124,7 +128,7 @@ ModelingToolkit.validate(eqs) #Returns false while displaying a warning message
 Instead, they should be parameterized:
 
 ```@example validation3
-using ModelingToolkit, Unitful
+using ModelingToolkit, DynamicQuantities
 @parameters τ [unit = u"ms"]
 @variables t [unit = u"ms"] E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
@@ -138,8 +142,8 @@ eqs = [D(E) ~ P - myfunc(E, τ)]
 ModelingToolkit.validate(eqs) #Returns true
 ```
 
-It is recommended *not* to circumvent unit validation by specializing user-defined functions on `Unitful` arguments vs. `Numbers`. This both fails to take advantage of `validate` for ensuring correctness, and may cause in errors in the
-future when `ModelingToolkit` is extended to support eliminating `Unitful` literals from functions.
+It is recommended *not* to circumvent unit validation by specializing user-defined functions on `DynamicQuantities` arguments vs. `Numbers`. This both fails to take advantage of `validate` for ensuring correctness, and may cause in errors in the
+future when `ModelingToolkit` is extended to support eliminating `DynamicQuantities` literals from functions.
 
 ## Other Restrictions
 
@@ -149,7 +153,7 @@ future when `ModelingToolkit` is extended to support eliminating `Unitful` liter
 
 If a system fails to validate due to unit issues, at least one warning message will appear, including a line number as well as the unit types and expressions that were in conflict. Some system constructors re-order equations before the unit checking can be done, in which case the equation numbers may be inaccurate. The printed expression that the problem resides in is always correctly shown.
 
-Symbolic exponents for unitful variables *are* supported (ex: `P^γ` in thermodynamics). However, this means that `ModelingToolkit` cannot reduce such expressions to `Unitful.Unitlike` subtypes at validation time because the exponent value is not available. In this case `ModelingToolkit.get_unit` is type-unstable, yielding a symbolic result, which can still be checked for symbolic equality with `ModelingToolkit.equivalent`.
+Symbolic exponents for unitful variables *are* supported (ex: `P^γ` in thermodynamics). However, this means that `ModelingToolkit` cannot reduce such expressions to `DynamicQuantities.Quantity` subtypes at validation time because the exponent value is not available. In this case `ModelingToolkit.get_unit` is type-unstable, yielding a symbolic result, which can still be checked for symbolic equality with `ModelingToolkit.equivalent`.
 
 ## Parameter & Initial Condition Values
 

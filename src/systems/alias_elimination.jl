@@ -30,7 +30,7 @@ function aag_bareiss(sys::AbstractSystem)
 end
 
 function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true);
-    callback = _ -> nothing) where {descend}
+        callback = _ -> nothing) where {descend}
     g = descend ? invview(var_to_diff) : var_to_diff
     callback(v)
     while (v′ = g[v]) !== nothing
@@ -111,10 +111,10 @@ function alias_elimination!(state::TearingState; kwargs...)
     @set! mm.nparentrows = nsrcs(graph)
     @set! mm.row_cols = eltype(mm.row_cols)[mm.row_cols[i]
                                             for (i, eq) in enumerate(mm.nzrows)
-                                                if old_to_new_eq[eq] > 0]
+                                            if old_to_new_eq[eq] > 0]
     @set! mm.row_vals = eltype(mm.row_vals)[mm.row_vals[i]
                                             for (i, eq) in enumerate(mm.nzrows)
-                                                if old_to_new_eq[eq] > 0]
+                                            if old_to_new_eq[eq] > 0]
     @set! mm.nzrows = Int[old_to_new_eq[eq] for eq in mm.nzrows if old_to_new_eq[eq] > 0]
 
     for old_ieq in to_expand
@@ -122,7 +122,6 @@ function alias_elimination!(state::TearingState; kwargs...)
         eqs[ieq] = expand_derivatives(eqs[ieq])
     end
 
-    newstates = []
     diff_to_var = invview(var_to_diff)
     new_graph = BipartiteGraph(n_new_eqs, ndsts(graph))
     new_solvable_graph = BipartiteGraph(n_new_eqs, ndsts(graph))
@@ -158,11 +157,11 @@ Find the first linear variable such that `𝑠neighbors(adj, i)[j]` is true give
 the `constraint`.
 """
 @inline function find_first_linear_variable(M::SparseMatrixCLIL,
-    range,
-    mask,
-    constraint)
+        range,
+        mask,
+        constraint)
     eadj = M.row_cols
-    for i in range
+    @inbounds for i in range
         vertices = eadj[i]
         if constraint(length(vertices))
             for (j, v) in enumerate(vertices)
@@ -176,10 +175,10 @@ the `constraint`.
 end
 
 @inline function find_first_linear_variable(M::AbstractMatrix,
-    range,
-    mask,
-    constraint)
-    for i in range
+        range,
+        mask,
+        constraint)
+    @inbounds for i in range
         row = @view M[i, :]
         if constraint(count(!iszero, row))
             for (v, val) in enumerate(row)
@@ -398,13 +397,6 @@ end
 
 swap!(v, i, j) = v[i], v[j] = v[j], v[i]
 
-function getcoeff(vars, coeffs, var)
-    for (vj, v) in enumerate(vars)
-        v == var && return coeffs[vj]
-    end
-    return 0
-end
-
 """
 $(SIGNATURES)
 
@@ -428,8 +420,8 @@ julia> ModelingToolkit.topsort_equations(eqs, [x, y, z, k])
  Equation(x(t), y(t) + z(t))
 ```
 """
-function topsort_equations(eqs, states; check = true)
-    graph, assigns = observed2graph(eqs, states)
+function topsort_equations(eqs, unknowns; check = true)
+    graph, assigns = observed2graph(eqs, unknowns)
     neqs = length(eqs)
     degrees = zeros(Int, neqs)
 
@@ -465,9 +457,9 @@ function topsort_equations(eqs, states; check = true)
     return ordered_eqs
 end
 
-function observed2graph(eqs, states)
-    graph = BipartiteGraph(length(eqs), length(states))
-    v2j = Dict(states .=> 1:length(states))
+function observed2graph(eqs, unknowns)
+    graph = BipartiteGraph(length(eqs), length(unknowns))
+    v2j = Dict(unknowns .=> 1:length(unknowns))
 
     # `assigns: eq -> var`, `eq` defines `var`
     assigns = similar(eqs, Int)
@@ -475,9 +467,9 @@ function observed2graph(eqs, states)
     for (i, eq) in enumerate(eqs)
         lhs_j = get(v2j, eq.lhs, nothing)
         lhs_j === nothing &&
-            throw(ArgumentError("The lhs $(eq.lhs) of $eq, doesn't appear in states."))
+            throw(ArgumentError("The lhs $(eq.lhs) of $eq, doesn't appear in unknowns."))
         assigns[i] = lhs_j
-        vs = vars(eq.rhs)
+        vs = vars(eq.rhs; op = Symbolics.Operator)
         for v in vs
             j = get(v2j, v, nothing)
             j !== nothing && add_edge!(graph, i, j)
@@ -487,11 +479,11 @@ function observed2graph(eqs, states)
     return graph, assigns
 end
 
-function fixpoint_sub(x, dict)
-    y = fast_substitute(x, dict)
+function fixpoint_sub(x, dict; operator = Nothing)
+    y = fast_substitute(x, dict; operator)
     while !isequal(x, y)
         y = x
-        x = fast_substitute(y, dict)
+        x = fast_substitute(y, dict; operator)
     end
 
     return x

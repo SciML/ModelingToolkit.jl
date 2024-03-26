@@ -1,5 +1,4 @@
 get_iv(D::Differential) = D.x
-get_iv(D::Difference) = D.t
 
 function make_operation(@nospecialize(op), args)
     if op === (*)
@@ -33,8 +32,8 @@ function retime_dvs(op, dvs, iv)
     op
 end
 
-function modified_states!(mstates, e::Equation, statelist = nothing)
-    get_variables!(mstates, e.lhs, statelist)
+function modified_unknowns!(munknowns, e::Equation, unknownlist = nothing)
+    get_variables!(munknowns, e.lhs, unknownlist)
 end
 
 macro showarr(x)
@@ -132,7 +131,7 @@ function check_variables(dvs, iv)
         (is_delay_var(iv, dv) || occursin(iv, dv)) ||
             throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
         isparameter(dv) &&
-            throw(ArgumentError("$dv is not a state. It is a parameter."))
+            throw(ArgumentError("$dv is not an unknown. It is a parameter."))
     end
 end
 
@@ -184,7 +183,7 @@ function check_equations(eqs, iv)
     end
 end
 """
-Get all the independent variables with respect to which differentials/differences are taken.
+Get all the independent variables with respect to which differentials are taken.
 """
 function collect_ivs_from_nested_operator!(ivs, x, target_op)
     if !istree(x)
@@ -195,10 +194,8 @@ function collect_ivs_from_nested_operator!(ivs, x, target_op)
         push!(ivs, get_iv(op))
         x = if target_op <: Differential
             op.x
-        elseif target_op <: Difference
-            op.t
         else
-            error("Unknown target op type in collect_ivs $target_op. Pass Difference or Differential")
+            error("Unknown target op type in collect_ivs $target_op. Pass Differential")
         end
         collect_ivs_from_nested_operator!(ivs, x, target_op)
     end
@@ -235,7 +232,7 @@ end
 
 function collect_defaults!(defs, vars)
     for v in vars
-        (haskey(defs, v) || !hasdefault(v)) && continue
+        (haskey(defs, v) || !hasdefault(unwrap(v))) && continue
         defs[v] = getdefault(v)
     end
     return defs
@@ -246,11 +243,14 @@ function collect_var_to_name!(vars, xs)
         x = unwrap(x)
         if hasmetadata(x, Symbolics.GetindexParent)
             xarr = getmetadata(x, Symbolics.GetindexParent)
+            hasname(xarr) || continue
             vars[Symbolics.getname(xarr)] = xarr
         else
             if istree(x) && operation(x) === getindex
                 x = arguments(x)[1]
             end
+            x = unwrap(x)
+            hasname(x) || continue
             vars[Symbolics.getname(unwrap(x))] = x
         end
     end
@@ -261,7 +261,7 @@ Throw error when difference/derivative operation occurs in the R.H.S.
 """
 @noinline function throw_invalid_operator(opvar, eq, op::Type)
     if op === Difference
-        optext = "difference"
+        error("The Difference operator is deprecated, use ShiftIndex instead")
     elseif op === Differential
         optext = "derivative"
     end
@@ -293,8 +293,7 @@ function check_operator_variables(eqs, op::T) where {T}
         if length(tmp) == 1
             x = only(tmp)
             if op === Differential
-                # Having a differece is fine for ODEs
-                is_tmp_fine = isdifferential(x) || isdifference(x)
+                is_tmp_fine = isdifferential(x)
             else
                 is_tmp_fine = istree(x) && !(operation(x) isa op)
             end
@@ -319,23 +318,6 @@ isoperator(op) = expr -> isoperator(expr, op)
 isdifferential(expr) = isoperator(expr, Differential)
 isdiffeq(eq) = isdifferential(eq.lhs)
 
-isdifference(expr) = isoperator(expr, Difference)
-isdifferenceeq(eq) = isdifference(eq.lhs)
-
-function iv_from_nested_difference(x::Symbolic)
-    istree(x) || return x
-    operation(x) isa Difference ? iv_from_nested_difference(arguments(x)[1]) :
-    arguments(x)[1]
-end
-iv_from_nested_difference(x) = nothing
-
-var_from_nested_difference(x, i = 0) = (nothing, nothing)
-function var_from_nested_difference(x::Symbolic, i = 0)
-    istree(x) && operation(x) isa Difference ?
-    var_from_nested_difference(arguments(x)[1], i + 1) :
-    (x, i)
-end
-
 isvariable(x::Num)::Bool = isvariable(value(x))
 function isvariable(x)::Bool
     x isa Symbolic || return false
@@ -350,7 +332,6 @@ end
 Return a `Set` containing all variables in `x` that appear in
 
   - differential equations if `op = Differential`
-  - difference equations if `op = Differential`
 
 Example:
 
@@ -364,6 +345,8 @@ v == Set([D(y), u])
 function vars(exprs::Symbolic; op = Differential)
     istree(exprs) ? vars([exprs]; op = op) : Set([exprs])
 end
+vars(exprs::Num; op = Differential) = vars(unwrap(exprs); op)
+vars(exprs::Symbolics.Arr; op = Differential) = vars(unwrap(exprs); op)
 vars(exprs; op = Differential) = foldl((x, y) -> vars!(x, y; op = op), exprs; init = Set())
 vars(eq::Equation; op = Differential) = vars!(Set(), eq; op = op)
 function vars!(vars, eq::Equation; op = Differential)
@@ -377,9 +360,10 @@ function vars!(vars, O; op = Differential)
 
     operation(O) isa op && return push!(vars, O)
 
-    if operation(O) === (getindex) &&
-       isvariable(first(arguments(O)))
-        return push!(vars, O)
+    if operation(O) === (getindex)
+        arr = first(arguments(O))
+        istree(arr) && operation(arr) isa op && return push!(vars, O)
+        isvariable(arr) && return push!(vars, O)
     end
 
     isvariable(operation(O)) && push!(vars, O)
@@ -389,9 +373,6 @@ function vars!(vars, O; op = Differential)
 
     return vars
 end
-
-difference_vars(x) = vars(x; op = Difference)
-difference_vars!(vars, O) = vars!(vars, O; op = Difference)
 
 function collect_operator_variables(sys::AbstractSystem, args...)
     collect_operator_variables(equations(sys), args...)
@@ -404,7 +385,7 @@ end
     collect_operator_variables(eqs::AbstractVector{Equation}, op)
 
 Return a `Set` containing all variables that have Operator `op` applied to them.
-See also [`collect_differential_variables`](@ref), [`collect_difference_variables`](@ref).
+See also [`collect_differential_variables`](@ref).
 """
 function collect_operator_variables(eqs::AbstractVector{Equation}, op)
     vars = Set()
@@ -420,7 +401,6 @@ function collect_operator_variables(eqs::AbstractVector{Equation}, op)
     return diffvars
 end
 collect_differential_variables(sys) = collect_operator_variables(sys, Differential)
-collect_difference_variables(sys) = collect_operator_variables(sys, Difference)
 
 """
     collect_applied_operators(x, op)
@@ -457,40 +437,30 @@ function find_derivatives!(vars, expr, f)
     return vars
 end
 
-function collect_vars!(states, parameters, expr, iv)
+function collect_vars!(unknowns, parameters, expr, iv; op = Differential)
     if issym(expr)
-        collect_var!(states, parameters, expr, iv)
+        collect_var!(unknowns, parameters, expr, iv)
     else
-        for var in vars(expr)
+        for var in vars(expr; op)
             if istree(var) && operation(var) isa Differential
                 var, _ = var_from_nested_derivative(var)
             end
-            collect_var!(states, parameters, var, iv)
+            collect_var!(unknowns, parameters, var, iv)
         end
     end
     return nothing
 end
 
-function collect_vars_difference!(states, parameters, expr, iv)
-    if issym(expr)
-        collect_var!(states, parameters, expr, iv)
-    else
-        for var in vars(expr)
-            if istree(var) && operation(var) isa Difference
-                var, _ = var_from_nested_difference(var)
-            end
-            collect_var!(states, parameters, var, iv)
-        end
-    end
-    return nothing
-end
-
-function collect_var!(states, parameters, var, iv)
+function collect_var!(unknowns, parameters, var, iv)
     isequal(var, iv) && return nothing
     if isparameter(var) || (istree(var) && isparameter(operation(var)))
         push!(parameters, var)
     elseif !isconstant(var)
-        push!(states, var)
+        push!(unknowns, var)
+    end
+    # Add also any parameters that appear only as defaults in the var
+    if hasdefault(var)
+        collect_vars!(unknowns, parameters, getdefault(var), iv)
     end
     return nothing
 end
@@ -605,7 +575,7 @@ function get_cmap(sys)
     return cmap, cs
 end
 
-function get_substitutions_and_solved_states(sys; no_postprocess = false)
+function get_substitutions_and_solved_unknowns(sys; no_postprocess = false)
     cmap, cs = get_cmap(sys)
     if empty_substitutions(sys) && isempty(cs)
         sol_states = Code.LazyState()
@@ -643,7 +613,7 @@ function mergedefaults(defaults, varmap, vars)
 end
 
 @noinline function throw_missingvars_in_sys(vars)
-    throw(ArgumentError("$vars are either missing from the variable map or missing from the system's states/parameters list."))
+    throw(ArgumentError("$vars are either missing from the variable map or missing from the system's unknowns/parameters list."))
 end
 
 function promote_to_concrete(vs; tofloat = true, use_union = true)
@@ -753,7 +723,7 @@ struct StatefulPreOrderDFS{T} <: AbstractSimpleTreeIter{T}
     t::T
 end
 function Base.iterate(it::StatefulPreOrderDFS,
-    state = (eltype(it)[it.t], reverse_buffer(it)))
+        state = (eltype(it)[it.t], reverse_buffer(it)))
     stack, rev_buff = state
     isempty(stack) && return nothing
     t = pop!(stack)
@@ -766,7 +736,7 @@ struct StatefulPostOrderDFS{T} <: AbstractSimpleTreeIter{T}
     t::T
 end
 function Base.iterate(it::StatefulPostOrderDFS,
-    state = (eltype(it)[it.t], falses(1), reverse_buffer(it)))
+        state = (eltype(it)[it.t], falses(1), reverse_buffer(it)))
     isempty(state[2]) && return nothing
     vstack, sstack, rev_buff = state
     while true
@@ -832,35 +802,76 @@ end
 # Symbolics needs to call unwrap on the substitution rules, but most of the time
 # we don't want to do that in MTK.
 const Eq = Union{Equation, Inequality}
-function fast_substitute(eq::Eq, subs)
+function fast_substitute(eq::Eq, subs; operator = Nothing)
     if eq isa Inequality
-        Inequality(fast_substitute(eq.lhs, subs), fast_substitute(eq.rhs, subs),
+        Inequality(fast_substitute(eq.lhs, subs; operator),
+            fast_substitute(eq.rhs, subs; operator),
             eq.relational_op)
     else
-        Equation(fast_substitute(eq.lhs, subs), fast_substitute(eq.rhs, subs))
+        Equation(fast_substitute(eq.lhs, subs; operator),
+            fast_substitute(eq.rhs, subs; operator))
     end
 end
-function fast_substitute(eq::T, subs::Pair) where {T <: Eq}
-    T(fast_substitute(eq.lhs, subs), fast_substitute(eq.rhs, subs))
+function fast_substitute(eq::T, subs::Pair; operator = Nothing) where {T <: Eq}
+    T(fast_substitute(eq.lhs, subs; operator), fast_substitute(eq.rhs, subs; operator))
 end
-fast_substitute(eqs::AbstractArray{<:Eq}, subs) = fast_substitute.(eqs, (subs,))
-fast_substitute(a, b) = substitute(a, b)
-function fast_substitute(expr, pair::Pair)
+function fast_substitute(eqs::AbstractArray, subs; operator = Nothing)
+    fast_substitute.(eqs, (subs,); operator)
+end
+function fast_substitute(eqs::AbstractArray, subs::Pair; operator = Nothing)
+    fast_substitute.(eqs, (subs,); operator)
+end
+for (exprType, subsType) in Iterators.product((Num, Symbolics.Arr), (Any, Pair))
+    @eval function fast_substitute(expr::$exprType, subs::$subsType; operator = Nothing)
+        fast_substitute(value(expr), subs; operator)
+    end
+end
+function fast_substitute(expr, subs; operator = Nothing)
+    if (_val = get(subs, expr, nothing)) !== nothing
+        return _val
+    end
+    istree(expr) || return expr
+    op = fast_substitute(operation(expr), subs; operator)
+    args = SymbolicUtils.unsorted_arguments(expr)
+    if !(op isa operator)
+        canfold = Ref(!(op isa Symbolic))
+        args = let canfold = canfold
+            map(args) do x
+                x′ = fast_substitute(x, subs; operator)
+                canfold[] = canfold[] && !(x′ isa Symbolic)
+                x′
+            end
+        end
+        canfold[] && return op(args...)
+    end
+    similarterm(expr,
+        op,
+        args,
+        symtype(expr);
+        metadata = metadata(expr))
+end
+function fast_substitute(expr, pair::Pair; operator = Nothing)
     a, b = pair
     isequal(expr, a) && return b
-
-    istree(expr) || return expr
-    op = fast_substitute(operation(expr), pair)
-    canfold = Ref(!(op isa Symbolic))
-    args = let canfold = canfold
-        map(SymbolicUtils.unsorted_arguments(expr)) do x
-            x′ = fast_substitute(x, pair)
-            canfold[] = canfold[] && !(x′ isa Symbolic)
-            x′
+    if a isa AbstractArray
+        for (ai, bi) in zip(a, b)
+            expr = fast_substitute(expr, ai => bi; operator)
         end
     end
-    canfold[] && return op(args...)
-
+    istree(expr) || return expr
+    op = fast_substitute(operation(expr), pair; operator)
+    args = SymbolicUtils.unsorted_arguments(expr)
+    if !(op isa operator)
+        canfold = Ref(!(op isa Symbolic))
+        args = let canfold = canfold
+            map(args) do x
+                x′ = fast_substitute(x, pair; operator)
+                canfold[] = canfold[] && !(x′ isa Symbolic)
+                x′
+            end
+        end
+        canfold[] && return op(args...)
+    end
     similarterm(expr,
         op,
         args,
@@ -869,3 +880,11 @@ function fast_substitute(expr, pair::Pair)
 end
 
 normalize_to_differential(s) = s
+
+function restrict_array_to_union(arr)
+    isempty(arr) && return arr
+    T = foldl(arr; init = Union{}) do prev, cur
+        Union{prev, typeof(cur)}
+    end
+    return Array{T, ndims(arr)}(arr)
+end

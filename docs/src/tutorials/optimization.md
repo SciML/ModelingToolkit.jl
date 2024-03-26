@@ -6,20 +6,20 @@ Let's solve the classical _Rosenbrock function_ in two dimensions.
 
 First, we need to make some imports.
 
-```@example rosenbrock_2d
+```julia
 using ModelingToolkit, Optimization, OptimizationOptimJL
 ```
 
 Now we can define our optimization problem.
 
-```@example rosenbrock_2d
+```julia
 @variables begin
     x, [bounds = (-2.0, 2.0)]
     y, [bounds = (-1.0, 3.0)]
 end
 @parameters a=1 b=1
 loss = (a - x)^2 + b * (y - x^2)^2
-@named sys = OptimizationSystem(loss, [x, y], [a, b])
+@mtkbuild sys = OptimizationSystem(loss, [x, y], [a, b])
 ```
 
 A visualization of the objective function is depicted below.
@@ -44,11 +44,11 @@ Every optimization problem consists of a set of _optimization variables_. In thi
 
 Next, the actual `OptimizationProblem` can be created. At this stage, an initial guess `u0` for the optimization variables needs to be provided via map, using the symbols from before. Concrete values for the parameters of the system can also be provided or changed. However, if the parameters have default values assigned, they are used automatically.
 
-```@example rosenbrock_2d
+```julia
 u0 = [x => 1.0
-    y => 2.0]
+      y => 2.0]
 p = [a => 1.0
-    b => 100.0]
+     b => 100.0]
 
 prob = OptimizationProblem(sys, u0, p, grad = true, hess = true)
 solve(prob, GradientDescent())
@@ -56,7 +56,7 @@ solve(prob, GradientDescent())
 
 ## Rosenbrock Function with Constraints
 
-```@example rosenbrock_2d_cstr
+```julia
 using ModelingToolkit, Optimization, OptimizationOptimJL
 
 @variables begin
@@ -66,12 +66,17 @@ end
 @parameters a=1 b=100
 loss = (a - x)^2 + b * (y - x^2)^2
 cons = [
-    x^2 + y^2 ≲ 1,
+    x^2 + y^2 ≲ 1
 ]
-@named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = cons)
+@mtkbuild sys = OptimizationSystem(loss, [x, y], [a, b], constraints = cons)
 u0 = [x => 0.14
-    y => 0.14]
-prob = OptimizationProblem(sys, u0, grad = true, hess = true, cons_j = true, cons_h = true)
+      y => 0.14]
+prob = OptimizationProblem(sys,
+    u0,
+    grad = true,
+    hess = true,
+    cons_j = true,
+    cons_h = true)
 solve(prob, IPNewton())
 ```
 

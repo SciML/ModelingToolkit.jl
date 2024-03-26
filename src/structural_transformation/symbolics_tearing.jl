@@ -138,7 +138,7 @@ function solve_equation(eq, var, simplify)
 end
 
 function substitute_vars!(structure, subs, cache = Int[], callback! = nothing;
-    exclude = ())
+        exclude = ())
     @unpack graph, solvable_graph = structure
     for su in subs
         su === nothing && continue
@@ -163,14 +163,14 @@ function substitute_vars!(structure, subs, cache = Int[], callback! = nothing;
 end
 
 function to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar::F,
-    var_to_diff) where {F}
+        var_to_diff) where {F}
     eq = neweqs[ieq]
     if !(eq.lhs isa Number && eq.lhs == 0)
         eq = 0 ~ eq.rhs - eq.lhs
     end
     rhs = eq.rhs
     if rhs isa Symbolic
-        # Check if the RHS is solvable in all state derivatives and if those
+        # Check if the RHS is solvable in all unknown variable derivatives and if those
         # the linear terms for them are all zero. If so, move them to the
         # LHS.
         dervar::Union{Nothing, Int} = nothing
@@ -218,7 +218,7 @@ end
 =#
 
 function tearing_reassemble(state::TearingState, var_eq_matching;
-    simplify = false, mm = nothing)
+        simplify = false, mm = nothing)
     @unpack fullvars, sys, structure = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
 
@@ -238,7 +238,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
     # called dummy derivatives.
 
     # Step 1:
-    # Replace derivatives of non-selected states by dummy derivatives
+    # Replace derivatives of non-selected unknown variables by dummy derivatives
 
     if ModelingToolkit.has_iv(state.sys)
         iv = get_iv(state.sys)
@@ -382,8 +382,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
         dx = fullvars[dv]
         # add `x_t`
         order, lv = var_order(dv)
-        x_t = lower_varname(fullvars[lv], iv, order)
-        push!(fullvars, x_t)
+        x_t = lower_varname_withshift(fullvars[lv], iv, order)
+        push!(fullvars, simplify_shifts(x_t))
         v_t = length(fullvars)
         v_t_idx = add_vertex!(var_to_diff)
         add_vertex!(graph, DST)
@@ -410,7 +410,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
         eq_var_matching[dummy_eq] = dv
     end
 
-    # Will reorder equations and states to be:
+    # Will reorder equations and unknowns to be:
     # [diffeqs; ...]
     # [diffvars; ...]
     # such that the mass matrix is:
@@ -437,10 +437,12 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
             # We cannot solve the differential variable like D(x)
             if isdervar(iv)
                 order, lv = var_order(iv)
-                dx = D(lower_varname(fullvars[lv], idep, order - 1))
-                eq = dx ~ ModelingToolkit.fixpoint_sub(Symbolics.solve_for(neweqs[ieq],
+                dx = D(simplify_shifts(lower_varname_withshift(
+                    fullvars[lv], idep, order - 1)))
+                eq = dx ~ simplify_shifts(ModelingToolkit.fixpoint_sub(
+                    Symbolics.solve_for(neweqs[ieq],
                         fullvars[iv]),
-                    total_sub)
+                    total_sub; operator = ModelingToolkit.Shift))
                 for e in 𝑑neighbors(graph, iv)
                     e == ieq && continue
                     for v in 𝑠neighbors(graph, e)
@@ -449,7 +451,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
                     rem_edge!(graph, e, iv)
                 end
                 push!(diff_eqs, eq)
-                total_sub[eq.lhs] = eq.rhs
+                total_sub[simplify_shifts(eq.lhs)] = eq.rhs
                 push!(diffeq_idxs, ieq)
                 push!(diff_vars, diff_to_var[iv])
                 continue
@@ -465,9 +467,10 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
                 @warn "Tearing: solving $eq for $var is singular!"
             else
                 rhs = -b / a
-                neweq = var ~ ModelingToolkit.fixpoint_sub(simplify ?
-                                                           Symbolics.simplify(rhs) : rhs,
-                    total_sub)
+                neweq = var ~ ModelingToolkit.fixpoint_sub(
+                    simplify ?
+                    Symbolics.simplify(rhs) : rhs,
+                    total_sub; operator = ModelingToolkit.Shift)
                 push!(subeqs, neweq)
                 push!(solved_equations, ieq)
                 push!(solved_variables, iv)
@@ -495,8 +498,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
     end
     solved_variables_set = BitSet(solved_variables)
     invvarsperm = [diff_vars;
-        setdiff!(setdiff(1:ndsts(graph), diff_vars_set),
-        solved_variables_set)]
+                   setdiff!(setdiff(1:ndsts(graph), diff_vars_set),
+                       solved_variables_set)]
     varsperm = zeros(Int, ndsts(graph))
     for (i, v) in enumerate(invvarsperm)
         varsperm[v] = i
@@ -540,9 +543,9 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
 
     sys = state.sys
     @set! sys.eqs = neweqs
-    @set! sys.states = Any[v
-                           for (i, v) in enumerate(fullvars)
-                               if diff_to_var[i] === nothing && ispresent(i)]
+    @set! sys.unknowns = Any[v
+                             for (i, v) in enumerate(fullvars)
+                             if diff_to_var[i] === nothing && ispresent(i)]
     @set! sys.substitutions = Substitutions(subeqs, deps)
 
     obs_sub = dummy_sub
@@ -553,6 +556,12 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
     # TODO: compute the dependency correctly so that we don't have to do this
     obs = [fast_substitute(observed(sys), obs_sub); subeqs]
     @set! sys.observed = obs
+
+    # Only makes sense for time-dependent
+    # TODO: generalize to SDE
+    if sys isa ODESystem
+        @set! sys.schedule = Schedule(var_eq_matching, dummy_sub)
+    end
     @set! state.sys = sys
     @set! sys.tearing_state = state
     return invalidate_cache!(sys)
@@ -584,7 +593,7 @@ new residual equations after tearing. End users are encouraged to call [`structu
 instead, which calls this function internally.
 """
 function tearing(sys::AbstractSystem, state = TearingState(sys); mm = nothing,
-    simplify = false, kwargs...)
+        simplify = false, kwargs...)
     var_eq_matching = tearing(state)
     invalidate_cache!(tearing_reassemble(state, var_eq_matching; mm, simplify))
 end
@@ -608,7 +617,7 @@ Perform index reduction and use the dummy derivative technique to ensure that
 the system is balanced.
 """
 function dummy_derivative(sys, state = TearingState(sys); simplify = false,
-    mm = nothing, kwargs...)
+        mm = nothing, kwargs...)
     jac = let state = state
         (eqs, vars) -> begin
             symeqs = EquationsView(state)[eqs]

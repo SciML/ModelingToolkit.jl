@@ -1,9 +1,15 @@
+module UnitfulUnitCheck
+
+using ..ModelingToolkit, Symbolics, SciMLBase, Unitful, RecursiveArrayTools
+using ..ModelingToolkit: ValidationError,
+                         ModelingToolkit, Connection, instream, JumpType, VariableUnit,
+                         get_systems,
+                         Conditional, Comparison
+using Symbolics: Symbolic, value, issym, isadd, ismul, ispow
+const MT = ModelingToolkit
+
 Base.:*(x::Union{Num, Symbolic}, y::Unitful.AbstractQuantity) = x * y
 Base.:/(x::Union{Num, Symbolic}, y::Unitful.AbstractQuantity) = x / y
-
-struct ValidationError <: Exception
-    message::String
-end
 
 """
 Throw exception on invalid unit types, otherwise return argument.
@@ -35,10 +41,6 @@ MT = ModelingToolkit
 equivalent(x, y) = isequal(1 * x, 1 * y)
 const unitless = Unitful.unit(1)
 
-#For dispatching get_unit
-const Conditional = Union{typeof(ifelse), typeof(IfElse.ifelse)}
-const Comparison = Union{typeof.([==, !=, ≠, <, <=, ≤, >, >=, ≥])...}
-
 """
 Find the unit of a symbolic item.
 """
@@ -50,7 +52,6 @@ function get_unit(x::Union{Symbolics.ArrayOp, Symbolics.Arr, Symbolics.CallWithM
     get_literal_unit(x)
 end
 get_unit(op::Differential, args) = get_unit(args[1]) / get_unit(op.x)
-get_unit(op::Difference, args) = get_unit(args[1]) / get_unit(op.t)
 get_unit(op::typeof(getindex), args) = get_unit(args[1])
 get_unit(x::SciMLBase.NullParameters) = unitless
 get_unit(op::typeof(instream), args) = get_unit(args[1])
@@ -184,26 +185,26 @@ function _validate(conn::Connection; info::String = "")
     valid = true
     syss = get_systems(conn)
     sys = first(syss)
-    st = states(sys)
+    unks = unknowns(sys)
     for i in 2:length(syss)
         s = syss[i]
-        sst = states(s)
-        if length(st) != length(sst)
+        _unks = unknowns(s)
+        if length(unks) != length(_unks)
             valid = false
-            @warn("$info: connected systems $(nameof(sys)) and $(nameof(s)) have $(length(st)) and $(length(sst)) states, cannor connect.")
+            @warn("$info: connected systems $(nameof(sys)) and $(nameof(s)) have $(length(unks)) and $(length(_unks)) unknowns, cannot connect.")
             continue
         end
-        for (i, x) in enumerate(st)
-            j = findfirst(isequal(x), sst)
+        for (i, x) in enumerate(unks)
+            j = findfirst(isequal(x), _unks)
             if j == nothing
                 valid = false
-                @warn("$info: connected systems $(nameof(sys)) and $(nameof(s)) do not have the same states.")
+                @warn("$info: connected systems $(nameof(sys)) and $(nameof(s)) do not have the same unknowns.")
             else
                 aunit = safe_get_unit(x, info * string(nameof(sys)) * "#$i")
-                bunit = safe_get_unit(sst[j], info * string(nameof(s)) * "#$j")
+                bunit = safe_get_unit(_unks[j], info * string(nameof(s)) * "#$j")
                 if !equivalent(aunit, bunit)
                     valid = false
-                    @warn("$info: connected system states $x and $(sst[j]) have mismatched units.")
+                    @warn("$info: connected system unknowns $x and $(_unks[j]) have mismatched units.")
                 end
             end
         end
@@ -211,15 +212,15 @@ function _validate(conn::Connection; info::String = "")
     valid
 end
 
-function validate(jump::Union{ModelingToolkit.VariableRateJump,
-        ModelingToolkit.ConstantRateJump}, t::Symbolic;
-    info::String = "")
+function validate(jump::Union{MT.VariableRateJump,
+            MT.ConstantRateJump}, t::Symbolic;
+        info::String = "")
     newinfo = replace(info, "eq." => "jump")
     _validate([jump.rate, 1 / t], ["rate", "1/t"], info = newinfo) && # Assuming the rate is per time units
         validate(jump.affect!, info = newinfo)
 end
 
-function validate(jump::ModelingToolkit.MassActionJump, t::Symbolic; info::String = "")
+function validate(jump::MT.MassActionJump, t::Symbolic; info::String = "")
     left_symbols = [x[1] for x in jump.reactant_stoch] #vector of pairs of symbol,int -> vector symbols
     net_symbols = [x[1] for x in jump.net_stoch]
     all_symbols = vcat(left_symbols, net_symbols)
@@ -235,18 +236,18 @@ function validate(jumps::ArrayPartition{<:Union{Any, Vector{<:JumpType}}}, t::Sy
     all([validate(jumps.x[idx], t, info = labels[idx]) for idx in 1:3])
 end
 
-function validate(eq::ModelingToolkit.Equation; info::String = "")
+function validate(eq::MT.Equation; info::String = "")
     if typeof(eq.lhs) == Connection
         _validate(eq.rhs; info)
     else
         _validate([eq.lhs, eq.rhs], ["left", "right"]; info)
     end
 end
-function validate(eq::ModelingToolkit.Equation,
-    term::Union{Symbolic, Unitful.Quantity, Num}; info::String = "")
+function validate(eq::MT.Equation,
+        term::Union{Symbolic, Unitful.Quantity, Num}; info::String = "")
     _validate([eq.lhs, eq.rhs, term], ["left", "right", "noise"]; info)
 end
-function validate(eq::ModelingToolkit.Equation, terms::Vector; info::String = "")
+function validate(eq::MT.Equation, terms::Vector; info::String = "")
     _validate(vcat([eq.lhs, eq.rhs], terms),
         vcat(["left", "right"], "noise  #" .* string.(1:length(terms))); info)
 end
@@ -273,8 +274,9 @@ validate(term::Symbolics.SymbolicUtils.Symbolic) = safe_get_unit(term, "") !== n
 """
 Throws error if units of equations are invalid.
 """
-function check_units(eqs...)
+function MT.check_units(::Val{:Unitful}, eqs...)
     validate(eqs...) ||
         throw(ValidationError("Some equations had invalid units. See warnings for details."))
 end
-all_dimensionless(states) = all(x -> safe_get_unit(x, "") in (unitless, nothing), states)
+
+end # module

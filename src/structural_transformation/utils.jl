@@ -8,7 +8,7 @@
 Find equation-variable maximal bipartite matching. `s.graph` is a bipartite graph.
 """
 function BipartiteGraphs.maximal_matching(s::SystemStructure, eqfilter = eq -> true,
-    varfilter = v -> true)
+        varfilter = v -> true)
     maximal_matching(s.graph, eqfilter, varfilter)
 end
 
@@ -88,7 +88,7 @@ function check_consistency(state::TransformationState, orig_inputs)
     # This is defined to check if Pantelides algorithm terminates. For more
     # details, check the equation (15) of the original paper.
     extended_graph = (@set graph.fadjlist = Vector{Int}[graph.fadjlist;
-        map(collect, edges(var_to_diff))])
+                                                        map(collect, edges(var_to_diff))])
     extended_var_eq_matching = maximal_matching(extended_graph)
 
     unassigned_var = []
@@ -131,7 +131,7 @@ function find_var_sccs(g::BipartiteGraph, assign = nothing)
 end
 
 function sorted_incidence_matrix(ts::TransformationState, val = true; only_algeqs = false,
-    only_algvars = false)
+        only_algvars = false)
     var_eq_matching, var_scc = algebraic_variables_scc(ts)
     s = ts.structure
     graph = ts.structure.graph
@@ -180,8 +180,8 @@ end
 ###
 
 function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = nothing;
-    may_be_zero = false,
-    allow_symbolic = false, allow_parameter = true, kwargs...)
+        may_be_zero = false,
+        allow_symbolic = false, allow_parameter = true, kwargs...)
     fullvars = state.fullvars
     @unpack graph, solvable_graph = state.structure
     eq = equations(state)[ieq]
@@ -263,12 +263,12 @@ function linear_subsys_adjmat!(state::TransformationState; kwargs...)
     for i in eachindex(eqs)
         all_int_vars, rhs = find_eq_solvables!(state, i, to_rm, coeffs; kwargs...)
 
-        # Check if all states in the equation is both linear and homogeneous,
+        # Check if all unknowns in the equation is both linear and homogeneous,
         # i.e. it is in the form of
         #
         #       ``∑ c_i * v_i = 0``,
         #
-        # where ``c_i`` ∈ ℤ and ``v_i`` denotes states.
+        # where ``c_i`` ∈ ℤ and ``v_i`` denotes unknowns.
         if all_int_vars && Symbolics._iszero(rhs)
             push!(linear_equations, i)
             push!(eadj, copy(𝑠neighbors(graph, i)))
@@ -345,8 +345,9 @@ function reordered_matrix(sys, torn_matching)
             append!(J, js)
         end
 
-        e_residual = setdiff([max_matching[v]
-                              for v in vars if max_matching[v] !== unassigned], e_solved)
+        e_residual = setdiff(
+            [max_matching[v]
+             for v in vars if max_matching[v] !== unassigned], e_solved)
         for er in e_residual
             isdiffeq(eqs[er]) && continue
             ii += 1
@@ -410,4 +411,41 @@ function numerical_nlsolve(f, u0, p)
     (rc == ReturnCode.Success) || nlsolve_failure(rc)
     # TODO: robust initial guess, better debugging info, and residual check
     sol.u
+end
+
+###
+### Misc
+###
+
+function lower_varname_withshift(var, iv, order)
+    order == 0 && return var
+    if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)
+        op = operation(var)
+        return Shift(op.t, order)(var)
+    end
+    return lower_varname(var, iv, order)
+end
+
+function isdoubleshift(var)
+    return ModelingToolkit.isoperator(var, ModelingToolkit.Shift) &&
+           ModelingToolkit.isoperator(arguments(var)[1], ModelingToolkit.Shift)
+end
+
+function simplify_shifts(var)
+    ModelingToolkit.hasshift(var) || return var
+    var isa Equation && return simplify_shifts(var.lhs) ~ simplify_shifts(var.rhs)
+    if isdoubleshift(var)
+        op1 = operation(var)
+        vv1 = arguments(var)[1]
+        op2 = operation(vv1)
+        vv2 = arguments(vv1)[1]
+        s1 = op1.steps
+        s2 = op2.steps
+        t1 = op1.t
+        t2 = op2.t
+        return simplify_shifts(ModelingToolkit.Shift(t1 === nothing ? t2 : t1, s1 + s2)(vv2))
+    else
+        return similarterm(var, operation(var), simplify_shifts.(arguments(var)),
+            Symbolics.symtype(var); metadata = unwrap(var).metadata)
+    end
 end

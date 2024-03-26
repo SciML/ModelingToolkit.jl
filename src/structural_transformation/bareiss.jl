@@ -115,7 +115,7 @@ else
 end
 
 function bareiss_update!(zero!, M::StridedMatrix, k, swapto, pivot,
-    prev_pivot::Base.BitInteger)
+        prev_pivot::Base.BitInteger)
     flag = zero(prev_pivot)
     prev_pivot = Base.MultiplicativeInverses.SignedMultiplicativeInverse(prev_pivot)
     @inbounds for i in (k + 1):size(M, 2)
@@ -149,7 +149,7 @@ end
 end
 
 function bareiss_update_virtual_colswap!(zero!, M::AbstractMatrix, k, swapto, pivot,
-    prev_pivot)
+        prev_pivot)
     if prev_pivot isa Base.BitInteger
         prev_pivot = Base.MultiplicativeInverses.SignedMultiplicativeInverse(prev_pivot)
     end
@@ -189,7 +189,7 @@ bareiss_colswap (the default) swaps the columns and rows normally.
 bareiss_virtcolswap pretends to swap the columns which can be faster for sparse matrices.
 """
 function bareiss!(M::AbstractMatrix{T}, swap_strategy = bareiss_colswap;
-    find_pivot = find_pivot_any, column_pivots = nothing) where {T}
+        find_pivot = find_pivot_any, column_pivots = nothing) where {T}
     swapcols!, swaprows!, update!, zero! = swap_strategy
     prev = one(eltype(M))
     n = size(M, 1)
@@ -252,7 +252,7 @@ end
 ###
 ### https://github.com/Nemocas/AbstractAlgebra.jl/blob/4803548c7a945f3f7bd8c63f8bb7c79fac92b11a/LICENSE.md
 function reduce_echelon!(A::AbstractMatrix{T}, rank, d,
-    pivots_cache = zeros(Int, size(A, 2))) where {T}
+        pivots_cache = zeros(Int, size(A, 2))) where {T}
     m, n = size(A)
     isreduced = true
     @inbounds for i in 1:rank
@@ -318,7 +318,7 @@ function reduce_echelon!(A::AbstractMatrix{T}, rank, d,
 end
 
 function reduced_echelon_nullspace(rank, A::AbstractMatrix{T},
-    pivots_cache = zeros(Int, size(A, 2))) where {T}
+        pivots_cache = zeros(Int, size(A, 2))) where {T}
     n = size(A, 2)
     nullity = n - rank
     U = zeros(T, n, nullity)

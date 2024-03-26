@@ -12,28 +12,27 @@ an optional forcing function, and allowing the user to specify the
 forcing later. Here, the library author defines a component named
 `decay`. The user then builds two `decay` components and connects them,
 saying the forcing term of `decay1` is a constant while the forcing term
-of `decay2` is the value of the state variable `x`.
+of `decay2` is the value of the unknown variable `x`.
 
 ```@example composition
 using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 function decay(; name)
-    @parameters t a
+    @parameters a
     @variables x(t) f(t)
-    D = Differential(t)
     ODESystem([
-            D(x) ~ -a * x + f,
-        ];
+            D(x) ~ -a * x + f
+        ], t;
         name = name)
 end
 
 @named decay1 = decay()
 @named decay2 = decay()
 
-@parameters t
-D = Differential(t)
-connected = compose(ODESystem([decay2.f ~ decay1.x
-            D(decay1.f) ~ 0], t; name = :connected), decay1, decay2)
+connected = compose(
+    ODESystem([decay2.f ~ decay1.x
+               D(decay1.f) ~ 0], t; name = :connected), decay1, decay2)
 
 equations(connected)
 
@@ -52,10 +51,10 @@ Now we can solve the system:
 
 ```@example composition
 x0 = [decay1.x => 1.0
-    decay1.f => 0.0
-    decay2.x => 1.0]
+      decay1.f => 0.0
+      decay2.x => 1.0]
 p = [decay1.a => 0.1
-    decay2.a => 0.2]
+     decay2.a => 0.2]
 
 using DifferentialEquations
 prob = ODEProblem(simplified_sys, x0, (0.0, 100.0), p)
@@ -70,18 +69,18 @@ subsystems. A model is the composition of itself and its subsystems.
 For example, if we have:
 
 ```julia
-@named sys = compose(ODESystem(eqs, indepvar, states, ps), subsys)
+@named sys = compose(ODESystem(eqs, indepvar, unknowns, ps), subsys)
 ```
 
 the `equations` of `sys` is the concatenation of `get_eqs(sys)` and
-`equations(subsys)`, the states are the concatenation of their states,
+`equations(subsys)`, the unknowns are the concatenation of their unknowns,
 etc. When the `ODEProblem` or `ODEFunction` is generated from this
 system, it will build and compile the functions associated with this
 composition.
 
 The new equations within the higher level system can access the variables
 in the lower level system by namespacing via the `nameof(subsys)`. For
-example, let's say there is a variable `x` in `states` and a variable
+example, let's say there is a variable `x` in `unknowns` and a variable
 `x` in `subsys`. We can declare that these two variables are the same
 by specifying their equality: `x ~ subsys.x` in the `eqs` for `sys`.
 This algebraic relationship can then be simplified by transformations
@@ -96,7 +95,7 @@ in their namespaced form. For example:
 
 ```julia
 u0 = [x => 2.0
-    subsys.x => 2.0]
+      subsys.x => 2.0]
 ```
 
 Note that any default values within the given subcomponent will be
@@ -133,10 +132,10 @@ sys = ODESystem(
 sys.y = u * 1.1
 ```
 
-In a hierarchical system, variables of the subsystem get namespaced by the name of the system they are in. This prevents naming clashes, but also enforces that every state and parameter is local to the subsystem it is used in. In some cases it might be desirable to have variables and parameters that are shared between subsystems, or even global. This can be accomplished as follows.
+In a hierarchical system, variables of the subsystem get namespaced by the name of the system they are in. This prevents naming clashes, but also enforces that every unknown and parameter is local to the subsystem it is used in. In some cases it might be desirable to have variables and parameters that are shared between subsystems, or even global. This can be accomplished as follows.
 
 ```julia
-@parameters t a b c d e f
+@parameters a b c d e f
 
 # a is a local variable
 b = ParentScope(b) # b is a variable that belongs to one level up in the hierarchy
@@ -186,31 +185,30 @@ i.e. equations which result in `0~0` expressions, in over-specified systems.
 
 Model inheritance can be done in two ways: implicitly or explicitly. First, one
 can use the `extend` function to extend a base model with another set of
-equations, states, and parameters. An example can be found in the
+equations, unknowns, and parameters. An example can be found in the
 [acausal components tutorial](@ref acausal).
 
 The explicit way is to shadow variables with equality expressions. For example,
 let's assume we have three separate systems which we want to compose to a single
-one. This is how one could explicitly forward all states and parameters to the
+one. This is how one could explicitly forward all unknowns and parameters to the
 higher level system:
 
 ```@example compose
 using ModelingToolkit, OrdinaryDiffEq, Plots
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 ## Library code
-
-@parameters t
-D = Differential(t)
-
 @variables S(t), I(t), R(t)
 N = S + I + R
 @parameters β, γ
 
-@named seqn = ODESystem([D(S) ~ -β * S * I / N])
-@named ieqn = ODESystem([D(I) ~ β * S * I / N - γ * I])
-@named reqn = ODESystem([D(R) ~ γ * I])
+@named seqn = ODESystem([D(S) ~ -β * S * I / N], t)
+@named ieqn = ODESystem([D(I) ~ β * S * I / N - γ * I], t)
+@named reqn = ODESystem([D(R) ~ γ * I], t)
 
-sir = compose(ODESystem([
+sir = compose(
+    ODESystem(
+        [
             S ~ ieqn.S,
             I ~ seqn.I,
             R ~ ieqn.R,
@@ -218,14 +216,20 @@ sir = compose(ODESystem([
             seqn.I ~ ieqn.I,
             seqn.R ~ reqn.R,
             ieqn.R ~ reqn.R,
-            reqn.I ~ ieqn.I], t, [S, I, R], [β, γ],
+            reqn.I ~ ieqn.I],
+        t,
+        [S, I, R],
+        [β, γ],
         defaults = [seqn.β => β
-            ieqn.β => β
-            ieqn.γ => γ
-            reqn.γ => γ], name = :sir), seqn, ieqn, reqn)
+                    ieqn.β => β
+                    ieqn.γ => γ
+                    reqn.γ => γ], name = :sir),
+    seqn,
+    ieqn,
+    reqn)
 ```
 
-Note that the states are forwarded by an equality relationship, while
+Note that the unknowns are forwarded by an equality relationship, while
 the parameters are forwarded through a relationship in their default
 values. The user of this model can then solve this model simply by
 specifying the values at the highest level:
@@ -244,7 +248,7 @@ u0 = [seqn.S => 990.0,
     reqn.R => 0.0]
 
 p = [β => 0.5
-    γ => 0.25]
+     γ => 0.25]
 
 tspan = (0.0, 40.0)
 prob = ODEProblem(sireqn_simple, u0, tspan, p, jac = true)
@@ -254,10 +258,10 @@ sol[reqn.R]
 
 ## Tearing Problem Construction
 
-Some system types, specifically `ODESystem` and `NonlinearSystem`, can be further
+Some system types (specifically `NonlinearSystem`) can be further
 reduced if `structural_simplify` has already been applied to them. This is done
-by using the alternative problem constructors, `ODAEProblem` and `BlockNonlinearProblem`
-respectively. In these cases, the constructor uses the knowledge of the
+by using the alternative problem constructors (`BlockNonlinearProblem`).
+In these cases, the constructor uses the knowledge of the
 strongly connected components calculated during the process of simplification
 as the basis for building pre-simplified nonlinear systems in the implicit
 solving. In summary: these problems are structurally modified, but could be
@@ -266,7 +270,7 @@ more efficient and more stable.
 ## Components with discontinuous dynamics
 
 When modeling, e.g., impacts, saturations or Coulomb friction, the dynamic
-equations are discontinuous in either the state or one of its derivatives. This
+equations are discontinuous in either the unknown or one of its derivatives. This
 causes the solver to take very small steps around the discontinuity, and
 sometimes leads to early stopping due to `dt <= dt_min`. The correct way to
 handle such dynamics is to tell the solver about the discontinuity by a

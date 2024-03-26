@@ -15,6 +15,69 @@ Symbolics.option_to_metadata_type(::Val{:irreducible}) = VariableIrreducible
 Symbolics.option_to_metadata_type(::Val{:state_priority}) = VariableStatePriority
 Symbolics.option_to_metadata_type(::Val{:misc}) = VariableMisc
 
+"""
+    dump_variable_metadata(var)
+
+Return all the metadata associated with symbolic variable `var` as a `NamedTuple`.
+
+```@example
+using ModelingToolkit
+
+@parameters p::Int [description = "My description", bounds = (0.5, 1.5)]
+ModelingToolkit.dump_variable_metadata(p)
+```
+"""
+function dump_variable_metadata(var)
+    uvar = unwrap(var)
+    vartype, name = get(uvar.metadata, VariableSource, (:unknown, :unknown))
+    shape = Symbolics.shape(var)
+    if shape == ()
+        shape = nothing
+    end
+    unit = get(uvar.metadata, VariableUnit, nothing)
+    connect = get(uvar.metadata, VariableConnectType, nothing)
+    noise = get(uvar.metadata, VariableNoiseType, nothing)
+    input = isinput(uvar) || nothing
+    output = isoutput(uvar) || nothing
+    irreducible = get(uvar.metadata, VariableIrreducible, nothing)
+    state_priority = get(uvar.metadata, VariableStatePriority, nothing)
+    misc = get(uvar.metadata, VariableMisc, nothing)
+    bounds = hasbounds(uvar) ? getbounds(uvar) : nothing
+    desc = getdescription(var)
+    if desc == ""
+        desc = nothing
+    end
+    guess = getguess(uvar)
+    disturbance = isdisturbance(uvar) || nothing
+    tunable = istunable(uvar, isparameter(uvar))
+    dist = getdist(uvar)
+    type = symtype(uvar)
+
+    meta = (
+        var = var,
+        vartype,
+        name,
+        shape,
+        unit,
+        connect,
+        noise,
+        input,
+        output,
+        irreducible,
+        state_priority,
+        misc,
+        bounds,
+        desc,
+        guess,
+        disturbance,
+        tunable,
+        dist,
+        type
+    )
+
+    return NamedTuple(k => v for (k, v) in pairs(meta) if v !== nothing)
+end
+
 abstract type AbstractConnectType end
 struct Equality <: AbstractConnectType end # Equality connection
 struct Flow <: AbstractConnectType end     # sum to 0
@@ -41,6 +104,9 @@ state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))
 function default_toterm(x)
     if istree(x) && (op = operation(x)) isa Operator
         if !(op isa Differential)
+            if op isa Shift && op.steps < 0
+                return x
+            end
             x = normalize_to_differential(op)(arguments(x)...)
         end
         Symbolics.diff2term(x)
@@ -57,8 +123,8 @@ and creates the array of values in the correct order with default values when
 applicable.
 """
 function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
-    toterm = default_toterm, promotetoconcrete = nothing,
-    tofloat = true, use_union = true)
+        toterm = default_toterm, promotetoconcrete = nothing,
+        tofloat = true, use_union = true)
     varlist = collect(map(unwrap, varlist))
 
     # Edge cases where one of the arguments is effectively empty.
@@ -75,10 +141,14 @@ function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
         end
     end
 
-    # T = typeof(varmap)
-    # We respect the input type (feature removed, not needed with Tuple support)
+    # We respect the input type if it's a static array
+    # otherwise canonicalize to a normal array
     # container_type = T <: Union{Dict,Tuple} ? Array : T
-    container_type = Array
+    if varmap isa StaticArray
+        container_type = typeof(varmap)
+    else
+        container_type = Array
+    end
 
     vals = if eltype(varmap) <: Pair # `varmap` is a dict or an array of pairs
         varmap = todict(varmap)
@@ -103,67 +173,55 @@ function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
     end
 end
 
+const MISSING_VARIABLES_MESSAGE = """
+                                Initial condition underdefined. Some are missing from the variable map.
+                                Please provide a default (`u0`), initialization equation, or guess
+                                for the following variables:
+                                """
+
+struct MissingVariablesError <: Exception
+    vars::Any
+end
+
+function Base.showerror(io::IO, e::MissingVariablesError)
+    println(io, MISSING_VARIABLES_MESSAGE)
+    println(io, e.vars)
+end
+
 function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false,
-    toterm = Symbolics.diff2term)
-    varmap = merge(defaults, varmap) # prefers the `varmap`
-    varmap = Dict(toterm(value(k)) => value(varmap[k]) for k in keys(varmap))
-    # resolve symbolic parameter expressions
-    for (p, v) in pairs(varmap)
-        varmap[p] = fixpoint_sub(v, varmap)
+        toterm = Symbolics.diff2term, initialization_phase = false)
+    varmap = canonicalize_varmap(varmap; toterm)
+    defaults = canonicalize_varmap(defaults; toterm)
+    varmap = merge(defaults, varmap)
+    values = Dict()
+    for var in varlist
+        var = unwrap(var)
+        val = unwrap(fixpoint_sub(var, varmap; operator = Symbolics.Operator))
+        if symbolic_type(val) === NotSymbolic()
+            values[var] = val
+        end
     end
+    missingvars = setdiff(varlist, collect(keys(values)))
+    check && (isempty(missingvars) || throw(MissingVariablesError(missingvars)))
+    return [values[unwrap(var)] for var in varlist]
+end
 
-    missingvars = setdiff(varlist, collect(keys(varmap)))
-    check && (isempty(missingvars) || throw_missingvars(missingvars))
-
-    out = [varmap[var] for var in varlist]
+function canonicalize_varmap(varmap; toterm = Symbolics.diff2term)
+    new_varmap = Dict()
+    for (k, v) in varmap
+        new_varmap[unwrap(k)] = unwrap(v)
+        new_varmap[toterm(unwrap(k))] = unwrap(v)
+        if Symbolics.isarraysymbolic(k) && Symbolics.shape(k) !== Symbolics.Unknown()
+            for i in eachindex(k)
+                new_varmap[k[i]] = v[i]
+            end
+        end
+    end
+    return new_varmap
 end
 
 @noinline function throw_missingvars(vars)
     throw(ArgumentError("$vars are missing from the variable map."))
-end
-
-"""
-$(SIGNATURES)
-
-Intercept the call to `process_p_u0_symbolic` and process symbolic maps of `p` and/or `u0` if the
-user has `ModelingToolkit` loaded.
-"""
-function SciMLBase.process_p_u0_symbolic(prob::Union{SciMLBase.AbstractDEProblem,
-        NonlinearProblem, OptimizationProblem,
-        SciMLBase.AbstractOptimizationCache},
-    p,
-    u0)
-    # check if a symbolic remake is possible
-    if eltype(p) <: Pair
-        hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :ps) ||
-            throw(ArgumentError("This problem does not support symbolic maps with `remake`, i.e. it does not have a symbolic origin." *
-                                " Please use `remake` with the `p` keyword argument as a vector of values, paying attention to parameter order."))
-    end
-    if eltype(u0) <: Pair
-        hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :states) ||
-            throw(ArgumentError("This problem does not support symbolic maps with `remake`, i.e. it does not have a symbolic origin." *
-                                " Please use `remake` with the `u0` keyword argument as a vector of values, paying attention to state order."))
-    end
-
-    sys = prob.f.sys
-    defs = defaults(sys)
-    ps = parameters(sys)
-    if has_split_idxs(sys) && (split_idxs = get_split_idxs(sys)) !== nothing
-        for (i, idxs) in enumerate(split_idxs)
-            defs = mergedefaults(defs, prob.p[i], ps[idxs])
-        end
-    else
-        # assemble defaults
-        defs = defaults(sys)
-        defs = mergedefaults(defs, prob.p, ps)
-    end
-    defs = mergedefaults(defs, p, ps)
-    sts = states(sys)
-    defs = mergedefaults(defs, prob.u0, sts)
-    defs = mergedefaults(defs, u0, sts)
-    u0, p, defs = get_u0_p(sys, defs)
-
-    return p, u0
 end
 
 struct IsHistory end
@@ -225,7 +283,7 @@ function isdisturbance(x)
 end
 
 function disturbances(sys)
-    [filter(isdisturbance, states(sys)); filter(isdisturbance, parameters(sys))]
+    [filter(isdisturbance, unknowns(sys)); filter(isdisturbance, parameters(sys))]
 end
 
 ## Tunable =====================================================================
@@ -235,7 +293,7 @@ Symbolics.option_to_metadata_type(::Val{:tunable}) = VariableTunable
 istunable(x::Num, args...) = istunable(Symbolics.unwrap(x), args...)
 
 """
-    istunable(x, default = false)
+    istunable(x, default = true)
 
 Determine whether symbolic variable `x` is marked as a tunable for an automatic tuning algorithm.
 
@@ -249,7 +307,7 @@ Create a tunable parameter by
 
 See also [`tunable_parameters`](@ref), [`getbounds`](@ref)
 """
-function istunable(x, default = false)
+function istunable(x, default = true)
     p = Symbolics.getparent(x, nothing)
     p === nothing || (x = p)
     Symbolics.getmetadata(x, VariableTunable, default)
@@ -294,7 +352,7 @@ end
 ## System interface
 
 """
-    tunable_parameters(sys, p = parameters(sys); default=false)
+    tunable_parameters(sys, p = parameters(sys); default=true)
 
 Get all parameters of `sys` that are marked as `tunable`.
 
@@ -308,7 +366,7 @@ Create a tunable parameter by
 
 See also [`getbounds`](@ref), [`istunable`](@ref)
 """
-function tunable_parameters(sys, p = parameters(sys); default = false)
+function tunable_parameters(sys, p = parameters(sys); default = true)
     filter(x -> istunable(x, default), p)
 end
 
@@ -322,7 +380,7 @@ Create parameters with bounds like this
 @parameters p [bounds=(-1, 1)]
 ```
 
-To obtain state bounds, call `getbounds(sys, states(sys))`
+To obtain unknown variable bounds, call `getbounds(sys, unknowns(sys))`
 """
 function getbounds(sys::ModelingToolkit.AbstractSystem, p = parameters(sys))
     Dict(p .=> getbounds.(p))
@@ -352,7 +410,7 @@ struct VariableDescription end
 Symbolics.option_to_metadata_type(::Val{:description}) = VariableDescription
 
 getdescription(x::Num) = getdescription(Symbolics.unwrap(x))
-
+getdescription(x::Symbolics.Arr) = getdescription(Symbolics.unwrap(x))
 """
     getdescription(x)
 
@@ -368,45 +426,11 @@ function hasdescription(x)
     getdescription(x) != ""
 end
 
-## binary variables =================================================================
-struct VariableBinary end
-Symbolics.option_to_metadata_type(::Val{:binary}) = VariableBinary
-
-isbinaryvar(x::Num) = isbinaryvar(Symbolics.unwrap(x))
-
-"""
-    isbinaryvar(x)
-
-Determine if a variable is binary.
-"""
-function isbinaryvar(x)
-    p = Symbolics.getparent(x, nothing)
-    p === nothing || (x = p)
-    return Symbolics.getmetadata(x, VariableBinary, false)
-end
-
-## integer variables =================================================================
-struct VariableInteger end
-Symbolics.option_to_metadata_type(::Val{:integer}) = VariableInteger
-
-isintegervar(x::Num) = isintegervar(Symbolics.unwrap(x))
-
-"""
-    isintegervar(x)
-
-Determine if a variable is an integer.
-"""
-function isintegervar(x)
-    p = Symbolics.getparent(x, nothing)
-    p === nothing || (x = p)
-    return Symbolics.getmetadata(x, VariableInteger, false)
-end
-
 ## Brownian
 """
     tobrownian(s::Sym)
 
-Maps the brownianiable to a state.
+Maps the brownianiable to an unknown.
 """
 tobrownian(s::Symbolic) = setmetadata(s, MTKVariableTypeCtx, BROWNIAN)
 tobrownian(s::Num) = Num(tobrownian(value(s)))
@@ -424,4 +448,43 @@ macro brownian(xs...)
         Real,
         xs,
         tobrownian) |> esc
+end
+
+## Guess ======================================================================
+struct VariableGuess end
+Symbolics.option_to_metadata_type(::Val{:guess}) = VariableGuess
+getguess(x::Num) = getguess(Symbolics.unwrap(x))
+
+"""
+    getguess(x)
+
+Get the guess for the initial value associated with symbolic variable `x`.
+Create variables with a guess like this
+
+```
+@variables x [guess=1]
+```
+"""
+function getguess(x)
+    p = Symbolics.getparent(x, nothing)
+    p === nothing || (x = p)
+    Symbolics.getmetadata(x, VariableGuess, nothing)
+end
+
+"""
+    hasguess(x)
+
+Determine whether symbolic variable `x` has a guess associated with it.
+See also [`getguess`](@ref).
+"""
+function hasguess(x)
+    getguess(x) !== nothing
+end
+
+function get_default_or_guess(x)
+    if hasdefault(x) && !((def = getdefault(x)) isa Equation)
+        return def
+    else
+        return getguess(x)
+    end
 end

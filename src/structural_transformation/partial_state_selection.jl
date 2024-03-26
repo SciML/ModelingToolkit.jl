@@ -28,7 +28,7 @@ function ascend_dg_all(xs, dg, level, maxlevel)
 end
 
 function pss_graph_modia!(structure::SystemStructure, maximal_top_matching, varlevel,
-    inv_varlevel, inv_eqlevel)
+        inv_varlevel, inv_eqlevel)
     @unpack eq_to_diff, var_to_diff, graph, solvable_graph = structure
 
     # var_eq_matching is a maximal matching on the top-differentiated variables.
@@ -49,8 +49,9 @@ function pss_graph_modia!(structure::SystemStructure, maximal_top_matching, varl
         maxeqlevel = maximum(map(x -> inv_eqlevel[x], eqs))
         maxvarlevel = level = maximum(map(x -> inv_varlevel[x], vars))
         old_level_vars = ()
-        ict = IncrementalCycleTracker(DiCMOBiGraph{true}(graph,
-                complete(Matching(ndsts(graph))));
+        ict = IncrementalCycleTracker(
+            DiCMOBiGraph{true}(graph,
+                complete(Matching(ndsts(graph)), nsrcs(graph))),
             dir = :in)
 
         while level >= 0
@@ -102,8 +103,9 @@ function pss_graph_modia!(structure::SystemStructure, maximal_top_matching, varl
             end
 
             if level != 0
-                remaining_vars = collect(v for v in to_tear_vars
-                                             if var_eq_matching[v] === unassigned)
+                remaining_vars = collect(v
+                for v in to_tear_vars
+                if var_eq_matching[v] === unassigned)
                 if !isempty(remaining_vars)
                     remaining_eqs = setdiff(to_tear_eqs, assigned_eqs)
                     nlsolve_matching = maximal_matching(graph,
@@ -122,7 +124,7 @@ function pss_graph_modia!(structure::SystemStructure, maximal_top_matching, varl
             level -= 1
         end
     end
-    return complete(var_eq_matching)
+    return complete(var_eq_matching, nsrcs(graph))
 end
 
 struct SelectedState end
@@ -168,15 +170,16 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
 end
 
 function dummy_derivative_graph!(state::TransformationState, jac = nothing;
-    state_priority = nothing, log = Val(false), kwargs...)
+        state_priority = nothing, log = Val(false), kwargs...)
     state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
     complete!(state.structure)
     var_eq_matching = complete(pantelides!(state))
     dummy_derivative_graph!(state.structure, var_eq_matching, jac, state_priority, log)
 end
 
-function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac = nothing,
-    state_priority = nothing, ::Val{log} = Val(false)) where {log}
+function dummy_derivative_graph!(
+        structure::SystemStructure, var_eq_matching, jac = nothing,
+        state_priority = nothing, ::Val{log} = Val(false)) where {log}
     @unpack eq_to_diff, var_to_diff, graph = structure
     diff_to_eq = invview(eq_to_diff)
     diff_to_var = invview(var_to_diff)
@@ -334,8 +337,8 @@ end
 
 function tearing_with_dummy_derivatives(structure, dummy_derivatives)
     @unpack var_to_diff = structure
-    # We can eliminate variables that are not a selected state (differential
-    # variables). Selected states are differentiated variables that are not
+    # We can eliminate variables that are not selected (differential
+    # variables). Selected unknowns are differentiated variables that are not
     # dummy derivatives.
     can_eliminate = falses(length(var_to_diff))
     for (v, dv) in enumerate(var_to_diff)
@@ -348,7 +351,7 @@ function tearing_with_dummy_derivatives(structure, dummy_derivatives)
         Base.Fix1(isdiffed, (structure, dummy_derivatives)),
         Union{Unassigned, SelectedState};
         varfilter = Base.Fix1(getindex, can_eliminate))
-    for v in eachindex(var_eq_matching)
+    for v in 𝑑vertices(structure.graph)
         is_present(structure, v) || continue
         dv = var_to_diff[v]
         (dv === nothing || !is_some_diff(structure, dummy_derivatives, dv)) && continue

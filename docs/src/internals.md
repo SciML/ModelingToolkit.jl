@@ -6,7 +6,7 @@ contributors to the library.
 ## Observables and Variable Elimination
 
 In the variable “elimination” algorithms, what is actually done is that variables
-are removed from being states and equations are moved into the `observed` category
+are removed from being unknowns and equations are moved into the `observed` category
 of the system. The `observed` equations are explicit algebraic equations which
 are then substituted out to completely eliminate these variables from the other
 equations, allowing the system to act as though these variables no longer exist.
@@ -32,6 +32,6 @@ The call chain typically looks like this, with the function names in the case of
 
  1. Problem constructor ([`ODEProblem`](@ref))
  2. Build an `DEFunction` ([`process_DEProblem`](@ref) -> [`ODEFunction`](@ref)
- 3. Write actual executable code ([`generate_function`](@ref))
+ 3. Write actual executable code ([`generate_function`](@ref) or [`generate_custom_function`](@ref))
 
 Apart from [`generate_function`](@ref), which generates the dynamics function, `ODEFunction` also builds functions for observed equations (`build_explicit_observed_function`) and Jacobians (`generate_jacobian`) etc. These are all stored in the `ODEFunction`.
