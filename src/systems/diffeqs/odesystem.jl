@@ -380,10 +380,10 @@ function build_explicit_observed_function(sys, ts;
         ps = full_parameters(sys),
         op = Operator,
         throw = true)
-    if (isscalar = !(ts isa AbstractVector))
+    if (isscalar = symbolic_type(ts) !== NotSymbolic())
         ts = [ts]
     end
-    ts = unwrap.(Symbolics.scalarize(ts))
+    ts = unwrap.(ts)
 
     vars = Set()
     foreach(v -> vars!(vars, v; op), ts)
@@ -399,9 +399,17 @@ function build_explicit_observed_function(sys, ts;
     end
 
     sts = Set(unknowns(sys))
+    sts = union(sts,
+        Set(arguments(st)[1] for st in sts if istree(st) && operation(st) === getindex))
+
     observed_idx = Dict(x.lhs => i for (i, x) in enumerate(obs))
     param_set = Set(parameters(sys))
+    param_set = union(param_set,
+        Set(arguments(p)[1] for p in param_set if istree(p) && operation(p) === getindex))
     param_set_ns = Set(unknowns(sys, p) for p in parameters(sys))
+    param_set_ns = union(param_set_ns,
+        Set(arguments(p)[1]
+        for p in param_set_ns if istree(p) && operation(p) === getindex))
     namespaced_to_obs = Dict(unknowns(sys, x.lhs) => x.lhs for x in obs)
     namespaced_to_sts = Dict(unknowns(sys, x) => x for x in unknowns(sys))
 
@@ -470,9 +478,9 @@ function build_explicit_observed_function(sys, ts;
     pre = get_postprocess_fbody(sys)
 
     ex = Func(args, [],
-        pre(Let(obsexprs,
-            isscalar ? ts[1] : MakeArray(ts, output_type),
-            false))) |> toexpr
+             pre(Let(obsexprs,
+                 isscalar ? ts[1] : MakeArray(ts, output_type),
+                 false))) |> wrap_array_vars(sys, ts)[1] |> toexpr
     expression ? ex : drop_expr(@RuntimeGeneratedFunction(ex))
 end
 
