@@ -39,7 +39,7 @@ function MTKParameters(
         u0 = Dict()
     end
     defs = merge(defs, u0)
-    defs = merge(defs, Dict(eq.lhs => eq.rhs for eq in observed(sys)))
+    defs = merge(Dict(eq.lhs => eq.rhs for eq in observed(sys)), defs)
     p = merge(defs, p)
     p = merge(Dict(unwrap(k) => v for (k, v) in p),
         Dict(default_toterm(unwrap(k)) => v for (k, v) in p))

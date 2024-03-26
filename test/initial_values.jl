@@ -46,3 +46,17 @@ desired_values = [p1, p2, p3]
 defaults = Dict([p3 => X])
 vals = ModelingToolkit.varmap_to_vars(var_vals, desired_values; defaults = defaults)
 @test vals == [1.0, 2.0, 3.0]
+
+# Issue#2565
+# Create ODESystem.
+@variables X1(t) X2(t)
+@parameters k1 k2 Γ[1:1]=X1 + X2
+eq = D(X1) ~ -k1 * X1 + k2 * (-X1 + Γ[1])
+obs = X2 ~ Γ[1] - X1
+@mtkbuild osys_m = ODESystem([eq], t, [X1], [k1, k2, Γ[1]]; observed = [X2 ~ Γ[1] - X1])
+
+# Creates ODEProblem.
+u0 = [X1 => 1.0, X2 => 2.0]
+tspan = (0.0, 1.0)
+ps = [k1 => 1.0, k2 => 5.0]
+@test_nowarn oprob = ODEProblem(osys_m, u0, tspan, ps)
