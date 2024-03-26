@@ -207,6 +207,7 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
             ivv = ivars[ivind += 1]
             dobreak = false
             while true
+                # M[j, i] = div(M[j, i] * pivot - M[j, k] * M[k, i], prev_pivot)
                 if kvv == ivv
                     v = kvv
                     ck = kcoeffs[kvind]
@@ -227,6 +228,7 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
                     p2 = Base.Checked.checked_mul(coeff, ck)
                     ci = exactdiv(Base.Checked.checked_sub(p1, p2), last_pivot)
                 elseif kvv < ivv
+                    # M[j, i] == 0
                     v = kvv
                     ck = kcoeffs[kvind]
                     kvind += 1
@@ -235,9 +237,16 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
                     else
                         kvv = kvars[kvind]
                     end
+                    if v == vpivot
+                        # Already done above
+                        _debug_mode && (vi += 1)
+                        dobreak && break
+                        continue
+                    end
                     p2 = Base.Checked.checked_mul(coeff, ck)
                     ci = exactdiv(Base.Checked.checked_neg(p2), last_pivot)
                 else # kvv > ivv
+                    # M[k, i] == 0
                     v = ivv
                     ci = icoeffs[ivind]
                     ivind += 1
@@ -250,8 +259,9 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
                 end
                 if _debug_mode
                     @assert v == vars[vi += 1]
+                    @assert v != vpivot
                 end
-                if v != vpivot && !iszero(ci)
+                if !iszero(ci)
                     tmp_incidence[tmp_len += 1] = v
                     tmp_coeffs[tmp_len] = ci
                 end
