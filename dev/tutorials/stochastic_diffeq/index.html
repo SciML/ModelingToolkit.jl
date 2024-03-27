@@ -27,7 +27,7 @@ parammap = [
 prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
 sol = solve(prob, LambaEulerHeun())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">retcode: Success
 Interpolation: 1st order linear
-t: 2363-element Vector{Float64}:
+t: 2427-element Vector{Float64}:
    0.0
    5.106983219771961e-7
    1.0852339342015416e-6
@@ -39,33 +39,33 @@ t: 2363-element Vector{Float64}:
    6.397148190818579e-6
    7.707490036648098e-6
    ⋮
-  99.63770094085663
-  99.68623468785827
-  99.74083515323512
-  99.80226067678409
-  99.84182183732449
-  99.88632814293244
-  99.93639773674138
-  99.99272602977645
+  99.48736740423142
+  99.54004177568143
+  99.5993004435627
+  99.65661027319692
+  99.72108383153541
+  99.7824739691069
+  99.85153787387483
+  99.92923476673876
  100.0
-u: 2363-element Vector{Vector{Float64}}:
+u: 2427-element Vector{Vector{Float64}}:
  [1.0, 0.0, 0.0]
- [1.0001174187469357, 1.1900695363711902e-6, 3.0388255934705087e-13]
- [1.0001986070923357, 2.5291096013710784e-6, 1.3724816890493e-12]
- [1.0002082108667902, 4.035468018475279e-6, 3.494423637586896e-12]
- [1.0002167918048486, 5.730153551456533e-6, 7.045677735560191e-12]
- [1.0001896210704386, 7.636441635062894e-6, 1.2513622971628396e-11]
- [1.0003153589331542, 9.782437239770347e-6, 2.053261268856527e-11]
- [1.0002094042677478, 1.2194331754647215e-5, 3.1909146812111354e-11]
- [1.000224532918566, 1.4909131165134405e-5, 4.769677059213756e-11]
- [1.0001746927804211, 1.7962211929591835e-5, 6.923338745673013e-11]
+ [0.9999858633631008, 1.1899130031390958e-6, 3.038425887175688e-13]
+ [0.9999554356216076, 2.528494728808173e-6, 1.3719693428603681e-12]
+ [0.9999426155062932, 4.034396452668131e-6, 3.492782997941377e-12]
+ [0.999937825323591, 5.7285553899330664e-6, 7.042037594914622e-12]
+ [0.999928922798824, 7.634451218633095e-6, 1.2507204363499543e-11]
+ [0.9999645044384369, 9.779006139394473e-6, 2.051984842097126e-11]
+ [0.999904849281797, 1.2190618726024488e-5, 3.189011296056561e-11]
+ [0.9999451522359641, 1.490496681306606e-5, 4.766950294159662e-11]
+ [0.9998837594887917, 1.7956987071274867e-5, 6.919317706452132e-11]
  ⋮
- [6.104979645203658, 6.008056577402014, 1.4344570656486737]
- [6.088380522197207, 6.010034360560925, 1.42227393359354]
- [5.869835827641972, 5.81517674713745, 1.3340063037533625]
- [5.959238603742961, 5.929243982292742, 1.3667332568214567]
- [6.02838712416277, 6.000260930762224, 1.3883563226573186]
- [5.9823395007008955, 5.953547314911142, 1.3740986243126259]
- [6.034791801217508, 6.006189839355154, 1.3933466061703739]
- [6.127498857370047, 6.091167144462804, 1.431686307486043]
- [6.162987001283907, 6.124643655672535, 1.441969318213307]</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../programmatically_generating/">« Programmatically Generating and Scripting ODESystems</a><a class="docs-footer-nextpage" href="../discrete_system/">(Experimental) Modeling Discrete Systems »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.3.0 on <span class="colophon-date" title="Wednesday 27 March 2024 18:59">Wednesday 27 March 2024</span>. Using Julia version 1.10.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ [5.9909216494970385, 5.976273895322021, 1.3728552220498422]
+ [6.071091329583223, 6.048413095519187, 1.406113706430987]
+ [6.154226246067317, 6.116543018295741, 1.44271571086368]
+ [6.08443607068698, 6.0367255714626085, 1.4163705895927867]
+ [5.773311075260943, 5.741501965524534, 1.2851283865092287]
+ [5.880186108695034, 5.871577243958316, 1.3274066541407925]
+ [5.661753683278976, 5.667377053869066, 1.2351888613345765]
+ [5.706426843401906, 5.732618576201758, 1.2566800303515577]
+ [5.578226034209501, 5.615200833431261, 1.203119587308852]</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../programmatically_generating/">« Programmatically Generating and Scripting ODESystems</a><a class="docs-footer-nextpage" href="../discrete_system/">(Experimental) Modeling Discrete Systems »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.3.0 on <span class="colophon-date" title="Wednesday 27 March 2024 20:43">Wednesday 27 March 2024</span>. Using Julia version 1.10.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
