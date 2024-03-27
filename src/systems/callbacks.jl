@@ -139,9 +139,12 @@ function namespace_callback(cb::SymbolicContinuousCallback, s)::SymbolicContinuo
 end
 
 """
-    continuous_events(sys::AbstractSystem)
+    continuous_events(sys::AbstractSystem)::Vector{SymbolicContinuousCallback}
 
-Returns a vector of all the `continuous_events` in an abstract system and its component subsystems. 
+Returns a vector of all the `continuous_events` in an abstract system and its component subsystems.
+The `SymbolicContinuousCallback`s in the returned vector are structs with two fields: `eqs` and
+`affect` which correspond to the first and second elements of a `Pair` used to define an event, i.e.
+`eqs => affect`.
 """
 function continuous_events(sys::AbstractSystem)
     obs = get_continuous_events(sys)
@@ -240,9 +243,12 @@ SymbolicDiscreteCallbacks(cbs::Vector{<:SymbolicDiscreteCallback}) = cbs
 SymbolicDiscreteCallbacks(::Nothing) = SymbolicDiscreteCallback[]
 
 """
-    discrete_events(sys::AbstractSystem)
+    discrete_events(sys::AbstractSystem) :: Vector{SymbolicDiscreteCallback}
 
-Returns a vector of all the `discrete_events` in an abstract system and its component subsystems. 
+Returns a vector of all the `discrete_events` in an abstract system and its component subsystems.
+The `SymbolicDiscreteCallback`s in the returned vector are structs with two fields: `condition` and
+`affect` which correspond to the first and second elements of a `Pair` used to define an event, i.e.
+`condition => affect`.
 """
 function discrete_events(sys::AbstractSystem)
     obs = get_discrete_events(sys)
