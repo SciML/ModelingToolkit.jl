@@ -489,7 +489,12 @@ function SymbolicIndexingInterface.is_observed(sys::AbstractSystem, sym)
            !is_independent_variable(sys, sym) && symbolic_type(sym) != NotSymbolic()
 end
 
-SymbolicIndexingInterface.default_values(sys::AbstractSystem) = get_defaults(sys)
+function SymbolicIndexingInterface.default_values(sys::AbstractSystem)
+    return merge(
+        Dict(eq.lhs => eq.rhs for eq in observed(sys)),
+        defaults(sys)
+    )
+end
 
 SymbolicIndexingInterface.is_time_dependent(::AbstractTimeDependentSystem) = true
 SymbolicIndexingInterface.is_time_dependent(::AbstractTimeIndependentSystem) = false

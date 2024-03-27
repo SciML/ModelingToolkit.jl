@@ -1,10 +1,10 @@
 using ModelingToolkit, SymbolicIndexingInterface, SciMLBase
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@parameters t a b
-@variables x(t)=1.0 y(t)=2.0
-D = Differential(t)
+@parameters a b
+@variables x(t)=1.0 y(t)=2.0 xy(t)
 eqs = [D(x) ~ a * y + t, D(y) ~ b * t]
-@named odesys = ODESystem(eqs, t, [x, y], [a, b])
+@named odesys = ODESystem(eqs, t, [x, y], [a, b]; observed = [xy ~ x + y])
 
 @test all(is_variable.((odesys,), [x, y, 1, 2, :x, :y]))
 @test all(.!is_variable.((odesys,), [a, b, t, 3, 0, :a, :b]))
@@ -24,6 +24,11 @@ eqs = [D(x) ~ a * y + t, D(y) ~ b * t]
 @test !isempty(default_values(odesys))
 @test default_values(odesys)[x] == 1.0
 @test default_values(odesys)[y] == 2.0
+@test isequal(default_values(odesys)[xy], x + y)
+
+@named odesys = ODESystem(
+    eqs, t, [x, y], [a, b]; defaults = [xy => 3.0], observed = [xy ~ x + y])
+@test default_values(odesys)[xy] == 3.0
 
 @variables x y z
 @parameters σ ρ β
@@ -36,10 +41,10 @@ eqs = [0 ~ σ * (y - x),
 @test !is_time_dependent(ns)
 
 @parameters x
-@variables t u(..)
+@variables u(..)
 Dxx = Differential(x)^2
 Dtt = Differential(t)^2
-Dt = Differential(t)
+Dt = D
 
 #2D PDE
 C = 1
@@ -60,10 +65,10 @@ domains = [t ∈ (0.0, 1.0),
 @test pde_system.ps == SciMLBase.NullParameters()
 @test parameter_symbols(pde_system) == []
 
-@parameters t x
+@parameters x
 @constants h = 1
 @variables u(..)
-Dt = Differential(t)
+Dt = D
 Dxx = Differential(x)^2
 eq = Dt(u(t, x)) ~ h * Dxx(u(t, x))
 bcs = [u(0, x) ~ -h * x * (x - 1) * sin(x),
