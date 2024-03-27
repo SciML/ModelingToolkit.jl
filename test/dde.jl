@@ -1,4 +1,6 @@
 using ModelingToolkit, DelayDiffEq, Test
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
 p0 = 0.2;
 q0 = 0.3;
 v0 = 1;
@@ -29,14 +31,13 @@ prob2 = DDEProblem(bc_model, u0, h2, tspan, constant_lags = lags)
 sol2 = solve(prob2, alg, reltol = 1e-7, abstol = 1e-10)
 
 @parameters p0=0.2 p1=0.2 q0=0.3 q1=0.3 v0=1 v1=1 d0=5 d1=1 d2=1 beta0=1 beta1=1
-@variables t x₀(t) x₁(t) x₂(..)
+@variables x₀(t) x₁(t) x₂(..)
 tau = 1
-D = Differential(t)
 eqs = [D(x₀) ~ (v0 / (1 + beta0 * (x₂(t - tau)^2))) * (p0 - q0) * x₀ - d0 * x₀
        D(x₁) ~ (v0 / (1 + beta0 * (x₂(t - tau)^2))) * (1 - p0 + q0) * x₀ +
                (v1 / (1 + beta1 * (x₂(t - tau)^2))) * (p1 - q1) * x₁ - d1 * x₁
        D(x₂(t)) ~ (v1 / (1 + beta1 * (x₂(t - tau)^2))) * (1 - p1 + q1) * x₁ - d2 * x₂(t)]
-@named sys = System(eqs)
+@mtkbuild sys = System(eqs, t)
 prob = DDEProblem(sys,
     [x₀ => 1.0, x₁ => 1.0, x₂(t) => 1.0],
     tspan,
@@ -70,21 +71,17 @@ prob = SDDEProblem(hayes_modelf, hayes_modelg, [1.0], h, tspan, pmul;
     constant_lags = (pmul[1],));
 sol = solve(prob, RKMil())
 
-@variables t x(..)
+@variables x(..)
 @parameters a=-4.0 b=-2.0 c=10.0 α=-1.3 β=-1.2 γ=1.1
-D = Differential(t)
 @brownian η
 τ = 1.0
 eqs = [D(x(t)) ~ a * x(t) + b * x(t - τ) + c + (α * x(t) + γ) * η]
-@named sys = System(eqs)
-sys = structural_simplify(sys)
+@mtkbuild sys = System(eqs, t)
 @test equations(sys) == [D(x(t)) ~ a * x(t) + b * x(t - τ) + c]
 @test isequal(ModelingToolkit.get_noiseeqs(sys), [α * x(t) + γ;;])
 prob_mtk = SDDEProblem(sys, [x(t) => 1.0 + t], tspan; constant_lags = (τ,));
 @test_nowarn sol_mtk = solve(prob_mtk, RKMil())
 
-@variables t
-D = Differential(t)
 @parameters x(..) a
 
 function oscillator(; name, k = 1.0, τ = 0.01)
@@ -93,7 +90,7 @@ function oscillator(; name, k = 1.0, τ = 0.01)
     eqs = [D(x(t)) ~ y,
         D(y) ~ -k * x(t - τ) + jcn,
         delx ~ x(t - τ)]
-    return System(eqs; name = name)
+    return System(eqs, t; name = name)
 end
 
 systems = @named begin

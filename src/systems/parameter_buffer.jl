@@ -90,7 +90,7 @@ function MTKParameters(
     for (sym, val) in p
         sym = unwrap(sym)
         ctype = concrete_symtype(sym)
-        val = symconvert(ctype, fixpoint_sub(val, p))
+        val = symconvert(ctype, unwrap(fixpoint_sub(val, p)))
         done = set_value(sym, val)
         if !done && Symbolics.isarraysymbolic(sym)
             done = all(set_value.(collect(sym), val))
