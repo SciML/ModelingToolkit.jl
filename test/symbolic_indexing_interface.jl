@@ -41,10 +41,10 @@ eqs = [0 ~ σ * (y - x),
 @test !is_time_dependent(ns)
 
 @parameters x
-@variables t u(..)
+@variables u(..)
 Dxx = Differential(x)^2
 Dtt = Differential(t)^2
-Dt = Differential(t)
+Dt = D
 
 #2D PDE
 C = 1
@@ -65,10 +65,10 @@ domains = [t ∈ (0.0, 1.0),
 @test pde_system.ps == SciMLBase.NullParameters()
 @test parameter_symbols(pde_system) == []
 
-@parameters t x
+@parameters x
 @constants h = 1
 @variables u(..)
-Dt = Differential(t)
+Dt = D
 Dxx = Differential(x)^2
 eq = Dt(u(t, x)) ~ h * Dxx(u(t, x))
 bcs = [u(0, x) ~ -h * x * (x - 1) * sin(x),
