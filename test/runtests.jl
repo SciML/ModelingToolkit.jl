@@ -69,6 +69,7 @@ end
             @safetestset "Generate Custom Function Test" include("generate_custom_function.jl")
             @safetestset "Initial Values Test" include("initial_values.jl")
             @safetestset "Discrete System" include("discrete_system.jl")
+            @safetestset "MTKParameters Test" include("mtkparameters.jl")
         end
     end
 
