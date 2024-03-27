@@ -118,16 +118,16 @@ end
 function SymbolicContinuousCallbacks(others)
     SymbolicContinuousCallbacks(SymbolicContinuousCallback(others))
 end
-SymbolicContinuousCallbacks(::Nothing) = SymbolicContinuousCallbacks(Equation[])
+SymbolicContinuousCallbacks(::Nothing) = SymbolicContinuousCallback[]
 
 equations(cb::SymbolicContinuousCallback) = cb.eqs
 function equations(cbs::Vector{<:SymbolicContinuousCallback})
-    reduce(vcat, [equations(cb) for cb in cbs])
+    mapreduce(equations, vcat, cbs, init = Equation[])
 end
 
 affects(cb::SymbolicContinuousCallback) = cb.affect
 function affects(cbs::Vector{SymbolicContinuousCallback})
-    reduce(vcat, [affects(cb) for cb in cbs], init = [])
+    mapreduce(affects, vcat, cbs, init = Equation[])
 end
 
 namespace_affects(af::Vector, s) = Equation[namespace_affect(a, s) for a in af]
