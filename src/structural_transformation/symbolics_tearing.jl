@@ -217,10 +217,16 @@ function check_diff_graph(var_to_diff, fullvars)
 end
 =#
 
-function tearing_reassemble(state::TearingState, var_eq_matching;
-        simplify = false, mm = nothing)
+function tearing_reassemble(state::TearingState, var_eq_matching,
+        full_var_eq_matching; simplify = false, mm = nothing)
     @unpack fullvars, sys, structure = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
+    extra_vars = Int[]
+    for v in 𝑑vertices(state.structure.graph)
+        eq = full_var_eq_matching[v]
+        eq isa Int && continue
+        push!(extra_vars, v)
+    end
 
     neweqs = collect(equations(state))
     # Terminology and Definition:
@@ -532,6 +538,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
     eq_to_diff = new_eq_to_diff
     diff_to_var = invview(var_to_diff)
 
+    old_fullvars = fullvars
     @set! state.structure.graph = complete(graph)
     @set! state.structure.var_to_diff = var_to_diff
     @set! state.structure.eq_to_diff = eq_to_diff
@@ -543,9 +550,15 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
 
     sys = state.sys
     @set! sys.eqs = neweqs
-    @set! sys.unknowns = Any[v
-                             for (i, v) in enumerate(fullvars)
-                             if diff_to_var[i] === nothing && ispresent(i)]
+    unknowns = Any[v
+                   for (i, v) in enumerate(fullvars)
+                   if diff_to_var[i] === nothing && ispresent(i)]
+    if !isempty(extra_vars)
+        for v in extra_vars
+            push!(unknowns, old_fullvars[v])
+        end
+    end
+    @set! sys.unknowns = unknowns
     @set! sys.substitutions = Substitutions(subeqs, deps)
 
     obs_sub = dummy_sub
@@ -570,19 +583,7 @@ end
 function tearing(state::TearingState; kwargs...)
     state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
     complete!(state.structure)
-    @unpack graph = state.structure
-    algvars = BitSet(findall(v -> isalgvar(state.structure, v), 1:ndsts(graph)))
-    aeqs = algeqs(state.structure)
-    var_eq_matching′, = tear_graph_modia(state.structure;
-        varfilter = var -> var in algvars,
-        eqfilter = eq -> eq in aeqs)
-    var_eq_matching = Matching{Union{Unassigned, SelectedState}}(var_eq_matching′)
-    for var in 1:ndsts(graph)
-        if isdiffvar(state.structure, var)
-            var_eq_matching[var] = SelectedState()
-        end
-    end
-    var_eq_matching
+    tearing_with_dummy_derivatives(state.structure, ())
 end
 
 """
@@ -594,8 +595,9 @@ instead, which calls this function internally.
 """
 function tearing(sys::AbstractSystem, state = TearingState(sys); mm = nothing,
         simplify = false, kwargs...)
-    var_eq_matching = tearing(state)
-    invalidate_cache!(tearing_reassemble(state, var_eq_matching; mm, simplify))
+    var_eq_matching, full_var_eq_matching = tearing(state)
+    invalidate_cache!(tearing_reassemble(
+        state, var_eq_matching, full_var_eq_matching; mm, simplify))
 end
 
 """
