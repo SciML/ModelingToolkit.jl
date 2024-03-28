@@ -101,6 +101,10 @@ let
     prob2 = ODEProblem(sys2, [source.p.i => 0.0], (0, 10.0), guesses = u0)
     sol2 = solve(prob2, Rosenbrock23())
     @test sol2[source.p.i] ≈ sol2[rc_model2.source.p.i] ≈ -sol2[capacitor.i]
+
+    prob3 = ODEProblem(sys2, [], (0, 10.0), guesses = u0)
+    sol3 = solve(prob2, Rosenbrock23())
+    @test sol3[unknowns(rc_model2), end] ≈ sol2[unknowns(rc_model2), end]
 end
 
 # Outer/inner connections
