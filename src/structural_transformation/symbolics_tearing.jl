@@ -218,14 +218,16 @@ end
 =#
 
 function tearing_reassemble(state::TearingState, var_eq_matching,
-        full_var_eq_matching; simplify = false, mm = nothing)
+        full_var_eq_matching = nothing; simplify = false, mm = nothing)
     @unpack fullvars, sys, structure = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     extra_vars = Int[]
-    for v in 𝑑vertices(state.structure.graph)
-        eq = full_var_eq_matching[v]
-        eq isa Int && continue
-        push!(extra_vars, v)
+    if full_var_eq_matching !== nothing
+        for v in 𝑑vertices(state.structure.graph)
+            eq = full_var_eq_matching[v]
+            eq isa Int && continue
+            push!(extra_vars, v)
+        end
     end
 
     neweqs = collect(equations(state))
