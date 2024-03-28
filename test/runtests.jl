@@ -34,6 +34,7 @@ end
             @safetestset "Mass Matrix Test" include("mass_matrix.jl")
             @safetestset "SteadyStateSystem Test" include("steadystatesystems.jl")
             @safetestset "SDESystem Test" include("sdesystem.jl")
+            @safetestset "DDESystem Test" include("dde.jl")
             @safetestset "NonlinearSystem Test" include("nonlinearsystem.jl")
             @safetestset "InitializationSystem Test" include("initializationsystem.jl")
             @safetestset "PDE Construction Test" include("pde.jl")
