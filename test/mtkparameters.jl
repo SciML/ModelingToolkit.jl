@@ -2,6 +2,7 @@ using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D, MTKParameters
 using SymbolicIndexingInterface
 using SciMLStructures: SciMLStructures, canonicalize, Tunable, Discrete, Constants
+using ForwardDiff
 
 @parameters a b c d::Integer e[1:3] f[1:3, 1:3]::Int g::Vector{AbstractFloat} h::String
 @named sys = ODESystem(
@@ -70,3 +71,33 @@ setp(sys, f[2, 2])(ps, 42) # with a sub-index
 
 setp(sys, h)(ps, "bar") # with a non-numeric
 @test getp(sys, h)(ps) == "bar"
+
+newps = remake_buffer(sys,
+    ps,
+    Dict(a => 1.0f0, b => 5.0f0, c => 2.0, d => 0x5, e => [0.4, 0.5, 0.6],
+        f => 3ones(UInt, 3, 3), g => ones(Float32, 4), h => "bar"))
+
+for fname in (:tunable, :discrete, :constant, :dependent)
+    # ensure same number of sub-buffers
+    @test length(getfield(ps, fname)) == length(getfield(newps, fname))
+end
+@test ps.dependent_update_iip === newps.dependent_update_iip
+@test ps.dependent_update_oop === newps.dependent_update_oop
+
+@test getp(sys, a)(newps) isa Float32
+@test getp(sys, b)(newps) == 2.0f0 # ensure dependent update still happened, despite explicit value
+@test getp(sys, c)(newps) isa Float64
+@test getp(sys, d)(newps) isa UInt8
+@test getp(sys, f)(newps) isa Matrix{UInt}
+# SII bug
+@test_broken getp(sys, g)(newps) isa Vector{Float32}
+
+ps = MTKParameters(sys, ivs)
+function loss(value, sys, ps)
+    @test value isa ForwardDiff.Dual
+    vals = merge(Dict(parameters(sys) .=> getp(sys, parameters(sys))(ps)), Dict(a => value))
+    ps = remake_buffer(sys, ps, vals)
+    getp(sys, a)(ps) + getp(sys, b)(ps)
+end
+
+@test ForwardDiff.derivative(x -> loss(x, sys, ps), 1.5) == 3.0

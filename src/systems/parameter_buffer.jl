@@ -318,6 +318,46 @@ function _set_parameter_unchecked!(
         p.dependent_update_iip(ArrayPartition(p.dependent), p...)
 end
 
+function SymbolicIndexingInterface.remake_buffer(sys, oldbuf::MTKParameters, vals::Dict)
+    buftypes = Dict{Tuple{Any, Int}, Any}()
+    for (p, val) in vals
+        (idx = parameter_index(sys, p)) isa ParameterIndex || continue
+        k = (idx.portion, idx.idx[1])
+        buftypes[k] = Union{get(buftypes, k, Union{}), typeof(val)}
+    end
+
+    newbufs = []
+    for (portion, old) in [(SciMLStructures.Tunable(), oldbuf.tunable)
+                           (SciMLStructures.Discrete(), oldbuf.discrete)
+                           (SciMLStructures.Constants(), oldbuf.constant)
+                           (NONNUMERIC_PORTION, oldbuf.nonnumeric)]
+        if isempty(old)
+            push!(newbufs, old)
+            continue
+        end
+        new = Any[copy(i) for i in old]
+        for i in eachindex(new)
+            buftype = get(buftypes, (portion, i), eltype(new[i]))
+            new[i] = similar(new[i], buftype)
+        end
+        push!(newbufs, Tuple(new))
+    end
+    tmpbuf = MTKParameters(
+        newbufs[1], newbufs[2], newbufs[3], oldbuf.dependent, newbufs[4], nothing, nothing)
+    for (p, val) in vals
+        _set_parameter_unchecked!(
+            tmpbuf, val, parameter_index(sys, p); update_dependent = false)
+    end
+    if oldbuf.dependent_update_oop !== nothing
+        dependent = oldbuf.dependent_update_oop(tmpbuf...)
+    else
+        dependent = ()
+    end
+    newbuf = MTKParameters(newbufs[1], newbufs[2], newbufs[3], dependent, newbufs[4],
+        oldbuf.dependent_update_iip, oldbuf.dependent_update_oop)
+    return newbuf
+end
+
 _subarrays(v::AbstractVector) = isempty(v) ? () : (v,)
 _subarrays(v::ArrayPartition) = v.x
 _subarrays(v::Tuple) = v
