@@ -92,7 +92,7 @@ function _model_macro(mod, name, expr, isconnector)
 
     iv = get(dict, :independent_variable, nothing)
     if iv === nothing
-        iv = dict[:independent_variable] = variable(:t)
+        iv = dict[:independent_variable] = get_t(mod, :t)
     end
 
     push!(exprs.args, :(push!(equations, $(eqs...))))
@@ -199,7 +199,7 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
             parse_variable_def!(dict, mod, a, varclass, kwargs, where_types; def, type)
         end
         Expr(:call, a, b) => begin
-            var = generate_var!(dict, a, b, varclass; indices, type)
+            var = generate_var!(dict, a, b, varclass, mod; indices, type)
             update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
                 varclass, where_types)
             (var, def)
@@ -280,11 +280,10 @@ function generate_var!(dict, a, varclass;
     generate_var(a, varclass; indices, type)
 end
 
-function generate_var!(dict, a, b, varclass;
+function generate_var!(dict, a, b, varclass, mod;
         indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
         type = Real)
-    # (type isa Nothing && type = Real)
-    iv = generate_var(b, :variables)
+    iv = b == :t ? get_t(mod, b) : generate_var(b, :variables)
     prev_iv = get!(dict, :independent_variable) do
         iv
     end
@@ -304,6 +303,16 @@ function generate_var!(dict, a, b, varclass;
         var = toparam(var)
     end
     var
+end
+
+function get_t(mod, t)
+    try
+        get_var(mod, t)
+    catch e
+        e isa UndefVarError &&
+            throw("Import the independent variable `t` (or `t_nounits`, `t_unitful` as `t`) from ModelingToolkit to use it in $mod.") ||
+            throw(e)
+    end
 end
 
 function parse_default(mod, a)
