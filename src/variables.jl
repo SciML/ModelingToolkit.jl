@@ -109,7 +109,7 @@ function default_toterm(x)
             end
             x = normalize_to_differential(op)(arguments(x)...)
         end
-        Symbolics.diff2term(x)
+        Symbolics.diff2term(x, Dict(VariableUnit => get_unit(x)))
     else
         x
     end

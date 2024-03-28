@@ -19,7 +19,7 @@ new = (((1 / β - 1) + δ) / γ)^(1 / (γ - 1))
 using ModelingToolkit: isdifferential, vars, collect_differential_variables,
                        collect_ivs
 @variables t u(t) y(t)
-D = Differential(t)
+using ModelingToolkit: D
 eq = D(y) ~ u
 v = vars(eq)
 @test v == Set([D(y), u])
@@ -32,3 +32,9 @@ aov = ModelingToolkit.collect_applied_operators(eq, Differential)
 
 ts = collect_ivs([eq])
 @test ts == Set([t])
+
+# Test units of diff vars of `Term` type.
+using ModelingToolkit: t, get_unit, default_toterm
+@variables k(t)
+k2 = D(D(k))
+get_unit(default_toterm(k2)) == get_unit(k2)
