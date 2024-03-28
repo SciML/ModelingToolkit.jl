@@ -13,6 +13,8 @@ ODESystem
   - `get_ps(sys)` or `parameters(sys)`: The parameters of the ODE.
   - `get_iv(sys)`: The independent variable of the ODE.
   - `get_u0_p(sys, u0map, parammap)` Numeric arrays for the initial condition and parameters given `var => value` maps.
+  - `continuous_events(sys)`: The set of continuous events in the ODE
+  - `discrete_events(sys)`: The set of discrete events in the ODE
 
 ## Transformations
 
