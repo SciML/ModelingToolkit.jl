@@ -60,3 +60,10 @@ u0 = [X1 => 1.0, X2 => 2.0]
 tspan = (0.0, 1.0)
 ps = [k1 => 1.0, k2 => 5.0]
 @test_nowarn oprob = ODEProblem(osys_m, u0, tspan, ps)
+
+# Make sure it doesn't error on array variables with unspecified size
+@parameters p::Vector{Real} q[1:3]
+varmap = Dict(p => ones(3), q => 2ones(3))
+cvarmap = ModelingToolkit.canonicalize_varmap(varmap)
+target_varmap = Dict(p => ones(3), q => 2ones(3), q[1] => 2.0, q[2] => 2.0, q[3] => 2.0)
+@test cvarmap == target_varmap

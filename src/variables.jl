@@ -209,8 +209,10 @@ end
 function canonicalize_varmap(varmap; toterm = Symbolics.diff2term)
     new_varmap = Dict()
     for (k, v) in varmap
-        new_varmap[unwrap(k)] = unwrap(v)
-        new_varmap[toterm(unwrap(k))] = unwrap(v)
+        k = unwrap(k)
+        v = unwrap(v)
+        new_varmap[k] = v
+        new_varmap[toterm(k)] = v
         if Symbolics.isarraysymbolic(k) && Symbolics.shape(k) !== Symbolics.Unknown()
             for i in eachindex(k)
                 new_varmap[k[i]] = v[i]
