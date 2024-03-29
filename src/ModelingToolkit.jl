@@ -256,7 +256,7 @@ export toexpr, get_variables
 export simplify, substitute
 export build_function
 export modelingtoolkitize
-export initializesystem, generate_initializesystem
+export generate_initializesystem
 
 export @variables, @parameters, @constants, @brownian
 export @named, @nonamespace, @namespace, extend, compose, complete
