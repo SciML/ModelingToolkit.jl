@@ -22,9 +22,9 @@ Pkg.add(&quot;ModelingToolkit&quot;)</code></pre><h2 id="Citation"><a class="doc
   [1dea7af3] OrdinaryDiffEq v6.74.1
   [91a5bcdd] Plots v1.40.2
   [789caeaf] StochasticDiffEq v6.65.1
-  [2efcf032] SymbolicIndexingInterface v0.3.13
+  [2efcf032] SymbolicIndexingInterface v0.3.15
   [d1185830] SymbolicUtils v1.5.1
-  [0c5d862f] Symbolics v5.26.0
+  [0c5d862f] Symbolics v5.27.1
   [1986cc42] Unitful v1.19.0
   [37e2e46d] LinearAlgebra
 Info Packages marked with ⌅ have new versions available but compatibility constraints restrict them from upgrading. To see why use `status --outdated`</code></pre></details><details><summary>and using this machine and Julia version.</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Julia Version 1.10.2
@@ -43,6 +43,7 @@ Environment:
   [47edcb42] ADTypes v0.2.7
   [a4c015fc] ANSIColoredPrinters v0.0.1
   [1520ce14] AbstractTrees v0.4.5
+  [7d9f7c33] Accessors v0.1.36
   [79e6a3ab] Adapt v4.0.4
 ⌅ [ec485272] ArnoldiMethod v0.2.0
 ⌅ [7d9fca2a] Arpack v0.5.3
@@ -54,7 +55,7 @@ Environment:
   [e2ed5e7c] Bijections v0.1.6
   [d1d4a3ce] BitFlags v0.1.8
   [62783981] BitTwiddlingConvenienceFunctions v0.1.5
-  [8e7c35d0] BlockArrays v0.16.40
+  [8e7c35d0] BlockArrays v0.16.41
   [764a87c0] BoundaryValueDiffEq v5.7.1
   [fa961155] CEnum v0.5.0
   [2a0fbf3d] CPUSummary v0.2.4
@@ -73,6 +74,7 @@ Environment:
   [bbf7d656] CommonSubexpressions v0.3.0
   [34da2185] Compat v4.14.0
   [b152e2b5] CompositeTypes v0.1.3
+  [a33af91c] CompositionsBase v0.1.2
   [2569d6c7] ConcreteStructs v0.2.3
   [f0e56b4a] ConcurrentUtilities v2.4.1
   [88cd18e8] ConsoleProgressMonitor v0.1.2
@@ -86,7 +88,7 @@ Environment:
   [bcd4f6db] DelayDiffEq v5.47.1
   [8bb1440f] DelimitedFiles v1.9.1
   [2b5f629d] DiffEqBase v6.148.0
-  [459566f4] DiffEqCallbacks v3.4.0
+  [459566f4] DiffEqCallbacks v3.4.1
   [77a26b50] DiffEqNoiseProcess v5.21.0
   [163ba53b] DiffResults v1.1.0
   [b552c78f] DiffRules v1.15.1
@@ -133,6 +135,7 @@ Environment:
   [615f187c] IfElse v0.1.1
   [d25df0c9] Inflate v0.1.4
   [8197267c] IntervalSets v0.7.10
+  [3587e190] InverseFunctions v0.1.13
   [92d709cd] IrrationalConstants v0.2.2
   [42fd0dbc] IterativeSolvers v0.9.4
   [82899510] IteratorInterfaceExtensions v1.0.0
@@ -243,10 +246,10 @@ Environment:
   [7792a7ef] StrideArraysCore v0.5.2
   [09ab397b] StructArrays v0.6.18
   [c3572dad] Sundials v4.24.0
-  [2efcf032] SymbolicIndexingInterface v0.3.13
+  [2efcf032] SymbolicIndexingInterface v0.3.15
   [19f23fe9] SymbolicLimits v0.2.0
   [d1185830] SymbolicUtils v1.5.1
-  [0c5d862f] Symbolics v5.26.0
+  [0c5d862f] Symbolics v5.27.1
   [3783bdb8] TableTraits v1.0.1
   [bd369af6] Tables v1.11.1
   [62fd8b95] TensorCore v0.1.1
@@ -254,7 +257,7 @@ Environment:
   [8290d209] ThreadingUtilities v0.5.2
   [a759f4b9] TimerOutputs v0.5.23
   [0796e94c] Tokenize v0.5.28
-  [3bb67fe8] TranscodingStreams v0.10.6
+  [3bb67fe8] TranscodingStreams v0.10.7
   [d5829a12] TriangularSolve v0.1.21
   [410a4b4d] Tricks v0.1.8
   [781d530d] TruncatedStacktraces v1.4.0
@@ -309,9 +312,9 @@ Environment:
   [a44049a8] Vulkan_Loader_jll v1.3.243+0
   [a2964d1f] Wayland_jll v1.21.0+1
   [2381bf8a] Wayland_protocols_jll v1.31.0+0
-  [02c8fc9c] XML2_jll v2.12.5+0
+  [02c8fc9c] XML2_jll v2.12.6+0
   [aed1982a] XSLT_jll v1.1.34+0
-  [ffd25f8a] XZ_jll v5.6.1+0
+  [ffd25f8a] XZ_jll v5.4.6+0
   [f67eecfb] Xorg_libICE_jll v1.0.10+1
   [c834827a] Xorg_libSM_jll v1.2.3+0
   [4f6342f7] Xorg_libX11_jll v1.8.6+0
@@ -336,7 +339,7 @@ Environment:
   [35661453] Xorg_xkbcomp_jll v1.4.6+0
   [33bec58e] Xorg_xkeyboard_config_jll v2.39.0+0
   [c5fb5394] Xorg_xtrans_jll v1.5.0+0
-  [3161d3a3] Zstd_jll v1.5.5+0
+  [3161d3a3] Zstd_jll v1.5.6+0
   [35ca27e7] eudev_jll v3.2.9+0
   [214eeab7] fzf_jll v0.43.0+0
   [1a1c6b14] gperf_jll v3.1.1+0
@@ -400,4 +403,4 @@ Environment:
   [8e850b90] libblastrampoline_jll v5.8.0+1
   [8e850ede] nghttp2_jll v1.52.0+1
   [3f19e933] p7zip_jll v17.4.0+2
-Info Packages marked with ⌃ and ⌅ have new versions available. Those with ⌃ may be upgradable, but those with ⌅ are restricted by compatibility constraints from upgrading. To see why use `status --outdated -m`</code></pre></details><p>You can also download the <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v9.9.0/assets/Manifest.toml">manifest</a> file and the <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v9.9.0/assets/Project.toml">project</a> file.</p></article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.3.0 on <span class="colophon-date" title="Thursday 28 March 2024 11:30">Thursday 28 March 2024</span>. Using Julia version 1.10.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+Info Packages marked with ⌃ and ⌅ have new versions available. Those with ⌃ may be upgradable, but those with ⌅ are restricted by compatibility constraints from upgrading. To see why use `status --outdated -m`</code></pre></details><p>You can also download the <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v9.9.0/assets/Manifest.toml">manifest</a> file and the <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v9.9.0/assets/Project.toml">project</a> file.</p></article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.3.0 on <span class="colophon-date" title="Friday 29 March 2024 20:06">Friday 29 March 2024</span>. Using Julia version 1.10.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
