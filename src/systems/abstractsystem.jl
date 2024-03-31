@@ -898,6 +898,12 @@ function namespace_equation(eq::Equation,
     _lhs ~ _rhs
 end
 
+function namespace_initialization_equations(sys::AbstractSystem, ivs = independent_variables(sys))
+    eqs = initialization_equations(sys)
+    isempty(eqs) && return Equation[]
+    map(eq -> namespace_equation(eq, sys; ivs), eqs)
+end
+
 function namespace_assignment(eq::Assignment, sys)
     _lhs = namespace_expr(eq.lhs, sys)
     _rhs = namespace_expr(eq.rhs, sys)
@@ -1068,6 +1074,20 @@ flatten(sys::AbstractSystem, args...) = sys
 
 function equations(sys::AbstractSystem)
     eqs = get_eqs(sys)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return eqs
+    else
+        eqs = Equation[eqs;
+                       reduce(vcat,
+                           namespace_equations.(get_systems(sys));
+                           init = Equation[])]
+        return eqs
+    end
+end
+
+function initialization_equations(sys::AbstractSystem)
+    eqs = get_initialization_eqs(sys)
     systems = get_systems(sys)
     if isempty(systems)
         return eqs
