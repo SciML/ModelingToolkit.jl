@@ -184,10 +184,15 @@ resistor = getproperty(rc, :resistor; namespace = false)
 @testset "Constants" begin
     @mtkmodel PiModel begin
         @constants begin
-            _p::Irrational = π, [description = "Value of Pi."]
+            _p::Irrational = π, [description = "Value of Pi.", unit = u"V"]
         end
         @parameters begin
             p = _p, [description = "Assign constant `_p` value."]
+            e, [unit = u"V"]
+        end
+        @equations begin
+            # This validates units; indirectly verifies that metadata was correctly passed.
+            e ~ _p
         end
     end
 

@@ -406,8 +406,9 @@ function parse_constants!(exprs, dict, body, mod)
             Expr(:(=), Expr(:(::), a, type), Expr(:tuple, b, metadata)) || Expr(:(=), Expr(:(::), a, type), b) => begin
                 type = getfield(mod, type)
                 b = _type_check!(get_var(mod, b), a, type, :constants)
-                constant = first(@constants $a::type = b)
-                push!(exprs, :($a = $constant))
+                push!(exprs,
+                    :($(Symbolics._parse_vars(
+                        :constants, type, [:($a = $b), metadata], toconstant))))
                 dict[:constants][a] = Dict(:value => b, :type => type)
                 if @isdefined metadata
                     for data in metadata.args
@@ -416,16 +417,18 @@ function parse_constants!(exprs, dict, body, mod)
                 end
             end
             Expr(:(=), a, Expr(:tuple, b, metadata)) => begin
-                constant = first(@constants $a = b)
-                push!(exprs, :($a = $constant))
+                push!(exprs,
+                    :($(Symbolics._parse_vars(
+                        :constants, Real, [:($a = $b), metadata], toconstant))))
                 dict[:constants][a] = Dict{Symbol, Any}(:value => get_var(mod, b))
                 for data in metadata.args
                     dict[:constants][a][data.args[1]] = data.args[2]
                 end
             end
             Expr(:(=), a, b) => begin
-                constant = first(@constants $a = b)
-                push!(exprs, :($a = $constant))
+                push!(exprs,
+                    :($(Symbolics._parse_vars(
+                        :constants, Real, [:($a = $b)], toconstant))))
                 dict[:constants][a] = Dict(:value => get_var(mod, b))
             end
             _ => error("""Malformed constant definition `$arg`. Please use the following syntax:
