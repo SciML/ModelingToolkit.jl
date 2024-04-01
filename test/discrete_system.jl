@@ -234,3 +234,34 @@ prob = DiscreteProblem(de, [], (0, 10))
 prob = DiscreteProblem(de, [x(k - 1) => 2.0], (0, 10))
 @test prob[x] == 3.0
 @test prob[x(k - 1)] == 2.0
+
+# Issue#2585
+getdata(buffer, t) = buffer[mod1(Int(t), length(buffer))]
+@register_symbolic getdata(buffer::Vector, t)
+k = ShiftIndex(t)
+function SampledData(; name, buffer)
+    L = length(buffer)
+    pars = @parameters begin
+        buffer[1:L] = buffer
+    end
+    @variables output(t) time(t)
+    eqs = [time ~ time(k - 1) + 1
+           output ~ getdata(buffer, time)]
+    return DiscreteSystem(eqs, t; name)
+end
+function System(; name, buffer)
+    @named y_sys = SampledData(; buffer = buffer)
+    pars = @parameters begin
+        α = 0.5, [description = "alpha"]
+        β = 0.5, [description = "beta"]
+    end
+    vars = @variables y(t)=0.0 y_shk(t)=0.0
+
+    eqs = [y_shk ~ y_sys.output
+           # y[t] = 0.5 * y[t - 1] + 0.5 * y[t + 1] + y_shk[t]
+           y(k - 1) ~ α * y(k - 2) + (β * y(k) + y_shk(k - 1))]
+
+    DiscreteSystem(eqs, t, vars, pars; systems = [y_sys], name = name)
+end
+
+@test_nowarn @mtkbuild sys = System(; buffer = ones(10))
