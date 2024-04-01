@@ -819,22 +819,24 @@ namespace_controls(sys::AbstractSystem) = controls(sys, controls(sys))
 
 function namespace_defaults(sys)
     defs = defaults(sys)
-    Dict((isparameter(k) ? parameters(sys, k) : unknowns(sys, k)) => namespace_expr(v, sys)
+    Dict((isparameter(k) ? parameters(sys, k) : unknowns(sys, k)) => namespace_expr(
+             v, sys; check = true)
     for (k, v) in pairs(defs))
 end
 
 function namespace_equations(sys::AbstractSystem, ivs = independent_variables(sys))
     eqs = equations(sys)
     isempty(eqs) && return Equation[]
-    map(eq -> namespace_equation(eq, sys; ivs), eqs)
+    map(eq -> namespace_equation(eq, sys; ivs, check = true), eqs)
 end
 
 function namespace_equation(eq::Equation,
         sys,
         n = nameof(sys);
-        ivs = independent_variables(sys))
-    _lhs = namespace_expr(eq.lhs, sys, n; ivs)
-    _rhs = namespace_expr(eq.rhs, sys, n; ivs)
+        ivs = independent_variables(sys),
+        check = false)
+    _lhs = namespace_expr(eq.lhs, sys, n; ivs, check)
+    _rhs = namespace_expr(eq.rhs, sys, n; ivs, check)
     _lhs ~ _rhs
 end
 
@@ -844,32 +846,36 @@ function namespace_assignment(eq::Assignment, sys)
     Assignment(_lhs, _rhs)
 end
 
-function namespace_expr(O, sys, n = nameof(sys); ivs = independent_variables(sys))
+function namespace_expr(
+        O, sys, n = nameof(sys); ivs = independent_variables(sys), check = false)
     O = unwrap(O)
     if any(isequal(O), ivs)
         return O
     elseif istree(O)
         T = typeof(O)
         renamed = let sys = sys, n = n, T = T
-            map(a -> namespace_expr(a, sys, n; ivs)::Any, arguments(O))
+            map(a -> namespace_expr(a, sys, n; ivs, check)::Any, arguments(O))
         end
         if isvariable(O)
+            check && !is_variable(sys, O) && !is_parameter(sys, O) && return O
             # Use renamespace so the scope is correct, and make sure to use the
             # metadata from the rescoped variable
             rescoped = renamespace(n, O)
             similarterm(O, operation(rescoped), renamed,
                 metadata = metadata(rescoped))
         elseif Symbolics.isarraysymbolic(O)
+            check && !is_variable(sys, O) && !is_parameter(sys, O) && return O
             # promote_symtype doesn't work for array symbolics
             similarterm(O, operation(O), renamed, symtype(O), metadata = metadata(O))
         else
             similarterm(O, operation(O), renamed, metadata = metadata(O))
         end
     elseif isvariable(O)
+        check && !is_variable(sys, O) && !is_parameter(sys, O) && return O
         renamespace(n, O)
     elseif O isa Array
         let sys = sys, n = n
-            map(o -> namespace_expr(o, sys, n; ivs), O)
+            map(o -> namespace_expr(o, sys, n; ivs, check), O)
         end
     else
         O
