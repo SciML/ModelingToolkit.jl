@@ -315,9 +315,9 @@ plot(solve(prob))
 
 More on this topic may be found in [Composing Models and Building Reusable Components](@ref acausal).
 
-## Initial Guess
+## Default Initial Condition
 
-It is often a good idea to specify reasonable values for the initial unknown and the
+It is often a good idea to specify reasonable values for the initial value of unknowns and the
 parameters of a model component. Then, these do not have to be explicitly specified when constructing the `ODEProblem`.
 
 ```@example ode2
@@ -334,15 +334,15 @@ parameters of a model component. Then, these do not have to be explicitly specif
 end
 ```
 
-While defining the model `UnitstepFOLFactory`, an initial guess of 0.0 is assigned to `x(t)` and 1.0 to `τ`.
-Additionally, these initial guesses can be modified while creating instances of `UnitstepFOLFactory` by passing arguments.
+While defining the model `UnitstepFOLFactory`, an initial condition of 0.0 is assigned to `x(t)` and 1.0 to `τ`.
+Additionally, these initial conditions can be modified while creating instances of `UnitstepFOLFactory` by passing arguments.
 
 ```@example ode2
 @mtkbuild fol = UnitstepFOLFactory(; x = 0.1)
 sol = ODEProblem(fol, [], (0.0, 5.0), []) |> solve
 ```
 
-In non-DSL definitions, one can pass `defaults` dictionary to set the initial guess of the symbolic variables.
+In non-DSL definitions, one can pass `defaults` dictionary to set the initial conditions of the symbolic variables.
 
 ```@example ode3
 using ModelingToolkit
