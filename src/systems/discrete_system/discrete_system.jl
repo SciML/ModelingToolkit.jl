@@ -199,6 +199,22 @@ function DiscreteSystem(eqs, iv; kwargs...)
         collect(allunknowns), collect(new_ps); kwargs...)
 end
 
+function flatten(sys::DiscreteSystem, noeqs = false)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return sys
+    else
+        return DiscreteSystem(noeqs ? Equation[] : equations(sys),
+            get_iv(sys),
+            unknowns(sys),
+            parameters(sys),
+            observed = observed(sys),
+            defaults = defaults(sys),
+            name = nameof(sys),
+            checks = false)
+    end
+end
+
 function generate_function(
         sys::DiscreteSystem, dvs = unknowns(sys), ps = full_parameters(sys); kwargs...)
     generate_custom_function(sys, [eq.rhs for eq in equations(sys)], dvs, ps; kwargs...)
