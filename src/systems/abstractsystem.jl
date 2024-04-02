@@ -746,19 +746,32 @@ end
 abstract type SymScope end
 
 struct LocalScope <: SymScope end
-function LocalScope(sym::Union{Num, Symbolic})
+function LocalScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
     apply_to_variables(sym) do sym
-        setmetadata(sym, SymScope, LocalScope())
+        if istree(sym) && operation(sym) === getindex
+            args = arguments(sym)
+            a1 = setmetadata(args[1], SymScope, LocalScope())
+            similarterm(sym, operation(sym), [a1, args[2:end]...])
+        else
+            setmetadata(sym, SymScope, LocalScope())
+        end
     end
 end
 
 struct ParentScope <: SymScope
     parent::SymScope
 end
-function ParentScope(sym::Union{Num, Symbolic})
+function ParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
     apply_to_variables(sym) do sym
-        setmetadata(sym, SymScope,
-            ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
+        if istree(sym) && operation(sym) == getindex
+            args = arguments(sym)
+            a1 = setmetadata(args[1], SymScope,
+                ParentScope(getmetadata(value(args[1]), SymScope, LocalScope())))
+            similarterm(sym, operation(sym), [a1, args[2:end]...])
+        else
+            setmetadata(sym, SymScope,
+                ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
+        end
     end
 end
 
@@ -766,18 +779,31 @@ struct DelayParentScope <: SymScope
     parent::SymScope
     N::Int
 end
-function DelayParentScope(sym::Union{Num, Symbolic}, N)
+function DelayParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}}, N)
     apply_to_variables(sym) do sym
-        setmetadata(sym, SymScope,
-            DelayParentScope(getmetadata(value(sym), SymScope, LocalScope()), N))
+        if istree(sym) && operation(sym) == getindex
+            args = arguments(sym)
+            a1 = setmetadata(args[1], SymScope,
+                DelayParentScope(getmetadata(value(args[1]), SymScope, LocalScope()), N))
+            similarterm(sym, operation(sym), [a1, args[2:end]...])
+        else
+            setmetadata(sym, SymScope,
+                DelayParentScope(getmetadata(value(sym), SymScope, LocalScope()), N))
+        end
     end
 end
-DelayParentScope(sym::Union{Num, Symbolic}) = DelayParentScope(sym, 1)
+DelayParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}}) = DelayParentScope(sym, 1)
 
 struct GlobalScope <: SymScope end
-function GlobalScope(sym::Union{Num, Symbolic})
+function GlobalScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
     apply_to_variables(sym) do sym
-        setmetadata(sym, SymScope, GlobalScope())
+        if istree(sym) && operation(sym) == getindex
+            args = arguments(sym)
+            a1 = setmetadata(args[1], SymScope, GlobalScope())
+            similarterm(sym, operation(sym), [a1, args[2:end]...])
+        else
+            setmetadata(sym, SymScope, GlobalScope())
+        end
     end
 end
 
@@ -1500,8 +1526,7 @@ function default_to_parentscope(v)
     uv isa Symbolic || return v
     apply_to_variables(v) do sym
         if !hasmetadata(uv, SymScope)
-            setmetadata(sym, SymScope,
-                ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
+            ParentScope(sym)
         else
             sym
         end
