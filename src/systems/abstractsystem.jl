@@ -2396,7 +2396,7 @@ form of differential.
 Example:
 ```julia
 using ModelingToolkit
-import ModelingToolkit: t as nounits_t, D as nounits_D
+using ModelingToolkit: t_nounits as t, D_nounits as D
 @parameters p d
 @variables X(t)
 eq1 = D(X) ~ p - d*X
@@ -2422,7 +2422,7 @@ any differentials.
 Example:
 ```julia
 using ModelingToolkit
-import ModelingToolkit: t as nounits_t, D as nounits_D
+using ModelingToolkit: t_nounits as t, D_nounits as D
 @parameters p d
 @variables X(t)
 eq1 = D(X) ~ p - d*X
@@ -2445,14 +2445,14 @@ differentials).
 Example:
 ```julia
 using ModelingToolkit
-import ModelingToolkit: t as nounits_t, D as nounits_D
+using ModelingToolkit: t_nounits as t, D_nounits as D
 @parameters p d
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
 @named osys = ODESystem([eq1, eq2], t)
 
-alg_equations(osys) # returns `0 ~ p - d*X(t)`.
+alg_equations(osys) # returns `[0 ~ p - d*X(t)]`.
 """
 alg_equations(sys::AbstractSystem) = filter(is_alg_equation, equations(sys))
 
@@ -2464,14 +2464,14 @@ For a system, returns a vector of all its differential equations (i.e. that does
 Example:
 ```julia
 using ModelingToolkit
-import ModelingToolkit: t as nounits_t, D as nounits_D
+using ModelingToolkit: t_nounits as t, D_nounits as D
 @parameters p d
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
 @named osys = ODESystem([eq1, eq2], t)
 
-diff_equations(osys) # returns `Differential(t)(X(t)) ~ p - d*X(t)`.
+diff_equations(osys) # returns `[Differential(t)(X(t)) ~ p - d*X(t)]`.
 """
 diff_equations(sys::AbstractSystem) = filter(is_diff_equation, equations(sys))
 
@@ -2484,7 +2484,7 @@ differentials).
 Example:
 ```julia
 using ModelingToolkit
-import ModelingToolkit: t as nounits_t, D as nounits_D
+using ModelingToolkit: t_nounits as t, D_nounits as D
 @parameters p d
 @variables X(t)
 eq1 = D(X) ~ p - d*X
@@ -2506,7 +2506,7 @@ For a system, returns true if it contain at least one differential equation (i.e
 Example:
 ```julia
 using ModelingToolkit
-import ModelingToolkit: t as nounits_t, D as nounits_D
+using ModelingToolkit: t_nounits as t, D_nounits as D
 @parameters p d
 @variables X(t)
 eq1 = D(X) ~ p - d*X
@@ -2530,7 +2530,7 @@ differentials) in its *top-level system*.
 Example:
 ```julia
 using ModelingToolkit
-import ModelingToolkit: t as nounits_t, D as nounits_D
+using ModelingToolkit: t_nounits as t, D_nounits as D
 @parameters p d
 @variables X(t)
 eq1 = D(X) ~ p - d*X
@@ -2555,7 +2555,7 @@ in its *top-level system*.
 Example:
 ```julia
 using ModelingToolkit
-import ModelingToolkit: t as nounits_t, D as nounits_D
+using ModelingToolkit: t_nounits as t, D_nounits as D
 @parameters p d
 @variables X(t)
 eq1 = D(X) ~ p - d*X
@@ -2580,7 +2580,7 @@ differentials) in its *top-level system*.
 Example:
 ```julia
 using ModelingToolkit
-import ModelingToolkit: t as nounits_t, D as nounits_D
+using ModelingToolkit: t_nounits as t, D_nounits as D
 @parameters p d
 @variables X(t)
 eq1 = D(X) ~ p - d*X
@@ -2605,7 +2605,7 @@ differential) in its *top-level system*.
 Example:
 ```julia
 using ModelingToolkit
-import ModelingToolkit: t as nounits_t, D as nounits_D
+using ModelingToolkit: t_nounits as t, D_nounits as D
 @parameters p d
 @variables X(t)
 eq1 = D(X) ~ p - d*X
