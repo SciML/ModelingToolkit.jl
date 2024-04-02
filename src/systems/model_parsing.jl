@@ -92,7 +92,7 @@ function _model_macro(mod, name, expr, isconnector)
 
     iv = get(dict, :independent_variable, nothing)
     if iv === nothing
-        iv = dict[:independent_variable] = variable(:t)
+        iv = dict[:independent_variable] = get_t(mod, :t)
     end
 
     push!(exprs.args, :(push!(equations, $(eqs...))))
@@ -199,7 +199,7 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
             parse_variable_def!(dict, mod, a, varclass, kwargs, where_types; def, type)
         end
         Expr(:call, a, b) => begin
-            var = generate_var!(dict, a, b, varclass; indices, type)
+            var = generate_var!(dict, a, b, varclass, mod; indices, type)
             update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
                 varclass, where_types)
             (var, def)
@@ -280,11 +280,10 @@ function generate_var!(dict, a, varclass;
     generate_var(a, varclass; indices, type)
 end
 
-function generate_var!(dict, a, b, varclass;
+function generate_var!(dict, a, b, varclass, mod;
         indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
         type = Real)
-    # (type isa Nothing && type = Real)
-    iv = generate_var(b, :variables)
+    iv = b == :t ? get_t(mod, b) : generate_var(b, :variables)
     prev_iv = get!(dict, :independent_variable) do
         iv
     end
@@ -304,6 +303,20 @@ function generate_var!(dict, a, b, varclass;
         var = toparam(var)
     end
     var
+end
+
+# Use the `t` defined in the `mod`. When it is unavailable, generate a new `t` with a warning.
+function get_t(mod, t)
+    try
+        get_var(mod, t)
+    catch e
+        if e isa UndefVarError
+            @warn("Could not find a predefined `t` in `$mod`; generating a new one within this model.\nConsider defining it or importing `t` (or `t_nounits`, `t_unitful` as `t`) from ModelingToolkit.")
+            variable(:t)
+        else
+            throw(e)
+        end
+    end
 end
 
 function parse_default(mod, a)
@@ -393,8 +406,9 @@ function parse_constants!(exprs, dict, body, mod)
             Expr(:(=), Expr(:(::), a, type), Expr(:tuple, b, metadata)) || Expr(:(=), Expr(:(::), a, type), b) => begin
                 type = getfield(mod, type)
                 b = _type_check!(get_var(mod, b), a, type, :constants)
-                constant = first(@constants $a::type = b)
-                push!(exprs, :($a = $constant))
+                push!(exprs,
+                    :($(Symbolics._parse_vars(
+                        :constants, type, [:($a = $b), metadata], toconstant))))
                 dict[:constants][a] = Dict(:value => b, :type => type)
                 if @isdefined metadata
                     for data in metadata.args
@@ -403,16 +417,18 @@ function parse_constants!(exprs, dict, body, mod)
                 end
             end
             Expr(:(=), a, Expr(:tuple, b, metadata)) => begin
-                constant = first(@constants $a = b)
-                push!(exprs, :($a = $constant))
+                push!(exprs,
+                    :($(Symbolics._parse_vars(
+                        :constants, Real, [:($a = $b), metadata], toconstant))))
                 dict[:constants][a] = Dict{Symbol, Any}(:value => get_var(mod, b))
                 for data in metadata.args
                     dict[:constants][a][data.args[1]] = data.args[2]
                 end
             end
             Expr(:(=), a, b) => begin
-                constant = first(@constants $a = b)
-                push!(exprs, :($a = $constant))
+                push!(exprs,
+                    :($(Symbolics._parse_vars(
+                        :constants, Real, [:($a = $b)], toconstant))))
                 dict[:constants][a] = Dict(:value => get_var(mod, b))
             end
             _ => error("""Malformed constant definition `$arg`. Please use the following syntax:
