@@ -6,13 +6,13 @@ import ModelingToolkit: t_nounits as t, D_nounits as D, wrap, get_eqs
 # Creates equations.
 @variables X(t) Y(t) Z(t)
 @parameters a b c d
-eq1 = X^Z - Z^(X+1) ~ log(X - a + b) * Y
+eq1 = X^Z - Z^(X + 1) ~ log(X - a + b) * Y
 eq2 = X ~ Y^(X + 1)
-eq3 = a + b + c + d ~ X*(Y + d*(Y + Z))
+eq3 = a + b + c + d ~ X * (Y + d * (Y + Z))
 eq4 = X ~ sqrt(a + Z) + t
-eq5 = D(D(X)) ~ a^(2Y) + 3Z*t - 6
-eq6 = X *(Z - Z*(b+X)) ~ c^(X+D(Y))
-eq7 = sqrt(X + c) ~ 2*(Y + log(a + D(Z)))
+eq5 = D(D(X)) ~ a^(2Y) + 3Z * t - 6
+eq6 = X * (Z - Z * (b + X)) ~ c^(X + D(Y))
+eq7 = sqrt(X + c) ~ 2 * (Y + log(a + D(Z)))
 eq8 = -0.1 ~ D(Z) + X
 
 @test is_alg_equation(eq1)
@@ -34,21 +34,15 @@ eq8 = -0.1 ~ D(Z) + X
 @test is_diff_equation(eq8)
 
 # Creates systems.
-eqs1 = [
-    X*Y + a ~ Z^3 - X*log(b + Y)
-    X ~ Z*Y*X + a + b
-    c*sin(X) + sin(Y) ~ d*(a + X*(b + Y* (c + Z)))
-]
-eqs2 = [
-    X + Y + c ~ b*X^(X + Z + a)
-    D(X) ~ a*Y + b*X + c*Z 
-    D(Z) + Z*Y ~ X - log(Z)
-]
-eqs3 = [
-    D(X) ~ sqrt(X + b) + sqrt(Z + c)
-    2Z * (Z + Y) ~ D(Y)*log(a)
-    D(Z) + c*X ~ b/(X+Y^d) + D(Z)
-]
+eqs1 = [X * Y + a ~ Z^3 - X * log(b + Y)
+        X ~ Z * Y * X + a + b
+        c * sin(X) + sin(Y) ~ d * (a + X * (b + Y * (c + Z)))]
+eqs2 = [X + Y + c ~ b * X^(X + Z + a)
+        D(X) ~ a * Y + b * X + c * Z
+        D(Z) + Z * Y ~ X - log(Z)]
+eqs3 = [D(X) ~ sqrt(X + b) + sqrt(Z + c)
+        2Z * (Z + Y) ~ D(Y) * log(a)
+        D(Z) + c * X ~ b / (X + Y^d) + D(Z)]
 @named osys1 = ODESystem(eqs1, t)
 @named osys2 = ODESystem(eqs2, t)
 @named osys3 = ODESystem(eqs3, t)
@@ -150,7 +144,6 @@ osys3_33 = compose(osys3, [osys3, osys3])
 @test !has_alg_eqs(get_systems(osys3_33)[2])
 @test has_diff_eqs(get_systems(osys3_33)[2])
 
-
 # Test getters for composed systems.
 ns_eqs1 = namespace_equations(osys1)
 ns_eqs2 = namespace_equations(osys2)
@@ -186,4 +179,3 @@ isequal(alg_equations(get_systems(osys3_2)[1]), eqs2[1:1])
 isequal(diff_equations(get_systems(osys3_2)[1]), eqs2[2:3])
 isequal(get_alg_eqs(get_systems(osys3_2)[1]), eqs2[1:1])
 isequal(get_diff_eqs(get_systems(osys3_2)[1]), eqs2[2:3])
-

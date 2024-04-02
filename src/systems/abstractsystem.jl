@@ -2520,7 +2520,6 @@ has_diff_equations(osys2) # returns `false`.
 """
 has_diff_equations(sys::AbstractSystem) = any(is_diff_equation, equations(sys))
 
-
 """
     get_alg_eqs(sys::AbstractSystem)
 
@@ -2619,4 +2618,4 @@ has_diff_eqs(osys12) # returns `true`.
 has_diff_eqs(osys21) # returns `false`.
 ```
 """
-has_diff_eqs(sys::AbstractSystem) =  any(is_diff_equation, get_eqs(sys))
+has_diff_eqs(sys::AbstractSystem) = any(is_diff_equation, get_eqs(sys))
