@@ -2384,3 +2384,239 @@ function dump_unknowns(sys::AbstractSystem)
         meta
     end
 end
+
+### Functions for accessing algebraic/differential equations in systems ###
+
+"""
+    is_diff_equation(eq)
+
+Returns `true` if the input is a differential equation, i.e. is an equatation that contain some 
+form of differential.
+
+Example:
+```julia
+using ModelingToolkit
+import ModelingToolkit: t as nounits_t, D as nounits_D
+@parameters p d
+@variables X(t)
+eq1 = D(X) ~ p - d*X
+eq2 = 0 ~ p - d*X
+
+is_diff_equation(eq1) # true
+is_diff_equation(eq2) # false
+```
+"""
+function is_diff_equation(eq)
+    (eq isa Equation) || (return false)
+    isdefined(eq, :lhs) && occursin(is_derivative, wrap(eq.lhs)) && (return true)
+    isdefined(eq, :rhs) && occursin(is_derivative, wrap(eq.rhs)) && (return true)
+    return false
+end
+
+"""
+    is_alg_equation(eq)
+
+Returns `true` if the input is an algebraic equation, i.e. is an equatation that does not contain 
+any differentials.
+
+Example:
+```julia
+using ModelingToolkit
+import ModelingToolkit: t as nounits_t, D as nounits_D
+@parameters p d
+@variables X(t)
+eq1 = D(X) ~ p - d*X
+eq2 = 0 ~ p - d*X
+
+is_alg_equation(eq1) # false
+is_alg_equation(eq2) # true
+```
+"""
+function is_alg_equation(eq)
+    return (eq isa Equation) && !is_diff_equation(eq)
+end
+
+"""
+    alg_equations(sys::AbstractSystem)
+
+For a system, returns a vector of all its algebraic equations (i.e. that does not contain any
+differentials).
+
+Example:
+```julia
+using ModelingToolkit
+import ModelingToolkit: t as nounits_t, D as nounits_D
+@parameters p d
+@variables X(t)
+eq1 = D(X) ~ p - d*X
+eq2 = 0 ~ p - d*X
+@named osys = ODESystem([eq1, eq2], t)
+
+alg_equations(osys) # returns `0 ~ p - d*X(t)`.
+"""
+alg_equations(sys::AbstractSystem) = filter(is_alg_equation, equations(sys))
+
+"""
+    diff_equations(sys::AbstractSystem)
+
+For a system, returns a vector of all its differential equations (i.e. that does contain a differential).
+
+Example:
+```julia
+using ModelingToolkit
+import ModelingToolkit: t as nounits_t, D as nounits_D
+@parameters p d
+@variables X(t)
+eq1 = D(X) ~ p - d*X
+eq2 = 0 ~ p - d*X
+@named osys = ODESystem([eq1, eq2], t)
+
+diff_equations(osys) # returns `Differential(t)(X(t)) ~ p - d*X(t)`.
+"""
+diff_equations(sys::AbstractSystem) = filter(is_diff_equation, equations(sys))
+
+"""
+    has_alg_equations(sys::AbstractSystem)
+
+For a system, returns true if it contain at least one algebraic equation (i.e. that does not contain any
+differentials).
+
+Example:
+```julia
+using ModelingToolkit
+import ModelingToolkit: t as nounits_t, D as nounits_D
+@parameters p d
+@variables X(t)
+eq1 = D(X) ~ p - d*X
+eq2 = 0 ~ p - d*X
+@named osys1 = ODESystem([eq1], t)
+@named osys2 = ODESystem([eq2], t)
+
+has_alg_equations(osys1) # returns `false`.
+has_alg_equations(osys2) # returns `true`.
+```
+"""
+has_alg_equations(sys::AbstractSystem) = any(is_alg_equation, equations(sys))
+
+"""
+    has_diff_equations(sys::AbstractSystem)
+
+For a system, returns true if it contain at least one differential equation (i.e. that contain a differential).
+
+Example:
+```julia
+using ModelingToolkit
+import ModelingToolkit: t as nounits_t, D as nounits_D
+@parameters p d
+@variables X(t)
+eq1 = D(X) ~ p - d*X
+eq2 = 0 ~ p - d*X
+@named osys1 = ODESystem([eq1], t)
+@named osys2 = ODESystem([eq2], t)
+
+has_diff_equations(osys1) # returns `true`.
+has_diff_equations(osys2) # returns `false`.
+```
+"""
+has_diff_equations(sys::AbstractSystem) = any(is_diff_equation, equations(sys))
+
+
+"""
+    get_alg_eqs(sys::AbstractSystem)
+
+For a system, returns a vector of all algebraic equations (i.e. that does not contain any
+differentials) in its *top-level system*.
+
+Example:
+```julia
+using ModelingToolkit
+import ModelingToolkit: t as nounits_t, D as nounits_D
+@parameters p d
+@variables X(t)
+eq1 = D(X) ~ p - d*X
+eq2 = 0 ~ p - d*X
+@named osys1 = ODESystem([eq1], t)
+@named osys2 = ODESystem([eq2], t)
+osys12 = compose(osys1, [osys2])
+osys21 = compose(osys2, [osys1])
+
+get_alg_eqs(osys12) # returns `Equation[]`.
+get_alg_eqs(osys21) # returns `[0 ~ p - d*X(t)]`.
+```
+"""
+get_alg_eqs(sys::AbstractSystem) = filter(is_alg_equation, get_eqs(sys))
+
+"""
+    get_diff_eqs(sys::AbstractSystem)
+
+For a system, returns a vector of all differential equations (i.e. that does contain a differential)
+in its *top-level system*.
+
+Example:
+```julia
+using ModelingToolkit
+import ModelingToolkit: t as nounits_t, D as nounits_D
+@parameters p d
+@variables X(t)
+eq1 = D(X) ~ p - d*X
+eq2 = 0 ~ p - d*X
+@named osys1 = ODESystem([eq1], t)
+@named osys2 = ODESystem([eq2], t)
+osys12 = compose(osys1, [osys2])
+osys21 = compose(osys2, [osys1])
+
+get_diff_eqs(osys12) # returns `[Differential(t)(X(t)) ~ p - d*X(t)]`.
+get_diff_eqs(osys21) # returns `Equation[]``.
+```
+"""
+get_diff_eqs(sys::AbstractSystem) = filter(is_diff_equation, get_eqs(sys))
+
+"""
+    has_alg_eqs(sys::AbstractSystem)
+
+For a system, returns true if it contain at least one algebraic equation (i.e. that does not contain any
+differentials) in its *top-level system*.
+
+Example:
+```julia
+using ModelingToolkit
+import ModelingToolkit: t as nounits_t, D as nounits_D
+@parameters p d
+@variables X(t)
+eq1 = D(X) ~ p - d*X
+eq2 = 0 ~ p - d*X
+@named osys1 = ODESystem([eq1], t)
+@named osys2 = ODESystem([eq2], t)
+osys12 = compose(osys1, [osys2])
+osys21 = compose(osys2, [osys1])
+
+has_alg_eqs(osys12) # returns `false`.
+has_alg_eqs(osys21) # returns `true`.
+```
+"""
+has_alg_eqs(sys::AbstractSystem) = any(is_alg_equation, get_eqs(sys))
+
+"""
+    has_diff_eqs(sys::AbstractSystem)
+
+For a system, returns true if it contain at least one differential equation (i.e. that contain a 
+differential) in its *top-level system*.
+
+Example:
+```julia
+using ModelingToolkit
+import ModelingToolkit: t as nounits_t, D as nounits_D
+@parameters p d
+@variables X(t)
+eq1 = D(X) ~ p - d*X
+eq2 = 0 ~ p - d*X
+@named osys1 = ODESystem([eq1], t)
+@named osys2 = ODESystem([eq2], t)
+osys12 = compose(osys1, [osys2])
+osys21 = compose(osys2, [osys1])
+
+has_diff_eqs(osys12) # returns `true`.
+has_diff_eqs(osys21) # returns `false`.
+```
+"""
+has_diff_eqs(sys::AbstractSystem) =  any(is_diff_equation, get_eqs(sys))
