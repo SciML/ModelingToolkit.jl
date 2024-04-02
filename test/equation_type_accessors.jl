@@ -1,6 +1,7 @@
 # Fetch packages.
 using ModelingToolkit
 import ModelingToolkit: get_systems, namespace_equations
+import ModelingToolkit: is_alg_equation, is_diff_equation
 import ModelingToolkit: t_nounits as t, D_nounits as D, wrap, get_eqs
 
 # Creates equations.
