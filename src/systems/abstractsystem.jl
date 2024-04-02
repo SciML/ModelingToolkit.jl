@@ -1555,7 +1555,7 @@ function component_post_processing(expr, isconnector)
     args = sig.args[2:end]
 
     quote
-        function $fname($(args...))
+        $Base.@__doc__ function $fname($(args...))
             # we need to create a closure to escape explicit return in `body`.
             res = (() -> $body)()
             if $isdefined(res, :gui_metadata) && $getfield(res, :gui_metadata) === nothing

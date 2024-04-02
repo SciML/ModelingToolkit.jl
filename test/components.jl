@@ -298,3 +298,25 @@ rc_eqs = [connect(capacitor.n, resistor.p)
 sys = structural_simplify(rc_model)
 prob = ODEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Tsit5())
+
+@testset "docstrings (#1155)" begin
+    """
+    Hey there, Pin1!
+    """
+    @connector function Pin1(; name)
+        @variables t
+        sts = @variables v(t)=1.0 i(t)=1.0
+        ODESystem(Equation[], t, sts, []; name = name)
+    end
+    @test string(Base.doc(Pin1)) == "Hey there, Pin1!\n"
+
+    """
+    Hey there, Pin2!
+    """
+    @component function Pin2(; name)
+        @variables t
+        sts = @variables v(t)=1.0 i(t)=1.0
+        ODESystem(Equation[], t, sts, []; name = name)
+    end
+    @test string(Base.doc(Pin2)) == "Hey there, Pin2!\n"
+end
