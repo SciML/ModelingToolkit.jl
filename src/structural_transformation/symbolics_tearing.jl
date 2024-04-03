@@ -551,7 +551,43 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     end
 
     sys = state.sys
+
+    obs_sub = dummy_sub
+    for eq in neweqs
+        isdiffeq(eq) || continue
+        obs_sub[eq.lhs] = eq.rhs
+    end
+    # TODO: compute the dependency correctly so that we don't have to do this
+    obs = [fast_substitute(observed(sys), obs_sub); subeqs]
+
+    # HACK: Substitute non-scalarized symbolic arrays of observed variables
+    # E.g. if `p[1] ~ (...)` and `p[2] ~ (...)` then substitute `p => [p[1], p[2]]` in all equations
+    # ideally, we want to support equations such as `p ~ [p[1], p[2]]` which will then be handled
+    # by the topological sorting and dependency identification pieces
+    obs_arr_subs = Dict()
+
+    for eq in obs
+        lhs = eq.lhs
+        istree(lhs) || continue
+        operation(lhs) === getindex || continue
+        Symbolics.shape(lhs) !== Symbolics.Unknown() || continue
+        arg1 = arguments(lhs)[1]
+        haskey(obs_arr_subs, arg1) && continue
+        obs_arr_subs[arg1] = [arg1[i] for i in eachindex(arg1)]
+    end
+    for i in eachindex(neweqs)
+        neweqs[i] = fast_substitute(neweqs[i], obs_arr_subs; operator = Symbolics.Operator)
+    end
+    for i in eachindex(obs)
+        obs[i] = fast_substitute(obs[i], obs_arr_subs; operator = Symbolics.Operator)
+    end
+    for i in eachindex(subeqs)
+        subeqs[i] = fast_substitute(subeqs[i], obs_arr_subs; operator = Symbolics.Operator)
+    end
+
     @set! sys.eqs = neweqs
+    @set! sys.observed = obs
+
     unknowns = Any[v
                    for (i, v) in enumerate(fullvars)
                    if diff_to_var[i] === nothing && ispresent(i)]
@@ -562,15 +598,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     end
     @set! sys.unknowns = unknowns
     @set! sys.substitutions = Substitutions(subeqs, deps)
-
-    obs_sub = dummy_sub
-    for eq in equations(sys)
-        isdiffeq(eq) || continue
-        obs_sub[eq.lhs] = eq.rhs
-    end
-    # TODO: compute the dependency correctly so that we don't have to do this
-    obs = [fast_substitute(observed(sys), obs_sub); subeqs]
-    @set! sys.observed = obs
 
     # Only makes sense for time-dependent
     # TODO: generalize to SDE
