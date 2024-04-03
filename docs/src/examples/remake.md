@@ -168,16 +168,22 @@ In the following code snippet the positions of parameters can be matched:
 ```@example Remake
 x_template = canonicalize(Tunable(), odeprob.p)[1]
 prob_ind = remake(odeprob, p = replace(
-    Tunable(), parameter_values(prob_ind), eachindex(x_template))) 
+    Tunable(), parameter_values(odeprob), eachindex(x_template))) 
 par_opt = [α, β, γ, δ]
 pos_opt = prob_ind.ps[par_opt]
+pos_par = zeros(Int,length(x_template))
+for (i,pos) in pairs(pos_opt)
+        pos_par[pos] = i
+end
 ```
 
 It makes a copy of the original problem, where all parameters are replaced by their 
 position in an vector. 
 Then, when querying the problem for given parameters, these positions are returned.
+Finally, the positions are inverted, so that `x[pos_par]` sorts the parameters
+in the order of the problem.
 
-This then allows to use `ps = replace(Tunable(), ps, view(x, pos_opt))` instead of
+This then allows to use `ps = replace(Tunable(), ps, view(x, pos_par))` instead of
 `x` in the cost function and allows providing initial reasonable initial conditions 
-for each parameter in the order `[α, β, γ, δ]`.
+for each parameter in the order of `part_opt = [α, β, γ, δ]`.
 
