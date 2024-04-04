@@ -143,18 +143,24 @@ end
 
 _split_helper(buf_v::T, recurse, raw, idx) where {T} = _split_helper(eltype(T), buf_v, recurse, raw, idx)
 
-function _split_helper(::Type{<:AbstractArray}, buf_v, recurse, raw, idx)
-    recurse ? map(b -> _split_helper(b, recurse, raw, idx), buf_v) : _split_helper(Any, b, recurse, raw, idx)
+function _split_helper(::Type{<:AbstractArray}, buf_v, ::Val{true}, raw, idx)
+    map(b -> _split_helper(eltype(b), b, Val(false), raw, idx), buf_v)
 end
 
-function _split_helper(::Any, buf_v, recurse, raw, idx)
+function _split_helper(::Type{<:AbstractArray}, buf_v, ::Val{false}, raw, idx)
+    _split_helper((), buf_v, (), raw, idx)
+end
+
+function _split_helper(_, buf_v, _, raw, idx)
     res = reshape(raw[idx[]:(idx[] + length(buf_v) - 1)], size(buf_v))
     idx[] += length(buf_v)
     return res
 end
 
-function split_into_buffers(raw::AbstractArray, buf; recurse = true)
-    ntuple(i->_split_helper(buf[i], recurse, raw, Ref(1)), Val(length(buf)))
+function split_into_buffers(raw::AbstractArray, buf, recurse = Val(true))
+    idx = Ref(1)
+    ntuple(i->_split_helper(buf[i], recurse, raw, idx), Val(length(buf)))
+end
 end
 
 function update_tuple_of_buffers(raw::AbstractArray, buf)
@@ -197,7 +203,7 @@ for (Portion, field) in [(SciMLStructures.Tunable, :tunable)
         @set! p.$field = split_into_buffers(newvals, p.$field)
         if p.dependent_update_oop !== nothing
             raw = p.dependent_update_oop(p...)
-            @set! p.dependent = split_into_buffers(raw, p.dependent; recurse = false)
+            @set! p.dependent = split_into_buffers(raw, p.dependent, Val(false))
         end
         p
     end
