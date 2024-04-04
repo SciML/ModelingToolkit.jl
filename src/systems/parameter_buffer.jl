@@ -192,10 +192,7 @@ for (Portion, field) in [(SciMLStructures.Tunable, :tunable)
     end
 
     @eval function SciMLStructures.replace!(::$Portion, p::MTKParameters, newvals)
-        src = split_into_buffers(newvals, p.$field)
-        for i in 1:length(p.$field)
-            (p.$field)[i] .= src[i]
-        end
+        update_tuple_of_buffers(newvals, p.$field)
         if p.dependent_update_iip !== nothing
             p.dependent_update_iip(ArrayPartition(p.dependent), p...)
         end
@@ -318,44 +315,32 @@ function _set_parameter_unchecked!(
         p.dependent_update_iip(ArrayPartition(p.dependent), p...)
 end
 
-function SymbolicIndexingInterface.remake_buffer(sys, oldbuf::MTKParameters, vals::Dict)
-    buftypes = Dict{Tuple{Any, Int}, Any}()
-    for (p, val) in vals
-        (idx = parameter_index(sys, p)) isa ParameterIndex || continue
-        k = (idx.portion, idx.idx[1])
-        buftypes[k] = Union{get(buftypes, k, Union{}), typeof(val)}
+function narrow_buffer_type(buffer::Vector)
+    type = Union{}
+    for x in buffer
+        type = Union{type, typeof(x)}
     end
+    return convert(Vector{type}, buffer)
+end
 
-    newbufs = []
-    for (portion, old) in [(SciMLStructures.Tunable(), oldbuf.tunable)
-                           (SciMLStructures.Discrete(), oldbuf.discrete)
-                           (SciMLStructures.Constants(), oldbuf.constant)
-                           (NONNUMERIC_PORTION, oldbuf.nonnumeric)]
-        if isempty(old)
-            push!(newbufs, old)
-            continue
-        end
-        new = Any[copy(i) for i in old]
-        for i in eachindex(new)
-            buftype = get(buftypes, (portion, i), eltype(new[i]))
-            new[i] = similar(new[i], buftype)
-        end
-        push!(newbufs, Tuple(new))
-    end
-    tmpbuf = MTKParameters(
-        newbufs[1], newbufs[2], newbufs[3], oldbuf.dependent, newbufs[4], nothing, nothing)
+function SymbolicIndexingInterface.remake_buffer(sys, oldbuf::MTKParameters, vals::Dict)
+    newbuf = @set oldbuf.tunable = similar.(oldbuf.tunable, Any)
+    @set! newbuf.discrete = similar.(newbuf.discrete, Any)
+    @set! newbuf.constant = similar.(newbuf.constant, Any)
+    @set! newbuf.nonnumeric = similar.(newbuf.nonnumeric, Any)
+
     for (p, val) in vals
         _set_parameter_unchecked!(
-            tmpbuf, val, parameter_index(sys, p); update_dependent = false)
+            newbuf, val, parameter_index(sys, p); update_dependent = false)
     end
-    if oldbuf.dependent_update_oop !== nothing
-        dependent = oldbuf.dependent_update_oop(tmpbuf...)
-    else
-        dependent = ()
+
+    @set! newbuf.tunable = narrow_buffer_type.(newbuf.tunable)
+    @set! newbuf.discrete = narrow_buffer_type.(newbuf.discrete)
+    @set! newbuf.constant = narrow_buffer_type.(newbuf.constant)
+    @set! newbuf.nonnumeric = narrow_buffer_type.(newbuf.nonnumeric)
+    if newbuf.dependent_update_oop !== nothing
+        @set! newbuf.dependent = newbuf.dependent_update_oop(newbuf...)
     end
-    newbuf = MTKParameters(newbufs[1], newbufs[2], newbufs[3], dependent, newbufs[4],
-        oldbuf.dependent_update_iip, oldbuf.dependent_update_oop)
-    return newbuf
 end
 
 _subarrays(v::AbstractVector) = isempty(v) ? () : (v,)
