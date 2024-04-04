@@ -1022,3 +1022,11 @@ prob2 = @test_nowarn ODEProblem(sys, [x => ones(3)], (0.0, 10.0), [p => ones(3, 
 sol2 = @test_nowarn solve(prob2, Tsit5())
 
 @test sol1 ≈ sol2
+
+# Requires fix in symbolics for `linear_expansion(p * x, D(y))`
+@test_broken begin
+    @variables x(t)[1:3] y(t)
+    @parameters p[1:3, 1:3]
+    @test_nowarn @mtkbuild sys = ODESystem([D(x) ~ p * x, D(y) ~ x' * p * x], t)
+    @test_nowarn ODEProblem(sys, [x => ones(3), y => 2], (0.0, 10.0), [p => ones(3, 3)])
+end
