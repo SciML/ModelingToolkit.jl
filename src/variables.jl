@@ -216,6 +216,7 @@ function canonicalize_varmap(varmap; toterm = Symbolics.diff2term)
         if Symbolics.isarraysymbolic(k) && Symbolics.shape(k) !== Symbolics.Unknown()
             for i in eachindex(k)
                 new_varmap[k[i]] = v[i]
+                new_varmap[toterm(k[i])] = v[i]
             end
         end
     end

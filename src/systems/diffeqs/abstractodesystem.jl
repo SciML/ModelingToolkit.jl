@@ -857,6 +857,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     varmap = u0map === nothing || isempty(u0map) || eltype(u0map) <: Number ?
              defaults(sys) :
              merge(defaults(sys), todict(u0map))
+    varmap = canonicalize_varmap(varmap)
     varlist = collect(map(unwrap, dvs))
     missingvars = setdiff(varlist, collect(keys(varmap)))
 

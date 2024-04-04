@@ -67,3 +67,10 @@ varmap = Dict(p => ones(3), q => 2ones(3))
 cvarmap = ModelingToolkit.canonicalize_varmap(varmap)
 target_varmap = Dict(p => ones(3), q => 2ones(3), q[1] => 2.0, q[2] => 2.0, q[3] => 2.0)
 @test cvarmap == target_varmap
+
+# Initialization of ODEProblem with dummy derivatives of multidimensional arrays
+# Issue#1283
+@variables z(t)[1:2, 1:2]
+eqs = [D(D(z)) ~ ones(2, 2)]
+@mtkbuild sys = ODESystem(eqs, t)
+@test_nowarn ODEProblem(sys, [z => zeros(2, 2), D(z) => ones(2, 2)], (0.0, 10.0))
