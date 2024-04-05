@@ -362,6 +362,7 @@ function flatten(sys::ODESystem, noeqs = false)
             discrete_events = discrete_events(sys),
             defaults = defaults(sys),
             name = nameof(sys),
+            initialization_eqs = initialization_equations(sys),
             checks = false)
     end
 end
