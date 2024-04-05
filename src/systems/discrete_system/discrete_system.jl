@@ -103,6 +103,7 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
         if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
             check_parameters(ps, iv)
+            check_namespacing(discreteEqs, dvs, ps, iv; systems)
         end
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(dvs, ps, iv)
