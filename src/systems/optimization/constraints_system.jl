@@ -88,6 +88,7 @@ struct ConstraintsSystem <: AbstractTimeIndependentSystem
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(unknowns, ps)
             check_units(u, constraints)
+            check_namespacing(constraints, unknowns, ps, nothing; systems)
         end
         new(tag, constraints, unknowns, ps, var_to_name, observed, jac, name, systems,
             defaults,
