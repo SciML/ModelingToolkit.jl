@@ -74,7 +74,6 @@ struct OptimizationSystem <: AbstractOptimizationSystem
             unwrap(op) isa Symbolic && check_units(u, op)
             check_units(u, observed)
             check_units(u, constraints)
-            check_namespacing([op; constraints], unknowns, ps, nothing; systems)
         end
         new(tag, op, unknowns, ps, var_to_name, observed,
             constraints, name, systems, defaults, metadata, gui_metadata, complete,

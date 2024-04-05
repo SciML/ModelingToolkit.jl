@@ -188,7 +188,6 @@ struct ODESystem <: AbstractODESystem
             check_parameters(ps, iv)
             check_equations(deqs, iv)
             check_equations(equations(cevents), iv)
-            check_namespacing([deqs; equations(cevents)], dvs, ps, iv; systems)
         end
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(dvs, ps, iv)
