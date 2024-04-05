@@ -182,35 +182,6 @@ function check_equations(eqs, iv)
             throw(ArgumentError("Differential w.r.t. variable ($single_iv) other than the independent variable ($iv) are not allowed."))
     end
 end
-
-function check_namespacing(eqs, dvs, ps, iv; systems = [])
-    eqsyms = vars(eqs; op = Nothing)
-    syssyms = Set{Symbol}()
-    foldl(Iterators.flatten((dvs, ps)); init = syssyms) do prev, sym
-        sym = unwrap(sym)
-        while istree(sym) && operation(sym) isa Operator
-            sym = only(arguments(sym))
-        end
-        push!(prev, getname(sym))
-        prev
-    end
-    subsysnames = get_name.(systems)
-    if iv !== nothing
-        push!(syssyms, getname(iv))
-    end
-    for sym in eqsyms
-        symname = getname(sym)
-        strname = String(symname)
-        if occursin('₊', strname)
-            subsysname = Symbol(first(split(strname, '₊')))
-            subsysname in subsysnames && continue
-            error("Unexpected variable $sym. Expected system to have subsystem with name $subsysname.")
-        end
-        symname in syssyms && continue
-        error("Symbol $sym does not occur in the system.")
-    end
-end
-
 """
 Get all the independent variables with respect to which differentials are taken.
 """
@@ -377,8 +348,8 @@ end
 vars(exprs::Num; op = Differential) = vars(unwrap(exprs); op)
 vars(exprs::Symbolics.Arr; op = Differential) = vars(unwrap(exprs); op)
 vars(exprs; op = Differential) = foldl((x, y) -> vars!(x, y; op = op), exprs; init = Set())
-vars(eq::Union{Equation, Inequality}; op = Differential) = vars!(Set(), eq; op = op)
-function vars!(vars, eq::Union{Equation, Inequality}; op = Differential)
+vars(eq::Equation; op = Differential) = vars!(Set(), eq; op = op)
+function vars!(vars, eq::Equation; op = Differential)
     (vars!(vars, eq.lhs; op = op); vars!(vars, eq.rhs; op = op); vars)
 end
 function vars!(vars, O; op = Differential)

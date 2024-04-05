@@ -1,8 +1,9 @@
 using ModelingToolkit
-using ModelingToolkit: SymScope, t_nounits as t, D_nounits as D
+using ModelingToolkit: SymScope
 using Symbolics: arguments, value
 using Test
 
+@parameters t
 @variables a b(t) c d e(t)
 
 b = ParentScope(b)
@@ -51,7 +52,7 @@ end
 @test renamed([:foo :bar :baz], c) == Symbol("foo₊c")
 @test renamed([:foo :bar :baz], d) == :d
 
-@parameters a b c d e f
+@parameters t a b c d e f
 p = [a
      ParentScope(b)
      ParentScope(ParentScope(c))
@@ -72,102 +73,3 @@ ps = ModelingToolkit.getname.(parameters(level3))
 @test isequal(ps[4], :level2₊level0₊d)
 @test isequal(ps[5], :level1₊level0₊e)
 @test isequal(ps[6], :f)
-
-@variables x(t) y(t)[1:2]
-@parameters p q[1:2]
-
-@test_throws ["Symbol", "x(t)", "does not occur"] ODESystem(
-    [D(x) ~ p], t, [], [p]; name = :foo)
-@test_nowarn ODESystem([D(x) ~ p], t, [x], [p]; name = :foo)
-@test_throws ["Symbol", "y(t)", "does not occur"] ODESystem(
-    D(y) ~ q, t, [], [q]; name = :foo)
-@test_nowarn ODESystem(D(y) ~ q, t, [y], [q]; name = :foo)
-@test_throws ["Symbol", "y(t)", "[1]", "does not occur"] ODESystem(
-    D(y[1]) ~ x, t, [x], []; name = :foo)
-@test_nowarn ODESystem(D(y[1]) ~ x, t, [x, y], []; name = :foo)
-@test_throws ["Symbol", "p", "does not occur"] ODESystem(D(x) ~ p, t, [x], []; name = :foo)
-@test_nowarn ODESystem(D(x) ~ p, t, [x], [p]; name = :foo)
-@test_throws ["Symbol", "q", "does not occur"] ODESystem(D(y) ~ q, t, [y], []; name = :foo)
-@test_nowarn ODESystem(D(y) ~ q, t, [y], [q]; name = :foo)
-@test_throws ["Symbol", "q", "[1]", "does not occur"] ODESystem(
-    D(y[1]) ~ q[1], t, [y], []; name = :foo)
-@test_nowarn ODESystem(D(y[1]) ~ q[1], t, [y], [q]; name = :foo)
-@test_throws ["Symbol", "x(t)", "does not occur"] ODESystem(
-    Equation[], t, [], [p]; name = :foo, continuous_events = [[x ~ 0.0] => [p ~ 1.0]])
-@test_nowarn ODESystem(
-    Equation[], t, [x], [p]; name = :foo, continuous_events = [[x ~ 0.0] => [p ~ 1.0]])
-
-@named sys1 = ODESystem(Equation[], t, [x, y], [p, q])
-@test_throws ["Unexpected", "sys1₊x(t)", "subsystem with name sys1"] ODESystem(
-    [D(x) ~ sys1.x], t; name = :sys2)
-@test_nowarn ODESystem([D(x) ~ sys1.x], t; name = :sys2, systems = [sys1])
-@test_throws ["Unexpected", "sys1₊y(t)", "subsystem with name sys1"] ODESystem(
-    [D(x) ~ sum(sys1.y)], t; name = :sys2)
-@test_nowarn ODESystem([D(x) ~ sum(sys1.y)], t; name = :sys2, systems = [sys1])
-@test_throws ["Unexpected", "sys1₊y(t)", "[1]", "subsystem with name sys1"] ODESystem(
-    D(x) ~ sys1.y[1], t; name = :sys2)
-@test_nowarn ODESystem(D(x) ~ sys1.y[1], t; name = :sys2, systems = [sys1])
-@test_throws ["Unexpected", "sys1₊p", "subsystem with name sys1"] ODESystem(
-    D(x) ~ sys1.p, t; name = :sys2)
-@test_nowarn ODESystem(D(x) ~ sys1.p, t; name = :sys2, systems = [sys1])
-@test_throws ["Unexpected", "sys1₊q", "subsystem with name sys1"] ODESystem(
-    D(y) ~ sys1.q, t; name = :sys2)
-@test_nowarn ODESystem(D(y) ~ sys1.q, t; name = :sys2, systems = [sys1])
-@test_throws ["Unexpected", "sys1₊q", "[1]", "subsystem with name sys1"] ODESystem(
-    D(x) ~ sys1.q[1], t; name = :sys2)
-@test_nowarn ODESystem(D(x) ~ sys1.q[1], t; name = :sys2, systems = [sys1])
-@test_throws ["Unexpected", "sys1₊x(t)", "subsystem with name sys1"] ODESystem(
-    Equation[], t, [], [p]; name = :sys2, continuous_events = [[sys1.x ~ 0] => [p ~ 1.0]])
-@test_nowarn ODESystem(Equation[], t, [], [p]; name = :sys2,
-    continuous_events = [[sys1.x ~ 0] => [p ~ 1.0]], systems = [sys1])
-
-# Ensure SDESystem checks noise eqs as well
-@test_throws ["Symbol", "x(t)", "does not occur"] SDESystem(
-    Equation[], [0.1x], t, [], []; name = :foo)
-@test_nowarn SDESystem(Equation[], [0.1x], t, [x], []; name = :foo)
-@named sys1 = SDESystem(Equation[], [], t, [x], [])
-@test_throws ["Unexpected", "sys1₊x(t)", "subsystem with name sys1"] SDESystem(
-    Equation[], [0.1sys1.x], t, [], []; name = :foo)
-@test_nowarn SDESystem(Equation[], [0.1sys1.x], t, [], []; name = :foo, systems = [sys1])
-
-# Ensure DiscreteSystem checks work
-k = ShiftIndex(t)
-@test_throws ["Symbol", "x(t)", "does not occur"] DiscreteSystem(
-    [x ~ x(k - 1) + x(k - 2)], t, [], []; name = :foo)
-@test_nowarn DiscreteSystem([x ~ x(k - 1) + x(k - 2)], t; name = :foo)
-@named sys1 = DiscreteSystem(Equation[], t, [x], [])
-@test_throws ["Unexpected", "sys1₊x(t)", "subsystem with name sys1"] DiscreteSystem(
-    [x ~ x(k - 1) + sys1.x(k - 2)], t, [x], []; name = :sys2)
-@test_nowarn DiscreteSystem(
-    [x ~ x(k - 1) + sys1.x(k - 2)], t, [x], []; name = :sys2, systems = [sys1])
-
-# Ensure NonlinearSystem checks work
-@variables x
-@test_throws ["Symbol", "x", "does not occur"] NonlinearSystem(
-    [0 ~ 2x + 3], [], []; name = :foo)
-@test_nowarn NonlinearSystem([0 ~ 2x + 3], [x], []; name = :foo)
-@named sys1 = NonlinearSystem(Equation[], [x], [])
-@test_throws ["Unexpected", "sys1₊x", "subsystem with name sys1"] NonlinearSystem(
-    [0 ~ sys1.x + 3], [], []; name = :foo)
-@test_nowarn NonlinearSystem([0 ~ sys1.x + 3], [], []; name = :foo, systems = [sys1])
-
-# Ensure ConstraintsSystem checks work
-@test_throws ["Symbol", "x", "does not occur"] ConstraintsSystem(
-    [0 ~ x^2 - 3], [], []; name = :foo)
-@test_nowarn ConstraintsSystem([0 ~ x^2 - 3], [x], []; name = :foo)
-@test_throws ["Symbol", "x", "does not occur"] ConstraintsSystem(
-    [Inequality(x^2, 3, <)], [], []; name = :foo)
-@test_nowarn ConstraintsSystem([Inequality(x^2, 3, <)], [x], []; name = :foo)
-@named sys1 = ConstraintsSystem(Equation[], [x], [])
-@test_throws ["Unexpected", "sys1₊x", "subsystem with name sys1"] ConstraintsSystem(
-    [0 ~ sys1.x^2 - 2], [], []; name = :sys2)
-@test_nowarn ConstraintsSystem([0 ~ sys1.x^2 - 2], [], []; name = :sys2, systems = [sys1])
-
-# Ensure OptimizationSystem checks work
-@test_throws ["Symbol", "x", "does not occur"] OptimizationSystem(
-    y[1], [y[1]], []; constraints = [x ~ 3], name = :foo)
-@test_nowarn OptimizationSystem(y[1], [y[1], x], []; constraints = [x ~ 3], name = :foo)
-@named sys1 = OptimizationSystem(x, [x], [])
-@test_throws ["Unexpected", "sys1₊x", "subsystem with name sys1"] OptimizationSystem(
-    sys1.x^2 - 2, [], []; name = :sys2)
-@test_nowarn OptimizationSystem(sys1.x^2 - 2, [], []; name = :sys2, systems = [sys1])

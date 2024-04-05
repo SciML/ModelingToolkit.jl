@@ -95,7 +95,6 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(unknowns, ps)
             check_units(u, eqs)
-            check_namespacing(eqs, unknowns, ps, nothing; systems)
         end
         new(tag, eqs, unknowns, ps, var_to_name, observed, jac, name, systems, defaults,
             connector_type, metadata, gui_metadata, tearing_state, substitutions, complete,
