@@ -233,7 +233,7 @@ function get_cmap(sys::ConstraintsSystem, exprs = nothing)
         cs = [cs; collect_constants(get_substitutions(sys).subs)]
     end
     if exprs !== nothing
-        cs = [cs; collect_contants(exprs)]
+        cs = [cs; collect_constants(exprs)]
     end
     # Swap constants for their values
     cmap = map(x -> x ~ getdefault(x), cs)
