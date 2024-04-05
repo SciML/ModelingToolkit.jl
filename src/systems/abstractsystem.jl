@@ -153,15 +153,15 @@ generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys),
 
 Generate a function to evaluate `exprs`. `exprs` is a symbolic expression or
 array of symbolic expression involving symbolic variables in `sys`. The symbolic variables
-may be subsetted using `dvs` and `ps`. All `kwargs` except `postprocess_fbody` and `states`
-are passed to the internal [`build_function`](@ref) call. The returned function can be called
-as `f(u, p, t)` or `f(du, u, p, t)` for time-dependent systems and `f(u, p)` or `f(du, u, p)`
-for time-independent systems. If `split=true` (the default) was passed to [`complete`](@ref),
+may be subsetted using `dvs` and `ps`. All `kwargs` are passed to the internal
+[`build_function`](@ref) call. The returned function can be called as `f(u, p, t)` or
+`f(du, u, p, t)` for time-dependent systems and `f(u, p)` or `f(du, u, p)` for
+time-independent systems. If `split=true` (the default) was passed to [`complete`](@ref),
 [`structural_simplify`](@ref) or [`@mtkbuild`](@ref), `p` is expected to be an `MTKParameters`
 object.
 """
 function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys),
-        ps = parameters(sys); wrap_code = nothing, kwargs...)
+        ps = parameters(sys); wrap_code = nothing, postprocess_fbody = nothing, states = nothing, kwargs...)
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system.")
     end
@@ -170,16 +170,21 @@ function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys
     if wrap_code === nothing
         wrap_code = isscalar ? identity : (identity, identity)
     end
-    pre, sol_states = get_substitutions_and_solved_unknowns(sys)
-
+    pre, sol_states = get_substitutions_and_solved_unknowns(sys, isscalar ? [exprs] : exprs)
+    if postprocess_fbody === nothing
+        postprocess_fbody = pre
+    end
+    if states === nothing
+        states = sol_states
+    end
     if is_time_dependent(sys)
         return build_function(exprs,
             dvs,
             p...,
             get_iv(sys);
             kwargs...,
-            postprocess_fbody = pre,
-            states = sol_states,
+            postprocess_fbody,
+            states,
             wrap_code = wrap_code .∘ wrap_mtkparameters(sys, isscalar) .∘
                         wrap_array_vars(sys, exprs; dvs)
         )
@@ -188,8 +193,8 @@ function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys
             dvs,
             p...;
             kwargs...,
-            postprocess_fbody = pre,
-            states = sol_states,
+            postprocess_fbody,
+            states,
             wrap_code = wrap_code .∘ wrap_mtkparameters(sys, isscalar) .∘
                         wrap_array_vars(sys, exprs; dvs)
         )

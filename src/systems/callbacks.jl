@@ -388,6 +388,7 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
             return (args...) -> () # We don't do anything in the callback, we're just after the event
         end
     else
+        eqs = flatten_equations(eqs)
         rhss = map(x -> x.rhs, eqs)
         outvar = :u
         if outputidxs === nothing
@@ -457,7 +458,7 @@ end
 
 function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = unknowns(sys),
         ps = full_parameters(sys); kwargs...)
-    eqs = map(cb -> cb.eqs, cbs)
+    eqs = map(cb -> flatten_equations(cb.eqs), cbs)
     num_eqs = length.(eqs)
     (isempty(eqs) || sum(num_eqs) == 0) && return nothing
     # fuse equations to create VectorContinuousCallback
@@ -471,12 +472,8 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = unknow
     rhss = map(x -> x.rhs, eqs)
     root_eq_vars = unique(collect(Iterators.flatten(map(ModelingToolkit.vars, rhss))))
 
-    u = map(x -> time_varying_as_func(value(x), sys), dvs)
-    p = map.(x -> time_varying_as_func(value(x), sys), reorder_parameters(sys, ps))
-    t = get_iv(sys)
-    pre = get_preprocess_constants(rhss)
-    rf_oop, rf_ip = build_function(rhss, u, p..., t; expression = Val{false},
-        postprocess_fbody = pre, kwargs...)
+    rf_oop, rf_ip = generate_custom_function(sys, rhss, dvs, ps; expression = Val{false},
+        kwargs...)
 
     affect_functions = map(cbs) do cb # Keep affect function separate
         eq_aff = affects(cb)
@@ -487,16 +484,16 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = unknow
         cond = function (u, t, integ)
             if DiffEqBase.isinplace(integ.sol.prob)
                 tmp, = DiffEqBase.get_tmp_cache(integ)
-                rf_ip(tmp, u, parameter_values(integ)..., t)
+                rf_ip(tmp, u, parameter_values(integ), t)
                 tmp[1]
             else
-                rf_oop(u, parameter_values(integ)..., t)
+                rf_oop(u, parameter_values(integ), t)
             end
         end
         ContinuousCallback(cond, affect_functions[])
     else
         cond = function (out, u, t, integ)
-            rf_ip(out, u, parameter_values(integ)..., t)
+            rf_ip(out, u, parameter_values(integ), t)
         end
 
         # since there may be different number of conditions and affects,

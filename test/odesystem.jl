@@ -995,3 +995,38 @@ let # Issue https://github.com/SciML/ModelingToolkit.jl/issues/2322
     sol = solve(prob, Rodas4())
     @test sol(1)[]≈0.6065307685451087 rtol=1e-4
 end
+
+# Issue#2599
+@variables x(t) y(t)
+eqs = [D(x) ~ x * t, y ~ 2x]
+@mtkbuild sys = ODESystem(eqs, t; continuous_events = [[y ~ 3] => [x ~ 2]])
+prob = ODEProblem(sys, [x => 1.0], (0.0, 10.0))
+@test_nowarn solve(prob, Tsit5())
+
+# Issue#2383
+@variables x(t)[1:3]
+@parameters p[1:3, 1:3]
+eqs = [
+    D(x) ~ p * x
+]
+@mtkbuild sys = ODESystem(eqs, t; continuous_events = [[norm(x) ~ 3.0] => [x ~ ones(3)]])
+# array affect equations used to not work
+prob1 = @test_nowarn ODEProblem(sys, [x => ones(3)], (0.0, 10.0), [p => ones(3, 3)])
+sol1 = @test_nowarn solve(prob1, Tsit5())
+
+# array condition equations also used to not work
+@mtkbuild sys = ODESystem(
+    eqs, t; continuous_events = [[x ~ sqrt(3) * ones(3)] => [x ~ ones(3)]])
+# array affect equations used to not work
+prob2 = @test_nowarn ODEProblem(sys, [x => ones(3)], (0.0, 10.0), [p => ones(3, 3)])
+sol2 = @test_nowarn solve(prob2, Tsit5())
+
+@test sol1 ≈ sol2
+
+# Requires fix in symbolics for `linear_expansion(p * x, D(y))`
+@test_broken begin
+    @variables x(t)[1:3] y(t)
+    @parameters p[1:3, 1:3]
+    @test_nowarn @mtkbuild sys = ODESystem([D(x) ~ p * x, D(y) ~ x' * p * x], t)
+    @test_nowarn ODEProblem(sys, [x => ones(3), y => 2], (0.0, 10.0), [p => ones(3, 3)])
+end

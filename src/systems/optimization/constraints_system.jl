@@ -226,11 +226,14 @@ function generate_canonical_form_lhss(sys)
     lhss = subs_constants([Symbolics.canonical_form(eq).lhs for eq in constraints(sys)])
 end
 
-function get_cmap(sys::ConstraintsSystem)
+function get_cmap(sys::ConstraintsSystem, exprs = nothing)
     #Inject substitutions for constants => values
     cs = collect_constants([get_constraints(sys); get_observed(sys)]) #ctrls? what else?
     if !empty_substitutions(sys)
         cs = [cs; collect_constants(get_substitutions(sys).subs)]
+    end
+    if exprs !== nothing
+        cs = [cs; collect_constants(exprs)]
     end
     # Swap constants for their values
     cmap = map(x -> x ~ getdefault(x), cs)
