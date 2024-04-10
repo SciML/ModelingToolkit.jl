@@ -62,7 +62,7 @@ function generate_initializesystem(sys::ODESystem;
         end
     else
         dd_guess = Dict()
-        filtered_u0 = u0map
+        filtered_u0 = todict(u0map)
     end
 
     defs = merge(defaults(sys), filtered_u0)
