@@ -1030,3 +1030,15 @@ sol2 = @test_nowarn solve(prob2, Tsit5())
     @test_nowarn @mtkbuild sys = ODESystem([D(x) ~ p * x, D(y) ~ x' * p * x], t)
     @test_nowarn ODEProblem(sys, [x => ones(3), y => 2], (0.0, 10.0), [p => ones(3, 3)])
 end
+
+@parameters g L
+@variables q₁(t) q₂(t) λ(t) θ(t)
+
+eqs = [D(D(q₁)) ~ -λ * q₁,
+    D(D(q₂)) ~ -λ * q₂ - g,
+    q₁ ~ L * sin(θ),
+    q₂ ~ L * cos(θ)]
+
+@named pend = ODESystem(eqs, t)
+@test_nowarn generate_initializesystem(
+    pend, u0map = [q₁ => 1.0, q₂ => 0.0], guesses = [λ => 1])
