@@ -2225,6 +2225,10 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
     eqs = union(get_eqs(basesys), get_eqs(sys))
     sts = union(get_unknowns(basesys), get_unknowns(sys))
     ps = union(get_ps(basesys), get_ps(sys))
+    base_deps = get_parameter_dependencies(basesys)
+    deps = get_parameter_dependencies(sys)
+    dep_ps = isnothing(base_deps) ? deps :
+             isnothing(deps) ? base_deps : union(base_deps, deps)
     obs = union(get_observed(basesys), get_observed(sys))
     cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
     devs = union(get_discrete_events(basesys), get_discrete_events(sys))
@@ -2233,11 +2237,12 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
 
     if length(ivs) == 0
         T(eqs, sts, ps, observed = obs, defaults = defs, name = name, systems = syss,
-            continuous_events = cevs, discrete_events = devs, gui_metadata = gui_metadata)
+            continuous_events = cevs, discrete_events = devs, gui_metadata = gui_metadata,
+            parameter_dependencies = dep_ps)
     elseif length(ivs) == 1
         T(eqs, ivs[1], sts, ps, observed = obs, defaults = defs, name = name,
             systems = syss, continuous_events = cevs, discrete_events = devs,
-            gui_metadata = gui_metadata)
+            gui_metadata = gui_metadata, parameter_dependencies = dep_ps)
     end
 end
 
@@ -2395,7 +2400,7 @@ end
 """
     is_diff_equation(eq)
 
-Returns `true` if the input is a differential equation, i.e. is an equatation that contain some 
+Returns `true` if the input is a differential equation, i.e. is an equatation that contain some
 form of differential.
 
 Example:
@@ -2421,7 +2426,7 @@ end
 """
     is_alg_equation(eq)
 
-Returns `true` if the input is an algebraic equation, i.e. is an equatation that does not contain 
+Returns `true` if the input is an algebraic equation, i.e. is an equatation that does not contain
 any differentials.
 
 Example:
@@ -2603,7 +2608,7 @@ has_alg_eqs(sys::AbstractSystem) = any(is_alg_equation, get_eqs(sys))
 """
     has_diff_eqs(sys::AbstractSystem)
 
-For a system, returns true if it contain at least one differential equation (i.e. that contain a 
+For a system, returns true if it contain at least one differential equation (i.e. that contain a
 differential) in its *top-level system*.
 
 Example:
