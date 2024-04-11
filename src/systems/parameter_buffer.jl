@@ -43,8 +43,7 @@ function MTKParameters(
     p = merge(defs, p)
     p = merge(Dict(unwrap(k) => v for (k, v) in p),
         Dict(default_toterm(unwrap(k)) => v for (k, v) in p))
-    p = Dict(k => fixpoint_sub(v, p)
-    for (k, v) in p if k in all_ps || default_toterm(k) in all_ps)
+    p = Dict(k => fixpoint_sub(v, p) for (k, v) in p)
     for (sym, _) in p
         if istree(sym) && operation(sym) === getindex &&
            first(arguments(sym)) in all_ps
@@ -89,14 +88,24 @@ function MTKParameters(
 
     for (sym, val) in p
         sym = unwrap(sym)
+        val = unwrap(val)
         ctype = concrete_symtype(sym)
-        val = symconvert(ctype, unwrap(fixpoint_sub(val, p)))
+        if symbolic_type(val) !== NotSymbolic()
+            continue
+        end
+        val = symconvert(ctype, val)
         done = set_value(sym, val)
         if !done && Symbolics.isarraysymbolic(sym)
-            done = all(set_value.(collect(sym), val))
-        end
-        if !done
-            error("Symbol $sym does not have an index")
+            if Symbolics.shape(sym) === Symbolics.Unknown()
+                for i in eachindex(val)
+                    set_value(sym[i], val[i])
+                end
+            else
+                if size(sym) != size(val)
+                    error("Got value of size $(size(val)) for parameter $sym of size $(size(sym))")
+                end
+                set_value.(collect(sym), val)
+            end
         end
     end
 
