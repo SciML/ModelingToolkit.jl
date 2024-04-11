@@ -2400,8 +2400,8 @@ end
 """
     is_diff_equation(eq)
 
-Returns `true` if the input is a differential equation, i.e. is an equatation that contain some
-form of differential.
+Return `true` if the input is a differential equation, i.e. an equation that contains a
+differential term.
 
 Example:
 ```julia
@@ -2426,7 +2426,7 @@ end
 """
     is_alg_equation(eq)
 
-Returns `true` if the input is an algebraic equation, i.e. is an equatation that does not contain
+Return `true` if the input is an algebraic equation, i.e. an equation that does not contain
 any differentials.
 
 Example:
@@ -2608,8 +2608,9 @@ has_alg_eqs(sys::AbstractSystem) = any(is_alg_equation, get_eqs(sys))
 """
     has_diff_eqs(sys::AbstractSystem)
 
-For a system, returns true if it contain at least one differential equation (i.e. that contain a
-differential) in its *top-level system*.
+Return `true` if a system contains at least one differential equation (i.e. an equation with a
+differential term). Note that this does not consider subsystems, and only takes into account
+equations in the top-level system.
 
 Example:
 ```julia
