@@ -112,3 +112,12 @@ u0 = [X => 1.0]
 ps = [p => [2.0, 0.1]]
 p = MTKParameters(osys, ps, u0)
 @test p.tunable[1] == [2.0, 0.1]
+
+# Ensure partial update promotes the buffer
+@parameters p q r
+@named sys = ODESystem(Equation[], t, [], [p, q, r])
+sys = complete(sys)
+ps = MTKParameters(sys, [p => 1.0, q => 2.0, r => 3.0])
+newps = remake_buffer(sys, ps, Dict(p => 1.0f0))
+@test newps.tunable[1] isa Vector{Float32}
+@test newps.tunable[1] == [1.0f0, 2.0f0, 3.0f0]
