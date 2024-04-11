@@ -101,3 +101,14 @@ function loss(value, sys, ps)
 end
 
 @test ForwardDiff.derivative(x -> loss(x, sys, ps), 1.5) == 3.0
+
+# Issue#2615
+@parameters p::Vector{Float64}
+@variables X(t)
+eq = D(X) ~ p[1] - p[2] * X
+@mtkbuild osys = ODESystem([eq], t)
+
+u0 = [X => 1.0]
+ps = [p => [2.0, 0.1]]
+p = MTKParameters(osys, ps, u0)
+@test p.tunable[1] == [2.0, 0.1]

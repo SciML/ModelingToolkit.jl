@@ -1024,7 +1024,7 @@ sol2 = @test_nowarn solve(prob2, Tsit5())
 @test sol1 ≈ sol2
 
 # Requires fix in symbolics for `linear_expansion(p * x, D(y))`
-@test_broken begin
+@test_skip begin
     @variables x(t)[1:3] y(t)
     @parameters p[1:3, 1:3]
     @test_nowarn @mtkbuild sys = ODESystem([D(x) ~ p * x, D(y) ~ x' * p * x], t)
