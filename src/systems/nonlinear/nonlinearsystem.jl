@@ -57,6 +57,11 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     """
     connector_type::Any
     """
+    A mapping from dependent parameters to expressions describing how they are calculated from
+    other parameters.
+    """
+    parameter_dependencies::Union{Nothing, Dict}
+    """
     Metadata for the system, to be used by downstream packages.
     """
     metadata::Any
@@ -87,7 +92,7 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
 
     function NonlinearSystem(tag, eqs, unknowns, ps, var_to_name, observed, jac, name,
             systems,
-            defaults, connector_type, metadata = nothing,
+            defaults, connector_type, parameter_dependencies = nothing, metadata = nothing,
             gui_metadata = nothing,
             tearing_state = nothing, substitutions = nothing,
             complete = false, index_cache = nothing, parent = nothing; checks::Union{
@@ -97,8 +102,8 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
             check_units(u, eqs)
         end
         new(tag, eqs, unknowns, ps, var_to_name, observed, jac, name, systems, defaults,
-            connector_type, metadata, gui_metadata, tearing_state, substitutions, complete,
-            index_cache, parent)
+            connector_type, parameter_dependencies, metadata, gui_metadata, tearing_state,
+            substitutions, complete, index_cache, parent)
     end
 end
 
@@ -113,6 +118,7 @@ function NonlinearSystem(eqs, unknowns, ps;
         continuous_events = nothing, # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
         discrete_events = nothing,   # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
         checks = true,
+        parameter_dependencies = nothing,
         metadata = nothing,
         gui_metadata = nothing)
     continuous_events === nothing || isempty(continuous_events) ||
@@ -148,9 +154,11 @@ function NonlinearSystem(eqs, unknowns, ps;
     process_variables!(var_to_name, defaults, ps)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
+    parameter_dependencies, ps = process_parameter_dependencies(
+        parameter_dependencies, ps)
     NonlinearSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         eqs, unknowns, ps, var_to_name, observed, jac, name, systems, defaults,
-        connector_type, metadata, gui_metadata, checks = checks)
+        connector_type, parameter_dependencies, metadata, gui_metadata, checks = checks)
 end
 
 function NonlinearSystem(eqs; kwargs...)
@@ -233,6 +241,7 @@ function generate_function(
     pre, sol_states = get_substitutions_and_solved_unknowns(sys)
 
     p = reorder_parameters(sys, value.(ps))
+    @show p ps
     return build_function(rhss, value.(dvs), p...; postprocess_fbody = pre,
         states = sol_states, kwargs...)
 end
@@ -385,7 +394,7 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
         kwargs...)
     eqs = equations(sys)
     dvs = unknowns(sys)
-    ps = parameters(sys)
+    ps = full_parameters(sys)
 
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         u0, defs = get_u0(sys, u0map, parammap)
