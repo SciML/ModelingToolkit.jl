@@ -350,6 +350,7 @@ function SymbolicIndexingInterface.remake_buffer(sys, oldbuf::MTKParameters, val
     if newbuf.dependent_update_oop !== nothing
         @set! newbuf.dependent = newbuf.dependent_update_oop(newbuf...)
     end
+    return newbuf
 end
 
 _subarrays(v::AbstractVector) = isempty(v) ? () : (v,)
