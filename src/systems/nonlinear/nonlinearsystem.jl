@@ -153,6 +153,32 @@ function NonlinearSystem(eqs, unknowns, ps;
         connector_type, metadata, gui_metadata, checks = checks)
 end
 
+function NonlinearSystem(eqs; kwargs...)
+    eqs = collect(eqs)
+    allunknowns = OrderedSet()
+    ps = OrderedSet()
+    for eq in eqs
+        collect_vars!(allunknowns, ps, eq.lhs, nothing)
+        collect_vars!(allunknowns, ps, eq.rhs, nothing)
+    end
+    new_ps = OrderedSet()
+    for p in ps
+        if istree(p) && operation(p) === getindex
+            par = arguments(p)[begin]
+            if Symbolics.shape(Symbolics.unwrap(par)) !== Symbolics.Unknown() &&
+               all(par[i] in ps for i in eachindex(par))
+                push!(new_ps, par)
+            else
+                push!(new_ps, p)
+            end
+        else
+            push!(new_ps, p)
+        end
+    end
+
+    return NonlinearSystem(eqs, collect(allunknowns), collect(new_ps); kwargs...)
+end
+
 function calculate_jacobian(sys::NonlinearSystem; sparse = false, simplify = false)
     cache = get_jac(sys)[]
     if cache isa Tuple && cache[2] == (sparse, simplify)

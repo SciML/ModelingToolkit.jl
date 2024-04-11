@@ -257,3 +257,12 @@ end
     sol = solve(prob)
     @test_nowarn sol[unknowns(ns)]
 end
+
+# Issue#2625
+@parameters p d
+@variables X(t)
+alg_eqs = [0 ~ p - d * X]
+
+sys = @test_nowarn NonlinearSystem(alg_eqs; name = :name)
+@test isequal(only(unknowns(sys)), X)
+@test all(isequal.(parameters(sys), [p, d]))
