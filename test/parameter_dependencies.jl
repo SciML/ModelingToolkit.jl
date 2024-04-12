@@ -7,6 +7,7 @@ using JumpProcesses
 using StableRNGs
 using SciMLStructures: canonicalize, Tunable, replace, replace!
 using SymbolicIndexingInterface
+using NonlinearSolve
 
 @testset "ODESystem with callbacks" begin
     @parameters p1=1.0 p2=1.0
@@ -160,6 +161,22 @@ end
     step!(integ, 11.0)
     @test integ.ps[γ] == 0.02
     @test integ.ps[β] == 0.0002
+end
+
+@testset "NonlinearSystem" begin
+    @parameters p1=1.0 p2=1.0
+    @variables x(t)
+    eqs = [0 ~ p1 * x * exp(x) + p2]
+    @mtkbuild sys = NonlinearSystem(eqs; parameter_dependencies = [p2 => 2p1])
+    @test isequal(only(parameters(sys)), p1)
+    @test Set(full_parameters(sys)) == Set([p1, p2])
+    prob = NonlinearProblem(sys, [x => 1.0])
+    @test prob.ps[p1] == 1.0
+    @test prob.ps[p2] == 2.0
+    @test_nowarn solve(prob, NewtonRaphson())
+    prob = NonlinearProblem(sys, [x => 1.0], [p1 => 2.0])
+    @test prob.ps[p1] == 2.0
+    @test prob.ps[p2] == 4.0
 end
 
 @testset "SciMLStructures interface" begin
