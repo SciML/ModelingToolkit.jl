@@ -1042,3 +1042,27 @@ eqs = [D(D(q₁)) ~ -λ * q₁,
 @named pend = ODESystem(eqs, t)
 @test_nowarn generate_initializesystem(
     pend, u0map = [q₁ => 1.0, q₂ => 0.0], guesses = [λ => 1])
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/2618
+@parameters σ ρ β
+@variables x(t) y(t) z(t)
+
+eqs = [D(D(x)) ~ σ * (y - x),
+    D(y) ~ x * (ρ - z) - y,
+    D(z) ~ x * y - β * z]
+
+@mtkbuild sys = ODESystem(eqs, t)
+
+u0 = [D(x) => 2.0,
+    x => 1.0,
+    y => 0.0,
+    z => 0.0]
+
+p = [σ => 28.0,
+    ρ => 10.0,
+    β => 8 / 3]
+
+prob = SteadyStateProblem(sys, u0, p)
+@test prob isa SteadyStateProblem
+prob = SteadyStateProblem(ODEProblem(sys, u0, (0.0, 10.0), p))
+@test prob isa SteadyStateProblem
