@@ -26,14 +26,12 @@ function structural_simplify(
     else
         newsys = newsys′
     end
-    if newsys isa ODESystem
-        @set! newsys.parent = complete(sys; split)
-    elseif has_parent(newsys)
+    if newsys isa ODESystem || has_parent(newsys)
         @set! newsys.parent = complete(sys; split)
     end
     newsys = complete(newsys; split)
     if has_defaults(newsys) && (defs = get_defaults(newsys)) !== nothing
-        ks = collect(keys(defs))
+        ks = collect(keys(defs))  # take copy to avoid mutating defs while iterating.
         for k in ks
             if Symbolics.isarraysymbolic(k) && Symbolics.shape(k) !== Symbolics.Unknown()
                 for i in eachindex(k)
