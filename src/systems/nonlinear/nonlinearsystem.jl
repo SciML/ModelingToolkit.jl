@@ -241,7 +241,6 @@ function generate_function(
     pre, sol_states = get_substitutions_and_solved_unknowns(sys)
 
     p = reorder_parameters(sys, value.(ps))
-    @show p ps
     return build_function(rhss, value.(dvs), p...; postprocess_fbody = pre,
         states = sol_states, kwargs...)
 end
@@ -395,7 +394,6 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
     eqs = equations(sys)
     dvs = unknowns(sys)
     ps = full_parameters(sys)
-
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         u0, defs = get_u0(sys, u0map, parammap)
         check_eqs_u0(eqs, dvs, u0; kwargs...)

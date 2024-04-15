@@ -43,13 +43,31 @@ function MTKParameters(
     p = merge(defs, p)
     p = merge(Dict(unwrap(k) => v for (k, v) in p),
         Dict(default_toterm(unwrap(k)) => v for (k, v) in p))
-    p = Dict(k => fixpoint_sub(v, p) for (k, v) in p)
+    p = Dict(unwrap(k) => fixpoint_sub(v, p) for (k, v) in p)
     for (sym, _) in p
         if istree(sym) && operation(sym) === getindex &&
            first(arguments(sym)) in all_ps
             error("Scalarized parameter values ($sym) are not supported. Instead of `[p[1] => 1.0, p[2] => 2.0]` use `[p => [1.0, 2.0]]`")
         end
     end
+
+    missing_params = Set()
+    for idxmap in (ic.tunable_idx, ic.discrete_idx, ic.constant_idx, ic.nonnumeric_idx)
+        for sym in keys(idxmap)
+            sym isa Symbol && continue
+            haskey(p, sym) && continue
+            hasname(sym) && haskey(p, getname(sym)) && continue
+            ttsym = default_toterm(sym)
+            haskey(p, ttsym) && continue
+            hasname(ttsym) && haskey(p, getname(ttsym)) && continue
+
+            istree(sym) && operation(sym) === getindex && haskey(p, arguments(sym)[1]) &&
+                continue
+            push!(missing_params, sym)
+        end
+    end
+
+    isempty(missing_params) || throw(MissingVariablesError(collect(missing_params)))
 
     tunable_buffer = Tuple(Vector{temp.type}(undef, temp.length)
     for temp in ic.tunable_buffer_sizes)
