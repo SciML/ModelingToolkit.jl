@@ -876,30 +876,33 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
             parammap = Dict(unwrap.(parameters(sys)) .=> parammap)
         end
     end
-    clockedparammap = Dict()
-    defs = ModelingToolkit.get_defaults(sys)
-    for v in ps
-        v = unwrap(v)
-        is_discrete_domain(v) || continue
-        op = operation(v)
-        if !isa(op, Symbolics.Operator) && parammap != SciMLBase.NullParameters() &&
-           haskey(parammap, v)
-            error("Initial conditions for discrete variables must be for the past state of the unknown. Instead of providing the condition for $v, provide the condition for $(Shift(iv, -1)(v)).")
+
+    if has_discrete_subsystems(sys) && get_discrete_subsystems(sys) !== nothing
+        clockedparammap = Dict()
+        defs = ModelingToolkit.get_defaults(sys)
+        for v in ps
+            v = unwrap(v)
+            is_discrete_domain(v) || continue
+            op = operation(v)
+            if !isa(op, Symbolics.Operator) && parammap != SciMLBase.NullParameters() &&
+               haskey(parammap, v)
+                error("Initial conditions for discrete variables must be for the past state of the unknown. Instead of providing the condition for $v, provide the condition for $(Shift(iv, -1)(v)).")
+            end
+            shiftedv = StructuralTransformations.simplify_shifts(Shift(iv, -1)(v))
+            if parammap != SciMLBase.NullParameters() &&
+               (val = get(parammap, shiftedv, nothing)) !== nothing
+                clockedparammap[v] = val
+            elseif op isa Shift
+                root = arguments(v)[1]
+                haskey(defs, root) || error("Initial condition for $v not provided.")
+                clockedparammap[v] = defs[root]
+            end
         end
-        shiftedv = StructuralTransformations.simplify_shifts(Shift(iv, -1)(v))
-        if parammap != SciMLBase.NullParameters() &&
-           (val = get(parammap, shiftedv, nothing)) !== nothing
-            clockedparammap[v] = val
-        elseif op isa Shift
-            root = arguments(v)[1]
-            haskey(defs, root) || error("Initial condition for $v not provided.")
-            clockedparammap[v] = defs[root]
+        parammap = if parammap == SciMLBase.NullParameters()
+            clockedparammap
+        else
+            merge(parammap, clockedparammap)
         end
-    end
-    parammap = if parammap == SciMLBase.NullParameters()
-        clockedparammap
-    else
-        merge(parammap, clockedparammap)
     end
     # TODO: make it work with clocks
     # ModelingToolkit.get_tearing_state(sys) !== nothing => Requires structural_simplify first
@@ -931,7 +934,12 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         u0, defs = get_u0(sys, trueinit, parammap; symbolic_u0)
         check_eqs_u0(eqs, dvs, u0; kwargs...)
-        p = MTKParameters(sys, parammap, trueinit)
+        p = if parammap === nothing ||
+               parammap == SciMLBase.NullParameters() && isempty(defs)
+            nothing
+        else
+            MTKParameters(sys, parammap, trueinit)
+        end
     else
         u0, p, defs = get_u0_p(sys,
             trueinit,
@@ -1592,7 +1600,6 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
     end
-
     if isempty(u0map) && get_initializesystem(sys) !== nothing
         isys = get_initializesystem(sys)
     elseif isempty(u0map) && get_initializesystem(sys) === nothing
@@ -1620,9 +1627,9 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         @warn "Initialization system is underdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false."
     end
 
-    parammap isa DiffEqBase.NullParameters || isempty(parammap) ?
-    [get_iv(sys) => t] :
-    merge(todict(parammap), Dict(get_iv(sys) => t))
+    parammap = parammap isa DiffEqBase.NullParameters || isempty(parammap) ?
+               [get_iv(sys) => t] :
+               merge(todict(parammap), Dict(get_iv(sys) => t))
 
     if neqs == nunknown
         NonlinearProblem(isys, guesses, parammap)
