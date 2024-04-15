@@ -324,29 +324,42 @@ function _set_parameter_unchecked!(
         p.dependent_update_iip(ArrayPartition(p.dependent), p...)
 end
 
-function narrow_buffer_type(buffer::Vector)
+function narrow_buffer_type_and_fallback_undefs(oldbuf::Vector, newbuf::Vector)
     type = Union{}
-    for x in buffer
-        type = Union{type, typeof(x)}
+    for i in eachindex(newbuf)
+        isassigned(newbuf, i) || continue
+        type = promote_type(type, typeof(newbuf[i]))
     end
-    return convert(Vector{type}, buffer)
+    for i in eachindex(newbuf)
+        isassigned(newbuf, i) && continue
+        newbuf[i] = convert(type, oldbuf[i])
+    end
+    return convert(Vector{type}, newbuf)
 end
 
 function SymbolicIndexingInterface.remake_buffer(sys, oldbuf::MTKParameters, vals::Dict)
-    newbuf = @set oldbuf.tunable = similar.(oldbuf.tunable, Any)
-    @set! newbuf.discrete = similar.(newbuf.discrete, Any)
-    @set! newbuf.constant = similar.(newbuf.constant, Any)
-    @set! newbuf.nonnumeric = similar.(newbuf.nonnumeric, Any)
+    newbuf = @set oldbuf.tunable = Tuple(Vector{Any}(undef, length(buf))
+    for buf in oldbuf.tunable)
+    @set! newbuf.discrete = Tuple(Vector{Any}(undef, length(buf))
+    for buf in newbuf.discrete)
+    @set! newbuf.constant = Tuple(Vector{Any}(undef, length(buf))
+    for buf in newbuf.constant)
+    @set! newbuf.nonnumeric = Tuple(Vector{Any}(undef, length(buf))
+    for buf in newbuf.nonnumeric)
 
     for (p, val) in vals
         _set_parameter_unchecked!(
             newbuf, val, parameter_index(sys, p); update_dependent = false)
     end
 
-    @set! newbuf.tunable = narrow_buffer_type.(newbuf.tunable)
-    @set! newbuf.discrete = narrow_buffer_type.(newbuf.discrete)
-    @set! newbuf.constant = narrow_buffer_type.(newbuf.constant)
-    @set! newbuf.nonnumeric = narrow_buffer_type.(newbuf.nonnumeric)
+    @set! newbuf.tunable = narrow_buffer_type_and_fallback_undefs.(
+        oldbuf.tunable, newbuf.tunable)
+    @set! newbuf.discrete = narrow_buffer_type_and_fallback_undefs.(
+        oldbuf.discrete, newbuf.discrete)
+    @set! newbuf.constant = narrow_buffer_type_and_fallback_undefs.(
+        oldbuf.constant, newbuf.constant)
+    @set! newbuf.nonnumeric = narrow_buffer_type_and_fallback_undefs.(
+        oldbuf.nonnumeric, newbuf.nonnumeric)
     if newbuf.dependent_update_oop !== nothing
         @set! newbuf.dependent = newbuf.dependent_update_oop(newbuf...)
     end
