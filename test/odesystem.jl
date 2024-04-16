@@ -1120,3 +1120,16 @@ tearing_state = TearingState(expand_connections(sys))
 ts_vars = tearing_state.fullvars
 orig_vars = unknowns(sys)
 @test isempty(setdiff(ts_vars, orig_vars))
+
+# Ensure indexes of array symbolics are cached appropriately
+@variables x(t)[1:2]
+@named sys = ODESystem(Equation[], t, [x], [])
+sys1 = complete(sys)
+@named sys = ODESystem(Equation[], t, [x...], [])
+sys2 = complete(sys)
+for sys in [sys1, sys2]
+    for (sym, idx) in [(x, 1:2), (x[1], 1), (x[2], 2)]
+        @test is_variable(sys, sym)
+        @test variable_index(sys, sym) == idx
+    end
+end
