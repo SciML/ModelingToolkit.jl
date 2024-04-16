@@ -123,6 +123,20 @@ newps = remake_buffer(sys, ps, Dict(p => 1.0f0))
 @test newps.tunable[1] isa Vector{Float32}
 @test newps.tunable[1] == [1.0f0, 2.0f0, 3.0f0]
 
+# Issue#2624
+@parameters p d
+@variables X(t)
+eqs = [D(X) ~ p - d * X]
+@mtkbuild sys = ODESystem(eqs, t)
+
+u0 = [X => 1.0]
+tspan = (0.0, 100.0)
+ps = [p => 1.0] # Value for `d` is missing
+
+@test_throws ModelingToolkit.MissingVariablesError ODEProblem(sys, u0, tspan, ps)
+@test_nowarn ODEProblem(sys, u0, tspan, [ps..., d => 1.0])
+
+  
 # JET tests
 
 # scalar parameters only

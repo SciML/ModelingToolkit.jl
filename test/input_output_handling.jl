@@ -20,9 +20,9 @@ end
 @named sys = ODESystem([D(x) ~ -x + u], t) # both u and x are unbound
 @named sys1 = ODESystem([D(x) ~ -x + v[1] + v[2]], t) # both v and x are unbound
 @named sys2 = ODESystem([D(x) ~ -sys.x], t, systems = [sys]) # this binds sys.x in the context of sys2, sys2.x is still unbound
-@named sys21 = ODESystem([D(x) ~ -sys.x], t, systems = [sys1]) # this binds sys.x in the context of sys2, sys2.x is still unbound
+@named sys21 = ODESystem([D(x) ~ -sys1.x], t, systems = [sys1]) # this binds sys.x in the context of sys2, sys2.x is still unbound
 @named sys3 = ODESystem([D(x) ~ -sys.x + sys.u], t, systems = [sys]) # This binds both sys.x and sys.u
-@named sys31 = ODESystem([D(x) ~ -sys.x + sys1.v[1]], t, systems = [sys1]) # This binds both sys.x and sys1.v[1]
+@named sys31 = ODESystem([D(x) ~ -sys1.x + sys1.v[1]], t, systems = [sys1]) # This binds both sys.x and sys1.v[1]
 
 @named sys4 = ODESystem([D(x) ~ -sys.x, u ~ sys.u], t, systems = [sys]) # This binds both sys.x and sys3.u, this system is one layer deeper than the previous. u is directly forwarded to sys.u, and in this case sys.u is bound while u is not
 
@@ -43,7 +43,7 @@ end
 @test is_bound(sys2, sys.x)
 @test !is_bound(sys2, sys.u)
 @test !is_bound(sys2, sys2.sys.u)
-@test is_bound(sys21, sys.x)
+@test is_bound(sys21, sys1.x)
 @test !is_bound(sys21, sys1.v[1])
 @test !is_bound(sys21, sys1.v[2])
 @test is_bound(sys31, sys1.v[1])

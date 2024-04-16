@@ -1066,3 +1066,57 @@ prob = SteadyStateProblem(sys, u0, p)
 @test prob isa SteadyStateProblem
 prob = SteadyStateProblem(ODEProblem(sys, u0, (0.0, 10.0), p))
 @test prob isa SteadyStateProblem
+
+# Issue#2344
+using ModelingToolkitStandardLibrary.Blocks
+
+function FML2(; name)
+    @parameters begin
+        k2[1:1] = [1.0]
+    end
+    systems = @named begin
+        constant = Constant(k = k2[1])
+    end
+    @variables begin
+        x(t) = 0
+    end
+    eqs = [
+        D(x) ~ constant.output.u + k2[1]
+    ]
+    ODESystem(eqs, t; systems, name)
+end
+
+@mtkbuild model = FML2()
+
+@test isequal(ModelingToolkit.defaults(model)[model.constant.k], model.k2[1])
+@test_nowarn ODEProblem(model, [], (0.0, 10.0))
+
+# Issue#2477
+function RealExpression(; name, y)
+    vars = @variables begin
+        u(t)
+    end
+    eqns = [
+        u ~ y
+    ]
+    sys = ODESystem(eqns, t, vars, []; name)
+end
+
+function RealExpressionSystem(; name)
+    vars = @variables begin
+        x(t)
+        z(t)[1:1]
+    end # doing a collect on z doesn't work either. 
+    @named e1 = RealExpression(y = x) # This works perfectly. 
+    @named e2 = RealExpression(y = z[1]) # This bugs. However, `full_equations(e2)` works as expected. 
+    systems = [e1, e2]
+    ODESystem(Equation[], t, Iterators.flatten(vars), []; systems, name)
+end
+
+@named sys = RealExpressionSystem()
+sys = complete(sys)
+@test Set(equations(sys)) == Set([sys.e1.u ~ sys.x, sys.e2.u ~ sys.z[1]])
+tearing_state = TearingState(expand_connections(sys))
+ts_vars = tearing_state.fullvars
+orig_vars = unknowns(sys)
+@test isempty(setdiff(ts_vars, orig_vars))
