@@ -136,12 +136,11 @@ ps = [p => 1.0] # Value for `d` is missing
 @test_throws ModelingToolkit.MissingVariablesError ODEProblem(sys, u0, tspan, ps)
 @test_nowarn ODEProblem(sys, u0, tspan, [ps..., d => 1.0])
 
-  
 # JET tests
 
 # scalar parameters only
 function level1()
-    @parameters p1=0.5 [tunable = true] p2 = 1 [tunable=true] p3 = 3 [tunable = false] p4=3 [tunable = true] y0=1
+    @parameters p1=0.5 [tunable = true] p2=1 [tunable = true] p3=3 [tunable = false] p4=3 [tunable = true] y0=1
     @variables x(t)=2 y(t)=y0
     D = Differential(t)
 
@@ -183,14 +182,14 @@ end
 
 @testset "level$i" for (i, prob) in enumerate([level1(), level2(), level3()])
     ps = prob.p
-    @testset "Type stability of $portion" for portion in [Tunable(), Discrete(), Constants()]
+    @testset "Type stability of $portion" for portion in [
+        Tunable(), Discrete(), Constants()]
         @test_call canonicalize(portion, ps)
         # @inferred canonicalize(portion, ps)
-        broken =
-            (i ∈ [2,3] && portion == Tunable())
+        broken = (i ∈ [2, 3] && portion == Tunable())
 
         # broken because the size of a vector of vectors can't be determined at compile time
-        @test_opt broken=broken target_modules = (ModelingToolkit,) canonicalize(
+        @test_opt broken=broken target_modules=(ModelingToolkit,) canonicalize(
             portion, ps)
 
         buffer, repack, alias = canonicalize(portion, ps)
@@ -200,7 +199,7 @@ end
         @test_opt target_modules=(ModelingToolkit,) SciMLStructures.replace(
             portion, ps, ones(length(buffer)))
 
-        @test_call target_modules = (ModelingToolkit,) SciMLStructures.replace!(
+        @test_call target_modules=(ModelingToolkit,) SciMLStructures.replace!(
             portion, ps, ones(length(buffer)))
         @inferred SciMLStructures.replace!(portion, ps, ones(length(buffer)))
         @test_opt target_modules=(ModelingToolkit,) SciMLStructures.replace!(
