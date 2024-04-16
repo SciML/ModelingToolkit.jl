@@ -137,9 +137,12 @@ function MTKParameters(
 end
 
 function buffer_to_arraypartition(buf)
-    return ArrayPartition(Tuple(eltype(v) <: AbstractArray ? buffer_to_arraypartition(v) :
-                                v for v in buf))
+    return ArrayPartition(ntuple(i -> _buffer_to_arrp_helper(buf[i]), Val(length(buf))))
 end
+
+_buffer_to_arrp_helper(v::T) where {T} = _buffer_to_arrp_helper(eltype(T), v)
+_buffer_to_arrp_helper(::Type{<:AbstractArray}, v) = buffer_to_arraypartition(v)
+_buffer_to_arrp_helper(::Any, v) = v
 
 function _split_helper(buf_v::T, recurse, raw, idx) where {T}
     _split_helper(eltype(T), buf_v, recurse, raw, idx)
