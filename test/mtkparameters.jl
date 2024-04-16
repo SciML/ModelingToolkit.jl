@@ -3,6 +3,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D, MTKParameters
 using SymbolicIndexingInterface
 using SciMLStructures: SciMLStructures, canonicalize, Tunable, Discrete, Constants
 using ForwardDiff
+using JET
 
 @parameters a b c d::Integer e[1:3] f[1:3, 1:3]::Int g::Vector{AbstractFloat} h::String
 @named sys = ODESystem(
@@ -121,3 +122,74 @@ ps = MTKParameters(sys, [p => 1.0, q => 2.0, r => 3.0])
 newps = remake_buffer(sys, ps, Dict(p => 1.0f0))
 @test newps.tunable[1] isa Vector{Float32}
 @test newps.tunable[1] == [1.0f0, 2.0f0, 3.0f0]
+
+# JET tests
+
+# scalar parameters only
+function level1()
+    @parameters p1=0.5 [tunable = true] p2 = 1 [tunable=true] p3 = 3 [tunable = false] p4=3 [tunable = true] y0=1
+    @variables x(t)=2 y(t)=y0
+    D = Differential(t)
+
+    eqs = [D(x) ~ p1 * x - p2 * x * y
+           D(y) ~ -p3 * y + p4 * x * y]
+
+    sys = structural_simplify(complete(ODESystem(
+        eqs, t, tspan = (0, 3.0), name = :sys, parameter_dependencies = [y0 => 2p4])))
+    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys)
+end
+
+# scalar and vector parameters
+function level2()
+    @parameters p1=0.5 [tunable = true] (p23[1:2]=[1, 3.0]) [tunable = true] p4=3 [tunable = false] y0=1
+    @variables x(t)=2 y(t)=y0
+    D = Differential(t)
+
+    eqs = [D(x) ~ p1 * x - p23[1] * x * y
+           D(y) ~ -p23[2] * y + p4 * x * y]
+
+    sys = structural_simplify(complete(ODESystem(
+        eqs, t, tspan = (0, 3.0), name = :sys, parameter_dependencies = [y0 => 2p4])))
+    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys)
+end
+
+# scalar and vector parameters with different scalar types
+function level3()
+    @parameters p1=0.5 [tunable = true] (p23[1:2]=[1, 3.0]) [tunable = true] p4::Int=3 [tunable = true] y0::Int=1
+    @variables x(t)=2 y(t)=y0
+    D = Differential(t)
+
+    eqs = [D(x) ~ p1 * x - p23[1] * x * y
+           D(y) ~ -p23[2] * y + p4 * x * y]
+
+    sys = structural_simplify(complete(ODESystem(
+        eqs, t, tspan = (0, 3.0), name = :sys, parameter_dependencies = [y0 => 2p4])))
+    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys)
+end
+
+@testset "level$i" for (i, prob) in enumerate([level1(), level2(), level3()])
+    ps = prob.p
+    @testset "Type stability of $portion" for portion in [Tunable(), Discrete(), Constants()]
+        @test_call canonicalize(portion, ps)
+        # @inferred canonicalize(portion, ps)
+        broken =
+            (i ∈ [2,3] && portion == Tunable())
+
+        # broken because the size of a vector of vectors can't be determined at compile time
+        @test_opt broken=broken target_modules = (ModelingToolkit,) canonicalize(
+            portion, ps)
+
+        buffer, repack, alias = canonicalize(portion, ps)
+
+        @test_call SciMLStructures.replace(portion, ps, ones(length(buffer)))
+        @inferred SciMLStructures.replace(portion, ps, ones(length(buffer)))
+        @test_opt target_modules=(ModelingToolkit,) SciMLStructures.replace(
+            portion, ps, ones(length(buffer)))
+
+        @test_call target_modules = (ModelingToolkit,) SciMLStructures.replace!(
+            portion, ps, ones(length(buffer)))
+        @inferred SciMLStructures.replace!(portion, ps, ones(length(buffer)))
+        @test_opt target_modules=(ModelingToolkit,) SciMLStructures.replace!(
+            portion, ps, ones(length(buffer)))
+    end
+end
