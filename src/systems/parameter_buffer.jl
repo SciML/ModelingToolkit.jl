@@ -172,17 +172,18 @@ function _update_tuple_helper(buf_v::T, raw, idx) where {T}
 end
 
 function _update_tuple_helper(::Type{<:AbstractArray}, buf_v, raw, idx)
-    map(b -> _update_tuple_helper(b, raw, idx), buf_v)
+    ntuple(i -> _update_tuple_helper(buf_v[i], raw, idx), Val(length(buf_v)))
 end
 
 function _update_tuple_helper(::Any, buf_v, raw, idx)
     copyto!(buf_v, view(raw, idx[]:(idx[] + length(buf_v) - 1)))
     idx[] += length(buf_v)
+    return nothing
 end
 
 function update_tuple_of_buffers(raw::AbstractArray, buf)
     idx = Ref(1)
-    map(b -> _update_tuple_helper(b, raw, idx), buf)
+    ntuple(i -> _update_tuple_helper(buf[i], raw, idx), Val(length(buf)))
 end
 
 SciMLStructures.isscimlstructure(::MTKParameters) = true
