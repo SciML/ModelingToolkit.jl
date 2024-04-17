@@ -26,7 +26,7 @@ struct OptimizationSystem <: AbstractOptimizationSystem
     """Objective function of the system."""
     op::Any
     """Unknown variables."""
-    unknowns::Vector
+    unknowns::Array
     """Parameters."""
     ps::Vector
     """Array variables."""
