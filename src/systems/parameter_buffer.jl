@@ -155,35 +155,53 @@ function MTKParameters(
 end
 
 function buffer_to_arraypartition(buf)
-    return ArrayPartition(Tuple(eltype(v) <: AbstractArray ? buffer_to_arraypartition(v) :
-                                v for v in buf))
+    return ArrayPartition(ntuple(i -> _buffer_to_arrp_helper(buf[i]), Val(length(buf))))
 end
 
-function split_into_buffers(raw::AbstractArray, buf; recurse = true)
-    idx = 1
-    function _helper(buf_v; recurse = true)
-        if eltype(buf_v) <: AbstractArray && recurse
-            return _helper.(buf_v; recurse = false)
-        else
-            res = reshape(raw[idx:(idx + length(buf_v) - 1)], size(buf_v))
-            idx += length(buf_v)
-            return res
-        end
-    end
-    return Tuple(_helper(buf_v; recurse) for buf_v in buf)
+_buffer_to_arrp_helper(v::T) where {T} = _buffer_to_arrp_helper(eltype(T), v)
+_buffer_to_arrp_helper(::Type{<:AbstractArray}, v) = buffer_to_arraypartition(v)
+_buffer_to_arrp_helper(::Any, v) = v
+
+function _split_helper(buf_v::T, recurse, raw, idx) where {T}
+    _split_helper(eltype(T), buf_v, recurse, raw, idx)
+end
+
+function _split_helper(::Type{<:AbstractArray}, buf_v, ::Val{true}, raw, idx)
+    map(b -> _split_helper(eltype(b), b, Val(false), raw, idx), buf_v)
+end
+
+function _split_helper(::Type{<:AbstractArray}, buf_v, ::Val{false}, raw, idx)
+    _split_helper((), buf_v, (), raw, idx)
+end
+
+function _split_helper(_, buf_v, _, raw, idx)
+    res = reshape(raw[idx[]:(idx[] + length(buf_v) - 1)], size(buf_v))
+    idx[] += length(buf_v)
+    return res
+end
+
+function split_into_buffers(raw::AbstractArray, buf, recurse = Val(true))
+    idx = Ref(1)
+    ntuple(i -> _split_helper(buf[i], recurse, raw, idx), Val(length(buf)))
+end
+
+function _update_tuple_helper(buf_v::T, raw, idx) where {T}
+    _update_tuple_helper(eltype(T), buf_v, raw, idx)
+end
+
+function _update_tuple_helper(::Type{<:AbstractArray}, buf_v, raw, idx)
+    ntuple(i -> _update_tuple_helper(buf_v[i], raw, idx), Val(length(buf_v)))
+end
+
+function _update_tuple_helper(::Any, buf_v, raw, idx)
+    copyto!(buf_v, view(raw, idx[]:(idx[] + length(buf_v) - 1)))
+    idx[] += length(buf_v)
+    return nothing
 end
 
 function update_tuple_of_buffers(raw::AbstractArray, buf)
-    idx = 1
-    function _helper(buf_v)
-        if eltype(buf_v) <: AbstractArray
-            _helper.(buf_v)
-        else
-            copyto!(buf_v, view(raw, idx:(idx + length(buf_v) - 1)))
-            idx += length(buf_v)
-        end
-    end
-    _helper.(buf)
+    idx = Ref(1)
+    ntuple(i -> _update_tuple_helper(buf[i], raw, idx), Val(length(buf)))
 end
 
 SciMLStructures.isscimlstructure(::MTKParameters) = true
@@ -213,7 +231,7 @@ for (Portion, field) in [(SciMLStructures.Tunable, :tunable)
         @set! p.$field = split_into_buffers(newvals, p.$field)
         if p.dependent_update_oop !== nothing
             raw = p.dependent_update_oop(p...)
-            @set! p.dependent = split_into_buffers(raw, p.dependent; recurse = false)
+            @set! p.dependent = split_into_buffers(raw, p.dependent, Val(false))
         end
         p
     end
