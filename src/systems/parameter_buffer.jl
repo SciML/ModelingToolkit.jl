@@ -384,6 +384,15 @@ function SymbolicIndexingInterface.remake_buffer(sys, oldbuf::MTKParameters, val
     return newbuf
 end
 
+function DiffEqBase.anyeltypedual(
+        p::MTKParameters, ::Type{Val{counter}} = Val{0}) where {counter}
+    DiffEqBase.anyeltypedual(p.tunable)
+end
+function DiffEqBase.anyeltypedual(p::Type{<:MTKParameters{T}},
+        ::Type{Val{counter}} = Val{0}) where {counter} where {T}
+    DiffEqBase.__anyeltypedual(T)
+end
+
 _subarrays(v::AbstractVector) = isempty(v) ? () : (v,)
 _subarrays(v::ArrayPartition) = v.x
 _subarrays(v::Tuple) = v
