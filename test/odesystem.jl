@@ -1120,3 +1120,15 @@ tearing_state = TearingState(expand_connections(sys))
 ts_vars = tearing_state.fullvars
 orig_vars = unknowns(sys)
 @test isempty(setdiff(ts_vars, orig_vars))
+
+# Guesses in hierarchical systems
+@variables x(t) y(t)
+@named sys = ODESystem(Equation[], t, [x], []; guesses = [x => 1.0])
+@named outer = ODESystem(
+    [D(y) ~ sys.x + t, 0 ~ t + y - sys.x * y], t, [y], []; systems = [sys])
+@test ModelingToolkit.guesses(outer)[sys.x] == 1.0
+outer = structural_simplify(outer)
+@test ModelingToolkit.get_guesses(outer)[sys.x] == 1.0
+prob = ODEProblem(outer, [outer.y => 2.0], (0.0, 10.0))
+int = init(prob, Rodas4())
+@test int[outer.sys.x] == 1.0
