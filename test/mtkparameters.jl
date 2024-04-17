@@ -2,6 +2,7 @@ using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D, MTKParameters
 using SymbolicIndexingInterface
 using SciMLStructures: SciMLStructures, canonicalize, Tunable, Discrete, Constants
+using OrdinaryDiffEq
 using ForwardDiff
 using JET
 
@@ -206,3 +207,24 @@ end
             portion, ps, ones(length(buffer)))
     end
 end
+
+# Issue#2642
+@parameters α β γ δ
+@variables x(t) y(t)
+eqs = [D(x) ~ (α - β * y) * x
+       D(y) ~ (δ * x - γ) * y]
+@mtkbuild odesys = ODESystem(eqs, t)
+odeprob = ODEProblem(
+    odesys, [x => 1.0, y => 1.0], (0.0, 10.0), [α => 1.5, β => 1.0, γ => 3.0, δ => 1.0])
+tunables, _... = canonicalize(Tunable(), odeprob.p)
+@test tunables isa AbstractVector{Float64}
+
+function loss(x)
+    ps = odeprob.p
+    newps = SciMLStructures.replace(Tunable(), ps, x)
+    newprob = remake(odeprob, p = newps)
+    sol = solve(newprob, Tsit5())
+    return sum(sol)
+end
+
+@test_nowarn ForwardDiff.gradient(loss, collect(tunables))

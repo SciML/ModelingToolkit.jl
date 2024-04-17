@@ -16,6 +16,18 @@ using ModelingToolkit
 @test hasguess(y) === true
 @test ModelingToolkit.dump_variable_metadata(y).guess == 0
 
+# Issue#2653
+@variables y[1:3] [guess = ones(3)]
+@test getguess(y) == ones(3)
+@test hasguess(y) === true
+@test ModelingToolkit.dump_variable_metadata(y).guess == ones(3)
+
+for i in 1:3
+    @test getguess(y[i]) == 1.0
+    @test hasguess(y[i]) === true
+    @test ModelingToolkit.dump_variable_metadata(y[i]).guess == 1.0
+end
+
 @variables y
 @test hasguess(y) === false
 @test !haskey(ModelingToolkit.dump_variable_metadata(y), :guess)
