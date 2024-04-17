@@ -17,7 +17,8 @@ struct ParameterIndex{P, I}
 end
 
 const ParamIndexMap = Dict{Union{Symbol, BasicSymbolic}, Tuple{Int, Int}}
-const UnknownIndexMap = Dict{Union{Symbol, BasicSymbolic}, Union{Int, UnitRange{Int}}}
+const UnknownIndexMap = Dict{
+    Union{Symbol, BasicSymbolic}, Union{Int, UnitRange{Int}, AbstractArray{Int}}}
 
 struct IndexCache
     unknown_idx::UnknownIndexMap
@@ -40,16 +41,31 @@ function IndexCache(sys::AbstractSystem)
         for sym in unks
             usym = unwrap(sym)
             sym_idx = if Symbolics.isarraysymbolic(sym)
-                idx:(idx + length(sym) - 1)
+                reshape(idx:(idx + length(sym) - 1), size(sym))
             else
                 idx
             end
             unk_idxs[usym] = sym_idx
 
-            if hasname(sym)
+            if hasname(sym) && (!istree(sym) || operation(sym) !== getindex)
                 unk_idxs[getname(usym)] = sym_idx
             end
             idx += length(sym)
+        end
+        for sym in unks
+            usym = unwrap(sym)
+            istree(sym) && operation(sym) === getindex || continue
+            arrsym = arguments(sym)[1]
+            all(haskey(unk_idxs, arrsym[i]) for i in eachindex(arrsym)) || continue
+
+            idxs = [unk_idxs[arrsym[i]] for i in eachindex(arrsym)]
+            if idxs == idxs[begin]:idxs[end]
+                idxs = reshape(idxs[begin]:idxs[end], size(idxs))
+            end
+            unk_idxs[arrsym] = idxs
+            if hasname(arrsym)
+                unk_idxs[getname(arrsym)] = idxs
+            end
         end
     end
 
@@ -124,7 +140,7 @@ function IndexCache(sys::AbstractSystem)
             for (j, p) in enumerate(buf)
                 idxs[p] = (i, j)
                 idxs[default_toterm(p)] = (i, j)
-                if hasname(p)
+                if hasname(p) && (!istree(p) || operation(p) !== getindex)
                     idxs[getname(p)] = (i, j)
                     idxs[getname(default_toterm(p))] = (i, j)
                 end

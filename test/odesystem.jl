@@ -1132,3 +1132,30 @@ outer = structural_simplify(outer)
 prob = ODEProblem(outer, [outer.y => 2.0], (0.0, 10.0))
 int = init(prob, Rodas4())
 @test int[outer.sys.x] == 1.0
+
+# Ensure indexes of array symbolics are cached appropriately
+@variables x(t)[1:2]
+@named sys = ODESystem(Equation[], t, [x], [])
+sys1 = complete(sys)
+@named sys = ODESystem(Equation[], t, [x...], [])
+sys2 = complete(sys)
+for sys in [sys1, sys2]
+    for (sym, idx) in [(x, 1:2), (x[1], 1), (x[2], 2)]
+        @test is_variable(sys, sym)
+        @test variable_index(sys, sym) == idx
+    end
+end
+
+@variables x(t)[1:2, 1:2]
+@named sys = ODESystem(Equation[], t, [x], [])
+sys1 = complete(sys)
+@named sys = ODESystem(Equation[], t, [x...], [])
+sys2 = complete(sys)
+for sys in [sys1, sys2]
+    @test is_variable(sys, x)
+    @test variable_index(sys, x) == [1 3; 2 4]
+    for i in eachindex(x)
+        @test is_variable(sys, x[i])
+        @test variable_index(sys, x[i]) == variable_index(sys, x)[i]
+    end
+end
