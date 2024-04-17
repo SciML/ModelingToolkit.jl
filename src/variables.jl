@@ -456,7 +456,7 @@ end
 ## Guess ======================================================================
 struct VariableGuess end
 Symbolics.option_to_metadata_type(::Val{:guess}) = VariableGuess
-getguess(x::Num) = getguess(Symbolics.unwrap(x))
+getguess(x::Union{Num, Symbolics.Arr}) = getguess(Symbolics.unwrap(x))
 
 """
     getguess(x)
@@ -469,8 +469,6 @@ Create variables with a guess like this
 ```
 """
 function getguess(x)
-    p = Symbolics.getparent(x, nothing)
-    p === nothing || (x = p)
     Symbolics.getmetadata(x, VariableGuess, nothing)
 end
 

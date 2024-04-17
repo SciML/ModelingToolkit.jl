@@ -859,6 +859,11 @@ function namespace_defaults(sys)
     for (k, v) in pairs(defs))
 end
 
+function namespace_guesses(sys)
+    guess = guesses(sys)
+    Dict(unknowns(sys, k) => namespace_expr(v, sys) for (k, v) in guess)
+end
+
 function namespace_equations(sys::AbstractSystem, ivs = independent_variables(sys))
     eqs = equations(sys)
     isempty(eqs) && return Equation[]
@@ -968,7 +973,13 @@ function full_parameters(sys::AbstractSystem)
 end
 
 function guesses(sys::AbstractSystem)
-    get_guesses(sys)
+    guess = get_guesses(sys)
+    systems = get_systems(sys)
+    isempty(systems) && return guess
+    for subsys in systems
+        guess = merge(guess, namespace_guesses(subsys))
+    end
+    return guess
 end
 
 # required in `src/connectors.jl:437`

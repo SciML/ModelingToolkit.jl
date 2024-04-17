@@ -354,6 +354,7 @@ function flatten(sys::ODESystem, noeqs = false)
             get_iv(sys),
             unknowns(sys),
             parameters(sys),
+            guesses = guesses(sys),
             observed = observed(sys),
             continuous_events = continuous_events(sys),
             discrete_events = discrete_events(sys),
