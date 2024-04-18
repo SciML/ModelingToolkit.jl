@@ -1751,7 +1751,26 @@ function linearization_function(sys::AbstractSystem, inputs,
     end
     sys = ssys
     x0 = merge(defaults(sys), Dict(missing_variable_defaults(sys)), op)
-    u0, _p, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
+
+    ci = infer_clocks!(ClockInference(TearingState(sys)))
+    t = 0.0
+    if sys isa ODESystem &&
+       all(isequal(Continuous()), ci.var_domain) &&
+       ModelingToolkit.get_tearing_state(sys) !== nothing
+        initializeprob = ModelingToolkit.InitializationProblem(
+            sys, t, x0, p; guesses = guesses(sys), warn_initialize_determined = true)
+        initializeprobmap = getu(initializeprob, unknowns(sys))
+        setinitializeprobt = setu(initializeprob, get_iv(sys))
+        zerovars = Dict(setdiff(unknowns(sys), keys(defaults(sys))) .=> 0.0)
+        trueinit = collect(merge(zerovars, x0))
+    else
+        initializeprob = nothing
+        initializeprobmap = nothing
+        setinitializeprobt = nothing
+        trueinit = x0
+    end
+
+    u0, _p, _ = get_u0_p(sys, trueinit, p; use_union = false, tofloat = true)
     ps = parameters(sys)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         p = MTKParameters(sys, p, u0)
@@ -1767,7 +1786,10 @@ function linearization_function(sys::AbstractSystem, inputs,
         alge_idxs = alge_idxs,
         input_idxs = input_idxs,
         sts = unknowns(sys),
-        fun = ODEFunction{true, SciMLBase.FullSpecialize}(sys, unknowns(sys), ps; p = p),
+        fun = ODEFunction{true, SciMLBase.FullSpecialize}(sys, unknowns(sys), ps; p),
+        initializeprob = initializeprob,
+        initializeprobmap = initializeprobmap,
+        setinitializeprobt = setinitializeprobt,
         h = build_explicit_observed_function(sys, outputs),
         chunk = ForwardDiff.Chunk(input_idxs)
 
@@ -1778,6 +1800,8 @@ function linearization_function(sys::AbstractSystem, inputs,
                 if initialize && !isempty(alge_idxs) # This is expensive and can be omitted if the user knows that the system is already initialized
                     residual = fun(u, p, t)
                     if norm(residual[alge_idxs]) > √(eps(eltype(residual)))
+                        setinitializeprobt(initializeprob, t)
+                        fun = remake(fun; initializeprob, initializeprobmap)
                         prob = ODEProblem(fun, u, (t, t + 1), p)
                         integ = init(prob, OrdinaryDiffEq.Rodas5P())
                         u = integ.u
