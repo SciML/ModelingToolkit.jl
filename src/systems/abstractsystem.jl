@@ -889,7 +889,8 @@ function namespace_equations(sys::AbstractSystem, ivs = independent_variables(sy
     map(eq -> namespace_equation(eq, sys; ivs), eqs)
 end
 
-function namespace_initialization_equations(sys::AbstractSystem, ivs = independent_variables(sys))
+function namespace_initialization_equations(
+        sys::AbstractSystem, ivs = independent_variables(sys))
     eqs = initialization_equations(sys)
     isempty(eqs) && return Equation[]
     map(eq -> namespace_equation(eq, sys; ivs), eqs)

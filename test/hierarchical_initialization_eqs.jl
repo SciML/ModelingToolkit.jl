@@ -7,135 +7,125 @@ A simple linear resistor model
 
 ![Resistor](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTpJkiEyqh-BRx27pvVH0GLZ4MP_D1oriBwJhnZdgIq7m17z9VKUWaW9MeNQAz1rTML2ho&usqp=CAU)
 """
-@component function Resistor(; name, R=1.0)
-  systems = @named begin
-    p = Pin()
-    n = Pin()
-  end
-  vars = @variables begin
-    v(t), [guess=0.0]
-    i(t), [guess=0.0]
-  end
-  params = @parameters begin
-    R = R, [description = "Resistance of this Resistor"]
-  end
-  eqs = [
-    v ~ p.v - n.v
-    i ~ p.i
-    p.i + n.i ~ 0
-    # Ohm's Law
-    v ~ i * R
-  ]
-  return ODESystem(eqs, t, vars, params; systems, name)
+@component function Resistor(; name, R = 1.0)
+    systems = @named begin
+        p = Pin()
+        n = Pin()
+    end
+    vars = @variables begin
+        v(t), [guess = 0.0]
+        i(t), [guess = 0.0]
+    end
+    params = @parameters begin
+        R = R, [description = "Resistance of this Resistor"]
+    end
+    eqs = [v ~ p.v - n.v
+           i ~ p.i
+           p.i + n.i ~ 0
+           # Ohm's Law
+           v ~ i * R]
+    return ODESystem(eqs, t, vars, params; systems, name)
 end
 @connector Pin begin
-  v(t)
-  i(t), [connect = Flow]
+    v(t)
+    i(t), [connect = Flow]
 end
-@component function ConstantVoltage(; name, V=1.0)
-  systems = @named begin
-    p = Pin()
-    n = Pin()
-  end
-  vars = @variables begin
-    v(t), [guess=0.0]
-    i(t), [guess=0.0]
-  end
-  params = @parameters begin
-    V = 10
-  end
-  eqs = [
-    v ~ p.v - n.v
-    i ~ p.i
-    p.i + n.i ~ 0
-    v ~ V
-  ]
-  return ODESystem(eqs, t, vars, params; systems, name)
-end
-
-@component function Capacitor(; name, C=1.0)
+@component function ConstantVoltage(; name, V = 1.0)
     systems = @named begin
-      p = Pin()
-      n = Pin()
+        p = Pin()
+        n = Pin()
     end
     vars = @variables begin
-      v(t), [guess=0.0]
-      i(t), [guess=0.0]
+        v(t), [guess = 0.0]
+        i(t), [guess = 0.0]
     end
     params = @parameters begin
-      C = C
+        V = 10
+    end
+    eqs = [v ~ p.v - n.v
+           i ~ p.i
+           p.i + n.i ~ 0
+           v ~ V]
+    return ODESystem(eqs, t, vars, params; systems, name)
+end
+
+@component function Capacitor(; name, C = 1.0)
+    systems = @named begin
+        p = Pin()
+        n = Pin()
+    end
+    vars = @variables begin
+        v(t), [guess = 0.0]
+        i(t), [guess = 0.0]
+    end
+    params = @parameters begin
+        C = C
     end
     initialization_eqs = [
-      v ~ 0
+        v ~ 0
     ]
-    eqs = [
-      v ~ p.v - n.v
-      i ~ p.i
-      p.i + n.i ~ 0
-      C * D(v) ~ i
-    ]
+    eqs = [v ~ p.v - n.v
+           i ~ p.i
+           p.i + n.i ~ 0
+           C * D(v) ~ i]
     return ODESystem(eqs, t, vars, params; systems, name, initialization_eqs)
-  end
+end
 
-  @component function Ground(; name)
+@component function Ground(; name)
     systems = @named begin
-      g = Pin()
+        g = Pin()
     end
     eqs = [
-      g.v ~ 0
+        g.v ~ 0
     ]
     return ODESystem(eqs, t, [], []; systems, name)
-  end
+end
 
-  @component function Inductor(; name, L=1.0)
+@component function Inductor(; name, L = 1.0)
     systems = @named begin
-      p = Pin()
-      n = Pin()
+        p = Pin()
+        n = Pin()
     end
     vars = @variables begin
-      v(t), [guess = 0.0]
-      i(t), [guess = 0.0]
+        v(t), [guess = 0.0]
+        i(t), [guess = 0.0]
     end
     params = @parameters begin
-      (L = L)
+        (L = L)
     end
-    eqs = [
-      v ~ p.v - n.v
-      i ~ p.i
-      p.i + n.i ~ 0
-      L * D(i) ~ v
-    ]
+    eqs = [v ~ p.v - n.v
+           i ~ p.i
+           p.i + n.i ~ 0
+           L * D(i) ~ v]
     return ODESystem(eqs, t, vars, params; systems, name)
-  end
+end
 
 """
 This is an RLC model.  This should support markdown.  That includes
 HTML as well.
 """
 @component function RLCModel(; name)
-  systems = @named begin
-    resistor = Resistor(R=100)
-    capacitor = Capacitor(C=0.001)
-    inductor = Inductor(L=1)
-    source = ConstantVoltage(V=30)
-    ground = Ground()
-  end
-  initialization_eqs = [
-    inductor.i ~ 0
-  ]
-  eqs = [
-    connect(source.p, inductor.n)
-    connect(inductor.p, resistor.p, capacitor.p)
-    connect(resistor.n, ground.g, capacitor.n, source.n)
-  ]
-  return ODESystem(eqs, t, [], []; systems, name, initialization_eqs)
+    systems = @named begin
+        resistor = Resistor(R = 100)
+        capacitor = Capacitor(C = 0.001)
+        inductor = Inductor(L = 1)
+        source = ConstantVoltage(V = 30)
+        ground = Ground()
+    end
+    initialization_eqs = [
+        inductor.i ~ 0
+    ]
+    eqs = [connect(source.p, inductor.n)
+           connect(inductor.p, resistor.p, capacitor.p)
+           connect(resistor.n, ground.g, capacitor.n, source.n)]
+    return ODESystem(eqs, t, [], []; systems, name, initialization_eqs)
 end
 """Run model RLCModel from 0 to 10"""
 function simple()
-  @mtkbuild model = RLCModel()
-  u0 = []
-  prob = ODEProblem(model, u0, (0.0, 10.0))
-  sol = solve(prob)
+    @mtkbuild model = RLCModel()
+    u0 = []
+    prob = ODEProblem(model, u0, (0.0, 10.0))
+    sol = solve(prob)
 end
 @test SciMLBase.successful_retcode(simple())
 
