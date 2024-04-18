@@ -1,5 +1,5 @@
 struct BufferTemplate
-    type::DataType
+    type::Union{DataType, UnionAll}
     length::Int
 end
 
@@ -16,7 +16,10 @@ const NONNUMERIC_PORTION = Nonnumeric()
 struct ParameterIndex{P, I}
     portion::P
     idx::I
+    validate_size::Bool
 end
+
+ParameterIndex(portion, idx) = ParameterIndex(portion, idx, false)
 
 const ParamIndexMap = Dict{Union{Symbol, BasicSymbolic}, Tuple{Int, Int}}
 const UnknownIndexMap = Dict{
@@ -34,11 +37,14 @@ struct IndexCache
     constant_buffer_sizes::Vector{BufferTemplate}
     dependent_buffer_sizes::Vector{BufferTemplate}
     nonnumeric_buffer_sizes::Vector{BufferTemplate}
+    symbol_to_variable::Dict{Symbol, BasicSymbolic}
 end
 
 function IndexCache(sys::AbstractSystem)
     unks = solved_unknowns(sys)
     unk_idxs = UnknownIndexMap()
+    symbol_to_variable = Dict{Symbol, BasicSymbolic}()
+
     let idx = 1
         for sym in unks
             usym = unwrap(sym)
@@ -50,7 +56,9 @@ function IndexCache(sys::AbstractSystem)
             unk_idxs[usym] = sym_idx
 
             if hasname(sym) && (!istree(sym) || operation(sym) !== getindex)
-                unk_idxs[getname(usym)] = sym_idx
+                name = getname(usym)
+                unk_idxs[name] = sym_idx
+                symbol_to_variable[name] = sym
             end
             idx += length(sym)
         end
@@ -66,7 +74,9 @@ function IndexCache(sys::AbstractSystem)
             end
             unk_idxs[arrsym] = idxs
             if hasname(arrsym)
-                unk_idxs[getname(arrsym)] = idxs
+                name = getname(arrsym)
+                unk_idxs[name] = idxs
+                symbol_to_variable[name] = arrsym
             end
         end
     end
@@ -144,14 +154,15 @@ function IndexCache(sys::AbstractSystem)
                 idxs[default_toterm(p)] = (i, j)
                 if hasname(p) && (!istree(p) || operation(p) !== getindex)
                     idxs[getname(p)] = (i, j)
+                    symbol_to_variable[getname(p)] = p
                     idxs[getname(default_toterm(p))] = (i, j)
+                    symbol_to_variable[getname(default_toterm(p))] = p
                 end
             end
             push!(buffer_sizes, BufferTemplate(T, length(buf)))
         end
         return idxs, buffer_sizes
     end
-
     disc_idxs, discrete_buffer_sizes = get_buffer_sizes_and_idxs(disc_buffers)
     tunable_idxs, tunable_buffer_sizes = get_buffer_sizes_and_idxs(tunable_buffers)
     const_idxs, const_buffer_sizes = get_buffer_sizes_and_idxs(constant_buffers)
@@ -169,7 +180,8 @@ function IndexCache(sys::AbstractSystem)
         tunable_buffer_sizes,
         const_buffer_sizes,
         dependent_buffer_sizes,
-        nonnumeric_buffer_sizes
+        nonnumeric_buffer_sizes,
+        symbol_to_variable
     )
 end
 
@@ -190,16 +202,21 @@ function SymbolicIndexingInterface.is_parameter(ic::IndexCache, sym)
 end
 
 function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym)
+    if sym isa Symbol
+        sym = ic.symbol_to_variable[sym]
+    end
+    validate_size = Symbolics.isarraysymbolic(sym) &&
+                    Symbolics.shape(sym) !== Symbolics.Unknown()
     return if (idx = check_index_map(ic.tunable_idx, sym)) !== nothing
-        ParameterIndex(SciMLStructures.Tunable(), idx)
+        ParameterIndex(SciMLStructures.Tunable(), idx, validate_size)
     elseif (idx = check_index_map(ic.discrete_idx, sym)) !== nothing
-        ParameterIndex(SciMLStructures.Discrete(), idx)
+        ParameterIndex(SciMLStructures.Discrete(), idx, validate_size)
     elseif (idx = check_index_map(ic.constant_idx, sym)) !== nothing
-        ParameterIndex(SciMLStructures.Constants(), idx)
+        ParameterIndex(SciMLStructures.Constants(), idx, validate_size)
     elseif (idx = check_index_map(ic.nonnumeric_idx, sym)) !== nothing
-        ParameterIndex(NONNUMERIC_PORTION, idx)
+        ParameterIndex(NONNUMERIC_PORTION, idx, validate_size)
     elseif (idx = check_index_map(ic.dependent_idx, sym)) !== nothing
-        ParameterIndex(DEPENDENT_PORTION, idx)
+        ParameterIndex(DEPENDENT_PORTION, idx, validate_size)
     else
         nothing
     end
@@ -219,26 +236,6 @@ function check_index_map(idxmap, sym)
     elseif !isa(dsym, Symbol) && (!istree(dsym) || operation(dsym) !== getindex) &&
            hasname(dsym) && (idx = get(idxmap, getname(dsym), nothing)) !== nothing
         idx
-    else
-        nothing
-    end
-end
-
-function ParameterIndex(ic::IndexCache, p, sub_idx = ())
-    p = unwrap(p)
-    return if haskey(ic.tunable_idx, p)
-        ParameterIndex(SciMLStructures.Tunable(), (ic.tunable_idx[p]..., sub_idx...))
-    elseif haskey(ic.discrete_idx, p)
-        ParameterIndex(SciMLStructures.Discrete(), (ic.discrete_idx[p]..., sub_idx...))
-    elseif haskey(ic.constant_idx, p)
-        ParameterIndex(SciMLStructures.Constants(), (ic.constant_idx[p]..., sub_idx...))
-    elseif haskey(ic.dependent_idx, p)
-        ParameterIndex(DEPENDENT_PORTION, (ic.dependent_idx[p]..., sub_idx...))
-    elseif haskey(ic.nonnumeric_idx, p)
-        ParameterIndex(NONNUMERIC_PORTION, (ic.nonnumeric_idx[p]..., sub_idx...))
-    elseif istree(p) && operation(p) === getindex
-        _p, sub_idx... = arguments(p)
-        ParameterIndex(ic, _p, sub_idx)
     else
         nothing
     end

@@ -241,3 +241,45 @@ newps = remake_buffer(
 VDual = Vector{<:ForwardDiff.Dual}
 VVDual = Vector{<:Vector{<:ForwardDiff.Dual}}
 @test newps.dependent isa Union{Tuple{VDual, VVDual}, Tuple{VVDual, VDual}}
+
+@testset "Parameter type validation" begin
+    struct Foo{T}
+        x::T
+    end
+
+    @parameters a b::Int c::Vector{Float64} d[1:2, 1:2]::Int e::Foo{Int} f::Foo
+    @named sys = ODESystem(Equation[], t, [], [a, b, c, d, e, f])
+    sys = complete(sys)
+    ps = MTKParameters(sys,
+        Dict(a => 1.0, b => 2, c => 3ones(2),
+            d => 3ones(Int, 2, 2), e => Foo(1), f => Foo("a")))
+    @test_nowarn setp(sys, c)(ps, ones(4)) # so this is fixed when SII is fixed
+    @test_throws DimensionMismatch set_parameter!(
+        ps, 4ones(Int, 3, 2), parameter_index(sys, d))
+    @test_throws DimensionMismatch set_parameter!(
+        ps, 4ones(Int, 4), parameter_index(sys, d)) # size has to match, not just length
+    @test_nowarn setp(sys, f)(ps, Foo(:a)) # can change non-concrete type
+
+    # Same flexibility is afforded to `b::Int` to allow for ForwardDiff
+    for sym in [a, b]
+        @test_nowarn remake_buffer(sys, ps, Dict(sym => 1))
+        newps = @test_nowarn remake_buffer(sys, ps, Dict(sym => 1.0f0)) # Can change type if it's numeric
+        @test getp(sys, sym)(newps) isa Float32
+        newps = @test_nowarn remake_buffer(sys, ps, Dict(sym => ForwardDiff.Dual(1.0)))
+        @test getp(sys, sym)(newps) isa ForwardDiff.Dual
+        @test_throws TypeError remake_buffer(sys, ps, Dict(sym => :a)) # still has to be numeric
+    end
+
+    newps = @test_nowarn remake_buffer(sys, ps, Dict(c => view(1.0:4.0, 2:4))) # can change type of array
+    @test getp(sys, c)(newps) == 2.0:4.0
+    @test parameter_values(newps, parameter_index(sys, c)) ≈ [2.0, 3.0, 4.0]
+    @test_throws TypeError remake_buffer(sys, ps, Dict(c => [:a, :b, :c])) # can't arbitrarily change eltype
+    @test_throws TypeError remake_buffer(sys, ps, Dict(c => :a)) # can't arbitrarily change type
+
+    newps = @test_nowarn remake_buffer(sys, ps, Dict(d => ForwardDiff.Dual.(ones(2, 2)))) # can change eltype
+    @test_throws TypeError remake_buffer(sys, ps, Dict(d => [:a :b; :c :d])) # eltype still has to be numeric
+    @test getp(sys, d)(newps) isa Matrix{<:ForwardDiff.Dual}
+
+    @test_throws TypeError remake_buffer(sys, ps, Dict(e => Foo(2.0))) # need exact same type for nonnumeric
+    @test_nowarn remake_buffer(sys, ps, Dict(f => Foo(:a)))
+end
