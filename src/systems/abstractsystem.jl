@@ -1751,6 +1751,7 @@ function linearization_function(sys::AbstractSystem, inputs,
     end
     sys = ssys
     x0 = merge(defaults(sys), Dict(missing_variable_defaults(sys)), op)
+    x0 = Dict(unwrap(k) => v for (k, v) in x0)
 
     ci = infer_clocks!(ClockInference(TearingState(sys)))
     t = 0.0
@@ -1786,9 +1787,8 @@ function linearization_function(sys::AbstractSystem, inputs,
         alge_idxs = alge_idxs,
         input_idxs = input_idxs,
         sts = unknowns(sys),
-        fun = ODEFunction{true, SciMLBase.FullSpecialize}(sys, unknowns(sys), ps; p),
+        fun = ODEFunction{true, SciMLBase.FullSpecialize}(sys, unknowns(sys), ps; p, initializeprobmap),
         initializeprob = initializeprob,
-        initializeprobmap = initializeprobmap,
         setinitializeprobt = setinitializeprobt,
         h = build_explicit_observed_function(sys, outputs),
         chunk = ForwardDiff.Chunk(input_idxs)
@@ -1801,7 +1801,7 @@ function linearization_function(sys::AbstractSystem, inputs,
                     residual = fun(u, p, t)
                     if norm(residual[alge_idxs]) > √(eps(eltype(residual)))
                         setinitializeprobt(initializeprob, t)
-                        fun = remake(fun; initializeprob, initializeprobmap)
+                        fun = @set fun.initializeprob = initializeprob
                         prob = ODEProblem(fun, u, (t, t + 1), p)
                         integ = init(prob, OrdinaryDiffEq.Rodas5P())
                         u = integ.u
