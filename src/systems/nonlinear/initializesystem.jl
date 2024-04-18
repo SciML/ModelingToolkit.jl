@@ -23,6 +23,7 @@ function generate_initializesystem(sys::ODESystem;
     diffmap = Dict(getfield.(eqs_diff, :lhs) .=> getfield.(eqs_diff, :rhs))
     observed_diffmap = Dict(Differential(get_iv(sys)).(getfield.((observed(sys)), :lhs)) .=>
         Differential(get_iv(sys)).(getfield.((observed(sys)), :rhs)))
+    full_diffmap = merge(diffmap, observed_diffmap)
 
     full_states = unique([sts; getfield.((observed(sys)), :lhs)])
     set_full_states = Set(full_states)
@@ -39,8 +40,7 @@ function generate_initializesystem(sys::ODESystem;
             filtered_u0 = Pair[]
             for x in u0map
                 y = get(schedule.dummy_sub, x[1], x[1])
-                y = ModelingToolkit.fixpoint_sub(y, observed_diffmap)
-                y = get(diffmap, y, y)
+                y = ModelingToolkit.fixpoint_sub(y, full_diffmap)
 
                 if y isa Symbolics.Arr
                     _y = collect(y)
