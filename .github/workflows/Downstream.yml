@@ -1,75 +1,41 @@
 name: IntegrationTest
 on:
   push:
-    branches: [master]
+    branches:
+      - master
+      # - at/test-ci-reusable
     tags: [v*]
   pull_request:
     paths-ignore:
         - 'docs/**'
 
 concurrency:
-  # Skip intermediate builds: always, but for the master branch and tags.
-  # Cancel intermediate builds: always, but for the master branch and tags.
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/master' && github.refs != 'refs/tags/*' }}
+  cancel-in-progress: true  
 
 jobs:
   test:
-    name: ${{ matrix.package.repo }}/${{ matrix.package.group }}/${{ matrix.julia-version }}
-    runs-on: ${{ matrix.os }}
-    env:
-      GROUP: ${{ matrix.package.group }}
+    name: "${{ matrix.package.repo }}"
     strategy:
       fail-fast: false
       matrix:
-        julia-version: [1]
-        os: [ubuntu-latest]
         package:
-          - {user: SciML, repo: SciMLBase.jl, group: Downstream}
-          - {user: SciML, repo: Catalyst.jl, group: All}
-          - {user: SciML, repo: CellMLToolkit.jl, group: All}
-          - {user: SciML, repo: SBMLToolkit.jl, group: All}
-          - {user: SciML, repo: NeuralPDE.jl, group: NNPDE}
-          - {user: SciML, repo: DataDrivenDiffEq.jl, group: Downstream}
-          - {user: SciML, repo: StructuralIdentifiability.jl, group: All}
-          - {user: SciML, repo: ModelingToolkitStandardLibrary.jl}
-          - {user: SciML, repo: ModelOrderReduction.jl, group: All}
-          - {user: SciML, repo: MethodOfLines.jl, group: Interface}
-          - {user: SciML, repo: MethodOfLines.jl, group: 2D_Diffusion}
-          - {user: SciML, repo: MethodOfLines.jl, group: DAE}
-          - {user: ai4energy, repo: Ai4EComponentLib.jl, group: Downstream}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: julia-actions/setup-julia@v1
-        with:
-          version: ${{ matrix.julia-version }}
-          arch: x64
-      - uses: julia-actions/julia-buildpkg@latest
-      - name: Clone Downstream
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ matrix.package.user }}/${{ matrix.package.repo }}
-          path: downstream
-      - name: Load this and run the downstream tests
-        shell: julia --color=yes --project=downstream {0}
-        run: |
-          using Pkg
-          try
-            # force it to use this PR's version of the package
-            Pkg.develop(PackageSpec(path="."))  # resolver may fail with main deps
-            Pkg.update()
-            Pkg.test(coverage=true)  # resolver may fail with test time deps
-          catch err
-            err isa Pkg.Resolve.ResolverError || rethrow()
-            # If we can't resolve that means this is incompatible by SemVer and this is fine
-            # It means we marked this as a breaking change, so we don't need to worry about
-            # Mistakenly introducing a breaking change, as we have intentionally made one
-            @info "Not compatible with this release. No problem." exception=err
-            exit(0)  # Exit immediately, as a success
-          end
-      - uses: julia-actions/julia-processcoverage@v1
-      - uses: codecov/codecov-action@v4
-        with:
-          file: lcov.info
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
+          - {owner: SciML, repo: SciMLBase.jl, group: Downstream}
+          - {owner: SciML, repo: Catalyst.jl, group: All}
+          - {owner: SciML, repo: CellMLToolkit.jl, group: All}
+          - {owner: SciML, repo: DataDrivenDiffEq.jl, group: Downstream}
+          - {owner: SciML, repo: SBMLToolkit.jl, group: All}
+          - {owner: SciML, repo: StructuralIdentifiability.jl, group: All}
+          - {owner: SciML, repo: ModelingToolkitStandardLibrary.jl}
+          - {owner: SciML, repo: ModelOrderReduction.jl, group: All}
+          - {owner: SciML, repo: MethodOfLines.jl, group: 2D_Diffusion}
+          - {owner: SciML, repo: MethodOfLines.jl, group: DAE}
+          - {owner: SciML, repo: MethodOfLines.jl, group: Interface}
+          - {owner: SciML, repo: NeuralPDE.jl, group: NNPDE}
+          - {owner: ai4energy, repo: Ai4EComponentLib.jl, group: Downstream}
+    uses: "SciML/.github/.github/workflows/downstream.yml@test"
+    with:
+      owner: ${{ matrix.package.owner }}
+      repo: ${{ matrix.package.repo }}
+      group: ${{ matrix.package.group }}
+    secrets: "inherit"
