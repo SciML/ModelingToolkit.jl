@@ -232,7 +232,8 @@ function delay_to_function(expr, iv, sts, ps, h)
     elseif istree(expr)
         return similarterm(expr,
             operation(expr),
-            map(x -> delay_to_function(x, iv, sts, ps, h), arguments(expr)))
+            map(x -> delay_to_function(x, iv, sts, ps, h), arguments(expr));
+            metadata = metadata(expr))
     else
         return expr
     end

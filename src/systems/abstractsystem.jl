@@ -751,7 +751,8 @@ function LocalScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
         if istree(sym) && operation(sym) === getindex
             args = arguments(sym)
             a1 = setmetadata(args[1], SymScope, LocalScope())
-            similarterm(sym, operation(sym), [a1, args[2:end]...])
+            similarterm(sym, operation(sym), [a1, args[2:end]...];
+                metadata = metadata(sym))
         else
             setmetadata(sym, SymScope, LocalScope())
         end
@@ -767,7 +768,8 @@ function ParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
             args = arguments(sym)
             a1 = setmetadata(args[1], SymScope,
                 ParentScope(getmetadata(value(args[1]), SymScope, LocalScope())))
-            similarterm(sym, operation(sym), [a1, args[2:end]...])
+            similarterm(sym, operation(sym), [a1, args[2:end]...];
+                metadata = metadata(sym))
         else
             setmetadata(sym, SymScope,
                 ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
@@ -785,7 +787,8 @@ function DelayParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}}, N)
             args = arguments(sym)
             a1 = setmetadata(args[1], SymScope,
                 DelayParentScope(getmetadata(value(args[1]), SymScope, LocalScope()), N))
-            similarterm(sym, operation(sym), [a1, args[2:end]...])
+            similarterm(sym, operation(sym), [a1, args[2:end]...];
+                metadata = metadata(sym))
         else
             setmetadata(sym, SymScope,
                 DelayParentScope(getmetadata(value(sym), SymScope, LocalScope()), N))
@@ -800,7 +803,8 @@ function GlobalScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
         if istree(sym) && operation(sym) == getindex
             args = arguments(sym)
             a1 = setmetadata(args[1], SymScope, GlobalScope())
-            similarterm(sym, operation(sym), [a1, args[2:end]...])
+            similarterm(sym, operation(sym), [a1, args[2:end]...];
+                metadata = metadata(sym))
         else
             setmetadata(sym, SymScope, GlobalScope())
         end
