@@ -21,14 +21,16 @@ function detime_dvs(op)
     elseif issym(operation(op))
         Sym{Real}(nameof(operation(op)))
     else
-        similarterm(op, operation(op), detime_dvs.(arguments(op)))
+        similarterm(op, operation(op), detime_dvs.(arguments(op));
+            metadata = metadata(op))
     end
 end
 
 function retime_dvs(op, dvs, iv)
     issym(op) && return Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(op))(iv)
     istree(op) ?
-    similarterm(op, operation(op), retime_dvs.(arguments(op), (dvs,), (iv,))) :
+    similarterm(op, operation(op), retime_dvs.(arguments(op), (dvs,), (iv,));
+        metadata = metadata(op)) :
     op
 end
 
