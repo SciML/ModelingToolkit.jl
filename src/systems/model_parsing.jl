@@ -187,7 +187,7 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
             var = generate_var!(dict, a, varclass; indices, type)
             update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
                 varclass, where_types)
-            (var, def)
+            return var, def, Dict()
         end
         Expr(:(::), a, type) => begin
             type = getfield(mod, type)
@@ -202,12 +202,12 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
             var = generate_var!(dict, a, b, varclass, mod; indices, type)
             update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
                 varclass, where_types)
-            (var, def)
+            return var, def, Dict()
         end
         Expr(:(=), a, b) => begin
             Base.remove_linenums!(b)
             def, meta = parse_default(mod, b)
-            var, def = parse_variable_def!(
+            var, def, _ = parse_variable_def!(
                 dict, mod, a, varclass, kwargs, where_types; def, type)
             if dict[varclass] isa Vector
                 dict[varclass][1][getname(var)][:default] = def
@@ -225,12 +225,13 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                         end
                     end
                 end
-                var = set_var_metadata(var, meta)
+                var, metadata_with_exprs = set_var_metadata(var, meta)
+                return var, def, metadata_with_exprs
             end
-            (var, def)
+            return var, def, Dict()
         end
         Expr(:tuple, a, b) => begin
-            var, def = parse_variable_def!(
+            var, def, _ = parse_variable_def!(
                 dict, mod, a, varclass, kwargs, where_types; type)
             meta = parse_metadata(mod, b)
             if meta !== nothing
@@ -244,9 +245,10 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                         end
                     end
                 end
-                var = set_var_metadata(var, meta)
+                var, metadata_with_exprs = set_var_metadata(var, meta)
+                return var, def, metadata_with_exprs
             end
-            (var, def)
+            return var, def, Dict()
         end
         Expr(:ref, a, b...) => begin
             indices = map(i -> UnitRange(i.args[2], i.args[end]), b)
@@ -350,21 +352,33 @@ function parse_metadata(mod, a)
     end
 end
 
-function set_var_metadata(a, ms)
-    for (m, v) in ms
-        a = wrap(set_scalar_metadata(unwrap(a), m, v))
-    end
+function _set_var_metadata!(metadata_with_exprs, a, m, v::Expr)
+    push!(metadata_with_exprs, m => v)
     a
+end
+function _set_var_metadata!(metadata_with_exprs, a, m, v)
+    wrap(set_scalar_metadata(unwrap(a), m, v))
+end
+
+function set_var_metadata(a, ms)
+    metadata_with_exprs = Dict{DataType, Expr}()
+    for (m, v) in ms
+        if m == VariableGuess && v isa Symbol
+            v = quote
+                $v
+            end
+        end
+        a = _set_var_metadata!(metadata_with_exprs, a, m, v)
+    end
+    a, metadata_with_exprs
 end
 
 function get_var(mod::Module, b)
     if b isa Symbol
-        getproperty(mod, b)
-    elseif b isa Expr
-        Core.eval(mod, b)
-    else
-        b
+        isdefined(mod, b) && return getproperty(mod, b)
+        isdefined(@__MODULE__, b) && return getproperty(@__MODULE__, b)
     end
+    b
 end
 
 function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps, c_evts, d_evts,
@@ -595,10 +609,26 @@ function parse_variable_arg!(exprs, vs, dict, mod, arg, varclass, kwargs, where_
 end
 
 function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
-    vv, def = parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types)
+    vv, def, metadata_with_exprs = parse_variable_def!(
+        dict, mod, arg, varclass, kwargs, where_types)
     name = getname(vv)
-    return vv isa Num ? name : :($name...),
-    :($name = $name === nothing ? $setdefault($vv, $def) : $setdefault($vv, $name))
+
+    varexpr = quote
+        $name = if $name === nothing
+            $setdefault($vv, $def)
+        else
+            $setdefault($vv, $name)
+        end
+    end
+
+    metadata_expr = Expr(:block)
+    for (k, v) in metadata_with_exprs
+        push!(metadata_expr.args,
+            :($name = $wrap($set_scalar_metadata($unwrap($name), $k, $v))))
+    end
+
+    push!(varexpr.args, metadata_expr)
+    return vv isa Num ? name : :($name...), varexpr
 end
 
 function handle_conditional_vars!(

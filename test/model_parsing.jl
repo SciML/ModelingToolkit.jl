@@ -376,8 +376,8 @@ end
 
 @testset "Metadata in variables" begin
     metadata = Dict(:description => "Variable to test metadata in the Model.structure",
-        :input => true, :bounds => (-1, 1), :connection_type => :Flow,
-        :tunable => false, :disturbance => true, :dist => Normal(1, 1))
+        :input => true, :bounds => :((-1, 1)), :connection_type => :Flow,
+        :tunable => false, :disturbance => true, :dist => :(Normal(1, 1)))
 
     @connector MockMeta begin
         m(t),
@@ -473,7 +473,7 @@ using ModelingToolkit: getdefault, scalarize
 
     @named model_with_component_array = ModelWithComponentArray()
 
-    @test ModelWithComponentArray.structure[:parameters][:r][:unit] == u"Ω"
+    @test eval(ModelWithComponentArray.structure[:parameters][:r][:unit]) == eval(u"Ω")
     @test lastindex(parameters(model_with_component_array)) == 3
 
     # Test the constant `k`. Manually k's value should be kept in sync here
