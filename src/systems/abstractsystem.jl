@@ -817,12 +817,14 @@ function renamespace(sys, x)
         T = typeof(x)
         if istree(x) && operation(x) isa Operator
             return similarterm(x, operation(x),
-                Any[renamespace(sys, only(arguments(x)))])::T
+                Any[renamespace(sys, only(arguments(x)))];
+                metadata = metadata(x))::T
         end
         if istree(x) && operation(x) === getindex
             args = arguments(x)
             return similarterm(
-                x, operation(x), vcat(renamespace(sys, args[1]), args[2:end]))::T
+                x, operation(x), vcat(renamespace(sys, args[1]), args[2:end]);
+                metadata = metadata(x))::T
         end
         let scope = getmetadata(x, SymScope, LocalScope())
             if scope isa LocalScope
