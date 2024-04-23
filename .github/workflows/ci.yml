@@ -31,6 +31,5 @@ jobs:
           - RegressionI
     uses: "SciML/.github/.github/workflows/tests.yml@test"
     with:
-      concurrent-jobs: true 
       group: ${{ matrix.group }}
     secrets: "inherit"
