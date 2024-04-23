@@ -4,14 +4,15 @@ on:
     branches:
       - master
       # - at/test-ci-reusable
-    tags: [v*]
+    tags:
+      - v*
   pull_request:
     paths-ignore:
         - 'docs/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true  
+  cancel-in-progress: ${{ github.ref_name != github.event.repository.default_branch || github.ref != 'v*' }}
 
 jobs:
   test:

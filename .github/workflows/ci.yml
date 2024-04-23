@@ -1,21 +1,21 @@
 name: CI
 on:
-  pull_request:
-    branches:
-      - master
-      - 'release-'
-    paths-ignore:
-      - 'docs/**'
   push:
     branches:
       - master
       - 'at/test-ci-reusable'
     paths-ignore:
       - 'docs/**'
+  pull_request:
+    branches:
+      - master
+      - 'release-'
+    paths-ignore:
+      - 'docs/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true  
+  cancel-in-progress: ${{ github.ref_name != github.event.repository.default_branch || github.ref != 'refs/tags/v*' }}
 
 jobs:
   tests:
