@@ -67,6 +67,20 @@ end
     @test Set(full_parameters(sys)) == Set([p1, p2])
 end
 
+@testset "getu with parameter deps" begin
+    @parameters p1=1.0 p2=1.0
+    @variables x(t)=0
+
+    @named sys = ODESystem(
+        [D(x) ~ p1 * t + p2],
+        t;
+        parameter_dependencies = [p2 => 2p1]
+    )
+    prob = ODEProblem(complete(sys))
+    get_dep = getu(prob, 2p2)
+    @test get_dep(prob) == 4
+end
+
 @testset "Clock system" begin
     dt = 0.1
     @variables x(t) y(t) u(t) yd(t) ud(t) r(t) z(t)
