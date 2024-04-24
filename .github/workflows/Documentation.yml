@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - at/test-ci-reusable
     tags: '*'
   pull_request:
 
