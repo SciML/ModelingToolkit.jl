@@ -8,11 +8,11 @@ on:
     tags: '*'
   pull_request:
 
-concurrency:
+# concurrency:
   # Skip intermediate builds: always, but for the master branch.
   # Cancel intermediate builds: always, but for the master branch.
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/master' && github.refs != 'refs/tags/*'}}
+  # group: ${{ github.workflow }}-${{ github.ref }}
+  # cancel-in-progress: ${{ github.ref != 'refs/heads/master' && github.refs != 'refs/tags/*'}}
 
 jobs:
   build:
@@ -22,7 +22,7 @@ jobs:
       - uses: julia-actions/setup-julia@latest
         with:
           version: '1'
-      # - run: sudo apt-get update && sudo apt-get install -y xorg-dev mesa-utils xvfb libgl1 freeglut3-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
+      - uses: julia-actions/cache@v1
       - name: Install dependencies
         run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
       - name: Build and deploy
