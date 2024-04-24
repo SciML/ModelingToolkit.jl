@@ -405,10 +405,10 @@ function build_explicit_observed_function(sys, ts;
         Set(arguments(st)[1] for st in sts if iscall(st) && operation(st) === getindex))
 
     observed_idx = Dict(x.lhs => i for (i, x) in enumerate(obs))
-    param_set = Set(parameters(sys))
+    param_set = Set(full_parameters(sys))
     param_set = union(param_set,
         Set(arguments(p)[1] for p in param_set if iscall(p) && operation(p) === getindex))
-    param_set_ns = Set(unknowns(sys, p) for p in parameters(sys))
+    param_set_ns = Set(unknowns(sys, p) for p in full_parameters(sys))
     param_set_ns = union(param_set_ns,
         Set(arguments(p)[1]
         for p in param_set_ns if iscall(p) && operation(p) === getindex))
