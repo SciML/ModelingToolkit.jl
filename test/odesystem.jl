@@ -1159,3 +1159,13 @@ for sys in [sys1, sys2]
         @test variable_index(sys, x[i]) == variable_index(sys, x)[i]
     end
 end
+
+@testset "Non-1-indexed variable array (issue #2670)" begin
+    @variables x(t)[0:1] # 0-indexed variable array
+    sys = ODESystem([
+        x[0] ~ 0.0
+        D(x[1]) ~ x[0]
+    ], t, [x], []; name=:sys)
+    @test_nowarn sys = structural_simplify(sys)
+    @test equations(sys) == [D(x[1]) ~ 0.0]
+end
