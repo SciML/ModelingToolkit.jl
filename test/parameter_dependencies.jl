@@ -69,7 +69,7 @@ end
 
 @testset "getu with parameter deps" begin
     @parameters p1=1.0 p2=1.0
-    @variables x(t)=0
+    @variables x(t) = 0
 
     @named sys = ODESystem(
         [D(x) ~ p1 * t + p2],
