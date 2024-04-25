@@ -1,8 +1,7 @@
 using ModelingToolkit, Test
 using ModelingToolkit: get_connector_type, get_defaults, get_gui_metadata,
-                       get_systems, get_ps, getdefault, getname, scalarize, symtype,
-                       VariableDescription,
-                       RegularConnector
+                       get_systems, get_ps, getdefault, getname, readable_code,
+                       scalarize, symtype, VariableDescription, RegularConnector
 using URIs: URI
 using Distributions
 using DynamicQuantities, OrdinaryDiffEq
@@ -768,4 +767,29 @@ end
 
 @testset "Parent module of Models" begin
     @test parentmodule(MyMockModule.Ground) == MyMockModule
+end
+
+@testset "Guesses with expression" begin
+    @mtkmodel GuessModel begin
+        @variables begin
+            k(t)
+            l(t) = 10, [guess = k, unit = u"A"]
+            i(t), [guess = k, unit = u"A"]
+            j(t), [guess = k + l / i]
+        end
+    end
+
+    @named guess_model = GuessModel()
+
+    j_guess = getguess(guess_model.j)
+    @test typeof(j_guess) == Num
+    @test readable_code(j_guess) == "l(t) / i(t) + k(t)"
+
+    i_guess = getguess(guess_model.i)
+    @test typeof(i_guess) == Num
+    @test readable_code(i_guess) == "k(t)"
+
+    l_guess = getguess(guess_model.l)
+    @test typeof(l_guess) == Num
+    @test readable_code(l_guess) == "k(t)"
 end
