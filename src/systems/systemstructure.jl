@@ -248,6 +248,9 @@ function Base.push!(ev::EquationsView, eq)
 end
 
 function TearingState(sys; quick_cancel = false, check = true)
+    if sys isa ODESystem
+        sys = scalarize(sys)
+    end
     sys = flatten(sys)
     ivs = independent_variables(sys)
     iv = length(ivs) == 1 ? ivs[1] : nothing
