@@ -576,7 +576,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
         arg1 = arguments(lhs)[1]
         haskey(obs_arr_subs, arg1) && continue
         obs_arr_subs[arg1] = [arg1[i] for i in eachindex(arg1)] # e.g. p => [p[1], p[2]]
-        index_first = eachindex(arg1)[1] 
+        index_first = eachindex(arg1)[1]
         obs_arr_subs[arg1] = Origin(index_first)(obs_arr_subs[arg1]) # respect non-1-indexed arrays
     end
     for i in eachindex(neweqs)
