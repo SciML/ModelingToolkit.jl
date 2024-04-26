@@ -102,6 +102,7 @@ function generate_initializesystem(sys::ODESystem;
         full_states,
         pars;
         defaults = merge(ModelingToolkit.defaults(sys), todict(u0), dd_guess),
+        parameter_dependencies = get_parameter_dependencies(sys),
         name,
         kwargs...)
 
