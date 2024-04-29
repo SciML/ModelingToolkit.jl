@@ -1159,3 +1159,9 @@ for sys in [sys1, sys2]
         @test variable_index(sys, x[i]) == variable_index(sys, x)[i]
     end
 end
+
+# Namespacing of array variables
+@variables x(t)[1:2]
+@named sys = ODESystem(Equation[], t)
+@test getname(unknowns(sys, x)) == :sys₊x
+@test size(unknowns(sys, x)) == size(x)

@@ -1022,6 +1022,10 @@ end
 
 unknowns(sys::Union{AbstractSystem, Nothing}, v) = renamespace(sys, v)
 parameters(sys::Union{AbstractSystem, Nothing}, v) = toparam(unknowns(sys, v))
+for vType in [Symbolics.Arr, Symbolics.Symbolic{<:AbstractArray}]
+    @eval unknowns(sys::AbstractSystem, v::$vType) = renamespace(sys, v)
+    @eval parameters(sys::AbstractSystem, v::$vType) = toparam(unknowns(sys, v))
+end
 for f in [:unknowns, :parameters]
     @eval function $f(sys::AbstractSystem, vs::AbstractArray)
         map(v -> $f(sys, v), vs)
