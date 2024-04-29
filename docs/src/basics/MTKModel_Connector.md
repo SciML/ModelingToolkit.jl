@@ -408,12 +408,13 @@ The conditional parts are reflected in the `structure`. For `BranchOutsideTheBlo
 
 ```julia
 julia> BranchOutsideTheBlock.structure
-Dict{Symbol, Any} with 6 entries:
+Dict{Symbol, Any} with 7 entries:
   :components            => Any[(:if, :flag, Vector{Union{Expr, Symbol}}[[:sys1, :C]], Any[])]
   :kwargs                => Dict{Symbol, Dict}(:flag=>Dict{Symbol, Bool}(:value=>1))
   :structural_parameters => Dict{Symbol, Dict}(:flag=>Dict{Symbol, Bool}(:value=>1))
   :independent_variable  => t
-  :parameters            => Dict{Symbol, Dict{Symbol, Any}}(:a2 => Dict(:type => AbstractArray{Real}, :condition => (:if, :flag, Dict{Symbol, Any}(:kwargs => Dict{Any, Any}(:a1 => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real)), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a1 => Dict(:type => AbstractArray{Real}))]), Dict{Symbol, Any}(:variables => Any[Dict{Symbol, Dict{Symbol, Any}}()], :kwargs => Dict{Any, Any}(:a2 => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real)), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a2 => Dict(:type => AbstractArray{Real}))]))), :a1 => Dict(:type => AbstractArray{Real}, :condition => (:if, :flag, Dict{Symbol, Any}(:kwargs => Dict{Any, Any}(:a1 => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real)), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a1 => Dict(:type => AbstractArray{Real}))]), Dict{Symbol, Any}(:variables => Any[Dict{Symbol, Dict{Symbol, Any}}()], :kwargs => Dict{Any, Any}(:a2 => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real)), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a2 => Dict(:type => AbstractArray{Real}))]))))
+  :parameters            => Dict{Symbol, Dict{Symbol, Any}}(:a2 => Dict(:type=>AbstractArray{Real}, :condition=>(:if, :flag, Dict{Symbol, Any}(:kwargs=>Dict{Any, Any}(:a1=>Dict{Symbol, Union{Nothing, DataType}}(:value=>nothing, :type=>Real)), :parameters=>Any[Dict{Symbol, Dict{Symbol, Any}}(:a1=>Dict(:type=>AbstractArray{Real}))]), Dict{Symbol, Any}(:variables=>Any[Dict{Symbol, Dict{Symbol, Any}}()], :kwargs=>Dict{Any, Any}(:a2=>Dict{Symbol, Union{Nothing, DataType}}(:value=>nothing, :type=>Real)), :parameters=>Any[Dict{Symbol, Dict{Symbol, Any}}(:a2=>Dict(:type=>AbstractArray{Real}))]))), :a1 => Dict(:type=>AbstractArray{Real}, :condition=>(:if, :flag, Dict{Symbol, Any}(:kwargs=>Dict{Any, Any}(:a1=>Dict{Symbol, Union{Nothing, DataType}}(:value=>nothing, :type=>Real)), :parameters=>Any[Dict{Symbol, Dict{Symbol, Any}}(:a1=>Dict(:type=>AbstractArray{Real}))]), Dict{Symbol, Any}(:variables=>Any[Dict{Symbol, Dict{Symbol, Any}}()], :kwargs=>Dict{Any, Any}(:a2=>Dict{Symbol, Union{Nothing, DataType}}(:value=>nothing, :type=>Real)), :parameters=>Any[Dict{Symbol, Dict{Symbol, Any}}(:a2=>Dict(:type=>AbstractArray{Real}))]))))
+  :defaults              => Dict{Symbol, Any}(:a1=>10)
   :equations             => Any[(:if, :flag, ["a1 ~ 0"], ["a2 ~ 0"])]
 ```
 
