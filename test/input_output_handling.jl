@@ -144,7 +144,9 @@ if VERSION >= v"1.8" # :opaque_closure not supported before
             drop_expr = identity)
         x = randn(size(A, 1))
         u = randn(size(B, 2))
-        p = getindex.(Ref(ModelingToolkit.defaults(ssys)), parameters(ssys))
+        p = getindex.(
+            Ref(merge(ModelingToolkit.defaults(ssys), ModelingToolkit.guesses(ssys))),
+            parameters(ssys))
         y1 = obsf(x, u, p, 0)
         y2 = C * x + D * u
         @test y1[] ≈ y2[]

@@ -120,10 +120,14 @@ lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
 lsyss, _ = ModelingToolkit.linearize_symbolic(pid, [reference.u, measurement.u],
     [ctr_output.u])
 
-@test substitute(lsyss.A, ModelingToolkit.defaults(pid)) == lsys.A
-@test substitute(lsyss.B, ModelingToolkit.defaults(pid)) == lsys.B
-@test substitute(lsyss.C, ModelingToolkit.defaults(pid)) == lsys.C
-@test substitute(lsyss.D, ModelingToolkit.defaults(pid)) == lsys.D
+@test substitute(
+    lsyss.A, merge(ModelingToolkit.defaults(pid), ModelingToolkit.guesses(pid))) == lsys.A
+@test substitute(
+    lsyss.B, merge(ModelingToolkit.defaults(pid), ModelingToolkit.guesses(pid))) == lsys.B
+@test substitute(
+    lsyss.C, merge(ModelingToolkit.defaults(pid), ModelingToolkit.guesses(pid))) == lsys.C
+@test substitute(
+    lsyss.D, merge(ModelingToolkit.defaults(pid), ModelingToolkit.guesses(pid))) == lsys.D
 
 # Test with the reverse desired unknown order as well to verify that similarity transform and reoreder_unknowns really works
 lsys = ModelingToolkit.reorder_unknowns(lsys, unknowns(ssys), reverse(desired_order))

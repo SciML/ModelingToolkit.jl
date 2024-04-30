@@ -1756,24 +1756,18 @@ function linearization_function(sys::AbstractSystem, inputs,
         op = merge(defs, op)
     end
     sys = ssys
-    x0 = merge(defaults(sys), Dict(missing_variable_defaults(sys)), op)
-    u0, _p, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
+    initsys = complete(generate_initializesystem(
+        sys, guesses = guesses(sys), algebraic_only = true))
+    initfn = NonlinearFunction(initsys)
+    initprobmap = getu(initsys, unknowns(sys))
     ps = parameters(sys)
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        p = MTKParameters(sys, p, u0)
-    else
-        p = _p
-        p, split_idxs = split_parameters_by_type(p)
-        if p isa Tuple
-            ps = Base.Fix1(getindex, ps).(split_idxs)
-            ps = (ps...,) #if p is Tuple, ps should be Tuple
-        end
-    end
     lin_fun = let diff_idxs = diff_idxs,
         alge_idxs = alge_idxs,
         input_idxs = input_idxs,
         sts = unknowns(sys),
-        fun = ODEFunction{true, SciMLBase.FullSpecialize}(sys, unknowns(sys), ps; p = p),
+        fun = ODEFunction{true, SciMLBase.FullSpecialize}(
+            sys, unknowns(sys), ps; initializeprobmap = initprobmap),
+        initfn = initfn,
         h = build_explicit_observed_function(sys, outputs),
         chunk = ForwardDiff.Chunk(input_idxs)
 
@@ -1784,6 +1778,8 @@ function linearization_function(sys::AbstractSystem, inputs,
                 if initialize && !isempty(alge_idxs) # This is expensive and can be omitted if the user knows that the system is already initialized
                     residual = fun(u, p, t)
                     if norm(residual[alge_idxs]) > √(eps(eltype(residual)))
+                        initprob = NonlinearLeastSquaresProblem(initfn, u, p)
+                        @set! fun.initializeprob = initprob
                         prob = ODEProblem(fun, u, (t, t + 1), p)
                         integ = init(prob, OrdinaryDiffEq.Rodas5P())
                         u = integ.u
@@ -2051,8 +2047,8 @@ lsys_sym, _ = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 """
 function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives = false,
         p = DiffEqBase.NullParameters())
-    x0 = merge(defaults(sys), op)
-    u0, p2, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
+    x0 = merge(defaults(sys), Dict(missing_variable_defaults(sys)), op)
+    u0, defs = get_u0(sys, x0, p)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         if p isa SciMLBase.NullParameters
             p = op
@@ -2063,7 +2059,7 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
         elseif p isa Vector
             p = merge(Dict(parameters(sys) .=> p), op)
         end
-        p2 = MTKParameters(sys, p, Dict(unknowns(sys) .=> u0))
+        p2 = MTKParameters(sys, p, merge(Dict(unknowns(sys) .=> u0), x0, guesses(sys)))
     end
     linres = lin_fun(u0, p2, t)
     f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u = linres
