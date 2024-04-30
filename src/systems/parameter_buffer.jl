@@ -190,7 +190,7 @@ function _update_tuple_helper(buf_v::T, raw, idx) where {T}
 end
 
 function _update_tuple_helper(::Type{<:AbstractArray}, buf_v, raw, idx)
-    ntuple(i -> _update_tuple_helper(buf_v[i], raw, idx), Val(length(buf_v)))
+    ntuple(i -> _update_tuple_helper(buf_v[i], raw, idx), length(buf_v))
 end
 
 function _update_tuple_helper(::Any, buf_v, raw, idx)
