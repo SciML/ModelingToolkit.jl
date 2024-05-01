@@ -247,6 +247,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     var_guesses = dvs′[hasaguess] .=> sysguesses[hasaguess]
     sysguesses = isempty(var_guesses) ? Dict() : todict(var_guesses)
     guesses = merge(sysguesses, todict(guesses))
+    guesses = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(guesses))
 
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
