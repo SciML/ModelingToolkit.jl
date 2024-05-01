@@ -867,10 +867,7 @@ end
 
 function namespace_guesses(sys)
     guess = guesses(sys)
-    Dict((vv = unwrap(v);
-         kk = unwrap(k);
-         unknowns(sys, kk) => vv isa Symbolic ? namespace_expr(v, sys) : vv)
-    for (k, v) in guess)
+    Dict(unknowns(sys, k) => namespace_expr(v, sys) for (k, v) in guess)
 end
 
 function namespace_equations(sys::AbstractSystem, ivs = independent_variables(sys))
