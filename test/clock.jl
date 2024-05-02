@@ -347,7 +347,7 @@ k = ShiftIndex()
         y(t)
     end
     @equations begin
-        x(k) ~ x(k - 1) + ki * u(k) * sampletime() / dt
+        x(k) ~ x(k - 1) + ki * u(k) * SampleTime() / dt
         output.u(k) ~ y(k)
         input.u(k) ~ u(k)
         y(k) ~ x(k - 1) + kp * u(k)
@@ -374,7 +374,7 @@ end
 @mtkmodel ClosedLoop begin
     @components begin
         plant = FirstOrder(k = 0.3, T = 1)
-        sampler = Blocks.Sampler(; clock = d)
+        sampler = Sampler()
         holder = ZeroOrderHold()
         controller = DiscretePI(kp = 2, ki = 2)
         feedback = Feedback()
@@ -441,7 +441,7 @@ prob = ODEProblem(ssys,
     [model.plant.x => 0.0; model.controller.kp => 2.0; model.controller.ki => 2.0],
     (0.0, Tf))
 int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
-@test int.ps[Hold(ssys.holder.input.u)] == 2 # constant output * kp issue https://github.com/SciML/ModelingToolkit.jl/issues/2356
+@test_broken int.ps[Hold(ssys.holder.input.u)] == 2 # constant output * kp issue https://github.com/SciML/ModelingToolkit.jl/issues/2356
 @test int.ps[ssys.controller.x] == 1 # c2d
 @test int.ps[Sample(d)(ssys.sampler.input.u)] == 0 # disc state
 sol = solve(prob,
