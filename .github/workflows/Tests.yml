@@ -1,0 +1,42 @@
+name: "Tests"
+
+on:
+  pull_request:
+    branches:
+      - master
+      - 'release-'
+    paths-ignore:
+      - 'docs/**'
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - 'docs/**'
+
+concurrency:
+  # Skip intermediate builds: always, but for the master branch.
+  # Cancel intermediate builds: always, but for the master branch.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+jobs:
+  format-check:
+    name: "Format Check"
+    uses: "SciML/.github/.github/workflows/format-check.yml@v1"
+
+  tests:
+    name: "Tests"
+    needs: format-check
+    strategy:
+      fail-fast: false
+      matrix:
+        group:
+          - InterfaceI
+          - InterfaceII
+          - Extensions
+          - Downstream
+          - RegressionI
+    uses: "SciML/.github/.github/workflows/tests.yml@v1"
+    with:
+      group: "${{ matrix.group }}"
+    secrets: "inherit"
