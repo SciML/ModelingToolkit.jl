@@ -652,6 +652,18 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
                 append!(appended_parameters, inputs[i], unknowns(ss))
                 discrete_subsystems[i] = ss
             end
+            for i in eachindex(discrete_subsystems)
+                discsys = discrete_subsystems[i]
+                eqs = collect(discsys.eqs)
+                for eqi in eachindex(eqs)
+                    clock = id_to_clock[i]
+                    clock isa AbstractDiscrete || continue
+                    Ts = sampletime(clock)
+                    eqs[eqi] = substitute(eqs[eqi], InferredSampleTime() => Ts)
+                end
+                @set discsys.eqs = eqs
+                discrete_subsystems[i] = discsys
+            end
             @set! sys.discrete_subsystems = discrete_subsystems, inputs, continuous_id,
             id_to_clock
             @set! sys.ps = appended_parameters

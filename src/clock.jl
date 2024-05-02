@@ -117,7 +117,8 @@ end
 Clock(dt::Real) = Clock(nothing, dt)
 Clock() = Clock(nothing, nothing)
 
-sampletime(c) = isdefined(c, :dt) ? c.dt : nothing
+sampletime() = InferredSampleTime()
+sampletime(c) = something(isdefined(c, :dt) ? c.dt : nothing, InferredSampleTime())
 Base.hash(c::Clock, seed::UInt) = hash(c.dt, seed ⊻ 0x953d7a9a18874b90)
 function Base.:(==)(c1::Clock, c2::Clock)
     ((c1.t === nothing || c2.t === nothing) || isequal(c1.t, c2.t)) && c1.dt == c2.dt

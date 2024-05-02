@@ -330,7 +330,7 @@ using ModelingToolkitStandardLibrary.Blocks
 
 dt = 0.05
 d = Clock(t, dt)
-k = ShiftIndex(d)
+k = ShiftIndex()
 
 @mtkmodel DiscretePI begin
     @components begin
@@ -347,7 +347,7 @@ k = ShiftIndex(d)
         y(t)
     end
     @equations begin
-        x(k) ~ x(k - 1) + ki * u(k)
+        x(k) ~ x(k - 1) + ki * u(k) * sampletime() / dt
         output.u(k) ~ y(k)
         input.u(k) ~ u(k)
         y(k) ~ x(k - 1) + kp * u(k)
@@ -364,21 +364,18 @@ end
     end
 end
 
-@mtkmodel Holder begin
-    @components begin
-        input = RealInput()
-        output = RealOutput()
-    end
+@mtkmodel ZeroOrderHold begin
+    @extend u, y = siso = Blocks.SISO()
     @equations begin
-        output.u ~ Hold(input.u)
+        y ~ Hold(u)
     end
 end
 
 @mtkmodel ClosedLoop begin
     @components begin
         plant = FirstOrder(k = 0.3, T = 1)
-        sampler = Sampler()
-        holder = Holder()
+        sampler = Blocks.Sampler(; clock = d)
+        holder = ZeroOrderHold()
         controller = DiscretePI(kp = 2, ki = 2)
         feedback = Feedback()
         ref = Constant(k = 0.5)

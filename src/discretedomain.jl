@@ -1,5 +1,14 @@
 using Symbolics: Operator, Num, Term, value, recursive_hasoperator
 
+struct InferredSampleTime <: Operator end
+function SymbolicUtils.promote_symtype(::Type{InferredSampleTime}, t...)
+    Real
+end
+function InferredSampleTime()
+    # Term{Real}(InferredSampleTime, Any[])
+    SymbolicUtils.term(InferredSampleTime, type = Real)
+end
+
 # Shift
 
 """
@@ -14,8 +23,6 @@ $(FIELDS)
 
 ```jldoctest
 julia> using Symbolics
-
-julia> @variables t;
 
 julia> Δ = Shift(t)
 (::Shift) (generic function with 2 methods)
@@ -176,7 +183,6 @@ end
 function (xn::Num)(k::ShiftIndex)
     @unpack clock, steps = k
     x = value(xn)
-    t = clock.t
     # Verify that the independent variables of k and x match and that the expression doesn't have multiple variables
     vars = Symbolics.get_variables(x)
     length(vars) == 1 ||
@@ -184,8 +190,11 @@ function (xn::Num)(k::ShiftIndex)
     args = Symbolics.arguments(vars[]) # args should be one element vector with the t in x(t)
     length(args) == 1 ||
         error("Cannot shift an expression with multiple independent variables $x.")
-    isequal(args[], t) ||
-        error("Independent variable of $xn is not the same as that of the ShiftIndex $(k.t)")
+    t = args[]
+    if hasfield(typeof(clock), :t)
+        isequal(t, clock.t) ||
+            error("Independent variable of $xn is not the same as that of the ShiftIndex $(k.t)")
+    end
 
     # d, _ = propagate_time_domain(xn)
     # if d != clock # this is only required if the variable has another clock
