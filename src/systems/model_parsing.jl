@@ -57,7 +57,6 @@ function _model_macro(mod, name, expr, isconnector)
     push!(exprs.args, :(parameters = []))
     push!(exprs.args, :(systems = ODESystem[]))
     push!(exprs.args, :(equations = Equation[]))
-    push!(exprs.args, :(defaults = Dict{Num, Union{Number, Symbol, Function}}()))
 
     Base.remove_linenums!(expr)
     for arg in expr.args
@@ -129,11 +128,17 @@ function _model_macro(mod, name, expr, isconnector)
         ]))))
 
     f = if length(where_types) == 0
-        :($(Symbol(:__, name, :__))(; name, $(kwargs...)) = $exprs)
+        :($(Symbol(:__, name, :__))(;
+            name,
+            defaults = Dict{Num, Union{Number, Symbol, Function}}(),
+            $(kwargs...)) = $exprs)
     else
         f_with_where = Expr(:where)
         push!(f_with_where.args,
-            :($(Symbol(:__, name, :__))(; name, $(kwargs...))), where_types...)
+            :($(Symbol(:__, name, :__))(;
+                name,
+                defaults = Dict{Num, Union{Number, Symbol, Function}}(),
+                $(kwargs...))), where_types...)
         :($f_with_where = $exprs)
     end
 
