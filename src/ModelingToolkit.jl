@@ -31,6 +31,7 @@ using PrecompileTools, Reexport
     import FunctionWrappersWrappers
     using URIs: URI
     using SciMLStructures
+    import OrderedCollections
 
     using RecursiveArrayTools
 

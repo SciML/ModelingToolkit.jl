@@ -793,3 +793,27 @@ end
     @test typeof(l_guess) == Num
     @test readable_code(l_guess) == "k(t)"
 end
+
+@testset "Argument order" begin
+    @mtkmodel OrderModel begin
+        @structural_parameters begin
+            b = 1 # reverse alphabetical order to test that the order is preserved
+            a = b
+        end
+        @parameters begin
+            c = a
+            d = b
+        end
+    end
+    @named ordermodel = OrderModel()
+    ordermodel = complete(ordermodel)
+    defs = ModelingToolkit.defaults(ordermodel)
+    @test defs[ordermodel.c] == 1
+    @test defs[ordermodel.d] == 1
+
+    @test_nowarn @named ordermodel = OrderModel(a = 2)
+    ordermodel = complete(ordermodel)
+    defs = ModelingToolkit.defaults(ordermodel)
+    @test defs[ordermodel.c] == 2
+    @test defs[ordermodel.d] == 1
+end
