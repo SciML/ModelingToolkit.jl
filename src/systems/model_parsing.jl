@@ -50,7 +50,7 @@ function _model_macro(mod, name, expr, isconnector)
     ps, sps, vs, = [], [], []
     c_evts = []
     d_evts = []
-    kwargs = Set()
+    kwargs = OrderedCollections.OrderedSet()
     where_types = Expr[]
 
     push!(exprs.args, :(variables = []))
