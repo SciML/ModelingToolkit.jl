@@ -79,7 +79,7 @@ function IndexCache(sys::AbstractSystem)
 
     function insert_by_type!(buffers::Dict{Any, Set{BasicSymbolic}}, sym)
         sym = unwrap(sym)
-        ctype = concrete_symtype(sym)
+        ctype = symtype(sym)
         buf = get!(buffers, ctype, Set{BasicSymbolic}())
         push!(buf, sym)
     end
@@ -116,7 +116,7 @@ function IndexCache(sys::AbstractSystem)
 
     for p in parameters(sys)
         p = unwrap(p)
-        ctype = concrete_symtype(p)
+        ctype = symtype(p)
         haskey(disc_buffers, ctype) && p in disc_buffers[ctype] && continue
         haskey(dependent_buffers, ctype) && p in dependent_buffers[ctype] && continue
         insert_by_type!(
@@ -312,9 +312,3 @@ function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
     end
     return result
 end
-
-concrete_symtype(x::BasicSymbolic) = concrete_symtype(symtype(x))
-concrete_symtype(::Type{Real}) = Float64
-concrete_symtype(::Type{Integer}) = Int
-concrete_symtype(::Type{A}) where {T, N, A <: Array{T, N}} = Array{concrete_symtype(T), N}
-concrete_symtype(::Type{T}) where {T} = T

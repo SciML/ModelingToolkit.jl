@@ -6,7 +6,7 @@ using DiffEqBase, SparseArrays
 using StaticArrays
 using Test
 using SymbolicUtils: issym
-
+using ForwardDiff
 using ModelingToolkit: value
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
@@ -1168,3 +1168,17 @@ end
 @named sys = ODESystem(Equation[], t)
 @test getname(unknowns(sys, x)) == :sys₊x
 @test size(unknowns(sys, x)) == size(x)
+
+# Issue#2667
+@testset "ForwardDiff through ODEProblem constructor" begin
+    @parameters P
+    @variables x(t)
+    sys = structural_simplify(ODESystem([D(x) ~ P], t, [x], [P]; name = :sys))
+
+    function x_at_1(P)
+        prob = ODEProblem(sys, [x => 0.0], (0.0, 1.0), [sys.P => P])
+        return solve(prob, Tsit5())(1.0)
+    end
+
+    @test_nowarn ForwardDiff.derivative(P -> x_at_1(P), 1.0)
+end
