@@ -70,7 +70,7 @@ function MTKParameters(
         end
     end
 
-    isempty(missing_params) || throw(MissingVariablesError(collect(missing_params)))
+    isempty(missing_params) || throw(MissingParametersError(collect(missing_params)))
 
     tunable_buffer = Tuple(Vector{temp.type}(undef, temp.length)
     for temp in ic.tunable_buffer_sizes)
@@ -574,4 +574,18 @@ function as_duals(p::MTKParameters, dualtype)
     tunable = dualtype.(p.tunable)
     discrete = dualtype.(p.discrete)
     return MTKParameters{typeof(tunable), typeof(discrete)}(tunable, discrete)
+end
+
+const MISSING_PARAMETERS_MESSAGE = """
+                                Some parameters are missing from the variable map.
+                                Please provide a value or default for the following variables:
+                                """
+
+struct MissingParametersError <: Exception
+    vars::Any
+end
+
+function Base.showerror(io::IO, e::MissingParametersError)
+    println(io, MISSING_PARAMETERS_MESSAGE)
+    println(io, e.vars)
 end

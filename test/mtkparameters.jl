@@ -130,7 +130,7 @@ u0 = [X => 1.0]
 tspan = (0.0, 100.0)
 ps = [p => 1.0] # Value for `d` is missing
 
-@test_throws ModelingToolkit.MissingVariablesError ODEProblem(sys, u0, tspan, ps)
+@test_throws ModelingToolkit.MissingParametersError ODEProblem(sys, u0, tspan, ps)
 @test_nowarn ODEProblem(sys, u0, tspan, [ps..., d => 1.0])
 
 # JET tests
