@@ -23,9 +23,7 @@ ps = MTKParameters(sys, ivs)
 
 ivs[a] = 1.0
 ps = MTKParameters(sys, ivs)
-@test_broken getp(sys, g) # SII bug
 for (p, val) in ivs
-    isequal(p, g) && continue # broken
     if isequal(p, c)
         val = 3ivs[a]
     end
@@ -67,9 +65,8 @@ setp(sys, e)(ps, 5ones(3)) # with an array
 setp(sys, f[2, 2])(ps, 42) # with a sub-index
 @test getp(sys, f[2, 2])(ps) == 42
 
-# SII bug
-@test_broken setp(sys, g)(ps, ones(100)) # with non-fixed-length array
-@test_broken getp(sys, g)(ps) == ones(100)
+setp(sys, g)(ps, ones(100)) # with non-fixed-length array
+@test getp(sys, g)(ps) == ones(100)
 
 setp(sys, h)(ps, "bar") # with a non-numeric
 @test getp(sys, h)(ps) == "bar"
@@ -91,8 +88,7 @@ end
 @test getp(sys, c)(newps) isa Float64
 @test getp(sys, d)(newps) isa UInt8
 @test getp(sys, f)(newps) isa Matrix{UInt}
-# SII bug
-@test_broken getp(sys, g)(newps) isa Vector{Float32}
+@test getp(sys, g)(newps) isa Vector{Float32}
 
 ps = MTKParameters(sys, ivs)
 function loss(value, sys, ps)
