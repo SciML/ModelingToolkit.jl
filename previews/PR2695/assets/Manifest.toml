@@ -2023,9 +2023,9 @@ version = "5.2.2+0"
 
 [[deps.SymbolicIndexingInterface]]
 deps = ["Accessors", "ArrayInterface", "RuntimeGeneratedFunctions", "StaticArraysCore"]
-git-tree-sha1 = "c4e6b5ec8c8cf592032664b6f4d75a389b420f87"
+git-tree-sha1 = "b479c7a16803f08779ac5b7f9844a42621baeeda"
 uuid = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
-version = "0.3.20"
+version = "0.3.21"
 
 [[deps.SymbolicLimits]]
 deps = ["SymbolicUtils"]
