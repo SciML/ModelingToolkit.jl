@@ -269,7 +269,7 @@ export debug_system
 #export Continuous, Discrete, sampletime, input_timedomain, output_timedomain
 #export has_discrete_domain, has_continuous_domain
 #export is_discrete_domain, is_continuous_domain, is_hybrid_domain
-export Sample, Hold, Shift, ShiftIndex
+export Sample, Hold, Shift, ShiftIndex, sampletime, SampleTime
 export Clock #, InferredDiscrete,
 
 end # module

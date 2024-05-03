@@ -627,7 +627,7 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
         kwargs...)
     if state.sys isa ODESystem
         ci = ModelingToolkit.ClockInference(state)
-        ModelingToolkit.infer_clocks!(ci)
+        ci = ModelingToolkit.infer_clocks!(ci)
         time_domains = merge(Dict(state.fullvars .=> ci.var_domain),
             Dict(default_toterm.(state.fullvars) .=> ci.var_domain))
         tss, inputs, continuous_id, id_to_clock = ModelingToolkit.split_system(ci)

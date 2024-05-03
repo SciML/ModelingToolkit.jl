@@ -21,6 +21,52 @@ function ClockInference(ts::TransformationState)
     ClockInference(ts, eq_domain, var_domain, inferred)
 end
 
+struct NotInferedTimeDomain end
+function error_sample_time(eq)
+    error("$eq\ncontains `SampleTime` but it is not an infered discrete equation.")
+end
+function substitute_sample_time(ci::ClockInference)
+    @unpack ts, eq_domain = ci
+    eqs = copy(equations(ts))
+    @assert length(eqs) == length(eq_domain)
+    for i in eachindex(eqs)
+        eq = eqs[i]
+        domain = eq_domain[i]
+        dt = sampletime(domain)
+        neweq = substitute_sample_time(eq, dt)
+        if neweq isa NotInferedTimeDomain
+            error_sample_time(eq)
+        end
+        eqs[i] = neweq
+    end
+    @set! ts.sys.eqs = eqs
+    @set! ci.ts = ts
+end
+
+function substitute_sample_time(eq::Equation, dt)
+    substitute_sample_time(eq.lhs, dt) ~ substitute_sample_time(eq.rhs, dt)
+end
+
+function substitute_sample_time(ex, dt)
+    istree(ex) || return ex
+    op = operation(ex)
+    args = arguments(ex)
+    if op == SampleTime
+        dt === nothing && return NotInferedTimeDomain()
+        return dt
+    else
+        new_args = similar(args)
+        for (i, arg) in enumerate(args)
+            ex_arg = substitute_sample_time(arg, dt)
+            if ex_arg isa NotInferedTimeDomain
+                return ex_arg
+            end
+            new_args[i] = ex_arg
+        end
+        similarterm(ex, op, new_args; metadata = metadata(ex))
+    end
+end
+
 function infer_clocks!(ci::ClockInference)
     @unpack ts, eq_domain, var_domain, inferred = ci
     @unpack var_to_diff, graph = ts.structure
@@ -66,6 +112,7 @@ function infer_clocks!(ci::ClockInference)
         end
     end
 
+    ci = substitute_sample_time(ci)
     return ci
 end
 
