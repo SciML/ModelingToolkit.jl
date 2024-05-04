@@ -1,10 +1,9 @@
 using Symbolics: Operator, Num, Term, value, recursive_hasoperator
 
-struct SampleTime <: Operator end
-SymbolicUtils.promote_symtype(::Type{SampleTime}, t...) = Real
-function SampleTime()
-    SymbolicUtils.term(SampleTime, type = Real)
+struct SampleTime <: Operator
+    SampleTime() = SymbolicUtils.term(SampleTime, type = Real)
 end
+SymbolicUtils.promote_symtype(::Type{<:SampleTime}, t...) = Real
 
 # Shift
 

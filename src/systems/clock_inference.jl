@@ -63,7 +63,7 @@ function substitute_sample_time(ex, dt)
             end
             new_args[i] = ex_arg
         end
-        similarterm(ex, op, new_args; metadata = metadata(ex))
+        similarterm(ex, op, new_args, symtype(ex); metadata = metadata(ex))
     end
 end
 
