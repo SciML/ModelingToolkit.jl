@@ -380,8 +380,10 @@ function generate_discrete_affect(
                     end
                 end
             else
-                :($empty_disc || disc(cache, disc_unknowns, p, t)) # Cache needed for atomic state update
-                copyto!(disc_unknowns, cache)
+                quote
+                    $empty_disc || disc(cache, disc_unknowns, p, t) # Cache needed for atomic state update
+                    copyto!(disc_unknowns, cache)
+                end
             end
             )
             # @show "after state update", p
