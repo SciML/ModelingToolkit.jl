@@ -528,3 +528,32 @@ prob = ODEProblem(sys, [], (0.0, 10.0), [x(k - 1) => 2.0])
 int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
 @test int.ps[x] == 3.0
 @test int.ps[x(k - 1)] == 2.0
+
+## Atomic state upadte tested using simple delay https://github.com/SciML/ModelingToolkit.jl/issues/2701
+
+using ModelingToolkit: t_nounits as t, D_nounits as D
+##
+k = ShiftIndex(Clock(t, 1))
+@mtkmodel DelayModel begin
+    @variables begin
+        input(t) = 0
+        delay(t) = 0
+        x(t) = 0
+    end
+    @structural_parameters begin
+        d
+    end
+    @equations begin
+        input ~ (t >= 2)
+        delay(k) ~ input(k - d)
+        D(x) ~ (-x + Hold(delay)) / 1e-3
+    end
+end
+
+for d in 0:3
+    @mtkbuild m = DelayModel(; d)
+    prob = ODEProblem(
+        m, [m.delay(k - 3) => 0, m.delay(k - 2) => 0, m.delay(k - 1) => 0], (0.0, 10.0))
+    sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent, dtmax = 0.5)
+    @test reduce(vcat, sol((0:1:10) .+ 0.1)[:])≈[zeros(2 + d); ones(10 - 1 - d)] atol=1e-3
+end

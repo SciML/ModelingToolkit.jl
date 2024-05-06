@@ -321,6 +321,8 @@ function generate_discrete_affect(
             end)
         end
 
+        cache = copy(p[$disc_range]) # Cache needed for atomic state update
+
         # @show disc_to_cont_idxs
         # @show cont_to_disc_idxs
         # @show disc_range
@@ -368,14 +370,16 @@ function generate_discrete_affect(
                 if use_index_cache
                 quote
                     if !$empty_disc
-                        disc(disc_unknowns, integrator.u, p..., t)
-                        for (val, i) in zip(disc_unknowns, $disc_range)
+                        # NOTE: the first and third arguments to `disc` MAY NOT be aliased
+                        disc(cache, integrator.u, p..., t) # Cache needed for atomic state update
+                        for (val, i) in zip(cache, $disc_range)
                             $(_set_parameter_unchecked!)(p, val, i; update_dependent = false)
                         end
                     end
                 end
             else
-                :($empty_disc || disc(disc_unknowns, disc_unknowns, p, t))
+                :($empty_disc || disc(cache, disc_unknowns, p, t)) # Cache needed for atomic state update
+                copyto!(disc_unknowns, cache)
             end
             )
             # @show "after state update", p
