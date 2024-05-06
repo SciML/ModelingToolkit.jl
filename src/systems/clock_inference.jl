@@ -373,10 +373,11 @@ function generate_discrete_affect(
                 quote
                     if !$empty_disc
                         # NOTE: the first and third arguments to `disc` MAY NOT be aliased
-                        disc(cache, integrator.u, p..., t) # Cache needed for atomic state update
+                        disc(cache, disc_unknowns, p..., t) # Cache needed for atomic state update
                         for (val, i) in zip(cache, $disc_range)
                             $(_set_parameter_unchecked!)(p, val, i; update_dependent = false)
                         end
+                        copyto!(disc_unknowns, cache)
                     end
                 end
             else
