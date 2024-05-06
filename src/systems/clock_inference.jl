@@ -321,13 +321,12 @@ function generate_discrete_affect(
             end)
         end
 
-        cache = copy(p[$disc_range]) # Cache needed for atomic state update
-
         # @show disc_to_cont_idxs
         # @show cont_to_disc_idxs
         # @show disc_range
         affect! = :(function (integrator, saved_values)
             @unpack u, p, t = integrator
+            cache = p[$disc_range] # Cache needed for atomic state update
             c2d_obs = $cont_to_disc_obs
             d2c_obs = $disc_to_cont_obs
             $(
