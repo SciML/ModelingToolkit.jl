@@ -326,17 +326,20 @@ function generate_discrete_affect(
         # @show disc_range
         affect! = :(function (integrator, saved_values)
             @unpack u, p, t = integrator
-            cache = p[$disc_range] # Cache needed for atomic state update
             c2d_obs = $cont_to_disc_obs
             d2c_obs = $disc_to_cont_obs
             $(
                 if use_index_cache
-                :(disc_unknowns = [$(parameter_values)(p, i) for i in $disc_range])
+                quote
+                    disc_unknowns = [$(parameter_values)(p, i) for i in $disc_range]
+                    cache = copy(disc_unknowns) # Cache needed for atomic state update
+                end
             else
                 quote
                     c2d_view = view(p, $cont_to_disc_idxs)
                     d2c_view = view(p, $disc_to_cont_idxs)
                     disc_unknowns = view(p, $disc_range)
+                    cache = copy(disc_unknowns)
                 end
             end
             )
