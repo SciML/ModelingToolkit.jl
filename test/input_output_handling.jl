@@ -145,7 +145,7 @@ if VERSION >= v"1.8" # :opaque_closure not supported before
         x = randn(size(A, 1))
         u = randn(size(B, 2))
         p = getindex.(
-            Ref(merge(ModelingToolkit.defaults(ssys), ModelingToolkit.guesses(ssys))),
+            Ref(ModelingToolkit.defaults_and_guesses(ssys)),
             parameters(ssys))
         y1 = obsf(x, u, p, 0)
         y2 = C * x + D * u

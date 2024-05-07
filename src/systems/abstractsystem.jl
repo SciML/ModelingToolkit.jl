@@ -1020,6 +1020,10 @@ function defaults(sys::AbstractSystem)
     isempty(systems) ? defs : mapfoldr(namespace_defaults, merge, systems; init = defs)
 end
 
+function defaults_and_guesses(sys::AbstractSystem)
+    merge(guesses(sys), defaults(sys))
+end
+
 unknowns(sys::Union{AbstractSystem, Nothing}, v) = renamespace(sys, v)
 for vType in [Symbolics.Arr, Symbolics.Symbolic{<:AbstractArray}]
     @eval unknowns(sys::AbstractSystem, v::$vType) = renamespace(sys, v)
