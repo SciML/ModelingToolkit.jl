@@ -210,7 +210,8 @@ SciMLStructures.ismutablescimlstructure(::MTKParameters) = true
 
 for (Portion, field) in [(SciMLStructures.Tunable, :tunable)
                          (SciMLStructures.Discrete, :discrete)
-                         (SciMLStructures.Constants, :constant)]
+                         (SciMLStructures.Constants, :constant)
+                         (Nonnumeric, :nonnumeric)]
     @eval function SciMLStructures.canonicalize(::$Portion, p::MTKParameters)
         as_vector = buffer_to_arraypartition(p.$field)
         repack = let as_vector = as_vector, p = p

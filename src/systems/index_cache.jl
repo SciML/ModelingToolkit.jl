@@ -8,8 +8,10 @@ function BufferTemplate(s::Type{<:Symbolics.Struct}, length::Int)
     BufferTemplate(T, length)
 end
 
-const DEPENDENT_PORTION = :dependent
-const NONNUMERIC_PORTION = :nonnumeric
+struct Dependent <: SciMLStructures.AbstractPortion end
+struct Nonnumeric <: SciMLStructures.AbstractPortion end
+const DEPENDENT_PORTION = Dependent()
+const NONNUMERIC_PORTION = Nonnumeric()
 
 struct ParameterIndex{P, I}
     portion::P
