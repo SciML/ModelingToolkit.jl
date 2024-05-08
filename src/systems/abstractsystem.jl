@@ -1779,7 +1779,13 @@ function linearization_function(sys::AbstractSystem, inputs,
     else
         p = todict(p)
     end
-    p[get_iv(sys)] = 0.0
+    x0 = merge(defaults_and_guesses(sys), op)
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        sys_ps = MTKParameters(sys, p, x0)
+    else
+        sys_ps = varmap_to_vars(p, parameters(sys); defaults = x0)
+    end
+    p[get_iv(sys)] = NaN
     if has_index_cache(initsys) && get_index_cache(initsys) !== nothing
         oldps = MTKParameters(initsys, p, merge(guesses(sys), defaults(sys), op))
         initsys_ps = parameters(initsys)
@@ -1812,19 +1818,19 @@ function linearization_function(sys::AbstractSystem, inputs,
             function (u, p, t)
                 state = ProblemState(; u, p, t)
                 if tunable_getter !== nothing
-                    oldps = SciMLStructures.replace!(
+                    SciMLStructures.replace!(
                         SciMLStructures.Tunable(), oldps, tunable_getter(state))
                 end
                 if disc_getter !== nothing
-                    oldps = SciMLStructures.replace!(
+                    SciMLStructures.replace!(
                         SciMLStructures.Discrete(), oldps, disc_getter(state))
                 end
                 if const_getter !== nothing
-                    oldps = SciMLStructures.replace!(
+                    SciMLStructures.replace!(
                         SciMLStructures.Constants(), oldps, const_getter(state))
                 end
                 if nonnum_getter !== nothing
-                    oldps = SciMLStructures.replace!(
+                    SciMLStructures.replace!(
                         NONNUMERIC_PORTION, oldps, nonnum_getter(state))
                 end
                 newu = u_getter(state)
@@ -1843,7 +1849,7 @@ function linearization_function(sys::AbstractSystem, inputs,
     end
     initfn = NonlinearFunction(initsys)
     initprobmap = getu(initsys, unknowns(sys))
-    ps = parameters(sys)
+    ps = full_parameters(sys)
     lin_fun = let diff_idxs = diff_idxs,
         alge_idxs = alge_idxs,
         input_idxs = input_idxs,
@@ -1854,9 +1860,20 @@ function linearization_function(sys::AbstractSystem, inputs,
         initfn = initfn,
         h = build_explicit_observed_function(sys, outputs),
         chunk = ForwardDiff.Chunk(input_idxs),
-        initialize = initialize
+        sys_ps = sys_ps,
+        initialize = initialize,
+        sys = sys
 
         function (u, p, t)
+            if !isa(p, MTKParameters)
+                p = todict(p)
+                newps = deepcopy(sys_ps)
+                for (k, v) in p
+                    setp(sys, k)(newps, v)
+                end
+                p = newps
+            end
+
             if u !== nothing # Handle systems without unknowns
                 length(sts) == length(u) ||
                     error("Number of unknown variables ($(length(sts))) does not match the number of input unknowns ($(length(u)))")
@@ -2137,7 +2154,7 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
     u0, defs = get_u0(sys, x0, p)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         if p isa SciMLBase.NullParameters
-            p = op
+            p = Dict()
         elseif p isa Dict
             p = merge(p, op)
         elseif p isa Vector && eltype(p) <: Pair
@@ -2145,9 +2162,8 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
         elseif p isa Vector
             p = merge(Dict(parameters(sys) .=> p), op)
         end
-        p2 = MTKParameters(sys, p, merge(Dict(unknowns(sys) .=> u0), x0, guesses(sys)))
     end
-    linres = lin_fun(u0, p2, t)
+    linres = lin_fun(u0, p, t)
     f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u = linres
 
     nx, nu = size(f_u)
