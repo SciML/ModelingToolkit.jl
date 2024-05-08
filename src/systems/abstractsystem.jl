@@ -494,6 +494,14 @@ function SymbolicIndexingInterface.is_observed(sys::AbstractSystem, sym)
            !is_independent_variable(sys, sym) && symbolic_type(sym) != NotSymbolic()
 end
 
+function SymbolicIndexingInterface.observed(sys::AbstractSystem, sym)
+    return let _fn = build_explicit_observed_function(sys, sym)
+        fn(u, p, t) = _fn(u, p, t)
+        fn(u, p::MTKParameters, t) = _fn(u, p..., t)
+        fn
+    end
+end
+
 function SymbolicIndexingInterface.default_values(sys::AbstractSystem)
     return merge(
         Dict(eq.lhs => eq.rhs for eq in observed(sys)),
