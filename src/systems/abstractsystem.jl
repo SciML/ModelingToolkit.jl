@@ -1774,6 +1774,73 @@ function linearization_function(sys::AbstractSystem, inputs,
     sys = ssys
     initsys = complete(generate_initializesystem(
         sys, guesses = guesses(sys), algebraic_only = true))
+    if p isa SciMLBase.NullParameters
+        p = Dict()
+    else
+        p = todict(p)
+    end
+    p[get_iv(sys)] = 0.0
+    if has_index_cache(initsys) && get_index_cache(initsys) !== nothing
+        oldps = MTKParameters(initsys, p, merge(guesses(sys), defaults(sys), op))
+        initsys_ps = parameters(initsys)
+        initsys_idxs = [parameter_index(initsys, param) for param in initsys_ps]
+        tunable_ps = [initsys_ps[i]
+                      for i in eachindex(initsys_ps)
+                      if initsys_idxs[i].portion == SciMLStructures.Tunable()]
+        tunable_getter = isempty(tunable_ps) ? nothing : getu(sys, tunable_ps)
+        discrete_ps = [initsys_ps[i]
+                       for i in eachindex(initsys_ps)
+                       if initsys_idxs[i].portion == SciMLStructures.Discrete()]
+        disc_getter = isempty(discrete_ps) ? nothing : getu(sys, discrete_ps)
+        constant_ps = [initsys_ps[i]
+                       for i in eachindex(initsys_ps)
+                       if initsys_idxs[i].portion == SciMLStructures.Constants()]
+        const_getter = isempty(constant_ps) ? nothing : getu(sys, constant_ps)
+        nonnum_ps = [initsys_ps[i]
+                     for i in eachindex(initsys_ps)
+                     if initsys_idxs[i].portion == NONNUMERIC_PORTION]
+        nonnum_getter = isempty(nonnum_ps) ? nothing : getu(sys, nonnum_ps)
+        u_getter = isempty(unknowns(initsys)) ? (_...) -> nothing :
+                   getu(sys, unknowns(initsys))
+        get_initprob_u_p = let tunable_getter = tunable_getter,
+            disc_getter = disc_getter,
+            const_getter = const_getter,
+            nonnum_getter = nonnum_getter,
+            oldps = oldps,
+            u_getter = u_getter
+
+            function (u, p, t)
+                state = ProblemState(; u, p, t)
+                if tunable_getter !== nothing
+                    oldps = SciMLStructures.replace!(
+                        SciMLStructures.Tunable(), oldps, tunable_getter(state))
+                end
+                if disc_getter !== nothing
+                    oldps = SciMLStructures.replace!(
+                        SciMLStructures.Discrete(), oldps, disc_getter(state))
+                end
+                if const_getter !== nothing
+                    oldps = SciMLStructures.replace!(
+                        SciMLStructures.Constants(), oldps, const_getter(state))
+                end
+                if nonnum_getter !== nothing
+                    oldps = SciMLStructures.replace!(
+                        NONNUMERIC_PORTION, oldps, nonnum_getter(state))
+                end
+                newu = u_getter(state)
+                return newu, oldps
+            end
+        end
+    else
+        get_initprob_u_p = let p_getter = getu(sys, parameters(initsys)),
+            u_getter = getu(sys, unknowns(initsys))
+
+            function (u, p, t)
+                state = ProblemState(; u, p, t)
+                return u_getter(state), p_getter(state)
+            end
+        end
+    end
     initfn = NonlinearFunction(initsys)
     initprobmap = getu(initsys, unknowns(sys))
     ps = parameters(sys)
@@ -1781,11 +1848,13 @@ function linearization_function(sys::AbstractSystem, inputs,
         alge_idxs = alge_idxs,
         input_idxs = input_idxs,
         sts = unknowns(sys),
+        get_initprob_u_p = get_initprob_u_p,
         fun = ODEFunction{true, SciMLBase.FullSpecialize}(
             sys, unknowns(sys), ps; initializeprobmap = initprobmap),
         initfn = initfn,
         h = build_explicit_observed_function(sys, outputs),
-        chunk = ForwardDiff.Chunk(input_idxs)
+        chunk = ForwardDiff.Chunk(input_idxs),
+        initialize = initialize
 
         function (u, p, t)
             if u !== nothing # Handle systems without unknowns
@@ -1794,7 +1863,8 @@ function linearization_function(sys::AbstractSystem, inputs,
                 if initialize && !isempty(alge_idxs) # This is expensive and can be omitted if the user knows that the system is already initialized
                     residual = fun(u, p, t)
                     if norm(residual[alge_idxs]) > √(eps(eltype(residual)))
-                        initprob = NonlinearLeastSquaresProblem(initfn, u, p)
+                        initu0, initp = get_initprob_u_p(u, p, t)
+                        initprob = NonlinearLeastSquaresProblem(initfn, initu0, initp)
                         @set! fun.initializeprob = initprob
                         prob = ODEProblem(fun, u, (t, t + 1), p)
                         integ = init(prob, OrdinaryDiffEq.Rodas5P())
