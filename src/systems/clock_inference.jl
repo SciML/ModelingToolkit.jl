@@ -362,42 +362,26 @@ function generate_discrete_affect(
                     for (val, i) in zip(result, $cont_to_disc_idxs)
                         $(_set_parameter_unchecked!)(p, val, i; update_dependent = false)
                     end
-                end
-            else
-                :(copyto!(c2d_view, c2d_obs(integrator.u, p, t)))
-            end
-            )
-            # @show "after c2d", p
-            $(
-                if use_index_cache
-                quote
                     if !$empty_disc
                         # NOTE: the first and third arguments to `disc` MAY NOT be aliased
                         disc(cache, disc_unknowns, p..., t) # Cache needed for atomic state update
                         for (val, i) in zip(cache, $disc_range)
                             $(_set_parameter_unchecked!)(p, val, i; update_dependent = false)
                         end
-                        copyto!(disc_unknowns, cache)
+                        # copyto!(disc_unknowns, cache)
                     end
-                end
-            else
-                quote
-                    $empty_disc || disc(cache, disc_unknowns, p, t) # Cache needed for atomic state update
-                    copyto!(disc_unknowns, cache)
-                end
-            end
-            )
-            # @show "after state update", p
-            $(
-                if use_index_cache
-                quote
                     result = d2c_obs(disc_unknowns, p..., t)
                     for (val, i) in zip(result, $disc_to_cont_idxs)
                         $(_set_parameter_unchecked!)(p, val, i; update_dependent = false)
                     end
                 end
             else
-                :(copyto!(d2c_view, d2c_obs(disc_unknowns, p, t)))
+                quote
+                    copyto!(c2d_view, c2d_obs(integrator.u, p, t))
+                    $empty_disc || disc(cache, disc_unknowns, p, t) # Cache needed for atomic state update
+                    copyto!(disc_unknowns, cache)
+                    copyto!(d2c_view, d2c_obs(disc_unknowns, p, t))
+                end
             end
             )
 
