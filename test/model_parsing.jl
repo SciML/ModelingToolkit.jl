@@ -1,6 +1,6 @@
 using ModelingToolkit, Test
-using ModelingToolkit: get_connector_type, get_defaults, get_gui_metadata,
-                       get_systems, get_ps, getdefault, getname, readable_code,
+using ModelingToolkit: defaults, get_connector_type, get_defaults, get_gui_metadata,
+                       get_systems, get_ps, getdefault, getname, guesses, readable_code,
                        scalarize, symtype, VariableDescription, RegularConnector
 using URIs: URI
 using Distributions
@@ -274,6 +274,36 @@ end
     @test get_defaults(model)[model.n2] == 5
 
     @test MockModel.structure[:defaults] == Dict(:n => 1.0, :n2 => "g()")
+end
+
+@testset "Defaults and Guesses" begin
+    @mtkmodel DefaultGuessModel begin
+        @parameters begin
+            d
+            g
+        end
+        @defaults begin
+            d => 10
+        end
+        @guesses begin
+            g => 20
+        end
+    end
+
+    @named dg1 = DefaultGuessModel()
+    dg1 = complete(dg1)
+    @test defaults(dg1)[dg1.d] == 10
+    @test guesses(dg1)[dg1.g] == 20
+
+    @named dg2 = DefaultGuessModel(defaults = Dict(:d => 100), guesses = Dict(:g => 200))
+    dg2 = complete(dg2)
+    @test defaults(dg2)[dg2.d] == 100
+    @test guesses(dg2)[dg2.g] == 200
+
+    @named dg3 = DefaultGuessModel(defaults = (d = 1000,), guesses = (g = 2000,))
+    dg3 = complete(dg3)
+    @test defaults(dg3)[dg3.d] == 1000
+    @test guesses(dg3)[dg3.g] == 2000
 end
 
 @testset "Type annotation" begin
