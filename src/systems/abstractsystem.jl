@@ -2678,3 +2678,31 @@ has_diff_eqs(osys21) # returns `false`.
 ```
 """
 has_diff_eqs(sys::AbstractSystem) = any(is_diff_equation, get_eqs(sys))
+
+function cannonialize_expr(expr)
+    expr = Symbolics.unwrap(expr)
+    if expr isa AbstractArray
+        Symbolics.unwrap.(expr)
+    else
+        Symbolics.unwrap(expr)
+    end
+end
+function scalarize_eq(eq)
+    lhs = scalarize(cannonialize_expr(eq.lhs))
+    rhs = scalarize(cannonialize_expr(eq.rhs))
+    if lhs isa AbstractArray || rhs isa AbstractArray
+        vec(Symbolics.value.(lhs) .~ Symbolics.value.(rhs))
+    else
+        Symbolics.value(lhs) ~ Symbolics.value(rhs)
+    end
+end
+function Symbolics.scalarize(sys::AbstractSystem)
+    eqs = reduce(vcat, map(scalarize_eq, equations(sys)))
+    sts = unknowns(sys)
+    ps = parameters(sys)
+    defs = defaults(sys)
+    sys = typeof(sys)(eqs, independent_variable(sys); name = nameof(sys))
+    @set! sys.unknowns = union(sts, unknowns(sys))
+    @set! sys.ps = union(ps, parameters(sys))
+    @set! sys.defaults = merge(defaults(sys), defs)
+end

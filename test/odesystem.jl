@@ -1159,3 +1159,30 @@ for sys in [sys1, sys2]
         @test variable_index(sys, x[i]) == variable_index(sys, x)[i]
     end
 end
+
+using Rotations
+@component function RigidBody(
+        TR; mass = 1.0, inv_inertia = 1.0 * I(3), inertia = 1.0 * I(3), name)
+    params = @parameters begin
+        mass = mass
+        inertia[1:3, 1:3] = inertia
+        inv_inertia[1:3, 1:3] = inv_inertia
+    end
+
+    flanges = []
+    force_eq = Num[0.0, 0.0, 0.0]
+    vars = @variables begin
+        x(t)[1:3]
+        v(t)[1:3]
+        R(t)[1:length(Rotations.params(one(TR)))]
+        ω(t)[1:3]
+    end
+    eqs = Equation[]
+    push!(eqs, D(x) ~ v)
+    push!(eqs, D(v) ~ force_eq / mass)
+    push!(eqs, D(R) ~ Rotations.kinematics(TR(R...), Symbolics.scalarize(ω)))
+    push!(eqs, D(ω) ~ inv_inertia * cross(ω, inertia * ω))
+    return ODESystem(eqs, t; name = name)
+end
+@named rb = RigidBody(Rotations.MRP)
+@test_nowarn structural_simplify(rb)
