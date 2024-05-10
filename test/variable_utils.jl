@@ -19,7 +19,7 @@ new = (((1 / β - 1) + δ) / γ)^(1 / (γ - 1))
 using ModelingToolkit: isdifferential, vars, collect_differential_variables,
                        collect_ivs
 @variables t u(t) y(t)
-D = Differential(t)
+using ModelingToolkit: D
 eq = D(y) ~ u
 v = vars(eq)
 @test v == Set([D(y), u])
@@ -32,3 +32,16 @@ aov = ModelingToolkit.collect_applied_operators(eq, Differential)
 
 ts = collect_ivs([eq])
 @test ts == Set([t])
+
+# Test units of diff vars of `Term` type.
+using ModelingToolkit: t, get_unit, default_toterm
+using DynamicQuantities
+@variables k(t) [unit = u"kg"]
+k2 = value(D(D(k)))
+@test get_unit(default_toterm(k2)) == get_unit(k2)
+
+@variables l(t) [unit = u"mg"]
+l2 = value(D(D(l)))
+@test_logs (:warn,
+    """Ignoring the unit while converting `Differential(t)(Differential(t)(l(t)))` to a term.
+1.0e-6 kg uses non SI unit. Please use SI unit only.""") default_toterm(value(l2))

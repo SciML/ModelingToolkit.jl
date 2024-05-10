@@ -126,7 +126,7 @@ end
 
 function get_unit(x::Symbolic)
     if (u = __get_literal_unit(x)) !== nothing
-        screen_unit(u)
+        u
     elseif issym(x)
         get_literal_unit(x)
     elseif isadd(x)

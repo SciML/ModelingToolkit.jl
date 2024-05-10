@@ -109,7 +109,14 @@ function default_toterm(x)
             end
             x = normalize_to_differential(op)(arguments(x)...)
         end
-        Symbolics.diff2term(x)
+        term_unit = if operation(x) isa Differential
+            _unit = safe_get_unit(
+                x, "Ignoring the unit while converting `$x` to a term.\n")
+            _unit !== nothing ? Dict(VariableUnit => _unit) : nothing
+        else
+            nothing
+        end
+        Symbolics.diff2term(x, term_unit)
     else
         x
     end
