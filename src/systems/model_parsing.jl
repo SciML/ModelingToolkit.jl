@@ -159,9 +159,11 @@ end
 function sanitize_default_guess_kwargs(type, target)
     return quote
         $type isa NamedTuple && ($type = Dict(pairs($type)))
-        for (var"#k", var"#v") in $type
-            var"##var" = filter!(var"#p" -> nameof(var"#p") == var"#k", [parameters...; variables...])[1]
-            $target[var"##var"] = var"#v"
+        for (var"##k", var"##v") in $type
+            var"##var" = filter!( var"##p" -> nameof(var"##p") ==  var"##k", vcat(parameters, variables))
+            if length(var"##var") == 1 # Variable can be present once or can be absent
+                $target[var"##var"[1]] =  var"##v"
+            end
         end
     end
 end
@@ -586,7 +588,15 @@ end
 function _parse_extend!(ext, a, b, dict, expr, kwargs, varexpr, vars)
     extend_args!(a, b, dict, expr, kwargs, varexpr)
     ext[] = a
-    push!(b.args, Expr(:kw, :name, Meta.quot(a)))
+    if length(b.args) > 1
+        if b.args[2].head == :parameters
+            push!(b.args[2].args, :defaults, :guesses, Expr(:kw, :name, Meta.quot(a)))
+        elseif b.args[2].head == :kw
+            b.args[2] = Expr(:parameters, :defaults, :guesses, Expr(:kw, :name, Meta.quot(a)), b.args[2:end]...)
+        end
+    else
+        push!(b.args, Expr(:parameters, :defaults, :guesses, Expr(:kw, :name, Meta.quot(a))))
+    end
     push!(expr.args, :($a = $b))
 
     dict[:extend] = [Symbol.(vars.args), a, b.args[1]]
@@ -616,6 +626,12 @@ function parse_extend!(exprs, ext, dict, mod, body, kwargs)
         Expr(:call, a′, _...) => begin
             a = Symbol(Symbol("#mtkmodel"), :__anonymous__, a′)
             b = body
+            @info 630 b.args[1] mod
+            try
+                getproperty(mod, b.args[1])
+            catch e
+                @info e
+            end
             if (model = getproperty(mod, b.args[1])) isa Model
                 vars = Expr(:tuple)
                 append!(vars.args, names(model))

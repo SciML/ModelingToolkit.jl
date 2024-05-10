@@ -277,7 +277,15 @@ end
 end
 
 @testset "Defaults and Guesses" begin
+    @mtkmodel ToExtend begin
+        @parameters begin
+            t1
+            t2
+        end
+    end
+
     @mtkmodel DefaultGuessModel begin
+        @extend ToExtend()#t1 = 0; t2 = 0)
         @parameters begin
             d
             g
@@ -295,15 +303,17 @@ end
     @test defaults(dg1)[dg1.d] == 10
     @test guesses(dg1)[dg1.g] == 20
 
-    @named dg2 = DefaultGuessModel(defaults = Dict(:d => 100), guesses = Dict(:g => 200))
+    @named dg2 = DefaultGuessModel(defaults = Dict(:d => 11, :t1 => 1), guesses = Dict(:g => 21))
     dg2 = complete(dg2)
-    @test defaults(dg2)[dg2.d] == 100
-    @test guesses(dg2)[dg2.g] == 200
+    @test defaults(dg2)[dg2.d] == 11
+    @test defaults(dg2)[dg2.t1] == 1
+    @test guesses(dg2)[dg2.g] == 21
 
-    @named dg3 = DefaultGuessModel(defaults = (d = 1000,), guesses = (g = 2000,))
+    @named dg3 = DefaultGuessModel(defaults = (d = 12,), guesses = (g = 22, t1 = 2))
     dg3 = complete(dg3)
-    @test defaults(dg3)[dg3.d] == 1000
-    @test guesses(dg3)[dg3.g] == 2000
+    @test defaults(dg3)[dg3.d] == 12
+    @test guesses(dg3)[dg3.g] == 22
+    @test guesses(dg3)[dg3.t1] == 2
 end
 
 @testset "Type annotation" begin
