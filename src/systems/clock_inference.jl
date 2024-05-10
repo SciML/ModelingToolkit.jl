@@ -25,8 +25,8 @@ struct NotInferedTimeDomain end
 function error_sample_time(eq)
     error("$eq\ncontains `SampleTime` but it is not an infered discrete equation.")
 end
-function substitute_sample_time(ci::ClockInference)
-    @unpack ts, eq_domain = ci
+function substitute_sample_time(ci::ClockInference, ts::TearingState)
+    @unpack eq_domain = ci
     eqs = copy(equations(ts))
     @assert length(eqs) == length(eq_domain)
     for i in eachindex(eqs)
@@ -112,7 +112,7 @@ function infer_clocks!(ci::ClockInference)
         end
     end
 
-    ci = substitute_sample_time(ci)
+    ci = substitute_sample_time(ci, ts)
     return ci
 end
 
