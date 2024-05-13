@@ -364,11 +364,11 @@ function generate_discrete_affect(
                     end
                     if !$empty_disc
                         # NOTE: the first and third arguments to `disc` MAY NOT be aliased
-                        disc(cache, disc_unknowns, p..., t) # Cache needed for atomic state update
-                        for (val, i) in zip(cache, $disc_range)
-                            $(_set_parameter_unchecked!)(p, val, i; update_dependent = false)
-                        end
-                        # copyto!(disc_unknowns, cache)
+                        disc(cache, integrator.u, p..., t) # Cache needed for atomic state update
+                    end
+                    copyto!(disc_unknowns, cache)
+                    for (val, i) in zip(cache, $disc_range)
+                        $(_set_parameter_unchecked!)(p, val, i; update_dependent = false)
                     end
                     result = d2c_obs(disc_unknowns, p..., t)
                     for (val, i) in zip(result, $disc_to_cont_idxs)
