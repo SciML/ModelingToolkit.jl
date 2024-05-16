@@ -747,6 +747,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
         $_jac
         M = $_M
         ODEFunction{$iip}($fsym,
+            sys = $sys,
             jac = $jacsym,
             tgrad = $tgradsym,
             mass_matrix = M,

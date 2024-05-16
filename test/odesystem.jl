@@ -55,6 +55,9 @@ for f in [
     ODEFunction(de, [x, y, z], [σ, ρ, β], tgrad = true, jac = true),
     eval(ODEFunctionExpr(de, [x, y, z], [σ, ρ, β], tgrad = true, jac = true)),
 ]
+    # system
+    @test f.sys === de
+
     # iip
     du = zeros(3)
     u = collect(1:3)
