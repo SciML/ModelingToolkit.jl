@@ -102,7 +102,8 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
     complete::Bool
 
-    function JumpSystem{U}(tag, ap::U, iv, states, ps, var_to_name, observed, name, systems,
+    function JumpSystem{U}(
+            tag, ap::U, iv, states, ps, var_to_name, observed, name, systems,
             defaults, connector_type, devents,
             metadata = nothing, gui_metadata = nothing,
             complete = false;
@@ -153,7 +154,8 @@ function JumpSystem(eqs, iv, states, ps;
         end
     end
     if !(isempty(default_u0) && isempty(default_p))
-        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
+        Base.depwarn(
+            "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
             :JumpSystem, force = true)
     end
     defaults = todict(defaults)
@@ -490,7 +492,7 @@ end
 function (ratemap::JumpSysMajParamMapper{
         U,
         V,
-        W,
+        W
 })(params) where {U <: AbstractArray,
         V <: AbstractArray, W}
     updateparams!(ratemap, params)

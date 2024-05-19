@@ -138,10 +138,10 @@ function continuous_events(sys::AbstractSystem)
 
     systems = get_systems(sys)
     cbs = [obs;
-        reduce(vcat,
-        (map(o -> namespace_callback(o, s), continuous_events(s))
-         for s in systems),
-        init = SymbolicContinuousCallback[])]
+           reduce(vcat,
+               (map(o -> namespace_callback(o, s), continuous_events(s))
+               for s in systems),
+               init = SymbolicContinuousCallback[])]
     filter(!isempty, cbs)
 end
 
@@ -232,9 +232,9 @@ function discrete_events(sys::AbstractSystem)
     obs = get_discrete_events(sys)
     systems = get_systems(sys)
     cbs = [obs;
-        reduce(vcat,
-        (map(o -> namespace_callback(o, s), discrete_events(s)) for s in systems),
-        init = SymbolicDiscreteCallback[])]
+           reduce(vcat,
+               (map(o -> namespace_callback(o, s), discrete_events(s)) for s in systems),
+               init = SymbolicDiscreteCallback[])]
     cbs
 end
 
@@ -249,8 +249,11 @@ function add_integrator_header(integrator = gensym(:MTKIntegrator), out = :u)
 end
 
 function condition_header(integrator = gensym(:MTKIntegrator))
-    expr -> Func([expr.args[1], expr.args[2],
-            DestructuredArgs(expr.args[3:end], integrator, inds = [:p])], [], expr.body)
+    expr -> Func(
+        [expr.args[1], expr.args[2],
+            DestructuredArgs(expr.args[3:end], integrator, inds = [:p])],
+        [],
+        expr.body)
 end
 
 """

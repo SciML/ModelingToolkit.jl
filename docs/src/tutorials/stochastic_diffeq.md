@@ -28,13 +28,13 @@ noiseeqs = [0.1 * x,
 u0map = [
     x => 1.0,
     y => 0.0,
-    z => 0.0,
+    z => 0.0
 ]
 
 parammap = [
     σ => 10.0,
     β => 26.0,
-    ρ => 2.33,
+    ρ => 2.33
 ]
 
 prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)

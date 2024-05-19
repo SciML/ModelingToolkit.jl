@@ -97,7 +97,8 @@ function OptimizationSystem(op, states, ps;
     op′ = value(scalarize(op))
 
     if !(isempty(default_u0) && isempty(default_p))
-        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
+        Base.depwarn(
+            "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
             :OptimizationSystem, force = true)
     end
     sysnames = nameof.(systems)
@@ -227,7 +228,8 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         use_union = false,
         kwargs...) where {iip}
     if haskey(kwargs, :lcons) || haskey(kwargs, :ucons)
-        Base.depwarn("`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
+        Base.depwarn(
+            "`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
             :OptimizationProblem, force = true)
     end
 
@@ -419,7 +421,8 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
         use_union = false,
         kwargs...) where {iip}
     if haskey(kwargs, :lcons) || haskey(kwargs, :ucons)
-        Base.depwarn("`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
+        Base.depwarn(
+            "`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
             :OptimizationProblem, force = true)
     end
 
@@ -461,7 +464,8 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
     f = generate_function(sys, checkbounds = checkbounds, linenumbers = linenumbers,
         expression = Val{true})
     if grad
-        _grad = generate_gradient(sys, checkbounds = checkbounds, linenumbers = linenumbers,
+        _grad = generate_gradient(
+            sys, checkbounds = checkbounds, linenumbers = linenumbers,
             parallel = parallel, expression = Val{false})[idx]
     else
         _grad = :nothing
@@ -560,7 +564,8 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
                 cons_hess_prototype = cons_hess_prototype,
                 expr = obj_expr,
                 cons_expr = cons_expr)
-            OptimizationProblem{$iip}(_f, u0, p; lb = lb, ub = ub, int = int, lcons = lcons,
+            OptimizationProblem{$iip}(
+                _f, u0, p; lb = lb, ub = ub, int = int, lcons = lcons,
                 ucons = ucons, kwargs...)
         end
     else

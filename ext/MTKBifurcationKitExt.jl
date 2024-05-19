@@ -40,10 +40,12 @@ struct ObservableRecordFromSolution{S, T}
         subs_vals_params = Pair.(parameters(nsys), p_vals)
         # Gets the (base) substitution values for observables. 
         subs_vals_obs = [obs.lhs => substitute(obs.rhs,
-            [subs_vals_states; subs_vals_params]) for obs in observed(nsys)]
+                             [subs_vals_states; subs_vals_params])
+                         for obs in observed(nsys)]
         # Sometimes observables depend on other observables, hence we make a second update to this vector.
         subs_vals_obs = [obs.lhs => substitute(obs.rhs,
-            [subs_vals_states; subs_vals_params; subs_vals_obs]) for obs in observed(nsys)]
+                             [subs_vals_states; subs_vals_params; subs_vals_obs])
+                         for obs in observed(nsys)]
         # During the bifurcation process, the value of some states, parameters, and observables may vary (and are calculated in each step). Those that are not are stored in this vector
         subs_vals = [subs_vals_states; subs_vals_params; subs_vals_obs]
 
@@ -68,7 +70,8 @@ function (orfs::ObservableRecordFromSolution)(x, p)
 
     # Updates the observable values (in subs_vals).
     for (obs_idx, obs_eq) in enumerate(orfs.obs_eqs)
-        orfs.subs_vals[orfs.param_end_idxs + obs_idx] = orfs.subs_vals[orfs.param_end_idxs + obs_idx][1] => substitute(obs_eq.rhs,
+        orfs.subs_vals[orfs.param_end_idxs + obs_idx] = orfs.subs_vals[orfs.param_end_idxs + obs_idx][1] => substitute(
+            obs_eq.rhs,
             orfs.subs_vals)
     end
 

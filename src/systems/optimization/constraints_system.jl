@@ -112,7 +112,8 @@ function ConstraintsSystem(constraints, states, ps;
     ps′ = value.(scalarize(ps))
 
     if !(isempty(default_u0) && isempty(default_p))
-        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
+        Base.depwarn(
+            "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
             :ConstraintsSystem, force = true)
     end
     sysnames = nameof.(systems)

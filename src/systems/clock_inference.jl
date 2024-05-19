@@ -187,12 +187,14 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
             output_type = SVector)
         ni = length(input)
         ns = length(states(sys))
-        disc = Func([
+        disc = Func(
+            [
                 out,
                 DestructuredArgs(states(sys)),
                 DestructuredArgs(appended_parameters),
-                get_iv(sys),
-            ], [],
+                get_iv(sys)
+            ],
+            [],
             let_block)
         cont_to_disc_idxs = (offset + 1):(offset += ni)
         input_offset = offset

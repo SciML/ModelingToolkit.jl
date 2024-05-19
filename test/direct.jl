@@ -20,7 +20,7 @@ canonequal(a, b) = isequal(simplify(a), simplify(b))
     [
         -sin(x) * cos(cos(x)),
         x / hypot(x, no_der(x)) +
-        no_der(x) * Differential(x)(no_der(x)) / hypot(x, no_der(x)),
+        no_der(x) * Differential(x)(no_der(x)) / hypot(x, no_der(x))
     ])
 
 @register_symbolic intfun(x)::Int
@@ -31,8 +31,8 @@ eqs = [σ * (y - x),
     x * y - β * z]
 
 simpexpr = [:($(*)(σ, $(+)(y, $(*)(-1, x))))
-    :($(+)($(*)(x, $(+)(ρ, $(*)(-1, z))), $(*)(-1, y)))
-    :($(+)($(*)(x, y), $(*)(-1, z, β)))]
+            :($(+)($(*)(x, $(+)(ρ, $(*)(-1, z))), $(*)(-1, y)))
+            :($(+)($(*)(x, y), $(*)(-1, z, β)))]
 
 σ, β, ρ = 2 // 3, 3 // 4, 4 // 5
 x, y, z = 6 // 7, 7 // 8, 8 // 9

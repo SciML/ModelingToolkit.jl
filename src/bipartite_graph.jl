@@ -3,12 +3,12 @@ module BipartiteGraphs
 import ModelingToolkit: complete
 
 export BipartiteEdge, BipartiteGraph, DiCMOBiGraph, Unassigned, unassigned,
-    Matching, ResidualCMOGraph, InducedCondensationGraph, maximal_matching,
-    construct_augmenting_path!, MatchedCondensationGraph
+       Matching, ResidualCMOGraph, InducedCondensationGraph, maximal_matching,
+       construct_augmenting_path!, MatchedCondensationGraph
 
 export 𝑠vertices, 𝑑vertices, has_𝑠vertex, has_𝑑vertex, 𝑠neighbors, 𝑑neighbors,
-    𝑠edges, 𝑑edges, nsrcs, ndsts, SRC, DST, set_neighbors!, invview,
-    delete_srcs!, delete_dsts!
+       𝑠edges, 𝑑edges, nsrcs, ndsts, SRC, DST, set_neighbors!, invview,
+       delete_srcs!, delete_dsts!
 
 using DocStringExtensions
 using UnPack
@@ -778,14 +778,14 @@ end
 
 function Graphs.outneighbors(mcg::MatchedCondensationGraph, cc::Integer)
     Iterators.flatten((mcg.scc_assignment[v′]
-                       for v′ in outneighbors(mcg.graph, v) if mcg.scc_assignment[v′] != cc)
-                      for v in mcg.sccs[cc])
+                      for v′ in outneighbors(mcg.graph, v) if mcg.scc_assignment[v′] != cc)
+    for v in mcg.sccs[cc])
 end
 
 function Graphs.inneighbors(mcg::MatchedCondensationGraph, cc::Integer)
     Iterators.flatten((mcg.scc_assignment[v′]
-                       for v′ in inneighbors(mcg.graph, v) if mcg.scc_assignment[v′] != cc)
-                      for v in mcg.sccs[cc])
+                      for v′ in inneighbors(mcg.graph, v) if mcg.scc_assignment[v′] != cc)
+    for v in mcg.sccs[cc])
 end
 
 """
@@ -811,8 +811,8 @@ end
 
 function _neighbors(icg::InducedCondensationGraph, cc::Integer)
     Iterators.flatten(Iterators.flatten(icg.graph.fadjlist[vsrc]
-                                        for vsrc in icg.graph.badjlist[v])
-                      for v in icg.sccs[cc])
+                      for vsrc in icg.graph.badjlist[v])
+    for v in icg.sccs[cc])
 end
 
 function Graphs.outneighbors(icg::InducedCondensationGraph, v::Integer)

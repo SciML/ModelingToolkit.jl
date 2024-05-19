@@ -1134,7 +1134,8 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     else
         noise_rate_prototype = zeros(eltype(u0), size(noiseeqs))
     end
-    SDDEProblem{iip}(f, f.g, u0, h, tspan, p; noise_rate_prototype =
+    SDDEProblem{iip}(f, f.g, u0, h, tspan, p;
+        noise_rate_prototype =
         noise_rate_prototype, kwargs1..., kwargs...)
 end
 

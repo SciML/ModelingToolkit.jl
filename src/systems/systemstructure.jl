@@ -4,11 +4,11 @@ using SymbolicUtils: istree, operation, arguments, Symbolic
 using SymbolicUtils: quick_cancel, similarterm
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
-    value, InvalidSystemException, isdifferential, _iszero,
-    isparameter, isconstant,
-    independent_variables, SparseMatrixCLIL, AbstractSystem,
-    equations, isirreducible, input_timedomain, TimeDomain,
-    VariableType, getvariabletype, has_equations, ODESystem
+                          value, InvalidSystemException, isdifferential, _iszero,
+                          isparameter, isconstant,
+                          independent_variables, SparseMatrixCLIL, AbstractSystem,
+                          equations, isirreducible, input_timedomain, TimeDomain,
+                          VariableType, getvariabletype, has_equations, ODESystem
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
 using Graphs
@@ -459,8 +459,9 @@ function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
     elseif j == 6
         return Label((i - 1 <= length(bgpm.var_to_diff)) ? string(i - 1) : "")
     elseif j == 4
-        return BipartiteAdjacencyList(i - 1 <= nsrcs(bgpm.bpg) ?
-                                      𝑠neighbors(bgpm.bpg, i - 1) : nothing,
+        return BipartiteAdjacencyList(
+            i - 1 <= nsrcs(bgpm.bpg) ?
+            𝑠neighbors(bgpm.bpg, i - 1) : nothing,
             bgpm.highlight_graph !== nothing &&
             i - 1 <= nsrcs(bgpm.highlight_graph) ?
             Set(𝑠neighbors(bgpm.highlight_graph, i - 1)) :
@@ -474,8 +475,9 @@ function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
             match = bgpm.var_eq_matching[i - 1]
             isa(match, Union{Int, Unassigned}) || (match = true) # Selected State
         end
-        return BipartiteAdjacencyList(i - 1 <= ndsts(bgpm.bpg) ?
-                                      𝑑neighbors(bgpm.bpg, i - 1) : nothing,
+        return BipartiteAdjacencyList(
+            i - 1 <= ndsts(bgpm.bpg) ?
+            𝑑neighbors(bgpm.bpg, i - 1) : nothing,
             bgpm.highlight_graph !== nothing &&
             i - 1 <= ndsts(bgpm.highlight_graph) ?
             Set(𝑑neighbors(bgpm.highlight_graph, i - 1)) :

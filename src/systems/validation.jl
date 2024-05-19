@@ -211,8 +211,10 @@ function _validate(conn::Connection; info::String = "")
     valid
 end
 
-function validate(jump::Union{ModelingToolkit.VariableRateJump,
-            ModelingToolkit.ConstantRateJump}, t::Symbolic;
+function validate(
+        jump::Union{ModelingToolkit.VariableRateJump,
+            ModelingToolkit.ConstantRateJump},
+        t::Symbolic;
         info::String = "")
     newinfo = replace(info, "eq." => "jump")
     _validate([jump.rate, 1 / t], ["rate", "1/t"], info = newinfo) && # Assuming the rate is per time units

@@ -21,7 +21,7 @@ using Symbolics
 @variables t x(t) y(t) # Define variables
 D = Differential(t) # Define a differential operator
 eqs = [D(x) ~ y
-    D(y) ~ x] # Define an array of equations
+       D(y) ~ x] # Define an array of equations
 ```
 
 ## The Non-DSL (non-`@mtkmodel`) Way of Defining an ODESystem
