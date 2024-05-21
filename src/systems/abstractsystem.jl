@@ -461,11 +461,12 @@ function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Symbol
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         return is_parameter(ic, sym)
     end
-    return any(isequal(sym), getname.(parameter_symbols(sys))) ||
+
+    named_parameters = [getname(sym) for sym in parameter_symbols(sys) if hasname(sym)]
+    return any(isequal(sym), named_parameters) ||
            count(NAMESPACE_SEPARATOR, string(sym)) == 1 &&
            count(isequal(sym),
-        Symbol.(nameof(sys), NAMESPACE_SEPARATOR_SYMBOL, getname.(parameter_symbols(sys)))) ==
-           1
+        Symbol.(nameof(sys), NAMESPACE_SEPARATOR_SYMBOL, named_parameters)) == 1
 end
 
 function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
