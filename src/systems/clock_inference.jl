@@ -186,6 +186,13 @@ function split_system(ci::ClockInference{S}) where {S}
         end
         tss[id] = ts_i
     end
+    if continuous_id != 0
+        tss[continuous_id], tss[end] = tss[end], tss[continuous_id]
+        inputs[continuous_id], inputs[end] = inputs[end], inputs[continuous_id]
+        id_to_clock[continuous_id], id_to_clock[end] = id_to_clock[end],
+        id_to_clock[continuous_id]
+        continuous_id = lastindex(tss)
+    end
     return tss, inputs, continuous_id, id_to_clock
 end
 
@@ -270,25 +277,9 @@ function generate_discrete_affect(
             ],
             [],
             let_block) |> toexpr
-        if use_index_cache
-            cont_to_disc_idxs = [parameter_index(osys, sym) for sym in input]
-            disc_range = [parameter_index(osys, sym) for sym in unknowns(sys)]
-        else
-            cont_to_disc_idxs = (offset + 1):(offset += ni)
-            input_offset = offset
-            disc_range = (offset + 1):(offset += ns)
-        end
-        save_vec = Expr(:ref, :Float64)
-        if use_index_cache
-            for unk in unknowns(sys)
-                idx = parameter_index(osys, unk)
-                push!(save_vec.args, :($(parameter_values)(p, $idx)))
-            end
-        else
-            for i in 1:ns
-                push!(save_vec.args, :(p[$(input_offset + i)]))
-            end
-        end
+        cont_to_disc_idxs = [parameter_index(osys, sym) for sym in input]
+        disc_range = [parameter_index(osys, sym) for sym in unknowns(sys)]
+        save_expr = :($(SciMLBase.save_discretes!)(integrator, $i))
         empty_disc = isempty(disc_range)
         disc_init = if use_index_cache
             :(function (u, p, t)
@@ -351,11 +342,14 @@ function generate_discrete_affect(
             # d2c comes last
             # @show t
             # @show "incoming", p
-            $(
-                if use_index_cache
+            result = c2d_obs(u, p..., t)
+            for (val, i) in zip(result, $cont_to_disc_idxs)
+                $(_set_parameter_unchecked!)(p, val, i; update_dependent = false)
+            end
+            $(if !empty_disc
                 quote
-                    result = c2d_obs(integrator.u, p..., t)
-                    for (val, i) in zip(result, $cont_to_disc_idxs)
+                    disc(disc_unknowns, u, p..., t)
+                    for (val, i) in zip(disc_unknowns, $disc_range)
                         $(_set_parameter_unchecked!)(p, val, i; update_dependent = false)
                     end
                 end
@@ -406,7 +400,7 @@ function generate_discrete_affect(
             end
             )
         end)
-        sv = SavedValues(Float64, Vector{Float64})
+
         push!(affect_funs, affect!)
         push!(init_funs, disc_init)
         push!(svs, sv)
