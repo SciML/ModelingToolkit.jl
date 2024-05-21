@@ -878,6 +878,11 @@ function namespace_guesses(sys)
     Dict(unknowns(sys, k) => namespace_expr(v, sys) for (k, v) in guess)
 end
 
+function namespace_parameter_dependencies(sys)
+    pdeps = get_parameter_dependencies(sys)
+    Dict(dependent_parameters(sys, k) => namespace_expr(v, sys) for (k, v) in pdeps)
+end
+
 function namespace_equations(sys::AbstractSystem, ivs = independent_variables(sys))
     eqs = equations(sys)
     isempty(eqs) && return Equation[]
@@ -976,11 +981,27 @@ end
 
 function dependent_parameters(sys::AbstractSystem)
     if has_parameter_dependencies(sys) &&
-       (pdeps = get_parameter_dependencies(sys)) !== nothing
-        collect(keys(pdeps))
+       !isempty(parameter_dependencies(sys))
+        collect(keys(parameter_dependencies(sys)))
     else
         []
     end
+end
+
+function parameter_dependencies(sys::AbstractSystem)
+    pdeps = get_parameter_dependencies(sys)
+    if isnothing(pdeps)
+        pdeps = Dict()
+    end
+    systems = get_systems(sys)
+    isempty(systems) && return pdeps
+    for subsys in systems
+        isnothing(get_parameter_dependencies(subsys)) && continue
+
+        pdeps = merge(pdeps, namespace_parameter_dependencies(subsys))
+    end
+    # @info pdeps
+    return pdeps
 end
 
 function full_parameters(sys::AbstractSystem)
@@ -1044,6 +1065,8 @@ for f in [:unknowns, :parameters]
         map(v -> $f(sys, v), vs)
     end
 end
+
+dependent_parameters(sys::Union{AbstractSystem, Nothing}, v) = renamespace(sys, v)
 
 flatten(sys::AbstractSystem, args...) = sys
 
