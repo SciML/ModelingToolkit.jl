@@ -1008,14 +1008,13 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
     inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(
+        affects, clocks = ModelingToolkit.generate_discrete_affect(
             sys, dss...; eval_expression, eval_module)
-        discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
+        discrete_cbs = map(affects, clocks) do affect, clock
             if clock isa Clock
-                PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt;
+                PeriodicCallback(affect, clock.dt;
                     final_affect = true, initial_affect = true)
             elseif clock isa SolverStepClock
-                affect = DiscreteSaveAffect(affect, sv)
                 DiscreteCallback(Returns(true), affect,
                     initialize = (c, u, t, integrator) -> affect(integrator))
             else
@@ -1031,8 +1030,6 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
         else
             cbs = CallbackSet(cbs, discrete_cbs...)
         end
-    else
-        svs = nothing
     end
     kwargs = filter_kwargs(kwargs)
     pt = something(get_metadata(sys), StandardODEProblem())
@@ -1041,17 +1038,8 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     if cbs !== nothing
         kwargs1 = merge(kwargs1, (callback = cbs,))
     end
-    if svs !== nothing
-        kwargs1 = merge(kwargs1, (disc_saved_values = svs,))
-    end
 
-    prob = ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...)
-    if !isempty(inits)
-        for init in inits
-            # init(prob.u0, prob.p, tspan[1])
-        end
-    end
-    prob
+    return ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...)
 end
 get_callback(prob::ODEProblem) = prob.kwargs[:callback]
 
