@@ -140,7 +140,7 @@ function MTKParameters(
         dep_exprs = ArrayPartition((Any[missing for _ in 1:length(v)] for v in dep_buffer)...)
         for (sym, val) in pdeps
             i, j = ic.dependent_idx[sym]
-            dep_exprs.x[i][j] = wrap(val)
+            dep_exprs.x[i][j] = unwrap(val)
         end
         dep_exprs = identity.(dep_exprs)
         p = reorder_parameters(ic, full_parameters(sys))
@@ -423,7 +423,10 @@ function SymbolicIndexingInterface.remake_buffer(sys, oldbuf::MTKParameters, val
     @set! newbuf.nonnumeric = narrow_buffer_type_and_fallback_undefs.(
         oldbuf.nonnumeric, newbuf.nonnumeric)
     if newbuf.dependent_update_oop !== nothing
-        @set! newbuf.dependent = newbuf.dependent_update_oop(newbuf...)
+        @set! newbuf.dependent = narrow_buffer_type_and_fallback_undefs.(
+            oldbuf.dependent,
+            split_into_buffers(
+                newbuf.dependent_update_oop(newbuf...), oldbuf.dependent, Val(false)))
     end
     return newbuf
 end
@@ -447,6 +450,7 @@ _num_subarrays(v::Tuple) = length(v)
 # getindex indexes the vectors, setindex! linearly indexes values
 # it's inconsistent, but we need it to be this way
 function Base.getindex(buf::MTKParameters, i)
+    i_orig = i
     if !isempty(buf.tunable)
         i <= _num_subarrays(buf.tunable) && return _subarrays(buf.tunable)[i]
         i -= _num_subarrays(buf.tunable)
@@ -467,7 +471,7 @@ function Base.getindex(buf::MTKParameters, i)
         i <= _num_subarrays(buf.dependent) && return _subarrays(buf.dependent)[i]
         i -= _num_subarrays(buf.dependent)
     end
-    throw(BoundsError(buf, i))
+    throw(BoundsError(buf, i_orig))
 end
 function Base.setindex!(p::MTKParameters, val, i)
     function _helper(buf)
@@ -551,9 +555,6 @@ function jacobian_wrt_vars(pf::F, p::MTKParameters, input_idxs, chunk::C) where 
             for (i, val) in zip(input_idxs, p_small_inner)
                 _set_parameter_unchecked!(p_big, val, i)
             end
-            # tunable, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p_big)
-            # tunable[input_idxs] .= p_small_inner
-            # p_big = repack(tunable)
             return if pf isa SciMLBase.ParamJacobianWrapper
                 buffer = Array{dualtype}(undef, size(pf.u))
                 pf(buffer, p_big)
@@ -563,8 +564,6 @@ function jacobian_wrt_vars(pf::F, p::MTKParameters, input_idxs, chunk::C) where 
             end
         end
     end
-    # tunable, _, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)
-    # p_small = tunable[input_idxs]
     p_small = parameter_values.((p,), input_idxs)
     cfg = ForwardDiff.JacobianConfig(p_closure, p_small, chunk, tag)
     ForwardDiff.jacobian(p_closure, p_small, cfg, Val(false))

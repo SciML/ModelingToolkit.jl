@@ -224,3 +224,20 @@ function loss(x)
 end
 
 @test_nowarn ForwardDiff.gradient(loss, collect(tunables))
+
+# Ensure dependent parameters are `Tuple{...}` and not `ArrayPartition` when using
+# `remake_buffer`.
+@parameters p1 p2 p3[1:2] p4[1:2]
+@named sys = ODESystem(
+    Equation[], t, [], [p1, p2, p3, p4]; parameter_dependencies = [p2 => 2p1, p4 => 3p3])
+sys = complete(sys)
+ps = MTKParameters(sys, [p1 => 1.0, p3 => [2.0, 3.0]])
+@test ps[parameter_index(sys, p2)] == 2.0
+@test ps[parameter_index(sys, p4)] == [6.0, 9.0]
+
+newps = remake_buffer(
+    sys, ps, Dict(p1 => ForwardDiff.Dual(2.0), p3 => ForwardDiff.Dual.([3.0, 4.0])))
+
+VDual = Vector{<:ForwardDiff.Dual}
+VVDual = Vector{<:Vector{<:ForwardDiff.Dual}}
+@test newps.dependent isa Union{Tuple{VDual, VVDual}, Tuple{VVDual, VDual}}
