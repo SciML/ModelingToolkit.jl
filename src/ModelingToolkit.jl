@@ -4,38 +4,9 @@ $(DocStringExtensions.README)
 module ModelingToolkit
 using PrecompileTools, Reexport
 @recompile_invalidations begin
-    using DocStringExtensions
-    using Compat
-    using AbstractTrees
-    using DiffEqBase, SciMLBase, ForwardDiff
-    using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap
-    using Distributed
-    using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
-    using InteractiveUtils
-    using Latexify, Unitful, ArrayInterface
-    using Setfield, ConstructionBase
-    using JumpProcesses
-    using DataStructures
-    using SpecialFunctions, NaNMath
+    using StaticArrays
     using RuntimeGeneratedFunctions
     using RuntimeGeneratedFunctions: drop_expr
-    using Base.Threads
-    using DiffEqCallbacks
-    using Graphs
-    import ExprTools: splitdef, combinedef
-    import Libdl
-    using DocStringExtensions
-    using Base: RefValue
-    using Combinatorics
-    import Distributions
-    import FunctionWrappersWrappers
-    using URIs: URI
-    using SciMLStructures
-    import OrderedCollections
-
-    using RecursiveArrayTools
-
-    using SymbolicIndexingInterface
     export independent_variables, unknowns, parameters, full_parameters, continuous_events,
            discrete_events
     import SymbolicUtils
@@ -46,11 +17,6 @@ using PrecompileTools, Reexport
     using SymbolicUtils.Code
     import SymbolicUtils.Code: toexpr
     import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
-    import JuliaFormatter
-
-    using MLStyle
-
-    using Reexport
     using Symbolics
     using Symbolics: degree
     using Symbolics: _parse_vars, value, @derivatives, get_variables,
@@ -69,10 +35,42 @@ using PrecompileTools, Reexport
                       substituter, scalarize, getparent, hasderiv, hasdiff
 
     import DiffEqBase: @add_kwonly
-    import OrdinaryDiffEq
-
-    import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
 end
+
+using DocStringExtensions
+using SpecialFunctions, NaNMath
+using DiffEqCallbacks
+using Graphs
+import ExprTools: splitdef, combinedef
+import OrderedCollections
+
+using SymbolicIndexingInterface
+using LinearAlgebra, SparseArrays, LabelledArrays
+using InteractiveUtils
+using JumpProcesses
+using DataStructures
+using Base.Threads
+using Latexify, Unitful, ArrayInterface
+using Setfield, ConstructionBase
+import Libdl
+using DocStringExtensions
+using Base: RefValue
+using Combinatorics
+import Distributions
+import FunctionWrappersWrappers
+using URIs: URI
+using SciMLStructures
+using Compat
+using AbstractTrees
+using DiffEqBase, SciMLBase, ForwardDiff
+using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap
+using Distributed
+import JuliaFormatter
+using MLStyle
+import OrdinaryDiffEq
+using Reexport
+using RecursiveArrayTools
+import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
 
 @reexport using Symbolics
 @reexport using UnPack
