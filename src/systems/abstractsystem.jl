@@ -639,6 +639,8 @@ function SymbolicIndexingInterface.observed(
         return let _fn = _fn
             fn2(u, p) = _fn(u, p)
             fn2(u, p::MTKParameters) = _fn(u, p...)
+            fn2(::Nothing, p) = _fn([], p)
+            fn2(::Nothing, p::MTKParameters) = _fn([], p...)
             fn2
         end
     end
