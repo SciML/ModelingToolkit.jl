@@ -5,38 +5,17 @@ module ModelingToolkit
 using PrecompileTools, Reexport
 @recompile_invalidations begin
     using StaticArrays
-    using RuntimeGeneratedFunctions
-    using RuntimeGeneratedFunctions: drop_expr
-    export independent_variables, unknowns, parameters, full_parameters, continuous_events,
-           discrete_events
-    import SymbolicUtils
-    import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype,
-                          Symbolic, isadd, ismul, ispow, issym, FnType,
-                          @rule, Rewriters, substitute, metadata, BasicSymbolic,
-                          Sym, Term
-    using SymbolicUtils.Code
-    import SymbolicUtils.Code: toexpr
-    import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
     using Symbolics
-    using Symbolics: degree
-    using Symbolics: _parse_vars, value, @derivatives, get_variables,
-                     exprs_occur_in, solve_for, build_expr, unwrap, wrap,
-                     VariableSource, getname, variable, Connection, connect,
-                     NAMESPACE_SEPARATOR, set_scalar_metadata, setdefaultval,
-                     initial_state, transition, activeState, entry,
-                     ticksInState, timeInState, fixpoint_sub, fast_substitute
-    import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
-                      jacobian_sparsity, isaffine, islinear, _iszero, _isone,
-                      tosymbol, lower_varname, diff2term, var_from_nested_derivative,
-                      BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
-                      ParallelForm, SerialForm, MultithreadedForm, build_function,
-                      rhss, lhss, prettify_expr, gradient,
-                      jacobian, hessian, derivative, sparsejacobian, sparsehessian,
-                      substituter, scalarize, getparent, hasderiv, hasdiff
-
-    import DiffEqBase: @add_kwonly
 end
 
+import SymbolicUtils
+import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype,
+                      Symbolic, isadd, ismul, ispow, issym, FnType,
+                      @rule, Rewriters, substitute, metadata, BasicSymbolic,
+                      Sym, Term
+using SymbolicUtils.Code
+import SymbolicUtils.Code: toexpr
+import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
 using DocStringExtensions
 using SpecialFunctions, NaNMath
 using DiffEqCallbacks
@@ -72,6 +51,28 @@ using Reexport
 using RecursiveArrayTools
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
 
+using RuntimeGeneratedFunctions
+using RuntimeGeneratedFunctions: drop_expr
+
+using Symbolics: degree
+using Symbolics: _parse_vars, value, @derivatives, get_variables,
+                 exprs_occur_in, solve_for, build_expr, unwrap, wrap,
+                 VariableSource, getname, variable, Connection, connect,
+                 NAMESPACE_SEPARATOR, set_scalar_metadata, setdefaultval,
+                 initial_state, transition, activeState, entry,
+                 ticksInState, timeInState, fixpoint_sub, fast_substitute
+import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
+                  jacobian_sparsity, isaffine, islinear, _iszero, _isone,
+                  tosymbol, lower_varname, diff2term, var_from_nested_derivative,
+                  BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
+                  ParallelForm, SerialForm, MultithreadedForm, build_function,
+                  rhss, lhss, prettify_expr, gradient,
+                  jacobian, hessian, derivative, sparsejacobian, sparsehessian,
+                  substituter, scalarize, getparent, hasderiv, hasdiff
+
+import DiffEqBase: @add_kwonly
+export independent_variables, unknowns, parameters, full_parameters, continuous_events,
+       discrete_events
 @reexport using Symbolics
 @reexport using UnPack
 RuntimeGeneratedFunctions.init(@__MODULE__)
