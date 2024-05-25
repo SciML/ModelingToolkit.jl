@@ -64,6 +64,7 @@ MTKDeepDiffsExt = "DeepDiffs"
 [compat]
 AbstractTrees = "0.3, 0.4"
 ArrayInterface = "6, 7"
+BifurcationKit = "0.3"
 Combinatorics = "1"
 Compat = "3.42, 4"
 ConstructionBase = "1"
