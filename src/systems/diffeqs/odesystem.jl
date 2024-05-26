@@ -201,7 +201,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     dvs′ = filter(x -> !isdelay(x, iv), dvs′)
 
     if !(isempty(default_u0) && isempty(default_p))
-        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
+        Base.depwarn(
+            "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
             :ODESystem, force = true)
     end
     defaults = todict(defaults)

@@ -49,7 +49,8 @@ function pss_graph_modia!(structure::SystemStructure, maximal_top_matching, varl
         maxeqlevel = maximum(map(x -> inv_eqlevel[x], eqs))
         maxvarlevel = level = maximum(map(x -> inv_varlevel[x], vars))
         old_level_vars = ()
-        ict = IncrementalCycleTracker(DiCMOBiGraph{true}(graph,
+        ict = IncrementalCycleTracker(
+            DiCMOBiGraph{true}(graph,
                 complete(Matching(ndsts(graph))));
             dir = :in)
 
@@ -102,8 +103,9 @@ function pss_graph_modia!(structure::SystemStructure, maximal_top_matching, varl
             end
 
             if level != 0
-                remaining_vars = collect(v for v in to_tear_vars
-                                             if var_eq_matching[v] === unassigned)
+                remaining_vars = collect(v
+                for v in to_tear_vars
+                if var_eq_matching[v] === unassigned)
                 if !isempty(remaining_vars)
                     remaining_eqs = setdiff(to_tear_eqs, assigned_eqs)
                     nlsolve_matching = maximal_matching(graph,
@@ -175,7 +177,8 @@ function dummy_derivative_graph!(state::TransformationState, jac = nothing;
     dummy_derivative_graph!(state.structure, var_eq_matching, jac, state_priority, log)
 end
 
-function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac = nothing,
+function dummy_derivative_graph!(
+        structure::SystemStructure, var_eq_matching, jac = nothing,
         state_priority = nothing, ::Val{log} = Val(false)) where {log}
     @unpack eq_to_diff, var_to_diff, graph = structure
     diff_to_eq = invview(eq_to_diff)

@@ -39,20 +39,20 @@ solexpr = solve(eval(probexpr), SRIW1(), seed = 1)
 @test SDEProblem(de, nothing).tspan == (0.0, 10.0)
 
 noiseeqs_nd = [0.01*x 0.01*x*y 0.02*x*z
-    σ 0.01*y 0.02*x*z
-    ρ β 0.01*z]
+               σ 0.01*y 0.02*x*z
+               ρ β 0.01*z]
 @named de = SDESystem(eqs, noiseeqs_nd, t, [x, y, z], [σ, ρ, β])
 f = eval(generate_diffusion_function(de)[1])
 @test f([1, 2, 3.0], [0.1, 0.2, 0.3], nothing) == [0.01*1 0.01*1*2 0.02*1*3
-    0.1 0.01*2 0.02*1*3
-    0.2 0.3 0.01*3]
+       0.1 0.01*2 0.02*1*3
+       0.2 0.3 0.01*3]
 
 f = eval(generate_diffusion_function(de)[2])
 du = ones(3, 3)
 f(du, [1, 2, 3.0], [0.1, 0.2, 0.3], nothing)
 @test du == [0.01*1 0.01*1*2 0.02*1*3
-    0.1 0.01*2 0.02*1*3
-    0.2 0.3 0.01*3]
+             0.1 0.01*2 0.02*1*3
+             0.2 0.3 0.01*3]
 
 f = SDEFunction(de)
 prob = SDEProblem(SDEFunction(de), [1.0, 0.0, 0.0], (0.0, 100.0), (10.0, 26.0, 2.33),
@@ -62,13 +62,13 @@ sol = solve(prob, EM(), dt = 0.001)
 u0map = [
     x => 1.0,
     y => 0.0,
-    z => 0.0,
+    z => 0.0
 ]
 
 parammap = [
     σ => 10.0,
     β => 26.0,
-    ρ => 2.33,
+    ρ => 2.33
 ]
 
 prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
@@ -320,7 +320,7 @@ fdrift = eval(generate_function(sys)[1])
 fdif = eval(generate_diffusion_function(sys)[1])
 @test fdrift(u0, p, t) == p[1] * u0
 @test fdif(u0, p, t) == [p[2]*u0[1] p[3]*u0[1]
-    p[4]*u0[1] p[5]*u0[2]]
+                         p[4]*u0[1] p[5]*u0[2]]
 fdrift! = eval(generate_function(sys)[2])
 fdif! = eval(generate_diffusion_function(sys)[2])
 du = similar(u0)
@@ -329,7 +329,7 @@ fdrift!(du, u0, p, t)
 du = similar(u0, size(prob.noise_rate_prototype))
 fdif!(du, u0, p, t)
 @test du == [p[2]*u0[1] p[3]*u0[1]
-    p[4]*u0[1] p[5]*u0[2]]
+             p[4]*u0[1] p[5]*u0[2]]
 
 # Ito -> Strat
 sys2 = stochastic_integral_transform(sys, -1 // 2)
@@ -337,22 +337,22 @@ fdrift = eval(generate_function(sys2)[1])
 fdif = eval(generate_diffusion_function(sys2)[1])
 @test fdrift(u0, p, t) ≈ [
     p[1] * u0[1] - 1 // 2 * (p[2]^2 * u0[1] + p[3]^2 * u0[1]),
-    p[1] * u0[2] - 1 // 2 * (p[2] * p[4] * u0[1] + p[5]^2 * u0[2]),
+    p[1] * u0[2] - 1 // 2 * (p[2] * p[4] * u0[1] + p[5]^2 * u0[2])
 ]
 @test fdif(u0, p, t) == [p[2]*u0[1] p[3]*u0[1]
-    p[4]*u0[1] p[5]*u0[2]]
+                         p[4]*u0[1] p[5]*u0[2]]
 fdrift! = eval(generate_function(sys2)[2])
 fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
 fdrift!(du, u0, p, t)
 @test du ≈ [
     p[1] * u0[1] - 1 // 2 * (p[2]^2 * u0[1] + p[3]^2 * u0[1]),
-    p[1] * u0[2] - 1 // 2 * (p[2] * p[4] * u0[1] + p[5]^2 * u0[2]),
+    p[1] * u0[2] - 1 // 2 * (p[2] * p[4] * u0[1] + p[5]^2 * u0[2])
 ]
 du = similar(u0, size(prob.noise_rate_prototype))
 fdif!(du, u0, p, t)
 @test du == [p[2]*u0[1] p[3]*u0[1]
-    p[4]*u0[1] p[5]*u0[2]]
+             p[4]*u0[1] p[5]*u0[2]]
 
 # Strat -> Ito
 sys2 = stochastic_integral_transform(sys, 1 // 2)
@@ -360,22 +360,22 @@ fdrift = eval(generate_function(sys2)[1])
 fdif = eval(generate_diffusion_function(sys2)[1])
 @test fdrift(u0, p, t) ≈ [
     p[1] * u0[1] + 1 // 2 * (p[2]^2 * u0[1] + p[3]^2 * u0[1]),
-    p[1] * u0[2] + 1 // 2 * (p[2] * p[4] * u0[1] + p[5]^2 * u0[2]),
+    p[1] * u0[2] + 1 // 2 * (p[2] * p[4] * u0[1] + p[5]^2 * u0[2])
 ]
 @test fdif(u0, p, t) == [p[2]*u0[1] p[3]*u0[1]
-    p[4]*u0[1] p[5]*u0[2]]
+                         p[4]*u0[1] p[5]*u0[2]]
 fdrift! = eval(generate_function(sys2)[2])
 fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
 fdrift!(du, u0, p, t)
 @test du ≈ [
     p[1] * u0[1] + 1 // 2 * (p[2]^2 * u0[1] + p[3]^2 * u0[1]),
-    p[1] * u0[2] + 1 // 2 * (p[2] * p[4] * u0[1] + p[5]^2 * u0[2]),
+    p[1] * u0[2] + 1 // 2 * (p[2] * p[4] * u0[1] + p[5]^2 * u0[2])
 ]
 du = similar(u0, size(prob.noise_rate_prototype))
 fdif!(du, u0, p, t)
 @test du == [p[2]*u0[1] p[3]*u0[1]
-    p[4]*u0[1] p[5]*u0[2]]
+             p[4]*u0[1] p[5]*u0[2]]
 
 # non-diagonal noise: Torus -- Strat and Ito are identical
 u0 = rand(2)
@@ -402,7 +402,7 @@ fdif = eval(generate_diffusion_function(sys)[1])
 @test fdrift(u0, p, t) == 0 * u0
 @test fdif(u0, p, t) ==
       [cos(p[1])*sin(u0[1]) cos(p[1])*cos(u0[1]) -sin(p[1])*sin(u0[2]) -sin(p[1])*cos(u0[2])
-    sin(p[1])*sin(u0[1]) sin(p[1])*cos(u0[1]) cos(p[1])*sin(u0[2]) cos(p[1])*cos(u0[2])]
+       sin(p[1])*sin(u0[1]) sin(p[1])*cos(u0[1]) cos(p[1])*sin(u0[2]) cos(p[1])*cos(u0[2])]
 fdrift! = eval(generate_function(sys)[2])
 fdif! = eval(generate_diffusion_function(sys)[2])
 du = similar(u0)
@@ -412,7 +412,7 @@ du = similar(u0, size(prob.noise_rate_prototype))
 fdif!(du, u0, p, t)
 @test du ==
       [cos(p[1])*sin(u0[1]) cos(p[1])*cos(u0[1]) -sin(p[1])*sin(u0[2]) -sin(p[1])*cos(u0[2])
-    sin(p[1])*sin(u0[1]) sin(p[1])*cos(u0[1]) cos(p[1])*sin(u0[2]) cos(p[1])*cos(u0[2])]
+       sin(p[1])*sin(u0[1]) sin(p[1])*cos(u0[1]) cos(p[1])*sin(u0[2]) cos(p[1])*cos(u0[2])]
 
 # Ito -> Strat
 sys2 = stochastic_integral_transform(sys, -1 // 2)
@@ -421,7 +421,7 @@ fdif = eval(generate_diffusion_function(sys2)[1])
 @test fdrift(u0, p, t) == 0 * u0
 @test fdif(u0, p, t) ==
       [cos(p[1])*sin(u0[1]) cos(p[1])*cos(u0[1]) -sin(p[1])*sin(u0[2]) -sin(p[1])*cos(u0[2])
-    sin(p[1])*sin(u0[1]) sin(p[1])*cos(u0[1]) cos(p[1])*sin(u0[2]) cos(p[1])*cos(u0[2])]
+       sin(p[1])*sin(u0[1]) sin(p[1])*cos(u0[1]) cos(p[1])*sin(u0[2]) cos(p[1])*cos(u0[2])]
 fdrift! = eval(generate_function(sys2)[2])
 fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
@@ -431,7 +431,7 @@ du = similar(u0, size(prob.noise_rate_prototype))
 fdif!(du, u0, p, t)
 @test du ==
       [cos(p[1])*sin(u0[1]) cos(p[1])*cos(u0[1]) -sin(p[1])*sin(u0[2]) -sin(p[1])*cos(u0[2])
-    sin(p[1])*sin(u0[1]) sin(p[1])*cos(u0[1]) cos(p[1])*sin(u0[2]) cos(p[1])*cos(u0[2])]
+       sin(p[1])*sin(u0[1]) sin(p[1])*cos(u0[1]) cos(p[1])*sin(u0[2]) cos(p[1])*cos(u0[2])]
 
 # Strat -> Ito
 sys2 = stochastic_integral_transform(sys, 1 // 2)
@@ -440,7 +440,7 @@ fdif = eval(generate_diffusion_function(sys2)[1])
 @test fdrift(u0, p, t) == 0 * u0
 @test fdif(u0, p, t) ==
       [cos(p[1])*sin(u0[1]) cos(p[1])*cos(u0[1]) -sin(p[1])*sin(u0[2]) -sin(p[1])*cos(u0[2])
-    sin(p[1])*sin(u0[1]) sin(p[1])*cos(u0[1]) cos(p[1])*sin(u0[2]) cos(p[1])*cos(u0[2])]
+       sin(p[1])*sin(u0[1]) sin(p[1])*cos(u0[1]) cos(p[1])*sin(u0[2]) cos(p[1])*cos(u0[2])]
 fdrift! = eval(generate_function(sys2)[2])
 fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
@@ -450,13 +450,13 @@ du = similar(u0, size(prob.noise_rate_prototype))
 fdif!(du, u0, p, t)
 @test du ==
       [cos(p[1])*sin(u0[1]) cos(p[1])*cos(u0[1]) -sin(p[1])*sin(u0[2]) -sin(p[1])*cos(u0[2])
-    sin(p[1])*sin(u0[1]) sin(p[1])*cos(u0[1]) cos(p[1])*sin(u0[2]) cos(p[1])*cos(u0[2])]
+       sin(p[1])*sin(u0[1]) sin(p[1])*cos(u0[1]) cos(p[1])*sin(u0[2]) cos(p[1])*cos(u0[2])]
 
 # issue #819
 @testset "Combined system name collisions" begin
     @variables t
     eqs_short = [D(x) ~ σ * (y - x),
-        D(y) ~ x * (ρ - z) - y,
+        D(y) ~ x * (ρ - z) - y
     ]
     sys1 = SDESystem(eqs_short, noiseeqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
     sys2 = SDESystem(eqs_short, noiseeqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
@@ -495,12 +495,12 @@ noiseeqs = [0.1 * x]
     x0 = 0.1
 
     u0map = [
-        x => x0,
+        x => x0
     ]
 
     parammap = [
         α => 1.5,
-        β => 1.0,
+        β => 1.0
     ]
 
     @named de = SDESystem(eqs, noiseeqs, t, [x], [α, β], observed = [weight ~ x * 10])
@@ -536,12 +536,12 @@ end
     ## Standard approach
     # EM with 1`000 trajectories for stepsize 2^-7
     u0map = [
-        x => x0,
+        x => x0
     ]
 
     parammap = [
         α => 1.5,
-        β => 1.0,
+        β => 1.0
     ]
 
     prob = SDEProblem(de, u0map, (0.0, 1.0), parammap)
@@ -605,8 +605,8 @@ drift_eqs = [D(x) ~ σ * (y - x),
     D(z) ~ x * y]
 
 diffusion_eqs = [s*x 0
-    s*y s*x
-    (s * x * z)-s * z 0]
+                 s*y s*x
+                 (s * x * z)-s * z 0]
 
 sys2 = SDESystem(drift_eqs, diffusion_eqs, t, sts, ps, name = :sys1)
 @test sys1 == sys2

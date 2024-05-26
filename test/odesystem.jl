@@ -27,8 +27,8 @@ ssort(eqs) = sort(eqs, by = string)
 @test isequal(ssort(parameters(subed)), [k, β, ρ])
 @test isequal(equations(subed),
     [D(x) ~ k * (y - x)
-        D(y) ~ (ρ - z) * x - y
-        D(z) ~ x * y - β * κ * z])
+     D(y) ~ (ρ - z) * x - y
+     D(z) ~ x * y - β * κ * z])
 @named des[1:3] = ODESystem(eqs)
 @test length(unique(x -> ModelingToolkit.get_tag(x), des)) == 1
 @test eval(toexpr(de)) == de
@@ -53,8 +53,11 @@ jacfun = eval(jac_expr[2])
 
 for f in [
     ODEFunction(de, [x, y, z], [σ, ρ, β], tgrad = true, jac = true),
-    eval(ODEFunctionExpr(de, [x, y, z], [σ, ρ, β], tgrad = true, jac = true)),
+    eval(ODEFunctionExpr(de, [x, y, z], [σ, ρ, β], tgrad = true, jac = true))
 ]
+    # system
+    @test f.sys === de
+
     # iip
     du = zeros(3)
     u = collect(1:3)
@@ -149,20 +152,21 @@ D3 = Differential(t)^3
 D2 = Differential(t)^2
 @variables u(t) uˍtt(t) uˍt(t) xˍt(t)
 eqs = [D3(u) ~ 2(D2(u)) + D(u) + D(x) + 1
-    D2(x) ~ D(x) + 2]
+       D2(x) ~ D(x) + 2]
 @named de = ODESystem(eqs)
 de1 = ode_order_lowering(de)
 lowered_eqs = [D(uˍtt) ~ 2uˍtt + uˍt + xˍt + 1
-    D(xˍt) ~ xˍt + 2
-    D(uˍt) ~ uˍtt
-    D(u) ~ uˍt
-    D(x) ~ xˍt]
+               D(xˍt) ~ xˍt + 2
+               D(uˍt) ~ uˍtt
+               D(u) ~ uˍt
+               D(x) ~ xˍt]
 
 #@test de1 == ODESystem(lowered_eqs)
 
 # issue #219
-@test all(isequal.([ModelingToolkit.var_from_nested_derivative(eq.lhs)[1]
-                    for eq in equations(de1)],
+@test all(isequal.(
+    [ModelingToolkit.var_from_nested_derivative(eq.lhs)[1]
+     for eq in equations(de1)],
     states(@named lowered = ODESystem(lowered_eqs))))
 
 test_diffeq_inference("first-order transform", de1, t, [uˍtt, xˍt, uˍt, u, x], [])
@@ -305,8 +309,8 @@ for (prob, atol) in [(prob1, 1e-12), (prob2, 1e-12), (prob3, 1e-12)]
 end
 
 du0 = [D(y₁) => -0.04
-    D(y₂) => 0.04
-    D(y₃) => 0.0]
+       D(y₂) => 0.04
+       D(y₃) => 0.0]
 prob4 = DAEProblem(sys, du0, u0, tspan, p2)
 prob5 = eval(DAEProblemExpr(sys, du0, u0, tspan, p2))
 for prob in [prob4, prob5]
@@ -344,18 +348,18 @@ D = Differential(t)
 asys = add_accumulations(sys)
 @variables accumulation_x(t) accumulation_y(t) accumulation_z(t)
 eqs = [0 ~ x + z
-    0 ~ x - y
-    D(accumulation_x) ~ x
-    D(accumulation_y) ~ y
-    D(accumulation_z) ~ z
-    D(x) ~ y]
+       0 ~ x - y
+       D(accumulation_x) ~ x
+       D(accumulation_y) ~ y
+       D(accumulation_z) ~ z
+       D(x) ~ y]
 @test ssort(equations(asys)) == ssort(eqs)
 @variables ac(t)
 asys = add_accumulations(sys, [ac => (x + y)^2])
 eqs = [0 ~ x + z
-    0 ~ x - y
-    D(ac) ~ (x + y)^2
-    D(x) ~ y]
+       0 ~ x - y
+       D(ac) ~ (x + y)^2
+       D(x) ~ y]
 @test ssort(equations(asys)) == ssort(eqs)
 
 sys2 = ode_order_lowering(sys)
@@ -368,7 +372,7 @@ D = Differential(t)
 
 eqs = [
     D(x1) ~ -x1,
-    0 ~ x1 - x2,
+    0 ~ x1 - x2
 ]
 @named sys = ODESystem(eqs, t)
 @test isequal(ModelingToolkit.get_iv(sys), t)
@@ -410,7 +414,7 @@ pars = []
 vars = @variables((u1,))
 der = Differential(t)
 eqs = [
-    der(u1) ~ 1,
+    der(u1) ~ 1
 ]
 @test_throws ArgumentError ODESystem(eqs, t, vars, pars, name = :foo)
 
@@ -422,7 +426,7 @@ vars = @variables((u1(t),))
 @parameters w
 der = Differential(w)
 eqs = [
-    der(u1) ~ t,
+    der(u1) ~ t
 ]
 @test_throws ArgumentError ModelingToolkit.ODESystem(eqs, t, vars, pars, name = :foo)
 
@@ -482,7 +486,7 @@ sts = @variables x(t)[1:3]=[1, 2, 3.0] y(t)=1.0
 ps = @parameters p[1:3] = [1, 2, 3]
 D = Differential(t)
 eqs = [collect(D.(x) .~ x)
-    D(y) ~ norm(collect(x)) * y - x[1]]
+       D(y) ~ norm(collect(x)) * y - x[1]]
 @named sys = ODESystem(eqs, t, [sts...;], [ps...;])
 sys = structural_simplify(sys)
 @test isequal(@nonamespace(sys.x), x)
@@ -508,9 +512,9 @@ sol = solve(prob, Tsit5())
 Δ = Difference(t; dt = 0.1)
 U = DiscreteUpdate(t; dt = 0.1)
 eqs = [δ(x) ~ a * x - b * x * y
-    δ(y) ~ -c * y + d * x * y
-    Δ(x) ~ y
-    U(y) ~ x + 1]
+       δ(y) ~ -c * y + d * x * y
+       Δ(x) ~ y
+       U(y) ~ x + 1]
 @named de = ODESystem(eqs, t, [x, y], [a, b, c, d])
 @test generate_difference_cb(de) isa ModelingToolkit.DiffEqCallbacks.DiscreteCallback
 
@@ -568,7 +572,7 @@ using ModelingToolkit: hist
 D = Differential(t)
 xₜ₋₁ = hist(x, t - 1)
 eqs = [D(x) ~ x * y
-    D(y) ~ y * x - xₜ₋₁]
+       D(y) ~ y * x - xₜ₋₁]
 @named sys = ODESystem(eqs, t)
 
 # register
@@ -615,7 +619,7 @@ D = Differential(t)
 eqs = [
     D(x) ~ 0.1x + 0.9y,
     D(y) ~ 0.5x + 0.5y,
-    z ~ α * x - β * y,
+    z ~ α * x - β * y
 ]
 
 @named sys = ODESystem(eqs, t, [x, y, z], [α, β])
@@ -668,8 +672,8 @@ eqs[end] = D(D(z)) ~ α * x - β * y
     defs = Dict{Any, Any}(s => v for (s, v) in zip(ss, vv))
 
     preface = [Assignment(dummy_var, SetArray(true, term(getfield, wf, Meta.quot(:u)), us))
-        Assignment(dummy_var, SetArray(true, term(getfield, wf, Meta.quot(:p)), ps))
-        Assignment(buffer, term(wf, t))]
+               Assignment(dummy_var, SetArray(true, term(getfield, wf, Meta.quot(:p)), ps))
+               Assignment(buffer, term(wf, t))]
     eqs = map(1:length(us)) do i
         D(us[i]) ~ dummy_identity(buffer[i], us[i])
     end
@@ -688,8 +692,8 @@ let
     @variables y(t) = 0
     @parameters k = 1
     eqs = [D(x[1]) ~ x[2]
-        D(x[2]) ~ -x[1] - 0.5 * x[2] + k
-        y ~ 0.9 * x[1] + x[2]]
+           D(x[2]) ~ -x[1] - 0.5 * x[2] + k
+           y ~ 0.9 * x[1] + x[2]]
     @named sys = ODESystem(eqs, t, vcat(x, [y]), [k], defaults = Dict(x .=> 0))
     sys = structural_simplify(sys)
 
@@ -773,8 +777,8 @@ let
     D = Differential(t)
 
     eqs = [D(q) ~ -p / L - F
-        D(p) ~ q / C
-        0 ~ q / C - R * F]
+           D(p) ~ q / C
+           0 ~ q / C - R * F]
 
     @named sys = ODESystem(eqs, t)
     @test length(equations(structural_simplify(sys))) == 2
@@ -797,7 +801,7 @@ let
     eqs2 = [
         D2(y2) ~ x2 * (rho - z2) - y2,
         D2(x2) ~ sigma * (y2 - x2),
-        D2(z2) ~ x2 * y2 - beta * z2,
+        D2(z2) ~ x2 * y2 - beta * z2
     ]
 
     # array u
@@ -809,7 +813,7 @@ let
     eqs4 = [
         D2(y2) ~ x2 * (rho - z2) - y2,
         D2(x2) ~ sigma * (y2 - x2),
-        D2(z2) ~ y2 - beta * z2, # missing x2 term
+        D2(z2) ~ y2 - beta * z2 # missing x2 term
     ]
 
     @named sys1 = ODESystem(eqs)
@@ -833,11 +837,11 @@ let
     vars = @variables sP(t) spP(t) spm(t) sph(t)
     pars = @parameters a b
     eqs = [sP ~ 1
-        spP ~ sP
-        spm ~ a
-        sph ~ b
-        spm ~ 0
-        sph ~ a]
+           spP ~ sP
+           spm ~ a
+           sph ~ b
+           spm ~ 0
+           sph ~ a]
     @named sys = ODESystem(eqs, t, vars, pars)
     @test_throws ModelingToolkit.ExtraEquationsSystemException structural_simplify(sys)
 end
@@ -858,9 +862,9 @@ let
     Dt = Differential(t)
 
     eqs = [Differential(t)(u[2]) - 1.1u[1] ~ 0
-        Differential(t)(u[3]) - 1.1u[2] ~ 0
-        u[1] ~ 0.0
-        u[4] ~ 0.0]
+           Differential(t)(u[3]) - 1.1u[2] ~ 0
+           u[1] ~ 0.0
+           u[4] ~ 0.0]
 
     ps = []
 
@@ -957,7 +961,7 @@ let
     sys_simp = structural_simplify(sys_con)
     D = Differential(t)
     true_eqs = [D(sys.x) ~ sys.v
-        D(sys.v) ~ ctrl.kv * sys.v + ctrl.kx * sys.x]
+                D(sys.v) ~ ctrl.kv * sys.v + ctrl.kx * sys.x]
     @test isequal(full_equations(sys_simp), true_eqs)
 end
 
@@ -981,7 +985,7 @@ let
     ∂t = Differential(t)
 
     eqs = [∂t(Q) ~ 0.2P
-        ∂t(P) ~ -80.0sin(Q)]
+           ∂t(P) ~ -80.0sin(Q)]
     @test_throws ArgumentError @named sys = ODESystem(eqs)
 end
 
@@ -990,8 +994,8 @@ end
 D = Differential(t)
 
 eqs = [D(q) ~ -p / L - F
-    D(p) ~ q / C
-    0 ~ q / C - R * F]
+       D(p) ~ q / C
+       0 ~ q / C - R * F]
 testdict = Dict([:name => "test"])
 @named sys = ODESystem(eqs, t, metadata = testdict)
 @test get_metadata(sys) == testdict
@@ -1000,7 +1004,7 @@ testdict = Dict([:name => "test"])
 ∂t = Differential(t)
 
 eqs = [∂t(Q) ~ 1 / sin(P)
-    ∂t(P) ~ log(-cos(Q))]
+       ∂t(P) ~ log(-cos(Q))]
 @named sys = ODESystem(eqs, t, [P, Q], [])
 sys = debug_system(sys);
 prob = ODEProblem(sys, [], (0, 1.0));

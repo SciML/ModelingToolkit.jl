@@ -31,7 +31,7 @@ syss = structural_simplify(sys)
 
 for df in [
     DiscreteFunction(sys, [S, I, R], [c, nsteps, δt, β, γ]),
-    eval(DiscreteFunctionExpr(sys, [S, I, R], [c, nsteps, δt, β, γ])),
+    eval(DiscreteFunctionExpr(sys, [S, I, R], [c, nsteps, δt, β, γ]))
 ]
 
     # iip
@@ -117,7 +117,7 @@ D2 = Difference(t; dt = 2)
 # Equations
 eqs = [
     D1(x(t)) ~ 0.4x(t) + 0.3x(t - 1.5) + 0.1x(t - 3),
-    D2(y(t)) ~ 0.3y(t) + 0.7y(t - 2) + 0.1z * h,
+    D2(y(t)) ~ 0.3y(t) + 0.7y(t - 2) + 0.1z * h
 ]
 
 # System
@@ -129,9 +129,9 @@ eqs2, max_delay = ModelingToolkit.linearize_eqs(sys; return_max_delay = true)
 @test max_delay[Symbolics.operation(Symbolics.value(y(t)))] ≈ 2
 
 linearized_eqs = [eqs
-    x(t - 3.0) ~ x(t - 1.5)
-    x(t - 1.5) ~ x(t)
-    y(t - 2.0) ~ y(t)]
+                  x(t - 3.0) ~ x(t - 1.5)
+                  x(t - 1.5) ~ x(t)
+                  y(t - 2.0) ~ y(t)]
 @test all(eqs2 .== linearized_eqs)
 
 # observed variable handling
@@ -186,8 +186,8 @@ RHS2 = RHS
     defs = Dict{Any, Any}(s => v for (s, v) in zip(ss, vv))
 
     preface = [Assignment(dummy_var, SetArray(true, term(getfield, wf, Meta.quot(:u)), us))
-        Assignment(dummy_var, SetArray(true, term(getfield, wf, Meta.quot(:p)), ps))
-        Assignment(buffer, term(wf, t))]
+               Assignment(dummy_var, SetArray(true, term(getfield, wf, Meta.quot(:p)), ps))
+               Assignment(buffer, term(wf, t))]
     eqs = map(1:length(us)) do i
         Δ(us[i]) ~ dummy_identity(buffer[i], us[i])
     end

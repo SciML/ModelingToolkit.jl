@@ -39,9 +39,9 @@ using PrecompileTools, Reexport
     export independent_variables, states, parameters
     import SymbolicUtils
     import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype,
-        Symbolic, isadd, ismul, ispow, issym, FnType,
-        @rule, Rewriters, substitute, metadata, BasicSymbolic,
-        Sym, Term
+                          Symbolic, isadd, ismul, ispow, issym, FnType,
+                          @rule, Rewriters, substitute, metadata, BasicSymbolic,
+                          Sym, Term
     using SymbolicUtils.Code
     import SymbolicUtils.Code: toexpr
     import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
@@ -53,17 +53,17 @@ using PrecompileTools, Reexport
     using Symbolics
     using Symbolics: degree
     using Symbolics: _parse_vars, value, @derivatives, get_variables,
-        exprs_occur_in, solve_for, build_expr, unwrap, wrap,
-        VariableSource, getname, variable, Connection, connect,
-        NAMESPACE_SEPARATOR, set_scalar_metadata, setdefaultval
+                     exprs_occur_in, solve_for, build_expr, unwrap, wrap,
+                     VariableSource, getname, variable, Connection, connect,
+                     NAMESPACE_SEPARATOR, set_scalar_metadata, setdefaultval
     import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
-        jacobian_sparsity, isaffine, islinear, _iszero, _isone,
-        tosymbol, lower_varname, diff2term, var_from_nested_derivative,
-        BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
-        ParallelForm, SerialForm, MultithreadedForm, build_function,
-        rhss, lhss, prettify_expr, gradient,
-        jacobian, hessian, derivative, sparsejacobian, sparsehessian,
-        substituter, scalarize, getparent
+                      jacobian_sparsity, isaffine, islinear, _iszero, _isone,
+                      tosymbol, lower_varname, diff2term, var_from_nested_derivative,
+                      BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
+                      ParallelForm, SerialForm, MultithreadedForm, build_function,
+                      rhss, lhss, prettify_expr, gradient,
+                      jacobian, hessian, derivative, sparsejacobian, sparsehessian,
+                      substituter, scalarize, getparent
 
     import DiffEqBase: @add_kwonly
     import OrdinaryDiffEq
@@ -181,12 +181,12 @@ PrecompileTools.@compile_workload begin
 end
 
 export AbstractTimeDependentSystem,
-    AbstractTimeIndependentSystem,
-    AbstractMultivariateSystem
+       AbstractTimeIndependentSystem,
+       AbstractMultivariateSystem
 
 export ODESystem,
-    ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system,
-    add_accumulations, System
+       ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system,
+       add_accumulations, System
 export DAEFunctionExpr, DAEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDEProblemExpr
 export SystemStructure
@@ -203,9 +203,9 @@ export alias_elimination, flatten
 export connect, domain_connect, @connector, Connection, Flow, Stream, instream
 export @component, @mtkmodel, @mtkbuild
 export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbance,
-    istunable, getdist, hasdist,
-    tunable_parameters, isirreducible, getdescription, hasdescription, isbinaryvar,
-    isintegervar
+       istunable, getdist, hasdist,
+       tunable_parameters, isirreducible, getdescription, hasdescription, isbinaryvar,
+       isintegervar
 export ode_order_lowering, dae_order_lowering, liouville_transform
 export PDESystem
 export Differential, expand_derivatives, @derivatives
@@ -213,11 +213,11 @@ export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, DelayParentScope, GlobalScope
 export independent_variable, equations, controls,
-    observed, structure, full_equations
+       observed, structure, full_equations
 export structural_simplify, expand_connections, linearize, linearization_function
 export DiscreteSystem,
-    DiscreteProblem, DiscreteProblemExpr, DiscreteFunction,
-    DiscreteFunctionExpr
+       DiscreteProblem, DiscreteProblemExpr, DiscreteFunction,
+       DiscreteFunctionExpr
 
 export calculate_jacobian, generate_jacobian, generate_function
 export calculate_control_jacobian, generate_control_jacobian

@@ -93,17 +93,19 @@ eqs1 = [
     0 ~ σ * (y - x) * h + F,
     0 ~ x * (ρ - z) - u,
     0 ~ x * y - β * z,
-    0 ~ x + y - z - u,
+    0 ~ x + y - z - u
 ]
 
 lorenz = name -> NonlinearSystem(eqs1, [x, y, z, u, F], [σ, ρ, β], name = name)
 lorenz1 = lorenz(:lorenz1)
 @test_throws ArgumentError NonlinearProblem(lorenz1, zeros(5))
 lorenz2 = lorenz(:lorenz2)
-@named connected = NonlinearSystem([s ~ a + lorenz1.x
-        lorenz2.y ~ s * h
-        lorenz1.F ~ lorenz2.u
-        lorenz2.F ~ lorenz1.u], [s, a], [],
+@named connected = NonlinearSystem(
+    [s ~ a + lorenz1.x
+     lorenz2.y ~ s * h
+     lorenz1.F ~ lorenz2.u
+     lorenz2.F ~ lorenz1.u],
+    [s, a], [],
     systems = [lorenz1, lorenz2])
 @test_nowarn alias_elimination(connected)
 
@@ -154,10 +156,10 @@ end
     @parameters a b
     @variables x y
     eqs1 = [
-        0 ~ a * x,
+        0 ~ a * x
     ]
     eqs2 = [
-        0 ~ b * y,
+        0 ~ b * y
     ]
 
     @named sys1 = NonlinearSystem(eqs1, [x], [a])
@@ -184,9 +186,9 @@ RHS2 = RHS
 @variables t
 @variables v1(t) v2(t) i1(t) i2(t)
 eq = [v1 ~ sin(2pi * t * h)
-    v1 - v2 ~ i1
-    v2 ~ i2
-    i1 ~ i2]
+      v1 - v2 ~ i1
+      v2 ~ i2
+      i1 ~ i2]
 @named sys = ODESystem(eq)
 @test length(equations(structural_simplify(sys))) == 0
 
@@ -249,9 +251,9 @@ end
     D = Differential(t)
 
     eqs = [dx ~ a * x - b * x * y
-        dy ~ -c * y + d * x * y
-        D(x) ~ dx
-        D(y) ~ dy]
+           dy ~ -c * y + d * x * y
+           D(x) ~ dx
+           D(y) ~ dy]
 
     @named sys = ODESystem(eqs, t, vars, pars)
 

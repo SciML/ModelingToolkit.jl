@@ -124,7 +124,8 @@ function NonlinearSystem(eqs, states, ps;
            for x in scalarize(eqs)]
 
     if !(isempty(default_u0) && isempty(default_p))
-        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
+        Base.depwarn(
+            "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
             :NonlinearSystem, force = true)
     end
     sysnames = nameof.(systems)
@@ -205,7 +206,7 @@ end
 
 function hessian_sparsity(sys::NonlinearSystem)
     [hessian_sparsity(eq.rhs,
-        states(sys)) for eq in equations(sys)]
+         states(sys)) for eq in equations(sys)]
 end
 
 """

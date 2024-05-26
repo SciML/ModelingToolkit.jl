@@ -1,7 +1,7 @@
 using ModelingToolkit, OrdinaryDiffEq, StochasticDiffEq, JumpProcesses, Test
 using ModelingToolkit: SymbolicContinuousCallback,
-    SymbolicContinuousCallbacks, NULL_AFFECT,
-    get_callback
+                       SymbolicContinuousCallbacks, NULL_AFFECT,
+                       get_callback
 using StableRNGs
 rng = StableRNG(12345)
 
@@ -128,7 +128,7 @@ fsys = flatten(sys)
       SymbolicContinuousCallback(Equation[x ~ 2], NULL_AFFECT)
 @test all(ModelingToolkit.continuous_events(sys2) .== [
     SymbolicContinuousCallback(Equation[x ~ 2], NULL_AFFECT),
-    SymbolicContinuousCallback(Equation[sys.x ~ 1], NULL_AFFECT),
+    SymbolicContinuousCallback(Equation[sys.x ~ 1], NULL_AFFECT)
 ])
 
 @test isequal(equations(getfield(sys2, :continuous_events))[1], x ~ 2)
@@ -204,7 +204,7 @@ root_eqs = [x ~ 0]
 affect = [v ~ -v]
 
 @named ball = ODESystem([D(x) ~ v
-        D(v) ~ -9.8], t, continuous_events = root_eqs => affect)
+                         D(v) ~ -9.8], t, continuous_events = root_eqs => affect)
 
 @test getfield(ball, :continuous_events)[] ==
       SymbolicContinuousCallback(Equation[x ~ 0], Equation[v ~ -v])
@@ -223,12 +223,13 @@ sol = solve(prob, Tsit5())
 D = Differential(t)
 
 continuous_events = [[x ~ 0] => [vx ~ -vx]
-    [y ~ -1.5, y ~ 1.5] => [vy ~ -vy]]
+                     [y ~ -1.5, y ~ 1.5] => [vy ~ -vy]]
 
-@named ball = ODESystem([D(x) ~ vx
-        D(y) ~ vy
-        D(vx) ~ -9.8
-        D(vy) ~ -0.01vy], t; continuous_events)
+@named ball = ODESystem(
+    [D(x) ~ vx
+     D(y) ~ vy
+     D(vx) ~ -9.8
+     D(vy) ~ -0.01vy], t; continuous_events)
 
 ball = structural_simplify(ball)
 
@@ -259,13 +260,13 @@ sol = solve(prob, Tsit5())
 ## Test multi-variable affect
 # in this test, there are two variables affected by a single event.
 continuous_events = [
-    [x ~ 0] => [vx ~ -vx, vy ~ -vy],
+    [x ~ 0] => [vx ~ -vx, vy ~ -vy]
 ]
 
 @named ball = ODESystem([D(x) ~ vx
-        D(y) ~ vy
-        D(vx) ~ -1
-        D(vy) ~ 0], t; continuous_events)
+                         D(y) ~ vy
+                         D(vx) ~ -1
+                         D(vy) ~ 0], t; continuous_events)
 
 ball = structural_simplify(ball)
 
@@ -284,8 +285,8 @@ sol = solve(prob, Tsit5())
 # tests that it works for ODAESystem
 @variables vs(t) v(t) vmeasured(t)
 eq = [vs ~ sin(2pi * t)
-    D(v) ~ vs - v
-    D(vmeasured) ~ 0.0]
+      D(v) ~ vs - v
+      D(vmeasured) ~ 0.0]
 ev = [sin(20pi * t) ~ 0.0] => [vmeasured ~ v]
 @named sys = ODESystem(eq, continuous_events = ev)
 sys = structural_simplify(sys)
@@ -329,8 +330,8 @@ sd_force(sd) = -sd.spring.k * sd.spring.x - sd.damper.c * sd.damper.vel
 @named sd = SpringDamper(; k = 1000, c = 10)
 function Model(u, d = 0)
     eqs = [connect_sd(sd, mass1, mass2)
-        Dₜ(mass1.vel) ~ (sd_force(sd) + u) / mass1.m
-        Dₜ(mass2.vel) ~ (-sd_force(sd) + d) / mass2.m]
+           Dₜ(mass1.vel) ~ (sd_force(sd) + u) / mass1.m
+           Dₜ(mass2.vel) ~ (-sd_force(sd) + d) / mass2.m]
     @named _model = ODESystem(eqs, t; observed = [y ~ mass2.pos])
     @named model = compose(_model, mass1, mass2, sd)
 end

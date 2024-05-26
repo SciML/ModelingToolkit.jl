@@ -1,5 +1,5 @@
 using ModelingToolkit, SparseArrays, Test, Optimization, OptimizationOptimJL,
-    OptimizationMOI, Ipopt, AmplNLWriter, Ipopt_jll
+      OptimizationMOI, Ipopt, AmplNLWriter, Ipopt_jll
 using ModelingToolkit: get_metadata
 
 @testset "basic" begin
@@ -32,15 +32,15 @@ using ModelingToolkit: get_metadata
     @test sparse_prob.f.hess_prototype.colptr == hess_sparsity.colptr
 
     u0 = [sys1.x => 1.0
-        sys1.y => 2.0
-        sys2.x => 3.0
-        sys2.y => 4.0
-        z => 5.0]
+          sys1.y => 2.0
+          sys2.x => 3.0
+          sys2.y => 4.0
+          z => 5.0]
     p = [sys1.a => 6.0
-        sys1.b => 7.0
-        sys2.a => 8.0
-        sys2.b => 9.0
-        β => 10.0]
+         sys1.b => 7.0
+         sys2.a => 8.0
+         sys2.b => 9.0
+         β => 10.0]
 
     prob = OptimizationProblem(combinedsys, u0, p, grad = true, hess = true, cons_j = true,
         cons_h = true)
@@ -54,7 +54,7 @@ end
     @parameters a b
     loss = (a - x)^2 + b * (y - x^2)^2
     cons = [
-        x^2 + y^2 ≲ 1.0,
+        x^2 + y^2 ≲ 1.0
     ]
     @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = cons)
 
@@ -77,8 +77,8 @@ end
     @parameters a b
     loss = (a - x)^2 + b * z^2
     cons = [1.0 ~ x^2 + y^2
-        z ~ y - x^2
-        z^2 + y^2 ≲ 1.0]
+            z ~ y - x^2
+            z^2 + y^2 ≲ 1.0]
     @named sys = OptimizationSystem(loss, [x, y, z], [a, b], constraints = cons)
     sys = structural_simplify(sys)
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, z => 0.0], [a => 1.0, b => 1.0],
@@ -142,10 +142,10 @@ end
     o1 = (x - a)^2
     o2 = (y - 1 / 2)^2
     c1 = [
-        x ~ 1,
+        x ~ 1
     ]
     c2 = [
-        y ~ 1,
+        y ~ 1
     ]
     sys1 = OptimizationSystem(o1, [x], [a], name = :sys1, constraints = c1)
     sys2 = OptimizationSystem(o2, [y], [], name = :sys2, constraints = c2)
@@ -183,7 +183,7 @@ end
     sys1 = OptimizationSystem(loss, [x, y], [a, b], name = :sys1)
 
     cons = [
-        x^2 + y^2 ≲ 1.0,
+        x^2 + y^2 ≲ 1.0
     ]
     sys2 = OptimizationSystem(loss, [x, y], [a, b], name = :sys2, constraints = cons)
 
@@ -194,15 +194,15 @@ end
         name = :combinedsys)
 
     u0 = [sys1.x => 1.0
-        sys1.y => 2.0
-        sys2.x => 3.0
-        sys2.y => 4.0
-        z => 5.0]
+          sys1.y => 2.0
+          sys2.x => 3.0
+          sys2.y => 4.0
+          z => 5.0]
     p = [sys1.a => 6.0
-        sys1.b => 7.0
-        sys2.a => 8.0
-        sys2.b => 9.0
-        β => 10.0]
+         sys1.b => 7.0
+         sys2.a => 8.0
+         sys2.b => 9.0
+         β => 10.0]
 
     prob = OptimizationProblem(combinedsys, u0, p, grad = true, hess = true, cons_j = true,
         cons_h = true)
@@ -227,7 +227,7 @@ end
     @variables x
     o1 = (x - 1)^2
     c1 = [
-        x ~ 1,
+        x ~ 1
     ]
     testdict = Dict(["test" => 1])
     sys1 = OptimizationSystem(o1, [x], [], name = :sys1, constraints = c1,
@@ -240,7 +240,7 @@ end
     @named sys = OptimizationSystem(x[1] + x[2], [x...], [];
         constraints = [
             1.0 ≲ x[1]^2 + x[2]^2,
-            x[1]^2 + x[2]^2 ≲ 2.0,
+            x[1]^2 + x[2]^2 ≲ 2.0
         ])
 
     prob = OptimizationProblem(sys, [x[1] => 2.0, x[2] => 0.0], [], grad = true,
@@ -267,7 +267,7 @@ end
     @parameters α₁ α₂
     loss = (α₁ - x₁)^2 + α₂ * (x₂ - x₁^2)^2
     cons = [
-        x₁^2 + x₂^2 ≲ 1.0,
+        x₁^2 + x₂^2 ≲ 1.0
     ]
     sys1 = OptimizationSystem(loss, [x₁, x₂], [α₁, α₂], name = :sys1, constraints = cons)
 
@@ -301,5 +301,5 @@ end
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0])
     @test prob.f.expr isa Symbolics.Symbolic
     @test all(prob.f.cons_expr[i].lhs isa Symbolics.Symbolic
-              for i in 1:length(prob.f.cons_expr))
+    for i in 1:length(prob.f.cons_expr))
 end

@@ -1,7 +1,7 @@
 using ModelingToolkit, Symbolics, Test
 using ModelingToolkit: get_namespace, has_var, inputs, outputs, is_bound, bound_inputs,
-    unbound_inputs, bound_outputs, unbound_outputs, isinput, isoutput,
-    ExtraVariablesSystemException
+                       unbound_inputs, bound_outputs, unbound_outputs, isinput, isoutput,
+                       ExtraVariablesSystemException
 
 @variables t xx(t) some_input(t) [input = true]
 D = Differential(t)
@@ -129,9 +129,9 @@ t = ModelingToolkitStandardLibrary.Mechanical.Rotational.t
 @named torque = Torque(; use_support = false)
 @variables y(t) = 0
 eqs = [connect(torque.flange, inertia1.flange_a)
-    connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
-    connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
-    y ~ inertia2.w + torque.tau.u]
+       connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
+       connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
+       y ~ inertia2.w + torque.tau.u]
 model = ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
     name = :name)
 model_outputs = [inertia1.w, inertia2.w, inertia1.phi, inertia2.phi]
@@ -159,7 +159,7 @@ end
 @variables t x(t)=0 u(t)=0 [input = true]
 D = Differential(t)
 eqs = [
-    D(x) ~ -x + u,
+    D(x) ~ -x + u
 ]
 
 @named sys = ODESystem(eqs)
@@ -182,7 +182,7 @@ function Mass(; name, m = 1.0, p = 0, v = 0)
     ps = @parameters m = m
     sts = @variables pos(t)=p vel(t)=v
     eqs = [D(pos) ~ vel
-        y ~ pos]
+           y ~ pos]
     ODESystem(eqs, t, [pos, vel, y], ps; name)
 end
 
@@ -219,8 +219,8 @@ c = 10
 @named sd = SpringDamper(; k, c)
 
 eqs = [connect_sd(sd, mass1, mass2)
-    D(mass1.vel) ~ (sd_force(sd) + u) / mass1.m
-    D(mass2.vel) ~ (-sd_force(sd)) / mass2.m]
+       D(mass1.vel) ~ (sd_force(sd) + u) / mass1.m
+       D(mass2.vel) ~ (-sd_force(sd)) / mass2.m]
 @named _model = ODESystem(eqs, t)
 @named model = compose(_model, mass1, mass2, sd);
 
@@ -228,7 +228,8 @@ f, dvs, ps = ModelingToolkit.generate_control_function(model, simplify = true)
 @test length(dvs) == 4
 @test length(ps) == length(parameters(model))
 p = ModelingToolkit.varmap_to_vars(ModelingToolkit.defaults(model), ps)
-x = ModelingToolkit.varmap_to_vars(merge(ModelingToolkit.defaults(model),
+x = ModelingToolkit.varmap_to_vars(
+    merge(ModelingToolkit.defaults(model),
         Dict(D.(states(model)) .=> 0.0)), dvs)
 u = [rand()]
 out = f[1](x, u, p, 1)
@@ -268,8 +269,8 @@ c = 10   # Damping coefficient
 
 function SystemModel(u = nothing; name = :model)
     eqs = [connect(torque.flange, inertia1.flange_a)
-        connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
-        connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
+           connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
+           connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
     if u !== nothing
         push!(eqs, connect(torque.tau, u.output))
         return @named model = ODESystem(eqs, t;
@@ -279,7 +280,7 @@ function SystemModel(u = nothing; name = :model)
                 inertia2,
                 spring,
                 damper,
-                u,
+                u
             ])
     end
     ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
@@ -321,8 +322,8 @@ y₁, y₂, y₃ = x
 u1, u2 = u
 k₁, k₂, k₃ = 1, 1, 1
 eqs = [D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃ + u1
-    D(y₂) ~ k₁ * y₁ - k₃ * y₂ * y₃ - k₂ * y₂^2 + u2
-    y₁ + y₂ + y₃ ~ 1]
+       D(y₂) ~ k₁ * y₁ - k₃ * y₂ * y₃ - k₂ * y₂^2 + u2
+       y₁ + y₂ + y₃ ~ 1]
 
 @named sys = ODESystem(eqs, t)
 m_inputs = [u[1], u[2]]
@@ -337,11 +338,12 @@ sys_simp, input_idxs = structural_simplify(sys, (; inputs = m_inputs, outputs = 
 @named gain = Gain(1;)
 @named int = Integrator(; k = 1)
 @named fb = Feedback(;)
-@named model = ODESystem([
+@named model = ODESystem(
+    [
         connect(c.output, fb.input1),
         connect(fb.input2, int.output),
         connect(fb.output, gain.input),
-        connect(gain.output, int.input),
+        connect(gain.output, int.input)
     ],
     t,
     systems = [int, gain, c, fb])
@@ -372,7 +374,7 @@ matrices, ssys = linearize(augmented_sys,
     [
         augmented_sys.u,
         augmented_sys.input.u[2],
-        augmented_sys.d,
+        augmented_sys.d
     ], outs)
 @test matrices.A ≈ [A [1; 0]; zeros(1, 2) -0.001]
 @test matrices.B == I
