@@ -8,6 +8,7 @@ function generate_initializesystem(sys::ODESystem;
         name = nameof(sys),
         guesses = Dict(), check_defguess = false,
         default_dd_value = 0.0,
+        algebraic_only = false,
         kwargs...)
     sts, eqs = unknowns(sys), equations(sys)
     idxs_diff = isdiffeq.(eqs)
@@ -68,28 +69,34 @@ function generate_initializesystem(sys::ODESystem;
     defs = merge(defaults(sys), filtered_u0)
     guesses = merge(get_guesses(sys), todict(guesses), dd_guess)
 
-    for st in full_states
-        if st ∈ keys(defs)
-            def = defs[st]
+    if !algebraic_only
+        for st in full_states
+            if st ∈ keys(defs)
+                def = defs[st]
 
-            if def isa Equation
-                st ∉ keys(guesses) && check_defguess &&
-                    error("Invalid setup: unknown $(st) has an initial condition equation with no guess.")
-                push!(eqs_ics, def)
+                if def isa Equation
+                    st ∉ keys(guesses) && check_defguess &&
+                        error("Invalid setup: unknown $(st) has an initial condition equation with no guess.")
+                    push!(eqs_ics, def)
+                    push!(u0, st => guesses[st])
+                else
+                    push!(eqs_ics, st ~ def)
+                    push!(u0, st => def)
+                end
+            elseif st ∈ keys(guesses)
                 push!(u0, st => guesses[st])
-            else
-                push!(eqs_ics, st ~ def)
-                push!(u0, st => def)
+            elseif check_defguess
+                error("Invalid setup: unknown $(st) has no default value or initial guess")
             end
-        elseif st ∈ keys(guesses)
-            push!(u0, st => guesses[st])
-        elseif check_defguess
-            error("Invalid setup: unknown $(st) has no default value or initial guess")
         end
     end
 
     pars = [parameters(sys); get_iv(sys)]
-    nleqs = [eqs_ics; get_initialization_eqs(sys); observed(sys)]
+    nleqs = if algebraic_only
+        [eqs_ics; observed(sys)]
+    else
+        [eqs_ics; get_initialization_eqs(sys); observed(sys)]
+    end
 
     sys_nl = NonlinearSystem(nleqs,
         full_states,

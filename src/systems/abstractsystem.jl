@@ -494,6 +494,14 @@ function SymbolicIndexingInterface.is_observed(sys::AbstractSystem, sym)
            !is_independent_variable(sys, sym) && symbolic_type(sym) != NotSymbolic()
 end
 
+function SymbolicIndexingInterface.observed(sys::AbstractSystem, sym)
+    return let _fn = build_explicit_observed_function(sys, sym)
+        fn(u, p, t) = _fn(u, p, t)
+        fn(u, p::MTKParameters, t) = _fn(u, p..., t)
+        fn
+    end
+end
+
 function SymbolicIndexingInterface.default_values(sys::AbstractSystem)
     return merge(
         Dict(eq.lhs => eq.rhs for eq in observed(sys)),
@@ -1020,7 +1028,15 @@ function defaults(sys::AbstractSystem)
     isempty(systems) ? defs : mapfoldr(namespace_defaults, merge, systems; init = defs)
 end
 
+function defaults_and_guesses(sys::AbstractSystem)
+    merge(guesses(sys), defaults(sys))
+end
+
 unknowns(sys::Union{AbstractSystem, Nothing}, v) = renamespace(sys, v)
+for vType in [Symbolics.Arr, Symbolics.Symbolic{<:AbstractArray}]
+    @eval unknowns(sys::AbstractSystem, v::$vType) = renamespace(sys, v)
+    @eval parameters(sys::AbstractSystem, v::$vType) = toparam(unknowns(sys, v))
+end
 parameters(sys::Union{AbstractSystem, Nothing}, v) = toparam(unknowns(sys, v))
 for f in [:unknowns, :parameters]
     @eval function $f(sys::AbstractSystem, vs::AbstractArray)
@@ -1756,34 +1772,117 @@ function linearization_function(sys::AbstractSystem, inputs,
         op = merge(defs, op)
     end
     sys = ssys
-    x0 = merge(defaults(sys), Dict(missing_variable_defaults(sys)), op)
-    u0, _p, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
-    ps = parameters(sys)
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        p = MTKParameters(sys, p, u0)
+    initsys = complete(generate_initializesystem(
+        sys, guesses = guesses(sys), algebraic_only = true))
+    if p isa SciMLBase.NullParameters
+        p = Dict()
     else
-        p = _p
-        p, split_idxs = split_parameters_by_type(p)
-        if p isa Tuple
-            ps = Base.Fix1(getindex, ps).(split_idxs)
-            ps = (ps...,) #if p is Tuple, ps should be Tuple
+        p = todict(p)
+    end
+    x0 = merge(defaults_and_guesses(sys), op)
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        sys_ps = MTKParameters(sys, p, x0)
+    else
+        sys_ps = varmap_to_vars(p, parameters(sys); defaults = x0)
+    end
+    p[get_iv(sys)] = NaN
+    if has_index_cache(initsys) && get_index_cache(initsys) !== nothing
+        oldps = MTKParameters(initsys, p, merge(guesses(sys), defaults(sys), op))
+        initsys_ps = parameters(initsys)
+        initsys_idxs = [parameter_index(initsys, param) for param in initsys_ps]
+        tunable_ps = [initsys_ps[i]
+                      for i in eachindex(initsys_ps)
+                      if initsys_idxs[i].portion == SciMLStructures.Tunable()]
+        tunable_getter = isempty(tunable_ps) ? nothing : getu(sys, tunable_ps)
+        discrete_ps = [initsys_ps[i]
+                       for i in eachindex(initsys_ps)
+                       if initsys_idxs[i].portion == SciMLStructures.Discrete()]
+        disc_getter = isempty(discrete_ps) ? nothing : getu(sys, discrete_ps)
+        constant_ps = [initsys_ps[i]
+                       for i in eachindex(initsys_ps)
+                       if initsys_idxs[i].portion == SciMLStructures.Constants()]
+        const_getter = isempty(constant_ps) ? nothing : getu(sys, constant_ps)
+        nonnum_ps = [initsys_ps[i]
+                     for i in eachindex(initsys_ps)
+                     if initsys_idxs[i].portion == NONNUMERIC_PORTION]
+        nonnum_getter = isempty(nonnum_ps) ? nothing : getu(sys, nonnum_ps)
+        u_getter = isempty(unknowns(initsys)) ? (_...) -> nothing :
+                   getu(sys, unknowns(initsys))
+        get_initprob_u_p = let tunable_getter = tunable_getter,
+            disc_getter = disc_getter,
+            const_getter = const_getter,
+            nonnum_getter = nonnum_getter,
+            oldps = oldps,
+            u_getter = u_getter
+
+            function (u, p, t)
+                state = ProblemState(; u, p, t)
+                if tunable_getter !== nothing
+                    SciMLStructures.replace!(
+                        SciMLStructures.Tunable(), oldps, tunable_getter(state))
+                end
+                if disc_getter !== nothing
+                    SciMLStructures.replace!(
+                        SciMLStructures.Discrete(), oldps, disc_getter(state))
+                end
+                if const_getter !== nothing
+                    SciMLStructures.replace!(
+                        SciMLStructures.Constants(), oldps, const_getter(state))
+                end
+                if nonnum_getter !== nothing
+                    SciMLStructures.replace!(
+                        NONNUMERIC_PORTION, oldps, nonnum_getter(state))
+                end
+                newu = u_getter(state)
+                return newu, oldps
+            end
+        end
+    else
+        get_initprob_u_p = let p_getter = getu(sys, parameters(initsys)),
+            u_getter = getu(sys, unknowns(initsys))
+
+            function (u, p, t)
+                state = ProblemState(; u, p, t)
+                return u_getter(state), p_getter(state)
+            end
         end
     end
+    initfn = NonlinearFunction(initsys)
+    initprobmap = getu(initsys, unknowns(sys))
+    ps = full_parameters(sys)
     lin_fun = let diff_idxs = diff_idxs,
         alge_idxs = alge_idxs,
         input_idxs = input_idxs,
         sts = unknowns(sys),
-        fun = ODEFunction{true, SciMLBase.FullSpecialize}(sys, unknowns(sys), ps; p = p),
+        get_initprob_u_p = get_initprob_u_p,
+        fun = ODEFunction{true, SciMLBase.FullSpecialize}(
+            sys, unknowns(sys), ps; initializeprobmap = initprobmap),
+        initfn = initfn,
         h = build_explicit_observed_function(sys, outputs),
-        chunk = ForwardDiff.Chunk(input_idxs)
+        chunk = ForwardDiff.Chunk(input_idxs),
+        sys_ps = sys_ps,
+        initialize = initialize,
+        sys = sys
 
         function (u, p, t)
+            if !isa(p, MTKParameters)
+                p = todict(p)
+                newps = deepcopy(sys_ps)
+                for (k, v) in p
+                    setp(sys, k)(newps, v)
+                end
+                p = newps
+            end
+
             if u !== nothing # Handle systems without unknowns
                 length(sts) == length(u) ||
                     error("Number of unknown variables ($(length(sts))) does not match the number of input unknowns ($(length(u)))")
                 if initialize && !isempty(alge_idxs) # This is expensive and can be omitted if the user knows that the system is already initialized
                     residual = fun(u, p, t)
                     if norm(residual[alge_idxs]) > √(eps(eltype(residual)))
+                        initu0, initp = get_initprob_u_p(u, p, t)
+                        initprob = NonlinearLeastSquaresProblem(initfn, initu0, initp)
+                        @set! fun.initializeprob = initprob
                         prob = ODEProblem(fun, u, (t, t + 1), p)
                         integ = init(prob, OrdinaryDiffEq.Rodas5P())
                         u = integ.u
@@ -2051,11 +2150,11 @@ lsys_sym, _ = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 """
 function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives = false,
         p = DiffEqBase.NullParameters())
-    x0 = merge(defaults(sys), op)
-    u0, p2, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
+    x0 = merge(defaults(sys), Dict(missing_variable_defaults(sys)), op)
+    u0, defs = get_u0(sys, x0, p)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         if p isa SciMLBase.NullParameters
-            p = op
+            p = Dict()
         elseif p isa Dict
             p = merge(p, op)
         elseif p isa Vector && eltype(p) <: Pair
@@ -2063,9 +2162,8 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
         elseif p isa Vector
             p = merge(Dict(parameters(sys) .=> p), op)
         end
-        p2 = MTKParameters(sys, p, Dict(unknowns(sys) .=> u0))
     end
-    linres = lin_fun(u0, p2, t)
+    linres = lin_fun(u0, p, t)
     f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u = linres
 
     nx, nu = size(f_u)

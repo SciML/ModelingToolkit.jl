@@ -1632,10 +1632,16 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     parammap = parammap isa DiffEqBase.NullParameters || isempty(parammap) ?
                [get_iv(sys) => t] :
                merge(todict(parammap), Dict(get_iv(sys) => t))
-
+    if isempty(u0map)
+        u0map = Dict()
+    end
+    if isempty(guesses)
+        guesses = Dict()
+    end
+    u0map = merge(todict(guesses), todict(u0map))
     if neqs == nunknown
-        NonlinearProblem(isys, guesses, parammap)
+        NonlinearProblem(isys, u0map, parammap)
     else
-        NonlinearLeastSquaresProblem(isys, guesses, parammap)
+        NonlinearLeastSquaresProblem(isys, u0map, parammap)
     end
 end

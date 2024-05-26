@@ -55,7 +55,10 @@ for var in all_obs
     push!(obs_exps, ex)
 end
 # observedfun expression for ODEFunctionExpr
-observedfun_exp = :(function (var, u0, p, t)
+observedfun_exp = :(function obs(var, u0, p, t)
+    if var isa AbstractArray
+        return obs.(var, (u0,), (p,), (t,))
+    end
     name = ModelingToolkit.getname(var)
     $(obs_exps...)
 end)
