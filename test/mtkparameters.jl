@@ -224,3 +224,15 @@ function loss(x)
 end
 
 @test_nowarn ForwardDiff.gradient(loss, collect(tunables))
+
+# Issue#2692
+@variables x(t)
+@parameters p d
+@mtkbuild osys = ODESystem(D(x) ~ p - d * x, t)
+u0 = [x => 5.0, d => 0.2]
+ps = [p => 5.0]
+@test_throws "Encountered parameter $d in initial conditions" ODEProblem(
+    osys, u0, (0.0, 1.0), ps)
+u0 = [x => 5.0]
+ps = [p => 5.0, d => 0.2]
+@test_nowarn ODEProblem(osys, u0, (0.0, 1.0), ps)

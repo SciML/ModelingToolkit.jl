@@ -38,6 +38,11 @@ function MTKParameters(
     elseif u0 === nothing || isempty(u0)
         u0 = Dict()
     end
+    for sym in keys(u0)
+        if is_parameter(sys, sym)
+            error("Encountered parameter $sym in initial conditions")
+        end
+    end
     defs = merge(defs, u0)
     defs = merge(Dict(eq.lhs => eq.rhs for eq in observed(sys)), defs)
     p = merge(defs, p)
