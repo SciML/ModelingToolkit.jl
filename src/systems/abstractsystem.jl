@@ -996,8 +996,6 @@ function parameter_dependencies(sys::AbstractSystem)
     systems = get_systems(sys)
     isempty(systems) && return pdeps
     for subsys in systems
-        isnothing(get_parameter_dependencies(subsys)) && continue
-
         pdeps = merge(pdeps, namespace_parameter_dependencies(subsys))
     end
     # @info pdeps
