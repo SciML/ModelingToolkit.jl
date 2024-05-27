@@ -528,3 +528,24 @@ prob = ODEProblem(sys, [], (0.0, 10.0), [x(k - 1) => 2.0])
 int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
 @test int.ps[x] == 3.0
 @test int.ps[x(k - 1)] == 2.0
+
+## ClockChange
+using ModelingToolkit: D_nounits as D
+k1 = ShiftIndex(Clock(t, 1))
+k2 = ShiftIndex(Clock(t, 2))
+@mtkmodel CC begin
+    @variables begin
+        x(t) = 0
+        y(t) = 0
+        dummy(t) = 0
+    end
+    @equations begin
+        x(k1) ~ x(k1 - 1) +
+                ModelingToolkit.ClockChange(from = k2.clock, to = k1.clock)(y(k2))
+        y(k2) ~ y(k2 - 1) + 1
+        D(dummy) ~ 0
+    end
+end
+@mtkbuild cc = CC()
+prob = ODEProblem(cc, [], (0, 10))
+sol = solve(prob, Tsit5(); kwargshandle = KeywordArgSilent)

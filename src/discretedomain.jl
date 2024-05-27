@@ -147,6 +147,29 @@ Returns true if the expression or equation `O` contains [`Hold`](@ref) terms.
 """
 hashold(O) = recursive_hasoperator(Hold, unwrap(O))
 
+# ClockChange
+
+"""
+$(TYPEDEF)
+
+Change the clock of a discrete-time variable by sub or super sampling
+```
+cont_x = ClockChange(from, to)(disc_x)
+```
+"""
+@kwdef struct ClockChange <: Operator
+    from::Any
+    to::Any
+end
+(D::ClockChange)(x) = Term{symtype(x)}(D, Any[x])
+(D::ClockChange)(x::Num) = Num(D(value(x)))
+SymbolicUtils.promote_symtype(::ClockChange, x) = x
+
+function Base.:(==)(D1::ClockChange, D2::ClockChange)
+    isequal(D1.to, D2.to) && isequal(D1.from, D2.from)
+end
+Base.hash(D::ClockChange, u::UInt) = hash(D.from, hash(D.to, xor(u, 0xa5b640d6d952f101)))
+
 # ShiftIndex
 
 """
@@ -242,10 +265,14 @@ function input_timedomain(h::Hold, arg = nothing)
 end
 output_timedomain(::Hold, arg = nothing) = Continuous()
 
+input_timedomain(cc::ClockChange, arg = nothing) = cc.from
+output_timedomain(cc::ClockChange, arg = nothing) = cc.to
+
 sampletime(op::Sample, arg = nothing) = sampletime(op.clock)
 sampletime(op::ShiftIndex, arg = nothing) = sampletime(op.clock)
+sampletime(op::ClockChange, arg = nothing) = sampletime(op.to)
 
-changes_domain(op) = isoperator(op, Union{Sample, Hold})
+changes_domain(op) = isoperator(op, Union{Sample, Hold, ClockChange})
 
 function output_timedomain(x)
     if isoperator(x, Operator)
