@@ -147,7 +147,6 @@ function Base.:(==)(c1::SolverStepClock, c2::SolverStepClock)
     ((c1.t === nothing || c2.t === nothing) || isequal(c1.t, c2.t))
 end
 
-
 """
     EventClock(t)
     EventClock(t, root_equation)

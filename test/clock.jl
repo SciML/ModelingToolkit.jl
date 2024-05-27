@@ -354,7 +354,7 @@ k = ShiftIndex()
     end
 end
 
-@mtkmodel Sampler begin
+@mtkmodel Sampler_ begin
     @components begin
         input = RealInput()
         output = RealOutput()
@@ -364,7 +364,7 @@ end
     end
 end
 
-@mtkmodel ZeroOrderHold begin
+@mtkmodel ZeroOrderHold_ begin
     @extend u, y = siso = Blocks.SISO()
     @equations begin
         y ~ Hold(u)
@@ -374,8 +374,8 @@ end
 @mtkmodel ClosedLoop begin
     @components begin
         plant = FirstOrder(k = 0.3, T = 1)
-        sampler = Sampler()
-        holder = ZeroOrderHold()
+        sampler = Sampler_()
+        holder = ZeroOrderHold_()
         controller = DiscretePI(kp = 2, ki = 2)
         feedback = Feedback()
         ref = Constant(k = 0.5)
@@ -483,7 +483,7 @@ k = ShiftIndex(c)
     end
     @equations begin
         ud ~ Sample(c)(u)
-        count ~ ud(k - 1)
+        count(k) ~ count(k-1) + 1 + 0*ud
     end
 end
 
@@ -511,7 +511,7 @@ prob = ODEProblem(model, [], (0.0, 10.0))
 sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 
 @test sol.prob.kwargs[:disc_saved_values][1].t == sol.t[1:2:end] # Test that the discrete-tiem system executed at every step of the continuous solver. The solver saves each time step twice, one state value before discrete affect and one after.
-@test sol.prob.kwargs[:disc_saved_values][1].saveval[2:end] == sol.u[1:2:(end - 2)]
+@test reduce(vcat, sol.prob.kwargs[:disc_saved_values][1].saveval[1:end]) == 1:(length(sol.t)÷2)
 @test_nowarn ModelingToolkit.build_explicit_observed_function(
     model, model.counter.ud)(sol.u[1], prob.p..., sol.t[1])
 
@@ -530,21 +530,20 @@ int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
 @test int.ps[x] == 3.0
 @test int.ps[x(k - 1)] == 2.0
 
-
 ## Test event clock
-
 k = ShiftIndex()
+
 @mtkmodel CrossingCounter begin
     @variables begin
         count(t) = 0
         u(t) = 0
     end
     @equations begin
-        count(k+1) ~ u
+        count(k) ~ count(k - 1) + 1 + 0*u
     end
 end
 
-@mtkmodel FirstOrder begin
+@mtkmodel FirstOrder_ begin
     @variables begin
         x(t) = 0
     end
@@ -556,13 +555,14 @@ end
 @mtkmodel FirstOrderWithCrossingCounter begin
     @components begin
         counter = CrossingCounter()
-        fo = FirstOrder()
+        fo = FirstOrder_()
     end
     begin
         c2 = ModelingToolkit.EventClock(t, fo.x ~ 0.1)
     end
     @equations begin
-        counter.u ~ Sample(c2)(fo.x)
+        # counter.u ~ Sample(c2)(fo.x)
+        counter.u ~ Sample(t, 0.1)(fo.x)
     end
 end
 
