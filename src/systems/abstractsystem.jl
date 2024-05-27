@@ -880,7 +880,7 @@ end
 
 function namespace_parameter_dependencies(sys)
     pdeps = get_parameter_dependencies(sys)
-    Dict(dependent_parameters(sys, k) => namespace_expr(v, sys) for (k, v) in pdeps)
+    Dict(parameters(sys, k) => namespace_expr(v, sys) for (k, v) in pdeps)
 end
 
 function namespace_equations(sys::AbstractSystem, ivs = independent_variables(sys))
@@ -1065,8 +1065,6 @@ for f in [:unknowns, :parameters]
         map(v -> $f(sys, v), vs)
     end
 end
-
-dependent_parameters(sys::Union{AbstractSystem, Nothing}, v) = renamespace(sys, v)
 
 flatten(sys::AbstractSystem, args...) = sys
 
