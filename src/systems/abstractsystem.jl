@@ -879,7 +879,7 @@ function namespace_guesses(sys)
 end
 
 function namespace_parameter_dependencies(sys)
-    pdeps = get_parameter_dependencies(sys)
+    pdeps = parameter_dependencies(sys)
     Dict(parameters(sys, k) => namespace_expr(v, sys) for (k, v) in pdeps)
 end
 
