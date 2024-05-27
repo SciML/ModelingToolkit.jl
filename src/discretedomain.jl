@@ -205,7 +205,7 @@ function (xn::Num)(k::ShiftIndex)
     if steps == 0
         return xn # x(k) needs no shift operator if the step of k is 0
     end
-    Shift(clock isa Inferred ? nothing : clock.t, steps)(xn) # a shift of k steps
+    Shift(t, steps)(xn)
 end
 
 Base.:+(k::ShiftIndex, i::Int) = ShiftIndex(k.clock, k.steps + i)
