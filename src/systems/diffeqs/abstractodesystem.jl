@@ -1091,17 +1091,16 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
         affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(sys, dss...)
         discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
+            daffect = DiscreteSaveAffect(affect, sv)
             if clock isa Clock
-                PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt;
+                PeriodicCallback(daffect, clock.dt;
                     final_affect = true, initial_affect = true)
             elseif clock isa SolverStepClock
-                affect = DiscreteSaveAffect(affect, sv)
-                DiscreteCallback(Returns(true), affect,
-                    initialize = (c, u, t, integrator) -> affect(integrator))
+                DiscreteCallback(Returns(true), daffect,
+                    initialize = (c, u, t, integrator) -> daffect(integrator))
             elseif clock isa EventClock
                 tempsys = @set sys.continuous_events = [SymbolicContinuousCallback(clock.cond)]
                 cb = generate_rootfinding_callback(tempsys)
-                daffect = DiscreteSaveAffect(affect, sv)
                 @set! cb.affect! = daffect
                 @set! cb.affect_neg! = daffect
                 cb
