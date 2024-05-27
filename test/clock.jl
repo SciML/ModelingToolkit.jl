@@ -549,3 +549,25 @@ end
 @mtkbuild cc = CC()
 prob = ODEProblem(cc, [], (0, 10))
 sol = solve(prob, Tsit5(); kwargshandle = KeywordArgSilent)
+d1 = reduce(vcat, sol.prob.kwargs[:disc_saved_values][1].saveval)
+d2 = reduce(vcat, sol.prob.kwargs[:disc_saved_values][2].saveval)
+
+if length(d1) < length(d2)
+    d1, d2 = d2, d1
+end
+
+@test d2 == 1:6 # y
+
+X = [0, 0] # xy
+ti = 0
+for ti in 0:10
+    i = ti + 1
+    x, y = X
+    if ti % 2 == 0
+        y = y + 1
+    end
+    x = x + y
+
+    @test d1[i] == x
+    X = [x, y]
+end
