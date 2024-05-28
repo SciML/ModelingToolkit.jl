@@ -528,3 +528,39 @@ prob = ODEProblem(sys, [], (0.0, 10.0), [x(k - 1) => 2.0])
 int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
 @test int.ps[x] == 3.0
 @test int.ps[x(k - 1)] == 2.0
+
+Ts1 = 0.3
+Ts2 = 1.1
+k = ShiftIndex()
+@mtkmodel MyMultirateModel begin
+    @variables begin
+        x(t) = -1
+        y(t)
+        u(t)
+        yd1(t)
+        ud1(t)
+        yd2(t)
+        ud2(t)
+        e(t)
+        r(t)
+    end
+    @parameters begin
+        kp1 = 1
+        kp2 = 2
+    end
+    @equations begin
+        # plant 🚗 (continuous-time part)
+        u ~ Hold(ud1) + Hold(ud2)
+        D(x) ~ -x + u
+        y ~ x
+
+        r ~ 1
+        # Controllers 💻 💻 (discrete-time parts)
+        yd1 ~ Sample(t, Ts1)(y)
+        ud1 ~ kp1 * (Sample(r) - yd1)
+        yd2 ~ Sample(t, Ts2)(y)
+        ud2 ~ kp2 * (Sample(r) - yd2)
+    end
+end
+
+@mtkbuild model = MyMultirateModel()
