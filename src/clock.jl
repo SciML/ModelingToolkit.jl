@@ -55,7 +55,7 @@ See also [`is_discrete_domain`](@ref)
 """
 function has_discrete_domain(x)
     issym(x) && return is_discrete_domain(x)
-    hasshift(x) || hassample(x) || hashold(x)
+    hasshift(x) || hassample(x) || hashold(x) || hasclockchange(x)
 end
 
 """

@@ -250,9 +250,10 @@ function generate_discrete_affect(
         cont_to_disc_obs = build_explicit_observed_function(
             use_index_cache ? osys : syss[continuous_id],
             needed_cont_to_disc_obs,
-            throw = false,
+            throw = true,
             expression = true,
             output_type = SVector)
+
         disc_to_cont_obs = build_explicit_observed_function(sys, needed_disc_to_cont_obs,
             throw = false,
             expression = true,

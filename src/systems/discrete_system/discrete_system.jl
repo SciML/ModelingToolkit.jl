@@ -139,7 +139,8 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
     iv′ = value(iv)
     dvs′ = value.(dvs)
     ps′ = value.(ps)
-    if any(hasderiv, eqs) || any(hashold, eqs) || any(hassample, eqs) || any(hasdiff, eqs)
+    if any(hasderiv, eqs) || any(hashold, eqs) || any(hassample, eqs) ||
+       any(hasdiff, eqs) || any(hasclockchange, eqs)
         error("Equations in a `DiscreteSystem` can only have `Shift` operators.")
     end
     if !(isempty(default_u0) && isempty(default_p))

@@ -166,10 +166,10 @@ end
 SymbolicUtils.promote_symtype(::ClockChange, x) = x
 
 function Base.:(==)(D1::ClockChange, D2::ClockChange)
-    isequal(D1.to, D2.to) && isequal(D1.from, D2.from)
+    ==(D1.to, D2.to) && ==(D1.from, D2.from)
 end
 Base.hash(D::ClockChange, u::UInt) = hash(D.from, hash(D.to, xor(u, 0xa5b640d6d952f101)))
-
+hasclockchange(O) = recursive_hasoperator(ClockChange, unwrap(O))
 # ShiftIndex
 
 """
