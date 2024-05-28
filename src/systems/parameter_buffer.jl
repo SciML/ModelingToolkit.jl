@@ -1,5 +1,8 @@
 symconvert(::Type{Symbolics.Struct{T}}, x) where {T} = convert(T, x)
 symconvert(::Type{T}, x) where {T} = convert(T, x)
+symconvert(::Type{Real}, x::Integer) = convert(Float64, x)
+symconvert(::Type{V}, x) where {V <: AbstractArray} = convert(V, symconvert.(eltype(V), x))
+
 struct MTKParameters{T, D, C, E, N, F, G}
     tunable::T
     discrete::D
@@ -67,7 +70,7 @@ function MTKParameters(
         end
     end
 
-    isempty(missing_params) || throw(MissingVariablesError(collect(missing_params)))
+    isempty(missing_params) || throw(MissingParametersError(collect(missing_params)))
 
     tunable_buffer = Tuple(Vector{temp.type}(undef, temp.length)
     for temp in ic.tunable_buffer_sizes)
@@ -107,7 +110,7 @@ function MTKParameters(
     for (sym, val) in p
         sym = unwrap(sym)
         val = unwrap(val)
-        ctype = concrete_symtype(sym)
+        ctype = symtype(sym)
         if symbolic_type(val) !== NotSymbolic()
             continue
         end
@@ -126,19 +129,27 @@ function MTKParameters(
             end
         end
     end
+    tunable_buffer = narrow_buffer_type.(tunable_buffer)
+    disc_buffer = narrow_buffer_type.(disc_buffer)
+    const_buffer = narrow_buffer_type.(const_buffer)
+    nonnumeric_buffer = narrow_buffer_type.(nonnumeric_buffer)
 
     if has_parameter_dependencies(sys) &&
        (pdeps = get_parameter_dependencies(sys)) !== nothing
         pdeps = Dict(k => fixpoint_sub(v, pdeps) for (k, v) in pdeps)
-        dep_exprs = ArrayPartition((wrap.(v) for v in dep_buffer)...)
+        dep_exprs = ArrayPartition((Any[missing for _ in 1:length(v)] for v in dep_buffer)...)
         for (sym, val) in pdeps
             i, j = ic.dependent_idx[sym]
             dep_exprs.x[i][j] = wrap(val)
         end
+        dep_exprs = identity.(dep_exprs)
         p = reorder_parameters(ic, full_parameters(sys))
         oop, iip = build_function(dep_exprs, p...)
         update_function_iip, update_function_oop = RuntimeGeneratedFunctions.@RuntimeGeneratedFunction(iip),
         RuntimeGeneratedFunctions.@RuntimeGeneratedFunction(oop)
+        update_function_iip(ArrayPartition(dep_buffer), tunable_buffer..., disc_buffer...,
+            const_buffer..., nonnumeric_buffer..., dep_buffer...)
+        dep_buffer = narrow_buffer_type.(dep_buffer)
     else
         update_function_iip = update_function_oop = nothing
     end
@@ -148,10 +159,24 @@ function MTKParameters(
         typeof(dep_buffer), typeof(nonnumeric_buffer), typeof(update_function_iip),
         typeof(update_function_oop)}(tunable_buffer, disc_buffer, const_buffer, dep_buffer,
         nonnumeric_buffer, update_function_iip, update_function_oop)
-    if mtkps.dependent_update_iip !== nothing
-        mtkps.dependent_update_iip(ArrayPartition(mtkps.dependent), mtkps...)
-    end
     return mtkps
+end
+
+function narrow_buffer_type(buffer::AbstractArray)
+    type = Union{}
+    for x in buffer
+        type = promote_type(type, typeof(x))
+    end
+    return convert.(type, buffer)
+end
+
+function narrow_buffer_type(buffer::AbstractArray{<:AbstractArray})
+    buffer = narrow_buffer_type.(buffer)
+    type = Union{}
+    for x in buffer
+        type = promote_type(type, eltype(x))
+    end
+    return broadcast.(convert, type, buffer)
 end
 
 function buffer_to_arraypartition(buf)
@@ -549,4 +574,18 @@ function as_duals(p::MTKParameters, dualtype)
     tunable = dualtype.(p.tunable)
     discrete = dualtype.(p.discrete)
     return MTKParameters{typeof(tunable), typeof(discrete)}(tunable, discrete)
+end
+
+const MISSING_PARAMETERS_MESSAGE = """
+                                Some parameters are missing from the variable map.
+                                Please provide a value or default for the following variables:
+                                """
+
+struct MissingParametersError <: Exception
+    vars::Any
+end
+
+function Base.showerror(io::IO, e::MissingParametersError)
+    println(io, MISSING_PARAMETERS_MESSAGE)
+    println(io, e.vars)
 end
