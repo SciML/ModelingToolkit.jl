@@ -5,6 +5,7 @@ Generate `NonlinearSystem` which initializes an ODE problem from specified initi
 """
 function generate_initializesystem(sys::ODESystem;
         u0map = Dict(),
+        pmap = Dict(),
         name = nameof(sys),
         guesses = Dict(), check_defguess = false,
         default_dd_value = 0.0,
@@ -69,6 +70,32 @@ function generate_initializesystem(sys::ODESystem;
     defs = merge(defaults(sys), filtered_u0)
     guesses = merge(get_guesses(sys), todict(guesses), dd_guess)
 
+    all_params = parameters(sys)
+    pars = [parameters(sys); get_iv(sys)]
+    paramsubs = Dict()
+    for p in all_params
+        haskey(pmap, p) && continue
+        paramsubs[p] = tovar(p)
+        push!(full_states, tovar(p))
+        deleteat!(pars, findfirst(isequal(p), pars))
+        if haskey(defs, p)
+            def = defs[p]
+            if def isa Equation
+                p ∉ keys(guesses) && check_defguess &&
+                    error("Invalid setup: parameter $(p) has an initial condition equation with no guess.")
+                push!(eqs_ics, def)
+                push!(u0, p => guesses[p])
+            else
+                push!(eqs_ics, p ~ def)
+                push!(u0, p => def)
+            end
+        elseif haskey(guesses, p)
+            push!(u0, p => guesses[p])
+        elseif check_defguess
+            error("Invalid setup: parameter $(p) has no default value or initial guess")
+        end
+    end
+
     if !algebraic_only
         for st in full_states
             if st ∈ keys(defs)
@@ -91,12 +118,12 @@ function generate_initializesystem(sys::ODESystem;
         end
     end
 
-    pars = [parameters(sys); get_iv(sys)]
     nleqs = if algebraic_only
         [eqs_ics; observed(sys)]
     else
         [eqs_ics; get_initialization_eqs(sys); observed(sys)]
     end
+    nleqs = fast_substitute(nleqs, paramsubs)
 
     sys_nl = NonlinearSystem(nleqs,
         full_states,
