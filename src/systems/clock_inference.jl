@@ -67,23 +67,61 @@ function substitute_sample_time(ex, dt)
     end
 end
 
-function infer_clocks!(ci::ClockInference)
+is_unknown_clock_sample(_) = i -> false
+function is_unknown_clock_sample(ts::TearingState)
+    let v_to_bool = map(get_fullvars(ts)) do v
+            istree(v) && (op = operation(v)) isa Sample || return false
+            op.clock == InferredDiscrete()
+        end
+        i -> v_to_bool[i]
+    end
+end
+
+function change_sample_clock(v, clock)
+    istree(v) && (op = operation(v)) isa Sample || error("$v is not a sampled variable")
+    Sample(clock)(only(arguments(v)))
+end
+
+function infer_clocks!(ci::ClockInference,
+        is_unknown_clock_sample = is_unknown_clock_sample(ci.ts))
     @unpack ts, eq_domain, var_domain, inferred = ci
     @unpack var_to_diff, graph = ts.structure
     fullvars = get_fullvars(ts)
     isempty(inferred) && return ci
-    # TODO: add a graph type to do this lazily
+    extra_samples = Dict{Tuple{Int, Int}, Int}()
     var_graph = SimpleGraph(ndsts(graph))
+    sv_to_eq = Dict{Int, Int}()
+    reindex_var = let nvars = Ref(length(var_domain)),
+        extra_samples = extra_samples,
+        var_graph = var_graph,
+        sv_to_eq = sv_to_eq
+        # (eq, var) -> new_var
+        (eq, var) -> begin
+            is_unknown_clock_sample(var) || return var
+            if haskey(sv_to_eq, var)
+                add_vertex!(var_graph)
+                push!(var_domain, InferredDiscrete())
+                get!(() -> nvars[] += 1, extra_samples, (eq, var))
+            else
+                sv_to_eq[var] = eq
+                var
+            end
+        end
+    end
+    # TODO: add a graph type to do this lazily
     for eq in 𝑠vertices(graph)
         vvs = 𝑠neighbors(graph, eq)
         if !isempty(vvs)
             fv, vs = Iterators.peel(vvs)
+            fv = reindex_var(eq, fv)
             for v in vs
-                add_edge!(var_graph, fv, v)
+                add_edge!(var_graph, fv, reindex_var(eq, v))
             end
         end
     end
     for v in vertices(var_to_diff)
+        # if there's a shift, it cannot possibly be a sample, so we don't have
+        # to reindex the variable.
         if (v′ = var_to_diff[v]) !== nothing
             add_edge!(var_graph, v, v′)
         end
@@ -111,6 +149,56 @@ function infer_clocks!(ci::ClockInference)
             eq_domain[eq] = vd
         end
     end
+    samplev_to_eq_nv = Dict{Int, Vector{Tuple{Int, Int}}}()
+    for ((eq, sv), nv) in extra_samples
+        eq_nvs = get!(() -> Int[], samplev_to_eq_nv, sv)
+        push!(eq_nvs, (eq, nv))
+    end
+    T = eltype(var_domain)
+    seen_clocks = Set{T}()
+    dels = BitSet()
+    for (sv, eq_nvs) in samplev_to_eq_nv
+        for (eq, nv) in eq_nvs
+            d = var_domain[nv]
+            if !(d in seen_clocks)
+                push!(seen_clocks, d)
+            else
+                push!(dels, nv)
+            end
+        end
+        empty!(seen_clocks)
+    end
+    nv_to_sv_eq = Dict{Int, Tuple{Int, Int}}(nv => (sv, eq)
+    for ((eq, sv), nv) in extra_samples)
+    subed_sv = BitSet()
+    eqs = equations(ts.sys)
+    for nv in (length(var_to_diff) + 1):length(var_domain)
+        nv in dels && continue
+        sv, eq = nv_to_sv_eq[nv]
+        if !(sv in subed_sv)
+            old_sv = fullvars[sv]
+            new_sv = fullvars[sv] = change_sample_clock(old_sv, var_domain[sv])
+            eq′′ = sv_to_eq[sv]
+            for eq′ in 𝑑neighbors(graph, sv)
+                eq′ == eq′′ && continue
+                set_neighbors!(graph, eq′, setdiff(𝑠neighbors(graph, eq′), sv))
+            end
+            eqs[eq] = fast_substitute(eqs[eq], old_sv => new_sv)
+            push!(subed_sv, sv)
+        end
+        d = var_domain[nv]
+        old_nv = fullvars[sv] # `sv` is deliberate
+        new_nv = change_sample_clock(old_nv, d)
+        push!(fullvars, new_nv)
+        eqs[eq] = fast_substitute(eqs[eq], old_nv => new_nv)
+        add_vertex!(var_to_diff)
+        var_to_diff[length(var_to_diff)] = nothing
+        add_vertex!(graph, DST)
+        add_edge!(graph, eq, length(var_to_diff))
+        @assert length(var_to_diff) == ndsts(graph)
+    end
+    deleteat!(var_domain, collect(dels))
+    @assert length(var_domain) == ndsts(graph)
 
     ci = substitute_sample_time(ci, ts)
     return ci
