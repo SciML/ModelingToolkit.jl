@@ -324,6 +324,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         split_idxs = nothing,
         initializeprob = nothing,
         initializeprobmap = nothing,
+        initializeprob_updatep! = nothing,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEFunction`")
@@ -506,7 +507,8 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
         analytic = analytic,
         initializeprob = initializeprob,
-        initializeprobmap = initializeprobmap)
+        initializeprobmap = initializeprobmap,
+        initializeprob_updatep! = initializeprob_updatep!)
 end
 
 """
@@ -538,6 +540,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         checkbounds = false,
         initializeprob = nothing,
         initializeprobmap = nothing,
+        initializeprob_updatep! = nothing,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEFunction`")
@@ -611,7 +614,8 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         jac_prototype = jac_prototype,
         observed = observedfun,
         initializeprob = initializeprob,
-        initializeprobmap = initializeprobmap)
+        initializeprobmap = initializeprobmap,
+        initializeprob_updatep! = initializeprob_updatep!)
 end
 
 function DiffEqBase.DDEFunction(sys::AbstractODESystem, args...; kwargs...)
@@ -862,7 +866,6 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     varmap = canonicalize_varmap(varmap)
     varlist = collect(map(unwrap, dvs))
     missingvars = setdiff(varlist, collect(keys(varmap)))
-
     # Append zeros to the variables which are determined by the initialization system
     # This essentially bypasses the check for if initial conditions are defined for DAEs
     # since they will be checked in the initialization problem's construction
@@ -873,11 +876,14 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         parammap = Dict(unwrap(k) => v for (k, v) in todict(parammap))
     elseif parammap isa AbstractArray
         if isempty(parammap)
-            parammap = SciMLBase.NullParameters()
+            parammap = Dict()
         else
             parammap = Dict(unwrap.(parameters(sys)) .=> parammap)
         end
+    elseif parammap === nothing || parammap isa SciMLBase.NullParameters
+        parammap = Dict()
     end
+    missingpars = setdiff(parameters(sys), keys(parammap))
 
     if has_discrete_subsystems(sys) && get_discrete_subsystems(sys) !== nothing
         clockedparammap = Dict()
@@ -886,7 +892,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
             v = unwrap(v)
             is_discrete_domain(v) || continue
             op = operation(v)
-            if !isa(op, Symbolics.Operator) && parammap != SciMLBase.NullParameters() &&
+            if !isa(op, Symbolics.Operator) && !isempty(parammap) &&
                haskey(parammap, v)
                 error("Initial conditions for discrete variables must be for the past state of the unknown. Instead of providing the condition for $v, provide the condition for $(Shift(iv, -1)(v)).")
             end
@@ -909,7 +915,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     # TODO: make it work with clocks
     # ModelingToolkit.get_tearing_state(sys) !== nothing => Requires structural_simplify first
     if sys isa ODESystem && build_initializeprob &&
-       (implicit_dae || !isempty(missingvars)) &&
+       (implicit_dae || !isempty(missingvars) || !isempty(missingpars)) &&
        all(isequal(Continuous()), ci.var_domain) &&
        ModelingToolkit.get_tearing_state(sys) !== nothing &&
        t !== nothing
@@ -921,15 +927,43 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         end
         initializeprob = ModelingToolkit.InitializationProblem(
             sys, t, u0map, parammap; guesses, warn_initialize_determined)
-        initializeprobmap = getu(initializeprob, unknowns(sys))
+        unks = unknowns(sys)
+        initializeprobmap = isempty(unks) ? (_...) -> nothing :
+                            getu(initializeprob, unknowns(sys))
+        if any(p -> is_variable(initializeprob, p) || is_observed(initializeprob, p),
+            parameters(sys))
+            punknowns = [p
+                         for p in parameters(sys)
+                         if is_variable(initializeprob, p) ||
+                            is_observed(initializeprob, p)]
+            initializeprob_updatep! = let getter = getu(initializeprob, tovar.(punknowns)),
+                setter = setp(sys, punknowns)
 
+                function (ps, initsol)
+                    setter(ps, getter(initsol))
+                end
+            end
+        else
+            punknowns = []
+            initializeprob_updatep! = nothing
+        end
         zerovars = Dict(setdiff(unknowns(sys), keys(defaults(sys))) .=> 0.0)
+        zeropars = Dict()
+        for p in punknowns
+            zeropars[p] = if Symbolics.isarraysymbolic(p)
+                collect(unwrap.(zero(p)))
+            else
+                unwrap(zero(p))
+            end
+        end
         trueinit = collect(merge(zerovars, eltype(u0map) <: Pair ? todict(u0map) : u0map))
         u0map isa StaticArraysCore.StaticArray &&
             (trueinit = SVector{length(trueinit)}(trueinit))
     else
         initializeprob = nothing
         initializeprobmap = nothing
+        initializeprob_updatep! = nothing
+        zeropars = Dict()
         trueinit = u0map
     end
 
@@ -940,7 +974,12 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
                parammap == SciMLBase.NullParameters() && isempty(defs)
             nothing
         else
-            MTKParameters(sys, parammap, trueinit)
+            if parammap === nothing || parammap == SciMLBase.NullParameters()
+                parammap = Dict()
+            else
+                parammap = todict(parammap)
+            end
+            MTKParameters(sys, merge(parammap, zeropars), trueinit)
         end
     else
         u0, p, defs = get_u0_p(sys,
@@ -975,6 +1014,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         sparse = sparse, eval_expression = eval_expression,
         initializeprob = initializeprob,
         initializeprobmap = initializeprobmap,
+        initializeprob_updatep! = initializeprob_updatep!,
         kwargs...)
     implicit_dae ? (f, du0, u0, p) : (f, u0, p)
 end
@@ -1602,13 +1642,15 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
     end
+    parammap = parammap isa SciMLBase.NullParameters ? Dict() : todict(parammap)
     if isempty(u0map) && get_initializesystem(sys) !== nothing
         isys = get_initializesystem(sys)
     elseif isempty(u0map) && get_initializesystem(sys) === nothing
-        isys = structural_simplify(generate_initializesystem(sys); fully_determined = false)
+        isys = structural_simplify(
+            generate_initializesystem(sys; pmap = parammap); fully_determined = false)
     else
         isys = structural_simplify(
-            generate_initializesystem(sys; u0map); fully_determined = false)
+            generate_initializesystem(sys; u0map, pmap = parammap); fully_determined = false)
     end
 
     uninit = setdiff(unknowns(sys), [unknowns(isys); getfield.(observed(isys), :lhs)])
@@ -1628,10 +1670,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     if warn_initialize_determined && neqs < nunknown
         @warn "Initialization system is underdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false."
     end
-
-    parammap = parammap isa DiffEqBase.NullParameters || isempty(parammap) ?
-               [get_iv(sys) => t] :
-               merge(todict(parammap), Dict(get_iv(sys) => t))
+    parammap[get_iv(sys)] = t
     if isempty(u0map)
         u0map = Dict()
     end
