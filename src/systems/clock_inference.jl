@@ -200,6 +200,39 @@ function split_system(ci::ClockInference{S}) where {S}
     return tss, inputs, continuous_id, id_to_clock
 end
 
+function topsort_discrete_systems(syss, inputs, continuous_id)
+    ios = NTuple{2, Set}[]
+    # collect all variables
+    for idx in 1:length(syss)
+        idx == continuous_id && continue
+        sys = syss[idx]
+        input = inputs[idx]
+        i = Set()
+        o = Set()
+        obs = observed(sys)
+        eqs = equations(sys)
+        for eq in Iterators.flatten((eqs, obs))
+            lhs = eq.lhs
+            push!(o, lhs)
+            vars!(i, eq.rhs; op = is_op_execpt_clock_change)
+        end
+        setdiff!(i, o)
+        push!(ios, (i, o))
+    end
+    dep_graphs = SimpleDiGraph{Int}(length(ios))
+    for (from, (_, o)) in enumerate(ios)
+        for (to, (i, _)) in enumerate(ios)
+            if any(ii -> ii in o, i)
+                if continuous_id >= 1
+                    add_edge!(dep_graphs, continuous_id, to)
+                end
+                add_edge!(dep_graphs, from, to)
+            end
+        end
+    end
+    Graphs.topological_sort(dep_graphs)
+end
+
 function generate_discrete_affect(
         osys::AbstractODESystem, syss, inputs, continuous_id, id_to_clock;
         checkbounds = true,
@@ -207,36 +240,7 @@ function generate_discrete_affect(
     @static if VERSION < v"1.7"
         error("The `generate_discrete_affect` function requires at least Julia 1.7")
     end
-    ios = NTuple{2, Set}[]
-    # collect all variables
-    for idx in 1:length(syss)
-        sys = syss[idx]
-        input = inputs[idx]
-        i = Set()
-        o = Set()
-        if idx != continuous_id
-            obs = observed(sys)
-            eqs = equations(sys)
-            for eq in Iterators.flatten((eqs, obs))
-                lhs = eq.lhs
-                push!(o, lhs)
-                vars!(i, eq.rhs; op = is_op_execpt_clock_change)
-            end
-            setdiff!(i, o)
-        end
-        push!(ios, (i, o))
-    end
-    dep_graphs = SimpleDiGraph{Int}(length(ios))
-    for (from, (_, o)) in enumerate(ios)
-        for (to, (i, _)) in enumerate(ios)
-            if any(ii -> ii in o, i)
-                add_edge!(dep_graphs, from, to)
-            end
-        end
-    end
-    topsort = Graphs.topological_sort(dep_graphs)
-    perm_idx = findfirst(isequal(continuous_id), topsort)
-    topsort[continuous_id], topsort[perm_idx] = topsort[perm_idx], topsort[continuous_id]
+    topsort = topsort_discrete_systems(syss, inputs, continuous_id)
 
     use_index_cache = has_index_cache(osys) && get_index_cache(osys) !== nothing
     out = Sym{Any}(:out)
@@ -252,8 +256,6 @@ function generate_discrete_affect(
     init_funs = []
     svs = []
     clocks = TimeDomain[]
-    syss = syss[topsort]
-    inputs = inputs[topsort]
     for (i, (sys, input)) in enumerate(zip(syss, inputs))
         i == continuous_id && continue
         push!(clocks, id_to_clock[i])
@@ -469,5 +471,6 @@ function generate_discrete_affect(
         inits = map(a -> toexpr(LiteralExpr(a)), init_funs)
     end
     defaults = Dict{Any, Any}(v => 0.0 for v in Iterators.flatten(inputs))
-    return affects, inits, clocks, svs, appended_parameters, defaults
+    return affects[topsort], inits[topsort], clocks[topsort], svs[topsort],
+    appended_parameters, defaults
 end
