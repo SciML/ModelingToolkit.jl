@@ -558,16 +558,21 @@ end
 
 @test d2 == 1:6 # y
 
-X = [0, 0] # xy
-ti = 0
-for ti in 0:10
-    i = ti + 1
-    x, y = X
-    if ti % 2 == 0
-        y = y + 1
-    end
-    x = x + y
+# Manual implementation of the dynamics
+function manualtest()
+    x, y = 0, 0
+    X = [[x, y]] # xy
+    ti = 0
+    for ti in 0:10
+        i = ti + 1
+        if ti % 2 == 0
+            y = y + 1
+        end
+        x = x + y
 
-    @test d1[i] == x
-    X = [x, y]
+        @test d1[i] == x
+        push!(X, [x, y])
+    end
+    X
 end
+X = manualtest()
