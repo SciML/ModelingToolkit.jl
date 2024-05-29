@@ -564,3 +564,7 @@ k = ShiftIndex()
 end
 
 @mtkbuild model = MyMultirateModel()
+prob = ODEProblem(model, [], (0, 5))
+sol = solve(prob, Tsit5(); kwargshandle = KeywordArgSilent)
+t_test = unique(sort([0:0.3:5; 0:1.1:5]))
+X = sol(t_test)
