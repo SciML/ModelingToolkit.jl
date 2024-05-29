@@ -190,9 +190,11 @@ function split_system(ci::ClockInference{S}) where {S}
         tss[id] = ts_i
     end
     dops = Union{Sample, Hold, ClockChange}
-    for i in eachindex(inputs)
-        inputs[i] = StructuralTransformations.simplify_shifts(fast_substitute(
-            inputs[i], shift_subs; operator = dops))
+    for input in inputs
+        for i in eachindex(input)
+            input[i] = StructuralTransformations.simplify_shifts(fast_substitute(
+                input[i], shift_subs; operator = dops))
+        end
     end
 
     return tss, inputs, continuous_id, id_to_clock
@@ -226,7 +228,7 @@ function generate_discrete_affect(
         assignments = map(s -> Assignment(s.lhs, s.rhs), subs.subs)
         let_body = SetArray(!checkbounds, out, rhss(equations(sys)))
         let_block = Let(assignments, let_body, false)
-        needed_cont_to_disc_obs = map(v -> arguments(v)[1], input)
+        needed_cont_to_disc_obs = map(v -> arguments(v)[1], filter(x->!(operation(x) isa ClockChange), input))
         # TODO: filter the needed ones
         fullvars = Set{Any}(eq.lhs for eq in observed(sys))
         for s in unknowns(sys)
