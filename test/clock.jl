@@ -531,7 +531,7 @@ int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
 
 ## ClockChange
 using ModelingToolkit: D_nounits as D
-k1 = ShiftIndex(Clock(t, 1))
+k1 = ShiftIndex(Clock(t, 1; phase = 100eps())) # TODO: this should not be required
 k2 = ShiftIndex(Clock(t, 2))
 @mtkmodel CC begin
     @variables begin
@@ -540,14 +540,13 @@ k2 = ShiftIndex(Clock(t, 2))
         dummy(t) = 0
     end
     @equations begin
-        x(k1) ~ x(k1 - 1) +
-                ModelingToolkit.ClockChange(from = k2.clock, to = k1.clock)(y(k2))
+        x(k1) ~ x(k1 - 1) + ClockChange(from = k2.clock, to = k1.clock)(y(k2))
         y(k2) ~ y(k2 - 1) + 1
         D(dummy) ~ 0
     end
 end
 @mtkbuild cc = CC()
-prob = ODEProblem(cc, [], (0, 10))
+prob = ODEProblem(cc, [], (0, 10.1))  # TODO: delaying end point by 0.1 should not be required without phase shift
 sol = solve(prob, Tsit5(); kwargshandle = KeywordArgSilent)
 d1 = reduce(vcat, sol.prob.kwargs[:disc_saved_values][1].saveval)
 d2 = reduce(vcat, sol.prob.kwargs[:disc_saved_values][2].saveval)

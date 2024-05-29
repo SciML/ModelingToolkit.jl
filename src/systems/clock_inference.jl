@@ -253,7 +253,6 @@ function generate_discrete_affect(
             throw = true,
             expression = true,
             output_type = SVector)
-
         disc_to_cont_obs = build_explicit_observed_function(sys, needed_disc_to_cont_obs,
             throw = false,
             expression = true,

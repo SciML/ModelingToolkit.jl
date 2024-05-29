@@ -1092,8 +1092,9 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
         affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(sys, dss...)
         discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
             if clock isa Clock
+                tsteps = (tspan[1] + clock.phase):(clock.dt):tspan[2]
                 PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt;
-                    final_affect = true, initial_affect = true)
+                    final_affect = tspan[2] ∈ tsteps, initial_affect = iszero(clock.phase), phase = clock.phase)
             elseif clock isa SolverStepClock
                 affect = DiscreteSaveAffect(affect, sv)
                 DiscreteCallback(Returns(true), affect,
