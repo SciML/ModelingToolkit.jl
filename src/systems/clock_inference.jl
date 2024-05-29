@@ -207,6 +207,37 @@ function generate_discrete_affect(
     @static if VERSION < v"1.7"
         error("The `generate_discrete_affect` function requires at least Julia 1.7")
     end
+    ios = NTuple{2, Set}[]
+    # collect all variables
+    for idx in 1:length(syss)
+        sys = syss[idx]
+        input = inputs[idx]
+        i = Set()
+        o = Set()
+        if idx != continuous_id
+            obs = observed(sys)
+            eqs = equations(sys)
+            for eq in Iterators.flatten((eqs, obs))
+                lhs = eq.lhs
+                push!(o, lhs)
+                vars!(i, eq.rhs; op = is_op_execpt_clock_change)
+            end
+            setdiff!(i, o)
+        end
+        push!(ios, (i, o))
+    end
+    dep_graphs = SimpleDiGraph{Int}(length(ios))
+    for (from, (_, o)) in enumerate(ios)
+        for (to, (i, _)) in enumerate(ios)
+            if any(ii -> ii in o, i)
+                add_edge!(dep_graphs, from, to)
+            end
+        end
+    end
+    topsort = Graphs.topological_sort(dep_graphs)
+    perm_idx = findfirst(isequal(continuous_id), topsort)
+    topsort[continuous_id], topsort[perm_idx] = topsort[perm_idx], topsort[continuous_id]
+
     use_index_cache = has_index_cache(osys) && get_index_cache(osys) !== nothing
     out = Sym{Any}(:out)
     appended_parameters = full_parameters(syss[continuous_id])
@@ -221,6 +252,8 @@ function generate_discrete_affect(
     init_funs = []
     svs = []
     clocks = TimeDomain[]
+    syss = syss[topsort]
+    inputs = inputs[topsort]
     for (i, (sys, input)) in enumerate(zip(syss, inputs))
         i == continuous_id && continue
         push!(clocks, id_to_clock[i])
@@ -228,7 +261,8 @@ function generate_discrete_affect(
         assignments = map(s -> Assignment(s.lhs, s.rhs), subs.subs)
         let_body = SetArray(!checkbounds, out, rhss(equations(sys)))
         let_block = Let(assignments, let_body, false)
-        needed_cont_to_disc_obs = map(v -> arguments(v)[1], filter(x->!(operation(x) isa ClockChange), input))
+        needed_cont_to_disc_obs = map(
+            v -> arguments(v)[1], filter(x -> !(operation(x) isa ClockChange), input))
         # TODO: filter the needed ones
         fullvars = Set{Any}(eq.lhs for eq in observed(sys))
         for s in unknowns(sys)
