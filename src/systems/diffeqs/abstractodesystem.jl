@@ -280,6 +280,25 @@ function isautonomous(sys::AbstractODESystem)
     all(iszero, tgrad)
 end
 
+struct GetAndSetFunctor{G, S}
+    getter::G
+    setter::S
+end
+
+function (gs::GetAndSetFunctor)(dest, source)
+    gs.setter(dest, gs.getter(source))
+end
+
+function generate_initializeprob_init(sys::AbstractSystem, initsys::AbstractSystem)
+    syms = vcat(variable_symbols(initsys), parameter_symbols(initsys))
+    return GetAndSetFunctor(getu(sys, syms), setu(initsys, syms))
+end
+
+function generate_initializeprob_update(sys::AbstractSystem, initsys::AbstractSystem)
+    syms = vcat(variable_symbols(sys), parameter_symbols(sys))
+    return GetAndSetFunctor(getu(initsys, syms), setu(sys, syms))
+end
+
 """
 ```julia
 DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
@@ -323,8 +342,8 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         analytic = nothing,
         split_idxs = nothing,
         initializeprob = nothing,
-        initializeprobmap = nothing,
-        initializeprob_updatep! = nothing,
+        initializeprob_init! = nothing,
+        initializeprob_update! = nothing,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEFunction`")
@@ -507,8 +526,8 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
         analytic = analytic,
         initializeprob = initializeprob,
-        initializeprobmap = initializeprobmap,
-        initializeprob_updatep! = initializeprob_updatep!)
+        initializeprob_init! = initializeprob_init!,
+        initializeprob_update! = initializeprob_update!)
 end
 
 """
@@ -539,8 +558,8 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         eval_module = @__MODULE__,
         checkbounds = false,
         initializeprob = nothing,
-        initializeprobmap = nothing,
-        initializeprob_updatep! = nothing,
+        initializeprob_init! = nothing,
+        initializeprob_update! = nothing,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEFunction`")
@@ -614,8 +633,8 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         jac_prototype = jac_prototype,
         observed = observedfun,
         initializeprob = initializeprob,
-        initializeprobmap = initializeprobmap,
-        initializeprob_updatep! = initializeprob_updatep!)
+        initializeprob_init! = initializeprob_init!,
+        initializeprob_update! = initializeprob_update!)
 end
 
 function DiffEqBase.DDEFunction(sys::AbstractODESystem, args...; kwargs...)
@@ -927,26 +946,11 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         end
         initializeprob = ModelingToolkit.InitializationProblem(
             sys, t, u0map, parammap; guesses, warn_initialize_determined)
-        unks = unknowns(sys)
-        initializeprobmap = isempty(unks) ? (_...) -> nothing :
-                            getu(initializeprob, unknowns(sys))
-        if any(p -> is_variable(initializeprob, p) || is_observed(initializeprob, p),
-            parameters(sys))
-            punknowns = [p
-                         for p in parameters(sys)
-                         if is_variable(initializeprob, p) ||
-                            is_observed(initializeprob, p)]
-            initializeprob_updatep! = let getter = getu(initializeprob, tovar.(punknowns)),
-                setter = setp(sys, punknowns)
-
-                function (ps, initsol)
-                    setter(ps, getter(initsol))
-                end
-            end
-        else
-            punknowns = []
-            initializeprob_updatep! = nothing
-        end
+        punknowns = [p
+                     for p in parameters(sys)
+                     if is_variable(initializeprob, p) || is_observed(initializeprob, p)]
+        initializeprob_init! = generate_initializeprob_init(sys, initializeprob.f.sys)
+        initializeprob_update! = generate_initializeprob_update(sys, initializeprob.f.sys)
         zerovars = Dict(setdiff(unknowns(sys), keys(defaults(sys))) .=> 0.0)
         zeropars = Dict()
         for p in punknowns
@@ -961,9 +965,9 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
             (trueinit = SVector{length(trueinit)}(trueinit))
     else
         initializeprob = nothing
-        initializeprobmap = nothing
-        initializeprob_updatep! = nothing
         zeropars = Dict()
+        initializeprob_init! = nothing
+        initializeprob_update! = nothing
         trueinit = u0map
     end
 
@@ -1012,9 +1016,8 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         checkbounds = checkbounds, p = p,
         linenumbers = linenumbers, parallel = parallel, simplify = simplify,
         sparse = sparse, eval_expression = eval_expression,
-        initializeprob = initializeprob,
-        initializeprobmap = initializeprobmap,
-        initializeprob_updatep! = initializeprob_updatep!,
+        initializeprob = initializeprob, initializeprob_init! = initializeprob_init!,
+        initializeprob_update! = initializeprob_update!,
         kwargs...)
     implicit_dae ? (f, du0, u0, p) : (f, u0, p)
 end
