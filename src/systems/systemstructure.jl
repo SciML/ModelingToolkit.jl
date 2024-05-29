@@ -456,18 +456,28 @@ function lower_order_var(dervar, t)
     diffvar
 end
 
-function shift_discrete_system(ts::TearingState)
+function shift_discrete_system(ts::TearingState, discmap = Dict())
     dops = Union{Sample, Hold, ClockChange}
     @unpack fullvars, sys = ts
-    discvars = OrderedSet()
+    discvars = Set()
     eqs = equations(sys)
     for eq in eqs
         vars!(discvars, eq; op = dops)
     end
     iv = get_iv(sys)
-    discmap = Dict(k => StructuralTransformations.simplify_shifts(Shift(iv, 1)(k))
+    fullvars_set = Set(fullvars)
     for k in discvars
-    if any(isequal(k), fullvars) && !isa(operation(k), dops))
+        if k in fullvars_set
+            opk = operation(k)
+            if !isa(opk, dops)
+                discmap[k] = StructuralTransformations.simplify_shifts(Shift(iv, 1)(k))
+            elseif opk isa ClockChange
+                v = only(arguments(k))
+                discmap[k] = opk(StructuralTransformations.simplify_shifts(Shift(iv, 1)(v)))
+            end
+        end
+    end
+
     for i in eachindex(fullvars)
         fullvars[i] = StructuralTransformations.simplify_shifts(fast_substitute(
             fullvars[i], discmap; operator = dops))

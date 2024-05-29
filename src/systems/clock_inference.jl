@@ -178,14 +178,23 @@ function split_system(ci::ClockInference{S}) where {S}
     end
 
     tss = similar(cid_to_eq, S)
+    shift_subs = Dict()
     for (id, ieqs) in enumerate(cid_to_eq)
         ts_i = system_subset(ts, ieqs)
         if id != continuous_id
-            ts_i = shift_discrete_system(ts_i)
+            new_shift_subs = empty(shift_subs)
+            ts_i = shift_discrete_system(ts_i, new_shift_subs)
+            merge!(shift_subs, new_shift_subs)
             @set! ts_i.structure.only_discrete = true
         end
         tss[id] = ts_i
     end
+    dops = Union{Sample, Hold, ClockChange}
+    for i in eachindex(inputs)
+        inputs[i] = StructuralTransformations.simplify_shifts(fast_substitute(
+            inputs[i], shift_subs; operator = dops))
+    end
+
     return tss, inputs, continuous_id, id_to_clock
 end
 

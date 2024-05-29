@@ -441,6 +441,9 @@ function topsort_equations(eqs, unknowns; check = true)
     return ordered_eqs
 end
 
+function is_op_execpt_clock_change(x)
+    x isa Symbolics.Operator && !(x isa ClockChange)
+end
 function observed2graph(eqs, unknowns)
     graph = BipartiteGraph(length(eqs), length(unknowns))
     v2j = Dict(unknowns .=> 1:length(unknowns))
@@ -453,7 +456,7 @@ function observed2graph(eqs, unknowns)
         lhs_j === nothing &&
             throw(ArgumentError("The lhs $(eq.lhs) of $eq, doesn't appear in unknowns."))
         assigns[i] = lhs_j
-        vs = vars(eq.rhs; op = Symbolics.Operator)
+        vs = vars(eq.rhs; op = is_op_execpt_clock_change)
         for v in vs
             j = get(v2j, v, nothing)
             j !== nothing && add_edge!(graph, i, j)

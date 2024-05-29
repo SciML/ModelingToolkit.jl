@@ -354,17 +354,20 @@ vars(eq::Equation; op = Differential) = vars!(Set(), eq; op = op)
 function vars!(vars, eq::Equation; op = Differential)
     (vars!(vars, eq.lhs; op = op); vars!(vars, eq.rhs; op = op); vars)
 end
+is_op(op::Type{<:T}) where {T} = x -> x isa op
+is_op(op::T) where {T} = op
 function vars!(vars, O; op = Differential)
+    isop = is_op(op)
     if isvariable(O)
         return push!(vars, O)
     end
     !istree(O) && return vars
 
-    operation(O) isa op && return push!(vars, O)
+    isop(operation(O)) && return push!(vars, O)
 
     if operation(O) === (getindex)
         arr = first(arguments(O))
-        istree(arr) && operation(arr) isa op && return push!(vars, O)
+        istree(arr) && isop(operation(arr)) && return push!(vars, O)
         isvariable(arr) && return push!(vars, O)
     end
 
