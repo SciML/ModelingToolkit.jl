@@ -495,10 +495,18 @@ function SymbolicIndexingInterface.is_observed(sys::AbstractSystem, sym)
 end
 
 function SymbolicIndexingInterface.observed(sys::AbstractSystem, sym)
-    return let _fn = build_explicit_observed_function(sys, sym)
-        fn(u, p, t) = _fn(u, p, t)
-        fn(u, p::MTKParameters, t) = _fn(u, p..., t)
-        fn
+    if is_time_dependent(sys)
+        return let _fn = build_explicit_observed_function(sys, sym)
+            fn(u, p, t) = _fn(u, p, t)
+            fn(u, p::MTKParameters, t) = _fn(u, p..., t)
+            fn
+        end
+    else
+        return let _fn = build_explicit_observed_function(sys, sym)
+            fn2(u, p) = _fn(u, p)
+            fn2(u, p::MTKParameters) = _fn(u, p...)
+            fn2
+        end
     end
 end
 
