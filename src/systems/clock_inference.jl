@@ -168,29 +168,28 @@ function infer_clocks!(ci::ClockInference,
         end
         empty!(seen_clocks)
     end
-    nv_to_sv_eq = Dict{Int, Tuple{Int, Int}}(nv => (sv, eq)
+    nv_to_sym_sv_eq = Dict{Int, Tuple{Any, Int, Int}}(nv => (fullvars[sv], sv, eq)
     for ((eq, sv), nv) in extra_samples)
+
     subed_sv = BitSet()
     eqs = equations(ts.sys)
     for nv in (length(var_to_diff) + 1):length(var_domain)
         nv in dels && continue
-        sv, eq = nv_to_sv_eq[nv]
+        old_sv, sv, eq = nv_to_sym_sv_eq[nv]
         if !(sv in subed_sv)
-            old_sv = fullvars[sv]
             new_sv = fullvars[sv] = change_sample_clock(old_sv, var_domain[sv])
             eq′′ = sv_to_eq[sv]
             for eq′ in 𝑑neighbors(graph, sv)
                 eq′ == eq′′ && continue
                 set_neighbors!(graph, eq′, setdiff(𝑠neighbors(graph, eq′), sv))
             end
-            eqs[eq] = fast_substitute(eqs[eq], old_sv => new_sv)
+            eqs[eq′′] = fast_substitute(eqs[eq′′], old_sv => new_sv)
             push!(subed_sv, sv)
         end
         d = var_domain[nv]
-        old_nv = fullvars[sv] # `sv` is deliberate
-        new_nv = change_sample_clock(old_nv, d)
+        new_nv = change_sample_clock(old_sv, d)
         push!(fullvars, new_nv)
-        eqs[eq] = fast_substitute(eqs[eq], old_nv => new_nv)
+        eqs[eq] = fast_substitute(eqs[eq], old_sv => new_nv)
         add_vertex!(var_to_diff)
         var_to_diff[length(var_to_diff)] = nothing
         add_vertex!(graph, DST)
