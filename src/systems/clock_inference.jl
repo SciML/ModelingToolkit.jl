@@ -82,9 +82,11 @@ function change_sample_clock(v, clock)
     Sample(clock)(only(arguments(v)))
 end
 
-function substitute_variable!(ts, eq, (old_sv, new_sv))
+function substitute_eq_variable!(ts::TearingState, sub_rules)
     eqs = equations(ts.sys)
-    eqs[eq] = fast_substitute(eqs[eq], old_sv => new_sv)
+    for (eq, (old_v, new_v)) in sub_rules
+        eqs[eq] = fast_substitute(eqs[eq], old_v => new_v)
+    end
 end
 
 function infer_clocks!(ci::ClockInference,
@@ -175,10 +177,12 @@ function infer_clocks!(ci::ClockInference,
         end
         empty!(seen_clocks)
     end
-    nv_to_sym_sv_eq = Dict{Int, Tuple{Any, Int, Int}}(nv => (fullvars[sv], sv, eq)
+    V = eltype(fullvars)
+    nv_to_sym_sv_eq = Dict{Int, Tuple{V, Int, Int}}(nv => (fullvars[sv], sv, eq)
     for ((eq, sv), nv) in extra_samples)
 
     subed_sv = BitSet()
+    sub_rules = Tuple{Int, Pair{V, V}}[] # eq, var -> new_var
     for nv in (length(var_to_diff) + 1):length(var_domain)
         nv in dels && continue
         old_sv, sv, eq = nv_to_sym_sv_eq[nv]
@@ -189,19 +193,20 @@ function infer_clocks!(ci::ClockInference,
                 eq′ == eq′′ && continue
                 set_neighbors!(graph, eq′, setdiff(𝑠neighbors(graph, eq′), sv))
             end
-            substitute_variable!(ts, eq′′, old_sv => new_sv)
+            push!(sub_rules, (eq′′, old_sv => new_sv))
             push!(subed_sv, sv)
         end
         d = var_domain[nv]
         new_nv = change_sample_clock(old_sv, d)
         push!(fullvars, new_nv)
-        substitute_variable!(ts, eq, old_sv => new_nv)
+        push!(sub_rules, (eq, old_sv => new_nv))
         add_vertex!(var_to_diff)
         var_to_diff[length(var_to_diff)] = nothing
         add_vertex!(graph, DST)
         add_edge!(graph, eq, length(var_to_diff))
         @assert length(var_to_diff) == ndsts(graph)
     end
+    substitute_eq_variable!(ts, sub_rules)
     deleteat!(var_domain, collect(dels))
     @assert length(var_domain) == ndsts(graph)
 
