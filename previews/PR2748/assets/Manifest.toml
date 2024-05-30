@@ -476,9 +476,9 @@ uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[deps.Distributions]]
 deps = ["AliasTables", "FillArrays", "LinearAlgebra", "PDMats", "Printf", "QuadGK", "Random", "SpecialFunctions", "Statistics", "StatsAPI", "StatsBase", "StatsFuns"]
-git-tree-sha1 = "22c595ca4146c07b16bcf9c8bea86f731f7109d2"
+git-tree-sha1 = "9c405847cc7ecda2dc921ccf18b47ca150d7317e"
 uuid = "31c24e10-a181-5473-b8eb-7969acd0382f"
-version = "0.25.108"
+version = "0.25.109"
 
     [deps.Distributions.extensions]
     DistributionsChainRulesCoreExt = "ChainRulesCore"
@@ -841,9 +841,9 @@ uuid = "615f187c-cbe4-4ef1-ba3b-2fcf58d6d173"
 version = "0.1.1"
 
 [[deps.Inflate]]
-git-tree-sha1 = "ea8031dea4aff6bd41f1df8f2fdfb25b33626381"
+git-tree-sha1 = "d1b1b796e47d94588b3757fe84fbf65a5ec4a80d"
 uuid = "d25df0c9-e2be-5dd7-82c8-3ad0b3e990b9"
-version = "0.1.4"
+version = "0.1.5"
 
 [[deps.IntelOpenMP_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -1676,9 +1676,9 @@ version = "0.6.12"
 
 [[deps.RecursiveArrayTools]]
 deps = ["Adapt", "ArrayInterface", "DocStringExtensions", "GPUArraysCore", "IteratorInterfaceExtensions", "LinearAlgebra", "RecipesBase", "SparseArrays", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface", "Tables"]
-git-tree-sha1 = "758bc86b90e9fee2edc4af2a750b0d3f2d5c02c5"
+git-tree-sha1 = "d0f8d22294f932efb1617d669aff73a5c97d38ff"
 uuid = "731186ca-8d62-57ce-b412-fbd966d074cd"
-version = "3.19.0"
+version = "3.20.0"
 
     [deps.RecursiveArrayTools.extensions]
     RecursiveArrayToolsFastBroadcastExt = "FastBroadcast"
@@ -2036,9 +2036,9 @@ version = "0.3.22"
 
 [[deps.SymbolicLimits]]
 deps = ["SymbolicUtils"]
-git-tree-sha1 = "89aa6b25a75418c8fffc42073b2e7dce69847394"
+git-tree-sha1 = "fb099adbd7504f1e68b4512828e9d94197a8b889"
 uuid = "19f23fe9-fdab-4a78-91af-e7b7767979c3"
-version = "0.2.0"
+version = "0.2.1"
 
 [[deps.SymbolicUtils]]
 deps = ["AbstractTrees", "Bijections", "ChainRulesCore", "Combinatorics", "ConstructionBase", "DataStructures", "DocStringExtensions", "DynamicPolynomials", "IfElse", "LabelledArrays", "LinearAlgebra", "MultivariatePolynomials", "NaNMath", "Setfield", "SparseArrays", "SpecialFunctions", "StaticArrays", "SymbolicIndexingInterface", "TimerOutputs", "Unityper"]
