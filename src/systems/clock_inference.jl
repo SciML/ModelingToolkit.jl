@@ -82,6 +82,11 @@ function change_sample_clock(v, clock)
     Sample(clock)(only(arguments(v)))
 end
 
+function substitute_variable!(ts, eq, (old_sv, new_sv))
+    eqs = equations(ts.sys)
+    eqs[eq] = fast_substitute(eqs[eq], old_sv => new_sv)
+end
+
 function infer_clocks!(ci::ClockInference,
         is_unknown_clock_sample = is_unknown_clock_sample(ci.ts))
     @unpack ts, eq_domain, var_domain, inferred = ci
@@ -154,6 +159,8 @@ function infer_clocks!(ci::ClockInference,
         eq_nvs = get!(() -> Int[], samplev_to_eq_nv, sv)
         push!(eq_nvs, (eq, nv))
     end
+
+    # de-deplicate uninferred variables with the same sample clock
     T = eltype(var_domain)
     seen_clocks = Set{T}()
     dels = BitSet()
@@ -172,7 +179,6 @@ function infer_clocks!(ci::ClockInference,
     for ((eq, sv), nv) in extra_samples)
 
     subed_sv = BitSet()
-    eqs = equations(ts.sys)
     for nv in (length(var_to_diff) + 1):length(var_domain)
         nv in dels && continue
         old_sv, sv, eq = nv_to_sym_sv_eq[nv]
@@ -183,13 +189,13 @@ function infer_clocks!(ci::ClockInference,
                 eq′ == eq′′ && continue
                 set_neighbors!(graph, eq′, setdiff(𝑠neighbors(graph, eq′), sv))
             end
-            eqs[eq′′] = fast_substitute(eqs[eq′′], old_sv => new_sv)
+            substitute_variable!(ts, eq′′, old_sv => new_sv)
             push!(subed_sv, sv)
         end
         d = var_domain[nv]
         new_nv = change_sample_clock(old_sv, d)
         push!(fullvars, new_nv)
-        eqs[eq] = fast_substitute(eqs[eq], old_sv => new_nv)
+        substitute_variable!(ts, eq, old_sv => new_nv)
         add_vertex!(var_to_diff)
         var_to_diff[length(var_to_diff)] = nothing
         add_vertex!(graph, DST)
