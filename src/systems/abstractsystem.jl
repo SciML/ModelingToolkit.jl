@@ -482,10 +482,12 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
             end
         elseif iscall(sym) && operation(sym) === getindex &&
                (idx = parameter_index(ic, first(arguments(sym)))) !== nothing
-            if idx.portion isa SciMLStructures.Discrete && idx.idx[2] == idx.idx[3] == nothing
+            if idx.portion isa SciMLStructures.Discrete &&
+               idx.idx[2] == idx.idx[3] == nothing
                 return nothing
             else
-                ParameterIndex(idx.portion, (idx.idx..., arguments(sym)[(begin + 1):end]...))
+                ParameterIndex(
+                    idx.portion, (idx.idx..., arguments(sym)[(begin + 1):end]...))
             end
         else
             nothing
@@ -505,7 +507,8 @@ end
 function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym::Symbol)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         idx = parameter_index(ic, sym)
-        if idx === nothing || idx.portion isa SciMLStructures.Discrete && idx.idx[2] == idx.idx[3] == 0
+        if idx === nothing ||
+           idx.portion isa SciMLStructures.Discrete && idx.idx[2] == idx.idx[3] == 0
             return nothing
         else
             return idx

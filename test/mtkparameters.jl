@@ -321,8 +321,8 @@ with_updated_parameter_timeseries_values(
 @test SciMLBase.get_saveable_values(ps, 1).x == ps.discrete[1]
 
 # With multiple types and clocks
-ps = MTKParameters((), SizedVector{2}([([1.0, 2.0, 3.0], [false]), ([4.0, 5.0, 6.0], Bool[])]), (), (), (), nothing, nothing)
-@test SciMLBase.get_saveable_values(ps, 1).x isa Tuple{Vector{Float64}, Vector{Bool}}
+ps = MTKParameters((), SizedVector{2}([([1.0, 2.0, 3.0], falses(1)), ([4.0, 5.0, 6.0], falses(0))]), (), (), (), nothing, nothing)
+@test SciMLBase.get_saveable_values(ps, 1).x isa Tuple{Vector{Float64}, BitVector}
 tsidx1 = 1
 tsidx2 = 2
 @test length(ps.discrete[tsidx1][1]) == 3

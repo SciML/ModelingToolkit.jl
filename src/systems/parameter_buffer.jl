@@ -158,7 +158,7 @@ function MTKParameters(
         end
     end
     tunable_buffer = narrow_buffer_type.(tunable_buffer)
-    disc_buffer = narrow_buffer_type.(disc_buffer)
+    disc_buffer = broadcast.(narrow_buffer_type, disc_buffer)
     const_buffer = narrow_buffer_type.(const_buffer)
     # Don't narrow nonnumeric types
     nonnumeric_buffer = nonnumeric_buffer
@@ -568,7 +568,7 @@ function SymbolicIndexingInterface.remake_buffer(indp, oldbuf::MTKParameters, va
         @set! newbuf.dependent = narrow_buffer_type_and_fallback_undefs.(
             oldbuf.dependent,
             split_into_buffers(
-                newbuf.dependent_update_oop(newbuf...), oldbuf.dependent, Val(false)))
+                newbuf.dependent_update_oop(newbuf...), oldbuf.dependent, Val(0)))
     end
     return newbuf
 end
