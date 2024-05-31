@@ -344,8 +344,8 @@ with_updated_parameter_timeseries_values(
 #         yd2 => 2.0 + Sample(ssc)(x), Sample(t, dt)(x) => x,
 #         Sample(ssc)(x) => x, Hold(yd1) => yd1, Hold(yd2) => yd2],
 #     [x => 3.0])
-ps = MTKParameters((), SizedVector{2}([([1.0, 2.0, 3.0], [false]), ([4.0, 5.0, 6.0], Bool[])]), (), (), (), nothing, nothing)
-@test SciMLBase.get_saveable_values(ps, 1).x isa Tuple{Vector{Float64}, Vector{Bool}}
+ps = MTKParameters((), SizedVector{2}([([1.0, 2.0, 3.0], falses(1)), ([4.0, 5.0, 6.0], falses(0))]), (), (), (), nothing, nothing)
+@test SciMLBase.get_saveable_values(ps, 1).x isa Tuple{Vector{Float64}, BitVector}
 # tsidx1 = timeseries_parameter_index(sys, flag).timeseries_idx
 # tsidx2 = 3 - tsidx1
 tsidx1 = 1

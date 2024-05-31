@@ -19,7 +19,8 @@ using SciMLStructures: Tunable
     @test parameter_index(odesys, a) isa ParameterIndex{Tunable, Tuple{Int, Int}}
     @test parameter_index(odesys, b) == parameter_index(odesys, :b)
     @test parameter_index(odesys, b) isa ParameterIndex{Tunable, Tuple{Int, Int}}
-    @test parameter_index.((odesys,), [x, y, t, ParameterIndex(Tunable(), (1, 1)), :x, :y,]) ==
+    @test parameter_index.(
+        (odesys,), [x, y, t, ParameterIndex(Tunable(), (1, 1)), :x, :y]) ==
           [nothing, nothing, nothing, ParameterIndex(Tunable(), (1, 1)), nothing, nothing]
     @test isequal(parameter_symbols(odesys), [a, b])
     @test all(is_independent_variable.((odesys,), [t, :t]))
