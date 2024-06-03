@@ -1,5 +1,28 @@
 using Symbolics: Operator, Num, Term, value, recursive_hasoperator
 
+"""
+    SampleTime
+
+Operator that returns the sample time of the associated clock. When appearing in an equation, this operator is replaced with the sample time of the clock the equation belongs to. If the operator is used in a continuous-time equation, an error is thrown.
+
+# Example
+The following example is taken from ModelingToolkitStandardLibrary.Blocks.DiscreteDerivative, and demonstrates a typical usage of this operator. Here, the operator is used in a `@structural_parameters` block, which makes it possible for the user that is instantiating the component to override the value of `Ts` if desired. If the user provides a `ShiftIndex` with an explicit clock, the value of `SampleTime` will refer to the sample inteval of that clock. If no explicit shift index is provided, clock inference will try to infer the clock partition in which the component appears, and, if clock inference is successful, the sample interval of the inferred clock will be used.
+```julia
+@mtkmodel DiscreteDerivative begin
+    @extend u, y = siso = SISO() # SISO is defined in MTKstdlib.Blocks
+    @parameters begin
+        k = 1, [description = "Gain"]
+    end
+    @structural_parameters begin
+        Ts = SampleTime() # Make it possible for the user to override Ts
+        z = ShiftIndex()  # Optinally override the standard shift index to provide an explicit clock
+    end
+    @equations begin
+        y(z) ~ k * (u(z) - u(z - 1)) / Ts
+    end
+end
+```
+"""
 struct SampleTime <: Operator
     SampleTime() = SymbolicUtils.term(SampleTime, type = Real)
 end
