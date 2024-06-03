@@ -191,6 +191,10 @@ function (xn::Num)(k::ShiftIndex)
         isequal(t, clock.t) ||
             error("Independent variable of $xn is not the same as that of the ShiftIndex $(k.t)")
     end
+    if isa(clock, Clock)
+        isequal(args[], t) ||
+            error("Independent variable of $xn is not the same as that of the ShiftIndex $(k.t)")
+    end
 
     # d, _ = propagate_time_domain(xn)
     # if d != clock # this is only required if the variable has another clock
@@ -201,7 +205,7 @@ function (xn::Num)(k::ShiftIndex)
     if steps == 0
         return xn # x(k) needs no shift operator if the step of k is 0
     end
-    Shift(t, steps)(xn) # a shift of k steps
+    Shift(t, steps)(xn)
 end
 
 Base.:+(k::ShiftIndex, i::Int) = ShiftIndex(k.clock, k.steps + i)
