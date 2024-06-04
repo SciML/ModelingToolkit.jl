@@ -173,7 +173,7 @@ function DiscreteSystem(eqs, iv; kwargs...)
     for eq in eqs
         collect_vars!(allunknowns, ps, eq.lhs, iv; op = Shift)
         collect_vars!(allunknowns, ps, eq.rhs, iv; op = Shift)
-        if istree(eq.lhs) && operation(eq.lhs) isa Shift
+        if iscall(eq.lhs) && operation(eq.lhs) isa Shift
             isequal(iv, operation(eq.lhs).t) ||
                 throw(ArgumentError("A DiscreteSystem can only have one independent variable."))
             eq.lhs in diffvars &&
@@ -183,7 +183,7 @@ function DiscreteSystem(eqs, iv; kwargs...)
     end
     new_ps = OrderedSet()
     for p in ps
-        if istree(p) && operation(p) === getindex
+        if iscall(p) && operation(p) === getindex
             par = arguments(p)[begin]
             if Symbolics.shape(Symbolics.unwrap(par)) !== Symbolics.Unknown() &&
                all(par[i] in ps for i in eachindex(par))

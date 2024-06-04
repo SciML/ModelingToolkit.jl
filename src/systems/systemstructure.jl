@@ -1,7 +1,7 @@
 using DataStructures
 using Symbolics: linear_expansion, unwrap, Connection
-using SymbolicUtils: istree, operation, arguments, Symbolic
-using SymbolicUtils: quick_cancel, similarterm
+using SymbolicUtils: iscall, operation, arguments, Symbolic
+using SymbolicUtils: quick_cancel, maketerm
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           value, InvalidSystemException, isdifferential, _iszero,
@@ -18,9 +18,8 @@ using SparseArrays
 
 function quick_cancel_expr(expr)
     Rewriters.Postwalk(quick_cancel,
-        similarterm = (x, f, args; kws...) -> similarterm(x, f, args,
-            SymbolicUtils.symtype(x);
-            metadata = SymbolicUtils.metadata(x),
+        similarterm = (x, f, args; kws...) -> maketerm(typeof(x), f, args,
+            SymbolicUtils.symtype(x), SymbolicUtils.metadata(x),
             kws...))(expr)
 end
 
@@ -288,7 +287,7 @@ function TearingState(sys; quick_cancel = false, check = true)
             _var, _ = var_from_nested_derivative(v)
             any(isequal(_var), ivs) && continue
             if isparameter(_var) ||
-               (istree(_var) && isparameter(operation(_var)) || isconstant(_var))
+               (iscall(_var) && isparameter(operation(_var)) || isconstant(_var))
                 continue
             end
             v = scalarize(v)
@@ -308,7 +307,7 @@ function TearingState(sys; quick_cancel = false, check = true)
             _var, _ = var_from_nested_derivative(var)
             any(isequal(_var), ivs) && continue
             if isparameter(_var) ||
-               (istree(_var) && isparameter(operation(_var)) || isconstant(_var))
+               (iscall(_var) && isparameter(operation(_var)) || isconstant(_var))
                 continue
             end
             varidx = addvar!(var)
@@ -328,7 +327,7 @@ function TearingState(sys; quick_cancel = false, check = true)
             dvar = var
             idx = varidx
 
-            if istree(var) && operation(var) isa Symbolics.Operator &&
+            if iscall(var) && operation(var) isa Symbolics.Operator &&
                !isdifferential(var) && (it = input_timedomain(var)) !== nothing
                 set_incidence = false
                 var = only(arguments(var))

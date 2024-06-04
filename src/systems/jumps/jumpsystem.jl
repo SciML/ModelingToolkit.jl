@@ -271,7 +271,7 @@ function numericrstoich(mtrs::Vector{Pair{V, W}}, unknowntoid) where {V, W}
     rs = Vector{Pair{Int, W}}()
     for (wspec, stoich) in mtrs
         spec = value(wspec)
-        if !istree(spec) && _iszero(spec)
+        if !iscall(spec) && _iszero(spec)
             push!(rs, 0 => stoich)
         else
             push!(rs, unknowntoid[spec] => stoich)
@@ -285,7 +285,7 @@ function numericnstoich(mtrs::Vector{Pair{V, W}}, unknowntoid) where {V, W}
     ns = Vector{Pair{Int, W}}()
     for (wspec, stoich) in mtrs
         spec = value(wspec)
-        !istree(spec) && _iszero(spec) &&
+        !iscall(spec) && _iszero(spec) &&
             error("Net stoichiometry can not have a species labelled 0.")
         push!(ns, unknowntoid[spec] => stoich)
     end

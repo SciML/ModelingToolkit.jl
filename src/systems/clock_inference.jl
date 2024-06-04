@@ -48,7 +48,7 @@ function substitute_sample_time(eq::Equation, dt)
 end
 
 function substitute_sample_time(ex, dt)
-    istree(ex) || return ex
+    iscall(ex) || return ex
     op = operation(ex)
     args = arguments(ex)
     if op == SampleTime
@@ -63,7 +63,7 @@ function substitute_sample_time(ex, dt)
             end
             new_args[i] = ex_arg
         end
-        similarterm(ex, op, new_args, symtype(ex); metadata = metadata(ex))
+        maketerm(typeof(ex), op, new_args, symtype(ex), metadata(ex))
     end
 end
 
@@ -128,7 +128,7 @@ function resize_or_push!(v, val, idx)
 end
 
 function is_time_domain_conversion(v)
-    istree(v) && (o = operation(v)) isa Operator &&
+    iscall(v) && (o = operation(v)) isa Operator &&
         input_timedomain(o) != output_timedomain(o)
 end
 

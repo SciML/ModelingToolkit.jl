@@ -92,7 +92,7 @@ function full_equations(sys::AbstractSystem; simplify = false)
     @unpack subs = substitutions
     solved = Dict(eq.lhs => eq.rhs for eq in subs)
     neweqs = map(equations(sys)) do eq
-        if istree(eq.lhs) && operation(eq.lhs) isa Union{Shift, Differential}
+        if iscall(eq.lhs) && operation(eq.lhs) isa Union{Shift, Differential}
             return tearing_sub(eq.lhs, solved, simplify) ~ tearing_sub(eq.rhs, solved,
                 simplify)
         else
@@ -568,7 +568,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
 
     for eq in obs
         lhs = eq.lhs
-        istree(lhs) || continue
+        iscall(lhs) || continue
         operation(lhs) === getindex || continue
         Symbolics.shape(lhs) !== Symbolics.Unknown() || continue
         arg1 = arguments(lhs)[1]

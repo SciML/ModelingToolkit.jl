@@ -9,7 +9,7 @@ using PrecompileTools, Reexport
 end
 
 import SymbolicUtils
-import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype,
+import SymbolicUtils: iscall, arguments, operation, maketerm, promote_symtype,
                       Symbolic, isadd, ismul, ispow, issym, FnType,
                       @rule, Rewriters, substitute, metadata, BasicSymbolic,
                       Sym, Term

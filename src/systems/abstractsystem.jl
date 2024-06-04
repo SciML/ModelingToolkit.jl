@@ -205,7 +205,7 @@ function wrap_array_vars(sys::AbstractSystem, exprs; dvs = unknowns(sys))
     isscalar = !(exprs isa AbstractArray)
     array_vars = Dict{Any, AbstractArray{Int}}()
     for (j, x) in enumerate(dvs)
-        if istree(x) && operation(x) == getindex
+        if iscall(x) && operation(x) == getindex
             arg = arguments(x)[1]
             inds = get!(() -> Int[], array_vars, arg)
             push!(inds, j)
@@ -352,7 +352,7 @@ function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym)
     end
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         return is_variable(ic, sym) ||
-               istree(sym) && operation(sym) === getindex &&
+               iscall(sym) && operation(sym) === getindex &&
                is_variable(ic, first(arguments(sym)))
     end
     return any(isequal(sym), variable_symbols(sys)) ||
@@ -378,7 +378,7 @@ function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         return if (idx = variable_index(ic, sym)) !== nothing
             idx
-        elseif istree(sym) && operation(sym) === getindex &&
+        elseif iscall(sym) && operation(sym) === getindex &&
                (idx = variable_index(ic, first(arguments(sym)))) !== nothing
             idx[arguments(sym)[(begin + 1):end]...]
         else
@@ -416,7 +416,7 @@ function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
     sym = unwrap(sym)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         return is_parameter(ic, sym) ||
-               istree(sym) && operation(sym) === getindex &&
+               iscall(sym) && operation(sym) === getindex &&
                is_parameter(ic, first(arguments(sym)))
     end
     if unwrap(sym) isa Int
@@ -441,7 +441,7 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         return if (idx = parameter_index(ic, sym)) !== nothing
             idx
-        elseif istree(sym) && operation(sym) === getindex &&
+        elseif iscall(sym) && operation(sym) === getindex &&
                (idx = parameter_index(ic, first(arguments(sym)))) !== nothing
             ParameterIndex(idx.portion, (idx.idx..., arguments(sym)[(begin + 1):end]...))
         else
@@ -745,10 +745,10 @@ function _apply_to_variables(f::F, ex) where {F}
     if isvariable(ex)
         return f(ex)
     end
-    istree(ex) || return ex
-    similarterm(ex, _apply_to_variables(f, operation(ex)),
+    iscall(ex) || return ex
+    maketerm(typeof(ex), _apply_to_variables(f, operation(ex)),
         map(Base.Fix1(_apply_to_variables, f), arguments(ex)),
-        metadata = metadata(ex))
+        symtype(ex), metadata(ex))
 end
 
 abstract type SymScope end
@@ -756,11 +756,11 @@ abstract type SymScope end
 struct LocalScope <: SymScope end
 function LocalScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
     apply_to_variables(sym) do sym
-        if istree(sym) && operation(sym) === getindex
+        if iscall(sym) && operation(sym) === getindex
             args = arguments(sym)
             a1 = setmetadata(args[1], SymScope, LocalScope())
-            similarterm(sym, operation(sym), [a1, args[2:end]...];
-                metadata = metadata(sym))
+            maketerm(typeof(sym), operation(sym), [a1, args[2:end]...];
+                symtype(sym), metadata(sym))
         else
             setmetadata(sym, SymScope, LocalScope())
         end
@@ -772,12 +772,12 @@ struct ParentScope <: SymScope
 end
 function ParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
     apply_to_variables(sym) do sym
-        if istree(sym) && operation(sym) === getindex
+        if iscall(sym) && operation(sym) === getindex
             args = arguments(sym)
             a1 = setmetadata(args[1], SymScope,
                 ParentScope(getmetadata(value(args[1]), SymScope, LocalScope())))
-            similarterm(sym, operation(sym), [a1, args[2:end]...];
-                metadata = metadata(sym))
+            maketerm(typeof(sym), operation(sym), [a1, args[2:end]...];
+                symtype(sym), metadata(sym))
         else
             setmetadata(sym, SymScope,
                 ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
@@ -791,12 +791,12 @@ struct DelayParentScope <: SymScope
 end
 function DelayParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}}, N)
     apply_to_variables(sym) do sym
-        if istree(sym) && operation(sym) == getindex
+        if iscall(sym) && operation(sym) == getindex
             args = arguments(sym)
             a1 = setmetadata(args[1], SymScope,
                 DelayParentScope(getmetadata(value(args[1]), SymScope, LocalScope()), N))
-            similarterm(sym, operation(sym), [a1, args[2:end]...];
-                metadata = metadata(sym))
+            maketerm(typeof(sym), operation(sym), [a1, args[2:end]...];
+                symtype(sym), metadata(sym))
         else
             setmetadata(sym, SymScope,
                 DelayParentScope(getmetadata(value(sym), SymScope, LocalScope()), N))
@@ -808,11 +808,11 @@ DelayParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}}) = DelayParentSco
 struct GlobalScope <: SymScope end
 function GlobalScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
     apply_to_variables(sym) do sym
-        if istree(sym) && operation(sym) == getindex
+        if iscall(sym) && operation(sym) == getindex
             args = arguments(sym)
             a1 = setmetadata(args[1], SymScope, GlobalScope())
-            similarterm(sym, operation(sym), [a1, args[2:end]...];
-                metadata = metadata(sym))
+            maketerm(typeof(sym), operation(sym), [a1, args[2:end]...];
+                symtype(sym), metadata(sym))
         else
             setmetadata(sym, SymScope, GlobalScope())
         end
@@ -827,16 +827,16 @@ function renamespace(sys, x)
     x = unwrap(x)
     if x isa Symbolic
         T = typeof(x)
-        if istree(x) && operation(x) isa Operator
-            return similarterm(x, operation(x),
+        if iscall(x) && operation(x) isa Operator
+            return maketerm(typeof(x), operation(x),
                 Any[renamespace(sys, only(arguments(x)))];
-                metadata = metadata(x))::T
+                symtype(x), metadata(x))::T
         end
-        if istree(x) && operation(x) === getindex
+        if iscall(x) && operation(x) === getindex
             args = arguments(x)
-            return similarterm(
-                x, operation(x), vcat(renamespace(sys, args[1]), args[2:end]);
-                metadata = metadata(x))::T
+            return maketerm(
+                typeof(x), operation(x), vcat(renamespace(sys, args[1]), args[2:end]);
+                symtype(x), metadata(x))::T
         end
         let scope = getmetadata(x, SymScope, LocalScope())
             if scope isa LocalScope
@@ -904,7 +904,7 @@ function namespace_expr(
     O = unwrap(O)
     if any(isequal(O), ivs)
         return O
-    elseif istree(O)
+    elseif iscall(O)
         T = typeof(O)
         renamed = let sys = sys, n = n, T = T
             map(a -> namespace_expr(a, sys, n; ivs)::Any, arguments(O))
@@ -913,13 +913,14 @@ function namespace_expr(
             # Use renamespace so the scope is correct, and make sure to use the
             # metadata from the rescoped variable
             rescoped = renamespace(n, O)
-            similarterm(O, operation(rescoped), renamed,
+            maketerm(typeof(rescoped), operation(rescoped), renamed,
+                symtype(rescoped)
                 metadata = metadata(rescoped))
         elseif Symbolics.isarraysymbolic(O)
             # promote_symtype doesn't work for array symbolics
-            similarterm(O, operation(O), renamed, symtype(O), metadata = metadata(O))
+            maketerm(typeof(O), operation(O), renamed, symtype(O), metadata(O))
         else
-            similarterm(O, operation(O), renamed, metadata = metadata(O))
+            maketerm(typeof(O), operation(O), renamed, symtype(O), metadata(O))
         end
     elseif isvariable(O)
         renamespace(n, O)
@@ -1097,7 +1098,7 @@ function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
     # than pass in a value in place of x(t).
     #
     # This is done by just making `x` the argument of the function.
-    if istree(x) &&
+    if iscall(x) &&
        issym(operation(x)) &&
        !(length(arguments(x)) == 1 && isequal(arguments(x)[1], get_iv(sys)))
         return operation(x)
@@ -1125,7 +1126,7 @@ function push_vars!(stmt, name, typ, vars)
     isempty(vars) && return
     vars_expr = Expr(:macrocall, typ, nothing)
     for s in vars
-        if istree(s)
+        if iscall(s)
             f = nameof(operation(s))
             args = arguments(s)
             ex = :($f($(args...)))
@@ -1142,7 +1143,7 @@ function round_trip_expr(t, var2name)
     name = get(var2name, t, nothing)
     name !== nothing && return name
     issym(t) && return nameof(t)
-    istree(t) || return t
+    iscall(t) || return t
     f = round_trip_expr(operation(t), var2name)
     args = map(Base.Fix2(round_trip_expr, var2name), arguments(t))
     return :($f($(args...)))

@@ -7,7 +7,7 @@ using Symbolics: unwrap, linear_expansion, fast_substitute
 using SymbolicUtils
 using SymbolicUtils.Code
 using SymbolicUtils.Rewriters
-using SymbolicUtils: similarterm, istree
+using SymbolicUtils: maketerm, iscall
 
 using ModelingToolkit
 using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Differential,

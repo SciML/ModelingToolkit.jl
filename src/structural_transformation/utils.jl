@@ -445,7 +445,7 @@ function simplify_shifts(var)
         t2 = op2.t
         return simplify_shifts(ModelingToolkit.Shift(t1 === nothing ? t2 : t1, s1 + s2)(vv2))
     else
-        return similarterm(var, operation(var), simplify_shifts.(arguments(var)),
-            Symbolics.symtype(var); metadata = unwrap(var).metadata)
+        return maketerm(typeof(var), operation(var), simplify_shifts.(arguments(var)),
+            Symbolics.symtype(var), unwrap(var).metadata)
     end
 end

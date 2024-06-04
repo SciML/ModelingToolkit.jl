@@ -124,17 +124,17 @@ function get_unit(x::Symbolic)
         else
             pargs[2] isa Number ? base^pargs[2] : (1 * base)^pargs[2]
         end
-    elseif istree(x)
+    elseif iscall(x)
         op = operation(x)
-        if issym(op) || (istree(op) && istree(operation(op))) # Dependent variables, not function calls
+        if issym(op) || (iscall(op) && iscall(operation(op))) # Dependent variables, not function calls
             return screen_unit(getmetadata(x, VariableUnit, unitless)) # Like x(t) or x[i]
-        elseif istree(op) && !istree(operation(op))
+        elseif iscall(op) && !iscall(operation(op))
             gp = getmetadata(x, Symbolics.GetindexParent, nothing) # Like x[1](t)
             return screen_unit(getmetadata(gp, VariableUnit, unitless))
         end  # Actual function calls:
         args = arguments(x)
         return get_unit(op, args)
-    else # This function should only be reached by Terms, for which `istree` is true
+    else # This function should only be reached by Terms, for which `iscall` is true
         throw(ArgumentError("Unsupported value $x."))
     end
 end

@@ -14,7 +14,7 @@ end
 
 function get_connection_type(s)
     s = unwrap(s)
-    if istree(s) && operation(s) === getindex
+    if iscall(s) && operation(s) === getindex
         s = arguments(s)[1]
     end
     getmetadata(s, VariableConnectType, Equality)
@@ -82,7 +82,7 @@ function collect_instream!(set, eq::Equation)
 end
 
 function collect_instream!(set, expr, occurs = false)
-    istree(expr) || return occurs
+    iscall(expr) || return occurs
     op = operation(expr)
     op === instream && (push!(set, expr); occurs = true)
     for a in SymbolicUtils.unsorted_arguments(expr)

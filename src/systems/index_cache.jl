@@ -49,14 +49,14 @@ function IndexCache(sys::AbstractSystem)
             end
             unk_idxs[usym] = sym_idx
 
-            if hasname(sym) && (!istree(sym) || operation(sym) !== getindex)
+            if hasname(sym) && (!iscall(sym) || operation(sym) !== getindex)
                 unk_idxs[getname(usym)] = sym_idx
             end
             idx += length(sym)
         end
         for sym in unks
             usym = unwrap(sym)
-            istree(sym) && operation(sym) === getindex || continue
+            iscall(sym) && operation(sym) === getindex || continue
             arrsym = arguments(sym)[1]
             all(haskey(unk_idxs, arrsym[i]) for i in eachindex(arrsym)) || continue
 
@@ -142,7 +142,7 @@ function IndexCache(sys::AbstractSystem)
             for (j, p) in enumerate(buf)
                 idxs[p] = (i, j)
                 idxs[default_toterm(p)] = (i, j)
-                if hasname(p) && (!istree(p) || operation(p) !== getindex)
+                if hasname(p) && (!iscall(p) || operation(p) !== getindex)
                     idxs[getname(p)] = (i, j)
                     idxs[getname(default_toterm(p))] = (i, j)
                 end
@@ -208,7 +208,7 @@ end
 function check_index_map(idxmap, sym)
     if (idx = get(idxmap, sym, nothing)) !== nothing
         return idx
-    elseif !isa(sym, Symbol) && (!istree(sym) || operation(sym) !== getindex) &&
+    elseif !isa(sym, Symbol) && (!iscall(sym) || operation(sym) !== getindex) &&
            hasname(sym) && (idx = get(idxmap, getname(sym), nothing)) !== nothing
         return idx
     end
@@ -216,7 +216,7 @@ function check_index_map(idxmap, sym)
     isequal(sym, dsym) && return nothing
     if (idx = get(idxmap, dsym, nothing)) !== nothing
         idx
-    elseif !isa(dsym, Symbol) && (!istree(dsym) || operation(dsym) !== getindex) &&
+    elseif !isa(dsym, Symbol) && (!iscall(dsym) || operation(dsym) !== getindex) &&
            hasname(dsym) && (idx = get(idxmap, getname(dsym), nothing)) !== nothing
         idx
     else
@@ -236,7 +236,7 @@ function ParameterIndex(ic::IndexCache, p, sub_idx = ())
         ParameterIndex(DEPENDENT_PORTION, (ic.dependent_idx[p]..., sub_idx...))
     elseif haskey(ic.nonnumeric_idx, p)
         ParameterIndex(NONNUMERIC_PORTION, (ic.nonnumeric_idx[p]..., sub_idx...))
-    elseif istree(p) && operation(p) === getindex
+    elseif iscall(p) && operation(p) === getindex
         _p, sub_idx... = arguments(p)
         ParameterIndex(ic, _p, sub_idx)
     else

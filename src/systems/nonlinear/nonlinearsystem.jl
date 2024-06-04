@@ -171,7 +171,7 @@ function NonlinearSystem(eqs; kwargs...)
     end
     new_ps = OrderedSet()
     for p in ps
-        if istree(p) && operation(p) === getindex
+        if iscall(p) && operation(p) === getindex
             par = arguments(p)[begin]
             if Symbolics.shape(Symbolics.unwrap(par)) !== Symbolics.Unknown() &&
                all(par[i] in ps for i in eachindex(par))
