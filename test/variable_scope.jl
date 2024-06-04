@@ -83,3 +83,25 @@ arr1 = ODESystem(Equation[], t, [], []; name = :arr1) ∘ arr0
 arr_ps = ModelingToolkit.getname.(parameters(arr1))
 @test isequal(arr_ps[1], Symbol("xx"))
 @test isequal(arr_ps[2], Symbol("arr0₊xx"))
+
+#Issue#2757
+function System1(; name, p)
+    @parameters p1 = p
+    @variables x(t) = 0.0
+    return ODESystem([D(x) ~ 2p1], t, [x], [p1]; name)
+end
+function System2(; name, p)
+    @variables x(t) = 0.0
+    @named inner = System1(p = p)
+    return ODESystem([D(x) ~ t], t, [x], []; name, systems = [inner])
+end
+function System3(; name, p)
+    @parameters p3 = p
+    @variables x(t) = 0.0
+    @named inner = System2(p = p3)
+    return ODESystem([D(x) ~ p3 * x], t, [x], [p3]; name, systems = [inner])
+end
+@mtkbuild sys = System3(; p = 1.0)
+defs = ModelingToolkit.defaults(sys)
+@test defs[sys.p3] == 1.0
+@test isequal(defs[sys.inner.inner.p1], sys.p3)

@@ -1564,7 +1564,7 @@ function default_to_parentscope(v)
     uv = unwrap(v)
     uv isa Symbolic || return v
     apply_to_variables(v) do sym
-        if !hasmetadata(uv, SymScope)
+        if (scope = getmetadata(uv, SymScope, LocalScope())) != GlobalScope()
             ParentScope(sym)
         else
             sym
