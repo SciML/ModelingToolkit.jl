@@ -1848,7 +1848,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         end
     end
     initfn = NonlinearFunction(initsys)
-    initprobmap = getu(initsys, unknowns(sys))
+    initprobmap = isempty(unknowns(sys)) ? nothing : getu(initsys, unknowns(sys))
     ps = full_parameters(sys)
     lin_fun = let diff_idxs = diff_idxs,
         alge_idxs = alge_idxs,
