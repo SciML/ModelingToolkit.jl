@@ -1795,7 +1795,7 @@ function io_preprocessing(sys::AbstractSystem, inputs,
 end
 
 """
-    lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false, initialize = true, kwargs...)
+    lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false, initialize = true, initialization_solver_alg = TrustRegion(), kwargs...)
 
 Return a function that linearizes the system `sys`. The function [`linearize`](@ref) provides a higher-level and easier to use interface.
 
@@ -1820,6 +1820,7 @@ The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occ
   - `outputs`: A vector of variables that indicate the outputs of the linearized input-output model.
   - `simplify`: Apply simplification in tearing.
   - `initialize`: If true, a check is performed to ensure that the operating point is consistent (satisfies algebraic equations). If the op is not consistent, initialization is performed.
+  - `initialization_solver_alg`: A NonlinearSolve algorithm to use for solving for a feasible set of state and algebraic variables that satisfies the specified operating point.
   - `kwargs`: Are passed on to `find_solvables!`
 
 See also [`linearize`](@ref) which provides a higher-level interface.
@@ -1830,6 +1831,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         op = Dict(),
         p = DiffEqBase.NullParameters(),
         zero_dummy_der = false,
+        initialization_solver_alg = TrustRegion(),
         kwargs...)
     inputs isa AbstractVector || (inputs = [inputs])
     outputs isa AbstractVector || (outputs = [outputs])
@@ -1936,6 +1938,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         chunk = ForwardDiff.Chunk(input_idxs),
         sys_ps = sys_ps,
         initialize = initialize,
+        initialization_solver_alg = initialization_solver_alg,
         sys = sys
 
         function (u, p, t)
@@ -1956,7 +1959,7 @@ function linearization_function(sys::AbstractSystem, inputs,
                     if norm(residual[alge_idxs]) > √(eps(eltype(residual)))
                         initu0, initp = get_initprob_u_p(u, p, t)
                         initprob = NonlinearLeastSquaresProblem(initfn, initu0, initp)
-                        nlsol = solve(initprob)
+                        nlsol = solve(initprob, initialization_solver_alg)
                         u = initprobmap(nlsol)
                     end
                 end
