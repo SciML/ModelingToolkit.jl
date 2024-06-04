@@ -3,7 +3,7 @@ $(DocStringExtensions.README)
 """
 module ModelingToolkit
 
-1+1
+1 + 1
 
 using PrecompileTools, Reexport
 @recompile_invalidations begin
