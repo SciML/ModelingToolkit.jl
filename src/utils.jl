@@ -29,7 +29,7 @@ end
 function retime_dvs(op, dvs, iv)
     issym(op) && return Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(op))(iv)
     iscall(op) ?
-    maketerm(typeof(op), operation(op), retime_dvs.(arguments(op), (dvs,), (iv,));
+    maketerm(typeof(op), operation(op), retime_dvs.(arguments(op), (dvs,), (iv,)),
         symtype(op), metadata(op)) :
     op
 end
