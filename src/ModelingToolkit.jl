@@ -46,7 +46,7 @@ using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap
 using Distributed
 import JuliaFormatter
 using MLStyle
-import OrdinaryDiffEq
+using NonlinearSolve
 using Reexport
 using RecursiveArrayTools
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix

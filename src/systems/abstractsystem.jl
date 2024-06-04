@@ -1843,8 +1843,10 @@ function linearization_function(sys::AbstractSystem, inputs,
         op = merge(defs, op)
     end
     sys = ssys
-    initsys = complete(generate_initializesystem(
-        sys, guesses = guesses(sys), algebraic_only = true))
+    initsys = structural_simplify(
+        generate_initializesystem(
+            sys, guesses = guesses(sys), algebraic_only = true),
+        fully_determined = false)
     if p isa SciMLBase.NullParameters
         p = Dict()
     else
@@ -1927,8 +1929,9 @@ function linearization_function(sys::AbstractSystem, inputs,
         sts = unknowns(sys),
         get_initprob_u_p = get_initprob_u_p,
         fun = ODEFunction{true, SciMLBase.FullSpecialize}(
-            sys, unknowns(sys), ps; initializeprobmap = initprobmap),
+            sys, unknowns(sys), ps),
         initfn = initfn,
+        initprobmap = initprobmap,
         h = build_explicit_observed_function(sys, outputs),
         chunk = ForwardDiff.Chunk(input_idxs),
         sys_ps = sys_ps,
@@ -1953,10 +1956,8 @@ function linearization_function(sys::AbstractSystem, inputs,
                     if norm(residual[alge_idxs]) > √(eps(eltype(residual)))
                         initu0, initp = get_initprob_u_p(u, p, t)
                         initprob = NonlinearLeastSquaresProblem(initfn, initu0, initp)
-                        @set! fun.initializeprob = initprob
-                        prob = ODEProblem(fun, u, (t, t + 1), p)
-                        integ = init(prob, OrdinaryDiffEq.Rodas5P())
-                        u = integ.u
+                        nlsol = solve(initprob)
+                        u = initprobmap(nlsol)
                     end
                 end
                 uf = SciMLBase.UJacobianWrapper(fun, t, p)
