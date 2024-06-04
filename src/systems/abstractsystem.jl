@@ -759,7 +759,7 @@ function LocalScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
         if iscall(sym) && operation(sym) === getindex
             args = arguments(sym)
             a1 = setmetadata(args[1], SymScope, LocalScope())
-            maketerm(typeof(sym), operation(sym), [a1, args[2:end]...];
+            maketerm(typeof(sym), operation(sym), [a1, args[2:end]...],
                 symtype(sym), metadata(sym))
         else
             setmetadata(sym, SymScope, LocalScope())
