@@ -239,26 +239,6 @@ function check_index_map(idxmap, sym)
         nothing
     end
 end
-
-function ParameterIndex(ic::IndexCache, p, sub_idx = ())
-    p = unwrap(p)
-    return if haskey(ic.tunable_idx, p)
-        ParameterIndex(SciMLStructures.Tunable(), (ic.tunable_idx[p]..., sub_idx...))
-    elseif haskey(ic.discrete_idx, p)
-        ParameterIndex(SciMLStructures.Discrete(), (ic.discrete_idx[p]..., sub_idx...))
-    elseif haskey(ic.constant_idx, p)
-        ParameterIndex(SciMLStructures.Constants(), (ic.constant_idx[p]..., sub_idx...))
-    elseif haskey(ic.dependent_idx, p)
-        ParameterIndex(DEPENDENT_PORTION, (ic.dependent_idx[p]..., sub_idx...))
-    elseif haskey(ic.nonnumeric_idx, p)
-        ParameterIndex(NONNUMERIC_PORTION, (ic.nonnumeric_idx[p]..., sub_idx...))
-    elseif iscall(p) && operation(p) === getindex
-        _p, sub_idx... = arguments(p)
-        ParameterIndex(ic, _p, sub_idx)
-    else
-        nothing
-    end
-end
                                     
 function discrete_linear_index(ic::IndexCache, idx::ParameterIndex)
     idx.portion isa SciMLStructures.Discrete || error("Discrete variable index expected")
