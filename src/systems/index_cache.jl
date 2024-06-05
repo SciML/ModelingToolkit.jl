@@ -239,7 +239,7 @@ function check_index_map(idxmap, sym)
         nothing
     end
 end
-                                    
+
 function discrete_linear_index(ic::IndexCache, idx::ParameterIndex)
     idx.portion isa SciMLStructures.Discrete || error("Discrete variable index expected")
     ind = sum(temp.length for temp in ic.tunable_buffer_sizes; init = 0)
