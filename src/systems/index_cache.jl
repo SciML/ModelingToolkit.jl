@@ -1,5 +1,5 @@
 struct BufferTemplate
-    type::DataType
+    type::Union{DataType, UnionAll}
     length::Int
 end
 
@@ -16,7 +16,10 @@ const NONNUMERIC_PORTION = Nonnumeric()
 struct ParameterIndex{P, I}
     portion::P
     idx::I
+    validate_size::Bool
 end
+
+ParameterIndex(portion, idx) = ParameterIndex(portion, idx, false)
 
 const ParamIndexMap = Dict{Union{Symbol, BasicSymbolic}, Tuple{Int, Int}}
 const UnknownIndexMap = Dict{
@@ -34,11 +37,14 @@ struct IndexCache
     constant_buffer_sizes::Vector{BufferTemplate}
     dependent_buffer_sizes::Vector{BufferTemplate}
     nonnumeric_buffer_sizes::Vector{BufferTemplate}
+    symbol_to_variable::Dict{Symbol, BasicSymbolic}
 end
 
 function IndexCache(sys::AbstractSystem)
     unks = solved_unknowns(sys)
     unk_idxs = UnknownIndexMap()
+    symbol_to_variable = Dict{Symbol, BasicSymbolic}()
+
     let idx = 1
         for sym in unks
             usym = unwrap(sym)
@@ -48,9 +54,10 @@ function IndexCache(sys::AbstractSystem)
                 idx
             end
             unk_idxs[usym] = sym_idx
-
             if hasname(sym) && (!iscall(sym) || operation(sym) !== getindex)
-                unk_idxs[getname(usym)] = sym_idx
+                name = getname(usym)
+                unk_idxs[name] = sym_idx
+                symbol_to_variable[name] = sym
             end
             idx += length(sym)
         end
@@ -66,7 +73,9 @@ function IndexCache(sys::AbstractSystem)
             end
             unk_idxs[arrsym] = idxs
             if hasname(arrsym)
-                unk_idxs[getname(arrsym)] = idxs
+                name = getname(arrsym)
+                unk_idxs[name] = idxs
+                symbol_to_variable[name] = arrsym
             end
         end
     end
@@ -144,14 +153,15 @@ function IndexCache(sys::AbstractSystem)
                 idxs[default_toterm(p)] = (i, j)
                 if hasname(p) && (!iscall(p) || operation(p) !== getindex)
                     idxs[getname(p)] = (i, j)
+                    symbol_to_variable[getname(p)] = p
                     idxs[getname(default_toterm(p))] = (i, j)
+                    symbol_to_variable[getname(default_toterm(p))] = p
                 end
             end
             push!(buffer_sizes, BufferTemplate(T, length(buf)))
         end
         return idxs, buffer_sizes
     end
-
     disc_idxs, discrete_buffer_sizes = get_buffer_sizes_and_idxs(disc_buffers)
     tunable_idxs, tunable_buffer_sizes = get_buffer_sizes_and_idxs(tunable_buffers)
     const_idxs, const_buffer_sizes = get_buffer_sizes_and_idxs(constant_buffers)
@@ -169,7 +179,8 @@ function IndexCache(sys::AbstractSystem)
         tunable_buffer_sizes,
         const_buffer_sizes,
         dependent_buffer_sizes,
-        nonnumeric_buffer_sizes
+        nonnumeric_buffer_sizes,
+        symbol_to_variable
     )
 end
 
@@ -190,16 +201,21 @@ function SymbolicIndexingInterface.is_parameter(ic::IndexCache, sym)
 end
 
 function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym)
+    if sym isa Symbol
+        sym = ic.symbol_to_variable[sym]
+    end
+    validate_size = Symbolics.isarraysymbolic(sym) &&
+                    Symbolics.shape(sym) !== Symbolics.Unknown()
     return if (idx = check_index_map(ic.tunable_idx, sym)) !== nothing
-        ParameterIndex(SciMLStructures.Tunable(), idx)
+        ParameterIndex(SciMLStructures.Tunable(), idx, validate_size)
     elseif (idx = check_index_map(ic.discrete_idx, sym)) !== nothing
-        ParameterIndex(SciMLStructures.Discrete(), idx)
+        ParameterIndex(SciMLStructures.Discrete(), idx, validate_size)
     elseif (idx = check_index_map(ic.constant_idx, sym)) !== nothing
-        ParameterIndex(SciMLStructures.Constants(), idx)
+        ParameterIndex(SciMLStructures.Constants(), idx, validate_size)
     elseif (idx = check_index_map(ic.nonnumeric_idx, sym)) !== nothing
-        ParameterIndex(NONNUMERIC_PORTION, idx)
+        ParameterIndex(NONNUMERIC_PORTION, idx, validate_size)
     elseif (idx = check_index_map(ic.dependent_idx, sym)) !== nothing
-        ParameterIndex(DEPENDENT_PORTION, idx)
+        ParameterIndex(DEPENDENT_PORTION, idx, validate_size)
     else
         nothing
     end
@@ -243,7 +259,7 @@ function ParameterIndex(ic::IndexCache, p, sub_idx = ())
         nothing
     end
 end
-
+                                    
 function discrete_linear_index(ic::IndexCache, idx::ParameterIndex)
     idx.portion isa SciMLStructures.Discrete || error("Discrete variable index expected")
     ind = sum(temp.length for temp in ic.tunable_buffer_sizes; init = 0)

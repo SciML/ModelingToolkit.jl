@@ -132,7 +132,8 @@ function MTKParameters(
     tunable_buffer = narrow_buffer_type.(tunable_buffer)
     disc_buffer = narrow_buffer_type.(disc_buffer)
     const_buffer = narrow_buffer_type.(const_buffer)
-    nonnumeric_buffer = narrow_buffer_type.(nonnumeric_buffer)
+    # Don't narrow nonnumeric types
+    nonnumeric_buffer = nonnumeric_buffer
 
     if has_parameter_dependencies(sys) &&
        (pdeps = get_parameter_dependencies(sys)) !== nothing
@@ -308,22 +309,31 @@ end
 
 function SymbolicIndexingInterface.set_parameter!(
         p::MTKParameters, val, idx::ParameterIndex)
-    @unpack portion, idx = idx
+    @unpack portion, idx, validate_size = idx
     i, j, k... = idx
     if portion isa SciMLStructures.Tunable
         if isempty(k)
+            if validate_size && size(val) !== size(p.tunable[i][j])
+                throw(InvalidParameterSizeException(size(p.tunable[i][j]), size(val)))
+            end
             p.tunable[i][j] = val
         else
             p.tunable[i][j][k...] = val
         end
     elseif portion isa SciMLStructures.Discrete
         if isempty(k)
+            if validate_size && size(val) !== size(p.discrete[i][j])
+                throw(InvalidParameterSizeException(size(p.discrete[i][j]), size(val)))
+            end
             p.discrete[i][j] = val
         else
             p.discrete[i][j][k...] = val
         end
     elseif portion isa SciMLStructures.Constants
         if isempty(k)
+            if validate_size && size(val) !== size(p.constant[i][j])
+                throw(InvalidParameterSizeException(size(p.constant[i][j]), size(val)))
+            end
             p.constant[i][j] = val
         else
             p.constant[i][j][k...] = val
@@ -392,6 +402,9 @@ function narrow_buffer_type_and_fallback_undefs(oldbuf::Vector, newbuf::Vector)
         isassigned(newbuf, i) || continue
         type = promote_type(type, typeof(newbuf[i]))
     end
+    if type == Union{}
+        type = eltype(oldbuf)
+    end
     for i in eachindex(newbuf)
         isassigned(newbuf, i) && continue
         newbuf[i] = convert(type, oldbuf[i])
@@ -399,7 +412,63 @@ function narrow_buffer_type_and_fallback_undefs(oldbuf::Vector, newbuf::Vector)
     return convert(Vector{type}, newbuf)
 end
 
-function SymbolicIndexingInterface.remake_buffer(sys, oldbuf::MTKParameters, vals::Dict)
+function validate_parameter_type(ic::IndexCache, p, index, val)
+    p = unwrap(p)
+    if p isa Symbol
+        p = get(ic.symbol_to_variable, p, nothing)
+        if p === nothing
+            @warn "No matching variable found for `Symbol` $p, skipping type validation."
+            return nothing
+        end
+    end
+    (; portion) = index
+    # Nonnumeric parameters have to match the type
+    if portion === NONNUMERIC_PORTION
+        stype = symtype(p)
+        val isa stype && return nothing
+        throw(ParameterTypeException(:validate_parameter_type, p, stype, val))
+    end
+    stype = symtype(p)
+    # Array parameters need array values...
+    if stype <: AbstractArray && !isa(val, AbstractArray)
+        throw(ParameterTypeException(:validate_parameter_type, p, stype, val))
+    end
+    # ... and must match sizes
+    if stype <: AbstractArray && Symbolics.shape(p) !== Symbolics.Unknown() &&
+       size(val) != size(p)
+        throw(InvalidParameterSizeException(p, val))
+    end
+    # Early exit
+    val isa stype && return nothing
+    if stype <: AbstractArray
+        # Arrays need handling when eltype is `Real` (accept any real array)
+        etype = eltype(stype)
+        if etype <: Real
+            etype = Real
+        end
+        # This is for duals and other complicated number types
+        etype = SciMLBase.parameterless_type(etype)
+        eltype(val) <: etype || throw(ParameterTypeException(
+            :validate_parameter_type, p, AbstractArray{etype}, val))
+    else
+        # Real check
+        if stype <: Real
+            stype = Real
+        end
+        stype = SciMLBase.parameterless_type(stype)
+        val isa stype ||
+            throw(ParameterTypeException(:validate_parameter_type, p, stype, val))
+    end
+end
+
+function indp_to_system(indp)
+    while hasmethod(symbolic_container, Tuple{typeof(indp)})
+        indp = symbolic_container(indp)
+    end
+    return indp
+end
+
+function SymbolicIndexingInterface.remake_buffer(indp, oldbuf::MTKParameters, vals::Dict)
     newbuf = @set oldbuf.tunable = Tuple(Vector{Any}(undef, length(buf))
     for buf in oldbuf.tunable)
     @set! newbuf.discrete = Tuple(Vector{Any}(undef, length(buf))
@@ -409,9 +478,15 @@ function SymbolicIndexingInterface.remake_buffer(sys, oldbuf::MTKParameters, val
     @set! newbuf.nonnumeric = Tuple(Vector{Any}(undef, length(buf))
     for buf in newbuf.nonnumeric)
 
+    # If the parameter buffer is an `MTKParameters` object, `indp` must eventually drill
+    # down to an `AbstractSystem` using `symbolic_container`. We leverage this to get
+    # the index cache.
+    ic = get_index_cache(indp_to_system(indp))
     for (p, val) in vals
+        idx = parameter_index(indp, p)
+        validate_parameter_type(ic, p, idx, val)
         _set_parameter_unchecked!(
-            newbuf, val, parameter_index(sys, p); update_dependent = false)
+            newbuf, val, idx; update_dependent = false)
     end
 
     @set! newbuf.tunable = narrow_buffer_type_and_fallback_undefs.(
@@ -587,4 +662,16 @@ end
 function Base.showerror(io::IO, e::MissingParametersError)
     println(io, MISSING_PARAMETERS_MESSAGE)
     println(io, e.vars)
+end
+
+function InvalidParameterSizeException(param, val)
+    DimensionMismatch("InvalidParameterSizeException: For parameter $(param) expected value of size $(size(param)). Received value $(val) of size $(size(val)).")
+end
+
+function InvalidParameterSizeException(param::Tuple, val::Tuple)
+    DimensionMismatch("InvalidParameterSizeException: Expected value of size $(param). Received value of size $(val).")
+end
+
+function ParameterTypeException(func, param, expected, val)
+    TypeError(func, "Parameter $param", expected, val)
 end
