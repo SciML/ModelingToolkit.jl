@@ -28,13 +28,13 @@ bprob = BifurcationProblem(nsys,
 opts_br = ContinuationPar(nev = 2,
     p_min = p_span[1],
     p_max = p_span[2])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">BifurcationKit.ContinuationPar{Float64, BifurcationKit.DefaultLS, BifurcationKit.DefaultEig{typeof(real)}}
-  dsmin: Float64 0.001
+  dsmin: Float64 0.0001
   dsmax: Float64 0.1
   ds: Float64 0.01
   a: Float64 0.5
   p_min: Float64 -4.0
   p_max: Float64 6.0
-  max_steps: Int64 100
+  max_steps: Int64 400
   newton_options: BifurcationKit.NewtonPar{Float64, BifurcationKit.DefaultLS, BifurcationKit.DefaultEig{typeof(real)}}
   η: Float64 150.0
   save_to_file: Bool false
@@ -64,11 +64,8 @@ opts_br = ContinuationPar(nev = 2,
       ├─ Algo: <span class="sgr36"><span class="sgr1">PALC</span></span>
       └─ Special points:
 
-If `br` is the name of the branch,
-ind_ev = index of the bifurcating eigenvalue e.g. `br.eig[idx].eigenvals[ind_ev]`
-
 - #  1, <span class="sgr1">endpoint</span> at p ≈ -4.00000000,                                                                     step =   0
-- #  2, <span class="sgr34"><span class="sgr1">      bp</span></span> at p ≈ +0.00044561 ∈ (-0.00010682, +0.00044561), |δp|=6e-04, [<span class="sgr32"><span class="sgr1">converged</span></span>], δ = ( 1,  0), step =  38, eigenelements in eig[ 39], ind_ev =   1
+- #  2, <span class="sgr34"><span class="sgr1">      bp</span></span> at p ≈ +0.00044561 ∈ (-0.00010682, +0.00044561), |δp|=6e-04, [<span class="sgr32"><span class="sgr1">converged</span></span>], δ = ( 1,  0), step =  38
 - #  3, <span class="sgr1">endpoint</span> at p ≈ +6.00000000,                                                                     step =  81
 </code></pre><p>Here, the value <code>2</code> sets how sub-branches of the diagram that BifurcationKit should compute. Generally, for bifurcation diagrams, it is recommended to use the <code>bothside=true</code> argument.</p><pre><code class="language-julia hljs">using Plots
 plot(bf;
@@ -76,7 +73,7 @@ plot(bf;
     markersize = 2,
     plotfold = false,
     xguide = &quot;μ&quot;,
-    yguide = &quot;x&quot;)</code></pre><img src="931b3f5e.svg" alt="Example block output"/><p>Here, the system exhibits a pitchfork bifurcation at <em>μ=0.0</em>.</p><h3 id="Using-ODESystem-inputs"><a class="docs-heading-anchor" href="#Using-ODESystem-inputs">Using <code>ODESystem</code> inputs</a><a id="Using-ODESystem-inputs-1"></a><a class="docs-heading-anchor-permalink" href="#Using-ODESystem-inputs" title="Permalink"></a></h3><p>It is also possible to use <code>ODESystem</code>s (rather than <code>NonlinearSystem</code>s) as input to <code>BifurcationProblem</code>. Here follows a brief such example.</p><pre><code class="language-julia hljs">using BifurcationKit, ModelingToolkit, Plots
+    yguide = &quot;x&quot;)</code></pre><img src="6ca84290.svg" alt="Example block output"/><p>Here, the system exhibits a pitchfork bifurcation at <em>μ=0.0</em>.</p><h3 id="Using-ODESystem-inputs"><a class="docs-heading-anchor" href="#Using-ODESystem-inputs">Using <code>ODESystem</code> inputs</a><a id="Using-ODESystem-inputs-1"></a><a class="docs-heading-anchor-permalink" href="#Using-ODESystem-inputs" title="Permalink"></a></h3><p>It is also possible to use <code>ODESystem</code>s (rather than <code>NonlinearSystem</code>s) as input to <code>BifurcationProblem</code>. Here follows a brief such example.</p><pre><code class="language-julia hljs">using BifurcationKit, ModelingToolkit, Plots
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @variables x(t) y(t)
@@ -108,7 +105,7 @@ plot(bf;
     markersize = 2,
     plotfold = false,
     xguide = &quot;μ&quot;,
-    yguide = &quot;x&quot;)</code></pre><img src="1442d9de.svg" alt="Example block output"/><p>Here, the value of <code>x</code> in the steady state does not change, however, at <code>μ=0</code> a Hopf bifurcation occur and the steady state turn unstable.</p><p>We compute the branch of periodic orbits which is nearby the Hopf Bifurcation. We thus provide the branch <code>bf.γ</code>, the index of the Hopf point we want to branch from: 2 in this case and a method <code>PeriodicOrbitOCollProblem(20, 5)</code> to compute periodic orbits.</p><pre><code class="language-julia hljs">br_po = continuation(bf.γ, 2, opts_br,
+    yguide = &quot;x&quot;)</code></pre><img src="9dc8ff7c.svg" alt="Example block output"/><p>Here, the value of <code>x</code> in the steady state does not change, however, at <code>μ=0</code> a Hopf bifurcation occur and the steady state turn unstable.</p><p>We compute the branch of periodic orbits which is nearby the Hopf Bifurcation. We thus provide the branch <code>bf.γ</code>, the index of the Hopf point we want to branch from: 2 in this case and a method <code>PeriodicOrbitOCollProblem(20, 5)</code> to compute periodic orbits.</p><pre><code class="language-julia hljs">br_po = continuation(bf.γ, 2, opts_br,
     PeriodicOrbitOCollProblem(20, 5);)
 
 plot(bf; putspecialptlegend = false,
@@ -116,5 +113,5 @@ plot(bf; putspecialptlegend = false,
     plotfold = false,
     xguide = &quot;μ&quot;,
     yguide = &quot;x&quot;)
-plot!(br_po, xguide = &quot;μ&quot;, yguide = &quot;x&quot;, label = &quot;Maximum of periodic orbit&quot;)</code></pre><img src="8a388cee.svg" alt="Example block output"/><p>Let&#39;s see how to plot the periodic solution we just computed:</p><pre><code class="language-julia hljs">sol = get_periodic_orbit(br_po, 10)
-plot(sol.t, sol[1, :], yguide = &quot;x&quot;, xguide = &quot;time&quot;, label = &quot;&quot;)</code></pre><img src="8a60a374.svg" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../parameter_identifiability/">« Parameter Identifiability in ODE Models</a><a class="docs-footer-nextpage" href="../SampledData/">Clocks and Sampled-Data Systems »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.4.1 on <span class="colophon-date" title="Thursday 30 May 2024 23:14">Thursday 30 May 2024</span>. Using Julia version 1.10.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+plot!(br_po, xguide = &quot;μ&quot;, yguide = &quot;x&quot;, label = &quot;Maximum of periodic orbit&quot;)</code></pre><img src="eacde387.svg" alt="Example block output"/><p>Let&#39;s see how to plot the periodic solution we just computed:</p><pre><code class="language-julia hljs">sol = get_periodic_orbit(br_po, 10)
+plot(sol.t, sol[1, :], yguide = &quot;x&quot;, xguide = &quot;time&quot;, label = &quot;&quot;)</code></pre><img src="cfed5c70.svg" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../parameter_identifiability/">« Parameter Identifiability in ODE Models</a><a class="docs-footer-nextpage" href="../SampledData/">Clocks and Sampled-Data Systems »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.4.1 on <span class="colophon-date" title="Wednesday 5 June 2024 17:34">Wednesday 5 June 2024</span>. Using Julia version 1.10.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
