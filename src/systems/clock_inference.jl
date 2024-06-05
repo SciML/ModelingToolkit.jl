@@ -82,6 +82,11 @@ function change_sample_clock(v, clock)
     Sample(clock)(only(arguments(v)))
 end
 
+function substitute_eq_variable!(ts, sub_rules)
+    if !isempty(sub_rules)
+        error("`substitute_eq_variable!` is not implemented for this backend!")
+    end
+end
 function substitute_eq_variable!(ts::TearingState, sub_rules)
     eqs = equations(ts.sys)
     for (eq, (old_v, new_v)) in sub_rules
