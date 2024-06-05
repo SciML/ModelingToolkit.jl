@@ -636,6 +636,9 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
             check_consistency, fully_determined,
             kwargs...)
         if length(tss) > 1
+            if continuous_id > 0
+                error("Hybrid continuous-discrete systems are currently not supported with the standard MTK compiler. This system requires JuliaSimCompiler.jl, see https://help.juliahub.com/juliasimcompiler/stable/")
+            end
             # TODO: rename it to something else
             discrete_subsystems = Vector{ODESystem}(undef, length(tss))
             # Note that the appended_parameters must agree with
