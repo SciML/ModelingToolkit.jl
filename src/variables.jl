@@ -102,7 +102,7 @@ isirreducible(x) = isvarkind(VariableIrreducible, x)
 state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))::Float64
 
 function default_toterm(x)
-    if istree(x) && (op = operation(x)) isa Operator
+    if iscall(x) && (op = operation(x)) isa Operator
         if !(op isa Differential)
             if op isa Shift && op.steps < 0
                 return x
@@ -232,7 +232,8 @@ ishistory(x) = ishistory(unwrap(x))
 ishistory(x::Symbolic) = getmetadata(x, IsHistory, false)
 hist(x, t) = wrap(hist(unwrap(x), t))
 function hist(x::Symbolic, t)
-    setmetadata(toparam(similarterm(x, operation(x), [unwrap(t)], metadata = metadata(x))),
+    setmetadata(
+        toparam(maketerm(typeof(x), operation(x), [unwrap(t)], symtype(x), metadata(x))),
         IsHistory, true)
 end
 

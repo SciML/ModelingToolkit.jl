@@ -48,7 +48,7 @@ function MTKParameters(
         Dict(default_toterm(unwrap(k)) => v for (k, v) in p))
     p = Dict(unwrap(k) => fixpoint_sub(v, p) for (k, v) in p)
     for (sym, _) in p
-        if istree(sym) && operation(sym) === getindex &&
+        if iscall(sym) && operation(sym) === getindex &&
            first(arguments(sym)) in all_ps
             error("Scalarized parameter values ($sym) are not supported. Instead of `[p[1] => 1.0, p[2] => 2.0]` use `[p => [1.0, 2.0]]`")
         end
@@ -64,7 +64,7 @@ function MTKParameters(
             haskey(p, ttsym) && continue
             hasname(ttsym) && haskey(p, getname(ttsym)) && continue
 
-            istree(sym) && operation(sym) === getindex && haskey(p, arguments(sym)[1]) &&
+            iscall(sym) && operation(sym) === getindex && haskey(p, arguments(sym)[1]) &&
                 continue
             push!(missing_params, sym)
         end

@@ -16,21 +16,21 @@ function make_operation(@nospecialize(op), args)
 end
 
 function detime_dvs(op)
-    if !istree(op)
+    if !iscall(op)
         op
     elseif issym(operation(op))
         Sym{Real}(nameof(operation(op)))
     else
-        similarterm(op, operation(op), detime_dvs.(arguments(op));
-            metadata = metadata(op))
+        maketerm(typeof(op), operation(op), detime_dvs.(arguments(op)),
+            symtype(op), metadata(op))
     end
 end
 
 function retime_dvs(op, dvs, iv)
     issym(op) && return Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(op))(iv)
-    istree(op) ?
-    similarterm(op, operation(op), retime_dvs.(arguments(op), (dvs,), (iv,));
-        metadata = metadata(op)) :
+    iscall(op) ?
+    maketerm(typeof(op), operation(op), retime_dvs.(arguments(op), (dvs,), (iv,)),
+        symtype(op), metadata(op)) :
     op
 end
 
@@ -188,7 +188,7 @@ end
 Get all the independent variables with respect to which differentials are taken.
 """
 function collect_ivs_from_nested_operator!(ivs, x, target_op)
-    if !istree(x)
+    if !iscall(x)
         return
     end
     op = operation(unwrap(x))
@@ -204,9 +204,9 @@ function collect_ivs_from_nested_operator!(ivs, x, target_op)
 end
 
 function iv_from_nested_derivative(x, op = Differential)
-    if istree(x) && operation(x) == getindex
+    if iscall(x) && operation(x) == getindex
         iv_from_nested_derivative(arguments(x)[1], op)
-    elseif istree(x)
+    elseif iscall(x)
         operation(x) isa op ? iv_from_nested_derivative(arguments(x)[1], op) :
         arguments(x)[1]
     elseif issym(x)
@@ -248,7 +248,7 @@ function collect_var_to_name!(vars, xs)
             hasname(xarr) || continue
             vars[Symbolics.getname(xarr)] = xarr
         else
-            if istree(x) && operation(x) === getindex
+            if iscall(x) && operation(x) === getindex
                 x = arguments(x)[1]
             end
             x = unwrap(x)
@@ -276,7 +276,7 @@ end
 Check if difference/derivative operation occurs in the R.H.S. of an equation
 """
 function _check_operator_variables(eq, op::T, expr = eq.rhs) where {T}
-    istree(expr) || return nothing
+    iscall(expr) || return nothing
     if operation(expr) isa op
         throw_invalid_operator(expr, eq, op)
     end
@@ -297,10 +297,10 @@ function check_operator_variables(eqs, op::T) where {T}
             if op === Differential
                 is_tmp_fine = isdifferential(x)
             else
-                is_tmp_fine = istree(x) && !(operation(x) isa op)
+                is_tmp_fine = iscall(x) && !(operation(x) isa op)
             end
         else
-            nd = count(x -> istree(x) && !(operation(x) isa op), tmp)
+            nd = count(x -> iscall(x) && !(operation(x) isa op), tmp)
             is_tmp_fine = iszero(nd)
         end
         is_tmp_fine ||
@@ -314,7 +314,7 @@ function check_operator_variables(eqs, op::T) where {T}
     end
 end
 
-isoperator(expr, op) = istree(expr) && operation(expr) isa op
+isoperator(expr, op) = iscall(expr) && operation(expr) isa op
 isoperator(op) = expr -> isoperator(expr, op)
 
 isdifferential(expr) = isoperator(expr, Differential)
@@ -345,7 +345,7 @@ v == Set([D(y), u])
 ```
 """
 function vars(exprs::Symbolic; op = Differential)
-    istree(exprs) ? vars([exprs]; op = op) : Set([exprs])
+    iscall(exprs) ? vars([exprs]; op = op) : Set([exprs])
 end
 vars(exprs::Num; op = Differential) = vars(unwrap(exprs); op)
 vars(exprs::Symbolics.Arr; op = Differential) = vars(unwrap(exprs); op)
@@ -358,13 +358,13 @@ function vars!(vars, O; op = Differential)
     if isvariable(O)
         return push!(vars, O)
     end
-    !istree(O) && return vars
+    !iscall(O) && return vars
 
     operation(O) isa op && return push!(vars, O)
 
     if operation(O) === (getindex)
         arr = first(arguments(O))
-        istree(arr) && operation(arr) isa op && return push!(vars, O)
+        iscall(arr) && operation(arr) isa op && return push!(vars, O)
         isvariable(arr) && return push!(vars, O)
     end
 
@@ -422,7 +422,7 @@ function collect_applied_operators(x, op)
     v = vars(x, op = op)
     filter(v) do x
         issym(x) && return false
-        istree(x) && return operation(x) isa op
+        iscall(x) && return operation(x) isa op
         false
     end
 end
@@ -431,7 +431,7 @@ function find_derivatives!(vars, expr::Equation, f = identity)
     (find_derivatives!(vars, expr.lhs, f); find_derivatives!(vars, expr.rhs, f); vars)
 end
 function find_derivatives!(vars, expr, f)
-    !istree(O) && return vars
+    !iscall(O) && return vars
     operation(O) isa Differential && push!(vars, f(O))
     for arg in arguments(O)
         vars!(vars, arg)
@@ -444,7 +444,7 @@ function collect_vars!(unknowns, parameters, expr, iv; op = Differential)
         collect_var!(unknowns, parameters, expr, iv)
     else
         for var in vars(expr; op)
-            if istree(var) && operation(var) isa Differential
+            if iscall(var) && operation(var) isa Differential
                 var, _ = var_from_nested_derivative(var)
             end
             collect_var!(unknowns, parameters, var, iv)
@@ -455,7 +455,7 @@ end
 
 function collect_var!(unknowns, parameters, var, iv)
     isequal(var, iv) && return nothing
-    if isparameter(var) || (istree(var) && isparameter(operation(var)))
+    if isparameter(var) || (iscall(var) && isparameter(operation(var)))
         push!(parameters, var)
     elseif !isconstant(var)
         push!(unknowns, var)
@@ -634,7 +634,7 @@ function promote_to_concrete(vs; tofloat = true, use_union = true)
     if Base.isconcretetype(T) && (!tofloat || T === float(T)) # nothing to do
         return vs
     else
-        sym_vs = filter(x -> SymbolicUtils.issym(x) || SymbolicUtils.istree(x), vs)
+        sym_vs = filter(x -> SymbolicUtils.issym(x) || SymbolicUtils.iscall(x), vs)
         isempty(sym_vs) || throw_missingvars_in_sys(sym_vs)
 
         C = nothing
@@ -794,9 +794,9 @@ function jacobian_wrt_vars(pf::F, p, input_idxs, chunk::C) where {F, C}
 end
 
 function fold_constants(ex)
-    if istree(ex)
-        similarterm(ex, operation(ex), map(fold_constants, arguments(ex)),
-            symtype(ex); metadata = metadata(ex))
+    if iscall(ex)
+        maketerm(typeof(ex), operation(ex), map(fold_constants, arguments(ex)),
+            symtype(ex), metadata(ex))
     elseif issym(ex) && isconstant(ex)
         getdefault(ex)
     else

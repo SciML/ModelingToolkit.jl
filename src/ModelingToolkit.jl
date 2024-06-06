@@ -9,7 +9,7 @@ using PrecompileTools, Reexport
 end
 
 import SymbolicUtils
-import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype,
+import SymbolicUtils: iscall, arguments, operation, maketerm, promote_symtype,
                       Symbolic, isadd, ismul, ispow, issym, FnType,
                       @rule, Rewriters, substitute, metadata, BasicSymbolic,
                       Sym, Term
@@ -59,7 +59,7 @@ using Symbolics: _parse_vars, value, @derivatives, get_variables,
                  exprs_occur_in, solve_for, build_expr, unwrap, wrap,
                  VariableSource, getname, variable, Connection, connect,
                  NAMESPACE_SEPARATOR, set_scalar_metadata, setdefaultval,
-                 initial_state, transition, activeState, entry,
+                 initial_state, transition, activeState, entry, hasnode,
                  ticksInState, timeInState, fixpoint_sub, fast_substitute
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   jacobian_sparsity, isaffine, islinear, _iszero, _isone,

@@ -39,7 +39,7 @@ end
 function (D::Shift)(x::Num, allow_zero = false)
     !allow_zero && D.steps == 0 && return x
     vt = value(x)
-    if istree(vt)
+    if iscall(vt)
         op = operation(vt)
         if op isa Sample
             error("Cannot shift a `Sample`. Create a variable to represent the sampled value and shift that instead")

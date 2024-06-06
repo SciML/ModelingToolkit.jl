@@ -315,7 +315,7 @@ function ODESystem(eqs, iv; kwargs...)
     end
     new_ps = OrderedSet()
     for p in ps
-        if istree(p) && operation(p) === getindex
+        if iscall(p) && operation(p) === getindex
             par = arguments(p)[begin]
             if Symbolics.shape(Symbolics.unwrap(par)) !== Symbolics.Unknown() &&
                all(par[i] in ps for i in eachindex(par))
@@ -402,16 +402,16 @@ function build_explicit_observed_function(sys, ts;
 
     sts = Set(unknowns(sys))
     sts = union(sts,
-        Set(arguments(st)[1] for st in sts if istree(st) && operation(st) === getindex))
+        Set(arguments(st)[1] for st in sts if iscall(st) && operation(st) === getindex))
 
     observed_idx = Dict(x.lhs => i for (i, x) in enumerate(obs))
     param_set = Set(parameters(sys))
     param_set = union(param_set,
-        Set(arguments(p)[1] for p in param_set if istree(p) && operation(p) === getindex))
+        Set(arguments(p)[1] for p in param_set if iscall(p) && operation(p) === getindex))
     param_set_ns = Set(unknowns(sys, p) for p in parameters(sys))
     param_set_ns = union(param_set_ns,
         Set(arguments(p)[1]
-        for p in param_set_ns if istree(p) && operation(p) === getindex))
+        for p in param_set_ns if iscall(p) && operation(p) === getindex))
     namespaced_to_obs = Dict(unknowns(sys, x.lhs) => x.lhs for x in obs)
     namespaced_to_sts = Dict(unknowns(sys, x) => x for x in unknowns(sys))
 
@@ -516,7 +516,7 @@ function convert_system(::Type{<:ODESystem}, sys, t; name = nameof(sys))
     sts = unknowns(sys)
     newsts = similar(sts, Any)
     for (i, s) in enumerate(sts)
-        if istree(s)
+        if iscall(s)
             args = arguments(s)
             length(args) == 1 ||
                 throw(InvalidSystemException("Illegal unknown: $s. The unknown can have at most one argument like `x(t)`."))
@@ -525,7 +525,8 @@ function convert_system(::Type{<:ODESystem}, sys, t; name = nameof(sys))
                 newsts[i] = s
                 continue
             end
-            ns = similarterm(s, operation(s), Any[t]; metadata = SymbolicUtils.metadata(s))
+            ns = maketerm(typeof(s), operation(s), Any[t],
+                SymbolicUtils.symtype(s), SymbolicUtils.metadata(s))
             newsts[i] = ns
             varmap[s] = ns
         else

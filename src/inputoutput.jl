@@ -19,8 +19,8 @@ function outputs(sys)
     lhss = [eq.lhs for eq in o]
     unique([filter(isoutput, unknowns(sys))
             filter(isoutput, parameters(sys))
-            filter(x -> istree(x) && isoutput(x), rhss) # observed can return equations with complicated expressions, we are only looking for single Terms
-            filter(x -> istree(x) && isoutput(x), lhss)])
+            filter(x -> iscall(x) && isoutput(x), rhss) # observed can return equations with complicated expressions, we are only looking for single Terms
+            filter(x -> iscall(x) && isoutput(x), lhss)])
 end
 
 """

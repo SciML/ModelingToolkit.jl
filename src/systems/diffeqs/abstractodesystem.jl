@@ -202,7 +202,7 @@ end
 function isdelay(var, iv)
     iv === nothing && return false
     isvariable(var) || return false
-    if istree(var) && !ModelingToolkit.isoperator(var, Symbolics.Operator)
+    if iscall(var) && !ModelingToolkit.isoperator(var, Symbolics.Operator)
         args = arguments(var)
         length(args) == 1 || return false
         isequal(args[1], iv) || return true
@@ -229,11 +229,11 @@ function delay_to_function(expr, iv, sts, ps, h)
         time = arguments(expr)[1]
         idx = sts[v]
         return term(getindex, h(Sym{Any}(:ˍ₋arg3), time), idx, type = Real) # BIG BIG HACK
-    elseif istree(expr)
-        return similarterm(expr,
+    elseif iscall(expr)
+        return maketerm(typeof(expr),
             operation(expr),
-            map(x -> delay_to_function(x, iv, sts, ps, h), arguments(expr));
-            metadata = metadata(expr))
+            map(x -> delay_to_function(x, iv, sts, ps, h), arguments(expr)),
+            symtype(expr), metadata(expr))
     else
         return expr
     end
@@ -244,7 +244,7 @@ function calculate_massmatrix(sys::AbstractODESystem; simplify = false)
     dvs = unknowns(sys)
     M = zeros(length(eqs), length(eqs))
     for (i, eq) in enumerate(eqs)
-        if istree(eq.lhs) && operation(eq.lhs) isa Differential
+        if iscall(eq.lhs) && operation(eq.lhs) isa Differential
             st = var_from_nested_derivative(eq.lhs)[1]
             j = variable_index(sys, st)
             M[i, j] = 1
@@ -1553,7 +1553,7 @@ InitializationProblem{iip}(sys::AbstractODESystem, u0map, tspan,
                            kwargs...) where {iip}
 ```
 
-Generates a NonlinearProblem or NonlinearLeastSquaresProblem from an ODESystem 
+Generates a NonlinearProblem or NonlinearLeastSquaresProblem from an ODESystem
 which represents the initialization, i.e. the calculation of the consistent
 initial conditions for the given DAE.
 """
