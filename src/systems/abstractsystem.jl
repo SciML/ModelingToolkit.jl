@@ -970,7 +970,7 @@ function parameters(sys::AbstractSystem)
     result = unique(isempty(systems) ? ps :
                     [ps; reduce(vcat, namespace_parameters.(systems))])
     if has_parameter_dependencies(sys) &&
-       (pdeps = get_parameter_dependencies(sys)) !== nothing
+       (pdeps = parameter_dependencies(sys)) !== nothing
         filter(result) do sym
             !haskey(pdeps, sym)
         end
@@ -2391,8 +2391,8 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
     eqs = union(get_eqs(basesys), get_eqs(sys))
     sts = union(get_unknowns(basesys), get_unknowns(sys))
     ps = union(get_ps(basesys), get_ps(sys))
-    base_deps = get_parameter_dependencies(basesys)
-    deps = get_parameter_dependencies(sys)
+    base_deps = parameter_dependencies(basesys)
+    deps = parameter_dependencies(sys)
     dep_ps = isnothing(base_deps) ? deps :
              isnothing(deps) ? base_deps : union(base_deps, deps)
     obs = union(get_observed(basesys), get_observed(sys))

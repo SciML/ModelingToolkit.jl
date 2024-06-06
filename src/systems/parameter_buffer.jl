@@ -136,7 +136,7 @@ function MTKParameters(
     nonnumeric_buffer = nonnumeric_buffer
 
     if has_parameter_dependencies(sys) &&
-       (pdeps = get_parameter_dependencies(sys)) !== nothing
+       (pdeps = parameter_dependencies(sys)) !== nothing
         pdeps = Dict(k => fixpoint_sub(v, pdeps) for (k, v) in pdeps)
         dep_exprs = ArrayPartition((Any[missing for _ in 1:length(v)] for v in dep_buffer)...)
         for (sym, val) in pdeps
