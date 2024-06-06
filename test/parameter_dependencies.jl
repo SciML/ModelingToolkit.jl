@@ -49,9 +49,28 @@ using NonlinearSolve
     @test integ.ps[p2] == 10.0
 end
 
+@testset "vector parameter deps" begin
+    @parameters p1[1:2]=[1.0, 2.0] p2[1:2]=[0.0, 0.0]
+    @variables x(t) = 0
+
+    @named sys = ODESystem(
+        [D(x) ~ sum(p1) * t + sum(p2)],
+        t;
+        parameter_dependencies = [p2 => 2p1]
+    )
+    prob = ODEProblem(complete(sys))
+    setp1! = setp(prob, p1)
+    get_p1 = getp(prob, p1)
+    get_p2 = getp(prob, p2)
+    setp1!(prob, [1.5, 2.5])
+
+    @test get_p1(prob) == [1.5, 2.5]
+    @test get_p2(prob) == [3.0, 5.0]
+end
+
 @testset "extend" begin
     @parameters p1=1.0 p2=1.0
-    @variables x(t)
+    @variables x(t) = 0
 
     @mtkbuild sys1 = ODESystem(
         [D(x) ~ p1 * t + p2],
@@ -65,6 +84,73 @@ end
     sys = extend(sys2, sys1)
     @test isequal(only(parameters(sys)), p1)
     @test Set(full_parameters(sys)) == Set([p1, p2])
+    prob = ODEProblem(complete(sys))
+    get_dep = getu(prob, 2p2)
+    @test get_dep(prob) == 4
+end
+
+@testset "getu with parameter deps" begin
+    @parameters p1=1.0 p2=1.0
+    @variables x(t) = 0
+
+    @named sys = ODESystem(
+        [D(x) ~ p1 * t + p2],
+        t;
+        parameter_dependencies = [p2 => 2p1]
+    )
+    prob = ODEProblem(complete(sys))
+    get_dep = getu(prob, 2p2)
+    @test get_dep(prob) == 4
+end
+
+@testset "getu with vector parameter deps" begin
+    @parameters p1[1:2]=[1.0, 2.0] p2[1:2]=[0.0, 0.0]
+    @variables x(t) = 0
+
+    @named sys = ODESystem(
+        [D(x) ~ sum(p1) * t + sum(p2)],
+        t;
+        parameter_dependencies = [p2 => 2p1]
+    )
+    prob = ODEProblem(complete(sys))
+    get_dep = getu(prob, 2p1)
+    @test get_dep(prob) == [2.0, 4.0]
+end
+
+@testset "composing systems with parameter deps" begin
+    @parameters p1=1.0 p2=2.0
+    @variables x(t) = 0
+
+    @mtkbuild sys1 = ODESystem(
+        [D(x) ~ p1 * t + p2],
+        t
+    )
+    @named sys2 = ODESystem(
+        [D(x) ~ p1 * t - p2],
+        t;
+        parameter_dependencies = [p2 => 2p1]
+    )
+    sys = complete(ODESystem([], t, systems = [sys1, sys2], name = :sys))
+
+    prob = ODEProblem(sys)
+    v1 = sys.sys2.p2
+    v2 = 2 * v1
+    @test is_parameter(prob, v1)
+    @test is_observed(prob, v2)
+    get_v1 = getu(prob, v1)
+    get_v2 = getu(prob, v2)
+    @test get_v1(prob) == 2
+    @test get_v2(prob) == 4
+
+    setp1! = setp(prob, sys2.p1)
+    setp1!(prob, 2.5)
+    @test prob.ps[sys2.p2] == 5.0
+
+    new_prob = remake(prob, p = [sys2.p1 => 1.5])
+
+    @test !isempty(ModelingToolkit.parameter_dependencies(sys2))
+    @test new_prob.ps[sys2.p1] == 1.5
+    @test new_prob.ps[sys2.p2] == 3.0
 end
 
 @testset "Clock system" begin

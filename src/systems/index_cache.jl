@@ -115,8 +115,8 @@ function IndexCache(sys::AbstractSystem)
         end
     end
 
-    if has_parameter_dependencies(sys) &&
-       (pdeps = get_parameter_dependencies(sys)) !== nothing
+    if has_parameter_dependencies(sys)
+        pdeps = parameter_dependencies(sys)
         for (sym, value) in pdeps
             sym = unwrap(sym)
             insert_by_type!(dependent_buffers, sym)
