@@ -241,7 +241,6 @@ end
 
 function calculate_massmatrix(sys::AbstractODESystem; simplify = false)
     eqs = [eq for eq in equations(sys)]
-    dvs = unknowns(sys)
     M = zeros(length(eqs), length(eqs))
     for (i, eq) in enumerate(eqs)
         if istree(eq.lhs) && operation(eq.lhs) isa Differential
