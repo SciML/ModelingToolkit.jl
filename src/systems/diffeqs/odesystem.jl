@@ -420,7 +420,10 @@ function build_explicit_observed_function(sys, ts;
     subs = Dict()
     maxidx = 0
     for s in dep_vars
-        if s in param_set || s in param_set_ns
+        if s in param_set || s in param_set_ns ||
+           iscall(s) &&
+           operation(s) === getindex &&
+           (arguments(s)[1] in param_set || arguments(s)[1] in param_set_ns)
             continue
         end
         idx = get(observed_idx, s, nothing)
