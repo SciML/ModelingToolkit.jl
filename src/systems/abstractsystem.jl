@@ -495,10 +495,18 @@ function SymbolicIndexingInterface.is_observed(sys::AbstractSystem, sym)
 end
 
 function SymbolicIndexingInterface.observed(sys::AbstractSystem, sym)
-    return let _fn = build_explicit_observed_function(sys, sym)
-        fn(u, p, t) = _fn(u, p, t)
-        fn(u, p::MTKParameters, t) = _fn(u, p..., t)
-        fn
+    if is_time_dependent(sys)
+        return let _fn = build_explicit_observed_function(sys, sym)
+            fn(u, p, t) = _fn(u, p, t)
+            fn(u, p::MTKParameters, t) = _fn(u, p..., t)
+            fn
+        end
+    else
+        return let _fn = build_explicit_observed_function(sys, sym)
+            fn2(u, p) = _fn(u, p)
+            fn2(u, p::MTKParameters) = _fn(u, p...)
+            fn2
+        end
     end
 end
 
@@ -1850,6 +1858,8 @@ function linearization_function(sys::AbstractSystem, inputs,
     end
     initfn = NonlinearFunction(initsys)
     initprobmap = getu(initsys, unknowns(sys))
+    initprob_init! = generate_initializeprob_init(sys, initsys)
+    initprob_update! = generate_initializeprob_update(sys, initsys)
     ps = full_parameters(sys)
     lin_fun = let diff_idxs = diff_idxs,
         alge_idxs = alge_idxs,
@@ -1857,7 +1867,8 @@ function linearization_function(sys::AbstractSystem, inputs,
         sts = unknowns(sys),
         get_initprob_u_p = get_initprob_u_p,
         fun = ODEFunction{true, SciMLBase.FullSpecialize}(
-            sys, unknowns(sys), ps; initializeprobmap = initprobmap),
+            sys, unknowns(sys), ps; initializeprob_init! = initprob_init!,
+            initializeprob_update! = initprob_update!),
         initfn = initfn,
         h = build_explicit_observed_function(sys, outputs),
         chunk = ForwardDiff.Chunk(input_idxs),
