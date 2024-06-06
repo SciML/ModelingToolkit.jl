@@ -2565,8 +2565,8 @@ is_diff_equation(eq2) # false
 """
 function is_diff_equation(eq)
     (eq isa Equation) || (return false)
-    isdefined(eq, :lhs) && hasnode(is_derivative, wrap(eq.lhs)) && (return true)
-    isdefined(eq, :rhs) && hasnode(is_derivative, wrap(eq.rhs)) && (return true)
+    isdefined(eq, :lhs) && SymbolicUtils.hasnode(is_derivative, wrap(eq.lhs)) && (return true)
+    isdefined(eq, :rhs) && SymbolicUtils.hasnode(is_derivative, wrap(eq.rhs)) && (return true)
     return false
 end
 
