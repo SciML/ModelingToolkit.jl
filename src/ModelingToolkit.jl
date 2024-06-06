@@ -10,7 +10,7 @@ end
 
 import SymbolicUtils
 import SymbolicUtils: iscall, arguments, operation, maketerm, promote_symtype,
-                      Symbolic, isadd, ismul, ispow, issym, FnType,
+                      hasnode, Symbolic, isadd, ismul, ispow, issym, FnType,
                       @rule, Rewriters, substitute, metadata, BasicSymbolic,
                       Sym, Term
 using SymbolicUtils.Code
