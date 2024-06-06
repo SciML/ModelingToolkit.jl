@@ -85,3 +85,19 @@ analytic_function = (ps, t, x) -> -ps[1] * x * (x - 1) * sin(x) * exp(-2 * ps[1]
 @test isequal(pdesys.ps, [h])
 @test isequal(parameter_symbols(pdesys), [h])
 @test isequal(parameters(pdesys), [h])
+
+# Issue#2767
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+using SymbolicIndexingInterface
+
+@parameters p1[1:2]=[1.0, 2.0] p2[1:2]=[0.0, 0.0]
+@variables x(t) = 0
+
+@named sys = ODESystem(
+    [D(x) ~ sum(p1) * t + sum(p2)],
+    t;
+)
+prob = ODEProblem(complete(sys))
+get_dep = @test_nowarn getu(prob, 2p1)
+@test get_dep(prob) == [2.0, 4.0]
