@@ -55,7 +55,7 @@ See also [`is_discrete_domain`](@ref)
 """
 function has_discrete_domain(x)
     issym(x) && return is_discrete_domain(x)
-    hasshift(x) || hassample(x) || hashold(x)
+    hasshift(x) || hassample(x) || hashold(x) || hasclockchange(x)
 end
 
 """
@@ -101,26 +101,29 @@ abstract type AbstractClock <: AbstractDiscrete end
 
 """
     Clock <: AbstractClock
-    Clock([t]; dt)
+    Clock([t]; dt, phase = 0)
 
 The default periodic clock with independent variables `t` and tick interval `dt`.
 If `dt` is left unspecified, it will be inferred (if possible).
+`phase` is an optional phase delay, such that the clock ticks at `(t_0 + phase : dt : t_final).
 """
 struct Clock <: AbstractClock
     "Independent variable"
     t::Union{Nothing, Symbolic}
     "Period"
     dt::Union{Nothing, Float64}
-    Clock(t::Union{Num, Symbolic}, dt = nothing) = new(value(t), dt)
-    Clock(t::Nothing, dt = nothing) = new(t, dt)
+    phase::Float64
+    Clock(t::Union{Num, Symbolic}, dt = nothing; phase = 0) = new(value(t), dt, phase)
+    Clock(t::Nothing, dt = nothing; phase = 0) = new(t, dt, phase)
 end
-Clock(dt::Real) = Clock(nothing, dt)
-Clock() = Clock(nothing, nothing)
+Clock(dt::Real; phase = 0) = Clock(nothing, dt, phase)
+Clock() = Clock(nothing, nothing, 0)
 
 sampletime(c) = isdefined(c, :dt) ? c.dt : nothing
-Base.hash(c::Clock, seed::UInt) = hash(c.dt, seed ⊻ 0x953d7a9a18874b90)
+Base.hash(c::Clock, seed::UInt) = hash(c.phase, hash(c.dt, seed ⊻ 0x953d7a9a18874b90))
 function Base.:(==)(c1::Clock, c2::Clock)
-    ((c1.t === nothing || c2.t === nothing) || isequal(c1.t, c2.t)) && c1.dt == c2.dt
+    ((c1.t === nothing || c2.t === nothing) || isequal(c1.t, c2.t)) && c1.dt == c2.dt &&
+        c1.phase == c2.phase
 end
 
 is_concrete_time_domain(x) = x isa Union{AbstractClock, Continuous}

@@ -528,3 +528,50 @@ prob = ODEProblem(sys, [], (0.0, 10.0), [x(k - 1) => 2.0])
 int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
 @test int.ps[x] == 3.0
 @test int.ps[x(k - 1)] == 2.0
+
+## ClockChange
+using ModelingToolkit: D_nounits as D
+k1 = ShiftIndex(Clock(t, 1; phase = 100eps())) # TODO: this should not be required
+k2 = ShiftIndex(Clock(t, 2))
+@mtkmodel CC begin
+    @variables begin
+        x(t) = 0
+        y(t) = 0
+        dummy(t) = 0
+    end
+    @equations begin
+        x(k1) ~ x(k1 - 1) + ClockChange(from = k2.clock, to = k1.clock)(y(k2))
+        y(k2) ~ y(k2 - 1) + 1
+        D(dummy) ~ 0
+    end
+end
+@mtkbuild cc = CC()
+prob = ODEProblem(cc, [], (0, 10.1))  # TODO: delaying end point by 0.1 should not be required without phase shift
+sol = solve(prob, Tsit5(); kwargshandle = KeywordArgSilent)
+d1 = reduce(vcat, sol.prob.kwargs[:disc_saved_values][1].saveval)
+d2 = reduce(vcat, sol.prob.kwargs[:disc_saved_values][2].saveval)
+
+if length(d1) < length(d2)
+    d1, d2 = d2, d1
+end
+
+@test d2 == 1:6 # y
+
+# Manual implementation of the dynamics
+function manualtest()
+    x, y = 0, 0
+    X = [[x, y]] # xy
+    ti = 0
+    for ti in 0:10
+        i = ti + 1
+        if ti % 2 == 0
+            y = y + 1
+        end
+        x = x + y
+
+        @test d1[i] == x
+        push!(X, [x, y])
+    end
+    X
+end
+X = manualtest()
