@@ -790,7 +790,8 @@ function get_u0_p(sys,
             @warn "Observed variables cannot be assigned initial values. Initial values for $u0s_in_obs will be ignored."
         end
     end
-    observedmap = todict(map(x -> x.rhs => x.lhs, observed(sys)))
+    obs = filter!(x->!(x[1] isa Number), map(x -> x.rhs => x.lhs, observed(sys)))
+    observedmap = isempty(obs) ? Dict() : todict(obs)
     defs = mergedefaults(defs, observedmap, u0map, dvs)
     for (k, v) in defs
         if Symbolics.isarraysymbolic(k)
@@ -822,7 +823,7 @@ function get_u0(
     if parammap !== nothing
         defs = mergedefaults(defs, parammap, ps)
     end
-    obs = map(x -> x.rhs => x.lhs, observed(sys))
+    obs = filter!(x->!(x[1] isa Number), map(x -> x.rhs => x.lhs, observed(sys)))
     observedmap = isempty(obs) ? Dict() : todict(obs)
     defs = mergedefaults(defs, observedmap, u0map, dvs)
     if symbolic_u0
@@ -1640,6 +1641,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     if isempty(guesses)
         guesses = Dict()
     end
+
     u0map = merge(todict(guesses), todict(u0map))
     if neqs == nunknown
         NonlinearProblem(isys, u0map, parammap)
