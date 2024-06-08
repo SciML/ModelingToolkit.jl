@@ -38,6 +38,7 @@ end
             @safetestset "DDESystem Test" include("dde.jl")
             @safetestset "NonlinearSystem Test" include("nonlinearsystem.jl")
             @safetestset "InitializationSystem Test" include("initializationsystem.jl")
+            @safetestset "Guess Propagation" include("guess_propagation.jl")
             @safetestset "Hierarchical Initialization Equations" include("hierarchical_initialization_eqs.jl")
             @safetestset "PDE Construction Test" include("pde.jl")
             @safetestset "JumpSystem Test" include("jumpsystem.jl")

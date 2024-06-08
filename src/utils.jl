@@ -617,6 +617,18 @@ function mergedefaults(defaults, varmap, vars)
     end
 end
 
+function mergedefaults(defaults, observedmap, varmap, vars)
+    defs = if varmap isa Dict
+        merge(observedmap, defaults, varmap)
+    elseif eltype(varmap) <: Pair
+        merge(observedmap, defaults, Dict(varmap))
+    elseif eltype(varmap) <: Number
+        merge(observedmap, defaults, Dict(zip(vars, varmap)))
+    else
+        merge(observedmap, defaults)
+    end
+end
+
 @noinline function throw_missingvars_in_sys(vars)
     throw(ArgumentError("$vars are either missing from the variable map or missing from the system's unknowns/parameters list."))
 end
