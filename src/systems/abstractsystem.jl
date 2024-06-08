@@ -905,13 +905,6 @@ function namespace_equation(eq::Equation,
     _lhs ~ _rhs
 end
 
-function namespace_initialization_equations(
-        sys::AbstractSystem, ivs = independent_variables(sys))
-    eqs = initialization_equations(sys)
-    isempty(eqs) && return Equation[]
-    map(eq -> namespace_equation(eq, sys; ivs), eqs)
-end
-
 function namespace_assignment(eq::Assignment, sys)
     _lhs = namespace_expr(eq.lhs, sys)
     _rhs = namespace_expr(eq.rhs, sys)
