@@ -103,8 +103,9 @@ function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem,
     # Converts the input state guess.
     u0_bif_vals = ModelingToolkit.varmap_to_vars(u0_bif,
         unknowns(nsys);
-        defaults = nsys.defaults)
-    p_vals = ModelingToolkit.varmap_to_vars(ps, parameters(nsys); defaults = nsys.defaults)
+        defaults = get_defaults(nsys))
+    p_vals = ModelingToolkit.varmap_to_vars(
+        ps, parameters(nsys); defaults = get_defaults(nsys))
 
     # Computes bifurcation parameter and the plotting function.
     bif_idx = findfirst(isequal(bif_par), parameters(nsys))
