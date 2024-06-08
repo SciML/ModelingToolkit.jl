@@ -27,7 +27,7 @@ struct ObservableRecordFromSolution{S, T}
             plot_var,
             bif_idx,
             u0_vals,
-            p_vals) where {S, T}
+            p_vals)
         obs_eqs = observed(nsys)
         target_obs_idx = findfirst(isequal(plot_var, eq.lhs) for eq in observed(nsys))
         state_end_idxs = length(unknowns(nsys))
