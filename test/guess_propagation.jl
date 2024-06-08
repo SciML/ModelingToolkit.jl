@@ -17,7 +17,7 @@ prob = ODEProblem(sys, [], tspan, [])
 
 @test prob.f.initializeprob[y] == 2.0
 @test prob.f.initializeprob[x] == 2.0
-sol = solve(prob.f.initializeprob; show_trace=Val(true))
+sol = solve(prob.f.initializeprob; show_trace = Val(true))
 
 # Guess via observed
 
@@ -34,7 +34,7 @@ prob = ODEProblem(sys, [], tspan, [])
 
 @test prob.f.initializeprob[x] == 2.0
 @test prob.f.initializeprob[y] == 2.0
-sol = solve(prob.f.initializeprob; show_trace=Val(true))
+sol = solve(prob.f.initializeprob; show_trace = Val(true))
 
 # Guess via parameter
 
@@ -52,7 +52,7 @@ tspan = (0.0, 0.2)
 prob = ODEProblem(sys, [], tspan, [])
 
 @test prob.f.initializeprob[x] == -1.0
-sol = solve(prob.f.initializeprob; show_trace=Val(true))
+sol = solve(prob.f.initializeprob; show_trace = Val(true))
 
 # Guess via observed parameter
 
@@ -61,7 +61,7 @@ sol = solve(prob.f.initializeprob; show_trace=Val(true))
 @variables y(t) [guess = a]
 
 eqs = [D(x) ~ a,
-       y ~ x]
+    y ~ x]
 
 initialization_eqs = [1 ~ exp(1 + x)]
 
@@ -72,4 +72,4 @@ tspan = (0.0, 0.2)
 prob = ODEProblem(sys, [], tspan, [])
 
 @test prob.f.initializeprob[x] == -1.0
-sol = solve(prob.f.initializeprob; show_trace=Val(true))
+sol = solve(prob.f.initializeprob; show_trace = Val(true))
