@@ -2341,11 +2341,11 @@ function Base.showerror(io::IO, e::ExtraEquationsSystemException)
     print(io, "ExtraEquationsSystemException: ", e.msg)
 end
 
-struct HybridSystemNotSupportedExcpetion <: Exception
+struct HybridSystemNotSupportedException <: Exception
     msg::String
 end
-function Base.showerror(io::IO, e::HybridSystemNotSupportedExcpetion)
-    print(io, "HybridSystemNotSupportedExcpetion: ", e.msg)
+function Base.showerror(io::IO, e::HybridSystemNotSupportedException)
+    print(io, "HybridSystemNotSupportedException: ", e.msg)
 end
 
 function AbstractTrees.children(sys::ModelingToolkit.AbstractSystem)

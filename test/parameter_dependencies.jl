@@ -167,7 +167,7 @@ end
            D(x) ~ -x + u
            y ~ x
            z(k) ~ z(k - 2) + yd(k - 2)]
-    @test_throws ModelingToolkit.HybridSystemNotSupportedExcpetion @mtkbuild sys = ODESystem(
+    @test_throws ModelingToolkit.HybridSystemNotSupportedException @mtkbuild sys = ODESystem(
         eqs, t; parameter_dependencies = [kq => 2kp])
 
     @test_skip begin

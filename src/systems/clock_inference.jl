@@ -21,9 +21,9 @@ function ClockInference(ts::TransformationState)
     ClockInference(ts, eq_domain, var_domain, inferred)
 end
 
-struct NotInferedTimeDomain end
+struct NotInferredTimeDomain end
 function error_sample_time(eq)
-    error("$eq\ncontains `SampleTime` but it is not an infered discrete equation.")
+    error("$eq\ncontains `SampleTime` but it is not an Inferred discrete equation.")
 end
 function substitute_sample_time(ci::ClockInference, ts::TearingState)
     @unpack eq_domain = ci
@@ -34,7 +34,7 @@ function substitute_sample_time(ci::ClockInference, ts::TearingState)
         domain = eq_domain[i]
         dt = sampletime(domain)
         neweq = substitute_sample_time(eq, dt)
-        if neweq isa NotInferedTimeDomain
+        if neweq isa NotInferredTimeDomain
             error_sample_time(eq)
         end
         eqs[i] = neweq
@@ -52,13 +52,13 @@ function substitute_sample_time(ex, dt)
     op = operation(ex)
     args = arguments(ex)
     if op == SampleTime
-        dt === nothing && return NotInferedTimeDomain()
+        dt === nothing && return NotInferredTimeDomain()
         return dt
     else
         new_args = similar(args)
         for (i, arg) in enumerate(args)
             ex_arg = substitute_sample_time(arg, dt)
-            if ex_arg isa NotInferedTimeDomain
+            if ex_arg isa NotInferredTimeDomain
                 return ex_arg
             end
             new_args[i] = ex_arg

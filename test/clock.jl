@@ -105,7 +105,7 @@ eqs = [yd ~ Sample(t, dt)(y)
        D(x) ~ -x + u
        y ~ x]
 @named sys = ODESystem(eqs, t)
-@test_throws ModelingToolkit.HybridSystemNotSupportedExcpetion ss=structural_simplify(sys);
+@test_throws ModelingToolkit.HybridSystemNotSupportedException ss=structural_simplify(sys);
 
 @test_skip begin
     Tf = 1.0
@@ -500,10 +500,10 @@ eqs = [yd ~ Sample(t, dt)(y)
     @mtkmodel FirstOrderWithStepCounter begin
         @components begin
             counter = CounterSys()
-            fo = FirstOrderSys()
+            firstorder = FirstOrderSys()
         end
         @equations begin
-            counter.u ~ fo.x
+            counter.u ~ firstorder.x
         end
     end
 
@@ -511,7 +511,7 @@ eqs = [yd ~ Sample(t, dt)(y)
     prob = ODEProblem(model, [], (0.0, 10.0))
     sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 
-    @test sol.prob.kwargs[:disc_saved_values][1].t == sol.t[1:2:end] # Test that the discrete-tiem system executed at every step of the continuous solver. The solver saves each time step twice, one state value before discrete affect and one after.
+    @test sol.prob.kwargs[:disc_saved_values][1].t == sol.t[1:2:end] # Test that the discrete-time system executed at every step of the continuous solver. The solver saves each time step twice, one state value before discrete affect and one after.
     @test_nowarn ModelingToolkit.build_explicit_observed_function(
         model, model.counter.ud)(sol.u[1], prob.p..., sol.t[1])
 
