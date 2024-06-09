@@ -73,3 +73,38 @@ prob = ODEProblem(sys, [], tspan, [])
 
 @test prob.f.initializeprob[x] == -1.0
 sol = solve(prob.f.initializeprob; show_trace = Val(true))
+
+# Test parameters + defaults
+# https://github.com/SciML/ModelingToolkit.jl/issues/2774
+
+@parameters x0
+@variables x(t)
+@variables y(t) = x
+@mtkbuild sys = ODESystem([x ~ x0, D(y) ~ x], t)
+prob = ODEProblem(sys, [], (0.0, 1.0), [x0 => 1.0])
+@test prob[x] == 1.0
+@test prob[y] == 1.0
+
+@parameters x0
+@variables x(t)
+@variables y(t) = x0
+@mtkbuild sys = ODESystem([x ~ x0, D(y) ~ x], t)
+prob = ODEProblem(sys, [], (0.0, 1.0), [x0 => 1.0])
+prob[x] == 1.0
+prob[y] == 1.0
+
+@parameters x0
+@variables x(t)
+@variables y(t) = x0
+@mtkbuild sys = ODESystem([x ~ y, D(y) ~ x], t)
+prob = ODEProblem(sys, [], (0.0, 1.0), [x0 => 1.0])
+prob[x] == 1.0
+prob[y] == 1.0
+
+@parameters x0
+@variables x(t) = x0
+@variables y(t) = x
+@mtkbuild sys = ODESystem([x ~ y, D(y) ~ x], t)
+prob = ODEProblem(sys, [], (0.0, 1.0), [x0 => 1.0])
+prob[x] == 1.0
+prob[y] == 1.0
