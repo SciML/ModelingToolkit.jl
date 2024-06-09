@@ -31,7 +31,7 @@ function generate_initializesystem(sys::ODESystem;
     schedule = getfield(sys, :schedule)
 
     if schedule !== nothing
-        guessmap = [x[2] => get(guesses, x[1], default_dd_value)
+        guessmap = [x[1] => get(guesses, x[1], default_dd_value)
                     for x in schedule.dummy_sub]
         dd_guess = Dict(filter(x -> !isnothing(x[1]), guessmap))
         if u0map === nothing || isempty(u0map)
