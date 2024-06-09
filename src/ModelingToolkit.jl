@@ -102,7 +102,7 @@ for fun in [:toexpr]
     end
 end
 
-1+1
+1 + 1
 
 """
 $(TYPEDEF)
