@@ -43,10 +43,10 @@ function MTKParameters(
     end
     defs = merge(defs, u0)
     defs = merge(Dict(eq.lhs => eq.rhs for eq in observed(sys)), defs)
-    p = merge(defs, p)
+    bigdefs = merge(defs, p)
     p = merge(Dict(unwrap(k) => v for (k, v) in p),
         Dict(default_toterm(unwrap(k)) => v for (k, v) in p))
-    p = Dict(unwrap(k) => fixpoint_sub(v, p) for (k, v) in p)
+    p = Dict(unwrap(k) => fixpoint_sub(v, bigdefs) for (k, v) in p)
     for (sym, _) in p
         if iscall(sym) && operation(sym) === getindex &&
            first(arguments(sym)) in all_ps
