@@ -853,6 +853,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         t = nothing,
         warn_initialize_determined = true,
         build_initializeprob = true,
+        initialization_eqs = [],
         kwargs...)
     eqs = equations(sys)
     dvs = unknowns(sys)
@@ -925,7 +926,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
             u0map = Dict()
         end
         initializeprob = ModelingToolkit.InitializationProblem(
-            sys, t, u0map, parammap; guesses, warn_initialize_determined)
+            sys, t, u0map, parammap; guesses, warn_initialize_determined, initialization_eqs)
         initializeprobmap = getu(initializeprob, unknowns(sys))
 
         zerovars = Dict(setdiff(unknowns(sys), keys(defaults(sys))) .=> 0.0)
@@ -1555,6 +1556,7 @@ InitializationProblem{iip}(sys::AbstractODESystem, u0map, tspan,
                            checkbounds = false, sparse = false,
                            simplify = false,
                            linenumbers = true, parallel = SerialForm(),
+                           initialization_eqs = [],
                            kwargs...) where {iip}
 ```
 
@@ -1603,17 +1605,19 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         guesses = [],
         check_length = true,
         warn_initialize_determined = true,
+        initialization_eqs = [],
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
     end
     if isempty(u0map) && get_initializesystem(sys) !== nothing
-        isys = get_initializesystem(sys)
+        isys = get_initializesystem(sys; initialization_eqs)
     elseif isempty(u0map) && get_initializesystem(sys) === nothing
-        isys = structural_simplify(generate_initializesystem(sys); fully_determined = false)
+        isys = structural_simplify(
+            generate_initializesystem(sys; initialization_eqs); fully_determined = false)
     else
         isys = structural_simplify(
-            generate_initializesystem(sys; u0map); fully_determined = false)
+            generate_initializesystem(sys; u0map, initialization_eqs); fully_determined = false)
     end
 
     uninit = setdiff(unknowns(sys), [unknowns(isys); getfield.(observed(isys), :lhs)])

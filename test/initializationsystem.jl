@@ -430,3 +430,16 @@ sol = solve(prob, Tsit5())
 
 # This should warn, but logging tests can't be marked as broken
 @test_logs prob = ODEProblem(simpsys, [], tspan, guesses = [x => 2.0])
+
+# Late Binding initialization_eqs
+# https://github.com/SciML/ModelingToolkit.jl/issues/2787
+
+@parameters g
+@variables x(t) y(t) [state_priority = 10] λ(t)
+eqs = [D(D(x)) ~ λ * x
+       D(D(y)) ~ λ * y - g
+       x^2 + y^2 ~ 1]
+@mtkbuild pend = ODESystem(eqs, t)
+
+prob = ODEProblem(pend, [x => 1], (0.0, 1.5), [g => 1],
+    guesses = [λ => 0, y => 1], initialization_eqs = [y ~ 1])
