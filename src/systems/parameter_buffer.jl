@@ -44,8 +44,42 @@ function MTKParameters(
     defs = merge(defs, u0)
     defs = merge(Dict(eq.lhs => eq.rhs for eq in observed(sys)), defs)
     bigdefs = merge(defs, p)
-    p = merge(Dict(unwrap(k) => v for (k, v) in p),
-        Dict(default_toterm(unwrap(k)) => v for (k, v) in p))
+    p = Dict()
+    missing_params = Set()
+
+    for sym in all_ps
+        ttsym = default_toterm(sym)
+        isarr = iscall(sym) && operation(sym) === getindex
+        arrparent = isarr ? arguments(sym)[1] : nothing
+        ttarrparent = isarr ? default_toterm(arrparent) : nothing
+        pname = hasname(sym) ? getname(sym) : nothing
+        ttpname = hasname(ttsym) ? getname(ttsym) : nothing
+        p[sym] = p[ttsym] = if haskey(bigdefs, sym)
+            bigdefs[sym]
+        elseif haskey(bigdefs, ttsym)
+            bigdefs[ttsym]
+        elseif haskey(bigdefs, pname)
+            isarr ? bigdefs[pname][arguments(sym)[2:end]...] : bigdefs[pname]
+        elseif haskey(bigdefs, ttpname)
+            isarr ? bigdefs[ttpname][arguments(sym)[2:end]...] : bigdefs[pname]
+        elseif isarr && haskey(bigdefs, arrparent)
+            bigdefs[arrparent][arguments(sym)[2:end]...]
+        elseif isarr && haskey(bigdefs, ttarrparent)
+            bigdefs[ttarrparent][arguments(sym)[2:end]...]
+        end
+        if get(p, sym, nothing) === nothing
+            push!(missing_params, sym)
+            continue
+        end
+        # We may encounter the `ttsym` version first, add it to `missing_params`
+        # then encounter the "normal" version of a parameter or vice versa
+        # Remove the old one in `missing_params` just in case
+        delete!(missing_params, sym)
+        delete!(missing_params, ttsym)
+    end
+
+    isempty(missing_params) || throw(MissingParametersError(collect(missing_params)))
+
     p = Dict(unwrap(k) => fixpoint_sub(v, bigdefs) for (k, v) in p)
     for (sym, _) in p
         if iscall(sym) && operation(sym) === getindex &&
@@ -53,24 +87,6 @@ function MTKParameters(
             error("Scalarized parameter values ($sym) are not supported. Instead of `[p[1] => 1.0, p[2] => 2.0]` use `[p => [1.0, 2.0]]`")
         end
     end
-
-    missing_params = Set()
-    for idxmap in (ic.tunable_idx, ic.discrete_idx, ic.constant_idx, ic.nonnumeric_idx)
-        for sym in keys(idxmap)
-            sym isa Symbol && continue
-            haskey(p, sym) && continue
-            hasname(sym) && haskey(p, getname(sym)) && continue
-            ttsym = default_toterm(sym)
-            haskey(p, ttsym) && continue
-            hasname(ttsym) && haskey(p, getname(ttsym)) && continue
-
-            iscall(sym) && operation(sym) === getindex && haskey(p, arguments(sym)[1]) &&
-                continue
-            push!(missing_params, sym)
-        end
-    end
-
-    isempty(missing_params) || throw(MissingParametersError(collect(missing_params)))
 
     tunable_buffer = Tuple(Vector{temp.type}(undef, temp.length)
     for temp in ic.tunable_buffer_sizes)
