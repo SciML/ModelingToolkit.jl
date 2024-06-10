@@ -2229,7 +2229,7 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
     u0, defs = get_u0(sys, x0, p)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         if p isa SciMLBase.NullParameters
-            p = Dict()
+            p = op
         elseif p isa Dict
             p = merge(p, op)
         elseif p isa Vector && eltype(p) <: Pair
