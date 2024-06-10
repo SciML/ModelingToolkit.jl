@@ -441,4 +441,5 @@ eqs = [D(D(x)) ~ λ * x
        x^2 + y^2 ~ 1]
 @mtkbuild pend = ODESystem(eqs, t)
 
-prob = ODEProblem(pend, [x => 1], (0.0, 1.5), [g => 1], guesses = [λ => 0, y => 1], initialization_eqs = [y ~ 1])
+prob = ODEProblem(pend, [x => 1], (0.0, 1.5), [g => 1],
+    guesses = [λ => 0, y => 1], initialization_eqs = [y ~ 1])

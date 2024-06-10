@@ -1613,7 +1613,8 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     if isempty(u0map) && get_initializesystem(sys) !== nothing
         isys = get_initializesystem(sys; initialization_eqs)
     elseif isempty(u0map) && get_initializesystem(sys) === nothing
-        isys = structural_simplify(generate_initializesystem(sys; initialization_eqs); fully_determined = false)
+        isys = structural_simplify(
+            generate_initializesystem(sys; initialization_eqs); fully_determined = false)
     else
         isys = structural_simplify(
             generate_initializesystem(sys; u0map, initialization_eqs); fully_determined = false)
