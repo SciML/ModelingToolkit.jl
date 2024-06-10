@@ -46,6 +46,7 @@ function MTKParameters(
     bigdefs = merge(defs, p)
     p = Dict()
     missing_params = Set()
+    pdeps = has_parameter_dependencies(sys) ? parameter_dependencies(sys) : nothing
 
     for sym in all_ps
         ttsym = default_toterm(sym)
@@ -76,6 +77,16 @@ function MTKParameters(
         # Remove the old one in `missing_params` just in case
         delete!(missing_params, sym)
         delete!(missing_params, ttsym)
+    end
+
+    if pdeps !== nothing
+        for (sym, expr) in pdeps
+            sym = unwrap(sym)
+            ttsym = default_toterm(sym)
+            delete!(missing_params, sym)
+            delete!(missing_params, ttsym)
+            p[sym] = p[ttsym] = expr
+        end
     end
 
     isempty(missing_params) || throw(MissingParametersError(collect(missing_params)))
@@ -151,8 +162,7 @@ function MTKParameters(
     # Don't narrow nonnumeric types
     nonnumeric_buffer = nonnumeric_buffer
 
-    if has_parameter_dependencies(sys) &&
-       (pdeps = parameter_dependencies(sys)) !== nothing
+    if pdeps !== nothing
         pdeps = Dict(k => fixpoint_sub(v, pdeps) for (k, v) in pdeps)
         dep_exprs = ArrayPartition((Any[missing for _ in 1:length(v)] for v in dep_buffer)...)
         for (sym, val) in pdeps
