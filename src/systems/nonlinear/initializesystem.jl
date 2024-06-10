@@ -9,6 +9,7 @@ function generate_initializesystem(sys::ODESystem;
         guesses = Dict(), check_defguess = false,
         default_dd_value = 0.0,
         algebraic_only = false,
+        initialization_eqs = [],
         kwargs...)
     sts, eqs = unknowns(sys), equations(sys)
     idxs_diff = isdiffeq.(eqs)
@@ -95,7 +96,7 @@ function generate_initializesystem(sys::ODESystem;
     nleqs = if algebraic_only
         [eqs_ics; observed(sys)]
     else
-        [eqs_ics; get_initialization_eqs(sys); observed(sys)]
+        [eqs_ics; get_initialization_eqs(sys); initialization_eqs; observed(sys)]
     end
 
     sys_nl = NonlinearSystem(nleqs,

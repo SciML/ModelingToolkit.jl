@@ -394,6 +394,7 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
     eqs = equations(sys)
     dvs = unknowns(sys)
     ps = full_parameters(sys)
+    Main.isys[] = sys
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         u0, defs = get_u0(sys, u0map, parammap)
         check_eqs_u0(eqs, dvs, u0; kwargs...)
