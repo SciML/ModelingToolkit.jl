@@ -495,10 +495,40 @@ function SymbolicIndexingInterface.is_observed(sys::AbstractSystem, sym)
 end
 
 function SymbolicIndexingInterface.observed(sys::AbstractSystem, sym)
-    return let _fn = build_explicit_observed_function(sys, sym)
-        fn(u, p, t) = _fn(u, p, t)
-        fn(u, p::MTKParameters, t) = _fn(u, p..., t)
-        fn
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+        if sym isa Symbol
+            _sym = get(ic.symbol_to_variable, sym, nothing)
+            if _sym === nothing
+                throw(ArgumentError("Symbol $sym does not exist in the system"))
+            end
+            sym = _sym
+        elseif sym isa AbstractArray && symbolic_type(sym) isa NotSymbolic &&
+               any(x -> x isa Symbol, sym)
+            sym = map(sym) do s
+                if s isa Symbol
+                    _s = get(ic.symbol_to_variable, s, nothing)
+                    if _s === nothing
+                        throw(ArgumentError("Symbol $s does not exist in the system"))
+                    end
+                    return _s
+                end
+                return unwrap(s)
+            end
+        end
+    end
+    _fn = build_explicit_observed_function(sys, sym)
+    if is_time_dependent(sys)
+        return let _fn = _fn
+            fn1(u, p, t) = _fn(u, p, t)
+            fn1(u, p::MTKParameters, t) = _fn(u, p..., t)
+            fn1
+        end
+    else
+        return let _fn = _fn
+            fn2(u, p) = _fn(u, p)
+            fn2(u, p::MTKParameters) = _fn(u, p...)
+            fn2
+        end
     end
 end
 

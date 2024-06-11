@@ -80,6 +80,12 @@ function IndexCache(sys::AbstractSystem)
         end
     end
 
+    for eq in observed(sys)
+        if symbolic_type(eq.lhs) != NotSymbolic() && hasname(eq.lhs)
+            symbol_to_variable[getname(eq.lhs)] = eq.lhs
+        end
+    end
+
     disc_buffers = Dict{Any, Set{BasicSymbolic}}()
     tunable_buffers = Dict{Any, Set{BasicSymbolic}}()
     constant_buffers = Dict{Any, Set{BasicSymbolic}}()
