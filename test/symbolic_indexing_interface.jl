@@ -101,3 +101,16 @@ using SymbolicIndexingInterface
 prob = ODEProblem(complete(sys))
 get_dep = @test_nowarn getu(prob, 2p1)
 @test get_dep(prob) == [2.0, 4.0]
+
+@testset "Observed functions with variables as `Symbol`s" begin
+    @variables x(t) y(t) z(t)[1:2]
+    @parameters p1 p2[1:2, 1:2]
+    @mtkbuild sys = ODESystem([D(x) ~ x * t + p1, y ~ 2x, D(z) ~ p2 * z], t)
+    prob = ODEProblem(
+        sys, [x => 1.0, z => ones(2)], (0.0, 1.0), [p1 => 2.0, p2 => ones(2, 2)])
+    @test getu(prob, x)(prob) == getu(prob, :x)(prob)
+    @test getu(prob, [x, y])(prob) == getu(prob, [:x, :y])(prob)
+    @test getu(prob, z)(prob) == getu(prob, :z)(prob)
+    @test getu(prob, p1)(prob) == getu(prob, :p1)(prob)
+    @test getu(prob, p2)(prob) == getu(prob, :p2)(prob)
+end
