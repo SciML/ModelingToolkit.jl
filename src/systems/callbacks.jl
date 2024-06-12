@@ -512,6 +512,24 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = unknow
     end
 end
 
+# Put a wrapper on NamedTuple so that u.resistor.v indexes like u.var"resistor.v"
+# Required for hierarchical, but a hack that should be fixed in the future
+struct NamedTupleSymbolFix{T}
+    x::T
+    sym::Symbol
+
+end
+NamedTupleSymbolFix(x) = NamedTupleSymbolFix(x, Symbol(""))
+function Base.getproperty(u::NamedTupleSymbolFix, s::Symbol)
+    newsym = getfield(u,:sym) == Symbol("") ? s : Symbol(getfield(u,:sym), ".", s)
+    x = getfield(u,:x)
+    if newsym in keys(x)
+        getproperty(x, newsym)
+    else
+        NamedTupleSymbolFix(x, newsym)
+    end
+end
+
 function compile_user_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
     dvs_ind = Dict(reverse(en) for en in enumerate(dvs))
     v_inds = map(sym -> dvs_ind[sym], unknowns(affect))
@@ -526,9 +544,10 @@ function compile_user_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
     # HACK: filter out eliminated symbols. Not clear this is the right thing to do
     # (MTK should keep these symbols)
     u = filter(x -> !isnothing(x[2]), collect(zip(unknowns_syms(affect), v_inds))) |>
-        NamedTuple
+        NamedTuple |> NamedTupleSymbolFix
+
     p = filter(x -> !isnothing(x[2]), collect(zip(parameters_syms(affect), p_inds))) |>
-        NamedTuple
+        NamedTuple |> NamedTupleSymbolFix
 
     let u = u, p = p, user_affect = func(affect), ctx = context(affect)
         function (integ)

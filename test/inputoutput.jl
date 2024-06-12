@@ -19,8 +19,8 @@ connected = ODESystem(Equation[], t, [], [], observed = connections,
 
 sys = connected
 
-@variables lorenz1₊F lorenz2₊F
-@test pins(connected) == Variable[lorenz1₊F, lorenz2₊F]
+@variables lorenz1.F lorenz2.F
+@test pins(connected) == Variable[lorenz1.F, lorenz2.F]
 @test isequal(observed(connected),
     [connections...,
         lorenz1.u ~ lorenz1.x + lorenz1.y - lorenz1.z,
@@ -40,7 +40,7 @@ simplifyeqs(eqs) = Equation.((x -> x.lhs).(eqs), simplify.((x -> x.rhs).(eqs)))
 
 @test isequal(simplifyeqs(equations(connected)), simplifyeqs(collapsed_eqs))
 
-# Variables indicated to be input/output 
+# Variables indicated to be input/output
 @variables x [input = true]
 @test hasmetadata(x, Symbolics.option_to_metadata_type(Val(:input)))
 @test getmetadata(x, Symbolics.option_to_metadata_type(Val(:input))) == true
