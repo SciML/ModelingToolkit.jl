@@ -22,7 +22,6 @@ using DiffEqCallbacks
 using Graphs
 import ExprTools: splitdef, combinedef
 import OrderedCollections
-import ComponentArrays
 
 using SymbolicIndexingInterface
 using LinearAlgebra, SparseArrays, LabelledArrays
