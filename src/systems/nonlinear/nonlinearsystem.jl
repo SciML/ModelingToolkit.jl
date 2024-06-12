@@ -306,18 +306,7 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
         _jac = nothing
     end
 
-    observedfun = let sys = sys, dict = Dict()
-        function generated_observed(obsvar, u, p)
-            obs = get!(dict, value(obsvar)) do
-                build_explicit_observed_function(sys, obsvar)
-            end
-            if p isa MTKParameters
-                obs(u, p...)
-            else
-                obs(u, p)
-            end
-        end
-    end
+    observedfun = ObservedFunctionCache(sys)
 
     NonlinearFunction{iip}(f,
         sys = sys,
