@@ -22,7 +22,7 @@ initprob = ModelingToolkit.InitializationProblem(pend, 0.0, [x => 1, y => 0], [g
 @test initprob isa NonlinearProblem
 sol = solve(initprob)
 @test SciMLBase.successful_retcode(sol)
-@test sol.u == [1.0, 0.0, 0.0, 0.0]
+@test sol.u == [0.0, 0.0, 0.0]
 @test maximum(abs.(sol[conditions])) < 1e-14
 
 initprob = ModelingToolkit.InitializationProblem(
@@ -443,3 +443,7 @@ eqs = [D(D(x)) ~ λ * x
 
 prob = ODEProblem(pend, [x => 1], (0.0, 1.5), [g => 1],
     guesses = [λ => 0, y => 1], initialization_eqs = [y ~ 1])
+
+unsimp = generate_initializesystem(pend; u0map = [x => 1], initialization_eqs = [y ~ 1])
+sys = structural_simplify(unsimp; fully_determined = false)
+@test length(equations(sys)) == 3

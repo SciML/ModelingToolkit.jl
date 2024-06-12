@@ -79,37 +79,55 @@ function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
 
     @unpack graph, solvable_graph = structure
     var_eq_matching = maximal_matching(graph, eqfilter, varfilter, U)
-    var_eq_matching = complete(var_eq_matching,
-        max(length(var_eq_matching),
-            maximum(x -> x isa Int ? x : 0, var_eq_matching, init = 0)))
+    matching_len = max(length(var_eq_matching),
+        maximum(x -> x isa Int ? x : 0, var_eq_matching, init = 0))
+    var_eq_matching = complete(var_eq_matching, matching_len)
     full_var_eq_matching = copy(var_eq_matching)
     var_sccs = find_var_sccs(graph, var_eq_matching)
-    vargraph = DiCMOBiGraph{true}(graph)
+    vargraph = DiCMOBiGraph{true}(graph, 0, Matching(matching_len))
     ict = IncrementalCycleTracker(vargraph; dir = :in)
 
     ieqs = Int[]
     filtered_vars = BitSet()
+    seen_eqs = falses(nsrcs(graph))
     for vars in var_sccs
         for var in vars
             if varfilter(var)
                 push!(filtered_vars, var)
                 if var_eq_matching[var] !== unassigned
-                    push!(ieqs, var_eq_matching[var])
+                    ieq = var_eq_matching[var]
+                    seen_eqs[ieq] = true
+                    push!(ieqs, ieq)
                 end
             end
             var_eq_matching[var] = unassigned
         end
-        tear_graph_block_modia!(var_eq_matching, ict, solvable_graph, ieqs,
-            filtered_vars,
-            isder)
-
-        # clear cache
-        vargraph.ne = 0
-        for var in vars
-            vargraph.matching[var] = unassigned
-        end
-        empty!(ieqs)
-        empty!(filtered_vars)
+        tear_block!(vargraph, vars,
+            var_eq_matching, ict, solvable_graph,
+            ieqs, filtered_vars, isder)
+    end
+    free_eqs = findall(!, seen_eqs)
+    if !isempty(free_eqs)
+        free_vars = findall(x -> !(x isa Int), var_eq_matching)
+        tear_block!(vargraph, (),
+            var_eq_matching, ict, solvable_graph,
+            free_eqs, BitSet(free_vars), isder)
     end
     return var_eq_matching, full_var_eq_matching, var_sccs
+end
+
+function tear_block!(vargraph, vars,
+        var_eq_matching, ict, solvable_graph, ieqs,
+        filtered_vars, isder)
+    tear_graph_block_modia!(var_eq_matching, ict, solvable_graph, ieqs,
+        filtered_vars,
+        isder)
+
+    # clear cache
+    vargraph.ne = 0
+    for var in vars
+        vargraph.matching[var] = unassigned
+    end
+    empty!(ieqs)
+    empty!(filtered_vars)
 end
