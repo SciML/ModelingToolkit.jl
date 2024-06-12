@@ -1192,6 +1192,30 @@ end
 ###
 ### System utils
 ###
+struct ObservedFunctionCache{S}
+    sys::S
+    dict::Dict{Any, Any}
+end
+
+function ObservedFunctionCache(sys)
+    return ObservedFunctionCache(sys, Dict())
+    let sys = sys, dict = Dict()
+        function generated_observed(obsvar, args...)
+        end
+    end
+end
+
+function (ofc::ObservedFunctionCache)(obsvar, args...)
+    obs = get!(ofc.dict, value(obsvar)) do
+        SymbolicIndexingInterface.observed(ofc.sys, obsvar)
+    end
+    if args === ()
+        return obs
+    else
+        return obs(args...)
+    end
+end
+
 function push_vars!(stmt, name, typ, vars)
     isempty(vars) && return
     vars_expr = Expr(:macrocall, typ, nothing)

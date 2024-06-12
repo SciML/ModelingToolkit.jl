@@ -337,27 +337,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         hess_prototype = nothing
     end
 
-    observedfun = let sys = sys, dict = Dict()
-        function generated_observed(obsvar, args...)
-            obs = get!(dict, value(obsvar)) do
-                build_explicit_observed_function(sys, obsvar)
-            end
-            if args === ()
-                let obs = obs
-                    _obs(u, p) = obs(u, p)
-                    _obs(u, p::MTKParameters) = obs(u, p...)
-                    _obs
-                end
-            else
-                u, p = args
-                if p isa MTKParameters
-                    obs(u, p...)
-                else
-                    obs(u, p)
-                end
-            end
-        end
-    end
+    observedfun = ObservedFunctionCache(sys)
 
     if length(cstr) > 0
         @named cons_sys = ConstraintsSystem(cstr, dvs, ps)

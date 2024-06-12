@@ -345,16 +345,7 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
 
     f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
 
-    # just taken from abstractodesystem.jl for ODEFunction def
-    obs = observed(sys)
-    observedfun = let sys = sys, dict = Dict()
-        function generated_observed(obsvar, u, p, t)
-            obs = get!(dict, value(obsvar)) do
-                build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
-            end
-            p isa MTKParameters ? obs(u, p..., t) : obs(u, p, t)
-        end
-    end
+    observedfun = ObservedFunctionCache(sys)
 
     df = DiscreteFunction{true, true}(f; sys = sys, observed = observedfun)
     DiscreteProblem(df, u0, tspan, p; kwargs...)
