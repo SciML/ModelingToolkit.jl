@@ -473,6 +473,9 @@ function build_explicit_observed_function(sys, ts;
         ps = DestructuredArgs.(ps, inbounds = !checkbounds)
     elseif has_index_cache(sys) && get_index_cache(sys) !== nothing
         ps = DestructuredArgs.(reorder_parameters(get_index_cache(sys), ps))
+        if isempty(ps) && inputs !== nothing
+            ps = (:EMPTY,)
+        end
     else
         ps = (DestructuredArgs(ps, inbounds = !checkbounds),)
     end
@@ -480,7 +483,8 @@ function build_explicit_observed_function(sys, ts;
     if inputs === nothing
         args = [dvs, ps..., ivs...]
     else
-        ipts = DestructuredArgs(unwrap.(inputs), inbounds = !checkbounds)
+        inputs = unwrap.(inputs)
+        ipts = DestructuredArgs(inputs, inbounds = !checkbounds)
         args = [dvs, ipts, ps..., ivs...]
     end
     pre = get_postprocess_fbody(sys)

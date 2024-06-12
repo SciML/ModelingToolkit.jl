@@ -378,3 +378,16 @@ matrices, ssys = linearize(augmented_sys,
 # P = ss(A,B,C,0)
 # G = ss(matrices...)
 # @test sminreal(G[1, 3]) ≈ sminreal(P[1,1])*dist
+
+@testset "Observed functions with inputs" begin
+    @variables x(t)=0 u(t)=0 [input = true]
+    eqs = [
+        D(x) ~ -x + u
+    ]
+
+    @named sys = ODESystem(eqs, t)
+    (; io_sys,) = ModelingToolkit.generate_control_function(sys, simplify = true)
+    obsfn = ModelingToolkit.build_explicit_observed_function(
+        io_sys, [x + u * t]; inputs = [u])
+    @test obsfn([1.0], [2.0], nothing, 3.0) == [7.0]
+end
