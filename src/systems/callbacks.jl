@@ -528,7 +528,7 @@ function Base.getproperty(u::NamedTupleSymbolFix, s::Symbol)
         NamedTupleSymbolFix(x, newsym)
     end
 end
-Base.getindex(u::NamedTupleSymbolFix, idxs...) = getfield(u,:x)[idxs...]
+Base.getindex(u::NamedTupleSymbolFix, idxs...) = getfield(u, :x)[idxs...]
 
 function compile_user_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
     dvs_ind = Dict(reverse(en) for en in enumerate(dvs))
