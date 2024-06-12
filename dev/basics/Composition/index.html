@@ -21,17 +21,17 @@ connected = compose(
 equations(connected)
 
 #4-element Vector{Equation}:
-# Differential(t)(decay1₊f(t)) ~ 0
-# decay2₊f(t) ~ decay1₊x(t)
-# Differential(t)(decay1₊x(t)) ~ decay1₊f(t) - (decay1₊a*(decay1₊x(t)))
-# Differential(t)(decay2₊x(t)) ~ decay2₊f(t) - (decay2₊a*(decay2₊x(t)))
+# Differential(t)(decay1.f(t)) ~ 0
+# decay2.f(t) ~ decay1.x(t)
+# Differential(t)(decay1.x(t)) ~ decay1.f(t) - (decay1.a*(decay1.x(t)))
+# Differential(t)(decay2.x(t)) ~ decay2.f(t) - (decay2.a*(decay2.x(t)))
 
 simplified_sys = structural_simplify(connected)
 
 equations(simplified_sys)</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} decay1_{+}f\left( t \right)}{\mathrm{d}t} =&amp; -0 \\
-\frac{\mathrm{d} decay1_{+}x\left( t \right)}{\mathrm{d}t} =&amp; decay1_{+}f\left( t \right) - decay1_{+}a decay1_{+}x\left( t \right) \\
-\frac{\mathrm{d} decay2_{+}x\left( t \right)}{\mathrm{d}t} =&amp; decay2_{+}f\left( t \right) - decay2_{+}a decay2_{+}x\left( t \right)
+\frac{\mathrm{d} \mathrm{decay1.f}\left( t \right)}{\mathrm{d}t} =&amp; -0 \\
+\frac{\mathrm{d} \mathrm{decay1.x}\left( t \right)}{\mathrm{d}t} =&amp; \mathrm{decay1.f}\left( t \right) - decay1.a \mathrm{decay1.x}\left( t \right) \\
+\frac{\mathrm{d} \mathrm{decay2.x}\left( t \right)}{\mathrm{d}t} =&amp; \mathrm{decay2.f}\left( t \right) - decay2.a \mathrm{decay2.x}\left( t \right)
 \end{align}
  \]</p><p>Now we can solve the system:</p><pre><code class="language-julia hljs">x0 = [decay1.x =&gt; 1.0
       decay1.f =&gt; 0.0
@@ -85,27 +85,27 @@ p = [a, b, c, d, e, f]
 level0 = ODESystem(Equation[], t, [], p; name = :level0)
 level1 = ODESystem(Equation[], t, [], []; name = :level1) ∘ level0
 parameters(level1)
-#level0₊a
+#level0.a
 #b
 #c
-#level0₊d
-#level0₊e
+#level0.d
+#level0.e
 #f
 level2 = ODESystem(Equation[], t, [], []; name = :level2) ∘ level1
 parameters(level2)
-#level1₊level0₊a
-#level1₊b
+#level1.level0.a
+#level1.b
 #c
-#level0₊d
-#level1₊level0₊e
+#level0.d
+#level1.level0.e
 #f
 level3 = ODESystem(Equation[], t, [], []; name = :level3) ∘ level2
 parameters(level3)
-#level2₊level1₊level0₊a
-#level2₊level1₊b
-#level2₊c
-#level2₊level0₊d
-#level1₊level0₊e
+#level2.level1.level0.a
+#level2.level1.b
+#level2.c
+#level2.level0.d
+#level1.level0.e
 #f</code></pre><h2 id="Structural-Simplify"><a class="docs-heading-anchor" href="#Structural-Simplify">Structural Simplify</a><a id="Structural-Simplify-1"></a><a class="docs-heading-anchor-permalink" href="#Structural-Simplify" title="Permalink"></a></h2><p>In many cases, the nicest way to build a model may leave a lot of unnecessary variables. Thus one may want to remove these equations before numerically solving. The <code>structural_simplify</code> function removes these trivial equality relationships and trivial singularity equations, i.e. equations which result in <code>0~0</code> expressions, in over-specified systems.</p><h2 id="Inheritance-and-Combine"><a class="docs-heading-anchor" href="#Inheritance-and-Combine">Inheritance and Combine</a><a id="Inheritance-and-Combine-1"></a><a class="docs-heading-anchor-permalink" href="#Inheritance-and-Combine" title="Permalink"></a></h2><p>Model inheritance can be done in two ways: implicitly or explicitly. First, one can use the <code>extend</code> function to extend a base model with another set of equations, unknowns, and parameters. An example can be found in the <a href="../../tutorials/acausal_components/#acausal">acausal components tutorial</a>.</p><p>The explicit way is to shadow variables with equality expressions. For example, let&#39;s assume we have three separate systems which we want to compose to a single one. This is how one could explicitly forward all unknowns and parameters to the higher level system:</p><pre><code class="language-julia hljs">using ModelingToolkit, OrdinaryDiffEq, Plots
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
@@ -139,24 +139,24 @@ sir = compose(
     seqn,
     ieqn,
     reqn)</code></pre><p class="math-container">\[ \begin{align}
-S\left( t \right) =&amp; ieqn_{+}S\left( t \right) \\
-I\left( t \right) =&amp; seqn_{+}I\left( t \right) \\
-R\left( t \right) =&amp; ieqn_{+}R\left( t \right) \\
-ieqn_{+}S\left( t \right) =&amp; seqn_{+}S\left( t \right) \\
-seqn_{+}I\left( t \right) =&amp; ieqn_{+}I\left( t \right) \\
-seqn_{+}R\left( t \right) =&amp; reqn_{+}R\left( t \right) \\
-ieqn_{+}R\left( t \right) =&amp; reqn_{+}R\left( t \right) \\
-reqn_{+}I\left( t \right) =&amp; ieqn_{+}I\left( t \right) \\
-\frac{\mathrm{d} seqn_{+}S\left( t \right)}{\mathrm{d}t} =&amp; \frac{ - seqn_+\beta seqn_{+}S\left( t \right) seqn_{+}I\left( t \right)}{seqn_{+}S\left( t \right) + seqn_{+}I\left( t \right) + seqn_{+}R\left( t \right)} \\
-\frac{\mathrm{d} ieqn_{+}I\left( t \right)}{\mathrm{d}t} =&amp; \frac{ieqn_+\beta ieqn_{+}S\left( t \right) ieqn_{+}I\left( t \right)}{ieqn_{+}S\left( t \right) + ieqn_{+}I\left( t \right) + ieqn_{+}R\left( t \right)} - ieqn_+\gamma ieqn_{+}I\left( t \right) \\
-\frac{\mathrm{d} reqn_{+}R\left( t \right)}{\mathrm{d}t} =&amp; reqn_+\gamma reqn_{+}I\left( t \right)
+S\left( t \right) =&amp; \mathrm{ieqn.S}\left( t \right) \\
+I\left( t \right) =&amp; \mathrm{seqn.I}\left( t \right) \\
+R\left( t \right) =&amp; \mathrm{ieqn.R}\left( t \right) \\
+\mathrm{ieqn.S}\left( t \right) =&amp; \mathrm{seqn.S}\left( t \right) \\
+\mathrm{seqn.I}\left( t \right) =&amp; \mathrm{ieqn.I}\left( t \right) \\
+\mathrm{seqn.R}\left( t \right) =&amp; \mathrm{reqn.R}\left( t \right) \\
+\mathrm{ieqn.R}\left( t \right) =&amp; \mathrm{reqn.R}\left( t \right) \\
+\mathrm{reqn.I}\left( t \right) =&amp; \mathrm{ieqn.I}\left( t \right) \\
+\frac{\mathrm{d} \mathrm{seqn.S}\left( t \right)}{\mathrm{d}t} =&amp; \frac{ - seqn.\beta \mathrm{seqn.S}\left( t \right) \mathrm{seqn.I}\left( t \right)}{\mathrm{seqn.R}\left( t \right) + \mathrm{seqn.S}\left( t \right) + \mathrm{seqn.I}\left( t \right)} \\
+\frac{\mathrm{d} \mathrm{ieqn.I}\left( t \right)}{\mathrm{d}t} =&amp; \frac{ieqn.\beta \mathrm{ieqn.I}\left( t \right) \mathrm{ieqn.S}\left( t \right)}{\mathrm{ieqn.R}\left( t \right) + \mathrm{ieqn.I}\left( t \right) + \mathrm{ieqn.S}\left( t \right)} - ieqn.\gamma \mathrm{ieqn.I}\left( t \right) \\
+\frac{\mathrm{d} \mathrm{reqn.R}\left( t \right)}{\mathrm{d}t} =&amp; reqn.\gamma \mathrm{reqn.I}\left( t \right)
 \end{align}
  \]</p><p>Note that the unknowns are forwarded by an equality relationship, while the parameters are forwarded through a relationship in their default values. The user of this model can then solve this model simply by specifying the values at the highest level:</p><pre><code class="language-julia hljs">sireqn_simple = structural_simplify(sir)
 
 equations(sireqn_simple)</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} seqn_{+}S\left( t \right)}{\mathrm{d}t} =&amp; \frac{ - seqn_+\beta seqn_{+}S\left( t \right) seqn_{+}I\left( t \right)}{seqn_{+}S\left( t \right) + seqn_{+}I\left( t \right) + seqn_{+}R\left( t \right)} \\
-\frac{\mathrm{d} ieqn_{+}I\left( t \right)}{\mathrm{d}t} =&amp; \frac{ieqn_+\beta ieqn_{+}S\left( t \right) ieqn_{+}I\left( t \right)}{ieqn_{+}S\left( t \right) + ieqn_{+}I\left( t \right) + ieqn_{+}R\left( t \right)} - ieqn_+\gamma ieqn_{+}I\left( t \right) \\
-\frac{\mathrm{d} reqn_{+}R\left( t \right)}{\mathrm{d}t} =&amp; reqn_+\gamma reqn_{+}I\left( t \right)
+\frac{\mathrm{d} \mathrm{seqn.S}\left( t \right)}{\mathrm{d}t} =&amp; \frac{ - seqn.\beta \mathrm{seqn.S}\left( t \right) \mathrm{seqn.I}\left( t \right)}{\mathrm{seqn.R}\left( t \right) + \mathrm{seqn.S}\left( t \right) + \mathrm{seqn.I}\left( t \right)} \\
+\frac{\mathrm{d} \mathrm{ieqn.I}\left( t \right)}{\mathrm{d}t} =&amp; \frac{ieqn.\beta \mathrm{ieqn.I}\left( t \right) \mathrm{ieqn.S}\left( t \right)}{\mathrm{ieqn.R}\left( t \right) + \mathrm{ieqn.I}\left( t \right) + \mathrm{ieqn.S}\left( t \right)} - ieqn.\gamma \mathrm{ieqn.I}\left( t \right) \\
+\frac{\mathrm{d} \mathrm{reqn.R}\left( t \right)}{\mathrm{d}t} =&amp; reqn.\gamma \mathrm{reqn.I}\left( t \right)
 \end{align}
  \]</p><pre><code class="language-julia hljs">## User Code
 
@@ -175,17 +175,17 @@ sol[reqn.R]</code></pre><pre class="documenter-example-output"><code class="nohi
    0.0014142401338982807
    0.015567426114815186
    0.1581830690301042
-   1.0627160216919254
-   3.3906763834079165
-   7.7850380814210345
-  15.47626943415924
-  30.102184533124042
-  58.804752758258026
- 116.64582495682083
- 221.07866633033512
- 368.8657025196621
- 519.3989582784649
- 655.4762283913897
- 723.949638157219
- 772.9458047004409
- 775.6835919121959</code></pre><h2 id="Tearing-Problem-Construction"><a class="docs-heading-anchor" href="#Tearing-Problem-Construction">Tearing Problem Construction</a><a id="Tearing-Problem-Construction-1"></a><a class="docs-heading-anchor-permalink" href="#Tearing-Problem-Construction" title="Permalink"></a></h2><p>Some system types (specifically <code>NonlinearSystem</code>) can be further reduced if <code>structural_simplify</code> has already been applied to them. This is done by using the alternative problem constructors (<code>BlockNonlinearProblem</code>). In these cases, the constructor uses the knowledge of the strongly connected components calculated during the process of simplification as the basis for building pre-simplified nonlinear systems in the implicit solving. In summary: these problems are structurally modified, but could be more efficient and more stable.</p><h2 id="Components-with-discontinuous-dynamics"><a class="docs-heading-anchor" href="#Components-with-discontinuous-dynamics">Components with discontinuous dynamics</a><a id="Components-with-discontinuous-dynamics-1"></a><a class="docs-heading-anchor-permalink" href="#Components-with-discontinuous-dynamics" title="Permalink"></a></h2><p>When modeling, e.g., impacts, saturations or Coulomb friction, the dynamic equations are discontinuous in either the unknown or one of its derivatives. This causes the solver to take very small steps around the discontinuity, and sometimes leads to early stopping due to <code>dt &lt;= dt_min</code>. The correct way to handle such dynamics is to tell the solver about the discontinuity by a root-finding equation, which can be modeling using <a href="../../systems/ODESystem/#ODESystem"><code>ODESystem</code></a>&#39;s event support. Please see the tutorial on <a href="../Events/#events">Callbacks and Events</a> for details and examples.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../Variable_metadata/">« Symbolic Metadata</a><a class="docs-footer-nextpage" href="../Events/">Event Handling and Callback Functions »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.4.1 on <span class="colophon-date" title="Sunday 9 June 2024 02:32">Sunday 9 June 2024</span>. Using Julia version 1.10.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+   1.0627160216919247
+   3.3906763834079183
+   7.785038081421038
+  15.476269434159235
+  30.102184533124035
+  58.80475275825802
+ 116.64582495682082
+ 221.0786663303351
+ 368.865702519662
+ 519.3989582784648
+ 655.4762283913893
+ 723.9496381572189
+ 772.945804700441
+ 775.683591912196</code></pre><h2 id="Tearing-Problem-Construction"><a class="docs-heading-anchor" href="#Tearing-Problem-Construction">Tearing Problem Construction</a><a id="Tearing-Problem-Construction-1"></a><a class="docs-heading-anchor-permalink" href="#Tearing-Problem-Construction" title="Permalink"></a></h2><p>Some system types (specifically <code>NonlinearSystem</code>) can be further reduced if <code>structural_simplify</code> has already been applied to them. This is done by using the alternative problem constructors (<code>BlockNonlinearProblem</code>). In these cases, the constructor uses the knowledge of the strongly connected components calculated during the process of simplification as the basis for building pre-simplified nonlinear systems in the implicit solving. In summary: these problems are structurally modified, but could be more efficient and more stable.</p><h2 id="Components-with-discontinuous-dynamics"><a class="docs-heading-anchor" href="#Components-with-discontinuous-dynamics">Components with discontinuous dynamics</a><a id="Components-with-discontinuous-dynamics-1"></a><a class="docs-heading-anchor-permalink" href="#Components-with-discontinuous-dynamics" title="Permalink"></a></h2><p>When modeling, e.g., impacts, saturations or Coulomb friction, the dynamic equations are discontinuous in either the unknown or one of its derivatives. This causes the solver to take very small steps around the discontinuity, and sometimes leads to early stopping due to <code>dt &lt;= dt_min</code>. The correct way to handle such dynamics is to tell the solver about the discontinuity by a root-finding equation, which can be modeling using <a href="../../systems/ODESystem/#ODESystem"><code>ODESystem</code></a>&#39;s event support. Please see the tutorial on <a href="../Events/#events">Callbacks and Events</a> for details and examples.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../Variable_metadata/">« Symbolic Metadata</a><a class="docs-footer-nextpage" href="../Events/">Event Handling and Callback Functions »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.4.1 on <span class="colophon-date" title="Wednesday 12 June 2024 16:11">Wednesday 12 June 2024</span>. Using Julia version 1.10.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
