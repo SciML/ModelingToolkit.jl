@@ -129,7 +129,7 @@ function generate_isouter(sys::AbstractSystem)
         function isouter(sys)::Bool
             s = string(nameof(sys))
             isconnector(sys) || error("$s is not a connector!")
-            idx = findfirst(isequal('.'), s)
+            idx = findfirst(isequal('₊'), s)
             parent_name = Symbol(idx === nothing ? s : s[1:prevind(s, idx)])
             parent_name in outer_connectors
         end

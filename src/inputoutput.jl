@@ -71,11 +71,11 @@ function is_bound(sys, u, stack = [])
     In the following scenario
     julia> observed(syss)
         2-element Vector{Equation}:
-        sys.y(tv) ~ sys.x(tv)
-        y(tv) ~ sys.x(tv)
-    sys.y(t) is bound to the outer y(t) through the variable sys.x(t) and should thus return is_bound(sys.y(t)) = true.
-    When asking is_bound(sys.y(t)), we know that we are looking through observed equations and can thus ask
-    if var is bound, if it is, then sys.y(t) is also bound. This can lead to an infinite recursion, so we maintain a stack of variables we have previously asked about to be able to break cycles
+        sys₊y(tv) ~ sys₊x(tv)
+        y(tv) ~ sys₊x(tv)
+    sys₊y(t) is bound to the outer y(t) through the variable sys₊x(t) and should thus return is_bound(sys₊y(t)) = true.
+    When asking is_bound(sys₊y(t)), we know that we are looking through observed equations and can thus ask
+    if var is bound, if it is, then sys₊y(t) is also bound. This can lead to an infinite recursion, so we maintain a stack of variables we have previously asked about to be able to break cycles
     =#
     u ∈ Set(stack) && return false # Cycle detected
     eqs = equations(sys)
@@ -119,8 +119,8 @@ function same_or_inner_namespace(u, var)
     nv = get_namespace(var)
     nu == nv ||           # namespaces are the same
         startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namespace to nu
-        occursin('.', string(getname(var))) &&
-            !occursin('.', string(getname(u))) # or u is top level but var is internal
+        occursin('₊', string(getname(var))) &&
+            !occursin('₊', string(getname(u))) # or u is top level but var is internal
 end
 
 function inner_namespace(u, var)
@@ -128,8 +128,8 @@ function inner_namespace(u, var)
     nv = get_namespace(var)
     nu == nv && return false
     startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namespace to nu
-        occursin('.', string(getname(var))) &&
-            !occursin('.', string(getname(u))) # or u is top level but var is internal
+        occursin('₊', string(getname(var))) &&
+            !occursin('₊', string(getname(u))) # or u is top level but var is internal
 end
 
 """
@@ -139,11 +139,11 @@ Return the namespace of a variable as a string. If the variable is not namespace
 """
 function get_namespace(x)
     sname = string(getname(x))
-    parts = split(sname, '.')
+    parts = split(sname, '₊')
     if length(parts) == 1
         return ""
     end
-    join(parts[1:(end - 1)], '.')
+    join(parts[1:(end - 1)], '₊')
 end
 
 """

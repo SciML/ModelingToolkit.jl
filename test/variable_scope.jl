@@ -31,25 +31,25 @@ eqs = [0 ~ a
 
 names = ModelingToolkit.getname.(unknowns(sys))
 @test :d in names
-@test Symbol("sub1.c") in names
-@test Symbol("sub1.sub2.b") in names
-@test Symbol("sub1.sub2.sub3.a") in names
-@test Symbol("sub1.sub2.sub4.a") in names
+@test Symbol("sub1₊c") in names
+@test Symbol("sub1₊sub2₊b") in names
+@test Symbol("sub1₊sub2₊sub3₊a") in names
+@test Symbol("sub1₊sub2₊sub4₊a") in names
 
 @named foo = NonlinearSystem(eqs, [a, b, c, d], [])
 @named bar = NonlinearSystem(eqs, [a, b, c, d], [])
 @test ModelingToolkit.getname(ModelingToolkit.namespace_expr(
     ModelingToolkit.namespace_expr(b,
         foo),
-    bar)) == Symbol("bar.b")
+    bar)) == Symbol("bar₊b")
 
 function renamed(nss, sym)
     ModelingToolkit.getname(foldr(ModelingToolkit.renamespace, nss, init = sym))
 end
 
-@test renamed([:foo :bar :baz], a) == Symbol("foo.bar.baz.a")
-@test renamed([:foo :bar :baz], b) == Symbol("foo.bar.b")
-@test renamed([:foo :bar :baz], c) == Symbol("foo.c")
+@test renamed([:foo :bar :baz], a) == Symbol("foo₊bar₊baz₊a")
+@test renamed([:foo :bar :baz], b) == Symbol("foo₊bar₊b")
+@test renamed([:foo :bar :baz], c) == Symbol("foo₊c")
 @test renamed([:foo :bar :baz], d) == :d
 
 @parameters t a b c d e f
@@ -67,12 +67,12 @@ level3 = ODESystem(Equation[], t, [], []; name = :level3) ∘ level2
 
 ps = ModelingToolkit.getname.(parameters(level3))
 
-@test isequal(ps[1], Symbol("level2.level1.level0.a"))
-@test isequal(ps[2], Symbol("level2.level1.b"))
-@test isequal(ps[3], Symbol("level2.c"))
-@test isequal(ps[4], Symbol("level2.level0.d"))
-@test isequal(ps[5], Symbol("level1.level0.e"))
-@test isequal(ps[6], Symbol("f"))
+@test isequal(ps[1], :level2₊level1₊level0₊a)
+@test isequal(ps[2], :level2₊level1₊b)
+@test isequal(ps[3], :level2₊c)
+@test isequal(ps[4], :level2₊level0₊d)
+@test isequal(ps[5], :level1₊level0₊e)
+@test isequal(ps[6], :f)
 
 # Issue@2252
 # Tests from PR#2354
@@ -82,4 +82,4 @@ arr0 = ODESystem(Equation[], t, [], arr_p; name = :arr0)
 arr1 = ODESystem(Equation[], t, [], []; name = :arr1) ∘ arr0
 arr_ps = ModelingToolkit.getname.(parameters(arr1))
 @test isequal(arr_ps[1], Symbol("xx"))
-@test isequal(arr_ps[2], Symbol("arr0.xx"))
+@test isequal(arr_ps[2], Symbol("arr0₊xx"))
