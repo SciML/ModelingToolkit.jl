@@ -305,36 +305,6 @@ deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
 version = "1.1.1+0"
 
-[[deps.ComponentArrays]]
-deps = ["ArrayInterface", "ChainRulesCore", "ForwardDiff", "Functors", "LinearAlgebra", "PackageExtensionCompat", "StaticArrayInterface", "StaticArraysCore"]
-git-tree-sha1 = "85d7d0c192e8eec909799737fe590f7d7ff0a6eb"
-uuid = "b0b7db55-cfe3-40fc-9ded-d10e2dbeff66"
-version = "0.15.13"
-
-    [deps.ComponentArrays.extensions]
-    ComponentArraysAdaptExt = "Adapt"
-    ComponentArraysConstructionBaseExt = "ConstructionBase"
-    ComponentArraysGPUArraysExt = "GPUArrays"
-    ComponentArraysOptimisersExt = "Optimisers"
-    ComponentArraysRecursiveArrayToolsExt = "RecursiveArrayTools"
-    ComponentArraysReverseDiffExt = "ReverseDiff"
-    ComponentArraysSciMLBaseExt = "SciMLBase"
-    ComponentArraysTrackerExt = "Tracker"
-    ComponentArraysTruncatedStacktracesExt = "TruncatedStacktraces"
-    ComponentArraysZygoteExt = "Zygote"
-
-    [deps.ComponentArrays.weakdeps]
-    Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
-    ConstructionBase = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
-    GPUArrays = "0c68f7d7-f131-5f86-a1c3-88cf8149b2d7"
-    Optimisers = "3bd65402-5787-11e9-1adc-39752487f4e2"
-    RecursiveArrayTools = "731186ca-8d62-57ce-b412-fbd966d074cd"
-    ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
-    SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
-    Tracker = "9f7883ad-71c0-57eb-9f7f-b5c9e6d3789c"
-    TruncatedStacktraces = "781d530d-4396-4725-bb49-402e4bee1e77"
-    Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
-
 [[deps.CompositeTypes]]
 git-tree-sha1 = "bce26c3dab336582805503bed209faab1c279768"
 uuid = "b152e2b5-7a66-4b01-a709-34e65c35f657"
@@ -1364,10 +1334,10 @@ version = "1.2.0"
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 
 [[deps.ModelingToolkit]]
-deps = ["AbstractTrees", "ArrayInterface", "Combinatorics", "Compat", "ComponentArrays", "ConstructionBase", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "DiffRules", "Distributed", "Distributions", "DocStringExtensions", "DomainSets", "DynamicQuantities", "ExprTools", "FindFirstFunctions", "ForwardDiff", "FunctionWrappersWrappers", "Graphs", "InteractiveUtils", "JuliaFormatter", "JumpProcesses", "LabelledArrays", "Latexify", "Libdl", "LinearAlgebra", "MLStyle", "NaNMath", "NonlinearSolve", "OrderedCollections", "PrecompileTools", "RecursiveArrayTools", "Reexport", "RuntimeGeneratedFunctions", "SciMLBase", "SciMLStructures", "Serialization", "Setfield", "SimpleNonlinearSolve", "SparseArrays", "SpecialFunctions", "StaticArrays", "SymbolicIndexingInterface", "SymbolicUtils", "Symbolics", "URIs", "UnPack", "Unitful"]
+deps = ["AbstractTrees", "ArrayInterface", "Combinatorics", "Compat", "ConstructionBase", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "DiffRules", "Distributed", "Distributions", "DocStringExtensions", "DomainSets", "DynamicQuantities", "ExprTools", "FindFirstFunctions", "ForwardDiff", "FunctionWrappersWrappers", "Graphs", "InteractiveUtils", "JuliaFormatter", "JumpProcesses", "LabelledArrays", "Latexify", "Libdl", "LinearAlgebra", "MLStyle", "NaNMath", "NonlinearSolve", "OrderedCollections", "PrecompileTools", "RecursiveArrayTools", "Reexport", "RuntimeGeneratedFunctions", "SciMLBase", "SciMLStructures", "Serialization", "Setfield", "SimpleNonlinearSolve", "SparseArrays", "SpecialFunctions", "StaticArrays", "SymbolicIndexingInterface", "SymbolicUtils", "Symbolics", "URIs", "UnPack", "Unitful"]
 path = "/home/runner/work/ModelingToolkit.jl/ModelingToolkit.jl"
 uuid = "961ee093-0014-501f-94e3-6117800e7a78"
-version = "9.17.1"
+version = "9.18.0"
 
     [deps.ModelingToolkit.extensions]
     MTKBifurcationKitExt = "BifurcationKit"
@@ -1388,9 +1358,9 @@ version = "0.2.4"
 
 [[deps.MultivariatePolynomials]]
 deps = ["ChainRulesCore", "DataStructures", "LinearAlgebra", "MutableArithmetics"]
-git-tree-sha1 = "dad7be0c92b688bf8f24af170825ccedc104b116"
+git-tree-sha1 = "5c1d1d9361e1417e5a065e1f84dc3686cbdaea21"
 uuid = "102ac46a-7ee4-5c85-9060-abc95bfdeaa3"
-version = "0.5.5"
+version = "0.5.6"
 
 [[deps.MutableArithmetics]]
 deps = ["LinearAlgebra", "SparseArrays", "Test"]
