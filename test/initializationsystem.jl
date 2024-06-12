@@ -443,3 +443,7 @@ eqs = [D(D(x)) ~ λ * x
 
 prob = ODEProblem(pend, [x => 1], (0.0, 1.5), [g => 1],
     guesses = [λ => 0, y => 1], initialization_eqs = [y ~ 1])
+
+unsimp = generate_initializesystem(pend; u0map = [x => 1], initialization_eqs = [y ~ 1])
+sys = structural_simplify(unsimp; fully_determined = false)
+@test length(equations(sys)) == 3
