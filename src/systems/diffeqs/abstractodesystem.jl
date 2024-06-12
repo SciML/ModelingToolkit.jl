@@ -404,82 +404,25 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
 
     obs = observed(sys)
     observedfun = if steady_state
-        let sys = sys, dict = Dict(), ps = ps
+        let sys = sys, dict = Dict()
             function generated_observed(obsvar, args...)
                 obs = get!(dict, value(obsvar)) do
-                    build_explicit_observed_function(sys, obsvar)
+                    SymbolicIndexingInterface.observed(sys, obsvar)
                 end
                 if args === ()
-                    let obs = obs, ps_T = typeof(ps)
-                        (u, p, t = Inf) -> if p isa MTKParameters
-                            obs(u, p..., t)
-                        elseif ps_T <: Tuple
-                            obs(u, p..., t)
-                        else
-                            obs(u, p, t)
-                        end
+                    return let obs = obs
+                        fn1(u, p, t = Inf) = obs(u, p, t)
+                        fn1
                     end
+                elseif length(args) == 2
+                    return obs(args..., Inf)
                 else
-                    if args[2] isa MTKParameters
-                        if length(args) == 2
-                            u, p = args
-                            obs(u, p..., Inf)
-                        else
-                            u, p, t = args
-                            obs(u, p..., t)
-                        end
-                    elseif ps isa Tuple
-                        if length(args) == 2
-                            u, p = args
-                            obs(u, p..., Inf)
-                        else
-                            u, p, t = args
-                            obs(u, p..., t)
-                        end
-                    else
-                        if length(args) == 2
-                            u, p = args
-                            obs(u, p, Inf)
-                        else
-                            u, p, t = args
-                            obs(u, p, t)
-                        end
-                    end
+                    return obs(args...)
                 end
             end
         end
     else
-        let sys = sys, dict = Dict(), ps = ps
-            function generated_observed(obsvar, args...)
-                obs = get!(dict, value(obsvar)) do
-                    build_explicit_observed_function(sys,
-                        obsvar;
-                        checkbounds = checkbounds,
-                        ps)
-                end
-                if args === ()
-                    let obs = obs, ps_T = typeof(ps)
-                        (u, p, t) -> if p isa MTKParameters
-                            obs(u, p..., t)
-                        elseif ps_T <: Tuple
-                            obs(u, p..., t)
-                        else
-                            obs(u, p, t)
-                        end
-                    end
-                else
-                    u, p, t = args
-                    if p isa MTKParameters
-                        u, p, t = args
-                        obs(u, p..., t)
-                    elseif ps isa Tuple # split parameters
-                        obs(u, p..., t)
-                    else
-                        obs(args...)
-                    end
-                end
-            end
-        end
+        ObservedFunctionCache(sys)
     end
 
     jac_prototype = if sparse
@@ -571,24 +514,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         _jac = nothing
     end
 
-    obs = observed(sys)
-    observedfun = let sys = sys, dict = Dict()
-        function generated_observed(obsvar, args...)
-            obs = get!(dict, value(obsvar)) do
-                build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
-            end
-            if args === ()
-                let obs = obs
-                    fun(u, p, t) = obs(u, p, t)
-                    fun(u, p::MTKParameters, t) = obs(u, p..., t)
-                    fun
-                end
-            else
-                u, p, t = args
-                p isa MTKParameters ? obs(u, p..., t) : obs(u, p, t)
-            end
-        end
-    end
+    observedfun = ObservedFunctionCache(sys)
 
     jac_prototype = if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)

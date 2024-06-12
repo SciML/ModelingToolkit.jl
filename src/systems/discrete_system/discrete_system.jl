@@ -330,14 +330,7 @@ function SciMLBase.DiscreteFunction{iip, specialize}(
         f = SciMLBase.wrapfun_iip(f, (u0, u0, p, t))
     end
 
-    observedfun = let sys = sys, dict = Dict()
-        function generate_observed(obsvar, u, p, t)
-            obs = get!(dict, value(obsvar)) do
-                build_explicit_observed_function(sys, obsvar)
-            end
-            p isa MTKParameters ? obs(u, p..., t) : obs(u, p, t)
-        end
-    end
+    observedfun = ObservedFunctionCache(sys)
 
     DiscreteFunction{iip, specialize}(f;
         sys = sys,

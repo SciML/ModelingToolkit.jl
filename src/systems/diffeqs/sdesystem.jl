@@ -484,19 +484,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
     M = calculate_massmatrix(sys)
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0', M)
 
-    obs = observed(sys)
-    observedfun = let sys = sys, dict = Dict()
-        function generated_observed(obsvar, u, p, t)
-            obs = get!(dict, value(obsvar)) do
-                build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
-            end
-            if p isa MTKParameters
-                obs(u, p..., t)
-            else
-                obs(u, p, t)
-            end
-        end
-    end
+    observedfun = ObservedFunctionCache(sys)
 
     SDEFunction{iip}(f, g,
         sys = sys,
