@@ -37,10 +37,10 @@ connected = compose(
 equations(connected)
 
 #4-element Vector{Equation}:
-# Differential(t)(decay1.f(t)) ~ 0
-# decay2.f(t) ~ decay1.x(t)
-# Differential(t)(decay1.x(t)) ~ decay1.f(t) - (decay1.a*(decay1.x(t)))
-# Differential(t)(decay2.x(t)) ~ decay2.f(t) - (decay2.a*(decay2.x(t)))
+# Differential(t)(decay1₊f(t)) ~ 0
+# decay2₊f(t) ~ decay1₊x(t)
+# Differential(t)(decay1₊x(t)) ~ decay1₊f(t) - (decay1₊a*(decay1₊x(t)))
+# Differential(t)(decay2₊x(t)) ~ decay2₊f(t) - (decay2₊a*(decay2₊x(t)))
 
 simplified_sys = structural_simplify(connected)
 
@@ -149,27 +149,27 @@ p = [a, b, c, d, e, f]
 level0 = ODESystem(Equation[], t, [], p; name = :level0)
 level1 = ODESystem(Equation[], t, [], []; name = :level1) ∘ level0
 parameters(level1)
-#level0.a
+#level0₊a
 #b
 #c
-#level0.d
-#level0.e
+#level0₊d
+#level0₊e
 #f
 level2 = ODESystem(Equation[], t, [], []; name = :level2) ∘ level1
 parameters(level2)
-#level1.level0.a
-#level1.b
+#level1₊level0₊a
+#level1₊b
 #c
-#level0.d
-#level1.level0.e
+#level0₊d
+#level1₊level0₊e
 #f
 level3 = ODESystem(Equation[], t, [], []; name = :level3) ∘ level2
 parameters(level3)
-#level2.level1.level0.a
-#level2.level1.b
-#level2.c
-#level2.level0.d
-#level1.level0.e
+#level2₊level1₊level0₊a
+#level2₊level1₊b
+#level2₊c
+#level2₊level0₊d
+#level1₊level0₊e
 #f
 ```
 

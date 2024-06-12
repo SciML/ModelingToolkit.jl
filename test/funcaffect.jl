@@ -123,7 +123,7 @@ i8 = findfirst(==(8.0), sol[:t])
 ctx = [0]
 function affect4!(integ, u, p, ctx)
     ctx[1] += 1
-    @test u.resistor.v == 1
+    @test u.resistor₊v == 1
 end
 s1 = compose(
     ODESystem(Equation[], t, [], [], name = :s1,
@@ -137,7 +137,7 @@ sol = solve(prob, Tsit5())
 include("../examples/rc_model.jl")
 
 function affect5!(integ, u, p, ctx)
-    @test integ.u[u.capacitor.v] ≈ 0.3
+    @test integ.u[u.capacitor₊v] ≈ 0.3
     integ.ps[p.C] *= 200
 end
 
