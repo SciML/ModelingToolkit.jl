@@ -172,10 +172,10 @@ When accessing variables of a sub-system, it can be useful to rename them
 (alternatively, an affect function may be reused in different contexts):
 
 ```julia
-[x ~ 0] => (affect!, [resistor₊v => :v, x], [p, q => :p2], [], ctx)
+[x ~ 0] => (affect!, [resistor.v => :v, x], [p, q => :p2], [], ctx)
 ```
 
-Here, the symbolic variable `resistor₊v` is passed as `v` while the symbolic
+Here, the symbolic variable `resistor.v` is passed as `v` while the symbolic
 parameter `q` has been renamed `p2`.
 
 As an example, here is the bouncing ball example from above using the functional

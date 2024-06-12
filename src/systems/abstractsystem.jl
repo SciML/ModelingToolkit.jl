@@ -365,8 +365,8 @@ function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym::Symbol)
         return is_variable(ic, sym)
     end
     return any(isequal(sym), getname.(variable_symbols(sys))) ||
-           count('₊', string(sym)) == 1 &&
-           count(isequal(sym), Symbol.(nameof(sys), :₊, getname.(variable_symbols(sys)))) ==
+           count('.', string(sym)) == 1 &&
+           count(isequal(sym), Symbol.(nameof(sys), :., getname.(variable_symbols(sys)))) ==
            1
 end
 
@@ -399,9 +399,9 @@ function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym::Symb
     idx = findfirst(isequal(sym), getname.(variable_symbols(sys)))
     if idx !== nothing
         return idx
-    elseif count('₊', string(sym)) == 1
+    elseif count('.', string(sym)) == 1
         return findfirst(isequal(sym),
-            Symbol.(nameof(sys), :₊, getname.(variable_symbols(sys))))
+            Symbol.(nameof(sys), :., getname.(variable_symbols(sys))))
     end
     return nothing
 end
@@ -431,9 +431,9 @@ function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Symbol
         return is_parameter(ic, sym)
     end
     return any(isequal(sym), getname.(parameter_symbols(sys))) ||
-           count('₊', string(sym)) == 1 &&
+           count('.', string(sym)) == 1 &&
            count(isequal(sym),
-        Symbol.(nameof(sys), :₊, getname.(parameter_symbols(sys)))) == 1
+        Symbol.(nameof(sys), :., getname.(parameter_symbols(sys)))) == 1
 end
 
 function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
@@ -466,9 +466,9 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym::Sym
     idx = findfirst(isequal(sym), getname.(parameter_symbols(sys)))
     if idx !== nothing
         return idx
-    elseif count('₊', string(sym)) == 1
+    elseif count('.', string(sym)) == 1
         return findfirst(isequal(sym),
-            Symbol.(nameof(sys), :₊, getname.(parameter_symbols(sys))))
+            Symbol.(nameof(sys), :., getname.(parameter_symbols(sys))))
     end
     return nothing
 end
@@ -889,7 +889,7 @@ function renamespace(sys, x)
     elseif x isa AbstractSystem
         rename(x, renamespace(sys, nameof(x)))
     else
-        Symbol(getname(sys), :₊, x)
+        Symbol(getname(sys), :., x)
     end
 end
 
@@ -1248,7 +1248,7 @@ function round_trip_eq(eq::Equation, var2name)
         syss = get_systems(eq.rhs)
         call = Expr(:call, connect)
         for sys in syss
-            strs = split(string(nameof(sys)), "₊")
+            strs = split(string(nameof(sys)), ".")
             s = Symbol(strs[1])
             for st in strs[2:end]
                 s = Expr(:., s, Meta.quot(Symbol(st)))

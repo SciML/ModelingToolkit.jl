@@ -34,8 +34,8 @@ end
 @test get_namespace(x) == ""
 @test get_namespace(sys.x) == "sys"
 @test get_namespace(sys2.x) == "sys2"
-@test get_namespace(sys2.sys.x) == "sys2₊sys"
-@test get_namespace(sys21.sys1.v) == "sys21₊sys1"
+@test get_namespace(sys2.sys.x) == "sys2.sys"
+@test get_namespace(sys21.sys1.v) == "sys21.sys1"
 
 @test !is_bound(sys, u)
 @test !is_bound(sys, x)

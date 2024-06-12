@@ -1109,9 +1109,9 @@ function RealExpressionSystem(; name)
     vars = @variables begin
         x(t)
         z(t)[1:1]
-    end # doing a collect on z doesn't work either. 
-    @named e1 = RealExpression(y = x) # This works perfectly. 
-    @named e2 = RealExpression(y = z[1]) # This bugs. However, `full_equations(e2)` works as expected. 
+    end # doing a collect on z doesn't work either.
+    @named e1 = RealExpression(y = x) # This works perfectly.
+    @named e2 = RealExpression(y = z[1]) # This bugs. However, `full_equations(e2)` works as expected.
     systems = [e1, e2]
     ODESystem(Equation[], t, Iterators.flatten(vars), []; systems, name)
 end
@@ -1166,7 +1166,7 @@ end
 # Namespacing of array variables
 @variables x(t)[1:2]
 @named sys = ODESystem(Equation[], t)
-@test getname(unknowns(sys, x)) == :sys₊x
+@test getname(unknowns(sys, x)) == Symbol("sys.x")
 @test size(unknowns(sys, x)) == size(x)
 
 # Issue#2667
