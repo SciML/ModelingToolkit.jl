@@ -517,12 +517,11 @@ end
 struct NamedTupleSymbolFix{T}
     x::T
     sym::Symbol
-
 end
 NamedTupleSymbolFix(x) = NamedTupleSymbolFix(x, Symbol(""))
 function Base.getproperty(u::NamedTupleSymbolFix, s::Symbol)
-    newsym = getfield(u,:sym) == Symbol("") ? s : Symbol(getfield(u,:sym), ".", s)
-    x = getfield(u,:x)
+    newsym = getfield(u, :sym) == Symbol("") ? s : Symbol(getfield(u, :sym), ".", s)
+    x = getfield(u, :x)
     if newsym in keys(x)
         getproperty(x, newsym)
     else
