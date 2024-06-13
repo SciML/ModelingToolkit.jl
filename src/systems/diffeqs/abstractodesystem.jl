@@ -323,6 +323,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         split_idxs = nothing,
         initializeprob = nothing,
         initializeprobmap = nothing,
+        reinitializemap = nothing,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEFunction`")
@@ -448,7 +449,8 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
         analytic = analytic,
         initializeprob = initializeprob,
-        initializeprobmap = initializeprobmap)
+        initializeprobmap = initializeprobmap
+        reinitializemap = reinitializemap)
 end
 
 """
@@ -480,6 +482,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         checkbounds = false,
         initializeprob = nothing,
         initializeprobmap = nothing,
+        reinitializemap = nothing,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEFunction`")
@@ -536,7 +539,8 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         jac_prototype = jac_prototype,
         observed = observedfun,
         initializeprob = initializeprob,
-        initializeprobmap = initializeprobmap)
+        initializeprobmap = initializeprobmap,
+        reinitializemap = reinitializemap)
 end
 
 function DiffEqBase.DDEFunction(sys::AbstractODESystem, args...; kwargs...)
@@ -854,6 +858,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         initializeprob = ModelingToolkit.InitializationProblem(
             sys, t, u0map, parammap; guesses, warn_initialize_determined, initialization_eqs)
         initializeprobmap = getu(initializeprob, unknowns(sys))
+        reinitializemap = setp(initializeprob, get_iv(sys))
 
         zerovars = Dict(setdiff(unknowns(sys), keys(defaults(sys))) .=> 0.0)
         trueinit = collect(merge(zerovars, eltype(u0map) <: Pair ? todict(u0map) : u0map))
@@ -862,6 +867,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     else
         initializeprob = nothing
         initializeprobmap = nothing
+        reinitializemap = nothing
         trueinit = u0map
     end
 
@@ -907,6 +913,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         sparse = sparse, eval_expression = eval_expression,
         initializeprob = initializeprob,
         initializeprobmap = initializeprobmap,
+        reinitializemap = reinitializemap,
         kwargs...)
     implicit_dae ? (f, du0, u0, p) : (f, u0, p)
 end
