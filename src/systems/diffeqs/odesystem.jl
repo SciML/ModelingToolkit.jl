@@ -493,16 +493,17 @@ function build_explicit_observed_function(sys, ts;
                      false))) |> wrap_array_vars(sys, ts)[1] |> toexpr
     oop_fn = expression ? oop_fn : drop_expr(@RuntimeGeneratedFunction(oop_fn))
 
-    iip_fn = build_function(isscalar ? ts[1] : ts,
-        args...;
-        postprocess_fbody = pre,
-        wrap_code = wrap_array_vars(
-            sys, isscalar ? ts[1] : ts) .∘ wrap_assignments(isscalar, obsexprs),
-        expression = Val{expression})[2]
-    if isscalar || return_inplace
-        return oop_fn, iip_fn
-    else
+    if !isscalar
+        iip_fn = build_function(ts,
+            args...;
+            postprocess_fbody = pre,
+            wrap_code = wrap_array_vars(sys, ts) .∘ wrap_assignments(isscalar, obsexprs),
+            expression = Val{expression})[2]
+    end
+    if isscalar || !return_inplace
         return oop_fn
+    else
+        return oop_fn, iip_fn
     end
 end
 
