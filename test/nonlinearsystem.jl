@@ -266,3 +266,11 @@ alg_eqs = [0 ~ p - d * X]
 sys = @test_nowarn NonlinearSystem(alg_eqs; name = :name)
 @test isequal(only(unknowns(sys)), X)
 @test all(isequal.(parameters(sys), [p, d]))
+
+# Over-determined sys
+@variables u1 u2
+@parameters u3 u4
+eqs = [u3 ~ u1 + u2, u4 ~ 2 * (u1 + u2), u3 + u4 ~ 3 * (u1 + u2)]
+@named ns = NonlinearSystem(eqs, [u1, u2], [u3, u4])
+sys = structural_simplify(ns; fully_determined = false)
+@test length(unknowns(sys)) == 1
