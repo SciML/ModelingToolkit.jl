@@ -382,6 +382,7 @@ function build_explicit_observed_function(sys, ts;
         checkbounds = true,
         drop_expr = drop_expr,
         ps = full_parameters(sys),
+        return_inplace = false,
         op = Operator,
         throw = true)
     if (isscalar = symbolic_type(ts) !== NotSymbolic())
@@ -479,16 +480,31 @@ function build_explicit_observed_function(sys, ts;
     if inputs === nothing
         args = [dvs, ps..., ivs...]
     else
-        ipts = DestructuredArgs(inputs, inbounds = !checkbounds)
+        ipts = DestructuredArgs(unwrap.(inputs), inbounds = !checkbounds)
         args = [dvs, ipts, ps..., ivs...]
     end
     pre = get_postprocess_fbody(sys)
 
-    ex = Func(args, [],
-             pre(Let(obsexprs,
-                 isscalar ? ts[1] : MakeArray(ts, output_type),
-                 false))) |> wrap_array_vars(sys, ts)[1] |> toexpr
-    expression ? ex : drop_expr(@RuntimeGeneratedFunction(ex))
+    # Need to keep old method of building the function since it uses `output_type`,
+    # which can't be provided to `build_function`
+    oop_fn = Func(args, [],
+                 pre(Let(obsexprs,
+                     isscalar ? ts[1] : MakeArray(ts, output_type),
+                     false))) |> wrap_array_vars(sys, ts)[1] |> toexpr
+    oop_fn = expression ? oop_fn : drop_expr(@RuntimeGeneratedFunction(oop_fn))
+
+    if !isscalar
+        iip_fn = build_function(ts,
+            args...;
+            postprocess_fbody = pre,
+            wrap_code = wrap_array_vars(sys, ts) .∘ wrap_assignments(isscalar, obsexprs),
+            expression = Val{expression})[2]
+    end
+    if isscalar || !return_inplace
+        return oop_fn
+    else
+        return oop_fn, iip_fn
+    end
 end
 
 function _eq_unordered(a, b)

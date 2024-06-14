@@ -201,6 +201,17 @@ function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys
     end
 end
 
+function wrap_assignments(isscalar, assignments; let_block = false)
+    function wrapper(expr)
+        Func(expr.args, [], Let(assignments, expr.body, let_block))
+    end
+    if isscalar
+        wrapper
+    else
+        wrapper, wrapper
+    end
+end
+
 function wrap_array_vars(sys::AbstractSystem, exprs; dvs = unknowns(sys))
     isscalar = !(exprs isa AbstractArray)
     array_vars = Dict{Any, AbstractArray{Int}}()

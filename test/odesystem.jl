@@ -1182,3 +1182,15 @@ end
 
     @test_nowarn ForwardDiff.derivative(P -> x_at_1(P), 1.0)
 end
+
+@testset "Inplace observed functions" begin
+    @parameters P
+    @variables x(t)
+    sys = structural_simplify(ODESystem([D(x) ~ P], t, [x], [P]; name = :sys))
+    obsfn = ModelingToolkit.build_explicit_observed_function(
+        sys, [x + 1, x + P, x + t], return_inplace = true)[2]
+    ps = ModelingToolkit.MTKParameters(sys, [P => 2.0])
+    buffer = zeros(3)
+    @test_nowarn obsfn(buffer, [1.0], ps..., 3.0)
+    @test buffer ≈ [2.0, 3.0, 4.0]
+end
