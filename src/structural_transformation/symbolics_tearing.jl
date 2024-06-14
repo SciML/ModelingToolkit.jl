@@ -56,7 +56,7 @@ function eq_derivative_graph!(s::SystemStructure, eq::Int)
     return eq_diff
 end
 
-function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int)
+function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int; kwargs...)
     s = ts.structure
 
     eq_diff = eq_derivative_graph!(s, ieq)
@@ -75,7 +75,8 @@ function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int)
         add_edge!(s.graph, eq_diff, s.var_to_diff[var])
     end
     s.solvable_graph === nothing ||
-        find_eq_solvables!(ts, eq_diff; may_be_zero = true, allow_symbolic = false)
+        find_eq_solvables!(
+            ts, eq_diff; may_be_zero = true, allow_symbolic = false, kwargs...)
 
     return eq_diff
 end
