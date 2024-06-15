@@ -274,3 +274,12 @@ eqs = [u3 ~ u1 + u2, u4 ~ 2 * (u1 + u2), u3 + u4 ~ 3 * (u1 + u2)]
 @named ns = NonlinearSystem(eqs, [u1, u2], [u3, u4])
 sys = structural_simplify(ns; fully_determined = false)
 @test length(unknowns(sys)) == 1
+
+# Conservative
+@variables X(t)
+alg_eqs = [1 ~ 2X]
+@named ns = NonlinearSystem(alg_eqs)
+sys = structural_simplify(ns)
+@test length(equations(sys)) == 0
+sys = structural_simplify(ns; conservative = true)
+@test length(equations(sys)) == 1

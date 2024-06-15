@@ -691,15 +691,18 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
         ModelingToolkit.check_consistency(state, orig_inputs)
     end
     if fully_determined && dummy_derivative
-        sys = ModelingToolkit.dummy_derivative(sys, state; simplify, mm, check_consistency)
+        sys = ModelingToolkit.dummy_derivative(
+            sys, state; simplify, mm, check_consistency, kwargs...)
     elseif fully_determined
         var_eq_matching = pantelides!(state; finalize = false, kwargs...)
         sys = pantelides_reassemble(state, var_eq_matching)
         state = TearingState(sys)
         sys, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
-        sys = ModelingToolkit.dummy_derivative(sys, state; simplify, mm, check_consistency)
+        sys = ModelingToolkit.dummy_derivative(
+            sys, state; simplify, mm, check_consistency, kwargs...)
     else
-        sys = ModelingToolkit.tearing(sys, state; simplify, mm, check_consistency)
+        sys = ModelingToolkit.tearing(
+            sys, state; simplify, mm, check_consistency, kwargs...)
     end
     fullunknowns = [map(eq -> eq.lhs, observed(sys)); unknowns(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)
