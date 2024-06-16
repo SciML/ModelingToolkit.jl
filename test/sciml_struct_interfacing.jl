@@ -4,7 +4,7 @@
 using ModelingToolkit, JumpProcesses, NonlinearSolve, OrdinaryDiffEq, Plots,
       SteadyStateDiffEq, StochasticDiffEq, Test
 using ModelingToolkit: t_nounits as t, D_nounits as D
-using ModelingToolkit: getp, getu, setp, setu
+using SymbolicIndexingInterface: getp, getu, setp, setu
 
 # Sets rnd number.
 using StableRNGs
