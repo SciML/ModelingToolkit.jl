@@ -139,7 +139,7 @@ function MTKParameters(
         val = unwrap(val)
         ctype = symtype(sym)
         if symbolic_type(val) !== NotSymbolic()
-            continue
+            error("Could not evaluate value of parameter $sym. Missing values for variables in expression $val.")
         end
         val = symconvert(ctype, val)
         done = set_value(sym, val)
