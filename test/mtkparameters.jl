@@ -283,3 +283,10 @@ VVDual = Vector{<:Vector{<:ForwardDiff.Dual}}
     @test_throws TypeError remake_buffer(sys, ps, Dict(e => Foo(2.0))) # need exact same type for nonnumeric
     @test_nowarn remake_buffer(sys, ps, Dict(f => Foo(:a)))
 end
+
+@testset "Error on missing parameter defaults" begin
+    @parameters a b c
+    @named sys = ODESystem(Equation[], t, [], [a, b]; defaults = Dict(b => 2c))
+    sys = complete(sys)
+    @test_throws ["Could not evaluate", "b", "Missing", "2c"] MTKParameters(sys, [a => 1.0])
+end
