@@ -1896,6 +1896,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         zero_dummy_der = false,
         initialization_solver_alg = TrustRegion(),
         eval_expression = false, eval_module = @__MODULE__,
+        warn_initialize_determined = true,
         kwargs...)
     inputs isa AbstractVector || (inputs = [inputs])
     outputs isa AbstractVector || (outputs = [outputs])
@@ -1909,10 +1910,26 @@ function linearization_function(sys::AbstractSystem, inputs,
         op = merge(defs, op)
     end
     sys = ssys
+    u0map = Dict(k => v for (k, v) in op if is_variable(ssys, k))
     initsys = structural_simplify(
         generate_initializesystem(
-            sys, guesses = guesses(sys), algebraic_only = true),
+            sys, u0map = u0map, guesses = guesses(sys), algebraic_only = true),
         fully_determined = false)
+
+    # HACK: some unknowns may not be involved in any initialization equations, and are
+    # thus removed from the system during `structural_simplify`.
+    # This causes `getu(initsys, unknowns(sys))` to fail, so we add them back as parameters
+    # for now.
+    missing_unknowns = setdiff(unknowns(sys), all_symbols(initsys))
+    if !isempty(missing_unknowns)
+        if warn_initialize_determined
+            @warn "Initialization system is underdetermined. No equations for $(missing_unknowns). Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false."
+        end
+        new_parameters = [parameters(initsys); missing_unknowns]
+        @set! initsys.ps = new_parameters
+        initsys = complete(initsys)
+    end
+
     if p isa SciMLBase.NullParameters
         p = Dict()
     else
