@@ -2625,12 +2625,22 @@ See also: [`ModelingToolkit.dump_variable_metadata`](@ref), [`ModelingToolkit.du
 """
 function dump_parameters(sys::AbstractSystem)
     defs = defaults(sys)
-    map(dump_variable_metadata.(parameters(sys))) do meta
+    pdeps = parameter_dependencies(sys)
+    metas = map(dump_variable_metadata.(parameters(sys))) do meta
         if haskey(defs, meta.var)
             meta = merge(meta, (; default = defs[meta.var]))
         end
         meta
     end
+    pdep_metas = map(collect(keys(pdeps))) do sym
+        val = pdeps[sym]
+        meta = dump_variable_metadata(sym)
+        meta = merge(meta,
+            (; dependency = pdeps[sym],
+                default = symbolic_evaluate(pdeps[sym], merge(defs, pdeps))))
+        return meta
+    end
+    return vcat(metas, pdep_metas)
 end
 
 """
