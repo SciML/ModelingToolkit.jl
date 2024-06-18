@@ -258,3 +258,50 @@ closed_loop = ODESystem(connections, t, systems = [model, pid, filt, sensor, r, 
     ])
 
 @test_nowarn linearize(closed_loop, :r, :y)
+
+# https://discourse.julialang.org/t/mtk-change-in-linearize/115760/3
+@mtkmodel Tank_noi begin
+    # Model parameters
+    @parameters begin
+        ρ = 1, [description = "Liquid density"]
+        A = 5, [description = "Cross sectional tank area"]
+        K = 5, [description = "Effluent valve constant"]
+        h_ς = 3, [description = "Scaling level in valve model"]
+    end
+    # Model variables, with initial values needed
+    @variables begin
+        m(t) = 1.5 * ρ * A, [description = "Liquid mass"]
+        md_i(t), [description = "Influent mass flow rate"]
+        md_e(t), [description = "Effluent mass flow rate"]
+        V(t), [description = "Liquid volume"]
+        h(t), [description = "level"]
+    end
+    # Providing model equations
+    @equations begin
+        D(m) ~ md_i - md_e
+        m ~ ρ * V
+        V ~ A * h
+        md_e ~ K * sqrt(h / h_ς)
+    end
+end
+
+@named tank_noi = Tank_noi()
+@unpack md_i, h, m = tank_noi
+m_ss = 2.4000000003229878
+@test_nowarn linearize(tank_noi, [md_i], [h]; op = Dict(m => m_ss, md_i => 2))
+
+# Test initialization
+@variables x(t) y(t) u(t)=1.0
+@parameters p = 1.0
+eqs = [D(x) ~ p * u, x ~ y]
+@named sys = ODESystem(eqs, t)
+
+matrices1, _ = linearize(sys, [u], []; op = Dict(x => 2.0))
+matrices2, _ = linearize(sys, [u], []; op = Dict(y => 2.0))
+@test matrices1 == matrices2
+
+# Ensure parameter values passed as `Dict` are respected
+linfun, _ = linearization_function(sys, [u], []; op = Dict(x => 2.0))
+matrices = linfun([1.0], Dict(p => 3.0), 1.0)
+# this would be 1 if the parameter value isn't respected
+@test matrices.f_u[] == 3.0

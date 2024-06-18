@@ -2000,7 +2000,9 @@ function linearization_function(sys::AbstractSystem, inputs,
                 p = todict(p)
                 newps = deepcopy(sys_ps)
                 for (k, v) in p
-                    setp(sys, k)(newps, v)
+                    if is_parameter(sys, k)
+                        setp(sys, k)(newps, v)
+                    end
                 end
                 p = newps
             end
