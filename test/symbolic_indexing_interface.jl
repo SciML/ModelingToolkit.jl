@@ -38,12 +38,12 @@ using SciMLStructures: Tunable
     odesys = complete(odesys)
     @test default_values(odesys)[xy] == 3.0
     pobs = parameter_observed(odesys, a + b)
-    @test pobs.timeseries_idx === nothing
-    @test pobs.observed_fn(
+    @test isempty(get_all_timeseries_indexes(odesys, a + b))
+    @test pobs(
         ModelingToolkit.MTKParameters(odesys, [a => 1.0, b => 2.0]), 0.0) ≈ 3.0
     pobs = parameter_observed(odesys, [a + b, a - b])
-    @test pobs.timeseries_idx === nothing
-    @test pobs.observed_fn(
+    @test isempty(get_all_timeseries_indexes(odesys, [a + b, a - b]))
+    @test pobs(
         ModelingToolkit.MTKParameters(odesys, [a => 1.0, b => 2.0]), 0.0) ≈ [3.0, -1.0]
 end
 
@@ -102,11 +102,11 @@ end
     @test !is_time_dependent(ns)
     ps = ModelingToolkit.MTKParameters(ns, [σ => 1.0, ρ => 2.0, β => 3.0])
     pobs = parameter_observed(ns, σ + ρ)
-    @test pobs.timeseries_idx === nothing
-    @test pobs.observed_fn(ps) == 3.0
+    @test isempty(get_all_timeseries_indexes(ns, σ + ρ))
+    @test pobs(ps) == 3.0
     pobs = parameter_observed(ns, [σ + ρ, ρ + β])
-    @test pobs.timeseries_idx === nothing
-    @test pobs.observed_fn(ps) == [3.0, 5.0]
+    @test isempty(get_all_timeseries_indexes(ns, [σ + ρ, ρ + β]))
+    @test pobs(ps) == [3.0, 5.0]
 end
 
 @testset "PDESystem" begin
@@ -147,6 +147,11 @@ end
     domains = [t ∈ (0.0, 1.0),
         x ∈ (0.0, 1.0)]
 
+    analytic = [u(t, x) ~ -h * x * (x - 1) * sin(x) * exp(-2 * h * t)]
+    analytic_function = (ps, t, x) -> -ps[1] * x * (x - 1) * sin(x) * exp(-2 * ps[1] * t)
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u], [h], analytic = analytic)
+
     @test isequal(pdesys.ps, [h])
     @test isequal(parameter_symbols(pdesys), [h])
     @test isequal(parameters(pdesys), [h])
@@ -179,12 +184,4 @@ get_dep = @test_nowarn getu(prob, 2p1)
     @test getu(prob, z)(prob) == getu(prob, :z)(prob)
     @test getu(prob, p1)(prob) == getu(prob, :p1)(prob)
     @test getu(prob, p2)(prob) == getu(prob, :p2)(prob)
-    analytic = [u(t, x) ~ -h * x * (x - 1) * sin(x) * exp(-2 * h * t)]
-    analytic_function = (ps, t, x) -> -ps[1] * x * (x - 1) * sin(x) * exp(-2 * ps[1] * t)
-
-    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u], [h], analytic = analytic)
-
-    @test isequal(pdesys.ps, [h])
-    @test isequal(parameter_symbols(pdesys), [h])
-    @test isequal(parameters(pdesys), [h])
 end

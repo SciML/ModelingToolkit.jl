@@ -447,7 +447,8 @@ function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
     sym = unwrap(sym)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         return sym isa ParameterIndex || is_parameter(ic, sym) ||
-               iscall(sym) && operation(sym) === getindex &&
+               iscall(sym) &&
+               operation(sym) === getindex &&
                is_parameter(ic, first(arguments(sym)))
     end
     if unwrap(sym) isa Int
@@ -526,34 +527,19 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym::Sym
 end
 
 function SymbolicIndexingInterface.is_timeseries_parameter(sys::AbstractSystem, sym)
+    is_time_dependent(sys) || return false
     has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing || return false
     is_timeseries_parameter(ic, sym)
 end
 
 function SymbolicIndexingInterface.timeseries_parameter_index(sys::AbstractSystem, sym)
+    is_time_dependent(sys) || return nothing
     has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing || return nothing
     timeseries_parameter_index(ic, sym)
 end
 
 function SymbolicIndexingInterface.parameter_observed(sys::AbstractSystem, sym)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        allvars = vars(sym; op = Symbolics.Operator)
-        ts_idxs = Set{Int}()
-        for var in allvars
-            var = unwrap(var)
-            # FIXME: Shouldn't have to shift systems
-            if istree(var) && (op = operation(var)) isa Shift && op.steps == 1
-                var = only(arguments(var))
-            end
-            ts_idx = check_index_map(ic.discrete_idx, unwrap(var))
-            ts_idx === nothing && continue
-            push!(ts_idxs, ts_idx[1])
-        end
-        if length(ts_idxs) == 1
-            ts_idx = only(ts_idxs)
-        else
-            ts_idx = nothing
-        end
         rawobs = build_explicit_observed_function(
             sys, sym; param_only = true, return_inplace = true)
         if rawobs isa Tuple
@@ -580,10 +566,44 @@ function SymbolicIndexingInterface.parameter_observed(sys::AbstractSystem, sym)
             end
         end
     else
-        ts_idx = nothing
         obsfn = build_explicit_observed_function(sys, sym; param_only = true)
     end
-    return ParameterObservedFunction(ts_idx, obsfn)
+    return obsfn
+end
+
+function _all_ts_idxs!(ts_idxs, ::NotSymbolic, sys, sym)
+    if is_variable(sys, sym)
+        push!(ts_idxs, ContinuousTimeseries())
+    elseif is_timeseries_parameter(sys, sym)
+        push!(ts_idxs, timeseries_parameter_index(sys, sym).timeseries_idx)
+    end
+end
+# Need this to avoid ambiguity with the array case
+for traitT in [
+    ScalarSymbolic,
+    ArraySymbolic
+]
+    @eval function _all_ts_idxs!(ts_idxs, ::$traitT, sys, sym)
+        allsyms = vars(sym; op = Symbolics.Operator)
+        foreach(allsyms) do s
+            _all_ts_idxs!(ts_idxs, sys, s)
+        end
+    end
+end
+function _all_ts_idxs!(ts_idxs, ::NotSymbolic, sys, sym::AbstractArray)
+    foreach(sym) do s
+        _all_ts_idxs!(ts_idxs, sys, s)
+    end
+end
+_all_ts_idxs!(ts_idxs, sys, sym) = _all_ts_idxs!(ts_idxs, NotSymbolic(), sys, sym)
+
+function SymbolicIndexingInterface.get_all_timeseries_indexes(sys::AbstractSystem, sym)
+    if !is_time_dependent(sys)
+        return Set()
+    end
+    ts_idxs = Set()
+    _all_ts_idxs!(ts_idxs, sys, sym)
+    return ts_idxs
 end
 
 function SymbolicIndexingInterface.parameter_symbols(sys::AbstractSystem)

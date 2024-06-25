@@ -363,7 +363,7 @@ function SymbolicIndexingInterface.set_parameter!(
             if validate_size && size(val) !== size(p.discrete[i][j][k])
                 throw(InvalidParameterSizeException(size(p.discrete[i][j][k]), size(val)))
             end
-            p.discrete[i][j][k][l...] = val
+            p.discrete[i][j][k] = val
         else
             p.discrete[i][j][k][l...] = val
         end
@@ -586,7 +586,8 @@ end
 Base.size(::NestedGetIndex) = ()
 
 function SymbolicIndexingInterface.with_updated_parameter_timeseries_values(
-        ps::MTKParameters, args::Pair{A, B}...) where {A, B <: NestedGetIndex}
+        ::AbstractSystem, ps::MTKParameters, args::Pair{A, B}...) where {
+        A, B <: NestedGetIndex}
     for (i, val) in args
         ps.discrete[i] = val.x
     end
