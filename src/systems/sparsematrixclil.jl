@@ -174,11 +174,9 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
         # eliminate `v`
         coeff = 0
         ivars = eadj[ei]
-        vj = findfirstequal(vpivot, ivars)
-        if vj !== nothing
+        vj = something(findfirstequal(vpivot, ivars), 0)
+        if vj !== 0
             coeff = old_cadj[ei][vj]
-            deleteat!(old_cadj[ei], vj)
-            deleteat!(eadj[ei], vj)
         elseif pivot_equal
             continue
         end
@@ -207,10 +205,10 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
             ivv = ivars[ivind += 1]
             dobreak = false
             while true
+                # M[j, i] = div(M[j, i] * pivot - M[j, k] * M[k, i], prev_pivot)
+                ci = 0
                 if kvv == ivv
                     v = kvv
-                    ck = kcoeffs[kvind]
-                    ci = icoeffs[ivind]
                     kvind += 1
                     ivind += 1
                     if kvind > numkvars
@@ -223,35 +221,46 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
                     else
                         ivv = ivars[ivind]
                     end
-                    p1 = Base.Checked.checked_mul(pivot, ci)
-                    p2 = Base.Checked.checked_mul(coeff, ck)
-                    ci = exactdiv(Base.Checked.checked_sub(p1, p2), last_pivot)
+                    if v != vpivot
+                        ck = kcoeffs[kvind - 1]
+                        ci = icoeffs[ivind - 1]
+                        p1 = Base.Checked.checked_mul(pivot, ci)
+                        p2 = Base.Checked.checked_mul(coeff, ck)
+                        ci = exactdiv(Base.Checked.checked_sub(p1, p2), last_pivot)
+                    end
                 elseif kvv < ivv
+                    # M[j, i] == 0
                     v = kvv
-                    ck = kcoeffs[kvind]
                     kvind += 1
                     if kvind > numkvars
                         dobreak = true
                     else
                         kvv = kvars[kvind]
                     end
-                    p2 = Base.Checked.checked_mul(coeff, ck)
-                    ci = exactdiv(Base.Checked.checked_neg(p2), last_pivot)
+                    if v != vpivot
+                        ck = kcoeffs[kvind - 1]
+                        p2 = Base.Checked.checked_mul(coeff, ck)
+                        ci = exactdiv(Base.Checked.checked_neg(p2), last_pivot)
+                    end
                 else # kvv > ivv
+                    # M[k, i] == 0
                     v = ivv
-                    ci = icoeffs[ivind]
                     ivind += 1
                     if ivind > numivars
                         dobreak = true
                     else
                         ivv = ivars[ivind]
                     end
-                    ci = exactdiv(Base.Checked.checked_mul(pivot, ci), last_pivot)
+                    if v != vpivot
+                        ci = icoeffs[ivind - 1]
+                        ci = exactdiv(Base.Checked.checked_mul(pivot, ci), last_pivot)
+                    end
                 end
                 if _debug_mode
                     @assert v == vars[vi += 1]
                 end
-                if v != vpivot && !iszero(ci)
+                if !iszero(ci)
+                    @assert v != vpivot
                     tmp_incidence[tmp_len += 1] = v
                     tmp_coeffs[tmp_len] = ci
                 end
