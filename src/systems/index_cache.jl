@@ -113,7 +113,7 @@ function IndexCache(sys::AbstractSystem)
                     error("Discrete subsystem $i input $inp is not a parameter")
                 disc_clocks[inp] = i
                 disc_clocks[default_toterm(inp)] = i
-                if hasname(inp) && (!istree(inp) || operation(inp) !== getindex)
+                if hasname(inp) && (!iscall(inp) || operation(inp) !== getindex)
                     disc_clocks[getname(inp)] = i
                     disc_clocks[default_toterm(inp)] = i
                 end
@@ -126,7 +126,7 @@ function IndexCache(sys::AbstractSystem)
                     error("Discrete subsystem $i unknown $sym is not a parameter")
                 disc_clocks[sym] = i
                 disc_clocks[default_toterm(sym)] = i
-                if hasname(sym) && (!istree(sym) || operation(sym) !== getindex)
+                if hasname(sym) && (!iscall(sym) || operation(sym) !== getindex)
                     disc_clocks[getname(sym)] = i
                     disc_clocks[getname(default_toterm(sym))] = i
                 end
@@ -138,13 +138,13 @@ function IndexCache(sys::AbstractSystem)
                 # FIXME: This shouldn't be necessary
                 eq.rhs === -0.0 && continue
                 sym = eq.lhs
-                if istree(sym) && operation(sym) == Shift(t, 1)
+                if iscall(sym) && operation(sym) == Shift(t, 1)
                     sym = only(arguments(sym))
                 end
                 disc_clocks[sym] = i
                 disc_clocks[sym] = i
                 disc_clocks[default_toterm(sym)] = i
-                if hasname(sym) && (!istree(sym) || operation(sym) !== getindex)
+                if hasname(sym) && (!iscall(sym) || operation(sym) !== getindex)
                     disc_clocks[getname(sym)] = i
                     disc_clocks[getname(default_toterm(sym))] = i
                 end
@@ -153,7 +153,7 @@ function IndexCache(sys::AbstractSystem)
 
         for par in inputs[continuous_id]
             is_parameter(sys, par) || error("Discrete subsystem input is not a parameter")
-            istree(par) && operation(par) isa Hold ||
+            iscall(par) && operation(par) isa Hold ||
                 error("Continuous subsystem input is not a Hold")
             if haskey(disc_clocks, par)
                 sym = par
@@ -176,7 +176,7 @@ function IndexCache(sys::AbstractSystem)
             disc_clocks[affect.lhs] = user_affect_clock
             disc_clocks[default_toterm(affect.lhs)] = user_affect_clock
             if hasname(affect.lhs) &&
-               (!istree(affect.lhs) || operation(affect.lhs) !== getindex)
+               (!iscall(affect.lhs) || operation(affect.lhs) !== getindex)
                 disc_clocks[getname(affect.lhs)] = user_affect_clock
                 disc_clocks[getname(default_toterm(affect.lhs))] = user_affect_clock
             end
@@ -190,7 +190,7 @@ function IndexCache(sys::AbstractSystem)
                 disc = unwrap(disc)
                 disc_clocks[disc] = user_affect_clock
                 disc_clocks[default_toterm(disc)] = user_affect_clock
-                if hasname(disc) && (!istree(disc) || operation(disc) !== getindex)
+                if hasname(disc) && (!iscall(disc) || operation(disc) !== getindex)
                     disc_clocks[getname(disc)] = user_affect_clock
                     disc_clocks[getname(default_toterm(disc))] = user_affect_clock
                 end
@@ -245,7 +245,7 @@ function IndexCache(sys::AbstractSystem)
             for (j, sym) in enumerate(buffer[btype])
                 disc_idxs[sym] = (clockidx, i, j)
                 disc_idxs[default_toterm(sym)] = (clockidx, i, j)
-                if hasname(sym) && (!istree(sym) || operation(sym) !== getindex)
+                if hasname(sym) && (!iscall(sym) || operation(sym) !== getindex)
                     disc_idxs[getname(sym)] = (clockidx, i, j)
                     disc_idxs[getname(default_toterm(sym))] = (clockidx, i, j)
                 end
@@ -256,7 +256,7 @@ function IndexCache(sys::AbstractSystem)
         haskey(disc_idxs, sym) && continue
         disc_idxs[sym] = (clockid, 0, 0)
         disc_idxs[default_toterm(sym)] = (clockid, 0, 0)
-        if hasname(sym) && (!istree(sym) || operation(sym) !== getindex)
+        if hasname(sym) && (!iscall(sym) || operation(sym) !== getindex)
             disc_idxs[getname(sym)] = (clockid, 0, 0)
             disc_idxs[getname(default_toterm(sym))] = (clockid, 0, 0)
         end
