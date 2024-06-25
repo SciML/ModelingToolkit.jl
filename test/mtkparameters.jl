@@ -290,3 +290,71 @@ end
     sys = complete(sys)
     @test_throws ["Could not evaluate", "b", "Missing", "2c"] MTKParameters(sys, [a => 1.0])
 end
+
+# Parameter timeseries
+# dt = 0.1
+# dt2 = 0.2
+# @variables x(t)=0 y(t)=0 u(t)=0 yd1(t)=0 ud1(t)=0 yd2(t)=0 ud2(t)=0
+# @parameters kp=1 r=1
+
+# eqs = [
+#        # controller (time discrete part `dt=0.1`)
+#        yd1 ~ Sample(t, dt)(y)
+#        ud1 ~ kp * (r - yd1)
+#        # controller (time discrete part `dt=0.2`)
+#        yd2 ~ Sample(t, dt2)(y)
+#        ud2 ~ kp * (r - yd2)
+
+#        # plant (time continuous part)
+#        u ~ Hold(ud1) + Hold(ud2)
+#        D(x) ~ -x + u
+#        y ~ x]
+
+# @mtkbuild cl = ODESystem(eqs, t)
+ps = MTKParameters(([1.0, 1.0],), SizedArray{2}([([0.0, 0.0],), ([0.0, 0.0],)]), (), (), (), nothing, nothing)
+# ps = MTKParameters(cl, [kp => 1.0])
+with_updated_parameter_timeseries_values(
+    ps, 1 => ModelingToolkit.NestedGetIndex(([5.0, 10.0],)))
+@test ps.discrete[1][1] == [5.0, 10.0]
+with_updated_parameter_timeseries_values(
+    ps, 1 => ModelingToolkit.NestedGetIndex(([3.0, 30.0],)),
+    2 => ModelingToolkit.NestedGetIndex(([4.0, 40.0],)))
+@test ps.discrete[1][1] == [3.0, 30.0]
+@test ps.discrete[2][1] == [4.0, 40.0]
+@test SciMLBase.get_saveable_values(ps, 1).x == ps.discrete[1]
+
+# With multiple types and clocks
+# @variables x(t) xd1(t) xd2(t) flag(t)::Bool yd1(t) yd2(t) yc1(t) yc2(t)
+# dt = 0.1
+# k1 = ShiftIndex(t, dt)
+# ssc = ModelingToolkit.SolverStepClock(t)
+# k2 = ShiftIndex(ssc)
+
+# eqs = [
+#     flag ~ ~flag(k1 - 1),
+#     xd1 ~ Sample(t, dt)(x),
+#     yd1 ~ ifelse(flag, xd1, yd1(k1 - 1)), xd2 ~ Sample(ssc)(x),
+#     yd2 ~ yd2(k2 - 1) + xd2, yc1 ~ Hold(yd1),
+#     yc2 ~ Hold(yd2),
+#     D(x) ~ yc1 + yc2
+# ]
+# @mtkbuild sys = ODESystem(eqs, t)
+# ps = MTKParameters(sys,
+#     [flag => true, yd1 => ifelse(flag, Sample(t, dt)(x), 1.0),
+#         yd2 => 2.0 + Sample(ssc)(x), Sample(t, dt)(x) => x,
+#         Sample(ssc)(x) => x, Hold(yd1) => yd1, Hold(yd2) => yd2],
+#     [x => 3.0])
+ps = MTKParameters((), SizedVector{2}([([1.0, 2.0, 3.0], [false]), ([4.0, 5.0, 6.0], Bool[])]), (), (), (), nothing, nothing)
+@test SciMLBase.get_saveable_values(ps, 1).x isa Tuple{Vector{Float64}, Vector{Bool}}
+# tsidx1 = timeseries_parameter_index(sys, flag).timeseries_idx
+# tsidx2 = 3 - tsidx1
+tsidx1 = 1
+tsidx2 = 2
+@test length(ps.discrete[tsidx1][1]) == 3
+@test length(ps.discrete[tsidx1][2]) == 1
+@test length(ps.discrete[tsidx2][1]) == 3
+@test length(ps.discrete[tsidx2][2]) == 0
+with_updated_parameter_timeseries_values(
+    ps, tsidx1 => ModelingToolkit.NestedGetIndex(([10.0, 11.0, 12.0], [false])))
+@test ps.discrete[tsidx1][1] == [10.0, 11.0, 12.0]
+@test ps.discrete[tsidx1][2][] == false
