@@ -281,7 +281,7 @@ function _check_operator_variables(eq, op::T, expr = eq.rhs) where {T}
         throw_invalid_operator(expr, eq, op)
     end
     foreach(expr -> _check_operator_variables(eq, op, expr),
-        SymbolicUtils.unsorted_arguments(expr))
+        SymbolicUtils.arguments(expr))
 end
 """
 Check if all the LHS are unique

@@ -85,7 +85,7 @@ function collect_instream!(set, expr, occurs = false)
     iscall(expr) || return occurs
     op = operation(expr)
     op === instream && (push!(set, expr); occurs = true)
-    for a in SymbolicUtils.unsorted_arguments(expr)
+    for a in SymbolicUtils.arguments(expr)
         occurs |= collect_instream!(set, a, occurs)
     end
     return occurs
