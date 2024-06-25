@@ -157,10 +157,10 @@ end
     dt = 0.1
     @variables x(t) y(t) u(t) yd(t) ud(t) r(t) z(t)
     @parameters kp kq
-    d = Clock(t, dt)
+    d = Clock(dt)
     k = ShiftIndex(d)
 
-    eqs = [yd ~ Sample(t, dt)(y)
+    eqs = [yd ~ Sample(dt)(y)
            ud ~ kp * (r - yd) + kq * z
            r ~ 1.0
            u ~ Hold(ud)

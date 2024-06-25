@@ -32,6 +32,7 @@ struct IndexCache
     constant_idx::ParamIndexMap
     dependent_idx::ParamIndexMap
     nonnumeric_idx::ParamIndexMap
+    observed_syms::Set{Union{Symbol, BasicSymbolic}}
     discrete_buffer_sizes::Vector{Vector{BufferTemplate}}
     tunable_buffer_sizes::Vector{BufferTemplate}
     constant_buffer_sizes::Vector{BufferTemplate}
@@ -48,16 +49,21 @@ function IndexCache(sys::AbstractSystem)
     let idx = 1
         for sym in unks
             usym = unwrap(sym)
+            rsym = renamespace(sys, usym)
             sym_idx = if Symbolics.isarraysymbolic(sym)
                 reshape(idx:(idx + length(sym) - 1), size(sym))
             else
                 idx
             end
             unk_idxs[usym] = sym_idx
+            unk_idxs[rsym] = sym_idx
             if hasname(sym) && (!iscall(sym) || operation(sym) !== getindex)
                 name = getname(usym)
+                rname = getname(rsym)
                 unk_idxs[name] = sym_idx
+                unk_idxs[rname] = sym_idx
                 symbol_to_variable[name] = sym
+                symbol_to_variable[rname] = sym
             end
             idx += length(sym)
         end
@@ -71,18 +77,41 @@ function IndexCache(sys::AbstractSystem)
             if idxs == idxs[begin]:idxs[end]
                 idxs = reshape(idxs[begin]:idxs[end], size(idxs))
             end
+            rsym = renamespace(sys, arrsym)
             unk_idxs[arrsym] = idxs
+            unk_idxs[rsym] = idxs
             if hasname(arrsym)
                 name = getname(arrsym)
+                rname = getname(rsym)
                 unk_idxs[name] = idxs
+                unk_idxs[rname] = idxs
                 symbol_to_variable[name] = arrsym
+                symbol_to_variable[rname] = arrsym
             end
         end
     end
 
+    observed_syms = Set{Union{Symbol, BasicSymbolic}}()
     for eq in observed(sys)
-        if symbolic_type(eq.lhs) != NotSymbolic() && hasname(eq.lhs)
-            symbol_to_variable[getname(eq.lhs)] = eq.lhs
+        if symbolic_type(eq.lhs) != NotSymbolic()
+            sym = eq.lhs
+            ttsym = default_toterm(sym)
+            rsym = renamespace(sys, sym)
+            rttsym = renamespace(sys, ttsym)
+            push!(observed_syms, sym)
+            push!(observed_syms, ttsym)
+            push!(observed_syms, rsym)
+            push!(observed_syms, rttsym)
+            if hasname(sym) && (!iscall(sym) || operation(sym) !== getindex)
+                symbol_to_variable[getname(sym)] = eq.lhs
+                symbol_to_variable[getname(ttsym)] = eq.lhs
+                symbol_to_variable[getname(rsym)] = eq.lhs
+                symbol_to_variable[getname(rttsym)] = eq.lhs
+                push!(observed_syms, getname(sym))
+                push!(observed_syms, getname(ttsym))
+                push!(observed_syms, getname(rsym))
+                push!(observed_syms, getname(rttsym))
+            end
         end
     end
 
@@ -109,26 +138,40 @@ function IndexCache(sys::AbstractSystem)
 
             for inp in inps
                 inp = unwrap(inp)
+                ttinp = default_toterm(inp)
+                rinp = renamespace(sys, inp)
+                rttinp = renamespace(sys, ttinp)
                 is_parameter(sys, inp) ||
                     error("Discrete subsystem $i input $inp is not a parameter")
                 disc_clocks[inp] = i
-                disc_clocks[default_toterm(inp)] = i
+                disc_clocks[ttinp] = i
+                disc_clocks[rinp] = i
+                disc_clocks[rttinp] = i
                 if hasname(inp) && (!iscall(inp) || operation(inp) !== getindex)
                     disc_clocks[getname(inp)] = i
-                    disc_clocks[default_toterm(inp)] = i
+                    disc_clocks[getname(ttinp)] = i
+                    disc_clocks[getname(rinp)] = i
+                    disc_clocks[getname(rttinp)] = i
                 end
                 insert_by_type!(disc_buffers[i], inp)
             end
 
             for sym in unknowns(disc_sys)
                 sym = unwrap(sym)
+                ttsym = default_toterm(sym)
+                rsym = renamespace(sys, sym)
+                rttsym = renamespace(sys, ttsym)
                 is_parameter(sys, sym) ||
                     error("Discrete subsystem $i unknown $sym is not a parameter")
                 disc_clocks[sym] = i
-                disc_clocks[default_toterm(sym)] = i
+                disc_clocks[ttsym] = i
+                disc_clocks[rsym] = i
+                disc_clocks[rttsym] = i
                 if hasname(sym) && (!iscall(sym) || operation(sym) !== getindex)
                     disc_clocks[getname(sym)] = i
-                    disc_clocks[getname(default_toterm(sym))] = i
+                    disc_clocks[getname(ttsym)] = i
+                    disc_clocks[getname(rsym)] = i
+                    disc_clocks[getname(rttsym)] = i
                 end
                 insert_by_type!(disc_buffers[i], sym)
             end
@@ -138,21 +181,31 @@ function IndexCache(sys::AbstractSystem)
                 # FIXME: This shouldn't be necessary
                 eq.rhs === -0.0 && continue
                 sym = eq.lhs
+                ttsym = default_toterm(sym)
+                rsym = renamespace(sys, sym)
+                rttsym = renamespace(sys, ttsym)
                 if iscall(sym) && operation(sym) == Shift(t, 1)
                     sym = only(arguments(sym))
                 end
                 disc_clocks[sym] = i
-                disc_clocks[sym] = i
-                disc_clocks[default_toterm(sym)] = i
+                disc_clocks[ttsym] = i
+                disc_clocks[rsym] = i
+                disc_clocks[rttsym] = i
                 if hasname(sym) && (!iscall(sym) || operation(sym) !== getindex)
                     disc_clocks[getname(sym)] = i
-                    disc_clocks[getname(default_toterm(sym))] = i
+                    disc_clocks[getname(ttsym)] = i
+                    disc_clocks[getname(rsym)] = i
+                    disc_clocks[getname(rttsym)] = i
                 end
             end
         end
 
         for par in inputs[continuous_id]
             is_parameter(sys, par) || error("Discrete subsystem input is not a parameter")
+            par = unwrap(par)
+            ttpar = default_toterm(par)
+            rpar = renamespace(sys, par)
+            rttpar = renamespace(sys, ttpar)
             iscall(par) && operation(par) isa Hold ||
                 error("Continuous subsystem input is not a Hold")
             if haskey(disc_clocks, par)
@@ -163,6 +216,9 @@ function IndexCache(sys::AbstractSystem)
             haskey(disc_clocks, sym) ||
                 error("Variable $par not part of a discrete subsystem")
             disc_clocks[par] = disc_clocks[sym]
+            disc_clocks[ttpar] = disc_clocks[sym]
+            disc_clocks[rpar] = disc_clocks[sym]
+            disc_clocks[rttpar] = disc_clocks[sym]
             insert_by_type!(disc_buffers[disc_clocks[sym]], par)
         end
     end
@@ -172,13 +228,21 @@ function IndexCache(sys::AbstractSystem)
     for affect in affs
         if affect isa Equation
             is_parameter(sys, affect.lhs) || continue
+            sym = affect.lhs
+            ttsym = default_toterm(sym)
+            rsym = renamespace(sys, sym)
+            rttsym = renamespace(sys, ttsym)
 
-            disc_clocks[affect.lhs] = user_affect_clock
-            disc_clocks[default_toterm(affect.lhs)] = user_affect_clock
-            if hasname(affect.lhs) &&
-               (!iscall(affect.lhs) || operation(affect.lhs) !== getindex)
-                disc_clocks[getname(affect.lhs)] = user_affect_clock
-                disc_clocks[getname(default_toterm(affect.lhs))] = user_affect_clock
+            disc_clocks[sym] = user_affect_clock
+            disc_clocks[ttsym] = user_affect_clock
+            disc_clocks[rsym] = user_affect_clock
+            disc_clocks[rttsym] = user_affect_clock
+            if hasname(sym) &&
+               (!iscall(sym) || operation(sym) !== getindex)
+                disc_clocks[getname(sym)] = user_affect_clock
+                disc_clocks[getname(ttsym)] = user_affect_clock
+                disc_clocks[getname(rsym)] = user_affect_clock
+                disc_clocks[getname(rttsym)] = user_affect_clock
             end
             buffer = get!(disc_buffers, user_affect_clock, Dict{Any, Set{BasicSymbolic}}())
             insert_by_type!(buffer, affect.lhs)
@@ -188,11 +252,18 @@ function IndexCache(sys::AbstractSystem)
                 is_parameter(sys, disc) ||
                     error("Expected discrete variable $disc in callback to be a parameter")
                 disc = unwrap(disc)
+                ttdisc = default_toterm(disc)
+                rdisc = renamespace(sys, disc)
+                rttdisc = renamespace(sys, ttdisc)
                 disc_clocks[disc] = user_affect_clock
-                disc_clocks[default_toterm(disc)] = user_affect_clock
+                disc_clocks[ttdisc] = user_affect_clock
+                disc_clocks[rdisc] = user_affect_clock
+                disc_clocks[rttdisc] = user_affect_clock
                 if hasname(disc) && (!iscall(disc) || operation(disc) !== getindex)
                     disc_clocks[getname(disc)] = user_affect_clock
-                    disc_clocks[getname(default_toterm(disc))] = user_affect_clock
+                    disc_clocks[getname(ttdisc)] = user_affect_clock
+                    disc_clocks[getname(rdisc)] = user_affect_clock
+                    disc_clocks[getname(rttdisc)] = user_affect_clock
                 end
                 buffer = get!(
                     disc_buffers, user_affect_clock, Dict{Any, Set{BasicSymbolic}}())
@@ -267,13 +338,22 @@ function IndexCache(sys::AbstractSystem)
         buffer_sizes = BufferTemplate[]
         for (i, (T, buf)) in enumerate(buffers)
             for (j, p) in enumerate(buf)
+                ttp = default_toterm(p)
+                rp = renamespace(sys, p)
+                rttp = renamespace(sys, ttp)
                 idxs[p] = (i, j)
-                idxs[default_toterm(p)] = (i, j)
+                idxs[ttp] = (i, j)
+                idxs[rp] = (i, j)
+                idxs[rttp] = (i, j)
                 if hasname(p) && (!iscall(p) || operation(p) !== getindex)
                     idxs[getname(p)] = (i, j)
+                    idxs[getname(ttp)] = (i, j)
+                    idxs[getname(rp)] = (i, j)
+                    idxs[getname(rttp)] = (i, j)
                     symbol_to_variable[getname(p)] = p
-                    idxs[getname(default_toterm(p))] = (i, j)
-                    symbol_to_variable[getname(default_toterm(p))] = p
+                    symbol_to_variable[getname(ttp)] = p
+                    symbol_to_variable[getname(rp)] = p
+                    symbol_to_variable[getname(rttp)] = p
                 end
             end
             push!(buffer_sizes, BufferTemplate(T, length(buf)))
@@ -293,6 +373,7 @@ function IndexCache(sys::AbstractSystem)
         const_idxs,
         dependent_idxs,
         nonnumeric_idxs,
+        observed_syms,
         disc_buffer_sizes,
         tunable_buffer_sizes,
         const_buffer_sizes,
@@ -303,6 +384,10 @@ function IndexCache(sys::AbstractSystem)
 end
 
 function SymbolicIndexingInterface.is_variable(ic::IndexCache, sym)
+    return check_index_map(ic.unknown_idx, sym) !== nothing
+end
+
+function SymbolicIndexingInterface.is_variable(ic::IndexCache, sym::Symbol)
     return check_index_map(ic.unknown_idx, sym) !== nothing
 end
 
