@@ -604,16 +604,15 @@ function SciMLBase.create_parameter_timeseries_collection(
 
     for (i, partition) in enumerate(ps.discrete)
         clock = id_to_clock[i]
-        if clock isa Clock
-            ts = tspan[1]:(clock.dt):tspan[2]
-            push!(buffers, DiffEqArray(NestedGetIndex{typeof(partition)}[], ts, (1, 1)))
-        elseif clock isa SolverStepClock
-            push!(buffers,
+        @match clock begin
+            PeriodicClock(dt, _...) => begin
+                ts = tspan[1]:(dt):tspan[2]
+                push!(buffers, DiffEqArray(NestedGetIndex{typeof(partition)}[], ts, (1, 1)))
+            end
+            &SolverStepClock => push!(buffers,
                 DiffEqArray(NestedGetIndex{typeof(partition)}[], eltype(tspan)[], (1, 1)))
-        elseif clock isa Continuous
-            continue
-        else
-            error("Unhandled clock $clock")
+            &Continuous => continue
+            _ => error("Unhandled clock $clock")
         end
     end
 

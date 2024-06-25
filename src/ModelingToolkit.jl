@@ -43,7 +43,8 @@ using SciMLStructures
 using Compat
 using AbstractTrees
 using DiffEqBase, SciMLBase, ForwardDiff
-using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap
+using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap, TimeDomain,
+                 PeriodicClock, Clock, SolverStepClock, Continuous
 using Distributed
 import JuliaFormatter
 using MLStyle
@@ -272,6 +273,6 @@ export debug_system
 #export has_discrete_domain, has_continuous_domain
 #export is_discrete_domain, is_continuous_domain, is_hybrid_domain
 export Sample, Hold, Shift, ShiftIndex, sampletime, SampleTime
-export Clock #, InferredDiscrete,
+export Clock, SolverStepClock, TimeDomain
 
 end # module

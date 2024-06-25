@@ -8,6 +8,7 @@ import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           isparameter, isconstant,
                           independent_variables, SparseMatrixCLIL, AbstractSystem,
                           equations, isirreducible, input_timedomain, TimeDomain,
+                          InferredTimeDomain,
                           VariableType, getvariabletype, has_equations, ODESystem
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
@@ -331,7 +332,7 @@ function TearingState(sys; quick_cancel = false, check = true)
                !isdifferential(var) && (it = input_timedomain(var)) !== nothing
                 set_incidence = false
                 var = only(arguments(var))
-                var = setmetadata(var, TimeDomain, it)
+                var = setmetadata(var, VariableTimeDomain, it)
                 @goto ANOTHER_VAR
             end
         end
@@ -660,7 +661,7 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
             @set! sys.defaults = merge(ModelingToolkit.defaults(sys),
                 Dict(v => 0.0 for v in Iterators.flatten(inputs)))
         end
-        ps = [setmetadata(sym, TimeDomain, get(time_domains, sym, Continuous()))
+        ps = [setmetadata(sym, VariableTimeDomain, get(time_domains, sym, Continuous))
               for sym in get_ps(sys)]
         @set! sys.ps = ps
     else

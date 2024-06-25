@@ -571,8 +571,17 @@ function SymbolicIndexingInterface.parameter_observed(sys::AbstractSystem, sym)
     return obsfn
 end
 
+function has_observed_with_lhs(sys, sym)
+    has_observed(sys) || return false
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+        return any(isequal(sym), ic.observed_syms)
+    else
+        return any(isequal(sym), [eq.lhs for eq in observed(sys)])
+    end
+end
+
 function _all_ts_idxs!(ts_idxs, ::NotSymbolic, sys, sym)
-    if is_variable(sys, sym)
+    if is_variable(sys, sym) || is_independent_variable(sys, sym)
         push!(ts_idxs, ContinuousTimeseries())
     elseif is_timeseries_parameter(sys, sym)
         push!(ts_idxs, timeseries_parameter_index(sys, sym).timeseries_idx)
@@ -585,17 +594,33 @@ for traitT in [
 ]
     @eval function _all_ts_idxs!(ts_idxs, ::$traitT, sys, sym)
         allsyms = vars(sym; op = Symbolics.Operator)
-        foreach(allsyms) do s
-            _all_ts_idxs!(ts_idxs, sys, s)
+        for s in allsyms
+            s = unwrap(s)
+            if is_variable(sys, s) || is_independent_variable(sys, s) ||
+               has_observed_with_lhs(sys, s)
+                push!(ts_idxs, ContinuousTimeseries())
+            elseif is_timeseries_parameter(sys, s)
+                push!(ts_idxs, timeseries_parameter_index(sys, s).timeseries_idx)
+            end
         end
     end
 end
+function _all_ts_idxs!(ts_idxs, ::ScalarSymbolic, sys, sym::Symbol)
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+        return _all_ts_idxs!(ts_idxs, sys, ic.symbol_to_variable[sym])
+    elseif is_variable(sys, sym) || is_independent_variable(sys, sym) ||
+           any(isequal(sym), [getname(eq.lhs) for eq in observed(sys)])
+        push!(ts_idxs, ContinuousTimeseries())
+    elseif is_timeseries_parameter(sys, sym)
+        push!(ts_idxs, timeseries_parameter_index(sys, s).timeseries_idx)
+    end
+end
 function _all_ts_idxs!(ts_idxs, ::NotSymbolic, sys, sym::AbstractArray)
-    foreach(sym) do s
+    for s in sym
         _all_ts_idxs!(ts_idxs, sys, s)
     end
 end
-_all_ts_idxs!(ts_idxs, sys, sym) = _all_ts_idxs!(ts_idxs, NotSymbolic(), sys, sym)
+_all_ts_idxs!(ts_idxs, sys, sym) = _all_ts_idxs!(ts_idxs, symbolic_type(sym), sys, sym)
 
 function SymbolicIndexingInterface.get_all_timeseries_indexes(sys::AbstractSystem, sym)
     if !is_time_dependent(sys)
