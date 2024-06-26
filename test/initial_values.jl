@@ -108,3 +108,12 @@ prob = ODEProblem(sys, [], (0.0, 1.0), [A1 => 0.3])
         @test isempty(ModelingToolkit.defaults(sys))
     end
 end
+
+# Using indepvar in initialization
+# Issue#2799
+@variables x(t)
+@parameters p
+@mtkbuild sys = ODESystem([D(x) ~ p], t; defaults = [x => t, p => 2t])
+prob = ODEProblem(structural_simplify(sys), [], (1.0, 2.0), [])
+@test prob[x] == 1.0
+@test prob.ps[p] == 2.0

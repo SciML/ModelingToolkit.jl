@@ -15,8 +15,8 @@ end
 
 function MTKParameters(
         sys::AbstractSystem, p, u0 = Dict(); tofloat = false, use_union = false,
-        eval_expression = false, eval_module = @__MODULE__)
-    ic::IndexCache = if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        t0 = nothing, eval_expression = false, eval_module = @__MODULE__)
+    ic = if has_index_cache(sys) && get_index_cache(sys) !== nothing
         get_index_cache(sys)
     else
         error("Cannot create MTKParameters if system does not have index_cache")
@@ -43,6 +43,9 @@ function MTKParameters(
     defs = merge(defs, u0)
     defs = merge(Dict(eq.lhs => eq.rhs for eq in observed(sys)), defs)
     bigdefs = merge(defs, p)
+    if t0 !== nothing
+        bigdefs[get_iv(sys)] = t0
+    end
     p = Dict()
     missing_params = Set()
     pdeps = has_parameter_dependencies(sys) ? parameter_dependencies(sys) : nothing
