@@ -836,6 +836,16 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
             merge(parammap, clockedparammap)
         end
     end
+    if eltype(u0map) <: Number
+        u0map = unknowns(sys) .=> u0map
+    end
+    if isempty(u0map)
+        u0map = Dict()
+    end
+    u0map = todict(u0map)
+    if t !== nothing
+        u0map = merge(u0map, Dict(iv => t))
+    end
     # TODO: make it work with clocks
     # ModelingToolkit.get_tearing_state(sys) !== nothing => Requires structural_simplify first
     if sys isa ODESystem && build_initializeprob &&
@@ -843,12 +853,6 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
          all(isequal(Continuous()), ci.var_domain) &&
          ModelingToolkit.get_tearing_state(sys) !== nothing) ||
         !isempty(initialization_equations(sys))) && t !== nothing
-        if eltype(u0map) <: Number
-            u0map = unknowns(sys) .=> u0map
-        end
-        if isempty(u0map)
-            u0map = Dict()
-        end
         initializeprob = ModelingToolkit.InitializationProblem(
             sys, t, u0map, parammap; guesses, warn_initialize_determined,
             initialization_eqs, eval_expression, eval_module)
@@ -871,7 +875,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
                parammap == SciMLBase.NullParameters() && isempty(defs)
             nothing
         else
-            MTKParameters(sys, parammap, trueinit; eval_expression, eval_module)
+            MTKParameters(sys, parammap, trueinit; t0 = t, eval_expression, eval_module)
         end
     else
         u0, p, defs = get_u0_p(sys,
