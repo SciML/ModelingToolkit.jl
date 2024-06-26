@@ -74,3 +74,20 @@ target_varmap = Dict(p => ones(3), q => 2ones(3), q[1] => 2.0, q[2] => 2.0, q[3]
 eqs = [D(D(z)) ~ ones(2, 2)]
 @mtkbuild sys = ODESystem(eqs, t)
 @test_nowarn ODEProblem(sys, [z => zeros(2, 2), D(z) => ones(2, 2)], (0.0, 10.0))
+
+# Initialization with defaults involving parameters that are not part of the system
+# Issue#2817
+@parameters A1 A2 B1 B2
+@variables x1(t) x2(t)
+@mtkbuild sys = ODESystem(
+    [
+        x1 ~ B1,
+        x2 ~ B2
+    ], t; defaults = [
+        A2 => 1 - A1,
+        B1 => A1,
+        B2 => A2
+    ])
+prob = ODEProblem(sys, [], (0.0, 1.0), [A1 => 0.3])
+@test prob.ps[B1] == 0.3
+@test prob.ps[B2] == 0.7
