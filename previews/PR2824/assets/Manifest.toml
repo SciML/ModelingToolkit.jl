@@ -1852,9 +1852,9 @@ version = "0.3.8"
 
 [[deps.SciMLStructures]]
 deps = ["ArrayInterface"]
-git-tree-sha1 = "6ab4beaf88dcdd2639bead916f2347f81dcacd0e"
+git-tree-sha1 = "cfdd1200d150df1d3c055cc72ee6850742e982d7"
 uuid = "53ae85a6-f571-4167-b2af-e1d143709226"
-version = "1.3.0"
+version = "1.4.1"
 
 [[deps.Scratch]]
 deps = ["Dates"]
