@@ -437,7 +437,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
             kwargs...)
         tgrad_oop, tgrad_iip = eval_expression ? eval_module.eval.(tgrad_gen) :
                                (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in tgrad_gen)
-                               
+
         _tgrad(u, p, t) = tgrad_oop(u, p, t)
         _tgrad(u, p::MTKParameters, t) = tgrad_oop(u, p..., t)
         _tgrad(J, u, p, t) = tgrad_iip(J, u, p, t)
@@ -449,9 +449,9 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
     if jac
         jac_gen = generate_jacobian(sys, dvs, ps; expression = Val{!eval_expression},
             sparse = sparse, kwargs...)
-        jac_oop, jac_iip = eval_expression ? eval_module.eval.(jac_gen) : 
+        jac_oop, jac_iip = eval_expression ? eval_module.eval.(jac_gen) :
                            (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in jac_gen)
-        
+
         _jac(u, p, t) = jac_oop(u, p, t)
         _jac(u, p::MTKParameters, t) = jac_oop(u, p..., t)
         _jac(J, u, p, t) = jac_iip(J, u, p, t)
