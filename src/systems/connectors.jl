@@ -187,6 +187,7 @@ end
 struct ConnectionSet
     set::Vector{ConnectionElement} # namespace.sys, var, isouter
 end
+ConnectionSet() = ConnectionSet(ConnectionElement[])
 Base.copy(c::ConnectionSet) = ConnectionSet(copy(c.set))
 
 function Base.show(io::IO, c::ConnectionSet)
@@ -373,51 +374,38 @@ function generate_connection_set!(connectionsets, domain_csets,
 end
 
 function Base.merge(csets::AbstractVector{<:ConnectionSet}, allouter = false)
-    csets, merged = partial_merge(csets, allouter)
-    while merged
-        csets, merged = partial_merge(csets)
-    end
-    csets
-end
-
-function partial_merge(csets::AbstractVector{<:ConnectionSet}, allouter = false)
-    mcsets = ConnectionSet[]
     ele2idx = Dict{ConnectionElement, Int}()
-    cacheset = Set{ConnectionElement}()
-    merged = false
-    for (j, cset) in enumerate(csets)
-        if allouter
-            cset = ConnectionSet(map(withtrueouter, cset.set))
-        end
-        idx = nothing
-        for e in cset.set
-            idx = get(ele2idx, e, nothing)
-            if idx !== nothing
-                merged = true
-                break
+    idx2ele = ConnectionElement[]
+    union_find = IntDisjointSets(0)
+    prev_id = Ref(-1)
+    for cset in csets, (j, s) in enumerate(cset.set)
+        v = allouter ? withtrueouter(s) : s
+        id = let ele2idx = ele2idx, idx2ele = idx2ele
+            get!(ele2idx, v) do
+                push!(idx2ele, v)
+                id = length(idx2ele)
+                id′ = push!(union_find)
+                @assert id == id′
+                id
             end
         end
-        if idx === nothing
-            push!(mcsets, copy(cset))
-            for e in cset.set
-                ele2idx[e] = length(mcsets)
-            end
-        else
-            for e in mcsets[idx].set
-                push!(cacheset, e)
-            end
-            for e in cset.set
-                push!(cacheset, e)
-            end
-            empty!(mcsets[idx].set)
-            for e in cacheset
-                ele2idx[e] = idx
-                push!(mcsets[idx].set, e)
-            end
-            empty!(cacheset)
+        if j > 1
+            union!(union_find, prev_id[], id)
         end
+        prev_id[] = id
     end
-    mcsets, merged
+    id2set = Dict{Int, ConnectionSet}()
+    merged_set = ConnectionSet[]
+    for (id, ele) in enumerate(idx2ele)
+        rid = find_root(union_find, id)
+        set = get!(id2set, rid) do
+            set = ConnectionSet()
+            push!(merged_set, set)
+            set
+        end
+        push!(set.set, ele)
+    end
+    merged_set
 end
 
 function generate_connection_equations_and_stream_connections(csets::AbstractVector{
