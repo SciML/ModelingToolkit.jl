@@ -1674,7 +1674,7 @@ function default_to_parentscope(v)
     uv = unwrap(v)
     uv isa Symbolic || return v
     apply_to_variables(v) do sym
-        if !hasmetadata(uv, SymScope)
+        if (scope = getmetadata(uv, SymScope, LocalScope())) != GlobalScope()
             ParentScope(sym)
         else
             sym
@@ -1962,7 +1962,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         end
     end
     initfn = NonlinearFunction(initsys)
-    initprobmap = getu(initsys, unknowns(sys))
+    initprobmap = isempty(unknowns(sys)) ? nothing : getu(initsys, unknowns(sys))
     ps = full_parameters(sys)
     lin_fun = let diff_idxs = diff_idxs,
         alge_idxs = alge_idxs,
