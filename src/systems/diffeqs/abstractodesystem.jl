@@ -313,7 +313,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         version = nothing, tgrad = false,
         jac = false, p = nothing,
         t = nothing,
-        eval_expression = true,
+        eval_expression = false,
         sparse = false, simplify = false,
         eval_module = @__MODULE__,
         steady_state = false,
@@ -327,12 +327,12 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEFunction`")
     end
-    f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression},
+    f_gen = generate_function(sys, dvs, ps; expression = Val{!eval_expression},
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
-    f_oop, f_iip = eval_expression ?
-                   (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen) :
-                   f_gen
+    f_oop, f_iip = eval_expression ? eval_module.eval.(f_gen) :
+                   (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen)
+
     f(u, p, t) = f_oop(u, p, t)
     f(du, u, p, t) = f_iip(du, u, p, t)
     f(u, p::Tuple{Vararg{Number}}, t) = f_oop(u, p, t)
@@ -352,12 +352,11 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
     if tgrad
         tgrad_gen = generate_tgrad(sys, dvs, ps;
             simplify = simplify,
-            expression = Val{eval_expression},
+            expression = Val{!eval_expression},
             expression_module = eval_module,
             checkbounds = checkbounds, kwargs...)
-        tgrad_oop, tgrad_iip = eval_expression ?
-                               (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in tgrad_gen) :
-                               tgrad_gen
+        tgrad_oop, tgrad_iip = eval_expression ? eval_module.eval.(tgrad_gen) :
+                               (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in tgrad_gen)
         if p isa Tuple
             __tgrad(u, p, t) = tgrad_oop(u, p..., t)
             __tgrad(J, u, p, t) = tgrad_iip(J, u, p..., t)
@@ -374,12 +373,12 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
     if jac
         jac_gen = generate_jacobian(sys, dvs, ps;
             simplify = simplify, sparse = sparse,
-            expression = Val{eval_expression},
+            expression = Val{!eval_expression},
             expression_module = eval_module,
             checkbounds = checkbounds, kwargs...)
-        jac_oop, jac_iip = eval_expression ?
-                           (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in jac_gen) :
-                           jac_gen
+        jac_oop, jac_iip = eval_expression ? eval_module.eval.(jac_gen) :
+                           (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in jac_gen)
+                           
         _jac(u, p, t) = jac_oop(u, p, t)
         _jac(J, u, p, t) = jac_iip(J, u, p, t)
         _jac(u, p::Tuple{Vararg{Number}}, t) = jac_oop(u, p, t)
@@ -474,7 +473,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         ddvs = map(diff2term ∘ Differential(get_iv(sys)), dvs),
         version = nothing, p = nothing,
         jac = false,
-        eval_expression = true,
+        eval_expression = false,
         sparse = false, simplify = false,
         eval_module = @__MODULE__,
         checkbounds = false,
@@ -485,12 +484,11 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEFunction`")
     end
     f_gen = generate_function(sys, dvs, ps; implicit_dae = true,
-        expression = Val{eval_expression},
+        expression = Val{!eval_expression},
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
-    f_oop, f_iip = eval_expression ?
-                   (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen) :
-                   f_gen
+    f_oop, f_iip = eval_expression ? eval_module.eval.(f_gen) :
+                   (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen)
     f(du, u, p, t) = f_oop(du, u, p, t)
     f(du, u, p::MTKParameters, t) = f_oop(du, u, p..., t)
     f(out, du, u, p, t) = f_iip(out, du, u, p, t)
@@ -499,12 +497,12 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
     if jac
         jac_gen = generate_dae_jacobian(sys, dvs, ps;
             simplify = simplify, sparse = sparse,
-            expression = Val{eval_expression},
+            expression = Val{!eval_expression},
             expression_module = eval_module,
             checkbounds = checkbounds, kwargs...)
-        jac_oop, jac_iip = eval_expression ?
-                           (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in jac_gen) :
-                           jac_gen
+        jac_oop, jac_iip = eval_expression ? eval_module.eval.(jac_gen) :
+                           (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in jac_gen)
+                           
         _jac(du, u, p, ˍ₋gamma, t) = jac_oop(du, u, p, ˍ₋gamma, t)
         _jac(du, u, p::MTKParameters, ˍ₋gamma, t) = jac_oop(du, u, p..., ˍ₋gamma, t)
 
@@ -770,7 +768,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         checkbounds = false, sparse = false,
         simplify = false,
         linenumbers = true, parallel = SerialForm(),
-        eval_expression = true,
+        eval_expression = false,
         use_union = true,
         tofloat = true,
         symbolic_u0 = false,

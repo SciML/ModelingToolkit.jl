@@ -192,7 +192,7 @@ end
 function generate_discrete_affect(
         osys::AbstractODESystem, syss, inputs, continuous_id, id_to_clock;
         checkbounds = true,
-        eval_module = @__MODULE__, eval_expression = true)
+        eval_module = @__MODULE__, eval_expression = false)
     @static if VERSION < v"1.7"
         error("The `generate_discrete_affect` function requires at least Julia 1.7")
     end
@@ -412,15 +412,15 @@ function generate_discrete_affect(
         push!(svs, sv)
     end
     if eval_expression
+        affects = map(a -> eval_module.eval(toexpr(LiteralExpr(a))), affect_funs)
+        inits = map(a -> eval_module.eval(toexpr(LiteralExpr(a))), init_funs)
+    else
         affects = map(affect_funs) do a
             drop_expr(@RuntimeGeneratedFunction(eval_module, toexpr(LiteralExpr(a))))
         end
         inits = map(init_funs) do a
             drop_expr(@RuntimeGeneratedFunction(eval_module, toexpr(LiteralExpr(a))))
         end
-    else
-        affects = map(a -> toexpr(LiteralExpr(a)), affect_funs)
-        inits = map(a -> toexpr(LiteralExpr(a)), init_funs)
     end
     defaults = Dict{Any, Any}(v => 0.0 for v in Iterators.flatten(inputs))
     return affects, inits, clocks, svs, appended_parameters, defaults
