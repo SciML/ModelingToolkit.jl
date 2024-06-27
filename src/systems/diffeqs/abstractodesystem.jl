@@ -327,7 +327,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEFunction`")
     end
-    f_gen = generate_function(sys, dvs, ps; expression = Val{!eval_expression},
+    f_gen = generate_function(sys, dvs, ps; expression = Val{true},
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
     f_oop, f_iip = eval_expression ? eval_module.eval.(f_gen) :
@@ -352,7 +352,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
     if tgrad
         tgrad_gen = generate_tgrad(sys, dvs, ps;
             simplify = simplify,
-            expression = Val{!eval_expression},
+            expression = Val{true},
             expression_module = eval_module,
             checkbounds = checkbounds, kwargs...)
         tgrad_oop, tgrad_iip = eval_expression ? eval_module.eval.(tgrad_gen) :
@@ -373,7 +373,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
     if jac
         jac_gen = generate_jacobian(sys, dvs, ps;
             simplify = simplify, sparse = sparse,
-            expression = Val{!eval_expression},
+            expression = Val{true},
             expression_module = eval_module,
             checkbounds = checkbounds, kwargs...)
         jac_oop, jac_iip = eval_expression ? eval_module.eval.(jac_gen) :
@@ -484,7 +484,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEFunction`")
     end
     f_gen = generate_function(sys, dvs, ps; implicit_dae = true,
-        expression = Val{!eval_expression},
+        expression = Val{true},
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
     f_oop, f_iip = eval_expression ? eval_module.eval.(f_gen) :
@@ -497,7 +497,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
     if jac
         jac_gen = generate_dae_jacobian(sys, dvs, ps;
             simplify = simplify, sparse = sparse,
-            expression = Val{!eval_expression},
+            expression = Val{true},
             expression_module = eval_module,
             checkbounds = checkbounds, kwargs...)
         jac_oop, jac_iip = eval_expression ? eval_module.eval.(jac_gen) :

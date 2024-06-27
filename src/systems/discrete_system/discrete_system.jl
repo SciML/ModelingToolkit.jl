@@ -315,7 +315,7 @@ function SciMLBase.DiscreteFunction{iip, specialize}(
     if !iscomplete(sys)
         error("A completed `DiscreteSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
     end
-    f_gen = generate_function(sys, dvs, ps; expression = Val{!eval_expression},
+    f_gen = generate_function(sys, dvs, ps; expression = Val{true},
         expression_module = eval_module, kwargs...)
     f_oop, f_iip = eval_expression ? eval_module.eval.(f_gen) :
                    (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen)

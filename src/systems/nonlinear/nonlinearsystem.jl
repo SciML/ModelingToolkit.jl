@@ -283,7 +283,7 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearFunction`")
     end
-    f_gen = generate_function(sys, dvs, ps; expression = Val{!eval_expression}, kwargs...)
+    f_gen = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
     f_oop, f_iip = eval_expression ? eval_module.eval.(f_gen) :
                    (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in f_gen)
     f(u, p) = f_oop(u, p)
@@ -294,7 +294,7 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
     if jac
         jac_gen = generate_jacobian(sys, dvs, ps;
             simplify = simplify, sparse = sparse,
-            expression = Val{!eval_expression}, kwargs...)
+            expression = Val{true}, kwargs...)
         jac_oop, jac_iip = eval_expression ? eval_module.eval.(jac_gen) :
                            (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in jac_gen)
         _jac(u, p) = jac_oop(u, p)

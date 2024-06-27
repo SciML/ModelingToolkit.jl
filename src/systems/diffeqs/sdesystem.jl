@@ -415,10 +415,10 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
     end
     dvs = scalarize.(dvs)
 
-    f_gen = generate_function(sys, dvs, ps; expression = Val{!eval_expression}, kwargs...)
+    f_gen = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
     f_oop, f_iip = eval_expression ? eval_module.eval.(f_gen) :
                    (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in f_gen)
-    g_gen = generate_diffusion_function(sys, dvs, ps; expression = Val{!eval_expression},
+    g_gen = generate_diffusion_function(sys, dvs, ps; expression = Val{true},
         kwargs...)
     g_oop, g_iip = eval_expression ? eval_module.eval.(g_gen) :
                    (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in g_gen)
@@ -433,7 +433,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
     g(du, u, p::MTKParameters, t) = g_iip(du, u, p..., t)
 
     if tgrad
-        tgrad_gen = generate_tgrad(sys, dvs, ps; expression = Val{!eval_expression},
+        tgrad_gen = generate_tgrad(sys, dvs, ps; expression = Val{true},
             kwargs...)
         tgrad_oop, tgrad_iip = eval_expression ? eval_module.eval.(tgrad_gen) :
                                (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in tgrad_gen)
@@ -447,7 +447,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
     end
 
     if jac
-        jac_gen = generate_jacobian(sys, dvs, ps; expression = Val{!eval_expression},
+        jac_gen = generate_jacobian(sys, dvs, ps; expression = Val{true},
             sparse = sparse, kwargs...)
         jac_oop, jac_iip = eval_expression ? eval_module.eval.(jac_gen) :
                            (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in jac_gen)
