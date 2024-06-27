@@ -5,6 +5,7 @@ struct SampleTime <: Operator
 end
 SymbolicUtils.promote_symtype(::Type{<:SampleTime}, t...) = Real
 Base.nameof(::SampleTime) = :SampleTime
+SymbolicUtils.isbinop(::SampleTime) = false
 
 # Shift
 
@@ -34,6 +35,7 @@ end
 Shift(steps::Int) = new(nothing, steps)
 normalize_to_differential(s::Shift) = Differential(s.t)^s.steps
 Base.nameof(::Shift) = :Shift
+SymbolicUtils.isbinop(::Shift) = false
 
 function (D::Shift)(x, allow_zero = false)
     !allow_zero && D.steps == 0 && return x
@@ -112,6 +114,7 @@ Sample(x) = Sample()(x)
 (D::Sample)(x::Num) = Num(D(value(x)))
 SymbolicUtils.promote_symtype(::Sample, x) = x
 Base.nameof(::Sample) = :Sample
+SymbolicUtils.isbinop(::Sample) = false
 
 Base.show(io::IO, D::Sample) = print(io, "Sample(", D.clock, ")")
 
@@ -142,6 +145,7 @@ end
 (D::Hold)(x::Num) = Num(D(value(x)))
 SymbolicUtils.promote_symtype(::Hold, x) = x
 Base.nameof(::Hold) = :Hold
+SymbolicUtils.isbinop(::Hold) = false
 
 Hold(x) = Hold()(x)
 
