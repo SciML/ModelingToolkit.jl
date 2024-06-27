@@ -163,10 +163,15 @@ end
 Base.nameof(l::ConnectionElement) = renamespace(nameof(l.sys), getname(l.v))
 Base.isequal(l1::ConnectionElement, l2::ConnectionElement) = l1 == l2
 function Base.:(==)(l1::ConnectionElement, l2::ConnectionElement)
-    nameof(l1.sys) == nameof(l2.sys) && isequal(l1.v, l2.v) && l1.isouter == l2.isouter
+    l1.isouter == l2.isouter && nameof(l1.sys) == nameof(l2.sys) && isequal(l1.v, l2.v)
 end
 
 const _debug_mode = Base.JLOptions().check_bounds == 1
+
+function Base.show(io::IO, c::ConnectionElement)
+    @unpack sys, v, isouter = c
+    print(io, nameof(sys), ".", v, "::", isouter ? "outer" : "inner")
+end
 
 function Base.hash(e::ConnectionElement, salt::UInt)
     if _debug_mode
@@ -189,6 +194,8 @@ struct ConnectionSet
 end
 ConnectionSet() = ConnectionSet(ConnectionElement[])
 Base.copy(c::ConnectionSet) = ConnectionSet(copy(c.set))
+Base.:(==)(a::ConnectionSet, b::ConnectionSet) = a.set == b.set
+Base.sort(a::ConnectionSet) = ConnectionSet(sort(a.set, by = string))
 
 function Base.show(io::IO, c::ConnectionSet)
     print(io, "<")
@@ -389,21 +396,25 @@ function Base.merge(csets::AbstractVector{<:ConnectionSet}, allouter = false)
                 id
             end
         end
+        # isequal might not be equal? lol
+        if v.sys.namespace !== nothing
+            idx2ele[id] = v
+        end
         if j > 1
             union!(union_find, prev_id[], id)
         end
         prev_id[] = id
     end
-    id2set = Dict{Int, ConnectionSet}()
+    id2set = Dict{Int, Int}()
     merged_set = ConnectionSet[]
     for (id, ele) in enumerate(idx2ele)
         rid = find_root(union_find, id)
-        set = get!(id2set, rid) do
+        set_idx = get!(id2set, rid) do
             set = ConnectionSet()
             push!(merged_set, set)
-            set
+            length(merged_set)
         end
-        push!(set.set, ele)
+        push!(merged_set[set_idx].set, ele)
     end
     merged_set
 end
