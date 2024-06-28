@@ -222,7 +222,7 @@ end
 
 function process_DiscreteProblem(constructor, sys::DiscreteSystem, u0map, parammap;
         linenumbers = true, parallel = SerialForm(),
-        eval_expression = true,
+        eval_expression = false,
         use_union = false,
         tofloat = !use_union,
         kwargs...)
@@ -271,7 +271,7 @@ function SciMLBase.DiscreteProblem(
         sys::DiscreteSystem, u0map = [], tspan = get_tspan(sys),
         parammap = SciMLBase.NullParameters();
         eval_module = @__MODULE__,
-        eval_expression = true,
+        eval_expression = false,
         use_union = false,
         kwargs...
 )
@@ -308,18 +308,17 @@ function SciMLBase.DiscreteFunction{iip, specialize}(
         version = nothing,
         p = nothing,
         t = nothing,
-        eval_expression = true,
+        eval_expression = false,
         eval_module = @__MODULE__,
         analytic = nothing,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed `DiscreteSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
     end
-    f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression},
+    f_gen = generate_function(sys, dvs, ps; expression = Val{true},
         expression_module = eval_module, kwargs...)
-    f_oop, f_iip = eval_expression ?
-                   (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen) :
-                   f_gen
+    f_oop, f_iip = eval_expression ? eval_module.eval.(f_gen) :
+                   (drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, ex)) for ex in f_gen)
     f(u, p, t) = f_oop(u, p, t)
     f(du, u, p, t) = f_iip(du, u, p, t)
 
