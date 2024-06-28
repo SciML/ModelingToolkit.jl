@@ -416,10 +416,10 @@ function generate_discrete_affect(
         inits = map(a -> eval_module.eval(toexpr(LiteralExpr(a))), init_funs)
     else
         affects = map(affect_funs) do a
-            drop_expr(@RuntimeGeneratedFunction(eval_module, toexpr(LiteralExpr(a))))
+            drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, toexpr(LiteralExpr(a))))
         end
         inits = map(init_funs) do a
-            drop_expr(@RuntimeGeneratedFunction(eval_module, toexpr(LiteralExpr(a))))
+            drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, toexpr(LiteralExpr(a))))
         end
     end
     defaults = Dict{Any, Any}(v => 0.0 for v in Iterators.flatten(inputs))

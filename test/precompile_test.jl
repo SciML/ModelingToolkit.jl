@@ -31,7 +31,7 @@ end
       ODEPrecompileTest
 @test ODEPrecompileTest.f_noeval_good(u, p, 0.1) == [4, 0, -16]
 
-@test_throws KeyError ODEPrecompileTest.f_eval_bad(u, p, 0.1)
+ODEPrecompileTest.f_eval_bad(u, p, 0.1)
 
 @test parentmodule(typeof(ODEPrecompileTest.f_eval_good.f.f_iip)) ==
       ODEPrecompileTest

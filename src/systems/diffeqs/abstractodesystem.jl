@@ -331,7 +331,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
     f_oop, f_iip = eval_expression ? eval_module.eval.(f_gen) :
-                   (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen)
+                   (drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, ex)) for ex in f_gen)
 
     f(u, p, t) = f_oop(u, p, t)
     f(du, u, p, t) = f_iip(du, u, p, t)
@@ -356,7 +356,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
             expression_module = eval_module,
             checkbounds = checkbounds, kwargs...)
         tgrad_oop, tgrad_iip = eval_expression ? eval_module.eval.(tgrad_gen) :
-                               (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in tgrad_gen)
+                               (drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, ex)) for ex in tgrad_gen)
         if p isa Tuple
             __tgrad(u, p, t) = tgrad_oop(u, p..., t)
             __tgrad(J, u, p, t) = tgrad_iip(J, u, p..., t)
@@ -377,7 +377,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
             expression_module = eval_module,
             checkbounds = checkbounds, kwargs...)
         jac_oop, jac_iip = eval_expression ? eval_module.eval.(jac_gen) :
-                           (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in jac_gen)
+                           (drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, ex)) for ex in jac_gen)
 
         _jac(u, p, t) = jac_oop(u, p, t)
         _jac(J, u, p, t) = jac_iip(J, u, p, t)
@@ -488,7 +488,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
     f_oop, f_iip = eval_expression ? eval_module.eval.(f_gen) :
-                   (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen)
+                   (drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, ex)) for ex in f_gen)
     f(du, u, p, t) = f_oop(du, u, p, t)
     f(du, u, p::MTKParameters, t) = f_oop(du, u, p..., t)
     f(out, du, u, p, t) = f_iip(out, du, u, p, t)
@@ -501,7 +501,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
             expression_module = eval_module,
             checkbounds = checkbounds, kwargs...)
         jac_oop, jac_iip = eval_expression ? eval_module.eval.(jac_gen) :
-                           (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in jac_gen)
+                           (drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, ex)) for ex in jac_gen)
 
         _jac(du, u, p, ˍ₋gamma, t) = jac_oop(du, u, p, ˍ₋gamma, t)
         _jac(du, u, p::MTKParameters, ˍ₋gamma, t) = jac_oop(du, u, p..., ˍ₋gamma, t)
@@ -553,7 +553,7 @@ function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         expression = Val{true},
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
-    f_oop, f_iip = (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen)
+    f_oop, f_iip = (drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, ex)) for ex in f_gen)
     f(u, h, p, t) = f_oop(u, h, p, t)
     f(u, h, p::MTKParameters, t) = f_oop(u, h, p..., t)
     f(du, u, h, p, t) = f_iip(du, u, h, p, t)
@@ -578,7 +578,7 @@ function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys
         expression = Val{true},
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
-    f_oop, f_iip = (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen)
+    f_oop, f_iip = (drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, ex)) for ex in f_gen)
     g_gen = generate_diffusion_function(sys, dvs, ps; expression = Val{true},
         isdde = true, kwargs...)
     g_oop, g_iip = (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in g_gen)
