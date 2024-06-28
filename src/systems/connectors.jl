@@ -408,7 +408,7 @@ function Base.merge(csets::AbstractVector{<:ConnectionSet}, allouter = false)
     id2set = Dict{Int, Int}()
     merged_set = ConnectionSet[]
     for (id, ele) in enumerate(idx2ele)
-        rid = find_root(union_find, id)
+        rid = find_root!(union_find, id)
         set_idx = get!(id2set, rid) do
             set = ConnectionSet()
             push!(merged_set, set)

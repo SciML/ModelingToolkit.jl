@@ -14,7 +14,8 @@ struct MTKParameters{T, D, C, E, N, F, G}
 end
 
 function MTKParameters(
-        sys::AbstractSystem, p, u0 = Dict(); tofloat = false, use_union = false)
+        sys::AbstractSystem, p, u0 = Dict(); tofloat = false, use_union = false,
+        eval_expression = false, eval_module = @__MODULE__)
     ic = if has_index_cache(sys) && get_index_cache(sys) !== nothing
         get_index_cache(sys)
     else
@@ -170,12 +171,15 @@ function MTKParameters(
             dep_exprs.x[i][j] = unwrap(val)
         end
         dep_exprs = identity.(dep_exprs)
-        p = reorder_parameters(ic, full_parameters(sys))
-        oop, iip = build_function(dep_exprs, p...)
-        update_function_iip, update_function_oop = RuntimeGeneratedFunctions.@RuntimeGeneratedFunction(iip),
-        RuntimeGeneratedFunctions.@RuntimeGeneratedFunction(oop)
-        update_function_iip(ArrayPartition(dep_buffer), tunable_buffer..., disc_buffer...,
-            const_buffer..., nonnumeric_buffer..., dep_buffer...)
+        psyms = reorder_parameters(ic, full_parameters(sys))
+        update_fn_exprs = build_function(dep_exprs, psyms..., expression = Val{true})
+
+        update_function_oop, update_function_iip = eval_or_rgf.(
+            update_fn_exprs; eval_expression, eval_module)
+        ap_dep_buffer = ArrayPartition(dep_buffer)
+        for i in eachindex(dep_exprs)
+            ap_dep_buffer[i] = fixpoint_sub(dep_exprs[i], p)
+        end
         dep_buffer = narrow_buffer_type.(dep_buffer)
     else
         update_function_iip = update_function_oop = nothing
