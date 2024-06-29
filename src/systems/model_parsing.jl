@@ -340,6 +340,9 @@ function parse_default(mod, a)
             (expr, nothing)
         end
         Expr(:if, condition, x, y) => (a, nothing)
+        Expr(:vect, x...) => begin
+            (a, nothing)
+        end
         _ => error("Cannot parse default $a $(typeof(a))")
     end
 end
