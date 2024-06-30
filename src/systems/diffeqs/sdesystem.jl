@@ -408,6 +408,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
         u0 = nothing;
         version = nothing, tgrad = false, sparse = false,
         jac = false, Wfact = false, eval_expression = false,
+        eval_module = @__MODULE__,
         checkbounds = false,
         kwargs...) where {iip}
     if !iscomplete(sys)
@@ -416,12 +417,10 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
     dvs = scalarize.(dvs)
 
     f_gen = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
-    f_oop, f_iip = eval_expression ? eval_module.eval.(f_gen) :
-                   (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in f_gen)
+    f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
     g_gen = generate_diffusion_function(sys, dvs, ps; expression = Val{true},
         kwargs...)
-    g_oop, g_iip = eval_expression ? eval_module.eval.(g_gen) :
-                   (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in g_gen)
+    g_oop, g_iip = eval_or_rgf.(g_gen; eval_expression, eval_module)
 
     f(u, p, t) = f_oop(u, p, t)
     f(u, p::MTKParameters, t) = f_oop(u, p..., t)
@@ -435,8 +434,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
     if tgrad
         tgrad_gen = generate_tgrad(sys, dvs, ps; expression = Val{true},
             kwargs...)
-        tgrad_oop, tgrad_iip = eval_expression ? eval_module.eval.(tgrad_gen) :
-                               (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in tgrad_gen)
+        tgrad_oop, tgrad_iip = eval_or_rgf.(tgrad_gen; eval_expression, eval_module)
 
         _tgrad(u, p, t) = tgrad_oop(u, p, t)
         _tgrad(u, p::MTKParameters, t) = tgrad_oop(u, p..., t)
@@ -449,8 +447,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
     if jac
         jac_gen = generate_jacobian(sys, dvs, ps; expression = Val{true},
             sparse = sparse, kwargs...)
-        jac_oop, jac_iip = eval_expression ? eval_module.eval.(jac_gen) :
-                           (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in jac_gen)
+        jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
 
         _jac(u, p, t) = jac_oop(u, p, t)
         _jac(u, p::MTKParameters, t) = jac_oop(u, p..., t)
@@ -463,10 +460,8 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
     if Wfact
         tmp_Wfact, tmp_Wfact_t = generate_factorized_W(sys, dvs, ps, true;
             expression = Val{true}, kwargs...)
-        Wfact_oop, Wfact_iip = eval_expression ? eval_module.eval.(tmp_Wfact) :
-                               (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in tmp_Wfact)
-        Wfact_oop_t, Wfact_iip_t = eval_expression ? eval_module.eval.(tmp_Wfact_t) :
-                                   (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in tmp_Wfact_t)
+        Wfact_oop, Wfact_iip = eval_or_rgf.(tmp_Wfact; eval_expression, eval_module)
+        Wfact_oop_t, Wfact_iip_t = eval_or_rgf.(tmp_Wfact_t; eval_expression, eval_module)
 
         _Wfact(u, p, dtgamma, t) = Wfact_oop(u, p, dtgamma, t)
         _Wfact(u, p::MTKParameters, dtgamma, t) = Wfact_oop(u, p..., dtgamma, t)
@@ -483,7 +478,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
     M = calculate_massmatrix(sys)
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0', M)
 
-    observedfun = ObservedFunctionCache(sys)
+    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
 
     SDEFunction{iip}(f, g,
         sys = sys,
@@ -597,7 +592,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map = [], tspan = get_tspa
     end
     f, u0, p = process_DEProblem(SDEFunction{iip}, sys, u0map, parammap; check_length,
         kwargs...)
-    cbs = process_events(sys; callback)
+    cbs = process_events(sys; callback, kwargs...)
     sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
 
     noiseeqs = get_noiseeqs(sys)

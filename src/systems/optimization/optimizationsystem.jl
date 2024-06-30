@@ -240,6 +240,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         cons_j = false, cons_h = false,
         cons_sparse = false, checkbounds = false,
         linenumbers = true, parallel = SerialForm(),
+        eval_expression = false, eval_module = @__MODULE__,
         use_union = false,
         kwargs...) where {iip}
     if !iscomplete(sys)
@@ -280,7 +281,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     if parammap isa MTKParameters
         p = parammap
     elseif has_index_cache(sys) && get_index_cache(sys) !== nothing
-        p = MTKParameters(sys, parammap, u0map)
+        p = MTKParameters(sys, parammap, u0map; eval_expression, eval_module)
     else
         p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
     end
@@ -292,9 +293,12 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         ub = nothing
     end
 
-    f = let _f = generate_function(
-            sys, checkbounds = checkbounds, linenumbers = linenumbers,
-            expression = Val{false})
+    f = let _f = eval_or_rgf(
+            generate_function(
+                sys, checkbounds = checkbounds, linenumbers = linenumbers,
+                expression = Val{true});
+            eval_expression,
+            eval_module)
         __f(u, p) = _f(u, p)
         __f(u, p::MTKParameters) = _f(u, p...)
         __f
@@ -302,10 +306,13 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     obj_expr = subs_constants(objective(sys))
 
     if grad
-        _grad = let (grad_oop, grad_iip) = generate_gradient(
-                sys, checkbounds = checkbounds,
-                linenumbers = linenumbers,
-                parallel = parallel, expression = Val{false})
+        _grad = let (grad_oop, grad_iip) = eval_or_rgf.(
+                generate_gradient(
+                    sys, checkbounds = checkbounds,
+                    linenumbers = linenumbers,
+                    parallel = parallel, expression = Val{true});
+                eval_expression,
+                eval_module)
             _grad(u, p) = grad_oop(u, p)
             _grad(J, u, p) = (grad_iip(J, u, p); J)
             _grad(u, p::MTKParameters) = grad_oop(u, p...)
@@ -317,10 +324,14 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     end
 
     if hess
-        _hess = let (hess_oop, hess_iip) = generate_hessian(sys, checkbounds = checkbounds,
-                linenumbers = linenumbers,
-                sparse = sparse, parallel = parallel,
-                expression = Val{false})
+        _hess = let (hess_oop, hess_iip) = eval_or_rgf.(
+                generate_hessian(
+                    sys, checkbounds = checkbounds,
+                    linenumbers = linenumbers,
+                    sparse = sparse, parallel = parallel,
+                    expression = Val{true});
+                eval_expression,
+                eval_module)
             _hess(u, p) = hess_oop(u, p)
             _hess(J, u, p) = (hess_iip(J, u, p); J)
             _hess(u, p::MTKParameters) = hess_oop(u, p...)
@@ -337,20 +348,24 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         hess_prototype = nothing
     end
 
-    observedfun = ObservedFunctionCache(sys)
+    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
 
     if length(cstr) > 0
         @named cons_sys = ConstraintsSystem(cstr, dvs, ps)
         cons_sys = complete(cons_sys)
         cons, lcons_, ucons_ = generate_function(cons_sys, checkbounds = checkbounds,
             linenumbers = linenumbers,
-            expression = Val{false})
+            expression = Val{true})
+        cons = eval_or_rgf.(cons; eval_expression, eval_module)
         if cons_j
-            _cons_j = let (cons_jac_oop, cons_jac_iip) = generate_jacobian(cons_sys;
-                    checkbounds = checkbounds,
-                    linenumbers = linenumbers,
-                    parallel = parallel, expression = Val{false},
-                    sparse = cons_sparse)
+            _cons_j = let (cons_jac_oop, cons_jac_iip) = eval_or_rgf.(
+                    generate_jacobian(cons_sys;
+                        checkbounds = checkbounds,
+                        linenumbers = linenumbers,
+                        parallel = parallel, expression = Val{true},
+                        sparse = cons_sparse);
+                    eval_expression,
+                    eval_module)
                 _cons_j(u, p) = cons_jac_oop(u, p)
                 _cons_j(J, u, p) = (cons_jac_iip(J, u, p); J)
                 _cons_j(u, p::MTKParameters) = cons_jac_oop(u, p...)
@@ -361,11 +376,14 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             _cons_j = nothing
         end
         if cons_h
-            _cons_h = let (cons_hess_oop, cons_hess_iip) = generate_hessian(
-                    cons_sys, checkbounds = checkbounds,
-                    linenumbers = linenumbers,
-                    sparse = cons_sparse, parallel = parallel,
-                    expression = Val{false})
+            _cons_h = let (cons_hess_oop, cons_hess_iip) = eval_or_rgf.(
+                    generate_hessian(
+                        cons_sys, checkbounds = checkbounds,
+                        linenumbers = linenumbers,
+                        sparse = cons_sparse, parallel = parallel,
+                        expression = Val{true});
+                    eval_expression,
+                    eval_module)
                 _cons_h(u, p) = cons_hess_oop(u, p)
                 _cons_h(J, u, p) = (cons_hess_iip(J, u, p); J)
                 _cons_h(u, p::MTKParameters) = cons_hess_oop(u, p...)
@@ -458,6 +476,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
         cons_j = false, cons_h = false,
         checkbounds = false,
         linenumbers = false, parallel = SerialForm(),
+        eval_expression = false, eval_module = @__MODULE__,
         use_union = false,
         kwargs...) where {iip}
     if !iscomplete(sys)
@@ -496,7 +515,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
 
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        p = MTKParameters(sys, parammap, u0map)
+        p = MTKParameters(sys, parammap, u0map; eval_expression, eval_module)
     else
         p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
     end
@@ -512,17 +531,23 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
     f = generate_function(sys, checkbounds = checkbounds, linenumbers = linenumbers,
         expression = Val{true})
     if grad
-        _grad = generate_gradient(
-            sys, checkbounds = checkbounds, linenumbers = linenumbers,
-            parallel = parallel, expression = Val{false})[idx]
+        _grad = eval_or_rgf(
+            generate_gradient(
+                sys, checkbounds = checkbounds, linenumbers = linenumbers,
+                parallel = parallel, expression = Val{true})[idx];
+            eval_expression,
+            eval_module)
     else
         _grad = :nothing
     end
 
     if hess
-        _hess = generate_hessian(sys, checkbounds = checkbounds, linenumbers = linenumbers,
-            sparse = sparse, parallel = parallel,
-            expression = Val{false})[idx]
+        _hess = eval_or_rgf(
+            generate_hessian(sys, checkbounds = checkbounds, linenumbers = linenumbers,
+                sparse = sparse, parallel = parallel,
+                expression = Val{false})[idx];
+            eval_expression,
+            eval_module)
     else
         _hess = :nothing
     end
@@ -546,14 +571,19 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
         @named cons_sys = ConstraintsSystem(cstr, dvs, ps)
         cons, lcons_, ucons_ = generate_function(cons_sys, checkbounds = checkbounds,
             linenumbers = linenumbers,
-            expression = Val{false})
+            expression = Val{true})
+        cons = eval_or_rgf(cons; eval_expression, eval_module)
         if cons_j
-            _cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
+            _cons_j = eval_or_rgf(
+                generate_jacobian(cons_sys; expression = Val{true}, sparse = sparse)[2];
+                eval_expression, eval_module)
         else
             _cons_j = nothing
         end
         if cons_h
-            _cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
+            _cons_h = eval_or_rgf(
+                generate_hessian(cons_sys; expression = Val{true}, sparse = sparse)[2];
+                eval_expression, eval_module)
         else
             _cons_h = nothing
         end

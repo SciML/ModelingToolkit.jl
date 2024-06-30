@@ -330,8 +330,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
     f_gen = generate_function(sys, dvs, ps; expression = Val{true},
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
-    f_oop, f_iip = eval_expression ? eval_module.eval.(f_gen) :
-                   (drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, ex)) for ex in f_gen)
+    f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
 
     f(u, p, t) = f_oop(u, p, t)
     f(du, u, p, t) = f_iip(du, u, p, t)
@@ -355,9 +354,8 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
             expression = Val{true},
             expression_module = eval_module,
             checkbounds = checkbounds, kwargs...)
-        tgrad_oop, tgrad_iip = eval_expression ? eval_module.eval.(tgrad_gen) :
-                               (drop_expr(RuntimeGeneratedFunction(
-                                    eval_module, eval_module, ex)) for ex in tgrad_gen)
+        tgrad_oop, tgrad_iip = eval_or_rgf.(tgrad_gen; eval_expression, eval_module)
+
         if p isa Tuple
             __tgrad(u, p, t) = tgrad_oop(u, p..., t)
             __tgrad(J, u, p, t) = tgrad_iip(J, u, p..., t)
@@ -377,9 +375,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
             expression = Val{true},
             expression_module = eval_module,
             checkbounds = checkbounds, kwargs...)
-        jac_oop, jac_iip = eval_expression ? eval_module.eval.(jac_gen) :
-                           (drop_expr(RuntimeGeneratedFunction(
-                                eval_module, eval_module, ex)) for ex in jac_gen)
+        jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
 
         _jac(u, p, t) = jac_oop(u, p, t)
         _jac(J, u, p, t) = jac_iip(J, u, p, t)
@@ -408,7 +404,8 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         let sys = sys, dict = Dict()
             function generated_observed(obsvar, args...)
                 obs = get!(dict, value(obsvar)) do
-                    SymbolicIndexingInterface.observed(sys, obsvar)
+                    SymbolicIndexingInterface.observed(
+                        sys, obsvar; eval_expression, eval_module)
                 end
                 if args === ()
                     return let obs = obs
@@ -423,7 +420,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
             end
         end
     else
-        ObservedFunctionCache(sys)
+        ObservedFunctionCache(sys; eval_expression, eval_module)
     end
 
     jac_prototype = if sparse
@@ -489,8 +486,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         expression = Val{true},
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
-    f_oop, f_iip = eval_expression ? eval_module.eval.(f_gen) :
-                   (drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, ex)) for ex in f_gen)
+    f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
     f(du, u, p, t) = f_oop(du, u, p, t)
     f(du, u, p::MTKParameters, t) = f_oop(du, u, p..., t)
     f(out, du, u, p, t) = f_iip(out, du, u, p, t)
@@ -502,9 +498,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
             expression = Val{true},
             expression_module = eval_module,
             checkbounds = checkbounds, kwargs...)
-        jac_oop, jac_iip = eval_expression ? eval_module.eval.(jac_gen) :
-                           (drop_expr(RuntimeGeneratedFunction(
-                                eval_module, eval_module, ex)) for ex in jac_gen)
+        jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
 
         _jac(du, u, p, ˍ₋gamma, t) = jac_oop(du, u, p, ˍ₋gamma, t)
         _jac(du, u, p::MTKParameters, ˍ₋gamma, t) = jac_oop(du, u, p..., ˍ₋gamma, t)
@@ -515,7 +509,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         _jac = nothing
     end
 
-    observedfun = ObservedFunctionCache(sys)
+    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
 
     jac_prototype = if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
@@ -546,6 +540,7 @@ end
 
 function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
+        eval_expression = false,
         eval_module = @__MODULE__,
         checkbounds = false,
         kwargs...) where {iip}
@@ -556,7 +551,7 @@ function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         expression = Val{true},
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
-    f_oop, f_iip = (drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, ex)) for ex in f_gen)
+    f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
     f(u, h, p, t) = f_oop(u, h, p, t)
     f(u, h, p::MTKParameters, t) = f_oop(u, h, p..., t)
     f(du, u, h, p, t) = f_iip(du, u, h, p, t)
@@ -571,6 +566,7 @@ end
 
 function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
+        eval_expression = false,
         eval_module = @__MODULE__,
         checkbounds = false,
         kwargs...) where {iip}
@@ -581,10 +577,10 @@ function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys
         expression = Val{true},
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
-    f_oop, f_iip = (drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, ex)) for ex in f_gen)
+    f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
     g_gen = generate_diffusion_function(sys, dvs, ps; expression = Val{true},
         isdde = true, kwargs...)
-    g_oop, g_iip = (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in g_gen)
+    g_oop, g_iip = eval_or_rgf.(g_gen; eval_expression, eval_module)
     f(u, h, p, t) = f_oop(u, h, p, t)
     f(u, h, p::MTKParameters, t) = f_oop(u, h, p..., t)
     f(du, u, h, p, t) = f_iip(du, u, h, p, t)
@@ -772,6 +768,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         simplify = false,
         linenumbers = true, parallel = SerialForm(),
         eval_expression = false,
+        eval_module = @__MODULE__,
         use_union = true,
         tofloat = true,
         symbolic_u0 = false,
@@ -853,7 +850,8 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
             u0map = Dict()
         end
         initializeprob = ModelingToolkit.InitializationProblem(
-            sys, t, u0map, parammap; guesses, warn_initialize_determined, initialization_eqs)
+            sys, t, u0map, parammap; guesses, warn_initialize_determined,
+            initialization_eqs, eval_expression, eval_module)
         initializeprobmap = getu(initializeprob, unknowns(sys))
 
         zerovars = Dict(setdiff(unknowns(sys), keys(defaults(sys))) .=> 0.0)
@@ -873,7 +871,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
                parammap == SciMLBase.NullParameters() && isempty(defs)
             nothing
         else
-            MTKParameters(sys, parammap, trueinit)
+            MTKParameters(sys, parammap, trueinit; eval_expression, eval_module)
         end
     else
         u0, p, defs = get_u0_p(sys,
@@ -906,6 +904,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         checkbounds = checkbounds, p = p,
         linenumbers = linenumbers, parallel = parallel, simplify = simplify,
         sparse = sparse, eval_expression = eval_expression,
+        eval_module = eval_module,
         initializeprob = initializeprob,
         initializeprobmap = initializeprobmap,
         kwargs...)
@@ -1012,17 +1011,20 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
         callback = nothing,
         check_length = true,
         warn_initialize_determined = true,
+        eval_expression = false,
+        eval_module = @__MODULE__,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
     end
     f, u0, p = process_DEProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
-        check_length, warn_initialize_determined, kwargs...)
-    cbs = process_events(sys; callback, kwargs...)
+        check_length, warn_initialize_determined, eval_expression, eval_module, kwargs...)
+    cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
     inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(sys, dss...)
+        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(
+            sys, dss...; eval_expression, eval_module)
         discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
             if clock isa Clock
                 PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt;
@@ -1107,9 +1109,9 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
         kwargs...)
 end
 
-function generate_history(sys::AbstractODESystem, u0; kwargs...)
+function generate_history(sys::AbstractODESystem, u0; expression = Val{false}, kwargs...)
     p = reorder_parameters(sys, full_parameters(sys))
-    build_function(u0, p..., get_iv(sys); expression = Val{false}, kwargs...)
+    build_function(u0, p..., get_iv(sys); expression, kwargs...)
 end
 
 function DiffEqBase.DDEProblem(sys::AbstractODESystem, args...; kwargs...)
@@ -1120,6 +1122,8 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         parammap = DiffEqBase.NullParameters();
         callback = nothing,
         check_length = true,
+        eval_expression = false,
+        eval_module = @__MODULE__,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DDEProblem`")
@@ -1127,14 +1131,16 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     f, u0, p = process_DEProblem(DDEFunction{iip}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
         symbolic_u0 = true,
-        check_length, kwargs...)
-    h_oop, h_iip = generate_history(sys, u0)
+        check_length, eval_expression, eval_module, kwargs...)
+    h_gen = generate_history(sys, u0; expression = Val{true})
+    h_oop, h_iip = eval_or_rgf.(h_gen; eval_expression, eval_module)
     h(p, t) = h_oop(p, t)
     h(p::MTKParameters, t) = h_oop(p..., t)
     u0 = h(p, tspan[1])
-    cbs = process_events(sys; callback, kwargs...)
+    cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, clocks, svs = ModelingToolkit.generate_discrete_affect(sys, dss...)
+        affects, clocks, svs = ModelingToolkit.generate_discrete_affect(
+            sys, dss...; eval_expression, eval_module)
         discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
             if clock isa Clock
                 PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt;
@@ -1176,23 +1182,27 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         callback = nothing,
         check_length = true,
         sparsenoise = nothing,
+        eval_expression = false,
+        eval_module = @__MODULE__,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `SDDEProblem`")
     end
     f, u0, p = process_DEProblem(SDDEFunction{iip}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
-        symbolic_u0 = true,
+        symbolic_u0 = true, eval_expression, eval_module,
         check_length, kwargs...)
-    h_oop, h_iip = generate_history(sys, u0)
+    h_gen = generate_history(sys, u0; expression = Val{true})
+    h_oop, h_iip = eval_or_rgf.(h_gen; eval_expression, eval_module)
     h(out, p, t) = h_iip(out, p, t)
     h(p, t) = h_oop(p, t)
     h(p::MTKParameters, t) = h_oop(p..., t)
     h(out, p::MTKParameters, t) = h_iip(out, p..., t)
     u0 = h(p, tspan[1])
-    cbs = process_events(sys; callback, kwargs...)
+    cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, clocks, svs = ModelingToolkit.generate_discrete_affect(sys, dss...)
+        affects, clocks, svs = ModelingToolkit.generate_discrete_affect(
+            sys, dss...; eval_expression, eval_module)
         discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
             if clock isa Clock
                 PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt;
@@ -1577,8 +1587,8 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
 
     u0map = merge(todict(guesses), todict(u0map))
     if neqs == nunknown
-        NonlinearProblem(isys, u0map, parammap)
+        NonlinearProblem(isys, u0map, parammap; kwargs...)
     else
-        NonlinearLeastSquaresProblem(isys, u0map, parammap)
+        NonlinearLeastSquaresProblem(isys, u0map, parammap; kwargs...)
     end
 end

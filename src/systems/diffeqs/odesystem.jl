@@ -378,6 +378,8 @@ i.e. there are no cycles.
 function build_explicit_observed_function(sys, ts;
         inputs = nothing,
         expression = false,
+        eval_expression = false,
+        eval_module = @__MODULE__,
         output_type = Array,
         checkbounds = true,
         drop_expr = drop_expr,
@@ -495,14 +497,17 @@ function build_explicit_observed_function(sys, ts;
                  pre(Let(obsexprs,
                      isscalar ? ts[1] : MakeArray(ts, output_type),
                      false))) |> wrap_array_vars(sys, ts)[1] |> toexpr
-    oop_fn = expression ? oop_fn : drop_expr(@RuntimeGeneratedFunction(oop_fn))
+    oop_fn = expression ? oop_fn : eval_or_rgf(oop_fn; eval_expression, eval_module)
 
     if !isscalar
         iip_fn = build_function(ts,
             args...;
             postprocess_fbody = pre,
             wrap_code = wrap_array_vars(sys, ts) .∘ wrap_assignments(isscalar, obsexprs),
-            expression = Val{expression})[2]
+            expression = Val{true})[2]
+        if !expression
+            iip_fn = eval_or_rgf(iip_fn; eval_expression, eval_module)
+        end
     end
     if isscalar || !return_inplace
         return oop_fn
