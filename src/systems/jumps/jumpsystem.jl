@@ -71,7 +71,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """The name of the system."""
     name::Symbol
     """The internal systems. These are required to have unique names."""
-    systems::Vector{JumpSystem}
+    systems::Vector{Any}
     """
     The default values to use when initial conditions and/or
     parameters are not supplied in `ODEProblem`.
