@@ -141,7 +141,7 @@ struct SDESystem <: AbstractODESystem
             check_parameters(ps, iv)
             check_equations(deqs, iv)
             check_equations(neqs, dvs)
-            if size(neqs,1) != length(dvs)
+            if size(neqs, 1) != length(dvs)
                 throw(ArgumentError("Noise equations ill-formed. Number of rows must match number of states. size(neqs,1) = $(size(neqs,1)) != length(dvs) = $(length(dvs))"))
             end
             check_equations(equations(cevents), iv)
