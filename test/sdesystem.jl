@@ -614,3 +614,18 @@ sys2 = complete(sys2)
 prob = SDEProblem(sys1, sts .=> [1.0, 0.0, 0.0],
     (0.0, 100.0), ps .=> (10.0, 26.0))
 solve(prob, LambaEulerHeun(), seed = 1)
+
+# SDEProblem construction with StaticArrays
+# Issue#2814
+@parameters p d
+@variables x(tt)
+@brownian a
+eqs = [D(x) ~ p - d * x + a * sqrt(p)]
+@mtkbuild sys = System(eqs, tt)
+u0 = @SVector[x => 10.0]
+tspan = (0.0, 10.0)
+ps = @SVector[p => 5.0, d => 0.5]
+sprob = SDEProblem(sys, u0, tspan, ps)
+@test !isinplace(sprob)
+@test !isinplace(sprob.f)
+@test_nowarn solve(sprob, ImplicitEM())
