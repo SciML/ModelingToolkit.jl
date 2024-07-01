@@ -817,3 +817,38 @@ end
     @test defs[ordermodel.c] == 2
     @test defs[ordermodel.d] == 1
 end
+
+@testset "Vector defaults" begin
+    @mtkmodel VectorDefaultWithMetadata begin
+        @parameters begin
+            n[1:3] = [1, 2, 3], [description = "Vector defaults"]
+        end
+    end
+
+    @named vec = VectorDefaultWithMetadata()
+    for i in 1:3
+        @test getdefault(vec.n[i]) == i
+    end
+
+    @mtkmodel VectorConditionalDefault begin
+        @structural_parameters begin
+            flag = true
+        end
+        @parameters begin
+            n[1:3] = if flag
+                [2, 2, 2]
+            else
+                1
+            end
+        end
+    end
+
+    @named vec_true = VectorConditionalDefault()
+    for i in 1:3
+        @test getdefault(vec_true.n[i]) == 2
+    end
+    @named vec_false = VectorConditionalDefault(flag = false)
+    for i in 1:3
+        @test getdefault(vec_false.n[i]) == 1
+    end
+end
