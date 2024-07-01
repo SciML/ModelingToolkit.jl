@@ -47,6 +47,7 @@ function dump_variable_metadata(var)
     if desc == ""
         desc = nothing
     end
+    default = hasdefault(uvar) ? getdefault(uvar) : nothing
     guess = getguess(uvar)
     disturbance = isdisturbance(uvar) || nothing
     tunable = istunable(uvar, isparameter(uvar))
@@ -72,7 +73,8 @@ function dump_variable_metadata(var)
         disturbance,
         tunable,
         dist,
-        type
+        type,
+        default
     )
 
     return NamedTuple(k => v for (k, v) in pairs(meta) if v !== nothing)

@@ -16,6 +16,12 @@ using ModelingToolkit
 @test hasguess(y) === true
 @test ModelingToolkit.dump_variable_metadata(y).guess == 0
 
+# Default
+@variables y = 0
+@test ModelingToolkit.getdefault(y) === 0
+@test ModelingToolkit.hasdefault(y) === true
+@test ModelingToolkit.dump_variable_metadata(y).default == 0
+
 # Issue#2653
 @variables y[1:3] [guess = ones(3)]
 @test getguess(y) == ones(3)
@@ -124,3 +130,15 @@ sp = Set(p)
 @named sys = ODESystem([u ~ p], t)
 
 @test_nowarn show(stdout, "text/plain", sys)
+
+# Defaults overridden by system, parameter dependencies
+@variables x(t) = 1.0
+@parameters p=2.0 q
+@named sys = ODESystem(Equation[], t, [x], [p]; defaults = Dict(x => 2.0, p => 3.0),
+    parameter_dependencies = [q => 2p])
+x_meta = ModelingToolkit.dump_unknowns(sys)[]
+@test x_meta.default == 2.0
+params_meta = ModelingToolkit.dump_parameters(sys)
+params_meta = Dict([ModelingToolkit.getname(meta.var) => meta for meta in params_meta])
+@test params_meta[:p].default == 3.0
+@test isequal(params_meta[:q].dependency, 2p)
