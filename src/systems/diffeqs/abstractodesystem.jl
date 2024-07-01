@@ -693,6 +693,7 @@ Take dictionaries with initial conditions and parameters and convert them to num
 function get_u0_p(sys,
         u0map,
         parammap = nothing;
+        t0 = nothing,
         use_union = true,
         tofloat = true,
         symbolic_u0 = false)
@@ -700,6 +701,9 @@ function get_u0_p(sys,
     ps = parameters(sys)
 
     defs = defaults(sys)
+    if t0 !== nothing
+        defs[get_iv(sys)] = t0
+    end
     if parammap !== nothing
         defs = mergedefaults(defs, parammap, ps)
     end
@@ -836,16 +840,6 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
             merge(parammap, clockedparammap)
         end
     end
-    if eltype(u0map) <: Number
-        u0map = unknowns(sys) .=> u0map
-    end
-    if isempty(u0map)
-        u0map = Dict()
-    end
-    u0map = todict(u0map)
-    if t !== nothing
-        u0map = merge(u0map, Dict(iv => t))
-    end
     # TODO: make it work with clocks
     # ModelingToolkit.get_tearing_state(sys) !== nothing => Requires structural_simplify first
     if sys isa ODESystem && build_initializeprob &&
@@ -869,7 +863,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     end
 
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        u0, defs = get_u0(sys, trueinit, parammap; symbolic_u0)
+        u0, defs = get_u0(sys, trueinit, parammap; symbolic_u0, t0 = t)
         check_eqs_u0(eqs, dvs, u0; kwargs...)
         p = if parammap === nothing ||
                parammap == SciMLBase.NullParameters() && isempty(defs)
