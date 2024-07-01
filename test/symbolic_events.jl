@@ -458,7 +458,7 @@ let
 
     ∂ₜ = D
     eqs = [∂ₜ(A) ~ -k * A]
-    @named ssys = SDESystem(eqs, Equation[0.0], t, [A], [k, t1, t2],
+    @named ssys = SDESystem(eqs, [0.0], t, [A], [k, t1, t2],
         discrete_events = [cb1, cb2])
     u0 = [A => 1.0]
     p = [k => 0.0, t1 => 1.0, t2 => 2.0]
