@@ -614,3 +614,15 @@ sys2 = complete(sys2)
 prob = SDEProblem(sys1, sts .=> [1.0, 0.0, 0.0],
     (0.0, 100.0), ps .=> (10.0, 26.0))
 solve(prob, LambaEulerHeun(), seed = 1)
+
+# Test ill-formed due to more equations than states in noise equations
+
+@parameters p d
+@variables t X(t)
+D = Differential(t)
+eqs = [D(X) ~ p - d*X]
+noise_eqs = [sqrt(p), -sqrt(d*X)]
+@test_throws ArgumentError ssys = SDESystem(eqs, noise_eqs, t, [X], [p, d]; name = :ssys)
+
+noise_eqs = reshape([sqrt(p), -sqrt(d*X)],1,2)
+ssys = SDESystem(eqs, noise_eqs, t, [X], [p, d]; name = :ssys)
