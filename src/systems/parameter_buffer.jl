@@ -32,9 +32,7 @@ function MTKParameters(
         p = Dict()
     end
     p = todict(p)
-    defs = Dict(default_toterm(unwrap(k)) => v
-    for (k, v) in defaults(sys)
-    if unwrap(k) in all_ps || default_toterm(unwrap(k)) in all_ps)
+    defs = Dict(default_toterm(unwrap(k)) => v for (k, v) in defaults(sys))
     if eltype(u0) <: Pair
         u0 = todict(u0)
     elseif u0 isa AbstractArray && !isempty(u0)
