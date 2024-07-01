@@ -619,10 +619,9 @@ solve(prob, LambaEulerHeun(), seed = 1)
 
 @parameters p d
 @variables t X(t)
-D = Differential(t)
 eqs = [D(X) ~ p - d * X]
 noise_eqs = [sqrt(p), -sqrt(d * X)]
-@test_throws ArgumentError ssys=SDESystem(eqs, noise_eqs, t, [X], [p, d]; name = :ssys)
+@test_throws ArgumentError SDESystem(eqs, noise_eqs, t, [X], [p, d]; name = :ssys)
 
 noise_eqs = reshape([sqrt(p), -sqrt(d * X)], 1, 2)
 ssys = SDESystem(eqs, noise_eqs, t, [X], [p, d]; name = :ssys)

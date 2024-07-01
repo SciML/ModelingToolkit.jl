@@ -458,7 +458,7 @@ let
 
     ∂ₜ = D
     eqs = [∂ₜ(A) ~ -k * A]
-    @named ssys = SDESystem(eqs, Equation[], t, [A], [k, t1, t2],
+    @named ssys = SDESystem(eqs, Equation[0.0], t, [A], [k, t1, t2],
         discrete_events = [cb1, cb2])
     u0 = [A => 1.0]
     p = [k => 0.0, t1 => 1.0, t2 => 2.0]
@@ -468,7 +468,7 @@ let
     cond1a = (t == t1)
     affect1a = [A ~ A + 1, B ~ A]
     cb1a = cond1a => affect1a
-    @named ssys1 = SDESystem(eqs, Equation[], t, [A, B], [k, t1, t2],
+    @named ssys1 = SDESystem(eqs, [0.0], t, [A, B], [k, t1, t2],
         discrete_events = [cb1a, cb2])
     u0′ = [A => 1.0, B => 0.0]
     sol = testsol(
@@ -478,11 +478,11 @@ let
     # same as above - but with set-time event syntax
     cb1‵ = [1.0] => affect1 # needs to be a Vector for the event to happen only once
     cb2‵ = [2.0] => affect2
-    @named ssys‵ = SDESystem(eqs, Equation[], t, [A], [k], discrete_events = [cb1‵, cb2‵])
+    @named ssys‵ = SDESystem(eqs, [0.0], t, [A], [k], discrete_events = [cb1‵, cb2‵])
     testsol(ssys‵, u0, p, tspan; paramtotest = k)
 
     # mixing discrete affects
-    @named ssys3 = SDESystem(eqs, Equation[], t, [A], [k, t1, t2],
+    @named ssys3 = SDESystem(eqs, [0.0], t, [A], [k, t1, t2],
         discrete_events = [cb1, cb2‵])
     testsol(ssys3, u0, p, tspan; tstops = [1.0], paramtotest = k)
 
@@ -492,16 +492,16 @@ let
         nothing
     end
     cb2‵‵ = [2.0] => (affect!, [], [k], [k], nothing)
-    @named ssys4 = SDESystem(eqs, Equation[], t, [A], [k, t1],
+    @named ssys4 = SDESystem(eqs, [0.0], t, [A], [k, t1],
         discrete_events = [cb1, cb2‵‵])
     testsol(ssys4, u0, p, tspan; tstops = [1.0], paramtotest = k)
 
     # mixing with symbolic condition in the func affect
     cb2‵‵‵ = (t == t2) => (affect!, [], [k], [k], nothing)
-    @named ssys5 = SDESystem(eqs, Equation[], t, [A], [k, t1, t2],
+    @named ssys5 = SDESystem(eqs, [0.0], t, [A], [k, t1, t2],
         discrete_events = [cb1, cb2‵‵‵])
     testsol(ssys5, u0, p, tspan; tstops = [1.0, 2.0], paramtotest = k)
-    @named ssys6 = SDESystem(eqs, Equation[], t, [A], [k, t1, t2],
+    @named ssys6 = SDESystem(eqs, [0.0], t, [A], [k, t1, t2],
         discrete_events = [cb2‵‵‵, cb1])
     testsol(ssys6, u0, p, tspan; tstops = [1.0, 2.0], paramtotest = k)
 
@@ -509,7 +509,7 @@ let
     cond3 = A ~ 0.1
     affect3 = [k ~ 0.0]
     cb3 = cond3 => affect3
-    @named ssys7 = SDESystem(eqs, Equation[], t, [A], [k, t1, t2],
+    @named ssys7 = SDESystem(eqs, [0.0], t, [A], [k, t1, t2],
         discrete_events = [cb1, cb2‵‵‵],
         continuous_events = [cb3])
     sol = testsol(ssys7, u0, p, (0.0, 10.0); tstops = [1.0, 2.0])
