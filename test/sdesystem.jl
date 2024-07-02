@@ -629,3 +629,16 @@ sprob = SDEProblem(sys, u0, tspan, ps)
 @test !isinplace(sprob)
 @test !isinplace(sprob.f)
 @test_nowarn solve(sprob, ImplicitEM())
+
+# Ensure diagonal noise generates vector noise function
+@variables y(tt)
+@brownian b
+eqs = [D(x) ~ p - d * x + a * sqrt(p)
+       D(y) ~ p - d * y + b * sqrt(d)]
+@mtkbuild sys = System(eqs, tt)
+u0 = @SVector[x => 10.0, y => 20.0]
+tspan = (0.0, 10.0)
+ps = @SVector[p => 5.0, d => 0.5]
+sprob = SDEProblem(sys, u0, tspan, ps)
+@test sprob.f.g(sprob.u0, sprob.p, sprob.tspan[1]) isa SVector{2, Float64}
+@test_nowarn solve(sprob, ImplicitEM())
