@@ -739,14 +739,19 @@ function get_u0_p(sys,
     end
     p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
     p = p === nothing ? SciMLBase.NullParameters() : p
+    t0 !== nothing && delete!(defs, get_iv(sys))
     u0, p, defs
 end
 
 function get_u0(
-        sys, u0map, parammap = nothing; symbolic_u0 = false, toterm = default_toterm)
+        sys, u0map, parammap = nothing; symbolic_u0 = false,
+        toterm = default_toterm, t0 = nothing)
     dvs = unknowns(sys)
     ps = parameters(sys)
     defs = defaults(sys)
+    if t0 !== nothing
+        defs[get_iv(sys)] = t0
+    end
     if parammap !== nothing
         defs = mergedefaults(defs, parammap, ps)
     end
@@ -761,6 +766,7 @@ function get_u0(
     else
         u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, toterm)
     end
+    t0 !== nothing && delete!(defs, get_iv(sys))
     return u0, defs
 end
 
@@ -847,6 +853,12 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
          all(isequal(Continuous()), ci.var_domain) &&
          ModelingToolkit.get_tearing_state(sys) !== nothing) ||
         !isempty(initialization_equations(sys))) && t !== nothing
+        if eltype(u0map) <: Number
+            u0map = unknowns(sys) .=> u0map
+        end
+        if isempty(u0map)
+            u0map = Dict()
+        end
         initializeprob = ModelingToolkit.InitializationProblem(
             sys, t, u0map, parammap; guesses, warn_initialize_determined,
             initialization_eqs, eval_expression, eval_module)
@@ -877,6 +889,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
             parammap;
             tofloat,
             use_union,
+            t0 = t,
             symbolic_u0)
         p, split_idxs = split_parameters_by_type(p)
         if p isa Tuple
