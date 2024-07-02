@@ -208,6 +208,10 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false
     return [values[unwrap(var)] for var in varlist]
 end
 
+function varmap_with_toterm(varmap; toterm = Symbolics.diff2term)
+    return merge(todict(varmap), Dict(toterm(unwrap(k)) => v for (k, v) in varmap))
+end
+
 function canonicalize_varmap(varmap; toterm = Symbolics.diff2term)
     new_varmap = Dict()
     for (k, v) in varmap
