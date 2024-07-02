@@ -32,7 +32,7 @@ jobs:
           - {user: SciML, repo: NeuralPDE.jl, group: NNPDE}
           - {user: SciML, repo: DataDrivenDiffEq.jl, group: Downstream}
           - {user: SciML, repo: StructuralIdentifiability.jl, group: All}
-          - {user: SciML, repo: ModelingToolkitStandardLibrary.jl}
+          - {user: SciML, repo: ModelingToolkitStandardLibrary.jl, group: Core}
           - {user: SciML, repo: ModelOrderReduction.jl, group: All}
           - {user: SciML, repo: MethodOfLines.jl, group: Interface}
           - {user: SciML, repo: MethodOfLines.jl, group: 2D_Diffusion}
