@@ -466,7 +466,7 @@ fdif!(du, u0, p, t)
                  x - y]
     sys1 = SDESystem(eqs_short, noiseeqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
     sys2 = SDESystem(eqs_short, noiseeqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
-    @test_throws ArgumentError SDESystem([sys2.y ~ sys1.z], [], t, [], [],
+    @test_throws ArgumentError SDESystem([sys2.y ~ sys1.z], [sys2.y], t, [], [],
         systems = [sys1, sys2], name = :foo)
 end
 
