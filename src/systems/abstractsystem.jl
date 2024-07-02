@@ -1223,21 +1223,24 @@ end
 struct ObservedFunctionCache{S}
     sys::S
     dict::Dict{Any, Any}
+    steady_state::Bool
     eval_expression::Bool
     eval_module::Module
 end
 
-function ObservedFunctionCache(sys; eval_expression = false, eval_module = @__MODULE__)
-    return ObservedFunctionCache(sys, Dict(), eval_expression, eval_module)
+function ObservedFunctionCache(
+        sys; steady_state = false, eval_expression = false, eval_module = @__MODULE__)
+    return ObservedFunctionCache(sys, Dict(), steady_state, eval_expression, eval_module)
 end
 
 # This is hit because ensemble problems do a deepcopy
 function Base.deepcopy_internal(ofc::ObservedFunctionCache, stackdict::IdDict)
     sys = deepcopy(ofc.sys)
     dict = deepcopy(ofc.dict)
+    steady_state = ofc.steady_state
     eval_expression = ofc.eval_expression
     eval_module = ofc.eval_module
-    newofc = ObservedFunctionCache(sys, dict, eval_expression, eval_module)
+    newofc = ObservedFunctionCache(sys, dict, steady_state, eval_expression, eval_module)
     stackdict[ofc] = newofc
     return newofc
 end
@@ -1247,6 +1250,12 @@ function (ofc::ObservedFunctionCache)(obsvar, args...)
         SymbolicIndexingInterface.observed(
             ofc.sys, obsvar; eval_expression = ofc.eval_expression,
             eval_module = ofc.eval_module)
+    end
+    if ofc.steady_state
+        obs = let fn = obs
+            fn1(u, p, t = Inf) = fn(u, p, t)
+            fn1
+        end
     end
     if args === ()
         return obs
