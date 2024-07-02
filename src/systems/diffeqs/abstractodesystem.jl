@@ -399,29 +399,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         ArrayInterface.restructure(u0 .* u0', M)
     end
 
-    obs = observed(sys)
-    observedfun = if steady_state
-        let sys = sys, dict = Dict()
-            function generated_observed(obsvar, args...)
-                obs = get!(dict, value(obsvar)) do
-                    SymbolicIndexingInterface.observed(
-                        sys, obsvar; eval_expression, eval_module)
-                end
-                if args === ()
-                    return let obs = obs
-                        fn1(u, p, t = Inf) = obs(u, p, t)
-                        fn1
-                    end
-                elseif length(args) == 2
-                    return obs(args..., Inf)
-                else
-                    return obs(args...)
-                end
-            end
-        end
-    else
-        ObservedFunctionCache(sys; eval_expression, eval_module)
-    end
+    observedfun = ObservedFunctionCache(sys; steady_state, eval_expression, eval_module)
 
     jac_prototype = if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
