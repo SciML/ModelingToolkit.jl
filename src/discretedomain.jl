@@ -85,8 +85,8 @@ $(TYPEDEF)
 Represents a sample operator. A discrete-time signal is created by sampling a continuous-time signal.
 
 # Constructors
-`Sample(clock::TimeDomain = InferredDiscrete())`
-`Sample([t], dt::Real)`
+`Sample(clock::Union{TimeDomain, InferredTimeDomain} = InferredDiscrete)`
+`Sample(dt::Real)`
 
 `Sample(x::Num)`, with a single argument, is shorthand for `Sample()(x)`.
 
@@ -100,16 +100,23 @@ julia> using Symbolics
 
 julia> @variables t;
 
-julia> Δ = Sample(t, 0.01)
+julia> Δ = Sample(0.01)
 (::Sample) (generic function with 2 methods)
 ```
 """
 struct Sample <: Operator
     clock::Any
-    Sample(clock::TimeDomain = InferredDiscrete()) = new(clock)
-    Sample(t, dt::Real) = new(Clock(t, dt))
+    Sample(clock::Union{TimeDomain, InferredTimeDomain} = InferredDiscrete) = new(clock)
 end
-Sample(x) = Sample()(x)
+
+function Sample(arg::Real)
+    arg = unwrap(arg)
+    if symbolic_type(arg) == NotSymbolic()
+        Sample(Clock(arg))
+    else
+        Sample()(arg)
+    end
+end
 (D::Sample)(x) = Term{symtype(x)}(D, Any[x])
 (D::Sample)(x::Num) = Num(D(value(x)))
 SymbolicUtils.promote_symtype(::Sample, x) = x
@@ -178,11 +185,14 @@ Shift(t, 1)(x(t))
 ```
 """
 struct ShiftIndex
-    clock::TimeDomain
+    clock::Union{InferredTimeDomain, TimeDomain, IntegerSequence}
     steps::Int
-    ShiftIndex(clock::TimeDomain = Inferred(), steps::Int = 0) = new(clock, steps)
-    ShiftIndex(t::Num, dt::Real, steps::Int = 0) = new(Clock(t, dt), steps)
-    ShiftIndex(t::Num, steps::Int = 0) = new(IntegerSequence(t), steps)
+    function ShiftIndex(
+            clock::Union{TimeDomain, InferredTimeDomain} = Inferred, steps::Int = 0)
+        new(clock, steps)
+    end
+    ShiftIndex(dt::Real, steps::Int = 0) = new(Clock(dt), steps)
+    ShiftIndex(t::Num, steps::Int = 0) = new(IntegerSequence(), steps)
 end
 
 function (xn::Num)(k::ShiftIndex)
@@ -206,7 +216,7 @@ function (xn::Num)(k::ShiftIndex)
     #     xn = Sample(t, clock)(xn)
     # end
     # QUESTION: should we return a variable with time domain set to k.clock?
-    xn = setmetadata(xn, TimeDomain, k.clock)
+    xn = setmetadata(xn, VariableTimeDomain, k.clock)
     if steps == 0
         return xn # x(k) needs no shift operator if the step of k is 0
     end
@@ -219,37 +229,37 @@ Base.:-(k::ShiftIndex, i::Int) = k + (-i)
 """
     input_timedomain(op::Operator)
 
-Return the time-domain type (`Continuous()` or `Discrete()`) that `op` operates on.
+Return the time-domain type (`Continuous` or `InferredDiscrete`) that `op` operates on.
 """
 function input_timedomain(s::Shift, arg = nothing)
     if has_time_domain(arg)
         return get_time_domain(arg)
     end
-    InferredDiscrete()
+    InferredDiscrete
 end
 
 """
     output_timedomain(op::Operator)
 
-Return the time-domain type (`Continuous()` or `Discrete()`) that `op` results in.
+Return the time-domain type (`Continuous` or `InferredDiscrete`) that `op` results in.
 """
 function output_timedomain(s::Shift, arg = nothing)
     if has_time_domain(arg)
         return get_time_domain(arg)
     end
-    InferredDiscrete()
+    InferredDiscrete
 end
 
-input_timedomain(::Sample, arg = nothing) = Continuous()
+input_timedomain(::Sample, arg = nothing) = Continuous
 output_timedomain(s::Sample, arg = nothing) = s.clock
 
 function input_timedomain(h::Hold, arg = nothing)
     if has_time_domain(arg)
         return get_time_domain(arg)
     end
-    InferredDiscrete() # the Hold accepts any discrete
+    InferredDiscrete # the Hold accepts any discrete
 end
-output_timedomain(::Hold, arg = nothing) = Continuous()
+output_timedomain(::Hold, arg = nothing) = Continuous
 
 sampletime(op::Sample, arg = nothing) = sampletime(op.clock)
 sampletime(op::ShiftIndex, arg = nothing) = sampletime(op.clock)

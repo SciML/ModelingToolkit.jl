@@ -157,10 +157,10 @@ end
     dt = 0.1
     @variables x(t) y(t) u(t) yd(t) ud(t) r(t) z(t)
     @parameters kp kq
-    d = Clock(t, dt)
+    d = Clock(dt)
     k = ShiftIndex(d)
 
-    eqs = [yd ~ Sample(t, dt)(y)
+    eqs = [yd ~ Sample(dt)(y)
            ud ~ kp * (r - yd) + kq * z
            r ~ 1.0
            u ~ Hold(ud)
@@ -175,7 +175,7 @@ end
         prob = ODEProblem(sys, [x => 0.0, y => 0.0], (0.0, Tf),
             [kp => 1.0; z(k - 1) => 3.0; yd(k - 1) => 0.0; z(k - 2) => 4.0;
              yd(k - 2) => 2.0])
-        @test_nowarn solve(prob, Tsit5(); kwargshandle = KeywordArgSilent)
+        @test_nowarn solve(prob, Tsit5())
 
         @mtkbuild sys = ODESystem(eqs, t; parameter_dependencies = [kq => 2kp],
             discrete_events = [[0.5] => [kp ~ 2.0]])
@@ -184,11 +184,11 @@ end
              yd(k - 2) => 2.0])
         @test prob.ps[kp] == 1.0
         @test prob.ps[kq] == 2.0
-        @test_nowarn solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
+        @test_nowarn solve(prob, Tsit5())
         prob = ODEProblem(sys, [x => 0.0, y => 0.0], (0.0, Tf),
             [kp => 1.0; z(k - 1) => 3.0; yd(k - 1) => 0.0; z(k - 2) => 4.0;
              yd(k - 2) => 2.0])
-        integ = init(prob, Tsit5(), kwargshandle = KeywordArgSilent)
+        integ = init(prob, Tsit5())
         @test integ.ps[kp] == 1.0
         @test integ.ps[kq] == 2.0
         step!(integ, 0.6)
