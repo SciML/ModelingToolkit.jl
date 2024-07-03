@@ -222,9 +222,9 @@ end
 
 function process_DiscreteProblem(constructor, sys::DiscreteSystem, u0map, parammap;
         linenumbers = true, parallel = SerialForm(),
-        eval_expression = true,
         use_union = false,
         tofloat = !use_union,
+        eval_expression = false, eval_module = @__MODULE__,
         kwargs...)
     iv = get_iv(sys)
     eqs = equations(sys)
@@ -249,7 +249,7 @@ function process_DiscreteProblem(constructor, sys::DiscreteSystem, u0map, paramm
     end
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         u0, defs = get_u0(sys, trueu0map, parammap)
-        p = MTKParameters(sys, parammap, trueu0map)
+        p = MTKParameters(sys, parammap, trueu0map; eval_expression, eval_module)
     else
         u0, p, defs = get_u0_p(sys, trueu0map, parammap; tofloat, use_union)
     end
@@ -259,7 +259,8 @@ function process_DiscreteProblem(constructor, sys::DiscreteSystem, u0map, paramm
     f = constructor(sys, dvs, ps, u0;
         linenumbers = linenumbers, parallel = parallel,
         syms = Symbol.(dvs), paramsyms = Symbol.(ps),
-        eval_expression = eval_expression, kwargs...)
+        eval_expression = eval_expression, eval_module = eval_module,
+        kwargs...)
     return f, u0, p
 end
 
@@ -271,7 +272,7 @@ function SciMLBase.DiscreteProblem(
         sys::DiscreteSystem, u0map = [], tspan = get_tspan(sys),
         parammap = SciMLBase.NullParameters();
         eval_module = @__MODULE__,
-        eval_expression = true,
+        eval_expression = false,
         use_union = false,
         kwargs...
 )
@@ -308,18 +309,16 @@ function SciMLBase.DiscreteFunction{iip, specialize}(
         version = nothing,
         p = nothing,
         t = nothing,
-        eval_expression = true,
+        eval_expression = false,
         eval_module = @__MODULE__,
         analytic = nothing,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed `DiscreteSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
     end
-    f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression},
+    f_gen = generate_function(sys, dvs, ps; expression = Val{true},
         expression_module = eval_module, kwargs...)
-    f_oop, f_iip = eval_expression ?
-                   (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen) :
-                   f_gen
+    f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
     f(u, p, t) = f_oop(u, p, t)
     f(du, u, p, t) = f_iip(du, u, p, t)
 

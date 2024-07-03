@@ -31,6 +31,7 @@ pages = [
         "basics/MTKModel_Connector.md",
         "basics/Validation.md",
         "basics/DependencyGraphs.md",
+        "basics/Precompilation.md",
         "basics/FAQ.md"],
     "System Types" => Any["systems/ODESystem.md",
         "systems/SDESystem.md",

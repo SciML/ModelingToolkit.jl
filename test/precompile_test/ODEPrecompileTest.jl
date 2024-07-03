@@ -27,4 +27,12 @@ const f_noeval_bad = system(; eval_expression = false)
 using RuntimeGeneratedFunctions
 RuntimeGeneratedFunctions.init(@__MODULE__)
 const f_noeval_good = system(; eval_expression = false, eval_module = @__MODULE__)
+
+# Eval the expression but into MTK's module, which means it won't be properly cached by
+# the package image
+const f_eval_bad = system(; eval_expression = true, eval_module = @__MODULE__)
+
+# Change the module the eval'd function is eval'd into to be the containing module,
+# which should make it be in the package image
+const f_eval_good = system(; eval_expression = true, eval_module = @__MODULE__)
 end

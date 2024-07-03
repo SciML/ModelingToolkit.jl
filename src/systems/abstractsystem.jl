@@ -161,7 +161,8 @@ time-independent systems. If `split=true` (the default) was passed to [`complete
 object.
 """
 function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys),
-        ps = parameters(sys); wrap_code = nothing, postprocess_fbody = nothing, states = nothing, kwargs...)
+        ps = parameters(sys); wrap_code = nothing, postprocess_fbody = nothing, states = nothing,
+        expression = Val{true}, eval_expression = false, eval_module = @__MODULE__, kwargs...)
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system.")
     end
@@ -177,8 +178,8 @@ function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys
     if states === nothing
         states = sol_states
     end
-    if is_time_dependent(sys)
-        return build_function(exprs,
+    fnexpr = if is_time_dependent(sys)
+        build_function(exprs,
             dvs,
             p...,
             get_iv(sys);
@@ -186,18 +187,28 @@ function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys
             postprocess_fbody,
             states,
             wrap_code = wrap_code .∘ wrap_mtkparameters(sys, isscalar) .∘
-                        wrap_array_vars(sys, exprs; dvs)
+                        wrap_array_vars(sys, exprs; dvs),
+            expression = Val{true}
         )
     else
-        return build_function(exprs,
+        build_function(exprs,
             dvs,
             p...;
             kwargs...,
             postprocess_fbody,
             states,
             wrap_code = wrap_code .∘ wrap_mtkparameters(sys, isscalar) .∘
-                        wrap_array_vars(sys, exprs; dvs)
+                        wrap_array_vars(sys, exprs; dvs),
+            expression = Val{true}
         )
+    end
+    if expression == Val{true}
+        return fnexpr
+    end
+    if fnexpr isa Tuple
+        return eval_or_rgf.(fnexpr; eval_expression, eval_module)
+    else
+        return eval_or_rgf(fnexpr; eval_expression, eval_module)
     end
 end
 
@@ -509,7 +520,8 @@ function SymbolicIndexingInterface.is_observed(sys::AbstractSystem, sym)
            !is_independent_variable(sys, sym) && symbolic_type(sym) != NotSymbolic()
 end
 
-function SymbolicIndexingInterface.observed(sys::AbstractSystem, sym)
+function SymbolicIndexingInterface.observed(
+        sys::AbstractSystem, sym; eval_expression = false, eval_module = @__MODULE__)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         if sym isa Symbol
             _sym = get(ic.symbol_to_variable, sym, nothing)
@@ -531,7 +543,8 @@ function SymbolicIndexingInterface.observed(sys::AbstractSystem, sym)
             end
         end
     end
-    _fn = build_explicit_observed_function(sys, sym)
+    _fn = build_explicit_observed_function(sys, sym; eval_expression, eval_module)
+
     if is_time_dependent(sys)
         return let _fn = _fn
             fn1(u, p, t) = _fn(u, p, t)
@@ -1210,19 +1223,30 @@ end
 struct ObservedFunctionCache{S}
     sys::S
     dict::Dict{Any, Any}
+    eval_expression::Bool
+    eval_module::Module
 end
 
-function ObservedFunctionCache(sys)
-    return ObservedFunctionCache(sys, Dict())
-    let sys = sys, dict = Dict()
-        function generated_observed(obsvar, args...)
-        end
-    end
+function ObservedFunctionCache(sys; eval_expression = false, eval_module = @__MODULE__)
+    return ObservedFunctionCache(sys, Dict(), eval_expression, eval_module)
+end
+
+# This is hit because ensemble problems do a deepcopy
+function Base.deepcopy_internal(ofc::ObservedFunctionCache, stackdict::IdDict)
+    sys = deepcopy(ofc.sys)
+    dict = deepcopy(ofc.dict)
+    eval_expression = ofc.eval_expression
+    eval_module = ofc.eval_module
+    newofc = ObservedFunctionCache(sys, dict, eval_expression, eval_module)
+    stackdict[ofc] = newofc
+    return newofc
 end
 
 function (ofc::ObservedFunctionCache)(obsvar, args...)
     obs = get!(ofc.dict, value(obsvar)) do
-        SymbolicIndexingInterface.observed(ofc.sys, obsvar)
+        SymbolicIndexingInterface.observed(
+            ofc.sys, obsvar; eval_expression = ofc.eval_expression,
+            eval_module = ofc.eval_module)
     end
     if args === ()
         return obs
@@ -1871,6 +1895,8 @@ function linearization_function(sys::AbstractSystem, inputs,
         p = DiffEqBase.NullParameters(),
         zero_dummy_der = false,
         initialization_solver_alg = TrustRegion(),
+        eval_expression = false, eval_module = @__MODULE__,
+        warn_initialize_determined = true,
         kwargs...)
     inputs isa AbstractVector || (inputs = [inputs])
     outputs isa AbstractVector || (outputs = [outputs])
@@ -1884,10 +1910,26 @@ function linearization_function(sys::AbstractSystem, inputs,
         op = merge(defs, op)
     end
     sys = ssys
+    u0map = Dict(k => v for (k, v) in op if is_variable(ssys, k))
     initsys = structural_simplify(
         generate_initializesystem(
-            sys, guesses = guesses(sys), algebraic_only = true),
+            sys, u0map = u0map, guesses = guesses(sys), algebraic_only = true),
         fully_determined = false)
+
+    # HACK: some unknowns may not be involved in any initialization equations, and are
+    # thus removed from the system during `structural_simplify`.
+    # This causes `getu(initsys, unknowns(sys))` to fail, so we add them back as parameters
+    # for now.
+    missing_unknowns = setdiff(unknowns(sys), all_symbols(initsys))
+    if !isempty(missing_unknowns)
+        if warn_initialize_determined
+            @warn "Initialization system is underdetermined. No equations for $(missing_unknowns). Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false."
+        end
+        new_parameters = [parameters(initsys); missing_unknowns]
+        @set! initsys.ps = new_parameters
+        initsys = complete(initsys)
+    end
+
     if p isa SciMLBase.NullParameters
         p = Dict()
     else
@@ -1895,65 +1937,36 @@ function linearization_function(sys::AbstractSystem, inputs,
     end
     x0 = merge(defaults_and_guesses(sys), op)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        sys_ps = MTKParameters(sys, p, x0)
+        sys_ps = MTKParameters(sys, p, x0; eval_expression, eval_module)
     else
         sys_ps = varmap_to_vars(p, parameters(sys); defaults = x0)
     end
     p[get_iv(sys)] = NaN
     if has_index_cache(initsys) && get_index_cache(initsys) !== nothing
-        oldps = MTKParameters(initsys, p, merge(guesses(sys), defaults(sys), op))
+        oldps = MTKParameters(initsys, p, merge(guesses(sys), defaults(sys), op);
+            eval_expression, eval_module)
         initsys_ps = parameters(initsys)
-        initsys_idxs = [parameter_index(initsys, param) for param in initsys_ps]
-        tunable_ps = [initsys_ps[i]
-                      for i in eachindex(initsys_ps)
-                      if initsys_idxs[i].portion == SciMLStructures.Tunable()]
-        tunable_getter = isempty(tunable_ps) ? nothing : getu(sys, tunable_ps)
-        discrete_ps = [initsys_ps[i]
-                       for i in eachindex(initsys_ps)
-                       if initsys_idxs[i].portion == SciMLStructures.Discrete()]
-        disc_getter = isempty(discrete_ps) ? nothing : getu(sys, discrete_ps)
-        constant_ps = [initsys_ps[i]
-                       for i in eachindex(initsys_ps)
-                       if initsys_idxs[i].portion == SciMLStructures.Constants()]
-        const_getter = isempty(constant_ps) ? nothing : getu(sys, constant_ps)
-        nonnum_ps = [initsys_ps[i]
-                     for i in eachindex(initsys_ps)
-                     if initsys_idxs[i].portion == NONNUMERIC_PORTION]
-        nonnum_getter = isempty(nonnum_ps) ? nothing : getu(sys, nonnum_ps)
+        p_getter = build_explicit_observed_function(
+            sys, initsys_ps; eval_expression, eval_module)
+
         u_getter = isempty(unknowns(initsys)) ? (_...) -> nothing :
-                   getu(sys, unknowns(initsys))
-        get_initprob_u_p = let tunable_getter = tunable_getter,
-            disc_getter = disc_getter,
-            const_getter = const_getter,
-            nonnum_getter = nonnum_getter,
-            oldps = oldps,
+                   build_explicit_observed_function(
+            sys, unknowns(initsys); eval_expression, eval_module)
+        get_initprob_u_p = let p_getter,
+            p_setter! = setp(initsys, initsys_ps),
             u_getter = u_getter
 
             function (u, p, t)
                 state = ProblemState(; u, p, t)
-                if tunable_getter !== nothing
-                    SciMLStructures.replace!(
-                        SciMLStructures.Tunable(), oldps, tunable_getter(state))
-                end
-                if disc_getter !== nothing
-                    SciMLStructures.replace!(
-                        SciMLStructures.Discrete(), oldps, disc_getter(state))
-                end
-                if const_getter !== nothing
-                    SciMLStructures.replace!(
-                        SciMLStructures.Constants(), oldps, const_getter(state))
-                end
-                if nonnum_getter !== nothing
-                    SciMLStructures.replace!(
-                        NONNUMERIC_PORTION, oldps, nonnum_getter(state))
-                end
+                p_setter!(oldps, p_getter(state))
                 newu = u_getter(state)
                 return newu, oldps
             end
         end
     else
         get_initprob_u_p = let p_getter = getu(sys, parameters(initsys)),
-            u_getter = getu(sys, unknowns(initsys))
+            u_getter = build_explicit_observed_function(
+                sys, unknowns(initsys); eval_expression, eval_module)
 
             function (u, p, t)
                 state = ProblemState(; u, p, t)
@@ -1961,19 +1974,21 @@ function linearization_function(sys::AbstractSystem, inputs,
             end
         end
     end
-    initfn = NonlinearFunction(initsys)
-    initprobmap = getu(initsys, unknowns(sys))
+    initfn = NonlinearFunction(initsys; eval_expression, eval_module)
+    initprobmap = build_explicit_observed_function(
+        initsys, unknowns(sys); eval_expression, eval_module)
     ps = full_parameters(sys)
+    h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
     lin_fun = let diff_idxs = diff_idxs,
         alge_idxs = alge_idxs,
         input_idxs = input_idxs,
         sts = unknowns(sys),
         get_initprob_u_p = get_initprob_u_p,
         fun = ODEFunction{true, SciMLBase.FullSpecialize}(
-            sys, unknowns(sys), ps),
+            sys, unknowns(sys), ps; eval_expression, eval_module),
         initfn = initfn,
         initprobmap = initprobmap,
-        h = build_explicit_observed_function(sys, outputs),
+        h = h,
         chunk = ForwardDiff.Chunk(input_idxs),
         sys_ps = sys_ps,
         initialize = initialize,
@@ -1985,7 +2000,9 @@ function linearization_function(sys::AbstractSystem, inputs,
                 p = todict(p)
                 newps = deepcopy(sys_ps)
                 for (k, v) in p
-                    setp(sys, k)(newps, v)
+                    if is_parameter(sys, k)
+                        setp(sys, k)(newps, v)
+                    end
                 end
                 p = newps
             end
@@ -2056,6 +2073,7 @@ where `x` are differential unknown variables, `z` algebraic variables, `u` input
 """
 function linearize_symbolic(sys::AbstractSystem, inputs,
         outputs; simplify = false, allow_input_derivatives = false,
+        eval_expression = false, eval_module = @__MODULE__,
         kwargs...)
     sys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(
         sys, inputs, outputs; simplify,
@@ -2065,10 +2083,11 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
     ps = full_parameters(sys)
     p = reorder_parameters(sys, ps)
 
-    fun = generate_function(sys, sts, ps; expression = Val{false})[1]
+    fun_expr = generate_function(sys, sts, ps; expression = Val{true})[1]
+    fun = eval_or_rgf(fun_expr; eval_expression, eval_module)
     dx = fun(sts, p..., t)
 
-    h = build_explicit_observed_function(sys, outputs)
+    h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
     y = h(sts, p..., t)
 
     fg_xz = Symbolics.jacobian(dx, sts)
@@ -2625,12 +2644,22 @@ See also: [`ModelingToolkit.dump_variable_metadata`](@ref), [`ModelingToolkit.du
 """
 function dump_parameters(sys::AbstractSystem)
     defs = defaults(sys)
-    map(dump_variable_metadata.(parameters(sys))) do meta
+    pdeps = parameter_dependencies(sys)
+    metas = map(dump_variable_metadata.(parameters(sys))) do meta
         if haskey(defs, meta.var)
             meta = merge(meta, (; default = defs[meta.var]))
         end
         meta
     end
+    pdep_metas = map(collect(keys(pdeps))) do sym
+        val = pdeps[sym]
+        meta = dump_variable_metadata(sym)
+        meta = merge(meta,
+            (; dependency = pdeps[sym],
+                default = symbolic_evaluate(pdeps[sym], merge(defs, pdeps))))
+        return meta
+    end
+    return vcat(metas, pdep_metas)
 end
 
 """

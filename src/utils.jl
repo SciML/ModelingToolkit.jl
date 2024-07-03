@@ -281,7 +281,7 @@ function _check_operator_variables(eq, op::T, expr = eq.rhs) where {T}
         throw_invalid_operator(expr, eq, op)
     end
     foreach(expr -> _check_operator_variables(eq, op, expr),
-        SymbolicUtils.unsorted_arguments(expr))
+        SymbolicUtils.arguments(expr))
 end
 """
 Check if all the LHS are unique
@@ -824,4 +824,12 @@ function restrict_array_to_union(arr)
         Union{prev, typeof(cur)}
     end
     return Array{T, ndims(arr)}(arr)
+end
+
+function eval_or_rgf(expr::Expr; eval_expression = false, eval_module = @__MODULE__)
+    if eval_expression
+        return eval_module.eval(expr)
+    else
+        return drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, expr))
+    end
 end

@@ -343,7 +343,7 @@ Notes
   - `kwargs` are passed through to `Symbolics.build_function`.
 """
 function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
-        expression = Val{true}, kwargs...)
+        expression = Val{true}, eval_expression = false, eval_module = @__MODULE__, kwargs...)
     u = map(x -> time_varying_as_func(value(x), sys), dvs)
     p = map.(x -> time_varying_as_func(value(x), sys), reorder_parameters(sys, ps))
     t = get_iv(sys)
@@ -353,8 +353,13 @@ function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
         cmap = map(x -> x => getdefault(x), cs)
         condit = substitute(condit, cmap)
     end
-    build_function(condit, u, t, p...; expression, wrap_code = condition_header(sys),
+    expr = build_function(
+        condit, u, t, p...; expression = Val{true}, wrap_code = condition_header(sys),
         kwargs...)
+    if expression == Val{true}
+        return expr
+    end
+    return eval_or_rgf(expr; eval_expression, eval_module)
 end
 
 function compile_affect(cb::SymbolicContinuousCallback, args...; kwargs...)
@@ -379,7 +384,8 @@ Notes
   - `kwargs` are passed through to `Symbolics.build_function`.
 """
 function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothing,
-        expression = Val{true}, checkvars = true,
+        expression = Val{true}, checkvars = true, eval_expression = false,
+        eval_module = @__MODULE__,
         postprocess_affect_expr! = nothing, kwargs...)
     if isempty(eqs)
         if expression == Val{true}
@@ -432,9 +438,8 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
         end
         t = get_iv(sys)
         integ = gensym(:MTKIntegrator)
-        getexpr = (postprocess_affect_expr! === nothing) ? expression : Val{true}
         pre = get_preprocess_constants(rhss)
-        rf_oop, rf_ip = build_function(rhss, u, p..., t; expression = getexpr,
+        rf_oop, rf_ip = build_function(rhss, u, p..., t; expression = Val{true},
             wrap_code = add_integrator_header(sys, integ, outvar),
             outputidxs = update_inds,
             postprocess_fbody = pre,
@@ -442,10 +447,11 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
         # applied user-provided function to the generated expression
         if postprocess_affect_expr! !== nothing
             postprocess_affect_expr!(rf_ip, integ)
-            (expression == Val{false}) &&
-                (return drop_expr(@RuntimeGeneratedFunction(rf_ip)))
         end
-        rf_ip
+        if expression == Val{false}
+            return eval_or_rgf(rf_ip; eval_expression, eval_module)
+        end
+        return rf_ip
     end
 end
 

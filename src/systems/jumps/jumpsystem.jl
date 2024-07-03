@@ -213,15 +213,17 @@ function generate_affect_function(js::JumpSystem, affect, outputidxs)
         expression = Val{true}, checkvars = false)
 end
 
-function assemble_vrj(js, vrj, unknowntoid)
-    _rate = drop_expr(@RuntimeGeneratedFunction(generate_rate_function(js, vrj.rate)))
+function assemble_vrj(
+        js, vrj, unknowntoid; eval_expression = false, eval_module = @__MODULE__)
+    _rate = eval_or_rgf(generate_rate_function(js, vrj.rate); eval_expression, eval_module)
     rate(u, p, t) = _rate(u, p, t)
     rate(u, p::MTKParameters, t) = _rate(u, p..., t)
 
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
-    affect = drop_expr(@RuntimeGeneratedFunction(generate_affect_function(js, vrj.affect!,
-        outputidxs)))
+    affect = eval_or_rgf(
+        generate_affect_function(js, vrj.affect!,
+            outputidxs); eval_expression, eval_module)
     VariableRateJump(rate, affect)
 end
 
@@ -240,15 +242,17 @@ function assemble_vrj_expr(js, vrj, unknowntoid)
     end
 end
 
-function assemble_crj(js, crj, unknowntoid)
-    _rate = drop_expr(@RuntimeGeneratedFunction(generate_rate_function(js, crj.rate)))
+function assemble_crj(
+        js, crj, unknowntoid; eval_expression = false, eval_module = @__MODULE__)
+    _rate = eval_or_rgf(generate_rate_function(js, crj.rate); eval_expression, eval_module)
     rate(u, p, t) = _rate(u, p, t)
     rate(u, p::MTKParameters, t) = _rate(u, p..., t)
 
     outputvars = (value(affect.lhs) for affect in crj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
-    affect = drop_expr(@RuntimeGeneratedFunction(generate_affect_function(js, crj.affect!,
-        outputidxs)))
+    affect = eval_or_rgf(
+        generate_affect_function(js, crj.affect!,
+            outputidxs); eval_expression, eval_module)
     ConstantRateJump(rate, affect)
 end
 
@@ -325,6 +329,8 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
         parammap = DiffEqBase.NullParameters();
         checkbounds = false,
         use_union = true,
+        eval_expression = false,
+        eval_module = @__MODULE__,
         kwargs...)
     if !iscomplete(sys)
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
@@ -338,14 +344,14 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
 
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        p = MTKParameters(sys, parammap, u0map)
+        p = MTKParameters(sys, parammap, u0map; eval_expression, eval_module)
     else
         p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
     end
 
     f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
 
-    observedfun = ObservedFunctionCache(sys)
+    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
 
     df = DiscreteFunction{true, true}(f; sys = sys, observed = observedfun)
     DiscreteProblem(df, u0, tspan, p; kwargs...)
@@ -417,7 +423,7 @@ sol = solve(jprob, SSAStepper())
 ```
 """
 function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = nothing,
-        kwargs...)
+        eval_expression = false, eval_module = @__MODULE__, kwargs...)
     if !iscomplete(js)
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `JumpProblem`")
     end
@@ -430,8 +436,10 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = 
 
     majpmapper = JumpSysMajParamMapper(js, p; jseqs = eqs, rateconsttype = invttype)
     majs = isempty(eqs.x[1]) ? nothing : assemble_maj(eqs.x[1], unknowntoid, majpmapper)
-    crjs = ConstantRateJump[assemble_crj(js, j, unknowntoid) for j in eqs.x[2]]
-    vrjs = VariableRateJump[assemble_vrj(js, j, unknowntoid) for j in eqs.x[3]]
+    crjs = ConstantRateJump[assemble_crj(js, j, unknowntoid; eval_expression, eval_module)
+                            for j in eqs.x[2]]
+    vrjs = VariableRateJump[assemble_vrj(js, j, unknowntoid; eval_expression, eval_module)
+                            for j in eqs.x[3]]
     ((prob isa DiscreteProblem) && !isempty(vrjs)) &&
         error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")
     jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, majs)
@@ -450,7 +458,8 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = 
     end
 
     # handle events, making sure to reset aggregators in the generated affect functions
-    cbs = process_events(js; callback, postprocess_affect_expr! = _reset_aggregator!)
+    cbs = process_events(js; callback, eval_expression, eval_module,
+        postprocess_affect_expr! = _reset_aggregator!)
 
     JumpProblem(prob, aggregator, jset; dep_graph = jtoj, vartojumps_map = vtoj,
         jumptovars_map = jtov, scale_rates = false, nocopy = true,

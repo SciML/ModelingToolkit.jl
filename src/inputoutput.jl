@@ -195,6 +195,8 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
         disturbance_inputs = disturbances(sys);
         implicit_dae = false,
         simplify = false,
+        eval_expression = false,
+        eval_module = @__MODULE__,
         kwargs...)
     isempty(inputs) && @warn("No unbound inputs were found in system.")
 
@@ -240,7 +242,8 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     end
     process = get_postprocess_fbody(sys)
     f = build_function(rhss, args...; postprocess_fbody = process,
-        expression = Val{false}, kwargs...)
+        expression = Val{true}, kwargs...)
+    f = eval_or_rgf.(f; eval_expression, eval_module)
     (; f, dvs, ps, io_sys = sys)
 end
 
@@ -395,7 +398,7 @@ model_outputs = [model.inertia1.w, model.inertia2.w, model.inertia1.phi, model.i
 
 `f_oop` will have an extra state corresponding to the integrator in the disturbance model. This state will not be affected by any input, but will affect the dynamics from where it enters, in this case it will affect additively from `model.torque.tau.u`.
 """
-function add_input_disturbance(sys, dist::DisturbanceModel, inputs = nothing)
+function add_input_disturbance(sys, dist::DisturbanceModel, inputs = nothing; kwargs...)
     t = get_iv(sys)
     @variables d(t)=0 [disturbance = true]
     @variables u(t)=0 [input = true] # New system input
@@ -418,6 +421,6 @@ function add_input_disturbance(sys, dist::DisturbanceModel, inputs = nothing)
     augmented_sys = extend(augmented_sys, sys)
 
     (f_oop, f_ip), dvs, p = generate_control_function(augmented_sys, all_inputs,
-        [d])
+        [d]; kwargs...)
     (f_oop, f_ip), augmented_sys, dvs, p
 end

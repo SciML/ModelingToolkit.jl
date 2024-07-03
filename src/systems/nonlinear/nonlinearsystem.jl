@@ -277,15 +277,15 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
         ps = full_parameters(sys), u0 = nothing;
         version = nothing,
         jac = false,
-        eval_expression = true,
+        eval_expression = false,
+        eval_module = @__MODULE__,
         sparse = false, simplify = false,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearFunction`")
     end
-    f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression}, kwargs...)
-    f_oop, f_iip = eval_expression ?
-                   (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in f_gen) : f_gen
+    f_gen = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
+    f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
     f(u, p) = f_oop(u, p)
     f(u, p::MTKParameters) = f_oop(u, p...)
     f(du, u, p) = f_iip(du, u, p)
@@ -294,10 +294,8 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
     if jac
         jac_gen = generate_jacobian(sys, dvs, ps;
             simplify = simplify, sparse = sparse,
-            expression = Val{eval_expression}, kwargs...)
-        jac_oop, jac_iip = eval_expression ?
-                           (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in jac_gen) :
-                           jac_gen
+            expression = Val{true}, kwargs...)
+        jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
         _jac(u, p) = jac_oop(u, p)
         _jac(u, p::MTKParameters) = jac_oop(u, p...)
         _jac(J, u, p) = jac_iip(J, u, p)
@@ -306,7 +304,7 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
         _jac = nothing
     end
 
-    observedfun = ObservedFunctionCache(sys)
+    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
 
     NonlinearFunction{iip}(f,
         sys = sys,
@@ -376,7 +374,8 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
         checkbounds = false, sparse = false,
         simplify = false,
         linenumbers = true, parallel = SerialForm(),
-        eval_expression = true,
+        eval_expression = false,
+        eval_module = @__MODULE__,
         use_union = false,
         tofloat = !use_union,
         kwargs...)
@@ -386,7 +385,7 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         u0, defs = get_u0(sys, u0map, parammap)
         check_eqs_u0(eqs, dvs, u0; kwargs...)
-        p = MTKParameters(sys, parammap, u0map)
+        p = MTKParameters(sys, parammap, u0map; eval_expression, eval_module)
     else
         u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union)
         check_eqs_u0(eqs, dvs, u0; kwargs...)
@@ -394,7 +393,8 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
 
     f = constructor(sys, dvs, ps, u0; jac = jac, checkbounds = checkbounds,
         linenumbers = linenumbers, parallel = parallel, simplify = simplify,
-        sparse = sparse, eval_expression = eval_expression, kwargs...)
+        sparse = sparse, eval_expression = eval_expression, eval_module = eval_module,
+        kwargs...)
     return f, u0, p
 end
 
