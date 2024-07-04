@@ -462,9 +462,11 @@ fdif!(du, u0, p, t)
     eqs_short = [D(x) ~ σ * (y - x),
         D(y) ~ x * (ρ - z) - y
     ]
-    sys1 = SDESystem(eqs_short, noiseeqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
-    sys2 = SDESystem(eqs_short, noiseeqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
-    @test_throws ArgumentError SDESystem([sys2.y ~ sys1.z], [], t, [], [],
+    noise_eqs = [y - x
+                 x - y]
+    sys1 = SDESystem(eqs_short, noise_eqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
+    sys2 = SDESystem(eqs_short, noise_eqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
+    @test_throws ArgumentError SDESystem([sys2.y ~ sys1.z], [sys2.y], t, [], [],
         systems = [sys1, sys2], name = :foo)
 end
 
@@ -614,6 +616,17 @@ sys2 = complete(sys2)
 prob = SDEProblem(sys1, sts .=> [1.0, 0.0, 0.0],
     (0.0, 100.0), ps .=> (10.0, 26.0))
 solve(prob, LambaEulerHeun(), seed = 1)
+
+# Test ill-formed due to more equations than states in noise equations
+
+@parameters p d
+@variables t X(t)
+eqs = [D(X) ~ p - d * X]
+noise_eqs = [sqrt(p), -sqrt(d * X)]
+@test_throws ArgumentError SDESystem(eqs, noise_eqs, t, [X], [p, d]; name = :ssys)
+
+noise_eqs = reshape([sqrt(p), -sqrt(d * X)], 1, 2)
+ssys = SDESystem(eqs, noise_eqs, t, [X], [p, d]; name = :ssys)
 
 # SDEProblem construction with StaticArrays
 # Issue#2814
