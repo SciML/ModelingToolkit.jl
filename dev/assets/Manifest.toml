@@ -124,9 +124,9 @@ version = "7.11.0"
 
 [[deps.ArrayLayouts]]
 deps = ["FillArrays", "LinearAlgebra"]
-git-tree-sha1 = "600078184f7de14b3e60efe13fc0ba5c59f6dca5"
+git-tree-sha1 = "8556500c18fcad8b4c44058e23fbc4a36143f6be"
 uuid = "4c555306-a7a7-4459-81d9-ec55ddd5c99a"
-version = "1.10.0"
+version = "1.10.1"
 weakdeps = ["SparseArrays"]
 
     [deps.ArrayLayouts.extensions]
@@ -156,9 +156,9 @@ version = "1.5.0"
 
 [[deps.BifurcationKit]]
 deps = ["ArnoldiMethod", "Arpack", "BlockArrays", "DataStructures", "Dates", "DocStringExtensions", "FastGaussQuadrature", "ForwardDiff", "IterativeSolvers", "KrylovKit", "LinearAlgebra", "LinearMaps", "Parameters", "PreallocationTools", "Printf", "RecipesBase", "RecursiveArrayTools", "Reexport", "Requires", "SciMLBase", "Setfield", "SparseArrays", "StructArrays"]
-git-tree-sha1 = "79dbbd0d208494295efef045a6a3caaa581773ab"
+git-tree-sha1 = "35c860e4b2d7a2db257a8bd41b08ea5d30f16fff"
 uuid = "0f109fa4-8a5d-4b75-95aa-f515264e7665"
-version = "0.3.5"
+version = "0.3.6"
 
 [[deps.Bijections]]
 git-tree-sha1 = "95f5c7e2d177b7ba1a240b0518038b975d72a8c0"
@@ -178,9 +178,13 @@ version = "0.1.6"
 
 [[deps.BlockArrays]]
 deps = ["ArrayLayouts", "FillArrays", "LinearAlgebra"]
-git-tree-sha1 = "9a9610fbe5779636f75229e423e367124034af41"
+git-tree-sha1 = "5c0ffe1dff8cb7112de075f1b1cb32191675fcba"
 uuid = "8e7c35d0-a365-5155-bbbb-fb81a777f24e"
-version = "0.16.43"
+version = "1.1.0"
+weakdeps = ["BandedMatrices"]
+
+    [deps.BlockArrays.extensions]
+    BlockArraysBandedMatricesExt = "BandedMatrices"
 
 [[deps.BoundaryValueDiffEq]]
 deps = ["ADTypes", "Adapt", "ArrayInterface", "BandedMatrices", "ConcreteStructs", "DiffEqBase", "FastAlmostBandedMatrices", "FastClosures", "ForwardDiff", "LinearAlgebra", "LinearSolve", "Logging", "NonlinearSolve", "OrdinaryDiffEq", "PreallocationTools", "PrecompileTools", "Preferences", "RecursiveArrayTools", "Reexport", "SciMLBase", "Setfield", "SparseArrays", "SparseDiffTools"]
@@ -1054,10 +1058,14 @@ uuid = "ba0b0d4f-ebba-5204-a429-3ac8c609bfb7"
 version = "0.9.6"
 
 [[deps.KrylovKit]]
-deps = ["ChainRulesCore", "GPUArraysCore", "LinearAlgebra", "Printf", "VectorInterface"]
-git-tree-sha1 = "3f3a92bbe8f568b689a7f7bc193f7c717d793751"
+deps = ["GPUArraysCore", "LinearAlgebra", "PackageExtensionCompat", "Printf", "VectorInterface"]
+git-tree-sha1 = "3c2a016489c38f35160a246c91a3f3353c47bb68"
 uuid = "0b1a1467-8014-51b9-945f-bf0ae24f4b77"
-version = "0.7.1"
+version = "0.8.1"
+weakdeps = ["ChainRulesCore"]
+
+    [deps.KrylovKit.extensions]
+    KrylovKitChainRulesCoreExt = "ChainRulesCore"
 
 [[deps.LAME_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -1137,14 +1145,22 @@ uuid = "0e77f7df-68c5-4e49-93ce-4cd80f5598bf"
 version = "1.2.2"
 
 [[deps.LazyArrays]]
-deps = ["ArrayLayouts", "FillArrays", "LinearAlgebra", "MacroTools", "MatrixFactorizations", "SparseArrays"]
-git-tree-sha1 = "35079a6a869eecace778bcda8641f9a54ca3a828"
+deps = ["ArrayLayouts", "FillArrays", "LinearAlgebra", "MacroTools", "SparseArrays"]
+git-tree-sha1 = "35d73607f9e74c18db8a434b4886a479faa8e6fa"
 uuid = "5078a376-72f3-5289-bfd5-ec5146d43c02"
-version = "1.10.0"
-weakdeps = ["StaticArrays"]
+version = "2.1.4"
 
     [deps.LazyArrays.extensions]
+    LazyArraysBandedMatricesExt = "BandedMatrices"
+    LazyArraysBlockArraysExt = "BlockArrays"
+    LazyArraysBlockBandedMatricesExt = "BlockBandedMatrices"
     LazyArraysStaticArraysExt = "StaticArrays"
+
+    [deps.LazyArrays.weakdeps]
+    BandedMatrices = "aae01518-5342-5314-be14-df237901396f"
+    BlockArrays = "8e7c35d0-a365-5155-bbbb-fb81a777f24e"
+    BlockBandedMatrices = "ffab5731-97b5-5995-9138-79e8c1846df0"
+    StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [[deps.LazyArtifacts]]
 deps = ["Artifacts", "Pkg"]
@@ -1261,9 +1277,9 @@ weakdeps = ["ChainRulesCore", "SparseArrays", "Statistics"]
 
 [[deps.LinearSolve]]
 deps = ["ArrayInterface", "ChainRulesCore", "ConcreteStructs", "DocStringExtensions", "EnumX", "FastLapackInterface", "GPUArraysCore", "InteractiveUtils", "KLU", "Krylov", "LazyArrays", "Libdl", "LinearAlgebra", "MKL_jll", "Markdown", "PrecompileTools", "Preferences", "RecursiveFactorization", "Reexport", "SciMLBase", "SciMLOperators", "Setfield", "SparseArrays", "Sparspak", "StaticArraysCore", "UnPack"]
-git-tree-sha1 = "7648cc20100504f4b453917aacc8520e9c0ecfb3"
+git-tree-sha1 = "b2e2dba60642e07c062eb3143770d7e234316772"
 uuid = "7ed4a6bd-45f5-4d41-b270-4a48e9bafcae"
-version = "2.30.1"
+version = "2.30.2"
 
     [deps.LinearSolve.extensions]
     LinearSolveBandedMatricesExt = "BandedMatrices"
@@ -1419,9 +1435,13 @@ version = "2.4.2"
 
 [[deps.MatrixFactorizations]]
 deps = ["ArrayLayouts", "LinearAlgebra", "Printf", "Random"]
-git-tree-sha1 = "6731e0574fa5ee21c02733e397beb133df90de35"
+git-tree-sha1 = "07c98fdf57c9b45b987cf250c4bdc7200fa39eb2"
 uuid = "a3b82374-2e81-5b9e-98ce-41277c0e4c87"
-version = "2.2.0"
+version = "3.0.0"
+weakdeps = ["BandedMatrices"]
+
+    [deps.MatrixFactorizations.extensions]
+    MatrixFactorizationsBandedMatricesExt = "BandedMatrices"
 
 [[deps.MaybeInplace]]
 deps = ["ArrayInterface", "LinearAlgebra", "MacroTools", "SparseArrays"]
@@ -1563,9 +1583,9 @@ version = "3.13.1"
     Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [[deps.OffsetArrays]]
-git-tree-sha1 = "e64b4f5ea6b7389f6f046d13d4896a8f9c1ba71e"
+git-tree-sha1 = "1a27764e945a152f7ca7efa04de513d473e9542e"
 uuid = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
-version = "1.14.0"
+version = "1.14.1"
 weakdeps = ["Adapt"]
 
     [deps.OffsetArrays.extensions]
@@ -2267,9 +2287,9 @@ version = "0.1.0"
 
 [[deps.SymbolicIndexingInterface]]
 deps = ["Accessors", "ArrayInterface", "RuntimeGeneratedFunctions", "StaticArraysCore"]
-git-tree-sha1 = "a5f6f138b740c9d93d76f0feddd3092e6ef002b7"
+git-tree-sha1 = "ebb8a46ffcef0f0cf17bf33ab61f33d9770f50d2"
 uuid = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
-version = "0.3.22"
+version = "0.3.25"
 
 [[deps.SymbolicLimits]]
 deps = ["SymbolicUtils"]
