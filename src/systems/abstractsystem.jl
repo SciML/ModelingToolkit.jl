@@ -2528,18 +2528,19 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
     cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
     devs = union(get_discrete_events(basesys), get_discrete_events(sys))
     defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
+    guesses = merge(get_guesses(basesys), get_guesses(sys)) # prefer `sys`
     ieqs = union(get_initialization_eqs(basesys), get_initialization_eqs(sys))
     syss = union(get_systems(basesys), get_systems(sys))
 
     if length(ivs) == 0
         T(eqs, sts, ps, observed = obs, defaults = defs, name = name, systems = syss,
             continuous_events = cevs, discrete_events = devs, gui_metadata = gui_metadata,
-            parameter_dependencies = dep_ps, initialization_eqs = ieqs)
+            parameter_dependencies = dep_ps, initialization_eqs = ieqs, guesses = guesses)
     elseif length(ivs) == 1
         T(eqs, ivs[1], sts, ps, observed = obs, defaults = defs, name = name,
             systems = syss, continuous_events = cevs, discrete_events = devs,
             gui_metadata = gui_metadata, parameter_dependencies = dep_ps,
-            initialization_eqs = ieqs)
+            initialization_eqs = ieqs, guesses = guesses)
     end
 end
 

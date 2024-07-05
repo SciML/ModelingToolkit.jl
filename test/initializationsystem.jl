@@ -448,10 +448,11 @@ unsimp = generate_initializesystem(pend; u0map = [x => 1], initialization_eqs = 
 sys = structural_simplify(unsimp; fully_determined = false)
 @test length(equations(sys)) == 3
 
-# Extend two systems with initialization equations
+# Extend two systems with initialization equations and guesses
 # https://github.com/SciML/ModelingToolkit.jl/issues/2845
 @variables x(t) y(t)
 @named sysx = ODESystem([D(x) ~ 0], t; initialization_eqs = [x ~ 1])
-@named sysy = ODESystem([D(y) ~ 0], t; initialization_eqs = [y ~ 2])
+@named sysy = ODESystem([D(y) ~ 0], t; initialization_eqs = [y^2 ~ 2], guesses = [y => 1])
 sys = extend(sysx, sysy)
 @test length(equations(generate_initializesystem(sys))) == 2
+@test length(ModelingToolkit.guesses(sys)) == 1
