@@ -41,11 +41,14 @@ function modelingtoolkitize(
         if prob isa NonlinearLeastSquaresProblem
             rhs = ArrayInterface.restructure(
                 prob.f.resid_prototype, similar(prob.f.resid_prototype, Num))
+                prob.f(rhs, vars, params)
+                eqs = vcat([0.0 ~ rhs[i] for i in 1:length(prob.f.resid_prototype)]...)
         else
             rhs = ArrayInterface.restructure(prob.u0, similar(vars, Num))
+            prob.f(rhs, vars, params)
+            eqs = vcat([0.0 ~ rhs[i] for i in 1:length(rhs)]...)
         end
-        prob.f(rhs, vars, params)
-        eqs = vcat([0.0 ~ rhs[i] for i in 1:length(prob.f.resid_prototype)]...)
+
     else
         rhs = prob.f(vars, params)
         out_def = prob.f(prob.u0, prob.p)
