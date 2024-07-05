@@ -39,7 +39,8 @@ function modelingtoolkitize(
 
     if DiffEqBase.isinplace(prob)
         if prob isa NonlinearLeastSquaresProblem
-            rhs = ArrayInterface.restructure(prob.f.resid_prototype, similar(prob.f.resid_prototype, Num))
+            rhs = ArrayInterface.restructure(
+                prob.f.resid_prototype, similar(prob.f.resid_prototype, Num))
         else
             rhs = ArrayInterface.restructure(prob.u0, similar(vars, Num))
         end
