@@ -175,3 +175,56 @@ function is_parameter_solvable(p, pmap, defs, guesses)
     return ((_val1 === missing || _val2 === missing) ||
            (_val1 === nothing && _val2 !== nothing)) && _val3 !== nothing
 end
+
+function SciMLBase.remake_initializeprob(sys::ODESystem, odefn, u0, t0, p)
+    if (u0 === missing || !(eltype(u0) <: Pair) || isempty(u0)) &&
+       (p === missing || !(eltype(p) <: Pair) || isempty(p))
+        return odefn.initializeprob, odefn.update_initializeprob!, odefn.initializeprobmap,
+        odefn.initializeprobpmap
+    end
+    if u0 === missing || isempty(u0)
+        u0 = Dict()
+    elseif !(eltype(u0) <: Pair)
+        u0 = Dict(unknowns(sys) .=> u0)
+    end
+    if p === missing
+        p = Dict()
+    end
+    if t0 === nothing
+        t0 = 0.0
+    end
+    u0 = todict(u0)
+    defs = defaults(sys)
+    varmap = merge(defs, u0)
+    varmap = canonicalize_varmap(varmap)
+    missingvars = setdiff(unknowns(sys), collect(keys(varmap)))
+    setobserved = filter(keys(varmap)) do var
+        has_observed_with_lhs(sys, var) || has_observed_with_lhs(sys, default_toterm(var))
+    end
+    p = todict(p)
+    guesses = ModelingToolkit.guesses(sys)
+    solvablepars = [par
+                    for par in parameters(sys)
+                    if is_parameter_solvable(par, p, defs, guesses)]
+    pvarmap = merge(defs, p)
+    setparobserved = filter(keys(pvarmap)) do var
+        has_parameter_dependency_with_lhs(sys, var)
+    end
+    if (((!isempty(missingvars) || !isempty(solvablepars) ||
+          !isempty(setobserved) || !isempty(setparobserved)) &&
+         ModelingToolkit.get_tearing_state(sys) !== nothing) ||
+        !isempty(initialization_equations(sys)))
+        initprob = InitializationProblem(sys, t0, u0, p)
+        initprobmap = getu(initprob, unknowns(sys))
+        punknowns = [p for p in all_variable_symbols(initprob) if is_parameter(sys, p)]
+        getpunknowns = getu(initprob, punknowns)
+        setpunknowns = setp(sys, punknowns)
+        initprobpmap = GetUpdatedMTKParameters(getpunknowns, setpunknowns)
+        reqd_syms = parameter_symbols(initprob)
+        update_initializeprob! = UpdateInitializeprob(
+            getu(sys, reqd_syms), setu(initprob, reqd_syms))
+        return initprob, update_initializeprob!, initprobmap, initprobpmap
+    else
+        return nothing, nothing, nothing, nothing
+    end
+end

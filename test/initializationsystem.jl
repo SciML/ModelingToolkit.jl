@@ -693,6 +693,11 @@ end
     @test prob.f.initializeprob.ps[p] ≈ 3.0
     @test init(prob, Tsit5())[x] ≈ 1.0
     ModelingToolkit.defaults(prob.f.sys)[p] = missing
+    prob2 = remake(prob; u0 = [y => 1.0], p = [p => 3x])
+    @test !is_variable(prob2.f.initializeprob, p) &&
+          !is_parameter(prob2.f.initializeprob, p)
+    @test init(prob2, Tsit5())[x] ≈ 0.5
+    @test_nowarn solve(prob2, Tsit5())
 end
 
 @testset "Equations for dependent parameters" begin
