@@ -447,3 +447,11 @@ prob = ODEProblem(pend, [x => 1], (0.0, 1.5), [g => 1],
 unsimp = generate_initializesystem(pend; u0map = [x => 1], initialization_eqs = [y ~ 1])
 sys = structural_simplify(unsimp; fully_determined = false)
 @test length(equations(sys)) == 3
+
+# Extend two systems with initialization equations
+# https://github.com/SciML/ModelingToolkit.jl/issues/2845
+@variables x(t) y(t)
+@named sysx = ODESystem([D(x) ~ 0], t; initialization_eqs = [x ~ 1])
+@named sysy = ODESystem([D(y) ~ 0], t; initialization_eqs = [y ~ 2])
+sys = extend(sysx, sysy)
+@test length(equations(generate_initializesystem(sys))) == 2
