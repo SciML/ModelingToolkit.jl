@@ -2532,8 +2532,8 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
     syss = union(get_systems(basesys), get_systems(sys))
     args = length(ivs) == 0 ? (eqs, sts, ps) : (eqs, ivs[1], sts, ps)
     kwargs = (parameter_dependencies = dep_ps, observed = obs, continuous_events = cevs,
-              discrete_events = devs, defaults = defs, systems = syss,
-              name = name, gui_metadata = gui_metadata)
+        discrete_events = devs, defaults = defs, systems = syss,
+        name = name, gui_metadata = gui_metadata)
 
     # collect fields specific to some system types
     if basesys isa ODESystem
