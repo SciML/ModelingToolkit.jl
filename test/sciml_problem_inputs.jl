@@ -1,8 +1,8 @@
 ### Prepares Tests ###
 
 # Fetch packages
-using ModelingToolkit, JumpProcesses, NonlinearSolve, OrdinaryDiffEq, SteadyStateDiffEq,
-      StochasticDiffEq, Test
+using ModelingToolkit, JumpProcesses, NonlinearSolve, OrdinaryDiffEq, StaticArrays,
+      SteadyStateDiffEq, StochasticDiffEq, Test
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 # Sets rnd number.
@@ -51,6 +51,12 @@ begin
         # Vectors providing default values.
         [X => 4, Y => 5, Z => 10],
         [osys.X => 4, osys.Y => 5, osys.Z => 10],
+        # Static vectors not providing default values.
+        SA[X => 4, Y => 5],
+        SA[osys.X => 4, osys.Y => 5],
+        # Static vectors providing default values.
+        SA[X => 4, Y => 5, Z => 10],
+        SA[osys.X => 4, osys.Y => 5, osys.Z => 10],
         # Dicts not providing default values.
         Dict([X => 4, Y => 5]),
         Dict([osys.X => 4, osys.Y => 5]),
@@ -72,6 +78,12 @@ begin
         # Vectors providing default values.
         [kp => 1.0, kd => 0.1, k1 => 0.25, k2 => 0.5, Z0 => 10],
         [osys.kp => 1.0, osys.kd => 0.1, osys.k1 => 0.25, osys.k2 => 0.5, osys.Z0 => 10],
+        # Static vectors not providing default values.
+        SA[kp => 1.0, kd => 0.1, k1 => 0.25, Z0 => 10],
+        SA[osys.kp => 1.0, osys.kd => 0.1, osys.k1 => 0.25, osys.Z0 => 10],
+        # Static vectors providing default values.
+        SA[kp => 1.0, kd => 0.1, k1 => 0.25, k2 => 0.5, Z0 => 10],
+        SA[osys.kp => 1.0, osys.kd => 0.1, osys.k1 => 0.25, osys.k2 => 0.5, osys.Z0 => 10],
         # Dicts not providing default values.
         Dict([kp => 1.0, kd => 0.1, k1 => 0.25, Z0 => 10]),
         Dict([osys.kp => 1.0, osys.kd => 0.1, osys.k1 => 0.25, osys.Z0 => 10]),
@@ -100,9 +112,9 @@ let
     # test failure.
     for u0 in u0_alts, p in p_alts
         oprob = remake(base_oprob; u0, p)
-        #     @test base_sol == solve(oprob, Tsit5(); saveat = 1.0)
+        @test base_sol == solve(oprob, Tsit5(); saveat = 1.0)
         eprob = remake(base_eprob; u0, p)
-        #     @test base_esol == solve(eprob, Tsit5(); trajectories = 2, saveat = 1.0)
+        @test base_esol == solve(eprob, Tsit5(); trajectories = 2, saveat = 1.0)
     end
 end
 
@@ -148,10 +160,9 @@ let
     base_nlprob = NonlinearProblem(nsys, u0_alts[1], p_alts[1])
     base_sol = solve(base_nlprob, NewtonRaphson())
     # Solves problems for all input types, checking that identical solutions are found.
-    # test failure.
     for u0 in u0_alts, p in p_alts
         nlprob = remake(base_nlprob; u0, p)
-        #     @test base_sol == solve(nlprob, NewtonRaphson())
+        @test base_sol == solve(nlprob, NewtonRaphson())
     end
 end
 
@@ -167,9 +178,9 @@ let
     # test failure.
     for u0 in u0_alts, p in p_alts
         ssprob = remake(base_ssprob; u0, p)
-        # @test base_sol == solve(ssprob, DynamicSS(Tsit5()))
+        @test base_sol == solve(ssprob, DynamicSS(Tsit5()))
         eprob = remake(base_eprob; u0, p)
-        # @test base_esol == solve(eprob, DynamicSS(Tsit5()); trajectories = 2)
+        @test base_esol == solve(eprob, DynamicSS(Tsit5()); trajectories = 2)
     end
 end
 
@@ -210,12 +221,15 @@ let
         # Missing a value.
         [X1 => 1],
         [osys.X1 => 1],
+        SA[X1 => 1],
+        SA[osys.X1 => 1],
         Dict([X1 => 1]),
         Dict([osys.X1 => 1]),
         (X1 => 1),
         (osys.X1 => 1),
         # Contain an additional value.
         [X1 => 1, X2 => 2, X3 => 3],
+        SA[X1 => 1, X2 => 2, X3 => 3],
         Dict([X1 => 1, X2 => 2, X3 => 3]),
         (X1 => 1, X2 => 2, X3 => 3)
     ]
@@ -223,12 +237,15 @@ let
         # Missing a value.
         [k1 => 1.0],
         [osys.k1 => 1.0],
+        SA[k1 => 1.0],
+        SA[osys.k1 => 1.0],
         Dict([k1 => 1.0]),
         Dict([osys.k1 => 1.0]),
         (k1 => 1.0),
         (osys.k1 => 1.0),
         # Contain an additional value.
         [k1 => 1.0, k2 => 2.0, k3 => 3.0],
+        SA[k1 => 1.0, k2 => 2.0, k3 => 3.0],
         Dict([k1 => 1.0, k2 => 2.0, k3 => 3.0]),
         (k1 => 1.0, k2 => 2.0, k3 => 3.0)
     ]
@@ -237,8 +254,8 @@ let
     # Broken tests are due to this issue: https://github.com/SciML/ModelingToolkit.jl/issues/2779
     for ps in [[ps_valid]; ps_invalid], u0 in [[u0_valid]; u0s_invalid]
         # Handles problems with/without tspan separately. Special check ensuring that valid inputs passes.
-        for (xsys, XProblem) in zip(
-            [osys, ssys, jsys], [ODEProblem, SDEProblem, DiscreteProblem])
+        for (xsys, XProblem) in zip([osys, ssys, jsys],
+            [ODEProblem, SDEProblem, DiscreteProblem])
             if isequal(ps, ps_valid) && isequal(u0, u0_valid)
                 XProblem(xsys, u0, (0.0, 1.0), ps)
                 @test true
@@ -312,6 +329,16 @@ begin
         [X[1] => 1.0, X[2] => 2.0, Y[1] => 10.0, Y[2] => 20.0],
         [osys.X => [1.0, 2.0], osys.Y => [10.0, 20.0]],
         [osys.X[1] => 1.0, osys.X[2] => 2.0, osys.Y[1] => 10.0, osys.Y[2] => 20.0],
+        # Static vectors not providing default values.
+        SA[X => [1.0, 2.0]],
+        SA[X[1] => 1.0, X[2] => 2.0],
+        SA[osys.X => [1.0, 2.0]],
+        SA[osys.X[1] => 1.0, osys.X[2] => 2.0],
+        # Static vectors providing default values.
+        SA[X => [1.0, 2.0], Y => [10.0, 20.0]],
+        SA[X[1] => 1.0, X[2] => 2.0, Y[1] => 10.0, Y[2] => 20.0],
+        SA[osys.X => [1.0, 2.0], osys.Y => [10.0, 20.0]],
+        SA[osys.X[1] => 1.0, osys.X[2] => 2.0, osys.Y[1] => 10.0, osys.Y[2] => 20.0],
         # Dicts not providing default values.
         Dict([X => [1.0, 2.0]]),
         Dict([X[1] => 1.0, X[2] => 2.0]),
@@ -342,6 +369,12 @@ begin
         # Vectors providing default values.
         [p => [4.0, 5.0], d => [0.2, 0.5]],
         [osys.p => [4.0, 5.0], osys.d => [0.2, 0.5]],
+        # Static vectors not providing default values.
+        SA[p => [1.0, 2.0]],
+        SA[osys.p => [1.0, 2.0]],
+        # Static vectors providing default values.
+        SA[p => [4.0, 5.0], d => [0.2, 0.5]],
+        SA[osys.p => [4.0, 5.0], osys.d => [0.2, 0.5]],
         # Dicts not providing default values.
         Dict([p => [1.0, 2.0]]),
         Dict([osys.p => [1.0, 2.0]]),
