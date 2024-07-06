@@ -473,3 +473,17 @@ sys = modelingtoolkitize(prob)
         end
     end
 end
+
+## NonlinearLeastSquaresProblem
+
+function nlls!(du, u, p)
+    du[1] = 2u[1] - 2
+    du[2] = u[1] - 4u[2]
+    du[3] = 0
+end
+u0 = [0.0, 0.0]
+prob = NonlinearLeastSquaresProblem(
+    NonlinearFunction(nlls!, resid_prototype = zeros(3)), u0)
+sys = modelingtoolkitize(prob)
+@test length(equations(sys)) == 3
+@test length(equations(structural_simplify(sys; fully_determined = false))) == 0
