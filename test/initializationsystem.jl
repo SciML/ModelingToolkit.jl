@@ -492,9 +492,9 @@ end
 @parameters k1 k2 ω
 @variables X(t) Y(t)
 eqs_1st_order = [D(Y) + Y - ω ~ 0,
-       X + k1 ~ Y + k2]
-eqs_2nd_order = [D(D(Y)) + 2ω*D(Y) + (ω^2)*Y ~ 0,
-        X + k1 ~ Y + k2]
+    X + k1 ~ Y + k2]
+eqs_2nd_order = [D(D(Y)) + 2ω * D(Y) + (ω^2) * Y ~ 0,
+    X + k1 ~ Y + k2]
 @mtkbuild sys_1st_order = ODESystem(eqs_1st_order, t)
 @mtkbuild sys_2nd_order = ODESystem(eqs_2nd_order, t)
 
@@ -502,7 +502,7 @@ u0_1st_order_1 = [X => 1.0, Y => 2.0]
 u0_1st_order_2 = [Y => 2.0]
 u0_2nd_order_1 = [X => 1.0, Y => 2.0, D(Y) => 0.5]
 u0_2nd_order_2 = [Y => 2.0, D(Y) => 0.5]
-tspan = (0.0, 10.)
+tspan = (0.0, 10.0)
 ps = [ω => 0.5, k1 => 2.0, k2 => 3.0]
 
 oprob_1st_order_1 = ODEProblem(sys_1st_order, u0_1st_order_1, tspan, ps)
@@ -510,9 +510,11 @@ oprob_1st_order_2 = ODEProblem(sys_1st_order, u0_1st_order_2, tspan, ps)
 oprob_2nd_order_1 = ODEProblem(sys_2nd_order, u0_2nd_order_1, tspan, ps) # gives sys_2nd_order
 oprob_2nd_order_2 = ODEProblem(sys_2nd_order, u0_2nd_order_2, tspan, ps)
 
-@test solve(oprob_1st_order_1, Rosenbrock23()).retcode == SciMLBase.ReturnCode.InitialFailure
+@test solve(oprob_1st_order_1, Rosenbrock23()).retcode ==
+      SciMLBase.ReturnCode.InitialFailure
 @test solve(oprob_1st_order_2, Rosenbrock23())[Y][1] == 2.0
-@test solve(oprob_2nd_order_1, Rosenbrock23()).retcode == SciMLBase.ReturnCode.InitialFailure
+@test solve(oprob_2nd_order_1, Rosenbrock23()).retcode ==
+      SciMLBase.ReturnCode.InitialFailure
 sol = solve(oprob_2nd_order_2, Rosenbrock23()) # retcode: Success
 @test sol[Y][1] == 2.0
 @test sol[1][2] == 0.5
