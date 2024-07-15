@@ -730,7 +730,7 @@ function get_u0(
     # if "lhs" is known by other means (parameter, another default, ...)
     # TODO: Is there a better way to determine which equations to flip?
     obs = map(x -> x.lhs => x.rhs, observed(sys))
-    obs = map(x -> isparameter(x[1]) || x[1] in keys(defs) ? reverse(x) : x, obs)
+    obs = map(x -> x[1] in keys(defs) ? reverse(x) : x, obs)
     obs = filter!(x -> !(x[1] isa Number), obs) # exclude e.g. "0 => x^2 + y^2 - 25"
     obsmap = isempty(obs) ? Dict() : todict(obs)
 
