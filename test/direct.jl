@@ -59,7 +59,8 @@ reference_jac = sparse(ModelingToolkit.jacobian(du, [x, y, z]))
       findnz(reference_jac)[[1, 2]]
 
 let
-    @variables t x(t) y(t) z(t)
+    @parameters t
+    @variables x(t) y(t) z(t)
     @test ModelingToolkit.exprs_occur_in([x, y, z], x^2 * y) == [true, true, false]
 end
 
@@ -196,7 +197,7 @@ test_worldage()
 
 let
     @register_symbolic foo(x)
-    @variables t
+    @parameters t
     D = Differential(t)
 
     @test isequal(expand_derivatives(D(foo(t))), D(foo(t)))

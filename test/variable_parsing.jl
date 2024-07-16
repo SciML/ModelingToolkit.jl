@@ -115,7 +115,8 @@ a = rename(value(x), :a)
 @test getmetadata(x, VariableConnectType) == Flow
 @test getmetadata(x, VariableUnit) == u
 
-@variables t x(t)=1 [connect = Flow, unit = u]
+@parameters t
+@variables x(t)=1 [connect = Flow, unit = u]
 
 @test getmetadata(x, VariableDefaultValue) == 1
 @test getmetadata(x, VariableConnectType) == Flow

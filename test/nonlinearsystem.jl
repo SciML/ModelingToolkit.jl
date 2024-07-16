@@ -115,7 +115,7 @@ lorenz2 = lorenz(:lorenz2)
 
 # system promotion
 using OrdinaryDiffEq
-@variables t
+@parameters t
 D = Differential(t)
 @named subsys = convert_system(ODESystem, lorenz1, t)
 @named sys = ODESystem([D(subsys.x) ~ subsys.x + subsys.x], t, systems = [subsys])
@@ -178,8 +178,8 @@ end
 end
 
 # observed variable handling
-@variables t x(t) RHS(t)
-@parameters τ
+@parameters t τ
+@variables x(t) RHS(t)
 @named fol = NonlinearSystem([0 ~ (1 - x * h) / τ], [x], [τ];
     observed = [RHS ~ (1 - x) / τ])
 @test isequal(RHS, @nonamespace fol.RHS)
@@ -188,7 +188,7 @@ RHS2 = RHS
 @test isequal(RHS, RHS2)
 
 # issue #1358
-@variables t
+@parameters t
 @variables v1(t) v2(t) i1(t) i2(t)
 eq = [v1 ~ sin(2pi * t * h)
       v1 - v2 ~ i1

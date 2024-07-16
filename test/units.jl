@@ -2,8 +2,8 @@ using ModelingToolkit, OrdinaryDiffEq, JumpProcesses, Unitful
 using Test
 MT = ModelingToolkit
 UMT = ModelingToolkit.UnitfulUnitCheck
-@parameters τ [unit = u"ms"] γ
-@variables t [unit = u"ms"] E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
+@parameters t [unit = u"ms"] τ [unit = u"ms"] γ
+@variables E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
 
 #This is how equivalent works:
@@ -94,8 +94,8 @@ bad_length_eqs = [connect(op, lp)]
 @test_throws MT.ValidationError ODESystem(bad_eqs, t, [], []; name = :sys)
 
 # Array variables
-@variables t [unit = u"s"] x(t)[1:3] [unit = u"m"]
-@parameters v[1:3]=[1, 2, 3] [unit = u"m/s"]
+@parameters t [unit = u"s"] v[1:3]=[1, 2, 3] [unit = u"m/s"]
+@variables x(t)[1:3] [unit = u"m"]
 D = Differential(t)
 eqs = D.(x) .~ v
 ODESystem(eqs, t, name = :sys)
@@ -109,8 +109,8 @@ eqs = [
 @named nls = NonlinearSystem(eqs, [x], [a])
 
 # SDE test w/ noise vector
-@parameters τ [unit = u"ms"] Q [unit = u"MW"]
-@variables t [unit = u"ms"] E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
+@parameters t [unit = u"ms"] τ [unit = u"ms"] Q [unit = u"MW"]
+@variables E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
 eqs = [D(E) ~ P - E / τ
        P ~ Q]
@@ -130,8 +130,8 @@ noiseeqs = [0.1u"MW" 0.1u"MW"
 @test !UMT.validate(eqs, noiseeqs)
 
 # Non-trivial simplifications
-@variables t [unit = u"s"] V(t) [unit = u"m"^3] L(t) [unit = u"m"]
-@parameters v [unit = u"m/s"] r [unit = u"m"^3 / u"s"]
+@parameters t [unit = u"s"] v [unit = u"m/s"] r [unit = u"m"^3 / u"s"]
+@variables V(t) [unit = u"m"^3] L(t) [unit = u"m"]
 D = Differential(t)
 eqs = [D(L) ~ v,
     V ~ L^3]
