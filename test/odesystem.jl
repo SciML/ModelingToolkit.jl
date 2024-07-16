@@ -1194,3 +1194,13 @@ end
     @test_nowarn obsfn(buffer, [1.0], ps..., 3.0)
     @test buffer ≈ [2.0, 3.0, 4.0]
 end
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/2818
+@testset "Independent variable must be a parameter"
+    @parameters x
+    @variables y(x)
+    @test_nowarn @named sys = ODESystem([y ~ 0], x)
+
+    @variables x y(x)
+    @test_throws ArgumentError @named sys = ODESystem([y ~ 0], x)
+end
