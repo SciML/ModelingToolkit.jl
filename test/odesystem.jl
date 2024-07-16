@@ -1196,11 +1196,19 @@ end
 end
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/2818
-@testset "Independent variable must be a parameter" begin
+@testset "Custom independent variable" begin
     @parameters x
     @variables y(x)
     @test_nowarn @named sys = ODESystem([y ~ 0], x)
 
     @variables x y(x)
     @test_throws ArgumentError @named sys = ODESystem([y ~ 0], x)
+
+    @parameters T
+    D = Differential(T)
+    @variables x(T)
+    @named sys2 = ODESystem([D(x) ~ 0], T; initialization_eqs = [x ~ T], guesses = [x => 0.0])
+    prob2 = ODEProblem(structural_simplify(sys2), [], (1.0, 2.0), [])
+    sol2 = solve(prob2)
+    @test all(sol2[x] .== 1.0)
 end
