@@ -171,7 +171,7 @@ end
 """
     check_equations(eqs, iv)
 
-Assert that equations are well-formed when building ODE, i.e., only containing a single independent variable.
+Assert that ODE equations are well-formed.
 """
 function check_equations(eqs, iv)
     ivs = collect_ivs(eqs)
@@ -182,6 +182,17 @@ function check_equations(eqs, iv)
         single_iv = pop!(ivs)
         isequal(single_iv, iv) ||
             throw(ArgumentError("Differential w.r.t. variable ($single_iv) other than the independent variable ($iv) are not allowed."))
+    end
+
+    for eq in eqs
+        vars, pars = collect_vars(eq, iv)
+        if isempty(vars)
+            if isempty(pars)
+                throw(ArgumentError("Equation $eq contains no variables or parameters."))
+            else
+                throw(ArgumentError("Equation $eq contains only parameters, but relationships between parameters should be specified with defaults or parameter_dependencies."))
+            end
+        end
     end
 end
 """
@@ -437,6 +448,12 @@ function find_derivatives!(vars, expr, f)
         vars!(vars, arg)
     end
     return vars
+end
+
+function collect_vars(args...; kwargs...)
+    unknowns, parameters = [], []
+    collect_vars!(unknowns, parameters, args...; kwargs...)
+    return unknowns, parameters
 end
 
 function collect_vars!(unknowns, parameters, expr, iv; op = Differential)
