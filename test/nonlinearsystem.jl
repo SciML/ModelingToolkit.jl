@@ -309,9 +309,9 @@ sys = structural_simplify(ns; conservative = true)
 
     # system that contains a chain of observed variables when simplified
     @variables x y z
-    eqs = [0 ~ x^2 + 2*z + y, z ~ y, y ~ x] # analytical solution x = y = z = 0 or -3
+    eqs = [0 ~ x^2 + 2z + y, z ~ y, y ~ x] # analytical solution x = y = z = 0 or -3
     @mtkbuild ns = NonlinearSystem(eqs) # solve for y with observed chain z -> x -> y
-    @test isequal(expand.(calculate_jacobian(ns)), [3//2 + y;;])
+    @test isequal(expand.(calculate_jacobian(ns)), [3 // 2 + y;;])
     @test isequal(calculate_hessian(ns), [[1;;]])
     prob = NonlinearProblem(ns, unknowns(ns) .=> -4.0) # give guess < -3 to reach -3
     sol = solve(prob, NewtonRaphson())
