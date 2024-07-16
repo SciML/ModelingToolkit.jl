@@ -104,7 +104,8 @@ const CheckUnits = 1 << 2
 
 function check_independent_variables(ivs)
     for iv in ivs
-        isparameter(iv) || throw(ArgumentError("Independent variable $iv is not a parameter."))
+        isparameter(iv) ||
+            throw(ArgumentError("Independent variable $iv is not a parameter."))
     end
 end
 
