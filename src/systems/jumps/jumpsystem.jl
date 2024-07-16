@@ -34,9 +34,10 @@ $(FIELDS)
 
 ```julia
 using ModelingToolkit, JumpProcesses
+using ModelingToolkit: t_nounits as t
 
 @parameters β γ
-@variables t S(t) I(t) R(t)
+@variables S(t) I(t) R(t)
 rate₁   = β*S*I
 affect₁ = [S ~ S - 1, I ~ I + 1]
 rate₂   = γ*I

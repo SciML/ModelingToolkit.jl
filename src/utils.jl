@@ -345,7 +345,8 @@ Return a `Set` containing all variables in `x` that appear in
 Example:
 
 ```
-@variables t u(t) y(t)
+t = ModelingToolkit.t_nounits
+@variables u(t) y(t)
 D  = Differential(t)
 v  = ModelingToolkit.vars(D(y) ~ u)
 v == Set([D(y), u])
