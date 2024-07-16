@@ -137,6 +137,7 @@ struct SDESystem <: AbstractODESystem
             complete = false, index_cache = nothing, parent = nothing;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
+            check_independent_variables([iv])
             check_variables(dvs, iv)
             check_parameters(ps, iv)
             check_equations(deqs, iv)

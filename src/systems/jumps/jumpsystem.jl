@@ -118,6 +118,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             complete = false, index_cache = nothing;
             checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
         if checks == true || (checks & CheckComponents) > 0
+            check_independent_variables([iv])
             check_variables(unknowns, iv)
             check_parameters(ps, iv)
         end

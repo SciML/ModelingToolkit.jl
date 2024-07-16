@@ -102,6 +102,12 @@ const CheckAll = 1 << 0
 const CheckComponents = 1 << 1
 const CheckUnits = 1 << 2
 
+function check_independent_variables(ivs)
+    for iv in ivs
+        isparameter(iv) || throw(ArgumentError("Independent variable $iv is not a parameter."))
+    end
+end
+
 function check_parameters(ps, iv)
     for p in ps
         isequal(iv, p) &&
