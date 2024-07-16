@@ -194,7 +194,6 @@ function calculate_jacobian(sys::NonlinearSystem; sparse = false, simplify = fal
     end
 
     # observed equations may depend on unknowns, so substitute them in first
-    # TODO: must do the same fix in e.g. calculate_hessian?
     # TODO: rather keep observed derivatives unexpanded, like "Differential(obs)(expr)"?
     obs = Dict(eq.lhs => eq.rhs for eq in observed(sys))
     rhs = map(eq -> fixpoint_sub(eq.rhs, obs), equations(sys))
