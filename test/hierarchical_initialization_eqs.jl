@@ -1,6 +1,6 @@
 using ModelingToolkit, OrdinaryDiffEq
 
-t = only(@variables(t))
+t = only(@parameters(t))
 D = Differential(t)
 """
 A simple linear resistor model
