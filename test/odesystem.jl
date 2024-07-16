@@ -1207,7 +1207,10 @@ end
     @parameters T
     D = Differential(T)
     @variables x(T)
-    @named sys2 = ODESystem([D(x) ~ 0], T; initialization_eqs = [x ~ T], guesses = [x => 0.0])
+    eqs = [D(x) ~ 0.0]
+    initialization_eqs = [x ~ T]
+    guesses = [x => 0.0]
+    @named sys2 = ODESystem(eqs, T; initialization_eqs, guesses)
     prob2 = ODEProblem(structural_simplify(sys2), [], (1.0, 2.0), [])
     sol2 = solve(prob2)
     @test all(sol2[x] .== 1.0)
