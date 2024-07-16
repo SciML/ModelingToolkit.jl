@@ -112,10 +112,10 @@ end
 @test getmetadata(y, VariableConnectType) == Flow
 
 a = rename(value(x), :a)
-@test_throws ErrorException ModelingToolkit.getdefault(x)
-@test !hasmetadata(x, VariableDefaultValue)
-@test getmetadata(x, VariableConnectType) == Flow
-@test getmetadata(x, VariableUnit) == u
+@test_throws ErrorException ModelingToolkit.getdefault(a)
+@test !hasmetadata(a, VariableDefaultValue)
+@test getmetadata(a, VariableConnectType) == Flow
+@test getmetadata(a, VariableUnit) == u
 
 @variables t x(t)=1 [connect = Flow, unit = u]
 
