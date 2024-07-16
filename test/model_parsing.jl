@@ -263,7 +263,7 @@ end
     @test getdefault(model.cval) == 1
     @test isequal(getdefault(model.c), model.cval + model.jval)
     @test getdefault(model.d) == 2
-    @test_throws KeyError getdefault(model.e)
+    @test_throws ErrorException getdefault(model.e)
     @test getdefault(model.f) == 3
     @test getdefault(model.i) == 4
     @test all(getdefault.(scalarize(model.b2)) .== [1, 3])
