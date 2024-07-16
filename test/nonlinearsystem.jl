@@ -288,20 +288,15 @@ sys = structural_simplify(ns; conservative = true)
 @testset "Jacobian with observed equations that depend on unknowns" begin
     @variables x y z
     @parameters σ ρ β
-    eqs = [
-        0 ~ σ * (y - x)
-        0 ~ x * (ρ - z) - y
-        0 ~ x * y - β * z
-    ]
+    eqs = [0 ~ σ * (y - x)
+           0 ~ x * (ρ - z) - y
+           0 ~ x * y - β * z]
     guesses = [x => 1.0, y => 0.0, z => 0.0]
     ps = [σ => 10.0, ρ => 26.0, β => 8 / 3]
     @mtkbuild ns = NonlinearSystem(eqs)
 
-    @test isequal(calculate_jacobian(ns), [
-        (-1-z+ρ)*σ    -x*σ
-        2x*(-z+ρ)     -β-(x^2)
-    ])
-
+    @test isequal(calculate_jacobian(ns), [(-1 - z + ρ)*σ -x*σ
+                                           2x*(-z + ρ) -β-(x^2)])
     # solve without analytical jacobian
     prob = NonlinearProblem(ns, guesses, ps)
     sol = solve(prob, NewtonRaphson())
