@@ -217,7 +217,7 @@ function iv_from_nested_derivative(x, op = Differential)
 end
 
 hasdefault(v) = hasmetadata(v, Symbolics.VariableDefaultValue)
-getdefault(v) = value(getmetadata(v, Symbolics.VariableDefaultValue))
+getdefault(v) = value(Symbolics.getdefaultval(v))
 function getdefaulttype(v)
     def = value(getmetadata(unwrap(v), Symbolics.VariableDefaultValue, nothing))
     def === nothing ? Float64 : typeof(def)
