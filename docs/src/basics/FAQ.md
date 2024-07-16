@@ -186,7 +186,7 @@ p, replace, alias = SciMLStructures.canonicalize(Tunable(), prob.p)
 
 This error can come up after running `structural_simplify` on a system that generates dummy derivatives (i.e. variables with `ˍt`).  For example, here even though all the variables are defined with initial values, the `ODEProblem` generation will throw an error that defaults are missing from the variable map.
 
-```
+```julia
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
@@ -202,7 +202,7 @@ prob = ODEProblem(sys, [], (0,1))
 
 We can solve this problem by using the `missing_variable_defaults()` function
 
-```
+```julia
 prob = ODEProblem(sys, ModelingToolkit.missing_variable_defaults(sys), (0,1))
 ```
 
@@ -221,7 +221,7 @@ julia> ModelingToolkit.missing_variable_defaults(sys, [1,2,3])
 Use the `u0_constructor` keyword argument to map an array to the desired
 container type. For example:
 
-```
+```julia
 using ModelingToolkit, StaticArrays
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
@@ -229,4 +229,18 @@ sts = @variables x1(t)=0.0
 eqs = [D(x1) ~ 1.1 * x1]
 @mtkbuild sys = ODESystem(eqs, t)
 prob = ODEProblem{false}(sys, [], (0,1); u0_constructor = x->SVector(x...))
+```
+
+## Using a custom independent variable
+
+When possible, we recommend `using ModelingToolkit: t_nounits as t, D_nounits as D` as the independent variable and its derivative.
+However, if you want to use your own, you can do so:
+
+```julia
+using ModelingToolkit
+
+@parameters x # independent variables must be created as parameters
+D = Differential(x)
+@variables y(x)
+@named sys = ODESystem([D(y) ~ x], x)
 ```
