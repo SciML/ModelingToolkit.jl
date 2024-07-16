@@ -418,7 +418,8 @@ collect_differential_variables(sys) = collect_operator_variables(sys, Differenti
 Return  a `Set` with all applied operators in `x`, example:
 
 ```
-@variables t u(t) y(t)
+@parameters t
+@variables u(t) y(t)
 D = Differential(t)
 eq = D(y) ~ u
 ModelingToolkit.collect_applied_operators(eq, Differential) == Set([D(y)])
