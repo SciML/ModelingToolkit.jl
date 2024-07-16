@@ -204,7 +204,7 @@ function check_equations(eqs, iv)
 
     for eq in eqs
         vars, pars = collect_vars(eq, iv)
-        isempty(vars) && !isempty(pars) && 
+        isempty(vars) && !isempty(pars) &&
             throw(ArgumentError("Equation $eq contains only parameters, but relationships between parameters should be specified with defaults or parameter_dependencies."))
     end
 end
