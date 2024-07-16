@@ -193,8 +193,12 @@ function calculate_jacobian(sys::NonlinearSystem; sparse = false, simplify = fal
         return cache[1]
     end
 
-    rhs = [eq.rhs for eq in equations(sys)]
+    # observed equations may depend on unknowns, so substitute them in first
+    # TODO: rather keep observed derivatives unexpanded, like "Differential(obs)(expr)"?
+    obs = Dict(eq.lhs => eq.rhs for eq in observed(sys))
+    rhs = map(eq -> fixpoint_sub(eq.rhs, obs), equations(sys))
     vals = [dv for dv in unknowns(sys)]
+
     if sparse
         jac = sparsejacobian(rhs, vals, simplify = simplify)
     else
@@ -215,7 +219,8 @@ function generate_jacobian(
 end
 
 function calculate_hessian(sys::NonlinearSystem; sparse = false, simplify = false)
-    rhs = [eq.rhs for eq in equations(sys)]
+    obs = Dict(eq.lhs => eq.rhs for eq in observed(sys))
+    rhs = map(eq -> fixpoint_sub(eq.rhs, obs), equations(sys))
     vals = [dv for dv in unknowns(sys)]
     if sparse
         hess = [sparsehessian(rhs[i], vals, simplify = simplify) for i in 1:length(rhs)]
