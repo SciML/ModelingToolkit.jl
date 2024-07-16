@@ -283,3 +283,32 @@ sys = structural_simplify(ns)
 @test length(equations(sys)) == 0
 sys = structural_simplify(ns; conservative = true)
 @test length(equations(sys)) == 1
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/2858
+@testset "Jacobian with observed equations that depend on unknowns" begin
+    @variables x y z
+    @parameters σ ρ β
+    eqs = [
+        0 ~ σ * (y - x)
+        0 ~ x * (ρ - z) - y
+        0 ~ x * y - β * z
+    ]
+    guesses = [x => 1.0, y => 0.0, z => 0.0]
+    ps = [σ => 10.0, ρ => 26.0, β => 8 / 3]
+    @mtkbuild ns = NonlinearSystem(eqs)
+
+    @test isequal(calculate_jacobian(ns), [
+        (-1-z+ρ)*σ    -x*σ
+        2x*(-z+ρ)     -β-(x^2)
+    ])
+
+    # solve without analytical jacobian
+    prob = NonlinearProblem(ns, guesses, ps)
+    sol = solve(prob, NewtonRaphson())
+    @test sol.retcode == ReturnCode.Success
+
+    # solve with analytical jacobian
+    prob = NonlinearProblem(ns, guesses, ps, jac = true)
+    sol = solve(prob, NewtonRaphson())
+    @test sol.retcode == ReturnCode.Success
+end
