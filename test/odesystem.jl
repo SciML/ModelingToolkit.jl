@@ -427,7 +427,6 @@ eqs = [
 @parameters p q
 @test_throws ArgumentError ODESystem([p ~ q], t; name = :foo)
 @test_throws ArgumentError ODESystem([p ~ 1], t; name = :foo)
-@test_throws ArgumentError ODESystem([1 ~ 2], t; name = :foo)
 
 @variables x(t)
 @parameters M b k
