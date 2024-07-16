@@ -193,8 +193,11 @@ function calculate_jacobian(sys::NonlinearSystem; sparse = false, simplify = fal
         return cache[1]
     end
 
-    rhs = [eq.rhs for eq in equations(sys)]
+    # observed equations may depend on unknowns, so substitute them in first
+    obs = map(eq -> eq.lhs => eq.rhs, observed(sys))
+    rhs = map(eq -> substitute(eq.rhs, obs), equations(sys))
     vals = [dv for dv in unknowns(sys)]
+
     if sparse
         jac = sparsejacobian(rhs, vals, simplify = simplify)
     else
