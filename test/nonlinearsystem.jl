@@ -306,4 +306,13 @@ sys = structural_simplify(ns; conservative = true)
     prob = NonlinearProblem(ns, guesses, ps, jac = true)
     sol = solve(prob, NewtonRaphson())
     @test sol.retcode == ReturnCode.Success
+
+    # system that contains a chain of observed variables when simplified
+    @variables x y z
+    eqs = [0 ~ x^2 + 2*z + y, z ~ y, y ~ x] # analytical solution x = y = z = 0 or -3
+    @mtkbuild ns = NonlinearSystem(eqs) # solve for y with observed chain z -> x -> y
+    @test isequal(expand.(calculate_jacobian(ns)), [3//2 + y;;])
+    prob = NonlinearProblem(ns, unknowns(ns) .=> -4.0) # give guess < -3 to reach -3
+    sol = solve(prob, NewtonRaphson())
+    @test sol[x] ≈ sol[y] ≈ sol[z] ≈ -3
 end
