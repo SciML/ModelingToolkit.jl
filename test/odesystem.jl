@@ -1196,7 +1196,7 @@ end
 end
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/2818
-@testset "Independent variable must be a parameter"
+@testset "Independent variable must be a parameter" begin
     @parameters x
     @variables y(x)
     @test_nowarn @named sys = ODESystem([y ~ 0], x)
