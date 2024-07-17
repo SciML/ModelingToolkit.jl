@@ -1202,7 +1202,7 @@ end
     @test_nowarn @named sys = ODESystem([y ~ 0], x)
 
     @variables x y(x)
-    @test_throws ArgumentError @named sys = ODESystem([y ~ 0], x)
+    @test_logs (:warn,) @named sys = ODESystem([y ~ 0], x)
 
     @parameters T
     D = Differential(T)
