@@ -50,6 +50,8 @@ using SparseArrays
 
 using SimpleNonlinearSolve
 
+using DocStringExtensions
+
 export tearing, partial_state_selection, dae_index_lowering, check_consistency
 export dummy_derivative
 export build_torn_function, build_observed_function, ODAEProblem

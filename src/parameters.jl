@@ -54,6 +54,8 @@ tovar(s::Num) = Num(tovar(value(s)))
 $(SIGNATURES)
 
 Define one or more known parameters.
+
+See also [`@independent_variables`](@ref), [`@variables`](@ref) and [`@constants`](@ref).
 """
 macro parameters(xs...)
     Symbolics._parse_vars(:parameters,

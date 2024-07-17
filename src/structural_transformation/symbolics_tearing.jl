@@ -86,6 +86,14 @@ function tearing_sub(expr, dict, s)
     s ? simplify(expr) : expr
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Like `equations(sys)`, but includes substitutions done by the tearing process.
+These equations matches generated numerical code.
+
+See also [`equations`](@ref) and [`ModelingToolkit.get_eqs`](@ref).
+"""
 function full_equations(sys::AbstractSystem; simplify = false)
     empty_substitutions(sys) && return equations(sys)
     substitutions = get_substitutions(sys)
