@@ -1194,3 +1194,17 @@ end
     @test_nowarn obsfn(buffer, [1.0], ps..., 3.0)
     @test buffer ≈ [2.0, 3.0, 4.0]
 end
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/2502
+@testset "Extend systems with a field that can be nothing" begin
+    A = Dict(:a => 1)
+    B = Dict(:b => 2)
+    @named A1 = ODESystem(Equation[], t, [], [])
+    @named B1 = ODESystem(Equation[], t, [], [])
+    @named A2 = ODESystem(Equation[], t, [], []; metadata = A)
+    @named B2 = ODESystem(Equation[], t, [], []; metadata = B)
+    @test     ModelingToolkit.get_metadata(extend(A1, B1))  == nothing
+    @test     ModelingToolkit.get_metadata(extend(A1, B2))  == B
+    @test     ModelingToolkit.get_metadata(extend(A2, B1))  == A
+    @test Set(ModelingToolkit.get_metadata(extend(A2, B2))) == Set(A ∪ B)
+end
