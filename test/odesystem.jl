@@ -1197,7 +1197,7 @@ end
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/2818
 @testset "Custom independent variable" begin
-    @parameters x
+    @independent_variables x
     @variables y(x)
     @test_nowarn @named sys = ODESystem([y ~ 0], x)
 
