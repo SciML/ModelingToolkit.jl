@@ -725,10 +725,16 @@ function get_u0(
         defs = mergedefaults(defs, parammap, ps)
     end
 
-    obs = filter!(x -> !(x[1] isa Number),
-        map(x -> isparameter(x.rhs) ? x.lhs => x.rhs : x.rhs => x.lhs, observed(sys)))
-    observedmap = isempty(obs) ? Dict() : todict(obs)
-    defs = mergedefaults(defs, observedmap, u0map, dvs)
+    # Convert observed equations "lhs ~ rhs" into defaults.
+    # Use the order "lhs => rhs" by default, but flip it to "rhs => lhs"
+    # if "lhs" is known by other means (parameter, another default, ...)
+    # TODO: Is there a better way to determine which equations to flip?
+    obs = map(x -> x.lhs => x.rhs, observed(sys))
+    obs = map(x -> x[1] in keys(defs) ? reverse(x) : x, obs)
+    obs = filter!(x -> !(x[1] isa Number), obs) # exclude e.g. "0 => x^2 + y^2 - 25"
+    obsmap = isempty(obs) ? Dict() : todict(obs)
+
+    defs = mergedefaults(defs, obsmap, u0map, dvs)
     if symbolic_u0
         u0 = varmap_to_vars(
             u0map, dvs; defaults = defs, tofloat = false, use_union = false, toterm)
