@@ -239,7 +239,7 @@ However, if you want to use your own, you can do so:
 ```julia
 using ModelingToolkit
 
-@parameters x # independent variables must be created as parameters
+@independent_variables x
 D = Differential(x)
 @variables y(x)
 @named sys = ODESystem([D(y) ~ x], x)
