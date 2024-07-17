@@ -127,6 +127,7 @@ using .BipartiteGraphs
 
 include("variables.jl")
 include("parameters.jl")
+include("independent_variables.jl")
 include("constants.jl")
 
 include("utils.jl")
@@ -262,7 +263,7 @@ export generate_initializesystem
 export alg_equations, diff_equations, has_alg_equations, has_diff_equations
 export get_alg_eqs, get_diff_eqs, has_alg_eqs, has_diff_eqs
 
-export @variables, @parameters, @constants, @brownian
+export @variables, @parameters, @independent_variables, @constants, @brownian
 export @named, @nonamespace, @namespace, extend, compose, complete
 export debug_system
 
