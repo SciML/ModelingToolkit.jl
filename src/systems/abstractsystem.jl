@@ -2521,18 +2521,16 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
     eqs = union(get_eqs(basesys), get_eqs(sys))
     sts = union(get_unknowns(basesys), get_unknowns(sys))
     ps = union(get_ps(basesys), get_ps(sys))
-    base_deps = parameter_dependencies(basesys)
-    deps = parameter_dependencies(sys)
-    dep_ps = isnothing(base_deps) ? deps :
-             isnothing(deps) ? base_deps : union(base_deps, deps)
+    dep_ps = union_nothing(parameter_dependencies(basesys), parameter_dependencies(sys))
     obs = union(get_observed(basesys), get_observed(sys))
     cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
     devs = union(get_discrete_events(basesys), get_discrete_events(sys))
     defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
+    meta = union_nothing(get_metadata(basesys), get_metadata(sys))
     syss = union(get_systems(basesys), get_systems(sys))
     args = length(ivs) == 0 ? (eqs, sts, ps) : (eqs, ivs[1], sts, ps)
     kwargs = (parameter_dependencies = dep_ps, observed = obs, continuous_events = cevs,
-        discrete_events = devs, defaults = defs, systems = syss,
+        discrete_events = devs, defaults = defs, systems = syss, metadata = meta,
         name = name, gui_metadata = gui_metadata)
 
     # collect fields specific to some system types
