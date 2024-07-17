@@ -972,7 +972,8 @@ vars_sub2 = @variables s2(t)
 @named partial_sub = ODESystem(Equation[], t, vars_sub2, [])
 @named sub = extend(partial_sub, sub)
 
-new_sys2 = complete(substitute(sys2, Dict(:sub => sub)))
+# no warnings for systems without events
+new_sys2 = @test_nowarn complete(substitute(sys2, Dict(:sub => sub)))
 Set(unknowns(new_sys2)) == Set([new_sys2.x1, new_sys2.sys1.x1,
     new_sys2.sys1.sub.s1, new_sys2.sys1.sub.s2,
     new_sys2.sub.s1, new_sys2.sub.s2])
