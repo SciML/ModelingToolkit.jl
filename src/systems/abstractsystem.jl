@@ -2521,10 +2521,7 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
     eqs = union(get_eqs(basesys), get_eqs(sys))
     sts = union(get_unknowns(basesys), get_unknowns(sys))
     ps = union(get_ps(basesys), get_ps(sys))
-    base_deps = parameter_dependencies(basesys)
-    deps = parameter_dependencies(sys)
-    dep_ps = isnothing(base_deps) ? deps :
-             isnothing(deps) ? base_deps : union(base_deps, deps)
+    dep_ps = union_nothing(parameter_dependencies(basesys), parameter_dependencies(sys))
     obs = union(get_observed(basesys), get_observed(sys))
     cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
     devs = union(get_discrete_events(basesys), get_discrete_events(sys))
