@@ -5,9 +5,9 @@ manifest_format = "2.0"
 project_hash = "b210d7ac5b3eaeaf7b90749f9bc914b16a1e1cf5"
 
 [[deps.ADTypes]]
-git-tree-sha1 = "1f3835083f5b40fc01a3c87e64bc3275cf447481"
+git-tree-sha1 = "878aee357e230c375cc531952933889cbf9e9314"
 uuid = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
-version = "1.5.4"
+version = "1.6.0"
 weakdeps = ["ChainRulesCore", "EnzymeCore"]
 
     [deps.ADTypes.extensions]
@@ -468,9 +468,9 @@ weakdeps = ["OrdinaryDiffEq", "Sundials"]
 
 [[deps.DiffEqNoiseProcess]]
 deps = ["DiffEqBase", "Distributions", "GPUArraysCore", "LinearAlgebra", "Markdown", "Optim", "PoissonRandom", "QuadGK", "Random", "Random123", "RandomNumbers", "RecipesBase", "RecursiveArrayTools", "Requires", "ResettableStacks", "SciMLBase", "StaticArraysCore", "Statistics"]
-git-tree-sha1 = "65cbbe1450ced323b4b17228ccd96349d96795a7"
+git-tree-sha1 = "ed0158e758723b4d429afbbb5d98c5afd3458dc1"
 uuid = "77a26b50-5914-5dd7-bc55-306e6241c503"
-version = "5.21.0"
+version = "5.22.0"
 
     [deps.DiffEqNoiseProcess.extensions]
     DiffEqNoiseProcessReverseDiffExt = "ReverseDiff"
@@ -498,9 +498,9 @@ version = "7.13.0"
 
 [[deps.DifferentiationInterface]]
 deps = ["ADTypes", "Compat", "DocStringExtensions", "FillArrays", "LinearAlgebra", "PackageExtensionCompat", "SparseArrays", "SparseMatrixColorings"]
-git-tree-sha1 = "b04acb57861ae60ce548e6041795cac9e4ad96fa"
+git-tree-sha1 = "c81579b549a00edf31582d318fec06523e0b607a"
 uuid = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
-version = "0.5.8"
+version = "0.5.9"
 
     [deps.DifferentiationInterface.extensions]
     DifferentiationInterfaceChainRulesCoreExt = "ChainRulesCore"
@@ -2146,9 +2146,9 @@ version = "2.19.0"
 
 [[deps.SparseMatrixColorings]]
 deps = ["ADTypes", "Compat", "DocStringExtensions", "LinearAlgebra", "Random", "SparseArrays"]
-git-tree-sha1 = "eed2446b3c3dd58f6ded3168998b8b2cb3fc9229"
+git-tree-sha1 = "bf25f53d0859b6e314532dca5e87dae8273e8ade"
 uuid = "0a514795-09f3-496d-8182-132a7b665d35"
-version = "0.3.3"
+version = "0.3.4"
 
 [[deps.Sparspak]]
 deps = ["Libdl", "LinearAlgebra", "Logging", "OffsetArrays", "Printf", "SparseArrays", "Test"]
@@ -2299,9 +2299,9 @@ version = "0.2.1"
 
 [[deps.SymbolicUtils]]
 deps = ["AbstractTrees", "Bijections", "ChainRulesCore", "Combinatorics", "ConstructionBase", "DataStructures", "DocStringExtensions", "DynamicPolynomials", "IfElse", "LabelledArrays", "LinearAlgebra", "MultivariatePolynomials", "NaNMath", "Setfield", "SparseArrays", "SpecialFunctions", "StaticArrays", "SymbolicIndexingInterface", "TermInterface", "TimerOutputs", "Unityper"]
-git-tree-sha1 = "cc049913a449be8c7ac00979831f26891e01add2"
+git-tree-sha1 = "9fe17daa6c306bab11a5d3270be25e06bcdab6c3"
 uuid = "d1185830-fcd6-423d-90d6-eec64667417b"
-version = "2.1.0"
+version = "2.1.1"
 
 [[deps.Symbolics]]
 deps = ["ADTypes", "ArrayInterface", "Bijections", "CommonWorldInvalidations", "ConstructionBase", "DataStructures", "DiffRules", "Distributions", "DocStringExtensions", "DomainSets", "DynamicPolynomials", "ForwardDiff", "IfElse", "LaTeXStrings", "LambertW", "Latexify", "Libdl", "LinearAlgebra", "LogExpFunctions", "MacroTools", "Markdown", "NaNMath", "PrecompileTools", "RecipesBase", "Reexport", "Requires", "RuntimeGeneratedFunctions", "SciMLBase", "Setfield", "SparseArrays", "SpecialFunctions", "StaticArraysCore", "SymbolicIndexingInterface", "SymbolicLimits", "SymbolicUtils", "TermInterface"]
