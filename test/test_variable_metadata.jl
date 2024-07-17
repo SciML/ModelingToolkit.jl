@@ -73,7 +73,7 @@ d = FakeNormal()
 @test !haskey(ModelingToolkit.dump_variable_metadata(y), :dist)
 
 ## System interface
-@parameters t
+@independent_variables t
 Dₜ = Differential(t)
 @variables x(t)=0 [bounds = (-10, 10)] u(t)=0 [input = true] y(t)=0 [output = true]
 @parameters T [bounds = (0, Inf)]
@@ -124,7 +124,7 @@ sp = Set(p)
 @test !hasdescription(u)
 @test !haskey(ModelingToolkit.dump_variable_metadata(u), :desc)
 
-@parameters t
+@independent_variables t
 @variables u(t) [description = "A short description of u"]
 @parameters p [description = "A description of p"]
 @named sys = ODESystem([u ~ p], t)

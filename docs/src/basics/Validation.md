@@ -8,7 +8,7 @@ Units may be assigned with the following syntax.
 
 ```@example validation
 using ModelingToolkit, DynamicQuantities
-@parameters t [unit = u"s"]
+@independent_variables t [unit = u"s"]
 @variables x(t) [unit = u"m"] g(t) w(t) [unit = u"Hz"]
 
 @parameters(t, [unit = u"s"])
@@ -50,7 +50,8 @@ Example usage below. Note that `ModelingToolkit` does not force unit conversions
 
 ```@example validation
 using ModelingToolkit, DynamicQuantities
-@parameters t [unit = u"ms"] τ [unit = u"ms"]
+@independent_variables t [unit = u"ms"]
+@parameters τ [unit = u"ms"]
 @variables E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
 eqs = [D(E) ~ P - E / τ,
@@ -74,7 +75,8 @@ An example of an inconsistent system: at present, `ModelingToolkit` requires tha
 
 ```@example validation
 using ModelingToolkit, DynamicQuantities
-@parameters t [unit = u"ms"] τ [unit = u"ms"]
+@independent_variables t [unit = u"ms"]
+@parameters τ [unit = u"ms"]
 @variables E(t) [unit = u"J"] P(t) [unit = u"MW"]
 D = Differential(t)
 eqs = [D(E) ~ P - E / τ,
@@ -119,7 +121,7 @@ In order for a function to work correctly during both validation & execution, th
 
 ```julia
 using ModelingToolkit, DynamicQuantities
-@parameters t [unit = u"ms"]
+@independent_variables t [unit = u"ms"]
 @variables E(t) [unit = u"J"] P(t) [unit = u"MW"]
 D = Differential(t)
 eqs = [D(E) ~ P - E / 1u"ms"]
@@ -134,7 +136,8 @@ Instead, they should be parameterized:
 
 ```@example validation3
 using ModelingToolkit, DynamicQuantities
-@parameters t [unit = u"ms"] τ [unit = u"ms"]
+@independent_variables t [unit = u"ms"]
+@parameters τ [unit = u"ms"]
 @variables E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
 eqs = [D(E) ~ P - E / τ]

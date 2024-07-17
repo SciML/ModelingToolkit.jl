@@ -418,7 +418,7 @@ collect_differential_variables(sys) = collect_operator_variables(sys, Differenti
 Return  a `Set` with all applied operators in `x`, example:
 
 ```
-@parameters t
+@independent_variables t
 @variables u(t) y(t)
 D = Differential(t)
 eq = D(y) ~ u

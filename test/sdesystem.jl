@@ -458,7 +458,8 @@ fdif!(du, u0, p, t)
 
 # issue #819
 @testset "Combined system name collisions" begin
-    @parameters t
+    @independent_variables t
+    D = Differential(t)
     eqs_short = [D(x) ~ σ * (y - x),
         D(y) ~ x * (ρ - z) - y
     ]
@@ -619,7 +620,8 @@ solve(prob, LambaEulerHeun(), seed = 1)
 
 # Test ill-formed due to more equations than states in noise equations
 
-@parameters t p d
+@independent_variables t
+@parameters p d
 @variables X(t)
 eqs = [D(X) ~ p - d * X]
 noise_eqs = [sqrt(p), -sqrt(d * X)]

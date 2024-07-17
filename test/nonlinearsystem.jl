@@ -9,7 +9,7 @@ using ModelingToolkit: get_default_or_guess, MTKParameters
 canonequal(a, b) = isequal(simplify(a), simplify(b))
 
 # Define some variables
-@parameters t σ ρ β
+@parameters σ ρ β
 @constants h = 1
 @variables x y z
 
@@ -115,7 +115,7 @@ lorenz2 = lorenz(:lorenz2)
 
 # system promotion
 using OrdinaryDiffEq
-@parameters t
+@independent_variables t
 D = Differential(t)
 @named subsys = convert_system(ODESystem, lorenz1, t)
 @named sys = ODESystem([D(subsys.x) ~ subsys.x + subsys.x], t, systems = [subsys])
@@ -126,7 +126,7 @@ sol = solve(prob, FBDF(), reltol = 1e-7, abstol = 1e-7)
 @test sol[subsys.x] + sol[subsys.y] - sol[subsys.z]≈sol[subsys.u] atol=1e-7
 @test_throws ArgumentError convert_system(ODESystem, sys, t)
 
-@parameters t σ ρ β
+@parameters σ ρ β
 @variables x y z
 
 # Define a nonlinear system
@@ -178,7 +178,8 @@ end
 end
 
 # observed variable handling
-@parameters t τ
+@independent_variables t
+@parameters τ
 @variables x(t) RHS(t)
 @named fol = NonlinearSystem([0 ~ (1 - x * h) / τ], [x], [τ];
     observed = [RHS ~ (1 - x) / τ])
@@ -188,7 +189,7 @@ RHS2 = RHS
 @test isequal(RHS, RHS2)
 
 # issue #1358
-@parameters t
+@independent_variables t
 @variables v1(t) v2(t) i1(t) i2(t)
 eq = [v1 ~ sin(2pi * t * h)
       v1 - v2 ~ i1
