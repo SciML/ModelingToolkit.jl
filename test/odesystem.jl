@@ -1208,3 +1208,23 @@ end
     @test     ModelingToolkit.get_metadata(extend(A2, B1))  == A
     @test Set(ModelingToolkit.get_metadata(extend(A2, B2))) == Set(A ∪ B)
 end
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/2859
+@testset "Initialization with defaults from observed equations (edge case)" begin
+    @variables x(t) y(t) z(t)
+    eqs = [D(x) ~ 0, y ~ x, D(z) ~ 0]
+    defaults = [x => 1, z => y]
+    @named sys = ODESystem(eqs, t; defaults)
+    ssys = structural_simplify(sys)
+    prob = ODEProblem(ssys, [], (0.0, 1.0), [])
+    @test prob[x] == prob[y] == prob[z] == 1.0
+
+    @parameters y0
+    @variables x(t) y(t) z(t)
+    eqs = [D(x) ~ 0, y ~ y0 / x, D(z) ~ y]
+    defaults = [y0 => 1, x => 1, z => y]
+    @named sys = ODESystem(eqs, t; defaults)
+    ssys = structural_simplify(sys)
+    prob = ODEProblem(ssys, [], (0.0, 1.0), [])
+    @test prob[x] == prob[y] == prob[z] == 1.0
+end
