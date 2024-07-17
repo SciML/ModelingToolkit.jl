@@ -184,13 +184,13 @@ for S in subtypes(ModelingToolkit.AbstractSystem)
 end
 
 const t_nounits = let
-    only(@parameters t)
+    only(@independent_variables t)
 end
 const t_unitful = let
-    only(@parameters t [unit = Unitful.u"s"])
+    only(@independent_variables t [unit = Unitful.u"s"])
 end
 const t = let
-    only(@parameters t [unit = DQ.u"s"])
+    only(@independent_variables t [unit = DQ.u"s"])
 end
 
 const D_nounits = Differential(t_nounits)
