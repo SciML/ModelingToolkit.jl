@@ -1203,9 +1203,9 @@ end
     @named B1 = ODESystem(Equation[], t, [], [])
     @named A2 = ODESystem(Equation[], t, [], []; metadata = A)
     @named B2 = ODESystem(Equation[], t, [], []; metadata = B)
-    @test     ModelingToolkit.get_metadata(extend(A1, B1))  == nothing
-    @test     ModelingToolkit.get_metadata(extend(A1, B2))  == B
-    @test     ModelingToolkit.get_metadata(extend(A2, B1))  == A
+    @test ModelingToolkit.get_metadata(extend(A1, B1)) == nothing
+    @test ModelingToolkit.get_metadata(extend(A1, B2)) == B
+    @test ModelingToolkit.get_metadata(extend(A2, B1)) == A
     @test Set(ModelingToolkit.get_metadata(extend(A2, B2))) == Set(A ∪ B)
 end
 
