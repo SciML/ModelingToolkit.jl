@@ -12,7 +12,7 @@ using ControlSystemsMTK
 using ControlSystemsMTK.ControlSystemsBase: sminreal, minreal, poles
 connect = ModelingToolkit.connect
 
-@parameters t
+@independent_variables t
 D = Differential(t)
 
 @named link1 = Link(; m = 0.2, l = 10, I = 1, g = -9.807)

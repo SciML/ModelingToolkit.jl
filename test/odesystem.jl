@@ -1196,6 +1196,27 @@ end
     @test buffer ≈ [2.0, 3.0, 4.0]
 end
 
+# https://github.com/SciML/ModelingToolkit.jl/issues/2818
+@testset "Custom independent variable" begin
+    @independent_variables x
+    @variables y(x)
+    @test_nowarn @named sys = ODESystem([y ~ 0], x)
+
+    @variables x y(x)
+    @test_logs (:warn,) @named sys = ODESystem([y ~ 0], x)
+
+    @parameters T
+    D = Differential(T)
+    @variables x(T)
+    eqs = [D(x) ~ 0.0]
+    initialization_eqs = [x ~ T]
+    guesses = [x => 0.0]
+    @named sys2 = ODESystem(eqs, T; initialization_eqs, guesses)
+    prob2 = ODEProblem(structural_simplify(sys2), [], (1.0, 2.0), [])
+    sol2 = solve(prob2)
+    @test all(sol2[x] .== 1.0)
+end
+
 # https://github.com/SciML/ModelingToolkit.jl/issues/2502
 @testset "Extend systems with a field that can be nothing" begin
     A = Dict(:a => 1)

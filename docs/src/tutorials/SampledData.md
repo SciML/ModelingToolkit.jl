@@ -97,7 +97,8 @@ H(z) = \dfrac{b_2 z^2 + b_1 z + b_0}{a_2 z^2 + a_1 z + a_0}
 may thus be modeled as
 
 ```julia
-@variables t y(t) [description = "Output"] u(t) [description = "Input"]
+t = ModelingToolkit.t_nounits
+@variables y(t) [description = "Output"] u(t) [description = "Input"]
 k = ShiftIndex(Clock(t, dt))
 eqs = [
     a2 * y(k) + a1 * y(k - 1) + a0 * y(k - 2) ~ b2 * u(k) + b1 * u(k - 1) + b0 * u(k - 2)

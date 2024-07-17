@@ -242,7 +242,7 @@ Generate `SDESystem`, dependent variables, and parameters from an `SDEProblem`.
 function modelingtoolkitize(prob::DiffEqBase.SDEProblem; kwargs...)
     prob.f isa DiffEqBase.AbstractParameterizedFunction &&
         return (prob.f.sys, prob.f.sys.unknowns, prob.f.sys.ps)
-    @parameters t
+    @independent_variables t
     p = prob.p
     has_p = !(p isa Union{DiffEqBase.NullParameters, Nothing})
 

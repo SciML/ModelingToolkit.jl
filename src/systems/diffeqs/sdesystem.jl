@@ -10,10 +10,10 @@ $(FIELDS)
 
 ```julia
 using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @parameters σ ρ β
-@variables t x(t) y(t) z(t)
-D = Differential(t)
+@variables x(t) y(t) z(t)
 
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
@@ -137,6 +137,7 @@ struct SDESystem <: AbstractODESystem
             complete = false, index_cache = nothing, parent = nothing;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
+            check_independent_variables([iv])
             check_variables(dvs, iv)
             check_parameters(ps, iv)
             check_equations(deqs, iv)
@@ -320,10 +321,10 @@ experiments. Springer Science & Business Media.
 
 ```julia
 using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @parameters α β
-@variables t x(t) y(t) z(t)
-D = Differential(t)
+@variables x(t) y(t) z(t)
 
 eqs = [D(x) ~ α*x]
 noiseeqs = [β*x]

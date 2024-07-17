@@ -4,7 +4,7 @@ using Test
 using ModelingToolkit: value, Flow
 using SymbolicUtils: FnType
 
-@parameters t
+@independent_variables t
 @variables x(t) y(t) # test multi-arg
 @variables z(t) # test single-arg
 
@@ -60,7 +60,7 @@ end
 # @test isequal(s1, collect(s))
 # @test isequal(σ1, σ)
 
-#@parameters t
+#@independent_variables t
 #@variables x[1:2](t)
 #x1 = Num[Variable{FnType{Tuple{Any}, Real}}(:x, 1)(t.val),
 #      Variable{FnType{Tuple{Any}, Real}}(:x, 2)(t.val)]
@@ -117,7 +117,8 @@ a = rename(value(x), :a)
 @test getmetadata(a, VariableConnectType) == Flow
 @test getmetadata(a, VariableUnit) == u
 
-@variables t x(t)=1 [connect = Flow, unit = u]
+@independent_variables t
+@variables x(t)=1 [connect = Flow, unit = u]
 
 @test getmetadata(x, VariableDefaultValue) == 1
 @test getmetadata(x, VariableConnectType) == Flow

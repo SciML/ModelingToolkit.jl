@@ -41,7 +41,7 @@ for i in 1:3
     @test eval(ModelingToolkit.toexpr.(eqs)[i]) == eval(simpexpr[i])
 end
 
-@parameters t σ ρ β
+@parameters σ ρ β
 @variables x y z
 ∂ = ModelingToolkit.jacobian(eqs, [x, y, z])
 for i in 1:3
@@ -59,7 +59,8 @@ reference_jac = sparse(ModelingToolkit.jacobian(du, [x, y, z]))
       findnz(reference_jac)[[1, 2]]
 
 let
-    @variables t x(t) y(t) z(t)
+    @independent_variables t
+    @variables x(t) y(t) z(t)
     @test ModelingToolkit.exprs_occur_in([x, y, z], x^2 * y) == [true, true, false]
 end
 
@@ -196,7 +197,7 @@ test_worldage()
 
 let
     @register_symbolic foo(x)
-    @variables t
+    @independent_variables t
     D = Differential(t)
 
     @test isequal(expand_derivatives(D(foo(t))), D(foo(t)))

@@ -2237,11 +2237,10 @@ This example builds the following feedback interconnection and linearizes it fro
 
 ```julia
 using ModelingToolkit
-@variables t
+using ModelingToolkit: t_nounits as t, D_nounits as D
 function plant(; name)
     @variables x(t) = 1
     @variables u(t)=0 y(t)=0
-    D = Differential(t)
     eqs = [D(x) ~ -x + u
            y ~ x]
     ODESystem(eqs, t; name = name)
@@ -2250,7 +2249,6 @@ end
 function ref_filt(; name)
     @variables x(t)=0 y(t)=0
     @variables u(t)=0 [input = true]
-    D = Differential(t)
     eqs = [D(x) ~ -2 * x + u
            y ~ x]
     ODESystem(eqs, t, name = name)

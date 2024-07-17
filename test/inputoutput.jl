@@ -1,6 +1,7 @@
 using ModelingToolkit, OrdinaryDiffEq, Symbolics, Test
 
-@parameters t σ ρ β
+@independent_variables t
+@parameters σ ρ β
 @variables x(t) y(t) z(t) F(t) u(t)
 D = Differential(t)
 

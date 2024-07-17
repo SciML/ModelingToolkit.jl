@@ -34,9 +34,10 @@ $(FIELDS)
 
 ```julia
 using ModelingToolkit, JumpProcesses
+using ModelingToolkit: t_nounits as t
 
 @parameters β γ
-@variables t S(t) I(t) R(t)
+@variables S(t) I(t) R(t)
 rate₁   = β*S*I
 affect₁ = [S ~ S - 1, I ~ I + 1]
 rate₂   = γ*I
@@ -118,6 +119,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             complete = false, index_cache = nothing;
             checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
         if checks == true || (checks & CheckComponents) > 0
+            check_independent_variables([iv])
             check_variables(unknowns, iv)
             check_parameters(ps, iv)
         end

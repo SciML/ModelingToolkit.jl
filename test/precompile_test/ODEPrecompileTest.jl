@@ -3,7 +3,8 @@ using ModelingToolkit
 
 function system(; kwargs...)
     # Define some variables
-    @parameters t σ ρ β
+    @independent_variables t
+    @parameters σ ρ β
     @variables x(t) y(t) z(t)
     D = Differential(t)
 
