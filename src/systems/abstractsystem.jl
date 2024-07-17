@@ -2600,8 +2600,10 @@ end
 
 keytype(::Type{<:Pair{T, V}}) where {T, V} = T
 function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, Dict})
-    if has_continuous_domain(sys) && get_continuous_events(sys) !== nothing ||
-       has_discrete_events(sys) && get_discrete_events(sys) !== nothing
+    if has_continuous_domain(sys) && get_continuous_events(sys) !== nothing &&
+       !isempty(get_continuous_events(sys)) ||
+       has_discrete_events(sys) && get_discrete_events(sys) !== nothing &&
+       !isempty(get_discrete_events(sys))
         @warn "`substitute` only supports performing substitutions in equations. This system has events, which will not be updated."
     end
     if keytype(eltype(rules)) <: Symbol
