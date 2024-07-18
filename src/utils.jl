@@ -1,14 +1,3 @@
-"""
-    union_nothing(x::Union{T1, Nothing}, y::Union{T2, Nothing}) where {T1, T2}
-
-Unite x and y gracefully when they could be nothing. If neither is nothing, x and y are united normally. If one is nothing, the other is returned unmodified. If both are nothing, nothing is returned.
-"""
-function union_nothing(x::Union{T1, Nothing}, y::Union{T2, Nothing}) where {T1, T2}
-    isnothing(x) && return y # y can be nothing or something
-    isnothing(y) && return x # x can be nothing or something
-    return union(x, y) # both x and y are something and can be united normally
-end
-
 get_iv(D::Differential) = D.x
 
 function make_operation(@nospecialize(op), args)
