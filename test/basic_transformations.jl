@@ -1,6 +1,7 @@
 using ModelingToolkit, OrdinaryDiffEq, Test
 
-@parameters t α β γ δ
+@independent_variables t
+@parameters α β γ δ
 @variables x(t) y(t)
 D = Differential(t)
 

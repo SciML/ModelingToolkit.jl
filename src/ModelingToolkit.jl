@@ -127,6 +127,7 @@ using .BipartiteGraphs
 
 include("variables.jl")
 include("parameters.jl")
+include("independent_variables.jl")
 include("constants.jl")
 
 include("utils.jl")
@@ -183,13 +184,13 @@ for S in subtypes(ModelingToolkit.AbstractSystem)
 end
 
 const t_nounits = let
-    only(@parameters t)
+    only(@independent_variables t)
 end
 const t_unitful = let
-    only(@parameters t [unit = Unitful.u"s"])
+    only(@independent_variables t [unit = Unitful.u"s"])
 end
 const t = let
-    only(@parameters t [unit = DQ.u"s"])
+    only(@independent_variables t [unit = DQ.u"s"])
 end
 
 const D_nounits = Differential(t_nounits)
@@ -235,8 +236,8 @@ export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, DelayParentScope, GlobalScope
-export independent_variable, equations, controls,
-       observed, full_equations
+export independent_variable, equations, controls, observed, full_equations
+export initialization_equations, guesses, defaults, parameter_dependencies
 export structural_simplify, expand_connections, linearize, linearization_function
 
 export calculate_jacobian, generate_jacobian, generate_function, generate_custom_function
@@ -262,7 +263,7 @@ export generate_initializesystem
 export alg_equations, diff_equations, has_alg_equations, has_diff_equations
 export get_alg_eqs, get_diff_eqs, has_alg_eqs, has_diff_eqs
 
-export @variables, @parameters, @constants, @brownian
+export @variables, @parameters, @independent_variables, @constants, @brownian
 export @named, @nonamespace, @namespace, extend, compose, complete
 export debug_system
 

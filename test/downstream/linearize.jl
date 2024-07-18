@@ -1,8 +1,9 @@
 using ModelingToolkit, Test
 
 # r is an input, and y is an output.
-@variables t x(t)=0 y(t)=0 u(t)=0 r(t)=0
-@variables t x(t)=0 y(t)=0 u(t)=0 r(t)=0 [input = true]
+@independent_variables t
+@variables x(t)=0 y(t)=0 u(t)=0 r(t)=0
+@variables x(t)=0 y(t)=0 u(t)=0 r(t)=0 [input = true]
 @parameters kp = 1
 D = Differential(t)
 

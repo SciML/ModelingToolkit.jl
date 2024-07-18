@@ -113,6 +113,13 @@ const CheckAll = 1 << 0
 const CheckComponents = 1 << 1
 const CheckUnits = 1 << 2
 
+function check_independent_variables(ivs)
+    for iv in ivs
+        isparameter(iv) ||
+            @warn "Independent variable $iv should be defined with @independent_variables $iv."
+    end
+end
+
 function check_parameters(ps, iv)
     for p in ps
         isequal(iv, p) &&
@@ -349,7 +356,8 @@ Return a `Set` containing all variables in `x` that appear in
 Example:
 
 ```
-@variables t u(t) y(t)
+t = ModelingToolkit.t_nounits
+@variables u(t) y(t)
 D  = Differential(t)
 v  = ModelingToolkit.vars(D(y) ~ u)
 v == Set([D(y), u])
@@ -421,7 +429,8 @@ collect_differential_variables(sys) = collect_operator_variables(sys, Differenti
 Return  a `Set` with all applied operators in `x`, example:
 
 ```
-@variables t u(t) y(t)
+@independent_variables t
+@variables u(t) y(t)
 D = Differential(t)
 eq = D(y) ~ u
 ModelingToolkit.collect_applied_operators(eq, Differential) == Set([D(y)])

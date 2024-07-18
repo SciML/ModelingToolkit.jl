@@ -11,8 +11,8 @@ $(FIELDS)
 ```julia
 using ModelingToolkit
 
-@parameters x
-@variables t u(..)
+@parameters x t
+@variables u(..)
 Dxx = Differential(x)^2
 Dtt = Differential(t)^2
 Dt = Differential(t)

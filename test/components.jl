@@ -304,7 +304,7 @@ sol = solve(prob, Tsit5())
     Hey there, Pin1!
     """
     @connector function Pin1(; name)
-        @variables t
+        @independent_variables t
         sts = @variables v(t)=1.0 i(t)=1.0
         ODESystem(Equation[], t, sts, []; name = name)
     end
@@ -314,7 +314,7 @@ sol = solve(prob, Tsit5())
     Hey there, Pin2!
     """
     @component function Pin2(; name)
-        @variables t
+        @independent_variables t
         sts = @variables v(t)=1.0 i(t)=1.0
         ODESystem(Equation[], t, sts, []; name = name)
     end
