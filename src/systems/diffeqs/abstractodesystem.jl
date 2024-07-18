@@ -1565,6 +1565,12 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     u0map = isempty(u0map) ? Dict() : todict(u0map)
     guesses = isempty(guesses) ? Dict() : todict(guesses)
 
+    # Check that all unknowns have guesses
+    # TODO: which, if any, unknowns should be excluded from this guess?
+    for x in unknowns(isys)
+        x in keys(guesses) || throw(ArgumentError("Missing guess for $x."))
+    end
+
     u0map = merge(guesses, u0map)
     if neqs == nunknown
         NonlinearProblem(isys, u0map, parammap; kwargs...)
