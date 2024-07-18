@@ -485,9 +485,8 @@ function expand_connections(sys::AbstractSystem, find = nothing, replace = nothi
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
     _sys = expand_instream(instream_csets, sys; debug = debug, tol = tol)
     sys = flatten(sys, true)
-    @set! sys.eqs = [equations(_sys); ceqs]
     d_defs = domain_defaults(sys, domain_csets)
-    @set! sys.defaults = merge(get_defaults(sys), d_defs)
+    remake(sys; eqs = [equations(_sys); ceqs], defaults = merge(get_defaults(sys), d_defs))
 end
 
 function unnamespace(root, namespace)

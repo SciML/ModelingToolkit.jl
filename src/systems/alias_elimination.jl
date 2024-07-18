@@ -135,8 +135,7 @@ function alias_elimination!(state::TearingState; kwargs...)
     state.structure.eq_to_diff = new_eq_to_diff
     state.structure.var_to_diff = new_var_to_diff
 
-    sys = state.sys
-    @set! sys.eqs = eqs
+    sys = remake(state.sys; eqs)
     state.sys = sys
     return invalidate_cache!(sys), mm
 end
