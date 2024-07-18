@@ -462,5 +462,5 @@ sys = extend(sysx, sysy)
     @variables x(t) y(t)
     @named sys = ODESystem([x^2 + y^2 ~ 25, D(x) ~ 1], t)
     ssys = structural_simplify(sys)
-    @test_throws ArgumentError prob = ODEProblem(ssys, [x => 3], (0, 1), [] #=; guesses = [y => 5]=#)
+    @test_throws ArgumentError ODEProblem(ssys, [x => 3], (0, 1), []) # y should have a guess
 end
