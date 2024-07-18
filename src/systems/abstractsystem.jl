@@ -741,7 +741,9 @@ WARNING: intended for internal use; does not perform any sanity checks.
 """
 # TODO: optionally re-call constructor to sanity check?
 # TODO: use SciMLBase's generic remake()? doesn't work out of the box, though
-function remake(sys::AbstractSystem; skip_nonexisting = false, kwargs...)
+# TODO: should register new tag? move Threads.atomic_add!(SYSTEM_COUNT, ...) to a separate function?
+# TODO: recreate the struct once with all new fields, instead of once for every field
+function remake(sys::AbstractSystem; kwargs...)
     for (field, value) in kwargs
         # like `Setfield.@set! sys.field = value`, but with `field` replaced by an arbitrarily named symbol
         # (e.g. https://discourse.julialang.org/t/accessing-struct-via-symbol/58809/4)
