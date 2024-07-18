@@ -1567,11 +1567,9 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     defs = defaults(isys)
 
     # Check that all unknowns have guesses
-    # TODO: which, if any, unknowns should be excluded from this guess?
-    for x in unknowns(isys)
-        x in keys(guesses) || x in keys(defs) ||
-            throw(ArgumentError("Missing guess for $x."))
-    end
+    unknowns_missing = setdiff(unknowns(isys), [keys(guesses), keys(defs)])
+    !isempty(unknowns_missing) &&
+        throw(ArgumentError("Missing guesses for unknowns $(join(unknowns_missing, ", "))."))
 
     u0map = merge(guesses, u0map)
     if neqs == nunknown
