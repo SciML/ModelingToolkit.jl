@@ -726,6 +726,30 @@ end
     end
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Remake the system `sys` with every field replaced by the value in `kwargs`.
+
+```julia
+@variables x(t) y(t)
+@named sysx = ODESystem([x ~ 0], t)
+sysy = remake(sysx, eqs = [y ~ 0])
+```
+
+WARNING: intended for internal use; does not perform any sanity checks.
+"""
+# TODO: optionally re-call constructor to sanity check?
+# TODO: use SciMLBase's generic remake()? doesn't work out of the box, though
+function remake(sys::AbstractSystem; kwargs...)
+    for (field, value) in kwargs
+        # like `Setfield.@set! sys.field = value`, but with `field` replaced by an arbitrarily named symbol
+        # (e.g. https://discourse.julialang.org/t/accessing-struct-via-symbol/58809/4)
+        sys = Setfield.set(sys, Setfield.PropertyLens{field}(), value)
+    end
+    return sys
+end
+
 rename(x, name) = @set x.name = name
 
 function Base.propertynames(sys::AbstractSystem; private = false)
