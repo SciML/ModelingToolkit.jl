@@ -1093,6 +1093,12 @@ function dependent_parameters(sys::AbstractSystem)
     end
 end
 
+"""
+$(TYPEDSIGNATURES)
+Get the parameter dependencies of the system `sys` and its subsystems.
+
+See also [`defaults`](@ref) and [`ModelingToolkit.get_parameter_dependencies`](@ref).
+"""
 function parameter_dependencies(sys::AbstractSystem)
     pdeps = get_parameter_dependencies(sys)
     if isnothing(pdeps)
@@ -1111,6 +1117,13 @@ function full_parameters(sys::AbstractSystem)
     vcat(parameters(sys), dependent_parameters(sys))
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Get the guesses for variables in the initialization system of the system `sys` and its subsystems.
+
+See also [`initialization_equations`](@ref) and [`ModelingToolkit.get_guesses`](@ref).
+"""
 function guesses(sys::AbstractSystem)
     guess = get_guesses(sys)
     systems = get_systems(sys)
@@ -1141,6 +1154,15 @@ end
 
 Base.@deprecate default_u0(x) defaults(x) false
 Base.@deprecate default_p(x) defaults(x) false
+
+"""
+$(TYPEDSIGNATURES)
+
+Get the default values of the system sys and its subsystems.
+If they are not explicitly provided, variables and parameters are initialized to these values.
+
+See also [`initialization_equations`](@ref), [`parameter_dependencies`](@ref) and [`ModelingToolkit.get_defaults`](@ref).
+"""
 function defaults(sys::AbstractSystem)
     systems = get_systems(sys)
     defs = get_defaults(sys)
@@ -1199,7 +1221,7 @@ $(TYPEDSIGNATURES)
 
 Get the initialization equations of the system `sys` and its subsystems.
 
-See also [`ModelingToolkit.get_initialization_eqs`](@ref).
+See also [`guesses`](@ref), [`defaults`](@ref), [`parameter_dependencies`](@ref) and [`ModelingToolkit.get_initialization_eqs`](@ref).
 """
 function initialization_equations(sys::AbstractSystem)
     eqs = get_initialization_eqs(sys)
