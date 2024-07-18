@@ -2658,10 +2658,9 @@ system's name.
 See also [`extend`](@ref).
 """
 function compose(sys::AbstractSystem, systems::AbstractArray; name = nameof(sys))
-    nsys = length(systems)
-    nsys == 0 && return sys
-    @set! sys.name = name
-    @set! sys.systems = [get_systems(sys); systems]
+    if !isempty(systems)
+        sys = remake(sys; name = name, systems = [get_systems(sys); systems])
+    end
     return sys
 end
 function compose(syss...; name = nameof(first(syss)))
