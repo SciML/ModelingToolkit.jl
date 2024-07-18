@@ -731,6 +731,9 @@ $(TYPEDSIGNATURES)
 
 Remake the system `sys` with every field replaced by the value in `kwargs`.
 
+If `skip_nonexisting`, fields that do not exist in `sys` are *silently skipped*!
+This means that typos in field names will not error, so use this with caution!
+
 ```julia
 @variables x(t) y(t)
 @named sysx = ODESystem([x ~ 0], t)
@@ -741,8 +744,9 @@ WARNING: intended for internal use; does not perform any sanity checks.
 """
 # TODO: optionally re-call constructor to sanity check?
 # TODO: use SciMLBase's generic remake()? doesn't work out of the box, though
-function remake(sys::AbstractSystem; kwargs...)
+function remake(sys::AbstractSystem; skip_nonexisting = false, kwargs...)
     for (field, value) in kwargs
+        !hasfield(typeof(sys), field) && skip_nonexisting && continue
         # like `Setfield.@set! sys.field = value`, but with `field` replaced by an arbitrarily named symbol
         # (e.g. https://discourse.julialang.org/t/accessing-struct-via-symbol/58809/4)
         sys = Setfield.set(sys, Setfield.PropertyLens{field}(), value)
@@ -2619,30 +2623,27 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
         end
     end
 
-    # collect fields common to all system types
-    eqs = union(get_eqs(basesys), get_eqs(sys))
-    sts = union(get_unknowns(basesys), get_unknowns(sys))
-    ps = union(get_ps(basesys), get_ps(sys))
-    dep_ps = union_nothing(parameter_dependencies(basesys), parameter_dependencies(sys))
-    obs = union(get_observed(basesys), get_observed(sys))
-    cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
-    devs = union(get_discrete_events(basesys), get_discrete_events(sys))
-    defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
-    meta = union_nothing(get_metadata(basesys), get_metadata(sys))
-    syss = union(get_systems(basesys), get_systems(sys))
-    args = length(ivs) == 0 ? (eqs, sts, ps) : (eqs, ivs[1], sts, ps)
-    kwargs = (parameter_dependencies = dep_ps, observed = obs, continuous_events = cevs,
-        discrete_events = devs, defaults = defs, systems = syss, metadata = meta,
-        name = name, gui_metadata = gui_metadata)
+    return remake(sys; skip_nonexisting = true,
+        # fields provided directly to extend()
+        name, gui_metadata,
 
-    # collect fields specific to some system types
-    if basesys isa ODESystem
-        ieqs = union(get_initialization_eqs(basesys), get_initialization_eqs(sys))
-        guesses = merge(get_guesses(basesys), get_guesses(sys)) # prefer `sys`
-        kwargs = merge(kwargs, (initialization_eqs = ieqs, guesses = guesses))
-    end
+        # fields common to all system types
+        eqs = union(get_eqs(basesys), get_eqs(sys)),
+        unknowns = union(get_unknowns(basesys), get_unknowns(sys)),
+        ps = union(get_ps(basesys), get_ps(sys)),
+        iv = isempty(ivs) ? missing : ivs[1], # TODO: handle generally
+        parameter_dependencies = union_nothing(get_parameter_dependencies(basesys), get_parameter_dependencies(sys)),
+        observed = union(get_observed(basesys), get_observed(sys)),
+        continuous_events = union(get_continuous_events(basesys), get_continuous_events(sys)),
+        discrete_events = union(get_discrete_events(basesys), get_discrete_events(sys)),
+        defaults = merge(get_defaults(basesys), get_defaults(sys)), # prefer `sys`,
+        systems = union(get_systems(basesys), get_systems(sys)),
+        metadata = union_nothing(get_metadata(basesys), get_metadata(sys)),
 
-    return T(args...; kwargs...)
+        # fields specific to some system types
+        initialization_eqs = hasfield(T, :initialization_eqs) ? union(get_initialization_eqs(basesys), get_initialization_eqs(sys)) : missing,
+        guesses = hasfield(T, :guesses) ? merge(get_guesses(basesys), get_guesses(sys)) : missing, # prefer `sys`
+    )
 end
 
 function Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nameof(sys))
