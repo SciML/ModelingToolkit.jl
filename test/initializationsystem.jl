@@ -17,7 +17,8 @@ sol = solve(initprob)
 @test SciMLBase.successful_retcode(sol)
 @test maximum(abs.(sol[conditions])) < 1e-14
 
-@test_throws ModelingToolkit.ExtraVariablesSystemException ModelingToolkit.InitializationProblem(pend, 0.0, [], [g => 1];
+@test_throws ModelingToolkit.ExtraVariablesSystemException ModelingToolkit.InitializationProblem(
+    pend, 0.0, [], [g => 1];
     guesses = [ModelingToolkit.missing_variable_defaults(pend); x => 1; y => 0.2],
     fully_determined = true)
 
@@ -55,7 +56,8 @@ sol = solve(prob.f.initializeprob)
 sol = solve(prob, Rodas5P())
 @test maximum(abs.(sol[conditions][1])) < 1e-14
 
-@test_throws ModelingToolkit.ExtraVariablesSystemException ODEProblem(pend, [x => 1], (0.0, 1.5), [g => 1],
+@test_throws ModelingToolkit.ExtraVariablesSystemException ODEProblem(
+    pend, [x => 1], (0.0, 1.5), [g => 1],
     guesses = ModelingToolkit.missing_variable_defaults(pend),
     fully_determined = true)
 
@@ -237,7 +239,8 @@ initsol = solve(initprob, reltol = 1e-12, abstol = 1e-12)
 @test SciMLBase.successful_retcode(initsol)
 @test maximum(abs.(initsol[conditions])) < 1e-14
 
-@test_throws ModelingToolkit.ExtraEquationsSystemException ModelingToolkit.InitializationProblem(sys, 0.0, fully_determined = true)
+@test_throws ModelingToolkit.ExtraEquationsSystemException ModelingToolkit.InitializationProblem(
+    sys, 0.0, fully_determined = true)
 
 allinit = unknowns(sys) .=> initsol[unknowns(sys)]
 prob = ODEProblem(sys, allinit, (0, 0.1))
@@ -249,7 +252,8 @@ sol = solve(prob, Rodas5P(), initializealg = BrownFullBasicInit())
 prob = ODEProblem(sys, allinit, (0, 0.1))
 prob = ODEProblem(sys, [], (0, 0.1), check = false)
 
-@test_throws ModelingToolkit.ExtraEquationsSystemException ODEProblem(sys, [], (0, 0.1), fully_determined = true)
+@test_throws ModelingToolkit.ExtraEquationsSystemException ODEProblem(
+    sys, [], (0, 0.1), fully_determined = true)
 
 sol = solve(prob, Rodas5P())
 # If initialized incorrectly, then it would be InitialFailure
