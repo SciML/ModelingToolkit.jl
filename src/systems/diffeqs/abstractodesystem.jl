@@ -1556,10 +1556,10 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     nunknown = length(unknowns(isys))
 
     if warn_initialize_determined && neqs > nunknown
-        @warn "Initialization system is overdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false."
+        @warn "Initialization system is overdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false. To make this warning into an error, pass fully_determined = true"
     end
     if warn_initialize_determined && neqs < nunknown
-        @warn "Initialization system is underdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false."
+        @warn "Initialization system is underdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false. To make this warning into an error, pass fully_determined = true"
     end
 
     parammap = parammap isa DiffEqBase.NullParameters || isempty(parammap) ?
