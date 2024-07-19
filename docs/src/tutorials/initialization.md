@@ -195,11 +195,11 @@ long enough you will see that `λ = 0` is required for this equation, but since 
 `λ = 1` we end up with a set of equations that are impossible to satisfy.
 
 !!! note
-    
+
     If you would prefer to have an error instead of a warning in the context of non-fully
     determined systems, pass the keyword argument `fully_determined = true` into the
     problem constructor. Additionally, any warning about not being fully determined can
-    be supressed via passing `warn_initialize_determined = false`.
+    be suppressed via passing `warn_initialize_determined = false`.
 
 ## Diving Deeper: Constructing the Initialization System
 
@@ -278,7 +278,7 @@ sol = solve(iprob)
 ```
 
 !!! note
-    
+
     For more information on solving NonlinearProblems and NonlinearLeastSquaresProblems,
     check out the [NonlinearSolve.jl tutorials!](https://docs.sciml.ai/NonlinearSolve/stable/tutorials/getting_started/).
 
