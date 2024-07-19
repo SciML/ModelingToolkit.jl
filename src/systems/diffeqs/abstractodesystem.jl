@@ -1567,7 +1567,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     defs = defaults(isys)
 
     # Check that all unknowns have guesses
-    unknowns_missing = setdiff(unknowns(isys), [keys(guesses), keys(defs)])
+    unknowns_missing = setdiff(unknowns(isys), union(keys(guesses), keys(defs), keys(u0map)))
     !isempty(unknowns_missing) &&
         throw(ArgumentError("Missing guesses for unknowns $(join(unknowns_missing, ", "))."))
 
