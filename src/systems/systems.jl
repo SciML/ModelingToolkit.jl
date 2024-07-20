@@ -7,21 +7,19 @@ end
 $(SIGNATURES)
 
 Structurally simplify algebraic equations in a system and compute the
-topological sort of the observed equations. When `simplify=true`, the `simplify`
-function will be applied during the tearing process. The kwargs
-`allow_symbolic=false`, `allow_parameter=true`, and `conservative=false` which
-limits the coefficient types during tearing. In particular, `conservative=true`
-limits tearing to only solve for trivial linear systems where the coefficient
-has the absolute value of ``1``. The kwarg `fully_determined=true` controls whether or not
-an error will be thrown if the number of equations don't match the number of inputs,
-outputs, and equations.
+topological sort of the observed equations in `sys`.
 
-The optional argument `io` may take a tuple `(inputs, outputs)`.
-This will convert all `inputs` to parameters and allow them to be unconnected, i.e.,
-simplification will allow models where `n_unknowns = n_equations - n_inputs`.
+### Optional Arguments:
++ optional argument `io` may take a tuple `(inputs, outputs)`. This will convert all `inputs` to parameters and allow them to be unconnected, i.e., simplification will allow models where `n_unknowns = n_equations - n_inputs`.
+
+### Optional Keyword Arguments:
++ When `simplify=true`, the `simplify` function will be applied during the tearing process.
++ `allow_symbolic=false`, `allow_parameter=true`, and `conservative=false` limit the coefficient types during tearing. In particular, `conservative=true` limits tearing to only solve for trivial linear systems where the coefficient has the absolute value of ``1``.
++ `fully_determined=true` controls whether or not an error will be thrown if the number of equations don't match the number of inputs, outputs, and equations.
 """
 function structural_simplify(
         sys::AbstractSystem, io = nothing; simplify = false, split = true,
+        allow_symbolic = true, allow_parameter = true, conservative = false, fully_determined = true,
         kwargs...)
     newsys′ = __structural_simplify(sys, io; simplify, kwargs...)
     if newsys′ isa Tuple
