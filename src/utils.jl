@@ -663,42 +663,43 @@ function promote_to_concrete(vs; tofloat = true, use_union = true)
         vs = Any[vs...]
     end
     T = eltype(vs)
-    if Base.isconcretetype(T) && (!tofloat || T === float(T)) # nothing to do
-        return vs
-    else
-        sym_vs = filter(x -> SymbolicUtils.issym(x) || SymbolicUtils.iscall(x), vs)
-        isempty(sym_vs) || throw_missingvars_in_sys(sym_vs)
 
-        C = nothing
-        for v in vs
-            E = typeof(v)
-            if E <: Number
-                if tofloat
-                    E = float(E)
-                end
-            end
-            if C === nothing
-                C = E
-            end
-            if use_union
-                C = Union{C, E}
-            else
-                @assert C==E "`promote_to_concrete` can't make type $E uniform with $C"
-                C = E
+    # return early if there is nothing to do
+    #Base.isconcretetype(T) && (!tofloat || T === float(T)) && return vs # TODO: disabled float(T) to restore missing errors in https://github.com/SciML/ModelingToolkit.jl/issues/2873
+    Base.isconcretetype(T) && !tofloat && return vs
+
+    sym_vs = filter(x -> SymbolicUtils.issym(x) || SymbolicUtils.iscall(x), vs)
+    isempty(sym_vs) || throw_missingvars_in_sys(sym_vs)
+
+    C = nothing
+    for v in vs
+        E = typeof(v)
+        if E <: Number
+            if tofloat
+                E = float(E)
             end
         end
-
-        y = similar(vs, C)
-        for i in eachindex(vs)
-            if (vs[i] isa Number) & tofloat
-                y[i] = float(vs[i]) #needed because copyto! can't convert Int to Float automatically
-            else
-                y[i] = vs[i]
-            end
+        if C === nothing
+            C = E
         end
-
-        return y
+        if use_union
+            C = Union{C, E}
+        else
+            @assert C==E "`promote_to_concrete` can't make type $E uniform with $C"
+            C = E
+        end
     end
+
+    y = similar(vs, C)
+    for i in eachindex(vs)
+        if (vs[i] isa Number) & tofloat
+            y[i] = float(vs[i]) #needed because copyto! can't convert Int to Float automatically
+        else
+            y[i] = vs[i]
+        end
+    end
+
+    return y
 end
 
 struct BitDict <: AbstractDict{Int, Int}
