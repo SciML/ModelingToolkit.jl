@@ -665,7 +665,8 @@ function promote_to_concrete(vs; tofloat = true, use_union = true)
     T = eltype(vs)
 
     # return early if there is nothing to do
-    Base.isconcretetype(T) && (!tofloat#= || T === float(T)=#) && return vs # TODO: disabled float(T) to restore missing errors in https://github.com/SciML/ModelingToolkit.jl/issues/2873
+    #Base.isconcretetype(T) && (!tofloat || T === float(T)) && return vs # TODO: disabled float(T) to restore missing errors in https://github.com/SciML/ModelingToolkit.jl/issues/2873
+    Base.isconcretetype(T) && !tofloat && return vs
 
     sym_vs = filter(x -> SymbolicUtils.issym(x) || SymbolicUtils.iscall(x), vs)
     isempty(sym_vs) || throw_missingvars_in_sys(sym_vs)
