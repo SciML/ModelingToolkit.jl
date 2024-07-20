@@ -2010,9 +2010,9 @@ version = "0.6.43"
 
 [[deps.SciMLBase]]
 deps = ["ADTypes", "Accessors", "ArrayInterface", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "EnumX", "FunctionWrappersWrappers", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "PrecompileTools", "Preferences", "Printf", "RecipesBase", "RecursiveArrayTools", "Reexport", "RuntimeGeneratedFunctions", "SciMLOperators", "SciMLStructures", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface", "Tables"]
-git-tree-sha1 = "281e82f2ae2b73262fed9e7a518711eb7feb7e59"
+git-tree-sha1 = "7a38aa94aaf425ab68b96f373cd036a204eaf04b"
 uuid = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
-version = "2.42.0"
+version = "2.43.0"
 
     [deps.SciMLBase.extensions]
     SciMLBaseChainRulesCoreExt = "ChainRulesCore"
@@ -2305,9 +2305,9 @@ version = "2.1.2"
 
 [[deps.Symbolics]]
 deps = ["ADTypes", "ArrayInterface", "Bijections", "CommonWorldInvalidations", "ConstructionBase", "DataStructures", "DiffRules", "Distributions", "DocStringExtensions", "DomainSets", "DynamicPolynomials", "ForwardDiff", "IfElse", "LaTeXStrings", "LambertW", "Latexify", "Libdl", "LinearAlgebra", "LogExpFunctions", "MacroTools", "Markdown", "NaNMath", "PrecompileTools", "RecipesBase", "Reexport", "Requires", "RuntimeGeneratedFunctions", "SciMLBase", "Setfield", "SparseArrays", "SpecialFunctions", "StaticArraysCore", "SymbolicIndexingInterface", "SymbolicLimits", "SymbolicUtils", "TermInterface"]
-git-tree-sha1 = "8539a734b448ca27707709c62420b1bf115ed7d9"
+git-tree-sha1 = "44356a85991385883acd0f41ef66c6f770d9a2e7"
 uuid = "0c5d862f-8b57-4792-8d23-62f2024744c7"
-version = "5.33.0"
+version = "5.34.0"
 
     [deps.Symbolics.extensions]
     SymbolicsGroebnerExt = "Groebner"
