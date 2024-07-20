@@ -8,11 +8,13 @@ $(SIGNATURES)
 
 Structurally simplify algebraic equations in a system and compute the
 topological sort of the observed equations. When `simplify=true`, the `simplify`
-function will be applied during the tearing process. It also takes kwargs
+function will be applied during the tearing process. The kwargs
 `allow_symbolic=false`, `allow_parameter=true`, and `conservative=false` which
 limits the coefficient types during tearing. In particular, `conservative=true`
 limits tearing to only solve for trivial linear systems where the coefficient
-has the absolute value of ``1``.
+has the absolute value of ``1``. The kwarg `fully_determined=true` controls whether or not
+an error will be thrown if the number of equations don't match the number of inputs,
+outputs, and equations.
 
 The optional argument `io` may take a tuple `(inputs, outputs)`.
 This will convert all `inputs` to parameters and allow them to be unconnected, i.e.,
