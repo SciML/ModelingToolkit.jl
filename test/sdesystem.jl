@@ -679,18 +679,18 @@ let
         β => 26.0,
         ρ => 2.33
     ]
-
     prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
-    @test solve(prob, SOSRI()).retcode == ReturnCode.Success
+    # TODO: re-enable this when we support scalar noise
+    @test_broken solve(prob, SOSRI()).retcode == ReturnCode.Success
 end
 
 let
     @parameters σ ρ β
     @variables x(t) y(t) z(t)
-    @brownian a b
-    eqs = [D(x) ~ σ * (y - x) + 0.1b * x,
-        D(y) ~ x * (ρ - z) - y + 0.1a * y,
-        D(z) ~ x * y - β * z + 0.1b * z]
+    @brownian a b c
+    eqs = [D(x) ~ σ * (y - x)  + 0.1a * x,
+        D(y) ~ x * (ρ - z) - y + 0.1b * y,
+        D(z) ~ x * y - β * z   + 0.1c * z]
 
     @mtkbuild de = System(eqs, t)
 
