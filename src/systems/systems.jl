@@ -128,8 +128,10 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
             @views copyto!(sorted_g_rows[i, :], g[g_row, :])
         end
         # Fix for https://github.com/SciML/ModelingToolkit.jl/issues/2490
-        noise_eqs = if isdiag(sorted_g_rows)
-            diag(sorted_g_rows) # This happens when the user uses N different `@brownian`s for `N` equations
+        noise_eqs = if all(row -> count(!iszero, row) == 1, eachrow(sorted_g_rows)) # Does each row have only one non-zero entry?
+            # then the noise is actually diagonal! make vector of non-zero entries.
+            # This happens when the user uses N different `@brownian`s for `N` equations
+            reduce(vcat, map(row -> filter(!iszero, row), eachrow(sorted_g_rows)))
         elseif sorted_g_rows isa AbstractMatrix && size(sorted_g_rows, 2) == 1
             sorted_g_rows[:, 1] # Take a vector slice so solver knows there's no mixing
         else

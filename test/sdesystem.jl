@@ -687,8 +687,8 @@ end
 let
     @parameters σ ρ β
     @variables x(t) y(t) z(t)
-    @brownian a b c
-    eqs = [D(x) ~ σ * (y - x) + 0.1c * x,
+    @brownian a b
+    eqs = [D(x) ~ σ * (y - x) + 0.1b * x,
         D(y) ~ x * (ρ - z) - y + 0.1a * y,
         D(z) ~ x * y - β * z + 0.1b * z]
 
