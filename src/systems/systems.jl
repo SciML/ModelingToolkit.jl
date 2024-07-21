@@ -134,7 +134,7 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
             noise_eqs = diag(sorted_g_rows)
             is_scalar_noise = false
         elseif sorted_g_rows isa AbstractMatrix && size(sorted_g_rows, 2) == 1
-            noise_eqs = sorted_g_rows[:, 1] 
+            noise_eqs = sorted_g_rows[:, 1]
             is_scalar_noise = true
         else
             noise_eqs = sorted_g_rows

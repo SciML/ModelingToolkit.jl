@@ -133,13 +133,13 @@ struct SDESystem <: AbstractODESystem
     be `true` when `noiseeqs isa Vector`. 
     """
     is_scalar_noise::Bool
-    
+
     function SDESystem(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed,
             tgrad,
             jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
             cevents, devents, parameter_dependencies, metadata = nothing, gui_metadata = nothing,
-            complete = false, index_cache = nothing, parent = nothing, is_scalar_noise=false;
+            complete = false, index_cache = nothing, parent = nothing, is_scalar_noise = false;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_independent_variables([iv])
@@ -181,11 +181,11 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
         discrete_events = nothing,
         parameter_dependencies = nothing,
         metadata = nothing,
-                   gui_metadata = nothing,
-                   complete = false,
-                   index_cache = nothing,
-                   parent = nothing,
-                   is_scalar_noise=false)
+        gui_metadata = nothing,
+        complete = false,
+        index_cache = nothing,
+        parent = nothing,
+        is_scalar_noise = false)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     iv′ = value(iv)
@@ -220,10 +220,10 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
     parameter_dependencies, ps′ = process_parameter_dependencies(
         parameter_dependencies, ps′)
     SDESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-              deqs, neqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
-              ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
-              cont_callbacks, disc_callbacks, parameter_dependencies, metadata, gui_metadata,
-              complete, index_cache, parent, is_scalar_noise; checks = checks)
+        deqs, neqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
+        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
+        cont_callbacks, disc_callbacks, parameter_dependencies, metadata, gui_metadata,
+        complete, index_cache, parent, is_scalar_noise; checks = checks)
 end
 
 function SDESystem(sys::ODESystem, neqs; kwargs...)
@@ -615,7 +615,6 @@ function SDEFunctionExpr(sys::SDESystem, args...; kwargs...)
     SDEFunctionExpr{true}(sys, args...; kwargs...)
 end
 
-
 function scalar_noise end # defined in ../ext/MTKDiffEqNoiseProcess.jl
 
 function DiffEqBase.SDEProblem{iip, specialize}(
@@ -738,7 +737,8 @@ function SDEProblemExpr{iip}(sys::SDESystem, u0map, tspan,
         p = $p
         noise_rate_prototype = $noise_rate_prototype
         noise = $noise
-        SDEProblem(f, u0, tspan, p; noise_rate_prototype = noise_rate_prototype, noise = noise,
+        SDEProblem(
+            f, u0, tspan, p; noise_rate_prototype = noise_rate_prototype, noise = noise,
             $(kwargs...))
     end
     !linenumbers ? Base.remove_linenums!(ex) : ex
