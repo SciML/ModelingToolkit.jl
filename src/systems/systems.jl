@@ -21,7 +21,9 @@ function structural_simplify(
         sys::AbstractSystem, io = nothing; simplify = false, split = true,
         allow_symbolic = true, allow_parameter = true, conservative = false, fully_determined = true,
         kwargs...)
-    newsys′ = __structural_simplify(sys, io; simplify, kwargs...)
+    newsys′ = __structural_simplify(sys, io; simplify, 
+                allow_symbolic = true, allow_parameter = true, conservative = false, fully_determined = true,
+                kwargs...)
     if newsys′ isa Tuple
         @assert length(newsys′) == 2
         newsys = newsys′[1]
