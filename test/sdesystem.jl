@@ -684,7 +684,7 @@ let
     @test solve(prob, SOSRI()).retcode == ReturnCode.Success
 end
 
-let # test to make sure that scalar noise always recieve the same kicks
+let # test to make sure that scalar noise always receive the same kicks
     @variables x(t) y(t)
     @brownian a
     eqs = [D(x) ~ a,
@@ -696,7 +696,7 @@ let # test to make sure that scalar noise always recieve the same kicks
     @test sol[end][1] == sol[end][2]
 end
 
-let # test that diagonal noise is corrently handled
+let # test that diagonal noise is correctly handled
     @parameters σ ρ β
     @variables x(t) y(t) z(t)
     @brownian a b c

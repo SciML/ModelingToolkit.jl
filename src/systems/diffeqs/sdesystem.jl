@@ -152,7 +152,7 @@ struct SDESystem <: AbstractODESystem
             end
             check_equations(equations(cevents), iv)
             if is_scalar_noise && neqs isa AbstractMatrix
-                throw(ArgumentError("Noise equations ill-formed. Recieved a matrix of noise equations of size $(size(neqs)), but `is_scalar_noise` was set to `true`. Scalar noise is only compatible with an `AbstractVector` of noise equations."))
+                throw(ArgumentError("Noise equations ill-formed. Received a matrix of noise equations of size $(size(neqs)), but `is_scalar_noise` was set to `true`. Scalar noise is only compatible with an `AbstractVector` of noise equations."))
             end
         end
         if checks == true || (checks & CheckUnits) > 0
