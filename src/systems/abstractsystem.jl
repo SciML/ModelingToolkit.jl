@@ -655,7 +655,8 @@ for prop in [:eqs
              :solved_unknowns
              :split_idxs
              :parent
-             :index_cache]
+             :index_cache
+             :is_scalar_noise]
     fname_get = Symbol(:get_, prop)
     fname_has = Symbol(:has_, prop)
     @eval begin

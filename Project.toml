@@ -56,10 +56,12 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 [weakdeps]
 BifurcationKit = "0f109fa4-8a5d-4b75-95aa-f515264e7665"
 DeepDiffs = "ab62b9b5-e342-54a8-a765-a90f495de1a6"
+DiffEqNoiseProcess = "77a26b50-5914-5dd7-bc55-306e6241c503"
 
 [extensions]
 MTKBifurcationKitExt = "BifurcationKit"
 MTKDeepDiffsExt = "DeepDiffs"
+MTKDiffEqNoiseProcess = "DiffEqNoiseProcess"
 
 [compat]
 AbstractTrees = "0.3, 0.4"

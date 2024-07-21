@@ -681,7 +681,7 @@ let
     ]
     prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
     # TODO: re-enable this when we support scalar noise
-    @test_broken solve(prob, SOSRI()).retcode == ReturnCode.Success
+    @test solve(prob, SOSRI()).retcode == ReturnCode.Success
 end
 
 let # test to make sure that scalar noise always recieve the same kicks
@@ -692,7 +692,7 @@ let # test to make sure that scalar noise always recieve the same kicks
 
     @mtkbuild de = System(eqs, t)
     prob = SDEProblem(de, [x => 0, y => 0], (0.0, 10.0), [])
-    sol = solve(prob, ImplicitEM())
+    sol = solve(prob, SOSRI())
     @test sol[end][1] == sol[end][2]
 end
 
