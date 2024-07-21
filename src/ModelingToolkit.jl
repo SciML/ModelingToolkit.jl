@@ -22,6 +22,7 @@ using DiffEqCallbacks
 using Graphs
 import ExprTools: splitdef, combinedef
 import OrderedCollections
+using DiffEqNoiseProcess: DiffEqNoiseProcess, WienerProcess
 
 using SymbolicIndexingInterface
 using LinearAlgebra, SparseArrays, LabelledArrays

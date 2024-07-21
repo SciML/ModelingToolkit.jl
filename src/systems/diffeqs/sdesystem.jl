@@ -615,8 +615,6 @@ function SDEFunctionExpr(sys::SDESystem, args...; kwargs...)
     SDEFunctionExpr{true}(sys, args...; kwargs...)
 end
 
-function scalar_noise end # defined in ../ext/MTKDiffEqNoiseProcess.jl
-
 function DiffEqBase.SDEProblem{iip, specialize}(
         sys::SDESystem, u0map = [], tspan = get_tspan(sys),
         parammap = DiffEqBase.NullParameters();
@@ -636,7 +634,7 @@ function DiffEqBase.SDEProblem{iip, specialize}(
     if noiseeqs isa AbstractVector
         noise_rate_prototype = nothing
         if is_scalar_noise
-            noise = scalar_noise()
+            noise = WienerProcess(0.0, 0.0, 0.0)
         else
             noise = nothing
         end
@@ -721,14 +719,18 @@ function SDEProblemExpr{iip}(sys::SDESystem, u0map, tspan,
     if noiseeqs isa AbstractVector
         noise_rate_prototype = nothing
         if is_scalar_noise
-            noise = scalar_noise()
+            noise = WienerProcess(0.0, 0.0, 0.0)
+        else
+            noise = nothing
         end
     elseif sparsenoise
         I, J, V = findnz(SparseArrays.sparse(noiseeqs))
         noise_rate_prototype = SparseArrays.sparse(I, J, zero(eltype(u0)))
+        noise = nothing
     else
         T = u0 === nothing ? Float64 : eltype(u0)
         noise_rate_prototype = zeros(T, size(get_noiseeqs(sys)))
+        noise = nothing
     end
     ex = quote
         f = $f
