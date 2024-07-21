@@ -684,13 +684,25 @@ let
     @test_broken solve(prob, SOSRI()).retcode == ReturnCode.Success
 end
 
-let
+let # test to make sure that scalar noise always recieve the same kicks
+    @variables x(t) y(t)
+    @brownian a
+    eqs = [D(x) ~ a,
+        D(y) ~ a]
+
+    @mtkbuild de = System(eqs, t)
+    prob = SDEProblem(de, [x => 0, y => 0], (0.0, 10.0), [])
+    sol = solve(prob, ImplicitEM())
+    @test sol[end][1] == sol[end][2]
+end
+
+let # test that diagonal noise is corrently handled
     @parameters σ ρ β
     @variables x(t) y(t) z(t)
     @brownian a b c
-    eqs = [D(x) ~ σ * (y - x)  + 0.1a * x,
+    eqs = [D(x) ~ σ * (y - x) + 0.1a * x,
         D(y) ~ x * (ρ - z) - y + 0.1b * y,
-        D(z) ~ x * y - β * z   + 0.1c * z]
+        D(z) ~ x * y - β * z + 0.1c * z]
 
     @mtkbuild de = System(eqs, t)
 
@@ -707,5 +719,6 @@ let
     ]
 
     prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
+    # SOSRI only works for diagonal and scalar noise
     @test solve(prob, SOSRI()).retcode == ReturnCode.Success
 end

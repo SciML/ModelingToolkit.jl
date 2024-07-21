@@ -135,7 +135,7 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
         elseif sorted_g_rows isa AbstractMatrix && size(sorted_g_rows, 2) == 1
             ##-------------------------------------------------------------------------------
             ## TODO: re-enable this code once we add a way to signal that the noise is scalar
-            # sorted_g_rows[:, 1] # Take a vector slice so solver knows there's no mixing
+            # sorted_g_rows[:, 1] 
             ##-------------------------------------------------------------------------------
             sorted_g_rows
         else
