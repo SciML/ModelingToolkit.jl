@@ -797,7 +797,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     varmap = canonicalize_varmap(varmap)
     varlist = collect(map(unwrap, dvs))
     missingvars = setdiff(varlist, collect(keys(varmap)))
-    setboserved = setdiff(collect(keys(varmap)), varlist)
+    setobserved = setdiff(collect(keys(varmap)), varlist)
 
     if eltype(parammap) <: Pair
         parammap = Dict(unwrap(k) => v for (k, v) in todict(parammap))
