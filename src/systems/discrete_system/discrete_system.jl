@@ -149,7 +149,8 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
             :DiscreteSystem, force = true)
     end
     defaults = todict(defaults)
-    defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
+    defaults = Dict(value(k) => value(v)
+    for (k, v) in pairs(defaults) if value(v) !== nothing)
 
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, dvs′)
