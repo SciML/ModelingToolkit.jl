@@ -19,7 +19,7 @@ topological sort of the observed equations in `sys`.
 """
 function structural_simplify(
         sys::AbstractSystem, io = nothing; simplify = false, split = true,
-        allow_symbolic = true, allow_parameter = true, conservative = false, fully_determined = true,
+        allow_symbolic = false, allow_parameter = true, conservative = false, fully_determined = true,
         kwargs...)
     newsys′ = __structural_simplify(sys, io; simplify,
         allow_symbolic, allow_parameter, conservative, fully_determined,
