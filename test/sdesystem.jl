@@ -722,3 +722,29 @@ let # test that diagonal noise is correctly handled
     # SOSRI only works for diagonal and scalar noise
     @test solve(prob, SOSRI()).retcode == ReturnCode.Success
 end
+
+@testset "Non-diagonal noise check" begin
+    @parameters σ ρ β
+    @variables x(t) y(t) z(t)
+    @brownian a b c
+    eqs = [D(x) ~ σ * (y - x) + 0.1a * x + 0.1b * y,
+        D(y) ~ x * (ρ - z) - y + 0.1b * y,
+        D(z) ~ x * y - β * z + 0.1c * z]
+    @mtkbuild de = System(eqs, t)
+
+    u0map = [
+        x => 1.0,
+        y => 0.0,
+        z => 0.0
+    ]
+
+    parammap = [
+        σ => 10.0,
+        β => 26.0,
+        ρ => 2.33
+    ]
+
+    prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
+    # SOSRI only works for diagonal and scalar noise
+    @test solve(prob, ImplicitEM()).retcode == ReturnCode.Success
+end

@@ -244,13 +244,20 @@ function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
         all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
 end
 
+function __num_isdiag(mat)
+    for i in axes(mat, 1), j in axes(mat, 2)
+        i == j || isequal(mat[i, j], 0) || return false
+    end
+    return true
+end
+
 function generate_diffusion_function(sys::SDESystem, dvs = unknowns(sys),
         ps = full_parameters(sys); isdde = false, kwargs...)
     eqs = get_noiseeqs(sys)
     if isdde
         eqs = delay_to_function(sys, eqs)
     end
-    if eqs isa AbstractMatrix && isdiag(eqs)
+    if eqs isa AbstractMatrix && __num_isdiag(eqs)
         eqs = diag(eqs)
     end
     u = map(x -> time_varying_as_func(value(x), sys), dvs)
