@@ -811,7 +811,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
 
     # ModelingToolkit.get_tearing_state(sys) !== nothing => Requires structural_simplify first
     if sys isa ODESystem && build_initializeprob &&
-       (((implicit_dae || !isempty(missingvars) || !isempty(setboserved)) &&
+       (((implicit_dae || !isempty(missingvars) || !isempty(setobserved)) &&
          all(isequal(Continuous()), ci.var_domain) &&
          ModelingToolkit.get_tearing_state(sys) !== nothing) ||
         !isempty(initialization_equations(sys))) && t !== nothing
