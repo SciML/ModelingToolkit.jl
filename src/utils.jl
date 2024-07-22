@@ -252,7 +252,9 @@ end
 
 function collect_defaults!(defs, vars)
     for v in vars
-        (haskey(defs, v) || !hasdefault(unwrap(v))) && continue
+        if haskey(defs, v) || !hasdefault(unwrap(v)) || (def = getdefault(v)) === nothing
+            continue
+        end
         defs[v] = getdefault(v)
     end
     return defs

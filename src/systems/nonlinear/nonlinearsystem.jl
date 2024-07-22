@@ -146,7 +146,8 @@ function NonlinearSystem(eqs, unknowns, ps;
     end
     jac = RefValue{Any}(EMPTY_JAC)
     defaults = todict(defaults)
-    defaults = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(defaults))
+    defaults = Dict{Any, Any}(value(k) => value(v)
+    for (k, v) in pairs(defaults) if value(v) !== nothing)
 
     unknowns, ps = value.(unknowns), value.(ps)
     var_to_name = Dict()
