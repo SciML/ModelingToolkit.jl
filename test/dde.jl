@@ -78,7 +78,7 @@ sol = solve(prob, RKMil())
 eqs = [D(x(t)) ~ a * x(t) + b * x(t - τ) + c + (α * x(t) + γ) * η]
 @mtkbuild sys = System(eqs, t)
 @test equations(sys) == [D(x(t)) ~ a * x(t) + b * x(t - τ) + c]
-@test isequal(ModelingToolkit.get_noiseeqs(sys), [α * x(t) + γ;;])
+@test isequal(ModelingToolkit.get_noiseeqs(sys), [α * x(t) + γ])
 prob_mtk = SDDEProblem(sys, [x(t) => 1.0 + t], tspan; constant_lags = (τ,));
 @test_nowarn sol_mtk = solve(prob_mtk, RKMil())
 

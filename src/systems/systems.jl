@@ -127,9 +127,23 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
             g_row > size(g, 1) && continue
             @views copyto!(sorted_g_rows[i, :], g[g_row, :])
         end
-
-        return SDESystem(full_equations(ode_sys), sorted_g_rows,
+        # Fix for https://github.com/SciML/ModelingToolkit.jl/issues/2490
+        if sorted_g_rows isa AbstractMatrix && size(sorted_g_rows, 2) == 1
+            # If there's only one brownian variable referenced across all the equations,
+            # we get a Nx1 matrix of noise equations, which is a special case known as scalar noise
+            noise_eqs = sorted_g_rows[:, 1]
+            is_scalar_noise = true
+        elseif isdiag(sorted_g_rows)
+            # If the noise matrix is diagonal, then the solver just takes a vector column of equations
+            # and it interprets that as diagonal noise.
+            noise_eqs = diag(sorted_g_rows)
+            is_scalar_noise = false
+        else
+            noise_eqs = sorted_g_rows
+            is_scalar_noise = false
+        end
+        return SDESystem(full_equations(ode_sys), noise_eqs,
             get_iv(ode_sys), unknowns(ode_sys), parameters(ode_sys);
-            name = nameof(ode_sys))
+            name = nameof(ode_sys), is_scalar_noise)
     end
 end

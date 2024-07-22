@@ -657,3 +657,68 @@ ps = @SVector[p => 5.0, d => 0.5]
 sprob = SDEProblem(sys, u0, tspan, ps)
 @test sprob.f.g(sprob.u0, sprob.p, sprob.tspan[1]) isa SVector{2, Float64}
 @test_nowarn solve(sprob, ImplicitEM())
+
+let
+    @parameters σ ρ β
+    @variables x(t) y(t) z(t)
+    @brownian a
+    eqs = [D(x) ~ σ * (y - x) + 0.1a * x,
+        D(y) ~ x * (ρ - z) - y + 0.1a * y,
+        D(z) ~ x * y - β * z + 0.1a * z]
+
+    @mtkbuild de = System(eqs, t)
+
+    u0map = [
+        x => 1.0,
+        y => 0.0,
+        z => 0.0
+    ]
+
+    parammap = [
+        σ => 10.0,
+        β => 26.0,
+        ρ => 2.33
+    ]
+    prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
+    # TODO: re-enable this when we support scalar noise
+    @test solve(prob, SOSRI()).retcode == ReturnCode.Success
+end
+
+let # test to make sure that scalar noise always receive the same kicks
+    @variables x(t) y(t)
+    @brownian a
+    eqs = [D(x) ~ a,
+        D(y) ~ a]
+
+    @mtkbuild de = System(eqs, t)
+    prob = SDEProblem(de, [x => 0, y => 0], (0.0, 10.0), [])
+    sol = solve(prob, SOSRI())
+    @test sol[end][1] == sol[end][2]
+end
+
+let # test that diagonal noise is correctly handled
+    @parameters σ ρ β
+    @variables x(t) y(t) z(t)
+    @brownian a b c
+    eqs = [D(x) ~ σ * (y - x) + 0.1a * x,
+        D(y) ~ x * (ρ - z) - y + 0.1b * y,
+        D(z) ~ x * y - β * z + 0.1c * z]
+
+    @mtkbuild de = System(eqs, t)
+
+    u0map = [
+        x => 1.0,
+        y => 0.0,
+        z => 0.0
+    ]
+
+    parammap = [
+        σ => 10.0,
+        β => 26.0,
+        ρ => 2.33
+    ]
+
+    prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
+    # SOSRI only works for diagonal and scalar noise
+    @test solve(prob, SOSRI()).retcode == ReturnCode.Success
+end

@@ -128,13 +128,18 @@ struct SDESystem <: AbstractODESystem
     The hierarchical parent system before simplification.
     """
     parent::Any
+    """
+    Signal for whether the noise equations should be treated as a scalar process. This should only
+    be `true` when `noiseeqs isa Vector`. 
+    """
+    is_scalar_noise::Bool
 
     function SDESystem(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed,
             tgrad,
             jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
             cevents, devents, parameter_dependencies, metadata = nothing, gui_metadata = nothing,
-            complete = false, index_cache = nothing, parent = nothing;
+            complete = false, index_cache = nothing, parent = nothing, is_scalar_noise = false;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_independent_variables([iv])
@@ -146,6 +151,9 @@ struct SDESystem <: AbstractODESystem
                 throw(ArgumentError("Noise equations ill-formed. Number of rows must match number of drift equations. size(neqs,1) = $(size(neqs,1)) != length(deqs) = $(length(deqs))"))
             end
             check_equations(equations(cevents), iv)
+            if is_scalar_noise && neqs isa AbstractMatrix
+                throw(ArgumentError("Noise equations ill-formed. Received a matrix of noise equations of size $(size(neqs)), but `is_scalar_noise` was set to `true`. Scalar noise is only compatible with an `AbstractVector` of noise equations."))
+            end
         end
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(dvs, ps, iv)
@@ -154,7 +162,7 @@ struct SDESystem <: AbstractODESystem
         new(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac,
             Wfact, Wfact_t, name, systems, defaults, connector_type, cevents, devents,
-            parameter_dependencies, metadata, gui_metadata, complete, index_cache, parent)
+            parameter_dependencies, metadata, gui_metadata, complete, index_cache, parent, is_scalar_noise)
     end
 end
 
@@ -173,7 +181,11 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
         discrete_events = nothing,
         parameter_dependencies = nothing,
         metadata = nothing,
-        gui_metadata = nothing)
+        gui_metadata = nothing,
+        complete = false,
+        index_cache = nothing,
+        parent = nothing,
+        is_scalar_noise = false)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     iv′ = value(iv)
@@ -210,7 +222,8 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
     SDESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, neqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
         ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
-        cont_callbacks, disc_callbacks, parameter_dependencies, metadata, gui_metadata; checks = checks)
+        cont_callbacks, disc_callbacks, parameter_dependencies, metadata, gui_metadata,
+        complete, index_cache, parent, is_scalar_noise; checks = checks)
 end
 
 function SDESystem(sys::ODESystem, neqs; kwargs...)
@@ -225,6 +238,7 @@ function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
         isequal(nameof(sys1), nameof(sys2)) &&
         isequal(get_eqs(sys1), get_eqs(sys2)) &&
         isequal(get_noiseeqs(sys1), get_noiseeqs(sys2)) &&
+        isequal(get_is_scalar_noise(sys1), get_is_scalar_noise(sys2)) &&
         _eq_unordered(get_unknowns(sys1), get_unknowns(sys2)) &&
         _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
         all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
@@ -616,16 +630,24 @@ function DiffEqBase.SDEProblem{iip, specialize}(
     sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
 
     noiseeqs = get_noiseeqs(sys)
+    is_scalar_noise = get_is_scalar_noise(sys)
     if noiseeqs isa AbstractVector
         noise_rate_prototype = nothing
+        if is_scalar_noise
+            noise = WienerProcess(0.0, 0.0, 0.0)
+        else
+            noise = nothing
+        end
     elseif sparsenoise
         I, J, V = findnz(SparseArrays.sparse(noiseeqs))
         noise_rate_prototype = SparseArrays.sparse(I, J, zero(eltype(u0)))
+        noise = nothing
     else
         noise_rate_prototype = zeros(eltype(u0), size(noiseeqs))
+        noise = nothing
     end
 
-    SDEProblem{iip}(f, u0, tspan, p; callback = cbs,
+    SDEProblem{iip}(f, u0, tspan, p; callback = cbs, noise,
         noise_rate_prototype = noise_rate_prototype, kwargs...)
 end
 
@@ -693,14 +715,22 @@ function SDEProblemExpr{iip}(sys::SDESystem, u0map, tspan,
     sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
 
     noiseeqs = get_noiseeqs(sys)
+    is_scalar_noise = get_is_scalar_noise(sys)
     if noiseeqs isa AbstractVector
         noise_rate_prototype = nothing
+        if is_scalar_noise
+            noise = WienerProcess(0.0, 0.0, 0.0)
+        else
+            noise = nothing
+        end
     elseif sparsenoise
         I, J, V = findnz(SparseArrays.sparse(noiseeqs))
         noise_rate_prototype = SparseArrays.sparse(I, J, zero(eltype(u0)))
+        noise = nothing
     else
         T = u0 === nothing ? Float64 : eltype(u0)
         noise_rate_prototype = zeros(T, size(get_noiseeqs(sys)))
+        noise = nothing
     end
     ex = quote
         f = $f
@@ -708,7 +738,9 @@ function SDEProblemExpr{iip}(sys::SDESystem, u0map, tspan,
         tspan = $tspan
         p = $p
         noise_rate_prototype = $noise_rate_prototype
-        SDEProblem(f, u0, tspan, p; noise_rate_prototype = noise_rate_prototype,
+        noise = $noise
+        SDEProblem(
+            f, u0, tspan, p; noise_rate_prototype = noise_rate_prototype, noise = noise,
             $(kwargs...))
     end
     !linenumbers ? Base.remove_linenums!(ex) : ex
