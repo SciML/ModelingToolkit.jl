@@ -30,8 +30,13 @@ ModelingToolkit.dump_variable_metadata(p)
 function dump_variable_metadata(var)
     uvar = unwrap(var)
     vartype, name = get(uvar.metadata, VariableSource, (:unknown, :unknown))
-    shape = Symbolics.shape(var)
-    if shape == ()
+    type = symtype(uvar)
+    if type <: AbstractArray
+        shape = Symbolics.shape(var)
+        if shape == ()
+            shape = nothing
+        end
+    else
         shape = nothing
     end
     unit = get(uvar.metadata, VariableUnit, nothing)
@@ -206,6 +211,10 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false
     missingvars = setdiff(varlist, collect(keys(values)))
     check && (isempty(missingvars) || throw(MissingVariablesError(missingvars)))
     return [values[unwrap(var)] for var in varlist]
+end
+
+function varmap_with_toterm(varmap; toterm = Symbolics.diff2term)
+    return merge(todict(varmap), Dict(toterm(unwrap(k)) => v for (k, v) in varmap))
 end
 
 function canonicalize_varmap(varmap; toterm = Symbolics.diff2term)

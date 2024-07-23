@@ -131,13 +131,15 @@ sp = Set(p)
 
 @test_nowarn show(stdout, "text/plain", sys)
 
-# Defaults overridden by system, parameter dependencies
-@variables x(t) = 1.0
+# Defaults, guesses overridden by system, parameter dependencies
+@variables x(t)=1.0 y(t) [guess = 1.0]
 @parameters p=2.0 q
-@named sys = ODESystem(Equation[], t, [x], [p]; defaults = Dict(x => 2.0, p => 3.0),
-    parameter_dependencies = [q => 2p])
-x_meta = ModelingToolkit.dump_unknowns(sys)[]
-@test x_meta.default == 2.0
+@named sys = ODESystem(Equation[], t, [x, y], [p]; defaults = Dict(x => 2.0, p => 3.0),
+    guesses = Dict(y => 2.0), parameter_dependencies = [q => 2p])
+unks_meta = ModelingToolkit.dump_unknowns(sys)
+unks_meta = Dict([ModelingToolkit.getname(meta.var) => meta for meta in unks_meta])
+@test unks_meta[:x].default == 2.0
+@test unks_meta[:y].guess == 2.0
 params_meta = ModelingToolkit.dump_parameters(sys)
 params_meta = Dict([ModelingToolkit.getname(meta.var) => meta for meta in params_meta])
 @test params_meta[:p].default == 3.0
