@@ -1,4 +1,4 @@
-# [Components and Connectors](@id mtkmodel_connector)
+# [ModelingToolkit Language: Modeling with `@mtkmodel` and `@connectors`](@id mtkmodel_connector)
 
 ## MTK Model
 
