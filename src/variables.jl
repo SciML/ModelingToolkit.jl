@@ -30,8 +30,13 @@ ModelingToolkit.dump_variable_metadata(p)
 function dump_variable_metadata(var)
     uvar = unwrap(var)
     vartype, name = get(uvar.metadata, VariableSource, (:unknown, :unknown))
-    shape = Symbolics.shape(var)
-    if shape == ()
+    type = symtype(uvar)
+    if type <: AbstractArray
+        shape = Symbolics.shape(var)
+        if shape == ()
+            shape = nothing
+        end
+    else
         shape = nothing
     end
     unit = get(uvar.metadata, VariableUnit, nothing)
