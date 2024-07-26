@@ -417,7 +417,7 @@ Where to go next?
   - Not sure how MTK relates to similar tools and packages? Read
     [Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages](@ref).
   - For a more detailed explanation of `@mtkmodel` checkout
-    [Defining components with `@mtkmodel` and connectors with `@connectors`](@ref mtkmodel_connector)
+    [Defining components with `@mtkmodel` and connectors with `@connectors`](@ref mtk_language)
   - Depending on what you want to do with MTK, have a look at some of the other
     **Symbolic Modeling Tutorials**.
   - If you want to automatically convert an existing function to a symbolic

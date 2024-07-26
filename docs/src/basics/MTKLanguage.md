@@ -1,4 +1,4 @@
-# [Components and Connectors](@id mtkmodel_connector)
+# [ModelingToolkit Language: Modeling with `@mtkmodel`, `@connectors` and `@mtkbuild`](@id mtk_language)
 
 ## MTK Model
 
@@ -440,4 +440,32 @@ Using ternary operator or if-elseif-else statement, conditional initial guesses 
         p = flag ? 1 : 2
     end
 end
+```
+
+## Build structurally simplified models:
+
+`@mtkbuild` builds an instance of a component and returns a structurally simplied `ODESystem`.
+
+```julia
+@mtkbuild sys = CustomModel()
+```
+
+This is equivalent to:
+
+```julia
+@named model = CustomModel()
+sys = structural_simplify(model)
+```
+
+Pass keyword arguments to `structural_simplify` using the following syntax:
+
+```julia
+@mtkbuild sys=CustomModel() fully_determined=false
+```
+
+This is equivalent to:
+
+```julia
+@named model = CustomModel()
+sys = structural_simplify(model; fully_determined = false)
 ```
