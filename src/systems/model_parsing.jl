@@ -51,7 +51,7 @@ function _model_macro(mod, name, expr, isconnector)
     c_evts = []
     d_evts = []
     kwargs = OrderedCollections.OrderedSet()
-    where_types = Expr[]
+    where_types = Union{Symbol, Expr}[]
 
     push!(exprs.args, :(variables = []))
     push!(exprs.args, :(parameters = []))
@@ -143,9 +143,17 @@ end
 pop_structure_dict!(dict, key) = length(dict[key]) == 0 && pop!(dict, key)
 
 function update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
-        varclass, where_types)
+        varclass, where_types, meta)
     if indices isa Nothing
-        push!(kwargs, Expr(:kw, Expr(:(::), a, Union{Nothing, type}), nothing))
+        kwtype = if !isnothing(meta) && haskey(meta, VariableUnit)
+            dim = dimension(eval(meta[VariableUnit]))
+            units = gensym(:U)
+            push!(where_types, units)
+            Expr(:curly, Union, :Nothing, Expr(:curly, Quantity, Expr(:(<:), type), dim, units))
+        else
+            Expr(:curly, Union, Nothing, type)
+        end
+        push!(kwargs, Expr(:kw, Expr(:(::), a, kwtype), nothing))
         dict[:kwargs][getname(var)] = Dict(:value => def, :type => type)
     else
         vartype = gensym(:T)
@@ -166,7 +174,7 @@ end
 
 function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         def = nothing, indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
-        type::Type = Real)
+        meta = nothing, type::Type = Real)
     metatypes = [(:connection_type, VariableConnectType),
         (:description, VariableDescription),
         (:unit, VariableUnit),
@@ -186,7 +194,7 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         a::Symbol => begin
             var = generate_var!(dict, a, varclass; indices, type)
             update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
-                varclass, where_types)
+                varclass, where_types, meta)
             return var, def, Dict()
         end
         Expr(:(::), a, type) => begin
@@ -201,14 +209,14 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         Expr(:call, a, b) => begin
             var = generate_var!(dict, a, b, varclass, mod; indices, type)
             update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
-                varclass, where_types)
+                varclass, where_types, meta)
             return var, def, Dict()
         end
         Expr(:(=), a, b) => begin
             Base.remove_linenums!(b)
             def, meta = parse_default(mod, b)
             var, def, _ = parse_variable_def!(
-                dict, mod, a, varclass, kwargs, where_types; def, type)
+                dict, mod, a, varclass, kwargs, where_types; def, meta, type)
             if dict[varclass] isa Vector
                 dict[varclass][1][getname(var)][:default] = def
             else
@@ -231,9 +239,9 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
             return var, def, Dict()
         end
         Expr(:tuple, a, b) => begin
-            var, def, _ = parse_variable_def!(
-                dict, mod, a, varclass, kwargs, where_types; type)
             meta = parse_metadata(mod, b)
+            var, def, _ = parse_variable_def!(
+                dict, mod, a, varclass, kwargs, where_types; meta, type)
             if meta !== nothing
                 for (type, key) in metatypes
                     if (mt = get(meta, key, nothing)) !== nothing
@@ -616,11 +624,22 @@ function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
         dict, mod, arg, varclass, kwargs, where_types)
     name = getname(vv)
 
-    varexpr = quote
-        $name = if $name === nothing
-            $setdefault($vv, $def)
-        else
-            $setdefault($vv, $name)
+    varexpr = if haskey(metadata_with_exprs, VariableUnit)
+        unit = metadata_with_exprs[VariableUnit]
+        quote
+            $name = if $name === nothing
+                $setdefault($vv, $def)
+            else
+                $setdefault($vv, $ustrip($unit, $name))
+            end
+        end
+    else
+        quote
+            $name = if $name === nothing
+                $setdefault($vv, $def)
+            else
+                $setdefault($vv, $name)
+            end
         end
     end
 
