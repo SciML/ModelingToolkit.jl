@@ -290,3 +290,20 @@ end
     sys = complete(sys)
     @test_throws ["Could not evaluate", "b", "Missing", "2c"] MTKParameters(sys, [a => 1.0])
 end
+
+@testset "Issue#3804" begin
+    @parameters k[1:4]
+    @variables (V(t))[1:2]
+    eqs = [
+        D(V[1]) ~ k[1] - k[2] * V[1],
+        D(V[2]) ~ k[3] - k[4] * V[2]
+    ]
+    @mtkbuild osys_scal = ODESystem(eqs, t, [V[1], V[2]], [k[1], k[2], k[3], k[4]])
+
+    u0 = [V => [10.0, 20.0]]
+    ps_vec = [k => [2.0, 3.0, 4.0, 5.0]]
+    ps_scal = [k[1] => 1.0, k[2] => 2.0, k[3] => 3.0, k[4] => 4.0]
+    oprob_scal_scal = ODEProblem(osys_scal, u0, 1.0, ps_scal)
+    newoprob = remake(oprob_scal_scal; p = ps_vec)
+    @test newoprob.ps[k] == [2.0, 3.0, 4.0, 5.0]
+end
