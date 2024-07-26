@@ -506,15 +506,38 @@ function SymbolicIndexingInterface.remake_buffer(indp, oldbuf::MTKParameters, va
     @set! newbuf.nonnumeric = Tuple(Vector{Any}(undef, length(buf))
     for buf in newbuf.nonnumeric)
 
+    syms = collect(keys(vals))
+    vals = Dict{Any, Any}(vals)
+    for sym in syms
+        symbolic_type(sym) == ArraySymbolic() || continue
+        is_parameter(indp, sym) && continue
+        stype = symtype(unwrap(sym))
+        stype <: AbstractArray || continue
+        Symbolics.shape(sym) == Symbolics.Unknown() && continue
+        for i in eachindex(sym)
+            vals[sym[i]] = vals[sym][i]
+        end
+    end
+
     # If the parameter buffer is an `MTKParameters` object, `indp` must eventually drill
     # down to an `AbstractSystem` using `symbolic_container`. We leverage this to get
     # the index cache.
     ic = get_index_cache(indp_to_system(indp))
     for (p, val) in vals
         idx = parameter_index(indp, p)
-        validate_parameter_type(ic, p, idx, val)
-        _set_parameter_unchecked!(
-            newbuf, val, idx; update_dependent = false)
+        if idx !== nothing
+            validate_parameter_type(ic, p, idx, val)
+            _set_parameter_unchecked!(
+                newbuf, val, idx; update_dependent = false)
+        elseif symbolic_type(p) == ArraySymbolic()
+            for (i, j) in zip(eachindex(p), eachindex(val))
+                pi = p[i]
+                idx = parameter_index(indp, pi)
+                validate_parameter_type(ic, pi, idx, val[j])
+                _set_parameter_unchecked!(
+                    newbuf, val[j], idx; update_dependent = false)
+            end
+        end
     end
 
     @set! newbuf.tunable = narrow_buffer_type_and_fallback_undefs.(
