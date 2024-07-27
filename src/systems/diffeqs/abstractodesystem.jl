@@ -777,6 +777,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     varmap = canonicalize_varmap(varmap)
     varlist = collect(map(unwrap, dvs))
     missingvars = setdiff(varlist, collect(keys(varmap)))
+    setobserved = setdiff(collect(keys(varmap)), varlist)
 
     # Append zeros to the variables which are determined by the initialization system
     # This essentially bypasses the check for if initial conditions are defined for DAEs
@@ -824,7 +825,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     # TODO: make it work with clocks
     # ModelingToolkit.get_tearing_state(sys) !== nothing => Requires structural_simplify first
     if sys isa ODESystem && build_initializeprob &&
-       (((implicit_dae || !isempty(missingvars)) &&
+       (((implicit_dae || !isempty(missingvars) || !isempty(setobserved)) &&
          all(isequal(Continuous()), ci.var_domain) &&
          ModelingToolkit.get_tearing_state(sys) !== nothing) ||
         !isempty(initialization_equations(sys))) && t !== nothing
