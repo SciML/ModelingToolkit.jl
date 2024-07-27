@@ -17,7 +17,7 @@ symbolic preprocessing to analyze and enhance the model. ModelingToolkit can
 automatically generate fast functions for model components like Jacobians
 and Hessians, along with automatically sparsifying and parallelizing the
 computations. Automatic transformations, such as index reduction, can be applied
-to the model to make it easier for numerical solvers to handle.
+to the model to make it easier for numerical solvers to handle.test master
 
 For information on using the package,
 [see the stable documentation](https://docs.sciml.ai/ModelingToolkit/stable/). Use the
