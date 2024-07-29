@@ -14,7 +14,7 @@ dt = 0.1
 @parameters kp
 # u(n + 1) := f(u(n))
 
-eqs = [yd ~ Sample(t, dt)(y)
+eqs = [yd ~ Sample(dt)(y)
        ud ~ kp * (r - yd)
        r ~ 1.0
 
@@ -64,40 +64,41 @@ By inference:
 
 ci, varmap = infer_clocks(sys)
 eqmap = ci.eq_domain
-tss, inputs = ModelingToolkit.split_system(deepcopy(ci))
-sss, = ModelingToolkit._structural_simplify!(deepcopy(tss[1]), (inputs[1], ()))
+tss, inputs, continuous_id = ModelingToolkit.split_system(deepcopy(ci))
+sss, = ModelingToolkit._structural_simplify!(
+    deepcopy(tss[continuous_id]), (inputs[continuous_id], ()))
 @test equations(sss) == [D(x) ~ u - x]
-sss, = ModelingToolkit._structural_simplify!(deepcopy(tss[2]), (inputs[2], ()))
+sss, = ModelingToolkit._structural_simplify!(deepcopy(tss[1]), (inputs[1], ()))
 @test isempty(equations(sss))
-d = Clock(t, dt)
+d = Clock(dt)
 k = ShiftIndex(d)
-@test observed(sss) == [yd(k + 1) ~ Sample(t, dt)(y); r(k + 1) ~ 1.0;
+@test observed(sss) == [yd(k + 1) ~ Sample(dt)(y); r(k + 1) ~ 1.0;
        ud(k + 1) ~ kp * (r(k + 1) - yd(k + 1))]
 
-d = Clock(t, dt)
+d = Clock(dt)
 # Note that TearingState reorders the equations
-@test eqmap[1] == Continuous()
+@test eqmap[1] == Continuous
 @test eqmap[2] == d
 @test eqmap[3] == d
 @test eqmap[4] == d
-@test eqmap[5] == Continuous()
-@test eqmap[6] == Continuous()
+@test eqmap[5] == Continuous
+@test eqmap[6] == Continuous
 
 @test varmap[yd] == d
 @test varmap[ud] == d
 @test varmap[r] == d
-@test varmap[x] == Continuous()
-@test varmap[y] == Continuous()
-@test varmap[u] == Continuous()
+@test varmap[x] == Continuous
+@test varmap[y] == Continuous
+@test varmap[u] == Continuous
 
 @info "Testing shift normalization"
 dt = 0.1
 @variables x(t) y(t) u(t) yd(t) ud(t)
 @parameters kp
-d = Clock(t, dt)
+d = Clock(dt)
 k = ShiftIndex(d)
 
-eqs = [yd ~ Sample(t, dt)(y)
+eqs = [yd ~ Sample(dt)(y)
        ud ~ kp * yd + ud(k - 2)
 
        # plant (time continuous part)
@@ -170,10 +171,10 @@ eqs = [yd ~ Sample(t, dt)(y)
 
     eqs = [
            # controller (time discrete part `dt=0.1`)
-           yd1 ~ Sample(t, dt)(y)
-           ud1 ~ kp * (Sample(t, dt)(r) - yd1)
-           yd2 ~ Sample(t, dt2)(y)
-           ud2 ~ kp * (Sample(t, dt2)(r) - yd2)
+           yd1 ~ Sample(dt)(y)
+           ud1 ~ kp * (Sample(dt)(r) - yd1)
+           yd2 ~ Sample(dt2)(y)
+           ud2 ~ kp * (Sample(dt2)(r) - yd2)
 
            # plant (time continuous part)
            u ~ Hold(ud1) + Hold(ud2)
@@ -182,8 +183,8 @@ eqs = [yd ~ Sample(t, dt)(y)
     @named sys = ODESystem(eqs, t)
     ci, varmap = infer_clocks(sys)
 
-    d = Clock(t, dt)
-    d2 = Clock(t, dt2)
+    d = Clock(dt)
+    d2 = Clock(dt2)
     #@test get_eq_domain(eqs[1]) == d
     #@test get_eq_domain(eqs[3]) == d2
 
@@ -191,15 +192,15 @@ eqs = [yd ~ Sample(t, dt)(y)
     @test varmap[ud1] == d
     @test varmap[yd2] == d2
     @test varmap[ud2] == d2
-    @test varmap[r] == Continuous()
-    @test varmap[x] == Continuous()
-    @test varmap[y] == Continuous()
-    @test varmap[u] == Continuous()
+    @test varmap[r] == Continuous
+    @test varmap[x] == Continuous
+    @test varmap[y] == Continuous
+    @test varmap[u] == Continuous
 
     @info "test composed systems"
 
     dt = 0.5
-    d = Clock(t, dt)
+    d = Clock(dt)
     k = ShiftIndex(d)
     timevec = 0:0.1:4
 
@@ -239,16 +240,16 @@ eqs = [yd ~ Sample(t, dt)(y)
 
     ci, varmap = infer_clocks(cl)
 
-    @test varmap[f.x] == Clock(t, 0.5)
-    @test varmap[p.x] == Continuous()
-    @test varmap[p.y] == Continuous()
-    @test varmap[c.ud] == Clock(t, 0.5)
-    @test varmap[c.yd] == Clock(t, 0.5)
-    @test varmap[c.y] == Continuous()
-    @test varmap[f.y] == Clock(t, 0.5)
-    @test varmap[f.u] == Clock(t, 0.5)
-    @test varmap[p.u] == Continuous()
-    @test varmap[c.r] == Clock(t, 0.5)
+    @test varmap[f.x] == Clock(0.5)
+    @test varmap[p.x] == Continuous
+    @test varmap[p.y] == Continuous
+    @test varmap[c.ud] == Clock(0.5)
+    @test varmap[c.yd] == Clock(0.5)
+    @test varmap[c.y] == Continuous
+    @test varmap[f.y] == Clock(0.5)
+    @test varmap[f.u] == Clock(0.5)
+    @test varmap[p.u] == Continuous
+    @test varmap[c.r] == Clock(0.5)
 
     ## Multiple clock rates
     @info "Testing multi-rate hybrid system"
@@ -259,10 +260,10 @@ eqs = [yd ~ Sample(t, dt)(y)
 
     eqs = [
            # controller (time discrete part `dt=0.1`)
-           yd1 ~ Sample(t, dt)(y)
+           yd1 ~ Sample(dt)(y)
            ud1 ~ kp * (r - yd1)
            # controller (time discrete part `dt=0.2`)
-           yd2 ~ Sample(t, dt2)(y)
+           yd2 ~ Sample(dt2)(y)
            ud2 ~ kp * (r - yd2)
 
            # plant (time continuous part)
@@ -272,8 +273,8 @@ eqs = [yd ~ Sample(t, dt)(y)
 
     @named cl = ODESystem(eqs, t)
 
-    d = Clock(t, dt)
-    d2 = Clock(t, dt2)
+    d = Clock(dt)
+    d2 = Clock(dt2)
 
     ci, varmap = infer_clocks(cl)
     @test varmap[yd1] == d
@@ -330,8 +331,8 @@ eqs = [yd ~ Sample(t, dt)(y)
     using ModelingToolkitStandardLibrary.Blocks
 
     dt = 0.05
-    d = Clock(t, dt)
-    k = ShiftIndex()
+    d = Clock(dt)
+    k = ShiftIndex(d)
 
     @mtkmodel DiscretePI begin
         @components begin
@@ -361,7 +362,7 @@ eqs = [yd ~ Sample(t, dt)(y)
             output = RealOutput()
         end
         @equations begin
-            output.u ~ Sample(t, dt)(input.u)
+            output.u ~ Sample(dt)(input.u)
         end
     end
 
@@ -473,7 +474,7 @@ eqs = [yd ~ Sample(t, dt)(y)
 
     ## Test continuous clock
 
-    c = ModelingToolkit.SolverStepClock(t)
+    c = ModelingToolkit.SolverStepClock
     k = ShiftIndex(c)
 
     @mtkmodel CounterSys begin

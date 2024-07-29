@@ -825,7 +825,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     # ModelingToolkit.get_tearing_state(sys) !== nothing => Requires structural_simplify first
     if sys isa ODESystem && build_initializeprob &&
        (((implicit_dae || !isempty(missingvars)) &&
-         all(isequal(Continuous()), ci.var_domain) &&
+         all(==(Continuous), ci.var_domain) &&
          ModelingToolkit.get_tearing_state(sys) !== nothing) ||
         !isempty(initialization_equations(sys))) && t !== nothing
         if eltype(u0map) <: Number
@@ -1008,18 +1008,15 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
     inits = []
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, inits, clocks, svs = ModelingToolkit.generate_discrete_affect(
+        affects, clocks = ModelingToolkit.generate_discrete_affect(
             sys, dss...; eval_expression, eval_module)
-        discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
-            if clock isa Clock
-                PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt;
+        discrete_cbs = map(affects, clocks) do affect, clock
+            @match clock begin
+                PeriodicClock(dt, _...) => PeriodicCallback(affect, dt;
                     final_affect = true, initial_affect = true)
-            elseif clock isa SolverStepClock
-                affect = DiscreteSaveAffect(affect, sv)
-                DiscreteCallback(Returns(true), affect,
+                &SolverStepClock => DiscreteCallback(Returns(true), affect,
                     initialize = (c, u, t, integrator) -> affect(integrator))
-            else
-                error("$clock is not a supported clock type.")
+                _ => error("$clock is not a supported clock type.")
             end
         end
         if cbs === nothing
@@ -1031,8 +1028,6 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
         else
             cbs = CallbackSet(cbs, discrete_cbs...)
         end
-    else
-        svs = nothing
     end
     kwargs = filter_kwargs(kwargs)
     pt = something(get_metadata(sys), StandardODEProblem())
@@ -1041,17 +1036,8 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     if cbs !== nothing
         kwargs1 = merge(kwargs1, (callback = cbs,))
     end
-    if svs !== nothing
-        kwargs1 = merge(kwargs1, (disc_saved_values = svs,))
-    end
 
-    prob = ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...)
-    if !isempty(inits)
-        for init in inits
-            # init(prob.u0, prob.p, tspan[1])
-        end
-    end
-    prob
+    return ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...)
 end
 get_callback(prob::ODEProblem) = prob.kwargs[:callback]
 
@@ -1124,14 +1110,15 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     u0 = h(p, tspan[1])
     cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, clocks, svs = ModelingToolkit.generate_discrete_affect(
+        affects, clocks = ModelingToolkit.generate_discrete_affect(
             sys, dss...; eval_expression, eval_module)
-        discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
-            if clock isa Clock
-                PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt;
+        discrete_cbs = map(affects, clocks) do affect, clock
+            @match clock begin
+                PeriodicClock(dt, _...) => PeriodicCallback(affect, dt;
                     final_affect = true, initial_affect = true)
-            else
-                error("$clock is not a supported clock type.")
+                &SolverStepClock => DiscreteCallback(Returns(true), affect,
+                    initialize = (c, u, t, integrator) -> affect(integrator))
+                _ => error("$clock is not a supported clock type.")
             end
         end
         if cbs === nothing
@@ -1186,14 +1173,15 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     u0 = h(p, tspan[1])
     cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        affects, clocks, svs = ModelingToolkit.generate_discrete_affect(
+        affects, clocks = ModelingToolkit.generate_discrete_affect(
             sys, dss...; eval_expression, eval_module)
-        discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
-            if clock isa Clock
-                PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt;
+        discrete_cbs = map(affects, clocks) do affect, clock
+            @match clock begin
+                PeriodicClock(dt, _...) => PeriodicCallback(affect, dt;
                     final_affect = true, initial_affect = true)
-            else
-                error("$clock is not a supported clock type.")
+                &SolverStepClock => DiscreteCallback(Returns(true), affect,
+                    initialize = (c, u, t, integrator) -> affect(integrator))
+                _ => error("$clock is not a supported clock type.")
             end
         end
         if cbs === nothing

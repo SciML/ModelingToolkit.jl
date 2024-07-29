@@ -2,6 +2,7 @@ using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D, MTKParameters
 using SymbolicIndexingInterface
 using SciMLStructures: SciMLStructures, canonicalize, Tunable, Discrete, Constants
+using StaticArrays: SizedVector
 using OrdinaryDiffEq
 using ForwardDiff
 using JET
@@ -307,3 +308,32 @@ end
     newoprob = remake(oprob_scal_scal; p = ps_vec)
     @test newoprob.ps[k] == [2.0, 3.0, 4.0, 5.0]
 end
+
+# Parameter timeseries
+ps = MTKParameters(([1.0, 1.0],), SizedVector{2}([([0.0, 0.0],), ([0.0, 0.0],)]),
+    (), (), (), nothing, nothing)
+with_updated_parameter_timeseries_values(
+    sys, ps, 1 => ModelingToolkit.NestedGetIndex(([5.0, 10.0],)))
+@test ps.discrete[1][1] == [5.0, 10.0]
+with_updated_parameter_timeseries_values(
+    sys, ps, 1 => ModelingToolkit.NestedGetIndex(([3.0, 30.0],)),
+    2 => ModelingToolkit.NestedGetIndex(([4.0, 40.0],)))
+@test ps.discrete[1][1] == [3.0, 30.0]
+@test ps.discrete[2][1] == [4.0, 40.0]
+@test SciMLBase.get_saveable_values(ps, 1).x == ps.discrete[1]
+
+# With multiple types and clocks
+ps = MTKParameters(
+    (), SizedVector{2}([([1.0, 2.0, 3.0], falses(1)), ([4.0, 5.0, 6.0], falses(0))]),
+    (), (), (), nothing, nothing)
+@test SciMLBase.get_saveable_values(ps, 1).x isa Tuple{Vector{Float64}, BitVector}
+tsidx1 = 1
+tsidx2 = 2
+@test length(ps.discrete[tsidx1][1]) == 3
+@test length(ps.discrete[tsidx1][2]) == 1
+@test length(ps.discrete[tsidx2][1]) == 3
+@test length(ps.discrete[tsidx2][2]) == 0
+with_updated_parameter_timeseries_values(
+    sys, ps, tsidx1 => ModelingToolkit.NestedGetIndex(([10.0, 11.0, 12.0], [false])))
+@test ps.discrete[tsidx1][1] == [10.0, 11.0, 12.0]
+@test ps.discrete[tsidx1][2][] == false

@@ -387,6 +387,7 @@ function build_explicit_observed_function(sys, ts;
         drop_expr = drop_expr,
         ps = full_parameters(sys),
         return_inplace = false,
+        param_only = false,
         op = Operator,
         throw = true)
     if (isscalar = symbolic_type(ts) !== NotSymbolic())
@@ -399,7 +400,16 @@ function build_explicit_observed_function(sys, ts;
     ivs = independent_variables(sys)
     dep_vars = scalarize(setdiff(vars, ivs))
 
-    obs = observed(sys)
+    obs = param_only ? Equation[] : observed(sys)
+    if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
+        # each subsystem is topologically sorted independently. We can append the
+        # equations to override the `lhs ~ 0` equations in `observed(sys)`
+        syss, _, continuous_id, _... = dss
+        for (i, subsys) in enumerate(syss)
+            i == continuous_id && continue
+            append!(obs, observed(subsys))
+        end
+    end
 
     cs = collect_constants(obs)
     if !isempty(cs) > 0
@@ -407,8 +417,9 @@ function build_explicit_observed_function(sys, ts;
         obs = map(x -> x.lhs ~ substitute(x.rhs, cmap), obs)
     end
 
-    sts = Set(unknowns(sys))
-    sts = union(sts,
+    sts = param_only ? Set() : Set(unknowns(sys))
+    sts = param_only ? Set() :
+          union(sts,
         Set(arguments(st)[1] for st in sts if iscall(st) && operation(st) === getindex))
 
     observed_idx = Dict(x.lhs => i for (i, x) in enumerate(obs))
@@ -420,7 +431,8 @@ function build_explicit_observed_function(sys, ts;
         Set(arguments(p)[1]
         for p in param_set_ns if iscall(p) && operation(p) === getindex))
     namespaced_to_obs = Dict(unknowns(sys, x.lhs) => x.lhs for x in obs)
-    namespaced_to_sts = Dict(unknowns(sys, x) => x for x in unknowns(sys))
+    namespaced_to_sts = param_only ? Dict() :
+                        Dict(unknowns(sys, x) => x for x in unknowns(sys))
 
     # FIXME: This is a rather rough estimate of dependencies. We assume
     # the expression depends on everything before the `maxidx`.
@@ -485,11 +497,11 @@ function build_explicit_observed_function(sys, ts;
     end
     dvs = DestructuredArgs(unknowns(sys), inbounds = !checkbounds)
     if inputs === nothing
-        args = [dvs, ps..., ivs...]
+        args = param_only ? [ps..., ivs...] : [dvs, ps..., ivs...]
     else
         inputs = unwrap.(inputs)
         ipts = DestructuredArgs(inputs, inbounds = !checkbounds)
-        args = [dvs, ipts, ps..., ivs...]
+        args = param_only ? [ipts, ps..., ivs...] : [dvs, ipts, ps..., ivs...]
     end
     pre = get_postprocess_fbody(sys)
 

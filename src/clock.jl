@@ -1,13 +1,26 @@
-abstract type TimeDomain end
-abstract type AbstractDiscrete <: TimeDomain end
+module InferredClock
 
-Base.Broadcast.broadcastable(d::TimeDomain) = Ref(d)
+export InferredTimeDomain
 
-struct Inferred <: TimeDomain end
-struct InferredDiscrete <: AbstractDiscrete end
-struct Continuous <: TimeDomain end
+using Expronicon.ADT: @adt, @match
+using SciMLBase: TimeDomain
 
-Symbolics.option_to_metadata_type(::Val{:timedomain}) = TimeDomain
+@adt InferredTimeDomain begin
+    Inferred
+    InferredDiscrete
+end
+
+Base.Broadcast.broadcastable(x::InferredTimeDomain) = Ref(x)
+
+end
+
+using .InferredClock
+
+struct VariableTimeDomain end
+Symbolics.option_to_metadata_type(::Val{:timedomain}) = VariableTimeDomain
+
+is_concrete_time_domain(::TimeDomain) = true
+is_concrete_time_domain(_) = false
 
 """
     is_continuous_domain(x)
@@ -16,7 +29,7 @@ true if `x` contains only continuous-domain signals.
 See also [`has_continuous_domain`](@ref)
 """
 function is_continuous_domain(x)
-    issym(x) && return getmetadata(x, TimeDomain, false) isa Continuous
+    issym(x) && return getmetadata(x, VariableTimeDomain, false) == Continuous
     !has_discrete_domain(x) && has_continuous_domain(x)
 end
 
@@ -24,7 +37,7 @@ function get_time_domain(x)
     if iscall(x) && operation(x) isa Operator
         output_timedomain(x)
     else
-        getmetadata(x, TimeDomain, nothing)
+        getmetadata(x, VariableTimeDomain, nothing)
     end
 end
 get_time_domain(x::Num) = get_time_domain(value(x))
@@ -37,14 +50,14 @@ Determine if variable `x` has a time-domain attributed to it.
 function has_time_domain(x::Symbolic)
     # getmetadata(x, Continuous, nothing) !== nothing ||
     # getmetadata(x, Discrete,   nothing) !== nothing
-    getmetadata(x, TimeDomain, nothing) !== nothing
+    getmetadata(x, VariableTimeDomain, nothing) !== nothing
 end
 has_time_domain(x::Num) = has_time_domain(value(x))
 has_time_domain(x) = false
 
 for op in [Differential]
-    @eval input_timedomain(::$op, arg = nothing) = Continuous()
-    @eval output_timedomain(::$op, arg = nothing) = Continuous()
+    @eval input_timedomain(::$op, arg = nothing) = Continuous
+    @eval output_timedomain(::$op, arg = nothing) = Continuous
 end
 
 """
@@ -83,10 +96,15 @@ true if `x` contains only discrete-domain signals.
 See also [`has_discrete_domain`](@ref)
 """
 function is_discrete_domain(x)
-    if hasmetadata(x, TimeDomain) || issym(x)
-        return getmetadata(x, TimeDomain, false) isa AbstractDiscrete
+    if hasmetadata(x, VariableTimeDomain) || issym(x)
+        return is_discrete_time_domain(getmetadata(x, VariableTimeDomain, false))
     end
     !has_discrete_domain(x) && has_continuous_domain(x)
+end
+
+sampletime(c) = @match c begin
+    PeriodicClock(dt, _...) => dt
+    _ => nothing
 end
 
 struct ClockInferenceException <: Exception
@@ -97,57 +115,4 @@ function Base.showerror(io::IO, cie::ClockInferenceException)
     print(io, "ClockInferenceException: ", cie.msg)
 end
 
-abstract type AbstractClock <: AbstractDiscrete end
-
-"""
-    Clock <: AbstractClock
-    Clock([t]; dt)
-
-The default periodic clock with independent variables `t` and tick interval `dt`.
-If `dt` is left unspecified, it will be inferred (if possible).
-"""
-struct Clock <: AbstractClock
-    "Independent variable"
-    t::Union{Nothing, Symbolic}
-    "Period"
-    dt::Union{Nothing, Float64}
-    Clock(t::Union{Num, Symbolic}, dt = nothing) = new(value(t), dt)
-    Clock(t::Nothing, dt = nothing) = new(t, dt)
-end
-Clock(dt::Real) = Clock(nothing, dt)
-Clock() = Clock(nothing, nothing)
-
-sampletime(c) = isdefined(c, :dt) ? c.dt : nothing
-Base.hash(c::Clock, seed::UInt) = hash(c.dt, seed ⊻ 0x953d7a9a18874b90)
-function Base.:(==)(c1::Clock, c2::Clock)
-    ((c1.t === nothing || c2.t === nothing) || isequal(c1.t, c2.t)) && c1.dt == c2.dt
-end
-
-is_concrete_time_domain(x) = x isa Union{AbstractClock, Continuous}
-
-"""
-    SolverStepClock <: AbstractClock
-    SolverStepClock()
-    SolverStepClock(t)
-
-A clock that ticks at each solver step (sometimes referred to as "continuous sample time"). This clock **does generally not have equidistant tick intervals**, instead, the tick interval depends on the adaptive step-size selection of the continuous solver, as well as any continuous event handling. If adaptivity of the solver is turned off and there are no continuous events, the tick interval will be given by the fixed solver time step `dt`.
-
-Due to possibly non-equidistant tick intervals, this clock should typically not be used with discrete-time systems that assume a fixed sample time, such as PID controllers and digital filters.
-"""
-struct SolverStepClock <: AbstractClock
-    "Independent variable"
-    t::Union{Nothing, Symbolic}
-    "Period"
-    SolverStepClock(t::Union{Num, Symbolic}) = new(value(t))
-end
-SolverStepClock() = SolverStepClock(nothing)
-
-Base.hash(c::SolverStepClock, seed::UInt) = seed ⊻ 0x953d7b9a18874b91
-function Base.:(==)(c1::SolverStepClock, c2::SolverStepClock)
-    ((c1.t === nothing || c2.t === nothing) || isequal(c1.t, c2.t))
-end
-
-struct IntegerSequence <: AbstractClock
-    t::Union{Nothing, Symbolic}
-    IntegerSequence(t::Union{Num, Symbolic}) = new(value(t))
-end
+struct IntegerSequence end

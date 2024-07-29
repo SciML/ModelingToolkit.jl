@@ -370,7 +370,9 @@ function vars(exprs::Symbolic; op = Differential)
 end
 vars(exprs::Num; op = Differential) = vars(unwrap(exprs); op)
 vars(exprs::Symbolics.Arr; op = Differential) = vars(unwrap(exprs); op)
-vars(exprs; op = Differential) = foldl((x, y) -> vars!(x, y; op = op), exprs; init = Set())
+function vars(exprs; op = Differential)
+    foldl((x, y) -> vars!(x, unwrap(y); op = op), exprs; init = Set())
+end
 vars(eq::Equation; op = Differential) = vars!(Set(), eq; op = op)
 function vars!(vars, eq::Equation; op = Differential)
     (vars!(vars, eq.lhs; op = op); vars!(vars, eq.rhs; op = op); vars)

@@ -16,7 +16,7 @@ A clock can be seen as an *event source*, i.e., when the clock ticks, an event i
   - [`Hold`](@ref)
   - [`ShiftIndex`](@ref)
 
-When a continuous-time variable `x` is sampled using `xd = Sample(x, dt)`, the result is a discrete-time variable `xd` that is defined and updated whenever the clock ticks. `xd` is *only defined when the clock ticks*, which it does with an interval of `dt`. If `dt` is unspecified, the tick rate of the clock associated with `xd` is inferred from the context in which `xd` appears. Any variable taking part in the same equation as `xd` is inferred to belong to the same *discrete partition* as `xd`, i.e., belonging to the same clock. A system may contain multiple different discrete-time partitions, each with a unique clock. This allows for modeling of multi-rate systems and discrete-time processes located on different computers etc.
+When a continuous-time variable `x` is sampled using `xd = Sample(dt)(x)`, the result is a discrete-time variable `xd` that is defined and updated whenever the clock ticks. `xd` is *only defined when the clock ticks*, which it does with an interval of `dt`. If `dt` is unspecified, the tick rate of the clock associated with `xd` is inferred from the context in which `xd` appears. Any variable taking part in the same equation as `xd` is inferred to belong to the same *discrete partition* as `xd`, i.e., belonging to the same clock. A system may contain multiple different discrete-time partitions, each with a unique clock. This allows for modeling of multi-rate systems and discrete-time processes located on different computers etc.
 
 To make a discrete-time variable available to the continuous partition, the [`Hold`](@ref) operator is used. `xc = Hold(xd)` creates a continuous-time variable `xc` that is updated whenever the clock associated with `xd` ticks, and holds its value constant between ticks.
 
@@ -34,7 +34,7 @@ using ModelingToolkit
 using ModelingToolkit: t_nounits as t
 @variables x(t) y(t) u(t)
 dt = 0.1                # Sample interval
-clock = Clock(t, dt)    # A periodic clock with tick rate dt
+clock = Clock(dt)    # A periodic clock with tick rate dt
 k = ShiftIndex(clock)
 
 eqs = [
@@ -99,7 +99,7 @@ may thus be modeled as
 ```julia
 t = ModelingToolkit.t_nounits
 @variables y(t) [description = "Output"] u(t) [description = "Input"]
-k = ShiftIndex(Clock(t, dt))
+k = ShiftIndex(Clock(dt))
 eqs = [
     a2 * y(k) + a1 * y(k - 1) + a0 * y(k - 2) ~ b2 * u(k) + b1 * u(k - 1) + b0 * u(k - 2)
 ]
@@ -128,10 +128,10 @@ requires specification of the initial condition for both `x(k-1)` and `x(k-2)`.
 Multi-rate systems are easy to model using multiple different clocks. The following set of equations is valid, and defines *two different discrete-time partitions*, each with its own clock:
 
 ```julia
-yd1 ~ Sample(t, dt1)(y)
-ud1 ~ kp * (Sample(t, dt1)(r) - yd1)
-yd2 ~ Sample(t, dt2)(y)
-ud2 ~ kp * (Sample(t, dt2)(r) - yd2)
+yd1 ~ Sample(dt1)(y)
+ud1 ~ kp * (Sample(dt1)(r) - yd1)
+yd2 ~ Sample(dt2)(y)
+ud2 ~ kp * (Sample(dt2)(r) - yd2)
 ```
 
 `yd1` and `ud1` belong to the same clock which ticks with an interval of `dt1`, while `yd2` and `ud2` belong to a different clock which ticks with an interval of `dt2`. The two clocks are *not synchronized*, i.e., they are not *guaranteed* to tick at the same point in time, even if one tick interval is a rational multiple of the other. Mechanisms for synchronization of clocks are not yet implemented.
@@ -148,7 +148,7 @@ using ModelingToolkit: t_nounits as t
 using ModelingToolkit: D_nounits as D
 dt = 0.5 # Sample interval
 @variables r(t)
-clock = Clock(t, dt)
+clock = Clock(dt)
 k = ShiftIndex(clock)
 
 function plant(; name)

@@ -446,8 +446,9 @@ end
 function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
     sym = unwrap(sym)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        return is_parameter(ic, sym) ||
-               iscall(sym) && operation(sym) === getindex &&
+        return sym isa ParameterIndex || is_parameter(ic, sym) ||
+               iscall(sym) &&
+               operation(sym) === getindex &&
                is_parameter(ic, first(arguments(sym)))
     end
     if unwrap(sym) isa Int
@@ -461,21 +462,34 @@ function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Symbol
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         return is_parameter(ic, sym)
     end
-    return any(isequal(sym), getname.(parameter_symbols(sys))) ||
+
+    named_parameters = [getname(sym) for sym in parameter_symbols(sys) if hasname(sym)]
+    return any(isequal(sym), named_parameters) ||
            count(NAMESPACE_SEPARATOR, string(sym)) == 1 &&
            count(isequal(sym),
-        Symbol.(nameof(sys), NAMESPACE_SEPARATOR_SYMBOL, getname.(parameter_symbols(sys)))) ==
-           1
+        Symbol.(nameof(sys), NAMESPACE_SEPARATOR_SYMBOL, named_parameters)) == 1
 end
 
 function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
     sym = unwrap(sym)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        return if (idx = parameter_index(ic, sym)) !== nothing
-            idx
+        return if sym isa ParameterIndex
+            sym
+        elseif (idx = parameter_index(ic, sym)) !== nothing
+            if idx.portion isa SciMLStructures.Discrete && idx.idx[2] == idx.idx[3] == 0
+                return nothing
+            else
+                idx
+            end
         elseif iscall(sym) && operation(sym) === getindex &&
                (idx = parameter_index(ic, first(arguments(sym)))) !== nothing
-            ParameterIndex(idx.portion, (idx.idx..., arguments(sym)[(begin + 1):end]...))
+            if idx.portion isa SciMLStructures.Discrete &&
+               idx.idx[2] == idx.idx[3] == nothing
+                return nothing
+            else
+                ParameterIndex(
+                    idx.portion, (idx.idx..., arguments(sym)[(begin + 1):end]...))
+            end
         else
             nothing
         end
@@ -493,7 +507,13 @@ end
 
 function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym::Symbol)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        return parameter_index(ic, sym)
+        idx = parameter_index(ic, sym)
+        if idx === nothing ||
+           idx.portion isa SciMLStructures.Discrete && idx.idx[2] == idx.idx[3] == 0
+            return nothing
+        else
+            return idx
+        end
     end
     idx = findfirst(isequal(sym), getname.(parameter_symbols(sys)))
     if idx !== nothing
@@ -504,6 +524,111 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym::Sym
                 nameof(sys), NAMESPACE_SEPARATOR_SYMBOL, getname.(parameter_symbols(sys))))
     end
     return nothing
+end
+
+function SymbolicIndexingInterface.is_timeseries_parameter(sys::AbstractSystem, sym)
+    is_time_dependent(sys) || return false
+    has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing || return false
+    is_timeseries_parameter(ic, sym)
+end
+
+function SymbolicIndexingInterface.timeseries_parameter_index(sys::AbstractSystem, sym)
+    is_time_dependent(sys) || return nothing
+    has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing || return nothing
+    timeseries_parameter_index(ic, sym)
+end
+
+function SymbolicIndexingInterface.parameter_observed(sys::AbstractSystem, sym)
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+        rawobs = build_explicit_observed_function(
+            sys, sym; param_only = true, return_inplace = true)
+        if rawobs isa Tuple
+            if is_time_dependent(sys)
+                obsfn = let oop = rawobs[1], iip = rawobs[2]
+                    f1a(p::MTKParameters, t) = oop(p..., t)
+                    f1a(out, p::MTKParameters, t) = iip(out, p..., t)
+                end
+            else
+                obsfn = let oop = rawobs[1], iip = rawobs[2]
+                    f1b(p::MTKParameters) = oop(p...)
+                    f1b(out, p::MTKParameters) = iip(out, p...)
+                end
+            end
+        else
+            if is_time_dependent(sys)
+                obsfn = let rawobs = rawobs
+                    f2a(p::MTKParameters, t) = rawobs(p..., t)
+                end
+            else
+                obsfn = let rawobs = rawobs
+                    f2b(p::MTKParameters) = rawobs(p...)
+                end
+            end
+        end
+    else
+        obsfn = build_explicit_observed_function(sys, sym; param_only = true)
+    end
+    return obsfn
+end
+
+function has_observed_with_lhs(sys, sym)
+    has_observed(sys) || return false
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+        return any(isequal(sym), ic.observed_syms)
+    else
+        return any(isequal(sym), [eq.lhs for eq in observed(sys)])
+    end
+end
+
+function _all_ts_idxs!(ts_idxs, ::NotSymbolic, sys, sym)
+    if is_variable(sys, sym) || is_independent_variable(sys, sym)
+        push!(ts_idxs, ContinuousTimeseries())
+    elseif is_timeseries_parameter(sys, sym)
+        push!(ts_idxs, timeseries_parameter_index(sys, sym).timeseries_idx)
+    end
+end
+# Need this to avoid ambiguity with the array case
+for traitT in [
+    ScalarSymbolic,
+    ArraySymbolic
+]
+    @eval function _all_ts_idxs!(ts_idxs, ::$traitT, sys, sym)
+        allsyms = vars(sym; op = Symbolics.Operator)
+        for s in allsyms
+            s = unwrap(s)
+            if is_variable(sys, s) || is_independent_variable(sys, s) ||
+               has_observed_with_lhs(sys, s)
+                push!(ts_idxs, ContinuousTimeseries())
+            elseif is_timeseries_parameter(sys, s)
+                push!(ts_idxs, timeseries_parameter_index(sys, s).timeseries_idx)
+            end
+        end
+    end
+end
+function _all_ts_idxs!(ts_idxs, ::ScalarSymbolic, sys, sym::Symbol)
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+        return _all_ts_idxs!(ts_idxs, sys, ic.symbol_to_variable[sym])
+    elseif is_variable(sys, sym) || is_independent_variable(sys, sym) ||
+           any(isequal(sym), [getname(eq.lhs) for eq in observed(sys)])
+        push!(ts_idxs, ContinuousTimeseries())
+    elseif is_timeseries_parameter(sys, sym)
+        push!(ts_idxs, timeseries_parameter_index(sys, s).timeseries_idx)
+    end
+end
+function _all_ts_idxs!(ts_idxs, ::NotSymbolic, sys, sym::AbstractArray)
+    for s in sym
+        _all_ts_idxs!(ts_idxs, sys, s)
+    end
+end
+_all_ts_idxs!(ts_idxs, sys, sym) = _all_ts_idxs!(ts_idxs, symbolic_type(sym), sys, sym)
+
+function SymbolicIndexingInterface.get_all_timeseries_indexes(sys::AbstractSystem, sym)
+    if !is_time_dependent(sys)
+        return Set()
+    end
+    ts_idxs = Set()
+    _all_ts_idxs!(ts_idxs, sys, sym)
+    return ts_idxs
 end
 
 function SymbolicIndexingInterface.parameter_symbols(sys::AbstractSystem)
@@ -523,7 +648,7 @@ function SymbolicIndexingInterface.independent_variable_symbols(sys::AbstractSys
 end
 
 function SymbolicIndexingInterface.is_observed(sys::AbstractSystem, sym)
-    return !is_variable(sys, sym) && !is_parameter(sys, sym) &&
+    return !is_variable(sys, sym) && parameter_index(sys, sym) === nothing &&
            !is_independent_variable(sys, sym) && symbolic_type(sym) != NotSymbolic()
 end
 
@@ -562,6 +687,8 @@ function SymbolicIndexingInterface.observed(
         return let _fn = _fn
             fn2(u, p) = _fn(u, p)
             fn2(u, p::MTKParameters) = _fn(u, p...)
+            fn2(::Nothing, p) = _fn([], p)
+            fn2(::Nothing, p::MTKParameters) = _fn([], p...)
             fn2
         end
     end
