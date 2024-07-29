@@ -16,7 +16,7 @@ Pkg.add("ModelingToolkit")
 ## Copy-Pastable Simplified Example
 
 A much deeper tutorial with forcing functions and sparse Jacobians is below.
-But if you want to just see some code and run, here's an example:
+But if you want to just see some code and run it, here's an example:
 
 ```@example first-mtkmodel
 using ModelingToolkit
@@ -24,10 +24,10 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @mtkmodel FOL begin
     @parameters begin
-        τ # parameters
+        τ = 3.0 # parameters
     end
     @variables begin
-        x(t) # dependent variables
+        x(t) = 0.0 # dependent variables
     end
     @equations begin
         D(x) ~ (1 - x) / τ
@@ -36,7 +36,7 @@ end
 
 using DifferentialEquations: solve
 @mtkbuild fol = FOL()
-prob = ODEProblem(fol, [fol.x => 0.0], (0.0, 10.0), [fol.τ => 3.0])
+prob = ODEProblem(fol, [], (0.0, 10.0), [])
 sol = solve(prob)
 
 using Plots
@@ -59,7 +59,7 @@ variable, ``f(t)`` is an external forcing function, and ``\tau`` is a
 parameter.
 In MTK, this system can be modelled as follows. For simplicity, we
 first set the forcing function to a time-independent value ``1``. And the
-independent variable ``t`` is automatically added by ``@mtkmodel``.
+independent variable ``t`` is automatically added by `@mtkmodel`.
 
 ```@example ode2
 using ModelingToolkit
@@ -67,10 +67,10 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @mtkmodel FOL begin
     @parameters begin
-        τ # parameters
+        τ = 3.0 # parameters and their values
     end
     @variables begin
-        x(t) # dependent variables
+        x(t) = 0.0 # dependent variables and their initial conditions
     end
     @equations begin
         D(x) ~ (1 - x) / τ
@@ -90,13 +90,12 @@ After construction of the ODE, you can solve it using [DifferentialEquations.jl]
 using DifferentialEquations
 using Plots
 
-prob = ODEProblem(fol, [fol.x => 0.0], (0.0, 10.0), [fol.τ => 3.0])
+prob = ODEProblem(fol, [], (0.0, 10.0), [])
 plot(solve(prob))
 ```
 
-The initial unknown and the parameter values are specified using a mapping
-from the actual symbolic elements to their values, represented as an array
-of `Pair`s, which are constructed using the `=>` operator.
+The parameter values are determined using the right hand side of the expressions in the `@parameters` block,
+and similarly initial conditions are determined using the right hand side of the expressions in the `@variables` block.
 
 ## Algebraic relations and structural simplification
 
@@ -109,10 +108,10 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @mtkmodel FOL begin
     @parameters begin
-        τ # parameters
+        τ = 3.0 # parameters and their values
     end
     @variables begin
-        x(t) # dependent variables
+        x(t) = 0.0 # dependent variables and their initial conditions
         RHS(t)
     end
     @equations begin
@@ -124,7 +123,8 @@ end
 @mtkbuild fol = FOL()
 ```
 
-You can look at the equations by using the command `equations`:
+If you copy this block of code to your REPL, you will not see the above LaTeX equations.
+Instead, you can look at the equations by using the `equations` function:
 
 ```@example ode2
 equations(fol)
@@ -132,9 +132,10 @@ equations(fol)
 
 Notice that there is only one equation in this system, `Differential(t)(x(t)) ~ RHS(t)`.
 The other equation was removed from the system and was transformed into an `observed`
-variable. Observed equations are variables which can be computed on-demand but are not
-necessary for the solution of the system, and thus MTK tracks it separately. One can
-check the observed equations via the `observed` function:
+variable. Observed equations are variables that can be computed on-demand but are not
+necessary for the solution of the system, and thus MTK tracks them separately.
+For this reason, we also did not need to specify an initial condition for `RHS`.
+You can check the observed equations via the `observed` function:
 
 ```@example ode2
 observed(fol)
@@ -144,22 +145,18 @@ For more information on this process, see [Observables and Variable Elimination]
 
 MTK still knows how to calculate them out of the information available
 in a simulation result. The intermediate variable `RHS` therefore can be plotted
-along with the unknown variable. Note that this has to be requested explicitly
-like as follows:
+along with the unknown variable. Note that this has to be requested explicitly:
 
 ```@example ode2
-prob = ODEProblem(fol,
-    [fol.x => 0.0],
-    (0.0, 10.0),
-    [fol.τ => 3.0])
+prob = ODEProblem(fol, [], (0.0, 10.0), [])
 sol = solve(prob)
-plot(sol, vars = [fol.x, fol.RHS])
+plot(sol, idxs = [fol.x, fol.RHS])
 ```
 
 ## Named Indexing of Solutions
 
-Note that the indexing of the solution similarly works via the names, and so to get
-the time series for `x`, one would do:
+Note that the indexing of the solution also works via the symbol, and so to get
+the time series for `x`, you would do:
 
 ```@example ode2
 sol[fol.x]
@@ -171,7 +168,7 @@ or to get the second value in the time series for `x`:
 sol[fol.x, 2]
 ```
 
-Similarly, the time series for `RHS` can be retrieved using the same indexing:
+Similarly, the time series for `RHS` can be retrieved using the same symbolic indexing:
 
 ```@example ode2
 sol[fol.RHS]
@@ -185,10 +182,10 @@ Obviously, one could use an explicit, symbolic function of time:
 ```@example ode2
 @mtkmodel FOL begin
     @parameters begin
-        τ # parameters
+        τ = 3.0 # parameters and their values
     end
     @variables begin
-        x(t) # dependent variables
+        x(t) = 0.0 # dependent variables and their initial conditions
         f(t)
     end
     @equations begin
@@ -197,16 +194,16 @@ Obviously, one could use an explicit, symbolic function of time:
     end
 end
 
-@named fol_variable_f = FOL()
+@mtkbuild fol_variable_f = FOL()
 ```
 
-But often this function might not be available in an explicit form.
-Instead the function might be provided as time-series data.
+However, this function might not be available in an explicit form.
+Instead, the function might be provided as time-series data.
 MTK handles this situation by allowing us to “register” arbitrary Julia functions,
-which are excluded from symbolic transformations, and thus used as-is.
-So, you could, for example, interpolate given the time-series using
+which are excluded from symbolic transformations and thus used as-is.
+For example, you could interpolate given the time-series using
 [DataInterpolations.jl](https://github.com/PumasAI/DataInterpolations.jl). Here,
-we illustrate this option by a simple lookup ("zero-order hold") of a vector
+we illustrate this option with a simple lookup ("zero-order hold") of a vector
 of random values:
 
 ```@example ode2
@@ -216,14 +213,11 @@ f_fun(t) = t >= 10 ? value_vector[end] : value_vector[Int(floor(t)) + 1]
 
 @mtkmodel FOLExternalFunction begin
     @parameters begin
-        τ # parameters
+        τ = 0.75 # parameters and their values
     end
     @variables begin
-        x(t) # dependent variables
+        x(t) = 0.0 # dependent variables and their initial conditions
         f(t)
-    end
-    @structural_parameters begin
-        h = 1
     end
     @equations begin
         f ~ f_fun(t)
@@ -232,68 +226,60 @@ f_fun(t) = t >= 10 ? value_vector[end] : value_vector[Int(floor(t)) + 1]
 end
 
 @mtkbuild fol_external_f = FOLExternalFunction()
-prob = ODEProblem(fol_external_f,
-    [fol_external_f.x => 0.0],
-    (0.0, 10.0),
-    [fol_external_f.τ => 0.75])
+```
 
+```@example ode2
+prob = ODEProblem(fol_external_f, [], (0.0, 10.0), [])
 sol = solve(prob)
-plot(sol, vars = [fol_external_f.x, fol_external_f.f])
+plot(sol, idxs = [fol_external_f.x, fol_external_f.f])
 ```
 
 ## Building component-based, hierarchical models
 
 Working with simple one-equation systems is already fun, but composing more
-complex systems from simple ones is even more fun. Best practice for such a
-“modeling framework” could be to use factory functions for model components:
+complex systems from simple ones is even more fun. The best practice for such a
+“modeling framework” is to use the `@components` block in the `@mtkmodel` macro:
 
 ```@example ode2
-function fol_factory(separate = false; name)
-    @parameters τ
-    @variables x(t) f(t) RHS(t)
-
-    eqs = separate ? [RHS ~ (f - x) / τ,
-        D(x) ~ RHS] :
-          D(x) ~ (f - x) / τ
-
-    ODESystem(eqs, t; name)
+@mtkmodel FOLUnconnectedFunction begin
+    @parameters begin
+        τ # parameters
+    end
+    @variables begin
+        x(t) # dependent variables
+        f(t)
+        RHS(t)
+    end
+    @equations begin
+        RHS ~ f
+        D(x) ~ (RHS - x) / τ
+    end
 end
+@mtkmodel FOLConnected begin
+    @components begin
+        fol_1 = FOLUnconnectedFunction(; τ = 2.0, x = -0.5)
+        fol_2 = FOLUnconnectedFunction(; τ = 4.0, x = 1.0)
+    end
+    @equations begin
+        fol_1.f ~ 1.5
+        fol_2.f ~ fol_1.x
+    end
+end
+@mtkbuild connected = FOLConnected()
 ```
 
-Such a factory can then be used to instantiate the same component multiple times,
-but allows for customization:
-
-```@example ode2
-@named fol_1 = fol_factory()
-@named fol_2 = fol_factory(true) # has observable RHS
-```
-
-The `@named` macro rewrites `fol_2 = fol_factory(true)` into `fol_2 = fol_factory(true,:fol_2)`.
-Now, these two components can be used as subsystems of a parent system, i.e.
-one level higher in the model hierarchy. The connections between the components
-again are just algebraic relations:
-
-```@example ode2
-connections = [fol_1.f ~ 1.5,
-    fol_2.f ~ fol_1.x]
-
-connected = compose(ODESystem(connections, t, name = :connected), fol_1, fol_2)
-```
+Here the total model consists of two of the same submodels (components),
+but with a different input function, parameter values and initial conditions.
+The first model has a constant input, and the second model uses the state `x` of the first system as an input.
+To avoid having to type the same differential equation multiple times,
+we define the submodel in a separate `@mtkmodel`.
+We then reuse this submodel twice in the total model `@components` block.
+The inputs of two submodels then still have to be specified in the `@equations` block.
 
 All equations, variables, and parameters are collected, but the structure of the
 hierarchical model is still preserved. This means you can still get information about
 `fol_1` by addressing it by `connected.fol_1`, or its parameter by
-`connected.fol_1.τ`. Before simulation, we again eliminate the algebraic
-variables and connection equations from the system using structural
-simplification:
-
-```@example ode2
-connected_simp = structural_simplify(connected)
-```
-
-```@example ode2
-full_equations(connected_simp)
-```
+`connected.fol_1.τ`.
 
 As expected, only the two equations with the derivatives of unknowns remain,
 as if you had manually eliminated as many variables as possible from the equations.
@@ -303,62 +289,11 @@ initial unknown and the parameter values can be specified accordingly when
 building the `ODEProblem`:
 
 ```@example ode2
-u0 = [fol_1.x => -0.5,
-    fol_2.x => 1.0]
-
-p = [fol_1.τ => 2.0,
-    fol_2.τ => 4.0]
-
-prob = ODEProblem(connected_simp, u0, (0.0, 10.0), p)
+prob = ODEProblem(connected, [], (0.0, 10.0), [])
 plot(solve(prob))
 ```
 
 More on this topic may be found in [Composing Models and Building Reusable Components](@ref acausal).
-
-## Default Initial Condition
-
-It is often a good idea to specify reasonable values for the initial value of unknowns and the
-parameters of a model component. Then, these do not have to be explicitly specified when constructing the `ODEProblem`.
-
-```@example ode2
-@mtkmodel UnitstepFOLFactory begin
-    @parameters begin
-        τ = 1.0
-    end
-    @variables begin
-        x(t) = 0.0
-    end
-    @equations begin
-        D(x) ~ (1 - x) / τ
-    end
-end
-```
-
-While defining the model `UnitstepFOLFactory`, an initial condition of 0.0 is assigned to `x(t)` and 1.0 to `τ`.
-Additionally, these initial conditions can be modified while creating instances of `UnitstepFOLFactory` by passing arguments.
-
-```@example ode2
-@mtkbuild fol = UnitstepFOLFactory(; x = 0.1)
-sol = ODEProblem(fol, [], (0.0, 5.0), []) |> solve
-```
-
-In non-DSL definitions, one can pass `defaults` dictionary to set the initial conditions of the symbolic variables.
-
-```@example ode3
-using ModelingToolkit
-using ModelingToolkit: t_nounits as t, D_nounits as D
-
-function UnitstepFOLFactory(; name)
-    @parameters τ
-    @variables x(t)
-    ODESystem(D(x) ~ (1 - x) / τ; name, defaults = Dict(x => 0.0, τ => 1.0))
-end
-```
-
-Note that the defaults can be functions of the other variables, which is then
-resolved at the time of the problem construction. Of course, the factory
-function could accept additional arguments to optionally specify the initial
-unknown or parameter values, etc.
 
 ## Symbolic and sparse derivatives
 
@@ -370,7 +305,7 @@ over time using an ODE solver.
 
 By default, analytical derivatives and sparse matrices, e.g. for the Jacobian, the
 matrix of first partial derivatives, are not used. Let's benchmark this (`prob`
-still is the problem using the `connected_simp` system above):
+still is the problem using the `connected` system above):
 
 ```@example ode2
 using BenchmarkTools
@@ -382,23 +317,24 @@ Now have MTK provide sparse, analytical derivatives to the solver. This has to
 be specified during the construction of the `ODEProblem`:
 
 ```@example ode2
-prob_an = ODEProblem(connected_simp, u0, (0.0, 10.0), p; jac = true)
-@btime solve($prob_an, Rodas4());
+prob_an = ODEProblem(connected, [], (0.0, 10.0), []; jac = true)
+@btime solve(prob_an, Rodas4());
 nothing # hide
 ```
 
 ```@example ode2
-prob_an = ODEProblem(connected_simp, u0, (0.0, 10.0), p; jac = true, sparse = true)
-@btime solve($prob_an, Rodas4());
+prob_sparse = ODEProblem(connected, [], (0.0, 10.0), []; jac = true, sparse = true)
+@btime solve(prob_sparse, Rodas4());
 nothing # hide
 ```
 
-The speedup is significant. For this small dense model (3 of 4 entries are
-populated), using sparse matrices is counterproductive in terms of required
+The speedup using the analytical Jacobian is significant.
+For this small dense model (3 of 4 entries populated),
+using sparse matrices is counterproductive in terms of required
 memory allocations. For large, hierarchically built models, which tend to be
-sparse, speedup and the reduction of memory allocation can be expected to be
-substantial. In addition, these problem builders allow for automatic parallelism
-using the structural information. For more information, see the
+sparse, speedup and the reduction of memory allocation can also be expected to be
+substantial. In addition, these problem builders allow for automatic parallelism by
+exploiting the structural information. For more information, see the
 [ODESystem](@ref ODESystem) page.
 
 ## Notes and pointers how to go on
