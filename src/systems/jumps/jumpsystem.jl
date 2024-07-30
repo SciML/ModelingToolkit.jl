@@ -203,6 +203,7 @@ function generate_rate_function(js::JumpSystem, rate)
     p = reorder_parameters(js, full_parameters(js))
     rf = build_function(rate, unknowns(js), p...,
         get_iv(js),
+        wrap_code = wrap_array_vars(js, rate; dvs = unknowns(js), ps = parameters(js)),
         expression = Val{true})
 end
 

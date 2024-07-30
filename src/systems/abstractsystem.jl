@@ -223,14 +223,44 @@ function wrap_assignments(isscalar, assignments; let_block = false)
     end
 end
 
-function wrap_array_vars(sys::AbstractSystem, exprs; dvs = unknowns(sys))
+function wrap_array_vars(
+        sys::AbstractSystem, exprs; dvs = unknowns(sys), ps = parameters(sys))
     isscalar = !(exprs isa AbstractArray)
     array_vars = Dict{Any, AbstractArray{Int}}()
-    for (j, x) in enumerate(dvs)
-        if iscall(x) && operation(x) == getindex
-            arg = arguments(x)[1]
-            inds = get!(() -> Int[], array_vars, arg)
-            push!(inds, j)
+    if dvs !== nothing
+        for (j, x) in enumerate(dvs)
+            if iscall(x) && operation(x) == getindex
+                arg = arguments(x)[1]
+                inds = get!(() -> Int[], array_vars, arg)
+                push!(inds, j)
+            end
+        end
+        uind = 1
+    else
+        uind = 0
+    end
+    # tunables are scalarized and concatenated, so we need to have assignments
+    # for the non-scalarized versions
+    array_tunables = Dict{Any, AbstractArray{Int}}()
+    for p in ps
+        idx = parameter_index(sys, p)
+        idx isa ParameterIndex || continue
+        idx.portion isa SciMLStructures.Tunable || continue
+        idx.idx isa AbstractArray || continue
+        array_tunables[p] = idx.idx
+    end
+    # Other parameters may be scalarized arrays but used in the vector form
+    other_array_parameters = Assignment[]
+    for p in ps
+        idx = parameter_index(sys, p)
+        if Symbolics.isarraysymbolic(p)
+            idx === nothing || continue
+            push!(other_array_parameters, p ← collect(p))
+        elseif iscall(p) && operation(p) == getindex
+            idx === nothing && continue
+            # all of the scalarized variables are in `ps`
+             all(x -> any(isequal(x), ps), collect(p))|| continue
+            push!(other_array_parameters, p ← collect(p))
         end
     end
     for (k, inds) in array_vars
@@ -244,7 +274,12 @@ function wrap_array_vars(sys::AbstractSystem, exprs; dvs = unknowns(sys))
                 expr.args,
                 [],
                 Let(
-                    [k ← :(view($(expr.args[1].name), $v)) for (k, v) in array_vars],
+                    vcat(
+                        [k ← :(view($(expr.args[uind].name), $v)) for (k, v) in array_vars],
+                        [k ← :(view($(expr.args[uind + 1].name), $v))
+                         for (k, v) in array_tunables],
+                         other_array_parameters
+                    ),
                     expr.body,
                     false
                 )
@@ -256,7 +291,11 @@ function wrap_array_vars(sys::AbstractSystem, exprs; dvs = unknowns(sys))
                 expr.args,
                 [],
                 Let(
-                    [k ← :(view($(expr.args[1].name), $v)) for (k, v) in array_vars],
+                    vcat(
+                        [k ← :(view($(expr.args[uind].name), $v)) for (k, v) in array_vars],
+                        [k ← :(view($(expr.args[uind + 1].name), $v))
+                         for (k, v) in array_tunables]
+                    ),
                     expr.body,
                     false
                 )
@@ -267,7 +306,12 @@ function wrap_array_vars(sys::AbstractSystem, exprs; dvs = unknowns(sys))
                 expr.args,
                 [],
                 Let(
-                    [k ← :(view($(expr.args[2].name), $v)) for (k, v) in array_vars],
+                    vcat(
+                        [k ← :(view($(expr.args[uind + 1].name), $v))
+                         for (k, v) in array_vars],
+                        [k ← :(view($(expr.args[uind + 2].name), $v))
+                         for (k, v) in array_tunables]
+                    ),
                     expr.body,
                     false
                 )

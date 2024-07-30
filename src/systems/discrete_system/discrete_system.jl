@@ -218,8 +218,10 @@ function flatten(sys::DiscreteSystem, noeqs = false)
 end
 
 function generate_function(
-        sys::DiscreteSystem, dvs = unknowns(sys), ps = full_parameters(sys); kwargs...)
-    generate_custom_function(sys, [eq.rhs for eq in equations(sys)], dvs, ps; kwargs...)
+        sys::DiscreteSystem, dvs = unknowns(sys), ps = full_parameters(sys); wrap_code = identity, kwargs...)
+    exprs = [eq.rhs for eq in equations(sys)]
+    wrap_code = wrap_code .∘ wrap_array_vars(sys, exprs)
+    generate_custom_function(sys, exprs, dvs, ps; wrap_code, kwargs...)
 end
 
 function process_DiscreteProblem(constructor, sys::DiscreteSystem, u0map, parammap;

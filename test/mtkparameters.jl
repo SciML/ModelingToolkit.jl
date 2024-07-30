@@ -40,9 +40,9 @@ setp(sys, a)(ps, 1.0)
 
 @test getp(sys, a)(ps) == getp(sys, b)(ps) / 2 == getp(sys, c)(ps) / 3 == 1.0
 
-for (portion, values) in [(Tunable(), vcat(ones(9), [1.0, 4.0, 5.0, 6.0, 7.0]))
+for (portion, values) in [(Tunable(), [1.0, 5.0, 6.0, 7.0])
                           (Discrete(), [3.0])
-                          (Constants(), [0.1, 0.2, 0.3])]
+                          (Constants(), vcat([0.1, 0.2, 0.3], ones(9), [4.0]))]
     buffer, repack, alias = canonicalize(portion, ps)
     @test alias
     @test sort(collect(buffer)) == values
@@ -74,7 +74,7 @@ setp(sys, h)(ps, "bar") # with a non-numeric
 
 newps = remake_buffer(sys,
     ps,
-    Dict(a => 1.0f0, b => 5.0f0, c => 2.0, d => 0x5, e => [0.4, 0.5, 0.6],
+    Dict(a => 1.0f0, b => 5.0f0, c => 2.0, d => 0x5, e => Float32[0.4, 0.5, 0.6],
         f => 3ones(UInt, 3, 3), g => ones(Float32, 4), h => "bar"))
 
 for fname in (:tunable, :discrete, :constant, :dependent)
@@ -110,7 +110,7 @@ eq = D(X) ~ p[1] - p[2] * X
 u0 = [X => 1.0]
 ps = [p => [2.0, 0.1]]
 p = MTKParameters(osys, ps, u0)
-@test p.tunable[1] == [2.0, 0.1]
+@test p.tunable == [2.0, 0.1]
 
 # Ensure partial update promotes the buffer
 @parameters p q r
@@ -118,8 +118,8 @@ p = MTKParameters(osys, ps, u0)
 sys = complete(sys)
 ps = MTKParameters(sys, [p => 1.0, q => 2.0, r => 3.0])
 newps = remake_buffer(sys, ps, Dict(p => 1.0f0))
-@test newps.tunable[1] isa Vector{Float32}
-@test newps.tunable[1] == [1.0f0, 2.0f0, 3.0f0]
+@test newps.tunable isa Vector{Float32}
+@test newps.tunable == [1.0f0, 2.0f0, 3.0f0]
 
 # Issue#2624
 @parameters p d

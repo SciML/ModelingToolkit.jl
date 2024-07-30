@@ -87,7 +87,7 @@ end
 
 function generate_tgrad(
         sys::AbstractODESystem, dvs = unknowns(sys), ps = full_parameters(sys);
-        simplify = false, kwargs...)
+        simplify = false, wrap_code = identity, kwargs...)
     tgrad = calculate_tgrad(sys, simplify = simplify)
     pre = get_preprocess_constants(tgrad)
     p = if has_index_cache(sys) && get_index_cache(sys) !== nothing
@@ -97,17 +97,19 @@ function generate_tgrad(
     else
         (ps,)
     end
+    wrap_code = wrap_code .∘ wrap_array_vars(sys, tgrad; dvs, ps)
     return build_function(tgrad,
         dvs,
         p...,
         get_iv(sys);
         postprocess_fbody = pre,
+        wrap_code,
         kwargs...)
 end
 
 function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = full_parameters(sys);
-        simplify = false, sparse = false, kwargs...)
+        simplify = false, sparse = false, wrap_code = identity, kwargs...)
     jac = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
     pre = get_preprocess_constants(jac)
     p = if has_index_cache(sys) && get_index_cache(sys) !== nothing
@@ -115,11 +117,13 @@ function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
     else
         (ps,)
     end
+    wrap_code = wrap_code .∘ wrap_array_vars(sys, jac; dvs, ps)
     return build_function(jac,
         dvs,
         p...,
         get_iv(sys);
         postprocess_fbody = pre,
+        wrap_code,
         kwargs...)
 end
 
@@ -188,12 +192,12 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
         if implicit_dae
             build_function(rhss, ddvs, u, p..., t; postprocess_fbody = pre,
                 states = sol_states,
-                wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs),
+                wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps),
                 kwargs...)
         else
             build_function(rhss, u, p..., t; postprocess_fbody = pre,
                 states = sol_states,
-                wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs),
+                wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps),
                 kwargs...)
         end
     end

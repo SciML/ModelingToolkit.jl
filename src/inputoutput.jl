@@ -243,7 +243,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     end
     process = get_postprocess_fbody(sys)
     f = build_function(rhss, args...; postprocess_fbody = process,
-        expression = Val{true}, kwargs...)
+        expression = Val{true}, wrap_code = wrap_array_vars(sys, rhss; dvs, ps), kwargs...)
     f = eval_or_rgf.(f; eval_expression, eval_module)
     (; f, dvs, ps, io_sys = sys)
 end

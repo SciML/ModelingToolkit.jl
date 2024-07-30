@@ -211,12 +211,13 @@ end
 
 function generate_jacobian(
         sys::NonlinearSystem, vs = unknowns(sys), ps = full_parameters(sys);
-        sparse = false, simplify = false, kwargs...)
+        sparse = false, simplify = false, wrap_code = identity, kwargs...)
     jac = calculate_jacobian(sys, sparse = sparse, simplify = simplify)
     pre, sol_states = get_substitutions_and_solved_unknowns(sys)
     p = reorder_parameters(sys, ps)
+    wrap_code = wrap_code .∘ wrap_array_vars(sys, jac; dvs = vs, ps)
     return build_function(
-        jac, vs, p...; postprocess_fbody = pre, states = sol_states, kwargs...)
+        jac, vs, p...; postprocess_fbody = pre, states = sol_states, wrap_code, kwargs...)
 end
 
 function calculate_hessian(sys::NonlinearSystem; sparse = false, simplify = false)
@@ -233,22 +234,23 @@ end
 
 function generate_hessian(
         sys::NonlinearSystem, vs = unknowns(sys), ps = full_parameters(sys);
-        sparse = false, simplify = false, kwargs...)
+        sparse = false, simplify = false, wrap_code = identity, kwargs...)
     hess = calculate_hessian(sys, sparse = sparse, simplify = simplify)
     pre = get_preprocess_constants(hess)
     p = reorder_parameters(sys, ps)
-    return build_function(hess, vs, p...; postprocess_fbody = pre, kwargs...)
+    wrap_code = wrap_code .∘ wrap_array_vars(sys, hess; dvs = vs, ps)
+    return build_function(hess, vs, p...; postprocess_fbody = pre, wrap_code, kwargs...)
 end
 
 function generate_function(
         sys::NonlinearSystem, dvs = unknowns(sys), ps = full_parameters(sys);
-        kwargs...)
+        wrap_code = identity, kwargs...)
     rhss = [deq.rhs for deq in equations(sys)]
     pre, sol_states = get_substitutions_and_solved_unknowns(sys)
-
+    wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps)
     p = reorder_parameters(sys, value.(ps))
     return build_function(rhss, value.(dvs), p...; postprocess_fbody = pre,
-        states = sol_states, kwargs...)
+        states = sol_states, wrap_code, kwargs...)
 end
 
 function jacobian_sparsity(sys::NonlinearSystem)

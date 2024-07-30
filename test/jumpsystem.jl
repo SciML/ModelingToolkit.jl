@@ -194,8 +194,8 @@ jprob = JumpProblem(js5, dprob, Direct(), save_positions = (false, false), rng =
 
 pcondit(u, t, integrator) = t == 1000.0
 function paffect!(integrator)
-    integrator.p[1] = 0.0
-    integrator.p[2] = 1.0
+    integrator.ps[k1] = 0.0
+    integrator.ps[k2] = 1.0
     reset_aggregated_jumps!(integrator)
 end
 sol = solve(jprob, SSAStepper(), tstops = [1000.0],
