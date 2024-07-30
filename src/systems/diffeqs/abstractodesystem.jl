@@ -781,7 +781,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         warn_initialize_determined = true,
         build_initializeprob = true,
         initialization_eqs = [],
-        fully_determined = false,
+        fully_determined = nothing,
         check_units = true,
         kwargs...)
     eqs = equations(sys)
@@ -1380,7 +1380,7 @@ InitializationProblem{iip}(sys::AbstractODESystem, u0map, tspan,
                            simplify = false,
                            linenumbers = true, parallel = SerialForm(),
                            initialization_eqs = [],
-                           fully_determined = false,
+                           fully_determined = nothing,
                            kwargs...) where {iip}
 ```
 
