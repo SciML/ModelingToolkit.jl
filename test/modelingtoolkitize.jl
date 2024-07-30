@@ -59,13 +59,13 @@ sys = complete(modelingtoolkitize(prob)) # symbolicitize me captain!
 
 prob = OptimizationProblem(sys, x0, p, grad = true, hess = true)
 sol = solve(prob, NelderMead())
-@test sol.minimum < 1e-8
+@test sol.objective < 1e-8
 
 sol = solve(prob, BFGS())
-@test sol.minimum < 1e-8
+@test sol.objective < 1e-8
 
 sol = solve(prob, Newton())
-@test sol.minimum < 1e-8
+@test sol.objective < 1e-8
 
 ## SIR System Regression Test
 
