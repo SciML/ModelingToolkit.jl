@@ -84,11 +84,11 @@ as well as the positive-edge `affect` and negative-edge `affect_neg` that apply 
 By default `affect_neg = affect`; to only get rising edges specify `affect_neg = nothing`.
 
 Assume without loss of generality that the equation is of the form `c(u,p,t) ~ 0`; we denote the integrator state as `i.u`. 
-For simplicty, we define `prev_sign = sign(c(u[t-1], p[t-1], t-1))` and `cur_sign = sign(c(u[t], p[t], t))`.
+For compactness, we define `prev_sign = sign(c(u[t-1], p[t-1], t-1))` and `cur_sign = sign(c(u[t], p[t], t))`.
 A condition edge will be detected and the callback will be invoked iff `prev_sign * cur_sign <= 0`. 
 Inter-sample condition activation is not guaranteed; for example if we use the dirac delta function as `c` to insert a 
 sharp discontinuity between integrator steps (which in this example would not normally be identified by adaptivity) then the condition is not
-gauranteed to be triggered.
+guaranteed to be triggered.
 
 Once detected the integrator will "wind back" through a root-finding process to identify the point when the condition became active; the method used 
 is specified by `rootfind` from [`SciMLBase.RootfindOpt`](@ref). Multiple callbacks in the same system with different `rootfind` operations will be resolved 
@@ -596,7 +596,7 @@ function generate_vector_rootfinding_callback(
 end
 
 """
-Compile a single continous callback affect function(s).
+Compile a single continuous callback affect function(s).
 """
 function compile_affect_fn(cb, sys::AbstractODESystem, dvs, ps, kwargs)
     eq_aff = affects(cb)
