@@ -260,7 +260,14 @@ function __num_isdiag_noise(mat)
     true
 end
 function __get_num_diag_noise(mat)
-    vec(sum(mat; dims = 2))
+    map(axes(mat, 2)) do j
+        for i ∈ axes(mat, 1)
+            if !isequal(mat[i, j], 0)
+                return mat[i, j]
+            end
+        end
+        0
+    end
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = unknowns(sys),
