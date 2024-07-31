@@ -2172,9 +2172,8 @@ function linearization_function(sys::AbstractSystem, inputs,
             u_getter = u_getter
 
             function (u, p, t)
-                state = ProblemState(; u, p, t)
-                p_setter!(oldps, p_getter(state))
-                newu = u_getter(state)
+                p_setter!(oldps, p_getter(u, p..., t))
+                newu = u_getter(u, p, t)
                 return newu, oldps
             end
         end
