@@ -136,7 +136,7 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
         elseif __num_isdiag_noise(sorted_g_rows)
             # If each column of the noise matrix has either 0 or 1 non-zero entry, then this is "diagonal noise".
             # In this case, the solver just takes a vector column of equations and it interprets that to
-            # mean that each noise process is independant
+            # mean that each noise process is independent
             noise_eqs = __get_num_diag_noise(sorted_g_rows)
             is_scalar_noise = false
         else
