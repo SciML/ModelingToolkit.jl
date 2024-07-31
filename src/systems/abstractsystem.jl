@@ -2167,7 +2167,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         u_getter = isempty(unknowns(initsys)) ? (_...) -> nothing :
                    build_explicit_observed_function(
             sys, unknowns(initsys); eval_expression, eval_module)
-        get_initprob_u_p = let p_getter,
+        get_initprob_u_p = let p_getter = p_getter,
             p_setter! = setp(initsys, initsys_ps),
             u_getter = u_getter
 
