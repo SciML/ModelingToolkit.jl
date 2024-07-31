@@ -150,7 +150,7 @@ function SymbolicContinuousCallback(eqs::Equation, affect = NULL_AFFECT;
         affect_neg = affect, rootfind = SciMLBase.LeftRootFind)
     SymbolicContinuousCallback([eqs], affect, affect_neg, rootfind)
 end
-function SymbolicContinuousCallback(eqs::Vector{Equation}, affect = NULL_AFFECT;
+function SymbolicContinuousCallback(eqs::Vector{Equation}, affect;
         affect_neg = affect, rootfind = SciMLBase.LeftRootFind)
     SymbolicContinuousCallback(eqs, affect, affect_neg, rootfind)
 end
