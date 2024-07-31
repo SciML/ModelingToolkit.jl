@@ -1,4 +1,4 @@
-# Getting Started with ModelingToolkit.jl
+# [Getting Started with ModelingToolkit.jl](@id getting_started)
 
 This is an introductory tutorial for ModelingToolkit (MTK). We will demonstrate
 the basics of the package by demonstrating how to define and simulate simple
@@ -96,6 +96,33 @@ plot(solve(prob))
 
 The parameter values are determined using the right hand side of the expressions in the `@parameters` block,
 and similarly initial conditions are determined using the right hand side of the expressions in the `@variables` block.
+
+## Using different values for parameters and initial conditions
+
+If you want to simulate the same model,
+but with different values for the parameters and initial conditions than the default values,
+you likely do not want to write an entirely new `@mtkmodel`.
+ModelingToolkit supports overwriting the default values:
+
+```@example ode2
+@mtkbuild fol_different_values = FOL(; τ = 1 / 3, x = 0.5)
+prob = ODEProblem(fol_different_values, [], (0.0, 10.0), [])
+plot(solve(prob))
+```
+
+Alternatively, this overwriting could also have occurred at the `ODEProblem` level.
+
+```@example ode2
+prob = ODEProblem(fol, [fol.τ => 1 / 3], (0.0, 10.0), [fol.x => 0.5])
+plot(solve(prob))
+```
+
+Here, the second argument of `ODEProblem` is an array of `Pairs`.
+The left hand side of each Pair is the parameter you want to overwrite,
+and the right hand side is the value to overwrite it with.
+Similarly, the initial conditions are overwritten in the fourth argument.
+One important difference with the previous method is
+that the parameter has to be referred to as `fol.τ` instead of just `τ`.
 
 ## Algebraic relations and structural simplification
 
