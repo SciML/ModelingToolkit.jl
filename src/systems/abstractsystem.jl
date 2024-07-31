@@ -2167,14 +2167,13 @@ function linearization_function(sys::AbstractSystem, inputs,
         u_getter = isempty(unknowns(initsys)) ? (_...) -> nothing :
                    build_explicit_observed_function(
             sys, unknowns(initsys); eval_expression, eval_module)
-        get_initprob_u_p = let p_getter,
+        get_initprob_u_p = let p_getter = p_getter,
             p_setter! = setp(initsys, initsys_ps),
             u_getter = u_getter
 
             function (u, p, t)
-                state = ProblemState(; u, p, t)
-                p_setter!(oldps, p_getter(state))
-                newu = u_getter(state)
+                p_setter!(oldps, p_getter(u, p..., t))
+                newu = u_getter(u, p, t)
                 return newu, oldps
             end
         end
