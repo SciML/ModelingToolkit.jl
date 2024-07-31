@@ -261,7 +261,7 @@ function __num_isdiag_noise(mat)
 end
 function __get_num_diag_noise(mat)
     map(axes(mat, 2)) do j
-        for i ∈ axes(mat, 1)
+        for i in axes(mat, 1)
             if !isequal(mat[i, j], 0)
                 return mat[i, j]
             end
