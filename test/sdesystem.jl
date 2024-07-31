@@ -693,7 +693,7 @@ let # test to make sure that scalar noise always receive the same kicks
     @mtkbuild de = System(eqs, t)
     prob = SDEProblem(de, [x => 0, y => 0], (0.0, 10.0), [])
     sol = solve(prob, SOSRI())
-    @test sol[end][1] == sol[end][2]
+    @test sol.u[end][1] == sol.u[end][2]
 end
 
 let # test that diagonal noise is correctly handled

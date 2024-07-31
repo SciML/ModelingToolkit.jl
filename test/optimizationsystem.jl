@@ -50,7 +50,7 @@ using ModelingToolkit: get_metadata
         cons_h = true)
     @test prob.f.sys === combinedsys
     sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
-    @test sol.minimum < -1e5
+    @test sol.objective < -1e5
 end
 
 @testset "inequality constraint" begin
@@ -66,14 +66,14 @@ end
         grad = true, hess = true, cons_j = true, cons_h = true)
     @test prob.f.sys === sys
     sol = solve(prob, IPNewton())
-    @test sol.minimum < 1.0
+    @test sol.objective < 1.0
     sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
-    @test sol.minimum < 1.0
+    @test sol.objective < 1.0
 
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 1.0],
         grad = false, hess = false, cons_j = false, cons_h = false)
     sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
-    @test_skip sol.minimum < 1.0
+    @test_skip sol.objective < 1.0
 end
 
 @testset "equality constraint" begin
@@ -88,18 +88,18 @@ end
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, z => 0.0], [a => 1.0, b => 1.0],
         grad = true, hess = true, cons_j = true, cons_h = true)
     sol = solve(prob, IPNewton())
-    @test sol.minimum < 1.0
+    @test sol.objective < 1.0
     @test sol.u≈[0.808, -0.064] atol=1e-3
     @test sol[x]^2 + sol[y]^2 ≈ 1.0
     sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
-    @test sol.minimum < 1.0
+    @test sol.objective < 1.0
     @test sol.u≈[0.808, -0.064] atol=1e-3
     @test sol[x]^2 + sol[y]^2 ≈ 1.0
 
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, z => 0.0], [a => 1.0, b => 1.0],
         grad = false, hess = false, cons_j = false, cons_h = false)
     sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
-    @test_skip sol.minimum < 1.0
+    @test_skip sol.objective < 1.0
     @test_skip sol.u≈[0.808, -0.064] atol=1e-3
     @test_skip sol[x]^2 + sol[y]^2 ≈ 1.0
 end
@@ -108,7 +108,7 @@ end
     rosenbrock(x, p) = (p[1] - x[1])^2 + p[2] * (x[2] - x[1]^2)^2
     x0 = zeros(2)
     p = [1.0, 100.0]
-    f = OptimizationFunction(rosenbrock, Optimization.AutoModelingToolkit())
+    f = OptimizationFunction(rosenbrock, Optimization.AutoSymbolics())
     prob = OptimizationProblem(f, x0, p)
     sol = solve(prob, Newton())
     @test sol.u ≈ [1.0, 1.0]
@@ -215,15 +215,15 @@ end
         Ipopt.Optimizer();
         print_level = 0))
     #=
-     @test sol.minimum < -1e5
+     @test sol.objective < -1e5
 
      prob = OptimizationProblem(sys2, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0],
          grad = true, hess = true, cons_j = true, cons_h = true)
      @test prob.f.sys === sys2
      sol = solve(prob, IPNewton())
-     @test sol.minimum < 1.0
+     @test sol.objective < 1.0
      sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
-     @test sol.minimum < 1.0
+     @test sol.objective < 1.0
      =#
 end
 
@@ -298,11 +298,11 @@ end
     loss = (a - x)^2 + b * (y - x^2)^2
     @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = [x^2 + y^2 ≲ 0.0])
     sys = complete(sys)
-    @test_throws ArgumentError OptimizationProblem(sys,
+    @test_throws ErrorException OptimizationProblem(sys,
         [x => 0.0, y => 0.0],
         [a => 1.0, b => 100.0],
         lcons = [0.0])
-    @test_throws ArgumentError OptimizationProblem(sys,
+    @test_throws ErrorException OptimizationProblem(sys,
         [x => 0.0, y => 0.0],
         [a => 1.0, b => 100.0],
         ucons = [0.0])

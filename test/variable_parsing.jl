@@ -33,10 +33,6 @@ s1 = Num(Sym{Real}(:s))
 @test ModelingToolkit.isparameter(s)
 @test ModelingToolkit.isparameter(σ)
 
-@derivatives D' ~ t
-D1 = Differential(t)
-@test D1 == D
-
 @test @macroexpand(@parameters x, y, z(t)) == @macroexpand(@parameters x y z(t))
 @test @macroexpand(@variables x, y, z(t)) == @macroexpand(@variables x y z(t))
 

@@ -1,0 +1,13 @@
+name: "Format Check"
+
+on:
+  push:
+    branches:
+      - 'master'
+    tags: '*'
+  pull_request:
+
+jobs:
+  format-check:
+    name: "Format Check"
+    uses: "SciML/.github/.github/workflows/format-suggestions-on-pr.yml@v1"
