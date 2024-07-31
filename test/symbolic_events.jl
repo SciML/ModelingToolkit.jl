@@ -5,6 +5,7 @@ using ModelingToolkit: SymbolicContinuousCallback,
                        t_nounits as t,
                        D_nounits as D
 using StableRNGs
+import SciMLBase
 using SymbolicIndexingInterface
 rng = StableRNG(12345)
 
@@ -12,6 +13,7 @@ rng = StableRNG(12345)
 
 eqs = [D(x) ~ 1]
 affect = [x ~ 0]
+affect_neg = [x ~ 1]
 
 ## Test SymbolicContinuousCallback
 @testset "SymbolicContinuousCallback constructors" begin
@@ -19,31 +21,43 @@ affect = [x ~ 0]
     @test e isa SymbolicContinuousCallback
     @test isequal(e.eqs, eqs)
     @test e.affect == NULL_AFFECT
+    @test e.affect_neg == NULL_AFFECT
+    @test e.rootfind == SciMLBase.LeftRootFind
 
     e = SymbolicContinuousCallback(eqs)
     @test e isa SymbolicContinuousCallback
     @test isequal(e.eqs, eqs)
     @test e.affect == NULL_AFFECT
+    @test e.affect_neg == NULL_AFFECT
+    @test e.rootfind == SciMLBase.LeftRootFind
 
     e = SymbolicContinuousCallback(eqs, NULL_AFFECT)
     @test e isa SymbolicContinuousCallback
     @test isequal(e.eqs, eqs)
     @test e.affect == NULL_AFFECT
+    @test e.affect_neg == NULL_AFFECT
+    @test e.rootfind == SciMLBase.LeftRootFind
 
     e = SymbolicContinuousCallback(eqs[], NULL_AFFECT)
     @test e isa SymbolicContinuousCallback
     @test isequal(e.eqs, eqs)
     @test e.affect == NULL_AFFECT
+    @test e.affect_neg == NULL_AFFECT
+    @test e.rootfind == SciMLBase.LeftRootFind
 
     e = SymbolicContinuousCallback(eqs => NULL_AFFECT)
     @test e isa SymbolicContinuousCallback
     @test isequal(e.eqs, eqs)
     @test e.affect == NULL_AFFECT
+    @test e.affect_neg == NULL_AFFECT
+    @test e.rootfind == SciMLBase.LeftRootFind
 
     e = SymbolicContinuousCallback(eqs[] => NULL_AFFECT)
     @test e isa SymbolicContinuousCallback
     @test isequal(e.eqs, eqs)
     @test e.affect == NULL_AFFECT
+    @test e.affect_neg == NULL_AFFECT
+    @test e.rootfind == SciMLBase.LeftRootFind
 
     ## With affect
 
@@ -51,32 +65,126 @@ affect = [x ~ 0]
     @test e isa SymbolicContinuousCallback
     @test isequal(e.eqs, eqs)
     @test e.affect == affect
+    @test e.affect_neg == affect
+    @test e.rootfind == SciMLBase.LeftRootFind
 
     e = SymbolicContinuousCallback(eqs, affect)
     @test e isa SymbolicContinuousCallback
     @test isequal(e.eqs, eqs)
     @test e.affect == affect
+    @test e.affect_neg == affect
+    @test e.rootfind == SciMLBase.LeftRootFind
 
     e = SymbolicContinuousCallback(eqs, affect)
     @test e isa SymbolicContinuousCallback
     @test isequal(e.eqs, eqs)
     @test e.affect == affect
+    @test e.affect_neg == affect
+    @test e.rootfind == SciMLBase.LeftRootFind
 
     e = SymbolicContinuousCallback(eqs[], affect)
     @test e isa SymbolicContinuousCallback
     @test isequal(e.eqs, eqs)
     @test e.affect == affect
+    @test e.affect_neg == affect
+    @test e.rootfind == SciMLBase.LeftRootFind
 
     e = SymbolicContinuousCallback(eqs => affect)
     @test e isa SymbolicContinuousCallback
     @test isequal(e.eqs, eqs)
     @test e.affect == affect
+    @test e.affect_neg == affect
+    @test e.rootfind == SciMLBase.LeftRootFind
 
     e = SymbolicContinuousCallback(eqs[] => affect)
     @test e isa SymbolicContinuousCallback
     @test isequal(e.eqs, eqs)
     @test e.affect == affect
+    @test e.affect_neg == affect
+    @test e.rootfind == SciMLBase.LeftRootFind
 
+    # with only positive edge affect
+    
+    e = SymbolicContinuousCallback(eqs[], affect, affect_neg=nothing)
+    @test e isa SymbolicContinuousCallback
+    @test isequal(e.eqs, eqs)
+    @test e.affect == affect
+    @test isnothing(e.affect_neg)
+    @test e.rootfind == SciMLBase.LeftRootFind
+
+    e = SymbolicContinuousCallback(eqs, affect, affect_neg=nothing)
+    @test e isa SymbolicContinuousCallback
+    @test isequal(e.eqs, eqs)
+    @test e.affect == affect
+    @test isnothing(e.affect_neg)
+    @test e.rootfind == SciMLBase.LeftRootFind
+
+    e = SymbolicContinuousCallback(eqs, affect, affect_neg=nothing)
+    @test e isa SymbolicContinuousCallback
+    @test isequal(e.eqs, eqs)
+    @test e.affect == affect
+    @test isnothing(e.affect_neg)
+    @test e.rootfind == SciMLBase.LeftRootFind
+
+    e = SymbolicContinuousCallback(eqs[], affect, affect_neg=nothing)
+    @test e isa SymbolicContinuousCallback
+    @test isequal(e.eqs, eqs)
+    @test e.affect == affect
+    @test isnothing(e.affect_neg)
+    @test e.rootfind == SciMLBase.LeftRootFind
+    
+    # with explicit edge affects
+    
+    e = SymbolicContinuousCallback(eqs[], affect, affect_neg=affect_neg)
+    @test e isa SymbolicContinuousCallback
+    @test isequal(e.eqs, eqs)
+    @test e.affect == affect
+    @test e.affect_neg == affect_neg
+    @test e.rootfind == SciMLBase.LeftRootFind
+
+    e = SymbolicContinuousCallback(eqs, affect, affect_neg=affect_neg)
+    @test e isa SymbolicContinuousCallback
+    @test isequal(e.eqs, eqs)
+    @test e.affect == affect
+    @test e.affect_neg == affect_neg
+    @test e.rootfind == SciMLBase.LeftRootFind
+
+    e = SymbolicContinuousCallback(eqs, affect, affect_neg=affect_neg)
+    @test e isa SymbolicContinuousCallback
+    @test isequal(e.eqs, eqs)
+    @test e.affect == affect
+    @test e.affect_neg == affect_neg
+    @test e.rootfind == SciMLBase.LeftRootFind
+
+    e = SymbolicContinuousCallback(eqs[], affect, affect_neg=affect_neg)
+    @test e isa SymbolicContinuousCallback
+    @test isequal(e.eqs, eqs)
+    @test e.affect == affect
+    @test e.affect_neg == affect_neg
+    @test e.rootfind == SciMLBase.LeftRootFind
+
+    # with different root finding ops
+
+    e = SymbolicContinuousCallback(eqs[], affect, affect_neg=affect_neg, rootfind=SciMLBase.LeftRootFind)
+    @test e isa SymbolicContinuousCallback
+    @test isequal(e.eqs, eqs)
+    @test e.affect == affect
+    @test e.affect_neg == affect_neg
+    @test e.rootfind == SciMLBase.LeftRootFind
+
+    e = SymbolicContinuousCallback(eqs[], affect, affect_neg=affect_neg, rootfind=SciMLBase.RightRootFind)
+    @test e isa SymbolicContinuousCallback
+    @test isequal(e.eqs, eqs)
+    @test e.affect == affect
+    @test e.affect_neg == affect_neg
+    @test e.rootfind == SciMLBase.RightRootFind
+
+    e = SymbolicContinuousCallback(eqs[], affect, affect_neg=affect_neg, rootfind=SciMLBase.NoRootFind)
+    @test e isa SymbolicContinuousCallback
+    @test isequal(e.eqs, eqs)
+    @test e.affect == affect
+    @test e.affect_neg == affect_neg
+    @test e.rootfind == SciMLBase.NoRootFind
     # test plural constructor
 
     e = SymbolicContinuousCallbacks(eqs[])
@@ -604,4 +712,124 @@ let
     @test typeof(oneosc_ce_simpl) == ODESystem
     @test sol[1, 6] < 1.0 # test whether x(t) decreases over time
     @test sol[1, 18] > 0.5 # test whether event happened
+end
+
+@testset "Additional SymbolicContinuousCallback options" begin
+    # baseline affect (pos + neg + left root find)
+    @variables c1(t)=1.0 c2(t)=1.0 # c1 = cos(t), c2 = cos(3t)
+    eqs = [D(c1) ~ -sin(t); D(c2) ~ -3*sin(3*t)]
+    record_crossings(i, u, _, c) = push!(c, i.t => i.u[u.v])
+    cr1 = []; cr2 = []
+    evt1 = ModelingToolkit.SymbolicContinuousCallback([c1 ~ 0], (record_crossings, [c1 => :v], [], [], cr1))
+    evt2 = ModelingToolkit.SymbolicContinuousCallback([c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2))
+    @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
+    trigsys_ss = structural_simplify(trigsys)
+    prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
+    sol = solve(prob, Tsit5())
+    required_crossings_c1 = [π/2, 3*π/2]
+    required_crossings_c2 = [π/6, π/2, 5*π/6, 7*π/6, 3*π/2, 11*π/6]
+    @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1e-4
+    @test maximum(abs.(first.(cr2) .- required_crossings_c2)) < 1e-4
+    @test sign.(cos.(required_crossings_c1 .- 1e-6)) == sign.(last.(cr1))
+    @test sign.(cos.(3*(required_crossings_c2 .- 1e-6))) == sign.(last.(cr2))
+
+    # with neg affect (pos * neg + left root find)
+    cr1p = []; cr2p = []
+    cr1n = []; cr2n = []
+    evt1 = ModelingToolkit.SymbolicContinuousCallback([c1 ~ 0], (record_crossings, [c1 => :v], [], [], cr1p); affect_neg = (record_crossings, [c1 => :v], [], [], cr1n))
+    evt2 = ModelingToolkit.SymbolicContinuousCallback([c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2p); affect_neg = (record_crossings, [c2 => :v], [], [], cr2n))
+    @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
+    trigsys_ss = structural_simplify(trigsys)
+    prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
+    c1_pc = filter((<=)(0) ∘ sin, required_crossings_c1)
+    c1_nc = filter((>=)(0) ∘ sin, required_crossings_c1)
+    c2_pc = filter(c -> -sin(3c) > 0, required_crossings_c2) 
+    c2_nc = filter(c -> -sin(3c) < 0, required_crossings_c2) 
+    @test maximum(abs.(c1_pc .- first.(cr1p))) < 1e-5
+    @test maximum(abs.(c1_nc .- first.(cr1n))) < 1e-5
+    @test maximum(abs.(c2_pc .- first.(cr2p))) < 1e-5
+    @test maximum(abs.(c2_nc .- first.(cr2n))) < 1e-5
+    @test sign.(cos.(c1_pc .- 1e-6)) == sign.(last.(cr1p))
+    @test sign.(cos.(c1_nc .- 1e-6)) == sign.(last.(cr1n))
+    @test sign.(cos.(3*(c2_pc .- 1e-6))) == sign.(last.(cr2p))
+    @test sign.(cos.(3*(c2_nc .- 1e-6))) == sign.(last.(cr2n))
+
+    # with nothing neg affect (pos * neg + left root find)
+    cr1p = []; cr2p = []
+    evt1 = ModelingToolkit.SymbolicContinuousCallback([c1 ~ 0], (record_crossings, [c1 => :v], [], [], cr1p); affect_neg = nothing)
+    evt2 = ModelingToolkit.SymbolicContinuousCallback([c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2p); affect_neg = nothing)
+    @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
+    trigsys_ss = structural_simplify(trigsys)
+    prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
+    @test maximum(abs.(c1_pc .- first.(cr1p))) < 1e-5
+    @test maximum(abs.(c2_pc .- first.(cr2p))) < 1e-5
+    @test sign.(cos.(c1_pc .- 1e-6)) == sign.(last.(cr1p))
+    @test sign.(cos.(3*(c2_pc .- 1e-6))) == sign.(last.(cr2p))
+
+
+    #mixed
+    cr1p = []; cr2p = []
+    cr1n = []; cr2n = []
+    evt1 = ModelingToolkit.SymbolicContinuousCallback([c1 ~ 0], (record_crossings, [c1 => :v], [], [], cr1p); affect_neg = nothing)
+    evt2 = ModelingToolkit.SymbolicContinuousCallback([c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2p); affect_neg = (record_crossings, [c2 => :v], [], [], cr2n))
+    @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
+    trigsys_ss = structural_simplify(trigsys)
+    prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
+    c1_pc = filter((<=)(0) ∘ sin, required_crossings_c1)
+    c2_pc = filter(c -> -sin(3c) > 0, required_crossings_c2) 
+    c2_nc = filter(c -> -sin(3c) < 0, required_crossings_c2) 
+    @test maximum(abs.(c1_pc .- first.(cr1p))) < 1e-5
+    @test maximum(abs.(c2_pc .- first.(cr2p))) < 1e-5
+    @test maximum(abs.(c2_nc .- first.(cr2n))) < 1e-5
+    @test sign.(cos.(c1_pc .- 1e-6)) == sign.(last.(cr1p))
+    @test sign.(cos.(3*(c2_pc .- 1e-6))) == sign.(last.(cr2p))
+    @test sign.(cos.(3*(c2_nc .- 1e-6))) == sign.(last.(cr2n))
+
+
+    # baseline affect w/ right rootfind (pos + neg + right root find)
+    @variables c1(t)=1.0 c2(t)=1.0 # c1 = cos(t), c2 = cos(3t)
+    cr1 = []; cr2 = []
+    evt1 = ModelingToolkit.SymbolicContinuousCallback([c1 ~ 0], (record_crossings, [c1 => :v], [], [], cr1); rootfind=SciMLBase.RightRootFind)
+    evt2 = ModelingToolkit.SymbolicContinuousCallback([c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2); rootfind=SciMLBase.RightRootFind)
+    @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
+    trigsys_ss = structural_simplify(trigsys)
+    prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
+    sol = solve(prob, Tsit5())
+    required_crossings_c1 = [π/2, 3*π/2]
+    required_crossings_c2 = [π/6, π/2, 5*π/6, 7*π/6, 3*π/2, 11*π/6]
+    @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1e-4
+    @test maximum(abs.(first.(cr2) .- required_crossings_c2)) < 1e-4
+    @test sign.(cos.(required_crossings_c1 .+ 1e-6)) == sign.(last.(cr1))
+    @test sign.(cos.(3*(required_crossings_c2 .+ 1e-6))) == sign.(last.(cr2))
+
+
+
+    # baseline affect w/ mixed rootfind (pos + neg + right root find)
+    cr1 = []; cr2 = []
+    evt1 = ModelingToolkit.SymbolicContinuousCallback([c1 ~ 0], (record_crossings, [c1 => :v], [], [], cr1); rootfind=SciMLBase.LeftRootFind)
+    evt2 = ModelingToolkit.SymbolicContinuousCallback([c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2); rootfind=SciMLBase.RightRootFind)
+    @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
+    trigsys_ss = structural_simplify(trigsys)
+    prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
+    sol = solve(prob, Tsit5())
+    @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1e-4
+    @test maximum(abs.(first.(cr2) .- required_crossings_c2)) < 1e-4
+    @test sign.(cos.(required_crossings_c1 .- 1e-6)) == sign.(last.(cr1))
+    @test sign.(cos.(3*(required_crossings_c2 .+ 1e-6))) == sign.(last.(cr2))
+
+    #flip order and ensure results are okay
+    cr1 = []; cr2 = []
+    evt1 = ModelingToolkit.SymbolicContinuousCallback([c1 ~ 0], (record_crossings, [c1 => :v], [], [], cr1); rootfind=SciMLBase.LeftRootFind)
+    evt2 = ModelingToolkit.SymbolicContinuousCallback([c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2); rootfind=SciMLBase.RightRootFind)
+    @named trigsys = ODESystem(eqs, t; continuous_events = [evt2, evt1])
+    trigsys_ss = structural_simplify(trigsys)
+    prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
+    sol = solve(prob, Tsit5())
+    @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1e-4
+    @test maximum(abs.(first.(cr2) .- required_crossings_c2)) < 1e-4
+    @test sign.(cos.(required_crossings_c1 .- 1e-6)) == sign.(last.(cr1))
+    @test sign.(cos.(3*(required_crossings_c2 .+ 1e-6))) == sign.(last.(cr2))
 end
