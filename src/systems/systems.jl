@@ -133,10 +133,11 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
             # we get a Nx1 matrix of noise equations, which is a special case known as scalar noise
             noise_eqs = sorted_g_rows[:, 1]
             is_scalar_noise = true
-        elseif isdiag(sorted_g_rows)
-            # If the noise matrix is diagonal, then the solver just takes a vector column of equations
-            # and it interprets that as diagonal noise.
-            noise_eqs = diag(sorted_g_rows)
+        elseif __num_isdiag_noise(sorted_g_rows)
+            # If each column of the noise matrix has either 0 or 1 non-zero entry, then this is "diagonal noise".
+            # In this case, the solver just takes a vector column of equations and it interprets that to
+            # mean that each noise process is independant
+            noise_eqs = __get_num_diag_noise(sorted_g_rows)
             is_scalar_noise = false
         else
             noise_eqs = sorted_g_rows

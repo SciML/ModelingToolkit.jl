@@ -245,11 +245,11 @@ function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
         all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
 end
 
-function __num_isdiag(mat)
-    for i in axes(mat, 1), j in axes(mat, 2)
-        i == j || isequal(mat[i, j], 0) || return false
-    end
-    return true
+function __num_isdiag_noise(mat)
+    all(col -> count(!iszero, col) <= 1, eachcol(mat))
+end
+function __get_num_diag_noise(mat)
+    vec(sum(mat; dims = 2))
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = unknowns(sys),
@@ -258,7 +258,7 @@ function generate_diffusion_function(sys::SDESystem, dvs = unknowns(sys),
     if isdde
         eqs = delay_to_function(sys, eqs)
     end
-    if eqs isa AbstractMatrix && __num_isdiag(eqs)
+    if eqs isa AbstractMatrix && __num_isdiag_noise(eqs)
         eqs = diag(eqs)
     end
     u = map(x -> time_varying_as_func(value(x), sys), dvs)
