@@ -142,17 +142,33 @@ end
 
 pop_structure_dict!(dict, key) = length(dict[key]) == 0 && pop!(dict, key)
 
+create_kwarg_type(meta, where_types, type) = haskey(meta, VariableUnit) ? create_kwarg_type_(meta[VariableUnit], where_types, type) : Expr(:curly, Union, Nothing, type)
+function create_kwarg_type_(unitmacro, where_types, type)
+    fn = gensym()
+    quote
+        #Expr(:curly, Union, :Nothing, Expr(:curly, Unitful.Quantity, Expr(:(<:), type), D, units))
+        function $fn()
+            let u = eval($unitmacro)
+            if typeof(u) <: Unitful.FreeUnits
+                Union{Nothing, Unitful.Quantity{<:$type, dimension(u), u}}
+            elseif typeof(u) <: DynamicQuantities.Quantity
+                Union{Nothing, DynamicQuantities.Quantity{<:$type, $units}}
+            else
+                throw("Unsupported units library")
+            end
+            end
+        end
+        $fn()
+    end
+end
+# function create_kwarg_type_(::DynamicQuantities.Quantity{T, D}, where_types, type) where {T, D}
+#     Expr(:curly, Union, :Nothing, Expr(:curly, DynamicQuantities.Quantity, Expr(:(<:), type), D))
+# end
+
 function update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
         varclass, where_types, meta)
     if indices isa Nothing
-        kwtype = if !isnothing(meta) && haskey(meta, VariableUnit)
-            dim = dimension(eval(meta[VariableUnit]))
-            units = gensym(:U)
-            push!(where_types, units)
-            Expr(:curly, Union, :Nothing, Expr(:curly, Quantity, Expr(:(<:), type), dim, units))
-        else
-            Expr(:curly, Union, Nothing, type)
-        end
+        kwtype = create_kwarg_type(meta, where_types, type)
         push!(kwargs, Expr(:kw, Expr(:(::), a, kwtype), nothing))
         dict[:kwargs][getname(var)] = Dict(:value => def, :type => type)
     else
