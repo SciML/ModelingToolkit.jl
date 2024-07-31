@@ -112,7 +112,8 @@ struct SymbolicContinuousCallback
     affect::Union{Vector{Equation}, FunctionalAffect}
     affect_neg::Union{Vector{Equation}, FunctionalAffect, Nothing}
     rootfind::SciMLBase.RootfindOpt
-    function SymbolicContinuousCallback(eqs::Vector{Equation}, affect = NULL_AFFECT, affect_neg = affect, rootfind=SciMLBase.LeftRootFind)
+    function SymbolicContinuousCallback(eqs::Vector{Equation}, affect = NULL_AFFECT,
+            affect_neg = affect, rootfind = SciMLBase.LeftRootFind)
         new(eqs, make_affect(affect), make_affect(affect_neg), rootfind)
     end # Default affect to nothing
 end
@@ -121,13 +122,15 @@ make_affect(affect::Tuple) = FunctionalAffect(affect...)
 make_affect(affect::NamedTuple) = FunctionalAffect(; affect...)
 
 function Base.:(==)(e1::SymbolicContinuousCallback, e2::SymbolicContinuousCallback)
-    isequal(e1.eqs, e2.eqs) && isequal(e1.affect, e2.affect) && isequal(e1.affect_neg, e2.affect_neg) && isequal(e1.rootfind, e2.rootfind)
+    isequal(e1.eqs, e2.eqs) && isequal(e1.affect, e2.affect) &&
+        isequal(e1.affect_neg, e2.affect_neg) && isequal(e1.rootfind, e2.rootfind)
 end
 Base.isempty(cb::SymbolicContinuousCallback) = isempty(cb.eqs)
 function Base.hash(cb::SymbolicContinuousCallback, s::UInt)
     s = foldr(hash, cb.eqs, init = s)
     s = cb.affect isa AbstractVector ? foldr(hash, cb.affect, init = s) : hash(cb.affect, s)
-    s = cb.affect_neg isa AbstractVector ? foldr(hash, cb.affect_neg, init = s) : hash(cb.affect_neg, s)
+    s = cb.affect_neg isa AbstractVector ? foldr(hash, cb.affect_neg, init = s) :
+        hash(cb.affect_neg, s)
     hash(cb.rootfind, s)
 end
 
@@ -143,8 +146,14 @@ function SymbolicContinuousCallback(args...)
 end # wrap eq in vector
 SymbolicContinuousCallback(p::Pair) = SymbolicContinuousCallback(p[1], p[2])
 SymbolicContinuousCallback(cb::SymbolicContinuousCallback) = cb # passthrough
-SymbolicContinuousCallback(eqs::Equation, affect = NULL_AFFECT; affect_neg = affect, rootfind=SciMLBase.LeftRootFind) =  SymbolicContinuousCallback([eqs], affect, affect_neg, rootfind)
-SymbolicContinuousCallback(eqs::Vector{Equation}, affect = NULL_AFFECT; affect_neg = affect, rootfind=SciMLBase.LeftRootFind) =  SymbolicContinuousCallback(eqs, affect, affect_neg, rootfind)
+function SymbolicContinuousCallback(eqs::Equation, affect = NULL_AFFECT;
+        affect_neg = affect, rootfind = SciMLBase.LeftRootFind)
+    SymbolicContinuousCallback([eqs], affect, affect_neg, rootfind)
+end
+function SymbolicContinuousCallback(eqs::Vector{Equation}, affect = NULL_AFFECT;
+        affect_neg = affect, rootfind = SciMLBase.LeftRootFind)
+    SymbolicContinuousCallback(eqs, affect, affect_neg, rootfind)
+end
 
 SymbolicContinuousCallbacks(cb::SymbolicContinuousCallback) = [cb]
 SymbolicContinuousCallbacks(cbs::Vector{<:SymbolicContinuousCallback}) = cbs
@@ -510,13 +519,15 @@ end
 Generate a single rootfinding callback; this happens if there is only one equation in `cbs` passed to 
 generate_rootfinding_callback and thus we can produce a ContinuousCallback instead of a VectorContinuousCallback.
 """
-function generate_single_rootfinding_callback(eq, cb, sys::AbstractODESystem, dvs = unknowns(sys),
-    ps = full_parameters(sys); kwargs...)
+function generate_single_rootfinding_callback(
+        eq, cb, sys::AbstractODESystem, dvs = unknowns(sys),
+        ps = full_parameters(sys); kwargs...)
     if !isequal(eq.lhs, 0)
         eq = 0 ~ eq.lhs - eq.rhs
     end
-    
-    rf_oop, rf_ip = generate_custom_function(sys, [eq.rhs], dvs, ps; expression = Val{false}, kwargs...)
+
+    rf_oop, rf_ip = generate_custom_function(
+        sys, [eq.rhs], dvs, ps; expression = Val{false}, kwargs...)
     affect_function = compile_affect_fn(cb, sys, dvs, ps, kwargs)
     cond = function (u, t, integ)
         if DiffEqBase.isinplace(integ.sol.prob)
@@ -527,11 +538,13 @@ function generate_single_rootfinding_callback(eq, cb, sys::AbstractODESystem, dv
             rf_oop(u, parameter_values(integ), t)
         end
     end
-    return ContinuousCallback(cond, affect_function.affect, affect_function.affect_neg, rootfind=cb.rootfind)
+    return ContinuousCallback(
+        cond, affect_function.affect, affect_function.affect_neg, rootfind = cb.rootfind)
 end
 
-function generate_vector_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = unknowns(sys),
-    ps = full_parameters(sys); rootfind=SciMLBase.RightRootFind, kwargs...)
+function generate_vector_rootfinding_callback(
+        cbs, sys::AbstractODESystem, dvs = unknowns(sys),
+        ps = full_parameters(sys); rootfind = SciMLBase.RightRootFind, kwargs...)
     eqs = map(cb -> flatten_equations(cb.eqs), cbs)
     num_eqs = length.(eqs)
     # fuse equations to create VectorContinuousCallback
@@ -543,9 +556,16 @@ function generate_vector_rootfinding_callback(cbs, sys::AbstractODESystem, dvs =
     end
 
     rhss = map(x -> x.rhs, eqs)
-    _, rf_ip = generate_custom_function(sys, rhss, dvs, ps; expression = Val{false}, kwargs...)
+    _, rf_ip = generate_custom_function(
+        sys, rhss, dvs, ps; expression = Val{false}, kwargs...)
 
-    affect_functions = @NamedTuple{affect::Function, affect_neg::Union{Function, Nothing}}[compile_affect_fn(cb, sys, dvs, ps, kwargs) for cb in cbs]
+    affect_functions = @NamedTuple{affect::Function, affect_neg::Union{Function, Nothing}}[compile_affect_fn(
+                                                                                               cb,
+                                                                                               sys,
+                                                                                               dvs,
+                                                                                               ps,
+                                                                                               kwargs)
+                                                                                           for cb in cbs]
     cond = function (out, u, t, integ)
         rf_ip(out, u, parameter_values(integ), t)
     end
@@ -571,7 +591,8 @@ function generate_vector_rootfinding_callback(cbs, sys::AbstractODESystem, dvs =
             affect_neg(integ)
         end
     end
-    return VectorContinuousCallback(cond, affect, affect_neg, length(eqs), rootfind=rootfind)
+    return VectorContinuousCallback(
+        cond, affect, affect_neg, length(eqs), rootfind = rootfind)
 end
 
 """
@@ -582,13 +603,14 @@ function compile_affect_fn(cb, sys::AbstractODESystem, dvs, ps, kwargs)
     eq_neg_aff = affect_negs(cb)
     affect = compile_affect(eq_aff, sys, dvs, ps; expression = Val{false}, kwargs...)
     if eq_neg_aff === eq_aff
-        affect_neg = affect 
+        affect_neg = affect
     elseif isnothing(eq_neg_aff)
         affect_neg = nothing
     else
-        affect_neg = compile_affect(eq_neg_aff, sys, dvs, ps; expression = Val{false}, kwargs...) 
+        affect_neg = compile_affect(
+            eq_neg_aff, sys, dvs, ps; expression = Val{false}, kwargs...)
     end
-    (affect=affect, affect_neg=affect_neg)
+    (affect = affect, affect_neg = affect_neg)
 end
 
 function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = unknowns(sys),
@@ -609,19 +631,24 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = unknow
 
     # group the cbs by what rootfind op they use
     # groupby would be very useful here, but alas
-    cb_classes = Dict{@NamedTuple{rootfind::SciMLBase.RootfindOpt}, Vector{SymbolicContinuousCallback}}()
-    for cb in cbs 
-        push!(get!(() -> SymbolicContinuousCallback[], cb_classes, (rootfind=cb.rootfind, )), cb)
+    cb_classes = Dict{
+        @NamedTuple{rootfind::SciMLBase.RootfindOpt}, Vector{SymbolicContinuousCallback}}()
+    for cb in cbs
+        push!(
+            get!(() -> SymbolicContinuousCallback[], cb_classes, (rootfind = cb.rootfind,)),
+            cb)
     end
 
     # generate the callbacks out; we sort by the equivalence class to ensure a deterministic preference order
-    compiled_callbacks = map(collect(pairs(sort!(OrderedDict(cb_classes); by=p->p.rootfind)))) do (equiv_class, cbs_in_class) 
-        return generate_vector_rootfinding_callback(cbs_in_class, sys, dvs, ps; rootfind=equiv_class.rootfind, kwargs...)
+    compiled_callbacks = map(collect(pairs(sort!(
+        OrderedDict(cb_classes); by = p -> p.rootfind)))) do (equiv_class, cbs_in_class)
+        return generate_vector_rootfinding_callback(
+            cbs_in_class, sys, dvs, ps; rootfind = equiv_class.rootfind, kwargs...)
     end
     if length(compiled_callbacks) == 1
         return compiled_callbacks[]
     else
-        return CallbackSet(compiled_callbacks...) 
+        return CallbackSet(compiled_callbacks...)
     end
 end
 
