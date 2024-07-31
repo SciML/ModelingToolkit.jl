@@ -246,7 +246,18 @@ function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
 end
 
 function __num_isdiag_noise(mat)
-    all(col -> count(!iszero, col) <= 1, eachcol(mat))
+    for j in axes(mat, 2)
+        nnz = 0
+        for i in axes(mat, 1)
+            if !isequal(mat[i, j], 0)
+                nnz += 1
+            end
+        end
+        if nnz > 1
+            return false
+        end
+    end
+    true
 end
 function __get_num_diag_noise(mat)
     vec(sum(mat; dims = 2))
