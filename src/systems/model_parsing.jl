@@ -160,7 +160,11 @@ function update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
                 Expr(:(::), a,
                     Expr(:curly, :Union, :Nothing, Expr(:curly, :AbstractArray, vartype))),
                 nothing))
-        push!(where_types, :($vartype <: $type))
+        if !isnothing(meta) && haskey(meta, VariableUnit)
+            push!(where_types, vartype)
+        else
+            push!(where_types, :($vartype <: $type))
+        end
         dict[:kwargs][getname(var)] = Dict(:value => def, :type => AbstractArray{type})
     end
     if dict[varclass] isa Vector
@@ -624,9 +628,19 @@ function convert_units(varunits::DynamicQuantities.Quantity, value)
         DynamicQuantities.SymbolicUnits.as_quantity(varunits), value))
 end
 
+function convert_units(varunits::DynamicQuantities.Quantity, value::AbstractArray{T}) where T
+    DynamicQuantities.ustrip.(DynamicQuantities.uconvert.(
+        DynamicQuantities.SymbolicUnits.as_quantity(varunits), value))
+end
+
 function convert_units(varunits::Unitful.FreeUnits, value)
     Unitful.ustrip(varunits, value)
 end
+
+function convert_units(varunits::Unitful.FreeUnits, value::AbstractArray{T}) where T
+    Unitful.ustrip.(varunits, value)
+end
+
 
 function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
     vv, def, metadata_with_exprs = parse_variable_def!(

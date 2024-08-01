@@ -209,3 +209,14 @@ end
 
 @test_throws ErrorException ParamTest(; name = :t, a = 1.0)
 @test_throws ErrorException ParamTest(; name = :t, a = 1.0u"s")
+
+@mtkmodel ArrayParamTest begin
+    @parameters begin
+        a[1:2], [unit = u"m"]
+    end
+end
+
+@named sys = ArrayParamTest()
+
+@named sys = ArrayParamTest(a = [1.0, 3.0]u"cm")
+@test ModelingToolkit.getdefault(sys.a) ≈ [0.01, 0.03]
