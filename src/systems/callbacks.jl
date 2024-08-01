@@ -112,7 +112,7 @@ struct SymbolicContinuousCallback
     affect::Union{Vector{Equation}, FunctionalAffect}
     affect_neg::Union{Vector{Equation}, FunctionalAffect, Nothing}
     rootfind::SciMLBase.RootfindOpt
-    function SymbolicContinuousCallback(eqs::Vector{Equation}, affect = NULL_AFFECT,
+    function SymbolicContinuousCallback(; eqs::Vector{Equation}, affect = NULL_AFFECT,
             affect_neg = affect, rootfind = SciMLBase.LeftRootFind)
         new(eqs, make_affect(affect), make_affect(affect_neg), rootfind)
     end # Default affect to nothing
@@ -148,11 +148,11 @@ SymbolicContinuousCallback(p::Pair) = SymbolicContinuousCallback(p[1], p[2])
 SymbolicContinuousCallback(cb::SymbolicContinuousCallback) = cb # passthrough
 function SymbolicContinuousCallback(eqs::Equation, affect = NULL_AFFECT;
         affect_neg = affect, rootfind = SciMLBase.LeftRootFind)
-    SymbolicContinuousCallback([eqs], affect, affect_neg, rootfind)
+    SymbolicContinuousCallback(eqs=[eqs], affect=affect, affect_neg=affect_neg, rootfind=rootfind)
 end
-function SymbolicContinuousCallback(eqs::Vector{Equation}, affect;
+function SymbolicContinuousCallback(eqs::Vector{Equation}, affect = NULL_AFFECT;
         affect_neg = affect, rootfind = SciMLBase.LeftRootFind)
-    SymbolicContinuousCallback(eqs, affect, affect_neg, rootfind)
+    SymbolicContinuousCallback(eqs=eqs, affect=affect, affect_neg=affect_neg, rootfind=rootfind)
 end
 
 SymbolicContinuousCallbacks(cb::SymbolicContinuousCallback) = [cb]
