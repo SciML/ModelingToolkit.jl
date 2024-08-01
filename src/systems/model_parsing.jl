@@ -628,7 +628,8 @@ function convert_units(varunits::DynamicQuantities.Quantity, value)
         DynamicQuantities.SymbolicUnits.as_quantity(varunits), value))
 end
 
-function convert_units(varunits::DynamicQuantities.Quantity, value::AbstractArray{T}) where T
+function convert_units(
+        varunits::DynamicQuantities.Quantity, value::AbstractArray{T}) where {T}
     DynamicQuantities.ustrip.(DynamicQuantities.uconvert.(
         DynamicQuantities.SymbolicUnits.as_quantity(varunits), value))
 end
@@ -637,10 +638,9 @@ function convert_units(varunits::Unitful.FreeUnits, value)
     Unitful.ustrip(varunits, value)
 end
 
-function convert_units(varunits::Unitful.FreeUnits, value::AbstractArray{T}) where T
+function convert_units(varunits::Unitful.FreeUnits, value::AbstractArray{T}) where {T}
     Unitful.ustrip.(varunits, value)
 end
-
 
 function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
     vv, def, metadata_with_exprs = parse_variable_def!(
