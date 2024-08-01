@@ -147,6 +147,7 @@ function BifurcationKit.BifurcationProblem(osys::ODESystem, args...; kwargs...)
     nsys = NonlinearSystem([0 ~ eq.rhs for eq in full_equations(osys)],
         unknowns(osys),
         parameters(osys);
+        observed = observed(osys),
         name = nameof(osys))
     return BifurcationKit.BifurcationProblem(complete(nsys), args...; kwargs...)
 end
