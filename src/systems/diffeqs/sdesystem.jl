@@ -277,9 +277,6 @@ function generate_diffusion_function(sys::SDESystem, dvs = unknowns(sys),
     if isdde
         eqs = delay_to_function(sys, eqs)
     end
-    if eqs isa AbstractMatrix && __num_isdiag_noise(eqs)
-        eqs = __get_num_diag_noise(eqs)
-    end
     u = map(x -> time_varying_as_func(value(x), sys), dvs)
     p = if has_index_cache(sys) && get_index_cache(sys) !== nothing
         reorder_parameters(get_index_cache(sys), ps)
