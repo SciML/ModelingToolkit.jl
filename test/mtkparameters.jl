@@ -183,18 +183,21 @@ end
     @testset "Type stability of $portion" for portion in [
         Tunable(), Discrete(), Constants()]
         @test_call canonicalize(portion, ps)
-        # @inferred canonicalize(portion, ps)
-        broken = (i ∈ [2, 3] && portion == Tunable())
+        @inferred canonicalize(portion, ps)
 
         # broken because the size of a vector of vectors can't be determined at compile time
-        @test_opt broken=broken target_modules=(ModelingToolkit,) canonicalize(
+        @test_opt target_modules=(ModelingToolkit,) canonicalize(
             portion, ps)
 
         buffer, repack, alias = canonicalize(portion, ps)
 
-        @test_call SciMLStructures.replace(portion, ps, ones(length(buffer)))
-        @inferred SciMLStructures.replace(portion, ps, ones(length(buffer)))
-        @test_opt target_modules=(ModelingToolkit,) SciMLStructures.replace(
+        # broken because dependent update functions break inference
+        @test_call target_modules=(ModelingToolkit,) SciMLStructures.replace(
+            portion, ps, ones(length(buffer)))
+        @test_throws Exception @inferred SciMLStructures.replace(
+            portion, ps, ones(length(buffer)))
+        @inferred MTKParameters SciMLStructures.replace(portion, ps, ones(length(buffer)))
+        @test_opt target_modules=(ModelingToolkit,) broken=true SciMLStructures.replace(
             portion, ps, ones(length(buffer)))
 
         @test_call target_modules=(ModelingToolkit,) SciMLStructures.replace!(
