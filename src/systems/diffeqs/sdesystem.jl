@@ -271,31 +271,6 @@ function __get_num_diag_noise(mat)
     end
 end
 
-# function __num_isdiag_noise(mat)
-#     for j in axes(mat, 2)
-#         nnz = 0
-#         for i in axes(mat, 1)
-#             if !isequal(mat[i, j], 0)
-#                 nnz += 1
-#             end
-#         end
-#         if nnz > 1
-#             return false
-#         end
-#     end
-#     true
-# end
-# function __get_num_diag_noise(mat)
-#     map(axes(mat, 2)) do j
-#         for i in axes(mat, 1)
-#             if !isequal(mat[i, j], 0)
-#                 return mat[i, j]
-#             end
-#         end
-#         0
-#     end
-# end
-
 function generate_diffusion_function(sys::SDESystem, dvs = unknowns(sys),
         ps = full_parameters(sys); isdde = false, kwargs...)
     eqs = get_noiseeqs(sys)
