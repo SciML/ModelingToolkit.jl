@@ -78,7 +78,6 @@ end
 
 @test OnePort.isconnector == false
 
-resistor_log = "$(@__DIR__)/logo/resistor.svg"
 @mtkmodel Resistor begin
     @extend v, i = oneport = OnePort()
     @parameters begin
