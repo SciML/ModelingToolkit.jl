@@ -241,27 +241,52 @@ function wrap_array_vars(
     end
     # tunables are scalarized and concatenated, so we need to have assignments
     # for the non-scalarized versions
-    array_tunables = Dict{Any, AbstractArray{Int}}()
-    for p in ps
-        idx = parameter_index(sys, p)
-        idx isa ParameterIndex || continue
-        idx.portion isa SciMLStructures.Tunable || continue
-        idx.idx isa AbstractArray || continue
-        array_tunables[p] = idx.idx
-    end
+    array_tunables = Dict{Any, Tuple{AbstractArray{Int}, Tuple{Vararg{Int}}}}()
     # Other parameters may be scalarized arrays but used in the vector form
-    other_array_parameters = Assignment[]
+    other_array_parameters = Dict{Any, Any}()
+
+    if ps isa Tuple && eltype(ps) <: AbstractArray
+        ps = Iterators.flatten(ps)
+    end
     for p in ps
-        idx = parameter_index(sys, p)
-        if Symbolics.isarraysymbolic(p)
-            idx === nothing || continue
-            push!(other_array_parameters, p ← collect(p))
-        elseif iscall(p) && operation(p) == getindex
-            idx === nothing && continue
-            # all of the scalarized variables are in `ps`
-             all(x -> any(isequal(x), ps), collect(p))|| continue
-            push!(other_array_parameters, p ← collect(p))
+        p = unwrap(p)
+        if iscall(p) && operation(p) == getindex
+            p = arguments(p)[1]
         end
+        symtype(p) <: AbstractArray && Symbolics.shape(p) != Symbolics.Unknown() || continue
+        scal = collect(p)
+        # all scalarized variables are in `ps`
+        any(isequal(p), ps) || all(x -> any(isequal(x), ps), scal) || continue
+        (haskey(array_tunables, p) || haskey(other_array_parameters, p)) && continue
+
+        idx = parameter_index(sys, p)
+        idx isa Int && continue
+        if idx isa ParameterIndex
+            if idx.portion != SciMLStructures.Tunable()
+                continue
+            end
+            idxs = vec(idx.idx)
+            sz = size(idx.idx)
+        else
+            # idx === nothing
+            idxs = map(Base.Fix1(parameter_index, sys), scal)
+            if all(x -> x isa ParameterIndex && x.portion isa SciMLStructures.Tunable, idxs)
+                idxs = map(x -> x.idx, idxs)
+            end
+            if !all(x -> x isa Int, idxs)
+                other_array_parameters[p] = scal
+                continue
+            end
+
+            sz = size(idxs)
+            if vec(idxs) == idxs[begin]:idxs[end]
+                idxs = idxs[begin]:idxs[end]
+            elseif vec(idxs) == idxs[begin]:-1:idxs[end]
+                idxs = idxs[begin]:-1:idxs[end]
+            end
+            idxs = vec(idxs)
+        end
+        array_tunables[p] = (idxs, sz)
     end
     for (k, inds) in array_vars
         if inds == (inds′ = inds[1]:inds[end])
@@ -276,9 +301,10 @@ function wrap_array_vars(
                 Let(
                     vcat(
                         [k ← :(view($(expr.args[uind].name), $v)) for (k, v) in array_vars],
-                        [k ← :(view($(expr.args[uind + 1].name), $v))
-                         for (k, v) in array_tunables],
-                         other_array_parameters
+                        [k ← :(reshape(view($(expr.args[uind + 1].name), $idxs), $sz))
+                         for (k, (idxs, sz)) in array_tunables],
+                        [k ← Code.MakeArray(v, symtype(k))
+                         for (k, v) in other_array_parameters]
                     ),
                     expr.body,
                     false
@@ -293,8 +319,10 @@ function wrap_array_vars(
                 Let(
                     vcat(
                         [k ← :(view($(expr.args[uind].name), $v)) for (k, v) in array_vars],
-                        [k ← :(view($(expr.args[uind + 1].name), $v))
-                         for (k, v) in array_tunables]
+                        [k ← :(reshape(view($(expr.args[uind + 1].name), $idxs), $sz))
+                         for (k, (idxs, sz)) in array_tunables],
+                        [k ← Code.MakeArray(v, symtype(k))
+                         for (k, v) in other_array_parameters]
                     ),
                     expr.body,
                     false
@@ -309,8 +337,10 @@ function wrap_array_vars(
                     vcat(
                         [k ← :(view($(expr.args[uind + 1].name), $v))
                          for (k, v) in array_vars],
-                        [k ← :(view($(expr.args[uind + 2].name), $v))
-                         for (k, v) in array_tunables]
+                        [k ← :(reshape(view($(expr.args[uind + 2].name), $idxs), $sz))
+                         for (k, (idxs, sz)) in array_tunables],
+                        [k ← Code.MakeArray(v, symtype(k))
+                         for (k, v) in other_array_parameters]
                     ),
                     expr.body,
                     false
@@ -499,7 +529,8 @@ function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
         return unwrap(sym) in 1:length(parameter_symbols(sys))
     end
     return any(isequal(sym), parameter_symbols(sys)) ||
-           hasname(sym) && is_parameter(sys, getname(sym))
+           hasname(sym) && !(iscall(sym) && operation(sym) == getindex) &&
+           is_parameter(sys, getname(sym))
 end
 
 function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Symbol)
@@ -507,7 +538,9 @@ function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Symbol
         return is_parameter(ic, sym)
     end
 
-    named_parameters = [getname(sym) for sym in parameter_symbols(sys) if hasname(sym)]
+    named_parameters = [getname(x)
+                        for x in parameter_symbols(sys)
+                        if hasname(x) && !(iscall(x) && operation(x) == getindex)]
     return any(isequal(sym), named_parameters) ||
            count(NAMESPACE_SEPARATOR, string(sym)) == 1 &&
            count(isequal(sym),
@@ -543,7 +576,7 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
         return sym
     end
     idx = findfirst(isequal(sym), parameter_symbols(sys))
-    if idx === nothing && hasname(sym)
+    if idx === nothing && hasname(sym) && !(iscall(sym) && operation(sym) == getindex)
         idx = parameter_index(sys, getname(sym))
     end
     return idx
@@ -559,13 +592,16 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym::Sym
             return idx
         end
     end
-    idx = findfirst(isequal(sym), getname.(parameter_symbols(sys)))
+    pnames = [getname(x)
+              for x in parameter_symbols(sys)
+              if hasname(x) && !(iscall(x) && operation(x) == getindex)]
+    idx = findfirst(isequal(sym), pnames)
     if idx !== nothing
         return idx
     elseif count(NAMESPACE_SEPARATOR, string(sym)) == 1
         return findfirst(isequal(sym),
             Symbol.(
-                nameof(sys), NAMESPACE_SEPARATOR_SYMBOL, getname.(parameter_symbols(sys))))
+                nameof(sys), NAMESPACE_SEPARATOR_SYMBOL, pnames))
     end
     return nothing
 end

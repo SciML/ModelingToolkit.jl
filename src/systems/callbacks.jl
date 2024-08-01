@@ -427,6 +427,7 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
             update_inds = outputidxs
         end
 
+        _ps = ps
         ps = reorder_parameters(sys, ps)
         if checkvars
             u = map(x -> time_varying_as_func(value(x), sys), dvs)
@@ -440,7 +441,7 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
         pre = get_preprocess_constants(rhss)
         rf_oop, rf_ip = build_function(rhss, u, p..., t; expression = Val{true},
             wrap_code = add_integrator_header(sys, integ, outvar) .∘
-                        wrap_array_vars(sys, rhss; dvs, ps),
+                        wrap_array_vars(sys, rhss; dvs, ps = _ps),
             outputidxs = update_inds,
             postprocess_fbody = pre,
             kwargs...)
