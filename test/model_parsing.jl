@@ -165,7 +165,8 @@ resistor = getproperty(rc, :resistor; namespace = false)
 # Test that `C_val` passed via argument is set as default of C.
 @test getdefault(rc.capacitor.C) * get_unit(rc.capacitor.C) == C_val
 # Test that `k`'s default value is unchanged.
-@test getdefault(rc.constant.k) * get_unit(rc.constant.k) == eval(RC.structure[:kwargs][:k_val][:value])
+@test getdefault(rc.constant.k) * get_unit(rc.constant.k) ==
+      eval(RC.structure[:kwargs][:k_val][:value])
 @test getdefault(rc.capacitor.v) == 0.0
 
 @test get_gui_metadata(rc.resistor).layout == Resistor.structure[:icon] ==

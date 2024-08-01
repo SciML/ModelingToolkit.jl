@@ -197,12 +197,14 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         end
         Expr(:(::), a, type) => begin
             type = getfield(mod, type)
-            parse_variable_def!(dict, mod, a, varclass, kwargs, where_types; def, type, meta)
+            parse_variable_def!(
+                dict, mod, a, varclass, kwargs, where_types; def, type, meta)
         end
         Expr(:(::), Expr(:call, a, b), type) => begin
             type = getfield(mod, type)
             def = _type_check!(def, a, type, varclass)
-            parse_variable_def!(dict, mod, a, varclass, kwargs, where_types; def, type, meta)
+            parse_variable_def!(
+                dict, mod, a, varclass, kwargs, where_types; def, type, meta)
         end
         Expr(:call, a, b) => begin
             var = generate_var!(dict, a, b, varclass, mod; indices, type)
@@ -618,7 +620,8 @@ function parse_variable_arg!(exprs, vs, dict, mod, arg, varclass, kwargs, where_
 end
 
 function convert_units(varunits::DynamicQuantities.Quantity, value)
-    DynamicQuantities.ustrip(DynamicQuantities.uconvert(DynamicQuantities.SymbolicUnits.as_quantity(varunits), value))
+    DynamicQuantities.ustrip(DynamicQuantities.uconvert(
+        DynamicQuantities.SymbolicUnits.as_quantity(varunits), value))
 end
 
 function convert_units(varunits::Unitful.FreeUnits, value)
@@ -639,10 +642,12 @@ function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
                 try
                     $setdefault($vv, $convert_units($unit, $name))
                 catch e
-                    if isa(e, $(DynamicQuantities.DimensionError)) || isa(e, $(Unitful.DimensionError))
-                        error("Unable to convert units for \'"*string(:($$vv))*"\'")
+                    if isa(e, $(DynamicQuantities.DimensionError)) ||
+                       isa(e, $(Unitful.DimensionError))
+                        error("Unable to convert units for \'" * string(:($$vv)) * "\'")
                     elseif isa(e, MethodError)
-                        error("No or invalid units provided for \'"*string(:($$vv))*"\'")
+                        error("No or invalid units provided for \'" * string(:($$vv)) *
+                              "\'")
                     else
                         rethrow(e)
                     end

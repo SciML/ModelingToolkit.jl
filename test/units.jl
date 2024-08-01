@@ -195,17 +195,17 @@ maj2 = MassActionJump(γ, [S => 1], [S => -1])
 
 @mtkmodel ParamTest begin
     @parameters begin
-        a, [unit=u"m"]
+        a, [unit = u"m"]
     end
     @variables begin
-        b(t), [unit=u"kg"]
+        b(t), [unit = u"kg"]
     end
 end
 
 @named sys = ParamTest()
 
-@named sys = ParamTest(a=3.0u"cm")
+@named sys = ParamTest(a = 3.0u"cm")
 @test ModelingToolkit.getdefault(sys.a) ≈ 0.03
 
-@test_throws ErrorException ParamTest(;name=:t, a=1.0)
-@test_throws ErrorException ParamTest(;name=:t, a=1.0u"s")
+@test_throws ErrorException ParamTest(; name = :t, a = 1.0)
+@test_throws ErrorException ParamTest(; name = :t, a = 1.0u"s")
