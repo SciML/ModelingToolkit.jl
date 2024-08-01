@@ -239,7 +239,7 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         Expr(:tuple, a, b) => begin
             meta = parse_metadata(mod, b)
             var, def, _ = parse_variable_def!(
-                dict, mod, a, varclass, kwargs, where_types, meta; type, meta)
+                dict, mod, a, varclass, kwargs, where_types; type, meta)
             if meta !== nothing
                 for (type, key) in metatypes
                     if (mt = get(meta, key, nothing)) !== nothing
