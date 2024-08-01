@@ -246,29 +246,55 @@ function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
 end
 
 function __num_isdiag_noise(mat)
-    for j in axes(mat, 2)
+    for i in axes(mat, 1)
         nnz = 0
-        for i in axes(mat, 1)
+        for j in axes(mat, 2)
             if !isequal(mat[i, j], 0)
                 nnz += 1
             end
         end
         if nnz > 1
-            return false
+            return (false)
         end
     end
     true
 end
 function __get_num_diag_noise(mat)
-    map(axes(mat, 2)) do j
-        for i in axes(mat, 1)
-            if !isequal(mat[i, j], 0)
-                return mat[i, j]
+    map(axes(mat, 1)) do i
+        for j in axes(mat, 2)
+            mij = mat[i, j]
+            if !isequal(mij, 0)
+                return mij
             end
         end
         0
     end
 end
+
+# function __num_isdiag_noise(mat)
+#     for j in axes(mat, 2)
+#         nnz = 0
+#         for i in axes(mat, 1)
+#             if !isequal(mat[i, j], 0)
+#                 nnz += 1
+#             end
+#         end
+#         if nnz > 1
+#             return false
+#         end
+#     end
+#     true
+# end
+# function __get_num_diag_noise(mat)
+#     map(axes(mat, 2)) do j
+#         for i in axes(mat, 1)
+#             if !isequal(mat[i, j], 0)
+#                 return mat[i, j]
+#             end
+#         end
+#         0
+#     end
+# end
 
 function generate_diffusion_function(sys::SDESystem, dvs = unknowns(sys),
         ps = full_parameters(sys); isdde = false, kwargs...)

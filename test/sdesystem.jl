@@ -726,10 +726,10 @@ end
 @testset "Non-diagonal noise check" begin
     @parameters σ ρ β
     @variables x(tt) y(tt) z(tt)
-    @brownian a b c
-    eqs = [D(x) ~ σ * (y - x) + 0.1a * x + 0.1b * y,
-        D(y) ~ x * (ρ - z) - y + 0.1b * y,
-        D(z) ~ x * y - β * z + 0.1c * z]
+    @brownian a b c d e f
+    eqs = [D(x) ~ σ * (y - x) + 0.1a * x + d,
+        D(y) ~ x * (ρ - z) - y + 0.1b * y + e,
+        D(z) ~ x * y - β * z + 0.1c * z + f]
     @mtkbuild de = System(eqs, tt)
 
     u0map = [
@@ -749,6 +749,7 @@ end
     @test_throws ErrorException solve(prob, SOSRI()).retcode==ReturnCode.Success
     # ImplicitEM does work for non-diagonal noise
     @test solve(prob, ImplicitEM()).retcode == ReturnCode.Success
+    @test size(ModelingToolkit.get_noiseeqs(de)) == (3, 6)
 end
 
 @testset "Diagonal noise, less brownians than equations" begin
