@@ -53,8 +53,9 @@ end
     end
 end
 
-@named p = Pin(; v = π)
-@test getdefault(p.v) == π
+@named p = Pin(; v = π * u"V")
+
+@test getdefault(p.v) ≈ π
 @test Pin.isconnector == true
 
 @mtkmodel OnePort begin
