@@ -227,6 +227,117 @@ affect_neg = [x ~ 1]
     @test e[].affect == affect
 end
 
+@testset "MutatingFunctionalAffect constructors" begin
+    fmfa(o, x, i, c) = nothing
+    m = ModelingToolkit.MutatingFunctionalAffect(fmfa)
+    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    @test m.f == fmfa
+    @test m.obs == []
+    @test m.obs_syms == []
+    @test m.modified == []
+    @test m.mod_syms == []
+    @test m.ctx === nothing
+    
+    m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (;))
+    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    @test m.f == fmfa
+    @test m.obs == []
+    @test m.obs_syms == []
+    @test m.modified == []
+    @test m.mod_syms == []
+    @test m.ctx === nothing
+    
+    m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (; x))
+    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [x])
+    @test m.obs_syms == [:x]
+    @test m.modified == []
+    @test m.mod_syms == []
+    @test m.ctx === nothing
+    
+    m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (; y=x))
+    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [x])
+    @test m.obs_syms == [:y]
+    @test m.modified == []
+    @test m.mod_syms == []
+    @test m.ctx === nothing
+    
+    m = ModelingToolkit.MutatingFunctionalAffect(fmfa; observed=(; y=x))
+    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [x])
+    @test m.obs_syms == [:y]
+    @test m.modified == []
+    @test m.mod_syms == []
+    @test m.ctx === nothing
+    
+    m = ModelingToolkit.MutatingFunctionalAffect(fmfa; modified=(; x))
+    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [])
+    @test m.obs_syms == []
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:x]
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.MutatingFunctionalAffect(fmfa; modified=(; y=x))
+    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [])
+    @test m.obs_syms == []
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:y]
+    @test m.ctx === nothing
+    
+    m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (; x), (; x))
+    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [x])
+    @test m.obs_syms == [:x]
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:x]
+    @test m.ctx === nothing
+    
+    m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (; y=x), (; y=x))
+    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [x])
+    @test m.obs_syms == [:y]
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:y]
+    @test m.ctx === nothing
+    
+    m = ModelingToolkit.MutatingFunctionalAffect(fmfa; modified=(; y=x), observed=(; y=x))
+    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [x])
+    @test m.obs_syms == [:y]
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:y]
+    @test m.ctx === nothing
+    
+    m = ModelingToolkit.MutatingFunctionalAffect(fmfa; modified=(; y=x), observed=(; y=x), ctx=3)
+    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [x])
+    @test m.obs_syms == [:y]
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:y]
+    @test m.ctx === 3
+    
+    m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (; x), (; x), 3)
+    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [x])
+    @test m.obs_syms == [:x]
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:x]
+    @test m.ctx === 3
+end
+
 ##
 
 @named sys = ODESystem(eqs, t, continuous_events = [x ~ 1])
@@ -912,27 +1023,54 @@ end
 
 @testset "Quadrature" begin 
     @variables theta(t) omega(t)
-    params = @parameters qA=0 qB=0
+    params = @parameters qA=0 qB=0 hA=0 hB=0 cnt=0
     eqs = [
         D(theta) ~ omega
-        omega ~ sin(0.5*t)
+        omega ~ 1.0
     ]
-    qAevt = ModelingToolkit.SymbolicContinuousCallback([cos(1000 * theta) ~ 0], 
-        ModelingToolkit.MutatingFunctionalAffect(modified=(; qA)) do x, o, i, c
+    function decoder(oldA, oldB, newA, newB)
+        state = (oldA, oldB, newA, newB)
+        if     state == (0, 0, 1, 0) || state == (1, 0, 1, 1) || state == (1, 1, 0, 1) || state == (0, 1, 0, 0)
+            return 1
+        elseif state == (0, 0, 0, 1) || state == (0, 1, 1, 1) || state == (1, 1, 1, 0) || state == (1, 0, 0, 0)
+            return -1
+        elseif state == (0, 0, 0, 0) || state == (0, 1, 0, 1) || state == (1, 0, 1, 0) || state == (1, 1, 1, 1)
+            return 0
+        else
+            return 0 # err is interpreted as no movement
+        end
+    end
+    # todo: warn about dups
+    # todo: warn if a variable appears in both observed and modified
+    qAevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta) ~ 0], 
+        ModelingToolkit.MutatingFunctionalAffect((; qB), (; qA, hA, hB, cnt)) do x, o, i, c
+            x.hA = x.qA
+            x.hB = o.qB
             x.qA = 1
+            x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
         end,
-        affect_neg = ModelingToolkit.MutatingFunctionalAffect(modified=(; qA)) do x, o, i, c
+        affect_neg = ModelingToolkit.MutatingFunctionalAffect((; qB), (; qA, hA, hB, cnt)) do x, o, i, c
+            x.hA = x.qA
+            x.hB = o.qB
             x.qA = 0
-        end)
-    qBevt = ModelingToolkit.SymbolicContinuousCallback([cos(1000 * theta + π/2) ~ 0], 
-        ModelingToolkit.MutatingFunctionalAffect(modified=(; qB)) do x, o, i, c
+            x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
+        end; rootfind=SciMLBase.RightRootFind)
+    qBevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta - π/2) ~ 0], 
+        ModelingToolkit.MutatingFunctionalAffect((; qA), (; qB, hA, hB, cnt)) do x, o, i, c
+            x.hA = o.qA
+            x.hB = x.qB
             x.qB = 1
+            x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
         end,
-        affect_neg = ModelingToolkit.MutatingFunctionalAffect(modified=(; qB)) do x, o, i, c
+        affect_neg = ModelingToolkit.MutatingFunctionalAffect((; qA), (; qB, hA, hB, cnt)) do x, o, i, c
+            x.hA = o.qA
+            x.hB = x.qB
             x.qB = 0
-        end)
+            x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
+        end; rootfind=SciMLBase.RightRootFind)
     @named sys = ODESystem(eqs, t, [theta, omega], params; continuous_events = [qAevt, qBevt])
     ss = structural_simplify(sys)
-    prob = ODEProblem(ss, [theta => 0.0], (0.0, 1.0))
+    prob = ODEProblem(ss, [theta => 0.0], (0.0, pi))
     sol = solve(prob, Tsit5(); dtmax=0.01)
+    @test sol[cnt] == 197 # we get 2 pulses per phase cycle (cos 0 crossing) and we go to 100 cycles; we miss a few due to the initial state
 end
