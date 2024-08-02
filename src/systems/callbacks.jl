@@ -145,17 +145,26 @@ By default `affect_neg = affect`; to only get rising edges specify `affect_neg =
 Assume without loss of generality that the equation is of the form `c(u,p,t) ~ 0`; we denote the integrator state as `i.u`. 
 For compactness, we define `prev_sign = sign(c(u[t-1], p[t-1], t-1))` and `cur_sign = sign(c(u[t], p[t], t))`.
 A condition edge will be detected and the callback will be invoked iff `prev_sign * cur_sign <= 0`. 
+The positive edge `affect` will be triggered iff an edge is detected and if `prev_sign < 0`; similarly, `affect_neg` will be
+triggered iff an edge is detected and `prev_sign > 0`. 
+
 Inter-sample condition activation is not guaranteed; for example if we use the dirac delta function as `c` to insert a 
 sharp discontinuity between integrator steps (which in this example would not normally be identified by adaptivity) then the condition is not
 guaranteed to be triggered.
 
 Once detected the integrator will "wind back" through a root-finding process to identify the point when the condition became active; the method used 
-is specified by `rootfind` from [`SciMLBase.RootfindOpt`](@ref). Multiple callbacks in the same system with different `rootfind` operations will be resolved 
-into separate VectorContinuousCallbacks in the enumeration order of `SciMLBase.RootfindOpt`, which may cause some callbacks to not fire if several become
-active at the same instant. See the `SciMLBase` documentation for more information on the semantic rules.
+is specified by `rootfind` from [`SciMLBase.RootfindOpt`](@ref). If we denote the time when the condition becomes active at tc,
+the value in the integrator after windback will be:
+* `u[tc-epsilon], p[tc-epsilon], tc` if `LeftRootFind` is used,
+* `u[tc+epsilon], p[tc+epsilon], tc` if `RightRootFind` is used,
+* or `u[t], p[t], t` if `NoRootFind` is used.
+For example, if we want to detect when an unknown variable `x` satisfies `x > 0` using the condition `x ~ 0` on a positive edge (that is, `D(x) > 0`),
+then left root finding will get us `x=-epsilon`, right root finding `x=epsilon` and no root finding whatever the next step of the integrator was after
+it passed through 0.
 
-The positive edge `affect` will be triggered iff an edge is detected and if `prev_sign < 0`; similarly, `affect_neg` will be
-triggered iff an edge is detected `prev_sign > 0`. 
+Multiple callbacks in the same system with different `rootfind` operations will be grouped
+by their `rootfind` value into separate VectorContinuousCallbacks in the enumeration order of `SciMLBase.RootfindOpt`. This may cause some callbacks to not fire if several become
+active at the same instant. See the `SciMLBase` documentation for more information on the semantic rules. 
 
 Affects (i.e. `affect` and `affect_neg`) can be specified as either:
 * A list of equations that should be applied when the callback is triggered (e.g. `x ~ 3, y ~ 7`) which must be of the form `unknown ~ observed value` where each `unknown` appears only once. Equations will be applied in the order that they appear in the vector; parameters and state updates will become immediately visible to following equations.
