@@ -48,6 +48,7 @@ See [Symbolic Metadata](@id symbolic_metadata). Metadata specified when creating
 ## Linearization
 
 See [Linearization](@ref linearization).
+See [Linearization](@ref linearization).
 
 ## Docstrings
 
