@@ -60,8 +60,6 @@ function Base.hash(a::FunctionalAffect, s::UInt)
     hash(a.ctx, s)
 end
 
-has_functional_affect(cb) = affects(cb) isa FunctionalAffect
-
 namespace_affect(affect, s) = namespace_equation(affect, s)
 function namespace_affect(affect::FunctionalAffect, s)
     FunctionalAffect(func(affect),
@@ -71,6 +69,67 @@ function namespace_affect(affect::FunctionalAffect, s)
         parameters_syms(affect),
         renamespace.((s,), discretes(affect)),
         context(affect))
+end
+
+"""
+`MutatingFunctionalAffect` differs from `FunctionalAffect` in two key ways:
+* First, insetad of the `u` vector passed to `f` being a vector of indices into `integ.u` it's instead the result of evaluating `obs` at the current state, named as specified in `obs_syms`. This allows affects to easily access observed states and decouples affect inputs from the system structure.
+* Second, it abstracts the assignment back to system states away. Instead of writing `integ.u[u.myvar] = [whatever]`, you instead declare in `mod_params` that you want to modify `myvar` and then either (out of place) return a named tuple with `myvar` or (in place) modify the associated element in the ComponentArray that's given.
+Initially, we only support "flat" states in `modified`; these states will be marked as irreducible in the overarching system and they will simply be bulk assigned at mutation. In the future, this will be extended to perform a nonlinear solve to further decouple the affect from the system structure.
+"""
+@kwdef struct MutatingFunctionalAffect
+    f::Any
+    obs::Vector
+    obs_syms::Vector{Symbol}
+    modified::Vector
+    mod_syms::Vector{Symbol}
+    ctx::Any
+end
+
+MutatingFunctionalAffect(f::Function; 
+    observed::NamedTuple = NamedTuple{()}(()),
+    modified::NamedTuple = NamedTuple{()}(()),
+    ctx=nothing) = MutatingFunctionalAffect(f, collect(values(observed)), collect(keys(observed)), collect(values(modified)), collect(keys(modified)), ctx)
+MutatingFunctionalAffect(f::Function, observed::NamedTuple; modified::NamedTuple = NamedTuple{()}(()), ctx=nothing) =
+    MutatingFunctionalAffect(f, observed=observed, modified=modified, ctx=ctx)
+MutatingFunctionalAffect(f::Function, observed::NamedTuple, modified::NamedTuple; ctx=nothing) =
+    MutatingFunctionalAffect(f, observed=observed, modified=modified, ctx=ctx)
+MutatingFunctionalAffect(f::Function, observed::NamedTuple, modified::NamedTuple, ctx) =
+    MutatingFunctionalAffect(f, observed=observed, modified=modified, ctx=ctx)
+
+func(f::MutatingFunctionalAffect) = f.f
+context(a::MutatingFunctionalAffect) = a.ctx
+observed(a::MutatingFunctionalAffect) = a.obs
+observed_syms(a::MutatingFunctionalAffect) = a.obs_syms
+discretes(a::MutatingFunctionalAffect) = filter(ModelingToolkit.isparameter, a.modified)
+modified(a::MutatingFunctionalAffect) = a.modified
+modified_syms(a::MutatingFunctionalAffect) = a.mod_syms
+
+function Base.:(==)(a1::MutatingFunctionalAffect, a2::MutatingFunctionalAffect)
+    isequal(a1.f, a2.f) && isequal(a1.obs, a2.obs) && isequal(a1.modified, a2.modified) && 
+        isequal(a1.obs_syms, a2.obs_syms) && isequal(a1.mod_syms, a2.mod_syms)&& isequal(a1.ctx, a2.ctx)
+end
+
+function Base.hash(a::MutatingFunctionalAffect, s::UInt)
+    s = hash(a.f, s)
+    s = hash(a.obs, s)
+    s = hash(a.obs_syms, s)
+    s = hash(a.modified, s)
+    s = hash(a.mod_syms, s)
+    hash(a.ctx, s)
+end
+
+function namespace_affect(affect::MutatingFunctionalAffect, s)
+    MutatingFunctionalAffect(func(affect),
+        renamespace.((s,), observed(affect)),
+        observed_syms(affect),
+        renamespace.((s,), modified(affect)),
+        modified_syms(affect),
+        context(affect))
+end
+
+function has_functional_affect(cb)
+    (affects(cb) isa FunctionalAffect || affects(cb) isa MutatingFunctionalAffect)
 end
 
 #################################### continuous events #####################################
@@ -109,8 +168,8 @@ Affects (i.e. `affect` and `affect_neg`) can be specified as either:
 """
 struct SymbolicContinuousCallback
     eqs::Vector{Equation}
-    affect::Union{Vector{Equation}, FunctionalAffect}
-    affect_neg::Union{Vector{Equation}, FunctionalAffect, Nothing}
+    affect::Union{Vector{Equation}, FunctionalAffect, MutatingFunctionalAffect}
+    affect_neg::Union{Vector{Equation}, FunctionalAffect, MutatingFunctionalAffect, Nothing}
     rootfind::SciMLBase.RootfindOpt
     function SymbolicContinuousCallback(; eqs::Vector{Equation}, affect = NULL_AFFECT,
             affect_neg = affect, rootfind = SciMLBase.LeftRootFind)
@@ -250,6 +309,7 @@ scalarize_affects(affects) = scalarize(affects)
 scalarize_affects(affects::Tuple) = FunctionalAffect(affects...)
 scalarize_affects(affects::NamedTuple) = FunctionalAffect(; affects...)
 scalarize_affects(affects::FunctionalAffect) = affects
+scalarize_affects(affects::MutatingFunctionalAffect) = affects
 
 SymbolicDiscreteCallback(p::Pair) = SymbolicDiscreteCallback(p[1], p[2])
 SymbolicDiscreteCallback(cb::SymbolicDiscreteCallback) = cb # passthrough
@@ -257,7 +317,7 @@ SymbolicDiscreteCallback(cb::SymbolicDiscreteCallback) = cb # passthrough
 function Base.show(io::IO, db::SymbolicDiscreteCallback)
     println(io, "condition: ", db.condition)
     println(io, "affects:")
-    if db.affects isa FunctionalAffect
+    if db.affects isa FunctionalAffect || db.affects isa MutatingFunctionalAffect
         # TODO
         println(io, " ", db.affects)
     else
@@ -745,6 +805,80 @@ function compile_user_affect(affect::FunctionalAffect, cb, sys, dvs, ps; kwargs.
             for idx in save_idxs
                 SciMLBase.save_discretes!(integ, idx)
             end
+        end
+    end
+end
+
+invalid_variables(sys, expr) = filter(x -> !any(isequal(x), all_symbols(sys)), vars(expr))
+function unassignable_variables(sys, expr) 
+    assignable_syms = vcat(unknowns(sys), parameters(sys))
+    return filter(x -> !any(isequal(x), assignable_syms), vars(expr))
+end
+
+function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwargs...)
+    #=
+    Implementation sketch:
+        generate observed function (oop), should save to a component array under obs_syms
+        do the same stuff as the normal FA for pars_syms
+        call the affect method - test if it's OOP or IP using applicable
+        unpack and apply the resulting values
+    =#
+    obs_exprs = observed(affect)
+    for oexpr in obs_exprs 
+        invalid_vars = invalid_variables(sys, oexpr)
+        if length(invalid_vars) > 0
+            error("Observed equation $(oexpr) in affect refers to missing variable(s) $(invalid_vars); the variables may not have been added (e.g. if a component is missing).")
+        end
+    end
+    obs_syms = observed_syms(affect)
+    obs_size = size.(obs_exprs) # we will generate a work buffer of a ComponentArray that maps obs_syms to arrays of size obs_size
+
+    mod_exprs = modified(affect)
+    for mexpr in mod_exprs 
+        if !is_observed(sys, mexpr) && parameter_index(sys, mexpr) === nothing
+            error("Expression $mexpr cannot be assigned to; currently only unknowns and parameters may be updated by an affect.")
+        end
+        invalid_vars = unassignable_variables(sys, mexpr)
+        if length(invalid_vars) > 0
+            error("Observed equation $(mexpr) in affect refers to missing variable(s) $(invalid_vars); the variables may not have been added (e.g. if a component is missing) or they may have been reduced away.")
+        end
+    end
+    mod_syms = modified_syms(affect)
+    _, mod_og_val_fun = build_explicit_observed_function(sys, mod_exprs; return_inplace=true) 
+
+    # sanity checks done! now build the data and update function for observed values
+    mkzero(sz) = if sz === () 0.0 else zeros(sz) end
+    _, obs_fun = build_explicit_observed_function(sys, reduce(vcat, Symbolics.scalarize.(obs_exprs); init = []); return_inplace=true) 
+    obs_component_array = ComponentArrays.ComponentArray(NamedTuple{(obs_syms..., )}(mkzero.(obs_size)))
+
+    # okay so now to generate the stuff to assign it back into the system
+    # note that we reorder the componentarray to make the views coherent wrt the base array
+    mod_pairs = mod_exprs .=> mod_syms
+    mod_param_pairs = filter(v -> is_parameter(sys, v[1]), mod_pairs)
+    mod_unk_pairs = filter(v -> !is_parameter(sys, v[1]), mod_pairs)
+    _, mod_og_val_fun = build_explicit_observed_function(sys, reduce(vcat, [first.(mod_param_pairs); first.(mod_unk_pairs)]; init = []); return_inplace=true) 
+    upd_params_fun = setu(sys, reduce(vcat, Symbolics.scalarize.(first.(mod_param_pairs)); init = []))
+    upd_unk_fun = setu(sys, reduce(vcat, Symbolics.scalarize.(first.(mod_unk_pairs)); init = []))
+
+    upd_component_array = ComponentArrays.ComponentArray(NamedTuple{([last.(mod_param_pairs); last.(mod_unk_pairs)]...,)}(
+        [collect(mkzero(size(e)) for e in first.(mod_param_pairs)); 
+         collect(mkzero(size(e)) for e in first.(mod_unk_pairs))]))
+    upd_params_view = view(upd_component_array, last.(mod_param_pairs))
+    upd_unks_view = view(upd_component_array, last.(mod_unk_pairs))
+    let user_affect = func(affect), ctx = context(affect)
+        function (integ)
+            # update the to-be-mutated values; this ensures that if you do a no-op then nothing happens
+            mod_og_val_fun(upd_component_array, integ.u, integ.p..., integ.t)
+            
+            # update the observed values
+            obs_fun(obs_component_array, integ.u, integ.p..., integ.t)
+
+            # let the user do their thing
+            user_affect(upd_component_array, obs_component_array, integ, ctx)
+
+            # write the new values back to the integrator
+            upd_params_fun(integ, upd_params_view)
+            upd_unk_fun(integ, upd_unks_view)
         end
     end
 end

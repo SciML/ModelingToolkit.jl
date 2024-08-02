@@ -887,3 +887,52 @@ end
     @test sol[b] == [2.0, 5.0, 5.0]
     @test sol[c] == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
 end
+@testset "Heater" begin 
+    @variables temp(t)
+    params = @parameters furnace_on_threshold=0.5 furnace_off_threshold=0.7 furnace_power=1.0 leakage=0.1 furnace_on::Bool=false
+    eqs = [
+        D(temp) ~ furnace_on * furnace_power - temp^2 * leakage
+    ]
+
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_off_threshold], 
+        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on)) do x, o, i, c
+            x.furnace_on = false
+        end)
+    furnace_enable = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_on_threshold], 
+        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on)) do x, o, i, c
+            x.furnace_on = true
+        end)
+        
+    @named sys = ODESystem(eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
+    ss = structural_simplify(sys)
+    prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+    sol = solve(prob, Tsit5(); dtmax=0.01)
+    @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
+end
+
+@testset "Quadrature" begin 
+    @variables theta(t) omega(t)
+    params = @parameters qA=0 qB=0
+    eqs = [
+        D(theta) ~ omega
+        omega ~ sin(0.5*t)
+    ]
+    qAevt = ModelingToolkit.SymbolicContinuousCallback([cos(1000 * theta) ~ 0], 
+        ModelingToolkit.MutatingFunctionalAffect(modified=(; qA)) do x, o, i, c
+            x.qA = 1
+        end,
+        affect_neg = ModelingToolkit.MutatingFunctionalAffect(modified=(; qA)) do x, o, i, c
+            x.qA = 0
+        end)
+    qBevt = ModelingToolkit.SymbolicContinuousCallback([cos(1000 * theta + π/2) ~ 0], 
+        ModelingToolkit.MutatingFunctionalAffect(modified=(; qB)) do x, o, i, c
+            x.qB = 1
+        end,
+        affect_neg = ModelingToolkit.MutatingFunctionalAffect(modified=(; qB)) do x, o, i, c
+            x.qB = 0
+        end)
+    @named sys = ODESystem(eqs, t, [theta, omega], params; continuous_events = [qAevt, qBevt])
+    ss = structural_simplify(sys)
+    prob = ODEProblem(ss, [theta => 0.0], (0.0, 1.0))
+    sol = solve(prob, Tsit5(); dtmax=0.01)
+end
