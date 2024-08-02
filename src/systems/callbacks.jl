@@ -818,10 +818,10 @@ function compile_user_affect(affect::FunctionalAffect, cb, sys, dvs, ps; kwargs.
     end
 end
 
-invalid_variables(sys, expr) = filter(x -> !any(isequal(x), all_symbols(sys)), vars(expr))
+invalid_variables(sys, expr) = filter(x -> !any(isequal(x), all_symbols(sys)), reduce(vcat, vars(expr); init=[]))
 function unassignable_variables(sys, expr) 
     assignable_syms = vcat(unknowns(sys), parameters(sys))
-    return filter(x -> !any(isequal(x), assignable_syms), vars(expr))
+    return filter(x -> !any(isequal(x), assignable_syms), reduce(vcat, vars(expr); init=[]))
 end
 
 function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwargs...)
@@ -832,6 +832,21 @@ function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwa
         call the affect method - test if it's OOP or IP using applicable
         unpack and apply the resulting values
     =#
+    function check_dups(syms, exprs) # = (syms_dedup, exprs_dedup)
+        seen = Set{Symbol}()
+        syms_dedup = []; exprs_dedup = []
+        for (sym, exp) in Iterators.zip(syms, exprs)
+            if !in(sym, seen)
+                push!(syms_dedup, sym)
+                push!(exprs_dedup, exp)
+                push!(seen, sym)
+            else
+                @warn "Expression $(expr) is aliased as $sym, which has already been used. The first definition will be used."
+            end
+        end
+        return (syms_dedup, exprs_dedup)
+    end
+
     obs_exprs = observed(affect)
     for oexpr in obs_exprs 
         invalid_vars = invalid_variables(sys, oexpr)
@@ -840,6 +855,7 @@ function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwa
         end
     end
     obs_syms = observed_syms(affect)
+    obs_syms, obs_exprs = check_dups(obs_syms, obs_exprs)
     obs_size = size.(obs_exprs) # we will generate a work buffer of a ComponentArray that maps obs_syms to arrays of size obs_size
 
     mod_exprs = modified(affect)
@@ -849,11 +865,17 @@ function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwa
         end
         invalid_vars = unassignable_variables(sys, mexpr)
         if length(invalid_vars) > 0
-            error("Observed equation $(mexpr) in affect refers to missing variable(s) $(invalid_vars); the variables may not have been added (e.g. if a component is missing) or they may have been reduced away.")
+            error("Modified equation $(mexpr) in affect refers to missing variable(s) $(invalid_vars); the variables may not have been added (e.g. if a component is missing) or they may have been reduced away.")
         end
     end
     mod_syms = modified_syms(affect)
+    mod_syms, mod_exprs = check_dups(mod_syms, mod_exprs)
     _, mod_og_val_fun = build_explicit_observed_function(sys, mod_exprs; return_inplace=true) 
+
+    overlapping_syms = intersect(mod_syms, obs_syms)
+    if length(overlapping_syms) > 0
+        @warn "The symbols $overlapping_syms are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value."
+    end
 
     # sanity checks done! now build the data and update function for observed values
     mkzero(sz) = if sz === () 0.0 else zeros(sz) end

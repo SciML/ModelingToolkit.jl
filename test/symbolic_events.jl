@@ -1021,6 +1021,46 @@ end
     @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
 end
 
+@testset "MutatingFunctionalAffect errors and warnings" begin 
+    @variables temp(t)
+    params = @parameters furnace_on_threshold=0.5 furnace_off_threshold=0.7 furnace_power=1.0 leakage=0.1 furnace_on::Bool=false
+    eqs = [
+        D(temp) ~ furnace_on * furnace_power - temp^2 * leakage
+    ]
+
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_off_threshold], 
+        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on), observed=(; furnace_on)) do x, o, i, c
+            x.furnace_on = false
+        end)
+    @named sys = ODESystem(eqs, t, [temp], params; continuous_events = [furnace_off])
+    ss = structural_simplify(sys)
+    @test_logs (:warn, "The symbols Any[:furnace_on] are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value.") prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+
+    @variables tempsq(t) # trivially eliminated
+    eqs = [
+        tempsq ~ temp^2
+        D(temp) ~ furnace_on * furnace_power - temp^2 * leakage
+    ]
+
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_off_threshold], 
+        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on, tempsq), observed=(; furnace_on)) do x, o, i, c
+            x.furnace_on = false
+        end)
+    @named sys = ODESystem(eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
+    ss = structural_simplify(sys)
+    @test_throws "refers to missing variable(s)" prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+
+    
+    @parameters not_actually_here
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_off_threshold], 
+        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on), observed=(; furnace_on, not_actually_here)) do x, o, i, c
+            x.furnace_on = false
+        end)
+    @named sys = ODESystem(eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
+    ss = structural_simplify(sys)
+    @test_throws "refers to missing variable(s)" prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+end
+
 @testset "Quadrature" begin 
     @variables theta(t) omega(t)
     params = @parameters qA=0 qB=0 hA=0 hB=0 cnt=0
@@ -1040,8 +1080,6 @@ end
             return 0 # err is interpreted as no movement
         end
     end
-    # todo: warn about dups
-    # todo: warn if a variable appears in both observed and modified
     qAevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta) ~ 0], 
         ModelingToolkit.MutatingFunctionalAffect((; qB), (; qA, hA, hB, cnt)) do x, o, i, c
             x.hA = x.qA
