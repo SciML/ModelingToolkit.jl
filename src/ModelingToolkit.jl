@@ -275,4 +275,19 @@ export debug_system
 export Sample, Hold, Shift, ShiftIndex, sampletime, SampleTime
 export Clock, SolverStepClock, TimeDomain
 
+function __init__()
+    Base.Experimental.register_error_hint(TypeError) do io, exc
+        if exc.expected == Bool && exc.got isa Num
+            println(io, "\nA symbolic expression appeared in a Boolean context. This error arises in situations where Julia expects a Bool, like ")
+            printstyled(io, "if boolean_condition", color=:blue)
+            printstyled(io, "\t\t use ifelse(boolean_condition, then branch, else branch)\n", color=:green)
+            printstyled(io, "x && y", color=:blue)
+            printstyled(io, "\t\t\t\t use x & y\n", color=:green)
+            printstyled(io, "booelan_condition ? a : b", color=:blue)
+            printstyled(io, "\t use ifelse(boolean_condition, a, b)\n", color=:green)
+            print(io, "but a symbolic expression appeared instead of a Bool. For help regarding control flow with symbolic variables, see https://docs.sciml.ai/ModelingToolkit/dev/basics/FAQ/#How-do-I-handle-if-statements-in-my-symbolic-forms?")
+        end
+    end
+end
+
 end # module
