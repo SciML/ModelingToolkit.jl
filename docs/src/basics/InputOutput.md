@@ -29,6 +29,7 @@ This function takes a vector of variables that are to be considered inputs, i.e.
 
 !!! note "Un-simplified system"
     
+    
     This function expects `sys` to be un-simplified, i.e., `structural_simplify` or `@mtkbuild` should not be called on the system before passing it into this function. `generate_control_function` calls a special version of `structural_simplify` internally.
 
 ## Generating an output function, ``g``
