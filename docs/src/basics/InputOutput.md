@@ -43,6 +43,7 @@ The order of the user-specified output variables determines the order of the out
 ## Input-output variable metadata
 
 See [Symbolic Metadata](@ref symbolic_metadata). Metadata specified when creating variables is not directly used by any of the functions above, but the user can use the accessor functions `ModelingToolkit.inputs(sys)` and `ModelingToolkit.outputs(sys)` to obtain all variables with such metadata for passing to the functions above. The presence of this metadata is not required for any IO functionality and may be omitted.
+See [Symbolic Metadata](@id symbolic_metadata). Metadata specified when creating variables is not directly used by any of the functions above, but the user can use the accessor functions `ModelingToolkit.inputs(sys)` and `ModelingToolkit.outputs(sys)` to obtain all variables with such metadata for passing to the functions above. The presence of this metadata is not required for any IO functionality and may be omitted.
 
 ## Linearization
 
