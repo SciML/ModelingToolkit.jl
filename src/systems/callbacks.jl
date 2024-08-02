@@ -148,11 +148,13 @@ SymbolicContinuousCallback(p::Pair) = SymbolicContinuousCallback(p[1], p[2])
 SymbolicContinuousCallback(cb::SymbolicContinuousCallback) = cb # passthrough
 function SymbolicContinuousCallback(eqs::Equation, affect = NULL_AFFECT;
         affect_neg = affect, rootfind = SciMLBase.LeftRootFind)
-    SymbolicContinuousCallback(eqs=[eqs], affect=affect, affect_neg=affect_neg, rootfind=rootfind)
+    SymbolicContinuousCallback(
+        eqs = [eqs], affect = affect, affect_neg = affect_neg, rootfind = rootfind)
 end
 function SymbolicContinuousCallback(eqs::Vector{Equation}, affect = NULL_AFFECT;
         affect_neg = affect, rootfind = SciMLBase.LeftRootFind)
-    SymbolicContinuousCallback(eqs=eqs, affect=affect, affect_neg=affect_neg, rootfind=rootfind)
+    SymbolicContinuousCallback(
+        eqs = eqs, affect = affect, affect_neg = affect_neg, rootfind = rootfind)
 end
 
 SymbolicContinuousCallbacks(cb::SymbolicContinuousCallback) = [cb]
