@@ -48,7 +48,6 @@ using ModelingToolkit: inputs, outputs
 
 !!! note "Un-simplified system"
     
-    
     Linearization expects `sys` to be un-simplified, i.e., `structural_simplify` or `@mtkbuild` should not be called on the system before linearizing.
 
 ## Operating point
