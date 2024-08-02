@@ -72,10 +72,29 @@ function namespace_affect(affect::FunctionalAffect, s)
 end
 
 """
-`MutatingFunctionalAffect` differs from `FunctionalAffect` in two key ways:
-* First, insetad of the `u` vector passed to `f` being a vector of indices into `integ.u` it's instead the result of evaluating `obs` at the current state, named as specified in `obs_syms`. This allows affects to easily access observed states and decouples affect inputs from the system structure.
-* Second, it abstracts the assignment back to system states away. Instead of writing `integ.u[u.myvar] = [whatever]`, you instead declare in `mod_params` that you want to modify `myvar` and then either (out of place) return a named tuple with `myvar` or (in place) modify the associated element in the ComponentArray that's given.
-Initially, we only support "flat" states in `modified`; these states will be marked as irreducible in the overarching system and they will simply be bulk assigned at mutation. In the future, this will be extended to perform a nonlinear solve to further decouple the affect from the system structure.
+    MutatingFunctionalAffect(f::Function; observed::NamedTuple, modified::NamedTuple, ctx)
+
+`MutatingFunctionalAffect` is a helper for writing affect functions that will compute observed values and
+ensure that modified values are correctly written back into the system. The affect function `f` needs to have
+one of three signatures:
+* `f(observed::ComponentArray)` if the function only reads observed values back from the system,
+* `f(observed::ComponentArray, modified::ComponentArray)` if the function also writes values (unknowns or parameters) into the system,
+* `f(observed::ComponentArray, modified::ComponentArray, ctx)` if the function needs the user-defined context,
+* `f(observed::ComponentArray, modified::ComponentArray, ctx, integrator)` if the function needs the low-level integrator.
+
+The function `f` will be called with `observed` and `modified` `ComponentArray`s that are derived from their respective `NamedTuple` definitions.
+Each `NamedTuple` should map an expression to a symbol; for example if we pass `observed=(; x = a + b)` this will alias the result of executing `a+b` in the system as `x`
+so the value of `a + b` will be accessible as `observed.x` in `f`. `modified` currently restricts symbolic expressions to only bare variables, so only tuples of the form
+`(; x = y)` or `(; x)` (which aliases `x` as itself) are allowed.
+
+Both `observed` and `modified` will be automatically populated with the current values of their corresponding expressions on function entry.
+The values in `modified` will be written back to the system after `f` returns. For example, if we want to update the value of `x` to be the result of `x + y` we could write
+
+    MutatingFunctionalAffect(observed=(; x_plus_y = x + y), modified=(; x)) do o, m
+        m.x = o.x_plus_y
+    end
+
+The affect function updates the value at `x` in `modified` to be the result of evaluating `x + y` as passed in the observed values.
 """
 @kwdef struct MutatingFunctionalAffect
     f::Any
@@ -174,6 +193,7 @@ Affects (i.e. `affect` and `affect_neg`) can be specified as either:
     + `read_parameters` is a vector of the parameters that are *used* by `f!`. Their indices are passed to `f` in `p` similarly to the indices of `unknowns` passed in `u`.
     + `modified_parameters` is a vector of the parameters that are *modified* by `f!`. Note that a parameter will not appear in `p` if it only appears in `modified_parameters`; it must appear in both `parameters` and `modified_parameters` if it is used in the affect definition.
     + `ctx` is a user-defined context object passed to `f!` when invoked. This value is aliased for each problem.
+* A [`MutatingFunctionalAffect`](@ref); refer to its documentation for details.
 """
 struct SymbolicContinuousCallback
     eqs::Vector{Equation}
