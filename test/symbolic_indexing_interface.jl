@@ -13,15 +13,15 @@ using SciMLStructures: Tunable
     @test variable_index.((odesys,), [x, y, a, b, t, 1, 2, :x, :y, :a, :b]) ==
           [1, 2, nothing, nothing, nothing, 1, 2, 1, 2, nothing, nothing]
     @test isequal(variable_symbols(odesys), [x, y])
-    @test all(is_parameter.((odesys,), [a, b, ParameterIndex(Tunable(), (1, 1)), :a, :b]))
+    @test all(is_parameter.((odesys,), [a, b, ParameterIndex(Tunable(), 1), :a, :b]))
     @test all(.!is_parameter.((odesys,), [x, y, t, 3, 0, :x, :y]))
     @test parameter_index(odesys, a) == parameter_index(odesys, :a)
-    @test parameter_index(odesys, a) isa ParameterIndex{Tunable, Tuple{Int, Int}}
+    @test parameter_index(odesys, a) isa ParameterIndex{Tunable, Int}
     @test parameter_index(odesys, b) == parameter_index(odesys, :b)
-    @test parameter_index(odesys, b) isa ParameterIndex{Tunable, Tuple{Int, Int}}
+    @test parameter_index(odesys, b) isa ParameterIndex{Tunable, Int}
     @test parameter_index.(
-        (odesys,), [x, y, t, ParameterIndex(Tunable(), (1, 1)), :x, :y]) ==
-          [nothing, nothing, nothing, ParameterIndex(Tunable(), (1, 1)), nothing, nothing]
+        (odesys,), [x, y, t, ParameterIndex(Tunable(), 1), :x, :y]) ==
+          [nothing, nothing, nothing, ParameterIndex(Tunable(), 1), nothing, nothing]
     @test isequal(parameter_symbols(odesys), [a, b])
     @test all(is_independent_variable.((odesys,), [t, :t]))
     @test all(.!is_independent_variable.((odesys,), [x, y, a, :x, :y, :a]))

@@ -485,6 +485,7 @@ function build_explicit_observed_function(sys, ts;
     if inputs !== nothing
         ps = setdiff(ps, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
     end
+    _ps = ps
     if ps isa Tuple
         ps = DestructuredArgs.(ps, inbounds = !checkbounds)
     elseif has_index_cache(sys) && get_index_cache(sys) !== nothing
@@ -505,19 +506,24 @@ function build_explicit_observed_function(sys, ts;
     end
     pre = get_postprocess_fbody(sys)
 
+    array_wrapper = if param_only
+        wrap_array_vars(sys, ts; ps = _ps, dvs = nothing)
+    else
+        wrap_array_vars(sys, ts; ps = _ps)
+    end
     # Need to keep old method of building the function since it uses `output_type`,
     # which can't be provided to `build_function`
     oop_fn = Func(args, [],
                  pre(Let(obsexprs,
                      isscalar ? ts[1] : MakeArray(ts, output_type),
-                     false))) |> wrap_array_vars(sys, ts)[1] |> toexpr
+                     false))) |> array_wrapper[1] |> toexpr
     oop_fn = expression ? oop_fn : eval_or_rgf(oop_fn; eval_expression, eval_module)
 
     if !isscalar
         iip_fn = build_function(ts,
             args...;
             postprocess_fbody = pre,
-            wrap_code = wrap_array_vars(sys, ts) .∘ wrap_assignments(isscalar, obsexprs),
+            wrap_code = array_wrapper .∘ wrap_assignments(isscalar, obsexprs),
             expression = Val{true})[2]
         if !expression
             iip_fn = eval_or_rgf(iip_fn; eval_expression, eval_module)

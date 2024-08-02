@@ -354,7 +354,8 @@ function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
         condit = substitute(condit, cmap)
     end
     expr = build_function(
-        condit, u, t, p...; expression = Val{true}, wrap_code = condition_header(sys),
+        condit, u, t, p...; expression = Val{true},
+        wrap_code = condition_header(sys) .∘ wrap_array_vars(sys, condit; dvs, ps),
         kwargs...)
     if expression == Val{true}
         return expr
@@ -411,10 +412,8 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
                 update_inds = map(sym -> unknownind[sym], update_vars)
             elseif isparameter(first(lhss)) && alleq
                 if has_index_cache(sys) && get_index_cache(sys) !== nothing
-                    ic = get_index_cache(sys)
                     update_inds = map(update_vars) do sym
-                        pind = parameter_index(sys, sym)
-                        discrete_linear_index(ic, pind)
+                        return parameter_index(sys, sym)
                     end
                 else
                     psind = Dict(reverse(en) for en in enumerate(ps))
@@ -428,6 +427,7 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
             update_inds = outputidxs
         end
 
+        _ps = ps
         ps = reorder_parameters(sys, ps)
         if checkvars
             u = map(x -> time_varying_as_func(value(x), sys), dvs)
@@ -440,7 +440,8 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
         integ = gensym(:MTKIntegrator)
         pre = get_preprocess_constants(rhss)
         rf_oop, rf_ip = build_function(rhss, u, p..., t; expression = Val{true},
-            wrap_code = add_integrator_header(sys, integ, outvar),
+            wrap_code = add_integrator_header(sys, integ, outvar) .∘
+                        wrap_array_vars(sys, rhss; dvs, ps = _ps),
             outputidxs = update_inds,
             postprocess_fbody = pre,
             kwargs...)

@@ -16,7 +16,7 @@ end
 function MTKParameters(
         sys::AbstractSystem, p, u0 = Dict(); tofloat = false, use_union = false,
         eval_expression = false, eval_module = @__MODULE__)
-    ic = if has_index_cache(sys) && get_index_cache(sys) !== nothing
+    ic::IndexCache = if has_index_cache(sys) && get_index_cache(sys) !== nothing
         get_index_cache(sys)
     else
         error("Cannot create MTKParameters if system does not have index_cache")
@@ -98,8 +98,8 @@ function MTKParameters(
         end
     end
 
-    tunable_buffer = Tuple(Vector{temp.type}(undef, temp.length)
-    for temp in ic.tunable_buffer_sizes)
+    tunable_buffer = Vector{ic.tunable_buffer_size.type}(
+        undef, ic.tunable_buffer_size.length)
     disc_buffer = SizedArray{Tuple{length(ic.discrete_buffer_sizes)}}([Tuple(Vector{temp.type}(
                                                                                  undef,
                                                                                  temp.length)
@@ -114,8 +114,8 @@ function MTKParameters(
     function set_value(sym, val)
         done = true
         if haskey(ic.tunable_idx, sym)
-            i, j = ic.tunable_idx[sym]
-            tunable_buffer[i][j] = val
+            idx = ic.tunable_idx[sym]
+            tunable_buffer[idx] = val
         elseif haskey(ic.discrete_idx, sym)
             i, j, k = ic.discrete_idx[sym]
             disc_buffer[i][j][k] = val
@@ -157,7 +157,10 @@ function MTKParameters(
             end
         end
     end
-    tunable_buffer = narrow_buffer_type.(tunable_buffer)
+    tunable_buffer = narrow_buffer_type(tunable_buffer)
+    if isempty(tunable_buffer)
+        tunable_buffer = Float64[]
+    end
     disc_buffer = broadcast.(narrow_buffer_type, disc_buffer)
     const_buffer = narrow_buffer_type.(const_buffer)
     # Don't narrow nonnumeric types
@@ -172,7 +175,8 @@ function MTKParameters(
         end
         dep_exprs = identity.(dep_exprs)
         psyms = reorder_parameters(ic, full_parameters(sys))
-        update_fn_exprs = build_function(dep_exprs, psyms..., expression = Val{true})
+        update_fn_exprs = build_function(dep_exprs, psyms..., expression = Val{true},
+            wrap_code = wrap_array_vars(sys, dep_exprs; dvs = nothing))
 
         update_function_oop, update_function_iip = eval_or_rgf.(
             update_fn_exprs; eval_expression, eval_module)
@@ -269,8 +273,40 @@ SciMLStructures.isscimlstructure(::MTKParameters) = true
 
 SciMLStructures.ismutablescimlstructure(::MTKParameters) = true
 
-for (Portion, field, recurse) in [(SciMLStructures.Tunable, :tunable, 1)
-                                  (SciMLStructures.Discrete, :discrete, 2)
+function SciMLStructures.canonicalize(::SciMLStructures.Tunable, p::MTKParameters)
+    arr = p.tunable
+    repack = let p = p
+        function (new_val)
+            if new_val !== p.tunable
+                copyto!(p.tunable, new_val)
+            end
+            if p.dependent_update_iip !== nothing
+                p.dependent_update_iip(ArrayPartition(p.dependent), p...)
+            end
+            return p
+        end
+    end
+    return arr, repack, true
+end
+
+function SciMLStructures.replace(::SciMLStructures.Tunable, p::MTKParameters, newvals)
+    @set! p.tunable = newvals
+    if p.dependent_update_oop !== nothing
+        raw = p.dependent_update_oop(p...)
+        @set! p.dependent = split_into_buffers(raw, p.dependent, Val(false))
+    end
+    return p
+end
+
+function SciMLStructures.replace!(::SciMLStructures.Tunable, p::MTKParameters, newvals)
+    copyto!(p.tunable, newvals)
+    if p.dependent_update_iip !== nothing
+        p.dependent_update_iip(ArrayPartition(p.dependent), p...)
+    end
+    return nothing
+end
+
+for (Portion, field, recurse) in [(SciMLStructures.Discrete, :discrete, 2)
                                   (SciMLStructures.Constants, :constant, 1)
                                   (Nonnumeric, :nonnumeric, 1)]
     @eval function SciMLStructures.canonicalize(::$Portion, p::MTKParameters)
@@ -308,7 +344,7 @@ for (Portion, field, recurse) in [(SciMLStructures.Tunable, :tunable, 1)
 end
 
 function Base.copy(p::MTKParameters)
-    tunable = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.tunable)
+    tunable = copy(p.tunable)
     discrete = typeof(p.discrete)([Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf)
                                    for buf in clockbuf) for clockbuf in p.discrete])
     constant = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.constant)
@@ -327,6 +363,9 @@ end
 
 function SymbolicIndexingInterface.parameter_values(p::MTKParameters, pind::ParameterIndex)
     @unpack portion, idx = pind
+    if portion isa SciMLStructures.Tunable
+        return idx isa Int ? p.tunable[idx] : view(p.tunable, idx)
+    end
     i, j, k... = idx
     if portion isa SciMLStructures.Tunable
         return isempty(k) ? p.tunable[i][j] : p.tunable[i][j][k...]
@@ -347,45 +386,44 @@ end
 function SymbolicIndexingInterface.set_parameter!(
         p::MTKParameters, val, idx::ParameterIndex)
     @unpack portion, idx, validate_size = idx
-    i, j, k... = idx
     if portion isa SciMLStructures.Tunable
-        if isempty(k)
-            if validate_size && size(val) !== size(p.tunable[i][j])
-                throw(InvalidParameterSizeException(size(p.tunable[i][j]), size(val)))
-            end
-            p.tunable[i][j] = val
-        else
-            p.tunable[i][j][k...] = val
+        if validate_size && size(val) !== size(idx)
+            throw(InvalidParameterSizeException(size(idx), size(val)))
         end
-    elseif portion isa SciMLStructures.Discrete
-        k, l... = k
-        if isempty(l)
-            if validate_size && size(val) !== size(p.discrete[i][j][k])
-                throw(InvalidParameterSizeException(size(p.discrete[i][j][k]), size(val)))
-            end
-            p.discrete[i][j][k] = val
-        else
-            p.discrete[i][j][k][l...] = val
-        end
-    elseif portion isa SciMLStructures.Constants
-        if isempty(k)
-            if validate_size && size(val) !== size(p.constant[i][j])
-                throw(InvalidParameterSizeException(size(p.constant[i][j]), size(val)))
-            end
-            p.constant[i][j] = val
-        else
-            p.constant[i][j][k...] = val
-        end
-    elseif portion === DEPENDENT_PORTION
-        error("Cannot set value of dependent parameter")
-    elseif portion === NONNUMERIC_PORTION
-        if isempty(k)
-            p.nonnumeric[i][j] = val
-        else
-            p.nonnumeric[i][j][k...] = val
-        end
+        p.tunable[idx] = val
     else
-        error("Unhandled portion $portion")
+        i, j, k... = idx
+        if portion isa SciMLStructures.Discrete
+            k, l... = k
+            if isempty(l)
+                if validate_size && size(val) !== size(p.discrete[i][j][k])
+                    throw(InvalidParameterSizeException(
+                        size(p.discrete[i][j][k]), size(val)))
+                end
+                p.discrete[i][j][k] = val
+            else
+                p.discrete[i][j][k][l...] = val
+            end
+        elseif portion isa SciMLStructures.Constants
+            if isempty(k)
+                if validate_size && size(val) !== size(p.constant[i][j])
+                    throw(InvalidParameterSizeException(size(p.constant[i][j]), size(val)))
+                end
+                p.constant[i][j] = val
+            else
+                p.constant[i][j][k...] = val
+            end
+        elseif portion === DEPENDENT_PORTION
+            error("Cannot set value of dependent parameter")
+        elseif portion === NONNUMERIC_PORTION
+            if isempty(k)
+                p.nonnumeric[i][j] = val
+            else
+                p.nonnumeric[i][j][k...] = val
+            end
+        else
+            error("Unhandled portion $portion")
+        end
     end
     if p.dependent_update_iip !== nothing
         p.dependent_update_iip(ArrayPartition(p.dependent), p...)
@@ -395,41 +433,39 @@ end
 function _set_parameter_unchecked!(
         p::MTKParameters, val, idx::ParameterIndex; update_dependent = true)
     @unpack portion, idx = idx
-    i, j, k... = idx
     if portion isa SciMLStructures.Tunable
-        if isempty(k)
-            p.tunable[i][j] = val
-        else
-            p.tunable[i][j][k...] = val
-        end
-    elseif portion isa SciMLStructures.Discrete
-        k, l... = k
-        if isempty(l)
-            p.discrete[i][j][k] = val
-        else
-            p.discrete[i][j][k][l...] = val
-        end
-    elseif portion isa SciMLStructures.Constants
-        if isempty(k)
-            p.constant[i][j] = val
-        else
-            p.constant[i][j][k...] = val
-        end
-    elseif portion === DEPENDENT_PORTION
-        if isempty(k)
-            p.dependent[i][j] = val
-        else
-            p.dependent[i][j][k...] = val
-        end
-        update_dependent = false
-    elseif portion === NONNUMERIC_PORTION
-        if isempty(k)
-            p.nonnumeric[i][j] = val
-        else
-            p.nonnumeric[i][j][k...] = val
-        end
+        p.tunable[idx] = val
     else
-        error("Unhandled portion $portion")
+        i, j, k... = idx
+        if portion isa SciMLStructures.Discrete
+            k, l... = k
+            if isempty(l)
+                p.discrete[i][j][k] = val
+            else
+                p.discrete[i][j][k][l...] = val
+            end
+        elseif portion isa SciMLStructures.Constants
+            if isempty(k)
+                p.constant[i][j] = val
+            else
+                p.constant[i][j][k...] = val
+            end
+        elseif portion === DEPENDENT_PORTION
+            if isempty(k)
+                p.dependent[i][j] = val
+            else
+                p.dependent[i][j][k...] = val
+            end
+            update_dependent = false
+        elseif portion === NONNUMERIC_PORTION
+            if isempty(k)
+                p.nonnumeric[i][j] = val
+            else
+                p.nonnumeric[i][j][k...] = val
+            end
+        else
+            error("Unhandled portion $portion")
+        end
     end
     update_dependent && p.dependent_update_iip !== nothing &&
         p.dependent_update_iip(ArrayPartition(p.dependent), p...)
@@ -508,8 +544,7 @@ function indp_to_system(indp)
 end
 
 function SymbolicIndexingInterface.remake_buffer(indp, oldbuf::MTKParameters, vals::Dict)
-    newbuf = @set oldbuf.tunable = Tuple(Vector{Any}(undef, length(buf))
-    for buf in oldbuf.tunable)
+    newbuf = @set oldbuf.tunable = Vector{Any}(undef, length(oldbuf.tunable))
     @set! newbuf.discrete = SizedVector{length(newbuf.discrete)}([Tuple(Vector{Any}(undef,
                                                                             length(buf))
                                                                   for buf in clockbuf)
@@ -553,7 +588,7 @@ function SymbolicIndexingInterface.remake_buffer(indp, oldbuf::MTKParameters, va
         end
     end
 
-    @set! newbuf.tunable = narrow_buffer_type_and_fallback_undefs.(
+    @set! newbuf.tunable = narrow_buffer_type_and_fallback_undefs(
         oldbuf.tunable, newbuf.tunable)
     @set! newbuf.discrete = SizedVector{length(newbuf.discrete)}([narrow_buffer_type_and_fallback_undefs.(
                                                                       oldclockbuf,
@@ -644,8 +679,8 @@ _num_subarrays(v::Tuple) = length(v)
 function Base.getindex(buf::MTKParameters, i)
     i_orig = i
     if !isempty(buf.tunable)
-        i <= _num_subarrays(buf.tunable) && return _subarrays(buf.tunable)[i]
-        i -= _num_subarrays(buf.tunable)
+        i == 1 && return buf.tunable
+        i -= 1
     end
     if !isempty(buf.discrete)
         for clockbuf in buf.discrete
@@ -667,37 +702,13 @@ function Base.getindex(buf::MTKParameters, i)
     end
     throw(BoundsError(buf, i_orig))
 end
-function Base.setindex!(p::MTKParameters, val, i)
-    function _helper(buf)
-        done = false
-        for v in buf
-            if i <= length(v)
-                v[i] = val
-                done = true
-            else
-                i -= length(v)
-            end
-        end
-        done
-    end
-    _helper(p.tunable) || _helper(Iterators.flatten(p.discrete)) || _helper(p.constant) ||
-        _helper(p.nonnumeric) || throw(BoundsError(p, i))
-    if p.dependent_update_iip !== nothing
-        p.dependent_update_iip(ArrayPartition(p.dependent), p...)
-    end
-end
 
-function Base.getindex(p::MTKParameters, pind::ParameterIndex)
-    parameter_values(p, pind)
-end
+Base.getindex(p::MTKParameters, pind::ParameterIndex) = parameter_values(p, pind)
 
-function Base.setindex!(p::MTKParameters, val, pind::ParameterIndex)
-    SymbolicIndexingInterface.set_parameter!(p, val, pind)
-end
+Base.setindex!(p::MTKParameters, val, pind::ParameterIndex) = set_parameter!(p, val, pind)
 
 function Base.iterate(buf::MTKParameters, state = 1)
-    total_len = 0
-    total_len += _num_subarrays(buf.tunable)
+    total_len = Int(!isempty(buf.tunable)) # for tunables
     for clockbuf in buf.discrete
         total_len += _num_subarrays(clockbuf)
     end

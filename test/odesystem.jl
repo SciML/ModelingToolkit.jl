@@ -1250,3 +1250,17 @@ end
     prob = ODEProblem(ssys, [], (0.0, 1.0), [])
     @test prob[x] == prob[y] == prob[z] == 1.0
 end
+
+@testset "Scalarized parameters in array functions" begin
+    @variables u(t)[1:2] x(t)[1:2] o(t)[1:2]
+    @parameters p[1:2, 1:2] [tunable = false]
+    @named sys = ODESystem(
+        [D(u) ~ (sum(u) + sum(x) + sum(p) + sum(o)) * x, o ~ prod(u) * x],
+        t, [u..., x..., o...], [p...])
+    sys1, = structural_simplify(sys, ([x...], []))
+    fn1, = ModelingToolkit.generate_function(sys1; expression = Val{false})
+    @test_nowarn fn1(ones(4), 2ones(2), 3ones(2, 2), 4.0)
+    sys2, = structural_simplify(sys, ([x...], []); split = false)
+    fn2, = ModelingToolkit.generate_function(sys2; expression = Val{false})
+    @test_nowarn fn2(ones(4), 2ones(6), 4.0)
+end

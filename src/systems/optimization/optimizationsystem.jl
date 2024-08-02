@@ -133,11 +133,13 @@ end
 
 function generate_gradient(sys::OptimizationSystem, vs = unknowns(sys),
         ps = full_parameters(sys);
+        wrap_code = identity,
         kwargs...)
     grad = calculate_gradient(sys)
     pre = get_preprocess_constants(grad)
     p = reorder_parameters(sys, ps)
-    return build_function(grad, vs, p...; postprocess_fbody = pre,
+    wrap_code = wrap_code .∘ wrap_array_vars(sys, grad; dvs = vs, ps)
+    return build_function(grad, vs, p...; postprocess_fbody = pre, wrap_code,
         kwargs...)
 end
 
@@ -147,7 +149,7 @@ end
 
 function generate_hessian(
         sys::OptimizationSystem, vs = unknowns(sys), ps = full_parameters(sys);
-        sparse = false, kwargs...)
+        sparse = false, wrap_code = identity, kwargs...)
     if sparse
         hess = sparsehessian(objective(sys), unknowns(sys))
     else
@@ -155,12 +157,14 @@ function generate_hessian(
     end
     pre = get_preprocess_constants(hess)
     p = reorder_parameters(sys, ps)
-    return build_function(hess, vs, p...; postprocess_fbody = pre,
+    wrap_code = wrap_code .∘ wrap_array_vars(sys, hess; dvs = vs, ps)
+    return build_function(hess, vs, p...; postprocess_fbody = pre, wrap_code,
         kwargs...)
 end
 
 function generate_function(sys::OptimizationSystem, vs = unknowns(sys),
         ps = full_parameters(sys);
+        wrap_code = identity,
         kwargs...)
     eqs = subs_constants(objective(sys))
     p = if has_index_cache(sys)
@@ -168,7 +172,8 @@ function generate_function(sys::OptimizationSystem, vs = unknowns(sys),
     else
         (ps,)
     end
-    return build_function(eqs, vs, p...;
+    wrap_code = wrap_code .∘ wrap_array_vars(sys, eqs; dvs = vs, ps)
+    return build_function(eqs, vs, p...; wrap_code,
         kwargs...)
 end
 

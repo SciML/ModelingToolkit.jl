@@ -24,17 +24,19 @@ ParameterIndex(portion, idx) = ParameterIndex(portion, idx, false)
 const ParamIndexMap = Dict{BasicSymbolic, Tuple{Int, Int}}
 const UnknownIndexMap = Dict{
     BasicSymbolic, Union{Int, UnitRange{Int}, AbstractArray{Int}}}
+const TunableIndexMap = Dict{BasicSymbolic,
+    Union{Int, UnitRange{Int}, Base.ReshapedArray{Int, N, UnitRange{Int}} where {N}}}
 
 struct IndexCache
     unknown_idx::UnknownIndexMap
     discrete_idx::Dict{BasicSymbolic, Tuple{Int, Int, Int}}
-    tunable_idx::ParamIndexMap
+    tunable_idx::TunableIndexMap
     constant_idx::ParamIndexMap
     dependent_idx::ParamIndexMap
     nonnumeric_idx::ParamIndexMap
     observed_syms::Set{BasicSymbolic}
     discrete_buffer_sizes::Vector{Vector{BufferTemplate}}
-    tunable_buffer_sizes::Vector{BufferTemplate}
+    tunable_buffer_size::BufferTemplate
     constant_buffer_sizes::Vector{BufferTemplate}
     dependent_buffer_sizes::Vector{BufferTemplate}
     nonnumeric_buffer_sizes::Vector{BufferTemplate}
@@ -75,7 +77,7 @@ function IndexCache(sys::AbstractSystem)
         end
     end
 
-    observed_syms = Set{Union{Symbol, BasicSymbolic}}()
+    observed_syms = Set{BasicSymbolic}()
     for eq in observed(sys)
         if symbolic_type(eq.lhs) != NotSymbolic()
             sym = eq.lhs
@@ -236,7 +238,10 @@ function IndexCache(sys::AbstractSystem)
         haskey(dependent_buffers, ctype) && p in dependent_buffers[ctype] && continue
         insert_by_type!(
             if ctype <: Real || ctype <: AbstractArray{<:Real}
-                if istunable(p, true) && Symbolics.shape(p) !== Symbolics.Unknown()
+                if istunable(p, true) && Symbolics.shape(p) != Symbolics.Unknown() &&
+                   (ctype == Real || ctype <: AbstractFloat ||
+                    ctype <: AbstractArray{Real} ||
+                    ctype <: AbstractArray{<:AbstractFloat})
                     tunable_buffers
                 else
                     constant_buffers
@@ -292,10 +297,29 @@ function IndexCache(sys::AbstractSystem)
         return idxs, buffer_sizes
     end
 
-    tunable_idxs, tunable_buffer_sizes = get_buffer_sizes_and_idxs(tunable_buffers)
     const_idxs, const_buffer_sizes = get_buffer_sizes_and_idxs(constant_buffers)
     dependent_idxs, dependent_buffer_sizes = get_buffer_sizes_and_idxs(dependent_buffers)
     nonnumeric_idxs, nonnumeric_buffer_sizes = get_buffer_sizes_and_idxs(nonnumeric_buffers)
+
+    tunable_idxs = TunableIndexMap()
+    tunable_buffer_size = 0
+    for (i, (_, buf)) in enumerate(tunable_buffers)
+        for (j, p) in enumerate(buf)
+            idx = if size(p) == ()
+                tunable_buffer_size + 1
+            else
+                reshape(
+                    (tunable_buffer_size + 1):(tunable_buffer_size + length(p)), size(p))
+            end
+            tunable_buffer_size += length(p)
+            tunable_idxs[p] = idx
+            tunable_idxs[default_toterm(p)] = idx
+            if hasname(p) && (!iscall(p) || operation(p) !== getindex)
+                symbol_to_variable[getname(p)] = p
+                symbol_to_variable[getname(default_toterm(p))] = p
+            end
+        end
+    end
 
     for sym in Iterators.flatten((keys(unk_idxs), keys(disc_idxs), keys(tunable_idxs),
         keys(const_idxs), keys(dependent_idxs), keys(nonnumeric_idxs),
@@ -314,7 +338,7 @@ function IndexCache(sys::AbstractSystem)
         nonnumeric_idxs,
         observed_syms,
         disc_buffer_sizes,
-        tunable_buffer_sizes,
+        BufferTemplate(Real, tunable_buffer_size),
         const_buffer_sizes,
         dependent_buffer_sizes,
         nonnumeric_buffer_sizes,
@@ -410,20 +434,6 @@ function check_index_map(idxmap, sym)
     end
 end
 
-function discrete_linear_index(ic::IndexCache, idx::ParameterIndex)
-    idx.portion isa SciMLStructures.Discrete || error("Discrete variable index expected")
-    ind = sum(temp.length for temp in ic.tunable_buffer_sizes; init = 0)
-    for clockbuftemps in Iterators.take(ic.discrete_buffer_sizes, idx.idx[1] - 1)
-        ind += sum(temp.length for temp in clockbuftemps; init = 0)
-    end
-    ind += sum(
-        temp.length
-        for temp in Iterators.take(ic.discrete_buffer_sizes[idx.idx[1]], idx.idx[2] - 1);
-        init = 0)
-    ind += idx.idx[3]
-    return ind
-end
-
 function reorder_parameters(sys::AbstractSystem, ps; kwargs...)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         reorder_parameters(get_index_cache(sys), ps; kwargs...)
@@ -436,8 +446,12 @@ end
 
 function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
     isempty(ps) && return ()
-    param_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
-    for temp in ic.tunable_buffer_sizes)
+    param_buf = if ic.tunable_buffer_size.length == 0
+        ()
+    else
+        (BasicSymbolic[unwrap(variable(:DEF))
+                       for _ in 1:(ic.tunable_buffer_size.length)],)
+    end
     disc_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
     for temp in Iterators.flatten(ic.discrete_buffer_sizes))
     const_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
@@ -453,8 +467,12 @@ function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
             i, j, k = ic.discrete_idx[p]
             disc_buf[(i - 1) * disc_offset + j][k] = p
         elseif haskey(ic.tunable_idx, p)
-            i, j = ic.tunable_idx[p]
-            param_buf[i][j] = p
+            i = ic.tunable_idx[p]
+            if i isa Int
+                param_buf[1][i] = unwrap(p)
+            else
+                param_buf[1][i] = unwrap.(collect(p))
+            end
         elseif haskey(ic.constant_idx, p)
             i, j = ic.constant_idx[p]
             const_buf[i][j] = p
