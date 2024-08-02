@@ -180,6 +180,9 @@ The return values also include the remaining unknowns and parameters, in the ord
 If `disturbance_inputs` is an array of variables, the generated dynamics function will preserve any state and dynamics associated with disturbance inputs, but the disturbance inputs themselves will not be included as inputs to the generated function. The use case for this is to generate dynamics for state observers that estimate the influence of unmeasured disturbances, and thus require unknown variables for the disturbance model, but without disturbance inputs since the disturbances are not available for measurement.
 See [`add_input_disturbance`](@ref) for a higher-level interface to this functionality.
 
+!!! note "Un-simplified system"
+    This function expects `sys` to be un-simplified, i.e., `structural_simplify` or `@mtkbuild` should not be called on the system before passing it into this function. `generate_control_function` calls a special version of `structural_simplify` internally.
+
 # Example
 
 ```
