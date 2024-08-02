@@ -43,7 +43,6 @@ using ModelingToolkit: inputs, outputs
 
 !!! note "Inputs must be unconnected"
     
-    
     The model above has 4 variables but only three equations, there is no equation specifying the value of `r` since `r` is an input. This means that only unbalanced models can be linearized, or in other words, models that are balanced and can be simulated _cannot_ be linearized. To learn more about this, see https://www.youtube.com/watch?v=-XOux-2XDGI&t=395s. Also see [ModelingToolkitStandardLibrary: Linear analysis](https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/API/linear_analysis/) for utilities that make linearization of completed models easier.
 
 !!! note "Un-simplified system"
