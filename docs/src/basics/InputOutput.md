@@ -6,6 +6,7 @@ An input-output system is a system on the form
 \begin{aligned}
 M \dot x &= f(x, u, p, t) \\
 y &= g(x, u, p, t)
+\end{aligned}
 ```
 
 where ``x`` is the state, ``u`` is the input and ``y`` is an output (in some contexts called an _observed variables_ in MTK).
@@ -23,7 +24,7 @@ This documentation page lists utilities that are useful for working with inputs 
 
 ## Generating a dynamics function with inputs, ``f``
 
-ModelingToolkit can generate the dynamics of a system, the function ``M\dot X = f(x, u, p, t)`` above, such that the user can pass not only the state ``x`` and parameters ``p`` but also an external input ``u``. To this end, the function [`generate_control_function`](@ref) exists.
+ModelingToolkit can generate the dynamics of a system, the function ``M\dot x = f(x, u, p, t)`` above, such that the user can pass not only the state ``x`` and parameters ``p`` but also an external input ``u``. To this end, the function [`generate_control_function`](@ref) exists.
 
 This function takes a vector of variables that are to be considered inputs, i.e., part of the vector ``u``. Alongside returning the function ``f``, [`generate_control_function`](@ref) also returns the chosen state realization of the system after simplification. This vector specifies the order of the state variables ``x``, while the user-specified vector `u` specifies the order of the input variables ``u``.
 
