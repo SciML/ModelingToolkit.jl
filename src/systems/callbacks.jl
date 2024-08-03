@@ -106,16 +106,25 @@ The affect function updates the value at `x` in `modified` to be the result of e
     ctx::Any
 end
 
-MutatingFunctionalAffect(f::Function; 
-    observed::NamedTuple = NamedTuple{()}(()),
-    modified::NamedTuple = NamedTuple{()}(()),
-    ctx=nothing) = MutatingFunctionalAffect(f, collect(values(observed)), collect(keys(observed)), collect(values(modified)), collect(keys(modified)), ctx)
-MutatingFunctionalAffect(f::Function, modified::NamedTuple; observed::NamedTuple = NamedTuple{()}(()), ctx=nothing) =
-    MutatingFunctionalAffect(f, observed=observed, modified=modified, ctx=ctx)
-MutatingFunctionalAffect(f::Function, modified::NamedTuple, observed::NamedTuple; ctx=nothing) =
-    MutatingFunctionalAffect(f, observed=observed, modified=modified, ctx=ctx)
-MutatingFunctionalAffect(f::Function, modified::NamedTuple, observed::NamedTuple, ctx) =
-    MutatingFunctionalAffect(f, observed=observed, modified=modified, ctx=ctx)
+function MutatingFunctionalAffect(f::Function;
+        observed::NamedTuple = NamedTuple{()}(()),
+        modified::NamedTuple = NamedTuple{()}(()),
+        ctx = nothing)
+    MutatingFunctionalAffect(f, collect(values(observed)), collect(keys(observed)),
+        collect(values(modified)), collect(keys(modified)), ctx)
+end
+function MutatingFunctionalAffect(f::Function, modified::NamedTuple;
+        observed::NamedTuple = NamedTuple{()}(()), ctx = nothing)
+    MutatingFunctionalAffect(f, observed = observed, modified = modified, ctx = ctx)
+end
+function MutatingFunctionalAffect(
+        f::Function, modified::NamedTuple, observed::NamedTuple; ctx = nothing)
+    MutatingFunctionalAffect(f, observed = observed, modified = modified, ctx = ctx)
+end
+function MutatingFunctionalAffect(
+        f::Function, modified::NamedTuple, observed::NamedTuple, ctx)
+    MutatingFunctionalAffect(f, observed = observed, modified = modified, ctx = ctx)
+end
 
 func(f::MutatingFunctionalAffect) = f.f
 context(a::MutatingFunctionalAffect) = a.ctx
@@ -126,8 +135,9 @@ modified(a::MutatingFunctionalAffect) = a.modified
 modified_syms(a::MutatingFunctionalAffect) = a.mod_syms
 
 function Base.:(==)(a1::MutatingFunctionalAffect, a2::MutatingFunctionalAffect)
-    isequal(a1.f, a2.f) && isequal(a1.obs, a2.obs) && isequal(a1.modified, a2.modified) && 
-        isequal(a1.obs_syms, a2.obs_syms) && isequal(a1.mod_syms, a2.mod_syms)&& isequal(a1.ctx, a2.ctx)
+    isequal(a1.f, a2.f) && isequal(a1.obs, a2.obs) && isequal(a1.modified, a2.modified) &&
+        isequal(a1.obs_syms, a2.obs_syms) && isequal(a1.mod_syms, a2.mod_syms) &&
+        isequal(a1.ctx, a2.ctx)
 end
 
 function Base.hash(a::MutatingFunctionalAffect, s::UInt)
@@ -839,10 +849,13 @@ function compile_user_affect(affect::FunctionalAffect, cb, sys, dvs, ps; kwargs.
     end
 end
 
-invalid_variables(sys, expr) = filter(x -> !any(isequal(x), all_symbols(sys)), reduce(vcat, vars(expr); init=[]))
-function unassignable_variables(sys, expr) 
+function invalid_variables(sys, expr)
+    filter(x -> !any(isequal(x), all_symbols(sys)), reduce(vcat, vars(expr); init = []))
+end
+function unassignable_variables(sys, expr)
     assignable_syms = vcat(unknowns(sys), parameters(sys))
-    return filter(x -> !any(isequal(x), assignable_syms), reduce(vcat, vars(expr); init=[]))
+    return filter(
+        x -> !any(isequal(x), assignable_syms), reduce(vcat, vars(expr); init = []))
 end
 
 function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwargs...)
@@ -855,7 +868,8 @@ function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwa
     =#
     function check_dups(syms, exprs) # = (syms_dedup, exprs_dedup)
         seen = Set{Symbol}()
-        syms_dedup = []; exprs_dedup = []
+        syms_dedup = []
+        exprs_dedup = []
         for (sym, exp) in Iterators.zip(syms, exprs)
             if !in(sym, seen)
                 push!(syms_dedup, sym)
@@ -869,7 +883,7 @@ function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwa
     end
 
     obs_exprs = observed(affect)
-    for oexpr in obs_exprs 
+    for oexpr in obs_exprs
         invalid_vars = invalid_variables(sys, oexpr)
         if length(invalid_vars) > 0
             error("Observed equation $(oexpr) in affect refers to missing variable(s) $(invalid_vars); the variables may not have been added (e.g. if a component is missing).")
@@ -880,7 +894,7 @@ function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwa
     obs_size = size.(obs_exprs) # we will generate a work buffer of a ComponentArray that maps obs_syms to arrays of size obs_size
 
     mod_exprs = modified(affect)
-    for mexpr in mod_exprs 
+    for mexpr in mod_exprs
         if !is_observed(sys, mexpr) && parameter_index(sys, mexpr) === nothing
             error("Expression $mexpr cannot be assigned to; currently only unknowns and parameters may be updated by an affect.")
         end
@@ -891,7 +905,8 @@ function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwa
     end
     mod_syms = modified_syms(affect)
     mod_syms, mod_exprs = check_dups(mod_syms, mod_exprs)
-    _, mod_og_val_fun = build_explicit_observed_function(sys, mod_exprs; return_inplace=true) 
+    _, mod_og_val_fun = build_explicit_observed_function(
+        sys, mod_exprs; return_inplace = true)
 
     overlapping_syms = intersect(mod_syms, obs_syms)
     if length(overlapping_syms) > 0
@@ -899,21 +914,33 @@ function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwa
     end
 
     # sanity checks done! now build the data and update function for observed values
-    mkzero(sz) = if sz === () 0.0 else zeros(sz) end
-    _, obs_fun = build_explicit_observed_function(sys, reduce(vcat, Symbolics.scalarize.(obs_exprs); init = []); return_inplace=true) 
-    obs_component_array = ComponentArrays.ComponentArray(NamedTuple{(obs_syms..., )}(mkzero.(obs_size)))
+    mkzero(sz) =
+        if sz === ()
+            0.0
+        else
+            zeros(sz)
+        end
+    _, obs_fun = build_explicit_observed_function(
+        sys, reduce(vcat, Symbolics.scalarize.(obs_exprs); init = []);
+        return_inplace = true)
+    obs_component_array = ComponentArrays.ComponentArray(NamedTuple{(obs_syms...,)}(mkzero.(obs_size)))
 
     # okay so now to generate the stuff to assign it back into the system
     # note that we reorder the componentarray to make the views coherent wrt the base array
     mod_pairs = mod_exprs .=> mod_syms
     mod_param_pairs = filter(v -> is_parameter(sys, v[1]), mod_pairs)
     mod_unk_pairs = filter(v -> !is_parameter(sys, v[1]), mod_pairs)
-    _, mod_og_val_fun = build_explicit_observed_function(sys, reduce(vcat, [first.(mod_param_pairs); first.(mod_unk_pairs)]; init = []); return_inplace=true) 
-    upd_params_fun = setu(sys, reduce(vcat, Symbolics.scalarize.(first.(mod_param_pairs)); init = []))
-    upd_unk_fun = setu(sys, reduce(vcat, Symbolics.scalarize.(first.(mod_unk_pairs)); init = []))
+    _, mod_og_val_fun = build_explicit_observed_function(
+        sys, reduce(vcat, [first.(mod_param_pairs); first.(mod_unk_pairs)]; init = []);
+        return_inplace = true)
+    upd_params_fun = setu(
+        sys, reduce(vcat, Symbolics.scalarize.(first.(mod_param_pairs)); init = []))
+    upd_unk_fun = setu(
+        sys, reduce(vcat, Symbolics.scalarize.(first.(mod_unk_pairs)); init = []))
 
-    upd_component_array = ComponentArrays.ComponentArray(NamedTuple{([last.(mod_param_pairs); last.(mod_unk_pairs)]...,)}(
-        [collect(mkzero(size(e)) for e in first.(mod_param_pairs)); 
+    upd_component_array = ComponentArrays.ComponentArray(NamedTuple{([last.(mod_param_pairs);
+                                                                      last.(mod_unk_pairs)]...,)}(
+        [collect(mkzero(size(e)) for e in first.(mod_param_pairs));
          collect(mkzero(size(e)) for e in first.(mod_unk_pairs))]))
     upd_params_view = view(upd_component_array, last.(mod_param_pairs))
     upd_unks_view = view(upd_component_array, last.(mod_unk_pairs))
@@ -921,7 +948,7 @@ function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwa
         function (integ)
             # update the to-be-mutated values; this ensures that if you do a no-op then nothing happens
             mod_og_val_fun(upd_component_array, integ.u, integ.p..., integ.t)
-            
+
             # update the observed values
             obs_fun(obs_component_array, integ.u, integ.p..., integ.t)
 
@@ -934,7 +961,7 @@ function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwa
                 user_affect(upd_component_array, obs_component_array)
             elseif applicable(user_affect, upd_component_array)
                 user_affect(upd_component_array)
-            else 
+            else
                 @error "User affect function $user_affect needs to implement one of the supported MutatingFunctionalAffect callback forms; see the MutatingFunctionalAffect docstring for more details"
                 user_affect(upd_component_array, obs_component_array, integ, ctx) # this WILL error but it'll give a more sensible message
             end
