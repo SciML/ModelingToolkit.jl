@@ -284,13 +284,15 @@ end
 
 namespace_affects(af::Vector, s) = Equation[namespace_affect(a, s) for a in af]
 namespace_affects(af::FunctionalAffect, s) = namespace_affect(af, s)
+namespace_affects(af::MutatingFunctionalAffect, s) = namespace_affect(af, s)
 namespace_affects(::Nothing, s) = nothing
 
 function namespace_callback(cb::SymbolicContinuousCallback, s)::SymbolicContinuousCallback
-    SymbolicContinuousCallback(
-        namespace_equation.(equations(cb), (s,)),
-        namespace_affects(affects(cb), s);
-        affect_neg = namespace_affects(affect_negs(cb), s))
+    SymbolicContinuousCallback(;
+        eqs = namespace_equation.(equations(cb), (s,)),
+        affect = namespace_affects(affects(cb), s),
+        affect_neg = namespace_affects(affect_negs(cb), s),
+        rootfind = cb.rootfind)
 end
 
 """
