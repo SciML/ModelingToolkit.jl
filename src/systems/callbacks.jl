@@ -72,15 +72,16 @@ function namespace_affect(affect::FunctionalAffect, s)
 end
 
 """
-    MutatingFunctionalAffect(f::Function; observed::NamedTuple, modified::NamedTuple, ctx)
+    MutatingFunctionalAffect(f::Function; modified::NamedTuple, observed::NamedTuple, ctx)
 
 `MutatingFunctionalAffect` is a helper for writing affect functions that will compute observed values and
 ensure that modified values are correctly written back into the system. The affect function `f` needs to have
-one of three signatures:
-* `f(observed::ComponentArray)` if the function only reads observed values back from the system,
-* `f(observed::ComponentArray, modified::ComponentArray)` if the function also writes values (unknowns or parameters) into the system,
-* `f(observed::ComponentArray, modified::ComponentArray, ctx)` if the function needs the user-defined context,
-* `f(observed::ComponentArray, modified::ComponentArray, ctx, integrator)` if the function needs the low-level integrator.
+one of four signatures:
+* `f(modified::ComponentArray)` if the function only writes values (unknowns or parameters) to the system,
+* `f(modified::ComponentArray, observed::ComponentArray)` if the function also reads observed values from the system,
+* `f(modified::ComponentArray, observed::ComponentArray, ctx)` if the function needs the user-defined context,
+* `f(modified::ComponentArray, observed::ComponentArray, ctx, integrator)` if the function needs the low-level integrator.
+These will be checked in reverse order (that is, the four-argument version first, than the 3, etc).
 
 The function `f` will be called with `observed` and `modified` `ComponentArray`s that are derived from their respective `NamedTuple` definitions.
 Each `NamedTuple` should map an expression to a symbol; for example if we pass `observed=(; x = a + b)` this will alias the result of executing `a+b` in the system as `x`
@@ -90,7 +91,7 @@ so the value of `a + b` will be accessible as `observed.x` in `f`. `modified` cu
 Both `observed` and `modified` will be automatically populated with the current values of their corresponding expressions on function entry.
 The values in `modified` will be written back to the system after `f` returns. For example, if we want to update the value of `x` to be the result of `x + y` we could write
 
-    MutatingFunctionalAffect(observed=(; x_plus_y = x + y), modified=(; x)) do o, m
+    MutatingFunctionalAffect(observed=(; x_plus_y = x + y), modified=(; x)) do m, o
         m.x = o.x_plus_y
     end
 
@@ -109,11 +110,11 @@ MutatingFunctionalAffect(f::Function;
     observed::NamedTuple = NamedTuple{()}(()),
     modified::NamedTuple = NamedTuple{()}(()),
     ctx=nothing) = MutatingFunctionalAffect(f, collect(values(observed)), collect(keys(observed)), collect(values(modified)), collect(keys(modified)), ctx)
-MutatingFunctionalAffect(f::Function, observed::NamedTuple; modified::NamedTuple = NamedTuple{()}(()), ctx=nothing) =
+MutatingFunctionalAffect(f::Function, modified::NamedTuple; observed::NamedTuple = NamedTuple{()}(()), ctx=nothing) =
     MutatingFunctionalAffect(f, observed=observed, modified=modified, ctx=ctx)
-MutatingFunctionalAffect(f::Function, observed::NamedTuple, modified::NamedTuple; ctx=nothing) =
+MutatingFunctionalAffect(f::Function, modified::NamedTuple, observed::NamedTuple; ctx=nothing) =
     MutatingFunctionalAffect(f, observed=observed, modified=modified, ctx=ctx)
-MutatingFunctionalAffect(f::Function, observed::NamedTuple, modified::NamedTuple, ctx) =
+MutatingFunctionalAffect(f::Function, modified::NamedTuple, observed::NamedTuple, ctx) =
     MutatingFunctionalAffect(f, observed=observed, modified=modified, ctx=ctx)
 
 func(f::MutatingFunctionalAffect) = f.f
@@ -925,7 +926,18 @@ function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwa
             obs_fun(obs_component_array, integ.u, integ.p..., integ.t)
 
             # let the user do their thing
-            user_affect(upd_component_array, obs_component_array, integ, ctx)
+            if applicable(user_affect, upd_component_array, obs_component_array, ctx, integ)
+                user_affect(upd_component_array, obs_component_array, ctx, integ)
+            elseif applicable(user_affect, upd_component_array, obs_component_array, ctx)
+                user_affect(upd_component_array, obs_component_array, ctx)
+            elseif applicable(user_affect, upd_component_array, obs_component_array)
+                user_affect(upd_component_array, obs_component_array)
+            elseif applicable(user_affect, upd_component_array)
+                user_affect(upd_component_array)
+            else 
+                @error "User affect function $user_affect needs to implement one of the supported MutatingFunctionalAffect callback forms; see the MutatingFunctionalAffect docstring for more details"
+                user_affect(upd_component_array, obs_component_array, integ, ctx) # this WILL error but it'll give a more sensible message
+            end
 
             # write the new values back to the integrator
             upd_params_fun(integ, upd_params_view)
