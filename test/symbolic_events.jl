@@ -237,7 +237,7 @@ end
     @test m.modified == []
     @test m.mod_syms == []
     @test m.ctx === nothing
-    
+
     m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (;))
     @test m isa ModelingToolkit.MutatingFunctionalAffect
     @test m.f == fmfa
@@ -246,7 +246,7 @@ end
     @test m.modified == []
     @test m.mod_syms == []
     @test m.ctx === nothing
-    
+
     m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (; x))
     @test m isa ModelingToolkit.MutatingFunctionalAffect
     @test m.f == fmfa
@@ -255,8 +255,8 @@ end
     @test isequal(m.modified, [x])
     @test m.mod_syms == [:x]
     @test m.ctx === nothing
-    
-    m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (; y=x))
+
+    m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (; y = x))
     @test m isa ModelingToolkit.MutatingFunctionalAffect
     @test m.f == fmfa
     @test isequal(m.obs, [])
@@ -264,8 +264,8 @@ end
     @test isequal(m.modified, [x])
     @test m.mod_syms == [:y]
     @test m.ctx === nothing
-    
-    m = ModelingToolkit.MutatingFunctionalAffect(fmfa; observed=(; y=x))
+
+    m = ModelingToolkit.MutatingFunctionalAffect(fmfa; observed = (; y = x))
     @test m isa ModelingToolkit.MutatingFunctionalAffect
     @test m.f == fmfa
     @test isequal(m.obs, [x])
@@ -273,8 +273,8 @@ end
     @test m.modified == []
     @test m.mod_syms == []
     @test m.ctx === nothing
-    
-    m = ModelingToolkit.MutatingFunctionalAffect(fmfa; modified=(; x))
+
+    m = ModelingToolkit.MutatingFunctionalAffect(fmfa; modified = (; x))
     @test m isa ModelingToolkit.MutatingFunctionalAffect
     @test m.f == fmfa
     @test isequal(m.obs, [])
@@ -283,7 +283,7 @@ end
     @test m.mod_syms == [:x]
     @test m.ctx === nothing
 
-    m = ModelingToolkit.MutatingFunctionalAffect(fmfa; modified=(; y=x))
+    m = ModelingToolkit.MutatingFunctionalAffect(fmfa; modified = (; y = x))
     @test m isa ModelingToolkit.MutatingFunctionalAffect
     @test m.f == fmfa
     @test isequal(m.obs, [])
@@ -291,7 +291,7 @@ end
     @test isequal(m.modified, [x])
     @test m.mod_syms == [:y]
     @test m.ctx === nothing
-    
+
     m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (; x), (; x))
     @test m isa ModelingToolkit.MutatingFunctionalAffect
     @test m.f == fmfa
@@ -300,8 +300,8 @@ end
     @test isequal(m.modified, [x])
     @test m.mod_syms == [:x]
     @test m.ctx === nothing
-    
-    m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (; y=x), (; y=x))
+
+    m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (; y = x), (; y = x))
     @test m isa ModelingToolkit.MutatingFunctionalAffect
     @test m.f == fmfa
     @test isequal(m.obs, [x])
@@ -309,8 +309,9 @@ end
     @test isequal(m.modified, [x])
     @test m.mod_syms == [:y]
     @test m.ctx === nothing
-    
-    m = ModelingToolkit.MutatingFunctionalAffect(fmfa; modified=(; y=x), observed=(; y=x))
+
+    m = ModelingToolkit.MutatingFunctionalAffect(
+        fmfa; modified = (; y = x), observed = (; y = x))
     @test m isa ModelingToolkit.MutatingFunctionalAffect
     @test m.f == fmfa
     @test isequal(m.obs, [x])
@@ -318,8 +319,9 @@ end
     @test isequal(m.modified, [x])
     @test m.mod_syms == [:y]
     @test m.ctx === nothing
-    
-    m = ModelingToolkit.MutatingFunctionalAffect(fmfa; modified=(; y=x), observed=(; y=x), ctx=3)
+
+    m = ModelingToolkit.MutatingFunctionalAffect(
+        fmfa; modified = (; y = x), observed = (; y = x), ctx = 3)
     @test m isa ModelingToolkit.MutatingFunctionalAffect
     @test m.f == fmfa
     @test isequal(m.obs, [x])
@@ -327,7 +329,7 @@ end
     @test isequal(m.modified, [x])
     @test m.mod_syms == [:y]
     @test m.ctx === 3
-    
+
     m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (; x), (; x), 3)
     @test m isa ModelingToolkit.MutatingFunctionalAffect
     @test m.f == fmfa
@@ -1005,151 +1007,176 @@ end
         D(temp) ~ furnace_on * furnace_power - temp^2 * leakage
     ]
 
-    furnace_off = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_off_threshold], 
-        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on)) do x, o, i, c
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on)) do x, o, i, c
             x.furnace_on = false
         end)
-    furnace_enable = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_on_threshold], 
-        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on)) do x, o, i, c
+    furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_on_threshold],
+        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on)) do x, o, i, c
             x.furnace_on = true
         end)
-    @named sys = ODESystem(eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
+    @named sys = ODESystem(
+        eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
     ss = structural_simplify(sys)
     prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
-    sol = solve(prob, Tsit5(); dtmax=0.01)
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
     @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
 
-    furnace_off = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_off_threshold], 
-        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on)) do x, o, i
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on)) do x, o, i
             x.furnace_on = false
         end)
-    furnace_enable = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_on_threshold], 
-        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on)) do x, o, i
+    furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_on_threshold],
+        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on)) do x, o, i
             x.furnace_on = true
         end)
-    @named sys = ODESystem(eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
+    @named sys = ODESystem(
+        eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
     ss = structural_simplify(sys)
     prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
-    sol = solve(prob, Tsit5(); dtmax=0.01)
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
     @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
 
-    furnace_off = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_off_threshold], 
-        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on)) do x, o
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on)) do x, o
             x.furnace_on = false
         end)
-    furnace_enable = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_on_threshold], 
-        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on)) do x, o
+    furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_on_threshold],
+        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on)) do x, o
             x.furnace_on = true
         end)
-    @named sys = ODESystem(eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
+    @named sys = ODESystem(
+        eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
     ss = structural_simplify(sys)
     prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
-    sol = solve(prob, Tsit5(); dtmax=0.01)
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
     @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
 
-    furnace_off = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_off_threshold], 
-        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on)) do x
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on)) do x
             x.furnace_on = false
         end)
-    furnace_enable = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_on_threshold], 
-        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on)) do x
+    furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_on_threshold],
+        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on)) do x
             x.furnace_on = true
         end)
-    @named sys = ODESystem(eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
+    @named sys = ODESystem(
+        eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
     ss = structural_simplify(sys)
     prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
-    sol = solve(prob, Tsit5(); dtmax=0.01)
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
     @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
 end
 
-@testset "MutatingFunctionalAffect errors and warnings" begin 
+@testset "MutatingFunctionalAffect errors and warnings" begin
     @variables temp(t)
     params = @parameters furnace_on_threshold=0.5 furnace_off_threshold=0.7 furnace_power=1.0 leakage=0.1 furnace_on::Bool=false
     eqs = [
         D(temp) ~ furnace_on * furnace_power - temp^2 * leakage
     ]
 
-    furnace_off = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_off_threshold], 
-        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on), observed=(; furnace_on)) do x, o, c, i
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkit.MutatingFunctionalAffect(
+            modified = (; furnace_on), observed = (; furnace_on)) do x, o, c, i
             x.furnace_on = false
         end)
     @named sys = ODESystem(eqs, t, [temp], params; continuous_events = [furnace_off])
     ss = structural_simplify(sys)
-    @test_logs (:warn, "The symbols Any[:furnace_on] are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value.") prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+    @test_logs (:warn,
+        "The symbols Any[:furnace_on] are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value.") prob=ODEProblem(
+        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
 
     @variables tempsq(t) # trivially eliminated
-    eqs = [
-        tempsq ~ temp^2
-        D(temp) ~ furnace_on * furnace_power - temp^2 * leakage
-    ]
+    eqs = [tempsq ~ temp^2
+           D(temp) ~ furnace_on * furnace_power - temp^2 * leakage]
 
-    furnace_off = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_off_threshold], 
-        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on, tempsq), observed=(; furnace_on)) do x, o, c, i
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkit.MutatingFunctionalAffect(
+            modified = (; furnace_on, tempsq), observed = (; furnace_on)) do x, o, c, i
             x.furnace_on = false
         end)
-    @named sys = ODESystem(eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
+    @named sys = ODESystem(
+        eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
     ss = structural_simplify(sys)
-    @test_throws "refers to missing variable(s)" prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+    @test_throws "refers to missing variable(s)" prob=ODEProblem(
+        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
 
-    
     @parameters not_actually_here
-    furnace_off = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_off_threshold], 
-        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on), observed=(; furnace_on, not_actually_here)) do x, o, c, i
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on),
+            observed = (; furnace_on, not_actually_here)) do x, o, c, i
             x.furnace_on = false
         end)
-    @named sys = ODESystem(eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
+    @named sys = ODESystem(
+        eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
     ss = structural_simplify(sys)
-    @test_throws "refers to missing variable(s)" prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+    @test_throws "refers to missing variable(s)" prob=ODEProblem(
+        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
 end
 
-@testset "Quadrature" begin 
+@testset "Quadrature" begin
     @variables theta(t) omega(t)
     params = @parameters qA=0 qB=0 hA=0 hB=0 cnt=0
-    eqs = [
-        D(theta) ~ omega
-        omega ~ 1.0
-    ]
+    eqs = [D(theta) ~ omega
+           omega ~ 1.0]
     function decoder(oldA, oldB, newA, newB)
         state = (oldA, oldB, newA, newB)
-        if     state == (0, 0, 1, 0) || state == (1, 0, 1, 1) || state == (1, 1, 0, 1) || state == (0, 1, 0, 0)
+        if state == (0, 0, 1, 0) || state == (1, 0, 1, 1) || state == (1, 1, 0, 1) ||
+           state == (0, 1, 0, 0)
             return 1
-        elseif state == (0, 0, 0, 1) || state == (0, 1, 1, 1) || state == (1, 1, 1, 0) || state == (1, 0, 0, 0)
+        elseif state == (0, 0, 0, 1) || state == (0, 1, 1, 1) || state == (1, 1, 1, 0) ||
+               state == (1, 0, 0, 0)
             return -1
-        elseif state == (0, 0, 0, 0) || state == (0, 1, 0, 1) || state == (1, 0, 1, 0) || state == (1, 1, 1, 1)
+        elseif state == (0, 0, 0, 0) || state == (0, 1, 0, 1) || state == (1, 0, 1, 0) ||
+               state == (1, 1, 1, 1)
             return 0
         else
             return 0 # err is interpreted as no movement
         end
     end
-    qAevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta) ~ 0], 
+    qAevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta) ~ 0],
         ModelingToolkit.MutatingFunctionalAffect((; qA, hA, hB, cnt), (; qB)) do x, o, i, c
             x.hA = x.qA
             x.hB = o.qB
             x.qA = 1
             x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
         end,
-        affect_neg = ModelingToolkit.MutatingFunctionalAffect((; qA, hA, hB, cnt), (; qB)) do x, o, c, i
+        affect_neg = ModelingToolkit.MutatingFunctionalAffect(
+            (; qA, hA, hB, cnt), (; qB)) do x, o, c, i
             x.hA = x.qA
             x.hB = o.qB
             x.qA = 0
             x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
-        end; rootfind=SciMLBase.RightRootFind)
-    qBevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta - π/2) ~ 0], 
+        end; rootfind = SciMLBase.RightRootFind)
+    qBevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta - π / 2) ~ 0],
         ModelingToolkit.MutatingFunctionalAffect((; qB, hA, hB, cnt), (; qA)) do x, o, i, c
             x.hA = o.qA
             x.hB = x.qB
             x.qB = 1
             x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
         end,
-        affect_neg = ModelingToolkit.MutatingFunctionalAffect((; qB, hA, hB, cnt), (; qA)) do x, o, c, i
+        affect_neg = ModelingToolkit.MutatingFunctionalAffect(
+            (; qB, hA, hB, cnt), (; qA)) do x, o, c, i
             x.hA = o.qA
             x.hB = x.qB
             x.qB = 0
             x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
-        end; rootfind=SciMLBase.RightRootFind)
-    @named sys = ODESystem(eqs, t, [theta, omega], params; continuous_events = [qAevt, qBevt])
+        end; rootfind = SciMLBase.RightRootFind)
+    @named sys = ODESystem(
+        eqs, t, [theta, omega], params; continuous_events = [qAevt, qBevt])
     ss = structural_simplify(sys)
     prob = ODEProblem(ss, [theta => 0.0], (0.0, pi))
-    sol = solve(prob, Tsit5(); dtmax=0.01)
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
     @test sol[cnt] == 197 # we get 2 pulses per phase cycle (cos 0 crossing) and we go to 100 cycles; we miss a few due to the initial state
 end
