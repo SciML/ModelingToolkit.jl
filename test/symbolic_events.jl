@@ -250,19 +250,19 @@ end
     m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (; x))
     @test m isa ModelingToolkit.MutatingFunctionalAffect
     @test m.f == fmfa
-    @test isequal(m.obs, [x])
-    @test m.obs_syms == [:x]
-    @test m.modified == []
-    @test m.mod_syms == []
+    @test isequal(m.obs, [])
+    @test m.obs_syms == []
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:x]
     @test m.ctx === nothing
     
     m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (; y=x))
     @test m isa ModelingToolkit.MutatingFunctionalAffect
     @test m.f == fmfa
-    @test isequal(m.obs, [x])
-    @test m.obs_syms == [:y]
-    @test m.modified == []
-    @test m.mod_syms == []
+    @test isequal(m.obs, [])
+    @test m.obs_syms == []
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:y]
     @test m.ctx === nothing
     
     m = ModelingToolkit.MutatingFunctionalAffect(fmfa; observed=(; y=x))
@@ -1013,7 +1013,48 @@ end
         ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on)) do x, o, i, c
             x.furnace_on = true
         end)
-        
+    @named sys = ODESystem(eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
+    ss = structural_simplify(sys)
+    prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+    sol = solve(prob, Tsit5(); dtmax=0.01)
+    @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
+
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_off_threshold], 
+        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on)) do x, o, i
+            x.furnace_on = false
+        end)
+    furnace_enable = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_on_threshold], 
+        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on)) do x, o, i
+            x.furnace_on = true
+        end)
+    @named sys = ODESystem(eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
+    ss = structural_simplify(sys)
+    prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+    sol = solve(prob, Tsit5(); dtmax=0.01)
+    @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
+
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_off_threshold], 
+        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on)) do x, o
+            x.furnace_on = false
+        end)
+    furnace_enable = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_on_threshold], 
+        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on)) do x, o
+            x.furnace_on = true
+        end)
+    @named sys = ODESystem(eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
+    ss = structural_simplify(sys)
+    prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+    sol = solve(prob, Tsit5(); dtmax=0.01)
+    @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
+
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_off_threshold], 
+        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on)) do x
+            x.furnace_on = false
+        end)
+    furnace_enable = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_on_threshold], 
+        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on)) do x
+            x.furnace_on = true
+        end)
     @named sys = ODESystem(eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
     ss = structural_simplify(sys)
     prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
@@ -1029,7 +1070,7 @@ end
     ]
 
     furnace_off = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_off_threshold], 
-        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on), observed=(; furnace_on)) do x, o, i, c
+        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on), observed=(; furnace_on)) do x, o, c, i
             x.furnace_on = false
         end)
     @named sys = ODESystem(eqs, t, [temp], params; continuous_events = [furnace_off])
@@ -1043,7 +1084,7 @@ end
     ]
 
     furnace_off = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_off_threshold], 
-        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on, tempsq), observed=(; furnace_on)) do x, o, i, c
+        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on, tempsq), observed=(; furnace_on)) do x, o, c, i
             x.furnace_on = false
         end)
     @named sys = ODESystem(eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
@@ -1053,7 +1094,7 @@ end
     
     @parameters not_actually_here
     furnace_off = ModelingToolkit.SymbolicContinuousCallback([temp ~ furnace_off_threshold], 
-        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on), observed=(; furnace_on, not_actually_here)) do x, o, i, c
+        ModelingToolkit.MutatingFunctionalAffect(modified=(; furnace_on), observed=(; furnace_on, not_actually_here)) do x, o, c, i
             x.furnace_on = false
         end)
     @named sys = ODESystem(eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
@@ -1081,26 +1122,26 @@ end
         end
     end
     qAevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta) ~ 0], 
-        ModelingToolkit.MutatingFunctionalAffect((; qB), (; qA, hA, hB, cnt)) do x, o, i, c
+        ModelingToolkit.MutatingFunctionalAffect((; qA, hA, hB, cnt), (; qB)) do x, o, i, c
             x.hA = x.qA
             x.hB = o.qB
             x.qA = 1
             x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
         end,
-        affect_neg = ModelingToolkit.MutatingFunctionalAffect((; qB), (; qA, hA, hB, cnt)) do x, o, i, c
+        affect_neg = ModelingToolkit.MutatingFunctionalAffect((; qA, hA, hB, cnt), (; qB)) do x, o, c, i
             x.hA = x.qA
             x.hB = o.qB
             x.qA = 0
             x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
         end; rootfind=SciMLBase.RightRootFind)
     qBevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta - π/2) ~ 0], 
-        ModelingToolkit.MutatingFunctionalAffect((; qA), (; qB, hA, hB, cnt)) do x, o, i, c
+        ModelingToolkit.MutatingFunctionalAffect((; qB, hA, hB, cnt), (; qA)) do x, o, i, c
             x.hA = o.qA
             x.hB = x.qB
             x.qB = 1
             x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
         end,
-        affect_neg = ModelingToolkit.MutatingFunctionalAffect((; qA), (; qB, hA, hB, cnt)) do x, o, i, c
+        affect_neg = ModelingToolkit.MutatingFunctionalAffect((; qB, hA, hB, cnt), (; qA)) do x, o, c, i
             x.hA = o.qA
             x.hB = x.qB
             x.qB = 0
