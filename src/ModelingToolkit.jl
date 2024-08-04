@@ -52,6 +52,7 @@ using NonlinearSolve
 using Reexport
 using RecursiveArrayTools
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
+import ComponentArrays
 
 using RuntimeGeneratedFunctions
 using RuntimeGeneratedFunctions: drop_expr
