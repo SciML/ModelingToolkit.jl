@@ -19,38 +19,27 @@ Let's optimize the classical _Rosenbrock function_ in two dimensions.
 ```@example optimization
 using ModelingToolkit, Optimization, OptimizationOptimJL
 @variables begin
-    x, [bounds = (-2.0, 2.0), guess = 1.0]
-    y, [bounds = (-1.0, 3.0), guess = 3.0]
+    x = 1.0, [bounds = (-2.0, 2.0)]
+    y = 3.0, [bounds = (-1.0, 3.0)]
 end
-@parameters a=1 b=1
+@parameters a=1.0 b=1.0
 rosenbrock = (a - x)^2 + b * (y - x^2)^2
 @mtkbuild sys = OptimizationSystem(rosenbrock, [x, y], [a, b])
 ```
 
 Every optimization problem consists of a set of optimization variables.
-In this case, we create two variables: `x` and `y`.
+In this case, we create two variables: `x` and `y`,
+with initial guesses `1` and `3` for their optimal values.
 Additionally, we assign box constraints for each of them, using `bounds`,
-as well as an initial guess for their optimal values, using `guess`.
-Both bounds and guess are called symbolic metadata.
+Bounds is an example of symbolic metadata.
 Fore more information, take a look at the symbolic metadata
-[documentation page](symbolic_metadata).
+[documentation page](@ref symbolic_metadata).
 
 We also create two parameters with `@parameters`.
 Parameters are useful if you want to solve the same optimization problem multiple times,
 with different values for these parameters.
 Default values for these parameters can also be assigned, here `1` is used for both `a` and `b`.
 These optimization values and parameters are used in an objective function, here the Rosenbrock function.
-
-A visualization of the Rosenbrock function is depicted below.
-
-```@example optimization
-using Plots
-x_plot = -2:0.01:2
-y_plot = -1:0.01:3
-contour(
-    x_plot, y_plot, (x, y) -> (1 - x)^2 + 100 * (y - x^2)^2, fill = true, color = :viridis,
-    ratio = :equal, xlims = (-2, 2))
-```
 
 Next, the actual `OptimizationProblem` can be created.
 The initial guesses for the optimization variables can be overwritten, via an array of `Pairs`,
@@ -64,10 +53,20 @@ u0 = [y => 2.0]
 p = [b => 100.0]
 
 prob = OptimizationProblem(sys, u0, p, grad = true, hess = true)
-solve(prob, GradientDescent())
+u_opt = solve(prob, GradientDescent())
 ```
 
-We see that the optimization result corresponds to the minimum in the figure.
+A visualization of the Rosenbrock function is depicted below.
+
+```@example optimization
+using Plots
+x_plot = -2:0.01:2
+y_plot = -1:0.01:3
+contour(
+    x_plot, y_plot, (x, y) -> (1 - x)^2 + 100 * (y - x^2)^2, fill = true, color = :viridis,
+    ratio = :equal, xlims = (-2, 2))
+scatter!([u_opt[1]], [u_opt[2]], ms = 10, label = "minimum")
+```
 
 ## Rosenbrock Function with Constraints
 
@@ -79,10 +78,10 @@ Let's add an inequality constraint to the previous example:
 using ModelingToolkit, Optimization, OptimizationOptimJL
 
 @variables begin
-    x, [bounds = (-2.0, 2.0), guess = 1.0]
-    y, [bounds = (-1.0, 3.0), guess = 2.0]
+    x = 0.14, [bounds = (-2.0, 2.0)]
+    y = 0.14, [bounds = (-1.0, 3.0)]
 end
-@parameters a=1 b=100
+@parameters a=1.0 b=100.0
 rosenbrock = (a - x)^2 + b * (y - x^2)^2
 cons = [
     x^2 + y^2 ≲ 1
