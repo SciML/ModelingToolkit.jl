@@ -159,7 +159,7 @@ function MTKParameters(
     end
     tunable_buffer = narrow_buffer_type(tunable_buffer)
     if isempty(tunable_buffer)
-        tunable_buffer = Float64[]
+        tunable_buffer = SizedVector{0, Float64}()
     end
     disc_buffer = broadcast.(narrow_buffer_type, disc_buffer)
     const_buffer = narrow_buffer_type.(const_buffer)
@@ -668,40 +668,48 @@ function DiffEqBase.anyeltypedual(p::Type{<:MTKParameters{T}},
     DiffEqBase.__anyeltypedual(T)
 end
 
-_subarrays(v::AbstractVector) = isempty(v) ? () : (v,)
-_subarrays(v::ArrayPartition) = v.x
-_subarrays(v::Tuple) = v
-_num_subarrays(v::AbstractVector) = 1
-_num_subarrays(v::ArrayPartition) = length(v.x)
-_num_subarrays(v::Tuple) = length(v)
 # for compiling callbacks
 # getindex indexes the vectors, setindex! linearly indexes values
 # it's inconsistent, but we need it to be this way
-function Base.getindex(buf::MTKParameters, i)
-    i_orig = i
-    if !isempty(buf.tunable)
-        i == 1 && return buf.tunable
-        i -= 1
+@generated function Base.getindex(
+        ps::MTKParameters{T, D, C, E, N}, idx::Int) where {T, D, C, E, N}
+    paths = []
+    if !(T <: SizedVector{0, Float64})
+        push!(paths, :(ps.tunable))
     end
-    if !isempty(buf.discrete)
-        for clockbuf in buf.discrete
-            i <= _num_subarrays(clockbuf) && return _subarrays(clockbuf)[i]
-            i -= _num_subarrays(clockbuf)
+    for i in 1:length(D)
+        for j in 1:fieldcount(eltype(D))
+            push!(paths, :(ps.discrete[$i][$j]))
         end
     end
-    if !isempty(buf.constant)
-        i <= _num_subarrays(buf.constant) && return _subarrays(buf.constant)[i]
-        i -= _num_subarrays(buf.constant)
+    for i in 1:fieldcount(C)
+        push!(paths, :(ps.constant[$i]))
     end
-    if !isempty(buf.nonnumeric)
-        i <= _num_subarrays(buf.nonnumeric) && return _subarrays(buf.nonnumeric)[i]
-        i -= _num_subarrays(buf.nonnumeric)
+    for i in 1:fieldcount(E)
+        push!(paths, :(ps.dependent[$i]))
     end
-    if !isempty(buf.dependent)
-        i <= _num_subarrays(buf.dependent) && return _subarrays(buf.dependent)[i]
-        i -= _num_subarrays(buf.dependent)
+    for i in 1:fieldcount(N)
+        push!(paths, :(ps.nonnumeric[$i]))
     end
-    throw(BoundsError(buf, i_orig))
+    expr = Expr(:if, :(idx == 1), :(return $(paths[1])))
+    curexpr = expr
+    for i in 2:length(paths)
+        push!(curexpr.args, Expr(:elseif, :(idx == $i), :(return $(paths[i]))))
+        curexpr = curexpr.args[end]
+    end
+    return Expr(:block, expr, :(throw(BoundsError(ps, idx))))
+end
+
+@generated function Base.length(ps::MTKParameters{T, D, C, E, N}) where {T, D, C, E, N}
+    len = 0
+    if !(T <: SizedVector{0, Float64})
+        len += 1
+    end
+    if length(D) > 0
+        len += length(D) * fieldcount(eltype(D))
+    end
+    len += fieldcount(C) + fieldcount(E) + fieldcount(N)
+    return len
 end
 
 Base.getindex(p::MTKParameters, pind::ParameterIndex) = parameter_values(p, pind)
@@ -709,13 +717,7 @@ Base.getindex(p::MTKParameters, pind::ParameterIndex) = parameter_values(p, pind
 Base.setindex!(p::MTKParameters, val, pind::ParameterIndex) = set_parameter!(p, val, pind)
 
 function Base.iterate(buf::MTKParameters, state = 1)
-    total_len = Int(!isempty(buf.tunable)) # for tunables
-    for clockbuf in buf.discrete
-        total_len += _num_subarrays(clockbuf)
-    end
-    total_len += _num_subarrays(buf.constant)
-    total_len += _num_subarrays(buf.nonnumeric)
-    total_len += _num_subarrays(buf.dependent)
+    total_len = length(buf)
     if state <= total_len
         return (buf[state], state + 1)
     else
