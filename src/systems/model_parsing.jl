@@ -41,6 +41,7 @@ function _model_macro(mod, name, expr, isconnector)
         :constants => Dict{Symbol, Dict}(),
         :defaults => Dict{Symbol, Any}(),
         :kwargs => Dict{Symbol, Dict}(),
+        :guesses => Dict{Symbol, Any}(),
         :structural_parameters => Dict{Symbol, Dict}()
     )
     comps = Union{Symbol, Expr}[]
@@ -57,7 +58,8 @@ function _model_macro(mod, name, expr, isconnector)
     push!(exprs.args, :(parameters = []))
     push!(exprs.args, :(systems = ODESystem[]))
     push!(exprs.args, :(equations = Equation[]))
-    push!(exprs.args, :(defaults = Dict{Num, Union{Number, Symbol, Function}}()))
+    push!(exprs.args, :(_defaults = Dict{Num, Union{Number, Symbol, Function}}()))
+    push!(exprs.args, :(_guesses = Dict{Num, Union{Number, Symbol, Function}}()))
 
     Base.remove_linenums!(expr)
     for arg in expr.args
@@ -106,8 +108,12 @@ function _model_macro(mod, name, expr, isconnector)
     @inline pop_structure_dict!.(
         Ref(dict), [:constants, :defaults, :kwargs, :structural_parameters])
 
+
+    push!(exprs.args, @inline sanitize_default_guess_kwargs(:defaults, :_defaults))
+    push!(exprs.args, @inline sanitize_default_guess_kwargs(:guesses, :_guesses))
+
     sys = :($ODESystem($Equation[equations...], $iv, variables, parameters;
-        name, systems, gui_metadata = $gui_metadata, defaults))
+        name, systems, gui_metadata = $gui_metadata, defaults = _defaults, guesses = _guesses))
 
     if ext[] === nothing
         push!(exprs.args, :(var"#___sys___" = $sys))
@@ -128,16 +134,38 @@ function _model_macro(mod, name, expr, isconnector)
             $(d_evts...)
         ]))))
 
+    Base.remove_linenums!(exprs)
+
     f = if length(where_types) == 0
-        :($(Symbol(:__, name, :__))(; name, $(kwargs...)) = $exprs)
+        :($(Symbol(:__, name, :__))(;
+            name,
+            defaults::Union{NamedTuple, Dict} = Dict{Union{Num, Symbol}, Union{Number, Symbol, Function}}(),
+            guesses::Union{NamedTuple, Dict} = Dict{Union{Num, Symbol}, Union{Number, Symbol, Function}}(),
+            $(kwargs...)) = $exprs)
     else
         f_with_where = Expr(:where)
         push!(f_with_where.args,
-            :($(Symbol(:__, name, :__))(; name, $(kwargs...))), where_types...)
+            :($(Symbol(:__, name, :__))(;
+                name,
+                defaults = Dict{Union{Num, Symbol}, Union{Number, Symbol, Function}}(),
+                guesses = Dict{Union{Num, Symbol}, Union{Number, Symbol, Function}}(),
+                $(kwargs...))), where_types...)
         :($f_with_where = $exprs)
     end
 
     :($name = $Model($f, $dict, $isconnector))
+end
+
+function sanitize_default_guess_kwargs(type, target)
+    return quote
+        $type isa NamedTuple && ($type = Dict(pairs($type)))
+        for (var"##k", var"##v") in $type
+            var"##var" = filter!( var"##p" -> nameof(var"##p") ==  var"##k", vcat(parameters, variables))
+            if length(var"##var") == 1 # Variable can be present once or can be absent
+                $target[var"##var"[1]] =  var"##v"
+            end
+        end
+    end
 end
 
 pop_structure_dict!(dict, key) = length(dict[key]) == 0 && pop!(dict, key)
@@ -410,7 +438,9 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps, c_evts, d_evts,
         isassigned(icon) && error("This model has more than one icon.")
         parse_icon!(body, dict, icon, mod)
     elseif mname == Symbol("@defaults")
-        parse_system_defaults!(exprs, arg, dict)
+        parse_system_defaults_guesses!(exprs, arg, dict, :defaults)
+    elseif mname == Symbol("@guesses")
+        parse_system_defaults_guesses!(exprs, arg, dict, :guesses)
     else
         error("$mname is not handled.")
     end
@@ -459,24 +489,25 @@ function parse_constants!(exprs, dict, body, mod)
     end
 end
 
-push_additional_defaults!(dict, a, b::Number) = dict[:defaults][a] = b
-push_additional_defaults!(dict, a, b::QuoteNode) = dict[:defaults][a] = b.value
-function push_additional_defaults!(dict, a, b::Expr)
-    dict[:defaults][a] = readable_code(b)
+push_additional_defaults_guesses!(dict, type, a, b::Number) = dict[type][a] = b
+push_additional_defaults_guesses!(dict, type, a, b::QuoteNode) = dict[type][a] = b.value
+function push_additional_defaults_guesses!(dict, type, a, b::Expr)
+    dict[type][a] = readable_code(b)
 end
 
-function parse_system_defaults!(exprs, defaults_body, dict)
-    for default_arg in defaults_body.args[end].args
+function parse_system_defaults_guesses!(exprs, dg_body, dict, type)
+    for dg_arg in dg_body.args[end].args
         # for arg in default_arg.args
-        MLStyle.@match default_arg begin
+        MLStyle.@match dg_arg begin
             # For cases like `p => 1` and `p => f()`. In both cases the definitions of
             # `a`, here `p` and when `b` is a function, here `f` are available while
             # defining the model
             Expr(:call, :(=>), a, b) => begin
-                push!(exprs, :(defaults[$a] = $b))
-                push_additional_defaults!(dict, a, b)
+                _type = Symbol(:_, type)
+                push!(exprs, :($_type[$a] = $b))
+                push_additional_defaults_guesses!(dict, type, a, b)
             end
-            _ => error("Invalid `defaults` entry $default_arg $(typeof(a)) $(typeof(b))")
+            _ => error("Invalid `$type` entry $dg_arg $(typeof(a)) $(typeof(b))")
         end
     end
 end
@@ -560,7 +591,15 @@ end
 function _parse_extend!(ext, a, b, dict, expr, kwargs, varexpr, vars)
     extend_args!(a, b, dict, expr, kwargs, varexpr)
     ext[] = a
-    push!(b.args, Expr(:kw, :name, Meta.quot(a)))
+    if length(b.args) > 1
+        if b.args[2].head == :parameters
+            push!(b.args[2].args, :defaults, :guesses, Expr(:kw, :name, Meta.quot(a)))
+        elseif b.args[2].head == :kw
+            b.args[2] = Expr(:parameters, :defaults, :guesses, Expr(:kw, :name, Meta.quot(a)), b.args[2:end]...)
+        end
+    else
+        push!(b.args, Expr(:parameters, :defaults, :guesses, Expr(:kw, :name, Meta.quot(a))))
+    end
     push!(expr.args, :($a = $b))
 
     dict[:extend] = [Symbol.(vars.args), a, b.args[1]]
@@ -590,6 +629,12 @@ function parse_extend!(exprs, ext, dict, mod, body, kwargs)
         Expr(:call, a′, _...) => begin
             a = Symbol(Symbol("#mtkmodel"), :__anonymous__, a′)
             b = body
+            @info 630 b.args[1] mod
+            try
+                getproperty(mod, b.args[1])
+            catch e
+                @info e
+            end
             if (model = getproperty(mod, b.args[1])) isa Model
                 vars = Expr(:tuple)
                 append!(vars.args, names(model))
