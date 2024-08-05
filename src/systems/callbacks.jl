@@ -190,8 +190,8 @@ namespace_affects(::Nothing, s) = nothing
 function namespace_callback(cb::SymbolicContinuousCallback, s)::SymbolicContinuousCallback
     SymbolicContinuousCallback(
         namespace_equation.(equations(cb), (s,)),
-        namespace_affects(affects(cb), s),
-        namespace_affects(affect_negs(cb), s))
+        namespace_affects(affects(cb), s);
+        affect_neg = namespace_affects(affect_negs(cb), s))
 end
 
 """
