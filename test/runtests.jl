@@ -43,7 +43,6 @@ end
             @safetestset "PDE Construction Test" include("pde.jl")
             @safetestset "JumpSystem Test" include("jumpsystem.jl")
             @safetestset "Constraints Test" include("constraints.jl")
-            @safetestset "SciML Problem Input Test" include("sciml_problem_inputs.jl")
             @safetestset "Reduction Test" include("reduction.jl")
             @safetestset "Split Parameters Test" include("split_parameters.jl")
             @safetestset "StaticArrays Test" include("static_arrays.jl")
@@ -78,7 +77,8 @@ end
     end
 
     if GROUP == "All" || GROUP == "InterfaceI" || GROUP == "SymbolicIndexingInterface"
-        # @safetestset "SymbolicIndexingInterface test" include("symbolic_indexing_interface.jl")
+        @safetestset "SymbolicIndexingInterface test" include("symbolic_indexing_interface.jl")
+        @safetestset "SciML Problem Input Test" include("sciml_problem_inputs.jl")
         @safetestset "MTKParameters Test" include("mtkparameters.jl")
     end
 
