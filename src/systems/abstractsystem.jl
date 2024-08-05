@@ -563,8 +563,11 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
             if idx.portion isa SciMLStructures.Discrete &&
                idx.idx[2] == idx.idx[3] == nothing
                 return nothing
+            elseif idx.portion isa SciMLStructures.Tunable
+                return ParameterIndex(
+                    idx.portion, idx.idx[arguments(sym)[(begin + 1):end]...])
             else
-                ParameterIndex(
+                return ParameterIndex(
                     idx.portion, (idx.idx..., arguments(sym)[(begin + 1):end]...))
             end
         else
