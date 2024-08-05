@@ -326,7 +326,14 @@ for (Portion, field, recurse) in [(SciMLStructures.Discrete, :discrete, 2)
     end
 
     @eval function SciMLStructures.replace(::$Portion, p::MTKParameters, newvals)
-        @set! p.$field = split_into_buffers(newvals, p.$field, Val($recurse))
+        @set! p.$field = $(
+            if Portion == SciMLStructures.Discrete
+            :(SizedVector{length(p.discrete)}(split_into_buffers(
+                newvals, p.$field, Val($recurse))))
+        else
+            :(split_into_buffers(newvals, p.$field, Val($recurse)))
+        end
+        )
         if p.dependent_update_oop !== nothing
             raw = p.dependent_update_oop(p...)
             @set! p.dependent = split_into_buffers(raw, p.dependent, Val(false))
