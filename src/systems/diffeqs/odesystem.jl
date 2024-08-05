@@ -401,15 +401,6 @@ function build_explicit_observed_function(sys, ts;
     dep_vars = scalarize(setdiff(vars, ivs))
 
     obs = param_only ? Equation[] : observed(sys)
-    if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
-        # each subsystem is topologically sorted independently. We can append the
-        # equations to override the `lhs ~ 0` equations in `observed(sys)`
-        syss, _, continuous_id, _... = dss
-        for (i, subsys) in enumerate(syss)
-            i == continuous_id && continue
-            append!(obs, observed(subsys))
-        end
-    end
 
     cs = collect_constants(obs)
     if !isempty(cs) > 0
