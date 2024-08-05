@@ -384,8 +384,8 @@ function SymbolicIndexingInterface.parameter_values(p::MTKParameters, pind::Para
 end
 
 function SymbolicIndexingInterface.set_parameter!(
-        p::MTKParameters, val, idx::ParameterIndex)
-    @unpack portion, idx, validate_size = idx
+        p::MTKParameters, val, pidx::ParameterIndex)
+    @unpack portion, idx, validate_size = pidx
     if portion isa SciMLStructures.Tunable
         if validate_size && size(val) !== size(idx)
             throw(InvalidParameterSizeException(size(idx), size(val)))
@@ -428,6 +428,7 @@ function SymbolicIndexingInterface.set_parameter!(
     if p.dependent_update_iip !== nothing
         p.dependent_update_iip(ArrayPartition(p.dependent), p...)
     end
+    return nothing
 end
 
 function _set_parameter_unchecked!(
