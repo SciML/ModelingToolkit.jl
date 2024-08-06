@@ -1356,6 +1356,7 @@ end
 function namespace_expr(
         O, sys, n = nameof(sys); ivs = independent_variables(sys))
     O = unwrap(O)
+    symbolic_type(O) == NotSymbolic() && return O
     if any(isequal(O), ivs)
         return O
     elseif iscall(O)
