@@ -551,7 +551,14 @@ function indp_to_system(indp)
     return indp
 end
 
-function SymbolicIndexingInterface.remake_buffer(indp, oldbuf::MTKParameters, vals::Dict)
+function validate_and_update(ic::IndexCache, buffer::MTKParameters, sym, idx, val)
+    if sym !== nothing
+        validate_parameter_type(ic, sym, idx, val)
+    end
+    _set_parameter_unchecked!(buffer, val, idx; update_dependent = false)
+end
+
+function SymbolicIndexingInterface.remake_buffer(indp, oldbuf::MTKParameters, idxs, vals)
     newbuf = @set oldbuf.tunable = Vector{Any}(undef, length(oldbuf.tunable))
     @set! newbuf.discrete = SizedVector{length(newbuf.discrete)}([Tuple(Vector{Any}(undef,
                                                                             length(buf))
@@ -562,47 +569,44 @@ function SymbolicIndexingInterface.remake_buffer(indp, oldbuf::MTKParameters, va
     @set! newbuf.nonnumeric = Tuple(Vector{Any}(undef, length(buf))
     for buf in newbuf.nonnumeric)
 
-    syms = collect(keys(vals))
-    vals = Dict{Any, Any}(vals)
-    for sym in syms
-        symbolic_type(sym) == ArraySymbolic() || continue
-        is_parameter(indp, sym) && continue
-        stype = symtype(unwrap(sym))
-        stype <: AbstractArray || continue
-        Symbolics.shape(sym) == Symbolics.Unknown() && continue
-        for i in eachindex(sym)
-            vals[sym[i]] = vals[sym][i]
-        end
-    end
-
     # If the parameter buffer is an `MTKParameters` object, `indp` must eventually drill
     # down to an `AbstractSystem` using `symbolic_container`. We leverage this to get
     # the index cache.
     ic = get_index_cache(indp_to_system(indp))
-    for (p, val) in vals
-        idx = parameter_index(indp, p)
-        if idx !== nothing
-            validate_parameter_type(ic, p, idx, val)
-            _set_parameter_unchecked!(
-                newbuf, val, idx; update_dependent = false)
-        elseif symbolic_type(p) == ArraySymbolic()
-            for (i, j) in zip(eachindex(p), eachindex(val))
-                pi = p[i]
-                idx = parameter_index(indp, pi)
-                validate_parameter_type(ic, pi, idx, val[j])
-                _set_parameter_unchecked!(
-                    newbuf, val[j], idx; update_dependent = false)
+    for (idx, val) in zip(idxs, vals)
+        if !(idx isa ParameterIndex)
+            p = unwrap(idx)
+            idx = parameter_index(sys, p)
+            stype = symtype(p)
+            if idx === nothing && symbolic_type(p) == ArraySymbolic() &&
+               stype <: AbstractArray && Symbolics.shape(p) != Symbolics.Unknown()
+                for i in eachindex(p)
+                    sym = p[i]
+                    subidx = parameter_index(ic, sym)
+                    subval = val[i]
+                    validate_and_update(ic, newbuf, sym, subidx, subval)
+                end
+                continue
             end
+        else
+            p = nothing
         end
+        validate_and_update(ic, newbuf, p, idx, val)
     end
 
     @set! newbuf.tunable = narrow_buffer_type_and_fallback_undefs(
         oldbuf.tunable, newbuf.tunable)
-    @set! newbuf.discrete = SizedVector{length(newbuf.discrete)}([narrow_buffer_type_and_fallback_undefs.(
-                                                                      oldclockbuf,
-                                                                      newclockbuf)
-                                                                  for (oldclockbuf, newclockbuf) in zip(
-        oldbuf.discrete, newbuf.discrete)])
+
+    # To keep the type constant
+    if isempty(newbuf.discrete)
+        @set! newbuf.discrete = SizedVector{0}([])
+    else
+        @set! newbuf.discrete = SizedVector{length(newbuf.discrete)}([narrow_buffer_type_and_fallback_undefs.(
+                                                                          oldclockbuf,
+                                                                          newclockbuf)
+                                                                      for (oldclockbuf, newclockbuf) in zip(
+            oldbuf.discrete, newbuf.discrete)])
+    end
     @set! newbuf.constant = narrow_buffer_type_and_fallback_undefs.(
         oldbuf.constant, newbuf.constant)
     @set! newbuf.nonnumeric = narrow_buffer_type_and_fallback_undefs.(
