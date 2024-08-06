@@ -486,3 +486,31 @@ sys = extend(sysx, sysy)
     ssys = structural_simplify(sys)
     @test_throws ArgumentError ODEProblem(ssys, [x => 3], (0, 1), []) # y should have a guess
 end
+
+@testset "Initialization of parameters" begin
+    function test_parameter(prob, sym, val, initialval = zero(val))
+        @test prob.ps[sym] ≈ initialval
+        @test init(prob).ps[sym] ≈ val
+        @test solve(prob).ps[sym] ≈ val
+    end
+    @variables x(t) y(t)
+    @parameters p
+    _p = ModelingToolkit.setdefault(p, missing)
+    @mtkbuild sys = ODESystem([D(x) ~ x, _p ~ x + y], t)
+    prob = ODEProblem(sys, [x => 1.0, y => 1.0], (0.0, 1.0))
+    test_parameter(prob, _p, 2.0)
+    @mtkbuild sys = ODESystem([D(x) ~ x, p ~ x + y], t; defaults = [p => missing])
+    prob = ODEProblem(sys, [x => 1.0, y => 1.0], (0.0, 1.0))
+    test_parameter(prob, p, 2.0)
+    @mtkbuild sys = ODESystem([D(x) ~ x, p ~ x + y], t)
+    prob = ODEProblem(sys, [x => 1.0, y => 1.0], (0.0, 1.0), [p => missing])
+    test_parameter(prob, p, 2.0)
+
+    @testset "Null system" begin
+        @variables x(t) y(t) s(t)
+        @parameters x0 y0
+        @mtkbuild sys = ODESystem([x ~ x0, y ~ y0, s ~ x + y], t)
+        prob = ODEProblem(sys, [s => 1.0], (0.0, 1.0), [x0 => 0.3, y0 => missing])
+        test_parameter(prob, y0, 0.7)
+    end
+end
