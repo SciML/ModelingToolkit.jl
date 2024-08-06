@@ -357,7 +357,9 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         analytic = nothing,
         split_idxs = nothing,
         initializeprob = nothing,
+        update_initializeprob! = nothing,
         initializeprobmap = nothing,
+        initializeprobpmap = nothing,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEFunction`")
@@ -459,7 +461,9 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
         analytic = analytic,
         initializeprob = initializeprob,
-        initializeprobmap = initializeprobmap)
+        update_initializeprob! = update_initializeprob!,
+        initializeprobmap = initializeprobmap,
+        initializeprobpmap = initializeprobpmap)
 end
 
 """
@@ -789,6 +793,45 @@ function get_u0(
     return u0, defs
 end
 
+struct GetUpdatedMTKParameters{G, S}
+    # `getu` functor which gets parameters that are unknowns during initialization
+    getpunknowns::G
+    # `setu` functor which returns a modified MTKParameters using those parameters
+    setpunknowns::S
+end
+
+function (f::GetUpdatedMTKParameters)(prob, initializesol)
+    mtkp = copy(parameter_values(prob))
+    f.setpunknowns(mtkp, f.getpunknowns(initializesol))
+    mtkp
+end
+
+struct UpdateInitializeprob{G, S}
+    # `getu` functor which gets all values from prob
+    getvals::G
+    # `setu` functor which updates initializeprob with values
+    setvals::S
+end
+
+function (f::UpdateInitializeprob)(initializeprob, prob)
+    f.setvals(initializeprob, f.getvals(prob))
+end
+
+function get_temporary_value(p)
+    stype = symtype(unwrap(p))
+    return if stype == Real
+        zero(Float64)
+    elseif stype <: AbstractArray{Real}
+        zeros(Float64, size(p))
+    elseif stype <: Real
+        zero(stype)
+    elseif stype <: AbstractArray
+        zeros(eltype(stype), size(p))
+    else
+        error("Nonnumeric parameter $p with symtype $stype cannot be solved for during initialization")
+    end
+end
+
 function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         implicit_dae = false, du0map = nothing,
         version = nothing, tgrad = false,
@@ -829,18 +872,38 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     end
 
     if eltype(parammap) <: Pair
-        parammap = Dict(unwrap(k) => v for (k, v) in todict(parammap))
+        parammap = Dict{Any, Any}(unwrap(k) => v for (k, v) in parammap)
     elseif parammap isa AbstractArray
         if isempty(parammap)
             parammap = SciMLBase.NullParameters()
         else
-            parammap = Dict(unwrap.(parameters(sys)) .=> parammap)
+            parammap = Dict{Any, Any}(unwrap.(parameters(sys)) .=> parammap)
         end
     end
+    defs = defaults(sys)
+    if has_guesses(sys)
+        guesses = merge(
+            ModelingToolkit.guesses(sys), isempty(guesses) ? Dict() : todict(guesses))
+        solvablepars = [p
+                        for p in parameters(sys)
+                        if is_parameter_solvable(p, parammap, defs, guesses)]
 
+        pvarmap = if parammap === nothing || parammap == SciMLBase.NullParameters() || !(eltype(parammap) <: Pair) && isempty(parammap)
+            defs
+        else
+            merge(defs, todict(parammap))
+        end
+        setparobserved = filter(keys(pvarmap)) do var
+            has_parameter_dependency_with_lhs(sys, var)
+        end
+    else
+        solvablepars = ()
+        setparobserved = ()
+    end
     # ModelingToolkit.get_tearing_state(sys) !== nothing => Requires structural_simplify first
     if sys isa ODESystem && build_initializeprob &&
-       (((implicit_dae || !isempty(missingvars) || !isempty(setobserved)) &&
+       (((implicit_dae || !isempty(missingvars) || !isempty(solvablepars) ||
+          !isempty(setobserved) || !isempty(setparobserved)) &&
          ModelingToolkit.get_tearing_state(sys) !== nothing) ||
         !isempty(initialization_equations(sys))) && t !== nothing
         if eltype(u0map) <: Number
@@ -854,14 +917,32 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
             sys, t, u0map, parammap; guesses, warn_initialize_determined,
             initialization_eqs, eval_expression, eval_module, fully_determined, check_units)
         initializeprobmap = getu(initializeprob, unknowns(sys))
+        punknowns = [p
+                     for p in all_variable_symbols(initializeprob) if is_parameter(sys, p)]
+        getpunknowns = getu(initializeprob, punknowns)
+        setpunknowns = setp(sys, punknowns)
+        initializeprobpmap = GetUpdatedMTKParameters(getpunknowns, setpunknowns)
+        reqd_syms = parameter_symbols(initializeprob)
+        update_initializeprob! = UpdateInitializeprob(
+            getu(sys, reqd_syms), setu(initializeprob, reqd_syms))
 
         zerovars = Dict(setdiff(unknowns(sys), keys(defaults(sys))) .=> 0.0)
+        if parammap isa SciMLBase.NullParameters
+            parammap = Dict()
+        end
+        for p in punknowns
+            p = unwrap(p)
+            stype = symtype(p)
+            parammap[p] = get_temporary_value(p)
+        end
         trueinit = collect(merge(zerovars, eltype(u0map) <: Pair ? todict(u0map) : u0map))
         u0map isa StaticArraysCore.StaticArray &&
             (trueinit = SVector{length(trueinit)}(trueinit))
     else
         initializeprob = nothing
+        update_initializeprob! = nothing
         initializeprobmap = nothing
+        initializeprobpmap = nothing
         trueinit = u0map
     end
 
@@ -909,7 +990,9 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         sparse = sparse, eval_expression = eval_expression,
         eval_module = eval_module,
         initializeprob = initializeprob,
+        update_initializeprob! = update_initializeprob!,
         initializeprobmap = initializeprobmap,
+        initializeprobpmap = initializeprobpmap,
         kwargs...)
     implicit_dae ? (f, du0, u0, p) : (f, u0, p)
 end
@@ -1471,10 +1554,12 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         isys = get_initializesystem(sys; initialization_eqs, check_units)
     elseif isempty(u0map) && get_initializesystem(sys) === nothing
         isys = structural_simplify(
-            generate_initializesystem(sys; initialization_eqs, check_units); fully_determined)
+            generate_initializesystem(
+                sys; initialization_eqs, check_units, pmap = parammap); fully_determined)
     else
         isys = structural_simplify(
-            generate_initializesystem(sys; u0map, initialization_eqs, check_units); fully_determined)
+            generate_initializesystem(
+                sys; u0map, initialization_eqs, check_units, pmap = parammap); fully_determined)
     end
 
     uninit = setdiff(unknowns(sys), [unknowns(isys); getfield.(observed(isys), :lhs)])
@@ -1498,6 +1583,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     parammap = parammap isa DiffEqBase.NullParameters || isempty(parammap) ?
                [get_iv(sys) => t] :
                merge(todict(parammap), Dict(get_iv(sys) => t))
+    parammap = Dict(k => v for (k, v) in parammap if v !== missing)
     if isempty(u0map)
         u0map = Dict()
     end
@@ -1505,7 +1591,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         guesses = Dict()
     end
 
-    u0map = merge(todict(guesses), todict(u0map))
+    u0map = merge(ModelingToolkit.guesses(sys), todict(guesses), todict(u0map))
     if neqs == nunknown
         NonlinearProblem(isys, u0map, parammap; kwargs...)
     else

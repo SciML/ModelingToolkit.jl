@@ -5,6 +5,7 @@ Generate `NonlinearSystem` which initializes an ODE problem from specified initi
 """
 function generate_initializesystem(sys::ODESystem;
         u0map = Dict(),
+        pmap = Dict(),
         initialization_eqs = [],
         guesses = Dict(),
         default_dd_guess = 0.0,
@@ -74,12 +75,103 @@ function generate_initializesystem(sys::ODESystem;
         end
     end
 
-    pars = [parameters(sys); get_iv(sys)] # include independent variable as pseudo-parameter
-    eqs_ics = [eqs_ics; observed(sys)]
-    return NonlinearSystem(
-        eqs_ics, vars, pars;
-        defaults = defs, parameter_dependencies = parameter_dependencies(sys),
-        checks = check_units,
-        name, kwargs...
+    # 4) process parameters as initialization unknowns
+    paramsubs = Dict()
+    if pmap isa SciMLBase.NullParameters
+        pmap = Dict()
+    end
+    pmap = todict(pmap)
+    for p in parameters(sys)
+        if is_parameter_solvable(p, pmap, defs, guesses)
+            # If either of them are `missing` the parameter is an unknown
+            # But if the parameter is passed a value, use that as an additional
+            # equation in the system
+            _val1 = get(pmap, p, nothing)
+            _val2 = get(defs, p, nothing)
+            _val3 = get(guesses, p, nothing)
+            varp = tovar(p)
+            paramsubs[p] = varp
+            # Has a default of `missing`, and (either an equation using the value passed to `ODEProblem` or a guess)
+            if _val2 === missing
+                if _val1 !== nothing && _val1 !== missing
+                    push!(eqs_ics, varp ~ _val1)
+                    push!(defs, varp => _val1)
+                elseif _val3 !== nothing
+                    # assuming an equation exists (either via algebraic equations or initialization_eqs)
+                    push!(defs, varp => _val3)
+                elseif check_defguess
+                    error("Invalid setup: parameter $(p) has no default value, initial value, or guess")
+                end
+                # `missing` passed to `ODEProblem`, and (either an equation using default or a guess)
+            elseif _val1 === missing
+                if _val2 !== nothing && _val2 !== missing
+                    push!(eqs_ics, varp ~ _val2)
+                    push!(defs, varp => _val2)
+                elseif _val3 !== nothing
+                    push!(defs, varp => _val3)
+                elseif check_defguess
+                    error("Invalid setup: parameter $(p) has no default value, initial value, or guess")
+                end
+                # given a symbolic value to ODEProblem
+            elseif symbolic_type(_val1) != NotSymbolic()
+                push!(eqs_ics, varp ~ _val1)
+                push!(defs, varp => _val3)
+                # No value passed to `ODEProblem`, but a default and a guess are present
+                # _val2 !== missing is implied by it falling this far in the elseif chain
+            elseif _val1 === nothing && _val2 !== nothing
+                push!(eqs_ics, varp ~ _val2)
+                push!(defs, varp => _val3)
+            else
+                # _val1 !== missing and _val1 !== nothing, so a value was provided to ODEProblem
+                # This would mean `is_parameter_solvable` returned `false`, so we never end up
+                # here
+                error("This should never be reached")
+            end
+        end
+    end
+
+    # 5) parameter dependencies become equations, their LHS become unknowns
+    for eq in parameter_dependencies(sys)
+        varp = tovar(eq.lhs)
+        paramsubs[eq.lhs] = varp
+        push!(eqs_ics, eq)
+        guessval = get(guesses, eq.lhs, eq.rhs)
+        push!(defs, varp => guessval)
+    end
+
+    # 6) handle values provided for dependent parameters similar to values for observed variables
+    for (k, v) in merge(defaults(sys), pmap)
+        if is_variable_floatingpoint(k) && has_parameter_dependency_with_lhs(sys, k)
+            push!(eqs_ics, paramsubs[k] ~ v)
+        end
+    end
+
+    # parameters do not include ones that became initialization unknowns
+    pars = vcat(
+        [get_iv(sys)], # include independent variable as pseudo-parameter
+        [p for p in parameters(sys) if !haskey(paramsubs, p)]
     )
+
+    eqs_ics = Symbolics.substitute.([eqs_ics; observed(sys)], (paramsubs,))
+    vars = [vars; collect(values(paramsubs))]
+    for k in keys(defs)
+        defs[k] = substitute(defs[k], paramsubs)
+    end
+    return NonlinearSystem(eqs_ics,
+        vars,
+        pars;
+        defaults = defs,
+        checks = check_units,
+        name,
+        kwargs...)
+end
+
+function is_parameter_solvable(p, pmap, defs, guesses)
+    _val1 = pmap isa AbstractDict ? get(pmap, p, nothing) : nothing
+    _val2 = get(defs, p, nothing)
+    _val3 = get(guesses, p, nothing)
+    # either (missing is a default or was passed to the ODEProblem) or (nothing was passed to
+    # the ODEProblem and it has a default and a guess)
+    return ((_val1 === missing || _val2 === missing) ||
+           (_val1 === nothing && _val2 !== nothing)) && _val3 !== nothing
 end

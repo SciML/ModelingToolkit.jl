@@ -736,6 +736,15 @@ function has_observed_with_lhs(sys, sym)
     end
 end
 
+function has_parameter_dependency_with_lhs(sys, sym)
+    has_parameter_dependencies(sys) || return false
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+        return any(isequal(sym), ic.dependent_pars)
+    else
+        return any(isequal(sym), [eq.lhs for eq in parameter_dependencies(sys)])
+    end
+end
+
 function _all_ts_idxs!(ts_idxs, ::NotSymbolic, sys, sym)
     if is_variable(sys, sym) || is_independent_variable(sys, sym)
         push!(ts_idxs, ContinuousTimeseries())

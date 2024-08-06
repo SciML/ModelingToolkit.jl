@@ -494,8 +494,8 @@ function collect_var!(unknowns, parameters, var, iv)
         push!(unknowns, var)
     end
     # Add also any parameters that appear only as defaults in the var
-    if hasdefault(var)
-        collect_vars!(unknowns, parameters, getdefault(var), iv)
+    if hasdefault(var) && (def = getdefault(var)) !== missing
+        collect_vars!(unknowns, parameters, def, iv)
     end
     return nothing
 end
