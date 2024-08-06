@@ -276,7 +276,7 @@ j1 = ConstantRateJump(k, [X ~ X - 1])
 @test_nowarn @mtkbuild js1 = JumpSystem([j1], t, [X], [k])
 
 
-# test correct autosolver is selected
+# test correct autosolver is selected, which implies appropriate dep graphs are available
 let
     @parameters k
     @variables X(t)
