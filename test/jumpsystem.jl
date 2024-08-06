@@ -69,15 +69,20 @@ parammap = [β => 0.1 / 1000, γ => 0.01]
 dprob = DiscreteProblem(js2, u₀map, tspan, parammap)
 jprob = JumpProblem(js2, dprob, Direct(), save_positions = (false, false), rng = rng)
 Nsims = 30000
-function getmean(jprob, Nsims)
+function getmean(jprob, Nsims; use_stepper = true)
     m = 0.0
     for i in 1:Nsims
-        sol = solve(jprob, SSAStepper())
+        sol = use_stepper ? solve(jprob, SSAStepper()) : solve(jprob)
         m += sol[end, end]
     end
     m / Nsims
 end
 m = getmean(jprob, Nsims)
+
+# test auto-alg selection works
+jprobb = JumpProblem(js2, dprob; save_positions = (false, false), rng)
+mb = getmean(jprobb, Nsims; use_stepper = false)
+@test abs(m - mb) / m < 0.01
 
 @variables S2(t)
 obs = [S2 ~ 2 * S]
@@ -89,7 +94,6 @@ sol = solve(jprob, SSAStepper(), saveat = tspan[2] / 10)
 @test all(2 .* sol[S] .== sol[S2])
 
 # test save_positions is working
-
 jprob = JumpProblem(js2, dprob, Direct(), save_positions = (false, false), rng = rng)
 sol = solve(jprob, SSAStepper(), saveat = 1.0)
 @test all((sol.t) .== collect(0.0:tspan[2]))

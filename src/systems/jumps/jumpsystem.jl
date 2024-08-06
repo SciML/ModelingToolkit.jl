@@ -426,7 +426,8 @@ jprob = JumpProblem(complete(js), dprob, Direct())
 sol = solve(jprob, SSAStepper())
 ```
 """
-function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = nothing,
+function JumpProcesses.JumpProblem(js::JumpSystem, prob,
+        aggregator = JumpProcesses.NullAggregator(); callback = nothing,
         eval_expression = false, eval_module = @__MODULE__, kwargs...)
     if !iscomplete(js)
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `JumpProblem`")
