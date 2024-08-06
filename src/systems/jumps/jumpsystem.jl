@@ -450,7 +450,7 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob,
     jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, majs)
 
     if needs_vartojumps_map(aggregator) || needs_depgraph(aggregator) ||
-            (aggregator isa JumpProcesses.NullAggregator)
+       (aggregator isa JumpProcesses.NullAggregator)
         jdeps = asgraph(js)
         vdeps = variable_dependencies(js)
         vtoj = jdeps.badjlist
