@@ -105,6 +105,10 @@ function generate_initializesystem(sys::ODESystem;
             if _val1 !== nothing && _val1 !== missing
                 push!(eqs_ics, varp ~ _val1)
             end
+            if !haskey(guesses, p)
+                error("Invalid setup: parameter $(p) has no default value or initial guess")
+            end
+            push!(u0, varp => guesses[p])
         end
     end
     pars = vcat(
