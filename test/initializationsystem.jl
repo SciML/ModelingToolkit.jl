@@ -522,7 +522,8 @@ end
     end
 
     using ModelingToolkitStandardLibrary.Mechanical.TranslationalModelica: Fixed, Mass,
-                                                                           Spring, Force
+                                                                           Spring, Force,
+                                                                           Damper
     using ModelingToolkitStandardLibrary.Blocks: Constant
 
     @named mass = Mass(; m = 1.0, s = 1.0, v = 0.0, a = 0.0)
@@ -530,11 +531,13 @@ end
     @named spring = Spring(; c = 2.0)
     @named gravity = Force()
     @named constant = Constant(; k = 9.81)
+    @named damper = Damper(; d = 0.1)
     @mtkbuild sys = ODESystem(
         [connect(fixed.flange, spring.flange_a), connect(spring.flange_b, mass.flange_a),
-            connect(mass.flange_a, gravity.flange), connect(constant.output, gravity.f)],
+            connect(mass.flange_a, gravity.flange), connect(constant.output, gravity.f),
+            connect(fixed.flange, damper.flange_a), connect(damper.flange_b, mass.flange_a)],
         t;
-        systems = [fixed, spring, mass, gravity, constant],
+        systems = [fixed, spring, mass, gravity, constant, damper],
         guesses = [spring.s_rel0 => 1.0])
     prob = ODEProblem(sys, [], (0.0, 1.0), [spring.s_rel0 => missing])
     test_parameter(prob, spring.s_rel0, -3.905)
