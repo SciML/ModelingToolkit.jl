@@ -145,7 +145,7 @@ pop_structure_dict!(dict, key) = length(dict[key]) == 0 && pop!(dict, key)
 function update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
         varclass, where_types)
     if indices isa Nothing
-        push!(kwargs, Expr(:kw, Expr(:(::), a, Union{Nothing, type}), nothing))
+        push!(kwargs, Expr(:kw, Expr(:(::), a, Union{Nothing, Missing, type}), nothing))
         dict[:kwargs][getname(var)] = Dict(:value => def, :type => type)
     else
         vartype = gensym(:T)
