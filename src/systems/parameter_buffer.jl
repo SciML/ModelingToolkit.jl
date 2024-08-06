@@ -59,7 +59,7 @@ function MTKParameters(
     end
     p = Dict()
     missing_params = Set()
-    pdeps = has_parameter_dependencies(sys) ? parameter_dependencies(sys) : nothing
+    pdeps = has_parameter_dependencies(sys) ? parameter_dependencies(sys) : []
 
     for sym in all_ps
         ttsym = default_toterm(sym)
@@ -92,7 +92,7 @@ function MTKParameters(
         delete!(missing_params, ttsym)
     end
 
-    if pdeps !== nothing
+    if !isempty(pdeps)
         for eq in pdeps
             sym = eq.lhs
             expr = eq.rhs
