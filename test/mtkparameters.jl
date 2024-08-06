@@ -194,10 +194,10 @@ end
         # broken because dependent update functions break inference
         @test_call target_modules=(ModelingToolkit,) SciMLStructures.replace(
             portion, ps, ones(length(buffer)))
-        @test_throws Exception @inferred SciMLStructures.replace(
+        @inferred SciMLStructures.replace(
             portion, ps, ones(length(buffer)))
         @inferred MTKParameters SciMLStructures.replace(portion, ps, ones(length(buffer)))
-        @test_opt target_modules=(ModelingToolkit,) broken=true SciMLStructures.replace(
+        @test_opt target_modules=(ModelingToolkit,) SciMLStructures.replace(
             portion, ps, ones(length(buffer)))
 
         @test_call target_modules=(ModelingToolkit,) SciMLStructures.replace!(
