@@ -5,6 +5,7 @@ Generate `NonlinearSystem` which initializes an ODE problem from specified initi
 """
 function generate_initializesystem(sys::ODESystem;
         u0map = Dict(),
+        pmap = Dict(),
         name = nameof(sys),
         guesses = Dict(), check_defguess = false,
         default_dd_value = 0.0,
@@ -90,18 +91,44 @@ function generate_initializesystem(sys::ODESystem;
         end
     end
 
-    pars = [parameters(sys); get_iv(sys)]
-    nleqs = if algebraic_only
-        [eqs_ics; observed(sys)]
-    else
-        [eqs_ics; get_initialization_eqs(sys); initialization_eqs; observed(sys)]
+    paramsubs = Dict()
+    if pmap isa SciMLBase.NullParameters
+        pmap = Dict()
     end
+    for p in parameters(sys)
+        # If either of them are `missing` the parameter is an unknown
+        # But if the parameter is passed a value, use that as an additional
+        # equation in the system
+        if (_val1 = get(pmap, p, nothing)) === missing || get(defs, p, nothing) === missing
+            varp = tovar(p)
+            paramsubs[p] = varp
+            if _val1 !== nothing && _val1 !== missing
+                push!(eqs_ics, varp ~ _val1)
+            end
+        end
+    end
+    pars = vcat(
+        [get_iv(sys)],
+        [p for p in parameters(sys) if !haskey(paramsubs, p)]
+    )
+    pdeps = parameter_dependencies(sys)
+    if !isempty(pdeps)
+        pdep_eqs = [k ~ v for (k, v) in pdeps]
+    else
+        pdep_eqs = Equation[]
+    end
+    nleqs = if algebraic_only
+        [eqs_ics; observed(sys); pdep_eqs]
+    else
+        [eqs_ics; get_initialization_eqs(sys); initialization_eqs; observed(sys); pdep_eqs]
+    end
+    nleqs = Symbolics.substitute.(nleqs, (paramsubs,))
+    unks = [full_states; collect(values(paramsubs))]
 
     sys_nl = NonlinearSystem(nleqs,
-        full_states,
+        unks,
         pars;
-        defaults = merge(ModelingToolkit.defaults(sys), todict(u0), dd_guess),
-        parameter_dependencies = parameter_dependencies(sys),
+        defaults = merge(ModelingToolkit.defaults(sys), todict(u0), dd_guess, pmap),
         name,
         kwargs...)
 
