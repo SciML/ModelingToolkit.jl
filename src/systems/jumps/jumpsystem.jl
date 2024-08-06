@@ -449,7 +449,8 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob,
         error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")
     jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, majs)
 
-    if needs_vartojumps_map(aggregator) || needs_depgraph(aggregator)
+    if needs_vartojumps_map(aggregator) || needs_depgraph(aggregator) ||
+            (aggregator isa JumpProcesses.NullAggregator)
         jdeps = asgraph(js)
         vdeps = variable_dependencies(js)
         vtoj = jdeps.badjlist

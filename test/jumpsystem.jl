@@ -274,3 +274,23 @@ affect = [X ~ X - 1]
 
 j1 = ConstantRateJump(k, [X ~ X - 1])
 @test_nowarn @mtkbuild js1 = JumpSystem([j1], t, [X], [k])
+
+
+# test correct autosolver is selected
+let
+    @parameters k
+    @variables X(t)
+    rate = k
+    affect = [X ~ X - 1]
+    j1 = ConstantRateJump(k, [X ~ X - 1])
+
+    Nv = [1, JumpProcesses.USE_DIRECT_THRESHOLD + 1, JumpProcesses.USE_RSSA_THRESHOLD + 1]
+    algtypes = [Direct, RSSA, RSSACR]
+    for (N, algtype) in zip(Nv, algtypes)
+        @named jsys = JumpSystem([deepcopy(j1) for _ in 1:N], t, [X], [k])
+        jsys = complete(jsys)
+        dprob = DiscreteProblem(jsys, [X => 10], (0.0, 10.0), [k => 1])
+        jprob = JumpProblem(jsys, dprob)
+        @test jprob.aggregator isa algtype
+    end
+end
