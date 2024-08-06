@@ -678,6 +678,10 @@ end
     return len
 end
 
+Base.size(ps::MTKParameters) = (length(ps),)
+
+Base.IndexStyle(::Type{T}) where {T <: MTKParameters} = IndexLinear()
+
 Base.getindex(p::MTKParameters, pind::ParameterIndex) = parameter_values(p, pind)
 
 Base.setindex!(p::MTKParameters, val, pind::ParameterIndex) = set_parameter!(p, val, pind)
