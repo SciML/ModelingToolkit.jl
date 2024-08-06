@@ -154,9 +154,9 @@ function update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
         if !isnothing(meta) && haskey(meta, VariableUnit)
             uvar = gensym()
             push!(where_types, uvar)
-            push!(kwargs, Expr(:kw, :($a::Union{Nothing, $uvar}), nothing))
+            push!(kwargs, Expr(:kw, :($a::Union{Nothing, Missing, $uvar}), nothing))
         else
-            push!(kwargs, Expr(:kw, :($a::Union{Nothing, $type}), nothing))
+            push!(kwargs, Expr(:kw, :($a::Union{Nothing, Missing, $type}), nothing))
         end
         dict[:kwargs][getname(var)] = Dict(:value => def, :type => type)
     else
