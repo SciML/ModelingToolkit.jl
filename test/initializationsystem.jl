@@ -506,6 +506,13 @@ end
     prob = ODEProblem(sys, [x => 1.0, y => 1.0], (0.0, 1.0), [p => missing])
     test_parameter(prob, p, 2.0)
 
+    @mtkbuild sys = ODESystem([D(x) ~ x, p ~ x + y], t; guesses = [p => 1.0])
+    @test_throws ModelingToolkit.MissingParametersError ODEProblem(
+        sys, [x => 1.0, y => 1.0], (0.0, 1.0))
+    @mtkbuild sys = ODESystem([D(x) ~ x, p ~ x + y], t)
+    @test_throws ["Invalid setup", "parameter p", "guess"] ODEProblem(
+        sys, [x => 1.0, y => 1.0], (0.0, 1.0), [p => missing])
+
     @testset "Null system" begin
         @variables x(t) y(t) s(t)
         @parameters x0 y0
@@ -513,4 +520,22 @@ end
         prob = ODEProblem(sys, [s => 1.0], (0.0, 1.0), [x0 => 0.3, y0 => missing])
         test_parameter(prob, y0, 0.7)
     end
+
+    using ModelingToolkitStandardLibrary.Mechanical.TranslationalModelica: Fixed, Mass,
+                                                                           Spring, Force
+    using ModelingToolkitStandardLibrary.Blocks: Constant
+
+    @named mass = Mass(; m = 1.0, s = 1.0, v = 0.0, a = 0.0)
+    @named fixed = Fixed(; s0 = 0.0)
+    @named spring = Spring(; c = 2.0)
+    @named gravity = Force()
+    @named constant = Constant(; k = 9.81)
+    @mtkbuild sys = ODESystem(
+        [connect(fixed.flange, spring.flange_a), connect(spring.flange_b, mass.flange_a),
+            connect(mass.flange_a, gravity.flange), connect(constant.output, gravity.f)],
+        t;
+        systems = [fixed, spring, mass, gravity, constant],
+        guesses = [spring.s_rel0 => 1.0])
+    prob = ODEProblem(sys, [], (0.0, 1.0), [spring.s_rel0 => missing])
+    test_parameter(prob, spring.s_rel0, -3.905)
 end
