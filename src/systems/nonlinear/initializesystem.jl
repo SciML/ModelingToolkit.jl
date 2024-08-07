@@ -107,3 +107,13 @@ function generate_initializesystem(sys::ODESystem;
 
     return sys_nl
 end
+
+function SciMLBase.remake_initializeprob(sys::ODESystem, odefn, u0, t0, p)
+    if !(eltype(u0) <: Pair) && !isempty(u0)
+        return odefn.initializeprob, odefn.initializeprobmap
+    end
+    initprob = InitializationProblem(sys, t0, u0, p)
+    display(initprob.f.sys); @show equations(initprob.f.sys)
+    initprobmap = getu(initprob, unknowns(sys))
+    return initprob, initprobmap
+end
