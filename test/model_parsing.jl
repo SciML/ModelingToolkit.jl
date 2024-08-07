@@ -854,3 +854,25 @@ end
         @test getdefault(vec_false.n[i]) == 1
     end
 end
+
+@testset "Duplicate names" begin
+    mod = @__MODULE__
+    @test_throws ErrorException ModelingToolkit._model_macro(mod, :ATest,
+        :(begin
+            @variables begin
+                a(t)
+                a(t)
+            end
+        end),
+        false)
+    @test_throws ErrorException ModelingToolkit._model_macro(mod, :ATest,
+        :(begin
+            @variables begin
+                a(t)
+            end
+            @parameters begin
+                a
+            end
+        end),
+        false)
+end
