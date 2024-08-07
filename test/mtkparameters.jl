@@ -77,12 +77,10 @@ newps = remake_buffer(sys,
     Dict(a => 1.0f0, b => 5.0f0, c => 2.0, d => 0x5, e => Float32[0.4, 0.5, 0.6],
         f => 3ones(UInt, 3, 3), g => ones(Float32, 4), h => "bar"))
 
-for fname in (:tunable, :discrete, :constant, :dependent)
+for fname in (:tunable, :discrete, :constant)
     # ensure same number of sub-buffers
     @test length(getfield(ps, fname)) == length(getfield(newps, fname))
 end
-@test ps.dependent_update_iip === newps.dependent_update_iip
-@test ps.dependent_update_oop === newps.dependent_update_oop
 
 @test getp(sys, a)(newps) isa Float32
 @test getp(sys, b)(newps) == 2.0f0 # ensure dependent update still happened, despite explicit value
@@ -236,15 +234,14 @@ end
     Equation[], t, [], [p1, p2, p3, p4]; parameter_dependencies = [p2 => 2p1, p4 => 3p3])
 sys = complete(sys)
 ps = MTKParameters(sys, [p1 => 1.0, p3 => [2.0, 3.0]])
-@test ps[parameter_index(sys, p2)] == 2.0
-@test ps[parameter_index(sys, p4)] == [6.0, 9.0]
+@test getp(sys, p2)(ps) == 2.0
+@test getp(sys, p4)(ps) == [6.0, 9.0]
 
 newps = remake_buffer(
     sys, ps, Dict(p1 => ForwardDiff.Dual(2.0), p3 => ForwardDiff.Dual.([3.0, 4.0])))
 
 VDual = Vector{<:ForwardDiff.Dual}
 VVDual = Vector{<:Vector{<:ForwardDiff.Dual}}
-@test newps.dependent isa Union{Tuple{VDual, VVDual}, Tuple{VVDual, VDual}}
 
 @testset "Parameter type validation" begin
     struct Foo{T}
@@ -314,7 +311,7 @@ end
 
 # Parameter timeseries
 ps = MTKParameters(([1.0, 1.0],), SizedVector{2}([([0.0, 0.0],), ([0.0, 0.0],)]),
-    (), (), (), nothing, nothing)
+    (), ())
 with_updated_parameter_timeseries_values(
     sys, ps, 1 => ModelingToolkit.NestedGetIndex(([5.0, 10.0],)))
 @test ps.discrete[1][1] == [5.0, 10.0]
@@ -328,7 +325,7 @@ with_updated_parameter_timeseries_values(
 # With multiple types and clocks
 ps = MTKParameters(
     (), SizedVector{2}([([1.0, 2.0, 3.0], falses(1)), ([4.0, 5.0, 6.0], falses(0))]),
-    (), (), (), nothing, nothing)
+    (), ())
 @test SciMLBase.get_saveable_values(ps, 1).x isa Tuple{Vector{Float64}, BitVector}
 tsidx1 = 1
 tsidx2 = 2

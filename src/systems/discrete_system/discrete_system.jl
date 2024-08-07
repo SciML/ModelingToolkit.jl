@@ -59,10 +59,10 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     """
     connector_type::Any
     """
-    A mapping from dependent parameters to expressions describing how they are calculated from
-    other parameters.
+    Topologically sorted parameter dependency equations, where all symbols are parameters and
+    the LHS is a single parameter.
     """
-    parameter_dependencies::Union{Nothing, Dict}
+    parameter_dependencies::Vector{Equation}
     """
     Metadata for the system, to be used by downstream packages.
     """
@@ -95,7 +95,7 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     function DiscreteSystem(tag, discreteEqs, iv, dvs, ps, tspan, var_to_name,
             observed,
             name,
-            systems, defaults, preface, connector_type, parameter_dependencies = nothing,
+            systems, defaults, preface, connector_type, parameter_dependencies = Equation[],
             metadata = nothing, gui_metadata = nothing,
             tearing_state = nothing, substitutions = nothing,
             complete = false, index_cache = nothing, parent = nothing;
@@ -131,7 +131,7 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
         defaults = _merge(Dict(default_u0), Dict(default_p)),
         preface = nothing,
         connector_type = nothing,
-        parameter_dependencies = nothing,
+        parameter_dependencies = Equation[],
         metadata = nothing,
         gui_metadata = nothing,
         kwargs...)
@@ -218,9 +218,10 @@ function flatten(sys::DiscreteSystem, noeqs = false)
 end
 
 function generate_function(
-        sys::DiscreteSystem, dvs = unknowns(sys), ps = full_parameters(sys); wrap_code = identity, kwargs...)
+        sys::DiscreteSystem, dvs = unknowns(sys), ps = parameters(sys); wrap_code = identity, kwargs...)
     exprs = [eq.rhs for eq in equations(sys)]
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, exprs)
+    wrap_code = wrap_code .∘ wrap_array_vars(sys, exprs) .∘
+                wrap_parameter_dependencies(sys, false)
     generate_custom_function(sys, exprs, dvs, ps; wrap_code, kwargs...)
 end
 
@@ -308,7 +309,7 @@ end
 function SciMLBase.DiscreteFunction{iip, specialize}(
         sys::DiscreteSystem,
         dvs = unknowns(sys),
-        ps = full_parameters(sys),
+        ps = parameters(sys),
         u0 = nothing;
         version = nothing,
         p = nothing,

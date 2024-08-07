@@ -57,10 +57,10 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     """
     connector_type::Any
     """
-    A mapping from dependent parameters to expressions describing how they are calculated from
-    other parameters.
+    Topologically sorted parameter dependency equations, where all symbols are parameters and
+    the LHS is a single parameter.
     """
-    parameter_dependencies::Union{Nothing, Dict}
+    parameter_dependencies::Vector{Equation}
     """
     Metadata for the system, to be used by downstream packages.
     """
@@ -92,7 +92,7 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
 
     function NonlinearSystem(tag, eqs, unknowns, ps, var_to_name, observed, jac, name,
             systems,
-            defaults, connector_type, parameter_dependencies = nothing, metadata = nothing,
+            defaults, connector_type, parameter_dependencies = Equation[], metadata = nothing,
             gui_metadata = nothing,
             tearing_state = nothing, substitutions = nothing,
             complete = false, index_cache = nothing, parent = nothing; checks::Union{
@@ -118,7 +118,7 @@ function NonlinearSystem(eqs, unknowns, ps;
         continuous_events = nothing, # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
         discrete_events = nothing,   # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
         checks = true,
-        parameter_dependencies = nothing,
+        parameter_dependencies = Equation[],
         metadata = nothing,
         gui_metadata = nothing)
     continuous_events === nothing || isempty(continuous_events) ||
@@ -210,12 +210,13 @@ function calculate_jacobian(sys::NonlinearSystem; sparse = false, simplify = fal
 end
 
 function generate_jacobian(
-        sys::NonlinearSystem, vs = unknowns(sys), ps = full_parameters(sys);
+        sys::NonlinearSystem, vs = unknowns(sys), ps = parameters(sys);
         sparse = false, simplify = false, wrap_code = identity, kwargs...)
     jac = calculate_jacobian(sys, sparse = sparse, simplify = simplify)
     pre, sol_states = get_substitutions_and_solved_unknowns(sys)
     p = reorder_parameters(sys, ps)
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, jac; dvs = vs, ps)
+    wrap_code = wrap_code .∘ wrap_array_vars(sys, jac; dvs = vs, ps) .∘
+                wrap_parameter_dependencies(sys, false)
     return build_function(
         jac, vs, p...; postprocess_fbody = pre, states = sol_states, wrap_code, kwargs...)
 end
@@ -233,21 +234,23 @@ function calculate_hessian(sys::NonlinearSystem; sparse = false, simplify = fals
 end
 
 function generate_hessian(
-        sys::NonlinearSystem, vs = unknowns(sys), ps = full_parameters(sys);
+        sys::NonlinearSystem, vs = unknowns(sys), ps = parameters(sys);
         sparse = false, simplify = false, wrap_code = identity, kwargs...)
     hess = calculate_hessian(sys, sparse = sparse, simplify = simplify)
     pre = get_preprocess_constants(hess)
     p = reorder_parameters(sys, ps)
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, hess; dvs = vs, ps)
+    wrap_code = wrap_code .∘ wrap_array_vars(sys, hess; dvs = vs, ps) .∘
+                wrap_parameter_dependencies(sys, false)
     return build_function(hess, vs, p...; postprocess_fbody = pre, wrap_code, kwargs...)
 end
 
 function generate_function(
-        sys::NonlinearSystem, dvs = unknowns(sys), ps = full_parameters(sys);
+        sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(sys);
         wrap_code = identity, kwargs...)
     rhss = [deq.rhs for deq in equations(sys)]
     pre, sol_states = get_substitutions_and_solved_unknowns(sys)
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps)
+    wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps) .∘
+                wrap_parameter_dependencies(sys, false)
     p = reorder_parameters(sys, value.(ps))
     return build_function(rhss, value.(dvs), p...; postprocess_fbody = pre,
         states = sol_states, wrap_code, kwargs...)
@@ -266,7 +269,7 @@ end
 """
 ```julia
 SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
-                                 ps = full_parameters(sys);
+                                 ps = parameters(sys);
                                  version = nothing,
                                  jac = false,
                                  sparse = false,
@@ -282,7 +285,7 @@ function SciMLBase.NonlinearFunction(sys::NonlinearSystem, args...; kwargs...)
 end
 
 function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
-        ps = full_parameters(sys), u0 = nothing;
+        ps = parameters(sys), u0 = nothing;
         version = nothing,
         jac = false,
         eval_expression = false,
@@ -328,7 +331,7 @@ end
 """
 ```julia
 SciMLBase.NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
-                                     ps = full_parameters(sys);
+                                     ps = parameters(sys);
                                      version = nothing,
                                      jac = false,
                                      sparse = false,
@@ -342,7 +345,7 @@ variable and parameter vectors, respectively.
 struct NonlinearFunctionExpr{iip} end
 
 function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
-        ps = full_parameters(sys), u0 = nothing;
+        ps = parameters(sys), u0 = nothing;
         version = nothing, tgrad = false,
         jac = false,
         linenumbers = false,
@@ -389,7 +392,7 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
         kwargs...)
     eqs = equations(sys)
     dvs = unknowns(sys)
-    ps = full_parameters(sys)
+    ps = parameters(sys)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         u0, defs = get_u0(sys, u0map, parammap)
         check_eqs_u0(eqs, dvs, u0; kwargs...)

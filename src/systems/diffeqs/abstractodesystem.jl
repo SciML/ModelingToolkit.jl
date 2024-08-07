@@ -86,7 +86,7 @@ function calculate_control_jacobian(sys::AbstractODESystem;
 end
 
 function generate_tgrad(
-        sys::AbstractODESystem, dvs = unknowns(sys), ps = full_parameters(sys);
+        sys::AbstractODESystem, dvs = unknowns(sys), ps = parameters(sys);
         simplify = false, wrap_code = identity, kwargs...)
     tgrad = calculate_tgrad(sys, simplify = simplify)
     pre = get_preprocess_constants(tgrad)
@@ -97,7 +97,8 @@ function generate_tgrad(
     else
         (ps,)
     end
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, tgrad; dvs, ps)
+    wrap_code = wrap_code .∘ wrap_array_vars(sys, tgrad; dvs, ps) .∘
+                wrap_parameter_dependencies(sys, !(tgrad isa AbstractArray))
     return build_function(tgrad,
         dvs,
         p...,
@@ -108,7 +109,7 @@ function generate_tgrad(
 end
 
 function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = full_parameters(sys);
+        ps = parameters(sys);
         simplify = false, sparse = false, wrap_code = identity, kwargs...)
     jac = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
     pre = get_preprocess_constants(jac)
@@ -117,7 +118,8 @@ function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
     else
         (ps,)
     end
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, jac; dvs, ps)
+    wrap_code = wrap_code .∘ wrap_array_vars(sys, jac; dvs, ps) .∘
+                wrap_parameter_dependencies(sys, false)
     return build_function(jac,
         dvs,
         p...,
@@ -128,7 +130,7 @@ function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
 end
 
 function generate_control_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = full_parameters(sys);
+        ps = parameters(sys);
         simplify = false, sparse = false, kwargs...)
     jac = calculate_control_jacobian(sys; simplify = simplify, sparse = sparse)
     p = reorder_parameters(sys, ps)
@@ -156,12 +158,12 @@ function generate_dae_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
 end
 
 function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = full_parameters(sys);
+        ps = parameters(sys);
         implicit_dae = false,
         ddvs = implicit_dae ? map(Differential(get_iv(sys)), dvs) :
                nothing,
         isdde = false,
-        wrap_code = nothing,
+        wrap_code = identity,
         kwargs...)
     if isdde
         eqs = delay_to_function(sys)
@@ -181,9 +183,6 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
     p = map.(x -> time_varying_as_func(value(x), sys), reorder_parameters(sys, ps))
     t = get_iv(sys)
 
-    if wrap_code === nothing
-        wrap_code = (identity, identity)
-    end
     if isdde
         build_function(rhss, u, DDE_HISTORY_FUN, p..., t; kwargs...)
     else
@@ -192,12 +191,14 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
         if implicit_dae
             build_function(rhss, ddvs, u, p..., t; postprocess_fbody = pre,
                 states = sol_states,
-                wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps),
+                wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps) .∘
+                            wrap_parameter_dependencies(sys, false),
                 kwargs...)
         else
             build_function(rhss, u, p..., t; postprocess_fbody = pre,
                 states = sol_states,
-                wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps),
+                wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps) .∘
+                            wrap_parameter_dependencies(sys, false),
                 kwargs...)
         end
     end
@@ -313,7 +314,7 @@ end
 
 function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         dvs = unknowns(sys),
-        ps = full_parameters(sys), u0 = nothing;
+        ps = parameters(sys), u0 = nothing;
         version = nothing, tgrad = false,
         jac = false, p = nothing,
         t = nothing,
@@ -780,7 +781,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         kwargs...)
     eqs = equations(sys)
     dvs = unknowns(sys)
-    ps = full_parameters(sys)
+    ps = parameters(sys)
     iv = get_iv(sys)
 
     # TODO: Pass already computed information to varmap_to_vars call
@@ -848,7 +849,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
             symbolic_u0)
         p, split_idxs = split_parameters_by_type(p)
         if p isa Tuple
-            ps = Base.Fix1(getindex, full_parameters(sys)).(split_idxs)
+            ps = Base.Fix1(getindex, parameters(sys)).(split_idxs)
             ps = (ps...,) #if p is Tuple, ps should be Tuple
         end
     end
@@ -1040,7 +1041,7 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
 end
 
 function generate_history(sys::AbstractODESystem, u0; expression = Val{false}, kwargs...)
-    p = reorder_parameters(sys, full_parameters(sys))
+    p = reorder_parameters(sys, parameters(sys))
     build_function(u0, p..., get_iv(sys); expression, kwargs...)
 end
 
