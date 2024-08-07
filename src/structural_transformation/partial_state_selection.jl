@@ -184,6 +184,23 @@ function dummy_derivative_graph!(
     diff_to_eq = invview(eq_to_diff)
     diff_to_var = invview(var_to_diff)
     invgraph = invview(graph)
+    extended_sp = let state_priority = state_priority, var_to_diff = var_to_diff,
+        diff_to_var = diff_to_var
+
+        var -> begin
+            min_p = max_p = 0.0
+            while var_to_diff[var] !== nothing
+                var = var_to_diff[var]
+            end
+            while true
+                p = state_priority(var)
+                max_p = max(max_p, p)
+                min_p = min(min_p, p)
+                (var = diff_to_var[var]) === nothing && break
+            end
+            min_p < 0 ? min_p : max_p
+        end
+    end
 
     var_sccs = find_var_sccs(graph, var_eq_matching)
     eqcolor = falses(nsrcs(graph))
@@ -225,7 +242,7 @@ function dummy_derivative_graph!(
             iszero(nrows) && break
 
             if state_priority !== nothing && isfirst
-                sort!(vars, by = state_priority)
+                sort!(vars, by = extended_sp)
             end
             # TODO: making the algorithm more robust
             # 1. If the Jacobian is a integer matrix, use Bareiss to check
