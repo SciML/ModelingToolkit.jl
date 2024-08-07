@@ -293,7 +293,7 @@ function SciMLStructures.replace(::SciMLStructures.Tunable, p::MTKParameters, ne
     @set! p.tunable = newvals
     if p.dependent_update_oop !== nothing
         raw = p.dependent_update_oop(p...)
-        @set! p.dependent = split_into_buffers(raw, p.dependent, Val(false))
+        @set! p.dependent = split_into_buffers(raw, p.dependent, Val(0))
     end
     return p
 end
@@ -336,7 +336,7 @@ for (Portion, field, recurse) in [(SciMLStructures.Discrete, :discrete, 2)
         )
         if p.dependent_update_oop !== nothing
             raw = p.dependent_update_oop(p...)
-            @set! p.dependent = split_into_buffers(raw, p.dependent, Val(false))
+            @set! p.dependent = split_into_buffers(raw, p.dependent, Val(0))
         end
         p
     end
