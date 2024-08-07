@@ -69,15 +69,20 @@ parammap = [β => 0.1 / 1000, γ => 0.01]
 dprob = DiscreteProblem(js2, u₀map, tspan, parammap)
 jprob = JumpProblem(js2, dprob, Direct(), save_positions = (false, false), rng = rng)
 Nsims = 30000
-function getmean(jprob, Nsims)
+function getmean(jprob, Nsims; use_stepper = true)
     m = 0.0
     for i in 1:Nsims
-        sol = solve(jprob, SSAStepper())
+        sol = use_stepper ? solve(jprob, SSAStepper()) : solve(jprob)
         m += sol[end, end]
     end
     m / Nsims
 end
 m = getmean(jprob, Nsims)
+
+# test auto-alg selection works
+jprobb = JumpProblem(js2, dprob; save_positions = (false, false), rng)
+mb = getmean(jprobb, Nsims; use_stepper = false)
+@test abs(m - mb) / m < 0.01
 
 @variables S2(t)
 obs = [S2 ~ 2 * S]
@@ -89,7 +94,6 @@ sol = solve(jprob, SSAStepper(), saveat = tspan[2] / 10)
 @test all(2 .* sol[S] .== sol[S2])
 
 # test save_positions is working
-
 jprob = JumpProblem(js2, dprob, Direct(), save_positions = (false, false), rng = rng)
 sol = solve(jprob, SSAStepper(), saveat = 1.0)
 @test all((sol.t) .== collect(0.0:tspan[2]))
@@ -270,3 +274,22 @@ affect = [X ~ X - 1]
 
 j1 = ConstantRateJump(k, [X ~ X - 1])
 @test_nowarn @mtkbuild js1 = JumpSystem([j1], t, [X], [k])
+
+# test correct autosolver is selected, which implies appropriate dep graphs are available
+let
+    @parameters k
+    @variables X(t)
+    rate = k
+    affect = [X ~ X - 1]
+    j1 = ConstantRateJump(k, [X ~ X - 1])
+
+    Nv = [1, JumpProcesses.USE_DIRECT_THRESHOLD + 1, JumpProcesses.USE_RSSA_THRESHOLD + 1]
+    algtypes = [Direct, RSSA, RSSACR]
+    for (N, algtype) in zip(Nv, algtypes)
+        @named jsys = JumpSystem([deepcopy(j1) for _ in 1:N], t, [X], [k])
+        jsys = complete(jsys)
+        dprob = DiscreteProblem(jsys, [X => 10], (0.0, 10.0), [k => 1])
+        jprob = JumpProblem(jsys, dprob)
+        @test jprob.aggregator isa algtype
+    end
+end
