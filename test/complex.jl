@@ -9,7 +9,7 @@ using Test
         z(t)::Complex
     end
     @equations begin
-        z ~ x + im*y
+        z ~ x + im * y
     end
 end
 @named mixed = ComplexModel()

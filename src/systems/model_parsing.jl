@@ -37,7 +37,9 @@ end
 
 flatten_equations(eqs::Vector{Equation}, eq::Equation) = vcat(eqs, [eq])
 flatten_equations(eq::Vector{Equation}, eqs::Vector{Equation}) = vcat(eq, eqs)
-flatten_equations(eqs::Vector{Union{Equation, Vector{Equation}}}) = foldl(flatten_equations, eqs; init=Equation[])
+function flatten_equations(eqs::Vector{Union{Equation, Vector{Equation}}})
+    foldl(flatten_equations, eqs; init = Equation[])
+end
 
 function _model_macro(mod, name, expr, isconnector)
     exprs = Expr(:block)
