@@ -133,6 +133,16 @@ hasdist(m)
 getdist(m)
 ```
 
+## Irreducible
+
+A variable can be marked `irreducible` to prevent it from being moved to an
+`observed` state. This forces the variable to be computed during solving so that
+it can be accessed in [callbacks](@ref events)
+
+```julia
+@variable important_value [irreducible=true]
+```
+
 ## Additional functions
 
 For systems that contain parameters with metadata like described above, have some additional functions defined for convenience.
