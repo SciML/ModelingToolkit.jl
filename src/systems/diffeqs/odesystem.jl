@@ -128,10 +128,10 @@ struct ODESystem <: AbstractODESystem
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
     """
-    A mapping from dependent parameters to expressions describing how they are calculated from
-    other parameters.
+    Topologically sorted parameter dependency equations, where all symbols are parameters and
+    the LHS is a single parameter.
     """
-    parameter_dependencies::Union{Nothing, Dict}
+    parameter_dependencies::Vector{Equation}
     """
     Metadata for the system, to be used by downstream packages.
     """
@@ -220,7 +220,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         preface = nothing,
         continuous_events = nothing,
         discrete_events = nothing,
-        parameter_dependencies = nothing,
+        parameter_dependencies = Equation[],
         checks = true,
         metadata = nothing,
         gui_metadata = nothing)
@@ -385,7 +385,7 @@ function build_explicit_observed_function(sys, ts;
         output_type = Array,
         checkbounds = true,
         drop_expr = drop_expr,
-        ps = full_parameters(sys),
+        ps = parameters(sys),
         return_inplace = false,
         param_only = false,
         op = Operator,
@@ -498,9 +498,10 @@ function build_explicit_observed_function(sys, ts;
     pre = get_postprocess_fbody(sys)
 
     array_wrapper = if param_only
-        wrap_array_vars(sys, ts; ps = _ps, dvs = nothing, inputs)
+        wrap_array_vars(sys, ts; ps = _ps, dvs = nothing, inputs) .∘
+        wrap_parameter_dependencies(sys, isscalar)
     else
-        wrap_array_vars(sys, ts; ps = _ps, inputs)
+        wrap_array_vars(sys, ts; ps = _ps, inputs) .∘ wrap_parameter_dependencies(sys, isscalar)
     end
     # Need to keep old method of building the function since it uses `output_type`,
     # which can't be provided to `build_function`

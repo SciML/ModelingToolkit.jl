@@ -82,7 +82,7 @@ function calculate_hessian end
 
 """
 ```julia
-generate_tgrad(sys::AbstractTimeDependentSystem, dvs = unknowns(sys), ps = full_parameters(sys),
+generate_tgrad(sys::AbstractTimeDependentSystem, dvs = unknowns(sys), ps = parameters(sys),
                expression = Val{true}; kwargs...)
 ```
 
@@ -93,7 +93,7 @@ function generate_tgrad end
 
 """
 ```julia
-generate_gradient(sys::AbstractSystem, dvs = unknowns(sys), ps = full_parameters(sys),
+generate_gradient(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
                   expression = Val{true}; kwargs...)
 ```
 
@@ -104,7 +104,7 @@ function generate_gradient end
 
 """
 ```julia
-generate_jacobian(sys::AbstractSystem, dvs = unknowns(sys), ps = full_parameters(sys),
+generate_jacobian(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
                   expression = Val{true}; sparse = false, kwargs...)
 ```
 
@@ -115,7 +115,7 @@ function generate_jacobian end
 
 """
 ```julia
-generate_factorized_W(sys::AbstractSystem, dvs = unknowns(sys), ps = full_parameters(sys),
+generate_factorized_W(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
                       expression = Val{true}; sparse = false, kwargs...)
 ```
 
@@ -126,7 +126,7 @@ function generate_factorized_W end
 
 """
 ```julia
-generate_hessian(sys::AbstractSystem, dvs = unknowns(sys), ps = full_parameters(sys),
+generate_hessian(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
                  expression = Val{true}; sparse = false, kwargs...)
 ```
 
@@ -137,7 +137,7 @@ function generate_hessian end
 
 """
 ```julia
-generate_function(sys::AbstractSystem, dvs = unknowns(sys), ps = full_parameters(sys),
+generate_function(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
                   expression = Val{true}; kwargs...)
 ```
 
@@ -148,7 +148,7 @@ function generate_function end
 """
 ```julia
 generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys),
-                         ps = full_parameters(sys); kwargs...)
+                         ps = parameters(sys); kwargs...)
 ```
 
 Generate a function to evaluate `exprs`. `exprs` is a symbolic expression or
@@ -187,7 +187,8 @@ function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys
             postprocess_fbody,
             states,
             wrap_code = wrap_code .∘ wrap_mtkparameters(sys, isscalar) .∘
-                        wrap_array_vars(sys, exprs; dvs),
+                        wrap_array_vars(sys, exprs; dvs) .∘
+                        wrap_parameter_dependencies(sys, isscalar),
             expression = Val{true}
         )
     else
@@ -198,7 +199,8 @@ function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys
             postprocess_fbody,
             states,
             wrap_code = wrap_code .∘ wrap_mtkparameters(sys, isscalar) .∘
-                        wrap_array_vars(sys, exprs; dvs),
+                        wrap_array_vars(sys, exprs; dvs) .∘
+                        wrap_parameter_dependencies(sys, isscalar),
             expression = Val{true}
         )
     end
@@ -221,6 +223,10 @@ function wrap_assignments(isscalar, assignments; let_block = false)
     else
         wrapper, wrapper
     end
+end
+
+function wrap_parameter_dependencies(sys::AbstractSystem, isscalar)
+    wrap_assignments(isscalar, [eq.lhs ← eq.rhs for eq in parameter_dependencies(sys)])
 end
 
 function wrap_array_vars(
@@ -757,7 +763,7 @@ function SymbolicIndexingInterface.get_all_timeseries_indexes(sys::AbstractSyste
 end
 
 function SymbolicIndexingInterface.parameter_symbols(sys::AbstractSystem)
-    return full_parameters(sys)
+    return parameters(sys)
 end
 
 function SymbolicIndexingInterface.is_independent_variable(sys::AbstractSystem, sym)
@@ -1214,11 +1220,6 @@ function namespace_guesses(sys)
     Dict(unknowns(sys, k) => namespace_expr(v, sys) for (k, v) in guess)
 end
 
-function namespace_parameter_dependencies(sys)
-    pdeps = parameter_dependencies(sys)
-    Dict(parameters(sys, k) => namespace_expr(v, sys) for (k, v) in pdeps)
-end
-
 function namespace_equations(sys::AbstractSystem, ivs = independent_variables(sys))
     eqs = equations(sys)
     isempty(eqs) && return Equation[]
@@ -1325,25 +1326,11 @@ function parameters(sys::AbstractSystem)
         ps = first.(ps)
     end
     systems = get_systems(sys)
-    result = unique(isempty(systems) ? ps :
-                    [ps; reduce(vcat, namespace_parameters.(systems))])
-    if has_parameter_dependencies(sys) &&
-       (pdeps = parameter_dependencies(sys)) !== nothing
-        filter(result) do sym
-            !haskey(pdeps, sym)
-        end
-    else
-        result
-    end
+    unique(isempty(systems) ? ps : [ps; reduce(vcat, namespace_parameters.(systems))])
 end
 
 function dependent_parameters(sys::AbstractSystem)
-    if has_parameter_dependencies(sys) &&
-       !isempty(parameter_dependencies(sys))
-        collect(keys(parameter_dependencies(sys)))
-    else
-        []
-    end
+    return map(eq -> eq.lhs, parameter_dependencies(sys))
 end
 
 """
@@ -1353,17 +1340,19 @@ Get the parameter dependencies of the system `sys` and its subsystems.
 See also [`defaults`](@ref) and [`ModelingToolkit.get_parameter_dependencies`](@ref).
 """
 function parameter_dependencies(sys::AbstractSystem)
+    if !has_parameter_dependencies(sys)
+        return Equation[]
+    end
     pdeps = get_parameter_dependencies(sys)
-    if isnothing(pdeps)
-        pdeps = Dict()
-    end
     systems = get_systems(sys)
-    isempty(systems) && return pdeps
-    for subsys in systems
-        pdeps = merge(pdeps, namespace_parameter_dependencies(subsys))
-    end
-    # @info pdeps
-    return pdeps
+    # put pdeps after those of subsystems to maintain topological sorted order
+    return vcat(
+        reduce(vcat,
+            [map(eq -> namespace_equation(eq, s), parameter_dependencies(s))
+             for s in systems];
+            init = Equation[]),
+        pdeps
+    )
 end
 
 function full_parameters(sys::AbstractSystem)
@@ -2317,7 +2306,7 @@ function linearization_function(sys::AbstractSystem, inputs,
     initfn = NonlinearFunction(initsys; eval_expression, eval_module)
     initprobmap = build_explicit_observed_function(
         initsys, unknowns(sys); eval_expression, eval_module)
-    ps = full_parameters(sys)
+    ps = parameters(sys)
     h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
     lin_fun = let diff_idxs = diff_idxs,
         alge_idxs = alge_idxs,
@@ -2420,7 +2409,7 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
         kwargs...)
     sts = unknowns(sys)
     t = get_iv(sys)
-    ps = full_parameters(sys)
+    ps = parameters(sys)
     p = reorder_parameters(sys, ps)
 
     fun_expr = generate_function(sys, sts, ps; expression = Val{true})[1]
@@ -2852,7 +2841,7 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
     eqs = union(get_eqs(basesys), get_eqs(sys))
     sts = union(get_unknowns(basesys), get_unknowns(sys))
     ps = union(get_ps(basesys), get_ps(sys))
-    dep_ps = union_nothing(parameter_dependencies(basesys), parameter_dependencies(sys))
+    dep_ps = union(parameter_dependencies(basesys), parameter_dependencies(sys))
     obs = union(get_observed(basesys), get_observed(sys))
     cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
     devs = union(get_discrete_events(basesys), get_discrete_events(sys))
@@ -2956,15 +2945,28 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
 end
 
 function process_parameter_dependencies(pdeps, ps)
-    pdeps === nothing && return pdeps, ps
-    if pdeps isa Vector && eltype(pdeps) <: Pair
-        pdeps = Dict(pdeps)
-    elseif !(pdeps isa Dict)
-        error("parameter_dependencies must be a `Dict` or `Vector{<:Pair}`")
+    if pdeps === nothing || isempty(pdeps)
+        return Equation[], ps
+    elseif eltype(pdeps) <: Pair
+        pdeps = [lhs ~ rhs for (lhs, rhs) in pdeps]
     end
-
+    if !(eltype(pdeps) <: Equation)
+        error("Parameter dependencies must be a `Dict`, `Vector{Pair}` or `Vector{Equation}`")
+    end
+    lhss = BasicSymbolic[]
+    for p in pdeps
+        if !isparameter(p.lhs)
+            error("LHS of parameter dependency must be a single parameter. Found $(p.lhs).")
+        end
+        syms = vars(p.rhs)
+        if !all(isparameter, syms)
+            error("RHS of parameter dependency must only include parameters. Found $(p.rhs)")
+        end
+        push!(lhss, p.lhs)
+    end
+    pdeps = topsort_equations(pdeps, union(ps, lhss))
     ps = filter(ps) do p
-        !haskey(pdeps, p)
+        !any(isequal(p), lhss)
     end
     return pdeps, ps
 end
@@ -2997,12 +2999,14 @@ function dump_parameters(sys::AbstractSystem)
         end
         meta
     end
-    pdep_metas = map(collect(keys(pdeps))) do sym
-        val = pdeps[sym]
+    pdep_metas = map(pdeps) do eq
+        sym = eq.lhs
+        val = eq.rhs
         meta = dump_variable_metadata(sym)
+        defs[eq.lhs] = eq.rhs
         meta = merge(meta,
-            (; dependency = pdeps[sym],
-                default = symbolic_evaluate(pdeps[sym], merge(defs, pdeps))))
+            (; dependency = val,
+                default = symbolic_evaluate(val, defs)))
         return meta
     end
     return vcat(metas, pdep_metas)
