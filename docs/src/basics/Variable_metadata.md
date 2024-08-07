@@ -140,7 +140,7 @@ A variable can be marked `irreducible` to prevent it from being moved to an
 it can be accessed in [callbacks](@ref events)
 
 ```julia
-@variable important_value [irreducible=true]
+@variable important_value [irreducible = true]
 ```
 
 ## Additional functions
