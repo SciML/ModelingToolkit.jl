@@ -51,7 +51,7 @@ function _model_macro(mod, name, expr, isconnector)
     c_evts = []
     d_evts = []
     kwargs = OrderedCollections.OrderedSet()
-    where_types = Expr[]
+    where_types = Union{Symbol, Expr}[]
 
     push!(exprs.args, :(variables = []))
     push!(exprs.args, :(parameters = []))
@@ -143,9 +143,15 @@ end
 pop_structure_dict!(dict, key) = length(dict[key]) == 0 && pop!(dict, key)
 
 function update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
-        varclass, where_types)
+        varclass, where_types, meta)
     if indices isa Nothing
-        push!(kwargs, Expr(:kw, Expr(:(::), a, Union{Nothing, type}), nothing))
+        if !isnothing(meta) && haskey(meta, VariableUnit)
+            uvar = gensym()
+            push!(where_types, uvar)
+            push!(kwargs, Expr(:kw, :($a::Union{Nothing, $uvar}), nothing))
+        else
+            push!(kwargs, Expr(:kw, :($a::Union{Nothing, $type}), nothing))
+        end
         dict[:kwargs][getname(var)] = Dict(:value => def, :type => type)
     else
         vartype = gensym(:T)
@@ -154,7 +160,11 @@ function update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
                 Expr(:(::), a,
                     Expr(:curly, :Union, :Nothing, Expr(:curly, :AbstractArray, vartype))),
                 nothing))
-        push!(where_types, :($vartype <: $type))
+        if !isnothing(meta) && haskey(meta, VariableUnit)
+            push!(where_types, vartype)
+        else
+            push!(where_types, :($vartype <: $type))
+        end
         dict[:kwargs][getname(var)] = Dict(:value => def, :type => AbstractArray{type})
     end
     if dict[varclass] isa Vector
@@ -166,7 +176,7 @@ end
 
 function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         def = nothing, indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
-        type::Type = Real)
+        type::Type = Real, meta = Dict{DataType, Expr}())
     metatypes = [(:connection_type, VariableConnectType),
         (:description, VariableDescription),
         (:unit, VariableUnit),
@@ -186,29 +196,31 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         a::Symbol => begin
             var = generate_var!(dict, a, varclass; indices, type)
             update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
-                varclass, where_types)
+                varclass, where_types, meta)
             return var, def, Dict()
         end
         Expr(:(::), a, type) => begin
             type = getfield(mod, type)
-            parse_variable_def!(dict, mod, a, varclass, kwargs, where_types; def, type)
+            parse_variable_def!(
+                dict, mod, a, varclass, kwargs, where_types; def, type, meta)
         end
         Expr(:(::), Expr(:call, a, b), type) => begin
             type = getfield(mod, type)
             def = _type_check!(def, a, type, varclass)
-            parse_variable_def!(dict, mod, a, varclass, kwargs, where_types; def, type)
+            parse_variable_def!(
+                dict, mod, a, varclass, kwargs, where_types; def, type, meta)
         end
         Expr(:call, a, b) => begin
             var = generate_var!(dict, a, b, varclass, mod; indices, type)
             update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
-                varclass, where_types)
+                varclass, where_types, meta)
             return var, def, Dict()
         end
         Expr(:(=), a, b) => begin
             Base.remove_linenums!(b)
             def, meta = parse_default(mod, b)
             var, def, _ = parse_variable_def!(
-                dict, mod, a, varclass, kwargs, where_types; def, type)
+                dict, mod, a, varclass, kwargs, where_types; def, type, meta)
             if dict[varclass] isa Vector
                 dict[varclass][1][getname(var)][:default] = def
             else
@@ -231,9 +243,9 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
             return var, def, Dict()
         end
         Expr(:tuple, a, b) => begin
-            var, def, _ = parse_variable_def!(
-                dict, mod, a, varclass, kwargs, where_types; type)
             meta = parse_metadata(mod, b)
+            var, def, _ = parse_variable_def!(
+                dict, mod, a, varclass, kwargs, where_types; type, meta)
             if meta !== nothing
                 for (type, key) in metatypes
                     if (mt = get(meta, key, nothing)) !== nothing
@@ -253,7 +265,7 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         Expr(:ref, a, b...) => begin
             indices = map(i -> UnitRange(i.args[2], i.args[end]), b)
             parse_variable_def!(dict, mod, a, varclass, kwargs, where_types;
-                def, indices, type)
+                def, indices, type, meta)
         end
         _ => error("$arg cannot be parsed")
     end
@@ -611,16 +623,58 @@ function parse_variable_arg!(exprs, vs, dict, mod, arg, varclass, kwargs, where_
     push!(exprs, ex)
 end
 
+function convert_units(varunits::DynamicQuantities.Quantity, value)
+    DynamicQuantities.ustrip(DynamicQuantities.uconvert(
+        DynamicQuantities.SymbolicUnits.as_quantity(varunits), value))
+end
+
+function convert_units(
+        varunits::DynamicQuantities.Quantity, value::AbstractArray{T}) where {T}
+    DynamicQuantities.ustrip.(DynamicQuantities.uconvert.(
+        DynamicQuantities.SymbolicUnits.as_quantity(varunits), value))
+end
+
+function convert_units(varunits::Unitful.FreeUnits, value)
+    Unitful.ustrip(varunits, value)
+end
+
+function convert_units(varunits::Unitful.FreeUnits, value::AbstractArray{T}) where {T}
+    Unitful.ustrip.(varunits, value)
+end
+
 function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
     vv, def, metadata_with_exprs = parse_variable_def!(
         dict, mod, arg, varclass, kwargs, where_types)
     name = getname(vv)
 
-    varexpr = quote
-        $name = if $name === nothing
-            $setdefault($vv, $def)
-        else
-            $setdefault($vv, $name)
+    varexpr = if haskey(metadata_with_exprs, VariableUnit)
+        unit = metadata_with_exprs[VariableUnit]
+        quote
+            $name = if $name === nothing
+                $setdefault($vv, $def)
+            else
+                try
+                    $setdefault($vv, $convert_units($unit, $name))
+                catch e
+                    if isa(e, $(DynamicQuantities.DimensionError)) ||
+                       isa(e, $(Unitful.DimensionError))
+                        error("Unable to convert units for \'" * string(:($$vv)) * "\'")
+                    elseif isa(e, MethodError)
+                        error("No or invalid units provided for \'" * string(:($$vv)) *
+                              "\'")
+                    else
+                        rethrow(e)
+                    end
+                end
+            end
+        end
+    else
+        quote
+            $name = if $name === nothing
+                $setdefault($vv, $def)
+            else
+                $setdefault($vv, $name)
+            end
         end
     end
 

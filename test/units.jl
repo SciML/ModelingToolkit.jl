@@ -192,3 +192,31 @@ maj2 = MassActionJump(γ, [I => 1], [I => -1, R => 1])
 maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
 maj2 = MassActionJump(γ, [S => 1], [S => -1])
 @named js4 = JumpSystem([maj1, maj2], t, [S], [β, γ])
+
+@mtkmodel ParamTest begin
+    @parameters begin
+        a, [unit = u"m"]
+    end
+    @variables begin
+        b(t), [unit = u"kg"]
+    end
+end
+
+@named sys = ParamTest()
+
+@named sys = ParamTest(a = 3.0u"cm")
+@test ModelingToolkit.getdefault(sys.a) ≈ 0.03
+
+@test_throws ErrorException ParamTest(; name = :t, a = 1.0)
+@test_throws ErrorException ParamTest(; name = :t, a = 1.0u"s")
+
+@mtkmodel ArrayParamTest begin
+    @parameters begin
+        a[1:2], [unit = u"m"]
+    end
+end
+
+@named sys = ArrayParamTest()
+
+@named sys = ArrayParamTest(a = [1.0, 3.0]u"cm")
+@test ModelingToolkit.getdefault(sys.a) ≈ [0.01, 0.03]

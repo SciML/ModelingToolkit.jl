@@ -1,7 +1,8 @@
 using ModelingToolkit, Test
 using ModelingToolkit: get_connector_type, get_defaults, get_gui_metadata,
                        get_systems, get_ps, getdefault, getname, readable_code,
-                       scalarize, symtype, VariableDescription, RegularConnector
+                       scalarize, symtype, VariableDescription, RegularConnector,
+                       get_unit
 using URIs: URI
 using Distributions
 using DynamicQuantities, OrdinaryDiffEq
@@ -53,8 +54,9 @@ end
     end
 end
 
-@named p = Pin(; v = π)
-@test getdefault(p.v) == π
+@named p = Pin(; v = π * u"V")
+
+@test getdefault(p.v) ≈ π
 @test Pin.isconnector == true
 
 @mtkmodel OnePort begin
@@ -76,7 +78,6 @@ end
 
 @test OnePort.isconnector == false
 
-resistor_log = "$(@__DIR__)/logo/resistor.svg"
 @mtkmodel Resistor begin
     @extend v, i = oneport = OnePort()
     @parameters begin
@@ -105,14 +106,14 @@ end
     @parameters begin
         C, [unit = u"F"]
     end
-    @extend OnePort(; v = 0.0)
+    @extend OnePort(; v = 0.0u"V")
     @icon "https://upload.wikimedia.org/wikipedia/commons/7/78/Capacitor_symbol.svg"
     @equations begin
         D(v) ~ i / C
     end
 end
 
-@named capacitor = Capacitor(C = 10, v = 10.0)
+@named capacitor = Capacitor(C = 10u"F", v = 10.0u"V")
 @test getdefault(capacitor.v) == 10.0
 
 @mtkmodel Voltage begin
@@ -127,9 +128,9 @@ end
 
 @mtkmodel RC begin
     @structural_parameters begin
-        R_val = 10
-        C_val = 10
-        k_val = 10
+        R_val = 10u"Ω"
+        C_val = 10u"F"
+        k_val = 10u"V"
     end
     @components begin
         resistor = Resistor(; R = R_val)
@@ -147,9 +148,9 @@ end
     end
 end
 
-C_val = 20
-R_val = 20
-res__R = 100
+C_val = 20u"F"
+R_val = 20u"Ω"
+res__R = 100u"Ω"
 @mtkbuild rc = RC(; C_val, R_val, resistor.R = res__R)
 prob = ODEProblem(rc, [], (0, 1e9))
 sol = solve(prob, Rodas5P())
@@ -160,11 +161,12 @@ resistor = getproperty(rc, :resistor; namespace = false)
 @test getname(rc.resistor.R) === getname(resistor.R)
 @test getname(rc.resistor.v) === getname(resistor.v)
 # Test that `resistor.R` overrides `R_val` in the argument.
-@test getdefault(rc.resistor.R) == res__R != R_val
+@test getdefault(rc.resistor.R) * get_unit(rc.resistor.R) == res__R != R_val
 # Test that `C_val` passed via argument is set as default of C.
-@test getdefault(rc.capacitor.C) == C_val
+@test getdefault(rc.capacitor.C) * get_unit(rc.capacitor.C) == C_val
 # Test that `k`'s default value is unchanged.
-@test getdefault(rc.constant.k) == RC.structure[:kwargs][:k_val][:value]
+@test getdefault(rc.constant.k) * get_unit(rc.constant.k) ==
+      eval(RC.structure[:kwargs][:k_val][:value])
 @test getdefault(rc.capacitor.v) == 0.0
 
 @test get_gui_metadata(rc.resistor).layout == Resistor.structure[:icon] ==
