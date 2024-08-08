@@ -73,6 +73,7 @@ end
             @safetestset "Initial Values Test" include("initial_values.jl")
             @safetestset "Discrete System" include("discrete_system.jl")
             @safetestset "Equation Type Accessors Test" include("equation_type_accessors.jl")
+            @safetestset "Equations with complex values" include("complex.jl")
         end
     end
 

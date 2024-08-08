@@ -35,6 +35,12 @@ for f in (:connector, :mtkmodel)
     end
 end
 
+flatten_equations(eqs::Vector{Equation}, eq::Equation) = vcat(eqs, [eq])
+flatten_equations(eq::Vector{Equation}, eqs::Vector{Equation}) = vcat(eq, eqs)
+function flatten_equations(eqs::Vector{Union{Equation, Vector{Equation}}})
+    foldl(flatten_equations, eqs; init = Equation[])
+end
+
 function _model_macro(mod, name, expr, isconnector)
     exprs = Expr(:block)
     dict = Dict{Symbol, Any}(
@@ -56,7 +62,7 @@ function _model_macro(mod, name, expr, isconnector)
     push!(exprs.args, :(variables = []))
     push!(exprs.args, :(parameters = []))
     push!(exprs.args, :(systems = ODESystem[]))
-    push!(exprs.args, :(equations = Equation[]))
+    push!(exprs.args, :(equations = Union{Equation, Vector{Equation}}[]))
     push!(exprs.args, :(defaults = Dict{Num, Union{Number, Symbol, Function}}()))
 
     Base.remove_linenums!(expr)
@@ -106,7 +112,7 @@ function _model_macro(mod, name, expr, isconnector)
     @inline pop_structure_dict!.(
         Ref(dict), [:constants, :defaults, :kwargs, :structural_parameters])
 
-    sys = :($ODESystem($Equation[equations...], $iv, variables, parameters;
+    sys = :($ODESystem($(flatten_equations)(equations), $iv, variables, parameters;
         name, systems, gui_metadata = $gui_metadata, defaults))
 
     if ext[] === nothing
