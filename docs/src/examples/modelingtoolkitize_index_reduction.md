@@ -119,11 +119,11 @@ you can arrive at the following set of equations](https://people.math.wisc.edu/%
 
 ```math
 \begin{aligned}
-x^\prime =& v_x \\
-v_x^\prime =& x T \\
-y^\prime =& v_y \\
-v_y^\prime =& y T - g \\
-0 =& 2 \left(v_x^{2} + v_y^{2} + y ( y T - g ) + T x^2 \right)
+x^\prime &= v_x \\
+v_x^\prime &= x T \\
+y^\prime &= v_y \\
+v_y^\prime &= y T - g \\
+0 &= 2 \left(v_x^{2} + v_y^{2} + y ( y T - g ) + T x^2 \right)
 \end{aligned}
 ```
 
