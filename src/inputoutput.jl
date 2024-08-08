@@ -160,7 +160,7 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
 # Build control function
 
 """
-    (f_oop, f_ip), dvs, p, io_sys = generate_control_function(
+    (f_oop, f_ip), x_sym, p, io_sys = generate_control_function(
             sys::AbstractODESystem,
             inputs             = unbound_inputs(sys),
             disturbance_inputs = nothing;
@@ -175,7 +175,7 @@ f_oop : (x,u,p,t)      -> rhs
 f_ip  : (xout,x,u,p,t) -> nothing
 ```
 
-The return values also include the remaining unknowns and parameters, in the order they appear as arguments to `f`.
+The return values also include the chosen state-realization (the remaining unknowns) `x_sym` and parameters, in the order they appear as arguments to `f`.
 
 If `disturbance_inputs` is an array of variables, the generated dynamics function will preserve any state and dynamics associated with disturbance inputs, but the disturbance inputs themselves will not be included as inputs to the generated function. The use case for this is to generate dynamics for state observers that estimate the influence of unmeasured disturbances, and thus require unknown variables for the disturbance model, but without disturbance inputs since the disturbances are not available for measurement.
 See [`add_input_disturbance`](@ref) for a higher-level interface to this functionality.
@@ -187,9 +187,9 @@ See [`add_input_disturbance`](@ref) for a higher-level interface to this functio
 
 ```
 using ModelingToolkit: generate_control_function, varmap_to_vars, defaults
-f, dvs, ps = generate_control_function(sys, expression=Val{false}, simplify=false)
+f, x_sym, ps = generate_control_function(sys, expression=Val{false}, simplify=false)
 p = varmap_to_vars(defaults(sys), ps)
-x = varmap_to_vars(defaults(sys), dvs)
+x = varmap_to_vars(defaults(sys), x_sym)
 t = 0
 f[1](x, inputs, p, t)
 ```
