@@ -282,9 +282,21 @@ function generate_var(a, varclass;
     var
 end
 
+singular(sym) = last(string(sym)) == 's' ? Symbol(string(sym)[1:(end - 1)]) : sym
+
+function check_name_uniqueness(dict, a, newvarclass)
+    for varclass in [:variables, :parameters, :structural_parameters, :constants]
+        dvarclass = get(dict, varclass, nothing)
+        if dvarclass !== nothing && a in keys(dvarclass)
+            error("Cannot create a $(singular(newvarclass)) `$(a)` because there is already a $(singular(varclass)) with that name")
+        end
+    end
+end
+
 function generate_var!(dict, a, varclass;
         indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
         type = Real)
+    check_name_uniqueness(dict, a, varclass)
     vd = get!(dict, varclass) do
         Dict{Symbol, Dict{Symbol, Any}}()
     end
@@ -302,6 +314,7 @@ function generate_var!(dict, a, b, varclass, mod;
         iv
     end
     @assert isequal(iv, prev_iv) "Multiple independent variables are used in the model"
+    check_name_uniqueness(dict, a, varclass)
     vd = get!(dict, varclass) do
         Dict{Symbol, Dict{Symbol, Any}}()
     end
