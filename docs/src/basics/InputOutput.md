@@ -66,6 +66,7 @@ nothing  # hide
 
 Now we can test the generated function `f` with random input and state values
 
+
 ```@example inputoutput
 p = [1]
 x = [rand()]
