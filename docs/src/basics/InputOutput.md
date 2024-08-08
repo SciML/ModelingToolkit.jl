@@ -50,6 +50,7 @@ nothing # hide
 
 We can inspect the state realization chosen by MTK
 
+
 ```@example inputoutput
 x_sym
 ```
