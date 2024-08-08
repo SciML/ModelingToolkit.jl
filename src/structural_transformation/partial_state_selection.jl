@@ -177,6 +177,11 @@ function dummy_derivative_graph!(state::TransformationState, jac = nothing;
     dummy_derivative_graph!(state.structure, var_eq_matching, jac, state_priority, log)
 end
 
+struct DummyDerivativeSummary
+    var_sccs::Vector{Vector{Int}}
+    state_priority::Vector{Vector{Float64}}
+end
+
 function dummy_derivative_graph!(
         structure::SystemStructure, var_eq_matching, jac = nothing,
         state_priority = nothing, ::Val{log} = Val(false)) where {log}
@@ -203,6 +208,9 @@ function dummy_derivative_graph!(
     end
 
     var_sccs = find_var_sccs(graph, var_eq_matching)
+    var_perm = Int[]
+    var_dummy_scc = Vector{Int}[]
+    var_state_priority = Vector{Float64}[]
     eqcolor = falses(nsrcs(graph))
     dummy_derivatives = Int[]
     col_order = Int[]
@@ -242,7 +250,13 @@ function dummy_derivative_graph!(
             iszero(nrows) && break
 
             if state_priority !== nothing && isfirst
-                sort!(vars, by = extended_sp)
+                sp = extended_sp.(vars)
+                resize!(var_perm, length(sp))
+                sortperm!(var_perm, sp)
+                permute!(vars, var_perm)
+                permute!(sp, var_perm)
+                push!(var_dummy_scc, copy(vars))
+                push!(var_state_priority, sp)
             end
             # TODO: making the algorithm more robust
             # 1. If the Jacobian is a integer matrix, use Bareiss to check
@@ -322,7 +336,7 @@ function dummy_derivative_graph!(
 
     ret = tearing_with_dummy_derivatives(structure, BitSet(dummy_derivatives))
     if log
-        ret
+        (ret..., DummyDerivativeSummary(var_dummy_scc, var_state_priority))
     else
         ret[1]
     end
