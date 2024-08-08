@@ -2238,6 +2238,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         eval_expression = false, eval_module = @__MODULE__,
         warn_initialize_determined = true,
         kwargs...)
+    op = Dict(op)
     inputs isa AbstractVector || (inputs = [inputs])
     outputs isa AbstractVector || (outputs = [outputs])
     ssys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs;
