@@ -498,9 +498,9 @@ function build_explicit_observed_function(sys, ts;
     pre = get_postprocess_fbody(sys)
 
     array_wrapper = if param_only
-        wrap_array_vars(sys, ts; ps = _ps, dvs = nothing)
+        wrap_array_vars(sys, ts; ps = _ps, dvs = nothing, inputs)
     else
-        wrap_array_vars(sys, ts; ps = _ps)
+        wrap_array_vars(sys, ts; ps = _ps, inputs)
     end
     # Need to keep old method of building the function since it uses `output_type`,
     # which can't be provided to `build_function`

@@ -501,3 +501,33 @@ function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
     end
     return result
 end
+
+# Given a parameter index, find the index of the buffer it is in when
+# `MTKParameters` is iterated
+function iterated_buffer_index(ic::IndexCache, ind::ParameterIndex)
+    idx = 0
+    if ind.portion isa SciMLStructures.Tunable
+        return idx + 1
+    elseif ic.tunable_buffer_size.length > 0
+        idx += 1
+    end
+    if ind.portion isa SciMLStructures.Discrete
+        return idx + length(first(ic.discrete_buffer_sizes)) * (ind.idx[1] - 1) + ind.idx[2]
+    elseif !isempty(ic.discrete_buffer_sizes)
+        idx += length(first(ic.discrete_buffer_sizes)) * length(ic.discrete_buffer_sizes)
+    end
+    if ind.portion isa SciMLStructures.Constants
+        return return idx + ind.idx[1]
+    elseif !isempty(ic.constant_buffer_sizes)
+        idx += length(ic.constant_buffer_sizes)
+    end
+    if ind.portion == DEPENDENT_PORTION
+        return idx + ind.idx[1]
+    elseif !isempty(ic.dependent_buffer_sizes)
+        idx += length(ic.dependent_buffer_sizes)
+    end
+    if ind.portion == NONNUMERIC_PORTION
+        return idx + ind.idx[1]
+    end
+    error("Unhandled portion $(ind.portion)")
+end
