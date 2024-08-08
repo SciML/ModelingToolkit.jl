@@ -286,7 +286,8 @@ singular(sym) = last(string(sym)) == 's' ? Symbol(string(sym)[1:(end - 1)]) : sy
 
 function check_name_uniqueness(dict, a, newvarclass)
     for varclass in [:variables, :parameters, :structural_parameters, :constants]
-        if haskey(dict, varclass) && a in keys(dict[varclass])
+        dvarclass = get(dict, varclass, nothing)
+        if dvarclass !== nothing && a in keys(dvarclass)
             error("Cannot create a $(singular(newvarclass)) `$(a)` because there is already a $(singular(varclass)) with that name")
         end
     end
