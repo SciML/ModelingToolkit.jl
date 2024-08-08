@@ -675,6 +675,7 @@ Take dictionaries with initial conditions and parameters and convert them to num
 function get_u0_p(sys,
         u0map,
         parammap = nothing;
+        t0 = nothing,
         use_union = true,
         tofloat = true,
         symbolic_u0 = false)
@@ -682,6 +683,9 @@ function get_u0_p(sys,
     ps = parameters(sys)
 
     defs = defaults(sys)
+    if t0 !== nothing
+        defs[get_iv(sys)] = t0
+    end
     if parammap !== nothing
         defs = mergedefaults(defs, parammap, ps)
     end
@@ -717,14 +721,19 @@ function get_u0_p(sys,
     end
     p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
     p = p === nothing ? SciMLBase.NullParameters() : p
+    t0 !== nothing && delete!(defs, get_iv(sys))
     u0, p, defs
 end
 
 function get_u0(
-        sys, u0map, parammap = nothing; symbolic_u0 = false, toterm = default_toterm)
+        sys, u0map, parammap = nothing; symbolic_u0 = false,
+        toterm = default_toterm, t0 = nothing)
     dvs = unknowns(sys)
     ps = parameters(sys)
     defs = defaults(sys)
+    if t0 !== nothing
+        defs[get_iv(sys)] = t0
+    end
     if parammap !== nothing
         defs = mergedefaults(defs, parammap, ps)
     end
@@ -745,6 +754,7 @@ function get_u0(
     else
         u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, toterm)
     end
+    t0 !== nothing && delete!(defs, get_iv(sys))
     return u0, defs
 end
 
@@ -819,13 +829,14 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     end
 
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        u0, defs = get_u0(sys, trueinit, parammap; symbolic_u0)
+        u0, defs = get_u0(sys, trueinit, parammap; symbolic_u0,
+            t0 = constructor <: Union{DDEFunction, SDDEFunction} ? nothing : t)
         check_eqs_u0(eqs, dvs, u0; kwargs...)
         p = if parammap === nothing ||
                parammap == SciMLBase.NullParameters() && isempty(defs)
             nothing
         else
-            MTKParameters(sys, parammap, trueinit; eval_expression, eval_module)
+            MTKParameters(sys, parammap, trueinit; t0 = t, eval_expression, eval_module)
         end
     else
         u0, p, defs = get_u0_p(sys,
@@ -833,6 +844,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
             parammap;
             tofloat,
             use_union,
+            t0 = constructor <: Union{DDEFunction, SDDEFunction} ? nothing : t,
             symbolic_u0)
         p, split_idxs = split_parameters_by_type(p)
         if p isa Tuple
