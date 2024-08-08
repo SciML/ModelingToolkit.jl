@@ -34,6 +34,7 @@ This function takes a vector of variables that are to be considered inputs, i.e.
 
 ### Example:
 
+
 The following example implements a simple first-order system with an input `u` and state `x`. The function `f` is generated using `generate_control_function`, and the function `f` is then tested with random input and state values.
 
 
