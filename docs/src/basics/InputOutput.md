@@ -48,6 +48,7 @@ f, x_sym, ps = ModelingToolkit.generate_control_function(sys, [u], simplify = tr
 nothing # hide
 ```
 
+
 We can inspect the state realization chosen by MTK
 
 
