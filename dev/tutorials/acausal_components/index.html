@@ -83,7 +83,7 @@ u0 = [
 ]
 prob = ODEProblem(rc_model, u0, (0, 10.0))
 sol = solve(prob)
-plot(sol)</code></pre><img src="3e10eda7.svg" alt="Example block output"/><h2 id="Explanation"><a class="docs-heading-anchor" href="#Explanation">Explanation</a><a id="Explanation-1"></a><a class="docs-heading-anchor-permalink" href="#Explanation" title="Permalink"></a></h2><p>We wish to build the following RC circuit by building individual components and connecting the pins:</p><p><img src="https://user-images.githubusercontent.com/1814174/172466302-907d39f3-6d2c-4d16-84a8-6de32bca757e.png" alt/></p><h3 id="Building-the-Component-Library"><a class="docs-heading-anchor" href="#Building-the-Component-Library">Building the Component Library</a><a id="Building-the-Component-Library-1"></a><a class="docs-heading-anchor-permalink" href="#Building-the-Component-Library" title="Permalink"></a></h3><p>For each of our components, we use ModelingToolkit <code>Model</code> that emits an <code>ODESystem</code>. At the top, we start with defining the fundamental qualities of an electric circuit component. At every input and output pin, a circuit component has two values: the current at the pin and the voltage. Thus we define the <code>Pin</code> component (connector) to simply be the values there. Whenever two <code>Pin</code>s in a circuit are connected together, the system satisfies <a href="https://en.wikipedia.org/wiki/Kirchhoff%27s_circuit_laws">Kirchhoff&#39;s laws</a>, i.e. that currents sum to zero and voltages across the pins are equal. <code>[connect = Flow]</code> informs MTK that currents ought to sum to zero, and by default, variables are equal in a connection.</p><pre><code class="language-julia hljs">@connector Pin begin
+plot(sol)</code></pre><img src="2205784b.svg" alt="Example block output"/><h2 id="Explanation"><a class="docs-heading-anchor" href="#Explanation">Explanation</a><a id="Explanation-1"></a><a class="docs-heading-anchor-permalink" href="#Explanation" title="Permalink"></a></h2><p>We wish to build the following RC circuit by building individual components and connecting the pins:</p><p><img src="https://user-images.githubusercontent.com/1814174/172466302-907d39f3-6d2c-4d16-84a8-6de32bca757e.png" alt/></p><h3 id="Building-the-Component-Library"><a class="docs-heading-anchor" href="#Building-the-Component-Library">Building the Component Library</a><a id="Building-the-Component-Library-1"></a><a class="docs-heading-anchor-permalink" href="#Building-the-Component-Library" title="Permalink"></a></h3><p>For each of our components, we use ModelingToolkit <code>Model</code> that emits an <code>ODESystem</code>. At the top, we start with defining the fundamental qualities of an electric circuit component. At every input and output pin, a circuit component has two values: the current at the pin and the voltage. Thus we define the <code>Pin</code> component (connector) to simply be the values there. Whenever two <code>Pin</code>s in a circuit are connected together, the system satisfies <a href="https://en.wikipedia.org/wiki/Kirchhoff%27s_circuit_laws">Kirchhoff&#39;s laws</a>, i.e. that currents sum to zero and voltages across the pins are equal. <code>[connect = Flow]</code> informs MTK that currents ought to sum to zero, and by default, variables are equal in a connection.</p><pre><code class="language-julia hljs">@connector Pin begin
     v(t)
     i(t), [connect = Flow]
 end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ModelingToolkit.Model{typeof(Main.__Pin__), Dict{Symbol, Any}}(Main.__Pin__, Dict{Symbol, Any}(:variables =&gt; Dict{Symbol, Dict{Symbol, Any}}(:v =&gt; Dict(:type =&gt; Real), :i =&gt; Dict(:type =&gt; Real, :connection_type =&gt; :Flow)), :kwargs =&gt; Dict{Symbol, Dict}(:v =&gt; Dict{Symbol, Union{Nothing, DataType}}(:value =&gt; nothing, :type =&gt; Real), :i =&gt; Dict{Symbol, Union{Nothing, DataType}}(:value =&gt; nothing, :type =&gt; Real)), :independent_variable =&gt; t), true)</code></pre><p>Note that this is an incompletely specified ODESystem: it cannot be simulated on its own because the equations for <code>v(t)</code> and <code>i(t)</code> are unknown. Instead, this just gives a common syntax for receiving this pair with some default values. One can then construct a <code>Pin</code> using the <code>@named</code> helper macro:</p><pre><code class="language-julia hljs">@named mypin1 = Pin()</code></pre><p class="math-container">\[ \begin{align}
@@ -147,61 +147,61 @@ end</code></pre><pre class="documenter-example-output"><code class="nohighlight 
         connect(capacitor.n, ground.g)
     end
 end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ModelingToolkit.Model{typeof(Main.__RCModel__), Dict{Symbol, Any}}(Main.__RCModel__, Dict{Symbol, Any}(:components =&gt; Any[Union{Expr, Symbol}[:resistor, :Resistor], Union{Expr, Symbol}[:capacitor, :Capacitor], Union{Expr, Symbol}[:source, :ConstantVoltage], Union{Expr, Symbol}[:ground, :Ground]], :independent_variable =&gt; t, :equations =&gt; Any[&quot;connect(source.p, resistor.p)&quot;, &quot;connect(source.p, resistor.p)&quot;, &quot;connect(resistor.n, capacitor.p)&quot;, &quot;connect(source.p, resistor.p)&quot;, &quot;connect(resistor.n, capacitor.p)&quot;, &quot;connect(capacitor.n, source.n)&quot;, &quot;connect(source.p, resistor.p)&quot;, &quot;connect(resistor.n, capacitor.p)&quot;, &quot;connect(capacitor.n, source.n)&quot;, &quot;connect(capacitor.n, ground.g)&quot;]), false)</code></pre><p>We can create a RCModel component with <code>@named</code>. And using <code>subcomponent_name.parameter</code> we can set the parameters or defaults values of variables of subcomponents.</p><pre><code class="language-julia hljs">@mtkbuild rc_model = RCModel(resistor.R = 2.0)</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} capacitor_{+}v\left( t \right)}{\mathrm{d}t} =&amp; \frac{capacitor_{+}i\left( t \right)}{capacitor_{+}C}
+\frac{\mathrm{d} capacitor_{+}v\left( t \right)}{\mathrm{d}t} &amp;= \frac{capacitor_{+}i\left( t \right)}{capacitor_{+}C}
 \end{align}
  \]</p><p>This model is acausal because we have not specified anything about the causality of the model. We have simply specified what is true about each of the variables. This forms a system of differential-algebraic equations (DAEs) which define the evolution of each unknown of the system. The equations are:</p><pre><code class="language-julia hljs">equations(expand_connections(rc_model))</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} capacitor_{+}v\left( t \right)}{\mathrm{d}t} =&amp; \frac{capacitor_{+}i\left( t \right)}{capacitor_{+}C}
+\frac{\mathrm{d} capacitor_{+}v\left( t \right)}{\mathrm{d}t} &amp;= \frac{capacitor_{+}i\left( t \right)}{capacitor_{+}C}
 \end{align}
  \]</p><p>the unknowns are:</p><pre><code class="language-julia hljs">unknowns(rc_model)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">1-element Vector{SymbolicUtils.BasicSymbolic{Real}}:
  capacitor₊v(t)</code></pre><p>and the parameters are:</p><pre><code class="language-julia hljs">parameters(rc_model)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{SymbolicUtils.BasicSymbolic{Real}}:
  resistor₊R
  capacitor₊C
  source₊V</code></pre><p>The observed equations are:</p><pre><code class="language-julia hljs">observed(rc_model)</code></pre><p class="math-container">\[ \begin{align}
-source_{+}v\left( t \right) =&amp; source_{+}V \\
-capacitor_{+}p_{+}v\left( t \right) =&amp; capacitor_{+}v\left( t \right) \\
-capacitor_{+}n_{+}v\left( t \right) =&amp; -0 \\
-ground_{+}g_{+}v\left( t \right) =&amp; 0 \\
-resistor_{+}v\left( t \right) =&amp;  - capacitor_{+}v\left( t \right) + source_{+}v\left( t \right) \\
-resistor_{+}n_{+}v\left( t \right) =&amp; capacitor_{+}p_{+}v\left( t \right) \\
-source_{+}p_{+}v\left( t \right) =&amp; source_{+}v\left( t \right) + capacitor_{+}n_{+}v\left( t \right) \\
-source_{+}n_{+}v\left( t \right) =&amp; capacitor_{+}n_{+}v\left( t \right) \\
-resistor_{+}i\left( t \right) =&amp; \frac{resistor_{+}v\left( t \right)}{resistor_{+}R} \\
-resistor_{+}p_{+}v\left( t \right) =&amp; source_{+}p_{+}v\left( t \right) \\
-resistor_{+}p_{+}i\left( t \right) =&amp; resistor_{+}i\left( t \right) \\
-capacitor_{+}i\left( t \right) =&amp; resistor_{+}i\left( t \right) \\
-source_{+}i\left( t \right) =&amp;  - resistor_{+}i\left( t \right) \\
-resistor_{+}n_{+}i\left( t \right) =&amp;  - resistor_{+}p_{+}i\left( t \right) \\
-capacitor_{+}p_{+}i\left( t \right) =&amp; capacitor_{+}i\left( t \right) \\
-ground_{+}g_{+}i\left( t \right) =&amp;  - resistor_{+}i\left( t \right) + capacitor_{+}i\left( t \right) \\
-source_{+}p_{+}i\left( t \right) =&amp; source_{+}i\left( t \right) \\
-capacitor_{+}n_{+}i\left( t \right) =&amp;  - capacitor_{+}p_{+}i\left( t \right) \\
-source_{+}n_{+}i\left( t \right) =&amp;  - source_{+}p_{+}i\left( t \right)
+source_{+}v\left( t \right) &amp;= source_{+}V \\
+capacitor_{+}p_{+}v\left( t \right) &amp;= capacitor_{+}v\left( t \right) \\
+capacitor_{+}n_{+}v\left( t \right) &amp;= -0 \\
+ground_{+}g_{+}v\left( t \right) &amp;= 0 \\
+resistor_{+}v\left( t \right) &amp;=  - capacitor_{+}v\left( t \right) + source_{+}v\left( t \right) \\
+resistor_{+}n_{+}v\left( t \right) &amp;= capacitor_{+}p_{+}v\left( t \right) \\
+source_{+}p_{+}v\left( t \right) &amp;= source_{+}v\left( t \right) + capacitor_{+}n_{+}v\left( t \right) \\
+source_{+}n_{+}v\left( t \right) &amp;= capacitor_{+}n_{+}v\left( t \right) \\
+resistor_{+}i\left( t \right) &amp;= \frac{resistor_{+}v\left( t \right)}{resistor_{+}R} \\
+resistor_{+}p_{+}v\left( t \right) &amp;= source_{+}p_{+}v\left( t \right) \\
+resistor_{+}p_{+}i\left( t \right) &amp;= resistor_{+}i\left( t \right) \\
+capacitor_{+}i\left( t \right) &amp;= resistor_{+}i\left( t \right) \\
+source_{+}i\left( t \right) &amp;=  - resistor_{+}i\left( t \right) \\
+resistor_{+}n_{+}i\left( t \right) &amp;=  - resistor_{+}p_{+}i\left( t \right) \\
+capacitor_{+}p_{+}i\left( t \right) &amp;= capacitor_{+}i\left( t \right) \\
+ground_{+}g_{+}i\left( t \right) &amp;=  - resistor_{+}i\left( t \right) + capacitor_{+}i\left( t \right) \\
+source_{+}p_{+}i\left( t \right) &amp;= source_{+}i\left( t \right) \\
+capacitor_{+}n_{+}i\left( t \right) &amp;=  - capacitor_{+}p_{+}i\left( t \right) \\
+source_{+}n_{+}i\left( t \right) &amp;=  - source_{+}p_{+}i\left( t \right)
 \end{align}
  \]</p><h2 id="Solving-this-System"><a class="docs-heading-anchor" href="#Solving-this-System">Solving this System</a><a id="Solving-this-System-1"></a><a class="docs-heading-anchor-permalink" href="#Solving-this-System" title="Permalink"></a></h2><p>We are left with a system of only two equations with two unknown variables. One of the equations is a differential equation, while the other is an algebraic equation. We can then give the values for the initial conditions of our unknowns, and solve the system by converting it to an ODEProblem in mass matrix form and solving it with an <a href="https://docs.sciml.ai/DiffEqDocs/stable/solvers/dae_solve/#OrdinaryDiffEq.jl-(Mass-Matrix)">ODEProblem mass matrix DAE solver</a>. This is done as follows:</p><pre><code class="language-julia hljs">u0 = [rc_model.capacitor.v =&gt; 0.0
       rc_model.capacitor.p.i =&gt; 0.0]
 
 prob = ODEProblem(rc_model, u0, (0, 10.0))
 sol = solve(prob)
-plot(sol)</code></pre><img src="fd5af552.svg" alt="Example block output"/><p>However, what if we wanted to plot the timeseries of a different variable? Do not worry, that information was not thrown away! Instead, transformations like <code>structural_simplify</code> simply change unknown variables into observables which are defined by <code>observed</code> equations.</p><pre><code class="language-julia hljs">observed(rc_model)</code></pre><p class="math-container">\[ \begin{align}
-source_{+}v\left( t \right) =&amp; source_{+}V \\
-capacitor_{+}p_{+}v\left( t \right) =&amp; capacitor_{+}v\left( t \right) \\
-capacitor_{+}n_{+}v\left( t \right) =&amp; -0 \\
-ground_{+}g_{+}v\left( t \right) =&amp; 0 \\
-resistor_{+}v\left( t \right) =&amp;  - capacitor_{+}v\left( t \right) + source_{+}v\left( t \right) \\
-resistor_{+}n_{+}v\left( t \right) =&amp; capacitor_{+}p_{+}v\left( t \right) \\
-source_{+}p_{+}v\left( t \right) =&amp; source_{+}v\left( t \right) + capacitor_{+}n_{+}v\left( t \right) \\
-source_{+}n_{+}v\left( t \right) =&amp; capacitor_{+}n_{+}v\left( t \right) \\
-resistor_{+}i\left( t \right) =&amp; \frac{resistor_{+}v\left( t \right)}{resistor_{+}R} \\
-resistor_{+}p_{+}v\left( t \right) =&amp; source_{+}p_{+}v\left( t \right) \\
-resistor_{+}p_{+}i\left( t \right) =&amp; resistor_{+}i\left( t \right) \\
-capacitor_{+}i\left( t \right) =&amp; resistor_{+}i\left( t \right) \\
-source_{+}i\left( t \right) =&amp;  - resistor_{+}i\left( t \right) \\
-resistor_{+}n_{+}i\left( t \right) =&amp;  - resistor_{+}p_{+}i\left( t \right) \\
-capacitor_{+}p_{+}i\left( t \right) =&amp; capacitor_{+}i\left( t \right) \\
-ground_{+}g_{+}i\left( t \right) =&amp;  - resistor_{+}i\left( t \right) + capacitor_{+}i\left( t \right) \\
-source_{+}p_{+}i\left( t \right) =&amp; source_{+}i\left( t \right) \\
-capacitor_{+}n_{+}i\left( t \right) =&amp;  - capacitor_{+}p_{+}i\left( t \right) \\
-source_{+}n_{+}i\left( t \right) =&amp;  - source_{+}p_{+}i\left( t \right)
+plot(sol)</code></pre><img src="4c4db348.svg" alt="Example block output"/><p>However, what if we wanted to plot the timeseries of a different variable? Do not worry, that information was not thrown away! Instead, transformations like <code>structural_simplify</code> simply change unknown variables into observables which are defined by <code>observed</code> equations.</p><pre><code class="language-julia hljs">observed(rc_model)</code></pre><p class="math-container">\[ \begin{align}
+source_{+}v\left( t \right) &amp;= source_{+}V \\
+capacitor_{+}p_{+}v\left( t \right) &amp;= capacitor_{+}v\left( t \right) \\
+capacitor_{+}n_{+}v\left( t \right) &amp;= -0 \\
+ground_{+}g_{+}v\left( t \right) &amp;= 0 \\
+resistor_{+}v\left( t \right) &amp;=  - capacitor_{+}v\left( t \right) + source_{+}v\left( t \right) \\
+resistor_{+}n_{+}v\left( t \right) &amp;= capacitor_{+}p_{+}v\left( t \right) \\
+source_{+}p_{+}v\left( t \right) &amp;= source_{+}v\left( t \right) + capacitor_{+}n_{+}v\left( t \right) \\
+source_{+}n_{+}v\left( t \right) &amp;= capacitor_{+}n_{+}v\left( t \right) \\
+resistor_{+}i\left( t \right) &amp;= \frac{resistor_{+}v\left( t \right)}{resistor_{+}R} \\
+resistor_{+}p_{+}v\left( t \right) &amp;= source_{+}p_{+}v\left( t \right) \\
+resistor_{+}p_{+}i\left( t \right) &amp;= resistor_{+}i\left( t \right) \\
+capacitor_{+}i\left( t \right) &amp;= resistor_{+}i\left( t \right) \\
+source_{+}i\left( t \right) &amp;=  - resistor_{+}i\left( t \right) \\
+resistor_{+}n_{+}i\left( t \right) &amp;=  - resistor_{+}p_{+}i\left( t \right) \\
+capacitor_{+}p_{+}i\left( t \right) &amp;= capacitor_{+}i\left( t \right) \\
+ground_{+}g_{+}i\left( t \right) &amp;=  - resistor_{+}i\left( t \right) + capacitor_{+}i\left( t \right) \\
+source_{+}p_{+}i\left( t \right) &amp;= source_{+}i\left( t \right) \\
+capacitor_{+}n_{+}i\left( t \right) &amp;=  - capacitor_{+}p_{+}i\left( t \right) \\
+source_{+}n_{+}i\left( t \right) &amp;=  - source_{+}p_{+}i\left( t \right)
 \end{align}
  \]</p><p>These are explicit algebraic equations which can then be used to reconstruct the required variables on the fly. This leads to dramatic computational savings because implicitly solving an ODE scales like O(n^3), so making there be as few unknowns as possible is good!</p><p>The solution object can be accessed via its symbols. For example, let&#39;s retrieve the voltage of the resistor over time:</p><pre><code class="language-julia hljs">sol[rc_model.resistor.v]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">15-element Vector{Float64}:
  1.0
@@ -218,4 +218,4 @@ source_{+}n_{+}i\left( t \right) =&amp;  - source_{+}p_{+}i\left( t \right)
  0.07897256881386727
  0.03841787611744962
  0.01648322536200686
- 0.006741257426458369</code></pre><p>or we can plot the timeseries of the resistor&#39;s voltage:</p><pre><code class="language-julia hljs">plot(sol, idxs = [rc_model.resistor.v])</code></pre><img src="a0a3eda5.svg" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../ode_modeling/">« Getting Started with ModelingToolkit.jl</a><a class="docs-footer-nextpage" href="../nonlinear/">Modeling Nonlinear Systems »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.5.0 on <span class="colophon-date" title="Wednesday 7 August 2024 20:17">Wednesday 7 August 2024</span>. Using Julia version 1.10.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ 0.006741257426458369</code></pre><p>or we can plot the timeseries of the resistor&#39;s voltage:</p><pre><code class="language-julia hljs">plot(sol, idxs = [rc_model.resistor.v])</code></pre><img src="5a71a89b.svg" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../ode_modeling/">« Getting Started with ModelingToolkit.jl</a><a class="docs-footer-nextpage" href="../nonlinear/">Modeling Nonlinear Systems »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.5.0 on <span class="colophon-date" title="Thursday 8 August 2024 12:11">Thursday 8 August 2024</span>. Using Julia version 1.10.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
