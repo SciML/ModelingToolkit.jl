@@ -133,3 +133,35 @@ let
     @test length(fold_points) == 2
     @test fold_points ≈ [-1.1851851706940317, -5.6734983580551894e-6] # test that they occur at the correct parameter values).
 end
+
+let 
+
+    @mtkmodel FOL begin
+        @parameters begin
+            τ # parameters
+        end
+        @variables begin
+            x(t) # dependent variables
+            RHS(t)
+        end
+        @equations begin
+            RHS ~ τ + x^2 - 0.1
+            D(x) ~ RHS
+        end
+    end
+
+    @mtkbuild fol = FOL()
+
+    par = [fol.τ => 0.0]
+    u0 = [fol.x => -1.0]
+    #prob = ODEProblem(fol, u0, (0.0, 1.), par)
+
+    bif_par = fol.τ
+    bp = BifurcationProblem(fol, u0, par, bif_par)
+    opts_br = ContinuationPar(p_min = -1.0,
+        p_max = 1.0)
+    bf = bifurcationdiagram(bp, PALC(), 2, opts_br).γ.specialpoint[1] ≈ 0.1
+
+    @test bf.γ.specialpoint[1].param≈0.1 atol=1e-4 rtol=1e-4
+
+end

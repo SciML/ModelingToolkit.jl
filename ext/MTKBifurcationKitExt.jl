@@ -144,9 +144,10 @@ function BifurcationKit.BifurcationProblem(osys::ODESystem, args...; kwargs...)
     if !ModelingToolkit.iscomplete(osys)
         error("A completed `ODESystem` is required. Call `complete` or `structural_simplify` on the system before creating a `BifurcationProblem`")
     end
-    nsys = NonlinearSystem([0 ~ eq.rhs for eq in equations(osys)],
+    nsys = NonlinearSystem([0 ~ eq.rhs for eq in full_equations(osys)],
         unknowns(osys),
         parameters(osys);
+        observed = observed(osys),
         name = nameof(osys))
     return BifurcationKit.BifurcationProblem(complete(nsys), args...; kwargs...)
 end
