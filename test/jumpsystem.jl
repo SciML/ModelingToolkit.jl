@@ -1,4 +1,5 @@
 using ModelingToolkit, DiffEqBase, JumpProcesses, Test, LinearAlgebra, StableRNGs
+using OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D
 MT = ModelingToolkit
 
@@ -67,7 +68,7 @@ tspan = (0.0, 250.0);
 u₀map = [S => 999, I => 1, R => 0]
 parammap = [β => 0.1 / 1000, γ => 0.01]
 dprob = DiscreteProblem(js2, u₀map, tspan, parammap)
-jprob = JumpProblem(js2, dprob, Direct(), save_positions = (false, false), rng)
+jprob = JumpProblem(js2, dprob, Direct(); save_positions = (false, false), rng)
 Nsims = 30000
 function getmean(jprob, Nsims; use_stepper = true)
     m = 0.0
@@ -89,13 +90,13 @@ obs = [S2 ~ 2 * S]
 @named js2b = JumpSystem([j₁, j₃], t, [S, I, R], [β, γ], observed = obs)
 js2b = complete(js2b)
 dprob = DiscreteProblem(js2b, u₀map, tspan, parammap)
-jprob = JumpProblem(js2b, dprob, Direct(), save_positions = (false, false), rng)
-sol = solve(jprob, SSAStepper(), saveat = tspan[2] / 10)
+jprob = JumpProblem(js2b, dprob, Direct(); save_positions = (false, false), rng)
+sol = solve(jprob, SSAStepper(); saveat = tspan[2] / 10)
 @test all(2 .* sol[S] .== sol[S2])
 
 # test save_positions is working
-jprob = JumpProblem(js2, dprob, Direct(), save_positions = (false, false), rng)
-sol = solve(jprob, SSAStepper(), saveat = 1.0)
+jprob = JumpProblem(js2, dprob, Direct(); save_positions = (false, false), rng)
+sol = solve(jprob, SSAStepper(); saveat = 1.0)
 @test all((sol.t) .== collect(0.0:tspan[2]))
 
 #test the MT JumpProblem rates/affects are correct
@@ -129,7 +130,7 @@ function a2!(integrator)
 end
 j2 = ConstantRateJump(r2, a2!)
 jset = JumpSet((), (j1, j2), nothing, nothing)
-jprob = JumpProblem(prob, Direct(), jset, save_positions = (false, false), rng)
+jprob = JumpProblem(prob, Direct(), jset; save_positions = (false, false), rng)
 m2 = getmean(jprob, Nsims)
 
 # test JumpSystem solution agrees with direct version
@@ -141,17 +142,17 @@ maj2 = MassActionJump(γ, [I => 1], [I => -1, R => 1])
 @named js3 = JumpSystem([maj1, maj2], t, [S, I, R], [β, γ])
 js3 = complete(js3)
 dprob = DiscreteProblem(js3, u₀map, tspan, parammap)
-jprob = JumpProblem(js3, dprob, Direct(), rng)
+jprob = JumpProblem(js3, dprob, Direct(); rng)
 m3 = getmean(jprob, Nsims)
 @test abs(m - m3) / m < 0.01
 
 # maj jump test with various dep graphs
 @named js3b = JumpSystem([maj1, maj2], t, [S, I, R], [β, γ])
 js3b = complete(js3b)
-jprobb = JumpProblem(js3b, dprob, NRM(), rng)
+jprobb = JumpProblem(js3b, dprob, NRM(); rng)
 m4 = getmean(jprobb, Nsims)
 @test abs(m - m4) / m < 0.01
-jprobc = JumpProblem(js3b, dprob, RSSA(), rng)
+jprobc = JumpProblem(js3b, dprob, RSSA(); rng)
 m4 = getmean(jprobc, Nsims)
 @test abs(m - m4) / m < 0.01
 
@@ -161,7 +162,7 @@ maj2 = MassActionJump(γ, [S => 1], [S => -1])
 @named js4 = JumpSystem([maj1, maj2], t, [S], [β, γ])
 js4 = complete(js4)
 dprob = DiscreteProblem(js4, [S => 999], (0, 1000.0), [β => 100.0, γ => 0.01])
-jprob = JumpProblem(js4, dprob, Direct(), rng)
+jprob = JumpProblem(js4, dprob, Direct(); rng)
 m4 = getmean(jprob, Nsims)
 @test abs(m4 - 2.0 / 0.01) * 0.01 / 2.0 < 0.01
 
@@ -171,7 +172,7 @@ maj2 = MassActionJump(γ, [S => 2], [S => -1])
 @named js4 = JumpSystem([maj1, maj2], t, [S], [β, γ])
 js4 = complete(js4)
 dprob = DiscreteProblem(js4, [S => 999], (0, 1000.0), [β => 100.0, γ => 0.01])
-jprob = JumpProblem(js4, dprob, Direct(), rng)
+jprob = JumpProblem(js4, dprob, Direct(); rng)
 sol = solve(jprob, SSAStepper());
 
 # issue #819
@@ -294,4 +295,17 @@ let
         jprob = JumpProblem(jsys, dprob)
         @test jprob.aggregator isa algtype
     end
+end
+
+# basic VariableRateJump test
+let
+    @variables A(t)
+    vrj = VariableRateJump(sin(t) + 1, [A ~ A + 1])
+    js = complete(JumpSystem([vrj], t, [A], []; name = :js))
+    oprob = ODEProblem(js, [A => 0], (0.0, 10.0))
+    jprob = JumpProblem(js, oprob, Direct())
+    sol = solve(jprob, Tsit5())
+
+
+
 end

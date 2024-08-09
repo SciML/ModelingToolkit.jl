@@ -461,7 +461,7 @@ function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothi
     observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
 
     f = (du, u, p, t) -> (du .= 0; nothing)
-    df = ODEFunction(f; sys = sys, observed = observedfun)
+    df = ODEFunction(f; sys, observed = observedfun)
     ODEProblem(df, u0, tspan, p; kwargs...)
 end
 
