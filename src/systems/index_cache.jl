@@ -8,9 +8,7 @@ function BufferTemplate(s::Type{<:Symbolics.Struct}, length::Int)
     BufferTemplate(T, length)
 end
 
-struct Dependent <: SciMLStructures.AbstractPortion end
 struct Nonnumeric <: SciMLStructures.AbstractPortion end
-const DEPENDENT_PORTION = Dependent()
 const NONNUMERIC_PORTION = Nonnumeric()
 
 struct ParameterIndex{P, I}
@@ -32,13 +30,12 @@ struct IndexCache
     discrete_idx::Dict{BasicSymbolic, Tuple{Int, Int, Int}}
     tunable_idx::TunableIndexMap
     constant_idx::ParamIndexMap
-    dependent_idx::ParamIndexMap
     nonnumeric_idx::ParamIndexMap
     observed_syms::Set{BasicSymbolic}
+    dependent_pars::Set{BasicSymbolic}
     discrete_buffer_sizes::Vector{Vector{BufferTemplate}}
     tunable_buffer_size::BufferTemplate
     constant_buffer_sizes::Vector{BufferTemplate}
-    dependent_buffer_sizes::Vector{BufferTemplate}
     nonnumeric_buffer_sizes::Vector{BufferTemplate}
     symbol_to_variable::Dict{Symbol, BasicSymbolic}
 end
@@ -95,7 +92,6 @@ function IndexCache(sys::AbstractSystem)
     disc_clocks = Dict{Union{Symbol, BasicSymbolic}, Int}()
     tunable_buffers = Dict{Any, Set{BasicSymbolic}}()
     constant_buffers = Dict{Any, Set{BasicSymbolic}}()
-    dependent_buffers = Dict{Any, Set{BasicSymbolic}}()
     nonnumeric_buffers = Dict{Any, Set{BasicSymbolic}}()
 
     function insert_by_type!(buffers::Dict{Any, Set{BasicSymbolic}}, sym)
@@ -223,19 +219,10 @@ function IndexCache(sys::AbstractSystem)
         end
     end
 
-    if has_parameter_dependencies(sys)
-        pdeps = parameter_dependencies(sys)
-        for (sym, value) in pdeps
-            sym = unwrap(sym)
-            insert_by_type!(dependent_buffers, sym)
-        end
-    end
-
     for p in parameters(sys)
         p = unwrap(p)
         ctype = symtype(p)
         haskey(disc_clocks, p) && continue
-        haskey(dependent_buffers, ctype) && p in dependent_buffers[ctype] && continue
         insert_by_type!(
             if ctype <: Real || ctype <: AbstractArray{<:Real}
                 if istunable(p, true) && Symbolics.shape(p) != Symbolics.Unknown() &&
@@ -298,7 +285,6 @@ function IndexCache(sys::AbstractSystem)
     end
 
     const_idxs, const_buffer_sizes = get_buffer_sizes_and_idxs(constant_buffers)
-    dependent_idxs, dependent_buffer_sizes = get_buffer_sizes_and_idxs(dependent_buffers)
     nonnumeric_idxs, nonnumeric_buffer_sizes = get_buffer_sizes_and_idxs(nonnumeric_buffers)
 
     tunable_idxs = TunableIndexMap()
@@ -322,11 +308,16 @@ function IndexCache(sys::AbstractSystem)
     end
 
     for sym in Iterators.flatten((keys(unk_idxs), keys(disc_idxs), keys(tunable_idxs),
-        keys(const_idxs), keys(dependent_idxs), keys(nonnumeric_idxs),
+        keys(const_idxs), keys(nonnumeric_idxs),
         observed_syms, independent_variable_symbols(sys)))
         if hasname(sym) && (!iscall(sym) || operation(sym) !== getindex)
             symbol_to_variable[getname(sym)] = sym
         end
+    end
+
+    dependent_pars = Set{BasicSymbolic}()
+    for eq in parameter_dependencies(sys)
+        push!(dependent_pars, eq.lhs)
     end
 
     return IndexCache(
@@ -334,13 +325,12 @@ function IndexCache(sys::AbstractSystem)
         disc_idxs,
         tunable_idxs,
         const_idxs,
-        dependent_idxs,
         nonnumeric_idxs,
         observed_syms,
+        dependent_pars,
         disc_buffer_sizes,
         BufferTemplate(Real, tunable_buffer_size),
         const_buffer_sizes,
-        dependent_buffer_sizes,
         nonnumeric_buffer_sizes,
         symbol_to_variable
     )
@@ -370,8 +360,7 @@ function SymbolicIndexingInterface.is_parameter(ic::IndexCache, sym)
     return check_index_map(ic.tunable_idx, sym) !== nothing ||
            check_index_map(ic.discrete_idx, sym) !== nothing ||
            check_index_map(ic.constant_idx, sym) !== nothing ||
-           check_index_map(ic.nonnumeric_idx, sym) !== nothing ||
-           check_index_map(ic.dependent_idx, sym) !== nothing
+           check_index_map(ic.nonnumeric_idx, sym) !== nothing
 end
 
 function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym)
@@ -389,8 +378,6 @@ function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym)
         ParameterIndex(SciMLStructures.Constants(), idx, validate_size)
     elseif (idx = check_index_map(ic.nonnumeric_idx, sym)) !== nothing
         ParameterIndex(NONNUMERIC_PORTION, idx, validate_size)
-    elseif (idx = check_index_map(ic.dependent_idx, sym)) !== nothing
-        ParameterIndex(DEPENDENT_PORTION, idx, validate_size)
     else
         nothing
     end
@@ -456,8 +443,6 @@ function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
     for temp in Iterators.flatten(ic.discrete_buffer_sizes))
     const_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
     for temp in ic.constant_buffer_sizes)
-    dep_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
-    for temp in ic.dependent_buffer_sizes)
     nonnumeric_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
     for temp in ic.nonnumeric_buffer_sizes)
     for p in ps
@@ -476,9 +461,6 @@ function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
         elseif haskey(ic.constant_idx, p)
             i, j = ic.constant_idx[p]
             const_buf[i][j] = p
-        elseif haskey(ic.dependent_idx, p)
-            i, j = ic.dependent_idx[p]
-            dep_buf[i][j] = p
         elseif haskey(ic.nonnumeric_idx, p)
             i, j = ic.nonnumeric_idx[p]
             nonnumeric_buf[i][j] = p
@@ -488,7 +470,7 @@ function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
     end
 
     result = broadcast.(
-        unwrap, (param_buf..., disc_buf..., const_buf..., nonnumeric_buf..., dep_buf...))
+        unwrap, (param_buf..., disc_buf..., const_buf..., nonnumeric_buf...))
     if drop_missing
         result = map(result) do buf
             filter(buf) do sym

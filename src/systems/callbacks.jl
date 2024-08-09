@@ -411,7 +411,8 @@ function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
     end
     expr = build_function(
         condit, u, t, p...; expression = Val{true},
-        wrap_code = condition_header(sys) .∘ wrap_array_vars(sys, condit; dvs, ps),
+        wrap_code = condition_header(sys) .∘ wrap_array_vars(sys, condit; dvs, ps) .∘
+                    wrap_parameter_dependencies(sys, !(condit isa AbstractArray)),
         kwargs...)
     if expression == Val{true}
         return expr
@@ -497,7 +498,8 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
         pre = get_preprocess_constants(rhss)
         rf_oop, rf_ip = build_function(rhss, u, p..., t; expression = Val{true},
             wrap_code = add_integrator_header(sys, integ, outvar) .∘
-                        wrap_array_vars(sys, rhss; dvs, ps = _ps),
+                        wrap_array_vars(sys, rhss; dvs, ps = _ps) .∘
+                        wrap_parameter_dependencies(sys, false),
             outputidxs = update_inds,
             postprocess_fbody = pre,
             kwargs...)
@@ -513,7 +515,7 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
 end
 
 function generate_rootfinding_callback(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = full_parameters(sys); kwargs...)
+        ps = parameters(sys); kwargs...)
     cbs = continuous_events(sys)
     isempty(cbs) && return nothing
     generate_rootfinding_callback(cbs, sys, dvs, ps; kwargs...)
@@ -524,7 +526,7 @@ generate_rootfinding_callback and thus we can produce a ContinuousCallback inste
 """
 function generate_single_rootfinding_callback(
         eq, cb, sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = full_parameters(sys); kwargs...)
+        ps = parameters(sys); kwargs...)
     if !isequal(eq.lhs, 0)
         eq = 0 ~ eq.lhs - eq.rhs
     end
@@ -547,7 +549,7 @@ end
 
 function generate_vector_rootfinding_callback(
         cbs, sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = full_parameters(sys); rootfind = SciMLBase.RightRootFind, kwargs...)
+        ps = parameters(sys); rootfind = SciMLBase.RightRootFind, kwargs...)
     eqs = map(cb -> flatten_equations(cb.eqs), cbs)
     num_eqs = length.(eqs)
     # fuse equations to create VectorContinuousCallback
@@ -617,7 +619,7 @@ function compile_affect_fn(cb, sys::AbstractODESystem, dvs, ps, kwargs)
 end
 
 function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = full_parameters(sys); kwargs...)
+        ps = parameters(sys); kwargs...)
     eqs = map(cb -> flatten_equations(cb.eqs), cbs)
     num_eqs = length.(eqs)
     total_eqs = sum(num_eqs)
@@ -660,10 +662,15 @@ function compile_user_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
     v_inds = map(sym -> dvs_ind[sym], unknowns(affect))
 
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        p_inds = [parameter_index(sys, sym) for sym in parameters(affect)]
+        p_inds = [if (pind = parameter_index(sys, sym)) === nothing
+                      sym
+                  else
+                      pind
+                  end
+                  for sym in parameters(affect)]
     else
         ps_ind = Dict(reverse(en) for en in enumerate(ps))
-        p_inds = map(sym -> ps_ind[sym], parameters(affect))
+        p_inds = map(sym -> get(ps_ind, sym, sym), parameters(affect))
     end
     # HACK: filter out eliminated symbols. Not clear this is the right thing to do
     # (MTK should keep these symbols)
@@ -711,7 +718,7 @@ function generate_discrete_callback(cb, sys, dvs, ps; postprocess_affect_expr! =
 end
 
 function generate_discrete_callbacks(sys::AbstractSystem, dvs = unknowns(sys),
-        ps = full_parameters(sys); kwargs...)
+        ps = parameters(sys); kwargs...)
     has_discrete_events(sys) || return nothing
     symcbs = discrete_events(sys)
     isempty(symcbs) && return nothing
