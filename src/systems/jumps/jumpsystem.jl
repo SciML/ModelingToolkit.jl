@@ -502,10 +502,12 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob,
         error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")
     jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, majs)
 
+    # dep graphs are only for constant rate jumps
+    nonvrjs = ArrayPartition(eqs.x[1], eqs.x[2])
     if needs_vartojumps_map(aggregator) || needs_depgraph(aggregator) ||
        (aggregator isa JumpProcesses.NullAggregator)
-        jdeps = asgraph(js)
-        vdeps = variable_dependencies(js)
+        jdeps = asgraph(js; eqs = nonvrjs)
+        vdeps = variable_dependencies(js; eqs = nonvrjs)
         vtoj = jdeps.badjlist
         jtov = vdeps.badjlist
         jtoj = needs_depgraph(aggregator) ? eqeq_dependencies(jdeps, vdeps).fadjlist :

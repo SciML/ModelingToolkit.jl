@@ -36,8 +36,8 @@ equation_dependencies(jumpsys)
 equation_dependencies(jumpsys, variables = parameters(jumpsys))
 ```
 """
-function equation_dependencies(sys::AbstractSystem; variables = unknowns(sys))
-    eqs = equations(sys)
+function equation_dependencies(sys::AbstractSystem; variables = unknowns(sys),
+        eqs = equations(sys))
     deps = Set()
     depeqs_to_vars = Vector{Vector}(undef, length(eqs))
 
@@ -114,8 +114,9 @@ digr = asgraph(jumpsys)
 ```
 """
 function asgraph(sys::AbstractSystem; variables = unknowns(sys),
-        variablestoids = Dict(v => i for (i, v) in enumerate(variables)))
-    asgraph(equation_dependencies(sys, variables = variables), variablestoids)
+        variablestoids = Dict(v => i for (i, v) in enumerate(variables)),
+        eqs = equations(sys))
+    asgraph(equation_dependencies(sys; variables, eqs), variablestoids)
 end
 
 """
@@ -141,8 +142,8 @@ variable_dependencies(jumpsys)
 ```
 """
 function variable_dependencies(sys::AbstractSystem; variables = unknowns(sys),
-        variablestoids = nothing)
-    eqs = equations(sys)
+        variablestoids = nothing, eqs = equations(sys))
+
     vtois = isnothing(variablestoids) ? Dict(v => i for (i, v) in enumerate(variables)) :
             variablestoids
 
@@ -193,8 +194,8 @@ dg = asdigraph(digr, jumpsys)
 ```
 """
 function asdigraph(g::BipartiteGraph, sys::AbstractSystem; variables = unknowns(sys),
-        equationsfirst = true)
-    neqs = length(equations(sys))
+        equationsfirst = true, eqs = equations(sys))
+    neqs = length(eqs)
     nvars = length(variables)
     fadjlist = deepcopy(g.fadjlist)
     badjlist = deepcopy(g.badjlist)
