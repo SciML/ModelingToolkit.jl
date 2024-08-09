@@ -1,4 +1,5 @@
-using ModelingToolkit, DiffEqBase, JumpProcesses, Test, LinearAlgebra, StableRNGs
+using ModelingToolkit, DiffEqBase, JumpProcesses, Test, LinearAlgebra
+using Random, StableRNGs
 using OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D
 MT = ModelingToolkit
@@ -299,13 +300,43 @@ end
 
 # basic VariableRateJump test
 let
-    @variables A(t)
-    vrj = VariableRateJump(sin(t) + 1, [A ~ A + 1])
-    js = complete(JumpSystem([vrj], t, [A], []; name = :js))
-    oprob = ODEProblem(js, [A => 0], (0.0, 10.0))
-    jprob = JumpProblem(js, oprob, Direct())
+    N = 1000  # number of simulations for testing solve accuracy
+    Random.seed!(rng, 1111)
+    @variables A(t) B(t) C(t)
+    @parameters k
+    vrj = VariableRateJump(k * (sin(t) + 1), [A ~ A + 1, C ~ C + 2])
+    js = complete(JumpSystem([vrj], t, [A,C], [k]; name = :js, observed = [B ~ C*A]))
+    oprob = ODEProblem(js, [A => 0, C => 0], (0.0, 10.0), [k => 1.0])
+    jprob = JumpProblem(js, oprob, Direct(); rng)
     sol = solve(jprob, Tsit5())
 
+    # test observed and symbolic indexing work
+    @test all(sol[:A] .* sol[:C] .== sol[:B])
 
+    dt = 1.0
+    tv = range(0.0, 10.0; step = 1.0)
+    cmean = zeros(11)
+    for n in 1:N
+        sol = solve(jprob, Tsit5(); save_everystep = false, saveat = dt)
+        cmean += Array(sol(tv; idxs = :C))
+    end
+    cmean ./= N
 
+    vrjrate(u, p, t) = p[1] * (sin(t) + 1)
+    function vrjaffect!(integ)
+        integ.u[1] += 1
+        integ.u[2] += 2
+        nothing
+    end
+    vrj2 = VariableRateJump(vrjrate, vrjaffect!)
+    oprob2 = ODEProblem((du,u,p,t) -> (du .= 0; nothing), [0, 0], (0.0, 10.0), (1.0,))
+    jprob2 = JumpProblem(oprob2, Direct(), vrj2; rng)
+    cmean2 = zeros(11)
+    for n in 1:N
+        sol2 = solve(jprob2, Tsit5(); saveat = dt)
+        cmean2 += Array(sol2(tv; idxs = 2))
+    end
+    cmean2 ./= N
+
+    @test all( abs.(cmean .- cmean2) .<= .05 .* cmean)
 end
