@@ -57,6 +57,8 @@ function screen_unit(result)
         else
             throw(ValidationError("$result doesn't use SI unit, please use `u\"m\"` to instantiate SI unit only."))
         end
+    elseif result isa Unitful.FreeUnits
+        return result
     else
         throw(ValidationError("$result doesn't have any unit."))
     end
