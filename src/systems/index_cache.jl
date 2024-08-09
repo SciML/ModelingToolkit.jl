@@ -29,7 +29,10 @@ const TunableIndexMap = Dict{BasicSymbolic,
 
 struct IndexCache
     unknown_idx::UnknownIndexMap
+    # sym => (clockidx, bufferidx, idx_in_buffer)
     discrete_idx::Dict{BasicSymbolic, Tuple{Int, Int, Int}}
+    clock_tick_times::Vector{Union{AbstractVector, Real, Nothing}}
+    callback_to_clocks::Dict{Any, Vector{Int}}
     tunable_idx::TunableIndexMap
     constant_idx::ParamIndexMap
     dependent_idx::ParamIndexMap
@@ -91,136 +94,100 @@ function IndexCache(sys::AbstractSystem)
         end
     end
 
-    disc_buffers = Dict{Int, Dict{Any, Set{BasicSymbolic}}}()
-    disc_clocks = Dict{Union{Symbol, BasicSymbolic}, Int}()
     tunable_buffers = Dict{Any, Set{BasicSymbolic}}()
     constant_buffers = Dict{Any, Set{BasicSymbolic}}()
     dependent_buffers = Dict{Any, Set{BasicSymbolic}}()
     nonnumeric_buffers = Dict{Any, Set{BasicSymbolic}}()
+
+    disc_param_callbacks = Dict{BasicSymbolic, Set{Int}}()
+    events = Iterators.flatten((continuous_events(sys), discrete_events(sys)))
+    clock_tick_times = Union{AbstractVector, Real, Nothing}[]
+    for (i, event) in enumerate(events)
+        if event isa SymbolicDiscreteCallback
+            cond = condition(event)
+            if is_timed_condition(cond)
+                push!(clock_tick_times, cond)
+            else
+                push!(clock_tick_times, nothing)
+            end
+        else
+            push!(clock_tick_times, nothing)
+        end
+
+        discs = Set{BasicSymbolic}()
+        affs = affects(event)
+        if !(affs isa AbstractArray)
+            affs = [affs]
+        end
+        for affect in affs
+            if affect isa Equation
+                is_parameter(sys, affect.lhs) && push!(discs, affect.lhs)
+            elseif affect isa FunctionalAffect
+                union!(discretes(affect))
+            else
+                error("Unhandled affect type $(typeof(affect))")
+            end
+        end
+
+        for sym in discs
+            is_parameter(sys, sym) ||
+                error("Expected discrete variable $sym in callback to be a parameter")
+            clocks = get!(() -> Set{Int}(), disc_param_callbacks, sym)
+            push!(clocks, i)
+        end
+    end
+
+    clock_partitions = unique(collect(values(disc_param_callbacks)))
+    disc_symtypes = unique(symtype.(keys(disc_param_callbacks)))
+    disc_symtype_idx = Dict(disc_symtypes .=> eachindex(disc_symtypes))
+    disc_syms_by_symtype = [BasicSymbolic[] for _ in disc_symtypes]
+    for sym in keys(disc_param_callbacks)
+        push!(disc_syms_by_symtype[disc_symtype_idx[symtype(sym)]], sym)
+    end
+    disc_syms_by_symtype_by_partition = [Vector{BasicSymbolic}[] for _ in disc_symtypes]
+    for (i, buffer) in enumerate(disc_syms_by_symtype)
+        for partition in clock_partitions
+            push!(disc_syms_by_symtype_by_partition[i],
+                [sym for sym in buffer if disc_param_callbacks[sym] == partition])
+        end
+    end
+    disc_idxs = Dict{BasicSymbolic, Tuple{Int, Int, Int}}()
+    for (typei, disc_syms_by_partition) in enumerate(disc_syms_by_symtype_by_partition)
+        symi = 0
+        for (parti, disc_syms) in enumerate(disc_syms_by_partition)
+            for sym in disc_syms
+                symi += 1
+                ttsym = default_toterm(sym)
+                rsym = renamespace(sys, sym)
+                rttsym = renamespace(sys, ttsym)
+                for cursym in (sym, ttsym, rsym, rttsym)
+                    disc_idxs[cursym] = (parti, typei, symi)
+                end
+            end
+        end
+    end
+    callback_to_clocks = Dict{
+        Union{SymbolicContinuousCallback, SymbolicDiscreteCallback}, Set{Int}}()
+    for (i, (event, partition)) in enumerate(zip(events, clock_partitions))
+        clocks = get!(() -> Set{Int}(), callback_to_clocks, event)
+        union!(clocks, partition)
+    end
+    callback_to_clocks = Dict{
+        Union{SymbolicContinuousCallback, SymbolicDiscreteCallback}, Vector{Int}}(k => collect(v)
+    for (k, v) in callback_to_clocks)
+
+    disc_buffer_templates = Vector{BufferTemplate}[]
+    for (symtype, disc_syms_by_partition) in zip(
+        disc_symtypes, disc_syms_by_symtype_by_partition)
+        push!(disc_buffer_templates,
+            [BufferTemplate(symtype, length(buf)) for buf in disc_syms_by_partition])
+    end
 
     function insert_by_type!(buffers::Dict{Any, Set{BasicSymbolic}}, sym)
         sym = unwrap(sym)
         ctype = symtype(sym)
         buf = get!(buffers, ctype, Set{BasicSymbolic}())
         push!(buf, sym)
-    end
-
-    if has_discrete_subsystems(sys) && get_discrete_subsystems(sys) !== nothing
-        syss, inputs, continuous_id, _ = get_discrete_subsystems(sys)
-
-        for (i, (inps, disc_sys)) in enumerate(zip(inputs, syss))
-            i == continuous_id && continue
-            disc_buffers[i] = Dict{Any, Set{BasicSymbolic}}()
-
-            for inp in inps
-                inp = unwrap(inp)
-                ttinp = default_toterm(inp)
-                rinp = renamespace(sys, inp)
-                rttinp = renamespace(sys, ttinp)
-                is_parameter(sys, inp) ||
-                    error("Discrete subsystem $i input $inp is not a parameter")
-
-                disc_clocks[inp] = i
-                disc_clocks[ttinp] = i
-                disc_clocks[rinp] = i
-                disc_clocks[rttinp] = i
-
-                insert_by_type!(disc_buffers[i], inp)
-            end
-
-            for sym in unknowns(disc_sys)
-                sym = unwrap(sym)
-                ttsym = default_toterm(sym)
-                rsym = renamespace(sys, sym)
-                rttsym = renamespace(sys, ttsym)
-                is_parameter(sys, sym) ||
-                    error("Discrete subsystem $i unknown $sym is not a parameter")
-
-                disc_clocks[sym] = i
-                disc_clocks[ttsym] = i
-                disc_clocks[rsym] = i
-                disc_clocks[rttsym] = i
-
-                insert_by_type!(disc_buffers[i], sym)
-            end
-            t = get_iv(sys)
-            for eq in observed(disc_sys)
-                # TODO: Is this a valid check
-                # FIXME: This shouldn't be necessary
-                eq.rhs === -0.0 && continue
-                sym = eq.lhs
-                ttsym = default_toterm(sym)
-                rsym = renamespace(sys, sym)
-                rttsym = renamespace(sys, ttsym)
-                if iscall(sym) && operation(sym) == Shift(t, 1)
-                    sym = only(arguments(sym))
-                end
-                disc_clocks[sym] = i
-                disc_clocks[ttsym] = i
-                disc_clocks[rsym] = i
-                disc_clocks[rttsym] = i
-            end
-        end
-
-        for par in inputs[continuous_id]
-            is_parameter(sys, par) || error("Discrete subsystem input is not a parameter")
-            par = unwrap(par)
-            ttpar = default_toterm(par)
-            rpar = renamespace(sys, par)
-            rttpar = renamespace(sys, ttpar)
-            iscall(par) && operation(par) isa Hold ||
-                error("Continuous subsystem input is not a Hold")
-            if haskey(disc_clocks, par)
-                sym = par
-            else
-                sym = first(arguments(par))
-            end
-            haskey(disc_clocks, sym) ||
-                error("Variable $par not part of a discrete subsystem")
-            disc_clocks[par] = disc_clocks[sym]
-            disc_clocks[ttpar] = disc_clocks[sym]
-            disc_clocks[rpar] = disc_clocks[sym]
-            disc_clocks[rttpar] = disc_clocks[sym]
-            insert_by_type!(disc_buffers[disc_clocks[sym]], par)
-        end
-    end
-
-    affs = vcat(affects(continuous_events(sys)), affects(discrete_events(sys)))
-    user_affect_clock = maximum(values(disc_clocks); init = 0) + 1
-    for affect in affs
-        if affect isa Equation
-            is_parameter(sys, affect.lhs) || continue
-            sym = affect.lhs
-            ttsym = default_toterm(sym)
-            rsym = renamespace(sys, sym)
-            rttsym = renamespace(sys, ttsym)
-
-            disc_clocks[sym] = user_affect_clock
-            disc_clocks[ttsym] = user_affect_clock
-            disc_clocks[rsym] = user_affect_clock
-            disc_clocks[rttsym] = user_affect_clock
-
-            buffer = get!(disc_buffers, user_affect_clock, Dict{Any, Set{BasicSymbolic}}())
-            insert_by_type!(buffer, affect.lhs)
-        else
-            discs = discretes(affect)
-            for disc in discs
-                is_parameter(sys, disc) ||
-                    error("Expected discrete variable $disc in callback to be a parameter")
-                disc = unwrap(disc)
-                ttdisc = default_toterm(disc)
-                rdisc = renamespace(sys, disc)
-                rttdisc = renamespace(sys, ttdisc)
-                disc_clocks[disc] = user_affect_clock
-                disc_clocks[ttdisc] = user_affect_clock
-                disc_clocks[rdisc] = user_affect_clock
-                disc_clocks[rttdisc] = user_affect_clock
-
-                buffer = get!(
-                    disc_buffers, user_affect_clock, Dict{Any, Set{BasicSymbolic}}())
-                insert_by_type!(buffer, disc)
-            end
-        end
     end
 
     if has_parameter_dependencies(sys)
@@ -234,7 +201,7 @@ function IndexCache(sys::AbstractSystem)
     for p in parameters(sys)
         p = unwrap(p)
         ctype = symtype(p)
-        haskey(disc_clocks, p) && continue
+        haskey(disc_idxs, p) && continue
         haskey(dependent_buffers, ctype) && p in dependent_buffers[ctype] && continue
         insert_by_type!(
             if ctype <: Real || ctype <: AbstractArray{<:Real}
@@ -251,32 +218,6 @@ function IndexCache(sys::AbstractSystem)
             end,
             p
         )
-    end
-
-    disc_idxs = Dict{Union{Symbol, BasicSymbolic}, Tuple{Int, Int, Int}}()
-    disc_buffer_sizes = [BufferTemplate[] for _ in 1:length(disc_buffers)]
-    disc_buffer_types = Set()
-    for buffer in values(disc_buffers)
-        union!(disc_buffer_types, keys(buffer))
-    end
-
-    for (clockidx, buffer) in disc_buffers
-        for (i, btype) in enumerate(disc_buffer_types)
-            if !haskey(buffer, btype)
-                push!(disc_buffer_sizes[clockidx], BufferTemplate(btype, 0))
-                continue
-            end
-            push!(disc_buffer_sizes[clockidx], BufferTemplate(btype, length(buffer[btype])))
-            for (j, sym) in enumerate(buffer[btype])
-                disc_idxs[sym] = (clockidx, i, j)
-                disc_idxs[default_toterm(sym)] = (clockidx, i, j)
-            end
-        end
-    end
-    for (sym, clockid) in disc_clocks
-        haskey(disc_idxs, sym) && continue
-        disc_idxs[sym] = (clockid, 0, 0)
-        disc_idxs[default_toterm(sym)] = (clockid, 0, 0)
     end
 
     function get_buffer_sizes_and_idxs(buffers::Dict{Any, Set{BasicSymbolic}})
@@ -332,12 +273,14 @@ function IndexCache(sys::AbstractSystem)
     return IndexCache(
         unk_idxs,
         disc_idxs,
+        clock_tick_times,
+        callback_to_clocks,
         tunable_idxs,
         const_idxs,
         dependent_idxs,
         nonnumeric_idxs,
         observed_syms,
-        disc_buffer_sizes,
+        disc_buffer_templates,
         BufferTemplate(Real, tunable_buffer_size),
         const_buffer_sizes,
         dependent_buffer_sizes,
@@ -384,6 +327,7 @@ function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym)
     return if (idx = check_index_map(ic.tunable_idx, sym)) !== nothing
         ParameterIndex(SciMLStructures.Tunable(), idx, validate_size)
     elseif (idx = check_index_map(ic.discrete_idx, sym)) !== nothing
+        _, idx... = idx
         ParameterIndex(SciMLStructures.Discrete(), idx, validate_size)
     elseif (idx = check_index_map(ic.constant_idx, sym)) !== nothing
         ParameterIndex(SciMLStructures.Constants(), idx, validate_size)
@@ -411,8 +355,8 @@ function SymbolicIndexingInterface.timeseries_parameter_index(ic::IndexCache, sy
     end
     idx = check_index_map(ic.discrete_idx, sym)
     idx === nothing && return nothing
-    clockid, partitionid... = idx
-    return ParameterTimeseriesIndex(clockid, partitionid)
+    clockid, symidx... = idx
+    return ParameterTimeseriesIndex(clockid, symidx)
 end
 
 function check_index_map(idxmap, sym)
