@@ -7,6 +7,9 @@ function _reset_aggregator!(expr, integrator)
     if expr isa Symbol
         error("Error, encountered a symbol. This should not happen.")
     end
+    if expr isa LineNumberNode
+        return
+    end
 
     if (expr.head == :function)
         _reset_aggregator!(expr.args[end], integrator)
@@ -218,7 +221,7 @@ function generate_affect_function(js::JumpSystem, affect, outputidxs)
         csubs = Dict(c => getdefault(c) for c in consts)
         affect = substitute(affect, csubs)
     end
-    compile_affect(affect, js, unknowns(js), parameters(js); outputidxs = outputidxs,
+    compile_affect(affect, nothing, js, unknowns(js), parameters(js); outputidxs = outputidxs,
         expression = Val{true}, checkvars = false)
 end
 

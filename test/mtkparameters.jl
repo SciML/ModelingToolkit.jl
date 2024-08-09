@@ -2,12 +2,12 @@ using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D, MTKParameters
 using SymbolicIndexingInterface
 using SciMLStructures: SciMLStructures, canonicalize, Tunable, Discrete, Constants
-using StaticArrays: SizedVector
+using BlockArrays: BlockedArray, Block
 using OrdinaryDiffEq
 using ForwardDiff
 using JET
 
-@parameters a b c d::Integer e[1:3] f[1:3, 1:3]::Int g::Vector{AbstractFloat} h::String
+@parameters a b c(t) d::Integer e[1:3] f[1:3, 1:3]::Int g::Vector{AbstractFloat} h::String
 @named sys = ODESystem(
     Equation[], t, [], [a, c, d, e, f, g, h], parameter_dependencies = [b => 2a],
     continuous_events = [[a ~ 0] => [c ~ 0]], defaults = Dict(a => 0.0))
@@ -310,30 +310,33 @@ end
 end
 
 # Parameter timeseries
-ps = MTKParameters(([1.0, 1.0],), SizedVector{2}([([0.0, 0.0],), ([0.0, 0.0],)]),
+ps = MTKParameters(([1.0, 1.0],), (BlockedArray(zeros(4), [2, 2]),),
     (), ())
+ps2 = SciMLStructures.replace(Discrete(), ps, ones(4))
+@test typeof(ps2.discrete) == typeof(ps.discrete)
 with_updated_parameter_timeseries_values(
     sys, ps, 1 => ModelingToolkit.NestedGetIndex(([5.0, 10.0],)))
-@test ps.discrete[1][1] == [5.0, 10.0]
+@test ps.discrete[1][Block(1)] == [5.0, 10.0]
 with_updated_parameter_timeseries_values(
     sys, ps, 1 => ModelingToolkit.NestedGetIndex(([3.0, 30.0],)),
     2 => ModelingToolkit.NestedGetIndex(([4.0, 40.0],)))
-@test ps.discrete[1][1] == [3.0, 30.0]
-@test ps.discrete[2][1] == [4.0, 40.0]
-@test SciMLBase.get_saveable_values(ps, 1).x == ps.discrete[1]
+@test ps.discrete[1][Block(1)] == [3.0, 30.0]
+@test ps.discrete[1][Block(2)] == [4.0, 40.0]
+@test SciMLBase.get_saveable_values(sys, ps, 1).x == (ps.discrete[1][Block(1)],)
 
 # With multiple types and clocks
 ps = MTKParameters(
-    (), SizedVector{2}([([1.0, 2.0, 3.0], falses(1)), ([4.0, 5.0, 6.0], falses(0))]),
+    (), (BlockedArray([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], [3, 3]),
+        BlockedArray(falses(1), [1, 0])),
     (), ())
-@test SciMLBase.get_saveable_values(ps, 1).x isa Tuple{Vector{Float64}, BitVector}
+@test SciMLBase.get_saveable_values(sys, ps, 1).x isa Tuple{Vector{Float64}, Vector{Bool}}
 tsidx1 = 1
 tsidx2 = 2
-@test length(ps.discrete[tsidx1][1]) == 3
-@test length(ps.discrete[tsidx1][2]) == 1
-@test length(ps.discrete[tsidx2][1]) == 3
-@test length(ps.discrete[tsidx2][2]) == 0
+@test length(ps.discrete[1][Block(tsidx1)]) == 3
+@test length(ps.discrete[2][Block(tsidx1)]) == 1
+@test length(ps.discrete[1][Block(tsidx2)]) == 3
+@test length(ps.discrete[2][Block(tsidx2)]) == 0
 with_updated_parameter_timeseries_values(
     sys, ps, tsidx1 => ModelingToolkit.NestedGetIndex(([10.0, 11.0, 12.0], [false])))
-@test ps.discrete[tsidx1][1] == [10.0, 11.0, 12.0]
-@test ps.discrete[tsidx1][2][] == false
+@test ps.discrete[1][Block(tsidx1)] == [10.0, 11.0, 12.0]
+@test ps.discrete[2][Block(tsidx1)][] == false

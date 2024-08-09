@@ -387,6 +387,26 @@ function condition_header(sys::AbstractSystem, integrator = gensym(:MTKIntegrato
     end
 end
 
+function callback_save_header(sys::AbstractSystem, cb)
+    if !(has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing)
+        return (identity, identity)
+    end
+    save_idxs = get(ic.callback_to_clocks, cb, Int[])
+    isempty(save_idxs) && return (identity, identity)
+
+    wrapper = function(expr)
+        return Func(expr.args, [], LiteralExpr(quote
+            $(expr.body)
+            save_idxs = $(save_idxs)
+            for idx in save_idxs
+                $(SciMLBase.save_discretes!)($(expr.args[1]), idx)
+            end
+        end))
+    end
+
+    return wrapper, wrapper
+end
+
 """
     compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps; expression, kwargs...)
 
@@ -421,7 +441,7 @@ function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
 end
 
 function compile_affect(cb::SymbolicContinuousCallback, args...; kwargs...)
-    compile_affect(affects(cb), args...; kwargs...)
+    compile_affect(affects(cb), cb, args...; kwargs...)
 end
 
 """
@@ -441,7 +461,7 @@ Notes
     well-formed.
   - `kwargs` are passed through to `Symbolics.build_function`.
 """
-function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothing,
+function compile_affect(eqs::Vector{Equation}, cb, sys, dvs, ps; outputidxs = nothing,
         expression = Val{true}, checkvars = true, eval_expression = false,
         eval_module = @__MODULE__,
         postprocess_affect_expr! = nothing, kwargs...)
@@ -497,7 +517,8 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
         integ = gensym(:MTKIntegrator)
         pre = get_preprocess_constants(rhss)
         rf_oop, rf_ip = build_function(rhss, u, p..., t; expression = Val{true},
-            wrap_code = add_integrator_header(sys, integ, outvar) .∘
+            wrap_code = callback_save_header(sys, cb) .∘
+                        add_integrator_header(sys, integ, outvar) .∘
                         wrap_array_vars(sys, rhss; dvs, ps = _ps) .∘
                         wrap_parameter_dependencies(sys, false),
             outputidxs = update_inds,
@@ -606,14 +627,14 @@ Compile a single continuous callback affect function(s).
 function compile_affect_fn(cb, sys::AbstractODESystem, dvs, ps, kwargs)
     eq_aff = affects(cb)
     eq_neg_aff = affect_negs(cb)
-    affect = compile_affect(eq_aff, sys, dvs, ps; expression = Val{false}, kwargs...)
+    affect = compile_affect(eq_aff, cb, sys, dvs, ps; expression = Val{false}, kwargs...)
     if eq_neg_aff === eq_aff
         affect_neg = affect
     elseif isnothing(eq_neg_aff)
         affect_neg = nothing
     else
         affect_neg = compile_affect(
-            eq_neg_aff, sys, dvs, ps; expression = Val{false}, kwargs...)
+            eq_neg_aff, cb, sys, dvs, ps; expression = Val{false}, kwargs...)
     end
     (affect = affect, affect_neg = affect_neg)
 end
@@ -657,7 +678,7 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = unknow
     end
 end
 
-function compile_user_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
+function compile_user_affect(affect::FunctionalAffect, cb, sys, dvs, ps; kwargs...)
     dvs_ind = Dict(reverse(en) for en in enumerate(dvs))
     v_inds = map(sym -> dvs_ind[sym], unknowns(affect))
 
@@ -679,21 +700,29 @@ function compile_user_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
     p = filter(x -> !isnothing(x[2]), collect(zip(parameters_syms(affect), p_inds))) |>
         NamedTuple
 
-    let u = u, p = p, user_affect = func(affect), ctx = context(affect)
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+        save_idxs = get(ic.callback_to_clocks, cb, Int[])
+    else
+        save_idxs = Int[]
+    end
+    let u = u, p = p, user_affect = func(affect), ctx = context(affect), save_idxs = save_idxs
         function (integ)
             user_affect(integ, u, p, ctx)
+            for idx in save_idxs
+                SciMLBase.save_discretes!(integ, idx)
+            end
         end
     end
 end
 
-function compile_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
-    compile_user_affect(affect, sys, dvs, ps; kwargs...)
+function compile_affect(affect::FunctionalAffect, cb, sys, dvs, ps; kwargs...)
+    compile_user_affect(affect, cb, sys, dvs, ps; kwargs...)
 end
 
 function generate_timed_callback(cb, sys, dvs, ps; postprocess_affect_expr! = nothing,
         kwargs...)
     cond = condition(cb)
-    as = compile_affect(affects(cb), sys, dvs, ps; expression = Val{false},
+    as = compile_affect(affects(cb), cb, sys, dvs, ps; expression = Val{false},
         postprocess_affect_expr!, kwargs...)
     if cond isa AbstractVector
         # Preset Time
@@ -711,7 +740,7 @@ function generate_discrete_callback(cb, sys, dvs, ps; postprocess_affect_expr! =
             kwargs...)
     else
         c = compile_condition(cb, sys, dvs, ps; expression = Val{false}, kwargs...)
-        as = compile_affect(affects(cb), sys, dvs, ps; expression = Val{false},
+        as = compile_affect(affects(cb), cb, sys, dvs, ps; expression = Val{false},
             postprocess_affect_expr!, kwargs...)
         return DiscreteCallback(c, as)
     end
