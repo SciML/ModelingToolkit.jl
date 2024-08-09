@@ -305,7 +305,7 @@ let
     @variables A(t) B(t) C(t)
     @parameters k
     vrj = VariableRateJump(k * (sin(t) + 1), [A ~ A + 1, C ~ C + 2])
-    js = complete(JumpSystem([vrj], t, [A,C], [k]; name = :js, observed = [B ~ C*A]))
+    js = complete(JumpSystem([vrj], t, [A, C], [k]; name = :js, observed = [B ~ C * A]))
     oprob = ODEProblem(js, [A => 0, C => 0], (0.0, 10.0), [k => 1.0])
     jprob = JumpProblem(js, oprob, Direct(); rng)
     sol = solve(jprob, Tsit5())
@@ -329,7 +329,7 @@ let
         nothing
     end
     vrj2 = VariableRateJump(vrjrate, vrjaffect!)
-    oprob2 = ODEProblem((du,u,p,t) -> (du .= 0; nothing), [0, 0], (0.0, 10.0), (1.0,))
+    oprob2 = ODEProblem((du, u, p, t) -> (du .= 0; nothing), [0, 0], (0.0, 10.0), (1.0,))
     jprob2 = JumpProblem(oprob2, Direct(), vrj2; rng)
     cmean2 = zeros(11)
     for n in 1:N
@@ -338,5 +338,5 @@ let
     end
     cmean2 ./= N
 
-    @test all( abs.(cmean .- cmean2) .<= .05 .* cmean)
+    @test all(abs.(cmean .- cmean2) .<= 0.05 .* cmean)
 end

@@ -465,7 +465,6 @@ function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothi
     ODEProblem(df, u0, tspan, p; kwargs...)
 end
 
-
 """
 ```julia
 DiffEqBase.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
