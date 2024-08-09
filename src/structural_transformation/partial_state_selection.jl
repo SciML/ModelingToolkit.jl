@@ -216,18 +216,23 @@ function dummy_derivative_graph!(
     col_order = Int[]
     nvars = ndsts(graph)
     eqs = Int[]
+    vars = Int[]
     next_eq_idxs = Int[]
     next_var_idxs = Int[]
     new_eqs = Int[]
     new_vars = Int[]
     eqs_set = BitSet()
-    for vars in var_sccs
+    for vars′ in var_sccs
         empty!(eqs)
-        for var in vars
+        empty!(vars)
+        for var in vars′
             eq = var_eq_matching[var]
             eq isa Int || continue
-            diff_to_eq[eq] === nothing && continue
-            push!(eqs, eq)
+            diff_to_eq[eq] === nothing || push!(eqs, eq)
+            if var_to_diff[var] !== nothing
+                error("Invalid SCC")
+            end
+            (diff_to_var[var] !== nothing && is_present(structure, var)) && push!(vars, var)
         end
         isempty(eqs) && continue
 
@@ -318,6 +323,8 @@ function dummy_derivative_graph!(
             for (i, var) in enumerate(vars)
                 ∫var = diff_to_var[var]
                 ∫var === nothing && continue
+                ∫∫var = diff_to_var[∫var]
+                ∫∫var === nothing && continue
                 if J !== nothing
                     push!(next_var_idxs, i)
                 end
