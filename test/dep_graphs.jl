@@ -16,11 +16,11 @@ j₅ = ConstantRateJump(k1 * I, [R ~ R + 1])
 j₆ = VariableRateJump(k1 * k2 / (1 + t) * S, [S ~ S - 1, R ~ R + 1])
 eqs = [j₁, j₂, j₃, j₄, j₅, j₆]
 @named js = JumpSystem(eqs, t, [S, I, R], [k1, k2])
-S = value(S);
-I = value(I);
-R = value(R);
-k1 = value(k1);
-k2 = value(k2);
+S = value(S)
+I = value(I)
+R = value(R)
+k1 = value(k1)
+k2 = value(k2)
 # eq to vars they depend on
 eq_sdeps = [Variable[], [S], [S, I], [S, R], [I], [S]]
 eq_sidepsf = [Int[], [1], [1, 2], [1, 3], [2], [1]]
@@ -84,11 +84,11 @@ let
     j₆ = VariableRateJump(k1 * k2 / (1 + t) * S, [S ~ S - 1, R ~ R + 1])
     eqs = [j₁, j₂, j₃, j₄, j₅, j₆]
     @named js = JumpSystem(eqs, t, [S, I, R], [k1, k2])
-    S = value(S);
-    I = value(I);
-    R = value(R);
-    k1 = value(k1);
-    k2 = value(k2);
+    S = value(S)
+    I = value(I)
+    R = value(R)
+    k1 = value(k1)
+    k2 = value(k2)
     # eq to vars they depend on
     eq_sdeps = [Variable[], [S], [S, I], [S, R], [I]]
     eq_sidepsf = [Int[], [1], [1, 2], [1, 3], [2]]

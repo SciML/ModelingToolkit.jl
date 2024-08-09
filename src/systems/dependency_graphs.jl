@@ -143,7 +143,6 @@ variable_dependencies(jumpsys)
 """
 function variable_dependencies(sys::AbstractSystem; variables = unknowns(sys),
         variablestoids = nothing, eqs = equations(sys))
-
     vtois = isnothing(variablestoids) ? Dict(v => i for (i, v) in enumerate(variables)) :
             variablestoids
 
