@@ -34,9 +34,7 @@ This function takes a vector of variables that are to be considered inputs, i.e.
 
 ### Example:
 
-
 The following example implements a simple first-order system with an input `u` and state `x`. The function `f` is generated using `generate_control_function`, and the function `f` is then tested with random input and state values.
-
 
 ```@example inputoutput
 import ModelingToolkit: t_nounits as t, D_nounits as D
@@ -50,9 +48,7 @@ f, x_sym, ps = ModelingToolkit.generate_control_function(sys, [u], simplify = tr
 nothing # hide
 ```
 
-
 We can inspect the state realization chosen by MTK
-
 
 ```@example inputoutput
 x_sym
@@ -69,7 +65,6 @@ nothing  # hide
 ```
 
 Now we can test the generated function `f` with random input and state values
-
 
 ```@example inputoutput
 p = [1]
