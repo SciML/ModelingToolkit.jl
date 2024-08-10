@@ -194,6 +194,10 @@ function JumpSystem(eqs, iv, unknowns, ps;
         metadata, gui_metadata, checks = checks)
 end
 
+has_massactionjumps(js::JumpSystem) = !isempty(equations(js).x[1])
+has_constantratejumps(js::JumpSystem) = !isempty(equations(js).x[2])
+has_variableratejumps(js::JumpSystem) = !isempty(equations(js).x[3])
+
 function generate_rate_function(js::JumpSystem, rate)
     consts = collect_constants(rate)
     if !isempty(consts) # The SymbolicUtils._build_function method of this case doesn't support postprocess_fbody
