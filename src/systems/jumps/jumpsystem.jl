@@ -194,6 +194,10 @@ function JumpSystem(eqs, iv, unknowns, ps;
         metadata, gui_metadata, checks = checks)
 end
 
+has_massactionjumps(js::JumpSystem) = !isempty(equations(js).x[1])
+has_constantratejumps(js::JumpSystem) = !isempty(equations(js).x[2])
+has_variableratejumps(js::JumpSystem) = !isempty(equations(js).x[3])
+
 function generate_rate_function(js::JumpSystem, rate)
     consts = collect_constants(rate)
     if !isempty(consts) # The SymbolicUtils._build_function method of this case doesn't support postprocess_fbody
@@ -311,7 +315,7 @@ end
 ```julia
 DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan,
                            parammap = DiffEqBase.NullParameters;
-                           use_union = false,
+                           use_union = true,
                            kwargs...)
 ```
 
@@ -331,7 +335,6 @@ dprob = DiscreteProblem(complete(js), u₀map, tspan, parammap)
 """
 function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing},
         parammap = DiffEqBase.NullParameters();
-        checkbounds = false,
         use_union = true,
         eval_expression = false,
         eval_module = @__MODULE__,
@@ -385,7 +388,7 @@ struct DiscreteProblemExpr{iip} end
 
 function DiscreteProblemExpr{iip}(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing},
         parammap = DiffEqBase.NullParameters();
-        use_union = false,
+        use_union = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblemExpr`")
@@ -410,6 +413,60 @@ function DiscreteProblemExpr{iip}(sys::JumpSystem, u0map, tspan::Union{Tuple, No
         df = DiscreteFunction{true, true}(f; sys = sys)
         DiscreteProblem(df, u0, tspan, p)
     end
+end
+
+"""
+```julia
+DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan,
+                           parammap = DiffEqBase.NullParameters;
+                           use_union = true,
+                           kwargs...)
+```
+
+Generates a blank ODEProblem for a pure jump JumpSystem to utilize as its `prob.prob`. This
+is used in the case where there are no ODEs and no SDEs associated with the system but there
+are jumps with an explicit time dependency (i.e. `VariableRateJump`s). If no jumps have an
+explicit time dependence, i.e. all are `ConstantRateJump`s or `MassActionJump`s then
+`DiscreteProblem` should be preferred for performance reasons.
+
+Continuing the example from the [`JumpSystem`](@ref) definition:
+
+```julia
+using DiffEqBase, JumpProcesses
+u₀map = [S => 999, I => 1, R => 0]
+parammap = [β => 0.1 / 1000, γ => 0.01]
+tspan = (0.0, 250.0)
+oprob = ODEProblem(complete(js), u₀map, tspan, parammap)
+```
+"""
+function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing},
+        parammap = DiffEqBase.NullParameters();
+        use_union = true,
+        eval_expression = false,
+        eval_module = @__MODULE__,
+        kwargs...)
+    if !iscomplete(sys)
+        error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
+    end
+    dvs = unknowns(sys)
+    ps = parameters(sys)
+
+    defs = defaults(sys)
+    defs = mergedefaults(defs, parammap, ps)
+    defs = mergedefaults(defs, u0map, dvs)
+
+    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        p = MTKParameters(sys, parammap, u0map; eval_expression, eval_module)
+    else
+        p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    end
+
+    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
+
+    f = (du, u, p, t) -> (du .= 0; nothing)
+    df = ODEFunction(f; sys, observed = observedfun)
+    ODEProblem(df, u0, tspan, p; kwargs...)
 end
 
 """
@@ -449,10 +506,12 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob,
         error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")
     jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, majs)
 
+    # dep graphs are only for constant rate jumps
+    nonvrjs = ArrayPartition(eqs.x[1], eqs.x[2])
     if needs_vartojumps_map(aggregator) || needs_depgraph(aggregator) ||
        (aggregator isa JumpProcesses.NullAggregator)
-        jdeps = asgraph(js)
-        vdeps = variable_dependencies(js)
+        jdeps = asgraph(js; eqs = nonvrjs)
+        vdeps = variable_dependencies(js; eqs = nonvrjs)
         vtoj = jdeps.badjlist
         jtov = vdeps.badjlist
         jtoj = needs_depgraph(aggregator) ? eqeq_dependencies(jdeps, vdeps).fadjlist :
