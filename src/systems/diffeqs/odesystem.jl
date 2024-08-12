@@ -501,7 +501,8 @@ function build_explicit_observed_function(sys, ts;
         wrap_array_vars(sys, ts; ps = _ps, dvs = nothing, inputs) .∘
         wrap_parameter_dependencies(sys, isscalar)
     else
-        wrap_array_vars(sys, ts; ps = _ps, inputs) .∘ wrap_parameter_dependencies(sys, isscalar)
+        wrap_array_vars(sys, ts; ps = _ps, inputs) .∘
+        wrap_parameter_dependencies(sys, isscalar)
     end
     # Need to keep old method of building the function since it uses `output_type`,
     # which can't be provided to `build_function`
