@@ -135,7 +135,7 @@ end
     prob = ODEProblem(sys)
     v1 = sys.sys2.p2
     v2 = 2 * v1
-    @test is_parameter(prob, v1)
+    @test is_observed(prob, v1)
     @test is_observed(prob, v2)
     get_v1 = getu(prob, v1)
     get_v2 = getu(prob, v2)
