@@ -104,10 +104,10 @@ struct SDESystem <: AbstractODESystem
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
     """
-    A mapping from dependent parameters to expressions describing how they are calculated from
-    other parameters.
+    Topologically sorted parameter dependency equations, where all symbols are parameters and
+    the LHS is a single parameter.
     """
-    parameter_dependencies::Union{Nothing, Dict}
+    parameter_dependencies::Vector{Equation}
     """
     Metadata for the system, to be used by downstream packages.
     """
@@ -179,7 +179,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
         checks = true,
         continuous_events = nothing,
         discrete_events = nothing,
-        parameter_dependencies = nothing,
+        parameter_dependencies = Equation[],
         metadata = nothing,
         gui_metadata = nothing,
         complete = false,
@@ -272,7 +272,7 @@ function __get_num_diag_noise(mat)
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = unknowns(sys),
-        ps = full_parameters(sys); isdde = false, kwargs...)
+        ps = parameters(sys); isdde = false, kwargs...)
     eqs = get_noiseeqs(sys)
     if isdde
         eqs = delay_to_function(sys, eqs)

@@ -91,10 +91,10 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
     """
-    A mapping from dependent parameters to expressions describing how they are calculated from
-    other parameters.
+    Topologically sorted parameter dependency equations, where all symbols are parameters and
+    the LHS is a single parameter.
     """
-    parameter_dependencies::Union{Nothing, Dict}
+    parameter_dependencies::Vector{Equation}
     """
     Metadata for the system, to be used by downstream packages.
     """
@@ -147,7 +147,7 @@ function JumpSystem(eqs, iv, unknowns, ps;
         checks = true,
         continuous_events = nothing,
         discrete_events = nothing,
-        parameter_dependencies = nothing,
+        parameter_dependencies = Equation[],
         metadata = nothing,
         gui_metadata = nothing,
         kwargs...)
@@ -204,10 +204,11 @@ function generate_rate_function(js::JumpSystem, rate)
         csubs = Dict(c => getdefault(c) for c in consts)
         rate = substitute(rate, csubs)
     end
-    p = reorder_parameters(js, full_parameters(js))
+    p = reorder_parameters(js, parameters(js))
     rf = build_function(rate, unknowns(js), p...,
         get_iv(js),
-        wrap_code = wrap_array_vars(js, rate; dvs = unknowns(js), ps = parameters(js)),
+        wrap_code = wrap_array_vars(js, rate; dvs = unknowns(js), ps = parameters(js)) .∘
+                    wrap_parameter_dependencies(js, !(rate isa AbstractArray)),
         expression = Val{true})
 end
 
@@ -217,7 +218,7 @@ function generate_affect_function(js::JumpSystem, affect, outputidxs)
         csubs = Dict(c => getdefault(c) for c in consts)
         affect = substitute(affect, csubs)
     end
-    compile_affect(affect, js, unknowns(js), full_parameters(js); outputidxs = outputidxs,
+    compile_affect(affect, js, unknowns(js), parameters(js); outputidxs = outputidxs,
         expression = Val{true}, checkvars = false)
 end
 
