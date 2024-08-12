@@ -221,7 +221,8 @@ function generate_affect_function(js::JumpSystem, affect, outputidxs)
         csubs = Dict(c => getdefault(c) for c in consts)
         affect = substitute(affect, csubs)
     end
-    compile_affect(affect, nothing, js, unknowns(js), parameters(js); outputidxs = outputidxs,
+    compile_affect(
+        affect, nothing, js, unknowns(js), parameters(js); outputidxs = outputidxs,
         expression = Val{true}, checkvars = false)
 end
 

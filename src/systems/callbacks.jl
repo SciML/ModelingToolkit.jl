@@ -394,14 +394,15 @@ function callback_save_header(sys::AbstractSystem, cb)
     save_idxs = get(ic.callback_to_clocks, cb, Int[])
     isempty(save_idxs) && return (identity, identity)
 
-    wrapper = function(expr)
-        return Func(expr.args, [], LiteralExpr(quote
-            $(expr.body)
-            save_idxs = $(save_idxs)
-            for idx in save_idxs
-                $(SciMLBase.save_discretes!)($(expr.args[1]), idx)
-            end
-        end))
+    wrapper = function (expr)
+        return Func(expr.args, [],
+            LiteralExpr(quote
+                $(expr.body)
+                save_idxs = $(save_idxs)
+                for idx in save_idxs
+                    $(SciMLBase.save_discretes!)($(expr.args[1]), idx)
+                end
+            end))
     end
 
     return wrapper, wrapper
@@ -705,7 +706,9 @@ function compile_user_affect(affect::FunctionalAffect, cb, sys, dvs, ps; kwargs.
     else
         save_idxs = Int[]
     end
-    let u = u, p = p, user_affect = func(affect), ctx = context(affect), save_idxs = save_idxs
+    let u = u, p = p, user_affect = func(affect), ctx = context(affect),
+        save_idxs = save_idxs
+
         function (integ)
             user_affect(integ, u, p, ctx)
             for idx in save_idxs

@@ -876,12 +876,13 @@ end
     cb2 = [x ~ 0.5] => (save_affect!, [], [b], [b], nothing)
     cb3 = 1.0 => [c ~ t]
 
-    @mtkbuild sys = ODESystem(D(x) ~ cos(x), t, [x], [a, b, c]; continuous_events = [cb1, cb2], discrete_events = [cb3])
+    @mtkbuild sys = ODESystem(D(x) ~ cos(t), t, [x], [a, b, c];
+        continuous_events = [cb1, cb2], discrete_events = [cb3])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2pi), [a => 1.0, b => 2.0, c => 0.0])
     @test sort(canonicalize(Discrete(), prob.p)[1]) == [0.0, 1.0, 2.0]
     sol = solve(prob, Tsit5())
 
     @test sol[a] == [-1.0]
     @test sol[b] == [5.0, 5.0]
-    @test sol[c] == [1.0, 2.0, 3.0]
+    @test sol[c] == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
 end
