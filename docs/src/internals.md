@@ -35,3 +35,12 @@ The call chain typically looks like this, with the function names in the case of
  3. Write actual executable code ([`generate_function`](@ref) or [`generate_custom_function`](@ref))
 
 Apart from [`generate_function`](@ref), which generates the dynamics function, `ODEFunction` also builds functions for observed equations (`build_explicit_observed_function`) and Jacobians (`generate_jacobian`) etc. These are all stored in the `ODEFunction`.
+
+## Creating an `MTKParameters` object
+
+It may be useful to create a parameter object without creating the problem. For this
+purpose, the `MTKParameters` constructor is exposed as public API.
+
+```@docs
+MTKParameters
+```
