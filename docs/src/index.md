@@ -137,7 +137,7 @@ Below is an incomplete list of extension libraries one may want to be aware of:
       + Transient solution of the CME
       + Dynamic state spaces
       + Accepts reaction systems defined using Catalyst.jl DSL.
-  - [FiniteStateProjection.jl](https://github.com/kaandocal/FiniteStateProjection.jl): High-performance simulation of
+  - [FiniteStateProjection.jl](https://github.com/SciML/FiniteStateProjection.jl): High-performance simulation of
     chemical master equations (CME) via finite state projections
     
       + Accepts reaction systems defined using Catalyst.jl DSL.
