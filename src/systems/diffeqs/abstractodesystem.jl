@@ -778,6 +778,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         build_initializeprob = true,
         initialization_eqs = [],
         fully_determined = false,
+        check_units = true,
         kwargs...)
     eqs = equations(sys)
     dvs = unknowns(sys)
@@ -816,7 +817,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         end
         initializeprob = ModelingToolkit.InitializationProblem(
             sys, t, u0map, parammap; guesses, warn_initialize_determined,
-            initialization_eqs, eval_expression, eval_module, fully_determined)
+            initialization_eqs, eval_expression, eval_module, fully_determined, check_units)
         initializeprobmap = getu(initializeprob, unknowns(sys))
 
         zerovars = Dict(setdiff(unknowns(sys), keys(defaults(sys))) .=> 0.0)
@@ -1426,18 +1427,19 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         warn_initialize_determined = true,
         initialization_eqs = [],
         fully_determined = false,
+        check_units = true,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
     end
     if isempty(u0map) && get_initializesystem(sys) !== nothing
-        isys = get_initializesystem(sys; initialization_eqs)
+        isys = get_initializesystem(sys; initialization_eqs, check_units)
     elseif isempty(u0map) && get_initializesystem(sys) === nothing
         isys = structural_simplify(
-            generate_initializesystem(sys; initialization_eqs); fully_determined)
+            generate_initializesystem(sys; initialization_eqs, check_units); fully_determined)
     else
         isys = structural_simplify(
-            generate_initializesystem(sys; u0map, initialization_eqs); fully_determined)
+            generate_initializesystem(sys; u0map, initialization_eqs, check_units); fully_determined)
     end
 
     uninit = setdiff(unknowns(sys), [unknowns(isys); getfield.(observed(isys), :lhs)])

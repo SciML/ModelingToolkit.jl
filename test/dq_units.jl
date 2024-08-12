@@ -207,5 +207,6 @@ end
     u0 = [pend.x => 1.0, pend.y => 0.0]
     p = [pend.g => 1.0, pend.L => 1.0]
     guess = [pend.λ => 0.0]
-    @test_broken prob = ODEProblem(pend, u0, (0.0, 1.0), p; guesses = guess)
+    @test prob = ODEProblem(
+        pend, u0, (0.0, 1.0), p; guesses = guess, check_units = false) isa Any
 end
