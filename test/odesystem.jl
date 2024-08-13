@@ -1170,14 +1170,14 @@ end
 @test getname(unknowns(sys, x)) == :sys₊x
 @test size(unknowns(sys, x)) == size(x)
 
-# Issue#2667
+# Issue#2667 and Issue#2953
 @testset "ForwardDiff through ODEProblem constructor" begin
     @parameters P
     @variables x(t)
     sys = structural_simplify(ODESystem([D(x) ~ P], t, [x], [P]; name = :sys))
 
     function x_at_1(P)
-        prob = ODEProblem(sys, [x => 0.0], (0.0, 1.0), [sys.P => P])
+        prob = ODEProblem(sys, [x => P], (0.0, 1.0), [sys.P => P])
         return solve(prob, Tsit5())(1.0)
     end
 
