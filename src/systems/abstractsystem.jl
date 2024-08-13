@@ -1062,6 +1062,13 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
         end
     end
 
+    if has_iv(sys)
+        iv = get_iv(sys)
+        if getname(iv) == name
+            return iv
+        end
+    end
+
     throw(ArgumentError("System $(nameof(sys)): variable $name does not exist"))
 end
 
