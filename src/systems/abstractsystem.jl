@@ -1004,6 +1004,7 @@ function Base.propertynames(sys::AbstractSystem; private = false)
         has_observed(sys) && for s in get_observed(sys)
             push!(names, getname(s.lhs))
         end
+        has_iv(sys) && push!(names, getname(get_iv(sys)))
         return names
     end
 end
