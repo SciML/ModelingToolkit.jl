@@ -569,7 +569,7 @@ function convert_system(::Type{<:ODESystem}, sys, t; name = nameof(sys))
                 continue
             end
             ns = maketerm(typeof(s), operation(s), Any[t],
-                SymbolicUtils.symtype(s), SymbolicUtils.metadata(s))
+                SymbolicUtils.metadata(s))
             newsts[i] = ns
             varmap[s] = ns
         else
