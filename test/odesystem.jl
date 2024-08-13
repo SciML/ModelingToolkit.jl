@@ -1264,3 +1264,10 @@ end
     fn2, = ModelingToolkit.generate_function(sys2; expression = Val{false})
     @test_nowarn fn2(ones(4), 2ones(6), 4.0)
 end
+
+@testset "Independent variable as system property" begin
+    @variables x(t)
+    @named sys = ODESystem([x ~ t], t)
+    @named sys = compose(sys, sys) # nest into a hierarchical system
+    @test t === sys.t === sys.sys.t
+end
