@@ -20,7 +20,7 @@ using SparseArrays
 function quick_cancel_expr(expr)
     Rewriters.Postwalk(quick_cancel,
         similarterm = (x, f, args; kws...) -> maketerm(typeof(x), f, args,
-            SymbolicUtils.symtype(x), SymbolicUtils.metadata(x),
+            SymbolicUtils.metadata(x),
             kws...))(expr)
 end
 

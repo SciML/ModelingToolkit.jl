@@ -244,7 +244,7 @@ ishistory(x::Symbolic) = getmetadata(x, IsHistory, false)
 hist(x, t) = wrap(hist(unwrap(x), t))
 function hist(x::Symbolic, t)
     setmetadata(
-        toparam(maketerm(typeof(x), operation(x), [unwrap(t)], symtype(x), metadata(x))),
+        toparam(maketerm(typeof(x), operation(x), [unwrap(t)], metadata(x))),
         IsHistory, true)
 end
 

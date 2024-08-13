@@ -1090,7 +1090,7 @@ function _apply_to_variables(f::F, ex) where {F}
     iscall(ex) || return ex
     maketerm(typeof(ex), _apply_to_variables(f, operation(ex)),
         map(Base.Fix1(_apply_to_variables, f), arguments(ex)),
-        symtype(ex), metadata(ex))
+        metadata(ex))
 end
 
 abstract type SymScope end
@@ -1102,7 +1102,7 @@ function LocalScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
             args = arguments(sym)
             a1 = setmetadata(args[1], SymScope, LocalScope())
             maketerm(typeof(sym), operation(sym), [a1, args[2:end]...],
-                symtype(sym), metadata(sym))
+                metadata(sym))
         else
             setmetadata(sym, SymScope, LocalScope())
         end
@@ -1119,7 +1119,7 @@ function ParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
             a1 = setmetadata(args[1], SymScope,
                 ParentScope(getmetadata(value(args[1]), SymScope, LocalScope())))
             maketerm(typeof(sym), operation(sym), [a1, args[2:end]...],
-                symtype(sym), metadata(sym))
+                metadata(sym))
         else
             setmetadata(sym, SymScope,
                 ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
@@ -1138,7 +1138,7 @@ function DelayParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}}, N)
             a1 = setmetadata(args[1], SymScope,
                 DelayParentScope(getmetadata(value(args[1]), SymScope, LocalScope()), N))
             maketerm(typeof(sym), operation(sym), [a1, args[2:end]...],
-                symtype(sym), metadata(sym))
+                metadata(sym))
         else
             setmetadata(sym, SymScope,
                 DelayParentScope(getmetadata(value(sym), SymScope, LocalScope()), N))
@@ -1154,7 +1154,7 @@ function GlobalScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
             args = arguments(sym)
             a1 = setmetadata(args[1], SymScope, GlobalScope())
             maketerm(typeof(sym), operation(sym), [a1, args[2:end]...],
-                symtype(sym), metadata(sym))
+                metadata(sym))
         else
             setmetadata(sym, SymScope, GlobalScope())
         end
@@ -1172,13 +1172,13 @@ function renamespace(sys, x)
         if iscall(x) && operation(x) isa Operator
             return maketerm(typeof(x), operation(x),
                 Any[renamespace(sys, only(arguments(x)))],
-                symtype(x), metadata(x))::T
+                metadata(x))::T
         end
         if iscall(x) && operation(x) === getindex
             args = arguments(x)
             return maketerm(
                 typeof(x), operation(x), vcat(renamespace(sys, args[1]), args[2:end]),
-                symtype(x), metadata(x))::T
+                metadata(x))::T
         end
         let scope = getmetadata(x, SymScope, LocalScope())
             if scope isa LocalScope
@@ -1263,13 +1263,12 @@ function namespace_expr(
             # metadata from the rescoped variable
             rescoped = renamespace(n, O)
             maketerm(typeof(rescoped), operation(rescoped), renamed,
-                symtype(rescoped),
                 metadata(rescoped))
         elseif Symbolics.isarraysymbolic(O)
             # promote_symtype doesn't work for array symbolics
-            maketerm(typeof(O), operation(O), renamed, symtype(O), metadata(O))
+            maketerm(typeof(O), operation(O), renamed, metadata(O))
         else
-            maketerm(typeof(O), operation(O), renamed, symtype(O), metadata(O))
+            maketerm(typeof(O), operation(O), renamed, metadata(O))
         end
     elseif isvariable(O)
         renamespace(n, O)

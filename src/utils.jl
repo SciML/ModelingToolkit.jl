@@ -33,7 +33,7 @@ function detime_dvs(op)
         Sym{Real}(nameof(operation(op)))
     else
         maketerm(typeof(op), operation(op), detime_dvs.(arguments(op)),
-            symtype(op), metadata(op))
+            metadata(op))
     end
 end
 
@@ -41,7 +41,7 @@ function retime_dvs(op, dvs, iv)
     issym(op) && return Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(op))(iv)
     iscall(op) ?
     maketerm(typeof(op), operation(op), retime_dvs.(arguments(op), (dvs,), (iv,)),
-        symtype(op), metadata(op)) :
+        metadata(op)) :
     op
 end
 
@@ -833,7 +833,7 @@ end
 function fold_constants(ex)
     if iscall(ex)
         maketerm(typeof(ex), operation(ex), map(fold_constants, arguments(ex)),
-            symtype(ex), metadata(ex))
+            metadata(ex))
     elseif issym(ex) && isconstant(ex)
         getdefault(ex)
     else

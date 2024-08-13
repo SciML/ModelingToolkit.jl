@@ -238,7 +238,7 @@ function delay_to_function(expr, iv, sts, ps, h)
         return maketerm(typeof(expr),
             operation(expr),
             map(x -> delay_to_function(x, iv, sts, ps, h), arguments(expr)),
-            symtype(expr), metadata(expr))
+            metadata(expr))
     else
         return expr
     end

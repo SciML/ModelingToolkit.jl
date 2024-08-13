@@ -32,5 +32,5 @@ function debug_sub(ex)
     f = operation(ex)
     args = map(debug_sub, arguments(ex))
     f in LOGGED_FUN ? logged_fun(f, args...) :
-    maketerm(typeof(ex), f, args, symtype(t), metadata(ex))
+    maketerm(typeof(ex), f, args, metadata(ex))
 end
