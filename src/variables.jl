@@ -201,16 +201,19 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false
     defaults = canonicalize_varmap(defaults; toterm)
     varmap = merge(defaults, varmap)
     values = Dict()
+
+    T = Union{}
     for var in varlist
         var = unwrap(var)
         val = unwrap(fixpoint_sub(var, varmap; operator = Symbolics.Operator))
         if !isequal(val, var)
             values[var] = val
+            T = promote_type(T, typeof(val))
         end
     end
     missingvars = setdiff(varlist, collect(keys(values)))
     check && (isempty(missingvars) || throw(MissingVariablesError(missingvars)))
-    return [values[unwrap(var)] for var in varlist]
+    return [T(values[unwrap(var)]) for var in varlist]
 end
 
 function varmap_with_toterm(varmap; toterm = Symbolics.diff2term)
