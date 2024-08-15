@@ -174,6 +174,10 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
         check_operator_variables(eqs, Differential)
         check_lhs(eqs, Differential, Set(dvs))
     end
+
+    # substitute constants in
+    eqs = map(subs_constants, eqs)
+
     # substitute x(t) by just x
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
            [eq.rhs for eq in eqs]

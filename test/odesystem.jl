@@ -1264,3 +1264,47 @@ end
     fn2, = ModelingToolkit.generate_function(sys2; expression = Val{false})
     @test_nowarn fn2(ones(4), 2ones(6), 4.0)
 end
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/2969
+@testset "Constant substitution" begin
+    make_model = function (c_a, c_b; name = nothing)
+        @mtkmodel ModelA begin
+            @constants begin
+                a = c_a
+            end
+            @variables begin
+                x(t)
+            end
+            @equations begin
+                D(x) ~ -a * x
+            end
+        end
+
+        @mtkmodel ModelB begin
+            @constants begin
+                b = c_b
+            end
+            @variables begin
+                y(t)
+            end
+            @components begin
+                modela = ModelA()
+            end
+            @equations begin
+                D(y) ~ -b * y
+            end
+        end
+        return ModelB(; name = name)
+    end
+    c_a, c_b = 1.234, 5.578
+    @named sys = make_model(c_a, c_b)
+    sys = complete(sys)
+
+    u0 = [sys.y => -1.0, sys.modela.x => -1.0]
+    p = defaults(sys)
+    prob = ODEProblem(sys, u0, (0.0, 1.0), p)
+
+    # evaluate
+    u0_v, p_v, _ = ModelingToolkit.get_u0_p(sys, u0, p)
+    @test prob.f(u0_v, p_v, 0.0) == [c_b, c_a]
+end
