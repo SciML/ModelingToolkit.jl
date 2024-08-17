@@ -275,4 +275,6 @@ export debug_system
 export Sample, Hold, Shift, ShiftIndex, sampletime, SampleTime
 export Clock, SolverStepClock, TimeDomain
 
+export MTKParameters
+
 end # module
