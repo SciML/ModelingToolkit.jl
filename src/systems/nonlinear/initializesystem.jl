@@ -10,6 +10,7 @@ function generate_initializesystem(sys::ODESystem;
         default_dd_value = 0.0,
         algebraic_only = false,
         initialization_eqs = [],
+        check_units = true,
         kwargs...)
     sts, eqs = unknowns(sys), equations(sys)
     idxs_diff = isdiffeq.(eqs)
@@ -102,6 +103,7 @@ function generate_initializesystem(sys::ODESystem;
         pars;
         defaults = merge(ModelingToolkit.defaults(sys), todict(u0), dd_guess),
         parameter_dependencies = parameter_dependencies(sys),
+        checks = check_units,
         name,
         kwargs...)
 
