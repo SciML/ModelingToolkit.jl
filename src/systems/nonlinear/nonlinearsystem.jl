@@ -396,7 +396,7 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         u0, defs = get_u0(sys, u0map, parammap)
         check_eqs_u0(eqs, dvs, u0; kwargs...)
-        p = MTKParameters(sys, parammap, u0map; eval_expression, eval_module)
+        p = MTKParameters(sys, parammap, u0map)
     else
         u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union)
         check_eqs_u0(eqs, dvs, u0; kwargs...)
