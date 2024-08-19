@@ -211,6 +211,9 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false
             T = promote_type(T, typeof(val))
         end
     end
+    if T == Union{} || T == Any || T <: BasicSymbolic
+        T = identity
+    end
     missingvars = setdiff(varlist, collect(keys(values)))
     check && (isempty(missingvars) || throw(MissingVariablesError(missingvars)))
     return [T(values[unwrap(var)]) for var in varlist]
