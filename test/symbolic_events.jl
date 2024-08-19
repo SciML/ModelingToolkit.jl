@@ -1074,6 +1074,26 @@ end
     prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
     sol = solve(prob, Tsit5(); dtmax = 0.01)
     @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
+
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on)) do x
+            x.furnace_on = false
+        end; initialize = ModelingToolkit.MutatingFunctionalAffect(modified = (; temp)) do x 
+            x.temp = 0.2
+        end)
+    furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_on_threshold],
+        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on)) do x, o, c, i
+            x.furnace_on = true
+        end)
+    @named sys = ODESystem(
+        eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
+    ss = structural_simplify(sys)
+    prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
+    @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
+    @test all(sol[temp][sol.t .!= 0.0] .<= 0.79) && all(sol[temp][sol.t .!= 0.0] .>= 0.2)
 end
 
 @testset "MutatingFunctionalAffect errors and warnings" begin
