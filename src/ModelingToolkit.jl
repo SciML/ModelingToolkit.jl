@@ -8,6 +8,8 @@ using PrecompileTools, Reexport
     using Symbolics
 end
 
+1 + 1
+
 import SymbolicUtils
 import SymbolicUtils: iscall, arguments, operation, maketerm, promote_symtype,
                       Symbolic, isadd, ismul, ispow, issym, FnType,
