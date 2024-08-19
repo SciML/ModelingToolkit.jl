@@ -104,28 +104,38 @@ The affect function updates the value at `x` in `modified` to be the result of e
     modified::Vector
     mod_syms::Vector{Symbol}
     ctx::Any
+    skip_checks::Bool
 end
 
 function MutatingFunctionalAffect(f::Function;
         observed::NamedTuple = NamedTuple{()}(()),
         modified::NamedTuple = NamedTuple{()}(()),
-        ctx = nothing)
-    MutatingFunctionalAffect(f, collect(values(observed)), collect(keys(observed)),
-        collect(values(modified)), collect(keys(modified)), ctx)
+        ctx = nothing,
+        skip_checks = false)
+    MutatingFunctionalAffect(f, 
+        collect(values(observed)), collect(keys(observed)),
+        collect(values(modified)), collect(keys(modified)), 
+        ctx, skip_checks)
 end
 function MutatingFunctionalAffect(f::Function, modified::NamedTuple;
-        observed::NamedTuple = NamedTuple{()}(()), ctx = nothing)
-    MutatingFunctionalAffect(f, observed = observed, modified = modified, ctx = ctx)
+        observed::NamedTuple = NamedTuple{()}(()), ctx = nothing, skip_checks=false)
+    MutatingFunctionalAffect(f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
 end
 function MutatingFunctionalAffect(
-        f::Function, modified::NamedTuple, observed::NamedTuple; ctx = nothing)
-    MutatingFunctionalAffect(f, observed = observed, modified = modified, ctx = ctx)
+        f::Function, modified::NamedTuple, observed::NamedTuple; ctx = nothing, skip_checks=false)
+    MutatingFunctionalAffect(f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
 end
 function MutatingFunctionalAffect(
-        f::Function, modified::NamedTuple, observed::NamedTuple, ctx)
-    MutatingFunctionalAffect(f, observed = observed, modified = modified, ctx = ctx)
+        f::Function, modified::NamedTuple, observed::NamedTuple, ctx; skip_checks=false)
+    MutatingFunctionalAffect(f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
 end
 
+function Base.show(io::IO, mfa::MutatingFunctionalAffect) 
+    obs_vals = join(map((ob,nm) -> "$ob => $nm", mfa.obs, mfa.obs_syms), ", ")
+    mod_vals = join(map((md,nm) -> "$md => $nm", mfa.modified, mfa.mod_syms), ", ")
+    affect = mfa.f
+    print(io, "MutatingFunctionalAffect(observed: [$obs_vals], modified: [$mod_vals], affect:$affect)")
+end
 func(f::MutatingFunctionalAffect) = f.f
 context(a::MutatingFunctionalAffect) = a.ctx
 observed(a::MutatingFunctionalAffect) = a.obs
@@ -208,12 +218,19 @@ Affects (i.e. `affect` and `affect_neg`) can be specified as either:
 """
 struct SymbolicContinuousCallback
     eqs::Vector{Equation}
+    initialize::Union{Vector{Equation}, FunctionalAffect, MutatingFunctionalAffect}
+    finalize::Union{Vector{Equation}, FunctionalAffect, MutatingFunctionalAffect}
     affect::Union{Vector{Equation}, FunctionalAffect, MutatingFunctionalAffect}
     affect_neg::Union{Vector{Equation}, FunctionalAffect, MutatingFunctionalAffect, Nothing}
     rootfind::SciMLBase.RootfindOpt
-    function SymbolicContinuousCallback(; eqs::Vector{Equation}, affect = NULL_AFFECT,
-            affect_neg = affect, rootfind = SciMLBase.LeftRootFind)
-        new(eqs, make_affect(affect), make_affect(affect_neg), rootfind)
+    function SymbolicContinuousCallback(; 
+        eqs::Vector{Equation}, 
+        affect = NULL_AFFECT,
+        affect_neg = affect, 
+        rootfind = SciMLBase.LeftRootFind,
+        initialize=NULL_AFFECT,
+        finalize=NULL_AFFECT)
+        new(eqs, initialize, finalize, make_affect(affect), make_affect(affect_neg), rootfind)
     end # Default affect to nothing
 end
 make_affect(affect) = affect
@@ -221,16 +238,79 @@ make_affect(affect::Tuple) = FunctionalAffect(affect...)
 make_affect(affect::NamedTuple) = FunctionalAffect(; affect...)
 
 function Base.:(==)(e1::SymbolicContinuousCallback, e2::SymbolicContinuousCallback)
-    isequal(e1.eqs, e2.eqs) && isequal(e1.affect, e2.affect) &&
+    isequal(e1.eqs, e2.eqs) && isequal(e1.affect, e2.affect) && 
+    isequal(e1.initialize, e2.initialize) && isequal(e1.finalize, e2.finalize) &&
         isequal(e1.affect_neg, e2.affect_neg) && isequal(e1.rootfind, e2.rootfind)
 end
 Base.isempty(cb::SymbolicContinuousCallback) = isempty(cb.eqs)
 function Base.hash(cb::SymbolicContinuousCallback, s::UInt)
+    hash_affect(affect::AbstractVector, s) = foldr(hash, affect, init = s)
+    hash_affect(affect, s) = hash(cb.affect, s)
     s = foldr(hash, cb.eqs, init = s)
-    s = cb.affect isa AbstractVector ? foldr(hash, cb.affect, init = s) : hash(cb.affect, s)
-    s = cb.affect_neg isa AbstractVector ? foldr(hash, cb.affect_neg, init = s) :
-        hash(cb.affect_neg, s)
+    s = hash_affect(cb.affect, s)
+    s = hash_affect(cb.affect_neg, s)
+    s = hash_affect(cb.initialize, s)
+    s = hash_affect(cb.finalize, s)
     hash(cb.rootfind, s)
+end
+
+
+function Base.show(io::IO, cb::SymbolicContinuousCallback)
+    indent = get(io, :indent, 0)
+    iio = IOContext(io, :indent => indent+1)
+    print(io, "SymbolicContinuousCallback(")
+    print(iio, "Equations:")
+    show(iio, equations(cb))
+    print(iio, "; ")
+    if affects(cb) != NULL_AFFECT
+        print(iio, "Affect:")
+        show(iio, affects(cb))
+        print(iio, ", ")
+    end
+    if affect_negs(cb) != NULL_AFFECT
+        print(iio, "Negative-edge affect:")
+        show(iio, affect_negs(cb))
+        print(iio, ", ")
+    end
+    if initialize_affects(cb) != NULL_AFFECT
+        print(iio, "Initialization affect:")
+        show(iio, initialize_affects(cb))
+        print(iio, ", ")
+    end
+    if finalize_affects(cb) != NULL_AFFECT
+        print(iio, "Finalization affect:")
+        show(iio, finalize_affects(cb))
+    end
+    print(iio, ")")
+end
+
+function Base.show(io::IO, mime::MIME"text/plain", cb::SymbolicContinuousCallback)
+    indent = get(io, :indent, 0)
+    iio = IOContext(io, :indent => indent+1)
+    println(io, "SymbolicContinuousCallback:")
+    println(iio, "Equations:")
+    show(iio, mime, equations(cb))
+    print(iio, "\n")
+    if affects(cb) != NULL_AFFECT
+        println(iio, "Affect:")
+        show(iio, mime, affects(cb))
+        print(iio, "\n")
+    end
+    if affect_negs(cb) != NULL_AFFECT
+        println(iio, "Negative-edge affect:")
+        show(iio, mime, affect_negs(cb))
+        print(iio, "\n")
+    end
+    if initialize_affects(cb) != NULL_AFFECT
+        println(iio, "Initialization affect:")
+        show(iio, mime, initialize_affects(cb))
+        print(iio, "\n")
+    end
+    if finalize_affects(cb) != NULL_AFFECT
+        println(iio, "Finalization affect:")
+        show(iio, mime, finalize_affects(cb))
+        print(iio, "\n")
+    end
 end
 
 to_equation_vector(eq::Equation) = [eq]
@@ -246,14 +326,14 @@ end # wrap eq in vector
 SymbolicContinuousCallback(p::Pair) = SymbolicContinuousCallback(p[1], p[2])
 SymbolicContinuousCallback(cb::SymbolicContinuousCallback) = cb # passthrough
 function SymbolicContinuousCallback(eqs::Equation, affect = NULL_AFFECT;
-        affect_neg = affect, rootfind = SciMLBase.LeftRootFind)
+        affect_neg = affect, rootfind = SciMLBase.LeftRootFind, initialize = NULL_AFFECT, finalize = NULL_AFFECT)
     SymbolicContinuousCallback(
-        eqs = [eqs], affect = affect, affect_neg = affect_neg, rootfind = rootfind)
+        eqs = [eqs], affect = affect, affect_neg = affect_neg, rootfind = rootfind, initialize=initialize, finalize=finalize)
 end
 function SymbolicContinuousCallback(eqs::Vector{Equation}, affect = NULL_AFFECT;
-        affect_neg = affect, rootfind = SciMLBase.LeftRootFind)
+        affect_neg = affect, rootfind = SciMLBase.LeftRootFind, initialize = NULL_AFFECT, finalize = NULL_AFFECT)
     SymbolicContinuousCallback(
-        eqs = eqs, affect = affect, affect_neg = affect_neg, rootfind = rootfind)
+        eqs = eqs, affect = affect, affect_neg = affect_neg, rootfind = rootfind, initialize=initialize, finalize=finalize)
 end
 
 SymbolicContinuousCallbacks(cb::SymbolicContinuousCallback) = [cb]
@@ -282,6 +362,16 @@ function affect_negs(cbs::Vector{SymbolicContinuousCallback})
     mapreduce(affect_negs, vcat, cbs, init = Equation[])
 end
 
+initialize_affects(cb::SymbolicContinuousCallback) = cb.initialize
+function initialize_affects(cbs::Vector{SymbolicContinuousCallback})
+    mapreduce(initialize_affects, vcat, cbs, init = Equation[])
+end
+
+finalize_affects(cb::SymbolicContinuousCallback) = cb.initialize
+function finalize_affects(cbs::Vector{SymbolicContinuousCallback})
+    mapreduce(finalize_affects, vcat, cbs, init = Equation[])
+end
+
 namespace_affects(af::Vector, s) = Equation[namespace_affect(a, s) for a in af]
 namespace_affects(af::FunctionalAffect, s) = namespace_affect(af, s)
 namespace_affects(af::MutatingFunctionalAffect, s) = namespace_affect(af, s)
@@ -292,6 +382,8 @@ function namespace_callback(cb::SymbolicContinuousCallback, s)::SymbolicContinuo
         eqs = namespace_equation.(equations(cb), (s,)),
         affect = namespace_affects(affects(cb), s),
         affect_neg = namespace_affects(affect_negs(cb), s),
+        initialize = namespace_affects(initialize_affects(cb), s),
+        finalize = namespace_affects(finalize_affects(cb), s),
         rootfind = cb.rootfind)
 end
 
@@ -681,8 +773,9 @@ function generate_single_rootfinding_callback(
         initfn = SciMLBase.INITIALIZE_DEFAULT
     end
     return ContinuousCallback(
-        cond, affect_function.affect, affect_function.affect_neg,
-        rootfind = cb.rootfind, initialize = initfn)
+        cond, affect_function.affect, affect_function.affect_neg, rootfind = cb.rootfind, 
+        initialize = isnothing(affect_function.initialize) ? SciMLBase.INITIALIZE_DEFAULT : (c, u, t, i) -> affect_function.initialize(i), 
+        finalize = isnothing(affect_function.finalize) ? SciMLBase.FINALIZE_DEFAULT : (c, u, t, i) -> affect_function.finalize(i))
 end
 
 function generate_vector_rootfinding_callback(
@@ -702,13 +795,12 @@ function generate_vector_rootfinding_callback(
     _, rf_ip = generate_custom_function(
         sys, rhss, dvs, ps; expression = Val{false}, kwargs...)
 
-    affect_functions = @NamedTuple{affect::Function, affect_neg::Union{Function, Nothing}}[compile_affect_fn(
-                                                                                               cb,
-                                                                                               sys,
-                                                                                               dvs,
-                                                                                               ps,
-                                                                                               kwargs)
-                                                                                           for cb in cbs]
+    affect_functions = @NamedTuple{
+        affect::Function, 
+        affect_neg::Union{Function, Nothing}, 
+        initialize::Union{Function, Nothing}, 
+        finalize::Union{Function, Nothing}}[
+            compile_affect_fn(cb, sys, dvs, ps, kwargs) for cb in cbs]
     cond = function (out, u, t, integ)
         rf_ip(out, u, parameter_values(integ), t)
     end
@@ -734,25 +826,27 @@ function generate_vector_rootfinding_callback(
             affect_neg(integ)
         end
     end
-    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        save_idxs = mapreduce(
-            cb -> get(ic.callback_to_clocks, cb, Int[]), vcat, cbs; init = Int[])
-        initfn = if isempty(save_idxs)
-            SciMLBase.INITIALIZE_DEFAULT
+    function handle_optional_setup_fn(funs, default)
+        if all(isnothing, funs)
+            return default
         else
-            let save_idxs = save_idxs
-                function (cb, u, t, integrator)
-                    for idx in save_idxs
-                        SciMLBase.save_discretes!(integrator, idx)
+            return let funs = funs
+                function (cb, u, t, integ)
+                    for func in funs
+                        if isnothing(func)
+                            continue
+                        else
+                            func(integ) 
+                        end
                     end
                 end
             end
         end
-    else
-        initfn = SciMLBase.INITIALIZE_DEFAULT
     end
+    initialize = handle_optional_setup_fn(map(fn -> fn.initialize, affect_functions), SciMLBase.INITIALIZE_DEFAULT)
+    finalize = handle_optional_setup_fn(map(fn -> fn.finalize, affect_functions), SciMLBase.FINALIZE_DEFAULT)
     return VectorContinuousCallback(
-        cond, affect, affect_neg, length(eqs), rootfind = rootfind, initialize = initfn)
+        cond, affect, affect_neg, length(eqs), rootfind = rootfind, initialize = initialize, finalize = finalize)
 end
 
 """
@@ -762,15 +856,23 @@ function compile_affect_fn(cb, sys::AbstractODESystem, dvs, ps, kwargs)
     eq_aff = affects(cb)
     eq_neg_aff = affect_negs(cb)
     affect = compile_affect(eq_aff, cb, sys, dvs, ps; expression = Val{false}, kwargs...)
+    function compile_optional_affect(aff)
+        if isnothing(aff)
+            return nothing
+        else
+            affspr = compile_affect(aff, cb, sys, dvs, ps; expression = Val{true}, kwargs...)
+            @show affspr
+            return compile_affect(aff, cb, sys, dvs, ps; expression = Val{false}, kwargs...)
+        end
+    end
     if eq_neg_aff === eq_aff
         affect_neg = affect
-    elseif isnothing(eq_neg_aff)
-        affect_neg = nothing
     else
-        affect_neg = compile_affect(
-            eq_neg_aff, cb, sys, dvs, ps; expression = Val{false}, kwargs...)
+        affect_neg = compile_optional_affect(eq_neg_aff)
     end
-    (affect = affect, affect_neg = affect_neg)
+    initialize = compile_optional_affect(initialize_affects(cb))
+    finalize = compile_optional_affect(finalize_affects(cb))
+    (affect = affect, affect_neg = affect_neg, initialize = initialize, finalize = finalize)
 end
 
 function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = unknowns(sys),
@@ -877,7 +979,7 @@ function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwa
                 push!(syms_dedup, sym)
                 push!(exprs_dedup, exp)
                 push!(seen, sym)
-            else
+            elseif !affect.skip_checks
                 @warn "Expression $(expr) is aliased as $sym, which has already been used. The first definition will be used."
             end
         end
@@ -887,7 +989,7 @@ function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwa
     obs_exprs = observed(affect)
     for oexpr in obs_exprs
         invalid_vars = invalid_variables(sys, oexpr)
-        if length(invalid_vars) > 0
+        if length(invalid_vars) > 0 && !affect.skip_checks
             error("Observed equation $(oexpr) in affect refers to missing variable(s) $(invalid_vars); the variables may not have been added (e.g. if a component is missing).")
         end
     end
@@ -897,11 +999,11 @@ function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwa
 
     mod_exprs = modified(affect)
     for mexpr in mod_exprs
-        if !is_observed(sys, mexpr) && parameter_index(sys, mexpr) === nothing
-            error("Expression $mexpr cannot be assigned to; currently only unknowns and parameters may be updated by an affect.")
+        if !is_observed(sys, mexpr) && parameter_index(sys, mexpr) === nothing && !affect.skip_checks
+            @warn ("Expression $mexpr cannot be assigned to; currently only unknowns and parameters may be updated by an affect.")
         end
         invalid_vars = unassignable_variables(sys, mexpr)
-        if length(invalid_vars) > 0
+        if length(invalid_vars) > 0 && !affect.skip_checks
             error("Modified equation $(mexpr) in affect refers to missing variable(s) $(invalid_vars); the variables may not have been added (e.g. if a component is missing) or they may have been reduced away.")
         end
     end
@@ -911,7 +1013,7 @@ function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwa
         sys, mod_exprs; return_inplace = true)
 
     overlapping_syms = intersect(mod_syms, obs_syms)
-    if length(overlapping_syms) > 0
+    if length(overlapping_syms) > 0 && !affect.skip_checks
         @warn "The symbols $overlapping_syms are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value."
     end
 
