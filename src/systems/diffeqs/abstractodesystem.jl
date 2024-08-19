@@ -842,7 +842,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
                parammap == SciMLBase.NullParameters() && isempty(defs)
             nothing
         else
-            MTKParameters(sys, parammap, trueinit; t0 = t, eval_expression, eval_module)
+            MTKParameters(sys, parammap, trueinit; t0 = t)
         end
     else
         u0, p, defs = get_u0_p(sys,
