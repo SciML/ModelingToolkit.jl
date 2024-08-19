@@ -104,5 +104,6 @@ end
     if GROUP == "All" || GROUP == "Extensions"
         activate_extensions_env()
         @safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl")
+        @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
     end
 end
