@@ -1177,7 +1177,7 @@ end
     sys = structural_simplify(ODESystem([D(x) ~ P], t, [x], [P]; name = :sys))
 
     function x_at_1(P)
-        prob = ODEProblem(sys, [x => P], (0.0, 1.0), [sys.P => P])
+        prob = ODEProblem(sys, [x => P], (0.0, 1.0), [sys.P => P], use_union = false)
         return solve(prob, Tsit5())(1.0)
     end
 
