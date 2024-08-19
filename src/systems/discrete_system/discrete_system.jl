@@ -254,7 +254,7 @@ function process_DiscreteProblem(constructor, sys::DiscreteSystem, u0map, paramm
     end
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         u0, defs = get_u0(sys, trueu0map, parammap)
-        p = MTKParameters(sys, parammap, trueu0map; eval_expression, eval_module)
+        p = MTKParameters(sys, parammap, trueu0map)
     else
         u0, p, defs = get_u0_p(sys, trueu0map, parammap; tofloat, use_union)
     end

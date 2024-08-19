@@ -722,7 +722,7 @@ function get_u0_p(sys,
     if symbolic_u0
         u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false, use_union = false)
     else
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, use_union)
     end
     p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
     p = p === nothing ? SciMLBase.NullParameters() : p
@@ -732,7 +732,7 @@ end
 
 function get_u0(
         sys, u0map, parammap = nothing; symbolic_u0 = false,
-        toterm = default_toterm, t0 = nothing)
+        toterm = default_toterm, t0 = nothing, use_union = true)
     dvs = unknowns(sys)
     ps = parameters(sys)
     defs = defaults(sys)
@@ -757,7 +757,7 @@ function get_u0(
         u0 = varmap_to_vars(
             u0map, dvs; defaults = defs, tofloat = false, use_union = false, toterm)
     else
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, toterm)
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, use_union, toterm)
     end
     t0 !== nothing && delete!(defs, get_iv(sys))
     return u0, defs
@@ -836,13 +836,13 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
 
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         u0, defs = get_u0(sys, trueinit, parammap; symbolic_u0,
-            t0 = constructor <: Union{DDEFunction, SDDEFunction} ? nothing : t)
+            t0 = constructor <: Union{DDEFunction, SDDEFunction} ? nothing : t, use_union)
         check_eqs_u0(eqs, dvs, u0; kwargs...)
         p = if parammap === nothing ||
                parammap == SciMLBase.NullParameters() && isempty(defs)
             nothing
         else
-            MTKParameters(sys, parammap, trueinit; t0 = t, eval_expression, eval_module)
+            MTKParameters(sys, parammap, trueinit; t0 = t)
         end
     else
         u0, p, defs = get_u0_p(sys,

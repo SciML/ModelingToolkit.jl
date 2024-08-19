@@ -290,7 +290,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     if parammap isa MTKParameters
         p = parammap
     elseif has_index_cache(sys) && get_index_cache(sys) !== nothing
-        p = MTKParameters(sys, parammap, u0map; eval_expression, eval_module)
+        p = MTKParameters(sys, parammap, u0map)
     else
         p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
     end
@@ -524,7 +524,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
 
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        p = MTKParameters(sys, parammap, u0map; eval_expression, eval_module)
+        p = MTKParameters(sys, parammap, u0map)
     else
         p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
     end

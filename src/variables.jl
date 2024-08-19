@@ -208,12 +208,11 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false
         val = unwrap(fixpoint_sub(var, varmap; operator = Symbolics.Operator))
         if !isequal(val, var)
             values[var] = val
-            T = promote_type(T, typeof(val))
         end
     end
     missingvars = setdiff(varlist, collect(keys(values)))
     check && (isempty(missingvars) || throw(MissingVariablesError(missingvars)))
-    return [T(values[unwrap(var)]) for var in varlist]
+    return [values[unwrap(var)] for var in varlist]
 end
 
 function varmap_with_toterm(varmap; toterm = Symbolics.diff2term)

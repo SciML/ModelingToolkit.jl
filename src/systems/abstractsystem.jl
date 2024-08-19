@@ -2266,14 +2266,13 @@ function linearization_function(sys::AbstractSystem, inputs,
     end
     x0 = merge(defaults_and_guesses(sys), op)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        sys_ps = MTKParameters(sys, p, x0; eval_expression, eval_module)
+        sys_ps = MTKParameters(sys, p, x0)
     else
         sys_ps = varmap_to_vars(p, parameters(sys); defaults = x0)
     end
     p[get_iv(sys)] = NaN
     if has_index_cache(initsys) && get_index_cache(initsys) !== nothing
-        oldps = MTKParameters(initsys, p, merge(guesses(sys), defaults(sys), op);
-            eval_expression, eval_module)
+        oldps = MTKParameters(initsys, p, merge(guesses(sys), defaults(sys), op))
         initsys_ps = parameters(initsys)
         p_getter = build_explicit_observed_function(
             sys, initsys_ps; eval_expression, eval_module)
