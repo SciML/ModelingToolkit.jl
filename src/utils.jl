@@ -690,7 +690,7 @@ function promote_to_concrete(vs; tofloat = true, use_union = true)
             C = Union{C, E}
         else
             C2 = promote_type(C, E)
-            @assert C2==E || C2==C "`promote_to_concrete` can't make type $E uniform with $C"
+            @assert C2 == E||C2 == C "`promote_to_concrete` can't make type $E uniform with $C"
             C = C2
         end
     end
