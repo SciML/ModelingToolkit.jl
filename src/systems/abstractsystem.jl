@@ -1345,13 +1345,16 @@ function parameter_dependencies(sys::AbstractSystem)
     pdeps = get_parameter_dependencies(sys)
     systems = get_systems(sys)
     # put pdeps after those of subsystems to maintain topological sorted order
-    return vcat(
-        reduce(vcat,
-            [map(eq -> namespace_equation(eq, s), parameter_dependencies(s))
-             for s in systems];
-            init = Equation[]),
-        pdeps
-    )
+    if isempty(systems)
+        return pdeps
+    else
+        return vcat(
+            reduce(vcat,
+                [map(eq -> namespace_equation(eq, s), parameter_dependencies(s))
+                 for s in systems]),
+            pdeps
+        )
+    end
 end
 
 function full_parameters(sys::AbstractSystem)
