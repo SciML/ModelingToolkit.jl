@@ -185,3 +185,28 @@ end
 
 @named sys = ArrayParamTest(a = [1.0, 3.0]u"cm")
 @test ModelingToolkit.getdefault(sys.a) ≈ [0.01, 0.03]
+
+@testset "Initialization checks" begin
+    @mtkmodel PendulumUnits begin
+        @parameters begin
+            g, [unit = u"m/s^2"]
+            L, [unit = u"m"]
+        end
+        @variables begin
+            x(t), [unit = u"m"]
+            y(t), [state_priority = 10, unit = u"m"]
+            λ(t), [unit = u"s^-2"]
+        end
+        @equations begin
+            D(D(x)) ~ λ * x
+            D(D(y)) ~ λ * y - g
+            x^2 + y^2 ~ L^2
+        end
+    end
+    @mtkbuild pend = PendulumUnits()
+    u0 = [pend.x => 1.0, pend.y => 0.0]
+    p = [pend.g => 1.0, pend.L => 1.0]
+    guess = [pend.λ => 0.0]
+    @test prob = ODEProblem(
+        pend, u0, (0.0, 1.0), p; guesses = guess, check_units = false) isa Any
+end

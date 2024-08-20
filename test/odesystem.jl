@@ -1170,14 +1170,14 @@ end
 @test getname(unknowns(sys, x)) == :sys₊x
 @test size(unknowns(sys, x)) == size(x)
 
-# Issue#2667
+# Issue#2667 and Issue#2953
 @testset "ForwardDiff through ODEProblem constructor" begin
     @parameters P
     @variables x(t)
     sys = structural_simplify(ODESystem([D(x) ~ P], t, [x], [P]; name = :sys))
 
     function x_at_1(P)
-        prob = ODEProblem(sys, [x => 0.0], (0.0, 1.0), [sys.P => P])
+        prob = ODEProblem(sys, [x => P], (0.0, 1.0), [sys.P => P], use_union = false)
         return solve(prob, Tsit5())(1.0)
     end
 
@@ -1263,6 +1263,50 @@ end
     sys2, = structural_simplify(sys, ([x...], []); split = false)
     fn2, = ModelingToolkit.generate_function(sys2; expression = Val{false})
     @test_nowarn fn2(ones(4), 2ones(6), 4.0)
+end
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/2969
+@testset "Constant substitution" begin
+    make_model = function (c_a, c_b; name = nothing)
+        @mtkmodel ModelA begin
+            @constants begin
+                a = c_a
+            end
+            @variables begin
+                x(t)
+            end
+            @equations begin
+                D(x) ~ -a * x
+            end
+        end
+
+        @mtkmodel ModelB begin
+            @constants begin
+                b = c_b
+            end
+            @variables begin
+                y(t)
+            end
+            @components begin
+                modela = ModelA()
+            end
+            @equations begin
+                D(y) ~ -b * y
+            end
+        end
+        return ModelB(; name = name)
+    end
+    c_a, c_b = 1.234, 5.578
+    @named sys = make_model(c_a, c_b)
+    sys = complete(sys)
+
+    u0 = [sys.y => -1.0, sys.modela.x => -1.0]
+    p = defaults(sys)
+    prob = ODEProblem(sys, u0, (0.0, 1.0), p)
+
+    # evaluate
+    u0_v, p_v, _ = ModelingToolkit.get_u0_p(sys, u0, p)
+    @test prob.f(u0_v, p_v, 0.0) == [c_b, c_a]
 end
 
 @testset "Independent variable as system property" begin

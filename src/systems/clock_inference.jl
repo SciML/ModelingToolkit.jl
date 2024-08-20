@@ -63,7 +63,7 @@ function substitute_sample_time(ex, dt)
             end
             new_args[i] = ex_arg
         end
-        maketerm(typeof(ex), op, new_args, symtype(ex), metadata(ex))
+        maketerm(typeof(ex), op, new_args, metadata(ex))
     end
 end
 

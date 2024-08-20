@@ -27,7 +27,7 @@ The procedure for variable elimination inside [`structural_simplify`](@ref) is
 
 ## Preparing a system for simulation
 
-Before a simulation or optimization can be performed, the symbolic equations stored in an [`AbstractSystem`](@ref) must be converted into executable code. This step typically occurs after the simplification explained above, and is performed when an instance of a [`SciMLBase.SciMLProblem`](@ref), such as a [`ODEProblem`](@ref), is constructed.
+Before a simulation or optimization can be performed, the symbolic equations stored in an [`AbstractSystem`](@ref) must be converted into executable code. This step typically occurs after the simplification explained above, and is performed when an instance of a [`SciMLBase.AbstractSciMLProblem`](@ref), such as a [`ODEProblem`](@ref), is constructed.
 The call chain typically looks like this, with the function names in the case of an `ODESystem` indicated in parentheses
 
  1. Problem constructor ([`ODEProblem`](@ref))
@@ -35,3 +35,12 @@ The call chain typically looks like this, with the function names in the case of
  3. Write actual executable code ([`generate_function`](@ref) or [`generate_custom_function`](@ref))
 
 Apart from [`generate_function`](@ref), which generates the dynamics function, `ODEFunction` also builds functions for observed equations (`build_explicit_observed_function`) and Jacobians (`generate_jacobian`) etc. These are all stored in the `ODEFunction`.
+
+## Creating an `MTKParameters` object
+
+It may be useful to create a parameter object without creating the problem. For this
+purpose, the `MTKParameters` constructor is exposed as public API.
+
+```@docs
+MTKParameters
+```

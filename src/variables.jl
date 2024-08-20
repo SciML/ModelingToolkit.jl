@@ -201,6 +201,8 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false
     defaults = canonicalize_varmap(defaults; toterm)
     varmap = merge(defaults, varmap)
     values = Dict()
+
+    T = Union{}
     for var in varlist
         var = unwrap(var)
         val = unwrap(fixpoint_sub(var, varmap; operator = Symbolics.Operator))
@@ -244,7 +246,7 @@ ishistory(x::Symbolic) = getmetadata(x, IsHistory, false)
 hist(x, t) = wrap(hist(unwrap(x), t))
 function hist(x::Symbolic, t)
     setmetadata(
-        toparam(maketerm(typeof(x), operation(x), [unwrap(t)], symtype(x), metadata(x))),
+        toparam(maketerm(typeof(x), operation(x), [unwrap(t)], metadata(x))),
         IsHistory, true)
 end
 

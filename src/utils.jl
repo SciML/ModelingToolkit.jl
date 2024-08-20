@@ -33,7 +33,7 @@ function detime_dvs(op)
         Sym{Real}(nameof(operation(op)))
     else
         maketerm(typeof(op), operation(op), detime_dvs.(arguments(op)),
-            symtype(op), metadata(op))
+            metadata(op))
     end
 end
 
@@ -41,7 +41,7 @@ function retime_dvs(op, dvs, iv)
     issym(op) && return Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(op))(iv)
     iscall(op) ?
     maketerm(typeof(op), operation(op), retime_dvs.(arguments(op), (dvs,), (iv,)),
-        symtype(op), metadata(op)) :
+        metadata(op)) :
     op
 end
 
@@ -689,8 +689,9 @@ function promote_to_concrete(vs; tofloat = true, use_union = true)
         if use_union
             C = Union{C, E}
         else
-            @assert C==E "`promote_to_concrete` can't make type $E uniform with $C"
-            C = E
+            C2 = promote_type(C, E)
+            @assert C2==E || C2==C "`promote_to_concrete` can't make type $E uniform with $C"
+            C = C2
         end
     end
 
@@ -833,7 +834,7 @@ end
 function fold_constants(ex)
     if iscall(ex)
         maketerm(typeof(ex), operation(ex), map(fold_constants, arguments(ex)),
-            symtype(ex), metadata(ex))
+            metadata(ex))
     elseif issym(ex) && isconstant(ex)
         getdefault(ex)
     else

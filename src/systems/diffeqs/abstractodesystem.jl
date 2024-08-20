@@ -174,6 +174,10 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
         check_operator_variables(eqs, Differential)
         check_lhs(eqs, Differential, Set(dvs))
     end
+
+    # substitute constants in
+    eqs = map(subs_constants, eqs)
+
     # substitute x(t) by just x
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
            [eq.rhs for eq in eqs]
@@ -238,7 +242,7 @@ function delay_to_function(expr, iv, sts, ps, h)
         return maketerm(typeof(expr),
             operation(expr),
             map(x -> delay_to_function(x, iv, sts, ps, h), arguments(expr)),
-            symtype(expr), metadata(expr))
+            metadata(expr))
     else
         return expr
     end
@@ -718,7 +722,7 @@ function get_u0_p(sys,
     if symbolic_u0
         u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false, use_union = false)
     else
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, use_union)
     end
     p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
     p = p === nothing ? SciMLBase.NullParameters() : p
@@ -728,7 +732,7 @@ end
 
 function get_u0(
         sys, u0map, parammap = nothing; symbolic_u0 = false,
-        toterm = default_toterm, t0 = nothing)
+        toterm = default_toterm, t0 = nothing, use_union = true)
     dvs = unknowns(sys)
     ps = parameters(sys)
     defs = defaults(sys)
@@ -753,7 +757,7 @@ function get_u0(
         u0 = varmap_to_vars(
             u0map, dvs; defaults = defs, tofloat = false, use_union = false, toterm)
     else
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, toterm)
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, use_union, toterm)
     end
     t0 !== nothing && delete!(defs, get_iv(sys))
     return u0, defs
@@ -778,6 +782,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         build_initializeprob = true,
         initialization_eqs = [],
         fully_determined = false,
+        check_units = true,
         kwargs...)
     eqs = equations(sys)
     dvs = unknowns(sys)
@@ -816,7 +821,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         end
         initializeprob = ModelingToolkit.InitializationProblem(
             sys, t, u0map, parammap; guesses, warn_initialize_determined,
-            initialization_eqs, eval_expression, eval_module, fully_determined)
+            initialization_eqs, eval_expression, eval_module, fully_determined, check_units)
         initializeprobmap = getu(initializeprob, unknowns(sys))
 
         zerovars = Dict(setdiff(unknowns(sys), keys(defaults(sys))) .=> 0.0)
@@ -831,13 +836,13 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
 
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         u0, defs = get_u0(sys, trueinit, parammap; symbolic_u0,
-            t0 = constructor <: Union{DDEFunction, SDDEFunction} ? nothing : t)
+            t0 = constructor <: Union{DDEFunction, SDDEFunction} ? nothing : t, use_union)
         check_eqs_u0(eqs, dvs, u0; kwargs...)
         p = if parammap === nothing ||
                parammap == SciMLBase.NullParameters() && isempty(defs)
             nothing
         else
-            MTKParameters(sys, parammap, trueinit; t0 = t, eval_expression, eval_module)
+            MTKParameters(sys, parammap, trueinit; t0 = t)
         end
     else
         u0, p, defs = get_u0_p(sys,
@@ -1426,18 +1431,19 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         warn_initialize_determined = true,
         initialization_eqs = [],
         fully_determined = false,
+        check_units = true,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
     end
     if isempty(u0map) && get_initializesystem(sys) !== nothing
-        isys = get_initializesystem(sys; initialization_eqs)
+        isys = get_initializesystem(sys; initialization_eqs, check_units)
     elseif isempty(u0map) && get_initializesystem(sys) === nothing
         isys = structural_simplify(
-            generate_initializesystem(sys; initialization_eqs); fully_determined)
+            generate_initializesystem(sys; initialization_eqs, check_units); fully_determined)
     else
         isys = structural_simplify(
-            generate_initializesystem(sys; u0map, initialization_eqs); fully_determined)
+            generate_initializesystem(sys; u0map, initialization_eqs, check_units); fully_determined)
     end
 
     uninit = setdiff(unknowns(sys), [unknowns(isys); getfield.(observed(isys), :lhs)])
