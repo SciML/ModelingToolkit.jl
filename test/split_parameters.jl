@@ -1,6 +1,7 @@
 using ModelingToolkit, Test
 using ModelingToolkitStandardLibrary.Blocks
 using OrdinaryDiffEq
+using BlockArrays: BlockedArray
 using ModelingToolkit: t_nounits as t, D_nounits as D
 using ModelingToolkit: MTKParameters, ParameterIndex, NONNUMERIC_PORTION
 using SciMLStructures: Tunable, Discrete, Constants
@@ -195,21 +196,23 @@ S = get_sensitivity(closed_loop, :u)
 
 @testset "Indexing MTKParameters with ParameterIndex" begin
     ps = MTKParameters(collect(1.0:10.0),
-        SizedVector{2}([([true, false], [[1 2; 3 4]]), ([false, true], [[2 4; 6 8]])]),
+        (BlockedArray([true, false, false, true], [2, 2]),
+            BlockedArray([[1 2; 3 4], [2 4; 6 8]], [1, 1])),
+        # (BlockedArray([[true, false], [false, true]]), BlockedArray([[[1 2; 3 4]], [[2 4; 6 8]]])),
         ([5, 6],),
         (["hi", "bye"], [:lie, :die]))
     @test ps[ParameterIndex(Tunable(), 1)] == 1.0
     @test ps[ParameterIndex(Tunable(), 2:4)] == collect(2.0:4.0)
     @test ps[ParameterIndex(Tunable(), reshape(4:7, 2, 2))] == reshape(4.0:7.0, 2, 2)
-    @test ps[ParameterIndex(Discrete(), (1, 2, 1, 2, 2))] == 4
-    @test ps[ParameterIndex(Discrete(), (2, 2, 1))] == [2 4; 6 8]
+    @test ps[ParameterIndex(Discrete(), (2, 1, 2, 2))] == 4
+    @test ps[ParameterIndex(Discrete(), (2, 2))] == [2 4; 6 8]
     @test ps[ParameterIndex(Constants(), (1, 1))] == 5
     @test ps[ParameterIndex(NONNUMERIC_PORTION, (2, 2))] == :die
 
     ps[ParameterIndex(Tunable(), 1)] = 1.5
     ps[ParameterIndex(Tunable(), 2:4)] = [2.5, 3.5, 4.5]
     ps[ParameterIndex(Tunable(), reshape(5:8, 2, 2))] = [5.5 7.5; 6.5 8.5]
-    ps[ParameterIndex(Discrete(), (1, 2, 1, 2, 2))] = 5
+    ps[ParameterIndex(Discrete(), (2, 1, 2, 2))] = 5
     @test ps[ParameterIndex(Tunable(), 1:8)] == collect(1.0:8.0) .+ 0.5
-    @test ps[ParameterIndex(Discrete(), (1, 2, 1, 2, 2))] == 5
+    @test ps[ParameterIndex(Discrete(), (2, 1, 2, 2))] == 5
 end

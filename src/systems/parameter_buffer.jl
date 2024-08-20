@@ -116,11 +116,11 @@ function MTKParameters(
 
     tunable_buffer = Vector{ic.tunable_buffer_size.type}(
         undef, ic.tunable_buffer_size.length)
-    disc_buffer = SizedArray{Tuple{length(ic.discrete_buffer_sizes)}}([Tuple(Vector{temp.type}(
-                                                                                 undef,
-                                                                                 temp.length)
-                                                                       for temp in subbuffer_sizes)
-                                                                       for subbuffer_sizes in ic.discrete_buffer_sizes])
+    disc_buffer = Tuple(BlockedArray(
+                            Vector{subbuffer_sizes[1].type}(
+                                undef, sum(x -> x.length, subbuffer_sizes)),
+                            map(x -> x.length, subbuffer_sizes))
+    for subbuffer_sizes in ic.discrete_buffer_sizes)
     const_buffer = Tuple(Vector{temp.type}(undef, temp.length)
     for temp in ic.constant_buffer_sizes)
     nonnumeric_buffer = Tuple(Vector{temp.type}(undef, temp.length)
@@ -131,8 +131,8 @@ function MTKParameters(
             idx = ic.tunable_idx[sym]
             tunable_buffer[idx] = val
         elseif haskey(ic.discrete_idx, sym)
-            i, j, k = ic.discrete_idx[sym]
-            disc_buffer[i][j][k] = val
+            idx = ic.discrete_idx[sym]
+            disc_buffer[idx.buffer_idx][idx.idx_in_buffer] = val
         elseif haskey(ic.constant_idx, sym)
             i, j = ic.constant_idx[sym]
             const_buffer[i][j] = val
@@ -172,7 +172,7 @@ function MTKParameters(
     if isempty(tunable_buffer)
         tunable_buffer = SizedVector{0, Float64}()
     end
-    disc_buffer = broadcast.(narrow_buffer_type, disc_buffer)
+    disc_buffer = narrow_buffer_type.(disc_buffer)
     const_buffer = narrow_buffer_type.(const_buffer)
     # Don't narrow nonnumeric types
     nonnumeric_buffer = nonnumeric_buffer
@@ -217,6 +217,12 @@ function _split_helper(::Type{<:AbstractArray}, buf_v, ::Val{N}, raw, idx) where
     map(b -> _split_helper(eltype(b), b, Val(N - 1), raw, idx), buf_v)
 end
 
+function _split_helper(
+        ::Type{<:AbstractArray}, buf_v::BlockedArray, ::Val{N}, raw, idx) where {N}
+    BlockedArray(map(b -> _split_helper(eltype(b), b, Val(N - 1), raw, idx), buf_v),
+        blocksizes(buf_v, 1))
+end
+
 function _split_helper(::Type{<:AbstractArray}, buf_v::Tuple, ::Val{N}, raw, idx) where {N}
     ntuple(i -> _split_helper(eltype(buf_v[i]), buf_v[i], Val(N - 1), raw, idx),
         Val(length(buf_v)))
@@ -228,6 +234,13 @@ end
 
 function _split_helper(_, buf_v, _, raw, idx)
     res = reshape(raw[idx[]:(idx[] + length(buf_v) - 1)], size(buf_v))
+    idx[] += length(buf_v)
+    return res
+end
+
+function _split_helper(_, buf_v::BlockedArray, _, raw, idx)
+    res = BlockedArray(
+        reshape(raw[idx[]:(idx[] + length(buf_v) - 1)], size(buf_v)), blocksizes(buf_v, 1))
     idx[] += length(buf_v)
     return res
 end
@@ -283,7 +296,7 @@ function SciMLStructures.replace!(::SciMLStructures.Tunable, p::MTKParameters, n
     return nothing
 end
 
-for (Portion, field, recurse) in [(SciMLStructures.Discrete, :discrete, 2)
+for (Portion, field, recurse) in [(SciMLStructures.Discrete, :discrete, 1)
                                   (SciMLStructures.Constants, :constant, 1)
                                   (Nonnumeric, :nonnumeric, 1)]
     @eval function SciMLStructures.canonicalize(::$Portion, p::MTKParameters)
@@ -300,14 +313,7 @@ for (Portion, field, recurse) in [(SciMLStructures.Discrete, :discrete, 2)
     end
 
     @eval function SciMLStructures.replace(::$Portion, p::MTKParameters, newvals)
-        @set! p.$field = $(
-            if Portion == SciMLStructures.Discrete
-            :(SizedVector{length(p.discrete)}(split_into_buffers(
-                newvals, p.$field, Val($recurse))))
-        else
-            :(split_into_buffers(newvals, p.$field, Val($recurse)))
-        end
-        )
+        @set! p.$field = split_into_buffers(newvals, p.$field, Val($recurse))
         p
     end
 
@@ -319,8 +325,7 @@ end
 
 function Base.copy(p::MTKParameters)
     tunable = copy(p.tunable)
-    discrete = typeof(p.discrete)([Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf)
-                                   for buf in clockbuf) for clockbuf in p.discrete])
+    discrete = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.discrete)
     constant = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.constant)
     nonnumeric = copy.(p.nonnumeric)
     return MTKParameters(
@@ -340,8 +345,7 @@ function SymbolicIndexingInterface.parameter_values(p::MTKParameters, pind::Para
     if portion isa SciMLStructures.Tunable
         return isempty(k) ? p.tunable[i][j] : p.tunable[i][j][k...]
     elseif portion isa SciMLStructures.Discrete
-        k, l... = k
-        return isempty(l) ? p.discrete[i][j][k] : p.discrete[i][j][k][l...]
+        return isempty(k) ? p.discrete[i][j] : p.discrete[i][j][k...]
     elseif portion isa SciMLStructures.Constants
         return isempty(k) ? p.constant[i][j] : p.constant[i][j][k...]
     elseif portion === NONNUMERIC_PORTION
@@ -362,15 +366,14 @@ function SymbolicIndexingInterface.set_parameter!(
     else
         i, j, k... = idx
         if portion isa SciMLStructures.Discrete
-            k, l... = k
-            if isempty(l)
-                if validate_size && size(val) !== size(p.discrete[i][j][k])
+            if isempty(k)
+                if validate_size && size(val) !== size(p.discrete[i][j])
                     throw(InvalidParameterSizeException(
-                        size(p.discrete[i][j][k]), size(val)))
+                        size(p.discrete[i][j]), size(val)))
                 end
-                p.discrete[i][j][k] = val
+                p.discrete[i][j] = val
             else
-                p.discrete[i][j][k][l...] = val
+                p.discrete[i][j][k...] = val
             end
         elseif portion isa SciMLStructures.Constants
             if isempty(k)
@@ -402,11 +405,10 @@ function _set_parameter_unchecked!(
     else
         i, j, k... = idx
         if portion isa SciMLStructures.Discrete
-            k, l... = k
-            if isempty(l)
-                p.discrete[i][j][k] = val
+            if isempty(k)
+                p.discrete[i][j] = val
             else
-                p.discrete[i][j][k][l...] = val
+                p.discrete[i][j][k...] = val
             end
         elseif portion isa SciMLStructures.Constants
             if isempty(k)
@@ -426,7 +428,8 @@ function _set_parameter_unchecked!(
     end
 end
 
-function narrow_buffer_type_and_fallback_undefs(oldbuf::Vector, newbuf::Vector)
+function narrow_buffer_type_and_fallback_undefs(
+        oldbuf::AbstractVector, newbuf::AbstractVector)
     type = Union{}
     for i in eachindex(newbuf)
         isassigned(newbuf, i) || continue
@@ -435,11 +438,15 @@ function narrow_buffer_type_and_fallback_undefs(oldbuf::Vector, newbuf::Vector)
     if type == Union{}
         type = eltype(oldbuf)
     end
+    newerbuf = similar(newbuf, type)
     for i in eachindex(newbuf)
-        isassigned(newbuf, i) && continue
-        newbuf[i] = convert(type, oldbuf[i])
+        if isassigned(newbuf, i)
+            newerbuf[i] = newbuf[i]
+        else
+            newerbuf[i] = oldbuf[i]
+        end
     end
-    return convert(Vector{type}, newbuf)
+    return newerbuf
 end
 
 function validate_parameter_type(ic::IndexCache, p, index, val)
@@ -500,10 +507,7 @@ end
 
 function SymbolicIndexingInterface.remake_buffer(indp, oldbuf::MTKParameters, vals::Dict)
     newbuf = @set oldbuf.tunable = Vector{Any}(undef, length(oldbuf.tunable))
-    @set! newbuf.discrete = SizedVector{length(newbuf.discrete)}([Tuple(Vector{Any}(undef,
-                                                                            length(buf))
-                                                                  for buf in clockbuf)
-                                                                  for clockbuf in newbuf.discrete])
+    @set! newbuf.discrete = Tuple(similar(buf, Any) for buf in newbuf.discrete)
     @set! newbuf.constant = Tuple(Vector{Any}(undef, length(buf))
     for buf in newbuf.constant)
     @set! newbuf.nonnumeric = Tuple(Vector{Any}(undef, length(buf))
@@ -545,11 +549,8 @@ function SymbolicIndexingInterface.remake_buffer(indp, oldbuf::MTKParameters, va
 
     @set! newbuf.tunable = narrow_buffer_type_and_fallback_undefs(
         oldbuf.tunable, newbuf.tunable)
-    @set! newbuf.discrete = SizedVector{length(newbuf.discrete)}([narrow_buffer_type_and_fallback_undefs.(
-                                                                      oldclockbuf,
-                                                                      newclockbuf)
-                                                                  for (oldclockbuf, newclockbuf) in zip(
-        oldbuf.discrete, newbuf.discrete)])
+    @set! newbuf.discrete = narrow_buffer_type_and_fallback_undefs.(
+        oldbuf.discrete, newbuf.discrete)
     @set! newbuf.constant = narrow_buffer_type_and_fallback_undefs.(
         oldbuf.constant, newbuf.constant)
     @set! newbuf.nonnumeric = narrow_buffer_type_and_fallback_undefs.(
@@ -572,8 +573,10 @@ Base.size(::NestedGetIndex) = ()
 function SymbolicIndexingInterface.with_updated_parameter_timeseries_values(
         ::AbstractSystem, ps::MTKParameters, args::Pair{A, B}...) where {
         A, B <: NestedGetIndex}
-    for (i, val) in args
-        ps.discrete[i] = val.x
+    for (i, ngi) in args
+        for (j, val) in enumerate(ngi.x)
+            copyto!(view(ps.discrete[j], Block(i)), val)
+        end
     end
     return ps
 end
@@ -581,30 +584,33 @@ end
 function SciMLBase.create_parameter_timeseries_collection(
         sys::AbstractSystem, ps::MTKParameters, tspan)
     ic = get_index_cache(sys) # this exists because the parameters are `MTKParameters`
-    has_discrete_subsystems(sys) || return nothing
-    (dss = get_discrete_subsystems(sys)) === nothing && return nothing
-    _, _, _, id_to_clock = dss
+    isempty(ps.discrete) && return nothing
+    num_discretes = only(blocksize(ps.discrete[1]))
     buffers = []
-
-    for (i, partition) in enumerate(ps.discrete)
-        clock = id_to_clock[i]
-        @match clock begin
-            PeriodicClock(dt, _...) => begin
-                ts = tspan[1]:(dt):tspan[2]
-                push!(buffers, DiffEqArray(NestedGetIndex{typeof(partition)}[], ts, (1, 1)))
-            end
-            &SolverStepClock => push!(buffers,
-                DiffEqArray(NestedGetIndex{typeof(partition)}[], eltype(tspan)[], (1, 1)))
-            &Continuous => continue
-            _ => error("Unhandled clock $clock")
-        end
+    partition_type = Tuple{(Vector{eltype(buf)} for buf in ps.discrete)...}
+    for i in 1:num_discretes
+        ts = eltype(tspan)[]
+        us = NestedGetIndex{partition_type}[]
+        push!(buffers, DiffEqArray(us, ts, (1, 1)))
     end
 
     return ParameterTimeseriesCollection(Tuple(buffers), copy(ps))
 end
 
-function SciMLBase.get_saveable_values(ps::MTKParameters, timeseries_idx)
-    return NestedGetIndex(deepcopy(ps.discrete[timeseries_idx]))
+function SciMLBase.get_saveable_values(
+        sys::AbstractSystem, ps::MTKParameters, timeseries_idx)
+    return NestedGetIndex(Tuple(buffer[Block(timeseries_idx)] for buffer in ps.discrete))
+end
+
+function save_callback_discretes!(integ::SciMLBase.DEIntegrator, callback)
+    ic = get_index_cache(indp_to_system(integ))
+    ic === nothing && return
+    clockidxs = get(ic.callback_to_clocks, callback, nothing)
+    clockidxs === nothing && return
+
+    for idx in clockidxs
+        SciMLBase.save_discretes!(integ, idx)
+    end
 end
 
 function DiffEqBase.anyeltypedual(
@@ -625,10 +631,8 @@ end
     if !(T <: SizedVector{0, Float64})
         push!(paths, :(ps.tunable))
     end
-    for i in 1:length(D)
-        for j in 1:fieldcount(eltype(D))
-            push!(paths, :(ps.discrete[$i][$j]))
-        end
+    for i in 1:fieldcount(D)
+        push!(paths, :(ps.discrete[$i]))
     end
     for i in 1:fieldcount(C)
         push!(paths, :(ps.constant[$i]))
@@ -650,10 +654,7 @@ end
     if !(T <: SizedVector{0, Float64})
         len += 1
     end
-    if length(D) > 0
-        len += length(D) * fieldcount(eltype(D))
-    end
-    len += fieldcount(C) + fieldcount(N)
+    len += fieldcount(D) + fieldcount(C) + fieldcount(N)
     return len
 end
 
