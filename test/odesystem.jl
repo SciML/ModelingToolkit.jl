@@ -1308,3 +1308,10 @@ end
     u0_v, p_v, _ = ModelingToolkit.get_u0_p(sys, u0, p)
     @test prob.f(u0_v, p_v, 0.0) == [c_b, c_a]
 end
+
+@testset "Independent variable as system property" begin
+    @variables x(t)
+    @named sys = ODESystem([x ~ t], t)
+    @named sys = compose(sys, sys) # nest into a hierarchical system
+    @test t === sys.t === sys.sys.t
+end

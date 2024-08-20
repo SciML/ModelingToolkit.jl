@@ -1004,6 +1004,7 @@ function Base.propertynames(sys::AbstractSystem; private = false)
         has_observed(sys) && for s in get_observed(sys)
             push!(names, getname(s.lhs))
         end
+        has_iv(sys) && push!(names, getname(get_iv(sys)))
         return names
     end
 end
@@ -1059,6 +1060,13 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
         i = findfirst(x -> getname(x.lhs) == name, obs)
         if i !== nothing
             return namespace ? renamespace(sys, obs[i].lhs) : obs[i].lhs
+        end
+    end
+
+    if has_iv(sys)
+        iv = get_iv(sys)
+        if getname(iv) == name
+            return iv
         end
     end
 

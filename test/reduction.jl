@@ -65,7 +65,7 @@ lorenz2 = lorenz(:lorenz2)
      lorenz1.u ~ lorenz2.F
      lorenz2.u ~ lorenz1.F],
     t, systems = [lorenz1, lorenz2])
-@test length(Base.propertynames(connected)) == 10
+@test length(Base.propertynames(connected)) == 10 + 1 # + 1 for independent variable
 @test isequal((@nonamespace connected.lorenz1.x), x)
 __x = x
 @unpack lorenz1 = connected
