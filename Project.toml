@@ -57,10 +57,12 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [weakdeps]
 BifurcationKit = "0f109fa4-8a5d-4b75-95aa-f515264e7665"
+ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 DeepDiffs = "ab62b9b5-e342-54a8-a765-a90f495de1a6"
 
 [extensions]
 MTKBifurcationKitExt = "BifurcationKit"
+MTKChainRulesCoreExt = "ChainRulesCore"
 MTKDeepDiffsExt = "DeepDiffs"
 
 [compat]
