@@ -492,6 +492,16 @@ function getguess(x)
 end
 
 """
+    setguess(x, v)
+
+Set the guess for the initial value associated with symbolic variable `x` to `v`.
+See also [`hasguess`](@ref).
+"""
+function setguess(x, v)
+    Symbolics.setmetadata(x, VariableGuess, v)
+end
+
+"""
     hasguess(x)
 
 Determine whether symbolic variable `x` has a guess associated with it.

@@ -249,11 +249,16 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     process_variables!(var_to_name, defaults, dvs′)
     process_variables!(var_to_name, defaults, ps′)
 
-    sysguesses = [ModelingToolkit.getguess(st) for st in dvs′]
-    hasaguess = findall(!isnothing, sysguesses)
-    var_guesses = dvs′[hasaguess] .=> sysguesses[hasaguess]
-    sysguesses = isempty(var_guesses) ? Dict() : todict(var_guesses)
-    guesses = merge(sysguesses, todict(guesses))
+    sysdvsguesses = [ModelingToolkit.getguess(st) for st in dvs′]
+    hasaguess = findall(!isnothing, sysdvsguesses)
+    var_guesses = dvs′[hasaguess] .=> sysdvsguesses[hasaguess]
+    sysdvsguesses = isempty(var_guesses) ? Dict() : todict(var_guesses)
+    syspsguesses = [ModelingToolkit.getguess(st) for st in ps′]
+    hasaguess = findall(!isnothing, syspsguesses)
+    ps_guesses = ps′[hasaguess] .=> syspsguesses[hasaguess]
+    syspsguesses = isempty(ps_guesses) ? Dict() : todict(ps_guesses)
+
+    guesses = merge(sysdvsguesses, syspsguesses, todict(guesses))
     guesses = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(guesses))
 
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
