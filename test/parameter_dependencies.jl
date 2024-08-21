@@ -166,6 +166,10 @@ end
     sys1 = ODESystem(
         Equation[], t, [], [p1]; parameter_dependencies, name = :sys1, systems = [sys2])
 
+    # ensure that parameter_dependencies is type stable
+    # (https://github.com/SciML/ModelingToolkit.jl/pull/2978)
+    @inferred ModelingToolkit.parameter_dependencies(sys1)
+
     sys = structural_simplify(sys1)
 
     prob = ODEProblem(sys, [], (0.0, 1.0))
