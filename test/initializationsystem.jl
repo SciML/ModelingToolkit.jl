@@ -601,12 +601,18 @@ end
     pmap[p] = 2q
     prob = ODEProblem(sys, u0map, (0.0, 1.0), pmap)
     test_parameter(prob, p, 2.0)
+    prob2 = remake(prob; u0 = u0map, p = pmap)
+    prob2.ps[p] = 0.0
+    test_parameter(prob2, p, 2.0)
     # `missing` default, provided guess
     @mtkbuild sys = ODESystem(
         [D(x) ~ x, p ~ x + y], t; defaults = [p => missing], guesses = [p => 0.0])
     prob = ODEProblem(sys, u0map, (0.0, 1.0))
     test_parameter(prob, p, 2.0)
     test_initializesystem(sys, u0map, pmap, p, 0 ~ p - x - y)
+    prob2 = remake(prob; u0 = u0map)
+    prob2.ps[p] = 0.0
+    test_parameter(prob2, p, 2.0)
 
     # `missing` to ODEProblem, equation from default
     @mtkbuild sys = ODESystem(
@@ -615,6 +621,8 @@ end
     prob = ODEProblem(sys, u0map, (0.0, 1.0), pmap)
     test_parameter(prob, p, 2.0)
     test_initializesystem(sys, u0map, pmap, p, 0 ~ 2q - p)
+    prob2 = remake(prob; u0 = u0map, p = pmap)
+    prob2.ps[p] = 0.0
     test_parameter(prob2, p, 2.0)
     # `missing` to ODEProblem, provided guess
     @mtkbuild sys = ODESystem(
@@ -622,6 +630,9 @@ end
     prob = ODEProblem(sys, u0map, (0.0, 1.0), pmap)
     test_parameter(prob, p, 2.0)
     test_initializesystem(sys, u0map, pmap, p, 0 ~ x + y - p)
+    prob2 = remake(prob; u0 = u0map, p = pmap)
+    prob2.ps[p] = 0.0
+    test_parameter(prob2, p, 2.0)
 
     # No `missing`, default and guess
     @mtkbuild sys = ODESystem(
@@ -630,6 +641,9 @@ end
     prob = ODEProblem(sys, u0map, (0.0, 1.0), pmap)
     test_parameter(prob, p, 2.0)
     test_initializesystem(sys, u0map, pmap, p, 0 ~ 2q - p)
+    prob2 = remake(prob; u0 = u0map, p = pmap)
+    prob2.ps[p] = 0.0
+    test_parameter(prob2, p, 2.0)
 
     # Should not be solved for:
 
@@ -710,4 +724,25 @@ end
     @test length(equations(ModelingToolkit.get_parent(prob.f.initializeprob.f.sys))) == 4
     integ = init(prob, Tsit5())
     @test integ.ps[p] ≈ 2
+end
+
+@testset "Re-creating initialization problem on remake" begin
+    @variables x(t) y(t)
+    @parameters p q
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ x, p ~ x + y], t; defaults = [p => missing], guesses = [x => 0.0, p => 0.0])
+    prob = ODEProblem(sys, [x => 1.0, y => 1.0], (0.0, 1.0))
+    @test init(prob, Tsit5()).ps[p] ≈ 2.0
+    # nonsensical value for y just to test that equations work
+    prob2 = remake(prob; u0 = [x => 1.0, y => 2x + exp(t)])
+    @test init(prob2, Tsit5()).ps[p] ≈ 4.0
+    # solve for `x` given `p` and `y`
+    prob3 = remake(prob; u0 = [x => nothing, y => 1.0], p = [p => 2x + exp(t)])
+    @test init(prob3, Tsit5())[x] ≈ 0.0
+    @test_logs (:warn, r"overdetermined") remake(
+        prob; u0 = [x => 1.0, y => 2.0], p = [p => 4.0])
+    prob4 = remake(prob; u0 = [x => 1.0, y => 2.0], p = [p => 4.0])
+    @test solve(prob4, Tsit5()).retcode == ReturnCode.InitialFailure
+    prob5 = remake(prob)
+    @test init(prob, Tsit5()).ps[p] ≈ 2.0
 end

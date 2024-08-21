@@ -114,7 +114,7 @@ eqs = [D(y) ~ dy * a
 sys = structural_simplify(model; split = false)
 
 tspan = (0.0, t_end)
-prob = ODEProblem(sys, [], tspan, [])
+prob = ODEProblem(sys, [], tspan, []; build_initializeprob = false)
 
 @test prob.p isa Vector{Float64}
 sol = solve(prob, ImplicitEuler());
@@ -122,7 +122,8 @@ sol = solve(prob, ImplicitEuler());
 
 # ------------------------ Mixed Type Conserved
 
-prob = ODEProblem(sys, [], tspan, []; tofloat = false, use_union = true)
+prob = ODEProblem(
+    sys, [], tspan, []; tofloat = false, use_union = true, build_initializeprob = false)
 
 @test prob.p isa Tuple{Vector{Float64}, Vector{Int64}}
 sol = solve(prob, ImplicitEuler());
