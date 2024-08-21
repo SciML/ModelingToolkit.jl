@@ -325,3 +325,16 @@ end
     @test getp(sys, p1)(ps2) == 2.0
     @test getp(sys, p2)(ps2) == 4.0
 end
+
+@testset "Discovery of parameters from dependencies" begin
+    @parameters p1 p2
+    @variables x(t) y(t)
+    @named sys = ODESystem([D(x) ~ y + p2], t; parameter_dependencies = [p2 ~ 2p1])
+    @test is_parameter(sys, p1)
+    @named sys = NonlinearSystem([x * y^2 ~ y + p2]; parameter_dependencies = [p2 ~ 2p1])
+    @test is_parameter(sys, p1)
+    k = ShiftIndex(t)
+    @named sys = DiscreteSystem(
+        [x(k - 1) ~ x(k) + y(k) + p2], t; parameter_dependencies = [p2 ~ 2p1])
+    @test is_parameter(sys, p1)
+end
