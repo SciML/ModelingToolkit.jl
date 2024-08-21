@@ -446,7 +446,7 @@ oprob = ODEProblem(complete(js), u₀map, tspan, parammap)
 """
 function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing},
         parammap = DiffEqBase.NullParameters();
-        use_union = true,
+        use_union = false,
         eval_expression = false,
         eval_module = @__MODULE__,
         kwargs...)

@@ -772,7 +772,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         linenumbers = true, parallel = SerialForm(),
         eval_expression = false,
         eval_module = @__MODULE__,
-        use_union = true,
+        use_union = false,
         tofloat = true,
         symbolic_u0 = false,
         u0_constructor = identity,
