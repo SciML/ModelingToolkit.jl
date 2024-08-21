@@ -1240,7 +1240,7 @@ function namespace_equation(eq::Equation,
         ivs = independent_variables(sys))
     _lhs = namespace_expr(eq.lhs, sys, n; ivs)
     _rhs = namespace_expr(eq.rhs, sys, n; ivs)
-    _lhs ~ _rhs
+    (_lhs ~ _rhs)::Equation
 end
 
 function namespace_assignment(eq::Assignment, sys)
