@@ -109,10 +109,6 @@ function define_vars(u, t)
     [_defvaridx(:x, i)(t) for i in eachindex(u)]
 end
 
-function define_vars(u::Union{SLArray, LArray}, t)
-    [_defvar(x)(t) for x in LabelledArrays.symnames(typeof(u))]
-end
-
 function define_vars(u::NTuple{<:Number}, t)
     tuple((_defvaridx(:x, i)(ModelingToolkit.value(t)) for i in eachindex(u))...)
 end
