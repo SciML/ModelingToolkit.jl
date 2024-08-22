@@ -109,10 +109,6 @@ function define_vars(u, t)
     [_defvaridx(:x, i)(t) for i in eachindex(u)]
 end
 
-function define_vars(u::Union{SLArray, LArray}, t)
-    [_defvar(x)(t) for x in LabelledArrays.symnames(typeof(u))]
-end
-
 function define_vars(u::NTuple{<:Number}, t)
     tuple((_defvaridx(:x, i)(ModelingToolkit.value(t)) for i in eachindex(u))...)
 end
@@ -181,15 +177,6 @@ function define_params(p::AbstractDict, names = nothing)
     else
         varnames_length_check(p, names)
         OrderedDict(k => toparam(variable(names[k])) for k in keys(p))
-    end
-end
-
-function define_params(p::Union{SLArray, LArray}, names = nothing)
-    if names === nothing
-        [toparam(variable(x)) for x in LabelledArrays.symnames(typeof(p))]
-    else
-        varnames_length_check(p, names)
-        [toparam(variable(names[i])) for i in eachindex(p)]
     end
 end
 

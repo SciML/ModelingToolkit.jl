@@ -25,7 +25,7 @@ import OrderedCollections
 using DiffEqNoiseProcess: DiffEqNoiseProcess, WienerProcess
 
 using SymbolicIndexingInterface
-using LinearAlgebra, SparseArrays, LabelledArrays
+using LinearAlgebra, SparseArrays
 using InteractiveUtils
 using JumpProcesses
 using DataStructures
