@@ -13,10 +13,6 @@ using ModelingToolkit: t, D
 @test MT.get_unit(0.5) == MT.unitless
 @test MT.get_unit(MT.SciMLBase.NullParameters()) == MT.unitless
 
-# Prohibited unit types
-@parameters γ [unit = 1u"ms"]
-@test_throws MT.ValidationError MT.get_unit(γ)
-
 eqs = [D(E) ~ P - E / τ
        0 ~ P]
 @test MT.validate(eqs)
@@ -59,9 +55,16 @@ end
 end
 @named p1 = Pin()
 @named p2 = Pin()
-@test_throws MT.ValidationError @named op = OtherPin()
 @named lp = LongPin()
 good_eqs = [connect(p1, p2)]
+@test MT.validate(good_eqs)
+@named sys = ODESystem(good_eqs, t, [], [])
+@named op = OtherPin()
+bad_eqs = [connect(p1, op)]
+@test !MT.validate(bad_eqs)
+@test_throws MT.ValidationError @named sys = ODESystem(bad_eqs, t, [], [])
+@named op2 = OtherPin()
+good_eqs = [connect(op, op2)]
 @test MT.validate(good_eqs)
 @named sys = ODESystem(good_eqs, t, [], [])
 
@@ -85,18 +88,22 @@ eqs = [
 eqs = [D(E) ~ P - E / τ
        P ~ Q]
 
-noiseeqs = [0.1u"W",
-    0.1u"W"]
+noiseeqs = [0.1us"W",
+    0.1us"W"]
 @named sys = SDESystem(eqs, noiseeqs, t, [P, E], [τ, Q])
 
+noiseeqs = [0.1u"W",
+    0.1u"W"]
+@test_throws MT.ValidationError @named sys = SDESystem(eqs, noiseeqs, t, [P, E], [τ, Q])
+
 # With noise matrix
-noiseeqs = [0.1u"W" 0.1u"W"
-            0.1u"W" 0.1u"W"]
+noiseeqs = [0.1us"W" 0.1us"W"
+            0.1us"W" 0.1us"W"]
 @named sys = SDESystem(eqs, noiseeqs, t, [P, E], [τ, Q])
 
 # Invalid noise matrix
-noiseeqs = [0.1u"W" 0.1u"W"
-            0.1u"W" 0.1u"s"]
+noiseeqs = [0.1us"W" 0.1us"W"
+            0.1us"W" 0.1us"s"]
 @test !MT.validate(eqs, noiseeqs)
 
 # Non-trivial simplifications
@@ -210,3 +217,10 @@ end
     @test prob = ODEProblem(
         pend, u0, (0.0, 1.0), p; guesses = guess, check_units = false) isa Any
 end
+
+@parameters p [unit = u"L/s"] d [unit = u"s^(-1)"]
+@parameters tt [unit = u"s"]
+@variables X(tt) [unit = u"L"]
+DD = Differential(tt)
+eqs = [DD(X) ~ p - d * X + d * X]
+@test ModelingToolkit.validate(eqs)

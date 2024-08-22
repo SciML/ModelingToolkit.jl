@@ -48,14 +48,11 @@ function screen_unit(result)
     if result isa DQ.AbstractQuantity
         d = DQ.dimension(result)
         if d isa DQ.Dimensions
-            if result != oneunit(result)
-                throw(ValidationError("$result uses non SI unit. Please use SI unit only."))
-            end
             return result
         elseif d isa DQ.SymbolicDimensions
-            throw(ValidationError("$result uses SymbolicDimensions, please use `u\"m\"` to instantiate SI unit only."))
+            return DQ.uexpand(oneunit(result))
         else
-            throw(ValidationError("$result doesn't use SI unit, please use `u\"m\"` to instantiate SI unit only."))
+            throw(ValidationError("$result doesn't have a recognized unit"))
         end
     else
         throw(ValidationError("$result doesn't have any unit."))
@@ -69,7 +66,7 @@ get_literal_unit(x) = screen_unit(something(__get_literal_unit(x), unitless))
 Find the unit of a symbolic item.
 """
 get_unit(x::Real) = unitless
-get_unit(x::DQ.AbstractQuantity) = screen_unit(oneunit(x))
+get_unit(x::DQ.AbstractQuantity) = screen_unit(x)
 get_unit(x::AbstractArray) = map(get_unit, x)
 get_unit(x::Num) = get_unit(unwrap(x))
 get_unit(op::Differential, args) = get_unit(args[1]) / get_unit(op.x)
@@ -81,9 +78,16 @@ get_unit(op::typeof(instream), args) = get_unit(args[1])
 function get_unit(op, args) # Fallback
     result = op(get_unit.(args)...)
     try
-        oneunit(result)
+        result
     catch
         throw(ValidationError("Unable to get unit for operation $op with arguments $args."))
+    end
+end
+
+function get_unit(::Union{typeof(+), typeof(-)}, args)
+    u = get_unit(args[1])
+    if all(i -> get_unit(args[i]) == u, 2:length(args))
+        return u
     end
 end
 
@@ -96,7 +100,7 @@ function get_unit(op::Integral, args)
     else
         unit *= get_unit(op.domain.variables)
     end
-    return oneunit(get_unit(args[1]) * unit)
+    return get_unit(args[1]) * unit
 end
 
 equivalent(x, y) = isequal(x, y)
@@ -197,7 +201,11 @@ function _validate(terms::Vector, labels::Vector{String}; info::String = "")
                 first_label = label
             elseif !equivalent(first_unit, equnit)
                 valid = false
-                @warn("$info: units [$(first_unit)] for $(first_label) and [$(equnit)] for $(label) do not match.")
+                str = "$info: units [$(first_unit)] for $(first_label) and [$(equnit)] for $(label) do not match."
+                if oneunit(first_unit) == oneunit(equnit)
+                    str *= " If there are non-SI units in the system, please use symbolic units like `us\"ms\"`"
+                end
+                @warn(str)
             end
         end
     end
@@ -227,7 +235,11 @@ function _validate(conn::Connection; info::String = "")
                 bunit = safe_get_unit(sst[j], info * string(nameof(s)) * "#$j")
                 if !equivalent(aunit, bunit)
                     valid = false
-                    @warn("$info: connected system unknowns $x and $(sst[j]) have mismatched units.")
+                    str = "$info: connected system unknowns $x ($aunit) and $(sst[j]) ($bunit) have mismatched units."
+                    if oneunit(aunit) == oneunit(bunit)
+                        str *= " If there are non-SI units in the system, please use symbolic units like `us\"ms\"`"
+                    end
+                    @warn(str)
                 end
             end
         end
