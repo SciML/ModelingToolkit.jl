@@ -1,7 +1,7 @@
 module MTKLabelledArraysExt
 
 using ModelingToolkit, LabelledArrays
-
+using ModelingToolkit: _defvar, toparam, variable, varnames_length_check
 function ModelingToolkit.define_vars(u::Union{SLArray, LArray}, t)
     [ModelingToolkit._defvar(x)(t) for x in LabelledArrays.symnames(typeof(u))]
 end
