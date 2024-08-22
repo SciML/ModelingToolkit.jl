@@ -165,7 +165,8 @@ function namespace_affect(affect::MutatingFunctionalAffect, s)
         observed_syms(affect),
         renamespace.((s,), modified(affect)),
         modified_syms(affect),
-        context(affect))
+        context(affect),
+        affect.skip_checks)
 end
 
 function has_functional_affect(cb)
