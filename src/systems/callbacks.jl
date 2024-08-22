@@ -963,7 +963,7 @@ function unassignable_variables(sys, expr)
         x -> !any(isequal(x), assignable_syms), reduce(vcat, vars(expr); init = []))
 end
 
-function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwargs...)
+function compile_user_affect(affect::MutatingFunctionalAffect, cb, sys, dvs, ps; kwargs...)
     #=
     Implementation sketch:
         generate observed function (oop), should save to a component array under obs_syms
@@ -1049,6 +1049,13 @@ function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwa
          collect(mkzero(size(e)) for e in first.(mod_unk_pairs))]))
     upd_params_view = view(upd_component_array, last.(mod_param_pairs))
     upd_unks_view = view(upd_component_array, last.(mod_unk_pairs))
+
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+        save_idxs = get(ic.callback_to_clocks, cb, Int[])
+    else
+        save_idxs = Int[]
+    end
+
     let user_affect = func(affect), ctx = context(affect)
         function (integ)
             # update the to-be-mutated values; this ensures that if you do a no-op then nothing happens
@@ -1074,11 +1081,16 @@ function compile_user_affect(affect::MutatingFunctionalAffect, sys, dvs, ps; kwa
             # write the new values back to the integrator
             upd_params_fun(integ, upd_params_view)
             upd_unk_fun(integ, upd_unks_view)
+
+            
+            for idx in save_idxs
+                SciMLBase.save_discretes!(integ, idx)
+            end
         end
     end
 end
 
-function compile_affect(affect::FunctionalAffect, cb, sys, dvs, ps; kwargs...)
+function compile_affect(affect::Union{FunctionalAffect, MutatingFunctionalAffect}, cb, sys, dvs, ps; kwargs...)
     compile_user_affect(affect, cb, sys, dvs, ps; kwargs...)
 end
 
