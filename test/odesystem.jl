@@ -1315,3 +1315,19 @@ end
     @named sys = compose(sys, sys) # nest into a hierarchical system
     @test t === sys.t === sys.sys.t
 end
+
+@testset "Substituting preserves parameter dependencies, defaults, guesses" begin
+    @parameters p1 p2
+    @variables x(t) y(t)
+    @named sys = ODESystem([D(x) ~ y + p2], t; parameter_dependencies = [p2 ~ 2p1],
+        defaults = [p1 => 1.0, p2 => 2.0], guesses = [p1 => 2.0, p2 => 3.0])
+    @parameters p3
+    sys2 = substitute(sys, [p1 => p3])
+    @test length(parameters(sys2)) == 1
+    @test is_parameter(sys2, p3)
+    @test !is_parameter(sys2, p1)
+    @test length(ModelingToolkit.defaults(sys2)) == 2
+    @test ModelingToolkit.defaults(sys2)[p3] == 1.0
+    @test length(ModelingToolkit.guesses(sys2)) == 2
+    @test ModelingToolkit.guesses(sys2)[p3] == 2.0
+end

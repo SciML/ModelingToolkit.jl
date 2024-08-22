@@ -2940,7 +2940,14 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
         rules = todict(map(r -> Symbolics.unwrap(r[1]) => Symbolics.unwrap(r[2]),
             collect(rules)))
         eqs = fast_substitute(equations(sys), rules)
-        ODESystem(eqs, get_iv(sys); name = nameof(sys))
+        pdeps = fast_substitute(parameter_dependencies(sys), rules)
+        defs = Dict(fast_substitute(k, rules) => fast_substitute(v, rules)
+        for (k, v) in defaults(sys))
+        guess = Dict(fast_substitute(k, rules) => fast_substitute(v, rules)
+        for (k, v) in guesses(sys))
+        subsys = map(s -> substitute(s, rules), get_systems(sys))
+        ODESystem(eqs, get_iv(sys); name = nameof(sys), defaults = defs,
+            guesses = guess, parameter_dependencies = pdeps, systems = subsys)
     else
         error("substituting symbols is not supported for $(typeof(sys))")
     end

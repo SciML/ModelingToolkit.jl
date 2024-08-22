@@ -311,6 +311,15 @@ function ODESystem(eqs, iv; kwargs...)
             push!(algeeq, eq)
         end
     end
+    for eq in get(kwargs, :parameter_dependencies, Equation[])
+        if eq isa Pair
+            collect_vars!(allunknowns, ps, eq[1], iv)
+            collect_vars!(allunknowns, ps, eq[2], iv)
+        else
+            collect_vars!(allunknowns, ps, eq.lhs, iv)
+            collect_vars!(allunknowns, ps, eq.rhs, iv)
+        end
+    end
     for v in allunknowns
         isdelay(v, iv) || continue
         collect_vars!(allunknowns, ps, arguments(v)[1], iv)

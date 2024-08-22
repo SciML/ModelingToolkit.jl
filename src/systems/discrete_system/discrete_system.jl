@@ -183,6 +183,15 @@ function DiscreteSystem(eqs, iv; kwargs...)
             push!(diffvars, eq.lhs)
         end
     end
+    for eq in get(kwargs, :parameter_dependencies, Equation[])
+        if eq isa Pair
+            collect_vars!(allunknowns, ps, eq[1], iv)
+            collect_vars!(allunknowns, ps, eq[2], iv)
+        else
+            collect_vars!(allunknowns, ps, eq.lhs, iv)
+            collect_vars!(allunknowns, ps, eq.rhs, iv)
+        end
+    end
     new_ps = OrderedSet()
     for p in ps
         if iscall(p) && operation(p) === getindex
