@@ -20,9 +20,9 @@ end
 @named sys = ODESystem([D(x) ~ -x + u], t) # both u and x are unbound
 @named sys1 = ODESystem([D(x) ~ -x + v[1] + v[2]], t) # both v and x are unbound
 @named sys2 = ODESystem([D(x) ~ -sys.x], t, systems = [sys]) # this binds sys.x in the context of sys2, sys2.x is still unbound
-@named sys21 = ODESystem([D(x) ~ -sys.x], t, systems = [sys1]) # this binds sys.x in the context of sys2, sys2.x is still unbound
+@named sys21 = ODESystem([D(x) ~ -sys1.x], t, systems = [sys1]) # this binds sys.x in the context of sys2, sys2.x is still unbound
 @named sys3 = ODESystem([D(x) ~ -sys.x + sys.u], t, systems = [sys]) # This binds both sys.x and sys.u
-@named sys31 = ODESystem([D(x) ~ -sys.x + sys1.v[1]], t, systems = [sys1]) # This binds both sys.x and sys1.v[1]
+@named sys31 = ODESystem([D(x) ~ -sys1.x + sys1.v[1]], t, systems = [sys1]) # This binds both sys.x and sys1.v[1]
 
 @named sys4 = ODESystem([D(x) ~ -sys.x, u ~ sys.u], t, systems = [sys]) # This binds both sys.x and sys3.u, this system is one layer deeper than the previous. u is directly forwarded to sys.u, and in this case sys.u is bound while u is not
 
@@ -43,7 +43,7 @@ end
 @test is_bound(sys2, sys.x)
 @test !is_bound(sys2, sys.u)
 @test !is_bound(sys2, sys2.sys.u)
-@test is_bound(sys21, sys.x)
+@test is_bound(sys21, sys1.x)
 @test !is_bound(sys21, sys1.v[1])
 @test !is_bound(sys21, sys1.v[2])
 @test is_bound(sys31, sys1.v[1])
@@ -144,7 +144,9 @@ if VERSION >= v"1.8" # :opaque_closure not supported before
             drop_expr = identity)
         x = randn(size(A, 1))
         u = randn(size(B, 2))
-        p = getindex.(Ref(ModelingToolkit.defaults(ssys)), parameters(ssys))
+        p = getindex.(
+            Ref(ModelingToolkit.defaults_and_guesses(ssys)),
+            parameters(ssys))
         y1 = obsf(x, u, p, 0)
         y2 = C * x + D * u
         @test y1[] ≈ y2[]
@@ -376,3 +378,27 @@ matrices, ssys = linearize(augmented_sys,
 # P = ss(A,B,C,0)
 # G = ss(matrices...)
 # @test sminreal(G[1, 3]) ≈ sminreal(P[1,1])*dist
+
+@testset "Observed functions with inputs" begin
+    @variables x(t)=0 u(t)=0 [input = true]
+    eqs = [
+        D(x) ~ -x + u
+    ]
+
+    @named sys = ODESystem(eqs, t)
+    (; io_sys,) = ModelingToolkit.generate_control_function(sys, simplify = true)
+    obsfn = ModelingToolkit.build_explicit_observed_function(
+        io_sys, [x + u * t]; inputs = [u])
+    @test obsfn([1.0], [2.0], nothing, 3.0) == [7.0]
+end
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/2896
+@testset "Constants substitution" begin
+    @constants c = 2.0
+    @variables x(t)
+    eqs = [D(x) ~ c * x]
+    @named sys = ODESystem(eqs, t, [x], [])
+
+    f, dvs, ps = ModelingToolkit.generate_control_function(sys, simplify = true)
+    @test f[1]([0.5], nothing, nothing, 0.0) == [1.0]
+end

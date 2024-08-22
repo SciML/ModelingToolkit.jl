@@ -11,8 +11,8 @@ $(FIELDS)
 ```julia
 using ModelingToolkit
 
-@parameters x
-@variables t u(..)
+@parameters x t
+@variables u(..)
 Dxx = Differential(x)^2
 Dtt = Differential(t)^2
 Dt = Differential(t)
@@ -116,7 +116,8 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
                     p = ps isa SciMLBase.NullParameters ? [] : ps
                     args = vcat(DestructuredArgs(p), args)
                     ex = Func(args, [], eq.rhs) |> toexpr
-                    eq.lhs => drop_expr(@RuntimeGeneratedFunction(eval_module, ex))
+                    eq.lhs => drop_expr(RuntimeGeneratedFunction(
+                        eval_module, eval_module, ex))
                 end
             end
         end

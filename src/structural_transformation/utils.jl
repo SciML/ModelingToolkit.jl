@@ -181,7 +181,9 @@ end
 
 function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = nothing;
         may_be_zero = false,
-        allow_symbolic = false, allow_parameter = true, kwargs...)
+        allow_symbolic = false, allow_parameter = true,
+        conservative = false,
+        kwargs...)
     fullvars = state.fullvars
     @unpack graph, solvable_graph = state.structure
     eq = equations(state)[ieq]
@@ -220,6 +222,7 @@ function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = no
             coeffs === nothing || push!(coeffs, convert(Int, a))
         else
             all_int_vars = false
+            conservative && continue
         end
         if a != 0
             add_edge!(solvable_graph, ieq, j)
@@ -445,7 +448,7 @@ function simplify_shifts(var)
         t2 = op2.t
         return simplify_shifts(ModelingToolkit.Shift(t1 === nothing ? t2 : t1, s1 + s2)(vv2))
     else
-        return similarterm(var, operation(var), simplify_shifts.(arguments(var)),
-            Symbolics.symtype(var); metadata = unwrap(var).metadata)
+        return maketerm(typeof(var), operation(var), simplify_shifts.(arguments(var)),
+            unwrap(var).metadata)
     end
 end

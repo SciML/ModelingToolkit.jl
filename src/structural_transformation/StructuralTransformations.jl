@@ -7,7 +7,7 @@ using Symbolics: unwrap, linear_expansion, fast_substitute
 using SymbolicUtils
 using SymbolicUtils.Code
 using SymbolicUtils.Rewriters
-using SymbolicUtils: similarterm, istree
+using SymbolicUtils: maketerm, iscall
 
 using ModelingToolkit
 using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Differential,
@@ -49,6 +49,8 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 using SparseArrays
 
 using SimpleNonlinearSolve
+
+using DocStringExtensions
 
 export tearing, partial_state_selection, dae_index_lowering, check_consistency
 export dummy_derivative

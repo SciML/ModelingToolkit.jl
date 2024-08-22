@@ -3,25 +3,70 @@ $(TYPEDSIGNATURES)
 
 Generate `OptimizationSystem`, dependent variables, and parameters from an `OptimizationProblem`.
 """
-function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem; kwargs...)
+function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem;
+        u_names = nothing, p_names = nothing, kwargs...)
     num_cons = isnothing(prob.lcons) ? 0 : length(prob.lcons)
     if prob.p isa Tuple || prob.p isa NamedTuple
         p = [x for x in prob.p]
     else
         p = prob.p
     end
-
-    vars = ArrayInterface.restructure(prob.u0,
-        [variable(:x, i) for i in eachindex(prob.u0)])
-    params = if p isa DiffEqBase.NullParameters
-        []
-    elseif p isa MTKParameters
-        [variable(:α, i) for i in eachindex(vcat(p...))]
+    has_p = !(p isa Union{DiffEqBase.NullParameters, Nothing})
+    if u_names !== nothing
+        varnames_length_check(prob.u0, u_names; is_unknowns = true)
+        _vars = [variable(name) for name in u_names]
+    elseif SciMLBase.has_sys(prob.f)
+        varnames = getname.(variable_symbols(prob.f.sys))
+        varidxs = variable_index.((prob.f.sys,), varnames)
+        invpermute!(varnames, varidxs)
+        _vars = [variable(name) for name in varnames]
+        if prob.f.sys isa OptimizationSystem
+            for (i, sym) in enumerate(variable_symbols(prob.f.sys))
+                if hasbounds(sym)
+                    _vars[i] = Symbolics.setmetadata(
+                        _vars[i], VariableBounds, getbounds(sym))
+                end
+            end
+        end
     else
-        ArrayInterface.restructure(p, [variable(:α, i) for i in eachindex(p)])
+        _vars = [variable(:x, i) for i in eachindex(prob.u0)]
+    end
+    _vars = reshape(_vars, size(prob.u0))
+    vars = ArrayInterface.restructure(prob.u0, _vars)
+    params = if has_p
+        if p_names === nothing && SciMLBase.has_sys(prob.f)
+            p_names = Dict(parameter_index(prob.f.sys, sym) => sym
+            for sym in parameter_symbols(prob.f.sys))
+        end
+        if p isa MTKParameters
+            old_to_new = Dict()
+            for sym in parameter_symbols(prob)
+                idx = parameter_index(prob, sym)
+                old_to_new[unwrap(sym)] = unwrap(p_names[idx])
+            end
+            order = reorder_parameters(prob.f.sys, parameters(prob.f.sys))
+            for arr in order
+                for i in eachindex(arr)
+                    arr[i] = old_to_new[arr[i]]
+                end
+            end
+            _params = order
+        else
+            _params = define_params(p, p_names)
+        end
+        p isa Number ? _params[1] :
+        (p isa Tuple || p isa NamedTuple || p isa AbstractDict || p isa MTKParameters ?
+         _params :
+         ArrayInterface.restructure(p, _params))
+    else
+        []
     end
 
-    eqs = prob.f(vars, params)
+    if p isa MTKParameters
+        eqs = prob.f(vars, params...)
+    else
+        eqs = prob.f(vars, params)
+    end
 
     if DiffEqBase.isinplace(prob) && !isnothing(prob.f.cons)
         lhs = Array{Num}(undef, num_cons)
@@ -58,10 +103,32 @@ function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem; kwargs...)
     else
         cons = []
     end
+    params = values(params)
+    params = if params isa Number || (params isa Array && ndims(params) == 0)
+        [params[1]]
+    elseif p isa MTKParameters
+        reduce(vcat, params)
+    else
+        vec(collect(params))
+    end
 
-    de = OptimizationSystem(eqs, vec(vars), vec(toparam.(params));
+    sts = vec(collect(vars))
+    default_u0 = Dict(sts .=> vec(collect(prob.u0)))
+    default_p = if has_p
+        if prob.p isa AbstractDict
+            Dict(v => prob.p[k] for (k, v) in pairs(_params))
+        elseif prob.p isa MTKParameters
+            Dict(params .=> reduce(vcat, prob.p))
+        else
+            Dict(params .=> vec(collect(prob.p)))
+        end
+    else
+        Dict()
+    end
+    de = OptimizationSystem(eqs, sts, params;
         name = gensym(:MTKizedOpt),
         constraints = cons,
+        defaults = merge(default_u0, default_p),
         kwargs...)
     de
 end

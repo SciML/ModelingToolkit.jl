@@ -4,75 +4,79 @@ $(DocStringExtensions.README)
 module ModelingToolkit
 using PrecompileTools, Reexport
 @recompile_invalidations begin
-    using DocStringExtensions
-    using Compat
-    using AbstractTrees
-    using DiffEqBase, SciMLBase, ForwardDiff
-    using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap
-    using Distributed
-    using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
-    using InteractiveUtils
-    using Latexify, Unitful, ArrayInterface
-    using Setfield, ConstructionBase
-    using JumpProcesses
-    using DataStructures
-    using SpecialFunctions, NaNMath
-    using RuntimeGeneratedFunctions
-    using RuntimeGeneratedFunctions: drop_expr
-    using Base.Threads
-    using DiffEqCallbacks
-    using Graphs
-    import ExprTools: splitdef, combinedef
-    import Libdl
-    using DocStringExtensions
-    using Base: RefValue
-    using Combinatorics
-    import Distributions
-    import FunctionWrappersWrappers
-    using URIs: URI
-    using SciMLStructures
-
-    using RecursiveArrayTools
-
-    using SymbolicIndexingInterface
-    export independent_variables, unknowns, parameters, full_parameters, continuous_events,
-           discrete_events
-    import SymbolicUtils
-    import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype,
-                          Symbolic, isadd, ismul, ispow, issym, FnType,
-                          @rule, Rewriters, substitute, metadata, BasicSymbolic,
-                          Sym, Term
-    using SymbolicUtils.Code
-    import SymbolicUtils.Code: toexpr
-    import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
-    import JuliaFormatter
-
-    using MLStyle
-
-    using Reexport
+    using StaticArrays
     using Symbolics
-    using Symbolics: degree
-    using Symbolics: _parse_vars, value, @derivatives, get_variables,
-                     exprs_occur_in, solve_for, build_expr, unwrap, wrap,
-                     VariableSource, getname, variable, Connection, connect,
-                     NAMESPACE_SEPARATOR, set_scalar_metadata, setdefaultval,
-                     initial_state, transition, activeState, entry,
-                     ticksInState, timeInState, fixpoint_sub, fast_substitute
-    import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
-                      jacobian_sparsity, isaffine, islinear, _iszero, _isone,
-                      tosymbol, lower_varname, diff2term, var_from_nested_derivative,
-                      BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
-                      ParallelForm, SerialForm, MultithreadedForm, build_function,
-                      rhss, lhss, prettify_expr, gradient,
-                      jacobian, hessian, derivative, sparsejacobian, sparsehessian,
-                      substituter, scalarize, getparent, hasderiv, hasdiff
-
-    import DiffEqBase: @add_kwonly
-    import OrdinaryDiffEq
-
-    import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
 end
 
+import SymbolicUtils
+import SymbolicUtils: iscall, arguments, operation, maketerm, promote_symtype,
+                      Symbolic, isadd, ismul, ispow, issym, FnType,
+                      @rule, Rewriters, substitute, metadata, BasicSymbolic,
+                      Sym, Term
+using SymbolicUtils.Code
+import SymbolicUtils.Code: toexpr
+import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
+using DocStringExtensions
+using SpecialFunctions, NaNMath
+using DiffEqCallbacks
+using Graphs
+import ExprTools: splitdef, combinedef
+import OrderedCollections
+using DiffEqNoiseProcess: DiffEqNoiseProcess, WienerProcess
+
+using SymbolicIndexingInterface
+using LinearAlgebra, SparseArrays
+using InteractiveUtils
+using JumpProcesses
+using DataStructures
+using Base.Threads
+using Latexify, Unitful, ArrayInterface
+using Setfield, ConstructionBase
+import Libdl
+using DocStringExtensions
+using Base: RefValue
+using Combinatorics
+import Distributions
+import FunctionWrappersWrappers
+using URIs: URI
+using SciMLStructures
+using Compat
+using AbstractTrees
+using DiffEqBase, SciMLBase, ForwardDiff
+using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap, TimeDomain,
+                 PeriodicClock, Clock, SolverStepClock, Continuous
+using Distributed
+import JuliaFormatter
+using MLStyle
+using NonlinearSolve
+using Reexport
+using RecursiveArrayTools
+import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
+import BlockArrays: BlockedArray, Block, blocksize, blocksizes
+
+using RuntimeGeneratedFunctions
+using RuntimeGeneratedFunctions: drop_expr
+
+using Symbolics: degree
+using Symbolics: _parse_vars, value, @derivatives, get_variables,
+                 exprs_occur_in, solve_for, build_expr, unwrap, wrap,
+                 VariableSource, getname, variable, Connection, connect,
+                 NAMESPACE_SEPARATOR, set_scalar_metadata, setdefaultval,
+                 initial_state, transition, activeState, entry, hasnode,
+                 ticksInState, timeInState, fixpoint_sub, fast_substitute
+const NAMESPACE_SEPARATOR_SYMBOL = Symbol(NAMESPACE_SEPARATOR)
+import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
+                  jacobian_sparsity, isaffine, islinear, _iszero, _isone,
+                  tosymbol, lower_varname, diff2term, var_from_nested_derivative,
+                  BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
+                  ParallelForm, SerialForm, MultithreadedForm, build_function,
+                  rhss, lhss, prettify_expr, gradient,
+                  jacobian, hessian, derivative, sparsejacobian, sparsehessian,
+                  substituter, scalarize, getparent, hasderiv, hasdiff
+
+import DiffEqBase: @add_kwonly
+export independent_variables, unknowns, parameters, full_parameters, continuous_events,
+       discrete_events
 @reexport using Symbolics
 @reexport using UnPack
 RuntimeGeneratedFunctions.init(@__MODULE__)
@@ -126,6 +130,7 @@ using .BipartiteGraphs
 
 include("variables.jl")
 include("parameters.jl")
+include("independent_variables.jl")
 include("constants.jl")
 
 include("utils.jl")
@@ -182,13 +187,13 @@ for S in subtypes(ModelingToolkit.AbstractSystem)
 end
 
 const t_nounits = let
-    only(@parameters t)
+    only(@independent_variables t)
 end
 const t_unitful = let
-    only(@parameters t [unit = Unitful.u"s"])
+    only(@independent_variables t [unit = Unitful.u"s"])
 end
 const t = let
-    only(@parameters t [unit = DQ.u"s"])
+    only(@independent_variables t [unit = DQ.u"s"])
 end
 
 const D_nounits = Differential(t_nounits)
@@ -234,8 +239,8 @@ export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, DelayParentScope, GlobalScope
-export independent_variable, equations, controls,
-       observed, full_equations
+export independent_variable, equations, controls, observed, full_equations
+export initialization_equations, guesses, defaults, parameter_dependencies
 export structural_simplify, expand_connections, linearize, linearization_function
 
 export calculate_jacobian, generate_jacobian, generate_function, generate_custom_function
@@ -261,14 +266,16 @@ export generate_initializesystem
 export alg_equations, diff_equations, has_alg_equations, has_diff_equations
 export get_alg_eqs, get_diff_eqs, has_alg_eqs, has_diff_eqs
 
-export @variables, @parameters, @constants, @brownian
+export @variables, @parameters, @independent_variables, @constants, @brownian
 export @named, @nonamespace, @namespace, extend, compose, complete
 export debug_system
 
 #export Continuous, Discrete, sampletime, input_timedomain, output_timedomain
 #export has_discrete_domain, has_continuous_domain
 #export is_discrete_domain, is_continuous_domain, is_hybrid_domain
-export Sample, Hold, Shift, ShiftIndex
-export Clock #, InferredDiscrete,
+export Sample, Hold, Shift, ShiftIndex, sampletime, SampleTime
+export Clock, SolverStepClock, TimeDomain
+
+export MTKParameters
 
 end # module

@@ -30,8 +30,13 @@ ModelingToolkit.dump_variable_metadata(p)
 function dump_variable_metadata(var)
     uvar = unwrap(var)
     vartype, name = get(uvar.metadata, VariableSource, (:unknown, :unknown))
-    shape = Symbolics.shape(var)
-    if shape == ()
+    type = symtype(uvar)
+    if type <: AbstractArray
+        shape = Symbolics.shape(var)
+        if shape == ()
+            shape = nothing
+        end
+    else
         shape = nothing
     end
     unit = get(uvar.metadata, VariableUnit, nothing)
@@ -47,6 +52,7 @@ function dump_variable_metadata(var)
     if desc == ""
         desc = nothing
     end
+    default = hasdefault(uvar) ? getdefault(uvar) : nothing
     guess = getguess(uvar)
     disturbance = isdisturbance(uvar) || nothing
     tunable = istunable(uvar, isparameter(uvar))
@@ -72,7 +78,8 @@ function dump_variable_metadata(var)
         disturbance,
         tunable,
         dist,
-        type
+        type,
+        default
     )
 
     return NamedTuple(k => v for (k, v) in pairs(meta) if v !== nothing)
@@ -102,7 +109,7 @@ isirreducible(x) = isvarkind(VariableIrreducible, x)
 state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))::Float64
 
 function default_toterm(x)
-    if istree(x) && (op = operation(x)) isa Operator
+    if iscall(x) && (op = operation(x)) isa Operator
         if !(op isa Differential)
             if op isa Shift && op.steps < 0
                 return x
@@ -194,6 +201,8 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false
     defaults = canonicalize_varmap(defaults; toterm)
     varmap = merge(defaults, varmap)
     values = Dict()
+
+    T = Union{}
     for var in varlist
         var = unwrap(var)
         val = unwrap(fixpoint_sub(var, varmap; operator = Symbolics.Operator))
@@ -204,6 +213,10 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false
     missingvars = setdiff(varlist, collect(keys(values)))
     check && (isempty(missingvars) || throw(MissingVariablesError(missingvars)))
     return [values[unwrap(var)] for var in varlist]
+end
+
+function varmap_with_toterm(varmap; toterm = Symbolics.diff2term)
+    return merge(todict(varmap), Dict(toterm(unwrap(k)) => v for (k, v) in varmap))
 end
 
 function canonicalize_varmap(varmap; toterm = Symbolics.diff2term)
@@ -232,7 +245,8 @@ ishistory(x) = ishistory(unwrap(x))
 ishistory(x::Symbolic) = getmetadata(x, IsHistory, false)
 hist(x, t) = wrap(hist(unwrap(x), t))
 function hist(x::Symbolic, t)
-    setmetadata(toparam(similarterm(x, operation(x), [unwrap(t)], metadata = metadata(x))),
+    setmetadata(
+        toparam(maketerm(typeof(x), operation(x), [unwrap(t)], metadata(x))),
         IsHistory, true)
 end
 
@@ -456,7 +470,7 @@ end
 ## Guess ======================================================================
 struct VariableGuess end
 Symbolics.option_to_metadata_type(::Val{:guess}) = VariableGuess
-getguess(x::Num) = getguess(Symbolics.unwrap(x))
+getguess(x::Union{Num, Symbolics.Arr}) = getguess(Symbolics.unwrap(x))
 
 """
     getguess(x)
@@ -469,8 +483,6 @@ Create variables with a guess like this
 ```
 """
 function getguess(x)
-    p = Symbolics.getparent(x, nothing)
-    p === nothing || (x = p)
     Symbolics.getmetadata(x, VariableGuess, nothing)
 end
 

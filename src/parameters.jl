@@ -15,9 +15,9 @@ function isparameter(x)
         isparameter(p) ||
             (hasmetadata(p, Symbolics.VariableSource) &&
              getmetadata(p, Symbolics.VariableSource)[1] == :parameters)
-    elseif istree(x) && operation(x) isa Symbolic
+    elseif iscall(x) && operation(x) isa Symbolic
         varT === PARAMETER || isparameter(operation(x))
-    elseif istree(x) && operation(x) == (getindex)
+    elseif iscall(x) && operation(x) == (getindex)
         isparameter(arguments(x)[1])
     elseif x isa Symbolic
         varT === PARAMETER
@@ -54,6 +54,8 @@ tovar(s::Num) = Num(tovar(value(s)))
 $(SIGNATURES)
 
 Define one or more known parameters.
+
+See also [`@independent_variables`](@ref), [`@variables`](@ref) and [`@constants`](@ref).
 """
 macro parameters(xs...)
     Symbolics._parse_vars(:parameters,

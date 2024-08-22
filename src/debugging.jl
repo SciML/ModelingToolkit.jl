@@ -28,9 +28,9 @@ end
 
 debug_sub(eq::Equation) = debug_sub(eq.lhs) ~ debug_sub(eq.rhs)
 function debug_sub(ex)
-    istree(ex) || return ex
+    iscall(ex) || return ex
     f = operation(ex)
     args = map(debug_sub, arguments(ex))
     f in LOGGED_FUN ? logged_fun(f, args...) :
-    similarterm(ex, f, args, metadata = metadata(ex))
+    maketerm(typeof(ex), f, args, metadata(ex))
 end

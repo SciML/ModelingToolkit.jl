@@ -30,3 +30,11 @@ end
 @test parentmodule(typeof(ODEPrecompileTest.f_noeval_good.f.f_oop).parameters[2]) ==
       ODEPrecompileTest
 @test ODEPrecompileTest.f_noeval_good(u, p, 0.1) == [4, 0, -16]
+
+ODEPrecompileTest.f_eval_bad(u, p, 0.1)
+
+@test parentmodule(typeof(ODEPrecompileTest.f_eval_good.f.f_iip)) ==
+      ODEPrecompileTest
+@test parentmodule(typeof(ODEPrecompileTest.f_eval_good.f.f_oop)) ==
+      ODEPrecompileTest
+@test ODEPrecompileTest.f_eval_good(u, p, 0.1) == [4, 0, -16]

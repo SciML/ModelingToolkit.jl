@@ -8,15 +8,19 @@ Units may be assigned with the following syntax.
 
 ```@example validation
 using ModelingToolkit, DynamicQuantities
-@variables t [unit = u"s"] x(t) [unit = u"m"] g(t) w(t) [unit = "Hz"]
+@independent_variables t [unit = u"s"]
+@variables x(t) [unit = u"m"] g(t) w(t) [unit = u"Hz"]
 
-@variables(t, [unit = u"s"], x(t), [unit = u"m"], g(t), w(t), [unit = "Hz"])
+@parameters(t, [unit = u"s"])
+@variables(x(t), [unit = u"m"], g(t), w(t), [unit = u"Hz"])
 
+@parameters begin
+    t, [unit = u"s"]
+end
 @variables(begin
-    t, [unit = u"s"],
     x(t), [unit = u"m"],
     g(t),
-    w(t), [unit = "Hz"]
+    w(t), [unit = u"Hz"]
 end)
 
 # Simultaneously set default value (use plain numbers, not quantities)
@@ -46,10 +50,11 @@ Example usage below. Note that `ModelingToolkit` does not force unit conversions
 
 ```@example validation
 using ModelingToolkit, DynamicQuantities
+@independent_variables t [unit = u"ms"]
 @parameters τ [unit = u"ms"]
-@variables t [unit = u"ms"] E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
+@variables E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
-eqs = eqs = [D(E) ~ P - E / τ,
+eqs = [D(E) ~ P - E / τ,
     0 ~ P]
 ModelingToolkit.validate(eqs)
 ```
@@ -70,10 +75,11 @@ An example of an inconsistent system: at present, `ModelingToolkit` requires tha
 
 ```@example validation
 using ModelingToolkit, DynamicQuantities
+@independent_variables t [unit = u"ms"]
 @parameters τ [unit = u"ms"]
-@variables t [unit = u"ms"] E(t) [unit = u"J"] P(t) [unit = u"MW"]
+@variables E(t) [unit = u"J"] P(t) [unit = u"MW"]
 D = Differential(t)
-eqs = eqs = [D(E) ~ P - E / τ,
+eqs = [D(E) ~ P - E / τ,
     0 ~ P]
 ModelingToolkit.validate(eqs) #Returns false while displaying a warning message
 ```
@@ -115,7 +121,8 @@ In order for a function to work correctly during both validation & execution, th
 
 ```julia
 using ModelingToolkit, DynamicQuantities
-@variables t [unit = u"ms"] E(t) [unit = u"J"] P(t) [unit = u"MW"]
+@independent_variables t [unit = u"ms"]
+@variables E(t) [unit = u"J"] P(t) [unit = u"MW"]
 D = Differential(t)
 eqs = [D(E) ~ P - E / 1u"ms"]
 ModelingToolkit.validate(eqs) #Returns false while displaying a warning message
@@ -129,8 +136,9 @@ Instead, they should be parameterized:
 
 ```@example validation3
 using ModelingToolkit, DynamicQuantities
+@independent_variables t [unit = u"ms"]
 @parameters τ [unit = u"ms"]
-@variables t [unit = u"ms"] E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
+@variables E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
 eqs = [D(E) ~ P - E / τ]
 ModelingToolkit.validate(eqs) #Returns true

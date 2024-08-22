@@ -10,10 +10,10 @@ $(FIELDS)
 
 ```julia
 using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @parameters σ ρ β
-@variables t x(t) y(t) z(t)
-D = Differential(t)
+@variables x(t) y(t) z(t)
 
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
@@ -104,10 +104,10 @@ struct SDESystem <: AbstractODESystem
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
     """
-    A mapping from dependent parameters to expressions describing how they are calculated from
-    other parameters.
+    Topologically sorted parameter dependency equations, where all symbols are parameters and
+    the LHS is a single parameter.
     """
-    parameter_dependencies::Union{Nothing, Dict}
+    parameter_dependencies::Vector{Equation}
     """
     Metadata for the system, to be used by downstream packages.
     """
@@ -128,19 +128,32 @@ struct SDESystem <: AbstractODESystem
     The hierarchical parent system before simplification.
     """
     parent::Any
+    """
+    Signal for whether the noise equations should be treated as a scalar process. This should only
+    be `true` when `noiseeqs isa Vector`. 
+    """
+    is_scalar_noise::Bool
 
     function SDESystem(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed,
             tgrad,
             jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
             cevents, devents, parameter_dependencies, metadata = nothing, gui_metadata = nothing,
-            complete = false, index_cache = nothing, parent = nothing;
+            complete = false, index_cache = nothing, parent = nothing, is_scalar_noise = false;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
+            check_independent_variables([iv])
             check_variables(dvs, iv)
             check_parameters(ps, iv)
             check_equations(deqs, iv)
+            check_equations(neqs, dvs)
+            if size(neqs, 1) != length(deqs)
+                throw(ArgumentError("Noise equations ill-formed. Number of rows must match number of drift equations. size(neqs,1) = $(size(neqs,1)) != length(deqs) = $(length(deqs))"))
+            end
             check_equations(equations(cevents), iv)
+            if is_scalar_noise && neqs isa AbstractMatrix
+                throw(ArgumentError("Noise equations ill-formed. Received a matrix of noise equations of size $(size(neqs)), but `is_scalar_noise` was set to `true`. Scalar noise is only compatible with an `AbstractVector` of noise equations."))
+            end
         end
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(dvs, ps, iv)
@@ -149,7 +162,7 @@ struct SDESystem <: AbstractODESystem
         new(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac,
             Wfact, Wfact_t, name, systems, defaults, connector_type, cevents, devents,
-            parameter_dependencies, metadata, gui_metadata, complete, index_cache, parent)
+            parameter_dependencies, metadata, gui_metadata, complete, index_cache, parent, is_scalar_noise)
     end
 end
 
@@ -166,9 +179,13 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
         checks = true,
         continuous_events = nothing,
         discrete_events = nothing,
-        parameter_dependencies = nothing,
+        parameter_dependencies = Equation[],
         metadata = nothing,
-        gui_metadata = nothing)
+        gui_metadata = nothing,
+        complete = false,
+        index_cache = nothing,
+        parent = nothing,
+        is_scalar_noise = false)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     iv′ = value(iv)
@@ -186,7 +203,8 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
             :SDESystem, force = true)
     end
     defaults = todict(defaults)
-    defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
+    defaults = Dict(value(k) => value(v)
+    for (k, v) in pairs(defaults) if value(v) !== nothing)
 
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, dvs′)
@@ -205,7 +223,8 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
     SDESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, neqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
         ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
-        cont_callbacks, disc_callbacks, parameter_dependencies, metadata, gui_metadata; checks = checks)
+        cont_callbacks, disc_callbacks, parameter_dependencies, metadata, gui_metadata,
+        complete, index_cache, parent, is_scalar_noise; checks = checks)
 end
 
 function SDESystem(sys::ODESystem, neqs; kwargs...)
@@ -220,13 +239,40 @@ function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
         isequal(nameof(sys1), nameof(sys2)) &&
         isequal(get_eqs(sys1), get_eqs(sys2)) &&
         isequal(get_noiseeqs(sys1), get_noiseeqs(sys2)) &&
+        isequal(get_is_scalar_noise(sys1), get_is_scalar_noise(sys2)) &&
         _eq_unordered(get_unknowns(sys1), get_unknowns(sys2)) &&
         _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
         all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
 end
 
+function __num_isdiag_noise(mat)
+    for i in axes(mat, 1)
+        nnz = 0
+        for j in axes(mat, 2)
+            if !isequal(mat[i, j], 0)
+                nnz += 1
+            end
+        end
+        if nnz > 1
+            return (false)
+        end
+    end
+    true
+end
+function __get_num_diag_noise(mat)
+    map(axes(mat, 1)) do i
+        for j in axes(mat, 2)
+            mij = mat[i, j]
+            if !isequal(mij, 0)
+                return mij
+            end
+        end
+        0
+    end
+end
+
 function generate_diffusion_function(sys::SDESystem, dvs = unknowns(sys),
-        ps = full_parameters(sys); isdde = false, kwargs...)
+        ps = parameters(sys); isdde = false, kwargs...)
     eqs = get_noiseeqs(sys)
     if isdde
         eqs = delay_to_function(sys, eqs)
@@ -291,7 +337,7 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
     end
 
     SDESystem(deqs, get_noiseeqs(sys), get_iv(sys), unknowns(sys), parameters(sys),
-        name = name, parameter_dependencies = get_parameter_dependencies(sys), checks = false)
+        name = name, parameter_dependencies = parameter_dependencies(sys), checks = false)
 end
 
 """
@@ -313,10 +359,10 @@ experiments. Springer Science & Business Media.
 
 ```julia
 using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @parameters α β
-@variables t x(t) y(t) z(t)
-D = Differential(t)
+@variables x(t) y(t) z(t)
 
 eqs = [D(x) ~ α*x]
 noiseeqs = [β*x]
@@ -399,29 +445,28 @@ function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
     # return modified SDE System
     SDESystem(deqs, noiseeqs, get_iv(sys), unknown_vars, parameters(sys);
         defaults = Dict(θ => θ0), observed = [weight ~ θ / θ0],
-        name = name, parameter_dependencies = get_parameter_dependencies(sys),
+        name = name, parameter_dependencies = parameter_dependencies(sys),
         checks = false)
 end
 
-function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
+function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(sys),
         ps = parameters(sys),
         u0 = nothing;
         version = nothing, tgrad = false, sparse = false,
-        jac = false, Wfact = false, eval_expression = true,
+        jac = false, Wfact = false, eval_expression = false,
+        eval_module = @__MODULE__,
         checkbounds = false,
-        kwargs...) where {iip}
+        kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEFunction`")
     end
     dvs = scalarize.(dvs)
 
-    f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression}, kwargs...)
-    f_oop, f_iip = eval_expression ?
-                   (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in f_gen) : f_gen
-    g_gen = generate_diffusion_function(sys, dvs, ps; expression = Val{eval_expression},
+    f_gen = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
+    f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
+    g_gen = generate_diffusion_function(sys, dvs, ps; expression = Val{true},
         kwargs...)
-    g_oop, g_iip = eval_expression ?
-                   (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in g_gen) : g_gen
+    g_oop, g_iip = eval_or_rgf.(g_gen; eval_expression, eval_module)
 
     f(u, p, t) = f_oop(u, p, t)
     f(u, p::MTKParameters, t) = f_oop(u, p..., t)
@@ -433,11 +478,10 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
     g(du, u, p::MTKParameters, t) = g_iip(du, u, p..., t)
 
     if tgrad
-        tgrad_gen = generate_tgrad(sys, dvs, ps; expression = Val{eval_expression},
+        tgrad_gen = generate_tgrad(sys, dvs, ps; expression = Val{true},
             kwargs...)
-        tgrad_oop, tgrad_iip = eval_expression ?
-                               (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in tgrad_gen) :
-                               tgrad_gen
+        tgrad_oop, tgrad_iip = eval_or_rgf.(tgrad_gen; eval_expression, eval_module)
+
         _tgrad(u, p, t) = tgrad_oop(u, p, t)
         _tgrad(u, p::MTKParameters, t) = tgrad_oop(u, p..., t)
         _tgrad(J, u, p, t) = tgrad_iip(J, u, p, t)
@@ -447,11 +491,10 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
     end
 
     if jac
-        jac_gen = generate_jacobian(sys, dvs, ps; expression = Val{eval_expression},
+        jac_gen = generate_jacobian(sys, dvs, ps; expression = Val{true},
             sparse = sparse, kwargs...)
-        jac_oop, jac_iip = eval_expression ?
-                           (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in jac_gen) :
-                           jac_gen
+        jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
+
         _jac(u, p, t) = jac_oop(u, p, t)
         _jac(u, p::MTKParameters, t) = jac_oop(u, p..., t)
         _jac(J, u, p, t) = jac_iip(J, u, p, t)
@@ -463,12 +506,9 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
     if Wfact
         tmp_Wfact, tmp_Wfact_t = generate_factorized_W(sys, dvs, ps, true;
             expression = Val{true}, kwargs...)
-        Wfact_oop, Wfact_iip = eval_expression ?
-                               (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in tmp_Wfact) :
-                               tmp_Wfact
-        Wfact_oop_t, Wfact_iip_t = eval_expression ?
-                                   (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in tmp_Wfact_t) :
-                                   tmp_Wfact_t
+        Wfact_oop, Wfact_iip = eval_or_rgf.(tmp_Wfact; eval_expression, eval_module)
+        Wfact_oop_t, Wfact_iip_t = eval_or_rgf.(tmp_Wfact_t; eval_expression, eval_module)
+
         _Wfact(u, p, dtgamma, t) = Wfact_oop(u, p, dtgamma, t)
         _Wfact(u, p::MTKParameters, dtgamma, t) = Wfact_oop(u, p..., dtgamma, t)
         _Wfact(W, u, p, dtgamma, t) = Wfact_iip(W, u, p, dtgamma, t)
@@ -484,21 +524,9 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = unknowns(sys),
     M = calculate_massmatrix(sys)
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0', M)
 
-    obs = observed(sys)
-    observedfun = let sys = sys, dict = Dict()
-        function generated_observed(obsvar, u, p, t)
-            obs = get!(dict, value(obsvar)) do
-                build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
-            end
-            if p isa MTKParameters
-                obs(u, p..., t)
-            else
-                obs(u, p, t)
-            end
-        end
-    end
+    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
 
-    SDEFunction{iip}(f, g,
+    SDEFunction{iip, specialize}(f, g,
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
         tgrad = _tgrad === nothing ? nothing : _tgrad,
@@ -521,6 +549,16 @@ respectively.
 """
 function DiffEqBase.SDEFunction(sys::SDESystem, args...; kwargs...)
     SDEFunction{true}(sys, args...; kwargs...)
+end
+
+function DiffEqBase.SDEFunction{true}(sys::SDESystem, args...;
+        kwargs...)
+    SDEFunction{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
+end
+
+function DiffEqBase.SDEFunction{false}(sys::SDESystem, args...;
+        kwargs...)
+    SDEFunction{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
 """
@@ -601,29 +639,39 @@ function SDEFunctionExpr(sys::SDESystem, args...; kwargs...)
     SDEFunctionExpr{true}(sys, args...; kwargs...)
 end
 
-function DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map = [], tspan = get_tspan(sys),
+function DiffEqBase.SDEProblem{iip, specialize}(
+        sys::SDESystem, u0map = [], tspan = get_tspan(sys),
         parammap = DiffEqBase.NullParameters();
         sparsenoise = nothing, check_length = true,
-        callback = nothing, kwargs...) where {iip}
+        callback = nothing, kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEProblem`")
     end
-    f, u0, p = process_DEProblem(SDEFunction{iip}, sys, u0map, parammap; check_length,
+    f, u0, p = process_DEProblem(
+        SDEFunction{iip, specialize}, sys, u0map, parammap; check_length,
         kwargs...)
-    cbs = process_events(sys; callback)
+    cbs = process_events(sys; callback, kwargs...)
     sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
 
     noiseeqs = get_noiseeqs(sys)
+    is_scalar_noise = get_is_scalar_noise(sys)
     if noiseeqs isa AbstractVector
         noise_rate_prototype = nothing
+        if is_scalar_noise
+            noise = WienerProcess(0.0, 0.0, 0.0)
+        else
+            noise = nothing
+        end
     elseif sparsenoise
         I, J, V = findnz(SparseArrays.sparse(noiseeqs))
         noise_rate_prototype = SparseArrays.sparse(I, J, zero(eltype(u0)))
+        noise = nothing
     else
         noise_rate_prototype = zeros(eltype(u0), size(noiseeqs))
+        noise = nothing
     end
 
-    SDEProblem{iip}(f, u0, tspan, p; callback = cbs,
+    SDEProblem{iip}(f, u0, tspan, p; callback = cbs, noise,
         noise_rate_prototype = noise_rate_prototype, kwargs...)
 end
 
@@ -644,6 +692,21 @@ symbolically calculating numerical enhancements.
 """
 function DiffEqBase.SDEProblem(sys::SDESystem, args...; kwargs...)
     SDEProblem{true}(sys, args...; kwargs...)
+end
+
+function DiffEqBase.SDEProblem(sys::SDESystem,
+        u0map::StaticArray,
+        args...;
+        kwargs...)
+    SDEProblem{false, SciMLBase.FullSpecialize}(sys, u0map, args...; kwargs...)
+end
+
+function DiffEqBase.SDEProblem{true}(sys::SDESystem, args...; kwargs...)
+    SDEProblem{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
+end
+
+function DiffEqBase.SDEProblem{false}(sys::SDESystem, args...; kwargs...)
+    SDEProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
 """
@@ -676,14 +739,22 @@ function SDEProblemExpr{iip}(sys::SDESystem, u0map, tspan,
     sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
 
     noiseeqs = get_noiseeqs(sys)
+    is_scalar_noise = get_is_scalar_noise(sys)
     if noiseeqs isa AbstractVector
         noise_rate_prototype = nothing
+        if is_scalar_noise
+            noise = WienerProcess(0.0, 0.0, 0.0)
+        else
+            noise = nothing
+        end
     elseif sparsenoise
         I, J, V = findnz(SparseArrays.sparse(noiseeqs))
         noise_rate_prototype = SparseArrays.sparse(I, J, zero(eltype(u0)))
+        noise = nothing
     else
         T = u0 === nothing ? Float64 : eltype(u0)
         noise_rate_prototype = zeros(T, size(get_noiseeqs(sys)))
+        noise = nothing
     end
     ex = quote
         f = $f
@@ -691,7 +762,9 @@ function SDEProblemExpr{iip}(sys::SDESystem, u0map, tspan,
         tspan = $tspan
         p = $p
         noise_rate_prototype = $noise_rate_prototype
-        SDEProblem(f, u0, tspan, p; noise_rate_prototype = noise_rate_prototype,
+        noise = $noise
+        SDEProblem(
+            f, u0, tspan, p; noise_rate_prototype = noise_rate_prototype, noise = noise,
             $(kwargs...))
     end
     !linenumbers ? Base.remove_linenums!(ex) : ex

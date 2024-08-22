@@ -1,8 +1,9 @@
 using ModelingToolkit, Test
 
 # r is an input, and y is an output.
-@variables t x(t)=0 y(t)=0 u(t)=0 r(t)=0
-@variables t x(t)=0 y(t)=0 u(t)=0 r(t)=0 [input = true]
+@independent_variables t
+@variables x(t)=0 y(t)=0 u(t)=0 r(t)=0
+@variables x(t)=0 y(t)=0 u(t)=0 r(t)=0 [input = true]
 @parameters kp = 1
 D = Differential(t)
 
@@ -120,10 +121,14 @@ lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
 lsyss, _ = ModelingToolkit.linearize_symbolic(pid, [reference.u, measurement.u],
     [ctr_output.u])
 
-@test substitute(lsyss.A, ModelingToolkit.defaults(pid)) == lsys.A
-@test substitute(lsyss.B, ModelingToolkit.defaults(pid)) == lsys.B
-@test substitute(lsyss.C, ModelingToolkit.defaults(pid)) == lsys.C
-@test substitute(lsyss.D, ModelingToolkit.defaults(pid)) == lsys.D
+@test substitute(
+    lsyss.A, ModelingToolkit.defaults_and_guesses(pid)) == lsys.A
+@test substitute(
+    lsyss.B, ModelingToolkit.defaults_and_guesses(pid)) == lsys.B
+@test substitute(
+    lsyss.C, ModelingToolkit.defaults_and_guesses(pid)) == lsys.C
+@test substitute(
+    lsyss.D, ModelingToolkit.defaults_and_guesses(pid)) == lsys.D
 
 # Test with the reverse desired unknown order as well to verify that similarity transform and reoreder_unknowns really works
 lsys = ModelingToolkit.reorder_unknowns(lsys, unknowns(ssys), reverse(desired_order))
@@ -192,66 +197,112 @@ lsys, ssys = linearize(sat, [u], [y]; op = Dict(u => 2))
 @test isempty(lsys.C)
 @test lsys.D[] == 0
 
-## Test that dummy_derivatives can be set to zero
-if VERSION >= v"1.8"
-    # The call to Link(; m = 0.2, l = 10, I = 1, g = -9.807) hangs forever on Julia v1.6
-    using LinearAlgebra
-    using ModelingToolkit
-    using ModelingToolkitStandardLibrary
-    using ModelingToolkitStandardLibrary.Blocks
-    using ModelingToolkitStandardLibrary.Mechanical.MultiBody2D
-    using ModelingToolkitStandardLibrary.Mechanical.TranslationalPosition
+# Test case when unknowns in system do not have equations in initialization system
+using ModelingToolkit, OrdinaryDiffEq, LinearAlgebra
+using ModelingToolkitStandardLibrary.Mechanical.Rotational
+using ModelingToolkitStandardLibrary.Blocks: Add, Sine, PID, SecondOrder, Step, RealOutput
+using ModelingToolkit: connect
 
-    using ControlSystemsMTK
-    using ControlSystemsMTK.ControlSystemsBase: sminreal, minreal, poles
-    connect = ModelingToolkit.connect
+# Parameters
+m1 = 1
+m2 = 1
+k = 1000 # Spring stiffness
+c = 10   # Damping coefficient
+@named inertia1 = Inertia(; J = m1)
+@named inertia2 = Inertia(; J = m2)
+@named spring = Spring(; c = k)
+@named damper = Damper(; d = c)
+@named torque = Torque()
 
-    @parameters t
-    D = Differential(t)
-
-    @named link1 = Link(; m = 0.2, l = 10, I = 1, g = -9.807)
-    @named cart = TranslationalPosition.Mass(; m = 1, s = 0)
-    @named fixed = Fixed()
-    @named force = Force(use_support = false)
-
-    eqs = [connect(link1.TX1, cart.flange)
-           connect(cart.flange, force.flange)
-           connect(link1.TY1, fixed.flange)]
-
-    @named model = ODESystem(eqs, t, [], []; systems = [link1, cart, force, fixed])
-    def = ModelingToolkit.defaults(model)
-    def[cart.s] = 10
-    def[cart.v] = 0
-    def[link1.A] = -pi / 2
-    def[link1.dA] = 0
-    lin_outputs = [cart.s, cart.v, link1.A, link1.dA]
-    lin_inputs = [force.f.u]
-
-    @info "named_ss"
-    G = named_ss(model, lin_inputs, lin_outputs, allow_symbolic = true, op = def,
-        allow_input_derivatives = true, zero_dummy_der = true)
-    G = sminreal(G)
-    @info "minreal"
-    G = minreal(G)
-    @info "poles"
-    ps = poles(G)
-
-    @test minimum(abs, ps) < 1e-6
-    @test minimum(abs, complex(0, 1.3777260367206716) .- ps) < 1e-10
-
-    lsys, syss = linearize(model, lin_inputs, lin_outputs, allow_symbolic = true, op = def,
-        allow_input_derivatives = true, zero_dummy_der = true)
-    lsyss, sysss = ModelingToolkit.linearize_symbolic(model, lin_inputs, lin_outputs;
-        allow_input_derivatives = true)
-
-    dummyder = setdiff(unknowns(sysss), unknowns(model))
-    def = merge(def, Dict(x => 0.0 for x in dummyder))
-    def[link1.fy1] = -def[link1.g] * def[link1.m]
-
-    @test substitute(lsyss.A, def) ≈ lsys.A
-    # We cannot pivot symbolically, so the part where a linear solve is required
-    # is not reliable.
-    @test substitute(lsyss.B, def)[1:6, 1] ≈ lsys.B[1:6, 1]
-    @test substitute(lsyss.C, def) ≈ lsys.C
-    @test substitute(lsyss.D, def) ≈ lsys.D
+function SystemModel(u = nothing; name = :model)
+    eqs = [connect(torque.flange, inertia1.flange_a)
+           connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
+           connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
+    if u !== nothing
+        push!(eqs, connect(torque.tau, u.output))
+        return ODESystem(eqs, t;
+            systems = [
+                torque,
+                inertia1,
+                inertia2,
+                spring,
+                damper,
+                u
+            ],
+            name)
+    end
+    ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
 end
+
+@named r = Step(start_time = 0)
+model = SystemModel()
+@named pid = PID(k = 100, Ti = 0.5, Td = 1)
+@named filt = SecondOrder(d = 0.9, w = 10)
+@named sensor = AngleSensor()
+@named er = Add(k2 = -1)
+
+connections = [connect(r.output, :r, filt.input)
+               connect(filt.output, er.input1)
+               connect(pid.ctr_output, :u, model.torque.tau)
+               connect(model.inertia2.flange_b, sensor.flange)
+               connect(sensor.phi, :y, er.input2)
+               connect(er.output, :e, pid.err_input)]
+
+closed_loop = ODESystem(connections, t, systems = [model, pid, filt, sensor, r, er],
+    name = :closed_loop, defaults = [
+        model.inertia1.phi => 0.0,
+        model.inertia2.phi => 0.0,
+        model.inertia1.w => 0.0,
+        model.inertia2.w => 0.0,
+        filt.x => 0.0,
+        filt.xd => 0.0
+    ])
+
+@test_nowarn linearize(closed_loop, :r, :y)
+
+# https://discourse.julialang.org/t/mtk-change-in-linearize/115760/3
+@mtkmodel Tank_noi begin
+    # Model parameters
+    @parameters begin
+        ρ = 1, [description = "Liquid density"]
+        A = 5, [description = "Cross sectional tank area"]
+        K = 5, [description = "Effluent valve constant"]
+        h_ς = 3, [description = "Scaling level in valve model"]
+    end
+    # Model variables, with initial values needed
+    @variables begin
+        m(t) = 1.5 * ρ * A, [description = "Liquid mass"]
+        md_i(t), [description = "Influent mass flow rate"]
+        md_e(t), [description = "Effluent mass flow rate"]
+        V(t), [description = "Liquid volume"]
+        h(t), [description = "level"]
+    end
+    # Providing model equations
+    @equations begin
+        D(m) ~ md_i - md_e
+        m ~ ρ * V
+        V ~ A * h
+        md_e ~ K * sqrt(h / h_ς)
+    end
+end
+
+@named tank_noi = Tank_noi()
+@unpack md_i, h, m = tank_noi
+m_ss = 2.4000000003229878
+@test_nowarn linearize(tank_noi, [md_i], [h]; op = Dict(m => m_ss, md_i => 2))
+
+# Test initialization
+@variables x(t) y(t) u(t)=1.0
+@parameters p = 1.0
+eqs = [D(x) ~ p * u, x ~ y]
+@named sys = ODESystem(eqs, t)
+
+matrices1, _ = linearize(sys, [u], []; op = Dict(x => 2.0))
+matrices2, _ = linearize(sys, [u], []; op = Dict(y => 2.0))
+@test matrices1 == matrices2
+
+# Ensure parameter values passed as `Dict` are respected
+linfun, _ = linearization_function(sys, [u], []; op = Dict(x => 2.0))
+matrices = linfun([1.0], Dict(p => 3.0), 1.0)
+# this would be 1 if the parameter value isn't respected
+@test matrices.f_u[] == 3.0

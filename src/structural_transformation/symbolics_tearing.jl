@@ -56,7 +56,7 @@ function eq_derivative_graph!(s::SystemStructure, eq::Int)
     return eq_diff
 end
 
-function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int)
+function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int; kwargs...)
     s = ts.structure
 
     eq_diff = eq_derivative_graph!(s, ieq)
@@ -75,7 +75,8 @@ function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int)
         add_edge!(s.graph, eq_diff, s.var_to_diff[var])
     end
     s.solvable_graph === nothing ||
-        find_eq_solvables!(ts, eq_diff; may_be_zero = true, allow_symbolic = false)
+        find_eq_solvables!(
+            ts, eq_diff; may_be_zero = true, allow_symbolic = false, kwargs...)
 
     return eq_diff
 end
@@ -85,6 +86,14 @@ function tearing_sub(expr, dict, s)
     s ? simplify(expr) : expr
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Like `equations(sys)`, but includes substitutions done by the tearing process.
+These equations matches generated numerical code.
+
+See also [`equations`](@ref) and [`ModelingToolkit.get_eqs`](@ref).
+"""
 function full_equations(sys::AbstractSystem; simplify = false)
     empty_substitutions(sys) && return equations(sys)
     substitutions = get_substitutions(sys)
@@ -92,7 +101,7 @@ function full_equations(sys::AbstractSystem; simplify = false)
     @unpack subs = substitutions
     solved = Dict(eq.lhs => eq.rhs for eq in subs)
     neweqs = map(equations(sys)) do eq
-        if istree(eq.lhs) && operation(eq.lhs) isa Union{Shift, Differential}
+        if iscall(eq.lhs) && operation(eq.lhs) isa Union{Shift, Differential}
             return tearing_sub(eq.lhs, solved, simplify) ~ tearing_sub(eq.rhs, solved,
                 simplify)
         else
@@ -568,7 +577,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
 
     for eq in obs
         lhs = eq.lhs
-        istree(lhs) || continue
+        iscall(lhs) || continue
         operation(lhs) === getindex || continue
         Symbolics.shape(lhs) !== Symbolics.Unknown() || continue
         arg1 = arguments(lhs)[1]

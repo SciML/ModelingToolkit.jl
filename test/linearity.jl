@@ -3,7 +3,8 @@ using DiffEqBase
 using Test
 
 # Define some variables
-@parameters t σ ρ β
+@independent_variables t
+@parameters σ ρ β
 @variables x(t) y(t) z(t)
 D = Differential(t)
 

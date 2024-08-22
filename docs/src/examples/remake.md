@@ -51,11 +51,8 @@ function loss(x, p)
     odeprob = p[1] # ODEProblem stored as parameters to avoid using global variables
     ps = parameter_values(odeprob) # obtain the parameter object from the problem
     ps = replace(Tunable(), ps, x) # create a copy with the values passed to the loss function
-    T = eltype(x)
-    # we also have to convert the `u0` vector
-    u0 = T.(state_values(odeprob))
     # remake the problem, passing in our new parameter object
-    newprob = remake(odeprob; u0 = u0, p = ps)
+    newprob = remake(odeprob; p = ps)
     timesteps = p[2]
     sol = solve(newprob, AutoTsit5(Rosenbrock23()); saveat = timesteps)
     truth = p[3]
@@ -136,7 +133,7 @@ over the various methods, listing their use cases.
 
 This method is the most generic. It can handle symbolic maps, initializations of
 parameters/states dependent on each other and partial updates. However, this comes at the
-cost of performance. `remake` is also not always inferrable.
+cost of performance. `remake` is also not always inferable.
 
 ## `remake` and `setp`/`setu`
 

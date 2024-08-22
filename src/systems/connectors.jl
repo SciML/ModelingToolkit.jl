@@ -14,7 +14,7 @@ end
 
 function get_connection_type(s)
     s = unwrap(s)
-    if istree(s) && operation(s) === getindex
+    if iscall(s) && operation(s) === getindex
         s = arguments(s)[1]
     end
     getmetadata(s, VariableConnectType, Equality)
@@ -82,10 +82,10 @@ function collect_instream!(set, eq::Equation)
 end
 
 function collect_instream!(set, expr, occurs = false)
-    istree(expr) || return occurs
+    iscall(expr) || return occurs
     op = operation(expr)
     op === instream && (push!(set, expr); occurs = true)
-    for a in SymbolicUtils.unsorted_arguments(expr)
+    for a in SymbolicUtils.arguments(expr)
         occurs |= collect_instream!(set, a, occurs)
     end
     return occurs
@@ -129,7 +129,7 @@ function generate_isouter(sys::AbstractSystem)
         function isouter(sys)::Bool
             s = string(nameof(sys))
             isconnector(sys) || error("$s is not a connector!")
-            idx = findfirst(isequal('₊'), s)
+            idx = findfirst(isequal(NAMESPACE_SEPARATOR), s)
             parent_name = Symbol(idx === nothing ? s : s[1:prevind(s, idx)])
             parent_name in outer_connectors
         end
@@ -163,10 +163,15 @@ end
 Base.nameof(l::ConnectionElement) = renamespace(nameof(l.sys), getname(l.v))
 Base.isequal(l1::ConnectionElement, l2::ConnectionElement) = l1 == l2
 function Base.:(==)(l1::ConnectionElement, l2::ConnectionElement)
-    nameof(l1.sys) == nameof(l2.sys) && isequal(l1.v, l2.v) && l1.isouter == l2.isouter
+    l1.isouter == l2.isouter && nameof(l1.sys) == nameof(l2.sys) && isequal(l1.v, l2.v)
 end
 
 const _debug_mode = Base.JLOptions().check_bounds == 1
+
+function Base.show(io::IO, c::ConnectionElement)
+    @unpack sys, v, isouter = c
+    print(io, nameof(sys), ".", v, "::", isouter ? "outer" : "inner")
+end
 
 function Base.hash(e::ConnectionElement, salt::UInt)
     if _debug_mode
@@ -187,7 +192,10 @@ end
 struct ConnectionSet
     set::Vector{ConnectionElement} # namespace.sys, var, isouter
 end
+ConnectionSet() = ConnectionSet(ConnectionElement[])
 Base.copy(c::ConnectionSet) = ConnectionSet(copy(c.set))
+Base.:(==)(a::ConnectionSet, b::ConnectionSet) = a.set == b.set
+Base.sort(a::ConnectionSet) = ConnectionSet(sort(a.set, by = string))
 
 function Base.show(io::IO, c::ConnectionSet)
     print(io, "<")
@@ -373,51 +381,42 @@ function generate_connection_set!(connectionsets, domain_csets,
 end
 
 function Base.merge(csets::AbstractVector{<:ConnectionSet}, allouter = false)
-    csets, merged = partial_merge(csets, allouter)
-    while merged
-        csets, merged = partial_merge(csets)
-    end
-    csets
-end
-
-function partial_merge(csets::AbstractVector{<:ConnectionSet}, allouter = false)
-    mcsets = ConnectionSet[]
     ele2idx = Dict{ConnectionElement, Int}()
-    cacheset = Set{ConnectionElement}()
-    merged = false
-    for (j, cset) in enumerate(csets)
-        if allouter
-            cset = ConnectionSet(map(withtrueouter, cset.set))
-        end
-        idx = nothing
-        for e in cset.set
-            idx = get(ele2idx, e, nothing)
-            if idx !== nothing
-                merged = true
-                break
+    idx2ele = ConnectionElement[]
+    union_find = IntDisjointSets(0)
+    prev_id = Ref(-1)
+    for cset in csets, (j, s) in enumerate(cset.set)
+        v = allouter ? withtrueouter(s) : s
+        id = let ele2idx = ele2idx, idx2ele = idx2ele
+            get!(ele2idx, v) do
+                push!(idx2ele, v)
+                id = length(idx2ele)
+                id′ = push!(union_find)
+                @assert id == id′
+                id
             end
         end
-        if idx === nothing
-            push!(mcsets, copy(cset))
-            for e in cset.set
-                ele2idx[e] = length(mcsets)
-            end
-        else
-            for e in mcsets[idx].set
-                push!(cacheset, e)
-            end
-            for e in cset.set
-                push!(cacheset, e)
-            end
-            empty!(mcsets[idx].set)
-            for e in cacheset
-                ele2idx[e] = idx
-                push!(mcsets[idx].set, e)
-            end
-            empty!(cacheset)
+        # isequal might not be equal? lol
+        if v.sys.namespace !== nothing
+            idx2ele[id] = v
         end
+        if j > 1
+            union!(union_find, prev_id[], id)
+        end
+        prev_id[] = id
     end
-    mcsets, merged
+    id2set = Dict{Int, Int}()
+    merged_set = ConnectionSet[]
+    for (id, ele) in enumerate(idx2ele)
+        rid = find_root!(union_find, id)
+        set_idx = get!(id2set, rid) do
+            set = ConnectionSet()
+            push!(merged_set, set)
+            length(merged_set)
+        end
+        push!(merged_set[set_idx].set, ele)
+    end
+    merged_set
 end
 
 function generate_connection_equations_and_stream_connections(csets::AbstractVector{

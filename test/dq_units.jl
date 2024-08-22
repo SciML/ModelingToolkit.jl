@@ -165,6 +165,59 @@ maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
 maj2 = MassActionJump(γ, [S => 1], [S => -1])
 @named js4 = JumpSystem([maj1, maj2], ModelingToolkit.t_nounits, [S], [β, γ])
 
+@mtkmodel ParamTest begin
+    @parameters begin
+        a, [unit = u"m"]
+    end
+    @variables begin
+        b(t), [unit = u"kg"]
+    end
+end
+
+@named sys = ParamTest()
+
+@named sys = ParamTest(a = 3.0u"cm")
+@test ModelingToolkit.getdefault(sys.a) ≈ 0.03
+
+@test_throws ErrorException ParamTest(; name = :t, a = 1.0)
+@test_throws ErrorException ParamTest(; name = :t, a = 1.0u"s")
+
+@mtkmodel ArrayParamTest begin
+    @parameters begin
+        a[1:2], [unit = u"m"]
+    end
+end
+
+@named sys = ArrayParamTest()
+
+@named sys = ArrayParamTest(a = [1.0, 3.0]u"cm")
+@test ModelingToolkit.getdefault(sys.a) ≈ [0.01, 0.03]
+
+@testset "Initialization checks" begin
+    @mtkmodel PendulumUnits begin
+        @parameters begin
+            g, [unit = u"m/s^2"]
+            L, [unit = u"m"]
+        end
+        @variables begin
+            x(t), [unit = u"m"]
+            y(t), [state_priority = 10, unit = u"m"]
+            λ(t), [unit = u"s^-2"]
+        end
+        @equations begin
+            D(D(x)) ~ λ * x
+            D(D(y)) ~ λ * y - g
+            x^2 + y^2 ~ L^2
+        end
+    end
+    @mtkbuild pend = PendulumUnits()
+    u0 = [pend.x => 1.0, pend.y => 0.0]
+    p = [pend.g => 1.0, pend.L => 1.0]
+    guess = [pend.λ => 0.0]
+    @test prob = ODEProblem(
+        pend, u0, (0.0, 1.0), p; guesses = guess, check_units = false) isa Any
+end
+
 @parameters p [unit = u"L/s"] d [unit = u"s^(-1)"]
 @parameters tt [unit = u"s"]
 @variables X(tt) [unit = u"L"]

@@ -24,6 +24,7 @@ end
             @safetestset "Parsing Test" include("variable_parsing.jl")
             @safetestset "Simplify Test" include("simplify.jl")
             @safetestset "Direct Usage Test" include("direct.jl")
+            @safetestset "IndexCache Test" include("index_cache.jl")
             @safetestset "System Linearity Test" include("linearity.jl")
             @safetestset "Input Output Test" include("input_output_handling.jl")
             @safetestset "Clock Test" include("clock.jl")
@@ -37,6 +38,8 @@ end
             @safetestset "DDESystem Test" include("dde.jl")
             @safetestset "NonlinearSystem Test" include("nonlinearsystem.jl")
             @safetestset "InitializationSystem Test" include("initializationsystem.jl")
+            @safetestset "Guess Propagation" include("guess_propagation.jl")
+            @safetestset "Hierarchical Initialization Equations" include("hierarchical_initialization_eqs.jl")
             @safetestset "PDE Construction Test" include("pde.jl")
             @safetestset "JumpSystem Test" include("jumpsystem.jl")
             @safetestset "Constraints Test" include("constraints.jl")
@@ -70,11 +73,13 @@ end
             @safetestset "Initial Values Test" include("initial_values.jl")
             @safetestset "Discrete System" include("discrete_system.jl")
             @safetestset "Equation Type Accessors Test" include("equation_type_accessors.jl")
+            @safetestset "Equations with complex values" include("complex.jl")
         end
     end
 
     if GROUP == "All" || GROUP == "InterfaceI" || GROUP == "SymbolicIndexingInterface"
         @safetestset "SymbolicIndexingInterface test" include("symbolic_indexing_interface.jl")
+        @safetestset "SciML Problem Input Test" include("sciml_problem_inputs.jl")
         @safetestset "MTKParameters Test" include("mtkparameters.jl")
     end
 
@@ -92,11 +97,13 @@ end
     if GROUP == "All" || GROUP == "Downstream"
         activate_downstream_env()
         @safetestset "Linearization Tests" include("downstream/linearize.jl")
+        @safetestset "Linearization Dummy Derivative Tests" include("downstream/linearization_dd.jl")
         @safetestset "Inverse Models Test" include("downstream/inversemodel.jl")
     end
 
     if GROUP == "All" || GROUP == "Extensions"
         activate_extensions_env()
         @safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl")
+        @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
     end
 end

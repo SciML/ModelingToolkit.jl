@@ -17,12 +17,17 @@ sol = solve(initprob)
 @test SciMLBase.successful_retcode(sol)
 @test maximum(abs.(sol[conditions])) < 1e-14
 
+@test_throws ModelingToolkit.ExtraVariablesSystemException ModelingToolkit.InitializationProblem(
+    pend, 0.0, [], [g => 1];
+    guesses = [ModelingToolkit.missing_variable_defaults(pend); x => 1; y => 0.2],
+    fully_determined = true)
+
 initprob = ModelingToolkit.InitializationProblem(pend, 0.0, [x => 1, y => 0], [g => 1];
     guesses = ModelingToolkit.missing_variable_defaults(pend))
 @test initprob isa NonlinearProblem
 sol = solve(initprob)
 @test SciMLBase.successful_retcode(sol)
-@test sol.u == [1.0, 0.0, 0.0, 0.0]
+@test sol.u == [0.0, 0.0, 0.0, 0.0]
 @test maximum(abs.(sol[conditions])) < 1e-14
 
 initprob = ModelingToolkit.InitializationProblem(
@@ -30,6 +35,10 @@ initprob = ModelingToolkit.InitializationProblem(
 @test initprob isa NonlinearLeastSquaresProblem
 sol = solve(initprob)
 @test !SciMLBase.successful_retcode(sol)
+
+@test_throws ModelingToolkit.ExtraVariablesSystemException ModelingToolkit.InitializationProblem(
+    pend, 0.0, [], [g => 1]; guesses = ModelingToolkit.missing_variable_defaults(pend),
+    fully_determined = true)
 
 prob = ODEProblem(pend, [x => 1, y => 0], (0.0, 1.5), [g => 1],
     guesses = ModelingToolkit.missing_variable_defaults(pend))
@@ -46,6 +55,11 @@ sol = solve(prob.f.initializeprob)
 @test maximum(abs.(sol[conditions])) < 1e-14
 sol = solve(prob, Rodas5P())
 @test maximum(abs.(sol[conditions][1])) < 1e-14
+
+@test_throws ModelingToolkit.ExtraVariablesSystemException ODEProblem(
+    pend, [x => 1], (0.0, 1.5), [g => 1],
+    guesses = ModelingToolkit.missing_variable_defaults(pend),
+    fully_determined = true)
 
 @connector Port begin
     p(t)
@@ -225,6 +239,9 @@ initsol = solve(initprob, reltol = 1e-12, abstol = 1e-12)
 @test SciMLBase.successful_retcode(initsol)
 @test maximum(abs.(initsol[conditions])) < 1e-14
 
+@test_throws ModelingToolkit.ExtraEquationsSystemException ModelingToolkit.InitializationProblem(
+    sys, 0.0, fully_determined = true)
+
 allinit = unknowns(sys) .=> initsol[unknowns(sys)]
 prob = ODEProblem(sys, allinit, (0, 0.1))
 sol = solve(prob, Rodas5P(), initializealg = BrownFullBasicInit())
@@ -232,7 +249,12 @@ sol = solve(prob, Rodas5P(), initializealg = BrownFullBasicInit())
 @test sol.retcode == SciMLBase.ReturnCode.Unstable
 @test maximum(abs.(initsol[conditions][1])) < 1e-14
 
+prob = ODEProblem(sys, allinit, (0, 0.1))
 prob = ODEProblem(sys, [], (0, 0.1), check = false)
+
+@test_throws ModelingToolkit.ExtraEquationsSystemException ODEProblem(
+    sys, [], (0, 0.1), fully_determined = true)
+
 sol = solve(prob, Rodas5P())
 # If initialized incorrectly, then it would be InitialFailure
 @test sol.retcode == SciMLBase.ReturnCode.Unstable
@@ -430,3 +452,37 @@ sol = solve(prob, Tsit5())
 
 # This should warn, but logging tests can't be marked as broken
 @test_logs prob = ODEProblem(simpsys, [], tspan, guesses = [x => 2.0])
+
+# Late Binding initialization_eqs
+# https://github.com/SciML/ModelingToolkit.jl/issues/2787
+
+@parameters g
+@variables x(t) y(t) [state_priority = 10] λ(t)
+eqs = [D(D(x)) ~ λ * x
+       D(D(y)) ~ λ * y - g
+       x^2 + y^2 ~ 1]
+@mtkbuild pend = ODESystem(eqs, t)
+
+prob = ODEProblem(pend, [x => 1], (0.0, 1.5), [g => 1],
+    guesses = [λ => 0, y => 1], initialization_eqs = [y ~ 1])
+
+unsimp = generate_initializesystem(pend; u0map = [x => 1], initialization_eqs = [y ~ 1])
+sys = structural_simplify(unsimp; fully_determined = false)
+@test length(equations(sys)) == 3
+
+# Extend two systems with initialization equations and guesses
+# https://github.com/SciML/ModelingToolkit.jl/issues/2845
+@variables x(t) y(t)
+@named sysx = ODESystem([D(x) ~ 0], t; initialization_eqs = [x ~ 1])
+@named sysy = ODESystem([D(y) ~ 0], t; initialization_eqs = [y^2 ~ 2], guesses = [y => 1])
+sys = extend(sysx, sysy)
+@test length(equations(generate_initializesystem(sys))) == 2
+@test length(ModelingToolkit.guesses(sys)) == 1
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/2873
+@testset "Error on missing defaults" begin
+    @variables x(t) y(t)
+    @named sys = ODESystem([x^2 + y^2 ~ 25, D(x) ~ 1], t)
+    ssys = structural_simplify(sys)
+    @test_throws ArgumentError ODEProblem(ssys, [x => 3], (0, 1), []) # y should have a guess
+end

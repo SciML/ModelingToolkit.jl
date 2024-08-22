@@ -7,6 +7,9 @@ function _reset_aggregator!(expr, integrator)
     if expr isa Symbol
         error("Error, encountered a symbol. This should not happen.")
     end
+    if expr isa LineNumberNode
+        return
+    end
 
     if (expr.head == :function)
         _reset_aggregator!(expr.args[end], integrator)
@@ -34,9 +37,10 @@ $(FIELDS)
 
 ```julia
 using ModelingToolkit, JumpProcesses
+using ModelingToolkit: t_nounits as t
 
 @parameters β γ
-@variables t S(t) I(t) R(t)
+@variables S(t) I(t) R(t)
 rate₁   = β*S*I
 affect₁ = [S ~ S - 1, I ~ I + 1]
 rate₂   = γ*I
@@ -90,10 +94,10 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
     """
-    A mapping from dependent parameters to expressions describing how they are calculated from
-    other parameters.
+    Topologically sorted parameter dependency equations, where all symbols are parameters and
+    the LHS is a single parameter.
     """
-    parameter_dependencies::Union{Nothing, Dict}
+    parameter_dependencies::Vector{Equation}
     """
     Metadata for the system, to be used by downstream packages.
     """
@@ -118,6 +122,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             complete = false, index_cache = nothing;
             checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
         if checks == true || (checks & CheckComponents) > 0
+            check_independent_variables([iv])
             check_variables(unknowns, iv)
             check_parameters(ps, iv)
         end
@@ -145,7 +150,7 @@ function JumpSystem(eqs, iv, unknowns, ps;
         checks = true,
         continuous_events = nothing,
         discrete_events = nothing,
-        parameter_dependencies = nothing,
+        parameter_dependencies = Equation[],
         metadata = nothing,
         gui_metadata = nothing,
         kwargs...)
@@ -174,7 +179,8 @@ function JumpSystem(eqs, iv, unknowns, ps;
             :JumpSystem, force = true)
     end
     defaults = todict(defaults)
-    defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
+    defaults = Dict(value(k) => value(v)
+    for (k, v) in pairs(defaults) if value(v) !== nothing)
 
     unknowns, ps = value.(unknowns), value.(ps)
     var_to_name = Dict()
@@ -191,15 +197,21 @@ function JumpSystem(eqs, iv, unknowns, ps;
         metadata, gui_metadata, checks = checks)
 end
 
+has_massactionjumps(js::JumpSystem) = !isempty(equations(js).x[1])
+has_constantratejumps(js::JumpSystem) = !isempty(equations(js).x[2])
+has_variableratejumps(js::JumpSystem) = !isempty(equations(js).x[3])
+
 function generate_rate_function(js::JumpSystem, rate)
     consts = collect_constants(rate)
     if !isempty(consts) # The SymbolicUtils._build_function method of this case doesn't support postprocess_fbody
         csubs = Dict(c => getdefault(c) for c in consts)
         rate = substitute(rate, csubs)
     end
-    p = reorder_parameters(js, full_parameters(js))
+    p = reorder_parameters(js, parameters(js))
     rf = build_function(rate, unknowns(js), p...,
         get_iv(js),
+        wrap_code = wrap_array_vars(js, rate; dvs = unknowns(js), ps = parameters(js)) .∘
+                    wrap_parameter_dependencies(js, !(rate isa AbstractArray)),
         expression = Val{true})
 end
 
@@ -209,19 +221,22 @@ function generate_affect_function(js::JumpSystem, affect, outputidxs)
         csubs = Dict(c => getdefault(c) for c in consts)
         affect = substitute(affect, csubs)
     end
-    compile_affect(affect, js, unknowns(js), full_parameters(js); outputidxs = outputidxs,
+    compile_affect(
+        affect, nothing, js, unknowns(js), parameters(js); outputidxs = outputidxs,
         expression = Val{true}, checkvars = false)
 end
 
-function assemble_vrj(js, vrj, unknowntoid)
-    _rate = drop_expr(@RuntimeGeneratedFunction(generate_rate_function(js, vrj.rate)))
+function assemble_vrj(
+        js, vrj, unknowntoid; eval_expression = false, eval_module = @__MODULE__)
+    _rate = eval_or_rgf(generate_rate_function(js, vrj.rate); eval_expression, eval_module)
     rate(u, p, t) = _rate(u, p, t)
     rate(u, p::MTKParameters, t) = _rate(u, p..., t)
 
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
-    affect = drop_expr(@RuntimeGeneratedFunction(generate_affect_function(js, vrj.affect!,
-        outputidxs)))
+    affect = eval_or_rgf(
+        generate_affect_function(js, vrj.affect!,
+            outputidxs); eval_expression, eval_module)
     VariableRateJump(rate, affect)
 end
 
@@ -240,15 +255,17 @@ function assemble_vrj_expr(js, vrj, unknowntoid)
     end
 end
 
-function assemble_crj(js, crj, unknowntoid)
-    _rate = drop_expr(@RuntimeGeneratedFunction(generate_rate_function(js, crj.rate)))
+function assemble_crj(
+        js, crj, unknowntoid; eval_expression = false, eval_module = @__MODULE__)
+    _rate = eval_or_rgf(generate_rate_function(js, crj.rate); eval_expression, eval_module)
     rate(u, p, t) = _rate(u, p, t)
     rate(u, p::MTKParameters, t) = _rate(u, p..., t)
 
     outputvars = (value(affect.lhs) for affect in crj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
-    affect = drop_expr(@RuntimeGeneratedFunction(generate_affect_function(js, crj.affect!,
-        outputidxs)))
+    affect = eval_or_rgf(
+        generate_affect_function(js, crj.affect!,
+            outputidxs); eval_expression, eval_module)
     ConstantRateJump(rate, affect)
 end
 
@@ -271,7 +288,7 @@ function numericrstoich(mtrs::Vector{Pair{V, W}}, unknowntoid) where {V, W}
     rs = Vector{Pair{Int, W}}()
     for (wspec, stoich) in mtrs
         spec = value(wspec)
-        if !istree(spec) && _iszero(spec)
+        if !iscall(spec) && _iszero(spec)
             push!(rs, 0 => stoich)
         else
             push!(rs, unknowntoid[spec] => stoich)
@@ -285,7 +302,7 @@ function numericnstoich(mtrs::Vector{Pair{V, W}}, unknowntoid) where {V, W}
     ns = Vector{Pair{Int, W}}()
     for (wspec, stoich) in mtrs
         spec = value(wspec)
-        !istree(spec) && _iszero(spec) &&
+        !iscall(spec) && _iszero(spec) &&
             error("Net stoichiometry can not have a species labelled 0.")
         push!(ns, unknowntoid[spec] => stoich)
     end
@@ -303,7 +320,7 @@ end
 ```julia
 DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan,
                            parammap = DiffEqBase.NullParameters;
-                           use_union = false,
+                           use_union = true,
                            kwargs...)
 ```
 
@@ -323,8 +340,9 @@ dprob = DiscreteProblem(complete(js), u₀map, tspan, parammap)
 """
 function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing},
         parammap = DiffEqBase.NullParameters();
-        checkbounds = false,
         use_union = true,
+        eval_expression = false,
+        eval_module = @__MODULE__,
         kwargs...)
     if !iscomplete(sys)
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
@@ -345,16 +363,7 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
 
     f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
 
-    # just taken from abstractodesystem.jl for ODEFunction def
-    obs = observed(sys)
-    observedfun = let sys = sys, dict = Dict()
-        function generated_observed(obsvar, u, p, t)
-            obs = get!(dict, value(obsvar)) do
-                build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
-            end
-            p isa MTKParameters ? obs(u, p..., t) : obs(u, p, t)
-        end
-    end
+    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
 
     df = DiscreteFunction{true, true}(f; sys = sys, observed = observedfun)
     DiscreteProblem(df, u0, tspan, p; kwargs...)
@@ -384,7 +393,7 @@ struct DiscreteProblemExpr{iip} end
 
 function DiscreteProblemExpr{iip}(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing},
         parammap = DiffEqBase.NullParameters();
-        use_union = false,
+        use_union = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblemExpr`")
@@ -413,6 +422,60 @@ end
 
 """
 ```julia
+DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan,
+                           parammap = DiffEqBase.NullParameters;
+                           use_union = true,
+                           kwargs...)
+```
+
+Generates a blank ODEProblem for a pure jump JumpSystem to utilize as its `prob.prob`. This
+is used in the case where there are no ODEs and no SDEs associated with the system but there
+are jumps with an explicit time dependency (i.e. `VariableRateJump`s). If no jumps have an
+explicit time dependence, i.e. all are `ConstantRateJump`s or `MassActionJump`s then
+`DiscreteProblem` should be preferred for performance reasons.
+
+Continuing the example from the [`JumpSystem`](@ref) definition:
+
+```julia
+using DiffEqBase, JumpProcesses
+u₀map = [S => 999, I => 1, R => 0]
+parammap = [β => 0.1 / 1000, γ => 0.01]
+tspan = (0.0, 250.0)
+oprob = ODEProblem(complete(js), u₀map, tspan, parammap)
+```
+"""
+function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing},
+        parammap = DiffEqBase.NullParameters();
+        use_union = false,
+        eval_expression = false,
+        eval_module = @__MODULE__,
+        kwargs...)
+    if !iscomplete(sys)
+        error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
+    end
+    dvs = unknowns(sys)
+    ps = parameters(sys)
+
+    defs = defaults(sys)
+    defs = mergedefaults(defs, parammap, ps)
+    defs = mergedefaults(defs, u0map, dvs)
+
+    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        p = MTKParameters(sys, parammap, u0map)
+    else
+        p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    end
+
+    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
+
+    f = (du, u, p, t) -> (du .= 0; nothing)
+    df = ODEFunction(f; sys, observed = observedfun)
+    ODEProblem(df, u0, tspan, p; kwargs...)
+end
+
+"""
+```julia
 DiffEqBase.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
 ```
 
@@ -425,8 +488,9 @@ jprob = JumpProblem(complete(js), dprob, Direct())
 sol = solve(jprob, SSAStepper())
 ```
 """
-function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = nothing,
-        kwargs...)
+function JumpProcesses.JumpProblem(js::JumpSystem, prob,
+        aggregator = JumpProcesses.NullAggregator(); callback = nothing,
+        eval_expression = false, eval_module = @__MODULE__, kwargs...)
     if !iscomplete(js)
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `JumpProblem`")
     end
@@ -439,15 +503,20 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = 
 
     majpmapper = JumpSysMajParamMapper(js, p; jseqs = eqs, rateconsttype = invttype)
     majs = isempty(eqs.x[1]) ? nothing : assemble_maj(eqs.x[1], unknowntoid, majpmapper)
-    crjs = ConstantRateJump[assemble_crj(js, j, unknowntoid) for j in eqs.x[2]]
-    vrjs = VariableRateJump[assemble_vrj(js, j, unknowntoid) for j in eqs.x[3]]
+    crjs = ConstantRateJump[assemble_crj(js, j, unknowntoid; eval_expression, eval_module)
+                            for j in eqs.x[2]]
+    vrjs = VariableRateJump[assemble_vrj(js, j, unknowntoid; eval_expression, eval_module)
+                            for j in eqs.x[3]]
     ((prob isa DiscreteProblem) && !isempty(vrjs)) &&
         error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")
     jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, majs)
 
-    if needs_vartojumps_map(aggregator) || needs_depgraph(aggregator)
-        jdeps = asgraph(js)
-        vdeps = variable_dependencies(js)
+    # dep graphs are only for constant rate jumps
+    nonvrjs = ArrayPartition(eqs.x[1], eqs.x[2])
+    if needs_vartojumps_map(aggregator) || needs_depgraph(aggregator) ||
+       (aggregator isa JumpProcesses.NullAggregator)
+        jdeps = asgraph(js; eqs = nonvrjs)
+        vdeps = variable_dependencies(js; eqs = nonvrjs)
         vtoj = jdeps.badjlist
         jtov = vdeps.badjlist
         jtoj = needs_depgraph(aggregator) ? eqeq_dependencies(jdeps, vdeps).fadjlist :
@@ -459,7 +528,8 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = 
     end
 
     # handle events, making sure to reset aggregators in the generated affect functions
-    cbs = process_events(js; callback, postprocess_affect_expr! = _reset_aggregator!)
+    cbs = process_events(js; callback, eval_expression, eval_module,
+        postprocess_affect_expr! = _reset_aggregator!)
 
     JumpProblem(prob, aggregator, jset; dep_graph = jtoj, vartojumps_map = vtoj,
         jumptovars_map = jtov, scale_rates = false, nocopy = true,

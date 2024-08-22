@@ -3,21 +3,36 @@ $(TYPEDSIGNATURES)
 
 Generate `ODESystem`, dependent variables, and parameters from an `ODEProblem`.
 """
-function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
+function modelingtoolkitize(
+        prob::DiffEqBase.ODEProblem; u_names = nothing, p_names = nothing, kwargs...)
     prob.f isa DiffEqBase.AbstractParameterizedFunction &&
         return prob.f.sys
-    @parameters t
-
+    t = t_nounits
     p = prob.p
     has_p = !(p isa Union{DiffEqBase.NullParameters, Nothing})
 
-    _vars = define_vars(prob.u0, t)
+    if u_names !== nothing
+        varnames_length_check(prob.u0, u_names; is_unknowns = true)
+        _vars = [_defvar(name)(t) for name in u_names]
+    elseif SciMLBase.has_sys(prob.f)
+        varnames = getname.(variable_symbols(prob.f.sys))
+        varidxs = variable_index.((prob.f.sys,), varnames)
+        invpermute!(varnames, varidxs)
+        _vars = [_defvar(name)(t) for name in varnames]
+    else
+        _vars = define_vars(prob.u0, t)
+    end
 
     vars = prob.u0 isa Number ? _vars : ArrayInterface.restructure(prob.u0, _vars)
     params = if has_p
-        _params = define_params(p)
+        if p_names === nothing && SciMLBase.has_sys(prob.f)
+            p_names = Dict(parameter_index(prob.f.sys, sym) => sym
+            for sym in parameter_symbols(prob.f.sys))
+        end
+        _params = define_params(p, p_names)
         p isa Number ? _params[1] :
-        (p isa Tuple || p isa NamedTuple || p isa AbstractDict ? _params :
+        (p isa Tuple || p isa NamedTuple || p isa AbstractDict || p isa MTKParameters ?
+         _params :
          ArrayInterface.restructure(p, _params))
     else
         []
@@ -25,7 +40,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
 
     var_set = Set(vars)
 
-    D = Differential(t)
+    D = D_nounits
     mm = prob.f.mass_matrix
 
     if mm === I
@@ -70,6 +85,8 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
     default_p = if has_p
         if prob.p isa AbstractDict
             Dict(v => prob.p[k] for (k, v) in pairs(_params))
+        elseif prob.p isa MTKParameters
+            Dict(params .=> reduce(vcat, prob.p))
         else
             Dict(params .=> vec(collect(prob.p)))
         end
@@ -90,10 +107,6 @@ _defvar(x) = variable(x, T = SymbolicUtils.FnType{Tuple, Real})
 
 function define_vars(u, t)
     [_defvaridx(:x, i)(t) for i in eachindex(u)]
-end
-
-function define_vars(u::Union{SLArray, LArray}, t)
-    [_defvar(x)(t) for x in LabelledArrays.symnames(typeof(u))]
 end
 
 function define_vars(u::NTuple{<:Number}, t)
@@ -125,44 +138,87 @@ function Base.showerror(io::IO, e::ModelingtoolkitizeParametersNotSupportedError
     println(io, e.type)
 end
 
-function define_params(p)
+function varnames_length_check(vars, names; is_unknowns = false)
+    if length(names) != length(vars)
+        throw(ArgumentError("""
+            Number of $(is_unknowns ? "unknowns" : "parameters") ($(length(vars))) \
+            does not match number of names ($(length(names))).
+        """))
+    end
+end
+
+function define_params(p, _ = nothing)
     throw(ModelingtoolkitizeParametersNotSupportedError(typeof(p)))
 end
 
-function define_params(p::AbstractArray)
-    [toparam(variable(:α, i)) for i in eachindex(p)]
-end
-
-function define_params(p::Number)
-    [toparam(variable(:α))]
-end
-
-function define_params(p::AbstractDict)
-    OrderedDict(k => toparam(variable(:α, i)) for (i, k) in zip(1:length(p), keys(p)))
-end
-
-function define_params(p::Union{SLArray, LArray})
-    [toparam(variable(x)) for x in LabelledArrays.symnames(typeof(p))]
-end
-
-function define_params(p::Tuple)
-    tuple((toparam(variable(:α, i)) for i in eachindex(p))...)
-end
-
-function define_params(p::NamedTuple)
-    NamedTuple(x => toparam(variable(x)) for x in keys(p))
-end
-
-function define_params(p::MTKParameters)
-    bufs = (p...,)
-    i = 1
-    ps = []
-    for buf in bufs
-        for _ in buf
-            push!(ps, toparam(variable(:α, i)))
-        end
+function define_params(p::AbstractArray, names = nothing)
+    if names === nothing
+        [toparam(variable(:α, i)) for i in eachindex(p)]
+    else
+        varnames_length_check(p, names)
+        [toparam(variable(names[i])) for i in eachindex(p)]
     end
-    return identity.(ps)
+end
+
+function define_params(p::Number, names = nothing)
+    if names === nothing
+        [toparam(variable(:α))]
+    elseif names isa Union{AbstractArray, AbstractDict}
+        varnames_length_check(p, names)
+        [toparam(variable(names[i])) for i in eachindex(p)]
+    else
+        [toparam(variable(names))]
+    end
+end
+
+function define_params(p::AbstractDict, names = nothing)
+    if names === nothing
+        OrderedDict(k => toparam(variable(:α, i)) for (i, k) in zip(1:length(p), keys(p)))
+    else
+        varnames_length_check(p, names)
+        OrderedDict(k => toparam(variable(names[k])) for k in keys(p))
+    end
+end
+
+function define_params(p::Tuple, names = nothing)
+    if names === nothing
+        tuple((toparam(variable(:α, i)) for i in eachindex(p))...)
+    else
+        varnames_length_check(p, names)
+        tuple((toparam(variable(names[i])) for i in eachindex(p))...)
+    end
+end
+
+function define_params(p::NamedTuple, names = nothing)
+    if names === nothing
+        NamedTuple(x => toparam(variable(x)) for x in keys(p))
+    else
+        varnames_length_check(p, names)
+        NamedTuple(x => toparam(variable(names[x])) for x in keys(p))
+    end
+end
+
+function define_params(p::MTKParameters, names = nothing)
+    if names === nothing
+        bufs = (p...,)
+        i = 1
+        ps = []
+        for buf in bufs
+            for _ in buf
+                push!(
+                    ps,
+                    if names === nothing
+                        toparam(variable(:α, i))
+                    else
+                        toparam(variable(names[i]))
+                    end
+                )
+            end
+        end
+        return identity.(ps)
+    else
+        return collect(values(names))
+    end
 end
 
 """
@@ -173,7 +229,7 @@ Generate `SDESystem`, dependent variables, and parameters from an `SDEProblem`.
 function modelingtoolkitize(prob::DiffEqBase.SDEProblem; kwargs...)
     prob.f isa DiffEqBase.AbstractParameterizedFunction &&
         return (prob.f.sys, prob.f.sys.unknowns, prob.f.sys.ps)
-    @parameters t
+    @independent_variables t
     p = prob.p
     has_p = !(p isa Union{DiffEqBase.NullParameters, Nothing})
 

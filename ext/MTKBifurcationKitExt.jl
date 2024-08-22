@@ -27,7 +27,7 @@ struct ObservableRecordFromSolution{S, T}
             plot_var,
             bif_idx,
             u0_vals,
-            p_vals) where {S, T}
+            p_vals)
         obs_eqs = observed(nsys)
         target_obs_idx = findfirst(isequal(plot_var, eq.lhs) for eq in observed(nsys))
         state_end_idxs = length(unknowns(nsys))
@@ -103,8 +103,9 @@ function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem,
     # Converts the input state guess.
     u0_bif_vals = ModelingToolkit.varmap_to_vars(u0_bif,
         unknowns(nsys);
-        defaults = nsys.defaults)
-    p_vals = ModelingToolkit.varmap_to_vars(ps, parameters(nsys); defaults = nsys.defaults)
+        defaults = ModelingToolkit.get_defaults(nsys))
+    p_vals = ModelingToolkit.varmap_to_vars(
+        ps, parameters(nsys); defaults = ModelingToolkit.get_defaults(nsys))
 
     # Computes bifurcation parameter and the plotting function.
     bif_idx = findfirst(isequal(bif_par), parameters(nsys))
@@ -143,9 +144,10 @@ function BifurcationKit.BifurcationProblem(osys::ODESystem, args...; kwargs...)
     if !ModelingToolkit.iscomplete(osys)
         error("A completed `ODESystem` is required. Call `complete` or `structural_simplify` on the system before creating a `BifurcationProblem`")
     end
-    nsys = NonlinearSystem([0 ~ eq.rhs for eq in equations(osys)],
+    nsys = NonlinearSystem([0 ~ eq.rhs for eq in full_equations(osys)],
         unknowns(osys),
         parameters(osys);
+        observed = observed(osys),
         name = nameof(osys))
     return BifurcationKit.BifurcationProblem(complete(nsys), args...; kwargs...)
 end

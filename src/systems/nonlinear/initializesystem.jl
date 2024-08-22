@@ -8,6 +8,9 @@ function generate_initializesystem(sys::ODESystem;
         name = nameof(sys),
         guesses = Dict(), check_defguess = false,
         default_dd_value = 0.0,
+        algebraic_only = false,
+        initialization_eqs = [],
+        check_units = true,
         kwargs...)
     sts, eqs = unknowns(sys), equations(sys)
     idxs_diff = isdiffeq.(eqs)
@@ -22,6 +25,7 @@ function generate_initializesystem(sys::ODESystem;
     diffmap = Dict(getfield.(eqs_diff, :lhs) .=> getfield.(eqs_diff, :rhs))
     observed_diffmap = Dict(Differential(get_iv(sys)).(getfield.((observed(sys)), :lhs)) .=>
         Differential(get_iv(sys)).(getfield.((observed(sys)), :rhs)))
+    full_diffmap = merge(diffmap, observed_diffmap)
 
     full_states = unique([sts; getfield.((observed(sys)), :lhs)])
     set_full_states = Set(full_states)
@@ -29,7 +33,7 @@ function generate_initializesystem(sys::ODESystem;
     schedule = getfield(sys, :schedule)
 
     if schedule !== nothing
-        guessmap = [x[2] => get(guesses, x[1], default_dd_value)
+        guessmap = [x[1] => get(guesses, x[1], default_dd_value)
                     for x in schedule.dummy_sub]
         dd_guess = Dict(filter(x -> !isnothing(x[1]), guessmap))
         if u0map === nothing || isempty(u0map)
@@ -38,8 +42,7 @@ function generate_initializesystem(sys::ODESystem;
             filtered_u0 = Pair[]
             for x in u0map
                 y = get(schedule.dummy_sub, x[1], x[1])
-                y = ModelingToolkit.fixpoint_sub(y, observed_diffmap)
-                y = get(diffmap, y, y)
+                y = ModelingToolkit.fixpoint_sub(y, full_diffmap)
 
                 if y isa Symbolics.Arr
                     _y = collect(y)
@@ -62,7 +65,7 @@ function generate_initializesystem(sys::ODESystem;
         end
     else
         dd_guess = Dict()
-        filtered_u0 = u0map
+        filtered_u0 = todict(u0map)
     end
 
     defs = merge(defaults(sys), filtered_u0)
@@ -89,12 +92,18 @@ function generate_initializesystem(sys::ODESystem;
     end
 
     pars = [parameters(sys); get_iv(sys)]
-    nleqs = [eqs_ics; get_initialization_eqs(sys); observed(sys)]
+    nleqs = if algebraic_only
+        [eqs_ics; observed(sys)]
+    else
+        [eqs_ics; get_initialization_eqs(sys); initialization_eqs; observed(sys)]
+    end
 
     sys_nl = NonlinearSystem(nleqs,
         full_states,
         pars;
         defaults = merge(ModelingToolkit.defaults(sys), todict(u0), dd_guess),
+        parameter_dependencies = parameter_dependencies(sys),
+        checks = check_units,
         name,
         kwargs...)
 

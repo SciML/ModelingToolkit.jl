@@ -123,7 +123,8 @@ end
 
 Perform Pantelides algorithm.
 """
-function pantelides!(state::TransformationState; finalize = true, maxiters = 8000)
+function pantelides!(
+        state::TransformationState; finalize = true, maxiters = 8000, kwargs...)
     @unpack graph, solvable_graph, var_to_diff, eq_to_diff = state.structure
     neqs = nsrcs(graph)
     nvars = nv(var_to_diff)
@@ -181,7 +182,7 @@ function pantelides!(state::TransformationState; finalize = true, maxiters = 800
                 ecolor[eq] || continue
                 # introduce a new equation
                 neqs += 1
-                eq_derivative!(state, eq)
+                eq_derivative!(state, eq; kwargs...)
             end
 
             for var in eachindex(vcolor)

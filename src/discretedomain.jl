@@ -1,5 +1,12 @@
 using Symbolics: Operator, Num, Term, value, recursive_hasoperator
 
+struct SampleTime <: Operator
+    SampleTime() = SymbolicUtils.term(SampleTime, type = Real)
+end
+SymbolicUtils.promote_symtype(::Type{<:SampleTime}, t...) = Real
+Base.nameof(::SampleTime) = :SampleTime
+SymbolicUtils.isbinop(::SampleTime) = false
+
 # Shift
 
 """
@@ -15,8 +22,6 @@ $(FIELDS)
 ```jldoctest
 julia> using Symbolics
 
-julia> @variables t;
-
 julia> Δ = Shift(t)
 (::Shift) (generic function with 2 methods)
 ```
@@ -29,6 +34,9 @@ struct Shift <: Operator
 end
 Shift(steps::Int) = new(nothing, steps)
 normalize_to_differential(s::Shift) = Differential(s.t)^s.steps
+Base.nameof(::Shift) = :Shift
+SymbolicUtils.isbinop(::Shift) = false
+
 function (D::Shift)(x, allow_zero = false)
     !allow_zero && D.steps == 0 && return x
     Term{symtype(x)}(D, Any[x])
@@ -36,7 +44,7 @@ end
 function (D::Shift)(x::Num, allow_zero = false)
     !allow_zero && D.steps == 0 && return x
     vt = value(x)
-    if istree(vt)
+    if iscall(vt)
         op = operation(vt)
         if op isa Sample
             error("Cannot shift a `Sample`. Create a variable to represent the sampled value and shift that instead")
@@ -77,8 +85,8 @@ $(TYPEDEF)
 Represents a sample operator. A discrete-time signal is created by sampling a continuous-time signal.
 
 # Constructors
-`Sample(clock::TimeDomain = InferredDiscrete())`
-`Sample([t], dt::Real)`
+`Sample(clock::Union{TimeDomain, InferredTimeDomain} = InferredDiscrete)`
+`Sample(dt::Real)`
 
 `Sample(x::Num)`, with a single argument, is shorthand for `Sample()(x)`.
 
@@ -90,21 +98,30 @@ $(FIELDS)
 ```jldoctest
 julia> using Symbolics
 
-julia> @variables t;
+julia> t = ModelingToolkit.t_nounits
 
-julia> Δ = Sample(t, 0.01)
+julia> Δ = Sample(0.01)
 (::Sample) (generic function with 2 methods)
 ```
 """
 struct Sample <: Operator
     clock::Any
-    Sample(clock::TimeDomain = InferredDiscrete()) = new(clock)
-    Sample(t, dt::Real) = new(Clock(t, dt))
+    Sample(clock::Union{TimeDomain, InferredTimeDomain} = InferredDiscrete) = new(clock)
 end
-Sample(x) = Sample()(x)
+
+function Sample(arg::Real)
+    arg = unwrap(arg)
+    if symbolic_type(arg) == NotSymbolic()
+        Sample(Clock(arg))
+    else
+        Sample()(arg)
+    end
+end
 (D::Sample)(x) = Term{symtype(x)}(D, Any[x])
 (D::Sample)(x::Num) = Num(D(value(x)))
 SymbolicUtils.promote_symtype(::Sample, x) = x
+Base.nameof(::Sample) = :Sample
+SymbolicUtils.isbinop(::Sample) = false
 
 Base.show(io::IO, D::Sample) = print(io, "Sample(", D.clock, ")")
 
@@ -134,6 +151,8 @@ end
 (D::Hold)(x) = Term{symtype(x)}(D, Any[x])
 (D::Hold)(x::Num) = Num(D(value(x)))
 SymbolicUtils.promote_symtype(::Hold, x) = x
+Base.nameof(::Hold) = :Hold
+SymbolicUtils.isbinop(::Hold) = false
 
 Hold(x) = Hold()(x)
 
@@ -154,7 +173,9 @@ The `ShiftIndex` operator allows you to index a signal and obtain a shifted disc
 # Examples
 
 ```
-julia> @variables t x(t);
+julia> t = ModelingToolkit.t_nounits;
+
+julia> @variables x(t);
 
 julia> k = ShiftIndex(t, 0.1);
 
@@ -162,21 +183,23 @@ julia> x(k)      # no shift
 x(t)
 
 julia> x(k+1)    # shift
-Shift(t, 1)(x(t))
+Shift(1)(x(t))
 ```
 """
 struct ShiftIndex
-    clock::TimeDomain
+    clock::Union{InferredTimeDomain, TimeDomain, IntegerSequence}
     steps::Int
-    ShiftIndex(clock::TimeDomain = Inferred(), steps::Int = 0) = new(clock, steps)
-    ShiftIndex(t::Num, dt::Real, steps::Int = 0) = new(Clock(t, dt), steps)
-    ShiftIndex(t::Num, steps::Int = 0) = new(IntegerSequence(t), steps)
+    function ShiftIndex(
+            clock::Union{TimeDomain, InferredTimeDomain, IntegerSequence} = Inferred, steps::Int = 0)
+        new(clock, steps)
+    end
+    ShiftIndex(dt::Real, steps::Int = 0) = new(Clock(dt), steps)
+    ShiftIndex(::Num, steps::Int) = new(IntegerSequence(), steps)
 end
 
 function (xn::Num)(k::ShiftIndex)
     @unpack clock, steps = k
     x = value(xn)
-    t = clock.t
     # Verify that the independent variables of k and x match and that the expression doesn't have multiple variables
     vars = Symbolics.get_variables(x)
     length(vars) == 1 ||
@@ -184,15 +207,13 @@ function (xn::Num)(k::ShiftIndex)
     args = Symbolics.arguments(vars[]) # args should be one element vector with the t in x(t)
     length(args) == 1 ||
         error("Cannot shift an expression with multiple independent variables $x.")
-    isequal(args[], t) ||
-        error("Independent variable of $xn is not the same as that of the ShiftIndex $(k.t)")
 
     # d, _ = propagate_time_domain(xn)
     # if d != clock # this is only required if the variable has another clock
     #     xn = Sample(t, clock)(xn)
     # end
     # QUESTION: should we return a variable with time domain set to k.clock?
-    xn = setmetadata(xn, TimeDomain, k.clock)
+    xn = setmetadata(xn, VariableTimeDomain, k.clock)
     if steps == 0
         return xn # x(k) needs no shift operator if the step of k is 0
     end
@@ -205,37 +226,37 @@ Base.:-(k::ShiftIndex, i::Int) = k + (-i)
 """
     input_timedomain(op::Operator)
 
-Return the time-domain type (`Continuous()` or `Discrete()`) that `op` operates on.
+Return the time-domain type (`Continuous` or `InferredDiscrete`) that `op` operates on.
 """
 function input_timedomain(s::Shift, arg = nothing)
     if has_time_domain(arg)
         return get_time_domain(arg)
     end
-    InferredDiscrete()
+    InferredDiscrete
 end
 
 """
     output_timedomain(op::Operator)
 
-Return the time-domain type (`Continuous()` or `Discrete()`) that `op` results in.
+Return the time-domain type (`Continuous` or `InferredDiscrete`) that `op` results in.
 """
 function output_timedomain(s::Shift, arg = nothing)
     if has_time_domain(arg)
         return get_time_domain(arg)
     end
-    InferredDiscrete()
+    InferredDiscrete
 end
 
-input_timedomain(::Sample, arg = nothing) = Continuous()
+input_timedomain(::Sample, arg = nothing) = Continuous
 output_timedomain(s::Sample, arg = nothing) = s.clock
 
 function input_timedomain(h::Hold, arg = nothing)
     if has_time_domain(arg)
         return get_time_domain(arg)
     end
-    InferredDiscrete() # the Hold accepts any discrete
+    InferredDiscrete # the Hold accepts any discrete
 end
-output_timedomain(::Hold, arg = nothing) = Continuous()
+output_timedomain(::Hold, arg = nothing) = Continuous
 
 sampletime(op::Sample, arg = nothing) = sampletime(op.clock)
 sampletime(op::ShiftIndex, arg = nothing) = sampletime(op.clock)
