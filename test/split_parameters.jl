@@ -117,7 +117,7 @@ sol = solve(prob, ImplicitEuler());
 
 # ------------------------ Mixed Type Conserved
 
-prob = ODEProblem(sys, [], tspan, []; tofloat = false)
+prob = ODEProblem(sys, [], tspan, []; tofloat = false, use_union = true)
 
 @test prob.p isa Tuple{Vector{Float64}, Vector{Int64}}
 sol = solve(prob, ImplicitEuler());
