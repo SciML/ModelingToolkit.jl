@@ -2934,12 +2934,12 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
     elseif sys isa ODESystem
         rules = todict(map(r -> Symbolics.unwrap(r[1]) => Symbolics.unwrap(r[2]),
             collect(rules)))
-        eqs = fast_substitute(equations(sys), rules)
-        pdeps = fast_substitute(parameter_dependencies(sys), rules)
+        eqs = fast_substitute(get_eqs(sys), rules)
+        pdeps = fast_substitute(get_parameter_dependencies(sys), rules)
         defs = Dict(fast_substitute(k, rules) => fast_substitute(v, rules)
-        for (k, v) in defaults(sys))
+        for (k, v) in get_defaults(sys))
         guess = Dict(fast_substitute(k, rules) => fast_substitute(v, rules)
-        for (k, v) in guesses(sys))
+        for (k, v) in get_guesses(sys))
         subsys = map(s -> substitute(s, rules), get_systems(sys))
         ODESystem(eqs, get_iv(sys); name = nameof(sys), defaults = defs,
             guesses = guess, parameter_dependencies = pdeps, systems = subsys)
@@ -2948,14 +2948,34 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
     end
 end
 
+struct InvalidParameterDependenciesType
+    got::Any
+end
+
+function Base.showerror(io::IO, err::InvalidParameterDependenciesType)
+    print(
+        io, "Parameter dependencies must be a `Dict`, or an array of `Pair` or `Equation`.")
+    if err.got !== nothing
+        print(io, " Got ", err.got)
+    end
+end
+
 function process_parameter_dependencies(pdeps, ps)
     if pdeps === nothing || isempty(pdeps)
         return Equation[], ps
-    elseif eltype(pdeps) <: Pair
-        pdeps = [lhs ~ rhs for (lhs, rhs) in pdeps]
     end
-    if !(eltype(pdeps) <: Equation)
-        error("Parameter dependencies must be a `Dict`, `Vector{Pair}` or `Vector{Equation}`")
+    if pdeps isa Dict
+        pdeps = [k ~ v for (k, v) in pdeps]
+    else
+        pdeps isa AbstractArray || throw(InvalidParameterDependenciesType(pdeps))
+        pdeps = [if p isa Pair
+                     p[1] ~ p[2]
+                 elseif p isa Equation
+                     p
+                 else
+                     error("Parameter dependencies must be a `Dict`, `Vector{Pair}` or `Vector{Equation}`")
+                 end
+                 for p in pdeps]
     end
     lhss = BasicSymbolic[]
     for p in pdeps
