@@ -958,9 +958,10 @@ function invalid_variables(sys, expr)
     filter(x -> !any(isequal(x), all_symbols(sys)), reduce(vcat, vars(expr); init = []))
 end
 function unassignable_variables(sys, expr)
-    assignable_syms = vcat(unknowns(sys), parameters(sys))
+    assignable_syms = reduce(vcat, Symbolics.scalarize.(vcat(unknowns(sys), parameters(sys))); init=[])
+    written = reduce(vcat, Symbolics.scalarize.(vars(expr)); init = [])
     return filter(
-        x -> !any(isequal(x), assignable_syms), reduce(vcat, vars(expr); init = []))
+        x -> !any(isequal(x), assignable_syms), written)
 end
 
 function compile_user_affect(affect::MutatingFunctionalAffect, cb, sys, dvs, ps; kwargs...)
@@ -1000,7 +1001,10 @@ function compile_user_affect(affect::MutatingFunctionalAffect, cb, sys, dvs, ps;
 
     mod_exprs = modified(affect)
     for mexpr in mod_exprs
-        if !is_observed(sys, mexpr) && parameter_index(sys, mexpr) === nothing && !affect.skip_checks
+        if affect.skip_checks 
+            continue 
+        end
+        if !is_variable(sys, mexpr) && parameter_index(sys, mexpr) === nothing && !affect.skip_checks
             @warn ("Expression $mexpr cannot be assigned to; currently only unknowns and parameters may be updated by an affect.")
         end
         invalid_vars = unassignable_variables(sys, mexpr)
@@ -1036,7 +1040,7 @@ function compile_user_affect(affect::MutatingFunctionalAffect, cb, sys, dvs, ps;
     mod_param_pairs = filter(v -> is_parameter(sys, v[1]), mod_pairs)
     mod_unk_pairs = filter(v -> !is_parameter(sys, v[1]), mod_pairs)
     _, mod_og_val_fun = build_explicit_observed_function(
-        sys, reduce(vcat, [first.(mod_param_pairs); first.(mod_unk_pairs)]; init = []);
+        sys, reduce(vcat, Symbolics.scalarize.([first.(mod_param_pairs); first.(mod_unk_pairs)]); init = []);
         return_inplace = true)
     upd_params_fun = setu(
         sys, reduce(vcat, Symbolics.scalarize.(first.(mod_param_pairs)); init = []))
