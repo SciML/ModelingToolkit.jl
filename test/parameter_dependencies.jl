@@ -153,6 +153,30 @@ end
     @test new_prob.ps[sys2.p2] == 3.0
 end
 
+@testset "parameter dependencies across model hierarchy" begin
+    sys2 = let name = :sys2
+        @parameters p2
+        @variables x(t) = 1.0
+        eqs = [D(x) ~ p2]
+        ODESystem(eqs, t, [x], [p2]; name)
+    end
+
+    @parameters p1 = 1.0
+    parameter_dependencies = [sys2.p2 ~ p1 * 2.0]
+    sys1 = ODESystem(
+        Equation[], t, [], [p1]; parameter_dependencies, name = :sys1, systems = [sys2])
+
+    # ensure that parameter_dependencies is type stable
+    # (https://github.com/SciML/ModelingToolkit.jl/pull/2978)
+    @inferred ModelingToolkit.parameter_dependencies(sys1)
+
+    sys = structural_simplify(sys1)
+
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    sol = solve(prob)
+    @test SciMLBase.successful_retcode(sol)
+end
+
 @testset "Clock system" begin
     dt = 0.1
     @variables x(t) y(t) u(t) yd(t) ud(t) r(t) z(t)
