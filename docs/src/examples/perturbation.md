@@ -26,7 +26,7 @@ function solve_coef(eqs, ps)
 
     for i in 1:length(ps)
         eq = substitute(eqs[i], vals)
-        vals[ps[i]] = Symbolics.solve_for(eq ~ 0, ps[i])
+        vals[ps[i]] = Symbolics.symbolic_linear_solve(eq ~ 0, ps[i])
     end
     vals
 end
