@@ -12,7 +12,7 @@ using SymbolicUtils: maketerm, iscall
 using ModelingToolkit
 using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Differential,
                        unknowns, equations, vars, Symbolic, diff2term, value,
-                       operation, arguments, Sym, Term, simplify, solve_for,
+                       operation, arguments, Sym, Term, simplify, symbolic_linear_solve,
                        isdiffeq, isdifferential, isirreducible,
                        empty_substitutions, get_substitutions,
                        get_tearing_state, get_iv, independent_variables,

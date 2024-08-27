@@ -141,7 +141,7 @@ function tearing_assignments(sys::AbstractSystem)
 end
 
 function solve_equation(eq, var, simplify)
-    rhs = value(solve_for(eq, var; simplify = simplify, check = false))
+    rhs = value(symbolic_linear_solve(eq, var; simplify = simplify, check = false))
     occursin(var, rhs) && throw(EquationSolveErrors(eq, var, rhs))
     var ~ rhs
 end
@@ -457,7 +457,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
                 dx = D(simplify_shifts(lower_varname_withshift(
                     fullvars[lv], idep, order - 1)))
                 eq = dx ~ simplify_shifts(Symbolics.fixpoint_sub(
-                    Symbolics.solve_for(neweqs[ieq],
+                    Symbolics.symbolic_linear_solve(neweqs[ieq],
                         fullvars[iv]),
                     total_sub; operator = ModelingToolkit.Shift))
                 for e in 𝑑neighbors(graph, iv)
