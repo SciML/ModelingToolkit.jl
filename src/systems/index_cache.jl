@@ -32,6 +32,8 @@ struct DiscreteIndex
 end
 
 const ParamIndexMap = Dict{BasicSymbolic, Tuple{Int, Int}}
+const NonnumericMap = Dict{
+    Union{BasicSymbolic, Symbolics.CallWithMetadata}, Tuple{Int, Int}}
 const UnknownIndexMap = Dict{
     BasicSymbolic, Union{Int, UnitRange{Int}, AbstractArray{Int}}}
 const TunableIndexMap = Dict{BasicSymbolic,
@@ -45,20 +47,20 @@ struct IndexCache
     callback_to_clocks::Dict{Any, Vector{Int}}
     tunable_idx::TunableIndexMap
     constant_idx::ParamIndexMap
-    nonnumeric_idx::ParamIndexMap
+    nonnumeric_idx::NonnumericMap
     observed_syms::Set{BasicSymbolic}
     dependent_pars::Set{BasicSymbolic}
     discrete_buffer_sizes::Vector{Vector{BufferTemplate}}
     tunable_buffer_size::BufferTemplate
     constant_buffer_sizes::Vector{BufferTemplate}
     nonnumeric_buffer_sizes::Vector{BufferTemplate}
-    symbol_to_variable::Dict{Symbol, BasicSymbolic}
+    symbol_to_variable::Dict{Symbol, Union{BasicSymbolic, CallWithMetadata}}
 end
 
 function IndexCache(sys::AbstractSystem)
     unks = solved_unknowns(sys)
     unk_idxs = UnknownIndexMap()
-    symbol_to_variable = Dict{Symbol, BasicSymbolic}()
+    symbol_to_variable = Dict{Symbol, Union{BasicSymbolic, CallWithMetadata}}()
 
     let idx = 1
         for sym in unks
@@ -105,12 +107,11 @@ function IndexCache(sys::AbstractSystem)
 
     tunable_buffers = Dict{Any, Set{BasicSymbolic}}()
     constant_buffers = Dict{Any, Set{BasicSymbolic}}()
-    nonnumeric_buffers = Dict{Any, Set{BasicSymbolic}}()
+    nonnumeric_buffers = Dict{Any, Set{Union{BasicSymbolic, CallWithMetadata}}}()
 
-    function insert_by_type!(buffers::Dict{Any, Set{BasicSymbolic}}, sym)
+    function insert_by_type!(buffers::Dict{Any, S}, sym, ctype) where {S}
         sym = unwrap(sym)
-        ctype = symtype(sym)
-        buf = get!(buffers, ctype, Set{BasicSymbolic}())
+        buf = get!(buffers, ctype, S())
         push!(buf, sym)
     end
 
@@ -142,7 +143,7 @@ function IndexCache(sys::AbstractSystem)
                 clocks = get!(() -> Set{Int}(), disc_param_callbacks, sym)
                 push!(clocks, i)
             else
-                insert_by_type!(constant_buffers, sym)
+                insert_by_type!(constant_buffers, sym, symtype(sym))
             end
         end
     end
@@ -197,6 +198,9 @@ function IndexCache(sys::AbstractSystem)
     for p in parameters(sys)
         p = unwrap(p)
         ctype = symtype(p)
+        if ctype <: FnType
+            ctype = fntype_to_function_type(ctype)
+        end
         haskey(disc_idxs, p) && continue
         haskey(constant_buffers, ctype) && p in constant_buffers[ctype] && continue
         insert_by_type!(
@@ -212,12 +216,13 @@ function IndexCache(sys::AbstractSystem)
             else
                 nonnumeric_buffers
             end,
-            p
+            p,
+            ctype
         )
     end
 
-    function get_buffer_sizes_and_idxs(buffers::Dict{Any, Set{BasicSymbolic}})
-        idxs = ParamIndexMap()
+    function get_buffer_sizes_and_idxs(T, buffers::Dict)
+        idxs = T()
         buffer_sizes = BufferTemplate[]
         for (i, (T, buf)) in enumerate(buffers)
             for (j, p) in enumerate(buf)
@@ -229,13 +234,18 @@ function IndexCache(sys::AbstractSystem)
                 idxs[rp] = (i, j)
                 idxs[rttp] = (i, j)
             end
+            if T <: Symbolics.FnType
+                T = Any
+            end
             push!(buffer_sizes, BufferTemplate(T, length(buf)))
         end
         return idxs, buffer_sizes
     end
 
-    const_idxs, const_buffer_sizes = get_buffer_sizes_and_idxs(constant_buffers)
-    nonnumeric_idxs, nonnumeric_buffer_sizes = get_buffer_sizes_and_idxs(nonnumeric_buffers)
+    const_idxs, const_buffer_sizes = get_buffer_sizes_and_idxs(
+        ParamIndexMap, constant_buffers)
+    nonnumeric_idxs, nonnumeric_buffer_sizes = get_buffer_sizes_and_idxs(
+        NonnumericMap, nonnumeric_buffers)
 
     tunable_idxs = TunableIndexMap()
     tunable_buffer_size = 0
@@ -401,7 +411,8 @@ function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
     for temp in ic.discrete_buffer_sizes)
     const_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
     for temp in ic.constant_buffer_sizes)
-    nonnumeric_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
+    nonnumeric_buf = Tuple(Union{BasicSymbolic, CallWithMetadata}[unwrap(variable(:DEF))
+                                                                  for _ in 1:(temp.length)]
     for temp in ic.nonnumeric_buffer_sizes)
     for p in ps
         p = unwrap(p)
@@ -481,3 +492,7 @@ function get_buffer_template(ic::IndexCache, pidx::ParameterIndex)
         error("Unhandled portion $portion")
     end
 end
+
+fntype_to_function_type(::Type{FnType{A, R, T}}) where {A, R, T} = T
+fntype_to_function_type(::Type{FnType{A, R, Nothing}}) where {A, R} = FunctionWrapper{R, A}
+fntype_to_function_type(::Type{FnType{A, R}}) where {A, R} = FunctionWrapper{R, A}

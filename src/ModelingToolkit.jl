@@ -38,6 +38,7 @@ using Base: RefValue
 using Combinatorics
 import Distributions
 import FunctionWrappersWrappers
+import FunctionWrappers: FunctionWrapper
 using URIs: URI
 using SciMLStructures
 using Compat
@@ -63,7 +64,8 @@ using Symbolics: _parse_vars, value, @derivatives, get_variables,
                  VariableSource, getname, variable, Connection, connect,
                  NAMESPACE_SEPARATOR, set_scalar_metadata, setdefaultval,
                  initial_state, transition, activeState, entry, hasnode,
-                 ticksInState, timeInState, fixpoint_sub, fast_substitute
+                 ticksInState, timeInState, fixpoint_sub, fast_substitute,
+                 CallWithMetadata, CallWithParent
 const NAMESPACE_SEPARATOR_SYMBOL = Symbol(NAMESPACE_SEPARATOR)
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   jacobian_sparsity, isaffine, islinear, _iszero, _isone,
