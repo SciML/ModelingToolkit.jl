@@ -861,8 +861,6 @@ function compile_affect_fn(cb, sys::AbstractODESystem, dvs, ps, kwargs)
         if isnothing(aff)
             return nothing
         else
-            affspr = compile_affect(aff, cb, sys, dvs, ps; expression = Val{true}, kwargs...)
-            @show affspr
             return compile_affect(aff, cb, sys, dvs, ps; expression = Val{false}, kwargs...)
         end
     end
