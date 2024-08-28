@@ -1331,3 +1331,27 @@ end
     @test length(ModelingToolkit.guesses(sys2)) == 2
     @test ModelingToolkit.guesses(sys2)[p3] == 2.0
 end
+
+@testset "Substituting with nested systems" begin
+    @parameters p1 p2
+    @variables x(t) y(t)
+    @named innersys = ODESystem([D(x) ~ y + p2], t; parameter_dependencies = [p2 ~ 2p1],
+        defaults = [p1 => 1.0, p2 => 2.0], guesses = [p1 => 2.0, p2 => 3.0])
+    @parameters p3 p4
+    @named outersys = ODESystem(
+        [D(innersys.y) ~ innersys.y + p4], t; parameter_dependencies = [p4 ~ 3p3],
+        defaults = [p3 => 3.0, p4 => 9.0], guesses = [p4 => 10.0], systems = [innersys])
+    @test_nowarn structural_simplify(outersys)
+    @parameters p5
+    sys2 = substitute(outersys, [p4 => p5])
+    @test_nowarn structural_simplify(sys2)
+    @test length(equations(sys2)) == 2
+    @test length(parameters(sys2)) == 2
+    @test length(full_parameters(sys2)) == 4
+    @test all(!isequal(p4), full_parameters(sys2))
+    @test any(isequal(p5), full_parameters(sys2))
+    @test length(ModelingToolkit.defaults(sys2)) == 4
+    @test ModelingToolkit.defaults(sys2)[p5] == 9.0
+    @test length(ModelingToolkit.guesses(sys2)) == 3
+    @test ModelingToolkit.guesses(sys2)[p5] == 10.0
+end
