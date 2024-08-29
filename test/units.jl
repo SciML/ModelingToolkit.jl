@@ -236,7 +236,7 @@ end
 
 @named sys = ExpressionParametersTest(; v = 2.0u"m/s", τ = 3.0u"s")
 sys = complete(sys)
-# TODO: Is there a way to evalute this expression and compare to 6.0?
+# TODO: Is there a way to evaluate this expression and compare to 6.0?
 @test isequal(ModelingToolkit.getdefault(sys.pt.a), sys.v * sys.τ)
 @test ModelingToolkit.getdefault(sys.v) ≈ 2.0
 @test ModelingToolkit.getdefault(sys.τ) ≈ 3.0
