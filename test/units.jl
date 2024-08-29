@@ -223,3 +223,21 @@ end
 
 @variables x(t)
 @test ModelingToolkit.get_unit(sin(x)) == ModelingToolkit.unitless
+
+@mtkmodel ExpressionParametersTest begin
+    @parameters begin
+        v = 1.0, [unit = u"m/s"]
+        τ = 1.0, [unit = u"s"]
+    end
+    @components begin
+        pt = ParamTest(; a = v * τ)
+    end
+end
+
+@named sys = ExpressionParametersTest(; v = 2.0u"m/s", τ = 3.0u"s")
+sys = complete(sys)
+# TODO: Is there a way to evalute this expression and compare to 6.0?
+@test isequal(ModelingToolkit.getdefault(sys.pt.a), sys.v * sys.τ)
+@test ModelingToolkit.getdefault(sys.v) ≈ 2.0
+@test ModelingToolkit.getdefault(sys.τ) ≈ 3.0
+

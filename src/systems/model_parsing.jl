@@ -663,6 +663,14 @@ function convert_units(varunits::Unitful.FreeUnits, value::AbstractArray{T}) whe
     Unitful.ustrip.(varunits, value)
 end
 
+function convert_units(varunits::Unitful.FreeUnits, value::Num)
+    value
+end
+
+function convert_units(varunits::DynamicQuantities.Quantity, value::Num)
+    value
+end
+
 function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
     vv, def, metadata_with_exprs = parse_variable_def!(
         dict, mod, arg, varclass, kwargs, where_types)
