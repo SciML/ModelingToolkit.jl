@@ -78,7 +78,7 @@ get_unit(op::typeof(instream), args) = get_unit(args[1])
 function get_unit(op, args) # Fallback
     result = op(get_unit.(args)...)
     try
-        result
+        get_unit(result)
     catch
         throw(ValidationError("Unable to get unit for operation $op with arguments $args."))
     end
