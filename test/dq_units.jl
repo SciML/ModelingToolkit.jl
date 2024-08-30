@@ -1,4 +1,5 @@
 using ModelingToolkit, OrdinaryDiffEq, JumpProcesses, DynamicQuantities
+using Symbolics
 using Test
 MT = ModelingToolkit
 using ModelingToolkit: t, D
@@ -224,3 +225,17 @@ end
 DD = Differential(tt)
 eqs = [DD(X) ~ p - d * X + d * X]
 @test ModelingToolkit.validate(eqs)
+
+# test units for registered functions
+let
+    mm(X, v, K) = v * X / (X + K)
+    mm2(X, v, K) = v * X / (X + K)
+    Symbolics.@register_symbolic mm2(X, v, K)
+    @parameters t [unit = u"s"] K [unit = u"mol/m^3"] v [unit = u"(m^6)/(s*mol^2)"]
+    @variables X(t) [unit = u"mol/m^3"]
+    mmunits = MT.get_unit(mm(X, v, K))
+    mm2units = MT.get_unit(mm2(X, v, K))
+    @test mmunits == MT.oneunit(mmunits)
+    @test mm2units == MT.oneunit(mm2units)
+    @test mmunits == mm2units
+end
