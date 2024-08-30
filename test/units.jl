@@ -220,3 +220,6 @@ end
 
 @named sys = ArrayParamTest(a = [1.0, 3.0]u"cm")
 @test ModelingToolkit.getdefault(sys.a) ≈ [0.01, 0.03]
+
+@variables x(t)
+@test ModelingToolkit.get_unit(sin(x)) == ModelingToolkit.unitless
