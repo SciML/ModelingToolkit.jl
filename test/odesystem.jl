@@ -1202,6 +1202,18 @@ end
     @variables y(x)
     @test_nowarn @named sys = ODESystem([y ~ 0], x)
 
+    # the same, but with @mtkmodel
+    @independent_variables x
+    @mtkmodel MyModel begin
+        @variables begin
+            y(x)
+        end
+        @equations begin
+            y ~ 0
+        end
+    end
+    @test_nowarn @mtkbuild sys = MyModel()
+
     @variables x y(x)
     @test_logs (:warn,) @named sys = ODESystem([y ~ 0], x)
 
