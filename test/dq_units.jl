@@ -237,4 +237,5 @@ let
     mm2units = MT.get_unit(mm2(X, v, K))
     @test mmunits == MT.oneunit(mmunits)
     @test mm2units == MT.oneunit(mm2units)
+    @test mmunits == mm2units
 end
