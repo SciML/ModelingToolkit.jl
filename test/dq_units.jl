@@ -231,8 +231,8 @@ let
     mm(X, v, K) = v * X / (X + K)
     mm2(X, v, K) = v * X / (X + K)
     Symbolics.@register_symbolic mm2(X, v, K)
-    @parameters t [unit=u"s"] K [unit=u"mol/m^3"] v [unit=u"(m^6)/(s*mol^2)"]
-    @variables X(t) [unit=u"mol/m^3"]
+    @parameters t [unit = u"s"] K [unit = u"mol/m^3"] v [unit = u"(m^6)/(s*mol^2)"]
+    @variables X(t) [unit = u"mol/m^3"]
     mmunits = MT.get_unit(mm(X, v, K))
     mm2units = MT.get_unit(mm2(X, v, K))
     @test mmunits == MT.oneunit(mmunits)

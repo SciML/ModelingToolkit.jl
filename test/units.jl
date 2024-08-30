@@ -240,4 +240,3 @@ sys = complete(sys)
 @test isequal(ModelingToolkit.getdefault(sys.pt.a), sys.v * sys.τ)
 @test ModelingToolkit.getdefault(sys.v) ≈ 2.0
 @test ModelingToolkit.getdefault(sys.τ) ≈ 3.0
-
