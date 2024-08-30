@@ -284,6 +284,8 @@ function generate_var(a, varclass;
           first(@variables $a[indices...]::type)
     if varclass == :parameters
         var = toparam(var)
+    elseif varclass == :independent_variables
+        var = toiv(var)
     end
     var
 end
@@ -315,7 +317,7 @@ end
 function generate_var!(dict, a, b, varclass, mod;
         indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
         type = Real)
-    iv = b == :t ? get_t(mod, b) : generate_var(b, :variables)
+    iv = b == :t ? get_t(mod, b) : generate_var(b, :independent_variables)
     prev_iv = get!(dict, :independent_variable) do
         iv
     end
