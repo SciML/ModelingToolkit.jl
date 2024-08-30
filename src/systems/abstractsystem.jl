@@ -2747,14 +2747,20 @@ struct ExtraVariablesSystemException <: Exception
     msg::String
 end
 function Base.showerror(io::IO, e::ExtraVariablesSystemException)
-    print(io, "ExtraVariablesSystemException: ", e.msg)
+    println(io, "ExtraVariablesSystemException: ", e.msg)
+    print(io,
+        "Note that the process of determining extra variables is a best-effort heuristic. " *
+        "The true extra variables are dependent on the model and may not be in this list.")
 end
 
 struct ExtraEquationsSystemException <: Exception
     msg::String
 end
 function Base.showerror(io::IO, e::ExtraEquationsSystemException)
-    print(io, "ExtraEquationsSystemException: ", e.msg)
+    println(io, "ExtraEquationsSystemException: ", e.msg)
+    print(io,
+        "Note that the process of determining extra equations is a best-effort heuristic. " *
+        "The true extra equations are dependent on the model and may not be in this list.")
 end
 
 struct HybridSystemNotSupportedException <: Exception
