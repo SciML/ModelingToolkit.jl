@@ -565,8 +565,22 @@ function generate_single_rootfinding_callback(
             rf_oop(u, parameter_values(integ), t)
         end
     end
+
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing &&
+       (save_idxs = get(ic.callback_to_clocks, cb, nothing)) !== nothing
+        initfn = let save_idxs = save_idxs
+            function (cb, u, t, integrator)
+                for idx in save_idxs
+                    SciMLBase.save_discretes!(integrator, idx)
+                end
+            end
+        end
+    else
+        initfn = SciMLBase.INITIALIZE_DEFAULT
+    end
     return ContinuousCallback(
-        cond, affect_function.affect, affect_function.affect_neg, rootfind = cb.rootfind)
+        cond, affect_function.affect, affect_function.affect_neg,
+        rootfind = cb.rootfind, initialize = initfn)
 end
 
 function generate_vector_rootfinding_callback(
@@ -618,8 +632,25 @@ function generate_vector_rootfinding_callback(
             affect_neg(integ)
         end
     end
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+        save_idxs = mapreduce(
+            cb -> get(ic.callback_to_clocks, cb, Int[]), vcat, cbs; init = Int[])
+        initfn = if isempty(save_idxs)
+            SciMLBase.INITIALIZE_DEFAULT
+        else
+            let save_idxs = save_idxs
+                function (cb, u, t, integrator)
+                    for idx in save_idxs
+                        SciMLBase.save_discretes!(integrator, idx)
+                    end
+                end
+            end
+        end
+    else
+        initfn = SciMLBase.INITIALIZE_DEFAULT
+    end
     return VectorContinuousCallback(
-        cond, affect, affect_neg, length(eqs), rootfind = rootfind)
+        cond, affect, affect_neg, length(eqs), rootfind = rootfind, initialize = initfn)
 end
 
 """
@@ -727,12 +758,24 @@ function generate_timed_callback(cb, sys, dvs, ps; postprocess_affect_expr! = no
     cond = condition(cb)
     as = compile_affect(affects(cb), cb, sys, dvs, ps; expression = Val{false},
         postprocess_affect_expr!, kwargs...)
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing &&
+       (save_idxs = get(ic.callback_to_clocks, cb, nothing)) !== nothing
+        initfn = let save_idxs = save_idxs
+            function (cb, u, t, integrator)
+                for idx in save_idxs
+                    SciMLBase.save_discretes!(integrator, idx)
+                end
+            end
+        end
+    else
+        initfn = SciMLBase.INITIALIZE_DEFAULT
+    end
     if cond isa AbstractVector
         # Preset Time
-        return PresetTimeCallback(cond, as)
+        return PresetTimeCallback(cond, as; initialize = initfn)
     else
         # Periodic
-        return PeriodicCallback(as, cond)
+        return PeriodicCallback(as, cond; initialize = initfn)
     end
 end
 
@@ -745,7 +788,19 @@ function generate_discrete_callback(cb, sys, dvs, ps; postprocess_affect_expr! =
         c = compile_condition(cb, sys, dvs, ps; expression = Val{false}, kwargs...)
         as = compile_affect(affects(cb), cb, sys, dvs, ps; expression = Val{false},
             postprocess_affect_expr!, kwargs...)
-        return DiscreteCallback(c, as)
+        if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing &&
+           (save_idxs = get(ic.callback_to_clocks, cb, nothing)) !== nothing
+            initfn = let save_idxs = save_idxs
+                function (cb, u, t, integrator)
+                    for idx in save_idxs
+                        SciMLBase.save_discretes!(integrator, idx)
+                    end
+                end
+            end
+        else
+            initfn = SciMLBase.INITIALIZE_DEFAULT
+        end
+        return DiscreteCallback(c, as; initialize = initfn)
     end
 end
 
