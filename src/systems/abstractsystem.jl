@@ -2285,7 +2285,7 @@ function linearization_function(sys::AbstractSystem, inputs,
 
             function (u, p, t)
                 p_setter!(oldps, p_getter(u, p..., t))
-                newu = u_getter(u, p, t)
+                newu = u_getter(u, p..., t)
                 return newu, oldps
             end
         end
@@ -2303,6 +2303,13 @@ function linearization_function(sys::AbstractSystem, inputs,
     initfn = NonlinearFunction(initsys; eval_expression, eval_module)
     initprobmap = build_explicit_observed_function(
         initsys, unknowns(sys); eval_expression, eval_module)
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        initprobmap = let inner = initprobmap
+            fn(u, p::MTKParameters) = inner(u, p...)
+            fn(u, p) = inner(u, p)
+            fn
+        end
+    end
     ps = parameters(sys)
     h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
     lin_fun = let diff_idxs = diff_idxs,
@@ -2342,7 +2349,7 @@ function linearization_function(sys::AbstractSystem, inputs,
                         initu0, initp = get_initprob_u_p(u, p, t)
                         initprob = NonlinearLeastSquaresProblem(initfn, initu0, initp)
                         nlsol = solve(initprob, initialization_solver_alg)
-                        u = initprobmap(nlsol)
+                        u = initprobmap(state_values(nlsol), parameter_values(nlsol))
                     end
                 end
                 uf = SciMLBase.UJacobianWrapper(fun, t, p)
