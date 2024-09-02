@@ -105,8 +105,7 @@ function MTKParameters(
     end
 
     isempty(missing_params) || throw(MissingParametersError(collect(missing_params)))
-
-    p = Dict(unwrap(k) => fixpoint_sub(v, bigdefs) for (k, v) in p)
+    p = Dict(unwrap(k) => (bigdefs[unwrap(k)] = fixpoint_sub(v, bigdefs)) for (k, v) in p)
     for (sym, _) in p
         if iscall(sym) && operation(sym) === getindex &&
            first(arguments(sym)) in all_ps
