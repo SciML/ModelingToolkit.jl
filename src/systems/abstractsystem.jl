@@ -1353,10 +1353,21 @@ function namespace_assignment(eq::Assignment, sys)
     Assignment(_lhs, _rhs)
 end
 
+function is_array_of_symbolics(x)
+    symbolic_type(x) == ArraySymbolic() && return true
+    symbolic_type(x) == ScalarSymbolic() && return false
+    x isa AbstractArray &&
+        any(y -> symbolic_type(y) != NotSymbolic() || is_array_of_symbolics(y), x)
+end
+
 function namespace_expr(
         O, sys, n = nameof(sys); ivs = independent_variables(sys))
     O = unwrap(O)
-    symbolic_type(O) == NotSymbolic() && return O
+    # Exceptions for arrays of symbolic and Ref of a symbolic, the latter
+    # of which shows up in broadcasts
+    if symbolic_type(O) == NotSymbolic() && !(O isa AbstractArray) && !(O isa Ref)
+        return O
+    end
     if any(isequal(O), ivs)
         return O
     elseif iscall(O)
@@ -1378,7 +1389,7 @@ function namespace_expr(
         end
     elseif isvariable(O)
         renamespace(n, O)
-    elseif O isa Array
+    elseif O isa AbstractArray && is_array_of_symbolics(O)
         let sys = sys, n = n
             map(o -> namespace_expr(o, sys, n; ivs), O)
         end
