@@ -239,3 +239,10 @@ let
     @test mm2units == MT.oneunit(mm2units)
     @test mmunits == mm2units
 end
+
+# test for array variable units https://github.com/SciML/ModelingToolkit.jl/issues/3009
+let
+    @variables x_vec(t)[1:3] [unit = u"1"] x_mat(t)[1:3, 1:3] [unit = u"1"]
+    @test MT.get_unit(x_vec) == u"1"
+    @test MT.get_unit(x_mat) == u"1"
+end
