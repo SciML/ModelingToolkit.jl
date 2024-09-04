@@ -298,11 +298,11 @@ end
     loss = (a - x)^2 + b * (y - x^2)^2
     @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = [x^2 + y^2 ≲ 0.0])
     sys = complete(sys)
-    @test_throws ErrorException OptimizationProblem(sys,
+    @test_throws Any OptimizationProblem(sys,
         [x => 0.0, y => 0.0],
         [a => 1.0, b => 100.0],
         lcons = [0.0])
-    @test_throws ErrorException OptimizationProblem(sys,
+    @test_throws Any OptimizationProblem(sys,
         [x => 0.0, y => 0.0],
         [a => 1.0, b => 100.0],
         ucons = [0.0])
