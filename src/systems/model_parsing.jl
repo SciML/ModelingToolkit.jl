@@ -509,7 +509,7 @@ function parse_system_defaults!(exprs, defaults_body, dict)
                 push!(exprs, :(defaults[$a] = $b))
                 push_additional_defaults!(dict, a, b)
             end
-            _ => error("Invalid `defaults` entry $default_arg $(typeof(a)) $(typeof(b))")
+            _ => error("Invalid `@defaults` entry: `$default_arg`")
         end
     end
 end
