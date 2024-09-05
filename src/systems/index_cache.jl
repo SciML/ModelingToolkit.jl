@@ -18,6 +18,7 @@ struct ParameterIndex{P, I}
 end
 
 ParameterIndex(portion, idx) = ParameterIndex(portion, idx, false)
+ParameterIndex(p::ParameterIndex) = ParameterIndex(p.portion, p.idx, false)
 
 struct DiscreteIndex
     # of all buffers corresponding to types, which one
@@ -318,7 +319,8 @@ function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym)
         sym = get(ic.symbol_to_variable, sym, nothing)
         sym === nothing && return nothing
     end
-    validate_size = Symbolics.isarraysymbolic(sym) &&
+    sym = unwrap(sym)
+    validate_size = Symbolics.isarraysymbolic(sym) && symtype(sym) <: AbstractArray &&
                     Symbolics.shape(sym) !== Symbolics.Unknown()
     return if (idx = check_index_map(ic.tunable_idx, sym)) !== nothing
         ParameterIndex(SciMLStructures.Tunable(), idx, validate_size)
@@ -458,4 +460,20 @@ function iterated_buffer_index(ic::IndexCache, ind::ParameterIndex)
         return idx + ind.idx[1]
     end
     error("Unhandled portion $(ind.portion)")
+end
+
+function get_buffer_template(ic::IndexCache, pidx::ParameterIndex)
+    (; portion, idx) = pidx
+
+    if portion isa SciMLStructures.Tunable
+        return ic.tunable_buffer_size
+    elseif portion isa SciMLStructures.Discrete
+        return ic.discrete_buffer_sizes[idx[1]][1]
+    elseif portion isa SciMLStructures.Constants
+        return ic.constant_buffer_sizes[idx[1]]
+    elseif portion isa Nonnumeric
+        return ic.nonnumeric_buffer_sizes[idx[1]]
+    else
+        error("Unhandled portion $portion")
+    end
 end
