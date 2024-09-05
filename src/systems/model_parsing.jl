@@ -945,7 +945,7 @@ end
 
 ### Parsing Components:
 
-function component_args!(a, b, varexpr, kwargs; index_name = nothing, keywords = false )
+function component_args!(a, b, varexpr, kwargs; index_name = nothing, keywords = false)
     # keywords indicates if whether or not the keyword arg delimiter ; has been seen
     # Whenever `b` is a function call, skip the first arg aka the function name.
     # Whenever it is a kwargs list, include it.
@@ -955,7 +955,8 @@ function component_args!(a, b, varexpr, kwargs; index_name = nothing, keywords =
         arg = b.args[i]
         arg isa LineNumberNode && continue
         MLStyle.@match arg begin
-            Expr(:kw, x) || (x::Symbol && if keywords end) => begin # handle keyword args
+            Expr(:kw, x) || (x::Symbol && if keywords
+            end) => begin # handle keyword args
                 varname, _varname = _rename(a, x)
                 b.args[i] = Expr(:kw, x, _varname)
                 push!(varexpr.args, :((if $varname !== nothing
@@ -969,7 +970,8 @@ function component_args!(a, b, varexpr, kwargs; index_name = nothing, keywords =
                 push!(kwargs, Expr(:kw, varname, nothing))
                 # dict[:kwargs][varname] = nothing
             end
-            x::Symbol && if !keywords end => begin # handle positional args
+            x::Symbol && if !keywords
+            end => begin # handle positional args
                 varname, _varname = _rename(a, x)
                 b.args[i] = :($_varname)
                 push!(varexpr.args, :((if $varname !== nothing
@@ -984,7 +986,6 @@ function component_args!(a, b, varexpr, kwargs; index_name = nothing, keywords =
                 # dict[:kwargs][varname] = nothing
             end
             Expr(:parameters, x...) => begin
-
                 component_args!(a, arg, varexpr, kwargs; keywords = true)
             end
             Expr(:kw, x, y) => begin
