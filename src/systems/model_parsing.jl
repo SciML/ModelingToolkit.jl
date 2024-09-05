@@ -952,9 +952,8 @@ function component_args!(a, b, varexpr, kwargs; index_name = nothing)
     for i in start:lastindex(b.args)
         arg = b.args[i]
         arg isa LineNumberNode && continue
-        @show arg
         MLStyle.@match arg begin
-            x::Symbol => begin
+            x::Symbol => begin # handle positional args
                 varname, _varname = _rename(a, x)
                 b.args[i] = :($_varname)
                 push!(varexpr.args, :((if $varname !== nothing
@@ -968,7 +967,7 @@ function component_args!(a, b, varexpr, kwargs; index_name = nothing)
                 push!(kwargs, Expr(:kw, varname, nothing))
                 # dict[:kwargs][varname] = nothing
             end
-            Expr(:kw, x) => begin
+            Expr(:kw, x) => begin # handle keyword args
                 varname, _varname = _rename(a, x)
                 b.args[i] = Expr(:kw, x, _varname)
                 push!(varexpr.args, :((if $varname !== nothing
