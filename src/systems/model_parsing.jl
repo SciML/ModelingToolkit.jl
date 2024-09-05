@@ -952,8 +952,23 @@ function component_args!(a, b, varexpr, kwargs; index_name = nothing)
     for i in start:lastindex(b.args)
         arg = b.args[i]
         arg isa LineNumberNode && continue
+        @show arg
         MLStyle.@match arg begin
-            x::Symbol || Expr(:kw, x) => begin
+            x::Symbol => begin
+                varname, _varname = _rename(a, x)
+                b.args[i] = :($_varname)
+                push!(varexpr.args, :((if $varname !== nothing
+                    $_varname = $varname
+                elseif @isdefined $x
+                    # Allow users to define a var in `structural_parameters` and set
+                    # that as positional arg of subcomponents; it is useful for cases
+                    # where it needs to be passed to multiple subcomponents.
+                    $_varname = $x
+                end)))
+                push!(kwargs, Expr(:kw, varname, nothing))
+                # dict[:kwargs][varname] = nothing
+            end
+            Expr(:kw, x) => begin
                 varname, _varname = _rename(a, x)
                 b.args[i] = Expr(:kw, x, _varname)
                 push!(varexpr.args, :((if $varname !== nothing
