@@ -552,4 +552,4 @@ oprob_2nd_order_2 = ODEProblem(sys_2nd_order, u0_2nd_order_2, tspan, ps)
       SciMLBase.ReturnCode.InitialFailure
 sol = solve(oprob_2nd_order_2, Rosenbrock23()) # retcode: Success
 @test sol[Y][1] == 2.0
-@test sol[1][2] == 0.5
+@test sol[1,2] == 0.5
