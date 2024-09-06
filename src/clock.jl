@@ -33,6 +33,7 @@ function is_continuous_domain(x)
     !has_discrete_domain(x) && has_continuous_domain(x)
 end
 
+get_time_domain(_, x) = get_time_domain(x)
 function get_time_domain(x)
     if iscall(x) && operation(x) isa Operator
         output_timedomain(x)
@@ -42,6 +43,7 @@ function get_time_domain(x)
 end
 get_time_domain(x::Num) = get_time_domain(value(x))
 
+has_time_domain(_, x) = has_time_domain(x)
 """
     has_time_domain(x)
 
