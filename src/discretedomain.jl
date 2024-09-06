@@ -241,14 +241,14 @@ end
 Return the time-domain type (`Continuous` or `InferredDiscrete`) that `op` results in.
 """
 function output_timedomain(s::Shift, arg = nothing)
-    if has_time_domain(arg)
-        return get_time_domain(arg)
+    if has_time_domain(t, arg)
+        return get_time_domain(t, arg)
     end
     InferredDiscrete
 end
 
-input_timedomain(::Sample, arg = nothing) = Continuous
-output_timedomain(s::Sample, arg = nothing) = s.clock
+input_timedomain(::Sample, _ = nothing) = Continuous
+output_timedomain(s::Sample, _ = nothing) = s.clock
 
 function input_timedomain(h::Hold, arg = nothing)
     if has_time_domain(arg)
@@ -256,10 +256,10 @@ function input_timedomain(h::Hold, arg = nothing)
     end
     InferredDiscrete # the Hold accepts any discrete
 end
-output_timedomain(::Hold, arg = nothing) = Continuous
+output_timedomain(::Hold, _ = nothing) = Continuous
 
-sampletime(op::Sample, arg = nothing) = sampletime(op.clock)
-sampletime(op::ShiftIndex, arg = nothing) = sampletime(op.clock)
+sampletime(op::Sample, _ = nothing) = sampletime(op.clock)
+sampletime(op::ShiftIndex, _ = nothing) = sampletime(op.clock)
 
 changes_domain(op) = isoperator(op, Union{Sample, Hold})
 

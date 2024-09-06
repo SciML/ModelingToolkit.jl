@@ -12,7 +12,7 @@ function ClockInference(ts::TransformationState)
     var_domain = TimeDomain[Continuous for _ in 1:ndsts(graph)]
     inferred = BitSet()
     for (i, v) in enumerate(get_fullvars(ts))
-        d = get_time_domain(v)
+        d = get_time_domain(ts, v)
         if is_concrete_time_domain(d)
             push!(inferred, i)
             var_domain[i] = d
