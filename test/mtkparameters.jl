@@ -9,7 +9,7 @@ using JET
 
 @parameters a b c(t) d::Integer e[1:3] f[1:3, 1:3]::Int g::Vector{AbstractFloat} h::String
 @named sys = ODESystem(
-    Equation[], t, [], [a, c, d, e, f, g, h], parameter_dependencies = [b => 2a],
+    Equation[], t, [], [a, c, d, e, f, g, h], parameter_dependencies = [b ~ 2a],
     continuous_events = [[a ~ 0] => [c ~ 0]], defaults = Dict(a => 0.0))
 sys = complete(sys)
 
@@ -72,10 +72,12 @@ setp(sys, g)(ps, ones(100)) # with non-fixed-length array
 setp(sys, h)(ps, "bar") # with a non-numeric
 @test getp(sys, h)(ps) == "bar"
 
-newps = remake_buffer(sys,
-    ps,
-    Dict(a => 1.0f0, b => 5.0f0, c => 2.0, d => 0x5, e => Float32[0.4, 0.5, 0.6],
-        f => 3ones(UInt, 3, 3), g => ones(Float32, 4), h => "bar"))
+varmap = Dict(a => 1.0f0, b => 5.0f0, c => 2.0, d => 0x5, e => Float32[0.4, 0.5, 0.6],
+    f => 3ones(UInt, 3, 3), g => ones(Float32, 4), h => "bar")
+@test_deprecated remake_buffer(sys, ps, varmap)
+@test_warn ["Symbolic variable b", "non-dependent", "parameter"] remake_buffer(
+    sys, ps, keys(varmap), values(varmap))
+newps = remake_buffer(sys, ps, keys(varmap), values(varmap))
 
 for fname in (:tunable, :discrete, :constant)
     # ensure same number of sub-buffers
@@ -92,8 +94,7 @@ end
 ps = MTKParameters(sys, ivs)
 function loss(value, sys, ps)
     @test value isa ForwardDiff.Dual
-    vals = merge(Dict(parameters(sys) .=> getp(sys, parameters(sys))(ps)), Dict(a => value))
-    ps = remake_buffer(sys, ps, vals)
+    ps = remake_buffer(sys, ps, (a,), (value,))
     getp(sys, a)(ps) + getp(sys, b)(ps)
 end
 
@@ -115,7 +116,7 @@ p = MTKParameters(osys, ps, u0)
 @named sys = ODESystem(Equation[], t, [], [p, q, r])
 sys = complete(sys)
 ps = MTKParameters(sys, [p => 1.0, q => 2.0, r => 3.0])
-newps = remake_buffer(sys, ps, Dict(p => 1.0f0))
+newps = remake_buffer(sys, ps, (p,), (1.0f0,))
 @test newps.tunable isa Vector{Float32}
 @test newps.tunable == [1.0f0, 2.0f0, 3.0f0]
 
@@ -227,19 +228,6 @@ end
 
 @test_nowarn ForwardDiff.gradient(loss, collect(tunables))
 
-# Ensure dependent parameters are `Tuple{...}` and not `ArrayPartition` when using
-# `remake_buffer`.
-@parameters p1 p2 p3[1:2] p4[1:2]
-@named sys = ODESystem(
-    Equation[], t, [], [p1, p2, p3, p4]; parameter_dependencies = [p2 => 2p1, p4 => 3p3])
-sys = complete(sys)
-ps = MTKParameters(sys, [p1 => 1.0, p3 => [2.0, 3.0]])
-@test getp(sys, p2)(ps) == 2.0
-@test getp(sys, p4)(ps) == [6.0, 9.0]
-
-newps = remake_buffer(
-    sys, ps, Dict(p1 => ForwardDiff.Dual(2.0), p3 => ForwardDiff.Dual.([3.0, 4.0])))
-
 VDual = Vector{<:ForwardDiff.Dual}
 VVDual = Vector{<:Vector{<:ForwardDiff.Dual}}
 
@@ -263,26 +251,26 @@ VVDual = Vector{<:Vector{<:ForwardDiff.Dual}}
 
     # Same flexibility is afforded to `b::Int` to allow for ForwardDiff
     for sym in [a, b]
-        @test_nowarn remake_buffer(sys, ps, Dict(sym => 1))
-        newps = @test_nowarn remake_buffer(sys, ps, Dict(sym => 1.0f0)) # Can change type if it's numeric
+        @test_nowarn remake_buffer(sys, ps, (sym,), (1,))
+        newps = @test_nowarn remake_buffer(sys, ps, (sym,), (1.0f0,)) # Can change type if it's numeric
         @test getp(sys, sym)(newps) isa Float32
-        newps = @test_nowarn remake_buffer(sys, ps, Dict(sym => ForwardDiff.Dual(1.0)))
+        newps = @test_nowarn remake_buffer(sys, ps, sym, ForwardDiff.Dual(1.0))
         @test getp(sys, sym)(newps) isa ForwardDiff.Dual
-        @test_throws TypeError remake_buffer(sys, ps, Dict(sym => :a)) # still has to be numeric
+        @test_throws TypeError remake_buffer(sys, ps, (sym,), (:a,)) # still has to be numeric
     end
 
-    newps = @test_nowarn remake_buffer(sys, ps, Dict(c => view(1.0:4.0, 2:4))) # can change type of array
+    newps = @test_nowarn remake_buffer(sys, ps, (c,), (view(1.0:4.0, 2:4),)) # can change type of array
     @test getp(sys, c)(newps) == 2.0:4.0
     @test parameter_values(newps, parameter_index(sys, c)) ≈ [2.0, 3.0, 4.0]
-    @test_throws TypeError remake_buffer(sys, ps, Dict(c => [:a, :b, :c])) # can't arbitrarily change eltype
-    @test_throws TypeError remake_buffer(sys, ps, Dict(c => :a)) # can't arbitrarily change type
+    @test_throws TypeError remake_buffer(sys, ps, (c,), ([:a, :b, :c],)) # can't arbitrarily change eltype
+    @test_throws TypeError remake_buffer(sys, ps, (c,), (:a,)) # can't arbitrarily change type
 
-    newps = @test_nowarn remake_buffer(sys, ps, Dict(d => ForwardDiff.Dual.(ones(2, 2)))) # can change eltype
-    @test_throws TypeError remake_buffer(sys, ps, Dict(d => [:a :b; :c :d])) # eltype still has to be numeric
+    newps = @test_nowarn remake_buffer(sys, ps, (d,), (ForwardDiff.Dual.(ones(2, 2)),)) # can change eltype
+    @test_throws TypeError remake_buffer(sys, ps, (d,), ([:a :b; :c :d],)) # eltype still has to be numeric
     @test getp(sys, d)(newps) isa Matrix{<:ForwardDiff.Dual}
 
-    @test_throws TypeError remake_buffer(sys, ps, Dict(e => Foo(2.0))) # need exact same type for nonnumeric
-    @test_nowarn remake_buffer(sys, ps, Dict(f => Foo(:a)))
+    @test_throws TypeError remake_buffer(sys, ps, (e,), (Foo(2.0),)) # need exact same type for nonnumeric
+    @test_nowarn remake_buffer(sys, ps, (f,), (Foo(:a),))
 end
 
 @testset "Error on missing parameter defaults" begin
@@ -292,7 +280,7 @@ end
     @test_throws ["Could not evaluate", "b", "Missing", "2c"] MTKParameters(sys, [a => 1.0])
 end
 
-@testset "Issue#3804" begin
+@testset "Issue#2804" begin
     @parameters k[1:4]
     @variables (V(t))[1:2]
     eqs = [

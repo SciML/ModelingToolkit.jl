@@ -396,37 +396,6 @@ function SymbolicIndexingInterface.set_parameter!(
     return nothing
 end
 
-function _set_parameter_unchecked!(
-        p::MTKParameters, val, idx::ParameterIndex; update_dependent = true)
-    @unpack portion, idx = idx
-    if portion isa SciMLStructures.Tunable
-        p.tunable[idx] = val
-    else
-        i, j, k... = idx
-        if portion isa SciMLStructures.Discrete
-            if isempty(k)
-                p.discrete[i][j] = val
-            else
-                p.discrete[i][j][k...] = val
-            end
-        elseif portion isa SciMLStructures.Constants
-            if isempty(k)
-                p.constant[i][j] = val
-            else
-                p.constant[i][j][k...] = val
-            end
-        elseif portion === NONNUMERIC_PORTION
-            if isempty(k)
-                p.nonnumeric[i][j] = val
-            else
-                p.nonnumeric[i][j][k...] = val
-            end
-        else
-            error("Unhandled portion $portion")
-        end
-    end
-end
-
 function narrow_buffer_type_and_fallback_undefs(
         oldbuf::AbstractVector, newbuf::AbstractVector)
     type = Union{}
@@ -448,31 +417,42 @@ function narrow_buffer_type_and_fallback_undefs(
     return newerbuf
 end
 
-function validate_parameter_type(ic::IndexCache, p, index, val)
+function validate_parameter_type(ic::IndexCache, p, idx::ParameterIndex, val)
     p = unwrap(p)
     if p isa Symbol
         p = get(ic.symbol_to_variable, p, nothing)
-        if p === nothing
-            @warn "No matching variable found for `Symbol` $p, skipping type validation."
-            return nothing
-        end
+        p === nothing && return validate_parameter_type(ic, idx, val)
     end
+    stype = symtype(p)
+    sz = if stype <: AbstractArray
+        Symbolics.shape(p) == Symbolics.Unknown() ? Symbolics.Unknown() : size(p)
+    elseif stype <: Number
+        size(p)
+    else
+        Symbolics.Unknown()
+    end
+    validate_parameter_type(ic, stype, sz, p, idx, val)
+end
+
+function validate_parameter_type(ic::IndexCache, idx::ParameterIndex, val)
+    validate_parameter_type(
+        ic, get_buffer_template(ic, idx).type, Symbolics.Unknown(), nothing, idx, val)
+end
+
+function validate_parameter_type(ic::IndexCache, stype, sz, sym, index, val)
     (; portion) = index
     # Nonnumeric parameters have to match the type
     if portion === NONNUMERIC_PORTION
-        stype = symtype(p)
         val isa stype && return nothing
-        throw(ParameterTypeException(:validate_parameter_type, p, stype, val))
+        throw(ParameterTypeException(:validate_parameter_type, sym, stype, val))
     end
-    stype = symtype(p)
     # Array parameters need array values...
     if stype <: AbstractArray && !isa(val, AbstractArray)
-        throw(ParameterTypeException(:validate_parameter_type, p, stype, val))
+        throw(ParameterTypeException(:validate_parameter_type, sym, stype, val))
     end
     # ... and must match sizes
-    if stype <: AbstractArray && Symbolics.shape(p) !== Symbolics.Unknown() &&
-       size(val) != size(p)
-        throw(InvalidParameterSizeException(p, val))
+    if stype <: AbstractArray && sz != Symbolics.Unknown() && size(val) != sz
+        throw(InvalidParameterSizeException(sym, val))
     end
     # Early exit
     val isa stype && return nothing
@@ -485,7 +465,7 @@ function validate_parameter_type(ic::IndexCache, p, index, val)
         # This is for duals and other complicated number types
         etype = SciMLBase.parameterless_type(etype)
         eltype(val) <: etype || throw(ParameterTypeException(
-            :validate_parameter_type, p, AbstractArray{etype}, val))
+            :validate_parameter_type, sym, AbstractArray{etype}, val))
     else
         # Real check
         if stype <: Real
@@ -493,7 +473,7 @@ function validate_parameter_type(ic::IndexCache, p, index, val)
         end
         stype = SciMLBase.parameterless_type(stype)
         val isa stype ||
-            throw(ParameterTypeException(:validate_parameter_type, p, stype, val))
+            throw(ParameterTypeException(:validate_parameter_type, sym, stype, val))
     end
 end
 
@@ -504,45 +484,69 @@ function indp_to_system(indp)
     return indp
 end
 
-function SymbolicIndexingInterface.remake_buffer(indp, oldbuf::MTKParameters, vals::Dict)
-    newbuf = @set oldbuf.tunable = Vector{Any}(undef, length(oldbuf.tunable))
+function SymbolicIndexingInterface.remake_buffer(indp, oldbuf::MTKParameters, idxs, vals)
+    newbuf = @set oldbuf.tunable = similar(oldbuf.tunable, Any)
     @set! newbuf.discrete = Tuple(similar(buf, Any) for buf in newbuf.discrete)
-    @set! newbuf.constant = Tuple(Vector{Any}(undef, length(buf))
-    for buf in newbuf.constant)
-    @set! newbuf.nonnumeric = Tuple(Vector{Any}(undef, length(buf))
-    for buf in newbuf.nonnumeric)
+    @set! newbuf.constant = Tuple(similar(buf, Any) for buf in newbuf.constant)
+    @set! newbuf.nonnumeric = Tuple(similar(buf, Any) for buf in newbuf.nonnumeric)
 
-    syms = collect(keys(vals))
-    vals = Dict{Any, Any}(vals)
-    for sym in syms
-        symbolic_type(sym) == ArraySymbolic() || continue
-        is_parameter(indp, sym) && continue
-        stype = symtype(unwrap(sym))
-        stype <: AbstractArray || continue
-        Symbolics.shape(sym) == Symbolics.Unknown() && continue
-        for i in eachindex(sym)
-            vals[sym[i]] = vals[sym][i]
+    function handle_parameter(ic, sym, idx, val)
+        if sym === nothing
+            validate_parameter_type(ic, idx, val)
+        else
+            validate_parameter_type(ic, sym, idx, val)
         end
+        # `ParameterIndex(idx)` turns off size validation since it relies on there
+        # being an existing value
+        set_parameter!(newbuf, val, ParameterIndex(idx))
     end
 
+    handled_idxs = Set{ParameterIndex}()
     # If the parameter buffer is an `MTKParameters` object, `indp` must eventually drill
     # down to an `AbstractSystem` using `symbolic_container`. We leverage this to get
     # the index cache.
     ic = get_index_cache(indp_to_system(indp))
-    for (p, val) in vals
-        idx = parameter_index(indp, p)
-        if idx !== nothing
-            validate_parameter_type(ic, p, idx, val)
-            _set_parameter_unchecked!(
-                newbuf, val, idx; update_dependent = false)
-        elseif symbolic_type(p) == ArraySymbolic()
-            for (i, j) in zip(eachindex(p), eachindex(val))
-                pi = p[i]
-                idx = parameter_index(indp, pi)
-                validate_parameter_type(ic, pi, idx, val[j])
-                _set_parameter_unchecked!(
-                    newbuf, val[j], idx; update_dependent = false)
+    for (idx, val) in zip(idxs, vals)
+        sym = nothing
+        if symbolic_type(idx) == ScalarSymbolic()
+            sym = idx
+            idx = parameter_index(ic, sym)
+            if idx === nothing
+                @warn "Symbolic variable $sym is not a (non-dependent) parameter in the system"
+                continue
             end
+            idx in handled_idxs && continue
+            handle_parameter(ic, sym, idx, val)
+            push!(handled_idxs, idx)
+        elseif symbolic_type(idx) == ArraySymbolic()
+            sym = idx
+            idx = parameter_index(ic, sym)
+            if idx === nothing
+                Symbolics.shape(sym) == Symbolics.Unknown() &&
+                    throw(ParameterNotInSystem(sym))
+                size(sym) == size(val) || throw(InvalidParameterSizeException(sym, val))
+
+                for (i, vali) in zip(eachindex(sym), eachindex(val))
+                    idx = parameter_index(ic, sym[i])
+                    if idx === nothing
+                        @warn "Symbolic variable $sym is not a (non-dependent) parameter in the system"
+                        continue
+                    end
+                    # Intentionally don't check handled_idxs here because array variables always take priority
+                    # See Issue#2804
+                    handle_parameter(ic, sym[i], idx, val[vali])
+                    push!(handled_idxs, idx)
+                end
+            else
+                idx in handled_idxs && continue
+                handle_parameter(ic, sym, idx, val)
+                push!(handled_idxs, idx)
+            end
+        else # NotSymbolic
+            if !(idx isa ParameterIndex)
+                throw(ArgumentError("Expected index for parameter to be a symbolic variable or `ParameterIndex`, got $idx"))
+            end
+            handle_parameter(ic, nothing, idx, val)
         end
     end
 
@@ -688,7 +692,7 @@ function jacobian_wrt_vars(pf::F, p::MTKParameters, input_idxs, chunk::C) where 
 
         function (p_small_inner)
             for (i, val) in zip(input_idxs, p_small_inner)
-                _set_parameter_unchecked!(p_big, val, i)
+                set_parameter!(p_big, val, i)
             end
             return if pf isa SciMLBase.ParamJacobianWrapper
                 buffer = Array{dualtype}(undef, size(pf.u))
@@ -734,4 +738,12 @@ end
 
 function ParameterTypeException(func, param, expected, val)
     TypeError(func, "Parameter $param", expected, val)
+end
+
+struct ParameterNotInSystem <: Exception
+    p::Any
+end
+
+function Base.showerror(io::IO, e::ParameterNotInSystem)
+    println(io, "Symbolic variable $(e.p) is not a parameter in the system")
 end
