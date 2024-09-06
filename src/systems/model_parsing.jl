@@ -148,15 +148,20 @@ end
 
 pop_structure_dict!(dict, key) = length(dict[key]) == 0 && pop!(dict, key)
 
+struct NoValue end
+const NO_VALUE = NoValue()
+
 function update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
         varclass, where_types, meta)
     if indices isa Nothing
         if !isnothing(meta) && haskey(meta, VariableUnit)
             uvar = gensym()
             push!(where_types, uvar)
-            push!(kwargs, Expr(:kw, :($a::Union{Nothing, Missing, $uvar}), nothing))
+            push!(kwargs,
+                Expr(:kw, :($a::Union{Nothing, Missing, $NoValue, $uvar}), NO_VALUE))
         else
-            push!(kwargs, Expr(:kw, :($a::Union{Nothing, Missing, $type}), nothing))
+            push!(kwargs,
+                Expr(:kw, :($a::Union{Nothing, Missing, $NoValue, $type}), NO_VALUE))
         end
         dict[:kwargs][getname(var)] = Dict(:value => def, :type => type)
     else
@@ -164,8 +169,9 @@ function update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
         push!(kwargs,
             Expr(:kw,
                 Expr(:(::), a,
-                    Expr(:curly, :Union, :Nothing, Expr(:curly, :AbstractArray, vartype))),
-                nothing))
+                    Expr(:curly, :Union, :Nothing, :Missing, NoValue,
+                        Expr(:curly, :AbstractArray, vartype))),
+                NO_VALUE))
         if !isnothing(meta) && haskey(meta, VariableUnit)
             push!(where_types, vartype)
         else
@@ -679,7 +685,7 @@ function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
     varexpr = if haskey(metadata_with_exprs, VariableUnit)
         unit = metadata_with_exprs[VariableUnit]
         quote
-            $name = if $name === nothing
+            $name = if $name === $NO_VALUE
                 $setdefault($vv, $def)
             else
                 try
@@ -699,7 +705,7 @@ function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
         end
     else
         quote
-            $name = if $name === nothing
+            $name = if $name === $NO_VALUE
                 $setdefault($vv, $def)
             else
                 $setdefault($vv, $name)
