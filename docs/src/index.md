@@ -119,12 +119,12 @@ Below is an incomplete list of extension libraries one may want to be aware of:
     
       + Automated construction of ODEs and DAEs from data
       + Representations of Koopman operators and Dynamic Mode Decomposition (DMD)
-  - [MomentClosure.jl](https://docs.sciml.ai/MomentClosure/dev/): Automatic
+  - [MomentClosure.jl](https://augustinas1.github.io/MomentClosure.jl/dev/): Automatic
     transformation of ReactionSystems into deterministic systems
     
       + Generates ODESystems for the moment closures
       + Allows for geometrically-distributed random reaction rates
-  - [ReactionMechanismSimulator.jl](https://docs.sciml.ai/ReactionMechanismSimulator/stable):
+  - [ReactionMechanismSimulator.jl](https://github.com/ReactionMechanismGenerator/ReactionMechanismSimulator.jl):
     Simulating and analyzing large chemical reaction mechanisms
     
       + Ideal gas and dilute liquid phases.
