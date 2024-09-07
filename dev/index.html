@@ -7,25 +7,25 @@ Pkg.add(&quot;ModelingToolkit&quot;)</code></pre><h2 id="Citation"><a class="doc
       eprint={2103.05244},
       archivePrefix={arXiv},
       primaryClass={cs.MS}
-}</code></pre><h2 id="Feature-Summary"><a class="docs-heading-anchor" href="#Feature-Summary">Feature Summary</a><a id="Feature-Summary-1"></a><a class="docs-heading-anchor-permalink" href="#Feature-Summary" title="Permalink"></a></h2><p>ModelingToolkit.jl is a symbolic-numeric modeling package. Thus it combines some of the features from symbolic computing packages like SymPy or Mathematica with the ideas of equation-based modeling systems like the causal Simulink and the acausal Modelica. It bridges the gap between many different kinds of equations, allowing one to quickly and easily transform systems of DAEs into optimization problems, or vice-versa, and then simplify and parallelize the resulting expressions before generating code.</p><h3 id="Feature-List"><a class="docs-heading-anchor" href="#Feature-List">Feature List</a><a id="Feature-List-1"></a><a class="docs-heading-anchor-permalink" href="#Feature-List" title="Permalink"></a></h3><ul><li>Causal and acausal modeling (Simulink/Modelica)</li><li>Automated model transformation, simplification, and composition</li><li>Automatic conversion of numerical models into symbolic models</li><li>Composition of models through the components, a lazy connection system, and tools for expanding/flattening</li><li>Pervasive parallelism in symbolic computations and generated functions</li><li>Transformations like alias elimination and tearing of nonlinear systems for efficiently numerically handling large-scale systems of equations</li><li>The ability to use the entire Symbolics.jl Computer Algebra System (CAS) as part of the modeling process.</li><li>Import models from common formats like SBML, CellML, BioNetGen, and more.</li><li>Extensibility: the whole system is written in pure Julia, so adding new functions, simplification rules, and model transformations has no barrier.</li></ul><p>For information on how to use the Symbolics.jl CAS system that ModelingToolkit.jl is built on, consult the <a href="https://docs.sciml.ai/Symbolics/stable/">Symbolics.jl documentation</a></p><h3 id="Equation-Types"><a class="docs-heading-anchor" href="#Equation-Types">Equation Types</a><a id="Equation-Types-1"></a><a class="docs-heading-anchor-permalink" href="#Equation-Types" title="Permalink"></a></h3><ul><li>Ordinary differential equations</li><li>Stochastic differential equations</li><li>Partial differential equations</li><li>Nonlinear systems</li><li>Optimization problems</li><li>Continuous-Time Markov Chains</li><li>Chemical Reactions (via <a href="https://docs.sciml.ai/Catalyst/stable/">Catalyst.jl</a>)</li><li>Nonlinear Optimal Control</li></ul><h2 id="Standard-Library"><a class="docs-heading-anchor" href="#Standard-Library">Standard Library</a><a id="Standard-Library-1"></a><a class="docs-heading-anchor-permalink" href="#Standard-Library" title="Permalink"></a></h2><p>For quick development, ModelingToolkit.jl includes <a href="https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/">ModelingToolkitStandardLibrary.jl</a>, a standard library of prebuilt components for the ModelingToolkit ecosystem.</p><h2 id="Model-Import-Formats"><a class="docs-heading-anchor" href="#Model-Import-Formats">Model Import Formats</a><a id="Model-Import-Formats-1"></a><a class="docs-heading-anchor-permalink" href="#Model-Import-Formats" title="Permalink"></a></h2><ul><li><p><a href="https://docs.sciml.ai/CellMLToolkit/stable/">CellMLToolkit.jl</a>: Import <a href="https://www.cellml.org/">CellML</a> models into ModelingToolkit</p><ul><li>Repository of more than a thousand pre-made models</li><li>Focus on biomedical models in areas such as: Calcium Dynamics, Cardiovascular Circulation, Cell Cycle, Cell Migration, Circadian Rhythms, Electrophysiology, Endocrine, Excitation-Contraction Coupling, Gene Regulation, Hepatology, Immunology, Ion Transport, Mechanical Constitutive Laws, Metabolism, Myofilament Mechanics, Neurobiology, pH Regulation, PKPD, Protein Modules, Signal Transduction, and Synthetic Biology.</li></ul></li><li><p><a href="https://docs.sciml.ai/SBMLToolkit/stable/">SBMLToolkit.jl</a>: Import <a href="http://sbml.org/">SBML</a> models into ModelingToolkit</p><ul><li>Uses the robust libsbml library for parsing and transforming the SBML</li></ul></li><li><p><a href="https://docs.sciml.ai/ReactionNetworkImporters/stable/">ReactionNetworkImporters.jl</a>: Import various models into ModelingToolkit</p><ul><li>Supports the BioNetGen <code>.net</code> file</li><li>Supports importing networks specified by stoichiometric matrices</li></ul></li></ul><h2 id="Extension-Libraries"><a class="docs-heading-anchor" href="#Extension-Libraries">Extension Libraries</a><a id="Extension-Libraries-1"></a><a class="docs-heading-anchor-permalink" href="#Extension-Libraries" title="Permalink"></a></h2><p>Because ModelingToolkit.jl is the core foundation of an equation-based modeling ecosystem, there is a large set of libraries adding features to this system. Below is an incomplete list of extension libraries one may want to be aware of:</p><ul><li><p><a href="https://docs.sciml.ai/Catalyst/stable/">Catalyst.jl</a>: Symbolic representations of chemical reactions</p><ul><li>Symbolically build and represent large systems of chemical reactions</li><li>Generate code for ODEs, SDEs, continuous-time Markov Chains, and more</li><li>Simulate the models using the SciML ecosystem with O(1) Gillespie methods</li></ul></li><li><p><a href="https://docs.sciml.ai/DataDrivenDiffEq/stable/">DataDrivenDiffEq.jl</a>: Automatic identification of equations from data</p><ul><li>Automated construction of ODEs and DAEs from data</li><li>Representations of Koopman operators and Dynamic Mode Decomposition (DMD)</li></ul></li><li><p><a href="https://docs.sciml.ai/MomentClosure/dev/">MomentClosure.jl</a>: Automatic transformation of ReactionSystems into deterministic systems</p><ul><li>Generates ODESystems for the moment closures</li><li>Allows for geometrically-distributed random reaction rates</li></ul></li><li><p><a href="https://docs.sciml.ai/ReactionMechanismSimulator/stable">ReactionMechanismSimulator.jl</a>: Simulating and analyzing large chemical reaction mechanisms</p><ul><li>Ideal gas and dilute liquid phases.</li><li>Constant T and P and constant V adiabatic ideal gas reactors.</li><li>Constant T and V dilute liquid reactors.</li><li>Diffusion limited rates. Sensitivity analysis for all reactors.</li><li>Flux diagrams with molecular images (if molecular information is provided).</li></ul></li><li><p><a href="https://github.com/voduchuy/NumCME.jl">NumCME.jl</a>: High-performance simulation of chemical master equations (CME)</p><ul><li>Transient solution of the CME</li><li>Dynamic state spaces</li><li>Accepts reaction systems defined using Catalyst.jl DSL.</li></ul></li><li><p><a href="https://github.com/SciML/FiniteStateProjection.jl">FiniteStateProjection.jl</a>: High-performance simulation of chemical master equations (CME) via finite state projections</p><ul><li>Accepts reaction systems defined using Catalyst.jl DSL.</li></ul></li></ul><h2 id="Compatible-Numerical-Solvers"><a class="docs-heading-anchor" href="#Compatible-Numerical-Solvers">Compatible Numerical Solvers</a><a id="Compatible-Numerical-Solvers-1"></a><a class="docs-heading-anchor-permalink" href="#Compatible-Numerical-Solvers" title="Permalink"></a></h2><p>All of the symbolic systems have a direct conversion to a numerical system, which can then be handled through the SciML interfaces. For example, after building a model and performing symbolic manipulations, an <code>ODESystem</code> can be converted into an <code>ODEProblem</code> to then be solved by a numerical ODE solver. Below is a list of the solver libraries which are the numerical targets of the ModelingToolkit system:</p><ul><li><p><a href="https://docs.sciml.ai/DiffEqDocs/stable/">DifferentialEquations.jl</a></p><ul><li>Multi-package interface of high performance numerical solvers for <code>ODESystem</code>, <code>SDESystem</code>, and <code>JumpSystem</code></li></ul></li><li><p><a href="https://docs.sciml.ai/NonlinearSolve/stable/">NonlinearSolve.jl</a></p><ul><li>High performance numerical solving of <code>NonlinearSystem</code></li></ul></li><li><p><a href="https://docs.sciml.ai/Optimization/stable/">Optimization.jl</a></p><ul><li>Multi-package interface for numerical solving <code>OptimizationSystem</code></li></ul></li><li><p><a href="https://docs.sciml.ai/NeuralPDE/stable/">NeuralPDE.jl</a></p><ul><li>Physics-Informed Neural Network (PINN) training on <code>PDESystem</code></li></ul></li><li><p><a href="https://docs.sciml.ai/MethodOfLines/stable/">MethodOfLines.jl</a></p><ul><li>Automated finite difference method (FDM) discretization of <code>PDESystem</code></li></ul></li></ul><h2 id="Contributing"><a class="docs-heading-anchor" href="#Contributing">Contributing</a><a id="Contributing-1"></a><a class="docs-heading-anchor-permalink" href="#Contributing" title="Permalink"></a></h2><ul><li><p>Please refer to the <a href="https://github.com/SciML/ColPrac/blob/master/README.md">SciML ColPrac: Contributor&#39;s Guide on Collaborative Practices for Community Packages</a> for guidance on PRs, issues, and other matters relating to contributing to SciML.</p></li><li><p>See the <a href="https://github.com/SciML/SciMLStyle">SciML Style Guide</a> for common coding practices and other style decisions.</p></li><li><p>There are a few community forums:</p><ul><li>The #diffeq-bridged and #sciml-bridged channels in the <a href="https://julialang.org/slack/">Julia Slack</a></li><li>The #diffeq-bridged and #sciml-bridged channels in the <a href="https://julialang.zulipchat.com/#narrow/stream/279055-sciml-bridged">Julia Zulip</a></li><li>On the <a href="https://discourse.julialang.org">Julia Discourse forums</a></li><li>See also <a href="https://sciml.ai/community/">SciML Community page</a></li></ul></li></ul><h2 id="Reproducibility"><a class="docs-heading-anchor" href="#Reproducibility">Reproducibility</a><a id="Reproducibility-1"></a><a class="docs-heading-anchor-permalink" href="#Reproducibility" title="Permalink"></a></h2><details><summary>The documentation of this SciML package was built using these direct dependencies,</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Status `~/work/ModelingToolkit.jl/ModelingToolkit.jl/docs/Project.toml`
+}</code></pre><h2 id="Feature-Summary"><a class="docs-heading-anchor" href="#Feature-Summary">Feature Summary</a><a id="Feature-Summary-1"></a><a class="docs-heading-anchor-permalink" href="#Feature-Summary" title="Permalink"></a></h2><p>ModelingToolkit.jl is a symbolic-numeric modeling package. Thus it combines some of the features from symbolic computing packages like SymPy or Mathematica with the ideas of equation-based modeling systems like the causal Simulink and the acausal Modelica. It bridges the gap between many different kinds of equations, allowing one to quickly and easily transform systems of DAEs into optimization problems, or vice-versa, and then simplify and parallelize the resulting expressions before generating code.</p><h3 id="Feature-List"><a class="docs-heading-anchor" href="#Feature-List">Feature List</a><a id="Feature-List-1"></a><a class="docs-heading-anchor-permalink" href="#Feature-List" title="Permalink"></a></h3><ul><li>Causal and acausal modeling (Simulink/Modelica)</li><li>Automated model transformation, simplification, and composition</li><li>Automatic conversion of numerical models into symbolic models</li><li>Composition of models through the components, a lazy connection system, and tools for expanding/flattening</li><li>Pervasive parallelism in symbolic computations and generated functions</li><li>Transformations like alias elimination and tearing of nonlinear systems for efficiently numerically handling large-scale systems of equations</li><li>The ability to use the entire Symbolics.jl Computer Algebra System (CAS) as part of the modeling process.</li><li>Import models from common formats like SBML, CellML, BioNetGen, and more.</li><li>Extensibility: the whole system is written in pure Julia, so adding new functions, simplification rules, and model transformations has no barrier.</li></ul><p>For information on how to use the Symbolics.jl CAS system that ModelingToolkit.jl is built on, consult the <a href="https://docs.sciml.ai/Symbolics/stable/">Symbolics.jl documentation</a></p><h3 id="Equation-Types"><a class="docs-heading-anchor" href="#Equation-Types">Equation Types</a><a id="Equation-Types-1"></a><a class="docs-heading-anchor-permalink" href="#Equation-Types" title="Permalink"></a></h3><ul><li>Ordinary differential equations</li><li>Stochastic differential equations</li><li>Partial differential equations</li><li>Nonlinear systems</li><li>Optimization problems</li><li>Continuous-Time Markov Chains</li><li>Chemical Reactions (via <a href="https://docs.sciml.ai/Catalyst/stable/">Catalyst.jl</a>)</li><li>Nonlinear Optimal Control</li></ul><h2 id="Standard-Library"><a class="docs-heading-anchor" href="#Standard-Library">Standard Library</a><a id="Standard-Library-1"></a><a class="docs-heading-anchor-permalink" href="#Standard-Library" title="Permalink"></a></h2><p>For quick development, ModelingToolkit.jl includes <a href="https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/">ModelingToolkitStandardLibrary.jl</a>, a standard library of prebuilt components for the ModelingToolkit ecosystem.</p><h2 id="Model-Import-Formats"><a class="docs-heading-anchor" href="#Model-Import-Formats">Model Import Formats</a><a id="Model-Import-Formats-1"></a><a class="docs-heading-anchor-permalink" href="#Model-Import-Formats" title="Permalink"></a></h2><ul><li><p><a href="https://docs.sciml.ai/CellMLToolkit/stable/">CellMLToolkit.jl</a>: Import <a href="https://www.cellml.org/">CellML</a> models into ModelingToolkit</p><ul><li>Repository of more than a thousand pre-made models</li><li>Focus on biomedical models in areas such as: Calcium Dynamics, Cardiovascular Circulation, Cell Cycle, Cell Migration, Circadian Rhythms, Electrophysiology, Endocrine, Excitation-Contraction Coupling, Gene Regulation, Hepatology, Immunology, Ion Transport, Mechanical Constitutive Laws, Metabolism, Myofilament Mechanics, Neurobiology, pH Regulation, PKPD, Protein Modules, Signal Transduction, and Synthetic Biology.</li></ul></li><li><p><a href="https://docs.sciml.ai/SBMLToolkit/stable/">SBMLToolkit.jl</a>: Import <a href="http://sbml.org/">SBML</a> models into ModelingToolkit</p><ul><li>Uses the robust libsbml library for parsing and transforming the SBML</li></ul></li><li><p><a href="https://docs.sciml.ai/ReactionNetworkImporters/stable/">ReactionNetworkImporters.jl</a>: Import various models into ModelingToolkit</p><ul><li>Supports the BioNetGen <code>.net</code> file</li><li>Supports importing networks specified by stoichiometric matrices</li></ul></li></ul><h2 id="Extension-Libraries"><a class="docs-heading-anchor" href="#Extension-Libraries">Extension Libraries</a><a id="Extension-Libraries-1"></a><a class="docs-heading-anchor-permalink" href="#Extension-Libraries" title="Permalink"></a></h2><p>Because ModelingToolkit.jl is the core foundation of an equation-based modeling ecosystem, there is a large set of libraries adding features to this system. Below is an incomplete list of extension libraries one may want to be aware of:</p><ul><li><p><a href="https://docs.sciml.ai/Catalyst/stable/">Catalyst.jl</a>: Symbolic representations of chemical reactions</p><ul><li>Symbolically build and represent large systems of chemical reactions</li><li>Generate code for ODEs, SDEs, continuous-time Markov Chains, and more</li><li>Simulate the models using the SciML ecosystem with O(1) Gillespie methods</li></ul></li><li><p><a href="https://docs.sciml.ai/DataDrivenDiffEq/stable/">DataDrivenDiffEq.jl</a>: Automatic identification of equations from data</p><ul><li>Automated construction of ODEs and DAEs from data</li><li>Representations of Koopman operators and Dynamic Mode Decomposition (DMD)</li></ul></li><li><p><a href="https://augustinas1.github.io/MomentClosure.jl/dev/">MomentClosure.jl</a>: Automatic transformation of ReactionSystems into deterministic systems</p><ul><li>Generates ODESystems for the moment closures</li><li>Allows for geometrically-distributed random reaction rates</li></ul></li><li><p><a href="https://github.com/ReactionMechanismGenerator/ReactionMechanismSimulator.jl">ReactionMechanismSimulator.jl</a>: Simulating and analyzing large chemical reaction mechanisms</p><ul><li>Ideal gas and dilute liquid phases.</li><li>Constant T and P and constant V adiabatic ideal gas reactors.</li><li>Constant T and V dilute liquid reactors.</li><li>Diffusion limited rates. Sensitivity analysis for all reactors.</li><li>Flux diagrams with molecular images (if molecular information is provided).</li></ul></li><li><p><a href="https://github.com/voduchuy/NumCME.jl">NumCME.jl</a>: High-performance simulation of chemical master equations (CME)</p><ul><li>Transient solution of the CME</li><li>Dynamic state spaces</li><li>Accepts reaction systems defined using Catalyst.jl DSL.</li></ul></li><li><p><a href="https://github.com/SciML/FiniteStateProjection.jl">FiniteStateProjection.jl</a>: High-performance simulation of chemical master equations (CME) via finite state projections</p><ul><li>Accepts reaction systems defined using Catalyst.jl DSL.</li></ul></li></ul><h2 id="Compatible-Numerical-Solvers"><a class="docs-heading-anchor" href="#Compatible-Numerical-Solvers">Compatible Numerical Solvers</a><a id="Compatible-Numerical-Solvers-1"></a><a class="docs-heading-anchor-permalink" href="#Compatible-Numerical-Solvers" title="Permalink"></a></h2><p>All of the symbolic systems have a direct conversion to a numerical system, which can then be handled through the SciML interfaces. For example, after building a model and performing symbolic manipulations, an <code>ODESystem</code> can be converted into an <code>ODEProblem</code> to then be solved by a numerical ODE solver. Below is a list of the solver libraries which are the numerical targets of the ModelingToolkit system:</p><ul><li><p><a href="https://docs.sciml.ai/DiffEqDocs/stable/">DifferentialEquations.jl</a></p><ul><li>Multi-package interface of high performance numerical solvers for <code>ODESystem</code>, <code>SDESystem</code>, and <code>JumpSystem</code></li></ul></li><li><p><a href="https://docs.sciml.ai/NonlinearSolve/stable/">NonlinearSolve.jl</a></p><ul><li>High performance numerical solving of <code>NonlinearSystem</code></li></ul></li><li><p><a href="https://docs.sciml.ai/Optimization/stable/">Optimization.jl</a></p><ul><li>Multi-package interface for numerical solving <code>OptimizationSystem</code></li></ul></li><li><p><a href="https://docs.sciml.ai/NeuralPDE/stable/">NeuralPDE.jl</a></p><ul><li>Physics-Informed Neural Network (PINN) training on <code>PDESystem</code></li></ul></li><li><p><a href="https://docs.sciml.ai/MethodOfLines/stable/">MethodOfLines.jl</a></p><ul><li>Automated finite difference method (FDM) discretization of <code>PDESystem</code></li></ul></li></ul><h2 id="Contributing"><a class="docs-heading-anchor" href="#Contributing">Contributing</a><a id="Contributing-1"></a><a class="docs-heading-anchor-permalink" href="#Contributing" title="Permalink"></a></h2><ul><li><p>Please refer to the <a href="https://github.com/SciML/ColPrac/blob/master/README.md">SciML ColPrac: Contributor&#39;s Guide on Collaborative Practices for Community Packages</a> for guidance on PRs, issues, and other matters relating to contributing to SciML.</p></li><li><p>See the <a href="https://github.com/SciML/SciMLStyle">SciML Style Guide</a> for common coding practices and other style decisions.</p></li><li><p>There are a few community forums:</p><ul><li>The #diffeq-bridged and #sciml-bridged channels in the <a href="https://julialang.org/slack/">Julia Slack</a></li><li>The #diffeq-bridged and #sciml-bridged channels in the <a href="https://julialang.zulipchat.com/#narrow/stream/279055-sciml-bridged">Julia Zulip</a></li><li>On the <a href="https://discourse.julialang.org">Julia Discourse forums</a></li><li>See also <a href="https://sciml.ai/community/">SciML Community page</a></li></ul></li></ul><h2 id="Reproducibility"><a class="docs-heading-anchor" href="#Reproducibility">Reproducibility</a><a id="Reproducibility-1"></a><a class="docs-heading-anchor-permalink" href="#Reproducibility" title="Permalink"></a></h2><details><summary>The documentation of this SciML package was built using these direct dependencies,</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Status `~/work/ModelingToolkit.jl/ModelingToolkit.jl/docs/Project.toml`
   [6e4b80f9] BenchmarkTools v1.5.0
 ⌅ [0f109fa4] BifurcationKit v0.3.6
-  [0c46a032] DifferentialEquations v7.13.0
+  [0c46a032] DifferentialEquations v7.14.0
   [31c24e10] Distributions v0.25.111
-  [e30172f5] Documenter v1.6.0
+  [e30172f5] Documenter v1.7.0
   [06fc5a27] DynamicQuantities v1.0.0
-  [961ee093] ModelingToolkit v9.36.0 `~/work/ModelingToolkit.jl/ModelingToolkit.jl`
+  [961ee093] ModelingToolkit v9.37.0 `~/work/ModelingToolkit.jl/ModelingToolkit.jl`
   [8913a72c] NonlinearSolve v3.14.0
   [429524aa] Optim v1.9.4
-  [7f7a1694] Optimization v3.27.0
+  [7f7a1694] Optimization v3.28.0
 ⌅ [36348300] OptimizationOptimJL v0.1.14
   [1dea7af3] OrdinaryDiffEq v6.89.0
   [91a5bcdd] Plots v1.40.8
   [53ae85a6] SciMLStructures v1.5.0
-  [789caeaf] StochasticDiffEq v6.68.0
-  [2efcf032] SymbolicIndexingInterface v0.3.28
-  [d1185830] SymbolicUtils v3.5.0
-  [0c5d862f] Symbolics v6.5.0
+  [789caeaf] StochasticDiffEq v6.69.0
+  [2efcf032] SymbolicIndexingInterface v0.3.30
+  [d1185830] SymbolicUtils v3.6.0
+  [0c5d862f] Symbolics v6.6.1
   [1986cc42] Unitful v1.21.0
   [37e2e46d] LinearAlgebra
 Info Packages marked with ⌅ have new versions available but compatibility constraints restrict them from upgrading. To see why use `status --outdated`</code></pre></details><details><summary>and using this machine and Julia version.</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Julia Version 1.10.5
@@ -81,7 +81,7 @@ Environment:
   [2569d6c7] ConcreteStructs v0.2.3
   [f0e56b4a] ConcurrentUtilities v2.4.2
   [88cd18e8] ConsoleProgressMonitor v0.1.2
-  [187b0558] ConstructionBase v1.5.7
+  [187b0558] ConstructionBase v1.5.8
   [d38c429a] Contour v0.6.3
   [adafc99b] CpuId v0.3.1
   [a8cc5b0e] Crayons v4.1.1
@@ -92,18 +92,18 @@ Environment:
   [bcd4f6db] DelayDiffEq v5.48.1
   [8bb1440f] DelimitedFiles v1.9.1
   [85a47980] Dictionaries v0.4.2
-  [2b5f629d] DiffEqBase v6.154.0
-  [459566f4] DiffEqCallbacks v3.9.0
+  [2b5f629d] DiffEqBase v6.155.0
+  [459566f4] DiffEqCallbacks v3.9.1
   [77a26b50] DiffEqNoiseProcess v5.23.0
   [163ba53b] DiffResults v1.1.0
   [b552c78f] DiffRules v1.15.1
-  [0c46a032] DifferentialEquations v7.13.0
-  [a0c0ee7d] DifferentiationInterface v0.5.15
+  [0c46a032] DifferentialEquations v7.14.0
+  [a0c0ee7d] DifferentiationInterface v0.5.17
   [8d63f2c5] DispatchDoctor v0.4.14
   [b4f34e82] Distances v0.10.11
   [31c24e10] Distributions v0.25.111
   [ffbed154] DocStringExtensions v0.9.3
-  [e30172f5] Documenter v1.6.0
+  [e30172f5] Documenter v1.7.0
   [5b8099bc] DomainSets v0.7.14
   [7c1d4256] DynamicPolynomials v0.6.0
   [06fc5a27] DynamicQuantities v1.0.0
@@ -122,7 +122,7 @@ Environment:
   [442a2c76] FastGaussQuadrature v1.0.2
   [29a986be] FastLapackInterface v2.0.4
   [1a297f60] FillArrays v1.13.0
-  [64ca27bc] FindFirstFunctions v1.3.0
+  [64ca27bc] FindFirstFunctions v1.4.1
   [6a86dc24] FiniteDiff v2.24.0
   [53c48c17] FixedPointNumbers v0.8.5
   [1fa38f19] Format v1.3.7
@@ -156,7 +156,7 @@ Environment:
   [692b3bcd] JLLWrappers v1.6.0
   [682c06a0] JSON v0.21.4
   [98e50ef6] JuliaFormatter v1.0.60
-  [ccbc3e58] JumpProcesses v9.13.5
+  [ccbc3e58] JumpProcesses v9.13.7
   [ef3ab10e] KLU v0.6.0
   [2c470bb0] Kronecker v0.5.5
   [ba0b0d4f] Krylov v0.9.6
@@ -167,7 +167,7 @@ Environment:
   [23fbe1c1] Latexify v0.16.5
   [10f19ff3] LayoutPointers v0.1.17
   [0e77f7df] LazilyInitializedFields v1.2.2
-  [5078a376] LazyArrays v2.2.0
+  [5078a376] LazyArrays v2.2.1
   [1d6d02ad] LeftChildRightSiblingTrees v0.2.0
   [2d8b4e74] LevyArea v1.0.0
   [d3d80556] LineSearches v7.3.0
@@ -178,7 +178,7 @@ Environment:
   [bdcacae8] LoopVectorization v0.12.171
   [d8e11817] MLStyle v0.4.17
   [1914dd2f] MacroTools v0.5.13
-  [af67fdf4] ManifoldDiff v0.3.11
+  [af67fdf4] ManifoldDiff v0.3.12
 ⌅ [1cead3c2] Manifolds v0.9.20
   [3362f125] ManifoldsBase v0.15.15
   [d125e4d3] ManualMemory v0.1.8
@@ -189,7 +189,7 @@ Environment:
   [739be429] MbedTLS v1.1.9
   [442fdcdd] Measures v0.3.2
   [e1d29d7a] Missings v1.2.0
-  [961ee093] ModelingToolkit v9.36.0 `~/work/ModelingToolkit.jl/ModelingToolkit.jl`
+  [961ee093] ModelingToolkit v9.37.0 `~/work/ModelingToolkit.jl/ModelingToolkit.jl`
   [46d2c3a1] MuladdMacro v0.2.4
   [102ac46a] MultivariatePolynomials v0.5.6
   [d8a4904e] MutableArithmetics v1.4.6
@@ -201,14 +201,14 @@ Environment:
   [6fe1bfb0] OffsetArrays v1.14.1
   [4d8831e6] OpenSSL v1.4.3
   [429524aa] Optim v1.9.4
-  [7f7a1694] Optimization v3.27.0
-  [bca83a33] OptimizationBase v1.5.0
+  [7f7a1694] Optimization v3.28.0
+⌅ [bca83a33] OptimizationBase v1.5.0
 ⌅ [36348300] OptimizationOptimJL v0.1.14
   [bac558e1] OrderedCollections v1.6.3
   [1dea7af3] OrdinaryDiffEq v6.89.0
   [89bda076] OrdinaryDiffEqAdamsBashforthMoulton v1.1.0
   [6ad6398a] OrdinaryDiffEqBDF v1.1.1
-  [bbf590c4] OrdinaryDiffEqCore v1.4.0
+  [bbf590c4] OrdinaryDiffEqCore v1.5.0
   [50262376] OrdinaryDiffEqDefault v1.1.0
   [4302a76b] OrdinaryDiffEqDifferentiation v1.1.0
   [9286f039] OrdinaryDiffEqExplicitRK v1.1.0
@@ -220,15 +220,15 @@ Environment:
   [d28bc4f8] OrdinaryDiffEqHighOrderRK v1.1.0
   [9f002381] OrdinaryDiffEqIMEXMultistep v1.1.0
   [521117fe] OrdinaryDiffEqLinear v1.1.0
-  [1344f307] OrdinaryDiffEqLowOrderRK v1.1.0
+  [1344f307] OrdinaryDiffEqLowOrderRK v1.2.0
   [b0944070] OrdinaryDiffEqLowStorageRK v1.2.1
-  [127b3ac7] OrdinaryDiffEqNonlinearSolve v1.1.0
+  [127b3ac7] OrdinaryDiffEqNonlinearSolve v1.2.0
   [c9986a66] OrdinaryDiffEqNordsieck v1.1.0
   [5dd0a6cf] OrdinaryDiffEqPDIRK v1.1.0
   [5b33eab2] OrdinaryDiffEqPRK v1.1.0
   [04162be5] OrdinaryDiffEqQPRK v1.1.0
   [af6ede74] OrdinaryDiffEqRKN v1.1.0
-  [43230ef6] OrdinaryDiffEqRosenbrock v1.1.1
+  [43230ef6] OrdinaryDiffEqRosenbrock v1.2.0
   [2d112036] OrdinaryDiffEqSDIRK v1.1.0
   [669c94d9] OrdinaryDiffEqSSPRK v1.2.0
   [e3e12d00] OrdinaryDiffEqStabilizedIRK v1.1.0
@@ -274,7 +274,7 @@ Environment:
   [7e49a35a] RuntimeGeneratedFunctions v0.5.13
   [94e857df] SIMDTypes v0.1.0
   [476501e8] SLEEFPirates v0.6.43
-  [0bca4576] SciMLBase v2.51.4
+  [0bca4576] SciMLBase v2.52.1
   [c0aeaf25] SciMLOperators v0.3.10
   [53ae85a6] SciMLStructures v1.5.0
   [6c6a2e73] Scratch v1.2.1
@@ -297,16 +297,16 @@ Environment:
   [82ae8749] StatsAPI v1.7.0
   [2913bbd2] StatsBase v0.34.3
   [4c63d2b9] StatsFuns v1.3.1
-  [9672c7b4] SteadyStateDiffEq v2.3.1
-  [789caeaf] StochasticDiffEq v6.68.0
+  [9672c7b4] SteadyStateDiffEq v2.4.0
+  [789caeaf] StochasticDiffEq v6.69.0
   [7792a7ef] StrideArraysCore v0.5.7
   [09ab397b] StructArrays v0.6.18
   [c3572dad] Sundials v4.25.0
   [4297ee4d] SymbolicAnalysis v0.3.0
-  [2efcf032] SymbolicIndexingInterface v0.3.28
+  [2efcf032] SymbolicIndexingInterface v0.3.30
   [19f23fe9] SymbolicLimits v0.2.2
-  [d1185830] SymbolicUtils v3.5.0
-  [0c5d862f] Symbolics v6.5.0
+  [d1185830] SymbolicUtils v3.6.0
+  [0c5d862f] Symbolics v6.6.1
   [3783bdb8] TableTraits v1.0.1
   [bd369af6] Tables v1.12.0
   [62fd8b95] TensorCore v0.1.1
@@ -365,7 +365,7 @@ Environment:
   [38a345b3] Libuuid_jll v2.40.1+0
   [856f044c] MKL_jll v2024.2.0+0
   [e7412a2a] Ogg_jll v1.3.5+1
-  [458c3c95] OpenSSL_jll v3.0.14+0
+  [458c3c95] OpenSSL_jll v3.0.15+0
   [efe28fd5] OpenSpecFun_jll v0.5.5+0
   [91d4177d] Opus_jll v1.3.3+0
   [36c8627f] Pango_jll v1.54.1+0
@@ -472,4 +472,4 @@ Environment:
   [8e850b90] libblastrampoline_jll v5.11.0+0
   [8e850ede] nghttp2_jll v1.52.0+1
   [3f19e933] p7zip_jll v17.4.0+2
-Info Packages marked with ⌅ have new versions available but compatibility constraints restrict them from upgrading. To see why use `status --outdated -m`</code></pre></details><p>You can also download the <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v9.36.0/assets/Manifest.toml">manifest</a> file and the <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v9.36.0/assets/Project.toml">project</a> file.</p></article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.6.0 on <span class="colophon-date" title="Sunday 1 September 2024 23:53">Sunday 1 September 2024</span>. Using Julia version 1.10.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+Info Packages marked with ⌅ have new versions available but compatibility constraints restrict them from upgrading. To see why use `status --outdated -m`</code></pre></details><p>You can also download the <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v9.37.0/assets/Manifest.toml">manifest</a> file and the <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v9.37.0/assets/Project.toml">project</a> file.</p></article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.7.0 on <span class="colophon-date" title="Saturday 7 September 2024 10:31">Saturday 7 September 2024</span>. Using Julia version 1.10.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
