@@ -306,3 +306,13 @@ linfun, _ = linearization_function(sys, [u], []; op = Dict(x => 2.0))
 matrices = linfun([1.0], Dict(p => 3.0), 1.0)
 # this would be 1 if the parameter value isn't respected
 @test matrices.f_u[] == 3.0
+
+@testset "Issue #2941" begin
+    @variables x(t) y(t)
+    @parameters p
+    eqs = [0 ~ x * log(y) - p]
+    @named sys = ODESystem(eqs, t; defaults = [p => 1.0])
+    sys = complete(sys)
+    @test_nowarn linearize(
+        sys, [x], []; op = Dict(x => 1.0), allow_input_derivatives = true)
+end
