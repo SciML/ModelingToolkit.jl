@@ -69,6 +69,7 @@ get_unit(x::Real) = unitless
 get_unit(x::DQ.AbstractQuantity) = screen_unit(x)
 get_unit(x::AbstractArray) = map(get_unit, x)
 get_unit(x::Num) = get_unit(unwrap(x))
+get_unit(x::Symbolics.Arr) = get_unit(unwrap(x))
 get_unit(op::Differential, args) = get_unit(args[1]) / get_unit(op.x)
 get_unit(op::Difference, args) = get_unit(args[1]) / get_unit(op.t)
 get_unit(op::typeof(getindex), args) = get_unit(args[1])
