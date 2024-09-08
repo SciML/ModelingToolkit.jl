@@ -44,24 +44,24 @@ function generate_initializesystem(sys::ODESystem;
                 y = get(schedule.dummy_sub, x[1], x[1])
                 y = ModelingToolkit.fixpoint_sub(y, full_diffmap)
 
-                if y isa Symbolics.Arr
+                if y ∈ set_full_states
+                    # defer initialization until defaults are merged below
+                    push!(filtered_u0, y => x[2])
+                elseif y isa Symbolics.Arr
+                    # scalarize array # TODO: don't scalarize arrays
                     _y = collect(y)
-
-                    # TODO: Don't scalarize arrays
-                    for i in 1:length(_y)
+                    for i in eachindex(_y)
                         push!(filtered_u0, _y[i] => x[2][i])
                     end
-                elseif y isa ModelingToolkit.BasicSymbolic
+                elseif y isa Symbolics.BasicSymbolic
                     # y is a derivative expression expanded
                     # add to the initialization equations
                     push!(eqs_ics, y ~ x[2])
-                elseif y ∈ set_full_states
-                    push!(filtered_u0, y => x[2])
                 else
                     error("Initialization expression $y is currently not supported. If its a higher order derivative expression, then only the dummy derivative expressions are supported.")
                 end
             end
-            filtered_u0 = filtered_u0 isa Pair ? todict([filtered_u0]) : todict(filtered_u0)
+            filtered_u0 = todict(filtered_u0)
         end
     else
         dd_guess = Dict()
