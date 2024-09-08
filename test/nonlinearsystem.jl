@@ -251,7 +251,6 @@ end
         0 ~ z - cos(x),
         0 ~ x * y]
     @named ns = NonlinearSystem(eqs, [x, y, z], [])
-    ns = complete(ns)
     vs = [unknowns(ns); parameters(ns)]
     ss_mtk = structural_simplify(ns)
     prob = NonlinearProblem(ss_mtk, vs .=> 1.0)

@@ -362,7 +362,6 @@ disturbed_input = ins[1]
     dist_integ,
     ins)
 
-augmented_sys = complete(augmented_sys)
 matrices, ssys = linearize(augmented_sys,
     [
         augmented_sys.u,

@@ -353,11 +353,11 @@ continuous_events = [[x ~ 0] => [vx ~ -vx]
      D(vx) ~ -9.8
      D(vy) ~ -0.01vy], t; continuous_events)
 
-ball = structural_simplify(ball)
+ball_split = structural_simplify(ball)
 ball_nosplit = structural_simplify(ball; split = false)
 
 tspan = (0.0, 5.0)
-prob = ODEProblem(ball, Pair[], tspan)
+prob = ODEProblem(ball_split, Pair[], tspan)
 prob_nosplit = ODEProblem(ball_nosplit, Pair[], tspan)
 
 cb = get_callback(prob)
