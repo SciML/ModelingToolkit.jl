@@ -61,7 +61,7 @@ function generate_initializesystem(sys::ODESystem;
                     error("Initialization expression $y is currently not supported. If its a higher order derivative expression, then only the dummy derivative expressions are supported.")
                 end
             end
-            filtered_u0 = filtered_u0 isa Pair ? todict([filtered_u0]) : todict(filtered_u0)
+            filtered_u0 = todict(filtered_u0)
         end
     else
         dd_guess = Dict()
