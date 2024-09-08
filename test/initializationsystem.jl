@@ -486,3 +486,22 @@ sys = extend(sysx, sysy)
     ssys = structural_simplify(sys)
     @test_throws ArgumentError ODEProblem(ssys, [x => 3], (0, 1), []) # y should have a guess
 end
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/3025
+@testset "Override defaults when setting initial conditions with unknowns(sys) or similar" begin
+    @variables x(t) y(t)
+
+    # system 1 should solve to x = 1
+    ics1 = [x => 1]
+    sys1 = ODESystem([D(x) ~ 0], t; defaults = ics1, name = :sys1) |> structural_simplify
+    prob1 = ODEProblem(sys1, [], (0.0, 1.0), [])
+    sol1 = solve(prob1, Tsit5())
+    @test all(sol1[x] .== 1)
+
+    # system 2 should solve to x = y = 2
+    sys2 = extend(sys1, ODESystem([D(y) ~ 0], t; initialization_eqs = [y ~ 2], name = :sys2)) |> structural_simplify
+    ics2 = unknowns(sys1) .=> 2 # should be equivalent to "ics2 = [x => 2]"
+    prob2 = ODEProblem(sys2, ics2, (0.0, 1.0), []; fully_determined = true)
+    sol2 = solve(prob2, Tsit5())
+    @test all(sol2[x] .== 2) && all(sol2[y] .== 2)
+end
