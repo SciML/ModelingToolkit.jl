@@ -94,7 +94,7 @@ function generate_initializesystem(sys::ODESystem;
     if !algebraic_only
         for eq in [get_initialization_eqs(sys); initialization_eqs]
             _eq = ModelingToolkit.fixpoint_sub(eq, full_diffmap)
-            push!(eqs_ics,_eq)
+            push!(eqs_ics, _eq)
         end
     end
 
