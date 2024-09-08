@@ -48,13 +48,12 @@ function generate_initializesystem(sys::ODESystem;
                     # defer initialization until defaults are merged below
                     push!(filtered_u0, y => x[2])
                 elseif y isa Symbolics.Arr
+                    # scalarize array # TODO: don't scalarize arrays
                     _y = collect(y)
-
-                    # TODO: Don't scalarize arrays
-                    for i in 1:length(_y)
+                    for i in eachindex(_y)
                         push!(filtered_u0, _y[i] => x[2][i])
                     end
-                elseif y isa ModelingToolkit.BasicSymbolic
+                elseif y isa Symbolics.BasicSymbolic
                     # y is a derivative expression expanded
                     # add to the initialization equations
                     push!(eqs_ics, y ~ x[2])
