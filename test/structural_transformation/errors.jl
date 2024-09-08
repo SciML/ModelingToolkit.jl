@@ -14,6 +14,6 @@ using Test
     end
 end
 
-@named rc_model = ODESystem(rc_eqs, t; systems)
+@named rc_model = FOL()
 sys = structural_simplify(rc_model)
 @test_throws ModelingToolkit.RepeatedStructuralSimplificationError structural_simplify(sys)
