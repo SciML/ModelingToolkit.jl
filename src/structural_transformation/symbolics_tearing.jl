@@ -453,6 +453,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
             # convert it into the mass matrix form.
             # We cannot solve the differential variable like D(x)
             if isdervar(iv)
+                isnothing(D) && error("Differential found in a non-differential system. Likely this is a bug in the construction of an initialization system. Please report this issue with a reproducible example. Offending equation: $(equations(sys)[ieq])")
                 order, lv = var_order(iv)
                 dx = D(simplify_shifts(lower_varname_withshift(
                     fullvars[lv], idep, order - 1)))
