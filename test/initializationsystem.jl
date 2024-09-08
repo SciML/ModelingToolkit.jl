@@ -508,3 +508,17 @@ end
     sol2 = solve(prob2, Tsit5())
     @test all(sol2[x] .== 2) && all(sol2[y] .== 2)
 end
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/3029
+@testset "Derivatives in Initialization Equations" begin
+    @variables x(t)
+    sys = ODESystem(
+        [D(D(x)) ~ 0], t; initialization_eqs = [x ~ 0, D(x) ~ 1], name = :sys) |>
+          structural_simplify
+    @test_nowarn ODEProblem(sys, [], (0.0, 1.0), [])
+
+    sys = ODESystem(
+        [D(D(x)) ~ 0], t; initialization_eqs = [x ~ 0, D(D(x)) ~ 0], name = :sys) |>
+          structural_simplify
+    @test_nowarn ODEProblem(sys, [D(x) => 1.0], (0.0, 1.0), [])
+end

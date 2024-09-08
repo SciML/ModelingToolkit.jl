@@ -91,12 +91,15 @@ function generate_initializesystem(sys::ODESystem;
         end
     end
 
-    pars = [parameters(sys); get_iv(sys)]
-    nleqs = if algebraic_only
-        [eqs_ics; observed(sys)]
-    else
-        [eqs_ics; get_initialization_eqs(sys); initialization_eqs; observed(sys)]
+    if !algebraic_only
+        for eq in [get_initialization_eqs(sys); initialization_eqs]
+            _eq = ModelingToolkit.fixpoint_sub(eq, full_diffmap)
+            push!(eqs_ics, _eq)
+        end
     end
+
+    pars = [parameters(sys); get_iv(sys)]
+    nleqs = [eqs_ics; observed(sys)]
 
     sys_nl = NonlinearSystem(nleqs,
         full_states,
