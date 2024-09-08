@@ -499,7 +499,10 @@ end
     @test all(sol1[x] .== 1)
 
     # system 2 should solve to x = y = 2
-    sys2 = extend(sys1, ODESystem([D(y) ~ 0], t; initialization_eqs = [y ~ 2], name = :sys2)) |> structural_simplify
+    sys2 = extend(
+        sys1,
+        ODESystem([D(y) ~ 0], t; initialization_eqs = [y ~ 2], name = :sys2)
+    ) |> structural_simplify
     ics2 = unknowns(sys1) .=> 2 # should be equivalent to "ics2 = [x => 2]"
     prob2 = ODEProblem(sys2, ics2, (0.0, 1.0), []; fully_determined = true)
     sol2 = solve(prob2, Tsit5())
