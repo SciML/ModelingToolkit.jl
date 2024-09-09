@@ -246,3 +246,31 @@ let
     @test MT.get_unit(x_vec) == u"1"
     @test MT.get_unit(x_mat) == u"1"
 end
+
+module UnitTD
+using Test
+using ModelingToolkit
+using ModelingToolkit: t, D
+using DynamicQuantities
+
+@mtkmodel UnitsExample begin
+    @parameters begin
+        g, [unit = u"m/s^2"]
+        L = 1.0, [unit = u"m"]
+    end
+    @variables begin
+        x(t), [unit = u"m"]
+        y(t), [state_priority = 10, unit = u"m"]
+        λ(t), [unit = u"s^-2"]
+    end
+    @equations begin
+        D(D(x)) ~ λ * x
+        D(D(y)) ~ λ * y - g
+        x^2 + y^2 ~ L^2
+    end
+end
+
+@mtkbuild pend = UnitsExample()
+@test ModelingToolkit.get_unit.(filter(x -> occursin("ˍt", string(x)), unknowns(pend))) ==
+      [u"m/s", u"m/s"]
+end

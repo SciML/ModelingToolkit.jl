@@ -16,7 +16,8 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
     fill!(out_vars, nothing)
     out_vars[1:length(fullvars)] .= fullvars
 
-    D = Differential(get_iv(sys))
+    iv = get_iv(sys)
+    D = Differential(iv)
 
     for (varidx, diff) in edges(var_to_diff)
         # fullvars[diff] = D(fullvars[var])
@@ -25,7 +26,7 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
         # `fullvars[i]` needs to be not a `D(...)`, because we want the DAE to be
         # first-order.
         if isdifferential(vi)
-            vi = out_vars[varidx] = diff2term(vi)
+            vi = out_vars[varidx] = diff2term_with_unit(vi, iv)
         end
         out_vars[diff] = D(vi)
     end

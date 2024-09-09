@@ -456,7 +456,7 @@ end
 
 function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
-        ddvs = map(diff2term ∘ Differential(get_iv(sys)), dvs),
+        ddvs = map(Base.Fix2(diff2term, get_iv(sys)) ∘ Differential(get_iv(sys)), dvs),
         version = nothing, p = nothing,
         jac = false,
         eval_expression = false,
