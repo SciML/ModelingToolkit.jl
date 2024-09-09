@@ -248,6 +248,7 @@ let
 end
 
 module UnitTD
+using Test
 using ModelingToolkit
 using ModelingToolkit: t, D
 using DynamicQuantities
