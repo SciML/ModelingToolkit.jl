@@ -61,7 +61,7 @@ tspan = (0.0, 1.0)
 ps = [k1 => 1.0, k2 => 5.0]
 # Broken since we need both X1 and X2 to initialize Γ but this makes the initialization system
 # overdetermined because parameter initialization isn't in yet
-@test_warn "overdetermined" oprob = ODEProblem(osys_m, u0, tspan, ps)
+@test_warn "overdetermined" oprob=ODEProblem(osys_m, u0, tspan, ps)
 
 # Make sure it doesn't error on array variables with unspecified size
 @parameters p::Vector{Real} q[1:3]
