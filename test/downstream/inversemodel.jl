@@ -135,7 +135,8 @@ cm = complete(model)
 op = Dict(D(cm.inverse_tank.xT) => 1,
     cm.tank.xc => 0.65)
 tspan = (0.0, 1000.0)
-prob = ODEProblem(ssys, op, tspan)
+# https://github.com/SciML/ModelingToolkit.jl/issues/2786
+prob = ODEProblem(ssys, op, tspan; build_initializeprob = false)
 sol = solve(prob, Rodas5P())
 
 @test SciMLBase.successful_retcode(sol)
