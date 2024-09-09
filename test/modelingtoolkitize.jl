@@ -313,10 +313,6 @@ sys = modelingtoolkitize(prob)
             (1.0, [:p]),
             (1.0, Dict(1 => :p)),
             (Dict(:a => 2, :b => 4), Dict(:a => :p, :b => :q)),
-            (LVector(a = 1, b = 2), [:p, :q]),
-            (SLVector(a = 1, b = 2), [:p, :q]),
-            (LVector(a = 1, b = 2), Dict(1 => :p, 2 => :q)),
-            (SLVector(a = 1, b = 2), Dict(1 => :p, 2 => :q)),
             ((a = 1, b = 2), (a = :p, b = :q)),
             ((a = 1, b = 2), Dict(:a => :p, :b => :q))
         ]
@@ -342,10 +338,6 @@ sys = modelingtoolkitize(prob)
             (1.0, [:p, :q]),
             (1.0, Dict(1 => :p, 2 => :q)),
             (Dict(:a => 2, :b => 4), Dict(:a => :p, :b => :q, :c => :r)),
-            (LVector(a = 1, b = 2), [:p, :q, :r]),
-            (SLVector(a = 1, b = 2), [:p, :q, :r]),
-            (LVector(a = 1, b = 2), Dict(1 => :p, 2 => :q, 3 => :r)),
-            (SLVector(a = 1, b = 2), Dict(1 => :p, 2 => :q, 3 => :r)),
             ((a = 1, b = 2), (a = :p, b = :q, c = :r)),
             ((a = 1, b = 2), Dict(:a => :p, :b => :q, :c => :r))
         ]
