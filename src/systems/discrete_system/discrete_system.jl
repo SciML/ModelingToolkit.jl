@@ -91,6 +91,7 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     The hierarchical parent system before simplification.
     """
     parent::Any
+    isscheduled::Bool
 
     function DiscreteSystem(tag, discreteEqs, iv, dvs, ps, tspan, var_to_name,
             observed,
@@ -98,7 +99,8 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
             systems, defaults, preface, connector_type, parameter_dependencies = Equation[],
             metadata = nothing, gui_metadata = nothing,
             tearing_state = nothing, substitutions = nothing,
-            complete = false, index_cache = nothing, parent = nothing;
+            complete = false, index_cache = nothing, parent = nothing,
+            isscheduled = false;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_independent_variables([iv])
@@ -113,7 +115,7 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
             systems,
             defaults,
             preface, connector_type, parameter_dependencies, metadata, gui_metadata,
-            tearing_state, substitutions, complete, index_cache, parent)
+            tearing_state, substitutions, complete, index_cache, parent, isscheduled)
     end
 end
 

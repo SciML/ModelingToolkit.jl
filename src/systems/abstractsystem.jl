@@ -846,6 +846,19 @@ end
 
 iscomplete(sys::AbstractSystem) = isdefined(sys, :complete) && getfield(sys, :complete)
 
+function schedule(sys::AbstractSystem)
+    has_schedule(sys) ? sys : (@set! sys.isscheduled = true)
+end
+function isscheduled(sys::AbstractSystem)
+    if has_schedule(sys)
+        get_schedule(sys) !== nothing
+    elseif has_isscheduled(sys)
+        get_isscheduled(sys)
+    else
+        false
+    end
+end
+
 """
 $(TYPEDSIGNATURES)
 
@@ -907,7 +920,8 @@ for prop in [:eqs
              :split_idxs
              :parent
              :index_cache
-             :is_scalar_noise]
+             :is_scalar_noise
+             :isscheduled]
     fname_get = Symbol(:get_, prop)
     fname_has = Symbol(:has_, prop)
     @eval begin
