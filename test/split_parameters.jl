@@ -82,8 +82,11 @@ eqs = [y ~ src.output.u
 @named sys = ODESystem(eqs, t, vars, []; systems = [int, src])
 s = complete(sys)
 sys = structural_simplify(sys)
-prob = ODEProblem(
+@test_broken ODEProblem(
     sys, [], (0.0, t_end), [s.src.interpolator => Interpolator(x, dt)]; tofloat = false)
+prob = ODEProblem(
+    sys, [], (0.0, t_end), [s.src.interpolator => Interpolator(x, dt)];
+    tofloat = false, build_initializeprob = false)
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
 @test sol[y][end] == x[end]

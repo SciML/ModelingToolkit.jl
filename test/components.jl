@@ -47,12 +47,7 @@ sys = structural_simplify(rc_model)
 @test length(equations(sys)) == 1
 check_contract(sys)
 @test !isempty(ModelingToolkit.defaults(sys))
-u0 = [capacitor.v => 0.0
-      capacitor.p.i => 0.0
-      resistor.v => 0.0]
-prob = ODEProblem(sys, u0, (0, 10.0))
-sol = solve(prob, Rodas4())
-check_rc_sol(sol)
+u0 = [capacitor.v => 0.0]
 prob = ODEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
 check_rc_sol(sol)
@@ -133,9 +128,7 @@ eqs = [connect(source.p, rc_comp.p)
 expand_connections(sys_inner_outer, debug = true)
 sys_inner_outer = structural_simplify(sys_inner_outer)
 @test !isempty(ModelingToolkit.defaults(sys_inner_outer))
-u0 = [rc_comp.capacitor.v => 0.0
-      rc_comp.capacitor.p.i => 0.0
-      rc_comp.resistor.v => 0.0]
+u0 = [rc_comp.capacitor.v => 0.0]
 prob = ODEProblem(sys_inner_outer, u0, (0, 10.0), sparse = true)
 sol_inner_outer = solve(prob, Rodas4())
 @test sol[capacitor.v] ≈ sol_inner_outer[rc_comp.capacitor.v]
