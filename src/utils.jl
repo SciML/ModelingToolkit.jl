@@ -836,7 +836,11 @@ function fold_constants(ex)
         maketerm(typeof(ex), operation(ex), map(fold_constants, arguments(ex)),
             metadata(ex))
     elseif issym(ex) && isconstant(ex)
-        getdefault(ex)
+        if (unit = getmetadata(ex, VariableUnit, nothing); unit !== nothing)
+            ex # we cannot fold constant with units
+        else
+            getdefault(ex)
+        end
     else
         ex
     end

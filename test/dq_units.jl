@@ -226,6 +226,16 @@ DD = Differential(tt)
 eqs = [DD(X) ~ p - d * X + d * X]
 @test ModelingToolkit.validate(eqs)
 
+@constants begin
+    to_m = 1, [unit = u"m"]
+end
+@variables begin
+    L(t), [unit = u"m"]
+    L_out(t), [unit = u"1"]
+end
+@test to_m in ModelingToolkit.vars(ModelingToolkit.fold_constants(Symbolics.unwrap(L_out *
+                                                                                   -to_m)))
+
 # test units for registered functions
 let
     mm(X, v, K) = v * X / (X + K)
