@@ -860,8 +860,8 @@ function eval_or_rgf(expr::Expr; eval_expression = false, eval_module = @__MODUL
     end
 end
 
-function diff2term_with_unit(x, t)
-    x = diff2term(x)
+function _with_unit(f, x, t, args...)
+    x = f(x, args...)
     if hasmetadata(x, VariableUnit) && (t isa Symbolic && hasmetadata(t, VariableUnit))
         xu = getmetadata(x, VariableUnit)
         tu = getmetadata(t, VariableUnit)
@@ -869,3 +869,6 @@ function diff2term_with_unit(x, t)
     end
     return x
 end
+
+diff2term_with_unit(x, t) = _with_unit(diff2term, x, t)
+lower_varname_with_unit(var, iv, order) = _with_unit(lower_varname, var, iv, iv, order)

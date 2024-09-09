@@ -426,7 +426,7 @@ function lower_varname_withshift(var, iv, order)
         op = operation(var)
         return Shift(op.t, order)(var)
     end
-    return lower_varname(var, iv, order)
+    return lower_varname_with_unit(var, iv, order)
 end
 
 function isdoubleshift(var)

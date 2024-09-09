@@ -34,7 +34,7 @@ function ode_order_lowering(eqs, iv, unknown_vars)
             var, maxorder = var_from_nested_derivative(eq.lhs)
             maxorder > get(var_order, var, 1) && (var_order[var] = maxorder)
             var′ = lower_varname(var, iv, maxorder - 1)
-            rhs′ = diff2term(eq.rhs)
+            rhs′ = diff2term_with_unit(eq.rhs, iv)
             push!(diff_vars, var′)
             push!(diff_eqs, D(var′) ~ rhs′)
         end
