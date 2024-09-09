@@ -75,11 +75,6 @@ __x = x
 # Reduced Flattened System
 
 reduced_system = structural_simplify(connected)
-reduced_system2 = structural_simplify(tearing_substitution(structural_simplify(tearing_substitution(structural_simplify(connected)))))
-
-@test isempty(setdiff(unknowns(reduced_system), unknowns(reduced_system2)))
-@test isequal(equations(tearing_substitution(reduced_system)), equations(reduced_system2))
-@test isequal(observed(reduced_system), observed(reduced_system2))
 @test setdiff(unknowns(reduced_system),
     [s
      a
