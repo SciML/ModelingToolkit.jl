@@ -203,7 +203,9 @@ function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = no
             all_int_vars = false
             if !allow_symbolic
                 if allow_parameter
-                    all(ModelingToolkit.isparameter, vars(a)) || continue
+                    all(
+                        x -> ModelingToolkit.isparameter(x) || ModelingToolkit.isconstant(x),
+                        vars(a)) || continue
                 else
                     continue
                 end
