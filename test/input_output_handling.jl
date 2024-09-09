@@ -362,12 +362,12 @@ disturbed_input = ins[1]
     dist_integ,
     ins)
 
-augmented_sys = complete(augmented_sys)
+getter_sys = complete(augmented_sys)
 matrices, ssys = linearize(augmented_sys,
     [
-        augmented_sys.u,
-        augmented_sys.input.u[2],
-        augmented_sys.d
+        getter_sys.u,
+        getter_sys.input.u[2],
+        getter_sys.d
     ], outs)
 @test matrices.A ≈ [A [1; 0]; zeros(1, 2) -0.001]
 @test matrices.B == I

@@ -312,7 +312,6 @@ matrices = linfun([1.0], Dict(p => 3.0), 1.0)
     @parameters p
     eqs = [0 ~ x * log(y) - p]
     @named sys = ODESystem(eqs, t; defaults = [p => 1.0])
-    sys = complete(sys)
     @test_nowarn linearize(
         sys, [x], []; op = Dict(x => 1.0), allow_input_derivatives = true)
 end

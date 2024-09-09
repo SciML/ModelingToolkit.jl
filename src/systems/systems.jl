@@ -3,6 +3,14 @@ function System(eqs::AbstractVector{<:Equation}, iv, args...; name = nothing,
     ODESystem(eqs, iv, args...; name, kw..., checks = false)
 end
 
+const REPEATED_SIMPLIFICATION_MESSAGE = "Structural simplification cannot be applied to a completed system. Double simplification is not allowed."
+
+struct RepeatedStructuralSimplificationError <: Exception end
+
+function Base.showerror(io::IO, e::RepeatedStructuralSimplificationError)
+    print(io, REPEATED_SIMPLIFICATION_MESSAGE)
+end
+
 """
 $(SIGNATURES)
 
@@ -21,6 +29,7 @@ function structural_simplify(
         sys::AbstractSystem, io = nothing; simplify = false, split = true,
         allow_symbolic = false, allow_parameter = true, conservative = false, fully_determined = true,
         kwargs...)
+    iscomplete(sys) && throw(RepeatedStructuralSimplificationError())
     newsys′ = __structural_simplify(sys, io; simplify,
         allow_symbolic, allow_parameter, conservative, fully_determined,
         kwargs...)
