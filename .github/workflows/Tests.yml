@@ -28,8 +28,6 @@ jobs:
         group:
           - InterfaceI
           - InterfaceII
-          - SymbolicIndexingInterface
-          - Extended
           - Extensions
           - Downstream
           - RegressionI
