@@ -116,6 +116,6 @@ end
 @variables x(t)
 @parameters p
 @mtkbuild sys = ODESystem([D(x) ~ p], t; defaults = [x => t, p => 2t])
-prob = ODEProblem(structural_simplify(sys), [], (1.0, 2.0), [])
+prob = ODEProblem(sys, [], (1.0, 2.0), [])
 @test prob[x] == 1.0
 @test prob.ps[p] == 2.0

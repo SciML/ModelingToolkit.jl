@@ -125,6 +125,7 @@ function tearing_substitution(sys::AbstractSystem; kwargs...)
     neweqs = full_equations(sys::AbstractSystem; kwargs...)
     @set! sys.eqs = neweqs
     @set! sys.substitutions = nothing
+    @set! sys.schedule = nothing
 end
 
 function tearing_assignments(sys::AbstractSystem)
