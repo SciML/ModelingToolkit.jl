@@ -89,21 +89,22 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     The hierarchical parent system before simplification.
     """
     parent::Any
+    isscheduled::Bool
 
     function NonlinearSystem(tag, eqs, unknowns, ps, var_to_name, observed, jac, name,
             systems,
             defaults, connector_type, parameter_dependencies = Equation[], metadata = nothing,
             gui_metadata = nothing,
             tearing_state = nothing, substitutions = nothing,
-            complete = false, index_cache = nothing, parent = nothing; checks::Union{
-                Bool, Int} = true)
+            complete = false, index_cache = nothing, parent = nothing,
+            isscheduled = false; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(unknowns, ps)
             check_units(u, eqs)
         end
         new(tag, eqs, unknowns, ps, var_to_name, observed, jac, name, systems, defaults,
             connector_type, parameter_dependencies, metadata, gui_metadata, tearing_state,
-            substitutions, complete, index_cache, parent)
+            substitutions, complete, index_cache, parent, isscheduled)
     end
 end
 

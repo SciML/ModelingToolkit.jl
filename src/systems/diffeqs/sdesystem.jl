@@ -133,13 +133,15 @@ struct SDESystem <: AbstractODESystem
     be `true` when `noiseeqs isa Vector`. 
     """
     is_scalar_noise::Bool
+    isscheduled::Bool
 
     function SDESystem(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed,
             tgrad,
             jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
             cevents, devents, parameter_dependencies, metadata = nothing, gui_metadata = nothing,
-            complete = false, index_cache = nothing, parent = nothing, is_scalar_noise = false;
+            complete = false, index_cache = nothing, parent = nothing, is_scalar_noise = false,
+            isscheduled = false;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_independent_variables([iv])
@@ -162,7 +164,8 @@ struct SDESystem <: AbstractODESystem
         new(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac,
             Wfact, Wfact_t, name, systems, defaults, connector_type, cevents, devents,
-            parameter_dependencies, metadata, gui_metadata, complete, index_cache, parent, is_scalar_noise)
+            parameter_dependencies, metadata, gui_metadata, complete, index_cache, parent, is_scalar_noise,
+            isscheduled)
     end
 end
 

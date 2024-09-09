@@ -29,7 +29,7 @@ function structural_simplify(
         sys::AbstractSystem, io = nothing; simplify = false, split = true,
         allow_symbolic = false, allow_parameter = true, conservative = false, fully_determined = true,
         kwargs...)
-    iscomplete(sys) && throw(RepeatedStructuralSimplificationError())
+    isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
     newsys′ = __structural_simplify(sys, io; simplify,
         allow_symbolic, allow_parameter, conservative, fully_determined,
         kwargs...)

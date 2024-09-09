@@ -12,6 +12,3 @@ end
 @safetestset "Bareiss" begin
     include("bareiss.jl")
 end
-@safetestset "Errors" begin
-    include("errors.jl")
-end

@@ -849,6 +849,33 @@ iscomplete(sys::AbstractSystem) = isdefined(sys, :complete) && getfield(sys, :co
 """
 $(TYPEDSIGNATURES)
 
+Mark a system as scheduled. It is only intended in compiler internals. A system
+is scheduled after tearing based simplifications where equations are converted
+into assignments.
+"""
+function schedule(sys::AbstractSystem)
+    has_schedule(sys) ? sys : (@set! sys.isscheduled = true)
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+If a system is scheduled, then changing its equations, variables, and
+parameters is no longer legal.
+"""
+function isscheduled(sys::AbstractSystem)
+    if has_schedule(sys)
+        get_schedule(sys) !== nothing
+    elseif has_isscheduled(sys)
+        get_isscheduled(sys)
+    else
+        false
+    end
+end
+
+"""
+$(TYPEDSIGNATURES)
+
 Mark a system as completed. If a system is complete, the system will no longer
 namespace its subsystems or variables, i.e. `isequal(complete(sys).v.i, v.i)`.
 """
@@ -907,7 +934,8 @@ for prop in [:eqs
              :split_idxs
              :parent
              :index_cache
-             :is_scalar_noise]
+             :is_scalar_noise
+             :isscheduled]
     fname_get = Symbol(:get_, prop)
     fname_has = Symbol(:has_, prop)
     @eval begin

@@ -24,7 +24,7 @@ using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Di
                        invalidate_cache!, Substitutions, get_or_construct_tearing_state,
                        filter_kwargs, lower_varname_with_unit, setio, SparseMatrixCLIL,
                        get_fullvars, has_equations, observed,
-                       Schedule
+                       Schedule, schedule
 
 using ModelingToolkit.BipartiteGraphs
 import .BipartiteGraphs: invview, complete

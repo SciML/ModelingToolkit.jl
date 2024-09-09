@@ -44,6 +44,7 @@ completed_rc_model = complete(rc_model)
 @test ModelingToolkit.n_extra_equations(capacitor) == 2
 @test length(equations(structural_simplify(rc_model, allow_parameter = false))) == 2
 sys = structural_simplify(rc_model)
+@test_throws ModelingToolkit.RepeatedStructuralSimplificationError structural_simplify(sys)
 @test length(equations(sys)) == 1
 check_contract(sys)
 @test !isempty(ModelingToolkit.defaults(sys))

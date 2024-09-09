@@ -114,12 +114,13 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     Cached data for fast symbolic indexing.
     """
     index_cache::Union{Nothing, IndexCache}
+    isscheduled::Bool
 
     function JumpSystem{U}(tag, ap::U, iv, unknowns, ps, var_to_name, observed, name,
             systems,
             defaults, connector_type, devents, parameter_dependencies,
             metadata = nothing, gui_metadata = nothing,
-            complete = false, index_cache = nothing;
+            complete = false, index_cache = nothing, isscheduled = false;
             checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
         if checks == true || (checks & CheckComponents) > 0
             check_independent_variables([iv])
@@ -132,7 +133,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
         end
         new{U}(tag, ap, iv, unknowns, ps, var_to_name, observed, name, systems, defaults,
             connector_type, devents, parameter_dependencies, metadata, gui_metadata,
-            complete, index_cache)
+            complete, index_cache, isscheduled)
     end
 end
 function JumpSystem(tag, ap, iv, states, ps, var_to_name, args...; kwargs...)

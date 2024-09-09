@@ -125,6 +125,7 @@ function tearing_substitution(sys::AbstractSystem; kwargs...)
     neweqs = full_equations(sys::AbstractSystem; kwargs...)
     @set! sys.eqs = neweqs
     @set! sys.substitutions = nothing
+    @set! sys.schedule = nothing
 end
 
 function tearing_assignments(sys::AbstractSystem)
@@ -615,6 +616,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     if sys isa ODESystem
         @set! sys.schedule = Schedule(var_eq_matching, dummy_sub)
     end
+    sys = schedule(sys)
     @set! state.sys = sys
     @set! sys.tearing_state = state
     return invalidate_cache!(sys)

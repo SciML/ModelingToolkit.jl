@@ -64,10 +64,12 @@ struct OptimizationSystem <: AbstractOptimizationSystem
     The hierarchical parent system before simplification.
     """
     parent::Any
+    isscheduled::Bool
 
     function OptimizationSystem(tag, op, unknowns, ps, var_to_name, observed,
             constraints, name, systems, defaults, metadata = nothing,
-            gui_metadata = nothing, complete = false, index_cache = nothing, parent = nothing;
+            gui_metadata = nothing, complete = false, index_cache = nothing, parent = nothing,
+            isscheduled = false;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(unknowns, ps)
@@ -77,7 +79,7 @@ struct OptimizationSystem <: AbstractOptimizationSystem
         end
         new(tag, op, unknowns, ps, var_to_name, observed,
             constraints, name, systems, defaults, metadata, gui_metadata, complete,
-            index_cache, parent)
+            index_cache, parent, isscheduled)
     end
 end
 
