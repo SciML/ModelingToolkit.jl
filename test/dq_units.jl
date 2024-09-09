@@ -270,5 +270,6 @@ using DynamicQuantities
 end
 
 @mtkbuild pend = UnitsExample()
-@test ModelingToolkit.get_unit.(filter(x -> occursin("ˍt", string(x)), unknowns(pend))) == [u"m/s", u"m/s"]
+@test ModelingToolkit.get_unit.(filter(x -> occursin("ˍt", string(x)), unknowns(pend))) ==
+      [u"m/s", u"m/s"]
 end
