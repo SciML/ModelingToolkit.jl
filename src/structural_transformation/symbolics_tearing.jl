@@ -274,7 +274,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
         dv === nothing && continue
         if var_eq_matching[var] !== SelectedState()
             dd = fullvars[dv]
-            v_t = setio(diff2term(unwrap(dd)), false, false)
+            v_t = setio(diff2term_with_unit(unwrap(dd), unwrap(iv)), false, false)
             for eq in 𝑑neighbors(graph, dv)
                 dummy_sub[dd] = v_t
                 neweqs[eq] = fast_substitute(neweqs[eq], dd => v_t)

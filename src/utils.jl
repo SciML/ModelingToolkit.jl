@@ -859,3 +859,13 @@ function eval_or_rgf(expr::Expr; eval_expression = false, eval_module = @__MODUL
         return drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, expr))
     end
 end
+
+function diff2term_with_unit(x, t)
+    x = diff2term(x)
+    if hasmetadata(x, VariableUnit) && (t isa Symbolic && hasmetadata(t, VariableUnit))
+        xu = getmetadata(x, VariableUnit)
+        tu = getmetadata(t, VariableUnit)
+        x = setmetadata(x, VariableUnit, xu / tu)
+    end
+    return x
+end
