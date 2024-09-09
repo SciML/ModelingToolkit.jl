@@ -31,7 +31,6 @@ end
             @safetestset "ODESystem Test" include("odesystem.jl")
             @safetestset "Dynamic Quantities Test" include("dq_units.jl")
             @safetestset "Unitful Quantities Test" include("units.jl")
-            @safetestset "LabelledArrays Test" include("labelledarrays.jl")
             @safetestset "Mass Matrix Test" include("mass_matrix.jl")
             @safetestset "InitializationSystem Test" include("initializationsystem.jl")
             @safetestset "Guess Propagation" include("guess_propagation.jl")
@@ -110,5 +109,6 @@ end
         activate_extensions_env()
         @safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl")
         @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
+        @safetestset "LabelledArrays Test" include("labelledarrays.jl")
     end
 end
