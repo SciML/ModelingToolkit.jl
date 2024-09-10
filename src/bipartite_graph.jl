@@ -69,14 +69,19 @@ function Base.setindex!(m::Matching{U}, v::Union{Integer, U}, i::Integer) where 
 
         # To maintain the invariant that `m.inv_match[m.match[i]] == i`, we need
         # to unassign the matching at `m.inv_match[v]` if it exists.
-        if v isa Int && (iv = m.inv_match[v]) isa Int
+        if v isa Int && 1 <= v <= length(m.inv_match) && (iv = m.inv_match[v]) isa Int
             m.match[iv] = unassigned
         end
         if isa(oldv, Int)
             @assert m.inv_match[oldv] == i
             m.inv_match[oldv] = unassigned
         end
-        isa(v, Int) && (m.inv_match[v] = i)
+        if isa(v, Int)
+            for vv in (length(m.inv_match) + 1):v
+                push!(m.inv_match, unassigned)
+            end
+            m.inv_match[v] = i
+        end
     end
     return m.match[i] = v
 end
@@ -84,6 +89,9 @@ end
 function Base.push!(m::Matching, v)
     push!(m.match, v)
     if v isa Integer && m.inv_match !== nothing
+        for vv in (length(m.inv_match) + 1):v
+            push!(m.inv_match, unassigned)
+        end
         m.inv_match[v] = length(m.match)
     end
 end

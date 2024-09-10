@@ -214,6 +214,7 @@ function dummy_derivative_graph!(
     eqcolor = falses(nsrcs(graph))
     dummy_derivatives = Int[]
     col_order = Int[]
+    neqs = nsrcs(graph)
     nvars = ndsts(graph)
     eqs = Int[]
     vars = Int[]
@@ -236,7 +237,7 @@ function dummy_derivative_graph!(
         end
         isempty(eqs) && continue
 
-        rank_matching = Matching(nvars)
+        rank_matching = Matching(max(nvars, neqs))
         isfirst = true
         if jac === nothing
             J = nothing
@@ -389,11 +390,13 @@ function tearing_with_dummy_derivatives(structure, dummy_derivatives)
         Base.Fix1(isdiffed, (structure, dummy_derivatives)),
         Union{Unassigned, SelectedState};
         varfilter = Base.Fix1(getindex, can_eliminate))
+
     for v in 𝑑vertices(structure.graph)
         is_present(structure, v) || continue
         dv = var_to_diff[v]
         (dv === nothing || !is_some_diff(structure, dummy_derivatives, dv)) && continue
         var_eq_matching[v] = SelectedState()
     end
+
     return var_eq_matching, full_var_eq_matching, var_sccs, can_eliminate
 end

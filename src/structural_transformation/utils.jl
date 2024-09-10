@@ -91,8 +91,10 @@ function check_consistency(state::TransformationState, orig_inputs)
                                                         map(collect, edges(var_to_diff))])
     extended_var_eq_matching = maximal_matching(extended_graph)
 
+    nvars = ndsts(graph)
     unassigned_var = []
     for (vj, eq) in enumerate(extended_var_eq_matching)
+        vj > nvars && break
         if eq === unassigned && !isempty(𝑑neighbors(graph, vj))
             push!(unassigned_var, fullvars[vj])
         end
