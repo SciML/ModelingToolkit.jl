@@ -876,8 +876,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Mark a system as completed. A completed system is assumed to be a 
-If a system is complete, the system will no longer
+Mark a system as completed. If a system is complete, the system will no longer
 namespace its subsystems or variables, i.e. `isequal(complete(sys).v.i, v.i)`.
 """
 function complete(sys::AbstractSystem; split = true)
