@@ -77,25 +77,29 @@ end
 `MutatingFunctionalAffect` is a helper for writing affect functions that will compute observed values and
 ensure that modified values are correctly written back into the system. The affect function `f` needs to have
 one of four signatures:
-* `f(modified::ComponentArray)` if the function only writes values (unknowns or parameters) to the system,
-* `f(modified::ComponentArray, observed::ComponentArray)` if the function also reads observed values from the system,
-* `f(modified::ComponentArray, observed::ComponentArray, ctx)` if the function needs the user-defined context,
-* `f(modified::ComponentArray, observed::ComponentArray, ctx, integrator)` if the function needs the low-level integrator.
+* `f(modified::NamedTuple)::NamedTuple` if the function only writes values (unknowns or parameters) to the system,
+* `f(modified::NamedTuple, observed::NamedTuple)::NamedTuple` if the function also reads observed values from the system,
+* `f(modified::NamedTuple, observed::NamedTuple, ctx)::NamedTuple` if the function needs the user-defined context,
+* `f(modified::NamedTuple, observed::NamedTuple, ctx, integrator)::NamedTuple` if the function needs the low-level integrator.
 These will be checked in reverse order (that is, the four-argument version first, than the 3, etc).
 
-The function `f` will be called with `observed` and `modified` `ComponentArray`s that are derived from their respective `NamedTuple` definitions.
-Each `NamedTuple` should map an expression to a symbol; for example if we pass `observed=(; x = a + b)` this will alias the result of executing `a+b` in the system as `x`
+The function `f` will be called with `observed` and `modified` `NamedTuple`s that are derived from their respective `NamedTuple` definitions.
+Each  declaration`NamedTuple` should map an expression to a symbol; for example if we pass `observed=(; x = a + b)` this will alias the result of executing `a+b` in the system as `x`
 so the value of `a + b` will be accessible as `observed.x` in `f`. `modified` currently restricts symbolic expressions to only bare variables, so only tuples of the form
 `(; x = y)` or `(; x)` (which aliases `x` as itself) are allowed.
 
-Both `observed` and `modified` will be automatically populated with the current values of their corresponding expressions on function entry.
-The values in `modified` will be written back to the system after `f` returns. For example, if we want to update the value of `x` to be the result of `x + y` we could write
+The argument NamedTuples (for instance `(;x=y)`) will be populated with the declared values on function entry; if we require `(;x=y)` in `observed` and `y=2`, for example,
+then the NamedTuple `(;x=2)` will be passed as `observed` to the affect function `f`. 
+
+The NamedTuple returned from `f` includes the values to be written back to the system after `f` returns. For example, if we want to update the value of `x` to be the result of `x + y` we could write
 
     MutatingFunctionalAffect(observed=(; x_plus_y = x + y), modified=(; x)) do m, o
-        m.x = o.x_plus_y
+        @set! m.x = o.x_plus_y
     end
 
-The affect function updates the value at `x` in `modified` to be the result of evaluating `x + y` as passed in the observed values.
+Where we use Setfield to copy the tuple `m` with a new value for `x`, then return the modified value of `m`. All values updated by the tuple must have names originally declared in
+`modified`; a runtime error will be produced if a value is written that does not appear in `modified`. The user can dynamically decide not to write a value back by not including it
+in the returned tuple, in which case the associated field will not be updated.
 """
 @kwdef struct MutatingFunctionalAffect
     f::Any
@@ -983,6 +987,18 @@ function unassignable_variables(sys, expr)
         x -> !any(isequal(x), assignable_syms), written)
 end
 
+@generated function _generated_writeback(integ, setters::NamedTuple{NS1,<:Tuple}, values::NamedTuple{NS2, <:Tuple}) where {NS1, NS2}
+    setter_exprs = []
+    for name in NS2 
+        if !(name in NS1)
+            missing_name = "Tried to write back to $name from affect; only declared states ($NS1) may be written to."
+            error(missing_name)
+        end
+        push!(setter_exprs, :(setters.$name(integ, values.$name)))
+    end
+    return :(begin $(setter_exprs...) end)
+end
+
 function compile_user_affect(affect::MutatingFunctionalAffect, cb, sys, dvs, ps; kwargs...)
     #=
     Implementation sketch:
@@ -1016,7 +1032,6 @@ function compile_user_affect(affect::MutatingFunctionalAffect, cb, sys, dvs, ps;
     end
     obs_syms = observed_syms(affect)
     obs_syms, obs_exprs = check_dups(obs_syms, obs_exprs)
-    obs_size = size.(obs_exprs) # we will generate a work buffer of a ComponentArray that maps obs_syms to arrays of size obs_size
 
     mod_exprs = modified(affect)
     for mexpr in mod_exprs
@@ -1033,8 +1048,6 @@ function compile_user_affect(affect::MutatingFunctionalAffect, cb, sys, dvs, ps;
     end
     mod_syms = modified_syms(affect)
     mod_syms, mod_exprs = check_dups(mod_syms, mod_exprs)
-    _, mod_og_val_fun = build_explicit_observed_function(
-        sys, mod_exprs; return_inplace = true)
 
     overlapping_syms = intersect(mod_syms, obs_syms)
     if length(overlapping_syms) > 0 && !affect.skip_checks
@@ -1048,31 +1061,20 @@ function compile_user_affect(affect::MutatingFunctionalAffect, cb, sys, dvs, ps;
         else
             zeros(sz)
         end
-    _, obs_fun = build_explicit_observed_function(
+    obs_fun = build_explicit_observed_function(
         sys, reduce(vcat, Symbolics.scalarize.(obs_exprs); init = []);
-        return_inplace = true)
-    obs_component_array = ComponentArrays.ComponentArray(NamedTuple{(obs_syms...,)}(mkzero.(obs_size)))
+        array_type = :tuple)
+    obs_sym_tuple = (obs_syms...,)
 
     # okay so now to generate the stuff to assign it back into the system
-    # note that we reorder the componentarray to make the views coherent wrt the base array
     mod_pairs = mod_exprs .=> mod_syms
-    mod_param_pairs = filter(v -> is_parameter(sys, v[1]), mod_pairs)
-    mod_unk_pairs = filter(v -> !is_parameter(sys, v[1]), mod_pairs)
-    _, mod_og_val_fun = build_explicit_observed_function(
-        sys, reduce(vcat, Symbolics.scalarize.([first.(mod_param_pairs); first.(mod_unk_pairs)]); init = []);
-        return_inplace = true)
-    upd_params_fun = setu(
-        sys, reduce(vcat, Symbolics.scalarize.(first.(mod_param_pairs)); init = []))
-    upd_unk_fun = setu(
-        sys, reduce(vcat, Symbolics.scalarize.(first.(mod_unk_pairs)); init = []))
+    mod_names = (mod_syms..., )
+    mod_og_val_fun = build_explicit_observed_function(
+        sys, reduce(vcat, Symbolics.scalarize.(first.(mod_pairs)); init = []);
+        array_type = :tuple)
 
-    upd_component_array = ComponentArrays.ComponentArray(NamedTuple{([last.(mod_param_pairs);
-                                                                      last.(mod_unk_pairs)]...,)}(
-        [collect(mkzero(size(e)) for e in first.(mod_param_pairs));
-         collect(mkzero(size(e)) for e in first.(mod_unk_pairs))]))
-    upd_params_view = view(upd_component_array, last.(mod_param_pairs))
-    upd_unks_view = view(upd_component_array, last.(mod_unk_pairs))
-
+    upd_funs = NamedTuple{mod_names}((setu.((sys,), first.(mod_pairs))...,))
+    
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         save_idxs = get(ic.callback_to_clocks, cb, Int[])
     else
@@ -1082,13 +1084,13 @@ function compile_user_affect(affect::MutatingFunctionalAffect, cb, sys, dvs, ps;
     let user_affect = func(affect), ctx = context(affect)
         function (integ)
             # update the to-be-mutated values; this ensures that if you do a no-op then nothing happens
-            mod_og_val_fun(upd_component_array, integ.u, integ.p..., integ.t)
+            upd_component_array = NamedTuple{mod_names}(mod_og_val_fun(integ.u, integ.p..., integ.t))
 
             # update the observed values
-            obs_fun(obs_component_array, integ.u, integ.p..., integ.t)
+            obs_component_array = NamedTuple{obs_sym_tuple}(obs_fun(integ.u, integ.p..., integ.t))
 
             # let the user do their thing
-            if applicable(user_affect, upd_component_array, obs_component_array, ctx, integ)
+            modvals = if applicable(user_affect, upd_component_array, obs_component_array, ctx, integ)
                 user_affect(upd_component_array, obs_component_array, ctx, integ)
             elseif applicable(user_affect, upd_component_array, obs_component_array, ctx)
                 user_affect(upd_component_array, obs_component_array, ctx)
@@ -1102,9 +1104,7 @@ function compile_user_affect(affect::MutatingFunctionalAffect, cb, sys, dvs, ps;
             end
 
             # write the new values back to the integrator
-            upd_params_fun(integ, upd_params_view)
-            upd_unk_fun(integ, upd_unks_view)
-
+            _generated_writeback(integ, upd_funs, modvals)
             
             for idx in save_idxs
                 SciMLBase.save_discretes!(integ, idx)
