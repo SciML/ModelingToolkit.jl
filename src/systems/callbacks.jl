@@ -161,7 +161,7 @@ end
 
 function namespace_affect(affect::MutatingFunctionalAffect, s)
     MutatingFunctionalAffect(func(affect),
-        renamespace.((s,), observed(affect)),
+        namespace_expr.(observed(affect), (s,)),
         observed_syms(affect),
         renamespace.((s,), modified(affect)),
         modified_syms(affect),
