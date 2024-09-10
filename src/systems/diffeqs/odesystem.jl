@@ -487,14 +487,14 @@ function build_explicit_observed_function(sys, ts;
     end
     _ps = ps
     if ps isa Tuple
-        ps = DestructuredArgs.(ps, inbounds = !checkbounds)
+        ps = DestructuredArgs.(unwrap.(ps), inbounds = !checkbounds)
     elseif has_index_cache(sys) && get_index_cache(sys) !== nothing
-        ps = DestructuredArgs.(reorder_parameters(get_index_cache(sys), ps))
+        ps = DestructuredArgs.(reorder_parameters(get_index_cache(sys), unwrap.(ps)))
         if isempty(ps) && inputs !== nothing
             ps = (:EMPTY,)
         end
     else
-        ps = (DestructuredArgs(ps, inbounds = !checkbounds),)
+        ps = (DestructuredArgs(unwrap.(ps), inbounds = !checkbounds),)
     end
     dvs = DestructuredArgs(unknowns(sys), inbounds = !checkbounds)
     if inputs === nothing
