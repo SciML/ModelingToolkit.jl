@@ -996,8 +996,8 @@ end
     @test sort(canonicalize(Discrete(), prob.p)[1]) == [0.0, 1.0, 2.0]
     sol = solve(prob, Tsit5())
 
-    @test sol[a] == [1.0, -1.0]
-    @test sol[b] == [2.0, 5.0, 5.0]
+    @test sol[a] == [-1.0]
+    @test sol[b] == [5.0, 5.0]
     @test sol[c] == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
 end
 @testset "Heater" begin 
@@ -1198,5 +1198,5 @@ end
     ss = structural_simplify(sys)
     prob = ODEProblem(ss, [theta => 0.0], (0.0, pi))
     sol = solve(prob, Tsit5(); dtmax = 0.01)
-    @test sol[cnt] == 197 # we get 2 pulses per phase cycle (cos 0 crossing) and we go to 100 cycles; we miss a few due to the initial state
+    @test getp(sol, cnt)(sol) == 197 # we get 2 pulses per phase cycle (cos 0 crossing) and we go to 100 cycles; we miss a few due to the initial state
 end
