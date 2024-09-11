@@ -436,8 +436,12 @@ function validate_parameter_type(ic::IndexCache, p, idx::ParameterIndex, val)
 end
 
 function validate_parameter_type(ic::IndexCache, idx::ParameterIndex, val)
+    stype = get_buffer_template(ic, idx).type
+    if idx.portion == SciMLStructures.Tunable() && !(idx.idx isa Int)
+        stype = AbstractArray{<:stype}
+    end
     validate_parameter_type(
-        ic, get_buffer_template(ic, idx).type, Symbolics.Unknown(), nothing, idx, val)
+        ic, stype, Symbolics.Unknown(), nothing, idx, val)
 end
 
 function validate_parameter_type(ic::IndexCache, stype, sz, sym, index, val)
@@ -489,6 +493,9 @@ function indp_to_system(indp)
 end
 
 function SymbolicIndexingInterface.remake_buffer(indp, oldbuf::MTKParameters, idxs, vals)
+    _remake_buffer(indp, oldbuf, idxs, vals)
+end
+function _remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true)
     newbuf = @set oldbuf.tunable = similar(oldbuf.tunable, Any)
     @set! newbuf.discrete = Tuple(similar(buf, Any) for buf in newbuf.discrete)
     @set! newbuf.constant = Tuple(similar(buf, Any) for buf in newbuf.constant)
