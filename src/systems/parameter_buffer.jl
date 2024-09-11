@@ -336,14 +336,15 @@ function Base.copy(p::MTKParameters)
 end
 
 function SymbolicIndexingInterface.parameter_values(p::MTKParameters, pind::ParameterIndex)
+    _ducktyped_parameter_values(p, pind)
+end
+function _ducktyped_parameter_values(p, pind::ParameterIndex)
     @unpack portion, idx = pind
     if portion isa SciMLStructures.Tunable
         return idx isa Int ? p.tunable[idx] : view(p.tunable, idx)
     end
     i, j, k... = idx
-    if portion isa SciMLStructures.Tunable
-        return isempty(k) ? p.tunable[i][j] : p.tunable[i][j][k...]
-    elseif portion isa SciMLStructures.Discrete
+    if portion isa SciMLStructures.Discrete
         return isempty(k) ? p.discrete[i][j] : p.discrete[i][j][k...]
     elseif portion isa SciMLStructures.Constants
         return isempty(k) ? p.constant[i][j] : p.constant[i][j][k...]
@@ -444,11 +445,13 @@ function validate_parameter_type(ic::IndexCache, stype, sz, sym, index, val)
     # Nonnumeric parameters have to match the type
     if portion === NONNUMERIC_PORTION
         val isa stype && return nothing
-        throw(ParameterTypeException(:validate_parameter_type, sym, stype, val))
+        throw(ParameterTypeException(
+            :validate_parameter_type, sym === nothing ? index : sym, stype, val))
     end
     # Array parameters need array values...
     if stype <: AbstractArray && !isa(val, AbstractArray)
-        throw(ParameterTypeException(:validate_parameter_type, sym, stype, val))
+        throw(ParameterTypeException(
+            :validate_parameter_type, sym === nothing ? index : sym, stype, val))
     end
     # ... and must match sizes
     if stype <: AbstractArray && sz != Symbolics.Unknown() && size(val) != sz
@@ -465,7 +468,7 @@ function validate_parameter_type(ic::IndexCache, stype, sz, sym, index, val)
         # This is for duals and other complicated number types
         etype = SciMLBase.parameterless_type(etype)
         eltype(val) <: etype || throw(ParameterTypeException(
-            :validate_parameter_type, sym, AbstractArray{etype}, val))
+            :validate_parameter_type, sym === nothing ? index : sym, AbstractArray{etype}, val))
     else
         # Real check
         if stype <: Real
@@ -473,7 +476,8 @@ function validate_parameter_type(ic::IndexCache, stype, sz, sym, index, val)
         end
         stype = SciMLBase.parameterless_type(stype)
         val isa stype ||
-            throw(ParameterTypeException(:validate_parameter_type, sym, stype, val))
+            throw(ParameterTypeException(
+                :validate_parameter_type, sym === nothing ? index : sym, stype, val))
     end
 end
 
