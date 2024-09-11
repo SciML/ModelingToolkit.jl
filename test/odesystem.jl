@@ -1367,3 +1367,23 @@ end
     @test length(ModelingToolkit.guesses(sys2)) == 3
     @test ModelingToolkit.guesses(sys2)[p5] == 10.0
 end
+
+@testset "Observed with inputs" begin
+    @variables u(t)[1:2] x(t)[1:2] o(t)[1:2]
+    @parameters p[1:4]
+
+    eqs = [D(u[1]) ~ p[1] * u[1] - p[2] * u[1] * u[2] + x[1] + 0.1
+           D(u[2]) ~ p[4] * u[1] * u[2] - p[3] * u[2] - x[2]
+           o[1] ~ sum(p) * sum(u)
+           o[2] ~ sum(p) * sum(x)]
+
+    @named sys = ODESystem(eqs, t, [u..., x..., o], [p...])
+    sys1, = structural_simplify(sys, ([x...], [o...]), split = false)
+
+    @test_nowarn ModelingToolkit.build_explicit_observed_function(sys1, u; inputs = [x...])
+
+    obsfn = ModelingToolkit.build_explicit_observed_function(
+        sys1, u + x + p[1:2]; inputs = [x...])
+
+    @test obsfn(ones(2), 2ones(2), 3ones(4), 4.0) == 6ones(2)
+end
