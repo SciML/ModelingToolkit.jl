@@ -1062,7 +1062,7 @@ function compile_user_affect(affect::MutatingFunctionalAffect, cb, sys, dvs, ps;
             zeros(sz)
         end
     obs_fun = build_explicit_observed_function(
-        sys, reduce(vcat, Symbolics.scalarize.(obs_exprs); init = []);
+        sys, Symbolics.scalarize.(obs_exprs);
         array_type = :tuple)
     obs_sym_tuple = (obs_syms...,)
 
@@ -1070,7 +1070,7 @@ function compile_user_affect(affect::MutatingFunctionalAffect, cb, sys, dvs, ps;
     mod_pairs = mod_exprs .=> mod_syms
     mod_names = (mod_syms..., )
     mod_og_val_fun = build_explicit_observed_function(
-        sys, reduce(vcat, Symbolics.scalarize.(first.(mod_pairs)); init = []);
+        sys, Symbolics.scalarize.(first.(mod_pairs));
         array_type = :tuple)
 
     upd_funs = NamedTuple{mod_names}((setu.((sys,), first.(mod_pairs))...,))
@@ -1084,7 +1084,8 @@ function compile_user_affect(affect::MutatingFunctionalAffect, cb, sys, dvs, ps;
     let user_affect = func(affect), ctx = context(affect)
         function (integ)
             # update the to-be-mutated values; this ensures that if you do a no-op then nothing happens
-            upd_component_array = NamedTuple{mod_names}(mod_og_val_fun(integ.u, integ.p..., integ.t))
+            modvals = mod_og_val_fun(integ.u, integ.p..., integ.t)
+            upd_component_array = NamedTuple{mod_names}(modvals)
 
             # update the observed values
             obs_component_array = NamedTuple{obs_sym_tuple}(obs_fun(integ.u, integ.p..., integ.t))
