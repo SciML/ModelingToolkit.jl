@@ -288,11 +288,7 @@ function IndexCache(sys::AbstractSystem)
 end
 
 function SymbolicIndexingInterface.is_variable(ic::IndexCache, sym)
-    if sym isa Symbol
-        sym = get(ic.symbol_to_variable, sym, nothing)
-        sym === nothing && return false
-    end
-    return check_index_map(ic.unknown_idx, sym) !== nothing
+    variable_index(ic, sym) !== nothing
 end
 
 function SymbolicIndexingInterface.variable_index(ic::IndexCache, sym)
@@ -300,18 +296,17 @@ function SymbolicIndexingInterface.variable_index(ic::IndexCache, sym)
         sym = get(ic.symbol_to_variable, sym, nothing)
         sym === nothing && return nothing
     end
-    return check_index_map(ic.unknown_idx, sym)
+    idx = check_index_map(ic.unknown_idx, sym)
+    idx === nothing || return idx
+    iscall(sym) && operation(sym) == getindex || return nothing
+    args = arguments(sym)
+    idx = variable_index(ic, args[1])
+    idx === nothing && return nothing
+    return idx[args[2:end]...]
 end
 
 function SymbolicIndexingInterface.is_parameter(ic::IndexCache, sym)
-    if sym isa Symbol
-        sym = get(ic.symbol_to_variable, sym, nothing)
-        sym === nothing && return false
-    end
-    return check_index_map(ic.tunable_idx, sym) !== nothing ||
-           check_index_map(ic.discrete_idx, sym) !== nothing ||
-           check_index_map(ic.constant_idx, sym) !== nothing ||
-           check_index_map(ic.nonnumeric_idx, sym) !== nothing
+    parameter_index(ic, sym) !== nothing
 end
 
 function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym)
@@ -331,17 +326,21 @@ function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym)
         ParameterIndex(SciMLStructures.Constants(), idx, validate_size)
     elseif (idx = check_index_map(ic.nonnumeric_idx, sym)) !== nothing
         ParameterIndex(NONNUMERIC_PORTION, idx, validate_size)
-    else
-        nothing
+    elseif iscall(sym) && operation(sym) == getindex
+        args = arguments(sym)
+        pidx = parameter_index(ic, args[1])
+        pidx === nothing && return nothing
+        if pidx.portion == SciMLStructures.Tunable()
+            ParameterIndex(pidx.portion, reshape(pidx.idx, size(args[1]))[args[2:end]...],
+                pidx.validate_size)
+        else
+            ParameterIndex(pidx.portion, (pidx.idx..., args[2:end]...), pidx.validate_size)
+        end
     end
 end
 
 function SymbolicIndexingInterface.is_timeseries_parameter(ic::IndexCache, sym)
-    if sym isa Symbol
-        sym = get(ic.symbol_to_variable, sym, nothing)
-        sym === nothing && return false
-    end
-    return check_index_map(ic.discrete_idx, sym) !== nothing
+    timeseries_parameter_index(ic, sym) !== nothing
 end
 
 function SymbolicIndexingInterface.timeseries_parameter_index(ic::IndexCache, sym)
@@ -350,8 +349,13 @@ function SymbolicIndexingInterface.timeseries_parameter_index(ic::IndexCache, sy
         sym === nothing && return nothing
     end
     idx = check_index_map(ic.discrete_idx, sym)
+    idx === nothing ||
+        return ParameterTimeseriesIndex(idx.clock_idx, (idx.buffer_idx, idx.idx_in_clock))
+    iscall(sym) && operation(sym) == getindex || return nothing
+    args = arguments(sym)
+    idx = timeseries_parameter_index(ic, args[1])
     idx === nothing && return nothing
-    return ParameterTimeseriesIndex(idx.clock_idx, (idx.buffer_idx, idx.idx_in_clock))
+    ParameterIndex(idx.portion, (idx.idx..., args[2:end]...), idx.validate_size)
 end
 
 function check_index_map(idxmap, sym)
