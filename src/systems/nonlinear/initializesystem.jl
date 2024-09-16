@@ -45,7 +45,7 @@ function generate_initializesystem(sys::ODESystem;
                     push!(defs, y => x)
                 elseif y isa Symbolics.Arr
                     # TODO: don't scalarize arrays
-                    push!(defs, collect(y) .=> x)
+                    push!(defs, (collect(y) .=> x)...)
                 elseif y isa Symbolics.BasicSymbolic
                     # y is a derivative expression expanded; add it to the initialization equations
                     push!(eqs_ics, y ~ x)
