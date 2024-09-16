@@ -29,7 +29,7 @@ function generate_initializesystem(sys::ODESystem;
 
     full_states = unique([sts; getfield.((observed(sys)), :lhs)])
     set_full_states = Set(full_states)
-    guesses = todict(guesses)
+    guesses = merge(get_guesses(sys), todict(guesses))
     schedule = getfield(sys, :schedule)
 
     if schedule !== nothing
@@ -69,7 +69,6 @@ function generate_initializesystem(sys::ODESystem;
     end
 
     defs = merge(defaults(sys), filtered_u0)
-    guesses = merge(get_guesses(sys), todict(guesses), dd_guess)
 
     for st in full_states
         if st ∈ keys(defs)
