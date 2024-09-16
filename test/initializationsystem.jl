@@ -510,7 +510,7 @@ end
 end
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/3029
-@testset "Derivatives in Initialization Equations" begin
+@testset "Derivatives in initialization equations" begin
     @variables x(t)
     sys = ODESystem(
         [D(D(x)) ~ 0], t; initialization_eqs = [x ~ 0, D(x) ~ 1], name = :sys) |>
@@ -521,6 +521,20 @@ end
         [D(D(x)) ~ 0], t; initialization_eqs = [x ~ 0, D(D(x)) ~ 0], name = :sys) |>
           structural_simplify
     @test_nowarn ODEProblem(sys, [D(x) => 1.0], (0.0, 1.0), [])
+end
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/3049
+@testset "Derivatives in initialization guesses" begin
+    for sign in [-1.0, +1.0]
+        @variables x(t)
+        sys = ODESystem(
+            [D(D(x)) ~ 0], t;
+            initialization_eqs = [D(x)^2 ~ 1, x ~ 0], guesses = [D(x) => sign], name = :sys
+        ) |> structural_simplify
+        prob = ODEProblem(sys, [], (0.0, 1.0), [])
+        sol = solve(prob, Tsit5())
+        @test sol(1.0, idxs=sys.x) ≈ sign # system with D(x(0)) = ±1 should solve to x(1) = ±1
+    end
 end
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/2619
