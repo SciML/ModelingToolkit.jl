@@ -8,7 +8,7 @@ using SciMLSensitivity
 using ForwardDiff
 using ChainRulesCore
 using ChainRulesCore: NoTangent
-using ChainRulesTestUtils: test_rrule
+using ChainRulesTestUtils: test_rrule, rand_tangent
 
 @variables x(t)[1:3] y(t)
 @parameters p[1:3, 1:3] q
@@ -97,3 +97,9 @@ for (_idxs, vals) in [
         end
     end
 end
+
+idxs = (parameter_index(sys, a), parameter_index(sys, b))
+vals = (1.0f0, 3ones(Float32, 3))
+tangent = rand_tangent(ps)
+fwd, back = ChainRulesCore.rrule(remake_buffer, sys, ps, idxs, vals)
+@inferred back(tangent)

@@ -13,11 +13,6 @@ function ChainRulesCore.rrule(::Type{MTK.MTKParameters}, tunables, args...)
     MTK.MTKParameters(tunables, args...), mtp_pullback
 end
 
-notangent_or_else(::NoTangent, _, x) = x
-notangent_or_else(_, x, _) = x
-notangent_fallback(x, y) = notangent_or_else(x, x, y)
-reduce_to_notangent(x, y) = notangent_or_else(x, y, x)
-
 function subset_idxs(idxs, portion, template)
     ntuple(Val(length(template))) do subi
         [Base.tail(idx.idx) for idx in idxs if idx.portion == portion && idx.idx[1] == subi]
@@ -83,21 +78,23 @@ function ChainRulesCore.rrule(
     const_idxs = subset_idxs(idxs, MTK.SciMLStructures.Constants(), oldbuf.constant)
     nn_idxs = subset_idxs(idxs, MTK.NONNUMERIC_PORTION, oldbuf.nonnumeric)
 
-    function remake_buffer_pullback(buf′)
-        buf′ = unthunk(buf′)
-        f′ = NoTangent()
-        indp′ = NoTangent()
+    pullback = let idxs = idxs
+        function remake_buffer_pullback(buf′)
+            buf′ = unthunk(buf′)
+            f′ = NoTangent()
+            indp′ = NoTangent()
 
-        tunable = selected_tangents(buf′.tunable, tunable_idxs)
-        discrete = selected_tangents(buf′.discrete, disc_idxs)
-        constant = selected_tangents(buf′.constant, const_idxs)
-        nonnumeric = selected_tangents(buf′.nonnumeric, nn_idxs)
-        oldbuf′ = Tangent{typeof(oldbuf)}(; tunable, discrete, constant, nonnumeric)
-        idxs′ = NoTangent()
-        vals′ = map(i -> MTK._ducktyped_parameter_values(buf′, i), idxs)
-        return f′, indp′, oldbuf′, idxs′, vals′
+            tunable = selected_tangents(buf′.tunable, tunable_idxs)
+            discrete = selected_tangents(buf′.discrete, disc_idxs)
+            constant = selected_tangents(buf′.constant, const_idxs)
+            nonnumeric = selected_tangents(buf′.nonnumeric, nn_idxs)
+            oldbuf′ = Tangent{typeof(oldbuf)}(; tunable, discrete, constant, nonnumeric)
+            idxs′ = NoTangent()
+            vals′ = map(i -> MTK._ducktyped_parameter_values(buf′, i), idxs)
+            return f′, indp′, oldbuf′, idxs′, vals′
+        end
     end
-    newbuf, remake_buffer_pullback
+    newbuf, pullback
 end
 
 end
