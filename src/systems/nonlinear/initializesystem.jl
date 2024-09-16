@@ -59,16 +59,7 @@ function generate_initializesystem(sys::ODESystem;
     # 2) process other variables
     for var in vars
         if var ∈ keys(defs)
-            def = defs[var]
-            if def isa Equation
-                # TODO: this behavior is not tested!
-                var ∉ keys(guesses) && check_defguess &&
-                    error("Invalid setup: variable $(var) has an initial condition equation with no guess.")
-                push!(eqs_ics, def)
-                push!(defs, var => guesses[var])
-            else
-                push!(eqs_ics, var ~ def)
-            end
+            push!(eqs_ics, var ~ defs[var])
         elseif var ∈ keys(guesses)
             push!(defs, var => guesses[var])
         elseif check_defguess
