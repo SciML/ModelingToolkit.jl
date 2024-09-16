@@ -533,7 +533,7 @@ end
         ) |> structural_simplify
         prob = ODEProblem(sys, [], (0.0, 1.0), [])
         sol = solve(prob, Tsit5())
-        @test sol(1.0, idxs=sys.x) ≈ sign # system with D(x(0)) = ±1 should solve to x(1) = ±1
+        @test sol(1.0, idxs = sys.x) ≈ sign # system with D(x(0)) = ±1 should solve to x(1) = ±1
     end
 end
 
