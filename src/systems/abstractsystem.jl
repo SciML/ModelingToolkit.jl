@@ -805,6 +805,10 @@ function SymbolicIndexingInterface.observed(
         return let _fn = _fn
             fn1(u, p, t) = _fn(u, p, t)
             fn1(u, p::MTKParameters, t) = _fn(u, p..., t)
+
+            # DDEs
+            fn1(u, histfn, p, t) = _fn(u, histfn, p, t)
+            fn1(u, histfn, p::MTKParameters, t) = _fn(u, histfn, p..., t)
             fn1
         end
     else

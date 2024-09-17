@@ -411,6 +411,9 @@ function build_explicit_observed_function(sys, ts;
         ts = [ts]
     end
     ts = unwrap.(ts)
+    if is_dde(sys)
+        ts = map(x -> delay_to_function(sys, x), ts)
+    end
 
     vars = Set()
     foreach(v -> vars!(vars, v; op), ts)
@@ -483,8 +486,12 @@ function build_explicit_observed_function(sys, ts;
     end
     ts = map(t -> substitute(t, subs), ts)
     obsexprs = []
+
     for i in 1:maxidx
         eq = obs[i]
+        if is_dde(sys)
+            eq = delay_to_function(sys, eq)
+        end
         lhs = eq.lhs
         rhs = eq.rhs
         push!(obsexprs, lhs ← rhs)
@@ -505,12 +512,17 @@ function build_explicit_observed_function(sys, ts;
         ps = (DestructuredArgs(unwrap.(ps), inbounds = !checkbounds),)
     end
     dvs = DestructuredArgs(unknowns(sys), inbounds = !checkbounds)
+    if is_dde(sys)
+        dvs = (dvs, DDE_HISTORY_FUN)
+    else
+        dvs = (dvs,)
+    end
     if inputs === nothing
-        args = param_only ? [ps..., ivs...] : [dvs, ps..., ivs...]
+        args = param_only ? [ps..., ivs...] : [dvs..., ps..., ivs...]
     else
         inputs = unwrap.(inputs)
         ipts = DestructuredArgs(inputs, inbounds = !checkbounds)
-        args = param_only ? [ipts, ps..., ivs...] : [dvs, ipts, ps..., ivs...]
+        args = param_only ? [ipts, ps..., ivs...] : [dvs..., ipts, ps..., ivs...]
     end
     pre = get_postprocess_fbody(sys)
 
@@ -543,6 +555,20 @@ function build_explicit_observed_function(sys, ts;
         return oop_fn
     else
         return oop_fn, iip_fn
+    end
+end
+
+function populate_delays(delays::Set, obsexprs, histfn, sys, sym)
+    _vars_util = vars(sym)
+    for v in _vars_util
+        v in delays && continue
+        iscall(v) && issym(operation(v)) && (args = arguments(v); length(args) == 1) &&
+            iscall(only(args)) || continue
+
+        idx = variable_index(sys, operation(v)(get_iv(sys)))
+        idx === nothing && error("Delay term $v is not an unknown in the system")
+        push!(delays, v)
+        push!(obsexprs, v ← histfn(only(args))[idx])
     end
 end
 
