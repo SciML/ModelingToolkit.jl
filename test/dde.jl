@@ -51,6 +51,8 @@ prob2 = DDEProblem(sys,
     constant_lags = [tau])
 sol2_mtk = solve(prob2, alg, reltol = 1e-7, abstol = 1e-10)
 @test sol2_mtk.u[end] ≈ sol2.u[end]
+@test_nowarn sol2_mtk[[x₀, x₁, x₂(t)]]
+@test_nowarn sol2_mtk[[x₀, x₁, x₂(t - 0.1)]]
 
 using StochasticDelayDiffEq
 function hayes_modelf(du, u, h, p, t)
@@ -102,7 +104,6 @@ end
 eqs = [osc1.jcn ~ osc2.delx,
     osc2.jcn ~ osc1.delx]
 @named coupledOsc = System(eqs, t)
-@test ModelingToolkit.is_dde(coupledOsc)
 @named coupledOsc = compose(coupledOsc, systems)
 @test ModelingToolkit.is_dde(coupledOsc)
 @named coupledOsc2 = System(eqs, t; systems)
@@ -112,3 +113,10 @@ for coupledOsc in [coupledOsc, coupledOsc2]
     @test length(equations(sys)) == 4
     @test length(unknowns(sys)) == 4
 end
+sys = structural_simplify(coupledOsc)
+prob = DDEProblem(sys, [], (0.0, 10.0); constant_lags = [sys.osc1.τ, sys.osc2.τ])
+sol = solve(prob, MethodOfSteps(Tsit5()))
+obsfn = ModelingToolkit.build_explicit_observed_function(
+    sys, [sys.osc1.delx, sys.osc2.delx])
+@test_nowarn sol[[sys.osc1.delx, sys.osc2.delx]]
+@test sol[sys.osc1.delx] ≈ sol(sol.t .- 0.01; idxs = sys.osc1.x)
