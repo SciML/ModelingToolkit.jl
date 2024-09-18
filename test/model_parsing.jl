@@ -876,3 +876,26 @@ end
         end),
         false)
 end
+
+@testset "Array Length as an Input" begin
+    @mtkmodel VaryingLengthArray begin
+        @structural_parameters begin
+            N
+            M
+        end
+        @parameters begin
+            p1[1:N]
+            p2[1:N, 1:M]
+        end
+        @variables begin
+            v1(t)[1:N]
+            v2(t)[1:N, 1:M]
+        end
+    end
+    
+    @named model = VaryingLengthArray(N = 2, M = 3)
+    @test length(model.p1) == 2
+    @test size(model.p2) == (2, 3)
+    @test length(model.v1) == 2
+    @test size(model.v2) == (2, 3)
+end

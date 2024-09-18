@@ -269,9 +269,12 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
             return var, def, Dict()
         end
         Expr(:ref, a, b...) => begin
-            indices = map(i -> UnitRange(i.args[2], i.args[end]), b)
-            parse_variable_def!(dict, mod, a, varclass, kwargs, where_types;
-                def, indices, type, meta)
+            if varclass == :parameters
+                var = :($a = $first(@parameters $a[$(b...)]))
+            else
+                var = :($a = $first(@variables $a[$(b...)]))
+            end
+            (:($a...), var), nothing, Dict()
         end
         _ => error("$arg cannot be parsed")
     end
@@ -674,47 +677,51 @@ end
 function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
     vv, def, metadata_with_exprs = parse_variable_def!(
         dict, mod, arg, varclass, kwargs, where_types)
-    name = getname(vv)
+    if vv isa Tuple
+        return vv
+    else
+        name = getname(vv[1])
 
-    varexpr = if haskey(metadata_with_exprs, VariableUnit)
-        unit = metadata_with_exprs[VariableUnit]
-        quote
-            $name = if $name === nothing
-                $setdefault($vv, $def)
-            else
-                try
-                    $setdefault($vv, $convert_units($unit, $name))
-                catch e
-                    if isa(e, $(DynamicQuantities.DimensionError)) ||
-                       isa(e, $(Unitful.DimensionError))
-                        error("Unable to convert units for \'" * string(:($$vv)) * "\'")
-                    elseif isa(e, MethodError)
-                        error("No or invalid units provided for \'" * string(:($$vv)) *
-                              "\'")
-                    else
-                        rethrow(e)
+        varexpr = if haskey(metadata_with_exprs, VariableUnit)
+            unit = metadata_with_exprs[VariableUnit]
+            quote
+                $name = if $name === nothing
+                    $setdefault($vv, $def)
+                else
+                    try
+                        $setdefault($vv, $convert_units($unit, $name))
+                    catch e
+                        if isa(e, $(DynamicQuantities.DimensionError)) ||
+                        isa(e, $(Unitful.DimensionError))
+                            error("Unable to convert units for \'" * string(:($$vv)) * "\'")
+                        elseif isa(e, MethodError)
+                            error("No or invalid units provided for \'" * string(:($$vv)) *
+                                "\'")
+                        else
+                            rethrow(e)
+                        end
                     end
                 end
             end
-        end
-    else
-        quote
-            $name = if $name === nothing
-                $setdefault($vv, $def)
-            else
-                $setdefault($vv, $name)
+        else
+            quote
+                $name = if $name === nothing
+                    $setdefault($vv, $def)
+                else
+                    $setdefault($vv, $name)
+                end
             end
         end
-    end
 
-    metadata_expr = Expr(:block)
-    for (k, v) in metadata_with_exprs
-        push!(metadata_expr.args,
-            :($name = $wrap($set_scalar_metadata($unwrap($name), $k, $v))))
-    end
+        metadata_expr = Expr(:block)
+        for (k, v) in metadata_with_exprs
+            push!(metadata_expr.args,
+                :($name = $wrap($set_scalar_metadata($unwrap($name), $k, $v))))
+        end
 
-    push!(varexpr.args, metadata_expr)
-    return vv isa Num ? name : :($name...), varexpr
+        push!(varexpr.args, metadata_expr)
+        return vv isa Num ? name : :($name...), varexpr
+    end
 end
 
 function handle_conditional_vars!(
