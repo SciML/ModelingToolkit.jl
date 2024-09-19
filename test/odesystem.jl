@@ -1387,3 +1387,10 @@ end
 
     @test obsfn(ones(2), 2ones(2), 3ones(4), 4.0) == 6ones(2)
 end
+
+@testset "Passing `nothing` to `u0`" begin
+    @variables x(t) = 1
+    @mtkbuild sys = ODEProblem(D(x) ~ t, t)
+    prob = @test_nowarn ODEProblem(sys, nothing, (0.0, 1.0))
+    @test_nowarn solve(prob)
+end
