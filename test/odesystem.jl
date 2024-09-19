@@ -1390,7 +1390,7 @@ end
 
 @testset "Passing `nothing` to `u0`" begin
     @variables x(t) = 1
-    @mtkbuild sys = ODEProblem(D(x) ~ t, t)
+    @mtkbuild sys = ODESystem(D(x) ~ t, t)
     prob = @test_nowarn ODEProblem(sys, nothing, (0.0, 1.0))
     @test_nowarn solve(prob)
 end

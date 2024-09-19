@@ -340,3 +340,10 @@ end
     prob.f.cons_h(H3, [1.0, 1.0], [1.0, 100.0])
     @test prob.f.cons_h([1.0, 1.0], [1.0, 100.0]) == H3
 end
+
+@testset "Passing `nothing` to `u0`" begin
+    @variables x = 1.0
+    @mtkbuild sys = OptimizationSystem((x - 3)^2, [x], [])
+    prob = @test_nowarn OptimizationProblem(sys, nothing)
+    @test_nowarn solve(prob, NelderMead())
+end
