@@ -1112,6 +1112,7 @@ end
 
 apply_to_variables(f::F, ex) where {F} = _apply_to_variables(f, ex)
 apply_to_variables(f::F, ex::Num) where {F} = wrap(_apply_to_variables(f, unwrap(ex)))
+apply_to_variables(f::F, ex::Arr) where {F} = wrap(_apply_to_variables(f, unwrap(ex)))
 function _apply_to_variables(f::F, ex) where {F}
     if isvariable(ex)
         return f(ex)
