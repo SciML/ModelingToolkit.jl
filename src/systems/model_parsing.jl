@@ -714,7 +714,7 @@ function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
     end
 
     push!(varexpr.args, metadata_expr)
-    return vv isa Num ? name : :($name...), varexpr
+    return name, varexpr
 end
 
 function handle_conditional_vars!(
