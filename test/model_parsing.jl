@@ -3,6 +3,7 @@ using ModelingToolkit: get_connector_type, get_defaults, get_gui_metadata,
                        get_systems, get_ps, getdefault, getname, readable_code,
                        scalarize, symtype, VariableDescription, RegularConnector,
                        get_unit
+using SymbolicIndexingInterface
 using URIs: URI
 using Distributions
 using DynamicQuantities, OrdinaryDiffEq
@@ -245,7 +246,7 @@ end
     kval = 5
     @named model = MockModel(; b2 = [1, 3], kval, cval = 1, func = identity)
 
-    @test lastindex(parameters(model)) == 31
+    @test lastindex(parameters(model)) == 21
 
     @test all(getdescription.([model.e2...]) .== "e2")
     @test all(getdescription.([model.h2...]) .== "h2(t)")
@@ -475,7 +476,7 @@ using ModelingToolkit: getdefault, scalarize
     @named model_with_component_array = ModelWithComponentArray()
 
     @test eval(ModelWithComponentArray.structure[:parameters][:r][:unit]) == eval(u"Ω")
-    @test lastindex(parameters(model_with_component_array)) == 3
+    @test lastindex(parameters(model_with_component_array)) == 1
 
     # Test the constant `k`. Manually k's value should be kept in sync here
     # and the ModelParsingPrecompile.
@@ -875,4 +876,27 @@ end
             end
         end),
         false)
+end
+
+@testset "Array parameters and subcomponent defaults" begin
+    @mtkmodel Foo begin
+        @parameters begin
+            p[1:3]
+        end
+    end
+    @mtkmodel Bar begin
+        @parameters begin
+            q[1:3]
+        end
+        @components begin
+            foo = Foo(p = q)
+        end
+    end
+    @named model = Bar()
+    model = complete(model)
+    # non-scalarized versions are parameters
+    @test is_parameter(model, model.q)
+    @test is_parameter(model, model.foo.p)
+    # default is correctly (not) namespaced
+    @test isequal(ModelingToolkit.defaults(model)[model.foo.p], model.q)
 end
