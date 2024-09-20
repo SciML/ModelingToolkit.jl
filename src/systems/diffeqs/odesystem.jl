@@ -141,6 +141,10 @@ struct ODESystem <: AbstractODESystem
     """
     gui_metadata::Union{Nothing, GUIMetadata}
     """
+    A boolean indicating if the given `ODESystem` represents a system of DDEs.
+    """
+    is_dde::Bool
+    """
     Cache for intermediate tearing state.
     """
     tearing_state::Any
@@ -178,7 +182,7 @@ struct ODESystem <: AbstractODESystem
             torn_matching, initializesystem, initialization_eqs, schedule,
             connector_type, preface, cevents,
             devents, parameter_dependencies,
-            metadata = nothing, gui_metadata = nothing,
+            metadata = nothing, gui_metadata = nothing, is_dde = false,
             tearing_state = nothing,
             substitutions = nothing, complete = false, index_cache = nothing,
             discrete_subsystems = nothing, solved_unknowns = nothing,
@@ -198,7 +202,7 @@ struct ODESystem <: AbstractODESystem
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses, torn_matching,
             initializesystem, initialization_eqs, schedule, connector_type, preface,
             cevents, devents, parameter_dependencies, metadata,
-            gui_metadata, tearing_state, substitutions, complete, index_cache,
+            gui_metadata, is_dde, tearing_state, substitutions, complete, index_cache,
             discrete_subsystems, solved_unknowns, split_idxs, parent)
     end
 end
@@ -223,7 +227,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         parameter_dependencies = Equation[],
         checks = true,
         metadata = nothing,
-        gui_metadata = nothing)
+        gui_metadata = nothing,
+        is_dde = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
@@ -266,12 +271,15 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
     parameter_dependencies, ps′ = process_parameter_dependencies(
         parameter_dependencies, ps′)
+    if is_dde === nothing
+        is_dde = _check_if_dde(deqs, iv′, systems)
+    end
     ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
         ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses, nothing, initializesystem,
         initialization_eqs, schedule, connector_type, preface, cont_callbacks,
         disc_callbacks, parameter_dependencies,
-        metadata, gui_metadata, checks = checks)
+        metadata, gui_metadata, is_dde, checks = checks)
 end
 
 function ODESystem(eqs, iv; kwargs...)

@@ -971,6 +971,7 @@ for prop in [:eqs
              :solved_unknowns
              :split_idxs
              :parent
+             :is_dde
              :index_cache
              :is_scalar_noise
              :isscheduled]

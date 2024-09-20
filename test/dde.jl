@@ -38,6 +38,7 @@ eqs = [D(x₀) ~ (v0 / (1 + beta0 * (x₂(t - tau)^2))) * (p0 - q0) * x₀ - d0 
                (v1 / (1 + beta1 * (x₂(t - tau)^2))) * (p1 - q1) * x₁ - d1 * x₁
        D(x₂(t)) ~ (v1 / (1 + beta1 * (x₂(t - tau)^2))) * (1 - p1 + q1) * x₁ - d2 * x₂(t)]
 @mtkbuild sys = System(eqs, t)
+@test ModelingToolkit.is_dde(sys)
 prob = DDEProblem(sys,
     [x₀ => 1.0, x₁ => 1.0, x₂(t) => 1.0],
     tspan,
@@ -77,6 +78,7 @@ sol = solve(prob, RKMil())
 τ = 1.0
 eqs = [D(x(t)) ~ a * x(t) + b * x(t - τ) + c + (α * x(t) + γ) * η]
 @mtkbuild sys = System(eqs, t)
+@test ModelingToolkit.is_dde(sys)
 @test equations(sys) == [D(x(t)) ~ a * x(t) + b * x(t - τ) + c]
 @test isequal(ModelingToolkit.get_noiseeqs(sys), [α * x(t) + γ])
 prob_mtk = SDDEProblem(sys, [x(t) => 1.0 + t], tspan; constant_lags = (τ,));
@@ -100,8 +102,11 @@ end
 eqs = [osc1.jcn ~ osc2.delx,
     osc2.jcn ~ osc1.delx]
 @named coupledOsc = System(eqs, t)
+@test ModelingToolkit.is_dde(coupledOsc)
 @named coupledOsc = compose(coupledOsc, systems)
+@test ModelingToolkit.is_dde(coupledOsc)
 @named coupledOsc2 = System(eqs, t; systems)
+@test ModelingToolkit.is_dde(coupledOsc2)
 for coupledOsc in [coupledOsc, coupledOsc2]
     local sys = structural_simplify(coupledOsc)
     @test length(equations(sys)) == 4

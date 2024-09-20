@@ -133,6 +133,10 @@ struct SDESystem <: AbstractODESystem
     be `true` when `noiseeqs isa Vector`. 
     """
     is_scalar_noise::Bool
+    """
+    A boolean indicating if the given `ODESystem` represents a system of DDEs.
+    """
+    is_dde::Bool
     isscheduled::Bool
 
     function SDESystem(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed,
@@ -141,6 +145,7 @@ struct SDESystem <: AbstractODESystem
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
             cevents, devents, parameter_dependencies, metadata = nothing, gui_metadata = nothing,
             complete = false, index_cache = nothing, parent = nothing, is_scalar_noise = false,
+            is_dde = false,
             isscheduled = false;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
@@ -165,7 +170,7 @@ struct SDESystem <: AbstractODESystem
             ctrl_jac,
             Wfact, Wfact_t, name, systems, defaults, connector_type, cevents, devents,
             parameter_dependencies, metadata, gui_metadata, complete, index_cache, parent, is_scalar_noise,
-            isscheduled)
+            is_dde, isscheduled)
     end
 end
 
@@ -188,7 +193,8 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
         complete = false,
         index_cache = nothing,
         parent = nothing,
-        is_scalar_noise = false)
+        is_scalar_noise = false,
+        is_dde = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     iv′ = value(iv)
@@ -223,11 +229,14 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
     parameter_dependencies, ps′ = process_parameter_dependencies(
         parameter_dependencies, ps′)
+    if is_dde === nothing
+        is_dde = _check_if_dde(deqs, iv′, systems)
+    end
     SDESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, neqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
         ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
         cont_callbacks, disc_callbacks, parameter_dependencies, metadata, gui_metadata,
-        complete, index_cache, parent, is_scalar_noise; checks = checks)
+        complete, index_cache, parent, is_scalar_noise, is_dde; checks = checks)
 end
 
 function SDESystem(sys::ODESystem, neqs; kwargs...)
