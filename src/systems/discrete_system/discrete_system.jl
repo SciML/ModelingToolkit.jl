@@ -247,6 +247,13 @@ function process_DiscreteProblem(constructor, sys::DiscreteSystem, u0map, paramm
     dvs = unknowns(sys)
     ps = parameters(sys)
 
+    if eltype(u0map) <: Number
+        u0map = unknowns(sys) .=> vec(u0map)
+    end
+    if u0map === nothing || isempty(u0map)
+        u0map = Dict()
+    end
+
     trueu0map = Dict()
     for (k, v) in u0map
         k = unwrap(k)

@@ -776,3 +776,11 @@ end
     prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
     @test solve(prob, SOSRI()).retcode == ReturnCode.Success
 end
+
+@testset "Passing `nothing` to `u0`" begin
+    @variables x(t) = 1
+    @brownian b
+    @mtkbuild sys = System([D(x) ~ x + b], t)
+    prob = @test_nowarn SDEProblem(sys, nothing, (0.0, 1.0))
+    @test_nowarn solve(prob, ImplicitEM())
+end
