@@ -152,6 +152,9 @@ function MTKParameters(
         if symbolic_type(val) !== NotSymbolic()
             error("Could not evaluate value of parameter $sym. Missing values for variables in expression $val.")
         end
+        if ctype <: FnType
+            ctype = fntype_to_function_type(ctype)
+        end
         val = symconvert(ctype, val)
         done = set_value(sym, val)
         if !done && Symbolics.isarraysymbolic(sym)

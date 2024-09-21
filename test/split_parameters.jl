@@ -1,11 +1,13 @@
 using ModelingToolkit, Test
 using ModelingToolkitStandardLibrary.Blocks
 using OrdinaryDiffEq
+using DataInterpolations
 using BlockArrays: BlockedArray
 using ModelingToolkit: t_nounits as t, D_nounits as D
 using ModelingToolkit: MTKParameters, ParameterIndex, NONNUMERIC_PORTION
 using SciMLStructures: Tunable, Discrete, Constants
 using StaticArrays: SizedVector
+using SymbolicIndexingInterface: is_parameter, getp
 
 x = [1, 2.0, false, [1, 2, 3], Parameter(1.0)]
 
@@ -218,4 +220,47 @@ S = get_sensitivity(closed_loop, :u)
     ps[ParameterIndex(Discrete(), (2, 1, 2, 2))] = 5
     @test ps[ParameterIndex(Tunable(), 1:8)] == collect(1.0:8.0) .+ 0.5
     @test ps[ParameterIndex(Discrete(), (2, 1, 2, 2))] == 5
+end
+
+@testset "Callable parameters" begin
+    @testset "As FunctionWrapper" begin
+        _f1(x) = 2x
+        struct Foo end
+        (::Foo)(x) = 3x
+        @variables x(t)
+        @parameters fn(::Real) = _f1
+        @mtkbuild sys = ODESystem(D(x) ~ fn(t), t)
+        @test is_parameter(sys, fn)
+        @test ModelingToolkit.defaults(sys)[fn] == _f1
+
+        getter = getp(sys, fn)
+        prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
+        @inferred getter(prob)
+        # cannot be inferred better since `FunctionWrapper` is only known to return `Real`
+        @inferred Vector{<:Real} prob.f(prob.u0, prob.p, prob.tspan[1])
+        sol = solve(prob, Tsit5(); abstol = 1e-10, reltol = 1e-10)
+        @test sol.u[end][] ≈ 2.0
+
+        prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [fn => Foo()])
+        @inferred getter(prob)
+        @inferred Vector{<:Real} prob.f(prob.u0, prob.p, prob.tspan[1])
+        sol = solve(prob; abstol = 1e-10, reltol = 1e-10)
+        @test sol.u[end][] ≈ 2.5
+    end
+
+    @testset "Concrete function type" begin
+        ts = 0.0:0.1:1.0
+        interp = LinearInterpolation(ts .^ 2, ts; extrapolate = true)
+        @variables x(t)
+        @parameters (fn::typeof(interp))(..)
+        @mtkbuild sys = ODESystem(D(x) ~ fn(x), t)
+        @test is_parameter(sys, fn)
+        getter = getp(sys, fn)
+        prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [fn => interp])
+        @inferred getter(prob)
+        @inferred prob.f(prob.u0, prob.p, prob.tspan[1])
+        @test_nowarn sol = solve(prob, Tsit5())
+        @test_nowarn prob.ps[fn] = LinearInterpolation(ts .^ 3, ts; extrapolate = true)
+        @test_nowarn sol = solve(prob)
+    end
 end

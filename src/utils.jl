@@ -371,7 +371,11 @@ end
 vars(exprs::Num; op = Differential) = vars(unwrap(exprs); op)
 vars(exprs::Symbolics.Arr; op = Differential) = vars(unwrap(exprs); op)
 function vars(exprs; op = Differential)
-    foldl((x, y) -> vars!(x, unwrap(y); op = op), exprs; init = Set())
+    if hasmethod(iterate, Tuple{typeof(exprs)})
+        foldl((x, y) -> vars!(x, unwrap(y); op = op), exprs; init = Set())
+    else
+        vars!(Set(), unwrap(exprs); op)
+    end
 end
 vars(eq::Equation; op = Differential) = vars!(Set(), eq; op = op)
 function vars!(vars, eq::Equation; op = Differential)
@@ -479,7 +483,11 @@ end
 
 function collect_var!(unknowns, parameters, var, iv)
     isequal(var, iv) && return nothing
-    if isparameter(var) || (iscall(var) && isparameter(operation(var)))
+    if iscalledparameter(var)
+        callable = getcalledparameter(var)
+        push!(parameters, callable)
+        collect_vars!(unknowns, parameters, arguments(var), iv)
+    elseif isparameter(var) || (iscall(var) && isparameter(operation(var)))
         push!(parameters, var)
     elseif !isconstant(var)
         push!(unknowns, var)
