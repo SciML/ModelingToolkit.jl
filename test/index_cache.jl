@@ -1,4 +1,4 @@
-using ModelingToolkit, SymbolicIndexingInterface
+using ModelingToolkit, SymbolicIndexingInterface, SciMLStructures
 using ModelingToolkit: t_nounits as t
 
 # Ensure indexes of array symbolics are cached appropriately
@@ -43,3 +43,23 @@ ic = ModelingToolkit.get_index_cache(sys)
 @test isequal(ic.symbol_to_variable[:x], x)
 @test isequal(ic.symbol_to_variable[:y], y)
 @test isequal(ic.symbol_to_variable[:z], z)
+
+@testset "tunable_parameters is ordered" begin
+    @parameters p q[1:3] r[1:2, 1:2] s [tunable = false]
+    @named sys = ODESystem(Equation[], t, [], [p, q, r, s])
+    sys = complete(sys)
+    @test all(splat(isequal), zip(tunable_parameters(sys), parameters(sys)[1:3]))
+
+    offset = 1
+    for par in tunable_parameters(sys)
+        idx = parameter_index(sys, par)
+        @test idx.portion isa SciMLStructures.Tunable
+        if Symbolics.isarraysymbolic(par)
+            @test vec(idx.idx) == offset:(offset + length(par) - 1)
+        else
+            @test idx.idx == offset
+        end
+        offset += length(par)
+    end
+end
+
