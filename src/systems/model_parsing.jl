@@ -222,6 +222,96 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                 varclass, where_types, meta)
             return var, def, Dict()
         end
+        Expr(:tuple, Expr(:ref, a, b...), y) => begin
+            varname = Meta.isexpr(a, :call) ? a.args[1] : a
+            push!(kwargs, Expr(:kw, varname, nothing))
+            if varclass == :parameters
+                var = :($varname = $first(@parameters $a[$(b...)] = ($varname, $y)))
+            else
+                var = :($varname = $first(@variables $a[$(b...)] = ($varname, $y)))
+            end
+            #TODO: update `dict` aka `Model.structure` with the metadata
+            (:($varname...), var), nothing, Dict()
+        end
+        Expr(:(=), Expr(:ref, a, b...), y) => begin
+            varname = Meta.isexpr(a, :call) ? a.args[1] : a
+            if Meta.isexpr(y, :tuple)
+                val, y = (y.args[1], y.args[2:end])
+                push!(kwargs, Expr(:kw, varname, nothing))
+                if varclass == :parameters
+                    var = :($varname = $varname === nothing ? $val : $varname;
+                    $varname = $first(@parameters $a[$(b...)] = (
+                        $varname, $(y...))))
+                else
+                    var = :($varname = $varname === nothing ? $val : $varname;
+                    $varname = $first(@variables $a[$(b...)] = (
+                        $varname, $(y...))))
+                end
+            else
+                push!(kwargs, Expr(:kw, varname, nothing))
+                if varclass == :parameters
+                    var = :($varname = $varname === nothing ? $y : $varname; $varname = $first(@parameters $a[$(b...)] = $varname))
+                else
+                    var = :($varname = $varname === nothing ? $y : $varname; $varname = $first(@variables $a[$(b...)] = $varname))
+                end
+            end
+            #TODO: update `dict`` aka `Model.structure` with the metadata
+            (:($varname...), var), nothing, Dict()
+        end
+        Expr(:(=), Expr(:(::), Expr(:ref, a, b...), n), y) => begin
+            varname = Meta.isexpr(a, :call) ? a.args[1] : a
+            if Meta.isexpr(y, :tuple)
+                val, y = (y.args[1], y.args[2:end])
+                push!(kwargs, Expr(:kw, varname, nothing))
+                if varclass == :parameters
+                    var = :(
+                    $varname = $varname = $varname === nothing ? $val : $varname;
+                    $varname = $first(@parameters $a[$(b...)]::$n = ($varname, $(y...)))
+                    )
+                else
+                    var = :($varname = $varname === nothing ? $val : $varname;
+                    $varname = $first(@variables $a[$(b...)]::$n = (
+                        $varname, $(y...))))
+                end
+            else
+                push!(kwargs, Expr(:kw, varname, y))
+                if varclass == :parameters
+                    var = :($varname = $first(@parameters $a[$(b...)]::$n = $varname))
+                else
+                    var = :($varname = $first(@variables $a[$(b...)]::$n = $varname))
+                end
+            end
+            #TODO: update `dict`` aka `Model.structure` with the metadata
+            (:($varname...), var), nothing, Dict()
+        end
+        Expr(:tuple, Expr(:(::), Expr(:ref, a, b...), n), y) => begin
+            varname = Meta.isexpr(a, :call) ? a.args[1] : a
+            push!(kwargs, Expr(:kw, varname, nothing))
+            if varclass == :parameters
+                var = :($varname = $first(@parameters $a[$(b...)]::$n = ($varname, $y)))
+            else
+                var = :($varname = $first(@variables $a[$(b...)]::$n = ($varname, $y)))
+            end
+            #TODO: update `dict` aka `Model.structure` with the metadata
+            (:($varname...), var), nothing, Dict()
+        end
+        Expr(:ref, a, b...) => begin
+            varname = a isa Expr && a.head == :call ? a.args[1] : a
+            push!(kwargs, Expr(:kw, varname, nothing))
+            if varclass == :parameters
+                var = :($varname = $first(@parameters $a[$(b...)] = $varname))
+            elseif varclass == :variables
+                var = :($varname = $first(@variables $a[$(b...)] = $varname))
+            else
+                throw("Symbolic array with arbitrary length is not handled for $varclass.
+                    Please open an issue with an example.")
+            end
+            dict[varclass] = get!(dict, varclass) do
+                Dict{Symbol, Dict{Symbol, Any}}()
+            end
+            # dict[:kwargs][varname] = dict[varclass][varname] = Dict(:size => b)
+            (:($varname...), var), nothing, Dict()
+        end
         Expr(:(=), a, b) => begin
             Base.remove_linenums!(b)
             def, meta = parse_default(mod, b)
@@ -267,14 +357,6 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                 return var, def, metadata_with_exprs
             end
             return var, def, Dict()
-        end
-        Expr(:ref, a, b...) => begin
-            if varclass == :parameters
-                var = :($a = $first(@parameters $a[$(b...)]))
-            else
-                var = :($a = $first(@variables $a[$(b...)]))
-            end
-            (:($a...), var), nothing, Dict()
         end
         _ => error("$arg cannot be parsed")
     end
@@ -677,11 +759,8 @@ end
 function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
     vv, def, metadata_with_exprs = parse_variable_def!(
         dict, mod, arg, varclass, kwargs, where_types)
-    if vv isa Tuple
-        return vv
-    else
-        name = getname(vv[1])
-
+    if !(vv isa Tuple)
+        name = getname(vv)
         varexpr = if haskey(metadata_with_exprs, VariableUnit)
             unit = metadata_with_exprs[VariableUnit]
             quote
@@ -692,11 +771,11 @@ function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
                         $setdefault($vv, $convert_units($unit, $name))
                     catch e
                         if isa(e, $(DynamicQuantities.DimensionError)) ||
-                        isa(e, $(Unitful.DimensionError))
+                           isa(e, $(Unitful.DimensionError))
                             error("Unable to convert units for \'" * string(:($$vv)) * "\'")
                         elseif isa(e, MethodError)
                             error("No or invalid units provided for \'" * string(:($$vv)) *
-                                "\'")
+                                  "\'")
                         else
                             rethrow(e)
                         end
@@ -721,6 +800,8 @@ function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
 
         push!(varexpr.args, metadata_expr)
         return vv isa Num ? name : :($name...), varexpr
+    else
+        return vv
     end
 end
 
