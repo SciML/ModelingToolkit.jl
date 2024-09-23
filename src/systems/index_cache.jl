@@ -496,3 +496,55 @@ end
 fntype_to_function_type(::Type{FnType{A, R, T}}) where {A, R, T} = T
 fntype_to_function_type(::Type{FnType{A, R, Nothing}}) where {A, R} = FunctionWrapper{R, A}
 fntype_to_function_type(::Type{FnType{A, R}}) where {A, R} = FunctionWrapper{R, A}
+
+"""
+    reorder_dimension_by_tunables!(dest::AbstractArray, sys::AbstractSystem, arr::AbstractArray, syms; dim = 1)
+
+Assuming the order of values in dimension `dim` of `arr` correspond to the order of tunable
+parameters in the system, reorder them according to the order described in `syms`. `syms` must
+be a permutation of `tunable_parameters(sys)`. The result is written to `dest`. The `size` of `dest` and
+`arr` must be equal. Return `dest`.
+
+See also: [`MTKParameters`](@ref), [`tunable_parameters`](@ref), [`reorder_dimension_by_tunables`](@ref).
+"""
+function reorder_dimension_by_tunables!(
+        dest::AbstractArray, sys::AbstractSystem, arr::AbstractArray, syms; dim = 1)
+    if !iscomplete(sys)
+        throw(ArgumentError("A completed system is required. Call `complete` or `structural_simplify` on the system."))
+    end
+    if !has_index_cache(sys) || (ic = get_index_cache(sys)) === nothing
+        throw(ArgumentError("The system does not have an index cache. Call `complete` or `structural_simplify` on the system with `split = true`."))
+    end
+    if size(dest) != size(arr)
+        throw(ArgumentError("Source and destination arrays must have the same size. Got source array with size $(size(arr)) and destination with size $(size(dest))."))
+    end
+
+    dsti = 1
+    for sym in syms
+        idx = parameter_index(ic, sym)
+        if !(idx.portion isa SciMLStructures.Tunable)
+            throw(ArgumentError("`syms` must be a permutation of `tunable_parameters(sys)`. Found $sym which is not a tunable parameter."))
+        end
+
+        dstidx = ntuple(
+            i -> i == dim ? (dsti:(dsti + length(sym) - 1)) : (:), Val(ndims(arr)))
+        destv = @view dest[dstidx...]
+        dsti += length(sym)
+        arridx = ntuple(i -> i == dim ? (idx.idx) : (:), Val(ndims(arr)))
+        srcv = @view arr[arridx...]
+        copyto!(destv, srcv)
+    end
+    return dest
+end
+
+"""
+    reorder_dimension_by_tunables(sys::AbstractSystem, arr::AbstractArray, syms; dim = 1)
+
+Out-of-place version of [`reorder_dimension_by_tunables!`](@ref).
+"""
+function reorder_dimension_by_tunables(
+        sys::AbstractSystem, arr::AbstractArray, syms; dim = 1)
+    buffer = similar(arr)
+    reorder_dimension_by_tunables!(buffer, sys, arr, syms; dim)
+    return buffer
+end

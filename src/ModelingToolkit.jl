@@ -278,6 +278,6 @@ export debug_system
 export Sample, Hold, Shift, ShiftIndex, sampletime, SampleTime
 export Clock, SolverStepClock, TimeDomain
 
-export MTKParameters
+export MTKParameters, reorder_dimension_by_tunables!, reorder_dimension_by_tunables
 
 end # module
