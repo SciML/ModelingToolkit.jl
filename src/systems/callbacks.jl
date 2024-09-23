@@ -1024,26 +1024,27 @@ function compile_user_affect(affect::MutatingFunctionalAffect, cb, sys, dvs, ps;
     end
 
     obs_exprs = observed(affect)
-    for oexpr in obs_exprs
-        invalid_vars = invalid_variables(sys, oexpr)
-        if length(invalid_vars) > 0 && !affect.skip_checks
-            error("Observed equation $(oexpr) in affect refers to missing variable(s) $(invalid_vars); the variables may not have been added (e.g. if a component is missing).")
+    if !affect.skip_checks
+        for oexpr in obs_exprs
+            invalid_vars = invalid_variables(sys, oexpr)
+            if length(invalid_vars) > 0
+                error("Observed equation $(oexpr) in affect refers to missing variable(s) $(invalid_vars); the variables may not have been added (e.g. if a component is missing).")
+            end
         end
     end
     obs_syms = observed_syms(affect)
     obs_syms, obs_exprs = check_dups(obs_syms, obs_exprs)
 
     mod_exprs = modified(affect)
-    for mexpr in mod_exprs
-        if affect.skip_checks 
-            continue 
-        end
-        if !is_variable(sys, mexpr) && parameter_index(sys, mexpr) === nothing && !affect.skip_checks
-            @warn ("Expression $mexpr cannot be assigned to; currently only unknowns and parameters may be updated by an affect.")
-        end
-        invalid_vars = unassignable_variables(sys, mexpr)
-        if length(invalid_vars) > 0 && !affect.skip_checks
-            error("Modified equation $(mexpr) in affect refers to missing variable(s) $(invalid_vars); the variables may not have been added (e.g. if a component is missing) or they may have been reduced away.")
+    if !affect.skip_checks
+        for mexpr in mod_exprs
+            if !is_variable(sys, mexpr) && parameter_index(sys, mexpr) === nothing
+                @warn ("Expression $mexpr cannot be assigned to; currently only unknowns and parameters may be updated by an affect.")
+            end
+            invalid_vars = unassignable_variables(sys, mexpr)
+            if length(invalid_vars) > 0
+                error("Modified equation $(mexpr) in affect refers to missing variable(s) $(invalid_vars); the variables may not have been added (e.g. if a component is missing) or they may have been reduced away.")
+            end
         end
     end
     mod_syms = modified_syms(affect)
