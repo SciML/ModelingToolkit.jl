@@ -999,6 +999,18 @@ end
     return :(begin $(setter_exprs...) end)
 end
 
+function check_assignable(sys, sym)
+    if symbolic_type(sym) == ScalarSymbolic()
+        is_variable(sys, sym) || is_parameter(sys, sym)
+    elseif symbolic_type(sym) == ArraySymbolic()
+        is_variable(sys, sym) || is_parameter(sys, sym) || all(x -> check_assignable(sys, x), collect(sym))
+    elseif sym isa Union{AbstractArray, Tuple}
+        all(x -> check_assignable(sys, x), sym)
+    else
+        false
+    end
+end
+
 function compile_user_affect(affect::MutatingFunctionalAffect, cb, sys, dvs, ps; kwargs...)
     #=
     Implementation sketch:
@@ -1038,7 +1050,7 @@ function compile_user_affect(affect::MutatingFunctionalAffect, cb, sys, dvs, ps;
     mod_exprs = modified(affect)
     if !affect.skip_checks
         for mexpr in mod_exprs
-            if !is_variable(sys, mexpr) && parameter_index(sys, mexpr) === nothing
+            if !check_assignable(sys, mexpr)
                 @warn ("Expression $mexpr cannot be assigned to; currently only unknowns and parameters may be updated by an affect.")
             end
             invalid_vars = unassignable_variables(sys, mexpr)
