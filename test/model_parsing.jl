@@ -534,9 +534,9 @@ end
     @named else_in_sys = InsideTheBlock(flag = 3)
     else_in_sys = complete(else_in_sys)
 
-    @test getname.(parameters(if_in_sys)) == [:if_parameter, :eq]
-    @test getname.(parameters(elseif_in_sys)) == [:elseif_parameter, :eq]
-    @test getname.(parameters(else_in_sys)) == [:else_parameter, :eq]
+    @test sort(getname.(parameters(if_in_sys))) == [:eq, :if_parameter]
+    @test sort(getname.(parameters(elseif_in_sys))) == [:elseif_parameter, :eq]
+    @test sort(getname.(parameters(else_in_sys))) == [:else_parameter, :eq]
 
     @test getdefault(if_in_sys.if_parameter) == 100
     @test getdefault(elseif_in_sys.elseif_parameter) == 101

@@ -42,7 +42,7 @@ for df in [
     # iip
     du = zeros(3)
     u = collect(1:3)
-    p = MTKParameters(syss, parameters(syss) .=> collect(1:5))
+    p = MTKParameters(syss, [c, nsteps, δt, β, γ] .=> collect(1:5))
     df.f(du, u, p, 0)
     @test du ≈ [0.01831563888873422, 0.9816849729159067, 4.999999388195359]
 
