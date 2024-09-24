@@ -277,7 +277,16 @@ function IndexCache(sys::AbstractSystem)
 
     dependent_pars = Set{BasicSymbolic}()
     for eq in parameter_dependencies(sys)
-        push!(dependent_pars, eq.lhs)
+        sym = eq.lhs
+        ttsym = default_toterm(sym)
+        rsym = renamespace(sys, sym)
+        rttsym = renamespace(sys, ttsym)
+        for s in [sym, ttsym, rsym, rttsym]
+            push!(dependent_pars, s)
+            if hasname(s) && (!iscall(s) || operation(s) != getindex)
+                symbol_to_variable[getname(s)] = sym
+            end
+        end
     end
 
     return IndexCache(
