@@ -180,6 +180,16 @@ function update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
     end
 end
 
+function unit_handled_variable_value(mod, y, varname)
+    meta = parse_metadata(mod, y)
+    varval = if meta isa Nothing || get(meta, VariableUnit, nothing) isa Nothing
+        varname
+    else
+        :($convert_units($(meta[VariableUnit]), $varname))
+    end
+    return varval
+end
+
 function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         def = nothing, indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
         type::Type = Real, meta = Dict{DataType, Expr}())
@@ -225,10 +235,11 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         Expr(:tuple, Expr(:ref, a, b...), y) => begin
             varname = Meta.isexpr(a, :call) ? a.args[1] : a
             push!(kwargs, Expr(:kw, varname, nothing))
+            varval = unit_handled_variable_value(mod, y, varname)
             if varclass == :parameters
-                var = :($varname = $first(@parameters $a[$(b...)] = ($varname, $y)))
+                var = :($varname = $first(@parameters $a[$(b...)] = ($varval, $y)))
             else
-                var = :($varname = $first(@variables $a[$(b...)] = ($varname, $y)))
+                var = :($varname = $first(@variables $a[$(b...)] = ($varval, $y)))
             end
             #TODO: update `dict` aka `Model.structure` with the metadata
             (:($varname...), var), nothing, Dict()
@@ -236,16 +247,17 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         Expr(:(=), Expr(:ref, a, b...), y) => begin
             varname = Meta.isexpr(a, :call) ? a.args[1] : a
             if Meta.isexpr(y, :tuple)
+                varval = unit_handled_variable_value(mod, y, varname)
                 val, y = (y.args[1], y.args[2:end])
                 push!(kwargs, Expr(:kw, varname, nothing))
                 if varclass == :parameters
                     var = :($varname = $varname === nothing ? $val : $varname;
                     $varname = $first(@parameters $a[$(b...)] = (
-                        $varname, $(y...))))
+                        $varval, $(y...))))
                 else
                     var = :($varname = $varname === nothing ? $val : $varname;
                     $varname = $first(@variables $a[$(b...)] = (
-                        $varname, $(y...))))
+                        $varval, $(y...))))
                 end
             else
                 push!(kwargs, Expr(:kw, varname, nothing))
@@ -260,25 +272,24 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         end
         Expr(:(=), Expr(:(::), Expr(:ref, a, b...), n), y) => begin
             varname = Meta.isexpr(a, :call) ? a.args[1] : a
+            varval = unit_handled_variable_value(mod, y, varname)
             if Meta.isexpr(y, :tuple)
                 val, y = (y.args[1], y.args[2:end])
                 push!(kwargs, Expr(:kw, varname, nothing))
                 if varclass == :parameters
-                    var = :(
-                    $varname = $varname = $varname === nothing ? $val : $varname;
-                    $varname = $first(@parameters $a[$(b...)]::$n = ($varname, $(y...)))
-                    )
+                    var = :($varname = $varname = $varname === nothing ? $val : $varname;
+                    $varname = $first(@parameters $a[$(b...)]::$n = ($varval, $(y...))))
                 else
                     var = :($varname = $varname === nothing ? $val : $varname;
                     $varname = $first(@variables $a[$(b...)]::$n = (
-                        $varname, $(y...))))
+                        $varval, $(y...))))
                 end
             else
                 push!(kwargs, Expr(:kw, varname, y))
                 if varclass == :parameters
-                    var = :($varname = $first(@parameters $a[$(b...)]::$n = $varname))
+                    var = :($varname = $first(@parameters $a[$(b...)]::$n = $varval))
                 else
-                    var = :($varname = $first(@variables $a[$(b...)]::$n = $varname))
+                    var = :($varname = $first(@variables $a[$(b...)]::$n = $varval))
                 end
             end
             #TODO: update `dict`` aka `Model.structure` with the metadata
@@ -286,11 +297,12 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         end
         Expr(:tuple, Expr(:(::), Expr(:ref, a, b...), n), y) => begin
             varname = Meta.isexpr(a, :call) ? a.args[1] : a
+            varval = unit_handled_variable_value(mod, y, varname)
             push!(kwargs, Expr(:kw, varname, nothing))
             if varclass == :parameters
-                var = :($varname = $first(@parameters $a[$(b...)]::$n = ($varname, $y)))
+                var = :($varname = $first(@parameters $a[$(b...)]::$n = ($varval, $y)))
             else
-                var = :($varname = $first(@variables $a[$(b...)]::$n = ($varname, $y)))
+                var = :($varname = $first(@variables $a[$(b...)]::$n = ($varval, $y)))
             end
             #TODO: update `dict` aka `Model.structure` with the metadata
             (:($varname...), var), nothing, Dict()
@@ -465,12 +477,22 @@ function parse_default(mod, a)
     end
 end
 
-function parse_metadata(mod, a)
+function parse_metadata(mod, a::Expr)
+    @info a typeof(a)
     MLStyle.@match a begin
-        Expr(:vect, eles...) => Dict(parse_metadata(mod, e) for e in eles)
+        Expr(:vect, b...) => Dict(parse_metadata(mod, m) for m in b)
+        Expr(:tuple, a, b...) => parse_metadata(mod, b)
         Expr(:(=), a, b) => Symbolics.option_to_metadata_type(Val(a)) => get_var(mod, b)
         _ => error("Cannot parse metadata $a")
     end
+end
+
+function parse_metadata(mod, metadata::AbstractArray)
+    ret = Dict()
+    for m in metadata
+        merge!(ret, parse_metadata(mod, m))
+    end
+    ret
 end
 
 function _set_var_metadata!(metadata_with_exprs, a, m, v::Expr)
@@ -730,6 +752,7 @@ function parse_variable_arg!(exprs, vs, dict, mod, arg, varclass, kwargs, where_
 end
 
 function convert_units(varunits::DynamicQuantities.Quantity, value)
+    value isa Nothing && return nothing
     DynamicQuantities.ustrip(DynamicQuantities.uconvert(
         DynamicQuantities.SymbolicUnits.as_quantity(varunits), value))
 end
@@ -741,6 +764,7 @@ function convert_units(
 end
 
 function convert_units(varunits::Unitful.FreeUnits, value)
+    value isa Nothing && return nothing
     Unitful.ustrip(varunits, value)
 end
 
