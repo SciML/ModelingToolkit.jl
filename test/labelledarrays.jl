@@ -87,5 +87,6 @@ u0 = @LArray [9998.0, 1.0, 1.0, 1.0] (:S, :I, :R, :C)
 problem = ODEProblem(SIR!, u0, tspan, p)
 sys = complete(modelingtoolkitize(problem))
 
-@test all(isequal.(parameters(sys), getproperty.(@variables(β, η, ω, φ, σ, μ), :val)))
+@test all(any(isequal(x), parameters(sys))
+for x in ModelingToolkit.unwrap.(@variables(β, η, ω, φ, σ, μ)))
 @test all(isequal.(Symbol.(unknowns(sys)), Symbol.(@variables(S(t), I(t), R(t), C(t)))))

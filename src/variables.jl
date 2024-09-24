@@ -381,7 +381,12 @@ Create a tunable parameter by
 @parameters u [tunable=true]
 ```
 
-See also [`getbounds`](@ref), [`istunable`](@ref)
+For systems created with `split = true` (the default) and `default = true` passed to this function, the order
+of parameters returned is the order in which they are stored in the tunables portion of `MTKParameters`. Note
+that array variables will not be scalarized. To obtain the flattened representation of the tunables portion,
+call `Symbolics.scalarize(tunable_parameters(sys))` and concatenate the resulting arrays.
+
+See also [`getbounds`](@ref), [`istunable`](@ref), [`MTKParameters`](@ref), [`complete`](@ref)
 """
 function tunable_parameters(sys, p = parameters(sys); default = true)
     filter(x -> istunable(x, default), p)
