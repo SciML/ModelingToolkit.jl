@@ -303,9 +303,9 @@ end
     @test symtype(type_model.par2) == Int
     @test symtype(type_model.par3) == BigFloat
     @test symtype(type_model.par4) == Float64
-    @test_broken symtype(type_model.par5[1]) == BigFloat
-    @test_broken symtype(type_model.par6[1]) == BigFloat
-    @test_broken symtype(type_model.par7[1, 1]) == BigFloat
+    @test symtype(type_model.par5[1]) == BigFloat
+    @test symtype(type_model.par6[1]) == BigFloat
+    @test symtype(type_model.par7[1, 1]) == BigFloat
 
     @test_throws TypeError TypeModel(; name = :throws, flag = 1)
     @test_throws TypeError TypeModel(; name = :throws, par0 = 1)
@@ -317,7 +317,7 @@ end
 
     # Test that array types are correctly added.
     @named type_model2 = TypeModel(; par5 = rand(BigFloat, 3))
-    @test_broken symtype(type_model2.par5[1]) == BigFloat
+    @test symtype(type_model2.par5[1]) == BigFloat
 
     @named type_model3 = TypeModel(; par7 = rand(BigFloat, 3, 3))
     @test symtype(type_model3.par7[1, 1]) == BigFloat

@@ -232,21 +232,21 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                 varclass, where_types, meta)
             return var, def, Dict()
         end
-        Expr(:tuple, Expr(:ref, a, b...), y) || Expr(:tuple, Expr(:(::), Expr(:ref, a, b...), n), y) => begin
-            isdefined(mod, :n) || (n = Real)
+        Expr(:tuple, Expr(:(::), Expr(:ref, a, b...), type), y) || Expr(:tuple, Expr(:ref, a, b...), y) => begin
+            (@isdefined type) || (type = Real)
             varname = Meta.isexpr(a, :call) ? a.args[1] : a
             push!(kwargs, Expr(:kw, varname, nothing))
             varval = unit_handled_variable_value(mod, y, varname)
             if varclass == :parameters
-                var = :($varname = $first(@parameters $a[$(b...)]::$n = ($varval, $y)))
+                var = :($varname = $first(@parameters $a[$(b...)]::$type = ($varval, $y)))
             else
-                var = :($varname = $first(@variables $a[$(b...)]::$n = ($varval, $y)))
+                var = :($varname = $first(@variables $a[$(b...)]::$type = ($varval, $y)))
             end
             #TODO: update `dict` aka `Model.structure` with the metadata
             (:($varname...), var), nothing, Dict()
         end
-        Expr(:(=), Expr(:ref, a, b...), y) || Expr(:(=), Expr(:(::), Expr(:ref, a, b...), n), y) => begin
-            isdefined(mod, :n) || (n = Real)
+        Expr(:(=), Expr(:(::), Expr(:ref, a, b...), type), y) || Expr(:(=), Expr(:ref, a, b...), y) => begin
+            (@isdefined type) || (type = Real)
             varname = Meta.isexpr(a, :call) ? a.args[1] : a
             if Meta.isexpr(y, :tuple)
                 varval = unit_handled_variable_value(mod, y, varname)
@@ -254,33 +254,34 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                 push!(kwargs, Expr(:kw, varname, nothing))
                 if varclass == :parameters
                     var = :($varname = $varname === nothing ? $val : $varname;
-                    $varname = $first(@parameters $a[$(b...)]::$n = (
+                    $varname = $first(@parameters $a[$(b...)]::$type = (
                         $varval, $(y...))))
                 else
                     var = :($varname = $varname === nothing ? $val : $varname;
-                    $varname = $first(@variables $a[$(b...)]::$n = (
+                    $varname = $first(@variables $a[$(b...)]::$type = (
                         $varval, $(y...))))
                 end
             else
                 push!(kwargs, Expr(:kw, varname, nothing))
                 if varclass == :parameters
                     var = :($varname = $varname === nothing ? $y : $varname;
-                    $varname = $first(@parameters $a[$(b...)]::$n = $varname))
+                    $varname = $first(@parameters $a[$(b...)]::$type = $varname))
                 else
                     var = :($varname = $varname === nothing ? $y : $varname;
-                    $varname = $first(@variables $a[$(b...)]::$n = $varname))
+                    $varname = $first(@variables $a[$(b...)]::$type = $varname))
                 end
             end
             #TODO: update `dict`` aka `Model.structure` with the metadata
             (:($varname...), var), nothing, Dict()
         end
-        Expr(:ref, a, b...) => begin
+        Expr(:(::), Expr(:ref, a, b...), type) || Expr(:ref, a, b...) => begin
+            (@isdefined type) || (type = Real)
             varname = a isa Expr && a.head == :call ? a.args[1] : a
             push!(kwargs, Expr(:kw, varname, nothing))
             if varclass == :parameters
-                var = :($varname = $first(@parameters $a[$(b...)] = $varname))
+                var = :($varname = $first(@parameters $a[$(b...)]::$type = $varname))
             elseif varclass == :variables
-                var = :($varname = $first(@variables $a[$(b...)] = $varname))
+                var = :($varname = $first(@variables $a[$(b...)]::$type = $varname))
             else
                 throw("Symbolic array with arbitrary length is not handled for $varclass.
                     Please open an issue with an example.")
