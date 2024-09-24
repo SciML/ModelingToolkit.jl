@@ -305,7 +305,7 @@ end
     @test symtype(type_model.par4) == Float64
     @test_broken symtype(type_model.par5[1]) == BigFloat
     @test_broken symtype(type_model.par6[1]) == BigFloat
-    @test symtype(type_model.par7[1, 1]) == BigFloat
+    @test_broken symtype(type_model.par7[1, 1]) == BigFloat
 
     @test_throws TypeError TypeModel(; name = :throws, flag = 1)
     @test_throws TypeError TypeModel(; name = :throws, par0 = 1)

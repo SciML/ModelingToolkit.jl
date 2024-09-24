@@ -232,19 +232,21 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                 varclass, where_types, meta)
             return var, def, Dict()
         end
-        Expr(:tuple, Expr(:ref, a, b...), y) => begin
+        Expr(:tuple, Expr(:ref, a, b...), y) || Expr(:tuple, Expr(:(::), Expr(:ref, a, b...), n), y) => begin
+            isdefined(mod, :n) || (n = Real)
             varname = Meta.isexpr(a, :call) ? a.args[1] : a
             push!(kwargs, Expr(:kw, varname, nothing))
             varval = unit_handled_variable_value(mod, y, varname)
             if varclass == :parameters
-                var = :($varname = $first(@parameters $a[$(b...)] = ($varval, $y)))
+                var = :($varname = $first(@parameters $a[$(b...)]::$n = ($varval, $y)))
             else
-                var = :($varname = $first(@variables $a[$(b...)] = ($varval, $y)))
+                var = :($varname = $first(@variables $a[$(b...)]::$n = ($varval, $y)))
             end
             #TODO: update `dict` aka `Model.structure` with the metadata
             (:($varname...), var), nothing, Dict()
         end
-        Expr(:(=), Expr(:ref, a, b...), y) => begin
+        Expr(:(=), Expr(:ref, a, b...), y) || Expr(:(=), Expr(:(::), Expr(:ref, a, b...), n), y) => begin
+            isdefined(mod, :n) || (n = Real)
             varname = Meta.isexpr(a, :call) ? a.args[1] : a
             if Meta.isexpr(y, :tuple)
                 varval = unit_handled_variable_value(mod, y, varname)
@@ -252,59 +254,24 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                 push!(kwargs, Expr(:kw, varname, nothing))
                 if varclass == :parameters
                     var = :($varname = $varname === nothing ? $val : $varname;
-                    $varname = $first(@parameters $a[$(b...)] = (
+                    $varname = $first(@parameters $a[$(b...)]::$n = (
                         $varval, $(y...))))
-                else
-                    var = :($varname = $varname === nothing ? $val : $varname;
-                    $varname = $first(@variables $a[$(b...)] = (
-                        $varval, $(y...))))
-                end
-            else
-                push!(kwargs, Expr(:kw, varname, nothing))
-                if varclass == :parameters
-                    var = :($varname = $varname === nothing ? $y : $varname; $varname = $first(@parameters $a[$(b...)] = $varname))
-                else
-                    var = :($varname = $varname === nothing ? $y : $varname; $varname = $first(@variables $a[$(b...)] = $varname))
-                end
-            end
-            #TODO: update `dict`` aka `Model.structure` with the metadata
-            (:($varname...), var), nothing, Dict()
-        end
-        Expr(:(=), Expr(:(::), Expr(:ref, a, b...), n), y) => begin
-            varname = Meta.isexpr(a, :call) ? a.args[1] : a
-            varval = unit_handled_variable_value(mod, y, varname)
-            if Meta.isexpr(y, :tuple)
-                val, y = (y.args[1], y.args[2:end])
-                push!(kwargs, Expr(:kw, varname, nothing))
-                if varclass == :parameters
-                    var = :($varname = $varname = $varname === nothing ? $val : $varname;
-                    $varname = $first(@parameters $a[$(b...)]::$n = ($varval, $(y...))))
                 else
                     var = :($varname = $varname === nothing ? $val : $varname;
                     $varname = $first(@variables $a[$(b...)]::$n = (
                         $varval, $(y...))))
                 end
             else
-                push!(kwargs, Expr(:kw, varname, y))
+                push!(kwargs, Expr(:kw, varname, nothing))
                 if varclass == :parameters
-                    var = :($varname = $first(@parameters $a[$(b...)]::$n = $varval))
+                    var = :($varname = $varname === nothing ? $y : $varname;
+                    $varname = $first(@parameters $a[$(b...)]::$n = $varname))
                 else
-                    var = :($varname = $first(@variables $a[$(b...)]::$n = $varval))
+                    var = :($varname = $varname === nothing ? $y : $varname;
+                    $varname = $first(@variables $a[$(b...)]::$n = $varname))
                 end
             end
             #TODO: update `dict`` aka `Model.structure` with the metadata
-            (:($varname...), var), nothing, Dict()
-        end
-        Expr(:tuple, Expr(:(::), Expr(:ref, a, b...), n), y) => begin
-            varname = Meta.isexpr(a, :call) ? a.args[1] : a
-            varval = unit_handled_variable_value(mod, y, varname)
-            push!(kwargs, Expr(:kw, varname, nothing))
-            if varclass == :parameters
-                var = :($varname = $first(@parameters $a[$(b...)]::$n = ($varval, $y)))
-            else
-                var = :($varname = $first(@variables $a[$(b...)]::$n = ($varval, $y)))
-            end
-            #TODO: update `dict` aka `Model.structure` with the metadata
             (:($varname...), var), nothing, Dict()
         end
         Expr(:ref, a, b...) => begin
@@ -478,7 +445,6 @@ function parse_default(mod, a)
 end
 
 function parse_metadata(mod, a::Expr)
-    @info a typeof(a)
     MLStyle.@match a begin
         Expr(:vect, b...) => Dict(parse_metadata(mod, m) for m in b)
         Expr(:tuple, a, b...) => parse_metadata(mod, b)
