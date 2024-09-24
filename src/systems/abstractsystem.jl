@@ -2960,6 +2960,9 @@ function compose(sys::AbstractSystem, systems::AbstractArray; name = nameof(sys)
     nsys == 0 && return sys
     @set! sys.name = name
     @set! sys.systems = [get_systems(sys); systems]
+    if has_is_dde(sys)
+        @set! sys.is_dde = _check_if_dde(equations(sys), get_iv(sys), get_systems(sys))
+    end
     return sys
 end
 function compose(syss...; name = nameof(first(syss)))
