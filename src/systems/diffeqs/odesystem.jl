@@ -412,8 +412,16 @@ function build_explicit_observed_function(sys, ts;
         ts = [ts]
     end
     ts = unwrap.(ts)
+    issplit = has_index_cache(sys) && get_index_cache(sys) !== nothing
     if is_dde(sys)
-        ts = map(x -> delay_to_function(sys, x), ts)
+        if issplit
+            ts = map(
+                x -> delay_to_function(
+                    sys, x; history_arg = issplit ? MTKPARAMETERS_ARG : DEFAULT_PARAMS_ARG),
+                ts)
+        else
+            ts = map(x -> delay_to_function(sys, x), ts)
+        end
     end
 
     vars = Set()
@@ -491,7 +499,8 @@ function build_explicit_observed_function(sys, ts;
     for i in 1:maxidx
         eq = obs[i]
         if is_dde(sys)
-            eq = delay_to_function(sys, eq)
+            eq = delay_to_function(
+                sys, eq; history_arg = issplit ? MTKPARAMETERS_ARG : DEFAULT_PARAMS_ARG)
         end
         lhs = eq.lhs
         rhs = eq.rhs
@@ -518,12 +527,14 @@ function build_explicit_observed_function(sys, ts;
     else
         dvs = (dvs,)
     end
+    p_start = param_only ? 1 : (length(dvs) + 1)
     if inputs === nothing
         args = param_only ? [ps..., ivs...] : [dvs..., ps..., ivs...]
     else
         inputs = unwrap.(inputs)
         ipts = DestructuredArgs(inputs, inbounds = !checkbounds)
         args = param_only ? [ipts, ps..., ivs...] : [dvs..., ipts, ps..., ivs...]
+        p_start += 1
     end
     pre = get_postprocess_fbody(sys)
 
@@ -534,19 +545,27 @@ function build_explicit_observed_function(sys, ts;
         wrap_array_vars(sys, ts; ps = _ps, inputs) .∘
         wrap_parameter_dependencies(sys, isscalar)
     end
+    mtkparams_wrapper = wrap_mtkparameters(sys, isscalar, p_start)
+    if mtkparams_wrapper isa Tuple
+        oop_mtkp_wrapper = mtkparams_wrapper[1]
+    else
+        oop_mtkp_wrapper = mtkparams_wrapper
+    end
+
     # Need to keep old method of building the function since it uses `output_type`,
     # which can't be provided to `build_function`
     oop_fn = Func(args, [],
                  pre(Let(obsexprs,
                      isscalar ? ts[1] : MakeArray(ts, output_type),
-                     false))) |> array_wrapper[1] |> toexpr
+                     false))) |> array_wrapper[1] |> oop_mtkp_wrapper |> toexpr
     oop_fn = expression ? oop_fn : eval_or_rgf(oop_fn; eval_expression, eval_module)
 
     if !isscalar
         iip_fn = build_function(ts,
             args...;
             postprocess_fbody = pre,
-            wrap_code = array_wrapper .∘ wrap_assignments(isscalar, obsexprs),
+            wrap_code = array_wrapper .∘ wrap_assignments(isscalar, obsexprs) .∘
+                        mtkparams_wrapper,
             expression = Val{true})[2]
         if !expression
             iip_fn = eval_or_rgf(iip_fn; eval_expression, eval_module)
