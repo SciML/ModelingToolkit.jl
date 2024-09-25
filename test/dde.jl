@@ -1,4 +1,5 @@
 using ModelingToolkit, DelayDiffEq, Test
+using SymbolicIndexingInterface: is_markovian
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 p0 = 0.2;
@@ -39,6 +40,7 @@ eqs = [D(x₀) ~ (v0 / (1 + beta0 * (x₂(t - tau)^2))) * (p0 - q0) * x₀ - d0 
        D(x₂(t)) ~ (v1 / (1 + beta1 * (x₂(t - tau)^2))) * (1 - p1 + q1) * x₁ - d2 * x₂(t)]
 @mtkbuild sys = System(eqs, t)
 @test ModelingToolkit.is_dde(sys)
+@test !is_markovian(sys)
 prob = DDEProblem(sys,
     [x₀ => 1.0, x₁ => 1.0, x₂(t) => 1.0],
     tspan,
@@ -81,6 +83,7 @@ sol = solve(prob, RKMil())
 eqs = [D(x(t)) ~ a * x(t) + b * x(t - τ) + c + (α * x(t) + γ) * η]
 @mtkbuild sys = System(eqs, t)
 @test ModelingToolkit.is_dde(sys)
+@test !is_markovian(sys)
 @test equations(sys) == [D(x(t)) ~ a * x(t) + b * x(t - τ) + c]
 @test isequal(ModelingToolkit.get_noiseeqs(sys), [α * x(t) + γ])
 prob_mtk = SDDEProblem(sys, [x(t) => 1.0 + t], tspan; constant_lags = (τ,));
@@ -106,8 +109,10 @@ eqs = [osc1.jcn ~ osc2.delx,
 @named coupledOsc = System(eqs, t)
 @named coupledOsc = compose(coupledOsc, systems)
 @test ModelingToolkit.is_dde(coupledOsc)
+@test !is_markovian(coupledOsc)
 @named coupledOsc2 = System(eqs, t; systems)
 @test ModelingToolkit.is_dde(coupledOsc2)
+@test !is_markovian(coupledOsc2)
 for coupledOsc in [coupledOsc, coupledOsc2]
     local sys = structural_simplify(coupledOsc)
     @test length(equations(sys)) == 4

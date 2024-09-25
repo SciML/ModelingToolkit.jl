@@ -1399,6 +1399,8 @@ end
     @variables x(t)
     @named sys = ODESystem(D(x) ~ x, t)
     @test !ModelingToolkit.is_dde(sys)
+    @test is_markovian(sys)
     @named sys2 = ODESystem(Equation[], t; systems = [sys])
     @test !ModelingToolkit.is_dde(sys)
+    @test is_markovian(sys)
 end

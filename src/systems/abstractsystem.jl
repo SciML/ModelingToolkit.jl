@@ -840,6 +840,8 @@ end
 SymbolicIndexingInterface.is_time_dependent(::AbstractTimeDependentSystem) = true
 SymbolicIndexingInterface.is_time_dependent(::AbstractTimeIndependentSystem) = false
 
+SymbolicIndexingInterface.is_markovian(sys::AbstractSystem) = !is_dde(sys)
+
 SymbolicIndexingInterface.constant_structure(::AbstractSystem) = true
 
 function SymbolicIndexingInterface.all_variable_symbols(sys::AbstractSystem)
