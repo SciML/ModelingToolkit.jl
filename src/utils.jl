@@ -483,6 +483,7 @@ end
 
 function collect_var!(unknowns, parameters, var, iv)
     isequal(var, iv) && return nothing
+    getmetadata(var, SymScope, LocalScope()) == LocalScope() || return nothing
     if iscalledparameter(var)
         callable = getcalledparameter(var)
         push!(parameters, callable)
