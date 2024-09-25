@@ -242,29 +242,32 @@ function isdelay(var, iv)
     return false
 end
 const DDE_HISTORY_FUN = Sym{Symbolics.FnType{Tuple{Any, <:Real}, Vector{Real}}}(:___history___)
-function delay_to_function(sys::AbstractODESystem, eqs = full_equations(sys))
+const DEFAULT_PARAMS_ARG = Sym{Any}(:ˍ₋arg3)
+function delay_to_function(
+        sys::AbstractODESystem, eqs = full_equations(sys); history_arg = DEFAULT_PARAMS_ARG)
     delay_to_function(eqs,
         get_iv(sys),
         Dict{Any, Int}(operation(s) => i for (i, s) in enumerate(unknowns(sys))),
         parameters(sys),
-        DDE_HISTORY_FUN)
+        DDE_HISTORY_FUN; history_arg)
 end
-function delay_to_function(eqs::Vector, iv, sts, ps, h)
-    delay_to_function.(eqs, (iv,), (sts,), (ps,), (h,))
+function delay_to_function(eqs::Vector, iv, sts, ps, h; history_arg = DEFAULT_PARAMS_ARG)
+    delay_to_function.(eqs, (iv,), (sts,), (ps,), (h,); history_arg)
 end
-function delay_to_function(eq::Equation, iv, sts, ps, h)
-    delay_to_function(eq.lhs, iv, sts, ps, h) ~ delay_to_function(eq.rhs, iv, sts, ps, h)
+function delay_to_function(eq::Equation, iv, sts, ps, h; history_arg = DEFAULT_PARAMS_ARG)
+    delay_to_function(eq.lhs, iv, sts, ps, h; history_arg) ~ delay_to_function(
+        eq.rhs, iv, sts, ps, h; history_arg)
 end
-function delay_to_function(expr, iv, sts, ps, h)
+function delay_to_function(expr, iv, sts, ps, h; history_arg = DEFAULT_PARAMS_ARG)
     if isdelay(expr, iv)
         v = operation(expr)
         time = arguments(expr)[1]
         idx = sts[v]
-        return term(getindex, h(Sym{Any}(:ˍ₋arg3), time), idx, type = Real) # BIG BIG HACK
+        return term(getindex, h(history_arg, time), idx, type = Real) # BIG BIG HACK
     elseif iscall(expr)
         return maketerm(typeof(expr),
             operation(expr),
-            map(x -> delay_to_function(x, iv, sts, ps, h), arguments(expr)),
+            map(x -> delay_to_function(x, iv, sts, ps, h; history_arg), arguments(expr)),
             metadata(expr))
     else
         return expr
