@@ -398,50 +398,76 @@ function wrap_array_vars(
     end
 end
 
-function wrap_mtkparameters(sys::AbstractSystem, isscalar::Bool)
+const MTKPARAMETERS_ARG = Sym{Vector{Vector}}(:___mtkparameters___)
+
+"""
+    wrap_mtkparameters(sys::AbstractSystem, isscalar::Bool, p_start = 2)
+
+Return function(s) to be passed to the `wrap_code` keyword of `build_function` which
+allow the compiled function to be called as `f(u, p, t)` where `p isa MTKParameters`
+instead of `f(u, p..., t)`. `isscalar` denotes whether the function expression being
+wrapped is for a scalar value. `p_start` is the index of the argument containing
+the first parameter vector in the out-of-place version of the function. For example,
+if a history function (DDEs) was passed before `p`, then the function before wrapping
+would have the signature `f(u, h, p..., t)` and hence `p_start` would need to be `3`.
+
+The returned function is `identity` if the system does not have an `IndexCache`.
+"""
+function wrap_mtkparameters(sys::AbstractSystem, isscalar::Bool, p_start = 2)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         offset = Int(is_time_dependent(sys))
 
         if isscalar
             function (expr)
-                p = gensym(:p)
+                param_args = expr.args[p_start:(end - offset)]
+                param_buffer_idxs = findall(x -> x isa DestructuredArgs, param_args)
+                param_buffer_args = param_args[param_buffer_idxs]
+                destructured_mtkparams = DestructuredArgs(
+                    [x.name for x in param_buffer_args],
+                    MTKPARAMETERS_ARG; inds = param_buffer_idxs)
                 Func(
                     [
-                        expr.args[1],
-                        DestructuredArgs(
-                            [arg.name for arg in expr.args[2:(end - offset)]], p),
-                        (isone(offset) ? (expr.args[end],) : ())...
+                        expr.args[begin:(p_start - 1)]...,
+                        destructured_mtkparams,
+                        expr.args[(end - offset + 1):end]...
                     ],
                     [],
-                    Let(expr.args[2:(end - offset)], expr.body, false)
+                    Let(param_buffer_args, expr.body, false)
                 )
             end
         else
             function (expr)
-                p = gensym(:p)
+                param_args = expr.args[p_start:(end - offset)]
+                param_buffer_idxs = findall(x -> x isa DestructuredArgs, param_args)
+                param_buffer_args = param_args[param_buffer_idxs]
+                destructured_mtkparams = DestructuredArgs(
+                    [x.name for x in param_buffer_args],
+                    MTKPARAMETERS_ARG; inds = param_buffer_idxs)
                 Func(
                     [
-                        expr.args[1],
-                        DestructuredArgs(
-                            [arg.name for arg in expr.args[2:(end - offset)]], p),
-                        (isone(offset) ? (expr.args[end],) : ())...
+                        expr.args[begin:(p_start - 1)]...,
+                        destructured_mtkparams,
+                        expr.args[(end - offset + 1):end]...
                     ],
                     [],
-                    Let(expr.args[2:(end - offset)], expr.body, false)
+                    Let(param_buffer_args, expr.body, false)
                 )
             end,
             function (expr)
-                p = gensym(:p)
+                param_args = expr.args[(p_start + 1):(end - offset)]
+                param_buffer_idxs = findall(x -> x isa DestructuredArgs, param_args)
+                param_buffer_args = param_args[param_buffer_idxs]
+                destructured_mtkparams = DestructuredArgs(
+                    [x.name for x in param_buffer_args],
+                    MTKPARAMETERS_ARG; inds = param_buffer_idxs)
                 Func(
                     [
-                        expr.args[1],
-                        expr.args[2],
-                        DestructuredArgs(
-                            [arg.name for arg in expr.args[3:(end - offset)]], p),
-                        (isone(offset) ? (expr.args[end],) : ())...
+                        expr.args[begin:p_start]...,
+                        destructured_mtkparams,
+                        expr.args[(end - offset + 1):end]...
                     ],
                     [],
-                    Let(expr.args[3:(end - offset)], expr.body, false)
+                    Let(param_buffer_args, expr.body, false)
                 )
             end
         end
