@@ -548,7 +548,7 @@ prob = ODEProblem(
 @test_nowarn solve(prob, Tsit5())
 obsfn = ModelingToolkit.build_explicit_observed_function(
     outersys, bar(3outersys.sys.ms, 3outersys.sys.p))
-@test_nowarn obsfn(sol.u[1], prob.p..., sol.t[1])
+@test_nowarn obsfn(sol.u[1], prob.p, sol.t[1])
 
 # x/x
 @variables x(t)

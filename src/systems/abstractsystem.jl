@@ -695,25 +695,17 @@ function SymbolicIndexingInterface.parameter_observed(sys::AbstractSystem, sym)
         if rawobs isa Tuple
             if is_time_dependent(sys)
                 obsfn = let oop = rawobs[1], iip = rawobs[2]
-                    f1a(p::MTKParameters, t) = oop(p..., t)
-                    f1a(out, p::MTKParameters, t) = iip(out, p..., t)
+                    f1a(p, t) = oop(p, t)
+                    f1a(out, p, t) = iip(out, p, t)
                 end
             else
                 obsfn = let oop = rawobs[1], iip = rawobs[2]
-                    f1b(p::MTKParameters) = oop(p...)
-                    f1b(out, p::MTKParameters) = iip(out, p...)
+                    f1b(p) = oop(p)
+                    f1b(out, p) = iip(out, p)
                 end
             end
         else
-            if is_time_dependent(sys)
-                obsfn = let rawobs = rawobs
-                    f2a(p::MTKParameters, t) = rawobs(p..., t)
-                end
-            else
-                obsfn = let rawobs = rawobs
-                    f2b(p::MTKParameters) = rawobs(p...)
-                end
-            end
+            obsfn = rawobs
         end
     else
         obsfn = build_explicit_observed_function(sys, sym; param_only = true)
@@ -828,21 +820,11 @@ function SymbolicIndexingInterface.observed(
     _fn = build_explicit_observed_function(sys, sym; eval_expression, eval_module)
 
     if is_time_dependent(sys)
-        return let _fn = _fn
-            fn1(u, p, t) = _fn(u, p, t)
-            fn1(u, p::MTKParameters, t) = _fn(u, p..., t)
-
-            # DDEs
-            fn1(u, histfn, p, t) = _fn(u, histfn, p, t)
-            fn1(u, histfn, p::MTKParameters, t) = _fn(u, histfn, p..., t)
-            fn1
-        end
+        return _fn
     else
         return let _fn = _fn
             fn2(u, p) = _fn(u, p)
-            fn2(u, p::MTKParameters) = _fn(u, p...)
             fn2(::Nothing, p) = _fn([], p)
-            fn2(::Nothing, p::MTKParameters) = _fn([], p...)
             fn2
         end
     end
@@ -2380,8 +2362,8 @@ function linearization_function(sys::AbstractSystem, inputs,
             u_getter = u_getter
 
             function (u, p, t)
-                p_setter!(oldps, p_getter(u, p..., t))
-                newu = u_getter(u, p..., t)
+                p_setter!(oldps, p_getter(u, p, t))
+                newu = u_getter(u, p, t)
                 return newu, oldps
             end
         end
@@ -2392,20 +2374,15 @@ function linearization_function(sys::AbstractSystem, inputs,
 
             function (u, p, t)
                 state = ProblemState(; u, p, t)
-                return u_getter(state), p_getter(state)
+                return u_getter(
+                    state_values(state), parameter_values(state), current_time(state)),
+                p_getter(state)
             end
         end
     end
     initfn = NonlinearFunction(initsys; eval_expression, eval_module)
     initprobmap = build_explicit_observed_function(
         initsys, unknowns(sys); eval_expression, eval_module)
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        initprobmap = let inner = initprobmap
-            fn(u, p::MTKParameters) = inner(u, p...)
-            fn(u, p) = inner(u, p)
-            fn
-        end
-    end
     ps = parameters(sys)
     h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
     lin_fun = let diff_idxs = diff_idxs,
@@ -2452,7 +2429,7 @@ function linearization_function(sys::AbstractSystem, inputs,
                 fg_xz = ForwardDiff.jacobian(uf, u)
                 h_xz = ForwardDiff.jacobian(
                     let p = p, t = t
-                        xz -> p isa MTKParameters ? h(xz, p..., t) : h(xz, p, t)
+                        xz -> h(xz, p, t)
                     end, u)
                 pf = SciMLBase.ParamJacobianWrapper(fun, t, u)
                 fg_u = jacobian_wrt_vars(pf, p, input_idxs, chunk)
@@ -2464,7 +2441,6 @@ function linearization_function(sys::AbstractSystem, inputs,
             end
             hp = let u = u, t = t
                 _hp(p) = h(u, p, t)
-                _hp(p::MTKParameters) = h(u, p..., t)
                 _hp
             end
             h_u = jacobian_wrt_vars(hp, p, input_idxs, chunk)
@@ -2517,7 +2493,7 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
     dx = fun(sts, p..., t)
 
     h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
-    y = h(sts, p..., t)
+    y = h(sts, p, t)
 
     fg_xz = Symbolics.jacobian(dx, sts)
     fg_u = Symbolics.jacobian(dx, inputs)

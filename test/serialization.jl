@@ -50,7 +50,7 @@ for var in all_obs
     f = ModelingToolkit.build_explicit_observed_function(ss, var; expression = true)
     sym = ModelingToolkit.getname(var) |> string
     ex = :(if name == Symbol($sym)
-        return $f(u0, p..., t)
+        return $f(u0, p, t)
     end)
     push!(obs_exps, ex)
 end

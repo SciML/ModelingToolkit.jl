@@ -514,7 +514,7 @@ eqs = [yd ~ Sample(dt)(y)
 
     @test sol.prob.kwargs[:disc_saved_values][1].t == sol.t[1:2:end] # Test that the discrete-time system executed at every step of the continuous solver. The solver saves each time step twice, one state value before discrete affect and one after.
     @test_nowarn ModelingToolkit.build_explicit_observed_function(
-        model, model.counter.ud)(sol.u[1], prob.p..., sol.t[1])
+        model, model.counter.ud)(sol.u[1], prob.p, sol.t[1])
 
     @variables x(t)=1.0 y(t)=1.0
     eqs = [D(y) ~ Hold(x)
