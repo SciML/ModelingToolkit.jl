@@ -237,6 +237,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     ctrl′ = value.(controls)
     dvs′ = value.(dvs)
     dvs′ = filter(x -> !isdelay(x, iv), dvs′)
+    parameter_dependencies, ps′ = process_parameter_dependencies(
+        parameter_dependencies, ps′)
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn(
             "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
@@ -246,6 +248,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, dvs′)
     process_variables!(var_to_name, defaults, ps′)
+    process_variables!(var_to_name, defaults, [eq.lhs for eq in parameter_dependencies])
+    process_variables!(var_to_name, defaults, [eq.rhs for eq in parameter_dependencies])
     defaults = Dict{Any, Any}(value(k) => value(v)
     for (k, v) in pairs(defaults) if v !== nothing)
 
@@ -257,9 +261,15 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     hasaguess = findall(!isnothing, syspsguesses)
     ps_guesses = ps′[hasaguess] .=> syspsguesses[hasaguess]
     syspsguesses = isempty(ps_guesses) ? Dict() : todict(ps_guesses)
+    syspdepguesses = [ModelingToolkit.getguess(eq.lhs) for eq in parameter_dependencies]
+    hasaguess = findall(!isnothing, syspdepguesses)
+    pdep_guesses = [eq.lhs for eq in parameter_dependencies][hasaguess] .=>
+        syspdepguesses[hasaguess]
+    syspdepguesses = isempty(pdep_guesses) ? Dict() : todict(pdep_guesses)
 
-    guesses = merge(sysdvsguesses, syspsguesses, todict(guesses))
-    guesses = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(guesses))
+    guesses = merge(sysdvsguesses, syspsguesses, syspdepguesses, todict(guesses))
+    guesses = Dict{Any, Any}(value(k) => value(v)
+    for (k, v) in pairs(guesses) if v !== nothing)
 
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
@@ -274,8 +284,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     end
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
-    parameter_dependencies, ps′ = process_parameter_dependencies(
-        parameter_dependencies, ps′)
+
     if is_dde === nothing
         is_dde = _check_if_dde(deqs, iv′, systems)
     end
