@@ -3090,7 +3090,7 @@ function process_parameter_dependencies(pdeps, ps)
                  end
                  for p in pdeps]
     end
-    lhss = BasicSymbolic[]
+    lhss = []
     for p in pdeps
         if !isparameter(p.lhs)
             error("LHS of parameter dependency must be a single parameter. Found $(p.lhs).")
@@ -3101,6 +3101,7 @@ function process_parameter_dependencies(pdeps, ps)
         end
         push!(lhss, p.lhs)
     end
+    lhss = map(identity, lhss)
     pdeps = topsort_equations(pdeps, union(ps, lhss))
     ps = filter(ps) do p
         !any(isequal(p), lhss)
