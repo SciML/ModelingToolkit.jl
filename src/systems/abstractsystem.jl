@@ -230,7 +230,8 @@ function wrap_parameter_dependencies(sys::AbstractSystem, isscalar)
 end
 
 function wrap_array_vars(
-        sys::AbstractSystem, exprs; dvs = unknowns(sys), ps = parameters(sys), inputs = nothing)
+        sys::AbstractSystem, exprs; dvs = unknowns(sys), ps = parameters(sys),
+        inputs = nothing, history = false)
     isscalar = !(exprs isa AbstractArray)
     array_vars = Dict{Any, AbstractArray{Int}}()
     if dvs !== nothing
@@ -328,6 +329,19 @@ function wrap_array_vars(
             array_parameters[p] = (idxs, buffer_idx, sz)
         end
     end
+
+    inputind = if history
+        uind + 2
+    else
+        uind + 1
+    end
+    params_offset = if history && hasinputs
+        uind + 2
+    elseif history || hasinputs
+        uind + 1
+    else
+        uind
+    end
     if isscalar
         function (expr)
             Func(
@@ -336,10 +350,10 @@ function wrap_array_vars(
                 Let(
                     vcat(
                         [k ← :(view($(expr.args[uind].name), $v)) for (k, v) in array_vars],
-                        [k ← :(view($(expr.args[uind + hasinputs].name), $v))
+                        [k ← :(view($(expr.args[inputind].name), $v))
                          for (k, v) in input_vars],
                         [k ← :(reshape(
-                             view($(expr.args[uind + hasinputs + buffer_idx].name), $idxs),
+                             view($(expr.args[params_offset + buffer_idx].name), $idxs),
                              $sz))
                          for (k, (idxs, buffer_idx, sz)) in array_parameters],
                         [k ← Code.MakeArray(v, symtype(k))
@@ -358,10 +372,10 @@ function wrap_array_vars(
                 Let(
                     vcat(
                         [k ← :(view($(expr.args[uind].name), $v)) for (k, v) in array_vars],
-                        [k ← :(view($(expr.args[uind + hasinputs].name), $v))
+                        [k ← :(view($(expr.args[inputind].name), $v))
                          for (k, v) in input_vars],
                         [k ← :(reshape(
-                             view($(expr.args[uind + hasinputs + buffer_idx].name), $idxs),
+                             view($(expr.args[params_offset + buffer_idx].name), $idxs),
                              $sz))
                          for (k, (idxs, buffer_idx, sz)) in array_parameters],
                         [k ← Code.MakeArray(v, symtype(k))
@@ -380,10 +394,10 @@ function wrap_array_vars(
                     vcat(
                         [k ← :(view($(expr.args[uind + 1].name), $v))
                          for (k, v) in array_vars],
-                        [k ← :(view($(expr.args[uind + hasinputs + 1].name), $v))
+                        [k ← :(view($(expr.args[inputind + 1].name), $v))
                          for (k, v) in input_vars],
                         [k ← :(reshape(
-                             view($(expr.args[uind + hasinputs + buffer_idx + 1].name),
+                             view($(expr.args[params_offset + buffer_idx + 1].name),
                                  $idxs),
                              $sz))
                          for (k, (idxs, buffer_idx, sz)) in array_parameters],
