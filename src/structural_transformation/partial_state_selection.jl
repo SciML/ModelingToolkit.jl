@@ -179,7 +179,7 @@ function dummy_derivative_graph!(state::TransformationState, jac = nothing;
     else
         ag = AliasGraph(mm, ndsts(state.structure.graph))
     end
-    dummy_derivative_graph!(state.structure, var_eq_matching, jac, state_priority, ag, log)
+    dummy_derivative_graph!(state.structure, var_eq_matching, jac, state_priority, ag, mm, log)
 end
 
 struct DummyDerivativeSummary
@@ -283,12 +283,12 @@ ordering to obtain state variables.
 
 function dummy_derivative_graph!(
         structure::SystemStructure, var_eq_matching, jac = nothing,
-        state_priority = nothing, ag = nothing, ::Val{log} = Val(false)) where {log}
+        state_priority = nothing, ag = nothing, mm = nothing, ::Val{log} = Val(false)) where {log}
     @unpack eq_to_diff, var_to_diff, graph = structure
     diff_to_eq = invview(eq_to_diff)
     diff_to_var = invview(var_to_diff)
     invgraph = invview(graph)
-    #ag = nothing
+    ag = nothing
     extended_sp_vec = extended_state_priority(state_priority, var_to_diff, ag)
     extended_sp = Base.Fix1(getindex, extended_sp_vec)
 
