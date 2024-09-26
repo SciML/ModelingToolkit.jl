@@ -125,3 +125,40 @@ obsfn = ModelingToolkit.build_explicit_observed_function(
     sys, [sys.osc1.delx, sys.osc2.delx])
 @test_nowarn sol[[sys.osc1.delx, sys.osc2.delx]]
 @test sol[sys.osc1.delx] ≈ sol(sol.t .- 0.01; idxs = sys.osc1.x)
+
+@testset "DDE observed with array variables" begin
+    @component function valve(; name)
+        @parameters begin
+            open(t)::Bool = false
+            Kp = 2
+            Ksnap = 1.1
+            τ = 0.1
+        end
+        @variables begin
+            opening(..)
+            lag_opening(t)
+            snap_opening(t)
+        end
+        eqs = [D(opening(t)) ~ Kp * (open - opening(t))
+               lag_opening ~ opening(t - τ)
+               snap_opening ~ clamp(Ksnap * lag_opening - 1 / Ksnap, 0, 1)]
+        return System(eqs, t; name = name)
+    end
+
+    @component function veccy(; name)
+        @parameters dx[1:3] = ones(3)
+        @variables begin
+            x(t)[1:3] = zeros(3)
+        end
+        return System([D(x) ~ dx], t; name = name)
+    end
+
+    @mtkbuild ssys = System(
+        Equation[], t; systems = [valve(name = :valve), veccy(name = :vvecs)])
+    prob = DDEProblem(ssys, [ssys.valve.opening => 1.0], (0.0, 1.0))
+    sol = solve(prob, MethodOfSteps(Tsit5()))
+    obsval = @test_nowarn sol[ssys.valve.lag_opening + sum(ssys.vvecs.x)]
+    @test obsval ≈
+          sol(sol.t .- prob.ps[ssys.valve.τ]; idxs = ssys.valve.opening).u .+
+          sum.(sol[ssys.vvecs.x])
+end

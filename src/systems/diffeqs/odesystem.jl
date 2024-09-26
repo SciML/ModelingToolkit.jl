@@ -539,10 +539,10 @@ function build_explicit_observed_function(sys, ts;
     pre = get_postprocess_fbody(sys)
 
     array_wrapper = if param_only
-        wrap_array_vars(sys, ts; ps = _ps, dvs = nothing, inputs) .∘
+        wrap_array_vars(sys, ts; ps = _ps, dvs = nothing, inputs, history = is_dde(sys)) .∘
         wrap_parameter_dependencies(sys, isscalar)
     else
-        wrap_array_vars(sys, ts; ps = _ps, inputs) .∘
+        wrap_array_vars(sys, ts; ps = _ps, inputs, history = is_dde(sys)) .∘
         wrap_parameter_dependencies(sys, isscalar)
     end
     mtkparams_wrapper = wrap_mtkparameters(sys, isscalar, p_start)
