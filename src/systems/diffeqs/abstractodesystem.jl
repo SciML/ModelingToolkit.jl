@@ -815,6 +815,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     ps = parameters(sys)
     iv = get_iv(sys)
 
+    check_array_equations_unknowns(eqs, dvs)
     # TODO: Pass already computed information to varmap_to_vars call
     # in process_u0? That would just be a small optimization
     varmap = u0map === nothing || isempty(u0map) || eltype(u0map) <: Number ?
