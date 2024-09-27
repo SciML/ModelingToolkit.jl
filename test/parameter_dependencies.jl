@@ -177,6 +177,27 @@ end
     @test SciMLBase.successful_retcode(sol)
 end
 
+struct CallableFoo
+    p
+end
+
+(f::CallableFoo)(x) = f.p+x
+
+@testset "callable parameters" begin
+    @variables y(t) = 1
+    @parameters p = 2 (i::CallableFoo)(..)
+
+    eqs = [D(y) ~ i(t)+p]
+    @named model = ODESystem(eqs, t, [y], [p, i];
+        parameter_dependencies = [i ~ CallableFoo(p)])
+    sys = structural_simplify(model)
+
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    sol = solve(prob, Tsit5())
+
+    @test SciMLBase.successful_retcode(sol)
+end
+
 @testset "Clock system" begin
     dt = 0.1
     @variables x(t) y(t) u(t) yd(t) ud(t) r(t) z(t)
