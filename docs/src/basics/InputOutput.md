@@ -56,7 +56,6 @@ x_sym
 ```
 
 as expected, `x` is chosen as the state variable.
-as expected, `x` is chosen as the state variable.
 
 ```@example inputoutput
 using Test # hide
