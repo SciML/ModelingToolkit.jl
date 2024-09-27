@@ -39,7 +39,7 @@ const UnknownIndexMap = Dict{
 const TunableIndexMap = Dict{BasicSymbolic,
     Union{Int, UnitRange{Int}, Base.ReshapedArray{Int, N, UnitRange{Int}} where {N}}}
 
-struct IndexCache{D}
+struct IndexCache
     unknown_idx::UnknownIndexMap
     # sym => (bufferidx, idx_in_buffer)
     discrete_idx::Dict{BasicSymbolic, DiscreteIndex}
@@ -49,7 +49,7 @@ struct IndexCache{D}
     constant_idx::ParamIndexMap
     nonnumeric_idx::NonnumericMap
     observed_syms::Set{BasicSymbolic}
-    dependent_pars::Set{D}
+    dependent_pars::Set{Union{BasicSymbolic, CallWithMetadata}}
     discrete_buffer_sizes::Vector{Vector{BufferTemplate}}
     tunable_buffer_size::BufferTemplate
     constant_buffer_sizes::Vector{BufferTemplate}
@@ -275,14 +275,7 @@ function IndexCache(sys::AbstractSystem)
         end
     end
 
-    pdeps = parameter_dependencies(sys)
-
-    D = if isempty(pdeps)
-        BasicSymbolic
-    else
-        mapreduce(typeof, promote_type, getproperty.(pdeps, :lhs))
-    end
-    dependent_pars = Set{D}()
+    dependent_pars = Set{Union{BasicSymbolic, CallWithMetadata}}()
 
     for eq in parameter_dependencies(sys)
         sym = eq.lhs
@@ -297,7 +290,7 @@ function IndexCache(sys::AbstractSystem)
         end
     end
 
-    return IndexCache{D}(
+    return IndexCache(
         unk_idxs,
         disc_idxs,
         callback_to_clocks,
