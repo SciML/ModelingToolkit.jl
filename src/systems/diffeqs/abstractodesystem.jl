@@ -888,7 +888,8 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
                         for p in parameters(sys)
                         if is_parameter_solvable(p, parammap, defs, guesses)]
 
-        pvarmap = if parammap === nothing || parammap == SciMLBase.NullParameters() || !(eltype(parammap) <: Pair) && isempty(parammap)
+        pvarmap = if parammap === nothing || parammap == SciMLBase.NullParameters() ||
+                     !(eltype(parammap) <: Pair) && isempty(parammap)
             defs
         else
             merge(defs, todict(parammap))
@@ -1592,6 +1593,22 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     end
 
     u0map = merge(ModelingToolkit.guesses(sys), todict(guesses), todict(u0map))
+    fullmap = merge(u0map, parammap)
+    u0T = Union{}
+    for sym in unknowns(isys)
+        haskey(fullmap, sym) || continue
+        symbolic_type(fullmap[sym]) == NotSymbolic() || continue
+        u0T = promote_type(u0T, typeof(fullmap[sym]))
+    end
+    for eq in observed(isys)
+        haskey(fullmap, eq.lhs) || continue
+        symbolic_type(fullmap[eq.lhs]) == NotSymbolic() || continue
+        u0T = promote_type(u0T, typeof(fullmap[eq.lhs]))
+    end
+    if u0T != Union{}
+        u0map = Dict(k => symbolic_type(v) == NotSymbolic() ? u0T(v) : v
+        for (k, v) in u0map)
+    end
     if neqs == nunknown
         NonlinearProblem(isys, u0map, parammap; kwargs...)
     else
