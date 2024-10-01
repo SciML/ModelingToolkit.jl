@@ -780,3 +780,19 @@ end
     @test eltype(prob2.f.initializeprob.p.tunable) <: ForwardDiff.Dual
     @test prob2.f.initializeprob.u0 ≈ prob.f.initializeprob.u0
 end
+
+@testset "`remake` preserves old u0map and pmap" begin
+    @variables x(t) y(t)
+    @parameters p
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ x + p * y, y^2 + 4y * p^2 ~ x], t; guesses = [y => 1.0, p => 1.0])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [p => 1.0])
+    @test is_variable(prob.f.initializeprob, y)
+    prob2 = @test_nowarn remake(prob; p = [p => 3.0]) # ensure no over/under-determined warning
+    @test is_variable(prob.f.initializeprob, y)
+
+    prob = ODEProblem(sys, [y => 1.0, x => 2.0], (0.0, 1.0), [p => missing])
+    @test is_variable(prob.f.initializeprob, p)
+    prob2 = @test_nowarn remake(prob; u0 = [y => 0.5])
+    @test is_variable(prob.f.initializeprob, p)
+end

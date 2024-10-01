@@ -157,13 +157,20 @@ function generate_initializesystem(sys::ODESystem;
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
+    meta = InitializationSystemMetadata(Dict{Any, Any}(u0map), Dict{Any, Any}(pmap))
     return NonlinearSystem(eqs_ics,
         vars,
         pars;
         defaults = defs,
         checks = check_units,
         name,
+        metadata = meta,
         kwargs...)
+end
+
+struct InitializationSystemMetadata
+    u0map::Dict{Any, Any}
+    pmap::Dict{Any, Any}
 end
 
 function is_parameter_solvable(p, pmap, defs, guesses)
@@ -253,6 +260,15 @@ function SciMLBase.remake_initializeprob(sys::ODESystem, odefn, u0, t0, p)
           !isempty(setobserved) || !isempty(setparobserved)) &&
          ModelingToolkit.get_tearing_state(sys) !== nothing) ||
         !isempty(initialization_equations(sys)))
+        if SciMLBase.has_initializeprob(odefn)
+            oldsys = odefn.initializeprob.f.sys
+            meta = get_metadata(oldsys)
+            if meta isa InitializationSystemMetadata
+                u0 = merge(meta.u0map, u0)
+                p = merge(meta.pmap, p)
+            end
+        end
+
         initprob = InitializationProblem(sys, t0, u0, p)
         initprobmap = getu(initprob, unknowns(sys))
         punknowns = [p for p in all_variable_symbols(initprob) if is_parameter(sys, p)]
