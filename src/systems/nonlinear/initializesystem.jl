@@ -173,13 +173,52 @@ function is_parameter_solvable(p, pmap, defs, guesses)
     # either (missing is a default or was passed to the ODEProblem) or (nothing was passed to
     # the ODEProblem and it has a default and a guess)
     return ((_val1 === missing || _val2 === missing) ||
-           (_val1 === nothing && _val2 !== nothing)) && _val3 !== nothing
+            (_val1 === nothing && _val2 !== nothing)) && _val3 !== nothing
 end
 
 function SciMLBase.remake_initializeprob(sys::ODESystem, odefn, u0, t0, p)
-    if (u0 === missing || !(eltype(u0) <: Pair) || isempty(u0)) &&
-       (p === missing || !(eltype(p) <: Pair) || isempty(p))
+    if u0 === missing && p === missing
         return odefn.initializeprob, odefn.update_initializeprob!, odefn.initializeprobmap,
+        odefn.initializeprobpmap
+    end
+    if !(eltype(u0) <: Pair) && !(eltype(p) <: Pair)
+        oldinitprob = odefn.initializeprob
+        if oldinitprob === nothing || !SciMLBase.has_sys(oldinitprob.f) ||
+           !(oldinitprob.f.sys isa NonlinearSystem)
+            return oldinitprob, odefn.update_initializeprob!, odefn.initializeprobmap,
+            odefn.initializeprobpmap
+        end
+        pidxs = ParameterIndex[]
+        pvals = []
+        u0idxs = Int[]
+        u0vals = []
+        for sym in variable_symbols(oldinitprob)
+            if is_variable(sys, sym)
+                u0 !== missing || continue
+                idx = variable_index(oldinitprob, sym)
+                push!(u0idxs, idx)
+                push!(u0vals, eltype(u0)(state_values(oldinitprob, idx)))
+            else
+                p !== missing || continue
+                idx = variable_index(oldinitprob, sym)
+                push!(u0idxs, idx)
+                push!(u0vals, typeof(getp(sys, sym)(p))(state_values(oldinitprob, idx)))
+            end
+        end
+        if p !== missing
+            for sym in parameter_symbols(oldinitprob)
+                push!(pidxs, parameter_index(oldinitprob, sym))
+                if isequal(sym, get_iv(sys))
+                    push!(pvals, t0)
+                else
+                    push!(pvals, getp(sys, sym)(p))
+                end
+            end
+        end
+        newu0 = remake_buffer(oldinitprob.f.sys, state_values(oldinitprob), u0idxs, u0vals)
+        newp = remake_buffer(oldinitprob.f.sys, parameter_values(oldinitprob), pidxs, pvals)
+        initprob = remake(oldinitprob; u0 = newu0, p = newp)
+        return initprob, odefn.update_initializeprob!, odefn.initializeprobmap,
         odefn.initializeprobpmap
     end
     if u0 === missing || isempty(u0)

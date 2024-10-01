@@ -1,5 +1,7 @@
 using ModelingToolkit, OrdinaryDiffEq, NonlinearSolve, Test
-using SymbolicIndexingInterface
+using ForwardDiff
+using SymbolicIndexingInterface, SciMLStructures
+using SciMLStructures: Tunable
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @parameters g
@@ -745,4 +747,36 @@ end
     @test solve(prob4, Tsit5()).retcode == ReturnCode.InitialFailure
     prob5 = remake(prob)
     @test init(prob, Tsit5()).ps[p] ≈ 2.0
+end
+
+@testset "`remake` changes initialization problem types" begin
+    @variables x(t) y(t) z(t)
+    @parameters p q
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ x * p + y * q, y^2 * q + q^2 * x ~ 0, z * p - p^2 * x * z ~ 0],
+        t; guesses = [x => 0.0, y => 0.0, z => 0.0, p => 0.0, q => 0.0])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [p => 1.0, q => missing])
+    @test is_variable(prob.f.initializeprob, q)
+    ps = prob.p
+    newps = SciMLStructures.replace(Tunable(), ps, ForwardDiff.Dual.(ps.tunable))
+    prob2 = remake(prob; p = newps)
+    @test eltype(prob2.f.initializeprob.u0) <: ForwardDiff.Dual
+    @test eltype(prob2.f.initializeprob.p.tunable) <: ForwardDiff.Dual
+    @test prob2.f.initializeprob.u0 ≈ prob.f.initializeprob.u0
+
+    prob2 = remake(prob; u0 = ForwardDiff.Dual.(prob.u0))
+    @test eltype(prob2.f.initializeprob.u0) <: ForwardDiff.Dual
+    @test eltype(prob2.f.initializeprob.p.tunable) <: Float64
+    @test prob2.f.initializeprob.u0 ≈ prob.f.initializeprob.u0
+
+    prob2 = remake(prob; u0 = ForwardDiff.Dual.(prob.u0), p = newps)
+    @test eltype(prob2.f.initializeprob.u0) <: ForwardDiff.Dual
+    @test eltype(prob2.f.initializeprob.p.tunable) <: ForwardDiff.Dual
+    @test prob2.f.initializeprob.u0 ≈ prob.f.initializeprob.u0
+
+    prob2 = remake(prob; u0 = [x => ForwardDiff.Dual(1.0)],
+        p = [p => ForwardDiff.Dual(1.0), q => missing])
+    @test eltype(prob2.f.initializeprob.u0) <: ForwardDiff.Dual
+    @test eltype(prob2.f.initializeprob.p.tunable) <: ForwardDiff.Dual
+    @test prob2.f.initializeprob.u0 ≈ prob.f.initializeprob.u0
 end
