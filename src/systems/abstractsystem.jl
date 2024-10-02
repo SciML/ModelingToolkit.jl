@@ -882,6 +882,44 @@ namespace its subsystems or variables, i.e. `isequal(complete(sys).v.i, v.i)`.
 function complete(sys::AbstractSystem; split = true)
     if split && has_index_cache(sys)
         @set! sys.index_cache = IndexCache(sys)
+        all_ps = parameters(sys)
+        if !isempty(all_ps)
+            # reorder parameters by portions
+            ps_split = reorder_parameters(sys, all_ps)
+            # if there are no tunables, vcat them
+            if isempty(get_index_cache(sys).tunable_idx)
+                ordered_ps = reduce(vcat, ps_split)
+            else
+                # if there are tunables, they will all be in `ps_split[1]`
+                # and the arrays will have been scalarized
+                ordered_ps = eltype(all_ps)[]
+                i = 1
+                # go through all the tunables
+                while i <= length(ps_split[1])
+                    sym = ps_split[1][i]
+                    # if the sym is not a scalarized array symbolic OR it was already scalarized,
+                    # just push it as-is
+                    if !iscall(sym) || operation(sym) != getindex ||
+                       any(isequal(sym), all_ps)
+                        push!(ordered_ps, sym)
+                        i += 1
+                        continue
+                    end
+                    # the next `length(sym)` symbols should be scalarized versions of the same
+                    # array symbolic
+                    if !allequal(first(arguments(x))
+                    for x in view(ps_split[1], i:(i + length(sym) - 1)))
+                        error("This should not be possible. Please open an issue in ModelingToolkit.jl with an MWE and stacktrace.")
+                    end
+                    arrsym = first(arguments(sym))
+                    push!(ordered_ps, arrsym)
+                    i += length(arrsym)
+                end
+                ordered_ps = vcat(
+                    ordered_ps, reduce(vcat, ps_split[2:end]; init = eltype(ordered_ps)[]))
+            end
+            @set! sys.ps = ordered_ps
+        end
     end
     if isdefined(sys, :initializesystem) && get_initializesystem(sys) !== nothing
         @set! sys.initializesystem = complete(get_initializesystem(sys); split)

@@ -185,3 +185,12 @@ get_dep = @test_nowarn getu(prob, 2p1)
     @test getu(prob, p1)(prob) == getu(prob, :p1)(prob)
     @test getu(prob, p2)(prob) == getu(prob, :p2)(prob)
 end
+
+@testset "Parameter dependencies as symbols" begin
+    @variables x(t) = 1.0
+    @parameters a=1 b
+    @named model = ODESystem(D(x) ~ x + a - b, t, parameter_dependencies = [b ~ a + 1])
+    sys = complete(model)
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    @test prob.ps[b] == prob.ps[:b]
+end

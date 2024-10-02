@@ -152,6 +152,9 @@ function MTKParameters(
         if symbolic_type(val) !== NotSymbolic()
             error("Could not evaluate value of parameter $sym. Missing values for variables in expression $val.")
         end
+        if ctype <: FnType
+            ctype = fntype_to_function_type(ctype)
+        end
         val = symconvert(ctype, val)
         done = set_value(sym, val)
         if !done && Symbolics.isarraysymbolic(sym)
@@ -336,14 +339,15 @@ function Base.copy(p::MTKParameters)
 end
 
 function SymbolicIndexingInterface.parameter_values(p::MTKParameters, pind::ParameterIndex)
+    _ducktyped_parameter_values(p, pind)
+end
+function _ducktyped_parameter_values(p, pind::ParameterIndex)
     @unpack portion, idx = pind
     if portion isa SciMLStructures.Tunable
         return idx isa Int ? p.tunable[idx] : view(p.tunable, idx)
     end
     i, j, k... = idx
-    if portion isa SciMLStructures.Tunable
-        return isempty(k) ? p.tunable[i][j] : p.tunable[i][j][k...]
-    elseif portion isa SciMLStructures.Discrete
+    if portion isa SciMLStructures.Discrete
         return isempty(k) ? p.discrete[i][j] : p.discrete[i][j][k...]
     elseif portion isa SciMLStructures.Constants
         return isempty(k) ? p.constant[i][j] : p.constant[i][j][k...]
@@ -435,8 +439,12 @@ function validate_parameter_type(ic::IndexCache, p, idx::ParameterIndex, val)
 end
 
 function validate_parameter_type(ic::IndexCache, idx::ParameterIndex, val)
+    stype = get_buffer_template(ic, idx).type
+    if idx.portion == SciMLStructures.Tunable() && !(idx.idx isa Int)
+        stype = AbstractArray{<:stype}
+    end
     validate_parameter_type(
-        ic, get_buffer_template(ic, idx).type, Symbolics.Unknown(), nothing, idx, val)
+        ic, stype, Symbolics.Unknown(), nothing, idx, val)
 end
 
 function validate_parameter_type(ic::IndexCache, stype, sz, sym, index, val)
@@ -444,11 +452,13 @@ function validate_parameter_type(ic::IndexCache, stype, sz, sym, index, val)
     # Nonnumeric parameters have to match the type
     if portion === NONNUMERIC_PORTION
         val isa stype && return nothing
-        throw(ParameterTypeException(:validate_parameter_type, sym, stype, val))
+        throw(ParameterTypeException(
+            :validate_parameter_type, sym === nothing ? index : sym, stype, val))
     end
     # Array parameters need array values...
     if stype <: AbstractArray && !isa(val, AbstractArray)
-        throw(ParameterTypeException(:validate_parameter_type, sym, stype, val))
+        throw(ParameterTypeException(
+            :validate_parameter_type, sym === nothing ? index : sym, stype, val))
     end
     # ... and must match sizes
     if stype <: AbstractArray && sz != Symbolics.Unknown() && size(val) != sz
@@ -465,7 +475,7 @@ function validate_parameter_type(ic::IndexCache, stype, sz, sym, index, val)
         # This is for duals and other complicated number types
         etype = SciMLBase.parameterless_type(etype)
         eltype(val) <: etype || throw(ParameterTypeException(
-            :validate_parameter_type, sym, AbstractArray{etype}, val))
+            :validate_parameter_type, sym === nothing ? index : sym, AbstractArray{etype}, val))
     else
         # Real check
         if stype <: Real
@@ -473,7 +483,8 @@ function validate_parameter_type(ic::IndexCache, stype, sz, sym, index, val)
         end
         stype = SciMLBase.parameterless_type(stype)
         val isa stype ||
-            throw(ParameterTypeException(:validate_parameter_type, sym, stype, val))
+            throw(ParameterTypeException(
+                :validate_parameter_type, sym === nothing ? index : sym, stype, val))
     end
 end
 
@@ -485,6 +496,9 @@ function indp_to_system(indp)
 end
 
 function SymbolicIndexingInterface.remake_buffer(indp, oldbuf::MTKParameters, idxs, vals)
+    _remake_buffer(indp, oldbuf, idxs, vals)
+end
+function _remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true)
     newbuf = @set oldbuf.tunable = similar(oldbuf.tunable, Any)
     @set! newbuf.discrete = Tuple(similar(buf, Any) for buf in newbuf.discrete)
     @set! newbuf.constant = Tuple(similar(buf, Any) for buf in newbuf.constant)

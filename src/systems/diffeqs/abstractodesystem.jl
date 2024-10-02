@@ -817,11 +817,12 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
          ModelingToolkit.get_tearing_state(sys) !== nothing) ||
         !isempty(initialization_equations(sys))) && t !== nothing
         if eltype(u0map) <: Number
-            u0map = unknowns(sys) .=> u0map
+            u0map = unknowns(sys) .=> vec(u0map)
         end
-        if isempty(u0map)
+        if u0map === nothing || isempty(u0map)
             u0map = Dict()
         end
+
         initializeprob = ModelingToolkit.InitializationProblem(
             sys, t, u0map, parammap; guesses, warn_initialize_determined,
             initialization_eqs, eval_expression, eval_module, fully_determined, check_units)

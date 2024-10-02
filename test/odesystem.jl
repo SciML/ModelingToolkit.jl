@@ -137,7 +137,7 @@ eqs = [D(x) ~ σ(t - 1) * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z * κ]
 @named de = ODESystem(eqs, t)
-test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ(t - 1), ρ, β))
+test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ, ρ, β))
 f = eval(generate_function(de, [x, y, z], [σ, ρ, β])[2])
 du = [0.0, 0.0, 0.0]
 f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
@@ -145,7 +145,7 @@ f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
 
 eqs = [D(x) ~ x + 10σ(t - 1) + 100σ(t - 2) + 1000σ(t^2)]
 @named de = ODESystem(eqs, t)
-test_diffeq_inference("many internal iv-varying", de, t, (x,), (σ(t - 2), σ(t^2), σ(t - 1)))
+test_diffeq_inference("many internal iv-varying", de, t, (x,), (σ,))
 f = eval(generate_function(de, [x], [σ])[2])
 du = [0.0]
 f(du, [1.0], [t -> t + 2], 5.0)
@@ -1386,4 +1386,11 @@ end
         sys1, u + x + p[1:2]; inputs = [x...])
 
     @test obsfn(ones(2), 2ones(2), 3ones(4), 4.0) == 6ones(2)
+end
+
+@testset "Passing `nothing` to `u0`" begin
+    @variables x(t) = 1
+    @mtkbuild sys = ODESystem(D(x) ~ t, t)
+    prob = @test_nowarn ODEProblem(sys, nothing, (0.0, 1.0))
+    @test_nowarn solve(prob)
 end

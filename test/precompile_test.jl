@@ -10,7 +10,7 @@ using ODEPrecompileTest
 
 u = collect(1:3)
 p = ModelingToolkit.MTKParameters(ODEPrecompileTest.f_noeval_good.sys,
-    parameters(ODEPrecompileTest.f_noeval_good.sys) .=> collect(4:6))
+    [:σ, :ρ, :β] .=> collect(4:6))
 
 # These cases do not work, because they get defined in the ModelingToolkit's RGF cache.
 @test parentmodule(typeof(ODEPrecompileTest.f_bad.f.f_iip).parameters[2]) == ModelingToolkit

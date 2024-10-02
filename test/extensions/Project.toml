@@ -1,5 +1,7 @@
 [deps]
 BifurcationKit = "0f109fa4-8a5d-4b75-95aa-f515264e7665"
+ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+ChainRulesTestUtils = "cdddcdb0-9152-4a09-a978-84456f9df70a"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 LabelledArrays = "2ee39098-c373-598a-b85f-a56591580800"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"

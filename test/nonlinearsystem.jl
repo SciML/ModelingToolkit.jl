@@ -318,3 +318,10 @@ sys = structural_simplify(ns; conservative = true)
     sol = solve(prob, NewtonRaphson())
     @test sol[x] ≈ sol[y] ≈ sol[z] ≈ -3
 end
+
+@testset "Passing `nothing` to `u0`" begin
+    @variables x = 1
+    @mtkbuild sys = NonlinearSystem([0 ~ x^2 - x^3 + 3])
+    prob = @test_nowarn NonlinearProblem(sys, nothing)
+    @test_nowarn solve(prob)
+end

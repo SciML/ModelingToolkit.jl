@@ -24,7 +24,6 @@ end
             @safetestset "Parsing Test" include("variable_parsing.jl")
             @safetestset "Simplify Test" include("simplify.jl")
             @safetestset "Direct Usage Test" include("direct.jl")
-            @safetestset "IndexCache Test" include("index_cache.jl")
             @safetestset "System Linearity Test" include("linearity.jl")
             @safetestset "Input Output Test" include("input_output_handling.jl")
             @safetestset "Clock Test" include("clock.jl")
@@ -65,6 +64,7 @@ end
 
     if GROUP == "All" || GROUP == "InterfaceII"
         @testset "InterfaceII" begin
+            @safetestset "IndexCache Test" include("index_cache.jl")
             @safetestset "Variable Utils Test" include("variable_utils.jl")
             @safetestset "Variable Metadata Test" include("test_variable_metadata.jl")
             @safetestset "OptimizationSystem Test" include("optimizationsystem.jl")
