@@ -501,3 +501,98 @@ function process_SciMLProblem(
         kwargs...)
     implicit_dae ? (f, du0, u0, p) : (f, u0, p)
 end
+
+##############
+# Legacy functions for backward compatibility
+##############
+
+"""
+    u0, p, defs = get_u0_p(sys, u0map, parammap; use_union=true, tofloat=true)
+
+Take dictionaries with initial conditions and parameters and convert them to numeric arrays `u0` and `p`. Also return the merged dictionary `defs` containing the entire operating point.
+"""
+function get_u0_p(sys,
+        u0map,
+        parammap = nothing;
+        t0 = nothing,
+        use_union = true,
+        tofloat = true,
+        symbolic_u0 = false)
+    dvs = unknowns(sys)
+    ps = parameters(sys)
+
+    defs = defaults(sys)
+    if t0 !== nothing
+        defs[get_iv(sys)] = t0
+    end
+    if parammap !== nothing
+        defs = mergedefaults(defs, parammap, ps)
+    end
+    if u0map isa Vector && eltype(u0map) <: Pair
+        u0map = Dict(u0map)
+    end
+    if u0map isa Dict
+        allobs = Set(getproperty.(observed(sys), :lhs))
+        if any(in(allobs), keys(u0map))
+            u0s_in_obs = filter(in(allobs), keys(u0map))
+            @warn "Observed variables cannot be assigned initial values. Initial values for $u0s_in_obs will be ignored."
+        end
+    end
+    obs = filter!(x -> !(x[1] isa Number), map(x -> x.rhs => x.lhs, observed(sys)))
+    observedmap = isempty(obs) ? Dict() : todict(obs)
+    defs = mergedefaults(defs, observedmap, u0map, dvs)
+    for (k, v) in defs
+        if Symbolics.isarraysymbolic(k)
+            ks = scalarize(k)
+            length(ks) == length(v) || error("$k has default value $v with unmatched size")
+            for (kk, vv) in zip(ks, v)
+                if !haskey(defs, kk)
+                    defs[kk] = vv
+                end
+            end
+        end
+    end
+
+    if symbolic_u0
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false, use_union = false)
+    else
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, use_union)
+    end
+    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
+    p = p === nothing ? SciMLBase.NullParameters() : p
+    t0 !== nothing && delete!(defs, get_iv(sys))
+    u0, p, defs
+end
+
+function get_u0(
+        sys, u0map, parammap = nothing; symbolic_u0 = false,
+        toterm = default_toterm, t0 = nothing, use_union = true)
+    dvs = unknowns(sys)
+    ps = parameters(sys)
+    defs = defaults(sys)
+    if t0 !== nothing
+        defs[get_iv(sys)] = t0
+    end
+    if parammap !== nothing
+        defs = mergedefaults(defs, parammap, ps)
+    end
+
+    # Convert observed equations "lhs ~ rhs" into defaults.
+    # Use the order "lhs => rhs" by default, but flip it to "rhs => lhs"
+    # if "lhs" is known by other means (parameter, another default, ...)
+    # TODO: Is there a better way to determine which equations to flip?
+    obs = map(x -> x.lhs => x.rhs, observed(sys))
+    obs = map(x -> x[1] in keys(defs) ? reverse(x) : x, obs)
+    obs = filter!(x -> !(x[1] isa Number), obs) # exclude e.g. "0 => x^2 + y^2 - 25"
+    obsmap = isempty(obs) ? Dict() : todict(obs)
+
+    defs = mergedefaults(defs, obsmap, u0map, dvs)
+    if symbolic_u0
+        u0 = varmap_to_vars(
+            u0map, dvs; defaults = defs, tofloat = false, use_union = false, toterm)
+    else
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, use_union, toterm)
+    end
+    t0 !== nothing && delete!(defs, get_iv(sys))
+    return u0, defs
+end
