@@ -144,6 +144,7 @@ include("systems/abstractsystem.jl")
 include("systems/model_parsing.jl")
 include("systems/connectors.jl")
 include("systems/callbacks.jl")
+include("systems/problem_utils.jl")
 
 include("systems/nonlinear/nonlinearsystem.jl")
 include("systems/diffeqs/odesystem.jl")

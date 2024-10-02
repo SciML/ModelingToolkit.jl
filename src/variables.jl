@@ -140,7 +140,7 @@ function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
     if is_incomplete_initialization || isempty(varmap)
         if isempty(defaults)
             if !is_incomplete_initialization && check
-                isempty(varlist) || throw_missingvars(varlist)
+                isempty(varlist) || throw(MissingVariablesError(varlist))
             end
             return nothing
         else
