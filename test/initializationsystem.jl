@@ -573,6 +573,6 @@ sol = solve(oprob_2nd_order_2, Rosenbrock23()) # retcode: Success
     @named sys = ODESystem([D(x) ~ x, D(y) ~ y], t; initialization_eqs = [y ~ -x])
     sys = structural_simplify(sys)
     prob = ODEProblem(sys, [sys.x => ones(5)], (0.0, 1.0), [])
-    sol = solve(prob, Tsit5(), reltol=1e-4)
-    @test all(sol(1.0, idxs=sys.x) .≈ +exp(1)) && all(sol(1.0, idxs=sys.y) .≈ -exp(1))
+    sol = solve(prob, Tsit5(), reltol = 1e-4)
+    @test all(sol(1.0, idxs = sys.x) .≈ +exp(1)) && all(sol(1.0, idxs = sys.y) .≈ -exp(1))
 end
