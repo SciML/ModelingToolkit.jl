@@ -1,4 +1,4 @@
-# Automated Index Reduction of DAEs
+# [Automated Index Reduction of DAEs](@ref higher_index)
 
 In many cases one may accidentally write down a DAE that is not easily solvable
 by numerical methods. In this tutorial, we will walk through an example of a

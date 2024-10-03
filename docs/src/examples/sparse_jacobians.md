@@ -1,4 +1,4 @@
-# Automated Sparse Analytical Jacobians
+# [Automated Sparse Analytical Jacobians](@id modelingtoolkitize_sparse)
 
 In many cases where you have large stiff differential equations, getting a
 sparse Jacobian can be essential for performance. In this tutorial, we will show
