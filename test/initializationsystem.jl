@@ -567,3 +567,12 @@ oprob_2nd_order_2 = ODEProblem(sys_2nd_order, u0_2nd_order_2, tspan, ps)
 sol = solve(oprob_2nd_order_2, Rosenbrock23()) # retcode: Success
 @test sol[Y][1] == 2.0
 @test sol[D(Y)][1] == 0.5
+
+@testset "Vector in initial conditions" begin
+    @variables x(t)[1:5] y(t)[1:5]
+    @named sys = ODESystem([D(x) ~ x, D(y) ~ y], t; initialization_eqs = [y ~ -x])
+    sys = structural_simplify(sys)
+    prob = ODEProblem(sys, [sys.x => ones(5)], (0.0, 1.0), [])
+    sol = solve(prob, Tsit5(), reltol=1e-4)
+    @test all(sol(1.0, idxs=sys.x) .≈ +exp(1)) && all(sol(1.0, idxs=sys.y) .≈ -exp(1))
+end
