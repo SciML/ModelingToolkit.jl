@@ -36,22 +36,20 @@ function generate_initializesystem(sys::ODESystem;
             # set dummy derivatives to default_dd_guess unless specified
             push!(defs, x[1] => get(guesses, x[1], default_dd_guess))
         end
-        if !isnothing(u0map)
-            for (y, x) in u0map
-                y = get(schedule.dummy_sub, y, y)
-                y = fixpoint_sub(y, diffmap)
-                if y ∈ vars_set
-                    # variables specified in u0 overrides defaults
-                    push!(defs, y => x)
-                elseif y isa Symbolics.Arr
-                    # TODO: don't scalarize arrays
-                    merge!(defs, Dict(scalarize(y .=> x)))
-                elseif y isa Symbolics.BasicSymbolic
-                    # y is a derivative expression expanded; add it to the initialization equations
-                    push!(eqs_ics, y ~ x)
-                else
-                    error("Initialization expression $y is currently not supported. If its a higher order derivative expression, then only the dummy derivative expressions are supported.")
-                end
+        for (y, x) in u0map
+            y = get(schedule.dummy_sub, y, y)
+            y = fixpoint_sub(y, diffmap)
+            if y ∈ vars_set
+                # variables specified in u0 overrides defaults
+                push!(defs, y => x)
+            elseif y isa Symbolics.Arr
+                # TODO: don't scalarize arrays
+                merge!(defs, Dict(scalarize(y .=> x)))
+            elseif y isa Symbolics.BasicSymbolic
+                # y is a derivative expression expanded; add it to the initialization equations
+                push!(eqs_ics, y ~ x)
+            else
+                error("Initialization expression $y is currently not supported. If its a higher order derivative expression, then only the dummy derivative expressions are supported.")
             end
         end
     end
