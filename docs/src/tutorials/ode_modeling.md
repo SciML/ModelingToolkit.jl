@@ -390,7 +390,7 @@ If you want some extra modeling goodies:
 If the getting started tutorial is too high-level for you, do a deeper dive:
   -  [Learn everything there is to know about `@mtkmodel` blocks](@ref mtk_language)
   -  [Learn how to write your own components to use in `@mtkmodel`](@ref acausal)
-  -  [Learn how to script the creation of `ODESystems` without the `@mtkmodel`](@id programmatically)
+  -  [Learn how to script the creation of `ODESystems` without the `@mtkmodel`](@ref programmatically)
   -  [Learn how to conserve certain quantities when connecting components using a domain](@ref domains)
   -  [Learn how MTK ensures that the initial state of your model is correct](@ref initialization)
   -  [Learn how MTK reduces the size of your model](@ref tearing)
@@ -410,4 +410,4 @@ Still want to know more about MTK?
   - Not sure how MTK relates to similar tools and packages? Read
     [Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages](@ref comparison)
   - Want to become a MTK dev? Read
-    [Internal Details](@ref internal)
+    [Internal Details](@ref internals)
