@@ -140,6 +140,9 @@ function NonlinearSystem(eqs, unknowns, ps;
         eqs = [eqs]
     end
 
+    # Copy equations to canonical form, but do not touch array expressions
+    eqs = [wrap(eq.lhs) isa Symbolics.Arr ? eq : 0 ~ eq.rhs - eq.lhs for eq in eqs]
+
     jac = RefValue{Any}(EMPTY_JAC)
     defaults = todict(defaults)
     defaults = Dict{Any, Any}(value(k) => value(v)
