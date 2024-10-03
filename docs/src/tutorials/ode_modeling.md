@@ -369,6 +369,7 @@ exploiting the structural information. For more information, see the
 Now you know how to do basic ODE modeling with MTK, what's next is up to you.
 
 If ODEs are not your speed, MTK can represent many other systems:
+
   - [Rootfinding for nonlinear systems of equations](@ref nonlinear)
   - [Solving optimization problems](@ref optimization)
   - [Stochastic Differential Equations](@ref SDE)
@@ -379,27 +380,32 @@ If ODEs are not your speed, MTK can represent many other systems:
 Numerical differential equation solvers require you to write your model in a very specific form.
 However, these forms are often not the most human-readable.
 MTK has symbolic transforms to translate your model into something your computer can simulate:
+
   - [Automatically transform higher order ODEs to first order ones](@ref higher_order)
   - [Automatically transform higher index DAEs to index one](@ref higher_index)
 
 If you want some extra modeling goodies:
+
   - [Validate your equations with units](@ref units)
   - [Add discrete time controls to your continuous plant](@ref hybrid)
   - [Add general discrete/continuous time events to your system](@ref events)
 
 If the getting started tutorial is too high-level for you, do a deeper dive:
-  -  [Learn everything there is to know about `@mtkmodel` blocks](@ref mtk_language)
-  -  [Learn how to write your own components to use in `@mtkmodel`](@ref acausal)
-  -  [Learn how to script the creation of `ODESystems` without the `@mtkmodel`](@ref programmatically)
-  -  [Learn how to conserve certain quantities when connecting components using a domain](@ref domains)
-  -  [Learn how MTK ensures that the initial state of your model is correct](@ref initialization)
-  -  [Learn how MTK reduces the size of your model](@ref tearing)
+
+  - [Learn everything there is to know about `@mtkmodel` blocks](@ref mtk_language)
+  - [Learn how to write your own components to use in `@mtkmodel`](@ref acausal)
+  - [Learn how to script the creation of `ODESystems` without the `@mtkmodel`](@ref programmatically)
+  - [Learn how to conserve certain quantities when connecting components using a domain](@ref domains)
+  - [Learn how MTK ensures that the initial state of your model is correct](@ref initialization)
+  - [Learn how MTK reduces the size of your model](@ref tearing)
 
 If you liked the idea of the speedup symbolic Jacobians give you, but don't want to commit to writing your entire model in MTK:
+
   - [modelingtoolkitize your `ODEProblem`](@ref modelingtoolkitize)
   - [use modelingtoolkitize to calculate sparsity patterns](@ref modelingtoolkitize_sparse)
 
 If you want to further investigate the properties of your ODE model:
+
   - [Check if the parameters of your model are identifiable](@ref identifiability)
   - [Check if your system exhibits any bifurcation](@ref bifurcation_diagrams)
   - [Perform a perturbation analysis to see your system change as parameter values change](@ref perturb_diff)
@@ -407,6 +413,7 @@ If you want to further investigate the properties of your ODE model:
   - [Use your MTK ODE model in an `OptimizationProblem`](@ref remake)
 
 Still want to know more about MTK?
+
   - Not sure how MTK relates to similar tools and packages? Read
     [Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages](@ref comparison)
   - Want to become a MTK dev? Read
