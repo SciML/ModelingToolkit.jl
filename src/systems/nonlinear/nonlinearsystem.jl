@@ -126,15 +126,13 @@ function NonlinearSystem(eqs, unknowns, ps;
         throw(ArgumentError("NonlinearSystem does not accept `continuous_events`, you provided $continuous_events"))
     discrete_events === nothing || isempty(discrete_events) ||
         throw(ArgumentError("NonlinearSystem does not accept `discrete_events`, you provided $discrete_events"))
-
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
-    # Move things over, but do not touch array expressions
-    #
-    # # we cannot scalarize in the loop because `eqs` itself might require
-    # scalarization
-    eqs = [x.lhs isa Union{Symbolic, Number} ? 0 ~ x.rhs - x.lhs : x
-           for x in scalarize(eqs)]
+
+    # Accept a single (scalar/vector) equation, but make array for consistent internal handling
+    if !(eqs isa AbstractArray)
+        eqs = [eqs]
+    end
 
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn(
