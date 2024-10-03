@@ -128,21 +128,18 @@ function NonlinearSystem(eqs, unknowns, ps;
         throw(ArgumentError("NonlinearSystem does not accept `discrete_events`, you provided $discrete_events"))
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
+    length(unique(nameof.(systems))) == length(systems) ||
+        throw(ArgumentError("System names must be unique."))
+    (isempty(default_u0) && isempty(default_p)) ||
+        Base.depwarn(
+            "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
+            :NonlinearSystem, force = true)
 
     # Accept a single (scalar/vector) equation, but make array for consistent internal handling
     if !(eqs isa AbstractArray)
         eqs = [eqs]
     end
 
-    if !(isempty(default_u0) && isempty(default_p))
-        Base.depwarn(
-            "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
-            :NonlinearSystem, force = true)
-    end
-    sysnames = nameof.(systems)
-    if length(unique(sysnames)) != length(sysnames)
-        throw(ArgumentError("System names must be unique."))
-    end
     jac = RefValue{Any}(EMPTY_JAC)
     defaults = todict(defaults)
     defaults = Dict{Any, Any}(value(k) => value(v)
