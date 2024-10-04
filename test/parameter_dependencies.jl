@@ -178,16 +178,18 @@ end
 end
 
 struct CallableFoo
-    p
+    p::Any
 end
 
-(f::CallableFoo)(x) = f.p+x
+@register_symbolic CallableFoo(x)
+
+(f::CallableFoo)(x) = f.p + x
 
 @testset "callable parameters" begin
     @variables y(t) = 1
-    @parameters p = 2 (i::CallableFoo)(..)
+    @parameters p=2 (i::CallableFoo)(..)
 
-    eqs = [D(y) ~ i(t)+p]
+    eqs = [D(y) ~ i(t) + p]
     @named model = ODESystem(eqs, t, [y], [p, i];
         parameter_dependencies = [i ~ CallableFoo(p)])
     sys = structural_simplify(model)
