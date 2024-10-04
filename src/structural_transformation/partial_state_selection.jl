@@ -288,7 +288,6 @@ function dummy_derivative_graph!(
     diff_to_eq = invview(eq_to_diff)
     diff_to_var = invview(var_to_diff)
     invgraph = invview(graph)
-    ag = nothing
     extended_sp_vec = extended_state_priority(state_priority, var_to_diff, ag)
     extended_sp = Base.Fix1(getindex, extended_sp_vec)
 
