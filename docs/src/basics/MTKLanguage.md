@@ -63,14 +63,13 @@ end
     @structural_parameters begin
         f = sin
         N = 2
-        M = 3
     end
     begin
         v_var = 1.0
     end
     @variables begin
         v(t) = v_var
-        v_array(t)[1:N, 1:M]
+        v_array(t)[1:2, 1:3]
         v_for_defaults(t)
     end
     @extend ModelB(; p1)
@@ -311,10 +310,10 @@ end
   - `:defaults`: Dictionary of variables and default values specified in the `@defaults`.
   - `:extend`: The list of extended unknowns, name given to the base system, and name of the base system.
   - `:structural_parameters`: Dictionary of structural parameters mapped to their metadata.
-  - `:parameters`: Dictionary of symbolic parameters mapped to their metadata. Metadata of
-    the parameter arrays is, for now, omitted.
-  - `:variables`: Dictionary of symbolic variables mapped to their metadata. Metadata of
-    the variable arrays is, for now, omitted.
+  - `:parameters`: Dictionary of symbolic parameters mapped to their metadata. For
+    parameter arrays, length is added to the metadata as `:size`.
+  - `:variables`: Dictionary of symbolic variables mapped to their metadata. For
+    variable arrays, length is added to the metadata as `:size`.
   - `:kwargs`: Dictionary of keyword arguments mapped to their metadata.
   - `:independent_variable`: Independent variable, which is added while generating the Model.
   - `:equations`: List of equations (represented as strings).
@@ -325,10 +324,10 @@ For example, the structure of `ModelC` is:
 julia> ModelC.structure
 Dict{Symbol, Any} with 10 entries:
   :components            => Any[Union{Expr, Symbol}[:model_a, :ModelA], Union{Expr, Symbol}[:model_array_a, :ModelA, :(1:N)], Union{Expr, Symbol}[:model_array_b, :ModelA, :(1:N)]]
-  :variables             => Dict{Symbol, Dict{Symbol, Any}}(:v=>Dict(:default=>:v_var, :type=>Real), :v_for_defaults=>Dict(:type=>Real))
+  :variables             => Dict{Symbol, Dict{Symbol, Any}}(:v=>Dict(:default=>:v_var, :type=>Real), :v_array=>Dict(:type=>Real, :size=>(2, 3)), :v_for_defaults=>Dict(:type=>Real))
   :icon                  => URI("https://github.com/SciML/SciMLDocs/blob/main/docs/src/assets/logo.png")
-  :kwargs                => Dict{Symbol, Dict}(:f => Dict(:value => :sin), :N => Dict(:value => 2), :M => Dict(:value => 3), :v => Dict{Symbol, Any}(:value => :v_var, :type => Real), :v_for_defaults => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real), :p1 => Dict(:value => nothing)),
-  :structural_parameters => Dict{Symbol, Dict}(:f => Dict(:value => :sin), :N => Dict(:value => 2), :M => Dict(:value => 3))
+  :kwargs                => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin), :N=>Dict(:value=>2), :v=>Dict{Symbol, Any}(:value=>:v_var, :type=>Real), :v_array=>Dict{Symbol, Union{Nothing, UnionAll}}(:value=>nothing, :type=>AbstractArray{Real}), :v_for_defaults=>Dict{Symbol, Union{Nothing, DataType}}(:value=>nothing, :type=>Real), :p1=>Dict(:value=>nothing))
+  :structural_parameters => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin), :N=>Dict(:value=>2))
   :independent_variable  => t
   :constants             => Dict{Symbol, Dict}(:c=>Dict{Symbol, Any}(:value=>1, :type=>Int64, :description=>"Example constant."))
   :extend                => Any[[:p2, :p1], Symbol("#mtkmodel__anonymous__ModelB"), :ModelB]

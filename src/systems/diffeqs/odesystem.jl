@@ -141,6 +141,10 @@ struct ODESystem <: AbstractODESystem
     """
     gui_metadata::Union{Nothing, GUIMetadata}
     """
+    A boolean indicating if the given `ODESystem` represents a system of DDEs.
+    """
+    is_dde::Bool
+    """
     Cache for intermediate tearing state.
     """
     tearing_state::Any
@@ -178,7 +182,7 @@ struct ODESystem <: AbstractODESystem
             torn_matching, initializesystem, initialization_eqs, schedule,
             connector_type, preface, cevents,
             devents, parameter_dependencies,
-            metadata = nothing, gui_metadata = nothing,
+            metadata = nothing, gui_metadata = nothing, is_dde = false,
             tearing_state = nothing,
             substitutions = nothing, complete = false, index_cache = nothing,
             discrete_subsystems = nothing, solved_unknowns = nothing,
@@ -198,7 +202,7 @@ struct ODESystem <: AbstractODESystem
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses, torn_matching,
             initializesystem, initialization_eqs, schedule, connector_type, preface,
             cevents, devents, parameter_dependencies, metadata,
-            gui_metadata, tearing_state, substitutions, complete, index_cache,
+            gui_metadata, is_dde, tearing_state, substitutions, complete, index_cache,
             discrete_subsystems, solved_unknowns, split_idxs, parent)
     end
 end
@@ -223,7 +227,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         parameter_dependencies = Equation[],
         checks = true,
         metadata = nothing,
-        gui_metadata = nothing)
+        gui_metadata = nothing,
+        is_dde = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
@@ -266,12 +271,15 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
     parameter_dependencies, ps′ = process_parameter_dependencies(
         parameter_dependencies, ps′)
+    if is_dde === nothing
+        is_dde = _check_if_dde(deqs, iv′, systems)
+    end
     ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
         ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses, nothing, initializesystem,
         initialization_eqs, schedule, connector_type, preface, cont_callbacks,
         disc_callbacks, parameter_dependencies,
-        metadata, gui_metadata, checks = checks)
+        metadata, gui_metadata, is_dde, checks = checks)
 end
 
 function ODESystem(eqs, iv; kwargs...)
@@ -374,6 +382,7 @@ function flatten(sys::ODESystem, noeqs = false)
             defaults = defaults(sys),
             name = nameof(sys),
             initialization_eqs = initialization_equations(sys),
+            is_dde = is_dde(sys),
             checks = false)
     end
 end
@@ -403,6 +412,17 @@ function build_explicit_observed_function(sys, ts;
         ts = [ts]
     end
     ts = unwrap.(ts)
+    issplit = has_index_cache(sys) && get_index_cache(sys) !== nothing
+    if is_dde(sys)
+        if issplit
+            ts = map(
+                x -> delay_to_function(
+                    sys, x; history_arg = issplit ? MTKPARAMETERS_ARG : DEFAULT_PARAMS_ARG),
+                ts)
+        else
+            ts = map(x -> delay_to_function(sys, x), ts)
+        end
+    end
 
     vars = Set()
     foreach(v -> vars!(vars, v; op), ts)
@@ -475,8 +495,13 @@ function build_explicit_observed_function(sys, ts;
     end
     ts = map(t -> substitute(t, subs), ts)
     obsexprs = []
+
     for i in 1:maxidx
         eq = obs[i]
+        if is_dde(sys)
+            eq = delay_to_function(
+                sys, eq; history_arg = issplit ? MTKPARAMETERS_ARG : DEFAULT_PARAMS_ARG)
+        end
         lhs = eq.lhs
         rhs = eq.rhs
         push!(obsexprs, lhs ← rhs)
@@ -497,35 +522,50 @@ function build_explicit_observed_function(sys, ts;
         ps = (DestructuredArgs(unwrap.(ps), inbounds = !checkbounds),)
     end
     dvs = DestructuredArgs(unknowns(sys), inbounds = !checkbounds)
+    if is_dde(sys)
+        dvs = (dvs, DDE_HISTORY_FUN)
+    else
+        dvs = (dvs,)
+    end
+    p_start = param_only ? 1 : (length(dvs) + 1)
     if inputs === nothing
-        args = param_only ? [ps..., ivs...] : [dvs, ps..., ivs...]
+        args = param_only ? [ps..., ivs...] : [dvs..., ps..., ivs...]
     else
         inputs = unwrap.(inputs)
         ipts = DestructuredArgs(inputs, inbounds = !checkbounds)
-        args = param_only ? [ipts, ps..., ivs...] : [dvs, ipts, ps..., ivs...]
+        args = param_only ? [ipts, ps..., ivs...] : [dvs..., ipts, ps..., ivs...]
+        p_start += 1
     end
     pre = get_postprocess_fbody(sys)
 
     array_wrapper = if param_only
-        wrap_array_vars(sys, ts; ps = _ps, dvs = nothing, inputs) .∘
+        wrap_array_vars(sys, ts; ps = _ps, dvs = nothing, inputs, history = is_dde(sys)) .∘
         wrap_parameter_dependencies(sys, isscalar)
     else
-        wrap_array_vars(sys, ts; ps = _ps, inputs) .∘
+        wrap_array_vars(sys, ts; ps = _ps, inputs, history = is_dde(sys)) .∘
         wrap_parameter_dependencies(sys, isscalar)
     end
+    mtkparams_wrapper = wrap_mtkparameters(sys, isscalar, p_start)
+    if mtkparams_wrapper isa Tuple
+        oop_mtkp_wrapper = mtkparams_wrapper[1]
+    else
+        oop_mtkp_wrapper = mtkparams_wrapper
+    end
+
     # Need to keep old method of building the function since it uses `output_type`,
     # which can't be provided to `build_function`
     oop_fn = Func(args, [],
                  pre(Let(obsexprs,
                      isscalar ? ts[1] : MakeArray(ts, output_type),
-                     false))) |> array_wrapper[1] |> toexpr
+                     false))) |> array_wrapper[1] |> oop_mtkp_wrapper |> toexpr
     oop_fn = expression ? oop_fn : eval_or_rgf(oop_fn; eval_expression, eval_module)
 
     if !isscalar
         iip_fn = build_function(ts,
             args...;
             postprocess_fbody = pre,
-            wrap_code = array_wrapper .∘ wrap_assignments(isscalar, obsexprs),
+            wrap_code = array_wrapper .∘ wrap_assignments(isscalar, obsexprs) .∘
+                        mtkparams_wrapper,
             expression = Val{true})[2]
         if !expression
             iip_fn = eval_or_rgf(iip_fn; eval_expression, eval_module)
@@ -535,6 +575,20 @@ function build_explicit_observed_function(sys, ts;
         return oop_fn
     else
         return oop_fn, iip_fn
+    end
+end
+
+function populate_delays(delays::Set, obsexprs, histfn, sys, sym)
+    _vars_util = vars(sym)
+    for v in _vars_util
+        v in delays && continue
+        iscall(v) && issym(operation(v)) && (args = arguments(v); length(args) == 1) &&
+            iscall(only(args)) || continue
+
+        idx = variable_index(sys, operation(v)(get_iv(sys)))
+        idx === nothing && error("Delay term $v is not an unknown in the system")
+        push!(delays, v)
+        push!(obsexprs, v ← histfn(only(args))[idx])
     end
 end
 

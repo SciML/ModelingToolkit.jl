@@ -293,7 +293,7 @@ function SciMLBase.NonlinearFunction(sys::NonlinearSystem, args...; kwargs...)
 end
 
 function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
-        ps = parameters(sys), u0 = nothing;
+        ps = parameters(sys), u0 = nothing, p = nothing;
         version = nothing,
         jac = false,
         eval_expression = false,
@@ -325,11 +325,22 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
 
     observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
 
+    if length(dvs) == length(equations(sys))
+        resid_prototype = nothing
+    else
+        u0ElType = u0 === nothing ? Float64 : eltype(u0)
+        if SciMLStructures.isscimlstructure(p)
+            u0ElType = promote_type(
+                eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]),
+                u0ElType)
+        end
+        resid_prototype = zeros(u0ElType, length(equations(sys)))
+    end
+
     NonlinearFunction{iip}(f,
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
-        resid_prototype = length(dvs) == length(equations(sys)) ? nothing :
-                          zeros(length(equations(sys))),
+        resid_prototype = resid_prototype,
         jac_prototype = sparse ?
                         similar(calculate_jacobian(sys, sparse = sparse),
             Float64) : nothing,
@@ -353,7 +364,7 @@ variable and parameter vectors, respectively.
 struct NonlinearFunctionExpr{iip} end
 
 function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
-        ps = parameters(sys), u0 = nothing;
+        ps = parameters(sys), u0 = nothing, p = nothing;
         version = nothing, tgrad = false,
         jac = false,
         linenumbers = false,
@@ -374,8 +385,18 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
     end
 
     jp_expr = sparse ? :(similar($(get_jac(sys)[]), Float64)) : :nothing
-    resid_expr = length(dvs) == length(equations(sys)) ? :nothing :
-                 :(zeros($(length(equations(sys)))))
+    if length(dvs) == length(equations(sys))
+        resid_expr = :nothing
+    else
+        u0ElType = u0 === nothing ? Float64 : eltype(u0)
+        if SciMLStructures.isscimlstructure(p)
+            u0ElType = promote_type(
+                eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]),
+                u0ElType)
+        end
+
+        resid_expr = :(zeros($u0ElType, $(length(equations(sys)))))
+    end
     ex = quote
         f = $f
         jac = $_jac
@@ -410,7 +431,7 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
         check_eqs_u0(eqs, dvs, u0; kwargs...)
     end
 
-    f = constructor(sys, dvs, ps, u0; jac = jac, checkbounds = checkbounds,
+    f = constructor(sys, dvs, ps, u0, p; jac = jac, checkbounds = checkbounds,
         linenumbers = linenumbers, parallel = parallel, simplify = simplify,
         sparse = sparse, eval_expression = eval_expression, eval_module = eval_module,
         kwargs...)

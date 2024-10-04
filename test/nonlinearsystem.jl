@@ -3,6 +3,7 @@ using ModelingToolkit: get_metadata
 using DiffEqBase, SparseArrays
 using Test
 using NonlinearSolve
+using ForwardDiff
 using ModelingToolkit: value
 using ModelingToolkit: get_default_or_guess, MTKParameters
 
@@ -338,4 +339,22 @@ end
     prob = NonlinearProblem(sys, unknowns(sys) .=> 0.0)
     sol = solve(prob)
     @test all(sol[x] .≈ A \ b)
+end
+
+@testset "resid_prototype when system has no unknowns and an equation" begin
+    @variables x
+    @parameters p
+    @named sys = NonlinearSystem([x ~ 1, x^2 - p ~ 0])
+    for sys in [
+        structural_simplify(sys, fully_determined = false),
+        structural_simplify(sys, fully_determined = false, split = false)
+    ]
+        @test length(equations(sys)) == 1
+        @test length(unknowns(sys)) == 0
+        T = typeof(ForwardDiff.Dual(1.0))
+        prob = NonlinearProblem(sys, [], [p => ForwardDiff.Dual(1.0)]; check_length = false)
+        @test prob.f(Float64[], prob.p) isa Vector{T}
+        @test prob.f.resid_prototype isa Vector{T}
+        @test_nowarn solve(prob)
+    end
 end
