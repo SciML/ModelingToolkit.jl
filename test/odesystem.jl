@@ -1404,3 +1404,34 @@ end
     @test !ModelingToolkit.is_dde(sys)
     @test is_markovian(sys)
 end
+
+@testset "Issue #2597" begin
+    @variables x(t)[1:2]=ones(2) y(t)=1.0
+
+    for eqs in [D(x) ~ x, collect(D(x) .~ x)]
+        for dvs in [[x], collect(x)]
+            @named sys = ODESystem(eqs, t, dvs, [])
+            sys = complete(sys)
+            if eqs isa Vector && length(eqs) == 2 && length(dvs) == 2
+                @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
+            else
+                @test_throws [
+                    r"array (equations|unknowns)", "structural_simplify", "scalarize"] ODEProblem(
+                    sys, [], (0.0, 1.0))
+            end
+        end
+    end
+    for eqs in [[D(x) ~ x, D(y) ~ y], [collect(D(x) .~ x); D(y) ~ y]]
+        for dvs in [[x, y], [x..., y]]
+            @named sys = ODESystem(eqs, t, dvs, [])
+            sys = complete(sys)
+            if eqs isa Vector && length(eqs) == 3 && length(dvs) == 3
+                @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
+            else
+                @test_throws [
+                    r"array (equations|unknowns)", "structural_simplify", "scalarize"] ODEProblem(
+                    sys, [], (0.0, 1.0))
+            end
+        end
+    end
+end
