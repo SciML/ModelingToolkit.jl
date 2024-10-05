@@ -49,7 +49,7 @@ struct IndexCache
     constant_idx::ParamIndexMap
     nonnumeric_idx::NonnumericMap
     observed_syms::Set{BasicSymbolic}
-    dependent_pars::Set{BasicSymbolic}
+    dependent_pars::Set{Union{BasicSymbolic, CallWithMetadata}}
     discrete_buffer_sizes::Vector{Vector{BufferTemplate}}
     tunable_buffer_size::BufferTemplate
     constant_buffer_sizes::Vector{BufferTemplate}
@@ -275,7 +275,8 @@ function IndexCache(sys::AbstractSystem)
         end
     end
 
-    dependent_pars = Set{BasicSymbolic}()
+    dependent_pars = Set{Union{BasicSymbolic, CallWithMetadata}}()
+
     for eq in parameter_dependencies(sys)
         sym = eq.lhs
         ttsym = default_toterm(sym)
