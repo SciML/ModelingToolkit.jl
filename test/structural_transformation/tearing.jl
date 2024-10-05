@@ -169,7 +169,7 @@ infprob = ODEProblem(structural_simplify(sys), [x => 1.0], (0, 1.0), [p => 0.2])
 infprob.f(du, infprob.u0, pr, tt)
 @test any(isnan, du)
 
-sol1 = solve(prob, RosShamp4(), reltol = 1e-7)
+sol1 = solve(prob, RosShamp4(), reltol = 1e-7, dtmax = 0.1)
 sol2 = solve(ODEProblem{false}((u, p, t) -> [-asin(u[1] - pr * t)],
         [1.0],
         (0, 1.0),
