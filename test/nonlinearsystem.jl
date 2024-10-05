@@ -327,6 +327,20 @@ end
     @test_nowarn solve(prob)
 end
 
+@testset "System of linear equations with vector variable" begin
+    # 1st example in https://en.wikipedia.org/w/index.php?title=System_of_linear_equations&oldid=1247697953
+    @variables x[1:3]
+    A = [3 2 -1
+         2 -2 4
+         -1 1/2 -1]
+    b = [1, -2, 0]
+    @named sys = NonlinearSystem(A * x ~ b, [x], [])
+    sys = structural_simplify(sys)
+    prob = NonlinearProblem(sys, unknowns(sys) .=> 0.0)
+    sol = solve(prob)
+    @test all(sol[x] .≈ A \ b)
+end
+
 @testset "resid_prototype when system has no unknowns and an equation" begin
     @variables x
     @parameters p
