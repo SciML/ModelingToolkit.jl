@@ -17,7 +17,6 @@ pages = [
         "Basic Examples" => Any["examples/higher_order.md",
             "examples/spring_mass.md",
             "examples/modelingtoolkitize_index_reduction.md",
-            "examples/parsing.md",
             "examples/remake.md"],
         "Advanced Examples" => Any["examples/tearing_parallelism.md",
             "examples/sparse_jacobians.md",

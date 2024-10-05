@@ -59,51 +59,13 @@ plot(sol)
 As you can see, generating an ODESystem is as simple as creating an array of equations
 and passing it to the `ODESystem` constructor.
 
-## Understanding the Difference Between the Julia Variable and the Symbolic Variable
-
-In the most basic usage of ModelingToolkit and Symbolics, the name of the Julia variable
-and the symbolic variable are the same. For example, when we do:
+`@named` automatically gives a name to the `ODESystem`, and is shorthand for
 
 ```@example scripting
-@variables a
+fol_model = ODESystem(eqs, t; name = :fol_model) # @named fol_model = ODESystem(eqs, t)
 ```
 
-the name of the symbolic variable is `a` and same with the Julia variable. However, we can
-de-couple these by setting `a` to a new symbolic variable, for example:
-
-```@example scripting
-b = only(@variables(a))
-```
-
-Now the Julia variable `b` refers to the variable named `a`. However, the downside of this current
-approach is that it requires that the user writing the script knows the name `a` that they want to
-place to the variable. But what if for example we needed to get the variable's name from a file?
-
-To do this, one can interpolate a symbol into the `@variables` macro using `$`. For example:
-
-```@example scripting
-a = :c
-b = only(@variables($a))
-```
-
-In this example, `@variables($a)` created a variable named `c`, and set this variable to `b`.
-
-Variables are not the only thing with names. For example, when you build a system, it knows its name
-that name is used in the namespacing. In the standard usage, again the Julia variable and the
-symbolic name are made the same via:
-
-```@example scripting
-@named fol_model = ODESystem(eqs, t)
-```
-
-However, one can decouple these two properties by noting that `@named` is simply shorthand for the
-following:
-
-```@example scripting
-fol_model = ODESystem(eqs, t; name = :fol_model)
-```
-
-Thus if we had read a name from a file and wish to populate an `ODESystem` with said name, we could do:
+Thus, if we had read a name from a file and wish to populate an `ODESystem` with said name, we could do:
 
 ```@example scripting
 namesym = :name_from_file
