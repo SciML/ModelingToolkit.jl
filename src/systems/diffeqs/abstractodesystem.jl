@@ -807,7 +807,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         warn_initialize_determined = true,
         build_initializeprob = true,
         initialization_eqs = [],
-        fully_determined = false,
+        fully_determined = nothing,
         check_units = true,
         kwargs...)
     eqs = equations(sys)
@@ -1410,7 +1410,7 @@ InitializationProblem{iip}(sys::AbstractODESystem, u0map, tspan,
                            simplify = false,
                            linenumbers = true, parallel = SerialForm(),
                            initialization_eqs = [],
-                           fully_determined = false,
+                           fully_determined = nothing,
                            kwargs...) where {iip}
 ```
 
@@ -1469,11 +1469,17 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     if isempty(u0map) && get_initializesystem(sys) !== nothing
         isys = get_initializesystem(sys; initialization_eqs, check_units)
     elseif isempty(u0map) && get_initializesystem(sys) === nothing
-        isys = structural_simplify(
-            generate_initializesystem(sys; initialization_eqs, check_units); fully_determined)
+        isys = generate_initializesystem(sys; initialization_eqs, check_units)
+        _fully_determined = fully_determined === nothing ?
+                            length(equations(isys)) == length(unknowns(isys)) :
+                            fully_determined
+        isys = structural_simplify(isys; _fully_determined)
     else
-        isys = structural_simplify(
-            generate_initializesystem(sys; u0map, initialization_eqs, check_units); fully_determined)
+        isys = generate_initializesystem(sys; u0map, initialization_eqs, check_units)
+        _fully_determined = fully_determined === nothing ?
+                            length(equations(isys)) == length(unknowns(isys)) :
+                            fully_determined
+        isys = structural_simplify(isys; _fully_determined)
     end
 
     uninit = setdiff(unknowns(sys), [unknowns(isys); getfield.(observed(isys), :lhs)])
