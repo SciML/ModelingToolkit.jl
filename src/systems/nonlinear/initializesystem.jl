@@ -246,6 +246,11 @@ function SciMLBase.remake_initializeprob(sys::ODESystem, odefn, u0, t0, p)
     u0 = todict(u0)
     defs = defaults(sys)
     varmap = merge(defs, u0)
+    for k in collect(keys(varmap))
+        if varmap[k] === nothing
+            delete!(varmap, k)
+        end
+    end
     varmap = canonicalize_varmap(varmap)
     missingvars = setdiff(unknowns(sys), collect(keys(varmap)))
     setobserved = filter(keys(varmap)) do var
@@ -270,6 +275,16 @@ function SciMLBase.remake_initializeprob(sys::ODESystem, odefn, u0, t0, p)
             if meta isa InitializationSystemMetadata
                 u0 = merge(meta.u0map, u0)
                 p = merge(meta.pmap, p)
+            end
+        end
+        for k in collect(keys(u0))
+            if u0[k] === nothing
+                delete!(u0, k)
+            end
+        end
+        for k in collect(keys(p))
+            if p[k] === nothing
+                delete!(p, k)
             end
         end
 
