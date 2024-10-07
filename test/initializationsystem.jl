@@ -647,19 +647,37 @@ end
     prob2.ps[p] = 0.0
     test_parameter(prob2, p, 2.0)
 
-    # Should not be solved for:
-
-    # ODEProblem value with guess, no `missing`
-    @mtkbuild sys = ODESystem([D(x) ~ x * q, D(y) ~ y * p], t; guesses = [p => 0.0])
-    _pmap = merge(pmap, Dict(p => 3q))
-    prob = ODEProblem(sys, u0map, (0.0, 1.0), _pmap)
-    @test prob.ps[p] ≈ 3.0
-    @test prob.f.initializeprob === nothing
     # Default overridden by ODEProblem, guess provided
     @mtkbuild sys = ODESystem(
         [D(x) ~ q * x, D(y) ~ y * p], t; defaults = [p => 2q], guesses = [p => 1.0])
+    _pmap = merge(pmap, Dict(p => q))
     prob = ODEProblem(sys, u0map, (0.0, 1.0), _pmap)
-    @test prob.ps[p] ≈ 3.0
+    test_parameter(prob, p, _pmap[q])
+    test_initializesystem(sys, u0map, _pmap, p, 0 ~ q - p)
+
+    # ODEProblem dependent value with guess, no `missing`
+    @mtkbuild sys = ODESystem([D(x) ~ x * q, D(y) ~ y * p], t; guesses = [p => 0.0])
+    _pmap = merge(pmap, Dict(p => 3q))
+    prob = ODEProblem(sys, u0map, (0.0, 1.0), _pmap)
+    test_parameter(prob, p, 3pmap[q])
+
+    # Should not be solved for:
+
+    # Override dependent default with direct value
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ q * x, D(y) ~ y * p], t; defaults = [p => 2q], guesses = [p => 1.0])
+    _pmap = merge(pmap, Dict(p => 1.0))
+    prob = ODEProblem(sys, u0map, (0.0, 1.0), _pmap)
+    @test prob.ps[p] ≈ 1.0
+    @test prob.f.initializeprob === nothing
+
+    # Non-floating point
+    @parameters r::Int s::Int
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ s * x, D(y) ~ y * r], t; defaults = [s => 2r], guesses = [s => 1.0])
+    prob = ODEProblem(sys, u0map, (0.0, 1.0), [r => 1])
+    @test prob.ps[r] == 1
+    @test prob.ps[s] == 2
     @test prob.f.initializeprob === nothing
 
     @mtkbuild sys = ODESystem([D(x) ~ x, p ~ x + y], t; guesses = [p => 0.0])

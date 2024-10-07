@@ -174,13 +174,16 @@ struct InitializationSystemMetadata
 end
 
 function is_parameter_solvable(p, pmap, defs, guesses)
+    p = unwrap(p)
+    is_variable_floatingpoint(p) || return false
     _val1 = pmap isa AbstractDict ? get(pmap, p, nothing) : nothing
     _val2 = get(defs, p, nothing)
     _val3 = get(guesses, p, nothing)
     # either (missing is a default or was passed to the ODEProblem) or (nothing was passed to
     # the ODEProblem and it has a default and a guess)
     return ((_val1 === missing || _val2 === missing) ||
-            (_val1 === nothing && _val2 !== nothing)) && _val3 !== nothing
+            (symbolic_type(_val1) != NotSymbolic() ||
+             _val1 === nothing && _val2 !== nothing)) && _val3 !== nothing
 end
 
 function SciMLBase.remake_initializeprob(sys::ODESystem, odefn, u0, t0, p)

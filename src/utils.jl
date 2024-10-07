@@ -885,3 +885,10 @@ end
 
 diff2term_with_unit(x, t) = _with_unit(diff2term, x, t)
 lower_varname_with_unit(var, iv, order) = _with_unit(lower_varname, var, iv, iv, order)
+
+function is_variable_floatingpoint(sym)
+    sym = unwrap(sym)
+    T = symtype(sym)
+    return T == Real || T <: AbstractFloat || T <: AbstractArray{Real} ||
+           T <: AbstractArray{<:AbstractFloat}
+end
