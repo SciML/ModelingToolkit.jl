@@ -2,13 +2,12 @@
 
 ## Prelims
 
-In the previous tutorial, [Mixed Symbolic-Numeric Perturbation Theory](https://symbolics.juliasymbolics.org/stable/examples/perturbation/), we discussed how to solve algebraic equations using **Symbolics.jl**. Here, our goal is to extend the method to differential equations. First, we import the following helper functions that were introduced in [Mixed Symbolic/Numerical Methods for Perturbation Theory - Algebraic Equations](@ref perturb_alg):
+In the previous tutorial, [Mixed Symbolic-Numeric Perturbation Theory](https://symbolics.juliasymbolics.org/stable/examples/perturbation/), we discussed how to solve algebraic equations using **Symbolics.jl**. Here, our goal is to extend the method to differential equations. First, we import the following helper functions that were introduced in [Mixed Symbolic/Numerical Methods for Perturbation Theory - Algebraic Equations](https://symbolics.juliasymbolics.org/stable/examples/perturbation/):
 
 ```julia
 using Symbolics, SymbolicUtils
 
-def_taylor(x, ps) = sum([a * x^i for (i, a) in enumerate(ps)])
-def_taylor(x, ps, p₀) = p₀ + def_taylor(x, ps)
+def_taylor(x, ps) = sum([a * x^(i - 1) for (i, a) in enumerate(ps)])
 
 function collect_powers(eq, x, ns; max_power = 100)
     eq = substitute(expand(eq), Dict(x^j => 0 for j in (last(ns) + 1):max_power))
@@ -16,7 +15,14 @@ function collect_powers(eq, x, ns; max_power = 100)
     eqs = []
     for i in ns
         powers = Dict(x^j => (i == j ? 1 : 0) for j in 1:last(ns))
-        push!(eqs, substitute(eq, powers))
+        e = substitute(eq, powers)
+
+		# manually remove zeroth order from higher orders
+		if 0 in ns && i != 0
+			e = e - eqs[1]
+		end
+
+        push!(eqs, e)
     end
     eqs
 end
@@ -46,20 +52,21 @@ with the initial conditions $x(0) = 0$, and $\dot{x}(0) = 1$. Note that for $\ep
 
 ```julia
 using ModelingToolkit: t_nounits as t, D_nounits as D
-n = 3
-@variables ϵ y[1:n](t) ∂∂y[1:n](t)
+order = 2
+n = order + 1
+@variables ϵ (y(t))[1:n] (∂∂y(t))[1:n]
 ```
 
 Next, we define $x$.
 
 ```julia
-x = def_taylor(ϵ, y[3:end], y[2])
+x = def_taylor(ϵ, y)
 ```
 
 We need the second derivative of `x`. It may seem that we can do this using `Differential(t)`; however, this operation needs to wait for a few steps because we need to manipulate the differentials as separate variables. Instead, we define dummy variables `∂∂y` as the placeholder for the second derivatives and define
 
 ```julia
-∂∂x = def_taylor(ϵ, ∂∂y[3:end], ∂∂y[2])
+∂∂x = def_taylor(ϵ, ∂∂y)
 ```
 
 as the second derivative of `x`. After rearrangement, our governing equation is $\ddot{x}(t)(1 + \epsilon x(t))^{-2} + 1 = 0$, or
@@ -71,7 +78,7 @@ eq = ∂∂x * (1 + ϵ * x)^2 + 1
 The next two steps are the same as the ones for algebraic equations (note that we pass `1:n` to `collect_powers` because the zeroth order term is needed here)
 
 ```julia
-eqs = collect_powers(eq, ϵ, 1:n)
+eqs = collect_powers(eq, ϵ, 0:order)
 ```
 
 and,
@@ -99,8 +106,8 @@ unknowns(sys)
 ```julia
 # the initial conditions
 # everything is zero except the initial velocity
-u0 = zeros(2n + 2)
-u0[3] = 1.0   # y₀ˍt
+u0 = zeros(2order + 2)
+u0[2] = 1.0   # yˍt₁
 
 prob = ODEProblem(sys, u0, (0, 3.0))
 sol = solve(prob; dtmax = 0.01)
@@ -109,7 +116,7 @@ sol = solve(prob; dtmax = 0.01)
 Finally, we calculate the solution to the problem as a function of `ϵ` by substituting the solution to the ODE system back into the defining equation for `x`. Note that `𝜀` is a number, compared to `ϵ`, which is a symbolic variable.
 
 ```julia
-X = 𝜀 -> sum([𝜀^(i - 1) * sol[y[i]] for i in eachindex(y)])
+X = 𝜀 -> sum([𝜀^(i - 1) * sol[yi] for (i, yi) in enumerate(y)])
 ```
 
 Using `X`, we can plot the trajectory for a range of $𝜀$s.
