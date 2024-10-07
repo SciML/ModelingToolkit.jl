@@ -589,7 +589,10 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
         haskey(obs_arr_subs, arg1) && continue
         obs_arr_subs[arg1] = [arg1[i] for i in eachindex(arg1)] # e.g. p => [p[1], p[2]]
         index_first = eachindex(arg1)[1]
-        obs_arr_subs[arg1] = Origin(index_first)(obs_arr_subs[arg1]) # respect non-1-indexed arrays
+
+        # respect non-1-indexed arrays
+        # TODO: get rid of this hack together with the above hack, then remove OffsetArrays dependency
+        obs_arr_subs[arg1] = Origin(index_first)(obs_arr_subs[arg1])
     end
     for i in eachindex(neweqs)
         neweqs[i] = fast_substitute(neweqs[i], obs_arr_subs; operator = Symbolics.Operator)
