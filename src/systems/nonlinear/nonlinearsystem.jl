@@ -57,10 +57,10 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     """
     connector_type::Any
     """
-    A mapping from dependent parameters to expressions describing how they are calculated from
-    other parameters.
+    Topologically sorted parameter dependency equations, where all symbols are parameters and
+    the LHS is a single parameter.
     """
-    parameter_dependencies::Union{Nothing, Dict}
+    parameter_dependencies::Vector{Equation}
     """
     Metadata for the system, to be used by downstream packages.
     """
@@ -89,21 +89,22 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     The hierarchical parent system before simplification.
     """
     parent::Any
+    isscheduled::Bool
 
     function NonlinearSystem(tag, eqs, unknowns, ps, var_to_name, observed, jac, name,
             systems,
-            defaults, connector_type, parameter_dependencies = nothing, metadata = nothing,
+            defaults, connector_type, parameter_dependencies = Equation[], metadata = nothing,
             gui_metadata = nothing,
             tearing_state = nothing, substitutions = nothing,
-            complete = false, index_cache = nothing, parent = nothing; checks::Union{
-                Bool, Int} = true)
+            complete = false, index_cache = nothing, parent = nothing,
+            isscheduled = false; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(unknowns, ps)
             check_units(u, eqs)
         end
         new(tag, eqs, unknowns, ps, var_to_name, observed, jac, name, systems, defaults,
             connector_type, parameter_dependencies, metadata, gui_metadata, tearing_state,
-            substitutions, complete, index_cache, parent)
+            substitutions, complete, index_cache, parent, isscheduled)
     end
 end
 
@@ -118,35 +119,34 @@ function NonlinearSystem(eqs, unknowns, ps;
         continuous_events = nothing, # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
         discrete_events = nothing,   # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
         checks = true,
-        parameter_dependencies = nothing,
+        parameter_dependencies = Equation[],
         metadata = nothing,
         gui_metadata = nothing)
     continuous_events === nothing || isempty(continuous_events) ||
         throw(ArgumentError("NonlinearSystem does not accept `continuous_events`, you provided $continuous_events"))
     discrete_events === nothing || isempty(discrete_events) ||
         throw(ArgumentError("NonlinearSystem does not accept `discrete_events`, you provided $discrete_events"))
-
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
-    # Move things over, but do not touch array expressions
-    #
-    # # we cannot scalarize in the loop because `eqs` itself might require
-    # scalarization
-    eqs = [x.lhs isa Union{Symbolic, Number} ? 0 ~ x.rhs - x.lhs : x
-           for x in scalarize(eqs)]
-
-    if !(isempty(default_u0) && isempty(default_p))
+    length(unique(nameof.(systems))) == length(systems) ||
+        throw(ArgumentError("System names must be unique."))
+    (isempty(default_u0) && isempty(default_p)) ||
         Base.depwarn(
             "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
             :NonlinearSystem, force = true)
+
+    # Accept a single (scalar/vector) equation, but make array for consistent internal handling
+    if !(eqs isa AbstractArray)
+        eqs = [eqs]
     end
-    sysnames = nameof.(systems)
-    if length(unique(sysnames)) != length(sysnames)
-        throw(ArgumentError("System names must be unique."))
-    end
+
+    # Copy equations to canonical form, but do not touch array expressions
+    eqs = [wrap(eq.lhs) isa Symbolics.Arr ? eq : 0 ~ eq.rhs - eq.lhs for eq in eqs]
+
     jac = RefValue{Any}(EMPTY_JAC)
     defaults = todict(defaults)
-    defaults = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(defaults))
+    defaults = Dict{Any, Any}(value(k) => value(v)
+    for (k, v) in pairs(defaults) if value(v) !== nothing)
 
     unknowns, ps = value.(unknowns), value.(ps)
     var_to_name = Dict()
@@ -169,9 +169,18 @@ function NonlinearSystem(eqs; kwargs...)
         collect_vars!(allunknowns, ps, eq.lhs, nothing)
         collect_vars!(allunknowns, ps, eq.rhs, nothing)
     end
+    for eq in get(kwargs, :parameter_dependencies, Equation[])
+        if eq isa Pair
+            collect_vars!(allunknowns, ps, eq[1], nothing)
+            collect_vars!(allunknowns, ps, eq[2], nothing)
+        else
+            collect_vars!(allunknowns, ps, eq.lhs, nothing)
+            collect_vars!(allunknowns, ps, eq.rhs, nothing)
+        end
+    end
     new_ps = OrderedSet()
     for p in ps
-        if istree(p) && operation(p) === getindex
+        if iscall(p) && operation(p) === getindex
             par = arguments(p)[begin]
             if Symbolics.shape(Symbolics.unwrap(par)) !== Symbolics.Unknown() &&
                all(par[i] in ps for i in eachindex(par))
@@ -193,8 +202,12 @@ function calculate_jacobian(sys::NonlinearSystem; sparse = false, simplify = fal
         return cache[1]
     end
 
-    rhs = [eq.rhs for eq in equations(sys)]
+    # observed equations may depend on unknowns, so substitute them in first
+    # TODO: rather keep observed derivatives unexpanded, like "Differential(obs)(expr)"?
+    obs = Dict(eq.lhs => eq.rhs for eq in observed(sys))
+    rhs = map(eq -> fixpoint_sub(eq.rhs, obs), equations(sys))
     vals = [dv for dv in unknowns(sys)]
+
     if sparse
         jac = sparsejacobian(rhs, vals, simplify = simplify)
     else
@@ -205,17 +218,20 @@ function calculate_jacobian(sys::NonlinearSystem; sparse = false, simplify = fal
 end
 
 function generate_jacobian(
-        sys::NonlinearSystem, vs = unknowns(sys), ps = full_parameters(sys);
-        sparse = false, simplify = false, kwargs...)
+        sys::NonlinearSystem, vs = unknowns(sys), ps = parameters(sys);
+        sparse = false, simplify = false, wrap_code = identity, kwargs...)
     jac = calculate_jacobian(sys, sparse = sparse, simplify = simplify)
     pre, sol_states = get_substitutions_and_solved_unknowns(sys)
     p = reorder_parameters(sys, ps)
+    wrap_code = wrap_code .∘ wrap_array_vars(sys, jac; dvs = vs, ps) .∘
+                wrap_parameter_dependencies(sys, false)
     return build_function(
-        jac, vs, p...; postprocess_fbody = pre, states = sol_states, kwargs...)
+        jac, vs, p...; postprocess_fbody = pre, states = sol_states, wrap_code, kwargs...)
 end
 
 function calculate_hessian(sys::NonlinearSystem; sparse = false, simplify = false)
-    rhs = [eq.rhs for eq in equations(sys)]
+    obs = Dict(eq.lhs => eq.rhs for eq in observed(sys))
+    rhs = map(eq -> fixpoint_sub(eq.rhs, obs), equations(sys))
     vals = [dv for dv in unknowns(sys)]
     if sparse
         hess = [sparsehessian(rhs[i], vals, simplify = simplify) for i in 1:length(rhs)]
@@ -226,23 +242,26 @@ function calculate_hessian(sys::NonlinearSystem; sparse = false, simplify = fals
 end
 
 function generate_hessian(
-        sys::NonlinearSystem, vs = unknowns(sys), ps = full_parameters(sys);
-        sparse = false, simplify = false, kwargs...)
+        sys::NonlinearSystem, vs = unknowns(sys), ps = parameters(sys);
+        sparse = false, simplify = false, wrap_code = identity, kwargs...)
     hess = calculate_hessian(sys, sparse = sparse, simplify = simplify)
     pre = get_preprocess_constants(hess)
     p = reorder_parameters(sys, ps)
-    return build_function(hess, vs, p...; postprocess_fbody = pre, kwargs...)
+    wrap_code = wrap_code .∘ wrap_array_vars(sys, hess; dvs = vs, ps) .∘
+                wrap_parameter_dependencies(sys, false)
+    return build_function(hess, vs, p...; postprocess_fbody = pre, wrap_code, kwargs...)
 end
 
 function generate_function(
-        sys::NonlinearSystem, dvs = unknowns(sys), ps = full_parameters(sys);
-        kwargs...)
+        sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(sys);
+        wrap_code = identity, kwargs...)
     rhss = [deq.rhs for deq in equations(sys)]
     pre, sol_states = get_substitutions_and_solved_unknowns(sys)
-
+    wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps) .∘
+                wrap_parameter_dependencies(sys, false)
     p = reorder_parameters(sys, value.(ps))
     return build_function(rhss, value.(dvs), p...; postprocess_fbody = pre,
-        states = sol_states, kwargs...)
+        states = sol_states, wrap_code, kwargs...)
 end
 
 function jacobian_sparsity(sys::NonlinearSystem)
@@ -258,7 +277,7 @@ end
 """
 ```julia
 SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
-                                 ps = full_parameters(sys);
+                                 ps = parameters(sys);
                                  version = nothing,
                                  jac = false,
                                  sparse = false,
@@ -274,18 +293,18 @@ function SciMLBase.NonlinearFunction(sys::NonlinearSystem, args...; kwargs...)
 end
 
 function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
-        ps = full_parameters(sys), u0 = nothing;
+        ps = parameters(sys), u0 = nothing, p = nothing;
         version = nothing,
         jac = false,
-        eval_expression = true,
+        eval_expression = false,
+        eval_module = @__MODULE__,
         sparse = false, simplify = false,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearFunction`")
     end
-    f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression}, kwargs...)
-    f_oop, f_iip = eval_expression ?
-                   (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in f_gen) : f_gen
+    f_gen = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
+    f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
     f(u, p) = f_oop(u, p)
     f(u, p::MTKParameters) = f_oop(u, p...)
     f(du, u, p) = f_iip(du, u, p)
@@ -294,10 +313,8 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
     if jac
         jac_gen = generate_jacobian(sys, dvs, ps;
             simplify = simplify, sparse = sparse,
-            expression = Val{eval_expression}, kwargs...)
-        jac_oop, jac_iip = eval_expression ?
-                           (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in jac_gen) :
-                           jac_gen
+            expression = Val{true}, kwargs...)
+        jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
         _jac(u, p) = jac_oop(u, p)
         _jac(u, p::MTKParameters) = jac_oop(u, p...)
         _jac(J, u, p) = jac_iip(J, u, p)
@@ -306,24 +323,24 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
         _jac = nothing
     end
 
-    observedfun = let sys = sys, dict = Dict()
-        function generated_observed(obsvar, u, p)
-            obs = get!(dict, value(obsvar)) do
-                build_explicit_observed_function(sys, obsvar)
-            end
-            if p isa MTKParameters
-                obs(u, p...)
-            else
-                obs(u, p)
-            end
+    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
+
+    if length(dvs) == length(equations(sys))
+        resid_prototype = nothing
+    else
+        u0ElType = u0 === nothing ? Float64 : eltype(u0)
+        if SciMLStructures.isscimlstructure(p)
+            u0ElType = promote_type(
+                eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]),
+                u0ElType)
         end
+        resid_prototype = zeros(u0ElType, length(equations(sys)))
     end
 
     NonlinearFunction{iip}(f,
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
-        resid_prototype = length(dvs) == length(equations(sys)) ? nothing :
-                          zeros(length(equations(sys))),
+        resid_prototype = resid_prototype,
         jac_prototype = sparse ?
                         similar(calculate_jacobian(sys, sparse = sparse),
             Float64) : nothing,
@@ -333,7 +350,7 @@ end
 """
 ```julia
 SciMLBase.NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
-                                     ps = full_parameters(sys);
+                                     ps = parameters(sys);
                                      version = nothing,
                                      jac = false,
                                      sparse = false,
@@ -347,7 +364,7 @@ variable and parameter vectors, respectively.
 struct NonlinearFunctionExpr{iip} end
 
 function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
-        ps = full_parameters(sys), u0 = nothing;
+        ps = parameters(sys), u0 = nothing, p = nothing;
         version = nothing, tgrad = false,
         jac = false,
         linenumbers = false,
@@ -368,8 +385,18 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
     end
 
     jp_expr = sparse ? :(similar($(get_jac(sys)[]), Float64)) : :nothing
-    resid_expr = length(dvs) == length(equations(sys)) ? :nothing :
-                 :(zeros($(length(equations(sys)))))
+    if length(dvs) == length(equations(sys))
+        resid_expr = :nothing
+    else
+        u0ElType = u0 === nothing ? Float64 : eltype(u0)
+        if SciMLStructures.isscimlstructure(p)
+            u0ElType = promote_type(
+                eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]),
+                u0ElType)
+        end
+
+        resid_expr = :(zeros($u0ElType, $(length(equations(sys)))))
+    end
     ex = quote
         f = $f
         jac = $_jac
@@ -387,13 +414,14 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
         checkbounds = false, sparse = false,
         simplify = false,
         linenumbers = true, parallel = SerialForm(),
-        eval_expression = true,
+        eval_expression = false,
+        eval_module = @__MODULE__,
         use_union = false,
         tofloat = !use_union,
         kwargs...)
     eqs = equations(sys)
     dvs = unknowns(sys)
-    ps = full_parameters(sys)
+    ps = parameters(sys)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         u0, defs = get_u0(sys, u0map, parammap)
         check_eqs_u0(eqs, dvs, u0; kwargs...)
@@ -403,9 +431,10 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
         check_eqs_u0(eqs, dvs, u0; kwargs...)
     end
 
-    f = constructor(sys, dvs, ps, u0; jac = jac, checkbounds = checkbounds,
+    f = constructor(sys, dvs, ps, u0, p; jac = jac, checkbounds = checkbounds,
         linenumbers = linenumbers, parallel = parallel, simplify = simplify,
-        sparse = sparse, eval_expression = eval_expression, kwargs...)
+        sparse = sparse, eval_expression = eval_expression, eval_module = eval_module,
+        kwargs...)
     return f, u0, p
 end
 

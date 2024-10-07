@@ -1,3 +1,14 @@
+"""
+    union_nothing(x::Union{T1, Nothing}, y::Union{T2, Nothing}) where {T1, T2}
+
+Unite x and y gracefully when they could be nothing. If neither is nothing, x and y are united normally. If one is nothing, the other is returned unmodified. If both are nothing, nothing is returned.
+"""
+function union_nothing(x::Union{T1, Nothing}, y::Union{T2, Nothing}) where {T1, T2}
+    isnothing(x) && return y # y can be nothing or something
+    isnothing(y) && return x # x can be nothing or something
+    return union(x, y) # both x and y are something and can be united normally
+end
+
 get_iv(D::Differential) = D.x
 
 function make_operation(@nospecialize(op), args)
@@ -16,21 +27,21 @@ function make_operation(@nospecialize(op), args)
 end
 
 function detime_dvs(op)
-    if !istree(op)
+    if !iscall(op)
         op
     elseif issym(operation(op))
         Sym{Real}(nameof(operation(op)))
     else
-        similarterm(op, operation(op), detime_dvs.(arguments(op));
-            metadata = metadata(op))
+        maketerm(typeof(op), operation(op), detime_dvs.(arguments(op)),
+            metadata(op))
     end
 end
 
 function retime_dvs(op, dvs, iv)
     issym(op) && return Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(op))(iv)
-    istree(op) ?
-    similarterm(op, operation(op), retime_dvs.(arguments(op), (dvs,), (iv,));
-        metadata = metadata(op)) :
+    iscall(op) ?
+    maketerm(typeof(op), operation(op), retime_dvs.(arguments(op), (dvs,), (iv,)),
+        metadata(op)) :
     op
 end
 
@@ -101,6 +112,13 @@ const CheckNone = 0
 const CheckAll = 1 << 0
 const CheckComponents = 1 << 1
 const CheckUnits = 1 << 2
+
+function check_independent_variables(ivs)
+    for iv in ivs
+        isparameter(iv) ||
+            @warn "Independent variable $iv should be defined with @independent_variables $iv."
+    end
+end
 
 function check_parameters(ps, iv)
     for p in ps
@@ -188,7 +206,7 @@ end
 Get all the independent variables with respect to which differentials are taken.
 """
 function collect_ivs_from_nested_operator!(ivs, x, target_op)
-    if !istree(x)
+    if !iscall(x)
         return
     end
     op = operation(unwrap(x))
@@ -204,9 +222,9 @@ function collect_ivs_from_nested_operator!(ivs, x, target_op)
 end
 
 function iv_from_nested_derivative(x, op = Differential)
-    if istree(x) && operation(x) == getindex
+    if iscall(x) && operation(x) == getindex
         iv_from_nested_derivative(arguments(x)[1], op)
-    elseif istree(x)
+    elseif iscall(x)
         operation(x) isa op ? iv_from_nested_derivative(arguments(x)[1], op) :
         arguments(x)[1]
     elseif issym(x)
@@ -217,7 +235,7 @@ function iv_from_nested_derivative(x, op = Differential)
 end
 
 hasdefault(v) = hasmetadata(v, Symbolics.VariableDefaultValue)
-getdefault(v) = value(getmetadata(v, Symbolics.VariableDefaultValue))
+getdefault(v) = value(Symbolics.getdefaultval(v))
 function getdefaulttype(v)
     def = value(getmetadata(unwrap(v), Symbolics.VariableDefaultValue, nothing))
     def === nothing ? Float64 : typeof(def)
@@ -234,7 +252,9 @@ end
 
 function collect_defaults!(defs, vars)
     for v in vars
-        (haskey(defs, v) || !hasdefault(unwrap(v))) && continue
+        if haskey(defs, v) || !hasdefault(unwrap(v)) || (def = getdefault(v)) === nothing
+            continue
+        end
         defs[v] = getdefault(v)
     end
     return defs
@@ -248,7 +268,7 @@ function collect_var_to_name!(vars, xs)
             hasname(xarr) || continue
             vars[Symbolics.getname(xarr)] = xarr
         else
-            if istree(x) && operation(x) === getindex
+            if iscall(x) && operation(x) === getindex
                 x = arguments(x)[1]
             end
             x = unwrap(x)
@@ -276,12 +296,12 @@ end
 Check if difference/derivative operation occurs in the R.H.S. of an equation
 """
 function _check_operator_variables(eq, op::T, expr = eq.rhs) where {T}
-    istree(expr) || return nothing
+    iscall(expr) || return nothing
     if operation(expr) isa op
         throw_invalid_operator(expr, eq, op)
     end
     foreach(expr -> _check_operator_variables(eq, op, expr),
-        SymbolicUtils.unsorted_arguments(expr))
+        SymbolicUtils.arguments(expr))
 end
 """
 Check if all the LHS are unique
@@ -297,10 +317,10 @@ function check_operator_variables(eqs, op::T) where {T}
             if op === Differential
                 is_tmp_fine = isdifferential(x)
             else
-                is_tmp_fine = istree(x) && !(operation(x) isa op)
+                is_tmp_fine = iscall(x) && !(operation(x) isa op)
             end
         else
-            nd = count(x -> istree(x) && !(operation(x) isa op), tmp)
+            nd = count(x -> iscall(x) && !(operation(x) isa op), tmp)
             is_tmp_fine = iszero(nd)
         end
         is_tmp_fine ||
@@ -314,7 +334,7 @@ function check_operator_variables(eqs, op::T) where {T}
     end
 end
 
-isoperator(expr, op) = istree(expr) && operation(expr) isa op
+isoperator(expr, op) = iscall(expr) && operation(expr) isa op
 isoperator(op) = expr -> isoperator(expr, op)
 
 isdifferential(expr) = isoperator(expr, Differential)
@@ -338,18 +358,25 @@ Return a `Set` containing all variables in `x` that appear in
 Example:
 
 ```
-@variables t u(t) y(t)
+t = ModelingToolkit.t_nounits
+@variables u(t) y(t)
 D  = Differential(t)
 v  = ModelingToolkit.vars(D(y) ~ u)
 v == Set([D(y), u])
 ```
 """
 function vars(exprs::Symbolic; op = Differential)
-    istree(exprs) ? vars([exprs]; op = op) : Set([exprs])
+    iscall(exprs) ? vars([exprs]; op = op) : Set([exprs])
 end
 vars(exprs::Num; op = Differential) = vars(unwrap(exprs); op)
 vars(exprs::Symbolics.Arr; op = Differential) = vars(unwrap(exprs); op)
-vars(exprs; op = Differential) = foldl((x, y) -> vars!(x, y; op = op), exprs; init = Set())
+function vars(exprs; op = Differential)
+    if hasmethod(iterate, Tuple{typeof(exprs)})
+        foldl((x, y) -> vars!(x, unwrap(y); op = op), exprs; init = Set())
+    else
+        vars!(Set(), unwrap(exprs); op)
+    end
+end
 vars(eq::Equation; op = Differential) = vars!(Set(), eq; op = op)
 function vars!(vars, eq::Equation; op = Differential)
     (vars!(vars, eq.lhs; op = op); vars!(vars, eq.rhs; op = op); vars)
@@ -358,13 +385,13 @@ function vars!(vars, O; op = Differential)
     if isvariable(O)
         return push!(vars, O)
     end
-    !istree(O) && return vars
+    !iscall(O) && return vars
 
     operation(O) isa op && return push!(vars, O)
 
     if operation(O) === (getindex)
         arr = first(arguments(O))
-        istree(arr) && operation(arr) isa op && return push!(vars, O)
+        iscall(arr) && operation(arr) isa op && return push!(vars, O)
         isvariable(arr) && return push!(vars, O)
     end
 
@@ -410,7 +437,8 @@ collect_differential_variables(sys) = collect_operator_variables(sys, Differenti
 Return  a `Set` with all applied operators in `x`, example:
 
 ```
-@variables t u(t) y(t)
+@independent_variables t
+@variables u(t) y(t)
 D = Differential(t)
 eq = D(y) ~ u
 ModelingToolkit.collect_applied_operators(eq, Differential) == Set([D(y)])
@@ -422,7 +450,7 @@ function collect_applied_operators(x, op)
     v = vars(x, op = op)
     filter(v) do x
         issym(x) && return false
-        istree(x) && return operation(x) isa op
+        iscall(x) && return operation(x) isa op
         false
     end
 end
@@ -431,7 +459,7 @@ function find_derivatives!(vars, expr::Equation, f = identity)
     (find_derivatives!(vars, expr.lhs, f); find_derivatives!(vars, expr.rhs, f); vars)
 end
 function find_derivatives!(vars, expr, f)
-    !istree(O) && return vars
+    !iscall(O) && return vars
     operation(O) isa Differential && push!(vars, f(O))
     for arg in arguments(O)
         vars!(vars, arg)
@@ -444,7 +472,7 @@ function collect_vars!(unknowns, parameters, expr, iv; op = Differential)
         collect_var!(unknowns, parameters, expr, iv)
     else
         for var in vars(expr; op)
-            if istree(var) && operation(var) isa Differential
+            if iscall(var) && operation(var) isa Differential
                 var, _ = var_from_nested_derivative(var)
             end
             collect_var!(unknowns, parameters, var, iv)
@@ -455,7 +483,12 @@ end
 
 function collect_var!(unknowns, parameters, var, iv)
     isequal(var, iv) && return nothing
-    if isparameter(var) || (istree(var) && isparameter(operation(var)))
+    getmetadata(var, SymScope, LocalScope()) == LocalScope() || return nothing
+    if iscalledparameter(var)
+        callable = getcalledparameter(var)
+        push!(parameters, callable)
+        collect_vars!(unknowns, parameters, arguments(var), iv)
+    elseif isparameter(var) || (iscall(var) && isparameter(operation(var)))
         push!(parameters, var)
     elseif !isconstant(var)
         push!(unknowns, var)
@@ -617,6 +650,18 @@ function mergedefaults(defaults, varmap, vars)
     end
 end
 
+function mergedefaults(defaults, observedmap, varmap, vars)
+    defs = if varmap isa Dict
+        merge(observedmap, defaults, varmap)
+    elseif eltype(varmap) <: Pair
+        merge(observedmap, defaults, Dict(varmap))
+    elseif eltype(varmap) <: Number
+        merge(observedmap, defaults, Dict(zip(vars, varmap)))
+    else
+        merge(observedmap, defaults)
+    end
+end
+
 @noinline function throw_missingvars_in_sys(vars)
     throw(ArgumentError("$vars are either missing from the variable map or missing from the system's unknowns/parameters list."))
 end
@@ -631,42 +676,44 @@ function promote_to_concrete(vs; tofloat = true, use_union = true)
         vs = Any[vs...]
     end
     T = eltype(vs)
-    if Base.isconcretetype(T) && (!tofloat || T === float(T)) # nothing to do
-        return vs
-    else
-        sym_vs = filter(x -> SymbolicUtils.issym(x) || SymbolicUtils.istree(x), vs)
-        isempty(sym_vs) || throw_missingvars_in_sys(sym_vs)
 
-        C = nothing
-        for v in vs
-            E = typeof(v)
-            if E <: Number
-                if tofloat
-                    E = float(E)
-                end
-            end
-            if C === nothing
-                C = E
-            end
-            if use_union
-                C = Union{C, E}
-            else
-                @assert C==E "`promote_to_concrete` can't make type $E uniform with $C"
-                C = E
+    # return early if there is nothing to do
+    #Base.isconcretetype(T) && (!tofloat || T === float(T)) && return vs # TODO: disabled float(T) to restore missing errors in https://github.com/SciML/ModelingToolkit.jl/issues/2873
+    Base.isconcretetype(T) && !tofloat && return vs
+
+    sym_vs = filter(x -> SymbolicUtils.issym(x) || SymbolicUtils.iscall(x), vs)
+    isempty(sym_vs) || throw_missingvars_in_sys(sym_vs)
+
+    C = nothing
+    for v in vs
+        E = typeof(v)
+        if E <: Number
+            if tofloat
+                E = float(E)
             end
         end
-
-        y = similar(vs, C)
-        for i in eachindex(vs)
-            if (vs[i] isa Number) & tofloat
-                y[i] = float(vs[i]) #needed because copyto! can't convert Int to Float automatically
-            else
-                y[i] = vs[i]
-            end
+        if C === nothing
+            C = E
         end
-
-        return y
+        if use_union
+            C = Union{C, E}
+        else
+            C2 = promote_type(C, E)
+            @assert C2 == E||C2 == C "`promote_to_concrete` can't make type $E uniform with $C"
+            C = C2
+        end
     end
+
+    y = similar(vs, C)
+    for i in eachindex(vs)
+        if (vs[i] isa Number) & tofloat
+            y[i] = float(vs[i]) #needed because copyto! can't convert Int to Float automatically
+        else
+            y[i] = vs[i]
+        end
+    end
+
+    return y
 end
 
 struct BitDict <: AbstractDict{Int, Int}
@@ -794,11 +841,15 @@ function jacobian_wrt_vars(pf::F, p, input_idxs, chunk::C) where {F, C}
 end
 
 function fold_constants(ex)
-    if istree(ex)
-        similarterm(ex, operation(ex), map(fold_constants, arguments(ex)),
-            symtype(ex); metadata = metadata(ex))
+    if iscall(ex)
+        maketerm(typeof(ex), operation(ex), map(fold_constants, arguments(ex)),
+            metadata(ex))
     elseif issym(ex) && isconstant(ex)
-        getdefault(ex)
+        if (unit = getmetadata(ex, VariableUnit, nothing); unit !== nothing)
+            ex # we cannot fold constant with units
+        else
+            getdefault(ex)
+        end
     else
         ex
     end
@@ -813,3 +864,24 @@ function restrict_array_to_union(arr)
     end
     return Array{T, ndims(arr)}(arr)
 end
+
+function eval_or_rgf(expr::Expr; eval_expression = false, eval_module = @__MODULE__)
+    if eval_expression
+        return eval_module.eval(expr)
+    else
+        return drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, expr))
+    end
+end
+
+function _with_unit(f, x, t, args...)
+    x = f(x, args...)
+    if hasmetadata(x, VariableUnit) && (t isa Symbolic && hasmetadata(t, VariableUnit))
+        xu = getmetadata(x, VariableUnit)
+        tu = getmetadata(t, VariableUnit)
+        x = setmetadata(x, VariableUnit, xu / tu)
+    end
+    return x
+end
+
+diff2term_with_unit(x, t) = _with_unit(diff2term, x, t)
+lower_varname_with_unit(var, iv, order) = _with_unit(lower_varname, var, iv, iv, order)

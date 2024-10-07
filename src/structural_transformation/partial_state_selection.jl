@@ -173,8 +173,13 @@ function dummy_derivative_graph!(state::TransformationState, jac = nothing;
         state_priority = nothing, log = Val(false), kwargs...)
     state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
     complete!(state.structure)
-    var_eq_matching = complete(pantelides!(state))
+    var_eq_matching = complete(pantelides!(state; kwargs...))
     dummy_derivative_graph!(state.structure, var_eq_matching, jac, state_priority, log)
+end
+
+struct DummyDerivativeSummary
+    var_sccs::Vector{Vector{Int}}
+    state_priority::Vector{Vector{Float64}}
 end
 
 function dummy_derivative_graph!(
@@ -184,29 +189,55 @@ function dummy_derivative_graph!(
     diff_to_eq = invview(eq_to_diff)
     diff_to_var = invview(var_to_diff)
     invgraph = invview(graph)
+    extended_sp = let state_priority = state_priority, var_to_diff = var_to_diff,
+        diff_to_var = diff_to_var
+
+        var -> begin
+            min_p = max_p = 0.0
+            while var_to_diff[var] !== nothing
+                var = var_to_diff[var]
+            end
+            while true
+                p = state_priority(var)
+                max_p = max(max_p, p)
+                min_p = min(min_p, p)
+                (var = diff_to_var[var]) === nothing && break
+            end
+            min_p < 0 ? min_p : max_p
+        end
+    end
 
     var_sccs = find_var_sccs(graph, var_eq_matching)
+    var_perm = Int[]
+    var_dummy_scc = Vector{Int}[]
+    var_state_priority = Vector{Float64}[]
     eqcolor = falses(nsrcs(graph))
     dummy_derivatives = Int[]
     col_order = Int[]
+    neqs = nsrcs(graph)
     nvars = ndsts(graph)
     eqs = Int[]
+    vars = Int[]
     next_eq_idxs = Int[]
     next_var_idxs = Int[]
     new_eqs = Int[]
     new_vars = Int[]
     eqs_set = BitSet()
-    for vars in var_sccs
+    for vars′ in var_sccs
         empty!(eqs)
-        for var in vars
+        empty!(vars)
+        for var in vars′
             eq = var_eq_matching[var]
             eq isa Int || continue
-            diff_to_eq[eq] === nothing && continue
-            push!(eqs, eq)
+            diff_to_eq[eq] === nothing || push!(eqs, eq)
+            if var_to_diff[var] !== nothing
+                error("Invalid SCC")
+            end
+            (diff_to_var[var] !== nothing && is_present(structure, var)) && push!(vars, var)
         end
         isempty(eqs) && continue
 
-        rank_matching = Matching(nvars)
+        rank_matching = Matching(max(nvars, neqs))
         isfirst = true
         if jac === nothing
             J = nothing
@@ -225,7 +256,13 @@ function dummy_derivative_graph!(
             iszero(nrows) && break
 
             if state_priority !== nothing && isfirst
-                sort!(vars, by = state_priority)
+                sp = extended_sp.(vars)
+                resize!(var_perm, length(sp))
+                sortperm!(var_perm, sp)
+                permute!(vars, var_perm)
+                permute!(sp, var_perm)
+                push!(var_dummy_scc, copy(vars))
+                push!(var_state_priority, sp)
             end
             # TODO: making the algorithm more robust
             # 1. If the Jacobian is a integer matrix, use Bareiss to check
@@ -287,6 +324,8 @@ function dummy_derivative_graph!(
             for (i, var) in enumerate(vars)
                 ∫var = diff_to_var[var]
                 ∫var === nothing && continue
+                ∫∫var = diff_to_var[∫var]
+                ∫∫var === nothing && continue
                 if J !== nothing
                     push!(next_var_idxs, i)
                 end
@@ -305,7 +344,7 @@ function dummy_derivative_graph!(
 
     ret = tearing_with_dummy_derivatives(structure, BitSet(dummy_derivatives))
     if log
-        ret
+        (ret..., DummyDerivativeSummary(var_dummy_scc, var_state_priority))
     else
         ret[1]
     end
@@ -351,11 +390,13 @@ function tearing_with_dummy_derivatives(structure, dummy_derivatives)
         Base.Fix1(isdiffed, (structure, dummy_derivatives)),
         Union{Unassigned, SelectedState};
         varfilter = Base.Fix1(getindex, can_eliminate))
+
     for v in 𝑑vertices(structure.graph)
         is_present(structure, v) || continue
         dv = var_to_diff[v]
         (dv === nothing || !is_some_diff(structure, dummy_derivatives, dv)) && continue
         var_eq_matching[v] = SelectedState()
     end
+
     return var_eq_matching, full_var_eq_matching, var_sccs, can_eliminate
 end

@@ -42,7 +42,7 @@ for df in [
     # iip
     du = zeros(3)
     u = collect(1:3)
-    p = MTKParameters(syss, parameters(syss) .=> collect(1:5))
+    p = MTKParameters(syss, [c, nsteps, δt, β, γ] .=> collect(1:5))
     df.f(du, u, p, 0)
     @test du ≈ [0.01831563888873422, 0.9816849729159067, 4.999999388195359]
 
@@ -265,3 +265,17 @@ function System(; name, buffer)
 end
 
 @test_nowarn @mtkbuild sys = System(; buffer = ones(10))
+
+# Ensure discrete systems with algebraic equations throw
+@variables x(t) y(t)
+k = ShiftIndex(t)
+@named sys = DiscreteSystem([x ~ x^2 + y^2, y ~ x(k - 1) + y(k - 1)], t)
+@test_throws ["algebraic equations", "not yet supported"] structural_simplify(sys)
+
+@testset "Passing `nothing` to `u0`" begin
+    @variables x(t) = 1
+    k = ShiftIndex()
+    @mtkbuild sys = DiscreteSystem([x(k) ~ x(k - 1) + 1], t)
+    prob = @test_nowarn DiscreteProblem(sys, nothing, (0.0, 1.0))
+    @test_nowarn solve(prob, FunctionMap())
+end

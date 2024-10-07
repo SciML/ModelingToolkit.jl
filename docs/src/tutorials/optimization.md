@@ -1,103 +1,113 @@
 # Modeling Optimization Problems
 
-## Rosenbrock Function in 2D
+ModelingToolkit.jl is not only useful for generating initial value problems (`ODEProblem`).
+The package can also build optimization systems.
 
-Let's solve the classical _Rosenbrock function_ in two dimensions.
+!!! note
+    
+    The high level `@mtkmodel` macro used in the
+    [getting started tutorial](@ref getting_started)
+    is not yet compatible with `OptimizationSystem`.
+    We thus have to use a lower level interface to define optimization systems.
+    For an introduction to this interface, read the
+    [programmatically generating ODESystems tutorial](@ref programmatically).
 
-First, we need to make some imports.
+## Unconstrained Rosenbrock Function
 
-```julia
+Let's optimize the classical _Rosenbrock function_ in two dimensions.
+
+```@example optimization
 using ModelingToolkit, Optimization, OptimizationOptimJL
-```
-
-Now we can define our optimization problem.
-
-```julia
 @variables begin
-    x, [bounds = (-2.0, 2.0)]
-    y, [bounds = (-1.0, 3.0)]
+    x = 1.0, [bounds = (-2.0, 2.0)]
+    y = 3.0, [bounds = (-1.0, 3.0)]
 end
-@parameters a=1 b=1
-loss = (a - x)^2 + b * (y - x^2)^2
-@mtkbuild sys = OptimizationSystem(loss, [x, y], [a, b])
+@parameters a=1.0 b=1.0
+rosenbrock = (a - x)^2 + b * (y - x^2)^2
+@mtkbuild sys = OptimizationSystem(rosenbrock, [x, y], [a, b])
 ```
 
-A visualization of the objective function is depicted below.
+Every optimization problem consists of a set of optimization variables.
+In this case, we create two variables: `x` and `y`,
+with initial guesses `1` and `3` for their optimal values.
+Additionally, we assign box constraints for each of them, using `bounds`,
+Bounds is an example of symbolic metadata.
+Fore more information, take a look at the symbolic metadata
+[documentation page](@ref symbolic_metadata).
 
-```@eval
-using Plots
-x = -2:0.01:2
-y = -1:0.01:3
-contour(x, y, (x, y) -> (1 - x)^2 + 100 * (y - x^2)^2, fill = true, color = :viridis,
-    ratio = :equal, xlims = (-2, 2))
-savefig("obj_fun.png");
-nothing; # hide
-```
+We also create two parameters with `@parameters`.
+Parameters are useful if you want to solve the same optimization problem multiple times,
+with different values for these parameters.
+Default values for these parameters can also be assigned, here `1` is used for both `a` and `b`.
+These optimization values and parameters are used in an objective function, here the Rosenbrock function.
 
-![plot of the Rosenbrock function](obj_fun.png)
+Next, the actual `OptimizationProblem` can be created.
+The initial guesses for the optimization variables can be overwritten, via an array of `Pairs`,
+in the second argument of `OptimizationProblem`.
+Values for the parameters of the system can also be overwritten from their default values,
+in the third argument of `OptimizationProblem`.
+ModelingToolkit is also capable of constructing analytical gradients and Hessians of the objective function.
 
-### Explanation
-
-Every optimization problem consists of a set of _optimization variables_. In this case, we create two variables. Additionally, we assign _box constraints_ for each of them. In the next step, we create two parameters for the problem with `@parameters`. While it is not needed to do this, it makes it easier to `remake` the problem later with different values for the parameters. The _objective function_ is specified as well and finally, everything is used to construct an `OptimizationSystem`.
-
-## Building and Solving the Optimization Problem
-
-Next, the actual `OptimizationProblem` can be created. At this stage, an initial guess `u0` for the optimization variables needs to be provided via map, using the symbols from before. Concrete values for the parameters of the system can also be provided or changed. However, if the parameters have default values assigned, they are used automatically.
-
-```julia
-u0 = [x => 1.0
-      y => 2.0]
-p = [a => 1.0
-     b => 100.0]
+```@example optimization
+u0 = [y => 2.0]
+p = [b => 100.0]
 
 prob = OptimizationProblem(sys, u0, p, grad = true, hess = true)
-solve(prob, GradientDescent())
+u_opt = solve(prob, GradientDescent())
+```
+
+A visualization of the Rosenbrock function is depicted below.
+
+```@example optimization
+using Plots
+x_plot = -2:0.01:2
+y_plot = -1:0.01:3
+contour(
+    x_plot, y_plot, (x, y) -> (1 - x)^2 + 100 * (y - x^2)^2, fill = true, color = :viridis,
+    ratio = :equal, xlims = (-2, 2))
+scatter!([u_opt[1]], [u_opt[2]], ms = 10, label = "minimum")
 ```
 
 ## Rosenbrock Function with Constraints
 
-```julia
+ModelingToolkit is also capable of handing more complicated constraints than box constraints.
+Non-linear equality and inequality constraints can be added to the `OptimizationSystem`.
+Let's add an inequality constraint to the previous example:
+
+```@example optimization_constrained
 using ModelingToolkit, Optimization, OptimizationOptimJL
 
 @variables begin
-    x, [bounds = (-2.0, 2.0)]
-    y, [bounds = (-1.0, 3.0)]
+    x = 0.14, [bounds = (-2.0, 2.0)]
+    y = 0.14, [bounds = (-1.0, 3.0)]
 end
-@parameters a=1 b=100
-loss = (a - x)^2 + b * (y - x^2)^2
+@parameters a=1.0 b=100.0
+rosenbrock = (a - x)^2 + b * (y - x^2)^2
 cons = [
     x^2 + y^2 ≲ 1
 ]
-@mtkbuild sys = OptimizationSystem(loss, [x, y], [a, b], constraints = cons)
-u0 = [x => 0.14
-      y => 0.14]
-prob = OptimizationProblem(sys,
-    u0,
-    grad = true,
-    hess = true,
-    cons_j = true,
-    cons_h = true)
-solve(prob, IPNewton())
+@mtkbuild sys = OptimizationSystem(rosenbrock, [x, y], [a, b], constraints = cons)
+prob = OptimizationProblem(sys, [], grad = true, hess = true, cons_j = true, cons_h = true)
+u_opt = solve(prob, IPNewton())
 ```
 
-A visualization of the objective function and the inequality constraint is depicted below.
+Inequality constraints are constructed via a `≲` (or `≳`).
+[(To write these symbols in your own code write `\lesssim` or `\gtrsim` and then press tab.)]
+(https://docs.julialang.org/en/v1/manual/unicode-input/)
+An equality constraint can be specified via a `~`, e.g., `x^2 + y^2 ~ 1`.
 
-```@eval
+A visualization of the Rosenbrock function and the inequality constraint is depicted below.
+
+```@example optimization_constrained
 using Plots
-x = -2:0.01:2
-y = -1:0.01:3
-contour(x, y, (x, y) -> (1 - x)^2 + 100 * (y - x^2)^2, fill = true, color = :viridis,
+x_plot = -2:0.01:2
+y_plot = -1:0.01:3
+contour(
+    x_plot, y_plot, (x, y) -> (1 - x)^2 + 100 * (y - x^2)^2, fill = true, color = :viridis,
     ratio = :equal, xlims = (-2, 2))
-contour!(x, y, (x, y) -> x^2 + y^2, levels = [1], color = :lightblue, line = 4)
-savefig("obj_fun_c.png");
-nothing; # hide
+contour!(x_plot, y_plot, (x, y) -> x^2 + y^2, levels = [1], color = :lightblue, line = 4)
+scatter!([u_opt[1]], [u_opt[2]], ms = 10, label = "minimum")
 ```
-
-![plot of the Rosenbrock function with constraint](obj_fun_c.png)
-
-### Explanation
-
-Equality and inequality constraints can be added to the `OptimizationSystem`. An equality constraint can be specified via an `Equation`, e.g., `x^2 + y^2 ~ 1`. While inequality constraints via an `Inequality`, e.g., `x^2 + y^2 ≲ 1`. The syntax is here `\lesssim` and `\gtrsim`.
 
 ## Nested Systems
 

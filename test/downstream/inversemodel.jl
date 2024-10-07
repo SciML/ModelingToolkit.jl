@@ -135,7 +135,8 @@ cm = complete(model)
 op = Dict(D(cm.inverse_tank.xT) => 1,
     cm.tank.xc => 0.65)
 tspan = (0.0, 1000.0)
-prob = ODEProblem(ssys, op, tspan)
+# https://github.com/SciML/ModelingToolkit.jl/issues/2786
+prob = ODEProblem(ssys, op, tspan; build_initializeprob = false)
 sol = solve(prob, Rodas5P())
 
 @test SciMLBase.successful_retcode(sol)
@@ -148,9 +149,11 @@ sol = solve(prob, Rodas5P())
 Sf, simplified_sys = Blocks.get_sensitivity_function(model, :y) # This should work without providing an operating opint containing a dummy derivative
 x, _ = ModelingToolkit.get_u0_p(simplified_sys, op)
 p = ModelingToolkit.MTKParameters(simplified_sys, op)
+# If this somehow passes, mention it on
+# https://github.com/SciML/ModelingToolkit.jl/issues/2786
 matrices1 = Sf(x, p, 0)
 matrices2, _ = Blocks.get_sensitivity(model, :y; op) # Test that we get the same result when calling the higher-level API
-@test matrices1.f_x ≈ matrices2.A[1:7, 1:7]
+@test_broken matrices1.f_x ≈ matrices2.A[1:7, 1:7]
 nsys = get_named_sensitivity(model, :y; op) # Test that we get the same result when calling an even higher-level API
 @test matrices2.A ≈ nsys.A
 
@@ -159,8 +162,10 @@ nsys = get_named_sensitivity(model, :y; op) # Test that we get the same result w
 Sf, simplified_sys = Blocks.get_comp_sensitivity_function(model, :y) # This should work without providing an operating opint containing a dummy derivative
 x, _ = ModelingToolkit.get_u0_p(simplified_sys, op)
 p = ModelingToolkit.MTKParameters(simplified_sys, op)
+# If this somehow passes, mention it on
+# https://github.com/SciML/ModelingToolkit.jl/issues/2786
 matrices1 = Sf(x, p, 0)
 matrices2, _ = Blocks.get_comp_sensitivity(model, :y; op) # Test that we get the same result when calling the higher-level API
-@test matrices1.f_x ≈ matrices2.A[1:7, 1:7]
+@test_broken matrices1.f_x ≈ matrices2.A[1:7, 1:7]
 nsys = get_named_comp_sensitivity(model, :y; op) # Test that we get the same result when calling an even higher-level API
 @test matrices2.A ≈ nsys.A

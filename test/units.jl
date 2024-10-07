@@ -2,8 +2,9 @@ using ModelingToolkit, OrdinaryDiffEq, JumpProcesses, Unitful
 using Test
 MT = ModelingToolkit
 UMT = ModelingToolkit.UnitfulUnitCheck
+@independent_variables t [unit = u"ms"]
 @parameters τ [unit = u"ms"] γ
-@variables t [unit = u"ms"] E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
+@variables E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
 
 #This is how equivalent works:
@@ -94,8 +95,9 @@ bad_length_eqs = [connect(op, lp)]
 @test_throws MT.ValidationError ODESystem(bad_eqs, t, [], []; name = :sys)
 
 # Array variables
-@variables t [unit = u"s"] x(t)[1:3] [unit = u"m"]
+@independent_variables t [unit = u"s"]
 @parameters v[1:3]=[1, 2, 3] [unit = u"m/s"]
+@variables x(t)[1:3] [unit = u"m"]
 D = Differential(t)
 eqs = D.(x) .~ v
 ODESystem(eqs, t, name = :sys)
@@ -109,8 +111,9 @@ eqs = [
 @named nls = NonlinearSystem(eqs, [x], [a])
 
 # SDE test w/ noise vector
+@independent_variables t [unit = u"ms"]
 @parameters τ [unit = u"ms"] Q [unit = u"MW"]
-@variables t [unit = u"ms"] E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
+@variables E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
 eqs = [D(E) ~ P - E / τ
        P ~ Q]
@@ -130,8 +133,9 @@ noiseeqs = [0.1u"MW" 0.1u"MW"
 @test !UMT.validate(eqs, noiseeqs)
 
 # Non-trivial simplifications
-@variables t [unit = u"s"] V(t) [unit = u"m"^3] L(t) [unit = u"m"]
+@independent_variables t [unit = u"s"]
 @parameters v [unit = u"m/s"] r [unit = u"m"^3 / u"s"]
+@variables V(t) [unit = u"m"^3] L(t) [unit = u"m"]
 D = Differential(t)
 eqs = [D(L) ~ v,
     V ~ L^3]
@@ -188,3 +192,51 @@ maj2 = MassActionJump(γ, [I => 1], [I => -1, R => 1])
 maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
 maj2 = MassActionJump(γ, [S => 1], [S => -1])
 @named js4 = JumpSystem([maj1, maj2], t, [S], [β, γ])
+
+@mtkmodel ParamTest begin
+    @parameters begin
+        a, [unit = u"m"]
+    end
+    @variables begin
+        b(t), [unit = u"kg"]
+    end
+end
+
+@named sys = ParamTest()
+
+@named sys = ParamTest(a = 3.0u"cm")
+@test ModelingToolkit.getdefault(sys.a) ≈ 0.03
+
+@test_throws ErrorException ParamTest(; name = :t, a = 1.0)
+@test_throws ErrorException ParamTest(; name = :t, a = 1.0u"s")
+
+@mtkmodel ArrayParamTest begin
+    @parameters begin
+        a[1:2], [unit = u"m"]
+    end
+end
+
+@named sys = ArrayParamTest()
+
+@named sys = ArrayParamTest(a = [1.0, 3.0]u"cm")
+@test ModelingToolkit.getdefault(sys.a) ≈ [0.01, 0.03]
+
+@variables x(t)
+@test ModelingToolkit.get_unit(sin(x)) == ModelingToolkit.unitless
+
+@mtkmodel ExpressionParametersTest begin
+    @parameters begin
+        v = 1.0, [unit = u"m/s"]
+        τ = 1.0, [unit = u"s"]
+    end
+    @components begin
+        pt = ParamTest(; a = v * τ)
+    end
+end
+
+@named sys = ExpressionParametersTest(; v = 2.0u"m/s", τ = 3.0u"s")
+sys = complete(sys)
+# TODO: Is there a way to evaluate this expression and compare to 6.0?
+@test isequal(ModelingToolkit.getdefault(sys.pt.a), sys.v * sys.τ)
+@test ModelingToolkit.getdefault(sys.v) ≈ 2.0
+@test ModelingToolkit.getdefault(sys.τ) ≈ 3.0

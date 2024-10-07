@@ -44,15 +44,11 @@ completed_rc_model = complete(rc_model)
 @test ModelingToolkit.n_extra_equations(capacitor) == 2
 @test length(equations(structural_simplify(rc_model, allow_parameter = false))) == 2
 sys = structural_simplify(rc_model)
+@test_throws ModelingToolkit.RepeatedStructuralSimplificationError structural_simplify(sys)
 @test length(equations(sys)) == 1
 check_contract(sys)
 @test !isempty(ModelingToolkit.defaults(sys))
-u0 = [capacitor.v => 0.0
-      capacitor.p.i => 0.0
-      resistor.v => 0.0]
-prob = ODEProblem(sys, u0, (0, 10.0))
-sol = solve(prob, Rodas4())
-check_rc_sol(sol)
+u0 = [capacitor.v => 0.0]
 prob = ODEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
 check_rc_sol(sol)
@@ -133,9 +129,7 @@ eqs = [connect(source.p, rc_comp.p)
 expand_connections(sys_inner_outer, debug = true)
 sys_inner_outer = structural_simplify(sys_inner_outer)
 @test !isempty(ModelingToolkit.defaults(sys_inner_outer))
-u0 = [rc_comp.capacitor.v => 0.0
-      rc_comp.capacitor.p.i => 0.0
-      rc_comp.resistor.v => 0.0]
+u0 = [rc_comp.capacitor.v => 0.0]
 prob = ODEProblem(sys_inner_outer, u0, (0, 10.0), sparse = true)
 sol_inner_outer = solve(prob, Rodas4())
 @test sol[capacitor.v] ≈ sol_inner_outer[rc_comp.capacitor.v]
@@ -304,7 +298,7 @@ sol = solve(prob, Tsit5())
     Hey there, Pin1!
     """
     @connector function Pin1(; name)
-        @variables t
+        @independent_variables t
         sts = @variables v(t)=1.0 i(t)=1.0
         ODESystem(Equation[], t, sts, []; name = name)
     end
@@ -314,7 +308,7 @@ sol = solve(prob, Tsit5())
     Hey there, Pin2!
     """
     @component function Pin2(; name)
-        @variables t
+        @independent_variables t
         sts = @variables v(t)=1.0 i(t)=1.0
         ODESystem(Equation[], t, sts, []; name = name)
     end

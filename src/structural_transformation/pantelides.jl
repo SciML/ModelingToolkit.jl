@@ -16,7 +16,8 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
     fill!(out_vars, nothing)
     out_vars[1:length(fullvars)] .= fullvars
 
-    D = Differential(get_iv(sys))
+    iv = get_iv(sys)
+    D = Differential(iv)
 
     for (varidx, diff) in edges(var_to_diff)
         # fullvars[diff] = D(fullvars[var])
@@ -25,7 +26,7 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
         # `fullvars[i]` needs to be not a `D(...)`, because we want the DAE to be
         # first-order.
         if isdifferential(vi)
-            vi = out_vars[varidx] = diff2term(vi)
+            vi = out_vars[varidx] = diff2term_with_unit(vi, iv)
         end
         out_vars[diff] = D(vi)
     end
@@ -123,7 +124,8 @@ end
 
 Perform Pantelides algorithm.
 """
-function pantelides!(state::TransformationState; finalize = true, maxiters = 8000)
+function pantelides!(
+        state::TransformationState; finalize = true, maxiters = 8000, kwargs...)
     @unpack graph, solvable_graph, var_to_diff, eq_to_diff = state.structure
     neqs = nsrcs(graph)
     nvars = nv(var_to_diff)
@@ -181,7 +183,7 @@ function pantelides!(state::TransformationState; finalize = true, maxiters = 800
                 ecolor[eq] || continue
                 # introduce a new equation
                 neqs += 1
-                eq_derivative!(state, eq)
+                eq_derivative!(state, eq; kwargs...)
             end
 
             for var in eachindex(vcolor)

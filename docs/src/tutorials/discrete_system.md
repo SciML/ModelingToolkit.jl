@@ -43,7 +43,7 @@ the Fibonacci series:
 ```
 
 The "default value" here should be interpreted as the value of `x` at all past timesteps.
-For example, here `x(k-1)` and `x(k-2)` will be `1.0`, and the inital value of `x(k)` will
+For example, here `x(k-1)` and `x(k-2)` will be `1.0`, and the initial value of `x(k)` will
 thus be `2.0`. During problem construction, the _past_ value of a variable should be
 provided. For example, providing `[x => 1.0]` while constructing this problem will error.
 Provide `[x(k-1) => 1.0]` instead. Note that values provided during problem construction

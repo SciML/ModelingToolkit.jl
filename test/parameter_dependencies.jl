@@ -49,9 +49,28 @@ using NonlinearSolve
     @test integ.ps[p2] == 10.0
 end
 
+@testset "vector parameter deps" begin
+    @parameters p1[1:2]=[1.0, 2.0] p2[1:2]=[0.0, 0.0]
+    @variables x(t) = 0
+
+    @named sys = ODESystem(
+        [D(x) ~ sum(p1) * t + sum(p2)],
+        t;
+        parameter_dependencies = [p2 => 2p1]
+    )
+    prob = ODEProblem(complete(sys))
+    setp1! = setp(prob, p1)
+    get_p1 = getp(prob, p1)
+    get_p2 = getp(prob, p2)
+    setp1!(prob, [1.5, 2.5])
+
+    @test get_p1(prob) == [1.5, 2.5]
+    @test get_p2(prob) == [3.0, 5.0]
+end
+
 @testset "extend" begin
     @parameters p1=1.0 p2=1.0
-    @variables x(t)
+    @variables x(t) = 0
 
     @mtkbuild sys1 = ODESystem(
         [D(x) ~ p1 * t + p2],
@@ -65,44 +84,164 @@ end
     sys = extend(sys2, sys1)
     @test isequal(only(parameters(sys)), p1)
     @test Set(full_parameters(sys)) == Set([p1, p2])
+    prob = ODEProblem(complete(sys))
+    get_dep = getu(prob, 2p2)
+    @test get_dep(prob) == 4
+end
+
+@testset "getu with parameter deps" begin
+    @parameters p1=1.0 p2=1.0
+    @variables x(t) = 0
+
+    @named sys = ODESystem(
+        [D(x) ~ p1 * t + p2],
+        t;
+        parameter_dependencies = [p2 => 2p1]
+    )
+    prob = ODEProblem(complete(sys))
+    get_dep = getu(prob, 2p2)
+    @test get_dep(prob) == 4
+end
+
+@testset "getu with vector parameter deps" begin
+    @parameters p1[1:2]=[1.0, 2.0] p2[1:2]=[0.0, 0.0]
+    @variables x(t) = 0
+
+    @named sys = ODESystem(
+        [D(x) ~ sum(p1) * t + sum(p2)],
+        t;
+        parameter_dependencies = [p2 => 2p1]
+    )
+    prob = ODEProblem(complete(sys))
+    get_dep = getu(prob, 2p1)
+    @test get_dep(prob) == [2.0, 4.0]
+end
+
+@testset "composing systems with parameter deps" begin
+    @parameters p1=1.0 p2=2.0
+    @variables x(t) = 0
+
+    @mtkbuild sys1 = ODESystem(
+        [D(x) ~ p1 * t + p2],
+        t
+    )
+    @named sys2 = ODESystem(
+        [D(x) ~ p1 * t - p2],
+        t;
+        parameter_dependencies = [p2 => 2p1]
+    )
+    sys = complete(ODESystem([], t, systems = [sys1, sys2], name = :sys))
+
+    prob = ODEProblem(sys)
+    v1 = sys.sys2.p2
+    v2 = 2 * v1
+    @test is_observed(prob, v1)
+    @test is_observed(prob, v2)
+    get_v1 = getu(prob, v1)
+    get_v2 = getu(prob, v2)
+    @test get_v1(prob) == 2
+    @test get_v2(prob) == 4
+
+    setp1! = setp(prob, sys2.p1)
+    setp1!(prob, 2.5)
+    @test prob.ps[sys2.p2] == 5.0
+
+    new_prob = remake(prob, p = [sys2.p1 => 1.5])
+
+    @test !isempty(ModelingToolkit.parameter_dependencies(sys2))
+    @test new_prob.ps[sys2.p1] == 1.5
+    @test new_prob.ps[sys2.p2] == 3.0
+end
+
+@testset "parameter dependencies across model hierarchy" begin
+    sys2 = let name = :sys2
+        @parameters p2
+        @variables x(t) = 1.0
+        eqs = [D(x) ~ p2]
+        ODESystem(eqs, t, [x], [p2]; name)
+    end
+
+    @parameters p1 = 1.0
+    parameter_dependencies = [sys2.p2 ~ p1 * 2.0]
+    sys1 = ODESystem(
+        Equation[], t, [], [p1]; parameter_dependencies, name = :sys1, systems = [sys2])
+
+    # ensure that parameter_dependencies is type stable
+    # (https://github.com/SciML/ModelingToolkit.jl/pull/2978)
+    @inferred ModelingToolkit.parameter_dependencies(sys1)
+
+    sys = structural_simplify(sys1)
+
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    sol = solve(prob)
+    @test SciMLBase.successful_retcode(sol)
+end
+
+struct CallableFoo
+    p::Any
+end
+
+@register_symbolic CallableFoo(x)
+
+(f::CallableFoo)(x) = f.p + x
+
+@testset "callable parameters" begin
+    @variables y(t) = 1
+    @parameters p=2 (i::CallableFoo)(..)
+
+    eqs = [D(y) ~ i(t) + p]
+    @named model = ODESystem(eqs, t, [y], [p, i];
+        parameter_dependencies = [i ~ CallableFoo(p)])
+    sys = structural_simplify(model)
+
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    sol = solve(prob, Tsit5())
+
+    @test SciMLBase.successful_retcode(sol)
 end
 
 @testset "Clock system" begin
     dt = 0.1
     @variables x(t) y(t) u(t) yd(t) ud(t) r(t) z(t)
     @parameters kp kq
-    d = Clock(t, dt)
+    d = Clock(dt)
     k = ShiftIndex(d)
 
-    eqs = [yd ~ Sample(t, dt)(y)
+    eqs = [yd ~ Sample(dt)(y)
            ud ~ kp * (r - yd) + kq * z
            r ~ 1.0
            u ~ Hold(ud)
            D(x) ~ -x + u
            y ~ x
            z(k) ~ z(k - 2) + yd(k - 2)]
-    @mtkbuild sys = ODESystem(eqs, t; parameter_dependencies = [kq => 2kp])
+    @test_throws ModelingToolkit.HybridSystemNotSupportedException @mtkbuild sys = ODESystem(
+        eqs, t; parameter_dependencies = [kq => 2kp])
 
-    Tf = 1.0
-    prob = ODEProblem(sys, [x => 0.0, y => 0.0], (0.0, Tf),
-        [kp => 1.0; z(k - 1) => 3.0; yd(k - 1) => 0.0; z(k - 2) => 4.0; yd(k - 2) => 2.0])
-    @test_nowarn solve(prob, Tsit5(); kwargshandle = KeywordArgSilent)
+    @test_skip begin
+        Tf = 1.0
+        prob = ODEProblem(sys, [x => 0.0, y => 0.0], (0.0, Tf),
+            [kp => 1.0; z(k - 1) => 3.0; yd(k - 1) => 0.0; z(k - 2) => 4.0;
+             yd(k - 2) => 2.0])
+        @test_nowarn solve(prob, Tsit5())
 
-    @mtkbuild sys = ODESystem(eqs, t; parameter_dependencies = [kq => 2kp],
-        discrete_events = [[0.5] => [kp ~ 2.0]])
-    prob = ODEProblem(sys, [x => 0.0, y => 0.0], (0.0, Tf),
-        [kp => 1.0; z(k - 1) => 3.0; yd(k - 1) => 0.0; z(k - 2) => 4.0; yd(k - 2) => 2.0])
-    @test prob.ps[kp] == 1.0
-    @test prob.ps[kq] == 2.0
-    @test_nowarn solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
-    prob = ODEProblem(sys, [x => 0.0, y => 0.0], (0.0, Tf),
-        [kp => 1.0; z(k - 1) => 3.0; yd(k - 1) => 0.0; z(k - 2) => 4.0; yd(k - 2) => 2.0])
-    integ = init(prob, Tsit5(), kwargshandle = KeywordArgSilent)
-    @test integ.ps[kp] == 1.0
-    @test integ.ps[kq] == 2.0
-    step!(integ, 0.6)
-    @test integ.ps[kp] == 2.0
-    @test integ.ps[kq] == 4.0
+        @mtkbuild sys = ODESystem(eqs, t; parameter_dependencies = [kq => 2kp],
+            discrete_events = [[0.5] => [kp ~ 2.0]])
+        prob = ODEProblem(sys, [x => 0.0, y => 0.0], (0.0, Tf),
+            [kp => 1.0; z(k - 1) => 3.0; yd(k - 1) => 0.0; z(k - 2) => 4.0;
+             yd(k - 2) => 2.0])
+        @test prob.ps[kp] == 1.0
+        @test prob.ps[kq] == 2.0
+        @test_nowarn solve(prob, Tsit5())
+        prob = ODEProblem(sys, [x => 0.0, y => 0.0], (0.0, Tf),
+            [kp => 1.0; z(k - 1) => 3.0; yd(k - 1) => 0.0; z(k - 2) => 4.0;
+             yd(k - 2) => 2.0])
+        integ = init(prob, Tsit5())
+        @test integ.ps[kp] == 1.0
+        @test integ.ps[kq] == 2.0
+        step!(integ, 0.6)
+        @test integ.ps[kp] == 2.0
+        @test integ.ps[kq] == 4.0
+    end
 end
 
 @testset "SDESystem" begin
@@ -232,4 +371,17 @@ end
     ps2 = replace(Tunable(), ps, [2.0])
     @test getp(sys, p1)(ps2) == 2.0
     @test getp(sys, p2)(ps2) == 4.0
+end
+
+@testset "Discovery of parameters from dependencies" begin
+    @parameters p1 p2
+    @variables x(t) y(t)
+    @named sys = ODESystem([D(x) ~ y + p2], t; parameter_dependencies = [p2 ~ 2p1])
+    @test is_parameter(sys, p1)
+    @named sys = NonlinearSystem([x * y^2 ~ y + p2]; parameter_dependencies = [p2 ~ 2p1])
+    @test is_parameter(sys, p1)
+    k = ShiftIndex(t)
+    @named sys = DiscreteSystem(
+        [x(k - 1) ~ x(k) + y(k) + p2], t; parameter_dependencies = [p2 ~ 2p1])
+    @test is_parameter(sys, p1)
 end

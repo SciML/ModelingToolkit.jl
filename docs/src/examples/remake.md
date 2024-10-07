@@ -133,7 +133,7 @@ over the various methods, listing their use cases.
 
 This method is the most generic. It can handle symbolic maps, initializations of
 parameters/states dependent on each other and partial updates. However, this comes at the
-cost of performance. `remake` is also not always inferrable.
+cost of performance. `remake` is also not always inferable.
 
 ## `remake` and `setp`/`setu`
 

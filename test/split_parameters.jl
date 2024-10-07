@@ -1,9 +1,13 @@
 using ModelingToolkit, Test
 using ModelingToolkitStandardLibrary.Blocks
 using OrdinaryDiffEq
+using DataInterpolations
+using BlockArrays: BlockedArray
 using ModelingToolkit: t_nounits as t, D_nounits as D
-using ModelingToolkit: MTKParameters, ParameterIndex, DEPENDENT_PORTION, NONNUMERIC_PORTION
+using ModelingToolkit: MTKParameters, ParameterIndex, NONNUMERIC_PORTION
 using SciMLStructures: Tunable, Discrete, Constants
+using StaticArrays: SizedVector
+using SymbolicIndexingInterface: is_parameter, getp
 
 x = [1, 2.0, false, [1, 2, 3], Parameter(1.0)]
 
@@ -80,8 +84,11 @@ eqs = [y ~ src.output.u
 @named sys = ODESystem(eqs, t, vars, []; systems = [int, src])
 s = complete(sys)
 sys = structural_simplify(sys)
-prob = ODEProblem(
+@test_broken ODEProblem(
     sys, [], (0.0, t_end), [s.src.interpolator => Interpolator(x, dt)]; tofloat = false)
+prob = ODEProblem(
+    sys, [], (0.0, t_end), [s.src.interpolator => Interpolator(x, dt)];
+    tofloat = false, build_initializeprob = false)
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
 @test sol[y][end] == x[end]
@@ -115,7 +122,7 @@ sol = solve(prob, ImplicitEuler());
 
 # ------------------------ Mixed Type Conserved
 
-prob = ODEProblem(sys, [], tspan, []; tofloat = false)
+prob = ODEProblem(sys, [], tspan, []; tofloat = false, use_union = true)
 
 @test prob.p isa Tuple{Vector{Float64}, Vector{Int64}}
 sol = solve(prob, ImplicitEuler());
@@ -193,23 +200,67 @@ connections = [[state_feedback.input.u[i] ~ model_outputs[i] for i in 1:4]
 S = get_sensitivity(closed_loop, :u)
 
 @testset "Indexing MTKParameters with ParameterIndex" begin
-    ps = MTKParameters(([1.0, 2.0], [3, 4]),
-        ([true, false], [[1 2; 3 4]]),
+    ps = MTKParameters(collect(1.0:10.0),
+        (BlockedArray([true, false, false, true], [2, 2]),
+            BlockedArray([[1 2; 3 4], [2 4; 6 8]], [1, 1])),
+        # (BlockedArray([[true, false], [false, true]]), BlockedArray([[[1 2; 3 4]], [[2 4; 6 8]]])),
         ([5, 6],),
-        ([7.0, 8.0],),
-        (["hi", "bye"], [:lie, :die]),
-        nothing,
-        nothing)
-    @test ps[ParameterIndex(Tunable(), (1, 2))] === 2.0
-    @test ps[ParameterIndex(Tunable(), (2, 2))] === 4
-    @test ps[ParameterIndex(Discrete(), (2, 1, 2, 2))] === 4
-    @test ps[ParameterIndex(Discrete(), (2, 1))] == [1 2; 3 4]
-    @test ps[ParameterIndex(Constants(), (1, 1))] === 5
-    @test ps[ParameterIndex(DEPENDENT_PORTION, (1, 1))] === 7.0
-    @test ps[ParameterIndex(NONNUMERIC_PORTION, (2, 2))] === :die
+        (["hi", "bye"], [:lie, :die]))
+    @test ps[ParameterIndex(Tunable(), 1)] == 1.0
+    @test ps[ParameterIndex(Tunable(), 2:4)] == collect(2.0:4.0)
+    @test ps[ParameterIndex(Tunable(), reshape(4:7, 2, 2))] == reshape(4.0:7.0, 2, 2)
+    @test ps[ParameterIndex(Discrete(), (2, 1, 2, 2))] == 4
+    @test ps[ParameterIndex(Discrete(), (2, 2))] == [2 4; 6 8]
+    @test ps[ParameterIndex(Constants(), (1, 1))] == 5
+    @test ps[ParameterIndex(NONNUMERIC_PORTION, (2, 2))] == :die
 
-    ps[ParameterIndex(Tunable(), (1, 2))] = 3.0
+    ps[ParameterIndex(Tunable(), 1)] = 1.5
+    ps[ParameterIndex(Tunable(), 2:4)] = [2.5, 3.5, 4.5]
+    ps[ParameterIndex(Tunable(), reshape(5:8, 2, 2))] = [5.5 7.5; 6.5 8.5]
     ps[ParameterIndex(Discrete(), (2, 1, 2, 2))] = 5
-    @test ps[ParameterIndex(Tunable(), (1, 2))] === 3.0
-    @test ps[ParameterIndex(Discrete(), (2, 1, 2, 2))] === 5
+    @test ps[ParameterIndex(Tunable(), 1:8)] == collect(1.0:8.0) .+ 0.5
+    @test ps[ParameterIndex(Discrete(), (2, 1, 2, 2))] == 5
+end
+
+@testset "Callable parameters" begin
+    @testset "As FunctionWrapper" begin
+        _f1(x) = 2x
+        struct Foo end
+        (::Foo)(x) = 3x
+        @variables x(t)
+        @parameters fn(::Real) = _f1
+        @mtkbuild sys = ODESystem(D(x) ~ fn(t), t)
+        @test is_parameter(sys, fn)
+        @test ModelingToolkit.defaults(sys)[fn] == _f1
+
+        getter = getp(sys, fn)
+        prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
+        @inferred getter(prob)
+        # cannot be inferred better since `FunctionWrapper` is only known to return `Real`
+        @inferred Vector{<:Real} prob.f(prob.u0, prob.p, prob.tspan[1])
+        sol = solve(prob, Tsit5(); abstol = 1e-10, reltol = 1e-10)
+        @test sol.u[end][] ≈ 2.0
+
+        prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [fn => Foo()])
+        @inferred getter(prob)
+        @inferred Vector{<:Real} prob.f(prob.u0, prob.p, prob.tspan[1])
+        sol = solve(prob; abstol = 1e-10, reltol = 1e-10)
+        @test sol.u[end][] ≈ 2.5
+    end
+
+    @testset "Concrete function type" begin
+        ts = 0.0:0.1:1.0
+        interp = LinearInterpolation(ts .^ 2, ts; extrapolate = true)
+        @variables x(t)
+        @parameters (fn::typeof(interp))(..)
+        @mtkbuild sys = ODESystem(D(x) ~ fn(x), t)
+        @test is_parameter(sys, fn)
+        getter = getp(sys, fn)
+        prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [fn => interp])
+        @inferred getter(prob)
+        @inferred prob.f(prob.u0, prob.p, prob.tspan[1])
+        @test_nowarn sol = solve(prob, Tsit5())
+        @test_nowarn prob.ps[fn] = LinearInterpolation(ts .^ 3, ts; extrapolate = true)
+        @test_nowarn sol = solve(prob)
+    end
 end

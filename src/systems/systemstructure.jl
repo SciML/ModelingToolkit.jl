@@ -1,13 +1,14 @@
 using DataStructures
 using Symbolics: linear_expansion, unwrap, Connection
-using SymbolicUtils: istree, operation, arguments, Symbolic
-using SymbolicUtils: quick_cancel, similarterm
+using SymbolicUtils: iscall, operation, arguments, Symbolic
+using SymbolicUtils: quick_cancel, maketerm
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           value, InvalidSystemException, isdifferential, _iszero,
                           isparameter, isconstant,
                           independent_variables, SparseMatrixCLIL, AbstractSystem,
                           equations, isirreducible, input_timedomain, TimeDomain,
+                          InferredTimeDomain,
                           VariableType, getvariabletype, has_equations, ODESystem
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
@@ -18,9 +19,8 @@ using SparseArrays
 
 function quick_cancel_expr(expr)
     Rewriters.Postwalk(quick_cancel,
-        similarterm = (x, f, args; kws...) -> similarterm(x, f, args,
-            SymbolicUtils.symtype(x);
-            metadata = SymbolicUtils.metadata(x),
+        similarterm = (x, f, args; kws...) -> maketerm(typeof(x), f, args,
+            SymbolicUtils.metadata(x),
             kws...))(expr)
 end
 
@@ -288,7 +288,7 @@ function TearingState(sys; quick_cancel = false, check = true)
             _var, _ = var_from_nested_derivative(v)
             any(isequal(_var), ivs) && continue
             if isparameter(_var) ||
-               (istree(_var) && isparameter(operation(_var)) || isconstant(_var))
+               (iscall(_var) && isparameter(operation(_var)) || isconstant(_var))
                 continue
             end
             v = scalarize(v)
@@ -308,7 +308,7 @@ function TearingState(sys; quick_cancel = false, check = true)
             _var, _ = var_from_nested_derivative(var)
             any(isequal(_var), ivs) && continue
             if isparameter(_var) ||
-               (istree(_var) && isparameter(operation(_var)) || isconstant(_var))
+               (iscall(_var) && isparameter(operation(_var)) || isconstant(_var))
                 continue
             end
             varidx = addvar!(var)
@@ -328,11 +328,11 @@ function TearingState(sys; quick_cancel = false, check = true)
             dvar = var
             idx = varidx
 
-            if istree(var) && operation(var) isa Symbolics.Operator &&
+            if iscall(var) && operation(var) isa Symbolics.Operator &&
                !isdifferential(var) && (it = input_timedomain(var)) !== nothing
                 set_incidence = false
                 var = only(arguments(var))
-                var = setmetadata(var, TimeDomain, it)
+                var = setmetadata(var, VariableTimeDomain, it)
                 @goto ANOTHER_VAR
             end
         end
@@ -627,7 +627,7 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
         kwargs...)
     if state.sys isa ODESystem
         ci = ModelingToolkit.ClockInference(state)
-        ModelingToolkit.infer_clocks!(ci)
+        ci = ModelingToolkit.infer_clocks!(ci)
         time_domains = merge(Dict(state.fullvars .=> ci.var_domain),
             Dict(default_toterm.(state.fullvars) .=> ci.var_domain))
         tss, inputs, continuous_id, id_to_clock = ModelingToolkit.split_system(ci)
@@ -636,6 +636,9 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
             check_consistency, fully_determined,
             kwargs...)
         if length(tss) > 1
+            if continuous_id > 0
+                throw(HybridSystemNotSupportedException("Hybrid continuous-discrete systems are currently not supported with the standard MTK compiler. This system requires JuliaSimCompiler.jl, see https://help.juliahub.com/juliasimcompiler/stable/"))
+            end
             # TODO: rename it to something else
             discrete_subsystems = Vector{ODESystem}(undef, length(tss))
             # Note that the appended_parameters must agree with
@@ -658,7 +661,8 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
             @set! sys.defaults = merge(ModelingToolkit.defaults(sys),
                 Dict(v => 0.0 for v in Iterators.flatten(inputs)))
         end
-        ps = [setmetadata(sym, TimeDomain, get(time_domains, sym, Continuous()))
+        ps = [sym isa CallWithMetadata ? sym :
+              setmetadata(sym, VariableTimeDomain, get(time_domains, sym, Continuous))
               for sym in get_ps(sys)]
         @set! sys.ps = ps
     else
@@ -689,15 +693,18 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
         ModelingToolkit.check_consistency(state, orig_inputs)
     end
     if fully_determined && dummy_derivative
-        sys = ModelingToolkit.dummy_derivative(sys, state; simplify, mm, check_consistency)
+        sys = ModelingToolkit.dummy_derivative(
+            sys, state; simplify, mm, check_consistency, kwargs...)
     elseif fully_determined
         var_eq_matching = pantelides!(state; finalize = false, kwargs...)
         sys = pantelides_reassemble(state, var_eq_matching)
         state = TearingState(sys)
         sys, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
-        sys = ModelingToolkit.dummy_derivative(sys, state; simplify, mm, check_consistency)
+        sys = ModelingToolkit.dummy_derivative(
+            sys, state; simplify, mm, check_consistency, kwargs...)
     else
-        sys = ModelingToolkit.tearing(sys, state; simplify, mm, check_consistency)
+        sys = ModelingToolkit.tearing(
+            sys, state; simplify, mm, check_consistency, kwargs...)
     end
     fullunknowns = [map(eq -> eq.lhs, observed(sys)); unknowns(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)

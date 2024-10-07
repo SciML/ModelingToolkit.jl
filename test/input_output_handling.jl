@@ -144,7 +144,9 @@ if VERSION >= v"1.8" # :opaque_closure not supported before
             drop_expr = identity)
         x = randn(size(A, 1))
         u = randn(size(B, 2))
-        p = getindex.(Ref(ModelingToolkit.defaults(ssys)), parameters(ssys))
+        p = (getindex.(
+            Ref(ModelingToolkit.defaults_and_guesses(ssys)),
+            parameters(ssys)),)
         y1 = obsf(x, u, p, 0)
         y2 = C * x + D * u
         @test y1[] ≈ y2[]
@@ -376,3 +378,27 @@ matrices, ssys = linearize(augmented_sys,
 # P = ss(A,B,C,0)
 # G = ss(matrices...)
 # @test sminreal(G[1, 3]) ≈ sminreal(P[1,1])*dist
+
+@testset "Observed functions with inputs" begin
+    @variables x(t)=0 u(t)=0 [input = true]
+    eqs = [
+        D(x) ~ -x + u
+    ]
+
+    @named sys = ODESystem(eqs, t)
+    (; io_sys,) = ModelingToolkit.generate_control_function(sys, simplify = true)
+    obsfn = ModelingToolkit.build_explicit_observed_function(
+        io_sys, [x + u * t]; inputs = [u])
+    @test obsfn([1.0], [2.0], nothing, 3.0) == [7.0]
+end
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/2896
+@testset "Constants substitution" begin
+    @constants c = 2.0
+    @variables x(t)
+    eqs = [D(x) ~ c * x]
+    @named sys = ODESystem(eqs, t, [x], [])
+
+    f, dvs, ps = ModelingToolkit.generate_control_function(sys, simplify = true)
+    @test f[1]([0.5], nothing, nothing, 0.0) == [1.0]
+end

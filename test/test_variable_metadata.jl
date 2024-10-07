@@ -16,6 +16,12 @@ using ModelingToolkit
 @test hasguess(y) === true
 @test ModelingToolkit.dump_variable_metadata(y).guess == 0
 
+# Default
+@variables y = 0
+@test ModelingToolkit.getdefault(y) === 0
+@test ModelingToolkit.hasdefault(y) === true
+@test ModelingToolkit.dump_variable_metadata(y).default == 0
+
 # Issue#2653
 @variables y[1:3] [guess = ones(3)]
 @test getguess(y) == ones(3)
@@ -67,7 +73,7 @@ d = FakeNormal()
 @test !haskey(ModelingToolkit.dump_variable_metadata(y), :dist)
 
 ## System interface
-@parameters t
+@independent_variables t
 Dₜ = Differential(t)
 @variables x(t)=0 [bounds = (-10, 10)] u(t)=0 [input = true] y(t)=0 [output = true]
 @parameters T [bounds = (0, Inf)]
@@ -118,9 +124,23 @@ sp = Set(p)
 @test !hasdescription(u)
 @test !haskey(ModelingToolkit.dump_variable_metadata(u), :desc)
 
-@parameters t
+@independent_variables t
 @variables u(t) [description = "A short description of u"]
 @parameters p [description = "A description of p"]
 @named sys = ODESystem([u ~ p], t)
 
 @test_nowarn show(stdout, "text/plain", sys)
+
+# Defaults, guesses overridden by system, parameter dependencies
+@variables x(t)=1.0 y(t) [guess = 1.0]
+@parameters p=2.0 q
+@named sys = ODESystem(Equation[], t, [x, y], [p]; defaults = Dict(x => 2.0, p => 3.0),
+    guesses = Dict(y => 2.0), parameter_dependencies = [q => 2p])
+unks_meta = ModelingToolkit.dump_unknowns(sys)
+unks_meta = Dict([ModelingToolkit.getname(meta.var) => meta for meta in unks_meta])
+@test unks_meta[:x].default == 2.0
+@test unks_meta[:y].guess == 2.0
+params_meta = ModelingToolkit.dump_parameters(sys)
+params_meta = Dict([ModelingToolkit.getname(meta.var) => meta for meta in params_meta])
+@test params_meta[:p].default == 3.0
+@test isequal(params_meta[:q].dependency, 2p)

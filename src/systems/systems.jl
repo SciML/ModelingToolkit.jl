@@ -3,28 +3,48 @@ function System(eqs::AbstractVector{<:Equation}, iv, args...; name = nothing,
     ODESystem(eqs, iv, args...; name, kw..., checks = false)
 end
 
+const REPEATED_SIMPLIFICATION_MESSAGE = "Structural simplification cannot be applied to a completed system. Double simplification is not allowed."
+
+struct RepeatedStructuralSimplificationError <: Exception end
+
+function Base.showerror(io::IO, e::RepeatedStructuralSimplificationError)
+    print(io, REPEATED_SIMPLIFICATION_MESSAGE)
+end
+
 """
 $(SIGNATURES)
 
 Structurally simplify algebraic equations in a system and compute the
-topological sort of the observed equations. When `simplify=true`, the `simplify`
-function will be applied during the tearing process. It also takes kwargs
-`allow_symbolic=false` and `allow_parameter=true` which limits the coefficient
-types during tearing.
+topological sort of the observed equations in `sys`.
 
-The optional argument `io` may take a tuple `(inputs, outputs)`.
-This will convert all `inputs` to parameters and allow them to be unconnected, i.e.,
-simplification will allow models where `n_unknowns = n_equations - n_inputs`.
+### Optional Arguments:
++ optional argument `io` may take a tuple `(inputs, outputs)`. This will convert all `inputs` to parameters and allow them to be unconnected, i.e., simplification will allow models where `n_unknowns = n_equations - n_inputs`.
+
+### Optional Keyword Arguments:
++ When `simplify=true`, the `simplify` function will be applied during the tearing process.
++ `allow_symbolic=false`, `allow_parameter=true`, and `conservative=false` limit the coefficient types during tearing. In particular, `conservative=true` limits tearing to only solve for trivial linear systems where the coefficient has the absolute value of ``1``.
++ `fully_determined=true` controls whether or not an error will be thrown if the number of equations don't match the number of inputs, outputs, and equations.
 """
 function structural_simplify(
         sys::AbstractSystem, io = nothing; simplify = false, split = true,
+        allow_symbolic = false, allow_parameter = true, conservative = false, fully_determined = true,
         kwargs...)
-    newsys′ = __structural_simplify(sys, io; simplify, kwargs...)
+    isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
+    newsys′ = __structural_simplify(sys, io; simplify,
+        allow_symbolic, allow_parameter, conservative, fully_determined,
+        kwargs...)
     if newsys′ isa Tuple
         @assert length(newsys′) == 2
         newsys = newsys′[1]
     else
         newsys = newsys′
+    end
+    if newsys isa DiscreteSystem &&
+       any(eq -> symbolic_type(eq.lhs) == NotSymbolic(), equations(newsys))
+        error("""
+            Encountered algebraic equations when simplifying discrete system. This is \
+            not yet supported.
+        """)
     end
     if newsys isa ODESystem || has_parent(newsys)
         @set! newsys.parent = complete(sys; split)
@@ -116,9 +136,24 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
             g_row > size(g, 1) && continue
             @views copyto!(sorted_g_rows[i, :], g[g_row, :])
         end
-
-        return SDESystem(full_equations(ode_sys), sorted_g_rows,
+        # Fix for https://github.com/SciML/ModelingToolkit.jl/issues/2490
+        if sorted_g_rows isa AbstractMatrix && size(sorted_g_rows, 2) == 1
+            # If there's only one brownian variable referenced across all the equations,
+            # we get a Nx1 matrix of noise equations, which is a special case known as scalar noise
+            noise_eqs = sorted_g_rows[:, 1]
+            is_scalar_noise = true
+        elseif __num_isdiag_noise(sorted_g_rows)
+            # If each column of the noise matrix has either 0 or 1 non-zero entry, then this is "diagonal noise".
+            # In this case, the solver just takes a vector column of equations and it interprets that to
+            # mean that each noise process is independent
+            noise_eqs = __get_num_diag_noise(sorted_g_rows)
+            is_scalar_noise = false
+        else
+            noise_eqs = sorted_g_rows
+            is_scalar_noise = false
+        end
+        return SDESystem(full_equations(ode_sys), noise_eqs,
             get_iv(ode_sys), unknowns(ode_sys), parameters(ode_sys);
-            name = nameof(ode_sys))
+            name = nameof(ode_sys), is_scalar_noise)
     end
 end

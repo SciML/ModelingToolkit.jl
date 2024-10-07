@@ -7,12 +7,12 @@ using Symbolics: unwrap, linear_expansion, fast_substitute
 using SymbolicUtils
 using SymbolicUtils.Code
 using SymbolicUtils.Rewriters
-using SymbolicUtils: similarterm, istree
+using SymbolicUtils: maketerm, iscall
 
 using ModelingToolkit
 using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Differential,
-                       unknowns, equations, vars, Symbolic, diff2term, value,
-                       operation, arguments, Sym, Term, simplify, solve_for,
+                       unknowns, equations, vars, Symbolic, diff2term_with_unit, value,
+                       operation, arguments, Sym, Term, simplify, symbolic_linear_solve,
                        isdiffeq, isdifferential, isirreducible,
                        empty_substitutions, get_substitutions,
                        get_tearing_state, get_iv, independent_variables,
@@ -22,9 +22,9 @@ using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Di
                        get_postprocess_fbody, vars!,
                        IncrementalCycleTracker, add_edge_checked!, topological_sort,
                        invalidate_cache!, Substitutions, get_or_construct_tearing_state,
-                       filter_kwargs, lower_varname, setio, SparseMatrixCLIL,
+                       filter_kwargs, lower_varname_with_unit, setio, SparseMatrixCLIL,
                        get_fullvars, has_equations, observed,
-                       Schedule
+                       Schedule, schedule
 
 using ModelingToolkit.BipartiteGraphs
 import .BipartiteGraphs: invview, complete
@@ -49,6 +49,8 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 using SparseArrays
 
 using SimpleNonlinearSolve
+
+using DocStringExtensions
 
 export tearing, partial_state_selection, dae_index_lowering, check_consistency
 export dummy_derivative

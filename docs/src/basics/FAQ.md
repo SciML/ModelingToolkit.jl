@@ -186,7 +186,7 @@ p, replace, alias = SciMLStructures.canonicalize(Tunable(), prob.p)
 
 This error can come up after running `structural_simplify` on a system that generates dummy derivatives (i.e. variables with `ˍt`).  For example, here even though all the variables are defined with initial values, the `ODEProblem` generation will throw an error that defaults are missing from the variable map.
 
-```
+```julia
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
@@ -197,13 +197,13 @@ eqs = [x1 + x2 + 1 ~ 0
        2 * D(D(x1)) + D(D(x2)) + D(D(x3)) + D(x4) + 4 ~ 0]
 @named sys = ODESystem(eqs, t)
 sys = structural_simplify(sys)
-prob = ODEProblem(sys, [], (0,1))
+prob = ODEProblem(sys, [], (0, 1))
 ```
 
 We can solve this problem by using the `missing_variable_defaults()` function
 
-```
-prob = ODEProblem(sys, ModelingToolkit.missing_variable_defaults(sys), (0,1))
+```julia
+prob = ODEProblem(sys, ModelingToolkit.missing_variable_defaults(sys), (0, 1))
 ```
 
 This function provides 0 for the default values, which is a safe assumption for dummy derivatives of most models.  However, the 2nd argument allows for a different default value or values to be used if needed.
@@ -221,12 +221,85 @@ julia> ModelingToolkit.missing_variable_defaults(sys, [1,2,3])
 Use the `u0_constructor` keyword argument to map an array to the desired
 container type. For example:
 
-```
+```julia
 using ModelingToolkit, StaticArrays
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
-sts = @variables x1(t)=0.0
+sts = @variables x1(t) = 0.0
 eqs = [D(x1) ~ 1.1 * x1]
 @mtkbuild sys = ODESystem(eqs, t)
-prob = ODEProblem{false}(sys, [], (0,1); u0_constructor = x->SVector(x...))
+prob = ODEProblem{false}(sys, [], (0, 1); u0_constructor = x -> SVector(x...))
+```
+
+## Using a custom independent variable
+
+When possible, we recommend `using ModelingToolkit: t_nounits as t, D_nounits as D` as the independent variable and its derivative.
+However, if you want to use your own, you can do so:
+
+```julia
+using ModelingToolkit
+
+@independent_variables x
+D = Differential(x)
+@variables y(x)
+@named sys = ODESystem([D(y) ~ x], x)
+```
+
+## Ordering of tunable parameters
+
+Tunable parameters are floating point parameters, not used in callbacks and not marked with `tunable = false` in their metadata. These are expected to be used with AD
+and optimization libraries. As such, they are stored together in one `Vector{T}`. To obtain the ordering of tunable parameters in this buffer, use:
+
+```@docs
+tunable_parameters
+```
+
+If you have an array in which a particular dimension is in the order of tunable parameters (e.g. the jacobian with respect to tunables) then that dimension of the
+array can be reordered into the required permutation using the symbolic variables:
+
+```@docs
+reorder_dimension_by_tunables!
+reorder_dimension_by_tunables
+```
+
+For example:
+
+```@example reorder
+using ModelingToolkit
+
+@parameters p q[1:3] r[1:2, 1:2]
+
+@named sys = ODESystem(Equation[], ModelingToolkit.t_nounits, [], [p, q, r])
+sys = complete(sys)
+```
+
+The canonicalized tunables portion of `MTKParameters` will be in the order of tunables:
+
+```@example reorder
+using SciMLStructures: canonicalize, Tunable
+
+ps = MTKParameters(sys, [p => 1.0, q => [2.0, 3.0, 4.0], r => [5.0 6.0; 7.0 8.0]])
+arr = canonicalize(Tunable(), ps)[1]
+```
+
+We can reorder this to contain the value for `p`, then all values for `q`, then for `r` using:
+
+```@example reorder
+reorder_dimension_by_tunables(sys, arr, [p, q, r])
+```
+
+This also works with interleaved subarrays of symbolics:
+
+```@example reorder
+reorder_dimension_by_tunables(sys, arr, [q[1], r[1, :], q[2], r[2, :], q[3], p])
+```
+
+And arbitrary dimensions of higher dimensional arrays:
+
+```@example reorder
+highdimarr = stack([i * arr for i in 1:5]; dims = 1)
+```
+
+```@example reorder
+reorder_dimension_by_tunables(sys, highdimarr, [q[1:2], r[1, :], q[3], r[2, :], p]; dim = 2)
 ```

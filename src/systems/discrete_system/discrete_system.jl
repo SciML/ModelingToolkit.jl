@@ -59,10 +59,10 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     """
     connector_type::Any
     """
-    A mapping from dependent parameters to expressions describing how they are calculated from
-    other parameters.
+    Topologically sorted parameter dependency equations, where all symbols are parameters and
+    the LHS is a single parameter.
     """
-    parameter_dependencies::Union{Nothing, Dict}
+    parameter_dependencies::Vector{Equation}
     """
     Metadata for the system, to be used by downstream packages.
     """
@@ -91,16 +91,19 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     The hierarchical parent system before simplification.
     """
     parent::Any
+    isscheduled::Bool
 
     function DiscreteSystem(tag, discreteEqs, iv, dvs, ps, tspan, var_to_name,
             observed,
             name,
-            systems, defaults, preface, connector_type, parameter_dependencies = nothing,
+            systems, defaults, preface, connector_type, parameter_dependencies = Equation[],
             metadata = nothing, gui_metadata = nothing,
             tearing_state = nothing, substitutions = nothing,
-            complete = false, index_cache = nothing, parent = nothing;
+            complete = false, index_cache = nothing, parent = nothing,
+            isscheduled = false;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
+            check_independent_variables([iv])
             check_variables(dvs, iv)
             check_parameters(ps, iv)
         end
@@ -112,7 +115,7 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
             systems,
             defaults,
             preface, connector_type, parameter_dependencies, metadata, gui_metadata,
-            tearing_state, substitutions, complete, index_cache, parent)
+            tearing_state, substitutions, complete, index_cache, parent, isscheduled)
     end
 end
 
@@ -130,7 +133,7 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
         defaults = _merge(Dict(default_u0), Dict(default_p)),
         preface = nothing,
         connector_type = nothing,
-        parameter_dependencies = nothing,
+        parameter_dependencies = Equation[],
         metadata = nothing,
         gui_metadata = nothing,
         kwargs...)
@@ -148,7 +151,8 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
             :DiscreteSystem, force = true)
     end
     defaults = todict(defaults)
-    defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
+    defaults = Dict(value(k) => value(v)
+    for (k, v) in pairs(defaults) if value(v) !== nothing)
 
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, dvs′)
@@ -173,7 +177,7 @@ function DiscreteSystem(eqs, iv; kwargs...)
     for eq in eqs
         collect_vars!(allunknowns, ps, eq.lhs, iv; op = Shift)
         collect_vars!(allunknowns, ps, eq.rhs, iv; op = Shift)
-        if istree(eq.lhs) && operation(eq.lhs) isa Shift
+        if iscall(eq.lhs) && operation(eq.lhs) isa Shift
             isequal(iv, operation(eq.lhs).t) ||
                 throw(ArgumentError("A DiscreteSystem can only have one independent variable."))
             eq.lhs in diffvars &&
@@ -181,9 +185,18 @@ function DiscreteSystem(eqs, iv; kwargs...)
             push!(diffvars, eq.lhs)
         end
     end
+    for eq in get(kwargs, :parameter_dependencies, Equation[])
+        if eq isa Pair
+            collect_vars!(allunknowns, ps, eq[1], iv)
+            collect_vars!(allunknowns, ps, eq[2], iv)
+        else
+            collect_vars!(allunknowns, ps, eq.lhs, iv)
+            collect_vars!(allunknowns, ps, eq.rhs, iv)
+        end
+    end
     new_ps = OrderedSet()
     for p in ps
-        if istree(p) && operation(p) === getindex
+        if iscall(p) && operation(p) === getindex
             par = arguments(p)[begin]
             if Symbolics.shape(Symbolics.unwrap(par)) !== Symbolics.Unknown() &&
                all(par[i] in ps for i in eachindex(par))
@@ -216,20 +229,30 @@ function flatten(sys::DiscreteSystem, noeqs = false)
 end
 
 function generate_function(
-        sys::DiscreteSystem, dvs = unknowns(sys), ps = full_parameters(sys); kwargs...)
-    generate_custom_function(sys, [eq.rhs for eq in equations(sys)], dvs, ps; kwargs...)
+        sys::DiscreteSystem, dvs = unknowns(sys), ps = parameters(sys); wrap_code = identity, kwargs...)
+    exprs = [eq.rhs for eq in equations(sys)]
+    wrap_code = wrap_code .∘ wrap_array_vars(sys, exprs) .∘
+                wrap_parameter_dependencies(sys, false)
+    generate_custom_function(sys, exprs, dvs, ps; wrap_code, kwargs...)
 end
 
 function process_DiscreteProblem(constructor, sys::DiscreteSystem, u0map, parammap;
         linenumbers = true, parallel = SerialForm(),
-        eval_expression = true,
         use_union = false,
         tofloat = !use_union,
+        eval_expression = false, eval_module = @__MODULE__,
         kwargs...)
     iv = get_iv(sys)
     eqs = equations(sys)
     dvs = unknowns(sys)
     ps = parameters(sys)
+
+    if eltype(u0map) <: Number
+        u0map = unknowns(sys) .=> vec(u0map)
+    end
+    if u0map === nothing || isempty(u0map)
+        u0map = Dict()
+    end
 
     trueu0map = Dict()
     for (k, v) in u0map
@@ -259,7 +282,8 @@ function process_DiscreteProblem(constructor, sys::DiscreteSystem, u0map, paramm
     f = constructor(sys, dvs, ps, u0;
         linenumbers = linenumbers, parallel = parallel,
         syms = Symbol.(dvs), paramsyms = Symbol.(ps),
-        eval_expression = eval_expression, kwargs...)
+        eval_expression = eval_expression, eval_module = eval_module,
+        kwargs...)
     return f, u0, p
 end
 
@@ -271,7 +295,7 @@ function SciMLBase.DiscreteProblem(
         sys::DiscreteSystem, u0map = [], tspan = get_tspan(sys),
         parammap = SciMLBase.NullParameters();
         eval_module = @__MODULE__,
-        eval_expression = true,
+        eval_expression = false,
         use_union = false,
         kwargs...
 )
@@ -303,23 +327,21 @@ end
 function SciMLBase.DiscreteFunction{iip, specialize}(
         sys::DiscreteSystem,
         dvs = unknowns(sys),
-        ps = full_parameters(sys),
+        ps = parameters(sys),
         u0 = nothing;
         version = nothing,
         p = nothing,
         t = nothing,
-        eval_expression = true,
+        eval_expression = false,
         eval_module = @__MODULE__,
         analytic = nothing,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed `DiscreteSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
     end
-    f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression},
+    f_gen = generate_function(sys, dvs, ps; expression = Val{true},
         expression_module = eval_module, kwargs...)
-    f_oop, f_iip = eval_expression ?
-                   (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen) :
-                   f_gen
+    f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
     f(u, p, t) = f_oop(u, p, t)
     f(du, u, p, t) = f_iip(du, u, p, t)
 
@@ -330,14 +352,7 @@ function SciMLBase.DiscreteFunction{iip, specialize}(
         f = SciMLBase.wrapfun_iip(f, (u0, u0, p, t))
     end
 
-    observedfun = let sys = sys, dict = Dict()
-        function generate_observed(obsvar, u, p, t)
-            obs = get!(dict, value(obsvar)) do
-                build_explicit_observed_function(sys, obsvar)
-            end
-            p isa MTKParameters ? obs(u, p..., t) : obs(u, p, t)
-        end
-    end
+    observedfun = ObservedFunctionCache(sys)
 
     DiscreteFunction{iip, specialize}(f;
         sys = sys,

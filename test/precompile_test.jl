@@ -10,7 +10,7 @@ using ODEPrecompileTest
 
 u = collect(1:3)
 p = ModelingToolkit.MTKParameters(ODEPrecompileTest.f_noeval_good.sys,
-    parameters(ODEPrecompileTest.f_noeval_good.sys) .=> collect(4:6))
+    [:σ, :ρ, :β] .=> collect(4:6))
 
 # These cases do not work, because they get defined in the ModelingToolkit's RGF cache.
 @test parentmodule(typeof(ODEPrecompileTest.f_bad.f.f_iip).parameters[2]) == ModelingToolkit
@@ -30,3 +30,11 @@ end
 @test parentmodule(typeof(ODEPrecompileTest.f_noeval_good.f.f_oop).parameters[2]) ==
       ODEPrecompileTest
 @test ODEPrecompileTest.f_noeval_good(u, p, 0.1) == [4, 0, -16]
+
+ODEPrecompileTest.f_eval_bad(u, p, 0.1)
+
+@test parentmodule(typeof(ODEPrecompileTest.f_eval_good.f.f_iip)) ==
+      ODEPrecompileTest
+@test parentmodule(typeof(ODEPrecompileTest.f_eval_good.f.f_oop)) ==
+      ODEPrecompileTest
+@test ODEPrecompileTest.f_eval_good(u, p, 0.1) == [4, 0, -16]

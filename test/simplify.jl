@@ -2,7 +2,7 @@ using ModelingToolkit
 using ModelingToolkit: value
 using Test
 
-@parameters t
+@independent_variables t
 @variables x(t) y(t) z(t)
 
 null_op = 0 * t
@@ -37,7 +37,8 @@ d3 = Differential(x)(d2)
 
 # 699
 using SymbolicUtils: substitute
-@parameters t a(t) b(t)
+@independent_variables t
+@parameters a(t) b(t)
 
 # back and forth substitution does not work for parameters with dependencies
 term = value(a)

@@ -19,8 +19,8 @@ function outputs(sys)
     lhss = [eq.lhs for eq in o]
     unique([filter(isoutput, unknowns(sys))
             filter(isoutput, parameters(sys))
-            filter(x -> istree(x) && isoutput(x), rhss) # observed can return equations with complicated expressions, we are only looking for single Terms
-            filter(x -> istree(x) && isoutput(x), lhss)])
+            filter(x -> iscall(x) && isoutput(x), rhss) # observed can return equations with complicated expressions, we are only looking for single Terms
+            filter(x -> iscall(x) && isoutput(x), lhss)])
 end
 
 """
@@ -119,8 +119,8 @@ function same_or_inner_namespace(u, var)
     nv = get_namespace(var)
     nu == nv ||           # namespaces are the same
         startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namespace to nu
-        occursin('₊', string(getname(var))) &&
-            !occursin('₊', string(getname(u))) # or u is top level but var is internal
+        occursin(NAMESPACE_SEPARATOR, string(getname(var))) &&
+            !occursin(NAMESPACE_SEPARATOR, string(getname(u))) # or u is top level but var is internal
 end
 
 function inner_namespace(u, var)
@@ -128,8 +128,8 @@ function inner_namespace(u, var)
     nv = get_namespace(var)
     nu == nv && return false
     startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namespace to nu
-        occursin('₊', string(getname(var))) &&
-            !occursin('₊', string(getname(u))) # or u is top level but var is internal
+        occursin(NAMESPACE_SEPARATOR, string(getname(var))) &&
+            !occursin(NAMESPACE_SEPARATOR, string(getname(u))) # or u is top level but var is internal
 end
 
 """
@@ -139,11 +139,11 @@ Return the namespace of a variable as a string. If the variable is not namespace
 """
 function get_namespace(x)
     sname = string(getname(x))
-    parts = split(sname, '₊')
+    parts = split(sname, NAMESPACE_SEPARATOR)
     if length(parts) == 1
         return ""
     end
-    join(parts[1:(end - 1)], '₊')
+    join(parts[1:(end - 1)], NAMESPACE_SEPARATOR)
 end
 
 """
@@ -160,7 +160,7 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
 # Build control function
 
 """
-    (f_oop, f_ip), dvs, p, io_sys = generate_control_function(
+    (f_oop, f_ip), x_sym, p, io_sys = generate_control_function(
             sys::AbstractODESystem,
             inputs             = unbound_inputs(sys),
             disturbance_inputs = nothing;
@@ -175,18 +175,21 @@ f_oop : (x,u,p,t)      -> rhs
 f_ip  : (xout,x,u,p,t) -> nothing
 ```
 
-The return values also include the remaining unknowns and parameters, in the order they appear as arguments to `f`.
+The return values also include the chosen state-realization (the remaining unknowns) `x_sym` and parameters, in the order they appear as arguments to `f`.
 
 If `disturbance_inputs` is an array of variables, the generated dynamics function will preserve any state and dynamics associated with disturbance inputs, but the disturbance inputs themselves will not be included as inputs to the generated function. The use case for this is to generate dynamics for state observers that estimate the influence of unmeasured disturbances, and thus require unknown variables for the disturbance model, but without disturbance inputs since the disturbances are not available for measurement.
 See [`add_input_disturbance`](@ref) for a higher-level interface to this functionality.
+
+!!! note "Un-simplified system"
+    This function expects `sys` to be un-simplified, i.e., `structural_simplify` or `@mtkbuild` should not be called on the system before passing it into this function. `generate_control_function` calls a special version of `structural_simplify` internally.
 
 # Example
 
 ```
 using ModelingToolkit: generate_control_function, varmap_to_vars, defaults
-f, dvs, ps = generate_control_function(sys, expression=Val{false}, simplify=false)
+f, x_sym, ps = generate_control_function(sys, expression=Val{false}, simplify=false)
 p = varmap_to_vars(defaults(sys), ps)
-x = varmap_to_vars(defaults(sys), dvs)
+x = varmap_to_vars(defaults(sys), x_sym)
 t = 0
 f[1](x, inputs, p, t)
 ```
@@ -195,6 +198,8 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
         disturbance_inputs = disturbances(sys);
         implicit_dae = false,
         simplify = false,
+        eval_expression = false,
+        eval_module = @__MODULE__,
         kwargs...)
     isempty(inputs) && @warn("No unbound inputs were found in system.")
 
@@ -216,6 +221,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     inputs = map(x -> time_varying_as_func(value(x), sys), inputs)
 
     eqs = [eq for eq in full_equations(sys)]
+    eqs = map(subs_constants, eqs)
     if disturbance_inputs !== nothing
         # Set all disturbance *inputs* to zero (we just want to keep the disturbance state)
         subs = Dict(disturbance_inputs .=> 0)
@@ -240,7 +246,10 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     end
     process = get_postprocess_fbody(sys)
     f = build_function(rhss, args...; postprocess_fbody = process,
-        expression = Val{false}, kwargs...)
+        expression = Val{true}, wrap_code = wrap_array_vars(sys, rhss; dvs, ps) .∘
+                                            wrap_parameter_dependencies(sys, false),
+        kwargs...)
+    f = eval_or_rgf.(f; eval_expression, eval_module)
     (; f, dvs, ps, io_sys = sys)
 end
 
@@ -395,7 +404,7 @@ model_outputs = [model.inertia1.w, model.inertia2.w, model.inertia1.phi, model.i
 
 `f_oop` will have an extra state corresponding to the integrator in the disturbance model. This state will not be affected by any input, but will affect the dynamics from where it enters, in this case it will affect additively from `model.torque.tau.u`.
 """
-function add_input_disturbance(sys, dist::DisturbanceModel, inputs = nothing)
+function add_input_disturbance(sys, dist::DisturbanceModel, inputs = nothing; kwargs...)
     t = get_iv(sys)
     @variables d(t)=0 [disturbance = true]
     @variables u(t)=0 [input = true] # New system input
@@ -418,6 +427,6 @@ function add_input_disturbance(sys, dist::DisturbanceModel, inputs = nothing)
     augmented_sys = extend(augmented_sys, sys)
 
     (f_oop, f_ip), dvs, p = generate_control_function(augmented_sys, all_inputs,
-        [d])
+        [d]; kwargs...)
     (f_oop, f_ip), augmented_sys, dvs, p
 end

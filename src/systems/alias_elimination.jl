@@ -388,8 +388,10 @@ Use Kahn's algorithm to topologically sort observed equations.
 
 Example:
 ```julia
-julia> @variables t x(t) y(t) z(t) k(t)
-(t, x(t), y(t), z(t), k(t))
+julia> t = ModelingToolkit.t_nounits
+
+julia> @variables x(t) y(t) z(t) k(t)
+(x(t), y(t), z(t), k(t))
 
 julia> eqs = [
            x ~ y + z

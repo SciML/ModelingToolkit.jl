@@ -10,10 +10,10 @@ $(FIELDS)
 
 ```julia
 using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @parameters σ ρ β
-@variables t x(t) y(t) z(t)
-D = Differential(t)
+@variables x(t) y(t) z(t)
 
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
@@ -128,10 +128,10 @@ struct ODESystem <: AbstractODESystem
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
     """
-    A mapping from dependent parameters to expressions describing how they are calculated from
-    other parameters.
+    Topologically sorted parameter dependency equations, where all symbols are parameters and
+    the LHS is a single parameter.
     """
-    parameter_dependencies::Union{Nothing, Dict}
+    parameter_dependencies::Vector{Equation}
     """
     Metadata for the system, to be used by downstream packages.
     """
@@ -140,6 +140,10 @@ struct ODESystem <: AbstractODESystem
     Metadata for MTK GUI.
     """
     gui_metadata::Union{Nothing, GUIMetadata}
+    """
+    A boolean indicating if the given `ODESystem` represents a system of DDEs.
+    """
+    is_dde::Bool
     """
     Cache for intermediate tearing state.
     """
@@ -178,12 +182,13 @@ struct ODESystem <: AbstractODESystem
             torn_matching, initializesystem, initialization_eqs, schedule,
             connector_type, preface, cevents,
             devents, parameter_dependencies,
-            metadata = nothing, gui_metadata = nothing,
+            metadata = nothing, gui_metadata = nothing, is_dde = false,
             tearing_state = nothing,
             substitutions = nothing, complete = false, index_cache = nothing,
             discrete_subsystems = nothing, solved_unknowns = nothing,
             split_idxs = nothing, parent = nothing; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
+            check_independent_variables([iv])
             check_variables(dvs, iv)
             check_parameters(ps, iv)
             check_equations(deqs, iv)
@@ -197,7 +202,7 @@ struct ODESystem <: AbstractODESystem
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses, torn_matching,
             initializesystem, initialization_eqs, schedule, connector_type, preface,
             cevents, devents, parameter_dependencies, metadata,
-            gui_metadata, tearing_state, substitutions, complete, index_cache,
+            gui_metadata, is_dde, tearing_state, substitutions, complete, index_cache,
             discrete_subsystems, solved_unknowns, split_idxs, parent)
     end
 end
@@ -219,10 +224,11 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         preface = nothing,
         continuous_events = nothing,
         discrete_events = nothing,
-        parameter_dependencies = nothing,
+        parameter_dependencies = Equation[],
         checks = true,
         metadata = nothing,
-        gui_metadata = nothing)
+        gui_metadata = nothing,
+        is_dde = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
@@ -237,7 +243,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
             :ODESystem, force = true)
     end
     defaults = todict(defaults)
-    defaults = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(defaults))
+    defaults = Dict{Any, Any}(value(k) => value(v)
+    for (k, v) in pairs(defaults) if value(v) !== nothing)
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, dvs′)
     process_variables!(var_to_name, defaults, ps′)
@@ -247,6 +254,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     var_guesses = dvs′[hasaguess] .=> sysguesses[hasaguess]
     sysguesses = isempty(var_guesses) ? Dict() : todict(var_guesses)
     guesses = merge(sysguesses, todict(guesses))
+    guesses = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(guesses))
 
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
@@ -263,12 +271,15 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
     parameter_dependencies, ps′ = process_parameter_dependencies(
         parameter_dependencies, ps′)
+    if is_dde === nothing
+        is_dde = _check_if_dde(deqs, iv′, systems)
+    end
     ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
         ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses, nothing, initializesystem,
         initialization_eqs, schedule, connector_type, preface, cont_callbacks,
         disc_callbacks, parameter_dependencies,
-        metadata, gui_metadata, checks = checks)
+        metadata, gui_metadata, is_dde, checks = checks)
 end
 
 function ODESystem(eqs, iv; kwargs...)
@@ -308,13 +319,22 @@ function ODESystem(eqs, iv; kwargs...)
             push!(algeeq, eq)
         end
     end
+    for eq in get(kwargs, :parameter_dependencies, Equation[])
+        if eq isa Pair
+            collect_vars!(allunknowns, ps, eq[1], iv)
+            collect_vars!(allunknowns, ps, eq[2], iv)
+        else
+            collect_vars!(allunknowns, ps, eq.lhs, iv)
+            collect_vars!(allunknowns, ps, eq.rhs, iv)
+        end
+    end
     for v in allunknowns
         isdelay(v, iv) || continue
         collect_vars!(allunknowns, ps, arguments(v)[1], iv)
     end
     new_ps = OrderedSet()
     for p in ps
-        if istree(p) && operation(p) === getindex
+        if iscall(p) && operation(p) === getindex
             par = arguments(p)[begin]
             if Symbolics.shape(Symbolics.unwrap(par)) !== Symbolics.Unknown() &&
                all(par[i] in ps for i in eachindex(par))
@@ -354,12 +374,15 @@ function flatten(sys::ODESystem, noeqs = false)
             get_iv(sys),
             unknowns(sys),
             parameters(sys),
+            parameter_dependencies = parameter_dependencies(sys),
             guesses = guesses(sys),
             observed = observed(sys),
             continuous_events = continuous_events(sys),
             discrete_events = discrete_events(sys),
             defaults = defaults(sys),
             name = nameof(sys),
+            initialization_eqs = initialization_equations(sys),
+            is_dde = is_dde(sys),
             checks = false)
     end
 end
@@ -375,23 +398,38 @@ i.e. there are no cycles.
 function build_explicit_observed_function(sys, ts;
         inputs = nothing,
         expression = false,
+        eval_expression = false,
+        eval_module = @__MODULE__,
         output_type = Array,
         checkbounds = true,
         drop_expr = drop_expr,
-        ps = full_parameters(sys),
+        ps = parameters(sys),
+        return_inplace = false,
+        param_only = false,
         op = Operator,
         throw = true)
     if (isscalar = symbolic_type(ts) !== NotSymbolic())
         ts = [ts]
     end
     ts = unwrap.(ts)
+    issplit = has_index_cache(sys) && get_index_cache(sys) !== nothing
+    if is_dde(sys)
+        if issplit
+            ts = map(
+                x -> delay_to_function(
+                    sys, x; history_arg = issplit ? MTKPARAMETERS_ARG : DEFAULT_PARAMS_ARG),
+                ts)
+        else
+            ts = map(x -> delay_to_function(sys, x), ts)
+        end
+    end
 
     vars = Set()
     foreach(v -> vars!(vars, v; op), ts)
     ivs = independent_variables(sys)
     dep_vars = scalarize(setdiff(vars, ivs))
 
-    obs = observed(sys)
+    obs = param_only ? Equation[] : observed(sys)
 
     cs = collect_constants(obs)
     if !isempty(cs) > 0
@@ -399,27 +437,32 @@ function build_explicit_observed_function(sys, ts;
         obs = map(x -> x.lhs ~ substitute(x.rhs, cmap), obs)
     end
 
-    sts = Set(unknowns(sys))
-    sts = union(sts,
-        Set(arguments(st)[1] for st in sts if istree(st) && operation(st) === getindex))
+    sts = param_only ? Set() : Set(unknowns(sys))
+    sts = param_only ? Set() :
+          union(sts,
+        Set(arguments(st)[1] for st in sts if iscall(st) && operation(st) === getindex))
 
     observed_idx = Dict(x.lhs => i for (i, x) in enumerate(obs))
-    param_set = Set(parameters(sys))
+    param_set = Set(full_parameters(sys))
     param_set = union(param_set,
-        Set(arguments(p)[1] for p in param_set if istree(p) && operation(p) === getindex))
-    param_set_ns = Set(unknowns(sys, p) for p in parameters(sys))
+        Set(arguments(p)[1] for p in param_set if iscall(p) && operation(p) === getindex))
+    param_set_ns = Set(unknowns(sys, p) for p in full_parameters(sys))
     param_set_ns = union(param_set_ns,
         Set(arguments(p)[1]
-        for p in param_set_ns if istree(p) && operation(p) === getindex))
+        for p in param_set_ns if iscall(p) && operation(p) === getindex))
     namespaced_to_obs = Dict(unknowns(sys, x.lhs) => x.lhs for x in obs)
-    namespaced_to_sts = Dict(unknowns(sys, x) => x for x in unknowns(sys))
+    namespaced_to_sts = param_only ? Dict() :
+                        Dict(unknowns(sys, x) => x for x in unknowns(sys))
 
     # FIXME: This is a rather rough estimate of dependencies. We assume
     # the expression depends on everything before the `maxidx`.
     subs = Dict()
     maxidx = 0
     for s in dep_vars
-        if s in param_set || s in param_set_ns
+        if s in param_set || s in param_set_ns ||
+           iscall(s) &&
+           operation(s) === getindex &&
+           (arguments(s)[1] in param_set || arguments(s)[1] in param_set_ns)
             continue
         end
         idx = get(observed_idx, s, nothing)
@@ -452,8 +495,13 @@ function build_explicit_observed_function(sys, ts;
     end
     ts = map(t -> substitute(t, subs), ts)
     obsexprs = []
+
     for i in 1:maxidx
         eq = obs[i]
+        if is_dde(sys)
+            eq = delay_to_function(
+                sys, eq; history_arg = issplit ? MTKPARAMETERS_ARG : DEFAULT_PARAMS_ARG)
+        end
         lhs = eq.lhs
         rhs = eq.rhs
         push!(obsexprs, lhs ← rhs)
@@ -462,27 +510,86 @@ function build_explicit_observed_function(sys, ts;
     if inputs !== nothing
         ps = setdiff(ps, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
     end
+    _ps = ps
     if ps isa Tuple
-        ps = DestructuredArgs.(ps, inbounds = !checkbounds)
+        ps = DestructuredArgs.(unwrap.(ps), inbounds = !checkbounds)
     elseif has_index_cache(sys) && get_index_cache(sys) !== nothing
-        ps = DestructuredArgs.(reorder_parameters(get_index_cache(sys), ps))
+        ps = DestructuredArgs.(reorder_parameters(get_index_cache(sys), unwrap.(ps)))
+        if isempty(ps) && inputs !== nothing
+            ps = (:EMPTY,)
+        end
     else
-        ps = (DestructuredArgs(ps, inbounds = !checkbounds),)
+        ps = (DestructuredArgs(unwrap.(ps), inbounds = !checkbounds),)
     end
     dvs = DestructuredArgs(unknowns(sys), inbounds = !checkbounds)
-    if inputs === nothing
-        args = [dvs, ps..., ivs...]
+    if is_dde(sys)
+        dvs = (dvs, DDE_HISTORY_FUN)
     else
+        dvs = (dvs,)
+    end
+    p_start = param_only ? 1 : (length(dvs) + 1)
+    if inputs === nothing
+        args = param_only ? [ps..., ivs...] : [dvs..., ps..., ivs...]
+    else
+        inputs = unwrap.(inputs)
         ipts = DestructuredArgs(inputs, inbounds = !checkbounds)
-        args = [dvs, ipts, ps..., ivs...]
+        args = param_only ? [ipts, ps..., ivs...] : [dvs..., ipts, ps..., ivs...]
+        p_start += 1
     end
     pre = get_postprocess_fbody(sys)
 
-    ex = Func(args, [],
-             pre(Let(obsexprs,
-                 isscalar ? ts[1] : MakeArray(ts, output_type),
-                 false))) |> wrap_array_vars(sys, ts)[1] |> toexpr
-    expression ? ex : drop_expr(@RuntimeGeneratedFunction(ex))
+    array_wrapper = if param_only
+        wrap_array_vars(sys, ts; ps = _ps, dvs = nothing, inputs, history = is_dde(sys)) .∘
+        wrap_parameter_dependencies(sys, isscalar)
+    else
+        wrap_array_vars(sys, ts; ps = _ps, inputs, history = is_dde(sys)) .∘
+        wrap_parameter_dependencies(sys, isscalar)
+    end
+    mtkparams_wrapper = wrap_mtkparameters(sys, isscalar, p_start)
+    if mtkparams_wrapper isa Tuple
+        oop_mtkp_wrapper = mtkparams_wrapper[1]
+    else
+        oop_mtkp_wrapper = mtkparams_wrapper
+    end
+
+    # Need to keep old method of building the function since it uses `output_type`,
+    # which can't be provided to `build_function`
+    oop_fn = Func(args, [],
+                 pre(Let(obsexprs,
+                     isscalar ? ts[1] : MakeArray(ts, output_type),
+                     false))) |> array_wrapper[1] |> oop_mtkp_wrapper |> toexpr
+    oop_fn = expression ? oop_fn : eval_or_rgf(oop_fn; eval_expression, eval_module)
+
+    if !isscalar
+        iip_fn = build_function(ts,
+            args...;
+            postprocess_fbody = pre,
+            wrap_code = array_wrapper .∘ wrap_assignments(isscalar, obsexprs) .∘
+                        mtkparams_wrapper,
+            expression = Val{true})[2]
+        if !expression
+            iip_fn = eval_or_rgf(iip_fn; eval_expression, eval_module)
+        end
+    end
+    if isscalar || !return_inplace
+        return oop_fn
+    else
+        return oop_fn, iip_fn
+    end
+end
+
+function populate_delays(delays::Set, obsexprs, histfn, sys, sym)
+    _vars_util = vars(sym)
+    for v in _vars_util
+        v in delays && continue
+        iscall(v) && issym(operation(v)) && (args = arguments(v); length(args) == 1) &&
+            iscall(only(args)) || continue
+
+        idx = variable_index(sys, operation(v)(get_iv(sys)))
+        idx === nothing && error("Delay term $v is not an unknown in the system")
+        push!(delays, v)
+        push!(obsexprs, v ← histfn(only(args))[idx])
+    end
 end
 
 function _eq_unordered(a, b)
@@ -515,7 +622,7 @@ function convert_system(::Type{<:ODESystem}, sys, t; name = nameof(sys))
     sts = unknowns(sys)
     newsts = similar(sts, Any)
     for (i, s) in enumerate(sts)
-        if istree(s)
+        if iscall(s)
             args = arguments(s)
             length(args) == 1 ||
                 throw(InvalidSystemException("Illegal unknown: $s. The unknown can have at most one argument like `x(t)`."))
@@ -524,7 +631,8 @@ function convert_system(::Type{<:ODESystem}, sys, t; name = nameof(sys))
                 newsts[i] = s
                 continue
             end
-            ns = similarterm(s, operation(s), Any[t]; metadata = SymbolicUtils.metadata(s))
+            ns = maketerm(typeof(s), operation(s), Any[t],
+                SymbolicUtils.metadata(s))
             newsts[i] = ns
             varmap[s] = ns
         else

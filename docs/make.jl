@@ -1,4 +1,5 @@
 using Documenter, ModelingToolkit
+using ModelingToolkit: SciMLBase
 
 # Make sure that plots don't throw a bunch of warnings / errors!
 ENV["GKSwstype"] = "100"

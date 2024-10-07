@@ -1,4 +1,4 @@
-# [Components and Connectors](@id mtkmodel_connector)
+# [ModelingToolkit Language: Modeling with `@mtkmodel`, `@connectors` and `@mtkbuild`](@id mtk_language)
 
 ## MTK Model
 
@@ -408,12 +408,13 @@ The conditional parts are reflected in the `structure`. For `BranchOutsideTheBlo
 
 ```julia
 julia> BranchOutsideTheBlock.structure
-Dict{Symbol, Any} with 6 entries:
+Dict{Symbol, Any} with 7 entries:
   :components            => Any[(:if, :flag, Vector{Union{Expr, Symbol}}[[:sys1, :C]], Any[])]
   :kwargs                => Dict{Symbol, Dict}(:flag=>Dict{Symbol, Bool}(:value=>1))
   :structural_parameters => Dict{Symbol, Dict}(:flag=>Dict{Symbol, Bool}(:value=>1))
   :independent_variable  => t
-  :parameters            => Dict{Symbol, Dict{Symbol, Any}}(:a2 => Dict(:type => AbstractArray{Real}, :condition => (:if, :flag, Dict{Symbol, Any}(:kwargs => Dict{Any, Any}(:a1 => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real)), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a1 => Dict(:type => AbstractArray{Real}))]), Dict{Symbol, Any}(:variables => Any[Dict{Symbol, Dict{Symbol, Any}}()], :kwargs => Dict{Any, Any}(:a2 => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real)), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a2 => Dict(:type => AbstractArray{Real}))]))), :a1 => Dict(:type => AbstractArray{Real}, :condition => (:if, :flag, Dict{Symbol, Any}(:kwargs => Dict{Any, Any}(:a1 => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real)), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a1 => Dict(:type => AbstractArray{Real}))]), Dict{Symbol, Any}(:variables => Any[Dict{Symbol, Dict{Symbol, Any}}()], :kwargs => Dict{Any, Any}(:a2 => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real)), :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}(:a2 => Dict(:type => AbstractArray{Real}))]))))
+  :parameters            => Dict{Symbol, Dict{Symbol, Any}}(:a2 => Dict(:type=>AbstractArray{Real}, :condition=>(:if, :flag, Dict{Symbol, Any}(:kwargs=>Dict{Any, Any}(:a1=>Dict{Symbol, Union{Nothing, DataType}}(:value=>nothing, :type=>Real)), :parameters=>Any[Dict{Symbol, Dict{Symbol, Any}}(:a1=>Dict(:type=>AbstractArray{Real}))]), Dict{Symbol, Any}(:variables=>Any[Dict{Symbol, Dict{Symbol, Any}}()], :kwargs=>Dict{Any, Any}(:a2=>Dict{Symbol, Union{Nothing, DataType}}(:value=>nothing, :type=>Real)), :parameters=>Any[Dict{Symbol, Dict{Symbol, Any}}(:a2=>Dict(:type=>AbstractArray{Real}))]))), :a1 => Dict(:type=>AbstractArray{Real}, :condition=>(:if, :flag, Dict{Symbol, Any}(:kwargs=>Dict{Any, Any}(:a1=>Dict{Symbol, Union{Nothing, DataType}}(:value=>nothing, :type=>Real)), :parameters=>Any[Dict{Symbol, Dict{Symbol, Any}}(:a1=>Dict(:type=>AbstractArray{Real}))]), Dict{Symbol, Any}(:variables=>Any[Dict{Symbol, Dict{Symbol, Any}}()], :kwargs=>Dict{Any, Any}(:a2=>Dict{Symbol, Union{Nothing, DataType}}(:value=>nothing, :type=>Real)), :parameters=>Any[Dict{Symbol, Dict{Symbol, Any}}(:a2=>Dict(:type=>AbstractArray{Real}))]))))
+  :defaults              => Dict{Symbol, Any}(:a1=>10)
   :equations             => Any[(:if, :flag, ["a1 ~ 0"], ["a2 ~ 0"])]
 ```
 
@@ -439,4 +440,32 @@ Using ternary operator or if-elseif-else statement, conditional initial guesses 
         p = flag ? 1 : 2
     end
 end
+```
+
+## Build structurally simplified models:
+
+`@mtkbuild` builds an instance of a component and returns a structurally simplied `ODESystem`.
+
+```julia
+@mtkbuild sys = CustomModel()
+```
+
+This is equivalent to:
+
+```julia
+@named model = CustomModel()
+sys = structural_simplify(model)
+```
+
+Pass keyword arguments to `structural_simplify` using the following syntax:
+
+```julia
+@mtkbuild sys=CustomModel() fully_determined=false
+```
+
+This is equivalent to:
+
+```julia
+@named model = CustomModel()
+sys = structural_simplify(model; fully_determined = false)
 ```

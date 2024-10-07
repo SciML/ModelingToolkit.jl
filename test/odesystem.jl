@@ -6,7 +6,7 @@ using DiffEqBase, SparseArrays
 using StaticArrays
 using Test
 using SymbolicUtils: issym
-
+using ForwardDiff
 using ModelingToolkit: value
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
@@ -58,6 +58,9 @@ for f in [
     ODEFunction(de, [x, y, z], [σ, ρ, β], tgrad = true, jac = true),
     eval(ODEFunctionExpr(de, [x, y, z], [σ, ρ, β], tgrad = true, jac = true))
 ]
+    # system
+    @test f.sys === de
+
     # iip
     du = zeros(3)
     u = collect(1:3)
@@ -134,7 +137,7 @@ eqs = [D(x) ~ σ(t - 1) * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z * κ]
 @named de = ODESystem(eqs, t)
-test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ(t - 1), ρ, β))
+test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ, ρ, β))
 f = eval(generate_function(de, [x, y, z], [σ, ρ, β])[2])
 du = [0.0, 0.0, 0.0]
 f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
@@ -142,7 +145,7 @@ f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
 
 eqs = [D(x) ~ x + 10σ(t - 1) + 100σ(t - 2) + 1000σ(t^2)]
 @named de = ODESystem(eqs, t)
-test_diffeq_inference("many internal iv-varying", de, t, (x,), (σ(t - 2), σ(t^2), σ(t - 1)))
+test_diffeq_inference("many internal iv-varying", de, t, (x,), (σ,))
 f = eval(generate_function(de, [x], [σ])[2])
 du = [0.0]
 f(du, [1.0], [t -> t + 2], 5.0)
@@ -545,7 +548,7 @@ prob = ODEProblem(
 @test_nowarn solve(prob, Tsit5())
 obsfn = ModelingToolkit.build_explicit_observed_function(
     outersys, bar(3outersys.sys.ms, 3outersys.sys.p))
-@test_nowarn obsfn(sol.u[1], prob.p..., sol.t[1])
+@test_nowarn obsfn(sol.u[1], prob.p, sol.t[1])
 
 # x/x
 @variables x(t)
@@ -969,7 +972,8 @@ vars_sub2 = @variables s2(t)
 @named partial_sub = ODESystem(Equation[], t, vars_sub2, [])
 @named sub = extend(partial_sub, sub)
 
-new_sys2 = complete(substitute(sys2, Dict(:sub => sub)))
+# no warnings for systems without events
+new_sys2 = @test_nowarn complete(substitute(sys2, Dict(:sub => sub)))
 Set(unknowns(new_sys2)) == Set([new_sys2.x1, new_sys2.sys1.x1,
     new_sys2.sys1.sub.s1, new_sys2.sys1.sub.s2,
     new_sys2.sub.s1, new_sys2.sub.s2])
@@ -1165,4 +1169,276 @@ end
     @named sys = ODESystem([x[0] ~ 0.0, D(x[1]) ~ x[0]], t, [x], [])
     @test_nowarn sys = structural_simplify(sys)
     @test equations(sys) == [D(x[1]) ~ 0.0]
+end
+
+# Namespacing of array variables
+@variables x(t)[1:2]
+@named sys = ODESystem(Equation[], t)
+@test getname(unknowns(sys, x)) == :sys₊x
+@test size(unknowns(sys, x)) == size(x)
+
+# Issue#2667 and Issue#2953
+@testset "ForwardDiff through ODEProblem constructor" begin
+    @parameters P
+    @variables x(t)
+    sys = structural_simplify(ODESystem([D(x) ~ P], t, [x], [P]; name = :sys))
+
+    function x_at_1(P)
+        prob = ODEProblem(sys, [x => P], (0.0, 1.0), [sys.P => P], use_union = false)
+        return solve(prob, Tsit5())(1.0)
+    end
+
+    @test_nowarn ForwardDiff.derivative(P -> x_at_1(P), 1.0)
+end
+
+@testset "Inplace observed functions" begin
+    @parameters P
+    @variables x(t)
+    sys = structural_simplify(ODESystem([D(x) ~ P], t, [x], [P]; name = :sys))
+    obsfn = ModelingToolkit.build_explicit_observed_function(
+        sys, [x + 1, x + P, x + t], return_inplace = true)[2]
+    ps = ModelingToolkit.MTKParameters(sys, [P => 2.0])
+    buffer = zeros(3)
+    @test_nowarn obsfn(buffer, [1.0], ps..., 3.0)
+    @test buffer ≈ [2.0, 3.0, 4.0]
+end
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/2818
+@testset "Custom independent variable" begin
+    @independent_variables x
+    @variables y(x)
+    @test_nowarn @named sys = ODESystem([y ~ 0], x)
+
+    # the same, but with @mtkmodel
+    @independent_variables x
+    @mtkmodel MyModel begin
+        @variables begin
+            y(x)
+        end
+        @equations begin
+            y ~ 0
+        end
+    end
+    @test_nowarn @mtkbuild sys = MyModel()
+
+    @variables x y(x)
+    @test_logs (:warn,) @named sys = ODESystem([y ~ 0], x)
+
+    @parameters T
+    D = Differential(T)
+    @variables x(T)
+    eqs = [D(x) ~ 0.0]
+    initialization_eqs = [x ~ T]
+    guesses = [x => 0.0]
+    @named sys2 = ODESystem(eqs, T; initialization_eqs, guesses)
+    prob2 = ODEProblem(structural_simplify(sys2), [], (1.0, 2.0), [])
+    sol2 = solve(prob2)
+    @test all(sol2[x] .== 1.0)
+end
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/2502
+@testset "Extend systems with a field that can be nothing" begin
+    A = Dict(:a => 1)
+    B = Dict(:b => 2)
+    @named A1 = ODESystem(Equation[], t, [], [])
+    @named B1 = ODESystem(Equation[], t, [], [])
+    @named A2 = ODESystem(Equation[], t, [], []; metadata = A)
+    @named B2 = ODESystem(Equation[], t, [], []; metadata = B)
+    @test ModelingToolkit.get_metadata(extend(A1, B1)) == nothing
+    @test ModelingToolkit.get_metadata(extend(A1, B2)) == B
+    @test ModelingToolkit.get_metadata(extend(A2, B1)) == A
+    @test Set(ModelingToolkit.get_metadata(extend(A2, B2))) == Set(A ∪ B)
+end
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/2859
+@testset "Initialization with defaults from observed equations (edge case)" begin
+    @variables x(t) y(t) z(t)
+    eqs = [D(x) ~ 0, y ~ x, D(z) ~ 0]
+    defaults = [x => 1, z => y]
+    @named sys = ODESystem(eqs, t; defaults)
+    ssys = structural_simplify(sys)
+    prob = ODEProblem(ssys, [], (0.0, 1.0), [])
+    @test prob[x] == prob[y] == prob[z] == 1.0
+
+    @parameters y0
+    @variables x(t) y(t) z(t)
+    eqs = [D(x) ~ 0, y ~ y0 / x, D(z) ~ y]
+    defaults = [y0 => 1, x => 1, z => y]
+    @named sys = ODESystem(eqs, t; defaults)
+    ssys = structural_simplify(sys)
+    prob = ODEProblem(ssys, [], (0.0, 1.0), [])
+    @test prob[x] == prob[y] == prob[z] == 1.0
+end
+
+@testset "Scalarized parameters in array functions" begin
+    @variables u(t)[1:2] x(t)[1:2] o(t)[1:2]
+    @parameters p[1:2, 1:2] [tunable = false]
+    @named sys = ODESystem(
+        [D(u) ~ (sum(u) + sum(x) + sum(p) + sum(o)) * x, o ~ prod(u) * x],
+        t, [u..., x..., o...], [p...])
+    sys1, = structural_simplify(sys, ([x...], []))
+    fn1, = ModelingToolkit.generate_function(sys1; expression = Val{false})
+    @test_nowarn fn1(ones(4), 2ones(2), 3ones(2, 2), 4.0)
+    sys2, = structural_simplify(sys, ([x...], []); split = false)
+    fn2, = ModelingToolkit.generate_function(sys2; expression = Val{false})
+    @test_nowarn fn2(ones(4), 2ones(6), 4.0)
+end
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/2969
+@testset "Constant substitution" begin
+    make_model = function (c_a, c_b; name = nothing)
+        @mtkmodel ModelA begin
+            @constants begin
+                a = c_a
+            end
+            @variables begin
+                x(t)
+            end
+            @equations begin
+                D(x) ~ -a * x
+            end
+        end
+
+        @mtkmodel ModelB begin
+            @constants begin
+                b = c_b
+            end
+            @variables begin
+                y(t)
+            end
+            @components begin
+                modela = ModelA()
+            end
+            @equations begin
+                D(y) ~ -b * y
+            end
+        end
+        return ModelB(; name = name)
+    end
+    c_a, c_b = 1.234, 5.578
+    @named sys = make_model(c_a, c_b)
+    sys = complete(sys)
+
+    u0 = [sys.y => -1.0, sys.modela.x => -1.0]
+    p = defaults(sys)
+    prob = ODEProblem(sys, u0, (0.0, 1.0), p)
+
+    # evaluate
+    u0_v, p_v, _ = ModelingToolkit.get_u0_p(sys, u0, p)
+    @test prob.f(u0_v, p_v, 0.0) == [c_b, c_a]
+end
+
+@testset "Independent variable as system property" begin
+    @variables x(t)
+    @named sys = ODESystem([x ~ t], t)
+    @named sys = compose(sys, sys) # nest into a hierarchical system
+    @test t === sys.t === sys.sys.t
+end
+
+@testset "Substituting preserves parameter dependencies, defaults, guesses" begin
+    @parameters p1 p2
+    @variables x(t) y(t)
+    @named sys = ODESystem([D(x) ~ y + p2], t; parameter_dependencies = [p2 ~ 2p1],
+        defaults = [p1 => 1.0, p2 => 2.0], guesses = [p1 => 2.0, p2 => 3.0])
+    @parameters p3
+    sys2 = substitute(sys, [p1 => p3])
+    @test length(parameters(sys2)) == 1
+    @test is_parameter(sys2, p3)
+    @test !is_parameter(sys2, p1)
+    @test length(ModelingToolkit.defaults(sys2)) == 2
+    @test ModelingToolkit.defaults(sys2)[p3] == 1.0
+    @test length(ModelingToolkit.guesses(sys2)) == 2
+    @test ModelingToolkit.guesses(sys2)[p3] == 2.0
+end
+
+@testset "Substituting with nested systems" begin
+    @parameters p1 p2
+    @variables x(t) y(t)
+    @named innersys = ODESystem([D(x) ~ y + p2], t; parameter_dependencies = [p2 ~ 2p1],
+        defaults = [p1 => 1.0, p2 => 2.0], guesses = [p1 => 2.0, p2 => 3.0])
+    @parameters p3 p4
+    @named outersys = ODESystem(
+        [D(innersys.y) ~ innersys.y + p4], t; parameter_dependencies = [p4 ~ 3p3],
+        defaults = [p3 => 3.0, p4 => 9.0], guesses = [p4 => 10.0], systems = [innersys])
+    @test_nowarn structural_simplify(outersys)
+    @parameters p5
+    sys2 = substitute(outersys, [p4 => p5])
+    @test_nowarn structural_simplify(sys2)
+    @test length(equations(sys2)) == 2
+    @test length(parameters(sys2)) == 2
+    @test length(full_parameters(sys2)) == 4
+    @test all(!isequal(p4), full_parameters(sys2))
+    @test any(isequal(p5), full_parameters(sys2))
+    @test length(ModelingToolkit.defaults(sys2)) == 4
+    @test ModelingToolkit.defaults(sys2)[p5] == 9.0
+    @test length(ModelingToolkit.guesses(sys2)) == 3
+    @test ModelingToolkit.guesses(sys2)[p5] == 10.0
+end
+
+@testset "Observed with inputs" begin
+    @variables u(t)[1:2] x(t)[1:2] o(t)[1:2]
+    @parameters p[1:4]
+
+    eqs = [D(u[1]) ~ p[1] * u[1] - p[2] * u[1] * u[2] + x[1] + 0.1
+           D(u[2]) ~ p[4] * u[1] * u[2] - p[3] * u[2] - x[2]
+           o[1] ~ sum(p) * sum(u)
+           o[2] ~ sum(p) * sum(x)]
+
+    @named sys = ODESystem(eqs, t, [u..., x..., o], [p...])
+    sys1, = structural_simplify(sys, ([x...], [o...]), split = false)
+
+    @test_nowarn ModelingToolkit.build_explicit_observed_function(sys1, u; inputs = [x...])
+
+    obsfn = ModelingToolkit.build_explicit_observed_function(
+        sys1, u + x + p[1:2]; inputs = [x...])
+
+    @test obsfn(ones(2), 2ones(2), 3ones(4), 4.0) == 6ones(2)
+end
+
+@testset "Passing `nothing` to `u0`" begin
+    @variables x(t) = 1
+    @mtkbuild sys = ODESystem(D(x) ~ t, t)
+    prob = @test_nowarn ODEProblem(sys, nothing, (0.0, 1.0))
+    @test_nowarn solve(prob)
+end
+
+@testset "ODEs are not DDEs" begin
+    @variables x(t)
+    @named sys = ODESystem(D(x) ~ x, t)
+    @test !ModelingToolkit.is_dde(sys)
+    @test is_markovian(sys)
+    @named sys2 = ODESystem(Equation[], t; systems = [sys])
+    @test !ModelingToolkit.is_dde(sys)
+    @test is_markovian(sys)
+end
+
+@testset "Issue #2597" begin
+    @variables x(t)[1:2]=ones(2) y(t)=1.0
+
+    for eqs in [D(x) ~ x, collect(D(x) .~ x)]
+        for dvs in [[x], collect(x)]
+            @named sys = ODESystem(eqs, t, dvs, [])
+            sys = complete(sys)
+            if eqs isa Vector && length(eqs) == 2 && length(dvs) == 2
+                @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
+            else
+                @test_throws [
+                    r"array (equations|unknowns)", "structural_simplify", "scalarize"] ODEProblem(
+                    sys, [], (0.0, 1.0))
+            end
+        end
+    end
+    for eqs in [[D(x) ~ x, D(y) ~ y], [collect(D(x) .~ x); D(y) ~ y]]
+        for dvs in [[x, y], [x..., y]]
+            @named sys = ODESystem(eqs, t, dvs, [])
+            sys = complete(sys)
+            if eqs isa Vector && length(eqs) == 3 && length(dvs) == 3
+                @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
+            else
+                @test_throws [
+                    r"array (equations|unknowns)", "structural_simplify", "scalarize"] ODEProblem(
+                    sys, [], (0.0, 1.0))
+            end
+        end
+    end
 end

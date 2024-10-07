@@ -1,9 +1,8 @@
 using ModelingToolkit
-using ModelingToolkit: SymScope
-using Symbolics: arguments, value
+using ModelingToolkit: SymScope, t_nounits as t, D_nounits as D
+using Symbolics: arguments, value, getname
 using Test
 
-@parameters t
 @variables a b(t) c d e(t)
 
 b = ParentScope(b)
@@ -52,7 +51,7 @@ end
 @test renamed([:foo :bar :baz], c) == Symbol("foo₊c")
 @test renamed([:foo :bar :baz], d) == :d
 
-@parameters t a b c d e f
+@parameters a b c d e f
 p = [a
      ParentScope(b)
      ParentScope(ParentScope(c))
@@ -83,3 +82,22 @@ arr1 = ODESystem(Equation[], t, [], []; name = :arr1) ∘ arr0
 arr_ps = ModelingToolkit.getname.(parameters(arr1))
 @test isequal(arr_ps[1], Symbol("xx"))
 @test isequal(arr_ps[2], Symbol("arr0₊xx"))
+
+function Foo(; name, p = 1)
+    @parameters p = p
+    @variables x(t)
+    return ODESystem(D(x) ~ p, t; name)
+end
+function Bar(; name, p = 2)
+    @parameters p = p
+    @variables x(t)
+    @named foo = Foo(; p)
+    return ODESystem(D(x) ~ p + t, t; systems = [foo], name)
+end
+@named bar = Bar()
+bar = complete(bar)
+@test length(parameters(bar)) == 2
+@test sort(getname.(parameters(bar))) == [:foo₊p, :p]
+defs = ModelingToolkit.defaults(bar)
+@test defs[bar.p] == 2
+@test isequal(defs[bar.foo.p], bar.p)

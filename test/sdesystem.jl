@@ -458,13 +458,16 @@ fdif!(du, u0, p, t)
 
 # issue #819
 @testset "Combined system name collisions" begin
-    @variables t
+    @independent_variables t
+    D = Differential(t)
     eqs_short = [D(x) ~ σ * (y - x),
         D(y) ~ x * (ρ - z) - y
     ]
-    sys1 = SDESystem(eqs_short, noiseeqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
-    sys2 = SDESystem(eqs_short, noiseeqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
-    @test_throws ArgumentError SDESystem([sys2.y ~ sys1.z], [], t, [], [],
+    noise_eqs = [y - x
+                 x - y]
+    sys1 = SDESystem(eqs_short, noise_eqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
+    sys2 = SDESystem(eqs_short, noise_eqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
+    @test_throws ArgumentError SDESystem([sys2.y ~ sys1.z], [sys2.y], t, [], [],
         systems = [sys1, sys2], name = :foo)
 end
 
@@ -614,3 +617,170 @@ sys2 = complete(sys2)
 prob = SDEProblem(sys1, sts .=> [1.0, 0.0, 0.0],
     (0.0, 100.0), ps .=> (10.0, 26.0))
 solve(prob, LambaEulerHeun(), seed = 1)
+
+# Test ill-formed due to more equations than states in noise equations
+
+@independent_variables t
+@parameters p d
+@variables X(t)
+eqs = [D(X) ~ p - d * X]
+noise_eqs = [sqrt(p), -sqrt(d * X)]
+@test_throws ArgumentError SDESystem(eqs, noise_eqs, t, [X], [p, d]; name = :ssys)
+
+noise_eqs = reshape([sqrt(p), -sqrt(d * X)], 1, 2)
+ssys = SDESystem(eqs, noise_eqs, t, [X], [p, d]; name = :ssys)
+
+# SDEProblem construction with StaticArrays
+# Issue#2814
+@parameters p d
+@variables x(tt)
+@brownian a
+eqs = [D(x) ~ p - d * x + a * sqrt(p)]
+@mtkbuild sys = System(eqs, tt)
+u0 = @SVector[x => 10.0]
+tspan = (0.0, 10.0)
+ps = @SVector[p => 5.0, d => 0.5]
+sprob = SDEProblem(sys, u0, tspan, ps)
+@test !isinplace(sprob)
+@test !isinplace(sprob.f)
+@test_nowarn solve(sprob, ImplicitEM())
+
+# Ensure diagonal noise generates vector noise function
+@variables y(tt)
+@brownian b
+eqs = [D(x) ~ p - d * x + a * sqrt(p)
+       D(y) ~ p - d * y + b * sqrt(d)]
+@mtkbuild sys = System(eqs, tt)
+u0 = @SVector[x => 10.0, y => 20.0]
+tspan = (0.0, 10.0)
+ps = @SVector[p => 5.0, d => 0.5]
+sprob = SDEProblem(sys, u0, tspan, ps)
+@test sprob.f.g(sprob.u0, sprob.p, sprob.tspan[1]) isa SVector{2, Float64}
+@test_nowarn solve(sprob, ImplicitEM())
+
+let
+    @parameters σ ρ β
+    @variables x(t) y(t) z(t)
+    @brownian a
+    eqs = [D(x) ~ σ * (y - x) + 0.1a * x,
+        D(y) ~ x * (ρ - z) - y + 0.1a * y,
+        D(z) ~ x * y - β * z + 0.1a * z]
+
+    @mtkbuild de = System(eqs, t)
+
+    u0map = [
+        x => 1.0,
+        y => 0.0,
+        z => 0.0
+    ]
+
+    parammap = [
+        σ => 10.0,
+        β => 26.0,
+        ρ => 2.33
+    ]
+    prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
+    # TODO: re-enable this when we support scalar noise
+    @test solve(prob, SOSRI()).retcode == ReturnCode.Success
+end
+
+let # test to make sure that scalar noise always receive the same kicks
+    @variables x(t) y(t)
+    @brownian a
+    eqs = [D(x) ~ a,
+        D(y) ~ a]
+
+    @mtkbuild de = System(eqs, t)
+    prob = SDEProblem(de, [x => 0, y => 0], (0.0, 10.0), [])
+    sol = solve(prob, SOSRI())
+    @test sol.u[end][1] == sol.u[end][2]
+end
+
+let # test that diagonal noise is correctly handled
+    @parameters σ ρ β
+    @variables x(t) y(t) z(t)
+    @brownian a b c
+    eqs = [D(x) ~ σ * (y - x) + 0.1a * x,
+        D(y) ~ x * (ρ - z) - y + 0.1b * y,
+        D(z) ~ x * y - β * z + 0.1c * z]
+
+    @mtkbuild de = System(eqs, t)
+
+    u0map = [
+        x => 1.0,
+        y => 0.0,
+        z => 0.0
+    ]
+
+    parammap = [
+        σ => 10.0,
+        β => 26.0,
+        ρ => 2.33
+    ]
+
+    prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
+    # SOSRI only works for diagonal and scalar noise
+    @test solve(prob, SOSRI()).retcode == ReturnCode.Success
+end
+
+@testset "Non-diagonal noise check" begin
+    @parameters σ ρ β
+    @variables x(tt) y(tt) z(tt)
+    @brownian a b c d e f
+    eqs = [D(x) ~ σ * (y - x) + 0.1a * x + d,
+        D(y) ~ x * (ρ - z) - y + 0.1b * y + e,
+        D(z) ~ x * y - β * z + 0.1c * z + f]
+    @mtkbuild de = System(eqs, tt)
+
+    u0map = [
+        x => 1.0,
+        y => 0.0,
+        z => 0.0
+    ]
+
+    parammap = [
+        σ => 10.0,
+        β => 26.0,
+        ρ => 2.33
+    ]
+
+    prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
+    # SOSRI only works for diagonal and scalar noise
+    @test_throws ErrorException solve(prob, SOSRI()).retcode==ReturnCode.Success
+    # ImplicitEM does work for non-diagonal noise
+    @test solve(prob, ImplicitEM()).retcode == ReturnCode.Success
+    @test size(ModelingToolkit.get_noiseeqs(de)) == (3, 6)
+end
+
+@testset "Diagonal noise, less brownians than equations" begin
+    @parameters σ ρ β
+    @variables x(tt) y(tt) z(tt)
+    @brownian a b
+    eqs = [D(x) ~ σ * (y - x) + 0.1a * x,     # One brownian
+        D(y) ~ x * (ρ - z) - y + 0.1b * y, # Another brownian
+        D(z) ~ x * y - β * z]              # no brownians -- still diagonal
+    @mtkbuild de = System(eqs, tt)
+
+    u0map = [
+        x => 1.0,
+        y => 0.0,
+        z => 0.0
+    ]
+
+    parammap = [
+        σ => 10.0,
+        β => 26.0,
+        ρ => 2.33
+    ]
+
+    prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
+    @test solve(prob, SOSRI()).retcode == ReturnCode.Success
+end
+
+@testset "Passing `nothing` to `u0`" begin
+    @variables x(t) = 1
+    @brownian b
+    @mtkbuild sys = System([D(x) ~ x + b], t)
+    prob = @test_nowarn SDEProblem(sys, nothing, (0.0, 1.0))
+    @test_nowarn solve(prob, ImplicitEM())
+end

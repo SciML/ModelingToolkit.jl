@@ -1,8 +1,8 @@
 using ModelingToolkit, Test
 using ModelingToolkit: get_connector_type, get_defaults, get_gui_metadata,
-                       get_systems, get_ps, getdefault, getname, scalarize, symtype,
-                       VariableDescription,
-                       RegularConnector
+                       get_systems, get_ps, getdefault, getname, readable_code,
+                       scalarize, symtype, VariableDescription, RegularConnector,
+                       get_unit
 using URIs: URI
 using Distributions
 using DynamicQuantities, OrdinaryDiffEq
@@ -54,8 +54,9 @@ end
     end
 end
 
-@named p = Pin(; v = π)
-@test getdefault(p.v) == π
+@named p = Pin(; v = π * u"V")
+
+@test getdefault(p.v) ≈ π
 @test Pin.isconnector == true
 
 @mtkmodel OnePort begin
@@ -77,7 +78,6 @@ end
 
 @test OnePort.isconnector == false
 
-resistor_log = "$(@__DIR__)/logo/resistor.svg"
 @mtkmodel Resistor begin
     @extend v, i = oneport = OnePort()
     @parameters begin
@@ -106,14 +106,14 @@ end
     @parameters begin
         C, [unit = u"F"]
     end
-    @extend OnePort(; v = 0.0)
+    @extend OnePort(; v = 0.0u"V")
     @icon "https://upload.wikimedia.org/wikipedia/commons/7/78/Capacitor_symbol.svg"
     @equations begin
         D(v) ~ i / C
     end
 end
 
-@named capacitor = Capacitor(C = 10, v = 10.0)
+@named capacitor = Capacitor(C = 10u"F", v = 10.0u"V")
 @test getdefault(capacitor.v) == 10.0
 
 @mtkmodel Voltage begin
@@ -128,9 +128,9 @@ end
 
 @mtkmodel RC begin
     @structural_parameters begin
-        R_val = 10
-        C_val = 10
-        k_val = 10
+        R_val = 10u"Ω"
+        C_val = 10u"F"
+        k_val = 10u"V"
     end
     @components begin
         resistor = Resistor(; R = R_val)
@@ -148,9 +148,9 @@ end
     end
 end
 
-C_val = 20
-R_val = 20
-res__R = 100
+C_val = 20u"F"
+R_val = 20u"Ω"
+res__R = 100u"Ω"
 @mtkbuild rc = RC(; C_val, R_val, resistor.R = res__R)
 prob = ODEProblem(rc, [], (0, 1e9))
 sol = solve(prob, Rodas5P())
@@ -161,11 +161,12 @@ resistor = getproperty(rc, :resistor; namespace = false)
 @test getname(rc.resistor.R) === getname(resistor.R)
 @test getname(rc.resistor.v) === getname(resistor.v)
 # Test that `resistor.R` overrides `R_val` in the argument.
-@test getdefault(rc.resistor.R) == res__R != R_val
+@test getdefault(rc.resistor.R) * get_unit(rc.resistor.R) == res__R != R_val
 # Test that `C_val` passed via argument is set as default of C.
-@test getdefault(rc.capacitor.C) == C_val
+@test getdefault(rc.capacitor.C) * get_unit(rc.capacitor.C) == C_val
 # Test that `k`'s default value is unchanged.
-@test getdefault(rc.constant.k) == RC.structure[:kwargs][:k_val][:value]
+@test getdefault(rc.constant.k) * get_unit(rc.constant.k) ==
+      eval(RC.structure[:kwargs][:k_val][:value])
 @test getdefault(rc.capacitor.v) == 0.0
 
 @test get_gui_metadata(rc.resistor).layout == Resistor.structure[:icon] ==
@@ -264,7 +265,7 @@ end
     @test getdefault(model.cval) == 1
     @test isequal(getdefault(model.c), model.cval + model.jval)
     @test getdefault(model.d) == 2
-    @test_throws KeyError getdefault(model.e)
+    @test_throws ErrorException getdefault(model.e)
     @test getdefault(model.f) == 3
     @test getdefault(model.i) == 4
     @test all(getdefault.(scalarize(model.b2)) .== [1, 3])
@@ -376,8 +377,8 @@ end
 
 @testset "Metadata in variables" begin
     metadata = Dict(:description => "Variable to test metadata in the Model.structure",
-        :input => true, :bounds => (-1, 1), :connection_type => :Flow,
-        :tunable => false, :disturbance => true, :dist => Normal(1, 1))
+        :input => true, :bounds => :((-1, 1)), :connection_type => :Flow,
+        :tunable => false, :disturbance => true, :dist => :(Normal(1, 1)))
 
     @connector MockMeta begin
         m(t),
@@ -473,7 +474,7 @@ using ModelingToolkit: getdefault, scalarize
 
     @named model_with_component_array = ModelWithComponentArray()
 
-    @test ModelWithComponentArray.structure[:parameters][:r][:unit] == u"Ω"
+    @test eval(ModelWithComponentArray.structure[:parameters][:r][:unit]) == eval(u"Ω")
     @test lastindex(parameters(model_with_component_array)) == 3
 
     # Test the constant `k`. Manually k's value should be kept in sync here
@@ -533,9 +534,9 @@ end
     @named else_in_sys = InsideTheBlock(flag = 3)
     else_in_sys = complete(else_in_sys)
 
-    @test getname.(parameters(if_in_sys)) == [:if_parameter, :eq]
-    @test getname.(parameters(elseif_in_sys)) == [:elseif_parameter, :eq]
-    @test getname.(parameters(else_in_sys)) == [:else_parameter, :eq]
+    @test sort(getname.(parameters(if_in_sys))) == [:eq, :if_parameter]
+    @test sort(getname.(parameters(elseif_in_sys))) == [:elseif_parameter, :eq]
+    @test sort(getname.(parameters(else_in_sys))) == [:else_parameter, :eq]
 
     @test getdefault(if_in_sys.if_parameter) == 100
     @test getdefault(elseif_in_sys.elseif_parameter) == 101
@@ -768,4 +769,110 @@ end
 
 @testset "Parent module of Models" begin
     @test parentmodule(MyMockModule.Ground) == MyMockModule
+end
+
+@testset "Guesses with expression" begin
+    @mtkmodel GuessModel begin
+        @variables begin
+            k(t)
+            l(t) = 10, [guess = k, unit = u"A"]
+            i(t), [guess = k, unit = u"A"]
+            j(t), [guess = k + l / i]
+        end
+    end
+
+    @named guess_model = GuessModel()
+
+    j_guess = getguess(guess_model.j)
+    @test typeof(j_guess) == Num
+    @test readable_code(j_guess) == "l(t) / i(t) + k(t)"
+
+    i_guess = getguess(guess_model.i)
+    @test typeof(i_guess) == Num
+    @test readable_code(i_guess) == "k(t)"
+
+    l_guess = getguess(guess_model.l)
+    @test typeof(l_guess) == Num
+    @test readable_code(l_guess) == "k(t)"
+end
+
+@testset "Argument order" begin
+    @mtkmodel OrderModel begin
+        @structural_parameters begin
+            b = 1 # reverse alphabetical order to test that the order is preserved
+            a = b
+        end
+        @parameters begin
+            c = a
+            d = b
+        end
+    end
+    @named ordermodel = OrderModel()
+    ordermodel = complete(ordermodel)
+    defs = ModelingToolkit.defaults(ordermodel)
+    @test defs[ordermodel.c] == 1
+    @test defs[ordermodel.d] == 1
+
+    @test_nowarn @named ordermodel = OrderModel(a = 2)
+    ordermodel = complete(ordermodel)
+    defs = ModelingToolkit.defaults(ordermodel)
+    @test defs[ordermodel.c] == 2
+    @test defs[ordermodel.d] == 1
+end
+
+@testset "Vector defaults" begin
+    @mtkmodel VectorDefaultWithMetadata begin
+        @parameters begin
+            n[1:3] = [1, 2, 3], [description = "Vector defaults"]
+        end
+    end
+
+    @named vec = VectorDefaultWithMetadata()
+    for i in 1:3
+        @test getdefault(vec.n[i]) == i
+    end
+
+    @mtkmodel VectorConditionalDefault begin
+        @structural_parameters begin
+            flag = true
+        end
+        @parameters begin
+            n[1:3] = if flag
+                [2, 2, 2]
+            else
+                1
+            end
+        end
+    end
+
+    @named vec_true = VectorConditionalDefault()
+    for i in 1:3
+        @test getdefault(vec_true.n[i]) == 2
+    end
+    @named vec_false = VectorConditionalDefault(flag = false)
+    for i in 1:3
+        @test getdefault(vec_false.n[i]) == 1
+    end
+end
+
+@testset "Duplicate names" begin
+    mod = @__MODULE__
+    @test_throws ErrorException ModelingToolkit._model_macro(mod, :ATest,
+        :(begin
+            @variables begin
+                a(t)
+                a(t)
+            end
+        end),
+        false)
+    @test_throws ErrorException ModelingToolkit._model_macro(mod, :ATest,
+        :(begin
+            @variables begin
+                a(t)
+            end
+            @parameters begin
+                a
+            end
+        end),
+        false)
 end

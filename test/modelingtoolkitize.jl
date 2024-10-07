@@ -1,5 +1,8 @@
 using OrdinaryDiffEq, ModelingToolkit, DataStructures, Test
 using Optimization, RecursiveArrayTools, OptimizationOptimJL
+using SymbolicIndexingInterface
+using ModelingToolkit: t_nounits as t, D_nounits as D
+using SciMLBase: parameterless_type
 
 N = 32
 const xyd_brusselator = range(0, stop = 1, length = N)
@@ -56,13 +59,13 @@ sys = complete(modelingtoolkitize(prob)) # symbolicitize me captain!
 
 prob = OptimizationProblem(sys, x0, p, grad = true, hess = true)
 sol = solve(prob, NelderMead())
-@test sol.minimum < 1e-8
+@test sol.objective < 1e-8
 
 sol = solve(prob, BFGS())
-@test sol.minimum < 1e-8
+@test sol.objective < 1e-8
 
 sol = solve(prob, Newton())
-@test sol.minimum < 1e-8
+@test sol.objective < 1e-8
 
 ## SIR System Regression Test
 
@@ -207,55 +210,6 @@ tspan = (0.0, 1.0)
 prob = ODEProblem(k, x0, tspan)
 sys = modelingtoolkitize(prob)
 
-## https://github.com/SciML/ModelingToolkit.jl/issues/1054
-using LabelledArrays
-using ModelingToolkit
-
-# ODE model: simple SIR model with seasonally forced contact rate
-function SIR!(du, u, p, t)
-
-    # Unknowns
-    (S, I, R) = u[1:3]
-    N = S + I + R
-
-    # params
-    β = p.β
-    η = p.η
-    φ = p.φ
-    ω = 1.0 / p.ω
-    μ = p.μ
-    σ = p.σ
-
-    # FOI
-    βeff = β * (1.0 + η * cos(2.0 * π * (t - φ) / 365.0))
-    λ = βeff * I / N
-
-    # change in unknowns
-    du[1] = (μ * N - λ * S - μ * S + ω * R)
-    du[2] = (λ * S - σ * I - μ * I)
-    du[3] = (σ * I - μ * R - ω * R)
-    du[4] = (σ * I) # cumulative incidence
-end
-
-# Solver settings
-tmin = 0.0
-tmax = 10.0 * 365.0
-tspan = (tmin, tmax)
-
-# Initiate ODE problem
-theta_fix = [1.0 / (80 * 365)]
-theta_est = [0.28, 0.07, 1.0 / 365.0, 1.0, 1.0 / 5.0]
-p = @LArray [theta_est; theta_fix] (:β, :η, :ω, :φ, :σ, :μ)
-u0 = @LArray [9998.0, 1.0, 1.0, 1.0] (:S, :I, :R, :C)
-
-# Initiate ODE problem
-problem = ODEProblem(SIR!, u0, tspan, p)
-sys = complete(modelingtoolkitize(problem))
-
-@parameters t
-@test all(isequal.(parameters(sys), getproperty.(@variables(β, η, ω, φ, σ, μ), :val)))
-@test all(isequal.(Symbol.(unknowns(sys)), Symbol.(@variables(S(t), I(t), R(t), C(t)))))
-
 # https://github.com/SciML/ModelingToolkit.jl/issues/1158
 
 function ode_prob(du, u, p::NamedTuple, t)
@@ -291,9 +245,8 @@ sys = modelingtoolkitize(prob)
 @test [ModelingToolkit.defaults(sys)[s] for s in parameters(sys)] == [10, 20]
 @test ModelingToolkit.has_tspan(sys)
 
-@parameters t sig=10 rho=28.0 beta=8 / 3
+@parameters sig=10 rho=28.0 beta=8 / 3
 @variables x(t)=100 y(t)=1.0 z(t)=1
-D = Differential(t)
 
 eqs = [D(x) ~ sig * (y - x),
     D(y) ~ x * (rho - z) - y,
@@ -307,3 +260,174 @@ noiseeqs = [0.1 * x,
 prob = SDEProblem(complete(sys))
 sys = modelingtoolkitize(prob)
 @test ModelingToolkit.has_tspan(sys)
+
+@testset "Explicit variable names" begin
+    function fn(du, u, p::NamedTuple, t)
+        du[1] = u[1] + p.a * u[2]
+        du[2] = u[2] + p.b * u[1]
+    end
+    function fn(du, u, p::AbstractDict, t)
+        du[1] = u[1] + p[:a] * u[2]
+        du[2] = u[2] + p[:b] * u[1]
+    end
+    function fn(du, u, p, t)
+        du[1] = u[1] + p[1] * u[2]
+        du[2] = u[2] + p[2] * u[1]
+    end
+    function fn(du, u, p::Real, t)
+        du[1] = u[1] + p * u[2]
+        du[2] = u[2] + p * u[1]
+    end
+    function nl_fn(u, p::NamedTuple)
+        [u[1] + p.a * u[2], u[2] + p.b * u[1]]
+    end
+    function nl_fn(u, p::AbstractDict)
+        [u[1] + p[:a] * u[2], u[2] + p[:b] * u[1]]
+    end
+    function nl_fn(u, p)
+        [u[1] + p[1] * u[2], u[2] + p[2] * u[1]]
+    end
+    function nl_fn(u, p::Real)
+        [u[1] + p * u[2], u[2] + p * u[1]]
+    end
+    params = (a = 1, b = 1)
+    odeprob = ODEProblem(fn, [1 1], (0, 1), params)
+    nlprob = NonlinearProblem(nl_fn, [1, 1], params)
+    optprob = OptimizationProblem(nl_fn, [1, 1], params)
+
+    @testset "$(parameterless_type(prob))" for prob in [optprob]
+        sys = modelingtoolkitize(prob, u_names = [:a, :b])
+        @test is_variable(sys, sys.a)
+        @test is_variable(sys, sys.b)
+        @test is_variable(sys, :a)
+        @test is_variable(sys, :b)
+
+        @test_throws ["unknowns", "2", "does not match", "names", "3"] modelingtoolkitize(
+            prob, u_names = [:a, :b, :c])
+        for (pvals, pnames) in [
+            ([1, 2], [:p, :q]),
+            ((1, 2), [:p, :q]),
+            ([1, 2], Dict(1 => :p, 2 => :q)),
+            ((1, 2), Dict(1 => :p, 2 => :q)),
+            (1.0, :p),
+            (1.0, [:p]),
+            (1.0, Dict(1 => :p)),
+            (Dict(:a => 2, :b => 4), Dict(:a => :p, :b => :q)),
+            ((a = 1, b = 2), (a = :p, b = :q)),
+            ((a = 1, b = 2), Dict(:a => :p, :b => :q))
+        ]
+            if pvals isa NamedTuple && prob isa OptimizationProblem
+                continue
+            end
+            sys = modelingtoolkitize(
+                remake(prob, p = pvals, interpret_symbolicmap = false), p_names = pnames)
+            if pnames isa Symbol
+                @test is_parameter(sys, pnames)
+                continue
+            end
+            for p in values(pnames)
+                @test is_parameter(sys, p)
+            end
+        end
+
+        for (pvals, pnames) in [
+            ([1, 2], [:p, :q, :r]),
+            ((1, 2), [:p, :q, :r]),
+            ([1, 2], Dict(1 => :p, 2 => :q, 3 => :r)),
+            ((1, 2), Dict(1 => :p, 2 => :q, 3 => :r)),
+            (1.0, [:p, :q]),
+            (1.0, Dict(1 => :p, 2 => :q)),
+            (Dict(:a => 2, :b => 4), Dict(:a => :p, :b => :q, :c => :r)),
+            ((a = 1, b = 2), (a = :p, b = :q, c = :r)),
+            ((a = 1, b = 2), Dict(:a => :p, :b => :q, :c => :r))
+        ]
+            newprob = remake(prob, p = pvals, interpret_symbolicmap = false)
+            @test_throws [
+                "parameters", "$(length(pvals))", "does not match", "$(length(pnames))"] modelingtoolkitize(
+                newprob, p_names = pnames)
+        end
+
+        sc = SymbolCache([:a, :b], [:p, :q])
+        sci_f = parameterless_type(prob.f)(prob.f.f, sys = sc)
+        newprob = remake(prob, f = sci_f, p = [1, 2])
+        sys = modelingtoolkitize(newprob)
+        @test is_variable(sys, sys.a)
+        @test is_variable(sys, sys.b)
+        @test is_variable(sys, :a)
+        @test is_variable(sys, :b)
+        @test is_parameter(sys, sys.p)
+        @test is_parameter(sys, sys.q)
+        @test is_parameter(sys, :p)
+        @test is_parameter(sys, :q)
+    end
+
+    @testset "From MTK model" begin
+        @testset "ODE" begin
+            @variables x(t)=1.0 y(t)=2.0
+            @parameters p=3.0 q=4.0
+            @mtkbuild sys = ODESystem([D(x) ~ p * y, D(y) ~ q * x], t)
+            prob1 = ODEProblem(sys, [], (0.0, 5.0))
+            newsys = complete(modelingtoolkitize(prob1))
+            @test is_variable(newsys, newsys.x)
+            @test is_variable(newsys, newsys.y)
+            @test is_parameter(newsys, newsys.p)
+            @test is_parameter(newsys, newsys.q)
+            prob2 = ODEProblem(newsys, [], (0.0, 5.0))
+
+            sol1 = solve(prob1, Tsit5())
+            sol2 = solve(prob2, Tsit5())
+            @test sol1 ≈ sol2
+        end
+        @testset "Nonlinear" begin
+            @variables x=1.0 y=2.0
+            @parameters p=3.0 q=4.0
+            @mtkbuild nlsys = NonlinearSystem([0 ~ p * y^2 + x, 0 ~ x + exp(x) * q])
+            prob1 = NonlinearProblem(nlsys, [])
+            newsys = complete(modelingtoolkitize(prob1))
+            @test is_variable(newsys, newsys.x)
+            @test is_variable(newsys, newsys.y)
+            @test is_parameter(newsys, newsys.p)
+            @test is_parameter(newsys, newsys.q)
+            prob2 = NonlinearProblem(newsys, [])
+
+            sol1 = solve(prob1)
+            sol2 = solve(prob2)
+            @test sol1 ≈ sol2
+        end
+        @testset "Optimization" begin
+            @variables begin
+                x = 1.0, [bounds = (-2.0, 10.0)]
+                y = 2.0, [bounds = (-1.0, 10.0)]
+            end
+            @parameters p=3.0 q=4.0
+            loss = (p - x)^2 + q * (y - x^2)^2
+            @mtkbuild optsys = OptimizationSystem(loss, [x, y], [p, q])
+            prob1 = OptimizationProblem(optsys, [], grad = true, hess = true)
+            newsys = complete(modelingtoolkitize(prob1))
+            @test is_variable(newsys, newsys.x)
+            @test is_variable(newsys, newsys.y)
+            @test is_parameter(newsys, newsys.p)
+            @test is_parameter(newsys, newsys.q)
+            prob2 = OptimizationProblem(newsys, [], grad = true, hess = true)
+
+            sol1 = solve(prob1, GradientDescent())
+            sol2 = solve(prob2, GradientDescent())
+
+            @test sol1 ≈ sol2
+        end
+    end
+end
+
+## NonlinearLeastSquaresProblem
+
+function nlls!(du, u, p)
+    du[1] = 2u[1] - 2
+    du[2] = u[1] - 4u[2]
+    du[3] = 0
+end
+u0 = [0.0, 0.0]
+prob = NonlinearLeastSquaresProblem(
+    NonlinearFunction(nlls!, resid_prototype = zeros(3)), u0)
+sys = modelingtoolkitize(prob)
+@test length(equations(sys)) == 3
+@test length(equations(structural_simplify(sys; fully_determined = false))) == 0
