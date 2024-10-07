@@ -74,7 +74,7 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   ParallelForm, SerialForm, MultithreadedForm, build_function,
                   rhss, lhss, prettify_expr, gradient,
                   jacobian, hessian, derivative, sparsejacobian, sparsehessian,
-                  substituter, scalarize, getparent, hasderiv, hasdiff
+                  substituter, scalarize, getparent, hasderiv, hasdiff, Arr
 
 import DiffEqBase: @add_kwonly
 export independent_variables, unknowns, parameters, full_parameters, continuous_events,
