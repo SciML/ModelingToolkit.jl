@@ -7,7 +7,8 @@ import ChainRulesCore: Tangent, ZeroTangent, NoTangent, zero_tangent, unthunk
 function ChainRulesCore.rrule(::Type{MTK.MTKParameters}, tunables, args...)
     function mtp_pullback(dt)
         dt = unthunk(dt)
-        (NoTangent(), dt.tunable[1:length(tunables)],
+        dtunables = dt isa AbstractArray ? dt : dt.tunable
+        (NoTangent(), dtunables[1:length(tunables)],
             ntuple(_ -> NoTangent(), length(args))...)
     end
     MTK.MTKParameters(tunables, args...), mtp_pullback
