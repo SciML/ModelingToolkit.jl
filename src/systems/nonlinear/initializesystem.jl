@@ -132,6 +132,7 @@ function generate_initializesystem(sys::ODESystem;
 
     # 5) parameter dependencies become equations, their LHS become unknowns
     for eq in parameter_dependencies(sys)
+        is_variable_floatingpoint(eq.lhs) || continue
         varp = tovar(eq.lhs)
         paramsubs[eq.lhs] = varp
         push!(eqs_ics, eq)
