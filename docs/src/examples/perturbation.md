@@ -4,8 +4,8 @@
 
 In the previous tutorial, [Mixed Symbolic-Numeric Perturbation Theory](https://symbolics.juliasymbolics.org/stable/examples/perturbation/), we discussed how to solve algebraic equations using **Symbolics.jl**. Here, our goal is to extend the method to differential equations. First, we import the following helper functions that were introduced in [Mixed Symbolic/Numerical Methods for Perturbation Theory - Algebraic Equations](https://symbolics.juliasymbolics.org/stable/examples/perturbation/):
 
-```julia
-using Symbolics, SymbolicUtils
+```@example perturbation
+using Symbolics
 
 def_taylor(x, ps) = sum([a * x^(i - 1) for (i, a) in enumerate(ps)])
 
@@ -17,10 +17,10 @@ function collect_powers(eq, x, ns; max_power = 100)
         powers = Dict(x^j => (i == j ? 1 : 0) for j in 1:last(ns))
         e = substitute(eq, powers)
 
-		# manually remove zeroth order from higher orders
-		if 0 in ns && i != 0
-			e = e - eqs[1]
-		end
+        # manually remove zeroth order from higher orders
+        if 0 in ns && i != 0
+            e = e - eqs[1]
+        end
 
         push!(eqs, e)
     end
@@ -50,7 +50,7 @@ As the first ODE example, we have chosen a simple and well-behaved problem, whic
 
 with the initial conditions $x(0) = 0$, and $\dot{x}(0) = 1$. Note that for $\epsilon = 0$, this equation transforms back to the standard one. Let's start with defining the variables
 
-```julia
+```@example perturbation
 using ModelingToolkit: t_nounits as t, D_nounits as D
 order = 2
 n = order + 1
@@ -59,69 +59,69 @@ n = order + 1
 
 Next, we define $x$.
 
-```julia
+```@example perturbation
 x = def_taylor(ϵ, y)
 ```
 
 We need the second derivative of `x`. It may seem that we can do this using `Differential(t)`; however, this operation needs to wait for a few steps because we need to manipulate the differentials as separate variables. Instead, we define dummy variables `∂∂y` as the placeholder for the second derivatives and define
 
-```julia
+```@example perturbation
 ∂∂x = def_taylor(ϵ, ∂∂y)
 ```
 
 as the second derivative of `x`. After rearrangement, our governing equation is $\ddot{x}(t)(1 + \epsilon x(t))^{-2} + 1 = 0$, or
 
-```julia
+```@example perturbation
 eq = ∂∂x * (1 + ϵ * x)^2 + 1
 ```
 
 The next two steps are the same as the ones for algebraic equations (note that we pass `1:n` to `collect_powers` because the zeroth order term is needed here)
 
-```julia
+```@example perturbation
 eqs = collect_powers(eq, ϵ, 0:order)
 ```
 
 and,
 
-```julia
+```@example perturbation
 vals = solve_coef(eqs, ∂∂y)
 ```
 
 Our system of ODEs is forming. Now is the time to convert `∂∂`s to the correct **Symbolics.jl** form by substitution:
 
-```julia
+```@example perturbation
 subs = Dict(∂∂y[i] => D(D(y[i])) for i in eachindex(y))
 eqs = [substitute(first(v), subs) ~ substitute(last(v), subs) for v in vals]
 ```
 
 We are nearly there! From this point on, the rest is standard ODE solving procedures. Potentially, we can use a symbolic ODE solver to find a closed form solution to this problem. However, **Symbolics.jl** currently does not support this functionality. Instead, we solve the problem numerically. We form an `ODESystem`, lower the order (convert second derivatives to first), generate an `ODEProblem` (after passing the correct initial conditions), and, finally, solve it.
 
-```julia
+```@example perturbation
 using ModelingToolkit, DifferentialEquations
 
 @mtkbuild sys = ODESystem(eqs, t)
 unknowns(sys)
 ```
 
-```julia
+```@example perturbation
 # the initial conditions
 # everything is zero except the initial velocity
 u0 = zeros(2order + 2)
 u0[2] = 1.0   # yˍt₁
 
 prob = ODEProblem(sys, u0, (0, 3.0))
-sol = solve(prob; dtmax = 0.01)
+sol = solve(prob; dtmax = 0.01);
 ```
 
 Finally, we calculate the solution to the problem as a function of `ϵ` by substituting the solution to the ODE system back into the defining equation for `x`. Note that `𝜀` is a number, compared to `ϵ`, which is a symbolic variable.
 
-```julia
+```@example perturbation
 X = 𝜀 -> sum([𝜀^(i - 1) * sol[yi] for (i, yi) in enumerate(y)])
 ```
 
 Using `X`, we can plot the trajectory for a range of $𝜀$s.
 
-```julia
+```@example perturbation
 using Plots
 
 plot(sol.t, hcat([X(𝜀) for 𝜀 in 0.0:0.1:0.5]...))
@@ -135,17 +135,18 @@ For the next example, we have chosen a simple example from a very important clas
 
 The goal is to solve $\ddot{x} + 2\epsilon\dot{x} + x = 0$, where the dot signifies time-derivatives and the initial conditions are $x(0) = 0$ and $\dot{x}(0) = 1$. If $\epsilon = 0$, the problem reduces to the simple linear harmonic oscillator with the exact solution $x(t) = \sin(t)$. We follow the same steps as the previous example.
 
-```julia
-n = 3
-@variables ϵ t y[1:n](t) ∂y[1:n] ∂∂y[1:n]
-x = def_taylor(ϵ, y[3:end], y[2])
-∂x = def_taylor(ϵ, ∂y[3:end], ∂y[2])
-∂∂x = def_taylor(ϵ, ∂∂y[3:end], ∂∂y[2])
+```@example perturbation
+order = 2
+n = order + 1
+@variables ϵ (y(t))[1:n] (∂y)[1:n] (∂∂y)[1:n]
+x = def_taylor(ϵ, y)
+∂x = def_taylor(ϵ, ∂y)
+∂∂x = def_taylor(ϵ, ∂∂y)
 ```
 
 This time we also need the first derivative terms. Continuing,
 
-```julia
+```@example perturbation
 eq = ∂∂x + 2 * ϵ * ∂x + x
 eqs = collect_powers(eq, ϵ, 0:n)
 vals = solve_coef(eqs, ∂∂y)
@@ -153,7 +154,7 @@ vals = solve_coef(eqs, ∂∂y)
 
 Next, we need to replace `∂`s and `∂∂`s with their **Symbolics.jl** counterparts:
 
-```julia
+```@example perturbation
 subs1 = Dict(∂y[i] => D(y[i]) for i in eachindex(y))
 subs2 = Dict(∂∂y[i] => D(D(y[i])) for i in eachindex(y))
 subs = subs1 ∪ subs2
@@ -162,19 +163,19 @@ eqs = [substitute(first(v), subs) ~ substitute(last(v), subs) for v in vals]
 
 We continue with converting 'eqs' to an `ODEProblem`, solving it, and finally plot the results against the exact solution to the original problem, which is $x(t, \epsilon) = (1 - \epsilon)^{-1/2} e^{-\epsilon t} \sin((1- \epsilon^2)^{1/2}t)$,
 
-```julia
+```@example perturbation
 @mtkbuild sys = ODESystem(eqs, t)
 ```
 
-```julia
+```@example perturbation
 # the initial conditions
-u0 = zeros(2n + 2)
-u0[3] = 1.0   # y₀ˍt
+u0 = zeros(2order + 2)
+u0[1] = 1.0   # yˍt₁
 
 prob = ODEProblem(sys, u0, (0, 50.0))
 sol = solve(prob; dtmax = 0.01)
 
-X = 𝜀 -> sum([𝜀^(i - 1) * sol[y[i]] for i in eachindex(y)])
+X = 𝜀 -> sum([𝜀^(i - 1) * sol[yi] for (i, yi) in enumerate(y)])
 T = sol.t
 Y = 𝜀 -> exp.(-𝜀 * T) .* sin.(sqrt(1 - 𝜀^2) * T) / sqrt(1 - 𝜀^2)    # exact solution
 
