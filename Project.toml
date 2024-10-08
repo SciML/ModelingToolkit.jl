@@ -72,7 +72,7 @@ MTKLabelledArraysExt = "LabelledArrays"
 [compat]
 AbstractTrees = "0.3, 0.4"
 ArrayInterface = "6, 7"
-BifurcationKit = "0.3"
+BifurcationKit = "0.3, 0.4"
 BlockArrays = "1.1"
 ChainRulesCore = "1"
 Combinatorics = "1"
