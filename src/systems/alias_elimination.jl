@@ -1,14 +1,15 @@
 using SymbolicUtils: Rewriters
 using Graphs.Experimental.Traversals
 
-function alias_eliminate_graph!(state::TransformationState; kwargs...)
+function alias_eliminate_graph!(state::TransformationState;
+        variable_underconstrained! = force_var_to_zero!, kwargs...)
     mm = linear_subsys_adjmat!(state; kwargs...)
     if size(mm, 1) == 0
         return mm # No linear subsystems
     end
 
     @unpack graph, var_to_diff, solvable_graph = state.structure
-    mm = alias_eliminate_graph!(state, mm)
+    mm = alias_eliminate_graph!(state, mm; variable_underconstrained!)
     s = state.structure
     for g in (s.graph, s.solvable_graph)
         g === nothing && continue
@@ -47,9 +48,17 @@ function alias_elimination!(state::TearingState; kwargs...)
     sys = state.sys
     complete!(state.structure)
     graph_orig = copy(state.structure.graph)
-    mm = alias_eliminate_graph!(state; kwargs...)
-
     fullvars = state.fullvars
+
+    function variable_underconstrained_mtk!(structure::SystemStructure,
+            ils::SparseMatrixCLIL,
+            v::Int)
+        @warn "The model is under-constrained. Variable $(fullvars[v]) was arbitrarily chosen to be set to 0. This may indicate a model bug!"
+        return force_var_to_zero!(structure, ils, v)
+    end
+    mm = alias_eliminate_graph!(state;
+        variable_underconstrained! = variable_underconstrained_mtk!, kwargs...)
+
     @unpack var_to_diff, graph, solvable_graph = state.structure
 
     subs = Dict()
@@ -347,7 +356,22 @@ function do_bareiss!(M, Mold, is_linear_variables, is_highest_diff)
     (rank1, rank2, rank3, pivots)
 end
 
-function alias_eliminate_graph!(state::TransformationState, ils::SparseMatrixCLIL)
+function force_var_to_zero!(structure::SystemStructure, ils::SparseMatrixCLIL, v::Int)
+    @unpack graph, solvable_graph, eq_to_diff = structure
+    @set! ils.nparentrows += 1
+    push!(ils.nzrows, ils.nparentrows)
+    push!(ils.row_cols, [v])
+    push!(ils.row_vals, [convert(eltype(ils), 1)])
+    add_vertex!(graph, SRC)
+    add_vertex!(solvable_graph, SRC)
+    add_edge!(graph, ils.nparentrows, v)
+    add_edge!(solvable_graph, ils.nparentrows, v)
+    add_vertex!(eq_to_diff)
+    return ils
+end
+
+function alias_eliminate_graph!(state::TransformationState, ils::SparseMatrixCLIL;
+        variable_underconstrained! = force_var_to_zero!)
     @unpack structure = state
     @unpack graph, solvable_graph, var_to_diff, eq_to_diff = state.structure
     # Step 1: Perform Bareiss factorization on the adjacency matrix of the linear
@@ -359,15 +383,7 @@ function alias_eliminate_graph!(state::TransformationState, ils::SparseMatrixCLI
     rk1vars = BitSet(@view pivots[1:rank1])
     for v in solvable_variables
         v in rk1vars && continue
-        @set! ils.nparentrows += 1
-        push!(ils.nzrows, ils.nparentrows)
-        push!(ils.row_cols, [v])
-        push!(ils.row_vals, [convert(eltype(ils), 1)])
-        add_vertex!(graph, SRC)
-        add_vertex!(solvable_graph, SRC)
-        add_edge!(graph, ils.nparentrows, v)
-        add_edge!(solvable_graph, ils.nparentrows, v)
-        add_vertex!(eq_to_diff)
+        ils = variable_underconstrained!(structure, ils, v)
     end
 
     return ils
