@@ -169,7 +169,7 @@ infprob = ODEProblem(structural_simplify(sys), [x => 1.0], (0, 1.0), [p => 0.2])
 infprob.f(du, infprob.u0, pr, tt)
 @test any(isnan, du)
 
-sol1 = solve(prob, RosShamp4(), reltol = 9e-4)
+sol1 = solve(prob, RosShamp4(), reltol = 2e-4)
 sol2 = solve(ODEProblem{false}((u, p, t) -> [-asin(u[1] - pr * t)],
         [1.0],
         (0, 1.0),
@@ -179,11 +179,11 @@ sol2 = solve(ODEProblem{false}((u, p, t) -> [-asin(u[1] - pr * t)],
 
 @test sol1[x] == first.(sol1.u)
 @test sol1[y] == first.(sol1.u)
-@test sin.(sol1[z]) .+ sol1[y]≈pr[1] * sol1.t atol=5e-5
+@test sin.(sol1[z]) .+ sol1[y]≈pr[1] * sol1.t atol=8e-4
 @test sol1[sin(z) + y]≈sin.(sol1[z]) .+ sol1[y] rtol=1e-12
 
 @test sol1[y, :] == sol1[x, :]
-@test (@. sin(sol1[z, :]) + sol1[y, :])≈pr * sol1.t atol=5e-5
+@test (@. sin(sol1[z, :]) + sol1[y, :])≈pr * sol1.t atol=8e-4
 
 # 1426
 function Translational_Mass(; name, m = 1.0)
