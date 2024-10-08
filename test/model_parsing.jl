@@ -279,6 +279,21 @@ end
     @test MockModel.structure[:defaults] == Dict(:n => 1.0, :n2 => "g()")
 end
 
+@testset "Arrays using vanilla-@variable syntax" begin
+    @mtkmodel TupleInArrayDef begin
+        @parameters begin
+            (l(t)[1:2, 1:3] = 1), [description = "l is more than 1D"]
+            (l2(t)[1:3] = 2), [description = "l2 is 1D"]
+            (l3(t)[1:3]::Int = 3), [description = "l3 is 1D and has a type"]
+        end
+    end
+
+    @named arr = TupleInArrayDef()
+    @test getdefault(arr.l) == 1
+    @test getdefault(arr.l2) == 2
+    @test getdefault(arr.l3) == 3
+end
+
 @testset "Type annotation" begin
     @mtkmodel TypeModel begin
         @structural_parameters begin

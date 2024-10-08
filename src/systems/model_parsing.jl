@@ -270,6 +270,8 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                 varclass, where_types, meta)
             return var, def, Dict()
         end
+        Expr(:tuple, Expr(:(=), Expr(:ref, a, indices...), default_val), meta_val) ||
+        Expr(:tuple, Expr(:(=), Expr(:(::), Expr(:ref, a, indices...), type), default_val), meta_val) ||
         Expr(:tuple, Expr(:(::), Expr(:ref, a, indices...), type), meta_val) ||
         Expr(:tuple, Expr(:ref, a, indices...), meta_val) => begin
             (@isdefined type) || (type = Real)
