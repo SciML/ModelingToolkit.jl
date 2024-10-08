@@ -1504,3 +1504,14 @@ end
     sys2 = complete(sys; split = false)
     @test ModelingToolkit.get_index_cache(sys2) === nothing
 end
+
+# https://github.com/SciML/SciMLBase.jl/issues/786
+@testset "Observed variables dependent on discrete parameters" begin
+    @variables x(t) obs(t)
+    @parameters c(t)
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ c * cos(x), obs ~ c], t, [x], [c]; discrete_events = [1.0 => [c ~ c + 1]])
+    prob = ODEProblem(sys, [x => 0.0], (0.0, 2pi), [c => 1.0])
+    sol = solve(prob, Tsit5())
+    @test sol[obs] ≈ 1:7
+end
