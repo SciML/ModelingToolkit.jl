@@ -106,8 +106,7 @@ unknowns(sys)
 ```@example perturbation
 # the initial conditions
 # everything is zero except the initial velocity
-u0 = zeros(2order + 2)
-u0[2] = 1.0   # yˍt₁
+u0 = Dict([unknowns(sys) .=> 0; D(y[1]) => 1])
 
 prob = ODEProblem(sys, u0, (0, 3.0))
 sol = solve(prob; dtmax = 0.01);
@@ -169,8 +168,7 @@ We continue with converting 'eqs' to an `ODEProblem`, solving it, and finally pl
 
 ```@example perturbation
 # the initial conditions
-u0 = zeros(2order + 2)
-u0[1] = 1.0   # yˍt₁
+u0 = Dict([unknowns(sys) .=> 0; D(y[1]) => 1])
 
 prob = ODEProblem(sys, u0, (0, 50.0))
 sol = solve(prob; dtmax = 0.01)
