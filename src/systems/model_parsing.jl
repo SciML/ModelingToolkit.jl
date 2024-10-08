@@ -281,9 +281,13 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
             varval = (@isdefined default_val) ? default_val :
                      unit_handled_variable_value(meta, varname)
             if varclass == :parameters
+                Meta.isexpr(a, :call) && assert_unique_independent_var(dict, a.args[end])
                 var = :($varname = $first(@parameters ($a[$(indices...)]::$type = $varval),
                 $meta_val))
             else
+                Meta.isexpr(a, :call) ||
+                    throw("$a is not a variable of the independent variable")
+                assert_unique_independent_var(dict, a.args[end])
                 var = :($varname = $first(@variables ($a[$(indices)]::$type = $varval),
                 $meta_val))
             end
@@ -301,10 +305,15 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                 val, def_n_meta = (def_n_meta.args[1], def_n_meta.args[2:end])
                 push!(kwargs, Expr(:kw, varname, nothing))
                 if varclass == :parameters
+                    Meta.isexpr(a, :call) &&
+                        assert_unique_independent_var(dict, a.args[end])
                     var = :($varname = $varname === nothing ? $val : $varname;
                     $varname = $first(@parameters ($a[$(indices...)]::$type = $varval),
                     $(def_n_meta...)))
                 else
+                    Meta.isexpr(a, :call) ||
+                        throw("$a is not a variable of the independent variable")
+                    assert_unique_independent_var(dict, a.args[end])
                     var = :($varname = $varname === nothing ? $val : $varname;
                     $varname = $first(@variables $a[$(indices...)]::$type = (
                         $varval),
@@ -313,9 +322,14 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
             else
                 push!(kwargs, Expr(:kw, varname, nothing))
                 if varclass == :parameters
+                    Meta.isexpr(a, :call) &&
+                        assert_unique_independent_var(dict, a.args[end])
                     var = :($varname = $varname === nothing ? $def_n_meta : $varname;
                     $varname = $first(@parameters $a[$(indices...)]::$type = $varname))
                 else
+                    Meta.isexpr(a, :call) ||
+                        throw("$a is not a variable of the independent variable")
+                    assert_unique_independent_var(dict, a.args[end])
                     var = :($varname = $varname === nothing ? $def_n_meta : $varname;
                     $varname = $first(@variables $a[$(indices...)]::$type = $varname))
                 end
@@ -331,8 +345,12 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
             varname = a isa Expr && a.head == :call ? a.args[1] : a
             push!(kwargs, Expr(:kw, varname, nothing))
             if varclass == :parameters
+                Meta.isexpr(a, :call) && assert_unique_independent_var(dict, a.args[end])
                 var = :($varname = $first(@parameters $a[$(indices...)]::$type = $varname))
             elseif varclass == :variables
+                Meta.isexpr(a, :call) ||
+                    throw("$a is not a variable of the independent variable")
+                assert_unique_independent_var(dict, a.args[end])
                 var = :($varname = $first(@variables $a[$(indices...)]::$type = $varname))
             else
                 throw("Symbolic array with arbitrary length is not handled for $varclass.
@@ -411,14 +429,22 @@ function generate_var!(dict, a, varclass;
     generate_var(a, varclass; indices, type)
 end
 
+function assert_unique_independent_var(dict, iv::Num)
+    assert_unique_independent_var(dict, nameof(iv))
+end
+function assert_unique_independent_var(dict, iv)
+    prev_iv = get!(dict, :independent_variable) do
+        iv
+    end
+    prev_iv isa Num && (prev_iv = nameof(prev_iv))
+    @assert isequal(iv, prev_iv) "Multiple independent variables are used in the model $(typeof(iv)) $(typeof(prev_iv))"
+end
+
 function generate_var!(dict, a, b, varclass, mod;
         indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
         type = Real)
     iv = b == :t ? get_t(mod, b) : generate_var(b, :independent_variables)
-    prev_iv = get!(dict, :independent_variable) do
-        iv
-    end
-    @assert isequal(iv, prev_iv) "Multiple independent variables are used in the model"
+    assert_unique_independent_var(dict, iv)
     check_name_uniqueness(dict, a, varclass)
     vd = get!(dict, varclass) do
         Dict{Symbol, Dict{Symbol, Any}}()
