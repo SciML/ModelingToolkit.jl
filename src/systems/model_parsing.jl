@@ -163,7 +163,7 @@ function update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
             push!(kwargs,
                 Expr(:kw, :($a::Union{Nothing, Missing, $NoValue, $type}), NO_VALUE))
         end
-        dict[:kwargs][getname(var)] = Dict(:value => def, :type => type)
+        dict[:kwargs][a] = Dict(:value => def, :type => type)
     else
         vartype = gensym(:T)
         push!(kwargs,
@@ -177,13 +177,69 @@ function update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
         else
             push!(where_types, :($vartype <: $type))
         end
-        dict[:kwargs][getname(var)] = Dict(:value => def, :type => AbstractArray{type})
+        dict[:kwargs][a] = Dict(:value => def, :type => AbstractArray{type})
     end
     if dict[varclass] isa Vector
-        dict[varclass][1][getname(var)][:type] = AbstractArray{type}
+        dict[varclass][1][a][:type] = AbstractArray{type}
     else
-        dict[varclass][getname(var)][:type] = type
+        dict[varclass][a][:type] = type
     end
+end
+
+function update_readable_metadata!(varclass_dict, meta::Dict, varname)
+    metatypes = [(:connection_type, VariableConnectType),
+        (:description, VariableDescription),
+        (:unit, VariableUnit),
+        (:bounds, VariableBounds),
+        (:noise, VariableNoiseType),
+        (:input, VariableInput),
+        (:output, VariableOutput),
+        (:irreducible, VariableIrreducible),
+        (:state_priority, VariableStatePriority),
+        (:misc, VariableMisc),
+        (:disturbance, VariableDisturbance),
+        (:tunable, VariableTunable),
+        (:dist, VariableDistribution)]
+
+    var_dict = get!(varclass_dict, varname) do
+        Dict{Symbol, Any}()
+    end
+
+    for (type, key) in metatypes
+        if (mt = get(meta, key, nothing)) !== nothing
+            key == VariableConnectType && (mt = nameof(mt))
+            var_dict[type] = mt
+        end
+    end
+end
+
+function push_array_kwargs_and_metadata!(
+        dict, indices, meta, type, varclass, varname, varval)
+    dict[varclass] = get!(dict, varclass) do
+        Dict{Symbol, Dict{Symbol, Any}}()
+    end
+    varclass_dict = dict[varclass] isa Vector ? Ref(dict[varclass][1]) : Ref(dict[varclass])
+
+    merge!(varclass_dict[],
+        Dict(varname => Dict(
+            :size => tuple([index_arg.args[end] for index_arg in indices]...),
+            :value => varval,
+            :type => type
+        )))
+
+    # Useful keys for kwargs entry are: value, type and size.
+    dict[:kwargs][varname] = varclass_dict[][varname]
+
+    meta !== nothing && update_readable_metadata!(varclass_dict[], meta, varname)
+end
+
+function unit_handled_variable_value(meta, varname)
+    varval = if meta isa Nothing || get(meta, VariableUnit, nothing) isa Nothing
+        varname
+    else
+        :($convert_units($(meta[VariableUnit]), $varname))
+    end
+    return varval
 end
 
 function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;

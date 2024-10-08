@@ -259,7 +259,8 @@ end
     @test all(collect(hasmetadata.(model.l, ModelingToolkit.VariableDescription)))
 
     @test all(lastindex.([model.a2, model.b2, model.d2, model.e2, model.h2]) .== 2)
-    @test size(model.l) == MockModel.structure[:parameters][:l][:size] == (2, 3)
+    @test size(model.l) == (2, 3)
+    @test MockModel.structure[:parameters][:l][:size] == (2, 3)
 
     model = complete(model)
     @test getdefault(model.cval) == 1
@@ -474,7 +475,8 @@ using ModelingToolkit: getdefault, scalarize
 
     @named model_with_component_array = ModelWithComponentArray()
 
-    @test eval(ModelWithComponentArray.structure[:parameters][:r][:unit]) == eval(u"Ω")
+    @test eval(ModelWithComponentArray.structure[:parameters][:r][:unit]) ==
+          eval(u"Ω")
     @test lastindex(parameters(model_with_component_array)) == 3
 
     # Test the constant `k`. Manually k's value should be kept in sync here
