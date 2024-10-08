@@ -302,7 +302,7 @@ end
     
     For more examples of usage, checkout [ModelingToolkitStandardLibrary.jl](https://github.com/SciML/ModelingToolkitStandardLibrary.jl/)
 
-## More on `Model.structure`
+## [More on `Model.structure`](@id model_structure)
 
 `structure` stores metadata that describes composition of a model. It includes:
 
@@ -334,6 +334,46 @@ Dict{Symbol, Any} with 10 entries:
   :extend                => Any[[:p2, :p1], Symbol("#mtkmodel__anonymous__ModelB"), :ModelB]
   :defaults              => Dict{Symbol, Any}(:v_for_defaults=>2.0)
   :equations             => Any["model_a.k ~ f(v)"]
+```
+
+### Different ways to define symbolics arrays:
+
+`@mtkmodel` supports symbolics arrays in both `@parameters` and `@variables`.
+Using a structural parameters, symbolic arrays of arbitrary lengths can be defined.
+Refer the following example for different ways to define symbolic arrays.
+
+```@example mtkmodel-example
+@mtkmodel ModelWithArrays begin
+    @structural_parameters begin
+        N = 2
+        M = 3
+    end
+    @parameters begin
+        p1[1:4]
+        p2[1:N]
+        p3[1:N, 1:M] = 10,
+        [description = "A multi-dimensional array of arbitrary length with description"]
+        (p4[1:N, 1:M] = 10),
+        [description = "An alternate syntax for p3 to match the syntax of vanilla parameters macro"]
+    end
+    @variables begin
+        v1(t)[1:2] = 10, [description = "An array of variable `v1`"]
+        v2(t)[1:3] = [1, 2, 3]
+    end
+end
+```
+
+The size of symbolic array can be accessed via `:size` key, along with other metadata (refer [More on `Model.structure`](@ref model_structure))
+of the symbolic variable.
+
+```julia
+julia> ModelWithArrays.structure
+Dict{Symbol, Any} with 5 entries:
+    :variables => Dict{Symbol, Dict{Symbol, Any}}(:v2 => Dict(:value => :([1, 2, 3]), :type => Real, :size => (3,)), :v1 => Dict(:value => :v1, :type => Real, :description => "An array of variable `v1`", :size => (2,)))
+    :kwargs => Dict{Symbol, Dict}(:p2 => Dict{Symbol, Any}(:value => nothing, :type => Real, :size => (:N,)), :v1 => Dict{Symbol, Any}(:value => :v1, :type => Real, :description => "An array of variable `v1`", :size => (2,)), :N => Dict(:value => 2), :M => Dict(:value => 3), :p4 => Dict{Symbol, Any}(:value => 10, :type => Real, :description => "An alternate syntax for p3 to match the syntax of vanilla parameters macro", :size => (:N, :M)), :v2 => Dict{Symbol, Any}(:value => :([1, 2, 3]), :type => Real, :size => (3,)), :p1 => Dict{Symbol, Any}(:value => nothing, :type => Real, :size => (4,)), :p3 => Dict{Symbol, Any}(:value => :p3, :type => Real, :description => "A multi-dimensional array of arbitrary length with description", :size => (:N, :M)))
+    :structural_parameters => Dict{Symbol, Dict}(:N => Dict(:value => 2), :M => Dict(:value => 3))
+    :independent_variable => :t
+    :parameters => Dict{Symbol, Dict{Symbol, Any}}(:p2 => Dict(:value => nothing, :type => Real, :size => (:N,)), :p4 => Dict(:value => 10, :type => Real, :description => "An alternate syntax for p3 to match the syntax of vanilla parameters macro", :size => (:N, :M)), :p1 => Dict(:value => nothing, :type => Real, :size => (4,)), :p3 => Dict(:value => :p3, :type => Real, :description => "A multi-dimensional array of arbitrary length with description", :size => (:N, :M)))), false)
 ```
 
 ### Using conditional statements
