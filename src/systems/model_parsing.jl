@@ -148,31 +148,17 @@ end
 
 pop_structure_dict!(dict, key) = length(dict[key]) == 0 && pop!(dict, key)
 
-function update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
+function update_kwargs_and_metadata!(dict, kwargs, a, def, type,
         varclass, where_types, meta)
-    if indices isa Nothing
-        if !isnothing(meta) && haskey(meta, VariableUnit)
-            uvar = gensym()
-            push!(where_types, uvar)
-            push!(kwargs, Expr(:kw, :($a::Union{Nothing, $uvar}), nothing))
-        else
-            push!(kwargs, Expr(:kw, :($a::Union{Nothing, $type}), nothing))
-        end
-        dict[:kwargs][a] = Dict(:value => def, :type => type)
+    if !isnothing(meta) && haskey(meta, VariableUnit)
+        uvar = gensym()
+        push!(where_types, uvar)
+        push!(kwargs, Expr(:kw, :($a::Union{Nothing, $uvar}), nothing))
     else
-        vartype = gensym(:T)
-        push!(kwargs,
-            Expr(:kw,
-                Expr(:(::), a,
-                    Expr(:curly, :Union, :Nothing, Expr(:curly, :AbstractArray, vartype))),
-                nothing))
-        if !isnothing(meta) && haskey(meta, VariableUnit)
-            push!(where_types, vartype)
-        else
-            push!(where_types, :($vartype <: $type))
-        end
-        dict[:kwargs][a] = Dict(:value => def, :type => AbstractArray{type})
+        push!(kwargs, Expr(:kw, :($a::Union{Nothing, $type}), nothing))
     end
+    dict[:kwargs][a] = Dict(:value => def, :type => type)
+
     if dict[varclass] isa Vector
         dict[varclass][1][a][:type] = AbstractArray{type}
     else
@@ -207,8 +193,8 @@ function update_readable_metadata!(varclass_dict, meta::Dict, varname)
     end
 end
 
-function push_array_kwargs_and_metadata!(
-        dict, indices, meta, type, varclass, varname, varval)
+function update_array_kwargs_and_metadata!(
+        dict, indices, kwargs, meta, type, varclass, varname, varval, where_types)
     dict[varclass] = get!(dict, varclass) do
         Dict{Symbol, Dict{Symbol, Any}}()
     end
@@ -220,6 +206,18 @@ function push_array_kwargs_and_metadata!(
             :value => varval,
             :type => type
         )))
+
+    vartype = gensym(:T)
+    push!(kwargs,
+        Expr(:kw,
+            Expr(:(::), varname,
+                Expr(:curly, :Union, :Nothing, Expr(:curly, :AbstractArray, vartype))),
+            nothing))
+    if !isnothing(meta) && haskey(meta, VariableUnit)
+        push!(where_types, vartype)
+    else
+        push!(where_types, :($vartype <: $type))
+    end
 
     # Useful keys for kwargs entry are: value, type and size.
     dict[:kwargs][varname] = varclass_dict[][varname]
@@ -237,13 +235,12 @@ function unit_handled_variable_value(meta, varname)
 end
 
 function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
-        def = nothing, indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
-        type::Type = Real, meta = Dict{DataType, Expr}())
+        def = nothing, type::Type = Real, meta = Dict{DataType, Expr}())
     arg isa LineNumberNode && return
     MLStyle.@match arg begin
         a::Symbol => begin
-            var = generate_var!(dict, a, varclass; indices, type)
-            update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
+            var = generate_var!(dict, a, varclass; type)
+            update_kwargs_and_metadata!(dict, kwargs, a, def, type,
                 varclass, where_types, meta)
             return var, def, Dict()
         end
@@ -259,8 +256,8 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                 dict, mod, a, varclass, kwargs, where_types; def, type, meta)
         end
         Expr(:call, a, b) => begin
-            var = generate_var!(dict, a, b, varclass, mod; indices, type)
-            update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
+            var = generate_var!(dict, a, b, varclass, mod; type)
+            update_kwargs_and_metadata!(dict, kwargs, a, def, type,
                 varclass, where_types, meta)
             return var, def, Dict()
         end
@@ -270,7 +267,6 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         Expr(:tuple, Expr(:ref, a, indices...), meta_val) => begin
             (@isdefined type) || (type = Real)
             varname = Meta.isexpr(a, :call) ? a.args[1] : a
-            push!(kwargs, Expr(:kw, varname, nothing))
             meta = parse_metadata(mod, meta_val)
             varval = (@isdefined default_val) ? default_val :
                      unit_handled_variable_value(meta, varname)
@@ -285,8 +281,8 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                 var = :($varname = $first(@variables ($a[$(indices)]::$type = $varval),
                 $meta_val))
             end
-            push_array_kwargs_and_metadata!(
-                dict, indices, meta, type, varclass, varname, varval)
+            update_array_kwargs_and_metadata!(
+                dict, indices, kwargs, meta, type, varclass, varname, varval, where_types)
             (:($varname...), var), nothing, Dict()
         end
         Expr(:(=), Expr(:(::), Expr(:ref, a, indices...), type), def_n_meta) ||
@@ -297,7 +293,6 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                 meta = parse_metadata(mod, def_n_meta)
                 varval = unit_handled_variable_value(meta, varname)
                 val, def_n_meta = (def_n_meta.args[1], def_n_meta.args[2:end])
-                push!(kwargs, Expr(:kw, varname, nothing))
                 if varclass == :parameters
                     Meta.isexpr(a, :call) &&
                         assert_unique_independent_var(dict, a.args[end])
@@ -314,7 +309,6 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                     $(def_n_meta...)))
                 end
             else
-                push!(kwargs, Expr(:kw, varname, nothing))
                 if varclass == :parameters
                     Meta.isexpr(a, :call) &&
                         assert_unique_independent_var(dict, a.args[end])
@@ -329,15 +323,14 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                 end
                 varval, meta = def_n_meta, nothing
             end
-            push_array_kwargs_and_metadata!(
-                dict, indices, meta, type, varclass, varname, varval)
+            update_array_kwargs_and_metadata!(
+                dict, indices, kwargs, meta, type, varclass, varname, varval, where_types)
             (:($varname...), var), nothing, Dict()
         end
         Expr(:(::), Expr(:ref, a, indices...), type) ||
         Expr(:ref, a, indices...) => begin
             (@isdefined type) || (type = Real)
             varname = a isa Expr && a.head == :call ? a.args[1] : a
-            push!(kwargs, Expr(:kw, varname, nothing))
             if varclass == :parameters
                 Meta.isexpr(a, :call) && assert_unique_independent_var(dict, a.args[end])
                 var = :($varname = $first(@parameters $a[$(indices...)]::$type = $varname))
@@ -350,8 +343,8 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                 throw("Symbolic array with arbitrary length is not handled for $varclass.
                     Please open an issue with an example.")
             end
-            push_array_kwargs_and_metadata!(
-                dict, indices, nothing, type, varclass, varname, nothing)
+            update_array_kwargs_and_metadata!(
+                dict, indices, kwargs, nothing, type, varclass, varname, nothing, where_types)
             (:($varname...), var), nothing, Dict()
         end
         Expr(:(=), a, b) => begin
@@ -386,11 +379,8 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
     end
 end
 
-function generate_var(a, varclass;
-        indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
-        type = Real)
-    var = indices === nothing ? Symbolics.variable(a; T = type) :
-          first(@variables $a[indices...]::type)
+function generate_var(a, varclass; type = Real)
+    var = Symbolics.variable(a; T = type)
     if varclass == :parameters
         var = toparam(var)
     elseif varclass == :independent_variables
@@ -420,7 +410,7 @@ function generate_var!(dict, a, varclass;
     vd isa Vector && (vd = first(vd))
     vd[a] = Dict{Symbol, Any}()
     indices !== nothing && (vd[a][:size] = Tuple(lastindex.(indices)))
-    generate_var(a, varclass; indices, type)
+    generate_var(a, varclass; type)
 end
 
 function assert_unique_independent_var(dict, iv::Num)
