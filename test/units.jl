@@ -240,3 +240,10 @@ sys = complete(sys)
 @test isequal(ModelingToolkit.getdefault(sys.pt.a), sys.v * sys.τ)
 @test ModelingToolkit.getdefault(sys.v) ≈ 2.0
 @test ModelingToolkit.getdefault(sys.τ) ≈ 3.0
+
+@testset "Issue#3017" begin
+    @constants c = 1 [unit = us"mol/nmol"]
+    @variables k(t) [unit = us"mol/nmol"]
+    @test ModelingToolkit.get_unit(c) == ModelingToolkit.get_unit(-c)
+    @test_nowarn NonlinearSystem([k ~ c], [k], []; name=:example)
+end
