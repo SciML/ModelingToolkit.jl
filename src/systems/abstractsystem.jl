@@ -730,7 +730,7 @@ end
 function has_observed_with_lhs(sys, sym)
     has_observed(sys) || return false
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        return any(isequal(sym), ic.observed_syms)
+        return haskey(ic.observed_syms_to_timeseries, sym)
     else
         return any(isequal(sym), [eq.lhs for eq in observed(sys)])
     end
@@ -752,11 +752,16 @@ for traitT in [
         allsyms = vars(sym; op = Symbolics.Operator)
         for s in allsyms
             s = unwrap(s)
-            if is_variable(sys, s) || is_independent_variable(sys, s) ||
-               has_observed_with_lhs(sys, s)
+            if is_variable(sys, s) || is_independent_variable(sys, s)
                 push!(ts_idxs, ContinuousTimeseries())
             elseif is_timeseries_parameter(sys, s)
                 push!(ts_idxs, timeseries_parameter_index(sys, s).timeseries_idx)
+            elseif has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+                if (ts = get(ic.observed_syms_to_timeseries, s, nothing)) !== nothing
+                    union!(ts_idxs, ts)
+                elseif (ts = get(ic.dependent_pars_to_timeseries, s, nothing)) !== nothing
+                    union!(ts_idxs, ts)
+                end
             end
         end
     end
