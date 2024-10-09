@@ -124,7 +124,7 @@ sol = solve(prob, MethodOfSteps(Tsit5()))
 obsfn = ModelingToolkit.build_explicit_observed_function(
     sys, [sys.osc1.delx, sys.osc2.delx])
 @test_nowarn sol[[sys.osc1.delx, sys.osc2.delx]]
-@test sol[sys.osc1.delx] ≈ sol(sol.t .- 0.01; idxs = sys.osc1.x)
+@test sol[sys.osc1.delx] ≈ sol(sol.t .- 0.01; idxs = sys.osc1.x).u
 
 @testset "DDE observed with array variables" begin
     @component function valve(; name)
