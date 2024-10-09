@@ -1,4 +1,6 @@
 using SafeTestsets, Pkg, Test
+# https://github.com/JuliaLang/julia/issues/54664
+import REPL
 
 const GROUP = get(ENV, "GROUP", "All")
 
