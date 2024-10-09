@@ -259,7 +259,8 @@ end
     @test all(collect(hasmetadata.(model.l, ModelingToolkit.VariableDescription)))
 
     @test all(lastindex.([model.a2, model.b2, model.d2, model.e2, model.h2]) .== 2)
-    @test size(model.l) == MockModel.structure[:parameters][:l][:size] == (2, 3)
+    @test size(model.l) == (2, 3)
+    @test MockModel.structure[:parameters][:l][:size] == (2, 3)
 
     model = complete(model)
     @test getdefault(model.cval) == 1
@@ -276,6 +277,21 @@ end
     @test get_defaults(model)[model.n2] == 5
 
     @test MockModel.structure[:defaults] == Dict(:n => 1.0, :n2 => "g()")
+end
+
+@testset "Arrays using vanilla-@variable syntax" begin
+    @mtkmodel TupleInArrayDef begin
+        @parameters begin
+            (l(t)[1:2, 1:3] = 1), [description = "l is more than 1D"]
+            (l2(t)[1:3] = 2), [description = "l2 is 1D"]
+            (l3(t)[1:3]::Int = 3), [description = "l3 is 1D and has a type"]
+        end
+    end
+
+    @named arr = TupleInArrayDef()
+    @test getdefault(arr.l) == 1
+    @test getdefault(arr.l2) == 2
+    @test getdefault(arr.l3) == 3
 end
 
 @testset "Type annotation" begin
@@ -474,7 +490,8 @@ using ModelingToolkit: getdefault, scalarize
 
     @named model_with_component_array = ModelWithComponentArray()
 
-    @test eval(ModelWithComponentArray.structure[:parameters][:r][:unit]) == eval(u"Ω")
+    @test eval(ModelWithComponentArray.structure[:parameters][:r][:unit]) ==
+          eval(u"Ω")
     @test lastindex(parameters(model_with_component_array)) == 3
 
     # Test the constant `k`. Manually k's value should be kept in sync here
