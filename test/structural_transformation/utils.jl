@@ -32,3 +32,11 @@ se = collect(StructuralTransformations.edges(graph))
 @test se == mapreduce(vcat, enumerate(graph.fadjlist)) do (s, d)
     StructuralTransformations.BipartiteEdge.(s, d)
 end
+
+@testset "observed2graph handles unknowns inside callable parameters" begin
+    @variables x(t) y(t)
+    @parameters p(..)
+    g, _ = ModelingToolkit.observed2graph([y ~ p(x), x ~ 0], [x, y])
+    @test ModelingToolkit.𝑠neighbors(g, 1) == [2]
+    @test ModelingToolkit.𝑑neighbors(g, 2) == [1]
+end
