@@ -1,4 +1,4 @@
-# Modeling with Stochasticity
+# [Modeling with Stochasticity](@id SDE)
 
 All models with `ODESystem` are deterministic. `SDESystem` adds another element
 to the model: randomness. This is a
