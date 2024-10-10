@@ -293,7 +293,7 @@ end
     ps_vec = [k => [2.0, 3.0, 4.0, 5.0]]
     ps_scal = [k[1] => 1.0, k[2] => 2.0, k[3] => 3.0, k[4] => 4.0]
     oprob_scal_scal = ODEProblem(osys_scal, u0, 1.0, ps_scal)
-    newoprob = remake(oprob_scal_scal; p = ps_vec)
+    newoprob = remake(oprob_scal_scal; p = ps_vec, build_initializeprob = false)
     @test newoprob.ps[k] == [2.0, 3.0, 4.0, 5.0]
 end
 

@@ -1,4 +1,7 @@
 using ModelingToolkit, OrdinaryDiffEq, NonlinearSolve, Test
+using ForwardDiff
+using SymbolicIndexingInterface, SciMLStructures
+using SciMLStructures: Tunable
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @parameters g
@@ -575,4 +578,239 @@ sol = solve(oprob_2nd_order_2, Rosenbrock23()) # retcode: Success
     prob = ODEProblem(sys, [sys.x => ones(5)], (0.0, 1.0), [])
     sol = solve(prob, Tsit5(), reltol = 1e-4)
     @test all(sol(1.0, idxs = sys.x) .≈ +exp(1)) && all(sol(1.0, idxs = sys.y) .≈ -exp(1))
+end
+
+@testset "Initialization of parameters" begin
+    function test_parameter(prob, sym, val, initialval = zero(val))
+        @test prob.ps[sym] ≈ initialval
+        @test init(prob, Tsit5()).ps[sym] ≈ val
+        @test solve(prob, Tsit5()).ps[sym] ≈ val
+    end
+    function test_initializesystem(sys, u0map, pmap, p, equation)
+        isys = ModelingToolkit.generate_initializesystem(
+            sys; u0map, pmap, guesses = ModelingToolkit.guesses(sys))
+        @test is_variable(isys, p)
+        @test equation in equations(isys) || (0 ~ -equation.rhs) in equations(isys)
+    end
+    @variables x(t) y(t)
+    @parameters p q
+    u0map = Dict(x => 1.0, y => 1.0)
+    pmap = Dict()
+    pmap[q] = 1.0
+    # `missing` default, equation from ODEProblem
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ x * q, D(y) ~ y * p], t; defaults = [p => missing], guesses = [p => 1.0])
+    pmap[p] = 2q
+    prob = ODEProblem(sys, u0map, (0.0, 1.0), pmap)
+    test_parameter(prob, p, 2.0)
+    prob2 = remake(prob; u0 = u0map, p = pmap)
+    prob2.ps[p] = 0.0
+    test_parameter(prob2, p, 2.0)
+    # `missing` default, provided guess
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ x, p ~ x + y], t; defaults = [p => missing], guesses = [p => 0.0])
+    prob = ODEProblem(sys, u0map, (0.0, 1.0))
+    test_parameter(prob, p, 2.0)
+    test_initializesystem(sys, u0map, pmap, p, 0 ~ p - x - y)
+    prob2 = remake(prob; u0 = u0map)
+    prob2.ps[p] = 0.0
+    test_parameter(prob2, p, 2.0)
+
+    # `missing` to ODEProblem, equation from default
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ x * q, D(y) ~ y * p], t; defaults = [p => 2q], guesses = [p => 1.0])
+    pmap[p] = missing
+    prob = ODEProblem(sys, u0map, (0.0, 1.0), pmap)
+    test_parameter(prob, p, 2.0)
+    test_initializesystem(sys, u0map, pmap, p, 0 ~ 2q - p)
+    prob2 = remake(prob; u0 = u0map, p = pmap)
+    prob2.ps[p] = 0.0
+    test_parameter(prob2, p, 2.0)
+    # `missing` to ODEProblem, provided guess
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ x, p ~ x + y], t; guesses = [p => 0.0])
+    prob = ODEProblem(sys, u0map, (0.0, 1.0), pmap)
+    test_parameter(prob, p, 2.0)
+    test_initializesystem(sys, u0map, pmap, p, 0 ~ x + y - p)
+    prob2 = remake(prob; u0 = u0map, p = pmap)
+    prob2.ps[p] = 0.0
+    test_parameter(prob2, p, 2.0)
+
+    # No `missing`, default and guess
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ x * q, D(y) ~ y * p], t; defaults = [p => 2q], guesses = [p => 0.0])
+    delete!(pmap, p)
+    prob = ODEProblem(sys, u0map, (0.0, 1.0), pmap)
+    test_parameter(prob, p, 2.0)
+    test_initializesystem(sys, u0map, pmap, p, 0 ~ 2q - p)
+    prob2 = remake(prob; u0 = u0map, p = pmap)
+    prob2.ps[p] = 0.0
+    test_parameter(prob2, p, 2.0)
+
+    # Default overridden by ODEProblem, guess provided
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ q * x, D(y) ~ y * p], t; defaults = [p => 2q], guesses = [p => 1.0])
+    _pmap = merge(pmap, Dict(p => q))
+    prob = ODEProblem(sys, u0map, (0.0, 1.0), _pmap)
+    test_parameter(prob, p, _pmap[q])
+    test_initializesystem(sys, u0map, _pmap, p, 0 ~ q - p)
+
+    # ODEProblem dependent value with guess, no `missing`
+    @mtkbuild sys = ODESystem([D(x) ~ x * q, D(y) ~ y * p], t; guesses = [p => 0.0])
+    _pmap = merge(pmap, Dict(p => 3q))
+    prob = ODEProblem(sys, u0map, (0.0, 1.0), _pmap)
+    test_parameter(prob, p, 3pmap[q])
+
+    # Should not be solved for:
+
+    # Override dependent default with direct value
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ q * x, D(y) ~ y * p], t; defaults = [p => 2q], guesses = [p => 1.0])
+    _pmap = merge(pmap, Dict(p => 1.0))
+    prob = ODEProblem(sys, u0map, (0.0, 1.0), _pmap)
+    @test prob.ps[p] ≈ 1.0
+    @test prob.f.initializeprob === nothing
+
+    # Non-floating point
+    @parameters r::Int s::Int
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ s * x, D(y) ~ y * r], t; defaults = [s => 2r], guesses = [s => 1.0])
+    prob = ODEProblem(sys, u0map, (0.0, 1.0), [r => 1])
+    @test prob.ps[r] == 1
+    @test prob.ps[s] == 2
+    @test prob.f.initializeprob === nothing
+
+    @mtkbuild sys = ODESystem([D(x) ~ x, p ~ x + y], t; guesses = [p => 0.0])
+    @test_throws ModelingToolkit.MissingParametersError ODEProblem(
+        sys, [x => 1.0, y => 1.0], (0.0, 1.0))
+
+    @testset "Null system" begin
+        @variables x(t) y(t) s(t)
+        @parameters x0 y0
+        @mtkbuild sys = ODESystem([x ~ x0, y ~ y0, s ~ x + y], t; guesses = [y0 => 0.0])
+        prob = ODEProblem(sys, [s => 1.0], (0.0, 1.0), [x0 => 0.3, y0 => missing])
+        test_parameter(prob, y0, 0.7)
+    end
+
+    using ModelingToolkitStandardLibrary.Mechanical.TranslationalModelica: Fixed, Mass,
+                                                                           Spring, Force,
+                                                                           Damper
+    using ModelingToolkitStandardLibrary.Mechanical: TranslationalModelica as TM
+    using ModelingToolkitStandardLibrary.Blocks: Constant
+
+    @named mass = TM.Mass(; m = 1.0, s = 1.0, v = 0.0, a = 0.0)
+    @named fixed = Fixed(; s0 = 0.0)
+    @named spring = Spring(; c = 2.0, s_rel0 = nothing)
+    @named gravity = Force()
+    @named constant = Constant(; k = 9.81)
+    @named damper = TM.Damper(; d = 0.1)
+    @mtkbuild sys = ODESystem(
+        [connect(fixed.flange, spring.flange_a), connect(spring.flange_b, mass.flange_a),
+            connect(mass.flange_a, gravity.flange), connect(constant.output, gravity.f),
+            connect(fixed.flange, damper.flange_a), connect(damper.flange_b, mass.flange_a)],
+        t;
+        systems = [fixed, spring, mass, gravity, constant, damper],
+        guesses = [spring.s_rel0 => 1.0])
+    prob = ODEProblem(sys, [], (0.0, 1.0), [spring.s_rel0 => missing])
+    test_parameter(prob, spring.s_rel0, -3.905)
+end
+
+@testset "Update initializeprob parameters" begin
+    @variables x(t) y(t)
+    @parameters p q
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ x, p ~ x + y], t; guesses = [x => 0.0, p => 0.0])
+    prob = ODEProblem(sys, [y => 1.0], (0.0, 1.0), [p => 3.0])
+    @test prob.f.initializeprob.ps[p] ≈ 3.0
+    @test init(prob, Tsit5())[x] ≈ 2.0
+    prob.ps[p] = 2.0
+    @test prob.f.initializeprob.ps[p] ≈ 3.0
+    @test init(prob, Tsit5())[x] ≈ 1.0
+    ModelingToolkit.defaults(prob.f.sys)[p] = missing
+    prob2 = remake(prob; u0 = [y => 1.0], p = [p => 3x])
+    @test !is_variable(prob2.f.initializeprob, p) &&
+          !is_parameter(prob2.f.initializeprob, p)
+    @test init(prob2, Tsit5())[x] ≈ 0.5
+    @test_nowarn solve(prob2, Tsit5())
+end
+
+@testset "Equations for dependent parameters" begin
+    @variables x(t)
+    @parameters p q=5 r
+    @mtkbuild sys = ODESystem(
+        D(x) ~ 2x + r, t; parameter_dependencies = [r ~ p + 2q, q ~ p + 3],
+        guesses = [p => 1.0])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [p => missing])
+    @test length(equations(ModelingToolkit.get_parent(prob.f.initializeprob.f.sys))) == 4
+    integ = init(prob, Tsit5())
+    @test integ.ps[p] ≈ 2
+end
+
+@testset "Re-creating initialization problem on remake" begin
+    @variables x(t) y(t)
+    @parameters p q
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ x, p ~ x + y], t; defaults = [p => missing], guesses = [x => 0.0, p => 0.0])
+    prob = ODEProblem(sys, [x => 1.0, y => 1.0], (0.0, 1.0))
+    @test init(prob, Tsit5()).ps[p] ≈ 2.0
+    # nonsensical value for y just to test that equations work
+    prob2 = remake(prob; u0 = [x => 1.0, y => 2x + exp(t)])
+    @test init(prob2, Tsit5()).ps[p] ≈ 4.0
+    # solve for `x` given `p` and `y`
+    prob3 = remake(prob; u0 = [x => nothing, y => 1.0], p = [p => 2x + exp(t)])
+    @test init(prob3, Tsit5())[x] ≈ 0.0
+    @test_logs (:warn, r"overdetermined") remake(
+        prob; u0 = [x => 1.0, y => 2.0], p = [p => 4.0])
+    prob4 = remake(prob; u0 = [x => 1.0, y => 2.0], p = [p => 4.0])
+    @test solve(prob4, Tsit5()).retcode == ReturnCode.InitialFailure
+    prob5 = remake(prob)
+    @test init(prob, Tsit5()).ps[p] ≈ 2.0
+end
+
+@testset "`remake` changes initialization problem types" begin
+    @variables x(t) y(t) z(t)
+    @parameters p q
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ x * p + y * q, y^2 * q + q^2 * x ~ 0, z * p - p^2 * x * z ~ 0],
+        t; guesses = [x => 0.0, y => 0.0, z => 0.0, p => 0.0, q => 0.0])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [p => 1.0, q => missing])
+    @test is_variable(prob.f.initializeprob, q)
+    ps = prob.p
+    newps = SciMLStructures.replace(Tunable(), ps, ForwardDiff.Dual.(ps.tunable))
+    prob2 = remake(prob; p = newps)
+    @test eltype(prob2.f.initializeprob.u0) <: ForwardDiff.Dual
+    @test eltype(prob2.f.initializeprob.p.tunable) <: ForwardDiff.Dual
+    @test prob2.f.initializeprob.u0 ≈ prob.f.initializeprob.u0
+
+    prob2 = remake(prob; u0 = ForwardDiff.Dual.(prob.u0))
+    @test eltype(prob2.f.initializeprob.u0) <: ForwardDiff.Dual
+    @test eltype(prob2.f.initializeprob.p.tunable) <: Float64
+    @test prob2.f.initializeprob.u0 ≈ prob.f.initializeprob.u0
+
+    prob2 = remake(prob; u0 = ForwardDiff.Dual.(prob.u0), p = newps)
+    @test eltype(prob2.f.initializeprob.u0) <: ForwardDiff.Dual
+    @test eltype(prob2.f.initializeprob.p.tunable) <: ForwardDiff.Dual
+    @test prob2.f.initializeprob.u0 ≈ prob.f.initializeprob.u0
+
+    prob2 = remake(prob; u0 = [x => ForwardDiff.Dual(1.0)],
+        p = [p => ForwardDiff.Dual(1.0), q => missing])
+    @test eltype(prob2.f.initializeprob.u0) <: ForwardDiff.Dual
+    @test eltype(prob2.f.initializeprob.p.tunable) <: ForwardDiff.Dual
+    @test prob2.f.initializeprob.u0 ≈ prob.f.initializeprob.u0
+end
+
+@testset "`remake` preserves old u0map and pmap" begin
+    @variables x(t) y(t)
+    @parameters p
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ x + p * y, y^2 + 4y * p^2 ~ x], t; guesses = [y => 1.0, p => 1.0])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [p => 1.0])
+    @test is_variable(prob.f.initializeprob, y)
+    prob2 = @test_nowarn remake(prob; p = [p => 3.0]) # ensure no over/under-determined warning
+    @test is_variable(prob.f.initializeprob, y)
+
+    prob = ODEProblem(sys, [y => 1.0, x => 2.0], (0.0, 1.0), [p => missing])
+    @test is_variable(prob.f.initializeprob, p)
+    prob2 = @test_nowarn remake(prob; u0 = [y => 0.5])
+    @test is_variable(prob.f.initializeprob, p)
 end

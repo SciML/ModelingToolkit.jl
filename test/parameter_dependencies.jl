@@ -10,7 +10,7 @@ using SymbolicIndexingInterface
 using NonlinearSolve
 
 @testset "ODESystem with callbacks" begin
-    @parameters p1=1.0 p2=1.0
+    @parameters p1=1.0 p2
     @variables x(t)
     cb1 = [x ~ 2.0] => [p1 ~ 2.0] # triggers at t=-2+√6
     function affect1!(integ, u, p, ctx)
@@ -31,7 +31,7 @@ using NonlinearSolve
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.5), jac = true)
     @test prob.ps[p1] == 1.0
     @test prob.ps[p2] == 2.0
-    @test_nowarn solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(solve(prob, Tsit5()))
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.5), [p1 => 1.0], jac = true)
     @test prob.ps[p1] == 1.0
     @test prob.ps[p2] == 2.0

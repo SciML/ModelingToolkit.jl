@@ -522,6 +522,9 @@ function _remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true
     ic = get_index_cache(indp_to_system(indp))
     for (idx, val) in zip(idxs, vals)
         sym = nothing
+        if val === missing
+            val = get_temporary_value(idx)
+        end
         if symbolic_type(idx) == ScalarSymbolic()
             sym = idx
             idx = parameter_index(ic, sym)

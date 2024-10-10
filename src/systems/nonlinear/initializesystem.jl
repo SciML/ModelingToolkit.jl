@@ -5,6 +5,7 @@ Generate `NonlinearSystem` which initializes an ODE problem from specified initi
 """
 function generate_initializesystem(sys::ODESystem;
         u0map = Dict(),
+        pmap = Dict(),
         initialization_eqs = [],
         guesses = Dict(),
         default_dd_guess = 0.0,
@@ -74,12 +75,230 @@ function generate_initializesystem(sys::ODESystem;
         end
     end
 
-    pars = [parameters(sys); get_iv(sys)] # include independent variable as pseudo-parameter
-    eqs_ics = [eqs_ics; observed(sys)]
-    return NonlinearSystem(
-        eqs_ics, vars, pars;
-        defaults = defs, parameter_dependencies = parameter_dependencies(sys),
-        checks = check_units,
-        name, kwargs...
+    # 4) process parameters as initialization unknowns
+    paramsubs = Dict()
+    if pmap isa SciMLBase.NullParameters
+        pmap = Dict()
+    end
+    pmap = todict(pmap)
+    for p in parameters(sys)
+        if is_parameter_solvable(p, pmap, defs, guesses)
+            # If either of them are `missing` the parameter is an unknown
+            # But if the parameter is passed a value, use that as an additional
+            # equation in the system
+            _val1 = get(pmap, p, nothing)
+            _val2 = get(defs, p, nothing)
+            _val3 = get(guesses, p, nothing)
+            varp = tovar(p)
+            paramsubs[p] = varp
+            # Has a default of `missing`, and (either an equation using the value passed to `ODEProblem` or a guess)
+            if _val2 === missing
+                if _val1 !== nothing && _val1 !== missing
+                    push!(eqs_ics, varp ~ _val1)
+                    push!(defs, varp => _val1)
+                elseif _val3 !== nothing
+                    # assuming an equation exists (either via algebraic equations or initialization_eqs)
+                    push!(defs, varp => _val3)
+                elseif check_defguess
+                    error("Invalid setup: parameter $(p) has no default value, initial value, or guess")
+                end
+                # `missing` passed to `ODEProblem`, and (either an equation using default or a guess)
+            elseif _val1 === missing
+                if _val2 !== nothing && _val2 !== missing
+                    push!(eqs_ics, varp ~ _val2)
+                    push!(defs, varp => _val2)
+                elseif _val3 !== nothing
+                    push!(defs, varp => _val3)
+                elseif check_defguess
+                    error("Invalid setup: parameter $(p) has no default value, initial value, or guess")
+                end
+                # given a symbolic value to ODEProblem
+            elseif symbolic_type(_val1) != NotSymbolic()
+                push!(eqs_ics, varp ~ _val1)
+                push!(defs, varp => _val3)
+                # No value passed to `ODEProblem`, but a default and a guess are present
+                # _val2 !== missing is implied by it falling this far in the elseif chain
+            elseif _val1 === nothing && _val2 !== nothing
+                push!(eqs_ics, varp ~ _val2)
+                push!(defs, varp => _val3)
+            else
+                # _val1 !== missing and _val1 !== nothing, so a value was provided to ODEProblem
+                # This would mean `is_parameter_solvable` returned `false`, so we never end up
+                # here
+                error("This should never be reached")
+            end
+        end
+    end
+
+    # 5) parameter dependencies become equations, their LHS become unknowns
+    for eq in parameter_dependencies(sys)
+        is_variable_floatingpoint(eq.lhs) || continue
+        varp = tovar(eq.lhs)
+        paramsubs[eq.lhs] = varp
+        push!(eqs_ics, eq)
+        guessval = get(guesses, eq.lhs, eq.rhs)
+        push!(defs, varp => guessval)
+    end
+
+    # 6) handle values provided for dependent parameters similar to values for observed variables
+    for (k, v) in merge(defaults(sys), pmap)
+        if is_variable_floatingpoint(k) && has_parameter_dependency_with_lhs(sys, k)
+            push!(eqs_ics, paramsubs[k] ~ v)
+        end
+    end
+
+    # parameters do not include ones that became initialization unknowns
+    pars = vcat(
+        [get_iv(sys)], # include independent variable as pseudo-parameter
+        [p for p in parameters(sys) if !haskey(paramsubs, p)]
     )
+
+    eqs_ics = Symbolics.substitute.([eqs_ics; observed(sys)], (paramsubs,))
+    vars = [vars; collect(values(paramsubs))]
+    for k in keys(defs)
+        defs[k] = substitute(defs[k], paramsubs)
+    end
+    meta = InitializationSystemMetadata(Dict{Any, Any}(u0map), Dict{Any, Any}(pmap))
+    return NonlinearSystem(eqs_ics,
+        vars,
+        pars;
+        defaults = defs,
+        checks = check_units,
+        name,
+        metadata = meta,
+        kwargs...)
+end
+
+struct InitializationSystemMetadata
+    u0map::Dict{Any, Any}
+    pmap::Dict{Any, Any}
+end
+
+function is_parameter_solvable(p, pmap, defs, guesses)
+    p = unwrap(p)
+    is_variable_floatingpoint(p) || return false
+    _val1 = pmap isa AbstractDict ? get(pmap, p, nothing) : nothing
+    _val2 = get(defs, p, nothing)
+    _val3 = get(guesses, p, nothing)
+    # either (missing is a default or was passed to the ODEProblem) or (nothing was passed to
+    # the ODEProblem and it has a default and a guess)
+    return ((_val1 === missing || _val2 === missing) ||
+            (symbolic_type(_val1) != NotSymbolic() ||
+             _val1 === nothing && _val2 !== nothing)) && _val3 !== nothing
+end
+
+function SciMLBase.remake_initializeprob(sys::ODESystem, odefn, u0, t0, p)
+    if u0 === missing && p === missing
+        return odefn.initializeprob, odefn.update_initializeprob!, odefn.initializeprobmap,
+        odefn.initializeprobpmap
+    end
+    if !(eltype(u0) <: Pair) && !(eltype(p) <: Pair)
+        oldinitprob = odefn.initializeprob
+        if oldinitprob === nothing || !SciMLBase.has_sys(oldinitprob.f) ||
+           !(oldinitprob.f.sys isa NonlinearSystem)
+            return oldinitprob, odefn.update_initializeprob!, odefn.initializeprobmap,
+            odefn.initializeprobpmap
+        end
+        pidxs = ParameterIndex[]
+        pvals = []
+        u0idxs = Int[]
+        u0vals = []
+        for sym in variable_symbols(oldinitprob)
+            if is_variable(sys, sym)
+                u0 !== missing || continue
+                idx = variable_index(oldinitprob, sym)
+                push!(u0idxs, idx)
+                push!(u0vals, eltype(u0)(state_values(oldinitprob, idx)))
+            else
+                p !== missing || continue
+                idx = variable_index(oldinitprob, sym)
+                push!(u0idxs, idx)
+                push!(u0vals, typeof(getp(sys, sym)(p))(state_values(oldinitprob, idx)))
+            end
+        end
+        if p !== missing
+            for sym in parameter_symbols(oldinitprob)
+                push!(pidxs, parameter_index(oldinitprob, sym))
+                if isequal(sym, get_iv(sys))
+                    push!(pvals, t0)
+                else
+                    push!(pvals, getp(sys, sym)(p))
+                end
+            end
+        end
+        newu0 = remake_buffer(oldinitprob.f.sys, state_values(oldinitprob), u0idxs, u0vals)
+        newp = remake_buffer(oldinitprob.f.sys, parameter_values(oldinitprob), pidxs, pvals)
+        initprob = remake(oldinitprob; u0 = newu0, p = newp)
+        return initprob, odefn.update_initializeprob!, odefn.initializeprobmap,
+        odefn.initializeprobpmap
+    end
+    if u0 === missing || isempty(u0)
+        u0 = Dict()
+    elseif !(eltype(u0) <: Pair)
+        u0 = Dict(unknowns(sys) .=> u0)
+    end
+    if p === missing
+        p = Dict()
+    end
+    if t0 === nothing
+        t0 = 0.0
+    end
+    u0 = todict(u0)
+    defs = defaults(sys)
+    varmap = merge(defs, u0)
+    for k in collect(keys(varmap))
+        if varmap[k] === nothing
+            delete!(varmap, k)
+        end
+    end
+    varmap = canonicalize_varmap(varmap)
+    missingvars = setdiff(unknowns(sys), collect(keys(varmap)))
+    setobserved = filter(keys(varmap)) do var
+        has_observed_with_lhs(sys, var) || has_observed_with_lhs(sys, default_toterm(var))
+    end
+    p = todict(p)
+    guesses = ModelingToolkit.guesses(sys)
+    solvablepars = [par
+                    for par in parameters(sys)
+                    if is_parameter_solvable(par, p, defs, guesses)]
+    pvarmap = merge(defs, p)
+    setparobserved = filter(keys(pvarmap)) do var
+        has_parameter_dependency_with_lhs(sys, var)
+    end
+    if (((!isempty(missingvars) || !isempty(solvablepars) ||
+          !isempty(setobserved) || !isempty(setparobserved)) &&
+         ModelingToolkit.get_tearing_state(sys) !== nothing) ||
+        !isempty(initialization_equations(sys)))
+        if SciMLBase.has_initializeprob(odefn)
+            oldsys = odefn.initializeprob.f.sys
+            meta = get_metadata(oldsys)
+            if meta isa InitializationSystemMetadata
+                u0 = merge(meta.u0map, u0)
+                p = merge(meta.pmap, p)
+            end
+        end
+        for k in collect(keys(u0))
+            if u0[k] === nothing
+                delete!(u0, k)
+            end
+        end
+        for k in collect(keys(p))
+            if p[k] === nothing
+                delete!(p, k)
+            end
+        end
+
+        initprob = InitializationProblem(sys, t0, u0, p)
+        initprobmap = getu(initprob, unknowns(sys))
+        punknowns = [p for p in all_variable_symbols(initprob) if is_parameter(sys, p)]
+        getpunknowns = getu(initprob, punknowns)
+        setpunknowns = setp(sys, punknowns)
+        initprobpmap = GetUpdatedMTKParameters(getpunknowns, setpunknowns)
+        reqd_syms = parameter_symbols(initprob)
+        update_initializeprob! = UpdateInitializeprob(
+            getu(sys, reqd_syms), setu(initprob, reqd_syms))
+        return initprob, update_initializeprob!, initprobmap, initprobpmap
+    else
+        return nothing, nothing, nothing, nothing
+    end
 end

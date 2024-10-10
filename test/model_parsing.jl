@@ -840,7 +840,7 @@ end
             n[1:3] = if flag
                 [2, 2, 2]
             else
-                1
+                [1, 1, 1]
             end
         end
     end
