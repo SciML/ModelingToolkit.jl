@@ -239,27 +239,65 @@ function unit_handled_variable_value(meta, varname)
     return varval
 end
 
+# This function parses various variable/parameter definitions.
+# 
+# The comments indicate the syntax matched by a block; either when parsed directly
+# when it is called recursively for parsing a part of an expression.
+# These variable definitions are part of test suite in `test/model_parsing.jl`
 function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         def = nothing, type::Type = Real, meta = Dict{DataType, Expr}())
     arg isa LineNumberNode && return
     MLStyle.@match arg begin
+        # Parses: `a`
+        # Recursively called by: `c(t) = cval + jval`
+        # Recursively called by: `d = 2`
+        # Recursively called by: `e, [description = "e"]`
+        # Recursively called by: `f = 3, [description = "f"]`
+        # Recursively called by: `k = kval, [description = "k"]`
+        # Recursively called by: `par0::Bool = true`
         a::Symbol => begin
             var = generate_var!(dict, a, varclass; type)
             update_kwargs_and_metadata!(dict, kwargs, a, def, type,
                 varclass, where_types, meta)
             return var, def, Dict()
         end
+        # Parses: `par5[1:3]::BigFloat`
+        # Parses: `par6(t)[1:3]::BigFloat`
+        # Recursively called by: `par2(t)::Int`
+        # Recursively called by: `par3(t)::BigFloat = 1.0`
         Expr(:(::), a, type) => begin
             type = getfield(mod, type)
             parse_variable_def!(
                 dict, mod, a, varclass, kwargs, where_types; def, type, meta)
         end
+        # Recursively called by: `i(t) = 4, [description = "i(t)"]`
+        # Recursively called by: `h(t), [description = "h(t)"]`
+        # Recursively called by: `j(t) = jval, [description = "j(t)"]`
+        # Recursively called by: `par2(t)::Int`
+        # Recursively called by: `par3(t)::BigFloat = 1.0`
         Expr(:call, a, b) => begin
             var = generate_var!(dict, a, b, varclass, mod; type)
             update_kwargs_and_metadata!(dict, kwargs, a, def, type,
                 varclass, where_types, meta)
             return var, def, Dict()
         end
+        # Condition 1 parses:
+        # `(l(t)[1:2, 1:3] = 1), [description = "l is more than 1D"]`
+        # `(l2(t)[1:N, 1:M] = 2), [description = "l is more than 1D, with arbitrary length"]`
+        # `(l3(t)[1:3] = 3), [description = "l2 is 1D"]`
+        # `(l4(t)[1:N] = 4), [description = "l2 is 1D, with arbitrary length"]`
+        # 
+        # Condition 2 parses:
+        # `(l5(t)[1:3]::Int = 5), [description = "l3 is 1D and has a type"]`
+        # `(l6(t)[1:N]::Int = 6), [description = "l3 is 1D and has a type, with arbitrary length"]`
+        #
+        # Condition 3 parses:
+        # `e2[1:2]::Int, [description = "e2"]`
+        # `h2(t)[1:2]::Int, [description = "h2(t)"]`
+        #
+        # Condition 4 parses:
+        # `e2[1:2], [description = "e2"]`
+        # `h2(t)[1:2], [description = "h2(t)"]`
         Expr(:tuple, Expr(:(=), Expr(:ref, a, indices...), default_val), meta_val) ||
         Expr(:tuple, Expr(:(=), Expr(:(::), Expr(:ref, a, indices...), type), default_val), meta_val) ||
         Expr(:tuple, Expr(:(::), Expr(:ref, a, indices...), type), meta_val) ||
@@ -284,6 +322,12 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                 dict, indices, kwargs, meta, type, varclass, varname, varval, where_types)
             (:($varname...), var), nothing, Dict()
         end
+        # Condition 1 parses:
+        # `par7(t)[1:3, 1:3]::BigFloat = 1.0, [description = "with description"]`
+        #
+        # Condition 2 parses:
+        # `d2[1:2] = 2`
+        # `l(t)[1:2, 1:3] = 2, [description = "l is more than 1D"]`
         Expr(:(=), Expr(:(::), Expr(:ref, a, indices...), type), def_n_meta) ||
         Expr(:(=), Expr(:ref, a, indices...), def_n_meta) => begin
             (@isdefined type) || (type = Real)
@@ -326,6 +370,13 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                 dict, indices, kwargs, meta, type, varclass, varname, varval, where_types)
             (:($varname...), var), nothing, Dict()
         end
+        # Condition 1 is recursively called by:
+        # `par5[1:3]::BigFloat`
+        # `par6(t)[1:3]::BigFloat`
+        # 
+        # Condition 2 parses:
+        # `b2(t)[1:2]`
+        # `a2[1:2]`
         Expr(:(::), Expr(:ref, a, indices...), type) ||
         Expr(:ref, a, indices...) => begin
             (@isdefined type) || (type = Real)
@@ -346,6 +397,14 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                 dict, indices, kwargs, nothing, type, varclass, varname, nothing, where_types)
             (:($varname...), var), nothing, Dict()
         end
+        # Parses: `c(t) = cval + jval`
+        # Parses: `d = 2`
+        # Parses: `f = 3, [description = "f"]`
+        # Parses: `i(t) = 4, [description = "i(t)"]`
+        # Parses: `j(t) = jval, [description = "j(t)"]`
+        # Parses: `k = kval, [description = "k"]`
+        # Parses: `par0::Bool = true`
+        # Parses: `par3(t)::BigFloat = 1.0`
         Expr(:(=), a, b) => begin
             Base.remove_linenums!(b)
             def, meta = parse_default(mod, b)
@@ -361,6 +420,9 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
             end
             return var, def, Dict()
         end
+        # Parses: `e, [description = "e"]`
+        # Parses: `h(t), [description = "h(t)"]`
+        # Parses: `par2(t)::Int`
         Expr(:tuple, a, b) => begin
             meta = parse_metadata(mod, b)
             var, def, _ = parse_variable_def!(
