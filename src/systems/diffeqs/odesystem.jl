@@ -323,11 +323,13 @@ function ODESystem(eqs, iv; kwargs...)
         collect_vars!(allunknowns, ps, eq.rhs, iv)
         if isdiffeq(eq)
             diffvar, _ = var_from_nested_derivative(eq.lhs)
-            isequal(iv, iv_from_nested_derivative(eq.lhs)) ||
-                throw(ArgumentError("An ODESystem can only have one independent variable."))
-            diffvar in diffvars &&
-                throw(ArgumentError("The differential variable $diffvar is not unique in the system of equations."))
-            push!(diffvars, diffvar)
+            if check_scope_depth(getmetadata(diffvar, SymScope, LocalScope()), 0)
+                isequal(iv, iv_from_nested_derivative(eq.lhs)) ||
+                    throw(ArgumentError("An ODESystem can only have one independent variable."))
+                diffvar in diffvars &&
+                    throw(ArgumentError("The differential variable $diffvar is not unique in the system of equations."))
+                push!(diffvars, diffvar)
+            end
             push!(diffeq, eq)
         else
             push!(algeeq, eq)
@@ -341,6 +343,9 @@ function ODESystem(eqs, iv; kwargs...)
             collect_vars!(allunknowns, ps, eq.lhs, iv)
             collect_vars!(allunknowns, ps, eq.rhs, iv)
         end
+    end
+    for ssys in get(kwargs, :systems, ODESystem[])
+        collect_scoped_vars!(allunknowns, ps, ssys, iv)
     end
     for v in allunknowns
         isdelay(v, iv) || continue

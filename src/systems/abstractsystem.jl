@@ -913,10 +913,24 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Mark a system as completed. If a system is complete, the system will no longer
+Mark a system as completed. A completed system is a system which is done being
+defined/modified and is ready for structural analysis or other transformations.
+This allows for analyses and optimizations to be performed which require knowing
+the global structure of the system.
+        
+One property to note is that if a system is complete, the system will no longer
 namespace its subsystems or variables, i.e. `isequal(complete(sys).v.i, v.i)`.
 """
 function complete(sys::AbstractSystem; split = true)
+    if !(sys isa JumpSystem)
+        newunknowns = OrderedSet()
+        newparams = OrderedSet()
+        iv = has_iv(sys) ? get_iv(sys) : nothing
+        collect_scoped_vars!(newunknowns, newparams, sys, iv; depth = -1)
+        # don't update unknowns to not disturb `structural_simplify` order
+        # `GlobalScope`d unknowns will be picked up and added there
+        @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
+    end
     if split && has_index_cache(sys)
         @set! sys.index_cache = IndexCache(sys)
         all_ps = parameters(sys)
@@ -3011,6 +3025,14 @@ function compose(sys::AbstractSystem, systems::AbstractArray; name = nameof(sys)
     if has_is_dde(sys)
         @set! sys.is_dde = _check_if_dde(equations(sys), get_iv(sys), get_systems(sys))
     end
+    newunknowns = OrderedSet()
+    newparams = OrderedSet()
+    iv = has_iv(sys) ? get_iv(sys) : nothing
+    for ssys in systems
+        collect_scoped_vars!(newunknowns, newparams, ssys, iv)
+    end
+    @set! sys.unknowns = unique!(vcat(get_unknowns(sys), collect(newunknowns)))
+    @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
     return sys
 end
 function compose(syss...; name = nameof(first(syss)))
