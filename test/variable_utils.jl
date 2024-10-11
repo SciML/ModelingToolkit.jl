@@ -1,5 +1,5 @@
 using ModelingToolkit, Test
-using ModelingToolkit: value
+using ModelingToolkit: value, vars
 using SymbolicUtils: <ₑ
 @parameters α β δ
 expr = (((1 / β - 1) + δ) / α)^(1 / (α - 1))
@@ -33,3 +33,11 @@ aov = ModelingToolkit.collect_applied_operators(eq, Differential)
 
 ts = collect_ivs([eq])
 @test ts == Set([t])
+
+@testset "vars searching through array of symbolics" begin
+    fn(x, y) = sum(x) + y
+    @register_symbolic fn(x::AbstractArray, y)
+    @variables x y z
+    res = vars(fn([x, y], z))
+    @test length(res) == 3
+end
