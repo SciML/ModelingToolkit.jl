@@ -151,44 +151,26 @@ pop_structure_dict!(dict, key) = length(dict[key]) == 0 && pop!(dict, key)
 struct NoValue end
 const NO_VALUE = NoValue()
 
-function update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
+function update_kwargs_and_metadata!(dict, kwargs, a, def, type,
         varclass, where_types, meta)
-    if indices isa Nothing
-        if !isnothing(meta) && haskey(meta, VariableUnit)
-            uvar = gensym()
-            push!(where_types, uvar)
-            push!(kwargs,
-                Expr(:kw, :($a::Union{Nothing, Missing, $NoValue, $uvar}), NO_VALUE))
-        else
-            push!(kwargs,
-                Expr(:kw, :($a::Union{Nothing, Missing, $NoValue, $type}), NO_VALUE))
-        end
-        dict[:kwargs][getname(var)] = Dict(:value => def, :type => type)
-    else
-        vartype = gensym(:T)
+    if !isnothing(meta) && haskey(meta, VariableUnit)
+        uvar = gensym()
+        push!(where_types, uvar)
         push!(kwargs,
-            Expr(:kw,
-                Expr(:(::), a,
-                    Expr(:curly, :Union, :Nothing, :Missing, NoValue,
-                        Expr(:curly, :AbstractArray, vartype))),
-                NO_VALUE))
-        if !isnothing(meta) && haskey(meta, VariableUnit)
-            push!(where_types, vartype)
-        else
-            push!(where_types, :($vartype <: $type))
-        end
-        dict[:kwargs][getname(var)] = Dict(:value => def, :type => AbstractArray{type})
-    end
-    if dict[varclass] isa Vector
-        dict[varclass][1][getname(var)][:type] = AbstractArray{type}
+            Expr(:kw, :($a::Union{Nothing, Missing, $NoValue, $uvar}), NO_VALUE))
     else
-        dict[varclass][getname(var)][:type] = type
+        push!(kwargs,
+            Expr(:kw, :($a::Union{Nothing, Missing, $NoValue, $type}), NO_VALUE))
+    end
+    dict[:kwargs][a] = Dict(:value => def, :type => type)
+    if dict[varclass] isa Vector
+        dict[varclass][1][a][:type] = AbstractArray{type}
+    else
+        dict[varclass][a][:type] = type
     end
 end
 
-function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
-        def = nothing, indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
-        type::Type = Real, meta = Dict{DataType, Expr}())
+function update_readable_metadata!(varclass_dict, meta::Dict, varname)
     metatypes = [(:connection_type, VariableConnectType),
         (:description, VariableDescription),
         (:unit, VariableUnit),
@@ -203,91 +185,263 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         (:tunable, VariableTunable),
         (:dist, VariableDistribution)]
 
+    var_dict = get!(varclass_dict, varname) do
+        Dict{Symbol, Any}()
+    end
+
+    for (type, key) in metatypes
+        if (mt = get(meta, key, nothing)) !== nothing
+            key == VariableConnectType && (mt = nameof(mt))
+            var_dict[type] = mt
+        end
+    end
+end
+
+function update_array_kwargs_and_metadata!(
+        dict, indices, kwargs, meta, type, varclass, varname, varval, where_types)
+    dict[varclass] = get!(dict, varclass) do
+        Dict{Symbol, Dict{Symbol, Any}}()
+    end
+    varclass_dict = dict[varclass] isa Vector ? Ref(dict[varclass][1]) : Ref(dict[varclass])
+
+    merge!(varclass_dict[],
+        Dict(varname => Dict(
+            :size => tuple([index_arg.args[end] for index_arg in indices]...),
+            :value => varval,
+            :type => type
+        )))
+
+    vartype = gensym(:T)
+    push!(kwargs,
+        Expr(:kw,
+            Expr(:(::), varname,
+                Expr(:curly, :Union, :Nothing, :Missing, NoValue,
+                    Expr(:curly, :AbstractArray, vartype))),
+            NO_VALUE))
+    if !isnothing(meta) && haskey(meta, VariableUnit)
+        push!(where_types, vartype)
+    else
+        push!(where_types, :($vartype <: $type))
+    end
+
+    # Useful keys for kwargs entry are: value, type and size.
+    dict[:kwargs][varname] = varclass_dict[][varname]
+
+    meta !== nothing && update_readable_metadata!(varclass_dict[], meta, varname)
+end
+
+function unit_handled_variable_value(meta, varname)
+    varval = if meta isa Nothing || get(meta, VariableUnit, nothing) isa Nothing
+        varname
+    else
+        :($convert_units($(meta[VariableUnit]), $varname))
+    end
+    return varval
+end
+
+# This function parses various variable/parameter definitions.
+# 
+# The comments indicate the syntax matched by a block; either when parsed directly
+# when it is called recursively for parsing a part of an expression.
+# These variable definitions are part of test suite in `test/model_parsing.jl`
+function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
+        def = nothing, type::Type = Real, meta = Dict{DataType, Expr}())
     arg isa LineNumberNode && return
     MLStyle.@match arg begin
+        # Parses: `a`
+        # Recursively called by: `c(t) = cval + jval`
+        # Recursively called by: `d = 2`
+        # Recursively called by: `e, [description = "e"]`
+        # Recursively called by: `f = 3, [description = "f"]`
+        # Recursively called by: `k = kval, [description = "k"]`
+        # Recursively called by: `par0::Bool = true`
         a::Symbol => begin
-            var = generate_var!(dict, a, varclass; indices, type)
-            update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
+            var = generate_var!(dict, a, varclass; type)
+            update_kwargs_and_metadata!(dict, kwargs, a, def, type,
                 varclass, where_types, meta)
             return var, def, Dict()
         end
+        # Parses: `par5[1:3]::BigFloat`
+        # Parses: `par6(t)[1:3]::BigFloat`
+        # Recursively called by: `par2(t)::Int`
+        # Recursively called by: `par3(t)::BigFloat = 1.0`
         Expr(:(::), a, type) => begin
             type = getfield(mod, type)
             parse_variable_def!(
                 dict, mod, a, varclass, kwargs, where_types; def, type, meta)
         end
-        Expr(:(::), Expr(:call, a, b), type) => begin
-            type = getfield(mod, type)
-            def = _type_check!(def, a, type, varclass)
-            parse_variable_def!(
-                dict, mod, a, varclass, kwargs, where_types; def, type, meta)
-        end
+        # Recursively called by: `i(t) = 4, [description = "i(t)"]`
+        # Recursively called by: `h(t), [description = "h(t)"]`
+        # Recursively called by: `j(t) = jval, [description = "j(t)"]`
+        # Recursively called by: `par2(t)::Int`
+        # Recursively called by: `par3(t)::BigFloat = 1.0`
         Expr(:call, a, b) => begin
-            var = generate_var!(dict, a, b, varclass, mod; indices, type)
-            update_kwargs_and_metadata!(dict, kwargs, a, def, indices, type, var,
+            var = generate_var!(dict, a, b, varclass, mod; type)
+            update_kwargs_and_metadata!(dict, kwargs, a, def, type,
                 varclass, where_types, meta)
             return var, def, Dict()
         end
+        # Condition 1 parses:
+        # `(l(t)[1:2, 1:3] = 1), [description = "l is more than 1D"]`
+        # `(l2(t)[1:N, 1:M] = 2), [description = "l is more than 1D, with arbitrary length"]`
+        # `(l3(t)[1:3] = 3), [description = "l2 is 1D"]`
+        # `(l4(t)[1:N] = 4), [description = "l2 is 1D, with arbitrary length"]`
+        # 
+        # Condition 2 parses:
+        # `(l5(t)[1:3]::Int = 5), [description = "l3 is 1D and has a type"]`
+        # `(l6(t)[1:N]::Int = 6), [description = "l3 is 1D and has a type, with arbitrary length"]`
+        #
+        # Condition 3 parses:
+        # `e2[1:2]::Int, [description = "e2"]`
+        # `h2(t)[1:2]::Int, [description = "h2(t)"]`
+        #
+        # Condition 4 parses:
+        # `e2[1:2], [description = "e2"]`
+        # `h2(t)[1:2], [description = "h2(t)"]`
+        Expr(:tuple, Expr(:(=), Expr(:ref, a, indices...), default_val), meta_val) ||
+        Expr(:tuple, Expr(:(=), Expr(:(::), Expr(:ref, a, indices...), type), default_val), meta_val) ||
+        Expr(:tuple, Expr(:(::), Expr(:ref, a, indices...), type), meta_val) ||
+        Expr(:tuple, Expr(:ref, a, indices...), meta_val) => begin
+            (@isdefined type) || (type = Real)
+            varname = Meta.isexpr(a, :call) ? a.args[1] : a
+            meta = parse_metadata(mod, meta_val)
+            varval = (@isdefined default_val) ? default_val :
+                     unit_handled_variable_value(meta, varname)
+            if varclass == :parameters
+                Meta.isexpr(a, :call) && assert_unique_independent_var(dict, a.args[end])
+                var = :($varname = $first(@parameters ($a[$(indices...)]::$type = $varval),
+                $meta_val))
+            else
+                Meta.isexpr(a, :call) ||
+                    throw("$a is not a variable of the independent variable")
+                assert_unique_independent_var(dict, a.args[end])
+                var = :($varname = $first(@variables ($a[$(indices)]::$type = $varval),
+                $meta_val))
+            end
+            update_array_kwargs_and_metadata!(
+                dict, indices, kwargs, meta, type, varclass, varname, varval, where_types)
+            (:($varname...), var), nothing, Dict()
+        end
+        # Condition 1 parses:
+        # `par7(t)[1:3, 1:3]::BigFloat = 1.0, [description = "with description"]`
+        #
+        # Condition 2 parses:
+        # `d2[1:2] = 2`
+        # `l(t)[1:2, 1:3] = 2, [description = "l is more than 1D"]`
+        Expr(:(=), Expr(:(::), Expr(:ref, a, indices...), type), def_n_meta) ||
+        Expr(:(=), Expr(:ref, a, indices...), def_n_meta) => begin
+            (@isdefined type) || (type = Real)
+            varname = Meta.isexpr(a, :call) ? a.args[1] : a
+            if Meta.isexpr(def_n_meta, :tuple)
+                meta = parse_metadata(mod, def_n_meta)
+                varval = unit_handled_variable_value(meta, varname)
+                val, def_n_meta = (def_n_meta.args[1], def_n_meta.args[2:end])
+                if varclass == :parameters
+                    Meta.isexpr(a, :call) &&
+                        assert_unique_independent_var(dict, a.args[end])
+                    var = :($varname = $varname === $NO_VALUE ? $val : $varname;
+                    $varname = $first(@parameters ($a[$(indices...)]::$type = $varval),
+                    $(def_n_meta...)))
+                else
+                    Meta.isexpr(a, :call) ||
+                        throw("$a is not a variable of the independent variable")
+                    assert_unique_independent_var(dict, a.args[end])
+                    var = :($varname = $varname === $NO_VALUE ? $val : $varname;
+                    $varname = $first(@variables $a[$(indices...)]::$type = (
+                        $varval),
+                    $(def_n_meta...)))
+                end
+            else
+                if varclass == :parameters
+                    Meta.isexpr(a, :call) &&
+                        assert_unique_independent_var(dict, a.args[end])
+                    var = :($varname = $varname === $NO_VALUE ? $def_n_meta : $varname;
+                    $varname = $first(@parameters $a[$(indices...)]::$type = $varname))
+                else
+                    Meta.isexpr(a, :call) ||
+                        throw("$a is not a variable of the independent variable")
+                    assert_unique_independent_var(dict, a.args[end])
+                    var = :($varname = $varname === $NO_VALUE ? $def_n_meta : $varname;
+                    $varname = $first(@variables $a[$(indices...)]::$type = $varname))
+                end
+                varval, meta = def_n_meta, nothing
+            end
+            update_array_kwargs_and_metadata!(
+                dict, indices, kwargs, meta, type, varclass, varname, varval, where_types)
+            (:($varname...), var), nothing, Dict()
+        end
+        # Condition 1 is recursively called by:
+        # `par5[1:3]::BigFloat`
+        # `par6(t)[1:3]::BigFloat`
+        # 
+        # Condition 2 parses:
+        # `b2(t)[1:2]`
+        # `a2[1:2]`
+        Expr(:(::), Expr(:ref, a, indices...), type) ||
+        Expr(:ref, a, indices...) => begin
+            (@isdefined type) || (type = Real)
+            varname = a isa Expr && a.head == :call ? a.args[1] : a
+            if varclass == :parameters
+                Meta.isexpr(a, :call) && assert_unique_independent_var(dict, a.args[end])
+                var = :($varname = $first(@parameters $a[$(indices...)]::$type = $varname))
+            elseif varclass == :variables
+                Meta.isexpr(a, :call) ||
+                    throw("$a is not a variable of the independent variable")
+                assert_unique_independent_var(dict, a.args[end])
+                var = :($varname = $first(@variables $a[$(indices...)]::$type = $varname))
+            else
+                throw("Symbolic array with arbitrary length is not handled for $varclass.
+                    Please open an issue with an example.")
+            end
+            update_array_kwargs_and_metadata!(
+                dict, indices, kwargs, nothing, type, varclass, varname, nothing, where_types)
+            (:($varname...), var), nothing, Dict()
+        end
+        # Parses: `c(t) = cval + jval`
+        # Parses: `d = 2`
+        # Parses: `f = 3, [description = "f"]`
+        # Parses: `i(t) = 4, [description = "i(t)"]`
+        # Parses: `j(t) = jval, [description = "j(t)"]`
+        # Parses: `k = kval, [description = "k"]`
+        # Parses: `par0::Bool = true`
+        # Parses: `par3(t)::BigFloat = 1.0`
         Expr(:(=), a, b) => begin
             Base.remove_linenums!(b)
             def, meta = parse_default(mod, b)
             var, def, _ = parse_variable_def!(
                 dict, mod, a, varclass, kwargs, where_types; def, type, meta)
-            if dict[varclass] isa Vector
-                dict[varclass][1][getname(var)][:default] = def
-            else
-                dict[varclass][getname(var)][:default] = def
-            end
+            varclass_dict = dict[varclass] isa Vector ? Ref(dict[varclass][1]) :
+                            Ref(dict[varclass])
+            varclass_dict[][getname(var)][:default] = def
             if meta !== nothing
-                for (type, key) in metatypes
-                    if (mt = get(meta, key, nothing)) !== nothing
-                        key == VariableConnectType && (mt = nameof(mt))
-                        if dict[varclass] isa Vector
-                            dict[varclass][1][getname(var)][type] = mt
-                        else
-                            dict[varclass][getname(var)][type] = mt
-                        end
-                    end
-                end
+                update_readable_metadata!(varclass_dict[], meta, getname(var))
                 var, metadata_with_exprs = set_var_metadata(var, meta)
                 return var, def, metadata_with_exprs
             end
             return var, def, Dict()
         end
+        # Parses: `e, [description = "e"]`
+        # Parses: `h(t), [description = "h(t)"]`
+        # Parses: `par2(t)::Int`
         Expr(:tuple, a, b) => begin
             meta = parse_metadata(mod, b)
             var, def, _ = parse_variable_def!(
                 dict, mod, a, varclass, kwargs, where_types; type, meta)
+            varclass_dict = dict[varclass] isa Vector ? Ref(dict[varclass][1]) :
+                            Ref(dict[varclass])
             if meta !== nothing
-                for (type, key) in metatypes
-                    if (mt = get(meta, key, nothing)) !== nothing
-                        key == VariableConnectType && (mt = nameof(mt))
-                        if dict[varclass] isa Vector
-                            dict[varclass][1][getname(var)][type] = mt
-                        else
-                            dict[varclass][getname(var)][type] = mt
-                        end
-                    end
-                end
+                update_readable_metadata!(varclass_dict[], meta, getname(var))
                 var, metadata_with_exprs = set_var_metadata(var, meta)
                 return var, def, metadata_with_exprs
             end
             return var, def, Dict()
-        end
-        Expr(:ref, a, b...) => begin
-            indices = map(i -> UnitRange(i.args[2], i.args[end]), b)
-            parse_variable_def!(dict, mod, a, varclass, kwargs, where_types;
-                def, indices, type, meta)
         end
         _ => error("$arg cannot be parsed")
     end
 end
 
-function generate_var(a, varclass;
-        indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
-        type = Real)
-    var = indices === nothing ? Symbolics.variable(a; T = type) :
-          first(@variables $a[indices...]::type)
+function generate_var(a, varclass; type = Real)
+    var = Symbolics.variable(a; T = type)
     if varclass == :parameters
         var = toparam(var)
     elseif varclass == :independent_variables
@@ -317,17 +471,25 @@ function generate_var!(dict, a, varclass;
     vd isa Vector && (vd = first(vd))
     vd[a] = Dict{Symbol, Any}()
     indices !== nothing && (vd[a][:size] = Tuple(lastindex.(indices)))
-    generate_var(a, varclass; indices, type)
+    generate_var(a, varclass; type)
+end
+
+function assert_unique_independent_var(dict, iv::Num)
+    assert_unique_independent_var(dict, nameof(iv))
+end
+function assert_unique_independent_var(dict, iv)
+    prev_iv = get!(dict, :independent_variable) do
+        iv
+    end
+    prev_iv isa Num && (prev_iv = nameof(prev_iv))
+    @assert isequal(iv, prev_iv) "Multiple independent variables are used in the model $(typeof(iv)) $(typeof(prev_iv))"
 end
 
 function generate_var!(dict, a, b, varclass, mod;
         indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing,
         type = Real)
     iv = b == :t ? get_t(mod, b) : generate_var(b, :independent_variables)
-    prev_iv = get!(dict, :independent_variable) do
-        iv
-    end
-    @assert isequal(iv, prev_iv) "Multiple independent variables are used in the model"
+    assert_unique_independent_var(dict, iv)
     check_name_uniqueness(dict, a, varclass)
     vd = get!(dict, varclass) do
         Dict{Symbol, Dict{Symbol, Any}}()
@@ -386,12 +548,21 @@ function parse_default(mod, a)
     end
 end
 
-function parse_metadata(mod, a)
+function parse_metadata(mod, a::Expr)
     MLStyle.@match a begin
-        Expr(:vect, eles...) => Dict(parse_metadata(mod, e) for e in eles)
+        Expr(:vect, b...) => Dict(parse_metadata(mod, m) for m in b)
+        Expr(:tuple, a, b...) => parse_metadata(mod, b)
         Expr(:(=), a, b) => Symbolics.option_to_metadata_type(Val(a)) => get_var(mod, b)
         _ => error("Cannot parse metadata $a")
     end
+end
+
+function parse_metadata(mod, metadata::AbstractArray)
+    ret = Dict()
+    for m in metadata
+        merge!(ret, parse_metadata(mod, m))
+    end
+    ret
 end
 
 function _set_var_metadata!(metadata_with_exprs, a, m, v::Expr)
@@ -655,6 +826,8 @@ function convert_units(varunits::DynamicQuantities.Quantity, value)
         DynamicQuantities.SymbolicUnits.as_quantity(varunits), value))
 end
 
+convert_units(::DynamicQuantities.Quantity, value::NoValue) = NO_VALUE
+
 function convert_units(
         varunits::DynamicQuantities.Quantity, value::AbstractArray{T}) where {T}
     DynamicQuantities.ustrip.(DynamicQuantities.uconvert.(
@@ -665,62 +838,63 @@ function convert_units(varunits::Unitful.FreeUnits, value)
     Unitful.ustrip(varunits, value)
 end
 
+convert_units(::Unitful.FreeUnits, value::NoValue) = NO_VALUE
+
 function convert_units(varunits::Unitful.FreeUnits, value::AbstractArray{T}) where {T}
     Unitful.ustrip.(varunits, value)
 end
 
-function convert_units(varunits::Unitful.FreeUnits, value::Num)
-    value
-end
+convert_units(::Unitful.FreeUnits, value::Num) = value
 
-function convert_units(varunits::DynamicQuantities.Quantity, value::Num)
-    value
-end
+convert_units(::DynamicQuantities.Quantity, value::Num) = value
 
 function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
     vv, def, metadata_with_exprs = parse_variable_def!(
         dict, mod, arg, varclass, kwargs, where_types)
-    name = getname(vv)
-
-    varexpr = if haskey(metadata_with_exprs, VariableUnit)
-        unit = metadata_with_exprs[VariableUnit]
-        quote
-            $name = if $name === $NO_VALUE
-                $setdefault($vv, $def)
-            else
-                try
-                    $setdefault($vv, $convert_units($unit, $name))
-                catch e
-                    if isa(e, $(DynamicQuantities.DimensionError)) ||
-                       isa(e, $(Unitful.DimensionError))
-                        error("Unable to convert units for \'" * string(:($$vv)) * "\'")
-                    elseif isa(e, MethodError)
-                        error("No or invalid units provided for \'" * string(:($$vv)) *
-                              "\'")
-                    else
-                        rethrow(e)
+    if !(vv isa Tuple)
+        name = getname(vv)
+        varexpr = if haskey(metadata_with_exprs, VariableUnit)
+            unit = metadata_with_exprs[VariableUnit]
+            quote
+                $name = if $name === $NO_VALUE
+                    $setdefault($vv, $def)
+                else
+                    try
+                        $setdefault($vv, $convert_units($unit, $name))
+                    catch e
+                        if isa(e, $(DynamicQuantities.DimensionError)) ||
+                           isa(e, $(Unitful.DimensionError))
+                            error("Unable to convert units for \'" * string(:($$vv)) * "\'")
+                        elseif isa(e, MethodError)
+                            error("No or invalid units provided for \'" * string(:($$vv)) *
+                                  "\'")
+                        else
+                            rethrow(e)
+                        end
                     end
                 end
             end
-        end
-    else
-        quote
-            $name = if $name === $NO_VALUE
-                $setdefault($vv, $def)
-            else
-                $setdefault($vv, $name)
+        else
+            quote
+                $name = if $name === $NO_VALUE
+                    $setdefault($vv, $def)
+                else
+                    $setdefault($vv, $name)
+                end
             end
         end
-    end
 
-    metadata_expr = Expr(:block)
-    for (k, v) in metadata_with_exprs
-        push!(metadata_expr.args,
-            :($name = $wrap($set_scalar_metadata($unwrap($name), $k, $v))))
-    end
+        metadata_expr = Expr(:block)
+        for (k, v) in metadata_with_exprs
+            push!(metadata_expr.args,
+                :($name = $wrap($set_scalar_metadata($unwrap($name), $k, $v))))
+        end
 
-    push!(varexpr.args, metadata_expr)
-    return vv isa Num ? name : :($name...), varexpr
+        push!(varexpr.args, metadata_expr)
+        return vv isa Num ? name : :($name...), varexpr
+    else
+        return vv
+    end
 end
 
 function handle_conditional_vars!(
