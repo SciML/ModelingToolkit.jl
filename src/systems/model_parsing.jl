@@ -215,8 +215,9 @@ function update_array_kwargs_and_metadata!(
     push!(kwargs,
         Expr(:kw,
             Expr(:(::), varname,
-                Expr(:curly, :Union, :Nothing, Expr(:curly, :AbstractArray, vartype))),
-            nothing))
+                Expr(:curly, :Union, :Nothing, :Missing, NoValue,
+                    Expr(:curly, :AbstractArray, vartype))),
+            NO_VALUE))
     if !isnothing(meta) && haskey(meta, VariableUnit)
         push!(where_types, vartype)
     else
@@ -300,14 +301,14 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                 if varclass == :parameters
                     Meta.isexpr(a, :call) &&
                         assert_unique_independent_var(dict, a.args[end])
-                    var = :($varname = $varname === nothing ? $val : $varname;
+                    var = :($varname = $varname === $NO_VALUE ? $val : $varname;
                     $varname = $first(@parameters ($a[$(indices...)]::$type = $varval),
                     $(def_n_meta...)))
                 else
                     Meta.isexpr(a, :call) ||
                         throw("$a is not a variable of the independent variable")
                     assert_unique_independent_var(dict, a.args[end])
-                    var = :($varname = $varname === nothing ? $val : $varname;
+                    var = :($varname = $varname === $NO_VALUE ? $val : $varname;
                     $varname = $first(@variables $a[$(indices...)]::$type = (
                         $varval),
                     $(def_n_meta...)))
@@ -316,13 +317,13 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                 if varclass == :parameters
                     Meta.isexpr(a, :call) &&
                         assert_unique_independent_var(dict, a.args[end])
-                    var = :($varname = $varname === nothing ? $def_n_meta : $varname;
+                    var = :($varname = $varname === $NO_VALUE ? $def_n_meta : $varname;
                     $varname = $first(@parameters $a[$(indices...)]::$type = $varname))
                 else
                     Meta.isexpr(a, :call) ||
                         throw("$a is not a variable of the independent variable")
                     assert_unique_independent_var(dict, a.args[end])
-                    var = :($varname = $varname === nothing ? $def_n_meta : $varname;
+                    var = :($varname = $varname === $NO_VALUE ? $def_n_meta : $varname;
                     $varname = $first(@variables $a[$(indices...)]::$type = $varname))
                 end
                 varval, meta = def_n_meta, nothing
@@ -765,10 +766,11 @@ function parse_variable_arg!(exprs, vs, dict, mod, arg, varclass, kwargs, where_
 end
 
 function convert_units(varunits::DynamicQuantities.Quantity, value)
-    value isa Nothing && return nothing
     DynamicQuantities.ustrip(DynamicQuantities.uconvert(
         DynamicQuantities.SymbolicUnits.as_quantity(varunits), value))
 end
+
+convert_units(::DynamicQuantities.Quantity, value::NoValue) = NO_VALUE
 
 function convert_units(
         varunits::DynamicQuantities.Quantity, value::AbstractArray{T}) where {T}
@@ -777,21 +779,18 @@ function convert_units(
 end
 
 function convert_units(varunits::Unitful.FreeUnits, value)
-    value isa Nothing && return nothing
     Unitful.ustrip(varunits, value)
 end
+
+convert_units(::Unitful.FreeUnits, value::NoValue) = NO_VALUE
 
 function convert_units(varunits::Unitful.FreeUnits, value::AbstractArray{T}) where {T}
     Unitful.ustrip.(varunits, value)
 end
 
-function convert_units(varunits::Unitful.FreeUnits, value::Num)
-    value
-end
+convert_units(::Unitful.FreeUnits, value::Num) = value
 
-function convert_units(varunits::DynamicQuantities.Quantity, value::Num)
-    value
-end
+convert_units(::DynamicQuantities.Quantity, value::Num) = value
 
 function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
     vv, def, metadata_with_exprs = parse_variable_def!(
