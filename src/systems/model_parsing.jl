@@ -254,12 +254,6 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
             parse_variable_def!(
                 dict, mod, a, varclass, kwargs, where_types; def, type, meta)
         end
-        Expr(:(::), Expr(:call, a, b), type) => begin
-            type = getfield(mod, type)
-            def = _type_check!(def, a, type, varclass)
-            parse_variable_def!(
-                dict, mod, a, varclass, kwargs, where_types; def, type, meta)
-        end
         Expr(:call, a, b) => begin
             var = generate_var!(dict, a, b, varclass, mod; type)
             update_kwargs_and_metadata!(dict, kwargs, a, def, type,
