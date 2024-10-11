@@ -385,6 +385,12 @@ function vars!(vars, O; op = Differential)
     if isvariable(O)
         return push!(vars, O)
     end
+    if symbolic_type(O) == NotSymbolic() && O isa AbstractArray
+        for arg in O
+            vars!(vars, arg; op)
+        end
+        return vars
+    end
     !iscall(O) && return vars
 
     operation(O) isa op && return push!(vars, O)
