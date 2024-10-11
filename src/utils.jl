@@ -467,23 +467,56 @@ function find_derivatives!(vars, expr, f)
     return vars
 end
 
-function collect_vars!(unknowns, parameters, expr, iv; op = Differential)
+"""
+    $(TYPEDSIGNATURES)
+
+Search through equations and parameter dependencies of `sys`, where sys is at a depth of
+`depth` from the root system, looking for variables scoped to the root system. Also
+recursively searches through all subsystems of `sys`, increasing the depth if it is not
+`-1`. A depth of `-1` indicates searching for variables with `GlobalScope`.
+"""
+function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Differential)
+    if has_eqs(sys)
+        for eq in get_eqs(sys)
+            eq.lhs isa Union{Symbolic, Number} || continue
+            collect_vars!(unknowns, parameters, eq.lhs, iv; depth, op)
+            collect_vars!(unknowns, parameters, eq.rhs, iv; depth, op)
+        end
+    end
+    if has_parameter_dependencies(sys)
+        for eq in get_parameter_dependencies(sys)
+            if eq isa Pair
+                collect_vars!(unknowns, parameters, eq[1], iv; depth, op)
+                collect_vars!(unknowns, parameters, eq[2], iv; depth, op)
+            else
+                collect_vars!(unknowns, parameters, eq.lhs, iv; depth, op)
+                collect_vars!(unknowns, parameters, eq.rhs, iv; depth, op)
+            end
+        end
+    end
+    newdepth = depth == -1 ? depth : depth + 1
+    for ssys in get_systems(sys)
+        collect_scoped_vars!(unknowns, parameters, ssys, iv; depth = newdepth, op)
+    end
+end
+
+function collect_vars!(unknowns, parameters, expr, iv; depth = 0, op = Differential)
     if issym(expr)
-        collect_var!(unknowns, parameters, expr, iv)
+        collect_var!(unknowns, parameters, expr, iv; depth)
     else
         for var in vars(expr; op)
             if iscall(var) && operation(var) isa Differential
                 var, _ = var_from_nested_derivative(var)
             end
-            collect_var!(unknowns, parameters, var, iv)
+            collect_var!(unknowns, parameters, var, iv; depth)
         end
     end
     return nothing
 end
 
-function collect_var!(unknowns, parameters, var, iv)
+function collect_var!(unknowns, parameters, var, iv; depth = 0)
     isequal(var, iv) && return nothing
-    getmetadata(var, SymScope, LocalScope()) == LocalScope() || return nothing
+    check_scope_depth(getmetadata(var, SymScope, LocalScope()), depth) || return nothing
     if iscalledparameter(var)
         callable = getcalledparameter(var)
         push!(parameters, callable)
@@ -498,6 +531,24 @@ function collect_var!(unknowns, parameters, var, iv)
         collect_vars!(unknowns, parameters, def, iv)
     end
     return nothing
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Check if the given `scope` is at a depth of `depth` from the root system. Only
+returns `true` for `scope::GlobalScope` if `depth == -1`.
+"""
+function check_scope_depth(scope, depth)
+    if scope isa LocalScope
+        return depth == 0
+    elseif scope isa ParentScope
+        return depth > 0 && check_scope_depth(scope.parent, depth - 1)
+    elseif scope isa DelayParentScope
+        return depth >= scope.N && check_scope_depth(scope.parent, depth - scope.N)
+    elseif scope isa GlobalScope
+        return depth == -1
+    end
 end
 
 """
