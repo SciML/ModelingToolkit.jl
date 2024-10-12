@@ -12,14 +12,14 @@ const MTK = ModelingToolkit
 
 function contains_variable(x, wrt)
     any(isequal(x), wrt) && return true
-    istree(x) || return false
+    iscall(x) || return false
     return any(y -> contains_variable(y, wrt), arguments(x))
 end
 
 function is_polynomial(x, wrt)
     x = unwrap(x)
     symbolic_type(x) == NotSymbolic() && return true
-    istree(x) || return true
+    iscall(x) || return true
     contains_variable(x, wrt) || return true
     any(isequal(x), wrt) && return true
 
