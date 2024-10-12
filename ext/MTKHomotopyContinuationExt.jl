@@ -1,0 +1,114 @@
+module MTKHomotopyContinuationExt
+
+using ModelingToolkit
+using ModelingToolkit.Symbolics: unwrap
+using ModelingToolkit.SymbolicIndexingInterface
+using HomotopyContinuation
+using ModelingToolkit: iscomplete, parameters, has_index_cache, get_index_cache, get_u0,
+                       get_u0_p, check_eqs_u0, CommonSolve
+
+function contains_variable(x, wrt)
+    any(isequal(x), wrt) && return true
+    istree(x) || return false
+    return any(y -> contains_variable(y, wrt), arguments(x))
+end
+
+function is_polynomial(x, wrt)
+    x = unwrap(x)
+    symbolic_type(x) == NotSymbolic() && return true
+    istree(x) || return true
+    contains_variable(x, wrt) || return true
+
+    if operation(x) in (*, +, -)
+        return all(y -> is_polynomial(y, wrt), arguments(x))
+    end
+    if operation(x) == (^)
+        b, p = arguments(x)
+        return is_polynomial(b, wrt) && !contains_variable(p, wrt)
+    end
+    return false
+end
+
+function symbolics_to_hc(expr)
+    if iscall(expr)
+        if operation(expr) == getindex
+            args = arguments(expr)
+            return ModelKit.Variable(getname(args[1]), args[2:end]...)
+        else
+            return operation(expr)(symbolics_to_hc.(arguments(expr))...)
+        end
+    elseif symbolic_type(expr) == NotSymbolic()
+        return expr
+    else
+        return ModelKit.Variable(getname(expr))
+    end
+end
+
+struct MTKHomotopySystem{F, P, J, V} <: HomotopyContinuation.AbstractSystem
+    f::F
+    p::P
+    jac::J
+    vars::V
+    nexprs::Int
+end
+
+Base.size(sys::MTKHomotopySystem) = (sys.nexprs, length(sys.vars))
+ModelKit.variables(sys::MTKHomotopySystem) = sys.vars
+
+function (sys::MTKHomotopySystem)(x, p = nothing)
+    sys.f(x, sys.p)
+end
+
+function ModelKit.evaluate!(u, sys::MTKHomotopySystem, x, p = nothing)
+    sys.f(u, x, sys.p)
+end
+
+function ModelKit.evaluate_and_jacobian!(u, U, sys::MTKHomotopySystem, x, p = nothing)
+    sys.f(u, x, sys.p)
+    sys.jac(U, x, sys.p)
+end
+
+function ModelingToolkit.HomotopyContinuationProblem(
+        sys::NonlinearSystem, u0map, parammap; compile = :all, kwargs...)
+    if !iscomplete(sys)
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `HomotopyContinuationProblem`")
+    end
+
+    dvs = unknowns(sys)
+    ps = parameters(sys)
+    eqs = equations(sys)
+
+    for eq in eqs
+        if !is_polynomial(eq.lhs, dvs) || !is_polynomial(eq.rhs, dvs)
+            error("Equation $eq is not a polynomial in the unknowns")
+        end
+    end
+
+    nlfn = NonlinearFunction(sys; jac = true)
+    hvars = symbolics_to_hc.(dvs)
+
+    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        u0, defs = get_u0(sys, u0map, parammap)
+        check_eqs_u0(eqs, dvs, u0; kwargs...)
+        p = MTKParameters(sys, parammap, u0map)
+    else
+        u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union)
+        check_eqs_u0(eqs, dvs, u0; kwargs...)
+    end
+
+    mtkhsys = MTKHomotopySystem(nlfn.f, p, nlfn.jac, hvars, length(eqs))
+
+    prob = ModelingToolkit.HomotopyContinuationProblem{typeof(mtkhsys), typeof(u0)}(
+        sys, mtkhsys, u0)
+end
+
+function CommonSolve.solve(prob::ModelingToolkit.HomotopyContinuationProblem; kwargs...)
+    sol = HomotopyContinuation.solve(prob.hcsys; kwargs...)
+    rsols = HomotopyContinuation.real_solutions(sol)
+    rsol = findmin(rsols) do val
+        norm(prob.u0 - val)
+    end
+    return rsol
+end
+
+end

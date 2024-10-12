@@ -565,3 +565,25 @@ function Base.:(==)(sys1::NonlinearSystem, sys2::NonlinearSystem)
         _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
         all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
 end
+
+struct HomotopyContinuationProblem{H, U}
+    sys::NonlinearSystem
+    hcsys::H
+    u0::U
+end
+
+function HomotopyContinuationProblem(args...; kwargs...)
+    error("Requires HomotopyContinuationExt")
+end
+
+SymbolicIndexingInterface.symbolic_container(p::HomotopyContinuationProblem) = p.sys
+SymbolicIndexingInterface.state_values(p::HomotopyContinuationProblem) = p.u0
+function SymbolicIndexingInterface.set_state!(p::HomotopyContinuationProblem, args...)
+    set_state!(p.u0, args...)
+end
+function SymbolicIndexingInterface.parameter_values(p::HomotopyContinuationProblem)
+    parameter_values(p.hcsys)
+end
+function SymbolicIndexingInterface.set_parameter!(p::HomotopyContinuationProblem, args...)
+    set_parameter!(p.hcsys, args...)
+end
