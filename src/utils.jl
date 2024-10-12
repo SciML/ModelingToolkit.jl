@@ -383,6 +383,14 @@ function vars!(vars, eq::Equation; op = Differential)
 end
 function vars!(vars, O; op = Differential)
     if isvariable(O)
+        if iscalledparameter(O)
+            f = getcalledparameter(O)
+            push!(vars, f)
+            for arg in arguments(O)
+                vars!(vars, arg; op)
+            end
+            return vars
+        end
         return push!(vars, O)
     end
     if symbolic_type(O) == NotSymbolic() && O isa AbstractArray
