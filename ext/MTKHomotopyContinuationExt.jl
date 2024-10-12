@@ -8,6 +8,8 @@ using HomotopyContinuation
 using ModelingToolkit: iscomplete, parameters, has_index_cache, get_index_cache, get_u0,
                        get_u0_p, check_eqs_u0, CommonSolve
 
+const MTK = ModelingToolkit
+
 function contains_variable(x, wrt)
     any(isequal(x), wrt) && return true
     istree(x) || return false
@@ -19,6 +21,7 @@ function is_polynomial(x, wrt)
     symbolic_type(x) == NotSymbolic() && return true
     istree(x) || return true
     contains_variable(x, wrt) || return true
+    any(isequal(x), wrt) && return true
 
     if operation(x) in (*, +, -)
         return all(y -> is_polynomial(y, wrt), arguments(x))
@@ -69,8 +72,10 @@ function ModelKit.evaluate_and_jacobian!(u, U, sys::MTKHomotopySystem, x, p = no
     sys.jac(U, x, sys.p)
 end
 
-function ModelingToolkit.HomotopyContinuationProblem(
-        sys::NonlinearSystem, u0map, parammap; compile = :all, kwargs...)
+SymbolicIndexingInterface.parameter_values(s::MTKHomotopySystem) = s.p
+
+function MTK.HomotopyContinuationProblem(
+        sys::NonlinearSystem, u0map, parammap; compile = :all, eval_expression = false, eval_module = ModelingToolkit, kwargs...)
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `HomotopyContinuationProblem`")
     end
@@ -85,24 +90,29 @@ function ModelingToolkit.HomotopyContinuationProblem(
         end
     end
 
-    nlfn = NonlinearFunction(sys; jac = true)
+    nlfn = NonlinearFunction(sys; jac = true, eval_expression, eval_module)
     hvars = symbolics_to_hc.(dvs)
+
+    u0map = MTK.todict(u0map)
+    parammap = MTK.todict(parammap)
 
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         u0, defs = get_u0(sys, u0map, parammap)
         check_eqs_u0(eqs, dvs, u0; kwargs...)
         p = MTKParameters(sys, parammap, u0map)
     else
-        u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union)
+        u0, p, defs = get_u0_p(sys, u0map, parammap)
         check_eqs_u0(eqs, dvs, u0; kwargs...)
     end
 
     mtkhsys = MTKHomotopySystem(nlfn.f, p, nlfn.jac, hvars, length(eqs))
 
-    return ModelingToolkit.HomotopyContinuationProblem(u0, mtkhsys, sys)
+    obsfn = MTK.ObservedFunctionCache(sys; eval_expression, eval_module)
+
+    return MTK.HomotopyContinuationProblem(u0, mtkhsys, sys, obsfn)
 end
 
-function CommonSolve.solve(prob::ModelingToolkit.HomotopyContinuationProblem; kwargs...)
+function CommonSolve.solve(prob::MTK.HomotopyContinuationProblem; kwargs...)
     sol = HomotopyContinuation.solve(prob.homotopy_continuation_system; kwargs...)
     realsols = HomotopyContinuation.results(sol; only_real = true)
     if isempty(realsols)
@@ -118,7 +128,7 @@ function CommonSolve.solve(prob::ModelingToolkit.HomotopyContinuationProblem; kw
         retcode = SciMLBase.ReturnCode.Success
     end
 
-    return SciMLBase.build_solution(prob, :HomotopyContinuation, u, resid; retcode)
+    return SciMLBase.build_solution(prob, :HomotopyContinuation, u, resid; retcode, original = sol)
 end
 
 end

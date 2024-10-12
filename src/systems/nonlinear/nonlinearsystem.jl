@@ -566,10 +566,11 @@ function Base.:(==)(sys1::NonlinearSystem, sys2::NonlinearSystem)
         all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
 end
 
-struct HomotopyContinuationProblem{uType, H} <: SciMLBase.AbstractNonlinearProblem{uType, true}
+struct HomotopyContinuationProblem{uType, H, O} <: SciMLBase.AbstractNonlinearProblem{uType, true}
     u0::uType
     homotopy_continuation_system::H
     sys::NonlinearSystem
+    obsfn::O
 end
 
 function HomotopyContinuationProblem(args...; kwargs...)
@@ -582,8 +583,15 @@ function SymbolicIndexingInterface.set_state!(p::HomotopyContinuationProblem, ar
     set_state!(p.u0, args...)
 end
 function SymbolicIndexingInterface.parameter_values(p::HomotopyContinuationProblem)
-    parameter_values(p.hcsys)
+    parameter_values(p.homotopy_continuation_system)
 end
 function SymbolicIndexingInterface.set_parameter!(p::HomotopyContinuationProblem, args...)
-    set_parameter!(p.hcsys, args...)
+    set_parameter!(parameter_values(p), args...)
+end
+function SymbolicIndexingInterface.observed(p::HomotopyContinuationProblem, sym)
+    if p.obsfn !== nothing
+        return p.obsfn(sym)
+    else
+        return SymbolicIndexingInterface.observed(p.sys, sym)
+    end
 end
