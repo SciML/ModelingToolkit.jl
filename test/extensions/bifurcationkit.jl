@@ -1,4 +1,4 @@
-using BifurcationKit, ModelingToolkit, SetField, Test
+using BifurcationKit, ModelingToolkit, Setfield, Test
 using ModelingToolkit: t_nounits as t, D_nounits as D
 # Simple pitchfork diagram, compares solution to native BifurcationKit, checks they are identical.
 # Checks using `jac=false` option.
