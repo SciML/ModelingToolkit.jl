@@ -1,6 +1,7 @@
 module MTKHomotopyContinuationExt
 
 using ModelingToolkit
+using ModelingToolkit.SciMLBase
 using ModelingToolkit.Symbolics: unwrap
 using ModelingToolkit.SymbolicIndexingInterface
 using HomotopyContinuation
@@ -98,17 +99,26 @@ function ModelingToolkit.HomotopyContinuationProblem(
 
     mtkhsys = MTKHomotopySystem(nlfn.f, p, nlfn.jac, hvars, length(eqs))
 
-    prob = ModelingToolkit.HomotopyContinuationProblem{typeof(mtkhsys), typeof(u0)}(
-        sys, mtkhsys, u0)
+    return ModelingToolkit.HomotopyContinuationProblem(u0, mtkhsys, sys)
 end
 
 function CommonSolve.solve(prob::ModelingToolkit.HomotopyContinuationProblem; kwargs...)
-    sol = HomotopyContinuation.solve(prob.hcsys; kwargs...)
-    rsols = HomotopyContinuation.real_solutions(sol)
-    rsol = findmin(rsols) do val
-        norm(prob.u0 - val)
+    sol = HomotopyContinuation.solve(prob.homotopy_continuation_system; kwargs...)
+    realsols = HomotopyContinuation.results(sol; only_real = true)
+    if isempty(realsols)
+        u = state_values(prob)
+        resid = prob.homotopy_continuation_system(u)
+        retcode = SciMLBase.ReturnCode.ConvergenceFailure
+    else
+        distance, idx = findmin(realsols) do result
+            norm(result.solution - state_values(prob))
+        end
+        u = real.(realsols[idx].solution)
+        resid = prob.homotopy_continuation_system(u)
+        retcode = SciMLBase.ReturnCode.Success
     end
-    return rsol
+
+    return SciMLBase.build_solution(prob, :HomotopyContinuation, u, resid; retcode)
 end
 
 end

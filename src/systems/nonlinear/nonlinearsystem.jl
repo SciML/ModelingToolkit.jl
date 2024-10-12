@@ -566,10 +566,10 @@ function Base.:(==)(sys1::NonlinearSystem, sys2::NonlinearSystem)
         all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
 end
 
-struct HomotopyContinuationProblem{H, U}
+struct HomotopyContinuationProblem{uType, H} <: SciMLBase.AbstractNonlinearProblem{uType, true}
+    u0::uType
+    homotopy_continuation_system::H
     sys::NonlinearSystem
-    hcsys::H
-    u0::U
 end
 
 function HomotopyContinuationProblem(args...; kwargs...)
