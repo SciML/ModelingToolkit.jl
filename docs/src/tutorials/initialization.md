@@ -278,7 +278,7 @@ initsys = prob2.f.initializeprob.f.sys
 
 The system is fully determined, and the equations are solvable.
 
-```@example
+```@example paraminit
 [equations(initsys); observed(initsys)]
 ```
 
