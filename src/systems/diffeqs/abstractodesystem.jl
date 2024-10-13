@@ -851,7 +851,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         build_initializeprob = true,
         initialization_eqs = [],
         fully_determined = false,
-        check_units = true,
+        check_units = false,
         kwargs...)
     eqs = equations(sys)
     dvs = unknowns(sys)
@@ -916,7 +916,8 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
 
         initializeprob = ModelingToolkit.InitializationProblem(
             sys, t, u0map, parammap; guesses, warn_initialize_determined,
-            initialization_eqs, eval_expression, eval_module, fully_determined, check_units)
+            initialization_eqs, eval_expression, eval_module, fully_determined,
+            check_units = check_units)
         initializeprobmap = getu(initializeprob, unknowns(sys))
         punknowns = [p
                      for p in all_variable_symbols(initializeprob) if is_parameter(sys, p)]
