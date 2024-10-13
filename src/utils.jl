@@ -492,6 +492,7 @@ recursively searches through all subsystems of `sys`, increasing the depth if it
 function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Differential)
     if has_eqs(sys)
         for eq in get_eqs(sys)
+            hasfield(eq, :lhs) || continue
             eq.lhs isa Union{Symbolic, Number} || continue
             collect_vars!(unknowns, parameters, eq.lhs, iv; depth, op)
             collect_vars!(unknowns, parameters, eq.rhs, iv; depth, op)
