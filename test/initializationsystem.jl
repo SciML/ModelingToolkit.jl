@@ -3,6 +3,7 @@ using ForwardDiff
 using SymbolicIndexingInterface, SciMLStructures
 using SciMLStructures: Tunable
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using DynamicQuantities
 
 @parameters g
 @variables x(t) y(t) [state_priority = 10] λ(t)
@@ -859,4 +860,20 @@ end
     @test prob.f.initializeprob !== nothing
     integ = init(prob)
     @test integ[x] ≈ [1.0, 3.0]
+end
+
+@testset "units" begin
+    t = ModelingToolkit.t
+    D = ModelingToolkit.D
+    @parameters g [unit = u"m/s^2"] L=1 [unit = u"m^2"]
+    @variables x(t) [unit = u"m"] y(t) [unit = u"m" state_priority = 10] λ(t) [unit = u"s^-2"]
+    eqs = [D(D(x)) ~ λ * x
+           D(D(y)) ~ λ * y - g
+           x^2 + y^2 ~ L]
+    @mtkbuild pend = ODESystem(eqs, t)
+
+    prob = ODEProblem(pend, [x => 1, y => 0], (0.0, 1.5), [g => 1],
+        guesses = ModelingToolkit.missing_variable_defaults(pend))
+    sol = solve(prob, Rodas5P())
+    @test SciMLBase.successful_retcode(sol)
 end

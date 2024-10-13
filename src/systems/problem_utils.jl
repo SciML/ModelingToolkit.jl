@@ -396,7 +396,7 @@ Keyword arguments:
 - `eval_module`: If `eval_expression == true`, the module to `eval` into. Otherwise, the module
   in which to generate the `RuntimeGeneratedFunction`.
 - `fully_determined`: Override whether the initialization system is fully determined.
-- `check_units`: Enable or disable unit checks.
+- `check_units`: Enable or disable unit checks when constructing the initialization problem.
 - `tofloat`, `use_union`: Passed to [`better_varmap_to_vars`](@ref) for building `u0` (and
   possibly `p`).
 - `u0_constructor`: A function to apply to the `u0` value returned from `better_varmap_to_vars`
@@ -414,7 +414,7 @@ function process_SciMLProblem(
         implicit_dae = false, t = nothing, guesses = AnyDict(),
         warn_initialize_determined = true, initialization_eqs = [],
         eval_expression = false, eval_module = @__MODULE__, fully_determined = false,
-        check_units = true, tofloat = true, use_union = false,
+        check_units = false, tofloat = true, use_union = false,
         u0_constructor = identity, du0map = nothing, check_length = true, symbolic_u0 = false, kwargs...)
     dvs = unknowns(sys)
     ps = parameters(sys)
