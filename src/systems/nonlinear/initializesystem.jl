@@ -37,7 +37,7 @@ function generate_initializesystem(sys::ODESystem;
             # set dummy derivatives to default_dd_guess unless specified
             push!(defs, x[1] => get(guesses, x[1], default_dd_guess))
         end
-        for (y, x) in u0map
+        function process_u0map_with_dummysubs(y, x)
             y = get(schedule.dummy_sub, y, y)
             y = fixpoint_sub(y, diffmap)
             if y ∈ vars_set
@@ -51,6 +51,13 @@ function generate_initializesystem(sys::ODESystem;
                 push!(eqs_ics, y ~ x)
             else
                 error("Initialization expression $y is currently not supported. If its a higher order derivative expression, then only the dummy derivative expressions are supported.")
+            end
+        end
+        for (y, x) in u0map
+            if Symbolics.isarraysymbolic(y)
+                process_u0map_with_dummysubs.(collect(y), collect(x))
+            else
+                process_u0map_with_dummysubs(y, x)
             end
         end
     end
