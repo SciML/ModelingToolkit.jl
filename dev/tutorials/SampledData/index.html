@@ -11,7 +11,7 @@ eqs = [
     x(k) ~ 0.5x(k - 1) + u(k - 1),
     y ~ x
 ]</code></pre><p class="math-container">\[ \begin{align}
-x\left( t \right) &amp;= 0.5 \mathrm{Shift(t, -1)}\left( x\left( t \right) \right) + \mathrm{Shift(t, -1)}\left( u\left( t \right) \right) \\
+x\left( t \right) &amp;= 0.5 Shift(t, -1)\left( x\left( t \right) \right) + Shift(t, -1)\left( u\left( t \right) \right) \\
 y\left( t \right) &amp;= x\left( t \right)
 \end{align}
  \]</p><p>A few things to note in this basic example:</p><ul><li>The equation <code>x(k+1) = 0.5x(k) + u(k)</code> has been rewritten in terms of negative shifts since positive shifts are not yet supported.</li><li><code>x</code> and <code>u</code> are automatically inferred to be discrete-time variables, since they appear in an equation with a discrete-time <a href="@ref"><code>ShiftIndex</code></a> <code>k</code>.</li><li><code>y</code> is also automatically inferred to be a discrete-time-time variable, since it appears in an equation with another discrete-time variable <code>x</code>. <code>x,u,y</code> all belong to the same discrete-time partition, i.e., they are all updated at the same <em>instantaneous point in time</em> at which the clock ticks.</li><li>The equation <code>y ~ x</code> does not use any shift index, this is equivalent to <code>y(k) ~ x(k)</code>, i.e., discrete-time variables without shift index are assumed to refer to the variable at the current time step.</li><li>The equation <code>x(k) ~ 0.5x(k-1) + u(k-1)</code> indicates how <code>x</code> is updated, i.e., what the value of <code>x</code> will be at the <em>current</em> time step in terms of the <em>past</em> value. The output <code>y</code>, is given by the value of <code>x</code> at the <em>current</em> time step, i.e., <code>y(k) ~ x(k)</code>. If this logic was implemented in an imperative programming style, the logic would thus be</li></ul><pre><code class="language-julia hljs">function discrete_step(x, u)
@@ -22,14 +22,14 @@ end</code></pre><p>An alternative and <em>equivalent</em> way of writing the sam
     x(k + 1) ~ 0.5x(k) + u(k),
     y(k) ~ x(k)
 ]</code></pre><p class="math-container">\[ \begin{align}
-\mathrm{Shift(t, 1)}\left( x\left( t \right) \right) &amp;= u\left( t \right) + 0.5 x\left( t \right) \\
+Shift(t, 1)\left( x\left( t \right) \right) &amp;= u\left( t \right) + 0.5 x\left( t \right) \\
 y\left( t \right) &amp;= x\left( t \right)
 \end{align}
  \]</p><p>but the use of positive time shifts is not yet supported. Instead, we <em>shifted all indices</em> by <code>-1</code> above, resulting in exactly the same difference equations. However, the next system is <em>not equivalent</em> to the previous one:</p><pre><code class="language-julia hljs">eqs = [
     x(k) ~ 0.5x(k - 1) + u(k),
     y ~ x
 ]</code></pre><p class="math-container">\[ \begin{align}
-x\left( t \right) &amp;= u\left( t \right) + 0.5 \mathrm{Shift(t, -1)}\left( x\left( t \right) \right) \\
+x\left( t \right) &amp;= u\left( t \right) + 0.5 Shift(t, -1)\left( x\left( t \right) \right) \\
 y\left( t \right) &amp;= x\left( t \right)
 \end{align}
  \]</p><p>In this last example, <code>u(k)</code> refers to the input at the new time point <code>k</code>., this system is equivalent to</p><pre><code class="nohighlight hljs">eqs = [
@@ -87,15 +87,15 @@ connections = [r ~ sin(t)          # reference signal
 
 @named cl = ODESystem(connections, t, systems = [f, c, p])</code></pre><p class="math-container">\[ \begin{align}
 r\left( t \right) &amp;= \sin\left( t \right) \\
-f_{+}u\left( t \right) &amp;= r\left( t \right) \\
-f_{+}y\left( t \right) &amp;= c_{+}r\left( t \right) \\
-\mathrm{Hold()}\left( c_{+}ud\left( t \right) \right) &amp;= p_{+}u\left( t \right) \\
-p_{+}y\left( t \right) &amp;= c_{+}y\left( t \right) \\
-f_{+}x\left( t \right) &amp;= 0.39347 f_{+}u\left( t \right) + 0.60653 \mathrm{Shift(t, -1)}\left( f_{+}x\left( t \right) \right) \\
-f_{+}y\left( t \right) &amp;= f_{+}x\left( t \right) \\
-c_{+}yd\left( t \right) &amp;= \mathrm{Sample(InferredTimeDomain::InferredDiscrete)}\left( c_{+}y\left( t \right) \right) \\
-c_{+}ud\left( t \right) &amp;= c_{+}kp \left(  - c_{+}yd\left( t \right) + c_{+}r\left( t \right) \right) \\
-\frac{\mathrm{d} p_{+}x\left( t \right)}{\mathrm{d}t} &amp;= p_{+}u\left( t \right) - p_{+}x\left( t \right) \\
-p_{+}y\left( t \right) &amp;= p_{+}x\left( t \right)
+f.u\left( t \right) &amp;= r\left( t \right) \\
+f.y\left( t \right) &amp;= c.r\left( t \right) \\
+Hold()\left( c.ud\left( t \right) \right) &amp;= p.u\left( t \right) \\
+p.y\left( t \right) &amp;= c.y\left( t \right) \\
+f.x\left( t \right) &amp;= 0.39347 f.u\left( t \right) + 0.60653 Shift(t, -1)\left( f.x\left( t \right) \right) \\
+f.y\left( t \right) &amp;= f.x\left( t \right) \\
+c.yd\left( t \right) &amp;= Sample(InferredTimeDomain::InferredDiscrete)\left( c.y\left( t \right) \right) \\
+c.ud\left( t \right) &amp;= c.kp \left(  - c.yd\left( t \right) + c.r\left( t \right) \right) \\
+\frac{\mathrm{d} p.x\left( t \right)}{\mathrm{d}t} &amp;= p.u\left( t \right) - p.x\left( t \right) \\
+p.y\left( t \right) &amp;= p.x\left( t \right)
 \end{align}
- \]</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../bifurcation_diagram_computation/">« Bifurcation Diagrams</a><a class="docs-footer-nextpage" href="../domain_connections/">Domains »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.7.0 on <span class="colophon-date" title="Wednesday 9 October 2024 12:53">Wednesday 9 October 2024</span>. Using Julia version 1.11.0.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ \]</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../bifurcation_diagram_computation/">« Bifurcation Diagrams</a><a class="docs-footer-nextpage" href="../domain_connections/">Domains »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.7.0 on <span class="colophon-date" title="Monday 14 October 2024 15:36">Monday 14 October 2024</span>. Using Julia version 1.11.0.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
