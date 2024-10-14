@@ -278,7 +278,7 @@ initsys = prob2.f.initializeprob.f.sys
 
 The system is fully determined, and the equations are solvable.
 
-```@example
+```@example paraminit
 [equations(initsys); observed(initsys)]
 ```
 
@@ -464,56 +464,3 @@ sol[α * x - β * x * y]
 ```@example init
 plot(sol)
 ```
-
-## Solving for parameters during initialization
-
-Sometimes, it is necessary to solve for a parameter during initialization. For example,
-given a spring-mass system we want to find the un-stretched length of the spring given
-that the initial condition of the system is its steady state.
-
-```@example init
-using ModelingToolkitStandardLibrary.Mechanical.TranslationalModelica: Fixed, Mass, Spring,
-                                                                       Force, Damper
-using ModelingToolkitStandardLibrary.Blocks: Constant
-
-@named mass = Mass(; m = 1.0, s = 1.0, v = 0.0, a = 0.0)
-@named fixed = Fixed(; s0 = 0.0)
-@named spring = Spring(; c = 2.0, s_rel0 = missing)
-@named gravity = Force()
-@named constant = Constant(; k = 9.81)
-@named damper = Damper(; d = 0.1)
-@mtkbuild sys = ODESystem(
-    [connect(fixed.flange, spring.flange_a), connect(spring.flange_b, mass.flange_a),
-        connect(mass.flange_a, gravity.flange), connect(constant.output, gravity.f),
-        connect(fixed.flange, damper.flange_a), connect(damper.flange_b, mass.flange_a)],
-    t;
-    systems = [fixed, spring, mass, gravity, constant, damper],
-    guesses = [spring.s_rel0 => 1.0])
-```
-
-Note that we explicitly provide `s_rel0 = missing` to the spring. Parameters are only
-solved for during initialization if their value (either default, or explicitly passed
-to the `ODEProblem` constructor) is `missing`. We also need to provide a guess for the
-parameter.
-
-If a parameter is not given a value of `missing`, and does not have a default or initial
-value, the `ODEProblem` constructor will throw an error. If the parameter _does_ have a
-value of `missing`, it must be given a guess.
-
-```@example init
-prob = ODEProblem(sys, [], (0.0, 1.0))
-prob.ps[spring.s_rel0]
-```
-
-Note that the value of the parameter in the problem is zero, similar to unknowns that
-are solved for during initialization.
-
-```@example init
-integ = init(prob)
-integ.ps[spring.s_rel0]
-```
-
-The un-stretched length of the spring is now correctly calculated. The same result can be
-achieved if `s_rel0 = missing` is omitted when constructing `spring`, and instead
-`spring.s_rel0 => missing` is passed to the `ODEProblem` constructor along with values
-of other parameters.
