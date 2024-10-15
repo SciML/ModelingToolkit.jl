@@ -717,7 +717,7 @@ function parse_structural_parameters!(exprs, sps, dict, mod, body, kwargs)
     end
 end
 
-function extend_args!(a, b, dict, expr, kwargs, varexpr, has_param = false)
+function extend_args!(a, b, dict, expr, kwargs, has_param = false)
     # Whenever `b` is a function call, skip the first arg aka the function name.
     # Whenever it is a kwargs list, include it.
     start = b.head == :call ? 2 : 1
@@ -738,18 +738,18 @@ function extend_args!(a, b, dict, expr, kwargs, varexpr, has_param = false)
                 dict[:kwargs][x] = Dict(:value => nothing)
             end
             Expr(:kw, x) => begin
+                b.args[i] = Expr(:kw, x, x)
                 push!(kwargs, Expr(:kw, x, nothing))
                 dict[:kwargs][x] = Dict(:value => nothing)
             end
             Expr(:kw, x, y) => begin
                 b.args[i] = Expr(:kw, x, x)
-                push!(varexpr.args, :($x = $x === nothing ? $y : $x))
-                push!(kwargs, Expr(:kw, x, nothing))
-                dict[:kwargs][x] = Dict(:value => nothing)
+                push!(kwargs, Expr(:kw, x, y))
+                dict[:kwargs][x] = Dict(:value => y)
             end
             Expr(:parameters, x...) => begin
                 has_param = true
-                extend_args!(a, arg, dict, expr, kwargs, varexpr, has_param)
+                extend_args!(a, arg, dict, expr, kwargs, has_param)
             end
             _ => error("Could not parse $arg of component $a")
         end
@@ -758,17 +758,40 @@ end
 
 const EMPTY_DICT = Dict()
 const EMPTY_VoVoSYMBOL = Vector{Symbol}[]
+const EMPTY_VoVoVoSYMBOL = Vector{Symbol}[[]]
 
-function Base.names(model::Model)
+function _arguments(model::Model)
     vars = keys(get(model.structure, :variables, EMPTY_DICT))
     vars = union(vars, keys(get(model.structure, :parameters, EMPTY_DICT)))
-    vars = union(vars,
-        map(first, get(model.structure, :components, EMPTY_VoVoSYMBOL)))
+    vars = union(vars, first(get(model.structure, :extend, EMPTY_VoVoVoSYMBOL)))
     collect(vars)
 end
 
-function _parse_extend!(ext, a, b, dict, expr, kwargs, varexpr, vars)
-    extend_args!(a, b, dict, expr, kwargs, varexpr)
+function Base.names(model::Model)
+    collect(union(_arguments(model),
+        map(first, get(model.structure, :components, EMPTY_VoVoSYMBOL))))
+end
+
+function _parse_extend!(ext, a, b, dict, expr, kwargs, vars, additional_args)
+    extend_args!(a, b, dict, expr, kwargs)
+
+    # `additional_args` doubles as a flag to check the mode of `@extend`. It is
+    # `nothing` for explicit destructuring.
+    # The following block modifies the arguments of both base and higher systems
+    # for the implicit extend statements.
+    if additional_args !== nothing
+        b.args = [b.args[1]]
+        allvars = [additional_args.args..., vars.args...]
+        push!(b.args, Expr(:parameters))
+        for var in allvars
+            push!(b.args[end].args, var)
+            if !haskey(dict[:kwargs], var)
+                push!(dict[:kwargs], var => Dict(:value => NO_VALUE))
+                push!(kwargs, Expr(:kw, var, NO_VALUE))
+            end
+        end
+    end
+
     ext[] = a
     push!(b.args, Expr(:kw, :name, Meta.quot(a)))
     push!(expr.args, :($a = $b))
@@ -780,8 +803,6 @@ end
 
 function parse_extend!(exprs, ext, dict, mod, body, kwargs)
     expr = Expr(:block)
-    varexpr = Expr(:block)
-    push!(exprs, varexpr)
     push!(exprs, expr)
     body = deepcopy(body)
     MLStyle.@match body begin
@@ -792,7 +813,9 @@ function parse_extend!(exprs, ext, dict, mod, body, kwargs)
                     error("`@extend` destructuring only takes an tuple as LHS. Got $body")
                 end
                 a, b = b.args
-                _parse_extend!(ext, a, b, dict, expr, kwargs, varexpr, vars)
+                # This doubles as a flag to identify the mode of `@extend`
+                additional_args = nothing
+                _parse_extend!(ext, a, b, dict, expr, kwargs, vars, additional_args)
             else
                 error("When explicitly destructing in `@extend` please use the syntax: `@extend a, b = oneport = OnePort()`.")
             end
@@ -802,8 +825,11 @@ function parse_extend!(exprs, ext, dict, mod, body, kwargs)
             b = body
             if (model = getproperty(mod, b.args[1])) isa Model
                 vars = Expr(:tuple)
-                append!(vars.args, names(model))
-                _parse_extend!(ext, a, b, dict, expr, kwargs, varexpr, vars)
+                append!(vars.args, _arguments(model))
+                additional_args = Expr(:tuple)
+                append!(additional_args.args,
+                    keys(get(model.structure, :structural_parameters, EMPTY_DICT)))
+                _parse_extend!(ext, a, b, dict, expr, kwargs, vars, additional_args)
             else
                 error("Cannot infer the exact `Model` that `@extend $(body)` refers." *
                       " Please specify the names that it brings into scope by:" *
@@ -1104,7 +1130,7 @@ function parse_icon!(body::String, dict, icon, mod)
     icon_dir = get(ENV, "MTK_ICONS_DIR", joinpath(DEPOT_PATH[1], "mtk_icons"))
     dict[:icon] = icon[] = if isfile(body)
         URI("file:///" * abspath(body))
-    elseif (iconpath = joinpath(icon_dir, body); isfile(iconpath))
+    elseif (iconpath = abspath(joinpath(icon_dir, body)); isfile(iconpath))
         URI("file:///" * abspath(iconpath))
     elseif try
         Base.isvalid(URI(body))
@@ -1115,6 +1141,7 @@ function parse_icon!(body::String, dict, icon, mod)
     elseif (_body = lstrip(body); startswith(_body, r"<\?xml|<svg"))
         String(_body) # With Julia-1.10 promoting `SubString{String}` to `String` can be dropped.
     else
+        @info iconpath=joinpath(icon_dir, body) isfile(iconpath) body
         error("\n$body is not a valid icon")
     end
 end
