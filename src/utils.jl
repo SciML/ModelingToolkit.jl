@@ -492,20 +492,19 @@ recursively searches through all subsystems of `sys`, increasing the depth if it
 function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Differential)
     if has_eqs(sys)
         for eq in get_eqs(sys)
-            eq isa Equation || continue
-            eq.lhs isa Union{Symbolic, Number} || continue
-            collect_vars!(unknowns, parameters, eq.lhs, iv; depth, op)
-            collect_vars!(unknowns, parameters, eq.rhs, iv; depth, op)
+            eqtype_supports_collect_vars(eq) || continue
+            if eq isa Equation
+                eq.lhs isa Union{Symbolic, Number} || continue
+            end
+            collect_vars!(unknowns, parameters, eq, iv; depth, op)
         end
     end
     if has_parameter_dependencies(sys)
         for eq in get_parameter_dependencies(sys)
             if eq isa Pair
-                collect_vars!(unknowns, parameters, eq[1], iv; depth, op)
-                collect_vars!(unknowns, parameters, eq[2], iv; depth, op)
+                collect_vars!(unknowns, parameters, eq, iv; depth, op)
             else
-                collect_vars!(unknowns, parameters, eq.lhs, iv; depth, op)
-                collect_vars!(unknowns, parameters, eq.rhs, iv; depth, op)
+                collect_vars!(unknowns, parameters, eq, iv; depth, op)
             end
         end
     end
@@ -526,6 +525,29 @@ function collect_vars!(unknowns, parameters, expr, iv; depth = 0, op = Different
             collect_var!(unknowns, parameters, var, iv; depth)
         end
     end
+    return nothing
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Indicate whether the given equation type (Equation, Pair, etc) supports `collect_vars!`. 
+Can be dispatched by higher-level libraries to indicate support.
+"""
+eqtype_supports_collect_vars(eq) = false
+eqtype_supports_collect_vars(eq::Equation) = true
+eqtype_supports_collect_vars(eq::Pair) = true
+
+function collect_vars!(unknowns, parameters, eq::Equation, iv;
+        depth = 0, op = Differential)
+    collect_vars!(unknowns, parameters, eq.lhs, iv; depth, op)
+    collect_vars!(unknowns, parameters, eq.rhs, iv; depth, op)
+    return nothing
+end
+
+function collect_vars!(unknowns, parameters, p::Pair, iv; depth = 0, op = Differential)
+    collect_vars!(unknowns, parameters, p[1], iv; depth, op)
+    collect_vars!(unknowns, parameters, p[2], iv; depth, op)
     return nothing
 end
 

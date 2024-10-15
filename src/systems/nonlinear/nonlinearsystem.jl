@@ -166,16 +166,13 @@ function NonlinearSystem(eqs; kwargs...)
     allunknowns = OrderedSet()
     ps = OrderedSet()
     for eq in eqs
-        collect_vars!(allunknowns, ps, eq.lhs, nothing)
-        collect_vars!(allunknowns, ps, eq.rhs, nothing)
+        collect_vars!(allunknowns, ps, eq, nothing)
     end
     for eq in get(kwargs, :parameter_dependencies, Equation[])
         if eq isa Pair
-            collect_vars!(allunknowns, ps, eq[1], nothing)
-            collect_vars!(allunknowns, ps, eq[2], nothing)
+            collect_vars!(allunknowns, ps, eq, nothing)
         else
-            collect_vars!(allunknowns, ps, eq.lhs, nothing)
-            collect_vars!(allunknowns, ps, eq.rhs, nothing)
+            collect_vars!(allunknowns, ps, eq, nothing)
         end
     end
     new_ps = OrderedSet()

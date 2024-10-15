@@ -319,8 +319,7 @@ function ODESystem(eqs, iv; kwargs...)
     compressed_eqs = Equation[] # equations that need to be expanded later, like `connect(a, b)`
     for eq in eqs
         eq.lhs isa Union{Symbolic, Number} || (push!(compressed_eqs, eq); continue)
-        collect_vars!(allunknowns, ps, eq.lhs, iv)
-        collect_vars!(allunknowns, ps, eq.rhs, iv)
+        collect_vars!(allunknowns, ps, eq, iv)
         if isdiffeq(eq)
             diffvar, _ = var_from_nested_derivative(eq.lhs)
             if check_scope_depth(getmetadata(diffvar, SymScope, LocalScope()), 0)
@@ -337,11 +336,9 @@ function ODESystem(eqs, iv; kwargs...)
     end
     for eq in get(kwargs, :parameter_dependencies, Equation[])
         if eq isa Pair
-            collect_vars!(allunknowns, ps, eq[1], iv)
-            collect_vars!(allunknowns, ps, eq[2], iv)
+            collect_vars!(allunknowns, ps, eq, iv)
         else
-            collect_vars!(allunknowns, ps, eq.lhs, iv)
-            collect_vars!(allunknowns, ps, eq.rhs, iv)
+            collect_vars!(allunknowns, ps, eq, iv)
         end
     end
     for ssys in get(kwargs, :systems, ODESystem[])
