@@ -492,7 +492,7 @@ recursively searches through all subsystems of `sys`, increasing the depth if it
 function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Differential)
     if has_eqs(sys)
         for eq in get_eqs(sys)
-            eq isa Equation || continue
+            eqtype_supports_collect_vars(eq) || continue
             (eq isa Equation && eq.lhs isa Union{Symbolic, Number}) || continue
             collect_vars!(unknowns, parameters, eq, iv; depth, op)
         end
@@ -525,6 +525,16 @@ function collect_vars!(unknowns, parameters, expr, iv; depth = 0, op = Different
     end
     return nothing
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Indicate whether the given equation type (Equation, Pair, etc) supports `collect_vars!`. Can
+be dispatched by higher-level libraries to indicate support.
+"""
+eqtype_supports_collect_vars(eq) = false
+eqtype_supports_collect_vars(eq::Equation) = true
+eqtype_supports_collect_vars(eq::Pair) = true
 
 function collect_vars!(unknowns, parameters, eq::Equation, iv; 
         depth = 0, op = Differential)
