@@ -536,7 +536,7 @@ eqtype_supports_collect_vars(eq) = false
 eqtype_supports_collect_vars(eq::Equation) = true
 eqtype_supports_collect_vars(eq::Pair) = true
 
-function collect_vars!(unknowns, parameters, eq::Equation, iv; 
+function collect_vars!(unknowns, parameters, eq::Equation, iv;
         depth = 0, op = Differential)
     collect_vars!(unknowns, parameters, eq.lhs, iv; depth, op)
     collect_vars!(unknowns, parameters, eq.rhs, iv; depth, op)
