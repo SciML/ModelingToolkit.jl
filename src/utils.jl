@@ -493,7 +493,9 @@ function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Dif
     if has_eqs(sys)
         for eq in get_eqs(sys)
             eqtype_supports_collect_vars(eq) || continue
-            (eq isa Equation && eq.lhs isa Union{Symbolic, Number}) || continue
+            if eq isa Equation 
+                eq.lhs isa Union{Symbolic, Number} || continue
+            end
             collect_vars!(unknowns, parameters, eq, iv; depth, op)
         end
     end
