@@ -493,19 +493,16 @@ function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Dif
     if has_eqs(sys)
         for eq in get_eqs(sys)
             eq isa Equation || continue
-            eq.lhs isa Union{Symbolic, Number} || continue
-            collect_vars!(unknowns, parameters, eq.lhs, iv; depth, op)
-            collect_vars!(unknowns, parameters, eq.rhs, iv; depth, op)
+            (eq isa Equation && eq.lhs isa Union{Symbolic, Number}) || continue
+            collect_vars!(unknowns, parameters, eq, iv; depth, op)
         end
     end
     if has_parameter_dependencies(sys)
         for eq in get_parameter_dependencies(sys)
             if eq isa Pair
-                collect_vars!(unknowns, parameters, eq[1], iv; depth, op)
-                collect_vars!(unknowns, parameters, eq[2], iv; depth, op)
+                collect_vars!(unknowns, parameters, eq, iv; depth, op)
             else
-                collect_vars!(unknowns, parameters, eq.lhs, iv; depth, op)
-                collect_vars!(unknowns, parameters, eq.rhs, iv; depth, op)
+                collect_vars!(unknowns, parameters, eq, iv; depth, op)
             end
         end
     end
@@ -526,6 +523,19 @@ function collect_vars!(unknowns, parameters, expr, iv; depth = 0, op = Different
             collect_var!(unknowns, parameters, var, iv; depth)
         end
     end
+    return nothing
+end
+
+function collect_vars!(unknowns, parameters, eq::Equation, iv; 
+        depth = 0, op = Differential)
+    collect_vars!(unknowns, parameters, eq.lhs, iv; depth, op)
+    collect_vars!(unknowns, parameters, eq.rhs, iv; depth, op)
+    return nothing
+end
+
+function collect_vars!(unknowns, parameters, p::Pair, iv; depth = 0, op = Differential)
+    collect_vars!(unknowns, parameters, p[1], iv; depth, op)
+    collect_vars!(unknowns, parameters, p[2], iv; depth, op)
     return nothing
 end
 

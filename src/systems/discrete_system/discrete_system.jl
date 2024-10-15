@@ -175,8 +175,7 @@ function DiscreteSystem(eqs, iv; kwargs...)
     ps = OrderedSet()
     iv = value(iv)
     for eq in eqs
-        collect_vars!(allunknowns, ps, eq.lhs, iv; op = Shift)
-        collect_vars!(allunknowns, ps, eq.rhs, iv; op = Shift)
+        collect_vars!(allunknowns, ps, eq, iv; op = Shift)
         if iscall(eq.lhs) && operation(eq.lhs) isa Shift
             isequal(iv, operation(eq.lhs).t) ||
                 throw(ArgumentError("A DiscreteSystem can only have one independent variable."))
@@ -187,11 +186,9 @@ function DiscreteSystem(eqs, iv; kwargs...)
     end
     for eq in get(kwargs, :parameter_dependencies, Equation[])
         if eq isa Pair
-            collect_vars!(allunknowns, ps, eq[1], iv)
-            collect_vars!(allunknowns, ps, eq[2], iv)
+            collect_vars!(allunknowns, ps, eq, iv)
         else
-            collect_vars!(allunknowns, ps, eq.lhs, iv)
-            collect_vars!(allunknowns, ps, eq.rhs, iv)
+            collect_vars!(allunknowns, ps, eq, iv)
         end
     end
     new_ps = OrderedSet()
