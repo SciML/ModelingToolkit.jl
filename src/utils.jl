@@ -529,8 +529,8 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Indicate whether the given equation type (Equation, Pair, etc) supports `collect_vars!`. Can
-be dispatched by higher-level libraries to indicate support.
+Indicate whether the given equation type (Equation, Pair, etc) supports `collect_vars!`. 
+Can be dispatched by higher-level libraries to indicate support.
 """
 eqtype_supports_collect_vars(eq) = false
 eqtype_supports_collect_vars(eq::Equation) = true
