@@ -1,4 +1,4 @@
-# Modeling with Stochasticity
+# [Modeling with Stochasticity](@id SDE)
 
 All previous differential equations tutorials deal with deterministic `ODESystem`s.
 In this tutorial, we add randomness.
