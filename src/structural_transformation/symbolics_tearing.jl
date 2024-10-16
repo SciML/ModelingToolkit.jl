@@ -574,35 +574,35 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     # TODO: compute the dependency correctly so that we don't have to do this
     obs = [fast_substitute(observed(sys), obs_sub); subeqs]
 
-    # HACK: Substitute non-scalarized symbolic arrays of observed variables
-    # E.g. if `p[1] ~ (...)` and `p[2] ~ (...)` then substitute `p => [p[1], p[2]]` in all equations
-    # ideally, we want to support equations such as `p ~ [p[1], p[2]]` which will then be handled
-    # by the topological sorting and dependency identification pieces
-    obs_arr_subs = Dict()
+    # HACK: Add equations for array observed variables. If `p[i] ~ (...)`
+    # are equations, add an equation `p ~ [p[1], p[2], ...]`
+    # allow topsort to reorder them
 
+    handled_obs_arr = Set()
+    obs_arr_eqs = Equation[]
     for eq in obs
         lhs = eq.lhs
         iscall(lhs) || continue
         operation(lhs) === getindex || continue
         Symbolics.shape(lhs) !== Symbolics.Unknown() || continue
         arg1 = arguments(lhs)[1]
-        haskey(obs_arr_subs, arg1) && continue
-        obs_arr_subs[arg1] = [arg1[i] for i in eachindex(arg1)] # e.g. p => [p[1], p[2]]
-        index_first = eachindex(arg1)[1]
-
+        arg1 in handled_obs_arr && continue
+        # firstindex returns 1 for multidimensional array symbolics
+        firstind = first(eachindex(arg1))
+        scal = [arg1[i] for i in eachindex(arg1)]
         # respect non-1-indexed arrays
         # TODO: get rid of this hack together with the above hack, then remove OffsetArrays dependency
-        obs_arr_subs[arg1] = Origin(index_first)(obs_arr_subs[arg1])
+        # `change_origin` is required because `Origin(firstind)(scal)` makes codegen
+        # try to `create_array(OffsetArray{...}, ...)` which errors.
+        # `term(Origin(firstind), scal)` doesn't retain the `symtype` and `size`
+        # of `scal`.
+        push!(obs_arr_eqs, arg1 ~ change_origin(Origin(firstind), scal))
+        push!(handled_obs_arr, arg1)
     end
-    for i in eachindex(neweqs)
-        neweqs[i] = fast_substitute(neweqs[i], obs_arr_subs; operator = Symbolics.Operator)
-    end
-    for i in eachindex(obs)
-        obs[i] = fast_substitute(obs[i], obs_arr_subs; operator = Symbolics.Operator)
-    end
-    for i in eachindex(subeqs)
-        subeqs[i] = fast_substitute(subeqs[i], obs_arr_subs; operator = Symbolics.Operator)
-    end
+    append!(obs, obs_arr_eqs)
+    append!(subeqs, obs_arr_eqs)
+    # need to re-sort subeqs
+    subeqs = ModelingToolkit.topsort_equations(subeqs, [eq.lhs for eq in subeqs])
 
     @set! sys.eqs = neweqs
     @set! sys.observed = obs
@@ -627,6 +627,16 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     @set! state.sys = sys
     @set! sys.tearing_state = state
     return invalidate_cache!(sys)
+end
+
+function change_origin(origin, arr)
+    return origin(arr)
+end
+
+@register_array_symbolic change_origin(origin::Origin, arr::AbstractArray) begin
+    size = size(arr)
+    eltype = eltype(arr)
+    ndims = ndims(arr)
 end
 
 function tearing(state::TearingState; kwargs...)
