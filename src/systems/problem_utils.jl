@@ -333,6 +333,18 @@ function get_temporary_value(p)
 end
 
 """
+    $(TYPEDEF)
+
+A simple utility meant to be used as the `constructor` passed to `process_SciMLProblem` in
+case constructing a SciMLFunction is not required.
+"""
+struct EmptySciMLFunction end
+
+function EmptySciMLFunction(args...; kwargs...)
+    return nothing
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 Return the SciMLFunction created via calling `constructor`, the initial conditions `u0`

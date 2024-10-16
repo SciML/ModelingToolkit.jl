@@ -610,6 +610,15 @@ function collect_constants!(constants, expr::Symbolic)
     end
 end
 
+function collect_constants!(constants, expr::Union{ConstantRateJump, VariableRateJump})
+    collect_constants!(constants, expr.rate)
+    collect_constants!(constants, expr.affect!)
+end
+
+function collect_constants!(constants, ::MassActionJump)
+    return constants
+end
+
 """
 Replace symbolic constants with their literal values
 """
@@ -667,7 +676,7 @@ end
 
 function get_cmap(sys, exprs = nothing)
     #Inject substitutions for constants => values
-    cs = collect_constants([get_eqs(sys); get_observed(sys)]) #ctrls? what else?
+    cs = collect_constants([collect(get_eqs(sys)); get_observed(sys)]) #ctrls? what else?
     if !empty_substitutions(sys)
         cs = [cs; collect_constants(get_substitutions(sys).subs)]
     end
