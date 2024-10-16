@@ -233,55 +233,25 @@ function generate_function(
     generate_custom_function(sys, exprs, dvs, ps; wrap_code, kwargs...)
 end
 
-function process_DiscreteProblem(constructor, sys::DiscreteSystem, u0map, parammap;
-        linenumbers = true, parallel = SerialForm(),
-        use_union = false,
-        tofloat = !use_union,
-        eval_expression = false, eval_module = @__MODULE__,
-        kwargs...)
+function shift_u0map_forward(sys::DiscreteSystem, u0map, defs)
     iv = get_iv(sys)
-    eqs = equations(sys)
-    dvs = unknowns(sys)
-    ps = parameters(sys)
-
-    if eltype(u0map) <: Number
-        u0map = unknowns(sys) .=> vec(u0map)
-    end
-    if u0map === nothing || isempty(u0map)
-        u0map = Dict()
-    end
-
-    trueu0map = Dict()
-    for (k, v) in u0map
-        k = unwrap(k)
+    updated = AnyDict()
+    for k in collect(keys(u0map))
+        v = u0map[k]
         if !((op = operation(k)) isa Shift)
             error("Initial conditions must be for the past state of the unknowns. Instead of providing the condition for $k, provide the condition for $(Shift(iv, -1)(k)).")
         end
-        trueu0map[Shift(iv, op.steps + 1)(arguments(k)[1])] = v
+        updated[Shift(iv, op.steps + 1)(arguments(k)[1])] = v
     end
-    defs = ModelingToolkit.get_defaults(sys)
-    for var in dvs
-        if (op = operation(var)) isa Shift && !haskey(trueu0map, var)
-            root = arguments(var)[1]
-            haskey(defs, root) || error("Initial condition for $var not provided.")
-            trueu0map[var] = defs[root]
-        end
+    for var in unknowns(sys)
+        op = operation(var)
+        op isa Shift || continue
+        haskey(updated, var) && continue
+        root = first(arguments(var))
+        haskey(defs, root) || error("Initial condition for $var not provided.")
+        updated[var] = defs[root]
     end
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        u0, defs = get_u0(sys, trueu0map, parammap)
-        p = MTKParameters(sys, parammap, trueu0map)
-    else
-        u0, p, defs = get_u0_p(sys, trueu0map, parammap; tofloat, use_union)
-    end
-
-    check_eqs_u0(eqs, dvs, u0; kwargs...)
-
-    f = constructor(sys, dvs, ps, u0;
-        linenumbers = linenumbers, parallel = parallel,
-        syms = Symbol.(dvs), paramsyms = Symbol.(ps),
-        eval_expression = eval_expression, eval_module = eval_module,
-        kwargs...)
-    return f, u0, p
+    return updated
 end
 
 """
@@ -304,7 +274,9 @@ function SciMLBase.DiscreteProblem(
     eqs = equations(sys)
     iv = get_iv(sys)
 
-    f, u0, p = process_DiscreteProblem(
+    u0map = to_varmap(u0map, dvs)
+    u0map = shift_u0map_forward(sys, u0map, defaults(sys))
+    f, u0, p = process_SciMLProblem(
         DiscreteFunction, sys, u0map, parammap; eval_expression, eval_module)
     u0 = f(u0, p, tspan[1])
     DiscreteProblem(f, u0, tspan, p; kwargs...)

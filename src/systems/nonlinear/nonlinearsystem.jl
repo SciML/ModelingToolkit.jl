@@ -290,7 +290,7 @@ function SciMLBase.NonlinearFunction(sys::NonlinearSystem, args...; kwargs...)
 end
 
 function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
-        ps = parameters(sys), u0 = nothing, p = nothing;
+        ps = parameters(sys), u0 = nothing; p = nothing,
         version = nothing,
         jac = false,
         eval_expression = false,
@@ -405,36 +405,6 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
     !linenumbers ? Base.remove_linenums!(ex) : ex
 end
 
-function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, parammap;
-        version = nothing,
-        jac = false,
-        checkbounds = false, sparse = false,
-        simplify = false,
-        linenumbers = true, parallel = SerialForm(),
-        eval_expression = false,
-        eval_module = @__MODULE__,
-        use_union = false,
-        tofloat = !use_union,
-        kwargs...)
-    eqs = equations(sys)
-    dvs = unknowns(sys)
-    ps = parameters(sys)
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        u0, defs = get_u0(sys, u0map, parammap)
-        check_eqs_u0(eqs, dvs, u0; kwargs...)
-        p = MTKParameters(sys, parammap, u0map)
-    else
-        u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union)
-        check_eqs_u0(eqs, dvs, u0; kwargs...)
-    end
-
-    f = constructor(sys, dvs, ps, u0, p; jac = jac, checkbounds = checkbounds,
-        linenumbers = linenumbers, parallel = parallel, simplify = simplify,
-        sparse = sparse, eval_expression = eval_expression, eval_module = eval_module,
-        kwargs...)
-    return f, u0, p
-end
-
 """
 ```julia
 DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
@@ -458,7 +428,7 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearProblem`")
     end
-    f, u0, p = process_NonlinearProblem(NonlinearFunction{iip}, sys, u0map, parammap;
+    f, u0, p = process_SciMLProblem(NonlinearFunction{iip}, sys, u0map, parammap;
         check_length, kwargs...)
     pt = something(get_metadata(sys), StandardNonlinearProblem())
     NonlinearProblem{iip}(f, u0, p, pt; filter_kwargs(kwargs)...)
@@ -487,7 +457,7 @@ function DiffEqBase.NonlinearLeastSquaresProblem{iip}(sys::NonlinearSystem, u0ma
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearLeastSquaresProblem`")
     end
-    f, u0, p = process_NonlinearProblem(NonlinearFunction{iip}, sys, u0map, parammap;
+    f, u0, p = process_SciMLProblem(NonlinearFunction{iip}, sys, u0map, parammap;
         check_length, kwargs...)
     pt = something(get_metadata(sys), StandardNonlinearProblem())
     NonlinearLeastSquaresProblem{iip}(f, u0, p; filter_kwargs(kwargs)...)
@@ -520,7 +490,7 @@ function NonlinearProblemExpr{iip}(sys::NonlinearSystem, u0map,
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearProblemExpr`")
     end
-    f, u0, p = process_NonlinearProblem(NonlinearFunctionExpr{iip}, sys, u0map, parammap;
+    f, u0, p = process_SciMLProblem(NonlinearFunctionExpr{iip}, sys, u0map, parammap;
         check_length, kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
 
@@ -560,7 +530,7 @@ function NonlinearLeastSquaresProblemExpr{iip}(sys::NonlinearSystem, u0map,
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearProblemExpr`")
     end
-    f, u0, p = process_NonlinearProblem(NonlinearFunctionExpr{iip}, sys, u0map, parammap;
+    f, u0, p = process_SciMLProblem(NonlinearFunctionExpr{iip}, sys, u0map, parammap;
         check_length, kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
 

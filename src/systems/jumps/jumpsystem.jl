@@ -348,20 +348,8 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
     if !iscomplete(sys)
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
     end
-    dvs = unknowns(sys)
-    ps = parameters(sys)
-
-    defs = defaults(sys)
-    defs = mergedefaults(defs, parammap, ps)
-    defs = mergedefaults(defs, u0map, dvs)
-
-    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        p = MTKParameters(sys, parammap, u0map)
-    else
-        p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
-    end
-
+    _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
+        t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false, check_length = false)
     f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
 
     observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
@@ -399,16 +387,9 @@ function DiscreteProblemExpr{iip}(sys::JumpSystem, u0map, tspan::Union{Tuple, No
     if !iscomplete(sys)
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblemExpr`")
     end
-    dvs = unknowns(sys)
-    ps = parameters(sys)
-    defs = defaults(sys)
 
-    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        p = MTKParameters(sys, parammap, u0map)
-    else
-        p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
-    end
+    _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
+        t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false, check_length = false)
     # identity function to make syms works
     quote
         f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
@@ -454,19 +435,9 @@ function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothi
     if !iscomplete(sys)
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
     end
-    dvs = unknowns(sys)
-    ps = parameters(sys)
 
-    defs = defaults(sys)
-    defs = mergedefaults(defs, parammap, ps)
-    defs = mergedefaults(defs, u0map, dvs)
-
-    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        p = MTKParameters(sys, parammap, u0map)
-    else
-        p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
-    end
+    _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
+        t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false, check_length = false)
 
     observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
 

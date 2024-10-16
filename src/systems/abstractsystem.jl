@@ -2914,7 +2914,7 @@ function Base.eltype(::Type{<:TreeIterator{ModelingToolkit.AbstractSystem}})
 end
 
 function check_array_equations_unknowns(eqs, dvs)
-    if any(eq -> Symbolics.isarraysymbolic(eq.lhs), eqs)
+    if any(eq -> eq isa Equation && Symbolics.isarraysymbolic(eq.lhs), eqs)
         throw(ArgumentError("The system has array equations. Call `structural_simplify` to handle such equations or scalarize them manually."))
     end
     if any(x -> Symbolics.isarraysymbolic(x), dvs)

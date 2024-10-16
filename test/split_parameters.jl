@@ -125,7 +125,7 @@ sol = solve(prob, ImplicitEuler());
 prob = ODEProblem(
     sys, [], tspan, []; tofloat = false, use_union = true, build_initializeprob = false)
 
-@test prob.p isa Tuple{Vector{Float64}, Vector{Int64}}
+@test prob.p isa Vector{Union{Float64, Int64}}
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
 

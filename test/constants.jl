@@ -37,3 +37,16 @@ eqs = [D(x) ~ β]
 simp = structural_simplify(sys)
 
 @test isempty(MT.collect_constants(nothing))
+
+@testset "Issue#3044" begin
+    @constants h = 1
+    @parameters τ = 0.5 * h
+    @variables x(MT.t_nounits) = h
+    eqs = [MT.D_nounits(x) ~ (h - x) / τ]
+
+    @mtkbuild fol_model = ODESystem(eqs, MT.t_nounits)
+
+    prob = ODEProblem(fol_model, [], (0.0, 10.0))
+    @test prob[x] ≈ 1
+    @test prob.ps[τ] ≈ 0.5
+end

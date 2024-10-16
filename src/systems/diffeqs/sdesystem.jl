@@ -659,7 +659,7 @@ function DiffEqBase.SDEProblem{iip, specialize}(
     if !iscomplete(sys)
         error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEProblem`")
     end
-    f, u0, p = process_DEProblem(
+    f, u0, p = process_SciMLProblem(
         SDEFunction{iip, specialize}, sys, u0map, parammap; check_length,
         kwargs...)
     cbs = process_events(sys; callback, kwargs...)
@@ -745,7 +745,8 @@ function SDEProblemExpr{iip}(sys::SDESystem, u0map, tspan,
     if !iscomplete(sys)
         error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEProblemExpr`")
     end
-    f, u0, p = process_DEProblem(SDEFunctionExpr{iip}, sys, u0map, parammap; check_length,
+    f, u0, p = process_SciMLProblem(
+        SDEFunctionExpr{iip}, sys, u0map, parammap; check_length,
         kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
     sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
