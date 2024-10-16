@@ -1442,3 +1442,8 @@ end
         end
     end
 end
+
+@testset "Parameter dependencies with constant RHS" begin
+    @parameters p
+    @test_nowarn ODESystem(Equation[], t; parameter_dependencies = [p ~ 1.0], name = :a)
+end
