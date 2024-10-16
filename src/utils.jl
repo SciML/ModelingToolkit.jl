@@ -252,6 +252,7 @@ end
 
 function collect_defaults!(defs, vars)
     for v in vars
+        symbolic_type(v) == NotSymbolic() && continue
         if haskey(defs, v) || !hasdefault(unwrap(v)) || (def = getdefault(v)) === nothing
             continue
         end
@@ -262,6 +263,7 @@ end
 
 function collect_var_to_name!(vars, xs)
     for x in xs
+        symbolic_type(x) == NotSymbolic() && continue
         x = unwrap(x)
         if hasmetadata(x, Symbolics.GetindexParent)
             xarr = getmetadata(x, Symbolics.GetindexParent)

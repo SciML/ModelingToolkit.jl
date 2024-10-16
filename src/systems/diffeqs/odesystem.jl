@@ -335,11 +335,7 @@ function ODESystem(eqs, iv; kwargs...)
         end
     end
     for eq in get(kwargs, :parameter_dependencies, Equation[])
-        if eq isa Pair
-            collect_vars!(allunknowns, ps, eq, iv)
-        else
-            collect_vars!(allunknowns, ps, eq, iv)
-        end
+        collect_vars!(allunknowns, ps, eq, iv)
     end
     for ssys in get(kwargs, :systems, ODESystem[])
         collect_scoped_vars!(allunknowns, ps, ssys, iv)
