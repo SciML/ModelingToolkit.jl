@@ -45,7 +45,7 @@ end
     @variables x(t) y(t)[1:2] z(t)[1:2]
     @parameters foo(::AbstractVector)[1:2]
     _tmp_fn(x) = 2x
-    @mtkbuild sys = ODESystem([D(x) ~ z[1] + z[2], y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t)
+    @mtkbuild sys = ODESystem([D(x) ~ z[1] + z[2] + foo(z)[1], y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t)
     @test length(equations(sys)) == 1
     @test length(observed(sys)) == 6
     @test any(eq -> isequal(eq.lhs, y), observed(sys))
