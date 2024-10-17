@@ -1884,7 +1884,7 @@ function n_extra_equations(sys::AbstractSystem)
     nextras = n_outer_stream_variables + length(ceqs)
 end
 
-function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; bold = true)
+function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; hint = true, bold = true)
     limit = get(io, :limit, false) # if output should be limited,
     rows = first(displaysize(io)) ÷ 5 # then allocate ≈1/5 of display height to each list
 
@@ -1898,6 +1898,7 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; bold = t
     nsubs = length(subs)
     nrows = min(nsubs, limit ? rows : nsubs)
     nrows > 0 && printstyled(io, "\nSubsystems ($(nsubs)):"; bold)
+    nrows > 0 && hint && print(io, " see ModelingToolkit.get_systems(sys)")
     for i in 1:nrows
         sub = subs[i]
         name = String(nameof(sub))
@@ -1912,7 +1913,7 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; bold = t
         end
     end
     limited = nrows < nsubs
-    limited && print(io, "\n  ⋮") # too many variables to print
+    limited && print(io, "\n  ⋮") # too many to print 
 
     # Print equations
     eqs = equations(sys)
@@ -1922,6 +1923,7 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; bold = t
         next = n_extra_equations(sys)
         ntot = neqs + nobs + next
         ntot > 0 && printstyled(io, "\nEquations ($ntot):"; bold)
+        ntot > 0 && hint && print(io, " see equations(sys)")
         neqs > 0 && print(io, "\n  $neqs solvable")
         nobs > 0 && print(io, "\n  $nobs observed")
         next > 0 && print(io, "\n  $next extra")
@@ -1935,6 +1937,7 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; bold = t
         nvars == 0 && continue # skip
         header = titlecase(String(nameof(varfunc))) # e.g. "Unknowns"
         printstyled(io, "\n$header ($nvars):"; bold)
+        hint && print(io, " see $(nameof(varfunc))(sys)")
         nrows = min(nvars, limit ? rows : nvars)
         defs = has_defaults(sys) ? defaults(sys) : nothing
         for i in 1:nrows
@@ -1957,7 +1960,7 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; bold = t
             end
         end
         limited = nrows < nvars
-        limited && print(io, "\n  ⋮") # too many variables to print
+        limited && printstyled(io, "\n  ⋮") # too many variables to print
     end
 
     return nothing
