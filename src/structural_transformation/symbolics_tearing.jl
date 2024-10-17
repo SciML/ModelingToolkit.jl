@@ -574,39 +574,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     # TODO: compute the dependency correctly so that we don't have to do this
     obs = [fast_substitute(observed(sys), obs_sub); subeqs]
 
-    # HACK: Substitute non-scalarized symbolic arrays of observed variables
-    # E.g. if `p[1] ~ (...)` and `p[2] ~ (...)` then substitute `p => [p[1], p[2]]` in all equations
-    # ideally, we want to support equations such as `p ~ [p[1], p[2]]` which will then be handled
-    # by the topological sorting and dependency identification pieces
-    obs_arr_subs = Dict()
-
-    for eq in obs
-        lhs = eq.lhs
-        iscall(lhs) || continue
-        operation(lhs) === getindex || continue
-        Symbolics.shape(lhs) !== Symbolics.Unknown() || continue
-        arg1 = arguments(lhs)[1]
-        haskey(obs_arr_subs, arg1) && continue
-        obs_arr_subs[arg1] = [arg1[i] for i in eachindex(arg1)] # e.g. p => [p[1], p[2]]
-        index_first = eachindex(arg1)[1]
-
-        # respect non-1-indexed arrays
-        # TODO: get rid of this hack together with the above hack, then remove OffsetArrays dependency
-        obs_arr_subs[arg1] = Origin(index_first)(obs_arr_subs[arg1])
-    end
-    for i in eachindex(neweqs)
-        neweqs[i] = fast_substitute(neweqs[i], obs_arr_subs; operator = Symbolics.Operator)
-    end
-    for i in eachindex(obs)
-        obs[i] = fast_substitute(obs[i], obs_arr_subs; operator = Symbolics.Operator)
-    end
-    for i in eachindex(subeqs)
-        subeqs[i] = fast_substitute(subeqs[i], obs_arr_subs; operator = Symbolics.Operator)
-    end
-
-    @set! sys.eqs = neweqs
-    @set! sys.observed = obs
-
     unknowns = Any[v
                    for (i, v) in enumerate(fullvars)
                    if diff_to_var[i] === nothing && ispresent(i)]
@@ -616,6 +583,69 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
         end
     end
     @set! sys.unknowns = unknowns
+
+    # HACK: Add equations for array observed variables. If `p[i] ~ (...)`
+    # are equations, add an equation `p ~ [p[1], p[2], ...]`
+    # allow topsort to reorder them
+    # only add the new equation if all `p[i]` are present and the unscalarized
+    # form is used in any equation (observed or not)
+    # we first count the number of times the scalarized form of each observed
+    # variable occurs in observed equations (and unknowns if it's split).
+
+    # map of array observed variable (unscalarized) to number of its
+    # scalarized terms that appear in observed equations
+    arr_obs_occurrences = Dict()
+    # to check if array variables occur in unscalarized form anywhere
+    all_vars = Set()
+    for eq in obs
+        vars!(all_vars, eq.rhs)
+        lhs = eq.lhs
+        iscall(lhs) || continue
+        operation(lhs) === getindex || continue
+        Symbolics.shape(lhs) != Symbolics.Unknown() || continue
+        arg1 = arguments(lhs)[1]
+        cnt = get(arr_obs_occurrences, arg1, 0)
+        arr_obs_occurrences[arg1] = cnt + 1
+        continue
+    end
+    # count variables in unknowns if they are scalarized forms of variables
+    # also present as observed. e.g. if `x[1]` is an unknown and `x[2] ~ (..)`
+    # is an observed equation.
+    for sym in unknowns
+        iscall(sym) || continue
+        operation(sym) === getindex || continue
+        Symbolics.shape(sym) != Symbolics.Unknown() || continue
+        arg1 = arguments(sym)[1]
+        cnt = get(arr_obs_occurrences, arg1, 0)
+        cnt == 0 && continue
+        arr_obs_occurrences[arg1] = cnt + 1
+    end
+    for eq in neweqs
+        vars!(all_vars, eq.rhs)
+    end
+    obs_arr_eqs = Equation[]
+    for (arrvar, cnt) in arr_obs_occurrences
+        cnt == length(arrvar) || continue
+        arrvar in all_vars || continue
+        # firstindex returns 1 for multidimensional array symbolics
+        firstind = first(eachindex(arrvar))
+        scal = [arrvar[i] for i in eachindex(arrvar)]
+        # respect non-1-indexed arrays
+        # TODO: get rid of this hack together with the above hack, then remove OffsetArrays dependency
+        # `change_origin` is required because `Origin(firstind)(scal)` makes codegen
+        # try to `create_array(OffsetArray{...}, ...)` which errors.
+        # `term(Origin(firstind), scal)` doesn't retain the `symtype` and `size`
+        # of `scal`.
+        push!(obs_arr_eqs, arrvar ~ change_origin(Origin(firstind), scal))
+    end
+    append!(obs, obs_arr_eqs)
+    append!(subeqs, obs_arr_eqs)
+    # need to re-sort subeqs
+    subeqs = ModelingToolkit.topsort_equations(subeqs, [eq.lhs for eq in subeqs])
+
+    @set! sys.eqs = neweqs
+    @set! sys.observed = obs
+
     @set! sys.substitutions = Substitutions(subeqs, deps)
 
     # Only makes sense for time-dependent
@@ -627,6 +657,16 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     @set! state.sys = sys
     @set! sys.tearing_state = state
     return invalidate_cache!(sys)
+end
+
+function change_origin(origin, arr)
+    return origin(arr)
+end
+
+@register_array_symbolic change_origin(origin::Origin, arr::AbstractArray) begin
+    size = size(arr)
+    eltype = eltype(arr)
+    ndims = ndims(arr)
 end
 
 function tearing(state::TearingState; kwargs...)
