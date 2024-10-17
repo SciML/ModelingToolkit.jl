@@ -1890,6 +1890,14 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; bold = t
     # Print name
     printstyled(io, "Model $(nameof(sys))"; bold)
 
+    # Print subsystems # TODO: limit
+    subs = nameof.(ModelingToolkit.get_systems(sys))
+    nsubs = length(subs)
+    nsubs > 0 && printstyled(io, "\nSubsystems ($(nsubs)):"; bold)
+    for sub in subs
+        print(io, "\n  ", sub)
+    end
+
     # Print equations
     eqs = equations(sys)
     if eqs isa AbstractArray && eltype(eqs) <: Equation
