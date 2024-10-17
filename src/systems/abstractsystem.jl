@@ -1888,15 +1888,26 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; bold = t
     limit = get(io, :limit, false) # if output should be limited,
     rows = first(displaysize(io)) ÷ 5 # then allocate ≈1/5 of display height to each list
 
-    # Print name
-    printstyled(io, "Model $(nameof(sys))"; bold)
+    # Print name and description
+    desc = get_description(sys)
+    printstyled(io, "Model ", nameof(sys), ":"; bold)
+    !isempty(desc) && print(io, " ", desc)
 
-    # Print subsystems # TODO: limit
-    subs = nameof.(ModelingToolkit.get_systems(sys))
+    # Print subsystems
+    subs = get_systems(sys)
     nsubs = length(subs)
     nsubs > 0 && printstyled(io, "\nSubsystems ($(nsubs)):"; bold)
     for sub in subs
-        print(io, "\n  ", sub)
+        name = String(nameof(sub))
+        print(io, "\n  ", name)
+        desc = get_description(sub)
+        if !isempty(desc)
+            maxlen = displaysize(io)[2] - length(name) - 6 # remaining length of line
+            if limit && length(desc) > maxlen
+                desc = chop(desc, tail = length(desc) - maxlen) * "…" # too long
+            end
+            print(io, ": ", desc)
+        end
     end
 
     # Print equations
