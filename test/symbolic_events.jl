@@ -228,10 +228,10 @@ affect_neg = [x ~ 1]
     @test e[].affect == affect
 end
 
-@testset "MutatingFunctionalAffect constructors" begin
+@testset "ImperativeAffect constructors" begin
     fmfa(o, x, i, c) = nothing
-    m = ModelingToolkit.MutatingFunctionalAffect(fmfa)
-    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    m = ModelingToolkit.ImperativeAffect(fmfa)
+    @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
     @test m.obs == []
     @test m.obs_syms == []
@@ -239,8 +239,8 @@ end
     @test m.mod_syms == []
     @test m.ctx === nothing
 
-    m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (;))
-    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    m = ModelingToolkit.ImperativeAffect(fmfa, (;))
+    @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
     @test m.obs == []
     @test m.obs_syms == []
@@ -248,8 +248,8 @@ end
     @test m.mod_syms == []
     @test m.ctx === nothing
 
-    m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (; x))
-    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    m = ModelingToolkit.ImperativeAffect(fmfa, (; x))
+    @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
     @test isequal(m.obs, [])
     @test m.obs_syms == []
@@ -257,8 +257,8 @@ end
     @test m.mod_syms == [:x]
     @test m.ctx === nothing
 
-    m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (; y = x))
-    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    m = ModelingToolkit.ImperativeAffect(fmfa, (; y = x))
+    @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
     @test isequal(m.obs, [])
     @test m.obs_syms == []
@@ -266,8 +266,8 @@ end
     @test m.mod_syms == [:y]
     @test m.ctx === nothing
 
-    m = ModelingToolkit.MutatingFunctionalAffect(fmfa; observed = (; y = x))
-    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    m = ModelingToolkit.ImperativeAffect(fmfa; observed = (; y = x))
+    @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
     @test isequal(m.obs, [x])
     @test m.obs_syms == [:y]
@@ -275,8 +275,8 @@ end
     @test m.mod_syms == []
     @test m.ctx === nothing
 
-    m = ModelingToolkit.MutatingFunctionalAffect(fmfa; modified = (; x))
-    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    m = ModelingToolkit.ImperativeAffect(fmfa; modified = (; x))
+    @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
     @test isequal(m.obs, [])
     @test m.obs_syms == []
@@ -284,8 +284,8 @@ end
     @test m.mod_syms == [:x]
     @test m.ctx === nothing
 
-    m = ModelingToolkit.MutatingFunctionalAffect(fmfa; modified = (; y = x))
-    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    m = ModelingToolkit.ImperativeAffect(fmfa; modified = (; y = x))
+    @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
     @test isequal(m.obs, [])
     @test m.obs_syms == []
@@ -293,8 +293,8 @@ end
     @test m.mod_syms == [:y]
     @test m.ctx === nothing
 
-    m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (; x), (; x))
-    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    m = ModelingToolkit.ImperativeAffect(fmfa, (; x), (; x))
+    @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
     @test isequal(m.obs, [x])
     @test m.obs_syms == [:x]
@@ -302,8 +302,8 @@ end
     @test m.mod_syms == [:x]
     @test m.ctx === nothing
 
-    m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (; y = x), (; y = x))
-    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    m = ModelingToolkit.ImperativeAffect(fmfa, (; y = x), (; y = x))
+    @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
     @test isequal(m.obs, [x])
     @test m.obs_syms == [:y]
@@ -311,9 +311,9 @@ end
     @test m.mod_syms == [:y]
     @test m.ctx === nothing
 
-    m = ModelingToolkit.MutatingFunctionalAffect(
+    m = ModelingToolkit.ImperativeAffect(
         fmfa; modified = (; y = x), observed = (; y = x))
-    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
     @test isequal(m.obs, [x])
     @test m.obs_syms == [:y]
@@ -321,9 +321,9 @@ end
     @test m.mod_syms == [:y]
     @test m.ctx === nothing
 
-    m = ModelingToolkit.MutatingFunctionalAffect(
+    m = ModelingToolkit.ImperativeAffect(
         fmfa; modified = (; y = x), observed = (; y = x), ctx = 3)
-    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
     @test isequal(m.obs, [x])
     @test m.obs_syms == [:y]
@@ -331,8 +331,8 @@ end
     @test m.mod_syms == [:y]
     @test m.ctx === 3
 
-    m = ModelingToolkit.MutatingFunctionalAffect(fmfa, (; x), (; x), 3)
-    @test m isa ModelingToolkit.MutatingFunctionalAffect
+    m = ModelingToolkit.ImperativeAffect(fmfa, (; x), (; x), 3)
+    @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
     @test isequal(m.obs, [x])
     @test m.obs_syms == [:x]
@@ -1010,12 +1010,12 @@ end
 
     furnace_off = ModelingToolkit.SymbolicContinuousCallback(
         [temp ~ furnace_off_threshold],
-        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on)) do x, o, i, c
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, i, c
             @set! x.furnace_on = false
         end)
     furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
         [temp ~ furnace_on_threshold],
-        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on)) do x, o, i, c
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, i, c
             @set! x.furnace_on = true
         end)
     @named sys = ODESystem(
@@ -1027,12 +1027,12 @@ end
 
     furnace_off = ModelingToolkit.SymbolicContinuousCallback(
         [temp ~ furnace_off_threshold],
-        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on)) do x, o, i
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, i
             @set! x.furnace_on = false
         end)
     furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
         [temp ~ furnace_on_threshold],
-        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on)) do x, o, i
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, i
             @set! x.furnace_on = true
         end)
     @named sys = ODESystem(
@@ -1044,12 +1044,12 @@ end
 
     furnace_off = ModelingToolkit.SymbolicContinuousCallback(
         [temp ~ furnace_off_threshold],
-        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on)) do x, o
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o
             @set! x.furnace_on = false
         end)
     furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
         [temp ~ furnace_on_threshold],
-        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on)) do x, o
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o
             @set! x.furnace_on = true
         end)
     @named sys = ODESystem(
@@ -1061,12 +1061,12 @@ end
 
     furnace_off = ModelingToolkit.SymbolicContinuousCallback(
         [temp ~ furnace_off_threshold],
-        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on)) do x
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x
             @set! x.furnace_on = false
         end)
     furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
         [temp ~ furnace_on_threshold],
-        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on)) do x
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x
             @set! x.furnace_on = true
         end)
     @named sys = ODESystem(
@@ -1078,14 +1078,14 @@ end
 
     furnace_off = ModelingToolkit.SymbolicContinuousCallback(
         [temp ~ furnace_off_threshold],
-        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on)) do x
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x
             @set! x.furnace_on = false
-        end; initialize = ModelingToolkit.MutatingFunctionalAffect(modified = (; temp)) do x 
+        end; initialize = ModelingToolkit.ImperativeAffect(modified = (; temp)) do x 
             @set! x.temp = 0.2
         end)
     furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
         [temp ~ furnace_on_threshold],
-        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on)) do x, o, c, i
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, c, i
             @set! x.furnace_on = true
         end)
     @named sys = ODESystem(
@@ -1097,7 +1097,7 @@ end
     @test all(sol[temp][sol.t .!= 0.0] .<= 0.79) && all(sol[temp][sol.t .!= 0.0] .>= 0.2)
 end
 
-@testset "MutatingFunctionalAffect errors and warnings" begin
+@testset "ImperativeAffect errors and warnings" begin
     @variables temp(t)
     params = @parameters furnace_on_threshold=0.5 furnace_off_threshold=0.7 furnace_power=1.0 leakage=0.1 furnace_on::Bool=false
     eqs = [
@@ -1106,7 +1106,7 @@ end
 
     furnace_off = ModelingToolkit.SymbolicContinuousCallback(
         [temp ~ furnace_off_threshold],
-        ModelingToolkit.MutatingFunctionalAffect(
+        ModelingToolkit.ImperativeAffect(
             modified = (; furnace_on), observed = (; furnace_on)) do x, o, c, i
             @set! x.furnace_on = false
         end)
@@ -1122,7 +1122,7 @@ end
 
     furnace_off = ModelingToolkit.SymbolicContinuousCallback(
         [temp ~ furnace_off_threshold],
-        ModelingToolkit.MutatingFunctionalAffect(
+        ModelingToolkit.ImperativeAffect(
             modified = (; furnace_on, tempsq), observed = (; furnace_on)) do x, o, c, i
             @set! x.furnace_on = false
         end)
@@ -1135,7 +1135,7 @@ end
     @parameters not_actually_here
     furnace_off = ModelingToolkit.SymbolicContinuousCallback(
         [temp ~ furnace_off_threshold],
-        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on),
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on),
             observed = (; furnace_on, not_actually_here)) do x, o, c, i
             @set! x.furnace_on = false
         end)
@@ -1148,7 +1148,7 @@ end
         
     furnace_off = ModelingToolkit.SymbolicContinuousCallback(
         [temp ~ furnace_off_threshold],
-        ModelingToolkit.MutatingFunctionalAffect(modified = (; furnace_on),
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on),
             observed = (; furnace_on)) do x, o, c, i
             return (;fictional2 = false)
         end)
@@ -1181,14 +1181,14 @@ end
         end
     end
     qAevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta) ~ 0],
-        ModelingToolkit.MutatingFunctionalAffect((; qA, hA, hB, cnt), (; qB)) do x, o, i, c
+        ModelingToolkit.ImperativeAffect((; qA, hA, hB, cnt), (; qB)) do x, o, i, c
             @set! x.hA = x.qA
             @set! x.hB = o.qB
             @set! x.qA = 1
             @set! x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
             x
         end,
-        affect_neg = ModelingToolkit.MutatingFunctionalAffect(
+        affect_neg = ModelingToolkit.ImperativeAffect(
             (; qA, hA, hB, cnt), (; qB)) do x, o, c, i
             @set! x.hA = x.qA
             @set! x.hB = o.qB
@@ -1197,14 +1197,14 @@ end
             x
         end; rootfind = SciMLBase.RightRootFind)
     qBevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta - π / 2) ~ 0],
-        ModelingToolkit.MutatingFunctionalAffect((; qB, hA, hB, cnt), (; qA)) do x, o, i, c
+        ModelingToolkit.ImperativeAffect((; qB, hA, hB, cnt), (; qA)) do x, o, i, c
             @set! x.hA = o.qA
             @set! x.hB = x.qB
             @set! x.qB = 1
             @set! x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
             x
         end,
-        affect_neg = ModelingToolkit.MutatingFunctionalAffect(
+        affect_neg = ModelingToolkit.ImperativeAffect(
             (; qB, hA, hB, cnt), (; qA)) do x, o, c, i
             @set! x.hA = o.qA
             @set! x.hB = x.qB

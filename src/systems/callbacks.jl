@@ -72,9 +72,9 @@ function namespace_affect(affect::FunctionalAffect, s)
 end
 
 """
-    MutatingFunctionalAffect(f::Function; modified::NamedTuple, observed::NamedTuple, ctx)
+    ImperativeAffect(f::Function; modified::NamedTuple, observed::NamedTuple, ctx)
 
-`MutatingFunctionalAffect` is a helper for writing affect functions that will compute observed values and
+`ImperativeAffect` is a helper for writing affect functions that will compute observed values and
 ensure that modified values are correctly written back into the system. The affect function `f` needs to have
 one of four signatures:
 * `f(modified::NamedTuple)::NamedTuple` if the function only writes values (unknowns or parameters) to the system,
@@ -93,7 +93,7 @@ then the NamedTuple `(;x=2)` will be passed as `observed` to the affect function
 
 The NamedTuple returned from `f` includes the values to be written back to the system after `f` returns. For example, if we want to update the value of `x` to be the result of `x + y` we could write
 
-    MutatingFunctionalAffect(observed=(; x_plus_y = x + y), modified=(; x)) do m, o
+    ImperativeAffect(observed=(; x_plus_y = x + y), modified=(; x)) do m, o
         @set! m.x = o.x_plus_y
     end
 
@@ -101,7 +101,7 @@ Where we use Setfield to copy the tuple `m` with a new value for `x`, then retur
 `modified`; a runtime error will be produced if a value is written that does not appear in `modified`. The user can dynamically decide not to write a value back by not including it
 in the returned tuple, in which case the associated field will not be updated.
 """
-@kwdef struct MutatingFunctionalAffect
+@kwdef struct ImperativeAffect
     f::Any
     obs::Vector
     obs_syms::Vector{Symbol}
@@ -111,50 +111,50 @@ in the returned tuple, in which case the associated field will not be updated.
     skip_checks::Bool
 end
 
-function MutatingFunctionalAffect(f::Function;
+function ImperativeAffect(f::Function;
         observed::NamedTuple = NamedTuple{()}(()),
         modified::NamedTuple = NamedTuple{()}(()),
         ctx = nothing,
         skip_checks = false)
-    MutatingFunctionalAffect(f, 
+    ImperativeAffect(f, 
         collect(values(observed)), collect(keys(observed)),
         collect(values(modified)), collect(keys(modified)), 
         ctx, skip_checks)
 end
-function MutatingFunctionalAffect(f::Function, modified::NamedTuple;
+function ImperativeAffect(f::Function, modified::NamedTuple;
         observed::NamedTuple = NamedTuple{()}(()), ctx = nothing, skip_checks=false)
-    MutatingFunctionalAffect(f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
+    ImperativeAffect(f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
 end
-function MutatingFunctionalAffect(
+function ImperativeAffect(
         f::Function, modified::NamedTuple, observed::NamedTuple; ctx = nothing, skip_checks=false)
-    MutatingFunctionalAffect(f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
+    ImperativeAffect(f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
 end
-function MutatingFunctionalAffect(
+function ImperativeAffect(
         f::Function, modified::NamedTuple, observed::NamedTuple, ctx; skip_checks=false)
-    MutatingFunctionalAffect(f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
+    ImperativeAffect(f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
 end
 
-function Base.show(io::IO, mfa::MutatingFunctionalAffect) 
+function Base.show(io::IO, mfa::ImperativeAffect) 
     obs_vals = join(map((ob,nm) -> "$ob => $nm", mfa.obs, mfa.obs_syms), ", ")
     mod_vals = join(map((md,nm) -> "$md => $nm", mfa.modified, mfa.mod_syms), ", ")
     affect = mfa.f
-    print(io, "MutatingFunctionalAffect(observed: [$obs_vals], modified: [$mod_vals], affect:$affect)")
+    print(io, "ImperativeAffect(observed: [$obs_vals], modified: [$mod_vals], affect:$affect)")
 end
-func(f::MutatingFunctionalAffect) = f.f
-context(a::MutatingFunctionalAffect) = a.ctx
-observed(a::MutatingFunctionalAffect) = a.obs
-observed_syms(a::MutatingFunctionalAffect) = a.obs_syms
-discretes(a::MutatingFunctionalAffect) = filter(ModelingToolkit.isparameter, a.modified)
-modified(a::MutatingFunctionalAffect) = a.modified
-modified_syms(a::MutatingFunctionalAffect) = a.mod_syms
+func(f::ImperativeAffect) = f.f
+context(a::ImperativeAffect) = a.ctx
+observed(a::ImperativeAffect) = a.obs
+observed_syms(a::ImperativeAffect) = a.obs_syms
+discretes(a::ImperativeAffect) = filter(ModelingToolkit.isparameter, a.modified)
+modified(a::ImperativeAffect) = a.modified
+modified_syms(a::ImperativeAffect) = a.mod_syms
 
-function Base.:(==)(a1::MutatingFunctionalAffect, a2::MutatingFunctionalAffect)
+function Base.:(==)(a1::ImperativeAffect, a2::ImperativeAffect)
     isequal(a1.f, a2.f) && isequal(a1.obs, a2.obs) && isequal(a1.modified, a2.modified) &&
         isequal(a1.obs_syms, a2.obs_syms) && isequal(a1.mod_syms, a2.mod_syms) &&
         isequal(a1.ctx, a2.ctx)
 end
 
-function Base.hash(a::MutatingFunctionalAffect, s::UInt)
+function Base.hash(a::ImperativeAffect, s::UInt)
     s = hash(a.f, s)
     s = hash(a.obs, s)
     s = hash(a.obs_syms, s)
@@ -163,8 +163,8 @@ function Base.hash(a::MutatingFunctionalAffect, s::UInt)
     hash(a.ctx, s)
 end
 
-function namespace_affect(affect::MutatingFunctionalAffect, s)
-    MutatingFunctionalAffect(func(affect),
+function namespace_affect(affect::ImperativeAffect, s)
+    ImperativeAffect(func(affect),
         namespace_expr.(observed(affect), (s,)),
         observed_syms(affect),
         renamespace.((s,), modified(affect)),
@@ -174,7 +174,7 @@ function namespace_affect(affect::MutatingFunctionalAffect, s)
 end
 
 function has_functional_affect(cb)
-    (affects(cb) isa FunctionalAffect || affects(cb) isa MutatingFunctionalAffect)
+    (affects(cb) isa FunctionalAffect || affects(cb) isa ImperativeAffect)
 end
 
 #################################### continuous events #####################################
@@ -219,7 +219,7 @@ Affects (i.e. `affect` and `affect_neg`) can be specified as either:
     + `read_parameters` is a vector of the parameters that are *used* by `f!`. Their indices are passed to `f` in `p` similarly to the indices of `unknowns` passed in `u`.
     + `modified_parameters` is a vector of the parameters that are *modified* by `f!`. Note that a parameter will not appear in `p` if it only appears in `modified_parameters`; it must appear in both `parameters` and `modified_parameters` if it is used in the affect definition.
     + `ctx` is a user-defined context object passed to `f!` when invoked. This value is aliased for each problem.
-* A [`MutatingFunctionalAffect`](@ref); refer to its documentation for details.
+* A [`ImperativeAffect`](@ref); refer to its documentation for details.
 
 Callbacks that impact a DAE are applied, then the DAE is reinitialized using `reinitializealg` (which defaults to `SciMLBase.CheckInit`).
 This reinitialization algorithm ensures that the DAE is satisfied after the callback runs. The default value of `CheckInit` will simply validate
@@ -228,10 +228,10 @@ initialization.
 """
 struct SymbolicContinuousCallback
     eqs::Vector{Equation}
-    initialize::Union{Vector{Equation}, FunctionalAffect, MutatingFunctionalAffect}
-    finalize::Union{Vector{Equation}, FunctionalAffect, MutatingFunctionalAffect}
-    affect::Union{Vector{Equation}, FunctionalAffect, MutatingFunctionalAffect}
-    affect_neg::Union{Vector{Equation}, FunctionalAffect, MutatingFunctionalAffect, Nothing}
+    initialize::Union{Vector{Equation}, FunctionalAffect, ImperativeAffect}
+    finalize::Union{Vector{Equation}, FunctionalAffect, ImperativeAffect}
+    affect::Union{Vector{Equation}, FunctionalAffect, ImperativeAffect}
+    affect_neg::Union{Vector{Equation}, FunctionalAffect, ImperativeAffect, Nothing}
     rootfind::SciMLBase.RootfindOpt
     reinitializealg::SciMLBase.DAEInitializationAlgorithm
     function SymbolicContinuousCallback(; 
@@ -390,7 +390,7 @@ reinitialization_algs(cbs::Vector{SymbolicContinuousCallback}) =
 
 namespace_affects(af::Vector, s) = Equation[namespace_affect(a, s) for a in af]
 namespace_affects(af::FunctionalAffect, s) = namespace_affect(af, s)
-namespace_affects(af::MutatingFunctionalAffect, s) = namespace_affect(af, s)
+namespace_affects(af::ImperativeAffect, s) = namespace_affect(af, s)
 namespace_affects(::Nothing, s) = nothing
 
 function namespace_callback(cb::SymbolicContinuousCallback, s)::SymbolicContinuousCallback
@@ -460,7 +460,7 @@ scalarize_affects(affects) = scalarize(affects)
 scalarize_affects(affects::Tuple) = FunctionalAffect(affects...)
 scalarize_affects(affects::NamedTuple) = FunctionalAffect(; affects...)
 scalarize_affects(affects::FunctionalAffect) = affects
-scalarize_affects(affects::MutatingFunctionalAffect) = affects
+scalarize_affects(affects::ImperativeAffect) = affects
 
 SymbolicDiscreteCallback(p::Pair) = SymbolicDiscreteCallback(p[1], p[2])
 SymbolicDiscreteCallback(cb::SymbolicDiscreteCallback) = cb # passthrough
@@ -468,7 +468,7 @@ SymbolicDiscreteCallback(cb::SymbolicDiscreteCallback) = cb # passthrough
 function Base.show(io::IO, db::SymbolicDiscreteCallback)
     println(io, "condition: ", db.condition)
     println(io, "affects:")
-    if db.affects isa FunctionalAffect || db.affects isa MutatingFunctionalAffect
+    if db.affects isa FunctionalAffect || db.affects isa ImperativeAffect
         # TODO
         println(io, " ", db.affects)
     else
@@ -1011,7 +1011,7 @@ function check_assignable(sys, sym)
     end
 end
 
-function compile_user_affect(affect::MutatingFunctionalAffect, cb, sys, dvs, ps; kwargs...)
+function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs...)
     #=
     Implementation sketch:
         generate observed function (oop), should save to a component array under obs_syms
@@ -1113,7 +1113,7 @@ function compile_user_affect(affect::MutatingFunctionalAffect, cb, sys, dvs, ps;
             elseif applicable(user_affect, upd_component_array)
                 user_affect(upd_component_array)
             else
-                @error "User affect function $user_affect needs to implement one of the supported MutatingFunctionalAffect callback forms; see the MutatingFunctionalAffect docstring for more details"
+                @error "User affect function $user_affect needs to implement one of the supported ImperativeAffect callback forms; see the ImperativeAffect docstring for more details"
                 user_affect(upd_component_array, obs_component_array, integ, ctx) # this WILL error but it'll give a more sensible message
             end
 
@@ -1127,7 +1127,7 @@ function compile_user_affect(affect::MutatingFunctionalAffect, cb, sys, dvs, ps;
     end
 end
 
-function compile_affect(affect::Union{FunctionalAffect, MutatingFunctionalAffect}, cb, sys, dvs, ps; kwargs...)
+function compile_affect(affect::Union{FunctionalAffect, ImperativeAffect}, cb, sys, dvs, ps; kwargs...)
     compile_user_affect(affect, cb, sys, dvs, ps; kwargs...)
 end
 
