@@ -120,21 +120,9 @@ function MTK.HomotopyContinuationProblem(
         end
     end
 
-    nlfn = NonlinearFunction(sys; jac = true, eval_expression, eval_module)
+    nlfn, u0, p = MTK.process_SciMLProblem(NonlinearFunction{true}, sys, u0map, parammap; jac = true, eval_expression, eval_module)
+
     hvars = symbolics_to_hc.(dvs)
-
-    u0map = MTK.todict(u0map)
-    parammap = MTK.todict(parammap)
-
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        u0, defs = get_u0(sys, u0map, parammap)
-        check_eqs_u0(eqs, dvs, u0; kwargs...)
-        p = MTKParameters(sys, parammap, u0map)
-    else
-        u0, p, defs = get_u0_p(sys, u0map, parammap)
-        check_eqs_u0(eqs, dvs, u0; kwargs...)
-    end
-
     mtkhsys = MTKHomotopySystem(nlfn.f, p, nlfn.jac, hvars, length(eqs))
 
     obsfn = MTK.ObservedFunctionCache(sys; eval_expression, eval_module)
