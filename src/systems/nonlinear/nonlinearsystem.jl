@@ -566,15 +566,37 @@ function Base.:(==)(sys1::NonlinearSystem, sys2::NonlinearSystem)
         all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
 end
 
-struct HomotopyContinuationProblem{uType, H, O} <: SciMLBase.AbstractNonlinearProblem{uType, true}
+"""
+$(TYPEDEF)
+
+A type of Nonlinear problem which specializes on polynomial systems and uses
+HomotopyContinuation.jl to solve the system. Requires importing HomotopyContinuation.jl to
+create and solve.
+"""
+struct HomotopyContinuationProblem{uType, H, O} <:
+       SciMLBase.AbstractNonlinearProblem{uType, true}
+    """
+    The initial values of states in the system. If there are multiple real roots of
+    the system, the one closest to this point is returned.
+    """
     u0::uType
+    """
+    A subtype of `HomotopyContinuation.AbstractSystem` to solve. Also contains the
+    parameter object.
+    """
     homotopy_continuation_system::H
+    """
+    The `NonlinearSystem` used to create this problem. Used for symbolic indexing.
+    """
     sys::NonlinearSystem
+    """
+    A function which generates and returns observed expressions for the given system.
+    """
     obsfn::O
 end
 
-function HomotopyContinuationProblem(args...; kwargs...)
-    error("Requires HomotopyContinuationExt")
+function HomotopyContinuationProblem(::AbstractSystem, _u0, _p; kwargs...)
+    error("HomotopyContinuation.jl is required to create and solve `HomotopyContinuationProblem`s. Please run `Pkg.add(\"HomotopyContinuation\")` to continue.")
 end
 
 SymbolicIndexingInterface.symbolic_container(p::HomotopyContinuationProblem) = p.sys
