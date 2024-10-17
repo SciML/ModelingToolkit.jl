@@ -1912,7 +1912,7 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; bold = t
         end
     end
     limited = nrows < nsubs
-    limited && print(io, "\n  ⋮") # too many variables to print
+    limited && print(io, "\n  ⋮\n  see ModelingToolkit.get_systems(sys) for all") # too many variables to print # TODO: should export e.g. systems(sys) for consistency
 
     # Print equations
     eqs = equations(sys)
@@ -1922,9 +1922,9 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; bold = t
         next = n_extra_equations(sys)
         ntot = neqs + nobs + next
         ntot > 0 && printstyled(io, "\nEquations ($ntot):"; bold)
-        neqs > 0 && printstyled(io, "\n  $neqs solvable")
-        nobs > 0 && printstyled(io, "\n  $nobs observed")
-        next > 0 && printstyled(io, "\n  $next extra")
+        neqs > 0 && printstyled(io, "\n  $neqs solvable … see equations(sys) for all")
+        nobs > 0 && printstyled(io, "\n  $nobs observed … see observed(sys) for all")
+        next > 0 && printstyled(io, "\n  $next extra") # TODO: what are these equations?
         #Base.print_matrix(io, eqs) # usually too long and not useful to print all equations
     end
 
@@ -1957,7 +1957,7 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; bold = t
             end
         end
         limited = nrows < nvars
-        limited && print(io, "\n  ⋮") # too many variables to print
+        limited && printstyled(io, "\n  ⋮\n  see $(nameof(varfunc))(sys) for all") # too many variables to print
     end
 
     return nothing
