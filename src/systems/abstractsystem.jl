@@ -1896,8 +1896,10 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; bold = t
     # Print subsystems
     subs = get_systems(sys)
     nsubs = length(subs)
-    nsubs > 0 && printstyled(io, "\nSubsystems ($(nsubs)):"; bold)
-    for sub in subs
+    nrows = min(nsubs, limit ? rows : nsubs)
+    nrows > 0 && printstyled(io, "\nSubsystems ($(nsubs)):"; bold)
+    for i in 1:nrows
+        sub = subs[i]
         name = String(nameof(sub))
         print(io, "\n  ", name)
         desc = get_description(sub)
@@ -1909,6 +1911,8 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; bold = t
             print(io, ": ", desc)
         end
     end
+    limited = nrows < nsubs
+    limited && print(io, "\n  ⋮") # too many variables to print
 
     # Print equations
     eqs = equations(sys)
