@@ -153,7 +153,7 @@ R_val = 20u"Ω"
 res__R = 100u"Ω"
 @mtkbuild rc = RC(; C_val, R_val, resistor.R = res__R)
 prob = ODEProblem(rc, [], (0, 1e9))
-sol = solve(prob, Rodas5P())
+sol = solve(prob)
 defs = ModelingToolkit.defaults(rc)
 @test sol[rc.capacitor.v, end] ≈ defs[rc.constant.k]
 resistor = getproperty(rc, :resistor; namespace = false)
@@ -459,9 +459,9 @@ end
     @test A.structure[:parameters] == Dict(:p => Dict(:type => Real))
     @test A.structure[:extend] == [[:e], :extended_e, :E]
     @test A.structure[:equations] == ["e ~ 0"]
-    @test A.structure[:kwargs] ==
-          Dict{Symbol, Dict}(:p => Dict(:value => nothing, :type => Real),
-        :v => Dict(:value => nothing, :type => Real))
+    @test A.structure[:kwargs] == Dict{Symbol, Dict}(
+        :p => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real),
+        :v => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real))
     @test A.structure[:components] == [[:cc, :C]]
 end
 
@@ -909,4 +909,26 @@ end
             end
         end),
         false)
+end
+
+@mtkmodel BaseSys begin
+    @parameters begin
+        p1
+        p2
+    end
+    @variables begin
+        v1(t)
+    end
+end
+
+@testset "Arguments of base system" begin
+    @mtkmodel MainSys begin
+        @extend BaseSys(p1 = 1)
+    end
+
+    @test names(MainSys) == [:p2, :p1, :v1]
+    @named main_sys = MainSys(p1 = 11, p2 = 12, v1 = 13)
+    @test getdefault(main_sys.p1) == 11
+    @test getdefault(main_sys.p2) == 12
+    @test getdefault(main_sys.v1) == 13
 end
