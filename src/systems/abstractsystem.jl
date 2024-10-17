@@ -1893,11 +1893,15 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; bold = t
     # Print equations
     eqs = equations(sys)
     neqs = count(eq -> !(eq.lhs isa Connection), eqs)
+    nobs = length(observed(sys))
     next = n_extra_equations(sys)
-    ntot = neqs + next
+    nini = has_initialization_eqs(sys) ? length(initialization_equations(sys)) : 0
+    ntot = neqs + nobs + next + nini
     ntot > 0 && printstyled(io, "\nEquations ($ntot):"; bold)
-    neqs > 0 && printstyled(io, "\n  $neqs normal")
+    neqs > 0 && printstyled(io, "\n  $neqs solvable")
+    nobs > 0 && printstyled(io, "\n  $nobs observed")
     next > 0 && printstyled(io, "\n  $next extra")
+    nini > 0 && printstyled(io, "\n  $nini initialization")
     #Base.print_matrix(io, eqs) # usually too long and seldom useful to print
 
     # Print variables
