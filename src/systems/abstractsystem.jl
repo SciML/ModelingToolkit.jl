@@ -1883,84 +1883,57 @@ function n_extra_equations(sys::AbstractSystem)
     nextras = n_outer_stream_variables + length(ceqs)
 end
 
-function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem)
+function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; bold = true)
+    limit = get(io, :limit, false) # if output should be limited,
+    rows = first(displaysize(io)) ÷ 5 # then allocate ≈1/5 of display height to each list
+
+    # Print name
+    printstyled(io, "Model $(nameof(sys))"; bold)
+
+    # Print equations
     eqs = equations(sys)
-    vars = unknowns(sys)
-    nvars = length(vars)
     if eqs isa AbstractArray && eltype(eqs) <: Equation
         neqs = count(eq -> !(eq.lhs isa Connection), eqs)
-        Base.printstyled(io, "Model $(nameof(sys)) with $neqs "; bold = true)
-        nextras = n_extra_equations(sys)
-        if nextras > 0
-            Base.printstyled(io, "("; bold = true)
-            Base.printstyled(io, neqs + nextras; bold = true, color = :magenta)
-            Base.printstyled(io, ") "; bold = true)
-        end
-        Base.printstyled(io, "equations\n"; bold = true)
-    else
-        Base.printstyled(io, "Model $(nameof(sys))\n"; bold = true)
+        next = n_extra_equations(sys)
+        ntot = neqs + next
+        ntot > 0 && printstyled(io, "\nEquations ($ntot):"; bold)
+        neqs > 0 && print(io, "\n  $neqs solvable … see equations(sys) for all")
+        next > 0 && print(io, "\n  $next extra")
+        #Base.print_matrix(io, eqs) # usually too long and not useful to print all equations
     end
-    # The reduced equations are usually very long. It's not that useful to print
-    # them.
-    #Base.print_matrix(io, eqs)
-    #println(io)
 
-    rows = first(displaysize(io)) ÷ 5
-    limit = get(io, :limit, false)
-
-    Base.printstyled(io, "Unknowns ($nvars):"; bold = true)
-    nrows = min(nvars, limit ? rows : nvars)
-    limited = nrows < length(vars)
-    defs = has_defaults(sys) ? defaults(sys) : nothing
-    for i in 1:nrows
-        s = vars[i]
-        print(io, "\n  ", s)
-
-        if defs !== nothing
-            val = get(defs, s, nothing)
-            if val !== nothing
-                print(io, " [defaults to ")
-                show(
-                    IOContext(io, :compact => true, :limit => true,
-                        :displaysize => (1, displaysize(io)[2])),
-                    val)
-                print(io, "]")
+    # Print variables
+    for varfunc in [unknowns, parameters]
+        vars = varfunc(sys)
+        nvars = length(vars)
+        nvars == 0 && continue # skip
+        header = titlecase(String(nameof(varfunc))) # e.g. "Unknowns"
+        printstyled(io, "\n$header ($nvars):"; bold)
+        nrows = min(nvars, limit ? rows : nvars)
+        defs = has_defaults(sys) ? defaults(sys) : nothing
+        for i in 1:nrows
+            s = vars[i]
+            print(io, "\n  ", s)
+            if !isnothing(defs)
+                val = get(defs, s, nothing)
+                if !isnothing(val)
+                    print(io, " [defaults to ")
+                    show(
+                        IOContext(io, :compact => true, :limit => true,
+                            :displaysize => (1, displaysize(io)[2])),
+                        val)
+                    print(io, "]")
+                end
+                desc = getdescription(s)
             end
-            description = getdescription(s)
-            if description !== nothing && description != ""
-                print(io, ": ", description)
+            if !isnothing(desc) && desc != ""
+                print(io, ": ", desc)
             end
         end
+        limited = nrows < nvars
+        limited && print(io, "\n  ⋮") # too many variables to print
     end
-    limited && print(io, "\n⋮")
-    println(io)
 
-    vars = parameters(sys)
-    nvars = length(vars)
-    Base.printstyled(io, "Parameters ($nvars):"; bold = true)
-    nrows = min(nvars, limit ? rows : nvars)
-    limited = nrows < length(vars)
-    for i in 1:nrows
-        s = vars[i]
-        print(io, "\n  ", s)
-
-        if defs !== nothing
-            val = get(defs, s, nothing)
-            if val !== nothing
-                print(io, " [defaults to ")
-                show(
-                    IOContext(io, :compact => true, :limit => true,
-                        :displaysize => (1, displaysize(io)[2])),
-                    val)
-                print(io, "]")
-            end
-            description = getdescription(s)
-            if description !== nothing && description != ""
-                print(io, ": ", description)
-            end
-        end
-    end
-    limited && print(io, "\n⋮")
     return nothing
 end
 
