@@ -986,6 +986,7 @@ for prop in [:eqs
              :ps
              :tspan
              :name
+             :description
              :var_to_name
              :ctrls
              :defaults

@@ -45,6 +45,10 @@ struct ConstraintsSystem <: AbstractTimeIndependentSystem
     """
     name::Symbol
     """
+    A description of the system.
+    """
+    description::String
+    """
     The internal systems. These are required to have unique names.
     """
     systems::Vector{ConstraintsSystem}
@@ -79,7 +83,7 @@ struct ConstraintsSystem <: AbstractTimeIndependentSystem
     index_cache::Union{Nothing, IndexCache}
 
     function ConstraintsSystem(tag, constraints, unknowns, ps, var_to_name, observed, jac,
-            name,
+            name, description,
             systems,
             defaults, connector_type, metadata = nothing,
             tearing_state = nothing, substitutions = nothing,
@@ -89,7 +93,7 @@ struct ConstraintsSystem <: AbstractTimeIndependentSystem
             u = __get_unit_type(unknowns, ps)
             check_units(u, constraints)
         end
-        new(tag, constraints, unknowns, ps, var_to_name, observed, jac, name, systems,
+        new(tag, constraints, unknowns, ps, var_to_name, observed, jac, name, description, systems,
             defaults,
             connector_type, metadata, tearing_state, substitutions, complete, index_cache)
     end
@@ -100,6 +104,7 @@ equations(sys::ConstraintsSystem) = constraints(sys) # needed for Base.show
 function ConstraintsSystem(constraints, unknowns, ps;
         observed = [],
         name = nothing,
+        description = "",
         default_u0 = Dict(),
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
@@ -142,7 +147,7 @@ function ConstraintsSystem(constraints, unknowns, ps;
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
     ConstraintsSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-        cstr, unknowns, ps, var_to_name, observed, jac, name, systems,
+        cstr, unknowns, ps, var_to_name, observed, jac, name, description, systems,
         defaults,
         connector_type, metadata, checks = checks)
 end

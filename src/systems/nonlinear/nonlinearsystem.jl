@@ -44,6 +44,10 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     """
     name::Symbol
     """
+    A description of the system.
+    """
+    description::String
+    """
     The internal systems. These are required to have unique names.
     """
     systems::Vector{NonlinearSystem}
@@ -91,7 +95,7 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     parent::Any
     isscheduled::Bool
 
-    function NonlinearSystem(tag, eqs, unknowns, ps, var_to_name, observed, jac, name,
+    function NonlinearSystem(tag, eqs, unknowns, ps, var_to_name, observed, jac, name, description,
             systems,
             defaults, connector_type, parameter_dependencies = Equation[], metadata = nothing,
             gui_metadata = nothing,
@@ -102,7 +106,7 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
             u = __get_unit_type(unknowns, ps)
             check_units(u, eqs)
         end
-        new(tag, eqs, unknowns, ps, var_to_name, observed, jac, name, systems, defaults,
+        new(tag, eqs, unknowns, ps, var_to_name, observed, jac, name, description, systems, defaults,
             connector_type, parameter_dependencies, metadata, gui_metadata, tearing_state,
             substitutions, complete, index_cache, parent, isscheduled)
     end
@@ -111,6 +115,7 @@ end
 function NonlinearSystem(eqs, unknowns, ps;
         observed = [],
         name = nothing,
+        description = "",
         default_u0 = Dict(),
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
@@ -157,7 +162,7 @@ function NonlinearSystem(eqs, unknowns, ps;
     parameter_dependencies, ps = process_parameter_dependencies(
         parameter_dependencies, ps)
     NonlinearSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-        eqs, unknowns, ps, var_to_name, observed, jac, name, systems, defaults,
+        eqs, unknowns, ps, var_to_name, observed, jac, name, description, systems, defaults,
         connector_type, parameter_dependencies, metadata, gui_metadata, checks = checks)
 end
 
@@ -554,6 +559,7 @@ function flatten(sys::NonlinearSystem, noeqs = false)
             observed = observed(sys),
             defaults = defaults(sys),
             name = nameof(sys),
+            description = get_description(sys),
             checks = false)
     end
 end

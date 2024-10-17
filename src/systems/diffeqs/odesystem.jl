@@ -79,6 +79,10 @@ struct ODESystem <: AbstractODESystem
     """
     name::Symbol
     """
+    A description of the system.
+    """
+    description::String
+    """
     The internal systems. These are required to have unique names.
     """
     systems::Vector{ODESystem}
@@ -178,7 +182,7 @@ struct ODESystem <: AbstractODESystem
     parent::Any
 
     function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
-            jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses,
+            jac, ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses,
             torn_matching, initializesystem, initialization_eqs, schedule,
             connector_type, preface, cevents,
             devents, parameter_dependencies,
@@ -199,7 +203,7 @@ struct ODESystem <: AbstractODESystem
             check_units(u, deqs)
         end
         new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
-            ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses, torn_matching,
+            ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses, torn_matching,
             initializesystem, initialization_eqs, schedule, connector_type, preface,
             cevents, devents, parameter_dependencies, metadata,
             gui_metadata, is_dde, tearing_state, substitutions, complete, index_cache,
@@ -213,6 +217,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         systems = ODESystem[],
         tspan = nothing,
         name = nothing,
+        description = "",
         default_u0 = Dict(),
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
@@ -290,7 +295,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     end
     ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
-        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses, nothing, initializesystem,
+        ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses, nothing, initializesystem,
         initialization_eqs, schedule, connector_type, preface, cont_callbacks,
         disc_callbacks, parameter_dependencies,
         metadata, gui_metadata, is_dde, checks = checks)
