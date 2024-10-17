@@ -1912,7 +1912,7 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; bold = t
         end
     end
     limited = nrows < nsubs
-    limited && print(io, "\n  ⋮") # too many variables to print
+    limited && print(io, "\n  ⋮\n  see ModelingToolkit.get_systems(sys) for all") # too many variables to print # TODO: should export e.g. systems(sys) for consistency
 
     # Print equations
     eqs = equations(sys)
@@ -1922,10 +1922,10 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; bold = t
     nini = has_initialization_eqs(sys) ? length(initialization_equations(sys)) : 0
     ntot = neqs + nobs + next + nini
     ntot > 0 && printstyled(io, "\nEquations ($ntot):"; bold)
-    neqs > 0 && printstyled(io, "\n  $neqs solvable")
-    nobs > 0 && printstyled(io, "\n  $nobs observed")
-    next > 0 && printstyled(io, "\n  $next extra")
-    nini > 0 && printstyled(io, "\n  $nini initialization")
+    neqs > 0 && printstyled(io, "\n  $neqs solvable … see equations(sys) for all")
+    nobs > 0 && printstyled(io, "\n  $nobs observed … see observed(sys) for all")
+    next > 0 && printstyled(io, "\n  $next extra") # TODO: what are these equations?
+    nini > 0 && printstyled(io, "\n  $nini initialization … see initialization_equations(sys) for all")
     #Base.print_matrix(io, eqs) # usually too long and seldom useful to print
 
     # Print variables
@@ -1957,7 +1957,7 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; bold = t
             end
         end
         limited = nrows < nvars
-        limited && print(io, "\n  ⋮") # too many variables to print
+        limited && printstyled(io, "\n  ⋮\n  see $(nameof(varfunc))(sys) for all") # too many variables to print
     end
 
     return nothing
