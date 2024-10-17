@@ -574,39 +574,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     # TODO: compute the dependency correctly so that we don't have to do this
     obs = [fast_substitute(observed(sys), obs_sub); subeqs]
 
-    # HACK: Add equations for array observed variables. If `p[i] ~ (...)`
-    # are equations, add an equation `p ~ [p[1], p[2], ...]`
-    # allow topsort to reorder them
-
-    handled_obs_arr = Set()
-    obs_arr_eqs = Equation[]
-    for eq in obs
-        lhs = eq.lhs
-        iscall(lhs) || continue
-        operation(lhs) === getindex || continue
-        Symbolics.shape(lhs) !== Symbolics.Unknown() || continue
-        arg1 = arguments(lhs)[1]
-        arg1 in handled_obs_arr && continue
-        # firstindex returns 1 for multidimensional array symbolics
-        firstind = first(eachindex(arg1))
-        scal = [arg1[i] for i in eachindex(arg1)]
-        # respect non-1-indexed arrays
-        # TODO: get rid of this hack together with the above hack, then remove OffsetArrays dependency
-        # `change_origin` is required because `Origin(firstind)(scal)` makes codegen
-        # try to `create_array(OffsetArray{...}, ...)` which errors.
-        # `term(Origin(firstind), scal)` doesn't retain the `symtype` and `size`
-        # of `scal`.
-        push!(obs_arr_eqs, arg1 ~ change_origin(Origin(firstind), scal))
-        push!(handled_obs_arr, arg1)
-    end
-    append!(obs, obs_arr_eqs)
-    append!(subeqs, obs_arr_eqs)
-    # need to re-sort subeqs
-    subeqs = ModelingToolkit.topsort_equations(subeqs, [eq.lhs for eq in subeqs])
-
-    @set! sys.eqs = neweqs
-    @set! sys.observed = obs
-
     unknowns = Any[v
                    for (i, v) in enumerate(fullvars)
                    if diff_to_var[i] === nothing && ispresent(i)]
@@ -616,6 +583,62 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
         end
     end
     @set! sys.unknowns = unknowns
+
+    # HACK: Add equations for array observed variables. If `p[i] ~ (...)`
+    # are equations, add an equation `p ~ [p[1], p[2], ...]`
+    # allow topsort to reorder them
+    # only add the new equation if all `p[i]` are present
+    # we first count the number of times the scalarized form of each observed
+    # variable occurs in observed equations (and unknowns if it's split).
+
+    # map of array observed variable (unscalarized) to number of its
+    # scalarized terms that appear in observed equations
+    arr_obs_occurrences = Dict()
+    for eq in obs
+        lhs = eq.lhs
+        iscall(lhs) || continue
+        operation(lhs) === getindex || continue
+        Symbolics.shape(lhs) != Symbolics.Unknown() || continue
+        arg1 = arguments(lhs)[1]
+        cnt = get(arr_obs_occurrences, arg1, 0)
+        arr_obs_occurrences[arg1] = cnt + 1
+        continue
+    end
+    # count variables in unknowns if they are scalarized forms of variables
+    # also present as observed. e.g. if `x[1]` is an unknown and `x[2] ~ (..)`
+    # is an observed equation.
+    for sym in unknowns
+        iscall(sym) || continue
+        operation(sym) === getindex || continue
+        Symbolics.shape(sym) != Symbolics.Unknown() || continue
+        arg1 = arguments(sym)[1]
+        cnt = get(arr_obs_occurrences, arg1, 0)
+        cnt == 0 && continue
+        arr_obs_occurrences[arg1] = cnt + 1
+    end
+    obs_arr_eqs = Equation[]
+    for (arrvar, cnt) in arr_obs_occurrences
+        cnt == length(arrvar) || continue
+        # firstindex returns 1 for multidimensional array symbolics
+        firstind = first(eachindex(arrvar))
+        scal = [arrvar[i] for i in eachindex(arrvar)]
+        all(sym -> any(eq -> isequal(sym, eq.lhs)))
+        # respect non-1-indexed arrays
+        # TODO: get rid of this hack together with the above hack, then remove OffsetArrays dependency
+        # `change_origin` is required because `Origin(firstind)(scal)` makes codegen
+        # try to `create_array(OffsetArray{...}, ...)` which errors.
+        # `term(Origin(firstind), scal)` doesn't retain the `symtype` and `size`
+        # of `scal`.
+        push!(obs_arr_eqs, arrvar ~ change_origin(Origin(firstind), scal))
+    end
+    append!(obs, obs_arr_eqs)
+    append!(subeqs, obs_arr_eqs)
+    # need to re-sort subeqs
+    subeqs = ModelingToolkit.topsort_equations(subeqs, [eq.lhs for eq in subeqs])
+
+    @set! sys.eqs = neweqs
+    @set! sys.observed = obs
+
     @set! sys.substitutions = Substitutions(subeqs, deps)
 
     # Only makes sense for time-dependent
