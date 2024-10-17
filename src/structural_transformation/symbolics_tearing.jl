@@ -587,14 +587,18 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     # HACK: Add equations for array observed variables. If `p[i] ~ (...)`
     # are equations, add an equation `p ~ [p[1], p[2], ...]`
     # allow topsort to reorder them
-    # only add the new equation if all `p[i]` are present
+    # only add the new equation if all `p[i]` are present and the unscalarized
+    # form is used in any equation (observed or not)
     # we first count the number of times the scalarized form of each observed
     # variable occurs in observed equations (and unknowns if it's split).
 
     # map of array observed variable (unscalarized) to number of its
     # scalarized terms that appear in observed equations
     arr_obs_occurrences = Dict()
+    # to check if array variables occur in unscalarized form anywhere
+    all_vars = Set()
     for eq in obs
+        vars!(all_vars, eq.rhs)
         lhs = eq.lhs
         iscall(lhs) || continue
         operation(lhs) === getindex || continue
@@ -616,13 +620,16 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
         cnt == 0 && continue
         arr_obs_occurrences[arg1] = cnt + 1
     end
+    for eq in neweqs
+        vars!(all_vars, eq.rhs)
+    end
     obs_arr_eqs = Equation[]
     for (arrvar, cnt) in arr_obs_occurrences
         cnt == length(arrvar) || continue
+        arrvar in all_vars || continue
         # firstindex returns 1 for multidimensional array symbolics
         firstind = first(eachindex(arrvar))
         scal = [arrvar[i] for i in eachindex(arrvar)]
-        all(sym -> any(eq -> isequal(sym, eq.lhs)))
         # respect non-1-indexed arrays
         # TODO: get rid of this hack together with the above hack, then remove OffsetArrays dependency
         # `change_origin` is required because `Origin(firstind)(scal)` makes codegen
