@@ -4,6 +4,7 @@ using ModelingToolkit
 using ModelingToolkit.SciMLBase
 using ModelingToolkit.Symbolics: unwrap
 using ModelingToolkit.SymbolicIndexingInterface
+using ModelingToolkit.DocStringExtensions
 using HomotopyContinuation
 using ModelingToolkit: iscomplete, parameters, has_index_cache, get_index_cache, get_u0,
                        get_u0_p, check_eqs_u0, CommonSolve
@@ -11,11 +12,14 @@ using ModelingToolkit: iscomplete, parameters, has_index_cache, get_index_cache,
 const MTK = ModelingToolkit
 
 function contains_variable(x, wrt)
-    any(isequal(x), wrt) && return true
-    iscall(x) || return false
-    return any(y -> contains_variable(y, wrt), arguments(x))
+    any(y -> occursin(y, x), wrt)
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Check if `x` is polynomial with respect to the variables in `wrt`.
+"""
 function is_polynomial(x, wrt)
     x = unwrap(x)
     symbolic_type(x) == NotSymbolic() && return true
@@ -33,6 +37,11 @@ function is_polynomial(x, wrt)
     return false
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Convert `expr` from a symbolics expression to one that uses `HomotopyContinuation.ModelKit`.
+"""
 function symbolics_to_hc(expr)
     if iscall(expr)
         if operation(expr) == getindex
@@ -48,11 +57,32 @@ function symbolics_to_hc(expr)
     end
 end
 
+"""
+$(TYPEDEF)
+
+A subtype of `HomotopyContinuation.AbstractSystem` used to solve `HomotopyContinuationProblem`s.
+"""
 struct MTKHomotopySystem{F, P, J, V} <: HomotopyContinuation.AbstractSystem
+    """
+    The generated function for the residual of the polynomial system. In-place.
+    """
     f::F
+    """
+    The parameter object.
+    """
     p::P
+    """
+    The generated function for the jacobian of the polynomial system. In-place.
+    """
     jac::J
+    """
+    The `HomotopyContinuation.ModelKit.Variable` representation of the unknowns of
+    the system.
+    """
     vars::V
+    """
+    The number of polynomials in the system. Must also be equal to `length(vars)`.
+    """
     nexprs::Int
 end
 
@@ -112,7 +142,14 @@ function MTK.HomotopyContinuationProblem(
     return MTK.HomotopyContinuationProblem(u0, mtkhsys, sys, obsfn)
 end
 
-function CommonSolve.solve(prob::MTK.HomotopyContinuationProblem; kwargs...)
+"""
+$(TYPEDSIGNATURES)
+
+Solve a `HomotopyContinuationProblem`. Ignores the algorithm passed to it, and always
+uses `HomotopyContinuation.jl`. All keyword arguments are forwarded to
+`HomotopyContinuation.solve`.
+"""
+function CommonSolve.solve(prob::MTK.HomotopyContinuationProblem, alg = nothing; kwargs...)
     sol = HomotopyContinuation.solve(prob.homotopy_continuation_system; kwargs...)
     realsols = HomotopyContinuation.results(sol; only_real = true)
     if isempty(realsols)
