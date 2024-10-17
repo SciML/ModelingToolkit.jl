@@ -1894,10 +1894,12 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; bold = t
     eqs = equations(sys)
     if eqs isa AbstractArray && eltype(eqs) <: Equation
         neqs = count(eq -> !(eq.lhs isa Connection), eqs)
+        nobs = has_observed(sys) ? length(observed(sys)) : 0
         next = n_extra_equations(sys)
-        ntot = neqs + next
+        ntot = neqs + nobs + next
         ntot > 0 && printstyled(io, "\nEquations ($ntot):"; bold)
-        neqs > 0 && print(io, "\n  $neqs solvable … see equations(sys) for all")
+        neqs > 0 && print(io, "\n  $neqs solvable")
+        nobs > 0 && print(io, "\n  $nobs observed")
         next > 0 && print(io, "\n  $next extra")
         #Base.print_matrix(io, eqs) # usually too long and not useful to print all equations
     end
