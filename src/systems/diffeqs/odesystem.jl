@@ -295,7 +295,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     end
     ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
-        ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses, nothing, initializesystem,
+        ctrl_jac, Wfact, Wfact_t, name, description, systems,
+        defaults, guesses, nothing, initializesystem,
         initialization_eqs, schedule, connector_type, preface, cont_callbacks,
         disc_callbacks, parameter_dependencies,
         metadata, gui_metadata, is_dde, checks = checks)

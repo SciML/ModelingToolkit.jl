@@ -118,7 +118,8 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     index_cache::Union{Nothing, IndexCache}
     isscheduled::Bool
 
-    function JumpSystem{U}(tag, ap::U, iv, unknowns, ps, var_to_name, observed, name, description,
+    function JumpSystem{U}(
+            tag, ap::U, iv, unknowns, ps, var_to_name, observed, name, description,
             systems,
             defaults, connector_type, devents, parameter_dependencies,
             metadata = nothing, gui_metadata = nothing,
@@ -133,7 +134,8 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             u = __get_unit_type(unknowns, ps, iv)
             check_units(u, ap, iv)
         end
-        new{U}(tag, ap, iv, unknowns, ps, var_to_name, observed, name, description, systems, defaults,
+        new{U}(tag, ap, iv, unknowns, ps, var_to_name,
+            observed, name, description, systems, defaults,
             connector_type, devents, parameter_dependencies, metadata, gui_metadata,
             complete, index_cache, isscheduled)
     end

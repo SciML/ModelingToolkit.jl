@@ -93,7 +93,8 @@ struct ConstraintsSystem <: AbstractTimeIndependentSystem
             u = __get_unit_type(unknowns, ps)
             check_units(u, constraints)
         end
-        new(tag, constraints, unknowns, ps, var_to_name, observed, jac, name, description, systems,
+        new(tag, constraints, unknowns, ps, var_to_name,
+            observed, jac, name, description, systems,
             defaults,
             connector_type, metadata, tearing_state, substitutions, complete, index_cache)
     end

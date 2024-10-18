@@ -95,7 +95,8 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     parent::Any
     isscheduled::Bool
 
-    function NonlinearSystem(tag, eqs, unknowns, ps, var_to_name, observed, jac, name, description,
+    function NonlinearSystem(
+            tag, eqs, unknowns, ps, var_to_name, observed, jac, name, description,
             systems,
             defaults, connector_type, parameter_dependencies = Equation[], metadata = nothing,
             gui_metadata = nothing,
@@ -106,7 +107,8 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
             u = __get_unit_type(unknowns, ps)
             check_units(u, eqs)
         end
-        new(tag, eqs, unknowns, ps, var_to_name, observed, jac, name, description, systems, defaults,
+        new(tag, eqs, unknowns, ps, var_to_name, observed,
+            jac, name, description, systems, defaults,
             connector_type, parameter_dependencies, metadata, gui_metadata, tearing_state,
             substitutions, complete, index_cache, parent, isscheduled)
     end
