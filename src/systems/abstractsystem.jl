@@ -2905,7 +2905,8 @@ end
 function AbstractTrees.children(sys::AbstractSystem)
     ModelingToolkit.get_systems(sys)
 end
-function AbstractTrees.printnode(io::IO, sys::AbstractSystem; describe = false, bold = false)
+function AbstractTrees.printnode(
+        io::IO, sys::AbstractSystem; describe = false, bold = false)
     printstyled(io, nameof(sys); bold)
     describe && !isempty(get_description(sys)) && print(io, ": ", get_description(sys))
 end

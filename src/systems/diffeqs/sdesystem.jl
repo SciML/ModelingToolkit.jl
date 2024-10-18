@@ -172,7 +172,8 @@ struct SDESystem <: AbstractODESystem
         end
         new(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac,
-            Wfact, Wfact_t, name, description, systems, defaults, connector_type, cevents, devents,
+            Wfact, Wfact_t, name, description, systems,
+            defaults, connector_type, cevents, devents,
             parameter_dependencies, metadata, gui_metadata, complete, index_cache, parent, is_scalar_noise,
             is_dde, isscheduled)
     end
@@ -354,7 +355,8 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
     end
 
     SDESystem(deqs, get_noiseeqs(sys), get_iv(sys), unknowns(sys), parameters(sys),
-        name = name, description = get_description(sys), parameter_dependencies = parameter_dependencies(sys), checks = false)
+        name = name, description = get_description(sys),
+        parameter_dependencies = parameter_dependencies(sys), checks = false)
 end
 
 """
@@ -462,7 +464,8 @@ function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
     # return modified SDE System
     SDESystem(deqs, noiseeqs, get_iv(sys), unknown_vars, parameters(sys);
         defaults = Dict(θ => θ0), observed = [weight ~ θ / θ0],
-        name = name, description = get_description(sys), parameter_dependencies = parameter_dependencies(sys),
+        name = name, description = get_description(sys),
+        parameter_dependencies = parameter_dependencies(sys),
         checks = false)
 end
 
