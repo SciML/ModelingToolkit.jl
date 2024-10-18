@@ -1898,7 +1898,7 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; hint = t
     nsubs = length(subs)
     nrows = min(nsubs, limit ? rows : nsubs)
     nrows > 0 && printstyled(io, "\nSubsystems ($(nsubs)):"; bold)
-    nrows > 0 && hint && print(io, " see ModelingToolkit.get_systems(sys)")
+    nrows > 0 && hint && print(io, " see hierarchy(sys)")
     for i in 1:nrows
         sub = subs[i]
         name = String(nameof(sub))
@@ -2902,12 +2902,22 @@ function Base.showerror(io::IO, e::HybridSystemNotSupportedException)
     print(io, "HybridSystemNotSupportedException: ", e.msg)
 end
 
-function AbstractTrees.children(sys::ModelingToolkit.AbstractSystem)
+function AbstractTrees.children(sys::AbstractSystem)
     ModelingToolkit.get_systems(sys)
 end
-function AbstractTrees.printnode(io::IO, sys::ModelingToolkit.AbstractSystem)
-    print(io, nameof(sys))
+function AbstractTrees.printnode(io::IO, sys::AbstractSystem; describe = false, bold = false)
+    printstyled(io, nameof(sys); bold)
+    describe && !isempty(get_description(sys)) && print(io, ": ", get_description(sys))
 end
+"""
+    hierarchy(sys::AbstractSystem; describe = false, bold = describe, kwargs...)
+
+Print a tree of a system's hierarchy of subsystems.
+"""
+function hierarchy(sys::AbstractSystem; describe = false, bold = describe, kwargs...)
+    print_tree(sys; printnode_kw = (describe = describe, bold = bold), kwargs...)
+end
+
 function Base.IteratorEltype(::Type{<:TreeIterator{ModelingToolkit.AbstractSystem}})
     Base.HasEltype()
 end
