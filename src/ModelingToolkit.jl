@@ -54,6 +54,7 @@ using Reexport
 using RecursiveArrayTools
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
 import BlockArrays: BlockedArray, Block, blocksize, blocksizes
+import CommonSolve
 
 using RuntimeGeneratedFunctions
 using RuntimeGeneratedFunctions: drop_expr
@@ -280,5 +281,7 @@ export Sample, Hold, Shift, ShiftIndex, sampletime, SampleTime
 export Clock, SolverStepClock, TimeDomain
 
 export MTKParameters, reorder_dimension_by_tunables!, reorder_dimension_by_tunables
+
+export HomotopyContinuationProblem
 
 end # module
