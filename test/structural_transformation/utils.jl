@@ -48,9 +48,25 @@ end
     @mtkbuild sys = ODESystem(
         [D(x) ~ z[1] + z[2] + foo(z)[1], y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t)
     @test length(equations(sys)) == 1
-    @test length(observed(sys)) == 6
+    @test length(observed(sys)) == 7
     @test any(eq -> isequal(eq.lhs, y), observed(sys))
     @test any(eq -> isequal(eq.lhs, z), observed(sys))
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [foo => _tmp_fn])
     @test_nowarn prob.f(prob.u0, prob.p, 0.0)
+end
+
+@testset "scalarized array observed calling same function multiple times" begin
+    @variables x(t) y(t)[1:2]
+    @parameters foo(::Real)[1:2]
+    val = Ref(0)
+    function _tmp_fn2(x)
+        val[] += 1
+        return [x, 2x]
+    end
+    @mtkbuild sys = ODESystem([D(x) ~ y[1] + y[2], y ~ foo(x)], t)
+    @test length(equations(sys)) == 1
+    @test length(observed(sys)) == 3
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [foo => _tmp_fn2])
+    @test_nowarn prob.f(prob.u0, prob.p, 0.0)
+    @test val[] == 1
 end
