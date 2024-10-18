@@ -781,21 +781,24 @@ function generate_single_rootfinding_callback(
         end
     end
 
+    user_initfun = isnothing(affect_function.initialize) ? SciMLBase.INITIALIZE_DEFAULT : (c, u, t, i) -> affect_function.initialize(i)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing &&
        (save_idxs = get(ic.callback_to_clocks, cb, nothing)) !== nothing
         initfn = let save_idxs = save_idxs
             function (cb, u, t, integrator)
+                user_initfun(cb, u, t, integrator)
                 for idx in save_idxs
                     SciMLBase.save_discretes!(integrator, idx)
                 end
             end
         end
     else
-        initfn = SciMLBase.INITIALIZE_DEFAULT
+        initfn = user_initfun
     end
+    
     return ContinuousCallback(
         cond, affect_function.affect, affect_function.affect_neg, rootfind = cb.rootfind, 
-        initialize = isnothing(affect_function.initialize) ? SciMLBase.INITIALIZE_DEFAULT : (c, u, t, i) -> affect_function.initialize(i), 
+        initialize = initfn, 
         finalize = isnothing(affect_function.finalize) ? SciMLBase.FINALIZE_DEFAULT : (c, u, t, i) -> affect_function.finalize(i),
         initializealg = reinitialization_alg(cb))
 end
@@ -878,8 +881,8 @@ function compile_affect_fn(cb, sys::AbstractODESystem, dvs, ps, kwargs)
     eq_aff = affects(cb)
     eq_neg_aff = affect_negs(cb)
     affect = compile_affect(eq_aff, cb, sys, dvs, ps; expression = Val{false}, kwargs...)
-    function compile_optional_affect(aff)
-        if isnothing(aff)
+    function compile_optional_affect(aff, default=nothing)
+        if isnothing(aff) || aff==default
             return nothing
         else
             return compile_affect(aff, cb, sys, dvs, ps; expression = Val{false}, kwargs...)
@@ -890,8 +893,8 @@ function compile_affect_fn(cb, sys::AbstractODESystem, dvs, ps, kwargs)
     else
         affect_neg = compile_optional_affect(eq_neg_aff)
     end
-    initialize = compile_optional_affect(initialize_affects(cb))
-    finalize = compile_optional_affect(finalize_affects(cb))
+    initialize = compile_optional_affect(initialize_affects(cb), NULL_AFFECT)
+    finalize = compile_optional_affect(finalize_affects(cb), NULL_AFFECT)
     (affect = affect, affect_neg = affect_neg, initialize = initialize, finalize = finalize)
 end
 
@@ -1097,11 +1100,11 @@ function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs.
     let user_affect = func(affect), ctx = context(affect)
         function (integ)
             # update the to-be-mutated values; this ensures that if you do a no-op then nothing happens
-            modvals = mod_og_val_fun(integ.u, integ.p..., integ.t)
+            modvals = mod_og_val_fun(integ.u, integ.p, integ.t)
             upd_component_array = NamedTuple{mod_names}(modvals)
 
             # update the observed values
-            obs_component_array = NamedTuple{obs_sym_tuple}(obs_fun(integ.u, integ.p..., integ.t))
+            obs_component_array = NamedTuple{obs_sym_tuple}(obs_fun(integ.u, integ.p, integ.t))
 
             # let the user do their thing
             modvals = if applicable(user_affect, upd_component_array, obs_component_array, ctx, integ)
