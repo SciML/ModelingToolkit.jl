@@ -74,6 +74,8 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     observed::Vector{Equation}
     """The name of the system."""
     name::Symbol
+    """A description of the system."""
+    description::String
     """The internal systems. These are required to have unique names."""
     systems::Vector{JumpSystem}
     """
@@ -116,7 +118,8 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     index_cache::Union{Nothing, IndexCache}
     isscheduled::Bool
 
-    function JumpSystem{U}(tag, ap::U, iv, unknowns, ps, var_to_name, observed, name,
+    function JumpSystem{U}(
+            tag, ap::U, iv, unknowns, ps, var_to_name, observed, name, description,
             systems,
             defaults, connector_type, devents, parameter_dependencies,
             metadata = nothing, gui_metadata = nothing,
@@ -131,7 +134,8 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             u = __get_unit_type(unknowns, ps, iv)
             check_units(u, ap, iv)
         end
-        new{U}(tag, ap, iv, unknowns, ps, var_to_name, observed, name, systems, defaults,
+        new{U}(tag, ap, iv, unknowns, ps, var_to_name,
+            observed, name, description, systems, defaults,
             connector_type, devents, parameter_dependencies, metadata, gui_metadata,
             complete, index_cache, isscheduled)
     end
@@ -147,6 +151,7 @@ function JumpSystem(eqs, iv, unknowns, ps;
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
         name = nothing,
+        description = "",
         connector_type = nothing,
         checks = true,
         continuous_events = nothing,
@@ -193,7 +198,7 @@ function JumpSystem(eqs, iv, unknowns, ps;
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
     parameter_dependencies, ps = process_parameter_dependencies(parameter_dependencies, ps)
     JumpSystem{typeof(ap)}(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-        ap, value(iv), unknowns, ps, var_to_name, observed, name, systems,
+        ap, value(iv), unknowns, ps, var_to_name, observed, name, description, systems,
         defaults, connector_type, disc_callbacks, parameter_dependencies,
         metadata, gui_metadata, checks = checks)
 end
