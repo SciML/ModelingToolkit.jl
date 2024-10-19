@@ -121,13 +121,13 @@ lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
 lsyss, _ = ModelingToolkit.linearize_symbolic(pid, [reference.u, measurement.u],
     [ctr_output.u])
 
-@test substitute(
+@test ModelingToolkit.fixpoint_sub(
     lsyss.A, ModelingToolkit.defaults_and_guesses(pid)) == lsys.A
-@test substitute(
+@test ModelingToolkit.fixpoint_sub(
     lsyss.B, ModelingToolkit.defaults_and_guesses(pid)) == lsys.B
-@test substitute(
+@test ModelingToolkit.fixpoint_sub(
     lsyss.C, ModelingToolkit.defaults_and_guesses(pid)) == lsys.C
-@test substitute(
+@test ModelingToolkit.fixpoint_sub(
     lsyss.D, ModelingToolkit.defaults_and_guesses(pid)) == lsys.D
 
 # Test with the reverse desired unknown order as well to verify that similarity transform and reoreder_unknowns really works
