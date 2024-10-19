@@ -60,3 +60,29 @@ end
     sol = @test_nowarn solve(prob; threading = false)
     @test sol.retcode == ReturnCode.ConvergenceFailure
 end
+
+@testset "Parametric exponent" begin
+    @variables x = 1.0
+    @parameters n::Integer = 4
+    @mtkbuild sys = NonlinearSystem([x^n + x^2 - 1 ~ 0])
+    prob = HomotopyContinuationProblem(sys, [])
+    sol = solve(prob; threading = false)
+    @test SciMLBase.successful_retcode(sol)
+end
+
+@testset "Polynomial check and warnings" begin
+    @variables x = 1.0
+    @parameters n = 4
+    @mtkbuild sys = NonlinearSystem([x^n + x^2 - 1 ~ 0])
+    @test_warn ["Exponent", "not an integer", "@parameters"] @test_throws "not a polynomial" HomotopyContinuationProblem(
+        sys, [])
+    @mtkbuild sys = NonlinearSystem([x^1.5 + x^2 - 1 ~ 0])
+    @test_warn ["Exponent", "not an integer"] @test_throws "not a polynomial" HomotopyContinuationProblem(
+        sys, [])
+    @mtkbuild sys = NonlinearSystem([x^x - x ~ 0])
+    @test_warn ["Exponent", "unknowns"] @test_throws "not a polynomial" HomotopyContinuationProblem(
+        sys, [])
+    @mtkbuild sys = NonlinearSystem([((x^2) / (x + 3))^2 + x ~ 0])
+    @test_warn ["Base", "not a polynomial", "Unrecognized operation", "/"] @test_throws "not a polynomial" HomotopyContinuationProblem(
+        sys, [])
+end

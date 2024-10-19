@@ -2,7 +2,7 @@ module MTKHomotopyContinuationExt
 
 using ModelingToolkit
 using ModelingToolkit.SciMLBase
-using ModelingToolkit.Symbolics: unwrap
+using ModelingToolkit.Symbolics: unwrap, symtype
 using ModelingToolkit.SymbolicIndexingInterface
 using ModelingToolkit.DocStringExtensions
 using HomotopyContinuation
@@ -32,8 +32,25 @@ function is_polynomial(x, wrt)
     end
     if operation(x) == (^)
         b, p = arguments(x)
-        return is_polynomial(b, wrt) && !contains_variable(p, wrt)
+        is_pow_integer = symtype(p) <: Integer
+        if !is_pow_integer
+            if symbolic_type(p) == NotSymbolic()
+                @warn "In $x: Exponent $p is not an integer"
+            else
+                @warn "In $x: Exponent $p is not an integer. Use `@parameters p::Integer` to declare integer parameters."
+            end
+        end
+        exponent_has_unknowns = contains_variable(p, wrt)
+        if exponent_has_unknowns
+            @warn "In $x: Exponent $p cannot contain unknowns of the system."
+        end
+        base_polynomial = is_polynomial(b, wrt)
+        if !base_polynomial
+            @warn "In $x: Base is not a polynomial"
+        end
+        return base_polynomial && !exponent_has_unknowns && is_pow_integer
     end
+    @warn "In $x: Unrecognized operation $(operation(x)). Allowed polynomial operations are `*, +, -, ^`"
     return false
 end
 
@@ -124,7 +141,7 @@ function MTK.HomotopyContinuationProblem(
 
     for eq in eqs
         if !is_polynomial(eq.lhs, dvs) || !is_polynomial(eq.rhs, dvs)
-            error("Equation $eq is not a polynomial in the unknowns")
+            error("Equation $eq is not a polynomial in the unknowns. See warnings for further details.")
         end
     end
 
