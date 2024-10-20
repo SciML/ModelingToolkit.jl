@@ -1856,8 +1856,14 @@ function get_or_construct_tearing_state(sys)
     state
 end
 
-# TODO: what about inputs?
-function n_extra_equations(sys::AbstractSystem)
+"""
+    n_expanded_connection_equations(sys::AbstractSystem)
+
+Returns the number of equations that the connections in `sys` expands to.
+Equivalent to `length(equations(expand_connections(sys))) - length(filter(eq -> !(eq.lhs isa Connection), equations(sys)))`.
+"""
+function n_expanded_connection_equations(sys::AbstractSystem)
+    # TODO: what about inputs?
     isconnector(sys) && return length(get_unknowns(sys))
     sys, (csets, _) = generate_connection_set(sys)
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
@@ -1919,14 +1925,13 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; hint = t
     eqs = equations(sys)
     if eqs isa AbstractArray && eltype(eqs) <: Equation
         neqs = count(eq -> !(eq.lhs isa Connection), eqs)
+        next = n_expanded_connection_equations(sys)
         nobs = has_observed(sys) ? length(observed(sys)) : 0
-        next = n_extra_equations(sys)
-        ntot = neqs + nobs + next
+        ntot = neqs + next + nobs
         ntot > 0 && printstyled(io, "\nEquations ($ntot):"; bold)
-        ntot > 0 && hint && print(io, " see equations(sys)")
-        neqs > 0 && print(io, "\n  $neqs solvable")
-        nobs > 0 && print(io, "\n  $nobs observed")
-        next > 0 && print(io, "\n  $next extra")
+        neqs > 0 && print(io, "\n  $neqs standard", hint ? ": see equations(sys)" : "")
+        next > 0 && print(io, "\n  $next connecting", hint ? ": see equations(expand_connections(sys))" : "")
+        nobs > 0 && print(io, "\n  $nobs observed", hint ? ": see observed(sys)" : "")
         #Base.print_matrix(io, eqs) # usually too long and not useful to print all equations
     end
 
