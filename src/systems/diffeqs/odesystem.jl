@@ -707,7 +707,8 @@ end
 
 function Base.show(io::IO, mime::MIME"text/plain", sys::ODESystem; hint = true, bold = true)
     # Print general AbstractSystem information
-    invoke(Base.show, Tuple{typeof(io), typeof(mime), AbstractSystem}, io, mime, sys; hint, bold)
+    invoke(Base.show, Tuple{typeof(io), typeof(mime), AbstractSystem},
+        io, mime, sys; hint, bold)
 
     # Print initialization equations (unique to ODESystems)
     nini = length(initialization_equations(sys))

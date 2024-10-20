@@ -1891,7 +1891,8 @@ function n_expanded_connection_equations(sys::AbstractSystem)
     nextras = n_outer_stream_variables + length(ceqs)
 end
 
-function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; hint = true, bold = true)
+function Base.show(
+        io::IO, mime::MIME"text/plain", sys::AbstractSystem; hint = true, bold = true)
     limit = get(io, :limit, false) # if output should be limited,
     rows = first(displaysize(io)) ÷ 5 # then allocate ≈1/5 of display height to each list
 
@@ -1930,7 +1931,8 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; hint = t
         ntot = neqs + next
         ntot > 0 && printstyled(io, "\nEquations ($ntot):"; bold)
         neqs > 0 && print(io, "\n  $neqs standard", hint ? ": see equations(sys)" : "")
-        next > 0 && print(io, "\n  $next connecting", hint ? ": see equations(expand_connections(sys))" : "")
+        next > 0 && print(io, "\n  $next connecting",
+            hint ? ": see equations(expand_connections(sys))" : "")
         #Base.print_matrix(io, eqs) # usually too long and not useful to print all equations
     end
 
