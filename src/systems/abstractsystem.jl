@@ -498,6 +498,7 @@ end
 Substitutions(subs, deps) = Substitutions(subs, deps, nothing)
 
 Base.nameof(sys::AbstractSystem) = getfield(sys, :name)
+description(sys::AbstractSystem) = has_description(sys) ? get_description(sys) : ""
 
 #Deprecated
 function independent_variable(sys::AbstractSystem)
@@ -1895,7 +1896,7 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; hint = t
     rows = first(displaysize(io)) ÷ 5 # then allocate ≈1/5 of display height to each list
 
     # Print name and description
-    desc = get_description(sys)
+    desc = description(sys)
     printstyled(io, "Model ", nameof(sys), ":"; bold)
     !isempty(desc) && print(io, " ", desc)
 
@@ -1909,7 +1910,7 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; hint = t
         sub = subs[i]
         name = String(nameof(sub))
         print(io, "\n  ", name)
-        desc = get_description(sub)
+        desc = description(sub)
         if !isempty(desc)
             maxlen = displaysize(io)[2] - length(name) - 6 # remaining length of line
             if limit && length(desc) > maxlen
@@ -2913,7 +2914,7 @@ end
 function AbstractTrees.printnode(
         io::IO, sys::AbstractSystem; describe = false, bold = false)
     printstyled(io, nameof(sys); bold)
-    describe && !isempty(get_description(sys)) && print(io, ": ", get_description(sys))
+    describe && !isempty(description(sys)) && print(io, ": ", description(sys))
 end
 """
     hierarchy(sys::AbstractSystem; describe = false, bold = describe, kwargs...)
@@ -3006,7 +3007,7 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
     cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
     devs = union(get_discrete_events(basesys), get_discrete_events(sys))
     defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
-    desc = join(filter(desc -> !isempty(desc), get_description.([sys, basesys])), " ") # concatenate non-empty descriptions with space
+    desc = join(filter(desc -> !isempty(desc), description.([sys, basesys])), " ") # concatenate non-empty descriptions with space
     meta = union_nothing(get_metadata(basesys), get_metadata(sys))
     syss = union(get_systems(basesys), get_systems(sys))
     args = length(ivs) == 0 ? (eqs, sts, ps) : (eqs, ivs[1], sts, ps)

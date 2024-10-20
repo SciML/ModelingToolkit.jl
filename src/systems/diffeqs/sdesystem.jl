@@ -355,7 +355,7 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
     end
 
     SDESystem(deqs, get_noiseeqs(sys), get_iv(sys), unknowns(sys), parameters(sys),
-        name = name, description = get_description(sys),
+        name = name, description = description(sys),
         parameter_dependencies = parameter_dependencies(sys), checks = false)
 end
 
@@ -464,7 +464,7 @@ function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
     # return modified SDE System
     SDESystem(deqs, noiseeqs, get_iv(sys), unknown_vars, parameters(sys);
         defaults = Dict(θ => θ0), observed = [weight ~ θ / θ0],
-        name = name, description = get_description(sys),
+        name = name, description = description(sys),
         parameter_dependencies = parameter_dependencies(sys),
         checks = false)
 end

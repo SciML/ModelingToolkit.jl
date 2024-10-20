@@ -226,7 +226,7 @@ function flatten(sys::DiscreteSystem, noeqs = false)
             observed = observed(sys),
             defaults = defaults(sys),
             name = nameof(sys),
-            description = get_description(sys),
+            description = description(sys),
             checks = false)
     end
 end
