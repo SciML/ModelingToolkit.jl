@@ -704,3 +704,15 @@ function add_accumulations(sys::ODESystem, vars::Vector{<:Pair})
     @set! sys.unknowns = [get_unknowns(sys); avars]
     @set! sys.defaults = merge(get_defaults(sys), Dict(a => 0.0 for a in avars))
 end
+
+function Base.show(io::IO, mime::MIME"text/plain", sys::ODESystem; hint = true, bold = true)
+    # Print general AbstractSystem information
+    invoke(Base.show, Tuple{typeof(io), typeof(mime), AbstractSystem}, io, mime, sys; hint, bold)
+
+    # Print initialization equations (unique to ODESystems)
+    nini = length(initialization_equations(sys))
+    nini > 0 && printstyled(io, "\nInitialization equations ($nini):"; bold)
+    nini > 0 && hint && print(io, " see initialization_equations(sys)")
+
+    return nothing
+end
