@@ -1927,12 +1927,10 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; hint = t
     if eqs isa AbstractArray && eltype(eqs) <: Equation
         neqs = count(eq -> !(eq.lhs isa Connection), eqs)
         next = n_expanded_connection_equations(sys)
-        nobs = has_observed(sys) ? length(observed(sys)) : 0
-        ntot = neqs + next + nobs
+        ntot = neqs + next
         ntot > 0 && printstyled(io, "\nEquations ($ntot):"; bold)
         neqs > 0 && print(io, "\n  $neqs standard", hint ? ": see equations(sys)" : "")
         next > 0 && print(io, "\n  $next connecting", hint ? ": see equations(expand_connections(sys))" : "")
-        nobs > 0 && print(io, "\n  $nobs observed", hint ? ": see observed(sys)" : "")
         #Base.print_matrix(io, eqs) # usually too long and not useful to print all equations
     end
 
@@ -1968,6 +1966,11 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem; hint = t
         limited = nrows < nvars
         limited && printstyled(io, "\n  ⋮") # too many variables to print
     end
+
+    # Print observed
+    nobs = has_observed(sys) ? length(observed(sys)) : 0
+    nobs > 0 && printstyled(io, "\nObserved ($nobs):"; bold)
+    nobs > 0 && hint && print(io, " see observed(sys)")
 
     return nothing
 end
