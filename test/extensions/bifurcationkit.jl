@@ -1,4 +1,4 @@
-using BifurcationKit, ModelingToolkit, Setfield, Test
+using BifurcationKit, ModelingToolkit, Test
 using ModelingToolkit: t_nounits as t, D_nounits as D
 # Simple pitchfork diagram, compares solution to native BifurcationKit, checks they are identical.
 # Checks using `jac=false` option.
@@ -36,7 +36,7 @@ let
     bprob_BK = BifurcationProblem(f_BK,
         [1.0, 1.0],
         [-1.0, 1.0],
-        (Setfield.@lens _[1]);
+        (@lens _[1]);
         record_from_solution = (x, p) -> x[1])
     bif_dia_BK = bifurcationdiagram(bprob_BK,
         PALC(),
