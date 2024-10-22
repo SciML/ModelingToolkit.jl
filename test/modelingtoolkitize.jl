@@ -67,6 +67,16 @@ sol = solve(prob, BFGS())
 sol = solve(prob, Newton())
 @test sol.objective < 1e-8
 
+prob = OptimizationProblem(ones(3); lb = [-Inf, 0.0, 1.0], ub = [Inf, 0.0, 2.0]) do u, p
+    sum(abs2, u)
+end
+
+sys = complete(modelingtoolkitize(prob))
+@test !ModelingToolkit.hasbounds(unknowns(sys)[1])
+@test !ModelingToolkit.hasbounds(unknowns(sys)[2])
+@test ModelingToolkit.hasbounds(unknowns(sys)[3])
+@test ModelingToolkit.getbounds(unknowns(sys)[3]) == (1.0, 2.0)
+
 ## SIR System Regression Test
 
 β = 0.01# infection rate
