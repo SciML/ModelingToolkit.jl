@@ -103,6 +103,17 @@ function OptimizationSystem(op, unknowns, ps;
     ps′ = value.(ps)
     op′ = value(scalarize(op))
 
+    irreducible_subs = Dict()
+    for i in eachindex(unknowns′)
+        var = unknowns′[i]
+        if hasbounds(var)
+            irreducible_subs[var] = irrvar = setirreducible(var, true)
+            unknowns′[i] = irrvar
+        end
+    end
+    op′ = substitute(op′, irreducible_subs)
+    constraints = substitute.(constraints, (irreducible_subs,))
+
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn(
             "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
@@ -113,7 +124,8 @@ function OptimizationSystem(op, unknowns, ps;
         throw(ArgumentError("System names must be unique."))
     end
     defaults = todict(defaults)
-    defaults = Dict(value(k) => value(v)
+    defaults = Dict(substitute(value(k), irreducible_subs) => substitute(
+                        value(v), irreducible_subs)
     for (k, v) in pairs(defaults) if value(v) !== nothing)
 
     var_to_name = Dict()

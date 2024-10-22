@@ -1,5 +1,5 @@
 using ModelingToolkit, SparseArrays, Test, Optimization, OptimizationOptimJL,
-      OptimizationMOI, Ipopt, AmplNLWriter, Ipopt_jll
+      OptimizationMOI, Ipopt, AmplNLWriter, Ipopt_jll, SymbolicIndexingInterface
 using ModelingToolkit: get_metadata
 
 @testset "basic" begin
@@ -346,4 +346,16 @@ end
     @mtkbuild sys = OptimizationSystem((x - 3)^2, [x], [])
     prob = @test_nowarn OptimizationProblem(sys, nothing)
     @test_nowarn solve(prob, NelderMead())
+end
+
+@testset "Bounded unknowns are irreducible" begin
+    @variables x
+    @variables y [bounds = (-Inf, Inf)]
+    @variables z [bounds = (1.0, 2.0)]
+    obj = x^2 + y^2 + z^2
+    cons = [y ~ 2x
+            z ~ 2y]
+    @mtkbuild sys = OptimizationSystem(obj, [x, y, z], []; constraints = cons)
+    @test is_variable(sys, z)
+    @test !is_variable(sys, y)
 end
