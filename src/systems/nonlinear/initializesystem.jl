@@ -138,8 +138,13 @@ function generate_initializesystem(sys::ODESystem;
     end
 
     # 5) parameter dependencies become equations, their LHS become unknowns
+    # non-numeric dependent parameters stay as parameter dependencies
+    new_parameter_deps = Equation[]
     for eq in parameter_dependencies(sys)
-        is_variable_floatingpoint(eq.lhs) || continue
+        if !is_variable_floatingpoint(eq.lhs)
+            push!(new_parameter_deps, eq)
+            continue
+        end
         varp = tovar(eq.lhs)
         paramsubs[eq.lhs] = varp
         push!(eqs_ics, eq)
@@ -171,6 +176,7 @@ function generate_initializesystem(sys::ODESystem;
         pars;
         defaults = defs,
         checks = check_units,
+        parameter_dependencies = new_parameter_deps,
         name,
         metadata = meta,
         kwargs...)

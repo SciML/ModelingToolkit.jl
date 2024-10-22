@@ -95,10 +95,10 @@ lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
 ## Symbolic linearization
 lsyss, _ = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 
-@test substitute(lsyss.A, ModelingToolkit.defaults(cl)) == lsys.A
-@test substitute(lsyss.B, ModelingToolkit.defaults(cl)) == lsys.B
-@test substitute(lsyss.C, ModelingToolkit.defaults(cl)) == lsys.C
-@test substitute(lsyss.D, ModelingToolkit.defaults(cl)) == lsys.D
+@test ModelingToolkit.fixpoint_sub(lsyss.A, ModelingToolkit.defaults(cl)) == lsys.A
+@test ModelingToolkit.fixpoint_sub(lsyss.B, ModelingToolkit.defaults(cl)) == lsys.B
+@test ModelingToolkit.fixpoint_sub(lsyss.C, ModelingToolkit.defaults(cl)) == lsys.C
+@test ModelingToolkit.fixpoint_sub(lsyss.D, ModelingToolkit.defaults(cl)) == lsys.D
 ##
 using ModelingToolkitStandardLibrary.Blocks: LimPID
 k = 400

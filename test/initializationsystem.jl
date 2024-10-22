@@ -815,3 +815,24 @@ end
     prob2 = @test_nowarn remake(prob; u0 = [y => 0.5])
     @test is_variable(prob.f.initializeprob, p)
 end
+
+struct Multiplier{T}
+    a::T
+    b::T
+end
+
+function (m::Multiplier)(x, y)
+    m.a * x + m.b * y
+end
+
+@register_symbolic Multiplier(x::Real, y::Real)
+
+@testset "Nonnumeric parameter dependencies are retained" begin
+    @variables x(t) y(t)
+    @parameters foo(::Real, ::Real) p
+    @mtkbuild sys = ODESystem([D(x) ~ t, 0 ~ foo(x, y)], t;
+        parameter_dependencies = [foo ~ Multiplier(p, 2p)], guesses = [y => -1.0])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [p => 1.0])
+    integ = init(prob, Rosenbrock23())
+    @test integ[y] ≈ -0.5
+end
