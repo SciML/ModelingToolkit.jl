@@ -165,7 +165,16 @@ function generate_initializesystem(sys::ODESystem;
         [p for p in parameters(sys) if !haskey(paramsubs, p)]
     )
 
-    eqs_ics = Symbolics.substitute.([eqs_ics; observed(sys)], (paramsubs,))
+    # 7) use observed equations for guesses of observed variables if not provided
+    obseqs = observed(sys)
+    for eq in obseqs
+        haskey(defs, eq.lhs) && continue
+        any(x -> isequal(default_toterm(x), eq.lhs), keys(defs)) && continue
+
+        defs[eq.lhs] = eq.rhs
+    end
+
+    eqs_ics = Symbolics.substitute.([eqs_ics; obseqs], (paramsubs,))
     vars = [vars; collect(values(paramsubs))]
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
