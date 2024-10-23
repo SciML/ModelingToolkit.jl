@@ -118,12 +118,12 @@ struct SymbolicContinuousCallback
     affect_neg::Union{Vector{Equation}, FunctionalAffect, Nothing}
     rootfind::SciMLBase.RootfindOpt
     reinitializealg::SciMLBase.DAEInitializationAlgorithm
-    function SymbolicContinuousCallback(; 
-        eqs::Vector{Equation}, 
-        affect = NULL_AFFECT,
-        affect_neg = affect, 
-        rootfind = SciMLBase.LeftRootFind,
-        reinitializealg=SciMLBase.CheckInit())
+    function SymbolicContinuousCallback(;
+            eqs::Vector{Equation},
+            affect = NULL_AFFECT,
+            affect_neg = affect,
+            rootfind = SciMLBase.LeftRootFind,
+            reinitializealg = SciMLBase.CheckInit())
         new(eqs, make_affect(affect), make_affect(affect_neg), rootfind, reinitializealg)
     end # Default affect to nothing
 end
@@ -194,8 +194,10 @@ function affect_negs(cbs::Vector{SymbolicContinuousCallback})
 end
 
 reinitialization_alg(cb::SymbolicContinuousCallback) = cb.reinitializealg
-reinitialization_algs(cbs::Vector{SymbolicContinuousCallback}) = 
-    mapreduce(reinitialization_alg, vcat, cbs, init = SciMLBase.DAEInitializationAlgorithm[])
+function reinitialization_algs(cbs::Vector{SymbolicContinuousCallback})
+    mapreduce(
+        reinitialization_alg, vcat, cbs, init = SciMLBase.DAEInitializationAlgorithm[])
+end
 
 namespace_affects(af::Vector, s) = Equation[namespace_affect(a, s) for a in af]
 namespace_affects(af::FunctionalAffect, s) = namespace_affect(af, s)
@@ -241,7 +243,8 @@ struct SymbolicDiscreteCallback
     affects::Any
     reinitializealg::SciMLBase.DAEInitializationAlgorithm
 
-    function SymbolicDiscreteCallback(condition, affects = NULL_AFFECT, reinitializealg=SciMLBase.CheckInit())
+    function SymbolicDiscreteCallback(
+            condition, affects = NULL_AFFECT, reinitializealg = SciMLBase.CheckInit())
         c = scalarize_condition(condition)
         a = scalarize_affects(affects)
         new(c, a, reinitializealg)
@@ -302,8 +305,10 @@ function affects(cbs::Vector{SymbolicDiscreteCallback})
 end
 
 reinitialization_alg(cb::SymbolicDiscreteCallback) = cb.reinitializealg
-reinitialization_algs(cbs::Vector{SymbolicDiscreteCallback}) = 
-    mapreduce(reinitialization_alg, vcat, cbs, init = SciMLBase.DAEInitializationAlgorithm[])
+function reinitialization_algs(cbs::Vector{SymbolicDiscreteCallback})
+    mapreduce(
+        reinitialization_alg, vcat, cbs, init = SciMLBase.DAEInitializationAlgorithm[])
+end
 
 function namespace_callback(cb::SymbolicDiscreteCallback, s)::SymbolicDiscreteCallback
     af = affects(cb)
@@ -598,14 +603,15 @@ function generate_single_rootfinding_callback(
         initfn = SciMLBase.INITIALIZE_DEFAULT
     end
     return ContinuousCallback(
-        cond, affect_function.affect, affect_function.affect_neg, rootfind = cb.rootfind, 
+        cond, affect_function.affect, affect_function.affect_neg, rootfind = cb.rootfind,
         initialize = initfn,
         initializealg = reinitialization_alg(cb))
 end
 
 function generate_vector_rootfinding_callback(
         cbs, sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys); rootfind = SciMLBase.RightRootFind, reinitialization = SciMLBase.CheckInit(), kwargs...)
+        ps = parameters(sys); rootfind = SciMLBase.RightRootFind,
+        reinitialization = SciMLBase.CheckInit(), kwargs...)
     eqs = map(cb -> flatten_equations(cb.eqs), cbs)
     num_eqs = length.(eqs)
     # fuse equations to create VectorContinuousCallback
@@ -670,7 +676,8 @@ function generate_vector_rootfinding_callback(
         initfn = SciMLBase.INITIALIZE_DEFAULT
     end
     return VectorContinuousCallback(
-        cond, affect, affect_neg, length(eqs), rootfind = rootfind, initialize = initfn, initializealg = reinitialization)
+        cond, affect, affect_neg, length(eqs), rootfind = rootfind,
+        initialize = initfn, initializealg = reinitialization)
 end
 
 """
@@ -711,13 +718,14 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = unknow
     # groupby would be very useful here, but alas
     cb_classes = Dict{
         @NamedTuple{
-            rootfind::SciMLBase.RootfindOpt, 
+            rootfind::SciMLBase.RootfindOpt,
             reinitialization::SciMLBase.DAEInitializationAlgorithm}, Vector{SymbolicContinuousCallback}}()
     for cb in cbs
         push!(
-            get!(() -> SymbolicContinuousCallback[], cb_classes, (
-                rootfind = cb.rootfind, 
-                reinitialization = reinitialization_alg(cb))),
+            get!(() -> SymbolicContinuousCallback[], cb_classes,
+                (
+                    rootfind = cb.rootfind,
+                    reinitialization = reinitialization_alg(cb))),
             cb)
     end
 
@@ -725,7 +733,8 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = unknow
     compiled_callbacks = map(collect(pairs(sort!(
         OrderedDict(cb_classes); by = p -> p.rootfind)))) do (equiv_class, cbs_in_class)
         return generate_vector_rootfinding_callback(
-            cbs_in_class, sys, dvs, ps; rootfind = equiv_class.rootfind, reinitialization=equiv_class.reinitialization, kwargs...)
+            cbs_in_class, sys, dvs, ps; rootfind = equiv_class.rootfind,
+            reinitialization = equiv_class.reinitialization, kwargs...)
     end
     if length(compiled_callbacks) == 1
         return compiled_callbacks[]
@@ -796,10 +805,12 @@ function generate_timed_callback(cb, sys, dvs, ps; postprocess_affect_expr! = no
     end
     if cond isa AbstractVector
         # Preset Time
-        return PresetTimeCallback(cond, as; initialize = initfn, initializealg=reinitialization_alg(cb))
+        return PresetTimeCallback(
+            cond, as; initialize = initfn, initializealg = reinitialization_alg(cb))
     else
         # Periodic
-        return PeriodicCallback(as, cond; initialize = initfn, initializealg=reinitialization_alg(cb))
+        return PeriodicCallback(
+            as, cond; initialize = initfn, initializealg = reinitialization_alg(cb))
     end
 end
 
@@ -824,7 +835,8 @@ function generate_discrete_callback(cb, sys, dvs, ps; postprocess_affect_expr! =
         else
             initfn = SciMLBase.INITIALIZE_DEFAULT
         end
-        return DiscreteCallback(c, as; initialize = initfn, initializealg=reinitialization_alg(cb))
+        return DiscreteCallback(
+            c, as; initialize = initfn, initializealg = reinitialization_alg(cb))
     end
 end
 

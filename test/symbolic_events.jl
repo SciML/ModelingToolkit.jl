@@ -890,13 +890,14 @@ end
 
 @testset "Discrete event reinitialization (#3142)" begin
     @connector LiquidPort begin
-        p(t)::Float64, [    description = "Set pressure in bar", 
-                            guess = 1.01325]
-        Vdot(t)::Float64, [ description = "Volume flow rate in L/min", 
-                            guess = 0.0, 
-                            connect = Flow]
+        p(t)::Float64, [description = "Set pressure in bar",
+            guess = 1.01325]
+        Vdot(t)::Float64,
+        [description = "Volume flow rate in L/min",
+            guess = 0.0,
+            connect = Flow]
     end
-    
+
     @mtkmodel PressureSource begin
         @components begin
             port = LiquidPort()
@@ -908,7 +909,7 @@ end
             port.p ~ p_set
         end
     end
-    
+
     @mtkmodel BinaryValve begin
         @constants begin
             p_ref::Float64 = 1.0, [description = "Reference pressure drop in bar"]
@@ -918,7 +919,7 @@ end
             port_in = LiquidPort()
             port_out = LiquidPort()
         end
-        @parameters begin 
+        @parameters begin
             k_V::Float64 = 1.0, [description = "Valve coefficient in L/min/bar"]
             k_leakage::Float64 = 1e-08, [description = "Leakage coefficient in L/min/bar"]
             ρ::Float64 = 1000.0, [description = "Density in kg/m^3"]
@@ -935,16 +936,16 @@ end
             Δp ~ port_in.p - port_out.p
             # System behavior
             D(S) ~ 0.0
-            Vdot ~ S*k_V*sign(Δp)*sqrt(abs(Δp)/p_ref * ρ_ref/ρ) + k_leakage*Δp # softplus alpha function to avoid negative values under the sqrt
+            Vdot ~ S * k_V * sign(Δp) * sqrt(abs(Δp) / p_ref * ρ_ref / ρ) + k_leakage * Δp # softplus alpha function to avoid negative values under the sqrt
         end
     end
-    
+
     # Test System
     @mtkmodel TestSystem begin
         @components begin
             pressure_source_1 = PressureSource(p_set = 2.0)
-            binary_valve_1 = BinaryValve(S = 1.0, k_leakage=0.0)
-            binary_valve_2 = BinaryValve(S = 1.0, k_leakage=0.0)
+            binary_valve_1 = BinaryValve(S = 1.0, k_leakage = 0.0)
+            binary_valve_2 = BinaryValve(S = 1.0, k_leakage = 0.0)
             pressure_source_2 = PressureSource(p_set = 1.0)
         end
         @equations begin
@@ -953,21 +954,21 @@ end
             connect(binary_valve_2.port_out, pressure_source_2.port)
         end
         @discrete_events begin
-            [30] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0 ]
-            [60] => [binary_valve_1.S ~ 1.0, binary_valve_2.S ~ 0.0, binary_valve_2.Δp ~ 1.0 ]
-            [120] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0 ]
+            [30] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0]
+            [60] => [
+                binary_valve_1.S ~ 1.0, binary_valve_2.S ~ 0.0, binary_valve_2.Δp ~ 1.0]
+            [120] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0]
         end
     end
-    
+
     # Test Simulation
     @mtkbuild sys = TestSystem()
-    
+
     # Test Simulation
     prob = ODEProblem(sys, [], (0.0, 150.0))
     sol = solve(prob)
     @test sol[end] == [0.0, 0.0, 0.0]
 end
-
 
 @testset "Discrete variable timeseries" begin
     @variables x(t)
@@ -991,20 +992,20 @@ end
 end
 
 @testset "Bump" begin
-    @variables x(t) [irreducible=true] y(t) [irreducible=true]
+    @variables x(t) [irreducible = true] y(t) [irreducible = true]
     eqs = [x ~ y, D(x) ~ -1]
     cb = [x ~ 0.0] => [x ~ 0, y ~ 1]
-    @mtkbuild pend = ODESystem(eqs, t;continuous_events = [cb])
+    @mtkbuild pend = ODESystem(eqs, t; continuous_events = [cb])
     prob = ODEProblem(pend, [x => 1], (0.0, 3.0), guesses = [y => x])
     @test_throws "initialization not satisifed" solve(prob, Rodas5())
-    
+
     cb = [x ~ 0.0] => [y ~ 1]
-    @mtkbuild pend = ODESystem(eqs, t;continuous_events = [cb])
+    @mtkbuild pend = ODESystem(eqs, t; continuous_events = [cb])
     prob = ODEProblem(pend, [x => 1], (0.0, 3.0), guesses = [y => x])
     @test_broken !SciMLBase.successful_retcode(solve(prob, Rodas5()))
 
     cb = [x ~ 0.0] => [x ~ 1, y ~ 1]
-    @mtkbuild pend = ODESystem(eqs, t;continuous_events = [cb])
+    @mtkbuild pend = ODESystem(eqs, t; continuous_events = [cb])
     prob = ODEProblem(pend, [x => 1], (0.0, 3.0), guesses = [y => x])
-    @test all(≈(0.0; atol=1e-9), solve(prob, Rodas5())[[x,y]][end])
+    @test all(≈(0.0; atol = 1e-9), solve(prob, Rodas5())[[x, y]][end])
 end
