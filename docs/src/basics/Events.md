@@ -394,7 +394,7 @@ exact SciMLCallbacks event that is generated for a continuous event.
 
 ### [Heater](@id heater_events)
 
-Bang-bang control of a heater connected to a leaky plant requires hysteresis in order to prevent control oscillation.
+Bang-bang control of a heater connected to a leaky plant requires hysteresis in order to prevent rapid control oscillation.
 
 ```@example events
 @variables temp(t)
