@@ -416,12 +416,12 @@ in between. To do this, we create two continuous callbacks:
 using Setfield
 furnace_disable = ModelingToolkit.SymbolicContinuousCallback(
     [temp ~ furnace_off_threshold],
-    ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, i, c
+    ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, c, i
         @set! x.furnace_on = false
     end)
 furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
     [temp ~ furnace_on_threshold],
-    ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, i, c
+    ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, c, i
         @set! x.furnace_on = true
     end)
 ```
@@ -454,18 +454,16 @@ In our example, each event merely changes whether the furnace is on or off. Acco
 evaluate this before calling our function to fill out all of the numerical values, then apply them back to the system
 once our affect function returns. Furthermore, it will check that it is possible to do this assignment.
 
-The function given to `ImperativeAffect` needs to have one of four signatures, checked in this order:
+The function given to `ImperativeAffect` needs to have the signature:
 
-  - `f(modified::NamedTuple, observed::NamedTuple, ctx, integrator)::NamedTuple` if the function needs the low-level integrator,
-  - `f(modified::NamedTuple, observed::NamedTuple, ctx)::NamedTuple` if the function needs the user-defined context,
-  - `f(modified::NamedTuple, observed::NamedTuple)::NamedTuple` if the function also reads observed values from the system,
-  - `f(modified::NamedTuple)::NamedTuple` if the function only writes values (unknowns or parameters) to the system.
-    The `do` block in the example implicitly constructs said function inline. For exposition, we use the full version (e.g. `x, o, i, c`) but this could be simplified to merely `x`.
-
+```julia 
+    f(modified::NamedTuple, observed::NamedTuple, ctx, integrator)::NamedTuple
+```
 The function `f` will be called with `observed` and `modified` `NamedTuple`s that are derived from their respective `NamedTuple` definitions.
 In our example, if `furnace_on` is `false`, then the value of the `x` that's passed in as `modified` will be `(furnace_on = false)`.
 The modified values should be passed out in the same format: to set `furnace_on` to `true` we need to return a tuple `(furnace_on = true)`.
-We use Setfield to do this in the example, recreating the result tuple before returning it.
+The examples does this with Setfield, recreating the result tuple before returning it; the returned tuple may optionally be missing values as 
+well, in which case those values will not be written back to the problem.
 
 Accordingly, we can now interpret the `ImperativeAffect` definitions to mean that when `temp = furnace_off_threshold` we
 will write `furnace_on = false` back to the system, and when `temp = furnace_on_threshold` we will write `furnace_on = true` back
@@ -543,7 +541,7 @@ In our encoder, we interpret this as occlusion or nonocclusion of the sensor, up
 
 ```@example events
 qAevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta) ~ 0],
-    ModelingToolkit.ImperativeAffect((; qA, hA, hB, cnt), (; qB)) do x, o, i, c
+    ModelingToolkit.ImperativeAffect((; qA, hA, hB, cnt), (; qB)) do x, o, c, i
         @set! x.hA = x.qA
         @set! x.hB = o.qB
         @set! x.qA = 1
@@ -567,7 +565,7 @@ Instead, we can use right root finding:
 
 ```@example events
 qBevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta - π / 2) ~ 0],
-    ModelingToolkit.ImperativeAffect((; qB, hA, hB, cnt), (; qA, theta)) do x, o, i, c
+    ModelingToolkit.ImperativeAffect((; qB, hA, hB, cnt), (; qA, theta)) do x, o, c, i
         @set! x.hA = o.qA
         @set! x.hB = x.qB
         @set! x.qB = clamp(sign(cos(100 * o.theta - π / 2)), 0.0, 1.0)

@@ -76,12 +76,11 @@ end
 
 `ImperativeAffect` is a helper for writing affect functions that will compute observed values and
 ensure that modified values are correctly written back into the system. The affect function `f` needs to have
-one of four signatures:
-* `f(modified::NamedTuple)::NamedTuple` if the function only writes values (unknowns or parameters) to the system,
-* `f(modified::NamedTuple, observed::NamedTuple)::NamedTuple` if the function also reads observed values from the system,
-* `f(modified::NamedTuple, observed::NamedTuple, ctx)::NamedTuple` if the function needs the user-defined context,
-* `f(modified::NamedTuple, observed::NamedTuple, ctx, integrator)::NamedTuple` if the function needs the low-level integrator.
-These will be checked in reverse order (that is, the four-argument version first, than the 3, etc).
+the signature 
+
+```
+    f(modified::NamedTuple, observed::NamedTuple, ctx, integrator)::NamedTuple
+```
 
 The function `f` will be called with `observed` and `modified` `NamedTuple`s that are derived from their respective `NamedTuple` definitions.
 Each  declaration`NamedTuple` should map an expression to a symbol; for example if we pass `observed=(; x = a + b)` this will alias the result of executing `a+b` in the system as `x`
@@ -1046,7 +1045,7 @@ function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs.
     Implementation sketch:
         generate observed function (oop), should save to a component array under obs_syms
         do the same stuff as the normal FA for pars_syms
-        call the affect method - test if it's OOP or IP using applicable
+        call the affect method
         unpack and apply the resulting values
     =#
     function check_dups(syms, exprs) # = (syms_dedup, exprs_dedup)
@@ -1135,22 +1134,10 @@ function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs.
                 integ.u, integ.p, integ.t))
 
             # let the user do their thing
-            modvals = if applicable(
-                user_affect, upd_component_array, obs_component_array, ctx, integ)
-                user_affect(upd_component_array, obs_component_array, ctx, integ)
-            elseif applicable(user_affect, upd_component_array, obs_component_array, ctx)
-                user_affect(upd_component_array, obs_component_array, ctx)
-            elseif applicable(user_affect, upd_component_array, obs_component_array)
-                user_affect(upd_component_array, obs_component_array)
-            elseif applicable(user_affect, upd_component_array)
-                user_affect(upd_component_array)
-            else
-                @error "User affect function $user_affect needs to implement one of the supported ImperativeAffect callback forms; see the ImperativeAffect docstring for more details"
-                user_affect(upd_component_array, obs_component_array, integ, ctx) # this WILL error but it'll give a more sensible message
-            end
-
+            upd_vals = user_affect(upd_component_array, obs_component_array, ctx, integ)
+            
             # write the new values back to the integrator
-            _generated_writeback(integ, upd_funs, modvals)
+            _generated_writeback(integ, upd_funs, upd_vals)
 
             for idx in save_idxs
                 SciMLBase.save_discretes!(integ, idx)

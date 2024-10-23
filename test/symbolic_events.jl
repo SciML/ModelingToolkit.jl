@@ -1027,60 +1027,9 @@ end
 
     furnace_off = ModelingToolkit.SymbolicContinuousCallback(
         [temp ~ furnace_off_threshold],
-        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, i
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, c, i
             @set! x.furnace_on = false
-        end)
-    furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
-        [temp ~ furnace_on_threshold],
-        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, i
-            @set! x.furnace_on = true
-        end)
-    @named sys = ODESystem(
-        eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
-    ss = structural_simplify(sys)
-    prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
-    sol = solve(prob, Tsit5(); dtmax = 0.01)
-    @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
-
-    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
-        [temp ~ furnace_off_threshold],
-        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o
-            @set! x.furnace_on = false
-        end)
-    furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
-        [temp ~ furnace_on_threshold],
-        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o
-            @set! x.furnace_on = true
-        end)
-    @named sys = ODESystem(
-        eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
-    ss = structural_simplify(sys)
-    prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
-    sol = solve(prob, Tsit5(); dtmax = 0.01)
-    @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
-
-    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
-        [temp ~ furnace_off_threshold],
-        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x
-            @set! x.furnace_on = false
-        end)
-    furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
-        [temp ~ furnace_on_threshold],
-        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x
-            @set! x.furnace_on = true
-        end)
-    @named sys = ODESystem(
-        eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
-    ss = structural_simplify(sys)
-    prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
-    sol = solve(prob, Tsit5(); dtmax = 0.01)
-    @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
-
-    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
-        [temp ~ furnace_off_threshold],
-        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x
-            @set! x.furnace_on = false
-        end; initialize = ModelingToolkit.ImperativeAffect(modified = (; temp)) do x
+        end; initialize = ModelingToolkit.ImperativeAffect(modified = (; temp)) do x, o, c, i
             @set! x.temp = 0.2
         end)
     furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
@@ -1180,7 +1129,7 @@ end
         end
     end
     qAevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta) ~ 0],
-        ModelingToolkit.ImperativeAffect((; qA, hA, hB, cnt), (; qB)) do x, o, i, c
+        ModelingToolkit.ImperativeAffect((; qA, hA, hB, cnt), (; qB)) do x, o, c, i
             @set! x.hA = x.qA
             @set! x.hB = o.qB
             @set! x.qA = 1
@@ -1196,7 +1145,7 @@ end
             x
         end; rootfind = SciMLBase.RightRootFind)
     qBevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta - π / 2) ~ 0],
-        ModelingToolkit.ImperativeAffect((; qB, hA, hB, cnt), (; qA)) do x, o, i, c
+        ModelingToolkit.ImperativeAffect((; qB, hA, hB, cnt), (; qA)) do x, o, c, i
             @set! x.hA = o.qA
             @set! x.hB = x.qB
             @set! x.qB = 1
