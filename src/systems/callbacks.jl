@@ -116,29 +116,33 @@ function ImperativeAffect(f::Function;
         modified::NamedTuple = NamedTuple{()}(()),
         ctx = nothing,
         skip_checks = false)
-    ImperativeAffect(f, 
+    ImperativeAffect(f,
         collect(values(observed)), collect(keys(observed)),
-        collect(values(modified)), collect(keys(modified)), 
+        collect(values(modified)), collect(keys(modified)),
         ctx, skip_checks)
 end
 function ImperativeAffect(f::Function, modified::NamedTuple;
-        observed::NamedTuple = NamedTuple{()}(()), ctx = nothing, skip_checks=false)
-    ImperativeAffect(f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
+        observed::NamedTuple = NamedTuple{()}(()), ctx = nothing, skip_checks = false)
+    ImperativeAffect(
+        f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
 end
 function ImperativeAffect(
-        f::Function, modified::NamedTuple, observed::NamedTuple; ctx = nothing, skip_checks=false)
-    ImperativeAffect(f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
+        f::Function, modified::NamedTuple, observed::NamedTuple; ctx = nothing, skip_checks = false)
+    ImperativeAffect(
+        f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
 end
 function ImperativeAffect(
-        f::Function, modified::NamedTuple, observed::NamedTuple, ctx; skip_checks=false)
-    ImperativeAffect(f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
+        f::Function, modified::NamedTuple, observed::NamedTuple, ctx; skip_checks = false)
+    ImperativeAffect(
+        f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
 end
 
-function Base.show(io::IO, mfa::ImperativeAffect) 
-    obs_vals = join(map((ob,nm) -> "$ob => $nm", mfa.obs, mfa.obs_syms), ", ")
-    mod_vals = join(map((md,nm) -> "$md => $nm", mfa.modified, mfa.mod_syms), ", ")
+function Base.show(io::IO, mfa::ImperativeAffect)
+    obs_vals = join(map((ob, nm) -> "$ob => $nm", mfa.obs, mfa.obs_syms), ", ")
+    mod_vals = join(map((md, nm) -> "$md => $nm", mfa.modified, mfa.mod_syms), ", ")
     affect = mfa.f
-    print(io, "ImperativeAffect(observed: [$obs_vals], modified: [$mod_vals], affect:$affect)")
+    print(io,
+        "ImperativeAffect(observed: [$obs_vals], modified: [$mod_vals], affect:$affect)")
 end
 func(f::ImperativeAffect) = f.f
 context(a::ImperativeAffect) = a.ctx
@@ -234,15 +238,16 @@ struct SymbolicContinuousCallback
     affect_neg::Union{Vector{Equation}, FunctionalAffect, ImperativeAffect, Nothing}
     rootfind::SciMLBase.RootfindOpt
     reinitializealg::SciMLBase.DAEInitializationAlgorithm
-    function SymbolicContinuousCallback(; 
-        eqs::Vector{Equation}, 
-        affect = NULL_AFFECT,
-        affect_neg = affect, 
-        rootfind = SciMLBase.LeftRootFind,
-        initialize=NULL_AFFECT,
-        finalize=NULL_AFFECT,
-        reinitializealg=SciMLBase.CheckInit())
-        new(eqs, initialize, finalize, make_affect(affect), make_affect(affect_neg), rootfind, reinitializealg)
+    function SymbolicContinuousCallback(;
+            eqs::Vector{Equation},
+            affect = NULL_AFFECT,
+            affect_neg = affect,
+            rootfind = SciMLBase.LeftRootFind,
+            initialize = NULL_AFFECT,
+            finalize = NULL_AFFECT,
+            reinitializealg = SciMLBase.CheckInit())
+        new(eqs, initialize, finalize, make_affect(affect),
+            make_affect(affect_neg), rootfind, reinitializealg)
     end # Default affect to nothing
 end
 make_affect(affect) = affect
@@ -250,8 +255,8 @@ make_affect(affect::Tuple) = FunctionalAffect(affect...)
 make_affect(affect::NamedTuple) = FunctionalAffect(; affect...)
 
 function Base.:(==)(e1::SymbolicContinuousCallback, e2::SymbolicContinuousCallback)
-    isequal(e1.eqs, e2.eqs) && isequal(e1.affect, e2.affect) && 
-    isequal(e1.initialize, e2.initialize) && isequal(e1.finalize, e2.finalize) &&
+    isequal(e1.eqs, e2.eqs) && isequal(e1.affect, e2.affect) &&
+        isequal(e1.initialize, e2.initialize) && isequal(e1.finalize, e2.finalize) &&
         isequal(e1.affect_neg, e2.affect_neg) && isequal(e1.rootfind, e2.rootfind)
 end
 Base.isempty(cb::SymbolicContinuousCallback) = isempty(cb.eqs)
@@ -266,10 +271,9 @@ function Base.hash(cb::SymbolicContinuousCallback, s::UInt)
     hash(cb.rootfind, s)
 end
 
-
 function Base.show(io::IO, cb::SymbolicContinuousCallback)
     indent = get(io, :indent, 0)
-    iio = IOContext(io, :indent => indent+1)
+    iio = IOContext(io, :indent => indent + 1)
     print(io, "SymbolicContinuousCallback(")
     print(iio, "Equations:")
     show(iio, equations(cb))
@@ -298,7 +302,7 @@ end
 
 function Base.show(io::IO, mime::MIME"text/plain", cb::SymbolicContinuousCallback)
     indent = get(io, :indent, 0)
-    iio = IOContext(io, :indent => indent+1)
+    iio = IOContext(io, :indent => indent + 1)
     println(io, "SymbolicContinuousCallback:")
     println(iio, "Equations:")
     show(iio, mime, equations(cb))
@@ -338,14 +342,18 @@ end # wrap eq in vector
 SymbolicContinuousCallback(p::Pair) = SymbolicContinuousCallback(p[1], p[2])
 SymbolicContinuousCallback(cb::SymbolicContinuousCallback) = cb # passthrough
 function SymbolicContinuousCallback(eqs::Equation, affect = NULL_AFFECT;
-        affect_neg = affect, rootfind = SciMLBase.LeftRootFind, initialize = NULL_AFFECT, finalize = NULL_AFFECT)
+        affect_neg = affect, rootfind = SciMLBase.LeftRootFind,
+        initialize = NULL_AFFECT, finalize = NULL_AFFECT)
     SymbolicContinuousCallback(
-        eqs = [eqs], affect = affect, affect_neg = affect_neg, rootfind = rootfind, initialize=initialize, finalize=finalize)
+        eqs = [eqs], affect = affect, affect_neg = affect_neg, rootfind = rootfind,
+        initialize = initialize, finalize = finalize)
 end
 function SymbolicContinuousCallback(eqs::Vector{Equation}, affect = NULL_AFFECT;
-        affect_neg = affect, rootfind = SciMLBase.LeftRootFind, initialize = NULL_AFFECT, finalize = NULL_AFFECT)
+        affect_neg = affect, rootfind = SciMLBase.LeftRootFind,
+        initialize = NULL_AFFECT, finalize = NULL_AFFECT)
     SymbolicContinuousCallback(
-        eqs = eqs, affect = affect, affect_neg = affect_neg, rootfind = rootfind, initialize=initialize, finalize=finalize)
+        eqs = eqs, affect = affect, affect_neg = affect_neg, rootfind = rootfind,
+        initialize = initialize, finalize = finalize)
 end
 
 SymbolicContinuousCallbacks(cb::SymbolicContinuousCallback) = [cb]
@@ -385,8 +393,10 @@ function finalize_affects(cbs::Vector{SymbolicContinuousCallback})
 end
 
 reinitialization_alg(cb::SymbolicContinuousCallback) = cb.reinitializealg
-reinitialization_algs(cbs::Vector{SymbolicContinuousCallback}) = 
-    mapreduce(reinitialization_alg, vcat, cbs, init = SciMLBase.DAEInitializationAlgorithm[])
+function reinitialization_algs(cbs::Vector{SymbolicContinuousCallback})
+    mapreduce(
+        reinitialization_alg, vcat, cbs, init = SciMLBase.DAEInitializationAlgorithm[])
+end
 
 namespace_affects(af::Vector, s) = Equation[namespace_affect(a, s) for a in af]
 namespace_affects(af::FunctionalAffect, s) = namespace_affect(af, s)
@@ -436,7 +446,8 @@ struct SymbolicDiscreteCallback
     affects::Any
     reinitializealg::SciMLBase.DAEInitializationAlgorithm
 
-    function SymbolicDiscreteCallback(condition, affects = NULL_AFFECT, reinitializealg=SciMLBase.CheckInit())
+    function SymbolicDiscreteCallback(
+            condition, affects = NULL_AFFECT, reinitializealg = SciMLBase.CheckInit())
         c = scalarize_condition(condition)
         a = scalarize_affects(affects)
         new(c, a, reinitializealg)
@@ -498,8 +509,10 @@ function affects(cbs::Vector{SymbolicDiscreteCallback})
 end
 
 reinitialization_alg(cb::SymbolicDiscreteCallback) = cb.reinitializealg
-reinitialization_algs(cbs::Vector{SymbolicDiscreteCallback}) = 
-    mapreduce(reinitialization_alg, vcat, cbs, init = SciMLBase.DAEInitializationAlgorithm[])
+function reinitialization_algs(cbs::Vector{SymbolicDiscreteCallback})
+    mapreduce(
+        reinitialization_alg, vcat, cbs, init = SciMLBase.DAEInitializationAlgorithm[])
+end
 
 function namespace_callback(cb::SymbolicDiscreteCallback, s)::SymbolicDiscreteCallback
     af = affects(cb)
@@ -781,7 +794,8 @@ function generate_single_rootfinding_callback(
         end
     end
 
-    user_initfun = isnothing(affect_function.initialize) ? SciMLBase.INITIALIZE_DEFAULT : (c, u, t, i) -> affect_function.initialize(i)
+    user_initfun = isnothing(affect_function.initialize) ? SciMLBase.INITIALIZE_DEFAULT :
+                   (c, u, t, i) -> affect_function.initialize(i)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing &&
        (save_idxs = get(ic.callback_to_clocks, cb, nothing)) !== nothing
         initfn = let save_idxs = save_idxs
@@ -795,17 +809,19 @@ function generate_single_rootfinding_callback(
     else
         initfn = user_initfun
     end
-    
+
     return ContinuousCallback(
-        cond, affect_function.affect, affect_function.affect_neg, rootfind = cb.rootfind, 
-        initialize = initfn, 
-        finalize = isnothing(affect_function.finalize) ? SciMLBase.FINALIZE_DEFAULT : (c, u, t, i) -> affect_function.finalize(i),
+        cond, affect_function.affect, affect_function.affect_neg, rootfind = cb.rootfind,
+        initialize = initfn,
+        finalize = isnothing(affect_function.finalize) ? SciMLBase.FINALIZE_DEFAULT :
+                   (c, u, t, i) -> affect_function.finalize(i),
         initializealg = reinitialization_alg(cb))
 end
 
 function generate_vector_rootfinding_callback(
         cbs, sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys); rootfind = SciMLBase.RightRootFind, reinitialization = SciMLBase.CheckInit(), kwargs...)
+        ps = parameters(sys); rootfind = SciMLBase.RightRootFind,
+        reinitialization = SciMLBase.CheckInit(), kwargs...)
     eqs = map(cb -> flatten_equations(cb.eqs), cbs)
     num_eqs = length.(eqs)
     # fuse equations to create VectorContinuousCallback
@@ -821,11 +837,12 @@ function generate_vector_rootfinding_callback(
         sys, rhss, dvs, ps; expression = Val{false}, kwargs...)
 
     affect_functions = @NamedTuple{
-        affect::Function, 
-        affect_neg::Union{Function, Nothing}, 
-        initialize::Union{Function, Nothing}, 
+        affect::Function,
+        affect_neg::Union{Function, Nothing},
+        initialize::Union{Function, Nothing},
         finalize::Union{Function, Nothing}}[
-            compile_affect_fn(cb, sys, dvs, ps, kwargs) for cb in cbs]
+                                            compile_affect_fn(cb, sys, dvs, ps, kwargs)
+                                            for cb in cbs]
     cond = function (out, u, t, integ)
         rf_ip(out, u, parameter_values(integ), t)
     end
@@ -861,17 +878,20 @@ function generate_vector_rootfinding_callback(
                         if isnothing(func)
                             continue
                         else
-                            func(integ) 
+                            func(integ)
                         end
                     end
                 end
             end
         end
     end
-    initialize = handle_optional_setup_fn(map(fn -> fn.initialize, affect_functions), SciMLBase.INITIALIZE_DEFAULT)
-    finalize = handle_optional_setup_fn(map(fn -> fn.finalize, affect_functions), SciMLBase.FINALIZE_DEFAULT)
+    initialize = handle_optional_setup_fn(
+        map(fn -> fn.initialize, affect_functions), SciMLBase.INITIALIZE_DEFAULT)
+    finalize = handle_optional_setup_fn(
+        map(fn -> fn.finalize, affect_functions), SciMLBase.FINALIZE_DEFAULT)
     return VectorContinuousCallback(
-        cond, affect, affect_neg, length(eqs), rootfind = rootfind, initialize = initialize, finalize = finalize, initializealg = reinitialization)
+        cond, affect, affect_neg, length(eqs), rootfind = rootfind, initialize = initialize,
+        finalize = finalize, initializealg = reinitialization)
 end
 
 """
@@ -881,8 +901,8 @@ function compile_affect_fn(cb, sys::AbstractODESystem, dvs, ps, kwargs)
     eq_aff = affects(cb)
     eq_neg_aff = affect_negs(cb)
     affect = compile_affect(eq_aff, cb, sys, dvs, ps; expression = Val{false}, kwargs...)
-    function compile_optional_affect(aff, default=nothing)
-        if isnothing(aff) || aff==default
+    function compile_optional_affect(aff, default = nothing)
+        if isnothing(aff) || aff == default
             return nothing
         else
             return compile_affect(aff, cb, sys, dvs, ps; expression = Val{false}, kwargs...)
@@ -918,13 +938,14 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = unknow
     # groupby would be very useful here, but alas
     cb_classes = Dict{
         @NamedTuple{
-            rootfind::SciMLBase.RootfindOpt, 
+            rootfind::SciMLBase.RootfindOpt,
             reinitialization::SciMLBase.DAEInitializationAlgorithm}, Vector{SymbolicContinuousCallback}}()
     for cb in cbs
         push!(
-            get!(() -> SymbolicContinuousCallback[], cb_classes, (
-                rootfind = cb.rootfind, 
-                reinitialization = reinitialization_alg(cb))),
+            get!(() -> SymbolicContinuousCallback[], cb_classes,
+                (
+                    rootfind = cb.rootfind,
+                    reinitialization = reinitialization_alg(cb))),
             cb)
     end
 
@@ -932,7 +953,8 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = unknow
     compiled_callbacks = map(collect(pairs(sort!(
         OrderedDict(cb_classes); by = p -> p.rootfind)))) do (equiv_class, cbs_in_class)
         return generate_vector_rootfinding_callback(
-            cbs_in_class, sys, dvs, ps; rootfind = equiv_class.rootfind, reinitialization=equiv_class.reinitialization, kwargs...)
+            cbs_in_class, sys, dvs, ps; rootfind = equiv_class.rootfind,
+            reinitialization = equiv_class.reinitialization, kwargs...)
     end
     if length(compiled_callbacks) == 1
         return compiled_callbacks[]
@@ -984,29 +1006,34 @@ function invalid_variables(sys, expr)
     filter(x -> !any(isequal(x), all_symbols(sys)), reduce(vcat, vars(expr); init = []))
 end
 function unassignable_variables(sys, expr)
-    assignable_syms = reduce(vcat, Symbolics.scalarize.(vcat(unknowns(sys), parameters(sys))); init=[])
+    assignable_syms = reduce(
+        vcat, Symbolics.scalarize.(vcat(unknowns(sys), parameters(sys))); init = [])
     written = reduce(vcat, Symbolics.scalarize.(vars(expr)); init = [])
     return filter(
         x -> !any(isequal(x), assignable_syms), written)
 end
 
-@generated function _generated_writeback(integ, setters::NamedTuple{NS1,<:Tuple}, values::NamedTuple{NS2, <:Tuple}) where {NS1, NS2}
+@generated function _generated_writeback(integ, setters::NamedTuple{NS1, <:Tuple},
+        values::NamedTuple{NS2, <:Tuple}) where {NS1, NS2}
     setter_exprs = []
-    for name in NS2 
+    for name in NS2
         if !(name in NS1)
             missing_name = "Tried to write back to $name from affect; only declared states ($NS1) may be written to."
             error(missing_name)
         end
         push!(setter_exprs, :(setters.$name(integ, values.$name)))
     end
-    return :(begin $(setter_exprs...) end)
+    return :(begin
+        $(setter_exprs...)
+    end)
 end
 
 function check_assignable(sys, sym)
     if symbolic_type(sym) == ScalarSymbolic()
         is_variable(sys, sym) || is_parameter(sys, sym)
     elseif symbolic_type(sym) == ArraySymbolic()
-        is_variable(sys, sym) || is_parameter(sys, sym) || all(x -> check_assignable(sys, x), collect(sym))
+        is_variable(sys, sym) || is_parameter(sys, sym) ||
+            all(x -> check_assignable(sys, x), collect(sym))
     elseif sym isa Union{AbstractArray, Tuple}
         all(x -> check_assignable(sys, x), sym)
     else
@@ -1084,13 +1111,13 @@ function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs.
 
     # okay so now to generate the stuff to assign it back into the system
     mod_pairs = mod_exprs .=> mod_syms
-    mod_names = (mod_syms..., )
+    mod_names = (mod_syms...,)
     mod_og_val_fun = build_explicit_observed_function(
         sys, Symbolics.scalarize.(first.(mod_pairs));
         array_type = :tuple)
 
     upd_funs = NamedTuple{mod_names}((setu.((sys,), first.(mod_pairs))...,))
-    
+
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         save_idxs = get(ic.callback_to_clocks, cb, Int[])
     else
@@ -1104,10 +1131,12 @@ function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs.
             upd_component_array = NamedTuple{mod_names}(modvals)
 
             # update the observed values
-            obs_component_array = NamedTuple{obs_sym_tuple}(obs_fun(integ.u, integ.p, integ.t))
+            obs_component_array = NamedTuple{obs_sym_tuple}(obs_fun(
+                integ.u, integ.p, integ.t))
 
             # let the user do their thing
-            modvals = if applicable(user_affect, upd_component_array, obs_component_array, ctx, integ)
+            modvals = if applicable(
+                user_affect, upd_component_array, obs_component_array, ctx, integ)
                 user_affect(upd_component_array, obs_component_array, ctx, integ)
             elseif applicable(user_affect, upd_component_array, obs_component_array, ctx)
                 user_affect(upd_component_array, obs_component_array, ctx)
@@ -1122,7 +1151,7 @@ function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs.
 
             # write the new values back to the integrator
             _generated_writeback(integ, upd_funs, modvals)
-            
+
             for idx in save_idxs
                 SciMLBase.save_discretes!(integ, idx)
             end
@@ -1130,7 +1159,8 @@ function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs.
     end
 end
 
-function compile_affect(affect::Union{FunctionalAffect, ImperativeAffect}, cb, sys, dvs, ps; kwargs...)
+function compile_affect(
+        affect::Union{FunctionalAffect, ImperativeAffect}, cb, sys, dvs, ps; kwargs...)
     compile_user_affect(affect, cb, sys, dvs, ps; kwargs...)
 end
 

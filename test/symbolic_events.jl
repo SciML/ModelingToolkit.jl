@@ -1001,7 +1001,7 @@ end
     @test sol[b] == [5.0, 5.0]
     @test sol[c] == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
 end
-@testset "Heater" begin 
+@testset "Heater" begin
     @variables temp(t)
     params = @parameters furnace_on_threshold=0.5 furnace_off_threshold=0.7 furnace_power=1.0 leakage=0.1 furnace_on::Bool=false
     eqs = [
@@ -1080,7 +1080,7 @@ end
         [temp ~ furnace_off_threshold],
         ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x
             @set! x.furnace_on = false
-        end; initialize = ModelingToolkit.ImperativeAffect(modified = (; temp)) do x 
+        end; initialize = ModelingToolkit.ImperativeAffect(modified = (; temp)) do x
             @set! x.temp = 0.2
         end)
     furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
@@ -1145,17 +1145,16 @@ end
     @test_throws "refers to missing variable(s)" prob=ODEProblem(
         ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
 
-        
     furnace_off = ModelingToolkit.SymbolicContinuousCallback(
         [temp ~ furnace_off_threshold],
         ModelingToolkit.ImperativeAffect(modified = (; furnace_on),
             observed = (; furnace_on)) do x, o, c, i
-            return (;fictional2 = false)
+            return (; fictional2 = false)
         end)
     @named sys = ODESystem(
         eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
     ss = structural_simplify(sys)
-    prob=ODEProblem(
+    prob = ODEProblem(
         ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
     @test_throws "Tried to write back to" solve(prob, Tsit5())
 end
@@ -1220,15 +1219,16 @@ end
     @test getp(sol, cnt)(sol) == 197 # we get 2 pulses per phase cycle (cos 0 crossing) and we go to 100 cycles; we miss a few due to the initial state
 end
 
-
-
 import RuntimeGeneratedFunctions
-function (f::RuntimeGeneratedFunctions.RuntimeGeneratedFunction{argnames, cache_tag, context_tag, id})(args::Vararg{Any, N}) where {N, argnames, cache_tag, context_tag, id}
+function (f::RuntimeGeneratedFunctions.RuntimeGeneratedFunction{
+        argnames, cache_tag, context_tag,
+        id})(args::Vararg{Any, N}) where {N, argnames, cache_tag, context_tag, id}
     try
         RuntimeGeneratedFunctions.generated_callfunc(f, args...)
-    catch e 
+    catch e
         @error "Caught error in RuntimeGeneratedFunction; source code follows"
-        func_expr = Expr(:->, Expr(:tuple, argnames...), RuntimeGeneratedFunctions._lookup_body(cache_tag, id))
+        func_expr = Expr(:->, Expr(:tuple, argnames...),
+            RuntimeGeneratedFunctions._lookup_body(cache_tag, id))
         @show func_expr
         rethrow(e)
     end
