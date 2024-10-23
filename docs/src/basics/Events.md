@@ -378,3 +378,201 @@ sol.ps[c] # sol[c] will error, since `c` is not a timeseries value
 ```
 
 It can be seen that the timeseries for `c` is not saved.
+
+
+## [(Experimental) Imperative affects](@id imp_affects)
+The `ImperativeAffect` can be used as an alternative to the aforementioned functional affect form. Note
+that `ImperativeAffect` is still experimental; to emphasize this, we do not export it and it should be
+included as `ModelingToolkit.ImperativeAffect`. It abstracts over how values are written back to the 
+system, simplifying the definitions and (in the future) allowing assignments back to observed values
+by solving the nonlinear reinitialization problem afterwards.
+
+We will use two examples to describe `ImperativeAffect`: a simple heater and a quadrature encoder. 
+These examples will also demonstrate advanced usage of `ModelingToolkit.SymbolicContinousCallback`,
+the low-level interface that the aforementioned tuple form converts into and allows control over the
+exact SciMLCallbacks event that is generated for a continous event.
+
+### [Heater](@id heater_events)
+Bang-bang control of a heater connected to a leaky plant requires hysteresis in order to prevent control oscillation.
+
+```@example events 
+@variables temp(t)
+params = @parameters furnace_on_threshold=0.5 furnace_off_threshold=0.7 furnace_power=1.0 leakage=0.1 furnace_on(t)::Bool=false
+eqs = [
+    D(temp) ~ furnace_on * furnace_power - temp^2 * leakage
+]
+```
+Our plant is simple. We have a heater that's turned on and off by the clocked parameter `furnace_on`
+which adds `furnace_power` forcing to the system when enabled. We then leak heat porportional to `leakage`
+as a function of the square of the current temperature. 
+
+We need a controller with hysteresis to conol the plant. We wish the furnace to turn on when the temperature
+is below `furnace_on_threshold` and off when above `furnace_off_threshold`, while maintaining its current state
+in between. To do this, we create two continous callbacks:
+```@example events
+using Setfield
+furnace_disable = ModelingToolkit.SymbolicContinuousCallback(
+    [temp ~ furnace_off_threshold],
+    ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, i, c
+        @set! x.furnace_on = false
+    end)
+furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
+    [temp ~ furnace_on_threshold],
+    ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, i, c
+        @set! x.furnace_on = true
+    end)
+```
+We're using the explicit form of `SymbolicContinuousCallback` here, though
+so far we aren't using anything that's not possible with the implicit interface.
+You can also write 
+```julia
+[temp ~ furnace_off_threshold] => ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, i, c
+    @set! x.furnace_on = false
+end
+```
+and it would work the same.
+
+The `ImperativeAffect` is the larger change in this example. `ImperativeAffect` has the constructor signature
+```julia
+    ImperativeAffect(f::Function; modified::NamedTuple, observed::NamedTuple, ctx)
+```
+that accepts the function to call, a named tuple of both the names of and symbolic values representing
+values in the system to be modified, a named tuple of the values that are merely observed (that is, used from
+the system but not modified), and a context that's passed to the affect function.
+
+In our example, each event merely changes whether the furnace is on or off. Accordingly, we pass a `modified` tuple
+`(; furnace_on)` (creating a `NamedTuple` equivalent to `(furnace_on = furnace_on)`). `ImperativeAffect` will then 
+evaluate this before calling our function to fill out all of the numerical values, then apply them back to the system
+once our affect function returns. Furthermore, it will check that it is possible to do this assignment.
+
+The function given to `ImperativeAffect` needs to have one of four signatures, checked in this order:
+* `f(modified::NamedTuple, observed::NamedTuple, ctx, integrator)::NamedTuple` if the function needs the low-level integrator,
+* `f(modified::NamedTuple, observed::NamedTuple, ctx)::NamedTuple` if the function needs the user-defined context,
+* `f(modified::NamedTuple, observed::NamedTuple)::NamedTuple` if the function also reads observed values from the system,
+* `f(modified::NamedTuple)::NamedTuple` if the function only writes values (unknowns or parameters) to the system.
+The `do` block in the example implicitly constructs said function inline. For exposition, we use the full version (e.g. `x, o, i, c`) but this could be simplified to merely `x`. 
+
+The function `f` will be called with `observed` and `modified` `NamedTuple`s that are derived from their respective `NamedTuple` definitions.
+In our example, if `furnace_on` is `false`, then the value of the `x` that's passed in as `modified` will be `(furnace_on = false)`. 
+The modified values should be passed out in the same format: to set `furnace_on` to `true` we need to return a tuple `(furnace_on = true)`.
+We use Setfield to do this in the example, recreating the result tuple before returning it.
+
+Accordingly, we can now interpret the `ImperativeAffect` definitions to mean that when `temp = furnace_off_threshold` we 
+will write `furnace_on = false` back to the system, and when `temp = furnace_on_threshold` we will write `furnace_on = true` back
+to the system.
+
+```@example events
+@named sys = ODESystem(
+    eqs, t, [temp], params; continuous_events = [furnace_disable, furnace_enable])
+ss = structural_simplify(sys)
+prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 10.0))
+sol = solve(prob, Tsit5())
+plot(sol)
+hline!([sol.ps[furnace_off_threshold], sol.ps[furnace_on_threshold]], l = (:black, 1), primary = false)
+```
+
+Here we see exactly the desired hysteresis. The heater starts on until the temperature hits
+`furnace_off_threshold`. The temperature then bleeds away until `furnace_on_threshold` at which
+point the furnace turns on again until `furnace_off_threshold` and so on and so forth. The controller
+is effectively regulating the temperature of the plant.
+
+### [Quadrature Encoder](@id quadrature)
+For a more complex application we'll look at modeling a quadrature encoder attached to a shaft spinning at a constant speed.
+Traditionally, a quadrature encoder is built out of a code wheel that interrupts the sensors at constant intervals and two sensors slightly out of phase with one another.
+A state machine can take the pattern of pulses produced by the two sensors and determine the number of steps that the shaft has spun. The state machine takes the new value
+from each sensor and the old values and decodes them into the direction that the wheel has spun in this step.
+
+```@example events
+    @variables theta(t) omega(t)
+    params = @parameters qA=0 qB=0 hA=0 hB=0 cnt::Int=0
+    eqs = [D(theta) ~ omega
+           omega ~ 1.0]
+```
+Our continous-time system is extremely simple. We have two states, `theta` for the angle of the shaft
+and `omega` for the rate at which it's spinning. We then have parameters for the state machine `qA, qB, hA, hB` 
+and a step count `cnt`.
+
+We'll then implement the decoder as a simple Julia function.
+```@example events
+    function decoder(oldA, oldB, newA, newB)
+        state = (oldA, oldB, newA, newB)
+        if state == (0, 0, 1, 0) || state == (1, 0, 1, 1) || state == (1, 1, 0, 1) ||
+           state == (0, 1, 0, 0)
+            return 1
+        elseif state == (0, 0, 0, 1) || state == (0, 1, 1, 1) || state == (1, 1, 1, 0) ||
+               state == (1, 0, 0, 0)
+            return -1
+        elseif state == (0, 0, 0, 0) || state == (0, 1, 0, 1) || state == (1, 0, 1, 0) ||
+               state == (1, 1, 1, 1)
+            return 0
+        else
+            return 0 # err is interpreted as no movement
+        end
+    end
+```
+Based on the current and old state, this function will return 1 if the wheel spun in the positive direction,
+-1 if in the negative, and 0 otherwise.
+
+The encoder state advances when the occlusion begins or ends. We model the 
+code wheel as simply detecting when `cos(100*theta)` is 0; if we're at a positive
+edge of the 0 crossing, then we interpret that as occlusion (so the discrete `qA` goes to 1). Otherwise, if `cos` is
+going negative, we interpret that as lack of occlusion (so the discrete goes to 0). The decoder function is
+then invoked to update the count with this new information.
+
+We can implement this in one of two ways: using edge sign detection or right root finding. For exposition, we
+will implement each sensor differently. 
+
+For sensor A, we're using the edge detction method. By providing a different affect to `SymbolicContinuousCallback`'s
+`affect_neg` argument, we can specify different behaviour for the negative crossing vs. the positive crossing of the root.
+In our encoder, we interpret this as occlusion or nonocclusion of the sensor, update the internal state, and tick the decoder.
+```@example events
+    qAevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta) ~ 0],
+        ModelingToolkit.ImperativeAffect((; qA, hA, hB, cnt), (; qB)) do x, o, i, c
+            @set! x.hA = x.qA
+            @set! x.hB = o.qB
+            @set! x.qA = 1
+            @set! x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
+            x
+        end,
+        affect_neg = ModelingToolkit.ImperativeAffect(
+            (; qA, hA, hB, cnt), (; qB)) do x, o, c, i
+            @set! x.hA = x.qA
+            @set! x.hB = o.qB
+            @set! x.qA = 0
+            @set! x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
+            x
+        end)
+```
+
+The other way we can implement a sensor is by changing the root find.
+Normally, we use left root finding; the affect will be invoked instantaneously before
+the root is crossed. This makes it trickier to figure out what the new state is.
+Instead, we can use right root finding:
+
+```@example events
+    qBevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta - π / 2) ~ 0],
+        ModelingToolkit.ImperativeAffect((; qB, hA, hB, cnt), (; qA, theta)) do x, o, i, c
+            @set! x.hA = o.qA
+            @set! x.hB = x.qB
+            @set! x.qB = clamp(sign(cos(100 * o.theta - π / 2)), 0.0, 1.0)
+            @set! x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
+            x
+        end; rootfind = SciMLBase.RightRootFind)
+```
+Here, sensor B is located `π / 2` behind sensor A in angular space, so we're adjusting our 
+trigger function accordingly. We here ask for right root finding on the callback, so we know
+that the value of said function will have the "new" sign rather than the old one. Thus, we can 
+determine the new state of the sensor from the sign of the indicator function evaluated at the
+affect activation point, with -1 mapped to 0.
+
+We can now simulate the encoder.
+```@example events
+    @named sys = ODESystem(
+        eqs, t, [theta, omega], params; continuous_events = [qAevt, qBevt])
+    ss = structural_simplify(sys)
+    prob = ODEProblem(ss, [theta => 0.0], (0.0, pi))
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
+    sol.ps[cnt]
+```
+`cos(100*theta)` will have 200 crossings in the half rotation we've gone through, so the encoder would notionally count 200 steps.
+Our encoder counts 198 steps (it loses one step to initialization and one step due to the final state falling squarely on an edge).
