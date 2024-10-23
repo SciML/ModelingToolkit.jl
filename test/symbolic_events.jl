@@ -1218,18 +1218,3 @@ end
     sol = solve(prob, Tsit5(); dtmax = 0.01)
     @test getp(sol, cnt)(sol) == 197 # we get 2 pulses per phase cycle (cos 0 crossing) and we go to 100 cycles; we miss a few due to the initial state
 end
-
-import RuntimeGeneratedFunctions
-function (f::RuntimeGeneratedFunctions.RuntimeGeneratedFunction{
-        argnames, cache_tag, context_tag,
-        id})(args::Vararg{Any, N}) where {N, argnames, cache_tag, context_tag, id}
-    try
-        RuntimeGeneratedFunctions.generated_callfunc(f, args...)
-    catch e
-        @error "Caught error in RuntimeGeneratedFunction; source code follows"
-        func_expr = Expr(:->, Expr(:tuple, argnames...),
-            RuntimeGeneratedFunctions._lookup_body(cache_tag, id))
-        @show func_expr
-        rethrow(e)
-    end
-end
