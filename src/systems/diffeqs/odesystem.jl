@@ -444,7 +444,7 @@ function build_explicit_observed_function(sys, ts;
         param_only = false,
         op = Operator,
         throw = true,
-        array_type=:array)
+        array_type = :array)
     if (isscalar = symbolic_type(ts) !== NotSymbolic())
         ts = [ts]
     end
@@ -589,10 +589,12 @@ function build_explicit_observed_function(sys, ts;
         oop_mtkp_wrapper = mtkparams_wrapper
     end
 
-    output_expr = isscalar ? ts[1] : (array_type == :array ? MakeArray(ts, output_type) : MakeTuple(ts))
+    output_expr = isscalar ? ts[1] :
+                  (array_type == :array ? MakeArray(ts, output_type) : MakeTuple(ts))
     # Need to keep old method of building the function since it uses `output_type`,
     # which can't be provided to `build_function`
-    oop_fn = Func(args, [], pre(Let(obsexprs, output_expr, false))) |> array_wrapper[1] |> oop_mtkp_wrapper |> toexpr
+    oop_fn = Func(args, [], pre(Let(obsexprs, output_expr, false))) |> array_wrapper[1] |>
+             oop_mtkp_wrapper |> toexpr
     oop_fn = expression ? oop_fn : eval_or_rgf(oop_fn; eval_expression, eval_module)
 
     if !isscalar
