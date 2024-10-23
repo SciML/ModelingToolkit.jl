@@ -408,7 +408,7 @@ Our plant is simple. We have a heater that's turned on and off by the clocked pa
 which adds `furnace_power` forcing to the system when enabled. We then leak heat proportional to `leakage`
 as a function of the square of the current temperature.
 
-We need a controller with hysteresis to conol the plant. We wish the furnace to turn on when the temperature
+We need a controller with hysteresis to control the plant. We wish the furnace to turn on when the temperature
 is below `furnace_on_threshold` and off when above `furnace_off_threshold`, while maintaining its current state
 in between. To do this, we create two continuous callbacks:
 
