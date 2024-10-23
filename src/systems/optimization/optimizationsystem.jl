@@ -37,6 +37,8 @@ struct OptimizationSystem <: AbstractOptimizationSystem
     constraints::Vector{Union{Equation, Inequality}}
     """The name of the system."""
     name::Symbol
+    """A description of the system."""
+    description::String
     """The internal systems. These are required to have unique names."""
     systems::Vector{OptimizationSystem}
     """
@@ -67,7 +69,7 @@ struct OptimizationSystem <: AbstractOptimizationSystem
     isscheduled::Bool
 
     function OptimizationSystem(tag, op, unknowns, ps, var_to_name, observed,
-            constraints, name, systems, defaults, metadata = nothing,
+            constraints, name, description, systems, defaults, metadata = nothing,
             gui_metadata = nothing, complete = false, index_cache = nothing, parent = nothing,
             isscheduled = false;
             checks::Union{Bool, Int} = true)
@@ -78,7 +80,7 @@ struct OptimizationSystem <: AbstractOptimizationSystem
             check_units(u, constraints)
         end
         new(tag, op, unknowns, ps, var_to_name, observed,
-            constraints, name, systems, defaults, metadata, gui_metadata, complete,
+            constraints, name, description, systems, defaults, metadata, gui_metadata, complete,
             index_cache, parent, isscheduled)
     end
 end
@@ -92,6 +94,7 @@ function OptimizationSystem(op, unknowns, ps;
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
         name = nothing,
+        description = "",
         systems = OptimizationSystem[],
         checks = true,
         metadata = nothing,
@@ -137,7 +140,7 @@ function OptimizationSystem(op, unknowns, ps;
         op′, unknowns′, ps′, var_to_name,
         observed,
         constraints,
-        name, systems, defaults, metadata, gui_metadata;
+        name, description, systems, defaults, metadata, gui_metadata;
         checks = checks)
 end
 

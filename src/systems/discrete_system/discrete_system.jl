@@ -42,6 +42,10 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     """
     name::Symbol
     """
+    A description of the system.
+    """
+    description::String
+    """
     The internal systems. These are required to have unique names.
     """
     systems::Vector{DiscreteSystem}
@@ -95,7 +99,7 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
 
     function DiscreteSystem(tag, discreteEqs, iv, dvs, ps, tspan, var_to_name,
             observed,
-            name,
+            name, description,
             systems, defaults, preface, connector_type, parameter_dependencies = Equation[],
             metadata = nothing, gui_metadata = nothing,
             tearing_state = nothing, substitutions = nothing,
@@ -111,7 +115,7 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
             u = __get_unit_type(dvs, ps, iv)
             check_units(u, discreteEqs)
         end
-        new(tag, discreteEqs, iv, dvs, ps, tspan, var_to_name, observed, name,
+        new(tag, discreteEqs, iv, dvs, ps, tspan, var_to_name, observed, name, description,
             systems,
             defaults,
             preface, connector_type, parameter_dependencies, metadata, gui_metadata,
@@ -128,6 +132,7 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
         systems = DiscreteSystem[],
         tspan = nothing,
         name = nothing,
+        description = "",
         default_u0 = Dict(),
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
@@ -164,7 +169,7 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
         throw(ArgumentError("System names must be unique."))
     end
     DiscreteSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-        eqs, iv′, dvs′, ps′, tspan, var_to_name, observed, name, systems,
+        eqs, iv′, dvs′, ps′, tspan, var_to_name, observed, name, description, systems,
         defaults, preface, connector_type, parameter_dependencies, metadata, gui_metadata, kwargs...)
 end
 
@@ -221,6 +226,7 @@ function flatten(sys::DiscreteSystem, noeqs = false)
             observed = observed(sys),
             defaults = defaults(sys),
             name = nameof(sys),
+            description = description(sys),
             checks = false)
     end
 end
