@@ -429,7 +429,7 @@ Options not otherwise specified are:
 * `op = Operator` sets the recursion terminator for the walk done by `vars` to identify the variables that appear in `ts`. See the documentation for `vars` for more detail.
 * `throw = true` if true, throw an error when generating a function for `ts` that reference variables that do not exist
 * `drop_expr` is deprecated.
-* `array_type`; only used if the output is an array (that is, `!isscalar(ts)`). If `:array`, then it will generate an array, if `:tuple` then it will generate a tuple.
+* `array_type`; only used if the output is an array (that is, `!isscalar(ts)`). If it is `Vector`, then it will generate an array, if `Tuple` then it will generate a tuple.
 """
 function build_explicit_observed_function(sys, ts;
         inputs = nothing,
@@ -444,7 +444,7 @@ function build_explicit_observed_function(sys, ts;
         param_only = false,
         op = Operator,
         throw = true,
-        array_type = :array)
+        array_type = Vector)
     if (isscalar = symbolic_type(ts) !== NotSymbolic())
         ts = [ts]
     end
@@ -590,7 +590,7 @@ function build_explicit_observed_function(sys, ts;
     end
 
     output_expr = isscalar ? ts[1] :
-                  (array_type == :array ? MakeArray(ts, output_type) : MakeTuple(ts))
+                  (array_type <: Vector ? MakeArray(ts, output_type) : MakeTuple(ts))
     # Need to keep old method of building the function since it uses `output_type`,
     # which can't be provided to `build_function`
     oop_fn = Func(args, [], pre(Let(obsexprs, output_expr, false))) |> array_wrapper[1] |>
