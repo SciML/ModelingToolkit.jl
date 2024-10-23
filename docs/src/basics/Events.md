@@ -561,7 +561,7 @@ qAevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta) ~ 0],
 ```
 
 The other way we can implement a sensor is by changing the root find.
-Normally, we use left root finding; the affect will be invoked instantaneously before
+Normally, we use left root finding; the affect will be invoked instantaneously _before_
 the root is crossed. This makes it trickier to figure out what the new state is.
 Instead, we can use right root finding:
 
