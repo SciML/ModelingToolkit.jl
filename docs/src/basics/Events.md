@@ -410,7 +410,7 @@ as a function of the square of the current temperature.
 
 We need a controller with hysteresis to conol the plant. We wish the furnace to turn on when the temperature
 is below `furnace_on_threshold` and off when above `furnace_off_threshold`, while maintaining its current state
-in between. To do this, we create two continous callbacks:
+in between. To do this, we create two continuous callbacks:
 
 ```@example events
 using Setfield
@@ -501,7 +501,7 @@ eqs = [D(theta) ~ omega
        omega ~ 1.0]
 ```
 
-Our continous-time system is extremely simple. We have two states, `theta` for the angle of the shaft
+Our continuous-time system is extremely simple. We have two states, `theta` for the angle of the shaft
 and `omega` for the rate at which it's spinning. We then have parameters for the state machine `qA, qB, hA, hB`
 and a step count `cnt`.
 
