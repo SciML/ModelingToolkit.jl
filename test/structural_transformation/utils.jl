@@ -53,6 +53,14 @@ end
     @test any(eq -> isequal(eq.lhs, z), observed(sys))
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [foo => _tmp_fn])
     @test_nowarn prob.f(prob.u0, prob.p, 0.0)
+
+    isys = ModelingToolkit.generate_initializesystem(sys)
+    @test length(unknowns(isys)) == 5
+    @test length(equations(isys)) == 4
+    @test !any(equations(isys)) do eq
+        iscall(eq.rhs) && operation(eq.rhs) in [StructuralTransformations.getindex_wrapper,
+            StructuralTransformations.change_origin]
+    end
 end
 
 @testset "scalarized array observed calling same function multiple times" begin
@@ -69,4 +77,12 @@ end
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [foo => _tmp_fn2])
     @test_nowarn prob.f(prob.u0, prob.p, 0.0)
     @test val[] == 1
+
+    isys = ModelingToolkit.generate_initializesystem(sys)
+    @test length(unknowns(isys)) == 3
+    @test length(equations(isys)) == 2
+    @test !any(equations(isys)) do eq
+        iscall(eq.rhs) && operation(eq.rhs) in [StructuralTransformations.getindex_wrapper,
+            StructuralTransformations.change_origin]
+    end
 end
