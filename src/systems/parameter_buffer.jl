@@ -59,7 +59,7 @@ function MTKParameters(
     end
     p = Dict()
     missing_params = Set()
-    pdeps = has_parameter_dependencies(sys) ? parameter_dependencies(sys) : nothing
+    pdeps = has_parameter_dependencies(sys) ? parameter_dependencies(sys) : []
 
     for sym in all_ps
         ttsym = default_toterm(sym)
@@ -92,7 +92,7 @@ function MTKParameters(
         delete!(missing_params, ttsym)
     end
 
-    if pdeps !== nothing
+    if !isempty(pdeps)
         for eq in pdeps
             sym = eq.lhs
             expr = eq.rhs
@@ -279,10 +279,7 @@ function SciMLStructures.canonicalize(::SciMLStructures.Tunable, p::MTKParameter
     arr = p.tunable
     repack = let p = p
         function (new_val)
-            if new_val !== p.tunable
-                copyto!(p.tunable, new_val)
-            end
-            return p
+            return SciMLStructures.replace(SciMLStructures.Tunable(), p, new_val)
         end
     end
     return arr, repack, true
@@ -303,12 +300,9 @@ for (Portion, field, recurse) in [(SciMLStructures.Discrete, :discrete, 1)
                                   (Nonnumeric, :nonnumeric, 1)]
     @eval function SciMLStructures.canonicalize(::$Portion, p::MTKParameters)
         as_vector = buffer_to_arraypartition(p.$field)
-        repack = let as_vector = as_vector, p = p
+        repack = let p = p
             function (new_val)
-                if new_val !== as_vector
-                    update_tuple_of_buffers(new_val, p.$field)
-                end
-                p
+                return SciMLStructures.replace(($Portion)(), p, new_val)
             end
         end
         return as_vector, repack, true
@@ -677,6 +671,10 @@ end
     len += fieldcount(D) + fieldcount(C) + fieldcount(N)
     return len
 end
+
+Base.size(ps::MTKParameters) = (length(ps),)
+
+Base.IndexStyle(::Type{T}) where {T <: MTKParameters} = IndexLinear()
 
 Base.getindex(p::MTKParameters, pind::ParameterIndex) = parameter_values(p, pind)
 
