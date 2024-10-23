@@ -404,7 +404,7 @@ eqs = [
 ]
 ```
 
-Our plant is simple. We have a heater that's turned on and off by the clocked parameter `furnace_on`
+Our plant is simple. We have a heater that's turned on and off by the time-indexed parameter `furnace_on`
 which adds `furnace_power` forcing to the system when enabled. We then leak heat proportional to `leakage`
 as a function of the square of the current temperature.
 
@@ -499,9 +499,9 @@ eqs = [D(theta) ~ omega
        omega ~ 1.0]
 ```
 
-Our continuous-time system is extremely simple. We have two states, `theta` for the angle of the shaft
+Our continuous-time system is extremely simple. We have two unknown variables `theta` for the angle of the shaft
 and `omega` for the rate at which it's spinning. We then have parameters for the state machine `qA, qB, hA, hB`
-and a step count `cnt`.
+(corresponding to the current quadrature of the A/B sensors and the historical ones) and a step count `cnt`.
 
 We'll then implement the decoder as a simple Julia function.
 
