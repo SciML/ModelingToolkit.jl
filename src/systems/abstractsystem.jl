@@ -2458,6 +2458,7 @@ function linearization_function(sys::AbstractSystem, inputs,
                 newps = deepcopy(sys_ps)
                 for (k, v) in p
                     if is_parameter(sys, k)
+                        v = fixpoint_sub(v, p)
                         setp(sys, k)(newps, v)
                     end
                 end
