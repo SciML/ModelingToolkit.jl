@@ -388,9 +388,9 @@ system, simplifying the definitions and (in the future) allowing assignments bac
 by solving the nonlinear reinitialization problem afterwards.
 
 We will use two examples to describe `ImperativeAffect`: a simple heater and a quadrature encoder.
-These examples will also demonstrate advanced usage of `ModelingToolkit.SymbolicContinousCallback`,
+These examples will also demonstrate advanced usage of `ModelingToolkit.SymbolicContinuousCallback`,
 the low-level interface that the aforementioned tuple form converts into and allows control over the
-exact SciMLCallbacks event that is generated for a continous event.
+exact SciMLCallbacks event that is generated for a continuous event.
 
 ### [Heater](@id heater_events)
 
@@ -405,7 +405,7 @@ eqs = [
 ```
 
 Our plant is simple. We have a heater that's turned on and off by the clocked parameter `furnace_on`
-which adds `furnace_power` forcing to the system when enabled. We then leak heat porportional to `leakage`
+which adds `furnace_power` forcing to the system when enabled. We then leak heat proportional to `leakage`
 as a function of the square of the current temperature.
 
 We need a controller with hysteresis to conol the plant. We wish the furnace to turn on when the temperature
@@ -537,7 +537,7 @@ then invoked to update the count with this new information.
 We can implement this in one of two ways: using edge sign detection or right root finding. For exposition, we
 will implement each sensor differently.
 
-For sensor A, we're using the edge detction method. By providing a different affect to `SymbolicContinuousCallback`'s
+For sensor A, we're using the edge detection method. By providing a different affect to `SymbolicContinuousCallback`'s
 `affect_neg` argument, we can specify different behaviour for the negative crossing vs. the positive crossing of the root.
 In our encoder, we interpret this as occlusion or nonocclusion of the sensor, update the internal state, and tick the decoder.
 
