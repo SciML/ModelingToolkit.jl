@@ -836,3 +836,11 @@ end
     integ = init(prob, Rosenbrock23())
     @test integ[y] ≈ -0.5
 end
+
+@testset "Use observed equations for guesses of observed variables" begin
+    @variables x(t) y(t) [state_priority = 100]
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ x + t, y ~ 2x + 1], t; initialization_eqs = [x^3 + y^3 ~ 1])
+    isys = ModelingToolkit.generate_initializesystem(sys)
+    @test isequal(defaults(isys)[y], 2x + 1)
+end
