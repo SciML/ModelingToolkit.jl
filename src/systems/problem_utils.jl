@@ -433,9 +433,14 @@ function process_SciMLProblem(
         solvablepars = [p
                         for p in parameters(sys)
                         if is_parameter_solvable(p, pmap, defs, guesses)]
+        has_dependent_unknowns = any(unknowns(sys)) do sym
+            val = get(op, sym, nothing)
+            val === nothing && return false
+            return symbolic_type(val) != NotSymbolic() || is_array_of_symbolics(val)
+        end
         if build_initializeprob &&
            (((implicit_dae || has_observed_u0s || !isempty(missing_unknowns) ||
-              !isempty(solvablepars)) &&
+              !isempty(solvablepars) || has_dependent_unknowns) &&
              get_tearing_state(sys) !== nothing) ||
             !isempty(initialization_equations(sys))) && t !== nothing
             initializeprob = ModelingToolkit.InitializationProblem(
