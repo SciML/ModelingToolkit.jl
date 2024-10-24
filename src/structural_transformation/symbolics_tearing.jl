@@ -584,7 +584,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     end
     @set! sys.unknowns = unknowns
 
-    obs, subeqs = cse_and_array_hacks(
+    obs, subeqs, deps = cse_and_array_hacks(
         obs, subeqs, unknowns, neweqs; cse = cse_hack, array = array_hack)
 
     @set! sys.eqs = neweqs
@@ -637,10 +637,7 @@ function cse_and_array_hacks(obs, subeqs, unknowns, neweqs; cse = true, array = 
         vars!(all_vars, rhs)
 
         # HACK 1
-        if cse &&
-           (!ModelingToolkit.isvariable(rhs) || ModelingToolkit.iscalledparameter(rhs)) &&
-           iscall(rhs) && operation(rhs) === getindex &&
-           Symbolics.shape(rhs) != Symbolics.Unknown()
+        if cse && is_getindexed_array(rhs)
             rhs_arr = arguments(rhs)[1]
             if !haskey(rhs_to_tempvar, rhs_arr)
                 tempvar = gensym(Symbol(lhs))
@@ -677,6 +674,33 @@ function cse_and_array_hacks(obs, subeqs, unknowns, neweqs; cse = true, array = 
         arr_obs_occurrences[arg1] = cnt + 1
         continue
     end
+
+    # Also do CSE for `equations(sys)`
+    if cse
+        for (i, eq) in enumerate(neweqs)
+            (; lhs, rhs) = eq
+            is_getindexed_array(rhs) || continue
+            rhs_arr = arguments(rhs)[1]
+            if !haskey(rhs_to_tempvar, rhs_arr)
+                tempvar = gensym(Symbol(lhs))
+                N = length(rhs_arr)
+                tempvar = unwrap(Symbolics.variable(
+                    tempvar; T = Symbolics.symtype(rhs_arr)))
+                tempvar = setmetadata(
+                    tempvar, Symbolics.ArrayShapeCtx, Symbolics.shape(rhs_arr))
+                tempeq = tempvar ~ rhs_arr
+                rhs_to_tempvar[rhs_arr] = tempvar
+                push!(obs, tempeq)
+                push!(subeqs, tempeq)
+            end
+            # don't need getindex_wrapper, but do it anyway to know that this
+            # hack took place
+            neweq = lhs ~ getindex_wrapper(
+                rhs_to_tempvar[rhs_arr], Tuple(arguments(rhs)[2:end]))
+            neweqs[i] = neweq
+        end
+    end
+
     # count variables in unknowns if they are scalarized forms of variables
     # also present as observed. e.g. if `x[1]` is an unknown and `x[2] ~ (..)`
     # is an observed equation.
@@ -713,7 +737,16 @@ function cse_and_array_hacks(obs, subeqs, unknowns, neweqs; cse = true, array = 
     # need to re-sort subeqs
     subeqs = ModelingToolkit.topsort_equations(subeqs, [eq.lhs for eq in subeqs])
 
-    return obs, subeqs
+    deps = Vector{Int}[i == 1 ? Int[] : collect(1:(i - 1))
+                       for i in 1:length(subeqs)]
+
+    return obs, subeqs, deps
+end
+
+function is_getindexed_array(rhs)
+    (!ModelingToolkit.isvariable(rhs) || ModelingToolkit.iscalledparameter(rhs)) &&
+        iscall(rhs) && operation(rhs) === getindex &&
+        Symbolics.shape(rhs) != Symbolics.Unknown()
 end
 
 # PART OF HACK 1

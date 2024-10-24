@@ -12,11 +12,10 @@ function generate_initializesystem(sys::ODESystem;
         algebraic_only = false,
         check_units = true, check_defguess = false,
         name = nameof(sys), kwargs...)
-    trueobs = unhack_observed(observed(sys))
+    trueobs, eqs = unhack_observed(observed(sys), equations(sys))
     vars = unique([unknowns(sys); getfield.(trueobs, :lhs)])
     vars_set = Set(vars) # for efficient in-lookup
 
-    eqs = equations(sys)
     idxs_diff = isdiffeq.(eqs)
     idxs_alge = .!idxs_diff
 
@@ -329,11 +328,11 @@ end
 Counteracts the CSE/array variable hacks in `symbolics_tearing.jl` so it works with
 initialization.
 """
-function unhack_observed(eqs::Vector{Equation})
+function unhack_observed(obseqs::Vector{Equation}, eqs::Vector{Equation})
     subs = Dict()
     tempvars = Set()
     rm_idxs = Int[]
-    for (i, eq) in enumerate(eqs)
+    for (i, eq) in enumerate(obseqs)
         iscall(eq.rhs) || continue
         if operation(eq.rhs) == StructuralTransformations.change_origin
             push!(rm_idxs, i)
@@ -347,14 +346,27 @@ function unhack_observed(eqs::Vector{Equation})
     end
 
     for (i, eq) in enumerate(eqs)
+        iscall(eq.rhs) || continue
+        if operation(eq.rhs) == StructuralTransformations.getindex_wrapper
+            var, idxs = arguments(eq.rhs)
+            subs[eq.rhs] = var[idxs...]
+            push!(tempvars, var)
+        end
+    end
+
+    for (i, eq) in enumerate(obseqs)
         if eq.lhs in tempvars
             subs[eq.lhs] = eq.rhs
             push!(rm_idxs, i)
         end
     end
 
-    eqs = eqs[setdiff(eachindex(eqs), rm_idxs)]
-    return map(eqs) do eq
+    obseqs = obseqs[setdiff(eachindex(obseqs), rm_idxs)]
+    obseqs = map(obseqs) do eq
         fixpoint_sub(eq.lhs, subs) ~ fixpoint_sub(eq.rhs, subs)
     end
+    eqs = map(eqs) do eq
+        fixpoint_sub(eq.lhs, subs) ~ fixpoint_sub(eq.rhs, subs)
+    end
+    return obseqs, eqs
 end
