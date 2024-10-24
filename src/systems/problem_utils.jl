@@ -171,7 +171,24 @@ function to_varmap(vals, varlist::Vector)
         check_eqs_u0(varlist, varlist, vals)
         vals = vec(varlist) .=> vec(vals)
     end
-    return anydict(unwrap(k) => unwrap(v) for (k, v) in anydict(vals))
+    return recursive_unwrap(anydict(vals))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Recursively call `Symbolics.unwrap` on `x`. Useful when `x` is an array of (potentially)
+symbolic values, all of which need to be unwrapped. Specializes when `x isa AbstractDict`
+to unwrap keys and values, returning an `AnyDict`.
+"""
+function recursive_unwrap(x::AbstractArray)
+    symbolic_type(x) == ArraySymbolic() ? unwrap(x) : recursive_unwrap.(x)
+end
+
+recursive_unwrap(x) = unwrap(x)
+
+function recursive_unwrap(x::AbstractDict)
+    return anydict(unwrap(k) => recursive_unwrap(v) for (k, v) in x)
 end
 
 """
@@ -262,7 +279,7 @@ function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
     end
     vals = map(x -> varmap[x], vars)
 
-    if container_type <: Union{AbstractDict, Tuple, Nothing}
+    if container_type <: Union{AbstractDict, Tuple, Nothing, SciMLBase.NullParameters}
         container_type = Array
     end
 
@@ -410,7 +427,7 @@ function process_SciMLProblem(
     u0map = to_varmap(u0map, dvs)
     _pmap = pmap
     pmap = to_varmap(pmap, ps)
-    defs = add_toterms(defaults(sys))
+    defs = add_toterms(recursive_unwrap(defaults(sys)))
     cmap, cs = get_cmap(sys)
     kwargs = NamedTuple(kwargs)
 
@@ -433,9 +450,14 @@ function process_SciMLProblem(
         solvablepars = [p
                         for p in parameters(sys)
                         if is_parameter_solvable(p, pmap, defs, guesses)]
+        has_dependent_unknowns = any(unknowns(sys)) do sym
+            val = get(op, sym, nothing)
+            val === nothing && return false
+            return symbolic_type(val) != NotSymbolic() || is_array_of_symbolics(val)
+        end
         if build_initializeprob &&
            (((implicit_dae || has_observed_u0s || !isempty(missing_unknowns) ||
-              !isempty(solvablepars)) &&
+              !isempty(solvablepars) || has_dependent_unknowns) &&
              get_tearing_state(sys) !== nothing) ||
             !isempty(initialization_equations(sys))) && t !== nothing
             initializeprob = ModelingToolkit.InitializationProblem(
