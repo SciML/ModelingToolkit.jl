@@ -1447,3 +1447,15 @@ end
     @parameters p
     @test_nowarn ODESystem(Equation[], t; parameter_dependencies = [p ~ 1.0], name = :a)
 end
+
+@testset "Inplace observed" begin
+    @variables x(t)
+    @parameters p[1:2] q
+    @mtkbuild sys = ODESystem(D(x) ~ sum(p) * x + q * t, t)
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [p => ones(2), q => 2])
+    obsfn = ModelingToolkit.build_explicit_observed_function(
+        sys, [p..., q], return_inplace = true)[2]
+    buf = zeros(3)
+    obsfn(buf, prob.u0, prob.p, 0.0)
+    @test buf ≈ [1.0, 1.0, 2.0]
+end
