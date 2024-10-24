@@ -13,7 +13,6 @@ function generate_initializesystem(sys::ODESystem;
         check_units = true, check_defguess = false,
         name = nameof(sys), kwargs...)
     trueobs = unhack_observed(observed(sys))
-    @show trueobs
     vars = unique([unknowns(sys); getfield.(trueobs, :lhs)])
     vars_set = Set(vars) # for efficient in-lookup
 
