@@ -844,3 +844,19 @@ end
     isys = ModelingToolkit.generate_initializesystem(sys)
     @test isequal(defaults(isys)[y], 2x + 1)
 end
+
+@testset "Create initializeprob when unknown has dependent value" begin
+    @variables x(t) y(t)
+    @mtkbuild sys = ODESystem([D(x) ~ x, D(y) ~ t * y], t; defaults = [x => 2y])
+    prob = ODEProblem(sys, [y => 1.0], (0.0, 1.0))
+    @test prob.f.initializeprob !== nothing
+    integ = init(prob)
+    @test integ[x] ≈ 2.0
+
+    @variables x(t)[1:2] y(t)
+    @mtkbuild sys = ODESystem([D(x) ~ x, D(y) ~ t], t; defaults = [x => [y, 3.0]])
+    prob = ODEProblem(sys, [y => 1.0], (0.0, 1.0))
+    @test prob.f.initializeprob !== nothing
+    integ = init(prob)
+    @test integ[x] ≈ [1.0, 3.0]
+end
