@@ -12,10 +12,10 @@ function generate_initializesystem(sys::ODESystem;
         algebraic_only = false,
         check_units = true, check_defguess = false,
         name = nameof(sys), kwargs...)
-    vars = unique([unknowns(sys); getfield.((observed(sys)), :lhs)])
+    trueobs, eqs = unhack_observed(observed(sys), equations(sys))
+    vars = unique([unknowns(sys); getfield.(trueobs, :lhs)])
     vars_set = Set(vars) # for efficient in-lookup
 
-    eqs = equations(sys)
     idxs_diff = isdiffeq.(eqs)
     idxs_alge = .!idxs_diff
 
@@ -24,7 +24,7 @@ function generate_initializesystem(sys::ODESystem;
     D = Differential(get_iv(sys))
     diffmap = merge(
         Dict(eq.lhs => eq.rhs for eq in eqs_diff),
-        Dict(D(eq.lhs) => D(eq.rhs) for eq in observed(sys))
+        Dict(D(eq.lhs) => D(eq.rhs) for eq in trueobs)
     )
 
     # 1) process dummy derivatives and u0map into initialization system
@@ -166,15 +166,14 @@ function generate_initializesystem(sys::ODESystem;
     )
 
     # 7) use observed equations for guesses of observed variables if not provided
-    obseqs = observed(sys)
-    for eq in obseqs
+    for eq in trueobs
         haskey(defs, eq.lhs) && continue
         any(x -> isequal(default_toterm(x), eq.lhs), keys(defs)) && continue
 
         defs[eq.lhs] = eq.rhs
     end
 
-    eqs_ics = Symbolics.substitute.([eqs_ics; obseqs], (paramsubs,))
+    eqs_ics = Symbolics.substitute.([eqs_ics; trueobs], (paramsubs,))
     vars = [vars; collect(values(paramsubs))]
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
@@ -323,4 +322,51 @@ function SciMLBase.remake_initializeprob(sys::ODESystem, odefn, u0, t0, p)
     else
         return nothing, nothing, nothing, nothing
     end
+end
+
+"""
+Counteracts the CSE/array variable hacks in `symbolics_tearing.jl` so it works with
+initialization.
+"""
+function unhack_observed(obseqs::Vector{Equation}, eqs::Vector{Equation})
+    subs = Dict()
+    tempvars = Set()
+    rm_idxs = Int[]
+    for (i, eq) in enumerate(obseqs)
+        iscall(eq.rhs) || continue
+        if operation(eq.rhs) == StructuralTransformations.change_origin
+            push!(rm_idxs, i)
+            continue
+        end
+        if operation(eq.rhs) == StructuralTransformations.getindex_wrapper
+            var, idxs = arguments(eq.rhs)
+            subs[eq.rhs] = var[idxs...]
+            push!(tempvars, var)
+        end
+    end
+
+    for (i, eq) in enumerate(eqs)
+        iscall(eq.rhs) || continue
+        if operation(eq.rhs) == StructuralTransformations.getindex_wrapper
+            var, idxs = arguments(eq.rhs)
+            subs[eq.rhs] = var[idxs...]
+            push!(tempvars, var)
+        end
+    end
+
+    for (i, eq) in enumerate(obseqs)
+        if eq.lhs in tempvars
+            subs[eq.lhs] = eq.rhs
+            push!(rm_idxs, i)
+        end
+    end
+
+    obseqs = obseqs[setdiff(eachindex(obseqs), rm_idxs)]
+    obseqs = map(obseqs) do eq
+        fixpoint_sub(eq.lhs, subs) ~ fixpoint_sub(eq.rhs, subs)
+    end
+    eqs = map(eqs) do eq
+        fixpoint_sub(eq.lhs, subs) ~ fixpoint_sub(eq.rhs, subs)
+    end
+    return obseqs, eqs
 end

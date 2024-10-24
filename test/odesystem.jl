@@ -1448,6 +1448,14 @@ end
     @test_nowarn ODESystem(Equation[], t; parameter_dependencies = [p ~ 1.0], name = :a)
 end
 
+@testset "Variable discovery in arrays of `Num` inside callable symbolic" begin
+    @variables x(t) y(t)
+    @parameters foo(::AbstractVector)
+    sys = @test_nowarn ODESystem(D(x) ~ foo([x, 2y]), t; name = :sys)
+    @test length(unknowns(sys)) == 2
+    @test any(isequal(y), unknowns(sys))
+end
+
 @testset "Inplace observed" begin
     @variables x(t)
     @parameters p[1:2] q

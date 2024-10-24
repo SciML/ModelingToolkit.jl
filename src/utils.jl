@@ -389,7 +389,13 @@ function vars!(vars, O; op = Differential)
             f = getcalledparameter(O)
             push!(vars, f)
             for arg in arguments(O)
-                vars!(vars, arg; op)
+                if symbolic_type(arg) == NotSymbolic() && arg isa AbstractArray
+                    for el in arg
+                        vars!(vars, unwrap(el); op)
+                    end
+                else
+                    vars!(vars, arg; op)
+                end
             end
             return vars
         end
@@ -397,7 +403,7 @@ function vars!(vars, O; op = Differential)
     end
     if symbolic_type(O) == NotSymbolic() && O isa AbstractArray
         for arg in O
-            vars!(vars, arg; op)
+            vars!(vars, unwrap(arg); op)
         end
         return vars
     end
