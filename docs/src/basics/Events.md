@@ -456,13 +456,14 @@ once our affect function returns. Furthermore, it will check that it is possible
 
 The function given to `ImperativeAffect` needs to have the signature:
 
-```julia 
-    f(modified::NamedTuple, observed::NamedTuple, ctx, integrator)::NamedTuple
+```julia
+f(modified::NamedTuple, observed::NamedTuple, ctx, integrator)::NamedTuple
 ```
+
 The function `f` will be called with `observed` and `modified` `NamedTuple`s that are derived from their respective `NamedTuple` definitions.
 In our example, if `furnace_on` is `false`, then the value of the `x` that's passed in as `modified` will be `(furnace_on = false)`.
 The modified values should be passed out in the same format: to set `furnace_on` to `true` we need to return a tuple `(furnace_on = true)`.
-The examples does this with Setfield, recreating the result tuple before returning it; the returned tuple may optionally be missing values as 
+The examples does this with Setfield, recreating the result tuple before returning it; the returned tuple may optionally be missing values as
 well, in which case those values will not be written back to the problem.
 
 Accordingly, we can now interpret the `ImperativeAffect` definitions to mean that when `temp = furnace_off_threshold` we

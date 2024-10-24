@@ -1135,7 +1135,7 @@ function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs.
 
             # let the user do their thing
             upd_vals = user_affect(upd_component_array, obs_component_array, ctx, integ)
-            
+
             # write the new values back to the integrator
             _generated_writeback(integ, upd_funs, upd_vals)
 

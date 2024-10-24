@@ -1029,7 +1029,8 @@ end
         [temp ~ furnace_off_threshold],
         ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, c, i
             @set! x.furnace_on = false
-        end; initialize = ModelingToolkit.ImperativeAffect(modified = (; temp)) do x, o, c, i
+        end; initialize = ModelingToolkit.ImperativeAffect(modified = (;
+            temp)) do x, o, c, i
             @set! x.temp = 0.2
         end)
     furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
