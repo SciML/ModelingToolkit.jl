@@ -279,7 +279,7 @@ function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
     end
     vals = map(x -> varmap[x], vars)
 
-    if container_type <: Union{AbstractDict, Tuple, Nothing}
+    if container_type <: Union{AbstractDict, Tuple, Nothing, SciMLBase.NullParameters}
         container_type = Array
     end
 

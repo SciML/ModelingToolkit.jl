@@ -128,3 +128,11 @@ prob = ODEProblem(sys, [], (1.0, 2.0), [])
     prob = ODEProblem(sys, [x => [y, 4.0], y => 2.0], (0.0, 1.0))
     @test eltype(prob.u0) <: Float64
 end
+
+@testset "split=false systems with all parameter defaults" begin
+    @variables x(t) = 1.0
+    @parameters p=1.0 q=2.0 r=3.0
+    @mtkbuild sys=ODESystem(D(x) ~ p * x + q * t + r, t) split=false
+    prob = @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
+    @test prob.p isa Vector{Float64}
+end
