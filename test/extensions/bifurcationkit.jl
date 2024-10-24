@@ -36,7 +36,7 @@ let
     bprob_BK = BifurcationProblem(f_BK,
         [1.0, 1.0],
         [-1.0, 1.0],
-        (@lens _[1]);
+        (BifurcationKit.@optic _[1]);
         record_from_solution = (x, p) -> x[1])
     bif_dia_BK = bifurcationdiagram(bprob_BK,
         PALC(),
