@@ -86,3 +86,47 @@ end
             StructuralTransformations.change_origin]
     end
 end
+
+@testset "array and cse hacks can be disabled" begin
+    @testset "fully_determined = true" begin
+        @variables x(t) y(t)[1:2] z(t)[1:2]
+        @parameters foo(::AbstractVector)[1:2]
+        _tmp_fn(x) = 2x
+        @named sys = ODESystem(
+            [D(x) ~ z[1] + z[2] + foo(z)[1], y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t)
+
+        sys1 = structural_simplify(sys; cse_hack = false)
+        @test length(observed(sys1)) == 6
+        @test !any(observed(sys1)) do eq
+            iscall(eq.rhs) &&
+                operation(eq.rhs) == StructuralTransformations.getindex_wrapper
+        end
+
+        sys2 = structural_simplify(sys; array_hack = false)
+        @test length(observed(sys2)) == 5
+        @test !any(observed(sys2)) do eq
+            iscall(eq.rhs) && operation(eq.rhs) == StructuralTransformations.change_origin
+        end
+    end
+
+    @testset "fully_determined = false" begin
+        @variables x(t) y(t)[1:2] z(t)[1:2] w(t)
+        @parameters foo(::AbstractVector)[1:2]
+        _tmp_fn(x) = 2x
+        @named sys = ODESystem(
+            [D(x) ~ z[1] + z[2] + foo(z)[1] + w, y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t)
+
+        sys1 = structural_simplify(sys; cse_hack = false, fully_determined = false)
+        @test length(observed(sys1)) == 6
+        @test !any(observed(sys1)) do eq
+            iscall(eq.rhs) &&
+                operation(eq.rhs) == StructuralTransformations.getindex_wrapper
+        end
+
+        sys2 = structural_simplify(sys; array_hack = false, fully_determined = false)
+        @test length(observed(sys2)) == 5
+        @test !any(observed(sys2)) do eq
+            iscall(eq.rhs) && operation(eq.rhs) == StructuralTransformations.change_origin
+        end
+    end
+end
