@@ -307,6 +307,12 @@ matrices = linfun([1.0], Dict(p => 3.0), 1.0)
 # this would be 1 if the parameter value isn't respected
 @test matrices.f_u[] == 3.0
 
+@testset "linearization_function handles dependent values" begin
+    @parameters q
+    matrices = @test_nowarn linfun([1.0], Dict(p => 3q, q => 1.0), 1.0)
+    @test matrices.f_u[] == 3.0
+end
+
 @testset "Issue #2941" begin
     @variables x(t) y(t)
     @parameters p
