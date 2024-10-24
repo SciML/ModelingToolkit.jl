@@ -576,8 +576,8 @@ function build_explicit_observed_function(sys, ts;
         iip_fn = build_function(ts,
             args...;
             postprocess_fbody = pre,
-            wrap_code = array_wrapper .∘ wrap_assignments(isscalar, obsexprs) .∘
-                        mtkparams_wrapper,
+            wrap_code = mtkparams_wrapper .∘ array_wrapper .∘
+                        wrap_assignments(isscalar, obsexprs),
             expression = Val{true})[2]
         if !expression
             iip_fn = eval_or_rgf(iip_fn; eval_expression, eval_module)
