@@ -879,6 +879,7 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         check_length = true,
         eval_expression = false,
         eval_module = @__MODULE__,
+        u0_constructor = identity,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DDEProblem`")
@@ -892,6 +893,9 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     h(p, t) = h_oop(p, t)
     h(p::MTKParameters, t) = h_oop(p..., t)
     u0 = h(p, tspan[1])
+    if u0 !== nothing
+        u0 = u0_constructor(u0)
+    end
 
     cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
     kwargs = filter_kwargs(kwargs)
@@ -914,6 +918,7 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         sparsenoise = nothing,
         eval_expression = false,
         eval_module = @__MODULE__,
+        u0_constructor = identity,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `SDDEProblem`")
@@ -929,6 +934,9 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     h(p::MTKParameters, t) = h_oop(p..., t)
     h(out, p::MTKParameters, t) = h_iip(out, p..., t)
     u0 = h(p, tspan[1])
+    if u0 !== nothing
+        u0 = u0_constructor(u0)
+    end
 
     cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
     kwargs = filter_kwargs(kwargs)
@@ -1311,7 +1319,11 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         u0T = promote_type(u0T, typeof(fullmap[eq.lhs]))
     end
     if u0T != Union{}
-        u0map = Dict(k => symbolic_type(v) == NotSymbolic() ? u0T(v) : v
+        u0map = Dict(k => if symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)
+                         v isa AbstractArray ? u0T.(v) : u0T(v)
+                     else
+                         v
+                     end
         for (k, v) in u0map)
     end
     if neqs == nunknown

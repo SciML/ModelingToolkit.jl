@@ -224,7 +224,7 @@ Affects (i.e. `affect` and `affect_neg`) can be specified as either:
     + `ctx` is a user-defined context object passed to `f!` when invoked. This value is aliased for each problem.
 * A [`ImperativeAffect`](@ref); refer to its documentation for details.
 
-Callbacks that impact a DAE are applied, then the DAE is reinitialized using `reinitializealg` (which defaults to `SciMLBase.CheckInit`).
+DAEs will be reinitialized using `reinitializealg` (which defaults to `SciMLBase.CheckInit`) after callbacks are applied.
 This reinitialization algorithm ensures that the DAE is satisfied after the callback runs. The default value of `CheckInit` will simply validate
 that the newly-assigned values indeed satisfy the algebraic system; see the documentation on DAE initialization for a more detailed discussion of
 initialization.
@@ -889,8 +889,8 @@ function generate_vector_rootfinding_callback(
     finalize = handle_optional_setup_fn(
         map(fn -> fn.finalize, affect_functions), SciMLBase.FINALIZE_DEFAULT)
     return VectorContinuousCallback(
-        cond, affect, affect_neg, length(eqs), rootfind = rootfind, initialize = initialize,
-        finalize = finalize, initializealg = reinitialization)
+        cond, affect, affect_neg, length(eqs), rootfind = rootfind,
+        initialize = initialize, finalize = finalize, initializealg = reinitialization)
 end
 
 """
@@ -1170,10 +1170,12 @@ function generate_timed_callback(cb, sys, dvs, ps; postprocess_affect_expr! = no
     end
     if cond isa AbstractVector
         # Preset Time
-        return PresetTimeCallback(cond, as; initialize = initfn)
+        return PresetTimeCallback(
+            cond, as; initialize = initfn, initializealg = reinitialization_alg(cb))
     else
         # Periodic
-        return PeriodicCallback(as, cond; initialize = initfn)
+        return PeriodicCallback(
+            as, cond; initialize = initfn, initializealg = reinitialization_alg(cb))
     end
 end
 
@@ -1198,7 +1200,8 @@ function generate_discrete_callback(cb, sys, dvs, ps; postprocess_affect_expr! =
         else
             initfn = SciMLBase.INITIALIZE_DEFAULT
         end
-        return DiscreteCallback(c, as; initialize = initfn)
+        return DiscreteCallback(
+            c, as; initialize = initfn, initializealg = reinitialization_alg(cb))
     end
 end
 

@@ -53,7 +53,7 @@ for (portion, values) in [(Tunable(), [1.0, 5.0, 6.0, 7.0])
     SciMLStructures.replace!(portion, ps, ones(length(buffer)))
     # make sure it is in-place
     @test all(isone, canonicalize(portion, ps)[1])
-    repack(zeros(length(buffer)))
+    global ps = repack(zeros(length(buffer)))
     @test all(iszero, canonicalize(portion, ps)[1])
 end
 

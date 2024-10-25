@@ -106,6 +106,7 @@ isoutput(x) = isvarkind(VariableOutput, x)
 # Before the solvability check, we already have handled IO variables, so
 # irreducibility is independent from IO.
 isirreducible(x) = isvarkind(VariableIrreducible, x)
+setirreducible(x, v) = setmetadata(x, VariableIrreducible, v)
 state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))::Float64
 
 function default_toterm(x)

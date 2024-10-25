@@ -73,7 +73,7 @@ end
         v_array(t)[1:N, 1:M]
         v_for_defaults(t)
     end
-    @extend ModelB(; p1)
+    @extend ModelB(p1 = 1)
     @components begin
         model_a = ModelA(; k_array)
         model_array_a = [ModelA(; k = i) for i in 1:N]
@@ -149,14 +149,18 @@ julia> ModelingToolkit.getdefault(model_c1.v)
 
 #### `@extend` begin block
 
-  - Partial systems can be extended in a higher system as `@extend PartialSystem(; kwargs)`.
-  - Keyword arguments pf partial system in the `@extend` definition are added as the keyword arguments of the base system.
-  - Note that in above example, `p1` is promoted as an argument of `ModelC`. Users can set the value of `p1`. However, as `p2` isn't listed in the model definition, its initial guess can't be specified while creating an instance of `ModelC`.
+Partial systems can be extended in a higher system in two ways:
 
-```julia
-julia> @mtkbuild model_c2 = ModelC(; p1 = 2.0)
+  - `@extend PartialSystem(var1 = value1)`
+    
+      + This is the recommended way of extending a base system.
+      + The default values for the arguments of the base system can be declared in the `@extend` statement.
+      + Note that all keyword arguments of the base system are added as the keyword arguments of the main system.
 
-```
+  - `@extend var_to_unpack1, var_to_unpack2 = partial_sys = PartialSystem(var1 = value1)`
+    
+      + In this method: explicitly list the variables that should be unpacked, provide a name for the partial system and declare the base system.
+      + Note that only the arguments listed out in the declaration of the base system (here: `var1`) are added as the keyword arguments of the higher system.
 
 #### `@components` begin block
 
@@ -325,11 +329,11 @@ For example, the structure of `ModelC` is:
 julia> ModelC.structure
 Dict{Symbol, Any} with 10 entries:
   :components            => Any[Union{Expr, Symbol}[:model_a, :ModelA], Union{Expr, Symbol}[:model_array_a, :ModelA, :(1:N)], Union{Expr, Symbol}[:model_array_b, :ModelA, :(1:N)]]
-  :variables             => Dict{Symbol, Dict{Symbol, Any}}(:v=>Dict(:default=>:v_var, :type=>Real), :v_for_defaults=>Dict(:type=>Real))
+  :variables             => Dict{Symbol, Dict{Symbol, Any}}(:v=>Dict(:default=>:v_var, :type=>Real), :v_array=>Dict(:value=>nothing, :type=>Real, :size=>(:N, :M)), :v_for_defaults=>Dict(:type=>Real))
   :icon                  => URI("https://github.com/SciML/SciMLDocs/blob/main/docs/src/assets/logo.png")
-  :kwargs                => Dict{Symbol, Dict}(:f => Dict(:value => :sin), :N => Dict(:value => 2), :M => Dict(:value => 3), :v => Dict{Symbol, Any}(:value => :v_var, :type => Real), :v_for_defaults => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real), :p1 => Dict(:value => nothing)),
-  :structural_parameters => Dict{Symbol, Dict}(:f => Dict(:value => :sin), :N => Dict(:value => 2), :M => Dict(:value => 3))
-  :independent_variable  => t
+  :kwargs                => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin), :p2=>Dict(:value=>NoValue()), :N=>Dict(:value=>2), :M=>Dict(:value=>3), :v=>Dict{Symbol, Any}(:value=>:v_var, :type=>Real), :v_array=>Dict{Symbol, Any}(:value=>nothing, :type=>Real, :size=>(:N, :M)), :v_for_defaults=>Dict{Symbol, Union{Nothing, DataType}}(:value=>nothing, :type=>Real), :p1=>Dict(:value=>1))
+  :structural_parameters => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin), :N=>Dict(:value=>2), :M=>Dict(:value=>3))
+  :independent_variable  => :t
   :constants             => Dict{Symbol, Dict}(:c=>Dict{Symbol, Any}(:value=>1, :type=>Int64, :description=>"Example constant."))
   :extend                => Any[[:p2, :p1], Symbol("#mtkmodel__anonymous__ModelB"), :ModelB]
   :defaults              => Dict{Symbol, Any}(:v_for_defaults=>2.0)
