@@ -1,4 +1,4 @@
-using ModelingToolkit, DelayDiffEq, Test
+using ModelingToolkit, DelayDiffEq, StaticArrays, Test
 using SymbolicIndexingInterface: is_markovian
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
@@ -89,6 +89,10 @@ eqs = [D(x(t)) ~ a * x(t) + b * x(t - τ) + c + (α * x(t) + γ) * η]
 prob_mtk = SDDEProblem(sys, [x(t) => 1.0 + t], tspan; constant_lags = (τ,));
 @test_nowarn sol_mtk = solve(prob_mtk, RKMil())
 
+prob_sa = SDDEProblem(
+    sys, [x(t) => 1.0 + t], tspan; constant_lags = (τ,), u0_constructor = SVector{1})
+@test prob_sa.u0 isa SVector{4, Float64}
+
 @parameters x(..) a
 
 function oscillator(; name, k = 1.0, τ = 0.01)
@@ -125,6 +129,10 @@ obsfn = ModelingToolkit.build_explicit_observed_function(
     sys, [sys.osc1.delx, sys.osc2.delx])
 @test_nowarn sol[[sys.osc1.delx, sys.osc2.delx]]
 @test sol[sys.osc1.delx] ≈ sol(sol.t .- 0.01; idxs = sys.osc1.x).u
+
+prob_sa = DDEProblem(sys, [], (0.0, 10.0); constant_lags = [sys.osc1.τ, sys.osc2.τ],
+    u0_constructor = SVector{4})
+@test prob_sa.u0 isa SVector{4, Float64}
 
 @testset "DDE observed with array variables" begin
     @component function valve(; name)
