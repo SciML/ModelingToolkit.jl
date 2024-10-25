@@ -921,7 +921,7 @@ the global structure of the system.
 One property to note is that if a system is complete, the system will no longer
 namespace its subsystems or variables, i.e. `isequal(complete(sys).v.i, v.i)`.
 """
-function complete(sys::AbstractSystem; split = true)
+function complete(sys::AbstractSystem; split = true, flatten = true)
     if !(sys isa JumpSystem)
         newunknowns = OrderedSet()
         newparams = OrderedSet()
@@ -931,9 +931,21 @@ function complete(sys::AbstractSystem; split = true)
         # `GlobalScope`d unknowns will be picked up and added there
         @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
     end
+    if flatten
+        if sys isa Union{OptimizationSystem, ConstraintsSystem, JumpSystem}
+            newsys = sys
+        else
+            newsys = expand_connections(sys)
+        end
+        newsys = ModelingToolkit.flatten(newsys)
+        if has_parent(newsys) && get_parent(sys) === nothing
+            @set! newsys.parent = complete(sys; split = false, flatten = false)
+        end
+        sys = newsys
+    end
     if split && has_index_cache(sys)
         @set! sys.index_cache = IndexCache(sys)
-        all_ps = parameters(sys)
+        all_ps = get_ps(sys)
         if !isempty(all_ps)
             # reorder parameters by portions
             ps_split = reorder_parameters(sys, all_ps)
@@ -1102,6 +1114,9 @@ function Base.propertynames(sys::AbstractSystem; private = false)
     if private
         return fieldnames(typeof(sys))
     else
+        if has_parent(sys) && (parent = get_parent(sys); parent !== nothing)
+            sys = parent
+        end
         names = Symbol[]
         for s in get_systems(sys)
             push!(names, getname(s))
@@ -1144,26 +1159,20 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
         avs = get_var_to_name(sys)
         v = get(avs, name, nothing)
         v === nothing || return namespace ? renamespace(sys, v) : v
-    else
-        sts = get_unknowns(sys)
-        i = findfirst(x -> getname(x) == name, sts)
-        if i !== nothing
-            return namespace ? renamespace(sys, sts[i]) : sts[i]
-        end
-
-        if has_ps(sys)
-            ps = get_ps(sys)
-            i = findfirst(x -> getname(x) == name, ps)
-            if i !== nothing
-                return namespace ? renamespace(sys, ps[i]) : ps[i]
-            end
-        end
     end
 
     sts = get_unknowns(sys)
     i = findfirst(x -> getname(x) == name, sts)
     if i !== nothing
         return namespace ? renamespace(sys, sts[i]) : sts[i]
+    end
+
+    if has_ps(sys)
+        ps = get_ps(sys)
+        i = findfirst(x -> getname(x) == name, ps)
+        if i !== nothing
+            return namespace ? renamespace(sys, ps[i]) : ps[i]
+        end
     end
 
     if has_observed(sys)
