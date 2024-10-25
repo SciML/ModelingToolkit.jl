@@ -91,7 +91,7 @@ prob_mtk = SDDEProblem(sys, [x(t) => 1.0 + t], tspan; constant_lags = (τ,));
 
 prob_sa = SDDEProblem(
     sys, [x(t) => 1.0 + t], tspan; constant_lags = (τ,), u0_constructor = SVector{1})
-@test prob_sa.u0 isa SVector{4, Float64}
+@test prob_sa.u0 isa SVector{1, Float64}
 
 @parameters x(..) a
 
