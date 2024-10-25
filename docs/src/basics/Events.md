@@ -383,14 +383,13 @@ It can be seen that the timeseries for `c` is not saved.
 
 The `ImperativeAffect` can be used as an alternative to the aforementioned functional affect form. Note
 that `ImperativeAffect` is still experimental; to emphasize this, we do not export it and it should be
-included as `ModelingToolkit.ImperativeAffect`. It abstracts over how values are written back to the
-system, simplifying the definitions and (in the future) allowing assignments back to observed values
-by solving the nonlinear reinitialization problem afterwards.
+included as `ModelingToolkit.ImperativeAffect`. `ImperativeAffect` aims to simplify the manipulation of 
+system state.
 
 We will use two examples to describe `ImperativeAffect`: a simple heater and a quadrature encoder.
 These examples will also demonstrate advanced usage of `ModelingToolkit.SymbolicContinuousCallback`,
-the low-level interface that the aforementioned tuple form converts into and allows control over the
-exact SciMLCallbacks event that is generated for a continuous event.
+the low-level interface of the tuple form converts into that allows control over the SciMLBase-level 
+event that is generated for a continuous event.
 
 ### [Heater](@id heater_events)
 
