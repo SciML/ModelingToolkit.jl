@@ -141,6 +141,22 @@ function OptimizationSystem(op, unknowns, ps;
         checks = checks)
 end
 
+function flatten(sys::OptimizationSystem)
+    systems = get_systems(sys)
+    isempty(systems) && return sys
+
+    return OptimizationSystem(
+        objective(sys),
+        unknowns(sys),
+        parameters(sys);
+        observed = observed(sys),
+        constraints = constraints(sys),
+        defaults = defaults(sys),
+        name = nameof(sys),
+        checks = false
+    )
+end
+
 function calculate_gradient(sys::OptimizationSystem)
     expand_derivatives.(gradient(objective(sys), unknowns(sys)))
 end
