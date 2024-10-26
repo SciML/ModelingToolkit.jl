@@ -82,7 +82,47 @@ end
     @mtkbuild sys = NonlinearSystem([x^x - x ~ 0])
     @test_warn ["Exponent", "unknowns"] @test_throws "not a polynomial" HomotopyContinuationProblem(
         sys, [])
-    @mtkbuild sys = NonlinearSystem([((x^2) / (x + 3))^2 + x ~ 0])
-    @test_warn ["Base", "not a polynomial", "Unrecognized operation", "/"] @test_throws "not a polynomial" HomotopyContinuationProblem(
+    @mtkbuild sys = NonlinearSystem([((x^2) / sin(x))^2 + x ~ 0])
+    @test_warn ["Unrecognized", "sin"] @test_throws "not a polynomial" HomotopyContinuationProblem(
         sys, [])
+end
+
+@testset "Rational functions" begin
+    @variables x=2.0 y=2.0
+    @parameters n = 4
+    @mtkbuild sys = NonlinearSystem([
+        0 ~ (x^2 - n * x + n) * (x - 1) / (x - 2) / (x - 3)
+    ])
+    prob = HomotopyContinuationProblem(sys, [])
+    sol = solve(prob; threading = false)
+    @test sol[x] ≈ 1.0
+    p = parameter_values(prob)
+    for invalid in [2.0, 3.0]
+        @test prob.denominator([invalid], p)[1] <= 1e-8
+    end
+
+    @named sys = NonlinearSystem(
+        [
+            0 ~ (x - 2) / (x - 4) + ((x - 3) / (y - 7)) / ((x^2 - 4x + y) / (x - 2.5)),
+            0 ~ ((y - 3) / (y - 4)) * (n / (y - 5)) + ((x - 1.5) / (x - 5.5))^2
+        ],
+        [x, y],
+        [n])
+    sys = complete(sys)
+    prob = HomotopyContinuationProblem(sys, [])
+    sol = solve(prob; threading = false)
+    disallowed_x = [4, 5.5]
+    disallowed_y = [7, 5, 4]
+    @test all(!isapprox(sol[x]; atol = 1e-8), disallowed_x)
+    @test all(!isapprox(sol[y]; atol = 1e-8), disallowed_y)
+    @test sol[x^2 - 4x + y] >= 1e-8
+
+    p = parameter_values(prob)
+    for val in disallowed_x
+        @test any(<=(1e-8), prob.denominator([val, 2.0], p))
+    end
+    for val in disallowed_y
+        @test any(<=(1e-8), prob.denominator([2.0, val], p))
+    end
+    @test prob.denominator([2.0, 4.0], p)[1] <= 1e-8
 end

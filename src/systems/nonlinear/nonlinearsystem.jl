@@ -573,7 +573,7 @@ A type of Nonlinear problem which specializes on polynomial systems and uses
 HomotopyContinuation.jl to solve the system. Requires importing HomotopyContinuation.jl to
 create and solve.
 """
-struct HomotopyContinuationProblem{uType, H, O} <:
+struct HomotopyContinuationProblem{uType, H, D, O} <:
        SciMLBase.AbstractNonlinearProblem{uType, true}
     """
     The initial values of states in the system. If there are multiple real roots of
@@ -585,6 +585,12 @@ struct HomotopyContinuationProblem{uType, H, O} <:
     parameter object.
     """
     homotopy_continuation_system::H
+    """
+    A function with signature `(u, p) -> resid`. In case of rational functions, this
+    is used to rule out roots of the system which would cause the denominator to be
+    zero.
+    """
+    denominator::D
     """
     The `NonlinearSystem` used to create this problem. Used for symbolic indexing.
     """
