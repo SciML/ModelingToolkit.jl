@@ -314,3 +314,39 @@ sol = solve(prob, Tsit5())
     end
     @test string(Base.doc(Pin2)) == "Hey there, Pin2!\n"
 end
+
+@testset "Issue#3016 Hierarchical indexing" begin
+    @mtkmodel Inner begin
+        @parameters begin
+            p
+        end
+    end
+    @mtkmodel Outer begin
+        @components begin
+            inner = Inner()
+        end
+        @variables begin
+            x(t)
+        end
+        @equations begin
+            x ~ inner.p
+        end
+    end
+
+    @named outer = Outer()
+    simp = structural_simplify(outer)
+
+    @test sort(propertynames(outer)) == [:inner, :t, :x]
+    @test propertynames(simp) == propertynames(outer)
+    @test sort(propertynames(outer.inner)) == [:p, :t]
+    @test propertynames(simp.inner) == propertynames(outer.inner)
+
+    for sym in (:t, :x)
+        @test_nowarn getproperty(simp, sym)
+        @test_nowarn getproperty(outer, sym)
+    end
+    @test_nowarn simp.inner.p
+    @test_nowarn outer.inner.p
+    @test_throws ArgumentError simp.inner₊p
+    @test_throws ArgumentError outer.inner₊p
+end
