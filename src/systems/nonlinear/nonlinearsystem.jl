@@ -258,13 +258,18 @@ end
 
 function generate_function(
         sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(sys);
-        wrap_code = identity, kwargs...)
+        wrap_code = identity, scalar = false, kwargs...)
     rhss = [deq.rhs for deq in equations(sys)]
+    dvs′ = value.(dvs)
+    if scalar
+        rhss = only(rhss)
+        dvs′ = only(dvs)
+    end
     pre, sol_states = get_substitutions_and_solved_unknowns(sys)
     wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps) .∘
-                wrap_parameter_dependencies(sys, false)
+                wrap_parameter_dependencies(sys, scalar)
     p = reorder_parameters(sys, value.(ps))
-    return build_function(rhss, value.(dvs), p...; postprocess_fbody = pre,
+    return build_function(rhss, dvs′, p...; postprocess_fbody = pre,
         states = sol_states, wrap_code, kwargs...)
 end
 
@@ -288,7 +293,7 @@ SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
                                  kwargs...) where {iip}
 ```
 
-Create an `NonlinearFunction` from the [`NonlinearSystem`](@ref). The arguments
+Create a `NonlinearFunction` from the [`NonlinearSystem`](@ref). The arguments
 `dvs` and `ps` are used to set the order of the dependent variable and parameter
 vectors, respectively.
 """
@@ -352,6 +357,34 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
 end
 
 """
+$(TYPEDSIGNATURES)
+
+Create an `IntervalNonlinearFunction` from the [`NonlinearSystem`](@ref). The arguments
+`dvs` and `ps` are used to set the order of the dependent variable and parameter vectors,
+respectively.
+"""
+function SciMLBase.IntervalNonlinearFunction(
+        sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(sys), u0 = nothing;
+        p = nothing, eval_expression = false, eval_module = @__MODULE__, kwargs...)
+    if !iscomplete(sys)
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `IntervalNonlinearFunction`")
+    end
+    if !isone(length(dvs)) || !isone(length(equations(sys)))
+        error("`IntervalNonlinearFunction` only supports systems with a single equation and a single unknown.")
+    end
+
+    f_gen = generate_function(
+        sys, dvs, ps; expression = Val{true}, scalar = true, kwargs...)
+    f_oop = eval_or_rgf(f_gen; eval_expression, eval_module)
+    f(u, p) = f_oop(u, p)
+    f(u, p::MTKParameters) = f_oop(u, p...)
+
+    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
+
+    IntervalNonlinearFunction{false}(f; observed = observedfun, sys = sys)
+end
+
+"""
 ```julia
 SciMLBase.NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
                                      ps = parameters(sys);
@@ -361,14 +394,14 @@ SciMLBase.NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
                                      kwargs...) where {iip}
 ```
 
-Create a Julia expression for an `ODEFunction` from the [`ODESystem`](@ref).
+Create a Julia expression for a `NonlinearFunction` from the [`NonlinearSystem`](@ref).
 The arguments `dvs` and `ps` are used to set the order of the dependent
 variable and parameter vectors, respectively.
 """
 struct NonlinearFunctionExpr{iip} end
 
 function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
-        ps = parameters(sys), u0 = nothing, p = nothing;
+        ps = parameters(sys), u0 = nothing; p = nothing,
         version = nothing, tgrad = false,
         jac = false,
         linenumbers = false,
@@ -408,6 +441,34 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
             jac = jac,
             resid_prototype = resid_expr,
             jac_prototype = $jp_expr)
+    end
+    !linenumbers ? Base.remove_linenums!(ex) : ex
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Create a Julia expression for an `IntervalNonlinearFunction` from the
+[`NonlinearSystem`](@ref). The arguments `dvs` and `ps` are used to set the order of the
+dependent variable and parameter vectors, respectively.
+"""
+function IntervalNonlinearFunctionExpr(
+        sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(sys),
+        u0 = nothing; p = nothing, linenumbers = false, kwargs...)
+    if !iscomplete(sys)
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `IntervalNonlinearFunctionExpr`")
+    end
+    if !isone(length(dvs)) || !isone(length(equations(sys)))
+        error("`IntervalNonlinearFunctionExpr` only supports systems with a single equation and a single unknown.")
+    end
+
+    f = generate_function(sys, dvs, ps; expression = Val{true}, scalar = true, kwargs...)
+
+    IntervalNonlinearFunction{false}(f; sys = sys)
+
+    ex = quote
+        f = $f
+        NonlinearFunction{false}(f)
     end
     !linenumbers ? Base.remove_linenums!(ex) : ex
 end
@@ -468,6 +529,26 @@ function DiffEqBase.NonlinearLeastSquaresProblem{iip}(sys::NonlinearSystem, u0ma
         check_length, kwargs...)
     pt = something(get_metadata(sys), StandardNonlinearProblem())
     NonlinearLeastSquaresProblem{iip}(f, u0, p; filter_kwargs(kwargs)...)
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Generate an `IntervalNonlinearProblem` from a `NonlinearSystem` and allow for automatically
+symbolically calculating numerical enhancements.
+"""
+function DiffEqBase.IntervalNonlinearProblem(sys::NonlinearSystem, uspan::NTuple{2},
+        parammap = SciMLBase.NullParameters(); kwargs...)
+    if !iscomplete(sys)
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `IntervalNonlinearProblem`")
+    end
+    if !isone(length(unknowns(sys))) || !isone(length(equations(sys)))
+        error("`IntervalNonlinearProblem` only supports with a single equation and a single unknown.")
+    end
+    f, u0, p = process_SciMLProblem(
+        IntervalNonlinearFunction, sys, unknowns(sys) .=> uspan[1], parammap; kwargs...)
+
+    return IntervalNonlinearProblem(f, uspan, p; filter_kwargs(kwargs)...)
 end
 
 """
@@ -546,6 +627,34 @@ function NonlinearLeastSquaresProblemExpr{iip}(sys::NonlinearSystem, u0map,
         u0 = $u0
         p = $p
         NonlinearLeastSquaresProblem(f, u0, p; $(filter_kwargs(kwargs)...))
+    end
+    !linenumbers ? Base.remove_linenums!(ex) : ex
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Generates a Julia expression for an IntervalNonlinearProblem from a
+NonlinearSystem and allows for automatically symbolically calculating
+numerical enhancements.
+"""
+function IntervalNonlinearProblemExpr(sys::NonlinearSystem, uspan::NTuple{2},
+        parammap = SciMLBase.NullParameters(); kwargs...)
+    if !iscomplete(sys)
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `IntervalNonlinearProblemExpr`")
+    end
+    if !isone(length(unknowns(sys))) || !isone(length(equations(sys)))
+        error("`IntervalNonlinearProblemExpr` only supports with a single equation and a single unknown.")
+    end
+    f, u0, p = process_SciMLProblem(
+        IntervalNonlinearFunctionExpr, sys, unknowns(sys) .=> uspan[1], parammap; kwargs...)
+    linenumbers = get(kwargs, :linenumbers, true)
+
+    ex = quote
+        f = $f
+        uspan = $uspan
+        p = $p
+        IntervalNonlinearProblem(f, uspan, p; $(filter_kwargs(kwargs)...))
     end
     !linenumbers ? Base.remove_linenums!(ex) : ex
 end

@@ -226,6 +226,8 @@ export JumpSystem
 export ODEProblem, SDEProblem
 export NonlinearFunction, NonlinearFunctionExpr
 export NonlinearProblem, NonlinearProblemExpr
+export IntervalNonlinearFunction, IntervalNonlinearFunctionExpr
+export IntervalNonlinearProblem, IntervalNonlinearProblemExpr
 export OptimizationProblem, OptimizationProblemExpr, constraints
 export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem
