@@ -41,7 +41,7 @@ end
 
 completed_rc_model = complete(rc_model)
 @test isequal(completed_rc_model.resistor.n.i, resistor.n.i)
-@test ModelingToolkit.n_extra_equations(capacitor) == 2
+@test ModelingToolkit.n_expanded_connection_equations(capacitor) == 2
 @test length(equations(structural_simplify(rc_model, allow_parameter = false))) == 2
 sys = structural_simplify(rc_model)
 @test_throws ModelingToolkit.RepeatedStructuralSimplificationError structural_simplify(sys)
