@@ -59,7 +59,7 @@ struct ObservableRecordFromSolution{S, T}
     end
 end
 # Functor function that computes the value.
-function (orfs::ObservableRecordFromSolution)(x, p)
+function (orfs::ObservableRecordFromSolution)(x, p; k...)
     # Updates the state values (in subs_vals).
     for state_idx in 1:(orfs.state_end_idxs)
         orfs.subs_vals[state_idx] = orfs.subs_vals[state_idx][1] => x[state_idx]
