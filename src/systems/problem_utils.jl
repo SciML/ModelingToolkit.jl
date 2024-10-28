@@ -301,12 +301,14 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Performs symbolic substitution on the values in `varmap`, using `varmap` itself as the
-set of substitution rules. 
+Performs symbolic substitution on the values in `varmap` for the keys in `vars`, using
+`varmap` itself as the set of substitution rules. If an entry in `vars` is not a key
+in `varmap`, it is ignored.
 """
-function evaluate_varmap!(varmap::AbstractDict)
-    for (k, v) in varmap
-        varmap[k] = fixpoint_sub(v, varmap)
+function evaluate_varmap!(varmap::AbstractDict, vars)
+    for k in vars
+        haskey(varmap, k) || continue
+        varmap[k] = fixpoint_sub(varmap[k], varmap)
     end
 end
 
@@ -499,7 +501,7 @@ function process_SciMLProblem(
     add_observed!(sys, op)
     add_parameter_dependencies!(sys, op)
 
-    evaluate_varmap!(op)
+    evaluate_varmap!(op, dvs)
 
     u0 = better_varmap_to_vars(
         op, dvs; tofloat = true, use_union = false,
@@ -511,6 +513,7 @@ function process_SciMLProblem(
 
     check_eqs_u0(eqs, dvs, u0; check_length, kwargs...)
 
+    evaluate_varmap!(op, ps)
     if is_split(sys)
         p = MTKParameters(sys, op)
     else
