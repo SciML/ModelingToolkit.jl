@@ -982,6 +982,25 @@ end
     @test sol[x][1] ≈ 1.0
     @test sol[x][2] ≈ 1.5 # the initialize affect has been applied
     @test seen == true
+
+    
+    @variables x(t)
+    seen = false
+    f = ModelingToolkit.FunctionalAffect(f=(i,u,p,c)->seen=true, sts=[], pars=[], discretes=[])
+    cb1 = ModelingToolkit.SymbolicContinuousCallback([x ~ 0], Equation[], initialize=[x~1.5], finalize=f)
+    inited = false 
+    finaled = false
+    a = ModelingToolkit.FunctionalAffect(f=(i,u,p,c)->inited=true, sts=[], pars=[], discretes=[])
+    b = ModelingToolkit.FunctionalAffect(f=(i,u,p,c)->finaled=true, sts=[], pars=[], discretes=[])
+    cb2= ModelingToolkit.SymbolicContinuousCallback([x ~ 0.1], Equation[], initialize=a, finalize=b)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; continuous_events = [cb1, cb2])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5())
+    @test sol[x][1] ≈ 1.0
+    @test sol[x][2] ≈ 1.5 # the initialize affect has been applied
+    @test seen == true
+    @test inited == true 
+    @test finaled == true
 end
 
 @testset "Bump" begin
