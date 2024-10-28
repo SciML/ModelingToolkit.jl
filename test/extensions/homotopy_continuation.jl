@@ -98,7 +98,9 @@ end
     @test sol[x] ≈ 1.0
     p = parameter_values(prob)
     for invalid in [2.0, 3.0]
-        @test prob.denominator([invalid], p)[1] <= 1e-8
+        for err in [-9e-8, 0, 9e-8]
+            @test any(<=(1e-7), prob.denominator([invalid + err, 2.0], p))
+        end
     end
 
     @named sys = NonlinearSystem(
@@ -115,14 +117,18 @@ end
     disallowed_y = [7, 5, 4]
     @test all(!isapprox(sol[x]; atol = 1e-8), disallowed_x)
     @test all(!isapprox(sol[y]; atol = 1e-8), disallowed_y)
-    @test sol[x^2 - 4x + y] >= 1e-8
+    @test abs(sol[x^2 - 4x + y]) >= 1e-8
 
     p = parameter_values(prob)
     for val in disallowed_x
-        @test any(<=(1e-8), prob.denominator([val, 2.0], p))
+        for err in [-9e-8, 0, 9e-8]
+            @test any(<=(1e-7), prob.denominator([val + err, 2.0], p))
+        end
     end
     for val in disallowed_y
-        @test any(<=(1e-8), prob.denominator([2.0, val], p))
+        for err in [-9e-8, 0, 9e-8]
+            @test any(<=(1e-7), prob.denominator([2.0, val + err], p))
+        end
     end
     @test prob.denominator([2.0, 4.0], p)[1] <= 1e-8
 end
