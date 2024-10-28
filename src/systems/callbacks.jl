@@ -111,6 +111,9 @@ DAEs will be reinitialized using `reinitializealg` (which defaults to `SciMLBase
 This reinitialization algorithm ensures that the DAE is satisfied after the callback runs. The default value of `CheckInit` will simply validate
 that the newly-assigned values indeed satisfy the algebraic system; see the documentation on DAE initialization for a more detailed discussion of
 initialization.
+
+Initial and final affects can also be specified with SCC, which are specified identically to positive and negative edge affects. Initialization affects
+will run as soon as the solver starts, while finalization affects will be executed after termination.
 """
 struct SymbolicContinuousCallback
     eqs::Vector{Equation}
