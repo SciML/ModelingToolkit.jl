@@ -581,9 +581,9 @@ version = "0.6.16"
 
 [[deps.DispatchDoctor]]
 deps = ["MacroTools", "Preferences"]
-git-tree-sha1 = "810cae95ca4db1c563be2d7d38fa9b7289d302db"
+git-tree-sha1 = "453df2ce2aef7de59c69a56d31dcd2ec3384dd77"
 uuid = "8d63f2c5-f18a-4cf2-ba9d-b3f60fc568c8"
-version = "0.4.16"
+version = "0.4.17"
 weakdeps = ["ChainRulesCore", "EnzymeCore"]
 
     [deps.DispatchDoctor.extensions]
@@ -930,9 +930,9 @@ version = "0.73.8+0"
 
 [[deps.GenericLinearAlgebra]]
 deps = ["LinearAlgebra", "Printf", "Random", "libblastrampoline_jll"]
-git-tree-sha1 = "f47136cac29a9b7a8a88dbce1195394978091edb"
+git-tree-sha1 = "c4f9c87b74aedf20920034bd4db81d0bffc527d2"
 uuid = "14197337-ba66-59df-a3e3-ca00e7dcff7a"
-version = "0.3.13"
+version = "0.3.14"
 
 [[deps.GenericSchur]]
 deps = ["LinearAlgebra", "Printf"]
