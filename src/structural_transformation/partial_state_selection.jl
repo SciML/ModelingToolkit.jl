@@ -179,7 +179,8 @@ function dummy_derivative_graph!(state::TransformationState, jac = nothing;
     else
         ag = AliasGraph(mm, ndsts(state.structure.graph))
     end
-    dummy_derivative_graph!(state.structure, var_eq_matching, jac, state_priority, ag, mm, log)
+    dummy_derivative_graph!(
+        state.structure, var_eq_matching, jac, state_priority, ag, mm, log)
 end
 
 struct DummyDerivativeSummary
@@ -209,7 +210,6 @@ end
 
 function extended_state_priority(state_priority, var_to_diff, ag::AliasGraph)
     sp = map(state_priority, 1:length(var_to_diff))
-    diff_to_var = invview(var_to_diff)
     prop_graph = SimpleDiGraph{Int}(ag)
     for (v, dv) in enumerate(var_to_diff)
         dv isa Int && add_edge!(prop_graph, v, dv)
@@ -228,16 +228,17 @@ function prop_state_priority!(sp, graph)
     visited = BitSet()
     function visit!(sp, graph, v)
         push!(visited, v)
-        for n in inneighbors(graph, v)
-            n in visited && continue
-            visit!(sp, graph, n)
-        end
         for n in outneighbors(graph, v)
+            n in visited && continue
             sp[n] = maxabs(sp[n], sp[v])
+            visit!(sp, graph, n)
         end
     end
     for v in vertices(graph)
-        visit!(sp, graph, v)
+        if all(x -> iszero(sp[v]), inneighbors(graph, v))
+            visit!(sp, graph, v)
+            empty!(visited)
+        end
     end
     sp
 end

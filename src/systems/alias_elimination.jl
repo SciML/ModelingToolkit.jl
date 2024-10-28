@@ -401,8 +401,8 @@ function AliasGraph(mm::SparseMatrixCLIL, nv::Int)
 end
 isneg(ag::AliasGraph, a, b) = (a, b) in ag.neg_edge
 for f in [:dst, :edges, :edgetype, :has_edge, :has_vertex,
-          :inneighbors, :is_directed, :ne, :nv, :outneighbors,
-          :src, :vertices]
+    :inneighbors, :is_directed, :ne, :nv, :outneighbors,
+    :src, :vertices]
     @eval Graphs.$f(ag::AliasGraph) = Graphs.$f(ag.graph)
 end
 
