@@ -1898,16 +1898,21 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem)
     nvars = length(vars)
     if eqs isa AbstractArray && eltype(eqs) <: Equation
         neqs = count(eq -> !(eq.lhs isa Connection), eqs)
-        Base.printstyled(io, "Model $(nameof(sys)) with $neqs "; bold = true)
+        Base.printstyled(io, "Model "; bold = true)
+        Base.print(io, nameof(sys))
+        Base.printstyled(io, " with "; bold = true)
+        Base.print(io, neqs, " ")
+
         nextras = n_extra_equations(sys)
         if nextras > 0
             Base.printstyled(io, "("; bold = true)
-            Base.printstyled(io, neqs + nextras; bold = true, color = :magenta)
+            Base.printstyled(io, neqs + nextras; color = :magenta)
             Base.printstyled(io, ") "; bold = true)
         end
         Base.printstyled(io, "equations\n"; bold = true)
     else
-        Base.printstyled(io, "Model $(nameof(sys))\n"; bold = true)
+        Base.printstyled(io, "Model "; bold = true)
+        Base.println(io, nameof(sys))
     end
     # The reduced equations are usually very long. It's not that useful to print
     # them.
@@ -1917,7 +1922,9 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem)
     rows = first(displaysize(io)) ÷ 5
     limit = get(io, :limit, false)
 
-    Base.printstyled(io, "Unknowns ($nvars):"; bold = true)
+    Base.printstyled(io, "Unknowns ("; bold = true)
+    Base.print(io, nvars)
+    Base.printstyled(io, "):"; bold = true)
     nrows = min(nvars, limit ? rows : nvars)
     limited = nrows < length(vars)
     defs = has_defaults(sys) ? defaults(sys) : nothing
@@ -1946,7 +1953,9 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem)
 
     vars = parameters(sys)
     nvars = length(vars)
-    Base.printstyled(io, "Parameters ($nvars):"; bold = true)
+    Base.printstyled(io, "Parameters ("; bold = true)
+    Base.print(io, nvars)
+    Base.printstyled(io, "):"; bold = true)
     nrows = min(nvars, limit ? rows : nvars)
     limited = nrows < length(vars)
     for i in 1:nrows
