@@ -235,7 +235,7 @@ function prop_state_priority!(sp, graph)
         end
     end
     for v in vertices(graph)
-        if all(x -> iszero(sp[v]), inneighbors(graph, v))
+        if isempty(inneighbors(graph, v))
             visit!(sp, graph, v)
             empty!(visited)
         end
