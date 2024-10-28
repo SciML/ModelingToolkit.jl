@@ -162,4 +162,12 @@ let
     bf = bifurcationdiagram(bp, PALC(), 2, opts_br)
 
     @test bf.γ.specialpoint[1].param≈0.1 atol=1e-4 rtol=1e-4
+
+    # Test with plot variable as observable
+    pvar = ModelingToolkit.get_var_to_name(fol)[:RHS]
+    bp = BifurcationProblem(fol, u0, par, bif_par; plot_var = pvar)
+    opts_br = ContinuationPar(p_min = -1.0,
+        p_max = 1.0)
+    bf = bifurcationdiagram(bp, PALC(), 2, opts_br)
+    @test bf.γ.specialpoint[1].param≈0.1 atol=1e-4 rtol=1e-4
 end
