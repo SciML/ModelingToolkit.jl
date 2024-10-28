@@ -136,3 +136,16 @@ end
     prob = @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
     @test prob.p isa Vector{Float64}
 end
+
+@testset "Issue#3153" begin
+    @variables x(t) y(t)
+    @parameters c1 c2 c3
+    eqs = [D(x) ~ y,
+        y ~ ifelse(t < c1, 0.0, (-c1 + t)^(c3))]
+    sps = [x, y]
+    ps = [c1, c2, c3]
+    @mtkbuild osys = ODESystem(eqs, t, sps, ps)
+    u0map = [x => 1.0]
+    pmap = [c1 => 5.0, c2 => 1.0, c3 => 1.2]
+    oprob = ODEProblem(osys, u0map, (0.0, 10.0), pmap)
+end
