@@ -932,10 +932,11 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
         @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
     end
     if flatten
-        if sys isa Union{OptimizationSystem, ConstraintsSystem, JumpSystem}
-            newsys = sys
-        else
+        if (eqs = equations(sys)) isa Vector &&
+           any(eq -> eq isa Equation && isconnection(eq.lhs), eqs)
             newsys = expand_connections(sys)
+        else
+            newsys = sys
         end
         newsys = ModelingToolkit.flatten(newsys)
         if has_parent(newsys) && get_parent(sys) === nothing
