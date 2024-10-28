@@ -262,9 +262,11 @@ function IndexCache(sys::AbstractSystem)
         sym = eq.lhs
         vs = vars(eq.rhs)
         timeseries = TimeseriesSetType()
-        for v in vs
-            if (idx = get(disc_idxs, v, nothing)) !== nothing
-                push!(timeseries, idx.clock_idx)
+        if is_time_dependent(sys)
+            for v in vs
+                if (idx = get(disc_idxs, v, nothing)) !== nothing
+                    push!(timeseries, idx.clock_idx)
+                end
             end
         end
         ttsym = default_toterm(sym)
@@ -284,11 +286,20 @@ function IndexCache(sys::AbstractSystem)
             sym = eq.lhs
             vs = vars(eq.rhs)
             timeseries = TimeseriesSetType()
-            for v in vs
-                if (idx = get(disc_idxs, v, nothing)) !== nothing
-                    push!(timeseries, idx.clock_idx)
-                elseif haskey(unk_idxs, v) || haskey(observed_syms_to_timeseries, v)
-                    push!(timeseries, ContinuousTimeseries())
+            if is_time_dependent(sys)
+                for v in vs
+                    if (idx = get(disc_idxs, v, nothing)) !== nothing
+                        push!(timeseries, idx.clock_idx)
+                    elseif haskey(unk_idxs, v)
+                        push!(timeseries, ContinuousTimeseries())
+                    elseif haskey(observed_syms_to_timeseries, v)
+                        union!(timeseries, observed_syms_to_timeseries[v])
+                    elseif haskey(dependent_pars_to_timeseries, v)
+                        union!(timeseries, dependent_pars_to_timeseries[v])
+                    elseif iscall(v) && issym(operation(v)) &&
+                           is_variable(sys, operation(v)(get_iv(sys)))
+                        push!(timeseries, ContinuousTimeseries())
+                    end
                 end
             end
             ttsym = default_toterm(sym)

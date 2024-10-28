@@ -766,6 +766,10 @@ for traitT in [
                 push!(ts_idxs, ContinuousTimeseries())
             elseif is_timeseries_parameter(sys, s)
                 push!(ts_idxs, timeseries_parameter_index(sys, s).timeseries_idx)
+            elseif is_time_dependent(sys) && iscall(s) && issym(operation(s)) &&
+                   is_variable(sys, operation(s)(get_iv(sys)))
+                # DDEs case, to detect x(t - k)
+                push!(ts_idxs, ContinuousTimeseries())
             elseif has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
                 if (ts = get(ic.observed_syms_to_timeseries, s, nothing)) !== nothing
                     union!(ts_idxs, ts)
