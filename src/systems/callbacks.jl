@@ -275,7 +275,7 @@ function initialize_affects(cbs::Vector{SymbolicContinuousCallback})
     mapreduce(initialize_affects, vcat, cbs, init = Equation[])
 end
 
-finalize_affects(cb::SymbolicContinuousCallback) = cb.initialize
+finalize_affects(cb::SymbolicContinuousCallback) = cb.finalize
 function finalize_affects(cbs::Vector{SymbolicContinuousCallback})
     mapreduce(finalize_affects, vcat, cbs, init = Equation[])
 end

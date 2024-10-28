@@ -970,6 +970,20 @@ end
     @test sol[c] == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
 end
 
+
+@testset "Initialization" begin
+    @variables x(t)
+    seen = false
+    f = ModelingToolkit.FunctionalAffect(f=(i,u,p,c)->seen=true, sts=[], pars=[], discretes=[])
+    cb1 = ModelingToolkit.SymbolicContinuousCallback([x ~ 0], Equation[], initialize=[x~1.5], finalize=f)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; continuous_events = [cb1])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5(); dtmax=0.01)
+    @test sol[x][1] ≈ 1.0
+    @test sol[x][2] ≈ 1.5 # the initialize affect has been applied
+    @test seen == true
+end
+
 @testset "Bump" begin
     @variables x(t) [irreducible = true] y(t) [irreducible = true]
     eqs = [x ~ y, D(x) ~ -1]
