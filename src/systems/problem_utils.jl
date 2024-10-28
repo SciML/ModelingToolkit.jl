@@ -302,7 +302,7 @@ end
     $(TYPEDSIGNATURES)
 
 Performs symbolic substitution on the values in `varmap` for the keys in `vars`, using
-`varmap` itself as the set of substitution rules. If an entry is `vars` is not a key
+`varmap` itself as the set of substitution rules. If an entry in `vars` is not a key
 in `varmap`, it is ignored.
 """
 function evaluate_varmap!(varmap::AbstractDict, vars)
