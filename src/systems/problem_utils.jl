@@ -465,7 +465,8 @@ function process_SciMLProblem(
             !isempty(initialization_equations(sys))) && t !== nothing
             initializeprob = ModelingToolkit.InitializationProblem(
                 sys, t, u0map, pmap; guesses, warn_initialize_determined,
-                initialization_eqs, eval_expression, eval_module, fully_determined, check_units = check_initialization_units)
+                initialization_eqs, eval_expression, eval_module, fully_determined,
+                check_units = check_initialization_units)
             initializeprobmap = getu(initializeprob, unknowns(sys))
 
             punknowns = [p
