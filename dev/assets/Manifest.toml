@@ -784,9 +784,9 @@ uuid = "29a986be-02c6-4525-aec4-84b980013641"
 version = "2.0.4"
 
 [[deps.FastPower]]
-git-tree-sha1 = "46aee43f62bc2bc06a74e2d668ffeea0a2689c93"
+git-tree-sha1 = "58c3431137131577a7c379d00fea00be524338fb"
 uuid = "a4df4552-cc26-4903-aec0-212e50a0e84b"
-version = "1.1.0"
+version = "1.1.1"
 
     [deps.FastPower.extensions]
     FastPowerEnzymeExt = "Enzyme"
