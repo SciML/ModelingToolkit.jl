@@ -358,3 +358,25 @@ end
         @test_nowarn solve(prob)
     end
 end
+
+@testset "IntervalNonlinearProblem" begin
+    @variables x
+    @parameters p
+    @named nlsys = NonlinearSystem([0 ~ x * x - p])
+
+    for sys in [complete(nlsys), complete(nlsys; split = false)]
+        prob = IntervalNonlinearProblem(sys, (0.0, 2.0), [p => 1.0])
+        sol = @test_nowarn solve(prob, ITP())
+        @test SciMLBase.successful_retcode(sol)
+        @test_nowarn IntervalNonlinearProblemExpr(sys, (0.0, 2.0), [p => 1.0])
+    end
+
+    @variables y
+    @mtkbuild sys = NonlinearSystem([0 ~ x * x - p * x + p, 0 ~ x * y + p])
+    @test_throws ["single equation", "unknown"] IntervalNonlinearProblem(sys, (0.0, 1.0))
+    @test_throws ["single equation", "unknown"] IntervalNonlinearFunction(sys, (0.0, 1.0))
+    @test_throws ["single equation", "unknown"] IntervalNonlinearProblemExpr(
+        sys, (0.0, 1.0))
+    @test_throws ["single equation", "unknown"] IntervalNonlinearFunctionExpr(
+        sys, (0.0, 1.0))
+end
