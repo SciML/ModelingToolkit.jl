@@ -78,6 +78,10 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     """
     name::Symbol
     """
+    A description of the system.
+    """
+    description::String
+    """
     Metadata for the system, to be used by downstream packages.
     """
     metadata::Any
@@ -96,6 +100,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
             gui_metadata = nothing,
             eval_module = @__MODULE__,
             checks::Union{Bool, Int} = true,
+            description = "",
             name)
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(dvs, ivs, ps)
@@ -127,7 +132,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
         end
 
         new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, analytic,
-            analytic_func, name, metadata, gui_metadata)
+            analytic_func, name, description, metadata, gui_metadata)
     end
 end
 

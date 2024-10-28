@@ -80,6 +80,10 @@ struct SDESystem <: AbstractODESystem
     """
     name::Symbol
     """
+    A description of the system.
+    """
+    description::String
+    """
     The internal systems. These are required to have unique names.
     """
     systems::Vector{SDESystem}
@@ -133,14 +137,19 @@ struct SDESystem <: AbstractODESystem
     be `true` when `noiseeqs isa Vector`. 
     """
     is_scalar_noise::Bool
+    """
+    A boolean indicating if the given `ODESystem` represents a system of DDEs.
+    """
+    is_dde::Bool
     isscheduled::Bool
 
     function SDESystem(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed,
             tgrad,
             jac,
-            ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
+            ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, connector_type,
             cevents, devents, parameter_dependencies, metadata = nothing, gui_metadata = nothing,
             complete = false, index_cache = nothing, parent = nothing, is_scalar_noise = false,
+            is_dde = false,
             isscheduled = false;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
@@ -163,9 +172,10 @@ struct SDESystem <: AbstractODESystem
         end
         new(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac,
-            Wfact, Wfact_t, name, systems, defaults, connector_type, cevents, devents,
+            Wfact, Wfact_t, name, description, systems,
+            defaults, connector_type, cevents, devents,
             parameter_dependencies, metadata, gui_metadata, complete, index_cache, parent, is_scalar_noise,
-            isscheduled)
+            is_dde, isscheduled)
     end
 end
 
@@ -178,6 +188,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
         name = nothing,
+        description = "",
         connector_type = nothing,
         checks = true,
         continuous_events = nothing,
@@ -188,7 +199,8 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
         complete = false,
         index_cache = nothing,
         parent = nothing,
-        is_scalar_noise = false)
+        is_scalar_noise = false,
+        is_dde = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     iv′ = value(iv)
@@ -223,11 +235,14 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
     parameter_dependencies, ps′ = process_parameter_dependencies(
         parameter_dependencies, ps′)
+    if is_dde === nothing
+        is_dde = _check_if_dde(deqs, iv′, systems)
+    end
     SDESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, neqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
-        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
+        ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, connector_type,
         cont_callbacks, disc_callbacks, parameter_dependencies, metadata, gui_metadata,
-        complete, index_cache, parent, is_scalar_noise; checks = checks)
+        complete, index_cache, parent, is_scalar_noise, is_dde; checks = checks)
 end
 
 function SDESystem(sys::ODESystem, neqs; kwargs...)
@@ -340,7 +355,8 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
     end
 
     SDESystem(deqs, get_noiseeqs(sys), get_iv(sys), unknowns(sys), parameters(sys),
-        name = name, parameter_dependencies = parameter_dependencies(sys), checks = false)
+        name = name, description = description(sys),
+        parameter_dependencies = parameter_dependencies(sys), checks = false)
 end
 
 """
@@ -448,7 +464,8 @@ function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
     # return modified SDE System
     SDESystem(deqs, noiseeqs, get_iv(sys), unknown_vars, parameters(sys);
         defaults = Dict(θ => θ0), observed = [weight ~ θ / θ0],
-        name = name, parameter_dependencies = parameter_dependencies(sys),
+        name = name, description = description(sys),
+        parameter_dependencies = parameter_dependencies(sys),
         checks = false)
 end
 
@@ -650,7 +667,7 @@ function DiffEqBase.SDEProblem{iip, specialize}(
     if !iscomplete(sys)
         error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEProblem`")
     end
-    f, u0, p = process_DEProblem(
+    f, u0, p = process_SciMLProblem(
         SDEFunction{iip, specialize}, sys, u0map, parammap; check_length,
         kwargs...)
     cbs = process_events(sys; callback, kwargs...)
@@ -736,7 +753,8 @@ function SDEProblemExpr{iip}(sys::SDESystem, u0map, tspan,
     if !iscomplete(sys)
         error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEProblemExpr`")
     end
-    f, u0, p = process_DEProblem(SDEFunctionExpr{iip}, sys, u0map, parammap; check_length,
+    f, u0, p = process_SciMLProblem(
+        SDEFunctionExpr{iip}, sys, u0map, parammap; check_length,
         kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
     sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))

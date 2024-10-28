@@ -119,7 +119,7 @@ prob1 = ODEProblem(reduced_system, u0, (0.0, 100.0), pp)
 solve(prob1, Rodas5())
 
 prob2 = SteadyStateProblem(reduced_system, u0, pp)
-@test prob2.f.observed(lorenz2.u, prob2.u0, pp) === 1.0
+@test prob2.f.observed(lorenz2.u, prob2.u0, prob2.p) === 1.0
 
 # issue #724 and #716
 let
@@ -178,6 +178,7 @@ A = reshape(1:(N^2), N, N)
 eqs = xs ~ A * xs
 @named sys′ = NonlinearSystem(eqs, [xs], [])
 sys = structural_simplify(sys′)
+@test length(equations(sys)) == 3 && length(observed(sys)) == 2
 
 # issue 958
 @parameters k₁ k₂ k₋₁ E₀

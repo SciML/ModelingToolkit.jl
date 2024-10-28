@@ -548,7 +548,7 @@ prob = ODEProblem(
 @test_nowarn solve(prob, Tsit5())
 obsfn = ModelingToolkit.build_explicit_observed_function(
     outersys, bar(3outersys.sys.ms, 3outersys.sys.p))
-@test_nowarn obsfn(sol.u[1], prob.p..., sol.t[1])
+@test_nowarn obsfn(sol.u[1], prob.p, sol.t[1])
 
 # x/x
 @variables x(t)
@@ -1164,6 +1164,13 @@ for sys in [sys1, sys2]
     end
 end
 
+@testset "Non-1-indexed variable array (issue #2670)" begin
+    @variables x(t)[0:1] # 0-indexed variable array
+    @named sys = ODESystem([x[0] ~ 0.0, D(x[1]) ~ x[0]], t, [x], [])
+    @test_nowarn sys = structural_simplify(sys)
+    @test equations(sys) == [D(x[1]) ~ 0.0]
+end
+
 # Namespacing of array variables
 @variables x(t)[1:2]
 @named sys = ODESystem(Equation[], t)
@@ -1393,4 +1400,70 @@ end
     @mtkbuild sys = ODESystem(D(x) ~ t, t)
     prob = @test_nowarn ODEProblem(sys, nothing, (0.0, 1.0))
     @test_nowarn solve(prob)
+end
+
+@testset "ODEs are not DDEs" begin
+    @variables x(t)
+    @named sys = ODESystem(D(x) ~ x, t)
+    @test !ModelingToolkit.is_dde(sys)
+    @test is_markovian(sys)
+    @named sys2 = ODESystem(Equation[], t; systems = [sys])
+    @test !ModelingToolkit.is_dde(sys)
+    @test is_markovian(sys)
+end
+
+@testset "Issue #2597" begin
+    @variables x(t)[1:2]=ones(2) y(t)=1.0
+
+    for eqs in [D(x) ~ x, collect(D(x) .~ x)]
+        for dvs in [[x], collect(x)]
+            @named sys = ODESystem(eqs, t, dvs, [])
+            sys = complete(sys)
+            if eqs isa Vector && length(eqs) == 2 && length(dvs) == 2
+                @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
+            else
+                @test_throws [
+                    r"array (equations|unknowns)", "structural_simplify", "scalarize"] ODEProblem(
+                    sys, [], (0.0, 1.0))
+            end
+        end
+    end
+    for eqs in [[D(x) ~ x, D(y) ~ y], [collect(D(x) .~ x); D(y) ~ y]]
+        for dvs in [[x, y], [x..., y]]
+            @named sys = ODESystem(eqs, t, dvs, [])
+            sys = complete(sys)
+            if eqs isa Vector && length(eqs) == 3 && length(dvs) == 3
+                @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
+            else
+                @test_throws [
+                    r"array (equations|unknowns)", "structural_simplify", "scalarize"] ODEProblem(
+                    sys, [], (0.0, 1.0))
+            end
+        end
+    end
+end
+
+@testset "Parameter dependencies with constant RHS" begin
+    @parameters p
+    @test_nowarn ODESystem(Equation[], t; parameter_dependencies = [p ~ 1.0], name = :a)
+end
+
+@testset "Variable discovery in arrays of `Num` inside callable symbolic" begin
+    @variables x(t) y(t)
+    @parameters foo(::AbstractVector)
+    sys = @test_nowarn ODESystem(D(x) ~ foo([x, 2y]), t; name = :sys)
+    @test length(unknowns(sys)) == 2
+    @test any(isequal(y), unknowns(sys))
+end
+
+@testset "Inplace observed" begin
+    @variables x(t)
+    @parameters p[1:2] q
+    @mtkbuild sys = ODESystem(D(x) ~ sum(p) * x + q * t, t)
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [p => ones(2), q => 2])
+    obsfn = ModelingToolkit.build_explicit_observed_function(
+        sys, [p..., q], return_inplace = true)[2]
+    buf = zeros(3)
+    obsfn(buf, prob.u0, prob.p, 0.0)
+    @test buf ≈ [1.0, 1.0, 2.0]
 end

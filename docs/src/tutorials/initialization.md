@@ -201,6 +201,87 @@ long enough you will see that `λ = 0` is required for this equation, but since 
     problem constructor. Additionally, any warning about not being fully determined can
     be suppressed via passing `warn_initialize_determined = false`.
 
+## Initialization of parameters
+
+Parameters may also be treated as unknowns in the initialization system. Doing so works
+almost identically to the standard case. For a parameter to be an initialization unknown
+(henceforth referred to as "solved parameter") it must represent a floating point number
+(have a `symtype` of `Real` or `<:AbstractFloat`) or an array of such numbers. Additionally,
+it must have a guess and one of the following conditions must be satisfied:
+
+ 1. The value of the parameter as passed to `ODEProblem` is an expression involving other
+    variables/parameters. For example, if `[p => 2q + x]` is passed to `ODEProblem`. In
+    this case, `p ~ 2q + x` is used as an equation during initialization.
+ 2. The parameter has a default (and no value for it is given to `ODEProblem`, since
+    that is condition 1). The default will be used as an equation during initialization.
+ 3. The parameter has a default of `missing`. If `ODEProblem` is given a value for this
+    parameter, it is used as an equation during initialization (whether the value is an
+    expression or not).
+ 4. `ODEProblem` is given a value of `missing` for the parameter. If the parameter has a
+    default, it will be used as an equation during initialization.
+
+All parameter dependencies (where the dependent parameter is a floating point number or
+array thereof) also become equations during initialization, and the dependent parameters
+become unknowns.
+
+`remake` will reconstruct the initialization system and problem, given the new
+constraints provided to it. The new values will be combined with the original
+variable-value mapping provided to `ODEProblem` and used to construct the initialization
+problem.
+
+### Parameter initialization by example
+
+Consider the following system, where the sum of two unknowns is a constant parameter
+`total`.
+
+```@example paraminit
+using ModelingToolkit, OrdinaryDiffEq # hidden
+using ModelingToolkit: t_nounits as t, D_nounits as D # hidden
+
+@variables x(t) y(t)
+@parameters total
+@mtkbuild sys = ODESystem([D(x) ~ -x, total ~ x + y], t;
+    defaults = [total => missing], guesses = [total => 1.0])
+```
+
+Given any two of `x`, `y` and `total` we can determine the remaining variable.
+
+```@example paraminit
+prob = ODEProblem(sys, [x => 1.0, y => 2.0], (0.0, 1.0))
+integ = init(prob, Tsit5())
+@assert integ.ps[total] ≈ 3.0 # hide
+integ.ps[total]
+```
+
+Suppose we want to re-create this problem, but now solve for `x` given `total` and `y`:
+
+```@example paraminit
+prob2 = remake(prob; u0 = [y => 1.0], p = [total => 4.0])
+initsys = prob2.f.initializeprob.f.sys
+```
+
+The system is now overdetermined. In fact:
+
+```@example paraminit
+[equations(initsys); observed(initsys)]
+```
+
+The system can never be satisfied and will always lead to an `InitialFailure`. This is
+due to the aforementioned behavior of retaining the original variable-value mapping
+provided to `ODEProblem`. To fix this, we pass `x => nothing` to `remake` to remove its
+retained value.
+
+```@example paraminit
+prob2 = remake(prob; u0 = [y => 1.0, x => nothing], p = [total => 4.0])
+initsys = prob2.f.initializeprob.f.sys
+```
+
+The system is fully determined, and the equations are solvable.
+
+```@example paraminit
+[equations(initsys); observed(initsys)]
+```
+
 ## Diving Deeper: Constructing the Initialization System
 
 To get a better sense of the initialization system and to help debug it, you can construct

@@ -106,6 +106,7 @@ isoutput(x) = isvarkind(VariableOutput, x)
 # Before the solvability check, we already have handled IO variables, so
 # irreducibility is independent from IO.
 isirreducible(x) = isvarkind(VariableIrreducible, x)
+setirreducible(x, v) = setmetadata(x, VariableIrreducible, v)
 state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))::Float64
 
 function default_toterm(x)
@@ -140,7 +141,7 @@ function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
     if is_incomplete_initialization || isempty(varmap)
         if isempty(defaults)
             if !is_incomplete_initialization && check
-                isempty(varlist) || throw_missingvars(varlist)
+                isempty(varlist) || throw(MissingVariablesError(varlist))
             end
             return nothing
         else
@@ -489,6 +490,16 @@ Create variables with a guess like this
 """
 function getguess(x)
     Symbolics.getmetadata(x, VariableGuess, nothing)
+end
+
+"""
+    setguess(x, v)
+
+Set the guess for the initial value associated with symbolic variable `x` to `v`.
+See also [`hasguess`](@ref).
+"""
+function setguess(x, v)
+    Symbolics.setmetadata(x, VariableGuess, v)
 end
 
 """

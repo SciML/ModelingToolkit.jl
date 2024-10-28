@@ -119,3 +119,33 @@ end
 prob = ODEProblem(sys, [], (1.0, 2.0), [])
 @test prob[x] == 1.0
 @test prob.ps[p] == 2.0
+
+@testset "Array of symbolics is unwrapped" begin
+    @variables x(t)[1:2] y(t)
+    @mtkbuild sys = ODESystem([D(x) ~ x, D(y) ~ t], t; defaults = [x => [y, 3.0]])
+    prob = ODEProblem(sys, [y => 1.0], (0.0, 1.0))
+    @test eltype(prob.u0) <: Float64
+    prob = ODEProblem(sys, [x => [y, 4.0], y => 2.0], (0.0, 1.0))
+    @test eltype(prob.u0) <: Float64
+end
+
+@testset "split=false systems with all parameter defaults" begin
+    @variables x(t) = 1.0
+    @parameters p=1.0 q=2.0 r=3.0
+    @mtkbuild sys=ODESystem(D(x) ~ p * x + q * t + r, t) split=false
+    prob = @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
+    @test prob.p isa Vector{Float64}
+end
+
+@testset "Issue#3153" begin
+    @variables x(t) y(t)
+    @parameters c1 c2 c3
+    eqs = [D(x) ~ y,
+        y ~ ifelse(t < c1, 0.0, (-c1 + t)^(c3))]
+    sps = [x, y]
+    ps = [c1, c2, c3]
+    @mtkbuild osys = ODESystem(eqs, t, sps, ps)
+    u0map = [x => 1.0]
+    pmap = [c1 => 5.0, c2 => 1.0, c3 => 1.2]
+    oprob = ODEProblem(osys, u0map, (0.0, 10.0), pmap)
+end

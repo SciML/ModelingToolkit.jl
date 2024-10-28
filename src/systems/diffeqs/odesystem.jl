@@ -79,6 +79,10 @@ struct ODESystem <: AbstractODESystem
     """
     name::Symbol
     """
+    A description of the system.
+    """
+    description::String
+    """
     The internal systems. These are required to have unique names.
     """
     systems::Vector{ODESystem}
@@ -141,6 +145,10 @@ struct ODESystem <: AbstractODESystem
     """
     gui_metadata::Union{Nothing, GUIMetadata}
     """
+    A boolean indicating if the given `ODESystem` represents a system of DDEs.
+    """
+    is_dde::Bool
+    """
     Cache for intermediate tearing state.
     """
     tearing_state::Any
@@ -174,11 +182,11 @@ struct ODESystem <: AbstractODESystem
     parent::Any
 
     function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
-            jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses,
+            jac, ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses,
             torn_matching, initializesystem, initialization_eqs, schedule,
             connector_type, preface, cevents,
             devents, parameter_dependencies,
-            metadata = nothing, gui_metadata = nothing,
+            metadata = nothing, gui_metadata = nothing, is_dde = false,
             tearing_state = nothing,
             substitutions = nothing, complete = false, index_cache = nothing,
             discrete_subsystems = nothing, solved_unknowns = nothing,
@@ -195,10 +203,10 @@ struct ODESystem <: AbstractODESystem
             check_units(u, deqs)
         end
         new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
-            ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses, torn_matching,
+            ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses, torn_matching,
             initializesystem, initialization_eqs, schedule, connector_type, preface,
             cevents, devents, parameter_dependencies, metadata,
-            gui_metadata, tearing_state, substitutions, complete, index_cache,
+            gui_metadata, is_dde, tearing_state, substitutions, complete, index_cache,
             discrete_subsystems, solved_unknowns, split_idxs, parent)
     end
 end
@@ -209,6 +217,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         systems = ODESystem[],
         tspan = nothing,
         name = nothing,
+        description = "",
         default_u0 = Dict(),
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
@@ -223,7 +232,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         parameter_dependencies = Equation[],
         checks = true,
         metadata = nothing,
-        gui_metadata = nothing)
+        gui_metadata = nothing,
+        is_dde = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
@@ -232,24 +242,39 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     ctrl′ = value.(controls)
     dvs′ = value.(dvs)
     dvs′ = filter(x -> !isdelay(x, iv), dvs′)
+    parameter_dependencies, ps′ = process_parameter_dependencies(
+        parameter_dependencies, ps′)
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn(
             "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
             :ODESystem, force = true)
     end
-    defaults = todict(defaults)
-    defaults = Dict{Any, Any}(value(k) => value(v)
-    for (k, v) in pairs(defaults) if value(v) !== nothing)
+    defaults = Dict{Any, Any}(todict(defaults))
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, dvs′)
     process_variables!(var_to_name, defaults, ps′)
+    process_variables!(var_to_name, defaults, [eq.lhs for eq in parameter_dependencies])
+    process_variables!(var_to_name, defaults, [eq.rhs for eq in parameter_dependencies])
+    defaults = Dict{Any, Any}(value(k) => value(v)
+    for (k, v) in pairs(defaults) if v !== nothing)
 
-    sysguesses = [ModelingToolkit.getguess(st) for st in dvs′]
-    hasaguess = findall(!isnothing, sysguesses)
-    var_guesses = dvs′[hasaguess] .=> sysguesses[hasaguess]
-    sysguesses = isempty(var_guesses) ? Dict() : todict(var_guesses)
-    guesses = merge(sysguesses, todict(guesses))
-    guesses = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(guesses))
+    sysdvsguesses = [ModelingToolkit.getguess(st) for st in dvs′]
+    hasaguess = findall(!isnothing, sysdvsguesses)
+    var_guesses = dvs′[hasaguess] .=> sysdvsguesses[hasaguess]
+    sysdvsguesses = isempty(var_guesses) ? Dict() : todict(var_guesses)
+    syspsguesses = [ModelingToolkit.getguess(st) for st in ps′]
+    hasaguess = findall(!isnothing, syspsguesses)
+    ps_guesses = ps′[hasaguess] .=> syspsguesses[hasaguess]
+    syspsguesses = isempty(ps_guesses) ? Dict() : todict(ps_guesses)
+    syspdepguesses = [ModelingToolkit.getguess(eq.lhs) for eq in parameter_dependencies]
+    hasaguess = findall(!isnothing, syspdepguesses)
+    pdep_guesses = [eq.lhs for eq in parameter_dependencies][hasaguess] .=>
+        syspdepguesses[hasaguess]
+    syspdepguesses = isempty(pdep_guesses) ? Dict() : todict(pdep_guesses)
+
+    guesses = merge(sysdvsguesses, syspsguesses, syspdepguesses, todict(guesses))
+    guesses = Dict{Any, Any}(value(k) => value(v)
+    for (k, v) in pairs(guesses) if v !== nothing)
 
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
@@ -264,14 +289,17 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     end
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
-    parameter_dependencies, ps′ = process_parameter_dependencies(
-        parameter_dependencies, ps′)
+
+    if is_dde === nothing
+        is_dde = _check_if_dde(deqs, iv′, systems)
+    end
     ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
-        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, guesses, nothing, initializesystem,
+        ctrl_jac, Wfact, Wfact_t, name, description, systems,
+        defaults, guesses, nothing, initializesystem,
         initialization_eqs, schedule, connector_type, preface, cont_callbacks,
         disc_callbacks, parameter_dependencies,
-        metadata, gui_metadata, checks = checks)
+        metadata, gui_metadata, is_dde, checks = checks)
 end
 
 function ODESystem(eqs, iv; kwargs...)
@@ -297,28 +325,26 @@ function ODESystem(eqs, iv; kwargs...)
     compressed_eqs = Equation[] # equations that need to be expanded later, like `connect(a, b)`
     for eq in eqs
         eq.lhs isa Union{Symbolic, Number} || (push!(compressed_eqs, eq); continue)
-        collect_vars!(allunknowns, ps, eq.lhs, iv)
-        collect_vars!(allunknowns, ps, eq.rhs, iv)
+        collect_vars!(allunknowns, ps, eq, iv)
         if isdiffeq(eq)
             diffvar, _ = var_from_nested_derivative(eq.lhs)
-            isequal(iv, iv_from_nested_derivative(eq.lhs)) ||
-                throw(ArgumentError("An ODESystem can only have one independent variable."))
-            diffvar in diffvars &&
-                throw(ArgumentError("The differential variable $diffvar is not unique in the system of equations."))
-            push!(diffvars, diffvar)
+            if check_scope_depth(getmetadata(diffvar, SymScope, LocalScope()), 0)
+                isequal(iv, iv_from_nested_derivative(eq.lhs)) ||
+                    throw(ArgumentError("An ODESystem can only have one independent variable."))
+                diffvar in diffvars &&
+                    throw(ArgumentError("The differential variable $diffvar is not unique in the system of equations."))
+                push!(diffvars, diffvar)
+            end
             push!(diffeq, eq)
         else
             push!(algeeq, eq)
         end
     end
     for eq in get(kwargs, :parameter_dependencies, Equation[])
-        if eq isa Pair
-            collect_vars!(allunknowns, ps, eq[1], iv)
-            collect_vars!(allunknowns, ps, eq[2], iv)
-        else
-            collect_vars!(allunknowns, ps, eq.lhs, iv)
-            collect_vars!(allunknowns, ps, eq.rhs, iv)
-        end
+        collect_vars!(allunknowns, ps, eq, iv)
+    end
+    for ssys in get(kwargs, :systems, ODESystem[])
+        collect_scoped_vars!(allunknowns, ps, ssys, iv)
     end
     for v in allunknowns
         isdelay(v, iv) || continue
@@ -373,7 +399,9 @@ function flatten(sys::ODESystem, noeqs = false)
             discrete_events = discrete_events(sys),
             defaults = defaults(sys),
             name = nameof(sys),
+            description = description(sys),
             initialization_eqs = initialization_equations(sys),
+            is_dde = is_dde(sys),
             checks = false)
     end
 end
@@ -403,6 +431,17 @@ function build_explicit_observed_function(sys, ts;
         ts = [ts]
     end
     ts = unwrap.(ts)
+    issplit = has_index_cache(sys) && get_index_cache(sys) !== nothing
+    if is_dde(sys)
+        if issplit
+            ts = map(
+                x -> delay_to_function(
+                    sys, x; history_arg = issplit ? MTKPARAMETERS_ARG : DEFAULT_PARAMS_ARG),
+                ts)
+        else
+            ts = map(x -> delay_to_function(sys, x), ts)
+        end
+    end
 
     vars = Set()
     foreach(v -> vars!(vars, v; op), ts)
@@ -475,8 +514,13 @@ function build_explicit_observed_function(sys, ts;
     end
     ts = map(t -> substitute(t, subs), ts)
     obsexprs = []
+
     for i in 1:maxidx
         eq = obs[i]
+        if is_dde(sys)
+            eq = delay_to_function(
+                sys, eq; history_arg = issplit ? MTKPARAMETERS_ARG : DEFAULT_PARAMS_ARG)
+        end
         lhs = eq.lhs
         rhs = eq.rhs
         push!(obsexprs, lhs ← rhs)
@@ -497,35 +541,50 @@ function build_explicit_observed_function(sys, ts;
         ps = (DestructuredArgs(unwrap.(ps), inbounds = !checkbounds),)
     end
     dvs = DestructuredArgs(unknowns(sys), inbounds = !checkbounds)
+    if is_dde(sys)
+        dvs = (dvs, DDE_HISTORY_FUN)
+    else
+        dvs = (dvs,)
+    end
+    p_start = param_only ? 1 : (length(dvs) + 1)
     if inputs === nothing
-        args = param_only ? [ps..., ivs...] : [dvs, ps..., ivs...]
+        args = param_only ? [ps..., ivs...] : [dvs..., ps..., ivs...]
     else
         inputs = unwrap.(inputs)
         ipts = DestructuredArgs(inputs, inbounds = !checkbounds)
-        args = param_only ? [ipts, ps..., ivs...] : [dvs, ipts, ps..., ivs...]
+        args = param_only ? [ipts, ps..., ivs...] : [dvs..., ipts, ps..., ivs...]
+        p_start += 1
     end
     pre = get_postprocess_fbody(sys)
 
     array_wrapper = if param_only
-        wrap_array_vars(sys, ts; ps = _ps, dvs = nothing, inputs) .∘
+        wrap_array_vars(sys, ts; ps = _ps, dvs = nothing, inputs, history = is_dde(sys)) .∘
         wrap_parameter_dependencies(sys, isscalar)
     else
-        wrap_array_vars(sys, ts; ps = _ps, inputs) .∘
+        wrap_array_vars(sys, ts; ps = _ps, inputs, history = is_dde(sys)) .∘
         wrap_parameter_dependencies(sys, isscalar)
     end
+    mtkparams_wrapper = wrap_mtkparameters(sys, isscalar, p_start)
+    if mtkparams_wrapper isa Tuple
+        oop_mtkp_wrapper = mtkparams_wrapper[1]
+    else
+        oop_mtkp_wrapper = mtkparams_wrapper
+    end
+
     # Need to keep old method of building the function since it uses `output_type`,
     # which can't be provided to `build_function`
     oop_fn = Func(args, [],
                  pre(Let(obsexprs,
                      isscalar ? ts[1] : MakeArray(ts, output_type),
-                     false))) |> array_wrapper[1] |> toexpr
+                     false))) |> array_wrapper[1] |> oop_mtkp_wrapper |> toexpr
     oop_fn = expression ? oop_fn : eval_or_rgf(oop_fn; eval_expression, eval_module)
 
     if !isscalar
         iip_fn = build_function(ts,
             args...;
             postprocess_fbody = pre,
-            wrap_code = array_wrapper .∘ wrap_assignments(isscalar, obsexprs),
+            wrap_code = mtkparams_wrapper .∘ array_wrapper .∘
+                        wrap_assignments(isscalar, obsexprs),
             expression = Val{true})[2]
         if !expression
             iip_fn = eval_or_rgf(iip_fn; eval_expression, eval_module)
@@ -535,6 +594,20 @@ function build_explicit_observed_function(sys, ts;
         return oop_fn
     else
         return oop_fn, iip_fn
+    end
+end
+
+function populate_delays(delays::Set, obsexprs, histfn, sys, sym)
+    _vars_util = vars(sym)
+    for v in _vars_util
+        v in delays && continue
+        iscall(v) && issym(operation(v)) && (args = arguments(v); length(args) == 1) &&
+            iscall(only(args)) || continue
+
+        idx = variable_index(sys, operation(v)(get_iv(sys)))
+        idx === nothing && error("Delay term $v is not an unknown in the system")
+        push!(delays, v)
+        push!(obsexprs, v ← histfn(only(args))[idx])
     end
 end
 
@@ -630,4 +703,17 @@ function add_accumulations(sys::ODESystem, vars::Vector{<:Pair})
     @set! sys.eqs = [eqs; Equation[D(a) ~ v[2] for (a, v) in zip(avars, vars)]]
     @set! sys.unknowns = [get_unknowns(sys); avars]
     @set! sys.defaults = merge(get_defaults(sys), Dict(a => 0.0 for a in avars))
+end
+
+function Base.show(io::IO, mime::MIME"text/plain", sys::ODESystem; hint = true, bold = true)
+    # Print general AbstractSystem information
+    invoke(Base.show, Tuple{typeof(io), typeof(mime), AbstractSystem},
+        io, mime, sys; hint, bold)
+
+    # Print initialization equations (unique to ODESystems)
+    nini = length(initialization_equations(sys))
+    nini > 0 && printstyled(io, "\nInitialization equations ($nini):"; bold)
+    nini > 0 && hint && print(io, " see initialization_equations(sys)")
+
+    return nothing
 end

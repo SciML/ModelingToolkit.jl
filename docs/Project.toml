@@ -1,6 +1,7 @@
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 BifurcationKit = "0f109fa4-8a5d-4b75-95aa-f515264e7665"
+DataInterpolations = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
 DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
@@ -22,7 +23,8 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
 BenchmarkTools = "1.3"
-BifurcationKit = "0.3"
+BifurcationKit = "0.4"
+DataInterpolations = "6.5"
 DifferentialEquations = "7.6"
 Distributions = "0.25"
 Documenter = "1"

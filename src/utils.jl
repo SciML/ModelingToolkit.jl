@@ -252,6 +252,7 @@ end
 
 function collect_defaults!(defs, vars)
     for v in vars
+        symbolic_type(v) == NotSymbolic() && continue
         if haskey(defs, v) || !hasdefault(unwrap(v)) || (def = getdefault(v)) === nothing
             continue
         end
@@ -262,6 +263,7 @@ end
 
 function collect_var_to_name!(vars, xs)
     for x in xs
+        symbolic_type(x) == NotSymbolic() && continue
         x = unwrap(x)
         if hasmetadata(x, Symbolics.GetindexParent)
             xarr = getmetadata(x, Symbolics.GetindexParent)
@@ -383,7 +385,27 @@ function vars!(vars, eq::Equation; op = Differential)
 end
 function vars!(vars, O; op = Differential)
     if isvariable(O)
+        if iscalledparameter(O)
+            f = getcalledparameter(O)
+            push!(vars, f)
+            for arg in arguments(O)
+                if symbolic_type(arg) == NotSymbolic() && arg isa AbstractArray
+                    for el in arg
+                        vars!(vars, unwrap(el); op)
+                    end
+                else
+                    vars!(vars, arg; op)
+                end
+            end
+            return vars
+        end
         return push!(vars, O)
+    end
+    if symbolic_type(O) == NotSymbolic() && O isa AbstractArray
+        for arg in O
+            vars!(vars, unwrap(arg); op)
+        end
+        return vars
     end
     !iscall(O) && return vars
 
@@ -467,23 +489,79 @@ function find_derivatives!(vars, expr, f)
     return vars
 end
 
-function collect_vars!(unknowns, parameters, expr, iv; op = Differential)
+"""
+    $(TYPEDSIGNATURES)
+
+Search through equations and parameter dependencies of `sys`, where sys is at a depth of
+`depth` from the root system, looking for variables scoped to the root system. Also
+recursively searches through all subsystems of `sys`, increasing the depth if it is not
+`-1`. A depth of `-1` indicates searching for variables with `GlobalScope`.
+"""
+function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Differential)
+    if has_eqs(sys)
+        for eq in get_eqs(sys)
+            eqtype_supports_collect_vars(eq) || continue
+            if eq isa Equation
+                eq.lhs isa Union{Symbolic, Number} || continue
+            end
+            collect_vars!(unknowns, parameters, eq, iv; depth, op)
+        end
+    end
+    if has_parameter_dependencies(sys)
+        for eq in get_parameter_dependencies(sys)
+            if eq isa Pair
+                collect_vars!(unknowns, parameters, eq, iv; depth, op)
+            else
+                collect_vars!(unknowns, parameters, eq, iv; depth, op)
+            end
+        end
+    end
+    newdepth = depth == -1 ? depth : depth + 1
+    for ssys in get_systems(sys)
+        collect_scoped_vars!(unknowns, parameters, ssys, iv; depth = newdepth, op)
+    end
+end
+
+function collect_vars!(unknowns, parameters, expr, iv; depth = 0, op = Differential)
     if issym(expr)
-        collect_var!(unknowns, parameters, expr, iv)
+        collect_var!(unknowns, parameters, expr, iv; depth)
     else
         for var in vars(expr; op)
             if iscall(var) && operation(var) isa Differential
                 var, _ = var_from_nested_derivative(var)
             end
-            collect_var!(unknowns, parameters, var, iv)
+            collect_var!(unknowns, parameters, var, iv; depth)
         end
     end
     return nothing
 end
 
-function collect_var!(unknowns, parameters, var, iv)
+"""
+    $(TYPEDSIGNATURES)
+
+Indicate whether the given equation type (Equation, Pair, etc) supports `collect_vars!`. 
+Can be dispatched by higher-level libraries to indicate support.
+"""
+eqtype_supports_collect_vars(eq) = false
+eqtype_supports_collect_vars(eq::Equation) = true
+eqtype_supports_collect_vars(eq::Pair) = true
+
+function collect_vars!(unknowns, parameters, eq::Equation, iv;
+        depth = 0, op = Differential)
+    collect_vars!(unknowns, parameters, eq.lhs, iv; depth, op)
+    collect_vars!(unknowns, parameters, eq.rhs, iv; depth, op)
+    return nothing
+end
+
+function collect_vars!(unknowns, parameters, p::Pair, iv; depth = 0, op = Differential)
+    collect_vars!(unknowns, parameters, p[1], iv; depth, op)
+    collect_vars!(unknowns, parameters, p[2], iv; depth, op)
+    return nothing
+end
+
+function collect_var!(unknowns, parameters, var, iv; depth = 0)
     isequal(var, iv) && return nothing
-    getmetadata(var, SymScope, LocalScope()) == LocalScope() || return nothing
+    check_scope_depth(getmetadata(var, SymScope, LocalScope()), depth) || return nothing
     if iscalledparameter(var)
         callable = getcalledparameter(var)
         push!(parameters, callable)
@@ -494,10 +572,28 @@ function collect_var!(unknowns, parameters, var, iv)
         push!(unknowns, var)
     end
     # Add also any parameters that appear only as defaults in the var
-    if hasdefault(var)
-        collect_vars!(unknowns, parameters, getdefault(var), iv)
+    if hasdefault(var) && (def = getdefault(var)) !== missing
+        collect_vars!(unknowns, parameters, def, iv)
     end
     return nothing
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Check if the given `scope` is at a depth of `depth` from the root system. Only
+returns `true` for `scope::GlobalScope` if `depth == -1`.
+"""
+function check_scope_depth(scope, depth)
+    if scope isa LocalScope
+        return depth == 0
+    elseif scope isa ParentScope
+        return depth > 0 && check_scope_depth(scope.parent, depth - 1)
+    elseif scope isa DelayParentScope
+        return depth >= scope.N && check_scope_depth(scope.parent, depth - scope.N)
+    elseif scope isa GlobalScope
+        return depth == -1
+    end
 end
 
 """
@@ -542,6 +638,15 @@ function collect_constants!(constants, expr::Symbolic)
             end
         end
     end
+end
+
+function collect_constants!(constants, expr::Union{ConstantRateJump, VariableRateJump})
+    collect_constants!(constants, expr.rate)
+    collect_constants!(constants, expr.affect!)
+end
+
+function collect_constants!(constants, ::MassActionJump)
+    return constants
 end
 
 """
@@ -601,7 +706,7 @@ end
 
 function get_cmap(sys, exprs = nothing)
     #Inject substitutions for constants => values
-    cs = collect_constants([get_eqs(sys); get_observed(sys)]) #ctrls? what else?
+    cs = collect_constants([collect(get_eqs(sys)); get_observed(sys)]) #ctrls? what else?
     if !empty_substitutions(sys)
         cs = [cs; collect_constants(get_substitutions(sys).subs)]
     end
@@ -885,3 +990,10 @@ end
 
 diff2term_with_unit(x, t) = _with_unit(diff2term, x, t)
 lower_varname_with_unit(var, iv, order) = _with_unit(lower_varname, var, iv, iv, order)
+
+function is_variable_floatingpoint(sym)
+    sym = unwrap(sym)
+    T = symtype(sym)
+    return T == Real || T <: AbstractFloat || T <: AbstractArray{Real} ||
+           T <: AbstractArray{<:AbstractFloat}
+end

@@ -54,6 +54,7 @@ using Reexport
 using RecursiveArrayTools
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
 import BlockArrays: BlockedArray, Block, blocksize, blocksizes
+import CommonSolve
 
 using RuntimeGeneratedFunctions
 using RuntimeGeneratedFunctions: drop_expr
@@ -144,6 +145,7 @@ include("systems/abstractsystem.jl")
 include("systems/model_parsing.jl")
 include("systems/connectors.jl")
 include("systems/callbacks.jl")
+include("systems/problem_utils.jl")
 
 include("systems/nonlinear/nonlinearsystem.jl")
 include("systems/diffeqs/odesystem.jl")
@@ -224,6 +226,8 @@ export JumpSystem
 export ODEProblem, SDEProblem
 export NonlinearFunction, NonlinearFunctionExpr
 export NonlinearProblem, NonlinearProblemExpr
+export IntervalNonlinearFunction, IntervalNonlinearFunctionExpr
+export IntervalNonlinearProblem, IntervalNonlinearProblemExpr
 export OptimizationProblem, OptimizationProblemExpr, constraints
 export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem
@@ -242,7 +246,7 @@ export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, DelayParentScope, GlobalScope
 export independent_variable, equations, controls, observed, full_equations
-export initialization_equations, guesses, defaults, parameter_dependencies
+export initialization_equations, guesses, defaults, parameter_dependencies, hierarchy
 export structural_simplify, expand_connections, linearize, linearization_function
 
 export calculate_jacobian, generate_jacobian, generate_function, generate_custom_function
@@ -279,5 +283,7 @@ export Sample, Hold, Shift, ShiftIndex, sampletime, SampleTime
 export Clock, SolverStepClock, TimeDomain
 
 export MTKParameters, reorder_dimension_by_tunables!, reorder_dimension_by_tunables
+
+export HomotopyContinuationProblem
 
 end # module
