@@ -673,7 +673,7 @@ function generate_single_rootfinding_callback(
             rf_oop(u, parameter_values(integ), t)
         end
     end
-    user_initfun = (affect_function.initialize == NULL_AFFECT) ? SciMLBase.INITIALIZE_DEFAULT :
+    user_initfun = isnothing(affect_function.initialize) ? SciMLBase.INITIALIZE_DEFAULT :
                        (c, u, t, i) -> affect_function.initialize(i)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing &&
        (save_idxs = get(ic.callback_to_clocks, cb, nothing)) !== nothing
@@ -691,7 +691,7 @@ function generate_single_rootfinding_callback(
     return ContinuousCallback(
         cond, affect_function.affect, affect_function.affect_neg, rootfind = cb.rootfind,
         initialize = initfn,
-        finalize = (affect_function.finalize == NULL_AFFECT) ? SciMLBase.FINALIZE_DEFAULT : (c, u, t, i) -> affect_function.finalize(i),
+        finalize = isnothing(affect_function.finalize) ? SciMLBase.FINALIZE_DEFAULT : (c, u, t, i) -> affect_function.finalize(i),
         initializealg = reinitialization_alg(cb))
 end
 
@@ -763,9 +763,35 @@ function generate_vector_rootfinding_callback(
             end
         end
     end
-    
-    initialize = handle_optional_setup_fn(
-        map(fn -> fn.initialize, affect_functions), SciMLBase.INITIALIZE_DEFAULT)
+    initialize = nothing
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+        initialize = handle_optional_setup_fn(map((cb, fn) -> begin 
+            if (save_idxs = get(ic.callback_to_clocks, cb, nothing)) !== nothing
+                let save_idxs = save_idxs
+                    if !isnothing(fn.initialize)
+                        (i) -> begin
+                            for idx in save_idxs
+                                SciMLBase.save_discretes!(i, idx)
+                            end
+                            fn.initialize(i)
+                        end
+                    else 
+                        (i) -> begin
+                            for idx in save_idxs
+                                SciMLBase.save_discretes!(i, idx)
+                            end
+                        end
+                    end
+                end
+            else
+                fn.initialize
+            end
+        end, cbs, affect_functions), SciMLBase.INITIALIZE_DEFAULT)
+        
+    else
+        initialize = handle_optional_setup_fn(map(fn -> fn.initialize, affect_functions), SciMLBase.INITIALIZE_DEFAULT)
+    end
+
     finalize = handle_optional_setup_fn(
         map(fn -> fn.finalize, affect_functions), SciMLBase.FINALIZE_DEFAULT)
     return VectorContinuousCallback(
