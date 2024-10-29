@@ -196,7 +196,18 @@ function MTK.HomotopyContinuationProblem(
             error("Equation $eq is not a polynomial in the unknowns. See warnings for further details.")
         end
         num, den = handle_rational_polynomials(eq.rhs - eq.lhs, dvs)
-        push!(denoms, den)
+
+        # make factors different elements, otherwise the nonzero factors artificially
+        # inflate the error of the zero factor.
+        if iscall(den) && operation(den) == *
+            for arg in arguments(den)
+                # ignore constant factors
+                symbolic_type(arg) == NotSymbolic() && continue
+                push!(denoms, abs(arg))
+            end
+        elseif symbolic_type(den) != NotSymbolic()
+            push!(denoms, abs(den))
+        end
         return 0 ~ num
     end
 
@@ -232,7 +243,7 @@ Extra keyword arguments:
   the denominator to be below `denominator_abstol` will be discarded.
 """
 function CommonSolve.solve(prob::MTK.HomotopyContinuationProblem,
-        alg = nothing; show_progress = false, denominator_abstol = 1e-8, kwargs...)
+        alg = nothing; show_progress = false, denominator_abstol = 1e-7, kwargs...)
     sol = HomotopyContinuation.solve(
         prob.homotopy_continuation_system; show_progress, kwargs...)
     realsols = HomotopyContinuation.results(sol; only_real = true)
