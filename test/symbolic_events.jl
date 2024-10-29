@@ -1001,6 +1001,54 @@ end
     @test seen == true
     @test inited == true 
     @test finaled == true
+
+    #periodic
+    inited = false 
+    finaled = false
+    cb3 = ModelingToolkit.SymbolicDiscreteCallback(1.0, [x ~ 2], initialize=a, finalize=b)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5())
+    @test inited == true 
+    @test finaled == true
+    @test isapprox(sol[x][3], 0.0, atol=1e-9)
+    @test sol[x][4] ≈ 2.0
+    @test sol[x][5] ≈ 1.0
+
+
+    seen = false
+    inited = false 
+    finaled = false
+    cb3 = ModelingToolkit.SymbolicDiscreteCallback(1.0, f, initialize=a, finalize=b)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5())
+    @test seen == true
+    @test inited == true 
+
+    #preset
+    seen = false
+    inited = false 
+    finaled = false
+    cb3 = ModelingToolkit.SymbolicDiscreteCallback([1.0], f, initialize=a, finalize=b)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5())
+    @test seen == true
+    @test inited == true 
+    @test finaled == true
+
+    #equational
+    seen = false
+    inited = false 
+    finaled = false
+    cb3 = ModelingToolkit.SymbolicDiscreteCallback(t == 1.0, f, initialize=a, finalize=b)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5(); tstops=1.0)
+    @test seen == true
+    @test inited == true 
+    @test finaled == true
 end
 
 @testset "Bump" begin
