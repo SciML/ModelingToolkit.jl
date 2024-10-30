@@ -170,3 +170,20 @@ prob_sa = DDEProblem(sys, [], (0.0, 10.0); constant_lags = [sys.osc1.τ, sys.osc
           sol(sol.t .- prob.ps[ssys.valve.τ]; idxs = ssys.valve.opening).u .+
           sum.(sol[ssys.vvecs.x])
 end
+
+@testset "Issue#3165 DDEs with non-tunables" begin
+    @variables x(..) = 1.0
+    @parameters w=1.0 [tunable = false] τ=0.5
+    eqs = [D(x(t)) ~ -w * x(t - τ)]
+
+    @named sys = System(eqs, t)
+    sys = structural_simplify(sys)
+
+    prob = DDEProblem(sys,
+        [],
+        (0.0, 10.0),
+        constant_lags = [τ])
+
+    alg = MethodOfSteps(Vern7())
+    @test_nowarn solve(prob, alg)
+end
