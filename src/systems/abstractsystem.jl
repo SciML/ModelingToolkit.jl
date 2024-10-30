@@ -933,8 +933,8 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
         @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
     end
     if flatten
-        if (eqs = equations(sys)) isa Vector &&
-           any(eq -> eq isa Equation && isconnection(eq.lhs), eqs)
+        eqs = equations(sys)
+        if eqs isa AbstractArray && eltype(eqs) <: Equation
             newsys = expand_connections(sys)
         else
             newsys = sys
