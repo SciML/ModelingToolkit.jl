@@ -932,3 +932,29 @@ end
     @test getdefault(main_sys.p2) == 12
     @test getdefault(main_sys.v1) == 13
 end
+
+@mtkmodel InnerModel begin
+    @parameters begin
+        p
+    end
+end
+
+@mtkmodel MidModel begin
+    @components begin
+        inmodel = InnerModel()
+    end
+end
+
+@mtkmodel OuterModel begin
+    @extend MidModel()
+    @equations begin
+        inmodel.p ~ 0
+    end
+end
+
+# The base system is fetched from the module while extending implicitly. This
+# way of defining fails when defined inside the `@testset`. So, it is moved out.
+@testset "Test unpacking of components in implicit extend" begin
+    @named out = OuterModel()
+    @test OuterModel.structure[:extend][1] == [:inmodel]
+end
