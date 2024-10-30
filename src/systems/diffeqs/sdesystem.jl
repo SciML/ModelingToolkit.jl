@@ -302,7 +302,11 @@ function generate_diffusion_function(sys::SDESystem, dvs = unknowns(sys),
         (map(x -> time_varying_as_func(value(x), sys), ps),)
     end
     if isdde
-        return build_function(eqs, u, DDE_HISTORY_FUN, p..., get_iv(sys); kwargs...)
+        return build_function(eqs, u, DDE_HISTORY_FUN, p..., get_iv(sys); kwargs...,
+            wrap_code = get(kwargs, :wrap_code, identity) .∘
+                        wrap_mtkparameters(sys, false, 3) .∘
+                        wrap_array_vars(sys, eqs; dvs, ps, history = true) .∘
+                        wrap_parameter_dependencies(sys, false))
     else
         return build_function(eqs, u, p..., get_iv(sys); kwargs...)
     end

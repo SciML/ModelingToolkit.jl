@@ -186,4 +186,15 @@ end
 
     alg = MethodOfSteps(Vern7())
     @test_nowarn solve(prob, alg)
+
+    @brownian r
+    eqs = [D(x(t)) ~ -w * x(t - τ) + r]
+    @named sys = System(eqs, t)
+    sys = structural_simplify(sys)
+    prob = SDDEProblem(sys,
+        [],
+        (0.0, 10.0),
+        constant_lags = [τ])
+
+    @test_nowarn solve(prob, RKMil())
 end

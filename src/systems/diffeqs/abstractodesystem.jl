@@ -215,7 +215,7 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
     if isdde
         build_function(rhss, u, DDE_HISTORY_FUN, p..., t; kwargs...,
             wrap_code = wrap_code .∘ wrap_mtkparameters(sys, false, 3) .∘
-                        wrap_array_vars(sys, rhss; dvs, ps) .∘
+                        wrap_array_vars(sys, rhss; dvs, ps, history = true) .∘
                         wrap_parameter_dependencies(sys, false))
     else
         pre, sol_states = get_substitutions_and_solved_unknowns(sys)
@@ -598,17 +598,14 @@ function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
+    f(u, h, p, t) = f_oop(u, h, p, t)
+    f(du, u, h, p, t) = f_iip(du, u, h, p, t)
+
     g_gen = generate_diffusion_function(sys, dvs, ps; expression = Val{true},
         isdde = true, kwargs...)
     g_oop, g_iip = eval_or_rgf.(g_gen; eval_expression, eval_module)
-    f(u, h, p, t) = f_oop(u, h, p, t)
-    f(u, h, p::MTKParameters, t) = f_oop(u, h, p..., t)
-    f(du, u, h, p, t) = f_iip(du, u, h, p, t)
-    f(du, u, h, p::MTKParameters, t) = f_iip(du, u, h, p..., t)
     g(u, h, p, t) = g_oop(u, h, p, t)
-    g(u, h, p::MTKParameters, t) = g_oop(u, h, p..., t)
     g(du, u, h, p, t) = g_iip(du, u, h, p, t)
-    g(du, u, h, p::MTKParameters, t) = g_iip(du, u, h, p..., t)
 
     SDDEFunction{iip}(f, g, sys = sys)
 end
