@@ -1075,3 +1075,45 @@ end
     prob = ODEProblem(pend, [x => 1], (0.0, 3.0), guesses = [y => x])
     @test all(≈(0.0; atol = 1e-9), solve(prob, Rodas5())[[x, y]][end])
 end
+
+@testset "Contact force (or lack thereof)" begin
+    @component function ContactForce2(; name, surface = nothing)
+        vars = @variables begin
+            q(t) = 1
+            v(t) = 0
+            f(t)
+            h(t)
+            hd(t)
+            hdd(t)
+            (λ(t) = 0), [irreducible = true]
+        end
+        pars = @parameters begin
+            contact::Int = 0    # discrete.time state variable
+            a0 = 100
+            a1 = 20
+            a2 = 1e6
+        end
+
+        equations = [0 ~ ifelse((contact == 1), hdd + a1 * hd + a0 * h + a2 * h^3, λ)
+                     f ~ contact * λ
+                     D(q) ~ v
+                     1 * D(v) ~ -1 * 9.81 + f
+                     h ~ q
+                     hd ~ D(h)
+                     hdd ~ D(hd)]
+
+        function affect!(integ, u, p, _)
+            @show integ[u.h]
+        end
+        continuous_events = ModelingToolkit.SymbolicContinuousCallback(
+            [h ~ 0], (affect!, [h], [], [], nothing))
+
+        ODESystem(equations, t, vars, pars; name, continuous_events)
+    end
+    @named model = ContactForce2()
+    model = complete(model)
+    ssys = structural_simplify(model)
+    prob = ODEProblem(ssys, [], (0.0, 5.0))
+    sol = solve(prob, Rodas4())
+    @test sol[model.h][end] < -20.0 # the object has fallen successfully
+end
