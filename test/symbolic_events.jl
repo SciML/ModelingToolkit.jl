@@ -1077,6 +1077,7 @@ end
 end
 
 @testset "Contact force (or lack thereof)" begin
+    triggered = 0
     @component function ContactForce2(; name, surface = nothing)
         vars = @variables begin
             q(t) = 1
@@ -1103,7 +1104,7 @@ end
                      hdd ~ D(hd)]
 
         function affect!(integ, u, p, _)
-            @show integ[u.h]
+            triggered += 1
         end
         continuous_events = ModelingToolkit.SymbolicContinuousCallback(
             [h ~ 0], (affect!, [h], [], [], nothing))
@@ -1116,4 +1117,5 @@ end
     prob = ODEProblem(ssys, [], (0.0, 5.0))
     sol = solve(prob, Rodas4())
     @test sol[model.h][end] < -20.0 # the object has fallen successfully
+    @test triggered == 1
 end
