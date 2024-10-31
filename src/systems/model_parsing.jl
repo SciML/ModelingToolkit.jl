@@ -772,18 +772,17 @@ function Base.names(model::Model)
         map(first, get(model.structure, :components, EMPTY_VoVoSYMBOL))))
 end
 
-function _parse_extend!(ext, a, b, dict, expr, kwargs, vars, additional_args)
+function _parse_extend!(ext, a, b, dict, expr, kwargs, vars, implicit_arglist)
     extend_args!(a, b, dict, expr, kwargs)
 
-    # `additional_args` doubles as a flag to check the mode of `@extend`. It is
+    # `implicit_arglist` doubles as a flag to check the mode of `@extend`. It is
     # `nothing` for explicit destructuring.
     # The following block modifies the arguments of both base and higher systems
     # for the implicit extend statements.
-    if additional_args !== nothing
+    if implicit_arglist !== nothing
         b.args = [b.args[1]]
-        allvars = [additional_args.args..., vars.args...]
         push!(b.args, Expr(:parameters))
-        for var in allvars
+        for var in implicit_arglist.args
             push!(b.args[end].args, var)
             if !haskey(dict[:kwargs], var)
                 push!(dict[:kwargs], var => Dict(:value => NO_VALUE))
@@ -814,8 +813,8 @@ function parse_extend!(exprs, ext, dict, mod, body, kwargs)
                 end
                 a, b = b.args
                 # This doubles as a flag to identify the mode of `@extend`
-                additional_args = nothing
-                _parse_extend!(ext, a, b, dict, expr, kwargs, vars, additional_args)
+                implicit_arglist = nothing
+                _parse_extend!(ext, a, b, dict, expr, kwargs, vars, implicit_arglist)
             else
                 error("When explicitly destructing in `@extend` please use the syntax: `@extend a, b = oneport = OnePort()`.")
             end
@@ -825,11 +824,12 @@ function parse_extend!(exprs, ext, dict, mod, body, kwargs)
             b = body
             if (model = getproperty(mod, b.args[1])) isa Model
                 vars = Expr(:tuple)
-                append!(vars.args, _arguments(model))
-                additional_args = Expr(:tuple)
-                append!(additional_args.args,
+                append!(vars.args, names(model))
+                implicit_arglist = Expr(:tuple)
+                append!(implicit_arglist.args, _arguments(model))
+                append!(implicit_arglist.args,
                     keys(get(model.structure, :structural_parameters, EMPTY_DICT)))
-                _parse_extend!(ext, a, b, dict, expr, kwargs, vars, additional_args)
+                _parse_extend!(ext, a, b, dict, expr, kwargs, vars, implicit_arglist)
             else
                 error("Cannot infer the exact `Model` that `@extend $(body)` refers." *
                       " Please specify the names that it brings into scope by:" *
