@@ -422,3 +422,25 @@ let
     @test issetequal(us, [x5])
     @test issetequal(ps, [p5])
 end
+
+# PDMP test
+let
+    @variables X(t) Y(t)
+    @parameters k1 k2
+    rate1 = k1 * X
+    affect1! = [X ~ X - 1]
+    rate2 = k1 
+    affect2! = [Y ~ Y + 1]
+    eqs = [D(X) ~ k2, D(Y) ~ -k2/100*Y]
+    vrj1 = VariableRateJump(rate1, affect1!)
+    vrj2 = VariableRateJump(rate2, affect2!)
+    @named jsys = JumpSystem([vrj1, vrj2, eqs[1], eqs[2]], t, [X, Y], [k1, k2])
+    jsys = complete(jsys)
+    u0 = [X => 0.0, Y => 0.0]
+    p = [k1 => 1.0, k2 => 20.0]
+    tspan = (0.0, 20.0)
+    oprob = ODEProblem(jsys, u0, tspan, p)
+    jprob = JumpProblem(jsys, oprob; rng)
+    sol = solve(jprob, Tsit5())
+
+end

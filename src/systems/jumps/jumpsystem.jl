@@ -482,19 +482,31 @@ function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothi
         use_union = false,
         eval_expression = false,
         eval_module = @__MODULE__,
+        check_length = false,
         kwargs...)
     if !iscomplete(sys)
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
     end
 
-    _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
-        t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false, check_length = false)
-
-    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
-
-    f = (du, u, p, t) -> (du .= 0; nothing)
-    df = ODEFunction(f; sys, observed = observedfun)
-    ODEProblem(df, u0, tspan, p; kwargs...)
+    # forward everything to be an ODESystem but the jumps
+    if has_equations(sys)
+        osys = ODESystem(equations(sys).x[4], get_iv(sys), unknowns(sys), parameters(sys);
+            observed = observed(sys), name = nameof(sys), description = description(sys),
+            systems = get_systems(sys), defaults = defaults(sys), 
+            discrete_events = discrete_events(sys), 
+            parameter_dependencies = parameter_dependencies(sys),
+            metadata = get_metadata(sys), gui_metadata = get_gui_metadata(sys))
+        osys = complete(osys)
+        return ODEProblem(osys, u0map, tspan, parammap; check_length, kwargs...)
+    else
+        _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
+            t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false, 
+            check_length = false)
+        f = (du, u, p, t) -> (du .= 0; nothing)
+        observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)    
+        df = ODEFunction(f; sys, observed = observedfun)
+        return ODEProblem(df, u0, tspan, p; check_length, kwargs...)
+    end
 end
 
 """
@@ -530,8 +542,8 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob,
                             for j in eqs.x[2]]
     vrjs = VariableRateJump[assemble_vrj(js, j, unknowntoid; eval_expression, eval_module)
                             for j in eqs.x[3]]
-    ((prob isa DiscreteProblem) && !isempty(vrjs)) &&
-        error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")
+    ((prob isa DiscreteProblem) && (!isempty(vrjs) || has_equations(js))) &&
+        error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps and/or coupled differential equations.")
     jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, majs)
 
     # dep graphs are only for constant rate jumps
