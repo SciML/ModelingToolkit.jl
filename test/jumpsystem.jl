@@ -341,15 +341,14 @@ let
     @test all(abs.(cmean .- cmean2) .<= 0.05 .* cmean)
 end
 
-
 # collect_vars! tests for jumps
-let 
+let
     @variables x1(t) x2(t) x3(t) x4(t) x5(t)
     @parameters p1 p2 p3 p4 p5
     j1 = ConstantRateJump(p1, [x1 ~ x1 + 1])
     j2 = MassActionJump(p2, [x2 => 1], [x3 => -1])
     j3 = VariableRateJump(p3, [x3 ~ x3 + 1, x4 ~ x4 + 1])
-    j4 = MassActionJump(p4*p5, [x1 => 1, x5 => 1], [x1 => -1, x5 => -1, x2 => 1])
+    j4 = MassActionJump(p4 * p5, [x1 => 1, x5 => 1], [x1 => -1, x5 => -1, x2 => 1])
     us = Set()
     ps = Set()
     iv = t
@@ -389,35 +388,36 @@ let
     p3 = ParentScope(ParentScope(p3))
     p4 = DelayParentScope(p4, 2)
     p5 = GlobalScope(p5)
-    
+
     j1 = ConstantRateJump(p1, [x1 ~ x1 + 1])
     j2 = MassActionJump(p2, [x2 => 1], [x3 => -1])
     j3 = VariableRateJump(p3, [x3 ~ x3 + 1, x4 ~ x4 + 1])
-    j4 = MassActionJump(p4*p5, [x1 => 1, x5 => 1], [x1 => -1, x5 => -1, x2 => 1])
+    j4 = MassActionJump(p4 * p5, [x1 => 1, x5 => 1], [x1 => -1, x5 => -1, x2 => 1])
     @named js = JumpSystem([j1, j2, j3, j4], t, [x1, x2, x3, x4, x5], [p1, p2, p3, p4, p5])
 
-    us = Set(); ps = Set()
+    us = Set()
+    ps = Set()
     iv = t
     MT.collect_scoped_vars!(us, ps, js, iv)
     @test issetequal(us, [x2])
     @test issetequal(ps, [p2])
 
-    empty!.((us,ps))
+    empty!.((us, ps))
     MT.collect_scoped_vars!(us, ps, js, iv; depth = 0)
     @test issetequal(us, [x1])
     @test issetequal(ps, [p1])
 
-    empty!.((us,ps))
+    empty!.((us, ps))
     MT.collect_scoped_vars!(us, ps, js, iv; depth = 1)
     @test issetequal(us, [x2])
     @test issetequal(ps, [p2])
 
-    empty!.((us,ps))
+    empty!.((us, ps))
     MT.collect_scoped_vars!(us, ps, js, iv; depth = 2)
     @test issetequal(us, [x3, x4])
     @test issetequal(ps, [p3, p4])
 
-    empty!.((us,ps))
+    empty!.((us, ps))
     MT.collect_scoped_vars!(us, ps, js, iv; depth = -1)
     @test issetequal(us, [x5])
     @test issetequal(ps, [p5])

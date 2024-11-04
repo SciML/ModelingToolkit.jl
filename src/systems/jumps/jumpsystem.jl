@@ -174,14 +174,15 @@ function JumpSystem(eqs, iv, unknowns, ps;
             "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
             :JumpSystem, force = true)
     end
-    defaults = Dict{Any,Any}(todict(defaults))
+    defaults = Dict{Any, Any}(todict(defaults))
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, us′)
     process_variables!(var_to_name, defaults, ps′)
     process_variables!(var_to_name, defaults, [eq.lhs for eq in parameter_dependencies])
     process_variables!(var_to_name, defaults, [eq.rhs for eq in parameter_dependencies])
-    defaults = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(defaults) 
-        if value(v) !== nothing)
+    #! format: off
+    defaults = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(defaults) if value(v) !== nothing)
+    #! format: on
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
     sysnames = nameof.(systems)
@@ -218,8 +219,8 @@ end
 
 ##### MTK dispatches for JumpSystems #####
 eqtype_supports_collect_vars(j::MassActionJump) = true
-function collect_vars!(unknowns, parameters, j::MassActionJump, iv; depth = 0, 
-        op = Differential)    
+function collect_vars!(unknowns, parameters, j::MassActionJump, iv; depth = 0,
+        op = Differential)
     collect_vars!(unknowns, parameters, j.scaled_rates, iv; depth, op)
     for field in (j.reactant_stoch, j.net_stoch)
         for el in field
@@ -229,8 +230,8 @@ function collect_vars!(unknowns, parameters, j::MassActionJump, iv; depth = 0,
     return nothing
 end
 
-eqtype_supports_collect_vars(j::Union{ConstantRateJump,VariableRateJump}) = true
-function collect_vars!(unknowns, parameters, j::Union{ConstantRateJump,VariableRateJump}, 
+eqtype_supports_collect_vars(j::Union{ConstantRateJump, VariableRateJump}) = true
+function collect_vars!(unknowns, parameters, j::Union{ConstantRateJump, VariableRateJump},
         iv; depth = 0, op = Differential)
     collect_vars!(unknowns, parameters, j.rate, iv; depth, op)
     for eq in j.affect!
@@ -278,7 +279,7 @@ function assemble_vrj(
 
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
-    affect = eval_or_rgf(generate_affect_function(js, vrj.affect!, outputidxs); 
+    affect = eval_or_rgf(generate_affect_function(js, vrj.affect!, outputidxs);
         eval_expression, eval_module)
     VariableRateJump(rate, affect)
 end
@@ -306,7 +307,7 @@ function assemble_crj(
 
     outputvars = (value(affect.lhs) for affect in crj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
-    affect = eval_or_rgf(generate_affect_function(js, crj.affect!, outputidxs); 
+    affect = eval_or_rgf(generate_affect_function(js, crj.affect!, outputidxs);
         eval_expression, eval_module)
     ConstantRateJump(rate, affect)
 end
