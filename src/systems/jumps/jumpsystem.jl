@@ -546,7 +546,7 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob,
     vrjs = VariableRateJump[assemble_vrj(js, j, unknowntoid; eval_expression, eval_module)
                             for j in eqs.x[3]]
     if prob isa DiscreteProblem
-        if (!isempty(vrjs) || has_equations(js) || !isempty(continous_events(js)))
+        if (!isempty(vrjs) || has_equations(js) || !isempty(continuous_events(js)))
             error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps, coupled differential equations, or continuous events.")
         end
     end
