@@ -96,11 +96,6 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
     """
-    A `Vector{SymbolicContinuousCallback}` that model events.
-    The integrator will use root finding to guarantee that it steps at each zero crossing.
-    """
-    continuous_events::Vector{SymbolicContinuousCallback}
-    """
     Topologically sorted parameter dependency equations, where all symbols are parameters and
     the LHS is a single parameter.
     """
@@ -172,13 +167,14 @@ function JumpSystem(eqs, iv, unknowns, ps;
     iv′ = value(iv)
     us′ = value.(unknowns)
     ps′ = value.(ps)
-    parameter_dependencies, ps = process_parameter_dependencies(parameter_dependencies, ps′)
+    parameter_dependencies, ps′ = process_parameter_dependencies(
+        parameter_dependencies, ps′)
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn(
             "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
             :JumpSystem, force = true)
     end
-    defaults = todict(defaults)
+    defaults = Dict{Any,Any}(todict(defaults))
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, us′)
     process_variables!(var_to_name, defaults, ps′)
@@ -188,7 +184,14 @@ function JumpSystem(eqs, iv, unknowns, ps;
         if value(v) !== nothing)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
+    sysnames = nameof.(systems)
+    if length(unique(sysnames)) != length(sysnames)
+        throw(ArgumentError("System names must be unique."))
+    end
+
     # equation processing
+    # this and the treatment of continuous events are the only part 
+    # unique to JumpSystems
     eqs = scalarize.(eqs)
     ap = ArrayPartition(MassActionJump[], ConstantRateJump[], VariableRateJump[])
     for eq in eqs
@@ -203,11 +206,6 @@ function JumpSystem(eqs, iv, unknowns, ps;
         end
     end
 
-    sysnames = nameof.(systems)
-    if length(unique(sysnames)) != length(sysnames)
-        throw(ArgumentError("System names must be unique."))
-    end
-
     (continuous_events === nothing) ||
         error("JumpSystems currently only support discrete events.")
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
@@ -220,17 +218,19 @@ end
 
 ##### MTK dispatches for JumpSystems #####
 function collect_vars!(unknowns, parameters, j::MassActionJump, iv; depth = 0, 
-        op = Differential)
+        op = Differential)    
     for field in (j.scaled_rates, j.reactant_stoch, j.net_stoch)
-        collect_vars!(unknowns, parameters, field, iv; depth, op)
+        for el in field
+            collect_vars!(unknowns, parameters, el, iv; depth, op)
+        end
     end
     return nothing
 end
 
 function collect_vars!(unknowns, parameters, j::Union{ConstantRateJump,VariableRateJump}, 
         iv; depth = 0, op = Differential)
-    collect_vars!(unknowns, parameters, j.condition, iv; depth, op)
-    for eq in j.affect
+    collect_vars!(unknowns, parameters, j.rate, iv; depth, op)
+    for eq in j.affect!
         (eq isa Equation) && collect_vars!(unknowns, parameters, eq, iv; depth, op)
     end
     return nothing
