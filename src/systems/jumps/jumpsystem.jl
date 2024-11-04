@@ -219,7 +219,8 @@ end
 ##### MTK dispatches for JumpSystems #####
 function collect_vars!(unknowns, parameters, j::MassActionJump, iv; depth = 0, 
         op = Differential)    
-    for field in (j.scaled_rates, j.reactant_stoch, j.net_stoch)
+    collect_vars!(unknowns, parameters, j.scaled_rates, iv; depth, op)
+    for field in (j.reactant_stoch, j.net_stoch)
         for el in field
             collect_vars!(unknowns, parameters, el, iv; depth, op)
         end
