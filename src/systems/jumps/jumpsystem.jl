@@ -88,6 +88,11 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
     connector_type::Any
     """
+    A `Vector{SymbolicContinuousCallback}` that model events.
+    The integrator will use root finding to guarantee that it steps at each zero crossing.
+    """
+    continuous_events::Vector{SymbolicContinuousCallback}
+    """
     A `Vector{SymbolicDiscreteCallback}` that models events. Symbolic
     analog to `SciMLBase.DiscreteCallback` that executes an affect when a given condition is
     true at the end of an integration step. Note, one must make sure to call
@@ -120,8 +125,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
 
     function JumpSystem{U}(
             tag, ap::U, iv, unknowns, ps, var_to_name, observed, name, description,
-            systems,
-            defaults, connector_type, devents, parameter_dependencies,
+            systems, defaults, connector_type, cevents, devents, parameter_dependencies,
             metadata = nothing, gui_metadata = nothing,
             complete = false, index_cache = nothing, isscheduled = false;
             checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
@@ -136,8 +140,8 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
         end
         new{U}(tag, ap, iv, unknowns, ps, var_to_name,
             observed, name, description, systems, defaults,
-            connector_type, devents, parameter_dependencies, metadata, gui_metadata,
-            complete, index_cache, isscheduled)
+            connector_type, cevents, devents, parameter_dependencies, metadata, 
+            gui_metadata, complete, index_cache, isscheduled)
     end
 end
 function JumpSystem(tag, ap, iv, states, ps, var_to_name, args...; kwargs...)
@@ -210,13 +214,12 @@ function JumpSystem(eqs, iv, unknowns, ps;
         end
     end
 
-    (continuous_events === nothing) ||
-        error("JumpSystems currently only support discrete events.")
+    cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
 
     JumpSystem{typeof(ap)}(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         ap, iv′, us′, ps′, var_to_name, observed, name, description, systems,
-        defaults, connector_type, disc_callbacks, parameter_dependencies,
+        defaults, connector_type, cont_callbacks, disc_callbacks, parameter_dependencies,
         metadata, gui_metadata, checks = checks)
 end
 
@@ -399,6 +402,10 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
         error("The passed in JumpSystem contains `Equations`, please use a problem type that supports equations such as such as ODEProblem.")
     end
 
+    if !isempty(continuous_events(sys))
+        error("The passed in JumpSystem contains `ContinuousEvents`, please use a problem type that supports continuous events such as such as ODEProblem.")
+    end
+
     _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
         t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false, check_length = false)
     f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
@@ -488,12 +495,12 @@ function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothi
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
     end
 
-    # forward everything to be an ODESystem but the jumps
+    # forward everything to be an ODESystem but the jumps and discrete events
     if has_equations(sys)
         osys = ODESystem(equations(sys).x[4], get_iv(sys), unknowns(sys), parameters(sys);
             observed = observed(sys), name = nameof(sys), description = description(sys),
             systems = get_systems(sys), defaults = defaults(sys), 
-            discrete_events = discrete_events(sys), 
+            continuous_events = continuous_events(sys),
             parameter_dependencies = parameter_dependencies(sys),
             metadata = get_metadata(sys), gui_metadata = get_gui_metadata(sys))
         osys = complete(osys)
@@ -542,8 +549,11 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob,
                             for j in eqs.x[2]]
     vrjs = VariableRateJump[assemble_vrj(js, j, unknowntoid; eval_expression, eval_module)
                             for j in eqs.x[3]]
-    ((prob isa DiscreteProblem) && (!isempty(vrjs) || has_equations(js))) &&
-        error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps and/or coupled differential equations.")
+    if prob isa DiscreteProblem
+        if (!isempty(vrjs) || has_equations(js) || !isempty(continous_events(js)))
+            error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps, coupled differential equations, or continuous events.")
+        end
+    end
     jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, majs)
 
     # dep graphs are only for constant rate jumps
