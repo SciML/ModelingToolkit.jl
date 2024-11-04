@@ -923,15 +923,14 @@ One property to note is that if a system is complete, the system will no longer
 namespace its subsystems or variables, i.e. `isequal(complete(sys).v.i, v.i)`.
 """
 function complete(sys::AbstractSystem; split = true, flatten = true)
-    if !(sys isa JumpSystem)
-        newunknowns = OrderedSet()
-        newparams = OrderedSet()
-        iv = has_iv(sys) ? get_iv(sys) : nothing
-        collect_scoped_vars!(newunknowns, newparams, sys, iv; depth = -1)
-        # don't update unknowns to not disturb `structural_simplify` order
-        # `GlobalScope`d unknowns will be picked up and added there
-        @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
-    end
+    newunknowns = OrderedSet()
+    newparams = OrderedSet()
+    iv = has_iv(sys) ? get_iv(sys) : nothing
+    collect_scoped_vars!(newunknowns, newparams, sys, iv; depth = -1)
+    # don't update unknowns to not disturb `structural_simplify` order
+    # `GlobalScope`d unknowns will be picked up and added there
+    @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
+    
     if flatten
         eqs = equations(sys)
         if eqs isa AbstractArray && eltype(eqs) <: Equation

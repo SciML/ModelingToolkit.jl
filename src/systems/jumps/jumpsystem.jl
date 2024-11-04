@@ -217,6 +217,7 @@ function JumpSystem(eqs, iv, unknowns, ps;
 end
 
 ##### MTK dispatches for JumpSystems #####
+eqtype_supports_collect_vars(j::MassActionJump) = true
 function collect_vars!(unknowns, parameters, j::MassActionJump, iv; depth = 0, 
         op = Differential)    
     collect_vars!(unknowns, parameters, j.scaled_rates, iv; depth, op)
@@ -228,6 +229,7 @@ function collect_vars!(unknowns, parameters, j::MassActionJump, iv; depth = 0,
     return nothing
 end
 
+eqtype_supports_collect_vars(j::Union{ConstantRateJump,VariableRateJump}) = true
 function collect_vars!(unknowns, parameters, j::Union{ConstantRateJump,VariableRateJump}, 
         iv; depth = 0, op = Differential)
     collect_vars!(unknowns, parameters, j.rate, iv; depth, op)
