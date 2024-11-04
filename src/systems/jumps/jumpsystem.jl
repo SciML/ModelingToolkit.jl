@@ -398,12 +398,8 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
     end
 
-    if has_equations(sys)
-        error("The passed in JumpSystem contains `Equations`, please use a problem type that supports equations such as such as ODEProblem.")
-    end
-
-    if !isempty(continuous_events(sys))
-        error("The passed in JumpSystem contains `ContinuousEvents`, please use a problem type that supports continuous events such as such as ODEProblem.")
+    if has_equations(sys) || (!isempty(continuous_events(sys)))
+        error("The passed in JumpSystem contains `Equation`s or continuous events, please use a problem type that supports these features, such as ODEProblem.")
     end
 
     _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
