@@ -2995,13 +2995,14 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Extend the `basesys` with `sys`, the resulting system would inherit `sys`'s name
-by default.
+Extend `basesys` with `sys`.
+By default, the resulting system inherits `sys`'s name and description.
 
 See also [`compose`](@ref).
 """
-function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nameof(sys),
-        gui_metadata = get_gui_metadata(sys))
+function extend(sys::AbstractSystem, basesys::AbstractSystem;
+    name::Symbol = nameof(sys), description = description(sys),
+    gui_metadata = get_gui_metadata(sys))
     T = SciMLBase.parameterless_type(basesys)
     ivs = independent_variables(basesys)
     if !(sys isa T)
@@ -3023,13 +3024,12 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
     cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
     devs = union(get_discrete_events(basesys), get_discrete_events(sys))
     defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
-    desc = join(filter(desc -> !isempty(desc), description.([sys, basesys])), " ") # concatenate non-empty descriptions with space
     meta = union_nothing(get_metadata(basesys), get_metadata(sys))
     syss = union(get_systems(basesys), get_systems(sys))
     args = length(ivs) == 0 ? (eqs, sts, ps) : (eqs, ivs[1], sts, ps)
     kwargs = (parameter_dependencies = dep_ps, observed = obs, continuous_events = cevs,
         discrete_events = devs, defaults = defs, systems = syss, metadata = meta,
-        name = name, description = desc, gui_metadata = gui_metadata)
+        name = name, description = description, gui_metadata = gui_metadata)
 
     # collect fields specific to some system types
     if basesys isa ODESystem
@@ -3041,8 +3041,8 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
     return T(args...; kwargs...)
 end
 
-function Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nameof(sys))
-    extend(sys, basesys; name = name)
+function Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; kwargs...)
+    extend(sys, basesys; kwargs...)
 end
 
 """
