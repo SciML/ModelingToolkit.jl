@@ -194,7 +194,8 @@ function JumpSystem(eqs, iv, unknowns, ps;
     # this and the treatment of continuous events are the only part 
     # unique to JumpSystems
     eqs = scalarize.(eqs)
-    ap = ArrayPartition(MassActionJump[], ConstantRateJump[], VariableRateJump[])
+    ap = ArrayPartition(
+        MassActionJump[], ConstantRateJump[], VariableRateJump[], Equation[])
     for eq in eqs
         if eq isa MassActionJump
             push!(ap.x[1], eq)
@@ -202,8 +203,10 @@ function JumpSystem(eqs, iv, unknowns, ps;
             push!(ap.x[2], eq)
         elseif eq isa VariableRateJump
             push!(ap.x[3], eq)
+        elseif eq isa Equation
+            push!(ap.x[4], eq)
         else
-            error("JumpSystem equations must contain MassActionJumps, ConstantRateJumps, or VariableRateJumps.")
+            error("JumpSystem equations must contain MassActionJumps, ConstantRateJumps, VariableRateJumps, or Equations.")
         end
     end
 
@@ -245,6 +248,7 @@ end
 has_massactionjumps(js::JumpSystem) = !isempty(equations(js).x[1])
 has_constantratejumps(js::JumpSystem) = !isempty(equations(js).x[2])
 has_variableratejumps(js::JumpSystem) = !isempty(equations(js).x[3])
+has_equations(js::JumpSystem) = !isempty(equations(js).x[4])
 
 function generate_rate_function(js::JumpSystem, rate)
     consts = collect_constants(rate)
@@ -390,6 +394,11 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
     if !iscomplete(sys)
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
     end
+
+    if has_equations(sys)
+        error("The passed in JumpSystem contains `Equations`, please use a problem type that supports equations such as such as ODEProblem.")
+    end
+
     _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
         t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false, check_length = false)
     f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
