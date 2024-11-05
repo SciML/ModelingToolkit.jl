@@ -485,7 +485,6 @@ function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothi
         use_union = false,
         eval_expression = false,
         eval_module = @__MODULE__,
-        check_length = false,
         kwargs...)
     if !iscomplete(sys)
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
@@ -496,11 +495,10 @@ function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothi
         osys = ODESystem(equations(sys).x[4], get_iv(sys), unknowns(sys), parameters(sys);
             observed = observed(sys), name = nameof(sys), description = description(sys),
             systems = get_systems(sys), defaults = defaults(sys), 
-            continuous_events = continuous_events(sys),
             parameter_dependencies = parameter_dependencies(sys),
             metadata = get_metadata(sys), gui_metadata = get_gui_metadata(sys))
         osys = complete(osys)
-        return ODEProblem(osys, u0map, tspan, parammap; check_length, kwargs...)
+        return ODEProblem(osys, u0map, tspan, parammap; check_length = false, kwargs...)
     else
         _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
             t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false, 
@@ -508,7 +506,7 @@ function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothi
         f = (du, u, p, t) -> (du .= 0; nothing)
         observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)    
         df = ODEFunction(f; sys, observed = observedfun)
-        return ODEProblem(df, u0, tspan, p; check_length, kwargs...)
+        return ODEProblem(df, u0, tspan, p; kwargs...)
     end
 end
 
