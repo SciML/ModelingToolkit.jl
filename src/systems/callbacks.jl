@@ -2,7 +2,7 @@
 has_continuous_events(sys::AbstractSystem) = isdefined(sys, :continuous_events)
 function get_continuous_events(sys::AbstractSystem)
     has_continuous_events(sys) || return SymbolicContinuousCallback[]
-    getfield(sys, :discrete_events)
+    getfield(sys, :continuous_events)
 end
 
 has_discrete_events(sys::AbstractSystem) = isdefined(sys, :discrete_events)
