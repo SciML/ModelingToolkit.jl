@@ -1495,3 +1495,12 @@ end
     sys2 = complete(sys)
     @test length(equations(sys2)) == total_eqs
 end
+
+@testset "`complete` with `split = false` removes the index cache" begin
+    @variables x(t)
+    @parameters p
+    @mtkbuild sys = ODESystem(D(x) ~ p * t, t)
+    @test ModelingToolkit.get_index_cache(sys) !== nothing
+    sys2 = complete(sys; split = false)
+    @test ModelingToolkit.get_index_cache(sys2) === nothing
+end

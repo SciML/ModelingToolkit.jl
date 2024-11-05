@@ -985,6 +985,8 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
             end
             @set! sys.ps = ordered_ps
         end
+    elseif has_index_cache(sys)
+        @set! sys.index_cache = nothing
     end
     if isdefined(sys, :initializesystem) && get_initializesystem(sys) !== nothing
         @set! sys.initializesystem = complete(get_initializesystem(sys); split)
