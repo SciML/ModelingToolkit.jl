@@ -3003,8 +3003,8 @@ By default, the resulting system inherits `sys`'s name and description.
 See also [`compose`](@ref).
 """
 function extend(sys::AbstractSystem, basesys::AbstractSystem;
-    name::Symbol = nameof(sys), description = description(sys),
-    gui_metadata = get_gui_metadata(sys))
+        name::Symbol = nameof(sys), description = description(sys),
+        gui_metadata = get_gui_metadata(sys))
     T = SciMLBase.parameterless_type(basesys)
     ivs = independent_variables(basesys)
     if !(sys isa T)
