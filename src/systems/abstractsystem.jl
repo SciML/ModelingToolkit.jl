@@ -985,6 +985,8 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
             end
             @set! sys.ps = ordered_ps
         end
+    elseif has_index_cache(sys)
+        @set! sys.index_cache = nothing
     end
     if isdefined(sys, :initializesystem) && get_initializesystem(sys) !== nothing
         @set! sys.initializesystem = complete(get_initializesystem(sys); split)
@@ -3001,8 +3003,8 @@ By default, the resulting system inherits `sys`'s name and description.
 See also [`compose`](@ref).
 """
 function extend(sys::AbstractSystem, basesys::AbstractSystem;
-    name::Symbol = nameof(sys), description = description(sys),
-    gui_metadata = get_gui_metadata(sys))
+        name::Symbol = nameof(sys), description = description(sys),
+        gui_metadata = get_gui_metadata(sys))
     T = SciMLBase.parameterless_type(basesys)
     ivs = independent_variables(basesys)
     if !(sys isa T)
