@@ -559,9 +559,9 @@ version = "7.15.0"
 
 [[deps.DifferentiationInterface]]
 deps = ["ADTypes", "LinearAlgebra"]
-git-tree-sha1 = "5e27b35fae15c8f955c07edf608baa21d091e366"
+git-tree-sha1 = "ba137efeddd4b6e6a7154f2a92d2922a0057486f"
 uuid = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
-version = "0.6.20"
+version = "0.6.21"
 
     [deps.DifferentiationInterface.extensions]
     DifferentiationInterfaceChainRulesCoreExt = "ChainRulesCore"
@@ -2874,9 +2874,9 @@ version = "0.2.0"
 
 [[deps.VectorInterface]]
 deps = ["LinearAlgebra"]
-git-tree-sha1 = "8c3eb8b3fe84edfa2dadf6a6d5b0eed0605ae912"
+git-tree-sha1 = "7cab92153022a72d4534262cc15a96e21223e3f9"
 uuid = "409d34a3-91d5-4945-b6ec-7529ddf182d8"
-version = "0.4.7"
+version = "0.4.8"
 
 [[deps.VectorizationBase]]
 deps = ["ArrayInterface", "CPUSummary", "HostCPUFeatures", "IfElse", "LayoutPointers", "Libdl", "LinearAlgebra", "SIMDTypes", "Static", "StaticArrayInterface"]
