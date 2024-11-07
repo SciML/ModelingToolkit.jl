@@ -340,3 +340,85 @@ let
 
     @test all(abs.(cmean .- cmean2) .<= 0.05 .* cmean)
 end
+
+# collect_vars! tests for jumps
+let
+    @variables x1(t) x2(t) x3(t) x4(t) x5(t)
+    @parameters p1 p2 p3 p4 p5
+    j1 = ConstantRateJump(p1, [x1 ~ x1 + 1])
+    j2 = MassActionJump(p2, [x2 => 1], [x3 => -1])
+    j3 = VariableRateJump(p3, [x3 ~ x3 + 1, x4 ~ x4 + 1])
+    j4 = MassActionJump(p4 * p5, [x1 => 1, x5 => 1], [x1 => -1, x5 => -1, x2 => 1])
+    us = Set()
+    ps = Set()
+    iv = t
+
+    MT.collect_vars!(us, ps, j1, iv)
+    @test issetequal(us, [x1])
+    @test issetequal(ps, [p1])
+
+    empty!(us)
+    empty!(ps)
+    MT.collect_vars!(us, ps, j2, iv)
+    @test issetequal(us, [x2, x3])
+    @test issetequal(ps, [p2])
+
+    empty!(us)
+    empty!(ps)
+    MT.collect_vars!(us, ps, j3, iv)
+    @test issetequal(us, [x3, x4])
+    @test issetequal(ps, [p3])
+
+    empty!(us)
+    empty!(ps)
+    MT.collect_vars!(us, ps, j4, iv)
+    @test issetequal(us, [x1, x5, x2])
+    @test issetequal(ps, [p4, p5])
+end
+
+# scoping tests
+let
+    @variables x1(t) x2(t) x3(t) x4(t) x5(t)
+    x2 = ParentScope(x2)
+    x3 = ParentScope(ParentScope(x3))
+    x4 = DelayParentScope(x4, 2)
+    x5 = GlobalScope(x5)
+    @parameters p1 p2 p3 p4 p5
+    p2 = ParentScope(p2)
+    p3 = ParentScope(ParentScope(p3))
+    p4 = DelayParentScope(p4, 2)
+    p5 = GlobalScope(p5)
+
+    j1 = ConstantRateJump(p1, [x1 ~ x1 + 1])
+    j2 = MassActionJump(p2, [x2 => 1], [x3 => -1])
+    j3 = VariableRateJump(p3, [x3 ~ x3 + 1, x4 ~ x4 + 1])
+    j4 = MassActionJump(p4 * p5, [x1 => 1, x5 => 1], [x1 => -1, x5 => -1, x2 => 1])
+    @named js = JumpSystem([j1, j2, j3, j4], t, [x1, x2, x3, x4, x5], [p1, p2, p3, p4, p5])
+
+    us = Set()
+    ps = Set()
+    iv = t
+    MT.collect_scoped_vars!(us, ps, js, iv)
+    @test issetequal(us, [x2])
+    @test issetequal(ps, [p2])
+
+    empty!.((us, ps))
+    MT.collect_scoped_vars!(us, ps, js, iv; depth = 0)
+    @test issetequal(us, [x1])
+    @test issetequal(ps, [p1])
+
+    empty!.((us, ps))
+    MT.collect_scoped_vars!(us, ps, js, iv; depth = 1)
+    @test issetequal(us, [x2])
+    @test issetequal(ps, [p2])
+
+    empty!.((us, ps))
+    MT.collect_scoped_vars!(us, ps, js, iv; depth = 2)
+    @test issetequal(us, [x3, x4])
+    @test issetequal(ps, [p3, p4])
+
+    empty!.((us, ps))
+    MT.collect_scoped_vars!(us, ps, js, iv; depth = -1)
+    @test issetequal(us, [x5])
+    @test issetequal(ps, [p5])
+end
