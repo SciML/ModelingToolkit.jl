@@ -1910,7 +1910,8 @@ function Base.show(
 
     # Print name and description
     desc = description(sys)
-    printstyled(io, "Model ", nameof(sys), ":"; bold)
+    name = nameof(sys)
+    printstyled(io, "Model ", name, ":"; bold)
     !isempty(desc) && print(io, " ", desc)
 
     # Print subsystems
@@ -1918,7 +1919,7 @@ function Base.show(
     nsubs = length(subs)
     nrows = min(nsubs, limit ? rows : nsubs)
     nrows > 0 && printstyled(io, "\nSubsystems ($(nsubs)):"; bold)
-    nrows > 0 && hint && print(io, " see hierarchy(sys)")
+    nrows > 0 && hint && print(io, " see hierarchy($name)")
     for i in 1:nrows
         sub = subs[i]
         name = String(nameof(sub))
@@ -1942,9 +1943,9 @@ function Base.show(
         next = n_expanded_connection_equations(sys)
         ntot = neqs + next
         ntot > 0 && printstyled(io, "\nEquations ($ntot):"; bold)
-        neqs > 0 && print(io, "\n  $neqs standard", hint ? ": see equations(sys)" : "")
+        neqs > 0 && print(io, "\n  $neqs standard", hint ? ": see equations($name)" : "")
         next > 0 && print(io, "\n  $next connecting",
-            hint ? ": see equations(expand_connections(sys))" : "")
+            hint ? ": see equations(expand_connections($name))" : "")
         #Base.print_matrix(io, eqs) # usually too long and not useful to print all equations
     end
 
@@ -1955,7 +1956,7 @@ function Base.show(
         nvars == 0 && continue # skip
         header = titlecase(String(nameof(varfunc))) # e.g. "Unknowns"
         printstyled(io, "\n$header ($nvars):"; bold)
-        hint && print(io, " see $(nameof(varfunc))(sys)")
+        hint && print(io, " see $(nameof(varfunc))($name)")
         nrows = min(nvars, limit ? rows : nvars)
         defs = has_defaults(sys) ? defaults(sys) : nothing
         for i in 1:nrows
@@ -1984,7 +1985,7 @@ function Base.show(
     # Print observed
     nobs = has_observed(sys) ? length(observed(sys)) : 0
     nobs > 0 && printstyled(io, "\nObserved ($nobs):"; bold)
-    nobs > 0 && hint && print(io, " see observed(sys)")
+    nobs > 0 && hint && print(io, " see observed($name)")
 
     return nothing
 end
