@@ -427,8 +427,8 @@ end
 let
     @variables X(t) Y(t)
     @parameters k1 k2
-    vrj1 = VariableRateJump(k1 * X, [X ~ X - 1])
-    vrj2 = VariableRateJump(k2, [Y ~ Y + 1])
+    vrj1 = VariableRateJump(k1 * X, [X ~ X - 1]; save_positions = (false, false))
+    vrj2 = VariableRateJump(k1, [Y ~ Y + 1]; save_positions = (false, false))
     eqs = [D(X) ~ k2, D(Y) ~ -k2/100*Y]
     @named jsys = JumpSystem([vrj1, vrj2, eqs[1], eqs[2]], t, [X, Y], [k1, k2])
     jsys = complete(jsys)
@@ -436,25 +436,23 @@ let
     u0 = [X => X0, Y => Y0]
     k1val = 1.0; k2val = 20.0
     p = [k1 => k1val, k2 => k2val]
-    tspan = (0.0, 20.0)
+    tspan = (0.0, 10.0)
     oprob = ODEProblem(jsys, u0, tspan, p)
-    jprob = JumpProblem(jsys, oprob; rng)
+    jprob = JumpProblem(jsys, oprob; rng, save_positions = (false, false))
 
-    times = range(0.0, 20.0, length = 100)
+    times = range(0.0, tspan[2], length = 100)
     Nsims = 2000
-    X = zeros(length(times))
-    Y = similar(X)
+    Xv = zeros(length(times))
+    Yv = copy(Xv)
     for n in 1:Nsims
-        sol = solve(jprob, Tsit5())
-        X .+= Array(sol(times; idxs = X))
-        Y .+= Array(sol(times; idxs = Y))
+        sol = solve(jprob, Tsit5(); saveat = times)
+        Xv .+= sol[1,:] #sol(times; idxs = X)
+        Yv .+= sol[2,:] #sol(times; idxs = Y)
     end
-    X ./= Nsims; Y ./= Nsims;
+    Xv ./= Nsims; Yv ./= Nsims;
 
     Xact(t) = X0 * exp(-k1val * t) + (k2val / k1val) * (1 - exp(-k1val * t))
-    Yact(t) = Y0 * exp(-k2val/100 * t) + (k1 / (k2val/100)) * (1 - exp(-k2val/100 * t))
-
-    @test all(abs.(X .- Xact.(times)) .<= 0.05 .* X)
-    @test all(abs.(Y .- Yact.(times)) .<= 0.05 .* Y)
-
+    Yact(t) = Y0 * exp(-k2val/100 * t) + (k1val / (k2val/100)) * (1 - exp(-k2val/100 * t))
+    @test all(abs.(Xv .- Xact.(times)) .<= 0.05 .* Xv)
+    @test all(abs.(Yv .- Yact.(times)) .<= 0.05 .* Yv)
 end

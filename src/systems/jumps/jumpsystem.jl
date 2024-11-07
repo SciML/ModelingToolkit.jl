@@ -288,7 +288,7 @@ function assemble_vrj(
     outputidxs = [unknowntoid[var] for var in outputvars]
     affect = eval_or_rgf(generate_affect_function(js, vrj.affect!, outputidxs);
         eval_expression, eval_module)
-    VariableRateJump(rate, affect)
+    VariableRateJump(rate, affect; save_positions = vrj.save_positions)
 end
 
 function assemble_vrj_expr(js, vrj, unknowntoid)
