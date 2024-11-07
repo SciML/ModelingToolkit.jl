@@ -1075,3 +1075,24 @@ end
     prob = ODEProblem(pend, [x => 1], (0.0, 3.0), guesses = [y => x])
     @test all(≈(0.0; atol = 1e-9), solve(prob, Rodas5())[[x, y]][end])
 end
+
+@testset "Issue#3154 Array variable in discrete condition" begin
+    @mtkmodel DECAY begin
+        @parameters begin
+            unrelated[1:2] = zeros(2)
+            k = 0.0
+        end
+        @variables begin
+            x(t) = 10.0
+        end
+        @equations begin
+            D(x) ~ -k * x
+        end
+        @discrete_events begin
+            (t == 1.0) => [k ~ 1.0]
+        end
+    end
+    @mtkbuild decay = DECAY()
+    prob = ODEProblem(decay, [], (0.0, 10.0), [])
+    @test_nowarn solve(prob, Tsit5(), tstops = [1.0])
+end
