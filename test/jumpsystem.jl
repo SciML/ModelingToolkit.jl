@@ -301,7 +301,7 @@ end
 # basic VariableRateJump test
 let
     N = 1000  # number of simulations for testing solve accuracy
-    Random.seed!(rng, 1111)
+    Random.seed!(rng, 1111) 
     @variables A(t) B(t) C(t)
     @parameters k
     vrj = VariableRateJump(k * (sin(t) + 1), [A ~ A + 1, C ~ C + 2])
@@ -427,20 +427,34 @@ end
 let
     @variables X(t) Y(t)
     @parameters k1 k2
-    rate1 = k1 * X
-    affect1! = [X ~ X - 1]
-    rate2 = k1 
-    affect2! = [Y ~ Y + 1]
+    vrj1 = VariableRateJump(k1 * X, [X ~ X - 1])
+    vrj2 = VariableRateJump(k2, [Y ~ Y + 1])
     eqs = [D(X) ~ k2, D(Y) ~ -k2/100*Y]
-    vrj1 = VariableRateJump(rate1, affect1!)
-    vrj2 = VariableRateJump(rate2, affect2!)
     @named jsys = JumpSystem([vrj1, vrj2, eqs[1], eqs[2]], t, [X, Y], [k1, k2])
     jsys = complete(jsys)
-    u0 = [X => 0.0, Y => 0.0]
-    p = [k1 => 1.0, k2 => 20.0]
+    X0 = 0.0; Y0 = 0.0
+    u0 = [X => X0, Y => Y0]
+    k1val = 1.0; k2val = 20.0
+    p = [k1 => k1val, k2 => k2val]
     tspan = (0.0, 20.0)
     oprob = ODEProblem(jsys, u0, tspan, p)
     jprob = JumpProblem(jsys, oprob; rng)
-    sol = solve(jprob, Tsit5())
+
+    times = range(0.0, 20.0, length = 100)
+    Nsims = 2000
+    X = zeros(length(times))
+    Y = similar(X)
+    for n in 1:Nsims
+        sol = solve(jprob, Tsit5())
+        X .+= Array(sol(times; idxs = X))
+        Y .+= Array(sol(times; idxs = Y))
+    end
+    X ./= Nsims; Y ./= Nsims;
+
+    Xact(t) = X0 * exp(-k1val * t) + (k2val / k1val) * (1 - exp(-k1val * t))
+    Yact(t) = Y0 * exp(-k2val/100 * t) + (k1 / (k2val/100)) * (1 - exp(-k2val/100 * t))
+
+    @test all(abs.(X .- Xact.(times)) .<= 0.05 .* X)
+    @test all(abs.(Y .- Yact.(times)) .<= 0.05 .* Y)
 
 end
