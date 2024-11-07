@@ -945,6 +945,15 @@ end
     end
 end
 
+@mtkmodel MidModelB begin
+    @parameters begin
+        b
+    end
+    @components begin
+        inmodel_b = InnerModel()
+    end
+end
+
 @mtkmodel OuterModel begin
     @extend MidModel()
     @equations begin
@@ -957,4 +966,16 @@ end
 @testset "Test unpacking of components in implicit extend" begin
     @named out = OuterModel()
     @test OuterModel.structure[:extend][1] == [:inmodel]
+end
+
+@mtkmodel MultipleExtend begin
+    @extend MidModel()
+    @extend MidModelB()
+end
+
+@testset "Multiple extend statements" begin
+    @named multiple_extend = MultipleExtend()
+    @test collect(nameof.(multiple_extend.systems)) == [:inmodel_b, :inmodel]
+    @test MultipleExtend.structure[:extend][1] == [:inmodel, :b, :inmodel_b]
+    @test tosymbol.(parameters(multiple_extend)) == [:b, :inmodel_b₊p, :inmodel₊p]
 end
