@@ -446,8 +446,10 @@ let
     Yv = copy(Xv)
     for n in 1:Nsims
         sol = solve(jprob, Tsit5(); saveat = times)
-        Xv .+= sol[1,:] #sol(times; idxs = X)
-        Yv .+= sol[2,:] #sol(times; idxs = Y)
+
+        # use direct indexing as much faster than symbolic indexing
+        Xv .+= sol[1,:] 
+        Yv .+= sol[2,:]
     end
     Xv ./= Nsims; Yv ./= Nsims;
 
