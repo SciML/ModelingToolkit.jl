@@ -970,6 +970,93 @@ end
     @test sol[c] == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
 end
 
+@testset "Initialization" begin
+    @variables x(t)
+    seen = false
+    f = ModelingToolkit.FunctionalAffect(
+        f = (i, u, p, c) -> seen = true, sts = [], pars = [], discretes = [])
+    cb1 = ModelingToolkit.SymbolicContinuousCallback(
+        [x ~ 0], Equation[], initialize = [x ~ 1.5], finalize = f)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; continuous_events = [cb1])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
+    @test sol[x][1] ≈ 1.0
+    @test sol[x][2] ≈ 1.5 # the initialize affect has been applied
+    @test seen == true
+
+    @variables x(t)
+    seen = false
+    f = ModelingToolkit.FunctionalAffect(
+        f = (i, u, p, c) -> seen = true, sts = [], pars = [], discretes = [])
+    cb1 = ModelingToolkit.SymbolicContinuousCallback(
+        [x ~ 0], Equation[], initialize = [x ~ 1.5], finalize = f)
+    inited = false
+    finaled = false
+    a = ModelingToolkit.FunctionalAffect(
+        f = (i, u, p, c) -> inited = true, sts = [], pars = [], discretes = [])
+    b = ModelingToolkit.FunctionalAffect(
+        f = (i, u, p, c) -> finaled = true, sts = [], pars = [], discretes = [])
+    cb2 = ModelingToolkit.SymbolicContinuousCallback(
+        [x ~ 0.1], Equation[], initialize = a, finalize = b)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; continuous_events = [cb1, cb2])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5())
+    @test sol[x][1] ≈ 1.0
+    @test sol[x][2] ≈ 1.5 # the initialize affect has been applied
+    @test seen == true
+    @test inited == true
+    @test finaled == true
+
+    #periodic
+    inited = false
+    finaled = false
+    cb3 = ModelingToolkit.SymbolicDiscreteCallback(
+        1.0, [x ~ 2], initialize = a, finalize = b)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5())
+    @test inited == true
+    @test finaled == true
+    @test isapprox(sol[x][3], 0.0, atol = 1e-9)
+    @test sol[x][4] ≈ 2.0
+    @test sol[x][5] ≈ 1.0
+
+    seen = false
+    inited = false
+    finaled = false
+    cb3 = ModelingToolkit.SymbolicDiscreteCallback(1.0, f, initialize = a, finalize = b)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5())
+    @test seen == true
+    @test inited == true
+
+    #preset
+    seen = false
+    inited = false
+    finaled = false
+    cb3 = ModelingToolkit.SymbolicDiscreteCallback([1.0], f, initialize = a, finalize = b)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5())
+    @test seen == true
+    @test inited == true
+    @test finaled == true
+
+    #equational
+    seen = false
+    inited = false
+    finaled = false
+    cb3 = ModelingToolkit.SymbolicDiscreteCallback(
+        t == 1.0, f, initialize = a, finalize = b)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5(); tstops = 1.0)
+    @test seen == true
+    @test inited == true
+    @test finaled == true
+end
+
 @testset "Bump" begin
     @variables x(t) [irreducible = true] y(t) [irreducible = true]
     eqs = [x ~ y, D(x) ~ -1]

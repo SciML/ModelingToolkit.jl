@@ -984,6 +984,8 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
             end
             @set! sys.ps = ordered_ps
         end
+    elseif has_index_cache(sys)
+        @set! sys.index_cache = nothing
     end
     if isdefined(sys, :initializesystem) && get_initializesystem(sys) !== nothing
         @set! sys.initializesystem = complete(get_initializesystem(sys); split)
@@ -1907,7 +1909,8 @@ function Base.show(
 
     # Print name and description
     desc = description(sys)
-    printstyled(io, "Model ", nameof(sys), ":"; bold)
+    name = nameof(sys)
+    printstyled(io, "Model ", name, ":"; bold)
     !isempty(desc) && print(io, " ", desc)
 
     # Print subsystems
@@ -1915,7 +1918,7 @@ function Base.show(
     nsubs = length(subs)
     nrows = min(nsubs, limit ? rows : nsubs)
     nrows > 0 && printstyled(io, "\nSubsystems ($(nsubs)):"; bold)
-    nrows > 0 && hint && print(io, " see hierarchy(sys)")
+    nrows > 0 && hint && print(io, " see hierarchy($name)")
     for i in 1:nrows
         sub = subs[i]
         name = String(nameof(sub))
@@ -1939,9 +1942,9 @@ function Base.show(
         next = n_expanded_connection_equations(sys)
         ntot = neqs + next
         ntot > 0 && printstyled(io, "\nEquations ($ntot):"; bold)
-        neqs > 0 && print(io, "\n  $neqs standard", hint ? ": see equations(sys)" : "")
+        neqs > 0 && print(io, "\n  $neqs standard", hint ? ": see equations($name)" : "")
         next > 0 && print(io, "\n  $next connecting",
-            hint ? ": see equations(expand_connections(sys))" : "")
+            hint ? ": see equations(expand_connections($name))" : "")
         #Base.print_matrix(io, eqs) # usually too long and not useful to print all equations
     end
 
@@ -1952,7 +1955,7 @@ function Base.show(
         nvars == 0 && continue # skip
         header = titlecase(String(nameof(varfunc))) # e.g. "Unknowns"
         printstyled(io, "\n$header ($nvars):"; bold)
-        hint && print(io, " see $(nameof(varfunc))(sys)")
+        hint && print(io, " see $(nameof(varfunc))($name)")
         nrows = min(nvars, limit ? rows : nvars)
         defs = has_defaults(sys) ? defaults(sys) : nothing
         for i in 1:nrows
@@ -1981,7 +1984,7 @@ function Base.show(
     # Print observed
     nobs = has_observed(sys) ? length(observed(sys)) : 0
     nobs > 0 && printstyled(io, "\nObserved ($nobs):"; bold)
-    nobs > 0 && hint && print(io, " see observed(sys)")
+    nobs > 0 && hint && print(io, " see observed($name)")
 
     return nothing
 end
@@ -2994,12 +2997,13 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Extend the `basesys` with `sys`, the resulting system would inherit `sys`'s name
-by default.
+Extend `basesys` with `sys`.
+By default, the resulting system inherits `sys`'s name and description.
 
 See also [`compose`](@ref).
 """
-function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nameof(sys),
+function extend(sys::AbstractSystem, basesys::AbstractSystem;
+        name::Symbol = nameof(sys), description = description(sys),
         gui_metadata = get_gui_metadata(sys))
     T = SciMLBase.parameterless_type(basesys)
     ivs = independent_variables(basesys)
@@ -3022,13 +3026,12 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
     cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
     devs = union(get_discrete_events(basesys), get_discrete_events(sys))
     defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
-    desc = join(filter(desc -> !isempty(desc), description.([sys, basesys])), " ") # concatenate non-empty descriptions with space
     meta = union_nothing(get_metadata(basesys), get_metadata(sys))
     syss = union(get_systems(basesys), get_systems(sys))
     args = length(ivs) == 0 ? (eqs, sts, ps) : (eqs, ivs[1], sts, ps)
     kwargs = (parameter_dependencies = dep_ps, observed = obs, continuous_events = cevs,
         discrete_events = devs, defaults = defs, systems = syss, metadata = meta,
-        name = name, description = desc, gui_metadata = gui_metadata)
+        name = name, description = description, gui_metadata = gui_metadata)
 
     # collect fields specific to some system types
     if basesys isa ODESystem
@@ -3040,8 +3043,8 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
     return T(args...; kwargs...)
 end
 
-function Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nameof(sys))
-    extend(sys, basesys; name = name)
+function Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; kwargs...)
+    extend(sys, basesys; kwargs...)
 end
 
 """
