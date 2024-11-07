@@ -441,13 +441,11 @@ let
     jprob = JumpProblem(jsys, oprob; rng, save_positions = (false, false))
 
     times = range(0.0, tspan[2], length = 100)
-    Nsims = 2000
+    Nsims = 4000
     Xv = zeros(length(times))
     Yv = copy(Xv)
     for n in 1:Nsims
         sol = solve(jprob, Tsit5(); saveat = times)
-
-        # use direct indexing as much faster than symbolic indexing
         Xv .+= sol[1,:] 
         Yv .+= sol[2,:]
     end
