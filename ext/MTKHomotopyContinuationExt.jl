@@ -192,7 +192,12 @@ function MTK.HomotopyContinuationProblem(
     end
 
     dvs = unknowns(sys)
-    eqs = equations(sys)
+    # we need to consider `full_equations` because observed also should be
+    # polynomials (if used in equations) and we don't know if observed is used
+    # in denominator.
+    # This is not the most efficient, and would be improved significantly with
+    # CSE/hashconsing.
+    eqs = full_equations(sys)
 
     denoms = []
     eqs2 = map(eqs) do eq
@@ -216,6 +221,9 @@ function MTK.HomotopyContinuationProblem(
     end
 
     sys2 = MTK.@set sys.eqs = eqs2
+    # remove observed equations to avoid adding them in codegen
+    MTK.@set! sys2.observed = Equation[]
+    MTK.@set! sys2.substitutions = nothing
 
     nlfn, u0, p = MTK.process_SciMLProblem(NonlinearFunction{true}, sys2, u0map, parammap;
         jac = true, eval_expression, eval_module)
