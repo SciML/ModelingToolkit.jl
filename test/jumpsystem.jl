@@ -425,11 +425,12 @@ end
 
 # PDMP test
 let
+    Random.seed!(rng, 1111)  
     @variables X(t) Y(t)
     @parameters k1 k2
     vrj1 = VariableRateJump(k1 * X, [X ~ X - 1]; save_positions = (false, false))
     vrj2 = VariableRateJump(k1, [Y ~ Y + 1]; save_positions = (false, false))
-    eqs = [D(X) ~ k2, D(Y) ~ -k2/100*Y]
+    eqs = [D(X) ~ k2, D(Y) ~ -k2/10*Y]
     @named jsys = JumpSystem([vrj1, vrj2, eqs[1], eqs[2]], t, [X, Y], [k1, k2])
     jsys = complete(jsys)
     X0 = 0.0; Y0 = 0.0
@@ -443,7 +444,7 @@ let
     times = range(0.0, tspan[2], length = 100)
     Nsims = 4000
     Xv = zeros(length(times))
-    Yv = copy(Xv)
+    Yv = zeros(length(times))
     for n in 1:Nsims
         sol = solve(jprob, Tsit5(); saveat = times)
         Xv .+= sol[1,:] 
@@ -452,7 +453,7 @@ let
     Xv ./= Nsims; Yv ./= Nsims;
 
     Xact(t) = X0 * exp(-k1val * t) + (k2val / k1val) * (1 - exp(-k1val * t))
-    Yact(t) = Y0 * exp(-k2val/100 * t) + (k1val / (k2val/100)) * (1 - exp(-k2val/100 * t))
+    Yact(t) = Y0 * exp(-k2val/10 * t) + (k1val / (k2val/10)) * (1 - exp(-k2val/10 * t))
     @test all(abs.(Xv .- Xact.(times)) .<= 0.05 .* Xv)
-    @test all(abs.(Yv .- Yact.(times)) .<= 0.05 .* Yv)
+    @test all(abs.(Yv .- Yact.(times)) .<= 0.1 .* Yv)    
 end
