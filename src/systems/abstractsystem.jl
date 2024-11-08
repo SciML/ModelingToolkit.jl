@@ -918,7 +918,7 @@ Mark a system as completed. A completed system is a system which is done being
 defined/modified and is ready for structural analysis or other transformations.
 This allows for analyses and optimizations to be performed which require knowing
 the global structure of the system.
-        
+
 One property to note is that if a system is complete, the system will no longer
 namespace its subsystems or variables, i.e. `isequal(complete(sys).v.i, v.i)`.
 """
@@ -1933,7 +1933,7 @@ function Base.show(
         end
     end
     limited = nrows < nsubs
-    limited && print(io, "\n  ⋮") # too many to print 
+    limited && print(io, "\n  ⋮") # too many to print
 
     # Print equations
     eqs = equations(sys)
@@ -3043,7 +3043,16 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
     return T(args...; kwargs...)
 end
 
+function extend(sys, basesys::Vector{T}) where {T <: AbstractSystem}
+    foldl(extend, basesys, init = sys)
+end
+
 function Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; kwargs...)
+    extend(sys, basesys; kwargs...)
+end
+
+function Base.:(&)(
+        sys::AbstractSystem, basesys::Vector{T}; kwargs...) where {T <: AbstractSystem}
     extend(sys, basesys; kwargs...)
 end
 
