@@ -32,14 +32,16 @@ function is_polynomial(x, wrt)
     end
     if operation(x) == (^)
         b, p = arguments(x)
-        is_pow_integer = symtype(p) <: Integer
-        if !is_pow_integer
-            if symbolic_type(p) == NotSymbolic()
-                @warn "In $x: Exponent $p is not an integer"
-            else
-                @warn "In $x: Exponent $p is not an integer. Use `@parameters p::Integer` to declare integer parameters."
-            end
+        if symbolic_type(p) != NotSymbolic()
+            @warn "In $x: Exponent $p cannot be symbolic"
+            is_pow_integer = false
+        elseif !(p isa Integer)
+            @warn "In $x: Exponent $p is not an integer"
+            is_pow_integer = false
+        else
+            is_pow_integer = true
         end
+
         exponent_has_unknowns = contains_variable(p, wrt)
         if exponent_has_unknowns
             @warn "In $x: Exponent $p cannot contain unknowns of the system."
@@ -179,6 +181,8 @@ Create a `HomotopyContinuationProblem` from a `NonlinearSystem` with polynomial 
 The problem will be solved by HomotopyContinuation.jl. The resultant `NonlinearSolution`
 will contain the polynomial root closest to the point specified by `u0map` (if real roots
 exist for the system).
+
+Keyword arguments are forwarded to `HomotopyContinuation.solver_startsystems`.
 """
 function MTK.HomotopyContinuationProblem(
         sys::NonlinearSystem, u0map, parammap = nothing; eval_expression = false,
@@ -223,20 +227,24 @@ function MTK.HomotopyContinuationProblem(
 
     obsfn = MTK.ObservedFunctionCache(sys; eval_expression, eval_module)
 
-    return MTK.HomotopyContinuationProblem(u0, mtkhsys, denominator, sys, obsfn)
+    solver_and_starts = HomotopyContinuation.solver_startsolutions(mtkhsys; kwargs...)
+    return MTK.HomotopyContinuationProblem(
+        u0, mtkhsys, denominator, sys, obsfn, solver_and_starts)
 end
 
 """
 $(TYPEDSIGNATURES)
 
 Solve a `HomotopyContinuationProblem`. Ignores the algorithm passed to it, and always
-uses `HomotopyContinuation.jl`. All keyword arguments except the ones listed below are
-forwarded to `HomotopyContinuation.solve`. The original solution as returned by
+uses `HomotopyContinuation.jl`. The original solution as returned by
 `HomotopyContinuation.jl` will be available in the `.original` field of the returned
 `NonlinearSolution`.
 
-All keyword arguments have their default values in HomotopyContinuation.jl, except
-`show_progress` which defaults to `false`.
+All keyword arguments except the ones listed below are forwarded to
+`HomotopyContinuation.solve`. Note that the solver and start solutions are precomputed,
+and only keyword arguments related to the solve process are valid. All keyword
+arguments have their default values in HomotopyContinuation.jl, except `show_progress`
+which defaults to `false`.
 
 Extra keyword arguments:
 - `denominator_abstol`: In case `prob` is solving a rational function, roots which cause
@@ -244,8 +252,8 @@ Extra keyword arguments:
 """
 function CommonSolve.solve(prob::MTK.HomotopyContinuationProblem,
         alg = nothing; show_progress = false, denominator_abstol = 1e-7, kwargs...)
-    sol = HomotopyContinuation.solve(
-        prob.homotopy_continuation_system; show_progress, kwargs...)
+    solver, starts = prob.solver_and_starts
+    sol = HomotopyContinuation.solve(solver, starts; show_progress, kwargs...)
     realsols = HomotopyContinuation.results(sol; only_real = true)
     if isempty(realsols)
         u = state_values(prob)
