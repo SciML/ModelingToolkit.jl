@@ -16,11 +16,69 @@ function contains_variable(x, wrt)
 end
 
 """
+Possible reasons why a term is not polynomial
+"""
+MTK.EnumX.@enumx NonPolynomialReason begin
+    NonIntegerExponent
+    ExponentContainsUnknowns
+    BaseNotPolynomial
+    UnrecognizedOperation
+end
+
+function display_reason(reason::NonPolynomialReason.T, sym)
+    if reason == NonPolynomialReason.NonIntegerExponent
+        pow = arguments(sym)[2]
+        "In $sym: Exponent $pow is not an integer"
+    elseif reason == NonPolynomialReason.ExponentContainsUnknowns
+        pow = arguments(sym)[2]
+        "In $sym: Exponent $pow contains unknowns of the system"
+    elseif reason == NonPolynomialReason.BaseNotPolynomial
+        base = arguments(sym)[1]
+        "In $sym: Base $base is not a polynomial in the unknowns"
+    elseif reason == NonPolynomialReason.UnrecognizedOperation
+        op = operation(sym)
+        """
+        In $sym: Operation $op is not recognized. Allowed polynomial operations are \
+        `*, /, +, -, ^`.
+        """
+    else
+        error("This should never happen. Please open an issue in ModelingToolkit.jl.")
+    end
+end
+
+mutable struct PolynomialData
+    non_polynomial_terms::Vector{BasicSymbolic}
+    reasons::Vector{NonPolynomialReason.T}
+    has_parametric_exponent::Bool
+end
+
+PolynomialData() = PolynomialData(BasicSymbolic[], NonPolynomialReason.T[], false)
+
+struct NotPolynomialError <: Exception
+    eq::Equation
+    data::PolynomialData
+end
+
+function Base.showerror(io::IO, err::NotPolynomialError)
+    println(io,
+        "Equation $(err.eq) is not a polynomial in the unknowns for the following reasons:")
+    for (term, reason) in zip(err.data.non_polynomial_terms, err.data.reasons)
+        println(io, display_reason(reason, term))
+    end
+end
+
+function is_polynomial!(data, y, wrt)
+    process_polynomial!(data, y, wrt)
+    isempty(data.reasons)
+end
+
+"""
 $(TYPEDSIGNATURES)
 
-Check if `x` is polynomial with respect to the variables in `wrt`.
+Return information about the polynmial `x` with respect to variables in `wrt`,
+writing said information to `data`.
 """
-function is_polynomial(x, wrt)
+function process_polynomial!(data::PolynomialData, x, wrt)
     x = unwrap(x)
     symbolic_type(x) == NotSymbolic() && return true
     iscall(x) || return true
@@ -28,31 +86,33 @@ function is_polynomial(x, wrt)
     any(isequal(x), wrt) && return true
 
     if operation(x) in (*, +, -, /)
-        return all(y -> is_polynomial(y, wrt), arguments(x))
+        return all(y -> is_polynomial!(data, y, wrt), arguments(x))
     end
     if operation(x) == (^)
         b, p = arguments(x)
+        is_pow_integer = symtype(p) <: Integer
+        if !is_pow_integer
+            push!(data.non_polynomial_terms, x)
+            push!(data.reasons, NonPolynomialReason.NonIntegerExponent)
+        end
         if symbolic_type(p) != NotSymbolic()
-            @warn "In $x: Exponent $p cannot be symbolic"
-            is_pow_integer = false
-        elseif !(p isa Integer)
-            @warn "In $x: Exponent $p is not an integer"
-            is_pow_integer = false
-        else
-            is_pow_integer = true
+            data.has_parametric_exponent = true
         end
 
         exponent_has_unknowns = contains_variable(p, wrt)
         if exponent_has_unknowns
-            @warn "In $x: Exponent $p cannot contain unknowns of the system."
+            push!(data.non_polynomial_terms, x)
+            push!(data.reasons, NonPolynomialReason.ExponentContainsUnknowns)
         end
-        base_polynomial = is_polynomial(b, wrt)
+        base_polynomial = is_polynomial!(data, b, wrt)
         if !base_polynomial
-            @warn "In $x: Base is not a polynomial"
+            push!(data.non_polynomial_terms, x)
+            push!(data.reasons, NonPolynomialReason.BaseNotPolynomial)
         end
         return base_polynomial && !exponent_has_unknowns && is_pow_integer
     end
-    @warn "In $x: Unrecognized operation $(operation(x)). Allowed polynomial operations are `*, +, -, ^`"
+    push!(data.non_polynomial_terms, x)
+    push!(data.reasons, NonPolynomialReason.UnrecognizedOperation)
     return false
 end
 
@@ -182,11 +242,17 @@ The problem will be solved by HomotopyContinuation.jl. The resultant `NonlinearS
 will contain the polynomial root closest to the point specified by `u0map` (if real roots
 exist for the system).
 
-Keyword arguments are forwarded to `HomotopyContinuation.solver_startsystems`.
+Keyword arguments:
+- `eval_expression`: Whether to `eval` the generated functions or use a `RuntimeGeneratedFunction`.
+- `eval_module`: The module to use for `eval`/`@RuntimeGeneratedFunction`
+- `warn_parametric_exponent`: Whether to warn if the system contains a parametric
+  exponent preventing the homotopy from being cached.
+
+All other keyword arguments are forwarded to `HomotopyContinuation.solver_startsystems`.
 """
 function MTK.HomotopyContinuationProblem(
         sys::NonlinearSystem, u0map, parammap = nothing; eval_expression = false,
-        eval_module = ModelingToolkit, kwargs...)
+        eval_module = ModelingToolkit, warn_parametric_exponent = true, kwargs...)
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `HomotopyContinuationProblem`")
     end
@@ -200,9 +266,14 @@ function MTK.HomotopyContinuationProblem(
     eqs = full_equations(sys)
 
     denoms = []
+    has_parametric_exponents = false
     eqs2 = map(eqs) do eq
-        if !is_polynomial(eq.lhs, dvs) || !is_polynomial(eq.rhs, dvs)
-            error("Equation $eq is not a polynomial in the unknowns. See warnings for further details.")
+        data = PolynomialData()
+        process_polynomial!(data, eq.lhs, dvs)
+        process_polynomial!(data, eq.rhs, dvs)
+        has_parametric_exponents |= data.has_parametric_exponent
+        if !isempty(data.non_polynomial_terms)
+            throw(NotPolynomialError(eq, data))
         end
         num, den = handle_rational_polynomials(eq.rhs - eq.lhs, dvs)
 
@@ -235,7 +306,18 @@ function MTK.HomotopyContinuationProblem(
 
     obsfn = MTK.ObservedFunctionCache(sys; eval_expression, eval_module)
 
-    solver_and_starts = HomotopyContinuation.solver_startsolutions(mtkhsys; kwargs...)
+    if has_parametric_exponents
+        if warn_parametric_exponent
+            @warn """
+            The system has parametric exponents, preventing caching of the homotopy. \
+            This will cause `solve` to be slower. Pass `warn_parametric_exponent \
+            = false` to turn off this warning
+            """
+        end
+        solver_and_starts = nothing
+    else
+        solver_and_starts = HomotopyContinuation.solver_startsolutions(mtkhsys; kwargs...)
+    end
     return MTK.HomotopyContinuationProblem(
         u0, mtkhsys, denominator, sys, obsfn, solver_and_starts)
 end
@@ -260,8 +342,13 @@ Extra keyword arguments:
 """
 function CommonSolve.solve(prob::MTK.HomotopyContinuationProblem,
         alg = nothing; show_progress = false, denominator_abstol = 1e-7, kwargs...)
-    solver, starts = prob.solver_and_starts
-    sol = HomotopyContinuation.solve(solver, starts; show_progress, kwargs...)
+    if prob.solver_and_starts === nothing
+        sol = HomotopyContinuation.solve(
+            prob.homotopy_continuation_system; show_progress, kwargs...)
+    else
+        solver, starts = prob.solver_and_starts
+        sol = HomotopyContinuation.solve(solver, starts; show_progress, kwargs...)
+    end
     realsols = HomotopyContinuation.results(sol; only_real = true)
     if isempty(realsols)
         u = state_values(prob)
