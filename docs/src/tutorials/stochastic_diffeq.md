@@ -23,9 +23,9 @@ where the magnitude of the noise scales with (0.3 times) the magnitude of each o
 
 ```math
 \begin{aligned}
-\frac{dx}{dt} &= (\sigma (y-x))  &+ 0.1x\frac{dB}{dt} \\
-\frac{dy}{dt} &= (x(\rho-z) - y) &+ 0.1y\frac{dB}{dt}  \\
-\frac{dz}{dt} &= (xy - \beta z)  &+ 0.1z\frac{dB}{dt}  \\
+\frac{dx}{dt} &= (\sigma (y-x))  &+ 0.3x\frac{dB}{dt} \\
+\frac{dy}{dt} &= (x(\rho-z) - y) &+ 0.3y\frac{dB}{dt}  \\
+\frac{dz}{dt} &= (xy - \beta z)  &+ 0.3z\frac{dB}{dt}  \\
 \end{aligned}
 ```
 
