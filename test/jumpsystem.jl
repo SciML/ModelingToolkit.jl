@@ -469,14 +469,12 @@ let
     eqs = [D(X) ~ α*(1 + Y)]
     @named jsys = JumpSystem([maj, crj, vrj, eqs[1]], t, [X, Y], [α, β])    
     jsys = complete(jsys)
-
     p = (α = 6.0, β = 2.0, X₀ = 2.0, Y₀ = 1.0)
     u0map = [X => p.X₀, Y => p.Y₀]
     pmap = [α => p.α, β => p.β]
     tspan = (0.0, 20.0)
     oprob = ODEProblem(jsys, u0map, tspan, pmap)
     jprob = JumpProblem(jsys, oprob; rng, save_positions = (false, false))
-
     times = range(0.0, tspan[2], length = 100)
     Nsims = 4000
     Xv = zeros(length(times))
@@ -487,20 +485,20 @@ let
         Yv .+= sol[2,:]
     end
     Xv ./= Nsims; Yv ./= Nsims;
+
     function Yf(t, p)
-        @unpack α, β, Y₀ = p
+        local α, β, X₀, Y₀ = p
         return (α / β) + (Y₀ - α / β) * exp(-β * t)
     end
     function Xf(t, p)
-        @unpack α, β, X₀, Y₀ = p
+        local α, β, X₀, Y₀ = p
         return (α / β) + (α^2 / β^2) + α * (Y₀ - α / β) * t * exp(-β * t) + (X₀ - α / β - α^2 / β^2) * exp(-β * t)
     end
     Xact = [Xf(t,p) for t in times]
     Yact = [Yf(t,p) for t in times]
     @test all(abs.(Xv .- Xact) .<= 0.05 .* Xv)
     @test all(abs.(Yv .- Yact) .<= 0.05 .* Yv)    
-
-    Xss = (p.α / p.β) + (p.α^2 / p.β^2)    
+   
     function affect!(integ, u, p, ctx)
         savevalues!(integ, true)
         terminate!(integ)
