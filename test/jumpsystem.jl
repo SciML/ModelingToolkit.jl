@@ -426,6 +426,7 @@ end
 # PDMP test
 let
     Random.seed!(rng, 1111)
+    Random.seed!(Random.default_rng(), 1111)
     @variables X(t) Y(t)
     @parameters k1 k2
     vrj1 = VariableRateJump(k1 * X, [X ~ X - 1]; save_positions = (false, false))
@@ -466,6 +467,7 @@ end
 # that mixes ODEs and jump types, and then contin events
 let
     Random.seed!(rng, 1111)
+    Random.seed!(Random.default_rng(), 1111)
     @variables X(t) Y(t)
     @parameters α β
     vrj = VariableRateJump(β * X, [X ~ X - 1]; save_positions = (false, false))
