@@ -434,7 +434,7 @@ let
     @named jsys = JumpSystem([vrj1, vrj2, eqs[1], eqs[2]], t, [X, Y], [k1, k2])
     jsys = complete(jsys)
     X0 = 0.0
-    Y0 = 0.0
+    Y0 = 3.0
     u0 = [X => X0, Y => Y0]
     k1val = 1.0
     k2val = 20.0
