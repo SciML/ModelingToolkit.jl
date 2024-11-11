@@ -140,7 +140,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
         end
         new{U}(tag, ap, iv, unknowns, ps, var_to_name,
             observed, name, description, systems, defaults,
-            connector_type, cevents, devents, parameter_dependencies, metadata, 
+            connector_type, cevents, devents, parameter_dependencies, metadata,
             gui_metadata, complete, index_cache, isscheduled)
     end
 end
@@ -494,17 +494,17 @@ function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothi
     if has_equations(sys)
         osys = ODESystem(equations(sys).x[4], get_iv(sys), unknowns(sys), parameters(sys);
             observed = observed(sys), name = nameof(sys), description = description(sys),
-            systems = get_systems(sys), defaults = defaults(sys), 
+            systems = get_systems(sys), defaults = defaults(sys),
             parameter_dependencies = parameter_dependencies(sys),
             metadata = get_metadata(sys), gui_metadata = get_gui_metadata(sys))
         osys = complete(osys)
         return ODEProblem(osys, u0map, tspan, parammap; check_length = false, kwargs...)
     else
         _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
-            t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false, 
+            t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false,
             check_length = false)
         f = (du, u, p, t) -> (du .= 0; nothing)
-        observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)    
+        observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
         df = ODEFunction(f; sys, observed = observedfun)
         return ODEProblem(df, u0, tspan, p; kwargs...)
     end

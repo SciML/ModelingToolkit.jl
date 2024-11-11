@@ -678,8 +678,8 @@ function compile_affect(eqs::Vector{Equation}, cb, sys, dvs, ps; outputidxs = no
     end
 end
 
-function generate_rootfinding_callback(sys::AbstractTimeDependentSystem, dvs = unknowns(sys),
-        ps = parameters(sys); kwargs...)
+function generate_rootfinding_callback(sys::AbstractTimeDependentSystem,
+        dvs = unknowns(sys), ps = parameters(sys); kwargs...)
     cbs = continuous_events(sys)
     isempty(cbs) && return nothing
     generate_rootfinding_callback(cbs, sys, dvs, ps; kwargs...)
@@ -860,8 +860,8 @@ function compile_affect_fn(cb, sys::AbstractTimeDependentSystem, dvs, ps, kwargs
     (affect = affect, affect_neg = affect_neg, initialize = initialize, finalize = finalize)
 end
 
-function generate_rootfinding_callback(cbs, sys::AbstractTimeDependentSystem, dvs = unknowns(sys),
-        ps = parameters(sys); kwargs...)
+function generate_rootfinding_callback(cbs, sys::AbstractTimeDependentSystem,
+        dvs = unknowns(sys), ps = parameters(sys); kwargs...)
     eqs = map(cb -> flatten_equations(cb.eqs), cbs)
     num_eqs = length.(eqs)
     total_eqs = sum(num_eqs)

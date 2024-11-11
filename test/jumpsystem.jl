@@ -301,7 +301,7 @@ end
 # basic VariableRateJump test
 let
     N = 1000  # number of simulations for testing solve accuracy
-    Random.seed!(rng, 1111) 
+    Random.seed!(rng, 1111)
     @variables A(t) B(t) C(t)
     @parameters k
     vrj = VariableRateJump(k * (sin(t) + 1), [A ~ A + 1, C ~ C + 2])
@@ -425,17 +425,19 @@ end
 
 # PDMP test
 let
-    Random.seed!(rng, 1111)  
+    Random.seed!(rng, 1111)
     @variables X(t) Y(t)
     @parameters k1 k2
     vrj1 = VariableRateJump(k1 * X, [X ~ X - 1]; save_positions = (false, false))
     vrj2 = VariableRateJump(k1, [Y ~ Y + 1]; save_positions = (false, false))
-    eqs = [D(X) ~ k2, D(Y) ~ -k2/10*Y]
+    eqs = [D(X) ~ k2, D(Y) ~ -k2 / 10 * Y]
     @named jsys = JumpSystem([vrj1, vrj2, eqs[1], eqs[2]], t, [X, Y], [k1, k2])
     jsys = complete(jsys)
-    X0 = 0.0; Y0 = 0.0
+    X0 = 0.0
+    Y0 = 0.0
     u0 = [X => X0, Y => Y0]
-    k1val = 1.0; k2val = 20.0
+    k1val = 1.0
+    k2val = 20.0
     p = [k1 => k1val, k2 => k2val]
     tspan = (0.0, 10.0)
     oprob = ODEProblem(jsys, u0, tspan, p)
@@ -447,27 +449,30 @@ let
     Yv = zeros(length(times))
     for n in 1:Nsims
         sol = solve(jprob, Tsit5(); saveat = times)
-        Xv .+= sol[1,:] 
-        Yv .+= sol[2,:]
+        Xv .+= sol[1, :]
+        Yv .+= sol[2, :]
     end
-    Xv ./= Nsims; Yv ./= Nsims;
+    Xv ./= Nsims
+    Yv ./= Nsims
 
     Xact(t) = X0 * exp(-k1val * t) + (k2val / k1val) * (1 - exp(-k1val * t))
-    Yact(t) = Y0 * exp(-k2val/10 * t) + (k1val / (k2val/10)) * (1 - exp(-k2val/10 * t))
+    function Yact(t)
+        Y0 * exp(-k2val / 10 * t) + (k1val / (k2val / 10)) * (1 - exp(-k2val / 10 * t))
+    end
     @test all(abs.(Xv .- Xact.(times)) .<= 0.05 .* Xv)
-    @test all(abs.(Yv .- Yact.(times)) .<= 0.1 .* Yv)    
+    @test all(abs.(Yv .- Yact.(times)) .<= 0.1 .* Yv)
 end
 
 # that mixes ODEs and jump types, and then contin events
 let
-    Random.seed!(rng, 1111)  
+    Random.seed!(rng, 1111)
     @variables X(t) Y(t)
     @parameters α β
     vrj = VariableRateJump(β * X, [X ~ X - 1]; save_positions = (false, false))
-    crj = ConstantRateJump(β*Y, [Y ~ Y - 1])
+    crj = ConstantRateJump(β * Y, [Y ~ Y - 1])
     maj = MassActionJump(α, [0 => 1], [Y => 1])
-    eqs = [D(X) ~ α*(1 + Y)]
-    @named jsys = JumpSystem([maj, crj, vrj, eqs[1]], t, [X, Y], [α, β])    
+    eqs = [D(X) ~ α * (1 + Y)]
+    @named jsys = JumpSystem([maj, crj, vrj, eqs[1]], t, [X, Y], [α, β])
     jsys = complete(jsys)
     p = (α = 6.0, β = 2.0, X₀ = 2.0, Y₀ = 1.0)
     u0map = [X => p.X₀, Y => p.Y₀]
@@ -481,10 +486,11 @@ let
     Yv = zeros(length(times))
     for n in 1:Nsims
         sol = solve(jprob, Tsit5(); saveat = times)
-        Xv .+= sol[1,:] 
-        Yv .+= sol[2,:]
+        Xv .+= sol[1, :]
+        Yv .+= sol[2, :]
     end
-    Xv ./= Nsims; Yv ./= Nsims;
+    Xv ./= Nsims
+    Yv ./= Nsims
 
     function Yf(t, p)
         local α, β, X₀, Y₀ = p
@@ -492,21 +498,22 @@ let
     end
     function Xf(t, p)
         local α, β, X₀, Y₀ = p
-        return (α / β) + (α^2 / β^2) + α * (Y₀ - α / β) * t * exp(-β * t) + (X₀ - α / β - α^2 / β^2) * exp(-β * t)
+        return (α / β) + (α^2 / β^2) + α * (Y₀ - α / β) * t * exp(-β * t) +
+               (X₀ - α / β - α^2 / β^2) * exp(-β * t)
     end
-    Xact = [Xf(t,p) for t in times]
-    Yact = [Yf(t,p) for t in times]
+    Xact = [Xf(t, p) for t in times]
+    Yact = [Yf(t, p) for t in times]
     @test all(abs.(Xv .- Xact) .<= 0.05 .* Xv)
-    @test all(abs.(Yv .- Yact) .<= 0.05 .* Yv)    
-   
+    @test all(abs.(Yv .- Yact) .<= 0.05 .* Yv)
+
     function affect!(integ, u, p, ctx)
         savevalues!(integ, true)
         terminate!(integ)
         nothing
     end
-    cevents = [t ~ .2] => (affect!, [], [], [], nothing)
-    @named jsys = JumpSystem([maj, crj, vrj, eqs[1]], t, [X, Y], [α, β]; 
-        continuous_events = cevents)    
+    cevents = [t ~ 0.2] => (affect!, [], [], [], nothing)
+    @named jsys = JumpSystem([maj, crj, vrj, eqs[1]], t, [X, Y], [α, β];
+        continuous_events = cevents)
     jsys = complete(jsys)
     tspan = (0.0, 200.0)
     oprob = ODEProblem(jsys, u0map, tspan, pmap)
@@ -516,8 +523,8 @@ let
     for n in 1:Nsims
         sol = solve(jprob, Tsit5(), saveat = tspan[2])
         @test sol.retcode == ReturnCode.Terminated
-        Xsamp += sol[1,end]
+        Xsamp += sol[1, end]
     end
     Xsamp /= Nsims
-    @test abs(Xsamp - Xf(.2,p) < .05 * Xf(.2,p))
+    @test abs(Xsamp - Xf(0.2, p) < 0.05 * Xf(0.2, p))
 end
