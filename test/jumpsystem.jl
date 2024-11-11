@@ -1,5 +1,5 @@
 using ModelingToolkit, DiffEqBase, JumpProcesses, Test, LinearAlgebra
-using Random, StableRNGs
+using Random, StableRNGs, NonlinearSolve
 using OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D
 MT = ModelingToolkit
@@ -456,4 +456,70 @@ let
     Yact(t) = Y0 * exp(-k2val/10 * t) + (k1val / (k2val/10)) * (1 - exp(-k2val/10 * t))
     @test all(abs.(Xv .- Xact.(times)) .<= 0.05 .* Xv)
     @test all(abs.(Yv .- Yact.(times)) .<= 0.1 .* Yv)    
+end
+
+# that mixes ODEs and jump types, and then contin events
+let
+    Random.seed!(rng, 1111)  
+    @variables X(t) Y(t)
+    @parameters α β
+    vrj = VariableRateJump(β * X, [X ~ X - 1]; save_positions = (false, false))
+    crj = ConstantRateJump(β*Y, [Y ~ Y - 1])
+    maj = MassActionJump(α, [0 => 1], [Y => 1])
+    eqs = [D(X) ~ α*(1 + Y)]
+    @named jsys = JumpSystem([maj, crj, vrj, eqs[1]], t, [X, Y], [α, β])    
+    jsys = complete(jsys)
+
+    p = (α = 6.0, β = 2.0, X₀ = 2.0, Y₀ = 1.0)
+    u0map = [X => p.X₀, Y => p.Y₀]
+    pmap = [α => p.α, β => p.β]
+    tspan = (0.0, 20.0)
+    oprob = ODEProblem(jsys, u0map, tspan, pmap)
+    jprob = JumpProblem(jsys, oprob; rng, save_positions = (false, false))
+
+    times = range(0.0, tspan[2], length = 100)
+    Nsims = 4000
+    Xv = zeros(length(times))
+    Yv = zeros(length(times))
+    for n in 1:Nsims
+        sol = solve(jprob, Tsit5(); saveat = times)
+        Xv .+= sol[1,:] 
+        Yv .+= sol[2,:]
+    end
+    Xv ./= Nsims; Yv ./= Nsims;
+    function Yf(t, p)
+        @unpack α, β, Y₀ = p
+        return (α / β) + (Y₀ - α / β) * exp(-β * t)
+    end
+    function Xf(t, p)
+        @unpack α, β, X₀, Y₀ = p
+        return (α / β) + (α^2 / β^2) + α * (Y₀ - α / β) * t * exp(-β * t) + (X₀ - α / β - α^2 / β^2) * exp(-β * t)
+    end
+    Xact = [Xf(t,p) for t in times]
+    Yact = [Yf(t,p) for t in times]
+    @test all(abs.(Xv .- Xact) .<= 0.05 .* Xv)
+    @test all(abs.(Yv .- Yact) .<= 0.05 .* Yv)    
+
+    Xss = (p.α / p.β) + (p.α^2 / p.β^2)    
+    function affect!(integ, u, p, ctx)
+        savevalues!(integ, true)
+        terminate!(integ)
+        nothing
+    end
+    cevents = [t ~ .2] => (affect!, [], [], [], nothing)
+    @named jsys = JumpSystem([maj, crj, vrj, eqs[1]], t, [X, Y], [α, β]; 
+        continuous_events = cevents)    
+    jsys = complete(jsys)
+    tspan = (0.0, 200.0)
+    oprob = ODEProblem(jsys, u0map, tspan, pmap)
+    jprob = JumpProblem(jsys, oprob; rng, save_positions = (false, false))
+    Xsamp = 0.0
+    Nsims = 4000
+    for n in 1:Nsims
+        sol = solve(jprob, Tsit5(), saveat = tspan[2])
+        @test sol.retcode == ReturnCode.Terminated
+        Xsamp += sol[1,end]
+    end
+    Xsamp /= Nsims
+    @test abs(Xsamp - Xf(.2,p) < .05 * Xf(.2,p))
 end
