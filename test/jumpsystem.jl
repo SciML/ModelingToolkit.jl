@@ -425,8 +425,8 @@ end
 
 # PDMP test
 let
-    Random.seed!(rng, 1111)
-    Random.seed!(Random.default_rng(), 1111)
+    seed = 1111
+    Random.seed!(rng, seed)
     @variables X(t) Y(t)
     @parameters k1 k2
     vrj1 = VariableRateJump(k1 * X, [X ~ X - 1]; save_positions = (false, false))
@@ -449,9 +449,10 @@ let
     Xv = zeros(length(times))
     Yv = zeros(length(times))
     for n in 1:Nsims
-        sol = solve(jprob, Tsit5(); saveat = times)
+        sol = solve(jprob, Tsit5(); saveat = times, seed)
         Xv .+= sol[1, :]
         Yv .+= sol[2, :]
+        seed += 1
     end
     Xv ./= Nsims
     Yv ./= Nsims
@@ -466,8 +467,8 @@ end
 
 # that mixes ODEs and jump types, and then contin events
 let
-    Random.seed!(rng, 1111)
-    Random.seed!(Random.default_rng(), 1111)
+    seed = 1111
+    Random.seed!(rng, seed)
     @variables X(t) Y(t)
     @parameters α β
     vrj = VariableRateJump(β * X, [X ~ X - 1]; save_positions = (false, false))
@@ -487,9 +488,10 @@ let
     Xv = zeros(length(times))
     Yv = zeros(length(times))
     for n in 1:Nsims
-        sol = solve(jprob, Tsit5(); saveat = times)
+        sol = solve(jprob, Tsit5(); saveat = times, seed)
         Xv .+= sol[1, :]
         Yv .+= sol[2, :]
+        seed += 1
     end
     Xv ./= Nsims
     Yv ./= Nsims
@@ -523,9 +525,10 @@ let
     Xsamp = 0.0
     Nsims = 4000
     for n in 1:Nsims
-        sol = solve(jprob, Tsit5(), saveat = tspan[2])
+        sol = solve(jprob, Tsit5(), saveat = tspan[2], seed)
         @test sol.retcode == ReturnCode.Terminated
         Xsamp += sol[1, end]
+        seed += 1
     end
     Xsamp /= Nsims
     @test abs(Xsamp - Xf(0.2, p) < 0.05 * Xf(0.2, p))
