@@ -1120,46 +1120,46 @@ end
     @test triggered == 1
 end
 
-@testset "Inductor converter; #2994" begin 
+@testset "Inductor converter; #2994" begin
     @parameters Rd Rsw C1 L1 V1 Rl
     @variables I_L1(t) I_V1(t) v1(t) v2(t) [irreducible = true] v3(t) [irreducible = true]
 
-    eqs = [
-        I_L1 + I_V1~ 0
-        -I_L1 + v2/Rsw + v2/Rd - v3/Rd~ 0
-        C1*D(v3) + v3/Rl - v2/Rd + v3/Rd~ 0
-        v1~ 10*sin(2*pi*50*t)
-        -D(I_L1)*L1 + v1 - v2~ 0]
+    eqs = [I_L1 + I_V1 ~ 0
+           -I_L1 + v2 / Rsw + v2 / Rd - v3 / Rd ~ 0
+           C1 * D(v3) + v3 / Rl - v2 / Rd + v3 / Rd ~ 0
+           v1 ~ 10 * sin(2 * pi * 50 * t)
+           -D(I_L1) * L1 + v1 - v2 ~ 0]
 
-    function D_on(i, u, p,ctx)
-        i.ps[p.Rd]=1e-3
+    function D_on(i, u, p, ctx)
+        i.ps[p.Rd] = 1e-3
     end
-    function D_off(i, u, p,ctx)
-        i.ps[p.Rd]=1e3
+    function D_off(i, u, p, ctx)
+        i.ps[p.Rd] = 1e3
     end
     c = ModelingToolkit.SymbolicContinuousCallback(
-        [v2-v3~0], (D_on, [v2,v3], [Rd], [], nothing);affect_neg =(D_off, [v2,v3], [Rd], [], nothing),
+        [v2 - v3 ~ 0], (D_on, [v2, v3], [Rd], [], nothing);
+        affect_neg = (D_off, [v2, v3], [Rd], [], nothing),
         rootfind = SciMLBase.LeftRootFind)
 
-    @mtkbuild pend = ODESystem(eqs, t;continuous_events=c)
+    @mtkbuild pend = ODESystem(eqs, t; continuous_events = c)
 
     u0 = [
-        I_L1=>0.0,
-        v3=>0.0,
+        I_L1 => 0.0,
+        v3 => 0.0
     ]
 
-    g=[
-        v1=>0.0,
-        v2=>0.0,
-        I_V1=>0.0]
-    p = [ 
+    g = [
+        v1 => 0.0,
+        v2 => 0.0,
+        I_V1 => 0.0]
+    p = [
         Rd => 0.001,
-        Rsw=>1e6,
-        C1=>0.01,
-        L1=>0.001,
-        V1=>10.0,
-        Rl=>20.0]
+        Rsw => 1e6,
+        C1 => 0.01,
+        L1 => 0.001,
+        V1 => 10.0,
+        Rl => 20.0]
     prob = ODEProblem(pend, u0, (0.0, 1.5), p, guesses = g)
-    sol = solve(prob, Rodas5P(),dtmax=1e-4)
-    @test all(x -> x[1] < 0.5 || x[2] < 10, sol[[t,v3]])
+    sol = solve(prob, Rodas5P(), dtmax = 1e-4)
+    @test all(x -> x[1] < 0.5 || x[2] < 10, sol[[t, v3]])
 end
