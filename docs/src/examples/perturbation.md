@@ -39,7 +39,8 @@ eqs_pert = taylor_coeff(eq_pert, ϵ, 0:2)
 !!! note
     
     The 0-th order equation can be solved analytically, but ModelingToolkit does currently not feature automatic analytical solution of ODEs, so we proceed with solving it numerically.
-    These are the ODEs we want to solve. Now construct an `ODESystem`, which automatically inserts dummy derivatives for the velocities:
+
+These are the ODEs we want to solve. Now construct an `ODESystem`, which automatically inserts dummy derivatives for the velocities:
 
 ```@example perturbation
 @mtkbuild sys = ODESystem(eqs_pert, t)
