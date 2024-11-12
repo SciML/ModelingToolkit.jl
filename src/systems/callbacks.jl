@@ -1,7 +1,9 @@
 #################################### system operations #####################################
-get_continuous_events(sys::AbstractSystem) = SymbolicContinuousCallback[]
-get_continuous_events(sys::AbstractODESystem) = getfield(sys, :continuous_events)
 has_continuous_events(sys::AbstractSystem) = isdefined(sys, :continuous_events)
+function get_continuous_events(sys::AbstractSystem)
+    has_continuous_events(sys) || return SymbolicContinuousCallback[]
+    getfield(sys, :continuous_events)
+end
 
 has_discrete_events(sys::AbstractSystem) = isdefined(sys, :discrete_events)
 function get_discrete_events(sys::AbstractSystem)
@@ -676,8 +678,8 @@ function compile_affect(eqs::Vector{Equation}, cb, sys, dvs, ps; outputidxs = no
     end
 end
 
-function generate_rootfinding_callback(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys); kwargs...)
+function generate_rootfinding_callback(sys::AbstractTimeDependentSystem,
+        dvs = unknowns(sys), ps = parameters(sys); kwargs...)
     cbs = continuous_events(sys)
     isempty(cbs) && return nothing
     generate_rootfinding_callback(cbs, sys, dvs, ps; kwargs...)
@@ -687,7 +689,7 @@ Generate a single rootfinding callback; this happens if there is only one equati
 generate_rootfinding_callback and thus we can produce a ContinuousCallback instead of a VectorContinuousCallback.
 """
 function generate_single_rootfinding_callback(
-        eq, cb, sys::AbstractODESystem, dvs = unknowns(sys),
+        eq, cb, sys::AbstractTimeDependentSystem, dvs = unknowns(sys),
         ps = parameters(sys); kwargs...)
     if !isequal(eq.lhs, 0)
         eq = 0 ~ eq.lhs - eq.rhs
@@ -729,7 +731,7 @@ function generate_single_rootfinding_callback(
 end
 
 function generate_vector_rootfinding_callback(
-        cbs, sys::AbstractODESystem, dvs = unknowns(sys),
+        cbs, sys::AbstractTimeDependentSystem, dvs = unknowns(sys),
         ps = parameters(sys); rootfind = SciMLBase.RightRootFind,
         reinitialization = SciMLBase.CheckInit(), kwargs...)
     eqs = map(cb -> flatten_equations(cb.eqs), cbs)
@@ -841,7 +843,7 @@ end
 """
 Compile a single continuous callback affect function(s).
 """
-function compile_affect_fn(cb, sys::AbstractODESystem, dvs, ps, kwargs)
+function compile_affect_fn(cb, sys::AbstractTimeDependentSystem, dvs, ps, kwargs)
     eq_aff = affects(cb)
     eq_neg_aff = affect_negs(cb)
     affect = compile_affect(eq_aff, cb, sys, dvs, ps; expression = Val{false}, kwargs...)
@@ -858,8 +860,8 @@ function compile_affect_fn(cb, sys::AbstractODESystem, dvs, ps, kwargs)
     (affect = affect, affect_neg = affect_neg, initialize = initialize, finalize = finalize)
 end
 
-function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys); kwargs...)
+function generate_rootfinding_callback(cbs, sys::AbstractTimeDependentSystem,
+        dvs = unknowns(sys), ps = parameters(sys); kwargs...)
     eqs = map(cb -> flatten_equations(cb.eqs), cbs)
     num_eqs = length.(eqs)
     total_eqs = sum(num_eqs)
@@ -1053,12 +1055,12 @@ merge_cb(x, ::Nothing) = x
 merge_cb(x, y) = CallbackSet(x, y)
 
 function process_events(sys; callback = nothing, kwargs...)
-    if has_continuous_events(sys)
+    if has_continuous_events(sys) && !isempty(continuous_events(sys))
         contin_cb = generate_rootfinding_callback(sys; kwargs...)
     else
         contin_cb = nothing
     end
-    if has_discrete_events(sys)
+    if has_discrete_events(sys) && !isempty(discrete_events(sys))
         discrete_cb = generate_discrete_callbacks(sys; kwargs...)
     else
         discrete_cb = nothing
