@@ -525,7 +525,7 @@ let
     Xsamp = 0.0
     Nsims = 4000
     for n in 1:Nsims
-        sol = solve(jprob, Tsit5(), saveat = tspan[2], seed)
+        sol = solve(jprob, Tsit5(); saveat = tspan[2], seed)
         @test sol.retcode == ReturnCode.Terminated
         Xsamp += sol[1, end]
         seed += 1
