@@ -1163,3 +1163,24 @@ end
     sol = solve(prob, Rodas5P(), dtmax = 1e-4)
     @test all(x -> x[1] < 0.5 || x[2] < 10, sol[[t, v3]])
 end
+
+@testset "Issue#3154 Array variable in discrete condition" begin
+    @mtkmodel DECAY begin
+        @parameters begin
+            unrelated[1:2] = zeros(2)
+            k = 0.0
+        end
+        @variables begin
+            x(t) = 10.0
+        end
+        @equations begin
+            D(x) ~ -k * x
+        end
+        @discrete_events begin
+            (t == 1.0) => [k ~ 1.0]
+        end
+    end
+    @mtkbuild decay = DECAY()
+    prob = ODEProblem(decay, [], (0.0, 10.0), [])
+    @test_nowarn solve(prob, Tsit5(), tstops = [1.0])
+end

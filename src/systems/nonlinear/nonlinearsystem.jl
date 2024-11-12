@@ -690,7 +690,7 @@ A type of Nonlinear problem which specializes on polynomial systems and uses
 HomotopyContinuation.jl to solve the system. Requires importing HomotopyContinuation.jl to
 create and solve.
 """
-struct HomotopyContinuationProblem{uType, H, D, O} <:
+struct HomotopyContinuationProblem{uType, H, D, O, SS} <:
        SciMLBase.AbstractNonlinearProblem{uType, true}
     """
     The initial values of states in the system. If there are multiple real roots of
@@ -716,6 +716,11 @@ struct HomotopyContinuationProblem{uType, H, D, O} <:
     A function which generates and returns observed expressions for the given system.
     """
     obsfn::O
+    """
+    The HomotopyContinuation.jl solver and start system, obtained through
+    `HomotopyContinuation.solver_startsystems`.
+    """
+    solver_and_starts::SS
 end
 
 function HomotopyContinuationProblem(::AbstractSystem, _u0, _p; kwargs...)

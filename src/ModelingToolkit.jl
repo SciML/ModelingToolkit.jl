@@ -55,6 +55,7 @@ using RecursiveArrayTools
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
 import BlockArrays: BlockedArray, Block, blocksize, blocksizes
 import CommonSolve
+import EnumX
 
 using RuntimeGeneratedFunctions
 using RuntimeGeneratedFunctions: drop_expr

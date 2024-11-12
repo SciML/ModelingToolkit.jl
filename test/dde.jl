@@ -74,7 +74,7 @@ pmul = [1.0,
 
 prob = SDDEProblem(hayes_modelf, hayes_modelg, [1.0], h, tspan, pmul;
     constant_lags = (pmul[1],));
-sol = solve(prob, RKMil())
+sol = solve(prob, RKMil(), seed = 100)
 
 @variables x(..)
 @parameters a=-4.0 b=-2.0 c=10.0 α=-1.3 β=-1.2 γ=1.1
@@ -87,7 +87,7 @@ eqs = [D(x(t)) ~ a * x(t) + b * x(t - τ) + c + (α * x(t) + γ) * η]
 @test equations(sys) == [D(x(t)) ~ a * x(t) + b * x(t - τ) + c]
 @test isequal(ModelingToolkit.get_noiseeqs(sys), [α * x(t) + γ])
 prob_mtk = SDDEProblem(sys, [x(t) => 1.0 + t], tspan; constant_lags = (τ,));
-@test_nowarn sol_mtk = solve(prob_mtk, RKMil())
+@test_nowarn sol_mtk = solve(prob_mtk, RKMil(), seed = 100)
 
 prob_sa = SDDEProblem(
     sys, [x(t) => 1.0 + t], tspan; constant_lags = (τ,), u0_constructor = SVector{1})

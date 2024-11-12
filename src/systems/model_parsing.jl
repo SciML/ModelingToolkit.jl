@@ -50,7 +50,7 @@ function _model_macro(mod, name, expr, isconnector)
         :structural_parameters => Dict{Symbol, Dict}()
     )
     comps = Union{Symbol, Expr}[]
-    ext = Ref{Any}(nothing)
+    ext = []
     eqs = Expr[]
     icon = Ref{Union{String, URI}}()
     ps, sps, vs, = [], [], []
@@ -115,10 +115,10 @@ function _model_macro(mod, name, expr, isconnector)
     sys = :($ODESystem($(flatten_equations)(equations), $iv, variables, parameters;
         name, systems, gui_metadata = $gui_metadata, defaults))
 
-    if ext[] === nothing
+    if length(ext) == 0
         push!(exprs.args, :(var"#___sys___" = $sys))
     else
-        push!(exprs.args, :(var"#___sys___" = $extend($sys, $(ext[]))))
+        push!(exprs.args, :(var"#___sys___" = $extend($sys, [$(ext...)])))
     end
 
     isconnector && push!(exprs.args,
@@ -240,7 +240,7 @@ function unit_handled_variable_value(meta, varname)
 end
 
 # This function parses various variable/parameter definitions.
-# 
+#
 # The comments indicate the syntax matched by a block; either when parsed directly
 # when it is called recursively for parsing a part of an expression.
 # These variable definitions are part of test suite in `test/model_parsing.jl`
@@ -286,7 +286,7 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         # `(l2(t)[1:N, 1:M] = 2), [description = "l is more than 1D, with arbitrary length"]`
         # `(l3(t)[1:3] = 3), [description = "l2 is 1D"]`
         # `(l4(t)[1:N] = 4), [description = "l2 is 1D, with arbitrary length"]`
-        # 
+        #
         # Condition 2 parses:
         # `(l5(t)[1:3]::Int = 5), [description = "l3 is 1D and has a type"]`
         # `(l6(t)[1:N]::Int = 6), [description = "l3 is 1D and has a type, with arbitrary length"]`
@@ -373,7 +373,7 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         # Condition 1 is recursively called by:
         # `par5[1:3]::BigFloat`
         # `par6(t)[1:3]::BigFloat`
-        # 
+        #
         # Condition 2 parses:
         # `b2(t)[1:2]`
         # `a2[1:2]`
@@ -791,11 +791,17 @@ function _parse_extend!(ext, a, b, dict, expr, kwargs, vars, implicit_arglist)
         end
     end
 
-    ext[] = a
+    push!(ext, a)
     push!(b.args, Expr(:kw, :name, Meta.quot(a)))
     push!(expr.args, :($a = $b))
 
-    dict[:extend] = [Symbol.(vars.args), a, b.args[1]]
+    if !haskey(dict, :extend)
+        dict[:extend] = [Symbol.(vars.args), a, b.args[1]]
+    else
+        push!(dict[:extend][1], Symbol.(vars.args)...)
+        dict[:extend][2] = vcat(dict[:extend][2], a)
+        dict[:extend][3] = vcat(dict[:extend][3], b.args[1])
+    end
 
     push!(expr.args, :(@unpack $vars = $a))
 end

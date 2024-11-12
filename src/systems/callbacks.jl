@@ -550,7 +550,7 @@ end
 """
     compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps; expression, kwargs...)
 
-Returns a function `condition(u,p,t)` returning the `condition(cb)`.
+Returns a function `condition(u,t,integrator)` returning the `condition(cb)`.
 
 Notes
 
@@ -571,7 +571,8 @@ function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
     end
     expr = build_function(
         condit, u, t, p...; expression = Val{true},
-        wrap_code = condition_header(sys) .∘ wrap_array_vars(sys, condit; dvs, ps) .∘
+        wrap_code = condition_header(sys) .∘
+                    wrap_array_vars(sys, condit; dvs, ps, inputs = true) .∘
                     wrap_parameter_dependencies(sys, !(condit isa AbstractArray)),
         kwargs...)
     if expression == Val{true}
