@@ -247,8 +247,6 @@ struct SymbolicContinuousCallback
             initialize = NULL_AFFECT,
             finalize = NULL_AFFECT,
             rootfind = SciMLBase.LeftRootFind,
-            initialize = NULL_AFFECT,
-            finalize = NULL_AFFECT,
             reinitializealg = SciMLBase.CheckInit())
         new(eqs, initialize, finalize, make_affect(affect),
             make_affect(affect_neg), rootfind, reinitializealg)
@@ -385,16 +383,6 @@ end
 affect_negs(cb::SymbolicContinuousCallback) = cb.affect_neg
 function affect_negs(cbs::Vector{SymbolicContinuousCallback})
     mapreduce(affect_negs, vcat, cbs, init = Equation[])
-end
-
-initialize_affects(cb::SymbolicContinuousCallback) = cb.initialize
-function initialize_affects(cbs::Vector{SymbolicContinuousCallback})
-    mapreduce(initialize_affects, vcat, cbs, init = Equation[])
-end
-
-finalize_affects(cb::SymbolicContinuousCallback) = cb.initialize
-function finalize_affects(cbs::Vector{SymbolicContinuousCallback})
-    mapreduce(finalize_affects, vcat, cbs, init = Equation[])
 end
 
 reinitialization_alg(cb::SymbolicContinuousCallback) = cb.reinitializealg
