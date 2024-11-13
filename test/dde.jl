@@ -74,7 +74,7 @@ pmul = [1.0,
 
 prob = SDDEProblem(hayes_modelf, hayes_modelg, [1.0], h, tspan, pmul;
     constant_lags = (pmul[1],));
-sol = solve(prob, RKMil())
+sol = solve(prob, RKMil(), seed = 100)
 
 @variables x(..)
 @parameters a=-4.0 b=-2.0 c=10.0 α=-1.3 β=-1.2 γ=1.1
@@ -87,11 +87,11 @@ eqs = [D(x(t)) ~ a * x(t) + b * x(t - τ) + c + (α * x(t) + γ) * η]
 @test equations(sys) == [D(x(t)) ~ a * x(t) + b * x(t - τ) + c]
 @test isequal(ModelingToolkit.get_noiseeqs(sys), [α * x(t) + γ])
 prob_mtk = SDDEProblem(sys, [x(t) => 1.0 + t], tspan; constant_lags = (τ,));
-@test_nowarn sol_mtk = solve(prob_mtk, RKMil())
+@test_nowarn sol_mtk = solve(prob_mtk, RKMil(), seed = 100)
 
 prob_sa = SDDEProblem(
     sys, [x(t) => 1.0 + t], tspan; constant_lags = (τ,), u0_constructor = SVector{1})
-@test prob_sa.u0 isa SVector{4, Float64}
+@test prob_sa.u0 isa SVector{1, Float64}
 
 @parameters x(..) a
 
@@ -169,4 +169,32 @@ prob_sa = DDEProblem(sys, [], (0.0, 10.0); constant_lags = [sys.osc1.τ, sys.osc
     @test obsval ≈
           sol(sol.t .- prob.ps[ssys.valve.τ]; idxs = ssys.valve.opening).u .+
           sum.(sol[ssys.vvecs.x])
+end
+
+@testset "Issue#3165 DDEs with non-tunables" begin
+    @variables x(..) = 1.0
+    @parameters w=1.0 [tunable = false] τ=0.5
+    eqs = [D(x(t)) ~ -w * x(t - τ)]
+
+    @named sys = System(eqs, t)
+    sys = structural_simplify(sys)
+
+    prob = DDEProblem(sys,
+        [],
+        (0.0, 10.0),
+        constant_lags = [τ])
+
+    alg = MethodOfSteps(Vern7())
+    @test_nowarn solve(prob, alg)
+
+    @brownian r
+    eqs = [D(x(t)) ~ -w * x(t - τ) + r]
+    @named sys = System(eqs, t)
+    sys = structural_simplify(sys)
+    prob = SDDEProblem(sys,
+        [],
+        (0.0, 10.0),
+        constant_lags = [τ])
+
+    @test_nowarn solve(prob, RKMil())
 end

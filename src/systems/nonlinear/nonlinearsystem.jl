@@ -44,6 +44,10 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     """
     name::Symbol
     """
+    A description of the system.
+    """
+    description::String
+    """
     The internal systems. These are required to have unique names.
     """
     systems::Vector{NonlinearSystem}
@@ -91,7 +95,8 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     parent::Any
     isscheduled::Bool
 
-    function NonlinearSystem(tag, eqs, unknowns, ps, var_to_name, observed, jac, name,
+    function NonlinearSystem(
+            tag, eqs, unknowns, ps, var_to_name, observed, jac, name, description,
             systems,
             defaults, connector_type, parameter_dependencies = Equation[], metadata = nothing,
             gui_metadata = nothing,
@@ -102,7 +107,8 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
             u = __get_unit_type(unknowns, ps)
             check_units(u, eqs)
         end
-        new(tag, eqs, unknowns, ps, var_to_name, observed, jac, name, systems, defaults,
+        new(tag, eqs, unknowns, ps, var_to_name, observed,
+            jac, name, description, systems, defaults,
             connector_type, parameter_dependencies, metadata, gui_metadata, tearing_state,
             substitutions, complete, index_cache, parent, isscheduled)
     end
@@ -111,6 +117,7 @@ end
 function NonlinearSystem(eqs, unknowns, ps;
         observed = [],
         name = nothing,
+        description = "",
         default_u0 = Dict(),
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
@@ -157,7 +164,7 @@ function NonlinearSystem(eqs, unknowns, ps;
     parameter_dependencies, ps = process_parameter_dependencies(
         parameter_dependencies, ps)
     NonlinearSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-        eqs, unknowns, ps, var_to_name, observed, jac, name, systems, defaults,
+        eqs, unknowns, ps, var_to_name, observed, jac, name, description, systems, defaults,
         connector_type, parameter_dependencies, metadata, gui_metadata, checks = checks)
 end
 
@@ -251,13 +258,18 @@ end
 
 function generate_function(
         sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(sys);
-        wrap_code = identity, kwargs...)
+        wrap_code = identity, scalar = false, kwargs...)
     rhss = [deq.rhs for deq in equations(sys)]
+    dvs′ = value.(dvs)
+    if scalar
+        rhss = only(rhss)
+        dvs′ = only(dvs)
+    end
     pre, sol_states = get_substitutions_and_solved_unknowns(sys)
     wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps) .∘
-                wrap_parameter_dependencies(sys, false)
+                wrap_parameter_dependencies(sys, scalar)
     p = reorder_parameters(sys, value.(ps))
-    return build_function(rhss, value.(dvs), p...; postprocess_fbody = pre,
+    return build_function(rhss, dvs′, p...; postprocess_fbody = pre,
         states = sol_states, wrap_code, kwargs...)
 end
 
@@ -281,7 +293,7 @@ SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
                                  kwargs...) where {iip}
 ```
 
-Create an `NonlinearFunction` from the [`NonlinearSystem`](@ref). The arguments
+Create a `NonlinearFunction` from the [`NonlinearSystem`](@ref). The arguments
 `dvs` and `ps` are used to set the order of the dependent variable and parameter
 vectors, respectively.
 """
@@ -345,6 +357,34 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
 end
 
 """
+$(TYPEDSIGNATURES)
+
+Create an `IntervalNonlinearFunction` from the [`NonlinearSystem`](@ref). The arguments
+`dvs` and `ps` are used to set the order of the dependent variable and parameter vectors,
+respectively.
+"""
+function SciMLBase.IntervalNonlinearFunction(
+        sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(sys), u0 = nothing;
+        p = nothing, eval_expression = false, eval_module = @__MODULE__, kwargs...)
+    if !iscomplete(sys)
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `IntervalNonlinearFunction`")
+    end
+    if !isone(length(dvs)) || !isone(length(equations(sys)))
+        error("`IntervalNonlinearFunction` only supports systems with a single equation and a single unknown.")
+    end
+
+    f_gen = generate_function(
+        sys, dvs, ps; expression = Val{true}, scalar = true, kwargs...)
+    f_oop = eval_or_rgf(f_gen; eval_expression, eval_module)
+    f(u, p) = f_oop(u, p)
+    f(u, p::MTKParameters) = f_oop(u, p...)
+
+    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
+
+    IntervalNonlinearFunction{false}(f; observed = observedfun, sys = sys)
+end
+
+"""
 ```julia
 SciMLBase.NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
                                      ps = parameters(sys);
@@ -354,14 +394,14 @@ SciMLBase.NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
                                      kwargs...) where {iip}
 ```
 
-Create a Julia expression for an `ODEFunction` from the [`ODESystem`](@ref).
+Create a Julia expression for a `NonlinearFunction` from the [`NonlinearSystem`](@ref).
 The arguments `dvs` and `ps` are used to set the order of the dependent
 variable and parameter vectors, respectively.
 """
 struct NonlinearFunctionExpr{iip} end
 
 function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
-        ps = parameters(sys), u0 = nothing, p = nothing;
+        ps = parameters(sys), u0 = nothing; p = nothing,
         version = nothing, tgrad = false,
         jac = false,
         linenumbers = false,
@@ -401,6 +441,34 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
             jac = jac,
             resid_prototype = resid_expr,
             jac_prototype = $jp_expr)
+    end
+    !linenumbers ? Base.remove_linenums!(ex) : ex
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Create a Julia expression for an `IntervalNonlinearFunction` from the
+[`NonlinearSystem`](@ref). The arguments `dvs` and `ps` are used to set the order of the
+dependent variable and parameter vectors, respectively.
+"""
+function IntervalNonlinearFunctionExpr(
+        sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(sys),
+        u0 = nothing; p = nothing, linenumbers = false, kwargs...)
+    if !iscomplete(sys)
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `IntervalNonlinearFunctionExpr`")
+    end
+    if !isone(length(dvs)) || !isone(length(equations(sys)))
+        error("`IntervalNonlinearFunctionExpr` only supports systems with a single equation and a single unknown.")
+    end
+
+    f = generate_function(sys, dvs, ps; expression = Val{true}, scalar = true, kwargs...)
+
+    IntervalNonlinearFunction{false}(f; sys = sys)
+
+    ex = quote
+        f = $f
+        NonlinearFunction{false}(f)
     end
     !linenumbers ? Base.remove_linenums!(ex) : ex
 end
@@ -461,6 +529,26 @@ function DiffEqBase.NonlinearLeastSquaresProblem{iip}(sys::NonlinearSystem, u0ma
         check_length, kwargs...)
     pt = something(get_metadata(sys), StandardNonlinearProblem())
     NonlinearLeastSquaresProblem{iip}(f, u0, p; filter_kwargs(kwargs)...)
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Generate an `IntervalNonlinearProblem` from a `NonlinearSystem` and allow for automatically
+symbolically calculating numerical enhancements.
+"""
+function DiffEqBase.IntervalNonlinearProblem(sys::NonlinearSystem, uspan::NTuple{2},
+        parammap = SciMLBase.NullParameters(); kwargs...)
+    if !iscomplete(sys)
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `IntervalNonlinearProblem`")
+    end
+    if !isone(length(unknowns(sys))) || !isone(length(equations(sys)))
+        error("`IntervalNonlinearProblem` only supports with a single equation and a single unknown.")
+    end
+    f, u0, p = process_SciMLProblem(
+        IntervalNonlinearFunction, sys, unknowns(sys) .=> uspan[1], parammap; kwargs...)
+
+    return IntervalNonlinearProblem(f, uspan, p; filter_kwargs(kwargs)...)
 end
 
 """
@@ -543,6 +631,34 @@ function NonlinearLeastSquaresProblemExpr{iip}(sys::NonlinearSystem, u0map,
     !linenumbers ? Base.remove_linenums!(ex) : ex
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Generates a Julia expression for an IntervalNonlinearProblem from a
+NonlinearSystem and allows for automatically symbolically calculating
+numerical enhancements.
+"""
+function IntervalNonlinearProblemExpr(sys::NonlinearSystem, uspan::NTuple{2},
+        parammap = SciMLBase.NullParameters(); kwargs...)
+    if !iscomplete(sys)
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `IntervalNonlinearProblemExpr`")
+    end
+    if !isone(length(unknowns(sys))) || !isone(length(equations(sys)))
+        error("`IntervalNonlinearProblemExpr` only supports with a single equation and a single unknown.")
+    end
+    f, u0, p = process_SciMLProblem(
+        IntervalNonlinearFunctionExpr, sys, unknowns(sys) .=> uspan[1], parammap; kwargs...)
+    linenumbers = get(kwargs, :linenumbers, true)
+
+    ex = quote
+        f = $f
+        uspan = $uspan
+        p = $p
+        IntervalNonlinearProblem(f, uspan, p; $(filter_kwargs(kwargs)...))
+    end
+    !linenumbers ? Base.remove_linenums!(ex) : ex
+end
+
 function flatten(sys::NonlinearSystem, noeqs = false)
     systems = get_systems(sys)
     if isempty(systems)
@@ -554,6 +670,7 @@ function flatten(sys::NonlinearSystem, noeqs = false)
             observed = observed(sys),
             defaults = defaults(sys),
             name = nameof(sys),
+            description = description(sys),
             checks = false)
     end
 end
@@ -573,7 +690,7 @@ A type of Nonlinear problem which specializes on polynomial systems and uses
 HomotopyContinuation.jl to solve the system. Requires importing HomotopyContinuation.jl to
 create and solve.
 """
-struct HomotopyContinuationProblem{uType, H, O} <:
+struct HomotopyContinuationProblem{uType, H, D, O, SS} <:
        SciMLBase.AbstractNonlinearProblem{uType, true}
     """
     The initial values of states in the system. If there are multiple real roots of
@@ -586,6 +703,12 @@ struct HomotopyContinuationProblem{uType, H, O} <:
     """
     homotopy_continuation_system::H
     """
+    A function with signature `(u, p) -> resid`. In case of rational functions, this
+    is used to rule out roots of the system which would cause the denominator to be
+    zero.
+    """
+    denominator::D
+    """
     The `NonlinearSystem` used to create this problem. Used for symbolic indexing.
     """
     sys::NonlinearSystem
@@ -593,6 +716,11 @@ struct HomotopyContinuationProblem{uType, H, O} <:
     A function which generates and returns observed expressions for the given system.
     """
     obsfn::O
+    """
+    The HomotopyContinuation.jl solver and start system, obtained through
+    `HomotopyContinuation.solver_startsystems`.
+    """
+    solver_and_starts::SS
 end
 
 function HomotopyContinuationProblem(::AbstractSystem, _u0, _p; kwargs...)

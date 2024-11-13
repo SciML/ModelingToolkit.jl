@@ -136,3 +136,41 @@ end
     prob = @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
     @test prob.p isa Vector{Float64}
 end
+
+@testset "Issue#3153" begin
+    @variables x(t) y(t)
+    @parameters c1 c2 c3
+    eqs = [D(x) ~ y,
+        y ~ ifelse(t < c1, 0.0, (-c1 + t)^(c3))]
+    sps = [x, y]
+    ps = [c1, c2, c3]
+    @mtkbuild osys = ODESystem(eqs, t, sps, ps)
+    u0map = [x => 1.0]
+    pmap = [c1 => 5.0, c2 => 1.0, c3 => 1.2]
+    oprob = ODEProblem(osys, u0map, (0.0, 10.0), pmap)
+end
+
+@testset "Cyclic dependency checking and substitution limits" begin
+    @variables x(t) y(t)
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ x, D(y) ~ y], t; initialization_eqs = [x ~ 2y + 3, y ~ 2x],
+        guesses = [x => 2y, y => 2x])
+    @test_warn ["Cycle", "unknowns", "x", "y"] try
+        ODEProblem(sys, [], (0.0, 1.0), warn_cyclic_dependency = true)
+    catch
+    end
+    @test_throws ModelingToolkit.UnexpectedSymbolicValueInVarmap ODEProblem(
+        sys, [x => 2y + 1, y => 2x], (0.0, 1.0); build_initializeprob = false)
+
+    @parameters p q
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ x * p, D(y) ~ y * q], t; guesses = [p => 1.0, q => 2.0])
+    # "unknowns" because they are initialization unknowns
+    @test_warn ["Cycle", "unknowns", "p", "q"] try
+        ODEProblem(sys, [x => 1, y => 2], (0.0, 1.0),
+            [p => 2q, q => 3p]; warn_cyclic_dependency = true)
+    catch
+    end
+    @test_throws ModelingToolkit.UnexpectedSymbolicValueInVarmap ODEProblem(
+        sys, [x => 1, y => 2], (0.0, 1.0), [p => 2q, q => 3p])
+end

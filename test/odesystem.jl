@@ -1467,3 +1467,40 @@ end
     obsfn(buf, prob.u0, prob.p, 0.0)
     @test buf ≈ [1.0, 1.0, 2.0]
 end
+
+@testset "`complete` expands connections" begin
+    using ModelingToolkitStandardLibrary.Electrical
+    @mtkmodel RC begin
+        @parameters begin
+            R = 1.0
+            C = 1.0
+            V = 1.0
+        end
+        @components begin
+            resistor = Resistor(R = R)
+            capacitor = Capacitor(C = C, v = 0.0)
+            source = Voltage()
+            constant = Constant(k = V)
+            ground = Ground()
+        end
+        @equations begin
+            connect(constant.output, source.V)
+            connect(source.p, resistor.p)
+            connect(resistor.n, capacitor.p)
+            connect(capacitor.n, source.n, ground.g)
+        end
+    end
+    @named sys = RC()
+    total_eqs = length(equations(expand_connections(sys)))
+    sys2 = complete(sys)
+    @test length(equations(sys2)) == total_eqs
+end
+
+@testset "`complete` with `split = false` removes the index cache" begin
+    @variables x(t)
+    @parameters p
+    @mtkbuild sys = ODESystem(D(x) ~ p * t, t)
+    @test ModelingToolkit.get_index_cache(sys) !== nothing
+    sys2 = complete(sys; split = false)
+    @test ModelingToolkit.get_index_cache(sys2) === nothing
+end

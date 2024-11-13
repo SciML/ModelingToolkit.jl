@@ -562,11 +562,11 @@ end
     end
 
     @named if_in_sys = InsideTheBlock()
-    if_in_sys = complete(if_in_sys)
+    if_in_sys = complete(if_in_sys; flatten = false)
     @named elseif_in_sys = InsideTheBlock(flag = 2)
-    elseif_in_sys = complete(elseif_in_sys)
+    elseif_in_sys = complete(elseif_in_sys; flatten = false)
     @named else_in_sys = InsideTheBlock(flag = 3)
-    else_in_sys = complete(else_in_sys)
+    else_in_sys = complete(else_in_sys; flatten = false)
 
     @test sort(getname.(parameters(if_in_sys))) == [:eq, :if_parameter]
     @test sort(getname.(parameters(elseif_in_sys))) == [:elseif_parameter, :eq]
@@ -653,13 +653,13 @@ end
     end
 
     @named if_out_sys = OutsideTheBlock(condition = 1)
-    if_out_sys = complete(if_out_sys)
+    if_out_sys = complete(if_out_sys; flatten = false)
     @named elseif_out_sys = OutsideTheBlock(condition = 2)
-    elseif_out_sys = complete(elseif_out_sys)
+    elseif_out_sys = complete(elseif_out_sys; flatten = false)
     @named else_out_sys = OutsideTheBlock(condition = 10)
-    else_out_sys = complete(else_out_sys)
+    else_out_sys = complete(else_out_sys; flatten = false)
     @named ternary_out_sys = OutsideTheBlock(condition = 4)
-    else_out_sys = complete(else_out_sys)
+    else_out_sys = complete(else_out_sys; flatten = false)
 
     @test getname.(parameters(if_out_sys)) == [:if_parameter, :default_parameter]
     @test getname.(parameters(elseif_out_sys)) == [:elseif_parameter, :default_parameter]
@@ -708,10 +708,10 @@ end
     end
 
     @named ternary_true = TernaryBranchingOutsideTheBlock()
-    ternary_true = complete(ternary_true)
+    ternary_true = complete(ternary_true; flatten = false)
 
     @named ternary_false = TernaryBranchingOutsideTheBlock(condition = false)
-    ternary_false = complete(ternary_false)
+    ternary_false = complete(ternary_false; flatten = false)
 
     @test getname.(parameters(ternary_true)) == [:ternary_parameter_true]
     @test getname.(parameters(ternary_false)) == [:ternary_parameter_false]
@@ -758,7 +758,7 @@ end
     end
 
     @named component = Component()
-    component = complete(component)
+    component = complete(component; flatten = false)
 
     @test nameof.(ModelingToolkit.get_systems(component)) == [
         :comprehension_1,
@@ -931,4 +931,51 @@ end
     @test getdefault(main_sys.p1) == 11
     @test getdefault(main_sys.p2) == 12
     @test getdefault(main_sys.v1) == 13
+end
+
+@mtkmodel InnerModel begin
+    @parameters begin
+        p
+    end
+end
+
+@mtkmodel MidModel begin
+    @components begin
+        inmodel = InnerModel()
+    end
+end
+
+@mtkmodel MidModelB begin
+    @parameters begin
+        b
+    end
+    @components begin
+        inmodel_b = InnerModel()
+    end
+end
+
+@mtkmodel OuterModel begin
+    @extend MidModel()
+    @equations begin
+        inmodel.p ~ 0
+    end
+end
+
+# The base system is fetched from the module while extending implicitly. This
+# way of defining fails when defined inside the `@testset`. So, it is moved out.
+@testset "Test unpacking of components in implicit extend" begin
+    @named out = OuterModel()
+    @test OuterModel.structure[:extend][1] == [:inmodel]
+end
+
+@mtkmodel MultipleExtend begin
+    @extend MidModel()
+    @extend MidModelB()
+end
+
+@testset "Multiple extend statements" begin
+    @named multiple_extend = MultipleExtend()
+    @test collect(nameof.(multiple_extend.systems)) == [:inmodel_b, :inmodel]
+    @test MultipleExtend.structure[:extend][1] == [:inmodel, :b, :inmodel_b]
+    @test tosymbol.(parameters(multiple_extend)) == [:b, :inmodel_b₊p, :inmodel₊p]
 end

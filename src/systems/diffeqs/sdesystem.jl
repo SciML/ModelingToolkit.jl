@@ -80,6 +80,10 @@ struct SDESystem <: AbstractODESystem
     """
     name::Symbol
     """
+    A description of the system.
+    """
+    description::String
+    """
     The internal systems. These are required to have unique names.
     """
     systems::Vector{SDESystem}
@@ -142,7 +146,7 @@ struct SDESystem <: AbstractODESystem
     function SDESystem(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed,
             tgrad,
             jac,
-            ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
+            ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, connector_type,
             cevents, devents, parameter_dependencies, metadata = nothing, gui_metadata = nothing,
             complete = false, index_cache = nothing, parent = nothing, is_scalar_noise = false,
             is_dde = false,
@@ -168,7 +172,8 @@ struct SDESystem <: AbstractODESystem
         end
         new(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac,
-            Wfact, Wfact_t, name, systems, defaults, connector_type, cevents, devents,
+            Wfact, Wfact_t, name, description, systems,
+            defaults, connector_type, cevents, devents,
             parameter_dependencies, metadata, gui_metadata, complete, index_cache, parent, is_scalar_noise,
             is_dde, isscheduled)
     end
@@ -183,6 +188,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
         name = nothing,
+        description = "",
         connector_type = nothing,
         checks = true,
         continuous_events = nothing,
@@ -234,7 +240,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
     end
     SDESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, neqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
-        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
+        ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, connector_type,
         cont_callbacks, disc_callbacks, parameter_dependencies, metadata, gui_metadata,
         complete, index_cache, parent, is_scalar_noise, is_dde; checks = checks)
 end
@@ -296,7 +302,11 @@ function generate_diffusion_function(sys::SDESystem, dvs = unknowns(sys),
         (map(x -> time_varying_as_func(value(x), sys), ps),)
     end
     if isdde
-        return build_function(eqs, u, DDE_HISTORY_FUN, p..., get_iv(sys); kwargs...)
+        return build_function(eqs, u, DDE_HISTORY_FUN, p..., get_iv(sys); kwargs...,
+            wrap_code = get(kwargs, :wrap_code, identity) .∘
+                        wrap_mtkparameters(sys, false, 3) .∘
+                        wrap_array_vars(sys, eqs; dvs, ps, history = true) .∘
+                        wrap_parameter_dependencies(sys, false))
     else
         return build_function(eqs, u, p..., get_iv(sys); kwargs...)
     end
@@ -349,7 +359,8 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
     end
 
     SDESystem(deqs, get_noiseeqs(sys), get_iv(sys), unknowns(sys), parameters(sys),
-        name = name, parameter_dependencies = parameter_dependencies(sys), checks = false)
+        name = name, description = description(sys),
+        parameter_dependencies = parameter_dependencies(sys), checks = false)
 end
 
 """
@@ -457,7 +468,8 @@ function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
     # return modified SDE System
     SDESystem(deqs, noiseeqs, get_iv(sys), unknown_vars, parameters(sys);
         defaults = Dict(θ => θ0), observed = [weight ~ θ / θ0],
-        name = name, parameter_dependencies = parameter_dependencies(sys),
+        name = name, description = description(sys),
+        parameter_dependencies = parameter_dependencies(sys),
         checks = false)
 end
 

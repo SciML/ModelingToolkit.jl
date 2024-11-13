@@ -498,6 +498,7 @@ end
 Substitutions(subs, deps) = Substitutions(subs, deps, nothing)
 
 Base.nameof(sys::AbstractSystem) = getfield(sys, :name)
+description(sys::AbstractSystem) = has_description(sys) ? get_description(sys) : ""
 
 #Deprecated
 function independent_variable(sys::AbstractSystem)
@@ -917,23 +918,35 @@ Mark a system as completed. A completed system is a system which is done being
 defined/modified and is ready for structural analysis or other transformations.
 This allows for analyses and optimizations to be performed which require knowing
 the global structure of the system.
-        
+
 One property to note is that if a system is complete, the system will no longer
 namespace its subsystems or variables, i.e. `isequal(complete(sys).v.i, v.i)`.
 """
-function complete(sys::AbstractSystem; split = true)
-    if !(sys isa JumpSystem)
-        newunknowns = OrderedSet()
-        newparams = OrderedSet()
-        iv = has_iv(sys) ? get_iv(sys) : nothing
-        collect_scoped_vars!(newunknowns, newparams, sys, iv; depth = -1)
-        # don't update unknowns to not disturb `structural_simplify` order
-        # `GlobalScope`d unknowns will be picked up and added there
-        @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
+function complete(sys::AbstractSystem; split = true, flatten = true)
+    newunknowns = OrderedSet()
+    newparams = OrderedSet()
+    iv = has_iv(sys) ? get_iv(sys) : nothing
+    collect_scoped_vars!(newunknowns, newparams, sys, iv; depth = -1)
+    # don't update unknowns to not disturb `structural_simplify` order
+    # `GlobalScope`d unknowns will be picked up and added there
+    @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
+
+    if flatten
+        eqs = equations(sys)
+        if eqs isa AbstractArray && eltype(eqs) <: Equation
+            newsys = expand_connections(sys)
+        else
+            newsys = sys
+        end
+        newsys = ModelingToolkit.flatten(newsys)
+        if has_parent(newsys) && get_parent(sys) === nothing
+            @set! newsys.parent = complete(sys; split = false, flatten = false)
+        end
+        sys = newsys
     end
     if split && has_index_cache(sys)
         @set! sys.index_cache = IndexCache(sys)
-        all_ps = parameters(sys)
+        all_ps = get_ps(sys)
         if !isempty(all_ps)
             # reorder parameters by portions
             ps_split = reorder_parameters(sys, all_ps)
@@ -971,6 +984,8 @@ function complete(sys::AbstractSystem; split = true)
             end
             @set! sys.ps = ordered_ps
         end
+    elseif has_index_cache(sys)
+        @set! sys.index_cache = nothing
     end
     if isdefined(sys, :initializesystem) && get_initializesystem(sys) !== nothing
         @set! sys.initializesystem = complete(get_initializesystem(sys); split)
@@ -986,6 +1001,7 @@ for prop in [:eqs
              :ps
              :tspan
              :name
+             :description
              :var_to_name
              :ctrls
              :defaults
@@ -1102,6 +1118,9 @@ function Base.propertynames(sys::AbstractSystem; private = false)
     if private
         return fieldnames(typeof(sys))
     else
+        if has_parent(sys) && (parent = get_parent(sys); parent !== nothing)
+            sys = parent
+        end
         names = Symbol[]
         for s in get_systems(sys)
             push!(names, getname(s))
@@ -1144,26 +1163,20 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
         avs = get_var_to_name(sys)
         v = get(avs, name, nothing)
         v === nothing || return namespace ? renamespace(sys, v) : v
-    else
-        sts = get_unknowns(sys)
-        i = findfirst(x -> getname(x) == name, sts)
-        if i !== nothing
-            return namespace ? renamespace(sys, sts[i]) : sts[i]
-        end
-
-        if has_ps(sys)
-            ps = get_ps(sys)
-            i = findfirst(x -> getname(x) == name, ps)
-            if i !== nothing
-                return namespace ? renamespace(sys, ps[i]) : ps[i]
-            end
-        end
     end
 
     sts = get_unknowns(sys)
     i = findfirst(x -> getname(x) == name, sts)
     if i !== nothing
         return namespace ? renamespace(sys, sts[i]) : sts[i]
+    end
+
+    if has_ps(sys)
+        ps = get_ps(sys)
+        i = findfirst(x -> getname(x) == name, ps)
+        if i !== nothing
+            return namespace ? renamespace(sys, ps[i]) : ps[i]
+        end
     end
 
     if has_observed(sys)
@@ -1855,8 +1868,14 @@ function get_or_construct_tearing_state(sys)
     state
 end
 
-# TODO: what about inputs?
-function n_extra_equations(sys::AbstractSystem)
+"""
+    n_expanded_connection_equations(sys::AbstractSystem)
+
+Returns the number of equations that the connections in `sys` expands to.
+Equivalent to `length(equations(expand_connections(sys))) - length(filter(eq -> !(eq.lhs isa Connection), equations(sys)))`.
+"""
+function n_expanded_connection_equations(sys::AbstractSystem)
+    # TODO: what about inputs?
     isconnector(sys) && return length(get_unknowns(sys))
     sys, (csets, _) = generate_connection_set(sys)
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
@@ -1883,84 +1902,90 @@ function n_extra_equations(sys::AbstractSystem)
     nextras = n_outer_stream_variables + length(ceqs)
 end
 
-function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem)
+function Base.show(
+        io::IO, mime::MIME"text/plain", sys::AbstractSystem; hint = true, bold = true)
+    limit = get(io, :limit, false) # if output should be limited,
+    rows = first(displaysize(io)) ÷ 5 # then allocate ≈1/5 of display height to each list
+
+    # Print name and description
+    desc = description(sys)
+    name = nameof(sys)
+    printstyled(io, "Model ", name, ":"; bold)
+    !isempty(desc) && print(io, " ", desc)
+
+    # Print subsystems
+    subs = get_systems(sys)
+    nsubs = length(subs)
+    nrows = min(nsubs, limit ? rows : nsubs)
+    nrows > 0 && printstyled(io, "\nSubsystems ($(nsubs)):"; bold)
+    nrows > 0 && hint && print(io, " see hierarchy($name)")
+    for i in 1:nrows
+        sub = subs[i]
+        name = String(nameof(sub))
+        print(io, "\n  ", name)
+        desc = description(sub)
+        if !isempty(desc)
+            maxlen = displaysize(io)[2] - length(name) - 6 # remaining length of line
+            if limit && length(desc) > maxlen
+                desc = chop(desc, tail = length(desc) - maxlen) * "…" # too long
+            end
+            print(io, ": ", desc)
+        end
+    end
+    limited = nrows < nsubs
+    limited && print(io, "\n  ⋮") # too many to print
+
+    # Print equations
     eqs = equations(sys)
-    vars = unknowns(sys)
-    nvars = length(vars)
     if eqs isa AbstractArray && eltype(eqs) <: Equation
         neqs = count(eq -> !(eq.lhs isa Connection), eqs)
-        Base.printstyled(io, "Model $(nameof(sys)) with $neqs "; bold = true)
-        nextras = n_extra_equations(sys)
-        if nextras > 0
-            Base.printstyled(io, "("; bold = true)
-            Base.printstyled(io, neqs + nextras; bold = true, color = :magenta)
-            Base.printstyled(io, ") "; bold = true)
-        end
-        Base.printstyled(io, "equations\n"; bold = true)
-    else
-        Base.printstyled(io, "Model $(nameof(sys))\n"; bold = true)
+        next = n_expanded_connection_equations(sys)
+        ntot = neqs + next
+        ntot > 0 && printstyled(io, "\nEquations ($ntot):"; bold)
+        neqs > 0 && print(io, "\n  $neqs standard", hint ? ": see equations($name)" : "")
+        next > 0 && print(io, "\n  $next connecting",
+            hint ? ": see equations(expand_connections($name))" : "")
+        #Base.print_matrix(io, eqs) # usually too long and not useful to print all equations
     end
-    # The reduced equations are usually very long. It's not that useful to print
-    # them.
-    #Base.print_matrix(io, eqs)
-    #println(io)
 
-    rows = first(displaysize(io)) ÷ 5
-    limit = get(io, :limit, false)
-
-    Base.printstyled(io, "Unknowns ($nvars):"; bold = true)
-    nrows = min(nvars, limit ? rows : nvars)
-    limited = nrows < length(vars)
-    defs = has_defaults(sys) ? defaults(sys) : nothing
-    for i in 1:nrows
-        s = vars[i]
-        print(io, "\n  ", s)
-
-        if defs !== nothing
-            val = get(defs, s, nothing)
-            if val !== nothing
-                print(io, " [defaults to ")
-                show(
-                    IOContext(io, :compact => true, :limit => true,
-                        :displaysize => (1, displaysize(io)[2])),
-                    val)
-                print(io, "]")
+    # Print variables
+    for varfunc in [unknowns, parameters]
+        vars = varfunc(sys)
+        nvars = length(vars)
+        nvars == 0 && continue # skip
+        header = titlecase(String(nameof(varfunc))) # e.g. "Unknowns"
+        printstyled(io, "\n$header ($nvars):"; bold)
+        hint && print(io, " see $(nameof(varfunc))($name)")
+        nrows = min(nvars, limit ? rows : nvars)
+        defs = has_defaults(sys) ? defaults(sys) : nothing
+        for i in 1:nrows
+            s = vars[i]
+            print(io, "\n  ", s)
+            if !isnothing(defs)
+                val = get(defs, s, nothing)
+                if !isnothing(val)
+                    print(io, " [defaults to ")
+                    show(
+                        IOContext(io, :compact => true, :limit => true,
+                            :displaysize => (1, displaysize(io)[2])),
+                        val)
+                    print(io, "]")
+                end
+                desc = getdescription(s)
             end
-            description = getdescription(s)
-            if description !== nothing && description != ""
-                print(io, ": ", description)
+            if !isnothing(desc) && desc != ""
+                print(io, ": ", desc)
             end
         end
+        limited = nrows < nvars
+        limited && printstyled(io, "\n  ⋮") # too many variables to print
     end
-    limited && print(io, "\n⋮")
-    println(io)
 
-    vars = parameters(sys)
-    nvars = length(vars)
-    Base.printstyled(io, "Parameters ($nvars):"; bold = true)
-    nrows = min(nvars, limit ? rows : nvars)
-    limited = nrows < length(vars)
-    for i in 1:nrows
-        s = vars[i]
-        print(io, "\n  ", s)
+    # Print observed
+    nobs = has_observed(sys) ? length(observed(sys)) : 0
+    nobs > 0 && printstyled(io, "\nObserved ($nobs):"; bold)
+    nobs > 0 && hint && print(io, " see observed($name)")
 
-        if defs !== nothing
-            val = get(defs, s, nothing)
-            if val !== nothing
-                print(io, " [defaults to ")
-                show(
-                    IOContext(io, :compact => true, :limit => true,
-                        :displaysize => (1, displaysize(io)[2])),
-                    val)
-                print(io, "]")
-            end
-            description = getdescription(s)
-            if description !== nothing && description != ""
-                print(io, ": ", description)
-            end
-        end
-    end
-    limited && print(io, "\n⋮")
     return nothing
 end
 
@@ -2901,12 +2926,23 @@ function Base.showerror(io::IO, e::HybridSystemNotSupportedException)
     print(io, "HybridSystemNotSupportedException: ", e.msg)
 end
 
-function AbstractTrees.children(sys::ModelingToolkit.AbstractSystem)
+function AbstractTrees.children(sys::AbstractSystem)
     ModelingToolkit.get_systems(sys)
 end
-function AbstractTrees.printnode(io::IO, sys::ModelingToolkit.AbstractSystem)
-    print(io, nameof(sys))
+function AbstractTrees.printnode(
+        io::IO, sys::AbstractSystem; describe = false, bold = false)
+    printstyled(io, nameof(sys); bold)
+    describe && !isempty(description(sys)) && print(io, ": ", description(sys))
 end
+"""
+    hierarchy(sys::AbstractSystem; describe = false, bold = describe, kwargs...)
+
+Print a tree of a system's hierarchy of subsystems.
+"""
+function hierarchy(sys::AbstractSystem; describe = false, bold = describe, kwargs...)
+    print_tree(sys; printnode_kw = (describe = describe, bold = bold), kwargs...)
+end
+
 function Base.IteratorEltype(::Type{<:TreeIterator{ModelingToolkit.AbstractSystem}})
     Base.HasEltype()
 end
@@ -2961,12 +2997,13 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Extend the `basesys` with `sys`, the resulting system would inherit `sys`'s name
-by default.
+Extend `basesys` with `sys`.
+By default, the resulting system inherits `sys`'s name and description.
 
 See also [`compose`](@ref).
 """
-function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nameof(sys),
+function extend(sys::AbstractSystem, basesys::AbstractSystem;
+        name::Symbol = nameof(sys), description = description(sys),
         gui_metadata = get_gui_metadata(sys))
     T = SciMLBase.parameterless_type(basesys)
     ivs = independent_variables(basesys)
@@ -2994,7 +3031,7 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
     args = length(ivs) == 0 ? (eqs, sts, ps) : (eqs, ivs[1], sts, ps)
     kwargs = (parameter_dependencies = dep_ps, observed = obs, continuous_events = cevs,
         discrete_events = devs, defaults = defs, systems = syss, metadata = meta,
-        name = name, gui_metadata = gui_metadata)
+        name = name, description = description, gui_metadata = gui_metadata)
 
     # collect fields specific to some system types
     if basesys isa ODESystem
@@ -3006,8 +3043,17 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
     return T(args...; kwargs...)
 end
 
-function Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nameof(sys))
-    extend(sys, basesys; name = name)
+function extend(sys, basesys::Vector{T}) where {T <: AbstractSystem}
+    foldl(extend, basesys, init = sys)
+end
+
+function Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; kwargs...)
+    extend(sys, basesys; kwargs...)
+end
+
+function Base.:(&)(
+        sys::AbstractSystem, basesys::Vector{T}; kwargs...) where {T <: AbstractSystem}
+    extend(sys, basesys; kwargs...)
 end
 
 """

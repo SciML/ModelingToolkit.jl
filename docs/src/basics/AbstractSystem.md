@@ -63,6 +63,7 @@ Optionally, a system could have:
   - `get_defaults(sys)`: A `Dict` that maps variables into their default values
     for the current-level system.
   - `get_noiseeqs(sys)`: Noise equations of the current-level system.
+  - `get_description(sys)`: A string that describes what a system represents.
   - `get_metadata(sys)`: Any metadata about the system or its origin to be used by downstream packages.
 
 Note that if you know a system is an `AbstractTimeDependentSystem` you could use `get_iv` to get the
