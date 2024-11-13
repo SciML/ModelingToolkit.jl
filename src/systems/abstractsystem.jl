@@ -818,6 +818,8 @@ function SymbolicIndexingInterface.is_observed(sys::AbstractSystem, sym)
            !is_independent_variable(sys, sym) && symbolic_type(sym) != NotSymbolic()
 end
 
+SymbolicIndexingInterface.supports_tuple_observed(::AbstractSystem) = true
+
 function SymbolicIndexingInterface.observed(
         sys::AbstractSystem, sym; eval_expression = false, eval_module = @__MODULE__)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
@@ -827,7 +829,8 @@ function SymbolicIndexingInterface.observed(
                 throw(ArgumentError("Symbol $sym does not exist in the system"))
             end
             sym = _sym
-        elseif sym isa AbstractArray && symbolic_type(sym) isa NotSymbolic &&
+        elseif (sym isa Tuple ||
+                (sym isa AbstractArray && symbolic_type(sym) isa NotSymbolic)) &&
                any(x -> x isa Symbol, sym)
             sym = map(sym) do s
                 if s isa Symbol

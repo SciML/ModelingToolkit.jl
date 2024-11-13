@@ -427,6 +427,10 @@ function build_explicit_observed_function(sys, ts;
         param_only = false,
         op = Operator,
         throw = true)
+    is_tuple = ts isa Tuple
+    if is_tuple
+        ts = collect(ts)
+    end
     if (isscalar = symbolic_type(ts) !== NotSymbolic())
         ts = [ts]
     end
@@ -573,9 +577,16 @@ function build_explicit_observed_function(sys, ts;
 
     # Need to keep old method of building the function since it uses `output_type`,
     # which can't be provided to `build_function`
+    return_value = if isscalar
+        ts[1]
+    elseif is_tuple
+        MakeTuple(Tuple(ts))
+    else
+        MakeArray(ts, output_type)
+    end
     oop_fn = Func(args, [],
                  pre(Let(obsexprs,
-                     isscalar ? ts[1] : MakeArray(ts, output_type),
+                     return_value,
                      false))) |> array_wrapper[1] |> oop_mtkp_wrapper |> toexpr
     oop_fn = expression ? oop_fn : eval_or_rgf(oop_fn; eval_expression, eval_module)
 
