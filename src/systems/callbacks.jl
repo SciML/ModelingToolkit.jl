@@ -922,18 +922,11 @@ function generate_vector_rootfinding_callback(
                 (cb, fn) -> begin
                     if (save_idxs = get(ic.callback_to_clocks, cb, nothing)) !== nothing
                         let save_idxs = save_idxs
-                            if !isnothing(fn.initialize)
-                                (i) -> begin
-                                    fn.initialize(i)
-                                    for idx in save_idxs
-                                        SciMLBase.save_discretes!(i, idx)
-                                    end
-                                end
-                            else
-                                (i) -> begin
-                                    for idx in save_idxs
-                                        SciMLBase.save_discretes!(i, idx)
-                                    end
+                            custom_init = fn.initialize
+                            (i) -> begin
+                                isnothing(custom_init) && custom_init(i)
+                                for idx in save_idxs
+                                    SciMLBase.save_discretes!(i, idx)
                                 end
                             end
                         end
