@@ -918,24 +918,21 @@ function generate_vector_rootfinding_callback(
     initialize = nothing
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         initialize = handle_optional_setup_fn(
-            map(
-                (cb, fn) -> begin
-                    if (save_idxs = get(ic.callback_to_clocks, cb, nothing)) !== nothing
-                        let save_idxs = save_idxs
-                            custom_init = fn.initialize
-                            (i) -> begin
-                                isnothing(custom_init) && custom_init(i)
-                                for idx in save_idxs
-                                    SciMLBase.save_discretes!(i, idx)
-                                end
+            map(cbs, affect_functions) do cb, fn
+                if (save_idxs = get(ic.callback_to_clocks, cb, nothing)) !== nothing
+                    let save_idxs = save_idxs
+                        custom_init = fn.initialize
+                        (i) -> begin
+                            isnothing(custom_init) && custom_init(i)
+                            for idx in save_idxs
+                                SciMLBase.save_discretes!(i, idx)
                             end
                         end
-                    else
-                        fn.initialize
                     end
-                end,
-                cbs,
-                affect_functions),
+                else
+                    fn.initialize
+                end
+            end,
             SciMLBase.INITIALIZE_DEFAULT)
 
     else
