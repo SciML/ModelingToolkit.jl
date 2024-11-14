@@ -1122,7 +1122,7 @@ function Base.propertynames(sys::AbstractSystem; private = false)
         return fieldnames(typeof(sys))
     else
         if has_parent(sys) && (parent = get_parent(sys); parent !== nothing)
-            sys = parent
+            return propertynames(parent; private)
         end
         names = Symbol[]
         for s in get_systems(sys)
@@ -1144,7 +1144,7 @@ end
 
 function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
     if has_parent(sys) && (parent = get_parent(sys); parent !== nothing)
-        sys = parent
+        return getproperty(parent, name; namespace)
     end
     wrap(getvar(sys, name; namespace = namespace))
 end

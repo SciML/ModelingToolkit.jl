@@ -350,3 +350,23 @@ end
     @test_throws ArgumentError simp.inner₊p
     @test_throws ArgumentError outer.inner₊p
 end
+
+@testset "`getproperty` on `structural_simplify(complete(sys))`" begin
+    @mtkmodel Foo begin
+        @variables begin
+            x(t)
+        end
+    end
+    @mtkmodel Bar begin
+        @components begin
+            foo = Foo()
+        end
+        @equations begin
+            D(foo.x) ~ foo.x
+        end
+    end
+    @named bar = Bar()
+    cbar = complete(bar)
+    ss = structural_simplify(cbar)
+    @test isequal(cbar.foo.x, ss.foo.x)
+end
