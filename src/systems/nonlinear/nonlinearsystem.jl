@@ -535,6 +535,117 @@ function DiffEqBase.NonlinearLeastSquaresProblem{iip}(sys::NonlinearSystem, u0ma
     NonlinearLeastSquaresProblem{iip}(f, u0, p; filter_kwargs(kwargs)...)
 end
 
+struct CacheWriter{F}
+    fn::F
+end
+
+function (cw::CacheWriter)(p, sols)
+    cw.fn(p.caches[1], sols, p...)
+end
+
+function CacheWriter(sys::AbstractSystem, exprs, solsyms;
+        eval_expression = false, eval_module = @__MODULE__)
+    ps = parameters(sys)
+    rps = reorder_parameters(sys, ps)
+    fn = Func(
+             [:out, DestructuredArgs(DestructuredArgs.(solsyms)),
+                 DestructuredArgs.(rps)...],
+             [],
+             SetArray(true, :out, exprs)
+         ) |> wrap_parameter_dependencies(sys, false)[2] |>
+         wrap_array_vars(sys, exprs; dvs = nothing)[2] |> toexpr
+    return CacheWriter(eval_or_rgf(fn; eval_expression, eval_module))
+end
+
+struct SCCNonlinearFunction{iip} end
+
+function SCCNonlinearFunction{iip}(
+        sys::NonlinearSystem, vscc, escc, cachesyms; eval_expression = false,
+        eval_module = @__MODULE__, kwargs...) where {iip}
+    dvs = unknowns(sys)
+    ps = parameters(sys)
+    rps = reorder_parameters(sys, ps)
+    eqs = equations(sys)
+    obs = observed(sys)
+
+    _dvs = dvs[vscc]
+    _eqs = eqs[escc]
+    obsidxs = observed_equations_used_by(sys, _eqs)
+    _obs = obs[obsidxs]
+
+    cmap, cs = get_cmap(sys)
+    assignments = [eq.lhs ← eq.rhs for eq in cmap]
+    rhss = [eq.rhs - eq.lhs for eq in _eqs]
+    wrap_code = wrap_assignments(false, assignments) .∘
+                (wrap_array_vars(sys, rhss; dvs = _dvs, cachesyms)) .∘
+                wrap_parameter_dependencies(sys, false)
+    @show _dvs
+    f_gen = build_function(
+        rhss, _dvs, ps..., cachesyms...; wrap_code, expression = Val{true})
+    f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
+
+    f(u, p) = f_oop(u, p)
+    f(u, p::MTKParameters) = f_oop(u, p...)
+    f(resid, u, p) = f_iip(resid, u, p)
+    f(resid, u, p::MTKParameters) = f_iip(resid, u, p...)
+
+    return NonlinearFunction{iip}(f)
+end
+
+function SciMLBase.SCCNonlinearProblem(sys::NonlinearSystem, args...; kwargs...)
+    SCCNonlinearProblem{true}(sys, args...; kwargs...)
+end
+
+function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
+        parammap = SciMLBase.NullParameters(); eval_expression = false, eval_module = @__MODULE__, kwargs...) where {iip}
+    if !iscomplete(sys) || get_tearing_state(sys) === nothing
+        error("A simplified `NonlinearSystem` is required. Call `structural_simplify` on the system before creating an `SCCNonlinearProblem`.")
+    end
+
+    if !is_split(sys)
+        error("The system has been simplified with `split = false`. `SCCNonlinearProblem` is not compatible with this system. Pass `split = true` to `structural_simplify` to use `SCCNonlinearProblem`.")
+    end
+
+    ts = get_tearing_state(sys)
+    var_eq_matching, var_sccs = StructuralTransformations.algebraic_variables_scc(ts)
+    condensed_graph = StructuralTransformations.MatchedCondensationGraph(
+        StructuralTransformations.DiCMOBiGraph{true}(ts.structure.graph, var_eq_matching),
+        var_sccs)
+    toporder = topological_sort_by_dfs(condensed_graph)
+    var_sccs = var_sccs[toporder]
+    eq_sccs = map(Base.Fix1(getindex, var_eq_matching), var_sccs)
+
+    dvs = unknowns(sys)
+    ps = parameters(sys)
+    eqs = equations(sys)
+    obs = observed(sys)
+
+    _, u0, p = process_SciMLProblem(
+        EmptySciMLFunction, sys, u0map, parammap; eval_expression, eval_module, kwargs...)
+    p = rebuild_with_caches(p, BufferTemplate(eltype(u0), length(u0)))
+
+    subprobs = []
+    explicitfuns = []
+    for (i, (escc, vscc)) in enumerate(zip(eq_sccs, var_sccs))
+        oldvars = dvs[reduce(vcat, view(var_sccs, 1:(i - 1)); init = Int[])]
+        if isempty(oldvars)
+            push!(explicitfuns, (_...) -> nothing)
+        else
+            solsyms = getindex.((dvs,), view(var_sccs, 1:(i - 1)))
+            push!(explicitfuns,
+                CacheWriter(sys, oldvars, solsyms; eval_expression, eval_module))
+        end
+        prob = NonlinearProblem(
+            SCCNonlinearFunction{iip}(
+                sys, vscc, escc, (oldvars,); eval_expression, eval_module, kwargs...),
+            u0[vscc],
+            p)
+        push!(subprobs, prob)
+    end
+
+    return SCCNonlinearProblem(subprobs, explicitfuns)
+end
+
 """
 $(TYPEDSIGNATURES)
 

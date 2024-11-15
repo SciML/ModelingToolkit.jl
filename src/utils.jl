@@ -1007,3 +1007,50 @@ function is_variable_floatingpoint(sym)
     return T == Real || T <: AbstractFloat || T <: AbstractArray{Real} ||
            T <: AbstractArray{<:AbstractFloat}
 end
+
+function observed_dependency_graph(eqs::Vector{Equation})
+    for eq in eqs
+        if symbolic_type(eq.lhs) == NotSymbolic()
+            error("All equations must be observed equations of the form `var ~ expr`. Got $eq")
+        end
+    end
+
+    idxmap = Dict(eq.lhs => i for (i, eq) in enumerate(eqs))
+    g = SimpleDiGraph(length(eqs))
+
+    syms = Set()
+    for (i, eq) in enumerate(eqs)
+        vars!(syms, eq)
+        for sym in syms
+            idx = get(idxmap, sym, nothing)
+            idx === nothing && continue
+            add_edge!(g, i, idx)
+        end
+    end
+
+    return g
+end
+
+function observed_equations_used_by(sys::AbstractSystem, exprs)
+    obs = observed(sys)
+
+    obsvars = getproperty.(obs, :lhs)
+    graph = observed_dependency_graph(obs)
+
+    syms = vars(exprs)
+
+    obsidxs = BitSet()
+    for sym in syms
+        idx = findfirst(isequal(sym), obsvars)
+        idx === nothing && continue
+        parents = dfs_parents(graph, idx)
+        for i in eachindex(parents)
+            parents[i] == 0 && continue
+            push!(obsidxs, i)
+        end
+    end
+
+    obsidxs = collect(obsidxs)
+    sort!(obsidxs)
+    return obsidxs
+end

@@ -162,11 +162,12 @@ object.
 """
 function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys),
         ps = parameters(sys); wrap_code = nothing, postprocess_fbody = nothing, states = nothing,
-        expression = Val{true}, eval_expression = false, eval_module = @__MODULE__, kwargs...)
+        expression = Val{true}, eval_expression = false, eval_module = @__MODULE__,
+        cachesyms::Tuple = (), kwargs...)
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system.")
     end
-    p = reorder_parameters(sys, unwrap.(ps))
+    p = (reorder_parameters(sys, unwrap.(ps))..., cachesyms...)
     isscalar = !(exprs isa AbstractArray)
     if wrap_code === nothing
         wrap_code = isscalar ? identity : (identity, identity)
@@ -187,7 +188,7 @@ function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys
             postprocess_fbody,
             states,
             wrap_code = wrap_code .∘ wrap_mtkparameters(sys, isscalar) .∘
-                        wrap_array_vars(sys, exprs; dvs) .∘
+                        wrap_array_vars(sys, exprs; dvs, cachesyms) .∘
                         wrap_parameter_dependencies(sys, isscalar),
             expression = Val{true}
         )
@@ -199,7 +200,7 @@ function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys
             postprocess_fbody,
             states,
             wrap_code = wrap_code .∘ wrap_mtkparameters(sys, isscalar) .∘
-                        wrap_array_vars(sys, exprs; dvs) .∘
+                        wrap_array_vars(sys, exprs; dvs, cachesyms) .∘
                         wrap_parameter_dependencies(sys, isscalar),
             expression = Val{true}
         )
@@ -231,116 +232,51 @@ end
 
 function wrap_array_vars(
         sys::AbstractSystem, exprs; dvs = unknowns(sys), ps = parameters(sys),
-        inputs = nothing, history = false)
+        inputs = nothing, history = false, cachesyms::Tuple = ())
     isscalar = !(exprs isa AbstractArray)
-    array_vars = Dict{Any, AbstractArray{Int}}()
-    if dvs !== nothing
-        for (j, x) in enumerate(dvs)
-            if iscall(x) && operation(x) == getindex
-                arg = arguments(x)[1]
-                inds = get!(() -> Int[], array_vars, arg)
-                push!(inds, j)
-            end
-        end
-        for (k, inds) in array_vars
-            if inds == (inds′ = inds[1]:inds[end])
-                array_vars[k] = inds′
-            end
-        end
+    var_to_arridxs = Dict()
 
-        uind = 1
-    else
+    if dvs === nothing
         uind = 0
-    end
-    # values are (indexes, index of buffer, size of parameter)
-    array_parameters = Dict{Any, Tuple{AbstractArray{Int}, Int, Tuple{Vararg{Int}}}}()
-    # If for some reason different elements of an array parameter are in different buffers
-    other_array_parameters = Dict{Any, Any}()
-
-    hasinputs = inputs !== nothing
-    input_vars = Dict{Any, AbstractArray{Int}}()
-    if hasinputs
-        for (j, x) in enumerate(inputs)
-            if iscall(x) && operation(x) == getindex
-                arg = arguments(x)[1]
-                inds = get!(() -> Int[], input_vars, arg)
-                push!(inds, j)
-            end
-        end
-        for (k, inds) in input_vars
-            if inds == (inds′ = inds[1]:inds[end])
-                input_vars[k] = inds′
-            end
-        end
-    end
-    if has_index_cache(sys)
-        ic = get_index_cache(sys)
     else
-        ic = nothing
-    end
-    if ps isa Tuple && eltype(ps) <: AbstractArray
-        ps = Iterators.flatten(ps)
-    end
-    for p in ps
-        p = unwrap(p)
-        if iscall(p) && operation(p) == getindex
-            p = arguments(p)[1]
+        uind = 1
+        for (i, x) in enumerate(dvs)
+            iscall(x) && operation(x) == getindex || continue
+            arg = arguments(x)[1]
+            inds = get!(() -> [], var_to_arridxs, arg)
+            push!(inds, (uind, i))
         end
-        symtype(p) <: AbstractArray && Symbolics.shape(p) != Symbolics.Unknown() || continue
-        scal = collect(p)
-        # all scalarized variables are in `ps`
-        any(isequal(p), ps) || all(x -> any(isequal(x), ps), scal) || continue
-        (haskey(array_parameters, p) || haskey(other_array_parameters, p)) && continue
-
-        idx = parameter_index(sys, p)
-        idx isa Int && continue
-        if idx isa ParameterIndex
-            if idx.portion != SciMLStructures.Tunable()
+    end
+    p_start = uind + 1 + (inputs !== nothing) + history
+    input_ind = inputs === nothing ? -1 : (p_start - 1)
+    rps = (reorder_parameters(sys, ps)..., cachesyms...)
+    for sym in reduce(vcat, rps; init = [])
+        iscall(sym) && operation(sym) == getindex || continue
+        arg = arguments(sym)[1]
+        if inputs !== nothing
+            idx = findfirst(isequal(sym), inputs)
+            if idx !== nothing
+                inds = get!(() -> [], var_to_arridxs, arg)
+                push!(inds, (input_ind, idx))
                 continue
             end
-            array_parameters[p] = (vec(idx.idx), 1, size(idx.idx))
-        else
-            # idx === nothing
-            idxs = map(Base.Fix1(parameter_index, sys), scal)
-            if first(idxs) isa ParameterIndex
-                buffer_idxs = map(Base.Fix1(iterated_buffer_index, ic), idxs)
-                if allequal(buffer_idxs)
-                    buffer_idx = first(buffer_idxs)
-                    if first(idxs).portion == SciMLStructures.Tunable()
-                        idxs = map(x -> x.idx, idxs)
-                    else
-                        idxs = map(x -> x.idx[end], idxs)
-                    end
-                else
-                    other_array_parameters[p] = scal
-                    continue
-                end
-            else
-                buffer_idx = 1
-            end
-
-            sz = size(idxs)
-            if vec(idxs) == idxs[begin]:idxs[end]
-                idxs = idxs[begin]:idxs[end]
-            elseif vec(idxs) == idxs[begin]:-1:idxs[end]
-                idxs = idxs[begin]:-1:idxs[end]
-            end
-            idxs = vec(idxs)
-            array_parameters[p] = (idxs, buffer_idx, sz)
         end
+        bufferidx = findfirst(buf -> any(isequal(sym), buf), rps)
+        idxinbuffer = findfirst(isequal(sym), rps[bufferidx])
+        inds = get!(() -> [], var_to_arridxs, arg)
+        push!(inds, (p_start + bufferidx - 1, idxinbuffer))
     end
 
-    inputind = if history
-        uind + 2
-    else
-        uind + 1
-    end
-    params_offset = if history && hasinputs
-        uind + 2
-    elseif history || hasinputs
-        uind + 1
-    else
-        uind
+    viewsyms = Dict()
+    splitsyms = Dict()
+    for (arrsym, idxs) in var_to_arridxs
+        length(idxs) == length(arrsym) || continue
+        # allequal(first, idxs) is a 1.11 feature
+        if allequal(Iterators.map(first, idxs))
+            viewsyms[arrsym] = (first(first(idxs)), reshape(last.(idxs), size(arrsym)))
+        else
+            splitsyms[arrsym] = reshape(idxs, size(arrsym))
+        end
     end
     if isscalar
         function (expr)
@@ -349,15 +285,11 @@ function wrap_array_vars(
                 [],
                 Let(
                     vcat(
-                        [k ← :(view($(expr.args[uind].name), $v)) for (k, v) in array_vars],
-                        [k ← :(view($(expr.args[inputind].name), $v))
-                         for (k, v) in input_vars],
-                        [k ← :(reshape(
-                             view($(expr.args[params_offset + buffer_idx].name), $idxs),
-                             $sz))
-                         for (k, (idxs, buffer_idx, sz)) in array_parameters],
-                        [k ← Code.MakeArray(v, symtype(k))
-                         for (k, v) in other_array_parameters]
+                        [sym ← :(view($(expr.args[i].name), $idxs))
+                         for (sym, (i, idxs)) in viewsyms],
+                        [sym ←
+                         MakeArray([expr.args[bufi].elems[vali] for (bufi, vali) in idxs],
+                             expr.args[idxs[1][1]]) for (sym, idxs) in splitsyms]
                     ),
                     expr.body,
                     false
@@ -371,15 +303,11 @@ function wrap_array_vars(
                 [],
                 Let(
                     vcat(
-                        [k ← :(view($(expr.args[uind].name), $v)) for (k, v) in array_vars],
-                        [k ← :(view($(expr.args[inputind].name), $v))
-                         for (k, v) in input_vars],
-                        [k ← :(reshape(
-                             view($(expr.args[params_offset + buffer_idx].name), $idxs),
-                             $sz))
-                         for (k, (idxs, buffer_idx, sz)) in array_parameters],
-                        [k ← Code.MakeArray(v, symtype(k))
-                         for (k, v) in other_array_parameters]
+                        [sym ← :(view($(expr.args[i].name), $idxs))
+                         for (sym, (i, idxs)) in viewsyms],
+                        [sym ←
+                         MakeArray([expr.args[bufi].elems[vali] for (bufi, vali) in idxs],
+                             expr.args[idxs[1][1]]) for (sym, idxs) in splitsyms]
                     ),
                     expr.body,
                     false
@@ -392,17 +320,11 @@ function wrap_array_vars(
                 [],
                 Let(
                     vcat(
-                        [k ← :(view($(expr.args[uind + 1].name), $v))
-                         for (k, v) in array_vars],
-                        [k ← :(view($(expr.args[inputind + 1].name), $v))
-                         for (k, v) in input_vars],
-                        [k ← :(reshape(
-                             view($(expr.args[params_offset + buffer_idx + 1].name),
-                                 $idxs),
-                             $sz))
-                         for (k, (idxs, buffer_idx, sz)) in array_parameters],
-                        [k ← Code.MakeArray(v, symtype(k))
-                         for (k, v) in other_array_parameters]
+                        [sym ← :(view($(expr.args[i + 1].name), $idxs))
+                         for (sym, (i, idxs)) in viewsyms],
+                        [sym ← MakeArray(
+                             [expr.args[bufi + 1].elems[vali] for (bufi, vali) in idxs],
+                             expr.args[idxs[1][1] + 1]) for (sym, idxs) in splitsyms]
                     ),
                     expr.body,
                     false
