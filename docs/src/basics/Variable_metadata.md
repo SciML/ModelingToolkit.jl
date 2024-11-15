@@ -86,6 +86,44 @@ hasbounds(u)
 getbounds(u)
 ```
 
+Bounds can also be specified for array variables. A scalar array bound is applied to each
+element of the array. A bound may also be specified as an array, in which case the size of
+the array must match the size of the symbolic variable.
+
+```@example metadata
+@variables x[1:2, 1:2] [bounds = (-1, 1)]
+hasbounds(x)
+```
+
+```@example metadata
+getbounds(x)
+```
+
+```@example metadata
+getbounds(x[1, 1])
+```
+
+```@example metadata
+getbounds(x[1:2, 1])
+```
+
+```@example metadata
+@variables x[1:2] [bounds = (-Inf, [1.0, Inf])]
+hasbounds(x)
+```
+
+```@example metadata
+getbounds(x)
+```
+
+```@example metadata
+getbounds(x[2])
+```
+
+```@example metadata
+hasbounds(x[2])
+```
+
 ## Guess
 
 Specify an initial guess for custom initial conditions of an `ODESystem`.
