@@ -877,3 +877,73 @@ end
     sol = solve(prob, Rodas5P())
     @test SciMLBase.successful_retcode(sol)
 end
+
+@testset "Issue#3205" begin
+    using ModelingToolkitStandardLibrary.Electrical
+    import ModelingToolkitStandardLibrary.Mechanical.Rotational as MR
+    using ModelingToolkitStandardLibrary.Blocks
+    using SciMLBase
+
+    function dc_motor(R1 = 0.5)
+        R = R1 # [Ohm] armature resistance
+        L = 4.5e-3 # [H] armature inductance
+        k = 0.5 # [N.m/A] motor constant
+        J = 0.02 # [kg.m²] inertia
+        f = 0.01 # [N.m.s/rad] friction factor
+        tau_L_step = -0.3 # [N.m] amplitude of the load torque step
+
+        @named ground = Ground()
+        @named source = Voltage()
+        @named ref = Blocks.Step(height = 0.2, start_time = 0)
+        @named pi_controller = Blocks.LimPI(k = 1.1, T = 0.035, u_max = 10, Ta = 0.035)
+        @named feedback = Blocks.Feedback()
+        @named R1 = Resistor(R = R)
+        @named L1 = Inductor(L = L)
+        @named emf = EMF(k = k)
+        @named fixed = MR.Fixed()
+        @named load = MR.Torque()
+        @named load_step = Blocks.Step(height = tau_L_step, start_time = 3)
+        @named inertia = MR.Inertia(J = J)
+        @named friction = MR.Damper(d = f)
+        @named speed_sensor = MR.SpeedSensor()
+
+        connections = [connect(fixed.flange, emf.support, friction.flange_b)
+                       connect(emf.flange, friction.flange_a, inertia.flange_a)
+                       connect(inertia.flange_b, load.flange)
+                       connect(inertia.flange_b, speed_sensor.flange)
+                       connect(load_step.output, load.tau)
+                       connect(ref.output, feedback.input1)
+                       connect(speed_sensor.w, :y, feedback.input2)
+                       connect(feedback.output, pi_controller.err_input)
+                       connect(pi_controller.ctr_output, :u, source.V)
+                       connect(source.p, R1.p)
+                       connect(R1.n, L1.p)
+                       connect(L1.n, emf.p)
+                       connect(emf.n, source.n, ground.g)]
+
+        @named model = ODESystem(connections, t,
+            systems = [
+                ground,
+                ref,
+                pi_controller,
+                feedback,
+                source,
+                R1,
+                L1,
+                emf,
+                fixed,
+                load,
+                load_step,
+                inertia,
+                friction,
+                speed_sensor
+            ])
+    end
+
+    model = dc_motor()
+    sys = structural_simplify(model)
+
+    prob = ODEProblem(sys, [sys.L1.i => 0.0], (0, 6.0))
+
+    @test_nowarn remake(prob, p = prob.p)
+end
