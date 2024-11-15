@@ -140,8 +140,7 @@ if VERSION >= v"1.8" # :opaque_closure not supported before
         A, B, C, D = matrices
         obsf = ModelingToolkit.build_explicit_observed_function(ssys,
             [y],
-            inputs = [torque.tau.u],
-            drop_expr = identity)
+            inputs = [torque.tau.u])
         x = randn(size(A, 1))
         u = randn(size(B, 2))
         p = (getindex.(
