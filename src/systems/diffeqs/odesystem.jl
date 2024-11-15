@@ -427,7 +427,7 @@ Generates a function that computes the observed value(s) `ts` in the system `sys
 - `checkbounds = true` checks bounds if true when destructuring parameters
 - `op = Operator` sets the recursion terminator for the walk done by `vars` to identify the variables that appear in `ts`. See the documentation for `vars` for more detail.
 - `throw = true` if true, throw an error when generating a function for `ts` that reference variables that do not exist.
-- `mkarray`; only used if the output is an array (that is, `!isscalar(ts)`). Called as `mkarray(ts, output_type)` where `ts` are the expressions to put in 
+- `mkarray`; only used if the output is an array (that is, `!isscalar(ts)`  and `ts` is not a tuple, in which case the result will always be a tuple). Called as `mkarray(ts, output_type)` where `ts` are the expressions to put in 
 the array and `output_type` is the argument of the same name passed to build_explicit_observed_function.
 
 ## Returns
