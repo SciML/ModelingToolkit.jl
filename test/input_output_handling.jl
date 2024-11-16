@@ -160,12 +160,12 @@ eqs = [
 ]
 
 @named sys = ODESystem(eqs, t)
-f, dvs, ps = ModelingToolkit.generate_control_function(sys, simplify = true)
+f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys, simplify = true)
 
 @test isequal(dvs[], x)
 @test isempty(ps)
 
-p = []
+p = nothing
 x = [rand()]
 u = [rand()]
 @test f[1](x, u, p, 1) == -x + u
@@ -221,10 +221,10 @@ eqs = [connect_sd(sd, mass1, mass2)
 @named _model = ODESystem(eqs, t)
 @named model = compose(_model, mass1, mass2, sd);
 
-f, dvs, ps = ModelingToolkit.generate_control_function(model, simplify = true)
+f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(model, simplify = true)
 @test length(dvs) == 4
 @test length(ps) == length(parameters(model))
-p = ModelingToolkit.varmap_to_vars(ModelingToolkit.defaults(model), ps)
+p = MTKParameters(io_sys, [io_sys.u => NaN])
 x = ModelingToolkit.varmap_to_vars(
     merge(ModelingToolkit.defaults(model),
         Dict(D.(unknowns(model)) .=> 0.0)), dvs)
@@ -288,7 +288,7 @@ model_outputs = [model.inertia1.w, model.inertia2.w, model.inertia1.phi, model.i
 @named dmodel = Blocks.StateSpace([0.0], [1.0], [1.0], [0.0]) # An integrating disturbance
 
 @named dist = ModelingToolkit.DisturbanceModel(model.torque.tau.u, dmodel)
-(f_oop, f_ip), outersys, dvs, p = ModelingToolkit.add_input_disturbance(model, dist)
+(f_oop, f_ip), outersys, dvs, p, io_sys = ModelingToolkit.add_input_disturbance(model, dist)
 
 @unpack u, d = outersys
 matrices, ssys = linearize(outersys, [u, d], model_outputs)
@@ -302,7 +302,7 @@ x_add = ModelingToolkit.varmap_to_vars(merge(Dict(dvs .=> 0), Dict(dstate => 1))
 x0 = randn(5)
 x1 = copy(x0) + x_add # add disturbance state perturbation
 u = randn(1)
-pn = ModelingToolkit.varmap_to_vars(def, p)
+pn = MTKParameters(io_sys, [])
 xp0 = f_oop(x0, u, pn, 0)
 xp1 = f_oop(x1, u, pn, 0)
 
@@ -400,4 +400,16 @@ end
 
     f, dvs, ps = ModelingToolkit.generate_control_function(sys, simplify = true)
     @test f[1]([0.5], nothing, nothing, 0.0) == [1.0]
+end
+
+@testset "With callable symbolic" begin
+    @variables x(t)=0 u(t)=0 [input = true]
+    @parameters p(::Real) = (x -> 2x)
+    eqs = [D(x) ~ -x + p(u)]
+    @named sys = ODESystem(eqs, t)
+    f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys, simplify = true)
+    p = MTKParameters(io_sys, [])
+    u = [1.0]
+    x = [1.0]
+    @test_nowarn f[1](x, u, p, 0.0)
 end
