@@ -38,6 +38,7 @@ using Base: RefValue
 using Combinatorics
 import Distributions
 import FunctionWrappersWrappers
+import FunctionWrappers: FunctionWrapper
 using URIs: URI
 using SciMLStructures
 using Compat
@@ -53,6 +54,8 @@ using Reexport
 using RecursiveArrayTools
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
 import BlockArrays: BlockedArray, Block, blocksize, blocksizes
+import CommonSolve
+import EnumX
 
 using RuntimeGeneratedFunctions
 using RuntimeGeneratedFunctions: drop_expr
@@ -63,7 +66,8 @@ using Symbolics: _parse_vars, value, @derivatives, get_variables,
                  VariableSource, getname, variable, Connection, connect,
                  NAMESPACE_SEPARATOR, set_scalar_metadata, setdefaultval,
                  initial_state, transition, activeState, entry, hasnode,
-                 ticksInState, timeInState, fixpoint_sub, fast_substitute
+                 ticksInState, timeInState, fixpoint_sub, fast_substitute,
+                 CallWithMetadata, CallWithParent
 const NAMESPACE_SEPARATOR_SYMBOL = Symbol(NAMESPACE_SEPARATOR)
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   jacobian_sparsity, isaffine, islinear, _iszero, _isone,
@@ -142,6 +146,7 @@ include("systems/abstractsystem.jl")
 include("systems/model_parsing.jl")
 include("systems/connectors.jl")
 include("systems/callbacks.jl")
+include("systems/problem_utils.jl")
 
 include("systems/nonlinear/nonlinearsystem.jl")
 include("systems/diffeqs/odesystem.jl")
@@ -222,6 +227,8 @@ export JumpSystem
 export ODEProblem, SDEProblem
 export NonlinearFunction, NonlinearFunctionExpr
 export NonlinearProblem, NonlinearProblemExpr
+export IntervalNonlinearFunction, IntervalNonlinearFunctionExpr
+export IntervalNonlinearProblem, IntervalNonlinearProblemExpr
 export OptimizationProblem, OptimizationProblemExpr, constraints
 export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem
@@ -240,7 +247,7 @@ export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, DelayParentScope, GlobalScope
 export independent_variable, equations, controls, observed, full_equations
-export initialization_equations, guesses, defaults, parameter_dependencies
+export initialization_equations, guesses, defaults, parameter_dependencies, hierarchy
 export structural_simplify, expand_connections, linearize, linearization_function
 
 export calculate_jacobian, generate_jacobian, generate_function, generate_custom_function
@@ -276,6 +283,8 @@ export debug_system
 export Sample, Hold, Shift, ShiftIndex, sampletime, SampleTime
 export Clock, SolverStepClock, TimeDomain
 
-export MTKParameters
+export MTKParameters, reorder_dimension_by_tunables!, reorder_dimension_by_tunables
+
+export HomotopyContinuationProblem
 
 end # module

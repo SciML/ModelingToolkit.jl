@@ -37,6 +37,8 @@ struct OptimizationSystem <: AbstractOptimizationSystem
     constraints::Vector{Union{Equation, Inequality}}
     """The name of the system."""
     name::Symbol
+    """A description of the system."""
+    description::String
     """The internal systems. These are required to have unique names."""
     systems::Vector{OptimizationSystem}
     """
@@ -67,7 +69,7 @@ struct OptimizationSystem <: AbstractOptimizationSystem
     isscheduled::Bool
 
     function OptimizationSystem(tag, op, unknowns, ps, var_to_name, observed,
-            constraints, name, systems, defaults, metadata = nothing,
+            constraints, name, description, systems, defaults, metadata = nothing,
             gui_metadata = nothing, complete = false, index_cache = nothing, parent = nothing,
             isscheduled = false;
             checks::Union{Bool, Int} = true)
@@ -78,7 +80,7 @@ struct OptimizationSystem <: AbstractOptimizationSystem
             check_units(u, constraints)
         end
         new(tag, op, unknowns, ps, var_to_name, observed,
-            constraints, name, systems, defaults, metadata, gui_metadata, complete,
+            constraints, name, description, systems, defaults, metadata, gui_metadata, complete,
             index_cache, parent, isscheduled)
     end
 end
@@ -92,6 +94,7 @@ function OptimizationSystem(op, unknowns, ps;
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
         name = nothing,
+        description = "",
         systems = OptimizationSystem[],
         checks = true,
         metadata = nothing,
@@ -103,6 +106,17 @@ function OptimizationSystem(op, unknowns, ps;
     ps′ = value.(ps)
     op′ = value(scalarize(op))
 
+    irreducible_subs = Dict()
+    for i in eachindex(unknowns′)
+        var = unknowns′[i]
+        if hasbounds(var)
+            irreducible_subs[var] = irrvar = setirreducible(var, true)
+            unknowns′[i] = irrvar
+        end
+    end
+    op′ = substitute(op′, irreducible_subs)
+    constraints = substitute.(constraints, (irreducible_subs,))
+
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn(
             "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
@@ -113,7 +127,8 @@ function OptimizationSystem(op, unknowns, ps;
         throw(ArgumentError("System names must be unique."))
     end
     defaults = todict(defaults)
-    defaults = Dict(value(k) => value(v)
+    defaults = Dict(substitute(value(k), irreducible_subs) => substitute(
+                        value(v), irreducible_subs)
     for (k, v) in pairs(defaults) if value(v) !== nothing)
 
     var_to_name = Dict()
@@ -125,8 +140,24 @@ function OptimizationSystem(op, unknowns, ps;
         op′, unknowns′, ps′, var_to_name,
         observed,
         constraints,
-        name, systems, defaults, metadata, gui_metadata;
+        name, description, systems, defaults, metadata, gui_metadata;
         checks = checks)
+end
+
+function flatten(sys::OptimizationSystem)
+    systems = get_systems(sys)
+    isempty(systems) && return sys
+
+    return OptimizationSystem(
+        objective(sys),
+        unknowns(sys),
+        parameters(sys);
+        observed = observed(sys),
+        constraints = constraints(sys),
+        defaults = defaults(sys),
+        name = nameof(sys),
+        checks = false
+    )
 end
 
 function calculate_gradient(sys::OptimizationSystem)

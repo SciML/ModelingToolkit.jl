@@ -33,6 +33,15 @@ function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem;
     end
     _vars = reshape(_vars, size(prob.u0))
     vars = ArrayInterface.restructure(prob.u0, _vars)
+    if prob.ub !== nothing # lb is also !== nothing
+        vars = map(vars, prob.lb, prob.ub) do sym, lb, ub
+            if iszero(lb) && iszero(ub) || isinf(lb) && lb < 0 && isinf(ub) && ub > 0
+                sym
+            else
+                Symbolics.setmetadata(sym, VariableBounds, (lb, ub))
+            end
+        end
+    end
     params = if has_p
         if p_names === nothing && SciMLBase.has_sys(prob.f)
             p_names = Dict(parameter_index(prob.f.sys, sym) => sym

@@ -661,7 +661,8 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
             @set! sys.defaults = merge(ModelingToolkit.defaults(sys),
                 Dict(v => 0.0 for v in Iterators.flatten(inputs)))
         end
-        ps = [setmetadata(sym, VariableTimeDomain, get(time_domains, sym, Continuous))
+        ps = [sym isa CallWithMetadata ? sym :
+              setmetadata(sym, VariableTimeDomain, get(time_domains, sym, Continuous))
               for sym in get_ps(sys)]
         @set! sys.ps = ps
     else

@@ -153,7 +153,7 @@ R_val = 20u"Ω"
 res__R = 100u"Ω"
 @mtkbuild rc = RC(; C_val, R_val, resistor.R = res__R)
 prob = ODEProblem(rc, [], (0, 1e9))
-sol = solve(prob, Rodas5P())
+sol = solve(prob)
 defs = ModelingToolkit.defaults(rc)
 @test sol[rc.capacitor.v, end] ≈ defs[rc.constant.k]
 resistor = getproperty(rc, :resistor; namespace = false)
@@ -259,7 +259,8 @@ end
     @test all(collect(hasmetadata.(model.l, ModelingToolkit.VariableDescription)))
 
     @test all(lastindex.([model.a2, model.b2, model.d2, model.e2, model.h2]) .== 2)
-    @test size(model.l) == MockModel.structure[:parameters][:l][:size] == (2, 3)
+    @test size(model.l) == (2, 3)
+    @test MockModel.structure[:parameters][:l][:size] == (2, 3)
 
     model = complete(model)
     @test getdefault(model.cval) == 1
@@ -276,6 +277,38 @@ end
     @test get_defaults(model)[model.n2] == 5
 
     @test MockModel.structure[:defaults] == Dict(:n => 1.0, :n2 => "g()")
+end
+
+@testset "Arrays using vanilla-@variable syntax" begin
+    @mtkmodel TupleInArrayDef begin
+        @structural_parameters begin
+            N
+            M
+        end
+        @parameters begin
+            (l(t)[1:2, 1:3] = 1), [description = "l is more than 1D"]
+            (l2(t)[1:N, 1:M] = 2),
+            [description = "l is more than 1D, with arbitrary length"]
+            (l3(t)[1:3] = 3), [description = "l2 is 1D"]
+            (l4(t)[1:N] = 4), [description = "l2 is 1D, with arbitrary length"]
+            (l5(t)[1:3]::Int = 5), [description = "l3 is 1D and has a type"]
+            (l6(t)[1:N]::Int = 6),
+            [description = "l3 is 1D and has a type, with arbitrary length"]
+        end
+    end
+
+    N, M = 4, 5
+    @named arr = TupleInArrayDef(; N, M)
+    @test getdefault(arr.l) == 1
+    @test getdefault(arr.l2) == 2
+    @test getdefault(arr.l3) == 3
+    @test getdefault(arr.l4) == 4
+    @test getdefault(arr.l5) == 5
+    @test getdefault(arr.l6) == 6
+
+    @test size(arr.l2) == (N, M)
+    @test size(arr.l4) == (N,)
+    @test size(arr.l6) == (N,)
 end
 
 @testset "Type annotation" begin
@@ -426,9 +459,9 @@ end
     @test A.structure[:parameters] == Dict(:p => Dict(:type => Real))
     @test A.structure[:extend] == [[:e], :extended_e, :E]
     @test A.structure[:equations] == ["e ~ 0"]
-    @test A.structure[:kwargs] ==
-          Dict{Symbol, Dict}(:p => Dict(:value => nothing, :type => Real),
-        :v => Dict(:value => nothing, :type => Real))
+    @test A.structure[:kwargs] == Dict{Symbol, Dict}(
+        :p => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real),
+        :v => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real))
     @test A.structure[:components] == [[:cc, :C]]
 end
 
@@ -474,7 +507,8 @@ using ModelingToolkit: getdefault, scalarize
 
     @named model_with_component_array = ModelWithComponentArray()
 
-    @test eval(ModelWithComponentArray.structure[:parameters][:r][:unit]) == eval(u"Ω")
+    @test eval(ModelWithComponentArray.structure[:parameters][:r][:unit]) ==
+          eval(u"Ω")
     @test lastindex(parameters(model_with_component_array)) == 3
 
     # Test the constant `k`. Manually k's value should be kept in sync here
@@ -528,15 +562,15 @@ end
     end
 
     @named if_in_sys = InsideTheBlock()
-    if_in_sys = complete(if_in_sys)
+    if_in_sys = complete(if_in_sys; flatten = false)
     @named elseif_in_sys = InsideTheBlock(flag = 2)
-    elseif_in_sys = complete(elseif_in_sys)
+    elseif_in_sys = complete(elseif_in_sys; flatten = false)
     @named else_in_sys = InsideTheBlock(flag = 3)
-    else_in_sys = complete(else_in_sys)
+    else_in_sys = complete(else_in_sys; flatten = false)
 
-    @test getname.(parameters(if_in_sys)) == [:if_parameter, :eq]
-    @test getname.(parameters(elseif_in_sys)) == [:elseif_parameter, :eq]
-    @test getname.(parameters(else_in_sys)) == [:else_parameter, :eq]
+    @test sort(getname.(parameters(if_in_sys))) == [:eq, :if_parameter]
+    @test sort(getname.(parameters(elseif_in_sys))) == [:elseif_parameter, :eq]
+    @test sort(getname.(parameters(else_in_sys))) == [:else_parameter, :eq]
 
     @test getdefault(if_in_sys.if_parameter) == 100
     @test getdefault(elseif_in_sys.elseif_parameter) == 101
@@ -619,13 +653,13 @@ end
     end
 
     @named if_out_sys = OutsideTheBlock(condition = 1)
-    if_out_sys = complete(if_out_sys)
+    if_out_sys = complete(if_out_sys; flatten = false)
     @named elseif_out_sys = OutsideTheBlock(condition = 2)
-    elseif_out_sys = complete(elseif_out_sys)
+    elseif_out_sys = complete(elseif_out_sys; flatten = false)
     @named else_out_sys = OutsideTheBlock(condition = 10)
-    else_out_sys = complete(else_out_sys)
+    else_out_sys = complete(else_out_sys; flatten = false)
     @named ternary_out_sys = OutsideTheBlock(condition = 4)
-    else_out_sys = complete(else_out_sys)
+    else_out_sys = complete(else_out_sys; flatten = false)
 
     @test getname.(parameters(if_out_sys)) == [:if_parameter, :default_parameter]
     @test getname.(parameters(elseif_out_sys)) == [:elseif_parameter, :default_parameter]
@@ -674,10 +708,10 @@ end
     end
 
     @named ternary_true = TernaryBranchingOutsideTheBlock()
-    ternary_true = complete(ternary_true)
+    ternary_true = complete(ternary_true; flatten = false)
 
     @named ternary_false = TernaryBranchingOutsideTheBlock(condition = false)
-    ternary_false = complete(ternary_false)
+    ternary_false = complete(ternary_false; flatten = false)
 
     @test getname.(parameters(ternary_true)) == [:ternary_parameter_true]
     @test getname.(parameters(ternary_false)) == [:ternary_parameter_false]
@@ -724,7 +758,7 @@ end
     end
 
     @named component = Component()
-    component = complete(component)
+    component = complete(component; flatten = false)
 
     @test nameof.(ModelingToolkit.get_systems(component)) == [
         :comprehension_1,
@@ -840,7 +874,7 @@ end
             n[1:3] = if flag
                 [2, 2, 2]
             else
-                1
+                [1, 1, 1]
             end
         end
     end
@@ -875,4 +909,73 @@ end
             end
         end),
         false)
+end
+
+@mtkmodel BaseSys begin
+    @parameters begin
+        p1
+        p2
+    end
+    @variables begin
+        v1(t)
+    end
+end
+
+@testset "Arguments of base system" begin
+    @mtkmodel MainSys begin
+        @extend BaseSys(p1 = 1)
+    end
+
+    @test names(MainSys) == [:p2, :p1, :v1]
+    @named main_sys = MainSys(p1 = 11, p2 = 12, v1 = 13)
+    @test getdefault(main_sys.p1) == 11
+    @test getdefault(main_sys.p2) == 12
+    @test getdefault(main_sys.v1) == 13
+end
+
+@mtkmodel InnerModel begin
+    @parameters begin
+        p
+    end
+end
+
+@mtkmodel MidModel begin
+    @components begin
+        inmodel = InnerModel()
+    end
+end
+
+@mtkmodel MidModelB begin
+    @parameters begin
+        b
+    end
+    @components begin
+        inmodel_b = InnerModel()
+    end
+end
+
+@mtkmodel OuterModel begin
+    @extend MidModel()
+    @equations begin
+        inmodel.p ~ 0
+    end
+end
+
+# The base system is fetched from the module while extending implicitly. This
+# way of defining fails when defined inside the `@testset`. So, it is moved out.
+@testset "Test unpacking of components in implicit extend" begin
+    @named out = OuterModel()
+    @test OuterModel.structure[:extend][1] == [:inmodel]
+end
+
+@mtkmodel MultipleExtend begin
+    @extend MidModel()
+    @extend MidModelB()
+end
+
+@testset "Multiple extend statements" begin
+    @named multiple_extend = MultipleExtend()
+    @test collect(nameof.(multiple_extend.systems)) == [:inmodel_b, :inmodel]
+    @test MultipleExtend.structure[:extend][1] == [:inmodel, :b, :inmodel_b]
+    @test tosymbol.(parameters(multiple_extend)) == [:b, :inmodel_b₊p, :inmodel₊p]
 end

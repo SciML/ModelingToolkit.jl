@@ -26,6 +26,16 @@ function isparameter(x)
     end
 end
 
+function iscalledparameter(x)
+    x = unwrap(x)
+    return isparameter(getmetadata(x, CallWithParent, nothing))
+end
+
+function getcalledparameter(x)
+    x = unwrap(x)
+    return getmetadata(x, CallWithParent)
+end
+
 """
     toparam(s)
 

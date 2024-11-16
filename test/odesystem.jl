@@ -137,7 +137,7 @@ eqs = [D(x) ~ σ(t - 1) * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z * κ]
 @named de = ODESystem(eqs, t)
-test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ(t - 1), ρ, β))
+test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ, ρ, β))
 f = eval(generate_function(de, [x, y, z], [σ, ρ, β])[2])
 du = [0.0, 0.0, 0.0]
 f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
@@ -145,7 +145,7 @@ f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
 
 eqs = [D(x) ~ x + 10σ(t - 1) + 100σ(t - 2) + 1000σ(t^2)]
 @named de = ODESystem(eqs, t)
-test_diffeq_inference("many internal iv-varying", de, t, (x,), (σ(t - 2), σ(t^2), σ(t - 1)))
+test_diffeq_inference("many internal iv-varying", de, t, (x,), (σ,))
 f = eval(generate_function(de, [x], [σ])[2])
 du = [0.0]
 f(du, [1.0], [t -> t + 2], 5.0)
@@ -548,7 +548,7 @@ prob = ODEProblem(
 @test_nowarn solve(prob, Tsit5())
 obsfn = ModelingToolkit.build_explicit_observed_function(
     outersys, bar(3outersys.sys.ms, 3outersys.sys.p))
-@test_nowarn obsfn(sol.u[1], prob.p..., sol.t[1])
+@test_nowarn obsfn(sol.u[1], prob.p, sol.t[1])
 
 # x/x
 @variables x(t)
@@ -1164,6 +1164,13 @@ for sys in [sys1, sys2]
     end
 end
 
+@testset "Non-1-indexed variable array (issue #2670)" begin
+    @variables x(t)[0:1] # 0-indexed variable array
+    @named sys = ODESystem([x[0] ~ 0.0, D(x[1]) ~ x[0]], t, [x], [])
+    @test_nowarn sys = structural_simplify(sys)
+    @test equations(sys) == [D(x[1]) ~ 0.0]
+end
+
 # Namespacing of array variables
 @variables x(t)[1:2]
 @named sys = ODESystem(Equation[], t)
@@ -1386,4 +1393,114 @@ end
         sys1, u + x + p[1:2]; inputs = [x...])
 
     @test obsfn(ones(2), 2ones(2), 3ones(4), 4.0) == 6ones(2)
+end
+
+@testset "Passing `nothing` to `u0`" begin
+    @variables x(t) = 1
+    @mtkbuild sys = ODESystem(D(x) ~ t, t)
+    prob = @test_nowarn ODEProblem(sys, nothing, (0.0, 1.0))
+    @test_nowarn solve(prob)
+end
+
+@testset "ODEs are not DDEs" begin
+    @variables x(t)
+    @named sys = ODESystem(D(x) ~ x, t)
+    @test !ModelingToolkit.is_dde(sys)
+    @test is_markovian(sys)
+    @named sys2 = ODESystem(Equation[], t; systems = [sys])
+    @test !ModelingToolkit.is_dde(sys)
+    @test is_markovian(sys)
+end
+
+@testset "Issue #2597" begin
+    @variables x(t)[1:2]=ones(2) y(t)=1.0
+
+    for eqs in [D(x) ~ x, collect(D(x) .~ x)]
+        for dvs in [[x], collect(x)]
+            @named sys = ODESystem(eqs, t, dvs, [])
+            sys = complete(sys)
+            if eqs isa Vector && length(eqs) == 2 && length(dvs) == 2
+                @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
+            else
+                @test_throws [
+                    r"array (equations|unknowns)", "structural_simplify", "scalarize"] ODEProblem(
+                    sys, [], (0.0, 1.0))
+            end
+        end
+    end
+    for eqs in [[D(x) ~ x, D(y) ~ y], [collect(D(x) .~ x); D(y) ~ y]]
+        for dvs in [[x, y], [x..., y]]
+            @named sys = ODESystem(eqs, t, dvs, [])
+            sys = complete(sys)
+            if eqs isa Vector && length(eqs) == 3 && length(dvs) == 3
+                @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
+            else
+                @test_throws [
+                    r"array (equations|unknowns)", "structural_simplify", "scalarize"] ODEProblem(
+                    sys, [], (0.0, 1.0))
+            end
+        end
+    end
+end
+
+@testset "Parameter dependencies with constant RHS" begin
+    @parameters p
+    @test_nowarn ODESystem(Equation[], t; parameter_dependencies = [p ~ 1.0], name = :a)
+end
+
+@testset "Variable discovery in arrays of `Num` inside callable symbolic" begin
+    @variables x(t) y(t)
+    @parameters foo(::AbstractVector)
+    sys = @test_nowarn ODESystem(D(x) ~ foo([x, 2y]), t; name = :sys)
+    @test length(unknowns(sys)) == 2
+    @test any(isequal(y), unknowns(sys))
+end
+
+@testset "Inplace observed" begin
+    @variables x(t)
+    @parameters p[1:2] q
+    @mtkbuild sys = ODESystem(D(x) ~ sum(p) * x + q * t, t)
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [p => ones(2), q => 2])
+    obsfn = ModelingToolkit.build_explicit_observed_function(
+        sys, [p..., q], return_inplace = true)[2]
+    buf = zeros(3)
+    obsfn(buf, prob.u0, prob.p, 0.0)
+    @test buf ≈ [1.0, 1.0, 2.0]
+end
+
+@testset "`complete` expands connections" begin
+    using ModelingToolkitStandardLibrary.Electrical
+    @mtkmodel RC begin
+        @parameters begin
+            R = 1.0
+            C = 1.0
+            V = 1.0
+        end
+        @components begin
+            resistor = Resistor(R = R)
+            capacitor = Capacitor(C = C, v = 0.0)
+            source = Voltage()
+            constant = Constant(k = V)
+            ground = Ground()
+        end
+        @equations begin
+            connect(constant.output, source.V)
+            connect(source.p, resistor.p)
+            connect(resistor.n, capacitor.p)
+            connect(capacitor.n, source.n, ground.g)
+        end
+    end
+    @named sys = RC()
+    total_eqs = length(equations(expand_connections(sys)))
+    sys2 = complete(sys)
+    @test length(equations(sys2)) == total_eqs
+end
+
+@testset "`complete` with `split = false` removes the index cache" begin
+    @variables x(t)
+    @parameters p
+    @mtkbuild sys = ODESystem(D(x) ~ p * t, t)
+    @test ModelingToolkit.get_index_cache(sys) !== nothing
+    sys2 = complete(sys; split = false)
+    @test ModelingToolkit.get_index_cache(sys2) === nothing
 end

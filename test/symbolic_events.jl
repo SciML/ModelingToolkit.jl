@@ -867,6 +867,88 @@ end
     @test sign.(cos.(3 * (required_crossings_c2 .+ 1e-6))) == sign.(last.(cr2))
 end
 
+@testset "Discrete event reinitialization (#3142)" begin
+    @connector LiquidPort begin
+        p(t)::Float64, [description = "Set pressure in bar",
+            guess = 1.01325]
+        Vdot(t)::Float64,
+        [description = "Volume flow rate in L/min",
+            guess = 0.0,
+            connect = Flow]
+    end
+
+    @mtkmodel PressureSource begin
+        @components begin
+            port = LiquidPort()
+        end
+        @parameters begin
+            p_set::Float64 = 1.01325, [description = "Set pressure in bar"]
+        end
+        @equations begin
+            port.p ~ p_set
+        end
+    end
+
+    @mtkmodel BinaryValve begin
+        @constants begin
+            p_ref::Float64 = 1.0, [description = "Reference pressure drop in bar"]
+            ρ_ref::Float64 = 1000.0, [description = "Reference density in kg/m^3"]
+        end
+        @components begin
+            port_in = LiquidPort()
+            port_out = LiquidPort()
+        end
+        @parameters begin
+            k_V::Float64 = 1.0, [description = "Valve coefficient in L/min/bar"]
+            k_leakage::Float64 = 1e-08, [description = "Leakage coefficient in L/min/bar"]
+            ρ::Float64 = 1000.0, [description = "Density in kg/m^3"]
+        end
+        @variables begin
+            S(t)::Float64, [description = "Valve state", guess = 1.0, irreducible = true]
+            Δp(t)::Float64, [description = "Pressure difference in bar", guess = 1.0]
+            Vdot(t)::Float64, [description = "Volume flow rate in L/min", guess = 1.0]
+        end
+        @equations begin
+            # Port handling
+            port_in.Vdot ~ -Vdot
+            port_out.Vdot ~ Vdot
+            Δp ~ port_in.p - port_out.p
+            # System behavior
+            D(S) ~ 0.0
+            Vdot ~ S * k_V * sign(Δp) * sqrt(abs(Δp) / p_ref * ρ_ref / ρ) + k_leakage * Δp # softplus alpha function to avoid negative values under the sqrt
+        end
+    end
+
+    # Test System
+    @mtkmodel TestSystem begin
+        @components begin
+            pressure_source_1 = PressureSource(p_set = 2.0)
+            binary_valve_1 = BinaryValve(S = 1.0, k_leakage = 0.0)
+            binary_valve_2 = BinaryValve(S = 1.0, k_leakage = 0.0)
+            pressure_source_2 = PressureSource(p_set = 1.0)
+        end
+        @equations begin
+            connect(pressure_source_1.port, binary_valve_1.port_in)
+            connect(binary_valve_1.port_out, binary_valve_2.port_in)
+            connect(binary_valve_2.port_out, pressure_source_2.port)
+        end
+        @discrete_events begin
+            [30] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0]
+            [60] => [
+                binary_valve_1.S ~ 1.0, binary_valve_2.S ~ 0.0, binary_valve_2.Δp ~ 1.0]
+            [120] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0]
+        end
+    end
+
+    # Test Simulation
+    @mtkbuild sys = TestSystem()
+
+    # Test Simulation
+    prob = ODEProblem(sys, [], (0.0, 150.0))
+    sol = solve(prob)
+    @test sol[end] == [0.0, 0.0, 0.0]
+end
+
 @testset "Discrete variable timeseries" begin
     @variables x(t)
     @parameters a(t) b(t) c(t)
@@ -886,4 +968,131 @@ end
     @test sol[a] == [1.0, -1.0]
     @test sol[b] == [2.0, 5.0, 5.0]
     @test sol[c] == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+end
+
+@testset "Initialization" begin
+    @variables x(t)
+    seen = false
+    f = ModelingToolkit.FunctionalAffect(
+        f = (i, u, p, c) -> seen = true, sts = [], pars = [], discretes = [])
+    cb1 = ModelingToolkit.SymbolicContinuousCallback(
+        [x ~ 0], Equation[], initialize = [x ~ 1.5], finalize = f)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; continuous_events = [cb1])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
+    @test sol[x][1] ≈ 1.0
+    @test sol[x][2] ≈ 1.5 # the initialize affect has been applied
+    @test seen == true
+
+    @variables x(t)
+    seen = false
+    f = ModelingToolkit.FunctionalAffect(
+        f = (i, u, p, c) -> seen = true, sts = [], pars = [], discretes = [])
+    cb1 = ModelingToolkit.SymbolicContinuousCallback(
+        [x ~ 0], Equation[], initialize = [x ~ 1.5], finalize = f)
+    inited = false
+    finaled = false
+    a = ModelingToolkit.FunctionalAffect(
+        f = (i, u, p, c) -> inited = true, sts = [], pars = [], discretes = [])
+    b = ModelingToolkit.FunctionalAffect(
+        f = (i, u, p, c) -> finaled = true, sts = [], pars = [], discretes = [])
+    cb2 = ModelingToolkit.SymbolicContinuousCallback(
+        [x ~ 0.1], Equation[], initialize = a, finalize = b)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; continuous_events = [cb1, cb2])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5())
+    @test sol[x][1] ≈ 1.0
+    @test sol[x][2] ≈ 1.5 # the initialize affect has been applied
+    @test seen == true
+    @test inited == true
+    @test finaled == true
+
+    #periodic
+    inited = false
+    finaled = false
+    cb3 = ModelingToolkit.SymbolicDiscreteCallback(
+        1.0, [x ~ 2], initialize = a, finalize = b)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5())
+    @test inited == true
+    @test finaled == true
+    @test isapprox(sol[x][3], 0.0, atol = 1e-9)
+    @test sol[x][4] ≈ 2.0
+    @test sol[x][5] ≈ 1.0
+
+    seen = false
+    inited = false
+    finaled = false
+    cb3 = ModelingToolkit.SymbolicDiscreteCallback(1.0, f, initialize = a, finalize = b)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5())
+    @test seen == true
+    @test inited == true
+
+    #preset
+    seen = false
+    inited = false
+    finaled = false
+    cb3 = ModelingToolkit.SymbolicDiscreteCallback([1.0], f, initialize = a, finalize = b)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5())
+    @test seen == true
+    @test inited == true
+    @test finaled == true
+
+    #equational
+    seen = false
+    inited = false
+    finaled = false
+    cb3 = ModelingToolkit.SymbolicDiscreteCallback(
+        t == 1.0, f, initialize = a, finalize = b)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5(); tstops = 1.0)
+    @test seen == true
+    @test inited == true
+    @test finaled == true
+end
+
+@testset "Bump" begin
+    @variables x(t) [irreducible = true] y(t) [irreducible = true]
+    eqs = [x ~ y, D(x) ~ -1]
+    cb = [x ~ 0.0] => [x ~ 0, y ~ 1]
+    @mtkbuild pend = ODESystem(eqs, t; continuous_events = [cb])
+    prob = ODEProblem(pend, [x => 1], (0.0, 3.0), guesses = [y => x])
+    @test_throws "CheckInit specified but initialization" solve(prob, Rodas5())
+
+    cb = [x ~ 0.0] => [y ~ 1]
+    @mtkbuild pend = ODESystem(eqs, t; continuous_events = [cb])
+    prob = ODEProblem(pend, [x => 1], (0.0, 3.0), guesses = [y => x])
+    @test_broken !SciMLBase.successful_retcode(solve(prob, Rodas5()))
+
+    cb = [x ~ 0.0] => [x ~ 1, y ~ 1]
+    @mtkbuild pend = ODESystem(eqs, t; continuous_events = [cb])
+    prob = ODEProblem(pend, [x => 1], (0.0, 3.0), guesses = [y => x])
+    @test all(≈(0.0; atol = 1e-9), solve(prob, Rodas5())[[x, y]][end])
+end
+
+@testset "Issue#3154 Array variable in discrete condition" begin
+    @mtkmodel DECAY begin
+        @parameters begin
+            unrelated[1:2] = zeros(2)
+            k = 0.0
+        end
+        @variables begin
+            x(t) = 10.0
+        end
+        @equations begin
+            D(x) ~ -k * x
+        end
+        @discrete_events begin
+            (t == 1.0) => [k ~ 1.0]
+        end
+    end
+    @mtkbuild decay = DECAY()
+    prob = ODEProblem(decay, [], (0.0, 10.0), [])
+    @test_nowarn solve(prob, Tsit5(), tstops = [1.0])
 end

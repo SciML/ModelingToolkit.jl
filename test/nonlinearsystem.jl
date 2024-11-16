@@ -3,6 +3,7 @@ using ModelingToolkit: get_metadata
 using DiffEqBase, SparseArrays
 using Test
 using NonlinearSolve
+using ForwardDiff
 using ModelingToolkit: value
 using ModelingToolkit: get_default_or_guess, MTKParameters
 
@@ -317,4 +318,65 @@ sys = structural_simplify(ns; conservative = true)
     prob = NonlinearProblem(ns, unknowns(ns) .=> -4.0) # give guess < -3 to reach -3
     sol = solve(prob, NewtonRaphson())
     @test sol[x] ≈ sol[y] ≈ sol[z] ≈ -3
+end
+
+@testset "Passing `nothing` to `u0`" begin
+    @variables x = 1
+    @mtkbuild sys = NonlinearSystem([0 ~ x^2 - x^3 + 3])
+    prob = @test_nowarn NonlinearProblem(sys, nothing)
+    @test_nowarn solve(prob)
+end
+
+@testset "System of linear equations with vector variable" begin
+    # 1st example in https://en.wikipedia.org/w/index.php?title=System_of_linear_equations&oldid=1247697953
+    @variables x[1:3]
+    A = [3 2 -1
+         2 -2 4
+         -1 1/2 -1]
+    b = [1, -2, 0]
+    @named sys = NonlinearSystem(A * x ~ b, [x], [])
+    sys = structural_simplify(sys)
+    prob = NonlinearProblem(sys, unknowns(sys) .=> 0.0)
+    sol = solve(prob)
+    @test all(sol[x] .≈ A \ b)
+end
+
+@testset "resid_prototype when system has no unknowns and an equation" begin
+    @variables x
+    @parameters p
+    @named sys = NonlinearSystem([x ~ 1, x^2 - p ~ 0])
+    for sys in [
+        structural_simplify(sys, fully_determined = false),
+        structural_simplify(sys, fully_determined = false, split = false)
+    ]
+        @test length(equations(sys)) == 1
+        @test length(unknowns(sys)) == 0
+        T = typeof(ForwardDiff.Dual(1.0))
+        prob = NonlinearProblem(sys, [], [p => ForwardDiff.Dual(1.0)]; check_length = false)
+        @test prob.f(Float64[], prob.p) isa Vector{T}
+        @test prob.f.resid_prototype isa Vector{T}
+        @test_nowarn solve(prob)
+    end
+end
+
+@testset "IntervalNonlinearProblem" begin
+    @variables x
+    @parameters p
+    @named nlsys = NonlinearSystem([0 ~ x * x - p])
+
+    for sys in [complete(nlsys), complete(nlsys; split = false)]
+        prob = IntervalNonlinearProblem(sys, (0.0, 2.0), [p => 1.0])
+        sol = @test_nowarn solve(prob, ITP())
+        @test SciMLBase.successful_retcode(sol)
+        @test_nowarn IntervalNonlinearProblemExpr(sys, (0.0, 2.0), [p => 1.0])
+    end
+
+    @variables y
+    @mtkbuild sys = NonlinearSystem([0 ~ x * x - p * x + p, 0 ~ x * y + p])
+    @test_throws ["single equation", "unknown"] IntervalNonlinearProblem(sys, (0.0, 1.0))
+    @test_throws ["single equation", "unknown"] IntervalNonlinearFunction(sys, (0.0, 1.0))
+    @test_throws ["single equation", "unknown"] IntervalNonlinearProblemExpr(
+        sys, (0.0, 1.0))
+    @test_throws ["single equation", "unknown"] IntervalNonlinearFunctionExpr(
+        sys, (0.0, 1.0))
 end

@@ -63,16 +63,17 @@ end
     @structural_parameters begin
         f = sin
         N = 2
+        M = 3
     end
     begin
         v_var = 1.0
     end
     @variables begin
         v(t) = v_var
-        v_array(t)[1:2, 1:3]
+        v_array(t)[1:N, 1:M]
         v_for_defaults(t)
     end
-    @extend ModelB(; p1)
+    @extend ModelB(p1 = 1)
     @components begin
         model_a = ModelA(; k_array)
         model_array_a = [ModelA(; k = i) for i in 1:N]
@@ -146,16 +147,20 @@ julia> ModelingToolkit.getdefault(model_c1.v)
 2.0
 ```
 
-#### `@extend` begin block
+#### `@extend` statement
 
-  - Partial systems can be extended in a higher system as `@extend PartialSystem(; kwargs)`.
-  - Keyword arguments pf partial system in the `@extend` definition are added as the keyword arguments of the base system.
-  - Note that in above example, `p1` is promoted as an argument of `ModelC`. Users can set the value of `p1`. However, as `p2` isn't listed in the model definition, its initial guess can't be specified while creating an instance of `ModelC`.
+One or more partial systems can be extended in a higher system with `@extend` statements. This can be done in two ways:
 
-```julia
-julia> @mtkbuild model_c2 = ModelC(; p1 = 2.0)
+  - `@extend PartialSystem(var1 = value1)`
+    
+      + This is the recommended way of extending a base system.
+      + The default values for the arguments of the base system can be declared in the `@extend` statement.
+      + Note that all keyword arguments of the base system are added as the keyword arguments of the main system.
 
-```
+  - `@extend var_to_unpack1, var_to_unpack2 = partial_sys = PartialSystem(var1 = value1)`
+    
+      + In this method: explicitly list the variables that should be unpacked, provide a name for the partial system and declare the base system.
+      + Note that only the arguments listed out in the declaration of the base system (here: `var1`) are added as the keyword arguments of the higher system.
 
 #### `@components` begin block
 
@@ -301,14 +306,15 @@ end
     
     For more examples of usage, checkout [ModelingToolkitStandardLibrary.jl](https://github.com/SciML/ModelingToolkitStandardLibrary.jl/)
 
-## More on `Model.structure`
+## [More on `Model.structure`](@id model_structure)
 
 `structure` stores metadata that describes composition of a model. It includes:
 
   - `:components`: The list of sub-components in the form of [[name, sub_component_name],...].
   - `:constants`: Dictionary of constants mapped to its metadata.
   - `:defaults`: Dictionary of variables and default values specified in the `@defaults`.
-  - `:extend`: The list of extended unknowns, name given to the base system, and name of the base system.
+  - `:extend`: The list of extended unknowns, parameters and components, name given to the base system, and name of the base system.
+    When multiple extend statements are present, latter two are returned as lists.
   - `:structural_parameters`: Dictionary of structural parameters mapped to their metadata.
   - `:parameters`: Dictionary of symbolic parameters mapped to their metadata. For
     parameter arrays, length is added to the metadata as `:size`.
@@ -324,15 +330,55 @@ For example, the structure of `ModelC` is:
 julia> ModelC.structure
 Dict{Symbol, Any} with 10 entries:
   :components            => Any[Union{Expr, Symbol}[:model_a, :ModelA], Union{Expr, Symbol}[:model_array_a, :ModelA, :(1:N)], Union{Expr, Symbol}[:model_array_b, :ModelA, :(1:N)]]
-  :variables             => Dict{Symbol, Dict{Symbol, Any}}(:v=>Dict(:default=>:v_var, :type=>Real), :v_array=>Dict(:type=>Real, :size=>(2, 3)), :v_for_defaults=>Dict(:type=>Real))
+  :variables             => Dict{Symbol, Dict{Symbol, Any}}(:v=>Dict(:default=>:v_var, :type=>Real), :v_array=>Dict(:value=>nothing, :type=>Real, :size=>(:N, :M)), :v_for_defaults=>Dict(:type=>Real))
   :icon                  => URI("https://github.com/SciML/SciMLDocs/blob/main/docs/src/assets/logo.png")
-  :kwargs                => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin), :N=>Dict(:value=>2), :v=>Dict{Symbol, Any}(:value=>:v_var, :type=>Real), :v_array=>Dict{Symbol, Union{Nothing, UnionAll}}(:value=>nothing, :type=>AbstractArray{Real}), :v_for_defaults=>Dict{Symbol, Union{Nothing, DataType}}(:value=>nothing, :type=>Real), :p1=>Dict(:value=>nothing))
-  :structural_parameters => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin), :N=>Dict(:value=>2))
-  :independent_variable  => t
+  :kwargs                => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin), :p2=>Dict(:value=>NoValue()), :N=>Dict(:value=>2), :M=>Dict(:value=>3), :v=>Dict{Symbol, Any}(:value=>:v_var, :type=>Real), :v_array=>Dict{Symbol, Any}(:value=>nothing, :type=>Real, :size=>(:N, :M)), :v_for_defaults=>Dict{Symbol, Union{Nothing, DataType}}(:value=>nothing, :type=>Real), :p1=>Dict(:value=>1))
+  :structural_parameters => Dict{Symbol, Dict}(:f=>Dict(:value=>:sin), :N=>Dict(:value=>2), :M=>Dict(:value=>3))
+  :independent_variable  => :t
   :constants             => Dict{Symbol, Dict}(:c=>Dict{Symbol, Any}(:value=>1, :type=>Int64, :description=>"Example constant."))
   :extend                => Any[[:p2, :p1], Symbol("#mtkmodel__anonymous__ModelB"), :ModelB]
   :defaults              => Dict{Symbol, Any}(:v_for_defaults=>2.0)
   :equations             => Any["model_a.k ~ f(v)"]
+```
+
+### Different ways to define symbolics arrays:
+
+`@mtkmodel` supports symbolics arrays in both `@parameters` and `@variables`.
+Using a structural parameters, symbolic arrays of arbitrary lengths can be defined.
+Refer the following example for different ways to define symbolic arrays.
+
+```@example mtkmodel-example
+@mtkmodel ModelWithArrays begin
+    @structural_parameters begin
+        N = 2
+        M = 3
+    end
+    @parameters begin
+        p1[1:4]
+        p2[1:N]
+        p3[1:N, 1:M] = 10,
+        [description = "A multi-dimensional array of arbitrary length with description"]
+        (p4[1:N, 1:M] = 10),
+        [description = "An alternate syntax for p3 to match the syntax of vanilla parameters macro"]
+    end
+    @variables begin
+        v1(t)[1:2] = 10, [description = "An array of variable `v1`"]
+        v2(t)[1:3] = [1, 2, 3]
+    end
+end
+```
+
+The size of symbolic array can be accessed via `:size` key, along with other metadata (refer [More on `Model.structure`](@ref model_structure))
+of the symbolic variable.
+
+```julia
+julia> ModelWithArrays.structure
+Dict{Symbol, Any} with 5 entries:
+    :variables => Dict{Symbol, Dict{Symbol, Any}}(:v2 => Dict(:value => :([1, 2, 3]), :type => Real, :size => (3,)), :v1 => Dict(:value => :v1, :type => Real, :description => "An array of variable `v1`", :size => (2,)))
+    :kwargs => Dict{Symbol, Dict}(:p2 => Dict{Symbol, Any}(:value => nothing, :type => Real, :size => (:N,)), :v1 => Dict{Symbol, Any}(:value => :v1, :type => Real, :description => "An array of variable `v1`", :size => (2,)), :N => Dict(:value => 2), :M => Dict(:value => 3), :p4 => Dict{Symbol, Any}(:value => 10, :type => Real, :description => "An alternate syntax for p3 to match the syntax of vanilla parameters macro", :size => (:N, :M)), :v2 => Dict{Symbol, Any}(:value => :([1, 2, 3]), :type => Real, :size => (3,)), :p1 => Dict{Symbol, Any}(:value => nothing, :type => Real, :size => (4,)), :p3 => Dict{Symbol, Any}(:value => :p3, :type => Real, :description => "A multi-dimensional array of arbitrary length with description", :size => (:N, :M)))
+    :structural_parameters => Dict{Symbol, Dict}(:N => Dict(:value => 2), :M => Dict(:value => 3))
+    :independent_variable => :t
+    :parameters => Dict{Symbol, Dict{Symbol, Any}}(:p2 => Dict(:value => nothing, :type => Real, :size => (:N,)), :p4 => Dict(:value => 10, :type => Real, :description => "An alternate syntax for p3 to match the syntax of vanilla parameters macro", :size => (:N, :M)), :p1 => Dict(:value => nothing, :type => Real, :size => (4,)), :p3 => Dict(:value => :p3, :type => Real, :description => "A multi-dimensional array of arbitrary length with description", :size => (:N, :M)))), false)
 ```
 
 ### Using conditional statements

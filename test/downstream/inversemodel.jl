@@ -151,13 +151,11 @@ x, _ = ModelingToolkit.get_u0_p(simplified_sys, op)
 p = ModelingToolkit.MTKParameters(simplified_sys, op)
 # If this somehow passes, mention it on
 # https://github.com/SciML/ModelingToolkit.jl/issues/2786
-@test_broken begin
-    matrices1 = Sf(x, p, 0)
-    matrices2, _ = Blocks.get_sensitivity(model, :y; op) # Test that we get the same result when calling the higher-level API
-    @test matrices1.f_x ≈ matrices2.A[1:7, 1:7]
-    nsys = get_named_sensitivity(model, :y; op) # Test that we get the same result when calling an even higher-level API
-    @test matrices2.A ≈ nsys.A
-end
+matrices1 = Sf(x, p, 0)
+matrices2, _ = Blocks.get_sensitivity(model, :y; op) # Test that we get the same result when calling the higher-level API
+@test_broken matrices1.f_x ≈ matrices2.A[1:7, 1:7]
+nsys = get_named_sensitivity(model, :y; op) # Test that we get the same result when calling an even higher-level API
+@test matrices2.A ≈ nsys.A
 
 # Test the same thing for comp sensitivities
 
@@ -166,10 +164,8 @@ x, _ = ModelingToolkit.get_u0_p(simplified_sys, op)
 p = ModelingToolkit.MTKParameters(simplified_sys, op)
 # If this somehow passes, mention it on
 # https://github.com/SciML/ModelingToolkit.jl/issues/2786
-@test_broken begin
-    matrices1 = Sf(x, p, 0)
-    matrices2, _ = Blocks.get_comp_sensitivity(model, :y; op) # Test that we get the same result when calling the higher-level API
-    @test matrices1.f_x ≈ matrices2.A[1:7, 1:7]
-    nsys = get_named_comp_sensitivity(model, :y; op) # Test that we get the same result when calling an even higher-level API
-    @test matrices2.A ≈ nsys.A
-end
+matrices1 = Sf(x, p, 0)
+matrices2, _ = Blocks.get_comp_sensitivity(model, :y; op) # Test that we get the same result when calling the higher-level API
+@test_broken matrices1.f_x ≈ matrices2.A[1:7, 1:7]
+nsys = get_named_comp_sensitivity(model, :y; op) # Test that we get the same result when calling an even higher-level API
+@test matrices2.A ≈ nsys.A

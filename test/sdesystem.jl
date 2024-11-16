@@ -36,10 +36,6 @@ solexpr = solve(eval(probexpr), SRIW1(), seed = 1)
 
 @test all(x -> x == 0, Array(sol - solexpr))
 
-# Test no error
-@test_nowarn SDEProblem(de, nothing, (0, 10.0))
-@test SDEProblem(de, nothing).tspan == (0.0, 10.0)
-
 noiseeqs_nd = [0.01*x 0.01*x*y 0.02*x*z
                σ 0.01*y 0.02*x*z
                ρ β 0.01*z]
@@ -775,4 +771,12 @@ end
 
     prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
     @test solve(prob, SOSRI()).retcode == ReturnCode.Success
+end
+
+@testset "Passing `nothing` to `u0`" begin
+    @variables x(t) = 1
+    @brownian b
+    @mtkbuild sys = System([D(x) ~ x + b], t)
+    prob = @test_nowarn SDEProblem(sys, nothing, (0.0, 1.0))
+    @test_nowarn solve(prob, ImplicitEM())
 end

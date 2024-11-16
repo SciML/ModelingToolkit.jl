@@ -59,7 +59,7 @@ struct ObservableRecordFromSolution{S, T}
     end
 end
 # Functor function that computes the value.
-function (orfs::ObservableRecordFromSolution)(x, p)
+function (orfs::ObservableRecordFromSolution)(x, p; k...)
     # Updates the state values (in subs_vals).
     for state_idx in 1:(orfs.state_end_idxs)
         orfs.subs_vals[state_idx] = orfs.subs_vals[state_idx][1] => x[state_idx]
@@ -113,7 +113,7 @@ function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem,
         # If the plot var is a normal state.
         if any(isequal(plot_var, var) for var in unknowns(nsys))
             plot_idx = findfirst(isequal(plot_var), unknowns(nsys))
-            record_from_solution = (x, p) -> x[plot_idx]
+            record_from_solution = (x, p; k...) -> x[plot_idx]
 
             # If the plot var is an observed state.
         elseif any(isequal(plot_var, eq.lhs) for eq in observed(nsys))
@@ -132,7 +132,7 @@ function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem,
     return BifurcationKit.BifurcationProblem(F,
         u0_bif_vals,
         p_vals,
-        (@lens _[bif_idx]),
+        (BifurcationKit.@optic _[bif_idx]),
         args...;
         record_from_solution = record_from_solution,
         J = J,
