@@ -254,7 +254,6 @@ end
 ## Bounds ======================================================================
 struct VariableBounds end
 Symbolics.option_to_metadata_type(::Val{:bounds}) = VariableBounds
-getbounds(x::Num) = getbounds(Symbolics.unwrap(x))
 
 """
     getbounds(x)
@@ -266,10 +265,35 @@ Create parameters with bounds like this
 @parameters p [bounds=(-1, 1)]
 ```
 """
-function getbounds(x)
+function getbounds(x::Union{Num, Symbolics.Arr, SymbolicUtils.Symbolic})
+    x = unwrap(x)
     p = Symbolics.getparent(x, nothing)
-    p === nothing || (x = p)
-    Symbolics.getmetadata(x, VariableBounds, (-Inf, Inf))
+    if p === nothing
+        bounds = Symbolics.getmetadata(x, VariableBounds, (-Inf, Inf))
+        if symbolic_type(x) == ArraySymbolic() && Symbolics.shape(x) != Symbolics.Unknown()
+            bounds = map(bounds) do b
+                b isa AbstractArray && return b
+                return fill(b, size(x))
+            end
+        end
+    else
+        # if we reached here, `x` is the result of calling `getindex`
+        bounds = @something Symbolics.getmetadata(x, VariableBounds, nothing) getbounds(p)
+        idxs = arguments(x)[2:end]
+        bounds = map(bounds) do b
+            if b isa AbstractArray
+                if Symbolics.shape(p) != Symbolics.Unknown() && size(p) != size(b)
+                    throw(DimensionMismatch("Expected array variable $p with shape $(size(p)) to have bounds of identical size. Found $bounds of size $(size(bounds))."))
+                end
+                return b[idxs...]
+            elseif symbolic_type(x) == ArraySymbolic()
+                return fill(b, size(x))
+            else
+                return b
+            end
+        end
+    end
+    return bounds
 end
 
 """
@@ -280,7 +304,7 @@ See also [`getbounds`](@ref).
 """
 function hasbounds(x)
     b = getbounds(x)
-    isfinite(b[1]) || isfinite(b[2])
+    any(isfinite.(b[1]) .|| isfinite.(b[2]))
 end
 
 ## Disturbance =================================================================
