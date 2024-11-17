@@ -490,7 +490,16 @@ function build_explicit_observed_function(sys, ts;
     ivs = independent_variables(sys)
     dep_vars = scalarize(setdiff(vars, ivs))
 
-    obs = param_only ? Equation[] : observed(sys)
+    obs = observed(sys)
+    if param_only
+        if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+            obs = filter(obs) do eq
+                !(ContinuousTimeseries() in ic.observed_syms_to_timeseries[eq.lhs])
+            end
+        else
+            obs = Equation[]
+        end
+    end
 
     cs = collect_constants(obs)
     if !isempty(cs) > 0

@@ -38,6 +38,7 @@ const UnknownIndexMap = Dict{
     BasicSymbolic, Union{Int, UnitRange{Int}, AbstractArray{Int}}}
 const TunableIndexMap = Dict{BasicSymbolic,
     Union{Int, UnitRange{Int}, Base.ReshapedArray{Int, N, UnitRange{Int}} where {N}}}
+const TimeseriesSetType = Set{Union{ContinuousTimeseries, Int}}
 
 struct IndexCache
     unknown_idx::UnknownIndexMap
@@ -48,8 +49,9 @@ struct IndexCache
     tunable_idx::TunableIndexMap
     constant_idx::ParamIndexMap
     nonnumeric_idx::NonnumericMap
-    observed_syms::Set{BasicSymbolic}
-    dependent_pars::Set{Union{BasicSymbolic, CallWithMetadata}}
+    observed_syms_to_timeseries::Dict{BasicSymbolic, TimeseriesSetType}
+    dependent_pars_to_timeseries::Dict{
+        Union{BasicSymbolic, CallWithMetadata}, TimeseriesSetType}
     discrete_buffer_sizes::Vector{Vector{BufferTemplate}}
     tunable_buffer_size::BufferTemplate
     constant_buffer_sizes::Vector{BufferTemplate}
@@ -88,20 +90,6 @@ function IndexCache(sys::AbstractSystem)
             rsym = renamespace(sys, arrsym)
             unk_idxs[arrsym] = idxs
             unk_idxs[rsym] = idxs
-        end
-    end
-
-    observed_syms = Set{BasicSymbolic}()
-    for eq in observed(sys)
-        if symbolic_type(eq.lhs) != NotSymbolic()
-            sym = eq.lhs
-            ttsym = default_toterm(sym)
-            rsym = renamespace(sys, sym)
-            rttsym = renamespace(sys, ttsym)
-            push!(observed_syms, sym)
-            push!(observed_syms, ttsym)
-            push!(observed_syms, rsym)
-            push!(observed_syms, rttsym)
         end
     end
 
@@ -267,26 +255,65 @@ function IndexCache(sys::AbstractSystem)
         end
     end
 
-    for sym in Iterators.flatten((keys(unk_idxs), keys(disc_idxs), keys(tunable_idxs),
-        keys(const_idxs), keys(nonnumeric_idxs),
-        observed_syms, independent_variable_symbols(sys)))
-        if hasname(sym) && (!iscall(sym) || operation(sym) !== getindex)
-            symbol_to_variable[getname(sym)] = sym
-        end
-    end
-
-    dependent_pars = Set{Union{BasicSymbolic, CallWithMetadata}}()
+    dependent_pars_to_timeseries = Dict{
+        Union{BasicSymbolic, CallWithMetadata}, TimeseriesSetType}()
 
     for eq in parameter_dependencies(sys)
         sym = eq.lhs
+        vs = vars(eq.rhs)
+        timeseries = TimeseriesSetType()
+        if is_time_dependent(sys)
+            for v in vs
+                if (idx = get(disc_idxs, v, nothing)) !== nothing
+                    push!(timeseries, idx.clock_idx)
+                end
+            end
+        end
         ttsym = default_toterm(sym)
         rsym = renamespace(sys, sym)
         rttsym = renamespace(sys, ttsym)
-        for s in [sym, ttsym, rsym, rttsym]
-            push!(dependent_pars, s)
+        for s in (sym, ttsym, rsym, rttsym)
+            dependent_pars_to_timeseries[s] = timeseries
             if hasname(s) && (!iscall(s) || operation(s) != getindex)
                 symbol_to_variable[getname(s)] = sym
             end
+        end
+    end
+
+    observed_syms_to_timeseries = Dict{BasicSymbolic, TimeseriesSetType}()
+    for eq in observed(sys)
+        if symbolic_type(eq.lhs) != NotSymbolic()
+            sym = eq.lhs
+            vs = vars(eq.rhs; op = Nothing)
+            timeseries = TimeseriesSetType()
+            if is_time_dependent(sys)
+                for v in vs
+                    if (idx = get(disc_idxs, v, nothing)) !== nothing
+                        push!(timeseries, idx.clock_idx)
+                    elseif haskey(observed_syms_to_timeseries, v)
+                        union!(timeseries, observed_syms_to_timeseries[v])
+                    elseif haskey(dependent_pars_to_timeseries, v)
+                        union!(timeseries, dependent_pars_to_timeseries[v])
+                    end
+                end
+                if isempty(timeseries)
+                    push!(timeseries, ContinuousTimeseries())
+                end
+            end
+            ttsym = default_toterm(sym)
+            rsym = renamespace(sys, sym)
+            rttsym = renamespace(sys, ttsym)
+            for s in (sym, ttsym, rsym, rttsym)
+                observed_syms_to_timeseries[s] = timeseries
+            end
+        end
+    end
+
+    for sym in Iterators.flatten((keys(unk_idxs), keys(disc_idxs), keys(tunable_idxs),
+        keys(const_idxs), keys(nonnumeric_idxs),
+        keys(observed_syms_to_timeseries), independent_variable_symbols(sys)))
+        if hasname(sym) && (!iscall(sym) || operation(sym) !== getindex)
+            symbol_to_variable[getname(sym)] = sym
         end
     end
 
@@ -297,8 +324,8 @@ function IndexCache(sys::AbstractSystem)
         tunable_idxs,
         const_idxs,
         nonnumeric_idxs,
-        observed_syms,
-        dependent_pars,
+        observed_syms_to_timeseries,
+        dependent_pars_to_timeseries,
         disc_buffer_templates,
         BufferTemplate(Real, tunable_buffer_size),
         const_buffer_sizes,
