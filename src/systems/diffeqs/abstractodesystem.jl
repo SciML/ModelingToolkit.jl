@@ -792,12 +792,6 @@ function DiffEqBase.ODEProblem{false}(sys::AbstractODESystem, args...; kwargs...
     ODEProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
-struct DiscreteSaveAffect{F, S} <: Function
-    f::F
-    s::S
-end
-(d::DiscreteSaveAffect)(args...) = d.f(args..., d.s)
-
 function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = [],
         tspan = get_tspan(sys),
         parammap = DiffEqBase.NullParameters();
