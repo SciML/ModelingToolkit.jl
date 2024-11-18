@@ -579,9 +579,8 @@ function SCCNonlinearFunction{iip}(
     wrap_code = wrap_assignments(false, assignments) .∘
                 (wrap_array_vars(sys, rhss; dvs = _dvs, cachesyms)) .∘
                 wrap_parameter_dependencies(sys, false)
-    @show _dvs
     f_gen = build_function(
-        rhss, _dvs, ps..., cachesyms...; wrap_code, expression = Val{true})
+        rhss, _dvs, rps..., cachesyms...; wrap_code, expression = Val{true})
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
 
     f(u, p) = f_oop(u, p)
@@ -608,11 +607,9 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
 
     ts = get_tearing_state(sys)
     var_eq_matching, var_sccs = StructuralTransformations.algebraic_variables_scc(ts)
-    condensed_graph = StructuralTransformations.MatchedCondensationGraph(
-        StructuralTransformations.DiCMOBiGraph{true}(ts.structure.graph, var_eq_matching),
-        var_sccs)
-    toporder = topological_sort_by_dfs(condensed_graph)
-    var_sccs = var_sccs[toporder]
+    # The system is simplified, so SCCs are already in sorted order. We just need to get them and sort
+    # according to index in unknowns(sys)
+    sort!(var_sccs)
     eq_sccs = map(Base.Fix1(getindex, var_eq_matching), var_sccs)
 
     dvs = unknowns(sys)
