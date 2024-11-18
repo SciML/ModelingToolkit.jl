@@ -149,6 +149,11 @@ struct ODESystem <: AbstractODESystem
     """
     is_dde::Bool
     """
+    A list of points to provide to the solver as tstops. Uses the same syntax as discrete
+    events.
+    """
+    tstops::Vector{Any}
+    """
     Cache for intermediate tearing state.
     """
     tearing_state::Any
@@ -187,7 +192,7 @@ struct ODESystem <: AbstractODESystem
             connector_type, preface, cevents,
             devents, parameter_dependencies,
             metadata = nothing, gui_metadata = nothing, is_dde = false,
-            tearing_state = nothing,
+            tstops = [], tearing_state = nothing,
             substitutions = nothing, complete = false, index_cache = nothing,
             discrete_subsystems = nothing, solved_unknowns = nothing,
             split_idxs = nothing, parent = nothing; checks::Union{Bool, Int} = true)
@@ -206,7 +211,7 @@ struct ODESystem <: AbstractODESystem
             ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses, torn_matching,
             initializesystem, initialization_eqs, schedule, connector_type, preface,
             cevents, devents, parameter_dependencies, metadata,
-            gui_metadata, is_dde, tearing_state, substitutions, complete, index_cache,
+            gui_metadata, is_dde, tstops, tearing_state, substitutions, complete, index_cache,
             discrete_subsystems, solved_unknowns, split_idxs, parent)
     end
 end
@@ -233,7 +238,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         checks = true,
         metadata = nothing,
         gui_metadata = nothing,
-        is_dde = nothing)
+        is_dde = nothing,
+        tstops = [])
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
@@ -299,7 +305,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         defaults, guesses, nothing, initializesystem,
         initialization_eqs, schedule, connector_type, preface, cont_callbacks,
         disc_callbacks, parameter_dependencies,
-        metadata, gui_metadata, is_dde, checks = checks)
+        metadata, gui_metadata, is_dde, tstops, checks = checks)
 end
 
 function ODESystem(eqs, iv; kwargs...)
@@ -402,6 +408,7 @@ function flatten(sys::ODESystem, noeqs = false)
             description = description(sys),
             initialization_eqs = initialization_equations(sys),
             is_dde = is_dde(sys),
+            tstops = symbolic_tstops(sys),
             checks = false)
     end
 end

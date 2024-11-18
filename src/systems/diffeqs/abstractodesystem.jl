@@ -758,6 +758,39 @@ function DAEFunctionExpr(sys::AbstractODESystem, args...; kwargs...)
     DAEFunctionExpr{true}(sys, args...; kwargs...)
 end
 
+struct SymbolicTstops{F}
+    fn::F
+end
+
+function (st::SymbolicTstops)(p, tspan)
+    unique!(sort!(reduce(vcat, st.fn(p..., tspan...))))
+end
+
+function SymbolicTstops(
+        sys::AbstractSystem; eval_expression = false, eval_module = @__MODULE__)
+    tstops = symbolic_tstops(sys)
+    isempty(tstops) && return nothing
+    t0 = gensym(:t0)
+    t1 = gensym(:t1)
+    tstops = map(tstops) do val
+        if is_array_of_symbolics(val) || val isa AbstractArray
+            collect(val)
+        else
+            term(:, t0, unwrap(val), t1; type = AbstractArray{Real})
+        end
+    end
+    rps = reorder_parameters(sys, parameters(sys))
+    tstops, _ = build_function(tstops,
+        rps...,
+        t0,
+        t1;
+        expression = Val{true},
+        wrap_code = wrap_array_vars(sys, tstops; dvs = nothing) .∘
+                    wrap_parameter_dependencies(sys, false))
+    tstops = eval_or_rgf(tstops; eval_expression, eval_module)
+    return SymbolicTstops(tstops)
+end
+
 """
 ```julia
 DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
@@ -817,6 +850,11 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
         kwargs1 = merge(kwargs1, (callback = cbs,))
     end
 
+    tstops = SymbolicTstops(sys; eval_expression, eval_module)
+    if tstops !== nothing
+        kwargs1 = merge(kwargs1, (; tstops))
+    end
+
     return ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...)
 end
 get_callback(prob::ODEProblem) = prob.kwargs[:callback]
@@ -843,7 +881,7 @@ end
 function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
         parammap = DiffEqBase.NullParameters();
         warn_initialize_determined = true,
-        check_length = true, kwargs...) where {iip}
+        check_length = true, eval_expression = false, eval_module = @__MODULE__, kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEProblem`")
     end
@@ -856,8 +894,15 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
     differential_vars = map(Base.Fix2(in, diffvars), sts)
     kwargs = filter_kwargs(kwargs)
 
+    kwargs1 = (;)
+
+    tstops = SymbolicTstops(sys; eval_expression, eval_module)
+    if tstops !== nothing
+        kwargs1 = merge(kwargs1, (; tstops))
+    end
+
     DAEProblem{iip}(f, du0, u0, tspan, p; differential_vars = differential_vars,
-        kwargs...)
+        kwargs..., kwargs1...)
 end
 
 function generate_history(sys::AbstractODESystem, u0; expression = Val{false}, kwargs...)

@@ -1051,6 +1051,7 @@ for prop in [:eqs
              :split_idxs
              :parent
              :is_dde
+             :tstops
              :index_cache
              :is_scalar_noise
              :isscheduled]
@@ -1377,6 +1378,14 @@ function namespace_initialization_equations(
     map(eq -> namespace_equation(eq, sys; ivs), eqs)
 end
 
+function namespace_tstops(sys::AbstractSystem)
+    tstops = symbolic_tstops(sys)
+    isempty(tstops) && return tstops
+    map(tstops) do val
+        namespace_expr(val, sys)
+    end
+end
+
 function namespace_equation(eq::Equation,
         sys,
         n = nameof(sys);
@@ -1630,6 +1639,14 @@ function initialization_equations(sys::AbstractSystem)
                            init = Equation[])]
         return eqs
     end
+end
+
+function symbolic_tstops(sys::AbstractSystem)
+    tstops = get_tstops(sys)
+    systems = get_systems(sys)
+    isempty(systems) && return tstops
+    tstops = [tstops; reduce(vcat, namespace_tstops.(get_systems(sys)); init = [])]
+    return tstops
 end
 
 function preface(sys::AbstractSystem)
