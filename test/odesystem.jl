@@ -1521,6 +1521,6 @@ end
     @parameters p[1:2] = [1.0, 2.0]
     @mtkbuild sys = ODESystem([D(x) ~ x, y^2 ~ x + sum(p)], t)
     prob = DAEProblem(sys, [D(x) => x, D(y) => D(x) / 2y], [], (0.0, 1.0))
-    sol = solve(prob, DImplicitEuler())
+    sol = solve(prob, DFBDF(), abstol=1e-8, reltol=1e-8)
     @test sol[x]≈sol[y^2 - sum(p)] atol=1e-5
 end
