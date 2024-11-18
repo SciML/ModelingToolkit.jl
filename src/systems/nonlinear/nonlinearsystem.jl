@@ -572,13 +572,15 @@ function SCCNonlinearFunction{iip}(
     _eqs = eqs[escc]
     obsidxs = observed_equations_used_by(sys, _eqs)
     _obs = obs[obsidxs]
+    obs_assignments = [eq.lhs ← eq.rhs for eq in _obs]
 
     cmap, cs = get_cmap(sys)
-    assignments = [eq.lhs ← eq.rhs for eq in cmap]
+    cmap_assignments = [eq.lhs ← eq.rhs for eq in cmap]
     rhss = [eq.rhs - eq.lhs for eq in _eqs]
-    wrap_code = wrap_assignments(false, assignments) .∘
+    wrap_code = wrap_assignments(false, cmap_assignments) .∘
                 (wrap_array_vars(sys, rhss; dvs = _dvs, cachesyms)) .∘
-                wrap_parameter_dependencies(sys, false)
+                wrap_parameter_dependencies(sys, false) .∘
+                wrap_assignments(false, obs_assignments)
     f_gen = build_function(
         rhss, _dvs, rps..., cachesyms...; wrap_code, expression = Val{true})
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
