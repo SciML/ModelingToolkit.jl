@@ -553,7 +553,7 @@ function CacheWriter(sys::AbstractSystem, exprs, solsyms;
              [],
              SetArray(true, :out, exprs)
          ) |> wrap_parameter_dependencies(sys, false)[2] |>
-         wrap_array_vars(sys, exprs; dvs = nothing)[2] |> toexpr
+         wrap_array_vars(sys, exprs; dvs = nothing, inputs = [])[2] |> toexpr
     return CacheWriter(eval_or_rgf(fn; eval_expression, eval_module))
 end
 
