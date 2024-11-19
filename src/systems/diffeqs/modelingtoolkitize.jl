@@ -277,10 +277,24 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem; kwargs...)
     else
         Vector(vec(params))
     end
+    sts = Vector(vec(vars))
+    default_u0 = Dict(sts .=> vec(collect(prob.u0)))
+    default_p = if has_p
+        if prob.p isa AbstractDict
+            Dict(v => prob.p[k] for (k, v) in pairs(_params))
+        elseif prob.p isa MTKParameters
+            Dict(params .=> reduce(vcat, prob.p))
+        else
+            Dict(params .=> vec(collect(prob.p)))
+        end
+    else
+        Dict()
+    end
 
-    de = SDESystem(deqs, neqs, t, Vector(vec(vars)), params;
+    de = SDESystem(deqs, neqs, t, sts, params;
         name = gensym(:MTKizedSDE),
         tspan = prob.tspan,
+        defaults = merge(default_u0, default_p),
         kwargs...)
 
     de
