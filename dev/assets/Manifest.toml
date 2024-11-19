@@ -2272,9 +2272,9 @@ weakdeps = ["SparseArrays", "StaticArraysCore"]
 
 [[deps.SciMLStructures]]
 deps = ["ArrayInterface"]
-git-tree-sha1 = "4cce08f7f8f9501edb1ea7b15360529745580e96"
+git-tree-sha1 = "0444a37a25fab98adbd90baa806ee492a3af133a"
 uuid = "53ae85a6-f571-4167-b2af-e1d143709226"
-version = "1.6.0"
+version = "1.6.1"
 
 [[deps.Scratch]]
 deps = ["Dates"]
