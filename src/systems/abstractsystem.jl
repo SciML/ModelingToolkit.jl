@@ -3285,18 +3285,25 @@ function dump_unknowns(sys::AbstractSystem)
     end
 end
 
-# syntax:
-# varname                  = "D(" varname ")" | arrvar | maybe_dummy_var
-# arrvar                   = maybe_dummy_var "[idxs...]"
-# idxs                     = int | int "," idxs
-# maybe_dummy_var          = namespacedvar | namespacedvar "(t)" |
-#                            namespacedvar "(t)" "ˍ" ts | namespacedvar "ˍ" ts |
-#                            namespacedvar "ˍ" ts "(t)"
-# ts                       = "t" | "t" ts
-# namespacedvar            = ident "₊" namespacedvar | ident "." namespacedvar | ident
-# 
-# I'd write a regex to validate this, but https://xkcd.com/1171/
+"""
+    $(TYPEDSIGNATURES)
+
+Return the variable in `sys` referred to by its string representation `str`.
+Roughly supports the following CFG:
+
+```
+varname                  = "D(" varname ")" | arrvar | maybe_dummy_var
+arrvar                   = maybe_dummy_var "[idxs...]"
+idxs                     = int | int "," idxs
+maybe_dummy_var          = namespacedvar | namespacedvar "(t)" |
+                           namespacedvar "(t)" "ˍ" ts | namespacedvar "ˍ" ts |
+                           namespacedvar "ˍ" ts "(t)"
+ts                       = "t" | "t" ts
+namespacedvar            = ident "₊" namespacedvar | ident "." namespacedvar | ident
+```
+"""
 function parse_variable(sys::AbstractSystem, str::AbstractString)
+    # I'd write a regex to validate `str`, but https://xkcd.com/1171/
     str = strip(str)
     derivative_level = 0
     while startswith(str, "D(") && endswith(str, ")")
