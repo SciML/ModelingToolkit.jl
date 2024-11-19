@@ -583,7 +583,13 @@ function SCCNonlinearFunction{iip}(
     f(resid, u, p) = f_iip(resid, u, p)
     f(resid, u, p::MTKParameters) = f_iip(resid, u, p...)
 
-    return NonlinearFunction{iip}(f)
+    subsys = NonlinearSystem(_eqs, _dvs, ps; observed = _obs, parameter_dependencies = parameter_dependencies(sys), name = nameof(sys))
+    if get_index_cache(sys) !== nothing
+        @set! subsys.index_cache = subset_unknowns_observed(get_index_cache(sys), sys, _dvs, getproperty.(_obs, (:lhs,)))
+        @set! subsys.complete = true
+    end
+
+    return NonlinearFunction{iip}(f; sys = subsys)
 end
 
 function SciMLBase.SCCNonlinearProblem(sys::NonlinearSystem, args...; kwargs...)

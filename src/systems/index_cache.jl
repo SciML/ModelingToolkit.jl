@@ -594,3 +594,28 @@ function reorder_dimension_by_tunables(
     reorder_dimension_by_tunables!(buffer, sys, arr, syms; dim)
     return buffer
 end
+
+function subset_unknowns_observed(
+        ic::IndexCache, sys::AbstractSystem, newunknowns, newobsvars)
+    unknown_idx = copy(ic.unknown_idx)
+    empty!(unknown_idx)
+    for (i, sym) in enumerate(newunknowns)
+        ttsym = default_toterm(sym)
+        rsym = renamespace(sys, sym)
+        rttsym = renamespace(sys, ttsym)
+        unknown_idx[sym] = unknown_idx[ttsym] = unknown_idx[rsym] = unknown_idx[rttsym] = i
+    end
+    observed_syms_to_timeseries = copy(ic.observed_syms_to_timeseries)
+    empty!(observed_syms_to_timeseries)
+    for sym in newobsvars
+        ttsym = default_toterm(sym)
+        rsym = renamespace(sys, sym)
+        rttsym = renamespace(sys, ttsym)
+        for s in (sym, ttsym, rsym, rttsym)
+            observed_syms_to_timeseries[s] = ic.observed_syms_to_timeseries[sym]
+        end
+    end
+    ic = @set ic.unknown_idx = unknown_idx
+    @set! ic.observed_syms_to_timeseries = observed_syms_to_timeseries
+    return ic
+end
