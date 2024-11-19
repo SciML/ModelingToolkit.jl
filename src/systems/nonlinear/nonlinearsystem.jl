@@ -560,18 +560,11 @@ end
 struct SCCNonlinearFunction{iip} end
 
 function SCCNonlinearFunction{iip}(
-        sys::NonlinearSystem, vscc, escc, cachesyms; eval_expression = false,
+        sys::NonlinearSystem, _eqs, _dvs, _obs, cachesyms; eval_expression = false,
         eval_module = @__MODULE__, kwargs...) where {iip}
-    dvs = unknowns(sys)
     ps = parameters(sys)
     rps = reorder_parameters(sys, ps)
-    eqs = equations(sys)
-    obs = observed(sys)
 
-    _dvs = dvs[vscc]
-    _eqs = eqs[escc]
-    obsidxs = observed_equations_used_by(sys, _eqs)
-    _obs = obs[obsidxs]
     obs_assignments = [eq.lhs ← eq.rhs for eq in _obs]
 
     cmap, cs = get_cmap(sys)
@@ -621,24 +614,46 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
 
     _, u0, p = process_SciMLProblem(
         EmptySciMLFunction, sys, u0map, parammap; eval_expression, eval_module, kwargs...)
-    p = rebuild_with_caches(p, BufferTemplate(eltype(u0), length(u0)))
 
-    subprobs = []
     explicitfuns = []
+    nlfuns = []
+    prevobsidxs = Int[]
+    cachevars = []
+    cacheexprs = []
     for (i, (escc, vscc)) in enumerate(zip(eq_sccs, var_sccs))
-        oldvars = dvs[reduce(vcat, view(var_sccs, 1:(i - 1)); init = Int[])]
-        if isempty(oldvars)
-            push!(explicitfuns, (_...) -> nothing)
+        # subset unknowns and equations
+        _dvs = dvs[vscc]
+        _eqs = eqs[escc]
+        # get observed equations required by this SCC
+        obsidxs = observed_equations_used_by(sys, _eqs)
+        # the ones used by previous SCCs can be precomputed into the cache
+        setdiff!(obsidxs, prevobsidxs)
+        _obs = obs[obsidxs]
+
+        if isempty(cachevars)
+            push!(explicitfuns, Returns(nothing))
         else
             solsyms = getindex.((dvs,), view(var_sccs, 1:(i - 1)))
             push!(explicitfuns,
-                CacheWriter(sys, oldvars, solsyms; eval_expression, eval_module))
+                CacheWriter(sys, cacheexprs, solsyms; eval_expression, eval_module))
         end
-        prob = NonlinearProblem(
-            SCCNonlinearFunction{iip}(
-                sys, vscc, escc, (oldvars,); eval_expression, eval_module, kwargs...),
-            u0[vscc],
-            p)
+        f = SCCNonlinearFunction{iip}(
+            sys, _eqs, _dvs, _obs, (cachevars,); eval_expression, eval_module, kwargs...)
+        push!(nlfuns, f)
+        append!(cachevars, _dvs)
+        append!(cacheexprs, _dvs)
+        for i in obsidxs
+            push!(cachevars, obs[i].lhs)
+            push!(cacheexprs, obs[i].rhs)
+        end
+        append!(prevobsidxs, obsidxs)
+    end
+
+    p = rebuild_with_caches(p, BufferTemplate(eltype(u0), length(cachevars)))
+
+    subprobs = []
+    for (f, vscc) in zip(nlfuns, var_sccs)
+        prob = NonlinearProblem(f, u0[vscc], p)
         push!(subprobs, prob)
     end
 
