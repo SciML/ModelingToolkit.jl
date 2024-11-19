@@ -441,3 +441,31 @@ prob = NonlinearLeastSquaresProblem(
 sys = modelingtoolkitize(prob)
 @test length(equations(sys)) == 3
 @test length(equations(structural_simplify(sys; fully_determined = false))) == 0
+
+@testset "`modelingtoolkitize(::SDEProblem)` sets defaults" begin
+    function sdeg!(du, u, p, t)
+        du[1] = 0.3 * u[1]
+        du[2] = 0.3 * u[2]
+        du[3] = 0.3 * u[3]
+    end
+    function sdef!(du, u, p, t)
+        x, y, z = u
+        sigma, rho, beta = p
+        du[1] = sigma * (y - x)
+        du[2] = x * (rho - z) - y
+        du[3] = x * y - beta * z
+    end
+    u0 = [1.0, 0.0, 0.0]
+    tspan = (0.0, 100.0)
+    p = [10.0, 28.0, 2.66]
+    sprob = SDEProblem(sdef!, sdeg!, u0, tspan, p)
+    sys = complete(modelingtoolkitize(sprob))
+    @test length(ModelingToolkit.defaults(sys)) == 6
+    sprob2 = SDEProblem(sys, [], tspan)
+
+    truevals = similar(u0)
+    sprob.f(truevals, u0, p, tspan[1])
+    mtkvals = similar(u0)
+    sprob2.f(mtkvals, sprob2.u0, sprob2.p, tspan[1])
+    @test mtkvals ≈ truevals
+end
