@@ -221,9 +221,11 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
         pre, sol_states = get_substitutions_and_solved_unknowns(sys)
 
         if implicit_dae
+            # inputs = [] makes `wrap_array_vars` offset by 1 since there is an extra
+            # argument
             build_function(rhss, ddvs, u, p..., t; postprocess_fbody = pre,
                 states = sol_states,
-                wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps) .∘
+                wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps, inputs = []) .∘
                             wrap_parameter_dependencies(sys, false),
                 kwargs...)
         else
@@ -789,12 +791,6 @@ end
 function DiffEqBase.ODEProblem{false}(sys::AbstractODESystem, args...; kwargs...)
     ODEProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
-
-struct DiscreteSaveAffect{F, S} <: Function
-    f::F
-    s::S
-end
-(d::DiscreteSaveAffect)(args...) = d.f(args..., d.s)
 
 function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = [],
         tspan = get_tspan(sys),

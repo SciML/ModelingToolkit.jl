@@ -641,8 +641,7 @@ function process_SciMLProblem(
         ddvs = map(Differential(iv), dvs)
         du0map = to_varmap(du0map, ddvs)
         merge!(op, du0map)
-
-        du0 = varmap_to_vars(du0map, ddvs; toterm = identity,
+        du0 = varmap_to_vars(op, ddvs; toterm = identity,
             tofloat = true)
         kwargs = merge(kwargs, (; ddvs))
     else
