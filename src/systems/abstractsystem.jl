@@ -3285,6 +3285,79 @@ function dump_unknowns(sys::AbstractSystem)
     end
 end
 
+# syntax:
+# varname                  = "D(" varname ")" | arrvar | maybe_dummy_var
+# arrvar                   = maybe_dummy_var "[idxs...]"
+# idxs                     = int | int "," idxs
+# maybe_dummy_var          = namespacedvar | namespacedvar "(t)" |
+#                            namespacedvar "(t)" "ˍ" ts | namespacedvar "ˍ" ts |
+#                            namespacedvar "ˍ" ts "(t)"
+# ts                       = "t" | "t" ts
+# namespacedvar            = ident "₊" namespacedvar | ident "." namespacedvar | ident
+# 
+# I'd write a regex to validate this, but https://xkcd.com/1171/
+function parse_variable(sys::AbstractSystem, str::AbstractString)
+    str = strip(str)
+    derivative_level = 0
+    while startswith(str, "D(") && endswith(str, ")")
+        derivative_level += 1
+        str = _string_view_inner(str, 2, 1)
+    end
+
+    arr_idxs = nothing
+    if endswith(str, ']')
+        open_idx = only(findfirst('[', str))
+        idxs_range = nextind(str, open_idx):prevind(str, lastindex(str))
+        idxs_str = view(str, idxs_range)
+        str = view(str, firstindex(str):prevind(str, open_idx))
+        arr_idxs = map(Base.Fix1(parse, Int), eachsplit(idxs_str, ","))
+    end
+
+    if endswith(str, "(t)")
+        str = _string_view_inner(str, 0, 3)
+    end
+
+    dummyderivative_level = 0
+    if (dd_idx = findfirst('ˍ', str)) !== nothing
+        t_idx = nextind(str, dd_idx)
+        while checkbounds(Bool, str, t_idx)
+            if str[t_idx] != 't'
+                throw(ArgumentError("Dummy derivative must be 'ˍ' followed by one or more 't'."))
+            end
+            dummyderivative_level += 1
+            t_idx = nextind(str, t_idx)
+        end
+        str = view(str, firstindex(str):prevind(str, dd_idx))
+    end
+
+    if endswith(str, "(t)")
+        str = _string_view_inner(str, 0, 3)
+    end
+
+    cur = sys
+    for ident in eachsplit(str, ('.', NAMESPACE_SEPARATOR))
+        ident = Symbol(ident)
+        hasproperty(cur, ident) ||
+            throw(ArgumentError("System $(nameof(cur)) does not have a subsystem/variable named $(ident)"))
+        cur = getproperty(cur, ident)
+    end
+
+    if arr_idxs !== nothing
+        cur = cur[arr_idxs...]
+    end
+
+    for i in 1:(derivative_level + dummyderivative_level)
+        cur = Differential(get_iv(sys))(cur)
+    end
+
+    return cur
+end
+
+function _string_view_inner(str, startoffset, endoffset)
+    view(str,
+        nextind(str, firstindex(str), startoffset):prevind(str, lastindex(str), endoffset))
+end
+
 ### Functions for accessing algebraic/differential equations in systems ###
 
 """
