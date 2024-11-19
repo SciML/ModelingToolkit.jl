@@ -1524,3 +1524,31 @@ end
     sol = solve(prob, DFBDF(), abstol=1e-8, reltol=1e-8)
     @test sol[x]≈sol[y^2 - sum(p)] atol=1e-5
 end
+
+@testset "Symbolic tstops" begin
+    @variables x(t) = 1.0
+    @parameters p=0.15 q=0.25 r[1:2]=[0.35, 0.45]
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ p * x + q * t + sum(r)], t; tstops = [0.5p, [0.1, 0.2], [p + 2q], r])
+    prob = ODEProblem(sys, [], (0.0, 5.0))
+    sol = solve(prob)
+    expected_tstops = unique!(sort!(vcat(0.0:0.075:5.0, 0.1, 0.2, 0.65, 0.35, 0.45)))
+    @test all(x -> any(isapprox(x, atol = 1e-6), sol.t), expected_tstops)
+    prob2 = remake(prob; tspan = (0.0, 10.0))
+    sol2 = solve(prob2)
+    expected_tstops = unique!(sort!(vcat(0.0:0.075:10.0, 0.1, 0.2, 0.65, 0.35, 0.45)))
+    @test all(x -> any(isapprox(x, atol = 1e-6), sol2.t), expected_tstops)
+
+    @variables y(t) [guess = 1.0]
+    @mtkbuild sys = ODESystem([D(x) ~ p * x + q * t + sum(r), y^3 ~ 2x + 1],
+        t; tstops = [0.5p, [0.1, 0.2], [p + 2q], r])
+    prob = DAEProblem(
+        sys, [D(y) => 2D(x) / 3y^2, D(x) => p * x + q * t + sum(r)], [], (0.0, 5.0))
+    sol = solve(prob, DImplicitEuler())
+    expected_tstops = unique!(sort!(vcat(0.0:0.075:5.0, 0.1, 0.2, 0.65, 0.35, 0.45)))
+    @test all(x -> any(isapprox(x, atol = 1e-6), sol.t), expected_tstops)
+    prob2 = remake(prob; tspan = (0.0, 10.0))
+    sol2 = solve(prob2, DImplicitEuler())
+    expected_tstops = unique!(sort!(vcat(0.0:0.075:10.0, 0.1, 0.2, 0.65, 0.35, 0.45)))
+    @test all(x -> any(isapprox(x, atol = 1e-6), sol2.t), expected_tstops)
+end
