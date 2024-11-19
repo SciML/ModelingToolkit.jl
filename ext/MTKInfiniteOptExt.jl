@@ -15,5 +15,6 @@ end
 # JuMP variables and Symbolics variables never compare equal. When tracing through dynamics, a function argument can be either a JuMP variable or A Symbolics variable, it can never be both.
 Base.isequal(::SymbolicUtils.BasicSymbolic{Real}, ::InfiniteOpt.GeneralVariableRef) = false
 Base.isequal(::InfiniteOpt.GeneralVariableRef, ::SymbolicUtils.BasicSymbolic{Real}) = false
-
+Base.isequal(::SymbolicUtils.Symbolic, ::Union{JuMP.GenericAffExpr, JuMP.GenericQuadExpr, InfiniteOpt.AbstractInfOptExpr}) = false
+Base.isequal(::Union{JuMP.GenericAffExpr, JuMP.GenericQuadExpr, InfiniteOpt.AbstractInfOptExpr}, ::SymbolicUtils.Symbolic) = false
 end
