@@ -71,8 +71,6 @@ function calculate_jacobian(sys::AbstractODESystem;
 
     rhs = [eq.rhs - eq.lhs for eq in full_equations(sys)] #need du terms on rhs for differentiating wrt du
 
-    iv = get_iv(sys)
-
     if sparse
         jac = sparsejacobian(rhs, dvs, simplify = simplify)
     else
@@ -94,8 +92,6 @@ function calculate_control_jacobian(sys::AbstractODESystem;
     end
 
     rhs = [eq.rhs for eq in full_equations(sys)]
-
-    iv = get_iv(sys)
     ctrls = controls(sys)
 
     if sparse
