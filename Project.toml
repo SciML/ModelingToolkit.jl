@@ -64,6 +64,7 @@ BifurcationKit = "0f109fa4-8a5d-4b75-95aa-f515264e7665"
 ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 DeepDiffs = "ab62b9b5-e342-54a8-a765-a90f495de1a6"
 HomotopyContinuation = "f213a82b-91d6-5c5d-acf7-10f1c761b327"
+InfiniteOpt = "20393b10-9daf-11e9-18c9-8db751c92c57"
 LabelledArrays = "2ee39098-c373-598a-b85f-a56591580800"
 
 [extensions]
@@ -72,6 +73,7 @@ MTKChainRulesCoreExt = "ChainRulesCore"
 MTKDeepDiffsExt = "DeepDiffs"
 MTKHomotopyContinuationExt = "HomotopyContinuation"
 MTKLabelledArraysExt = "LabelledArrays"
+MTKInfiniteOptExt = "InfiniteOpt"
 
 [compat]
 AbstractTrees = "0.3, 0.4"
@@ -104,6 +106,7 @@ FunctionWrappers = "1.1"
 FunctionWrappersWrappers = "0.1"
 Graphs = "1.5.2"
 HomotopyContinuation = "2.11"
+InfiniteOpt = "0.5"
 InteractiveUtils = "1"
 JuliaFormatter = "1.0.47"
 JumpProcesses = "9.13.1"
