@@ -213,3 +213,14 @@ end
     prob = ODEProblem(sys, [], (0.0, 1.0))
     @test prob.ps[b] == prob.ps[:b]
 end
+
+@testset "`get_all_timeseries_indexes` with non-split systems" begin
+    @variables x(t) y(t) z(t)
+    @parameters a
+    @named sys = ODESystem([D(x) ~ a * x, y ~ 2x, z ~ 0.0], t)
+    sys = structural_simplify(sys, split = false)
+    for sym in [x, y, z, x + y, x + a, y / x]
+        @test only(get_all_timeseries_indexes(sys, sym)) == ContinuousTimeseries()
+    end
+    @test isempty(get_all_timeseries_indexes(sys, a))
+end
