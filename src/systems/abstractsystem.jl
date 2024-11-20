@@ -770,11 +770,19 @@ for traitT in [
                    is_variable(sys, operation(s)(get_iv(sys)))
                 # DDEs case, to detect x(t - k)
                 push!(ts_idxs, ContinuousTimeseries())
-            elseif has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-                if (ts = get(ic.observed_syms_to_timeseries, s, nothing)) !== nothing
-                    union!(ts_idxs, ts)
-                elseif (ts = get(ic.dependent_pars_to_timeseries, s, nothing)) !== nothing
-                    union!(ts_idxs, ts)
+            else
+                if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+                    if (ts = get(ic.observed_syms_to_timeseries, s, nothing)) !== nothing
+                        union!(ts_idxs, ts)
+                    elseif (ts = get(ic.dependent_pars_to_timeseries, s, nothing)) !==
+                           nothing
+                        union!(ts_idxs, ts)
+                    end
+                else
+                    # for split=false systems
+                    if has_observed_with_lhs(sys, sym)
+                        push!(ts_idxs, ContinuousTimeseries())
+                    end
                 end
             end
         end
