@@ -3295,14 +3295,18 @@ Roughly supports the following CFG:
 varname                  = "D(" varname ")" | arrvar | maybe_dummy_var
 arrvar                   = maybe_dummy_var "[idxs...]"
 idxs                     = int | int "," idxs
-maybe_dummy_var          = namespacedvar | namespacedvar "(t)" |
-                           namespacedvar "(t)" "ˍ" ts | namespacedvar "ˍ" ts |
-                           namespacedvar "ˍ" ts "(t)"
-ts                       = "t" | "t" ts
+maybe_dummy_var          = namespacedvar | namespacedvar "(" iv ")" |
+                           namespacedvar "(" iv ")" "ˍ" ts | namespacedvar "ˍ" ts |
+                           namespacedvar "ˍ" ts "(" iv ")"
+ts                       = iv | iv ts
 namespacedvar            = ident "₊" namespacedvar | ident "." namespacedvar | ident
 ```
+
+Where `iv` is the independent variable, `int` is an integer and `ident` is an identifier.
 """
 function parse_variable(sys::AbstractSystem, str::AbstractString)
+    iv = has_iv(sys) ? string(getname(get_iv(sys))) : nothing
+
     # I'd write a regex to validate `str`, but https://xkcd.com/1171/
     str = strip(str)
     derivative_level = 0
@@ -3320,25 +3324,22 @@ function parse_variable(sys::AbstractSystem, str::AbstractString)
         arr_idxs = map(Base.Fix1(parse, Int), eachsplit(idxs_str, ","))
     end
 
-    if endswith(str, "(t)")
-        str = _string_view_inner(str, 0, 3)
+    if iv !== nothing && endswith(str, "($iv)")
+        str = _string_view_inner(str, 0, 2 + length(iv))
     end
 
     dummyderivative_level = 0
-    if (dd_idx = findfirst('ˍ', str)) !== nothing
-        t_idx = nextind(str, dd_idx)
-        while checkbounds(Bool, str, t_idx)
-            if str[t_idx] != 't'
-                throw(ArgumentError("Dummy derivative must be 'ˍ' followed by one or more 't'."))
-            end
+    if iv !== nothing && (dd_idx = findfirst('ˍ', str)) !== nothing
+        t_idx = findnext(iv, str, dd_idx)
+        while t_idx !== nothing
             dummyderivative_level += 1
-            t_idx = nextind(str, t_idx)
+            t_idx = findnext(iv, str, nextind(str, last(t_idx)))
         end
         str = view(str, firstindex(str):prevind(str, dd_idx))
     end
 
-    if endswith(str, "(t)")
-        str = _string_view_inner(str, 0, 3)
+    if iv !== nothing && endswith(str, "($iv)")
+        str = _string_view_inner(str, 0, 2 + length(iv))
     end
 
     cur = sys

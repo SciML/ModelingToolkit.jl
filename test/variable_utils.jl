@@ -43,98 +43,95 @@ ts = collect_ivs([eq])
     @test length(res) == 3
 end
 
-@testset "parse_variable" begin
-    @mtkmodel Lorenz begin
+@testset "parse_variable with iv: $iv" for iv in [t, only(@independent_variables tt)]
+    D = Differential(iv)
+    function Lorenz(; name)
         @variables begin
-            x(t)
-            y(t)
-            z(t)
+            x(iv)
+            y(iv)
+            z(iv)
         end
         @parameters begin
             σ
             ρ
             β
         end
-        @equations begin
-            D(D(x)) ~ σ * (y - x)
-            D(y) ~ x * (ρ - z) - y
-            D(z) ~ x * y - β * z
-        end
+        sys = ODESystem(
+            [D(D(x)) ~ σ * (y - x)
+             D(y) ~ x * (ρ - z) - y
+             D(z) ~ x * y - β * z], iv; name)
     end
-    @mtkmodel ArrSys begin
+    function ArrSys(; name)
         @variables begin
-            x(t)[1:2]
+            x(iv)[1:2]
         end
         @parameters begin
             p[1:2, 1:2]
         end
-        @equations begin
-            D(D(x)) ~ p * x
-        end
+        sys = ODESystem([D(D(x)) ~ p * x], iv; name)
     end
-    @mtkmodel Outer begin
-        @components begin
-            😄 = Lorenz()
-            arr = ArrSys()
-        end
+    function Outer(; name)
+        @named 😄 = Lorenz()
+        @named arr = ArrSys()
+        sys = ODESystem(Equation[], iv; name, systems = [😄, arr])
     end
 
     @mtkbuild sys = Outer()
     for (str, var) in [
         # unicode system, scalar variable
         ("😄.x", sys.😄.x),
-        ("😄.x(t)", sys.😄.x),
+        ("😄.x($iv)", sys.😄.x),
         ("😄₊x", sys.😄.x),
-        ("😄₊x(t)", sys.😄.x),
+        ("😄₊x($iv)", sys.😄.x),
         # derivative
         ("D(😄.x)", D(sys.😄.x)),
-        ("D(😄.x(t))", D(sys.😄.x)),
+        ("D(😄.x($iv))", D(sys.😄.x)),
         ("D(😄₊x)", D(sys.😄.x)),
-        ("D(😄₊x(t))", D(sys.😄.x)),
+        ("D(😄₊x($iv))", D(sys.😄.x)),
         # other derivative
-        ("😄.xˍt", D(sys.😄.x)),
-        ("😄.x(t)ˍt", D(sys.😄.x)),
-        ("😄₊xˍt", D(sys.😄.x)),
-        ("😄₊x(t)ˍt", D(sys.😄.x)),
+        ("😄.xˍ$iv", D(sys.😄.x)),
+        ("😄.x($iv)ˍ$iv", D(sys.😄.x)),
+        ("😄₊xˍ$iv", D(sys.😄.x)),
+        ("😄₊x($iv)ˍ$iv", D(sys.😄.x)),
         # scalar parameter
         ("😄.σ", sys.😄.σ),
         ("😄₊σ", sys.😄.σ),
         # array variable
         ("arr.x", sys.arr.x),
         ("arr₊x", sys.arr.x),
-        ("arr.x(t)", sys.arr.x),
-        ("arr₊x(t)", sys.arr.x),
+        ("arr.x($iv)", sys.arr.x),
+        ("arr₊x($iv)", sys.arr.x),
         # getindex
         ("arr.x[1]", sys.arr.x[1]),
         ("arr₊x[1]", sys.arr.x[1]),
-        ("arr.x(t)[1]", sys.arr.x[1]),
-        ("arr₊x(t)[1]", sys.arr.x[1]),
+        ("arr.x($iv)[1]", sys.arr.x[1]),
+        ("arr₊x($iv)[1]", sys.arr.x[1]),
         # derivative
-        ("D(arr.x(t))", D(sys.arr.x)),
-        ("D(arr₊x(t))", D(sys.arr.x)),
+        ("D(arr.x($iv))", D(sys.arr.x)),
+        ("D(arr₊x($iv))", D(sys.arr.x)),
         ("D(arr.x[1])", D(sys.arr.x[1])),
         ("D(arr₊x[1])", D(sys.arr.x[1])),
-        ("D(arr.x(t)[1])", D(sys.arr.x[1])),
-        ("D(arr₊x(t)[1])", D(sys.arr.x[1])),
+        ("D(arr.x($iv)[1])", D(sys.arr.x[1])),
+        ("D(arr₊x($iv)[1])", D(sys.arr.x[1])),
         # other derivative
-        ("arr.xˍt", D(sys.arr.x)),
-        ("arr₊xˍt", D(sys.arr.x)),
-        ("arr.xˍt(t)", D(sys.arr.x)),
-        ("arr₊xˍt(t)", D(sys.arr.x)),
-        ("arr.xˍt[1]", D(sys.arr.x[1])),
-        ("arr₊xˍt[1]", D(sys.arr.x[1])),
-        ("arr.xˍt(t)[1]", D(sys.arr.x[1])),
-        ("arr₊xˍt(t)[1]", D(sys.arr.x[1])),
-        ("arr.x(t)ˍt", D(sys.arr.x)),
-        ("arr₊x(t)ˍt", D(sys.arr.x)),
-        ("arr.x(t)ˍt[1]", D(sys.arr.x[1])),
-        ("arr₊x(t)ˍt[1]", D(sys.arr.x[1])),
+        ("arr.xˍ$iv", D(sys.arr.x)),
+        ("arr₊xˍ$iv", D(sys.arr.x)),
+        ("arr.xˍ$iv($iv)", D(sys.arr.x)),
+        ("arr₊xˍ$iv($iv)", D(sys.arr.x)),
+        ("arr.xˍ$iv[1]", D(sys.arr.x[1])),
+        ("arr₊xˍ$iv[1]", D(sys.arr.x[1])),
+        ("arr.xˍ$iv($iv)[1]", D(sys.arr.x[1])),
+        ("arr₊xˍ$iv($iv)[1]", D(sys.arr.x[1])),
+        ("arr.x($iv)ˍ$iv", D(sys.arr.x)),
+        ("arr₊x($iv)ˍ$iv", D(sys.arr.x)),
+        ("arr.x($iv)ˍ$iv[1]", D(sys.arr.x[1])),
+        ("arr₊x($iv)ˍ$iv[1]", D(sys.arr.x[1])),
         # array parameter
         ("arr.p", sys.arr.p),
         ("arr₊p", sys.arr.p),
         ("arr.p[1, 2]", sys.arr.p[1, 2]),
         ("arr₊p[1, 2]", sys.arr.p[1, 2])
     ]
-        isequal(parse_variable(sys, str), var)
+        @test isequal(parse_variable(sys, str), var)
     end
 end
