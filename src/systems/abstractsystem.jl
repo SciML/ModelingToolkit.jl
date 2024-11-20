@@ -3302,6 +3302,96 @@ function dump_unknowns(sys::AbstractSystem)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return the variable in `sys` referred to by its string representation `str`.
+Roughly supports the following CFG:
+
+```
+varname                  = "D(" varname ")" | "Differential(" iv ")(" varname ")" | arrvar | maybe_dummy_var
+arrvar                   = maybe_dummy_var "[idxs...]"
+idxs                     = int | int "," idxs
+maybe_dummy_var          = namespacedvar | namespacedvar "(" iv ")" |
+                           namespacedvar "(" iv ")" "ˍ" ts | namespacedvar "ˍ" ts |
+                           namespacedvar "ˍ" ts "(" iv ")"
+ts                       = iv | iv ts
+namespacedvar            = ident "₊" namespacedvar | ident "." namespacedvar | ident
+```
+
+Where `iv` is the independent variable, `int` is an integer and `ident` is an identifier.
+"""
+function parse_variable(sys::AbstractSystem, str::AbstractString)
+    iv = has_iv(sys) ? string(getname(get_iv(sys))) : nothing
+
+    # I'd write a regex to validate `str`, but https://xkcd.com/1171/
+    str = strip(str)
+    derivative_level = 0
+    while ((cond1 = startswith(str, "D(")) || startswith(str, "Differential(")) && endswith(str, ")")
+        if cond1
+            derivative_level += 1
+            str = _string_view_inner(str, 2, 1)
+            continue
+        end
+        _tmpstr = _string_view_inner(str, 13, 1)
+        if !startswith(_tmpstr, "$iv)(")
+            throw(ArgumentError("Expected differential with respect to independent variable $iv in $str"))
+        end
+        derivative_level += 1
+        str = _string_view_inner(_tmpstr, length(iv) + 2, 0)
+    end
+
+    arr_idxs = nothing
+    if endswith(str, ']')
+        open_idx = only(findfirst('[', str))
+        idxs_range = nextind(str, open_idx):prevind(str, lastindex(str))
+        idxs_str = view(str, idxs_range)
+        str = view(str, firstindex(str):prevind(str, open_idx))
+        arr_idxs = map(Base.Fix1(parse, Int), eachsplit(idxs_str, ","))
+    end
+
+    if iv !== nothing && endswith(str, "($iv)")
+        str = _string_view_inner(str, 0, 2 + length(iv))
+    end
+
+    dummyderivative_level = 0
+    if iv !== nothing && (dd_idx = findfirst('ˍ', str)) !== nothing
+        t_idx = findnext(iv, str, dd_idx)
+        while t_idx !== nothing
+            dummyderivative_level += 1
+            t_idx = findnext(iv, str, nextind(str, last(t_idx)))
+        end
+        str = view(str, firstindex(str):prevind(str, dd_idx))
+    end
+
+    if iv !== nothing && endswith(str, "($iv)")
+        str = _string_view_inner(str, 0, 2 + length(iv))
+    end
+
+    cur = sys
+    for ident in eachsplit(str, ('.', NAMESPACE_SEPARATOR))
+        ident = Symbol(ident)
+        hasproperty(cur, ident) ||
+            throw(ArgumentError("System $(nameof(cur)) does not have a subsystem/variable named $(ident)"))
+        cur = getproperty(cur, ident)
+    end
+
+    if arr_idxs !== nothing
+        cur = cur[arr_idxs...]
+    end
+
+    for i in 1:(derivative_level + dummyderivative_level)
+        cur = Differential(get_iv(sys))(cur)
+    end
+
+    return cur
+end
+
+function _string_view_inner(str, startoffset, endoffset)
+    view(str,
+        nextind(str, firstindex(str), startoffset):prevind(str, lastindex(str), endoffset))
+end
+
 ### Functions for accessing algebraic/differential equations in systems ###
 
 """
