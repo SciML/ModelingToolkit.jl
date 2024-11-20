@@ -143,3 +143,20 @@ end
     @test sol.u≈sccsol.u atol=1e-10
 end
 
+@testset "Expression caching" begin
+    @variables x[1:4] = rand(4)
+    val = Ref(0)
+    function func(x, y)
+        val[] += 1
+        x + y
+    end
+    @register_symbolic func(x, y)
+    @mtkbuild sys = NonlinearSystem([0 ~ x[1]^3 + x[2]^3 - 5
+                                     0 ~ sin(x[1] - x[2]) - 0.5
+                                     0 ~ func(x[1], x[2]) * exp(x[3]) - x[4]^3 - 5
+                                     0 ~ func(x[1], x[2]) * exp(x[4]) - x[3]^3 - 4])
+    sccprob = SCCNonlinearProblem(sys, [])
+    sccsol = solve(sccprob, NewtonRaphson())
+    @test SciMLBase.successful_retcode(sccsol)
+    @test val[] == 1
+end

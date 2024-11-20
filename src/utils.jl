@@ -1001,6 +1001,11 @@ end
 diff2term_with_unit(x, t) = _with_unit(diff2term, x, t)
 lower_varname_with_unit(var, iv, order) = _with_unit(lower_varname, var, iv, iv, order)
 
+"""
+    $(TYPEDSIGNATURES)
+
+Check if `sym` represents a symbolic floating point number or array of such numbers.
+"""
 function is_variable_floatingpoint(sym)
     sym = unwrap(sym)
     T = symtype(sym)
@@ -1051,4 +1056,88 @@ function observed_equations_used_by(sys::AbstractSystem, exprs)
     obsidxs = collect(obsidxs)
     sort!(obsidxs)
     return obsidxs
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given an expression `expr`, return a dictionary mapping subexpressions of `expr` that do
+not involve variables in `vars` to anonymous symbolic variables. Also return the modified
+`expr` with the substitutions indicated by the dictionary. If `expr` is a function
+of only `vars`, then all of the returned subexpressions can be precomputed.
+
+Note that this will only process subexpressions floating point value. Additionally,
+array variables must be passed in both scalarized and non-scalarized forms in `vars`.
+"""
+function subexpressions_not_involving_vars(expr, vars)
+    expr = unwrap(expr)
+    vars = map(unwrap, vars)
+    state = Dict()
+    newexpr = subexpressions_not_involving_vars!(expr, vars, state)
+    return state, newexpr
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Mutating version of `subexpressions_not_involving_vars` which writes to `state`. Only
+returns the modified `expr`.
+"""
+function subexpressions_not_involving_vars!(expr, vars, state::Dict{Any, Any})
+    expr = unwrap(expr)
+    symbolic_type(expr) == NotSymbolic() && return expr
+    iscall(expr) || return expr
+    is_variable_floatingpoint(expr) || return expr
+    symtype(expr) <: Union{Real, AbstractArray{<:Real}} || return expr
+    Symbolics.shape(expr) == Symbolics.Unknown() && return expr
+    haskey(state, expr) && return state[expr]
+    vs = ModelingToolkit.vars(expr)
+    intersect!(vs, vars)
+    if isempty(vs)
+        sym = gensym(:subexpr)
+        stype = symtype(expr)
+        var = similar_variable(expr, sym)
+        state[expr] = var
+        return var
+    end
+    op = operation(expr)
+    args = arguments(expr)
+    if (op == (+) || op == (*)) && symbolic_type(expr) !== ArraySymbolic()
+        indep_args = []
+        dep_args = []
+        for arg in args
+            _vs = ModelingToolkit.vars(arg)
+            intersect!(_vs, vars)
+            if !isempty(_vs)
+                push!(dep_args, subexpressions_not_involving_vars!(arg, vars, state))
+            else
+                push!(indep_args, arg)
+            end
+        end
+        indep_term = reduce(op, indep_args; init = Int(op == (*)))
+        indep_term = subexpressions_not_involving_vars!(indep_term, vars, state)
+        dep_term = reduce(op, dep_args; init = Int(op == (*)))
+        return op(indep_term, dep_term)
+    end
+    newargs = map(args) do arg
+        symbolic_type(arg) != NotSymbolic() || is_array_of_symbolics(arg) || return arg
+        subexpressions_not_involving_vars!(arg, vars, state)
+    end
+    return maketerm(typeof(expr), op, newargs, metadata(expr))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Create an anonymous symbolic variable of the same shape, size and symtype as `var`, with
+name `gensym(name)`. Does not support unsized array symbolics.
+"""
+function similar_variable(var::BasicSymbolic, name = :anon)
+    name = gensym(name)
+    stype = symtype(var)
+    sym = Symbolics.variable(name; T = stype)
+    if size(var) !== ()
+        sym = setmetadata(sym, Symbolics.ArrayShapeCtx, map(Base.OneTo, size(var)))
+    end
+    return sym
 end

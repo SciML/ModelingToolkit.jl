@@ -583,9 +583,11 @@ function SCCNonlinearFunction{iip}(
     f(resid, u, p) = f_iip(resid, u, p)
     f(resid, u, p::MTKParameters) = f_iip(resid, u, p...)
 
-    subsys = NonlinearSystem(_eqs, _dvs, ps; observed = _obs, parameter_dependencies = parameter_dependencies(sys), name = nameof(sys))
+    subsys = NonlinearSystem(_eqs, _dvs, ps; observed = _obs,
+        parameter_dependencies = parameter_dependencies(sys), name = nameof(sys))
     if get_index_cache(sys) !== nothing
-        @set! subsys.index_cache = subset_unknowns_observed(get_index_cache(sys), sys, _dvs, getproperty.(_obs, (:lhs,)))
+        @set! subsys.index_cache = subset_unknowns_observed(
+            get_index_cache(sys), sys, _dvs, getproperty.(_obs, (:lhs,)))
         @set! subsys.complete = true
     end
 
@@ -624,8 +626,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
     explicitfuns = []
     nlfuns = []
     prevobsidxs = Int[]
-    cachevars = []
-    cacheexprs = []
+    cachesize = 0
     for (i, (escc, vscc)) in enumerate(zip(eq_sccs, var_sccs))
         # subset unknowns and equations
         _dvs = dvs[vscc]
@@ -635,6 +636,32 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         # the ones used by previous SCCs can be precomputed into the cache
         setdiff!(obsidxs, prevobsidxs)
         _obs = obs[obsidxs]
+
+        # get all subexpressions in the RHS which we can precompute in the cache
+        banned_vars = Set{Any}(vcat(_dvs, getproperty.(_obs, (:lhs,))))
+        for var in banned_vars
+            iscall(var) || continue
+            operation(var) === getindex || continue
+            push!(banned_vars, arguments(var)[1])
+        end
+        state = Dict()
+        for i in eachindex(_obs)
+            _obs[i] = _obs[i].lhs ~ subexpressions_not_involving_vars!(
+                _obs[i].rhs, banned_vars, state)
+        end
+        for i in eachindex(_eqs)
+            _eqs[i] = _eqs[i].lhs ~ subexpressions_not_involving_vars!(
+                _eqs[i].rhs, banned_vars, state)
+        end
+
+        # cached variables and their corresponding expressions
+        cachevars = Any[obs[i].lhs for i in prevobsidxs]
+        cacheexprs = Any[obs[i].rhs for i in prevobsidxs]
+        for (k, v) in state
+            push!(cachevars, unwrap(v))
+            push!(cacheexprs, unwrap(k))
+        end
+        cachesize = max(cachesize, length(cachevars))
 
         if isempty(cachevars)
             push!(explicitfuns, Returns(nothing))
@@ -655,7 +682,9 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         append!(prevobsidxs, obsidxs)
     end
 
-    p = rebuild_with_caches(p, BufferTemplate(eltype(u0), length(cachevars)))
+    if cachesize != 0
+        p = rebuild_with_caches(p, BufferTemplate(eltype(u0), cachesize))
+    end
 
     subprobs = []
     for (f, vscc) in zip(nlfuns, var_sccs)
