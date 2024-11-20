@@ -4,12 +4,13 @@ const AnyDict = Dict{Any, Any}
     $(TYPEDSIGNATURES)
 
 If called without arguments, return `Dict{Any, Any}`. Otherwise, interpret the input
-as a symbolic map and turn it into a `Dict{Any, Any}`. Handles `SciMLBase.NullParameters`
-and `nothing`.
+as a symbolic map and turn it into a `Dict{Any, Any}`. Handles `SciMLBase.NullParameters`,
+`missing` and `nothing`.
 """
 anydict() = AnyDict()
 anydict(::SciMLBase.NullParameters) = AnyDict()
 anydict(::Nothing) = AnyDict()
+anydict(::Missing) = AnyDict()
 anydict(x::AnyDict) = x
 anydict(x) = AnyDict(x)
 
@@ -386,6 +387,15 @@ function evaluate_varmap!(varmap::AbstractDict, vars; limit = 100)
         haskey(varmap, k) || continue
         varmap[k] = fixpoint_sub(varmap[k], varmap; maxiters = limit)
     end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Remove keys in `varmap` whose values are `nothing`.
+"""
+function filter_missing_values!(varmap::AbstractDict)
+    filter!(kvp -> kvp[2] !== nothing, varmap)
 end
 
 struct GetUpdatedMTKParameters{G, S}

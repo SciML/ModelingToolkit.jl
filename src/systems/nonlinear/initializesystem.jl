@@ -30,7 +30,8 @@ function generate_initializesystem(sys::ODESystem;
     # 1) process dummy derivatives and u0map into initialization system
     eqs_ics = eqs[idxs_alge] # start equation list with algebraic equations
     defs = copy(defaults(sys)) # copy so we don't modify sys.defaults
-    guesses = merge(get_guesses(sys), todict(guesses))
+    additional_guesses = anydict(guesses)
+    guesses = merge(get_guesses(sys), additional_guesses)
     schedule = getfield(sys, :schedule)
     if !isnothing(schedule)
         for x in filter(x -> !isnothing(x[1]), schedule.dummy_sub)
@@ -178,7 +179,7 @@ function generate_initializesystem(sys::ODESystem;
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
-    meta = InitializationSystemMetadata(Dict{Any, Any}(u0map), Dict{Any, Any}(pmap))
+    meta = InitializationSystemMetadata(anydict(u0map), anydict(pmap), additional_guesses)
     return NonlinearSystem(eqs_ics,
         vars,
         pars;
@@ -193,6 +194,7 @@ end
 struct InitializationSystemMetadata
     u0map::Dict{Any, Any}
     pmap::Dict{Any, Any}
+    additional_guesses::Dict{Any, Any}
 end
 
 function is_parameter_solvable(p, pmap, defs, guesses)
@@ -263,75 +265,29 @@ function SciMLBase.remake_initializeprob(sys::ODESystem, odefn, u0, t0, p)
         return initprob, odefn.update_initializeprob!, odefn.initializeprobmap,
         odefn.initializeprobpmap
     end
-    if u0 === missing || isempty(u0)
-        u0 = Dict()
-    elseif !(eltype(u0) <: Pair)
-        u0 = Dict(unknowns(sys) .=> u0)
-    end
-    if p === missing
-        p = Dict()
+    dvs = unknowns(sys)
+    ps = parameters(sys)
+    u0map = to_varmap(u0, dvs)
+    pmap = to_varmap(p, ps)
+    guesses = Dict()
+    if SciMLBase.has_initializeprob(odefn)
+        oldsys = odefn.initializeprob.f.sys
+        meta = get_metadata(oldsys)
+        if meta isa InitializationSystemMetadata
+            u0map = merge(meta.u0map, u0map)
+            pmap = merge(meta.pmap, pmap)
+            merge!(guesses, meta.additional_guesses)
+        end
     end
     if t0 === nothing
         t0 = 0.0
     end
-    u0 = todict(u0)
-    defs = defaults(sys)
-    varmap = merge(defs, u0)
-    for k in collect(keys(varmap))
-        if varmap[k] === nothing
-            delete!(varmap, k)
-        end
-    end
-    varmap = canonicalize_varmap(varmap)
-    missingvars = setdiff(unknowns(sys), collect(keys(varmap)))
-    setobserved = filter(keys(varmap)) do var
-        has_observed_with_lhs(sys, var) || has_observed_with_lhs(sys, default_toterm(var))
-    end
-    p = todict(p)
-    guesses = ModelingToolkit.guesses(sys)
-    solvablepars = [par
-                    for par in parameters(sys)
-                    if is_parameter_solvable(par, p, defs, guesses)]
-    pvarmap = merge(defs, p)
-    setparobserved = filter(keys(pvarmap)) do var
-        has_parameter_dependency_with_lhs(sys, var)
-    end
-    if (((!isempty(missingvars) || !isempty(solvablepars) ||
-          !isempty(setobserved) || !isempty(setparobserved)) &&
-         ModelingToolkit.get_tearing_state(sys) !== nothing) ||
-        !isempty(initialization_equations(sys)))
-        if SciMLBase.has_initializeprob(odefn)
-            oldsys = odefn.initializeprob.f.sys
-            meta = get_metadata(oldsys)
-            if meta isa InitializationSystemMetadata
-                u0 = merge(meta.u0map, u0)
-                p = merge(meta.pmap, p)
-            end
-        end
-        for k in collect(keys(u0))
-            if u0[k] === nothing
-                delete!(u0, k)
-            end
-        end
-        for k in collect(keys(p))
-            if p[k] === nothing
-                delete!(p, k)
-            end
-        end
-
-        initprob = InitializationProblem(sys, t0, u0, p)
-        initprobmap = getu(initprob, unknowns(sys))
-        punknowns = [p for p in all_variable_symbols(initprob) if is_parameter(sys, p)]
-        getpunknowns = getu(initprob, punknowns)
-        setpunknowns = setp(sys, punknowns)
-        initprobpmap = GetUpdatedMTKParameters(getpunknowns, setpunknowns)
-        reqd_syms = parameter_symbols(initprob)
-        update_initializeprob! = UpdateInitializeprob(
-            getu(sys, reqd_syms), setu(initprob, reqd_syms))
-        return initprob, update_initializeprob!, initprobmap, initprobpmap
-    else
-        return nothing, nothing, nothing, nothing
-    end
+    filter_missing_values!(u0map)
+    filter_missing_values!(pmap)
+    f, _ = process_SciMLProblem(EmptySciMLFunction, sys, u0map, pmap; guesses, t = t0)
+    kws = f.kwargs
+    return get(kws, :initializeprob, nothing), get(kws, :update_initializeprob!, nothing), get(kws, :initializeprobmap, nothing),
+        get(kws, :initializeprobpmap, nothing)
 end
 
 """
