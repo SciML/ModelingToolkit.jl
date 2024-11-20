@@ -1008,29 +1008,27 @@ function is_variable_floatingpoint(sym)
            T <: AbstractArray{<:AbstractFloat}
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return the `DiCMOBiGraph` denoting the dependencies between observed equations `eqs`.
+"""
 function observed_dependency_graph(eqs::Vector{Equation})
     for eq in eqs
         if symbolic_type(eq.lhs) == NotSymbolic()
             error("All equations must be observed equations of the form `var ~ expr`. Got $eq")
         end
     end
-
-    idxmap = Dict(eq.lhs => i for (i, eq) in enumerate(eqs))
-    g = SimpleDiGraph(length(eqs))
-
-    syms = Set()
-    for (i, eq) in enumerate(eqs)
-        vars!(syms, eq)
-        for sym in syms
-            idx = get(idxmap, sym, nothing)
-            idx === nothing && continue
-            add_edge!(g, i, idx)
-        end
-    end
-
-    return g
+    graph, assigns = observed2graph(eqs, getproperty.(eqs, (:lhs,)))
+    matching = complete(Matching(Vector{Union{Unassigned, Int}}(assigns)))
+    return DiCMOBiGraph{false}(graph, matching)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return the indexes of observed equations of `sys` used by expression `exprs`.
+"""
 function observed_equations_used_by(sys::AbstractSystem, exprs)
     obs = observed(sys)
 
