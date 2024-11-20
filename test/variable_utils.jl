@@ -88,6 +88,10 @@ end
         ("D(😄.x($iv))", D(sys.😄.x)),
         ("D(😄₊x)", D(sys.😄.x)),
         ("D(😄₊x($iv))", D(sys.😄.x)),
+        ("Differential($iv)(😄.x)", D(sys.😄.x)),
+        ("Differential($iv)(😄.x($iv))", D(sys.😄.x)),
+        ("Differential($iv)(😄₊x)", D(sys.😄.x)),
+        ("Differential($iv)(😄₊x($iv))", D(sys.😄.x)),
         # other derivative
         ("😄.xˍ$iv", D(sys.😄.x)),
         ("😄.x($iv)ˍ$iv", D(sys.😄.x)),
@@ -113,6 +117,12 @@ end
         ("D(arr₊x[1])", D(sys.arr.x[1])),
         ("D(arr.x($iv)[1])", D(sys.arr.x[1])),
         ("D(arr₊x($iv)[1])", D(sys.arr.x[1])),
+        ("Differential($iv)(arr.x($iv))", D(sys.arr.x)),
+        ("Differential($iv)(arr₊x($iv))", D(sys.arr.x)),
+        ("Differential($iv)(arr.x[1])", D(sys.arr.x[1])),
+        ("Differential($iv)(arr₊x[1])", D(sys.arr.x[1])),
+        ("Differential($iv)(arr.x($iv)[1])", D(sys.arr.x[1])),
+        ("Differential($iv)(arr₊x($iv)[1])", D(sys.arr.x[1])),
         # other derivative
         ("arr.xˍ$iv", D(sys.arr.x)),
         ("arr₊xˍ$iv", D(sys.arr.x)),

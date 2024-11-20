@@ -3292,7 +3292,7 @@ Return the variable in `sys` referred to by its string representation `str`.
 Roughly supports the following CFG:
 
 ```
-varname                  = "D(" varname ")" | arrvar | maybe_dummy_var
+varname                  = "D(" varname ")" | "Differential(" iv ")(" varname ")" | arrvar | maybe_dummy_var
 arrvar                   = maybe_dummy_var "[idxs...]"
 idxs                     = int | int "," idxs
 maybe_dummy_var          = namespacedvar | namespacedvar "(" iv ")" |
@@ -3310,9 +3310,18 @@ function parse_variable(sys::AbstractSystem, str::AbstractString)
     # I'd write a regex to validate `str`, but https://xkcd.com/1171/
     str = strip(str)
     derivative_level = 0
-    while startswith(str, "D(") && endswith(str, ")")
+    while ((cond1 = startswith(str, "D(")) || startswith(str, "Differential(")) && endswith(str, ")")
+        if cond1
+            derivative_level += 1
+            str = _string_view_inner(str, 2, 1)
+            continue
+        end
+        _tmpstr = _string_view_inner(str, 13, 1)
+        if !startswith(_tmpstr, "$iv)(")
+            throw(ArgumentError("Expected differential with respect to independent variable $iv in $str"))
+        end
         derivative_level += 1
-        str = _string_view_inner(str, 2, 1)
+        str = _string_view_inner(_tmpstr, length(iv) + 2, 0)
     end
 
     arr_idxs = nothing
