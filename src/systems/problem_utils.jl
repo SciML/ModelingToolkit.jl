@@ -431,12 +431,16 @@ end
     $(TYPEDEF)
 
 A simple utility meant to be used as the `constructor` passed to `process_SciMLProblem` in
-case constructing a SciMLFunction is not required.
+case constructing a SciMLFunction is not required. The arguments passed to it are available
+in the `args` field, and the keyword arguments in the `kwargs` field.
 """
-struct EmptySciMLFunction end
+struct EmptySciMLFunction{A, K}
+    args::A
+    kwargs::K
+end
 
 function EmptySciMLFunction(args...; kwargs...)
-    return nothing
+    return EmptySciMLFunction{typeof(args), typeof(kwargs)}(args, kwargs)
 end
 
 """
