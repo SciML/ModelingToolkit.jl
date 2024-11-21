@@ -958,3 +958,20 @@ end
     @test_warn ["structurally singular", "initialization", "Guess", "heuristic"] ODEProblem(
         pend, [x => 1, y => 0], (0.0, 1.5), [g => 1], guesses = [λ => 1])
 end
+
+@testset "DAEProblem initialization" begin
+    @variables x(t) [guess = 1.0] y(t) [guess = 1.0]
+    @parameters p=missing [guess = 1.0] q=missing [guess = 1.0]
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ p * y + q * t, x^3 + y^3 ~ 5], t; initialization_eqs = [p^2 + q^3 ~ 3])
+
+    # FIXME: solve for du0
+    prob = DAEProblem(
+        sys, [D(x) => cbrt(4), D(y) => -1 / cbrt(4)], [x => 1.0], (0.0, 1.0), [p => 1.0])
+
+    integ = init(prob, DImplicitEuler())
+    @test integ[x] ≈ 1.0
+    @test integ[y]≈cbrt(4) rtol=1e-6
+    @test integ.ps[p] ≈ 1.0
+    @test integ.ps[q]≈cbrt(2) rtol=1e-6
+end
