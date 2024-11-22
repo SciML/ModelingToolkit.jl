@@ -210,17 +210,16 @@ function is_parameter_solvable(p, pmap, defs, guesses)
              _val1 === nothing && _val2 !== nothing)) && _val3 !== nothing
 end
 
-function SciMLBase.remake_initializeprob(sys::ODESystem, odefn, u0, t0, p)
+function SciMLBase.remake_initialization_data(sys::ODESystem, odefn, u0, t0, p, newu0, newp)
     if u0 === missing && p === missing
-        return odefn.initializeprob, odefn.update_initializeprob!, odefn.initializeprobmap,
-        odefn.initializeprobpmap
+        return odefn.initialization_data
     end
     if !(eltype(u0) <: Pair) && !(eltype(p) <: Pair)
         oldinitprob = odefn.initializeprob
-        if oldinitprob === nothing || !SciMLBase.has_sys(oldinitprob.f) ||
-           !(oldinitprob.f.sys isa NonlinearSystem)
-            return oldinitprob, odefn.update_initializeprob!, odefn.initializeprobmap,
-            odefn.initializeprobpmap
+        oldinitprob === nothing && return nothing
+        if !SciMLBase.has_sys(oldinitprob.f) || !(oldinitprob.f.sys isa NonlinearSystem)
+            return SciMLBase.OverrideInitData(oldinitprob, odefn.update_initializeprob!,
+                odefn.initializeprobmap, odefn.initializeprobpmap)
         end
         pidxs = ParameterIndex[]
         pvals = []
@@ -262,14 +261,17 @@ function SciMLBase.remake_initializeprob(sys::ODESystem, odefn, u0, t0, p)
                 oldinitprob.f.sys, parameter_values(oldinitprob), pidxs, pvals)
         end
         initprob = remake(oldinitprob; u0 = newu0, p = newp)
-        return initprob, odefn.update_initializeprob!, odefn.initializeprobmap,
-        odefn.initializeprobpmap
+        return SciMLBase.OverrideInitData(initprob, odefn.update_initializeprob!,
+            odefn.initializeprobmap, odefn.initializeprobpmap)
     end
     dvs = unknowns(sys)
     ps = parameters(sys)
     u0map = to_varmap(u0, dvs)
+    symbols_to_symbolics!(sys, u0map)
     pmap = to_varmap(p, ps)
+    symbols_to_symbolics!(sys, pmap)
     guesses = Dict()
+    defs = defaults(sys)
     if SciMLBase.has_initializeprob(odefn)
         oldsys = odefn.initializeprob.f.sys
         meta = get_metadata(oldsys)
@@ -277,6 +279,35 @@ function SciMLBase.remake_initializeprob(sys::ODESystem, odefn, u0, t0, p)
             u0map = merge(meta.u0map, u0map)
             pmap = merge(meta.pmap, pmap)
             merge!(guesses, meta.additional_guesses)
+        end
+    else
+        # there is no initializeprob, so the original problem construction
+        # had no solvable parameters and had the differential variables
+        # specified in `u0map`.
+        if u0 === missing
+            # the user didn't pass `u0` to `remake`, so they want to retain
+            # existing values. Fill the differential variables in `u0map`,
+            # initialization will either be elided or solve for the algebraic
+            # variables
+            diff_idxs = isdiffeq.(equations(sys))
+            for i in eachindex(dvs)
+                diff_idxs[i] || continue
+                u0map[dvs[i]] = newu0[i]
+            end
+        end
+        if p === missing
+            # the user didn't pass `p` to `remake`, so they want to retain
+            # existing values. Fill all parameters in `pmap` so that none of
+            # them are solvable.
+            for p in ps
+                pmap[p] = getp(sys, p)(newp)
+            end
+        end
+        # all non-solvable parameters need values regardless
+        for p in ps
+            haskey(pmap, p) && continue
+            is_parameter_solvable(p, pmap, defs, guesses) && continue
+            pmap[p] = getp(sys, p)(newp)
         end
     end
     if t0 === nothing
@@ -286,8 +317,13 @@ function SciMLBase.remake_initializeprob(sys::ODESystem, odefn, u0, t0, p)
     filter_missing_values!(pmap)
     f, _ = process_SciMLProblem(EmptySciMLFunction, sys, u0map, pmap; guesses, t = t0)
     kws = f.kwargs
-    return get(kws, :initializeprob, nothing), get(kws, :update_initializeprob!, nothing), get(kws, :initializeprobmap, nothing),
-        get(kws, :initializeprobpmap, nothing)
+    initprob = get(kws, :initializeprob, nothing)
+    if initprob === nothing
+        return nothing
+    end
+    return SciMLBase.OverrideInitData(initprob, get(kws, :update_initializeprob!, nothing),
+        get(kws, :initializeprobmap, nothing),
+        get(kws, :initializeprobpmap, nothing))
 end
 
 """
