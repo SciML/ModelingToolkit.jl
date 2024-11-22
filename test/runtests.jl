@@ -33,7 +33,6 @@ end
             @safetestset "Dynamic Quantities Test" include("dq_units.jl")
             @safetestset "Unitful Quantities Test" include("units.jl")
             @safetestset "Mass Matrix Test" include("mass_matrix.jl")
-            @safetestset "InitializationSystem Test" include("initializationsystem.jl")
             @safetestset "Guess Propagation" include("guess_propagation.jl")
             @safetestset "Hierarchical Initialization Equations" include("hierarchical_initialization_eqs.jl")
             @safetestset "Reduction Test" include("reduction.jl")
@@ -62,6 +61,10 @@ end
             @safetestset "Equation Type Accessors Test" include("equation_type_accessors.jl")
             @safetestset "Equations with complex values" include("complex.jl")
         end
+    end
+
+    if GROUP == "All" || GROUP == "InterfaceI" || GROUP == "Initialization"
+            @safetestset "InitializationSystem Test" include("initializationsystem.jl")
     end
 
     if GROUP == "All" || GROUP == "InterfaceII"
