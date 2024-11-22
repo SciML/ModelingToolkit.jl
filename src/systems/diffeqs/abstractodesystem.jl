@@ -468,6 +468,116 @@ end
 
 """
 ```julia
+SciMLBase.BVProblem{iip}(sys::AbstractODESystem, u0map, tspan,
+                         parammap = DiffEqBase.NullParameters();
+                         version = nothing, tgrad = false,
+                         jac = true, sparse = true,
+                         simplify = false,
+                         kwargs...) where {iip}
+```
+
+Create a `BVProblem` from the [`ODESystem`](@ref). The arguments `dvs` and
+`ps` are used to set the order of the dependent variable and parameter vectors,
+respectively.
+"""
+function SciMLBase.BVProblem(sys::AbstractODESystem, args...; kwargs...)
+    BVProblem{true}(sys, args...; kwargs...)
+end
+
+function SciMLBase.BVProblem(sys::AbstractODESystem,
+        u0map::StaticArray,
+        args...;
+        kwargs...)
+    BVProblem{false, SciMLBase.FullSpecialize}(sys, u0map, args...; kwargs...)
+end
+
+function SciMLBase.BVProblem{true}(sys::AbstractODESystem, args...; kwargs...)
+    BVProblem{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
+end
+
+function SciMLBase.BVProblem{false}(sys::AbstractODESystem, args...; kwargs...)
+    BVProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
+end
+
+function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = [],
+        tspan = get_tspan(sys),
+        parammap = DiffEqBase.NullParameters();
+        version = nothing, tgrad = false,
+        jac = true, sparse = true, 
+        sparsity = true, 
+        callback = nothing,
+        check_length = true,
+        warn_initialize_determined = true,
+        eval_expression = false,
+        eval_module = @__MODULE__,
+        kwargs...) where {iip, specialize}
+
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `BVProblem`")
+    end
+
+    f, u0, p = process_SciMLProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
+        t = tspan !== nothing ? tspan[1] : tspan,
+        check_length, warn_initialize_determined, eval_expression, eval_module, jac, sparse, sparsity, kwargs...)
+
+    # if jac
+    #     jac_gen = generate_jacobian(sys, dvs, ps;
+    #         simplify = simplify, sparse = sparse,
+    #         expression = Val{true},
+    #         expression_module = eval_module,
+    #         checkbounds = checkbounds, kwargs...)
+    #     jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
+
+    #     _jac(u, p, t) = jac_oop(u, p, t)
+    #     _jac(J, u, p, t) = jac_iip(J, u, p, t)
+    #     _jac(u, p::Tuple{Vararg{Number}}, t) = jac_oop(u, p, t)
+    #     _jac(J, u, p::Tuple{Vararg{Number}}, t) = jac_iip(J, u, p, t)
+    #     _jac(u, p::Tuple, t) = jac_oop(u, p..., t)
+    #     _jac(J, u, p::Tuple, t) = jac_iip(J, u, p..., t)
+    #     _jac(u, p::MTKParameters, t) = jac_oop(u, p..., t)
+    #     _jac(J, u, p::MTKParameters, t) = jac_iip(J, u, p..., t)
+    # else
+    #     _jac = nothing
+    # end
+
+    # jac_prototype = if sparse
+    #     uElType = u0 === nothing ? Float64 : eltype(u0)
+    #     if jac
+    #         similar(calculate_jacobian(sys, sparse = sparse), uElType)
+    #     else
+    #         similar(jacobian_sparsity(sys), uElType)
+    #     end
+    # else
+    #     nothing
+    # end
+
+    # f.jac = _jac
+    # f.jac_prototype = jac_prototype
+    # f.sparsity = jac ? jacobian_sparsity(sys) : nothing
+
+    cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
+
+    kwargs = filter_kwargs(kwargs)
+
+    kwargs1 = (;)
+    if cbs !== nothing
+        kwargs1 = merge(kwargs1, (callback = cbs,))
+    end
+
+    # Define the boundary conditions
+    bc = if iip 
+        (residual, u, p, t) -> (residual = u[1] - u0)
+    else
+        (u, p, t) -> (u[1] - u0)
+    end
+
+    return BVProblem{iip}(f, bc, u0, tspan, p; kwargs1..., kwargs...)
+end
+
+get_callback(prob::BVProblem) = prob.kwargs[:callback]
+
+"""
+```julia
 DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
                             ps = parameters(sys);
                             version = nothing, tgrad = false,
