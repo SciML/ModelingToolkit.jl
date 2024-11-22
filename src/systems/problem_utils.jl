@@ -55,6 +55,42 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Turn any `Symbol` keys in `varmap` to the appropriate symbolic variables in `sys`. Any
+symbols that cannot be converted are ignored.
+"""
+function symbols_to_symbolics!(sys::AbstractSystem, varmap::AbstractDict)
+    if is_split(sys)
+        ic = get_index_cache(sys)
+        for k in collect(keys(varmap))
+            k isa Symbol || continue
+            newk = get(ic.symbol_to_variable, k, nothing)
+            newk === nothing && continue
+            varmap[newk] = varmap[k]
+            delete!(varmap, k)
+        end
+    else
+        syms = all_symbols(sys)
+        for k in collect(keys(varmap))
+            k isa Symbol || continue
+            idx = findfirst(syms) do sym
+                hasname(sym) || return false
+                name = getname(sym)
+                return name == k
+            end
+            idx === nothing && continue
+            newk = syms[idx]
+            if iscall(newk) && operation(newk) === getindex
+                newk = arguments(newk)[1]
+            end
+            varmap[newk] = varmap[k]
+            delete!(varmap, k)
+        end
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Ensure `varmap` contains entries for all variables in `vars` by using values from
 `fallbacks` if they don't already exist in `varmap`. Return the set of all variables in
 `vars` not present in `varmap` or `fallbacks`. If an array variable in `vars` does not
@@ -530,8 +566,10 @@ function process_SciMLProblem(
     pType = typeof(pmap)
     _u0map = u0map
     u0map = to_varmap(u0map, dvs)
+    symbols_to_symbolics!(sys, u0map)
     _pmap = pmap
     pmap = to_varmap(pmap, ps)
+    symbols_to_symbolics!(sys, pmap)
     defs = add_toterms(recursive_unwrap(defaults(sys)))
     cmap, cs = get_cmap(sys)
     kwargs = NamedTuple(kwargs)
