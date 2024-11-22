@@ -358,4 +358,13 @@ end
     @mtkbuild sys = OptimizationSystem(obj, [x, y, z], []; constraints = cons)
     @test is_variable(sys, z)
     @test !is_variable(sys, y)
+
+    @variables x[1:3] [bounds = ([-Inf, -1.0, -2.0], [Inf, 1.0, 2.0])]
+    obj = x[1]^2 + x[2]^2 + x[3]^2
+    cons = [x[2] ~ 2x[1] + 3, x[3] ~ x[1] + x[2]]
+    @mtkbuild sys = OptimizationSystem(obj, [x], []; constraints = cons)
+    @test length(unknowns(sys)) == 2
+    @test !is_variable(sys, x[1])
+    @test is_variable(sys, x[2])
+    @test is_variable(sys, x[3])
 end

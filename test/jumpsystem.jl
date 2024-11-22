@@ -1,5 +1,5 @@
 using ModelingToolkit, DiffEqBase, JumpProcesses, Test, LinearAlgebra
-using Random, StableRNGs
+using Random, StableRNGs, NonlinearSolve
 using OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D
 MT = ModelingToolkit
@@ -339,4 +339,197 @@ let
     cmean2 ./= N
 
     @test all(abs.(cmean .- cmean2) .<= 0.05 .* cmean)
+end
+
+# collect_vars! tests for jumps
+let
+    @variables x1(t) x2(t) x3(t) x4(t) x5(t)
+    @parameters p1 p2 p3 p4 p5
+    j1 = ConstantRateJump(p1, [x1 ~ x1 + 1])
+    j2 = MassActionJump(p2, [x2 => 1], [x3 => -1])
+    j3 = VariableRateJump(p3, [x3 ~ x3 + 1, x4 ~ x4 + 1])
+    j4 = MassActionJump(p4 * p5, [x1 => 1, x5 => 1], [x1 => -1, x5 => -1, x2 => 1])
+    us = Set()
+    ps = Set()
+    iv = t
+
+    MT.collect_vars!(us, ps, j1, iv)
+    @test issetequal(us, [x1])
+    @test issetequal(ps, [p1])
+
+    empty!(us)
+    empty!(ps)
+    MT.collect_vars!(us, ps, j2, iv)
+    @test issetequal(us, [x2, x3])
+    @test issetequal(ps, [p2])
+
+    empty!(us)
+    empty!(ps)
+    MT.collect_vars!(us, ps, j3, iv)
+    @test issetequal(us, [x3, x4])
+    @test issetequal(ps, [p3])
+
+    empty!(us)
+    empty!(ps)
+    MT.collect_vars!(us, ps, j4, iv)
+    @test issetequal(us, [x1, x5, x2])
+    @test issetequal(ps, [p4, p5])
+end
+
+# scoping tests
+let
+    @variables x1(t) x2(t) x3(t) x4(t) x5(t)
+    x2 = ParentScope(x2)
+    x3 = ParentScope(ParentScope(x3))
+    x4 = DelayParentScope(x4, 2)
+    x5 = GlobalScope(x5)
+    @parameters p1 p2 p3 p4 p5
+    p2 = ParentScope(p2)
+    p3 = ParentScope(ParentScope(p3))
+    p4 = DelayParentScope(p4, 2)
+    p5 = GlobalScope(p5)
+
+    j1 = ConstantRateJump(p1, [x1 ~ x1 + 1])
+    j2 = MassActionJump(p2, [x2 => 1], [x3 => -1])
+    j3 = VariableRateJump(p3, [x3 ~ x3 + 1, x4 ~ x4 + 1])
+    j4 = MassActionJump(p4 * p5, [x1 => 1, x5 => 1], [x1 => -1, x5 => -1, x2 => 1])
+    @named js = JumpSystem([j1, j2, j3, j4], t, [x1, x2, x3, x4, x5], [p1, p2, p3, p4, p5])
+
+    us = Set()
+    ps = Set()
+    iv = t
+    MT.collect_scoped_vars!(us, ps, js, iv)
+    @test issetequal(us, [x2])
+    @test issetequal(ps, [p2])
+
+    empty!.((us, ps))
+    MT.collect_scoped_vars!(us, ps, js, iv; depth = 0)
+    @test issetequal(us, [x1])
+    @test issetequal(ps, [p1])
+
+    empty!.((us, ps))
+    MT.collect_scoped_vars!(us, ps, js, iv; depth = 1)
+    @test issetequal(us, [x2])
+    @test issetequal(ps, [p2])
+
+    empty!.((us, ps))
+    MT.collect_scoped_vars!(us, ps, js, iv; depth = 2)
+    @test issetequal(us, [x3, x4])
+    @test issetequal(ps, [p3, p4])
+
+    empty!.((us, ps))
+    MT.collect_scoped_vars!(us, ps, js, iv; depth = -1)
+    @test issetequal(us, [x5])
+    @test issetequal(ps, [p5])
+end
+
+# PDMP test
+let
+    seed = 1111
+    Random.seed!(rng, seed)
+    @variables X(t) Y(t)
+    @parameters k1 k2
+    vrj1 = VariableRateJump(k1 * X, [X ~ X - 1]; save_positions = (false, false))
+    vrj2 = VariableRateJump(k1, [Y ~ Y + 1]; save_positions = (false, false))
+    eqs = [D(X) ~ k2, D(Y) ~ -k2 / 10 * Y]
+    @named jsys = JumpSystem([vrj1, vrj2, eqs[1], eqs[2]], t, [X, Y], [k1, k2])
+    jsys = complete(jsys)
+    X0 = 0.0
+    Y0 = 3.0
+    u0 = [X => X0, Y => Y0]
+    k1val = 1.0
+    k2val = 20.0
+    p = [k1 => k1val, k2 => k2val]
+    tspan = (0.0, 10.0)
+    oprob = ODEProblem(jsys, u0, tspan, p)
+    jprob = JumpProblem(jsys, oprob; rng, save_positions = (false, false))
+
+    times = range(0.0, tspan[2], length = 100)
+    Nsims = 4000
+    Xv = zeros(length(times))
+    Yv = zeros(length(times))
+    for n in 1:Nsims
+        sol = solve(jprob, Tsit5(); saveat = times, seed)
+        Xv .+= sol[1, :]
+        Yv .+= sol[2, :]
+        seed += 1
+    end
+    Xv ./= Nsims
+    Yv ./= Nsims
+
+    Xact(t) = X0 * exp(-k1val * t) + (k2val / k1val) * (1 - exp(-k1val * t))
+    function Yact(t)
+        Y0 * exp(-k2val / 10 * t) + (k1val / (k2val / 10)) * (1 - exp(-k2val / 10 * t))
+    end
+    @test all(abs.(Xv .- Xact.(times)) .<= 0.05 .* Xv)
+    @test all(abs.(Yv .- Yact.(times)) .<= 0.1 .* Yv)
+end
+
+# that mixes ODEs and jump types, and then contin events
+let
+    seed = 1111
+    Random.seed!(rng, seed)
+    @variables X(t) Y(t)
+    @parameters α β
+    vrj = VariableRateJump(β * X, [X ~ X - 1]; save_positions = (false, false))
+    crj = ConstantRateJump(β * Y, [Y ~ Y - 1])
+    maj = MassActionJump(α, [0 => 1], [Y => 1])
+    eqs = [D(X) ~ α * (1 + Y)]
+    @named jsys = JumpSystem([maj, crj, vrj, eqs[1]], t, [X, Y], [α, β])
+    jsys = complete(jsys)
+    p = (α = 6.0, β = 2.0, X₀ = 2.0, Y₀ = 1.0)
+    u0map = [X => p.X₀, Y => p.Y₀]
+    pmap = [α => p.α, β => p.β]
+    tspan = (0.0, 20.0)
+    oprob = ODEProblem(jsys, u0map, tspan, pmap)
+    jprob = JumpProblem(jsys, oprob; rng, save_positions = (false, false))
+    times = range(0.0, tspan[2], length = 100)
+    Nsims = 4000
+    Xv = zeros(length(times))
+    Yv = zeros(length(times))
+    for n in 1:Nsims
+        sol = solve(jprob, Tsit5(); saveat = times, seed)
+        Xv .+= sol[1, :]
+        Yv .+= sol[2, :]
+        seed += 1
+    end
+    Xv ./= Nsims
+    Yv ./= Nsims
+
+    function Yf(t, p)
+        local α, β, X₀, Y₀ = p
+        return (α / β) + (Y₀ - α / β) * exp(-β * t)
+    end
+    function Xf(t, p)
+        local α, β, X₀, Y₀ = p
+        return (α / β) + (α^2 / β^2) + α * (Y₀ - α / β) * t * exp(-β * t) +
+               (X₀ - α / β - α^2 / β^2) * exp(-β * t)
+    end
+    Xact = [Xf(t, p) for t in times]
+    Yact = [Yf(t, p) for t in times]
+    @test all(abs.(Xv .- Xact) .<= 0.05 .* Xv)
+    @test all(abs.(Yv .- Yact) .<= 0.05 .* Yv)
+
+    function affect!(integ, u, p, ctx)
+        savevalues!(integ, true)
+        terminate!(integ)
+        nothing
+    end
+    cevents = [t ~ 0.2] => (affect!, [], [], [], nothing)
+    @named jsys = JumpSystem([maj, crj, vrj, eqs[1]], t, [X, Y], [α, β];
+        continuous_events = cevents)
+    jsys = complete(jsys)
+    tspan = (0.0, 200.0)
+    oprob = ODEProblem(jsys, u0map, tspan, pmap)
+    jprob = JumpProblem(jsys, oprob; rng, save_positions = (false, false))
+    Xsamp = 0.0
+    Nsims = 4000
+    for n in 1:Nsims
+        sol = solve(jprob, Tsit5(); saveat = tspan[2], seed)
+        @test sol.retcode == ReturnCode.Terminated
+        Xsamp += sol[1, end]
+        seed += 1
+    end
+    Xsamp /= Nsims
+    @test abs(Xsamp - Xf(0.2, p) < 0.05 * Xf(0.2, p))
 end

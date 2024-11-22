@@ -50,7 +50,7 @@ function _model_macro(mod, name, expr, isconnector)
         :structural_parameters => Dict{Symbol, Dict}()
     )
     comps = Union{Symbol, Expr}[]
-    ext = Ref{Any}(nothing)
+    ext = []
     eqs = Expr[]
     icon = Ref{Union{String, URI}}()
     ps, sps, vs, = [], [], []
@@ -115,10 +115,10 @@ function _model_macro(mod, name, expr, isconnector)
     sys = :($ODESystem($(flatten_equations)(equations), $iv, variables, parameters;
         name, systems, gui_metadata = $gui_metadata, defaults))
 
-    if ext[] === nothing
+    if length(ext) == 0
         push!(exprs.args, :(var"#___sys___" = $sys))
     else
-        push!(exprs.args, :(var"#___sys___" = $extend($sys, $(ext[]))))
+        push!(exprs.args, :(var"#___sys___" = $extend($sys, [$(ext...)])))
     end
 
     isconnector && push!(exprs.args,
@@ -240,7 +240,7 @@ function unit_handled_variable_value(meta, varname)
 end
 
 # This function parses various variable/parameter definitions.
-# 
+#
 # The comments indicate the syntax matched by a block; either when parsed directly
 # when it is called recursively for parsing a part of an expression.
 # These variable definitions are part of test suite in `test/model_parsing.jl`
@@ -286,7 +286,7 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         # `(l2(t)[1:N, 1:M] = 2), [description = "l is more than 1D, with arbitrary length"]`
         # `(l3(t)[1:3] = 3), [description = "l2 is 1D"]`
         # `(l4(t)[1:N] = 4), [description = "l2 is 1D, with arbitrary length"]`
-        # 
+        #
         # Condition 2 parses:
         # `(l5(t)[1:3]::Int = 5), [description = "l3 is 1D and has a type"]`
         # `(l6(t)[1:N]::Int = 6), [description = "l3 is 1D and has a type, with arbitrary length"]`
@@ -373,7 +373,7 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         # Condition 1 is recursively called by:
         # `par5[1:3]::BigFloat`
         # `par6(t)[1:3]::BigFloat`
-        # 
+        #
         # Condition 2 parses:
         # `b2(t)[1:2]`
         # `a2[1:2]`
@@ -772,18 +772,17 @@ function Base.names(model::Model)
         map(first, get(model.structure, :components, EMPTY_VoVoSYMBOL))))
 end
 
-function _parse_extend!(ext, a, b, dict, expr, kwargs, vars, additional_args)
+function _parse_extend!(ext, a, b, dict, expr, kwargs, vars, implicit_arglist)
     extend_args!(a, b, dict, expr, kwargs)
 
-    # `additional_args` doubles as a flag to check the mode of `@extend`. It is
+    # `implicit_arglist` doubles as a flag to check the mode of `@extend`. It is
     # `nothing` for explicit destructuring.
     # The following block modifies the arguments of both base and higher systems
     # for the implicit extend statements.
-    if additional_args !== nothing
+    if implicit_arglist !== nothing
         b.args = [b.args[1]]
-        allvars = [additional_args.args..., vars.args...]
         push!(b.args, Expr(:parameters))
-        for var in allvars
+        for var in implicit_arglist.args
             push!(b.args[end].args, var)
             if !haskey(dict[:kwargs], var)
                 push!(dict[:kwargs], var => Dict(:value => NO_VALUE))
@@ -792,11 +791,17 @@ function _parse_extend!(ext, a, b, dict, expr, kwargs, vars, additional_args)
         end
     end
 
-    ext[] = a
+    push!(ext, a)
     push!(b.args, Expr(:kw, :name, Meta.quot(a)))
     push!(expr.args, :($a = $b))
 
-    dict[:extend] = [Symbol.(vars.args), a, b.args[1]]
+    if !haskey(dict, :extend)
+        dict[:extend] = [Symbol.(vars.args), a, b.args[1]]
+    else
+        push!(dict[:extend][1], Symbol.(vars.args)...)
+        dict[:extend][2] = vcat(dict[:extend][2], a)
+        dict[:extend][3] = vcat(dict[:extend][3], b.args[1])
+    end
 
     push!(expr.args, :(@unpack $vars = $a))
 end
@@ -814,8 +819,8 @@ function parse_extend!(exprs, ext, dict, mod, body, kwargs)
                 end
                 a, b = b.args
                 # This doubles as a flag to identify the mode of `@extend`
-                additional_args = nothing
-                _parse_extend!(ext, a, b, dict, expr, kwargs, vars, additional_args)
+                implicit_arglist = nothing
+                _parse_extend!(ext, a, b, dict, expr, kwargs, vars, implicit_arglist)
             else
                 error("When explicitly destructing in `@extend` please use the syntax: `@extend a, b = oneport = OnePort()`.")
             end
@@ -825,11 +830,12 @@ function parse_extend!(exprs, ext, dict, mod, body, kwargs)
             b = body
             if (model = getproperty(mod, b.args[1])) isa Model
                 vars = Expr(:tuple)
-                append!(vars.args, _arguments(model))
-                additional_args = Expr(:tuple)
-                append!(additional_args.args,
+                append!(vars.args, names(model))
+                implicit_arglist = Expr(:tuple)
+                append!(implicit_arglist.args, _arguments(model))
+                append!(implicit_arglist.args,
                     keys(get(model.structure, :structural_parameters, EMPTY_DICT)))
-                _parse_extend!(ext, a, b, dict, expr, kwargs, vars, additional_args)
+                _parse_extend!(ext, a, b, dict, expr, kwargs, vars, implicit_arglist)
             else
                 error("Cannot infer the exact `Model` that `@extend $(body)` refers." *
                       " Please specify the names that it brings into scope by:" *

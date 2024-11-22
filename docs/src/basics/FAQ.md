@@ -82,6 +82,16 @@ parameter_index(sys, sym)
 Note that while the variable index will be an integer, the parameter index is a struct of
 type `ParameterIndex` whose internals should not be relied upon.
 
+## Can I index with strings?
+
+Strings are not considered symbolic variables, and thus cannot directly be used for symbolic
+indexing. However, ModelingToolkit does provide a method to parse the string representation of
+a variable, given the system in which that variable exists.
+
+```@docs
+ModelingToolkit.parse_variable
+```
+
 ## Transforming value maps to arrays
 
 ModelingToolkit.jl allows (and recommends) input maps like `[x => 2.0, y => 3.0]`

@@ -71,8 +71,6 @@ function calculate_jacobian(sys::AbstractODESystem;
 
     rhs = [eq.rhs - eq.lhs for eq in full_equations(sys)] #need du terms on rhs for differentiating wrt du
 
-    iv = get_iv(sys)
-
     if sparse
         jac = sparsejacobian(rhs, dvs, simplify = simplify)
     else
@@ -94,8 +92,6 @@ function calculate_control_jacobian(sys::AbstractODESystem;
     end
 
     rhs = [eq.rhs for eq in full_equations(sys)]
-
-    iv = get_iv(sys)
     ctrls = controls(sys)
 
     if sparse
@@ -189,7 +185,9 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
         wrap_code = identity,
         kwargs...)
     if isdde
-        eqs = delay_to_function(sys)
+        issplit = has_index_cache(sys) && get_index_cache(sys) !== nothing
+        eqs = delay_to_function(
+            sys; history_arg = issplit ? MTKPARAMETERS_ARG : DEFAULT_PARAMS_ARG)
     else
         eqs = [eq for eq in equations(sys)]
     end
@@ -211,14 +209,19 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
     t = get_iv(sys)
 
     if isdde
-        build_function(rhss, u, DDE_HISTORY_FUN, p..., t; kwargs...)
+        build_function(rhss, u, DDE_HISTORY_FUN, p..., t; kwargs...,
+            wrap_code = wrap_code .∘ wrap_mtkparameters(sys, false, 3) .∘
+                        wrap_array_vars(sys, rhss; dvs, ps, history = true) .∘
+                        wrap_parameter_dependencies(sys, false))
     else
         pre, sol_states = get_substitutions_and_solved_unknowns(sys)
 
         if implicit_dae
+            # inputs = [] makes `wrap_array_vars` offset by 1 since there is an extra
+            # argument
             build_function(rhss, ddvs, u, p..., t; postprocess_fbody = pre,
                 states = sol_states,
-                wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps) .∘
+                wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps, inputs = []) .∘
                             wrap_parameter_dependencies(sys, false),
                 kwargs...)
         else
@@ -570,9 +573,7 @@ function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
     f(u, h, p, t) = f_oop(u, h, p, t)
-    f(u, h, p::MTKParameters, t) = f_oop(u, h, p..., t)
     f(du, u, h, p, t) = f_iip(du, u, h, p, t)
-    f(du, u, h, p::MTKParameters, t) = f_iip(du, u, h, p..., t)
 
     DDEFunction{iip}(f, sys = sys)
 end
@@ -595,17 +596,14 @@ function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
+    f(u, h, p, t) = f_oop(u, h, p, t)
+    f(du, u, h, p, t) = f_iip(du, u, h, p, t)
+
     g_gen = generate_diffusion_function(sys, dvs, ps; expression = Val{true},
         isdde = true, kwargs...)
     g_oop, g_iip = eval_or_rgf.(g_gen; eval_expression, eval_module)
-    f(u, h, p, t) = f_oop(u, h, p, t)
-    f(u, h, p::MTKParameters, t) = f_oop(u, h, p..., t)
-    f(du, u, h, p, t) = f_iip(du, u, h, p, t)
-    f(du, u, h, p::MTKParameters, t) = f_iip(du, u, h, p..., t)
     g(u, h, p, t) = g_oop(u, h, p, t)
-    g(u, h, p::MTKParameters, t) = g_oop(u, h, p..., t)
     g(du, u, h, p, t) = g_iip(du, u, h, p, t)
-    g(du, u, h, p::MTKParameters, t) = g_iip(du, u, h, p..., t)
 
     SDDEFunction{iip}(f, g, sys = sys)
 end
@@ -756,6 +754,39 @@ function DAEFunctionExpr(sys::AbstractODESystem, args...; kwargs...)
     DAEFunctionExpr{true}(sys, args...; kwargs...)
 end
 
+struct SymbolicTstops{F}
+    fn::F
+end
+
+function (st::SymbolicTstops)(p, tspan)
+    unique!(sort!(reduce(vcat, st.fn(p..., tspan...))))
+end
+
+function SymbolicTstops(
+        sys::AbstractSystem; eval_expression = false, eval_module = @__MODULE__)
+    tstops = symbolic_tstops(sys)
+    isempty(tstops) && return nothing
+    t0 = gensym(:t0)
+    t1 = gensym(:t1)
+    tstops = map(tstops) do val
+        if is_array_of_symbolics(val) || val isa AbstractArray
+            collect(val)
+        else
+            term(:, t0, unwrap(val), t1; type = AbstractArray{Real})
+        end
+    end
+    rps = reorder_parameters(sys, parameters(sys))
+    tstops, _ = build_function(tstops,
+        rps...,
+        t0,
+        t1;
+        expression = Val{true},
+        wrap_code = wrap_array_vars(sys, tstops; dvs = nothing) .∘
+                    wrap_parameter_dependencies(sys, false))
+    tstops = eval_or_rgf(tstops; eval_expression, eval_module)
+    return SymbolicTstops(tstops)
+end
+
 """
 ```julia
 DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
@@ -790,12 +821,6 @@ function DiffEqBase.ODEProblem{false}(sys::AbstractODESystem, args...; kwargs...
     ODEProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
-struct DiscreteSaveAffect{F, S} <: Function
-    f::F
-    s::S
-end
-(d::DiscreteSaveAffect)(args...) = d.f(args..., d.s)
-
 function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = [],
         tspan = get_tspan(sys),
         parammap = DiffEqBase.NullParameters();
@@ -819,6 +844,11 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     kwargs1 = (;)
     if cbs !== nothing
         kwargs1 = merge(kwargs1, (callback = cbs,))
+    end
+
+    tstops = SymbolicTstops(sys; eval_expression, eval_module)
+    if tstops !== nothing
+        kwargs1 = merge(kwargs1, (; tstops))
     end
 
     return ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...)
@@ -847,7 +877,7 @@ end
 function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
         parammap = DiffEqBase.NullParameters();
         warn_initialize_determined = true,
-        check_length = true, kwargs...) where {iip}
+        check_length = true, eval_expression = false, eval_module = @__MODULE__, kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEProblem`")
     end
@@ -860,8 +890,15 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
     differential_vars = map(Base.Fix2(in, diffvars), sts)
     kwargs = filter_kwargs(kwargs)
 
+    kwargs1 = (;)
+
+    tstops = SymbolicTstops(sys; eval_expression, eval_module)
+    if tstops !== nothing
+        kwargs1 = merge(kwargs1, (; tstops))
+    end
+
     DAEProblem{iip}(f, du0, u0, tspan, p; differential_vars = differential_vars,
-        kwargs...)
+        kwargs..., kwargs1...)
 end
 
 function generate_history(sys::AbstractODESystem, u0; expression = Val{false}, kwargs...)

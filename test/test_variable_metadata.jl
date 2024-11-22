@@ -10,6 +10,47 @@ using ModelingToolkit
 @test !hasbounds(y)
 @test !haskey(ModelingToolkit.dump_variable_metadata(y), :bounds)
 
+@variables y[1:3]
+@test !hasbounds(y)
+@test getbounds(y)[1] == [-Inf, -Inf, -Inf]
+@test getbounds(y)[2] == [Inf, Inf, Inf]
+for i in eachindex(y)
+    @test !hasbounds(y[i])
+    b = getbounds(y[i])
+    @test b[1] == -Inf && b[2] == Inf
+end
+
+@variables y[1:3] [bounds = (-1, 1)]
+@test hasbounds(y)
+@test getbounds(y)[1] == -ones(3)
+@test getbounds(y)[2] == ones(3)
+for i in eachindex(y)
+    @test hasbounds(y[i])
+    b = getbounds(y[i])
+    @test b[1] == -1.0 && b[2] == 1.0
+end
+@test getbounds(y[1:2])[1] == -ones(2)
+@test getbounds(y[1:2])[2] == ones(2)
+
+@variables y[1:2, 1:2] [bounds = (-1, [1.0 Inf; 2.0 3.0])]
+@test hasbounds(y)
+@test getbounds(y)[1] == [-1 -1; -1 -1]
+@test getbounds(y)[2] == [1.0 Inf; 2.0 3.0]
+for i in eachindex(y)
+    @test hasbounds(y[i])
+    b = getbounds(y[i])
+    @test b[1] == -1 && b[2] == [1.0 Inf; 2.0 3.0][i]
+end
+
+@variables y[1:2] [bounds = (-Inf, [1.0, Inf])]
+@test hasbounds(y)
+@test getbounds(y)[1] == [-Inf, -Inf]
+@test getbounds(y)[2] == [1.0, Inf]
+@test hasbounds(y[1])
+@test getbounds(y[1]) == (-Inf, 1.0)
+@test !hasbounds(y[2])
+@test getbounds(y[2]) == (-Inf, Inf)
+
 # Guess
 @variables y [guess = 0]
 @test getguess(y) === 0

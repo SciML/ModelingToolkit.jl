@@ -101,8 +101,8 @@ function OptimizationSystem(op, unknowns, ps;
         gui_metadata = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
-    constraints = value.(scalarize(constraints))
-    unknowns′ = value.(scalarize(unknowns))
+    constraints = value.(reduce(vcat, scalarize(constraints); init = []))
+    unknowns′ = value.(reduce(vcat, scalarize(unknowns); init = []))
     ps′ = value.(ps)
     op′ = value(scalarize(op))
 
