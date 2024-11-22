@@ -88,6 +88,11 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
     connector_type::Any
     """
+    A `Vector{SymbolicContinuousCallback}` that model events.
+    The integrator will use root finding to guarantee that it steps at each zero crossing.
+    """
+    continuous_events::Vector{SymbolicContinuousCallback}
+    """
     A `Vector{SymbolicDiscreteCallback}` that models events. Symbolic
     analog to `SciMLBase.DiscreteCallback` that executes an affect when a given condition is
     true at the end of an integration step. Note, one must make sure to call
@@ -120,8 +125,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
 
     function JumpSystem{U}(
             tag, ap::U, iv, unknowns, ps, var_to_name, observed, name, description,
-            systems,
-            defaults, connector_type, devents, parameter_dependencies,
+            systems, defaults, connector_type, cevents, devents, parameter_dependencies,
             metadata = nothing, gui_metadata = nothing,
             complete = false, index_cache = nothing, isscheduled = false;
             checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
@@ -136,8 +140,8 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
         end
         new{U}(tag, ap, iv, unknowns, ps, var_to_name,
             observed, name, description, systems, defaults,
-            connector_type, devents, parameter_dependencies, metadata, gui_metadata,
-            complete, index_cache, isscheduled)
+            connector_type, cevents, devents, parameter_dependencies, metadata,
+            gui_metadata, complete, index_cache, isscheduled)
     end
 end
 function JumpSystem(tag, ap, iv, states, ps, var_to_name, args...; kwargs...)
@@ -160,14 +164,42 @@ function JumpSystem(eqs, iv, unknowns, ps;
         metadata = nothing,
         gui_metadata = nothing,
         kwargs...)
+
+    # variable processing, similar to ODESystem
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
-    eqs = scalarize.(eqs)
+    iv′ = value(iv)
+    us′ = value.(unknowns)
+    ps′ = value.(ps)
+    parameter_dependencies, ps′ = process_parameter_dependencies(
+        parameter_dependencies, ps′)
+    if !(isempty(default_u0) && isempty(default_p))
+        Base.depwarn(
+            "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
+            :JumpSystem, force = true)
+    end
+    defaults = Dict{Any, Any}(todict(defaults))
+    var_to_name = Dict()
+    process_variables!(var_to_name, defaults, us′)
+    process_variables!(var_to_name, defaults, ps′)
+    process_variables!(var_to_name, defaults, [eq.lhs for eq in parameter_dependencies])
+    process_variables!(var_to_name, defaults, [eq.rhs for eq in parameter_dependencies])
+    #! format: off
+    defaults = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(defaults) if value(v) !== nothing)
+    #! format: on
+    isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
+
     sysnames = nameof.(systems)
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    ap = ArrayPartition(MassActionJump[], ConstantRateJump[], VariableRateJump[])
+
+    # equation processing
+    # this and the treatment of continuous events are the only part 
+    # unique to JumpSystems
+    eqs = scalarize.(eqs)
+    ap = ArrayPartition(
+        MassActionJump[], ConstantRateJump[], VariableRateJump[], Equation[])
     for eq in eqs
         if eq isa MassActionJump
             push!(ap.x[1], eq)
@@ -175,37 +207,51 @@ function JumpSystem(eqs, iv, unknowns, ps;
             push!(ap.x[2], eq)
         elseif eq isa VariableRateJump
             push!(ap.x[3], eq)
+        elseif eq isa Equation
+            push!(ap.x[4], eq)
         else
-            error("JumpSystem equations must contain MassActionJumps, ConstantRateJumps, or VariableRateJumps.")
+            error("JumpSystem equations must contain MassActionJumps, ConstantRateJumps, VariableRateJumps, or Equations.")
         end
     end
-    if !(isempty(default_u0) && isempty(default_p))
-        Base.depwarn(
-            "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
-            :JumpSystem, force = true)
-    end
-    defaults = todict(defaults)
-    defaults = Dict(value(k) => value(v)
-    for (k, v) in pairs(defaults) if value(v) !== nothing)
 
-    unknowns, ps = value.(unknowns), value.(ps)
-    var_to_name = Dict()
-    process_variables!(var_to_name, defaults, unknowns)
-    process_variables!(var_to_name, defaults, ps)
-    isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
-    (continuous_events === nothing) ||
-        error("JumpSystems currently only support discrete events.")
+    cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
-    parameter_dependencies, ps = process_parameter_dependencies(parameter_dependencies, ps)
+
     JumpSystem{typeof(ap)}(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-        ap, value(iv), unknowns, ps, var_to_name, observed, name, description, systems,
-        defaults, connector_type, disc_callbacks, parameter_dependencies,
+        ap, iv′, us′, ps′, var_to_name, observed, name, description, systems,
+        defaults, connector_type, cont_callbacks, disc_callbacks, parameter_dependencies,
         metadata, gui_metadata, checks = checks)
 end
+
+##### MTK dispatches for JumpSystems #####
+eqtype_supports_collect_vars(j::MassActionJump) = true
+function collect_vars!(unknowns, parameters, j::MassActionJump, iv; depth = 0,
+        op = Differential)
+    collect_vars!(unknowns, parameters, j.scaled_rates, iv; depth, op)
+    for field in (j.reactant_stoch, j.net_stoch)
+        for el in field
+            collect_vars!(unknowns, parameters, el, iv; depth, op)
+        end
+    end
+    return nothing
+end
+
+eqtype_supports_collect_vars(j::Union{ConstantRateJump, VariableRateJump}) = true
+function collect_vars!(unknowns, parameters, j::Union{ConstantRateJump, VariableRateJump},
+        iv; depth = 0, op = Differential)
+    collect_vars!(unknowns, parameters, j.rate, iv; depth, op)
+    for eq in j.affect!
+        (eq isa Equation) && collect_vars!(unknowns, parameters, eq, iv; depth, op)
+    end
+    return nothing
+end
+
+##########################################
 
 has_massactionjumps(js::JumpSystem) = !isempty(equations(js).x[1])
 has_constantratejumps(js::JumpSystem) = !isempty(equations(js).x[2])
 has_variableratejumps(js::JumpSystem) = !isempty(equations(js).x[3])
+has_equations(js::JumpSystem) = !isempty(equations(js).x[4])
 
 function generate_rate_function(js::JumpSystem, rate)
     consts = collect_constants(rate)
@@ -240,10 +286,9 @@ function assemble_vrj(
 
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
-    affect = eval_or_rgf(
-        generate_affect_function(js, vrj.affect!,
-            outputidxs); eval_expression, eval_module)
-    VariableRateJump(rate, affect)
+    affect = eval_or_rgf(generate_affect_function(js, vrj.affect!, outputidxs);
+        eval_expression, eval_module)
+    VariableRateJump(rate, affect; save_positions = vrj.save_positions)
 end
 
 function assemble_vrj_expr(js, vrj, unknowntoid)
@@ -269,9 +314,8 @@ function assemble_crj(
 
     outputvars = (value(affect.lhs) for affect in crj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
-    affect = eval_or_rgf(
-        generate_affect_function(js, crj.affect!,
-            outputidxs); eval_expression, eval_module)
+    affect = eval_or_rgf(generate_affect_function(js, crj.affect!, outputidxs);
+        eval_expression, eval_module)
     ConstantRateJump(rate, affect)
 end
 
@@ -353,6 +397,11 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
     if !iscomplete(sys)
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
     end
+
+    if has_equations(sys) || (!isempty(continuous_events(sys)))
+        error("The passed in JumpSystem contains `Equation`s or continuous events, please use a problem type that supports these features, such as ODEProblem.")
+    end
+
     _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
         t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false, check_length = false)
     f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
@@ -441,14 +490,24 @@ function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothi
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
     end
 
-    _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
-        t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false, check_length = false)
-
-    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
-
-    f = (du, u, p, t) -> (du .= 0; nothing)
-    df = ODEFunction(f; sys, observed = observedfun)
-    ODEProblem(df, u0, tspan, p; kwargs...)
+    # forward everything to be an ODESystem but the jumps and discrete events
+    if has_equations(sys)
+        osys = ODESystem(equations(sys).x[4], get_iv(sys), unknowns(sys), parameters(sys);
+            observed = observed(sys), name = nameof(sys), description = description(sys),
+            systems = get_systems(sys), defaults = defaults(sys),
+            parameter_dependencies = parameter_dependencies(sys),
+            metadata = get_metadata(sys), gui_metadata = get_gui_metadata(sys))
+        osys = complete(osys)
+        return ODEProblem(osys, u0map, tspan, parammap; check_length = false, kwargs...)
+    else
+        _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
+            t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false,
+            check_length = false)
+        f = (du, u, p, t) -> (du .= 0; nothing)
+        observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
+        df = ODEFunction(f; sys, observed = observedfun)
+        return ODEProblem(df, u0, tspan, p; kwargs...)
+    end
 end
 
 """
@@ -484,8 +543,11 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob,
                             for j in eqs.x[2]]
     vrjs = VariableRateJump[assemble_vrj(js, j, unknowntoid; eval_expression, eval_module)
                             for j in eqs.x[3]]
-    ((prob isa DiscreteProblem) && !isempty(vrjs)) &&
-        error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")
+    if prob isa DiscreteProblem
+        if (!isempty(vrjs) || has_equations(js) || !isempty(continuous_events(js)))
+            error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps, coupled differential equations, or continuous events.")
+        end
+    end
     jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, majs)
 
     # dep graphs are only for constant rate jumps

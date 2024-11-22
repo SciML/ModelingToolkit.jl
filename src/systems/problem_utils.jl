@@ -250,6 +250,25 @@ function add_parameter_dependencies!(sys::AbstractSystem, varmap::AbstractDict)
     add_observed_equations!(varmap, parameter_dependencies(sys))
 end
 
+struct UnexpectedSymbolicValueInVarmap <: Exception
+    sym::Any
+    val::Any
+end
+
+function Base.showerror(io::IO, err::UnexpectedSymbolicValueInVarmap)
+    println(io,
+        """
+        Found symbolic value $(err.val) for variable $(err.sym). You may be missing an \
+        initial condition or have cyclic initial conditions. If this is intended, pass \
+        `symbolic_u0 = true`. In case the initial conditions are not cyclic but \
+        require more substitutions to resolve, increase `substitution_limit`. To report \
+        cycles in initial conditions of unknowns/parameters, pass \
+        `warn_cyclic_dependency = true`. If the cycles are still not reported, you \
+        may need to pass a larger value for `circular_dependency_max_cycle_length` \
+        or `circular_dependency_max_cycles`.
+        """)
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -278,6 +297,12 @@ function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
         isempty(missing_vars) || throw(MissingVariablesError(missing_vars))
     end
     vals = map(x -> varmap[x], vars)
+    if !allow_symbolic
+        for (sym, val) in zip(vars, vals)
+            symbolic_type(val) == NotSymbolic() && continue
+            throw(UnexpectedSymbolicValueInVarmap(sym, val))
+        end
+    end
 
     if container_type <: Union{AbstractDict, Tuple, Nothing, SciMLBase.NullParameters}
         container_type = Array
@@ -301,14 +326,65 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Check if any of the substitution rules in `varmap` lead to cycles involving
+variables in `vars`. Return a vector of vectors containing all the variables
+in each cycle.
+
+Keyword arguments:
+- `max_cycle_length`: The maximum length (number of variables) of detected cycles.
+- `max_cycles`: The maximum number of cycles to report.
+"""
+function check_substitution_cycles(
+        varmap::AbstractDict, vars; max_cycle_length = length(varmap), max_cycles = 10)
+    # ordered set so that `vars` are the first `k` in the list
+    allvars = OrderedSet{Any}(vars)
+    union!(allvars, keys(varmap))
+    allvars = collect(allvars)
+    var_to_idx = Dict(allvars .=> eachindex(allvars))
+    graph = SimpleDiGraph(length(allvars))
+
+    buffer = Set()
+    for (k, v) in varmap
+        kidx = var_to_idx[k]
+        if symbolic_type(v) != NotSymbolic()
+            vars!(buffer, v)
+            for var in buffer
+                haskey(var_to_idx, var) || continue
+                add_edge!(graph, kidx, var_to_idx[var])
+            end
+        elseif v isa AbstractArray
+            for val in v
+                vars!(buffer, val)
+            end
+            for var in buffer
+                haskey(var_to_idx, var) || continue
+                add_edge!(graph, kidx, var_to_idx[var])
+            end
+        end
+        empty!(buffer)
+    end
+
+    # detect at most 100 cycles involving at most `length(varmap)` vertices
+    cycles = Graphs.simplecycles_limited_length(graph, max_cycle_length, max_cycles)
+    # only count those which contain variables in `vars`
+    filter!(Base.Fix1(any, <=(length(vars))), cycles)
+
+    map(cycles) do cycle
+        map(Base.Fix1(getindex, allvars), cycle)
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Performs symbolic substitution on the values in `varmap` for the keys in `vars`, using
 `varmap` itself as the set of substitution rules. If an entry in `vars` is not a key
 in `varmap`, it is ignored.
 """
-function evaluate_varmap!(varmap::AbstractDict, vars)
+function evaluate_varmap!(varmap::AbstractDict, vars; limit = 100)
     for k in vars
         haskey(varmap, k) || continue
-        varmap[k] = fixpoint_sub(varmap[k], varmap)
+        varmap[k] = fixpoint_sub(varmap[k], varmap; maxiters = limit)
     end
 end
 
@@ -407,6 +483,14 @@ Keyword arguments:
   length of `u0` vector for consistency. If `false`, do not check with equations. This is
   forwarded to `check_eqs_u0`
 - `symbolic_u0` allows the returned `u0` to be an array of symbolics.
+- `warn_cyclic_dependency`: Whether to emit a warning listing out cycles in initial
+  conditions provided for unknowns and parameters.
+- `circular_dependency_max_cycle_length`: Maximum length of cycle to check for.
+  Only applicable if `warn_cyclic_dependency == true`.
+- `circular_dependency_max_cycles`: Maximum number of cycles to check for.
+  Only applicable if `warn_cyclic_dependency == true`.
+- `substitution_limit`: The number times to substitute initial conditions into each
+  other to attempt to arrive at a numeric value.
 
 All other keyword arguments are passed as-is to `constructor`.
 """
@@ -416,7 +500,11 @@ function process_SciMLProblem(
         warn_initialize_determined = true, initialization_eqs = [],
         eval_expression = false, eval_module = @__MODULE__, fully_determined = false,
         check_initialization_units = false, tofloat = true, use_union = false,
-        u0_constructor = identity, du0map = nothing, check_length = true, symbolic_u0 = false, kwargs...)
+        u0_constructor = identity, du0map = nothing, check_length = true,
+        symbolic_u0 = false, warn_cyclic_dependency = false,
+        circular_dependency_max_cycle_length = length(all_symbols(sys)),
+        circular_dependency_max_cycles = 10,
+        substitution_limit = 100, kwargs...)
     dvs = unknowns(sys)
     ps = parameters(sys)
     iv = has_iv(sys) ? get_iv(sys) : nothing
@@ -466,7 +554,8 @@ function process_SciMLProblem(
             initializeprob = ModelingToolkit.InitializationProblem(
                 sys, t, u0map, pmap; guesses, warn_initialize_determined,
                 initialization_eqs, eval_expression, eval_module, fully_determined,
-                check_units = check_initialization_units)
+                warn_cyclic_dependency, check_units = check_initialization_units,
+                circular_dependency_max_cycle_length, circular_dependency_max_cycles)
             initializeprobmap = getu(initializeprob, unknowns(sys))
 
             punknowns = [p
@@ -503,7 +592,20 @@ function process_SciMLProblem(
     add_observed!(sys, op)
     add_parameter_dependencies!(sys, op)
 
-    evaluate_varmap!(op, dvs)
+    if warn_cyclic_dependency
+        cycles = check_substitution_cycles(
+            op, dvs; max_cycle_length = circular_dependency_max_cycle_length,
+            max_cycles = circular_dependency_max_cycles)
+        if !isempty(cycles)
+            buffer = IOBuffer()
+            for cycle in cycles
+                println(buffer, cycle)
+            end
+            msg = String(take!(buffer))
+            @warn "Cycles in unknowns:\n$msg"
+        end
+    end
+    evaluate_varmap!(op, dvs; limit = substitution_limit)
 
     u0 = better_varmap_to_vars(
         op, dvs; tofloat = true, use_union = false,
@@ -515,7 +617,20 @@ function process_SciMLProblem(
 
     check_eqs_u0(eqs, dvs, u0; check_length, kwargs...)
 
-    evaluate_varmap!(op, ps)
+    if warn_cyclic_dependency
+        cycles = check_substitution_cycles(
+            op, ps; max_cycle_length = circular_dependency_max_cycle_length,
+            max_cycles = circular_dependency_max_cycles)
+        if !isempty(cycles)
+            buffer = IOBuffer()
+            for cycle in cycles
+                println(buffer, cycle)
+            end
+            msg = String(take!(buffer))
+            @warn "Cycles in parameters:\n$msg"
+        end
+    end
+    evaluate_varmap!(op, ps; limit = substitution_limit)
     if is_split(sys)
         p = MTKParameters(sys, op)
     else
@@ -526,8 +641,7 @@ function process_SciMLProblem(
         ddvs = map(Differential(iv), dvs)
         du0map = to_varmap(du0map, ddvs)
         merge!(op, du0map)
-
-        du0 = varmap_to_vars(du0map, ddvs; toterm = identity,
+        du0 = varmap_to_vars(op, ddvs; toterm = identity,
             tofloat = true)
         kwargs = merge(kwargs, (; ddvs))
     else

@@ -731,7 +731,7 @@ end
 function has_observed_with_lhs(sys, sym)
     has_observed(sys) || return false
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        return any(isequal(sym), ic.observed_syms)
+        return haskey(ic.observed_syms_to_timeseries, sym)
     else
         return any(isequal(sym), [eq.lhs for eq in observed(sys)])
     end
@@ -740,7 +740,7 @@ end
 function has_parameter_dependency_with_lhs(sys, sym)
     has_parameter_dependencies(sys) || return false
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        return any(isequal(sym), ic.dependent_pars)
+        return haskey(ic.dependent_pars_to_timeseries, unwrap(sym))
     else
         return any(isequal(sym), [eq.lhs for eq in parameter_dependencies(sys)])
     end
@@ -762,11 +762,28 @@ for traitT in [
         allsyms = vars(sym; op = Symbolics.Operator)
         for s in allsyms
             s = unwrap(s)
-            if is_variable(sys, s) || is_independent_variable(sys, s) ||
-               has_observed_with_lhs(sys, s)
+            if is_variable(sys, s) || is_independent_variable(sys, s)
                 push!(ts_idxs, ContinuousTimeseries())
             elseif is_timeseries_parameter(sys, s)
                 push!(ts_idxs, timeseries_parameter_index(sys, s).timeseries_idx)
+            elseif is_time_dependent(sys) && iscall(s) && issym(operation(s)) &&
+                   is_variable(sys, operation(s)(get_iv(sys)))
+                # DDEs case, to detect x(t - k)
+                push!(ts_idxs, ContinuousTimeseries())
+            else
+                if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+                    if (ts = get(ic.observed_syms_to_timeseries, s, nothing)) !== nothing
+                        union!(ts_idxs, ts)
+                    elseif (ts = get(ic.dependent_pars_to_timeseries, s, nothing)) !==
+                           nothing
+                        union!(ts_idxs, ts)
+                    end
+                else
+                    # for split=false systems
+                    if has_observed_with_lhs(sys, sym)
+                        push!(ts_idxs, ContinuousTimeseries())
+                    end
+                end
             end
         end
     end
@@ -818,6 +835,8 @@ function SymbolicIndexingInterface.is_observed(sys::AbstractSystem, sym)
            !is_independent_variable(sys, sym) && symbolic_type(sym) != NotSymbolic()
 end
 
+SymbolicIndexingInterface.supports_tuple_observed(::AbstractSystem) = true
+
 function SymbolicIndexingInterface.observed(
         sys::AbstractSystem, sym; eval_expression = false, eval_module = @__MODULE__)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
@@ -827,7 +846,8 @@ function SymbolicIndexingInterface.observed(
                 throw(ArgumentError("Symbol $sym does not exist in the system"))
             end
             sym = _sym
-        elseif sym isa AbstractArray && symbolic_type(sym) isa NotSymbolic &&
+        elseif (sym isa Tuple ||
+                (sym isa AbstractArray && symbolic_type(sym) isa NotSymbolic)) &&
                any(x -> x isa Symbol, sym)
             sym = map(sym) do s
                 if s isa Symbol
@@ -918,23 +938,22 @@ Mark a system as completed. A completed system is a system which is done being
 defined/modified and is ready for structural analysis or other transformations.
 This allows for analyses and optimizations to be performed which require knowing
 the global structure of the system.
-        
+
 One property to note is that if a system is complete, the system will no longer
 namespace its subsystems or variables, i.e. `isequal(complete(sys).v.i, v.i)`.
 """
 function complete(sys::AbstractSystem; split = true, flatten = true)
-    if !(sys isa JumpSystem)
-        newunknowns = OrderedSet()
-        newparams = OrderedSet()
-        iv = has_iv(sys) ? get_iv(sys) : nothing
-        collect_scoped_vars!(newunknowns, newparams, sys, iv; depth = -1)
-        # don't update unknowns to not disturb `structural_simplify` order
-        # `GlobalScope`d unknowns will be picked up and added there
-        @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
-    end
+    newunknowns = OrderedSet()
+    newparams = OrderedSet()
+    iv = has_iv(sys) ? get_iv(sys) : nothing
+    collect_scoped_vars!(newunknowns, newparams, sys, iv; depth = -1)
+    # don't update unknowns to not disturb `structural_simplify` order
+    # `GlobalScope`d unknowns will be picked up and added there
+    @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
+
     if flatten
-        if (eqs = equations(sys)) isa Vector &&
-           any(eq -> eq isa Equation && isconnection(eq.lhs), eqs)
+        eqs = equations(sys)
+        if eqs isa AbstractArray && eltype(eqs) <: Equation
             newsys = expand_connections(sys)
         else
             newsys = sys
@@ -985,6 +1004,8 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
             end
             @set! sys.ps = ordered_ps
         end
+    elseif has_index_cache(sys)
+        @set! sys.index_cache = nothing
     end
     if isdefined(sys, :initializesystem) && get_initializesystem(sys) !== nothing
         @set! sys.initializesystem = complete(get_initializesystem(sys); split)
@@ -1038,6 +1059,7 @@ for prop in [:eqs
              :split_idxs
              :parent
              :is_dde
+             :tstops
              :index_cache
              :is_scalar_noise
              :isscheduled]
@@ -1118,7 +1140,7 @@ function Base.propertynames(sys::AbstractSystem; private = false)
         return fieldnames(typeof(sys))
     else
         if has_parent(sys) && (parent = get_parent(sys); parent !== nothing)
-            sys = parent
+            return propertynames(parent; private)
         end
         names = Symbol[]
         for s in get_systems(sys)
@@ -1140,7 +1162,7 @@ end
 
 function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
     if has_parent(sys) && (parent = get_parent(sys); parent !== nothing)
-        sys = parent
+        return getproperty(parent, name; namespace)
     end
     wrap(getvar(sys, name; namespace = namespace))
 end
@@ -1362,6 +1384,14 @@ function namespace_initialization_equations(
     eqs = initialization_equations(sys)
     isempty(eqs) && return Equation[]
     map(eq -> namespace_equation(eq, sys; ivs), eqs)
+end
+
+function namespace_tstops(sys::AbstractSystem)
+    tstops = symbolic_tstops(sys)
+    isempty(tstops) && return tstops
+    map(tstops) do val
+        namespace_expr(val, sys)
+    end
 end
 
 function namespace_equation(eq::Equation,
@@ -1617,6 +1647,14 @@ function initialization_equations(sys::AbstractSystem)
                            init = Equation[])]
         return eqs
     end
+end
+
+function symbolic_tstops(sys::AbstractSystem)
+    tstops = get_tstops(sys)
+    systems = get_systems(sys)
+    isempty(systems) && return tstops
+    tstops = [tstops; reduce(vcat, namespace_tstops.(get_systems(sys)); init = [])]
+    return tstops
 end
 
 function preface(sys::AbstractSystem)
@@ -1908,7 +1946,8 @@ function Base.show(
 
     # Print name and description
     desc = description(sys)
-    printstyled(io, "Model ", nameof(sys), ":"; bold)
+    name = nameof(sys)
+    printstyled(io, "Model ", name, ":"; bold)
     !isempty(desc) && print(io, " ", desc)
 
     # Print subsystems
@@ -1916,7 +1955,7 @@ function Base.show(
     nsubs = length(subs)
     nrows = min(nsubs, limit ? rows : nsubs)
     nrows > 0 && printstyled(io, "\nSubsystems ($(nsubs)):"; bold)
-    nrows > 0 && hint && print(io, " see hierarchy(sys)")
+    nrows > 0 && hint && print(io, " see hierarchy($name)")
     for i in 1:nrows
         sub = subs[i]
         name = String(nameof(sub))
@@ -1931,7 +1970,7 @@ function Base.show(
         end
     end
     limited = nrows < nsubs
-    limited && print(io, "\n  ⋮") # too many to print 
+    limited && print(io, "\n  ⋮") # too many to print
 
     # Print equations
     eqs = equations(sys)
@@ -1940,9 +1979,9 @@ function Base.show(
         next = n_expanded_connection_equations(sys)
         ntot = neqs + next
         ntot > 0 && printstyled(io, "\nEquations ($ntot):"; bold)
-        neqs > 0 && print(io, "\n  $neqs standard", hint ? ": see equations(sys)" : "")
+        neqs > 0 && print(io, "\n  $neqs standard", hint ? ": see equations($name)" : "")
         next > 0 && print(io, "\n  $next connecting",
-            hint ? ": see equations(expand_connections(sys))" : "")
+            hint ? ": see equations(expand_connections($name))" : "")
         #Base.print_matrix(io, eqs) # usually too long and not useful to print all equations
     end
 
@@ -1953,7 +1992,7 @@ function Base.show(
         nvars == 0 && continue # skip
         header = titlecase(String(nameof(varfunc))) # e.g. "Unknowns"
         printstyled(io, "\n$header ($nvars):"; bold)
-        hint && print(io, " see $(nameof(varfunc))(sys)")
+        hint && print(io, " see $(nameof(varfunc))($name)")
         nrows = min(nvars, limit ? rows : nvars)
         defs = has_defaults(sys) ? defaults(sys) : nothing
         for i in 1:nrows
@@ -1982,7 +2021,7 @@ function Base.show(
     # Print observed
     nobs = has_observed(sys) ? length(observed(sys)) : 0
     nobs > 0 && printstyled(io, "\nObserved ($nobs):"; bold)
-    nobs > 0 && hint && print(io, " see observed(sys)")
+    nobs > 0 && hint && print(io, " see observed($name)")
 
     return nothing
 end
@@ -2995,12 +3034,13 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Extend the `basesys` with `sys`, the resulting system would inherit `sys`'s name
-by default.
+Extend `basesys` with `sys`.
+By default, the resulting system inherits `sys`'s name and description.
 
 See also [`compose`](@ref).
 """
-function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nameof(sys),
+function extend(sys::AbstractSystem, basesys::AbstractSystem;
+        name::Symbol = nameof(sys), description = description(sys),
         gui_metadata = get_gui_metadata(sys))
     T = SciMLBase.parameterless_type(basesys)
     ivs = independent_variables(basesys)
@@ -3023,13 +3063,12 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
     cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
     devs = union(get_discrete_events(basesys), get_discrete_events(sys))
     defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
-    desc = join(filter(desc -> !isempty(desc), description.([sys, basesys])), " ") # concatenate non-empty descriptions with space
     meta = union_nothing(get_metadata(basesys), get_metadata(sys))
     syss = union(get_systems(basesys), get_systems(sys))
     args = length(ivs) == 0 ? (eqs, sts, ps) : (eqs, ivs[1], sts, ps)
     kwargs = (parameter_dependencies = dep_ps, observed = obs, continuous_events = cevs,
         discrete_events = devs, defaults = defs, systems = syss, metadata = meta,
-        name = name, description = desc, gui_metadata = gui_metadata)
+        name = name, description = description, gui_metadata = gui_metadata)
 
     # collect fields specific to some system types
     if basesys isa ODESystem
@@ -3041,8 +3080,17 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
     return T(args...; kwargs...)
 end
 
-function Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nameof(sys))
-    extend(sys, basesys; name = name)
+function extend(sys, basesys::Vector{T}) where {T <: AbstractSystem}
+    foldl(extend, basesys, init = sys)
+end
+
+function Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; kwargs...)
+    extend(sys, basesys; kwargs...)
+end
+
+function Base.:(&)(
+        sys::AbstractSystem, basesys::Vector{T}; kwargs...) where {T <: AbstractSystem}
+    extend(sys, basesys; kwargs...)
 end
 
 """
@@ -3260,6 +3308,96 @@ function dump_unknowns(sys::AbstractSystem)
         end
         meta
     end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return the variable in `sys` referred to by its string representation `str`.
+Roughly supports the following CFG:
+
+```
+varname                  = "D(" varname ")" | "Differential(" iv ")(" varname ")" | arrvar | maybe_dummy_var
+arrvar                   = maybe_dummy_var "[idxs...]"
+idxs                     = int | int "," idxs
+maybe_dummy_var          = namespacedvar | namespacedvar "(" iv ")" |
+                           namespacedvar "(" iv ")" "ˍ" ts | namespacedvar "ˍ" ts |
+                           namespacedvar "ˍ" ts "(" iv ")"
+ts                       = iv | iv ts
+namespacedvar            = ident "₊" namespacedvar | ident "." namespacedvar | ident
+```
+
+Where `iv` is the independent variable, `int` is an integer and `ident` is an identifier.
+"""
+function parse_variable(sys::AbstractSystem, str::AbstractString)
+    iv = has_iv(sys) ? string(getname(get_iv(sys))) : nothing
+
+    # I'd write a regex to validate `str`, but https://xkcd.com/1171/
+    str = strip(str)
+    derivative_level = 0
+    while ((cond1 = startswith(str, "D(")) || startswith(str, "Differential(")) && endswith(str, ")")
+        if cond1
+            derivative_level += 1
+            str = _string_view_inner(str, 2, 1)
+            continue
+        end
+        _tmpstr = _string_view_inner(str, 13, 1)
+        if !startswith(_tmpstr, "$iv)(")
+            throw(ArgumentError("Expected differential with respect to independent variable $iv in $str"))
+        end
+        derivative_level += 1
+        str = _string_view_inner(_tmpstr, length(iv) + 2, 0)
+    end
+
+    arr_idxs = nothing
+    if endswith(str, ']')
+        open_idx = only(findfirst('[', str))
+        idxs_range = nextind(str, open_idx):prevind(str, lastindex(str))
+        idxs_str = view(str, idxs_range)
+        str = view(str, firstindex(str):prevind(str, open_idx))
+        arr_idxs = map(Base.Fix1(parse, Int), eachsplit(idxs_str, ","))
+    end
+
+    if iv !== nothing && endswith(str, "($iv)")
+        str = _string_view_inner(str, 0, 2 + length(iv))
+    end
+
+    dummyderivative_level = 0
+    if iv !== nothing && (dd_idx = findfirst('ˍ', str)) !== nothing
+        t_idx = findnext(iv, str, dd_idx)
+        while t_idx !== nothing
+            dummyderivative_level += 1
+            t_idx = findnext(iv, str, nextind(str, last(t_idx)))
+        end
+        str = view(str, firstindex(str):prevind(str, dd_idx))
+    end
+
+    if iv !== nothing && endswith(str, "($iv)")
+        str = _string_view_inner(str, 0, 2 + length(iv))
+    end
+
+    cur = sys
+    for ident in eachsplit(str, ('.', NAMESPACE_SEPARATOR))
+        ident = Symbol(ident)
+        hasproperty(cur, ident) ||
+            throw(ArgumentError("System $(nameof(cur)) does not have a subsystem/variable named $(ident)"))
+        cur = getproperty(cur, ident)
+    end
+
+    if arr_idxs !== nothing
+        cur = cur[arr_idxs...]
+    end
+
+    for i in 1:(derivative_level + dummyderivative_level)
+        cur = Differential(get_iv(sys))(cur)
+    end
+
+    return cur
+end
+
+function _string_view_inner(str, startoffset, endoffset)
+    view(str,
+        nextind(str, firstindex(str), startoffset):prevind(str, lastindex(str), endoffset))
 end
 
 ### Functions for accessing algebraic/differential equations in systems ###

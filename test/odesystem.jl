@@ -1467,3 +1467,88 @@ end
     obsfn(buf, prob.u0, prob.p, 0.0)
     @test buf ≈ [1.0, 1.0, 2.0]
 end
+
+@testset "`complete` expands connections" begin
+    using ModelingToolkitStandardLibrary.Electrical
+    @mtkmodel RC begin
+        @parameters begin
+            R = 1.0
+            C = 1.0
+            V = 1.0
+        end
+        @components begin
+            resistor = Resistor(R = R)
+            capacitor = Capacitor(C = C, v = 0.0)
+            source = Voltage()
+            constant = Constant(k = V)
+            ground = Ground()
+        end
+        @equations begin
+            connect(constant.output, source.V)
+            connect(source.p, resistor.p)
+            connect(resistor.n, capacitor.p)
+            connect(capacitor.n, source.n, ground.g)
+        end
+    end
+    @named sys = RC()
+    total_eqs = length(equations(expand_connections(sys)))
+    sys2 = complete(sys)
+    @test length(equations(sys2)) == total_eqs
+end
+
+@testset "`complete` with `split = false` removes the index cache" begin
+    @variables x(t)
+    @parameters p
+    @mtkbuild sys = ODESystem(D(x) ~ p * t, t)
+    @test ModelingToolkit.get_index_cache(sys) !== nothing
+    sys2 = complete(sys; split = false)
+    @test ModelingToolkit.get_index_cache(sys2) === nothing
+end
+
+# https://github.com/SciML/SciMLBase.jl/issues/786
+@testset "Observed variables dependent on discrete parameters" begin
+    @variables x(t) obs(t)
+    @parameters c(t)
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ c * cos(x), obs ~ c], t, [x], [c]; discrete_events = [1.0 => [c ~ c + 1]])
+    prob = ODEProblem(sys, [x => 0.0], (0.0, 2pi), [c => 1.0])
+    sol = solve(prob, Tsit5())
+    @test sol[obs] ≈ 1:7
+end
+
+@testset "DAEProblem with array parameters" begin
+    @variables x(t)=1.0 y(t) [guess = 1.0]
+    @parameters p[1:2] = [1.0, 2.0]
+    @mtkbuild sys = ODESystem([D(x) ~ x, y^2 ~ x + sum(p)], t)
+    prob = DAEProblem(sys, [D(x) => x, D(y) => D(x) / 2y], [], (0.0, 1.0))
+    sol = solve(prob, DFBDF(), abstol = 1e-8, reltol = 1e-8)
+    @test sol[x]≈sol[y^2 - sum(p)] atol=1e-5
+end
+
+@testset "Symbolic tstops" begin
+    @variables x(t) = 1.0
+    @parameters p=0.15 q=0.25 r[1:2]=[0.35, 0.45]
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ p * x + q * t + sum(r)], t; tstops = [0.5p, [0.1, 0.2], [p + 2q], r])
+    prob = ODEProblem(sys, [], (0.0, 5.0))
+    sol = solve(prob)
+    expected_tstops = unique!(sort!(vcat(0.0:0.075:5.0, 0.1, 0.2, 0.65, 0.35, 0.45)))
+    @test all(x -> any(isapprox(x, atol = 1e-6), sol.t), expected_tstops)
+    prob2 = remake(prob; tspan = (0.0, 10.0))
+    sol2 = solve(prob2)
+    expected_tstops = unique!(sort!(vcat(0.0:0.075:10.0, 0.1, 0.2, 0.65, 0.35, 0.45)))
+    @test all(x -> any(isapprox(x, atol = 1e-6), sol2.t), expected_tstops)
+
+    @variables y(t) [guess = 1.0]
+    @mtkbuild sys = ODESystem([D(x) ~ p * x + q * t + sum(r), y^3 ~ 2x + 1],
+        t; tstops = [0.5p, [0.1, 0.2], [p + 2q], r])
+    prob = DAEProblem(
+        sys, [D(y) => 2D(x) / 3y^2, D(x) => p * x + q * t + sum(r)], [], (0.0, 5.0))
+    sol = solve(prob, DImplicitEuler())
+    expected_tstops = unique!(sort!(vcat(0.0:0.075:5.0, 0.1, 0.2, 0.65, 0.35, 0.45)))
+    @test all(x -> any(isapprox(x, atol = 1e-6), sol.t), expected_tstops)
+    prob2 = remake(prob; tspan = (0.0, 10.0))
+    sol2 = solve(prob2, DImplicitEuler())
+    expected_tstops = unique!(sort!(vcat(0.0:0.075:10.0, 0.1, 0.2, 0.65, 0.35, 0.45)))
+    @test all(x -> any(isapprox(x, atol = 1e-6), sol2.t), expected_tstops)
+end

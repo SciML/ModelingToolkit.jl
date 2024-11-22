@@ -1,183 +1,105 @@
 # [Symbolic-Numeric Perturbation Theory for ODEs](@id perturb_diff)
 
-## Prelims
+In the [Mixed Symbolic-Numeric Perturbation Theory tutorial](https://symbolics.juliasymbolics.org/stable/tutorials/perturbation/), we discussed how to solve algebraic equations using **Symbolics.jl**. Here we extend the method to differential equations. The procedure is similar, but the Taylor series coefficients now become functions of an independent variable (usually time).
 
-In the previous tutorial, [Mixed Symbolic-Numeric Perturbation Theory](https://symbolics.juliasymbolics.org/stable/examples/perturbation/), we discussed how to solve algebraic equations using **Symbolics.jl**. Here, our goal is to extend the method to differential equations. First, we import the following helper functions that were introduced in [Mixed Symbolic/Numerical Methods for Perturbation Theory - Algebraic Equations](https://symbolics.juliasymbolics.org/stable/examples/perturbation/):
+## Free fall in a varying gravitational field
+
+Our first ODE example is a well-known physics problem: what is the altitude $x(t)$ of an object (say, a ball or a rocket) thrown vertically with initial velocity $ẋ(0)$ from the surface of a planet with mass $M$ and radius $R$? According to Newton's second law and law of gravity, it is the solution of the ODE
+
+```math
+ẍ = -\frac{GM}{(R+x)^2} = -\frac{GM}{R^2} \frac{1}{\left(1+ϵ\frac{x}{R}\right)^2}.
+```
+
+In the last equality, we introduced a perturbative expansion parameter $ϵ$. When $ϵ=1$, we recover the original problem. When $ϵ=0$, the problem reduces to the trivial problem $ẍ = -g$ with constant gravitational acceleration $g = GM/R^2$ and solution $x(t) = x(0) + ẋ(0) t - \frac{1}{2} g t^2$. This is a good setup for perturbation theory.
+
+To make the problem dimensionless, we redefine $x \leftarrow x / R$ and $t \leftarrow t / \sqrt{R^3/GM}$. Then the ODE becomes
+
+```@example perturbation
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+@variables ϵ x(t)
+eq = D(D(x)) ~ -(1 + ϵ * x)^(-2)
+```
+
+Next, expand $x(t)$ in a series up to second order in $ϵ$:
 
 ```@example perturbation
 using Symbolics
-
-def_taylor(x, ps) = sum([a * x^(i - 1) for (i, a) in enumerate(ps)])
-
-function collect_powers(eq, x, ns; max_power = 100)
-    eq = substitute(expand(eq), Dict(x^j => 0 for j in (last(ns) + 1):max_power))
-
-    eqs = []
-    for i in ns
-        powers = Dict(x^j => (i == j ? 1 : 0) for j in 1:last(ns))
-        e = substitute(eq, powers)
-
-        # manually remove zeroth order from higher orders
-        if 0 in ns && i != 0
-            e = e - eqs[1]
-        end
-
-        push!(eqs, e)
-    end
-    eqs
-end
-
-function solve_coef(eqs, ps)
-    vals = Dict()
-
-    for i in 1:length(ps)
-        eq = substitute(eqs[i], vals)
-        vals[ps[i]] = Symbolics.symbolic_linear_solve(eq ~ 0, ps[i])
-    end
-    vals
-end
+@variables y(t)[0:2] # coefficients
+x_series = series(y, ϵ)
 ```
 
-## The Trajectory of a Ball!
-
-In the first two examples, we applied the perturbation method to algebraic problems. However, the main power of the perturbation method is to solve differential equations (usually ODEs, but also occasionally PDEs). Surprisingly, the main procedure developed to solve algebraic problems works well for differential equations. In fact, we will use the same two helper functions, `collect_powers` and `solve_coef`. The main difference is in the way we expand the dependent variables. For algebraic problems, the coefficients of $\epsilon$ are constants; whereas, for differential equations, they are functions of the dependent variable (usually time).
-
-As the first ODE example, we have chosen a simple and well-behaved problem, which is a variation of a standard first-year physics problem: what is the trajectory of an object (say, a ball, or a rocket) thrown vertically at velocity $v$ from the surface of a planet? Assuming a constant acceleration of gravity, $g$, every burgeoning physicist knows the answer: $x(t) = x(0) + vt - \frac{1}{2}gt^2$. However, what happens if $g$ is not constant? Specifically, $g$ is inversely proportional to the distant from the center of the planet. If $v$ is large and the projectile travels a large fraction of the radius of the planet, the assumption of constant gravity does not hold anymore. However, unless $v$ is large compared to the escape velocity, the correction is usually small. After simplifications and change of variables to dimensionless, the problem becomes
-
-```math
-  \ddot{x}(t) = -\frac{1}{(1 + \epsilon x(t))^2}
-```
-
-with the initial conditions $x(0) = 0$, and $\dot{x}(0) = 1$. Note that for $\epsilon = 0$, this equation transforms back to the standard one. Let's start with defining the variables
+Insert this into the equation and collect perturbed equations to each order:
 
 ```@example perturbation
-using ModelingToolkit: t_nounits as t, D_nounits as D
-order = 2
-n = order + 1
-@variables ϵ (y(t))[1:n] (∂∂y(t))[1:n]
+eq_pert = substitute(eq, x => x_series)
+eqs_pert = taylor_coeff(eq_pert, ϵ, 0:2)
 ```
 
-Next, we define $x$.
+!!! note
+    
+    The 0-th order equation can be solved analytically, but ModelingToolkit does currently not feature automatic analytical solution of ODEs, so we proceed with solving it numerically.
+
+These are the ODEs we want to solve. Now construct an `ODESystem`, which automatically inserts dummy derivatives for the velocities:
 
 ```@example perturbation
-x = def_taylor(ϵ, y)
+@mtkbuild sys = ODESystem(eqs_pert, t)
 ```
 
-We need the second derivative of `x`. It may seem that we can do this using `Differential(t)`; however, this operation needs to wait for a few steps because we need to manipulate the differentials as separate variables. Instead, we define dummy variables `∂∂y` as the placeholder for the second derivatives and define
+To solve the `ODESystem`, we generate an `ODEProblem` with initial conditions $x(0) = 0$, and $ẋ(0) = 1$, and solve it:
 
 ```@example perturbation
-∂∂x = def_taylor(ϵ, ∂∂y)
+using DifferentialEquations
+u0 = Dict([unknowns(sys) .=> 0.0; D(y[0]) => 1.0]) # nonzero initial velocity
+prob = ODEProblem(sys, u0, (0.0, 3.0))
+sol = solve(prob)
 ```
 
-as the second derivative of `x`. After rearrangement, our governing equation is $\ddot{x}(t)(1 + \epsilon x(t))^{-2} + 1 = 0$, or
-
-```@example perturbation
-eq = ∂∂x * (1 + ϵ * x)^2 + 1
-```
-
-The next two steps are the same as the ones for algebraic equations (note that we pass `1:n` to `collect_powers` because the zeroth order term is needed here)
-
-```@example perturbation
-eqs = collect_powers(eq, ϵ, 0:order)
-```
-
-and,
-
-```@example perturbation
-vals = solve_coef(eqs, ∂∂y)
-```
-
-Our system of ODEs is forming. Now is the time to convert `∂∂`s to the correct **Symbolics.jl** form by substitution:
-
-```@example perturbation
-subs = Dict(∂∂y[i] => D(D(y[i])) for i in eachindex(y))
-eqs = [substitute(first(v), subs) ~ substitute(last(v), subs) for v in vals]
-```
-
-We are nearly there! From this point on, the rest is standard ODE solving procedures. Potentially, we can use a symbolic ODE solver to find a closed form solution to this problem. However, **Symbolics.jl** currently does not support this functionality. Instead, we solve the problem numerically. We form an `ODESystem`, lower the order (convert second derivatives to first), generate an `ODEProblem` (after passing the correct initial conditions), and, finally, solve it.
-
-```@example perturbation
-using ModelingToolkit, DifferentialEquations
-
-@mtkbuild sys = ODESystem(eqs, t)
-unknowns(sys)
-```
-
-```@example perturbation
-# the initial conditions
-# everything is zero except the initial velocity
-u0 = Dict([unknowns(sys) .=> 0; D(y[1]) => 1])
-
-prob = ODEProblem(sys, u0, (0, 3.0))
-sol = solve(prob; dtmax = 0.01);
-```
-
-Finally, we calculate the solution to the problem as a function of `ϵ` by substituting the solution to the ODE system back into the defining equation for `x`. Note that `𝜀` is a number, compared to `ϵ`, which is a symbolic variable.
-
-```@example perturbation
-X = 𝜀 -> sum([𝜀^(i - 1) * sol[yi] for (i, yi) in enumerate(y)])
-```
-
-Using `X`, we can plot the trajectory for a range of $𝜀$s.
+This is the solution for the coefficients in the series for $x(t)$ and their derivatives. Finally, we calculate the solution to the original problem by summing the series for different $ϵ$:
 
 ```@example perturbation
 using Plots
-
-plot(sol.t, hcat([X(𝜀) for 𝜀 in 0.0:0.1:0.5]...))
+p = plot()
+for ϵᵢ in 0.0:0.1:1.0
+    plot!(p, sol, idxs = substitute(x_series, ϵ => ϵᵢ), label = "ϵ = $ϵᵢ")
+end
+p
 ```
 
-As expected, as `𝜀` becomes larger (meaning the gravity is less with altitude), the object goes higher and stays up for a longer duration. Of course, we could have solved the problem directly using as ODE solver. One of the benefits of the perturbation method is that we need to run the ODE solver only once and then can just calculate the answer for different values of `𝜀`; whereas, if we had used the direct method, we would need to run the solver once for each value of `𝜀`.
+This makes sense: for larger $ϵ$, gravity weakens with altitude, and the trajectory goes higher for a fixed initial velocity.
 
-## A Weakly Nonlinear Oscillator
+An advantage of the perturbative method is that we run the ODE solver only once and calculate trajectories for several $ϵ$ for free. Had we solved the full unperturbed ODE directly, we would need to do repeat it for every $ϵ$.
 
-For the next example, we have chosen a simple example from a very important class of problems, the nonlinear oscillators. As we will see, perturbation theory has difficulty providing a good solution to this problem, but the process is instructive. This example closely follows the chapter 7.6 of *Nonlinear Dynamics and Chaos* by Steven Strogatz.
+## Weakly nonlinear oscillator
 
-The goal is to solve $\ddot{x} + 2\epsilon\dot{x} + x = 0$, where the dot signifies time-derivatives and the initial conditions are $x(0) = 0$ and $\dot{x}(0) = 1$. If $\epsilon = 0$, the problem reduces to the simple linear harmonic oscillator with the exact solution $x(t) = \sin(t)$. We follow the same steps as the previous example.
+Our second example applies perturbation theory to nonlinear oscillators -- a very important class of problems. As we will see, perturbation theory has difficulty providing a good solution to this problem, but the process is nevertheless instructive. This example closely follows chapter 7.6 of *Nonlinear Dynamics and Chaos* by Steven Strogatz.
+
+The goal is to solve the ODE
 
 ```@example perturbation
-order = 2
-n = order + 1
-@variables ϵ (y(t))[1:n] (∂y)[1:n] (∂∂y)[1:n]
-x = def_taylor(ϵ, y)
-∂x = def_taylor(ϵ, ∂y)
-∂∂x = def_taylor(ϵ, ∂∂y)
+eq = D(D(x)) + 2 * ϵ * D(x) + x ~ 0
 ```
 
-This time we also need the first derivative terms. Continuing,
+with initial conditions $x(0) = 0$ and $ẋ(0) = 1$. With $ϵ = 0$, the problem reduces to the simple linear harmonic oscillator with the exact solution $x(t) = \sin(t)$.
+
+We follow the same steps as in the previous example to construct the `ODESystem`:
 
 ```@example perturbation
-eq = ∂∂x + 2 * ϵ * ∂x + x
-eqs = collect_powers(eq, ϵ, 0:n)
-vals = solve_coef(eqs, ∂∂y)
+eq_pert = substitute(eq, x => x_series)
+eqs_pert = taylor_coeff(eq_pert, ϵ, 0:2)
+@mtkbuild sys = ODESystem(eqs_pert, t)
 ```
 
-Next, we need to replace `∂`s and `∂∂`s with their **Symbolics.jl** counterparts:
+We solve and plot it as in the previous example, and compare the solution with $ϵ=0.1$ to the exact solution $x(t, ϵ) = e^{-ϵ t} \sin(\sqrt{(1-ϵ^2)}\,t) / \sqrt{1-ϵ^2}$ of the unperturbed equation:
 
 ```@example perturbation
-subs1 = Dict(∂y[i] => D(y[i]) for i in eachindex(y))
-subs2 = Dict(∂∂y[i] => D(D(y[i])) for i in eachindex(y))
-subs = subs1 ∪ subs2
-eqs = [substitute(first(v), subs) ~ substitute(last(v), subs) for v in vals]
+u0 = Dict([unknowns(sys) .=> 0.0; D(y[0]) => 1.0]) # nonzero initial velocity
+prob = ODEProblem(sys, u0, (0.0, 50.0))
+sol = solve(prob)
+plot(sol, idxs = substitute(x_series, ϵ => 0.1); label = "Perturbative (ϵ=0.1)")
+
+x_exact(t, ϵ) = exp(-ϵ * t) * sin(√(1 - ϵ^2) * t) / √(1 - ϵ^2)
+plot!(sol.t, x_exact.(sol.t, 0.1); label = "Exact (ϵ=0.1)")
 ```
 
-We continue with converting 'eqs' to an `ODEProblem`, solving it, and finally plot the results against the exact solution to the original problem, which is $x(t, \epsilon) = (1 - \epsilon)^{-1/2} e^{-\epsilon t} \sin((1- \epsilon^2)^{1/2}t)$,
-
-```@example perturbation
-@mtkbuild sys = ODESystem(eqs, t)
-```
-
-```@example perturbation
-# the initial conditions
-u0 = Dict([unknowns(sys) .=> 0; D(y[1]) => 1])
-
-prob = ODEProblem(sys, u0, (0, 50.0))
-sol = solve(prob; dtmax = 0.01)
-
-X = 𝜀 -> sum([𝜀^(i - 1) * sol[yi] for (i, yi) in enumerate(y)])
-T = sol.t
-Y = 𝜀 -> exp.(-𝜀 * T) .* sin.(sqrt(1 - 𝜀^2) * T) / sqrt(1 - 𝜀^2)    # exact solution
-
-plot(sol.t, [Y(0.1), X(0.1)])
-```
-
-The figure is similar to Figure 7.6.2 in *Nonlinear Dynamics and Chaos*. The two curves fit well for the first couple of cycles, but then the perturbation method curve diverges from the true solution. The main reason is that the problem has two or more time-scales that introduce secular terms in the solution. One solution is to explicitly account for the two time scales and use an analytic method called *two-timing*.
+This is similar to Figure 7.6.2 in *Nonlinear Dynamics and Chaos*. The two curves fit well for the first couple of cycles, but then the perturbative solution diverges from the exact solution. The main reason is that the problem has two or more time-scales that introduce secular terms in the solution. One solution is to explicitly account for the two time scales and use an analytic method called *two-timing*, but this is outside the scope of this example.

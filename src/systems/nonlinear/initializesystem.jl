@@ -225,7 +225,7 @@ function SciMLBase.remake_initializeprob(sys::ODESystem, odefn, u0, t0, p)
         u0idxs = Int[]
         u0vals = []
         for sym in variable_symbols(oldinitprob)
-            if is_variable(sys, sym)
+            if is_variable(sys, sym) || has_observed_with_lhs(sys, sym)
                 u0 !== missing || continue
                 idx = variable_index(oldinitprob, sym)
                 push!(u0idxs, idx)
@@ -247,8 +247,18 @@ function SciMLBase.remake_initializeprob(sys::ODESystem, odefn, u0, t0, p)
                 end
             end
         end
-        newu0 = remake_buffer(oldinitprob.f.sys, state_values(oldinitprob), u0idxs, u0vals)
-        newp = remake_buffer(oldinitprob.f.sys, parameter_values(oldinitprob), pidxs, pvals)
+        if isempty(u0idxs)
+            newu0 = state_values(oldinitprob)
+        else
+            newu0 = remake_buffer(
+                oldinitprob.f.sys, state_values(oldinitprob), u0idxs, u0vals)
+        end
+        if isempty(pidxs)
+            newp = parameter_values(oldinitprob)
+        else
+            newp = remake_buffer(
+                oldinitprob.f.sys, parameter_values(oldinitprob), pidxs, pvals)
+        end
         initprob = remake(oldinitprob; u0 = newu0, p = newp)
         return initprob, odefn.update_initializeprob!, odefn.initializeprobmap,
         odefn.initializeprobpmap

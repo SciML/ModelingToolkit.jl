@@ -147,9 +147,9 @@ julia> ModelingToolkit.getdefault(model_c1.v)
 2.0
 ```
 
-#### `@extend` begin block
+#### `@extend` statement
 
-Partial systems can be extended in a higher system in two ways:
+One or more partial systems can be extended in a higher system with `@extend` statements. This can be done in two ways:
 
   - `@extend PartialSystem(var1 = value1)`
     
@@ -313,7 +313,8 @@ end
   - `:components`: The list of sub-components in the form of [[name, sub_component_name],...].
   - `:constants`: Dictionary of constants mapped to its metadata.
   - `:defaults`: Dictionary of variables and default values specified in the `@defaults`.
-  - `:extend`: The list of extended unknowns, name given to the base system, and name of the base system.
+  - `:extend`: The list of extended unknowns, parameters and components, name given to the base system, and name of the base system.
+    When multiple extend statements are present, latter two are returned as lists.
   - `:structural_parameters`: Dictionary of structural parameters mapped to their metadata.
   - `:parameters`: Dictionary of symbolic parameters mapped to their metadata. For
     parameter arrays, length is added to the metadata as `:size`.

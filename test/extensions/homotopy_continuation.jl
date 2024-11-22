@@ -61,30 +61,73 @@ end
     @test sol.retcode == ReturnCode.ConvergenceFailure
 end
 
-@testset "Parametric exponent" begin
+@testset "Parametric exponents" begin
     @variables x = 1.0
     @parameters n::Integer = 4
     @mtkbuild sys = NonlinearSystem([x^n + x^2 - 1 ~ 0])
-    prob = HomotopyContinuationProblem(sys, [])
+    prob = @test_warn ["parametric", "exponent"] HomotopyContinuationProblem(sys, [])
+    @test prob.solver_and_starts === nothing
+    @test_nowarn HomotopyContinuationProblem(sys, []; warn_parametric_exponent = false)
     sol = solve(prob; threading = false)
     @test SciMLBase.successful_retcode(sol)
 end
 
 @testset "Polynomial check and warnings" begin
     @variables x = 1.0
-    @parameters n = 4
-    @mtkbuild sys = NonlinearSystem([x^n + x^2 - 1 ~ 0])
-    @test_warn ["Exponent", "not an integer", "@parameters"] @test_throws "not a polynomial" HomotopyContinuationProblem(
-        sys, [])
     @mtkbuild sys = NonlinearSystem([x^1.5 + x^2 - 1 ~ 0])
-    @test_warn ["Exponent", "not an integer"] @test_throws "not a polynomial" HomotopyContinuationProblem(
+    @test_throws ["Cannot convert", "Unable", "symbolically solve",
+        "Exponent", "not an integer", "not a polynomial"] HomotopyContinuationProblem(
         sys, [])
     @mtkbuild sys = NonlinearSystem([x^x - x ~ 0])
-    @test_warn ["Exponent", "unknowns"] @test_throws "not a polynomial" HomotopyContinuationProblem(
+    @test_throws ["Cannot convert", "Unable", "symbolically solve",
+        "Exponent", "unknowns", "not a polynomial"] HomotopyContinuationProblem(
         sys, [])
     @mtkbuild sys = NonlinearSystem([((x^2) / sin(x))^2 + x ~ 0])
-    @test_warn ["Unrecognized", "sin"] @test_throws "not a polynomial" HomotopyContinuationProblem(
+    @test_throws ["Cannot convert", "both polynomial", "non-polynomial",
+        "recognized", "sin", "not a polynomial"] HomotopyContinuationProblem(
         sys, [])
+
+    @variables y = 2.0
+    @mtkbuild sys = NonlinearSystem([x^2 + y^2 + 2 ~ 0, y ~ sin(x)])
+    @test_throws ["Cannot convert", "recognized", "sin", "not a polynomial"] HomotopyContinuationProblem(
+        sys, [])
+
+    @mtkbuild sys = NonlinearSystem([x^2 + y^2 - 2 ~ 0, sin(x + y) ~ 0])
+    @test_throws ["Cannot convert", "function of multiple unknowns"] HomotopyContinuationProblem(
+        sys, [])
+
+    @mtkbuild sys = NonlinearSystem([sin(x)^2 + 1 ~ 0, cos(y) - cos(x) - 1 ~ 0])
+    @test_throws ["Cannot convert", "multiple non-polynomial terms", "same unknown"] HomotopyContinuationProblem(
+        sys, [])
+
+    @mtkbuild sys = NonlinearSystem([sin(x^2)^2 + sin(x^2) - 1 ~ 0])
+    @test_throws ["import Nemo"] HomotopyContinuationProblem(sys, [])
+end
+
+import Nemo
+
+@testset "With Nemo" begin
+    @variables x = 2.0
+    @mtkbuild sys = NonlinearSystem([sin(x^2)^2 + sin(x^2) - 1 ~ 0])
+    prob = HomotopyContinuationProblem(sys, [])
+    @test prob[1] ≈ 2.0
+    sol = solve(prob; threading = false)
+    _x = sol[1]
+    @test sin(_x^2)^2 + sin(_x^2) - 1≈0.0 atol=1e-12
+end
+
+@testset "Function of polynomial" begin
+    @variables x=0.25 y=0.125
+    a = sin(x^2 - 4x + 1)
+    b = cos(3log(y) + 4)
+    @mtkbuild sys = NonlinearSystem([(a^2 - 4a * b + 4b^2) / (a - 0.25) ~ 0
+                                     (a^2 - 0.75a + 0.125) ~ 0])
+    prob = HomotopyContinuationProblem(sys, [])
+    @test prob[x] ≈ 0.25
+    @test prob[y] ≈ 0.125
+    sol = solve(prob; threading = false)
+    @test sol[a]≈0.5 atol=1e-6
+    @test sol[b]≈0.25 atol=1e-6
 end
 
 @testset "Rational functions" begin
@@ -98,7 +141,9 @@ end
     @test sol[x] ≈ 1.0
     p = parameter_values(prob)
     for invalid in [2.0, 3.0]
-        @test prob.denominator([invalid], p)[1] <= 1e-8
+        for err in [-9e-8, 0, 9e-8]
+            @test any(<=(1e-7), prob.denominator([invalid + err, 2.0], p))
+        end
     end
 
     @named sys = NonlinearSystem(
@@ -115,14 +160,35 @@ end
     disallowed_y = [7, 5, 4]
     @test all(!isapprox(sol[x]; atol = 1e-8), disallowed_x)
     @test all(!isapprox(sol[y]; atol = 1e-8), disallowed_y)
-    @test sol[x^2 - 4x + y] >= 1e-8
+    @test abs(sol[x^2 - 4x + y]) >= 1e-8
 
     p = parameter_values(prob)
     for val in disallowed_x
-        @test any(<=(1e-8), prob.denominator([val, 2.0], p))
+        for err in [-9e-8, 0, 9e-8]
+            @test any(<=(1e-7), prob.denominator([val + err, 2.0], p))
+        end
     end
     for val in disallowed_y
-        @test any(<=(1e-8), prob.denominator([2.0, val], p))
+        for err in [-9e-8, 0, 9e-8]
+            @test any(<=(1e-7), prob.denominator([2.0, val + err], p))
+        end
     end
     @test prob.denominator([2.0, 4.0], p)[1] <= 1e-8
+
+    @testset "Rational function in observed" begin
+        @variables x=1 y=1
+        @mtkbuild sys = NonlinearSystem([x^2 + y^2 - 2x - 2 ~ 0, y ~ (x - 1) / (x - 2)])
+        prob = HomotopyContinuationProblem(sys, [])
+        @test any(prob.denominator([2.0], parameter_values(prob)) .≈ 0.0)
+        @test_nowarn solve(prob; threading = false)
+    end
+end
+
+@testset "Non-polynomial observed not used in equations" begin
+    @variables x=1 y
+    @mtkbuild sys = NonlinearSystem([x^2 - 2 ~ 0, y ~ sin(x)])
+    prob = HomotopyContinuationProblem(sys, [])
+    sol = @test_nowarn solve(prob; threading = false)
+    @test sol[x] ≈ √2.0
+    @test sol[y] ≈ sin(√2.0)
 end
