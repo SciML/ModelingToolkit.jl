@@ -780,3 +780,22 @@ end
     prob = @test_nowarn SDEProblem(sys, nothing, (0.0, 1.0))
     @test_nowarn solve(prob, ImplicitEM())
 end
+
+@testset "Issue#3212: Noise dependent on observed" begin
+    sts = @variables begin
+        x(t) = 1.0
+        input(t)
+        [input = true]
+    end
+    ps = @parameters a = 2
+    @brownian η
+
+    eqs = [D(x) ~ -a * x + (input + 1) * η
+           input ~ 0.0]
+
+    sys = System(eqs, t, sts, ps; name = :name)
+    sys = structural_simplify(sys)
+    @test ModelingToolkit.get_noiseeqs(sys) ≈ [1.0]
+    prob = SDEProblem(sys, [], (0.0, 1.0), [])
+    @test_nowarn solve(prob, RKMil())
+end
