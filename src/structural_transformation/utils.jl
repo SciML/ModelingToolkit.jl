@@ -58,33 +58,15 @@ end
 ###
 ### Structural check
 ###
-function check_consistency(state::TransformationState, orig_inputs)
-    fullvars = get_fullvars(state)
-    neqs = n_concrete_eqs(state)
+
+"""
+    $(TYPEDSIGNATURES)
+
+Check if the `state` represents a singular system, and return the unmatched variables.
+"""
+function singular_check(state::TransformationState)
     @unpack graph, var_to_diff = state.structure
-    highest_vars = computed_highest_diff_variables(complete!(state.structure))
-    n_highest_vars = 0
-    for (v, h) in enumerate(highest_vars)
-        h || continue
-        isempty(𝑑neighbors(graph, v)) && continue
-        n_highest_vars += 1
-    end
-    is_balanced = n_highest_vars == neqs
-
-    if neqs > 0 && !is_balanced
-        varwhitelist = var_to_diff .== nothing
-        var_eq_matching = maximal_matching(graph, eq -> true, v -> varwhitelist[v]) # not assigned
-        # Just use `error_reporting` to do conditional
-        iseqs = n_highest_vars < neqs
-        if iseqs
-            eq_var_matching = invview(complete(var_eq_matching, nsrcs(graph))) # extra equations
-            bad_idxs = findall(isequal(unassigned), @view eq_var_matching[1:nsrcs(graph)])
-        else
-            bad_idxs = findall(isequal(unassigned), var_eq_matching)
-        end
-        error_reporting(state, bad_idxs, n_highest_vars, iseqs, orig_inputs)
-    end
-
+    fullvars = get_fullvars(state)
     # This is defined to check if Pantelides algorithm terminates. For more
     # details, check the equation (15) of the original paper.
     extended_graph = (@set graph.fadjlist = Vector{Int}[graph.fadjlist;
@@ -99,6 +81,46 @@ function check_consistency(state::TransformationState, orig_inputs)
             push!(unassigned_var, fullvars[vj])
         end
     end
+    return unassigned_var
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Check the consistency of `state`, given the inputs `orig_inputs`. If `nothrow == false`,
+throws an error if the system is under-/over-determined or singular. In this case, if the
+function returns it will return `true`. If `nothrow == true`, it will return `false`
+instead of throwing an error. The singular case will print a warning.
+"""
+function check_consistency(state::TransformationState, orig_inputs; nothrow = false)
+    fullvars = get_fullvars(state)
+    neqs = n_concrete_eqs(state)
+    @unpack graph, var_to_diff = state.structure
+    highest_vars = computed_highest_diff_variables(complete!(state.structure))
+    n_highest_vars = 0
+    for (v, h) in enumerate(highest_vars)
+        h || continue
+        isempty(𝑑neighbors(graph, v)) && continue
+        n_highest_vars += 1
+    end
+    is_balanced = n_highest_vars == neqs
+
+    if neqs > 0 && !is_balanced
+        nothrow && return false
+        varwhitelist = var_to_diff .== nothing
+        var_eq_matching = maximal_matching(graph, eq -> true, v -> varwhitelist[v]) # not assigned
+        # Just use `error_reporting` to do conditional
+        iseqs = n_highest_vars < neqs
+        if iseqs
+            eq_var_matching = invview(complete(var_eq_matching, nsrcs(graph))) # extra equations
+            bad_idxs = findall(isequal(unassigned), @view eq_var_matching[1:nsrcs(graph)])
+        else
+            bad_idxs = findall(isequal(unassigned), var_eq_matching)
+        end
+        error_reporting(state, bad_idxs, n_highest_vars, iseqs, orig_inputs)
+    end
+
+    unassigned_var = singular_check(state)
 
     if !isempty(unassigned_var) || !is_balanced
         io = IOBuffer()
@@ -107,10 +129,14 @@ function check_consistency(state::TransformationState, orig_inputs)
         errmsg = "The system is structurally singular! " *
                  "Here are the problematic variables: \n" *
                  unassigned_var_str
+        if nothrow
+            @warn errmsg
+            return false
+        end
         throw(InvalidSystemException(errmsg))
     end
 
-    return nothing
+    return true
 end
 
 ###
