@@ -979,3 +979,14 @@ end
     @test MultipleExtend.structure[:extend][1] == [:inmodel, :b, :inmodel_b]
     @test tosymbol.(parameters(multiple_extend)) == [:b, :inmodel_b₊p, :inmodel₊p]
 end
+
+struct CustomStruct end
+@testset "Nonnumeric parameters" begin
+    @mtkmodel MyModel begin
+        @parameters begin
+            p::CustomStruct
+        end
+    end
+    @named sys = MyModel(p = CustomStruct())
+    @test ModelingToolkit.defaults(sys)[@nonamespace sys.p] == CustomStruct()
+end
