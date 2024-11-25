@@ -1295,7 +1295,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         check_length = true,
         warn_initialize_determined = true,
         initialization_eqs = [],
-        fully_determined = false,
+        fully_determined = nothing,
         check_units = true,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
@@ -1311,6 +1311,10 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         isys = structural_simplify(
             generate_initializesystem(
                 sys; u0map, initialization_eqs, check_units, pmap = parammap); fully_determined)
+    end
+
+    if !isempty(StructuralTransformations.singular_check(get_tearing_state(isys)))
+        @warn "Since the initialization system is singular, the guess values may significantly affect the initial values of the ODE"
     end
 
     uninit = setdiff(unknowns(sys), [unknowns(isys); getfield.(observed(isys), :lhs)])
