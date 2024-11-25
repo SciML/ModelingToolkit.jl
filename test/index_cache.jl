@@ -92,3 +92,29 @@ end
     reorder_dimension_by_tunables!(dst, sys, src, [r, q, p]; dim = 2)
     @test dst ≈ stack([vcat(4ones(4), 3ones(3), 1.0) for i in 1:5]; dims = 1)
 end
+
+mutable struct ParamTest
+    y::Any
+end
+(pt::ParamTest)(x) = pt.y - x
+@testset "Issue#3215: Callable discrete parameter" begin
+    function update_affect!(integ, u, p, ctx)
+        integ.p[p.p_1].y = integ.t
+    end
+
+    tp1 = typeof(ParamTest(1))
+    @parameters (p_1::tp1)(..) = ParamTest(1)
+    @variables x(ModelingToolkit.t_nounits) = 0
+
+    event1 = [1.0, 2, 3] => (update_affect!, [], [p_1], [p_1], nothing)
+
+    @named sys = ODESystem([
+            ModelingToolkit.D_nounits(x) ~ p_1(x)
+        ],
+        ModelingToolkit.t_nounits;
+        discrete_events = [event1]
+    )
+    ss = @test_nowarn complete(sys)
+    @test length(parameters(ss)) == 1
+    @test !is_timeseries_parameter(ss, p_1)
+end
