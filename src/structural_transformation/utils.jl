@@ -123,16 +123,15 @@ function check_consistency(state::TransformationState, orig_inputs; nothrow = fa
     unassigned_var = singular_check(state)
 
     if !isempty(unassigned_var) || !is_balanced
+        if nothrow
+            return false
+        end
         io = IOBuffer()
         Base.print_array(io, unassigned_var)
         unassigned_var_str = String(take!(io))
         errmsg = "The system is structurally singular! " *
                  "Here are the problematic variables: \n" *
                  unassigned_var_str
-        if nothrow
-            @warn errmsg
-            return false
-        end
         throw(InvalidSystemException(errmsg))
     end
 

@@ -955,6 +955,6 @@ end
            D(D(y)) ~ λ * y - g
            x^2 + y^2 ~ 1]
     @mtkbuild pend = ODESystem(eqs, t)
-    @test_warn ["structurally singular", "initialization", "guess"] ODEProblem(
+    @test_warn ["structurally singular", "initialization", "Guess", "heuristic"] ODEProblem(
         pend, [x => 1, y => 0], (0.0, 1.5), [g => 1], guesses = [λ => 1])
 end
