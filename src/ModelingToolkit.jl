@@ -50,6 +50,7 @@ using Distributed
 import JuliaFormatter
 using MLStyle
 using NonlinearSolve
+import SCCNonlinearSolve
 using Reexport
 using RecursiveArrayTools
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix

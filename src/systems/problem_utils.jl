@@ -541,6 +541,8 @@ Keyword arguments:
   Only applicable if `warn_cyclic_dependency == true`.
 - `substitution_limit`: The number times to substitute initial conditions into each
   other to attempt to arrive at a numeric value.
+- `use_scc`: Whether to use `SCCNonlinearProblem` for initialization if the system is fully
+  determined.
 
 All other keyword arguments are passed as-is to `constructor`.
 """
@@ -554,7 +556,7 @@ function process_SciMLProblem(
         symbolic_u0 = false, warn_cyclic_dependency = false,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10,
-        substitution_limit = 100, kwargs...)
+        substitution_limit = 100, use_scc = true, kwargs...)
     dvs = unknowns(sys)
     ps = parameters(sys)
     iv = has_iv(sys) ? get_iv(sys) : nothing
@@ -607,7 +609,7 @@ function process_SciMLProblem(
                 sys, t, u0map, pmap; guesses, warn_initialize_determined,
                 initialization_eqs, eval_expression, eval_module, fully_determined,
                 warn_cyclic_dependency, check_units = check_initialization_units,
-                circular_dependency_max_cycle_length, circular_dependency_max_cycles)
+                circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc)
             initializeprobmap = getu(initializeprob, unknowns(sys))
 
             punknowns = [p

@@ -1301,6 +1301,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         initialization_eqs = [],
         fully_determined = nothing,
         check_units = true,
+        use_scc = true,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
@@ -1318,8 +1319,8 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     end
 
     ts = get_tearing_state(isys)
-    if warn_initialize_determined &&
-       (unassigned_vars = StructuralTransformations.singular_check(ts); !isempty(unassigned_vars))
+    unassigned_vars = StructuralTransformations.singular_check(ts)
+    if warn_initialize_determined && !isempty(unassigned_vars)
         errmsg = """
         The initialization system is structurally singular. Guess values may \
         significantly affect the initial values of the ODE. The problematic variables \
@@ -1381,9 +1382,11 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
                      end
         for (k, v) in u0map)
     end
-    if neqs == nunknown
-        NonlinearProblem(isys, u0map, parammap; kwargs...)
+
+    TProb = if neqs == nunknown && isempty(unassigned_vars)
+        use_scc && neqs > 0 && is_split(isys) ? SCCNonlinearProblem : NonlinearProblem
     else
-        NonlinearLeastSquaresProblem(isys, u0map, parammap; kwargs...)
+        NonlinearLeastSquaresProblem
     end
+    TProb(isys, u0map, parammap; kwargs...)
 end

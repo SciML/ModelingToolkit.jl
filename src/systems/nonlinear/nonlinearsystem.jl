@@ -692,7 +692,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         push!(subprobs, prob)
     end
 
-    return SCCNonlinearProblem(subprobs, explicitfuns)
+    return SCCNonlinearProblem(subprobs, explicitfuns, sys, p)
 end
 
 """
