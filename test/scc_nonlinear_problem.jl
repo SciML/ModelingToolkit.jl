@@ -3,6 +3,7 @@ using NonlinearSolve, SCCNonlinearSolve
 using OrdinaryDiffEq
 using SciMLBase, Symbolics
 using LinearAlgebra, Test
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @testset "Trivial case" begin
     function f!(du, u, p)
@@ -30,7 +31,7 @@ using LinearAlgebra, Test
     sol2 = solve(sccprob, NewtonRaphson())
     @test SciMLBase.successful_retcode(sol1)
     @test SciMLBase.successful_retcode(sol2)
-    @test sol1.u ≈ sol2.u
+    @test sol1[u] ≈ sol2[u]
 end
 
 @testset "With parameters" begin

@@ -299,7 +299,7 @@ end
 
 # Parameter timeseries
 ps = MTKParameters(([1.0, 1.0],), (BlockedArray(zeros(4), [2, 2]),),
-    (), ())
+    (), (), ())
 ps2 = SciMLStructures.replace(Discrete(), ps, ones(4))
 @test typeof(ps2.discrete) == typeof(ps.discrete)
 with_updated_parameter_timeseries_values(
@@ -316,7 +316,7 @@ with_updated_parameter_timeseries_values(
 ps = MTKParameters(
     (), (BlockedArray([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], [3, 3]),
         BlockedArray(falses(1), [1, 0])),
-    (), ())
+    (), (), ())
 @test SciMLBase.get_saveable_values(sys, ps, 1).x isa Tuple{Vector{Float64}, Vector{Bool}}
 tsidx1 = 1
 tsidx2 = 2

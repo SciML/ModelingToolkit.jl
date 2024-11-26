@@ -28,7 +28,7 @@ sol = solve(initprob)
 
 initprob = ModelingToolkit.InitializationProblem(pend, 0.0, [x => 1, y => 0], [g => 1];
     guesses = ModelingToolkit.missing_variable_defaults(pend))
-@test initprob isa NonlinearProblem
+@test initprob isa NonlinearLeastSquaresProblem
 sol = solve(initprob)
 @test SciMLBase.successful_retcode(sol)
 @test sol.u == [0.0, 0.0, 0.0, 0.0]
