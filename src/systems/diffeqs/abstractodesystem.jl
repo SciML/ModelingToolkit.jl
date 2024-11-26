@@ -1356,6 +1356,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         u0T = promote_type(u0T, typeof(fullmap[eq.lhs]))
     end
     if u0T != Union{}
+        u0T = eltype(u0T)
         u0map = Dict(k => if symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)
                          v isa AbstractArray ? u0T.(v) : u0T(v)
                      else
