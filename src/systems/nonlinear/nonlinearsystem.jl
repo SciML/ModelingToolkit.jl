@@ -610,9 +610,17 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
 
     ts = get_tearing_state(sys)
     var_eq_matching, var_sccs = StructuralTransformations.algebraic_variables_scc(ts)
-    # The system is simplified, so SCCs are already in sorted order. We just need to get them and sort
-    # according to index in unknowns(sys)
-    sort!(var_sccs)
+
+    if length(var_sccs) == 1
+        return NonlinearProblem{iip}(sys, u0map, parammap; eval_expression, eval_module, kwargs...)
+    end
+
+    condensed_graph = MatchedCondensationGraph(
+        DiCMOBiGraph{true}(complete(ts.structure.graph),
+            complete(var_eq_matching)),
+        var_sccs)
+    toporder = topological_sort_by_dfs(condensed_graph)
+    var_sccs = var_sccs[toporder]
     eq_sccs = map(Base.Fix1(getindex, var_eq_matching), var_sccs)
 
     dvs = unknowns(sys)
