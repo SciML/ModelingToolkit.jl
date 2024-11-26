@@ -3335,7 +3335,8 @@ function parse_variable(sys::AbstractSystem, str::AbstractString)
     # I'd write a regex to validate `str`, but https://xkcd.com/1171/
     str = strip(str)
     derivative_level = 0
-    while ((cond1 = startswith(str, "D(")) || startswith(str, "Differential(")) && endswith(str, ")")
+    while ((cond1 = startswith(str, "D(")) || startswith(str, "Differential(")) &&
+        endswith(str, ")")
         if cond1
             derivative_level += 1
             str = _string_view_inner(str, 2, 1)

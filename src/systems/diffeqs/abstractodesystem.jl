@@ -1295,7 +1295,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         check_length = true,
         warn_initialize_determined = true,
         initialization_eqs = [],
-        fully_determined = false,
+        fully_determined = nothing,
         check_units = true,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
@@ -1311,6 +1311,19 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         isys = structural_simplify(
             generate_initializesystem(
                 sys; u0map, initialization_eqs, check_units, pmap = parammap); fully_determined)
+    end
+
+    ts = get_tearing_state(isys)
+    if warn_initialize_determined &&
+       (unassigned_vars = StructuralTransformations.singular_check(ts); !isempty(unassigned_vars))
+        errmsg = """
+        The initialization system is structurally singular. Guess values may \
+        significantly affect the initial values of the ODE. The problematic variables \
+        are $unassigned_vars.
+
+        Note that the identification of problematic variables is a best-effort heuristic.
+        """
+        @warn errmsg
     end
 
     uninit = setdiff(unknowns(sys), [unknowns(isys); getfield.(observed(isys), :lhs)])

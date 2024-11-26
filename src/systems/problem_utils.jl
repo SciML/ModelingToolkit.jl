@@ -498,7 +498,7 @@ function process_SciMLProblem(
         constructor, sys::AbstractSystem, u0map, pmap; build_initializeprob = true,
         implicit_dae = false, t = nothing, guesses = AnyDict(),
         warn_initialize_determined = true, initialization_eqs = [],
-        eval_expression = false, eval_module = @__MODULE__, fully_determined = false,
+        eval_expression = false, eval_module = @__MODULE__, fully_determined = nothing,
         check_initialization_units = false, tofloat = true, use_union = false,
         u0_constructor = identity, du0map = nothing, check_length = true,
         symbolic_u0 = false, warn_cyclic_dependency = false,
