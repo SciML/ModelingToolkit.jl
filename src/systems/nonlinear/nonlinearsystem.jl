@@ -543,17 +543,22 @@ function (cw::CacheWriter)(p, sols)
     cw.fn(p.caches[1], sols, p...)
 end
 
-function CacheWriter(sys::AbstractSystem, exprs, solsyms;
+function CacheWriter(sys::AbstractSystem, exprs, solsyms, obseqs::Vector{Equation};
         eval_expression = false, eval_module = @__MODULE__)
     ps = parameters(sys)
     rps = reorder_parameters(sys, ps)
+    obs_assigns = [eq.lhs ← eq.rhs for eq in obseqs]
+    cmap, cs = get_cmap(sys)
+    cmap_assigns = [eq.lhs ← eq.rhs for eq in cmap]
     fn = Func(
              [:out, DestructuredArgs(DestructuredArgs.(solsyms)),
                  DestructuredArgs.(rps)...],
              [],
              SetArray(true, :out, exprs)
-         ) |> wrap_parameter_dependencies(sys, false)[2] |>
-         wrap_array_vars(sys, exprs; dvs = nothing, inputs = [])[2] |> toexpr
+         ) |> wrap_assignments(false, obs_assigns)[2] |>
+         wrap_parameter_dependencies(sys, false)[2] |>
+         wrap_array_vars(sys, exprs; dvs = nothing, inputs = [])[2] |>
+         wrap_assignments(false, cmap_assigns)[2] |> toexpr
     return CacheWriter(eval_or_rgf(fn; eval_expression, eval_module))
 end
 
@@ -612,7 +617,8 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
     var_eq_matching, var_sccs = StructuralTransformations.algebraic_variables_scc(ts)
 
     if length(var_sccs) == 1
-        return NonlinearProblem{iip}(sys, u0map, parammap; eval_expression, eval_module, kwargs...)
+        return NonlinearProblem{iip}(
+            sys, u0map, parammap; eval_expression, eval_module, kwargs...)
     end
 
     condensed_graph = MatchedCondensationGraph(
@@ -664,7 +670,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
 
         # cached variables and their corresponding expressions
         cachevars = Any[obs[i].lhs for i in prevobsidxs]
-        cacheexprs = Any[obs[i].rhs for i in prevobsidxs]
+        cacheexprs = Any[obs[i].lhs for i in prevobsidxs]
         for (k, v) in state
             push!(cachevars, unwrap(v))
             push!(cacheexprs, unwrap(k))
@@ -676,7 +682,8 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         else
             solsyms = getindex.((dvs,), view(var_sccs, 1:(i - 1)))
             push!(explicitfuns,
-                CacheWriter(sys, cacheexprs, solsyms; eval_expression, eval_module))
+                CacheWriter(sys, cacheexprs, solsyms, obs[prevobsidxs];
+                    eval_expression, eval_module))
         end
         f = SCCNonlinearFunction{iip}(
             sys, _eqs, _dvs, _obs, (cachevars,); eval_expression, eval_module, kwargs...)
