@@ -247,20 +247,15 @@ function wrap_array_vars(
             push!(inds, (uind, i))
         end
     end
-    p_start = uind + 1 + (inputs !== nothing) + history
-    input_ind = inputs === nothing ? -1 : (p_start - 1)
+    p_start = uind + 1 + history
     rps = (reorder_parameters(sys, ps)..., cachesyms...)
+    if inputs !== nothing
+        rps = (inputs, rps...)
+    end
     for sym in reduce(vcat, rps; init = [])
         iscall(sym) && operation(sym) == getindex || continue
         arg = arguments(sym)[1]
-        if inputs !== nothing
-            idx = findfirst(isequal(sym), inputs)
-            if idx !== nothing
-                inds = get!(() -> [], var_to_arridxs, arg)
-                push!(inds, (input_ind, idx))
-                continue
-            end
-        end
+
         bufferidx = findfirst(buf -> any(isequal(sym), buf), rps)
         idxinbuffer = findfirst(isequal(sym), rps[bufferidx])
         inds = get!(() -> [], var_to_arridxs, arg)
