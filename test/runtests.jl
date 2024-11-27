@@ -60,7 +60,7 @@ end
         end
     end
 
-    if GROUP == "All" || GROUP == "InterfaceI" || GROUP == "Initialization"
+    if GROUP == "All" || GROUP == "Initialization"
             @safetestset "Guess Propagation" include("guess_propagation.jl")
             @safetestset "Hierarchical Initialization Equations" include("hierarchical_initialization_eqs.jl")
             @safetestset "InitializationSystem Test" include("initializationsystem.jl")
