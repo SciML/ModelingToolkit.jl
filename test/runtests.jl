@@ -61,10 +61,10 @@ end
     end
 
     if GROUP == "All" || GROUP == "Initialization"
-            @safetestset "Guess Propagation" include("guess_propagation.jl")
-            @safetestset "Hierarchical Initialization Equations" include("hierarchical_initialization_eqs.jl")
-            @safetestset "InitializationSystem Test" include("initializationsystem.jl")
-            @safetestset "Initial Values Test" include("initial_values.jl")
+        @safetestset "Guess Propagation" include("guess_propagation.jl")
+        @safetestset "Hierarchical Initialization Equations" include("hierarchical_initialization_eqs.jl")
+        @safetestset "InitializationSystem Test" include("initializationsystem.jl")
+        @safetestset "Initial Values Test" include("initial_values.jl")
     end
 
     if GROUP == "All" || GROUP == "InterfaceII"
