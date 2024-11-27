@@ -372,7 +372,8 @@ end
 @testset "Constraints work with nonnumeric parameters" begin
     @variables x
     @parameters p f(::Real)
-    @mtkbuild sys = OptimizationSystem(x^2 + f(x) * p, [x], [f, p]; constraints = [2.0 ≲ f(x) + p])
+    @mtkbuild sys = OptimizationSystem(
+        x^2 + f(x) * p, [x], [f, p]; constraints = [2.0 ≲ f(x) + p])
     prob = OptimizationProblem(sys, [x => 1.0], [p => 1.0, f => (x -> 2x)])
     @test abs(prob.f.cons(prob.u0, prob.p)[1]) ≈ 1.0
 end
