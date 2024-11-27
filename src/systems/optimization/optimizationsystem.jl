@@ -284,6 +284,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         linenumbers = true, parallel = SerialForm(),
         eval_expression = false, eval_module = @__MODULE__,
         use_union = false,
+        checks = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed `OptimizationSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `OptimizationProblem`")
@@ -393,7 +394,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
 
     if length(cstr) > 0
-        @named cons_sys = ConstraintsSystem(cstr, dvs, ps)
+        @named cons_sys = ConstraintsSystem(cstr, dvs, ps; checks)
         cons_sys = complete(cons_sys)
         cons, lcons_, ucons_ = generate_function(cons_sys, checkbounds = checkbounds,
             linenumbers = linenumbers,
