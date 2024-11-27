@@ -71,7 +71,7 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
 end
 
 """
-    computed_highest_diff_variables(structure)
+    computed_highest_diff_variables(structure; whitelisted_vars = ())
 
 Computes which variables are the "highest-differentiated" for purposes of
 pantelides. Ordinarily this is relatively straightforward. However, in our
@@ -83,12 +83,18 @@ case, there is one complicating condition:
 
 This function takes care of these complications are returns a boolean array
 for every variable, indicating whether it is considered "highest-differentiated".
+
+For each index `i` in `whitelisted_vars`, the `i`th variable is included if it
+is the highest differentiated variable even if it doesn't appear in the system.
 """
-function computed_highest_diff_variables(structure)
+function computed_highest_diff_variables(structure; whitelisted_vars = ())
     @unpack graph, var_to_diff = structure
 
     nvars = length(var_to_diff)
     varwhitelist = falses(nvars)
+    for i in whitelisted_vars
+        varwhitelist[i] = true
+    end
     for var in 1:nvars
         if var_to_diff[var] === nothing && !varwhitelist[var]
             # This variable is structurally highest-differentiated, but may not actually appear in the
@@ -125,7 +131,7 @@ end
 Perform Pantelides algorithm.
 """
 function pantelides!(
-        state::TransformationState; finalize = true, maxiters = 8000, kwargs...)
+        state::TransformationState; finalize = true, maxiters = 8000, whitelisted_vars = (), kwargs...)
     @unpack graph, solvable_graph, var_to_diff, eq_to_diff = state.structure
     neqs = nsrcs(graph)
     nvars = nv(var_to_diff)
@@ -137,8 +143,7 @@ function pantelides!(
         eq -> !isempty(𝑠neighbors(graph, eq)) && eq_to_diff[eq] === nothing,
         1:neqs′)
 
-    varwhitelist = computed_highest_diff_variables(state.structure)
-
+    varwhitelist = computed_highest_diff_variables(state.structure; whitelisted_vars)
     if nnonemptyeqs > count(varwhitelist)
         throw(InvalidSystemException("System is structurally singular"))
     end
@@ -206,14 +211,19 @@ function pantelides!(
 end
 
 """
-    dae_index_lowering(sys::ODESystem; kwargs...) -> ODESystem
+    dae_index_lowering(sys::ODESystem; to_index_zero = false, kwargs...) -> ODESystem
 
 Perform the Pantelides algorithm to transform a higher index DAE to an index 1
 DAE. `kwargs` are forwarded to [`pantelides!`](@ref). End users are encouraged to call [`structural_simplify`](@ref)
-instead, which calls this function internally.
+instead, which calls this function internally. If `to_index_zero` is true, the DAE will be reduced to an index 1 DAE.
 """
-function dae_index_lowering(sys::ODESystem; kwargs...)
+function dae_index_lowering(sys::ODESystem; to_index_zero = false, kwargs...)
     state = TearingState(sys)
-    var_eq_matching = pantelides!(state; finalize = false, kwargs...)
+    if to_index_zero
+        newvars = ModelingToolkit.add_missing_differentials!(state)
+    else
+        newvars = ()
+    end
+    var_eq_matching = pantelides!(state; finalize = false, whitelisted_vars = newvars, kwargs...)
     return invalidate_cache!(pantelides_reassemble(state, var_eq_matching))
 end
