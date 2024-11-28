@@ -516,6 +516,15 @@ function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Dif
             end
         end
     end
+    if has_constraints(sys)
+        for eq in get_constraints(sys)
+            eqtype_supports_collect_vars(eq) || continue
+            collect_vars!(unknowns, parameters, eq, iv; depth, op)
+        end
+    end
+    if has_op(sys)
+        collect_vars!(unknowns, parameters, get_op(sys), iv; depth, op)
+    end
     newdepth = depth == -1 ? depth : depth + 1
     for ssys in get_systems(sys)
         collect_scoped_vars!(unknowns, parameters, ssys, iv; depth = newdepth, op)
@@ -544,9 +553,10 @@ Can be dispatched by higher-level libraries to indicate support.
 """
 eqtype_supports_collect_vars(eq) = false
 eqtype_supports_collect_vars(eq::Equation) = true
+eqtype_supports_collect_vars(eq::Inequality) = true
 eqtype_supports_collect_vars(eq::Pair) = true
 
-function collect_vars!(unknowns, parameters, eq::Equation, iv;
+function collect_vars!(unknowns, parameters, eq::Union{Equation, Inequality}, iv;
         depth = 0, op = Differential)
     collect_vars!(unknowns, parameters, eq.lhs, iv; depth, op)
     collect_vars!(unknowns, parameters, eq.rhs, iv; depth, op)
@@ -558,6 +568,7 @@ function collect_vars!(unknowns, parameters, p::Pair, iv; depth = 0, op = Differ
     collect_vars!(unknowns, parameters, p[2], iv; depth, op)
     return nothing
 end
+
 
 function collect_var!(unknowns, parameters, var, iv; depth = 0)
     isequal(var, iv) && return nothing

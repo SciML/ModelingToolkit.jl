@@ -144,6 +144,33 @@ function OptimizationSystem(op, unknowns, ps;
         checks = checks)
 end
 
+function OptimizationSystem(objective; constraints = [], kwargs...)
+    allunknowns = OrderedSet()
+    ps = OrderedSet()
+    collect_vars!(allunknowns, ps, objective, nothing)
+    for cons in constraints
+        collect_vars!(allunknowns, ps, cons, nothing)
+    end
+    for ssys in get(kwargs, :systems, OptimizationSystem[])
+        collect_scoped_vars!(allunknowns, ps, ssys, nothing)
+    end
+    new_ps = OrderedSet()
+    for p in ps
+        if iscall(p) && operation(p) === getindex
+            par = arguments(p)[begin]
+            if Symbolics.shape(Symbolics.unwrap(par)) !== Symbolics.Unknown() &&
+               all(par[i] in ps for i in eachindex(par))
+                push!(new_ps, par)
+            else
+                push!(new_ps, p)
+            end
+        else
+            push!(new_ps, p)
+        end
+    end
+    return OptimizationSystem(objective, collect(allunknowns), collect(new_ps); constraints, kwargs...)
+end
+
 function flatten(sys::OptimizationSystem)
     systems = get_systems(sys)
     isempty(systems) && return sys
