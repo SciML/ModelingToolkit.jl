@@ -896,9 +896,9 @@ version = "0.1.3"
 
 [[deps.Functors]]
 deps = ["Compat", "ConstructionBase", "LinearAlgebra", "Random"]
-git-tree-sha1 = "15e5397dd1cea034c7c772d9748cdee461fb5496"
+git-tree-sha1 = "60a0339f28a233601cb74468032b5c302d5067de"
 uuid = "d9f16b24-f501-4c13-a1f2-28368ffc5196"
-version = "0.5.1"
+version = "0.5.2"
 
 [[deps.Future]]
 deps = ["Random"]
@@ -1201,9 +1201,9 @@ version = "1.3.0"
 
 [[deps.LazyArrays]]
 deps = ["ArrayLayouts", "FillArrays", "LinearAlgebra", "MacroTools", "SparseArrays"]
-git-tree-sha1 = "376bc148ae72e68a08f0d5d8a69e287025a37687"
+git-tree-sha1 = "b67fb758e019d833d6627a61cfdaff052ef46361"
 uuid = "5078a376-72f3-5289-bfd5-ec5146d43c02"
-version = "2.2.2"
+version = "2.2.3"
 
     [deps.LazyArrays.extensions]
     LazyArraysBandedMatricesExt = "BandedMatrices"
