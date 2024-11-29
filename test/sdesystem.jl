@@ -799,3 +799,13 @@ end
     prob = SDEProblem(sys, [], (0.0, 1.0), [])
     @test_nowarn solve(prob, RKMil())
 end
+
+@testset "Observed variables retained after `structural_simplify`" begin
+    @variables x(t) y(t) z(t)
+    @brownian a
+    @mtkbuild sys = System([D(x) ~ x + a, D(y) ~ y + a, z ~ x + y], t)
+    @test sys isa SDESystem
+    @test length(observed(sys)) == 1
+    prob = SDEProblem(sys, [x => 1.0, y => 1.0], (0.0, 1.0))
+    @test prob[z] ≈ 2.0
+end
