@@ -96,9 +96,21 @@ end
 Possible reasons why a term is not polynomial
 """
 EnumX.@enumx NonPolynomialReason begin
+    """
+    Exponent of an expression involving unknowns is not an integer.
+    """
     NonIntegerExponent
+    """
+    Exponent is an expression containing unknowns.
+    """
     ExponentContainsUnknowns
+    """
+    The base of an exponent is not a polynomial in the unknowns.
+    """
     BaseNotPolynomial
+    """
+    An expression involves a non-polynomial operation involving unknowns.
+    """
     UnrecognizedOperation
 end
 
