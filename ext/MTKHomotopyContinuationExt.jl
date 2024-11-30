@@ -96,16 +96,22 @@ All other keyword arguments are forwarded to `HomotopyContinuation.solver_starts
 """
 function MTK.HomotopyContinuationProblem(
         sys::NonlinearSystem, u0map, parammap = nothing; kwargs...)
+    prob = MTK._safe_HomotopyContinuationProblem(sys, u0map, parammap; kwargs...)
+    prob isa MTK.HomotopyContinuationProblem || throw(prob)
+    return prob
+end
+
+function MTK._safe_HomotopyContinuationProblem(sys, u0map, parammap = nothing; kwargs...)
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `HomotopyContinuationProblem`")
     end
     transformation = MTK.PolynomialTransformation(sys)
     if transformation isa MTK.NotPolynomialError
-        throw(transformation)
+        return transformation
     end
     result = MTK.transform_system(sys, transformation)
     if result isa MTK.NotPolynomialError
-        throw(result)
+        return result
     end
     MTK.HomotopyContinuationProblem(sys, transformation, result, u0map, parammap; kwargs...)
 end

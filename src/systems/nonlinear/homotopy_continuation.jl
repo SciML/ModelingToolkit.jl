@@ -48,6 +48,27 @@ function HomotopyContinuationProblem(::AbstractSystem, _u0, _p; kwargs...)
     error("HomotopyContinuation.jl is required to create and solve `HomotopyContinuationProblem`s. Please run `Pkg.add(\"HomotopyContinuation\")` to continue.")
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Utility function for `safe_HomotopyContinuationProblem`, implemented in the extension.
+"""
+function _safe_HomotopyContinuationProblem end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return a `HomotopyContinuationProblem` if the extension is loaded and the system is
+polynomial. If the extension is not loaded, return `nothing`. If the system is not
+polynomial, return the appropriate `NotPolynomialError`.
+"""
+function safe_HomotopyContinuationProblem(sys::NonlinearSystem, args...; kwargs...)
+    if Base.get_extension(ModelingToolkit, :MTKHomotopyContinuationExt) === nothing
+        return nothing
+    end
+    return _safe_HomotopyContinuationProblem(sys, args...; kwargs...)
+end
+
 SymbolicIndexingInterface.symbolic_container(p::HomotopyContinuationProblem) = p.sys
 SymbolicIndexingInterface.state_values(p::HomotopyContinuationProblem) = p.u0
 function SymbolicIndexingInterface.set_state!(p::HomotopyContinuationProblem, args...)
