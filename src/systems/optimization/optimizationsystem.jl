@@ -168,7 +168,8 @@ function OptimizationSystem(objective; constraints = [], kwargs...)
             push!(new_ps, p)
         end
     end
-    return OptimizationSystem(objective, collect(allunknowns), collect(new_ps); constraints, kwargs...)
+    return OptimizationSystem(
+        objective, collect(allunknowns), collect(new_ps); constraints, kwargs...)
 end
 
 function flatten(sys::OptimizationSystem)

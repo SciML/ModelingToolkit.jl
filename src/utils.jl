@@ -569,7 +569,6 @@ function collect_vars!(unknowns, parameters, p::Pair, iv; depth = 0, op = Differ
     return nothing
 end
 
-
 function collect_var!(unknowns, parameters, var, iv; depth = 0)
     isequal(var, iv) && return nothing
     check_scope_depth(getmetadata(var, SymScope, LocalScope()), depth) || return nothing
