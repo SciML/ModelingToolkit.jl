@@ -116,5 +116,6 @@ end
         @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
         @safetestset "LabelledArrays Test" include("labelledarrays.jl")
         @safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl")
+        @safetestset "InfiniteOpt Extension Test" include("extensions/test_infiniteopt.jl")
     end
 end
