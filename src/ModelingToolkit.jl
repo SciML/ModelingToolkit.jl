@@ -150,6 +150,7 @@ include("systems/callbacks.jl")
 include("systems/problem_utils.jl")
 
 include("systems/nonlinear/nonlinearsystem.jl")
+include("systems/nonlinear/homotopy_continuation.jl")
 include("systems/diffeqs/odesystem.jl")
 include("systems/diffeqs/sdesystem.jl")
 include("systems/diffeqs/abstractodesystem.jl")
