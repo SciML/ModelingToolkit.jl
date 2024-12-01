@@ -513,8 +513,6 @@ function SciMLBase.BVProblem{false}(sys::AbstractODESystem, args...; kwargs...)
     BVProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
-# figure out what's going on when we try to set `sparse`?
-
 function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = [],
         tspan = get_tspan(sys),
         parammap = DiffEqBase.NullParameters();
@@ -544,14 +542,13 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
     end
     
     # Construct initial conditions
-    _u0 = prepare_initial_state(u0)
-    __u0 = _u0 isa Function ? _u0(tspan[1]) : _u0
+    _u0 = u0 isa Function ? u0(tspan[1]) : u0
 
     # Define the boundary conditions
     bc = if iip 
-        (residual, u, p, t) -> (residual = u[1] - __u0)
+        (residual, u, p, t) -> (residual = u[1] - _u0)
     else
-        (u, p, t) -> (u[1] - __u0)
+        (u, p, t) -> (u[1] - _u0)
     end
 
     return BVProblem{iip}(f, bc, u0, tspan, p; kwargs1..., kwargs...)
