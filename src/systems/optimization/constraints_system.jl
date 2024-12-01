@@ -143,8 +143,8 @@ function ConstraintsSystem(constraints, unknowns, ps;
     for (k, v) in pairs(defaults) if value(v) !== nothing)
 
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, unknowns′)
-    process_variables!(var_to_name, defaults, ps′)
+    process_variables!(var_to_name, defaults, Dict(), unknowns′)
+    process_variables!(var_to_name, defaults, Dict(), ps′)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
     ConstraintsSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),

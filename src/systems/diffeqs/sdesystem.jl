@@ -93,6 +93,19 @@ struct SDESystem <: AbstractODESystem
     """
     defaults::Dict
     """
+    The guesses to use as the initial conditions for the
+    initialization system.
+    """
+    guesses::Dict
+    """
+    The system for performing the initialization.
+    """
+    initializesystem::Union{Nothing, NonlinearSystem}
+    """
+    Extra equations to be enforced during the initialization sequence.
+    """
+    initialization_eqs::Vector{Equation}
+    """
     Type of the system.
     """
     connector_type::Any
@@ -144,9 +157,8 @@ struct SDESystem <: AbstractODESystem
     isscheduled::Bool
 
     function SDESystem(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed,
-            tgrad,
-            jac,
-            ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, connector_type,
+            tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults,
+            guesses, initializesystem, initialization_eqs, connector_type,
             cevents, devents, parameter_dependencies, metadata = nothing, gui_metadata = nothing,
             complete = false, index_cache = nothing, parent = nothing, is_scalar_noise = false,
             is_dde = false,
@@ -171,9 +183,9 @@ struct SDESystem <: AbstractODESystem
             check_units(u, deqs, neqs)
         end
         new(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
-            ctrl_jac,
-            Wfact, Wfact_t, name, description, systems,
-            defaults, connector_type, cevents, devents,
+            ctrl_jac, Wfact, Wfact_t, name, description, systems,
+            defaults, guesses, initializesystem, initialization_eqs, connector_type, cevents,
+            devents,
             parameter_dependencies, metadata, gui_metadata, complete, index_cache, parent, is_scalar_noise,
             is_dde, isscheduled)
     end
@@ -187,6 +199,9 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
         default_u0 = Dict(),
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
+        guesses = Dict(),
+        initializesystem = nothing,
+        initialization_eqs = Equation[],
         name = nothing,
         description = "",
         connector_type = nothing,
@@ -207,6 +222,8 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
     dvs′ = value.(dvs)
     ps′ = value.(ps)
     ctrl′ = value.(controls)
+    parameter_dependencies, ps′ = process_parameter_dependencies(
+        parameter_dependencies, ps′)
 
     sysnames = nameof.(systems)
     if length(unique(sysnames)) != length(sysnames)
@@ -217,13 +234,21 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
             "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
             :SDESystem, force = true)
     end
-    defaults = todict(defaults)
-    defaults = Dict(value(k) => value(v)
-    for (k, v) in pairs(defaults) if value(v) !== nothing)
 
+    defaults = Dict{Any, Any}(todict(defaults))
+    guesses = Dict{Any, Any}(todict(guesses))
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, dvs′)
-    process_variables!(var_to_name, defaults, ps′)
+    process_variables!(var_to_name, defaults, guesses, dvs′)
+    process_variables!(var_to_name, defaults, guesses, ps′)
+    process_variables!(
+        var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
+    process_variables!(
+        var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
+    defaults = Dict{Any, Any}(value(k) => value(v)
+    for (k, v) in pairs(defaults) if v !== nothing)
+    guesses = Dict{Any, Any}(value(k) => value(v)
+    for (k, v) in pairs(guesses) if v !== nothing)
+
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
     tgrad = RefValue(EMPTY_TGRAD)
@@ -233,14 +258,13 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
     Wfact_t = RefValue(EMPTY_JAC)
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
-    parameter_dependencies, ps′ = process_parameter_dependencies(
-        parameter_dependencies, ps′)
     if is_dde === nothing
         is_dde = _check_if_dde(deqs, iv′, systems)
     end
     SDESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, neqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
-        ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, connector_type,
+        ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses,
+        initializesystem, initialization_eqs, connector_type,
         cont_callbacks, disc_callbacks, parameter_dependencies, metadata, gui_metadata,
         complete, index_cache, parent, is_scalar_noise, is_dde; checks = checks)
 end
