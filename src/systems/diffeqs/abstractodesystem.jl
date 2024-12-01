@@ -471,6 +471,17 @@ end
 
 """
 ```julia
+SciMLBase.BVPFunction{iip}(sys::AbstractODESystem, u0map, tspan,
+                         parammap = DiffEqBase.NullParameters();
+                         version = nothing, tgrad = false,
+                         jac = true, sparse = true,
+                         simplify = false,
+                         kwargs...) where {iip}
+```
+"""
+
+"""
+```julia
 SciMLBase.BVProblem{iip}(sys::AbstractODESystem, u0map, tspan,
                          parammap = DiffEqBase.NullParameters();
                          version = nothing, tgrad = false,
@@ -481,7 +492,7 @@ SciMLBase.BVProblem{iip}(sys::AbstractODESystem, u0map, tspan,
 
 Create a `BVProblem` from the [`ODESystem`](@ref). The arguments `dvs` and
 `ps` are used to set the order of the dependent variable and parameter vectors,
-respectively.
+respectively. `u0` should be either the initial condition, a vector of values `u(t_i)` for collocation methods, or a function returning one or the other.
 """
 function SciMLBase.BVProblem(sys::AbstractODESystem, args...; kwargs...)
     BVProblem{true}(sys, args...; kwargs...)
@@ -502,12 +513,13 @@ function SciMLBase.BVProblem{false}(sys::AbstractODESystem, args...; kwargs...)
     BVProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
+# figure out what's going on when we try to set `sparse`?
+
 function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = [],
         tspan = get_tspan(sys),
         parammap = DiffEqBase.NullParameters();
         version = nothing, tgrad = false,
         jac = true, sparse = true, 
-        sparsity = true, 
         callback = nothing,
         check_length = true,
         warn_initialize_determined = true,
@@ -521,57 +533,27 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
 
     f, u0, p = process_SciMLProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
-        check_length, warn_initialize_determined, eval_expression, eval_module, jac, sparse, sparsity, kwargs...)
-
-    # if jac
-    #     jac_gen = generate_jacobian(sys, dvs, ps;
-    #         simplify = simplify, sparse = sparse,
-    #         expression = Val{true},
-    #         expression_module = eval_module,
-    #         checkbounds = checkbounds, kwargs...)
-    #     jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
-
-    #     _jac(u, p, t) = jac_oop(u, p, t)
-    #     _jac(J, u, p, t) = jac_iip(J, u, p, t)
-    #     _jac(u, p::Tuple{Vararg{Number}}, t) = jac_oop(u, p, t)
-    #     _jac(J, u, p::Tuple{Vararg{Number}}, t) = jac_iip(J, u, p, t)
-    #     _jac(u, p::Tuple, t) = jac_oop(u, p..., t)
-    #     _jac(J, u, p::Tuple, t) = jac_iip(J, u, p..., t)
-    #     _jac(u, p::MTKParameters, t) = jac_oop(u, p..., t)
-    #     _jac(J, u, p::MTKParameters, t) = jac_iip(J, u, p..., t)
-    # else
-    #     _jac = nothing
-    # end
-
-    # jac_prototype = if sparse
-    #     uElType = u0 === nothing ? Float64 : eltype(u0)
-    #     if jac
-    #         similar(calculate_jacobian(sys, sparse = sparse), uElType)
-    #     else
-    #         similar(jacobian_sparsity(sys), uElType)
-    #     end
-    # else
-    #     nothing
-    # end
-
-    # f.jac = _jac
-    # f.jac_prototype = jac_prototype
-    # f.sparsity = jac ? jacobian_sparsity(sys) : nothing
+        check_length, warn_initialize_determined, eval_expression, eval_module, jac, kwargs...)
 
     cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
-
     kwargs = filter_kwargs(kwargs)
 
     kwargs1 = (;)
     if cbs !== nothing
         kwargs1 = merge(kwargs1, (callback = cbs,))
     end
+    
+    # Construct initial conditions
+    _u0 = prepare_initial_state(u0)
+    __u0 = if _u0 isa Function 
+        _u0(t_i)
+    end
 
     # Define the boundary conditions
     bc = if iip 
-        (residual, u, p, t) -> (residual = u[1] - u0)
+        (residual, u, p, t) -> (residual = u[1] - __u0)
     else
-        (u, p, t) -> (u[1] - u0)
+        (u, p, t) -> (u[1] - __u0)
     end
 
     return BVProblem{iip}(f, bc, u0, tspan, p; kwargs1..., kwargs...)
