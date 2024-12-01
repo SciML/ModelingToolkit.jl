@@ -84,6 +84,11 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
     defaults::Dict
     """
+    The guesses to use as the initial conditions for the
+    initialization system.
+    """
+    guesses::Dict
+    """
     Type of the system.
     """
     connector_type::Any
@@ -125,8 +130,8 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
 
     function JumpSystem{U}(
             tag, ap::U, iv, unknowns, ps, var_to_name, observed, name, description,
-            systems, defaults, connector_type, cevents, devents, parameter_dependencies,
-            metadata = nothing, gui_metadata = nothing,
+            systems, defaults, guesses, connector_type, cevents, devents,
+            parameter_dependencies, metadata = nothing, gui_metadata = nothing,
             complete = false, index_cache = nothing, isscheduled = false;
             checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
         if checks == true || (checks & CheckComponents) > 0
@@ -139,7 +144,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             check_units(u, ap, iv)
         end
         new{U}(tag, ap, iv, unknowns, ps, var_to_name,
-            observed, name, description, systems, defaults,
+            observed, name, description, systems, defaults, guesses,
             connector_type, cevents, devents, parameter_dependencies, metadata,
             gui_metadata, complete, index_cache, isscheduled)
     end
@@ -154,6 +159,7 @@ function JumpSystem(eqs, iv, unknowns, ps;
         default_u0 = Dict(),
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
+        guesses = Dict(),
         name = nothing,
         description = "",
         connector_type = nothing,
@@ -180,12 +186,13 @@ function JumpSystem(eqs, iv, unknowns, ps;
     end
     defaults = Dict{Any, Any}(todict(defaults))
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, us′)
-    process_variables!(var_to_name, defaults, ps′)
-    process_variables!(var_to_name, defaults, [eq.lhs for eq in parameter_dependencies])
-    process_variables!(var_to_name, defaults, [eq.rhs for eq in parameter_dependencies])
+    process_variables!(var_to_name, defaults, guesses, us′)
+    process_variables!(var_to_name, defaults, guesses, ps′)
+    process_variables!(var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
+    process_variables!(var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
     #! format: off
     defaults = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(defaults) if value(v) !== nothing)
+    guesses = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(guesses) if v !== nothing)
     #! format: on
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
@@ -219,8 +226,8 @@ function JumpSystem(eqs, iv, unknowns, ps;
 
     JumpSystem{typeof(ap)}(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         ap, iv′, us′, ps′, var_to_name, observed, name, description, systems,
-        defaults, connector_type, cont_callbacks, disc_callbacks, parameter_dependencies,
-        metadata, gui_metadata, checks = checks)
+        defaults, guesses, connector_type, cont_callbacks, disc_callbacks,
+        parameter_dependencies, metadata, gui_metadata, checks = checks)
 end
 
 ##### MTK dispatches for JumpSystems #####
@@ -494,7 +501,7 @@ function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothi
     if has_equations(sys)
         osys = ODESystem(equations(sys).x[4], get_iv(sys), unknowns(sys), parameters(sys);
             observed = observed(sys), name = nameof(sys), description = description(sys),
-            systems = get_systems(sys), defaults = defaults(sys),
+            systems = get_systems(sys), defaults = defaults(sys), guesses = guesses(sys),
             parameter_dependencies = parameter_dependencies(sys),
             metadata = get_metadata(sys), gui_metadata = get_gui_metadata(sys))
         osys = complete(osys)
