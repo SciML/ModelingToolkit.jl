@@ -113,7 +113,7 @@ the `initialization_eqs` keyword argument, for example:
 
 ```@example init
 prob = ODEProblem(pend, [x => 1], (0.0, 1.5), [g => 1], guesses = [λ => 0, y => 1],
-    initialization_eqs = [y ~ 1])
+    initialization_eqs = [y ~ 0])
 sol = solve(prob, Rodas5P())
 plot(sol, idxs = (x, y))
 ```
