@@ -677,7 +677,11 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = false,
         dummy_derivative = true,
         kwargs...)
-    check_consistency &= fully_determined
+    if fully_determined isa Bool
+        check_consistency &= fully_determined
+    else
+        check_consistency = true
+    end
     has_io = io !== nothing
     orig_inputs = Set()
     if has_io
@@ -690,7 +694,8 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
     end
     sys, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
     if check_consistency
-        ModelingToolkit.check_consistency(state, orig_inputs)
+        fully_determined = ModelingToolkit.check_consistency(
+            state, orig_inputs; nothrow = fully_determined === nothing)
     end
     if fully_determined && dummy_derivative
         sys = ModelingToolkit.dummy_derivative(

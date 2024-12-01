@@ -88,6 +88,14 @@ function tearing_sub(expr, dict, s)
     s ? simplify(expr) : expr
 end
 
+function tearing_substitute_expr(sys::AbstractSystem, expr; simplify = false)
+    empty_substitutions(sys) && return expr
+    substitutions = get_substitutions(sys)
+    @unpack subs = substitutions
+    solved = Dict(eq.lhs => eq.rhs for eq in subs)
+    return tearing_sub(expr, solved, simplify)
+end
+
 """
 $(TYPEDSIGNATURES)
 
