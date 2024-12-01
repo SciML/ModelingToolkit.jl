@@ -545,9 +545,7 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
     
     # Construct initial conditions
     _u0 = prepare_initial_state(u0)
-    __u0 = if _u0 isa Function 
-        _u0(t_i)
-    end
+    __u0 = _u0 isa Function ? _u0(tspan[1]) : _u0
 
     # Define the boundary conditions
     bc = if iip 
