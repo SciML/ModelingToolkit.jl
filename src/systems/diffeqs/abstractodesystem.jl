@@ -1395,5 +1395,5 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     else
         NonlinearLeastSquaresProblem
     end
-    TProb(isys, u0map, parammap; kwargs...)
+    TProb(isys, u0map, parammap; kwargs..., build_initializeprob = false)
 end
