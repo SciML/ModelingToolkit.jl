@@ -359,10 +359,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         sparsity = false,
         analytic = nothing,
         split_idxs = nothing,
-        initializeprob = nothing,
-        update_initializeprob! = nothing,
-        initializeprobmap = nothing,
-        initializeprobpmap = nothing,
+        initialization_data = nothing,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEFunction`")
@@ -463,10 +460,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         observed = observedfun,
         sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
         analytic = analytic,
-        initializeprob = initializeprob,
-        update_initializeprob! = update_initializeprob!,
-        initializeprobmap = initializeprobmap,
-        initializeprobpmap = initializeprobpmap)
+        initialization_data)
 end
 
 """
@@ -567,6 +561,7 @@ function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         eval_expression = false,
         eval_module = @__MODULE__,
         checkbounds = false,
+        initialization_data = nothing,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `DDEFunction`")
@@ -579,7 +574,7 @@ function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
     f(u, h, p, t) = f_oop(u, h, p, t)
     f(du, u, h, p, t) = f_iip(du, u, h, p, t)
 
-    DDEFunction{iip}(f, sys = sys)
+    DDEFunction{iip}(f; sys = sys, initialization_data)
 end
 
 function DiffEqBase.SDDEFunction(sys::AbstractODESystem, args...; kwargs...)
@@ -591,6 +586,7 @@ function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys
         eval_expression = false,
         eval_module = @__MODULE__,
         checkbounds = false,
+        initialization_data = nothing,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `SDDEFunction`")
@@ -609,7 +605,7 @@ function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys
     g(u, h, p, t) = g_oop(u, h, p, t)
     g(du, u, h, p, t) = g_iip(du, u, h, p, t)
 
-    SDDEFunction{iip}(f, g, sys = sys)
+    SDDEFunction{iip}(f, g; sys = sys, initialization_data)
 end
 
 """
