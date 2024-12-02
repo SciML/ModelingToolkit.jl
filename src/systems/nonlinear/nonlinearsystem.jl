@@ -62,6 +62,14 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     """
     guesses::Dict
     """
+    The system for performing the initialization.
+    """
+    initializesystem::Union{Nothing, NonlinearSystem}
+    """
+    Extra equations to be enforced during the initialization sequence.
+    """
+    initialization_eqs::Vector{Equation}
+    """
     Type of the system.
     """
     connector_type::Any
@@ -102,9 +110,8 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
 
     function NonlinearSystem(
             tag, eqs, unknowns, ps, var_to_name, observed, jac, name, description,
-            systems, defaults, guesses, connector_type, parameter_dependencies = Equation[],
-            metadata = nothing,
-            gui_metadata = nothing,
+            systems, defaults, guesses, initializesystem, initialization_eqs, connector_type,
+            parameter_dependencies = Equation[], metadata = nothing, gui_metadata = nothing,
             tearing_state = nothing, substitutions = nothing,
             complete = false, index_cache = nothing, parent = nothing,
             isscheduled = false; checks::Union{Bool, Int} = true)
@@ -112,8 +119,8 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
             u = __get_unit_type(unknowns, ps)
             check_units(u, eqs)
         end
-        new(tag, eqs, unknowns, ps, var_to_name, observed,
-            jac, name, description, systems, defaults, guesses,
+        new(tag, eqs, unknowns, ps, var_to_name, observed, jac, name, description,
+            systems, defaults, guesses, initializesystem, initialization_eqs,
             connector_type, parameter_dependencies, metadata, gui_metadata, tearing_state,
             substitutions, complete, index_cache, parent, isscheduled)
     end
@@ -127,6 +134,8 @@ function NonlinearSystem(eqs, unknowns, ps;
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
         guesses = Dict(),
+        initializesystem = nothing,
+        initialization_eqs = Equation[],
         systems = NonlinearSystem[],
         connector_type = nothing,
         continuous_events = nothing, # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
@@ -164,11 +173,14 @@ function NonlinearSystem(eqs, unknowns, ps;
         parameter_dependencies, ps′)
 
     defaults = Dict{Any, Any}(todict(defaults))
+    guesses = Dict{Any, Any}(todict(guesses))
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, guesses, dvs′)
     process_variables!(var_to_name, defaults, guesses, ps′)
-    process_variables!(var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
-    process_variables!(var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
+    process_variables!(
+        var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
+    process_variables!(
+        var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
     defaults = Dict{Any, Any}(value(k) => value(v)
     for (k, v) in pairs(defaults) if v !== nothing)
     guesses = Dict{Any, Any}(value(k) => value(v)
@@ -178,8 +190,8 @@ function NonlinearSystem(eqs, unknowns, ps;
 
     NonlinearSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         eqs, dvs′, ps′, var_to_name, observed, jac, name, description, systems, defaults,
-        guesses, connector_type, parameter_dependencies, metadata, gui_metadata,
-        checks = checks)
+        guesses, initializesystem, initialization_eqs, connector_type, parameter_dependencies,
+        metadata, gui_metadata, checks = checks)
 end
 
 function NonlinearSystem(eqs; kwargs...)
