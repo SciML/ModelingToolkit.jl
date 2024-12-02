@@ -540,7 +540,7 @@ function maybe_build_initialization_problem(
     end
     if (((implicit_dae || has_observed_u0s || !isempty(missing_unknowns) ||
           !isempty(solvablepars) || has_dependent_unknowns) &&
-         get_tearing_state(sys) !== nothing) ||
+         (!has_tearing_state(sys) || get_tearing_state(sys) !== nothing)) ||
         !isempty(initialization_equations(sys))) && t !== nothing
         initializeprob = ModelingToolkit.InitializationProblem(
             sys, t, u0map, pmap; guesses, kwargs...)
