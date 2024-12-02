@@ -13,9 +13,7 @@ function generate_initializesystem(sys::AbstractSystem;
         check_units = true, check_defguess = false,
         name = nameof(sys), extra_metadata = (;), kwargs...)
     eqs = equations(sys)
-    if sys isa JumpSystem
-        eqs = eqs.x[4]
-    end
+    eqs = filter(x -> x isa Equation, eqs)
     trueobs, eqs = unhack_observed(observed(sys), eqs)
     vars = unique([unknowns(sys); getfield.(trueobs, :lhs)])
     vars_set = Set(vars) # for efficient in-lookup
