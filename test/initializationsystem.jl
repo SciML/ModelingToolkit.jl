@@ -975,3 +975,60 @@ end
     @test integ.ps[p] ≈ 1.0
     @test integ.ps[q]≈cbrt(2) rtol=1e-6
 end
+
+@testset "Guesses provided to `ODEProblem` are used in `remake`" begin
+    @variables x(t) y(t)=2x
+    @parameters p q=3x
+    @mtkbuild sys = ODESystem([D(x) ~ x * p + q, x^3 + y^3 ~ 3], t)
+    prob = ODEProblem(
+        sys, [], (0.0, 1.0), [p => 1.0]; guesses = [x => 1.0, y => 1.0, q => 1.0])
+    @test prob[x] == 0.0
+    @test prob[y] == 0.0
+    @test prob.ps[p] == 1.0
+    @test prob.ps[q] == 0.0
+    integ = init(prob)
+    @test integ[x] ≈ 1 / cbrt(3)
+    @test integ[y] ≈ 2 / cbrt(3)
+    @test integ.ps[p] == 1.0
+    @test integ.ps[q] ≈ 3 / cbrt(3)
+    prob2 = remake(prob; u0 = [y => 3x], p = [q => 2x])
+    integ2 = init(prob2)
+    @test integ2[x] ≈ cbrt(3 / 28)
+    @test integ2[y] ≈ 3cbrt(3 / 28)
+    @test integ2.ps[p] == 1.0
+    @test integ2.ps[q] ≈ 2cbrt(3 / 28)
+end
+
+@testset "Remake problem with no initializeprob" begin
+    @variables x(t) [guess = 1.0] y(t) [guess = 1.0]
+    @parameters p [guess = 1.0] q [guess = 1.0]
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ p * x + q * y, y ~ 2x], t; parameter_dependencies = [q ~ 2p])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [p => 1.0])
+    @test prob.f.initialization_data === nothing
+    prob2 = remake(prob; u0 = [x => 2.0])
+    @test prob2[x] == 2.0
+    @test prob2.f.initialization_data === nothing
+    prob3 = remake(prob; u0 = [y => 2.0])
+    @test prob3.f.initialization_data !== nothing
+    @test init(prob3)[x] ≈ 1.0
+    prob4 = remake(prob; p = [p => 1.0])
+    @test prob4.f.initialization_data === nothing
+    prob5 = remake(prob; p = [p => missing, q => 2.0])
+    @test prob5.f.initialization_data !== nothing
+    @test init(prob5).ps[p] ≈ 1.0
+end
+
+@testset "Variables provided as symbols" begin
+    @variables x(t) [guess = 1.0] y(t) [guess = 1.0]
+    @parameters p [guess = 1.0] q [guess = 1.0]
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ p * x + q * y, y ~ 2x], t; parameter_dependencies = [q ~ 2p])
+    prob = ODEProblem(sys, [:x => 1.0], (0.0, 1.0), [p => 1.0])
+    @test prob.f.initialization_data === nothing
+    prob2 = remake(prob; u0 = [:x => 2.0])
+    @test prob2.f.initialization_data === nothing
+    prob3 = remake(prob; u0 = [:y => 1.0])
+    @test prob3.f.initialization_data !== nothing
+    @test init(prob3)[x] ≈ 0.5
+end

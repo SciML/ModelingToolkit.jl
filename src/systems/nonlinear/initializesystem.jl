@@ -30,7 +30,8 @@ function generate_initializesystem(sys::ODESystem;
     # 1) process dummy derivatives and u0map into initialization system
     eqs_ics = eqs[idxs_alge] # start equation list with algebraic equations
     defs = copy(defaults(sys)) # copy so we don't modify sys.defaults
-    guesses = merge(get_guesses(sys), todict(guesses))
+    additional_guesses = anydict(guesses)
+    guesses = merge(get_guesses(sys), additional_guesses)
     schedule = getfield(sys, :schedule)
     if !isnothing(schedule)
         for x in filter(x -> !isnothing(x[1]), schedule.dummy_sub)
@@ -178,7 +179,7 @@ function generate_initializesystem(sys::ODESystem;
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
-    meta = InitializationSystemMetadata(Dict{Any, Any}(u0map), Dict{Any, Any}(pmap))
+    meta = InitializationSystemMetadata(anydict(u0map), anydict(pmap), additional_guesses)
     return NonlinearSystem(eqs_ics,
         vars,
         pars;
@@ -193,6 +194,7 @@ end
 struct InitializationSystemMetadata
     u0map::Dict{Any, Any}
     pmap::Dict{Any, Any}
+    additional_guesses::Dict{Any, Any}
 end
 
 function is_parameter_solvable(p, pmap, defs, guesses)
@@ -208,17 +210,16 @@ function is_parameter_solvable(p, pmap, defs, guesses)
              _val1 === nothing && _val2 !== nothing)) && _val3 !== nothing
 end
 
-function SciMLBase.remake_initializeprob(sys::ODESystem, odefn, u0, t0, p)
+function SciMLBase.remake_initialization_data(sys::ODESystem, odefn, u0, t0, p, newu0, newp)
     if u0 === missing && p === missing
-        return odefn.initializeprob, odefn.update_initializeprob!, odefn.initializeprobmap,
-        odefn.initializeprobpmap
+        return odefn.initialization_data
     end
     if !(eltype(u0) <: Pair) && !(eltype(p) <: Pair)
         oldinitprob = odefn.initializeprob
-        if oldinitprob === nothing || !SciMLBase.has_sys(oldinitprob.f) ||
-           !(oldinitprob.f.sys isa NonlinearSystem)
-            return oldinitprob, odefn.update_initializeprob!, odefn.initializeprobmap,
-            odefn.initializeprobpmap
+        oldinitprob === nothing && return nothing
+        if !SciMLBase.has_sys(oldinitprob.f) || !(oldinitprob.f.sys isa NonlinearSystem)
+            return SciMLBase.OverrideInitData(oldinitprob, odefn.update_initializeprob!,
+                odefn.initializeprobmap, odefn.initializeprobpmap)
         end
         pidxs = ParameterIndex[]
         pvals = []
@@ -260,78 +261,69 @@ function SciMLBase.remake_initializeprob(sys::ODESystem, odefn, u0, t0, p)
                 oldinitprob.f.sys, parameter_values(oldinitprob), pidxs, pvals)
         end
         initprob = remake(oldinitprob; u0 = newu0, p = newp)
-        return initprob, odefn.update_initializeprob!, odefn.initializeprobmap,
-        odefn.initializeprobpmap
+        return SciMLBase.OverrideInitData(initprob, odefn.update_initializeprob!,
+            odefn.initializeprobmap, odefn.initializeprobpmap)
     end
-    if u0 === missing || isempty(u0)
-        u0 = Dict()
-    elseif !(eltype(u0) <: Pair)
-        u0 = Dict(unknowns(sys) .=> u0)
-    end
-    if p === missing
-        p = Dict()
+    dvs = unknowns(sys)
+    ps = parameters(sys)
+    u0map = to_varmap(u0, dvs)
+    symbols_to_symbolics!(sys, u0map)
+    pmap = to_varmap(p, ps)
+    symbols_to_symbolics!(sys, pmap)
+    guesses = Dict()
+    defs = defaults(sys)
+    if SciMLBase.has_initializeprob(odefn)
+        oldsys = odefn.initializeprob.f.sys
+        meta = get_metadata(oldsys)
+        if meta isa InitializationSystemMetadata
+            u0map = merge(meta.u0map, u0map)
+            pmap = merge(meta.pmap, pmap)
+            merge!(guesses, meta.additional_guesses)
+        end
+    else
+        # there is no initializeprob, so the original problem construction
+        # had no solvable parameters and had the differential variables
+        # specified in `u0map`.
+        if u0 === missing
+            # the user didn't pass `u0` to `remake`, so they want to retain
+            # existing values. Fill the differential variables in `u0map`,
+            # initialization will either be elided or solve for the algebraic
+            # variables
+            diff_idxs = isdiffeq.(equations(sys))
+            for i in eachindex(dvs)
+                diff_idxs[i] || continue
+                u0map[dvs[i]] = newu0[i]
+            end
+        end
+        if p === missing
+            # the user didn't pass `p` to `remake`, so they want to retain
+            # existing values. Fill all parameters in `pmap` so that none of
+            # them are solvable.
+            for p in ps
+                pmap[p] = getp(sys, p)(newp)
+            end
+        end
+        # all non-solvable parameters need values regardless
+        for p in ps
+            haskey(pmap, p) && continue
+            is_parameter_solvable(p, pmap, defs, guesses) && continue
+            pmap[p] = getp(sys, p)(newp)
+        end
     end
     if t0 === nothing
         t0 = 0.0
     end
-    u0 = todict(u0)
-    defs = defaults(sys)
-    varmap = merge(defs, u0)
-    for k in collect(keys(varmap))
-        if varmap[k] === nothing
-            delete!(varmap, k)
-        end
+    filter_missing_values!(u0map)
+    filter_missing_values!(pmap)
+    f, _ = process_SciMLProblem(EmptySciMLFunction, sys, u0map, pmap; guesses, t = t0)
+    kws = f.kwargs
+    initprob = get(kws, :initializeprob, nothing)
+    if initprob === nothing
+        return nothing
     end
-    varmap = canonicalize_varmap(varmap)
-    missingvars = setdiff(unknowns(sys), collect(keys(varmap)))
-    setobserved = filter(keys(varmap)) do var
-        has_observed_with_lhs(sys, var) || has_observed_with_lhs(sys, default_toterm(var))
-    end
-    p = todict(p)
-    guesses = ModelingToolkit.guesses(sys)
-    solvablepars = [par
-                    for par in parameters(sys)
-                    if is_parameter_solvable(par, p, defs, guesses)]
-    pvarmap = merge(defs, p)
-    setparobserved = filter(keys(pvarmap)) do var
-        has_parameter_dependency_with_lhs(sys, var)
-    end
-    if (((!isempty(missingvars) || !isempty(solvablepars) ||
-          !isempty(setobserved) || !isempty(setparobserved)) &&
-         ModelingToolkit.get_tearing_state(sys) !== nothing) ||
-        !isempty(initialization_equations(sys)))
-        if SciMLBase.has_initializeprob(odefn)
-            oldsys = odefn.initializeprob.f.sys
-            meta = get_metadata(oldsys)
-            if meta isa InitializationSystemMetadata
-                u0 = merge(meta.u0map, u0)
-                p = merge(meta.pmap, p)
-            end
-        end
-        for k in collect(keys(u0))
-            if u0[k] === nothing
-                delete!(u0, k)
-            end
-        end
-        for k in collect(keys(p))
-            if p[k] === nothing
-                delete!(p, k)
-            end
-        end
-
-        initprob = InitializationProblem(sys, t0, u0, p)
-        initprobmap = getu(initprob, unknowns(sys))
-        punknowns = [p for p in all_variable_symbols(initprob) if is_parameter(sys, p)]
-        getpunknowns = getu(initprob, punknowns)
-        setpunknowns = setp(sys, punknowns)
-        initprobpmap = GetUpdatedMTKParameters(getpunknowns, setpunknowns)
-        reqd_syms = parameter_symbols(initprob)
-        update_initializeprob! = UpdateInitializeprob(
-            getu(sys, reqd_syms), setu(initprob, reqd_syms))
-        return initprob, update_initializeprob!, initprobmap, initprobpmap
-    else
-        return nothing, nothing, nothing, nothing
-    end
+    return SciMLBase.OverrideInitData(initprob, get(kws, :update_initializeprob!, nothing),
+        get(kws, :initializeprobmap, nothing),
+        get(kws, :initializeprobpmap, nothing))
 end
 
 """

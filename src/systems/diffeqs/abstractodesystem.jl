@@ -1310,11 +1310,11 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     elseif isempty(u0map) && get_initializesystem(sys) === nothing
         isys = structural_simplify(
             generate_initializesystem(
-                sys; initialization_eqs, check_units, pmap = parammap); fully_determined)
+                sys; initialization_eqs, check_units, pmap = parammap, guesses); fully_determined)
     else
         isys = structural_simplify(
             generate_initializesystem(
-                sys; u0map, initialization_eqs, check_units, pmap = parammap); fully_determined)
+                sys; u0map, initialization_eqs, check_units, pmap = parammap, guesses); fully_determined)
     end
 
     ts = get_tearing_state(isys)
