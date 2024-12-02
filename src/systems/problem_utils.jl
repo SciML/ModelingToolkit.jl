@@ -567,7 +567,9 @@ function maybe_build_initialization_problem(
         end
         empty!(missing_unknowns)
         return (;
-            initializeprob, initializeprobmap, initializeprobpmap, update_initializeprob!)
+                initialization_data = SciMLBase.OverrideInitData(
+                    initializeprob, initializeprobmap,
+                    initializeprobpmap, update_initializeprob!))
     end
     return (;)
 end
