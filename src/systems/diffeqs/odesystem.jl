@@ -256,11 +256,14 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
             :ODESystem, force = true)
     end
     defaults = Dict{Any, Any}(todict(defaults))
+    guesses = Dict{Any, Any}(todict(guesses))
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, guesses, dvs′)
     process_variables!(var_to_name, defaults, guesses, ps′)
-    process_variables!(var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
-    process_variables!(var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
+    process_variables!(
+        var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
+    process_variables!(
+        var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
     defaults = Dict{Any, Any}(value(k) => value(v)
     for (k, v) in pairs(defaults) if v !== nothing)
     guesses = Dict{Any, Any}(value(k) => value(v)

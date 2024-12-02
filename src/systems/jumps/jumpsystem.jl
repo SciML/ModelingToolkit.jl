@@ -89,6 +89,14 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
     guesses::Dict
     """
+    The system for performing the initialization.
+    """
+    initializesystem::Union{Nothing, NonlinearSystem}
+    """
+    Extra equations to be enforced during the initialization sequence.
+    """
+    initialization_eqs::Vector{Equation}
+    """
     Type of the system.
     """
     connector_type::Any
@@ -130,7 +138,8 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
 
     function JumpSystem{U}(
             tag, ap::U, iv, unknowns, ps, var_to_name, observed, name, description,
-            systems, defaults, guesses, connector_type, cevents, devents,
+            systems, defaults, guesses, initializesystem, initialization_eqs, connector_type,
+            cevents, devents,
             parameter_dependencies, metadata = nothing, gui_metadata = nothing,
             complete = false, index_cache = nothing, isscheduled = false;
             checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
@@ -144,7 +153,8 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             check_units(u, ap, iv)
         end
         new{U}(tag, ap, iv, unknowns, ps, var_to_name,
-            observed, name, description, systems, defaults, guesses,
+            observed, name, description, systems, defaults, guesses, initializesystem,
+            initialization_eqs,
             connector_type, cevents, devents, parameter_dependencies, metadata,
             gui_metadata, complete, index_cache, isscheduled)
     end
@@ -160,6 +170,8 @@ function JumpSystem(eqs, iv, unknowns, ps;
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
         guesses = Dict(),
+        initializesystem = nothing,
+        initialization_eqs = Equation[],
         name = nothing,
         description = "",
         connector_type = nothing,
@@ -185,11 +197,14 @@ function JumpSystem(eqs, iv, unknowns, ps;
             :JumpSystem, force = true)
     end
     defaults = Dict{Any, Any}(todict(defaults))
+    guesses = Dict{Any, Any}(todict(guesses))
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, guesses, us′)
     process_variables!(var_to_name, defaults, guesses, ps′)
-    process_variables!(var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
-    process_variables!(var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
+    process_variables!(
+        var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
+    process_variables!(
+        var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
     #! format: off
     defaults = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(defaults) if value(v) !== nothing)
     guesses = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(guesses) if v !== nothing)
@@ -226,7 +241,8 @@ function JumpSystem(eqs, iv, unknowns, ps;
 
     JumpSystem{typeof(ap)}(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         ap, iv′, us′, ps′, var_to_name, observed, name, description, systems,
-        defaults, guesses, connector_type, cont_callbacks, disc_callbacks,
+        defaults, guesses, initializesystem, initialization_eqs, connector_type,
+        cont_callbacks, disc_callbacks,
         parameter_dependencies, metadata, gui_metadata, checks = checks)
 end
 
