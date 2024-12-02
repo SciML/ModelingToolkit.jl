@@ -22,10 +22,16 @@ function generate_initializesystem(sys::AbstractSystem;
     defs = copy(defaults(sys)) # copy so we don't modify sys.defaults
     additional_guesses = anydict(guesses)
     guesses = merge(get_guesses(sys), additional_guesses)
+    idxs_diff = isdiffeq.(eqs)
 
+    # 1) Use algebraic equations of time-dependent systems as initialization constraints
     if has_iv(sys)
-        idxs_diff = isdiffeq.(eqs)
         idxs_alge = .!idxs_diff
+        append!(eqs_ics, eqs[idxs_alge]) # start equation list with algebraic equations
+    end
+
+    if has_schedule(sys) && (schedule = get_schedule(sys); !isnothing(schedule))
+        # 2) process dummy derivatives and u0map into initialization system
 
         # prepare map for dummy derivative substitution
         eqs_diff = eqs[idxs_diff]
@@ -35,40 +41,41 @@ function generate_initializesystem(sys::AbstractSystem;
             Dict(D(eq.lhs) => D(eq.rhs) for eq in trueobs)
         )
 
-        # 1) process dummy derivatives and u0map into initialization system
-        append!(eqs_ics, eqs[idxs_alge]) # start equation list with algebraic equations
-        if has_schedule(sys) && (schedule = get_schedule(sys); !isnothing(schedule))
-            for x in filter(x -> !isnothing(x[1]), schedule.dummy_sub)
-                # set dummy derivatives to default_dd_guess unless specified
-                push!(defs, x[1] => get(guesses, x[1], default_dd_guess))
+        for x in filter(x -> !isnothing(x[1]), schedule.dummy_sub)
+            # set dummy derivatives to default_dd_guess unless specified
+            push!(defs, x[1] => get(guesses, x[1], default_dd_guess))
+        end
+        function process_u0map_with_dummysubs(y, x)
+            y = get(schedule.dummy_sub, y, y)
+            y = fixpoint_sub(y, diffmap)
+            if y ∈ vars_set
+                # variables specified in u0 overrides defaults
+                push!(defs, y => x)
+            elseif y isa Symbolics.Arr
+                # TODO: don't scalarize arrays
+                merge!(defs, Dict(scalarize(y .=> x)))
+            elseif y isa Symbolics.BasicSymbolic
+                # y is a derivative expression expanded; add it to the initialization equations
+                push!(eqs_ics, y ~ x)
+            else
+                error("Initialization expression $y is currently not supported. If its a higher order derivative expression, then only the dummy derivative expressions are supported.")
             end
-            function process_u0map_with_dummysubs(y, x)
-                y = get(schedule.dummy_sub, y, y)
-                y = fixpoint_sub(y, diffmap)
-                if y ∈ vars_set
-                    # variables specified in u0 overrides defaults
-                    push!(defs, y => x)
-                elseif y isa Symbolics.Arr
-                    # TODO: don't scalarize arrays
-                    merge!(defs, Dict(scalarize(y .=> x)))
-                elseif y isa Symbolics.BasicSymbolic
-                    # y is a derivative expression expanded; add it to the initialization equations
-                    push!(eqs_ics, y ~ x)
-                else
-                    error("Initialization expression $y is currently not supported. If its a higher order derivative expression, then only the dummy derivative expressions are supported.")
-                end
+        end
+        for (y, x) in u0map
+            if Symbolics.isarraysymbolic(y)
+                process_u0map_with_dummysubs.(collect(y), collect(x))
+            else
+                process_u0map_with_dummysubs(y, x)
             end
-            for (y, x) in u0map
-                if Symbolics.isarraysymbolic(y)
-                    process_u0map_with_dummysubs.(collect(y), collect(x))
-                else
-                    process_u0map_with_dummysubs(y, x)
-                end
-            end
+        end
+    else
+        # 2) System doesn't have a schedule, so dummy derivatives don't exist/aren't handled (SDESystem)
+        for (k, v) in u0map
+            defs[k] = v
         end
     end
 
-    # 2) process other variables
+    # 3) process other variables
     for var in vars
         if var ∈ keys(defs)
             push!(eqs_ics, var ~ defs[var])
@@ -79,7 +86,7 @@ function generate_initializesystem(sys::AbstractSystem;
         end
     end
 
-    # 3) process explicitly provided initialization equations
+    # 4) process explicitly provided initialization equations
     if !algebraic_only
         initialization_eqs = [get_initialization_eqs(sys); initialization_eqs]
         for eq in initialization_eqs
@@ -88,7 +95,7 @@ function generate_initializesystem(sys::AbstractSystem;
         end
     end
 
-    # 4) process parameters as initialization unknowns
+    # 5) process parameters as initialization unknowns
     paramsubs = Dict()
     if pmap isa SciMLBase.NullParameters
         pmap = Dict()
@@ -143,7 +150,7 @@ function generate_initializesystem(sys::AbstractSystem;
         end
     end
 
-    # 5) parameter dependencies become equations, their LHS become unknowns
+    # 6) parameter dependencies become equations, their LHS become unknowns
     # non-numeric dependent parameters stay as parameter dependencies
     new_parameter_deps = Equation[]
     for eq in parameter_dependencies(sys)
@@ -158,7 +165,7 @@ function generate_initializesystem(sys::AbstractSystem;
         push!(defs, varp => guessval)
     end
 
-    # 6) handle values provided for dependent parameters similar to values for observed variables
+    # 7) handle values provided for dependent parameters similar to values for observed variables
     for (k, v) in merge(defaults(sys), pmap)
         if is_variable_floatingpoint(k) && has_parameter_dependency_with_lhs(sys, k)
             push!(eqs_ics, paramsubs[k] ~ v)
@@ -171,7 +178,7 @@ function generate_initializesystem(sys::AbstractSystem;
         [p for p in parameters(sys) if !haskey(paramsubs, p)]
     )
 
-    # 7) use observed equations for guesses of observed variables if not provided
+    # 8) use observed equations for guesses of observed variables if not provided
     for eq in trueobs
         haskey(defs, eq.lhs) && continue
         any(x -> isequal(default_toterm(x), eq.lhs), keys(defs)) && continue
