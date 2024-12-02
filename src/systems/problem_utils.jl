@@ -540,8 +540,9 @@ function maybe_build_initialization_problem(
     end
     if (((implicit_dae || has_observed_u0s || !isempty(missing_unknowns) ||
           !isempty(solvablepars) || has_dependent_unknowns) &&
-         get_tearing_state(sys) !== nothing) ||
-        !isempty(initialization_equations(sys))) && t !== nothing
+         (!has_tearing_state(sys) || get_tearing_state(sys) !== nothing)) ||
+        !isempty(initialization_equations(sys))) &&
+       (!is_time_dependent(sys) || t !== nothing)
         initializeprob = ModelingToolkit.InitializationProblem(
             sys, t, u0map, pmap; guesses, kwargs...)
         initializeprobmap = getu(initializeprob, unknowns(sys))
@@ -567,7 +568,9 @@ function maybe_build_initialization_problem(
         end
         empty!(missing_unknowns)
         return (;
-            initializeprob, initializeprobmap, initializeprobpmap, update_initializeprob!)
+            initialization_data = SciMLBase.OverrideInitData(
+                initializeprob, update_initializeprob!, initializeprobmap,
+                initializeprobpmap))
     end
     return (;)
 end
@@ -662,7 +665,7 @@ function process_SciMLProblem(
     op, missing_unknowns, missing_pars = build_operating_point(
         u0map, pmap, defs, cmap, dvs, ps)
 
-    if sys isa ODESystem && build_initializeprob
+    if build_initializeprob
         kws = maybe_build_initialization_problem(
             sys, op, u0map, pmap, t, defs, guesses, missing_unknowns;
             implicit_dae, warn_initialize_determined, initialization_eqs,
