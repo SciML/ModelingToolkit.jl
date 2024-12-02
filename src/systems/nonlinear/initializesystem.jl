@@ -346,13 +346,7 @@ function SciMLBase.remake_initialization_data(sys::ODESystem, odefn, u0, t0, p, 
         u0map, pmap, defs, cmap, dvs, ps)
     kws = maybe_build_initialization_problem(
         sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns; use_scc)
-    initprob = get(kws, :initializeprob, nothing)
-    if initprob === nothing
-        return nothing
-    end
-    return SciMLBase.OverrideInitData(initprob, get(kws, :update_initializeprob!, nothing),
-        get(kws, :initializeprobmap, nothing),
-        get(kws, :initializeprobpmap, nothing))
+    return get(kws, :initialization_data, nothing)
 end
 
 """
