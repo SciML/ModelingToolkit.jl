@@ -490,10 +490,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         sparse = false, simplify = false,
         eval_module = @__MODULE__,
         checkbounds = false,
-        initializeprob = nothing,
-        initializeprobmap = nothing,
-        initializeprobpmap = nothing,
-        update_initializeprob! = nothing,
+        initialization_data = nothing,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEFunction`")
@@ -541,15 +538,12 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         nothing
     end
 
-    DAEFunction{iip}(f,
+    DAEFunction{iip}(f;
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
         jac_prototype = jac_prototype,
         observed = observedfun,
-        initializeprob = initializeprob,
-        initializeprobmap = initializeprobmap,
-        initializeprobpmap = initializeprobpmap,
-        update_initializeprob! = update_initializeprob!)
+        initialization_data)
 end
 
 function DiffEqBase.DDEFunction(sys::AbstractODESystem, args...; kwargs...)
