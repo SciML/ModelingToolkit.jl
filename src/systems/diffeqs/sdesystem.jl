@@ -544,7 +544,7 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
         version = nothing, tgrad = false, sparse = false,
         jac = false, Wfact = false, eval_expression = false,
         eval_module = @__MODULE__,
-        checkbounds = false,
+        checkbounds = false, initialization_data = nothing,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEFunction`")
@@ -615,13 +615,13 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
 
     observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
 
-    SDEFunction{iip, specialize}(f, g,
+    SDEFunction{iip, specialize}(f, g;
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
         tgrad = _tgrad === nothing ? nothing : _tgrad,
         Wfact = _Wfact === nothing ? nothing : _Wfact,
         Wfact_t = _Wfact_t === nothing ? nothing : _Wfact_t,
-        mass_matrix = _M,
+        mass_matrix = _M, initialization_data,
         observed = observedfun)
 end
 

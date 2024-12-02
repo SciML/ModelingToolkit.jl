@@ -344,6 +344,7 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
         eval_expression = false,
         eval_module = @__MODULE__,
         sparse = false, simplify = false,
+        initialization_data = nothing,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearFunction`")
@@ -376,14 +377,14 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
         resid_prototype = calculate_resid_prototype(length(equations(sys)), u0, p)
     end
 
-    NonlinearFunction{iip}(f,
+    NonlinearFunction{iip}(f;
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
         resid_prototype = resid_prototype,
         jac_prototype = sparse ?
                         similar(calculate_jacobian(sys, sparse = sparse),
             Float64) : nothing,
-        observed = observedfun)
+        observed = observedfun, initialization_data)
 end
 
 """
@@ -395,7 +396,8 @@ respectively.
 """
 function SciMLBase.IntervalNonlinearFunction(
         sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(sys), u0 = nothing;
-        p = nothing, eval_expression = false, eval_module = @__MODULE__, kwargs...)
+        p = nothing, eval_expression = false, eval_module = @__MODULE__,
+        initialization_data = nothing, kwargs...)
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `IntervalNonlinearFunction`")
     end
@@ -411,7 +413,8 @@ function SciMLBase.IntervalNonlinearFunction(
 
     observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
 
-    IntervalNonlinearFunction{false}(f; observed = observedfun, sys = sys)
+    IntervalNonlinearFunction{false}(
+        f; observed = observedfun, sys = sys, initialization_data)
 end
 
 """
@@ -884,6 +887,7 @@ function flatten(sys::NonlinearSystem, noeqs = false)
             observed = observed(sys),
             defaults = defaults(sys),
             guesses = guesses(sys),
+            initialization_eqs = initialization_equations(sys),
             name = nameof(sys),
             description = description(sys),
             metadata = get_metadata(sys),
