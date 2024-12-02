@@ -471,17 +471,6 @@ end
 
 """
 ```julia
-SciMLBase.BVPFunction{iip}(sys::AbstractODESystem, u0map, tspan,
-                         parammap = DiffEqBase.NullParameters();
-                         version = nothing, tgrad = false,
-                         jac = true, sparse = true,
-                         simplify = false,
-                         kwargs...) where {iip}
-```
-"""
-
-"""
-```julia
 SciMLBase.BVProblem{iip}(sys::AbstractODESystem, u0map, tspan,
                          parammap = DiffEqBase.NullParameters();
                          version = nothing, tgrad = false,
@@ -492,7 +481,7 @@ SciMLBase.BVProblem{iip}(sys::AbstractODESystem, u0map, tspan,
 
 Create a `BVProblem` from the [`ODESystem`](@ref). The arguments `dvs` and
 `ps` are used to set the order of the dependent variable and parameter vectors,
-respectively. `u0` should be either the initial condition, a vector of values `u(t_i)` for collocation methods, or a function returning one or the other.
+respectively. `u0map` should be used to specify the initial condition, or be a function returning an initial condition.
 """
 function SciMLBase.BVProblem(sys::AbstractODESystem, args...; kwargs...)
     BVProblem{true}(sys, args...; kwargs...)
@@ -517,7 +506,6 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
         tspan = get_tspan(sys),
         parammap = DiffEqBase.NullParameters();
         version = nothing, tgrad = false,
-        jac = true, sparse = true, 
         callback = nothing,
         check_length = true,
         warn_initialize_determined = true,
@@ -531,7 +519,7 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
 
     f, u0, p = process_SciMLProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
-        check_length, warn_initialize_determined, eval_expression, eval_module, jac, kwargs...)
+        check_length, warn_initialize_determined, eval_expression, eval_module, kwargs...)
 
     cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
     kwargs = filter_kwargs(kwargs)
@@ -546,7 +534,7 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
 
     # Define the boundary conditions
     bc = if iip 
-        (residual, u, p, t) -> (residual = u[1] - _u0)
+        (residual, u, p, t) -> residual .= u[1] - _u0
     else
         (u, p, t) -> (u[1] - _u0)
     end
