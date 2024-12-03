@@ -1032,3 +1032,20 @@ end
     @test prob3.f.initialization_data !== nothing
     @test init(prob3)[x] ≈ 0.5
 end
+
+@testset "Issue#3246: type promotion with parameter dependent initialization_eqs" begin
+    @variables x(t)=1 y(t)=1
+    @parameters a = 1
+    @named sys = ODESystem([D(x) ~ 0, D(y) ~ x + a], t; initialization_eqs = [y ~ a])
+
+    ssys = structural_simplify(sys)
+    prob = ODEProblem(ssys, [], (0, 1), [])
+
+    @test SciMLBase.successful_retcode(solve(prob))
+
+    seta = setsym_oop(prob, [a])
+    (newu0, newp) = seta(prob, ForwardDiff.Dual{ForwardDiff.Tag{:tag, Float64}}.([1.0], 1))
+    newprob = remake(prob, u0 = newu0, p = newp)
+
+    @test SciMLBase.successful_retcode(solve(newprob))
+end

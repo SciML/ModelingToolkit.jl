@@ -260,7 +260,16 @@ function SciMLBase.remake_initialization_data(sys::ODESystem, odefn, u0, t0, p, 
             newp = remake_buffer(
                 oldinitprob.f.sys, parameter_values(oldinitprob), pidxs, pvals)
         end
-        initprob = remake(oldinitprob; u0 = newu0, p = newp)
+        if oldinitprob.f.resid_prototype === nothing
+            newf = oldinitprob.f
+        else
+            newf = NonlinearFunction{
+                SciMLBase.isinplace(oldinitprob.f), SciMLBase.specialization(oldinitprob.f)}(
+                oldinitprob.f;
+                resid_prototype = calculate_resid_prototype(
+                    length(oldinitprob.f.resid_prototype), newu0, newp))
+        end
+        initprob = remake(oldinitprob; f = newf, u0 = newu0, p = newp)
         return SciMLBase.OverrideInitData(initprob, odefn.update_initializeprob!,
             odefn.initializeprobmap, odefn.initializeprobpmap)
     end
