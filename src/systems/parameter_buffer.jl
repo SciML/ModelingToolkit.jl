@@ -574,6 +574,10 @@ function _remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true
 
     @set! newbuf.tunable = narrow_buffer_type_and_fallback_undefs(
         oldbuf.tunable, newbuf.tunable)
+    if eltype(newbuf.tunable) <: Integer
+        T = promote_type(eltype(newbuf.tunable), Float64)
+        @set! newbuf.tunable = T.(newbuf.tunable)
+    end
     @set! newbuf.discrete = narrow_buffer_type_and_fallback_undefs.(
         oldbuf.discrete, newbuf.discrete)
     @set! newbuf.constant = narrow_buffer_type_and_fallback_undefs.(
