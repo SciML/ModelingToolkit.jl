@@ -28,19 +28,18 @@ function generate_initializesystem(sys::AbstractSystem;
     if has_iv(sys)
         idxs_alge = .!idxs_diff
         append!(eqs_ics, eqs[idxs_alge]) # start equation list with algebraic equations
-    end
 
-    if has_schedule(sys) && (schedule = get_schedule(sys); !isnothing(schedule))
-        # 2) process dummy derivatives and u0map into initialization system
-
-        # prepare map for dummy derivative substitution
         eqs_diff = eqs[idxs_diff]
         D = Differential(get_iv(sys))
         diffmap = merge(
             Dict(eq.lhs => eq.rhs for eq in eqs_diff),
             Dict(D(eq.lhs) => D(eq.rhs) for eq in trueobs)
         )
+    end
 
+    if has_schedule(sys) && (schedule = get_schedule(sys); !isnothing(schedule))
+        # 2) process dummy derivatives and u0map into initialization system
+        # prepare map for dummy derivative substitution
         for x in filter(x -> !isnothing(x[1]), schedule.dummy_sub)
             # set dummy derivatives to default_dd_guess unless specified
             push!(defs, x[1] => get(guesses, x[1], default_dd_guess))
