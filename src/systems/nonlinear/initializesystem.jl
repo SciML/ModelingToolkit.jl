@@ -223,16 +223,19 @@ function is_parameter_solvable(p, pmap, defs, guesses)
              _val1 === nothing && _val2 !== nothing)) && _val3 !== nothing
 end
 
-function SciMLBase.remake_initialization_data(sys::ODESystem, odefn, u0, t0, p, newu0, newp)
+function SciMLBase.remake_initialization_data(
+        sys::AbstractSystem, odefn, u0, t0, p, newu0, newp)
     if u0 === missing && p === missing
         return odefn.initialization_data
     end
     if !(eltype(u0) <: Pair) && !(eltype(p) <: Pair)
-        oldinitprob = odefn.initializeprob
+        oldinitdata = odefn.initialization_data
+        oldinitdata === nothing && return nothing
+
+        oldinitprob = oldinitdata.initializeprob
         oldinitprob === nothing && return nothing
         if !SciMLBase.has_sys(oldinitprob.f) || !(oldinitprob.f.sys isa NonlinearSystem)
-            return SciMLBase.OverrideInitData(oldinitprob, odefn.update_initializeprob!,
-                odefn.initializeprobmap, odefn.initializeprobpmap)
+            return oldinitdata
         end
         pidxs = ParameterIndex[]
         pvals = []
@@ -254,7 +257,7 @@ function SciMLBase.remake_initialization_data(sys::ODESystem, odefn, u0, t0, p, 
         if p !== missing
             for sym in parameter_symbols(oldinitprob)
                 push!(pidxs, parameter_index(oldinitprob, sym))
-                if isequal(sym, get_iv(sys))
+                if is_time_dependent(sys) && isequal(sym, get_iv(sys))
                     push!(pvals, t0)
                 else
                     push!(pvals, getp(sys, sym)(p))
@@ -283,8 +286,8 @@ function SciMLBase.remake_initialization_data(sys::ODESystem, odefn, u0, t0, p, 
                     length(oldinitprob.f.resid_prototype), newu0, newp))
         end
         initprob = remake(oldinitprob; f = newf, u0 = newu0, p = newp)
-        return SciMLBase.OverrideInitData(initprob, odefn.update_initializeprob!,
-            odefn.initializeprobmap, odefn.initializeprobpmap)
+        return SciMLBase.OverrideInitData(initprob, oldinitdata.update_initializeprob!,
+            oldinitdata.initializeprobmap, oldinitdata.initializeprobpmap)
     end
     dvs = unknowns(sys)
     ps = parameters(sys)
@@ -298,7 +301,7 @@ function SciMLBase.remake_initialization_data(sys::ODESystem, odefn, u0, t0, p, 
     use_scc = true
 
     if SciMLBase.has_initializeprob(odefn)
-        oldsys = odefn.initializeprob.f.sys
+        oldsys = odefn.initialization_data.initializeprob.f.sys
         meta = get_metadata(oldsys)
         if meta isa InitializationSystemMetadata
             u0map = merge(meta.u0map, u0map)
@@ -336,7 +339,7 @@ function SciMLBase.remake_initialization_data(sys::ODESystem, odefn, u0, t0, p, 
             pmap[p] = getp(sys, p)(newp)
         end
     end
-    if t0 === nothing
+    if t0 === nothing && is_time_dependent(sys)
         t0 = 0.0
     end
     filter_missing_values!(u0map)
