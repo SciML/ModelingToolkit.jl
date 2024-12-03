@@ -529,12 +529,12 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
         kwargs1 = merge(kwargs1, (callback = cbs,))
     end
     
-    # Construct initial conditions
+    # Construct initial conditions.
     _u0 = u0 isa Function ? u0(tspan[1]) : u0
 
-    # Define the boundary conditions
+    # Define the boundary conditions.
     bc = if iip 
-        (residual, u, p, t) -> residual .= u[1] - _u0
+        (residual, u, p, t) -> (residual .= u[1] - _u0)
     else
         (u, p, t) -> (u[1] - _u0)
     end
