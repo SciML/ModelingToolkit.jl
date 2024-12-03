@@ -71,8 +71,6 @@ function calculate_jacobian(sys::AbstractODESystem;
 
     rhs = [eq.rhs - eq.lhs for eq in full_equations(sys)] #need du terms on rhs for differentiating wrt du
 
-    iv = get_iv(sys)
-
     if sparse
         jac = sparsejacobian(rhs, dvs, simplify = simplify)
     else
@@ -94,8 +92,6 @@ function calculate_control_jacobian(sys::AbstractODESystem;
     end
 
     rhs = [eq.rhs for eq in full_equations(sys)]
-
-    iv = get_iv(sys)
     ctrls = controls(sys)
 
     if sparse
@@ -221,9 +217,11 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
         pre, sol_states = get_substitutions_and_solved_unknowns(sys)
 
         if implicit_dae
+            # inputs = [] makes `wrap_array_vars` offset by 1 since there is an extra
+            # argument
             build_function(rhss, ddvs, u, p..., t; postprocess_fbody = pre,
                 states = sol_states,
-                wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps) .∘
+                wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps, inputs = []) .∘
                             wrap_parameter_dependencies(sys, false),
                 kwargs...)
         else
@@ -500,6 +498,8 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         checkbounds = false,
         initializeprob = nothing,
         initializeprobmap = nothing,
+        initializeprobpmap = nothing,
+        update_initializeprob! = nothing,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEFunction`")
@@ -553,7 +553,9 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         jac_prototype = jac_prototype,
         observed = observedfun,
         initializeprob = initializeprob,
-        initializeprobmap = initializeprobmap)
+        initializeprobmap = initializeprobmap,
+        initializeprobpmap = initializeprobpmap,
+        update_initializeprob! = update_initializeprob!)
 end
 
 function DiffEqBase.DDEFunction(sys::AbstractODESystem, args...; kwargs...)
@@ -756,6 +758,39 @@ function DAEFunctionExpr(sys::AbstractODESystem, args...; kwargs...)
     DAEFunctionExpr{true}(sys, args...; kwargs...)
 end
 
+struct SymbolicTstops{F}
+    fn::F
+end
+
+function (st::SymbolicTstops)(p, tspan)
+    unique!(sort!(reduce(vcat, st.fn(p..., tspan...))))
+end
+
+function SymbolicTstops(
+        sys::AbstractSystem; eval_expression = false, eval_module = @__MODULE__)
+    tstops = symbolic_tstops(sys)
+    isempty(tstops) && return nothing
+    t0 = gensym(:t0)
+    t1 = gensym(:t1)
+    tstops = map(tstops) do val
+        if is_array_of_symbolics(val) || val isa AbstractArray
+            collect(val)
+        else
+            term(:, t0, unwrap(val), t1; type = AbstractArray{Real})
+        end
+    end
+    rps = reorder_parameters(sys, parameters(sys))
+    tstops, _ = build_function(tstops,
+        rps...,
+        t0,
+        t1;
+        expression = Val{true},
+        wrap_code = wrap_array_vars(sys, tstops; dvs = nothing) .∘
+                    wrap_parameter_dependencies(sys, false))
+    tstops = eval_or_rgf(tstops; eval_expression, eval_module)
+    return SymbolicTstops(tstops)
+end
+
 """
 ```julia
 DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
@@ -790,12 +825,6 @@ function DiffEqBase.ODEProblem{false}(sys::AbstractODESystem, args...; kwargs...
     ODEProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
-struct DiscreteSaveAffect{F, S} <: Function
-    f::F
-    s::S
-end
-(d::DiscreteSaveAffect)(args...) = d.f(args..., d.s)
-
 function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = [],
         tspan = get_tspan(sys),
         parammap = DiffEqBase.NullParameters();
@@ -819,6 +848,11 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     kwargs1 = (;)
     if cbs !== nothing
         kwargs1 = merge(kwargs1, (callback = cbs,))
+    end
+
+    tstops = SymbolicTstops(sys; eval_expression, eval_module)
+    if tstops !== nothing
+        kwargs1 = merge(kwargs1, (; tstops))
     end
 
     return ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...)
@@ -847,7 +881,7 @@ end
 function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
         parammap = DiffEqBase.NullParameters();
         warn_initialize_determined = true,
-        check_length = true, kwargs...) where {iip}
+        check_length = true, eval_expression = false, eval_module = @__MODULE__, kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEProblem`")
     end
@@ -860,8 +894,15 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
     differential_vars = map(Base.Fix2(in, diffvars), sts)
     kwargs = filter_kwargs(kwargs)
 
+    kwargs1 = (;)
+
+    tstops = SymbolicTstops(sys; eval_expression, eval_module)
+    if tstops !== nothing
+        kwargs1 = merge(kwargs1, (; tstops))
+    end
+
     DAEProblem{iip}(f, du0, u0, tspan, p; differential_vars = differential_vars,
-        kwargs...)
+        kwargs..., kwargs1...)
 end
 
 function generate_history(sys::AbstractODESystem, u0; expression = Val{false}, kwargs...)
@@ -1258,7 +1299,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         check_length = true,
         warn_initialize_determined = true,
         initialization_eqs = [],
-        fully_determined = false,
+        fully_determined = nothing,
         check_units = true,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
@@ -1269,11 +1310,24 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     elseif isempty(u0map) && get_initializesystem(sys) === nothing
         isys = structural_simplify(
             generate_initializesystem(
-                sys; initialization_eqs, check_units, pmap = parammap); fully_determined)
+                sys; initialization_eqs, check_units, pmap = parammap, guesses); fully_determined)
     else
         isys = structural_simplify(
             generate_initializesystem(
-                sys; u0map, initialization_eqs, check_units, pmap = parammap); fully_determined)
+                sys; u0map, initialization_eqs, check_units, pmap = parammap, guesses); fully_determined)
+    end
+
+    ts = get_tearing_state(isys)
+    if warn_initialize_determined &&
+       (unassigned_vars = StructuralTransformations.singular_check(ts); !isempty(unassigned_vars))
+        errmsg = """
+        The initialization system is structurally singular. Guess values may \
+        significantly affect the initial values of the ODE. The problematic variables \
+        are $unassigned_vars.
+
+        Note that the identification of problematic variables is a best-effort heuristic.
+        """
+        @warn errmsg
     end
 
     uninit = setdiff(unknowns(sys), [unknowns(isys); getfield.(observed(isys), :lhs)])
@@ -1319,6 +1373,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         u0T = promote_type(u0T, typeof(fullmap[eq.lhs]))
     end
     if u0T != Union{}
+        u0T = eltype(u0T)
         u0map = Dict(k => if symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)
                          v isa AbstractArray ? u0T.(v) : u0T(v)
                      else

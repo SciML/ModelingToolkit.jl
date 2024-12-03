@@ -731,7 +731,7 @@ end
 function has_observed_with_lhs(sys, sym)
     has_observed(sys) || return false
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        return any(isequal(sym), ic.observed_syms)
+        return haskey(ic.observed_syms_to_timeseries, sym)
     else
         return any(isequal(sym), [eq.lhs for eq in observed(sys)])
     end
@@ -740,7 +740,7 @@ end
 function has_parameter_dependency_with_lhs(sys, sym)
     has_parameter_dependencies(sys) || return false
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        return any(isequal(sym), ic.dependent_pars)
+        return haskey(ic.dependent_pars_to_timeseries, unwrap(sym))
     else
         return any(isequal(sym), [eq.lhs for eq in parameter_dependencies(sys)])
     end
@@ -762,11 +762,28 @@ for traitT in [
         allsyms = vars(sym; op = Symbolics.Operator)
         for s in allsyms
             s = unwrap(s)
-            if is_variable(sys, s) || is_independent_variable(sys, s) ||
-               has_observed_with_lhs(sys, s)
+            if is_variable(sys, s) || is_independent_variable(sys, s)
                 push!(ts_idxs, ContinuousTimeseries())
             elseif is_timeseries_parameter(sys, s)
                 push!(ts_idxs, timeseries_parameter_index(sys, s).timeseries_idx)
+            elseif is_time_dependent(sys) && iscall(s) && issym(operation(s)) &&
+                   is_variable(sys, operation(s)(get_iv(sys)))
+                # DDEs case, to detect x(t - k)
+                push!(ts_idxs, ContinuousTimeseries())
+            else
+                if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+                    if (ts = get(ic.observed_syms_to_timeseries, s, nothing)) !== nothing
+                        union!(ts_idxs, ts)
+                    elseif (ts = get(ic.dependent_pars_to_timeseries, s, nothing)) !==
+                           nothing
+                        union!(ts_idxs, ts)
+                    end
+                else
+                    # for split=false systems
+                    if has_observed_with_lhs(sys, sym)
+                        push!(ts_idxs, ContinuousTimeseries())
+                    end
+                end
             end
         end
     end
@@ -818,6 +835,8 @@ function SymbolicIndexingInterface.is_observed(sys::AbstractSystem, sym)
            !is_independent_variable(sys, sym) && symbolic_type(sym) != NotSymbolic()
 end
 
+SymbolicIndexingInterface.supports_tuple_observed(::AbstractSystem) = true
+
 function SymbolicIndexingInterface.observed(
         sys::AbstractSystem, sym; eval_expression = false, eval_module = @__MODULE__)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
@@ -827,7 +846,8 @@ function SymbolicIndexingInterface.observed(
                 throw(ArgumentError("Symbol $sym does not exist in the system"))
             end
             sym = _sym
-        elseif sym isa AbstractArray && symbolic_type(sym) isa NotSymbolic &&
+        elseif (sym isa Tuple ||
+                (sym isa AbstractArray && symbolic_type(sym) isa NotSymbolic)) &&
                any(x -> x isa Symbol, sym)
             sym = map(sym) do s
                 if s isa Symbol
@@ -1039,6 +1059,7 @@ for prop in [:eqs
              :split_idxs
              :parent
              :is_dde
+             :tstops
              :index_cache
              :is_scalar_noise
              :isscheduled]
@@ -1119,7 +1140,7 @@ function Base.propertynames(sys::AbstractSystem; private = false)
         return fieldnames(typeof(sys))
     else
         if has_parent(sys) && (parent = get_parent(sys); parent !== nothing)
-            sys = parent
+            return propertynames(parent; private)
         end
         names = Symbol[]
         for s in get_systems(sys)
@@ -1141,7 +1162,7 @@ end
 
 function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
     if has_parent(sys) && (parent = get_parent(sys); parent !== nothing)
-        sys = parent
+        return getproperty(parent, name; namespace)
     end
     wrap(getvar(sys, name; namespace = namespace))
 end
@@ -1363,6 +1384,14 @@ function namespace_initialization_equations(
     eqs = initialization_equations(sys)
     isempty(eqs) && return Equation[]
     map(eq -> namespace_equation(eq, sys; ivs), eqs)
+end
+
+function namespace_tstops(sys::AbstractSystem)
+    tstops = symbolic_tstops(sys)
+    isempty(tstops) && return tstops
+    map(tstops) do val
+        namespace_expr(val, sys)
+    end
 end
 
 function namespace_equation(eq::Equation,
@@ -1618,6 +1647,14 @@ function initialization_equations(sys::AbstractSystem)
                            init = Equation[])]
         return eqs
     end
+end
+
+function symbolic_tstops(sys::AbstractSystem)
+    tstops = get_tstops(sys)
+    systems = get_systems(sys)
+    isempty(systems) && return tstops
+    tstops = [tstops; reduce(vcat, namespace_tstops.(get_systems(sys)); init = [])]
+    return tstops
 end
 
 function preface(sys::AbstractSystem)
@@ -3271,6 +3308,97 @@ function dump_unknowns(sys::AbstractSystem)
         end
         meta
     end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return the variable in `sys` referred to by its string representation `str`.
+Roughly supports the following CFG:
+
+```
+varname                  = "D(" varname ")" | "Differential(" iv ")(" varname ")" | arrvar | maybe_dummy_var
+arrvar                   = maybe_dummy_var "[idxs...]"
+idxs                     = int | int "," idxs
+maybe_dummy_var          = namespacedvar | namespacedvar "(" iv ")" |
+                           namespacedvar "(" iv ")" "ˍ" ts | namespacedvar "ˍ" ts |
+                           namespacedvar "ˍ" ts "(" iv ")"
+ts                       = iv | iv ts
+namespacedvar            = ident "₊" namespacedvar | ident "." namespacedvar | ident
+```
+
+Where `iv` is the independent variable, `int` is an integer and `ident` is an identifier.
+"""
+function parse_variable(sys::AbstractSystem, str::AbstractString)
+    iv = has_iv(sys) ? string(getname(get_iv(sys))) : nothing
+
+    # I'd write a regex to validate `str`, but https://xkcd.com/1171/
+    str = strip(str)
+    derivative_level = 0
+    while ((cond1 = startswith(str, "D(")) || startswith(str, "Differential(")) &&
+        endswith(str, ")")
+        if cond1
+            derivative_level += 1
+            str = _string_view_inner(str, 2, 1)
+            continue
+        end
+        _tmpstr = _string_view_inner(str, 13, 1)
+        if !startswith(_tmpstr, "$iv)(")
+            throw(ArgumentError("Expected differential with respect to independent variable $iv in $str"))
+        end
+        derivative_level += 1
+        str = _string_view_inner(_tmpstr, length(iv) + 2, 0)
+    end
+
+    arr_idxs = nothing
+    if endswith(str, ']')
+        open_idx = only(findfirst('[', str))
+        idxs_range = nextind(str, open_idx):prevind(str, lastindex(str))
+        idxs_str = view(str, idxs_range)
+        str = view(str, firstindex(str):prevind(str, open_idx))
+        arr_idxs = map(Base.Fix1(parse, Int), eachsplit(idxs_str, ","))
+    end
+
+    if iv !== nothing && endswith(str, "($iv)")
+        str = _string_view_inner(str, 0, 2 + length(iv))
+    end
+
+    dummyderivative_level = 0
+    if iv !== nothing && (dd_idx = findfirst('ˍ', str)) !== nothing
+        t_idx = findnext(iv, str, dd_idx)
+        while t_idx !== nothing
+            dummyderivative_level += 1
+            t_idx = findnext(iv, str, nextind(str, last(t_idx)))
+        end
+        str = view(str, firstindex(str):prevind(str, dd_idx))
+    end
+
+    if iv !== nothing && endswith(str, "($iv)")
+        str = _string_view_inner(str, 0, 2 + length(iv))
+    end
+
+    cur = sys
+    for ident in eachsplit(str, ('.', NAMESPACE_SEPARATOR))
+        ident = Symbol(ident)
+        hasproperty(cur, ident) ||
+            throw(ArgumentError("System $(nameof(cur)) does not have a subsystem/variable named $(ident)"))
+        cur = getproperty(cur, ident)
+    end
+
+    if arr_idxs !== nothing
+        cur = cur[arr_idxs...]
+    end
+
+    for i in 1:(derivative_level + dummyderivative_level)
+        cur = Differential(get_iv(sys))(cur)
+    end
+
+    return cur
+end
+
+function _string_view_inner(str, startoffset, endoffset)
+    view(str,
+        nextind(str, firstindex(str), startoffset):prevind(str, lastindex(str), endoffset))
 end
 
 ### Functions for accessing algebraic/differential equations in systems ###

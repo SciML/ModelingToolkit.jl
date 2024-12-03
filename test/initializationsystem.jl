@@ -877,3 +877,175 @@ end
     sol = solve(prob, Rodas5P())
     @test SciMLBase.successful_retcode(sol)
 end
+
+@testset "Issue#3205" begin
+    using ModelingToolkitStandardLibrary.Electrical
+    import ModelingToolkitStandardLibrary.Mechanical.Rotational as MR
+    using ModelingToolkitStandardLibrary.Blocks
+    using SciMLBase
+
+    function dc_motor(R1 = 0.5)
+        R = R1 # [Ohm] armature resistance
+        L = 4.5e-3 # [H] armature inductance
+        k = 0.5 # [N.m/A] motor constant
+        J = 0.02 # [kg.m²] inertia
+        f = 0.01 # [N.m.s/rad] friction factor
+        tau_L_step = -0.3 # [N.m] amplitude of the load torque step
+
+        @named ground = Ground()
+        @named source = Voltage()
+        @named ref = Blocks.Step(height = 0.2, start_time = 0)
+        @named pi_controller = Blocks.LimPI(k = 1.1, T = 0.035, u_max = 10, Ta = 0.035)
+        @named feedback = Blocks.Feedback()
+        @named R1 = Resistor(R = R)
+        @named L1 = Inductor(L = L)
+        @named emf = EMF(k = k)
+        @named fixed = MR.Fixed()
+        @named load = MR.Torque()
+        @named load_step = Blocks.Step(height = tau_L_step, start_time = 3)
+        @named inertia = MR.Inertia(J = J)
+        @named friction = MR.Damper(d = f)
+        @named speed_sensor = MR.SpeedSensor()
+
+        connections = [connect(fixed.flange, emf.support, friction.flange_b)
+                       connect(emf.flange, friction.flange_a, inertia.flange_a)
+                       connect(inertia.flange_b, load.flange)
+                       connect(inertia.flange_b, speed_sensor.flange)
+                       connect(load_step.output, load.tau)
+                       connect(ref.output, feedback.input1)
+                       connect(speed_sensor.w, :y, feedback.input2)
+                       connect(feedback.output, pi_controller.err_input)
+                       connect(pi_controller.ctr_output, :u, source.V)
+                       connect(source.p, R1.p)
+                       connect(R1.n, L1.p)
+                       connect(L1.n, emf.p)
+                       connect(emf.n, source.n, ground.g)]
+
+        @named model = ODESystem(connections, t,
+            systems = [
+                ground,
+                ref,
+                pi_controller,
+                feedback,
+                source,
+                R1,
+                L1,
+                emf,
+                fixed,
+                load,
+                load_step,
+                inertia,
+                friction,
+                speed_sensor
+            ])
+    end
+
+    model = dc_motor()
+    sys = structural_simplify(model)
+
+    prob = ODEProblem(sys, [sys.L1.i => 0.0], (0, 6.0))
+
+    @test_nowarn remake(prob, p = prob.p)
+end
+
+@testset "Singular initialization prints a warning" begin
+    @parameters g
+    @variables x(t) y(t) [state_priority = 10] λ(t)
+    eqs = [D(D(x)) ~ λ * x
+           D(D(y)) ~ λ * y - g
+           x^2 + y^2 ~ 1]
+    @mtkbuild pend = ODESystem(eqs, t)
+    @test_warn ["structurally singular", "initialization", "Guess", "heuristic"] ODEProblem(
+        pend, [x => 1, y => 0], (0.0, 1.5), [g => 1], guesses = [λ => 1])
+end
+
+@testset "DAEProblem initialization" begin
+    @variables x(t) [guess = 1.0] y(t) [guess = 1.0]
+    @parameters p=missing [guess = 1.0] q=missing [guess = 1.0]
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ p * y + q * t, x^3 + y^3 ~ 5], t; initialization_eqs = [p^2 + q^3 ~ 3])
+
+    # FIXME: solve for du0
+    prob = DAEProblem(
+        sys, [D(x) => cbrt(4), D(y) => -1 / cbrt(4)], [x => 1.0], (0.0, 1.0), [p => 1.0])
+
+    integ = init(prob, DImplicitEuler())
+    @test integ[x] ≈ 1.0
+    @test integ[y]≈cbrt(4) rtol=1e-6
+    @test integ.ps[p] ≈ 1.0
+    @test integ.ps[q]≈cbrt(2) rtol=1e-6
+end
+
+@testset "Guesses provided to `ODEProblem` are used in `remake`" begin
+    @variables x(t) y(t)=2x
+    @parameters p q=3x
+    @mtkbuild sys = ODESystem([D(x) ~ x * p + q, x^3 + y^3 ~ 3], t)
+    prob = ODEProblem(
+        sys, [], (0.0, 1.0), [p => 1.0]; guesses = [x => 1.0, y => 1.0, q => 1.0])
+    @test prob[x] == 0.0
+    @test prob[y] == 0.0
+    @test prob.ps[p] == 1.0
+    @test prob.ps[q] == 0.0
+    integ = init(prob)
+    @test integ[x] ≈ 1 / cbrt(3)
+    @test integ[y] ≈ 2 / cbrt(3)
+    @test integ.ps[p] == 1.0
+    @test integ.ps[q] ≈ 3 / cbrt(3)
+    prob2 = remake(prob; u0 = [y => 3x], p = [q => 2x])
+    integ2 = init(prob2)
+    @test integ2[x] ≈ cbrt(3 / 28)
+    @test integ2[y] ≈ 3cbrt(3 / 28)
+    @test integ2.ps[p] == 1.0
+    @test integ2.ps[q] ≈ 2cbrt(3 / 28)
+end
+
+@testset "Remake problem with no initializeprob" begin
+    @variables x(t) [guess = 1.0] y(t) [guess = 1.0]
+    @parameters p [guess = 1.0] q [guess = 1.0]
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ p * x + q * y, y ~ 2x], t; parameter_dependencies = [q ~ 2p])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [p => 1.0])
+    @test prob.f.initialization_data === nothing
+    prob2 = remake(prob; u0 = [x => 2.0])
+    @test prob2[x] == 2.0
+    @test prob2.f.initialization_data === nothing
+    prob3 = remake(prob; u0 = [y => 2.0])
+    @test prob3.f.initialization_data !== nothing
+    @test init(prob3)[x] ≈ 1.0
+    prob4 = remake(prob; p = [p => 1.0])
+    @test prob4.f.initialization_data === nothing
+    prob5 = remake(prob; p = [p => missing, q => 2.0])
+    @test prob5.f.initialization_data !== nothing
+    @test init(prob5).ps[p] ≈ 1.0
+end
+
+@testset "Variables provided as symbols" begin
+    @variables x(t) [guess = 1.0] y(t) [guess = 1.0]
+    @parameters p [guess = 1.0] q [guess = 1.0]
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ p * x + q * y, y ~ 2x], t; parameter_dependencies = [q ~ 2p])
+    prob = ODEProblem(sys, [:x => 1.0], (0.0, 1.0), [p => 1.0])
+    @test prob.f.initialization_data === nothing
+    prob2 = remake(prob; u0 = [:x => 2.0])
+    @test prob2.f.initialization_data === nothing
+    prob3 = remake(prob; u0 = [:y => 1.0])
+    @test prob3.f.initialization_data !== nothing
+    @test init(prob3)[x] ≈ 0.5
+end
+
+@testset "Issue#3246: type promotion with parameter dependent initialization_eqs" begin
+    @variables x(t)=1 y(t)=1
+    @parameters a = 1
+    @named sys = ODESystem([D(x) ~ 0, D(y) ~ x + a], t; initialization_eqs = [y ~ a])
+
+    ssys = structural_simplify(sys)
+    prob = ODEProblem(ssys, [], (0, 1), [])
+
+    @test SciMLBase.successful_retcode(solve(prob))
+
+    seta = setsym_oop(prob, [a])
+    (newu0, newp) = seta(prob, ForwardDiff.Dual{ForwardDiff.Tag{:tag, Float64}}.([1.0], 1))
+    newprob = remake(prob, u0 = newu0, p = newp)
+
+    @test SciMLBase.successful_retcode(solve(newprob))
+end

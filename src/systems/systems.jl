@@ -152,8 +152,10 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
             noise_eqs = sorted_g_rows
             is_scalar_noise = false
         end
+
+        noise_eqs = StructuralTransformations.tearing_substitute_expr(ode_sys, noise_eqs)
         return SDESystem(full_equations(ode_sys), noise_eqs,
             get_iv(ode_sys), unknowns(ode_sys), parameters(ode_sys);
-            name = nameof(ode_sys), is_scalar_noise)
+            name = nameof(ode_sys), is_scalar_noise, observed = observed(ode_sys))
     end
 end

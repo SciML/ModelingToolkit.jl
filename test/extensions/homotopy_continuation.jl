@@ -75,19 +75,59 @@ end
 @testset "Polynomial check and warnings" begin
     @variables x = 1.0
     @mtkbuild sys = NonlinearSystem([x^1.5 + x^2 - 1 ~ 0])
-    @test_throws ["Exponent", "not an integer", "not a polynomial"] HomotopyContinuationProblem(
+    @test_throws ["Cannot convert", "Unable", "symbolically solve",
+        "Exponent", "not an integer", "not a polynomial"] HomotopyContinuationProblem(
         sys, [])
     @mtkbuild sys = NonlinearSystem([x^x - x ~ 0])
-    @test_throws ["Exponent", "unknowns", "not a polynomial"] HomotopyContinuationProblem(
+    @test_throws ["Cannot convert", "Unable", "symbolically solve",
+        "Exponent", "unknowns", "not a polynomial"] HomotopyContinuationProblem(
         sys, [])
     @mtkbuild sys = NonlinearSystem([((x^2) / sin(x))^2 + x ~ 0])
-    @test_throws ["recognized", "sin", "not a polynomial"] HomotopyContinuationProblem(
+    @test_throws ["Cannot convert", "both polynomial", "non-polynomial",
+        "recognized", "sin", "not a polynomial"] HomotopyContinuationProblem(
         sys, [])
 
     @variables y = 2.0
     @mtkbuild sys = NonlinearSystem([x^2 + y^2 + 2 ~ 0, y ~ sin(x)])
-    @test_throws ["recognized", "sin", "not a polynomial"] HomotopyContinuationProblem(
+    @test_throws ["Cannot convert", "recognized", "sin", "not a polynomial"] HomotopyContinuationProblem(
         sys, [])
+
+    @mtkbuild sys = NonlinearSystem([x^2 + y^2 - 2 ~ 0, sin(x + y) ~ 0])
+    @test_throws ["Cannot convert", "function of multiple unknowns"] HomotopyContinuationProblem(
+        sys, [])
+
+    @mtkbuild sys = NonlinearSystem([sin(x)^2 + 1 ~ 0, cos(y) - cos(x) - 1 ~ 0])
+    @test_throws ["Cannot convert", "multiple non-polynomial terms", "same unknown"] HomotopyContinuationProblem(
+        sys, [])
+
+    @mtkbuild sys = NonlinearSystem([sin(x^2)^2 + sin(x^2) - 1 ~ 0])
+    @test_throws ["import Nemo"] HomotopyContinuationProblem(sys, [])
+end
+
+import Nemo
+
+@testset "With Nemo" begin
+    @variables x = 2.0
+    @mtkbuild sys = NonlinearSystem([sin(x^2)^2 + sin(x^2) - 1 ~ 0])
+    prob = HomotopyContinuationProblem(sys, [])
+    @test prob[1] ≈ 2.0
+    sol = solve(prob; threading = false)
+    _x = sol[1]
+    @test sin(_x^2)^2 + sin(_x^2) - 1≈0.0 atol=1e-12
+end
+
+@testset "Function of polynomial" begin
+    @variables x=0.25 y=0.125
+    a = sin(x^2 - 4x + 1)
+    b = cos(3log(y) + 4)
+    @mtkbuild sys = NonlinearSystem([(a^2 - 4a * b + 4b^2) / (a - 0.25) ~ 0
+                                     (a^2 - 0.75a + 0.125) ~ 0])
+    prob = HomotopyContinuationProblem(sys, [])
+    @test prob[x] ≈ 0.25
+    @test prob[y] ≈ 0.125
+    sol = solve(prob; threading = false)
+    @test sol[a]≈0.5 atol=1e-6
+    @test sol[b]≈0.25 atol=1e-6
 end
 
 @testset "Rational functions" begin

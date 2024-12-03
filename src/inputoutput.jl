@@ -235,18 +235,20 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     # TODO: add an optional check on the ordering of observed equations
     u = map(x -> time_varying_as_func(value(x), sys), dvs)
     p = map(x -> time_varying_as_func(value(x), sys), ps)
+    p = reorder_parameters(sys, p)
     t = get_iv(sys)
 
     # pre = has_difference ? (ex -> ex) : get_postprocess_fbody(sys)
 
-    args = (u, inputs, p, t)
+    args = (u, inputs, p..., t)
     if implicit_dae
         ddvs = map(Differential(get_iv(sys)), dvs)
         args = (ddvs, args...)
     end
     process = get_postprocess_fbody(sys)
     f = build_function(rhss, args...; postprocess_fbody = process,
-        expression = Val{true}, wrap_code = wrap_array_vars(sys, rhss; dvs, ps) .∘
+        expression = Val{true}, wrap_code = wrap_mtkparameters(sys, false, 3) .∘
+                                            wrap_array_vars(sys, rhss; dvs, ps, inputs) .∘
                                             wrap_parameter_dependencies(sys, false),
         kwargs...)
     f = eval_or_rgf.(f; eval_expression, eval_module)
@@ -426,7 +428,7 @@ function add_input_disturbance(sys, dist::DisturbanceModel, inputs = nothing; kw
     augmented_sys = ODESystem(eqs, t, systems = [dsys], name = gensym(:outer))
     augmented_sys = extend(augmented_sys, sys)
 
-    (f_oop, f_ip), dvs, p = generate_control_function(augmented_sys, all_inputs,
+    (f_oop, f_ip), dvs, p, io_sys = generate_control_function(augmented_sys, all_inputs,
         [d]; kwargs...)
-    (f_oop, f_ip), augmented_sys, dvs, p
+    (f_oop, f_ip), augmented_sys, dvs, p, io_sys
 end

@@ -283,6 +283,16 @@ function hessian_sparsity(sys::NonlinearSystem)
          unknowns(sys)) for eq in equations(sys)]
 end
 
+function calculate_resid_prototype(N, u0, p)
+    u0ElType = u0 === nothing ? Float64 : eltype(u0)
+    if SciMLStructures.isscimlstructure(p)
+        u0ElType = promote_type(
+            eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]),
+            u0ElType)
+    end
+    return zeros(u0ElType, N)
+end
+
 """
 ```julia
 SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
@@ -337,13 +347,7 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
     if length(dvs) == length(equations(sys))
         resid_prototype = nothing
     else
-        u0ElType = u0 === nothing ? Float64 : eltype(u0)
-        if SciMLStructures.isscimlstructure(p)
-            u0ElType = promote_type(
-                eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]),
-                u0ElType)
-        end
-        resid_prototype = zeros(u0ElType, length(equations(sys)))
+        resid_prototype = calculate_resid_prototype(length(equations(sys)), u0, p)
     end
 
     NonlinearFunction{iip}(f,
@@ -690,7 +694,7 @@ A type of Nonlinear problem which specializes on polynomial systems and uses
 HomotopyContinuation.jl to solve the system. Requires importing HomotopyContinuation.jl to
 create and solve.
 """
-struct HomotopyContinuationProblem{uType, H, D, O, SS} <:
+struct HomotopyContinuationProblem{uType, H, D, O, SS, U} <:
        SciMLBase.AbstractNonlinearProblem{uType, true}
     """
     The initial values of states in the system. If there are multiple real roots of
@@ -721,6 +725,12 @@ struct HomotopyContinuationProblem{uType, H, D, O, SS} <:
     `HomotopyContinuation.solver_startsystems`.
     """
     solver_and_starts::SS
+    """
+    A function which takes a solution of the transformed system, and returns a vector
+    of solutions for the original system. This is utilized when converting systems
+    to polynomials.
+    """
+    unpack_solution::U
 end
 
 function HomotopyContinuationProblem(::AbstractSystem, _u0, _p; kwargs...)

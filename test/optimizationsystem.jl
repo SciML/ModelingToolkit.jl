@@ -358,4 +358,33 @@ end
     @mtkbuild sys = OptimizationSystem(obj, [x, y, z], []; constraints = cons)
     @test is_variable(sys, z)
     @test !is_variable(sys, y)
+
+    @variables x[1:3] [bounds = ([-Inf, -1.0, -2.0], [Inf, 1.0, 2.0])]
+    obj = x[1]^2 + x[2]^2 + x[3]^2
+    cons = [x[2] ~ 2x[1] + 3, x[3] ~ x[1] + x[2]]
+    @mtkbuild sys = OptimizationSystem(obj, [x], []; constraints = cons)
+    @test length(unknowns(sys)) == 2
+    @test !is_variable(sys, x[1])
+    @test is_variable(sys, x[2])
+    @test is_variable(sys, x[3])
+end
+
+@testset "Constraints work with nonnumeric parameters" begin
+    @variables x
+    @parameters p f(::Real)
+    @mtkbuild sys = OptimizationSystem(
+        x^2 + f(x) * p, [x], [f, p]; constraints = [2.0 ≲ f(x) + p])
+    prob = OptimizationProblem(sys, [x => 1.0], [p => 1.0, f => (x -> 2x)])
+    @test abs(prob.f.cons(prob.u0, prob.p)[1]) ≈ 1.0
+end
+
+@testset "Variable discovery" begin
+    @variables x1 x2
+    @parameters p1 p2
+    @named sys1 = OptimizationSystem(x1^2; constraints = [p1 * x1 ≲ 2.0])
+    @named sys2 = OptimizationSystem(x2^2; constraints = [p2 * x2 ≲ 2.0], systems = [sys1])
+    @test isequal(only(unknowns(sys1)), x1)
+    @test isequal(only(parameters(sys1)), p1)
+    @test all(y -> any(x -> isequal(x, y), unknowns(sys2)), [x2, sys1.x1])
+    @test all(y -> any(x -> isequal(x, y), parameters(sys2)), [p2, sys1.p1])
 end

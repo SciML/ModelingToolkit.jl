@@ -8,6 +8,7 @@ using SciMLStructures: Tunable
     eqs = [D(x) ~ a * y + t, D(y) ~ b * t]
     @named odesys = ODESystem(eqs, t, [x, y], [a, b]; observed = [xy ~ x + y])
     odesys = complete(odesys)
+    @test SymbolicIndexingInterface.supports_tuple_observed(odesys)
     @test all(is_variable.((odesys,), [x, y, 1, 2, :x, :y]))
     @test all(.!is_variable.((odesys,), [a, b, t, 3, 0, :a, :b]))
     @test variable_index.((odesys,), [x, y, a, b, t, 1, 2, :x, :y, :a, :b]) ==
@@ -32,6 +33,14 @@ using SciMLStructures: Tunable
     @test default_values(odesys)[x] == 1.0
     @test default_values(odesys)[y] == 2.0
     @test isequal(default_values(odesys)[xy], x + y)
+
+    prob = ODEProblem(odesys, [], (0.0, 1.0), [a => 1.0, b => 2.0])
+    getter = getu(odesys, (x + 1, x + 2))
+    @test getter(prob) isa Tuple
+    @test_nowarn @inferred getter(prob)
+    getter = getp(odesys, (a + 1, a + 2))
+    @test getter(prob) isa Tuple
+    @test_nowarn @inferred getter(prob)
 
     @named odesys = ODESystem(
         eqs, t, [x, y], [a, b]; defaults = [xy => 3.0], observed = [xy ~ x + y])
@@ -99,6 +108,7 @@ end
         0 ~ x * y - β * z]
     @named ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
     ns = complete(ns)
+    @test SymbolicIndexingInterface.supports_tuple_observed(ns)
     @test !is_time_dependent(ns)
     ps = ModelingToolkit.MTKParameters(ns, [σ => 1.0, ρ => 2.0, β => 3.0])
     pobs = parameter_observed(ns, σ + ρ)
@@ -107,6 +117,15 @@ end
     pobs = parameter_observed(ns, [σ + ρ, ρ + β])
     @test isempty(get_all_timeseries_indexes(ns, [σ + ρ, ρ + β]))
     @test pobs(ps) == [3.0, 5.0]
+
+    prob = NonlinearProblem(
+        ns, [x => 1.0, y => 2.0, z => 3.0], [σ => 1.0, ρ => 2.0, β => 3.0])
+    getter = getu(ns, (x + 1, x + 2))
+    @test getter(prob) isa Tuple
+    @test_nowarn @inferred getter(prob)
+    getter = getp(ns, (σ + 1, σ + 2))
+    @test getter(prob) isa Tuple
+    @test_nowarn @inferred getter(prob)
 end
 
 @testset "PDESystem" begin
@@ -193,4 +212,15 @@ end
     sys = complete(model)
     prob = ODEProblem(sys, [], (0.0, 1.0))
     @test prob.ps[b] == prob.ps[:b]
+end
+
+@testset "`get_all_timeseries_indexes` with non-split systems" begin
+    @variables x(t) y(t) z(t)
+    @parameters a
+    @named sys = ODESystem([D(x) ~ a * x, y ~ 2x, z ~ 0.0], t)
+    sys = structural_simplify(sys, split = false)
+    for sym in [x, y, z, x + y, x + a, y / x]
+        @test only(get_all_timeseries_indexes(sys, sym)) == ContinuousTimeseries()
+    end
+    @test isempty(get_all_timeseries_indexes(sys, a))
 end

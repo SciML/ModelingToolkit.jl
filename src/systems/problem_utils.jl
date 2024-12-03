@@ -4,12 +4,13 @@ const AnyDict = Dict{Any, Any}
     $(TYPEDSIGNATURES)
 
 If called without arguments, return `Dict{Any, Any}`. Otherwise, interpret the input
-as a symbolic map and turn it into a `Dict{Any, Any}`. Handles `SciMLBase.NullParameters`
-and `nothing`.
+as a symbolic map and turn it into a `Dict{Any, Any}`. Handles `SciMLBase.NullParameters`,
+`missing` and `nothing`.
 """
 anydict() = AnyDict()
 anydict(::SciMLBase.NullParameters) = AnyDict()
 anydict(::Nothing) = AnyDict()
+anydict(::Missing) = AnyDict()
 anydict(x::AnyDict) = x
 anydict(x) = AnyDict(x)
 
@@ -49,6 +50,42 @@ function add_toterms(varmap::AbstractDict; toterm = default_toterm)
     cp = copy(varmap)
     add_toterms!(cp; toterm)
     return cp
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Turn any `Symbol` keys in `varmap` to the appropriate symbolic variables in `sys`. Any
+symbols that cannot be converted are ignored.
+"""
+function symbols_to_symbolics!(sys::AbstractSystem, varmap::AbstractDict)
+    if is_split(sys)
+        ic = get_index_cache(sys)
+        for k in collect(keys(varmap))
+            k isa Symbol || continue
+            newk = get(ic.symbol_to_variable, k, nothing)
+            newk === nothing && continue
+            varmap[newk] = varmap[k]
+            delete!(varmap, k)
+        end
+    else
+        syms = all_symbols(sys)
+        for k in collect(keys(varmap))
+            k isa Symbol || continue
+            idx = findfirst(syms) do sym
+                hasname(sym) || return false
+                name = getname(sym)
+                return name == k
+            end
+            idx === nothing && continue
+            newk = syms[idx]
+            if iscall(newk) && operation(newk) === getindex
+                newk = arguments(newk)[1]
+            end
+            varmap[newk] = varmap[k]
+            delete!(varmap, k)
+        end
+    end
 end
 
 """
@@ -388,6 +425,15 @@ function evaluate_varmap!(varmap::AbstractDict, vars; limit = 100)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Remove keys in `varmap` whose values are `nothing`.
+"""
+function filter_missing_values!(varmap::AbstractDict)
+    filter!(kvp -> kvp[2] !== nothing, varmap)
+end
+
 struct GetUpdatedMTKParameters{G, S}
     # `getu` functor which gets parameters that are unknowns during initialization
     getpunknowns::G
@@ -431,12 +477,16 @@ end
     $(TYPEDEF)
 
 A simple utility meant to be used as the `constructor` passed to `process_SciMLProblem` in
-case constructing a SciMLFunction is not required.
+case constructing a SciMLFunction is not required. The arguments passed to it are available
+in the `args` field, and the keyword arguments in the `kwargs` field.
 """
-struct EmptySciMLFunction end
+struct EmptySciMLFunction{A, K}
+    args::A
+    kwargs::K
+end
 
 function EmptySciMLFunction(args...; kwargs...)
-    return nothing
+    return EmptySciMLFunction{typeof(args), typeof(kwargs)}(args, kwargs)
 end
 
 """
@@ -498,7 +548,7 @@ function process_SciMLProblem(
         constructor, sys::AbstractSystem, u0map, pmap; build_initializeprob = true,
         implicit_dae = false, t = nothing, guesses = AnyDict(),
         warn_initialize_determined = true, initialization_eqs = [],
-        eval_expression = false, eval_module = @__MODULE__, fully_determined = false,
+        eval_expression = false, eval_module = @__MODULE__, fully_determined = nothing,
         check_initialization_units = false, tofloat = true, use_union = false,
         u0_constructor = identity, du0map = nothing, check_length = true,
         symbolic_u0 = false, warn_cyclic_dependency = false,
@@ -516,8 +566,10 @@ function process_SciMLProblem(
     pType = typeof(pmap)
     _u0map = u0map
     u0map = to_varmap(u0map, dvs)
+    symbols_to_symbolics!(sys, u0map)
     _pmap = pmap
     pmap = to_varmap(pmap, ps)
+    symbols_to_symbolics!(sys, pmap)
     defs = add_toterms(recursive_unwrap(defaults(sys)))
     cmap, cs = get_cmap(sys)
     kwargs = NamedTuple(kwargs)
@@ -641,8 +693,7 @@ function process_SciMLProblem(
         ddvs = map(Differential(iv), dvs)
         du0map = to_varmap(du0map, ddvs)
         merge!(op, du0map)
-
-        du0 = varmap_to_vars(du0map, ddvs; toterm = identity,
+        du0 = varmap_to_vars(op, ddvs; toterm = identity,
             tofloat = true)
         kwargs = merge(kwargs, (; ddvs))
     else
