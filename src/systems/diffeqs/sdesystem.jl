@@ -738,7 +738,7 @@ function DiffEqBase.SDEProblem{iip, specialize}(
     end
     f, u0, p = process_SciMLProblem(
         SDEFunction{iip, specialize}, sys, u0map, parammap; check_length,
-        kwargs...)
+        t = tspan === nothing ? nothing : tspan[1], kwargs...)
     cbs = process_events(sys; callback, kwargs...)
     sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
 
