@@ -712,7 +712,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
     @set! sys.unknowns = new_dvs
     @set! sys.eqs = new_eqs
     sys = complete(sys)
-    return SCCNonlinearProblem(subprobs, explicitfuns, sys, p)
+    return SCCNonlinearProblem(subprobs, explicitfuns, p, true; sys)
 end
 
 """
