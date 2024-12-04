@@ -281,6 +281,8 @@ function SciMLBase.remake_initialization_data(sys::ODESystem, odefn, u0, t0, p, 
     symbols_to_symbolics!(sys, pmap)
     guesses = Dict()
     defs = defaults(sys)
+    cmap, cs = get_cmap(sys)
+
     if SciMLBase.has_initializeprob(odefn)
         oldsys = odefn.initializeprob.f.sys
         meta = get_metadata(oldsys)
@@ -324,8 +326,9 @@ function SciMLBase.remake_initialization_data(sys::ODESystem, odefn, u0, t0, p, 
     end
     filter_missing_values!(u0map)
     filter_missing_values!(pmap)
-    f, _ = process_SciMLProblem(EmptySciMLFunction, sys, u0map, pmap; guesses, t = t0)
-    kws = f.kwargs
+
+    op, missing_unknowns, missing_pars = build_operating_point(u0map, pmap, defs, cmap, dvs, ps)
+    kws = maybe_build_initialization_problem(sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns; use_scc = true)
     initprob = get(kws, :initializeprob, nothing)
     if initprob === nothing
         return nothing
