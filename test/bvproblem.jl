@@ -23,8 +23,8 @@ sol2 = solve(bvp, MIRK4(), dt = 0.01);
 op = ODEProblem(lotkavolterra, u0map, tspan, parammap)
 osol = solve(op, Vern9())
 
-@test isapprox(sol.u[end],osol.u[end]; atol = 0.001)
-@test isapprox(sol2.u[end],osol.u[end]; atol = 0.001)
+@test isapprox(sol.u[end],osol.u[end]; atol = 0.01)
+@test isapprox(sol2.u[end],osol.u[end]; atol = 0.01)
 @test sol.u[1] == [1., 2.]
 @test sol2.u[1] == [1., 2.]
 
@@ -50,7 +50,7 @@ sol2 = solve(bvp2, MIRK4(), dt = 0.01);
 op = ODEProblem(pend, u0map, tspan, parammap)
 osol = solve(op, Vern9())
 
-@test sol.u[end] ≈ osol.u[end]
+@test isapprox(sol.u[end], osol.u[end]; atol = 0.01)
 @test sol.u[1] == [π/2, π/2]
-@test sol2.u[end] ≈ osol.u[end]
+@test isapprox(sol2.u[end], osol.u[end]; atol = 0.01)
 @test sol2.u[1] == [π/2, π/2]

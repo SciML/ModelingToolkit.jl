@@ -534,7 +534,7 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
 
     # Define the boundary conditions.
     bc = if iip 
-        (residual, u, p, t) -> (residual .= u[1] - _u0)
+        (residual, u, p, t) -> (residual .= u[1] .- _u0)
     else
         (u, p, t) -> (u[1] - _u0)
     end
@@ -542,7 +542,7 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
     return BVProblem{iip}(f, bc, u0, tspan, p; kwargs1..., kwargs...)
 end
 
-get_callback(prob::BVProblem) = prob.kwargs[:callback]
+get_callback(prob::BVProblem) = error("BVP solvers do not support callbacks.")
 
 """
 ```julia
