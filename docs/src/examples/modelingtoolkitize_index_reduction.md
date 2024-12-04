@@ -51,6 +51,14 @@ In this tutorial, we will look at the pendulum system:
 \end{aligned}
 ```
 
+These equations can be derived using the [Lagrangian equation of the first kind.](https://en.wikipedia.org/wiki/Lagrangian_mechanics#Lagrangian)
+Specifically, for a pendulum with unit mass and length $L$, which thus has
+kinetic energy $\frac{1}{2}(v_x^2 + v_y^2)$,
+potential energy $gy$,
+and holonomic constraint $x^2 + y^2 - L^2 = 0$.
+The Lagrange multiplier related to this constraint is equal to half of $T$, 
+and represents the tension in the rope of the pendulum.
+
 As a good DifferentialEquations.jl user, one would follow
 [the mass matrix DAE tutorial](https://docs.sciml.ai/DiffEqDocs/stable/tutorials/dae_example/#Mass-Matrix-Differential-Algebraic-Equations-(DAEs))
 to arrive at code for simulating the model:
