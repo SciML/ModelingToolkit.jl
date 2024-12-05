@@ -26,7 +26,7 @@ topological sort of the observed equations in `sys`.
 + `fully_determined=true` controls whether or not an error will be thrown if the number of equations don't match the number of inputs, outputs, and equations.
 """
 function structural_simplify(
-        sys::AbstractSystem, io = nothing; simplify = false, split = true,
+        sys::AbstractSystem, io = nothing; additional_passes = [], simplify = false, split = true,
         allow_symbolic = false, allow_parameter = true, conservative = false, fully_determined = true,
         kwargs...)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
@@ -48,6 +48,9 @@ function structural_simplify(
     end
     if newsys isa ODESystem || has_parent(newsys)
         @set! newsys.parent = complete(sys; split, flatten = false)
+    end
+    for pass in additional_passes 
+        newsys = pass(newsys)
     end
     newsys = complete(newsys; split)
     if has_defaults(newsys) && (defs = get_defaults(newsys)) !== nothing
