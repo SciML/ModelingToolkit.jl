@@ -535,6 +535,186 @@ function DiffEqBase.NonlinearLeastSquaresProblem{iip}(sys::NonlinearSystem, u0ma
     NonlinearLeastSquaresProblem{iip}(f, u0, p; filter_kwargs(kwargs)...)
 end
 
+struct CacheWriter{F}
+    fn::F
+end
+
+function (cw::CacheWriter)(p, sols)
+    cw.fn(p.caches[1], sols, p...)
+end
+
+function CacheWriter(sys::AbstractSystem, exprs, solsyms, obseqs::Vector{Equation};
+        eval_expression = false, eval_module = @__MODULE__)
+    ps = parameters(sys)
+    rps = reorder_parameters(sys, ps)
+    obs_assigns = [eq.lhs ← eq.rhs for eq in obseqs]
+    cmap, cs = get_cmap(sys)
+    cmap_assigns = [eq.lhs ← eq.rhs for eq in cmap]
+    fn = Func(
+             [:out, DestructuredArgs(DestructuredArgs.(solsyms)),
+                 DestructuredArgs.(rps)...],
+             [],
+             SetArray(true, :out, exprs)
+         ) |> wrap_assignments(false, obs_assigns)[2] |>
+         wrap_parameter_dependencies(sys, false)[2] |>
+         wrap_array_vars(sys, exprs; dvs = nothing, inputs = [])[2] |>
+         wrap_assignments(false, cmap_assigns)[2] |> toexpr
+    return CacheWriter(eval_or_rgf(fn; eval_expression, eval_module))
+end
+
+struct SCCNonlinearFunction{iip} end
+
+function SCCNonlinearFunction{iip}(
+        sys::NonlinearSystem, _eqs, _dvs, _obs, cachesyms; eval_expression = false,
+        eval_module = @__MODULE__, kwargs...) where {iip}
+    ps = parameters(sys)
+    rps = reorder_parameters(sys, ps)
+
+    obs_assignments = [eq.lhs ← eq.rhs for eq in _obs]
+
+    cmap, cs = get_cmap(sys)
+    cmap_assignments = [eq.lhs ← eq.rhs for eq in cmap]
+    rhss = [eq.rhs - eq.lhs for eq in _eqs]
+    wrap_code = wrap_assignments(false, cmap_assignments) .∘
+                (wrap_array_vars(sys, rhss; dvs = _dvs, cachesyms)) .∘
+                wrap_parameter_dependencies(sys, false) .∘
+                wrap_assignments(false, obs_assignments)
+    f_gen = build_function(
+        rhss, _dvs, rps..., cachesyms...; wrap_code, expression = Val{true})
+    f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
+
+    f(u, p) = f_oop(u, p)
+    f(u, p::MTKParameters) = f_oop(u, p...)
+    f(resid, u, p) = f_iip(resid, u, p)
+    f(resid, u, p::MTKParameters) = f_iip(resid, u, p...)
+
+    subsys = NonlinearSystem(_eqs, _dvs, ps; observed = _obs,
+        parameter_dependencies = parameter_dependencies(sys), name = nameof(sys))
+    if get_index_cache(sys) !== nothing
+        @set! subsys.index_cache = subset_unknowns_observed(
+            get_index_cache(sys), sys, _dvs, getproperty.(_obs, (:lhs,)))
+        @set! subsys.complete = true
+    end
+
+    return NonlinearFunction{iip}(f; sys = subsys)
+end
+
+function SciMLBase.SCCNonlinearProblem(sys::NonlinearSystem, args...; kwargs...)
+    SCCNonlinearProblem{true}(sys, args...; kwargs...)
+end
+
+function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
+        parammap = SciMLBase.NullParameters(); eval_expression = false, eval_module = @__MODULE__, kwargs...) where {iip}
+    if !iscomplete(sys) || get_tearing_state(sys) === nothing
+        error("A simplified `NonlinearSystem` is required. Call `structural_simplify` on the system before creating an `SCCNonlinearProblem`.")
+    end
+
+    if !is_split(sys)
+        error("The system has been simplified with `split = false`. `SCCNonlinearProblem` is not compatible with this system. Pass `split = true` to `structural_simplify` to use `SCCNonlinearProblem`.")
+    end
+
+    ts = get_tearing_state(sys)
+    var_eq_matching, var_sccs = StructuralTransformations.algebraic_variables_scc(ts)
+
+    if length(var_sccs) == 1
+        return NonlinearProblem{iip}(
+            sys, u0map, parammap; eval_expression, eval_module, kwargs...)
+    end
+
+    condensed_graph = MatchedCondensationGraph(
+        DiCMOBiGraph{true}(complete(ts.structure.graph),
+            complete(var_eq_matching)),
+        var_sccs)
+    toporder = topological_sort_by_dfs(condensed_graph)
+    var_sccs = var_sccs[toporder]
+    eq_sccs = map(Base.Fix1(getindex, var_eq_matching), var_sccs)
+
+    dvs = unknowns(sys)
+    ps = parameters(sys)
+    eqs = equations(sys)
+    obs = observed(sys)
+
+    _, u0, p = process_SciMLProblem(
+        EmptySciMLFunction, sys, u0map, parammap; eval_expression, eval_module, kwargs...)
+
+    explicitfuns = []
+    nlfuns = []
+    prevobsidxs = Int[]
+    cachesize = 0
+    for (i, (escc, vscc)) in enumerate(zip(eq_sccs, var_sccs))
+        # subset unknowns and equations
+        _dvs = dvs[vscc]
+        _eqs = eqs[escc]
+        # get observed equations required by this SCC
+        obsidxs = observed_equations_used_by(sys, _eqs)
+        # the ones used by previous SCCs can be precomputed into the cache
+        setdiff!(obsidxs, prevobsidxs)
+        _obs = obs[obsidxs]
+
+        # get all subexpressions in the RHS which we can precompute in the cache
+        banned_vars = Set{Any}(vcat(_dvs, getproperty.(_obs, (:lhs,))))
+        for var in banned_vars
+            iscall(var) || continue
+            operation(var) === getindex || continue
+            push!(banned_vars, arguments(var)[1])
+        end
+        state = Dict()
+        for i in eachindex(_obs)
+            _obs[i] = _obs[i].lhs ~ subexpressions_not_involving_vars!(
+                _obs[i].rhs, banned_vars, state)
+        end
+        for i in eachindex(_eqs)
+            _eqs[i] = _eqs[i].lhs ~ subexpressions_not_involving_vars!(
+                _eqs[i].rhs, banned_vars, state)
+        end
+
+        # cached variables and their corresponding expressions
+        cachevars = Any[obs[i].lhs for i in prevobsidxs]
+        cacheexprs = Any[obs[i].lhs for i in prevobsidxs]
+        for (k, v) in state
+            push!(cachevars, unwrap(v))
+            push!(cacheexprs, unwrap(k))
+        end
+        cachesize = max(cachesize, length(cachevars))
+
+        if isempty(cachevars)
+            push!(explicitfuns, Returns(nothing))
+        else
+            solsyms = getindex.((dvs,), view(var_sccs, 1:(i - 1)))
+            push!(explicitfuns,
+                CacheWriter(sys, cacheexprs, solsyms, obs[prevobsidxs];
+                    eval_expression, eval_module))
+        end
+        f = SCCNonlinearFunction{iip}(
+            sys, _eqs, _dvs, _obs, (cachevars,); eval_expression, eval_module, kwargs...)
+        push!(nlfuns, f)
+        append!(cachevars, _dvs)
+        append!(cacheexprs, _dvs)
+        for i in obsidxs
+            push!(cachevars, obs[i].lhs)
+            push!(cacheexprs, obs[i].rhs)
+        end
+        append!(prevobsidxs, obsidxs)
+    end
+
+    if cachesize != 0
+        p = rebuild_with_caches(p, BufferTemplate(eltype(u0), cachesize))
+    end
+
+    subprobs = []
+    for (f, vscc) in zip(nlfuns, var_sccs)
+        prob = NonlinearProblem(f, u0[vscc], p)
+        push!(subprobs, prob)
+    end
+
+    new_dvs = dvs[reduce(vcat, var_sccs)]
+    new_eqs = eqs[reduce(vcat, eq_sccs)]
+    @set! sys.unknowns = new_dvs
+    @set! sys.eqs = new_eqs
+    sys = complete(sys)
+    return SCCNonlinearProblem(subprobs, explicitfuns, p, true; sys)
+end
+
 """
 $(TYPEDSIGNATURES)
 

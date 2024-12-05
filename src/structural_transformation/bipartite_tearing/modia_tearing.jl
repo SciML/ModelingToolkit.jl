@@ -62,6 +62,15 @@ function tear_graph_block_modia!(var_eq_matching, ict, solvable_graph, eqs, vars
     return nothing
 end
 
+function build_var_eq_matching(structure::SystemStructure, ::Type{U} = Unassigned;
+        varfilter::F2 = v -> true, eqfilter::F3 = eq -> true) where {U, F2, F3}
+    @unpack graph, solvable_graph = structure
+    var_eq_matching = maximal_matching(graph, eqfilter, varfilter, U)
+    matching_len = max(length(var_eq_matching),
+        maximum(x -> x isa Int ? x : 0, var_eq_matching, init = 0))
+    return complete(var_eq_matching, matching_len), matching_len
+end
+
 function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
         ::Type{U} = Unassigned;
         varfilter::F2 = v -> true,
@@ -78,10 +87,7 @@ function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
     # find them here [TODO: It would be good to have an explicit example of this.]
 
     @unpack graph, solvable_graph = structure
-    var_eq_matching = maximal_matching(graph, eqfilter, varfilter, U)
-    matching_len = max(length(var_eq_matching),
-        maximum(x -> x isa Int ? x : 0, var_eq_matching, init = 0))
-    var_eq_matching = complete(var_eq_matching, matching_len)
+    var_eq_matching, matching_len = build_var_eq_matching(structure, U; varfilter, eqfilter)
     full_var_eq_matching = copy(var_eq_matching)
     var_sccs = find_var_sccs(graph, var_eq_matching)
     vargraph = DiCMOBiGraph{true}(graph, 0, Matching(matching_len))
