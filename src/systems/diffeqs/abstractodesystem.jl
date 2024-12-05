@@ -1342,11 +1342,17 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     neqs = length(equations(isys))
     nunknown = length(unknowns(isys))
 
+    if use_scc
+        scc_message = "`SCCNonlinearProblem` can only be used for initialization of fully determined systems and hence will not be used here. "
+    else
+        scc_message = ""
+    end
+
     if warn_initialize_determined && neqs > nunknown
-        @warn "Initialization system is overdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false. To make this warning into an error, pass fully_determined = true"
+        @warn "Initialization system is overdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. $(scc_message)To suppress this warning pass warn_initialize_determined = false. To make this warning into an error, pass fully_determined = true"
     end
     if warn_initialize_determined && neqs < nunknown
-        @warn "Initialization system is underdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false. To make this warning into an error, pass fully_determined = true"
+        @warn "Initialization system is underdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. $(scc_message)To suppress this warning pass warn_initialize_determined = false. To make this warning into an error, pass fully_determined = true"
     end
 
     parammap = parammap isa DiffEqBase.NullParameters || isempty(parammap) ?
@@ -1384,7 +1390,16 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     end
 
     TProb = if neqs == nunknown && isempty(unassigned_vars)
-        use_scc && neqs > 0 && is_split(isys) ? SCCNonlinearProblem : NonlinearProblem
+        if use_scc && neqs > 0
+            if is_split(isys)
+                SCCNonlinearProblem
+            else
+                @warn "`SCCNonlinearProblem` can only be used with `split = true` systems. Simplify your `ODESystem` with `split = true` or pass `use_scc = false` to disable this warning"
+                NonlinearProblem
+            end
+        else
+            NonlinearProblem
+        end
     else
         NonlinearLeastSquaresProblem
     end
