@@ -11,7 +11,7 @@ function generate_initializesystem(sys::ODESystem;
         default_dd_guess = 0.0,
         algebraic_only = false,
         check_units = true, check_defguess = false,
-        name = nameof(sys), kwargs...)
+        name = nameof(sys), extra_metadata = (;), kwargs...)
     trueobs, eqs = unhack_observed(observed(sys), equations(sys))
     vars = unique([unknowns(sys); getfield.(trueobs, :lhs)])
     vars_set = Set(vars) # for efficient in-lookup
@@ -179,7 +179,8 @@ function generate_initializesystem(sys::ODESystem;
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
-    meta = InitializationSystemMetadata(anydict(u0map), anydict(pmap), additional_guesses)
+    meta = InitializationSystemMetadata(
+        anydict(u0map), anydict(pmap), additional_guesses, extra_metadata)
     return NonlinearSystem(eqs_ics,
         vars,
         pars;
@@ -195,6 +196,7 @@ struct InitializationSystemMetadata
     u0map::Dict{Any, Any}
     pmap::Dict{Any, Any}
     additional_guesses::Dict{Any, Any}
+    extra_metadata::NamedTuple
 end
 
 function is_parameter_solvable(p, pmap, defs, guesses)
@@ -282,6 +284,7 @@ function SciMLBase.remake_initialization_data(sys::ODESystem, odefn, u0, t0, p, 
     guesses = Dict()
     defs = defaults(sys)
     cmap, cs = get_cmap(sys)
+    use_scc = true
 
     if SciMLBase.has_initializeprob(odefn)
         oldsys = odefn.initializeprob.f.sys
@@ -290,6 +293,7 @@ function SciMLBase.remake_initialization_data(sys::ODESystem, odefn, u0, t0, p, 
             u0map = merge(meta.u0map, u0map)
             pmap = merge(meta.pmap, pmap)
             merge!(guesses, meta.additional_guesses)
+            use_scc = get(meta.extra_metadata, :use_scc, true)
         end
     else
         # there is no initializeprob, so the original problem construction
@@ -327,8 +331,10 @@ function SciMLBase.remake_initialization_data(sys::ODESystem, odefn, u0, t0, p, 
     filter_missing_values!(u0map)
     filter_missing_values!(pmap)
 
-    op, missing_unknowns, missing_pars = build_operating_point(u0map, pmap, defs, cmap, dvs, ps)
-    kws = maybe_build_initialization_problem(sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns; use_scc = true)
+    op, missing_unknowns, missing_pars = build_operating_point(
+        u0map, pmap, defs, cmap, dvs, ps)
+    kws = maybe_build_initialization_problem(
+        sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns; use_scc)
     initprob = get(kws, :initializeprob, nothing)
     if initprob === nothing
         return nothing
