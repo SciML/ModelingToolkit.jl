@@ -583,6 +583,10 @@ sol = solve(oprob_2nd_order_2, Rosenbrock23()) # retcode: Success
     @test all(sol(1.0, idxs = sys.x) .≈ +exp(1)) && all(sol(1.0, idxs = sys.y) .≈ -exp(1))
 end
 
+NonlinearSystemWrapper(eqs, t; kws...) = NonlinearSystem(eqs; kws...)
+NonlinearProblemWrapper(sys, u0, tspan, args...; kwargs...) = NonlinearProblem(sys, u0, args...; kwargs...)
+NLLSProblemWrapper(sys, u0, tspan, args...; kwargs...) = NonlinearLeastSquaresProblem(sys, u0, args...; kwargs...)
+
 @testset "Initialization of parameters" begin
     @variables _x(..) y(t)
     @parameters p q
@@ -594,13 +598,37 @@ end
     # the correct solver.
     # `rhss` allows adding terms to the end of equations (only 2 equations allowed) to influence
     # the system type (brownian vars to turn it into an SDE).
-    @testset "$Problem" for (Problem, alg, rhss) in [
-        (ODEProblem, Tsit5(), zeros(2)), (SDEProblem, ImplicitEM(), [a, b]),
-        (DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
-        (SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b])]
+    @testset "$Problem with $(SciMLBase.parameterless_type(alg))" for (System, Problem, alg, rhss) in [
+        (System, ODEProblem, Tsit5(), zeros(2)),
+        (System, SDEProblem, ImplicitEM(), [a, b]),
+        (System, DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
+        (System, SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b]),
+        # polyalg cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, FastShortcutNonlinearPolyalg(), zeros(2)),
+        # generalized first order cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, NewtonRaphson(), zeros(2)),
+        # quasi newton cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, Klement(), zeros(2)),
+        # noinit cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, SimpleNewtonRaphson(), zeros(2)),
+        # DFSane cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, DFSane(), zeros(2)),
+        # Least squares
+        # polyalg cache
+        (NonlinearSystemWrapper, NLLSProblemWrapper, FastShortcutNLLSPolyalg(), zeros(2)),
+        # generalized first order cache
+        (NonlinearSystemWrapper, NLLSProblemWrapper, LevenbergMarquardt(), zeros(2)),
+        # noinit cache
+        (NonlinearSystemWrapper, NLLSProblemWrapper, SimpleGaussNewton(), zeros(2)),
+    ]
+
+        is_nlsolve = alg isa SciMLBase.AbstractNonlinearAlgorithm
+
         function test_parameter(prob, sym, val, initialval = zero(val))
             @test prob.ps[sym] ≈ initialval
-            @test init(prob, alg).ps[sym] ≈ val
+            if !is_nlsolve || prob.u0 !== nothing
+                @test init(prob, alg).ps[sym] ≈ val
+            end
             @test solve(prob, alg).ps[sym] ≈ val
         end
         function test_initializesystem(sys, u0map, pmap, p, equation)
@@ -609,6 +637,8 @@ end
             @test is_variable(isys, p)
             @test equation in equations(isys) || (0 ~ -equation.rhs) in equations(isys)
         end
+        D = is_nlsolve ? v -> v^3 : Differential(t)
+
         u0map = Dict(x => 1.0, y => 1.0)
         pmap = Dict()
         pmap[q] = 1.0
@@ -669,16 +699,14 @@ end
         prob = Problem(sys, u0map, (0.0, 1.0), _pmap)
         test_parameter(prob, p, _pmap[q])
         test_initializesystem(sys, u0map, _pmap, p, 0 ~ q - p)
-
         # Problem dependent value with guess, no `missing`
         @mtkbuild sys = System(
-            [D(x) ~ x * q + rhss[1], D(y) ~ y * p + rhss[2]], t; guesses = [p => 0.0])
+            [D(x) ~ y * q + p + rhss[1], D(y) ~ x * p + q + rhss[2]], t; guesses = [p => 0.0])
         _pmap = merge(pmap, Dict(p => 3q))
         prob = Problem(sys, u0map, (0.0, 1.0), _pmap)
         test_parameter(prob, p, 3pmap[q])
 
         # Should not be solved for:
-
         # Override dependent default with direct value
         @mtkbuild sys = System(
             [D(x) ~ q * x + rhss[1], D(y) ~ y * p + rhss[2]], t; defaults = [p => 2q], guesses = [p => 1.0])
@@ -700,6 +728,13 @@ end
             [D(x) ~ x + rhss[1], p ~ x + y + rhss[2]], t; guesses = [p => 0.0])
         @test_throws ModelingToolkit.MissingParametersError Problem(
             sys, [x => 1.0, y => 1.0], (0.0, 1.0))
+
+        # Unsatisfiable initialization
+        prob = Problem(sys, [x => 1.0, y => 1.0], (0.0, 1.0), [p => 2.0]; initialization_eqs = [x^2 + y^2 ~ 3])
+        @test prob.f.initialization_data !== nothing
+        @test solve(prob, alg).retcode == ReturnCode.InitialFailure
+        cache = init(prob, alg)
+        @test solve!(cache).retcode == ReturnCode.InitialFailure
     end
 
     @testset "Null system" begin
@@ -739,10 +774,32 @@ end
     @brownian a b
     x = _x(t)
 
-    @testset "$Problem" for (Problem, alg, rhss) in [
-        (ODEProblem, Tsit5(), zeros(2)), (SDEProblem, ImplicitEM(), [a, b]),
-        (DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
-        (SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b])]
+    @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (System, Problem, alg, rhss) in [
+        (System, ODEProblem, Tsit5(), zeros(2)),
+        (System, SDEProblem, ImplicitEM(), [a, b]),
+        (System, DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
+        (System, SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b]),
+        # polyalg cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, FastShortcutNonlinearPolyalg(), zeros(2)),
+        # generalized first order cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, NewtonRaphson(), zeros(2)),
+        # quasi newton cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, Klement(), zeros(2)),
+        # noinit cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, SimpleNewtonRaphson(), zeros(2)),
+        # DFSane cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, DFSane(), zeros(2)),
+        # Least squares
+        # polyalg cache
+        (NonlinearSystemWrapper, NLLSProblemWrapper, FastShortcutNLLSPolyalg(), zeros(2)),
+        # generalized first order cache
+        (NonlinearSystemWrapper, NLLSProblemWrapper, LevenbergMarquardt(), zeros(2)),
+        # noinit cache
+        (NonlinearSystemWrapper, NLLSProblemWrapper, SimpleGaussNewton(), zeros(2)),
+    ]
+        is_nlsolve = alg isa SciMLBase.AbstractNonlinearAlgorithm
+        D = is_nlsolve ? v -> v^3 : Differential(t)
+
         @mtkbuild sys = System(
             [D(x) ~ x + rhss[1], p ~ x + y + rhss[2]], t; guesses = [x => 0.0, p => 0.0])
         prob = Problem(sys, [y => 1.0], (0.0, 1.0), [p => 3.0])
