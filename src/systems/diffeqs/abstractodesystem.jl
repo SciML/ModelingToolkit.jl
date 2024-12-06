@@ -1247,11 +1247,11 @@ Generates a NonlinearProblem or NonlinearLeastSquaresProblem from an ODESystem
 which represents the initialization, i.e. the calculation of the consistent
 initial conditions for the given DAE.
 """
-function InitializationProblem(sys::AbstractODESystem, args...; kwargs...)
+function InitializationProblem(sys::AbstractSystem, args...; kwargs...)
     InitializationProblem{true}(sys, args...; kwargs...)
 end
 
-function InitializationProblem(sys::AbstractODESystem, t,
+function InitializationProblem(sys::AbstractSystem, t,
         u0map::StaticArray,
         args...;
         kwargs...)
@@ -1259,11 +1259,11 @@ function InitializationProblem(sys::AbstractODESystem, t,
         sys, t, u0map, args...; kwargs...)
 end
 
-function InitializationProblem{true}(sys::AbstractODESystem, args...; kwargs...)
+function InitializationProblem{true}(sys::AbstractSystem, args...; kwargs...)
     InitializationProblem{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
 end
 
-function InitializationProblem{false}(sys::AbstractODESystem, args...; kwargs...)
+function InitializationProblem{false}(sys::AbstractSystem, args...; kwargs...)
     InitializationProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
@@ -1282,8 +1282,8 @@ function Base.showerror(io::IO, e::IncompleteInitializationError)
     println(io, e.uninit)
 end
 
-function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
-        t::Number, u0map = [],
+function InitializationProblem{iip, specialize}(sys::AbstractSystem,
+        t, u0map = [],
         parammap = DiffEqBase.NullParameters();
         guesses = [],
         check_length = true,
@@ -1347,13 +1347,13 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         @warn "Initialization system is underdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. $(scc_message)To suppress this warning pass warn_initialize_determined = false. To make this warning into an error, pass fully_determined = true"
     end
 
-    parammap = parammap isa DiffEqBase.NullParameters || isempty(parammap) ?
-               [get_iv(sys) => t] :
-               merge(todict(parammap), Dict(get_iv(sys) => t))
-    parammap = Dict(k => v for (k, v) in parammap if v !== missing)
-    if isempty(u0map)
-        u0map = Dict()
+    parammap = recursive_unwrap(anydict(parammap))
+    if t !== nothing
+        parammap[get_iv(sys)] = t
     end
+    filter!(kvp -> kvp[2] !== missing, parammap)
+
+    u0map = to_varmap(u0map, unknowns(sys))
     if isempty(guesses)
         guesses = Dict()
     end
