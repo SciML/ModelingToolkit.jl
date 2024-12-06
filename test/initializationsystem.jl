@@ -829,10 +829,33 @@ end
     @brownian a
     x = _x(t)
 
-    @testset "$Problem" for (Problem, alg, rhss) in [
-        (ODEProblem, Tsit5(), 0), (SDEProblem, ImplicitEM(), a),
-        (DDEProblem, MethodOfSteps(Tsit5()), _x(t - 0.1)),
-        (SDDEProblem, ImplicitEM(), _x(t - 0.1) + a)]
+    @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (System, Problem, alg, rhss) in [
+        (System, ODEProblem, Tsit5(), 0),
+        (System, SDEProblem, ImplicitEM(), a),
+        (System, DDEProblem, MethodOfSteps(Tsit5()), _x(t - 0.1)),
+        (System, SDDEProblem, ImplicitEM(), _x(t - 0.1) + a),
+        # polyalg cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper,
+            FastShortcutNonlinearPolyalg(), 0),
+        # generalized first order cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, NewtonRaphson(), 0),
+        # quasi newton cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, Klement(), 0),
+        # noinit cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, SimpleNewtonRaphson(), 0),
+        # DFSane cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, DFSane(), 0),
+        # Least squares
+        # polyalg cache
+        (NonlinearSystemWrapper, NLLSProblemWrapper, FastShortcutNLLSPolyalg(), 0),
+        # generalized first order cache
+        (NonlinearSystemWrapper, NLLSProblemWrapper, LevenbergMarquardt(), 0),
+        # noinit cache
+        (NonlinearSystemWrapper, NLLSProblemWrapper, SimpleGaussNewton(), 0)
+    ]
+        is_nlsolve = alg isa SciMLBase.AbstractNonlinearAlgorithm
+        D = is_nlsolve ? v -> v^3 : Differential(t)
+
         @mtkbuild sys = System(
             [D(x) ~ 2x + r + rhss], t; parameter_dependencies = [r ~ p + 2q, q ~ p + 3],
             guesses = [p => 1.0])
@@ -850,21 +873,44 @@ end
     @brownian a b
     x = _x(t)
 
-    @testset "$Problem" for (Problem, alg, rhss) in [
-        (ODEProblem, Tsit5(), zeros(2)), (SDEProblem, ImplicitEM(), [a, b]),
-        (DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
-        (SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b])]
+    @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (System, Problem, alg, rhss) in [
+        (System, ODEProblem, Tsit5(), zeros(2)),
+        (System, SDEProblem, ImplicitEM(), [a, b]),
+        (System, DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
+        (System, SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b]),
+        # polyalg cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper,
+            FastShortcutNonlinearPolyalg(), zeros(2)),
+        # generalized first order cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, NewtonRaphson(), zeros(2)),
+        # quasi newton cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, Klement(), zeros(2)),
+        # noinit cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, SimpleNewtonRaphson(), zeros(2)),
+        # DFSane cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, DFSane(), zeros(2)),
+        # Least squares
+        # polyalg cache
+        (NonlinearSystemWrapper, NLLSProblemWrapper, FastShortcutNLLSPolyalg(), zeros(2)),
+        # generalized first order cache
+        (NonlinearSystemWrapper, NLLSProblemWrapper, LevenbergMarquardt(), zeros(2)),
+        # noinit cache
+        (NonlinearSystemWrapper, NLLSProblemWrapper, SimpleGaussNewton(), zeros(2))
+    ]
+        is_nlsolve = alg isa SciMLBase.AbstractNonlinearAlgorithm
+        D = is_nlsolve ? v -> v^3 : Differential(t)
+
         @mtkbuild sys = System(
             [D(x) ~ x + rhss[1], p ~ x + y + rhss[2]], t; defaults = [p => missing], guesses = [
                 x => 0.0, p => 0.0])
         prob = Problem(sys, [x => 1.0, y => 1.0], (0.0, 1.0))
         @test init(prob, alg).ps[p] ≈ 2.0
         # nonsensical value for y just to test that equations work
-        prob2 = remake(prob; u0 = [x => 1.0, y => 2x + exp(t)])
-        @test init(prob2, alg).ps[p] ≈ 4.0
+        prob2 = remake(prob; u0 = [x => 1.0, y => 2x + exp(x)])
+        @test init(prob2, alg).ps[p] ≈ 3 + exp(1)
         # solve for `x` given `p` and `y`
-        prob3 = remake(prob; u0 = [x => nothing, y => 1.0], p = [p => 2x + exp(t)])
-        @test init(prob3, alg)[x] ≈ 0.0
+        prob3 = remake(prob; u0 = [x => nothing, y => 1.0], p = [p => 2x + exp(y)])
+        @test init(prob3, alg)[x] ≈ 1 - exp(1)
         @test_logs (:warn, r"overdetermined") remake(
             prob; u0 = [x => 1.0, y => 2.0], p = [p => 4.0])
         prob4 = remake(prob; u0 = [x => 1.0, y => 2.0], p = [p => 4.0])
@@ -880,44 +926,68 @@ end
     @brownian a
     x = _x(t)
 
-    @testset "$Problem" for (Problem, alg, rhss) in [
-        (ODEProblem, Tsit5(), 0), (SDEProblem, ImplicitEM(), a),
-        (DDEProblem, MethodOfSteps(Tsit5()), _x(t - 0.1)),
-        (SDDEProblem, ImplicitEM(), _x(t - 0.1) + a)]
+    @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (System, Problem, alg, rhss) in [
+        (System, ODEProblem, Tsit5(), 0),
+        (System, SDEProblem, ImplicitEM(), a),
+        (System, DDEProblem, MethodOfSteps(Tsit5()), _x(t - 0.1)),
+        (System, SDDEProblem, ImplicitEM(), _x(t - 0.1) + a),
+        # polyalg cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper,
+            FastShortcutNonlinearPolyalg(), 0),
+        # generalized first order cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, NewtonRaphson(), 0),
+        # quasi newton cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, Klement(), 0),
+        # noinit cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, SimpleNewtonRaphson(), 0),
+        # DFSane cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, DFSane(), 0),
+        # Least squares
+        # polyalg cache
+        (NonlinearSystemWrapper, NLLSProblemWrapper, FastShortcutNLLSPolyalg(), 0),
+        # generalized first order cache
+        (NonlinearSystemWrapper, NLLSProblemWrapper, LevenbergMarquardt(), 0),
+        # noinit cache
+        (NonlinearSystemWrapper, NLLSProblemWrapper, SimpleGaussNewton(), 0)
+    ]
+        is_nlsolve = alg isa SciMLBase.AbstractNonlinearAlgorithm
+        D = is_nlsolve ? v -> v^3 : Differential(t)
+        alge_eqs = [y^2 * q + q^2 * x ~ 0, z * p - p^2 * x * z ~ 0]
+
         @mtkbuild sys = System(
-            [D(x) ~ x * p + y * q + rhss, y^2 * q + q^2 * x ~ 0, z * p - p^2 * x * z ~ 0],
+            [D(x) ~ x * p + y^2 * q + rhss; alge_eqs],
             t; guesses = [x => 0.0, y => 0.0, z => 0.0, p => 0.0, q => 0.0])
-        prob = Problem(sys, [x => 1.0], (0.0, 1.0), [p => 1.0, q => missing])
+        prob = Problem(sys, [x => 1.0], (0.0, 1.0), [p => 1.0, q => missing]; initialization_eqs = is_nlsolve ? alge_eqs : [])
         @test is_variable(prob.f.initialization_data.initializeprob, q)
         ps = prob.p
         newps = SciMLStructures.replace(Tunable(), ps, ForwardDiff.Dual.(ps.tunable))
         prob2 = remake(prob; p = newps)
-        @test eltype(prob2.f.initialization_data.initializeprob.u0) <: ForwardDiff.Dual
+        @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <: ForwardDiff.Dual
         @test eltype(prob2.f.initialization_data.initializeprob.p.tunable) <:
               ForwardDiff.Dual
-        @test prob2.f.initialization_data.initializeprob.u0 ≈
-              prob.f.initialization_data.initializeprob.u0
+        @test state_values(prob2.f.initialization_data.initializeprob) ≈
+              state_values(prob.f.initialization_data.initializeprob)
 
         prob2 = remake(prob; u0 = ForwardDiff.Dual.(prob.u0))
-        @test eltype(prob2.f.initialization_data.initializeprob.u0) <: ForwardDiff.Dual
+        @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <: ForwardDiff.Dual
         @test eltype(prob2.f.initialization_data.initializeprob.p.tunable) <: Float64
-        @test prob2.f.initialization_data.initializeprob.u0 ≈
-              prob.f.initialization_data.initializeprob.u0
+        @test state_values(prob2.f.initialization_data.initializeprob) ≈
+              state_values(prob.f.initialization_data.initializeprob)
 
         prob2 = remake(prob; u0 = ForwardDiff.Dual.(prob.u0), p = newps)
-        @test eltype(prob2.f.initialization_data.initializeprob.u0) <: ForwardDiff.Dual
+        @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <: ForwardDiff.Dual
         @test eltype(prob2.f.initialization_data.initializeprob.p.tunable) <:
               ForwardDiff.Dual
-        @test prob2.f.initialization_data.initializeprob.u0 ≈
-              prob.f.initialization_data.initializeprob.u0
+        @test state_values(prob2.f.initialization_data.initializeprob) ≈
+              state_values(prob.f.initialization_data.initializeprob)
 
         prob2 = remake(prob; u0 = [x => ForwardDiff.Dual(1.0)],
             p = [p => ForwardDiff.Dual(1.0), q => missing])
-        @test eltype(prob2.f.initialization_data.initializeprob.u0) <: ForwardDiff.Dual
+        @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <: ForwardDiff.Dual
         @test eltype(prob2.f.initialization_data.initializeprob.p.tunable) <:
               ForwardDiff.Dual
-        @test prob2.f.initialization_data.initializeprob.u0 ≈
-              prob.f.initialization_data.initializeprob.u0
+        @test state_values(prob2.f.initialization_data.initializeprob) ≈
+              state_values(prob.f.initialization_data.initializeprob)
     end
 end
 
@@ -927,19 +997,42 @@ end
     @brownian a
     x = _x(t)
 
-    @testset "$Problem" for (Problem, alg, rhss) in [
-        (ODEProblem, Tsit5(), 0), (SDEProblem, ImplicitEM(), a),
-        (DDEProblem, MethodOfSteps(Tsit5()), _x(t - 0.1)),
-        (SDDEProblem, ImplicitEM(), _x(t - 0.1) + a)]
+    @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (System, Problem, alg, rhss) in [
+        (System, ODEProblem, Tsit5(), 0),
+        (System, SDEProblem, ImplicitEM(), a),
+        (System, DDEProblem, MethodOfSteps(Tsit5()), _x(t - 0.1)),
+        (System, SDDEProblem, ImplicitEM(), _x(t - 0.1) + a),
+        # polyalg cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper,
+            FastShortcutNonlinearPolyalg(), 0),
+        # generalized first order cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, NewtonRaphson(), 0),
+        # quasi newton cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, Klement(), 0),
+        # noinit cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, SimpleNewtonRaphson(), 0),
+        # DFSane cache
+        (NonlinearSystemWrapper, NonlinearProblemWrapper, DFSane(), 0),
+        # Least squares
+        # polyalg cache
+        (NonlinearSystemWrapper, NLLSProblemWrapper, FastShortcutNLLSPolyalg(), 0),
+        # generalized first order cache
+        (NonlinearSystemWrapper, NLLSProblemWrapper, LevenbergMarquardt(), 0),
+        # noinit cache
+        (NonlinearSystemWrapper, NLLSProblemWrapper, SimpleGaussNewton(), 0)
+    ]
+        is_nlsolve = alg isa SciMLBase.AbstractNonlinearAlgorithm
+        D = is_nlsolve ? v -> v^3 : Differential(t)
+        alge_eqs = [y^2 + 4y * p^2 ~ x^3]
         @mtkbuild sys = System(
-            [D(x) ~ x + p * y + rhss, y^2 + 4y * p^2 ~ x], t; guesses = [
+            [D(x) ~ x + p * y^2 + rhss; alge_eqs], t; guesses = [
                 y => 1.0, p => 1.0])
-        prob = Problem(sys, [x => 1.0], (0.0, 1.0), [p => 1.0])
+        prob = Problem(sys, [x => 1.0], (0.0, 1.0), [p => 1.0]; initialization_eqs = is_nlsolve ? alge_eqs : [])
         @test is_variable(prob.f.initialization_data.initializeprob, y)
         prob2 = @test_nowarn remake(prob; p = [p => 3.0]) # ensure no over/under-determined warning
         @test is_variable(prob.f.initialization_data.initializeprob, y)
 
-        prob = Problem(sys, [y => 1.0, x => 2.0], (0.0, 1.0), [p => missing])
+        prob = Problem(sys, [y => 1.0, x => 2.0], (0.0, 1.0), [p => missing]; initialization_eqs = is_nlsolve ? alge_eqs : [])
         @test is_variable(prob.f.initialization_data.initializeprob, p)
         prob2 = @test_nowarn remake(prob; u0 = [y => 0.5])
         @test is_variable(prob.f.initialization_data.initializeprob, p)
