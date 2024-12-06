@@ -21,6 +21,7 @@ function generate_initializesystem(sys::AbstractSystem;
     eqs_ics = Equation[]
     defs = copy(defaults(sys)) # copy so we don't modify sys.defaults
     additional_guesses = anydict(guesses)
+    additional_initialization_eqs = Vector{Equation}(initialization_eqs)
     guesses = merge(get_guesses(sys), additional_guesses)
     idxs_diff = isdiffeq.(eqs)
 
@@ -191,7 +192,7 @@ function generate_initializesystem(sys::AbstractSystem;
         defs[k] = substitute(defs[k], paramsubs)
     end
     meta = InitializationSystemMetadata(
-        anydict(u0map), anydict(pmap), additional_guesses, extra_metadata)
+        anydict(u0map), anydict(pmap), additional_guesses, additional_initialization_eqs, extra_metadata)
     return NonlinearSystem(eqs_ics,
         vars,
         pars;
@@ -207,6 +208,7 @@ struct InitializationSystemMetadata
     u0map::Dict{Any, Any}
     pmap::Dict{Any, Any}
     additional_guesses::Dict{Any, Any}
+    additional_initialization_eqs::Vector{Equation}
     extra_metadata::NamedTuple
 end
 
@@ -299,6 +301,7 @@ function SciMLBase.remake_initialization_data(
     defs = defaults(sys)
     cmap, cs = get_cmap(sys)
     use_scc = true
+    initialization_eqs = Equation[]
 
     if SciMLBase.has_initializeprob(odefn)
         oldsys = odefn.initialization_data.initializeprob.f.sys
@@ -308,6 +311,7 @@ function SciMLBase.remake_initialization_data(
             pmap = merge(meta.pmap, pmap)
             merge!(guesses, meta.additional_guesses)
             use_scc = get(meta.extra_metadata, :use_scc, true)
+            initialization_eqs = meta.additional_initialization_eqs
         end
     else
         # there is no initializeprob, so the original problem construction
@@ -348,7 +352,7 @@ function SciMLBase.remake_initialization_data(
     op, missing_unknowns, missing_pars = build_operating_point(
         u0map, pmap, defs, cmap, dvs, ps)
     kws = maybe_build_initialization_problem(
-        sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns; use_scc)
+        sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns; use_scc, initialization_eqs)
     return get(kws, :initialization_data, nothing)
 end
 
