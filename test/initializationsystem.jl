@@ -957,25 +957,29 @@ end
         @mtkbuild sys = System(
             [D(x) ~ x * p + y^2 * q + rhss; alge_eqs],
             t; guesses = [x => 0.0, y => 0.0, z => 0.0, p => 0.0, q => 0.0])
-        prob = Problem(sys, [x => 1.0], (0.0, 1.0), [p => 1.0, q => missing]; initialization_eqs = is_nlsolve ? alge_eqs : [])
+        prob = Problem(sys, [x => 1.0], (0.0, 1.0), [p => 1.0, q => missing];
+            initialization_eqs = is_nlsolve ? alge_eqs : [])
         @test is_variable(prob.f.initialization_data.initializeprob, q)
         ps = prob.p
         newps = SciMLStructures.replace(Tunable(), ps, ForwardDiff.Dual.(ps.tunable))
         prob2 = remake(prob; p = newps)
-        @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <: ForwardDiff.Dual
+        @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <:
+              ForwardDiff.Dual
         @test eltype(prob2.f.initialization_data.initializeprob.p.tunable) <:
               ForwardDiff.Dual
         @test state_values(prob2.f.initialization_data.initializeprob) ≈
               state_values(prob.f.initialization_data.initializeprob)
 
         prob2 = remake(prob; u0 = ForwardDiff.Dual.(prob.u0))
-        @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <: ForwardDiff.Dual
+        @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <:
+              ForwardDiff.Dual
         @test eltype(prob2.f.initialization_data.initializeprob.p.tunable) <: Float64
         @test state_values(prob2.f.initialization_data.initializeprob) ≈
               state_values(prob.f.initialization_data.initializeprob)
 
         prob2 = remake(prob; u0 = ForwardDiff.Dual.(prob.u0), p = newps)
-        @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <: ForwardDiff.Dual
+        @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <:
+              ForwardDiff.Dual
         @test eltype(prob2.f.initialization_data.initializeprob.p.tunable) <:
               ForwardDiff.Dual
         @test state_values(prob2.f.initialization_data.initializeprob) ≈
@@ -983,7 +987,8 @@ end
 
         prob2 = remake(prob; u0 = [x => ForwardDiff.Dual(1.0)],
             p = [p => ForwardDiff.Dual(1.0), q => missing])
-        @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <: ForwardDiff.Dual
+        @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <:
+              ForwardDiff.Dual
         @test eltype(prob2.f.initialization_data.initializeprob.p.tunable) <:
               ForwardDiff.Dual
         @test state_values(prob2.f.initialization_data.initializeprob) ≈
@@ -1027,12 +1032,14 @@ end
         @mtkbuild sys = System(
             [D(x) ~ x + p * y^2 + rhss; alge_eqs], t; guesses = [
                 y => 1.0, p => 1.0])
-        prob = Problem(sys, [x => 1.0], (0.0, 1.0), [p => 1.0]; initialization_eqs = is_nlsolve ? alge_eqs : [])
+        prob = Problem(sys, [x => 1.0], (0.0, 1.0), [p => 1.0];
+            initialization_eqs = is_nlsolve ? alge_eqs : [])
         @test is_variable(prob.f.initialization_data.initializeprob, y)
         prob2 = @test_nowarn remake(prob; p = [p => 3.0]) # ensure no over/under-determined warning
         @test is_variable(prob.f.initialization_data.initializeprob, y)
 
-        prob = Problem(sys, [y => 1.0, x => 2.0], (0.0, 1.0), [p => missing]; initialization_eqs = is_nlsolve ? alge_eqs : [])
+        prob = Problem(sys, [y => 1.0, x => 2.0], (0.0, 1.0), [p => missing];
+            initialization_eqs = is_nlsolve ? alge_eqs : [])
         @test is_variable(prob.f.initialization_data.initializeprob, p)
         prob2 = @test_nowarn remake(prob; u0 = [y => 0.5])
         @test is_variable(prob.f.initialization_data.initializeprob, p)
