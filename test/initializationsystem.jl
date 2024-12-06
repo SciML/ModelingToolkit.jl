@@ -584,8 +584,12 @@ sol = solve(oprob_2nd_order_2, Rosenbrock23()) # retcode: Success
 end
 
 NonlinearSystemWrapper(eqs, t; kws...) = NonlinearSystem(eqs; kws...)
-NonlinearProblemWrapper(sys, u0, tspan, args...; kwargs...) = NonlinearProblem(sys, u0, args...; kwargs...)
-NLLSProblemWrapper(sys, u0, tspan, args...; kwargs...) = NonlinearLeastSquaresProblem(sys, u0, args...; kwargs...)
+function NonlinearProblemWrapper(sys, u0, tspan, args...; kwargs...)
+    NonlinearProblem(sys, u0, args...; kwargs...)
+end
+function NLLSProblemWrapper(sys, u0, tspan, args...; kwargs...)
+    NonlinearLeastSquaresProblem(sys, u0, args...; kwargs...)
+end
 
 @testset "Initialization of parameters" begin
     @variables _x(..) y(t)
@@ -604,7 +608,8 @@ NLLSProblemWrapper(sys, u0, tspan, args...; kwargs...) = NonlinearLeastSquaresPr
         (System, DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
         (System, SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b]),
         # polyalg cache
-        (NonlinearSystemWrapper, NonlinearProblemWrapper, FastShortcutNonlinearPolyalg(), zeros(2)),
+        (NonlinearSystemWrapper, NonlinearProblemWrapper,
+            FastShortcutNonlinearPolyalg(), zeros(2)),
         # generalized first order cache
         (NonlinearSystemWrapper, NonlinearProblemWrapper, NewtonRaphson(), zeros(2)),
         # quasi newton cache
@@ -619,9 +624,8 @@ NLLSProblemWrapper(sys, u0, tspan, args...; kwargs...) = NonlinearLeastSquaresPr
         # generalized first order cache
         (NonlinearSystemWrapper, NLLSProblemWrapper, LevenbergMarquardt(), zeros(2)),
         # noinit cache
-        (NonlinearSystemWrapper, NLLSProblemWrapper, SimpleGaussNewton(), zeros(2)),
+        (NonlinearSystemWrapper, NLLSProblemWrapper, SimpleGaussNewton(), zeros(2))
     ]
-
         is_nlsolve = alg isa SciMLBase.AbstractNonlinearAlgorithm
 
         function test_parameter(prob, sym, val, initialval = zero(val))
@@ -730,7 +734,8 @@ NLLSProblemWrapper(sys, u0, tspan, args...; kwargs...) = NonlinearLeastSquaresPr
             sys, [x => 1.0, y => 1.0], (0.0, 1.0))
 
         # Unsatisfiable initialization
-        prob = Problem(sys, [x => 1.0, y => 1.0], (0.0, 1.0), [p => 2.0]; initialization_eqs = [x^2 + y^2 ~ 3])
+        prob = Problem(sys, [x => 1.0, y => 1.0], (0.0, 1.0),
+            [p => 2.0]; initialization_eqs = [x^2 + y^2 ~ 3])
         @test prob.f.initialization_data !== nothing
         @test solve(prob, alg).retcode == ReturnCode.InitialFailure
         cache = init(prob, alg)
@@ -780,7 +785,8 @@ end
         (System, DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
         (System, SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b]),
         # polyalg cache
-        (NonlinearSystemWrapper, NonlinearProblemWrapper, FastShortcutNonlinearPolyalg(), zeros(2)),
+        (NonlinearSystemWrapper, NonlinearProblemWrapper,
+            FastShortcutNonlinearPolyalg(), zeros(2)),
         # generalized first order cache
         (NonlinearSystemWrapper, NonlinearProblemWrapper, NewtonRaphson(), zeros(2)),
         # quasi newton cache
@@ -795,7 +801,7 @@ end
         # generalized first order cache
         (NonlinearSystemWrapper, NLLSProblemWrapper, LevenbergMarquardt(), zeros(2)),
         # noinit cache
-        (NonlinearSystemWrapper, NLLSProblemWrapper, SimpleGaussNewton(), zeros(2)),
+        (NonlinearSystemWrapper, NLLSProblemWrapper, SimpleGaussNewton(), zeros(2))
     ]
         is_nlsolve = alg isa SciMLBase.AbstractNonlinearAlgorithm
         D = is_nlsolve ? v -> v^3 : Differential(t)
