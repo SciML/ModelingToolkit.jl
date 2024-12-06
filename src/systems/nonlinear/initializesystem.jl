@@ -35,6 +35,8 @@ function generate_initializesystem(sys::AbstractSystem;
             Dict(eq.lhs => eq.rhs for eq in eqs_diff),
             Dict(D(eq.lhs) => D(eq.rhs) for eq in trueobs)
         )
+    else
+        diffmap = Dict()
     end
 
     if has_schedule(sys) && (schedule = get_schedule(sys); !isnothing(schedule))
@@ -172,10 +174,8 @@ function generate_initializesystem(sys::AbstractSystem;
     end
 
     # parameters do not include ones that became initialization unknowns
-    pars = vcat(
-        [get_iv(sys)], # include independent variable as pseudo-parameter
-        [p for p in parameters(sys) if !haskey(paramsubs, p)]
-    )
+    pars = filter(p -> !haskey(paramsubs, p), parameters(sys))
+    is_time_dependent(sys) && push!(pars, get_iv(sys))
 
     # 8) use observed equations for guesses of observed variables if not provided
     for eq in trueobs
