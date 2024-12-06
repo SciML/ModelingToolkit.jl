@@ -232,6 +232,8 @@ function SciMLBase.remake_initialization_data(
     end
     if !(eltype(u0) <: Pair) && !(eltype(p) <: Pair)
         oldinitdata = odefn.initialization_data
+        oldinitdata === nothing && return nothing
+
         oldinitprob = oldinitdata.initializeprob
         oldinitprob === nothing && return nothing
         if !SciMLBase.has_sys(oldinitprob.f) || !(oldinitprob.f.sys isa NonlinearSystem)
@@ -257,7 +259,7 @@ function SciMLBase.remake_initialization_data(
         if p !== missing
             for sym in parameter_symbols(oldinitprob)
                 push!(pidxs, parameter_index(oldinitprob, sym))
-                if isequal(sym, get_iv(sys))
+                if is_time_dependent(sys) && isequal(sym, get_iv(sys))
                     push!(pvals, t0)
                 else
                     push!(pvals, getp(sys, sym)(p))
@@ -341,7 +343,7 @@ function SciMLBase.remake_initialization_data(
             pmap[p] = getp(sys, p)(newp)
         end
     end
-    if t0 === nothing
+    if t0 === nothing && is_time_dependent(sys)
         t0 = 0.0
     end
     filter_missing_values!(u0map)
