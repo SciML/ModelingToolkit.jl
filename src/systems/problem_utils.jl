@@ -664,7 +664,7 @@ function process_SciMLProblem(
     op, missing_unknowns, missing_pars = build_operating_point(
         u0map, pmap, defs, cmap, dvs, ps)
 
-    if sys isa ODESystem && build_initializeprob
+    if build_initializeprob
         kws = maybe_build_initialization_problem(
             sys, op, u0map, pmap, t, defs, guesses, missing_unknowns;
             implicit_dae, warn_initialize_determined, initialization_eqs,
