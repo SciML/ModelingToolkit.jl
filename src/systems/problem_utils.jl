@@ -541,7 +541,7 @@ function maybe_build_initialization_problem(
     if (((implicit_dae || has_observed_u0s || !isempty(missing_unknowns) ||
           !isempty(solvablepars) || has_dependent_unknowns) &&
          (!has_tearing_state(sys) || get_tearing_state(sys) !== nothing)) ||
-        !isempty(initialization_equations(sys))) && t !== nothing
+        !isempty(initialization_equations(sys))) && (!is_time_dependent(sys) || t !== nothing)
         initializeprob = ModelingToolkit.InitializationProblem(
             sys, t, u0map, pmap; guesses, kwargs...)
         initializeprobmap = getu(initializeprob, unknowns(sys))
