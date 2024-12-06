@@ -923,7 +923,7 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     h_oop, h_iip = eval_or_rgf.(h_gen; eval_expression, eval_module)
     h(p, t) = h_oop(p, t)
     h(p::MTKParameters, t) = h_oop(p..., t)
-    u0 = h(p, tspan[1])
+    u0 = float.(h(p, tspan[1]))
     if u0 !== nothing
         u0 = u0_constructor(u0)
     end
