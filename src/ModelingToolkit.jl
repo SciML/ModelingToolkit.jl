@@ -145,6 +145,7 @@ include("systems/parameter_buffer.jl")
 include("systems/abstractsystem.jl")
 include("systems/model_parsing.jl")
 include("systems/connectors.jl")
+include("systems/imperative_affect.jl")
 include("systems/callbacks.jl")
 include("systems/problem_utils.jl")
 

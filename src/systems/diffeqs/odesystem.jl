@@ -629,8 +629,6 @@ function build_explicit_observed_function(sys, ts;
         oop_mtkp_wrapper = mtkparams_wrapper
     end
 
-    output_expr = isscalar ? ts[1] :
-                  (array_type <: Vector ? MakeArray(ts, output_type) : MakeTuple(ts))
     # Need to keep old method of building the function since it uses `output_type`,
     # which can't be provided to `build_function`
     return_value = if isscalar
