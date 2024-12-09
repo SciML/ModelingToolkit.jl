@@ -1,4 +1,4 @@
-# Automatic Transformation of Nth Order ODEs to 1st Order ODEs
+# [Automatic Transformation of Nth Order ODEs to 1st Order ODEs](@id higher_order)
 
 ModelingToolkit has a system for transformations of mathematical
 systems. These transformations allow for symbolically changing
