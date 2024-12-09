@@ -206,7 +206,7 @@ S = get_sensitivity(closed_loop, :u)
             BlockedArray([[1 2; 3 4], [2 4; 6 8]], [1, 1])),
         # (BlockedArray([[true, false], [false, true]]), BlockedArray([[[1 2; 3 4]], [[2 4; 6 8]]])),
         ([5, 6],),
-        (["hi", "bye"], [:lie, :die]))
+        (["hi", "bye"], [:lie, :die]), ())
     @test ps[ParameterIndex(Tunable(), 1)] == 1.0
     @test ps[ParameterIndex(Tunable(), 2:4)] == collect(2.0:4.0)
     @test ps[ParameterIndex(Tunable(), reshape(4:7, 2, 2))] == reshape(4.0:7.0, 2, 2)

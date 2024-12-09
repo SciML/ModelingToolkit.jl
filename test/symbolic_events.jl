@@ -1344,7 +1344,7 @@ end
     cb = [x ~ 0.0] => [x ~ 0, y ~ 1]
     @mtkbuild pend = ODESystem(eqs, t; continuous_events = [cb])
     prob = ODEProblem(pend, [x => 1], (0.0, 3.0), guesses = [y => x])
-    @test_throws "CheckInit specified but initialization" solve(prob, Rodas5())
+    @test_throws "DAE initialization failed" solve(prob, Rodas5())
 
     cb = [x ~ 0.0] => [y ~ 1]
     @mtkbuild pend = ODESystem(eqs, t; continuous_events = [cb])
