@@ -161,7 +161,7 @@ end
     @test prob[y] ≈ 0.125
     sol = solve(prob; threading = false)
     # can't replicate the solve failure locally, so CI logs might help
-    @show sol.u HomotopyContinuation.real_solutions(sol.original)
+    @show sol.u sol.original.path_results
     @test SciMLBase.successful_retcode(sol)
     @test sol[a]≈0.5 atol=1e-6
     @test sol[b]≈0.25 atol=1e-6
