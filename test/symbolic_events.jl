@@ -936,7 +936,7 @@ end
     @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
-    sol = solve(prob, Tsit5())
+    sol = solve(prob, Tsit5(); dtmax=0.01)
     required_crossings_c1 = [π / 2, 3 * π / 2]
     required_crossings_c2 = [π / 6, π / 2, 5 * π / 6, 7 * π / 6, 3 * π / 2, 11 * π / 6]
     @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1e-4
@@ -1079,8 +1079,8 @@ end
     @test sort(canonicalize(Discrete(), prob.p)[1]) == [0.0, 1.0, 2.0]
     sol = solve(prob, Tsit5())
 
-    @test sol[a] == [-1.0]
-    @test sol[b] == [5.0, 5.0]
+    @test sol[a] == [1.0,-1.0]
+    @test sol[b] == [2.0,5.0, 5.0]
     @test sol[c] == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
 end
 @testset "Heater" begin
@@ -1248,7 +1248,7 @@ end
     ss = structural_simplify(sys)
     prob = ODEProblem(ss, [theta => 0.0], (0.0, pi))
     sol = solve(prob, Tsit5(); dtmax = 0.01)
-    @test getp(sol, cnt)(sol) == 197 # we get 2 pulses per phase cycle (cos 0 crossing) and we go to 100 cycles; we miss a few due to the initial state
+    @test getp(sol, cnt)(sol) == 198 # we get 2 pulses per phase cycle (cos 0 crossing) and we go to 100 cycles; we miss a few due to the initial state
 end
 
 @testset "Initialization" begin

@@ -818,7 +818,7 @@ function generate_vector_rootfinding_callback(
                     let save_idxs = save_idxs
                         custom_init = fn.initialize
                         (i) -> begin
-                            isnothing(custom_init) && custom_init(i)
+                            !isnothing(custom_init) && custom_init(i)
                             for idx in save_idxs
                                 SciMLBase.save_discretes!(i, idx)
                             end

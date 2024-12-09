@@ -175,7 +175,7 @@ function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs.
         end
     obs_fun = build_explicit_observed_function(
         sys, Symbolics.scalarize.(obs_exprs);
-        array_type = Tuple)
+        mkarray = (es,_) -> MakeTuple(es))
     obs_sym_tuple = (obs_syms...,)
 
     # okay so now to generate the stuff to assign it back into the system
@@ -183,7 +183,7 @@ function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs.
     mod_names = (mod_syms...,)
     mod_og_val_fun = build_explicit_observed_function(
         sys, Symbolics.scalarize.(first.(mod_pairs));
-        array_type = Tuple)
+        mkarray = (es,_) -> MakeTuple(es))
 
     upd_funs = NamedTuple{mod_names}((setu.((sys,), first.(mod_pairs))...,))
 
