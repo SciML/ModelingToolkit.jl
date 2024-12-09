@@ -1246,7 +1246,7 @@ end
     @named sys = ODESystem(
         eqs, t, [theta, omega], params; continuous_events = [qAevt, qBevt])
     ss = structural_simplify(sys)
-    prob = ODEProblem(ss, [theta => 0.0], (0.0, pi))
+    prob = ODEProblem(ss, [theta => 1e-5], (0.0, pi))
     sol = solve(prob, Tsit5(); dtmax = 0.01)
     @test getp(sol, cnt)(sol) == 198 # we get 2 pulses per phase cycle (cos 0 crossing) and we go to 100 cycles; we miss a few due to the initial state
 end
