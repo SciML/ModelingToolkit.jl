@@ -936,7 +936,7 @@ end
     @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
-    sol = solve(prob, Tsit5(); dtmax=0.01)
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
     required_crossings_c1 = [π / 2, 3 * π / 2]
     required_crossings_c2 = [π / 6, π / 2, 5 * π / 6, 7 * π / 6, 3 * π / 2, 11 * π / 6]
     @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1e-4
@@ -1079,8 +1079,8 @@ end
     @test sort(canonicalize(Discrete(), prob.p)[1]) == [0.0, 1.0, 2.0]
     sol = solve(prob, Tsit5())
 
-    @test sol[a] == [1.0,-1.0]
-    @test sol[b] == [2.0,5.0, 5.0]
+    @test sol[a] == [1.0, -1.0]
+    @test sol[b] == [2.0, 5.0, 5.0]
     @test sol[c] == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
 end
 @testset "Heater" begin
