@@ -809,3 +809,52 @@ end
     prob = SDEProblem(sys, [x => 1.0, y => 1.0], (0.0, 1.0))
     @test prob[z] ≈ 2.0
 end
+
+@testset "SDESystem to ODESystem" begin
+    @variables x(t) y(t) z(t)
+    @testset "Scalar noise" begin
+        @named sys = SDESystem([D(x) ~ x, D(y) ~ y, z ~ x + y], [x, y, 3],
+            t, [x, y, z], [], is_scalar_noise = true)
+        odesys = ODESystem(sys)
+        @test odesys isa ODESystem
+        vs = ModelingToolkit.vars(equations(odesys))
+        nbrownian = count(
+            v -> ModelingToolkit.getvariabletype(v) == ModelingToolkit.BROWNIAN, vs)
+        @test nbrownian == 3
+        for eq in equations(odesys)
+            ModelingToolkit.isdiffeq(eq) || continue
+            @test length(arguments(eq.rhs)) == 4
+        end
+    end
+
+    @testset "Non-scalar vector noise" begin
+        @named sys = SDESystem([D(x) ~ x, D(y) ~ y, z ~ x + y], [x, y, 0],
+            t, [x, y, z], [], is_scalar_noise = false)
+        odesys = ODESystem(sys)
+        @test odesys isa ODESystem
+        vs = ModelingToolkit.vars(equations(odesys))
+        nbrownian = count(
+            v -> ModelingToolkit.getvariabletype(v) == ModelingToolkit.BROWNIAN, vs)
+        @test nbrownian == 1
+        for eq in equations(odesys)
+            ModelingToolkit.isdiffeq(eq) || continue
+            @test length(arguments(eq.rhs)) == 2
+        end
+    end
+
+    @testset "Matrix noise" begin
+        noiseeqs = [x+y y+z z+x
+                    2y 2z 2x
+                    z+1 x+1 y+1]
+        @named sys = SDESystem([D(x) ~ x, D(y) ~ y, D(z) ~ z], noiseeqs, t, [x, y, z], [])
+        odesys = ODESystem(sys)
+        @test odesys isa ODESystem
+        vs = ModelingToolkit.vars(equations(odesys))
+        nbrownian = count(
+            v -> ModelingToolkit.getvariabletype(v) == ModelingToolkit.BROWNIAN, vs)
+        @test nbrownian == 3
+        for eq in equations(odesys)
+            @test length(arguments(eq.rhs)) == 4
+        end
+    end
+end
