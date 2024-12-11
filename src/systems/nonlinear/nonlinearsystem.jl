@@ -501,7 +501,8 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearProblem`")
     end
     if use_homotopy_continuation
-        prob = safe_HomotopyContinuationProblem(sys, u0map, parammap; check_length, kwargs...)
+        prob = safe_HomotopyContinuationProblem(
+            sys, u0map, parammap; check_length, kwargs...)
         if prob isa HomotopyContinuationProblem
             return prob
         end
