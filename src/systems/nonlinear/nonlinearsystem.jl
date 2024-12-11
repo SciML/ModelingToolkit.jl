@@ -496,13 +496,15 @@ end
 
 function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         parammap = DiffEqBase.NullParameters();
-        check_length = true, use_homotopy_continuation = true, kwargs...) where {iip}
+        check_length = true, use_homotopy_continuation = false, kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearProblem`")
     end
-    prob = safe_HomotopyContinuationProblem(sys, u0map, parammap; check_length, kwargs...)
-    if prob isa HomotopyContinuationProblem
-        return prob
+    if use_homotopy_continuation
+        prob = safe_HomotopyContinuationProblem(sys, u0map, parammap; check_length, kwargs...)
+        if prob isa HomotopyContinuationProblem
+            return prob
+        end
     end
     f, u0, p = process_SciMLProblem(NonlinearFunction{iip}, sys, u0map, parammap;
         check_length, kwargs...)

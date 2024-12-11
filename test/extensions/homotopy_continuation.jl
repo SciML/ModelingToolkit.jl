@@ -29,7 +29,7 @@ import HomotopyContinuation
     @test SciMLBase.successful_retcode(sol)
     @test norm(sol.resid)≈0.0 atol=1e-10
 
-    prob2 = NonlinearProblem(sys, u0)
+    prob2 = NonlinearProblem(sys, u0; use_homotopy_continuation = true)
     @test prob2 isa HomotopyContinuationProblem
     sol = solve(prob2; threading = false)
     @test SciMLBase.successful_retcode(sol)
