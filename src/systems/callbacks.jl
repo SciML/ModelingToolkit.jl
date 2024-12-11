@@ -98,7 +98,7 @@ sharp discontinuity between integrator steps (which in this example would not no
 guaranteed to be triggered.
 
 Once detected the integrator will "wind back" through a root-finding process to identify the point when the condition became active; the method used 
-is specified by `rootfind` from [`SciMLBase.RootfindOpt`](@ref). If we denote the time when the condition becomes active as `tc``,
+is specified by `rootfind` from [`SciMLBase.RootfindOpt`](@ref). If we denote the time when the condition becomes active as `tc`,
 the value in the integrator after windback will be:
 * `u[tc-epsilon], p[tc-epsilon], tc` if `LeftRootFind` is used,
 * `u[tc+epsilon], p[tc+epsilon], tc` if `RightRootFind` is used,
