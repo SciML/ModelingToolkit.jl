@@ -72,6 +72,10 @@ function __structural_simplify(sys::JumpSystem, args...; kwargs...)
     return sys
 end
 
+function __structural_simplify(sys::SDESystem, args...; kwargs...)
+    return __structural_simplify(ODESystem(sys), args...; kwargs...)
+end
+
 function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
         kwargs...)
     sys = expand_connections(sys)

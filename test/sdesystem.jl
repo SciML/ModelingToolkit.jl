@@ -858,3 +858,13 @@ end
         end
     end
 end
+
+@testset "`structural_simplify(::SDESystem)`" begin
+    @variables x(t) y(t)
+    @mtkbuild sys = SDESystem(
+        [D(x) ~ x, y ~ 2x], [x, 0], t, [x, y], []; is_scalar_noise = true)
+    @test sys isa SDESystem
+    @test length(equations(sys)) == 1
+    @test length(ModelingToolkit.get_noiseeqs(sys)) == 1
+    @test length(observed(sys)) == 1
+end
