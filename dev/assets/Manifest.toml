@@ -2,7 +2,7 @@
 
 julia_version = "1.10.7"
 manifest_format = "2.0"
-project_hash = "a649837f8be8233073a53ea2a8cd1f1e09bae30e"
+project_hash = "b59a40302b5beb03767657a9b78f7b05b30b59b6"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "72af59f5b8f09faee36b4ec48e014a79210f2f4f"
@@ -984,9 +984,9 @@ version = "1.0.2"
 
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "ExceptionUnwrapping", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "PrecompileTools", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
-git-tree-sha1 = "6c22309e9a356ac1ebc5c8a217045f9bae6f8d9a"
+git-tree-sha1 = "627fcacdb7cb51dc67f557e1598cdffe4dda386d"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "1.10.13"
+version = "1.10.14"
 
 [[deps.HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll"]
@@ -1380,9 +1380,9 @@ version = "2.38.0"
 
 [[deps.LogExpFunctions]]
 deps = ["DocStringExtensions", "IrrationalConstants", "LinearAlgebra"]
-git-tree-sha1 = "a2d09619db4e765091ee5c6ffe8872849de0feea"
+git-tree-sha1 = "13ca9e2586b89836fd20cccf56e57e2b9ae7f38f"
 uuid = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
-version = "0.3.28"
+version = "0.3.29"
 
     [deps.LogExpFunctions.extensions]
     LogExpFunctionsChainRulesCoreExt = "ChainRulesCore"
@@ -2419,9 +2419,9 @@ version = "0.3.9"
 
 [[deps.SpecialFunctions]]
 deps = ["IrrationalConstants", "LogExpFunctions", "OpenLibm_jll", "OpenSpecFun_jll"]
-git-tree-sha1 = "2f5d4697f21388cbe1ff299430dd169ef97d7e14"
+git-tree-sha1 = "64cca0c26b4f31ba18f13f6c12af7c85f478cfde"
 uuid = "276daf66-3868-5448-9aa4-cd146d93841b"
-version = "2.4.0"
+version = "2.5.0"
 weakdeps = ["ChainRulesCore"]
 
     [deps.SpecialFunctions.extensions]
