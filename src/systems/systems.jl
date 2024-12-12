@@ -46,11 +46,11 @@ function structural_simplify(
             not yet supported.
         """)
     end
+    for pass in additional_passes
+        newsys = pass(newsys)
+    end
     if newsys isa ODESystem || has_parent(newsys)
         @set! newsys.parent = complete(sys; split, flatten = false)
-    end
-    for pass in additional_passes 
-        newsys = pass(newsys)
     end
     newsys = complete(newsys; split)
     if has_defaults(newsys) && (defs = get_defaults(newsys)) !== nothing
