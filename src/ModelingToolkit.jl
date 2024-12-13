@@ -181,6 +181,7 @@ include("discretedomain.jl")
 include("systems/systemstructure.jl")
 include("systems/clock_inference.jl")
 include("systems/systems.jl")
+include("systems/if_lifting.jl")
 
 include("debugging.jl")
 include("systems/alias_elimination.jl")
