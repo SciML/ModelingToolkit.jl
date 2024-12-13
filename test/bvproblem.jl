@@ -44,7 +44,7 @@ tspan = (0., 10.)
 bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap)
 sol = solve(bvp, MIRK4(), dt = 0.01);
 
-bvp2 = SciMLBase.BVProblem{false, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap)
+bvp2 = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(pend, u0map, tspan, parammap)
 sol2 = solve(bvp2, MIRK4(), dt = 0.01);
 
 op = ODEProblem(pend, u0map, tspan, parammap)
