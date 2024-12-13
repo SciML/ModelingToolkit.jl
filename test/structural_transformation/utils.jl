@@ -152,3 +152,12 @@ end
         end
     end
 end
+
+@testset "additional passes" begin
+    @variables x(t) y(t)
+    @named sys = ODESystem([D(x) ~ x, y ~ x + t], t)
+    value = Ref(0)
+    pass(sys; kwargs...) = (value[] += 1; return sys)
+    structural_simplify(sys; additional_passes = [pass])
+    @test value[] == 1
+end
