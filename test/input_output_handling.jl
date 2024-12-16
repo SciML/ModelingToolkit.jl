@@ -153,24 +153,66 @@ if VERSION >= v"1.8" # :opaque_closure not supported before
 end
 
 ## Code generation with unbound inputs
+@testset "generate_control_function with disturbance inputs" begin
+    for split in [true, false]
+        simplify = true
 
-@variables x(t)=0 u(t)=0 [input = true]
-eqs = [
-    D(x) ~ -x + u
-]
+        @variables x(t)=0 u(t)=0 [input = true]
+        eqs = [
+            D(x) ~ -x + u
+        ]
 
-@named sys = ODESystem(eqs, t)
-f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys, simplify = true)
+        @named sys = ODESystem(eqs, t)
+        f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys; simplify, split)
 
-@test isequal(dvs[], x)
-@test isempty(ps)
+        @test isequal(dvs[], x)
+        @test isempty(ps)
 
-p = nothing
-x = [rand()]
-u = [rand()]
-@test f[1](x, u, p, 1) == -x + u
+        p = nothing
+        x = [rand()]
+        u = [rand()]
+        @test f[1](x, u, p, 1) == -x + u
 
-# more complicated system
+        # With disturbance inputs
+        @variables x(t)=0 u(t)=0 [input = true] d(t)=0
+        eqs = [
+            D(x) ~ -x + u + d^2
+        ]
+
+        @named sys = ODESystem(eqs, t)
+        f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(
+            sys, [u], [d]; simplify, split)
+
+        @test isequal(dvs[], x)
+        @test isempty(ps)
+
+        p = nothing
+        x = [rand()]
+        u = [rand()]
+        @test f[1](x, u, p, 1) == -x + u
+
+        ## With added d argument
+        @variables x(t)=0 u(t)=0 [input = true] d(t)=0
+        eqs = [
+            D(x) ~ -x + u + d^2
+        ]
+
+        @named sys = ODESystem(eqs, t)
+        f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(
+            sys, [u], [d]; simplify, split, disturbance_argument = true)
+
+        @test isequal(dvs[], x)
+        @test isempty(ps)
+
+        p = nothing
+        x = [rand()]
+        u = [rand()]
+        d = [rand()]
+        @test f[1](x, u, p, t, d) == -x + u + [d[]^2]
+    end
+end
+
+## more complicated system
 
 @variables u(t) [input = true]
 
