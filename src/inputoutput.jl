@@ -251,7 +251,8 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     end
     process = get_postprocess_fbody(sys)
     wrapped_arrays_vars = disturbance_argument ?
-                          wrap_array_vars(sys, rhss; dvs, ps, inputs, cachesyms = (disturbance_inputs,)) :
+                          wrap_array_vars(
+        sys, rhss; dvs, ps, inputs, cachesyms = (disturbance_inputs,)) :
                           wrap_array_vars(sys, rhss; dvs, ps, inputs)
     f = build_function(rhss, args...; postprocess_fbody = process,
         expression = Val{true}, wrap_code = wrap_mtkparameters(sys, false, 3) .∘
