@@ -230,9 +230,33 @@ function wrap_parameter_dependencies(sys::AbstractSystem, isscalar)
     wrap_assignments(isscalar, [eq.lhs ← eq.rhs for eq in parameter_dependencies(sys)])
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Add the necessary assignment statements to allow use of unscalarized array variables
+in the generated code. `expr` is the expression returned by the function. `dvs` and
+`ps` are the unknowns and parameters of the system `sys` to use in the generated code.
+`inputs` can be specified as an array of symbolics if the generated function has inputs.
+If `history == true`, the generated function accepts a history function. `cachesyms` are
+extra variables (arrays of variables) stored in the cache array(s) of the parameter
+object. `extra_args` are extra arguments appended to the end of the argument list.
+
+The function is assumed to have the signature `f(du, u, h, x, p, cache_syms..., t, extra_args...)`
+Where:
+- `du` is the optional buffer to write to for in-place functions.
+- `u` is the list of unknowns. This argument is not present if `dvs === nothing`.
+- `h` is the optional history function, present if `history == true`.
+- `x` is the array of inputs, present only if `inputs !== nothing`. Values are assumed
+  to be in the order of variables passed to `inputs`.
+- `p` is the parameter object.
+- `cache_syms` are the cache variables. These are part of the splatted parameter object.
+- `t` is time, present only if the system is time dependent.
+- `extra_args` are the extra arguments passed to the function, present only if
+  `extra_args` is non-empty.
+"""
 function wrap_array_vars(
         sys::AbstractSystem, exprs; dvs = unknowns(sys), ps = parameters(sys),
-        inputs = nothing, history = false, cachesyms::Tuple = ())
+        inputs = nothing, history = false, cachesyms::Tuple = (), extra_args::Tuple = ())
     isscalar = !(exprs isa AbstractArray)
     var_to_arridxs = Dict()
 
@@ -252,6 +276,10 @@ function wrap_array_vars(
     if inputs !== nothing
         rps = (inputs, rps...)
     end
+    if has_iv(sys)
+        rps = (rps..., get_iv(sys))
+    end
+    rps = (rps..., extra_args...)
     for sym in reduce(vcat, rps; init = [])
         iscall(sym) && operation(sym) == getindex || continue
         arg = arguments(sym)[1]
