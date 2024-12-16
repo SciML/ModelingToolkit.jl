@@ -2,6 +2,8 @@ using BoundaryValueDiffEq, OrdinaryDiffEq
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
+solvers = [MIRK4, RadauIIa5, LobattoIIIa3]
+
 @parameters α = 7.5 β = 4. γ = 8. δ = 5. 
 @variables x(t) = 1. y(t) = 2. 
 
@@ -13,20 +15,26 @@ parammap = [:α => 7.5, :β => 4, :γ => 8., :δ => 5.]
 tspan = (0., 10.)
 
 @mtkbuild lotkavolterra = ODESystem(eqs, t)
-
-bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lotkavolterra, u0map, tspan, parammap)
-sol = solve(bvp, MIRK4(), dt = 0.01);
-
-bvp2 = SciMLBase.BVProblem{false, SciMLBase.AutoSpecialize}(lotkavolterra, u0map, tspan, parammap)
-sol2 = solve(bvp, MIRK4(), dt = 0.01);
-
 op = ODEProblem(lotkavolterra, u0map, tspan, parammap)
 osol = solve(op, Vern9())
 
-@test isapprox(sol.u[end],osol.u[end]; atol = 0.01)
-@test isapprox(sol2.u[end],osol.u[end]; atol = 0.01)
-@test sol.u[1] == [1., 2.]
-@test sol2.u[1] == [1., 2.]
+bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lotkavolterra, u0map, tspan, parammap; eval_expression = true)
+
+for solver in solvers
+    println("$solver")
+    sol = solve(bvp, solver(), dt = 0.01)
+    @test isapprox(sol.u[end], osol.u[end]; atol = 0.01)
+    @test sol.u[1] == [1., 2.]
+end
+
+# Test out of place
+bvp2 = SciMLBase.BVProblem{false, SciMLBase.AutoSpecialize}(lotkavolterra, u0map, tspan, parammap; eval_expression = true)
+
+for solver in solvers
+    sol = solve(bvp2, solver(), dt = 0.01)
+    @test isapprox(sol.u[end],osol.u[end]; atol = 0.01)
+    @test sol.u[1] == [1., 2.]
+end
 
 ### Testing on pendulum
 
@@ -38,19 +46,24 @@ eqs = [D(D(θ)) ~ -(g / L) * sin(θ)]
 @mtkbuild pend = ODESystem(eqs, t)
 
 u0map = [θ => π/2, D(θ) => π/2]
-parammap = [:L => 2., :g => 9.81]
+parammap = [:L => 1., :g => 9.81]
 tspan = (0., 10.)
-
-bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap)
-sol = solve(bvp, MIRK4(), dt = 0.01);
-
-bvp2 = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(pend, u0map, tspan, parammap)
-sol2 = solve(bvp2, MIRK4(), dt = 0.01);
 
 op = ODEProblem(pend, u0map, tspan, parammap)
 osol = solve(op, Vern9())
 
-@test isapprox(sol.u[end], osol.u[end]; atol = 0.01)
-@test sol.u[1] == [π/2, π/2]
-@test isapprox(sol2.u[end], osol.u[end]; atol = 0.01)
-@test sol2.u[1] == [π/2, π/2]
+bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap)
+for solver in solvers
+    sol = solve(bvp2, solver(), dt = 0.01)
+    @test isapprox(sol.u[end],osol.u[end]; atol = 0.01)
+    @test sol.u[1] == [π/2, π/2]
+end
+
+# Test out-of-place
+bvp2 = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(pend, u0map, tspan, parammap)
+
+for solver in solvers
+    sol = solve(bvp2, solver(), dt = 0.01)
+    @test isapprox(sol.u[end],osol.u[end]; atol = 0.01)
+    @test sol.u[1] == [π/2, π/2]
+end

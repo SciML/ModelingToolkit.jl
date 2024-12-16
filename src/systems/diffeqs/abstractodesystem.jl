@@ -539,10 +539,18 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
         (u, p, t) -> (u[1] - _u0)
     end
 
-    return BVProblem{iip}(f, bc, u0, tspan, p; kwargs1..., kwargs...)
+    return BVProblem{iip}(f, bc, _u0, tspan, p; kwargs1..., kwargs...)
 end
 
 get_callback(prob::BVProblem) = error("BVP solvers do not support callbacks.")
+
+@inline function create_array(::Type{Base.ReinterpretArray}, ::Nothing, ::Val{1}, ::Val{dims}, elems...) where dims
+    [elems...]
+end
+
+@inline function create_array(::Type{Base.ReinterpretArray}, T, ::Val{1}, ::Val{dims}, elems...) where dims
+    T[elems...]
+end
 
 """
 ```julia
