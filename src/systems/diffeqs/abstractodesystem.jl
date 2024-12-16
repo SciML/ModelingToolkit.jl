@@ -1310,6 +1310,11 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
                 pmap = parammap, guesses, extra_metadata = (; use_scc)); fully_determined)
     end
 
+    meta = get_metadata(isys)
+    if meta isa InitializationSystemMetadata
+        @set! isys.metadata.oop_reconstruct_u0_p = ReconstructInitializeprob(sys, isys)
+    end
+
     ts = get_tearing_state(isys)
     unassigned_vars = StructuralTransformations.singular_check(ts)
     if warn_initialize_determined && !isempty(unassigned_vars)
