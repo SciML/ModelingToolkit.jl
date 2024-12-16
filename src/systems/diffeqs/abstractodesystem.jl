@@ -512,7 +512,6 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
         eval_expression = false,
         eval_module = @__MODULE__,
         kwargs...) where {iip, specialize}
-
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `BVProblem`")
     end
@@ -528,12 +527,12 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
     if cbs !== nothing
         kwargs1 = merge(kwargs1, (callback = cbs,))
     end
-    
+
     # Construct initial conditions.
     _u0 = u0 isa Function ? u0(tspan[1]) : u0
 
     # Define the boundary conditions.
-    bc = if iip 
+    bc = if iip
         (residual, u, p, t) -> (residual .= u[1] .- _u0)
     else
         (u, p, t) -> (u[1] - _u0)
@@ -544,11 +543,13 @@ end
 
 get_callback(prob::BVProblem) = error("BVP solvers do not support callbacks.")
 
-@inline function create_array(::Type{Base.ReinterpretArray}, ::Nothing, ::Val{1}, ::Val{dims}, elems...) where dims
+@inline function create_array(::Type{Base.ReinterpretArray}, ::Nothing,
+        ::Val{1}, ::Val{dims}, elems...) where {dims}
     [elems...]
 end
 
-@inline function create_array(::Type{Base.ReinterpretArray}, T, ::Val{1}, ::Val{dims}, elems...) where dims
+@inline function create_array(
+        ::Type{Base.ReinterpretArray}, T, ::Val{1}, ::Val{dims}, elems...) where {dims}
     T[elems...]
 end
 
