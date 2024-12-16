@@ -219,7 +219,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
         # ps = [ps; disturbance_inputs]
     end
     inputs = map(x -> time_varying_as_func(value(x), sys), inputs)
-    disturbance_inputs = map(x -> time_varying_as_func(value(x), sys), disturbance_inputs)
+    disturbance_inputs = unwrap.(disturbance_inputs)
 
     eqs = [eq for eq in full_equations(sys)]
     eqs = map(subs_constants, eqs)
@@ -251,7 +251,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     end
     process = get_postprocess_fbody(sys)
     wrapped_arrays_vars = disturbance_argument ?
-                          wrap_array_vars(sys, rhss; dvs, ps, inputs, disturbance_inputs) :
+                          wrap_array_vars(sys, rhss; dvs, ps, inputs, cachesyms = (disturbance_inputs,)) :
                           wrap_array_vars(sys, rhss; dvs, ps, inputs)
     f = build_function(rhss, args...; postprocess_fbody = process,
         expression = Val{true}, wrap_code = wrap_mtkparameters(sys, false, 3) .∘
