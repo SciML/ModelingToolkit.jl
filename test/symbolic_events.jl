@@ -8,6 +8,7 @@ using ModelingToolkit: SymbolicContinuousCallback,
 using StableRNGs
 import SciMLBase
 using SymbolicIndexingInterface
+using Setfield
 rng = StableRNG(12345)
 
 @variables x(t) = 0
@@ -225,6 +226,119 @@ affect_neg = [x ~ 1]
     @test e isa Vector{SymbolicContinuousCallback}
     @test isequal(e[].eqs, eqs)
     @test e[].affect == affect
+end
+
+@testset "ImperativeAffect constructors" begin
+    fmfa(o, x, i, c) = nothing
+    m = ModelingToolkit.ImperativeAffect(fmfa)
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test m.obs == []
+    @test m.obs_syms == []
+    @test m.modified == []
+    @test m.mod_syms == []
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.ImperativeAffect(fmfa, (;))
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test m.obs == []
+    @test m.obs_syms == []
+    @test m.modified == []
+    @test m.mod_syms == []
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.ImperativeAffect(fmfa, (; x))
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [])
+    @test m.obs_syms == []
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:x]
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.ImperativeAffect(fmfa, (; y = x))
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [])
+    @test m.obs_syms == []
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:y]
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.ImperativeAffect(fmfa; observed = (; y = x))
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [x])
+    @test m.obs_syms == [:y]
+    @test m.modified == []
+    @test m.mod_syms == []
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.ImperativeAffect(fmfa; modified = (; x))
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [])
+    @test m.obs_syms == []
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:x]
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.ImperativeAffect(fmfa; modified = (; y = x))
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [])
+    @test m.obs_syms == []
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:y]
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.ImperativeAffect(fmfa, (; x), (; x))
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [x])
+    @test m.obs_syms == [:x]
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:x]
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.ImperativeAffect(fmfa, (; y = x), (; y = x))
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [x])
+    @test m.obs_syms == [:y]
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:y]
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.ImperativeAffect(
+        fmfa; modified = (; y = x), observed = (; y = x))
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [x])
+    @test m.obs_syms == [:y]
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:y]
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.ImperativeAffect(
+        fmfa; modified = (; y = x), observed = (; y = x), ctx = 3)
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [x])
+    @test m.obs_syms == [:y]
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:y]
+    @test m.ctx === 3
+
+    m = ModelingToolkit.ImperativeAffect(fmfa, (; x), (; x), 3)
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [x])
+    @test m.obs_syms == [:x]
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:x]
+    @test m.ctx === 3
 end
 
 ##
@@ -822,7 +936,7 @@ end
     @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
-    sol = solve(prob, Tsit5())
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
     required_crossings_c1 = [π / 2, 3 * π / 2]
     required_crossings_c2 = [π / 6, π / 2, 5 * π / 6, 7 * π / 6, 3 * π / 2, 11 * π / 6]
     @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1e-4
@@ -969,6 +1083,173 @@ end
     @test sol[b] == [2.0, 5.0, 5.0]
     @test sol[c] == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
 end
+@testset "Heater" begin
+    @variables temp(t)
+    params = @parameters furnace_on_threshold=0.5 furnace_off_threshold=0.7 furnace_power=1.0 leakage=0.1 furnace_on::Bool=false
+    eqs = [
+        D(temp) ~ furnace_on * furnace_power - temp^2 * leakage
+    ]
+
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, i, c
+            @set! x.furnace_on = false
+        end)
+    furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_on_threshold],
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, i, c
+            @set! x.furnace_on = true
+        end)
+    @named sys = ODESystem(
+        eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
+    ss = structural_simplify(sys)
+    prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
+    @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
+
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, c, i
+            @set! x.furnace_on = false
+        end; initialize = ModelingToolkit.ImperativeAffect(modified = (;
+            temp)) do x, o, c, i
+            @set! x.temp = 0.2
+        end)
+    furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_on_threshold],
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, c, i
+            @set! x.furnace_on = true
+        end)
+    @named sys = ODESystem(
+        eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
+    ss = structural_simplify(sys)
+    prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
+    @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
+    @test all(sol[temp][sol.t .!= 0.0] .<= 0.79) && all(sol[temp][sol.t .!= 0.0] .>= 0.2)
+end
+
+@testset "ImperativeAffect errors and warnings" begin
+    @variables temp(t)
+    params = @parameters furnace_on_threshold=0.5 furnace_off_threshold=0.7 furnace_power=1.0 leakage=0.1 furnace_on::Bool=false
+    eqs = [
+        D(temp) ~ furnace_on * furnace_power - temp^2 * leakage
+    ]
+
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkit.ImperativeAffect(
+            modified = (; furnace_on), observed = (; furnace_on)) do x, o, c, i
+            @set! x.furnace_on = false
+        end)
+    @named sys = ODESystem(eqs, t, [temp], params; continuous_events = [furnace_off])
+    ss = structural_simplify(sys)
+    @test_logs (:warn,
+        "The symbols Any[:furnace_on] are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value.") prob=ODEProblem(
+        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+
+    @variables tempsq(t) # trivially eliminated
+    eqs = [tempsq ~ temp^2
+           D(temp) ~ furnace_on * furnace_power - temp^2 * leakage]
+
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkit.ImperativeAffect(
+            modified = (; furnace_on, tempsq), observed = (; furnace_on)) do x, o, c, i
+            @set! x.furnace_on = false
+        end)
+    @named sys = ODESystem(
+        eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
+    ss = structural_simplify(sys)
+    @test_throws "refers to missing variable(s)" prob=ODEProblem(
+        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+
+    @parameters not_actually_here
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on),
+            observed = (; furnace_on, not_actually_here)) do x, o, c, i
+            @set! x.furnace_on = false
+        end)
+    @named sys = ODESystem(
+        eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
+    ss = structural_simplify(sys)
+    @test_throws "refers to missing variable(s)" prob=ODEProblem(
+        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on),
+            observed = (; furnace_on)) do x, o, c, i
+            return (; fictional2 = false)
+        end)
+    @named sys = ODESystem(
+        eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
+    ss = structural_simplify(sys)
+    prob = ODEProblem(
+        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+    @test_throws "Tried to write back to" solve(prob, Tsit5())
+end
+
+@testset "Quadrature" begin
+    @variables theta(t) omega(t)
+    params = @parameters qA=0 qB=0 hA=0 hB=0 cnt::Int=0
+    eqs = [D(theta) ~ omega
+           omega ~ 1.0]
+    function decoder(oldA, oldB, newA, newB)
+        state = (oldA, oldB, newA, newB)
+        if state == (0, 0, 1, 0) || state == (1, 0, 1, 1) || state == (1, 1, 0, 1) ||
+           state == (0, 1, 0, 0)
+            return 1
+        elseif state == (0, 0, 0, 1) || state == (0, 1, 1, 1) || state == (1, 1, 1, 0) ||
+               state == (1, 0, 0, 0)
+            return -1
+        elseif state == (0, 0, 0, 0) || state == (0, 1, 0, 1) || state == (1, 0, 1, 0) ||
+               state == (1, 1, 1, 1)
+            return 0
+        else
+            return 0 # err is interpreted as no movement
+        end
+    end
+    qAevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta) ~ 0],
+        ModelingToolkit.ImperativeAffect((; qA, hA, hB, cnt), (; qB)) do x, o, c, i
+            @set! x.hA = x.qA
+            @set! x.hB = o.qB
+            @set! x.qA = 1
+            @set! x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
+            x
+        end,
+        affect_neg = ModelingToolkit.ImperativeAffect(
+            (; qA, hA, hB, cnt), (; qB)) do x, o, c, i
+            @set! x.hA = x.qA
+            @set! x.hB = o.qB
+            @set! x.qA = 0
+            @set! x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
+            x
+        end; rootfind = SciMLBase.RightRootFind)
+    qBevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta - π / 2) ~ 0],
+        ModelingToolkit.ImperativeAffect((; qB, hA, hB, cnt), (; qA)) do x, o, c, i
+            @set! x.hA = o.qA
+            @set! x.hB = x.qB
+            @set! x.qB = 1
+            @set! x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
+            x
+        end,
+        affect_neg = ModelingToolkit.ImperativeAffect(
+            (; qB, hA, hB, cnt), (; qA)) do x, o, c, i
+            @set! x.hA = o.qA
+            @set! x.hB = x.qB
+            @set! x.qB = 0
+            @set! x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
+            x
+        end; rootfind = SciMLBase.RightRootFind)
+    @named sys = ODESystem(
+        eqs, t, [theta, omega], params; continuous_events = [qAevt, qBevt])
+    ss = structural_simplify(sys)
+    prob = ODEProblem(ss, [theta => 1e-5], (0.0, pi))
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
+    @test getp(sol, cnt)(sol) == 198 # we get 2 pulses per phase cycle (cos 0 crossing) and we go to 100 cycles; we miss a few due to the initial state
+end
 
 @testset "Initialization" begin
     @variables x(t)
@@ -1063,7 +1344,7 @@ end
     cb = [x ~ 0.0] => [x ~ 0, y ~ 1]
     @mtkbuild pend = ODESystem(eqs, t; continuous_events = [cb])
     prob = ODEProblem(pend, [x => 1], (0.0, 3.0), guesses = [y => x])
-    @test_throws "CheckInit specified but initialization" solve(prob, Rodas5())
+    @test_throws "DAE initialization failed" solve(prob, Rodas5())
 
     cb = [x ~ 0.0] => [y ~ 1]
     @mtkbuild pend = ODESystem(eqs, t; continuous_events = [cb])

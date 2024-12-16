@@ -78,6 +78,7 @@ end
             @safetestset "SDESystem Test" include("sdesystem.jl")
             @safetestset "DDESystem Test" include("dde.jl")
             @safetestset "NonlinearSystem Test" include("nonlinearsystem.jl")
+            @safetestset "SCCNonlinearProblem Test" include("scc_nonlinear_problem.jl")
             @safetestset "PDE Construction Test" include("pde.jl")
             @safetestset "JumpSystem Test" include("jumpsystem.jl")
             @safetestset "BVProblem Test" include("bvproblem.jl")

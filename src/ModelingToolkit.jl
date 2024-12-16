@@ -50,6 +50,7 @@ using Distributed
 import JuliaFormatter
 using MLStyle
 using NonlinearSolve
+import SCCNonlinearSolve
 using Reexport
 using RecursiveArrayTools
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
@@ -145,10 +146,12 @@ include("systems/parameter_buffer.jl")
 include("systems/abstractsystem.jl")
 include("systems/model_parsing.jl")
 include("systems/connectors.jl")
+include("systems/imperative_affect.jl")
 include("systems/callbacks.jl")
 include("systems/problem_utils.jl")
 
 include("systems/nonlinear/nonlinearsystem.jl")
+include("systems/nonlinear/homotopy_continuation.jl")
 include("systems/diffeqs/odesystem.jl")
 include("systems/diffeqs/sdesystem.jl")
 include("systems/diffeqs/abstractodesystem.jl")

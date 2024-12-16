@@ -76,12 +76,13 @@ prob = SDDEProblem(hayes_modelf, hayes_modelg, [1.0], h, tspan, pmul;
     constant_lags = (pmul[1],));
 sol = solve(prob, RKMil(), seed = 100)
 
-@variables x(..)
+@variables x(..) delx(t)
 @parameters a=-4.0 b=-2.0 c=10.0 α=-1.3 β=-1.2 γ=1.1
 @brownian η
 τ = 1.0
-eqs = [D(x(t)) ~ a * x(t) + b * x(t - τ) + c + (α * x(t) + γ) * η]
+eqs = [D(x(t)) ~ a * x(t) + b * x(t - τ) + c + (α * x(t) + γ) * η, delx ~ x(t - τ)]
 @mtkbuild sys = System(eqs, t)
+@test ModelingToolkit.has_observed_with_lhs(sys, delx)
 @test ModelingToolkit.is_dde(sys)
 @test !is_markovian(sys)
 @test equations(sys) == [D(x(t)) ~ a * x(t) + b * x(t - τ) + c]

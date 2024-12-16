@@ -1,6 +1,18 @@
 using ModelingToolkit, NonlinearSolve, SymbolicIndexingInterface
+import ModelingToolkit as MTK
 using LinearAlgebra
 using Test
+
+@testset "Safe HCProblem" begin
+    @variables x y z
+    eqs = [0 ~ x^2 + y^2 + 2x * y
+           0 ~ x^2 + 4x + 4
+           0 ~ y * z + 4x^2]
+    @mtkbuild sys = NonlinearSystem(eqs)
+    prob = MTK.safe_HomotopyContinuationProblem(sys, [x => 1.0, y => 1.0, z => 1.0], [])
+    @test prob === nothing
+end
+
 import HomotopyContinuation
 
 @testset "No parameters" begin
@@ -9,10 +21,17 @@ import HomotopyContinuation
            0 ~ x^2 + 4x + 4
            0 ~ y * z + 4x^2]
     @mtkbuild sys = NonlinearSystem(eqs)
-    prob = HomotopyContinuationProblem(sys, [x => 1.0, y => 1.0, z => 1.0], [])
+    u0 = [x => 1.0, y => 1.0, z => 1.0]
+    prob = HomotopyContinuationProblem(sys, u0)
     @test prob[x] == prob[y] == prob[z] == 1.0
     @test prob[x + y] == 2.0
     sol = solve(prob; threading = false)
+    @test SciMLBase.successful_retcode(sol)
+    @test norm(sol.resid)≈0.0 atol=1e-10
+
+    prob2 = NonlinearProblem(sys, u0)
+    @test prob2 isa HomotopyContinuationProblem
+    sol = solve(prob2; threading = false)
     @test SciMLBase.successful_retcode(sol)
     @test norm(sol.resid)≈0.0 atol=1e-10
 end
@@ -78,30 +97,45 @@ end
     @test_throws ["Cannot convert", "Unable", "symbolically solve",
         "Exponent", "not an integer", "not a polynomial"] HomotopyContinuationProblem(
         sys, [])
+    @test MTK.safe_HomotopyContinuationProblem(sys, []) isa MTK.NotPolynomialError
+    @test NonlinearProblem(sys, []) isa NonlinearProblem
+
     @mtkbuild sys = NonlinearSystem([x^x - x ~ 0])
     @test_throws ["Cannot convert", "Unable", "symbolically solve",
         "Exponent", "unknowns", "not a polynomial"] HomotopyContinuationProblem(
         sys, [])
+    @test MTK.safe_HomotopyContinuationProblem(sys, []) isa MTK.NotPolynomialError
+    @test NonlinearProblem(sys, []) isa NonlinearProblem
     @mtkbuild sys = NonlinearSystem([((x^2) / sin(x))^2 + x ~ 0])
     @test_throws ["Cannot convert", "both polynomial", "non-polynomial",
         "recognized", "sin", "not a polynomial"] HomotopyContinuationProblem(
         sys, [])
+    @test MTK.safe_HomotopyContinuationProblem(sys, []) isa MTK.NotPolynomialError
+    @test NonlinearProblem(sys, []) isa NonlinearProblem
 
     @variables y = 2.0
     @mtkbuild sys = NonlinearSystem([x^2 + y^2 + 2 ~ 0, y ~ sin(x)])
     @test_throws ["Cannot convert", "recognized", "sin", "not a polynomial"] HomotopyContinuationProblem(
         sys, [])
+    @test MTK.safe_HomotopyContinuationProblem(sys, []) isa MTK.NotPolynomialError
+    @test NonlinearProblem(sys, []) isa NonlinearProblem
 
     @mtkbuild sys = NonlinearSystem([x^2 + y^2 - 2 ~ 0, sin(x + y) ~ 0])
     @test_throws ["Cannot convert", "function of multiple unknowns"] HomotopyContinuationProblem(
         sys, [])
+    @test MTK.safe_HomotopyContinuationProblem(sys, []) isa MTK.NotPolynomialError
+    @test NonlinearProblem(sys, []) isa NonlinearProblem
 
     @mtkbuild sys = NonlinearSystem([sin(x)^2 + 1 ~ 0, cos(y) - cos(x) - 1 ~ 0])
     @test_throws ["Cannot convert", "multiple non-polynomial terms", "same unknown"] HomotopyContinuationProblem(
         sys, [])
+    @test MTK.safe_HomotopyContinuationProblem(sys, []) isa MTK.NotPolynomialError
+    @test NonlinearProblem(sys, []) isa NonlinearProblem
 
     @mtkbuild sys = NonlinearSystem([sin(x^2)^2 + sin(x^2) - 1 ~ 0])
     @test_throws ["import Nemo"] HomotopyContinuationProblem(sys, [])
+    @test MTK.safe_HomotopyContinuationProblem(sys, []) isa MTK.NotPolynomialError
+    @test NonlinearProblem(sys, []) isa NonlinearProblem
 end
 
 import Nemo
@@ -126,6 +160,9 @@ end
     @test prob[x] ≈ 0.25
     @test prob[y] ≈ 0.125
     sol = solve(prob; threading = false)
+    # can't replicate the solve failure locally, so CI logs might help
+    @show sol.u sol.original.path_results
+    @test SciMLBase.successful_retcode(sol)
     @test sol[a]≈0.5 atol=1e-6
     @test sol[b]≈0.25 atol=1e-6
 end

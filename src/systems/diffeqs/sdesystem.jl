@@ -263,6 +263,47 @@ function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
         all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
 end
 
+"""
+    function ODESystem(sys::SDESystem)
+
+Convert an `SDESystem` to the equivalent `ODESystem` using `@brownian` variables instead
+of noise equations. The returned system will not be `iscomplete` and will not have an
+index cache, regardless of `iscomplete(sys)`.
+"""
+function ODESystem(sys::SDESystem)
+    neqs = get_noiseeqs(sys)
+    eqs = equations(sys)
+    is_scalar_noise = get_is_scalar_noise(sys)
+    nbrownian = if is_scalar_noise
+        length(neqs)
+    else
+        size(neqs, 2)
+    end
+    brownvars = map(1:nbrownian) do i
+        name = gensym(Symbol(:brown_, i))
+        only(@brownian $name)
+    end
+    if is_scalar_noise
+        brownterms = reduce(+, neqs .* brownvars; init = 0)
+        neweqs = map(eqs) do eq
+            eq.lhs ~ eq.rhs + brownterms
+        end
+    else
+        if neqs isa AbstractVector
+            neqs = reshape(neqs, (length(neqs), 1))
+        end
+        brownterms = neqs * brownvars
+        neweqs = map(eqs, brownterms) do eq, brown
+            eq.lhs ~ eq.rhs + brown
+        end
+    end
+    newsys = ODESystem(neweqs, get_iv(sys), unknowns(sys), parameters(sys);
+        parameter_dependencies = parameter_dependencies(sys), defaults = defaults(sys),
+        continuous_events = continuous_events(sys), discrete_events = discrete_events(sys),
+        name = nameof(sys), description = description(sys), metadata = get_metadata(sys))
+    @set newsys.parent = sys
+end
+
 function __num_isdiag_noise(mat)
     for i in axes(mat, 1)
         nnz = 0

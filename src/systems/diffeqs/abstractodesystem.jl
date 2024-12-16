@@ -1384,6 +1384,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         initialization_eqs = [],
         fully_determined = nothing,
         check_units = true,
+        use_scc = true,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
@@ -1393,16 +1394,18 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     elseif isempty(u0map) && get_initializesystem(sys) === nothing
         isys = structural_simplify(
             generate_initializesystem(
-                sys; initialization_eqs, check_units, pmap = parammap); fully_determined)
+                sys; initialization_eqs, check_units, pmap = parammap,
+                guesses, extra_metadata = (; use_scc)); fully_determined)
     else
         isys = structural_simplify(
             generate_initializesystem(
-                sys; u0map, initialization_eqs, check_units, pmap = parammap); fully_determined)
+                sys; u0map, initialization_eqs, check_units,
+                pmap = parammap, guesses, extra_metadata = (; use_scc)); fully_determined)
     end
 
     ts = get_tearing_state(isys)
-    if warn_initialize_determined &&
-       (unassigned_vars = StructuralTransformations.singular_check(ts); !isempty(unassigned_vars))
+    unassigned_vars = StructuralTransformations.singular_check(ts)
+    if warn_initialize_determined && !isempty(unassigned_vars)
         errmsg = """
         The initialization system is structurally singular. Guess values may \
         significantly affect the initial values of the ODE. The problematic variables \
@@ -1424,11 +1427,17 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     neqs = length(equations(isys))
     nunknown = length(unknowns(isys))
 
+    if use_scc
+        scc_message = "`SCCNonlinearProblem` can only be used for initialization of fully determined systems and hence will not be used here. "
+    else
+        scc_message = ""
+    end
+
     if warn_initialize_determined && neqs > nunknown
-        @warn "Initialization system is overdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false. To make this warning into an error, pass fully_determined = true"
+        @warn "Initialization system is overdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. $(scc_message)To suppress this warning pass warn_initialize_determined = false. To make this warning into an error, pass fully_determined = true"
     end
     if warn_initialize_determined && neqs < nunknown
-        @warn "Initialization system is underdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false. To make this warning into an error, pass fully_determined = true"
+        @warn "Initialization system is underdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. $(scc_message)To suppress this warning pass warn_initialize_determined = false. To make this warning into an error, pass fully_determined = true"
     end
 
     parammap = parammap isa DiffEqBase.NullParameters || isempty(parammap) ?
@@ -1464,9 +1473,20 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
                      end
         for (k, v) in u0map)
     end
-    if neqs == nunknown
-        NonlinearProblem(isys, u0map, parammap; kwargs...)
+
+    TProb = if neqs == nunknown && isempty(unassigned_vars)
+        if use_scc && neqs > 0
+            if is_split(isys)
+                SCCNonlinearProblem
+            else
+                @warn "`SCCNonlinearProblem` can only be used with `split = true` systems. Simplify your `ODESystem` with `split = true` or pass `use_scc = false` to disable this warning"
+                NonlinearProblem
+            end
+        else
+            NonlinearProblem
+        end
     else
-        NonlinearLeastSquaresProblem(isys, u0map, parammap; kwargs...)
+        NonlinearLeastSquaresProblem
     end
+    TProb(isys, u0map, parammap; kwargs...)
 end
