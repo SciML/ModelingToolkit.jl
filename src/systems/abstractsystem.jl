@@ -360,7 +360,7 @@ end
 const MTKPARAMETERS_ARG = Sym{Vector{Vector}}(:___mtkparameters___)
 
 """
-    wrap_mtkparameters(sys::AbstractSystem, isscalar::Bool, p_start = 2)
+    wrap_mtkparameters(sys::AbstractSystem, isscalar::Bool, p_start = 2, offset = Int(is_time_dependent(sys)))
 
 Return function(s) to be passed to the `wrap_code` keyword of `build_function` which
 allow the compiled function to be called as `f(u, p, t)` where `p isa MTKParameters`
@@ -370,12 +370,14 @@ the first parameter vector in the out-of-place version of the function. For exam
 if a history function (DDEs) was passed before `p`, then the function before wrapping
 would have the signature `f(u, h, p..., t)` and hence `p_start` would need to be `3`.
 
+`offset` is the number of arguments at the end of the argument list to ignore. Defaults
+to 1 if the system is time-dependent (to ignore `t`) and 0 otherwise.
+
 The returned function is `identity` if the system does not have an `IndexCache`.
 """
-function wrap_mtkparameters(sys::AbstractSystem, isscalar::Bool, p_start = 2)
+function wrap_mtkparameters(sys::AbstractSystem, isscalar::Bool, p_start = 2,
+        offset = Int(is_time_dependent(sys)))
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        offset = Int(is_time_dependent(sys))
-
         if isscalar
             function (expr)
                 param_args = expr.args[p_start:(end - offset)]
