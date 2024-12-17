@@ -543,12 +543,12 @@ end
 
 get_callback(prob::BVProblem) = error("BVP solvers do not support callbacks.")
 
-@inline function SciMLBase.Code.create_array(::Type{<:Base.ReinterpretArray}, ::Nothing,
+@inline function SymbolicUtils.Code.create_array(::Type{<:Base.ReinterpretArray}, ::Nothing,
         ::Val{1}, ::Val{dims}, elems...) where {dims}
     [elems...]
 end
 
-@inline function SciMLBase.Code.create_array(
+@inline function SymbolicUtils.Code.create_array(
         ::Type{<:Base.ReinterpretArray}, T, ::Val{1}, ::Val{dims}, elems...) where {dims}
     T[elems...]
 end
