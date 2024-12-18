@@ -101,7 +101,8 @@ function MTK.HomotopyContinuationProblem(
     return prob
 end
 
-function MTK._safe_HomotopyContinuationProblem(sys, u0map, parammap = nothing; kwargs...)
+function MTK._safe_HomotopyContinuationProblem(sys, u0map, parammap = nothing;
+        fraction_cancel_fn = SymbolicUtils.simplify_fractions, kwargs...)
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `HomotopyContinuationProblem`")
     end
@@ -109,7 +110,7 @@ function MTK._safe_HomotopyContinuationProblem(sys, u0map, parammap = nothing; k
     if transformation isa MTK.NotPolynomialError
         return transformation
     end
-    result = MTK.transform_system(sys, transformation)
+    result = MTK.transform_system(sys, transformation; fraction_cancel_fn)
     if result isa MTK.NotPolynomialError
         return result
     end
