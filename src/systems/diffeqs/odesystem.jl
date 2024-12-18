@@ -409,6 +409,7 @@ function flatten(sys::ODESystem, noeqs = false)
             initialization_eqs = initialization_equations(sys),
             is_dde = is_dde(sys),
             tstops = symbolic_tstops(sys),
+            metadata = get_metadata(sys),
             checks = false)
     end
 end

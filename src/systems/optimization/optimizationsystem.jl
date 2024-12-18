@@ -184,6 +184,7 @@ function flatten(sys::OptimizationSystem)
         constraints = constraints(sys),
         defaults = defaults(sys),
         name = nameof(sys),
+        metadata = get_metadata(sys),
         checks = false
     )
 end

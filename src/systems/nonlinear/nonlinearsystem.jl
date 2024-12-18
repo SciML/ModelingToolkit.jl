@@ -859,6 +859,7 @@ function flatten(sys::NonlinearSystem, noeqs = false)
             defaults = defaults(sys),
             name = nameof(sys),
             description = description(sys),
+            metadata = get_metadata(sys),
             checks = false)
     end
 end
