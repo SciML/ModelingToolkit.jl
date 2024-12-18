@@ -1033,19 +1033,24 @@ end
     $(TYPEDSIGNATURES)
 
 Return the indexes of observed equations of `sys` used by expression `exprs`.
+
+Keyword arguments:
+- `involved_vars`: A collection of the variables involved in `exprs`. This is the set of
+  variables which will be explored to find dependencies on observed equations. Typically,
+  providing this keyword is not necessary and is only useful to avoid repeatedly calling
+  `vars(exprs)`
 """
-function observed_equations_used_by(sys::AbstractSystem, exprs)
+function observed_equations_used_by(sys::AbstractSystem, exprs; involved_vars = vars(exprs))
     obs = observed(sys)
 
     obsvars = getproperty.(obs, :lhs)
     graph = observed_dependency_graph(obs)
 
-    syms = vars(exprs)
-
     obsidxs = BitSet()
-    for sym in syms
+    for sym in involved_vars
         idx = findfirst(isequal(sym), obsvars)
         idx === nothing && continue
+        idx in obsidxs && continue
         parents = dfs_parents(graph, idx)
         for i in eachindex(parents)
             parents[i] == 0 && continue
