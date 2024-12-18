@@ -630,6 +630,12 @@ function build_explicit_observed_function(sys, ts;
         oop_mtkp_wrapper = mtkparams_wrapper
     end
 
+    if !checkbounds
+        inbounds_wrapper = wrap_inbounds(false)
+    else
+        inbounds_wrapper = (identity, identity)
+    end
+
     # Need to keep old method of building the function since it uses `output_type`,
     # which can't be provided to `build_function`
     return_value = if isscalar
@@ -642,14 +648,14 @@ function build_explicit_observed_function(sys, ts;
     oop_fn = Func(args, [],
                  pre(Let(obsexprs,
                      return_value,
-                     false))) |> array_wrapper[1] |> oop_mtkp_wrapper |> toexpr
+                     false))) |> array_wrapper[1] |> oop_mtkp_wrapper |> inbounds_wrapper[1] |> toexpr
     oop_fn = expression ? oop_fn : eval_or_rgf(oop_fn; eval_expression, eval_module)
 
     if !isscalar
         iip_fn = build_function(ts,
             args...;
             postprocess_fbody = pre,
-            wrap_code = mtkparams_wrapper .∘ array_wrapper .∘
+            wrap_code = inbounds_wrapper .∘ mtkparams_wrapper .∘ array_wrapper .∘
                         wrap_assignments(isscalar, obsexprs),
             expression = Val{true})[2]
         if !expression

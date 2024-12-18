@@ -235,6 +235,9 @@ end
 function generate_function(
         sys::DiscreteSystem, dvs = unknowns(sys), ps = parameters(sys); wrap_code = identity, kwargs...)
     exprs = [eq.rhs for eq in equations(sys)]
+    if !get(kwargs, :checkbounds, false)
+        wrap_code = wrap_code .∘ wrap_inbounds(false)
+    end
     wrap_code = wrap_code .∘ wrap_array_vars(sys, exprs) .∘
                 wrap_parameter_dependencies(sys, false)
     generate_custom_function(sys, exprs, dvs, ps; wrap_code, kwargs...)
@@ -328,7 +331,7 @@ function SciMLBase.DiscreteFunction{iip, specialize}(
         f = SciMLBase.wrapfun_iip(f, (u0, u0, p, t))
     end
 
-    observedfun = ObservedFunctionCache(sys)
+    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
 
     DiscreteFunction{iip, specialize}(f;
         sys = sys,
