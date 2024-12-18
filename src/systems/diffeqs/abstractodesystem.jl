@@ -116,6 +116,9 @@ function generate_tgrad(
     else
         (ps,)
     end
+    if !get(kwargs, :checkbounds, false)
+        wrap_code = wrap_code .∘ wrap_inbounds(false)
+    end
     wrap_code = wrap_code .∘ wrap_array_vars(sys, tgrad; dvs, ps) .∘
                 wrap_parameter_dependencies(sys, !(tgrad isa AbstractArray))
     return build_function(tgrad,
@@ -136,6 +139,9 @@ function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
         reorder_parameters(get_index_cache(sys), ps)
     else
         (ps,)
+    end
+    if !get(kwargs, :checkbounds, false)
+        wrap_code = wrap_code .∘ wrap_inbounds(false)
     end
     wrap_code = wrap_code .∘ wrap_array_vars(sys, jac; dvs, ps) .∘
                 wrap_parameter_dependencies(sys, false)
@@ -207,6 +213,10 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
     u = map(x -> time_varying_as_func(value(x), sys), dvs)
     p = map.(x -> time_varying_as_func(value(x), sys), reorder_parameters(sys, ps))
     t = get_iv(sys)
+
+    if !get(kwargs, :checkbounds, false)
+        wrap_code = wrap_code .∘ wrap_inbounds(false)
+    end
 
     if isdde
         build_function(rhss, u, DDE_HISTORY_FUN, p..., t; kwargs...,
@@ -439,7 +449,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         ArrayInterface.restructure(u0 .* u0', M)
     end
 
-    observedfun = ObservedFunctionCache(sys; steady_state, eval_expression, eval_module)
+    observedfun = ObservedFunctionCache(sys; steady_state, eval_expression, eval_module, checkbounds)
 
     jac_prototype = if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
@@ -531,7 +541,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         _jac = nothing
     end
 
-    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
+    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
 
     jac_prototype = if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
