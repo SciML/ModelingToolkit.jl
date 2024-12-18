@@ -244,8 +244,9 @@ function setdefault(v, val)
     val === nothing ? v : wrap(setdefaultval(unwrap(v), value(val)))
 end
 
-function process_variables!(var_to_name, defs, vars)
+function process_variables!(var_to_name, defs, guesses, vars)
     collect_defaults!(defs, vars)
+    collect_guesses!(guesses, vars)
     collect_var_to_name!(var_to_name, vars)
     return nothing
 end
@@ -259,6 +260,17 @@ function collect_defaults!(defs, vars)
         defs[v] = getdefault(v)
     end
     return defs
+end
+
+function collect_guesses!(guesses, vars)
+    for v in vars
+        symbolic_type(v) == NotSymbolic() && continue
+        if haskey(guesses, v) || !hasguess(unwrap(v)) || (def = getguess(v)) === nothing
+            continue
+        end
+        guesses[v] = getguess(v)
+    end
+    return guesses
 end
 
 function collect_var_to_name!(vars, xs)
@@ -1145,4 +1157,13 @@ function similar_variable(var::BasicSymbolic, name = :anon)
         sym = setmetadata(sym, Symbolics.ArrayShapeCtx, map(Base.OneTo, size(var)))
     end
     return sym
+end
+
+function guesses_from_metadata!(guesses, vars)
+    varguesses = [getguess(v) for v in vars]
+    hasaguess = findall(!isnothing, varguesses)
+    for i in hasaguess
+        haskey(guesses, vars[i]) && continue
+        guesses[vars[i]] = varguesses[i]
+    end
 end
