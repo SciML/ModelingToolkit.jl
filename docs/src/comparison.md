@@ -1,4 +1,4 @@
-# Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages
+# [Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages](@id comparison)
 
 ## Comparison Against Modelica
 
