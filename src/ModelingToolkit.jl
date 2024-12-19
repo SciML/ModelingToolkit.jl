@@ -145,6 +145,7 @@ include("systems/index_cache.jl")
 include("systems/parameter_buffer.jl")
 include("systems/abstractsystem.jl")
 include("systems/model_parsing.jl")
+include("systems/analysis_points.jl")
 include("systems/connectors.jl")
 include("systems/imperative_affect.jl")
 include("systems/callbacks.jl")
@@ -238,7 +239,8 @@ export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem
 export NonlinearSystem, OptimizationSystem, ConstraintsSystem
 export alias_elimination, flatten
-export connect, domain_connect, @connector, Connection, Flow, Stream, instream
+export connect, domain_connect, @connector, Connection, AnalysisPoint, Flow, Stream,
+       instream
 export initial_state, transition, activeState, entry, ticksInState, timeInState
 export @component, @mtkmodel, @mtkbuild
 export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbance,
