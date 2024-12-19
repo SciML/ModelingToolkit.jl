@@ -84,6 +84,7 @@ end
             @safetestset "print_tree" include("print_tree.jl")
             @safetestset "Constraints Test" include("constraints.jl")
             @safetestset "IfLifting Test" include("if_lifting.jl")
+            @safetestset "Analysis Points Test" include("analysis_points.jl")
         end
     end
 
