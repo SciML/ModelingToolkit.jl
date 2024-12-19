@@ -300,7 +300,7 @@ function build_torn_function(sys;
         rhss)
 
     unknown_vars = Any[fullvars[i] for i in unknowns_idxs]
-    @set! sys.solved_unknowns = unknown_vars
+    @reset sys.solved_unknowns = unknown_vars
 
     pre = get_postprocess_fbody(sys)
     cpre = get_preprocess_constants(rhss)

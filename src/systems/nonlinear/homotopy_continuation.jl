@@ -479,10 +479,10 @@ function transform_system(sys::NonlinearSystem, transformation::PolynomialTransf
     end
 
     sys2 = @set sys.eqs = eqs2
-    @set! sys2.unknowns = new_dvs
+    @reset sys2.unknowns = new_dvs
     # remove observed equations to avoid adding them in codegen
-    @set! sys2.observed = Equation[]
-    @set! sys2.substitutions = nothing
+    @reset sys2.observed = Equation[]
+    @reset sys2.substitutions = nothing
     return PolynomialTransformationResult(sys2, denoms)
 end
 

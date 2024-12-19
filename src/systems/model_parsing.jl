@@ -122,15 +122,15 @@ function _model_macro(mod, name, expr, isconnector)
     end
 
     isconnector && push!(exprs.args,
-        :($Setfield.@set!(var"#___sys___".connector_type=$connector_type(var"#___sys___"))))
+        :($Accessors.@reset(var"#___sys___".connector_type=$connector_type(var"#___sys___"))))
 
     !isempty(c_evts) && push!(exprs.args,
-        :($Setfield.@set!(var"#___sys___".continuous_events=$SymbolicContinuousCallback.([
+        :($Accessors.@reset(var"#___sys___".continuous_events=$SymbolicContinuousCallback.([
             $(c_evts...)
         ]))))
 
     !isempty(d_evts) && push!(exprs.args,
-        :($Setfield.@set!(var"#___sys___".discrete_events=$SymbolicDiscreteCallback.([
+        :($Accessors.@reset(var"#___sys___".discrete_events=$SymbolicDiscreteCallback.([
             $(d_evts...)
         ]))))
 

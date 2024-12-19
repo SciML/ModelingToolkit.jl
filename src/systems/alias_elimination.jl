@@ -99,14 +99,14 @@ function alias_elimination!(state::TearingState; kwargs...)
         eq = eqs[ieq]
         eqs[ieq] = fast_substitute(eq, subs)
     end
-    @set! mm.nparentrows = nsrcs(graph)
-    @set! mm.row_cols = eltype(mm.row_cols)[mm.row_cols[i]
+    @reset mm.nparentrows = nsrcs(graph)
+    @reset mm.row_cols = eltype(mm.row_cols)[mm.row_cols[i]
                                             for (i, eq) in enumerate(mm.nzrows)
                                             if old_to_new_eq[eq] > 0]
-    @set! mm.row_vals = eltype(mm.row_vals)[mm.row_vals[i]
+    @reset mm.row_vals = eltype(mm.row_vals)[mm.row_vals[i]
                                             for (i, eq) in enumerate(mm.nzrows)
                                             if old_to_new_eq[eq] > 0]
-    @set! mm.nzrows = Int[old_to_new_eq[eq] for eq in mm.nzrows if old_to_new_eq[eq] > 0]
+    @reset mm.nzrows = Int[old_to_new_eq[eq] for eq in mm.nzrows if old_to_new_eq[eq] > 0]
 
     for old_ieq in to_expand
         ieq = old_to_new_eq[old_ieq]
@@ -136,7 +136,7 @@ function alias_elimination!(state::TearingState; kwargs...)
     state.structure.var_to_diff = new_var_to_diff
 
     sys = state.sys
-    @set! sys.eqs = eqs
+    @reset sys.eqs = eqs
     state.sys = sys
     return invalidate_cache!(sys), mm
 end
@@ -359,7 +359,7 @@ function alias_eliminate_graph!(state::TransformationState, ils::SparseMatrixCLI
     rk1vars = BitSet(@view pivots[1:rank1])
     for v in solvable_variables
         v in rk1vars && continue
-        @set! ils.nparentrows += 1
+        @reset ils.nparentrows += 1
         push!(ils.nzrows, ils.nparentrows)
         push!(ils.row_cols, [v])
         push!(ils.row_vals, [convert(eltype(ils), 1)])

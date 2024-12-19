@@ -65,8 +65,8 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
         filter(x -> value(x.lhs) !== nothing,
             out_eqs[sort(filter(x -> x !== unassigned, var_eq_matching))]))
 
-    @set! sys.eqs = final_eqs
-    @set! sys.unknowns = final_vars
+    @reset sys.eqs = final_eqs
+    @reset sys.unknowns = final_vars
     return sys
 end
 

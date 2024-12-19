@@ -761,11 +761,11 @@ function structural_simplify(sys::OptimizationSystem; split = true, kwargs...)
         cons_simplified[i] = fixpoint_sub(eq, subs)
     end
     newsts = setdiff(unknowns(sys), keys(subs))
-    @set! sys.constraints = cons_simplified
-    @set! sys.observed = [observed(sys); obs]
+    @reset sys.constraints = cons_simplified
+    @reset sys.observed = [observed(sys); obs]
     neweqs = fixpoint_sub.(equations(sys), (subs,))
-    @set! sys.op = length(neweqs) == 1 ? first(neweqs) : neweqs
-    @set! sys.unknowns = newsts
+    @reset sys.op = length(neweqs) == 1 ? first(neweqs) : neweqs
+    @reset sys.unknowns = newsts
     sys = complete(sys; split)
     return sys
 end

@@ -616,6 +616,6 @@ function subset_unknowns_observed(
         end
     end
     ic = @set ic.unknown_idx = unknown_idx
-    @set! ic.observed_syms_to_timeseries = observed_syms_to_timeseries
+    @reset ic.observed_syms_to_timeseries = observed_syms_to_timeseries
     return ic
 end

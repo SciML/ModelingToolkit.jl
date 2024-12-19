@@ -14,7 +14,7 @@ using DocStringExtensions
 using UnPack
 using SparseArrays
 using Graphs
-using Setfield
+using Accessors
 
 ### Matching
 struct Unassigned

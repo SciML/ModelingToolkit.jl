@@ -1,4 +1,4 @@
-using ModelingToolkit, Test, Setfield, OrdinaryDiffEq, DiffEqCallbacks
+using ModelingToolkit, Test, Accessors, OrdinaryDiffEq, DiffEqCallbacks
 using ModelingToolkit: Continuous
 using ModelingToolkit: t_nounits as t, D_nounits as D
 

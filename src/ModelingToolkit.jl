@@ -31,7 +31,8 @@ using JumpProcesses
 using DataStructures
 using Base.Threads
 using Latexify, Unitful, ArrayInterface
-using Setfield, ConstructionBase
+import Setfield
+using Accessors, ConstructionBase
 import Libdl
 using DocStringExtensions
 using Base: RefValue

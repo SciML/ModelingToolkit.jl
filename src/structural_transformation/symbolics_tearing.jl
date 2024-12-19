@@ -133,9 +133,9 @@ end
 
 function tearing_substitution(sys::AbstractSystem; kwargs...)
     neweqs = full_equations(sys::AbstractSystem; kwargs...)
-    @set! sys.eqs = neweqs
-    @set! sys.substitutions = nothing
-    @set! sys.schedule = nothing
+    @reset sys.eqs = neweqs
+    @reset sys.substitutions = nothing
+    @reset sys.schedule = nothing
 end
 
 function tearing_assignments(sys::AbstractSystem)
@@ -563,10 +563,10 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     diff_to_var = invview(var_to_diff)
 
     old_fullvars = fullvars
-    @set! state.structure.graph = complete(graph)
-    @set! state.structure.var_to_diff = var_to_diff
-    @set! state.structure.eq_to_diff = eq_to_diff
-    @set! state.fullvars = fullvars = fullvars[invvarsperm]
+    @reset state.structure.graph = complete(graph)
+    @reset state.structure.var_to_diff = var_to_diff
+    @reset state.structure.eq_to_diff = eq_to_diff
+    @reset state.fullvars = fullvars = fullvars[invvarsperm]
     ispresent = let var_to_diff = var_to_diff, graph = graph
         i -> (!isempty(𝑑neighbors(graph, i)) ||
               (var_to_diff[i] !== nothing && !isempty(𝑑neighbors(graph, var_to_diff[i]))))
@@ -590,24 +590,24 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
             push!(unknowns, old_fullvars[v])
         end
     end
-    @set! sys.unknowns = unknowns
+    @reset sys.unknowns = unknowns
 
     obs, subeqs, deps = cse_and_array_hacks(
         obs, subeqs, unknowns, neweqs; cse = cse_hack, array = array_hack)
 
-    @set! sys.eqs = neweqs
-    @set! sys.observed = obs
+    @reset sys.eqs = neweqs
+    @reset sys.observed = obs
 
-    @set! sys.substitutions = Substitutions(subeqs, deps)
+    @reset sys.substitutions = Substitutions(subeqs, deps)
 
     # Only makes sense for time-dependent
     # TODO: generalize to SDE
     if sys isa ODESystem
-        @set! sys.schedule = Schedule(var_eq_matching, dummy_sub)
+        @reset sys.schedule = Schedule(var_eq_matching, dummy_sub)
     end
     sys = schedule(sys)
-    @set! state.sys = sys
-    @set! sys.tearing_state = state
+    @reset state.sys = sys
+    @reset sys.tearing_state = state
     return invalidate_cache!(sys)
 end
 

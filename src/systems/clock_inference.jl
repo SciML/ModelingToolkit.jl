@@ -39,8 +39,8 @@ function substitute_sample_time(ci::ClockInference, ts::TearingState)
         end
         eqs[i] = neweq
     end
-    @set! ts.sys.eqs = eqs
-    @set! ci.ts = ts
+    @reset ts.sys.eqs = eqs
+    @reset ci.ts = ts
 end
 
 function substitute_sample_time(eq::Equation, dt)
@@ -182,7 +182,7 @@ function split_system(ci::ClockInference{S}) where {S}
         ts_i = system_subset(ts, ieqs)
         if id != continuous_id
             ts_i = shift_discrete_system(ts_i)
-            @set! ts_i.structure.only_discrete = true
+            @reset ts_i.structure.only_discrete = true
         end
         tss[id] = ts_i
     end

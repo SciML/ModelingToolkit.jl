@@ -21,10 +21,10 @@ then the NamedTuple `(;x=2)` will be passed as `observed` to the affect function
 The NamedTuple returned from `f` includes the values to be written back to the system after `f` returns. For example, if we want to update the value of `x` to be the result of `x + y` we could write
 
     ImperativeAffect(observed=(; x_plus_y = x + y), modified=(; x)) do m, o
-        @set! m.x = o.x_plus_y
+        @reset m.x = o.x_plus_y
     end
 
-Where we use Setfield to copy the tuple `m` with a new value for `x`, then return the modified value of `m`. All values updated by the tuple must have names originally declared in
+Where we use Accessors to copy the tuple `m` with a new value for `x`, then return the modified value of `m`. All values updated by the tuple must have names originally declared in
 `modified`; a runtime error will be produced if a value is written that does not appear in `modified`. The user can dynamically decide not to write a value back by not including it
 in the returned tuple, in which case the associated field will not be updated.
 """
