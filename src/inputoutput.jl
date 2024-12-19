@@ -315,12 +315,12 @@ function inputs_to_parameters!(state::TransformationState, io)
         @assert new_v > 0
         new_var_to_diff[new_i] = new_v
     end
-    @set! structure.var_to_diff = complete(new_var_to_diff)
-    @set! structure.graph = complete(new_graph)
+    @reset structure.var_to_diff = complete(new_var_to_diff)
+    @reset structure.graph = complete(new_graph)
 
-    @set! sys.eqs = isempty(input_to_parameters) ? equations(sys) :
+    @reset sys.eqs = isempty(input_to_parameters) ? equations(sys) :
                     fast_substitute(equations(sys), input_to_parameters)
-    @set! sys.unknowns = setdiff(unknowns(sys), keys(input_to_parameters))
+    @reset sys.unknowns = setdiff(unknowns(sys), keys(input_to_parameters))
     ps = parameters(sys)
 
     if io !== nothing
@@ -334,11 +334,11 @@ function inputs_to_parameters!(state::TransformationState, io)
         new_parameters = new_parameters[permutation]
     end
 
-    @set! sys.ps = [ps; new_parameters]
+    @reset sys.ps = [ps; new_parameters]
 
-    @set! state.sys = sys
-    @set! state.fullvars = new_fullvars
-    @set! state.structure = structure
+    @reset state.sys = sys
+    @reset state.fullvars = new_fullvars
+    @reset state.structure = structure
     base_params = length(ps)
     return state, (base_params + 1):(base_params + length(new_parameters)) # (1:length(new_parameters)) .+ base_params
 end

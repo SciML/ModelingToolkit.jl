@@ -50,7 +50,7 @@ function structural_simplify(
         newsys = pass(newsys)
     end
     if newsys isa ODESystem || has_parent(newsys)
-        @set! newsys.parent = complete(sys; split, flatten = false)
+        @reset newsys.parent = complete(sys; split, flatten = false)
     end
     newsys = complete(newsys; split)
     if has_defaults(newsys) && (defs = get_defaults(newsys)) !== nothing
@@ -125,8 +125,8 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
         end
         g = Matrix(sparse(Is, Js, vals))
         sys = state.sys
-        @set! sys.eqs = new_eqs
-        @set! sys.unknowns = [v
+        @reset sys.eqs = new_eqs
+        @reset sys.unknowns = [v
                               for (i, v) in enumerate(fullvars)
                               if !iszero(new_idxs[i]) &&
                                  invview(var_to_diff)[i] === nothing]

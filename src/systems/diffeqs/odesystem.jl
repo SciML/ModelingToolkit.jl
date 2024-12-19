@@ -766,9 +766,9 @@ function add_accumulations(sys::ODESystem, vars::Vector{<:Pair})
         error("$ints already exist in the system!")
     end
     D = Differential(get_iv(sys))
-    @set! sys.eqs = [eqs; Equation[D(a) ~ v[2] for (a, v) in zip(avars, vars)]]
-    @set! sys.unknowns = [get_unknowns(sys); avars]
-    @set! sys.defaults = merge(get_defaults(sys), Dict(a => 0.0 for a in avars))
+    @reset sys.eqs = [eqs; Equation[D(a) ~ v[2] for (a, v) in zip(avars, vars)]]
+    @reset sys.unknowns = [get_unknowns(sys); avars]
+    @reset sys.defaults = merge(get_defaults(sys), Dict(a => 0.0 for a in avars))
 end
 
 function Base.show(io::IO, mime::MIME"text/plain", sys::ODESystem; hint = true, bold = true)

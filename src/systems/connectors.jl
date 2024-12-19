@@ -370,14 +370,14 @@ function generate_connection_set!(connectionsets, domain_csets,
 
     # pre order traversal
     if !isempty(extra_unknowns)
-        @set! sys.unknowns = [get_unknowns(sys); extra_unknowns]
+        @reset sys.unknowns = [get_unknowns(sys); extra_unknowns]
     end
-    @set! sys.systems = map(
+    @reset sys.systems = map(
         s -> generate_connection_set!(connectionsets, domain_csets, s,
             find, replace, scalarize,
             renamespace(namespace, s)),
         subsys)
-    @set! sys.eqs = eqs
+    @reset sys.eqs = eqs
 end
 
 function Base.merge(csets::AbstractVector{<:ConnectionSet}, allouter = false)
@@ -485,9 +485,9 @@ function expand_connections(sys::AbstractSystem, find = nothing, replace = nothi
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
     _sys = expand_instream(instream_csets, sys; debug = debug, tol = tol)
     sys = flatten(sys, true)
-    @set! sys.eqs = [equations(_sys); ceqs]
+    @reset sys.eqs = [equations(_sys); ceqs]
     d_defs = domain_defaults(sys, domain_csets)
-    @set! sys.defaults = merge(get_defaults(sys), d_defs)
+    @reset sys.defaults = merge(get_defaults(sys), d_defs)
 end
 
 function unnamespace(root, namespace)
@@ -508,7 +508,7 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
         tol = 1e-8)
     subsys = get_systems(sys)
     # post order traversal
-    @set! sys.systems = map(
+    @reset sys.systems = map(
         s -> expand_instream(csets, s,
             renamespace(namespace, nameof(s)),
             namespace; debug, tol),
@@ -672,8 +672,8 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
         println("======================================")
     end
 
-    @set! sys.systems = []
-    @set! sys.eqs = [get_eqs(sys); eqs; subed_eqs; additional_eqs]
+    @reset sys.systems = []
+    @reset sys.eqs = [get_eqs(sys); eqs; subed_eqs; additional_eqs]
     sys
 end
 

@@ -8,7 +8,7 @@ using ModelingToolkit: SymbolicContinuousCallback,
 using StableRNGs
 import SciMLBase
 using SymbolicIndexingInterface
-using Setfield
+using Accessors
 rng = StableRNG(12345)
 
 @variables x(t) = 0
@@ -1093,12 +1093,12 @@ end
     furnace_off = ModelingToolkit.SymbolicContinuousCallback(
         [temp ~ furnace_off_threshold],
         ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, i, c
-            @set! x.furnace_on = false
+            @reset x.furnace_on = false
         end)
     furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
         [temp ~ furnace_on_threshold],
         ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, i, c
-            @set! x.furnace_on = true
+            @reset x.furnace_on = true
         end)
     @named sys = ODESystem(
         eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
@@ -1110,15 +1110,15 @@ end
     furnace_off = ModelingToolkit.SymbolicContinuousCallback(
         [temp ~ furnace_off_threshold],
         ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, c, i
-            @set! x.furnace_on = false
+            @reset x.furnace_on = false
         end; initialize = ModelingToolkit.ImperativeAffect(modified = (;
             temp)) do x, o, c, i
-            @set! x.temp = 0.2
+            @reset x.temp = 0.2
         end)
     furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
         [temp ~ furnace_on_threshold],
         ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, c, i
-            @set! x.furnace_on = true
+            @reset x.furnace_on = true
         end)
     @named sys = ODESystem(
         eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
@@ -1140,7 +1140,7 @@ end
         [temp ~ furnace_off_threshold],
         ModelingToolkit.ImperativeAffect(
             modified = (; furnace_on), observed = (; furnace_on)) do x, o, c, i
-            @set! x.furnace_on = false
+            @reset x.furnace_on = false
         end)
     @named sys = ODESystem(eqs, t, [temp], params; continuous_events = [furnace_off])
     ss = structural_simplify(sys)
@@ -1156,7 +1156,7 @@ end
         [temp ~ furnace_off_threshold],
         ModelingToolkit.ImperativeAffect(
             modified = (; furnace_on, tempsq), observed = (; furnace_on)) do x, o, c, i
-            @set! x.furnace_on = false
+            @reset x.furnace_on = false
         end)
     @named sys = ODESystem(
         eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
@@ -1169,7 +1169,7 @@ end
         [temp ~ furnace_off_threshold],
         ModelingToolkit.ImperativeAffect(modified = (; furnace_on),
             observed = (; furnace_on, not_actually_here)) do x, o, c, i
-            @set! x.furnace_on = false
+            @reset x.furnace_on = false
         end)
     @named sys = ODESystem(
         eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
@@ -1213,34 +1213,34 @@ end
     end
     qAevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta) ~ 0],
         ModelingToolkit.ImperativeAffect((; qA, hA, hB, cnt), (; qB)) do x, o, c, i
-            @set! x.hA = x.qA
-            @set! x.hB = o.qB
-            @set! x.qA = 1
-            @set! x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
+            @reset x.hA = x.qA
+            @reset x.hB = o.qB
+            @reset x.qA = 1
+            @reset x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
             x
         end,
         affect_neg = ModelingToolkit.ImperativeAffect(
             (; qA, hA, hB, cnt), (; qB)) do x, o, c, i
-            @set! x.hA = x.qA
-            @set! x.hB = o.qB
-            @set! x.qA = 0
-            @set! x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
+            @reset x.hA = x.qA
+            @reset x.hB = o.qB
+            @reset x.qA = 0
+            @reset x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
             x
         end; rootfind = SciMLBase.RightRootFind)
     qBevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta - π / 2) ~ 0],
         ModelingToolkit.ImperativeAffect((; qB, hA, hB, cnt), (; qA)) do x, o, c, i
-            @set! x.hA = o.qA
-            @set! x.hB = x.qB
-            @set! x.qB = 1
-            @set! x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
+            @reset x.hA = o.qA
+            @reset x.hB = x.qB
+            @reset x.qB = 1
+            @reset x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
             x
         end,
         affect_neg = ModelingToolkit.ImperativeAffect(
             (; qB, hA, hB, cnt), (; qA)) do x, o, c, i
-            @set! x.hA = o.qA
-            @set! x.hB = x.qB
-            @set! x.qB = 0
-            @set! x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
+            @reset x.hA = o.qA
+            @reset x.hB = x.qB
+            @reset x.qB = 0
+            @reset x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
             x
         end; rootfind = SciMLBase.RightRootFind)
     @named sys = ODESystem(

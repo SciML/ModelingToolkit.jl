@@ -294,7 +294,7 @@ function SciMLStructures.canonicalize(::SciMLStructures.Tunable, p::MTKParameter
 end
 
 function SciMLStructures.replace(::SciMLStructures.Tunable, p::MTKParameters, newvals)
-    @set! p.tunable = newvals
+    @reset p.tunable = newvals
     return p
 end
 
@@ -318,7 +318,7 @@ for (Portion, field, recurse) in [(SciMLStructures.Discrete, :discrete, 1)
     end
 
     @eval function SciMLStructures.replace(::$Portion, p::MTKParameters, newvals)
-        @set! p.$field = split_into_buffers(newvals, p.$field, Val($recurse))
+        @reset p.$field = split_into_buffers(newvals, p.$field, Val($recurse))
         p
     end
 
@@ -505,9 +505,9 @@ function SymbolicIndexingInterface.remake_buffer(indp, oldbuf::MTKParameters, id
 end
 function _remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true)
     newbuf = @set oldbuf.tunable = similar(oldbuf.tunable, Any)
-    @set! newbuf.discrete = Tuple(similar(buf, Any) for buf in newbuf.discrete)
-    @set! newbuf.constant = Tuple(similar(buf, Any) for buf in newbuf.constant)
-    @set! newbuf.nonnumeric = Tuple(similar(buf, Any) for buf in newbuf.nonnumeric)
+    @reset newbuf.discrete = Tuple(similar(buf, Any) for buf in newbuf.discrete)
+    @reset newbuf.constant = Tuple(similar(buf, Any) for buf in newbuf.constant)
+    @reset newbuf.nonnumeric = Tuple(similar(buf, Any) for buf in newbuf.nonnumeric)
 
     function handle_parameter(ic, sym, idx, val)
         if sym === nothing
@@ -572,13 +572,13 @@ function _remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true
         end
     end
 
-    @set! newbuf.tunable = narrow_buffer_type_and_fallback_undefs(
+    @reset newbuf.tunable = narrow_buffer_type_and_fallback_undefs(
         oldbuf.tunable, newbuf.tunable)
-    @set! newbuf.discrete = narrow_buffer_type_and_fallback_undefs.(
+    @reset newbuf.discrete = narrow_buffer_type_and_fallback_undefs.(
         oldbuf.discrete, newbuf.discrete)
-    @set! newbuf.constant = narrow_buffer_type_and_fallback_undefs.(
+    @reset newbuf.constant = narrow_buffer_type_and_fallback_undefs.(
         oldbuf.constant, newbuf.constant)
-    @set! newbuf.nonnumeric = narrow_buffer_type_and_fallback_undefs.(
+    @reset newbuf.nonnumeric = narrow_buffer_type_and_fallback_undefs.(
         oldbuf.nonnumeric, newbuf.nonnumeric)
     return newbuf
 end

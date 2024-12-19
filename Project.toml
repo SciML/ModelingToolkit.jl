@@ -5,6 +5,7 @@ version = "9.59.0"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
+Accessors = "7d9f7c33-5ae7-4f3b-8dc6-eff91059b697"
 ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
 BlockArrays = "8e7c35d0-a365-5155-bbbb-fb81a777f24e"
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
@@ -73,11 +74,12 @@ MTKBifurcationKitExt = "BifurcationKit"
 MTKChainRulesCoreExt = "ChainRulesCore"
 MTKDeepDiffsExt = "DeepDiffs"
 MTKHomotopyContinuationExt = "HomotopyContinuation"
-MTKLabelledArraysExt = "LabelledArrays"
 MTKInfiniteOptExt = "InfiniteOpt"
+MTKLabelledArraysExt = "LabelledArrays"
 
 [compat]
 AbstractTrees = "0.3, 0.4"
+Accessors = "0.1.36"
 ArrayInterface = "6, 7"
 BifurcationKit = "0.4"
 BlockArrays = "1.1"

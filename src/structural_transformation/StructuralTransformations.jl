@@ -1,6 +1,6 @@
 module StructuralTransformations
 
-using Setfield: @set!, @set
+using Accessors: @set, @reset
 using UnPack: @unpack
 
 using Symbolics: unwrap, linear_expansion, fast_substitute

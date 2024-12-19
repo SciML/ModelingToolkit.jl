@@ -859,7 +859,7 @@ is scheduled after tearing based simplifications where equations are converted
 into assignments.
 """
 function schedule(sys::AbstractSystem)
-    has_schedule(sys) ? sys : (@set! sys.isscheduled = true)
+    has_schedule(sys) ? sys : (@reset sys.isscheduled = true)
 end
 
 """
@@ -896,7 +896,7 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
     collect_scoped_vars!(newunknowns, newparams, sys, iv; depth = -1)
     # don't update unknowns to not disturb `structural_simplify` order
     # `GlobalScope`d unknowns will be picked up and added there
-    @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
+    @reset sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
 
     if flatten
         eqs = equations(sys)
@@ -907,12 +907,12 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
         end
         newsys = ModelingToolkit.flatten(newsys)
         if has_parent(newsys) && get_parent(sys) === nothing
-            @set! newsys.parent = complete(sys; split = false, flatten = false)
+            @reset newsys.parent = complete(sys; split = false, flatten = false)
         end
         sys = newsys
     end
     if split && has_index_cache(sys)
-        @set! sys.index_cache = IndexCache(sys)
+        @reset sys.index_cache = IndexCache(sys)
         all_ps = get_ps(sys)
         if !isempty(all_ps)
             # reorder parameters by portions
@@ -949,15 +949,15 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
                 ordered_ps = vcat(
                     ordered_ps, reduce(vcat, ps_split[2:end]; init = eltype(ordered_ps)[]))
             end
-            @set! sys.ps = ordered_ps
+            @reset sys.ps = ordered_ps
         end
     elseif has_index_cache(sys)
-        @set! sys.index_cache = nothing
+        @reset sys.index_cache = nothing
     end
     if isdefined(sys, :initializesystem) && get_initializesystem(sys) !== nothing
-        @set! sys.initializesystem = complete(get_initializesystem(sys); split)
+        @reset sys.initializesystem = complete(get_initializesystem(sys); split)
     end
-    isdefined(sys, :complete) ? (@set! sys.complete = true) : sys
+    isdefined(sys, :complete) ? (@reset sys.complete = true) : sys
 end
 
 for prop in [:eqs
@@ -1062,6 +1062,7 @@ end
 function Setfield.get(obj::AbstractSystem, ::Setfield.PropertyLens{field}) where {field}
     getfield(obj, field)
 end
+
 @generated function ConstructionBase.setproperties(obj::AbstractSystem, patch::NamedTuple)
     if issubset(fieldnames(patch), fieldnames(obj))
         args = map(fieldnames(obj)) do fn
@@ -2229,9 +2230,9 @@ function component_post_processing(expr, isconnector)
             if $isdefined(res, :gui_metadata) && $getfield(res, :gui_metadata) === nothing
                 name = $(Meta.quot(fname))
                 if $isconnector
-                    $Setfield.@set!(res.connector_type=$connector_type(res))
+                    $Accessors.@reset(res.connector_type=$connector_type(res))
                 end
-                $Setfield.@set!(res.gui_metadata=$GUIMetadata($GlobalRef(@__MODULE__, name)))
+                $Accessors.@reset(res.gui_metadata=$GUIMetadata($GlobalRef(@__MODULE__, name)))
             else
                 res
             end
@@ -2287,10 +2288,10 @@ function debug_system(sys::AbstractSystem)
         error("debug_system only works on systems with no sub-systems!")
     end
     if has_eqs(sys)
-        @set! sys.eqs = debug_sub.(equations(sys))
+        @reset sys.eqs = debug_sub.(equations(sys))
     end
     if has_observed(sys)
-        @set! sys.observed = debug_sub.(observed(sys))
+        @reset sys.observed = debug_sub.(observed(sys))
     end
     return sys
 end
@@ -2301,7 +2302,7 @@ function eliminate_constants(sys::AbstractSystem)
         eq_cs = collect_constants(eqs)
         if !isempty(eq_cs)
             new_eqs = eliminate_constants(eqs, eq_cs)
-            @set! sys.eqs = new_eqs
+            @reset sys.eqs = new_eqs
         end
     end
     return sys
@@ -2372,7 +2373,7 @@ function linearization_function(sys::AbstractSystem, inputs,
     if zero_dummy_der
         dummyder = setdiff(unknowns(ssys), unknowns(sys))
         defs = Dict(x => 0.0 for x in dummyder)
-        @set! ssys.defaults = merge(defs, defaults(ssys))
+        @reset ssys.defaults = merge(defs, defaults(ssys))
         op = merge(defs, op)
     end
     sys = ssys
@@ -2392,7 +2393,7 @@ function linearization_function(sys::AbstractSystem, inputs,
             @warn "Initialization system is underdetermined. No equations for $(missing_unknowns). Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false."
         end
         new_parameters = [parameters(initsys); missing_unknowns]
-        @set! initsys.ps = new_parameters
+        @reset initsys.ps = new_parameters
         initsys = complete(initsys)
     end
 
@@ -3051,10 +3052,10 @@ See also [`extend`](@ref).
 function compose(sys::AbstractSystem, systems::AbstractArray; name = nameof(sys))
     nsys = length(systems)
     nsys == 0 && return sys
-    @set! sys.name = name
-    @set! sys.systems = [get_systems(sys); systems]
+    @reset sys.name = name
+    @reset sys.systems = [get_systems(sys); systems]
     if has_is_dde(sys)
-        @set! sys.is_dde = _check_if_dde(equations(sys), get_iv(sys), get_systems(sys))
+        @reset sys.is_dde = _check_if_dde(equations(sys), get_iv(sys), get_systems(sys))
     end
     newunknowns = OrderedSet()
     newparams = OrderedSet()
@@ -3062,8 +3063,8 @@ function compose(sys::AbstractSystem, systems::AbstractArray; name = nameof(sys)
     for ssys in systems
         collect_scoped_vars!(newunknowns, newparams, ssys, iv)
     end
-    @set! sys.unknowns = unique!(vcat(get_unknowns(sys), collect(newunknowns)))
-    @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
+    @reset sys.unknowns = unique!(vcat(get_unknowns(sys), collect(newunknowns)))
+    @reset sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
     return sys
 end
 function compose(syss...; name = nameof(first(syss)))
@@ -3116,7 +3117,7 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
         dict = todict(rules)
         systems = get_systems(sys)
         # post-walk to avoid infinite recursion
-        @set! sys.systems = map(Base.Fix2(substitute, dict), systems)
+        @reset sys.systems = map(Base.Fix2(substitute, dict), systems)
         something(get(rules, nameof(sys), nothing), sys)
     elseif sys isa ODESystem
         rules = todict(map(r -> Symbolics.unwrap(r[1]) => Symbolics.unwrap(r[2]),

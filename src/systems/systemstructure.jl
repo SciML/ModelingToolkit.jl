@@ -14,7 +14,7 @@ using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
 using Graphs
 using UnPack
-using Setfield
+using Accessors
 using SparseArrays
 
 function quick_cancel_expr(expr)
@@ -206,8 +206,8 @@ end
 TransformationState(sys::AbstractSystem) = TearingState(sys)
 function system_subset(ts::TearingState, ieqs::Vector{Int})
     eqs = equations(ts)
-    @set! ts.sys.eqs = eqs[ieqs]
-    @set! ts.structure = system_subset(ts.structure, ieqs)
+    @reset ts.sys.eqs = eqs[ieqs]
+    @reset ts.structure = system_subset(ts.structure, ieqs)
     ts
 end
 
@@ -222,8 +222,8 @@ function system_subset(structure::SystemStructure, ieqs::Vector{Int})
         push!(fadj, ivars)
         eq_to_diff[j] = structure.eq_to_diff[eq_i]
     end
-    @set! structure.graph = complete(BipartiteGraph(ne, fadj, ndsts(graph)))
-    @set! structure.eq_to_diff = eq_to_diff
+    @reset structure.graph = complete(BipartiteGraph(ne, fadj, ndsts(graph)))
+    @reset structure.eq_to_diff = eq_to_diff
     structure
 end
 
@@ -424,7 +424,7 @@ function TearingState(sys; quick_cancel = false, check = true)
         add_edge!(graph, ie, jv)
     end
 
-    @set! sys.eqs = eqs
+    @reset sys.eqs = eqs
 
     eq_to_diff = DiffGraph(nsrcs(graph))
 
@@ -475,8 +475,8 @@ function shift_discrete_system(ts::TearingState)
         eqs[i] = StructuralTransformations.simplify_shifts(fast_substitute(
             eqs[i], discmap; operator = Union{Sample, Hold}))
     end
-    @set! ts.sys.eqs = eqs
-    @set! ts.fullvars = fullvars
+    @reset ts.sys.eqs = eqs
+    @reset ts.fullvars = fullvars
     return ts
 end
 
@@ -655,16 +655,16 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
                 append!(appended_parameters, inputs[i], unknowns(ss))
                 discrete_subsystems[i] = ss
             end
-            @set! sys.discrete_subsystems = discrete_subsystems, inputs, continuous_id,
+            @reset sys.discrete_subsystems = discrete_subsystems, inputs, continuous_id,
             id_to_clock
-            @set! sys.ps = appended_parameters
-            @set! sys.defaults = merge(ModelingToolkit.defaults(sys),
+            @reset sys.ps = appended_parameters
+            @reset sys.defaults = merge(ModelingToolkit.defaults(sys),
                 Dict(v => 0.0 for v in Iterators.flatten(inputs)))
         end
         ps = [sym isa CallWithMetadata ? sym :
               setmetadata(sym, VariableTimeDomain, get(time_domains, sym, Continuous))
               for sym in get_ps(sys)]
-        @set! sys.ps = ps
+        @reset sys.ps = ps
     else
         sys, input_idxs = _structural_simplify!(state, io; simplify, check_consistency,
             fully_determined, kwargs...)
@@ -712,7 +712,7 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
             sys, state; simplify, mm, check_consistency, kwargs...)
     end
     fullunknowns = [map(eq -> eq.lhs, observed(sys)); unknowns(sys)]
-    @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)
+    @reset sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)
 
     ModelingToolkit.invalidate_cache!(sys), input_idxs
 end

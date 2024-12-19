@@ -412,16 +412,16 @@ is below `furnace_on_threshold` and off when above `furnace_off_threshold`, whil
 in between. To do this, we create two continuous callbacks:
 
 ```@example events
-using Setfield
+using Accessors
 furnace_disable = ModelingToolkit.SymbolicContinuousCallback(
     [temp ~ furnace_off_threshold],
     ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, c, i
-        @set! x.furnace_on = false
+        @reset x.furnace_on = false
     end)
 furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
     [temp ~ furnace_on_threshold],
     ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, c, i
-        @set! x.furnace_on = true
+        @reset x.furnace_on = true
     end)
 ```
 
@@ -432,7 +432,7 @@ You can also write
 ```julia
 [temp ~ furnace_off_threshold] => ModelingToolkit.ImperativeAffect(modified = (;
     furnace_on)) do x, o, i, c
-    @set! x.furnace_on = false
+    @reset x.furnace_on = false
 end
 ```
 
@@ -462,7 +462,7 @@ f(modified::NamedTuple, observed::NamedTuple, ctx, integrator)::NamedTuple
 The function `f` will be called with `observed` and `modified` `NamedTuple`s that are derived from their respective `NamedTuple` definitions.
 In our example, if `furnace_on` is `false`, then the value of the `x` that's passed in as `modified` will be `(furnace_on = false)`.
 The modified values should be passed out in the same format: to set `furnace_on` to `true` we need to return a tuple `(furnace_on = true)`.
-The examples does this with Setfield, recreating the result tuple before returning it; the returned tuple may optionally be missing values as
+The examples does this with Accessors, recreating the result tuple before returning it; the returned tuple may optionally be missing values as
 well, in which case those values will not be written back to the problem.
 
 Accordingly, we can now interpret the `ImperativeAffect` definitions to mean that when `temp = furnace_off_threshold` we
@@ -542,18 +542,18 @@ In our encoder, we interpret this as occlusion or nonocclusion of the sensor, up
 ```@example events
 qAevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta) ~ 0],
     ModelingToolkit.ImperativeAffect((; qA, hA, hB, cnt), (; qB)) do x, o, c, i
-        @set! x.hA = x.qA
-        @set! x.hB = o.qB
-        @set! x.qA = 1
-        @set! x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
+        @reset x.hA = x.qA
+        @reset x.hB = o.qB
+        @reset x.qA = 1
+        @reset x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
         x
     end,
     affect_neg = ModelingToolkit.ImperativeAffect(
         (; qA, hA, hB, cnt), (; qB)) do x, o, c, i
-        @set! x.hA = x.qA
-        @set! x.hB = o.qB
-        @set! x.qA = 0
-        @set! x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
+        @reset x.hA = x.qA
+        @reset x.hB = o.qB
+        @reset x.qA = 0
+        @reset x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
         x
     end)
 ```
@@ -566,10 +566,10 @@ Instead, we can use right root finding:
 ```@example events
 qBevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta - π / 2) ~ 0],
     ModelingToolkit.ImperativeAffect((; qB, hA, hB, cnt), (; qA, theta)) do x, o, c, i
-        @set! x.hA = o.qA
-        @set! x.hB = x.qB
-        @set! x.qB = clamp(sign(cos(100 * o.theta - π / 2)), 0.0, 1.0)
-        @set! x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
+        @reset x.hA = o.qA
+        @reset x.hB = x.qB
+        @reset x.qB = clamp(sign(cos(100 * o.theta - π / 2)), 0.0, 1.0)
+        @reset x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
         x
     end; rootfind = SciMLBase.RightRootFind)
 ```

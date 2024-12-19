@@ -452,7 +452,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         nothing
     end
 
-    @set! sys.split_idxs = split_idxs
+    @reset sys.split_idxs = split_idxs
 
     ODEFunction{iip, specialize}(f;
         sys = sys,

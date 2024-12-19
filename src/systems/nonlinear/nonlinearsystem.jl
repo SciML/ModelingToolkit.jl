@@ -595,9 +595,9 @@ function SCCNonlinearFunction{iip}(
     subsys = NonlinearSystem(_eqs, _dvs, ps; observed = _obs,
         parameter_dependencies = parameter_dependencies(sys), name = nameof(sys))
     if get_index_cache(sys) !== nothing
-        @set! subsys.index_cache = subset_unknowns_observed(
+        @reset subsys.index_cache = subset_unknowns_observed(
             get_index_cache(sys), sys, _dvs, getproperty.(_obs, (:lhs,)))
-        @set! subsys.complete = true
+        @reset subsys.complete = true
     end
 
     return NonlinearFunction{iip}(f; sys = subsys)
@@ -713,8 +713,8 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
 
     new_dvs = dvs[reduce(vcat, var_sccs)]
     new_eqs = eqs[reduce(vcat, eq_sccs)]
-    @set! sys.unknowns = new_dvs
-    @set! sys.eqs = new_eqs
+    @reset sys.unknowns = new_dvs
+    @reset sys.eqs = new_eqs
     sys = complete(sys)
     return SCCNonlinearProblem(subprobs, explicitfuns, p, true; sys)
 end

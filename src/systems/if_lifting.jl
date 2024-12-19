@@ -501,11 +501,11 @@ function IfLifting(sys::ODESystem)
         push!(new_ps, var)
     end
 
-    @set! sys.defaults = new_defaults
-    @set! sys.eqs = eqs
+    @reset sys.defaults = new_defaults
+    @reset sys.eqs = eqs
     # do not need to topsort because we didn't modify the order
-    @set! sys.observed = obs
-    @set! sys.continuous_events = new_callbacks
-    @set! sys.ps = new_ps
+    @reset sys.observed = obs
+    @reset sys.continuous_events = new_callbacks
+    @reset sys.ps = new_ps
     return sys
 end
