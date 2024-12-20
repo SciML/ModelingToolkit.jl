@@ -291,4 +291,6 @@ export MTKParameters, reorder_dimension_by_tunables!, reorder_dimension_by_tunab
 
 export HomotopyContinuationProblem
 
+function FMIComponent end
+
 end # module
