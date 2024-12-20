@@ -10,8 +10,8 @@ solvers = [MIRK4, RadauIIa5, LobattoIIIa3]
 eqs = [D(x) ~ α * x - β * x * y,
     D(y) ~ -γ * y + δ * x * y]
 
-u0map = [:x => 1.0, :y => 2.0]
-parammap = [:α => 7.5, :β => 4, :γ => 8.0, :δ => 5.0]
+u0map = [x => 1.0, y => 2.0]
+parammap = [α => 7.5, β => 4, γ => 8.0, δ => 5.0]
 tspan = (0.0, 10.0)
 
 @mtkbuild lotkavolterra = ODESystem(eqs, t)
