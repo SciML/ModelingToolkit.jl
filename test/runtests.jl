@@ -117,6 +117,7 @@ end
 
     if GROUP == "All" || GROUP == "Extensions"
         activate_extensions_env()
+        @safetestset "FMI Extension Test" include("extensions/fmi.jl")
         @safetestset "HomotopyContinuation Extension Test" include("extensions/homotopy_continuation.jl")
         @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
         @safetestset "LabelledArrays Test" include("labelledarrays.jl")
