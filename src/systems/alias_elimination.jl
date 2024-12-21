@@ -381,6 +381,31 @@ end
 
 swap!(v, i, j) = v[i], v[j] = v[j], v[i]
 
+struct AliasGraph <: Graphs.AbstractGraph{Int}
+    graph::SimpleGraph{Int}
+    neg_edge::Set{Tuple{Int, Int}}
+end
+function AliasGraph(mm::SparseMatrixCLIL, nv::Int)
+    graph = SimpleGraph{Int}(nv)
+    neg_edge = Set{Tuple{Int, Int}}()
+    for r in eachrow(mm)
+        @unpack nzval, nzind = r.vec
+        length(nzval) == 2 || continue
+        (v1, v2) = nzval
+        (abs(v1) == abs(v2) == 1) || continue
+        (i1, i2) = nzind
+        add_edge!(graph, i1, i2)
+        push!(neg_edge, (i1, i2))
+    end
+    AliasGraph(graph, neg_edge)
+end
+isneg(ag::AliasGraph, a, b) = (a, b) in ag.neg_edge
+for f in [:dst, :edges, :edgetype, :has_edge, :has_vertex,
+    :inneighbors, :is_directed, :ne, :nv, :outneighbors,
+    :src, :vertices]
+    @eval Graphs.$f(ag::AliasGraph) = Graphs.$f(ag.graph)
+end
+
 """
 $(SIGNATURES)
 
