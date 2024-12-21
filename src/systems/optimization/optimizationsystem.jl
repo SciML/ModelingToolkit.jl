@@ -40,7 +40,7 @@ struct OptimizationSystem <: AbstractOptimizationSystem
     """A description of the system."""
     description::String
     """The internal systems. These are required to have unique names."""
-    systems::Vector{OptimizationSystem}
+    systems::Vector{Any}
     """
     The default values to use when initial guess and/or
     parameters are not supplied in `OptimizationProblem`.
