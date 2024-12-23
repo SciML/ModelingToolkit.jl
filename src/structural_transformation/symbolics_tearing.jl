@@ -696,6 +696,7 @@ function cse_and_array_hacks(obs, subeqs, unknowns, neweqs; cse = true, array = 
                     tempvar; T = Symbolics.symtype(rhs_arr)))
                 tempvar = setmetadata(
                     tempvar, Symbolics.ArrayShapeCtx, Symbolics.shape(rhs_arr))
+                vars!(all_vars, rhs_arr)
                 tempeq = tempvar ~ rhs_arr
                 rhs_to_tempvar[rhs_arr] = tempvar
                 push!(obs, tempeq)
