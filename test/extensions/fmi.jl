@@ -17,3 +17,20 @@ import ModelingToolkit as MTK
         @test_nowarn solve(prob, Tsit5())
     end
 end
+
+@testset "IO Model" begin
+    fmu = loadFMU("./fmus/SimpleAdder.fmu"; type = :ME)
+    @named adder = MTK.FMIComponent(Val(2), Val(:ME); fmu)
+    @variables a(t) b(t) c(t) [guess = 1.0]
+    @mtkbuild sys = ODESystem(
+        [adder.a ~ a, adder.b ~ b, D(a) ~ t,
+            D(b) ~ adder.out + adder.c, c^2 ~ adder.out + adder.value],
+        t;
+        systems = [adder])
+
+    # c will be solved for by initialization
+    # this tests that initialization also works with FMUs
+    prob = ODEProblem(sys, [sys.adder.c => 1.0, sys.a => 1.0, sys.b => 1.0], (0.0, 1.0))
+    sol = solve(prob, Rodas5P(autodiff = false))
+    @test SciMLBase.successful_retcode(sol)
+end
