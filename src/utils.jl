@@ -403,6 +403,9 @@ function vars!(vars, eq::Equation; op = Differential)
 end
 function vars!(vars, O; op = Differential)
     if isvariable(O)
+        if iscall(O) && operation(O) === getindex && iscalledparameter(first(arguments(O)))
+            O = first(arguments(O))
+        end
         if iscalledparameter(O)
             f = getcalledparameter(O)
             push!(vars, f)
