@@ -738,7 +738,11 @@ function cse_and_array_hacks(obs, subeqs, unknowns, neweqs; cse = true, array = 
         # try to `create_array(OffsetArray{...}, ...)` which errors.
         # `term(Origin(firstind), scal)` doesn't retain the `symtype` and `size`
         # of `scal`.
-        push!(obs_arr_eqs, arrvar ~ change_origin(Origin(firstind), scal))
+        rhs = scal
+        if !isone(firstind)
+            rhs = change_origin(Origin(firstind), rhs)
+        end
+        push!(obs_arr_eqs, arrvar ~ rhs)
     end
     append!(obs, obs_arr_eqs)
     append!(subeqs, obs_arr_eqs)
