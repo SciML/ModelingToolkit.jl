@@ -36,68 +36,43 @@ function MTK.FMIComponent(::Val{2}, ::Val{:ME}; fmu = nothing, tolerance = 1e-6,
     states = []
     diffvars = []
     observed = Equation[]
-    stateT = Float64
-    for (valRef, snames) in FMI.getStateValueReferencesAndNames(fmu)
-        stateT = FMI.dataTypeForValueReference(fmu, valRef)
-        snames = map(parseFMIVariableName, snames)
-        vars = [MTK.unwrap(only(@variables $sname(t)::stateT)) for sname in snames]
-        for i in eachindex(vars)
-            if i == 1
-                push!(diffvars, vars[i])
-            else
-                push!(observed, vars[i] ~ vars[1])
-            end
-            value_references[vars[i]] = valRef
-        end
-        append!(states, vars)
+    fmi_variables_to_mtk_variables!(fmu, FMI.getStateValueReferencesAndNames(fmu),
+        value_references, diffvars, states, observed)
+    if isempty(diffvars)
+        __mtk_internal_u = []
+    else
+        @variables __mtk_internal_u(t)[1:length(diffvars)]
+        push!(observed, __mtk_internal_u ~ copy(diffvars))
+        push!(states, __mtk_internal_u)
     end
 
     inputs = []
-    for (valRef, snames) in FMI.getInputValueReferencesAndNames(fmu)
-        snames = map(parseFMIVariableName, snames)
-        vars = [MTK.unwrap(only(@variables $sname(t)::stateT)) for sname in snames]
-        for i in eachindex(vars)
-            if i == 1
-                push!(inputs, vars[i])
-            else
-                push!(observed, vars[i] ~ vars[1])
-            end
-            value_references[vars[i]] = valRef
-        end
-        append!(states, vars)
+    fmi_variables_to_mtk_variables!(fmu, FMI.getInputValueReferencesAndNames(fmu),
+        value_references, inputs, states, observed)
+    if isempty(inputs)
+        __mtk_internal_x = []
+    else
+        @variables __mtk_internal_x(t)[1:length(inputs)]
+        push!(observed, __mtk_internal_x ~ copy(inputs))
+        push!(states, __mtk_internal_x)
     end
 
     outputs = []
-    for (valRef, snames) in FMI.getOutputValueReferencesAndNames(fmu)
-        snames = map(parseFMIVariableName, snames)
-        vars = [MTK.unwrap(only(@variables $sname(t)::stateT)) for sname in snames]
-        for i in eachindex(vars)
-            if i == 1
-                push!(outputs, vars[i])
-            else
-                push!(observed, vars[i] ~ vars[1])
-            end
-            value_references[vars[i]] = valRef
-        end
-        append!(states, vars)
-    end
+    fmi_variables_to_mtk_variables!(fmu, FMI.getOutputValueReferencesAndNames(fmu),
+        value_references, outputs, states, observed)
+    # @variables __mtk_internal_o(t)[1:length(outputs)]
+    # push!(observed, __mtk_internal_o ~ outputs)
 
     params = []
     parameter_dependencies = Equation[]
-    for (valRef, pnames) in FMI.getParameterValueReferencesAndNames(fmu)
-        defval = FMI.getStartValue(fmu, valRef)
-        T = FMI.dataTypeForValueReference(fmu, valRef)
-        pnames = map(parseFMIVariableName, pnames)
-        vars = [MTK.unwrap(only(@parameters $pname::T)) for pname in pnames]
-        for i in eachindex(vars)
-            if i == 1
-                push!(params, vars[i])
-            else
-                push!(parameter_dependencies, vars[i] ~ vars[1])
-            end
-            value_references[vars[i]] = valRef
-        end
-        defs[vars[1]] = defval
+    fmi_variables_to_mtk_variables!(
+        fmu, FMI.getParameterValueReferencesAndNames(fmu), value_references,
+        params, [], parameter_dependencies, defs; parameters = true)
+    if isempty(params)
+        __mtk_internal_p = []
+    else
+        @parameters __mtk_internal_p[1:length(params)]
+        push!(parameter_dependencies, __mtk_internal_p ~ copy(params))
     end
 
     input_value_references = UInt32[value_references[var] for var in inputs]
@@ -109,7 +84,7 @@ function MTK.FMIComponent(::Val{2}, ::Val{:ME}; fmu = nothing, tolerance = 1e-6,
     buffer_length = length(diffvars) + length(outputs)
     _functor = FMI2MEFunctor(zeros(buffer_length), output_value_references)
     @parameters (functor::(typeof(_functor)))(..)[1:buffer_length] = _functor
-    call_expr = functor(wrapper, copy(diffvars), copy(inputs), copy(params), t)
+    call_expr = functor(wrapper, __mtk_internal_u, __mtk_internal_x, __mtk_internal_p, t)
 
     diffeqs = Equation[]
     for (i, var) in enumerate([D.(diffvars); outputs])
@@ -125,6 +100,30 @@ function MTK.FMIComponent(::Val{2}, ::Val{:ME}; fmu = nothing, tolerance = 1e-6,
     eqs = [observed; diffeqs]
     return ODESystem(eqs, t, states, params; parameter_dependencies, defaults = defs,
         discrete_events = [instance_management_callback], name)
+end
+
+function fmi_variables_to_mtk_variables!(fmu, varmap, value_references, truevars, allvars,
+        obseqs, defs = Dict(); parameters = false)
+    for (valRef, snames) in varmap
+        stateT = FMI.dataTypeForValueReference(fmu, valRef)
+        snames = map(parseFMIVariableName, snames)
+        if parameters
+            vars = [MTK.unwrap(only(@parameters $sname::stateT)) for sname in snames]
+        else
+            vars = [MTK.unwrap(only(@variables $sname(t)::stateT)) for sname in snames]
+        end
+        for i in eachindex(vars)
+            if i == 1
+                push!(truevars, vars[i])
+            else
+                push!(obseqs, vars[i] ~ vars[1])
+            end
+            value_references[vars[i]] = valRef
+        end
+        append!(allvars, vars)
+        defval = FMI.getStartValue(fmu, valRef)
+        defs[vars[1]] = defval
+    end
 end
 
 function parseFMIVariableName(name::AbstractString)
