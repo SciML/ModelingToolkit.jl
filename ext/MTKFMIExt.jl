@@ -191,6 +191,14 @@ struct FMI2MEFunctor{T}
     output_value_references::Vector{UInt32}
 end
 
+@register_array_symbolic (fn::FMI2MEFunctor)(
+    wrapper::FMI2InstanceWrapper, states::Vector{<:Real},
+    inputs::Vector{<:Real}, params::Vector{<:Real}, t::Real) begin
+    size = (length(states) + length(fn.output_value_references),)
+    eltype = eltype(states)
+    ndims = 1
+end
+
 function (fn::FMI2MEFunctor)(wrapper::FMI2InstanceWrapper, states, inputs, params, t)
     instance = get_instance!(wrapper, states, inputs, params, t)
 
