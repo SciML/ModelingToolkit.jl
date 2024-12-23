@@ -738,7 +738,9 @@ function cse_and_array_hacks(obs, subeqs, unknowns, neweqs; cse = true, array = 
         # try to `create_array(OffsetArray{...}, ...)` which errors.
         # `term(Origin(firstind), scal)` doesn't retain the `symtype` and `size`
         # of `scal`.
-        push!(obs_arr_eqs, arrvar ~ change_origin(Origin(firstind), scal))
+        rhs = scal
+        rhs = change_origin(firstind, rhs)
+        push!(obs_arr_eqs, arrvar ~ rhs)
     end
     append!(obs, obs_arr_eqs)
     append!(subeqs, obs_arr_eqs)
@@ -765,10 +767,10 @@ getindex_wrapper(x, i) = x[i...]
 
 # PART OF HACK 2
 function change_origin(origin, arr)
-    return origin(arr)
+    return Origin(origin)(arr)
 end
 
-@register_array_symbolic change_origin(origin::Origin, arr::AbstractArray) begin
+@register_array_symbolic change_origin(origin::Any, arr::AbstractArray) begin
     size = size(arr)
     eltype = eltype(arr)
     ndims = ndims(arr)
