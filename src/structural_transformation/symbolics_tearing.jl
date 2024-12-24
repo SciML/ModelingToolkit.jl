@@ -593,7 +593,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     @set! sys.unknowns = unknowns
 
     obs, subeqs, deps = cse_and_array_hacks(
-        obs, subeqs, unknowns, neweqs; cse = cse_hack, array = array_hack)
+        sys, obs, subeqs, unknowns, neweqs; cse = cse_hack, array = array_hack)
 
     @set! sys.eqs = neweqs
     @set! sys.observed = obs
@@ -627,7 +627,7 @@ if all `p[i]` are present and the unscalarized form is used in any equation (obs
 not) we first count the number of times the scalarized form of each observed variable
 occurs in observed equations (and unknowns if it's split).
 """
-function cse_and_array_hacks(obs, subeqs, unknowns, neweqs; cse = true, array = true)
+function cse_and_array_hacks(sys, obs, subeqs, unknowns, neweqs; cse = true, array = true)
     # HACK 1
     # mapping of rhs to temporary CSE variable
     # `f(...) => tmpvar` in above example
@@ -724,6 +724,11 @@ function cse_and_array_hacks(obs, subeqs, unknowns, neweqs; cse = true, array = 
     end
     for eq in neweqs
         vars!(all_vars, eq.rhs)
+    end
+
+    # also count unscalarized variables used in callbacks
+    for ev in Iterators.flatten((continuous_events(sys), discrete_events(sys)))
+        vars!(all_vars, ev)
     end
     obs_arr_eqs = Equation[]
     for (arrvar, cnt) in arr_obs_occurrences
