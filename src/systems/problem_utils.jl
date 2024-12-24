@@ -91,6 +91,18 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Utility function to get the value `val` corresponding to key `var` in `varmap`, and
+return `getindex(val, idx)` if it exists or `nothing` otherwise.
+"""
+function get_and_getindex(varmap, var, idx)
+    val = get(varmap, var, nothing)
+    val === nothing && return nothing
+    return val[idx]
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Ensure `varmap` contains entries for all variables in `vars` by using values from
 `fallbacks` if they don't already exist in `varmap`. Return the set of all variables in
 `vars` not present in `varmap` or `fallbacks`. If an array variable in `vars` does not
@@ -115,8 +127,9 @@ function add_fallbacks!(
             val = map(eachindex(var)) do idx
                 # @something is lazy and saves from writing a massive if-elseif-else
                 @something(get(varmap, var[idx], nothing),
-                    get(varmap, ttvar[idx], nothing), get(fallbacks, var, nothing)[idx],
-                    get(fallbacks, ttvar, nothing)[idx], get(fallbacks, var[idx], nothing),
+                    get(varmap, ttvar[idx], nothing), get_and_getindex(fallbacks, var, idx),
+                    get_and_getindex(fallbacks, ttvar, idx), get(
+                        fallbacks, var[idx], nothing),
                     get(fallbacks, ttvar[idx], nothing), Some(nothing))
             end
             # only push the missing entries
