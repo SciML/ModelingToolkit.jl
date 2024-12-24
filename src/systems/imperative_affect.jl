@@ -216,3 +216,20 @@ function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs.
 end
 
 scalarize_affects(affects::ImperativeAffect) = affects
+
+function vars!(vars, aff::ImperativeAffect; op = Differential)
+    for var in Iterators.flatten((observed(aff), modified(aff)))
+        if symbolic_type(var) == NotSymbolic()
+            if var isa AbstractArray
+                for v in var
+                    v = unwrap(v)
+                    vars!(vars, v)
+                end
+            end
+        else
+            var = unwrap(var)
+            vars!(vars, var)
+        end
+    end
+    return vars
+end
