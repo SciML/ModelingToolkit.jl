@@ -21,7 +21,9 @@ using ModelingToolkit: t_nounits as t, D_nounits as D, IfLifting, no_if_lift
     @test operation(only(equations(ss2)).rhs) === ifelse
 
     discvar = only(parameters(ss2))
-    prob2 = ODEProblem(ss2, [x => 0.0], (0.0, 5.0))
+    prob1 = ODEProblem(ss1, [ss1.x => 0.0], (0.0, 5.0))
+    sol1 = solve(prob1, Tsit5())
+    prob2 = ODEProblem(ss2, [ss2.x => 0.0], (0.0, 5.0))
     sol2 = solve(prob2, Tsit5())
     @test count(isapprox(pi), sol2.t) == 2
     @test any(isapprox(pi), sol2.discretes[1].t)
