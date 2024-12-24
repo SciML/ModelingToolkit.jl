@@ -299,6 +299,9 @@ function IndexCache(sys::AbstractSystem)
                 for v in vs
                     if (idx = get(disc_idxs, v, nothing)) !== nothing
                         push!(timeseries, idx.clock_idx)
+                    elseif iscall(v) && operation(v) === getindex &&
+                           (idx = get(disc_idxs, arguments(v)[1], nothing)) !== nothing
+                        push!(timeseries, idx.clock_idx)
                     elseif haskey(observed_syms_to_timeseries, v)
                         union!(timeseries, observed_syms_to_timeseries[v])
                     elseif haskey(dependent_pars_to_timeseries, v)
