@@ -193,6 +193,15 @@ function generate_initializesystem(sys::AbstractSystem;
         append!(eqs_ics, trueobs)
     end
 
+    # even if `p => tovar(p)` is in `paramsubs`, `isparameter(p[1]) === true` after substitution
+    # so add scalarized versions as well
+    for k in collect(keys(paramsubs))
+        symbolic_type(k) == ArraySymbolic() || continue
+        for i in eachindex(k)
+            paramsubs[k[i]] = paramsubs[k][i]
+        end
+    end
+
     eqs_ics = Symbolics.substitute.(eqs_ics, (paramsubs,))
     if is_time_dependent(sys)
         vars = [vars; collect(values(paramsubs))]
