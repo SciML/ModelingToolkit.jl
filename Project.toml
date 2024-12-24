@@ -73,8 +73,8 @@ MTKBifurcationKitExt = "BifurcationKit"
 MTKChainRulesCoreExt = "ChainRulesCore"
 MTKDeepDiffsExt = "DeepDiffs"
 MTKHomotopyContinuationExt = "HomotopyContinuation"
-MTKLabelledArraysExt = "LabelledArrays"
 MTKInfiniteOptExt = "InfiniteOpt"
+MTKLabelledArraysExt = "LabelledArrays"
 
 [compat]
 AbstractTrees = "0.3, 0.4"
