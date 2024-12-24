@@ -57,6 +57,7 @@ function structural_simplify(
         ks = collect(keys(defs))  # take copy to avoid mutating defs while iterating.
         for k in ks
             if Symbolics.isarraysymbolic(k) && Symbolics.shape(k) !== Symbolics.Unknown()
+                defs[k] === missing && continue
                 for i in eachindex(k)
                     defs[k[i]] = defs[k][i]
                 end
