@@ -1230,7 +1230,7 @@ function flatten_equations(eqs)
                 error("LHS ($(eq.lhs)) and RHS ($(eq.rhs)) must either both be array expressions or both scalar")
             size(eq.lhs) == size(eq.rhs) ||
                 error("Size of LHS ($(eq.lhs)) and RHS ($(eq.rhs)) must match: got $(size(eq.lhs)) and $(size(eq.rhs))")
-            return collect(eq.lhs) .~ collect(eq.rhs)
+            return vec(collect(eq.lhs) .~ collect(eq.rhs))
         else
             eq
         end
