@@ -172,6 +172,9 @@ function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys
     if wrap_code === nothing
         wrap_code = isscalar ? identity : (identity, identity)
     end
+    if !get(kwargs, :checkbounds, false)
+        wrap_code = wrap_code .∘ wrap_inbounds(false)
+    end
     pre, sol_states = get_substitutions_and_solved_unknowns(sys, isscalar ? [exprs] : exprs)
     if postprocess_fbody === nothing
         postprocess_fbody = pre
@@ -224,6 +227,13 @@ function wrap_assignments(isscalar, assignments; let_block = false)
     else
         wrapper, wrapper
     end
+end
+
+function wrap_inbounds(isscalar)
+    function wrapper(expr)
+        Func(expr.args, [], :(@inbounds begin; $(toexpr(expr.body)); end))
+    end
+    return isscalar ? wrapper : (wrapper, wrapper)
 end
 
 function wrap_parameter_dependencies(sys::AbstractSystem, isscalar)
@@ -785,7 +795,7 @@ end
 SymbolicIndexingInterface.supports_tuple_observed(::AbstractSystem) = true
 
 function SymbolicIndexingInterface.observed(
-        sys::AbstractSystem, sym; eval_expression = false, eval_module = @__MODULE__)
+        sys::AbstractSystem, sym; eval_expression = false, eval_module = @__MODULE__, checkbounds = true)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         if sym isa Symbol
             _sym = get(ic.symbol_to_variable, sym, nothing)
@@ -808,7 +818,7 @@ function SymbolicIndexingInterface.observed(
             end
         end
     end
-    _fn = build_explicit_observed_function(sys, sym; eval_expression, eval_module)
+    _fn = build_explicit_observed_function(sys, sym; eval_expression, eval_module, checkbounds)
 
     if is_time_dependent(sys)
         return _fn
@@ -1671,11 +1681,12 @@ struct ObservedFunctionCache{S}
     steady_state::Bool
     eval_expression::Bool
     eval_module::Module
+    checkbounds::Bool
 end
 
 function ObservedFunctionCache(
-        sys; steady_state = false, eval_expression = false, eval_module = @__MODULE__)
-    return ObservedFunctionCache(sys, Dict(), steady_state, eval_expression, eval_module)
+        sys; steady_state = false, eval_expression = false, eval_module = @__MODULE__, checkbounds = true)
+    return ObservedFunctionCache(sys, Dict(), steady_state, eval_expression, eval_module, checkbounds)
 end
 
 # This is hit because ensemble problems do a deepcopy
@@ -1694,7 +1705,7 @@ function (ofc::ObservedFunctionCache)(obsvar, args...)
     obs = get!(ofc.dict, value(obsvar)) do
         SymbolicIndexingInterface.observed(
             ofc.sys, obsvar; eval_expression = ofc.eval_expression,
-            eval_module = ofc.eval_module)
+            eval_module = ofc.eval_module, checkbounds = ofc.checkbounds)
     end
     if ofc.steady_state
         obs = let fn = obs

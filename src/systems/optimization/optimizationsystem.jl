@@ -200,6 +200,9 @@ function generate_gradient(sys::OptimizationSystem, vs = unknowns(sys),
     grad = calculate_gradient(sys)
     pre = get_preprocess_constants(grad)
     p = reorder_parameters(sys, ps)
+    if !get(kwargs, :checkbounds, false)
+        wrap_code = wrap_code .∘ wrap_inbounds(false)
+    end
     wrap_code = wrap_code .∘ wrap_array_vars(sys, grad; dvs = vs, ps) .∘
                 wrap_parameter_dependencies(sys, !(grad isa AbstractArray))
     return build_function(grad, vs, p...; postprocess_fbody = pre, wrap_code,
@@ -220,6 +223,9 @@ function generate_hessian(
     end
     pre = get_preprocess_constants(hess)
     p = reorder_parameters(sys, ps)
+    if !get(kwargs, :checkbounds, false)
+        wrap_code = wrap_code .∘ wrap_inbounds(false)
+    end
     wrap_code = wrap_code .∘ wrap_array_vars(sys, hess; dvs = vs, ps) .∘
                 wrap_parameter_dependencies(sys, false)
     return build_function(hess, vs, p...; postprocess_fbody = pre, wrap_code,
@@ -235,6 +241,9 @@ function generate_function(sys::OptimizationSystem, vs = unknowns(sys),
         reorder_parameters(get_index_cache(sys), ps)
     else
         (ps,)
+    end
+    if !get(kwargs, :checkbounds, false)
+        wrap_code = wrap_code .∘ wrap_inbounds(false)
     end
     wrap_code = wrap_code .∘ wrap_array_vars(sys, eqs; dvs = vs, ps) .∘
                 wrap_parameter_dependencies(sys, !(eqs isa AbstractArray))
@@ -420,7 +429,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         hess_prototype = nothing
     end
 
-    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
+    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module, checkbounds)
 
     if length(cstr) > 0
         @named cons_sys = ConstraintsSystem(cstr, dvs, ps; checks)

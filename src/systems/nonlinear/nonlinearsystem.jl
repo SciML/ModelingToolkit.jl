@@ -253,6 +253,9 @@ function generate_jacobian(
     jac = calculate_jacobian(sys, sparse = sparse, simplify = simplify)
     pre, sol_states = get_substitutions_and_solved_unknowns(sys)
     p = reorder_parameters(sys, ps)
+    if !get(kwargs, :checkbounds, false)
+        wrap_code = wrap_code .∘ wrap_inbounds(false)
+    end
     wrap_code = wrap_code .∘ wrap_array_vars(sys, jac; dvs = vs, ps) .∘
                 wrap_parameter_dependencies(sys, false)
     return build_function(
@@ -277,6 +280,9 @@ function generate_hessian(
     hess = calculate_hessian(sys, sparse = sparse, simplify = simplify)
     pre = get_preprocess_constants(hess)
     p = reorder_parameters(sys, ps)
+    if !get(kwargs, :checkbounds, false)
+        wrap_code = wrap_code .∘ wrap_inbounds(false)
+    end
     wrap_code = wrap_code .∘ wrap_array_vars(sys, hess; dvs = vs, ps) .∘
                 wrap_parameter_dependencies(sys, false)
     return build_function(hess, vs, p...; postprocess_fbody = pre, wrap_code, kwargs...)
@@ -292,6 +298,9 @@ function generate_function(
         dvs′ = only(dvs)
     end
     pre, sol_states = get_substitutions_and_solved_unknowns(sys)
+    if !get(kwargs, :checkbounds, false)
+        wrap_code = wrap_code .∘ wrap_inbounds(false)
+    end
     wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps) .∘
                 wrap_parameter_dependencies(sys, scalar)
     p = reorder_parameters(sys, value.(ps))
@@ -369,7 +378,7 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
         _jac = nothing
     end
 
-    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
+    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
 
     if length(dvs) == length(equations(sys))
         resid_prototype = nothing
@@ -411,7 +420,7 @@ function SciMLBase.IntervalNonlinearFunction(
     f(u, p) = f_oop(u, p)
     f(u, p::MTKParameters) = f_oop(u, p...)
 
-    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
+    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
 
     IntervalNonlinearFunction{false}(
         f; observed = observedfun, sys = sys, initialization_data)
@@ -608,6 +617,9 @@ function SCCNonlinearFunction{iip}(
     cmap, cs = get_cmap(sys)
     cmap_assignments = [eq.lhs ← eq.rhs for eq in cmap]
     rhss = [eq.rhs - eq.lhs for eq in _eqs]
+    if !get(kwargs, :checkbounds, false)
+        wrap_code = wrap_code .∘ wrap_inbounds(false)
+    end
     wrap_code = wrap_assignments(false, cmap_assignments) .∘
                 (wrap_array_vars(sys, rhss; dvs = _dvs, cachesyms)) .∘
                 wrap_parameter_dependencies(sys, false) .∘

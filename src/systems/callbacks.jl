@@ -583,9 +583,14 @@ function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
         cmap = map(x -> x => getdefault(x), cs)
         condit = substitute(condit, cmap)
     end
+    if !get(kwargs, :checkbounds, false)
+        inbounds_wrapper = wrap_inbounds(!(condit isa AbstractArray))
+    else
+        inbounds_wrapper = condit isa AbstractArray ? (identity, identity) : identity
+    end
     expr = build_function(
         condit, u, t, p...; expression = Val{true},
-        wrap_code = condition_header(sys) .∘
+        wrap_code = condition_header(sys) .∘ inbounds_wrapper .∘
                     wrap_array_vars(sys, condit; dvs, ps, inputs = true) .∘
                     wrap_parameter_dependencies(sys, !(condit isa AbstractArray)),
         kwargs...)
@@ -671,6 +676,7 @@ function compile_affect(eqs::Vector{Equation}, cb, sys, dvs, ps; outputidxs = no
         t = get_iv(sys)
         integ = gensym(:MTKIntegrator)
         pre = get_preprocess_constants(rhss)
+        inbounds_wrapper = get(kwargs, :checkbounds, false) ? (identity, identity) : wrap_inbounds(false)
         rf_oop, rf_ip = build_function(rhss, u, p..., t; expression = Val{true},
             wrap_code = callback_save_header(sys, cb) .∘
                         add_integrator_header(sys, integ, outvar) .∘
