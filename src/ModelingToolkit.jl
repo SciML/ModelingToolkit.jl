@@ -293,4 +293,8 @@ export MTKParameters, reorder_dimension_by_tunables!, reorder_dimension_by_tunab
 
 export HomotopyContinuationProblem
 
+export AnalysisPoint, Break, PerturbOutput, SampleInput, SensitivityTransform,
+       ComplementarySensitivityTransform, LoopTransferTransform, apply_transformation,
+       get_sensitivity_function, get_comp_sensitivity_function, get_looptransfer_function,
+       get_sensitivity, get_comp_sensitivity, get_looptransfer, open_loop
 end # module
