@@ -14,25 +14,46 @@ macro statuscheck(expr)
     fnname = fn.args[2]
 
     instance = expr.args[2]
+    is_v2 = startswith("fmi2", string(fnname))
 
+    fmiTrue = is_v2 ? FMI.fmi2True : FMI.fmi3True
+    fmiStatusOK = is_v2 ? FMI.fmi2StatusOK : FMI.fmi3StatusOK
+    fmiStatusWarning = is_v2 ? FMI.fmi2StatusWarning : FMI.fmi3StatusWarning
+    fmiStatusFatal = is_v2 ? FMI.fmi2StatusFatal : FMI.fmi3StatusFatal
+    fmiTerminate = is_v2 ? FMI.fmi2Terminate : FMI.fmi3Terminate
+    fmiFreeInstance! = is_v2 ? FMI.fmi2FreeInstance! : FMI.fmi3FreeInstance!
     return quote
         status = $expr
         fnname = $fnname
-        if status !== nothing && ((status isa Tuple && status[1] == FMI.fmi2True) ||
-            (!(status isa Tuple) && status != FMI.fmi2StatusOK &&
-             status != FMI.fmi2StatusWarning))
-            if status != FMI.fmi2StatusFatal
-                FMI.fmi2Terminate(wrapper.instance)
+        if status !== nothing && ((status isa Tuple && status[1] == $fmiTrue) ||
+            (!(status isa Tuple) && status != $fmiStatusOK &&
+             status != $fmiStatusWarning))
+            if status != $fmiStatusFatal
+                $fmiTerminate(wrapper.instance)
             end
-            FMI.fmi2FreeInstance!(wrapper.instance)
+            $fmiFreeInstance!(wrapper.instance)
             wrapper.instance = nothing
             error("FMU Error in $fnname: status $status")
         end
     end |> esc
 end
 
-function MTK.FMIComponent(::Val{2}; fmu = nothing, tolerance = 1e-6,
-        communication_step_size = nothing, type, name)
+@static if !hasmethod(FMI.getValueReferencesAndNames, Tuple{FMI.fmi3ModelDescription})
+    function FMI.getValueReferencesAndNames(
+            md::FMI.fmi3ModelDescription; vrs = md.valueReferences)
+        dict = Dict{FMI.fmi3ValueReference, Array{String}}()
+        for vr in vrs
+            dict[vr] = FMI.valueReferenceToString(md, vr)
+        end
+        return dict
+    end
+end
+
+function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
+        communication_step_size = nothing, type, name) where {Ver}
+    if Ver != 2 && Ver != 3
+        throw(ArgumentError("FMI Version must be `2` or `3`"))
+    end
     if type == :CS && communication_step_size === nothing
         throw(ArgumentError("`communication_step_size` must be specified for Co-Simulation FMUs."))
     end
@@ -90,8 +111,14 @@ function MTK.FMIComponent(::Val{2}; fmu = nothing, tolerance = 1e-6,
 
     input_value_references = UInt32[value_references[var] for var in inputs]
     param_value_references = UInt32[value_references[var] for var in params]
-    @parameters wrapper::FMI2InstanceWrapper = FMI2InstanceWrapper(
-        fmu, param_value_references, input_value_references, tolerance)
+
+    if Ver == 2
+        @parameters wrapper::FMI2InstanceWrapper = FMI2InstanceWrapper(
+            fmu, param_value_references, input_value_references, tolerance)
+    else
+        @parameters wrapper::FMI3InstanceWrapper = FMI3InstanceWrapper(
+            fmu, param_value_references, input_value_references)
+    end
 
     output_value_references = UInt32[value_references[var] for var in outputs]
     buffer_length = length(diffvars) + length(outputs)
@@ -99,7 +126,8 @@ function MTK.FMIComponent(::Val{2}; fmu = nothing, tolerance = 1e-6,
     initialization_eqs = Equation[]
 
     if type == :ME
-        _functor = FMI2MEFunctor(zeros(buffer_length), output_value_references)
+        FunctorT = Ver == 2 ? FMI2MEFunctor : FMI3MEFunctor
+        _functor = FunctorT(zeros(buffer_length), output_value_references)
         @parameters (functor::(typeof(_functor)))(..)[1:buffer_length] = _functor
         call_expr = functor(
             wrapper, __mtk_internal_u, __mtk_internal_x, __mtk_internal_p, t)
@@ -109,14 +137,14 @@ function MTK.FMIComponent(::Val{2}; fmu = nothing, tolerance = 1e-6,
             push!(diffeqs, var ~ call_expr[i])
         end
 
-        finalize_affect = MTK.FunctionalAffect(fmi2Finalize!, [], [wrapper], [])
-        step_affect = MTK.FunctionalAffect(fmi2MEStep!, [], [wrapper], [])
+        finalize_affect = MTK.FunctionalAffect(fmiFinalize!, [], [wrapper], [])
+        step_affect = MTK.FunctionalAffect(fmiMEStep!, [], [wrapper], [])
         instance_management_callback = MTK.SymbolicDiscreteCallback(
             (t != t - 1), step_affect; finalize = finalize_affect)
 
         push!(params, wrapper, functor)
         push!(states, __mtk_internal_u)
-    elseif type == :CS
+    elseif type == :CS && Ver == 2
         state_value_references = UInt32[value_references[var] for var in diffvars]
         state_and_output_value_references = vcat(
             state_value_references, output_value_references)
@@ -142,7 +170,7 @@ function MTK.FMIComponent(::Val{2}; fmu = nothing, tolerance = 1e-6,
         end
         initialize_affect = MTK.ImperativeAffect(fmi2CSInitialize!; observed = cb_observed,
             modified = cb_modified, ctx = _functor)
-        finalize_affect = MTK.FunctionalAffect(fmi2Finalize!, [], [wrapper], [])
+        finalize_affect = MTK.FunctionalAffect(fmiFinalize!, [], [wrapper], [])
         step_affect = MTK.ImperativeAffect(
             fmi2CSStep!; observed = cb_observed, modified = cb_modified, ctx = _functor)
         instance_management_callback = MTK.SymbolicDiscreteCallback(
@@ -250,6 +278,63 @@ function reset_instance!(wrapper::FMI2InstanceWrapper)
     wrapper.instance = nothing
 end
 
+mutable struct FMI3InstanceWrapper
+    const fmu::FMI.FMU3
+    const param_value_references::Vector{UInt32}
+    const input_value_references::Vector{UInt32}
+    instance::Union{FMI.FMU3Instance{FMI.FMU3}, Nothing}
+end
+
+function FMI3InstanceWrapper(fmu, params, inputs)
+    FMI3InstanceWrapper(fmu, params, inputs, nothing)
+end
+
+function get_instance_common!(wrapper::FMI3InstanceWrapper, states, inputs, params, t)
+    if !isempty(params)
+        @statuscheck FMI.fmi3SetFloat64(wrapper.instance, wrapper.param_value_references,
+            params)
+    end
+    @statuscheck FMI.fmi3EnterInitializationMode(
+        wrapper.instance, FMI.fmi3False, zero(FMI.fmi3Float64), t, FMI.fmi3False, t)
+    if !isempty(inputs)
+        @statuscheck FMI.fmi3SetFloat64(
+            wrapper.instance, wrapper.input_value_references, inputs)
+    end
+
+    return wrapper.instance
+end
+
+function get_instance_ME!(wrapper::FMI3InstanceWrapper, states, inputs, params, t)
+    if wrapper.instance === nothing
+        wrapper.instance = FMI.fmi3InstantiateModelExchange!(wrapper.fmu)::FMI.FMU3Instance
+        get_instance_common!(wrapper, states, inputs, params, t)
+        @statuscheck FMI.fmi3ExitInitializationMode(wrapper.instance)
+        eventInfo = FMI.fmi3UpdateDiscreteStates(wrapper.instance)
+        @assert eventInfo[1] == FMI.fmi2False
+        # TODO: Support FMU events
+        @statuscheck FMI.fmi3EnterContinuousTimeMode(wrapper.instance)
+    end
+
+    return wrapper.instance
+end
+
+function complete_step!(wrapper::FMI3InstanceWrapper)
+    wrapper.instance === nothing && return
+    enterEventMode = Ref(FMI.fmi3False)
+    terminateSimulation = Ref(FMI.fmi3False)
+    @statuscheck FMI.fmi3CompletedIntegratorStep!(
+        wrapper.instance, FMI.fmi3True, enterEventMode, terminateSimulation)
+    @assert enterEventMode[] == FMI.fmi3False
+    @assert terminateSimulation[] == FMI.fmi3False
+end
+
+function reset_instance!(wrapper::FMI3InstanceWrapper)
+    wrapper.instance === nothing && return
+    FMI.fmi3Terminate(wrapper.instance)
+    FMI.fmi3FreeInstance!(wrapper.instance)
+    wrapper.instance = nothing
+end
+
 struct FMI2MEFunctor{T}
     return_buffer::Vector{T}
     output_value_references::Vector{UInt32}
@@ -284,13 +369,46 @@ function (fn::FMI2MEFunctor)(wrapper::FMI2InstanceWrapper, states, inputs, param
     return [states_buffer; outputs_buffer]
 end
 
-function fmi2MEStep!(integrator, u, p, ctx)
+struct FMI3MEFunctor{T}
+    return_buffer::Vector{T}
+    output_value_references::Vector{UInt32}
+end
+
+@register_array_symbolic (fn::FMI3MEFunctor)(
+    wrapper::FMI3InstanceWrapper, states::Vector{<:Real},
+    inputs::Vector{<:Real}, params::Vector{<:Real}, t::Real) begin
+    size = (length(states) + length(fn.output_value_references),)
+    eltype = eltype(states)
+    ndims = 1
+end
+
+function update_instance_ME!(wrapper::FMI3InstanceWrapper, states, inputs, t)
+    instance = wrapper.instance
+    @statuscheck FMI.fmi3SetTime(instance, t)
+    @statuscheck FMI.fmi3SetContinuousStates(instance, states)
+    if !isempty(inputs)
+        @statuscheck FMI.fmi3SetFloat64(instance, wrapper.input_value_references, inputs)
+    end
+end
+
+function (fn::FMI3MEFunctor)(wrapper::FMI3InstanceWrapper, states, inputs, params, t)
+    instance = get_instance_ME!(wrapper, states, inputs, params, t)
+    update_instance_ME!(wrapper, states, inputs, t)
+
+    states_buffer = zeros(length(states))
+    @statuscheck FMI.fmi3GetContinuousStateDerivatives!(instance, states_buffer)
+    outputs_buffer = zeros(length(fn.output_value_references))
+    FMI.fmi3GetFloat64!(instance, fn.output_value_references, outputs_buffer)
+    return [states_buffer; outputs_buffer]
+end
+
+function fmiMEStep!(integrator, u, p, ctx)
     wrapper_idx = p[1]
     wrapper = integrator.ps[wrapper_idx]
     complete_step!(wrapper)
 end
 
-function fmi2Finalize!(integrator, u, p, ctx)
+function fmiFinalize!(integrator, u, p, ctx)
     wrapper_idx = p[1]
     wrapper = integrator.ps[wrapper_idx]
     reset_instance!(wrapper)
