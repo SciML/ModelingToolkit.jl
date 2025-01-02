@@ -2374,6 +2374,12 @@ function linearization_function(sys::AbstractSystem, inputs,
     op = Dict(op)
     inputs isa AbstractVector || (inputs = [inputs])
     outputs isa AbstractVector || (outputs = [outputs])
+    inputs = mapreduce(vcat, inputs; init = []) do var
+        symbolic_type(var) == ArraySymbolic() ? collect(var) : [var]
+    end
+    outputs = mapreduce(vcat, outputs; init = []) do var
+        symbolic_type(var) == ArraySymbolic() ? collect(var) : [var]
+    end
     ssys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs;
         simplify,
         kwargs...)
