@@ -630,25 +630,33 @@ end
 function linearization_function(sys::AbstractSystem,
         inputs::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
         outputs; loop_openings = [], system_modifier = identity, kwargs...)
-    sys = handle_loop_openings(sys, loop_openings)
-
+    loop_openings = Set(map(nameof, canonicalize_ap(loop_openings)))
     inputs = canonicalize_ap(inputs)
     outputs = canonicalize_ap(outputs)
 
     input_vars = []
     for input in inputs
-        sys, (input_var,) = apply_transformation(PerturbOutput(input), sys)
+        if nameof(input) in loop_openings
+            delete!(loop_openings, nameof(input))
+            sys, (input_var,) = apply_transformation(Break(input, true), sys)
+        else
+            sys, (input_var,) = apply_transformation(PerturbOutput(input), sys)
+        end
         push!(input_vars, input_var)
     end
     output_vars = []
     for output in outputs
         if output isa AnalysisPoint
-            sys, (output_var,) = apply_transformation(GetInput(output), sys)
-            push!(output_vars, output_var)
+            sys, (output_var,) = apply_transformation(AddVariable(output), sys)
+            sys, (input_var,) = apply_transformation(GetInput(output), sys)
+            push!(get_eqs(sys), output_var ~ input_var)
         else
-            push!(output_vars, output)
+            output_var = output
         end
+        push!(output_vars, output_var)
     end
+
+    sys = handle_loop_openings(sys, collect(loop_openings))
 
     return linearization_function(system_modifier(sys), input_vars, output_vars; kwargs...)
 end
