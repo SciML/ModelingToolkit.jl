@@ -1,7 +1,8 @@
 using ModelingToolkit, OrdinaryDiffEq, LinearAlgebra, ControlSystemsBase
 using ModelingToolkitStandardLibrary.Mechanical.Rotational
 using ModelingToolkitStandardLibrary.Blocks
-using ModelingToolkit: connect, AnalysisPoint, t_nounits as t, D_nounits as D
+using ModelingToolkit: connect, AnalysisPoint, t_nounits as t, D_nounits as D,
+                       get_sensitivity, get_comp_sensitivity, get_looptransfer, open_loop
 import ControlSystemsBase as CS
 
 @testset "Complicated model" begin
@@ -154,10 +155,10 @@ end
         t,
         systems = [P_outer, sys_inner])
 
-    Souter = sminreal(ss(get_sensitivity(sys_outer, :sys_inner_u)[1]...))
+    Souter = sminreal(ss(get_sensitivity(sys_outer, sys_inner.u)[1]...))
 
     Sinner2 = sminreal(ss(get_sensitivity(
-        sys_outer, :sys_inner_u, loop_openings = [:y2])[1]...))
+        sys_outer, sys_inner.u, loop_openings = [:y2])[1]...))
 
     @test Sinner.nx == 1
     @test Sinner == Sinner2
@@ -183,23 +184,23 @@ end
            connect(K.output, :plant_input, P.input)]
     sys = ODESystem(eqs, t, systems = [P, K], name = :hej)
 
-    matrices, _ = Blocks.get_sensitivity(sys, :plant_input)
+    matrices, _ = get_sensitivity(sys, :plant_input)
     S = CS.feedback(I(2), Kss * Pss, pos_feedback = true)
 
     @test CS.tf(CS.ss(matrices...)) ≈ CS.tf(S)
 
-    matrices, _ = Blocks.get_comp_sensitivity(sys, :plant_input)
+    matrices, _ = get_comp_sensitivity(sys, :plant_input)
     T = -CS.feedback(Kss * Pss, I(2), pos_feedback = true)
 
     # bodeplot([ss(matrices...), T])
     @test CS.tf(CS.ss(matrices...)) ≈ CS.tf(T)
 
-    matrices, _ = Blocks.get_looptransfer(
+    matrices, _ = get_looptransfer(
         sys, :plant_input)
     L = Kss * Pss
     @test CS.tf(CS.ss(matrices...)) ≈ CS.tf(L)
 
-    matrices, _ = linearize(sys, :plant_input, :plant_output)
+    matrices, _ = linearize(sys, AnalysisPoint(:plant_input), :plant_output)
     G = CS.feedback(Pss, Kss, pos_feedback = true)
     @test CS.tf(CS.ss(matrices...)) ≈ CS.tf(G)
 end
@@ -222,7 +223,8 @@ end
            connect(F.output, sys_inner.add.input1)]
     sys_outer = ODESystem(eqs, t, systems = [F, sys_inner, r], name = :outer)
 
-    matrices, _ = get_sensitivity(sys_outer, [:, :inner_plant_output])
+    matrices, _ = get_sensitivity(
+        sys_outer, [sys_outer.inner.plant_input, sys_outer.inner.plant_output])
 
     Ps = tf(1, [1, 1]) |> ss
     Cs = tf(1) |> ss
@@ -230,4 +232,44 @@ end
     G = CS.ss(matrices...) |> sminreal
     Si = CS.feedback(1, Cs * Ps)
     @test tf(G[1, 1]) ≈ tf(Si)
+
+    So = CS.feedback(1, Ps * Cs)
+    @test tf(G[2, 2]) ≈ tf(So)
+    @test tf(G[1, 2]) ≈ tf(-CS.feedback(Cs, Ps))
+    @test tf(G[2, 1]) ≈ tf(CS.feedback(Ps, Cs))
+
+    matrices, _ = get_comp_sensitivity(
+        sys_outer, [sys_outer.inner.plant_input, sys_outer.inner.plant_output])
+
+    G = CS.ss(matrices...) |> sminreal
+    Ti = CS.feedback(Cs * Ps)
+    @test tf(G[1, 1]) ≈ tf(Ti)
+
+    To = CS.feedback(Ps * Cs)
+    @test tf(G[2, 2]) ≈ tf(To)
+    @test tf(G[1, 2]) ≈ tf(CS.feedback(Cs, Ps)) # The negative sign appears in a confusing place due to negative feedback not happening through Ps
+    @test tf(G[2, 1]) ≈ tf(-CS.feedback(Ps, Cs))
+
+    # matrices, _ = get_looptransfer(sys_outer, [:inner_plant_input, :inner_plant_output])
+    matrices, _ = get_looptransfer(sys_outer, sys_outer.inner.plant_input)
+    L = CS.ss(matrices...) |> sminreal
+    @test tf(L) ≈ -tf(Cs * Ps)
+
+    matrices, _ = get_looptransfer(sys_outer, sys_outer.inner.plant_output)
+    L = CS.ss(matrices...) |> sminreal
+    @test tf(L[1, 1]) ≈ -tf(Ps * Cs)
+
+    # Calling looptransfer like below is not the intended way, but we can work out what it should return if we did so it remains a valid test
+    matrices, _ = get_looptransfer(
+        sys_outer, [sys_outer.inner.plant_input, sys_outer.inner.plant_output])
+    L = CS.ss(matrices...) |> sminreal
+    @test tf(L[1, 1]) ≈ tf(0)
+    @test tf(L[2, 2]) ≈ tf(0)
+    @test sminreal(L[1, 2]) ≈ ss(-1)
+    @test tf(L[2, 1]) ≈ tf(Ps)
+
+    matrices, _ = linearize(
+        sys_outer, [sys_outer.inner.plant_input], [sys_inner.plant_output])
+    G = CS.ss(matrices...) |> sminreal
+    @test tf(G) ≈ tf(CS.feedback(Ps, Cs))
 end
