@@ -144,12 +144,16 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
 
         push!(params, wrapper, functor)
         push!(states, __mtk_internal_u)
-    elseif type == :CS && Ver == 2
+    elseif type == :CS
         state_value_references = UInt32[value_references[var] for var in diffvars]
         state_and_output_value_references = vcat(
             state_value_references, output_value_references)
-        _functor = FMI2CSFunctor(state_and_output_value_references,
-            state_value_references, output_value_references)
+        _functor = if Ver == 2
+            FMI2CSFunctor(state_and_output_value_references,
+                state_value_references, output_value_references)
+        else
+            FMI3CSFunctor(state_value_references, output_value_references)
+        end
         @parameters (functor::(typeof(_functor)))(..)[1:(length(__mtk_internal_u) + length(__mtk_internal_o))] = _functor
         for (i, x) in enumerate(collect(__mtk_internal_o))
             push!(initialization_eqs,
@@ -168,11 +172,11 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
         if symbolic_type(__mtk_internal_u) != NotSymbolic()
             cb_modified = (cb_modified..., states = __mtk_internal_u)
         end
-        initialize_affect = MTK.ImperativeAffect(fmi2CSInitialize!; observed = cb_observed,
+        initialize_affect = MTK.ImperativeAffect(fmiCSInitialize!; observed = cb_observed,
             modified = cb_modified, ctx = _functor)
         finalize_affect = MTK.FunctionalAffect(fmiFinalize!, [], [wrapper], [])
         step_affect = MTK.ImperativeAffect(
-            fmi2CSStep!; observed = cb_observed, modified = cb_modified, ctx = _functor)
+            fmiCSStep!; observed = cb_observed, modified = cb_modified, ctx = _functor)
         instance_management_callback = MTK.SymbolicDiscreteCallback(
             communication_step_size, step_affect; initialize = initialize_affect, finalize = finalize_affect
         )
@@ -318,6 +322,16 @@ function get_instance_ME!(wrapper::FMI3InstanceWrapper, states, inputs, params, 
     return wrapper.instance
 end
 
+function get_instance_CS!(wrapper::FMI3InstanceWrapper, states, inputs, params, t)
+    if wrapper.instance === nothing
+        wrapper.instance = FMI.fmi3InstantiateCoSimulation!(
+            wrapper.fmu; eventModeUsed = false)::FMI.FMU3Instance
+        get_instance_common!(wrapper, states, inputs, params, t)
+        @statuscheck FMI.fmi3ExitInitializationMode(wrapper.instance)
+    end
+    return wrapper.instance
+end
+
 function complete_step!(wrapper::FMI3InstanceWrapper)
     wrapper.instance === nothing && return
     enterEventMode = Ref(FMI.fmi3False)
@@ -440,7 +454,7 @@ end
     ndims = 1
 end
 
-function fmi2CSInitialize!(m, o, ctx::FMI2CSFunctor, integrator)
+function fmiCSInitialize!(m, o, ctx::FMI2CSFunctor, integrator)
     states = isdefined(m, :states) ? m.states : ()
     inputs = o.inputs
     params = o.params
@@ -449,6 +463,7 @@ function fmi2CSInitialize!(m, o, ctx::FMI2CSFunctor, integrator)
     if wrapper.instance !== nothing
         reset_instance!(wrapper)
     end
+
     instance = get_instance_common!(wrapper, states, inputs, params, t)
     @statuscheck FMI.fmi2ExitInitializationMode(instance)
     if isdefined(m, :states)
@@ -461,7 +476,7 @@ function fmi2CSInitialize!(m, o, ctx::FMI2CSFunctor, integrator)
     return m
 end
 
-function fmi2CSStep!(m, o, ctx::FMI2CSFunctor, integrator)
+function fmiCSStep!(m, o, ctx::FMI2CSFunctor, integrator)
     wrapper = o.wrapper
     states = isdefined(m, :states) ? m.states : ()
     inputs = o.inputs
@@ -477,6 +492,81 @@ function fmi2CSStep!(m, o, ctx::FMI2CSFunctor, integrator)
     end
     if isdefined(m, :outputs)
         @statuscheck FMI.fmi2GetReal!(instance, ctx.output_value_references, m.outputs)
+    end
+
+    return m
+end
+
+struct FMI3CSFunctor
+    state_value_references::Vector{UInt32}
+    output_value_references::Vector{UInt32}
+end
+
+function (fn::FMI3CSFunctor)(wrapper::FMI3InstanceWrapper, states, inputs, params, t)
+    states = states isa SubArray ? copy(states) : states
+    inputs = inputs isa SubArray ? copy(inputs) : inputs
+    params = params isa SubArray ? copy(params) : params
+    instance = get_instance_CS!(wrapper, states, inputs, params, t)
+    if isempty(fn.output_value_references)
+        return eltype(states)[]
+    else
+        return FMI.fmi3GetFloat64(instance, fn.output_value_references)
+    end
+end
+
+@register_array_symbolic (fn::FMI3CSFunctor)(
+    wrapper::FMI3InstanceWrapper, states::Vector{<:Real},
+    inputs::Vector{<:Real}, params::Vector{<:Real}, t::Real) begin
+    size = (length(states) + length(fn.output_value_references),)
+    eltype = eltype(states)
+    ndims = 1
+end
+
+function fmiCSInitialize!(m, o, ctx::FMI3CSFunctor, integrator)
+    states = isdefined(m, :states) ? m.states : ()
+    inputs = o.inputs
+    params = o.params
+    t = o.t
+    wrapper = o.wrapper
+    if wrapper.instance !== nothing
+        reset_instance!(wrapper)
+    end
+    instance = get_instance_CS!(wrapper, states, inputs, params, t)
+    if isdefined(m, :states)
+        @statuscheck FMI.fmi3GetFloat64!(instance, ctx.state_value_references, m.states)
+    end
+    if isdefined(m, :outputs)
+        @statuscheck FMI.fmi3GetFloat64!(instance, ctx.output_value_references, m.outputs)
+    end
+
+    return m
+end
+
+function fmiCSStep!(m, o, ctx::FMI3CSFunctor, integrator)
+    wrapper = o.wrapper
+    states = isdefined(m, :states) ? m.states : ()
+    inputs = o.inputs
+    params = o.params
+    t = o.t
+    dt = o.dt
+
+    instance = get_instance_CS!(wrapper, states, inputs, params, integrator.t)
+    eventEncountered = Ref(FMI.fmi3False)
+    terminateSimulation = Ref(FMI.fmi3False)
+    earlyReturn = Ref(FMI.fmi3False)
+    lastSuccessfulTime = Ref(zero(FMI.fmi3Float64))
+    @statuscheck FMI.fmi3DoStep!(
+        instance, integrator.t - dt, dt, FMI.fmi3True, eventEncountered,
+        terminateSimulation, earlyReturn, lastSuccessfulTime)
+    @assert eventEncountered[] == FMI.fmi3False
+    @assert terminateSimulation[] == FMI.fmi3False
+    @assert earlyReturn[] == FMI.fmi3False
+
+    if isdefined(m, :states)
+        @statuscheck FMI.fmi3GetFloat64!(instance, ctx.state_value_references, m.states)
+    end
+    if isdefined(m, :outputs)
+        @statuscheck FMI.fmi3GetFloat64!(instance, ctx.output_value_references, m.outputs)
     end
 
     return m
