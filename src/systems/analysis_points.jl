@@ -611,8 +611,10 @@ function get_looptransfer_function(
 end
 
 for f in [:get_sensitivity, :get_comp_sensitivity, :get_looptransfer]
-    @eval function $f(sys, ap, args...; kwargs...)
-        lin_fun, ssys = $(Symbol(f, :_function))(sys, ap, args...; kwargs...)
+    @eval function $f(
+            sys, ap, args...; loop_openings = [], system_modifier = identity, kwargs...)
+        lin_fun, ssys = $(Symbol(f, :_function))(
+            sys, ap, args...; loop_openings, system_modifier, kwargs...)
         ModelingToolkit.linearize(ssys, lin_fun; kwargs...), ssys
     end
 end
