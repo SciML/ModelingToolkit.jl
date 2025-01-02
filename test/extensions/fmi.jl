@@ -35,6 +35,23 @@ import ModelingToolkit as MTK
         @test sol(0.0:0.1:8.0;
             idxs = [sys.inner.mass__s, sys.inner.mass__v]).u≈collect.(truesol.values.saveval) rtol=1e-2
     end
+
+    fmu = loadFMU("SpringPendulum1D", "Dymola", "2023x", "3.0"; type = :ME)
+    truesol = FMI.simulate(
+        fmu, (0.0, 8.0); saveat = 0.0:0.1:8.0, recordValues = ["mass.s", "mass.v"])
+    @testset "v3, ME" begin
+        fmu = loadFMU("SpringPendulum1D", "Dymola", "2023x", "3.0"; type = :ME)
+        @mtkbuild sys = MTK.FMIComponent(Val(3); fmu, type = :ME)
+        prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+            sys, [sys.mass__s => 0.5, sys.mass__v => 0.0], (0.0, 8.0))
+        sol = solve(prob, Tsit5(); reltol = 1e-8, abstol = 1e-8)
+        @test SciMLBase.successful_retcode(sol)
+
+        @test sol(0.0:0.1:8.0;
+            idxs = [sys.mass__s, sys.mass__v]).u≈collect.(truesol.values.saveval) atol=1e-4
+        # repeated solve works
+        @test_nowarn solve(prob, Tsit5())
+    end
 end
 
 @testset "IO Model" begin
