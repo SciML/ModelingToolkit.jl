@@ -198,19 +198,23 @@ function modify_nested_subsystem(
 
     # recursive helper function which does the searching and modification
     function _helper(sys::AbstractSystem, i::Int)
-        # we reached past the end, so everything matched and
-        # `sys` is the system to modify.
         if i > length(hierarchy)
+            # we reached past the end, so everything matched and
+            # `sys` is the system to modify.
             sys, vars = fn(sys)
         else
+            # find the subsystem with the given name and error otherwise
             cur = hierarchy[i]
             idx = findfirst(subsys -> nameof(subsys) == cur, get_systems(sys))
             idx === nothing &&
                 error("System $(join([nameof(root); hierarchy[1:i-1]], '.')) does not have a subsystem named $cur.")
 
+            # recurse into new subsystem
             newsys, vars = _helper(get_systems(sys)[idx], i + 1)
+            # update this system with modified subsystem
             @set! sys.systems[idx] = newsys
         end
+        # only namespace variables from inner systems
         if i != 1
             vars = ntuple(Val(length(vars))) do i
                 renamespace(sys, vars[i])
@@ -270,6 +274,15 @@ end
 
 #### PRIMITIVE TRANSFORMATIONS
 
+const DOC_WILL_REMOVE_AP = """
+    Note that this transformation will remove `ap`, causing any subsequent transformations \
+    referring to it to fail.\
+    """
+
+const DOC_ADDED_VARIABLE = """
+    The added variable(s) will have a default of zero, of the appropriate type and size.\
+    """
+
 """
     $(TYPEDEF)
 
@@ -278,11 +291,9 @@ it will add a new input variable which connects to the outputs of the analysis p
 `apply_transformation` returns the new input variable (if added) as the auxiliary
 information. The new input variable will have the name `Symbol(:d_, nameof(ap))`.
 
-Note that this transformation will remove `ap`, causing any subsequent transformations
-referring to it to fail.
+$DOC_WILL_REMOVE_AP
 
-The added variable, if present, will have a default of zero, of the appropriate type and
-size.
+$DOC_ADDED_VARIABLE
 
 ## Fields
 
@@ -340,9 +351,7 @@ end
     $(TYPEDEF)
 
 A transformation which returns the variable corresponding to the input of the analysis
-point.
-
-`apply_transformation` returns the variable as auxiliary information.
+point. Does not modify the system.
 
 ## Fields
 
@@ -350,7 +359,7 @@ $(TYPEDFIELDS)
 """
 struct GetInput <: AnalysisPointTransformation
     """
-    The analysis point to add the output to.
+    The analysis point to get the input of.
     """
     ap::AnalysisPoint
 end
@@ -380,15 +389,12 @@ the analysis point before connecting to the outputs. The new variable will have 
 
 If `with_output == true`, also creates an additional new variable which has the value
 provided to the outputs after the above modification. This new variable has the same name
-as the analysis point.
+as the analysis point and will be the second variable in the tuple of new variables returned
+from `apply_transformation`.
 
-`apply_transformation` returns a 1-tuple of the perturbation variable if
-`with_output == false` and a 2-tuple of the perturbation variable and output variable if
-`with_output == true`.
+$DOC_WILL_REMOVE_AP
 
-Removes the analysis point `ap`, so any subsequent transformations requiring it will fail.
-
-The added variable(s) will have a default of zero, of the appropriate type and size.
+$DOC_ADDED_VARIABLE
 
 ## Fields
 
@@ -454,17 +460,33 @@ function apply_transformation(tf::PerturbOutput, sys::AbstractSystem)
 end
 
 """
-    $(TYPEDSIGNATURES)
+    $(TYPEDEF)
 
 A transformation which adds a variable named `name` to the system containing the analysis
-point `ap`. The added variable has the same type and size as the input of the analysis
-point.
+point `ap`. $DOC_ADDED_VARIABLE
+
+# Fields
+
+$(TYPEDFIELDS)
 """
 struct AddVariable <: AnalysisPointTransformation
+    """
+    The analysis point in the system to modify, and whose input should be used as the
+    template for the new variable.
+    """
     ap::AnalysisPoint
+    """
+    The name of the added variable.
+    """
     name::Symbol
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Add a new variable to the system containing analysis point `ap` with the same name as the
+analysis point.
+"""
 AddVariable(ap::AnalysisPoint) = AddVariable(ap, nameof(ap))
 
 function apply_transformation(tf::AddVariable, sys::AbstractSystem)
@@ -494,11 +516,12 @@ end
     $(TYPEDSIGNATURES)
 
 A transformation enable calculating the sensitivity function about the analysis point `ap`.
-`apply_transformation` returns a 2-tuple `du, u` as auxiliary information.
+The returned added variables are `(du, u)` where `du` is the perturbation added to the
+input, and `u` is the output after perturbation.
 
-Removes the analysis point `ap`, so any subsequent transformations requiring it will fail.
+$DOC_WILL_REMOVE_AP
 
-The added variables will have a default of zero, of the appropriate type and size.
+$DOC_ADDED_VARIABLE
 """
 SensitivityTransform(ap::AnalysisPoint) = PerturbOutput(ap, true)
 
@@ -506,14 +529,21 @@ SensitivityTransform(ap::AnalysisPoint) = PerturbOutput(ap, true)
     $(TYPEDEF)
 
 A transformation to enable calculating the complementary sensitivity function about the
-analysis point `ap`. `apply_transformation` returns a 2-tuple `du, u` as auxiliary
-information.
+analysis point `ap`. The returned added variables are `(du, u)` where `du` is the
+perturbation added to the outputs and `u` is the input to the analysis point.
 
-Removes the analysis point `ap`, so any subsequent transformations requiring it will fail.
+$DOC_WILL_REMOVE_AP
 
-The added variables will have a default of zero, of the appropriate type and size.
+$DOC_ADDED_VARIABLE
+
+# Fields
+
+$(TYPEDFIELDS)
 """
 struct ComplementarySensitivityTransform <: AnalysisPointTransformation
+    """
+    The analysis point to modify.
+    """
     ap::AnalysisPoint
 end
 
@@ -537,7 +567,25 @@ function apply_transformation(cst::ComplementarySensitivityTransform, sys::Abstr
     return sys, (du, u)
 end
 
+"""
+    $(TYPEDEF)
+
+A transformation to enable calculating the loop transfer function about the analysis point
+`ap`. The returned added variables are `(du, u)` where `du` feeds into the outputs of `ap`
+and `u` is the input of `ap`.
+
+$DOC_WILL_REMOVE_AP
+
+$DOC_ADDED_VARIABLE
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
 struct LoopTransferTransform <: AnalysisPointTransformation
+    """
+    The analysis point to modify.
+    """
     ap::AnalysisPoint
 end
 
@@ -547,8 +595,13 @@ function apply_transformation(tf::LoopTransferTransform, sys::AbstractSystem)
     return sys, (du, u)
 end
 
-### TODO: Move these
+"""
+    $(TYPEDSIGNATURES)
 
+A utility function to get the "canonical" form of a list of analysis points. Always returns
+a list of values. Any value that cannot be turned into an `AnalysisPoint` (i.e. isn't
+already an `AnalysisPoint` or `Symbol`) is simply wrapped in an array.
+"""
 canonicalize_ap(ap::Symbol) = [AnalysisPoint(ap)]
 canonicalize_ap(ap::AnalysisPoint) = [ap]
 canonicalize_ap(ap) = [ap]
@@ -556,6 +609,11 @@ function canonicalize_ap(aps::Vector)
     mapreduce(canonicalize_ap, vcat, aps; init = [])
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Given a list of analysis points, break the connection for each and set the output to zero.
+"""
 function handle_loop_openings(sys::AbstractSystem, aps)
     for ap in canonicalize_ap(aps)
         sys, (outvar,) = apply_transformation(Break(ap, true), sys)
@@ -568,63 +626,130 @@ function handle_loop_openings(sys::AbstractSystem, aps)
     return sys
 end
 
-function get_sensitivity_function(
-        sys::AbstractSystem, aps; system_modifier = identity, loop_openings = [], kwargs...)
+const DOC_LOOP_OPENINGS = """
+    - `loop_openings`: A list of analysis points whose connections should be removed and
+      the outputs set to zero as a part of the linear analysis.
+"""
+
+const DOC_SYS_MODIFIER = """
+    - `system_modifier`: A function taking the transformed system and applying any
+      additional transformations, returning the modified system. The modified system
+      is passed to `linearization_function`. 
+"""
+"""
+    $(TYPEDSIGNATURES)
+
+Utility function for linear analyses that apply a transformation `transform`, which
+returns the added variables `(du, u)`, to each of the analysis points in `aps` and then
+calls `linearization_function` with all the `du`s as inputs and `u`s as outputs. Returns
+the linearization function and modified, simplified system.
+
+# Keyword arguments
+
+$DOC_LOOP_OPENINGS
+$DOC_SYS_MODIFIER
+
+All other keyword arguments are forwarded to `linearization_function`.
+"""
+function get_linear_analysis_function(
+        sys::AbstractSystem, transform, aps; system_modifier = identity, loop_openings = [], kwargs...)
     sys = handle_loop_openings(sys, loop_openings)
     aps = canonicalize_ap(aps)
     dus = []
     us = []
     for ap in aps
-        sys, (du, u) = apply_transformation(SensitivityTransform(ap), sys)
+        sys, (du, u) = apply_transformation(transform(ap), sys)
         push!(dus, du)
         push!(us, u)
     end
     linearization_function(system_modifier(sys), dus, us; kwargs...)
 end
 
-function get_comp_sensitivity_function(
-        sys::AbstractSystem, aps; system_modifier = identity, loop_openings = [], kwargs...)
-    sys = handle_loop_openings(sys, loop_openings)
-    aps = canonicalize_ap(aps)
-    dus = []
-    us = []
-    for ap in aps
-        sys, (du, u) = apply_transformation(ComplementarySensitivityTransform(ap), sys)
-        push!(dus, du)
-        push!(us, u)
-    end
-    linearization_function(system_modifier(sys), dus, us; kwargs...)
+"""
+    $(TYPEDSIGNATURES)
+
+Return the sensitivity function for the analysis point(s) `aps`, and the modified system
+simplified with the appropriate inputs and outputs.
+
+# Keyword Arguments
+
+$DOC_LOOP_OPENINGS
+$DOC_SYS_MODIFIER
+
+All other keyword arguments are forwarded to `linearization_function`.
+"""
+function get_sensitivity_function(sys::AbstractSystem, aps; kwargs...)
+    get_linear_analysis_function(sys, SensitivityTransform, aps; kwargs...)
 end
 
-function get_looptransfer_function(
-        sys, aps; system_modifier = identity, loop_openings = [], kwargs...)
-    sys = handle_loop_openings(sys, loop_openings)
-    aps = canonicalize_ap(aps)
-    dus = []
-    us = []
-    for ap in aps
-        sys, (du, u) = apply_transformation(LoopTransferTransform(ap), sys)
-        push!(dus, du)
-        push!(us, u)
-    end
-    linearization_function(system_modifier(sys), dus, us; kwargs...)
+"""
+    $(TYPEDSIGNATURES)
+
+Return the complementary sensitivity function for the analysis point(s) `aps`, and the
+modified system simplified with the appropriate inputs and outputs.
+
+# Keyword Arguments
+
+$DOC_LOOP_OPENINGS
+$DOC_SYS_MODIFIER
+
+All other keyword arguments are forwarded to `linearization_function`.
+"""
+function get_comp_sensitivity_function(sys::AbstractSystem, aps; kwargs...)
+    get_linear_analysis_function(sys, ComplementarySensitivityTransform, aps; kwargs...)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return the loop-transfer function for the analysis point(s) `aps`, and the modified
+system simplified with the appropriate inputs and outputs.
+
+# Keyword Arguments
+
+$DOC_LOOP_OPENINGS
+$DOC_SYS_MODIFIER
+
+All other keyword arguments are forwarded to `linearization_function`.
+"""
+function get_looptransfer_function(sys::AbstractSystem, aps; kwargs...)
+    get_linear_analysis_function(sys, LoopTransferTransform, aps; kwargs...)
 end
 
 for f in [:get_sensitivity, :get_comp_sensitivity, :get_looptransfer]
+    utility_fun = Symbol(f, :_function)
     @eval function $f(
             sys, ap, args...; loop_openings = [], system_modifier = identity, kwargs...)
-        lin_fun, ssys = $(Symbol(f, :_function))(
+        lin_fun, ssys = $(utility_fun)(
             sys, ap, args...; loop_openings, system_modifier, kwargs...)
         ModelingToolkit.linearize(ssys, lin_fun; kwargs...), ssys
     end
+    @eval @doc """
+        $(TYPEDSIGNATURES)
+
+        Call `$($utility_fun)` and perform the linearization. All keyword arguments are
+        forwarded to `$($utility_fun)` and subsequently `linearize`.
+    """ $f
 end
 
-function open_loop(sys, ap::Union{Symbol, AnalysisPoint}; kwargs...)
+"""
+    $(TYPEDSIGNATURES)
+
+Apply `LoopTransferTransform` to the analysis point `ap` and return the
+result of `apply_transformation`.
+
+# Keyword Arguments
+
+- `system_modifier`: a function which takes the modified system and returns a new system
+  with any required further modifications peformed.
+"""
+function open_loop(sys, ap::Union{Symbol, AnalysisPoint}; system_modifier = identity)
     if ap isa Symbol
         ap = AnalysisPoint(ap)
     end
     tf = LoopTransferTransform(ap)
-    return apply_transformation(tf, sys)
+    sys, vars = apply_transformation(tf, sys)
+    return system_modifier(sys), vars
 end
 
 function linearization_function(sys::AbstractSystem,
