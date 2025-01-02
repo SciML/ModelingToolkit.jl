@@ -519,7 +519,10 @@ end
 
 function apply_transformation(cst::ComplementarySensitivityTransform, sys::AbstractSystem)
     sys, (u,) = apply_transformation(GetInput(cst.ap), sys)
-    sys, (du,) = apply_transformation(AddVariable(cst.ap, Symbol(:comp_sens_du)), sys)
+    sys, (du,) = apply_transformation(
+        AddVariable(
+            cst.ap, Symbol(namespace_hierarchy(nameof(cst.ap))[end], :_comp_sens_du)),
+        sys)
     sys, (_du,) = apply_transformation(PerturbOutput(cst.ap), sys)
 
     # `PerturbOutput` adds the equation `input + _du ~ output`
