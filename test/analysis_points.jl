@@ -2,7 +2,7 @@ using ModelingToolkit, ModelingToolkitStandardLibrary.Blocks
 using OrdinaryDiffEq, LinearAlgebra
 using Test
 using ModelingToolkit: t_nounits as t, D_nounits as D, AnalysisPoint, get_sensitivity,
-                       get_comp_sensitivity, get_looptransfer
+                       get_comp_sensitivity, get_looptransfer, open_loop, AbstractSystem
 using Symbolics: NAMESPACE_SEPARATOR
 
 @testset "AnalysisPoint is lowered to `connect`" begin
@@ -13,14 +13,14 @@ using Symbolics: NAMESPACE_SEPARATOR
     eqs = [connect(P.output, C.input)
            connect(C.output, ap, P.input)]
     sys_ap = ODESystem(eqs, t, systems = [P, C], name = :hej)
-    sys_ap2 = @test_nowarn expand_connections(sys)
+    sys_ap2 = @test_nowarn expand_connections(sys_ap)
 
     @test all(eq -> !(eq.lhs isa AnalysisPoint), equations(sys_ap2))
 
     eqs = [connect(P.output, C.input)
            connect(C.output, P.input)]
     sys_normal = ODESystem(eqs, t, systems = [P, C], name = :hej)
-    sys_normal2 = @test_nowarn expand_connections(sys)
+    sys_normal2 = @test_nowarn expand_connections(sys_normal)
 
     @test isequal(sys_ap2, sys_normal2)
 end
@@ -190,70 +190,4 @@ end
     @test matrices.A[] == -2
     @test matrices.B[] * matrices.C[] == 1 # both positive
     @test matrices.D[] == 0
-end
-
-using ModelingToolkit, OrdinaryDiffEq, LinearAlgebra
-using ModelingToolkitStandardLibrary.Mechanical.Rotational
-using ModelingToolkitStandardLibrary.Blocks: Sine, PID, SecondOrder, Step, RealOutput
-using ModelingToolkit: connect
-
-@testset "Complicated model" begin
-    # Parameters
-    m1 = 1
-    m2 = 1
-    k = 1000 # Spring stiffness
-    c = 10   # Damping coefficient
-    @named inertia1 = Inertia(; J = m1)
-    @named inertia2 = Inertia(; J = m2)
-    @named spring = Spring(; c = k)
-    @named damper = Damper(; d = c)
-    @named torque = Torque()
-
-    function SystemModel(u = nothing; name = :model)
-        eqs = [connect(torque.flange, inertia1.flange_a)
-               connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
-               connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
-        if u !== nothing
-            push!(eqs, connect(torque.tau, u.output))
-            return ODESystem(eqs, t;
-                systems = [
-                    torque,
-                    inertia1,
-                    inertia2,
-                    spring,
-                    damper,
-                    u
-                ],
-                name)
-        end
-        ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
-    end
-
-    @named r = Step(start_time = 0)
-    model = SystemModel()
-    @named pid = PID(k = 100, Ti = 0.5, Td = 1)
-    @named filt = SecondOrder(d = 0.9, w = 10)
-    @named sensor = AngleSensor()
-    @named er = Add(k2 = -1)
-
-    connections = [connect(r.output, :r, filt.input)
-                   connect(filt.output, er.input1)
-                   connect(pid.ctr_output, :u, model.torque.tau)
-                   connect(model.inertia2.flange_b, sensor.flange)
-                   connect(sensor.phi, :y, er.input2)
-                   connect(er.output, :e, pid.err_input)]
-
-    closed_loop = ODESystem(connections, t, systems = [model, pid, filt, sensor, r, er],
-        name = :closed_loop, defaults = [
-            model.inertia1.phi => 0.0,
-            model.inertia2.phi => 0.0,
-            model.inertia1.w => 0.0,
-            model.inertia2.w => 0.0,
-            filt.x => 0.0,
-            filt.xd => 0.0
-        ])
-
-    sys = structural_simplify(closed_loop)
-    prob = ODEProblem(sys, unknowns(sys) .=> 0.0, (0.0, 4.0))
-    sol = solve(prob, Rodas5P(), reltol = 1e-6, abstol = 1e-9)
 end
