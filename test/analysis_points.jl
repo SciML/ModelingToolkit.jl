@@ -1,8 +1,7 @@
 using ModelingToolkit, ModelingToolkitStandardLibrary.Blocks
 using OrdinaryDiffEq, LinearAlgebra
 using Test
-using ModelingToolkit: t_nounits as t, D_nounits as D, AnalysisPoint, get_sensitivity,
-                       get_comp_sensitivity, get_looptransfer, open_loop, AbstractSystem
+using ModelingToolkit: t_nounits as t, D_nounits as D, AnalysisPoint, AbstractSystem
 using Symbolics: NAMESPACE_SEPARATOR
 
 @testset "AnalysisPoint is lowered to `connect`" begin
@@ -164,17 +163,7 @@ end
         (inputap, [nameof(outputap)]),
         (nameof(inputap), [nameof(outputap)])
     ]
-        if input isa Symbol
-            # broken because MTKStdlib defines the method for
-            # `input::Union{Symbol, Vector{Symbol}}` which we can't directly call
-            @test_broken linearize(sys, input, output)
-            linfun, ssys = @invoke linearization_function(sys::AbstractSystem,
-                input::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
-                output::Any)
-            matrices = linearize(ssys, linfun)
-        else
-            matrices, _ = linearize(sys, input, output)
-        end
+        matrices, _ = linearize(sys, input, output)
         # Result should be the same as feedpack(P, 1), i.e., the closed-loop transfer function from plant input to plant output
         @test matrices.A[] == -2
         @test matrices.B[] * matrices.C[] == 1 # both positive

@@ -1,8 +1,7 @@
 using ModelingToolkit, OrdinaryDiffEq, LinearAlgebra, ControlSystemsBase
 using ModelingToolkitStandardLibrary.Mechanical.Rotational
 using ModelingToolkitStandardLibrary.Blocks
-using ModelingToolkit: connect, AnalysisPoint, t_nounits as t, D_nounits as D,
-                       get_sensitivity, get_comp_sensitivity, get_looptransfer, open_loop
+using ModelingToolkit: connect, t_nounits as t, D_nounits as D
 import ControlSystemsBase as CS
 
 @testset "Complicated model" begin
