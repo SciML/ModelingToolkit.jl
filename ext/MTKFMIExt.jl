@@ -4,6 +4,7 @@ using ModelingToolkit
 using SymbolicIndexingInterface
 using ModelingToolkit: t_nounits as t, D_nounits as D
 import ModelingToolkit as MTK
+import SciMLBase
 import FMI
 
 macro statuscheck(expr)
@@ -140,7 +141,7 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
         finalize_affect = MTK.FunctionalAffect(fmiFinalize!, [], [wrapper], [])
         step_affect = MTK.FunctionalAffect(fmiMEStep!, [], [wrapper], [])
         instance_management_callback = MTK.SymbolicDiscreteCallback(
-            (t != t - 1), step_affect; finalize = finalize_affect)
+            (t != t - 1), step_affect; finalize = finalize_affect, reinitializealg = SciMLBase.NoInit())
 
         push!(params, wrapper, functor)
         push!(states, __mtk_internal_u)
@@ -178,7 +179,8 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
         step_affect = MTK.ImperativeAffect(
             fmiCSStep!; observed = cb_observed, modified = cb_modified, ctx = _functor)
         instance_management_callback = MTK.SymbolicDiscreteCallback(
-            communication_step_size, step_affect; initialize = initialize_affect, finalize = finalize_affect
+            communication_step_size, step_affect; initialize = initialize_affect,
+            finalize = finalize_affect, reinitializealg = SciMLBase.NoInit()
         )
 
         symbolic_type(__mtk_internal_o) == NotSymbolic() || push!(params, __mtk_internal_o)
