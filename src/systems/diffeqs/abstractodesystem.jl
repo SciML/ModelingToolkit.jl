@@ -1393,11 +1393,13 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
     for sym in unknowns(isys)
         haskey(fullmap, sym) || continue
         symbolic_type(fullmap[sym]) == NotSymbolic() || continue
+        is_array_of_symbolics(fullmap[sym]) && continue
         u0T = promote_type(u0T, typeof(fullmap[sym]))
     end
     for eq in observed(isys)
         haskey(fullmap, eq.lhs) || continue
         symbolic_type(fullmap[eq.lhs]) == NotSymbolic() || continue
+        is_array_of_symbolics(fullmap[eq.lhs]) && continue
         u0T = promote_type(u0T, typeof(fullmap[eq.lhs]))
     end
     if u0T != Union{}
