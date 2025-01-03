@@ -186,6 +186,14 @@ function generate_initializesystem(sys::AbstractSystem;
         defs[eq.lhs] = eq.rhs
     end
 
+    # even if `p => tovar(p)` is in `paramsubs`, `isparameter(p[1]) === true` after substitution
+    # so add scalarized versions as well
+    for k in collect(keys(paramsubs))
+        symbolic_type(k) == ArraySymbolic() || continue
+        for i in eachindex(k)
+            paramsubs[k[i]] = paramsubs[k][i]
+        end
+    end
     eqs_ics = Symbolics.substitute.([eqs_ics; trueobs], (paramsubs,))
     vars = [vars; collect(values(paramsubs))]
     for k in keys(defs)
