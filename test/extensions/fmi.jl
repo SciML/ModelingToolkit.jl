@@ -2,6 +2,8 @@ using ModelingToolkit, FMI, FMIZoo, OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D
 import ModelingToolkit as MTK
 
+const FMU_DIR = joinpath(@__DIR__, "fmus")
+
 @testset "Standalone pendulum model" begin
     fmu = loadFMU("SpringPendulum1D", "Dymola", "2022x"; type = :ME)
     truesol = FMI.simulate(
@@ -71,7 +73,7 @@ end
 
 @testset "IO Model" begin
     @testset "v2, ME" begin
-        fmu = loadFMU("../../omc-fmus/SimpleAdder.fmu"; type = :ME)
+        fmu = loadFMU(joinpath(FMU_DIR, "SimpleAdder.fmu"); type = :ME)
         @named adder = MTK.FMIComponent(Val(2); fmu, type = :ME)
         @variables a(t) b(t) c(t) [guess = 1.0]
         @mtkbuild sys = ODESystem(
@@ -87,7 +89,7 @@ end
         @test SciMLBase.successful_retcode(sol)
     end
     @testset "v2, CS" begin
-        fmu = loadFMU("../../omc-fmus/SimpleAdder.fmu"; type = :CS)
+        fmu = loadFMU(joinpath(FMU_DIR, "SimpleAdder.fmu"); type = :CS)
         @named adder = MTK.FMIComponent(
             Val(2); fmu, type = :CS, communication_step_size = 0.001)
         @variables a(t) b(t) c(t) [guess = 1.0]
@@ -101,6 +103,35 @@ end
         # this tests that initialization also works with FMUs
         prob = ODEProblem(sys, [sys.adder.c => 1.0, sys.a => 1.0, sys.b => 1.0],
             (0.0, 1.0); use_scc = false)
+        sol = solve(prob, Rodas5P(autodiff = false))
+        @test SciMLBase.successful_retcode(sol)
+    end
+
+    @testset "v3, ME" begin
+        fmu = loadFMU(joinpath(FMU_DIR, "StateSpace.fmu"); type = :ME)
+        @named sspace = MTK.FMIComponent(Val(3); fmu, type = :ME)
+        @variables u(t)=1.0 x(t)=1.0 y(t) [guess = 1.0]
+        @mtkbuild sys = ODESystem(
+            [sspace.u ~ u, D(u) ~ t, D(x) ~ sspace.x + sspace.y, y^2 ~ sspace.y + x], t;
+            systems = [sspace]
+        )
+
+        prob = ODEProblem(sys, [sys.sspace.x => 1.0], (0.0, 1.0); use_scc = false)
+        sol = solve(prob, Rodas5P(autodiff = false))
+        @test SciMLBase.successful_retcode(sol)
+    end
+
+    @testset "v3, CS" begin
+        fmu = loadFMU(joinpath(FMU_DIR, "StateSpace.fmu"); type = :CS)
+        @named sspace = MTK.FMIComponent(
+            Val(3); fmu, communication_step_size = 1e-3, type = :CS)
+        @variables u(t)=1.0 x(t)=1.0 y(t) [guess = 1.0]
+        @mtkbuild sys = ODESystem(
+            [sspace.u ~ u, D(u) ~ t, D(x) ~ sspace.x + sspace.y, y^2 ~ sspace.y + x], t;
+            systems = [sspace]
+        )
+
+        prob = ODEProblem(sys, [sys.sspace.x => 1.0], (0.0, 1.0); use_scc = false)
         sol = solve(prob, Rodas5P(autodiff = false))
         @test SciMLBase.successful_retcode(sol)
     end
