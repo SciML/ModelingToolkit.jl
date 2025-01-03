@@ -1,6 +1,6 @@
 """
     $(TYPEDEF)
-    $(TYPEDSIGNATURES)
+    AnalysisPoint(input, name::Symbol, outputs::Vector)
 
 Create an AnalysisPoint for linear analysis. Analysis points can be created by calling
 
@@ -8,18 +8,78 @@ Create an AnalysisPoint for linear analysis. Analysis points can be created by c
 connect(in, :ap_name, out...)
 ```
 
-Where `in` is the input to the connection, and `out...` are the outputs. In the context of
-ModelingToolkitStandardLibrary.jl, `in` is a `RealOutput` connector and `out...` are all
-`RealInput` connectors. All involved connectors are required to either have an unknown named
+Where `in` is the input to the connection, and `out...` are the outputs. All involved
+connectors (input and outputs) are required to either have an unknown named
 `u` or a single unknown, all of which should have the same size.
+
+See also [`get_sensitivity`](@ref), [`get_comp_sensitivity`](@ref), [`get_looptransfer`](@ref), [`open_loop`](@ref)
+
+# Fields
+
+$(TYPEDFIELDS)
+
+# Example
+
+```julia
+using ModelingToolkit
+using ModelingToolkitStandardLibrary.Blocks
+using ModelingToolkit: t_nounits as t
+
+@named P = FirstOrder(k = 1, T = 1)
+@named C = Gain(; k = -1)
+t = ModelingToolkit.get_iv(P)
+
+eqs = [connect(P.output, C.input)
+       connect(C.output, :plant_input, P.input)]
+sys = ODESystem(eqs, t, systems = [P, C], name = :feedback_system)
+
+matrices_S, _ = get_sensitivity(sys, :plant_input) # Compute the matrices of a state-space representation of the (input) sensitivity function.
+matrices_T, _ = get_comp_sensitivity(sys, :plant_input)
+```
+
+Continued linear analysis and design can be performed using ControlSystemsBase.jl.
+Create `ControlSystemsBase.StateSpace` objects using
+
+```julia
+using ControlSystemsBase, Plots
+S = ss(matrices_S...)
+T = ss(matrices_T...)
+bodeplot([S, T], lab = ["S" "T"])
+```
+
+The sensitivity functions obtained this way should be equivalent to the ones obtained with the code below
+
+```julia
+using ControlSystemsBase
+P = tf(1.0, [1, 1])
+C = 1                      # Negative feedback assumed in ControlSystems
+S = sensitivity(P, C)      # or feedback(1, P*C)
+T = comp_sensitivity(P, C) # or feedback(P*C)
+```
 """
 struct AnalysisPoint
+    """
+    The input to the connection. In the context of ModelingToolkitStandardLibrary.jl,
+    this is a `RealOutput` connector.
+    """
     input::Any
+    """
+    The name of the analysis point.
+    """
     name::Symbol
+    """
+    The outputs of the connection. In the context of ModelingToolkitStandardLibrary.jl,
+    these are all `RealInput` connectors.
+    """
     outputs::Union{Nothing, Vector{Any}}
 end
 
 AnalysisPoint() = AnalysisPoint(nothing, Symbol(), nothing)
+"""
+    $(TYPEDSIGNATURES)
+
+Create an `AnalysisPoint` with the given name, with no input or outputs specified.
+"""
 AnalysisPoint(name::Symbol) = AnalysisPoint(nothing, name, nothing)
 
 Base.nameof(ap::AnalysisPoint) = ap.name
@@ -78,9 +138,35 @@ function Symbolics.connect(in, ap::AnalysisPoint, outs...)
 end
 
 """
-    $(TYPEDSIGNATURES)
+    connect(output_connector, ap_name::Symbol, input_connector; verbose = true)
+    connect(output_connector, ap::AnalysisPoint, input_connector; verbose = true)
 
-Create an `AnalysisPoint` connection connecting `in` to `outs...`.
+Connect `output_connector` and `input_connector` with an [`AnalysisPoint`](@ref) inbetween.
+The incoming connection `output_connector` is expected to be an output connector (for
+example, `ModelingToolkitStandardLibrary.Blocks.RealOutput`), and vice versa.
+
+*PLEASE NOTE*: The connection is assumed to be *causal*, meaning that
+
+```julia
+@named P = FirstOrder(k = 1, T = 1)
+@named C = Gain(; k = -1)
+connect(C.output, :plant_input, P.input)
+```
+
+is correct, whereas
+
+```julia
+connect(P.input, :plant_input, C.output)
+```
+
+typically is not (unless the model is an inverse model).
+
+# Arguments:
+
+  - `output_connector`: An output connector
+  - `input_connector`: An input connector
+  - `ap`: An explicitly created [`AnalysisPoint`](@ref)
+  - `ap_name`: If a name is given, an [`AnalysisPoint`](@ref) with the given name will be created automatically.
 """
 function Symbolics.connect(in::AbstractSystem, name::Symbol, out, outs...)
     return AnalysisPoint() ~ AnalysisPoint(in, name, [out; collect(outs)])
@@ -724,12 +810,6 @@ for f in [:get_sensitivity, :get_comp_sensitivity, :get_looptransfer]
             sys, ap, args...; loop_openings, system_modifier, kwargs...)
         ModelingToolkit.linearize(ssys, lin_fun; kwargs...), ssys
     end
-    @eval @doc """
-        $(TYPEDSIGNATURES)
-
-        Call `$($utility_fun)` and perform the linearization. All keyword arguments are
-        forwarded to `$($utility_fun)` and subsequently `linearize`.
-    """ $f
 end
 
 """
@@ -785,3 +865,59 @@ function linearization_function(sys::AbstractSystem,
 
     return linearization_function(system_modifier(sys), input_vars, output_vars; kwargs...)
 end
+
+@doc """
+        get_sensitivity(sys, ap::AnalysisPoint; kwargs)
+        get_sensitivity(sys, ap_name::Symbol; kwargs)
+
+Compute the sensitivity function in analysis point `ap`. The sensitivity function is obtained by introducing an infinitesimal perturbation `d` at the input of `ap`, linearizing the system and computing the transfer function between `d` and the output of `ap`.
+
+!!! danger "Experimental"
+
+    The analysis-point interface is currently experimental and at any time subject to breaking changes not respecting semantic versioning.
+
+# Arguments:
+
+  - `kwargs`: Are sent to `ModelingToolkit.linearize`
+
+See also [`get_comp_sensitivity`](@ref), [`get_looptransfer`](@ref).
+""" get_sensitivity
+
+@doc """
+    get_comp_sensitivity(sys, ap::AnalysisPoint; kwargs)
+    get_comp_sensitivity(sys, ap_name::Symbol; kwargs)
+
+Compute the complementary sensitivity function in analysis point `ap`. The complementary sensitivity function is obtained by introducing an infinitesimal perturbation `d` at the output of `ap`, linearizing the system and computing the transfer function between `d` and the input of `ap`.
+
+!!! danger "Experimental"
+
+    The analysis-point interface is currently experimental and at any time subject to breaking changes not respecting semantic versioning.
+
+# Arguments:
+
+  - `kwargs`: Are sent to `ModelingToolkit.linearize`
+
+See also [`get_sensitivity`](@ref), [`get_looptransfer`](@ref).
+""" get_comp_sensitivity
+
+@doc """
+    get_looptransfer(sys, ap::AnalysisPoint; kwargs)
+    get_looptransfer(sys, ap_name::Symbol; kwargs)
+
+Compute the (linearized) loop-transfer function in analysis point `ap`, from `ap.out` to `ap.in`.
+
+!!! info "Negative feedback"
+
+    Feedback loops often use negative feedback, and the computed loop-transfer function will in this case have the negative feedback included. Standard analysis tools often assume a loop-transfer function without the negative gain built in, and the result of this function may thus need negation before use.
+
+
+!!! danger "Experimental"
+
+    The analysis-point interface is currently experimental and at any time subject to breaking changes not respecting semantic versioning.
+
+# Arguments:
+
+  - `kwargs`: Are sent to `ModelingToolkit.linearize`
+
+See also [`get_sensitivity`](@ref), [`get_comp_sensitivity`](@ref), [`open_loop`](@ref).
+""" get_looptransfer
