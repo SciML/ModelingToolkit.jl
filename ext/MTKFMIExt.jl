@@ -128,7 +128,7 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
 
     if type == :ME
         FunctorT = Ver == 2 ? FMI2MEFunctor : FMI3MEFunctor
-        _functor = FunctorT(zeros(buffer_length), output_value_references)
+        _functor = FunctorT(output_value_references)
         @parameters (functor::(typeof(_functor)))(..)[1:buffer_length] = _functor
         call_expr = functor(
             wrapper, __mtk_internal_u, __mtk_internal_x, __mtk_internal_p, t)
@@ -147,11 +147,8 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
         push!(states, __mtk_internal_u)
     elseif type == :CS
         state_value_references = UInt32[value_references[var] for var in diffvars]
-        state_and_output_value_references = vcat(
-            state_value_references, output_value_references)
         _functor = if Ver == 2
-            FMI2CSFunctor(state_and_output_value_references,
-                state_value_references, output_value_references)
+            FMI2CSFunctor(state_value_references, output_value_references)
         else
             FMI3CSFunctor(state_value_references, output_value_references)
         end
@@ -351,9 +348,8 @@ function reset_instance!(wrapper::FMI3InstanceWrapper)
     wrapper.instance = nothing
 end
 
-struct FMI2MEFunctor{T}
-    return_buffer::Vector{T}
-    output_value_references::Vector{UInt32}
+struct FMI2MEFunctor
+    output_value_references::Vector{FMI.fmi2ValueReference}
 end
 
 @register_array_symbolic (fn::FMI2MEFunctor)(
@@ -385,9 +381,8 @@ function (fn::FMI2MEFunctor)(wrapper::FMI2InstanceWrapper, states, inputs, param
     return [states_buffer; outputs_buffer]
 end
 
-struct FMI3MEFunctor{T}
-    return_buffer::Vector{T}
-    output_value_references::Vector{UInt32}
+struct FMI3MEFunctor
+    output_value_references::Vector{FMI.fmi3ValueReference}
 end
 
 @register_array_symbolic (fn::FMI3MEFunctor)(
@@ -431,7 +426,6 @@ function fmiFinalize!(integrator, u, p, ctx)
 end
 
 struct FMI2CSFunctor
-    state_and_output_value_references::Vector{UInt32}
     state_value_references::Vector{UInt32}
     output_value_references::Vector{UInt32}
 end
