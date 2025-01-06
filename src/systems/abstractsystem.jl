@@ -785,7 +785,7 @@ end
 SymbolicIndexingInterface.supports_tuple_observed(::AbstractSystem) = true
 
 function SymbolicIndexingInterface.observed(
-        sys::AbstractSystem, sym; eval_expression = false, eval_module = @__MODULE__)
+        sys::AbstractSystem, sym; eval_expression = false, eval_module = @__MODULE__, checkbounds = true)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         if sym isa Symbol
             _sym = get(ic.symbol_to_variable, sym, nothing)
@@ -808,7 +808,8 @@ function SymbolicIndexingInterface.observed(
             end
         end
     end
-    _fn = build_explicit_observed_function(sys, sym; eval_expression, eval_module)
+    _fn = build_explicit_observed_function(
+        sys, sym; eval_expression, eval_module, checkbounds)
 
     if is_time_dependent(sys)
         return _fn
@@ -1671,11 +1672,14 @@ struct ObservedFunctionCache{S}
     steady_state::Bool
     eval_expression::Bool
     eval_module::Module
+    checkbounds::Bool
 end
 
 function ObservedFunctionCache(
-        sys; steady_state = false, eval_expression = false, eval_module = @__MODULE__)
-    return ObservedFunctionCache(sys, Dict(), steady_state, eval_expression, eval_module)
+        sys; steady_state = false, eval_expression = false,
+        eval_module = @__MODULE__, checkbounds = true)
+    return ObservedFunctionCache(
+        sys, Dict(), steady_state, eval_expression, eval_module, checkbounds)
 end
 
 # This is hit because ensemble problems do a deepcopy
@@ -1685,7 +1689,9 @@ function Base.deepcopy_internal(ofc::ObservedFunctionCache, stackdict::IdDict)
     steady_state = ofc.steady_state
     eval_expression = ofc.eval_expression
     eval_module = ofc.eval_module
-    newofc = ObservedFunctionCache(sys, dict, steady_state, eval_expression, eval_module)
+    checkbounds = ofc.checkbounds
+    newofc = ObservedFunctionCache(
+        sys, dict, steady_state, eval_expression, eval_module, checkbounds)
     stackdict[ofc] = newofc
     return newofc
 end
@@ -1694,7 +1700,7 @@ function (ofc::ObservedFunctionCache)(obsvar, args...)
     obs = get!(ofc.dict, value(obsvar)) do
         SymbolicIndexingInterface.observed(
             ofc.sys, obsvar; eval_expression = ofc.eval_expression,
-            eval_module = ofc.eval_module)
+            eval_module = ofc.eval_module, checkbounds = ofc.checkbounds)
     end
     if ofc.steady_state
         obs = let fn = obs
