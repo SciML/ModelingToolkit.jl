@@ -314,9 +314,10 @@ function modify_nested_subsystem(
         return fn(root)
     end
     # ignore the name of the root
-    if nameof(root) == hierarchy[1]
-        hierarchy = @view hierarchy[2:end]
+    if nameof(root) != hierarchy[1]
+        error("The name of the root system $(nameof(root)) must be included in the name passed to `modify_nested_subsystem`")
     end
+    hierarchy = @view hierarchy[2:end]
 
     # recursive helper function which does the searching and modification
     function _helper(sys::AbstractSystem, i::Int)
@@ -722,13 +723,14 @@ end
 
 A utility function to get the "canonical" form of a list of analysis points. Always returns
 a list of values. Any value that cannot be turned into an `AnalysisPoint` (i.e. isn't
-already an `AnalysisPoint` or `Symbol`) is simply wrapped in an array.
+already an `AnalysisPoint` or `Symbol`) is simply wrapped in an array. `Symbol` names of
+`AnalysisPoint`s are namespaced with `sys`.
 """
-canonicalize_ap(ap::Symbol) = [AnalysisPoint(ap)]
-canonicalize_ap(ap::AnalysisPoint) = [ap]
-canonicalize_ap(ap) = [ap]
-function canonicalize_ap(aps::Vector)
-    mapreduce(canonicalize_ap, vcat, aps; init = [])
+canonicalize_ap(sys::AbstractSystem, ap::Symbol) = [AnalysisPoint(renamespace(sys, ap))]
+canonicalize_ap(sys::AbstractSystem, ap::AnalysisPoint) = [ap]
+canonicalize_ap(sys::AbstractSystem, ap) = [ap]
+function canonicalize_ap(sys::AbstractSystem, aps::Vector)
+    mapreduce(Base.Fix1(canonicalize_ap, sys), vcat, aps; init = [])
 end
 
 """
@@ -737,7 +739,7 @@ end
 Given a list of analysis points, break the connection for each and set the output to zero.
 """
 function handle_loop_openings(sys::AbstractSystem, aps)
-    for ap in canonicalize_ap(aps)
+    for ap in canonicalize_ap(sys, aps)
         sys, (outvar,) = apply_transformation(Break(ap, true), sys)
         if Symbolics.isarraysymbolic(outvar)
             push!(get_eqs(sys), outvar ~ zeros(size(outvar)))
@@ -776,7 +778,7 @@ All other keyword arguments are forwarded to `linearization_function`.
 function get_linear_analysis_function(
         sys::AbstractSystem, transform, aps; system_modifier = identity, loop_openings = [], kwargs...)
     sys = handle_loop_openings(sys, loop_openings)
-    aps = canonicalize_ap(aps)
+    aps = canonicalize_ap(sys, aps)
     dus = []
     us = []
     for ap in aps
@@ -860,9 +862,7 @@ result of `apply_transformation`.
   with any required further modifications peformed.
 """
 function open_loop(sys, ap::Union{Symbol, AnalysisPoint}; system_modifier = identity)
-    if ap isa Symbol
-        ap = AnalysisPoint(ap)
-    end
+    ap = only(canonicalize_ap(sys, ap))
     tf = LoopTransferTransform(ap)
     sys, vars = apply_transformation(tf, sys)
     return system_modifier(sys), vars
@@ -871,9 +871,9 @@ end
 function linearization_function(sys::AbstractSystem,
         inputs::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
         outputs; loop_openings = [], system_modifier = identity, kwargs...)
-    loop_openings = Set(map(nameof, canonicalize_ap(loop_openings)))
-    inputs = canonicalize_ap(inputs)
-    outputs = canonicalize_ap(outputs)
+    loop_openings = Set(map(nameof, canonicalize_ap(sys, loop_openings)))
+    inputs = canonicalize_ap(sys, inputs)
+    outputs = canonicalize_ap(sys, outputs)
 
     input_vars = []
     for input in inputs
@@ -897,7 +897,7 @@ function linearization_function(sys::AbstractSystem,
         push!(output_vars, output_var)
     end
 
-    sys = handle_loop_openings(sys, collect(loop_openings))
+    sys = handle_loop_openings(sys, map(AnalysisPoint, collect(loop_openings)))
 
     return linearization_function(system_modifier(sys), input_vars, output_vars; kwargs...)
 end

@@ -64,7 +64,7 @@ import ControlSystemsBase as CS
     prob = ODEProblem(sys, unknowns(sys) .=> 0.0, (0.0, 4.0))
     sol = solve(prob, Rodas5P(), reltol = 1e-6, abstol = 1e-9)
 
-    matrices, ssys = linearize(closed_loop, AnalysisPoint(:r), AnalysisPoint(:y))
+    matrices, ssys = linearize(closed_loop, :r, :y)
     lsys = ss(matrices...) |> sminreal
     @test lsys.nx == 8
 
@@ -129,13 +129,11 @@ end
         t,
         systems = [P_inner, feedback, ref])
 
-    P_not_broken, _ = linearize(sys_inner, AnalysisPoint(:u), AnalysisPoint(:y))
+    P_not_broken, _ = linearize(sys_inner, :u, :y)
     @test P_not_broken.A[] == -2
-    P_broken, _ = linearize(sys_inner, AnalysisPoint(:u), AnalysisPoint(:y),
-        loop_openings = [AnalysisPoint(:u)])
+    P_broken, _ = linearize(sys_inner, :u, :y, loop_openings = [:u])
     @test P_broken.A[] == -1
-    P_broken, _ = linearize(sys_inner, AnalysisPoint(:u), AnalysisPoint(:y),
-        loop_openings = [AnalysisPoint(:y)])
+    P_broken, _ = linearize(sys_inner, :u, :y, loop_openings = [:y])
     @test P_broken.A[] == -1
 
     Sinner = sminreal(ss(get_sensitivity(sys_inner, :u)[1]...))
@@ -154,10 +152,10 @@ end
         t,
         systems = [P_outer, sys_inner])
 
-    Souter = sminreal(ss(get_sensitivity(sys_outer, sys_inner.u)[1]...))
+    Souter = sminreal(ss(get_sensitivity(sys_outer, sys_outer.sys_inner.u)[1]...))
 
     Sinner2 = sminreal(ss(get_sensitivity(
-        sys_outer, sys_inner.u, loop_openings = [:y2])[1]...))
+        sys_outer, sys_outer.sys_inner.u, loop_openings = [:y2])[1]...))
 
     @test Sinner.nx == 1
     @test Sinner == Sinner2
@@ -268,7 +266,7 @@ end
     @test tf(L[2, 1]) ≈ tf(Ps)
 
     matrices, _ = linearize(
-        sys_outer, [sys_outer.inner.plant_input], [sys_inner.plant_output])
+        sys_outer, [sys_outer.inner.plant_input], [nameof(sys_inner.plant_output)])
     G = CS.ss(matrices...) |> sminreal
     @test tf(G) ≈ tf(CS.feedback(Ps, Cs))
 end

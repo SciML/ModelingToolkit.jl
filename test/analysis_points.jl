@@ -2,6 +2,7 @@ using ModelingToolkit, ModelingToolkitStandardLibrary.Blocks
 using OrdinaryDiffEq, LinearAlgebra
 using Test
 using ModelingToolkit: t_nounits as t, D_nounits as D, AnalysisPoint, AbstractSystem
+import ModelingToolkit as MTK
 using Symbolics: NAMESPACE_SEPARATOR
 
 @testset "AnalysisPoint is lowered to `connect`" begin
@@ -69,26 +70,21 @@ sys = ODESystem(eqs, t, systems = [P, C], name = :hej)
     @test norm(sol.u[end]) < 1e-6 # This fails without the feedback through C
 end
 
-@testset "get_sensitivity - $name" for (name, sys, ap) in [
+test_cases = [
     ("inner", sys, sys.plant_input),
     ("nested", nested_sys, nested_sys.hej.plant_input),
-    ("inner - nonamespace", sys, :plant_input),
-    ("inner - Symbol", sys, nameof(sys.plant_input)),
-    ("nested - Symbol", nested_sys, nameof(nested_sys.hej.plant_input))
+    ("inner - Symbol", sys, :plant_input),
+    ("nested - Symbol", nested_sys, nameof(sys.plant_input))
 ]
+
+@testset "get_sensitivity - $name" for (name, sys, ap) in test_cases
     matrices, _ = get_sensitivity(sys, ap)
     @test matrices.A[] == -2
     @test matrices.B[] * matrices.C[] == -1 # either one negative
     @test matrices.D[] == 1
 end
 
-@testset "get_comp_sensitivity - $name" for (name, sys, ap) in [
-    ("inner", sys, sys.plant_input),
-    ("nested", nested_sys, nested_sys.hej.plant_input),
-    ("inner - nonamespace", sys, :plant_input),
-    ("inner - Symbol", sys, nameof(sys.plant_input)),
-    ("nested - Symbol", nested_sys, nameof(nested_sys.hej.plant_input))
-]
+@testset "get_comp_sensitivity - $name" for (name, sys, ap) in test_cases
     matrices, _ = get_comp_sensitivity(sys, ap)
     @test matrices.A[] == -2
     @test matrices.B[] * matrices.C[] == 1 # both positive or negative
@@ -104,13 +100,7 @@ S = sensitivity(P, C)      # or feedback(1, P*C)
 T = comp_sensitivity(P, C) # or feedback(P*C)
 =#
 
-@testset "get_looptransfer - $name" for (name, sys, ap) in [
-    ("inner", sys, sys.plant_input),
-    ("nested", nested_sys, nested_sys.hej.plant_input),
-    ("inner - nonamespace", sys, :plant_input),
-    ("inner - Symbol", sys, nameof(sys.plant_input)),
-    ("nested - Symbol", nested_sys, nameof(nested_sys.hej.plant_input))
-]
+@testset "get_looptransfer - $name" for (name, sys, ap) in test_cases
     matrices, _ = get_looptransfer(sys, ap)
     @test matrices.A[] == -1
     @test matrices.B[] * matrices.C[] == -1 # either one negative
@@ -125,13 +115,7 @@ C = -1
 L = P*C
 =#
 
-@testset "open_loop - $name" for (name, sys, ap) in [
-    ("inner", sys, sys.plant_input),
-    ("nested", nested_sys, nested_sys.hej.plant_input),
-    ("inner - nonamespace", sys, :plant_input),
-    ("inner - Symbol", sys, nameof(sys.plant_input)),
-    ("nested - Symbol", nested_sys, nameof(nested_sys.hej.plant_input))
-]
+@testset "open_loop - $name" for (name, sys, ap) in test_cases
     open_sys, (du, u) = open_loop(sys, ap)
     matrices, _ = linearize(open_sys, [du], [u])
     @test matrices.A[] == -1
@@ -146,13 +130,14 @@ eqs = [connect(P.output, :plant_output, C.input)
 sys = ODESystem(eqs, t, systems = [P, C], name = :hej)
 @named nested_sys = ODESystem(Equation[], t; systems = [sys])
 
-@testset "get_sensitivity - $name" for (name, sys, ap) in [
+test_cases = [
     ("inner", sys, sys.plant_input),
     ("nested", nested_sys, nested_sys.hej.plant_input),
-    ("inner - nonamespace", sys, :plant_input),
-    ("inner - Symbol", sys, nameof(sys.plant_input)),
-    ("nested - Symbol", nested_sys, nameof(nested_sys.hej.plant_input))
+    ("inner - Symbol", sys, :plant_input),
+    ("nested - Symbol", nested_sys, nameof(sys.plant_input))
 ]
+
+@testset "get_sensitivity - $name" for (name, sys, ap) in test_cases
     matrices, _ = get_sensitivity(sys, ap)
     @test matrices.A[] == -2
     @test matrices.B[] * matrices.C[] == -1 # either one negative
@@ -163,15 +148,19 @@ end
     ("inner", sys, sys.plant_input, sys.plant_output),
     ("nested", nested_sys, nested_sys.hej.plant_input, nested_sys.hej.plant_output)
 ]
+    inputname = Symbol(join(
+        MTK.namespace_hierarchy(nameof(inputap))[2:end], NAMESPACE_SEPARATOR))
+    outputname = Symbol(join(
+        MTK.namespace_hierarchy(nameof(outputap))[2:end], NAMESPACE_SEPARATOR))
     @testset "input - $(typeof(input)), output - $(typeof(output))" for (input, output) in [
         (inputap, outputap),
-        (nameof(inputap), outputap),
-        (inputap, nameof(outputap)),
-        (nameof(inputap), nameof(outputap)),
+        (inputname, outputap),
+        (inputap, outputname),
+        (inputname, outputname),
         (inputap, [outputap]),
-        (nameof(inputap), [outputap]),
-        (inputap, [nameof(outputap)]),
-        (nameof(inputap), [nameof(outputap)])
+        (inputname, [outputap]),
+        (inputap, [outputname]),
+        (inputname, [outputname])
     ]
         matrices, _ = linearize(sys, input, output)
         # Result should be the same as feedpack(P, 1), i.e., the closed-loop transfer function from plant input to plant output
