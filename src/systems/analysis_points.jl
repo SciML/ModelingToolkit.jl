@@ -72,6 +72,36 @@ struct AnalysisPoint
     these are all `RealInput` connectors.
     """
     outputs::Union{Nothing, Vector{Any}}
+
+    function AnalysisPoint(input, name::Symbol, outputs; verbose = true)
+        # input to analysis point should be an output variable
+        if verbose && input !== nothing
+            var = ap_var(input)
+            isoutput(var) || ap_warning(1, name, true)
+        end
+        # outputs of analysis points should be input variables
+        if verbose && outputs !== nothing
+            for (i, output) in enumerate(outputs)
+                var = ap_var(output)
+                isinput(var) || ap_warning(2 + i, name, false)
+            end
+        end
+
+        return new(input, name, outputs)
+    end
+end
+
+function ap_warning(arg::Int, name::Symbol, should_be_output)
+    causality = should_be_output ? "output" : "input"
+    @warn """
+    The $(arg)-th argument to analysis point $(name) was not a $causality. This is supported in \
+    order to handle inverse models, but may not be what you intended.
+
+    If you are building a forward mode (causal), you may want to swap this argument with \
+    one on the opposite side of the name of the analysis point provided to `connect`. \
+    Learn more about the causality of analysis points in the docstring for `AnalysisPoint`. \
+    Silence this message using `connect(out, :name, in...; warn = false)`.
+    """
 end
 
 AnalysisPoint() = AnalysisPoint(nothing, Symbol(), nothing)
@@ -133,8 +163,8 @@ function renamespace(sys, ap::AnalysisPoint)
 end
 
 # create analysis points via `connect`
-function Symbolics.connect(in, ap::AnalysisPoint, outs...)
-    return AnalysisPoint() ~ AnalysisPoint(in, ap.name, collect(outs))
+function Symbolics.connect(in, ap::AnalysisPoint, outs...; verbose = true)
+    return AnalysisPoint() ~ AnalysisPoint(in, ap.name, collect(outs); verbose)
 end
 
 """
@@ -161,15 +191,21 @@ connect(P.input, :plant_input, C.output)
 
 typically is not (unless the model is an inverse model).
 
-# Arguments:
+# Arguments
 
-  - `output_connector`: An output connector
-  - `input_connector`: An input connector
-  - `ap`: An explicitly created [`AnalysisPoint`](@ref)
-  - `ap_name`: If a name is given, an [`AnalysisPoint`](@ref) with the given name will be created automatically.
+- `output_connector`: An output connector
+- `input_connector`: An input connector
+- `ap`: An explicitly created [`AnalysisPoint`](@ref)
+- `ap_name`: If a name is given, an [`AnalysisPoint`](@ref) with the given name will be
+  created automatically.
+
+# Keyword arguments
+
+- `verbose`: Warn if an input is connected to an output (reverse causality). Silence this
+  warning if you are analyzing an inverse model.
 """
-function Symbolics.connect(in::AbstractSystem, name::Symbol, out, outs...)
-    return AnalysisPoint() ~ AnalysisPoint(in, name, [out; collect(outs)])
+function Symbolics.connect(in::AbstractSystem, name::Symbol, out, outs...; verbose = true)
+    return AnalysisPoint() ~ AnalysisPoint(in, name, [out; collect(outs)]; verbose)
 end
 
 """

@@ -24,6 +24,16 @@ using Symbolics: NAMESPACE_SEPARATOR
     @test isequal(sys_ap2, sys_normal2)
 end
 
+@testset "Inverse causality throws a warning" begin
+    @named P = FirstOrder(k = 1, T = 1)
+    @named C = Gain(; k = -1)
+
+    ap = AnalysisPoint(:plant_input)
+    @test_warn ["1-th argument", "plant_input", "not a output"] connect(
+        P.input, ap, C.output)
+    @test_nowarn connect(P.input, ap, C.output; verbose = false)
+end
+
 # also tests `connect(input, name::Symbol, outputs...)` syntax
 @testset "AnalysisPoint is accessible via `getproperty`" begin
     @named P = FirstOrder(k = 1, T = 1)
