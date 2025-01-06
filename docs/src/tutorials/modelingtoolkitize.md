@@ -33,10 +33,10 @@ to improve a simulation code before it's passed to the solver.
 ## Example Usage: Generating an Analytical Jacobian Expression for an ODE Code
 
 Take, for example, the Robertson ODE
-defined as an `ODEProblem` for DifferentialEquations.jl:
+defined as an `ODEProblem` for OrdinaryDiffEq.jl:
 
 ```@example mtkize
-using DifferentialEquations, ModelingToolkit
+using OrdinaryDiffEq, ModelingToolkit
 function rober(du, u, p, t)
     y₁, y₂, y₃ = u
     k₁, k₂, k₃ = p
