@@ -132,7 +132,8 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
     # parse the inputs to the FMU
     inputs = []
     fmi_variables_to_mtk_variables!(fmu, FMI.getInputValueReferencesAndNames(fmu),
-        value_references, inputs, states, observed)
+        value_references, inputs, states, observed; postprocess_variable = v -> MTK.setinput(
+            v, true))
     # create a symbolic variable for the input buffer
     if isempty(inputs)
         __mtk_internal_x = []
@@ -145,7 +146,8 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
     # parse the outputs of the FMU
     outputs = []
     fmi_variables_to_mtk_variables!(fmu, FMI.getOutputValueReferencesAndNames(fmu),
-        value_references, outputs, states, observed)
+        value_references, outputs, states, observed; postprocess_variable = v -> MTK.setoutput(
+            v, true))
     # create the output buffer. This is only required for CoSimulation to pass it to
     # the callback affect
     if type == :CS
@@ -284,18 +286,22 @@ defaults.
 # Keyword Arguments
 - `parameters`: A boolean indicating whether to use `@parameters` for the symbolic
   variables instead of `@variables`.
+- `postprocess_variable`: A function applied to each created variable that should
+  return the updated variable. This is useful to add metadata to variables.
 """
 function fmi_variables_to_mtk_variables!(
         fmu::Union{FMI.FMU2, FMI.FMU3}, varmap::AbstractDict,
         value_references::AbstractDict, truevars, allvars,
-        obseqs, defs = Dict(); parameters = false)
+        obseqs, defs = Dict(); parameters = false, postprocess_variable = identity)
     for (valRef, snames) in varmap
         stateT = FMI.dataTypeForValueReference(fmu, valRef)
         snames = map(parseFMIVariableName, snames)
         if parameters
-            vars = [MTK.unwrap(only(@parameters $sname::stateT)) for sname in snames]
+            vars = [postprocess_variable(MTK.unwrap(only(@parameters $sname::stateT)))
+                    for sname in snames]
         else
-            vars = [MTK.unwrap(only(@variables $sname(t)::stateT)) for sname in snames]
+            vars = [postprocess_variable(MTK.unwrap(only(@variables $sname(t)::stateT)))
+                    for sname in snames]
         end
         for i in eachindex(vars)
             if i == 1
