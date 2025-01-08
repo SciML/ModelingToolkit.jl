@@ -2282,7 +2282,7 @@ Stacktrace:
 """
 function debug_system(sys::AbstractSystem)
     if has_systems(sys) && !isempty(get_systems(sys))
-        error("debug_system only works on systems with no sub-systems!")
+        error("debug_system(sys) only works on systems with no sub-systems! Consider flattening it with flatten(sys) or structural_simplify(sys) first.")
     end
     if has_eqs(sys)
         @set! sys.eqs = debug_sub.(equations(sys))
