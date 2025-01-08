@@ -2266,19 +2266,17 @@ Replace functions with singularities with a function that errors with symbolic
 information. E.g.
 
 ```julia-repl
-julia> sys = debug_system(sys);
+julia> sys = debug_system(sys)
 
-julia> sys = complete(sys);
+julia> sys = complete(sys)
 
-julia> prob = ODEProblem(sys, [], (0, 1.0));
+julia> prob = ODEProblem(sys, [1.0, 0.0], (0.0, 1.0))
 
-julia> du = zero(prob.u0);
-
-julia> prob.f(du, prob.u0, prob.p, 0.0)
-ERROR: DomainError with (-1.0,):
-log errors with input(s): -cos(Q(t)) => -1.0
+julia> prob.f(prob.u0, prob.p, 0.0)
+ERROR: Function log(-cos(Q(t))) errors with input
+  -cos(Q(t)) => -1.0
 Stacktrace:
-  [1] (::ModelingToolkit.LoggedFun{typeof(log)})(args::Float64)
+  [1] (::ModelingToolkit.LoggedFun{typeof(log)})(num_args::Float64)
   ...
 ```
 """
