@@ -939,7 +939,7 @@ testdict = Dict([:name => "test"])
 sys = complete(debug_system(sys))
 prob = ODEProblem(sys, [], (0.0, 1.0))
 @test_throws "log(-cos(Q(t))) errors" prob.f([1, 0], prob.p, 0.0)
-@test prob.f([0, 2], prob.p, 0.0)[1] == 1 / 0
+@test_throws "/(1, sin(P(t))) output non-finite value" prob.f([0, 2], prob.p, 0.0)
 
 let
     @variables x(t) = 1

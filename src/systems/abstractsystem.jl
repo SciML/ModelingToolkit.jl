@@ -2266,18 +2266,14 @@ Replace functions with singularities with a function that errors with symbolic
 information. E.g.
 
 ```julia-repl
-julia> sys = debug_system(sys)
+julia> sys = debug_system(complete(sys))
 
-julia> sys = complete(sys)
-
-julia> prob = ODEProblem(sys, [1.0, 0.0], (0.0, 1.0))
+julia> prob = ODEProblem(sys, [0.0, 2.0], (0.0, 1.0))
 
 julia> prob.f(prob.u0, prob.p, 0.0)
-ERROR: Function log(-cos(Q(t))) errors with input
-  -cos(Q(t)) => -1.0
-Stacktrace:
-  [1] (::ModelingToolkit.LoggedFun{typeof(log)})(num_args::Float64)
-  ...
+ERROR: Function /(1, sin(P(t))) output non-finite value Inf with input
+  1 => 1
+  sin(P(t)) => 0.0
 ```
 """
 function debug_system(sys::AbstractSystem)

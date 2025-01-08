@@ -7,18 +7,23 @@ struct LoggedFun{F}
     f::F
     args::Any
 end
+LoggedFunctionException(lf::LoggedFun, args, msg) = LoggedFunctionException(
+    "Function $(lf.f)($(join(lf.args, ", "))) " * msg * " with input" *
+    join("\n  " .* string.(lf.args .=> args)) # one line for each "var => val" for readability
+)
 Base.showerror(io::IO, err::LoggedFunctionException) = print(io, err.msg)
 Base.nameof(lf::LoggedFun) = nameof(lf.f)
 SymbolicUtils.promote_symtype(::LoggedFun, Ts...) = Real
 function (lf::LoggedFun)(args...)
-    try
-        return lf.f(args...) # try to call with numerical input, as usual
+    val = try
+        lf.f(args...) # try to call with numerical input, as usual
     catch err
-        throw(LoggedFunctionException(
-            "Function $(lf.f)($(join(lf.args, ", "))) errors with input" *
-            join("\n  " .* string.(lf.args .=> args)) # one line for each "var => val" for readability
-        )) # Julia automatically attaches original error message
+        throw(LoggedFunctionException(lf, args, "errors")) # Julia automatically attaches original error message
     end
+    if !isfinite(val)
+        throw(LoggedFunctionException(lf, args, "output non-finite value $val"))
+    end
+    return val
 end
 
 function logged_fun(f, args...)
