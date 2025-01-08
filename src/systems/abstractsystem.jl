@@ -2260,10 +2260,12 @@ macro mtkbuild(exprs...)
 end
 
 """
-$(SIGNATURES)
+    debug_system(sys::AbstractSystem; error_nonfinite = true)
 
 Replace functions with singularities with a function that errors with symbolic
-information. E.g.
+information. If `error_nonfinite`, debugged functions that output nonfinite values
+(like `Inf` or `NaN`) also display errors, even though the raw function itself
+does not throw an exception (like `1/0`). For example:
 
 ```julia-repl
 julia> sys = debug_system(complete(sys))
@@ -2276,15 +2278,15 @@ ERROR: Function /(1, sin(P(t))) output non-finite value Inf with input
   sin(P(t)) => 0.0
 ```
 """
-function debug_system(sys::AbstractSystem)
+function debug_system(sys::AbstractSystem; kw...)
     if has_systems(sys) && !isempty(get_systems(sys))
         error("debug_system(sys) only works on systems with no sub-systems! Consider flattening it with flatten(sys) or structural_simplify(sys) first.")
     end
     if has_eqs(sys)
-        @set! sys.eqs = debug_sub.(equations(sys))
+        @set! sys.eqs = debug_sub.(equations(sys); kw...)
     end
     if has_observed(sys)
-        @set! sys.observed = debug_sub.(observed(sys))
+        @set! sys.observed = debug_sub.(observed(sys); kw...)
     end
     return sys
 end

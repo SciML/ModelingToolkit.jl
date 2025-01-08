@@ -6,6 +6,7 @@ end
 struct LoggedFun{F}
     f::F
     args::Any
+    error_nonfinite::Bool
 end
 LoggedFunctionException(lf::LoggedFun, args, msg) = LoggedFunctionException(
     "Function $(lf.f)($(join(lf.args, ", "))) " * msg * " with input" *
@@ -20,22 +21,22 @@ function (lf::LoggedFun)(args...)
     catch err
         throw(LoggedFunctionException(lf, args, "errors")) # Julia automatically attaches original error message
     end
-    if !isfinite(val)
+    if lf.error_nonfinite && !isfinite(val)
         throw(LoggedFunctionException(lf, args, "output non-finite value $val"))
     end
     return val
 end
 
-function logged_fun(f, args...)
+function logged_fun(f, args...; error_nonfinite = true) # remember to update error_nonfinite in debug_system() docstring
     # Currently we don't really support complex numbers
-    term(LoggedFun(f, args), args..., type = Real)
+    term(LoggedFun(f, args, error_nonfinite), args..., type = Real)
 end
 
-debug_sub(eq::Equation) = debug_sub(eq.lhs) ~ debug_sub(eq.rhs)
-function debug_sub(ex)
+debug_sub(eq::Equation; kw...) = debug_sub(eq.lhs; kw...) ~ debug_sub(eq.rhs; kw...)
+function debug_sub(ex; kw...)
     iscall(ex) || return ex
     f = operation(ex)
     args = map(debug_sub, arguments(ex))
-    f in LOGGED_FUN ? logged_fun(f, args...) :
+    f in LOGGED_FUN ? logged_fun(f, args...; kw...) :
     maketerm(typeof(ex), f, args, metadata(ex))
 end
