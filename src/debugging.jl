@@ -1,23 +1,23 @@
 const LOGGED_FUN = Set([log, sqrt, (^), /, inv])
-is_legal(::typeof(/), a, b) = is_legal(inv, b)
-is_legal(::typeof(inv), a) = !iszero(a)
-is_legal(::Union{typeof(log), typeof(sqrt)}, a) = a isa Complex || a >= zero(a)
-is_legal(::typeof(^), a, b) = a isa Complex || b isa Complex || isinteger(b) || a >= zero(a)
 
+struct LoggedFunctionException <: Exception
+    msg::String
+end
 struct LoggedFun{F}
     f::F
     args::Any
 end
+Base.showerror(io::IO, err::LoggedFunctionException) = print(io, err.msg)
 Base.nameof(lf::LoggedFun) = nameof(lf.f)
 SymbolicUtils.promote_symtype(::LoggedFun, Ts...) = Real
 function (lf::LoggedFun)(args...)
-    f = lf.f
-    symbolic_args = lf.args
-    if is_legal(f, args...)
-        f(args...)
-    else
-        args_str = join(string.(symbolic_args .=> args), ", ", ", and ")
-        throw(DomainError(args, "$(lf.f) errors with input(s): $args_str"))
+    try
+        return lf.f(args...) # try to call with numerical input, as usual
+    catch err
+        throw(LoggedFunctionException(
+            "Function $(lf.f)($(join(lf.args, ", "))) errors with input" *
+            join("\n  " .* string.(lf.args .=> args)) # one line for each "var => val" for readability
+        )) # Julia automatically attaches original error message
     end
 end
 
