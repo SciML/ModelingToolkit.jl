@@ -84,12 +84,16 @@ with the name `namespace__variable`.
   supported by FMI.jl.
 - `communication_step_size`: The periodic interval at which communication with CoSimulation
   FMUs will occur. Must be provided for CoSimulation FMU components.
+- `reinitializealg`: The DAE initialization algorithm to use for the callback managing the
+  FMU. For CoSimulation FMUs whose states/outputs are used in algebraic equations of the
+  system, this needs to be an algorithm that will solve for the new algebraic variables.
+  For example, `OrdinaryDiffEqCore.BrownFullBasicInit()`.
 - `type`: Either `:ME` or `:CS` depending on whether `fmu` is a Model Exchange or
   CoSimulation FMU respectively.
 - `name`: The name of the system.
 """
 function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
-        communication_step_size = nothing, type, name) where {Ver}
+        communication_step_size = nothing, reinitializealg = SciMLBase.NoInit(), type, name) where {Ver}
     if Ver != 2 && Ver != 3
         throw(ArgumentError("FMI Version must be `2` or `3`"))
     end
@@ -106,8 +110,14 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
     # this is a subset of `states` in the case where the FMU has multiple names for
     # the same value reference.
     diffvars = []
+    # variables that are derivatives of diffvars
+    dervars = []
     # observed equations
     observed = Equation[]
+    # need to separate observed equations for duplicate derivative variables
+    # since they aren't included in CS FMUs
+    der_observed = Equation[]
+
     # parse states
     fmi_variables_to_mtk_variables!(fmu, FMI.getStateValueReferencesAndNames(fmu),
         value_references, diffvars, states, observed)
@@ -115,12 +125,14 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
     # functions as the state vector
     if isempty(diffvars)
         # no differential variables
-        __mtk_internal_u = []
+        __mtk_internal_u = Float64[]
     elseif type == :ME
-        # ME FMUs perform integration using the Julia solver, so unknowns of the FMU
-        # are unknowns of the `ODESystem`
-        @variables __mtk_internal_u(t)[1:length(diffvars)] [guess = diffvars]
-        push!(observed, __mtk_internal_u ~ copy(diffvars))
+        # to avoid running into `structural_simplify` warnings about array variables
+        # and some unfortunate circular dependency issues, ME FMUs use an array of
+        # symbolics instead. This is also not worse off in performance
+        # because the former approach would allocate anyway.
+        # TODO: Can we avoid an allocation here using static arrays?
+        __mtk_internal_u = copy(diffvars)
     elseif type == :CS
         # CS FMUs do their own independent integration in a periodic callback, so their
         # unknowns are discrete variables in the `ODESystem`. A default of `missing` allows
@@ -129,18 +141,30 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
         push!(observed, __mtk_internal_u ~ copy(diffvars))
     end
 
+    # parse derivatives of states
+    # the variables passed to `postprocess_variable` haven't been differentiated yet, so they
+    # should match one variable in states. That's the one this is the derivative of, and we
+    # keep track of this ordering
+    derivative_order = []
+    function derivative_order_postprocess(var)
+        idx = findfirst(isequal(var), states)
+        idx === nothing || push!(derivative_order, states[idx])
+        return var
+    end
+    fmi_variables_to_mtk_variables!(
+        fmu, FMI.getDerivateValueReferencesAndNames(fmu), value_references, dervars,
+        states, der_observed; postprocess_variable = derivative_order_postprocess)
+    @assert length(derivative_order) == length(dervars)
+
     # parse the inputs to the FMU
     inputs = []
     fmi_variables_to_mtk_variables!(fmu, FMI.getInputValueReferencesAndNames(fmu),
         value_references, inputs, states, observed; postprocess_variable = v -> MTK.setinput(
             v, true))
     # create a symbolic variable for the input buffer
-    if isempty(inputs)
-        __mtk_internal_x = []
-    else
-        @variables __mtk_internal_x(t)[1:length(inputs)] [guess = inputs]
-        push!(observed, __mtk_internal_x ~ copy(inputs))
-        push!(states, __mtk_internal_x)
+    __mtk_internal_x = copy(inputs)
+    if isempty(__mtk_internal_x)
+        __mtk_internal_x = Float64[]
     end
 
     # parse the outputs of the FMU
@@ -152,7 +176,7 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
     # the callback affect
     if type == :CS
         if isempty(outputs)
-            __mtk_internal_o = []
+            __mtk_internal_o = Float64[]
         else
             @parameters __mtk_internal_o(t)[1:length(outputs)]=missing [guess = zeros(length(outputs))]
             push!(observed, __mtk_internal_o ~ outputs)
@@ -167,60 +191,58 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
         fmu, FMI.getParameterValueReferencesAndNames(fmu), value_references,
         params, [], parameter_dependencies, defs; parameters = true)
     # create a symbolic variable for the parameter buffer
-    if isempty(params)
-        __mtk_internal_p = []
-    else
-        @parameters __mtk_internal_p[1:length(params)]
-        push!(parameter_dependencies, __mtk_internal_p ~ copy(params))
+    __mtk_internal_p = copy(params)
+    if isempty(__mtk_internal_p)
+        __mtk_internal_p = Float64[]
     end
 
+    derivative_value_references = UInt32[value_references[var] for var in dervars]
+    state_value_references = UInt32[value_references[var] for var in diffvars]
+    output_value_references = UInt32[value_references[var] for var in outputs]
     input_value_references = UInt32[value_references[var] for var in inputs]
     param_value_references = UInt32[value_references[var] for var in params]
 
     # create a parameter for the instance wrapper
     # this manages the creation and deallocation of FMU instances
-    if Ver == 2
-        @parameters wrapper::FMI2InstanceWrapper = FMI2InstanceWrapper(
-            fmu, param_value_references, input_value_references, tolerance)
-    else
-        @parameters wrapper::FMI3InstanceWrapper = FMI3InstanceWrapper(
-            fmu, param_value_references, input_value_references)
-    end
-
-    output_value_references = UInt32[value_references[var] for var in outputs]
     buffer_length = length(diffvars) + length(outputs)
+    if Ver == 2
+        @parameters (wrapper::FMI2InstanceWrapper)(..)[1:buffer_length] = FMI2InstanceWrapper(
+            fmu, derivative_value_references, state_value_references, output_value_references,
+            param_value_references, input_value_references, tolerance)
+    else
+        @parameters (wrapper::FMI3InstanceWrapper)(..)[1:buffer_length] = FMI3InstanceWrapper(
+            fmu, derivative_value_references, state_value_references,
+            output_value_references, param_value_references, input_value_references)
+    end
 
     # any additional initialization equations for the system
     initialization_eqs = Equation[]
 
     if type == :ME
-        # the functor is a callable struct which returns the state derivative and
+        # the wrapper is a callable struct which returns the state derivative and
         # output values
-        FunctorT = Ver == 2 ? FMI2MEFunctor : FMI3MEFunctor
-        _functor = FunctorT(output_value_references)
-        @parameters (functor::(typeof(_functor)))(..)[1:buffer_length] = _functor
-
-        # symbolic expression for calling the functor
-        call_expr = functor(
-            wrapper, __mtk_internal_u, __mtk_internal_x, __mtk_internal_p, t)
+        # symbolic expression for calling the wrapper
+        call_expr = wrapper(__mtk_internal_u, __mtk_internal_x, __mtk_internal_p, t)
 
         # differential and observed equations
         diffeqs = Equation[]
-        for (i, var) in enumerate([D.(diffvars); outputs])
+        for (i, var) in enumerate([dervars; outputs])
             push!(diffeqs, var ~ call_expr[i])
+        end
+        for (var, dervar) in zip(derivative_order, dervars)
+            push!(diffeqs, D(var) ~ dervar)
         end
 
         # instance management callback which deallocates the instance when
         # necessary and notifies the FMU of completed integrator steps
         finalize_affect = MTK.FunctionalAffect(fmiFinalize!, [], [wrapper], [])
-        step_affect = MTK.FunctionalAffect(fmiMEStep!, [], [wrapper], [])
+        step_affect = MTK.FunctionalAffect(Returns(nothing), [], [], [])
         instance_management_callback = MTK.SymbolicDiscreteCallback(
-            (t != t - 1), step_affect; finalize = finalize_affect, reinitializealg = SciMLBase.NoInit())
+            (t != t - 1), step_affect; finalize = finalize_affect, reinitializealg = reinitializealg)
 
-        push!(params, wrapper, functor)
-        push!(states, __mtk_internal_u)
+        push!(params, wrapper)
+        append!(observed, der_observed)
     elseif type == :CS
-        state_value_references = UInt32[value_references[var] for var in diffvars]
         _functor = if Ver == 2
             FMI2CSFunctor(state_value_references, output_value_references)
         else
@@ -257,7 +279,7 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
             fmiCSStep!; observed = cb_observed, modified = cb_modified, ctx = _functor)
         instance_management_callback = MTK.SymbolicDiscreteCallback(
             communication_step_size, step_affect; initialize = initialize_affect,
-            finalize = finalize_affect, reinitializealg = SciMLBase.NoInit()
+            finalize = finalize_affect, reinitializealg = reinitializealg
         )
 
         # guarded in case there are no outputs/states and the variable is `[]`.
@@ -293,15 +315,29 @@ function fmi_variables_to_mtk_variables!(
         fmu::Union{FMI.FMU2, FMI.FMU3}, varmap::AbstractDict,
         value_references::AbstractDict, truevars, allvars,
         obseqs, defs = Dict(); parameters = false, postprocess_variable = identity)
-    for (valRef, snames) in varmap
+    for (valRef, varnames) in varmap
         stateT = FMI.dataTypeForValueReference(fmu, valRef)
-        snames = map(parseFMIVariableName, snames)
+        snames = Symbol[]
+        ders = Int[]
+        for name in varnames
+            sname, der = parseFMIVariableName(name)
+            push!(snames, sname)
+            push!(ders, der)
+        end
         if parameters
             vars = [postprocess_variable(MTK.unwrap(only(@parameters $sname::stateT)))
                     for sname in snames]
         else
             vars = [postprocess_variable(MTK.unwrap(only(@variables $sname(t)::stateT)))
                     for sname in snames]
+        end
+        for i in eachindex(vars)
+            der = ders[i]
+            vars[i] = MTK.unwrap(vars[i])
+            for j in 1:der
+                vars[i] = D(vars[i])
+            end
+            vars[i] = MTK.default_toterm(vars[i])
         end
         for i in eachindex(vars)
             if i == 1
@@ -321,10 +357,22 @@ end
     $(TYPEDSIGNATURES)
 
 Parse the string name of an FMI variable into a `Symbol` name for the corresponding
-MTK vriable.
+MTK variable. Return the `Symbol` name and the number of times it is differentiated.
 """
 function parseFMIVariableName(name::AbstractString)
-    return Symbol(replace(name, "." => "__"))
+    name = replace(name, "." => "__")
+    der = 0
+    if startswith(name, "der(")
+        idx = findfirst(',', name)
+        if idx === nothing
+            name = @view name[5:(end - 1)]
+            der = 1
+        else
+            der = parse(Int, @view name[(idx + 1):(end - 1)])
+            name = @view name[5:(idx - 1)]
+        end
+    end
+    return Symbol(name), der
 end
 
 """
@@ -341,6 +389,20 @@ mutable struct FMI2InstanceWrapper
     The FMU from `FMI.loadFMU`.
     """
     const fmu::FMI.FMU2
+    """
+    The value references for derivatives of states of the FMU, in the order that the
+    caller expects them to be returned when calling this struct.
+    """
+    const derivative_value_references::Vector{FMI.fmi2ValueReference}
+    """
+    The value references for the states of the FMU.
+    """
+    const state_value_references::Vector{FMI.fmi2ValueReference}
+    """
+    The value references for outputs of the FMU, in the order that the caller expects
+    them to be returned when calling this struct.
+    """
+    const output_value_references::Vector{FMI.fmi2ValueReference}
     """
     The parameter value references. These should be in the same order as the parameter
     vector passed to functions involving this wrapper.
@@ -366,9 +428,11 @@ end
 
 Create an `FMI2InstanceWrapper` with no instance.
 """
-function FMI2InstanceWrapper(fmu, params, inputs, tolerance)
-    FMI2InstanceWrapper(fmu, params, inputs, tolerance, nothing)
+function FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance)
+    FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance, nothing)
 end
+
+Base.nameof(::FMI2InstanceWrapper) = :FMI2InstanceWrapper
 
 """
     $(TYPEDSIGNATURES)
@@ -381,6 +445,10 @@ time. Returns the created instance, which is also stored in `wrapper.instance`.
 """
 function get_instance_common!(wrapper::FMI2InstanceWrapper, inputs, params, t)
     wrapper.instance = FMI.fmi2Instantiate!(wrapper.fmu)::FMI.FMU2Component
+    if !isempty(inputs)
+        @statuscheck FMI.fmi2SetReal(wrapper.instance, wrapper.input_value_references,
+            Csize_t(length(wrapper.param_value_references)), inputs)
+    end
     if !isempty(params)
         @statuscheck FMI.fmi2SetReal(wrapper.instance, wrapper.param_value_references,
             Csize_t(length(wrapper.param_value_references)), params)
@@ -388,11 +456,6 @@ function get_instance_common!(wrapper::FMI2InstanceWrapper, inputs, params, t)
     @statuscheck FMI.fmi2SetupExperiment(
         wrapper.instance, FMI.fmi2True, wrapper.tolerance, t, FMI.fmi2False, t)
     @statuscheck FMI.fmi2EnterInitializationMode(wrapper.instance)
-    if !isempty(inputs)
-        @statuscheck FMI.fmi2SetReal(wrapper.instance, wrapper.input_value_references,
-            Csize_t(length(wrapper.param_value_references)), inputs)
-    end
-
     return wrapper.instance
 end
 
@@ -425,9 +488,13 @@ present and create a new one otherwise. Return the instance.
 
 See `get_instance_common!` for a description of the arguments.
 """
-function get_instance_CS!(wrapper::FMI2InstanceWrapper, inputs, params, t)
+function get_instance_CS!(wrapper::FMI2InstanceWrapper, states, inputs, params, t)
     if wrapper.instance === nothing
         get_instance_common!(wrapper, inputs, params, t)
+        if !isempty(states)
+            @statuscheck FMI.fmi2SetReal(wrapper.instance, wrapper.state_value_references,
+                Csize_t(length(wrapper.state_value_references)), states)
+        end
         @statuscheck FMI.fmi2ExitInitializationMode(wrapper.instance)
     end
     return wrapper.instance
@@ -436,12 +503,10 @@ end
 """
     $(TYPEDSIGNATURES)
 
-If `wrapper.instance !== nothing`, tell the FMU that an integrator step has been accepted.
-This is relevant only for ModelExchange FMUs.
+Call `fmiXCompletedIntegratorStep` with `noSetFMUStatePriorToCurrentPoint` as false.
 """
-function complete_step!(wrapper::FMI2InstanceWrapper)
-    wrapper.instance === nothing && return
-    @statuscheck FMI.fmi2CompletedIntegratorStep(wrapper.instance, FMI.fmi2True)
+function partiallyCompleteIntegratorStep(wrapper::FMI2InstanceWrapper)
+    @statuscheck FMI.fmi2CompletedIntegratorStep(wrapper.instance, FMI.fmi2False)
 end
 
 """
@@ -472,6 +537,17 @@ mutable struct FMI3InstanceWrapper
     """
     const fmu::FMI.FMU3
     """
+    The value references for derivatives of states of the FMU, in the order that the
+    caller expects them to be returned when calling this struct.
+    """
+    const derivative_value_references::Vector{FMI.fmi3ValueReference}
+    const state_value_references::Vector{FMI.fmi3ValueReference}
+    """
+    The value references for outputs of the FMU, in the order that the caller expects
+    them to be returned when calling this struct.
+    """
+    const output_value_references::Vector{FMI.fmi3ValueReference}
+    """
     The parameter value references. These should be in the same order as the parameter
     vector passed to functions involving this wrapper.
     """
@@ -492,9 +568,11 @@ end
 
 Create an `FMI3InstanceWrapper` with no instance.
 """
-function FMI3InstanceWrapper(fmu, params, inputs)
-    FMI3InstanceWrapper(fmu, params, inputs, nothing)
+function FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs)
+    FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs, nothing)
 end
+
+Base.nameof(::FMI3InstanceWrapper) = :FMI3InstanceWrapper
 
 """
     $(TYPEDSIGNATURES)
@@ -550,11 +628,15 @@ present and create a new one otherwise. Return the instance.
 
 See `get_instance_common!` for a description of the arguments.
 """
-function get_instance_CS!(wrapper::FMI3InstanceWrapper, inputs, params, t)
+function get_instance_CS!(wrapper::FMI3InstanceWrapper, states, inputs, params, t)
     if wrapper.instance === nothing
         wrapper.instance = FMI.fmi3InstantiateCoSimulation!(
             wrapper.fmu; eventModeUsed = false)::FMI.FMU3Instance
         get_instance_common!(wrapper, inputs, params, t)
+        if !isempty(states)
+            @statuscheck FMI.fmi3SetFloat64(
+                wrapper.instance, wrapper.state_value_references, states)
+        end
         @statuscheck FMI.fmi3ExitInitializationMode(wrapper.instance)
     end
     return wrapper.instance
@@ -562,17 +644,12 @@ end
 
 """
     $(TYPEDSIGNATURES)
-
-If `wrapper.instance !== nothing`, tell the FMU that an integrator step has been accepted.
-This is relevant only for ModelExchange FMUs. Asserts that the simulation does not need
-to be terminated and does not require entering event mode.
 """
-function complete_step!(wrapper::FMI3InstanceWrapper)
-    wrapper.instance === nothing && return
+function partiallyCompleteIntegratorStep(wrapper::FMI3InstanceWrapper)
     enterEventMode = Ref(FMI.fmi3False)
     terminateSimulation = Ref(FMI.fmi3False)
     @statuscheck FMI.fmi3CompletedIntegratorStep!(
-        wrapper.instance, FMI.fmi3True, enterEventMode, terminateSimulation)
+        wrapper.instance, FMI.fmi3False, enterEventMode, terminateSimulation)
     @assert enterEventMode[] == FMI.fmi3False
     @assert terminateSimulation[] == FMI.fmi3False
 end
@@ -587,88 +664,14 @@ function reset_instance!(wrapper::FMI3InstanceWrapper)
     wrapper.instance = nothing
 end
 
-"""
-    $(TYPEDEF)
-
-A callable struct useful for simulating v2 Model Exchange FMUs. When called, updates the
-internal state of the FMU and gets updated values for continuous state derivatives and
-output variables.
-
-# Fields
-
-$(TYPEDFIELDS)
-"""
-struct FMI2MEFunctor
-    """
-    The value references for outputs of the FMU, in the order that the caller expects
-    them to be returned when calling `FMI2MEFunctor`.
-    """
-    output_value_references::Vector{FMI.fmi2ValueReference}
-end
-
-@register_array_symbolic (fn::FMI2MEFunctor)(
-    wrapper::FMI2InstanceWrapper, states::Vector{<:Real},
-    inputs::Vector{<:Real}, params::Vector{<:Real}, t::Real) begin
+@register_array_symbolic (fn::FMI2InstanceWrapper)(
+    states::Vector{<:Real}, inputs::Vector{<:Real}, params::Vector{<:Real}, t::Real) begin
     size = (length(states) + length(fn.output_value_references),)
     eltype = eltype(states)
     ndims = 1
 end
 
-"""
-    $(TYPEDSIGNATURES)
-
-Update `wrapper.instance` with the new values of state, input and independent variables.
-"""
-function update_instance_ME!(wrapper::FMI2InstanceWrapper, states, inputs, t)
-    instance = wrapper.instance
-    @statuscheck FMI.fmi2SetTime(instance, t)
-    @statuscheck FMI.fmi2SetContinuousStates(instance, states)
-    if !isempty(inputs)
-        @statuscheck FMI.fmi2SetReal(instance, wrapper.input_value_references,
-            Csize_t(length(wrapper.param_value_references)), inputs)
-    end
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Get the FMU instance (creating and initializing it if not present), update it
-with the current values of variables, and return a vector of the state derivatives
-and output variables.
-"""
-function (fn::FMI2MEFunctor)(wrapper::FMI2InstanceWrapper, states, inputs, params, t)
-    instance = get_instance_ME!(wrapper, inputs, params, t)
-    update_instance_ME!(wrapper, states, inputs, t)
-
-    # TODO: Find a way to do this without allocating. We can't pass a view to these
-    # functions.
-    states_buffer = zeros(length(states))
-    @statuscheck FMI.fmi2GetDerivatives!(instance, states_buffer)
-    outputs_buffer = zeros(length(fn.output_value_references))
-    FMI.fmi2GetReal!(instance, fn.output_value_references, outputs_buffer)
-    return [states_buffer; outputs_buffer]
-end
-
-"""
-    $(TYPEDEF)
-
-A callable struct useful for simulating v3 Model Exchange FMUs. When called, updates the
-internal state of the FMU and gets updated values for continuous state derivatives and
-output variables.
-
-# Fields
-
-$(TYPEDFIELDS)
-"""
-struct FMI3MEFunctor
-    """
-    The value references for outputs of the FMU, in the order that the caller expects
-    them to be returned when calling `FMI3MEFunctor`.
-    """
-    output_value_references::Vector{FMI.fmi3ValueReference}
-end
-
-@register_array_symbolic (fn::FMI3MEFunctor)(
+@register_array_symbolic (fn::FMI3InstanceWrapper)(
     wrapper::FMI3InstanceWrapper, states::Vector{<:Real},
     inputs::Vector{<:Real}, params::Vector{<:Real}, t::Real) begin
     size = (length(states) + length(fn.output_value_references),)
@@ -679,48 +682,28 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Update `wrapper.instance` with the new values of state, input and independent variables.
+Update the internal state of the ME FMU and return a vector of updated values
+for continuous state derivatives and output variables respectively. Needs to be a
+callable struct to enable symbolic registration with an inferred return size.
 """
-function update_instance_ME!(wrapper::FMI3InstanceWrapper, states, inputs, t)
-    instance = wrapper.instance
-    @statuscheck FMI.fmi3SetTime(instance, t)
-    @statuscheck FMI.fmi3SetContinuousStates(instance, states)
-    if !isempty(inputs)
-        @statuscheck FMI.fmi3SetFloat64(instance, wrapper.input_value_references, inputs)
-    end
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Get the FMU instance (creating and initializing it if not present), update it
-with the current values of variables, and return a vector of the state derivatives
-and output variables.
-"""
-function (fn::FMI3MEFunctor)(wrapper::FMI3InstanceWrapper, states, inputs, params, t)
+function (wrapper::Union{FMI2InstanceWrapper, FMI3InstanceWrapper})(
+        states, inputs, params, t)
     instance = get_instance_ME!(wrapper, inputs, params, t)
-    update_instance_ME!(wrapper, states, inputs, t)
 
-    # TODO: Don't allocate
+    # TODO: Find a way to do this without allocating. We can't pass a view to these
+    # functions.
     states_buffer = zeros(length(states))
-    @statuscheck FMI.fmi3GetContinuousStateDerivatives!(instance, states_buffer)
-    outputs_buffer = zeros(length(fn.output_value_references))
-    FMI.fmi3GetFloat64!(instance, fn.output_value_references, outputs_buffer)
+    outputs_buffer = zeros(length(wrapper.output_value_references))
+    # Defined in FMIBase.jl/src/eval.jl
+    # Doesn't seem to be documented, but somehow this is the only way to
+    # propagate inputs to the FMU consistently. I have no idea why.
+    instance(; x = states, u = inputs, u_refs = wrapper.input_value_references,
+        p = params, p_refs = wrapper.param_value_references, t = t)
+    # the spec requires completing the step before getting updated derivative/output values
+    partiallyCompleteIntegratorStep(wrapper)
+    instance(; dx = states_buffer, dx_refs = wrapper.derivative_value_references,
+        y = outputs_buffer, y_refs = wrapper.output_value_references)
     return [states_buffer; outputs_buffer]
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-An affect function for use inside a `FunctionalAffect`. This should be triggered every
-time an integrator step is accepted. Expects `p` to be a 1-length array containing
-the index of the instance wrapper (`FMI2InstanceWrapper` or `FMI3InstanceWrapper`) in
-the parameter object.
-"""
-function fmiMEStep!(integrator, u, p, ctx)
-    wrapper_idx = p[1]
-    wrapper = integrator.ps[wrapper_idx]
-    complete_step!(wrapper)
 end
 
 """
@@ -762,7 +745,7 @@ function (fn::FMI2CSFunctor)(wrapper::FMI2InstanceWrapper, states, inputs, param
     states = states isa SubArray ? copy(states) : states
     inputs = inputs isa SubArray ? copy(inputs) : inputs
     params = params isa SubArray ? copy(params) : params
-    instance = get_instance_CS!(wrapper, inputs, params, t)
+    instance = get_instance_CS!(wrapper, states, inputs, params, t)
     if isempty(fn.output_value_references)
         return eltype(states)[]
     else
@@ -799,7 +782,7 @@ function fmiCSInitialize!(m, o, ctx::FMI2CSFunctor, integrator)
         reset_instance!(wrapper)
     end
 
-    instance = get_instance_CS!(wrapper, inputs, params, t)
+    instance = get_instance_CS!(wrapper, states, inputs, params, t)
     if isdefined(m, :states)
         @statuscheck FMI.fmi2GetReal!(instance, ctx.state_value_references, m.states)
     end
@@ -826,7 +809,11 @@ function fmiCSStep!(m, o, ctx::FMI2CSFunctor, integrator)
     t = o.t
     dt = o.dt
 
-    instance = get_instance_CS!(wrapper, inputs, params, integrator.t)
+    instance = get_instance_CS!(wrapper, states, inputs, params, integrator.t)
+    if !isempty(inputs)
+        FMI.fmi2SetReal(
+            instance, wrapper.input_value_references, Csize_t(length(inputs)), inputs)
+    end
     @statuscheck FMI.fmi2DoStep(instance, integrator.t - dt, dt, FMI.fmi2True)
 
     if isdefined(m, :states)
@@ -864,7 +851,7 @@ function (fn::FMI3CSFunctor)(wrapper::FMI3InstanceWrapper, states, inputs, param
     states = states isa SubArray ? copy(states) : states
     inputs = inputs isa SubArray ? copy(inputs) : inputs
     params = params isa SubArray ? copy(params) : params
-    instance = get_instance_CS!(wrapper, inputs, params, t)
+    instance = get_instance_CS!(wrapper, states, inputs, params, t)
 
     if isempty(fn.output_value_references)
         return eltype(states)[]
@@ -893,7 +880,7 @@ function fmiCSInitialize!(m, o, ctx::FMI3CSFunctor, integrator)
     if wrapper.instance !== nothing
         reset_instance!(wrapper)
     end
-    instance = get_instance_CS!(wrapper, inputs, params, t)
+    instance = get_instance_CS!(wrapper, states, inputs, params, t)
     if isdefined(m, :states)
         @statuscheck FMI.fmi3GetFloat64!(instance, ctx.state_value_references, m.states)
     end
@@ -915,7 +902,10 @@ function fmiCSStep!(m, o, ctx::FMI3CSFunctor, integrator)
     t = o.t
     dt = o.dt
 
-    instance = get_instance_CS!(wrapper, inputs, params, integrator.t)
+    instance = get_instance_CS!(wrapper, states, inputs, params, integrator.t)
+    if !isempty(inputs)
+        FMI.fmi3SetFloat64(instance, wrapper.input_value_references, inputs)
+    end
     eventEncountered = Ref(FMI.fmi3False)
     terminateSimulation = Ref(FMI.fmi3False)
     earlyReturn = Ref(FMI.fmi3False)
