@@ -348,7 +348,8 @@ function PolynomialTransformation(sys::NonlinearSystem)
     # Is there a better way to check for uniqueness? `simplify` is relatively slow
     # (maybe use the threaded version?) and `expand` can blow up expression size.
     # Could metatheory help?
-    all_non_poly_terms = mapreduce(d -> d.non_polynomial_terms, vcat, polydata)
+    all_non_poly_terms = mapreduce(
+        d -> d.non_polynomial_terms, vcat, polydata; init = BasicSymbolic[])
     unique!(all_non_poly_terms)
 
     # each variable can only be replaced by one non-polynomial expression involving
