@@ -57,6 +57,19 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     """
     defaults::Dict
     """
+    The guesses to use as the initial conditions for the
+    initialization system.
+    """
+    guesses::Dict
+    """
+    The system for performing the initialization.
+    """
+    initializesystem::Union{Nothing, NonlinearSystem}
+    """
+    Extra equations to be enforced during the initialization sequence.
+    """
+    initialization_eqs::Vector{Equation}
+    """
     Type of the system.
     """
     connector_type::Any
@@ -97,9 +110,8 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
 
     function NonlinearSystem(
             tag, eqs, unknowns, ps, var_to_name, observed, jac, name, description,
-            systems,
-            defaults, connector_type, parameter_dependencies = Equation[], metadata = nothing,
-            gui_metadata = nothing,
+            systems, defaults, guesses, initializesystem, initialization_eqs, connector_type,
+            parameter_dependencies = Equation[], metadata = nothing, gui_metadata = nothing,
             tearing_state = nothing, substitutions = nothing,
             complete = false, index_cache = nothing, parent = nothing,
             isscheduled = false; checks::Union{Bool, Int} = true)
@@ -107,8 +119,8 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
             u = __get_unit_type(unknowns, ps)
             check_units(u, eqs)
         end
-        new(tag, eqs, unknowns, ps, var_to_name, observed,
-            jac, name, description, systems, defaults,
+        new(tag, eqs, unknowns, ps, var_to_name, observed, jac, name, description,
+            systems, defaults, guesses, initializesystem, initialization_eqs,
             connector_type, parameter_dependencies, metadata, gui_metadata, tearing_state,
             substitutions, complete, index_cache, parent, isscheduled)
     end
@@ -121,6 +133,9 @@ function NonlinearSystem(eqs, unknowns, ps;
         default_u0 = Dict(),
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
+        guesses = Dict(),
+        initializesystem = nothing,
+        initialization_eqs = Equation[],
         systems = NonlinearSystem[],
         connector_type = nothing,
         continuous_events = nothing, # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
@@ -151,21 +166,32 @@ function NonlinearSystem(eqs, unknowns, ps;
     eqs = [wrap(eq.lhs) isa Symbolics.Arr ? eq : 0 ~ eq.rhs - eq.lhs for eq in eqs]
 
     jac = RefValue{Any}(EMPTY_JAC)
-    defaults = todict(defaults)
-    defaults = Dict{Any, Any}(value(k) => value(v)
-    for (k, v) in pairs(defaults) if value(v) !== nothing)
 
-    unknowns, ps = value.(unknowns), value.(ps)
+    ps′ = value.(ps)
+    dvs′ = value.(unknowns)
+    parameter_dependencies, ps′ = process_parameter_dependencies(
+        parameter_dependencies, ps′)
+
+    defaults = Dict{Any, Any}(todict(defaults))
+    guesses = Dict{Any, Any}(todict(guesses))
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, unknowns)
-    process_variables!(var_to_name, defaults, ps)
+    process_variables!(var_to_name, defaults, guesses, dvs′)
+    process_variables!(var_to_name, defaults, guesses, ps′)
+    process_variables!(
+        var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
+    process_variables!(
+        var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
+    defaults = Dict{Any, Any}(value(k) => value(v)
+    for (k, v) in pairs(defaults) if v !== nothing)
+    guesses = Dict{Any, Any}(value(k) => value(v)
+    for (k, v) in pairs(guesses) if v !== nothing)
+
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
-    parameter_dependencies, ps = process_parameter_dependencies(
-        parameter_dependencies, ps)
     NonlinearSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-        eqs, unknowns, ps, var_to_name, observed, jac, name, description, systems, defaults,
-        connector_type, parameter_dependencies, metadata, gui_metadata, checks = checks)
+        eqs, dvs′, ps′, var_to_name, observed, jac, name, description, systems, defaults,
+        guesses, initializesystem, initialization_eqs, connector_type, parameter_dependencies,
+        metadata, gui_metadata, checks = checks)
 end
 
 function NonlinearSystem(eqs; kwargs...)
@@ -318,6 +344,7 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
         eval_expression = false,
         eval_module = @__MODULE__,
         sparse = false, simplify = false,
+        initialization_data = nothing,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearFunction`")
@@ -350,14 +377,14 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
         resid_prototype = calculate_resid_prototype(length(equations(sys)), u0, p)
     end
 
-    NonlinearFunction{iip}(f,
+    NonlinearFunction{iip}(f;
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
         resid_prototype = resid_prototype,
         jac_prototype = sparse ?
                         similar(calculate_jacobian(sys, sparse = sparse),
             Float64) : nothing,
-        observed = observedfun)
+        observed = observedfun, initialization_data)
 end
 
 """
@@ -369,7 +396,8 @@ respectively.
 """
 function SciMLBase.IntervalNonlinearFunction(
         sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(sys), u0 = nothing;
-        p = nothing, eval_expression = false, eval_module = @__MODULE__, kwargs...)
+        p = nothing, eval_expression = false, eval_module = @__MODULE__,
+        initialization_data = nothing, kwargs...)
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `IntervalNonlinearFunction`")
     end
@@ -385,7 +413,8 @@ function SciMLBase.IntervalNonlinearFunction(
 
     observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
 
-    IntervalNonlinearFunction{false}(f; observed = observedfun, sys = sys)
+    IntervalNonlinearFunction{false}(
+        f; observed = observedfun, sys = sys, initialization_data)
 end
 
 """
@@ -496,13 +525,16 @@ end
 
 function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         parammap = DiffEqBase.NullParameters();
-        check_length = true, use_homotopy_continuation = true, kwargs...) where {iip}
+        check_length = true, use_homotopy_continuation = false, kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearProblem`")
     end
-    prob = safe_HomotopyContinuationProblem(sys, u0map, parammap; check_length, kwargs...)
-    if prob isa HomotopyContinuationProblem
-        return prob
+    if use_homotopy_continuation
+        prob = safe_HomotopyContinuationProblem(
+            sys, u0map, parammap; check_length, kwargs...)
+        if prob isa HomotopyContinuationProblem
+            return prob
+        end
     end
     f, u0, p = process_SciMLProblem(NonlinearFunction{iip}, sys, u0map, parammap;
         check_length, kwargs...)
@@ -857,8 +889,11 @@ function flatten(sys::NonlinearSystem, noeqs = false)
             parameters(sys),
             observed = observed(sys),
             defaults = defaults(sys),
+            guesses = guesses(sys),
+            initialization_eqs = initialization_equations(sys),
             name = nameof(sys),
             description = description(sys),
+            metadata = get_metadata(sys),
             checks = false)
     end
 end

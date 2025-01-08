@@ -256,29 +256,16 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
             :ODESystem, force = true)
     end
     defaults = Dict{Any, Any}(todict(defaults))
+    guesses = Dict{Any, Any}(todict(guesses))
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, dvs′)
-    process_variables!(var_to_name, defaults, ps′)
-    process_variables!(var_to_name, defaults, [eq.lhs for eq in parameter_dependencies])
-    process_variables!(var_to_name, defaults, [eq.rhs for eq in parameter_dependencies])
+    process_variables!(var_to_name, defaults, guesses, dvs′)
+    process_variables!(var_to_name, defaults, guesses, ps′)
+    process_variables!(
+        var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
+    process_variables!(
+        var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
     defaults = Dict{Any, Any}(value(k) => value(v)
     for (k, v) in pairs(defaults) if v !== nothing)
-
-    sysdvsguesses = [ModelingToolkit.getguess(st) for st in dvs′]
-    hasaguess = findall(!isnothing, sysdvsguesses)
-    var_guesses = dvs′[hasaguess] .=> sysdvsguesses[hasaguess]
-    sysdvsguesses = isempty(var_guesses) ? Dict() : todict(var_guesses)
-    syspsguesses = [ModelingToolkit.getguess(st) for st in ps′]
-    hasaguess = findall(!isnothing, syspsguesses)
-    ps_guesses = ps′[hasaguess] .=> syspsguesses[hasaguess]
-    syspsguesses = isempty(ps_guesses) ? Dict() : todict(ps_guesses)
-    syspdepguesses = [ModelingToolkit.getguess(eq.lhs) for eq in parameter_dependencies]
-    hasaguess = findall(!isnothing, syspdepguesses)
-    pdep_guesses = [eq.lhs for eq in parameter_dependencies][hasaguess] .=>
-        syspdepguesses[hasaguess]
-    syspdepguesses = isempty(pdep_guesses) ? Dict() : todict(pdep_guesses)
-
-    guesses = merge(sysdvsguesses, syspsguesses, syspdepguesses, todict(guesses))
     guesses = Dict{Any, Any}(value(k) => value(v)
     for (k, v) in pairs(guesses) if v !== nothing)
 
@@ -409,6 +396,7 @@ function flatten(sys::ODESystem, noeqs = false)
             initialization_eqs = initialization_equations(sys),
             is_dde = is_dde(sys),
             tstops = symbolic_tstops(sys),
+            metadata = get_metadata(sys),
             checks = false)
     end
 end

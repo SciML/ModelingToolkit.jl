@@ -359,10 +359,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         sparsity = false,
         analytic = nothing,
         split_idxs = nothing,
-        initializeprob = nothing,
-        update_initializeprob! = nothing,
-        initializeprobmap = nothing,
-        initializeprobpmap = nothing,
+        initialization_data = nothing,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEFunction`")
@@ -463,10 +460,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         observed = observedfun,
         sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
         analytic = analytic,
-        initializeprob = initializeprob,
-        update_initializeprob! = update_initializeprob!,
-        initializeprobmap = initializeprobmap,
-        initializeprobpmap = initializeprobpmap)
+        initialization_data)
 end
 
 """
@@ -496,10 +490,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         sparse = false, simplify = false,
         eval_module = @__MODULE__,
         checkbounds = false,
-        initializeprob = nothing,
-        initializeprobmap = nothing,
-        initializeprobpmap = nothing,
-        update_initializeprob! = nothing,
+        initialization_data = nothing,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEFunction`")
@@ -547,15 +538,12 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         nothing
     end
 
-    DAEFunction{iip}(f,
+    DAEFunction{iip}(f;
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
         jac_prototype = jac_prototype,
         observed = observedfun,
-        initializeprob = initializeprob,
-        initializeprobmap = initializeprobmap,
-        initializeprobpmap = initializeprobpmap,
-        update_initializeprob! = update_initializeprob!)
+        initialization_data)
 end
 
 function DiffEqBase.DDEFunction(sys::AbstractODESystem, args...; kwargs...)
@@ -567,6 +555,7 @@ function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         eval_expression = false,
         eval_module = @__MODULE__,
         checkbounds = false,
+        initialization_data = nothing,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `DDEFunction`")
@@ -579,7 +568,7 @@ function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
     f(u, h, p, t) = f_oop(u, h, p, t)
     f(du, u, h, p, t) = f_iip(du, u, h, p, t)
 
-    DDEFunction{iip}(f, sys = sys)
+    DDEFunction{iip}(f; sys = sys, initialization_data)
 end
 
 function DiffEqBase.SDDEFunction(sys::AbstractODESystem, args...; kwargs...)
@@ -591,6 +580,7 @@ function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys
         eval_expression = false,
         eval_module = @__MODULE__,
         checkbounds = false,
+        initialization_data = nothing,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `SDDEFunction`")
@@ -609,7 +599,7 @@ function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys
     g(u, h, p, t) = g_oop(u, h, p, t)
     g(du, u, h, p, t) = g_iip(du, u, h, p, t)
 
-    SDDEFunction{iip}(f, g, sys = sys)
+    SDDEFunction{iip}(f, g; sys = sys, initialization_data)
 end
 
 """
@@ -1004,7 +994,7 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     h_oop, h_iip = eval_or_rgf.(h_gen; eval_expression, eval_module)
     h(p, t) = h_oop(p, t)
     h(p::MTKParameters, t) = h_oop(p..., t)
-    u0 = h(p, tspan[1])
+    u0 = float.(h(p, tspan[1]))
     if u0 !== nothing
         u0 = u0_constructor(u0)
     end
@@ -1301,7 +1291,7 @@ function flatten_equations(eqs)
                 error("LHS ($(eq.lhs)) and RHS ($(eq.rhs)) must either both be array expressions or both scalar")
             size(eq.lhs) == size(eq.rhs) ||
                 error("Size of LHS ($(eq.lhs)) and RHS ($(eq.rhs)) must match: got $(size(eq.lhs)) and $(size(eq.rhs))")
-            return collect(eq.lhs) .~ collect(eq.rhs)
+            return vec(collect(eq.lhs) .~ collect(eq.rhs))
         else
             eq
         end
@@ -1328,11 +1318,11 @@ Generates a NonlinearProblem or NonlinearLeastSquaresProblem from an ODESystem
 which represents the initialization, i.e. the calculation of the consistent
 initial conditions for the given DAE.
 """
-function InitializationProblem(sys::AbstractODESystem, args...; kwargs...)
+function InitializationProblem(sys::AbstractSystem, args...; kwargs...)
     InitializationProblem{true}(sys, args...; kwargs...)
 end
 
-function InitializationProblem(sys::AbstractODESystem, t,
+function InitializationProblem(sys::AbstractSystem, t,
         u0map::StaticArray,
         args...;
         kwargs...)
@@ -1340,11 +1330,11 @@ function InitializationProblem(sys::AbstractODESystem, t,
         sys, t, u0map, args...; kwargs...)
 end
 
-function InitializationProblem{true}(sys::AbstractODESystem, args...; kwargs...)
+function InitializationProblem{true}(sys::AbstractSystem, args...; kwargs...)
     InitializationProblem{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
 end
 
-function InitializationProblem{false}(sys::AbstractODESystem, args...; kwargs...)
+function InitializationProblem{false}(sys::AbstractSystem, args...; kwargs...)
     InitializationProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
@@ -1363,8 +1353,8 @@ function Base.showerror(io::IO, e::IncompleteInitializationError)
     println(io, e.uninit)
 end
 
-function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
-        t::Number, u0map = [],
+function InitializationProblem{iip, specialize}(sys::AbstractSystem,
+        t, u0map = [],
         parammap = DiffEqBase.NullParameters();
         guesses = [],
         check_length = true,
@@ -1389,6 +1379,11 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
             generate_initializesystem(
                 sys; u0map, initialization_eqs, check_units,
                 pmap = parammap, guesses, extra_metadata = (; use_scc)); fully_determined)
+    end
+
+    meta = get_metadata(isys)
+    if meta isa InitializationSystemMetadata
+        @set! isys.metadata.oop_reconstruct_u0_p = ReconstructInitializeprob(sys, isys)
     end
 
     ts = get_tearing_state(isys)
@@ -1428,13 +1423,13 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
         @warn "Initialization system is underdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. $(scc_message)To suppress this warning pass warn_initialize_determined = false. To make this warning into an error, pass fully_determined = true"
     end
 
-    parammap = parammap isa DiffEqBase.NullParameters || isempty(parammap) ?
-               [get_iv(sys) => t] :
-               merge(todict(parammap), Dict(get_iv(sys) => t))
-    parammap = Dict(k => v for (k, v) in parammap if v !== missing)
-    if isempty(u0map)
-        u0map = Dict()
+    parammap = recursive_unwrap(anydict(parammap))
+    if t !== nothing
+        parammap[get_iv(sys)] = t
     end
+    filter!(kvp -> kvp[2] !== missing, parammap)
+
+    u0map = to_varmap(u0map, unknowns(sys))
     if isempty(guesses)
         guesses = Dict()
     end
@@ -1476,5 +1471,5 @@ function InitializationProblem{iip, specialize}(sys::AbstractODESystem,
     else
         NonlinearLeastSquaresProblem
     end
-    TProb(isys, u0map, parammap; kwargs...)
+    TProb(isys, u0map, parammap; kwargs..., build_initializeprob = false)
 end

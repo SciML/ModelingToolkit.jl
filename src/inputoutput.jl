@@ -160,7 +160,7 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
 # Build control function
 
 """
-    (f_oop, f_ip), x_sym, p, io_sys = generate_control_function(
+    (f_oop, f_ip), x_sym, p_sym, io_sys = generate_control_function(
             sys::AbstractODESystem,
             inputs             = unbound_inputs(sys),
             disturbance_inputs = nothing;
@@ -177,8 +177,7 @@ f_ip  : (xout,x,u,p,t) -> nothing
 
 The return values also include the chosen state-realization (the remaining unknowns) `x_sym` and parameters, in the order they appear as arguments to `f`.
 
-If `disturbance_inputs` is an array of variables, the generated dynamics function will preserve any state and dynamics associated with disturbance inputs, but the disturbance inputs themselves will not be included as inputs to the generated function. The use case for this is to generate dynamics for state observers that estimate the influence of unmeasured disturbances, and thus require unknown variables for the disturbance model, but without disturbance inputs since the disturbances are not available for measurement.
-See [`add_input_disturbance`](@ref) for a higher-level interface to this functionality.
+If `disturbance_inputs` is an array of variables, the generated dynamics function will preserve any state and dynamics associated with disturbance inputs, but the disturbance inputs themselves will (by default) not be included as inputs to the generated function. The use case for this is to generate dynamics for state observers that estimate the influence of unmeasured disturbances, and thus require unknown variables for the disturbance model, but without disturbance inputs since the disturbances are not available for measurement. To add an input argument corresponding to the disturbance inputs, either include the disturbance inputs among the control inputs, or set `disturbance_argument=true`, in which case an additional input argument `w` is added to the generated function `(x,u,p,t,w)->rhs`.
 
 !!! note "Un-simplified system"
     This function expects `sys` to be un-simplified, i.e., `structural_simplify` or `@mtkbuild` should not be called on the system before passing it into this function. `generate_control_function` calls a special version of `structural_simplify` internally.
@@ -196,6 +195,7 @@ f[1](x, inputs, p, t)
 """
 function generate_control_function(sys::AbstractODESystem, inputs = unbound_inputs(sys),
         disturbance_inputs = disturbances(sys);
+        disturbance_argument = false,
         implicit_dae = false,
         simplify = false,
         eval_expression = false,
@@ -219,10 +219,11 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
         # ps = [ps; disturbance_inputs]
     end
     inputs = map(x -> time_varying_as_func(value(x), sys), inputs)
+    disturbance_inputs = unwrap.(disturbance_inputs)
 
     eqs = [eq for eq in full_equations(sys)]
     eqs = map(subs_constants, eqs)
-    if disturbance_inputs !== nothing
+    if disturbance_inputs !== nothing && !disturbance_argument
         # Set all disturbance *inputs* to zero (we just want to keep the disturbance state)
         subs = Dict(disturbance_inputs .=> 0)
         eqs = [eq.lhs ~ substitute(eq.rhs, subs) for eq in eqs]
@@ -239,16 +240,24 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     t = get_iv(sys)
 
     # pre = has_difference ? (ex -> ex) : get_postprocess_fbody(sys)
-
-    args = (u, inputs, p..., t)
+    if disturbance_argument
+        args = (u, inputs, p..., t, disturbance_inputs)
+    else
+        args = (u, inputs, p..., t)
+    end
     if implicit_dae
         ddvs = map(Differential(get_iv(sys)), dvs)
         args = (ddvs, args...)
     end
     process = get_postprocess_fbody(sys)
+    wrapped_arrays_vars = disturbance_argument ?
+                          wrap_array_vars(
+        sys, rhss; dvs, ps, inputs, extra_args = (disturbance_inputs,)) :
+                          wrap_array_vars(sys, rhss; dvs, ps, inputs)
     f = build_function(rhss, args...; postprocess_fbody = process,
-        expression = Val{true}, wrap_code = wrap_mtkparameters(sys, false, 3) .∘
-                                            wrap_array_vars(sys, rhss; dvs, ps, inputs) .∘
+        expression = Val{true}, wrap_code = wrap_mtkparameters(
+            sys, false, 3, Int(disturbance_argument) + 1) .∘
+                                            wrapped_arrays_vars .∘
                                             wrap_parameter_dependencies(sys, false),
         kwargs...)
     f = eval_or_rgf.(f; eval_expression, eval_module)

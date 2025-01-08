@@ -442,7 +442,8 @@ Transform the system `sys` with `transformation` and return a
 `PolynomialTransformationResult`, or a `NotPolynomialError` if the system cannot
 be transformed.
 """
-function transform_system(sys::NonlinearSystem, transformation::PolynomialTransformation)
+function transform_system(sys::NonlinearSystem, transformation::PolynomialTransformation;
+        fraction_cancel_fn = simplify_fractions)
     subrules = transformation.substitution_rules
     dvs = unknowns(sys)
     eqs = full_equations(sys)
@@ -463,7 +464,7 @@ function transform_system(sys::NonlinearSystem, transformation::PolynomialTransf
             return NotPolynomialError(
                 VariablesAsPolyAndNonPoly(dvs[poly_and_nonpoly]), eqs, polydata)
         end
-        num, den = handle_rational_polynomials(t, new_dvs)
+        num, den = handle_rational_polynomials(t, new_dvs; fraction_cancel_fn)
         # make factors different elements, otherwise the nonzero factors artificially
         # inflate the error of the zero factor.
         if iscall(den) && operation(den) == *
@@ -492,43 +493,67 @@ $(TYPEDSIGNATURES)
 Given a `x`, a polynomial in variables in `wrt` which may contain rational functions,
 express `x` as a single rational function with polynomial `num` and denominator `den`.
 Return `(num, den)`.
+
+Keyword arguments:
+- `fraction_cancel_fn`: A function which takes a fraction (`operation(expr) == /`) and returns
+  a simplified symbolic quantity with common factors in the numerator and denominator are
+  cancelled. Defaults to `SymbolicUtils.simplify_fractions`, but can be changed to
+  `nothing` to improve performance on large polynomials at the cost of avoiding non-trivial
+  cancellation.
 """
-function handle_rational_polynomials(x, wrt)
+function handle_rational_polynomials(x, wrt; fraction_cancel_fn = simplify_fractions)
     x = unwrap(x)
     symbolic_type(x) == NotSymbolic() && return x, 1
     iscall(x) || return x, 1
     contains_variable(x, wrt) || return x, 1
     any(isequal(x), wrt) && return x, 1
 
-    # simplify_fractions cancels out some common factors
-    # and expands (a / b)^c to a^c / b^c, so we only need
-    # to handle these cases
-    x = simplify_fractions(x)
     op = operation(x)
     args = arguments(x)
 
     if op == /
         # numerator and denominator are trivial
         num, den = args
-        # but also search for rational functions in numerator
-        n, d = handle_rational_polynomials(num, wrt)
-        num, den = n, den * d
-    elseif op == +
+        n1, d1 = handle_rational_polynomials(num, wrt; fraction_cancel_fn)
+        n2, d2 = handle_rational_polynomials(den, wrt; fraction_cancel_fn)
+        num, den = n1 * d2, d1 * n2
+    elseif (op == +) || (op == -)
         num = 0
         den = 1
-
-        # we don't need to do common denominator
-        # because we don't care about cases where denominator
-        # is zero. The expression is zero when all the numerators
-        # are zero.
+        if op == -
+            args[2] = -args[2]
+        end
         for arg in args
-            n, d = handle_rational_polynomials(arg, wrt)
-            num += n
+            n, d = handle_rational_polynomials(arg, wrt; fraction_cancel_fn)
+            num = num * d + n * den
+            den *= d
+        end
+    elseif op == ^
+        base, pow = args
+        num, den = handle_rational_polynomials(base, wrt; fraction_cancel_fn)
+        num ^= pow
+        den ^= pow
+    elseif op == *
+        num = 1
+        den = 1
+        for arg in args
+            n, d = handle_rational_polynomials(arg, wrt; fraction_cancel_fn)
+            num *= n
             den *= d
         end
     else
-        return x, 1
+        error("Unhandled operation in `handle_rational_polynomials`. This should never happen. Please open an issue in ModelingToolkit.jl with an MWE.")
     end
+
+    if fraction_cancel_fn !== nothing
+        expr = fraction_cancel_fn(num / den)
+        if iscall(expr) && operation(expr) == /
+            num, den = arguments(expr)
+        else
+            num, den = expr, 1
+        end
+    end
+
     # if the denominator isn't a polynomial in `wrt`, better to not include it
     # to reduce the size of the gcd polynomial
     if !contains_variable(den, wrt)

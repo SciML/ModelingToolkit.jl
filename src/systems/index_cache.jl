@@ -404,6 +404,7 @@ function SymbolicIndexingInterface.timeseries_parameter_index(ic::IndexCache, sy
         sym = get(ic.symbol_to_variable, sym, nothing)
         sym === nothing && return nothing
     end
+    sym = unwrap(sym)
     idx = check_index_map(ic.discrete_idx, sym)
     idx === nothing ||
         return ParameterTimeseriesIndex(idx.clock_idx, (idx.buffer_idx, idx.idx_in_clock))
@@ -411,7 +412,8 @@ function SymbolicIndexingInterface.timeseries_parameter_index(ic::IndexCache, sy
     args = arguments(sym)
     idx = timeseries_parameter_index(ic, args[1])
     idx === nothing && return nothing
-    ParameterIndex(idx.portion, (idx.idx..., args[2:end]...), idx.validate_size)
+    return ParameterTimeseriesIndex(
+        idx.timeseries_idx, (idx.parameter_idx..., args[2:end]...))
 end
 
 function check_index_map(idxmap, sym)

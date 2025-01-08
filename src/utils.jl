@@ -244,6 +244,13 @@ function setdefault(v, val)
     val === nothing ? v : wrap(setdefaultval(unwrap(v), value(val)))
 end
 
+function process_variables!(var_to_name, defs, guesses, vars)
+    collect_defaults!(defs, vars)
+    collect_guesses!(guesses, vars)
+    collect_var_to_name!(var_to_name, vars)
+    return nothing
+end
+
 function process_variables!(var_to_name, defs, vars)
     collect_defaults!(defs, vars)
     collect_var_to_name!(var_to_name, vars)
@@ -259,6 +266,17 @@ function collect_defaults!(defs, vars)
         defs[v] = getdefault(v)
     end
     return defs
+end
+
+function collect_guesses!(guesses, vars)
+    for v in vars
+        symbolic_type(v) == NotSymbolic() && continue
+        if haskey(guesses, v) || !hasguess(unwrap(v)) || (def = getguess(v)) === nothing
+            continue
+        end
+        guesses[v] = getguess(v)
+    end
+    return guesses
 end
 
 function collect_var_to_name!(vars, xs)
@@ -1033,19 +1051,24 @@ end
     $(TYPEDSIGNATURES)
 
 Return the indexes of observed equations of `sys` used by expression `exprs`.
+
+Keyword arguments:
+- `involved_vars`: A collection of the variables involved in `exprs`. This is the set of
+  variables which will be explored to find dependencies on observed equations. Typically,
+  providing this keyword is not necessary and is only useful to avoid repeatedly calling
+  `vars(exprs)`
 """
-function observed_equations_used_by(sys::AbstractSystem, exprs)
+function observed_equations_used_by(sys::AbstractSystem, exprs; involved_vars = vars(exprs))
     obs = observed(sys)
 
     obsvars = getproperty.(obs, :lhs)
     graph = observed_dependency_graph(obs)
 
-    syms = vars(exprs)
-
     obsidxs = BitSet()
-    for sym in syms
+    for sym in involved_vars
         idx = findfirst(isequal(sym), obsvars)
         idx === nothing && continue
+        idx in obsidxs && continue
         parents = dfs_parents(graph, idx)
         for i in eachindex(parents)
             parents[i] == 0 && continue
@@ -1140,4 +1163,13 @@ function similar_variable(var::BasicSymbolic, name = :anon)
         sym = setmetadata(sym, Symbolics.ArrayShapeCtx, map(Base.OneTo, size(var)))
     end
     return sym
+end
+
+function guesses_from_metadata!(guesses, vars)
+    varguesses = [getguess(v) for v in vars]
+    hasaguess = findall(!isnothing, varguesses)
+    for i in hasaguess
+        haskey(guesses, vars[i]) && continue
+        guesses[vars[i]] = varguesses[i]
+    end
 end

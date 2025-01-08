@@ -3,7 +3,7 @@ $(TYPEDSIGNATURES)
 
 Generate `NonlinearSystem` which initializes an ODE problem from specified initial conditions of an `ODESystem`.
 """
-function generate_initializesystem(sys::ODESystem;
+function generate_initializesystem(sys::AbstractSystem;
         u0map = Dict(),
         pmap = Dict(),
         initialization_eqs = [],
@@ -12,28 +12,37 @@ function generate_initializesystem(sys::ODESystem;
         algebraic_only = false,
         check_units = true, check_defguess = false,
         name = nameof(sys), extra_metadata = (;), kwargs...)
-    trueobs, eqs = unhack_observed(observed(sys), equations(sys))
+    eqs = equations(sys)
+    eqs = filter(x -> x isa Equation, eqs)
+    trueobs, eqs = unhack_observed(observed(sys), eqs)
     vars = unique([unknowns(sys); getfield.(trueobs, :lhs)])
     vars_set = Set(vars) # for efficient in-lookup
 
-    idxs_diff = isdiffeq.(eqs)
-    idxs_alge = .!idxs_diff
-
-    # prepare map for dummy derivative substitution
-    eqs_diff = eqs[idxs_diff]
-    D = Differential(get_iv(sys))
-    diffmap = merge(
-        Dict(eq.lhs => eq.rhs for eq in eqs_diff),
-        Dict(D(eq.lhs) => D(eq.rhs) for eq in trueobs)
-    )
-
-    # 1) process dummy derivatives and u0map into initialization system
-    eqs_ics = eqs[idxs_alge] # start equation list with algebraic equations
+    eqs_ics = Equation[]
     defs = copy(defaults(sys)) # copy so we don't modify sys.defaults
     additional_guesses = anydict(guesses)
+    additional_initialization_eqs = Vector{Equation}(initialization_eqs)
     guesses = merge(get_guesses(sys), additional_guesses)
-    schedule = getfield(sys, :schedule)
-    if !isnothing(schedule)
+    idxs_diff = isdiffeq.(eqs)
+
+    # 1) Use algebraic equations of time-dependent systems as initialization constraints
+    if has_iv(sys)
+        idxs_alge = .!idxs_diff
+        append!(eqs_ics, eqs[idxs_alge]) # start equation list with algebraic equations
+
+        eqs_diff = eqs[idxs_diff]
+        D = Differential(get_iv(sys))
+        diffmap = merge(
+            Dict(eq.lhs => eq.rhs for eq in eqs_diff),
+            Dict(D(eq.lhs) => D(eq.rhs) for eq in trueobs)
+        )
+    else
+        diffmap = Dict()
+    end
+
+    if has_schedule(sys) && (schedule = get_schedule(sys); !isnothing(schedule))
+        # 2) process dummy derivatives and u0map into initialization system
+        # prepare map for dummy derivative substitution
         for x in filter(x -> !isnothing(x[1]), schedule.dummy_sub)
             # set dummy derivatives to default_dd_guess unless specified
             push!(defs, x[1] => get(guesses, x[1], default_dd_guess))
@@ -61,9 +70,14 @@ function generate_initializesystem(sys::ODESystem;
                 process_u0map_with_dummysubs(y, x)
             end
         end
+    else
+        # 2) System doesn't have a schedule, so dummy derivatives don't exist/aren't handled (SDESystem)
+        for (k, v) in u0map
+            defs[k] = v
+        end
     end
 
-    # 2) process other variables
+    # 3) process other variables
     for var in vars
         if var ∈ keys(defs)
             push!(eqs_ics, var ~ defs[var])
@@ -74,7 +88,7 @@ function generate_initializesystem(sys::ODESystem;
         end
     end
 
-    # 3) process explicitly provided initialization equations
+    # 4) process explicitly provided initialization equations
     if !algebraic_only
         initialization_eqs = [get_initialization_eqs(sys); initialization_eqs]
         for eq in initialization_eqs
@@ -83,7 +97,7 @@ function generate_initializesystem(sys::ODESystem;
         end
     end
 
-    # 4) process parameters as initialization unknowns
+    # 5) process parameters as initialization unknowns
     paramsubs = Dict()
     if pmap isa SciMLBase.NullParameters
         pmap = Dict()
@@ -138,7 +152,7 @@ function generate_initializesystem(sys::ODESystem;
         end
     end
 
-    # 5) parameter dependencies become equations, their LHS become unknowns
+    # 6) parameter dependencies become equations, their LHS become unknowns
     # non-numeric dependent parameters stay as parameter dependencies
     new_parameter_deps = Equation[]
     for eq in parameter_dependencies(sys)
@@ -153,7 +167,7 @@ function generate_initializesystem(sys::ODESystem;
         push!(defs, varp => guessval)
     end
 
-    # 6) handle values provided for dependent parameters similar to values for observed variables
+    # 7) handle values provided for dependent parameters similar to values for observed variables
     for (k, v) in merge(defaults(sys), pmap)
         if is_variable_floatingpoint(k) && has_parameter_dependency_with_lhs(sys, k)
             push!(eqs_ics, paramsubs[k] ~ v)
@@ -161,12 +175,10 @@ function generate_initializesystem(sys::ODESystem;
     end
 
     # parameters do not include ones that became initialization unknowns
-    pars = vcat(
-        [get_iv(sys)], # include independent variable as pseudo-parameter
-        [p for p in parameters(sys) if !haskey(paramsubs, p)]
-    )
+    pars = Vector{SymbolicParam}(filter(p -> !haskey(paramsubs, p), parameters(sys)))
+    is_time_dependent(sys) && push!(pars, get_iv(sys))
 
-    # 7) use observed equations for guesses of observed variables if not provided
+    # 8) use observed equations for guesses of observed variables if not provided
     for eq in trueobs
         haskey(defs, eq.lhs) && continue
         any(x -> isequal(default_toterm(x), eq.lhs), keys(defs)) && continue
@@ -180,7 +192,8 @@ function generate_initializesystem(sys::ODESystem;
         defs[k] = substitute(defs[k], paramsubs)
     end
     meta = InitializationSystemMetadata(
-        anydict(u0map), anydict(pmap), additional_guesses, extra_metadata)
+        anydict(u0map), anydict(pmap), additional_guesses,
+        additional_initialization_eqs, extra_metadata, nothing)
     return NonlinearSystem(eqs_ics,
         vars,
         pars;
@@ -192,11 +205,30 @@ function generate_initializesystem(sys::ODESystem;
         kwargs...)
 end
 
+struct ReconstructInitializeprob
+    getter::Any
+    setter::Any
+end
+
+function ReconstructInitializeprob(srcsys::AbstractSystem, dstsys::AbstractSystem)
+    syms = [unknowns(dstsys);
+            reduce(vcat, reorder_parameters(dstsys, parameters(dstsys)); init = [])]
+    getter = getu(srcsys, syms)
+    setter = setsym_oop(dstsys, syms)
+    return ReconstructInitializeprob(getter, setter)
+end
+
+function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
+    rip.setter(dstvalp, rip.getter(srcvalp))
+end
+
 struct InitializationSystemMetadata
     u0map::Dict{Any, Any}
     pmap::Dict{Any, Any}
     additional_guesses::Dict{Any, Any}
+    additional_initialization_eqs::Vector{Equation}
     extra_metadata::NamedTuple
+    oop_reconstruct_u0_p::Union{Nothing, ReconstructInitializeprob}
 end
 
 function is_parameter_solvable(p, pmap, defs, guesses)
@@ -212,56 +244,29 @@ function is_parameter_solvable(p, pmap, defs, guesses)
              _val1 === nothing && _val2 !== nothing)) && _val3 !== nothing
 end
 
-function SciMLBase.remake_initialization_data(sys::ODESystem, odefn, u0, t0, p, newu0, newp)
+function SciMLBase.remake_initialization_data(
+        sys::AbstractSystem, odefn, u0, t0, p, newu0, newp)
     if u0 === missing && p === missing
         return odefn.initialization_data
     end
     if !(eltype(u0) <: Pair) && !(eltype(p) <: Pair)
-        oldinitprob = odefn.initializeprob
+        oldinitdata = odefn.initialization_data
+        oldinitdata === nothing && return nothing
+
+        oldinitprob = oldinitdata.initializeprob
         oldinitprob === nothing && return nothing
         if !SciMLBase.has_sys(oldinitprob.f) || !(oldinitprob.f.sys isa NonlinearSystem)
-            return SciMLBase.OverrideInitData(oldinitprob, odefn.update_initializeprob!,
-                odefn.initializeprobmap, odefn.initializeprobpmap)
+            return oldinitdata
         end
-        pidxs = ParameterIndex[]
-        pvals = []
-        u0idxs = Int[]
-        u0vals = []
-        for sym in variable_symbols(oldinitprob)
-            if is_variable(sys, sym) || has_observed_with_lhs(sys, sym)
-                u0 !== missing || continue
-                idx = variable_index(oldinitprob, sym)
-                push!(u0idxs, idx)
-                push!(u0vals, eltype(u0)(state_values(oldinitprob, idx)))
-            else
-                p !== missing || continue
-                idx = variable_index(oldinitprob, sym)
-                push!(u0idxs, idx)
-                push!(u0vals, typeof(getp(sys, sym)(p))(state_values(oldinitprob, idx)))
-            end
-        end
-        if p !== missing
-            for sym in parameter_symbols(oldinitprob)
-                push!(pidxs, parameter_index(oldinitprob, sym))
-                if isequal(sym, get_iv(sys))
-                    push!(pvals, t0)
-                else
-                    push!(pvals, getp(sys, sym)(p))
-                end
-            end
-        end
-        if isempty(u0idxs)
-            newu0 = state_values(oldinitprob)
+        oldinitsys = oldinitprob.f.sys
+        meta = get_metadata(oldinitsys)
+        if meta isa InitializationSystemMetadata && meta.oop_reconstruct_u0_p !== nothing
+            reconstruct_fn = meta.oop_reconstruct_u0_p
         else
-            newu0 = remake_buffer(
-                oldinitprob.f.sys, state_values(oldinitprob), u0idxs, u0vals)
+            reconstruct_fn = ReconstructInitializeprob(sys, oldinitsys)
         end
-        if isempty(pidxs)
-            newp = parameter_values(oldinitprob)
-        else
-            newp = remake_buffer(
-                oldinitprob.f.sys, parameter_values(oldinitprob), pidxs, pvals)
-        end
+        new_initu0, new_initp = reconstruct_fn(
+            ProblemState(; u = newu0, p = newp, t = t0), oldinitprob)
         if oldinitprob.f.resid_prototype === nothing
             newf = oldinitprob.f
         else
@@ -269,11 +274,11 @@ function SciMLBase.remake_initialization_data(sys::ODESystem, odefn, u0, t0, p, 
                 SciMLBase.isinplace(oldinitprob.f), SciMLBase.specialization(oldinitprob.f)}(
                 oldinitprob.f;
                 resid_prototype = calculate_resid_prototype(
-                    length(oldinitprob.f.resid_prototype), newu0, newp))
+                    length(oldinitprob.f.resid_prototype), new_initu0, new_initp))
         end
-        initprob = remake(oldinitprob; f = newf, u0 = newu0, p = newp)
-        return SciMLBase.OverrideInitData(initprob, odefn.update_initializeprob!,
-            odefn.initializeprobmap, odefn.initializeprobpmap)
+        initprob = remake(oldinitprob; f = newf, u0 = new_initu0, p = new_initp)
+        return SciMLBase.OverrideInitData(initprob, oldinitdata.update_initializeprob!,
+            oldinitdata.initializeprobmap, oldinitdata.initializeprobpmap)
     end
     dvs = unknowns(sys)
     ps = parameters(sys)
@@ -285,15 +290,17 @@ function SciMLBase.remake_initialization_data(sys::ODESystem, odefn, u0, t0, p, 
     defs = defaults(sys)
     cmap, cs = get_cmap(sys)
     use_scc = true
+    initialization_eqs = Equation[]
 
     if SciMLBase.has_initializeprob(odefn)
-        oldsys = odefn.initializeprob.f.sys
+        oldsys = odefn.initialization_data.initializeprob.f.sys
         meta = get_metadata(oldsys)
         if meta isa InitializationSystemMetadata
             u0map = merge(meta.u0map, u0map)
             pmap = merge(meta.pmap, pmap)
             merge!(guesses, meta.additional_guesses)
             use_scc = get(meta.extra_metadata, :use_scc, true)
+            initialization_eqs = meta.additional_initialization_eqs
         end
     else
         # there is no initializeprob, so the original problem construction
@@ -325,7 +332,7 @@ function SciMLBase.remake_initialization_data(sys::ODESystem, odefn, u0, t0, p, 
             pmap[p] = getp(sys, p)(newp)
         end
     end
-    if t0 === nothing
+    if t0 === nothing && is_time_dependent(sys)
         t0 = 0.0
     end
     filter_missing_values!(u0map)
@@ -334,14 +341,8 @@ function SciMLBase.remake_initialization_data(sys::ODESystem, odefn, u0, t0, p, 
     op, missing_unknowns, missing_pars = build_operating_point(
         u0map, pmap, defs, cmap, dvs, ps)
     kws = maybe_build_initialization_problem(
-        sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns; use_scc)
-    initprob = get(kws, :initializeprob, nothing)
-    if initprob === nothing
-        return nothing
-    end
-    return SciMLBase.OverrideInitData(initprob, get(kws, :update_initializeprob!, nothing),
-        get(kws, :initializeprobmap, nothing),
-        get(kws, :initializeprobpmap, nothing))
+        sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns; use_scc, initialization_eqs)
+    return get(kws, :initialization_data, nothing)
 end
 
 """

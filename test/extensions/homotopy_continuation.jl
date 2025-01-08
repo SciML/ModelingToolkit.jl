@@ -1,4 +1,5 @@
 using ModelingToolkit, NonlinearSolve, SymbolicIndexingInterface
+using SymbolicUtils
 import ModelingToolkit as MTK
 using LinearAlgebra
 using Test
@@ -29,11 +30,13 @@ import HomotopyContinuation
     @test SciMLBase.successful_retcode(sol)
     @test norm(sol.resid)≈0.0 atol=1e-10
 
-    prob2 = NonlinearProblem(sys, u0)
+    prob2 = NonlinearProblem(sys, u0; use_homotopy_continuation = true)
     @test prob2 isa HomotopyContinuationProblem
     sol = solve(prob2; threading = false)
     @test SciMLBase.successful_retcode(sol)
     @test norm(sol.resid)≈0.0 atol=1e-10
+
+    @test NonlinearProblem(sys, u0; use_homotopy_continuation = false) isa NonlinearProblem
 end
 
 struct Wrapper
@@ -217,7 +220,17 @@ end
         @mtkbuild sys = NonlinearSystem([x^2 + y^2 - 2x - 2 ~ 0, y ~ (x - 1) / (x - 2)])
         prob = HomotopyContinuationProblem(sys, [])
         @test any(prob.denominator([2.0], parameter_values(prob)) .≈ 0.0)
-        @test_nowarn solve(prob; threading = false)
+        @test SciMLBase.successful_retcode(solve(prob; threading = false))
+    end
+
+    @testset "Rational function forced to common denominators" begin
+        @variables x = 1
+        @mtkbuild sys = NonlinearSystem([0 ~ 1 / (1 + x) - x])
+        prob = HomotopyContinuationProblem(sys, [])
+        @test any(prob.denominator([-1.0], parameter_values(prob)) .≈ 0.0)
+        sol = solve(prob; threading = false)
+        @test SciMLBase.successful_retcode(sol)
+        @test 1 / (1 + sol.u[1]) - sol.u[1]≈0.0 atol=1e-10
     end
 end
 
@@ -228,4 +241,20 @@ end
     sol = @test_nowarn solve(prob; threading = false)
     @test sol[x] ≈ √2.0
     @test sol[y] ≈ sin(√2.0)
+end
+
+@testset "`fraction_cancel_fn`" begin
+    @variables x = 1
+    @named sys = NonlinearSystem([0 ~ ((x^2 - 5x + 6) / (x - 2) - 1) * (x^2 - 7x + 12) /
+                                      (x - 4)^3])
+    sys = complete(sys)
+
+    @testset "`simplify_fractions`" begin
+        prob = HomotopyContinuationProblem(sys, [])
+        @test prob.denominator([0.0], parameter_values(prob)) ≈ [4.0]
+    end
+    @testset "`nothing`" begin
+        prob = HomotopyContinuationProblem(sys, []; fraction_cancel_fn = nothing)
+        @test sort(prob.denominator([0.0], parameter_values(prob))) ≈ [2.0, 4.0^3]
+    end
 end

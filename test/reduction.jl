@@ -158,9 +158,7 @@ eqs = [u1 ~ u2
 reducedsys = structural_simplify(sys)
 @test length(observed(reducedsys)) == 2
 
-u0 = [u1 => 1
-      u2 => 1
-      u3 => 0.3]
+u0 = [u2 => 1]
 pp = [2]
 nlprob = NonlinearProblem(reducedsys, u0, [p => pp[1]])
 reducedsol = solve(nlprob, NewtonRaphson())
