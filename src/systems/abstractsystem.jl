@@ -2278,7 +2278,8 @@ ERROR: Function /(1, sin(P(t))) output non-finite value Inf with input
   sin(P(t)) => 0.0
 ```
 """
-function debug_system(sys::AbstractSystem; functions = [log, sqrt, (^), /, inv, asin, acos], kw...)
+function debug_system(
+        sys::AbstractSystem; functions = [log, sqrt, (^), /, inv, asin, acos], kw...)
     if !(functions isa Set)
         functions = Set(functions) # more efficient "in" lookup
     end

@@ -6,10 +6,12 @@ struct LoggedFun{F}
     args::Any
     error_nonfinite::Bool
 end
-LoggedFunctionException(lf::LoggedFun, args, msg) = LoggedFunctionException(
-    "Function $(lf.f)($(join(lf.args, ", "))) " * msg * " with input" *
-    join("\n  " .* string.(lf.args .=> args)) # one line for each "var => val" for readability
-)
+function LoggedFunctionException(lf::LoggedFun, args, msg)
+    LoggedFunctionException(
+        "Function $(lf.f)($(join(lf.args, ", "))) " * msg * " with input" *
+        join("\n  " .* string.(lf.args .=> args)) # one line for each "var => val" for readability
+    )
+end
 Base.showerror(io::IO, err::LoggedFunctionException) = print(io, err.msg)
 Base.nameof(lf::LoggedFun) = nameof(lf.f)
 SymbolicUtils.promote_symtype(::LoggedFun, Ts...) = Real
@@ -30,7 +32,9 @@ function logged_fun(f, args...; error_nonfinite = true) # remember to update err
     term(LoggedFun(f, args, error_nonfinite), args..., type = Real)
 end
 
-debug_sub(eq::Equation, funcs; kw...) = debug_sub(eq.lhs, funcs; kw...) ~ debug_sub(eq.rhs, funcs; kw...)
+function debug_sub(eq::Equation, funcs; kw...)
+    debug_sub(eq.lhs, funcs; kw...) ~ debug_sub(eq.rhs, funcs; kw...)
+end
 function debug_sub(ex, funcs; kw...)
     iscall(ex) || return ex
     f = operation(ex)
