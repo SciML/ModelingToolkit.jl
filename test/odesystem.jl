@@ -931,22 +931,15 @@ testdict = Dict([:name => "test"])
 @named sys = ODESystem(eqs, t, metadata = testdict)
 @test get_metadata(sys) == testdict
 
-@variables P(t)=0 Q(t)=2
-∂t = D
-
-eqs = [∂t(Q) ~ 1 / sin(P)
-       ∂t(P) ~ log(-cos(Q))]
-@named sys = ODESystem(eqs, t, [P, Q], [])
-sys = complete(debug_system(sys));
-prob = ODEProblem(sys, [], (0, 1.0));
-du = zero(prob.u0);
-if VERSION < v"1.8"
-    @test_throws DomainError prob.f(du, [1, 0], prob.p, 0.0)
-    @test_throws DomainError prob.f(du, [0, 2], prob.p, 0.0)
-else
-    @test_throws "-cos(Q(t))" prob.f(du, [1, 0], prob.p, 0.0)
-    @test_throws "sin(P(t))" prob.f(du, [0, 2], prob.p, 0.0)
-end
+@variables P(t) = NaN Q(t) = NaN
+@named sys = ODESystem([
+    D(Q) ~ 1 / sin(P)
+    D(P) ~ log(-cos(Q))
+], t, [P, Q], [])
+sys = complete(debug_system(sys))
+prob = ODEProblem(sys, [], (0.0, 1.0))
+@test_throws "log(-cos(Q(t))) errors" prob.f([1, 0], prob.p, 0.0)
+@test prob.f([0, 2], prob.p, 0.0)[1] == 1 / 0
 
 let
     @variables x(t) = 1
