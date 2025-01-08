@@ -719,7 +719,6 @@ function cse_and_array_hacks(sys, obs, subeqs, unknowns, neweqs; cse = true, arr
         Symbolics.shape(sym) != Symbolics.Unknown() || continue
         arg1 = arguments(sym)[1]
         cnt = get(arr_obs_occurrences, arg1, 0)
-        cnt == 0 && continue
         arr_obs_occurrences[arg1] = cnt + 1
     end
     for eq in neweqs
