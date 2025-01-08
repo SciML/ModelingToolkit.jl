@@ -1,5 +1,3 @@
-const LOGGED_FUN = Set([log, sqrt, (^), /, inv])
-
 struct LoggedFunctionException <: Exception
     msg::String
 end
@@ -32,11 +30,11 @@ function logged_fun(f, args...; error_nonfinite = true) # remember to update err
     term(LoggedFun(f, args, error_nonfinite), args..., type = Real)
 end
 
-debug_sub(eq::Equation; kw...) = debug_sub(eq.lhs; kw...) ~ debug_sub(eq.rhs; kw...)
-function debug_sub(ex; kw...)
+debug_sub(eq::Equation, funcs; kw...) = debug_sub(eq.lhs, funcs; kw...) ~ debug_sub(eq.rhs, funcs; kw...)
+function debug_sub(ex, funcs; kw...)
     iscall(ex) || return ex
     f = operation(ex)
-    args = map(debug_sub, arguments(ex))
-    f in LOGGED_FUN ? logged_fun(f, args...; kw...) :
+    args = map(ex -> debug_sub(ex, funcs; kw...), arguments(ex))
+    f in funcs ? logged_fun(f, args...; kw...) :
     maketerm(typeof(ex), f, args, metadata(ex))
 end
