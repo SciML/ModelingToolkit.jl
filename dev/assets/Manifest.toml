@@ -1096,9 +1096,9 @@ version = "1.0.62"
 
 [[deps.JumpProcesses]]
 deps = ["ArrayInterface", "DataStructures", "DiffEqBase", "DocStringExtensions", "FunctionWrappers", "Graphs", "LinearAlgebra", "Markdown", "PoissonRandom", "Random", "RandomNumbers", "RecursiveArrayTools", "Reexport", "SciMLBase", "Setfield", "StaticArrays", "SymbolicIndexingInterface", "UnPack"]
-git-tree-sha1 = "c3a2cb6f968404ed3b1d5382bbdd7b7d83966598"
+git-tree-sha1 = "ed3b5f80be8fc7d1b0185edb862f2273e02cbec2"
 uuid = "ccbc3e58-028d-4f4c-8cd5-9ae44345cda5"
-version = "9.14.0"
+version = "9.14.1"
 weakdeps = ["FastBroadcast"]
 
 [[deps.KLU]]
