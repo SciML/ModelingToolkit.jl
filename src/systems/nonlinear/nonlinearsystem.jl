@@ -369,7 +369,8 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
         _jac = nothing
     end
 
-    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
+    observedfun = ObservedFunctionCache(
+        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
 
     if length(dvs) == length(equations(sys))
         resid_prototype = nothing
@@ -411,7 +412,8 @@ function SciMLBase.IntervalNonlinearFunction(
     f(u, p) = f_oop(u, p)
     f(u, p::MTKParameters) = f_oop(u, p...)
 
-    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
+    observedfun = ObservedFunctionCache(
+        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
 
     IntervalNonlinearFunction{false}(
         f; observed = observedfun, sys = sys, initialization_data)

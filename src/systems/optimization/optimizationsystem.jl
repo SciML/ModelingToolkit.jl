@@ -420,7 +420,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         hess_prototype = nothing
     end
 
-    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
+    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module, checkbounds)
 
     if length(cstr) > 0
         @named cons_sys = ConstraintsSystem(cstr, dvs, ps; checks)

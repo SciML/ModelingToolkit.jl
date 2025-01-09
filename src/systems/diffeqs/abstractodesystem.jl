@@ -436,7 +436,8 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         ArrayInterface.restructure(u0 .* u0', M)
     end
 
-    observedfun = ObservedFunctionCache(sys; steady_state, eval_expression, eval_module)
+    observedfun = ObservedFunctionCache(
+        sys; steady_state, eval_expression, eval_module, checkbounds)
 
     jac_prototype = if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
@@ -522,7 +523,8 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         _jac = nothing
     end
 
-    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
+    observedfun = ObservedFunctionCache(
+        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
 
     jac_prototype = if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)

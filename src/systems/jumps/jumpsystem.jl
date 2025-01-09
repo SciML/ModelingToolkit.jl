@@ -429,7 +429,8 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
         t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false, check_length = false)
     f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
 
-    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
+    observedfun = ObservedFunctionCache(
+        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
 
     df = DiscreteFunction{true, true}(f; sys = sys, observed = observedfun)
     DiscreteProblem(df, u0, tspan, p; kwargs...)
@@ -527,7 +528,8 @@ function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothi
             t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false,
             check_length = false)
         f = (du, u, p, t) -> (du .= 0; nothing)
-        observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
+        observedfun = ObservedFunctionCache(sys; eval_expression, eval_module,
+            checkbounds = get(kwargs, :checkbounds, false))
         df = ODEFunction(f; sys, observed = observedfun)
         return ODEProblem(df, u0, tspan, p; kwargs...)
     end
