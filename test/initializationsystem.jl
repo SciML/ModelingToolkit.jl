@@ -1282,3 +1282,27 @@ end
 
     @test SciMLBase.successful_retcode(solve(newprob))
 end
+
+@testset "Issue#3295: Incomplete initialization of pure-ODE systems" begin
+    @variables X(t) Y(t)
+    @parameters p d
+    eqs = [
+        D(X) ~ p - d * X,
+        D(Y) ~ p - d * Y
+    ]
+    @mtkbuild osys = ODESystem(eqs, t)
+
+    # Make problem.
+    u0_vals = [X => 4, Y => 5.0]
+    tspan = (0.0, 10.0)
+    p_vals = [p => 1.0, d => 0.1]
+    oprob = ODEProblem(osys, u0_vals, tspan, p_vals)
+    integ = init(oprob)
+    @test integ[X] ≈ 4.0
+    @test integ[Y] ≈ 5.0
+    # Attempt to `remake`.
+    rp = remake(oprob; u0 = [Y => 7])
+    integ = init(rp)
+    @test integ[X] ≈ 4.0
+    @test integ[Y] ≈ 7.0
+end
