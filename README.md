@@ -36,7 +36,7 @@ lower it to a first order system, symbolically generate the Jacobian function
 for the numerical integrator, and solve it.
 
 ```julia
-using DifferentialEquations, ModelingToolkit
+using OrdinaryDiffEqDefault, ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @parameters σ ρ β
