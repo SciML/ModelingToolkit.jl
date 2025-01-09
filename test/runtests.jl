@@ -84,6 +84,7 @@ end
             @safetestset "print_tree" include("print_tree.jl")
             @safetestset "Constraints Test" include("constraints.jl")
             @safetestset "IfLifting Test" include("if_lifting.jl")
+            @safetestset "Analysis Points Test" include("analysis_points.jl")
         end
     end
 
@@ -110,6 +111,7 @@ end
         @safetestset "Linearization Tests" include("downstream/linearize.jl")
         @safetestset "Linearization Dummy Derivative Tests" include("downstream/linearization_dd.jl")
         @safetestset "Inverse Models Test" include("downstream/inversemodel.jl")
+        @safetestset "Analysis Points Test" include("downstream/analysis_points.jl")
     end
 
     if GROUP == "All" || GROUP == "Extensions"

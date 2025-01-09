@@ -1163,6 +1163,14 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
         end
     end
 
+    if has_eqs(sys)
+        for eq in get_eqs(sys)
+            if eq.lhs isa AnalysisPoint && nameof(eq.rhs) == name
+                return namespace ? renamespace(sys, eq.rhs) : eq.rhs
+            end
+        end
+    end
+
     throw(ArgumentError("System $(nameof(sys)): variable $name does not exist"))
 end
 
@@ -2372,6 +2380,12 @@ function linearization_function(sys::AbstractSystem, inputs,
     op = Dict(op)
     inputs isa AbstractVector || (inputs = [inputs])
     outputs isa AbstractVector || (outputs = [outputs])
+    inputs = mapreduce(vcat, inputs; init = []) do var
+        symbolic_type(var) == ArraySymbolic() ? collect(var) : [var]
+    end
+    outputs = mapreduce(vcat, outputs; init = []) do var
+        symbolic_type(var) == ArraySymbolic() ? collect(var) : [var]
+    end
     ssys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs;
         simplify,
         kwargs...)

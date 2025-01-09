@@ -20,7 +20,7 @@ equalities before solving. Let's see this in action.
 ## Copy-Paste Example
 
 ```@example acausal
-using ModelingToolkit, Plots, DifferentialEquations
+using ModelingToolkit, Plots, OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @connector Pin begin
