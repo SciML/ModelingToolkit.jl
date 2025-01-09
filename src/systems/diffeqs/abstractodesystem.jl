@@ -873,7 +873,7 @@ function SciMLBase.BVProblem(sys::AbstractODESystem,
         kwargs...)
     BVProblem{false, SciMLBase.FullSpecialize}(sys, u0map, args...; kwargs...)
 end
-
+o
 function SciMLBase.BVProblem{true}(sys::AbstractODESystem, args...; kwargs...)
     BVProblem{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
 end
@@ -908,17 +908,83 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
         kwargs1 = merge(kwargs1, (callback = cbs,))
     end
 
+    # Handle algebraic equations
+    stidxmap = Dict([v => i for (i, v) in enumerate(unknowns(sys))])
+    pidxmap = Dict([v => i for (i, v) in enumerate(parameters(sys))])
+    ns = length(stmap)
+    ne = length(get_alg_eqs(sys))
+    
     # Define the boundary conditions.
-    bc = if iip
-        (residual, u, p, t) -> (residual .= u[1] .- u0)
+    bc = if has_alg_eqs(sys)
+        if iip
+            (residual,u,p,t) -> begin
+                residual[1:ns] .= u[1] .- u0
+                residual[ns+1:ns+ne] .= sub_u_p_into_symeq.(get_alg_eqs(sys))
+            end
+        else
+            (u,p,t) -> begin
+                resid = vcat(u[1] - u0, sub_u_p_into_symeq.(get_alg_eqs(sys)))
+            end
+        end
     else
-        (u, p, t) -> (u[1] - u0)
+        if iip
+            (residual,u,p,t) -> begin
+                residual .= u[1] .- u0
+            end
+        else
+            (u,p,t) -> (u[1] - u0)
+        end
     end
 
     return BVProblem{iip}(f, bc, u0, tspan, p; kwargs1..., kwargs...)
 end
 
 get_callback(prob::BVProblem) = error("BVP solvers do not support callbacks.")
+
+# Helper to create the dictionary that will substitute numeric values for u, p into the algebraic equations in the ODESystem. Used to construct the boundary condition function. 
+#   Take a system with variables x,y, parameters g
+#
+#   1 + x + y → 1 + u[1][1] + u[1][2]
+#   x(0.5) → u(0.5)[1]
+#   x(0.5)*g(0.5) → u(0.5)[1]*p[1]
+
+function sub_u_p_into_symeq(eq, u, p, stidxmap, pidxmap)
+    iv = ModelingToolkit.get_iv(sys)
+    eq = Symbolics.unwrap(eq)
+
+    stmap = Dict([st => u[1][i] for st => i in stidxmap])
+    pmap = Dict([pa => p[i] for pa => i in pidxmap])
+    eq = Symbolics.substitute(eq, merge(stmap, pmap))
+
+    csyms = []
+    # Find most nested calls, substitute those first.
+    while !isempty(find_callable_syms!(csyms, eq))
+        for sym in csyms 
+            t = arguments(sym)[1]
+            x = operation(sym)
+
+            if isparameter(x)
+                eq = Symbolics.substitute(eq, Dict(x(t) => p[pidxmap[x(iv)]]))
+            elseif isvariable(x)
+                eq = Symbolics.substitute(eq, Dict(x(t) => u(val)[stidxmap[x(iv)]]))
+            end
+        end
+        empty!(csyms)
+    end
+    eq
+end
+
+function find_callable_syms!(csyms, ex)
+    ex = Symbolics.unwrap(ex)
+
+    if iscall(ex)
+        operation(ex) isa Symbolic && (arguments(ex)[1] isa Symbolic) && push!(csyms, ex) # only add leaf nodes 
+        for arg in arguments(ex)
+            find_callable_syms!(csyms, arg)
+        end
+    end
+    csyms 
+end
 
 """
 ```julia
