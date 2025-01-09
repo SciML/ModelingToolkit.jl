@@ -85,6 +85,7 @@ end
             @safetestset "Constraints Test" include("constraints.jl")
             @safetestset "IfLifting Test" include("if_lifting.jl")
             @safetestset "Analysis Points Test" include("analysis_points.jl")
+            @safetestset "Causal Variables Connection Test" include("causal_variables_connection.jl")
         end
     end
 
