@@ -1875,6 +1875,13 @@ Equivalent to `length(equations(expand_connections(sys))) - length(filter(eq -> 
 function n_expanded_connection_equations(sys::AbstractSystem)
     # TODO: what about inputs?
     isconnector(sys) && return length(get_unknowns(sys))
+    sys = remove_analysis_points(sys)
+    n_variable_connect_eqs = 0
+    for eq in equations(sys)
+        is_causal_variable_connection(eq.rhs) || continue
+        n_variable_connect_eqs += length(get_systems(eq.rhs)) - 1
+    end
+
     sys, (csets, _) = generate_connection_set(sys)
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
     n_outer_stream_variables = 0
@@ -1897,7 +1904,7 @@ function n_expanded_connection_equations(sys::AbstractSystem)
     #    n_toplevel_unused_flows += count(x->get_connection_type(x) === Flow && !(x in toplevel_flows), get_unknowns(m))
     #end
 
-    nextras = n_outer_stream_variables + length(ceqs)
+    nextras = n_outer_stream_variables + length(ceqs) + n_variable_connect_eqs
 end
 
 function Base.show(
