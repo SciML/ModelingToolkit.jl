@@ -31,6 +31,7 @@ pages = [
         "basics/InputOutput.md",
         "basics/MTKLanguage.md",
         "basics/Validation.md",
+        "basics/Debugging.md",
         "basics/DependencyGraphs.md",
         "basics/Precompilation.md",
         "basics/FAQ.md"],
