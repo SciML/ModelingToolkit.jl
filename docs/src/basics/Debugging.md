@@ -18,22 +18,18 @@ sys = structural_simplify(sys)
 
 This problem causes the ODE solver to crash:
 
-```@example debug
-prob = ODEProblem(sys, [], (0.0, 10.0), [])
-sol = solve(prob, Tsit5())
+```@repl debug
+prob = ODEProblem(sys, [], (0.0, 10.0), []);
+sol = solve(prob, Tsit5());
 ```
 
 This suggests *that* something went wrong, but not exactly *what* went wrong and *where* it did.
 In such situations, the `debug_system` function is helpful:
 
-```@example debug
-try # workaround to show Documenter.jl error (https://github.com/JuliaDocs/Documenter.jl/issues/1420#issuecomment-770539595) # hide
-dsys = debug_system(sys; functions = [sqrt])
-dprob = ODEProblem(dsys, [], (0.0, 10.0), [])
-dsol = solve(dprob, Tsit5())
-catch err # hide
-showerror(stderr, err) # hide
-end # hide
+```@repl debug
+dsys = debug_system(sys; functions = [sqrt]);
+dprob = ODEProblem(dsys, [], (0.0, 10.0), []);
+dsol = solve(dprob, Tsit5());
 ```
 
 Now we see that it crashed because `u1` decreased so much that it became negative and outside the domain of the `√` function.
