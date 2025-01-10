@@ -116,7 +116,7 @@ end
         x′
     end
     @variables begin
-        p(t) = p′
+        p(t)
         x(t) = x′
         dm(t) = 0
         f(t) = p′ * A
