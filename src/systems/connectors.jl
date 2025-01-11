@@ -481,6 +481,7 @@ end
 
 function expand_connections(sys::AbstractSystem, find = nothing, replace = nothing;
         debug = false, tol = 1e-10, scalarize = true)
+    sys = remove_analysis_points(sys)
     sys, (csets, domain_csets) = generate_connection_set(sys, find, replace; scalarize)
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
     _sys = expand_instream(instream_csets, sys; debug = debug, tol = tol)

@@ -26,7 +26,7 @@ topological sort of the observed equations in `sys`.
 + `fully_determined=true` controls whether or not an error will be thrown if the number of equations don't match the number of inputs, outputs, and equations.
 """
 function structural_simplify(
-        sys::AbstractSystem, io = nothing; simplify = false, split = true,
+        sys::AbstractSystem, io = nothing; additional_passes = [], simplify = false, split = true,
         allow_symbolic = false, allow_parameter = true, conservative = false, fully_determined = true,
         kwargs...)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
@@ -45,6 +45,9 @@ function structural_simplify(
             Encountered algebraic equations when simplifying discrete system. This is \
             not yet supported.
         """)
+    end
+    for pass in additional_passes
+        newsys = pass(newsys)
     end
     if newsys isa ODESystem || has_parent(newsys)
         @set! newsys.parent = complete(sys; split, flatten = false)
@@ -70,6 +73,10 @@ end
 
 function __structural_simplify(sys::JumpSystem, args...; kwargs...)
     return sys
+end
+
+function __structural_simplify(sys::SDESystem, args...; kwargs...)
+    return __structural_simplify(ODESystem(sys), args...; kwargs...)
 end
 
 function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
@@ -152,8 +159,12 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
             noise_eqs = sorted_g_rows
             is_scalar_noise = false
         end
-        return SDESystem(full_equations(ode_sys), noise_eqs,
+
+        noise_eqs = StructuralTransformations.tearing_substitute_expr(ode_sys, noise_eqs)
+        return SDESystem(Vector{Equation}(full_equations(ode_sys)), noise_eqs,
             get_iv(ode_sys), unknowns(ode_sys), parameters(ode_sys);
-            name = nameof(ode_sys), is_scalar_noise)
+            name = nameof(ode_sys), is_scalar_noise, observed = observed(ode_sys), defaults = defaults(sys),
+            parameter_dependencies = parameter_dependencies(sys),
+            guesses = guesses(sys), initialization_eqs = initialization_equations(sys))
     end
 end

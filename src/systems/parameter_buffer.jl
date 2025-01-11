@@ -3,11 +3,12 @@ symconvert(::Type{T}, x) where {T} = convert(T, x)
 symconvert(::Type{Real}, x::Integer) = convert(Float64, x)
 symconvert(::Type{V}, x) where {V <: AbstractArray} = convert(V, symconvert.(eltype(V), x))
 
-struct MTKParameters{T, D, C, N}
+struct MTKParameters{T, D, C, N, H}
     tunable::T
     discrete::D
     constant::C
     nonnumeric::N
+    caches::H
 end
 
 """
@@ -181,9 +182,16 @@ function MTKParameters(
 
     mtkps = MTKParameters{
         typeof(tunable_buffer), typeof(disc_buffer), typeof(const_buffer),
-        typeof(nonnumeric_buffer)}(tunable_buffer, disc_buffer, const_buffer,
-        nonnumeric_buffer)
+        typeof(nonnumeric_buffer), typeof(())}(tunable_buffer,
+        disc_buffer, const_buffer, nonnumeric_buffer, ())
     return mtkps
+end
+
+function rebuild_with_caches(p::MTKParameters, cache_templates::BufferTemplate...)
+    buffers = map(cache_templates) do template
+        Vector{template.type}(undef, template.length)
+    end
+    @set p.caches = buffers
 end
 
 function narrow_buffer_type(buffer::AbstractArray)
@@ -297,7 +305,8 @@ end
 
 for (Portion, field, recurse) in [(SciMLStructures.Discrete, :discrete, 1)
                                   (SciMLStructures.Constants, :constant, 1)
-                                  (Nonnumeric, :nonnumeric, 1)]
+                                  (Nonnumeric, :nonnumeric, 1)
+                                  (SciMLStructures.Caches, :caches, 1)]
     @eval function SciMLStructures.canonicalize(::$Portion, p::MTKParameters)
         as_vector = buffer_to_arraypartition(p.$field)
         repack = let p = p
@@ -324,11 +333,13 @@ function Base.copy(p::MTKParameters)
     discrete = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.discrete)
     constant = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.constant)
     nonnumeric = copy.(p.nonnumeric)
+    caches = copy.(p.caches)
     return MTKParameters(
         tunable,
         discrete,
         constant,
-        nonnumeric
+        nonnumeric,
+        caches
     )
 end
 
@@ -563,6 +574,10 @@ function _remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true
 
     @set! newbuf.tunable = narrow_buffer_type_and_fallback_undefs(
         oldbuf.tunable, newbuf.tunable)
+    if eltype(newbuf.tunable) <: Integer
+        T = promote_type(eltype(newbuf.tunable), Float64)
+        @set! newbuf.tunable = T.(newbuf.tunable)
+    end
     @set! newbuf.discrete = narrow_buffer_type_and_fallback_undefs.(
         oldbuf.discrete, newbuf.discrete)
     @set! newbuf.constant = narrow_buffer_type_and_fallback_undefs.(
@@ -640,7 +655,7 @@ end
 # getindex indexes the vectors, setindex! linearly indexes values
 # it's inconsistent, but we need it to be this way
 @generated function Base.getindex(
-        ps::MTKParameters{T, D, C, N}, idx::Int) where {T, D, C, N}
+        ps::MTKParameters{T, D, C, N, H}, idx::Int) where {T, D, C, N, H}
     paths = []
     if !(T <: SizedVector{0, Float64})
         push!(paths, :(ps.tunable))
@@ -654,6 +669,9 @@ end
     for i in 1:fieldcount(N)
         push!(paths, :(ps.nonnumeric[$i]))
     end
+    for i in 1:fieldcount(H)
+        push!(paths, :(ps.caches[$i]))
+    end
     expr = Expr(:if, :(idx == 1), :(return $(paths[1])))
     curexpr = expr
     for i in 2:length(paths)
@@ -663,12 +681,12 @@ end
     return Expr(:block, expr, :(throw(BoundsError(ps, idx))))
 end
 
-@generated function Base.length(ps::MTKParameters{T, D, C, N}) where {T, D, C, N}
+@generated function Base.length(ps::MTKParameters{T, D, C, N, H}) where {T, D, C, N, H}
     len = 0
     if !(T <: SizedVector{0, Float64})
         len += 1
     end
-    len += fieldcount(D) + fieldcount(C) + fieldcount(N)
+    len += fieldcount(D) + fieldcount(C) + fieldcount(N) + fieldcount(H)
     return len
 end
 
@@ -691,7 +709,10 @@ end
 
 function Base.:(==)(a::MTKParameters, b::MTKParameters)
     return a.tunable == b.tunable && a.discrete == b.discrete &&
-           a.constant == b.constant && a.nonnumeric == b.nonnumeric
+           a.constant == b.constant && a.nonnumeric == b.nonnumeric &&
+           all(Iterators.map(a.caches, b.caches) do acache, bcache
+               eltype(acache) == eltype(bcache) && length(acache) == length(bcache)
+           end)
 end
 
 # to support linearize/linearization_function

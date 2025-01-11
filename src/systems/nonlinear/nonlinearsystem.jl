@@ -57,6 +57,19 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     """
     defaults::Dict
     """
+    The guesses to use as the initial conditions for the
+    initialization system.
+    """
+    guesses::Dict
+    """
+    The system for performing the initialization.
+    """
+    initializesystem::Union{Nothing, NonlinearSystem}
+    """
+    Extra equations to be enforced during the initialization sequence.
+    """
+    initialization_eqs::Vector{Equation}
+    """
     Type of the system.
     """
     connector_type::Any
@@ -97,9 +110,8 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
 
     function NonlinearSystem(
             tag, eqs, unknowns, ps, var_to_name, observed, jac, name, description,
-            systems,
-            defaults, connector_type, parameter_dependencies = Equation[], metadata = nothing,
-            gui_metadata = nothing,
+            systems, defaults, guesses, initializesystem, initialization_eqs, connector_type,
+            parameter_dependencies = Equation[], metadata = nothing, gui_metadata = nothing,
             tearing_state = nothing, substitutions = nothing,
             complete = false, index_cache = nothing, parent = nothing,
             isscheduled = false; checks::Union{Bool, Int} = true)
@@ -107,8 +119,8 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
             u = __get_unit_type(unknowns, ps)
             check_units(u, eqs)
         end
-        new(tag, eqs, unknowns, ps, var_to_name, observed,
-            jac, name, description, systems, defaults,
+        new(tag, eqs, unknowns, ps, var_to_name, observed, jac, name, description,
+            systems, defaults, guesses, initializesystem, initialization_eqs,
             connector_type, parameter_dependencies, metadata, gui_metadata, tearing_state,
             substitutions, complete, index_cache, parent, isscheduled)
     end
@@ -121,6 +133,9 @@ function NonlinearSystem(eqs, unknowns, ps;
         default_u0 = Dict(),
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
+        guesses = Dict(),
+        initializesystem = nothing,
+        initialization_eqs = Equation[],
         systems = NonlinearSystem[],
         connector_type = nothing,
         continuous_events = nothing, # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
@@ -151,21 +166,32 @@ function NonlinearSystem(eqs, unknowns, ps;
     eqs = [wrap(eq.lhs) isa Symbolics.Arr ? eq : 0 ~ eq.rhs - eq.lhs for eq in eqs]
 
     jac = RefValue{Any}(EMPTY_JAC)
-    defaults = todict(defaults)
-    defaults = Dict{Any, Any}(value(k) => value(v)
-    for (k, v) in pairs(defaults) if value(v) !== nothing)
 
-    unknowns, ps = value.(unknowns), value.(ps)
+    ps′ = value.(ps)
+    dvs′ = value.(unknowns)
+    parameter_dependencies, ps′ = process_parameter_dependencies(
+        parameter_dependencies, ps′)
+
+    defaults = Dict{Any, Any}(todict(defaults))
+    guesses = Dict{Any, Any}(todict(guesses))
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, unknowns)
-    process_variables!(var_to_name, defaults, ps)
+    process_variables!(var_to_name, defaults, guesses, dvs′)
+    process_variables!(var_to_name, defaults, guesses, ps′)
+    process_variables!(
+        var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
+    process_variables!(
+        var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
+    defaults = Dict{Any, Any}(value(k) => value(v)
+    for (k, v) in pairs(defaults) if v !== nothing)
+    guesses = Dict{Any, Any}(value(k) => value(v)
+    for (k, v) in pairs(guesses) if v !== nothing)
+
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
-    parameter_dependencies, ps = process_parameter_dependencies(
-        parameter_dependencies, ps)
     NonlinearSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-        eqs, unknowns, ps, var_to_name, observed, jac, name, description, systems, defaults,
-        connector_type, parameter_dependencies, metadata, gui_metadata, checks = checks)
+        eqs, dvs′, ps′, var_to_name, observed, jac, name, description, systems, defaults,
+        guesses, initializesystem, initialization_eqs, connector_type, parameter_dependencies,
+        metadata, gui_metadata, checks = checks)
 end
 
 function NonlinearSystem(eqs; kwargs...)
@@ -283,6 +309,16 @@ function hessian_sparsity(sys::NonlinearSystem)
          unknowns(sys)) for eq in equations(sys)]
 end
 
+function calculate_resid_prototype(N, u0, p)
+    u0ElType = u0 === nothing ? Float64 : eltype(u0)
+    if SciMLStructures.isscimlstructure(p)
+        u0ElType = promote_type(
+            eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]),
+            u0ElType)
+    end
+    return zeros(u0ElType, N)
+end
+
 """
 ```julia
 SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
@@ -308,6 +344,7 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
         eval_expression = false,
         eval_module = @__MODULE__,
         sparse = false, simplify = false,
+        initialization_data = nothing,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearFunction`")
@@ -332,28 +369,23 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
         _jac = nothing
     end
 
-    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
+    observedfun = ObservedFunctionCache(
+        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
 
     if length(dvs) == length(equations(sys))
         resid_prototype = nothing
     else
-        u0ElType = u0 === nothing ? Float64 : eltype(u0)
-        if SciMLStructures.isscimlstructure(p)
-            u0ElType = promote_type(
-                eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]),
-                u0ElType)
-        end
-        resid_prototype = zeros(u0ElType, length(equations(sys)))
+        resid_prototype = calculate_resid_prototype(length(equations(sys)), u0, p)
     end
 
-    NonlinearFunction{iip}(f,
+    NonlinearFunction{iip}(f;
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
         resid_prototype = resid_prototype,
         jac_prototype = sparse ?
                         similar(calculate_jacobian(sys, sparse = sparse),
             Float64) : nothing,
-        observed = observedfun)
+        observed = observedfun, initialization_data)
 end
 
 """
@@ -365,7 +397,8 @@ respectively.
 """
 function SciMLBase.IntervalNonlinearFunction(
         sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(sys), u0 = nothing;
-        p = nothing, eval_expression = false, eval_module = @__MODULE__, kwargs...)
+        p = nothing, eval_expression = false, eval_module = @__MODULE__,
+        initialization_data = nothing, kwargs...)
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `IntervalNonlinearFunction`")
     end
@@ -379,9 +412,11 @@ function SciMLBase.IntervalNonlinearFunction(
     f(u, p) = f_oop(u, p)
     f(u, p::MTKParameters) = f_oop(u, p...)
 
-    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
+    observedfun = ObservedFunctionCache(
+        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
 
-    IntervalNonlinearFunction{false}(f; observed = observedfun, sys = sys)
+    IntervalNonlinearFunction{false}(
+        f; observed = observedfun, sys = sys, initialization_data)
 end
 
 """
@@ -492,9 +527,16 @@ end
 
 function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         parammap = DiffEqBase.NullParameters();
-        check_length = true, kwargs...) where {iip}
+        check_length = true, use_homotopy_continuation = false, kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearProblem`")
+    end
+    if use_homotopy_continuation
+        prob = safe_HomotopyContinuationProblem(
+            sys, u0map, parammap; check_length, kwargs...)
+        if prob isa HomotopyContinuationProblem
+            return prob
+        end
     end
     f, u0, p = process_SciMLProblem(NonlinearFunction{iip}, sys, u0map, parammap;
         check_length, kwargs...)
@@ -529,6 +571,186 @@ function DiffEqBase.NonlinearLeastSquaresProblem{iip}(sys::NonlinearSystem, u0ma
         check_length, kwargs...)
     pt = something(get_metadata(sys), StandardNonlinearProblem())
     NonlinearLeastSquaresProblem{iip}(f, u0, p; filter_kwargs(kwargs)...)
+end
+
+struct CacheWriter{F}
+    fn::F
+end
+
+function (cw::CacheWriter)(p, sols)
+    cw.fn(p.caches[1], sols, p...)
+end
+
+function CacheWriter(sys::AbstractSystem, exprs, solsyms, obseqs::Vector{Equation};
+        eval_expression = false, eval_module = @__MODULE__)
+    ps = parameters(sys)
+    rps = reorder_parameters(sys, ps)
+    obs_assigns = [eq.lhs ← eq.rhs for eq in obseqs]
+    cmap, cs = get_cmap(sys)
+    cmap_assigns = [eq.lhs ← eq.rhs for eq in cmap]
+    fn = Func(
+             [:out, DestructuredArgs(DestructuredArgs.(solsyms)),
+                 DestructuredArgs.(rps)...],
+             [],
+             SetArray(true, :out, exprs)
+         ) |> wrap_assignments(false, obs_assigns)[2] |>
+         wrap_parameter_dependencies(sys, false)[2] |>
+         wrap_array_vars(sys, exprs; dvs = nothing, inputs = [])[2] |>
+         wrap_assignments(false, cmap_assigns)[2] |> toexpr
+    return CacheWriter(eval_or_rgf(fn; eval_expression, eval_module))
+end
+
+struct SCCNonlinearFunction{iip} end
+
+function SCCNonlinearFunction{iip}(
+        sys::NonlinearSystem, _eqs, _dvs, _obs, cachesyms; eval_expression = false,
+        eval_module = @__MODULE__, kwargs...) where {iip}
+    ps = parameters(sys)
+    rps = reorder_parameters(sys, ps)
+
+    obs_assignments = [eq.lhs ← eq.rhs for eq in _obs]
+
+    cmap, cs = get_cmap(sys)
+    cmap_assignments = [eq.lhs ← eq.rhs for eq in cmap]
+    rhss = [eq.rhs - eq.lhs for eq in _eqs]
+    wrap_code = wrap_assignments(false, cmap_assignments) .∘
+                (wrap_array_vars(sys, rhss; dvs = _dvs, cachesyms)) .∘
+                wrap_parameter_dependencies(sys, false) .∘
+                wrap_assignments(false, obs_assignments)
+    f_gen = build_function(
+        rhss, _dvs, rps..., cachesyms...; wrap_code, expression = Val{true})
+    f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
+
+    f(u, p) = f_oop(u, p)
+    f(u, p::MTKParameters) = f_oop(u, p...)
+    f(resid, u, p) = f_iip(resid, u, p)
+    f(resid, u, p::MTKParameters) = f_iip(resid, u, p...)
+
+    subsys = NonlinearSystem(_eqs, _dvs, ps; observed = _obs,
+        parameter_dependencies = parameter_dependencies(sys), name = nameof(sys))
+    if get_index_cache(sys) !== nothing
+        @set! subsys.index_cache = subset_unknowns_observed(
+            get_index_cache(sys), sys, _dvs, getproperty.(_obs, (:lhs,)))
+        @set! subsys.complete = true
+    end
+
+    return NonlinearFunction{iip}(f; sys = subsys)
+end
+
+function SciMLBase.SCCNonlinearProblem(sys::NonlinearSystem, args...; kwargs...)
+    SCCNonlinearProblem{true}(sys, args...; kwargs...)
+end
+
+function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
+        parammap = SciMLBase.NullParameters(); eval_expression = false, eval_module = @__MODULE__, kwargs...) where {iip}
+    if !iscomplete(sys) || get_tearing_state(sys) === nothing
+        error("A simplified `NonlinearSystem` is required. Call `structural_simplify` on the system before creating an `SCCNonlinearProblem`.")
+    end
+
+    if !is_split(sys)
+        error("The system has been simplified with `split = false`. `SCCNonlinearProblem` is not compatible with this system. Pass `split = true` to `structural_simplify` to use `SCCNonlinearProblem`.")
+    end
+
+    ts = get_tearing_state(sys)
+    var_eq_matching, var_sccs = StructuralTransformations.algebraic_variables_scc(ts)
+
+    if length(var_sccs) == 1
+        return NonlinearProblem{iip}(
+            sys, u0map, parammap; eval_expression, eval_module, kwargs...)
+    end
+
+    condensed_graph = MatchedCondensationGraph(
+        DiCMOBiGraph{true}(complete(ts.structure.graph),
+            complete(var_eq_matching)),
+        var_sccs)
+    toporder = topological_sort_by_dfs(condensed_graph)
+    var_sccs = var_sccs[toporder]
+    eq_sccs = map(Base.Fix1(getindex, var_eq_matching), var_sccs)
+
+    dvs = unknowns(sys)
+    ps = parameters(sys)
+    eqs = equations(sys)
+    obs = observed(sys)
+
+    _, u0, p = process_SciMLProblem(
+        EmptySciMLFunction, sys, u0map, parammap; eval_expression, eval_module, kwargs...)
+
+    explicitfuns = []
+    nlfuns = []
+    prevobsidxs = Int[]
+    cachesize = 0
+    for (i, (escc, vscc)) in enumerate(zip(eq_sccs, var_sccs))
+        # subset unknowns and equations
+        _dvs = dvs[vscc]
+        _eqs = eqs[escc]
+        # get observed equations required by this SCC
+        obsidxs = observed_equations_used_by(sys, _eqs)
+        # the ones used by previous SCCs can be precomputed into the cache
+        setdiff!(obsidxs, prevobsidxs)
+        _obs = obs[obsidxs]
+
+        # get all subexpressions in the RHS which we can precompute in the cache
+        banned_vars = Set{Any}(vcat(_dvs, getproperty.(_obs, (:lhs,))))
+        for var in banned_vars
+            iscall(var) || continue
+            operation(var) === getindex || continue
+            push!(banned_vars, arguments(var)[1])
+        end
+        state = Dict()
+        for i in eachindex(_obs)
+            _obs[i] = _obs[i].lhs ~ subexpressions_not_involving_vars!(
+                _obs[i].rhs, banned_vars, state)
+        end
+        for i in eachindex(_eqs)
+            _eqs[i] = _eqs[i].lhs ~ subexpressions_not_involving_vars!(
+                _eqs[i].rhs, banned_vars, state)
+        end
+
+        # cached variables and their corresponding expressions
+        cachevars = Any[obs[i].lhs for i in prevobsidxs]
+        cacheexprs = Any[obs[i].lhs for i in prevobsidxs]
+        for (k, v) in state
+            push!(cachevars, unwrap(v))
+            push!(cacheexprs, unwrap(k))
+        end
+        cachesize = max(cachesize, length(cachevars))
+
+        if isempty(cachevars)
+            push!(explicitfuns, Returns(nothing))
+        else
+            solsyms = getindex.((dvs,), view(var_sccs, 1:(i - 1)))
+            push!(explicitfuns,
+                CacheWriter(sys, cacheexprs, solsyms, obs[prevobsidxs];
+                    eval_expression, eval_module))
+        end
+        f = SCCNonlinearFunction{iip}(
+            sys, _eqs, _dvs, _obs, (cachevars,); eval_expression, eval_module, kwargs...)
+        push!(nlfuns, f)
+        append!(cachevars, _dvs)
+        append!(cacheexprs, _dvs)
+        for i in obsidxs
+            push!(cachevars, obs[i].lhs)
+            push!(cacheexprs, obs[i].rhs)
+        end
+        append!(prevobsidxs, obsidxs)
+    end
+
+    if cachesize != 0
+        p = rebuild_with_caches(p, BufferTemplate(eltype(u0), cachesize))
+    end
+
+    subprobs = []
+    for (f, vscc) in zip(nlfuns, var_sccs)
+        prob = NonlinearProblem(f, u0[vscc], p)
+        push!(subprobs, prob)
+    end
+
+    new_dvs = dvs[reduce(vcat, var_sccs)]
+    new_eqs = eqs[reduce(vcat, eq_sccs)]
+    @set! sys.unknowns = new_dvs
+    @set! sys.eqs = new_eqs
+    sys = complete(sys)
+    return SCCNonlinearProblem(subprobs, explicitfuns, p, true; sys)
 end
 
 """
@@ -669,8 +891,11 @@ function flatten(sys::NonlinearSystem, noeqs = false)
             parameters(sys),
             observed = observed(sys),
             defaults = defaults(sys),
+            guesses = guesses(sys),
+            initialization_eqs = initialization_equations(sys),
             name = nameof(sys),
             description = description(sys),
+            metadata = get_metadata(sys),
             checks = false)
     end
 end
@@ -681,73 +906,4 @@ function Base.:(==)(sys1::NonlinearSystem, sys2::NonlinearSystem)
         _eq_unordered(get_unknowns(sys1), get_unknowns(sys2)) &&
         _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
         all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
-end
-
-"""
-$(TYPEDEF)
-
-A type of Nonlinear problem which specializes on polynomial systems and uses
-HomotopyContinuation.jl to solve the system. Requires importing HomotopyContinuation.jl to
-create and solve.
-"""
-struct HomotopyContinuationProblem{uType, H, D, O, SS, U} <:
-       SciMLBase.AbstractNonlinearProblem{uType, true}
-    """
-    The initial values of states in the system. If there are multiple real roots of
-    the system, the one closest to this point is returned.
-    """
-    u0::uType
-    """
-    A subtype of `HomotopyContinuation.AbstractSystem` to solve. Also contains the
-    parameter object.
-    """
-    homotopy_continuation_system::H
-    """
-    A function with signature `(u, p) -> resid`. In case of rational functions, this
-    is used to rule out roots of the system which would cause the denominator to be
-    zero.
-    """
-    denominator::D
-    """
-    The `NonlinearSystem` used to create this problem. Used for symbolic indexing.
-    """
-    sys::NonlinearSystem
-    """
-    A function which generates and returns observed expressions for the given system.
-    """
-    obsfn::O
-    """
-    The HomotopyContinuation.jl solver and start system, obtained through
-    `HomotopyContinuation.solver_startsystems`.
-    """
-    solver_and_starts::SS
-    """
-    A function which takes a solution of the transformed system, and returns a vector
-    of solutions for the original system. This is utilized when converting systems
-    to polynomials.
-    """
-    unpack_solution::U
-end
-
-function HomotopyContinuationProblem(::AbstractSystem, _u0, _p; kwargs...)
-    error("HomotopyContinuation.jl is required to create and solve `HomotopyContinuationProblem`s. Please run `Pkg.add(\"HomotopyContinuation\")` to continue.")
-end
-
-SymbolicIndexingInterface.symbolic_container(p::HomotopyContinuationProblem) = p.sys
-SymbolicIndexingInterface.state_values(p::HomotopyContinuationProblem) = p.u0
-function SymbolicIndexingInterface.set_state!(p::HomotopyContinuationProblem, args...)
-    set_state!(p.u0, args...)
-end
-function SymbolicIndexingInterface.parameter_values(p::HomotopyContinuationProblem)
-    parameter_values(p.homotopy_continuation_system)
-end
-function SymbolicIndexingInterface.set_parameter!(p::HomotopyContinuationProblem, args...)
-    set_parameter!(parameter_values(p), args...)
-end
-function SymbolicIndexingInterface.observed(p::HomotopyContinuationProblem, sym)
-    if p.obsfn !== nothing
-        return p.obsfn(sym)
-    else
-        return SymbolicIndexingInterface.observed(p.sys, sym)
-    end
 end

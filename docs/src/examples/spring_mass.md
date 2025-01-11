@@ -5,7 +5,7 @@ In this tutorial, we will build a simple component-based model of a spring-mass 
 ## Copy-Paste Example
 
 ```@example component
-using ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra
+using ModelingToolkit, Plots, OrdinaryDiffEq, LinearAlgebra
 using ModelingToolkit: t_nounits as t, D_nounits as D
 using Symbolics: scalarize
 

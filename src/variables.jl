@@ -90,7 +90,7 @@ struct Equality <: AbstractConnectType end # Equality connection
 struct Flow <: AbstractConnectType end     # sum to 0
 struct Stream <: AbstractConnectType end   # special stream connector
 
-isvarkind(m, x::Num) = isvarkind(m, value(x))
+isvarkind(m, x::Union{Num, Symbolics.Arr}) = isvarkind(m, value(x))
 function isvarkind(m, x)
     iskind = getmetadata(x, m, nothing)
     iskind !== nothing && return iskind
@@ -489,7 +489,9 @@ $(SIGNATURES)
 Define one or more Brownian variables.
 """
 macro brownian(xs...)
-    all(x -> x isa Symbol || Meta.isexpr(x, :call) && x.args[1] == :$, xs) ||
+    all(
+        x -> x isa Symbol || Meta.isexpr(x, :call) && x.args[1] == :$ || Meta.isexpr(x, :$),
+        xs) ||
         error("@brownian only takes scalar expressions!")
     Symbolics._parse_vars(:brownian,
         Real,

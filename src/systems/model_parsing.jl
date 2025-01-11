@@ -497,7 +497,7 @@ function generate_var!(dict, a, b, varclass, mod;
     vd isa Vector && (vd = first(vd))
     vd[a] = Dict{Symbol, Any}()
     var = if indices === nothing
-        Symbolics.variable(a, T = SymbolicUtils.FnType{Tuple{Any}, type})(iv)
+        first(@variables $a(iv)::type)
     else
         vd[a][:size] = Tuple(lastindex.(indices))
         first(@variables $a(iv)[indices...]::type)
@@ -923,7 +923,7 @@ function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
         end
 
         push!(varexpr.args, metadata_expr)
-        return vv isa Num ? name : :($name...), varexpr
+        return symbolic_type(vv) == ScalarSymbolic() ? name : :($name...), varexpr
     else
         return vv
     end

@@ -93,6 +93,19 @@ struct SDESystem <: AbstractODESystem
     """
     defaults::Dict
     """
+    The guesses to use as the initial conditions for the
+    initialization system.
+    """
+    guesses::Dict
+    """
+    The system for performing the initialization.
+    """
+    initializesystem::Union{Nothing, NonlinearSystem}
+    """
+    Extra equations to be enforced during the initialization sequence.
+    """
+    initialization_eqs::Vector{Equation}
+    """
     Type of the system.
     """
     connector_type::Any
@@ -144,9 +157,8 @@ struct SDESystem <: AbstractODESystem
     isscheduled::Bool
 
     function SDESystem(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed,
-            tgrad,
-            jac,
-            ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, connector_type,
+            tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults,
+            guesses, initializesystem, initialization_eqs, connector_type,
             cevents, devents, parameter_dependencies, metadata = nothing, gui_metadata = nothing,
             complete = false, index_cache = nothing, parent = nothing, is_scalar_noise = false,
             is_dde = false,
@@ -171,9 +183,9 @@ struct SDESystem <: AbstractODESystem
             check_units(u, deqs, neqs)
         end
         new(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
-            ctrl_jac,
-            Wfact, Wfact_t, name, description, systems,
-            defaults, connector_type, cevents, devents,
+            ctrl_jac, Wfact, Wfact_t, name, description, systems,
+            defaults, guesses, initializesystem, initialization_eqs, connector_type, cevents,
+            devents,
             parameter_dependencies, metadata, gui_metadata, complete, index_cache, parent, is_scalar_noise,
             is_dde, isscheduled)
     end
@@ -187,6 +199,9 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
         default_u0 = Dict(),
         default_p = Dict(),
         defaults = _merge(Dict(default_u0), Dict(default_p)),
+        guesses = Dict(),
+        initializesystem = nothing,
+        initialization_eqs = Equation[],
         name = nothing,
         description = "",
         connector_type = nothing,
@@ -207,6 +222,8 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
     dvs′ = value.(dvs)
     ps′ = value.(ps)
     ctrl′ = value.(controls)
+    parameter_dependencies, ps′ = process_parameter_dependencies(
+        parameter_dependencies, ps′)
 
     sysnames = nameof.(systems)
     if length(unique(sysnames)) != length(sysnames)
@@ -217,13 +234,21 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
             "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
             :SDESystem, force = true)
     end
-    defaults = todict(defaults)
-    defaults = Dict(value(k) => value(v)
-    for (k, v) in pairs(defaults) if value(v) !== nothing)
 
+    defaults = Dict{Any, Any}(todict(defaults))
+    guesses = Dict{Any, Any}(todict(guesses))
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, dvs′)
-    process_variables!(var_to_name, defaults, ps′)
+    process_variables!(var_to_name, defaults, guesses, dvs′)
+    process_variables!(var_to_name, defaults, guesses, ps′)
+    process_variables!(
+        var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
+    process_variables!(
+        var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
+    defaults = Dict{Any, Any}(value(k) => value(v)
+    for (k, v) in pairs(defaults) if v !== nothing)
+    guesses = Dict{Any, Any}(value(k) => value(v)
+    for (k, v) in pairs(guesses) if v !== nothing)
+
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
     tgrad = RefValue(EMPTY_TGRAD)
@@ -233,14 +258,13 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
     Wfact_t = RefValue(EMPTY_JAC)
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
-    parameter_dependencies, ps′ = process_parameter_dependencies(
-        parameter_dependencies, ps′)
     if is_dde === nothing
         is_dde = _check_if_dde(deqs, iv′, systems)
     end
     SDESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, neqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
-        ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, connector_type,
+        ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses,
+        initializesystem, initialization_eqs, connector_type,
         cont_callbacks, disc_callbacks, parameter_dependencies, metadata, gui_metadata,
         complete, index_cache, parent, is_scalar_noise, is_dde; checks = checks)
 end
@@ -261,6 +285,47 @@ function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
         _eq_unordered(get_unknowns(sys1), get_unknowns(sys2)) &&
         _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
         all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
+end
+
+"""
+    function ODESystem(sys::SDESystem)
+
+Convert an `SDESystem` to the equivalent `ODESystem` using `@brownian` variables instead
+of noise equations. The returned system will not be `iscomplete` and will not have an
+index cache, regardless of `iscomplete(sys)`.
+"""
+function ODESystem(sys::SDESystem)
+    neqs = get_noiseeqs(sys)
+    eqs = equations(sys)
+    is_scalar_noise = get_is_scalar_noise(sys)
+    nbrownian = if is_scalar_noise
+        length(neqs)
+    else
+        size(neqs, 2)
+    end
+    brownvars = map(1:nbrownian) do i
+        name = gensym(Symbol(:brown_, i))
+        only(@brownian $name)
+    end
+    if is_scalar_noise
+        brownterms = reduce(+, neqs .* brownvars; init = 0)
+        neweqs = map(eqs) do eq
+            eq.lhs ~ eq.rhs + brownterms
+        end
+    else
+        if neqs isa AbstractVector
+            neqs = reshape(neqs, (length(neqs), 1))
+        end
+        brownterms = neqs * brownvars
+        neweqs = map(eqs, brownterms) do eq, brown
+            eq.lhs ~ eq.rhs + brown
+        end
+    end
+    newsys = ODESystem(neweqs, get_iv(sys), unknowns(sys), parameters(sys);
+        parameter_dependencies = parameter_dependencies(sys), defaults = defaults(sys),
+        continuous_events = continuous_events(sys), discrete_events = discrete_events(sys),
+        name = nameof(sys), description = description(sys), metadata = get_metadata(sys))
+    @set newsys.parent = sys
 end
 
 function __num_isdiag_noise(mat)
@@ -479,7 +544,7 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
         version = nothing, tgrad = false, sparse = false,
         jac = false, Wfact = false, eval_expression = false,
         eval_module = @__MODULE__,
-        checkbounds = false,
+        checkbounds = false, initialization_data = nothing,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEFunction`")
@@ -548,15 +613,16 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
     M = calculate_massmatrix(sys)
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0', M)
 
-    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
+    observedfun = ObservedFunctionCache(
+        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
 
-    SDEFunction{iip, specialize}(f, g,
+    SDEFunction{iip, specialize}(f, g;
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
         tgrad = _tgrad === nothing ? nothing : _tgrad,
         Wfact = _Wfact === nothing ? nothing : _Wfact,
         Wfact_t = _Wfact_t === nothing ? nothing : _Wfact_t,
-        mass_matrix = _M,
+        mass_matrix = _M, initialization_data,
         observed = observedfun)
 end
 
@@ -673,7 +739,7 @@ function DiffEqBase.SDEProblem{iip, specialize}(
     end
     f, u0, p = process_SciMLProblem(
         SDEFunction{iip, specialize}, sys, u0map, parammap; check_length,
-        kwargs...)
+        t = tspan === nothing ? nothing : tspan[1], kwargs...)
     cbs = process_events(sys; callback, kwargs...)
     sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
 
@@ -694,6 +760,8 @@ function DiffEqBase.SDEProblem{iip, specialize}(
         noise_rate_prototype = zeros(eltype(u0), size(noiseeqs))
         noise = nothing
     end
+
+    kwargs = filter_kwargs(kwargs)
 
     SDEProblem{iip}(f, u0, tspan, p; callback = cbs, noise,
         noise_rate_prototype = noise_rate_prototype, kwargs...)

@@ -55,6 +55,19 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     """
     defaults::Dict
     """
+    The guesses to use as the initial conditions for the
+    initialization system.
+    """
+    guesses::Dict
+    """
+    The system for performing the initialization.
+    """
+    initializesystem::Union{Nothing, NonlinearSystem}
+    """
+    Extra equations to be enforced during the initialization sequence.
+    """
+    initialization_eqs::Vector{Equation}
+    """
     Inject assignment statements before the evaluation of the RHS function.
     """
     preface::Any
@@ -98,9 +111,8 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     isscheduled::Bool
 
     function DiscreteSystem(tag, discreteEqs, iv, dvs, ps, tspan, var_to_name,
-            observed,
-            name, description,
-            systems, defaults, preface, connector_type, parameter_dependencies = Equation[],
+            observed, name, description, systems, defaults, guesses, initializesystem,
+            initialization_eqs, preface, connector_type, parameter_dependencies = Equation[],
             metadata = nothing, gui_metadata = nothing,
             tearing_state = nothing, substitutions = nothing,
             complete = false, index_cache = nothing, parent = nothing,
@@ -116,8 +128,7 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
             check_units(u, discreteEqs)
         end
         new(tag, discreteEqs, iv, dvs, ps, tspan, var_to_name, observed, name, description,
-            systems,
-            defaults,
+            systems, defaults, guesses, initializesystem, initialization_eqs,
             preface, connector_type, parameter_dependencies, metadata, gui_metadata,
             tearing_state, substitutions, complete, index_cache, parent, isscheduled)
     end
@@ -135,6 +146,9 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
         description = "",
         default_u0 = Dict(),
         default_p = Dict(),
+        guesses = Dict(),
+        initializesystem = nothing,
+        initialization_eqs = Equation[],
         defaults = _merge(Dict(default_u0), Dict(default_p)),
         preface = nothing,
         connector_type = nothing,
@@ -155,13 +169,21 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
             "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
             :DiscreteSystem, force = true)
     end
-    defaults = todict(defaults)
-    defaults = Dict(value(k) => value(v)
-    for (k, v) in pairs(defaults) if value(v) !== nothing)
 
+    defaults = Dict{Any, Any}(todict(defaults))
+    guesses = Dict{Any, Any}(todict(guesses))
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, dvs′)
-    process_variables!(var_to_name, defaults, ps′)
+    process_variables!(var_to_name, defaults, guesses, dvs′)
+    process_variables!(var_to_name, defaults, guesses, ps′)
+    process_variables!(
+        var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
+    process_variables!(
+        var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
+    defaults = Dict{Any, Any}(value(k) => value(v)
+    for (k, v) in pairs(defaults) if v !== nothing)
+    guesses = Dict{Any, Any}(value(k) => value(v)
+    for (k, v) in pairs(guesses) if v !== nothing)
+
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
     sysnames = nameof.(systems)
@@ -170,7 +192,8 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
     end
     DiscreteSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         eqs, iv′, dvs′, ps′, tspan, var_to_name, observed, name, description, systems,
-        defaults, preface, connector_type, parameter_dependencies, metadata, gui_metadata, kwargs...)
+        defaults, guesses, initializesystem, initialization_eqs, preface, connector_type,
+        parameter_dependencies, metadata, gui_metadata, kwargs...)
 end
 
 function DiscreteSystem(eqs, iv; kwargs...)
@@ -225,8 +248,11 @@ function flatten(sys::DiscreteSystem, noeqs = false)
             parameters(sys),
             observed = observed(sys),
             defaults = defaults(sys),
+            guesses = guesses(sys),
+            initialization_eqs = initialization_equations(sys),
             name = nameof(sys),
             description = description(sys),
+            metadata = get_metadata(sys),
             checks = false)
     end
 end
@@ -327,7 +353,8 @@ function SciMLBase.DiscreteFunction{iip, specialize}(
         f = SciMLBase.wrapfun_iip(f, (u0, u0, p, t))
     end
 
-    observedfun = ObservedFunctionCache(sys)
+    observedfun = ObservedFunctionCache(
+        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
 
     DiscreteFunction{iip, specialize}(f;
         sys = sys,

@@ -33,9 +33,6 @@ end
             @safetestset "Dynamic Quantities Test" include("dq_units.jl")
             @safetestset "Unitful Quantities Test" include("units.jl")
             @safetestset "Mass Matrix Test" include("mass_matrix.jl")
-            @safetestset "InitializationSystem Test" include("initializationsystem.jl")
-            @safetestset "Guess Propagation" include("guess_propagation.jl")
-            @safetestset "Hierarchical Initialization Equations" include("hierarchical_initialization_eqs.jl")
             @safetestset "Reduction Test" include("reduction.jl")
             @safetestset "Split Parameters Test" include("split_parameters.jl")
             @safetestset "StaticArrays Test" include("static_arrays.jl")
@@ -58,10 +55,16 @@ end
             @safetestset "Constants Test" include("constants.jl")
             @safetestset "Parameter Dependency Test" include("parameter_dependencies.jl")
             @safetestset "Generate Custom Function Test" include("generate_custom_function.jl")
-            @safetestset "Initial Values Test" include("initial_values.jl")
             @safetestset "Equation Type Accessors Test" include("equation_type_accessors.jl")
             @safetestset "Equations with complex values" include("complex.jl")
         end
+    end
+
+    if GROUP == "All" || GROUP == "Initialization"
+        @safetestset "Guess Propagation" include("guess_propagation.jl")
+        @safetestset "Hierarchical Initialization Equations" include("hierarchical_initialization_eqs.jl")
+        @safetestset "InitializationSystem Test" include("initializationsystem.jl")
+        @safetestset "Initial Values Test" include("initial_values.jl")
     end
 
     if GROUP == "All" || GROUP == "InterfaceII"
@@ -75,10 +78,13 @@ end
             @safetestset "SDESystem Test" include("sdesystem.jl")
             @safetestset "DDESystem Test" include("dde.jl")
             @safetestset "NonlinearSystem Test" include("nonlinearsystem.jl")
+            @safetestset "SCCNonlinearProblem Test" include("scc_nonlinear_problem.jl")
             @safetestset "PDE Construction Test" include("pde.jl")
             @safetestset "JumpSystem Test" include("jumpsystem.jl")
             @safetestset "print_tree" include("print_tree.jl")
             @safetestset "Constraints Test" include("constraints.jl")
+            @safetestset "IfLifting Test" include("if_lifting.jl")
+            @safetestset "Analysis Points Test" include("analysis_points.jl")
         end
     end
 
@@ -105,6 +111,7 @@ end
         @safetestset "Linearization Tests" include("downstream/linearize.jl")
         @safetestset "Linearization Dummy Derivative Tests" include("downstream/linearization_dd.jl")
         @safetestset "Inverse Models Test" include("downstream/inversemodel.jl")
+        @safetestset "Analysis Points Test" include("downstream/analysis_points.jl")
     end
 
     if GROUP == "All" || GROUP == "Extensions"
@@ -113,5 +120,6 @@ end
         @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
         @safetestset "LabelledArrays Test" include("labelledarrays.jl")
         @safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl")
+        @safetestset "InfiniteOpt Extension Test" include("extensions/test_infiniteopt.jl")
     end
 end

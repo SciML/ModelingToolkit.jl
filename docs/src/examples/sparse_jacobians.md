@@ -11,7 +11,7 @@ First, let's start out with an implementation of the 2-dimensional Brusselator
 partial differential equation discretized using finite differences:
 
 ```@example sparsejac
-using DifferentialEquations, ModelingToolkit
+using OrdinaryDiffEq, ModelingToolkit
 
 const N = 32
 const xyd_brusselator = range(0, stop = 1, length = N)

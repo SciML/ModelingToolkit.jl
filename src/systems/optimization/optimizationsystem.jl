@@ -132,8 +132,8 @@ function OptimizationSystem(op, unknowns, ps;
     for (k, v) in pairs(defaults) if value(v) !== nothing)
 
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, unknowns′)
-    process_variables!(var_to_name, defaults, ps′)
+    process_variables!(var_to_name, defaults, Dict(), unknowns′)
+    process_variables!(var_to_name, defaults, Dict(), ps′)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
     OptimizationSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
@@ -142,6 +142,34 @@ function OptimizationSystem(op, unknowns, ps;
         constraints,
         name, description, systems, defaults, metadata, gui_metadata;
         checks = checks)
+end
+
+function OptimizationSystem(objective; constraints = [], kwargs...)
+    allunknowns = OrderedSet()
+    ps = OrderedSet()
+    collect_vars!(allunknowns, ps, objective, nothing)
+    for cons in constraints
+        collect_vars!(allunknowns, ps, cons, nothing)
+    end
+    for ssys in get(kwargs, :systems, OptimizationSystem[])
+        collect_scoped_vars!(allunknowns, ps, ssys, nothing)
+    end
+    new_ps = OrderedSet()
+    for p in ps
+        if iscall(p) && operation(p) === getindex
+            par = arguments(p)[begin]
+            if Symbolics.shape(Symbolics.unwrap(par)) !== Symbolics.Unknown() &&
+               all(par[i] in ps for i in eachindex(par))
+                push!(new_ps, par)
+            else
+                push!(new_ps, p)
+            end
+        else
+            push!(new_ps, p)
+        end
+    end
+    return OptimizationSystem(
+        objective, collect(allunknowns), collect(new_ps); constraints, kwargs...)
 end
 
 function flatten(sys::OptimizationSystem)
@@ -156,6 +184,7 @@ function flatten(sys::OptimizationSystem)
         constraints = constraints(sys),
         defaults = defaults(sys),
         name = nameof(sys),
+        metadata = get_metadata(sys),
         checks = false
     )
 end
@@ -284,6 +313,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         linenumbers = true, parallel = SerialForm(),
         eval_expression = false, eval_module = @__MODULE__,
         use_union = false,
+        checks = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed `OptimizationSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `OptimizationProblem`")
@@ -390,15 +420,20 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         hess_prototype = nothing
     end
 
-    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module)
+    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module, checkbounds)
 
     if length(cstr) > 0
-        @named cons_sys = ConstraintsSystem(cstr, dvs, ps)
+        @named cons_sys = ConstraintsSystem(cstr, dvs, ps; checks)
         cons_sys = complete(cons_sys)
         cons, lcons_, ucons_ = generate_function(cons_sys, checkbounds = checkbounds,
             linenumbers = linenumbers,
             expression = Val{true})
-        cons = eval_or_rgf.(cons; eval_expression, eval_module)
+        cons = let (cons_oop, cons_iip) = eval_or_rgf.(cons; eval_expression, eval_module)
+            _cons(u, p) = cons_oop(u, p)
+            _cons(resid, u, p) = cons_iip(resid, u, p)
+            _cons(u, p::MTKParameters) = cons_oop(u, p...)
+            _cons(resid, u, p::MTKParameters) = cons_iip(resid, u, p...)
+        end
         if cons_j
             _cons_j = let (cons_jac_oop, cons_jac_iip) = eval_or_rgf.(
                     generate_jacobian(cons_sys;
@@ -464,7 +499,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             grad = _grad,
             hess = _hess,
             hess_prototype = hess_prototype,
-            cons = cons[2],
+            cons = cons,
             cons_j = _cons_j,
             cons_h = _cons_h,
             cons_jac_prototype = cons_jac_prototype,

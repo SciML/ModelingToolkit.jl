@@ -244,6 +244,13 @@ function setdefault(v, val)
     val === nothing ? v : wrap(setdefaultval(unwrap(v), value(val)))
 end
 
+function process_variables!(var_to_name, defs, guesses, vars)
+    collect_defaults!(defs, vars)
+    collect_guesses!(guesses, vars)
+    collect_var_to_name!(var_to_name, vars)
+    return nothing
+end
+
 function process_variables!(var_to_name, defs, vars)
     collect_defaults!(defs, vars)
     collect_var_to_name!(var_to_name, vars)
@@ -259,6 +266,17 @@ function collect_defaults!(defs, vars)
         defs[v] = getdefault(v)
     end
     return defs
+end
+
+function collect_guesses!(guesses, vars)
+    for v in vars
+        symbolic_type(v) == NotSymbolic() && continue
+        if haskey(guesses, v) || !hasguess(unwrap(v)) || (def = getguess(v)) === nothing
+            continue
+        end
+        guesses[v] = getguess(v)
+    end
+    return guesses
 end
 
 function collect_var_to_name!(vars, xs)
@@ -516,6 +534,15 @@ function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Dif
             end
         end
     end
+    if has_constraints(sys)
+        for eq in get_constraints(sys)
+            eqtype_supports_collect_vars(eq) || continue
+            collect_vars!(unknowns, parameters, eq, iv; depth, op)
+        end
+    end
+    if has_op(sys)
+        collect_vars!(unknowns, parameters, get_op(sys), iv; depth, op)
+    end
     newdepth = depth == -1 ? depth : depth + 1
     for ssys in get_systems(sys)
         collect_scoped_vars!(unknowns, parameters, ssys, iv; depth = newdepth, op)
@@ -544,9 +571,10 @@ Can be dispatched by higher-level libraries to indicate support.
 """
 eqtype_supports_collect_vars(eq) = false
 eqtype_supports_collect_vars(eq::Equation) = true
+eqtype_supports_collect_vars(eq::Inequality) = true
 eqtype_supports_collect_vars(eq::Pair) = true
 
-function collect_vars!(unknowns, parameters, eq::Equation, iv;
+function collect_vars!(unknowns, parameters, eq::Union{Equation, Inequality}, iv;
         depth = 0, op = Differential)
     collect_vars!(unknowns, parameters, eq.lhs, iv; depth, op)
     collect_vars!(unknowns, parameters, eq.rhs, iv; depth, op)
@@ -991,9 +1019,157 @@ end
 diff2term_with_unit(x, t) = _with_unit(diff2term, x, t)
 lower_varname_with_unit(var, iv, order) = _with_unit(lower_varname, var, iv, iv, order)
 
+"""
+    $(TYPEDSIGNATURES)
+
+Check if `sym` represents a symbolic floating point number or array of such numbers.
+"""
 function is_variable_floatingpoint(sym)
     sym = unwrap(sym)
     T = symtype(sym)
     return T == Real || T <: AbstractFloat || T <: AbstractArray{Real} ||
            T <: AbstractArray{<:AbstractFloat}
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return the `DiCMOBiGraph` denoting the dependencies between observed equations `eqs`.
+"""
+function observed_dependency_graph(eqs::Vector{Equation})
+    for eq in eqs
+        if symbolic_type(eq.lhs) == NotSymbolic()
+            error("All equations must be observed equations of the form `var ~ expr`. Got $eq")
+        end
+    end
+    graph, assigns = observed2graph(eqs, getproperty.(eqs, (:lhs,)))
+    matching = complete(Matching(Vector{Union{Unassigned, Int}}(assigns)))
+    return DiCMOBiGraph{false}(graph, matching)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return the indexes of observed equations of `sys` used by expression `exprs`.
+
+Keyword arguments:
+- `involved_vars`: A collection of the variables involved in `exprs`. This is the set of
+  variables which will be explored to find dependencies on observed equations. Typically,
+  providing this keyword is not necessary and is only useful to avoid repeatedly calling
+  `vars(exprs)`
+"""
+function observed_equations_used_by(sys::AbstractSystem, exprs; involved_vars = vars(exprs))
+    obs = observed(sys)
+
+    obsvars = getproperty.(obs, :lhs)
+    graph = observed_dependency_graph(obs)
+
+    obsidxs = BitSet()
+    for sym in involved_vars
+        idx = findfirst(isequal(sym), obsvars)
+        idx === nothing && continue
+        idx in obsidxs && continue
+        parents = dfs_parents(graph, idx)
+        for i in eachindex(parents)
+            parents[i] == 0 && continue
+            push!(obsidxs, i)
+        end
+    end
+
+    obsidxs = collect(obsidxs)
+    sort!(obsidxs)
+    return obsidxs
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given an expression `expr`, return a dictionary mapping subexpressions of `expr` that do
+not involve variables in `vars` to anonymous symbolic variables. Also return the modified
+`expr` with the substitutions indicated by the dictionary. If `expr` is a function
+of only `vars`, then all of the returned subexpressions can be precomputed.
+
+Note that this will only process subexpressions floating point value. Additionally,
+array variables must be passed in both scalarized and non-scalarized forms in `vars`.
+"""
+function subexpressions_not_involving_vars(expr, vars)
+    expr = unwrap(expr)
+    vars = map(unwrap, vars)
+    state = Dict()
+    newexpr = subexpressions_not_involving_vars!(expr, vars, state)
+    return state, newexpr
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Mutating version of `subexpressions_not_involving_vars` which writes to `state`. Only
+returns the modified `expr`.
+"""
+function subexpressions_not_involving_vars!(expr, vars, state::Dict{Any, Any})
+    expr = unwrap(expr)
+    symbolic_type(expr) == NotSymbolic() && return expr
+    iscall(expr) || return expr
+    is_variable_floatingpoint(expr) || return expr
+    symtype(expr) <: Union{Real, AbstractArray{<:Real}} || return expr
+    Symbolics.shape(expr) == Symbolics.Unknown() && return expr
+    haskey(state, expr) && return state[expr]
+    vs = ModelingToolkit.vars(expr)
+    intersect!(vs, vars)
+    if isempty(vs)
+        sym = gensym(:subexpr)
+        stype = symtype(expr)
+        var = similar_variable(expr, sym)
+        state[expr] = var
+        return var
+    end
+    op = operation(expr)
+    args = arguments(expr)
+    if (op == (+) || op == (*)) && symbolic_type(expr) !== ArraySymbolic()
+        indep_args = []
+        dep_args = []
+        for arg in args
+            _vs = ModelingToolkit.vars(arg)
+            intersect!(_vs, vars)
+            if !isempty(_vs)
+                push!(dep_args, subexpressions_not_involving_vars!(arg, vars, state))
+            else
+                push!(indep_args, arg)
+            end
+        end
+        indep_term = reduce(op, indep_args; init = Int(op == (*)))
+        indep_term = subexpressions_not_involving_vars!(indep_term, vars, state)
+        dep_term = reduce(op, dep_args; init = Int(op == (*)))
+        return op(indep_term, dep_term)
+    end
+    newargs = map(args) do arg
+        symbolic_type(arg) != NotSymbolic() || is_array_of_symbolics(arg) || return arg
+        subexpressions_not_involving_vars!(arg, vars, state)
+    end
+    return maketerm(typeof(expr), op, newargs, metadata(expr))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Create an anonymous symbolic variable of the same shape, size and symtype as `var`, with
+name `gensym(name)`. Does not support unsized array symbolics.
+"""
+function similar_variable(var::BasicSymbolic, name = :anon)
+    name = gensym(name)
+    stype = symtype(var)
+    sym = Symbolics.variable(name; T = stype)
+    if size(var) !== ()
+        sym = setmetadata(sym, Symbolics.ArrayShapeCtx, map(Base.OneTo, size(var)))
+    end
+    return sym
+end
+
+function guesses_from_metadata!(guesses, vars)
+    varguesses = [getguess(v) for v in vars]
+    hasaguess = findall(!isnothing, varguesses)
+    for i in hasaguess
+        haskey(guesses, vars[i]) && continue
+        guesses[vars[i]] = varguesses[i]
+    end
 end

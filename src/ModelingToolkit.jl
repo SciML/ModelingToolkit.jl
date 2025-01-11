@@ -50,6 +50,7 @@ using Distributed
 import JuliaFormatter
 using MLStyle
 using NonlinearSolve
+import SCCNonlinearSolve
 using Reexport
 using RecursiveArrayTools
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
@@ -144,11 +145,14 @@ include("systems/index_cache.jl")
 include("systems/parameter_buffer.jl")
 include("systems/abstractsystem.jl")
 include("systems/model_parsing.jl")
+include("systems/analysis_points.jl")
 include("systems/connectors.jl")
+include("systems/imperative_affect.jl")
 include("systems/callbacks.jl")
 include("systems/problem_utils.jl")
 
 include("systems/nonlinear/nonlinearsystem.jl")
+include("systems/nonlinear/homotopy_continuation.jl")
 include("systems/diffeqs/odesystem.jl")
 include("systems/diffeqs/sdesystem.jl")
 include("systems/diffeqs/abstractodesystem.jl")
@@ -178,6 +182,7 @@ include("discretedomain.jl")
 include("systems/systemstructure.jl")
 include("systems/clock_inference.jl")
 include("systems/systems.jl")
+include("systems/if_lifting.jl")
 
 include("debugging.jl")
 include("systems/alias_elimination.jl")
@@ -234,7 +239,8 @@ export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem
 export NonlinearSystem, OptimizationSystem, ConstraintsSystem
 export alias_elimination, flatten
-export connect, domain_connect, @connector, Connection, Flow, Stream, instream
+export connect, domain_connect, @connector, Connection, AnalysisPoint, Flow, Stream,
+       instream
 export initial_state, transition, activeState, entry, ticksInState, timeInState
 export @component, @mtkmodel, @mtkbuild
 export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbance,
@@ -287,4 +293,7 @@ export MTKParameters, reorder_dimension_by_tunables!, reorder_dimension_by_tunab
 
 export HomotopyContinuationProblem
 
+export AnalysisPoint, get_sensitivity_function, get_comp_sensitivity_function,
+       get_looptransfer_function, get_sensitivity, get_comp_sensitivity, get_looptransfer,
+       open_loop
 end # module

@@ -162,11 +162,12 @@ object.
 """
 function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys),
         ps = parameters(sys); wrap_code = nothing, postprocess_fbody = nothing, states = nothing,
-        expression = Val{true}, eval_expression = false, eval_module = @__MODULE__, kwargs...)
+        expression = Val{true}, eval_expression = false, eval_module = @__MODULE__,
+        cachesyms::Tuple = (), kwargs...)
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system.")
     end
-    p = reorder_parameters(sys, unwrap.(ps))
+    p = (reorder_parameters(sys, unwrap.(ps))..., cachesyms...)
     isscalar = !(exprs isa AbstractArray)
     if wrap_code === nothing
         wrap_code = isscalar ? identity : (identity, identity)
@@ -187,7 +188,7 @@ function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys
             postprocess_fbody,
             states,
             wrap_code = wrap_code .∘ wrap_mtkparameters(sys, isscalar) .∘
-                        wrap_array_vars(sys, exprs; dvs) .∘
+                        wrap_array_vars(sys, exprs; dvs, cachesyms) .∘
                         wrap_parameter_dependencies(sys, isscalar),
             expression = Val{true}
         )
@@ -199,7 +200,7 @@ function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys
             postprocess_fbody,
             states,
             wrap_code = wrap_code .∘ wrap_mtkparameters(sys, isscalar) .∘
-                        wrap_array_vars(sys, exprs; dvs) .∘
+                        wrap_array_vars(sys, exprs; dvs, cachesyms) .∘
                         wrap_parameter_dependencies(sys, isscalar),
             expression = Val{true}
         )
@@ -229,118 +230,76 @@ function wrap_parameter_dependencies(sys::AbstractSystem, isscalar)
     wrap_assignments(isscalar, [eq.lhs ← eq.rhs for eq in parameter_dependencies(sys)])
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Add the necessary assignment statements to allow use of unscalarized array variables
+in the generated code. `expr` is the expression returned by the function. `dvs` and
+`ps` are the unknowns and parameters of the system `sys` to use in the generated code.
+`inputs` can be specified as an array of symbolics if the generated function has inputs.
+If `history == true`, the generated function accepts a history function. `cachesyms` are
+extra variables (arrays of variables) stored in the cache array(s) of the parameter
+object. `extra_args` are extra arguments appended to the end of the argument list.
+
+The function is assumed to have the signature `f(du, u, h, x, p, cache_syms..., t, extra_args...)`
+Where:
+- `du` is the optional buffer to write to for in-place functions.
+- `u` is the list of unknowns. This argument is not present if `dvs === nothing`.
+- `h` is the optional history function, present if `history == true`.
+- `x` is the array of inputs, present only if `inputs !== nothing`. Values are assumed
+  to be in the order of variables passed to `inputs`.
+- `p` is the parameter object.
+- `cache_syms` are the cache variables. These are part of the splatted parameter object.
+- `t` is time, present only if the system is time dependent.
+- `extra_args` are the extra arguments passed to the function, present only if
+  `extra_args` is non-empty.
+"""
 function wrap_array_vars(
         sys::AbstractSystem, exprs; dvs = unknowns(sys), ps = parameters(sys),
-        inputs = nothing, history = false)
+        inputs = nothing, history = false, cachesyms::Tuple = (), extra_args::Tuple = ())
     isscalar = !(exprs isa AbstractArray)
-    array_vars = Dict{Any, AbstractArray{Int}}()
-    if dvs !== nothing
-        for (j, x) in enumerate(dvs)
-            if iscall(x) && operation(x) == getindex
-                arg = arguments(x)[1]
-                inds = get!(() -> Int[], array_vars, arg)
-                push!(inds, j)
-            end
-        end
-        for (k, inds) in array_vars
-            if inds == (inds′ = inds[1]:inds[end])
-                array_vars[k] = inds′
-            end
-        end
+    var_to_arridxs = Dict()
 
-        uind = 1
-    else
+    if dvs === nothing
         uind = 0
-    end
-    # values are (indexes, index of buffer, size of parameter)
-    array_parameters = Dict{Any, Tuple{AbstractArray{Int}, Int, Tuple{Vararg{Int}}}}()
-    # If for some reason different elements of an array parameter are in different buffers
-    other_array_parameters = Dict{Any, Any}()
-
-    hasinputs = inputs !== nothing
-    input_vars = Dict{Any, AbstractArray{Int}}()
-    if hasinputs
-        for (j, x) in enumerate(inputs)
-            if iscall(x) && operation(x) == getindex
-                arg = arguments(x)[1]
-                inds = get!(() -> Int[], input_vars, arg)
-                push!(inds, j)
-            end
-        end
-        for (k, inds) in input_vars
-            if inds == (inds′ = inds[1]:inds[end])
-                input_vars[k] = inds′
-            end
-        end
-    end
-    if has_index_cache(sys)
-        ic = get_index_cache(sys)
     else
-        ic = nothing
-    end
-    if ps isa Tuple && eltype(ps) <: AbstractArray
-        ps = Iterators.flatten(ps)
-    end
-    for p in ps
-        p = unwrap(p)
-        if iscall(p) && operation(p) == getindex
-            p = arguments(p)[1]
+        uind = 1
+        for (i, x) in enumerate(dvs)
+            iscall(x) && operation(x) == getindex || continue
+            arg = arguments(x)[1]
+            inds = get!(() -> [], var_to_arridxs, arg)
+            push!(inds, (uind, i))
         end
-        symtype(p) <: AbstractArray && Symbolics.shape(p) != Symbolics.Unknown() || continue
-        scal = collect(p)
-        # all scalarized variables are in `ps`
-        any(isequal(p), ps) || all(x -> any(isequal(x), ps), scal) || continue
-        (haskey(array_parameters, p) || haskey(other_array_parameters, p)) && continue
+    end
+    p_start = uind + 1 + history
+    rps = (reorder_parameters(sys, ps)..., cachesyms...)
+    if inputs !== nothing
+        rps = (inputs, rps...)
+    end
+    if has_iv(sys)
+        rps = (rps..., get_iv(sys))
+    end
+    rps = (rps..., extra_args...)
+    for sym in reduce(vcat, rps; init = [])
+        iscall(sym) && operation(sym) == getindex || continue
+        arg = arguments(sym)[1]
 
-        idx = parameter_index(sys, p)
-        idx isa Int && continue
-        if idx isa ParameterIndex
-            if idx.portion != SciMLStructures.Tunable()
-                continue
-            end
-            array_parameters[p] = (vec(idx.idx), 1, size(idx.idx))
+        bufferidx = findfirst(buf -> any(isequal(sym), buf), rps)
+        idxinbuffer = findfirst(isequal(sym), rps[bufferidx])
+        inds = get!(() -> [], var_to_arridxs, arg)
+        push!(inds, (p_start + bufferidx - 1, idxinbuffer))
+    end
+
+    viewsyms = Dict()
+    splitsyms = Dict()
+    for (arrsym, idxs) in var_to_arridxs
+        length(idxs) == length(arrsym) || continue
+        # allequal(first, idxs) is a 1.11 feature
+        if allequal(Iterators.map(first, idxs))
+            viewsyms[arrsym] = (first(first(idxs)), reshape(last.(idxs), size(arrsym)))
         else
-            # idx === nothing
-            idxs = map(Base.Fix1(parameter_index, sys), scal)
-            if first(idxs) isa ParameterIndex
-                buffer_idxs = map(Base.Fix1(iterated_buffer_index, ic), idxs)
-                if allequal(buffer_idxs)
-                    buffer_idx = first(buffer_idxs)
-                    if first(idxs).portion == SciMLStructures.Tunable()
-                        idxs = map(x -> x.idx, idxs)
-                    else
-                        idxs = map(x -> x.idx[end], idxs)
-                    end
-                else
-                    other_array_parameters[p] = scal
-                    continue
-                end
-            else
-                buffer_idx = 1
-            end
-
-            sz = size(idxs)
-            if vec(idxs) == idxs[begin]:idxs[end]
-                idxs = idxs[begin]:idxs[end]
-            elseif vec(idxs) == idxs[begin]:-1:idxs[end]
-                idxs = idxs[begin]:-1:idxs[end]
-            end
-            idxs = vec(idxs)
-            array_parameters[p] = (idxs, buffer_idx, sz)
+            splitsyms[arrsym] = reshape(idxs, size(arrsym))
         end
-    end
-
-    inputind = if history
-        uind + 2
-    else
-        uind + 1
-    end
-    params_offset = if history && hasinputs
-        uind + 2
-    elseif history || hasinputs
-        uind + 1
-    else
-        uind
     end
     if isscalar
         function (expr)
@@ -349,15 +308,11 @@ function wrap_array_vars(
                 [],
                 Let(
                     vcat(
-                        [k ← :(view($(expr.args[uind].name), $v)) for (k, v) in array_vars],
-                        [k ← :(view($(expr.args[inputind].name), $v))
-                         for (k, v) in input_vars],
-                        [k ← :(reshape(
-                             view($(expr.args[params_offset + buffer_idx].name), $idxs),
-                             $sz))
-                         for (k, (idxs, buffer_idx, sz)) in array_parameters],
-                        [k ← Code.MakeArray(v, symtype(k))
-                         for (k, v) in other_array_parameters]
+                        [sym ← :(view($(expr.args[i].name), $idxs))
+                         for (sym, (i, idxs)) in viewsyms],
+                        [sym ←
+                         MakeArray([expr.args[bufi].elems[vali] for (bufi, vali) in idxs],
+                             expr.args[idxs[1][1]]) for (sym, idxs) in splitsyms]
                     ),
                     expr.body,
                     false
@@ -371,15 +326,11 @@ function wrap_array_vars(
                 [],
                 Let(
                     vcat(
-                        [k ← :(view($(expr.args[uind].name), $v)) for (k, v) in array_vars],
-                        [k ← :(view($(expr.args[inputind].name), $v))
-                         for (k, v) in input_vars],
-                        [k ← :(reshape(
-                             view($(expr.args[params_offset + buffer_idx].name), $idxs),
-                             $sz))
-                         for (k, (idxs, buffer_idx, sz)) in array_parameters],
-                        [k ← Code.MakeArray(v, symtype(k))
-                         for (k, v) in other_array_parameters]
+                        [sym ← :(view($(expr.args[i].name), $idxs))
+                         for (sym, (i, idxs)) in viewsyms],
+                        [sym ←
+                         MakeArray([expr.args[bufi].elems[vali] for (bufi, vali) in idxs],
+                             expr.args[idxs[1][1]]) for (sym, idxs) in splitsyms]
                     ),
                     expr.body,
                     false
@@ -392,17 +343,11 @@ function wrap_array_vars(
                 [],
                 Let(
                     vcat(
-                        [k ← :(view($(expr.args[uind + 1].name), $v))
-                         for (k, v) in array_vars],
-                        [k ← :(view($(expr.args[inputind + 1].name), $v))
-                         for (k, v) in input_vars],
-                        [k ← :(reshape(
-                             view($(expr.args[params_offset + buffer_idx + 1].name),
-                                 $idxs),
-                             $sz))
-                         for (k, (idxs, buffer_idx, sz)) in array_parameters],
-                        [k ← Code.MakeArray(v, symtype(k))
-                         for (k, v) in other_array_parameters]
+                        [sym ← :(view($(expr.args[i + 1].name), $idxs))
+                         for (sym, (i, idxs)) in viewsyms],
+                        [sym ← MakeArray(
+                             [expr.args[bufi + 1].elems[vali] for (bufi, vali) in idxs],
+                             expr.args[idxs[1][1] + 1]) for (sym, idxs) in splitsyms]
                     ),
                     expr.body,
                     false
@@ -415,7 +360,7 @@ end
 const MTKPARAMETERS_ARG = Sym{Vector{Vector}}(:___mtkparameters___)
 
 """
-    wrap_mtkparameters(sys::AbstractSystem, isscalar::Bool, p_start = 2)
+    wrap_mtkparameters(sys::AbstractSystem, isscalar::Bool, p_start = 2, offset = Int(is_time_dependent(sys)))
 
 Return function(s) to be passed to the `wrap_code` keyword of `build_function` which
 allow the compiled function to be called as `f(u, p, t)` where `p isa MTKParameters`
@@ -425,12 +370,14 @@ the first parameter vector in the out-of-place version of the function. For exam
 if a history function (DDEs) was passed before `p`, then the function before wrapping
 would have the signature `f(u, h, p..., t)` and hence `p_start` would need to be `3`.
 
+`offset` is the number of arguments at the end of the argument list to ignore. Defaults
+to 1 if the system is time-dependent (to ignore `t`) and 0 otherwise.
+
 The returned function is `identity` if the system does not have an `IndexCache`.
 """
-function wrap_mtkparameters(sys::AbstractSystem, isscalar::Bool, p_start = 2)
+function wrap_mtkparameters(sys::AbstractSystem, isscalar::Bool, p_start = 2,
+        offset = Int(is_time_dependent(sys)))
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        offset = Int(is_time_dependent(sys))
-
         if isscalar
             function (expr)
                 param_args = expr.args[p_start:(end - offset)]
@@ -838,7 +785,7 @@ end
 SymbolicIndexingInterface.supports_tuple_observed(::AbstractSystem) = true
 
 function SymbolicIndexingInterface.observed(
-        sys::AbstractSystem, sym; eval_expression = false, eval_module = @__MODULE__)
+        sys::AbstractSystem, sym; eval_expression = false, eval_module = @__MODULE__, checkbounds = true)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         if sym isa Symbol
             _sym = get(ic.symbol_to_variable, sym, nothing)
@@ -861,7 +808,8 @@ function SymbolicIndexingInterface.observed(
             end
         end
     end
-    _fn = build_explicit_observed_function(sys, sym; eval_expression, eval_module)
+    _fn = build_explicit_observed_function(
+        sys, sym; eval_expression, eval_module, checkbounds)
 
     if is_time_dependent(sys)
         return _fn
@@ -1212,6 +1160,14 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
         iv = get_iv(sys)
         if getname(iv) == name
             return iv
+        end
+    end
+
+    if has_eqs(sys)
+        for eq in get_eqs(sys)
+            if eq.lhs isa AnalysisPoint && nameof(eq.rhs) == name
+                return namespace ? renamespace(sys, eq.rhs) : eq.rhs
+            end
         end
     end
 
@@ -1724,11 +1680,14 @@ struct ObservedFunctionCache{S}
     steady_state::Bool
     eval_expression::Bool
     eval_module::Module
+    checkbounds::Bool
 end
 
 function ObservedFunctionCache(
-        sys; steady_state = false, eval_expression = false, eval_module = @__MODULE__)
-    return ObservedFunctionCache(sys, Dict(), steady_state, eval_expression, eval_module)
+        sys; steady_state = false, eval_expression = false,
+        eval_module = @__MODULE__, checkbounds = true)
+    return ObservedFunctionCache(
+        sys, Dict(), steady_state, eval_expression, eval_module, checkbounds)
 end
 
 # This is hit because ensemble problems do a deepcopy
@@ -1738,7 +1697,9 @@ function Base.deepcopy_internal(ofc::ObservedFunctionCache, stackdict::IdDict)
     steady_state = ofc.steady_state
     eval_expression = ofc.eval_expression
     eval_module = ofc.eval_module
-    newofc = ObservedFunctionCache(sys, dict, steady_state, eval_expression, eval_module)
+    checkbounds = ofc.checkbounds
+    newofc = ObservedFunctionCache(
+        sys, dict, steady_state, eval_expression, eval_module, checkbounds)
     stackdict[ofc] = newofc
     return newofc
 end
@@ -1747,7 +1708,7 @@ function (ofc::ObservedFunctionCache)(obsvar, args...)
     obs = get!(ofc.dict, value(obsvar)) do
         SymbolicIndexingInterface.observed(
             ofc.sys, obsvar; eval_expression = ofc.eval_expression,
-            eval_module = ofc.eval_module)
+            eval_module = ofc.eval_module, checkbounds = ofc.checkbounds)
     end
     if ofc.steady_state
         obs = let fn = obs
@@ -2419,6 +2380,12 @@ function linearization_function(sys::AbstractSystem, inputs,
     op = Dict(op)
     inputs isa AbstractVector || (inputs = [inputs])
     outputs isa AbstractVector || (outputs = [outputs])
+    inputs = mapreduce(vcat, inputs; init = []) do var
+        symbolic_type(var) == ArraySymbolic() ? collect(var) : [var]
+    end
+    outputs = mapreduce(vcat, outputs; init = []) do var
+        symbolic_type(var) == ArraySymbolic() ? collect(var) : [var]
+    end
     ssys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs;
         simplify,
         kwargs...)
@@ -3335,7 +3302,8 @@ function parse_variable(sys::AbstractSystem, str::AbstractString)
     # I'd write a regex to validate `str`, but https://xkcd.com/1171/
     str = strip(str)
     derivative_level = 0
-    while ((cond1 = startswith(str, "D(")) || startswith(str, "Differential(")) && endswith(str, ")")
+    while ((cond1 = startswith(str, "D(")) || startswith(str, "Differential(")) &&
+        endswith(str, ")")
         if cond1
             derivative_level += 1
             str = _string_view_inner(str, 2, 1)
