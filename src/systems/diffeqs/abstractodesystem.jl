@@ -917,7 +917,7 @@ end
 function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = [],
         tspan = get_tspan(sys),
         parammap = DiffEqBase.NullParameters();
-        constraints = nothing, guesses = nothing,
+        constraints = nothing, guesses = Dict(),
         version = nothing, tgrad = false,
         callback = nothing,
         check_length = true,
@@ -929,7 +929,7 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `BVProblem`")
     end
-    !isnothing(callbacks) && error("BVP solvers do not support callbacks.")
+    !isnothing(callback) && error("BVP solvers do not support callbacks.")
 
     iv = get_iv(sys)
     constraintsts = nothing
@@ -964,7 +964,7 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
     pidxmap = Dict([v => i for (i, v) in enumerate(ps)])
 
     # Indices of states that have initial constraints.
-    u0i = has_alg_eqs(sys) ? collect(1:length(sts)) : [stidxmap[k] for k in keys(u0map)]
+    u0i = has_alg_eqs(sys) ? collect(1:length(sts)) : [stidxmap[k] for (k,v) in u0map]
     ni = length(u0i)
     
     bc = if !isnothing(constraints)
@@ -994,7 +994,7 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
         end
     end
 
-    return BVProblem{iip}(f, bc, u0, tspan, p; kwargs1..., kwargs...)
+    return BVProblem{iip}(f, bc, u0, tspan, p; kwargs...)
 end
 
 get_callback(prob::BVProblem) = error("BVP solvers do not support callbacks.")

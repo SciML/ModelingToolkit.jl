@@ -44,13 +44,14 @@ end
 ### Testing on pendulum
 let
      @parameters g=9.81 L=1.0
-     @variables θ(t) = π / 2
+     @variables θ(t) = π / 2 θ_t(t)
      
-     eqs = [D(D(θ)) ~ -(g / L) * sin(θ)]
+     eqs = [D(θ) ~ θ_t
+            D(θ_t) ~ -(g / L) * sin(θ)]
      
      @mtkbuild pend = ODESystem(eqs, t)
      
-     u0map = [θ => π / 2, D(θ) => π / 2]
+     u0map = [θ => π / 2, θ_t => π / 2]
      parammap = [:L => 1.0, :g => 9.81]
      tspan = (0.0, 6.0)
      
@@ -74,9 +75,9 @@ let
      end
 end
 
-###################################################
-### ODESystem with Constraint Equations, DAEs with constraints ###
-###################################################
+##################################################################
+### ODESystem with constraint equations, DAEs with constraints ###
+##################################################################
 
 # Cartesian pendulum from the docs.
 # DAE IVP solved using BoundaryValueDiffEq solvers.
@@ -90,19 +91,19 @@ let
 
     tspan = (0.0, 1.5)
     u0map = [x => 1, y => 0]
-    parammap = [g => 1]
-    guesses = [λ => 1]
+    pmap = [g => 1]
+    guess = [λ => 1]
 
-    prob = ODEProblem(pend, u0map, tspan, pmap; guesses)
-    sol = solve(prob, Rodas5P())
+    prob = ODEProblem(pend, u0map, tspan, pmap; guesses = guess)
+    osol = solve(prob, Rodas5P())
 
-    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap; guesses)
+    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap; guesses = guess)
     
     for solver in solvers
-        sol = solve(bvp, solver(), dt = 0.01)
+        sol = solve(bvp, solver(), dt = 0.001)
         @test isapprox(sol.u[end], osol.u[end]; atol = 0.01)
         conditions = getfield.(equations(pend)[3:end], :rhs)
-        @test [sol[conditions][1]; sol[x][1] - 1; sol[y][1]] ≈ 0 
+        @test isapprox([sol[conditions][1]; sol[x][1] - 1; sol[y][1]], zeros(5), atol = 0.001)
     end
 
     bvp2 = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(pend, u0map, tspan, parammap)
