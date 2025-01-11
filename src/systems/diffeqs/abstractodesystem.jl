@@ -853,15 +853,47 @@ get_callback(prob::ODEProblem) = prob.kwargs[:callback]
 ```julia
 SciMLBase.BVProblem{iip}(sys::AbstractODESystem, u0map, tspan,
                          parammap = DiffEqBase.NullParameters();
+                         constraints = nothing, guesses = nothing,
                          version = nothing, tgrad = false,
                          jac = true, sparse = true,
                          simplify = false,
                          kwargs...) where {iip}
 ```
 
-Create a `BVProblem` from the [`ODESystem`](@ref). The arguments `dvs` and
+Create a boundary value problem from the [`ODESystem`](@ref). The arguments `dvs` and
 `ps` are used to set the order of the dependent variable and parameter vectors,
-respectively. `u0map` should be used to specify the initial condition.
+respectively. `u0map` is used to specify fixed initial values for the states.
+
+Every variable must have either an initial guess supplied using `guesses` or 
+a fixed initial value specified using `u0map`.
+
+`constraints` are used to specify boundary conditions to the ODESystem in the
+form of equations. These values should specify values that state variables should
+take at specific points, as in `x(0.5) ~ 1`). More general constraints that 
+should hold over the entire solution, such as `x(t)^2 + y(t)^2`, should be 
+specified as one of the equations used to build the `ODESystem`. Below is an example.
+
+```julia
+    @parameters g
+    @variables x(..) y(t) [state_priority = 10] λ(t)
+    eqs = [D(D(x(t))) ~ λ * x(t)
+           D(D(y)) ~ λ * y - g
+           x(t)^2 + y^2 ~ 1]
+    @mtkbuild pend = ODESystem(eqs, t)
+
+    tspan = (0.0, 1.5)
+    u0map = [x(t) => 0.6, y => 0.8]
+    parammap = [g => 1]
+    guesses = [λ => 1]
+    constraints = [x(0.5) ~ 1]
+
+    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap; constraints, guesses, check_length = false)
+```
+
+If no `constraints` are specified, the problem will be treated as an initial value problem.
+
+If the `ODESystem` has algebraic equations like `x(t)^2 + y(t)^2`, the resulting 
+`BVProblem` must be solved using BVDAE solvers, such as Ascher.
 """
 function SciMLBase.BVProblem(sys::AbstractODESystem, args...; kwargs...)
     BVProblem{true}(sys, args...; kwargs...)
@@ -873,7 +905,7 @@ function SciMLBase.BVProblem(sys::AbstractODESystem,
         kwargs...)
     BVProblem{false, SciMLBase.FullSpecialize}(sys, u0map, args...; kwargs...)
 end
-o
+
 function SciMLBase.BVProblem{true}(sys::AbstractODESystem, args...; kwargs...)
     BVProblem{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
 end
@@ -885,6 +917,7 @@ end
 function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = [],
         tspan = get_tspan(sys),
         parammap = DiffEqBase.NullParameters();
+        constraints = nothing, guesses = nothing,
         version = nothing, tgrad = false,
         callback = nothing,
         check_length = true,
@@ -892,38 +925,63 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
         eval_expression = false,
         eval_module = @__MODULE__,
         kwargs...) where {iip, specialize}
+
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `BVProblem`")
     end
+    !isnothing(callbacks) && error("BVP solvers do not support callbacks.")
 
-    f, u0, p = process_SciMLProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
-        t = tspan !== nothing ? tspan[1] : tspan,
-        check_length, warn_initialize_determined, eval_expression, eval_module, kwargs...)
+    iv = get_iv(sys)
+    constraintsts = nothing
+    constraintps = nothing
+    sts = unknowns(sys)
+    ps = parameters(sys)
 
-    cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
-    kwargs = filter_kwargs(kwargs)
+    if !isnothing(constraints)
+        constraints isa Equation || 
+            constraints isa Vector{Equation} || 
+            error("Constraints must be specified as an equation or a vector of equations.")
 
-    kwargs1 = (;)
-    if cbs !== nothing
-        kwargs1 = merge(kwargs1, (callback = cbs,))
+        (length(constraints) + length(u0map) > length(sts)) && 
+            error("The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) cannot exceed the total number of states.")
+
+        constraintsts = OrderedSet()
+        constraintps = OrderedSet()
+
+        for eq in constraints
+            collect_vars!(constraintsts, constraintps, eq, iv)
+            validate_constraint_syms(eq, constraintsts, constraintps, Set(sts), Set(ps), iv)
+            empty!(constraintsts)
+            empty!(constraintps)
+        end
     end
 
-    # Handle algebraic equations
-    stidxmap = Dict([v => i for (i, v) in enumerate(unknowns(sys))])
-    pidxmap = Dict([v => i for (i, v) in enumerate(parameters(sys))])
-    ns = length(stmap)
-    ne = length(get_alg_eqs(sys))
+    f, u0, p = process_SciMLProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
+        t = tspan !== nothing ? tspan[1] : tspan, guesses,
+        check_length, warn_initialize_determined, eval_expression, eval_module, kwargs...)
+
+    stidxmap = Dict([v => i for (i, v) in enumerate(sts)])
+    pidxmap = Dict([v => i for (i, v) in enumerate(ps)])
+
+    # Indices of states that have initial constraints.
+    u0i = has_alg_eqs(sys) ? collect(1:length(sts)) : [stidxmap[k] for k in keys(u0map)]
+    ni = length(u0i)
     
-    # Define the boundary conditions.
-    bc = if has_alg_eqs(sys)
+    bc = if !isnothing(constraints)
+        ne = length(constraints)
         if iip
             (residual,u,p,t) -> begin
-                residual[1:ns] .= u[1] .- u0
-                residual[ns+1:ns+ne] .= sub_u_p_into_symeq.(get_alg_eqs(sys))
+                residual[1:ni] .= u[1][u0i] .- u0[u0i]
+                residual[ni+1:ni+ne] .= map(constraints) do cons
+                    sub_u_p_into_symeq(cons.rhs - cons.lhs, u, p, stidxmap, pidxmap, iv, tspan)
+                end
             end
         else
             (u,p,t) -> begin
-                resid = vcat(u[1] - u0, sub_u_p_into_symeq.(get_alg_eqs(sys)))
+                consresid = map(constraints) do cons
+                    sub_u_p_into_symeq(cons.rhs-cons.lhs, u, p, stidxmap, pidxmap, iv, tspan)
+                end
+                resid = vcat(u[1][u0i] - u0[u0i], consresid)
             end
         end
     else
@@ -941,32 +999,54 @@ end
 
 get_callback(prob::BVProblem) = error("BVP solvers do not support callbacks.")
 
-# Helper to create the dictionary that will substitute numeric values for u, p into the algebraic equations in the ODESystem. Used to construct the boundary condition function. 
+# Validate that all the variables in the BVP constraints are well-formed states or parameters.
+function validate_constraint_syms(eq, constraintsts, constraintps, sts, ps, iv) 
+    ModelingToolkit.check_variables(constraintsts)
+    ModelingToolkit.check_parameters(constraintps)
+
+    for var in constraintsts
+        if arguments(var) == iv
+            var ∈ sts || error("Constraint equation $eq contains a variable $var that is not a variable of the ODESystem.")
+            error("Constraint equation $eq contains a variable $var that does not have a specified argument. Such equations should be specified as algebraic equations to the ODESystem rather than a boundary constraints.")
+        else
+            operation(var)(iv) ∈ sts || error("Constraint equation $eq contains a variable $(operation(var)) that is not a variable of the ODESystem.")
+        end
+    end
+
+    for var in constraintps
+        if !iscall(var)
+            var ∈ ps || error("Constraint equation $eq contains a parameter $var that is not a parameter of the ODESystem.")
+        else
+            operation(var) ∈ ps || error("Constraint equations contain a parameter $var that is not a parameter of the ODESystem.")
+        end
+    end
+end
+
+# Helper to substitute numeric values for u, p into the algebraic equations in the ODESystem. Used to construct the boundary condition function. 
 #   Take a system with variables x,y, parameters g
 #
-#   1 + x + y → 1 + u[1][1] + u[1][2]
+#   1 + x(0) + y(0) → 1 + u[1][1] + u[1][2]
 #   x(0.5) → u(0.5)[1]
 #   x(0.5)*g(0.5) → u(0.5)[1]*p[1]
-
-function sub_u_p_into_symeq(eq, u, p, stidxmap, pidxmap)
-    iv = ModelingToolkit.get_iv(sys)
+function sub_u_p_into_symeq(eq, u, p, stidxmap, pidxmap, iv, tspan)
     eq = Symbolics.unwrap(eq)
 
-    stmap = Dict([st => u[1][i] for st => i in stidxmap])
-    pmap = Dict([pa => p[i] for pa => i in pidxmap])
+    stmap = Dict([st => u[1][i] for (st, i) in stidxmap])
+    pmap = Dict([pa => p[i] for (pa, i) in pidxmap])
     eq = Symbolics.substitute(eq, merge(stmap, pmap))
 
     csyms = []
     # Find most nested calls, substitute those first.
     while !isempty(find_callable_syms!(csyms, eq))
         for sym in csyms 
-            t = arguments(sym)[1]
             x = operation(sym)
+            t = arguments(sym)[1]
+            prog = (tspan[2] - tspan[1])/(t - tspan[1]) # 1 / the % of the timespan elapsed
 
             if isparameter(x)
                 eq = Symbolics.substitute(eq, Dict(x(t) => p[pidxmap[x(iv)]]))
             elseif isvariable(x)
-                eq = Symbolics.substitute(eq, Dict(x(t) => u(val)[stidxmap[x(iv)]]))
+                eq = Symbolics.substitute(eq, Dict(x(t) => u[Int(end ÷ prog)][stidxmap[x(iv)]]))
             end
         end
         empty!(csyms)
