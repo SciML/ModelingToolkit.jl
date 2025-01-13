@@ -777,7 +777,7 @@ function DiffEqBase.SDEProblem{iip, specialize}(
     if any(ModelingToolkit.isbrownian, unknowns(sys))
         error("SDESystem constructed by defining Brownian variables with @brownian must be simplified by calling `structural_simplify` before a SDEProblem can be constructed.")
     else
-        error("Cannot construct SDEProblem from an ODESystem.")
+        error("Cannot construct SDEProblem from a normal ODESystem.")
     end
 end
 
