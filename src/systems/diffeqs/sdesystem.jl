@@ -737,6 +737,7 @@ function DiffEqBase.SDEProblem{iip, specialize}(
     if !iscomplete(sys)
         error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEProblem`")
     end
+
     f, u0, p = process_SciMLProblem(
         SDEFunction{iip, specialize}, sys, u0map, parammap; check_length,
         t = tspan === nothing ? nothing : tspan[1], kwargs...)
@@ -765,6 +766,19 @@ function DiffEqBase.SDEProblem{iip, specialize}(
 
     SDEProblem{iip}(f, u0, tspan, p; callback = cbs, noise,
         noise_rate_prototype = noise_rate_prototype, kwargs...)
+end
+
+function DiffEqBase.SDEProblem{iip, specialize}(
+        sys::ODESystem, u0map = [], tspan = get_tspan(sys),
+        parammap = DiffEqBase.NullParameters();
+        sparsenoise = nothing, check_length = true,
+        callback = nothing, kwargs...) where {iip, specialize}
+
+    if any(ModelingToolkit.isbrownian, unknowns(sys))
+        error("SDESystem constructed by defining Brownian variables with @brownian must be simplified by calling `structural_simplify` before a SDEProblem can be constructed.")
+    else
+        error("Cannot construct SDEProblem from an ODESystem.")
+    end
 end
 
 """
