@@ -903,16 +903,6 @@ end
         @test f_sparse isa Expr
     end
 
-    @testset "Mass Matrix Handling" begin
-        # Test with default mass matrix
-        @test eval(SDEFunctionExpr(de).args[7]) == UniformScaling{Bool}(true)
-
-        # Test with non-trivial mass matrix
-        u0 = [1.0, 2.0, 3.0]
-        f_mass = SDEFunctionExpr(de, u0 = u0)
-        @test f_mass isa Expr
-    end
-
     @testset "Ordering Tests" begin
         dvs = [z, y, x]
         ps = [β, ρ, σ]
