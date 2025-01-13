@@ -868,3 +868,29 @@ end
     @test length(ModelingToolkit.get_noiseeqs(sys)) == 1
     @test length(observed(sys)) == 1
 end
+
+# Test `isequal` handles events
+let
+    @variables X(t)
+    @parameters p d
+    @brownian a
+    seq = D(X) ~ p - d*X + a
+    @mtkbuild ssys1 = System([eq], t; name = :ssys)
+    @mtkbuild ssys2 = System([eq], t; name = :ssys)
+    @test ssys1 == ssys2 # true
+
+    continuous_events = [[X ~ 1.0] => [X ~ X + 5.0]]
+    discrete_events = [5.0 => [d ~ d / 2.0]]
+
+    @mtkbuild ssys1 = System([eq], t; name = :ssys, continuous_events)
+    @mtkbuild ssys2 = System([eq], t; name = :ssys)
+    @test ssys1 !== ssys2 
+
+    @mtkbuild ssys1 = System([eq], t; name = :ssys, discrete_events)
+    @mtkbuild ssys2 = System([eq], t; name = :ssys)
+    @test ssys1 !== ssys2
+
+    @mtkbuild ssys1 = System([eq], t; name = :ssys, continuous_events)
+    @mtkbuild ssys2 = System([eq], t; name = :ssys, discrete_events)
+    @test ssys1 !== ssys2 
+end

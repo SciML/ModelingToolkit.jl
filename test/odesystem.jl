@@ -1552,3 +1552,29 @@ end
     expected_tstops = unique!(sort!(vcat(0.0:0.075:10.0, 0.1, 0.2, 0.65, 0.35, 0.45)))
     @test all(x -> any(isapprox(x, atol = 1e-6), sol2.t), expected_tstops)
 end
+
+# Test `isequal`
+let
+    @variables X(t)
+    @parameters p d
+    eq = D(X) ~ p - d*X
+
+    osys1 = complete(ODESystem([eq], t; name = :osys))
+    osys2 = complete(ODESystem([eq], t; name = :osys))
+    @test osys1 == osys2 # true
+
+    continuous_events = [[X ~ 1.0] => [X ~ X + 5.0]]
+    discrete_events = [5.0 => [d ~ d / 2.0]]
+
+    osys1 = complete(ODESystem([eq], t; name = :osys, continuous_events))
+    osys2 = complete(ODESystem([eq], t; name = :osys))
+    @test osys1 !== osys2 
+
+    osys1 = complete(ODESystem([eq], t; name = :osys, discrete_events))
+    osys2 = complete(ODESystem([eq], t; name = :osys))
+    @test osys1 !== osys2
+
+    osys1 = complete(ODESystem([eq], t; name = :osys, continuous_events))
+    osys2 = complete(ODESystem([eq], t; name = :osys, discrete_events))
+    @test osys1 !== osys2 
+end
