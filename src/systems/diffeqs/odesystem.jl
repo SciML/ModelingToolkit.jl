@@ -449,6 +449,8 @@ an array of inputs `inputs` is given, and `param_only` is false for a time-depen
 """
 function build_explicit_observed_function(sys, ts;
         inputs = nothing,
+        disturbance_inputs = nothing,
+        disturbance_argument = false,
         expression = false,
         eval_expression = false,
         eval_module = @__MODULE__,
@@ -575,12 +577,15 @@ function build_explicit_observed_function(sys, ts;
     if inputs !== nothing
         ps = setdiff(ps, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
     end
+    if disturbance_inputs !== nothing
+        ps = setdiff(ps, disturbance_inputs)
+    end
     _ps = ps
     if ps isa Tuple
         ps = DestructuredArgs.(unwrap.(ps), inbounds = !checkbounds)
     elseif has_index_cache(sys) && get_index_cache(sys) !== nothing
         ps = DestructuredArgs.(reorder_parameters(get_index_cache(sys), unwrap.(ps)))
-        if isempty(ps) && inputs !== nothing
+        if isempty(ps) && (inputs !== nothing || disturbance_inputs !== nothing)
             ps = (:EMPTY,)
         end
     else
@@ -601,13 +606,20 @@ function build_explicit_observed_function(sys, ts;
         args = param_only ? [ipts, ps..., ivs...] : [dvs..., ipts, ps..., ivs...]
         p_start += 1
     end
+    if disturbance_argument
+        disturbance_inputs = unwrap.(disturbance_inputs)
+        dist_inputs = DestructuredArgs(disturbance_inputs, inbounds = !checkbounds)
+        args = [args; dist_inputs]
+    end
     pre = get_postprocess_fbody(sys)
 
     array_wrapper = if param_only
-        wrap_array_vars(sys, ts; ps = _ps, dvs = nothing, inputs, history = is_dde(sys)) .∘
+        wrap_array_vars(sys, ts; ps = _ps, dvs = nothing, inputs,
+            history = is_dde(sys), extra_args = (disturbance_inputs,)) .∘
         wrap_parameter_dependencies(sys, isscalar)
     else
-        wrap_array_vars(sys, ts; ps = _ps, inputs, history = is_dde(sys)) .∘
+        wrap_array_vars(sys, ts; ps = _ps, inputs, history = is_dde(sys),
+            extra_args = (disturbance_inputs,)) .∘
         wrap_parameter_dependencies(sys, isscalar)
     end
     mtkparams_wrapper = wrap_mtkparameters(sys, isscalar, p_start)
