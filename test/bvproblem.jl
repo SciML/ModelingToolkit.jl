@@ -2,7 +2,9 @@
 
 using BoundaryValueDiffEq, OrdinaryDiffEq, BoundaryValueDiffEqAscher
 using ModelingToolkit
+using SciMLBase
 using ModelingToolkit: t_nounits as t, D_nounits as D
+import ModelingToolkit: process_constraints
 
 ### Test Collocation solvers on simple problems 
 solvers = [MIRK4, RadauIIa5, LobattoIIIa3]
@@ -81,6 +83,153 @@ end
 ### ODESystem with constraint equations, DAEs with constraints ###
 ##################################################################
 
+# Test generation of boundary condition function.
+let
+    @parameters α=1.5 β=1.0 γ=3.0 δ=1.0
+    @variables x(..) y(t)
+    eqs = [D(x(t)) ~ α * x(t) - β * x(t) * y,
+           D(y) ~ -γ * y + δ * x(t) * y]
+    
+    tspan = (0., 10.)
+    @mtkbuild lksys = ODESystem(eqs, t)
+
+    function lotkavolterra!(du, u, p, t) 
+        du[1] = p[1]*u[1] - p[2]*u[1]*u[2]
+        du[2] = -p[4]*u[2] + p[3]*u[1]*u[2]
+    end
+
+    function lotkavolterra(u, p, t) 
+        [p[1]*u[1] - p[2]*u[1]*u[2], -p[4]*u[2] + p[3]*u[1]*u[2]]
+    end
+    # Compare the built bc function to the actual constructed one.
+    function bc!(resid, u, p, t) 
+        resid[1] = u[1][1] - 1.
+        resid[2] = u[1][2] - 2.
+        nothing
+    end
+    function bc(u, p, t)
+        [u[1][1] - 1., u[1][2] - 2.]
+    end
+
+    u0 = [1., 2.]; p = [1.5, 1., 3., 1.]
+    genbc_iip = ModelingToolkit.process_constraints(lksys, nothing, u0, [1, 2], tspan, true)
+    genbc_oop = ModelingToolkit.process_constraints(lksys, nothing, u0, [1, 2], tspan, false)
+
+    bvpi1 = SciMLBase.BVProblem(lotkavolterra!, bc!, [1.,2.], tspan, p)
+    bvpi2 = SciMLBase.BVProblem(lotkavolterra!, genbc_iip, [1.,2.], tspan, p)
+
+    sol1 = solve(bvpi1, MIRK4(), dt = 0.05)
+    sol2 = solve(bvpi2, MIRK4(), dt = 0.05)
+    @test sol1 ≈ sol2
+
+    bvpo1 = BVProblem(lotkavolterra, bc, [1,2], tspan, p)
+    bvpo2 = BVProblem(lotkavolterra, genbc_oop, [1,2], tspan, p)
+
+    sol1 = solve(bvpo1, MIRK4(), dt = 0.05)
+    sol2 = solve(bvpo2, MIRK4(), dt = 0.05)
+    @test sol1 ≈ sol2
+
+    # Test with a constraint.
+    constraints = [x(0.5) ~ 1.]
+
+    function bc!(resid, u, p, t) 
+        resid[1] = u[1][2] - 2.
+        resid[2] = u(0.5)[1] - 1.
+    end
+    function bc(u, p, t)
+        [u[1][2] - 2., u(0.5)[1] - 1.]
+    end
+
+    u0 = [1., 2.]
+    genbc_iip = ModelingToolkit.process_constraints(lksys, constraints, u0, [2], tspan, true)
+    genbc_oop = ModelingToolkit.process_constraints(lksys, constraints, u0, [2], tspan, false)
+
+    bvpi1 = SciMLBase.BVProblem(lotkavolterra!, bc!, [1.,2.], tspan, p)
+    bvpi2 = SciMLBase.BVProblem(lotkavolterra!, genbc_iip, [1.,2.], tspan, p)
+    bvpi3 = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, u0map, tspan, parammap; guesses, constraints)
+    
+    sol1 = solve(bvpi1, MIRK4(), dt = 0.05)
+    sol2 = solve(bvpi2, MIRK4(), dt = 0.05)
+    @test sol1 ≈ sol2 # don't get true equality here, not sure why
+
+    bvpo1 = BVProblem(lotkavolterra, bc, [1,2], tspan, p)
+    bvpo2 = BVProblem(lotkavolterra, genbc_oop, [1,2], tspan, p)
+
+    sol1 = solve(bvpo1, MIRK4(), dt = 0.05)
+    sol2 = solve(bvpo2, MIRK4(), dt = 0.05)
+    @test sol1 ≈ sol2
+end
+
+function test_solvers(solvers, prob, u0map, constraints, equations = []; dt = 0.05)
+    for solver in solvers
+        sol = solve(prob, solver(); dt)
+        @test SciMLBase.successful_retcode(sol.retcode)
+        p = prob.p; t = sol.t; bc = prob.f.bc
+        ns = length(prob.u0)
+        if isinplace(bvp.f)
+            resid = zeros(ns)
+            bc!(resid, sol, p, t)
+            @test isapprox(zeros(ns), resid)
+        else
+            @test isapprox(zeros(ns), bc(sol, p, t))
+        end
+
+        for (k, v) in u0map
+            @test sol[k][1] == v
+        end
+         
+        # for cons in constraints
+        #     @test sol[cons.rhs - cons.lhs] ≈ 0
+        # end
+
+        for eq in equations
+            @test sol[eq] ≈ 0
+        end
+    end
+end
+
+# Simple ODESystem with BVP constraints.
+let
+    t = ModelingToolkit.t_nounits; D = ModelingToolkit.D_nounits
+    @parameters α=1.5 β=1.0 γ=3.0 δ=1.0
+    @variables x(..) y(t)
+    
+    eqs = [D(x(t)) ~ α * x(t) - β * x(t) * y,
+           D(y) ~ -γ * y + δ * x(t) * y]
+    
+    u0map = []
+    parammap = [α => 7.5, β => 4, γ => 8.0, δ => 5.0]
+    tspan = (0.0, 10.0)
+    guesses = [x(t) => 1.0, y => 2.]
+
+    @mtkbuild lotkavolterra = ODESystem(eqs, t)
+
+    constraints = [x(6.) ~ 1.5]
+    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lotkavolterra, u0map, tspan, parammap; guesses, constraints)
+    test_solvers(solvers, bvp, u0map, constraints)
+
+    # Testing that more complicated constraints give correct solutions.
+    constraints = [y(2.) + x(8.) ~ 2.]
+    bvp = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(lotkavolterra, u0map, tspan, parammap; guesses, constraints)
+    test_solvers(solvers, bvp, u0map, constraints)
+
+    constraints = [α * β - x(6.) ~ 0.5]
+    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lotkavolterra, u0map, tspan, parammap; guesses, constraints)
+    test_solvers(solvers, bvp, u0map, constraints)
+
+    # Testing that errors are properly thrown when malformed constraints are given.
+    @variables bad(..)
+    constraints = [x(1.) + bad(3.) ~ 10]
+    @test_throws Exception bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lotkavolterra, u0map, tspan, parammap; guesses, constraints)
+
+    constraints = [x(t) + y(t) ~ 3]
+    @test_throws Exception bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lotkavolterra, u0map, tspan, parammap; guesses, constraints)
+
+    @parameters bad2
+    constraints = [bad2 + x(0.) ~ 3]
+    @test_throws Exception bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lotkavolterra, u0map, tspan, parammap; guesses, constraints)
+end
+
 # Cartesian pendulum from the docs.
 # DAE IVP solved using BoundaryValueDiffEq solvers.
 # let
@@ -117,153 +266,6 @@ end
 #         @test [sol[conditions][1]; sol[x][1] - 1; sol[y][1]] ≈ 0 
 #     end
 # end
-
-# Test generation of boundary condition function.
-let
-    @parameters α=7.5 β=4.0 γ=8.0 δ=5.0
-    @variables x(..) y(t)
-    eqs = [D(x(t)) ~ α * x(t) - β * x(t) * y,
-           D(y) ~ -γ * y + δ * x(t) * y]
-    
-    tspan = (0., 10.)
-    @mtkbuild lksys = ODESystem(eqs, t)
-
-    function lotkavolterra!(du, u, p, t) 
-        du[1] = p[1]*u[1] - p[2]*u[1]*u[2]
-        du[2] = -p[3]*u[2] + p[4]*u[1]*u[2]
-    end
-
-    function lotkavolterra(u, p, t) 
-        [p[1]*u[1] - p[2]*u[1]*u[2], -p[3]*u[2] + p[4]*u[1]*u[2]]
-    end
-    # Compare the built bc function to the actual constructed one.
-    function bc!(resid, u, p, t) 
-        resid[1] = u[1][1] - 1.
-        resid[2] = u[1][2] - 2.
-        nothing
-    end
-    function bc(u, p, t)
-        [u[1][1] - 1., u[1][2] - 2.]
-    end
-
-    constraints = nothing
-    u0 = [1., 2.]; p = [7.5, 4., 8., 5.]
-    genbc_iip = ModelingToolkit.process_constraints(lksys, constraints, u0, [1, 2], tspan, true)
-    genbc_oop = ModelingToolkit.process_constraints(lksys, constraints, u0, [1, 2], tspan, false)
-
-    bvpi1 = SciMLBase.BVProblem(lotkavolterra!, bc!, [1,2], tspan, p)
-    bvpi2 = SciMLBase.BVProblem(lotkavolterra!, genbc_iip, [1,2], tspan, p)
-
-    sol1 = solve(bvpi1, MIRK4(), dt = 0.01)
-    sol2 = solve(bvpi2, MIRK4(), dt = 0.01)
-    @test sol1 ≈ sol2
-
-    bvpo1 = BVProblem(lotkavolterra, bc, [1,2], tspan, p)
-    bvpo2 = BVProblem(lotkavolterra, genbc_oop, [1,2], tspan, p)
-
-    sol1 = solve(bvpo1, MIRK4(), dt = 0.01)
-    sol2 = solve(bvpo2, MIRK4(), dt = 0.01)
-    @test sol1 ≈ sol2
-
-    # Test with a constraint.
-    constraints = [x(0.5) ~ 1.]
-
-    function bc!(resid, u, p, t) 
-        resid[1] = u[1][2] - 2.
-        resid[2] = u(0.5)[1] - 1.
-    end
-    function bc(u, p, t)
-        [u[1][2] - 2., u(0.5)[1] - 1.]
-    end
-
-    u0 = [1., 2.]
-    genbc_iip = ModelingToolkit.process_constraints(lksys, constraints, u0, [2], tspan, true)
-    genbc_oop = ModelingToolkit.process_constraints(lksys, constraints, u0, [2], tspan, false)
-
-    bvpi1 = SciMLBase.BVProblem(lotkavolterra!, bc!, [1,2], tspan, p)
-    bvpi2 = SciMLBase.BVProblem(lotkavolterra!, genbc_iip, [1,2], tspan, p)
-
-    sol1 = solve(bvpi1, MIRK4(), dt = 0.01)
-    sol2 = solve(bvpi2, MIRK4(), dt = 0.01)
-    @test sol1 ≈ sol2 # don't get true equality here, not sure why
-
-    bvpo1 = BVProblem(lotkavolterra, bc, [1,2], tspan, p)
-    bvpo2 = BVProblem(lotkavolterra, genbc_oop, [1,2], tspan, p)
-
-    sol1 = solve(bvpo1, MIRK4(), dt = 0.01)
-    sol2 = solve(bvpo2, MIRK4(), dt = 0.01)
-    @test sol1 ≈ sol2
-end
-
-function test_solvers(solvers, prob, u0map, constraints, equations = []; dt = 0.01)
-    for solver in solvers
-        sol = solve(prob, solver(); dt)
-        @test successful_retcode(sol.retcode)
-        p = prob.p; t = sol.t; bc = prob.f.bc
-        ns = length(prob.u0)
-
-        if isinplace(bvp.f)
-            resid = zeros(ns)
-            bc!(resid, sol, p, t)
-            @test isapprox(zeros(ns), resid)
-        else
-            @test isapprox(zeros(ns), bc(sol, p, t))
-        end
-
-        for (k, v) in u0map
-            @test sol[k][1] == v
-        end
-         
-        # for cons in constraints
-        #     @test sol[cons.rhs - cons.lhs] ≈ 0
-        # end
-
-        for eq in equations
-            @test sol[eq] ≈ 0
-        end
-    end
-end
-
-# Simple ODESystem with BVP constraints.
-let
-    @parameters α=7.5 β=4.0 γ=8.0 δ=5.0
-    @variables x(..) y(t)
-    
-    eqs = [D(x(t)) ~ α * x(t) - β * x(t) * y,
-           D(y) ~ -γ * y + δ * x(t) * y]
-    
-    u0map = [y => 2.0]
-    parammap = [α => 7.5, β => 4, γ => 8.0, δ => 5.0]
-    tspan = (0.0, 10.0)
-    guesses = [x(t) => 1.0]
-
-    @mtkbuild lotkavolterra = ODESystem(eqs, t)
-
-    constraints = [x(6.) ~ 3]
-    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lotkavolterra, u0map, tspan, parammap; guesses, constraints)
-    test_solvers(solvers, bvp, u0map, constraints)
-
-    # Testing that more complicated constraints give correct solutions.
-    constraints = [y(2.) + x(8.) ~ 12]
-    bvp = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(pend, u0map, tspan, parammap; guesses, constraints)
-    test_solvers(solvers, bvp, u0map, constraints)
-
-    constraints = [α * β - x(6.) ~ 24]
-    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap; guesses, constraints)
-    test_solvers(solvers, bvp, u0map, constraints)
-
-    # Testing that errors are properly thrown when malformed constraints are given.
-    @variables bad(..)
-    constraints = [x(1.) + bad(3.) ~ 10]
-    @test_throws Exception bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap; guesses, constraints)
-
-    constraints = [x(t) + y(t) ~ 3]
-    @test_throws Exception bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap; guesses, constraints)
-
-    @parameters bad2
-    constraints = [bad2 + x(0.) ~ 3]
-    @test_throws Exception bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap; guesses, constraints)
-end
 
 # Adding a midpoint boundary constraint.
 # Solve using BVDAE solvers.

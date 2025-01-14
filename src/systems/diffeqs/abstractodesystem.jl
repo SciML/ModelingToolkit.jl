@@ -939,7 +939,7 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
     ps = parameters(sys)
 
     # Constraint validation
-    f_cons = if !isnothing(constraints)
+    if !isnothing(constraints)
         constraints isa Equation || 
             constraints isa Vector{Equation} || 
             error("Constraints must be specified as an equation or a vector of equations.")
@@ -958,32 +958,6 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
     stidxmap = Dict([v => i for (i, v) in enumerate(sts)])
     u0_idxs = has_alg_eqs(sys) ? collect(1:length(sts)) : [stidxmap[k] for (k,v) in u0map]
 
-    # bc = if !isnothing(constraints) && iip
-    #     (residual,u,p,t) -> begin
-    #         println(u(0.5))
-    #         residual[1:ni] .= u[1][u0i] .- u0[u0i]
-    #         for (i, cons) in enumerate(constraints)
-    #             residual[ni+i] = eval_symbolic_residual(cons, u, p, stidxmap, pidxmap, iv, tspan)
-    #         end
-    #     end
-
-    # elseif !isnothing(constraints) && !iip
-    #     (u,p,t) -> begin
-    #         consresid = map(constraints) do cons
-    #             eval_symbolic_residual(cons, u, p, stidxmap, pidxmap, iv, tspan)
-    #         end
-    #         resid = vcat(u[1][u0i] - u0[u0i], consresid)
-    #     end
-
-    # elseif iip
-    #     (residual,u,p,t) -> begin
-    #         println(u(0.5))
-    #         residual .= u[1] .- u0
-    #     end
-
-    # else
-    #     (u,p,t) -> (u[1] - u0)
-    # end
     bc = process_constraints(sys, constraints, u0, u0_idxs, tspan, iip)
 
     return BVProblem{iip}(f, bc, u0, tspan, p; kwargs...)
@@ -1075,11 +1049,10 @@ function process_constraints(sys::ODESystem, constraints, u0, u0_idxs, tspan, ii
     end
 
     exprs = vcat(init_cond_exprs, exprs)
+    @show exprs
     bcs = Symbolics.build_function(exprs, sol, p, expression = Val{false})
     if iip
-        return (resid, u, p, t) -> begin
-            bcs[2](resid, u, p)
-        end
+        return (resid, u, p, t) -> bcs[2](resid, u, p)
     else
         return (u, p, t) -> bcs[1](u, p)
     end
