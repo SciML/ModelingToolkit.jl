@@ -931,68 +931,60 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
     end
     !isnothing(callback) && error("BVP solvers do not support callbacks.")
 
-    iv = get_iv(sys)
+    has_alg_eqs(sys) && error("The BVProblem currently does not support ODESystems with algebraic equations.") # Remove this when the BVDAE solvers get updated, the codegen should work when it does.
+
     constraintsts = nothing
     constraintps = nothing
     sts = unknowns(sys)
     ps = parameters(sys)
 
-    if !isnothing(constraints)
+    # Constraint validation
+    f_cons = if !isnothing(constraints)
         constraints isa Equation || 
             constraints isa Vector{Equation} || 
             error("Constraints must be specified as an equation or a vector of equations.")
 
         (length(constraints) + length(u0map) > length(sts)) && 
-            error("The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) cannot exceed the total number of states.")
-
-        constraintsts = OrderedSet()
-        constraintps = OrderedSet()
-
-        for eq in constraints
-            collect_vars!(constraintsts, constraintps, eq, iv)
-            validate_constraint_syms(eq, constraintsts, constraintps, Set(sts), Set(ps), iv)
-            empty!(constraintsts)
-            empty!(constraintps)
-        end
+        error("The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) cannot exceed the total number of states.")
     end
 
-    f, u0, p = process_SciMLProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
+    # ODESystems without algebraic equations should use both fixed values + guesses
+    # for initialization.
+    _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses)) 
+    f, u0, p = process_SciMLProblem(ODEFunction{iip, specialize}, sys, _u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan, guesses,
         check_length, warn_initialize_determined, eval_expression, eval_module, kwargs...)
 
     stidxmap = Dict([v => i for (i, v) in enumerate(sts)])
-    pidxmap = Dict([v => i for (i, v) in enumerate(ps)])
+    u0_idxs = has_alg_eqs(sys) ? collect(1:length(sts)) : [stidxmap[k] for (k,v) in u0map]
 
-    # Indices of states that have initial constraints.
-    u0i = has_alg_eqs(sys) ? collect(1:length(sts)) : [stidxmap[k] for (k,v) in u0map]
-    ni = length(u0i)
-    
-    bc = if !isnothing(constraints)
-        ne = length(constraints)
-        if iip
-            (residual,u,p,t) -> begin
-                residual[1:ni] .= u[1][u0i] .- u0[u0i]
-                residual[ni+1:ni+ne] .= map(constraints) do cons
-                    sub_u_p_into_symeq(cons.rhs - cons.lhs, u, p, stidxmap, pidxmap, iv, tspan)
-                end
-            end
-        else
-            (u,p,t) -> begin
-                consresid = map(constraints) do cons
-                    sub_u_p_into_symeq(cons.rhs-cons.lhs, u, p, stidxmap, pidxmap, iv, tspan)
-                end
-                resid = vcat(u[1][u0i] - u0[u0i], consresid)
-            end
-        end
-    else
-        if iip
-            (residual,u,p,t) -> begin
-                residual .= u[1] .- u0
-            end
-        else
-            (u,p,t) -> (u[1] - u0)
-        end
-    end
+    # bc = if !isnothing(constraints) && iip
+    #     (residual,u,p,t) -> begin
+    #         println(u(0.5))
+    #         residual[1:ni] .= u[1][u0i] .- u0[u0i]
+    #         for (i, cons) in enumerate(constraints)
+    #             residual[ni+i] = eval_symbolic_residual(cons, u, p, stidxmap, pidxmap, iv, tspan)
+    #         end
+    #     end
+
+    # elseif !isnothing(constraints) && !iip
+    #     (u,p,t) -> begin
+    #         consresid = map(constraints) do cons
+    #             eval_symbolic_residual(cons, u, p, stidxmap, pidxmap, iv, tspan)
+    #         end
+    #         resid = vcat(u[1][u0i] - u0[u0i], consresid)
+    #     end
+
+    # elseif iip
+    #     (residual,u,p,t) -> begin
+    #         println(u(0.5))
+    #         residual .= u[1] .- u0
+    #     end
+
+    # else
+    #     (u,p,t) -> (u[1] - u0)
+    # end
+    bc = process_constraints(sys, constraints, u0, u0_idxs, tspan, iip)
 
     return BVProblem{iip}(f, bc, u0, tspan, p; kwargs...)
 end
@@ -1001,11 +993,10 @@ get_callback(prob::BVProblem) = error("BVP solvers do not support callbacks.")
 
 # Validate that all the variables in the BVP constraints are well-formed states or parameters.
 function validate_constraint_syms(eq, constraintsts, constraintps, sts, ps, iv) 
-    ModelingToolkit.check_variables(constraintsts)
-    ModelingToolkit.check_parameters(constraintps)
-
     for var in constraintsts
-        if arguments(var) == iv
+        if length(arguments(var)) > 1
+            error("Too many arguments for variable $var.")
+        elseif arguments(var) == iv
             var ∈ sts || error("Constraint equation $eq contains a variable $var that is not a variable of the ODESystem.")
             error("Constraint equation $eq contains a variable $var that does not have a specified argument. Such equations should be specified as algebraic equations to the ODESystem rather than a boundary constraints.")
         else
@@ -1017,53 +1008,81 @@ function validate_constraint_syms(eq, constraintsts, constraintps, sts, ps, iv)
         if !iscall(var)
             var ∈ ps || error("Constraint equation $eq contains a parameter $var that is not a parameter of the ODESystem.")
         else
+            length(arguments(var)) > 1 && error("Too many arguments for parameter $var.")
             operation(var) ∈ ps || error("Constraint equations contain a parameter $var that is not a parameter of the ODESystem.")
         end
     end
 end
 
-# Helper to substitute numeric values for u, p into the algebraic equations in the ODESystem. Used to construct the boundary condition function. 
-#   Take a system with variables x,y, parameters g
-#
-#   1 + x(0) + y(0) → 1 + u[1][1] + u[1][2]
-#   x(0.5) → u(0.5)[1]
-#   x(0.5)*g(0.5) → u(0.5)[1]*p[1]
-function sub_u_p_into_symeq(eq, u, p, stidxmap, pidxmap, iv, tspan)
-    eq = Symbolics.unwrap(eq)
+"""
+    process_constraints(sys, constraints, u0, tspan, iip)
 
-    stmap = Dict([st => u[1][i] for (st, i) in stidxmap])
-    pmap = Dict([pa => p[i] for (pa, i) in pidxmap])
-    eq = Symbolics.substitute(eq, merge(stmap, pmap))
+    Given an ODESystem with some constraints, generate the boundary condition function.
+"""
+function process_constraints(sys::ODESystem, constraints, u0, u0_idxs, tspan, iip)
 
-    csyms = []
-    # Find most nested calls, substitute those first.
-    while !isempty(find_callable_syms!(csyms, eq))
-        for sym in csyms 
-            x = operation(sym)
-            t = arguments(sym)[1]
-            prog = (tspan[2] - tspan[1])/(t - tspan[1]) # 1 / the % of the timespan elapsed
+    iv = get_iv(sys)
+    sts = get_unknowns(sys)
+    ps = get_ps(sys)
+    np = length(ps)
+    ns = length(sts)
 
-            if isparameter(x)
-                eq = Symbolics.substitute(eq, Dict(x(t) => p[pidxmap[x(iv)]]))
-            elseif isvariable(x)
-                eq = Symbolics.substitute(eq, Dict(x(t) => u[Int(end ÷ prog)][stidxmap[x(iv)]]))
+    stidxmap = Dict([v => i for (i, v) in enumerate(sts)])
+    pidxmap = Dict([v => i for (i, v) in enumerate(ps)])
+
+    @variables sol(..)[1:ns] p[1:np]
+    exprs = Any[]
+
+    constraintsts = OrderedSet()
+    constraintps = OrderedSet()
+
+    !isnothing(constraints) && for cons in constraints
+        collect_vars!(constraintsts, constraintps, cons, iv)
+        validate_constraint_syms(cons, constraintsts, constraintps, Set(sts), Set(ps), iv)
+        expr = cons.rhs - cons.lhs
+
+        for st in constraintsts
+            x = operation(st)
+            t = arguments(st)[1]
+            idx = stidxmap[x(iv)]
+
+            expr = Symbolics.substitute(expr, Dict(x(t) => sol(t)[idx]))
+        end
+
+        for var in constraintps
+            if iscall(var)
+                x = operation(var)
+                t = arguments(var)[1]
+                idx = pidxmap[x]
+
+                expr = Symbolics.substitute(expr, Dict(x(t) => p[idx]))
+            else
+                idx = pidxmap[var]
+                expr = Symbolics.substitute(expr, Dict(var => p[idx]))
             end
         end
-        empty!(csyms)
+
+        empty!(constraintsts)
+        empty!(constraintps)
+        push!(exprs, expr)
     end
-    eq
-end
 
-function find_callable_syms!(csyms, ex)
-    ex = Symbolics.unwrap(ex)
+    init_cond_exprs = Any[]
 
-    if iscall(ex)
-        operation(ex) isa Symbolic && (arguments(ex)[1] isa Symbolic) && push!(csyms, ex) # only add leaf nodes 
-        for arg in arguments(ex)
-            find_callable_syms!(csyms, arg)
+    for i in u0_idxs
+        expr = sol(tspan[1])[i] - u0[i]
+        push!(init_cond_exprs, expr)
+    end
+
+    exprs = vcat(init_cond_exprs, exprs)
+    bcs = Symbolics.build_function(exprs, sol, p, expression = Val{false})
+    if iip
+        return (resid, u, p, t) -> begin
+            bcs[2](resid, u, p)
         end
+    else
+        return (u, p, t) -> bcs[1](u, p)
     end
-    csyms 
 end
 
 """
