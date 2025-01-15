@@ -32,7 +32,7 @@ initprob = ModelingToolkit.InitializationProblem(pend, 0.0, [x => 1, y => 0], [g
 @test initprob isa NonlinearLeastSquaresProblem
 sol = solve(initprob)
 @test SciMLBase.successful_retcode(sol)
-@test sol.u == [0.0, 0.0, 0.0, 0.0]
+@test all(iszero, sol.u)
 @test maximum(abs.(sol[conditions])) < 1e-14
 
 initprob = ModelingToolkit.InitializationProblem(
