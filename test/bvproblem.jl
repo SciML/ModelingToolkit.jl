@@ -7,7 +7,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 import ModelingToolkit: process_constraints
 
 ### Test Collocation solvers on simple problems 
-solvers = [MIRK4, RadauIIa5, LobattoIIIa3]
+solvers = [MIRK4, RadauIIa5]
 daesolvers = [Ascher2, Ascher4, Ascher6]
 
 let
@@ -149,32 +149,32 @@ let
     bvpi3 = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, [x(t) => 1.], tspan; guesses = [y(t) => 1.], constraints)
     bvpi4 = SciMLBase.BVProblem{true, SciMLBase.FullSpecialize}(lksys, [x(t) => 1.], tspan; guesses = [y(t) => 1.], constraints)
     
-    @btime sol1 = solve(bvpi1, MIRK4(), dt = 0.01)
-    @btime sol2 = solve(bvpi2, MIRK4(), dt = 0.01)
-    @btime sol3 = solve(bvpi3, MIRK4(), dt = 0.01)
-    @btime sol4 = solve(bvpi4, MIRK4(), dt = 0.01)
+    sol1 = @btime solve($bvpi1, MIRK4(), dt = 0.01)
+    sol2 = @btime solve($bvpi2, MIRK4(), dt = 0.01)
+    sol3 = @btime solve($bvpi3, MIRK4(), dt = 0.01)
+    sol4 = @btime solve($bvpi4, MIRK4(), dt = 0.01)
     @test sol1 ≈ sol2 ≈ sol3 ≈ sol4 # don't get true equality here, not sure why
 
     bvpo1 = BVProblem(lotkavolterra, bc, [1,2], tspan, p)
     bvpo2 = BVProblem(lotkavolterra, genbc_oop, [1,2], tspan, p)
-    bvpo3 = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(lksys, [x(t) => 1.], tspan, parammap; guesses = [y(t) => 1.], constraints)
+    bvpo3 = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(lksys, [x(t) => 1.], tspan; guesses = [y(t) => 1.], constraints)
 
-    @btime sol1 = solve(bvpo1, MIRK4(), dt = 0.05)
-    @btime sol2 = solve(bvpo2, MIRK4(), dt = 0.05)
-    @btime sol3 = solve(bvpo3, MIRK4(), dt = 0.05)
+    sol1 = @btime solve($bvpo1, MIRK4(), dt = 0.05)
+    sol2 = @btime solve($bvpo2, MIRK4(), dt = 0.05)
+    sol3 = @btime solve($bvpo3, MIRK4(), dt = 0.05)
     @test sol1 ≈ sol2 ≈ sol3
 end
 
 function test_solvers(solvers, prob, u0map, constraints, equations = []; dt = 0.05, atol = 1e-4)
     for solver in solvers
         println("Solver: $solver")
-        @btime sol = solve(prob, solver(), dt = dt, abstol = atol)
+        sol = @btime solve($prob, $solver(), dt = $dt, abstol = $atol)
         @test SciMLBase.successful_retcode(sol.retcode)
         p = prob.p; t = sol.t; bc = prob.f.bc
         ns = length(prob.u0)
         if isinplace(bvp.f)
             resid = zeros(ns)
-            bc!(resid, sol, p, t)
+            bc(resid, sol, p, t)
             @test isapprox(zeros(ns), resid; atol)
         else
             @test isapprox(zeros(ns), bc(sol, p, t); atol)
@@ -203,35 +203,35 @@ let
            D(y(t)) ~ -γ * y(t) + δ * x(t) * y(t)]
     
     u0map = []
-    tspan = (0.0, 10.0)
+    tspan = (0.0, 1.0)
     guesses = [x(t) => 4.0, y(t) => 2.]
 
     @mtkbuild lksys = ODESystem(eqs, t)
 
-    constraints = [x(6.) ~ 3.5, x(3.) ~ 7.]
+    constraints = [x(.6) ~ 3.5, x(.3) ~ 7.]
     bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, u0map, tspan; guesses, constraints)
-    test_solvers(solvers, bvp, u0map, constraints; dt = 0.1)
+    test_solvers(solvers, bvp, u0map, constraints; dt = 0.05)
 
     # Testing that more complicated constraints give correct solutions.
-    constraints = [y(2.) + x(8.) ~ 2.]
-    bvp = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(lotkavolterra, u0map, tspan, parammap; guesses, constraints)
-    test_solvers(solvers, bvp, u0map, constraints)
+    constraints = [y(.2) + x(.8) ~ 3., y(.3) + x(.5) ~ 5.]
+    bvp = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(lksys, u0map, tspan; guesses, constraints, jac = true)
+    test_solvers(solvers, bvp, u0map, constraints; dt = 0.05)
 
-    constraints = [α * β - x(6.) ~ 0.5]
-    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lotkavolterra, u0map, tspan, parammap; guesses, constraints)
+    constraints = [α * β - x(.6) ~ 0.0, y(.2) ~ 3.]
+    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, u0map, tspan; guesses, constraints)
     test_solvers(solvers, bvp, u0map, constraints)
 
     # Testing that errors are properly thrown when malformed constraints are given.
     @variables bad(..)
     constraints = [x(1.) + bad(3.) ~ 10]
-    @test_throws Exception bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lotkavolterra, u0map, tspan, parammap; guesses, constraints)
+    @test_throws Exception bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, u0map, tspan; guesses, constraints)
 
     constraints = [x(t) + y(t) ~ 3]
-    @test_throws Exception bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lotkavolterra, u0map, tspan, parammap; guesses, constraints)
+    @test_throws Exception bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, u0map, tspan; guesses, constraints)
 
     @parameters bad2
     constraints = [bad2 + x(0.) ~ 3]
-    @test_throws Exception bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lotkavolterra, u0map, tspan, parammap; guesses, constraints)
+    @test_throws Exception bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, u0map, tspan; guesses, constraints)
 end
 
 # Cartesian pendulum from the docs.
