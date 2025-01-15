@@ -580,7 +580,7 @@ struct CacheWriter{F}
 end
 
 function (cw::CacheWriter)(p, sols)
-    cw.fn(p.caches..., sols, p...)
+    cw.fn(p.caches, sols, p...)
 end
 
 function CacheWriter(sys::AbstractSystem, buffer_types::Vector{TypeT},
@@ -594,10 +594,10 @@ function CacheWriter(sys::AbstractSystem, buffer_types::Vector{TypeT},
 
     outsyms = [Symbol(:out, i) for i in eachindex(buffer_types)]
     body = map(eachindex(buffer_types), buffer_types) do i, T
-        Symbol(:tmp, i) ← SetArray(true, outsyms[i], get(exprs, T, []))
+        Symbol(:tmp, i) ← SetArray(true, :(out[$i]), get(exprs, T, []))
     end
     fn = Func(
-             [outsyms..., DestructuredArgs(DestructuredArgs.(solsyms)),
+             [:out, DestructuredArgs(DestructuredArgs.(solsyms)),
                  DestructuredArgs.(rps)...],
              [],
              Let(body, :())
