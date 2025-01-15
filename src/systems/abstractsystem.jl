@@ -1919,7 +1919,7 @@ function Base.show(
     nrows > 0 && hint && print(io, " see hierarchy($name)")
     for i in 1:nrows
         sub = subs[i]
-        name = String(nameof(sub))
+        local name = String(nameof(sub))
         print(io, "\n  ", name)
         desc = description(sub)
         if !isempty(desc)
