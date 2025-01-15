@@ -860,12 +860,11 @@ SciMLBase.BVProblem{iip}(sys::AbstractODESystem, u0map, tspan,
                          kwargs...) where {iip}
 ```
 
-Create a boundary value problem from the [`ODESystem`](@ref). The arguments `dvs` and
-`ps` are used to set the order of the dependent variable and parameter vectors,
-respectively. `u0map` is used to specify fixed initial values for the states.
+Create a boundary value problem from the [`ODESystem`](@ref). 
 
-Every variable must have either an initial guess supplied using `guesses` or 
-a fixed initial value specified using `u0map`.
+`u0map` is used to specify fixed initial values for the states. Every variable 
+must have either an initial guess supplied using `guesses` or a fixed initial 
+value specified using `u0map`.
 
 `constraints` are used to specify boundary conditions to the ODESystem in the
 form of equations. These values should specify values that state variables should
@@ -1049,7 +1048,6 @@ function process_constraints(sys::ODESystem, constraints, u0, u0_idxs, tspan, ii
     end
 
     exprs = vcat(init_cond_exprs, exprs)
-    @show exprs
     bcs = Symbolics.build_function(exprs, sol, p, expression = Val{false})
     if iip
         return (resid, u, p, t) -> bcs[2](resid, u, p)
