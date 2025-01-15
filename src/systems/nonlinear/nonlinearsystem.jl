@@ -695,6 +695,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
     scc_cachevars = Dict{TypeT, Vector{Any}}[]
     scc_cacheexprs = Dict{TypeT, Vector{Any}}[]
     scc_eqs = Vector{Equation}[]
+    scc_obs = Vector{Equation}[]
     for (i, (escc, vscc)) in enumerate(zip(eq_sccs, var_sccs))
         # subset unknowns and equations
         _dvs = dvs[vscc]
@@ -708,10 +709,8 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         # get all subexpressions in the RHS which we can precompute in the cache
         # precomputed subexpressions should not contain `banned_vars`
         banned_vars = Set{Any}(vcat(_dvs, getproperty.(_obs, (:lhs,))))
-        for var in banned_vars
-            iscall(var) || continue
-            operation(var) === getindex || continue
-            push!(banned_vars, arguments(var)[1])
+        filter!(banned_vars) do var
+            symbolic_type(var) != ArraySymbolic() || all(x -> var[i] in banned_vars, eachindex(var))
         end
         state = Dict()
         for i in eachindex(_obs)
@@ -762,15 +761,15 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         push!(scc_cachevars, cachevars)
         push!(scc_cacheexprs, cacheexprs)
         push!(scc_eqs, _eqs)
+        push!(scc_obs, _obs)
         blockpush!(prevobsidxs, obsidxs)
     end
 
     for (i, (escc, vscc)) in enumerate(zip(eq_sccs, var_sccs))
         _dvs = dvs[vscc]
         _eqs = scc_eqs[i]
-        obsidxs = prevobsidxs[Block(i)]
         _prevobsidxs = reduce(vcat, blocks(prevobsidxs)[1:(i - 1)]; init = Int[])
-        _obs = obs[obsidxs]
+        _obs = scc_obs[i]
         cachevars = scc_cachevars[i]
         cacheexprs = scc_cacheexprs[i]
 
