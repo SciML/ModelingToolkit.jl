@@ -1108,10 +1108,15 @@ returns the modified `expr`.
 """
 function subexpressions_not_involving_vars!(expr, vars, state::Dict{Any, Any})
     expr = unwrap(expr)
-    symbolic_type(expr) == NotSymbolic() && return expr
+    if symbolic_type(expr) == NotSymbolic()
+        if is_array_of_symbolics(expr)
+            return map(expr) do el
+                subexpressions_not_involving_vars!(el, vars, state)
+            end
+        end
+        return expr
+    end
     iscall(expr) || return expr
-    is_variable_floatingpoint(expr) || return expr
-    symtype(expr) <: Union{Real, AbstractArray{<:Real}} || return expr
     Symbolics.shape(expr) == Symbolics.Unknown() && return expr
     haskey(state, expr) && return state[expr]
     vs = ModelingToolkit.vars(expr)
@@ -1143,7 +1148,6 @@ function subexpressions_not_involving_vars!(expr, vars, state::Dict{Any, Any})
         return op(indep_term, dep_term)
     end
     newargs = map(args) do arg
-        symbolic_type(arg) != NotSymbolic() || is_array_of_symbolics(arg) || return arg
         subexpressions_not_involving_vars!(arg, vars, state)
     end
     return maketerm(typeof(expr), op, newargs, metadata(expr))
