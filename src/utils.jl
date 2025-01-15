@@ -1116,20 +1116,25 @@ function subexpressions_not_involving_vars!(expr, vars, state::Dict{Any, Any})
         end
         return expr
     end
+    any(isequal(expr), vars) && return expr
     iscall(expr) || return expr
     Symbolics.shape(expr) == Symbolics.Unknown() && return expr
     haskey(state, expr) && return state[expr]
-    vs = ModelingToolkit.vars(expr)
-    intersect!(vs, vars)
-    if isempty(vs)
+    op = operation(expr)
+    args = arguments(expr)
+    # if this is a `getindex` and the getindex-ed value is a `Sym`
+    # or it is not a called parameter
+    # OR
+    # none of `vars` are involved in `expr`
+    if op === getindex && (issym(args[1]) || !iscalledparameter(args[1])) ||
+       (vs = ModelingToolkit.vars(expr); intersect!(vs, vars); isempty(vs))
         sym = gensym(:subexpr)
         stype = symtype(expr)
         var = similar_variable(expr, sym)
         state[expr] = var
         return var
     end
-    op = operation(expr)
-    args = arguments(expr)
+
     if (op == (+) || op == (*)) && symbolic_type(expr) !== ArraySymbolic()
         indep_args = []
         dep_args = []
