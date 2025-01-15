@@ -161,3 +161,95 @@ end
     @test SciMLBase.successful_retcode(sccsol)
     @test val[] == 1
 end
+
+import ModelingToolkitStandardLibrary.Blocks as B
+import ModelingToolkitStandardLibrary.Mechanical.Translational as T
+import ModelingToolkitStandardLibrary.Hydraulic.IsothermalCompressible as IC
+
+@testset "Caching of subexpressions of different types" begin
+    liquid_pressure(rho, rho_0, bulk) = (rho / rho_0 - 1) * bulk
+    gas_pressure(rho, rho_0, p_gas, rho_gas) = rho * ((0 - p_gas) / (rho_0 - rho_gas))
+    full_pressure(rho, rho_0, bulk, p_gas, rho_gas) = ifelse(
+        rho >= rho_0, liquid_pressure(rho, rho_0, bulk),
+        gas_pressure(rho, rho_0, p_gas, rho_gas))
+
+    @component function Volume(;
+            #parameters
+            area,
+            direction = +1,
+            x_int,
+            name)
+        pars = @parameters begin
+            area = area
+            x_int = x_int
+            rho_0 = 1000
+            bulk = 1e9
+            p_gas = -1000
+            rho_gas = 1
+        end
+
+        vars = @variables begin
+            x(t) = x_int
+            dx(t), [guess = 0]
+            p(t), [guess = 0]
+            f(t), [guess = 0]
+            rho(t), [guess = 0]
+            m(t), [guess = 0]
+            dm(t), [guess = 0]
+        end
+
+        systems = @named begin
+            port = IC.HydraulicPort()
+            flange = T.MechanicalPort()
+        end
+
+        eqs = [
+               # connectors
+               port.p ~ p
+               port.dm ~ dm
+               flange.v * direction ~ dx
+               flange.f * direction ~ -f
+
+               # differentials
+               D(x) ~ dx
+               D(m) ~ dm
+
+               # physics
+               p ~ full_pressure(rho, rho_0, bulk, p_gas, rho_gas)
+               f ~ p * area
+               m ~ rho * x * area]
+
+        return ODESystem(eqs, t, vars, pars; name, systems)
+    end
+
+    systems = @named begin
+        fluid = IC.HydraulicFluid(; bulk_modulus = 1e9)
+
+        src1 = IC.Pressure(;)
+        src2 = IC.Pressure(;)
+
+        vol1 = Volume(; area = 0.01, direction = +1, x_int = 0.1)
+        vol2 = Volume(; area = 0.01, direction = +1, x_int = 0.1)
+
+        mass = T.Mass(; m = 10)
+
+        sin1 = B.Sine(; frequency = 0.5, amplitude = +0.5e5, offset = 10e5)
+        sin2 = B.Sine(; frequency = 0.5, amplitude = -0.5e5, offset = 10e5)
+    end
+
+    eqs = [connect(fluid, src1.port)
+           connect(fluid, src2.port)
+           connect(src1.port, vol1.port)
+           connect(src2.port, vol2.port)
+           connect(vol1.flange, mass.flange, vol2.flange)
+           connect(src1.p, sin1.output)
+           connect(src2.p, sin2.output)]
+
+    initialization_eqs = [mass.s ~ 0.0
+                          mass.v ~ 0.0]
+
+    @mtkbuild sys = ODESystem(eqs, t, [], []; systems, initialization_eqs)
+    prob = ODEProblem(sys, [], (0, 5))
+    sol = solve(prob)
+    @test SciMLBase.successful_retcode(sol)
+end
