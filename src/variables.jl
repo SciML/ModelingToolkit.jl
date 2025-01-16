@@ -29,7 +29,7 @@ ModelingToolkit.dump_variable_metadata(p)
 """
 function dump_variable_metadata(var)
     uvar = unwrap(var)
-    vartype, name = get(uvar.metadata, VariableSource, (:unknown, :unknown))
+    vartype, name = Symbolics.getmetadata(uvar, VariableSource, (:unknown, :unknown))
     type = symtype(uvar)
     if type <: AbstractArray
         shape = Symbolics.shape(var)
@@ -39,14 +39,14 @@ function dump_variable_metadata(var)
     else
         shape = nothing
     end
-    unit = get(uvar.metadata, VariableUnit, nothing)
-    connect = get(uvar.metadata, VariableConnectType, nothing)
-    noise = get(uvar.metadata, VariableNoiseType, nothing)
+    unit = getunit(uvar)
+    connect = getconnect(uvar)
+    noise = getnoise(uvar) 
     input = isinput(uvar) || nothing
     output = isoutput(uvar) || nothing
-    irreducible = get(uvar.metadata, VariableIrreducible, nothing)
-    state_priority = get(uvar.metadata, VariableStatePriority, nothing)
-    misc = get(uvar.metadata, VariableMisc, nothing)
+    irreducible = isirreducible(var)
+    state_priority = Symbolics.getmetadata(uvar, VariableStatePriority, nothing)
+    misc = getmisc(uvar)
     bounds = hasbounds(uvar) ? getbounds(uvar) : nothing
     desc = getdescription(var)
     if desc == ""
@@ -57,12 +57,13 @@ function dump_variable_metadata(var)
     disturbance = isdisturbance(uvar) || nothing
     tunable = istunable(uvar, isparameter(uvar))
     dist = getdist(uvar)
-    type = symtype(uvar)
+    variable_type = getvariabletype(uvar)
 
     meta = (
         var = var,
         vartype,
         name,
+        variable_type,
         shape,
         unit,
         connect,
@@ -85,11 +86,28 @@ function dump_variable_metadata(var)
     return NamedTuple(k => v for (k, v) in pairs(meta) if v !== nothing)
 end
 
+### Connect
 abstract type AbstractConnectType end
 struct Equality <: AbstractConnectType end # Equality connection
 struct Flow <: AbstractConnectType end     # sum to 0
 struct Stream <: AbstractConnectType end   # special stream connector
 
+"""
+    getconnect(x)
+
+Get the connect type of x. See also [`hasconnect`](@ref).
+"""
+getconnect(x) = getconnect(unwrap(x))
+getconnect(x::Symbolic) = Symbolics.getmetadata(x, VariableConnectType, nothing)
+"""
+    hasconnect(x)
+
+Determine whether variable `x` has a connect type. See also [`getconnect`](@ref).
+"""
+hasconnect(x) = getconnect(x) !== nothing
+setconnect(x, t::Type{T}) where T <: AbstractConnectType = setmetadata(x, VariableConnectType, t)
+
+### Input, Output, Irreducible 
 isvarkind(m, x::Union{Num, Symbolics.Arr}) = isvarkind(m, value(x))
 function isvarkind(m, x)
     iskind = getmetadata(x, m, nothing)
@@ -98,15 +116,17 @@ function isvarkind(m, x)
     getmetadata(x, m, false)
 end
 
-setinput(x, v) = setmetadata(x, VariableInput, v)
-setoutput(x, v) = setmetadata(x, VariableOutput, v)
-setio(x, i, o) = setoutput(setinput(x, i), o)
+setinput(x, v::Bool) = setmetadata(x, VariableInput, v)
+setoutput(x, v::Bool) = setmetadata(x, VariableOutput, v)
+setio(x, i::Bool, o::Bool) = setoutput(setinput(x, i), o)
+
 isinput(x) = isvarkind(VariableInput, x)
 isoutput(x) = isvarkind(VariableOutput, x)
+
 # Before the solvability check, we already have handled IO variables, so
 # irreducibility is independent from IO.
 isirreducible(x) = isvarkind(VariableIrreducible, x)
-setirreducible(x, v) = setmetadata(x, VariableIrreducible, v)
+setirreducible(x, v::Bool) = setmetadata(x, VariableIrreducible, v)
 state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))::Float64
 
 function default_toterm(x)
@@ -545,3 +565,52 @@ function get_default_or_guess(x)
         return getguess(x)
     end
 end
+
+## Miscellaneous metadata ======================================================================
+"""
+    getmisc(x)
+
+Fetch any miscellaneous data associated with symbolic variable `x`.
+See also [`hasmisc(x)`](@ref).
+"""
+getmisc(x) = getmisc(unwrap(x))
+getmisc(x::Symbolic) = Symbolics.getmetadata(x, VariableMisc, nothing)
+"""
+    hasmisc(x)
+
+Determine whether a symbolic variable `x` has misc
+metadata associated with it. 
+
+See also [`getmisc(x)`](@ref).
+"""
+hasmisc(x) = getmisc(x) !== nothing
+setmisc(x, miscdata) = setmetadata(x, VariableMisc, miscdata) 
+
+## Units ======================================================================
+"""
+    getunit(x)
+
+Alias for [`get_unit(x)`](@ref).
+"""
+getunit(x) = get_unit(x)
+"""
+    hasunit(x)
+
+Check if the variable `x` has a unit.
+"""
+hasunit(x) = getunit(x) !== nothing
+
+## Noise ======================================================================
+"""
+    getnoise(x)
+
+Get the noise type of variable `x`.
+"""
+getnoise(x) = getnoise(unwrap(x))
+getnoise(x::Symbolic) = Symbolics.getmetadata(x, VariableNoiseType, nothing)
+"""
+    hasnoise(x)
+
+Determine if variable `x` has a noise type.
+"""
+hasnoise(x) = getnoise(x) !== nothing
