@@ -1294,6 +1294,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
         fully_determined = nothing,
         check_units = true,
         use_scc = true,
+        allow_incomplete = false,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
@@ -1335,7 +1336,13 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
     # TODO: throw on uninitialized arrays
     filter!(x -> !(x isa Symbolics.Arr), uninit)
     if !isempty(uninit)
-        throw(IncompleteInitializationError(uninit))
+        allow_incomplete || throw(IncompleteInitializationError(uninit))
+        # for incomplete initialization, we will add the missing variables as parameters.
+        # they will be updated by `update_initializeprob!` and `initializeprobmap` will
+        # use them to construct the new `u0`.
+        newparams = map(toparam, uninit)
+        append!(get_ps(isys), newparams)
+        isys = complete(isys)
     end
 
     neqs = length(equations(isys))
