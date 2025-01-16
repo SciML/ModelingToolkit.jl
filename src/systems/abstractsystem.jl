@@ -1010,9 +1010,7 @@ for prop in [:eqs
              :tstops
              :index_cache
              :is_scalar_noise
-             :isscheduled
-             :input
-             :misc]
+             :isscheduled]
     fname_get = Symbol(:get_, prop)
     fname_has = Symbol(:has_, prop)
     @eval begin
