@@ -1306,3 +1306,24 @@ end
     @test integ[X] ≈ 4.0
     @test integ[Y] ≈ 7.0
 end
+
+@testset "Issue#3297: `generate_initializesystem(::JumpSystem)`" begin
+    @parameters β γ S0
+    @variables S(t)=S0 I(t) R(t)
+    rate₁ = β * S * I
+    affect₁ = [S ~ S - 1, I ~ I + 1]
+    rate₂ = γ * I
+    affect₂ = [I ~ I - 1, R ~ R + 1]
+    j₁ = ConstantRateJump(rate₁, affect₁)
+    j₂ = ConstantRateJump(rate₂, affect₂)
+    j₃ = MassActionJump(2 * β + γ, [R => 1], [S => 1, R => -1])
+    @mtkbuild js = JumpSystem([j₁, j₂, j₃], t, [S, I, R], [β, γ, S0])
+
+    u0s = [I => 1, R => 0]
+    ps = [S0 => 999, β => 0.01, γ => 0.001]
+    dprob = DiscreteProblem(js, u0s, (0.0, 10.0), ps)
+    @test dprob.f.initialization_data !== nothing
+    sol = solve(dprob, FunctionMap())
+    @test sol[S, 1] ≈ 999
+    @test SciMLBase.successful_retcode(sol)
+end
