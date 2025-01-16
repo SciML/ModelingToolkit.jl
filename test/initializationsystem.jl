@@ -1,5 +1,5 @@
 using ModelingToolkit, OrdinaryDiffEq, NonlinearSolve, Test
-using StochasticDiffEq, DelayDiffEq, StochasticDelayDiffEq
+using StochasticDiffEq, DelayDiffEq, StochasticDelayDiffEq, JumpProcesses
 using ForwardDiff
 using SymbolicIndexingInterface, SciMLStructures
 using SciMLStructures: Tunable
@@ -1324,6 +1324,11 @@ end
     dprob = DiscreteProblem(js, u0s, (0.0, 10.0), ps)
     @test dprob.f.initialization_data !== nothing
     sol = solve(dprob, FunctionMap())
+    @test sol[S, 1] ≈ 999
+    @test SciMLBase.successful_retcode(sol)
+
+    jprob = JumpProblem(js, dprob)
+    sol = solve(jprob, SSAStepper())
     @test sol[S, 1] ≈ 999
     @test SciMLBase.successful_retcode(sol)
 end
