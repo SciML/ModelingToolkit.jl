@@ -969,7 +969,7 @@ function validate_constraint_syms(eq, constraintsts, constraintps, sts, ps, iv)
     for var in constraintsts
         if length(arguments(var)) > 1
             error("Too many arguments for variable $var.")
-        elseif arguments(var) == iv
+        elseif isequal(arguments(var)[1], iv)
             var ∈ sts || error("Constraint equation $eq contains a variable $var that is not a variable of the ODESystem.")
             error("Constraint equation $eq contains a variable $var that does not have a specified argument. Such equations should be specified as algebraic equations to the ODESystem rather than a boundary constraints.")
         else
