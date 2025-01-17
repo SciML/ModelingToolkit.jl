@@ -317,6 +317,12 @@ function SciMLBase.remake_initialization_data(
                 u0map[dvs[i]] = newu0[i]
             end
         end
+        # ensure all unknowns have guesses in case they weren't given one
+        # and become solvable
+        for i in eachindex(dvs)
+            haskey(guesses, dvs[i]) && continue
+            guesses[dvs[i]] = newu0[i]
+        end
         if p === missing
             # the user didn't pass `p` to `remake`, so they want to retain
             # existing values. Fill all parameters in `pmap` so that none of
@@ -341,7 +347,8 @@ function SciMLBase.remake_initialization_data(
     op, missing_unknowns, missing_pars = build_operating_point(
         u0map, pmap, defs, cmap, dvs, ps)
     kws = maybe_build_initialization_problem(
-        sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns; use_scc, initialization_eqs)
+        sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns;
+        use_scc, initialization_eqs, allow_incomplete = true)
     return get(kws, :initialization_data, nothing)
 end
 

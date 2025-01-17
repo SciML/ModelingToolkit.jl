@@ -545,7 +545,10 @@ function maybe_build_initialization_problem(
        (!is_time_dependent(sys) || t !== nothing)
         initializeprob = ModelingToolkit.InitializationProblem(
             sys, t, u0map, pmap; guesses, kwargs...)
-        initializeprobmap = getu(initializeprob, unknowns(sys))
+
+        all_init_syms = Set(all_symbols(initializeprob))
+        solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
+        initializeprobmap = getu(initializeprob, solved_unknowns)
 
         punknowns = [p
                      for p in all_variable_symbols(initializeprob)

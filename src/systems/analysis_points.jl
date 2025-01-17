@@ -208,6 +208,14 @@ function Symbolics.connect(in::AbstractSystem, name::Symbol, out, outs...; verbo
     return AnalysisPoint() ~ AnalysisPoint(in, name, [out; collect(outs)]; verbose)
 end
 
+function Symbolics.connect(
+        in::ConnectableSymbolicT, name::Symbol, out::ConnectableSymbolicT,
+        outs::ConnectableSymbolicT...; verbose = true)
+    allvars = (in, out, outs...)
+    validate_causal_variables_connection(allvars)
+    return AnalysisPoint() ~ AnalysisPoint(in, name, [out; collect(outs)]; verbose)
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -240,13 +248,22 @@ connection. This is the variable named `u` if present, and otherwise the only
 variable in the system. If the system does not have a variable named `u` and
 contains multiple variables, throw an error.
 """
-function ap_var(sys)
+function ap_var(sys::AbstractSystem)
     if hasproperty(sys, :u)
         return sys.u
     end
     x = unknowns(sys)
     length(x) == 1 && return renamespace(sys, x[1])
     error("Could not determine the analysis-point variable in system $(nameof(sys)). To use an analysis point, apply it to a connection between causal blocks which have a variable named `u` or a single unknown of the same size.")
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+For an `AnalysisPoint` involving causal variables. Simply return the variable.
+"""
+function ap_var(var::ConnectableSymbolicT)
+    return var
 end
 
 """
