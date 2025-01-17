@@ -587,9 +587,9 @@ setmisc(x, miscdata) = setmetadata(x, VariableMisc, miscdata)
 """
     getunit(x)
 
-Alias for [`get_unit(x)`](@ref).
+Fetch the unit associated with variable `x`. This function is a metadata getter for an individual variable, while `get_unit` is used for unit inference on more complicated sdymbolic expressions.
 """
-getunit(x) = get_unit(x)
+getunit(x) = Symbolics.getmetadata(x, VariableUnit, nothing)
 """
     hasunit(x)
 
