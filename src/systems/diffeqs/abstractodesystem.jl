@@ -1366,6 +1366,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
     end
 
     u0map = merge(ModelingToolkit.guesses(sys), todict(guesses), todict(u0map))
+    u0map = Dict(diff2term(var) => val for (var, val) in u0map) # replace D(x) -> x_t etc.
     fullmap = merge(u0map, parammap)
     u0T = Union{}
     for sym in unknowns(isys)
