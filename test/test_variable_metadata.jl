@@ -221,8 +221,10 @@ x = ModelingToolkit.setmisc(x, "okay")
 @variables x
 @test ModelingToolkit.getvariabletype(x) == ModelingToolkit.VARIABLE
 @test ModelingToolkit.dump_variable_metadata(x).variable_type == ModelingToolkit.VARIABLE
+@test ModelingToolkit.dump_variable_metadata(x).variable_source == :variables
 x = ModelingToolkit.toparam(x)
 @test ModelingToolkit.getvariabletype(x) == ModelingToolkit.PARAMETER
+@test ModelingToolkit.dump_variable_metadata(x).variable_source == :variables
 
 @parameters y
 @test ModelingToolkit.getvariabletype(y) == ModelingToolkit.PARAMETER

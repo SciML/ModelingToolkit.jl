@@ -54,6 +54,10 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @variables i(t) [connect = Flow]
 @variables k(t) [connect = Stream]
+hasconnect(i)
+```
+```@example connect
+getconnect(k)
 ```
 
 ## Input or output
@@ -177,8 +181,35 @@ A variable can be marked `irreducible` to prevent it from being moved to an
 `observed` state. This forces the variable to be computed during solving so that
 it can be accessed in [callbacks](@ref events)
 
-```julia
+```@example metadata
 @variable important_value [irreducible = true]
+isirreducible(important_value)
+```
+
+## Units
+
+Units for variables can be designated using symbolic metadata. For more information, please see the [model validation and units](@ref units) section of the docs. Note that `getunit` is equivalent to `get_unit`. 
+
+```@example metadata
+@variable speed [unit=u"m/s"]
+hasunit(speed)
+```
+```@example metadata
+getunit(speed)
+```
+
+## Miscellaneous metadata
+
+User-defined metadata can be added using the `misc` metadata. This can be queried
+using the `hasmisc` and `getmisc` functions.
+
+```@example metadata
+@variables u [misc = :conserved_parameter] y [misc = [2, 4, 6]]
+hasmisc(u)
+```
+
+```@example metadata
+getmisc(y)
 ```
 
 ## Additional functions

@@ -8,7 +8,6 @@ struct VariableStatePriority end
 struct VariableMisc end
 Symbolics.option_to_metadata_type(::Val{:unit}) = VariableUnit
 Symbolics.option_to_metadata_type(::Val{:connect}) = VariableConnectType
-Symbolics.option_to_metadata_type(::Val{:noise}) = VariableNoiseType
 Symbolics.option_to_metadata_type(::Val{:input}) = VariableInput
 Symbolics.option_to_metadata_type(::Val{:output}) = VariableOutput
 Symbolics.option_to_metadata_type(::Val{:irreducible}) = VariableIrreducible
@@ -29,7 +28,7 @@ ModelingToolkit.dump_variable_metadata(p)
 """
 function dump_variable_metadata(var)
     uvar = unwrap(var)
-    vartype, name = Symbolics.getmetadata(uvar, VariableSource, (:unknown, :unknown))
+    variable_source, name = Symbolics.getmetadata(uvar, VariableSource, (:unknown, :unknown))
     type = symtype(uvar)
     if type <: AbstractArray
         shape = Symbolics.shape(var)
@@ -41,7 +40,6 @@ function dump_variable_metadata(var)
     end
     unit = getunit(uvar)
     connect = getconnect(uvar)
-    noise = getnoise(uvar) 
     input = isinput(uvar) || nothing
     output = isoutput(uvar) || nothing
     irreducible = isirreducible(var)
@@ -61,13 +59,12 @@ function dump_variable_metadata(var)
 
     meta = (
         var = var,
-        vartype,
+        variable_source,
         name,
         variable_type,
         shape,
         unit,
         connect,
-        noise,
         input,
         output,
         irreducible,
@@ -599,18 +596,3 @@ getunit(x) = get_unit(x)
 Check if the variable `x` has a unit.
 """
 hasunit(x) = getunit(x) !== nothing
-
-## Noise ======================================================================
-"""
-    getnoise(x)
-
-Get the noise type of variable `x`.
-"""
-getnoise(x) = getnoise(unwrap(x))
-getnoise(x::Symbolic) = Symbolics.getmetadata(x, VariableNoiseType, nothing)
-"""
-    hasnoise(x)
-
-Determine if variable `x` has a noise type.
-"""
-hasnoise(x) = getnoise(x) !== nothing
