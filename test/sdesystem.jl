@@ -870,7 +870,7 @@ end
 end
 
 # Test validating types of states
-let
+@testset "Validate input types" begin
     @parameters p d
     @variables X(t)::Int64
     @brownian z
