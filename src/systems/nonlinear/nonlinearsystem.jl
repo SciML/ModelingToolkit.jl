@@ -573,29 +573,37 @@ function DiffEqBase.NonlinearLeastSquaresProblem{iip}(sys::NonlinearSystem, u0ma
     NonlinearLeastSquaresProblem{iip}(f, u0, p; filter_kwargs(kwargs)...)
 end
 
+const TypeT = Union{DataType, UnionAll}
+
 struct CacheWriter{F}
     fn::F
 end
 
 function (cw::CacheWriter)(p, sols)
-    cw.fn(p.caches[1], sols, p...)
+    cw.fn(p.caches, sols, p...)
 end
 
-function CacheWriter(sys::AbstractSystem, exprs, solsyms, obseqs::Vector{Equation};
+function CacheWriter(sys::AbstractSystem, buffer_types::Vector{TypeT},
+        exprs::Dict{TypeT, Vector{Any}}, solsyms, obseqs::Vector{Equation};
         eval_expression = false, eval_module = @__MODULE__)
     ps = parameters(sys)
     rps = reorder_parameters(sys, ps)
     obs_assigns = [eq.lhs ← eq.rhs for eq in obseqs]
     cmap, cs = get_cmap(sys)
     cmap_assigns = [eq.lhs ← eq.rhs for eq in cmap]
+
+    outsyms = [Symbol(:out, i) for i in eachindex(buffer_types)]
+    body = map(eachindex(buffer_types), buffer_types) do i, T
+        Symbol(:tmp, i) ← SetArray(true, :(out[$i]), get(exprs, T, []))
+    end
     fn = Func(
              [:out, DestructuredArgs(DestructuredArgs.(solsyms)),
                  DestructuredArgs.(rps)...],
              [],
-             SetArray(true, :out, exprs)
+             Let(body, :())
          ) |> wrap_assignments(false, obs_assigns)[2] |>
          wrap_parameter_dependencies(sys, false)[2] |>
-         wrap_array_vars(sys, exprs; dvs = nothing, inputs = [])[2] |>
+         wrap_array_vars(sys, []; dvs = nothing, inputs = [])[2] |>
          wrap_assignments(false, cmap_assigns)[2] |> toexpr
     return CacheWriter(eval_or_rgf(fn; eval_expression, eval_module))
 end
@@ -677,8 +685,17 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
 
     explicitfuns = []
     nlfuns = []
-    prevobsidxs = Int[]
-    cachesize = 0
+    prevobsidxs = BlockArray(undef_blocks, Vector{Int}, Int[])
+    # Cache buffer types and corresponding sizes. Stored as a pair of arrays instead of a
+    # dict to maintain a consistent order of buffers across SCCs
+    cachetypes = TypeT[]
+    cachesizes = Int[]
+    # explicitfun! related information for each SCC
+    # We need to compute buffer sizes before doing any codegen
+    scc_cachevars = Dict{TypeT, Vector{Any}}[]
+    scc_cacheexprs = Dict{TypeT, Vector{Any}}[]
+    scc_eqs = Vector{Equation}[]
+    scc_obs = Vector{Equation}[]
     for (i, (escc, vscc)) in enumerate(zip(eq_sccs, var_sccs))
         # subset unknowns and equations
         _dvs = dvs[vscc]
@@ -690,11 +707,10 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         _obs = obs[obsidxs]
 
         # get all subexpressions in the RHS which we can precompute in the cache
+        # precomputed subexpressions should not contain `banned_vars`
         banned_vars = Set{Any}(vcat(_dvs, getproperty.(_obs, (:lhs,))))
-        for var in banned_vars
-            iscall(var) || continue
-            operation(var) === getindex || continue
-            push!(banned_vars, arguments(var)[1])
+        filter!(banned_vars) do var
+            symbolic_type(var) != ArraySymbolic() || all(x -> var[i] in banned_vars, eachindex(var))
         end
         state = Dict()
         for i in eachindex(_obs)
@@ -706,37 +722,85 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
                 _eqs[i].rhs, banned_vars, state)
         end
 
-        # cached variables and their corresponding expressions
-        cachevars = Any[obs[i].lhs for i in prevobsidxs]
-        cacheexprs = Any[obs[i].lhs for i in prevobsidxs]
-        for (k, v) in state
-            push!(cachevars, unwrap(v))
-            push!(cacheexprs, unwrap(k))
+        # map from symtype to cached variables and their expressions
+        cachevars = Dict{Union{DataType, UnionAll}, Vector{Any}}()
+        cacheexprs = Dict{Union{DataType, UnionAll}, Vector{Any}}()
+        # observed of previous SCCs are in the cache
+        # NOTE: When we get proper CSE, we can substitute these
+        # and then use `subexpressions_not_involving_vars!`
+        for i in prevobsidxs
+            T = symtype(obs[i].lhs)
+            buf = get!(() -> Any[], cachevars, T)
+            push!(buf, obs[i].lhs)
+
+            buf = get!(() -> Any[], cacheexprs, T)
+            push!(buf, obs[i].lhs)
         end
-        cachesize = max(cachesize, length(cachevars))
+
+        for (k, v) in state
+            k = unwrap(k)
+            v = unwrap(v)
+            T = symtype(k)
+            buf = get!(() -> Any[], cachevars, T)
+            push!(buf, v)
+            buf = get!(() -> Any[], cacheexprs, T)
+            push!(buf, k)
+        end
+
+        # update the sizes of cache buffers
+        for (T, buf) in cachevars
+            idx = findfirst(isequal(T), cachetypes)
+            if idx === nothing
+                push!(cachetypes, T)
+                push!(cachesizes, 0)
+                idx = lastindex(cachetypes)
+            end
+            cachesizes[idx] = max(cachesizes[idx], length(buf))
+        end
+
+        push!(scc_cachevars, cachevars)
+        push!(scc_cacheexprs, cacheexprs)
+        push!(scc_eqs, _eqs)
+        push!(scc_obs, _obs)
+        blockpush!(prevobsidxs, obsidxs)
+    end
+
+    for (i, (escc, vscc)) in enumerate(zip(eq_sccs, var_sccs))
+        _dvs = dvs[vscc]
+        _eqs = scc_eqs[i]
+        _prevobsidxs = reduce(vcat, blocks(prevobsidxs)[1:(i - 1)]; init = Int[])
+        _obs = scc_obs[i]
+        cachevars = scc_cachevars[i]
+        cacheexprs = scc_cacheexprs[i]
 
         if isempty(cachevars)
             push!(explicitfuns, Returns(nothing))
         else
             solsyms = getindex.((dvs,), view(var_sccs, 1:(i - 1)))
             push!(explicitfuns,
-                CacheWriter(sys, cacheexprs, solsyms, obs[prevobsidxs];
+                CacheWriter(sys, cachetypes, cacheexprs, solsyms, obs[_prevobsidxs];
                     eval_expression, eval_module))
         end
+
+        cachebufsyms = Tuple(map(cachetypes) do T
+            get(cachevars, T, [])
+        end)
         f = SCCNonlinearFunction{iip}(
-            sys, _eqs, _dvs, _obs, (cachevars,); eval_expression, eval_module, kwargs...)
+            sys, _eqs, _dvs, _obs, cachebufsyms; eval_expression, eval_module, kwargs...)
         push!(nlfuns, f)
-        append!(cachevars, _dvs)
-        append!(cacheexprs, _dvs)
-        for i in obsidxs
-            push!(cachevars, obs[i].lhs)
-            push!(cacheexprs, obs[i].rhs)
-        end
-        append!(prevobsidxs, obsidxs)
     end
 
-    if cachesize != 0
-        p = rebuild_with_caches(p, BufferTemplate(eltype(u0), cachesize))
+    if !isempty(cachetypes)
+        templates = map(cachetypes, cachesizes) do T, n
+            # Real refers to `eltype(u0)`
+            if T == Real
+                T = eltype(u0)
+            elseif T <: Array && eltype(T) == Real
+                T = Array{eltype(u0), ndims(T)}
+            end
+            BufferTemplate(T, n)
+        end
+        p = rebuild_with_caches(p, templates...)
     end
 
     subprobs = []

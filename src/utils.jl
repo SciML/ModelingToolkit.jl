@@ -1108,23 +1108,33 @@ returns the modified `expr`.
 """
 function subexpressions_not_involving_vars!(expr, vars, state::Dict{Any, Any})
     expr = unwrap(expr)
-    symbolic_type(expr) == NotSymbolic() && return expr
+    if symbolic_type(expr) == NotSymbolic()
+        if is_array_of_symbolics(expr)
+            return map(expr) do el
+                subexpressions_not_involving_vars!(el, vars, state)
+            end
+        end
+        return expr
+    end
+    any(isequal(expr), vars) && return expr
     iscall(expr) || return expr
-    is_variable_floatingpoint(expr) || return expr
-    symtype(expr) <: Union{Real, AbstractArray{<:Real}} || return expr
     Symbolics.shape(expr) == Symbolics.Unknown() && return expr
     haskey(state, expr) && return state[expr]
-    vs = ModelingToolkit.vars(expr)
-    intersect!(vs, vars)
-    if isempty(vs)
+    op = operation(expr)
+    args = arguments(expr)
+    # if this is a `getindex` and the getindex-ed value is a `Sym`
+    # or it is not a called parameter
+    # OR
+    # none of `vars` are involved in `expr`
+    if op === getindex && (issym(args[1]) || !iscalledparameter(args[1])) ||
+       (vs = ModelingToolkit.vars(expr); intersect!(vs, vars); isempty(vs))
         sym = gensym(:subexpr)
         stype = symtype(expr)
         var = similar_variable(expr, sym)
         state[expr] = var
         return var
     end
-    op = operation(expr)
-    args = arguments(expr)
+
     if (op == (+) || op == (*)) && symbolic_type(expr) !== ArraySymbolic()
         indep_args = []
         dep_args = []
@@ -1143,7 +1153,6 @@ function subexpressions_not_involving_vars!(expr, vars, state::Dict{Any, Any})
         return op(indep_term, dep_term)
     end
     newargs = map(args) do arg
-        symbolic_type(arg) != NotSymbolic() || is_array_of_symbolics(arg) || return arg
         subexpressions_not_involving_vars!(arg, vars, state)
     end
     return maketerm(typeof(expr), op, newargs, metadata(expr))
