@@ -115,11 +115,12 @@ fwd, back = ChainRulesCore.rrule(remake_buffer, sys, ps, idxs, vals)
 
     # Find initial throw velocity that reaches exactly 10 m after 1 s
     dprob0 = ODEProblem(sys, [D(y) => NaN], (0.0, 1.0), []; guesses = [y => 0.0])
-    nprob = NonlinearProblem((ics, _) -> begin
+    function f(ics, _)
         dprob = remake(dprob0, u0 = Dict(D(y) => ics[1]))
         dsol = solve(dprob, Tsit5())
         return [dsol[y][end] - 10.0]
-    end, [1.0])
+    end
+    nprob = NonlinearProblem(f, [1.0])
     nsol = solve(nprob, NewtonRaphson())
-    @test nsol[1] ≈ 10.0/1.0 + 9.81*1.0/2 # anal free fall solution is y = v0*t - g*t^2/2 -> v0 = y/t + g*t/2
+    @test nsol[1] ≈ 10.0 / 1.0 + 9.81 * 1.0 / 2 # anal free fall solution is y = v0*t - g*t^2/2 -> v0 = y/t + g*t/2
 end
