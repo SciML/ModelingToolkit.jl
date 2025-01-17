@@ -158,7 +158,7 @@ end
 function check_var_types(sys_type::Type{T}, dvs) where T <: AbstractSystem
     any(u -> !(symtype(u) <: Number), dvs) && error("The type of unknown variables must be a numeric type.")
     if sys_type == ODESystem || sys_type == SDESystem || sys_type == PDESystem
-        any(u -> !(symtype(u) <: Float), dvs) && error("The type of unknown variables for an SDESystem, PDESystem, or ODESystem must be a float.")
+        any(u -> !(symtype(u) <: AbstractFloat), dvs) && error("The type of unknown variables for an SDESystem, PDESystem, or ODESystem must be a float.")
     end
     nothing
 end

@@ -1552,3 +1552,10 @@ end
     expected_tstops = unique!(sort!(vcat(0.0:0.075:10.0, 0.1, 0.2, 0.65, 0.35, 0.45)))
     @test all(x -> any(isapprox(x, atol = 1e-6), sol2.t), expected_tstops)
 end
+
+let
+    @parameters p d
+    @variables X(t)::Int64
+    eq = D(X) ~ p - d*X
+    @test_throws Exception @mtkbuild osys = ODESystem([eq], t)
+end

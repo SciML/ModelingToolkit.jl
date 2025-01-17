@@ -868,3 +868,12 @@ end
     @test length(ModelingToolkit.get_noiseeqs(sys)) == 1
     @test length(observed(sys)) == 1
 end
+
+# Test validating types of states
+let
+    @parameters p d
+    @variables X(t)::Int64
+    @brownian z
+    eq2 = D(X) ~ p - d*X + z
+    @test_throws Exception @mtkbuild ssys = System([eq2], t)
+end
