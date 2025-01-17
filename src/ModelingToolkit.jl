@@ -247,7 +247,7 @@ export @component, @mtkmodel, @mtkbuild
 export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbance,
        istunable, getdist, hasdist,
        tunable_parameters, isirreducible, getdescription, hasdescription,
-       hasnoise, getnoise, hasunit, getunit, hasconnect, getconnect,
+       hasunit, getunit, hasconnect, getconnect,
        hasmisc, getmisc
 export ode_order_lowering, dae_order_lowering, liouville_transform
 export PDESystem
