@@ -155,6 +155,14 @@ function check_variables(dvs, iv)
     end
 end
 
+function check_var_types(sys_type::Type{T}, dvs) where T <: AbstractSystem
+    any(u -> !(symtype(u) <: Number), dvs) && error("The type of unknown variables must be a numeric type.")
+    if sys_type == ODESystem || sys_type == SDESystem || sys_type == PDESystem
+        any(u -> !(symtype(u) <: Float), dvs) && error("The type of unknown variables for an SDESystem, PDESystem, or ODESystem must be a float.")
+    end
+    nothing
+end
+
 function check_lhs(eq::Equation, op, dvs::Set)
     v = unwrap(eq.lhs)
     _iszero(v) && return
@@ -1182,3 +1190,4 @@ function guesses_from_metadata!(guesses, vars)
         guesses[vars[i]] = varguesses[i]
     end
 end
+

@@ -122,6 +122,7 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
             check_independent_variables([iv])
             check_variables(dvs, iv)
             check_parameters(ps, iv)
+            check_var_types(DiscreteSystem, dvs)
         end
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(dvs, ps, iv)
