@@ -768,11 +768,7 @@ function DiffEqBase.SDEProblem{iip, specialize}(
         noise_rate_prototype = noise_rate_prototype, kwargs...)
 end
 
-function DiffEqBase.SDEProblem{iip, specialize}(
-        sys::ODESystem, u0map = [], tspan = get_tspan(sys),
-        parammap = DiffEqBase.NullParameters();
-        sparsenoise = nothing, check_length = true,
-        callback = nothing, kwargs...) where {iip, specialize}
+function DiffEqBase.SDEProblem(sys::ODESystem, args...; kwargs...)
 
     if any(ModelingToolkit.isbrownian, unknowns(sys))
         error("SDESystem constructed by defining Brownian variables with @brownian must be simplified by calling `structural_simplify` before a SDEProblem can be constructed.")
