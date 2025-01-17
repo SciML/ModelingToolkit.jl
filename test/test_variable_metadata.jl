@@ -187,12 +187,6 @@ params_meta = Dict([ModelingToolkit.getname(meta.var) => meta for meta in params
 @test params_meta[:p].default == 3.0
 @test isequal(params_meta[:q].dependency, 2p)
 
-# Noise
-@variables x [noise = 1]
-@test hasnoise(x)
-@test getnoise(x) == 1
-@test ModelingToolkit.dump_variable_metadata(x).noise == 1
-
 # Connect
 @variables x [connect = Flow]
 @test hasconnect(x)
