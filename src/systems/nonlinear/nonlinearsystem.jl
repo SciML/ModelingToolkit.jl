@@ -935,7 +935,7 @@ function IntervalNonlinearProblemExpr(sys::NonlinearSystem, uspan::NTuple{2},
         error("`IntervalNonlinearProblemExpr` only supports with a single equation and a single unknown.")
     end
     f, u0, p = process_SciMLProblem(
-        IntervalNonlinearFunctionExpr, sys, unknowns(sys) .=> uspan[1], parammap; 
+        IntervalNonlinearFunctionExpr, sys, unknowns(sys) .=> uspan[1], parammap;
         build_initializeprob = false, kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
 
