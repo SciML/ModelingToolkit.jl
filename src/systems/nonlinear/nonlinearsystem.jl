@@ -681,7 +681,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
     obs = observed(sys)
 
     _, u0, p = process_SciMLProblem(
-        EmptySciMLFunction, sys, u0map, parammap; eval_expression, eval_module, 
+        EmptySciMLFunction, sys, u0map, parammap; eval_expression, eval_module,
         build_initializeprob = false, kwargs...)
 
     explicitfuns = []
