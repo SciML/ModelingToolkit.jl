@@ -397,5 +397,5 @@ end
     # Solve the numerical problem
     sol = solve(prob, NewtonRaphson())
     @test SciMLBase.successful_retcode(sol)
-    @test norm(sol.resid) < 1e-12 
+    @test norm(sol.resid) < 1e-12
 end
