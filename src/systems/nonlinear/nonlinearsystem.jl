@@ -833,7 +833,7 @@ function DiffEqBase.IntervalNonlinearProblem(sys::NonlinearSystem, uspan::NTuple
         error("`IntervalNonlinearProblem` only supports with a single equation and a single unknown.")
     end
     f, u0, p = process_SciMLProblem(
-        IntervalNonlinearFunction, sys, unknowns(sys) .=> uspan[1], parammap; 
+        IntervalNonlinearFunction, sys, unknowns(sys) .=> uspan[1], parammap;
         build_initializeprob = false, kwargs...)
 
     return IntervalNonlinearProblem(f, uspan, p; filter_kwargs(kwargs)...)
