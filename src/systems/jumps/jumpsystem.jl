@@ -425,14 +425,15 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
         error("The passed in JumpSystem contains `Equation`s or continuous events, please use a problem type that supports these features, such as ODEProblem.")
     end
 
-    _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
+    _f, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
         t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false, check_length = false)
     f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
 
     observedfun = ObservedFunctionCache(
         sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
 
-    df = DiscreteFunction{true, true}(f; sys = sys, observed = observedfun)
+    df = DiscreteFunction{true, true}(f; sys = sys, observed = observedfun,
+        initialization_data = get(_f.kwargs, :initialization_data, nothing))
     DiscreteProblem(df, u0, tspan, p; kwargs...)
 end
 
