@@ -868,12 +868,10 @@ end
     @test length(ModelingToolkit.get_noiseeqs(sys)) == 1
     @test length(observed(sys)) == 1
 end
-using ModelingToolkit, StochasticDiffEq
-using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @testset "Error when constructing SDESystem without `structural_simplify`" begin
     @parameters σ ρ β
-    @variables x(t) y(t) z(t)
+    @variables x(tt) y(tt) z(tt)
     @brownian a
     eqs = [D(x) ~ σ * (y - x) + 0.1a * x,
         D(y) ~ x * (ρ - z) - y + 0.1a * y,
