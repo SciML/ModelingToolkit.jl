@@ -1335,7 +1335,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
 
     # TODO: throw on uninitialized arrays
     filter!(x -> !(x isa Symbolics.Arr), uninit)
-    if !isempty(uninit)
+    if is_time_dependent(sys) && !isempty(uninit)
         allow_incomplete || throw(IncompleteInitializationError(uninit))
         # for incomplete initialization, we will add the missing variables as parameters.
         # they will be updated by `update_initializeprob!` and `initializeprobmap` will

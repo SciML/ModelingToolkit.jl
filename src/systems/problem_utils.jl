@@ -546,30 +546,46 @@ function maybe_build_initialization_problem(
         initializeprob = ModelingToolkit.InitializationProblem(
             sys, t, u0map, pmap; guesses, kwargs...)
 
-        all_init_syms = Set(all_symbols(initializeprob))
-        solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
-        initializeprobmap = getu(initializeprob, solved_unknowns)
+        if is_time_dependent(sys)
+            all_init_syms = Set(all_symbols(initializeprob))
+            solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
+            initializeprobmap = getu(initializeprob, solved_unknowns)
+        else
+            initializeprobmap = nothing
+        end
 
         punknowns = [p
                      for p in all_variable_symbols(initializeprob)
                      if is_parameter(sys, p)]
-        getpunknowns = getu(initializeprob, punknowns)
-        setpunknowns = setp(sys, punknowns)
-        initializeprobpmap = GetUpdatedMTKParameters(getpunknowns, setpunknowns)
+        if isempty(punknowns)
+            initializeprobpmap = nothing
+        else
+            getpunknowns = getu(initializeprob, punknowns)
+            setpunknowns = setp(sys, punknowns)
+            initializeprobpmap = GetUpdatedMTKParameters(getpunknowns, setpunknowns)
+        end
 
         reqd_syms = parameter_symbols(initializeprob)
-        update_initializeprob! = UpdateInitializeprob(
-            getu(sys, reqd_syms), setu(initializeprob, reqd_syms))
+        # we still want the `initialization_data` because it helps with `remake`
+        if initializeprobmap === nothing && initializeprobpmap === nothing
+            update_initializeprob! = nothing
+        else
+            update_initializeprob! = UpdateInitializeprob(
+                getu(sys, reqd_syms), setu(initializeprob, reqd_syms))
+        end
+
         for p in punknowns
             p = unwrap(p)
             stype = symtype(p)
             op[p] = get_temporary_value(p)
         end
 
-        for v in missing_unknowns
-            op[v] = zero_var(v)
+        if is_time_dependent(sys)
+            for v in missing_unknowns
+                op[v] = zero_var(v)
+            end
+            empty!(missing_unknowns)
         end
-        empty!(missing_unknowns)
         return (;
             initialization_data = SciMLBase.OverrideInitData(
                 initializeprob, update_initializeprob!, initializeprobmap,
