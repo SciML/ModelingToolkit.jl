@@ -42,51 +42,53 @@ function generate_initializesystem(sys::AbstractSystem;
         diffmap = Dict()
     end
 
-    if has_schedule(sys) && (schedule = get_schedule(sys); !isnothing(schedule))
-        # 2) process dummy derivatives and u0map into initialization system
-        # prepare map for dummy derivative substitution
-        for x in filter(x -> !isnothing(x[1]), schedule.dummy_sub)
-            # set dummy derivatives to default_dd_guess unless specified
-            push!(defs, x[1] => get(guesses, x[1], default_dd_guess))
-        end
-        function process_u0map_with_dummysubs(y, x)
-            y = get(schedule.dummy_sub, y, y)
-            y = fixpoint_sub(y, diffmap)
-            if y ∈ vars_set
-                # variables specified in u0 overrides defaults
-                push!(defs, y => x)
-            elseif y isa Symbolics.Arr
-                # TODO: don't scalarize arrays
-                merge!(defs, Dict(scalarize(y .=> x)))
-            elseif y isa Symbolics.BasicSymbolic
-                # y is a derivative expression expanded; add it to the initialization equations
-                push!(eqs_ics, y ~ x)
-            else
-                error("Initialization expression $y is currently not supported. If its a higher order derivative expression, then only the dummy derivative expressions are supported.")
+    if is_time_dependent(sys)
+        if has_schedule(sys) && (schedule = get_schedule(sys); !isnothing(schedule))
+            # 2) process dummy derivatives and u0map into initialization system
+            # prepare map for dummy derivative substitution
+            for x in filter(x -> !isnothing(x[1]), schedule.dummy_sub)
+                # set dummy derivatives to default_dd_guess unless specified
+                push!(defs, x[1] => get(guesses, x[1], default_dd_guess))
+            end
+            function process_u0map_with_dummysubs(y, x)
+                y = get(schedule.dummy_sub, y, y)
+                y = fixpoint_sub(y, diffmap)
+                if y ∈ vars_set
+                    # variables specified in u0 overrides defaults
+                    push!(defs, y => x)
+                elseif y isa Symbolics.Arr
+                    # TODO: don't scalarize arrays
+                    merge!(defs, Dict(scalarize(y .=> x)))
+                elseif y isa Symbolics.BasicSymbolic
+                    # y is a derivative expression expanded; add it to the initialization equations
+                    push!(eqs_ics, y ~ x)
+                else
+                    error("Initialization expression $y is currently not supported. If its a higher order derivative expression, then only the dummy derivative expressions are supported.")
+                end
+            end
+            for (y, x) in u0map
+                if Symbolics.isarraysymbolic(y)
+                    process_u0map_with_dummysubs.(collect(y), collect(x))
+                else
+                    process_u0map_with_dummysubs(y, x)
+                end
+            end
+        else
+            # 2) System doesn't have a schedule, so dummy derivatives don't exist/aren't handled (SDESystem)
+            for (k, v) in u0map
+                defs[k] = v
             end
         end
-        for (y, x) in u0map
-            if Symbolics.isarraysymbolic(y)
-                process_u0map_with_dummysubs.(collect(y), collect(x))
-            else
-                process_u0map_with_dummysubs(y, x)
-            end
-        end
-    else
-        # 2) System doesn't have a schedule, so dummy derivatives don't exist/aren't handled (SDESystem)
-        for (k, v) in u0map
-            defs[k] = v
-        end
-    end
 
-    # 3) process other variables
-    for var in vars
-        if var ∈ keys(defs)
-            push!(eqs_ics, var ~ defs[var])
-        elseif var ∈ keys(guesses)
-            push!(defs, var => guesses[var])
-        elseif check_defguess
-            error("Invalid setup: variable $(var) has no default value or initial guess")
+        # 3) process other variables
+        for var in vars
+            if var ∈ keys(defs)
+                push!(eqs_ics, var ~ defs[var])
+            elseif var ∈ keys(guesses)
+                push!(defs, var => guesses[var])
+            elseif check_defguess
+                error("Invalid setup: variable $(var) has no default value or initial guess")
+            end
         end
     end
 
@@ -180,16 +182,24 @@ function generate_initializesystem(sys::AbstractSystem;
     pars = Vector{SymbolicParam}(filter(p -> !haskey(paramsubs, p), parameters(sys)))
     is_time_dependent(sys) && push!(pars, get_iv(sys))
 
-    # 8) use observed equations for guesses of observed variables if not provided
-    for eq in trueobs
-        haskey(defs, eq.lhs) && continue
-        any(x -> isequal(default_toterm(x), eq.lhs), keys(defs)) && continue
+    if is_time_dependent(sys)
+        # 8) use observed equations for guesses of observed variables if not provided
+        for eq in trueobs
+            haskey(defs, eq.lhs) && continue
+            any(x -> isequal(default_toterm(x), eq.lhs), keys(defs)) && continue
 
-        defs[eq.lhs] = eq.rhs
+            defs[eq.lhs] = eq.rhs
+        end
+        append!(eqs_ics, trueobs)
     end
 
-    eqs_ics = Symbolics.substitute.([eqs_ics; trueobs], (paramsubs,))
-    vars = [vars; collect(values(paramsubs))]
+    eqs_ics = Symbolics.substitute.(eqs_ics, (paramsubs,))
+    if is_time_dependent(sys)
+        vars = [vars; collect(values(paramsubs))]
+    else
+        vars = collect(values(paramsubs))
+    end
+
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
