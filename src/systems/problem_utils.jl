@@ -708,6 +708,8 @@ Keyword arguments:
   determined.
 - `force_initialization_time_independent`: Whether to force the initialization to not use
   the independent variable of `sys`.
+- `algebraic_only`: Whether to build the initialization problem using only algebraic equations.
+- `allow_incomplete`: Whether to allow incomplete initialization problems.
 
 All other keyword arguments are passed as-is to `constructor`.
 """
@@ -722,7 +724,8 @@ function process_SciMLProblem(
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10,
         substitution_limit = 100, use_scc = true,
-        force_initialization_time_independent = false, kwargs...)
+        force_initialization_time_independent = false, algebraic_only = false,
+        allow_incomplete = false, kwargs...)
     dvs = unknowns(sys)
     ps = parameters(sys)
     iv = has_iv(sys) ? get_iv(sys) : nothing
@@ -759,7 +762,7 @@ function process_SciMLProblem(
             eval_expression, eval_module, fully_determined,
             warn_cyclic_dependency, check_units = check_initialization_units,
             circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
-            force_time_independent = force_initialization_time_independent)
+            force_time_independent = force_initialization_time_independent, algebraic_only, allow_incomplete)
 
         kwargs = merge(kwargs, kws)
     end
