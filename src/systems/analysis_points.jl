@@ -863,7 +863,7 @@ for f in [:get_sensitivity, :get_comp_sensitivity, :get_looptransfer]
             sys, ap, args...; loop_openings = [], system_modifier = identity, kwargs...)
         lin_fun, ssys = $(utility_fun)(
             sys, ap, args...; loop_openings, system_modifier, kwargs...)
-        ModelingToolkit.linearize(ssys, lin_fun; kwargs...), ssys
+        ModelingToolkit.linearize(ssys, lin_fun), ssys
     end
 end
 
