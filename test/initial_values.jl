@@ -174,3 +174,11 @@ end
     @test_throws ModelingToolkit.UnexpectedSymbolicValueInVarmap ODEProblem(
         sys, [x => 1, y => 2], (0.0, 1.0), [p => 2q, q => 3p])
 end
+
+@testset "`add_fallbacks!` checks scalarized array parameters correctly" begin
+    @variables x(t)[1:2]
+    @parameters p[1:2, 1:2]
+    @mtkbuild sys = ODESystem(D(x) ~ p * x, t)
+    # used to throw a `MethodError` complaining about `getindex(::Nothing, ::CartesianIndex{2})`
+    @test_throws ModelingToolkit.MissingParametersError ODEProblem(sys, [x => ones(2)], (0.0, 1.0))
+end
