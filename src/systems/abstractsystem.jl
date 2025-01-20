@@ -2394,6 +2394,9 @@ See also [`linearize`](@ref) which provides a higher-level interface.
 function linearization_function(sys::AbstractSystem, inputs,
         outputs; simplify = false,
         initialize = true,
+        initializealg = nothing,
+        initialization_abstol = 1e-6,
+        initialization_reltol = 1e-3,
         op = Dict(),
         p = DiffEqBase.NullParameters(),
         zero_dummy_der = false,
@@ -2420,88 +2423,32 @@ function linearization_function(sys::AbstractSystem, inputs,
         op = merge(defs, op)
     end
     sys = ssys
-    u0map = Dict(k => v for (k, v) in op if is_variable(ssys, k))
-    initsys = structural_simplify(
-        generate_initializesystem(
-            sys, u0map = u0map, guesses = guesses(sys), algebraic_only = true),
-        fully_determined = false)
 
-    # HACK: some unknowns may not be involved in any initialization equations, and are
-    # thus removed from the system during `structural_simplify`.
-    # This causes `getu(initsys, unknowns(sys))` to fail, so we add them back as parameters
-    # for now.
-    missing_unknowns = setdiff(unknowns(sys), all_symbols(initsys))
-    if !isempty(missing_unknowns)
-        if warn_initialize_determined
-            @warn "Initialization system is underdetermined. No equations for $(missing_unknowns). Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false."
-        end
-        new_parameters = [parameters(initsys); missing_unknowns]
-        @set! initsys.ps = new_parameters
-        initsys = complete(initsys)
+    if initializealg === nothing
+        initializealg = initialize ? OverrideInit() : NoInit()
     end
 
-    if p isa SciMLBase.NullParameters
-        p = Dict()
-    else
-        p = todict(p)
-    end
-    x0 = merge(defaults_and_guesses(sys), op)
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        sys_ps = MTKParameters(sys, p, x0)
-    else
-        sys_ps = varmap_to_vars(p, parameters(sys); defaults = x0)
-    end
-    p[get_iv(sys)] = NaN
-    if has_index_cache(initsys) && get_index_cache(initsys) !== nothing
-        oldps = MTKParameters(initsys, p, merge(guesses(sys), defaults(sys), op))
-        initsys_ps = parameters(initsys)
-        p_getter = build_explicit_observed_function(
-            sys, initsys_ps; eval_expression, eval_module)
+    fun, u0, p = process_SciMLProblem(
+        ODEFunction{true, SciMLBase.FullSpecialize}, sys, op, p;
+        t = 0.0, build_initializeprob = initializealg isa OverrideInit,
+        allow_incomplete = true, algebraic_only = true)
+    prob = ODEProblem(fun, u0, (nothing, nothing), p)
 
-        u_getter = isempty(unknowns(initsys)) ? (_...) -> nothing :
-                   build_explicit_observed_function(
-            sys, unknowns(initsys); eval_expression, eval_module)
-        get_initprob_u_p = let p_getter = p_getter,
-            p_setter! = setp(initsys, initsys_ps),
-            u_getter = u_getter
-
-            function (u, p, t)
-                p_setter!(oldps, p_getter(u, p, t))
-                newu = u_getter(u, p, t)
-                return newu, oldps
-            end
-        end
-    else
-        get_initprob_u_p = let p_getter = getu(sys, parameters(initsys)),
-            u_getter = build_explicit_observed_function(
-                sys, unknowns(initsys); eval_expression, eval_module)
-
-            function (u, p, t)
-                state = ProblemState(; u, p, t)
-                return u_getter(
-                    state_values(state), parameter_values(state), current_time(state)),
-                p_getter(state)
-            end
-        end
-    end
-    initfn = NonlinearFunction(initsys; eval_expression, eval_module)
-    initprobmap = build_explicit_observed_function(
-        initsys, unknowns(sys); eval_expression, eval_module)
     ps = parameters(sys)
     h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
     lin_fun = let diff_idxs = diff_idxs,
         alge_idxs = alge_idxs,
         input_idxs = input_idxs,
         sts = unknowns(sys),
-        get_initprob_u_p = get_initprob_u_p,
-        fun = ODEFunction{true, SciMLBase.FullSpecialize}(
-            sys, unknowns(sys), ps; eval_expression, eval_module),
-        initfn = initfn,
-        initprobmap = initprobmap,
+        fun = fun,
+        prob = prob,
+        sys_ps = p,
         h = h,
+        integ_cache = (similar(u0)),
         chunk = ForwardDiff.Chunk(input_idxs),
-        sys_ps = sys_ps,
-        initialize = initialize,
+        initializealg = initializealg,
+        initialization_abstol = initialization_abstol,
+        initialization_reltol = initialization_reltol,
         initialization_solver_alg = initialization_solver_alg,
         sys = sys
 
@@ -2521,14 +2468,14 @@ function linearization_function(sys::AbstractSystem, inputs,
             if u !== nothing # Handle systems without unknowns
                 length(sts) == length(u) ||
                     error("Number of unknown variables ($(length(sts))) does not match the number of input unknowns ($(length(u)))")
-                if initialize && !isempty(alge_idxs) # This is expensive and can be omitted if the user knows that the system is already initialized
-                    residual = fun(u, p, t)
-                    if norm(residual[alge_idxs]) > √(eps(eltype(residual)))
-                        initu0, initp = get_initprob_u_p(u, p, t)
-                        initprob = NonlinearLeastSquaresProblem(initfn, initu0, initp)
-                        nlsol = solve(initprob, initialization_solver_alg)
-                        u = initprobmap(state_values(nlsol), parameter_values(nlsol))
-                    end
+
+                integ = MockIntegrator{true}(u, p, t, integ_cache)
+                u, p, success = SciMLBase.get_initial_values(
+                    prob, integ, fun, initializealg, Val(true);
+                    abstol = initialization_abstol, reltol = initialization_reltol,
+                    nlsolve_alg = initialization_solver_alg)
+                if !success
+                    error("Initialization algorithm $(initializealg) failed with `u = $u` and `p = $p`.")
                 end
                 uf = SciMLBase.UJacobianWrapper(fun, t, p)
                 fg_xz = ForwardDiff.jacobian(uf, u)
@@ -2562,6 +2509,44 @@ function linearization_function(sys::AbstractSystem, inputs,
     end
     return lin_fun, sys
 end
+
+"""
+    $(TYPEDEF)
+
+Mock `DEIntegrator` to allow using `CheckInit` without having to create a new integrator
+(and consequently depend on `OrdinaryDiffEq`).
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
+struct MockIntegrator{iip, U, P, T, C} <: SciMLBase.DEIntegrator{Nothing, iip, U, T}
+    """
+    The state vector.
+    """
+    u::U
+    """
+    The parameter object.
+    """
+    p::P
+    """
+    The current time.
+    """
+    t::T
+    """
+    The integrator cache.
+    """
+    cache::C
+end
+
+function MockIntegrator{iip}(u::U, p::P, t::T, cache::C) where {iip, U, P, T, C}
+    return MockIntegrator{iip, U, P, T, C}(u, p, t, cache)
+end
+
+SymbolicIndexingInterface.state_values(integ::MockIntegrator) = integ.u
+SymbolicIndexingInterface.parameter_values(integ::MockIntegrator) = integ.p
+SymbolicIndexingInterface.current_time(integ::MockIntegrator) = integ.t
+SciMLBase.get_tmp_cache(integ::MockIntegrator) = integ.cache
 
 """
     (; A, B, C, D), simplified_sys = linearize_symbolic(sys::AbstractSystem, inputs, outputs; simplify = false, allow_input_derivatives = false, kwargs...)

@@ -45,7 +45,7 @@ using Compat
 using AbstractTrees
 using DiffEqBase, SciMLBase, ForwardDiff
 using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap, TimeDomain,
-                 PeriodicClock, Clock, SolverStepClock, Continuous
+                 PeriodicClock, Clock, SolverStepClock, Continuous, OverrideInit, NoInit
 using Distributed
 import JuliaFormatter
 using MLStyle
