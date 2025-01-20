@@ -977,4 +977,3 @@ function generate_control_function(
 
     ModelingToolkit.generate_control_function(system_modifier(sys), u, d; kwargs...)
 end
-
