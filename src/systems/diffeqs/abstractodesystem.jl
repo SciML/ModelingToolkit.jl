@@ -1391,16 +1391,16 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
     fullmap = merge(u0map, parammap)
     u0T = Union{}
     for sym in unknowns(isys)
-        haskey(fullmap, sym) || continue
-        symbolic_type(fullmap[sym]) == NotSymbolic() || continue
-        is_array_of_symbolics(fullmap[sym]) && continue
-        u0T = promote_type(u0T, typeof(fullmap[sym]))
+        val = fixpoint_sub(sym, fullmap)
+        symbolic_type(val) == NotSymbolic() || continue
+        u0T = promote_type(u0T, typeof(val))
     end
     for eq in observed(isys)
-        haskey(fullmap, eq.lhs) || continue
-        symbolic_type(fullmap[eq.lhs]) == NotSymbolic() || continue
-        is_array_of_symbolics(fullmap[eq.lhs]) && continue
-        u0T = promote_type(u0T, typeof(fullmap[eq.lhs]))
+        # ignore HACK-ed observed equations
+        symbolic_type(eq.lhs) == ArraySymbolic() && continue
+        val = fixpoint_sub(eq.lhs, fullmap)
+        symbolic_type(val) == NotSymbolic() || continue
+        u0T = promote_type(u0T, typeof(val))
     end
     if u0T != Union{}
         u0T = eltype(u0T)
