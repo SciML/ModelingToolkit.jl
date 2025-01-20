@@ -661,6 +661,8 @@ Keyword arguments:
   other to attempt to arrive at a numeric value.
 - `use_scc`: Whether to use `SCCNonlinearProblem` for initialization if the system is fully
   determined.
+- `algebraic_only`: Whether to build the initialization problem using only algebraic equations.
+- `allow_incomplete`: Whether to allow incomplete initialization problems.
 
 All other keyword arguments are passed as-is to `constructor`.
 """
@@ -674,7 +676,8 @@ function process_SciMLProblem(
         symbolic_u0 = false, warn_cyclic_dependency = false,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10,
-        substitution_limit = 100, use_scc = true, kwargs...)
+        substitution_limit = 100, use_scc = true, algebraic_only = false,
+        allow_incomplete = false, kwargs...)
     dvs = unknowns(sys)
     ps = parameters(sys)
     iv = has_iv(sys) ? get_iv(sys) : nothing
@@ -706,7 +709,8 @@ function process_SciMLProblem(
             implicit_dae, warn_initialize_determined, initialization_eqs,
             eval_expression, eval_module, fully_determined,
             warn_cyclic_dependency, check_units = check_initialization_units,
-            circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc)
+            circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
+            algebraic_only, allow_incomplete)
 
         kwargs = merge(kwargs, kws)
     end
