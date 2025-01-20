@@ -696,6 +696,9 @@ function process_SciMLProblem(
 
     op, missing_unknowns, missing_pars = build_operating_point(
         u0map, pmap, defs, cmap, dvs, ps)
+    filter_missing_values!(op)
+    filter_missing_values!(u0map)
+    filter_missing_values!(pmap)
 
     if build_initializeprob
         kws = maybe_build_initialization_problem(
