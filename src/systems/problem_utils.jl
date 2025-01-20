@@ -746,6 +746,9 @@ function process_SciMLProblem(
 
     op, missing_unknowns, missing_pars = build_operating_point(
         u0map, pmap, defs, cmap, dvs, ps)
+    filter_missing_values!(op)
+    filter_missing_values!(u0map)
+    filter_missing_values!(pmap)
     substitute_extra_variables!(sys, u0map)
     substitute_extra_variables!(sys, pmap)
 
