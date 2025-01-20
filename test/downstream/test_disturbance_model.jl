@@ -57,7 +57,7 @@ end
 ssys = structural_simplify(model)
 prob = ODEProblem(ssys, [], (0.0, 10.0))
 sol = solve(prob, Tsit5())
-plot(sol)
+# plot(sol)
 
 ##
 using ControlSystemsBase
