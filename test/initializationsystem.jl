@@ -950,7 +950,7 @@ end
         prob2 = remake(prob; u0 = ForwardDiff.Dual.(prob.u0))
         @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <:
               ForwardDiff.Dual
-        @test eltype(prob2.f.initialization_data.initializeprob.p.tunable) <: Float64
+        @test eltype(prob2.f.initialization_data.initializeprob.p.tunable) <: ForwardDiff.Dual
         @test state_values(prob2.f.initialization_data.initializeprob) ≈
               state_values(prob.f.initialization_data.initializeprob)
 
