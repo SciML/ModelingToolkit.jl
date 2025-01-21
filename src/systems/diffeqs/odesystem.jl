@@ -631,7 +631,15 @@ function build_explicit_observed_function(sys, ts;
     oop_fn = Func(args, [],
                  pre(Let(obsexprs,
                      return_value,
-                     false))) |> array_wrapper[1] |> oop_mtkp_wrapper |> toexpr
+                     false)), [Expr(:meta, :propagate_inbounds)]) |> array_wrapper[1] |> oop_mtkp_wrapper |> toexpr
+
+    if !checkbounds
+        oop_fn.args[end] = quote
+            @inbounds begin
+                $(oop_fn.args[end])
+            end
+        end
+    end
     oop_fn = expression ? oop_fn : eval_or_rgf(oop_fn; eval_expression, eval_module)
 
     if !isscalar
@@ -641,6 +649,18 @@ function build_explicit_observed_function(sys, ts;
             wrap_code = mtkparams_wrapper .∘ array_wrapper .∘
                         wrap_assignments(isscalar, obsexprs),
             expression = Val{true})[2]
+        if !checkbounds
+            iip_fn.args[end] = quote
+                @inbounds begin
+                    $(iip_fn.args[end])
+                end
+            end
+        end
+        iip_fn.args[end] = quote
+            $(Expr(:meta, :propagate_inbounds))
+            $(iip_fn.args[end])
+        end
+
         if !expression
             iip_fn = eval_or_rgf(iip_fn; eval_expression, eval_module)
         end

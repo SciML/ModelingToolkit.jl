@@ -1335,7 +1335,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
 
     # TODO: throw on uninitialized arrays
     filter!(x -> !(x isa Symbolics.Arr), uninit)
-    if !isempty(uninit)
+    if is_time_dependent(sys) && !isempty(uninit)
         allow_incomplete || throw(IncompleteInitializationError(uninit))
         # for incomplete initialization, we will add the missing variables as parameters.
         # they will be updated by `update_initializeprob!` and `initializeprobmap` will
@@ -1373,6 +1373,21 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
     end
 
     u0map = merge(ModelingToolkit.guesses(sys), todict(guesses), todict(u0map))
+
+    # Replace dummy derivatives in u0map: D(x) -> x_t etc.
+    if has_schedule(sys)
+        schedule = get_schedule(sys)
+        if !isnothing(schedule)
+            for (var, val) in u0map
+                dvar = get(schedule.dummy_sub, var, var) # with dummy derivatives
+                if dvar !== var # then replace it
+                    delete!(u0map, var)
+                    push!(u0map, dvar => val)
+                end
+            end
+        end
+    end
+
     fullmap = merge(u0map, parammap)
     u0T = Union{}
     for sym in unknowns(isys)
