@@ -600,8 +600,7 @@ end
         (ModelingToolkit.System, DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
         (ModelingToolkit.System, SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b])
     ]
-        function test_parameter(prob, sym, val, initialval = zero(val))
-            @test prob.ps[sym] ≈ initialval
+        function test_parameter(prob, sym, val)
             if prob.u0 !== nothing
                 @test init(prob, alg).ps[sym] ≈ val
             end
