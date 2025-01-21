@@ -455,7 +455,9 @@ struct GetUpdatedMTKParameters{G, S}
 end
 
 function (f::GetUpdatedMTKParameters)(prob, initializesol)
-    mtkp = copy(parameter_values(prob))
+    p = parameter_values(prob)
+    p === nothing && return nothing
+    mtkp = copy(p)
     f.setpunknowns(mtkp, f.getpunknowns(initializesol))
     mtkp
 end
