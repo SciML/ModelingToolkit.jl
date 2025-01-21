@@ -1220,22 +1220,35 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
         check_units = true,
         use_scc = true,
         allow_incomplete = false,
+        force_time_independent = false,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
     end
     if isempty(u0map) && get_initializesystem(sys) !== nothing
         isys = get_initializesystem(sys; initialization_eqs, check_units)
+        simplify_system = false
     elseif isempty(u0map) && get_initializesystem(sys) === nothing
-        isys = structural_simplify(
-            generate_initializesystem(
-                sys; initialization_eqs, check_units, pmap = parammap,
-                guesses, extra_metadata = (; use_scc)); fully_determined)
+        isys = generate_initializesystem(
+            sys; initialization_eqs, check_units, pmap = parammap,
+            guesses, extra_metadata = (; use_scc))
+        simplify_system = true
     else
-        isys = structural_simplify(
-            generate_initializesystem(
-                sys; u0map, initialization_eqs, check_units,
-                pmap = parammap, guesses, extra_metadata = (; use_scc)); fully_determined)
+        isys = generate_initializesystem(
+            sys; u0map, initialization_eqs, check_units,
+            pmap = parammap, guesses, extra_metadata = (; use_scc))
+        simplify_system = true
+    end
+
+    # useful for `SteadyStateProblem` since `f` has to be autonomous and the
+    # initialization should be too
+    if force_time_independent
+        idx = findfirst(isequal(get_iv(sys)), get_ps(isys))
+        idx === nothing || deleteat!(get_ps(isys), idx)
+    end
+
+    if simplify_system
+        isys = structural_simplify(isys; fully_determined)
     end
 
     meta = get_metadata(isys)
