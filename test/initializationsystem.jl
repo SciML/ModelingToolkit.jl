@@ -687,7 +687,8 @@ end
         _pmap = merge(pmap, Dict(p => 1.0))
         prob = Problem(sys, u0map, (0.0, 1.0), _pmap)
         @test prob.ps[p] ≈ 1.0
-        @test prob.f.initialization_data === nothing
+        initsys = prob.f.initialization_data.initializeprob.f.sys
+        @test is_parameter(initsys, p)
 
         # Non-floating point
         @parameters r::Int s::Int
@@ -696,7 +697,9 @@ end
         prob = Problem(sys, u0map, (0.0, 1.0), [r => 1])
         @test prob.ps[r] == 1
         @test prob.ps[s] == 2
-        @test prob.f.initialization_data === nothing
+        initsys = prob.f.initialization_data.initializeprob.f.sys
+        @test is_parameter(initsys, r)
+        @test is_parameter(initsys, s)
 
         @mtkbuild sys = System(
             [D(x) ~ x + rhss[1], p ~ x + y + rhss[2]], t; guesses = [p => 0.0])
@@ -1180,21 +1183,28 @@ end
     @test integ2.ps[q] ≈ 2cbrt(3 / 28)
 end
 
+function test_dummy_initialization_equation(prob, var)
+    initsys = prob.f.initialization_data.initializeprob.f.sys
+    @test isempty(equations(initsys))
+    idx = findfirst(eq -> isequal(var, eq.lhs), observed(initsys))
+    @test idx !== nothing && is_parameter(initsys, observed(initsys)[idx].rhs)
+end
+
 @testset "Remake problem with no initializeprob" begin
     @variables x(t) [guess = 1.0] y(t) [guess = 1.0]
     @parameters p [guess = 1.0] q [guess = 1.0]
     @mtkbuild sys = ODESystem(
         [D(x) ~ p * x + q * y, y ~ 2x], t; parameter_dependencies = [q ~ 2p])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [p => 1.0])
-    @test prob.f.initialization_data === nothing
+    test_dummy_initialization_equation(prob, x)
     prob2 = remake(prob; u0 = [x => 2.0])
     @test prob2[x] == 2.0
-    @test prob2.f.initialization_data === nothing
+    test_dummy_initialization_equation(prob2, x)
     prob3 = remake(prob; u0 = [y => 2.0])
     @test prob3.f.initialization_data !== nothing
     @test init(prob3)[x] ≈ 1.0
     prob4 = remake(prob; p = [p => 1.0])
-    @test prob4.f.initialization_data === nothing
+    test_dummy_initialization_equation(prob4, x)
     prob5 = remake(prob; p = [p => missing, q => 2.0])
     @test prob5.f.initialization_data !== nothing
     @test init(prob5).ps[p] ≈ 1.0
@@ -1206,12 +1216,12 @@ end
     @mtkbuild sys = ODESystem(
         [D(x) ~ p * x + q * y, y ~ 2x], t; parameter_dependencies = [q ~ 2p])
     prob = ODEProblem(sys, [:x => 1.0], (0.0, 1.0), [p => 1.0])
-    @test prob.f.initialization_data === nothing
+    test_dummy_initialization_equation(prob, x)
     prob2 = remake(prob; u0 = [:x => 2.0])
-    @test prob2.f.initialization_data === nothing
-    prob3 = remake(prob; u0 = [:y => 1.0])
-    @test prob3.f.initialization_data !== nothing
+    test_dummy_initialization_equation(prob2, x)
+    prob3 = remake(prob; u0 = [:y => 1.0, :x => nothing])
     @test init(prob3)[x] ≈ 0.5
+    @test SciMLBase.successful_retcode(solve(prob3))
 end
 
 @testset "Issue#3246: type promotion with parameter dependent initialization_eqs" begin
