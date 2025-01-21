@@ -3,7 +3,7 @@ using StochasticDiffEq, DelayDiffEq, StochasticDelayDiffEq, JumpProcesses
 using ForwardDiff
 using SymbolicIndexingInterface, SciMLStructures
 using SciMLStructures: Tunable
-using ModelingToolkit: t_nounits as t, D_nounits as D
+using ModelingToolkit: t_nounits as t, D_nounits as D, observed
 using DynamicQuantities
 
 @parameters g
