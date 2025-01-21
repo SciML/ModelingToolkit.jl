@@ -17,6 +17,9 @@ function generate_initializesystem(sys::AbstractSystem;
         eqs = Equation[x for x in eqs if x isa Equation]
     end
     trueobs, eqs = unhack_observed(observed(sys), eqs)
+    # remove any observed equations that directly or indirectly contain
+    # delayed unknowns
+    isempty(trueobs) || filter_delay_equations_variables!(sys, trueobs)
     vars = unique([unknowns(sys); getfield.(trueobs, :lhs)])
     vars_set = Set(vars) # for efficient in-lookup
 
@@ -269,6 +272,52 @@ function get_initial_value_parameter(sym)
     name = Symbol(name, :ₘₜₖ_₀)
     newvar = unwrap(similar_variable(sym, name; use_gensym = false))
     return toparam(newvar)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given `sys` and a list of observed equations `trueobs`, remove all the equations that
+directly or indirectly contain a delayed unknown of `sys`.
+"""
+function filter_delay_equations_variables!(sys::AbstractSystem, trueobs::Vector{Equation})
+    is_time_dependent(sys) || return trueobs
+    banned_vars = Set()
+    idxs_to_remove = Int[]
+    for (i, eq) in enumerate(trueobs)
+        _has_delays(sys, eq.rhs, banned_vars) || continue
+        push!(idxs_to_remove, i)
+        push!(banned_vars, eq.lhs)
+    end
+    return deleteat!(trueobs, idxs_to_remove)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Check if the expression `ex` contains a delayed unknown of `sys` or a term in
+`banned`.
+"""
+function _has_delays(sys::AbstractSystem, ex, banned)
+    ex = unwrap(ex)
+    ex in banned && return true
+    if symbolic_type(ex) == NotSymbolic()
+        if is_array_of_symbolics(ex)
+            return any(x -> _has_delays(sys, x, banned), ex)
+        end
+        return false
+    end
+    iscall(ex) || return false
+    op = operation(ex)
+    args = arguments(ex)
+    if iscalledparameter(ex)
+        return any(x -> _has_delays(sys, x, banned), args)
+    end
+    if issym(op) && length(args) == 1 && is_variable(sys, op(get_iv(sys))) &&
+       iscall(args[1]) && get_iv(sys) in vars(args[1])
+        return true
+    end
+    return any(x -> _has_delays(sys, x, banned), args)
 end
 
 struct ReconstructInitializeprob
