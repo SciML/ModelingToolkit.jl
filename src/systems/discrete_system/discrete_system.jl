@@ -336,6 +336,7 @@ function SciMLBase.DiscreteFunction{iip, specialize}(
         eval_expression = false,
         eval_module = @__MODULE__,
         analytic = nothing,
+        initialization_data = nothing,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed `DiscreteSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
@@ -359,7 +360,8 @@ function SciMLBase.DiscreteFunction{iip, specialize}(
     DiscreteFunction{iip, specialize}(f;
         sys = sys,
         observed = observedfun,
-        analytic = analytic)
+        analytic = analytic,
+        initialization_data = initialization_data)
 end
 
 """
