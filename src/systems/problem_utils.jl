@@ -596,6 +596,8 @@ function maybe_build_initialization_problem(
     end
 
     for p in punknowns
+        is_parameter_solvable(p, pmap, defs, guesses) || continue
+        get(op, p, missing) === missing || continue
         p = unwrap(p)
         stype = symtype(p)
         op[p] = get_temporary_value(p)
