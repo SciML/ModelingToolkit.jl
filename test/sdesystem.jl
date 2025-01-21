@@ -869,6 +869,31 @@ end
     @test length(observed(sys)) == 1
 end
 
+@testset "SDESystem Equality with events" begin
+    @variables X(t)
+    @parameters p d
+    @brownian a
+    seq = D(X) ~ p - d*X + a
+    @mtkbuild ssys1 = System([seq], t; name = :ssys)
+    @mtkbuild ssys2 = System([seq], t; name = :ssys)
+    @test ssys1 == ssys2 # true
+
+    continuous_events = [[X ~ 1.0] => [X ~ X + 5.0]]
+    discrete_events = [5.0 => [d ~ d / 2.0]]
+
+    @mtkbuild ssys1 = System([seq], t; name = :ssys, continuous_events)
+    @mtkbuild ssys2 = System([seq], t; name = :ssys)
+    @test ssys1 !== ssys2 
+
+    @mtkbuild ssys1 = System([seq], t; name = :ssys, discrete_events)
+    @mtkbuild ssys2 = System([seq], t; name = :ssys)
+    @test ssys1 !== ssys2
+
+    @mtkbuild ssys1 = System([seq], t; name = :ssys, continuous_events)
+    @mtkbuild ssys2 = System([seq], t; name = :ssys, discrete_events)
+    @test ssys1 !== ssys2 
+end
+
 @testset "Error when constructing SDESystem without `structural_simplify`" begin
     @parameters σ ρ β
     @variables x(tt) y(tt) z(tt)

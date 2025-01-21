@@ -279,11 +279,13 @@ function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
     iv2 = get_iv(sys2)
     isequal(iv1, iv2) &&
         isequal(nameof(sys1), nameof(sys2)) &&
-        isequal(get_eqs(sys1), get_eqs(sys2)) &&
-        isequal(get_noiseeqs(sys1), get_noiseeqs(sys2)) &&
+        _eq_unordered(get_eqs(sys1), get_eqs(sys2)) &&
+        _eq_unordered(get_noiseeqs(sys1), get_noiseeqs(sys2)) &&
         isequal(get_is_scalar_noise(sys1), get_is_scalar_noise(sys2)) &&
         _eq_unordered(get_unknowns(sys1), get_unknowns(sys2)) &&
         _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
+        _eq_unordered(continuous_events(sys1), continuous_events(sys2)) &&
+        _eq_unordered(discrete_events(sys1), discrete_events(sys2)) && 
         all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
 end
 

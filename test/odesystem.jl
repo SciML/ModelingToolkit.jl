@@ -1544,6 +1544,32 @@ end
     @test all(x -> any(isapprox(x, atol = 1e-6), sol2.t), expected_tstops)
 end
 
+# Test `isequal`
+@testset "`isequal`" begin
+    @variables X(t)
+    @parameters p d
+    eq = D(X) ~ p - d*X
+
+    osys1 = complete(ODESystem([eq], t; name = :osys))
+    osys2 = complete(ODESystem([eq], t; name = :osys))
+    @test osys1 == osys2 # true
+
+    continuous_events = [[X ~ 1.0] => [X ~ X + 5.0]]
+    discrete_events = [5.0 => [d ~ d / 2.0]]
+
+    osys1 = complete(ODESystem([eq], t; name = :osys, continuous_events))
+    osys2 = complete(ODESystem([eq], t; name = :osys))
+    @test osys1 !== osys2 
+
+    osys1 = complete(ODESystem([eq], t; name = :osys, discrete_events))
+    osys2 = complete(ODESystem([eq], t; name = :osys))
+    @test osys1 !== osys2
+
+    osys1 = complete(ODESystem([eq], t; name = :osys, continuous_events))
+    osys2 = complete(ODESystem([eq], t; name = :osys, discrete_events))
+    @test osys1 !== osys2 
+end
+
 @testset "dae_order_lowering basic test" begin
     @parameters a
     @variables x(t) y(t) z(t)
