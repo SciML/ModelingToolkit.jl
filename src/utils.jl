@@ -358,7 +358,7 @@ isoperator(expr, op) = iscall(expr) && operation(expr) isa op
 isoperator(op) = expr -> isoperator(expr, op)
 
 isdifferential(expr) = isoperator(expr, Differential)
-isdiffeq(eq) = isdifferential(eq.lhs)
+isdiffeq(eq) = isdifferential(eq.lhs) || isoperator(eq.lhs, Shift)
 
 isvariable(x::Num)::Bool = isvariable(value(x))
 function isvariable(x)::Bool
