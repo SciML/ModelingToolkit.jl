@@ -373,6 +373,8 @@ function Base.:(==)(sys1::ODESystem, sys2::ODESystem)
         _eq_unordered(get_eqs(sys1), get_eqs(sys2)) &&
         _eq_unordered(get_unknowns(sys1), get_unknowns(sys2)) &&
         _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
+        _eq_unordered(continuous_events(sys1), continuous_events(sys2)) &&
+        _eq_unordered(discrete_events(sys1), discrete_events(sys2)) && 
         all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
 end
 
@@ -629,7 +631,15 @@ function build_explicit_observed_function(sys, ts;
     oop_fn = Func(args, [],
                  pre(Let(obsexprs,
                      return_value,
-                     false))) |> array_wrapper[1] |> oop_mtkp_wrapper |> toexpr
+                     false)), [Expr(:meta, :propagate_inbounds)]) |> array_wrapper[1] |> oop_mtkp_wrapper |> toexpr
+
+    if !checkbounds
+        oop_fn.args[end] = quote
+            @inbounds begin
+                $(oop_fn.args[end])
+            end
+        end
+    end
     oop_fn = expression ? oop_fn : eval_or_rgf(oop_fn; eval_expression, eval_module)
 
     if !isscalar
@@ -639,6 +649,18 @@ function build_explicit_observed_function(sys, ts;
             wrap_code = mtkparams_wrapper .∘ array_wrapper .∘
                         wrap_assignments(isscalar, obsexprs),
             expression = Val{true})[2]
+        if !checkbounds
+            iip_fn.args[end] = quote
+                @inbounds begin
+                    $(iip_fn.args[end])
+                end
+            end
+        end
+        iip_fn.args[end] = quote
+            $(Expr(:meta, :propagate_inbounds))
+            $(iip_fn.args[end])
+        end
+
         if !expression
             iip_fn = eval_or_rgf(iip_fn; eval_expression, eval_module)
         end

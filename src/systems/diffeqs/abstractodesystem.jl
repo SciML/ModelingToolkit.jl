@@ -1294,6 +1294,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
         fully_determined = nothing,
         check_units = true,
         use_scc = true,
+        allow_incomplete = false,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
@@ -1334,8 +1335,14 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
 
     # TODO: throw on uninitialized arrays
     filter!(x -> !(x isa Symbolics.Arr), uninit)
-    if !isempty(uninit)
-        throw(IncompleteInitializationError(uninit))
+    if is_time_dependent(sys) && !isempty(uninit)
+        allow_incomplete || throw(IncompleteInitializationError(uninit))
+        # for incomplete initialization, we will add the missing variables as parameters.
+        # they will be updated by `update_initializeprob!` and `initializeprobmap` will
+        # use them to construct the new `u0`.
+        newparams = map(toparam, uninit)
+        append!(get_ps(isys), newparams)
+        isys = complete(isys)
     end
 
     neqs = length(equations(isys))
@@ -1366,6 +1373,21 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
     end
 
     u0map = merge(ModelingToolkit.guesses(sys), todict(guesses), todict(u0map))
+
+    # Replace dummy derivatives in u0map: D(x) -> x_t etc.
+    if has_schedule(sys)
+        schedule = get_schedule(sys)
+        if !isnothing(schedule)
+            for (var, val) in u0map
+                dvar = get(schedule.dummy_sub, var, var) # with dummy derivatives
+                if dvar !== var # then replace it
+                    delete!(u0map, var)
+                    push!(u0map, dvar => val)
+                end
+            end
+        end
+    end
+
     fullmap = merge(u0map, parammap)
     u0T = Union{}
     for sym in unknowns(isys)

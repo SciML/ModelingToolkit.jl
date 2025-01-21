@@ -910,3 +910,47 @@ end
         @test f_order isa Expr
     end
 end
+
+@testset "SDESystem Equality with events" begin
+    @variables X(t)
+    @parameters p d
+    @brownian a
+    seq = D(X) ~ p - d*X + a
+    @mtkbuild ssys1 = System([seq], t; name = :ssys)
+    @mtkbuild ssys2 = System([seq], t; name = :ssys)
+    @test ssys1 == ssys2 # true
+
+    continuous_events = [[X ~ 1.0] => [X ~ X + 5.0]]
+    discrete_events = [5.0 => [d ~ d / 2.0]]
+
+    @mtkbuild ssys1 = System([seq], t; name = :ssys, continuous_events)
+    @mtkbuild ssys2 = System([seq], t; name = :ssys)
+    @test ssys1 !== ssys2 
+
+    @mtkbuild ssys1 = System([seq], t; name = :ssys, discrete_events)
+    @mtkbuild ssys2 = System([seq], t; name = :ssys)
+    @test ssys1 !== ssys2
+
+    @mtkbuild ssys1 = System([seq], t; name = :ssys, continuous_events)
+    @mtkbuild ssys2 = System([seq], t; name = :ssys, discrete_events)
+    @test ssys1 !== ssys2 
+end
+
+@testset "Error when constructing SDESystem without `structural_simplify`" begin
+    @parameters σ ρ β
+    @variables x(tt) y(tt) z(tt)
+    @brownian a
+    eqs = [D(x) ~ σ * (y - x) + 0.1a * x,
+        D(y) ~ x * (ρ - z) - y + 0.1a * y,
+        D(z) ~ x * y - β * z + 0.1a * z]
+
+    @named de = System(eqs, t)
+    de = complete(de)
+
+    u0map = [x => 1.0, y => 0.0, z => 0.0]
+    parammap = [σ => 10.0, β => 26.0, ρ => 2.33]
+
+    @test_throws ErrorException("SDESystem constructed by defining Brownian variables with @brownian must be simplified by calling `structural_simplify` before a SDEProblem can be constructed.") SDEProblem(de, u0map, (0.0, 100.0), parammap)
+    de = structural_simplify(de)
+    @test SDEProblem(de, u0map, (0.0, 100.0), parammap) isa SDEProblem
+end

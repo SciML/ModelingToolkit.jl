@@ -54,7 +54,8 @@ import SCCNonlinearSolve
 using Reexport
 using RecursiveArrayTools
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
-import BlockArrays: BlockedArray, Block, blocksize, blocksizes
+import BlockArrays: BlockArray, BlockedArray, Block, blocksize, blocksizes, blockpush!,
+                    undef_blocks, blocks
 import CommonSolve
 import EnumX
 
@@ -145,8 +146,8 @@ include("systems/index_cache.jl")
 include("systems/parameter_buffer.jl")
 include("systems/abstractsystem.jl")
 include("systems/model_parsing.jl")
-include("systems/analysis_points.jl")
 include("systems/connectors.jl")
+include("systems/analysis_points.jl")
 include("systems/imperative_affect.jl")
 include("systems/callbacks.jl")
 include("systems/problem_utils.jl")

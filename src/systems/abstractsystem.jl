@@ -1875,6 +1875,13 @@ Equivalent to `length(equations(expand_connections(sys))) - length(filter(eq -> 
 function n_expanded_connection_equations(sys::AbstractSystem)
     # TODO: what about inputs?
     isconnector(sys) && return length(get_unknowns(sys))
+    sys = remove_analysis_points(sys)
+    n_variable_connect_eqs = 0
+    for eq in equations(sys)
+        is_causal_variable_connection(eq.rhs) || continue
+        n_variable_connect_eqs += length(get_systems(eq.rhs)) - 1
+    end
+
     sys, (csets, _) = generate_connection_set(sys)
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
     n_outer_stream_variables = 0
@@ -1897,7 +1904,7 @@ function n_expanded_connection_equations(sys::AbstractSystem)
     #    n_toplevel_unused_flows += count(x->get_connection_type(x) === Flow && !(x in toplevel_flows), get_unknowns(m))
     #end
 
-    nextras = n_outer_stream_variables + length(ceqs)
+    nextras = n_outer_stream_variables + length(ceqs) + n_variable_connect_eqs
 end
 
 function Base.show(
@@ -1919,7 +1926,7 @@ function Base.show(
     nrows > 0 && hint && print(io, " see hierarchy($name)")
     for i in 1:nrows
         sub = subs[i]
-        name = String(nameof(sub))
+        local name = String(nameof(sub))
         print(io, "\n  ", name)
         desc = description(sub)
         if !isempty(desc)
@@ -2274,37 +2281,37 @@ macro mtkbuild(exprs...)
 end
 
 """
-$(SIGNATURES)
+    debug_system(sys::AbstractSystem; functions = [log, sqrt, (^), /, inv, asin, acos], error_nonfinite = true)
 
-Replace functions with singularities with a function that errors with symbolic
-information. E.g.
+Wrap `functions` in `sys` so any error thrown in them shows helpful symbolic-numeric
+information about its input. If `error_nonfinite`, functions that output nonfinite
+values (like `Inf` or `NaN`) also display errors, even though the raw function itself
+does not throw an exception (like `1/0`). For example:
 
 ```julia-repl
-julia> sys = debug_system(sys);
+julia> sys = debug_system(complete(sys))
 
-julia> sys = complete(sys);
+julia> prob = ODEProblem(sys, [0.0, 2.0], (0.0, 1.0))
 
-julia> prob = ODEProblem(sys, [], (0, 1.0));
-
-julia> du = zero(prob.u0);
-
-julia> prob.f(du, prob.u0, prob.p, 0.0)
-ERROR: DomainError with (-1.0,):
-log errors with input(s): -cos(Q(t)) => -1.0
-Stacktrace:
-  [1] (::ModelingToolkit.LoggedFun{typeof(log)})(args::Float64)
-  ...
+julia> prob.f(prob.u0, prob.p, 0.0)
+ERROR: Function /(1, sin(P(t))) output non-finite value Inf with input
+  1 => 1
+  sin(P(t)) => 0.0
 ```
 """
-function debug_system(sys::AbstractSystem)
+function debug_system(
+        sys::AbstractSystem; functions = [log, sqrt, (^), /, inv, asin, acos], kw...)
+    if !(functions isa Set)
+        functions = Set(functions) # more efficient "in" lookup
+    end
     if has_systems(sys) && !isempty(get_systems(sys))
-        error("debug_system only works on systems with no sub-systems!")
+        error("debug_system(sys) only works on systems with no sub-systems! Consider flattening it with flatten(sys) or structural_simplify(sys) first.")
     end
     if has_eqs(sys)
-        @set! sys.eqs = debug_sub.(equations(sys))
+        @set! sys.eqs = debug_sub.(equations(sys), Ref(functions); kw...)
     end
     if has_observed(sys)
-        @set! sys.observed = debug_sub.(observed(sys))
+        @set! sys.observed = debug_sub.(observed(sys), Ref(functions); kw...)
     end
     return sys
 end

@@ -279,11 +279,13 @@ function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
     iv2 = get_iv(sys2)
     isequal(iv1, iv2) &&
         isequal(nameof(sys1), nameof(sys2)) &&
-        isequal(get_eqs(sys1), get_eqs(sys2)) &&
-        isequal(get_noiseeqs(sys1), get_noiseeqs(sys2)) &&
+        _eq_unordered(get_eqs(sys1), get_eqs(sys2)) &&
+        _eq_unordered(get_noiseeqs(sys1), get_noiseeqs(sys2)) &&
         isequal(get_is_scalar_noise(sys1), get_is_scalar_noise(sys2)) &&
         _eq_unordered(get_unknowns(sys1), get_unknowns(sys2)) &&
         _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
+        _eq_unordered(continuous_events(sys1), continuous_events(sys2)) &&
+        _eq_unordered(discrete_events(sys1), discrete_events(sys2)) && 
         all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
 end
 
@@ -737,6 +739,7 @@ function DiffEqBase.SDEProblem{iip, specialize}(
     if !iscomplete(sys)
         error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEProblem`")
     end
+
     f, u0, p = process_SciMLProblem(
         SDEFunction{iip, specialize}, sys, u0map, parammap; check_length,
         t = tspan === nothing ? nothing : tspan[1], kwargs...)
@@ -765,6 +768,15 @@ function DiffEqBase.SDEProblem{iip, specialize}(
 
     SDEProblem{iip}(f, u0, tspan, p; callback = cbs, noise,
         noise_rate_prototype = noise_rate_prototype, kwargs...)
+end
+
+function DiffEqBase.SDEProblem(sys::ODESystem, args...; kwargs...)
+
+    if any(ModelingToolkit.isbrownian, unknowns(sys))
+        error("SDESystem constructed by defining Brownian variables with @brownian must be simplified by calling `structural_simplify` before a SDEProblem can be constructed.")
+    else
+        error("Cannot construct SDEProblem from a normal ODESystem.")
+    end
 end
 
 """
