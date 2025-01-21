@@ -460,6 +460,16 @@ function SciMLBase.remake_initialization_data(
             merge!(guesses, meta.additional_guesses)
             use_scc = get(meta.extra_metadata, :use_scc, true)
             initialization_eqs = meta.additional_initialization_eqs
+
+            # remove occurrences of `keys(new_params)` from `u0map` and `pmap`
+            for (newvar, oldvar) in meta.new_params
+                if isequal(get(u0map, oldvar, nothing), newvar)
+                    u0map[oldvar] = pmap[newvar]
+                elseif isequal(get(pmap, oldvar, nothing), newvar)
+                    pmap[oldvar] = pmap[newvar]
+                end
+                delete!(pmap, newvar)
+            end
         end
     else
         # there is no initializeprob, so the original problem construction
