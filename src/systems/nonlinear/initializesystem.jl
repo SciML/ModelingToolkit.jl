@@ -40,15 +40,17 @@ function generate_initializesystem(sys::AbstractSystem;
     new_params = Dict()
     u0map = copy(anydict(u0map))
     pmap = copy(anydict(pmap))
-    for (k, v) in u0map
-        k = unwrap(k)
-        is_variable(sys, k) || continue
-        (symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)) || continue
-        newvar = get_initial_value_parameter(k)
-        new_params[newvar] = k
-        pmap[newvar] = v
-        u0map[k] = newvar
-        defs[newvar] = v
+    if is_time_dependent(sys)
+        for (k, v) in u0map
+            k = unwrap(k)
+            is_variable(sys, k) || continue
+            (symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)) || continue
+            newvar = get_initial_value_parameter(k)
+            new_params[newvar] = k
+            pmap[newvar] = v
+            u0map[k] = newvar
+            defs[newvar] = v
+        end
     end
     for (k, v) in pmap
         k = unwrap(k)
