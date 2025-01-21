@@ -511,6 +511,9 @@ Construct the operating point of the system from the user-provided `u0map` and `
 defaults `defs`, constant equations `cmap` (from `get_cmap(sys)`), unknowns `dvs` and
 parameters `ps`. Return the operating point as a dictionary, the list of unknowns for which
 no values can be determined, and the list of parameters for which no values can be determined.
+
+Also updates `u0map` and `pmap` in-place to contain all the initial conditions in `op`, split
+by unknowns and parameters respectively.
 """
 function build_operating_point(
         u0map::AbstractDict, pmap::AbstractDict, defs::AbstractDict, cmap, dvs, ps)
@@ -524,6 +527,17 @@ function build_operating_point(
     missing_pars = add_fallbacks!(op, ps, defs)
     for eq in cmap
         op[eq.lhs] = eq.rhs
+    end
+
+    empty!(u0map)
+    empty!(pmap)
+    for (k, v) in op
+        k = unwrap(k)
+        if isparameter(k)
+            pmap[k] = v
+        elseif !isconstant(k)
+            u0map[k] = v
+        end
     end
     return op, missing_unknowns, missing_pars
 end
