@@ -27,6 +27,38 @@ function generate_initializesystem(sys::AbstractSystem;
     guesses = merge(get_guesses(sys), additional_guesses)
     idxs_diff = isdiffeq.(eqs)
 
+    # PREPROCESSING
+    # for initial conditions of the form `var => constant`, we instead turn them into
+    # `var ~ var0` where `var0` is a new parameter, and make `update_initializeprob!`
+    # update `initializeprob.ps[var0] = prob[var]`.
+
+    # map parameters in `initprob` which need to be updated in `update_initializeprob!`
+    # to the corresponding expressions that determine their values
+    new_params = Dict()
+    u0map = copy(anydict(u0map))
+    pmap = copy(anydict(pmap))
+    for (k, v) in u0map
+        k = unwrap(k)
+        is_variable(sys, k) || continue
+        (symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)) || continue
+        newvar = get_initial_value_parameter(k)
+        new_params[newvar] = k
+        pmap[newvar] = v
+        u0map[k] = newvar
+        defs[newvar] = v
+    end
+    for (k, v) in pmap
+        k = unwrap(k)
+        is_parameter_solvable(k, pmap, defs, guesses) || continue
+        (v !== missing && symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)) ||
+            continue
+        newvar = get_initial_value_parameter(k)
+        new_params[newvar] = k
+        pmap[newvar] = v
+        pmap[k] = newvar
+        defs[newvar] = v
+    end
+
     # 1) Use algebraic equations of time-dependent systems as initialization constraints
     if has_iv(sys)
         idxs_alge = .!idxs_diff
@@ -103,10 +135,6 @@ function generate_initializesystem(sys::AbstractSystem;
 
     # 5) process parameters as initialization unknowns
     paramsubs = Dict()
-    if pmap isa SciMLBase.NullParameters
-        pmap = Dict()
-    end
-    pmap = todict(pmap)
     for p in parameters(sys)
         if is_parameter_solvable(p, pmap, defs, guesses)
             # If either of them are `missing` the parameter is an unknown
@@ -180,6 +208,7 @@ function generate_initializesystem(sys::AbstractSystem;
 
     # parameters do not include ones that became initialization unknowns
     pars = Vector{SymbolicParam}(filter(p -> !haskey(paramsubs, p), parameters(sys)))
+    pars = [pars; map(unwrap, collect(keys(new_params)))]
     is_time_dependent(sys) && push!(pars, get_iv(sys))
 
     if is_time_dependent(sys)
@@ -214,7 +243,7 @@ function generate_initializesystem(sys::AbstractSystem;
     end
     meta = InitializationSystemMetadata(
         anydict(u0map), anydict(pmap), additional_guesses,
-        additional_initialization_eqs, extra_metadata, nothing)
+        additional_initialization_eqs, extra_metadata, nothing, new_params)
     return NonlinearSystem(eqs_ics,
         vars,
         pars;
@@ -226,15 +255,33 @@ function generate_initializesystem(sys::AbstractSystem;
         kwargs...)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Get a new symbolic variable of the same type and size as `sym`, which is a parameter.
+"""
+function get_initial_value_parameter(sym)
+    sym = default_toterm(unwrap(sym))
+    name = hasname(sym) ? getname(sym) : Symbol(sym)
+    if iscall(sym) && operation(sym) === getindex
+        name = Symbol(name, :_, join(arguments(sym)[2:end], "_"))
+    end
+    name = Symbol(name, :ₘₜₖ_₀)
+    newvar = unwrap(similar_variable(sym, name; use_gensym = false))
+    return toparam(newvar)
+end
+
 struct ReconstructInitializeprob
     getter::Any
     setter::Any
 end
 
-function ReconstructInitializeprob(srcsys::AbstractSystem, dstsys::AbstractSystem)
-    syms = reduce(vcat, reorder_parameters(dstsys, parameters(dstsys)); init = [])
-    getter = getu(srcsys, syms)
-    setter = setp_oop(dstsys, syms)
+function ReconstructInitializeprob(
+        srcsys::AbstractSystem, dstsys::AbstractSystem; remap = Dict())
+    syms = [unknowns(dstsys);
+            reduce(vcat, reorder_parameters(dstsys, parameters(dstsys)); init = [])]
+    getter = getu(srcsys, map(x -> get(remap, x, x), syms))
+    setter = setsym_oop(dstsys, syms)
     return ReconstructInitializeprob(getter, setter)
 end
 
@@ -266,6 +313,7 @@ struct InitializationSystemMetadata
     additional_initialization_eqs::Vector{Equation}
     extra_metadata::NamedTuple
     oop_reconstruct_u0_p::Union{Nothing, ReconstructInitializeprob}
+    new_params::Dict{Any, Any}
 end
 
 function get_possibly_array_fallback_singletons(varmap, p)
