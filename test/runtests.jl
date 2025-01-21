@@ -4,6 +4,12 @@ import REPL
 
 const GROUP = get(ENV, "GROUP", "All")
 
+function activate_fmi_env()
+    Pkg.activate("fmi")
+    Pkg.develop(PackageSpec(path = dirname(@__DIR__)))
+    Pkg.instantiate()
+end
+
 function activate_extensions_env()
     Pkg.activate("extensions")
     Pkg.develop(PackageSpec(path = dirname(@__DIR__)))
@@ -115,9 +121,13 @@ end
         @safetestset "Analysis Points Test" include("downstream/analysis_points.jl")
     end
 
+    if GROUP == "All" || GROUP == "FMI"
+        activate_fmi_env()
+        @safetestset "FMI Extension Test" include("fmi/fmi.jl")
+    end
+
     if GROUP == "All" || GROUP == "Extensions"
         activate_extensions_env()
-        @safetestset "FMI Extension Test" include("extensions/fmi.jl")
         @safetestset "HomotopyContinuation Extension Test" include("extensions/homotopy_continuation.jl")
         @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
         @safetestset "LabelledArrays Test" include("labelledarrays.jl")

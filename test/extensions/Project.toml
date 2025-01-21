@@ -2,8 +2,6 @@
 BifurcationKit = "0f109fa4-8a5d-4b75-95aa-f515264e7665"
 ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 ChainRulesTestUtils = "cdddcdb0-9152-4a09-a978-84456f9df70a"
-FMI = "14a09403-18e3-468f-ad8a-74f8dda2d9ac"
-FMIZoo = "724179cf-c260-40a9-bd27-cccc6fe2f195"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 HomotopyContinuation = "f213a82b-91d6-5c5d-acf7-10f1c761b327"
 InfiniteOpt = "20393b10-9daf-11e9-18c9-8db751c92c57"
