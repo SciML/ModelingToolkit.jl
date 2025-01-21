@@ -90,6 +90,10 @@ function generate_initializesystem(sys::AbstractSystem;
             function process_u0map_with_dummysubs(y, x)
                 y = get(schedule.dummy_sub, y, y)
                 y = fixpoint_sub(y, diffmap)
+                # If we have `D(x) ~ x` and provide [D(x) => x, x => 1.0] to `u0map`, then
+                # without this condition `defs` would get `x => x` instead of retaining
+                # `x => 1.0`.
+                isequal(y, x) && return
                 if y ∈ vars_set
                     # variables specified in u0 overrides defaults
                     push!(defs, y => x)
