@@ -70,7 +70,7 @@ function generate_initializesystem(sys::AbstractSystem;
         append!(eqs_ics, eqs[idxs_alge]) # start equation list with algebraic equations
 
         eqs_diff = eqs[idxs_diff]
-        D = Differential(get_iv(sys))
+        D = sys isa DiscreteSystem ? Shift(get_iv(sys), 1) : Differential(get_iv(sys))
         diffmap = merge(
             Dict(eq.lhs => eq.rhs for eq in eqs_diff),
             Dict(D(eq.lhs) => D(eq.rhs) for eq in trueobs)
