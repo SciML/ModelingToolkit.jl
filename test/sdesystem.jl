@@ -869,6 +869,48 @@ end
     @test length(observed(sys)) == 1
 end
 
+@testset "SDEFunctionExpr" begin
+    @parameters σ ρ β
+    @variables x(tt) y(tt) z(tt)
+
+    eqs = [D(x) ~ σ * (y - x),
+        D(y) ~ x * (ρ - z) - y,
+        D(z) ~ x * y - β * z]
+
+    noiseeqs = [0.1 * x,
+        0.1 * y,
+        0.1 * z]
+
+    @named sys = ODESystem(eqs, tt, [x, y, z], [σ, ρ, β])
+    
+    @named de = SDESystem(eqs, noiseeqs, tt, [x, y, z], [σ, ρ, β], tspan = (0.0, 10.0))
+    de = complete(de)
+    
+    f = SDEFunctionExpr(de)
+    @test f isa Expr
+
+    @testset "Configuration Tests" begin
+        # Test with `tgrad`
+        f_tgrad = SDEFunctionExpr(de; tgrad = true)
+        @test f_tgrad isa Expr
+
+        # Test with `jac`
+        f_jac = SDEFunctionExpr(de; jac = true)
+        @test f_jac isa Expr
+
+        # Test with sparse Jacobian
+        f_sparse = SDEFunctionExpr(de; sparse = true)
+        @test f_sparse isa Expr
+    end
+
+    @testset "Ordering Tests" begin
+        dvs = [z, y, x]
+        ps = [β, ρ, σ]
+        f_order = SDEFunctionExpr(de, dvs, ps)
+        @test f_order isa Expr
+    end
+end
+
 @testset "SDESystem Equality with events" begin
     @variables X(t)
     @parameters p d
