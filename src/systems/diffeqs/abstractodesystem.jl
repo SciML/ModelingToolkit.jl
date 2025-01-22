@@ -1295,6 +1295,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
         check_units = true,
         use_scc = true,
         allow_incomplete = false,
+        algebraic_only = false,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
@@ -1305,12 +1306,12 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
         isys = structural_simplify(
             generate_initializesystem(
                 sys; initialization_eqs, check_units, pmap = parammap,
-                guesses, extra_metadata = (; use_scc)); fully_determined)
+                guesses, extra_metadata = (; use_scc), algebraic_only); fully_determined)
     else
         isys = structural_simplify(
             generate_initializesystem(
                 sys; u0map, initialization_eqs, check_units,
-                pmap = parammap, guesses, extra_metadata = (; use_scc)); fully_determined)
+                pmap = parammap, guesses, extra_metadata = (; use_scc)), algebraic_only; fully_determined)
     end
 
     meta = get_metadata(isys)
