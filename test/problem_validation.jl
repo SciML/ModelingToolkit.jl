@@ -12,6 +12,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     ps = [p => 1.0, d => 0.5]
     @test_throws ModelingToolkit.BadKeyError oprob = ODEProblem(osys, u0, (0.0, 1.0), ps)
     
+    @parameters p d
     ps = [p => 1.0, d => 0.5, "Random stuff" => 3.0]
     @test_throws ModelingToolkit.BadKeyError oprob = ODEProblem(osys, u0, (0.0, 1.0), ps)
 
