@@ -692,8 +692,6 @@ function process_SciMLProblem(
     pmap = to_varmap(pmap, ps)
     symbols_to_symbolics!(sys, pmap)
     check_keys(sys, pmap)
-    badkeys = filter(k -> symbolic_type(k) === NotSymbolic(), keys(pmap))
-    isempty(badkeys) || throw(BadKeyError(collect(badkeys)))
 
     defs = add_toterms(recursive_unwrap(defaults(sys)))
     cmap, cs = get_cmap(sys)
