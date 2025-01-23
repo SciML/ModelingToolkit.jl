@@ -684,12 +684,17 @@ function process_SciMLProblem(
 
     u0Type = typeof(u0map)
     pType = typeof(pmap)
-    _u0map = u0map
+
     u0map = to_varmap(u0map, dvs)
     symbols_to_symbolics!(sys, u0map)
-    _pmap = pmap
+    check_keys(sys, u0map)
+
     pmap = to_varmap(pmap, ps)
     symbols_to_symbolics!(sys, pmap)
+    check_keys(sys, pmap)
+    badkeys = filter(k -> symbolic_type(k) === NotSymbolic(), keys(pmap))
+    isempty(badkeys) || throw(BadKeyError(collect(badkeys)))
+
     defs = add_toterms(recursive_unwrap(defaults(sys)))
     cmap, cs = get_cmap(sys)
     kwargs = NamedTuple(kwargs)
@@ -777,6 +782,39 @@ function process_SciMLProblem(
         kwargs...)
     implicit_dae ? (f, du0, u0, p) : (f, u0, p)
 end
+
+# Check that the keys of a u0map or pmap are valid
+# (i.e. are symbolic keys, and are defined for the system.)
+function check_keys(sys, map) 
+    badkeys = Any[]
+    for k in keys(map)
+        if symbolic_type(k) === NotSymbolic()
+            push!(badkeys, k)
+        elseif k isa Symbol
+            !hasproperty(sys, k) && push!(badkeys, k)
+        elseif k ∉ Set(parameters(sys)) && k ∉ Set(unknowns(sys)) 
+            push!(badkeys, k)
+        end
+    end
+
+    isempty(badkeys) || throw(BadKeyError(collect(badkeys)))
+end
+
+const BAD_KEY_MESSAGE = """
+                        Undefined keys found in the parameter or initial condition maps. 
+                        The following keys are either invalid or not parameters/states of the system:
+                        """
+
+struct BadKeyError <: Exception
+    vars::Any
+end
+
+function Base.showerror(io::IO, e::BadKeyError) 
+    println(io, BAD_KEY_MESSAGE)
+    println(io, join(e.vars, ", "))
+end
+
+
 
 ##############
 # Legacy functions for backward compatibility
