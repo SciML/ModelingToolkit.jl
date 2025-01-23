@@ -416,7 +416,7 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
     end
 
     _f, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
-        t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false, check_length = false)
+        t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false, check_length = false, build_initializeprob = false)
     f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
 
     observedfun = ObservedFunctionCache(
@@ -513,7 +513,8 @@ function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothi
             parameter_dependencies = parameter_dependencies(sys),
             metadata = get_metadata(sys), gui_metadata = get_gui_metadata(sys))
         osys = complete(osys)
-        return ODEProblem(osys, u0map, tspan, parammap; check_length = false, kwargs...)
+        return ODEProblem(osys, u0map, tspan, parammap; check_length = false,
+            build_initializeprob = false, kwargs...)
     else
         _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
             t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false,
