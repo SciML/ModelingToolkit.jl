@@ -1544,6 +1544,13 @@ end
     @test all(x -> any(isapprox(x, atol = 1e-6), sol2.t), expected_tstops)
 end
 
+@testset "Validate input types" begin
+    @parameters p d
+    @variables X(t)::Int64
+    eq = D(X) ~ p - d*X
+    @test_throws Exception @mtkbuild osys = ODESystem([eq], t)
+end
+
 # Test `isequal`
 @testset "`isequal`" begin
     @variables X(t)
