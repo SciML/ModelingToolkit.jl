@@ -103,7 +103,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
             description = "",
             name)
         if checks == true || (checks & CheckComponents) > 0
-            check_var_types(PDESystem, dvs)
+            check_var_types(PDESystem, [dv(ivs...) for dv in dvs])
         end
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(dvs, ivs, ps)
