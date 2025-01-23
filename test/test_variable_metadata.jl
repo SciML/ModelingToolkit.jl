@@ -1,4 +1,5 @@
 using ModelingToolkit
+using DynamicQuantities
 
 # Bounds
 @variables u [bounds = (-1, 1)]
@@ -185,3 +186,42 @@ params_meta = ModelingToolkit.dump_parameters(sys)
 params_meta = Dict([ModelingToolkit.getname(meta.var) => meta for meta in params_meta])
 @test params_meta[:p].default == 3.0
 @test isequal(params_meta[:q].dependency, 2p)
+
+# Connect
+@variables x [connect = Flow]
+@test hasconnect(x)
+@test getconnect(x) == Flow
+@test ModelingToolkit.dump_variable_metadata(x).connect == Flow
+x = ModelingToolkit.setconnect(x, ModelingToolkit.Stream)
+@test getconnect(x) == ModelingToolkit.Stream
+
+struct BadConnect end
+@test_throws Exception ModelingToolkit.setconnect(x, BadConnect)
+
+# Unit
+@variables x [unit = u"s"]
+@test hasunit(x)
+@test getunit(x) == u"s"
+@test ModelingToolkit.dump_variable_metadata(x).unit == u"s"
+
+# Misc data
+@variables x [misc = [:good]]
+@test hasmisc(x)
+@test getmisc(x) == [:good]
+x = ModelingToolkit.setmisc(x, "okay")
+@test getmisc(x) == "okay"
+
+# Variable Type
+@variables x
+@test ModelingToolkit.getvariabletype(x) == ModelingToolkit.VARIABLE
+@test ModelingToolkit.dump_variable_metadata(x).variable_type == ModelingToolkit.VARIABLE
+@test ModelingToolkit.dump_variable_metadata(x).variable_source == :variables
+x = ModelingToolkit.toparam(x)
+@test ModelingToolkit.getvariabletype(x) == ModelingToolkit.PARAMETER
+@test ModelingToolkit.dump_variable_metadata(x).variable_source == :variables
+
+@parameters y
+@test ModelingToolkit.getvariabletype(y) == ModelingToolkit.PARAMETER
+
+@brownian z
+@test ModelingToolkit.getvariabletype(z) == ModelingToolkit.BROWNIAN
