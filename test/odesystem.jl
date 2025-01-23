@@ -931,22 +931,13 @@ testdict = Dict([:name => "test"])
 @named sys = ODESystem(eqs, t, metadata = testdict)
 @test get_metadata(sys) == testdict
 
-@variables P(t)=0 Q(t)=2
-∂t = D
-
-eqs = [∂t(Q) ~ 1 / sin(P)
-       ∂t(P) ~ log(-cos(Q))]
+@variables P(t)=NaN Q(t)=NaN
+eqs = [D(Q) ~ 1 / sin(P), D(P) ~ log(-cos(Q))]
 @named sys = ODESystem(eqs, t, [P, Q], [])
-sys = complete(debug_system(sys));
-prob = ODEProblem(sys, [], (0, 1.0));
-du = zero(prob.u0);
-if VERSION < v"1.8"
-    @test_throws DomainError prob.f(du, [1, 0], prob.p, 0.0)
-    @test_throws DomainError prob.f(du, [0, 2], prob.p, 0.0)
-else
-    @test_throws "-cos(Q(t))" prob.f(du, [1, 0], prob.p, 0.0)
-    @test_throws "sin(P(t))" prob.f(du, [0, 2], prob.p, 0.0)
-end
+sys = complete(debug_system(sys))
+prob = ODEProblem(sys, [], (0.0, 1.0))
+@test_throws "log(-cos(Q(t))) errors" prob.f([1, 0], prob.p, 0.0)
+@test_throws "/(1, sin(P(t))) output non-finite value" prob.f([0, 2], prob.p, 0.0)
 
 let
     @variables x(t) = 1
@@ -1558,6 +1549,32 @@ end
     @variables X(t)::Int64
     eq = D(X) ~ p - d*X
     @test_throws Exception @mtkbuild osys = ODESystem([eq], t)
+end
+
+# Test `isequal`
+@testset "`isequal`" begin
+    @variables X(t)
+    @parameters p d
+    eq = D(X) ~ p - d*X
+
+    osys1 = complete(ODESystem([eq], t; name = :osys))
+    osys2 = complete(ODESystem([eq], t; name = :osys))
+    @test osys1 == osys2 # true
+
+    continuous_events = [[X ~ 1.0] => [X ~ X + 5.0]]
+    discrete_events = [5.0 => [d ~ d / 2.0]]
+
+    osys1 = complete(ODESystem([eq], t; name = :osys, continuous_events))
+    osys2 = complete(ODESystem([eq], t; name = :osys))
+    @test osys1 !== osys2 
+
+    osys1 = complete(ODESystem([eq], t; name = :osys, discrete_events))
+    osys2 = complete(ODESystem([eq], t; name = :osys))
+    @test osys1 !== osys2
+
+    osys1 = complete(ODESystem([eq], t; name = :osys, continuous_events))
+    osys2 = complete(ODESystem([eq], t; name = :osys, discrete_events))
+    @test osys1 !== osys2 
 end
 
 @testset "dae_order_lowering basic test" begin

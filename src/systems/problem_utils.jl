@@ -91,6 +91,18 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Utility function to get the value `val` corresponding to key `var` in `varmap`, and
+return `getindex(val, idx)` if it exists or `nothing` otherwise.
+"""
+function get_and_getindex(varmap, var, idx)
+    val = get(varmap, var, nothing)
+    val === nothing && return nothing
+    return val[idx]
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Ensure `varmap` contains entries for all variables in `vars` by using values from
 `fallbacks` if they don't already exist in `varmap`. Return the set of all variables in
 `vars` not present in `varmap` or `fallbacks`. If an array variable in `vars` does not
@@ -115,8 +127,9 @@ function add_fallbacks!(
             val = map(eachindex(var)) do idx
                 # @something is lazy and saves from writing a massive if-elseif-else
                 @something(get(varmap, var[idx], nothing),
-                    get(varmap, ttvar[idx], nothing), get(fallbacks, var, nothing)[idx],
-                    get(fallbacks, ttvar, nothing)[idx], get(fallbacks, var[idx], nothing),
+                    get(varmap, ttvar[idx], nothing), get_and_getindex(fallbacks, var, idx),
+                    get_and_getindex(fallbacks, ttvar, idx), get(
+                        fallbacks, var[idx], nothing),
                     get(fallbacks, ttvar[idx], nothing), Some(nothing))
             end
             # only push the missing entries
@@ -546,30 +559,46 @@ function maybe_build_initialization_problem(
         initializeprob = ModelingToolkit.InitializationProblem(
             sys, t, u0map, pmap; guesses, kwargs...)
 
-        all_init_syms = Set(all_symbols(initializeprob))
-        solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
-        initializeprobmap = getu(initializeprob, solved_unknowns)
+        if is_time_dependent(sys)
+            all_init_syms = Set(all_symbols(initializeprob))
+            solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
+            initializeprobmap = getu(initializeprob, solved_unknowns)
+        else
+            initializeprobmap = nothing
+        end
 
         punknowns = [p
                      for p in all_variable_symbols(initializeprob)
                      if is_parameter(sys, p)]
-        getpunknowns = getu(initializeprob, punknowns)
-        setpunknowns = setp(sys, punknowns)
-        initializeprobpmap = GetUpdatedMTKParameters(getpunknowns, setpunknowns)
+        if isempty(punknowns)
+            initializeprobpmap = nothing
+        else
+            getpunknowns = getu(initializeprob, punknowns)
+            setpunknowns = setp(sys, punknowns)
+            initializeprobpmap = GetUpdatedMTKParameters(getpunknowns, setpunknowns)
+        end
 
         reqd_syms = parameter_symbols(initializeprob)
-        update_initializeprob! = UpdateInitializeprob(
-            getu(sys, reqd_syms), setu(initializeprob, reqd_syms))
+        # we still want the `initialization_data` because it helps with `remake`
+        if initializeprobmap === nothing && initializeprobpmap === nothing
+            update_initializeprob! = nothing
+        else
+            update_initializeprob! = UpdateInitializeprob(
+                getu(sys, reqd_syms), setu(initializeprob, reqd_syms))
+        end
+
         for p in punknowns
             p = unwrap(p)
             stype = symtype(p)
             op[p] = get_temporary_value(p)
         end
 
-        for v in missing_unknowns
-            op[v] = zero_var(v)
+        if is_time_dependent(sys)
+            for v in missing_unknowns
+                op[v] = zero_var(v)
+            end
+            empty!(missing_unknowns)
         end
-        empty!(missing_unknowns)
         return (;
             initialization_data = SciMLBase.OverrideInitData(
                 initializeprob, update_initializeprob!, initializeprobmap,
