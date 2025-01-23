@@ -742,6 +742,8 @@ function process_SciMLProblem(
     cmap, cs = get_cmap(sys)
     kwargs = NamedTuple(kwargs)
 
+    is_time_dependent(sys) || add_observed!(sys, u0map)
+
     op, missing_unknowns, missing_pars = build_operating_point(
         u0map, pmap, defs, cmap, dvs, ps)
     substitute_extra_variables!(sys, u0map)
@@ -763,7 +765,7 @@ function process_SciMLProblem(
         op[iv] = t
     end
 
-    add_observed!(sys, op)
+    is_time_dependent(sys) && add_observed!(sys, op)
     add_parameter_dependencies!(sys, op)
 
     if warn_cyclic_dependency
