@@ -220,7 +220,10 @@ function generate_initializesystem(sys::AbstractSystem;
     pars = [pars; map(unwrap, collect(keys(new_params)))]
     is_time_dependent(sys) && push!(pars, get_iv(sys))
 
-    if is_time_dependent(sys)
+    # FIXME: observed equations for discrete systems are broken. They don't express
+    # relations at the current time and instead express them in terms of past values.
+    # This precludes them from being useful in initialization.
+    if is_time_dependent(sys) && !(sys isa DiscreteSystem)
         # 8) use observed equations for guesses of observed variables if not provided
         for eq in trueobs
             haskey(defs, eq.lhs) && continue
