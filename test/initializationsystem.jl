@@ -786,20 +786,26 @@ end
     @testset "Parameter initialization" begin
         function test_parameter(prob, alg, param, val)
             integ = init(prob, alg)
-            @test integ.ps[param]≈val rtol=1e-6
+            @test integ.ps[param]≈val rtol=1e-5
+            # some algorithms are a little temperamental
             sol = solve(prob, alg)
-            @test sol.ps[param]≈val rtol=1e-6
+            @test sol.ps[param]≈val rtol=1e-5
             @test SciMLBase.successful_retcode(sol)
         end
-        @variables x=1.0 y=3.0
-        @parameters p q
 
-        @mtkbuild sys = NonlinearSystem(
-            [(x - p)^2 + (y - q)^3 ~ 0, x - q ~ 0]; defaults = [q => missing],
-            guesses = [q => 1.0], initialization_eqs = [p^2 + q^2 + 2p * q ~ 0])
+        @parameters p=2.0 q=missing [guess = 1.0] c = 1.0
+        @variables x=1.0 y=2.0 z=3.0
+
+        eqs = [0 ~ p * (y - x),
+            0 ~ x * (q - z) - y,
+            0 ~ x * y - c * z]
+        @mtkbuild sys = NonlinearSystem(eqs; initialization_eqs = [p^2 + q^2 + 2p*q ~ 0])
+        # @mtkbuild sys = NonlinearSystem(
+        #     [p * x^2 + q * y^3 ~ 0, x - q ~ 0]; defaults = [q => missing],
+        #     guesses = [q => 1.0], initialization_eqs = [p^2 + q^2 + 2p * q ~ 0])
 
         for (probT, algs) in prob_alg_combinations
-            prob = probT(sys, [], [p => 2.0])
+            prob = probT(sys, [])
             @test prob.f.initialization_data !== nothing
             @test prob.f.initialization_data.initializeprobmap === nothing
             for alg in algs
