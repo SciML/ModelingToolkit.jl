@@ -1,20 +1,12 @@
-module InferredClock
-
-export InferredTimeDomain
-
-using Expronicon.ADT: @adt, @match
-using SciMLBase: TimeDomain
-
-@adt InferredTimeDomain begin
+@data InferredClock begin
     Inferred
     InferredDiscrete
 end
 
+const InferredTimeDomain = InferredClock.Type
+using .InferredClock: Inferred, InferredDiscrete
+
 Base.Broadcast.broadcastable(x::InferredTimeDomain) = Ref(x)
-
-end
-
-using .InferredClock
 
 struct VariableTimeDomain end
 Symbolics.option_to_metadata_type(::Val{:timedomain}) = VariableTimeDomain
@@ -29,7 +21,7 @@ true if `x` contains only continuous-domain signals.
 See also [`has_continuous_domain`](@ref)
 """
 function is_continuous_domain(x)
-    issym(x) && return getmetadata(x, VariableTimeDomain, false) == Continuous
+    issym(x) && return getmetadata(x, VariableTimeDomain, false) == Continuous()
     !has_discrete_domain(x) && has_continuous_domain(x)
 end
 
@@ -58,8 +50,8 @@ has_time_domain(x::Num) = has_time_domain(value(x))
 has_time_domain(x) = false
 
 for op in [Differential]
-    @eval input_timedomain(::$op, arg = nothing) = Continuous
-    @eval output_timedomain(::$op, arg = nothing) = Continuous
+    @eval input_timedomain(::$op, arg = nothing) = Continuous()
+    @eval output_timedomain(::$op, arg = nothing) = Continuous()
 end
 
 """
@@ -104,8 +96,8 @@ function is_discrete_domain(x)
     !has_discrete_domain(x) && has_continuous_domain(x)
 end
 
-sampletime(c) = @match c begin
-    PeriodicClock(dt, _...) => dt
+sampletime(c) = Moshi.Match.@match c begin
+    PeriodicClock(dt) => dt
     _ => nothing
 end
 

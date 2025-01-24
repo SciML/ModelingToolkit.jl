@@ -226,28 +226,28 @@ Base.:-(k::ShiftIndex, i::Int) = k + (-i)
 """
     input_timedomain(op::Operator)
 
-Return the time-domain type (`Continuous` or `InferredDiscrete`) that `op` operates on.
+Return the time-domain type (`Continuous()` or `InferredDiscrete()`) that `op` operates on.
 """
 function input_timedomain(s::Shift, arg = nothing)
     if has_time_domain(arg)
         return get_time_domain(arg)
     end
-    InferredDiscrete
+    InferredDiscrete()
 end
 
 """
     output_timedomain(op::Operator)
 
-Return the time-domain type (`Continuous` or `InferredDiscrete`) that `op` results in.
+Return the time-domain type (`Continuous()` or `InferredDiscrete()`) that `op` results in.
 """
 function output_timedomain(s::Shift, arg = nothing)
     if has_time_domain(t, arg)
         return get_time_domain(t, arg)
     end
-    InferredDiscrete
+    InferredDiscrete()
 end
 
-input_timedomain(::Sample, _ = nothing) = Continuous
+input_timedomain(::Sample, _ = nothing) = Continuous()
 output_timedomain(s::Sample, _ = nothing) = s.clock
 
 function input_timedomain(h::Hold, arg = nothing)
@@ -256,7 +256,7 @@ function input_timedomain(h::Hold, arg = nothing)
     end
     InferredDiscrete # the Hold accepts any discrete
 end
-output_timedomain(::Hold, _ = nothing) = Continuous
+output_timedomain(::Hold, _ = nothing) = Continuous()
 
 sampletime(op::Sample, _ = nothing) = sampletime(op.clock)
 sampletime(op::ShiftIndex, _ = nothing) = sampletime(op.clock)

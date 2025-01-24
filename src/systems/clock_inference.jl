@@ -8,8 +8,8 @@ end
 function ClockInference(ts::TransformationState)
     @unpack structure = ts
     @unpack graph = structure
-    eq_domain = TimeDomain[Continuous for _ in 1:nsrcs(graph)]
-    var_domain = TimeDomain[Continuous for _ in 1:ndsts(graph)]
+    eq_domain = TimeDomain[Continuous() for _ in 1:nsrcs(graph)]
+    var_domain = TimeDomain[Continuous() for _ in 1:ndsts(graph)]
     inferred = BitSet()
     for (i, v) in enumerate(get_fullvars(ts))
         d = get_time_domain(ts, v)
@@ -151,7 +151,7 @@ function split_system(ci::ClockInference{S}) where {S}
             get!(clock_to_id, d) do
                 cid = (cid_counter[] += 1)
                 push!(id_to_clock, d)
-                if d == Continuous
+                if d == Continuous()
                     continuous_id[] = cid
                 end
                 cid

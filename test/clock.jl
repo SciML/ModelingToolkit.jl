@@ -77,19 +77,19 @@ k = ShiftIndex(d)
 
 d = Clock(dt)
 # Note that TearingState reorders the equations
-@test eqmap[1] == Continuous
+@test eqmap[1] == Continuous()
 @test eqmap[2] == d
 @test eqmap[3] == d
 @test eqmap[4] == d
-@test eqmap[5] == Continuous
-@test eqmap[6] == Continuous
+@test eqmap[5] == Continuous()
+@test eqmap[6] == Continuous()
 
 @test varmap[yd] == d
 @test varmap[ud] == d
 @test varmap[r] == d
-@test varmap[x] == Continuous
-@test varmap[y] == Continuous
-@test varmap[u] == Continuous
+@test varmap[x] == Continuous()
+@test varmap[y] == Continuous()
+@test varmap[u] == Continuous()
 
 @info "Testing shift normalization"
 dt = 0.1
@@ -192,10 +192,10 @@ eqs = [yd ~ Sample(dt)(y)
     @test varmap[ud1] == d
     @test varmap[yd2] == d2
     @test varmap[ud2] == d2
-    @test varmap[r] == Continuous
-    @test varmap[x] == Continuous
-    @test varmap[y] == Continuous
-    @test varmap[u] == Continuous
+    @test varmap[r] == Continuous()
+    @test varmap[x] == Continuous()
+    @test varmap[y] == Continuous()
+    @test varmap[u] == Continuous()
 
     @info "test composed systems"
 
@@ -241,14 +241,14 @@ eqs = [yd ~ Sample(dt)(y)
     ci, varmap = infer_clocks(cl)
 
     @test varmap[f.x] == Clock(0.5)
-    @test varmap[p.x] == Continuous
-    @test varmap[p.y] == Continuous
+    @test varmap[p.x] == Continuous()
+    @test varmap[p.y] == Continuous()
     @test varmap[c.ud] == Clock(0.5)
     @test varmap[c.yd] == Clock(0.5)
-    @test varmap[c.y] == Continuous
+    @test varmap[c.y] == Continuous()
     @test varmap[f.y] == Clock(0.5)
     @test varmap[f.u] == Clock(0.5)
-    @test varmap[p.u] == Continuous
+    @test varmap[p.u] == Continuous()
     @test varmap[c.r] == Clock(0.5)
 
     ## Multiple clock rates
@@ -474,7 +474,7 @@ eqs = [yd ~ Sample(dt)(y)
 
     ## Test continuous clock
 
-    c = ModelingToolkit.SolverStepClock
+    c = ModelingToolkit.SolverStepClock()
     k = ShiftIndex(c)
 
     @mtkmodel CounterSys begin
