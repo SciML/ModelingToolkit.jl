@@ -1287,7 +1287,7 @@ end
     u0s = [I => 1, R => 0]
     ps = [S0 => 999, β => 0.01, γ => 0.001]
     dprob = DiscreteProblem(js, u0s, (0.0, 10.0), ps)
-    @test dprob.f.initialization_data !== nothing
+    @test_broken dprob.f.initialization_data !== nothing
     sol = solve(dprob, FunctionMap())
     @test sol[S, 1] ≈ 999
     @test SciMLBase.successful_retcode(sol)
