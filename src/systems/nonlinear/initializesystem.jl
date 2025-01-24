@@ -17,6 +17,9 @@ function generate_initializesystem(sys::AbstractSystem;
         eqs = Equation[x for x in eqs if x isa Equation]
     end
     trueobs, eqs = unhack_observed(observed(sys), eqs)
+    # remove any observed equations that directly or indirectly contain
+    # delayed unknowns
+    isempty(trueobs) || filter_delay_equations_variables!(sys, trueobs)
     vars = unique([unknowns(sys); getfield.(trueobs, :lhs)])
     vars_set = Set(vars) # for efficient in-lookup
 
@@ -26,6 +29,39 @@ function generate_initializesystem(sys::AbstractSystem;
     additional_initialization_eqs = Vector{Equation}(initialization_eqs)
     guesses = merge(get_guesses(sys), additional_guesses)
     idxs_diff = isdiffeq.(eqs)
+
+    # PREPROCESSING
+    # for initial conditions of the form `var => constant`, we instead turn them into
+    # `var ~ var0` where `var0` is a new parameter, and make `update_initializeprob!`
+    # update `initializeprob.ps[var0] = prob[var]`.
+
+    # map parameters in `initprob` which need to be updated in `update_initializeprob!`
+    # to the corresponding expressions that determine their values
+    new_params = Dict()
+    u0map = copy(anydict(u0map))
+    pmap = copy(anydict(pmap))
+    if is_time_dependent(sys)
+        for (k, v) in u0map
+            k = unwrap(k)
+            is_variable(sys, k) || continue
+            (symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)) || continue
+            newvar = get_initial_value_parameter(k)
+            new_params[newvar] = k
+            pmap[newvar] = v
+            u0map[k] = newvar
+            defs[newvar] = v
+        end
+    end
+    for (k, v) in pmap
+        k = unwrap(k)
+        is_parameter_solvable(k, pmap, defs, guesses) || continue
+        (v !== missing && symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)) || continue
+        newvar = get_initial_value_parameter(k)
+        new_params[newvar] = k
+        pmap[newvar] = v
+        pmap[k] = newvar
+        defs[newvar] = v
+    end
 
     # 1) Use algebraic equations of time-dependent systems as initialization constraints
     if has_iv(sys)
@@ -53,6 +89,10 @@ function generate_initializesystem(sys::AbstractSystem;
             function process_u0map_with_dummysubs(y, x)
                 y = get(schedule.dummy_sub, y, y)
                 y = fixpoint_sub(y, diffmap)
+                # If we have `D(x) ~ x` and provide [D(x) => x, x => 1.0] to `u0map`, then
+                # without this condition `defs` would get `x => x` instead of retaining
+                # `x => 1.0`.
+                isequal(y, x) && return
                 if y ∈ vars_set
                     # variables specified in u0 overrides defaults
                     push!(defs, y => x)
@@ -103,10 +143,6 @@ function generate_initializesystem(sys::AbstractSystem;
 
     # 5) process parameters as initialization unknowns
     paramsubs = Dict()
-    if pmap isa SciMLBase.NullParameters
-        pmap = Dict()
-    end
-    pmap = todict(pmap)
     for p in parameters(sys)
         if is_parameter_solvable(p, pmap, defs, guesses)
             # If either of them are `missing` the parameter is an unknown
@@ -180,6 +216,7 @@ function generate_initializesystem(sys::AbstractSystem;
 
     # parameters do not include ones that became initialization unknowns
     pars = Vector{SymbolicParam}(filter(p -> !haskey(paramsubs, p), parameters(sys)))
+    pars = [pars; map(unwrap, collect(keys(new_params)))]
     is_time_dependent(sys) && push!(pars, get_iv(sys))
 
     if is_time_dependent(sys)
@@ -205,7 +242,7 @@ function generate_initializesystem(sys::AbstractSystem;
     end
     meta = InitializationSystemMetadata(
         anydict(u0map), anydict(pmap), additional_guesses,
-        additional_initialization_eqs, extra_metadata, nothing)
+        additional_initialization_eqs, extra_metadata, nothing, new_params)
     return NonlinearSystem(eqs_ics,
         vars,
         pars;
@@ -217,21 +254,98 @@ function generate_initializesystem(sys::AbstractSystem;
         kwargs...)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Get a new symbolic variable of the same type and size as `sym`, which is a parameter.
+"""
+function get_initial_value_parameter(sym)
+    sym = default_toterm(unwrap(sym))
+    name = hasname(sym) ? getname(sym) : Symbol(sym)
+    if iscall(sym) && operation(sym) === getindex
+        name = Symbol(name, :_, join(arguments(sym)[2:end], "_"))
+    end
+    name = Symbol(name, :ₘₜₖ_₀)
+    newvar = unwrap(similar_variable(sym, name; use_gensym = false))
+    return toparam(newvar)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given `sys` and a list of observed equations `trueobs`, remove all the equations that
+directly or indirectly contain a delayed unknown of `sys`.
+"""
+function filter_delay_equations_variables!(sys::AbstractSystem, trueobs::Vector{Equation})
+    is_time_dependent(sys) || return trueobs
+    banned_vars = Set()
+    idxs_to_remove = Int[]
+    for (i, eq) in enumerate(trueobs)
+        _has_delays(sys, eq.rhs, banned_vars) || continue
+        push!(idxs_to_remove, i)
+        push!(banned_vars, eq.lhs)
+    end
+    return deleteat!(trueobs, idxs_to_remove)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Check if the expression `ex` contains a delayed unknown of `sys` or a term in
+`banned`.
+"""
+function _has_delays(sys::AbstractSystem, ex, banned)
+    ex = unwrap(ex)
+    ex in banned && return true
+    if symbolic_type(ex) == NotSymbolic()
+        if is_array_of_symbolics(ex)
+            return any(x -> _has_delays(sys, x, banned), ex)
+        end
+        return false
+    end
+    iscall(ex) || return false
+    op = operation(ex)
+    args = arguments(ex)
+    if iscalledparameter(ex)
+        return any(x -> _has_delays(sys, x, banned), args)
+    end
+    if issym(op) && length(args) == 1 && is_variable(sys, op(get_iv(sys))) && iscall(args[1]) && get_iv(sys) in vars(args[1])
+        return true
+    end
+    return any(x -> _has_delays(sys, x, banned), args)
+end
+
 struct ReconstructInitializeprob
     getter::Any
     setter::Any
 end
 
-function ReconstructInitializeprob(srcsys::AbstractSystem, dstsys::AbstractSystem)
-    syms = [unknowns(dstsys);
-            reduce(vcat, reorder_parameters(dstsys, parameters(dstsys)); init = [])]
-    getter = getu(srcsys, syms)
-    setter = setsym_oop(dstsys, syms)
+function ReconstructInitializeprob(srcsys::AbstractSystem, dstsys::AbstractSystem; remap = Dict())
+    syms = reduce(vcat, reorder_parameters(dstsys, parameters(dstsys)); init = [])
+    getter = getu(srcsys, map(x -> get(remap, x, x), syms))
+    setter = setp_oop(dstsys, syms)
     return ReconstructInitializeprob(getter, setter)
 end
 
 function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
-    rip.setter(dstvalp, rip.getter(srcvalp))
+    newp = rip.setter(dstvalp, rip.getter(srcvalp))
+    if state_values(dstvalp) === nothing
+        return nothing, newp
+    end
+    T = eltype(state_values(srcvalp))
+    if parameter_values(dstvalp) isa MTKParameters
+        if !isempty(newp.tunable)
+            T = promote_type(eltype(newp.tunable), T)
+        end
+    elseif !isempty(newp)
+        T = promote_type(eltype(newp), T)
+    end
+    if T == eltype(state_values(dstvalp))
+        u0 = state_values(dstvalp)
+    else
+        u0 = T.(state_values(dstvalp))
+    end
+    return u0, newp
 end
 
 struct InitializationSystemMetadata
@@ -241,6 +355,7 @@ struct InitializationSystemMetadata
     additional_initialization_eqs::Vector{Equation}
     extra_metadata::NamedTuple
     oop_reconstruct_u0_p::Union{Nothing, ReconstructInitializeprob}
+    new_params::Dict{Any, Any}
 end
 
 function is_parameter_solvable(p, pmap, defs, guesses)
@@ -313,6 +428,16 @@ function SciMLBase.remake_initialization_data(
             merge!(guesses, meta.additional_guesses)
             use_scc = get(meta.extra_metadata, :use_scc, true)
             initialization_eqs = meta.additional_initialization_eqs
+
+            # remove occurrences of `keys(new_params)` from `u0map` and `pmap`
+            for (newvar, oldvar) in meta.new_params
+                if isequal(get(u0map, oldvar, nothing), newvar)
+                    u0map[oldvar] = pmap[newvar]
+                elseif isequal(get(pmap, oldvar, nothing), newvar)
+                    pmap[oldvar] = pmap[newvar]
+                end
+                delete!(pmap, newvar)
+            end
         end
     else
         # there is no initializeprob, so the original problem construction

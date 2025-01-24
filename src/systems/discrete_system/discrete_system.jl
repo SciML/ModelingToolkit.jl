@@ -309,7 +309,7 @@ function SciMLBase.DiscreteProblem(
     u0map = to_varmap(u0map, dvs)
     u0map = shift_u0map_forward(sys, u0map, defaults(sys))
     f, u0, p = process_SciMLProblem(
-        DiscreteFunction, sys, u0map, parammap; eval_expression, eval_module)
+        DiscreteFunction, sys, u0map, parammap; eval_expression, eval_module, build_initializeprob = false)
     u0 = f(u0, p, tspan[1])
     DiscreteProblem(f, u0, tspan, p; kwargs...)
 end
@@ -336,6 +336,7 @@ function SciMLBase.DiscreteFunction{iip, specialize}(
         eval_expression = false,
         eval_module = @__MODULE__,
         analytic = nothing,
+        initialization_data = nothing,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed `DiscreteSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
@@ -359,7 +360,8 @@ function SciMLBase.DiscreteFunction{iip, specialize}(
     DiscreteFunction{iip, specialize}(f;
         sys = sys,
         observed = observedfun,
-        analytic = analytic)
+        analytic = analytic,
+        initialization_data = initialization_data)
 end
 
 """

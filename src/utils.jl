@@ -358,7 +358,7 @@ isoperator(expr, op) = iscall(expr) && operation(expr) isa op
 isoperator(op) = expr -> isoperator(expr, op)
 
 isdifferential(expr) = isoperator(expr, Differential)
-isdiffeq(eq) = isdifferential(eq.lhs)
+isdiffeq(eq) = isdifferential(eq.lhs) || isoperator(eq.lhs, Shift)
 
 isvariable(x::Num)::Bool = isvariable(value(x))
 function isvariable(x)::Bool
@@ -1163,9 +1163,13 @@ end
 
 Create an anonymous symbolic variable of the same shape, size and symtype as `var`, with
 name `gensym(name)`. Does not support unsized array symbolics.
+
+If `use_gensym == false`, will not `gensym` the name.
 """
-function similar_variable(var::BasicSymbolic, name = :anon)
-    name = gensym(name)
+function similar_variable(var::BasicSymbolic, name = :anon; use_gensym = true)
+    if use_gensym
+        name = gensym(name)
+    end
     stype = symtype(var)
     sym = Symbolics.variable(name; T = stype)
     if size(var) !== ()

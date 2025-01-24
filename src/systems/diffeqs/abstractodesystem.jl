@@ -1120,7 +1120,7 @@ function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem, u0map,
     end
     f, u0, p = process_SciMLProblem(ODEFunction{iip}, sys, u0map, parammap;
         steady_state = true,
-        check_length, kwargs...)
+        check_length, force_initialization_time_independent = true, kwargs...)
     kwargs = filter_kwargs(kwargs)
     SteadyStateProblem{iip}(f, u0, p; kwargs...)
 end
@@ -1295,27 +1295,41 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
         check_units = true,
         use_scc = true,
         allow_incomplete = false,
+        force_time_independent = false,
+        algebraic_only = false,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
     end
     if isempty(u0map) && get_initializesystem(sys) !== nothing
         isys = get_initializesystem(sys; initialization_eqs, check_units)
+        simplify_system = false
     elseif isempty(u0map) && get_initializesystem(sys) === nothing
-        isys = structural_simplify(
-            generate_initializesystem(
+        isys = generate_initializesystem(
                 sys; initialization_eqs, check_units, pmap = parammap,
-                guesses, extra_metadata = (; use_scc)); fully_determined)
+                guesses, extra_metadata = (; use_scc), algebraic_only)
+        simplify_system = true
     else
-        isys = structural_simplify(
-            generate_initializesystem(
+        isys = generate_initializesystem(
                 sys; u0map, initialization_eqs, check_units,
-                pmap = parammap, guesses, extra_metadata = (; use_scc)); fully_determined)
+                pmap = parammap, guesses, extra_metadata = (; use_scc), algebraic_only)
+        simplify_system = true
+    end
+
+    # useful for `SteadyStateProblem` since `f` has to be autonomous and the
+    # initialization should be too
+    if force_time_independent
+        idx = findfirst(isequal(get_iv(sys)), get_ps(isys))
+        idx === nothing || deleteat!(get_ps(isys), idx)
+    end
+
+    if simplify_system
+        isys = structural_simplify(isys; fully_determined)
     end
 
     meta = get_metadata(isys)
     if meta isa InitializationSystemMetadata
-        @set! isys.metadata.oop_reconstruct_u0_p = ReconstructInitializeprob(sys, isys)
+        @set! isys.metadata.oop_reconstruct_u0_p = ReconstructInitializeprob(sys, isys; remap = meta.new_params)
     end
 
     ts = get_tearing_state(isys)
@@ -1373,20 +1387,6 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
     end
 
     u0map = merge(ModelingToolkit.guesses(sys), todict(guesses), todict(u0map))
-
-    # Replace dummy derivatives in u0map: D(x) -> x_t etc.
-    if has_schedule(sys)
-        schedule = get_schedule(sys)
-        if !isnothing(schedule)
-            for (var, val) in u0map
-                dvar = get(schedule.dummy_sub, var, var) # with dummy derivatives
-                if dvar !== var # then replace it
-                    delete!(u0map, var)
-                    push!(u0map, dvar => val)
-                end
-            end
-        end
-    end
 
     fullmap = merge(u0map, parammap)
     u0T = Union{}
