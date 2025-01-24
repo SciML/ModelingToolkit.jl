@@ -70,7 +70,7 @@ function generate_initializesystem(sys::AbstractSystem;
         append!(eqs_ics, eqs[idxs_alge]) # start equation list with algebraic equations
 
         eqs_diff = eqs[idxs_diff]
-        D = sys isa DiscreteSystem ? Shift(get_iv(sys), 1) : Differential(get_iv(sys))
+        D = Differential(get_iv(sys))
         diffmap = merge(
             Dict(eq.lhs => eq.rhs for eq in eqs_diff),
             Dict(D(eq.lhs) => D(eq.rhs) for eq in trueobs)
@@ -220,10 +220,7 @@ function generate_initializesystem(sys::AbstractSystem;
     pars = [pars; map(unwrap, collect(keys(new_params)))]
     is_time_dependent(sys) && push!(pars, get_iv(sys))
 
-    # FIXME: observed equations for discrete systems are broken. They don't express
-    # relations at the current time and instead express them in terms of past values.
-    # This precludes them from being useful in initialization.
-    if is_time_dependent(sys) && !(sys isa DiscreteSystem)
+    if is_time_dependent(sys)
         # 8) use observed equations for guesses of observed variables if not provided
         for eq in trueobs
             haskey(defs, eq.lhs) && continue
