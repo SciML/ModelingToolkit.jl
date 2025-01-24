@@ -687,13 +687,17 @@ function populate_delays(delays::Set, obsexprs, histfn, sys, sym)
 end
 
 function _eq_unordered(a, b)
+    a = vec(a)
+    b = vec(b)
     length(a) === length(b) || return false
     n = length(a)
     idxs = Set(1:n)
     for x in a
         idx = findfirst(isequal(x), b)
+        while idx !== nothing && !(idx in idxs)
+            idx = findnext(isequal(x), b, idx + 1)
+        end
         idx === nothing && return false
-        idx ∈ idxs || return false
         delete!(idxs, idx)
     end
     return true
