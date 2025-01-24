@@ -788,10 +788,6 @@ function check_keys(sys, map)
     for k in keys(map)
         if symbolic_type(k) === NotSymbolic()
             push!(badkeys, k)
-        elseif k isa Symbol
-            !hasproperty(sys, k) && push!(badkeys, k)
-        elseif k ∉ Set(parameters(sys)) && k ∉ Set(unknowns(sys)) 
-            push!(badkeys, k)
         end
     end
 
