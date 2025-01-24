@@ -247,7 +247,7 @@ function output_timedomain(s::Shift, arg = nothing)
     InferredDiscrete
 end
 
-input_timedomain(::Sample, _ = nothing) = Continuous
+input_timedomain(::Sample, _ = nothing) = Continuous()
 output_timedomain(s::Sample, _ = nothing) = s.clock
 
 function input_timedomain(h::Hold, arg = nothing)
@@ -256,7 +256,7 @@ function input_timedomain(h::Hold, arg = nothing)
     end
     InferredDiscrete # the Hold accepts any discrete
 end
-output_timedomain(::Hold, _ = nothing) = Continuous
+output_timedomain(::Hold, _ = nothing) = Continuous()
 
 sampletime(op::Sample, _ = nothing) = sampletime(op.clock)
 sampletime(op::ShiftIndex, _ = nothing) = sampletime(op.clock)
