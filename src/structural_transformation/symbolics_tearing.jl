@@ -771,6 +771,9 @@ getindex_wrapper(x, i) = x[i...]
 
 # PART OF HACK 2
 function change_origin(origin, arr)
+    if all(isone, Tuple(origin))
+        return arr
+    end
     return Origin(origin)(arr)
 end
 
