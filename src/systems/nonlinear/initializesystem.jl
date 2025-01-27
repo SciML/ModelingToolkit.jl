@@ -232,15 +232,31 @@ struct ReconstructInitializeprob
 end
 
 function ReconstructInitializeprob(srcsys::AbstractSystem, dstsys::AbstractSystem)
-    syms = [unknowns(dstsys);
-            reduce(vcat, reorder_parameters(dstsys, parameters(dstsys)); init = [])]
+    syms = reduce(vcat, reorder_parameters(dstsys, parameters(dstsys)); init = [])
     getter = getu(srcsys, syms)
-    setter = setsym_oop(dstsys, syms)
+    setter = setp_oop(dstsys, syms)
     return ReconstructInitializeprob(getter, setter)
 end
 
 function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
-    rip.setter(dstvalp, rip.getter(srcvalp))
+    newp = rip.setter(dstvalp, rip.getter(srcvalp))
+    if state_values(dstvalp) === nothing
+        return nothing, newp
+    end
+    T = eltype(state_values(srcvalp))
+    if parameter_values(dstvalp) isa MTKParameters
+        if !isempty(newp.tunable)
+            T = promote_type(eltype(newp.tunable), T)
+        end
+    elseif !isempty(newp)
+        T = promote_type(eltype(newp), T)
+    end
+    if T == eltype(state_values(dstvalp))
+        u0 = state_values(dstvalp)
+    else
+        u0 = T.(state_values(dstvalp))
+    end
+    return u0, newp
 end
 
 struct InitializationSystemMetadata
