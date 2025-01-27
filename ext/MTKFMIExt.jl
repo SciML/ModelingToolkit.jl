@@ -745,6 +745,9 @@ function (fn::FMI2CSFunctor)(wrapper::FMI2InstanceWrapper, states, inputs, param
     states = states isa SubArray ? copy(states) : states
     inputs = inputs isa SubArray ? copy(inputs) : inputs
     params = params isa SubArray ? copy(params) : params
+    if wrapper.instance !== nothing
+        reset_instance!(wrapper)
+    end
     instance = get_instance_CS!(wrapper, states, inputs, params, t)
     if isempty(fn.output_value_references)
         return eltype(states)[]
