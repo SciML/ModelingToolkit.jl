@@ -1,0 +1,8 @@
+[deps]
+FMI = "14a09403-18e3-468f-ad8a-74f8dda2d9ac"
+FMIZoo = "724179cf-c260-40a9-bd27-cccc6fe2f195"
+ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
+
+[compat]
+FMI = "0.14"

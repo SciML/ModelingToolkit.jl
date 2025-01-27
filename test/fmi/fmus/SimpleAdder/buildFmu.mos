@@ -1,0 +1,12 @@
+OpenModelica.Scripting.loadFile("SimpleAdder.mo"); getErrorString();
+
+installPackage(Modelica);
+
+setCommandLineOptions("-d=newInst"); getErrorString();
+setCommandLineOptions("-d=initialization"); getErrorString();
+setCommandLineOptions("-d=-disableDirectionalDerivatives"); getErrorString();
+
+cd("output"); getErrorString();
+buildModelFMU(SimpleAdder, version = "2.0", fmuType = "me_cs"); getErrorString();
+system("unzip -l SimpleAdder.fmu | egrep -v 'sources|files' | tail -n+3 | grep -o '[A-Za-z._0-9/]*$' > BB.log")
+

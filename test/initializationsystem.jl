@@ -792,10 +792,10 @@ end
         @variables x=1.0 y=3.0
         @parameters p q
 
-        @mtkbuild sys = NonlinearSystem(
-            [(x - p)^2 + (y - q)^3 ~ 0, x - q ~ 0]; defaults = [q => missing],
+        @named sys = NonlinearSystem(
+            [x + y - p ~ 0, x - q ~ 0]; defaults = [q => missing],
             guesses = [q => 1.0], initialization_eqs = [p^2 + q^2 + 2p * q ~ 0])
-
+        sys = complete(sys)
         for (probT, algs) in prob_alg_combinations
             prob = probT(sys, [], [p => 2.0])
             @test prob.f.initialization_data !== nothing

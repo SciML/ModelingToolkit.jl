@@ -591,6 +591,10 @@ function maybe_build_initialization_problem(
             p = unwrap(p)
             stype = symtype(p)
             op[p] = get_temporary_value(p)
+            if iscall(p) && operation(p) === getindex
+                arrp = arguments(p)[1]
+                op[arrp] = collect(arrp)
+            end
         end
 
         if is_time_dependent(sys)

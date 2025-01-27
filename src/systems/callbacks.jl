@@ -77,6 +77,13 @@ function has_functional_affect(cb)
     (affects(cb) isa FunctionalAffect || affects(cb) isa ImperativeAffect)
 end
 
+function vars!(vars, aff::FunctionalAffect; op = Differential)
+    for var in Iterators.flatten((unknowns(aff), parameters(aff), discretes(aff)))
+        vars!(vars, var)
+    end
+    return vars
+end
+
 #################################### continuous events #####################################
 
 const NULL_AFFECT = Equation[]
@@ -333,6 +340,22 @@ function continuous_events(sys::AbstractSystem)
     filter(!isempty, cbs)
 end
 
+function vars!(vars, cb::SymbolicContinuousCallback; op = Differential)
+    for eq in equations(cb)
+        vars!(vars, eq; op)
+    end
+    for aff in (affects(cb), affect_negs(cb), initialize_affects(cb), finalize_affects(cb))
+        if aff isa Vector{Equation}
+            for eq in aff
+                vars!(vars, eq; op)
+            end
+        elseif aff !== nothing
+            vars!(vars, aff; op)
+        end
+    end
+    return vars
+end
+
 #################################### discrete events #####################################
 
 struct SymbolicDiscreteCallback
@@ -467,6 +490,28 @@ function discrete_events(sys::AbstractSystem)
                (map(o -> namespace_callback(o, s), discrete_events(s)) for s in systems),
                init = SymbolicDiscreteCallback[])]
     cbs
+end
+
+function vars!(vars, cb::SymbolicDiscreteCallback; op = Differential)
+    if symbolic_type(cb.condition) == NotSymbolic
+        if cb.condition isa AbstractArray
+            for eq in cb.condition
+                vars!(vars, eq; op)
+            end
+        end
+    else
+        vars!(vars, cb.condition; op)
+    end
+    for aff in (cb.affects, cb.initialize, cb.finalize)
+        if aff isa Vector{Equation}
+            for eq in aff
+                vars!(vars, eq; op)
+            end
+        elseif aff !== nothing
+            vars!(vars, aff; op)
+        end
+    end
+    return vars
 end
 
 ################################# compilation functions ####################################
