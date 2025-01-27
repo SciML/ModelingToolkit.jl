@@ -1,4 +1,4 @@
-using ModelingToolkit, FMI, FMIZoo, OrdinaryDiffEq
+using ModelingToolkit, FMI, FMIZoo, OrdinaryDiffEq, NonlinearSolve, SciMLBase
 using ModelingToolkit: t_nounits as t, D_nounits as D
 import ModelingToolkit as MTK
 
@@ -171,7 +171,7 @@ end
 
         @test truesol(sol.t; idxs = [truesys.a, truesys.b, truesys.c]).u≈sol.u rtol=1e-2
         # sys.adder.c is a discrete variable
-        @test truesol(sol.t; idxs = truesys.adder.c)≈sol(sol.t; idxs = sys.adder.c) rtol=1e-3
+        @test truesol(sol.t; idxs = truesys.adder.c).u≈sol(sol.t; idxs = sys.adder.c).u rtol=1e-3
     end
 
     function build_sspace_model(sspace)
@@ -262,7 +262,7 @@ end
         @named adder2 = MTK.FMIComponent(
             Val(2); fmu, type = :CS, communication_step_size = 1e-3)
         sys, prob = build_looped_adders(adder1, adder2)
-        sol = solve(prob, Tsit5(); reltol = 1e-8)
+        sol = solve(prob, Tsit5(); reltol = 1e-8, initializealg = SciMLBase.OverrideInit(nlsolve = FastShortcutNLLSPolyalg(autodiff = AutoFiniteDiff())))
         @test truesol(sol.t;
             idxs = [truesys.adder1.c, truesys.adder2.c]).u≈sol(
             sol.t; idxs = [sys.adder1.c, sys.adder2.c]).u rtol=1e-3
