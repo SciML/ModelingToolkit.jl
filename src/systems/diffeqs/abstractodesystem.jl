@@ -943,9 +943,10 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
 
     sts = unknowns(sys)
     ps = parameters(sys)
+    constraintsys = get_constraintsystem(sys)
 
-    if !isnothing(constraints)
-        (length(constraints) + length(u0map) > length(sts)) && 
+    if !isnothing(constraintsys)
+        (length(constraints(constraintsys)) + length(u0map) > length(sts)) && 
         @warn "The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) exceeds the total number of states. The BVP solvers will default to doing a nonlinear least-squares optimization."
     end
 
@@ -976,33 +977,35 @@ function generate_function_bc(sys::ODESystem, u0, u0_idxs, tspan, iip)
     ps = get_ps(sys)
     np = length(ps)
     ns = length(sts)
-    conssys = get_constraintsystem(sys)
-    cons = constraints(conssys)
-
     stidxmap = Dict([v => i for (i, v) in enumerate(sts)])
     pidxmap = Dict([v => i for (i, v) in enumerate(ps)])
 
     @variables sol(..)[1:ns] p[1:np]
-    exprs = Any[]
 
-    for st in get_unknowns(cons)
-        x = operation(st)
-        t = first(arguments(st))
-        idx = stidxmap[x(iv)]
+    conssys = get_constraintsystem(sys)
+    cons = Any[]
+    if !isnothing(conssys)
+        cons = [con.lhs - con.rhs for con in constraints(conssys)]
 
-        cons = Symbolics.substitute(cons, Dict(x(t) => sol(t)[idx]))
-    end
+        for st in get_unknowns(conssys)
+            x = operation(st)
+            t = only(arguments(st))
+            idx = stidxmap[x(iv)]
 
-    for var in get_parameters(cons) 
-        if iscall(var)
-            x = operation(var)
-            t = arguments(var)[1]
-            idx = pidxmap[x]
+            cons = map(c -> Symbolics.substitute(c, Dict(x(t) => sol(t)[idx])), cons)
+        end
 
-            cons = Symbolics.substitute(cons, Dict(x(t) => p[idx]))
-        else
-            idx = pidxmap[var]
-            cons = Symbolics.substitute(cons, Dict(var => p[idx]))
+        for var in parameters(conssys) 
+            if iscall(var)
+                x = operation(var)
+                t = only(arguments(var))
+                idx = pidxmap[x]
+
+                cons = map(c -> Symbolics.substitute(c, Dict(x(t) => p[idx])), cons)
+            else
+                idx = pidxmap[var]
+                cons = map(c -> Symbolics.substitute(c, Dict(var => p[idx])), cons)
+            end
         end
     end
 

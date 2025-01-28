@@ -5,7 +5,6 @@ using BenchmarkTools
 using ModelingToolkit
 using SciMLBase
 using ModelingToolkit: t_nounits as t, D_nounits as D
-import ModelingToolkit: process_constraints
 
 ### Test Collocation solvers on simple problems 
 solvers = [MIRK4]
@@ -113,8 +112,8 @@ let
     end
 
     u0 = [1., 2.]; p = [1.5, 1., 1., 3.]
-    genbc_iip = ModelingToolkit.generate_function_bc(lksys, nothing, u0, [1, 2], tspan, true)
-    genbc_oop = ModelingToolkit.generate_function_bc(lksys, nothing, u0, [1, 2], tspan, false)
+    genbc_iip = ModelingToolkit.generate_function_bc(lksys, u0, [1, 2], tspan, true)
+    genbc_oop = ModelingToolkit.generate_function_bc(lksys, u0, [1, 2], tspan, false)
 
     bvpi1 = SciMLBase.BVProblem(lotkavolterra!, bc!, [1.,2.], tspan, p)
     bvpi2 = SciMLBase.BVProblem(lotkavolterra!, genbc_iip, [1.,2.], tspan, p)
@@ -131,7 +130,8 @@ let
     @test sol1 ≈ sol2
 
     # Test with a constraint.
-    constraints = [y(0.5) ~ 2.]
+    constr = [y(0.5) ~ 2.]
+    @mtkbuild lksys = ODESystem(eqs, t; constraints = constr)
 
     function bc!(resid, u, p, t) 
         resid[1] = u(0.0)[1] - 1.
@@ -142,13 +142,13 @@ let
     end
 
     u0 = [1, 1.]
-    genbc_iip = ModelingToolkit.generate_function_bc(lksys, constraints, u0, [1], tspan, true)
-    genbc_oop = ModelingToolkit.generate_function_bc(lksys, constraints, u0, [1], tspan, false)
+    genbc_iip = ModelingToolkit.generate_function_bc(lksys, u0, [1], tspan, true)
+    genbc_oop = ModelingToolkit.generate_function_bc(lksys, u0, [1], tspan, false)
 
     bvpi1 = SciMLBase.BVProblem(lotkavolterra!, bc!, u0, tspan, p)
     bvpi2 = SciMLBase.BVProblem(lotkavolterra!, genbc_iip, u0, tspan, p)
-    bvpi3 = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, [x(t) => 1.], tspan; guesses = [y(t) => 1.], constraints)
-    bvpi4 = SciMLBase.BVProblem{true, SciMLBase.FullSpecialize}(lksys, [x(t) => 1.], tspan; guesses = [y(t) => 1.], constraints)
+    bvpi3 = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, [x(t) => 1.], tspan; guesses = [y(t) => 1.])
+    bvpi4 = SciMLBase.BVProblem{true, SciMLBase.FullSpecialize}(lksys, [x(t) => 1.], tspan; guesses = [y(t) => 1.])
     
     sol1 = @btime solve($bvpi1, MIRK4(), dt = 0.01)
     sol2 = @btime solve($bvpi2, MIRK4(), dt = 0.01)
@@ -158,7 +158,7 @@ let
 
     bvpo1 = BVProblem(lotkavolterra, bc, u0, tspan, p)
     bvpo2 = BVProblem(lotkavolterra, genbc_oop, u0, tspan, p)
-    bvpo3 = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(lksys, [x(t) => 1.], tspan; guesses = [y(t) => 1.], constraints)
+    bvpo3 = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(lksys, [x(t) => 1.], tspan; guesses = [y(t) => 1.])
 
     sol1 = @btime solve($bvpo1, MIRK4(), dt = 0.05)
     sol2 = @btime solve($bvpo2, MIRK4(), dt = 0.05)
@@ -197,12 +197,6 @@ function test_solvers(solvers, prob, u0map, constraints, equations = []; dt = 0.
     end
 end
 
-solvers = [RadauIIa3, RadauIIa5, RadauIIa7,
-           LobattoIIIa2, LobattoIIIa4, LobattoIIIa5,
-           LobattoIIIb2, LobattoIIIb3, LobattoIIIb4, LobattoIIIb5,
-           LobattoIIIc2, LobattoIIIc3, LobattoIIIc4, LobattoIIIc5]
-weird = [MIRK2, MIRK5, RadauIIa2]
-daesolvers = []
 # Simple ODESystem with BVP constraints.
 let
     @parameters α=1.5 β=1.0 γ=3.0 δ=1.0
@@ -222,24 +216,14 @@ let
 
     # Testing that more complicated constr give correct solutions.
     constr = [y(.2) + x(.8) ~ 3., y(.3) ~ 2.]
+    @mtkbuild lksys = ODESystem(eqs, t; constraints = constr)
     bvp = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(lksys, u0map, tspan; guesses)
     test_solvers(solvers, bvp, u0map, constr; dt = 0.05)
 
     constr = [α * β - x(.6) ~ 0.0, y(.2) ~ 3.]
+    @mtkbuild lksys = ODESystem(eqs, t; constraints = constr)
     bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, u0map, tspan; guesses)
     test_solvers(solvers, bvp, u0map, constr)
-
-    # Testing that errors are properly thrown when malformed constr are given.
-    @variables bad(..)
-    constr = [x(1.) + bad(3.) ~ 10]
-    @test_throws ErrorException lksys = ODESystem(eqs, t; constraints = constr)
-
-    constr = [x(t) + y(t) ~ 3]
-    @test_throws ErrorException lksys = ODESystem(eqs, t; constraints = constr)
-
-    @parameters bad2
-    constr = [bad2 + x(0.) ~ 3]
-    @test_throws ErrorException lksys = ODESystem(eqs, t; constraints = constr)
 end
 
 # Cartesian pendulum from the docs.

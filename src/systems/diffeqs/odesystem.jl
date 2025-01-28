@@ -802,13 +802,11 @@ function validate_constraint_syms(constraintsts, constraintps, sts, ps, iv)
             throw(ArgumentError("Too many arguments for variable $var."))
         elseif length(arguments(var)) == 1
             arg = first(arguments(var))
-            operation(var)(iv) ∈ sts || throw(ArgumentError("Variable $var is not a variable of the ODESystem. Called variables must be variables of the ODESystem."))
+            operation(var)(iv) ∈ sts || 
+                throw(ArgumentError("Variable $var is not a variable of the ODESystem. Called variables must be variables of the ODESystem."))
 
-            isequal(arg, iv) || 
-                isparameter(arg) || 
-                arg isa Integer || 
-                    arg isa AbstractFloat || 
-                        throw(ArgumentError("Invalid argument specified for variable $var. The argument of the variable should be either $iv, a parameter, or a value specifying the time that the constraint holds."))
+            isequal(arg, iv) || isparameter(arg) || arg isa Integer || arg isa AbstractFloat || 
+                throw(ArgumentError("Invalid argument specified for variable $var. The argument of the variable should be either $iv, a parameter, or a value specifying the time that the constraint holds."))
         else
             var ∈ sts && @warn "Variable $var has no argument. It will be interpreted as $var($iv), and the constraint will apply to the entire interval."
         end
@@ -824,7 +822,6 @@ function validate_constraint_syms(constraintsts, constraintps, sts, ps, iv)
             operation(var) ∈ ps || throw(ArgumentError("Parameter $var is not a parameter of the ODESystem. Called parameters must be parameters of the ODESystem."))
 
             isequal(arg, iv) || 
-                isparameter(arg) ||
                 arg isa Integer || 
                     arg isa AbstractFloat || 
                         throw(ArgumentError("Invalid argument specified for callable parameter $var. The argument of the parameter should be either $iv, a parameter, or a value specifying the time that the constraint holds."))
