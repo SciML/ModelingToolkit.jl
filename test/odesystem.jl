@@ -1562,23 +1562,28 @@ end
     # Test variables + parameters infer correctly.
     @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
     @test issetequal(parameters(sys), [a, c, d, e])
-    @test issetequal(unknowns(sys), [x(t), y(t)])
+    @test issetequal(unknowns(sys), [x(t), y(t), z(t)])
 
     @parameters t_c
     cons = [x(t_c) ~ 3]
     @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
-    @test_broken issetequal(parameters(sys), [a, e, t_c]) # TODO: unbreak this.
+    @test issetequal(parameters(sys), [a, e, t_c]) 
+
+    @parameters g(..) h i
+    cons = [g(h, i) * x(3) ~ c]
+    @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
+    @test issetequal(parameters(sys), [g, h, i, a, e, c]) 
 
     # Test that bad constraints throw errors.
-    cons = [x(3, 4) ~ 3]
+    cons = [x(3, 4) ~ 3] # unknowns cannot have multiple args.
     @test_throws ArgumentError @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
 
-    cons = [x(y(t)) ~ 2]
+    cons = [x(y(t)) ~ 2] # unknown arg must be parameter, value, or t
     @test_throws ArgumentError @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
 
     @variables u(t) v
     cons = [x(t) * u ~ 3]
     @test_throws ArgumentError @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
     cons = [x(t) * v ~ 3]
-    @test_nowarn @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
+    @test_throws ArgumentError @mtkbuild sys = ODESystem(eqs, t; constraints = cons) # Need time argument.
 end
