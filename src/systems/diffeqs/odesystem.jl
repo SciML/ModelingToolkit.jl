@@ -368,8 +368,8 @@ function ODESystem(eqs, iv; constraints = Equation[], kwargs...)
     end
     algevars = setdiff(allunknowns, diffvars)
 
+    consvars = OrderedSet()
     if !isempty(constraints)
-        consvars = OrderedSet()
         constraintsystem = process_constraint_system(constraints, allunknowns, new_ps, iv)
         for st in get_unknowns(constraintsystem)
             iscall(st) ? 
