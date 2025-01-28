@@ -1552,3 +1552,33 @@ end
     expected_tstops = unique!(sort!(vcat(0.0:0.075:10.0, 0.1, 0.2, 0.65, 0.35, 0.45)))
     @test all(x -> any(isapprox(x, atol = 1e-6), sol2.t), expected_tstops)
 end
+
+@testset "Constraint system construction" begin
+    @variables x(..) y(..) z(..)
+    @parameters a b c d e 
+    eqs = [D(x(t)) ~ 3*a*y(t), D(y(t)) ~ x(t) - z(t), D(z(t)) ~ e*x(t)^2]
+    cons = [x(0.3) ~ c*d, y(0.7) ~ 3]
+
+    # Test variables + parameters infer correctly.
+    @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
+    @test issetequal(parameters(sys), [a, c, d, e])
+    @test issetequal(unknowns(sys), [x(t), y(t)])
+
+    @parameters t_c
+    cons = [x(t_c) ~ 3]
+    @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
+    @test_broken issetequal(parameters(sys), [a, e, t_c]) # TODO: unbreak this.
+
+    # Test that bad constraints throw errors.
+    cons = [x(3, 4) ~ 3]
+    @test_throws ArgumentError @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
+
+    cons = [x(y(t)) ~ 2]
+    @test_throws ArgumentError @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
+
+    @variables u(t) v
+    cons = [x(t) * u ~ 3]
+    @test_throws ArgumentError @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
+    cons = [x(t) * v ~ 3]
+    @test_nowarn @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
+end
