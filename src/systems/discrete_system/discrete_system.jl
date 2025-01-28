@@ -353,7 +353,8 @@ function SciMLBase.DiscreteFunction{iip, specialize}(
         f = SciMLBase.wrapfun_iip(f, (u0, u0, p, t))
     end
 
-    observedfun = ObservedFunctionCache(sys)
+    observedfun = ObservedFunctionCache(
+        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
 
     DiscreteFunction{iip, specialize}(f;
         sys = sys,

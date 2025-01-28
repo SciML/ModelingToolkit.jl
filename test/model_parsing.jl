@@ -1,4 +1,4 @@
-using ModelingToolkit, Test
+using ModelingToolkit, Symbolics, Test
 using ModelingToolkit: get_connector_type, get_defaults, get_gui_metadata,
                        get_systems, get_ps, getdefault, getname, readable_code,
                        scalarize, symtype, VariableDescription, RegularConnector,
@@ -989,4 +989,23 @@ struct CustomStruct end
     end
     @named sys = MyModel(p = CustomStruct())
     @test ModelingToolkit.defaults(sys)[@nonamespace sys.p] == CustomStruct()
+end
+
+@testset "Variables are not callable symbolics" begin
+    @mtkmodel Example begin
+        @variables begin
+            x(t)
+            y(t)
+        end
+        @equations begin
+            x ~ y
+        end
+    end
+    @named ex = Example()
+    vars = Symbolics.get_variables(only(equations(ex)))
+    @test length(vars) == 2
+    for u in Symbolics.unwrap.(unknowns(ex))
+        @test !Symbolics.hasmetadata(u, Symbolics.CallWithParent)
+        @test any(isequal(u), vars)
+    end
 end

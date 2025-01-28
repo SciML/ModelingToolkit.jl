@@ -49,7 +49,7 @@ These are the ODEs we want to solve. Now construct an `ODESystem`, which automat
 To solve the `ODESystem`, we generate an `ODEProblem` with initial conditions $x(0) = 0$, and $ẋ(0) = 1$, and solve it:
 
 ```@example perturbation
-using DifferentialEquations
+using OrdinaryDiffEq
 u0 = Dict([unknowns(sys) .=> 0.0; D(y[0]) => 1.0]) # nonzero initial velocity
 prob = ODEProblem(sys, u0, (0.0, 3.0))
 sol = solve(prob)

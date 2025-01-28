@@ -34,7 +34,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     end
 end
 
-using DifferentialEquations: solve
+using OrdinaryDiffEq
 @mtkbuild fol = FOL()
 prob = ODEProblem(fol, [], (0.0, 10.0), [])
 sol = solve(prob)
@@ -84,10 +84,10 @@ Note that equations in MTK use the tilde character (`~`) as equality sign.
 
 `@mtkbuild` creates an instance of `FOL` named as `fol`.
 
-After construction of the ODE, you can solve it using [DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/):
+After construction of the ODE, you can solve it using [OrdinaryDiffEq.jl](https://docs.sciml.ai/DiffEqDocs/stable/):
 
 ```@example ode2
-using DifferentialEquations
+using OrdinaryDiffEq
 using Plots
 
 prob = ODEProblem(fol, [], (0.0, 10.0), [])

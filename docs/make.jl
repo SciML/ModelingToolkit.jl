@@ -25,7 +25,12 @@ makedocs(sitename = "ModelingToolkit.jl",
     modules = [ModelingToolkit],
     clean = true, doctest = false, linkcheck = true,
     warnonly = [:docs_block, :missing_docs, :cross_references],
-    linkcheck_ignore = ["https://epubs.siam.org/doi/10.1137/0903023"],
+    linkcheck_ignore = [
+        "https://epubs.siam.org/doi/10.1137/0903023",
+        # this link tends to fail linkcheck stochastically and often takes much longer to succeed
+        # even in the browser it takes ages
+        "http://www.scholarpedia.org/article/Differential-algebraic_equations"
+    ],
     format = Documenter.HTML(;
         assets = ["assets/favicon.ico"],
         mathengine,
