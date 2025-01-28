@@ -1660,3 +1660,4 @@ end
     @test_throws ArgumentError @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
     cons = [x(t) * v ~ 3]
     @test_throws ArgumentError @mtkbuild sys = ODESystem(eqs, t; constraints = cons) # Need time argument.
+end
