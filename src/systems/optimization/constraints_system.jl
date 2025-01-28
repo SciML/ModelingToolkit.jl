@@ -90,9 +90,6 @@ struct ConstraintsSystem <: AbstractTimeIndependentSystem
             complete = false, index_cache = nothing;
             checks::Union{Bool, Int} = true)
 
-        ##if checks == true || (checks & CheckComponents) > 0 
-        ##    check_variables(unknowns, constraints)
-        ##end
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(unknowns, ps)
             check_units(u, constraints)
