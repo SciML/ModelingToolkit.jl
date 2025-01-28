@@ -290,9 +290,14 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         is_dde = _check_if_dde(deqs, iv′, systems)
     end
 
-    if !isempty(systems)
-        cons = get_constraintsystem.(systems)
-        @set! constraintsystem.systems = cons
+    if !isempty(systems) && !isnothing(constraintsystem)
+        conssystems = ConstraintsSystem[]
+        for sys in systems
+            cons = get_constraintsystem(sys)
+            cons !== nothing && push!(conssystems, cons) 
+        end
+        @show conssystems
+        @set! constraintsystem.systems = conssystems
     end
 
     ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
