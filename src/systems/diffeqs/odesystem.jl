@@ -291,7 +291,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     end
 
     if !isempty(systems)
-        cons = get_constraintsystems.(systems)
+        cons = get_constraintsystem.(systems)
         @set! constraintsystem.systems = cons
     end
 
