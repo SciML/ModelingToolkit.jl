@@ -170,7 +170,6 @@ struct SDESystem <: AbstractODESystem
             check_parameters(ps, iv)
             check_equations(deqs, iv)
             check_equations(neqs, dvs)
-            check_var_types(SDESystem, dvs)
             if size(neqs, 1) != length(deqs)
                 throw(ArgumentError("Noise equations ill-formed. Number of rows must match number of drift equations. size(neqs,1) = $(size(neqs,1)) != length(deqs) = $(length(deqs))"))
             end
