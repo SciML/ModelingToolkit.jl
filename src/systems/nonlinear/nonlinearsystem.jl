@@ -115,9 +115,6 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
             tearing_state = nothing, substitutions = nothing,
             complete = false, index_cache = nothing, parent = nothing,
             isscheduled = false; checks::Union{Bool, Int} = true)
-        if checks == true || (checks & CheckComponents) > 0
-            check_var_types(NonlinearSystem, unknowns)
-        end
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(unknowns, ps)
             check_units(u, eqs)
