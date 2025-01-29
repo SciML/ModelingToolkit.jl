@@ -296,9 +296,38 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
 end
 
 function ODESystem(eqs, iv; kwargs...)
-    param_deps = get(kwargs, :parameter_dependencies, Equation[])
-    eqs, dvs, ps = process_equations_DESystem(eqs, param_deps, iv)
-    return ODESystem(eqs, iv, dvs, ps; kwargs...)
+    diffvars, allunknowns, ps, eqs = process_equations(eqs, iv)
+
+    for eq in get(kwargs, :parameter_dependencies, Equation[])
+        collect_vars!(allunknowns, ps, eq, iv)
+    end
+
+    for ssys in get(kwargs, :systems, ODESystem[])
+        collect_scoped_vars!(allunknowns, ps, ssys, iv)
+    end
+
+    for v in allunknowns
+        isdelay(v, iv) || continue
+        collect_vars!(allunknowns, ps, arguments(v)[1], iv)
+    end
+
+    new_ps = OrderedSet()
+    for p in ps
+        if iscall(p) && operation(p) === getindex
+            par = arguments(p)[begin]
+            if Symbolics.shape(Symbolics.unwrap(par)) !== Symbolics.Unknown() &&
+               all(par[i] in ps for i in eachindex(par))
+                push!(new_ps, par)
+            else
+                push!(new_ps, p)
+            end
+        else
+            push!(new_ps, p)
+        end
+    end
+    algevars = setdiff(allunknowns, diffvars)
+
+    return ODESystem(eqs, iv, collect(Iterators.flatten((diffvars, algevars))), collect(new_ps); kwargs...)
 end
 
 # NOTE: equality does not check cached Jacobian

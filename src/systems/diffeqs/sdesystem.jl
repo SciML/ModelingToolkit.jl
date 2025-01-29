@@ -274,18 +274,46 @@ function SDESystem(sys::ODESystem, neqs; kwargs...)
 end
 
 function SDESystem(eqs::Vector{Equation}, noiseeqs::AbstractArray, iv; kwargs...) 
-    param_deps = get(kwargs, :parameter_dependencies, Equation[])
-    eqs, dvs, ps = process_equations_DESystem(eqs, param_deps, iv)
+    diffvars, allunknowns, ps, eqs = process_equations(eqs, iv)
+
+    for eq in get(kwargs, :parameter_dependencies, Equation[])
+        collect_vars!(allunknowns, ps, eq, iv)
+    end
+
+    for ssys in get(kwargs, :systems, ODESystem[])
+        collect_scoped_vars!(allunknowns, ps, ssys, iv)
+    end
+
+    for v in allunknowns
+        isdelay(v, iv) || continue
+        collect_vars!(allunknowns, ps, arguments(v)[1], iv)
+    end
+
+    new_ps = OrderedSet()
+    for p in ps
+        if iscall(p) && operation(p) === getindex
+            par = arguments(p)[begin]
+            if Symbolics.shape(Symbolics.unwrap(par)) !== Symbolics.Unknown() &&
+               all(par[i] in ps for i in eachindex(par))
+                push!(new_ps, par)
+            else
+                push!(new_ps, p)
+            end
+        else
+            push!(new_ps, p)
+        end
+    end
 
     # validate noise equations
     noisedvs = OrderedSet()
     noiseps = OrderedSet()
     collect_vars!(noisedvs, noiseps, noiseeqs, iv)
     for dv in noisedvs
-        var ∈ Set(dvs) || throw(ArgumentError("Variable $dv in noise equations is not an unknown of the system."))
+        var ∈ allunknowns || throw(ArgumentError("Variable $dv in noise equations is not an unknown of the system."))
     end
+    algevars = setdiff(allunknowns, diffvars)
 
-    return SDESystem(eqs, noiseeqs, iv, dvs, [ps; collect(noiseps)]; kwargs...)
+    return SDESystem(eqs, noiseeqs, iv, Iterators.flatten((diffvars, algevars)), [ps; collect(noiseps)]; kwargs...)
 end
 
 SDESystem(eq::Equation, noiseeqs::AbstractArray, args...; kwargs...) = SDESystem([eq], noiseeqs, args...; kwargs...)

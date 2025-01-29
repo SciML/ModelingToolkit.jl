@@ -1189,9 +1189,9 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Find all the unknowns and parameters from the equations and parameter dependencies of an ODESystem or SDESystem. Return re-ordered equations, unknowns, and parameters.
+Find all the unknowns and parameters from the equations of a SDESystem or ODESystem. Return re-ordered equations, differential variables, all variables, and parameters.
 """
-function process_equations_DESystem(eqs, param_deps, iv)
+function process_equations(eqs, iv)
     eqs = collect(eqs)
 
     diffvars = OrderedSet()
@@ -1233,25 +1233,6 @@ function process_equations_DESystem(eqs, param_deps, iv)
             push!(algeeq, eq)
         end
     end
-    for eq in param_deps
-        collect_vars!(allunknowns, ps, eq, iv)
-    end
 
-    new_ps = OrderedSet()
-    for p in ps
-        if iscall(p) && operation(p) === getindex
-            par = arguments(p)[begin]
-            if Symbolics.shape(Symbolics.unwrap(par)) !== Symbolics.Unknown() &&
-               all(par[i] in ps for i in eachindex(par))
-                push!(new_ps, par)
-            else
-                push!(new_ps, p)
-            end
-        else
-            push!(new_ps, p)
-        end
-    end
-    algevars = setdiff(allunknowns, diffvars)
-
-    Equation[diffeq; algeeq; compressed_eqs], collect(Iterators.flatten((diffvars, algevars))), collect(new_ps)
+    diffvars, allunknowns, ps, Equation[diffeq; algeeq; compressed_eqs]
 end
