@@ -273,7 +273,7 @@ function SDESystem(sys::ODESystem, neqs; kwargs...)
     SDESystem(equations(sys), neqs, get_iv(sys), unknowns(sys), parameters(sys); kwargs...)
 end
 
-function SDESystem(eqs, noiseeqs, iv; kwargs...) 
+function SDESystem(eqs::Vector{Equation}, noiseeqs::AbstractArray, iv; kwargs...) 
     param_deps = get(kwargs, :parameter_dependencies, Equation[])
     eqs, dvs, ps = process_equations_DESystem(eqs, param_deps, iv)
 
@@ -287,6 +287,9 @@ function SDESystem(eqs, noiseeqs, iv; kwargs...)
 
     return SDESystem(eqs, noiseeqs, iv, dvs, [ps; collect(noiseps)]; kwargs...)
 end
+
+SDESystem(eq::Equation, noiseeqs::AbstractArray, args...; kwargs...) = SDESystem([eq], noiseeqs, args...; kwargs...)
+SDESystem(eq::Equation, noiseeq, args...; kwargs...) = SDESystem([eq], [noiseeq], args...; kwargs...)
 
 function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
     sys1 === sys2 && return true

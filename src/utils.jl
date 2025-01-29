@@ -1225,7 +1225,7 @@ function process_equations_DESystem(eqs, param_deps, iv)
                     throw(ArgumentError("An ODESystem can only have one independent variable."))
                 diffvar in diffvars &&
                     throw(ArgumentError("The differential variable $diffvar is not unique in the system of equations."))
-                !(symtype(diffvar) === Real || eltype(symtype(diffvar)) === Real) && throw(ArgumentError("Differential variable $var has type $(symtype(diffvar)). Differential variables should not be concretely typed."))
+                !(symtype(diffvar) === Real || eltype(symtype(diffvar)) === Real) && throw(ArgumentError("Differential variable $diffvar has type $(symtype(diffvar)). Differential variables should not be concretely typed."))
                 push!(diffvars, diffvar)
             end
             push!(diffeq, eq)
