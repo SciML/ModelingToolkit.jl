@@ -713,7 +713,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         # precomputed subexpressions should not contain `banned_vars`
         banned_vars = Set{Any}(vcat(_dvs, getproperty.(_obs, (:lhs,))))
         filter!(banned_vars) do var
-            symbolic_type(var) != ArraySymbolic() || all(x -> var[i] in banned_vars, eachindex(var))
+            symbolic_type(var) != ArraySymbolic() || all(j -> var[j] in banned_vars, eachindex(var))
         end
         state = Dict()
         for i in eachindex(_obs)
@@ -775,6 +775,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         _obs = scc_obs[i]
         cachevars = scc_cachevars[i]
         cacheexprs = scc_cacheexprs[i]
+        _prevobsidxs = vcat(_prevobsidxs, observed_equations_used_by(sys, reduce(vcat, values(cacheexprs); init = [])))
 
         if isempty(cachevars)
             push!(explicitfuns, Returns(nothing))

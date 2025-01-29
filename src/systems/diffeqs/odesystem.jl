@@ -688,13 +688,22 @@ function populate_delays(delays::Set, obsexprs, histfn, sys, sym)
 end
 
 function _eq_unordered(a, b)
+    # a and b may be multidimensional
+    # e.g. comparing noiseeqs of SDESystem
+    a = vec(a)
+    b = vec(b)
     length(a) === length(b) || return false
     n = length(a)
     idxs = Set(1:n)
     for x in a
         idx = findfirst(isequal(x), b)
+        # loop since there might be multiple identical entries in a/b
+        # and while we might have already matched the first there could
+        # be a second that is equal to x
+        while idx !== nothing && !(idx in idxs)
+            idx = findnext(isequal(x), b, idx + 1)
+        end
         idx === nothing && return false
-        idx ∈ idxs || return false
         delete!(idxs, idx)
     end
     return true

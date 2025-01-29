@@ -38,7 +38,7 @@ in the returned tuple, in which case the associated field will not be updated.
     skip_checks::Bool
 end
 
-function ImperativeAffect(f::Function;
+function ImperativeAffect(f;
         observed::NamedTuple = NamedTuple{()}(()),
         modified::NamedTuple = NamedTuple{()}(()),
         ctx = nothing,
@@ -48,18 +48,18 @@ function ImperativeAffect(f::Function;
         collect(values(modified)), collect(keys(modified)),
         ctx, skip_checks)
 end
-function ImperativeAffect(f::Function, modified::NamedTuple;
+function ImperativeAffect(f, modified::NamedTuple;
         observed::NamedTuple = NamedTuple{()}(()), ctx = nothing, skip_checks = false)
     ImperativeAffect(
         f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
 end
 function ImperativeAffect(
-        f::Function, modified::NamedTuple, observed::NamedTuple; ctx = nothing, skip_checks = false)
+        f, modified::NamedTuple, observed::NamedTuple; ctx = nothing, skip_checks = false)
     ImperativeAffect(
         f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
 end
 function ImperativeAffect(
-        f::Function, modified::NamedTuple, observed::NamedTuple, ctx; skip_checks = false)
+        f, modified::NamedTuple, observed::NamedTuple, ctx; skip_checks = false)
     ImperativeAffect(
         f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
 end
@@ -216,3 +216,20 @@ function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs.
 end
 
 scalarize_affects(affects::ImperativeAffect) = affects
+
+function vars!(vars, aff::ImperativeAffect; op = Differential)
+    for var in Iterators.flatten((observed(aff), modified(aff)))
+        if symbolic_type(var) == NotSymbolic()
+            if var isa AbstractArray
+                for v in var
+                    v = unwrap(v)
+                    vars!(vars, v)
+                end
+            end
+        else
+            var = unwrap(var)
+            vars!(vars, var)
+        end
+    end
+    return vars
+end
