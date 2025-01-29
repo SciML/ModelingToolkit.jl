@@ -309,7 +309,7 @@ function SDESystem(eqs::Vector{Equation}, noiseeqs::AbstractArray, iv; kwargs...
     noiseps = OrderedSet()
     collect_vars!(noisedvs, noiseps, noiseeqs, iv)
     for dv in noisedvs
-        var ∈ allunknowns || throw(ArgumentError("Variable $dv in noise equations is not an unknown of the system."))
+        dv ∈ allunknowns || throw(ArgumentError("Variable $dv in noise equations is not an unknown of the system."))
     end
     algevars = setdiff(allunknowns, diffvars)
 
