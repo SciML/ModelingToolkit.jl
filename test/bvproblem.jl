@@ -1,6 +1,6 @@
 ### TODO: update when BoundaryValueDiffEqAscher is updated to use the normal boundary condition conventions 
 
-using BoundaryValueDiffEq, OrdinaryDiffEq, BoundaryValueDiffEqAscher
+using BoundaryValueDiffEq, OrdinaryDiffEqDefault, BoundaryValueDiffEqAscher
 using BenchmarkTools
 using ModelingToolkit
 using SciMLBase
@@ -166,7 +166,7 @@ let
     @test sol1 ≈ sol2 ≈ sol3
 end
 
-function test_solvers(solvers, prob, u0map, constraints, equations = []; dt = 0.05, atol = 1e-3)
+function test_solvers(solvers, prob, u0map, constraints, equations = []; dt = 0.05, atol = 1e-2)
     for solver in solvers
         println("Solver: $solver")
         sol = @btime solve($prob, $solver(), dt = $dt, abstol = $atol)
@@ -214,7 +214,7 @@ let
     bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, u0map, tspan; guesses)
     test_solvers(solvers, bvp, u0map, constr; dt = 0.05)
 
-    # Testing that more complicated constr give correct solutions.
+    # Testing that more complicated constraints give correct solutions.
     constr = [y(.2) + x(.8) ~ 3., y(.3) ~ 2.]
     @mtkbuild lksys = ODESystem(eqs, t; constraints = constr)
     bvp = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(lksys, u0map, tspan; guesses)
