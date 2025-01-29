@@ -662,7 +662,7 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
                 Dict(v => 0.0 for v in Iterators.flatten(inputs)))
         end
         ps = [sym isa CallWithMetadata ? sym :
-              setmetadata(sym, VariableTimeDomain, get(time_domains, sym, Continuous))
+              setmetadata(sym, VariableTimeDomain, get(time_domains, sym, Continuous()))
               for sym in get_ps(sys)]
         @set! sys.ps = ps
     else
