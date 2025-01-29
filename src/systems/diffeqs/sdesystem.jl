@@ -273,6 +273,21 @@ function SDESystem(sys::ODESystem, neqs; kwargs...)
     SDESystem(equations(sys), neqs, get_iv(sys), unknowns(sys), parameters(sys); kwargs...)
 end
 
+function SDESystem(eqs, noiseeqs, iv; kwargs...) 
+    param_deps = get(kwargs, :parameter_dependencies, Equation[])
+    eqs, dvs, ps = process_equations_DESystem(eqs, param_deps, iv)
+
+    # validate noise equations
+    noisedvs = OrderedSet()
+    noiseps = OrderedSet()
+    collect_vars!(noisedvs, noiseps, noiseeqs, iv)
+    for dv in noisedvs
+        var ∈ Set(dvs) || throw(ArgumentError("Variable $dv in noise equations is not an unknown of the system."))
+    end
+
+    return SDESystem(eqs, noiseeqs, iv, dvs, [ps; collect(noiseps)]; kwargs...)
+end
+
 function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
     sys1 === sys2 && return true
     iv1 = get_iv(sys1)

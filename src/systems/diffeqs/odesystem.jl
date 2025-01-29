@@ -296,73 +296,9 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
 end
 
 function ODESystem(eqs, iv; kwargs...)
-    eqs = collect(eqs)
-    # NOTE: this assumes that the order of algebraic equations doesn't matter
-    diffvars = OrderedSet()
-    allunknowns = OrderedSet()
-    ps = OrderedSet()
-    # reorder equations such that it is in the form of `diffeq, algeeq`
-    diffeq = Equation[]
-    algeeq = Equation[]
-    # initial loop for finding `iv`
-    if iv === nothing
-        for eq in eqs
-            if !(eq.lhs isa Number) # assume eq.lhs is either Differential or Number
-                iv = iv_from_nested_derivative(eq.lhs)
-                break
-            end
-        end
-    end
-    iv = value(iv)
-    iv === nothing && throw(ArgumentError("Please pass in independent variables."))
-    compressed_eqs = Equation[] # equations that need to be expanded later, like `connect(a, b)`
-    for eq in eqs
-        eq.lhs isa Union{Symbolic, Number} || (push!(compressed_eqs, eq); continue)
-        collect_vars!(allunknowns, ps, eq, iv)
-        if isdiffeq(eq)
-            diffvar, _ = var_from_nested_derivative(eq.lhs)
-            if check_scope_depth(getmetadata(diffvar, SymScope, LocalScope()), 0)
-                isequal(iv, iv_from_nested_derivative(eq.lhs)) ||
-                    throw(ArgumentError("An ODESystem can only have one independent variable."))
-                diffvar in diffvars &&
-                    throw(ArgumentError("The differential variable $diffvar is not unique in the system of equations."))
-                push!(diffvars, diffvar)
-            end
-            !(symtype(diffvar) === Real || eltype(symtype(var)) === Real) && throw(ArgumentError("Differential variable $var has type $(symtype(var)). Differential variables should not be concretely typed."))
-
-            push!(diffeq, eq)
-        else
-            push!(algeeq, eq)
-        end
-    end
-    for eq in get(kwargs, :parameter_dependencies, Equation[])
-        collect_vars!(allunknowns, ps, eq, iv)
-    end
-    for ssys in get(kwargs, :systems, ODESystem[])
-        collect_scoped_vars!(allunknowns, ps, ssys, iv)
-    end
-    for v in allunknowns
-        isdelay(v, iv) || continue
-        collect_vars!(allunknowns, ps, arguments(v)[1], iv)
-    end
-    new_ps = OrderedSet()
-    for p in ps
-        if iscall(p) && operation(p) === getindex
-            par = arguments(p)[begin]
-            if Symbolics.shape(Symbolics.unwrap(par)) !== Symbolics.Unknown() &&
-               all(par[i] in ps for i in eachindex(par))
-                push!(new_ps, par)
-            else
-                push!(new_ps, p)
-            end
-        else
-            push!(new_ps, p)
-        end
-    end
-    algevars = setdiff(allunknowns, diffvars)
-    # the orders here are very important!
-    return ODESystem(Equation[diffeq; algeeq; compressed_eqs], iv,
-        collect(Iterators.flatten((diffvars, algevars))), collect(new_ps); kwargs...)
+    param_deps = get(kwargs, :parameter_dependencies, Equation[])
+    eqs, dvs, ps = process_equations_DESystem(eqs, param_deps, iv)
+    return ODESystem(eqs, iv, dvs, ps; kwargs...)
 end
 
 # NOTE: equality does not check cached Jacobian
