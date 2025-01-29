@@ -38,6 +38,7 @@ jobs:
           - Extensions
           - Downstream
           - RegressionI
+          - FMI
     uses: "SciML/.github/.github/workflows/tests.yml@v1"
     with:
       julia-version: "${{ matrix.version }}"
