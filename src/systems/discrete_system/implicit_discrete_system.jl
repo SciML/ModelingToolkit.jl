@@ -23,7 +23,7 @@ struct ImplicitDiscreteSystem <: AbstractTimeDependentSystem
     structurally identical.
     """
     tag::UInt
-    """The differential equations defining the discrete system."""
+    """The difference equations defining the discrete system."""
     eqs::Vector{Equation}
     """Independent variable."""
     iv::BasicSymbolic{Real}
@@ -48,10 +48,10 @@ struct ImplicitDiscreteSystem <: AbstractTimeDependentSystem
     """
     The internal systems. These are required to have unique names.
     """
-    systems::Vector{DiscreteSystem}
+    systems::Vector{ImplicitDiscreteSystem}
     """
     The default values to use when initial conditions and/or
-    parameters are not supplied in `DiscreteProblem`.
+    parameters are not supplied in `ImplicitDiscreteProblem`.
     """
     defaults::Dict
     """
@@ -136,11 +136,11 @@ end
 
 """
     $(TYPEDSIGNATURES)
-Constructs a DiscreteSystem.
+Constructs a ImplicitDiscreteSystem.
 """
 function ImplicitDiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
         observed = Num[],
-        systems = DiscreteSystem[],
+        systems = ImplicitDiscreteSystem[],
         tspan = nothing,
         name = nothing,
         description = "",
@@ -162,12 +162,12 @@ function ImplicitDiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
     dvs′ = value.(dvs)
     ps′ = value.(ps)
     if any(hasderiv, eqs) || any(hashold, eqs) || any(hassample, eqs) || any(hasdiff, eqs)
-        error("Equations in a `DiscreteSystem` can only have `Shift` operators.")
+        error("Equations in a `ImplicitDiscreteSystem` can only have `Shift` operators.")
     end
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn(
             "`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
-            :DiscreteSystem, force = true)
+            :ImplicitDiscreteSystem, force = true)
     end
 
     defaults = Dict{Any, Any}(todict(defaults))
@@ -190,7 +190,7 @@ function ImplicitDiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    DiscreteSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
+    ImplicitDiscreteSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         eqs, iv′, dvs′, ps′, tspan, var_to_name, observed, name, description, systems,
         defaults, guesses, initializesystem, initialization_eqs, preface, connector_type,
         parameter_dependencies, metadata, gui_metadata, kwargs...)
@@ -206,7 +206,7 @@ function ImplicitDiscreteSystem(eqs, iv; kwargs...)
         collect_vars!(allunknowns, ps, eq, iv; op = Shift)
         if iscall(eq.lhs) && operation(eq.lhs) isa Shift
             isequal(iv, operation(eq.lhs).t) ||
-                throw(ArgumentError("A DiscreteSystem can only have one independent variable."))
+                throw(ArgumentError("An ImplicitDiscreteSystem can only have one independent variable."))
             eq.lhs in diffvars &&
                 throw(ArgumentError("The shift variable $(eq.lhs) is not unique in the system of equations."))
             push!(diffvars, eq.lhs)
@@ -233,16 +233,16 @@ function ImplicitDiscreteSystem(eqs, iv; kwargs...)
             push!(new_ps, p)
         end
     end
-    return DiscreteSystem(eqs, iv,
+    return ImplicitDiscreteSystem(eqs, iv,
         collect(allunknowns), collect(new_ps); kwargs...)
 end
 
-function flatten(sys::DiscreteSystem, noeqs = false)
+function flatten(sys::ImplicitDiscreteSystem, noeqs = false)
     systems = get_systems(sys)
     if isempty(systems)
         return sys
     else
-        return DiscreteSystem(noeqs ? Equation[] : equations(sys),
+        return ImplicitDiscreteSystem(noeqs ? Equation[] : equations(sys),
             get_iv(sys),
             unknowns(sys),
             parameters(sys),
@@ -258,14 +258,14 @@ function flatten(sys::DiscreteSystem, noeqs = false)
 end
 
 function generate_function(
-        sys::DiscreteSystem, dvs = unknowns(sys), ps = parameters(sys); wrap_code = identity, kwargs...)
+        sys::ImplicitDiscreteSystem, dvs = unknowns(sys), ps = parameters(sys); wrap_code = identity, kwargs...)
     exprs = [eq.rhs for eq in equations(sys)]
     wrap_code = wrap_code .∘ wrap_array_vars(sys, exprs) .∘
                 wrap_parameter_dependencies(sys, false)
     generate_custom_function(sys, exprs, dvs, ps; wrap_code, kwargs...)
 end
 
-function shift_u0map_forward(sys::DiscreteSystem, u0map, defs)
+function shift_u0map_forward(sys::ImplicitDiscreteSystem, u0map, defs)
     iv = get_iv(sys)
     updated = AnyDict()
     for k in collect(keys(u0map))
@@ -291,7 +291,7 @@ end
 Generates an ImplicitDiscreteProblem from an ImplicitDiscreteSystem.
 """
 function SciMLBase.ImplicitDiscreteProblem(
-        sys::DiscreteSystem, u0map = [], tspan = get_tspan(sys),
+        sys::ImplicitDiscreteSystem, u0map = [], tspan = get_tspan(sys),
         parammap = SciMLBase.NullParameters();
         eval_module = @__MODULE__,
         eval_expression = false,
@@ -309,7 +309,7 @@ function SciMLBase.ImplicitDiscreteProblem(
     u0map = to_varmap(u0map, dvs)
     u0map = shift_u0map_forward(sys, u0map, defaults(sys))
     f, u0, p = process_SciMLProblem(
-        DiscreteFunction, sys, u0map, parammap; eval_expression, eval_module)
+        ImplicitDiscreteFunction, sys, u0map, parammap; eval_expression, eval_module)
     u0 = f(u0, p, tspan[1])
     ImplicitDiscreteProblem(f, u0, tspan, p; kwargs...)
 end
@@ -348,7 +348,7 @@ function SciMLBase.ImplicitDiscreteFunction{iip, specialize}(
 
     if specialize === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
-            error("u0, p, and t must be specified for FunctionWrapperSpecialize on DiscreteFunction.")
+            error("u0, p, and t must be specified for FunctionWrapperSpecialize on ImplicitDiscreteFunction.")
         end
         f = SciMLBase.wrapfun_iip(f, (u0, u0, p, t))
     end
@@ -395,7 +395,7 @@ function ImplicitDiscreteFunctionExpr{iip}(sys::ImplicitDiscreteSystem, dvs = un
 
     ex = quote
         $_f
-        DiscreteFunction{$iip}($fsym)
+        ImplicitDiscreteFunction{$iip}($fsym)
     end
     !linenumbers ? Base.remove_linenums!(ex) : ex
 end
