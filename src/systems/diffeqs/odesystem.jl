@@ -329,6 +329,8 @@ function ODESystem(eqs, iv; kwargs...)
                     throw(ArgumentError("The differential variable $diffvar is not unique in the system of equations."))
                 push!(diffvars, diffvar)
             end
+            !(symtype(diffvar) === Real || eltype(symtype(var)) === Real) && throw(ArgumentError("Differential variable $var has type $(symtype(var)). Differential variables should not be concretely typed."))
+
             push!(diffeq, eq)
         else
             push!(algeeq, eq)
