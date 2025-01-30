@@ -62,7 +62,7 @@ first_order_idx1_pendulum = complete(ode_order_lowering(idx1_pendulum))
 
 using OrdinaryDiffEq
 using LinearAlgebra
-prob = ODEProblem(ODEFunction(first_order_idx1_pendulum),
+prob = ODEProblem(first_order_idx1_pendulum,
     #  [x, y, w, z, xˍt, yˍt, T]
     [1, 0, 0, 0, 0, 0, 0.0],# 0, 0, 0, 0],
     (0, 10.0),
