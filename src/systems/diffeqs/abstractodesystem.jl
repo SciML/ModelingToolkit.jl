@@ -549,8 +549,6 @@ struct ODEFunctionClosure{O, I} <: Function
 end
 (f::ODEFunctionClosure)(u, p, t) = f.f_oop(u, p, t)
 (f::ODEFunctionClosure)(du, u, p, t) = f.f_iip(du, u, p, t)
-(f::ODEFunctionClosure)(u, p::MTKParameters, t) = f.f_oop(u, p..., t)
-(f::ODEFunctionClosure)(du, u, p::MTKParameters, t) = f.f_iip(du, u, p..., t)
 
 function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
@@ -645,8 +643,6 @@ struct DAEFunctionClosure{O, I} <: Function
 end
 (f::DAEFunctionClosure)(du, u, p, t) = f.f_oop(du, u, p, t)
 (f::DAEFunctionClosure)(out, du, u, p, t) = f.f_iip(out, du, u, p, t)
-(f::DAEFunctionClosure)(du, u, p::MTKParameters, t) = f.f_oop(du, u, p..., t)
-(f::DAEFunctionClosure)(out, du, u, p::MTKParameters, t) = f.f_iip(out, du, u, p..., t)
 
 function DAEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
