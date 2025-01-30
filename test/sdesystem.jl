@@ -24,14 +24,14 @@ noiseeqs = [0.1 * x,
 @named de = SDESystem(eqs, noiseeqs, tt, [x, y, z], [σ, ρ, β], tspan = (0.0, 10.0))
 de = complete(de)
 f = eval(generate_diffusion_function(de)[1])
-@test f(ones(3), rand(3), nothing) == 0.1ones(3)
+@test f(ones(3), (rand(3),), nothing) == 0.1ones(3)
 
 f = SDEFunction(de)
-prob = SDEProblem(SDEFunction(de), [1.0, 0.0, 0.0], (0.0, 100.0), (10.0, 26.0, 2.33))
+prob = SDEProblem(de, [1.0, 0.0, 0.0], (0.0, 100.0), [10.0, 26.0, 2.33])
 sol = solve(prob, SRIW1(), seed = 1)
 
-probexpr = SDEProblem(SDEFunction(de), [1.0, 0.0, 0.0], (0.0, 100.0),
-    (10.0, 26.0, 2.33))
+probexpr = SDEProblem(de, [1.0, 0.0, 0.0], (0.0, 100.0),
+    [10.0, 26.0, 2.33])
 solexpr = solve(eval(probexpr), SRIW1(), seed = 1)
 
 @test all(x -> x == 0, Array(sol - solexpr))
@@ -43,13 +43,13 @@ noiseeqs_nd = [0.01*x 0.01*x*y 0.02*x*z
 de = complete(de)
 f = eval(generate_diffusion_function(de)[1])
 p = MTKParameters(de, [σ => 0.1, ρ => 0.2, β => 0.3])
-@test f([1, 2, 3.0], p..., nothing) == [0.01*1 0.01*1*2 0.02*1*3
+@test f([1, 2, 3.0], p, nothing) == [0.01*1 0.01*1*2 0.02*1*3
        0.1 0.01*2 0.02*1*3
        0.2 0.3 0.01*3]
 
 f = eval(generate_diffusion_function(de)[2])
 du = ones(3, 3)
-f(du, [1, 2, 3.0], p..., nothing)
+f(du, [1, 2, 3.0], p, nothing)
 @test du == [0.01*1 0.01*1*2 0.02*1*3
              0.1 0.01*2 0.02*1*3
              0.2 0.3 0.01*3]
@@ -86,7 +86,7 @@ function test_SDEFunction_no_eval()
     # Need to test within a function scope to trigger world age issues
     f = SDEFunction(de, eval_expression = false)
     p = MTKParameters(de, [σ => 10.0, ρ => 26.0, β => 2.33])
-    @test f([1.0, 0.0, 0.0], p..., (0.0, 100.0)) ≈ [-10.0, 26.0, 0.0]
+    @test f([1.0, 0.0, 0.0], p, (0.0, 100.0)) ≈ [-10.0, 26.0, 0.0]
 end
 test_SDEFunction_no_eval()
 
