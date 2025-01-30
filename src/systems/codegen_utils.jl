@@ -74,6 +74,14 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
 
     args = ntuple(Val(length(args))) do i
         arg = args[i]
+        if is_time_dependent(sys)
+            arg = if symbolic_type(arg) == NotSymbolic()
+                arg isa AbstractArray ?
+                map(x -> time_varying_as_func(unwrap(x), sys), arg) : arg
+            else
+                time_varying_as_func(unwrap(arg), sys)
+            end
+        end
         if symbolic_type(arg) == NotSymbolic() && arg isa AbstractArray
             DestructuredArgs(arg, generated_argument_name(i); create_bindings)
         else
