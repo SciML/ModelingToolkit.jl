@@ -675,7 +675,7 @@ struct SymbolicTstops{F}
 end
 
 function (st::SymbolicTstops)(p, tspan)
-    unique!(sort!(reduce(vcat, st.fn(p..., tspan...))))
+    unique!(sort!(reduce(vcat, st.fn(p, tspan...))))
 end
 
 function SymbolicTstops(
@@ -692,13 +692,12 @@ function SymbolicTstops(
         end
     end
     rps = reorder_parameters(sys, parameters(sys))
-    tstops, _ = build_function(tstops,
+    tstops, _ = build_function_wrapper(sys, tstops,
         rps...,
         t0,
         t1;
         expression = Val{true},
-        wrap_code = wrap_array_vars(sys, tstops; dvs = nothing) .∘
-                    wrap_parameter_dependencies(sys, false))
+        p_start = 1, p_end = length(rps), add_observed = false, force_SA = true)
     tstops = eval_or_rgf(tstops; eval_expression, eval_module)
     return SymbolicTstops(tstops)
 end
