@@ -430,9 +430,9 @@ function TearingState(sys; quick_cancel = false, check = true)
 
     ts = TearingState(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
-                        complete(graph), nothing, var_types, sys isa AbstractDiscreteSystem),
+            complete(graph), nothing, var_types, sys isa DiscreteSystem),
         Any[])
-    if sys isa AbstractDiscreteSystem 
+    if sys isa DiscreteSystem
         ts = shift_discrete_system(ts)
     end
     return ts
@@ -456,8 +456,6 @@ function lower_order_var(dervar, t)
     diffvar
 end
 
-"""
-"""
 function shift_discrete_system(ts::TearingState)
     @unpack fullvars, sys = ts
     discvars = OrderedSet()
