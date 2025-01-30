@@ -1,6 +1,6 @@
 ### TODO: update when BoundaryValueDiffEqAscher is updated to use the normal boundary condition conventions 
 
-using BoundaryValueDiffEq, OrdinaryDiffEqDefault, BoundaryValueDiffEqAscher
+using BoundaryValueDiffEq, OrdinaryDiffEq, BoundaryValueDiffEqAscher
 using BenchmarkTools
 using ModelingToolkit
 using SciMLBase
