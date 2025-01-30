@@ -123,7 +123,6 @@ abstract type AbstractTimeIndependentSystem <: AbstractSystem end
 abstract type AbstractODESystem <: AbstractTimeDependentSystem end
 abstract type AbstractMultivariateSystem <: AbstractSystem end
 abstract type AbstractOptimizationSystem <: AbstractTimeIndependentSystem end
-abstract type AbstractDiscreteSystem <: AbstractTimeDependentSystem end
 
 function independent_variable end
 
@@ -165,7 +164,6 @@ include("systems/diffeqs/modelingtoolkitize.jl")
 include("systems/diffeqs/basic_transformations.jl")
 
 include("systems/discrete_system/discrete_system.jl")
-include("systems/discrete_system/implicit_discrete_system.jl")
 
 include("systems/jumps/jumpsystem.jl")
 
@@ -231,7 +229,6 @@ export DAEFunctionExpr, DAEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDEProblemExpr
 export SystemStructure
 export DiscreteSystem, DiscreteProblem, DiscreteFunction, DiscreteFunctionExpr
-export ImplicitDiscreteSystem, ImplicitDiscreteProblem, ImplicitDiscreteFunction, ImplicitDiscreteFunctionExpr
 export JumpSystem
 export ODEProblem, SDEProblem
 export NonlinearFunction, NonlinearFunctionExpr
