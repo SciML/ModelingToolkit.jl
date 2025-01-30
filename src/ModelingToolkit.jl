@@ -123,6 +123,7 @@ abstract type AbstractTimeIndependentSystem <: AbstractSystem end
 abstract type AbstractODESystem <: AbstractTimeDependentSystem end
 abstract type AbstractMultivariateSystem <: AbstractSystem end
 abstract type AbstractOptimizationSystem <: AbstractTimeIndependentSystem end
+abstract type AbstractDiscreteSystem <: AbstractTimeDependentSystem end
 
 function independent_variable end
 

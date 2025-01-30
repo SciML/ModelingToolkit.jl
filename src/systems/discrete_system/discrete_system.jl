@@ -17,7 +17,7 @@ eqs = [x(k+1) ~ σ*(y-x),
 @named de = DiscreteSystem(eqs)
 ```
 """
-struct DiscreteSystem <: AbstractTimeDependentSystem
+struct DiscreteSystem <: AbstractDiscreteSystem
     """
     A tag for the system. If two systems have the same tag, then they are
     structurally identical.

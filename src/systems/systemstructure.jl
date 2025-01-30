@@ -430,9 +430,9 @@ function TearingState(sys; quick_cancel = false, check = true)
 
     ts = TearingState(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
-            complete(graph), nothing, var_types, sys isa DiscreteSystem),
+                        complete(graph), nothing, var_types, sys isa AbstractDiscreteSystem),
         Any[])
-    if sys isa DiscreteSystem || sys isa ImplicitDiscreteSystem
+    if sys isa AbstractDiscreteSystem 
         ts = shift_discrete_system(ts)
     end
     return ts

@@ -10,13 +10,13 @@ using ModelingToolkit: t_nounits as t
 @parameters σ=28.0 ρ=10.0 β=8/3 δt=0.1
 @variables x(t)=1.0 y(t)=0.0 z(t)=0.0
 k = ShiftIndex(t)
-eqs = [x ~ σ*(y(k-1)-x),
-       y ~ x*(ρ-z(k-1))-y,
-       z ~ x(k-1)*y - β*z]
+eqs = [x ~ σ*(y-x),
+       y ~ x*(ρ-z)-y,
+       z ~ x*y - β*z]
 @named ide = ImplicitDiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β]; tspan = (0, 1000.0))
 ```
 """
-struct ImplicitDiscreteSystem <: AbstractTimeDependentSystem
+struct ImplicitDiscreteSystem <: AbstractDiscreteSystem
     """
     A tag for the system. If two systems have the same tag, then they are
     structurally identical.
