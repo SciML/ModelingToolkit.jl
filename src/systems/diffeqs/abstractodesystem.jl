@@ -183,6 +183,7 @@ end
 function isdelay(var, iv)
     iv === nothing && return false
     isvariable(var) || return false
+    isparameter(var) && return false
     if iscall(var) && !ModelingToolkit.isoperator(var, Symbolics.Operator)
         args = arguments(var)
         length(args) == 1 || return false
