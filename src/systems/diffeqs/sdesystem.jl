@@ -411,24 +411,8 @@ end
 function generate_diffusion_function(sys::SDESystem, dvs = unknowns(sys),
         ps = parameters(sys); isdde = false, kwargs...)
     eqs = get_noiseeqs(sys)
-    if isdde
-        eqs = delay_to_function(sys, eqs)
-    end
-    u = map(x -> time_varying_as_func(value(x), sys), dvs)
-    p = if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        reorder_parameters(get_index_cache(sys), ps)
-    else
-        (map(x -> time_varying_as_func(value(x), sys), ps),)
-    end
-    if isdde
-        return build_function(eqs, u, DDE_HISTORY_FUN, p..., get_iv(sys); kwargs...,
-            wrap_code = get(kwargs, :wrap_code, identity) .∘
-                        wrap_mtkparameters(sys, false, 3) .∘
-                        wrap_array_vars(sys, eqs; dvs, ps, history = true) .∘
-                        wrap_parameter_dependencies(sys, false))
-    else
-        return build_function(eqs, u, p..., get_iv(sys); kwargs...)
-    end
+    p = reorder_parameters(sys, ps)
+    return build_function_wrapper(sys, eqs, dvs, p..., get_iv(sys); kwargs...)
 end
 
 """
