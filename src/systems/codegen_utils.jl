@@ -49,6 +49,16 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
     isscalar = !(expr isa AbstractArray || symbolic_type(expr) == ArraySymbolic())
 
     obs = filter(filter_observed, observed(sys))
+    if wrap_delays
+        history_arg = is_split(sys) ? MTKPARAMETERS_ARG : generated_argument_name(p_start)
+        obs = map(obs) do eq
+            delay_to_function(sys, eq; history_arg)
+        end
+        expr = delay_to_function(sys, expr; history_arg)
+        args = (args[1:p_start-1]..., DDE_HISTORY_FUN, args[p_start:end]...)
+        p_start += 1
+        p_end += 1
+    end
     pdeps = parameter_dependencies(sys)
 
     cmap, _ = get_cmap(sys)
@@ -100,11 +110,11 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
         end
     end
 
-    wrap_code = wrap_code .∘ wrap_assignments(isscalar, assignments)
-
-    if wrap_delays
-        expr = delay_to_function(sys, expr; history_arg = is_split(sys) ? MTKPARAMETERS_ARG : generated_argument_name(p_start))
+    if has_preface(sys) && (pref = preface(sys)) !== nothing
+        append!(assignments, pref)
     end
+
+    wrap_code = wrap_code .∘ wrap_assignments(isscalar, assignments)
 
     return build_function(expr, args...; wrap_code, kwargs...)
 end
