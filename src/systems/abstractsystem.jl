@@ -2558,7 +2558,7 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
 
     fun_expr = generate_function(sys, sts, ps; expression = Val{true})[1]
     fun = eval_or_rgf(fun_expr; eval_expression, eval_module)
-    dx = fun(sts, p..., t)
+    dx = fun(sts, p, t)
 
     h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
     y = h(sts, p, t)
