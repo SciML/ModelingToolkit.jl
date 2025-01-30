@@ -1062,7 +1062,8 @@ Keyword arguments:
   `vars(exprs)`
 - `obs`: the list of observed equations.
 """
-function observed_equations_used_by(sys::AbstractSystem, exprs; involved_vars = vars(exprs), obs = observed(sys))
+function observed_equations_used_by(sys::AbstractSystem, exprs;
+        involved_vars = vars(exprs; op = Union{Shift, Differential}), obs = observed(sys))
     obsvars = getproperty.(obs, :lhs)
     graph = observed_dependency_graph(obs)
 
