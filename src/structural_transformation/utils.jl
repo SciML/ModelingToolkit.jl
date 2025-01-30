@@ -452,8 +452,15 @@ end
 function lower_varname_withshift(var, iv, order)
     order == 0 && return var
     if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)
-        op = operation(var)
-        return Shift(op.t, order)(var)
+        O = only(arguments(var))
+        oldop = operation(O)
+        ds = "$iv-$order"
+        d_separator = 'ˍ'
+        newname = Symbol(string(nameof(oldop)), d_separator, ds)
+
+        newvar = maketerm(typeof(O), Symbolics.rename(oldop, newname), Symbolics.children(O), Symbolics.metadata(O))
+        setmetadata(newvar, Symbolics.VariableSource, (:variables, newname))
+        return ModelingToolkit._with_unit(identity, newvar, iv)
     end
     return lower_varname_with_unit(var, iv, order)
 end
