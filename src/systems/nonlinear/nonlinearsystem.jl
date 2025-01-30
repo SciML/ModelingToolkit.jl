@@ -269,13 +269,10 @@ end
 
 function generate_hessian(
         sys::NonlinearSystem, vs = unknowns(sys), ps = parameters(sys);
-        sparse = false, simplify = false, wrap_code = identity, kwargs...)
+        sparse = false, simplify = false, kwargs...)
     hess = calculate_hessian(sys, sparse = sparse, simplify = simplify)
-    pre = get_preprocess_constants(hess)
     p = reorder_parameters(sys, ps)
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, hess; dvs = vs, ps) .∘
-                wrap_parameter_dependencies(sys, false)
-    return build_function(hess, vs, p...; postprocess_fbody = pre, wrap_code, kwargs...)
+    return build_function_wrapper(sys, hess, vs, p...; kwargs...)
 end
 
 function generate_function(
