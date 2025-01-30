@@ -150,6 +150,7 @@ include("systems/connectors.jl")
 include("systems/analysis_points.jl")
 include("systems/imperative_affect.jl")
 include("systems/callbacks.jl")
+include("systems/codegen_utils.jl")
 include("systems/problem_utils.jl")
 
 include("systems/nonlinear/nonlinearsystem.jl")
