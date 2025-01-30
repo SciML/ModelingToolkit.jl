@@ -45,10 +45,10 @@ function array_variable_assignments(args...)
     return assignments
 end
 
-function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2, p_end = is_time_dependent(sys) ? length(args) - 1 : length(args), wrap_delays = is_dde(sys), wrap_code = identity, kwargs...)
+function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2, p_end = is_time_dependent(sys) ? length(args) - 1 : length(args), wrap_delays = is_dde(sys), wrap_code = identity, add_observed = true, filter_observed = Returns(true), create_bindings = true, kwargs...)
     isscalar = !(expr isa AbstractArray || symbolic_type(expr) == ArraySymbolic())
 
-    obs = observed(sys)
+    obs = filter(filter_observed, observed(sys))
     pdeps = parameter_dependencies(sys)
 
     cmap, _ = get_cmap(sys)
@@ -58,6 +58,11 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
     end
     for c in extra_constants
         push!(cmap, c ~ getdefault(c))
+    end
+    if add_observed
+        obsidxs = observed_equations_used_by(sys, expr)
+    else
+        obsidxs = Int[]
     end
     pdepidxs = observed_equations_used_by(sys, expr; obs = pdeps)
 
@@ -70,7 +75,7 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
     args = ntuple(Val(length(args))) do i
         arg = args[i]
         if symbolic_type(arg) == NotSymbolic() && arg isa AbstractArray
-            DestructuredArgs(arg, generated_argument_name(i))
+            DestructuredArgs(arg, generated_argument_name(i); create_bindings)
         else
             arg
         end
@@ -80,7 +85,10 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
         if p_start > p_end
             args = (args[1:p_start-1]..., MTKPARAMETERS_ARG, args[p_end+1:end]...)
         else
-            args = (args[1:p_start-1]..., DestructuredArgs(collect(args[p_start:p_end]), MTKPARAMETERS_ARG), args[p_end+1:end]...)
+            # cannot apply `create_bindings` here since it doesn't nest
+            args = (args[1:(p_start - 1)]...,
+                DestructuredArgs(collect(args[p_start:p_end]), MTKPARAMETERS_ARG),
+                args[(p_end + 1):end]...)
         end
     end
 
