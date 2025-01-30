@@ -277,19 +277,15 @@ end
 
 function generate_function(
         sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(sys);
-        wrap_code = identity, scalar = false, kwargs...)
+        scalar = false, kwargs...)
     rhss = [deq.rhs for deq in equations(sys)]
     dvs′ = value.(dvs)
     if scalar
         rhss = only(rhss)
         dvs′ = only(dvs)
     end
-    pre, sol_states = get_substitutions_and_solved_unknowns(sys)
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps) .∘
-                wrap_parameter_dependencies(sys, scalar)
     p = reorder_parameters(sys, value.(ps))
-    return build_function(rhss, dvs′, p...; postprocess_fbody = pre,
-        states = sol_states, wrap_code, kwargs...)
+    return build_function_wrapper(sys, rhss, dvs′, p...; kwargs...)
 end
 
 function jacobian_sparsity(sys::NonlinearSystem)
