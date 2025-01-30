@@ -161,7 +161,7 @@ time-independent systems. If `split=true` (the default) was passed to [`complete
 object.
 """
 function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys),
-        ps = parameters(sys); wrap_code = nothing, postprocess_fbody = nothing, states = nothing,
+        ps = parameters(sys);
         expression = Val{true}, eval_expression = false, eval_module = @__MODULE__,
         cachesyms::Tuple = (), kwargs...)
     if !iscomplete(sys)
@@ -169,39 +169,19 @@ function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys
     end
     p = (reorder_parameters(sys, unwrap.(ps))..., cachesyms...)
     isscalar = !(exprs isa AbstractArray)
-    if wrap_code === nothing
-        wrap_code = isscalar ? identity : (identity, identity)
-    end
-    pre, sol_states = get_substitutions_and_solved_unknowns(sys, isscalar ? [exprs] : exprs)
-    if postprocess_fbody === nothing
-        postprocess_fbody = pre
-    end
-    if states === nothing
-        states = sol_states
-    end
     fnexpr = if is_time_dependent(sys)
-        build_function(exprs,
+        build_function_wrapper(sys, exprs,
             dvs,
             p...,
             get_iv(sys);
             kwargs...,
-            postprocess_fbody,
-            states,
-            wrap_code = wrap_code .∘ wrap_mtkparameters(sys, isscalar) .∘
-                        wrap_array_vars(sys, exprs; dvs, cachesyms) .∘
-                        wrap_parameter_dependencies(sys, isscalar),
             expression = Val{true}
         )
     else
-        build_function(exprs,
+        build_function_wrapper(sys, exprs,
             dvs,
             p...;
             kwargs...,
-            postprocess_fbody,
-            states,
-            wrap_code = wrap_code .∘ wrap_mtkparameters(sys, isscalar) .∘
-                        wrap_array_vars(sys, exprs; dvs, cachesyms) .∘
-                        wrap_parameter_dependencies(sys, isscalar),
             expression = Val{true}
         )
     end
