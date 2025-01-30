@@ -233,6 +233,7 @@ function DiscreteSystem(eqs, iv; kwargs...)
             push!(new_ps, p)
         end
     end
+    @show allunknowns
     return DiscreteSystem(eqs, iv,
         collect(allunknowns), collect(new_ps); kwargs...)
 end

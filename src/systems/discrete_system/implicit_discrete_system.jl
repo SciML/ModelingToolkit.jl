@@ -10,11 +10,10 @@ using ModelingToolkit: t_nounits as t
 @parameters σ=28.0 ρ=10.0 β=8/3 δt=0.1
 @variables x(t)=1.0 y(t)=0.0 z(t)=0.0
 k = ShiftIndex(t)
-eqs = [x(k+1) ~ σ*(y-x),
-       y(k+1) ~ x*(ρ-z)-y,
-       z(k+1) ~ x*y - β*z]
-@named de = ImplicitDiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β]; tspan = (0, 1000.0)) # or
-@named de = ImplicitDiscreteSystem(eqs)
+eqs = [x ~ σ*(y(k-1)-x),
+       y ~ x*(ρ-z(k-1))-y,
+       z ~ x(k-1)*y - β*z]
+@named ide = ImplicitDiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β]; tspan = (0, 1000.0))
 ```
 """
 struct ImplicitDiscreteSystem <: AbstractTimeDependentSystem
@@ -136,6 +135,7 @@ end
 
 """
     $(TYPEDSIGNATURES)
+
 Constructs a ImplicitDiscreteSystem.
 """
 function ImplicitDiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
@@ -170,6 +170,8 @@ function ImplicitDiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
             :ImplicitDiscreteSystem, force = true)
     end
 
+    # Copy equations to canonical form, but do not touch array expressions
+    eqs = [wrap(eq.lhs) isa Symbolics.Arr ? eq : 0 ~ eq.rhs - eq.lhs for eq in eqs]
     defaults = Dict{Any, Any}(todict(defaults))
     guesses = Dict{Any, Any}(todict(guesses))
     var_to_name = Dict()
@@ -236,6 +238,8 @@ function ImplicitDiscreteSystem(eqs, iv; kwargs...)
     return ImplicitDiscreteSystem(eqs, iv,
         collect(allunknowns), collect(new_ps); kwargs...)
 end
+# basically at every timestep it should build a nonlinear solve
+# Previous timesteps should be treated as parameters? is this right? 
 
 function flatten(sys::ImplicitDiscreteSystem, noeqs = false)
     systems = get_systems(sys)
@@ -259,10 +263,25 @@ end
 
 function generate_function(
         sys::ImplicitDiscreteSystem, dvs = unknowns(sys), ps = parameters(sys); wrap_code = identity, kwargs...)
-    exprs = [eq.rhs for eq in equations(sys)]
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, exprs) .∘
-                wrap_parameter_dependencies(sys, false)
-    generate_custom_function(sys, exprs, dvs, ps; wrap_code, kwargs...)
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system.")
+    end
+    p = (reorder_parameters(sys, unwrap.(ps))..., cachesyms...)
+    isscalar = !(exprs isa AbstractArray)
+    pre, sol_states = get_substitutions_and_solved_unknowns(sys, isscalar ? [exprs] : exprs)
+    if postprocess_fbody === nothing
+        postprocess_fbody = pre
+    end
+    if states === nothing
+        states = sol_states
+    end
+    exprs = [eq.lhs - eq.rhs for eq in equations(sys)]
+    u = map(Shift(iv, -1), dvs)
+    u_next = dvs
+
+    wrap_code = wrap_code .∘ wrap_array_vars(sys, exprs) .∘ wrap_parameter_dependencies(sys, false)
+
+    build_function(exprs, u_next, u, p..., get_iv(sys))
 end
 
 function shift_u0map_forward(sys::ImplicitDiscreteSystem, u0map, defs)
@@ -311,7 +330,7 @@ function SciMLBase.ImplicitDiscreteProblem(
     f, u0, p = process_SciMLProblem(
         ImplicitDiscreteFunction, sys, u0map, parammap; eval_expression, eval_module)
     u0 = f(u0, p, tspan[1])
-    ImplicitDiscreteProblem(f, u0, tspan, p; kwargs...)
+    NonlinearProblem(f, u0, tspan, p; kwargs...)
 end
 
 function SciMLBase.ImplicitDiscreteFunction(sys::ImplicitDiscreteSystem, args...; kwargs...)
@@ -337,14 +356,15 @@ function SciMLBase.ImplicitDiscreteFunction{iip, specialize}(
         eval_module = @__MODULE__,
         analytic = nothing,
         kwargs...) where {iip, specialize}
+
     if !iscomplete(sys)
         error("A completed `ImplicitDiscreteSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `ImplicitDiscreteProblem`")
     end
     f_gen = generate_function(sys, dvs, ps; expression = Val{true},
         expression_module = eval_module, kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
-    f(u, p, t) = f_oop(u, p, t)
-    f(du, u, p, t) = f_iip(du, u, p, t)
+    f(u_next, u, p, t) = f_oop(u_next, u, p, t)
+    f(resid, u_next, u, p, t) = f_iip(resid, u_next, u, p, t)
 
     if specialize === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
@@ -379,8 +399,8 @@ struct ImplicitDiscreteFunctionClosure{O, I} <: Function
     f_oop::O
     f_iip::I
 end
-(f::ImplicitDiscreteFunctionClosure)(u, p, t) = f.f_oop(u, p, t)
-(f::ImplicitDiscreteFunctionClosure)(du, u, p, t) = f.f_iip(du, u, p, t)
+(f::ImplicitDiscreteFunctionClosure)(u_next, u, p, t) = f.f_oop(u_next, u, p, t)
+(f::ImplicitDiscreteFunctionClosure)(resid, u_next, u, p, t) = f.f_iip(resid, u_next, u, p, t)
 
 function ImplicitDiscreteFunctionExpr{iip}(sys::ImplicitDiscreteSystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
