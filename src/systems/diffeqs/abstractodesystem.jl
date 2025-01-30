@@ -118,22 +118,13 @@ end
 
 function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys);
-        simplify = false, sparse = false, wrap_code = identity, kwargs...)
+        simplify = false, sparse = false, kwargs...)
     jac = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
-    pre = get_preprocess_constants(jac)
-    p = if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        reorder_parameters(get_index_cache(sys), ps)
-    else
-        (ps,)
-    end
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, jac; dvs, ps) .∘
-                wrap_parameter_dependencies(sys, false)
-    return build_function(jac,
+    p = reorder_parameters(sys, ps)
+    return build_function_wrapper(sys, jac,
         dvs,
         p...,
         get_iv(sys);
-        postprocess_fbody = pre,
-        wrap_code,
         kwargs...)
 end
 
