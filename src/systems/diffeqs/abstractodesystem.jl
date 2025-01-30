@@ -147,13 +147,9 @@ function generate_dae_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
     @variables ˍ₋gamma
     jac = ˍ₋gamma * jac_du + jac_u
     pre = get_preprocess_constants(jac)
-    p = if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        reorder_parameters(get_index_cache(sys), ps)
-    else
-        (ps,)
-    end
-    return build_function(jac, derivatives, dvs, p..., ˍ₋gamma, get_iv(sys);
-        postprocess_fbody = pre, kwargs...)
+    p = reorder_parameters(sys, ps)
+    return build_function_wrapper(sys, jac, derivatives, dvs, p..., ˍ₋gamma, get_iv(sys);
+        p_start = 3, p_end = 2 + length(p), kwargs...)
 end
 
 function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
