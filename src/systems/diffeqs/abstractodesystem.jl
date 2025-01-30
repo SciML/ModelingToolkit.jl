@@ -158,55 +158,25 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
         ddvs = implicit_dae ? map(Differential(get_iv(sys)), dvs) :
                nothing,
         isdde = false,
-        wrap_code = identity,
         kwargs...)
-    if isdde
-        issplit = has_index_cache(sys) && get_index_cache(sys) !== nothing
-        eqs = delay_to_function(
-            sys; history_arg = issplit ? MTKPARAMETERS_ARG : DEFAULT_PARAMS_ARG)
-    else
-        eqs = [eq for eq in equations(sys)]
-    end
+    eqs = [eq for eq in equations(sys)]
     if !implicit_dae
         check_operator_variables(eqs, Differential)
         check_lhs(eqs, Differential, Set(dvs))
     end
 
-    # substitute constants in
-    eqs = map(subs_constants, eqs)
-
-    # substitute x(t) by just x
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
            [eq.rhs for eq in eqs]
 
     # TODO: add an optional check on the ordering of observed equations
-    u = map(x -> time_varying_as_func(value(x), sys), dvs)
-    p = map.(x -> time_varying_as_func(value(x), sys), reorder_parameters(sys, ps))
+    u = dvs
+    p = reorder_parameters(sys, ps)
     t = get_iv(sys)
 
-    if isdde
-        build_function(rhss, u, DDE_HISTORY_FUN, p..., t; kwargs...,
-            wrap_code = wrap_code .∘ wrap_mtkparameters(sys, false, 3) .∘
-                        wrap_array_vars(sys, rhss; dvs, ps, history = true) .∘
-                        wrap_parameter_dependencies(sys, false))
+    if implicit_dae
+        build_function_wrapper(sys, rhss, ddvs, u, p..., t; p_start = 3, kwargs...)
     else
-        pre, sol_states = get_substitutions_and_solved_unknowns(sys)
-
-        if implicit_dae
-            # inputs = [] makes `wrap_array_vars` offset by 1 since there is an extra
-            # argument
-            build_function(rhss, ddvs, u, p..., t; postprocess_fbody = pre,
-                states = sol_states,
-                wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps, inputs = []) .∘
-                            wrap_parameter_dependencies(sys, false),
-                kwargs...)
-        else
-            build_function(rhss, u, p..., t; postprocess_fbody = pre,
-                states = sol_states,
-                wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps) .∘
-                            wrap_parameter_dependencies(sys, false),
-                kwargs...)
-        end
+        build_function_wrapper(sys, rhss, u, p..., t; kwargs...)
     end
 end
 
