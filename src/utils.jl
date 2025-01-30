@@ -1060,10 +1060,9 @@ Keyword arguments:
   variables which will be explored to find dependencies on observed equations. Typically,
   providing this keyword is not necessary and is only useful to avoid repeatedly calling
   `vars(exprs)`
+- `obs`: the list of observed equations.
 """
-function observed_equations_used_by(sys::AbstractSystem, exprs; involved_vars = vars(exprs))
-    obs = observed(sys)
-
+function observed_equations_used_by(sys::AbstractSystem, exprs; involved_vars = vars(exprs), obs = observed(sys))
     obsvars = getproperty.(obs, :lhs)
     graph = observed_dependency_graph(obs)
 
