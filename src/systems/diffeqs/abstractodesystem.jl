@@ -133,7 +133,7 @@ function generate_control_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
         simplify = false, sparse = false, kwargs...)
     jac = calculate_control_jacobian(sys; simplify = simplify, sparse = sparse)
     p = reorder_parameters(sys, ps)
-    return build_function(jac, dvs, p..., get_iv(sys); kwargs...)
+    return build_function_wrapper(sys, jac, dvs, p..., get_iv(sys); kwargs...)
 end
 
 function generate_dae_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
