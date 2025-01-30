@@ -341,9 +341,7 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
     f_gen = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
     f(u, p) = f_oop(u, p)
-    f(u, p::MTKParameters) = f_oop(u, p...)
     f(du, u, p) = f_iip(du, u, p)
-    f(du, u, p::MTKParameters) = f_iip(du, u, p...)
 
     if jac
         jac_gen = generate_jacobian(sys, dvs, ps;
@@ -351,9 +349,7 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
             expression = Val{true}, kwargs...)
         jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
         _jac(u, p) = jac_oop(u, p)
-        _jac(u, p::MTKParameters) = jac_oop(u, p...)
         _jac(J, u, p) = jac_iip(J, u, p)
-        _jac(J, u, p::MTKParameters) = jac_iip(J, u, p...)
     else
         _jac = nothing
     end
@@ -397,9 +393,7 @@ function SciMLBase.IntervalNonlinearFunction(
 
     f_gen = generate_function(
         sys, dvs, ps; expression = Val{true}, scalar = true, kwargs...)
-    f_oop = eval_or_rgf(f_gen; eval_expression, eval_module)
-    f(u, p) = f_oop(u, p)
-    f(u, p::MTKParameters) = f_oop(u, p...)
+    f = eval_or_rgf(f_gen; eval_expression, eval_module)
 
     observedfun = ObservedFunctionCache(
         sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
