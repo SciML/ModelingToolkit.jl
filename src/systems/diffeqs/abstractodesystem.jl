@@ -317,12 +317,6 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
 
     f(u, p, t) = f_oop(u, p, t)
     f(du, u, p, t) = f_iip(du, u, p, t)
-    f(u, p::Tuple{Vararg{Number}}, t) = f_oop(u, p, t)
-    f(du, u, p::Tuple{Vararg{Number}}, t) = f_iip(du, u, p, t)
-    f(u, p::Tuple, t) = f_oop(u, p..., t)
-    f(du, u, p::Tuple, t) = f_iip(du, u, p..., t)
-    f(u, p::MTKParameters, t) = f_oop(u, p..., t)
-    f(du, u, p::MTKParameters, t) = f_iip(du, u, p..., t)
 
     if specialize === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
@@ -339,15 +333,9 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
             checkbounds = checkbounds, kwargs...)
         tgrad_oop, tgrad_iip = eval_or_rgf.(tgrad_gen; eval_expression, eval_module)
 
-        if p isa Tuple
-            __tgrad(u, p, t) = tgrad_oop(u, p..., t)
-            __tgrad(J, u, p, t) = tgrad_iip(J, u, p..., t)
-            _tgrad = __tgrad
-        else
-            ___tgrad(u, p, t) = tgrad_oop(u, p, t)
-            ___tgrad(J, u, p, t) = tgrad_iip(J, u, p, t)
-            _tgrad = ___tgrad
-        end
+        ___tgrad(u, p, t) = tgrad_oop(u, p, t)
+        ___tgrad(J, u, p, t) = tgrad_iip(J, u, p, t)
+        _tgrad = ___tgrad
     else
         _tgrad = nothing
     end
@@ -362,12 +350,6 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
 
         _jac(u, p, t) = jac_oop(u, p, t)
         _jac(J, u, p, t) = jac_iip(J, u, p, t)
-        _jac(u, p::Tuple{Vararg{Number}}, t) = jac_oop(u, p, t)
-        _jac(J, u, p::Tuple{Vararg{Number}}, t) = jac_iip(J, u, p, t)
-        _jac(u, p::Tuple, t) = jac_oop(u, p..., t)
-        _jac(J, u, p::Tuple, t) = jac_iip(J, u, p..., t)
-        _jac(u, p::MTKParameters, t) = jac_oop(u, p..., t)
-        _jac(J, u, p::MTKParameters, t) = jac_iip(J, u, p..., t)
     else
         _jac = nothing
     end
