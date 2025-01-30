@@ -52,7 +52,13 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
     pdeps = parameter_dependencies(sys)
 
     cmap, _ = get_cmap(sys)
-    obsidxs = observed_equations_used_by(sys, expr)
+    extra_constants = collect_constants(expr)
+    filter!(extra_constants) do c
+        !any(x -> isequal(c, x.lhs), cmap)
+    end
+    for c in extra_constants
+        push!(cmap, c ~ getdefault(c))
+    end
     pdepidxs = observed_equations_used_by(sys, expr; obs = pdeps)
 
     assignments = array_variable_assignments(args...)
