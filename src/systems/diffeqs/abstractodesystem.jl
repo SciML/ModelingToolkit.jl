@@ -106,24 +106,13 @@ end
 
 function generate_tgrad(
         sys::AbstractODESystem, dvs = unknowns(sys), ps = parameters(sys);
-        simplify = false, wrap_code = identity, kwargs...)
+        simplify = false, kwargs...)
     tgrad = calculate_tgrad(sys, simplify = simplify)
-    pre = get_preprocess_constants(tgrad)
-    p = if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        reorder_parameters(get_index_cache(sys), ps)
-    elseif ps isa Tuple
-        ps
-    else
-        (ps,)
-    end
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, tgrad; dvs, ps) .∘
-                wrap_parameter_dependencies(sys, !(tgrad isa AbstractArray))
-    return build_function(tgrad,
+    p = reorder_parameters(sys, ps)
+    return build_function_wrapper(sys, tgrad,
         dvs,
         p...,
         get_iv(sys);
-        postprocess_fbody = pre,
-        wrap_code,
         kwargs...)
 end
 
