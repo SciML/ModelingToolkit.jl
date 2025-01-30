@@ -249,14 +249,10 @@ end
 
 function generate_jacobian(
         sys::NonlinearSystem, vs = unknowns(sys), ps = parameters(sys);
-        sparse = false, simplify = false, wrap_code = identity, kwargs...)
+        sparse = false, simplify = false, kwargs...)
     jac = calculate_jacobian(sys, sparse = sparse, simplify = simplify)
-    pre, sol_states = get_substitutions_and_solved_unknowns(sys)
     p = reorder_parameters(sys, ps)
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, jac; dvs = vs, ps) .∘
-                wrap_parameter_dependencies(sys, false)
-    return build_function(
-        jac, vs, p...; postprocess_fbody = pre, states = sol_states, wrap_code, kwargs...)
+    return build_function_wrapper(sys, jac, vs, p...; kwargs...)
 end
 
 function calculate_hessian(sys::NonlinearSystem; sparse = false, simplify = false)
