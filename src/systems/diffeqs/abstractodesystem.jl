@@ -818,7 +818,9 @@ end
 
 function generate_history(sys::AbstractODESystem, u0; expression = Val{false}, kwargs...)
     p = reorder_parameters(sys, parameters(sys))
-    build_function(u0, p..., get_iv(sys); expression, kwargs...)
+    build_function_wrapper(
+        sys, u0, p..., get_iv(sys); expression, p_start = 1, p_end = length(p),
+        similarto = typeof(u0), wrap_delays = false, kwargs...)
 end
 
 function DiffEqBase.DDEProblem(sys::AbstractODESystem, args...; kwargs...)
@@ -842,8 +844,7 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         check_length, eval_expression, eval_module, kwargs...)
     h_gen = generate_history(sys, u0; expression = Val{true})
     h_oop, h_iip = eval_or_rgf.(h_gen; eval_expression, eval_module)
-    h(p, t) = h_oop(p, t)
-    h(p::MTKParameters, t) = h_oop(p..., t)
+    h = h_oop
     u0 = float.(h(p, tspan[1]))
     if u0 !== nothing
         u0 = u0_constructor(u0)
@@ -881,10 +882,7 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         check_length, kwargs...)
     h_gen = generate_history(sys, u0; expression = Val{true})
     h_oop, h_iip = eval_or_rgf.(h_gen; eval_expression, eval_module)
-    h(out, p, t) = h_iip(out, p, t)
-    h(p, t) = h_oop(p, t)
-    h(p::MTKParameters, t) = h_oop(p..., t)
-    h(out, p::MTKParameters, t) = h_iip(out, p..., t)
+    h = h_oop
     u0 = h(p, tspan[1])
     if u0 !== nothing
         u0 = u0_constructor(u0)
