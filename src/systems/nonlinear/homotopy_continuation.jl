@@ -45,29 +45,6 @@ function display_reason(reason::NonPolynomialReason.T, sym)
     end
 end
 
-"""
-    $(TYPEDEF)
-
-Information about an expression about its polynomial nature.
-"""
-mutable struct PolynomialData
-    """
-    A list of all non-polynomial terms in the expression.
-    """
-    non_polynomial_terms::Vector{BasicSymbolic}
-    """
-    Corresponding to `non_polynomial_terms`, a list of reasons why they are
-    not polynomial.
-    """
-    reasons::Vector{NonPolynomialReason.T}
-    """
-    Whether the polynomial contains parametric exponents of unknowns.
-    """
-    has_parametric_exponent::Bool
-end
-
-PolynomialData() = PolynomialData(BasicSymbolic[], NonPolynomialReason.T[], false)
-
 abstract type PolynomialTransformationError <: Exception end
 
 struct MultivarTerm <: PolynomialTransformationError
@@ -137,6 +114,29 @@ function Base.showerror(io::IO, err::NotPolynomialError)
         end
     end
 end
+
+"""
+    $(TYPEDEF)
+
+Information about an expression about its polynomial nature.
+"""
+mutable struct PolynomialData
+    """
+    A list of all non-polynomial terms in the expression.
+    """
+    non_polynomial_terms::Vector{BasicSymbolic}
+    """
+    Corresponding to `non_polynomial_terms`, a list of reasons why they are
+    not polynomial.
+    """
+    reasons::Vector{NonPolynomialReason.T}
+    """
+    Whether the polynomial contains parametric exponents of unknowns.
+    """
+    has_parametric_exponent::Bool
+end
+
+PolynomialData() = PolynomialData(BasicSymbolic[], NonPolynomialReason.T[], false)
 
 function is_polynomial!(data, y, wrt)
     process_polynomial!(data, y, wrt)
