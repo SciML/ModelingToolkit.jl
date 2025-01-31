@@ -869,6 +869,17 @@ end
     @test length(observed(sys)) == 1
 end
 
+# Test validating types of states
+@testset "Validate input types" begin
+    @parameters p d
+    @variables X(t)::Int64
+    @brownian z
+    eq2 = D(X) ~ p - d*X + z
+    @test_throws ArgumentError @mtkbuild ssys = System([eq2], t)
+    noiseeq = [1]
+    @test_throws ArgumentError @named ssys = SDESystem([eq2], [noiseeq], t)
+end
+
 @testset "SDEFunctionExpr" begin
     @parameters σ ρ β
     @variables x(tt) y(tt) z(tt)
