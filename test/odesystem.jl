@@ -1547,7 +1547,7 @@ end
 @testset "Validate input types" begin
     @parameters p d
     @variables X(t)::Int64
-    eq = D(X) ~ p - d*X
+    eq = D(X) ~ p - d * X
     @test_throws ArgumentError @mtkbuild osys = ODESystem([eq], t)
     @variables Y(t)[1:3]::String
     eq = D(Y) ~ [p, p, p]

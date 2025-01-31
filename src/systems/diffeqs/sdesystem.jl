@@ -273,7 +273,7 @@ function SDESystem(sys::ODESystem, neqs; kwargs...)
     SDESystem(equations(sys), neqs, get_iv(sys), unknowns(sys), parameters(sys); kwargs...)
 end
 
-function SDESystem(eqs::Vector{Equation}, noiseeqs::AbstractArray, iv; kwargs...) 
+function SDESystem(eqs::Vector{Equation}, noiseeqs::AbstractArray, iv; kwargs...)
     diffvars, allunknowns, ps, eqs = process_equations(eqs, iv)
 
     for eq in get(kwargs, :parameter_dependencies, Equation[])
@@ -309,15 +309,21 @@ function SDESystem(eqs::Vector{Equation}, noiseeqs::AbstractArray, iv; kwargs...
     noiseps = OrderedSet()
     collect_vars!(noisedvs, noiseps, noiseeqs, iv)
     for dv in noisedvs
-        dv ∈ allunknowns || throw(ArgumentError("Variable $dv in noise equations is not an unknown of the system."))
+        dv ∈ allunknowns ||
+            throw(ArgumentError("Variable $dv in noise equations is not an unknown of the system."))
     end
     algevars = setdiff(allunknowns, diffvars)
 
-    return SDESystem(eqs, noiseeqs, iv, Iterators.flatten((diffvars, algevars)), [ps; collect(noiseps)]; kwargs...)
+    return SDESystem(eqs, noiseeqs, iv, Iterators.flatten((diffvars, algevars)),
+        [ps; collect(noiseps)]; kwargs...)
 end
 
-SDESystem(eq::Equation, noiseeqs::AbstractArray, args...; kwargs...) = SDESystem([eq], noiseeqs, args...; kwargs...)
-SDESystem(eq::Equation, noiseeq, args...; kwargs...) = SDESystem([eq], [noiseeq], args...; kwargs...)
+function SDESystem(eq::Equation, noiseeqs::AbstractArray, args...; kwargs...)
+    SDESystem([eq], noiseeqs, args...; kwargs...)
+end
+function SDESystem(eq::Equation, noiseeq, args...; kwargs...)
+    SDESystem([eq], [noiseeq], args...; kwargs...)
+end
 
 function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
     sys1 === sys2 && return true

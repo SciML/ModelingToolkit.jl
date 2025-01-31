@@ -1281,3 +1281,17 @@ end
     @test sol[S, 1] ≈ 999
     @test SciMLBase.successful_retcode(sol)
 end
+
+@testset "Solvable array parameters with scalarized guesses" begin
+    @variables x(t)
+    @parameters p[1:2] q
+    @mtkbuild sys = ODESystem(
+        D(x) ~ p[1] + p[2] + q, t; defaults = [p[1] => q, p[2] => 2q],
+        guesses = [p[1] => q, p[2] => 2q])
+    @test ModelingToolkit.is_parameter_solvable(p, Dict(), defaults(sys), guesses(sys))
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [q => 2.0])
+    @test length(ModelingToolkit.observed(prob.f.initialization_data.initializeprob.f.sys)) ==
+          3
+    sol = solve(prob, Tsit5())
+    @test sol.ps[p] ≈ [2.0, 4.0]
+end
