@@ -96,7 +96,7 @@ end
 struct NotPolynomialError <: Exception
     transformation_err::Union{PolynomialTransformationError, Nothing}
     eq::Vector{Equation}
-    data::Vector{PolynomialData}
+    data::Vector{Any} # PolynomialData but then I have to put that struct above this
 end
 
 function Base.showerror(io::IO, err::NotPolynomialError)
