@@ -874,7 +874,7 @@ end
     @parameters p d
     @variables X(t)::Int64
     @brownian z
-    eq2 = D(X) ~ p - d*X + z
+    eq2 = D(X) ~ p - d * X + z
     @test_throws ArgumentError @mtkbuild ssys = System([eq2], t)
     noiseeq = [1]
     @test_throws ArgumentError @named ssys = SDESystem([eq2], [noiseeq], t)

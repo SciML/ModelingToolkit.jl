@@ -289,7 +289,8 @@ end
 function is_parameter_solvable(p, pmap, defs, guesses)
     p = unwrap(p)
     is_variable_floatingpoint(p) || return false
-    _val1 = pmap isa AbstractDict ? get_possibly_array_fallback_singletons(pmap, p) : nothing
+    _val1 = pmap isa AbstractDict ? get_possibly_array_fallback_singletons(pmap, p) :
+            nothing
     _val2 = get_possibly_array_fallback_singletons(defs, p)
     _val3 = get_possibly_array_fallback_singletons(guesses, p)
     # either (missing is a default or was passed to the ODEProblem) or (nothing was passed to
