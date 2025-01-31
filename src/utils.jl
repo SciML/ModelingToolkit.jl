@@ -1076,7 +1076,8 @@ function observed_equations_used_by(sys::AbstractSystem, exprs;
 
     obsidxs = BitSet()
     for sym in involved_vars
-        idx = findfirst(isequal(sym), obsvars)
+        arrsym = iscall(sym) && operation(sym) === getindex ? arguments(sym)[1] : nothing
+        idx = findfirst(v -> isequal(v, sym) || isequal(v, arrsym), obsvars)
         idx === nothing && continue
         idx in obsidxs && continue
         parents = dfs_parents(graph, idx)
