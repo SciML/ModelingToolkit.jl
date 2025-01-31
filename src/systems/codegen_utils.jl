@@ -45,7 +45,7 @@ function array_variable_assignments(args...)
     return assignments
 end
 
-function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2, p_end = is_time_dependent(sys) ? length(args) - 1 : length(args), wrap_delays = is_dde(sys), wrap_code = identity, add_observed = true, filter_observed = Returns(true), create_bindings = true, kwargs...)
+function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2, p_end = is_time_dependent(sys) ? length(args) - 1 : length(args), wrap_delays = is_dde(sys), wrap_code = identity, add_observed = true, filter_observed = Returns(true), create_bindings = true, output_type = nothing, mkarray = nothing, kwargs...)
     isscalar = !(expr isa AbstractArray || symbolic_type(expr) == ArraySymbolic())
 
     obs = filter(filter_observed, observed(sys))
@@ -116,5 +116,19 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
 
     wrap_code = wrap_code .∘ wrap_assignments(isscalar, assignments)
 
-    return build_function(expr, args...; wrap_code, kwargs...)
+    similarto = nothing
+    if output_type === Tuple
+        expr = MakeTuple(Tuple(expr))
+        wrap_code = wrap_code[1]
+    elseif mkarray === nothing
+        similarto = output_type
+    else
+        expr = mkarray(expr, output_type)
+        wrap_code = wrap_code[2]
+    end
+
+    if wrap_code isa Tuple && symbolic_type(expr) == ScalarSymbolic()
+        wrap_code = wrap_code[1]
+    end
+    return build_function(expr, args...; wrap_code, similarto, kwargs...)
 end
