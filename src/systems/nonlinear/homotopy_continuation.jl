@@ -122,6 +122,11 @@ Information about an expression about its polynomial nature.
 """
 mutable struct PolynomialData
     """
+    A list of the variables in the expression being searched that occur outside of
+    any non-polynomial terms.
+    """
+    solo_terms::Set{BasicSymbolic}
+    """
     A list of all non-polynomial terms in the expression.
     """
     non_polynomial_terms::Vector{BasicSymbolic}
@@ -136,7 +141,7 @@ mutable struct PolynomialData
     has_parametric_exponent::Bool
 end
 
-PolynomialData() = PolynomialData(BasicSymbolic[], NonPolynomialReason.T[], false)
+PolynomialData() = PolynomialData(Set{BasicSymbolic}(), BasicSymbolic[], NonPolynomialReason.T[], false)
 
 function is_polynomial!(data, y, wrt)
     process_polynomial!(data, y, wrt)
@@ -152,9 +157,12 @@ writing said information to `data`.
 function process_polynomial!(data::PolynomialData, x, wrt)
     x = unwrap(x)
     symbolic_type(x) == NotSymbolic() && return true
-    iscall(x) || return true
     contains_variable(x, wrt) || return true
-    any(isequal(x), wrt) && return true
+    if any(isequal(x), wrt)
+        push!(data.solo_terms, x)
+        return true
+    end
+    iscall(x) || return true
 
     if operation(x) in (*, +, -, /)
         # `map` because `all` will early exit, but we want to search
