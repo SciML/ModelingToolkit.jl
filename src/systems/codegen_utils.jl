@@ -45,7 +45,7 @@ function array_variable_assignments(args...)
     return assignments
 end
 
-function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2, p_end = is_time_dependent(sys) ? length(args) - 1 : length(args), wrap_delays = is_dde(sys), wrap_code = identity, add_observed = true, filter_observed = Returns(true), create_bindings = true, output_type = nothing, mkarray = nothing, kwargs...)
+function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2, p_end = is_time_dependent(sys) ? length(args) - 1 : length(args), wrap_delays = is_dde(sys), wrap_code = identity, add_observed = true, filter_observed = Returns(true), create_bindings = true, output_type = nothing, mkarray = nothing, wrap_mtkparameters = true, kwargs...)
     isscalar = !(expr isa AbstractArray || symbolic_type(expr) == ArraySymbolic())
 
     obs = filter(filter_observed, observed(sys))
@@ -99,7 +99,7 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
         end
     end
 
-    if is_split(sys)
+    if is_split(sys) && wrap_mtkparameters
         if p_start > p_end
             args = (args[1:p_start-1]..., MTKPARAMETERS_ARG, args[p_end+1:end]...)
         else
