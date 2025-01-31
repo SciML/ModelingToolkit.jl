@@ -285,7 +285,7 @@ function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
         _eq_unordered(get_unknowns(sys1), get_unknowns(sys2)) &&
         _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
         _eq_unordered(continuous_events(sys1), continuous_events(sys2)) &&
-        _eq_unordered(discrete_events(sys1), discrete_events(sys2)) && 
+        _eq_unordered(discrete_events(sys1), discrete_events(sys2)) &&
         all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
 end
 
@@ -771,7 +771,6 @@ function DiffEqBase.SDEProblem{iip, specialize}(
 end
 
 function DiffEqBase.SDEProblem(sys::ODESystem, args...; kwargs...)
-
     if any(ModelingToolkit.isbrownian, unknowns(sys))
         error("SDESystem constructed by defining Brownian variables with @brownian must be simplified by calling `structural_simplify` before a SDEProblem can be constructed.")
     else
