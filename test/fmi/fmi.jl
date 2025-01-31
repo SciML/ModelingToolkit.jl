@@ -262,7 +262,10 @@ end
         @named adder2 = MTK.FMIComponent(
             Val(2); fmu, type = :CS, communication_step_size = 1e-3)
         sys, prob = build_looped_adders(adder1, adder2)
-        sol = solve(prob, Tsit5(); reltol = 1e-8, initializealg = SciMLBase.OverrideInit(nlsolve = FastShortcutNLLSPolyalg(autodiff = AutoFiniteDiff())))
+        sol = solve(prob,
+            Tsit5();
+            reltol = 1e-8,
+            initializealg = SciMLBase.OverrideInit(nlsolve = FastShortcutNLLSPolyalg(autodiff = AutoFiniteDiff())))
         @test truesol(sol.t;
             idxs = [truesys.adder1.c, truesys.adder2.c]).u≈sol(
             sol.t; idxs = [sys.adder1.c, sys.adder2.c]).u rtol=1e-3

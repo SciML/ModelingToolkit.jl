@@ -1558,7 +1558,7 @@ end
 @testset "`isequal`" begin
     @variables X(t)
     @parameters p d
-    eq = D(X) ~ p - d*X
+    eq = D(X) ~ p - d * X
 
     osys1 = complete(ODESystem([eq], t; name = :osys))
     osys2 = complete(ODESystem([eq], t; name = :osys))
@@ -1569,7 +1569,7 @@ end
 
     osys1 = complete(ODESystem([eq], t; name = :osys, continuous_events))
     osys2 = complete(ODESystem([eq], t; name = :osys))
-    @test osys1 !== osys2 
+    @test osys1 !== osys2
 
     osys1 = complete(ODESystem([eq], t; name = :osys, discrete_events))
     osys2 = complete(ODESystem([eq], t; name = :osys))
@@ -1577,28 +1577,28 @@ end
 
     osys1 = complete(ODESystem([eq], t; name = :osys, continuous_events))
     osys2 = complete(ODESystem([eq], t; name = :osys, discrete_events))
-    @test osys1 !== osys2 
+    @test osys1 !== osys2
 end
 
 @testset "dae_order_lowering basic test" begin
     @parameters a
     @variables x(t) y(t) z(t)
     @named dae_sys = ODESystem([
-        D(x) ~ y,
-        0 ~ x + z,
-        0 ~ x - y + z
-    ], t, [z, y, x], [])
+            D(x) ~ y,
+            0 ~ x + z,
+            0 ~ x - y + z
+        ], t, [z, y, x], [])
 
     lowered_dae_sys = dae_order_lowering(dae_sys)
-    @variables x1(t) y1(t) z1(t) 
+    @variables x1(t) y1(t) z1(t)
     expected_eqs = [
         0 ~ x + z,
         0 ~ x - y + z,
         Differential(t)(x) ~ y
     ]
     lowered_eqs = equations(lowered_dae_sys)
-    sorted_lowered_eqs = sort(lowered_eqs, by=string)
-    sorted_expected_eqs = sort(expected_eqs, by=string)
+    sorted_lowered_eqs = sort(lowered_eqs, by = string)
+    sorted_expected_eqs = sort(expected_eqs, by = string)
     @test sorted_lowered_eqs == sorted_expected_eqs
 
     expected_vars = Set([z, y, x])
