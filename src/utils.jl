@@ -636,6 +636,8 @@ function collect_constants(x)
     return constants
 end
 
+collect_constants!(::Any, ::Symbol) = nothing
+
 function collect_constants!(constants, arr::AbstractArray)
     for el in arr
         collect_constants!(constants, el)
