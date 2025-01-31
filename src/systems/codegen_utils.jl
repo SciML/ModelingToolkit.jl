@@ -59,7 +59,10 @@ function array_variable_assignments(args...)
                 idxs = SArray{Tuple{size(idxs)...}}(idxs)
             end
             # view and reshape
-            push!(assignments, arrvar ← term(reshape, term(view, generated_argument_name(buffer_idx), idxs), size(arrvar)))
+            push!(assignments,
+                arrvar ←
+                term(reshape, term(view, generated_argument_name(buffer_idx), idxs),
+                    size(arrvar)))
         else
             elems = map(idxs) do idx
                 i, j = idx
@@ -109,10 +112,17 @@ generated functions, and `args` are the arguments.
   code for `expr`.
 - `wrap_mtkparameters`: Whether to collapse parameter buffers for a split system into a
   argument.
+- `extra_assignments`: Extra `Assignment` statements to prefix to `expr`, after all other
+  assignments.
 
 All other keyword arguments are forwarded to `build_function`.
 """
-function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2, p_end = is_time_dependent(sys) ? length(args) - 1 : length(args), wrap_delays = is_dde(sys), wrap_code = identity, add_observed = true, filter_observed = Returns(true), create_bindings = true, output_type = nothing, mkarray = nothing, wrap_mtkparameters = true, kwargs...)
+function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
+        p_end = is_time_dependent(sys) ? length(args) - 1 : length(args),
+        wrap_delays = is_dde(sys), wrap_code = identity,
+        add_observed = true, filter_observed = Returns(true),
+        create_bindings = true, output_type = nothing, mkarray = nothing,
+        wrap_mtkparameters = true, extra_assignments = Assignment[], kwargs...)
     isscalar = !(expr isa AbstractArray || symbolic_type(expr) == ArraySymbolic())
     # filter observed equations
     obs = filter(filter_observed, observed(sys))
@@ -152,6 +162,7 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
     for eq in Iterators.flatten((cmap, pdeps[pdepidxs], obs[obsidxs]))
         push!(assignments, eq.lhs ← eq.rhs)
     end
+    append!(assignments, extra_assignments)
 
     args = ntuple(Val(length(args))) do i
         arg = args[i]
