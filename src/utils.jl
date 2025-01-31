@@ -739,7 +739,12 @@ end
 
 function get_cmap(sys, exprs = nothing)
     #Inject substitutions for constants => values
-    cs = collect_constants([collect(get_eqs(sys)); get_observed(sys)]) #ctrls? what else?
+    buffer = []
+    has_eqs(sys) && append!(buffer, collect(get_eqs(sys)))
+    has_observed(sys) && append!(buffer, collect(get_observed(sys)))
+    has_op(sys) && push!(buffer, get_op(sys))
+    has_constraints(sys) && append!(buffer, get_constraints(sys))
+    cs = collect_constants(buffer) #ctrls? what else?
     if !empty_substitutions(sys)
         cs = [cs; collect_constants(get_substitutions(sys).subs)]
     end
