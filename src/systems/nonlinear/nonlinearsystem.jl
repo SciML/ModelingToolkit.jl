@@ -563,7 +563,7 @@ struct CacheWriter{F}
 end
 
 function (cw::CacheWriter)(p, sols)
-    cw.fn(p.caches, sols, p...)
+    cw.fn(p.caches, sols, p)
 end
 
 function CacheWriter(sys::AbstractSystem, buffer_types::Vector{TypeT},
@@ -572,22 +572,15 @@ function CacheWriter(sys::AbstractSystem, buffer_types::Vector{TypeT},
     ps = parameters(sys)
     rps = reorder_parameters(sys, ps)
     obs_assigns = [eq.lhs ← eq.rhs for eq in obseqs]
-    cmap, cs = get_cmap(sys)
-    cmap_assigns = [eq.lhs ← eq.rhs for eq in cmap]
-
-    outsyms = [Symbol(:out, i) for i in eachindex(buffer_types)]
     body = map(eachindex(buffer_types), buffer_types) do i, T
         Symbol(:tmp, i) ← SetArray(true, :(out[$i]), get(exprs, T, []))
     end
-    fn = Func(
-             [:out, DestructuredArgs(DestructuredArgs.(solsyms)),
-                 DestructuredArgs.(rps)...],
-             [],
-             Let(body, :())
-         ) |> wrap_assignments(false, obs_assigns)[2] |>
-         wrap_parameter_dependencies(sys, false)[2] |>
-         wrap_array_vars(sys, []; dvs = nothing, inputs = [])[2] |>
-         wrap_assignments(false, cmap_assigns)[2] |> toexpr
+
+    fn = build_function_wrapper(
+        sys, nothing, :out, DestructuredArgs(DestructuredArgs.(solsyms)),
+        DestructuredArgs.(rps)...; p_start = 3, p_end = length(rps) + 2,
+        expression = Val{true}, add_observed = false,
+        extra_assignments = [obs_assigns; body])
     return CacheWriter(eval_or_rgf(fn; eval_expression, eval_module))
 end
 
@@ -601,21 +594,15 @@ function SCCNonlinearFunction{iip}(
 
     obs_assignments = [eq.lhs ← eq.rhs for eq in _obs]
 
-    cmap, cs = get_cmap(sys)
-    cmap_assignments = [eq.lhs ← eq.rhs for eq in cmap]
     rhss = [eq.rhs - eq.lhs for eq in _eqs]
-    wrap_code = wrap_assignments(false, cmap_assignments) .∘
-                (wrap_array_vars(sys, rhss; dvs = _dvs, cachesyms)) .∘
-                wrap_parameter_dependencies(sys, false) .∘
-                wrap_assignments(false, obs_assignments)
-    f_gen = build_function(
-        rhss, _dvs, rps..., cachesyms...; wrap_code, expression = Val{true})
+    f_gen = build_function_wrapper(sys,
+        rhss, _dvs, rps..., cachesyms...; p_start = 2,
+        p_end = length(rps) + length(cachesyms) + 1, add_observed = false,
+        extra_assignments = obs_assignments, expression = Val{true})
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
 
     f(u, p) = f_oop(u, p)
-    f(u, p::MTKParameters) = f_oop(u, p...)
     f(resid, u, p) = f_iip(resid, u, p)
-    f(resid, u, p::MTKParameters) = f_iip(resid, u, p...)
 
     subsys = NonlinearSystem(_eqs, _dvs, ps; observed = _obs,
         parameter_dependencies = parameter_dependencies(sys), name = nameof(sys))
