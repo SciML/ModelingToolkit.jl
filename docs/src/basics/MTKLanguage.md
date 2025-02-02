@@ -23,6 +23,7 @@ equations.
 
 `@mtkmodel` definition contains begin blocks of
 
+  - `@description`: for describing the whole system with a human-readable string
   - `@components`: for listing sub-components of the system
   - `@constants`: for declaring constants
   - `@defaults`: for passing `defaults` to ODESystem
@@ -42,6 +43,7 @@ using ModelingToolkit
 using ModelingToolkit: t
 
 @mtkmodel ModelA begin
+    @description "A component with parameters `k` and `k_array`."
     @parameters begin
         k
         k_array[1:2]
@@ -49,6 +51,7 @@ using ModelingToolkit: t
 end
 
 @mtkmodel ModelB begin
+    @description "A component with parameters `p1` and `p2`."
     @parameters begin
         p1 = 1.0, [description = "Parameter of ModelB"]
         p2 = 1.0, [description = "Parameter of ModelB"]
@@ -56,6 +59,7 @@ end
 end
 
 @mtkmodel ModelC begin
+    @description "A bigger system that contains many more things."
     @icon "https://github.com/SciML/SciMLDocs/blob/main/docs/src/assets/logo.png"
     @constants begin
         c::Int = 1, [description = "Example constant."]
@@ -90,6 +94,10 @@ end
     end
 end
 ```
+
+#### `@description`
+
+A documenting `String` that summarizes and explains what the model is.
 
 #### `@icon`
 
