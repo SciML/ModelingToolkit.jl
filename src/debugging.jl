@@ -42,3 +42,21 @@ function debug_sub(ex, funcs; kw...)
     f in funcs ? logged_fun(f, args...; kw...) :
     maketerm(typeof(ex), f, args, metadata(ex))
 end
+
+function _debug_assertion(expr::Bool, message::String, log::Bool)
+    expr && return 0.0
+    log && @error message
+    return NaN
+end
+
+@register_symbolic _debug_assertion(expr::Bool, message::String, log::Bool)
+
+const ASSERTION_LOG_VARIABLE = only(@parameters __log_assertions_ₘₜₖ::Bool = false)
+
+function get_assertions_expr(assertions::Dict{BasicSymbolic, String})
+    term = 0
+    for (k, v) in assertions
+        term += _debug_assertion(k, "Assertion $k failed:\n$v", ASSERTION_LOG_VARIABLE)
+    end
+    return term
+end

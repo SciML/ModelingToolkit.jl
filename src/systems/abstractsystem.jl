@@ -2312,7 +2312,15 @@ function debug_system(
         error("debug_system(sys) only works on systems with no sub-systems! Consider flattening it with flatten(sys) or structural_simplify(sys) first.")
     end
     if has_eqs(sys)
-        @set! sys.eqs = debug_sub.(equations(sys), Ref(functions); kw...)
+        eqs = debug_sub.(equations(sys), Ref(functions); kw...)
+        expr = get_assertions_expr(assertions(sys))
+        eqs[end] = eqs[end].lhs ~ eqs[end].rhs + expr
+        @set! sys.eqs = eqs
+        @set! sys.ps = unique!([get_ps(sys); ASSERTION_LOG_VARIABLE])
+        @set! sys.defaults = merge(get_defaults(sys), Dict(ASSERTION_LOG_VARIABLE => true))
+        if iscomplete(sys)
+            sys = complete(sys; split = is_split(sys))
+        end
     end
     if has_observed(sys)
         @set! sys.observed = debug_sub.(observed(sys), Ref(functions); kw...)
