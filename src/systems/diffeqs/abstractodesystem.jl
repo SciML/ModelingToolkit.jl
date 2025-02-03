@@ -883,7 +883,7 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
 
     fns = generate_function_bc(sys, u0, u0_idxs, tspan)
     bc_oop, bc_iip = eval_or_rgf.(fns; eval_expression, eval_module) 
-    # bc(sol, p, t) = bc_oop(sol, p, t)
+    bc(sol, p, t) = bc_oop(sol, p, t)
     bc(resid, u, p, t) = bc_iip(resid, u, p, t)
 
     return BVProblem{iip}(f, bc, u0, tspan, p; kwargs...)
