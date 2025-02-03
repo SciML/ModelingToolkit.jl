@@ -983,6 +983,7 @@ for prop in [:eqs
              :gui_metadata
              :discrete_subsystems
              :parameter_dependencies
+             :assertions
              :solved_unknowns
              :split_idxs
              :parent
@@ -1463,6 +1464,24 @@ end
 
 function full_parameters(sys::AbstractSystem)
     vcat(parameters(sys), dependent_parameters(sys))
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Get the assertions for a system `sys` and its subsystems.
+"""
+function assertions(sys::AbstractSystem)
+    has_assertions(sys) || return Dict{BasicSymbolic, String}()
+
+    asserts = get_assertions(sys)
+    systems = get_systems(sys)
+    namespaced_asserts = mapreduce(
+        merge!, systems; init = Dict{BasicSymbolic, String}()) do subsys
+        Dict{BasicSymbolic, String}(namespace_expr(k, subsys) => v
+        for (k, v) in assertions(subsys))
+    end
+    return merge(asserts, namespaced_asserts)
 end
 
 """
@@ -3034,6 +3053,11 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
         ieqs = union(get_initialization_eqs(basesys), get_initialization_eqs(sys))
         guesses = merge(get_guesses(basesys), get_guesses(sys)) # prefer `sys`
         kwargs = merge(kwargs, (initialization_eqs = ieqs, guesses = guesses))
+    end
+
+    if has_assertions(basesys)
+        kwargs = merge(
+            kwargs, (; assertions = merge(get_assertions(basesys), get_assertions(sys))))
     end
 
     return T(args...; kwargs...)
