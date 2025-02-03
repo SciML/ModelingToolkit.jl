@@ -127,6 +127,7 @@ end
 end
 
 @mtkmodel RC begin
+    @description "An RC circuit."
     @structural_parameters begin
         R_val = 10u"Ω"
         C_val = 10u"F"
@@ -139,7 +140,6 @@ end
         constant = Constant(; k = k_val)
         ground = MyMockModule.Ground()
     end
-
     @equations begin
         connect(constant.output, source.V)
         connect(source.p, resistor.p)
@@ -157,6 +157,7 @@ sol = solve(prob)
 defs = ModelingToolkit.defaults(rc)
 @test sol[rc.capacitor.v, end] ≈ defs[rc.constant.k]
 resistor = getproperty(rc, :resistor; namespace = false)
+@test ModelingToolkit.description(rc) == "An RC circuit."
 @test getname(rc.resistor) === getname(resistor)
 @test getname(rc.resistor.R) === getname(resistor.R)
 @test getname(rc.resistor.v) === getname(resistor.v)

@@ -84,6 +84,7 @@ end
 end
 
 @mtkmodel RCModel begin
+    @description "A circuit with a constant voltage source, resistor and capacitor connected in series."
     @components begin
         resistor = Resistor(R = 1.0)
         capacitor = Capacitor(C = 1.0)
@@ -251,6 +252,7 @@ make all of our parameter values 1.0. As `resistor`, `capacitor`, `source` lists
 
 ```@example acausal
 @mtkmodel RCModel begin
+    @description "A circuit with a constant voltage source, resistor and capacitor connected in series."
     @components begin
         resistor = Resistor(R = 1.0)
         capacitor = Capacitor(C = 1.0)

@@ -194,16 +194,10 @@ function calculate_gradient(sys::OptimizationSystem)
 end
 
 function generate_gradient(sys::OptimizationSystem, vs = unknowns(sys),
-        ps = parameters(sys);
-        wrap_code = identity,
-        kwargs...)
+        ps = parameters(sys); kwargs...)
     grad = calculate_gradient(sys)
-    pre = get_preprocess_constants(grad)
     p = reorder_parameters(sys, ps)
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, grad; dvs = vs, ps) .∘
-                wrap_parameter_dependencies(sys, !(grad isa AbstractArray))
-    return build_function(grad, vs, p...; postprocess_fbody = pre, wrap_code,
-        kwargs...)
+    return build_function_wrapper(sys, grad, vs, p...; kwargs...)
 end
 
 function calculate_hessian(sys::OptimizationSystem)
@@ -212,34 +206,22 @@ end
 
 function generate_hessian(
         sys::OptimizationSystem, vs = unknowns(sys), ps = parameters(sys);
-        sparse = false, wrap_code = identity, kwargs...)
+        sparse = false, kwargs...)
     if sparse
         hess = sparsehessian(objective(sys), unknowns(sys))
     else
         hess = calculate_hessian(sys)
     end
-    pre = get_preprocess_constants(hess)
     p = reorder_parameters(sys, ps)
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, hess; dvs = vs, ps) .∘
-                wrap_parameter_dependencies(sys, false)
-    return build_function(hess, vs, p...; postprocess_fbody = pre, wrap_code,
-        kwargs...)
+    return build_function_wrapper(sys, hess, vs, p...; kwargs...)
 end
 
 function generate_function(sys::OptimizationSystem, vs = unknowns(sys),
         ps = parameters(sys);
-        wrap_code = identity,
         kwargs...)
-    eqs = subs_constants(objective(sys))
-    p = if has_index_cache(sys)
-        reorder_parameters(get_index_cache(sys), ps)
-    else
-        (ps,)
-    end
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, eqs; dvs = vs, ps) .∘
-                wrap_parameter_dependencies(sys, !(eqs isa AbstractArray))
-    return build_function(eqs, vs, p...; wrap_code,
-        kwargs...)
+    eqs = objective(sys)
+    p = reorder_parameters(sys, ps)
+    return build_function_wrapper(sys, eqs, vs, p...; kwargs...)
 end
 
 function namespace_objective(sys::AbstractSystem)
@@ -368,7 +350,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     f = let _f = eval_or_rgf(
             generate_function(
                 sys, checkbounds = checkbounds, linenumbers = linenumbers,
-                expression = Val{true});
+                expression = Val{true}, wrap_mtkparameters = false);
             eval_expression,
             eval_module)
         __f(u, p) = _f(u, p)
@@ -382,7 +364,8 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                 generate_gradient(
                     sys, checkbounds = checkbounds,
                     linenumbers = linenumbers,
-                    parallel = parallel, expression = Val{true});
+                    parallel = parallel, expression = Val{true},
+                    wrap_mtkparameters = false);
                 eval_expression,
                 eval_module)
             _grad(u, p) = grad_oop(u, p)
@@ -401,7 +384,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                     sys, checkbounds = checkbounds,
                     linenumbers = linenumbers,
                     sparse = sparse, parallel = parallel,
-                    expression = Val{true});
+                    expression = Val{true}, wrap_mtkparameters = false);
                 eval_expression,
                 eval_module)
             _hess(u, p) = hess_oop(u, p)
@@ -427,7 +410,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         cons_sys = complete(cons_sys)
         cons, lcons_, ucons_ = generate_function(cons_sys, checkbounds = checkbounds,
             linenumbers = linenumbers,
-            expression = Val{true})
+            expression = Val{true}; wrap_mtkparameters = false)
         cons = let (cons_oop, cons_iip) = eval_or_rgf.(cons; eval_expression, eval_module)
             _cons(u, p) = cons_oop(u, p)
             _cons(resid, u, p) = cons_iip(resid, u, p)
@@ -440,7 +423,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                         checkbounds = checkbounds,
                         linenumbers = linenumbers,
                         parallel = parallel, expression = Val{true},
-                        sparse = cons_sparse);
+                        sparse = cons_sparse, wrap_mtkparameters = false);
                     eval_expression,
                     eval_module)
                 _cons_j(u, p) = cons_jac_oop(u, p)
@@ -458,7 +441,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                         cons_sys, checkbounds = checkbounds,
                         linenumbers = linenumbers,
                         sparse = cons_sparse, parallel = parallel,
-                        expression = Val{true});
+                        expression = Val{true}, wrap_mtkparameters = false);
                     eval_expression,
                     eval_module)
                 _cons_h(u, p) = cons_hess_oop(u, p)

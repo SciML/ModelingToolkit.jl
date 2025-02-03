@@ -4,6 +4,12 @@ import REPL
 
 const GROUP = get(ENV, "GROUP", "All")
 
+function activate_fmi_env()
+    Pkg.activate("fmi")
+    Pkg.develop(PackageSpec(path = dirname(@__DIR__)))
+    Pkg.instantiate()
+end
+
 function activate_extensions_env()
     Pkg.activate("extensions")
     Pkg.develop(PackageSpec(path = dirname(@__DIR__)))
@@ -114,6 +120,11 @@ end
         @safetestset "Linearization Dummy Derivative Tests" include("downstream/linearization_dd.jl")
         @safetestset "Inverse Models Test" include("downstream/inversemodel.jl")
         @safetestset "Analysis Points Test" include("downstream/analysis_points.jl")
+    end
+
+    if GROUP == "All" || GROUP == "FMI"
+        activate_fmi_env()
+        @safetestset "FMI Extension Test" include("fmi/fmi.jl")
     end
 
     if GROUP == "All" || GROUP == "Extensions"
