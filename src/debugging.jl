@@ -43,6 +43,13 @@ function debug_sub(ex, funcs; kw...)
     maketerm(typeof(ex), f, args, metadata(ex))
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+A function which takes a condition `expr` and returns `NaN` if it is false,
+and zero if it is true. In case the condition is false and `log == true`,
+`message` will be logged as an `@error`.
+"""
 function _debug_assertion(expr::Bool, message::String, log::Bool)
     expr && return 0.0
     log && @error message
@@ -51,9 +58,19 @@ end
 
 @register_symbolic _debug_assertion(expr::Bool, message::String, log::Bool)
 
+"""
+Boolean parameter added to models returned from `debug_system` to control logging of
+assertions.
+"""
 const ASSERTION_LOG_VARIABLE = only(@parameters __log_assertions_ₘₜₖ::Bool = false)
 
-function get_assertions_expr(assertions::Dict{BasicSymbolic, String})
+"""
+    $(TYPEDSIGNATURES)
+
+Get a symbolic expression as per the requirement of `debug_system` for all the assertions
+in `assertions`. `is_split` denotes whether the corresponding system is a split system.
+"""
+function get_assertions_expr(assertions::Dict{BasicSymbolic, String}, is_split::Bool)
     term = 0
     for (k, v) in assertions
         term += _debug_assertion(k, "Assertion $k failed:\n$v", ASSERTION_LOG_VARIABLE)

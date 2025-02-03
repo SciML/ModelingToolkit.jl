@@ -2302,6 +2302,14 @@ ERROR: Function /(1, sin(P(t))) output non-finite value Inf with input
   1 => 1
   sin(P(t)) => 0.0
 ```
+
+Additionally, all assertions in the system are validated in the equations. If any of
+the conditions are false, the right hand side of at least one of the equations of
+the system will evaluate to `NaN`. A new parameter is also added to the system which
+controls whether the message associated with each assertion will be logged when the
+assertion fails. This parameter defaults to `true` and can be toggled by
+symbolic indexing with `ModelingToolkit.ASSERTION_LOG_VARIABLE`. For example,
+`prob.ps[ModelingToolkit.ASSERTION_LOG_VARIABLE] = false` will disable logging.
 """
 function debug_system(
         sys::AbstractSystem; functions = [log, sqrt, (^), /, inv, asin, acos], kw...)
