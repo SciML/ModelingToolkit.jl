@@ -1,6 +1,7 @@
 ### TODO: update when BoundaryValueDiffEqAscher is updated to use the normal boundary condition conventions 
 
-using BoundaryValueDiffEq, OrdinaryDiffEq, BoundaryValueDiffEqAscher
+using OrdinaryDiffEqVerner
+using BoundaryValueDiffEqMIRK, BoundaryValueDiffEqAscher
 using BenchmarkTools
 using ModelingToolkit
 using SciMLBase
@@ -207,22 +208,22 @@ let
     
     u0map = []
     tspan = (0.0, 1.0)
-    guesses = [x(t) => 4.0, y(t) => 2.]
+    guess = [x(t) => 4.0, y(t) => 2.0]
     constr = [x(.6) ~ 3.5, x(.3) ~ 7.]
     @mtkbuild lksys = ODESystem(eqs, t; constraints = constr)
 
-    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, u0map, tspan; guesses)
+    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, u0map, tspan; guesses = guess)
     test_solvers(solvers, bvp, u0map, constr; dt = 0.05)
 
     # Testing that more complicated constraints give correct solutions.
     constr = [y(.2) + x(.8) ~ 3., y(.3) ~ 2.]
     @mtkbuild lksys = ODESystem(eqs, t; constraints = constr)
-    bvp = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(lksys, u0map, tspan; guesses)
+    bvp = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(lksys, u0map, tspan; guesses = guess)
     test_solvers(solvers, bvp, u0map, constr; dt = 0.05)
 
     constr = [α * β - x(.6) ~ 0.0, y(.2) ~ 3.]
     @mtkbuild lksys = ODESystem(eqs, t; constraints = constr)
-    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, u0map, tspan; guesses)
+    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, u0map, tspan; guesses = guess)
     test_solvers(solvers, bvp, u0map, constr)
 end
 

@@ -881,18 +881,23 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
     stidxmap = Dict([v => i for (i, v) in enumerate(sts)])
     u0_idxs = has_alg_eqs(sys) ? collect(1:length(sts)) : [stidxmap[k] for (k,v) in u0map]
 
-    bc = generate_function_bc(sys, u0, u0_idxs, tspan, iip)
+    fns = generate_function_bc(sys, u0, u0_idxs, tspan)
+    bc_oop, bc_iip = eval_or_rgf.(fns; eval_expression, eval_module) 
+    # bc(sol, p, t) = bc_oop(sol, p, t)
+    bc(resid, u, p, t) = bc_iip(resid, u, p, t)
+
     return BVProblem{iip}(f, bc, u0, tspan, p; kwargs...)
 end
 
 get_callback(prob::BVProblem) = error("BVP solvers do not support callbacks.")
 
 """
-    generate_function_bc(sys::ODESystem, u0, u0_idxs, tspan, iip)
+    generate_function_bc(sys::ODESystem, u0, u0_idxs, tspan)
 
     Given an ODESystem with constraints, generate the boundary condition function to pass to boundary value problem solvers.
+    Expression uses the constraints and the provided initial conditions.
 """
-function generate_function_bc(sys::ODESystem, u0, u0_idxs, tspan, iip)
+function generate_function_bc(sys::ODESystem, u0, u0_idxs, tspan; kwargs...)
     iv = get_iv(sys)
     sts = get_unknowns(sys)
     ps = get_ps(sys)
@@ -915,19 +920,6 @@ function generate_function_bc(sys::ODESystem, u0, u0_idxs, tspan, iip)
 
             cons = map(c -> Symbolics.substitute(c, Dict(x(t) => sol(t)[idx])), cons)
         end
-
-        for var in parameters(conssys) 
-            if iscall(var)
-                x = operation(var)
-                t = only(arguments(var))
-                idx = pidxmap[x]
-
-                cons = map(c -> Symbolics.substitute(c, Dict(x(t) => p[idx])), cons)
-            else
-                idx = pidxmap[var]
-                cons = map(c -> Symbolics.substitute(c, Dict(var => p[idx])), cons)
-            end
-        end
     end
 
     init_conds = Any[]
@@ -937,12 +929,9 @@ function generate_function_bc(sys::ODESystem, u0, u0_idxs, tspan, iip)
     end
 
     exprs = vcat(init_conds, cons)
-    bcs = Symbolics.build_function(exprs, sol, p, expression = Val{false})
-    if iip
-        return (resid, u, p, t) -> bcs[2](resid, u, p)
-    else
-        return (u, p, t) -> bcs[1](u, p)
-    end
+    _p = reorder_parameters(sys, ps)
+
+    build_function_wrapper(sys, exprs, sol, _p..., t; kwargs...)
 end
 
 """
