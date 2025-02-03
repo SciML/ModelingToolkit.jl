@@ -636,6 +636,8 @@ function collect_constants(x)
     return constants
 end
 
+collect_constants!(::Any, ::Symbol) = nothing
+
 function collect_constants!(constants, arr::AbstractArray)
     for el in arr
         collect_constants!(constants, el)
@@ -737,7 +739,12 @@ end
 
 function get_cmap(sys, exprs = nothing)
     #Inject substitutions for constants => values
-    cs = collect_constants([collect(get_eqs(sys)); get_observed(sys)]) #ctrls? what else?
+    buffer = []
+    has_eqs(sys) && append!(buffer, collect(get_eqs(sys)))
+    has_observed(sys) && append!(buffer, collect(get_observed(sys)))
+    has_op(sys) && push!(buffer, get_op(sys))
+    has_constraints(sys) && append!(buffer, get_constraints(sys))
+    cs = collect_constants(buffer) #ctrls? what else?
     if !empty_substitutions(sys)
         cs = [cs; collect_constants(get_substitutions(sys).subs)]
     end
@@ -1060,16 +1067,17 @@ Keyword arguments:
   variables which will be explored to find dependencies on observed equations. Typically,
   providing this keyword is not necessary and is only useful to avoid repeatedly calling
   `vars(exprs)`
+- `obs`: the list of observed equations.
 """
-function observed_equations_used_by(sys::AbstractSystem, exprs; involved_vars = vars(exprs))
-    obs = observed(sys)
-
+function observed_equations_used_by(sys::AbstractSystem, exprs;
+        involved_vars = vars(exprs; op = Union{Shift, Differential}), obs = observed(sys))
     obsvars = getproperty.(obs, :lhs)
     graph = observed_dependency_graph(obs)
 
     obsidxs = BitSet()
     for sym in involved_vars
-        idx = findfirst(isequal(sym), obsvars)
+        arrsym = iscall(sym) && operation(sym) === getindex ? arguments(sym)[1] : nothing
+        idx = findfirst(v -> isequal(v, sym) || isequal(v, arrsym), obsvars)
         idx === nothing && continue
         idx in obsidxs && continue
         parents = dfs_parents(graph, idx)

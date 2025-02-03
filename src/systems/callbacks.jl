@@ -519,70 +519,19 @@ end
 # handles ensuring that affect! functions work with integrator arguments
 function add_integrator_header(
         sys::AbstractSystem, integrator = gensym(:MTKIntegrator), out = :u)
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        function (expr)
-            p = gensym(:p)
-            Func(
-                [
-                    DestructuredArgs([expr.args[1], p, expr.args[end]],
-                    integrator, inds = [:u, :p, :t])
-                ],
-                [],
-                Let(
-                    [DestructuredArgs([arg.name for arg in expr.args[2:(end - 1)]], p),
-                        expr.args[2:(end - 1)]...],
-                    expr.body,
-                    false)
-            )
-        end,
-        function (expr)
-            p = gensym(:p)
-            Func(
-                [
-                    DestructuredArgs([expr.args[1], expr.args[2], p, expr.args[end]],
-                    integrator, inds = [out, :u, :p, :t])
-                ],
-                [],
-                Let(
-                    [DestructuredArgs([arg.name for arg in expr.args[3:(end - 1)]], p),
-                        expr.args[3:(end - 1)]...],
-                    expr.body,
-                    false)
-            )
-        end
-    else
-        expr -> Func([DestructuredArgs(expr.args, integrator, inds = [:u, :p, :t])], [],
-            expr.body),
-        expr -> Func(
-            [DestructuredArgs(expr.args, integrator, inds = [out, :u, :p, :t])], [],
-            expr.body)
-    end
+    expr -> Func([DestructuredArgs(expr.args, integrator, inds = [:u, :p, :t])], [],
+        expr.body),
+    expr -> Func(
+        [DestructuredArgs(expr.args, integrator, inds = [out, :u, :p, :t])], [],
+        expr.body)
 end
 
 function condition_header(sys::AbstractSystem, integrator = gensym(:MTKIntegrator))
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        function (expr)
-            p = gensym(:p)
-            res = Func(
-                [expr.args[1], expr.args[2],
-                    DestructuredArgs([p], integrator, inds = [:p])],
-                [],
-                Let(
-                    [
-                        DestructuredArgs([arg.name for arg in expr.args[3:end]], p),
-                        expr.args[3:end]...
-                    ], expr.body, false
-                )
-            )
-            return res
-        end
-    else
-        expr -> Func(
-            [expr.args[1], expr.args[2],
-                DestructuredArgs(expr.args[3:end], integrator, inds = [:p])],
-            [],
-            expr.body)
-    end
+    expr -> Func(
+        [expr.args[1], expr.args[2],
+            DestructuredArgs(expr.args[3:end], integrator, inds = [:p])],
+        [],
+        expr.body)
 end
 
 function callback_save_header(sys::AbstractSystem, cb)
@@ -628,11 +577,10 @@ function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
         cmap = map(x -> x => getdefault(x), cs)
         condit = substitute(condit, cmap)
     end
-    expr = build_function(
+    expr = build_function_wrapper(sys,
         condit, u, t, p...; expression = Val{true},
-        wrap_code = condition_header(sys) .∘
-                    wrap_array_vars(sys, condit; dvs, ps, inputs = true) .∘
-                    wrap_parameter_dependencies(sys, !(condit isa AbstractArray)),
+        p_start = 3, p_end = length(p) + 2,
+        wrap_code = condition_header(sys),
         kwargs...)
     if expression == Val{true}
         return expr
@@ -715,14 +663,12 @@ function compile_affect(eqs::Vector{Equation}, cb, sys, dvs, ps; outputidxs = no
         end
         t = get_iv(sys)
         integ = gensym(:MTKIntegrator)
-        pre = get_preprocess_constants(rhss)
-        rf_oop, rf_ip = build_function(rhss, u, p..., t; expression = Val{true},
+        rf_oop, rf_ip = build_function_wrapper(
+            sys, rhss, u, p..., t; expression = Val{true},
             wrap_code = callback_save_header(sys, cb) .∘
-                        add_integrator_header(sys, integ, outvar) .∘
-                        wrap_array_vars(sys, rhss; dvs, ps = _ps) .∘
-                        wrap_parameter_dependencies(sys, false),
+                        add_integrator_header(sys, integ, outvar),
             outputidxs = update_inds,
-            postprocess_fbody = pre,
+            create_bindings = false,
             kwargs...)
         # applied user-provided function to the generated expression
         if postprocess_affect_expr! !== nothing

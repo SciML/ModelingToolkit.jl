@@ -216,7 +216,7 @@ end
 
 prob = ODEProblem(ODEFunction{false}(lotka), [1.0, 1.0], (0.0, 1.0), [1.5, 1.0, 3.0, 1.0])
 de = complete(modelingtoolkitize(prob))
-ODEFunction(de)(similar(prob.u0), prob.u0, prob.p, 0.1)
+ODEFunction(de)(similar(prob.u0), prob.u0, (prob.p,), 0.1)
 
 function lotka(du, u, p, t)
     x = u[1]
@@ -228,7 +228,7 @@ end
 prob = ODEProblem(lotka, [1.0, 1.0], (0.0, 1.0), [1.5, 1.0, 3.0, 1.0])
 
 de = complete(modelingtoolkitize(prob))
-ODEFunction(de)(similar(prob.u0), prob.u0, prob.p, 0.1)
+ODEFunction(de)(similar(prob.u0), prob.u0, (prob.p,), 0.1)
 
 # automatic unknown detection for DAEs
 @parameters k₁ k₂ k₃
@@ -1269,7 +1269,7 @@ end
         t, [u..., x..., o...], [p...])
     sys1, = structural_simplify(sys, ([x...], []))
     fn1, = ModelingToolkit.generate_function(sys1; expression = Val{false})
-    @test_nowarn fn1(ones(4), 2ones(2), 3ones(2, 2), 4.0)
+    @test_nowarn fn1(ones(4), (2ones(2), 3ones(2, 2)), 4.0)
     sys2, = structural_simplify(sys, ([x...], []); split = false)
     fn2, = ModelingToolkit.generate_function(sys2; expression = Val{false})
     @test_nowarn fn2(ones(4), 2ones(6), 4.0)

@@ -62,9 +62,9 @@ function modelingtoolkitize(
         fill!(rhs, 0)
         if prob.f isa ODEFunction &&
            prob.f.f isa FunctionWrappersWrappers.FunctionWrappersWrapper
-            prob.f.f.fw[1].obj[](rhs, vars, params, t)
+            prob.f.f.fw[1].obj[](rhs, vars, p isa MTKParameters ? (params,) : params, t)
         else
-            prob.f(rhs, vars, params, t)
+            prob.f(rhs, vars, p isa MTKParameters ? (params,) : params, t)
         end
     else
         rhs = prob.f(vars, params, t)
@@ -253,14 +253,14 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem; kwargs...)
     if DiffEqBase.isinplace(prob)
         lhs = similar(vars, Any)
 
-        prob.f(lhs, vars, params, t)
+        prob.f(lhs, vars, p isa MTKParameters ? (params,) : params, t)
 
         if DiffEqBase.is_diagonal_noise(prob)
             neqs = similar(vars, Any)
-            prob.g(neqs, vars, params, t)
+            prob.g(neqs, vars, p isa MTKParameters ? (params,) : params, t)
         else
             neqs = similar(vars, Any, size(prob.noise_rate_prototype))
-            prob.g(neqs, vars, params, t)
+            prob.g(neqs, vars, p isa MTKParameters ? (params,) : params, t)
         end
     else
         lhs = prob.f(vars, params, t)

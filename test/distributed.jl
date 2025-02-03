@@ -15,12 +15,11 @@ addprocs(2)
 
 @everywhere @named de = ODESystem(eqs, t)
 @everywhere de = complete(de)
-@everywhere ode_func = ODEFunction(de, [x, y, z], [σ, ρ, β])
 
 @everywhere u0 = [19.0, 20.0, 50.0]
 @everywhere params = [16.0, 45.92, 4]
 
-@everywhere ode_prob = ODEProblem(ode_func, u0, (0.0, 10.0), params)
+@everywhere ode_prob = ODEProblem(de, u0, (0.0, 10.0), params)
 
 @everywhere begin
     using OrdinaryDiffEq
