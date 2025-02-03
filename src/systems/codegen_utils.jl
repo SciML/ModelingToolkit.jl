@@ -149,8 +149,8 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
         push!(cmap, c ~ getdefault(c))
     end
     # only get the necessary observed equations, avoiding extra computation
-    if add_observed
-        obsidxs = observed_equations_used_by(sys, expr)
+    if add_observed && !isempty(obs)
+        obsidxs = observed_equations_used_by(sys, expr; obs)
     else
         obsidxs = Int[]
     end
