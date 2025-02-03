@@ -451,18 +451,22 @@ end
 
 function lower_varname_withshift(var, iv, order)
     order == 0 && return var
+    ds = "$iv-$order"
+    d_separator = 'ˍ'
+
     if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)
         O = only(arguments(var))
         oldop = operation(O)
-        ds = "$iv-$order"
-        d_separator = 'ˍ'
         newname = Symbol(string(nameof(oldop)), d_separator, ds)
-
-        newvar = maketerm(typeof(O), Symbolics.rename(oldop, newname), Symbolics.children(O), Symbolics.metadata(O))
-        setmetadata(newvar, Symbolics.VariableSource, (:variables, newname))
-        return ModelingToolkit._with_unit(identity, newvar, iv)
+    else
+        O = var
+        oldop = operation(var) 
+        varname = split(string(nameof(oldop)), d_separator)[1]
+        newname = Symbol(varname, d_separator, ds)
     end
-    return lower_varname_with_unit(var, iv, order)
+    newvar = maketerm(typeof(O), Symbolics.rename(oldop, newname), Symbolics.children(O), Symbolics.metadata(O))
+    setmetadata(newvar, Symbolics.VariableSource, (:variables, newname))
+    return ModelingToolkit._with_unit(identity, newvar, iv)
 end
 
 function isdoubleshift(var)

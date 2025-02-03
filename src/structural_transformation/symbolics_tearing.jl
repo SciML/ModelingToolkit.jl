@@ -240,7 +240,7 @@ end
 function tearing_reassemble(state::TearingState, var_eq_matching,
         full_var_eq_matching = nothing; simplify = false, mm = nothing, cse_hack = true, array_hack = true)
     @unpack fullvars, sys, structure = state
-    @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
+    @unpack solvable_graph, var_to_diff, eq_to_diff, graph, lowest_shift = structure
     extra_vars = Int[]
     if full_var_eq_matching !== nothing
         for v in 𝑑vertices(state.structure.graph)
@@ -279,6 +279,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
         iv = D = nothing
     end
     diff_to_var = invview(var_to_diff)
+
     dummy_sub = Dict()
     for var in 1:length(fullvars)
         dv = var_to_diff[var]
@@ -310,7 +311,10 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
             diff_to_var[dv] = nothing
         end
     end
+    @show neweqs
 
+    println("Post state selection.")
+    
     # `SelectedState` information is no longer needed past here. State selection
     # is done. All non-differentiated variables are algebraic variables, and all
     # variables that appear differentiated are differential variables.
@@ -331,9 +335,27 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
                 order += 1
                 dv = dv′
             end
+            println("Order")
+            @show fullvars[dv]
+            is_only_discrete(state.structure) && begin
+                var = fullvars[dv]
+                key = operation(var) isa Shift ? only(arguments(var)) : var
+                order = -get(lowest_shift, key, 0) - order
+            end
             order, dv
         end
     end
+
+    lower_name = is_only_discrete(state.structure) ? lower_varname_withshift : lower_varname_with_unit
+    # is_only_discrete(state.structure) && for v in 1:length(fullvars)
+    #     var = fullvars[v]
+    #     op = operation(var)
+    #     if op isa Shift
+    #         x = only(arguments(var))
+    #         lowest_shift_idxs[v]
+    #         op.steps == lowest_shift[x] && (fullvars[v] = lower_varname_withshift(var, iv, -op.steps))
+    #     end
+    # end
 
     #retear = BitSet()
     # There are three cases where we want to generate new variables to convert
@@ -384,9 +406,28 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     eq_var_matching = invview(var_eq_matching)
     linear_eqs = mm === nothing ? Dict{Int, Int}() :
                  Dict(reverse(en) for en in enumerate(mm.nzrows))
+
     for v in 1:length(var_to_diff)
-        dv = var_to_diff[v]
+        println()
+        @show fullvars
+        @show diff_to_var
+        is_highest_discrete = begin
+            var = fullvars[v]
+            op = operation(var)
+            if (!is_only_discrete(state.structure) || op isa Shift) 
+                false
+            elseif !haskey(lowest_shift, var)
+                false
+            else
+                low = lowest_shift[var]
+                idx = findfirst(x -> isequal(x, Shift(iv, low)(var)), fullvars)
+                true
+            end
+        end
+        dv = is_highest_discrete ? idx : var_to_diff[v]
+        @show (v, fullvars[v], dv)
         dv isa Int || continue
+
         solved = var_eq_matching[dv] isa Int
         solved && continue
         # check if there's `D(x) = x_t` already
@@ -404,17 +445,19 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
                diff_to_var[v_t] === nothing)
                 @assert dv in rvs
                 dummy_eq = eq
+                @show "FOUND DUMMY EQ"
                 @goto FOUND_DUMMY_EQ
             end
         end
         dx = fullvars[dv]
         # add `x_t`
-        order, lv = var_order(dv)
-        x_t = lower_varname_withshift(fullvars[lv], iv, order)
+        @show order, lv = var_order(dv)
+        x_t = lower_name(fullvars[lv], iv, order)
         push!(fullvars, simplify_shifts(x_t))
         v_t = length(fullvars)
         v_t_idx = add_vertex!(var_to_diff)
         add_vertex!(graph, DST)
+        @show x_t, dx
         # TODO: do we care about solvable_graph? We don't use them after
         # `dummy_derivative_graph`.
         add_vertex!(solvable_graph, DST)
@@ -433,10 +476,16 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
         add_edge!(solvable_graph, dummy_eq, dv)
         @assert nsrcs(graph) == nsrcs(solvable_graph) == dummy_eq
         @label FOUND_DUMMY_EQ
+        @show is_highest_discrete
+        @show diff_to_var
+        @show v_t, dv
+        # If var = x with no shift, then 
+        is_highest_discrete && (lowest_shift[x_t] = lowest_shift[fullvars[v]])
         var_to_diff[v_t] = var_to_diff[dv]
         var_eq_matching[dv] = unassigned
         eq_var_matching[dummy_eq] = dv
     end
+    @show neweqs
 
     # Will reorder equations and unknowns to be:
     # [diffeqs; ...]
@@ -537,6 +586,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
 
     deps = Vector{Int}[i == 1 ? Int[] : collect(1:(i - 1))
                        for i in 1:length(solved_equations)]
+
     # Contract the vertices in the structure graph to make the structure match
     # the new reality of the system we've just created.
     graph = contract_variables(graph, var_eq_matching, varsperm, eqsperm,

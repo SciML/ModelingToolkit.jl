@@ -140,17 +140,21 @@ get_fullvars(ts::TransformationState) = ts.fullvars
 has_equations(::TransformationState) = true
 
 Base.@kwdef mutable struct SystemStructure
-    # Maps the (index of) a variable to the (index of) the variable describing
-    # its derivative.
+    """Maps the (index of) a variable to the (index of) the variable describing its derivative."""
     var_to_diff::DiffGraph
+    """Maps the (index of) a """
     eq_to_diff::DiffGraph
     # Can be access as
     # `graph` to automatically look at the bipartite graph
     # or as `torn` to assert that tearing has run.
+    """Incidence graph of the system of equations. An edge from equation x to variable y exists if variable y appears in equation x."""
     graph::BipartiteGraph{Int, Nothing}
+    """."""
     solvable_graph::Union{BipartiteGraph{Int, Nothing}, Nothing}
     var_types::Union{Vector{VariableType}, Nothing}
+    """Whether the system is discrete."""
     only_discrete::Bool
+    lowest_shift::Union{Dict, Nothing}
 end
 
 function Base.copy(structure::SystemStructure)
@@ -346,6 +350,8 @@ function TearingState(sys; quick_cancel = false, check = true)
             eqs[i] = eqs[i].lhs ~ rhs
         end
     end
+
+    ### Handle discrete variables
     lowest_shift = Dict()
     for var in fullvars
         if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)
@@ -430,10 +436,10 @@ function TearingState(sys; quick_cancel = false, check = true)
 
     ts = TearingState(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
-            complete(graph), nothing, var_types, sys isa DiscreteSystem),
+            complete(graph), nothing, var_types, sys isa DiscreteSystem, lowest_shift),
         Any[])
     if sys isa DiscreteSystem
-        ts = shift_discrete_system(ts)
+        ts = shift_discrete_system(ts, lowest_shift)
     end
     return ts
 end
@@ -456,17 +462,27 @@ function lower_order_var(dervar, t)
     diffvar
 end
 
-function shift_discrete_system(ts::TearingState)
+"""
+    Shift variable x by the largest shift s such that x(k-s) appears in the system of equations.
+    The lowest-shift term will have.
+"""
+function shift_discrete_system(ts::TearingState, lowest_shift)
     @unpack fullvars, sys = ts
+    return ts
     discvars = OrderedSet()
     eqs = equations(sys)
+
     for eq in eqs
         vars!(discvars, eq; op = Union{Sample, Hold})
     end
     iv = get_iv(sys)
-    discmap = Dict(k => StructuralTransformations.simplify_shifts(Shift(iv, 1)(k))
+    discmap = Dict(k => StructuralTransformations.simplify_shifts(Shift(iv, -get(lowest_shift, k, 0))(k))
     for k in discvars
-    if any(isequal(k), fullvars) && !isa(operation(k), Union{Sample, Hold}))
+    if any(isequal(k), fullvars) && !isa(operation(k), Union{Sample, Hold})) 
+
+    discmap = Dict(k => StructuralTransformations.simplify_shifts(Shift(iv, 1)(k))    for k in discvars 
+    if any(isequal(k), fullvars) && !isa(operation(k), Union{Sample, Hold})) 
+
     for i in eachindex(fullvars)
         fullvars[i] = StructuralTransformations.simplify_shifts(fast_substitute(
             fullvars[i], discmap; operator = Union{Sample, Hold}))
