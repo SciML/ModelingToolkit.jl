@@ -137,7 +137,7 @@ struct ODESystem <: AbstractODESystem
     """
     parameter_dependencies::Vector{Equation}
     """
-    Mapping of conditions which should be true throughout the solve to corresponding error
+    Mapping of conditions which should be true throughout the solution process to corresponding error
     messages. These will be added to the equations when calling `debug_system`.
     """
     assertions::Dict{BasicSymbolic, String}
