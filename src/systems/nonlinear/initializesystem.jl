@@ -31,6 +31,12 @@ function generate_initializesystem(sys::AbstractSystem;
     idxs_diff = isdiffeq.(eqs)
 
     # PREPROCESSING
+    # If `=> nothing` in `u0map`, remove the key from `defs`
+    for (k, v) in u0map
+        v === nothing || continue
+        delete!(defs, k)
+    end
+    filter_missing_values!(u0map)
     # for initial conditions of the form `var => constant`, we instead turn them into
     # `var ~ var0` where `var0` is a new parameter, and make `update_initializeprob!`
     # update `initializeprob.ps[var0] = prob[var]`.
