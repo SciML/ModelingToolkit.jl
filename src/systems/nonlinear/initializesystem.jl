@@ -31,6 +31,13 @@ function generate_initializesystem(sys::AbstractSystem;
     idxs_diff = isdiffeq.(eqs)
 
     # PREPROCESSING
+    # If `=> nothing` in `u0map`, remove the key from `defs`
+    u0map = copy(anydict(u0map))
+    for (k, v) in u0map
+        v === nothing || continue
+        delete!(defs, k)
+    end
+    filter_missing_values!(u0map)
     # for initial conditions of the form `var => constant`, we instead turn them into
     # `var ~ var0` where `var0` is a new parameter, and make `update_initializeprob!`
     # update `initializeprob.ps[var0] = prob[var]`.
@@ -38,7 +45,6 @@ function generate_initializesystem(sys::AbstractSystem;
     # map parameters in `initprob` which need to be updated in `update_initializeprob!`
     # to the corresponding expressions that determine their values
     new_params = Dict()
-    u0map = copy(anydict(u0map))
     pmap = copy(anydict(pmap))
     if is_time_dependent(sys)
         for (k, v) in u0map
