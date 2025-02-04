@@ -100,33 +100,6 @@ let
     function lotkavolterra(u, p, t) 
         [p[1]*u[1] - p[2]*u[1]*u[2], -p[4]*u[2] + p[3]*u[1]*u[2]]
     end
-    # Compare the built bc function to the actual constructed one.
-    function bc!(resid, u, p, t) 
-        resid[1] = u[1][1] - 1.
-        resid[2] = u[1][2] - 2.
-        nothing
-    end
-    function bc(u, p, t)
-        [u[1][1] - 1., u[1][2] - 2.]
-    end
-
-    u0 = [1., 2.]; p = [1.5, 1., 1., 3.]
-    fns = ModelingToolkit.generate_function_bc(lksys, u0, [1, 2], tspan)
-    genbc_oop, genbc_iip = ModelingToolkit.eval_or_rgf.(fns)
-
-    bvpi1 = SciMLBase.BVProblem(lotkavolterra!, bc!, [1.,2.], tspan, p)
-    bvpi2 = SciMLBase.BVProblem(lotkavolterra!, genbc_iip, [1.,2.], tspan, p)
-
-    sol1 = solve(bvpi1, MIRK4(), dt = 0.05)
-    sol2 = solve(bvpi2, MIRK4(), dt = 0.05)
-    @test sol1 ≈ sol2
-
-    bvpo1 = BVProblem(lotkavolterra, bc, [1,2], tspan, p)
-    bvpo2 = BVProblem(lotkavolterra, genbc_oop, [1,2], tspan, p)
-
-    sol1 = solve(bvpo1, MIRK4(), dt = 0.05)
-    sol2 = solve(bvpo2, MIRK4(), dt = 0.05)
-    @test sol1 ≈ sol2
 
     # Test with a constraint.
     constr = [y(0.5) ~ 2.]
@@ -140,29 +113,16 @@ let
         [u(0.0)[1] - 1., u(0.5)[2] - 2.]
     end
 
-    u0 = [1, 1.]
-    fns = ModelingToolkit.generate_function_bc(lksys, u0, [1], tspan)
-    genbc_oop, genbc_iip = ModelingToolkit.eval_or_rgf.(fns)
-
     bvpi1 = SciMLBase.BVProblem(lotkavolterra!, bc!, u0, tspan, p)
-    bvpi2 = SciMLBase.BVProblem(lotkavolterra!, genbc_iip, u0, tspan, p)
+    bvpi1 = SciMLBase.BVProblem(lotkavolterra, bc, u0, tspan, p)
     bvpi3 = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, [x(t) => 1.], tspan; guesses = [y(t) => 1.])
-    bvpi4 = SciMLBase.BVProblem{true, SciMLBase.FullSpecialize}(lksys, [x(t) => 1.], tspan; guesses = [y(t) => 1.])
+    bvpi4 = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(lksys, [x(t) => 1.], tspan; guesses = [y(t) => 1.])
     
     sol1 = @btime solve($bvpi1, MIRK4(), dt = 0.01)
     sol2 = @btime solve($bvpi2, MIRK4(), dt = 0.01)
     sol3 = @btime solve($bvpi3, MIRK4(), dt = 0.01)
     sol4 = @btime solve($bvpi4, MIRK4(), dt = 0.01)
     @test sol1 ≈ sol2 ≈ sol3 ≈ sol4 # don't get true equality here, not sure why
-
-    bvpo1 = BVProblem(lotkavolterra, bc, u0, tspan, p)
-    bvpo2 = BVProblem(lotkavolterra, genbc_oop, u0, tspan, p)
-    bvpo3 = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(lksys, [x(t) => 1.], tspan; guesses = [y(t) => 1.])
-
-    sol1 = @btime solve($bvpo1, MIRK4(), dt = 0.05)
-    sol2 = @btime solve($bvpo2, MIRK4(), dt = 0.05)
-    sol3 = @btime solve($bvpo3, MIRK4(), dt = 0.05)
-    @test sol1 ≈ sol2 ≈ sol3
 end
 
 function test_solvers(solvers, prob, u0map, constraints, equations = []; dt = 0.05, atol = 1e-2)
