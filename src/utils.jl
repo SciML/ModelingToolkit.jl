@@ -636,6 +636,8 @@ function collect_constants(x)
     return constants
 end
 
+collect_constants!(::Any, ::Symbol) = nothing
+
 function collect_constants!(constants, arr::AbstractArray)
     for el in arr
         collect_constants!(constants, el)
@@ -737,7 +739,12 @@ end
 
 function get_cmap(sys, exprs = nothing)
     #Inject substitutions for constants => values
-    cs = collect_constants([collect(get_eqs(sys)); get_observed(sys)]) #ctrls? what else?
+    buffer = []
+    has_eqs(sys) && append!(buffer, collect(get_eqs(sys)))
+    has_observed(sys) && append!(buffer, collect(get_observed(sys)))
+    has_op(sys) && push!(buffer, get_op(sys))
+    has_constraints(sys) && append!(buffer, get_constraints(sys))
+    cs = collect_constants(buffer) #ctrls? what else?
     if !empty_substitutions(sys)
         cs = [cs; collect_constants(get_substitutions(sys).subs)]
     end
@@ -1060,16 +1067,17 @@ Keyword arguments:
   variables which will be explored to find dependencies on observed equations. Typically,
   providing this keyword is not necessary and is only useful to avoid repeatedly calling
   `vars(exprs)`
+- `obs`: the list of observed equations.
 """
-function observed_equations_used_by(sys::AbstractSystem, exprs; involved_vars = vars(exprs))
-    obs = observed(sys)
-
+function observed_equations_used_by(sys::AbstractSystem, exprs;
+        involved_vars = vars(exprs; op = Union{Shift, Differential}), obs = observed(sys))
     obsvars = getproperty.(obs, :lhs)
     graph = observed_dependency_graph(obs)
 
     obsidxs = BitSet()
     for sym in involved_vars
-        idx = findfirst(isequal(sym), obsvars)
+        arrsym = iscall(sym) && operation(sym) === getindex ? arguments(sym)[1] : nothing
+        idx = findfirst(v -> isequal(v, sym) || isequal(v, arrsym), obsvars)
         idx === nothing && continue
         idx in obsidxs && continue
         parents = dfs_parents(graph, idx)
@@ -1184,4 +1192,56 @@ function guesses_from_metadata!(guesses, vars)
         haskey(guesses, vars[i]) && continue
         guesses[vars[i]] = varguesses[i]
     end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Find all the unknowns and parameters from the equations of a SDESystem or ODESystem. Return re-ordered equations, differential variables, all variables, and parameters.
+"""
+function process_equations(eqs, iv)
+    eqs = collect(eqs)
+
+    diffvars = OrderedSet()
+    allunknowns = OrderedSet()
+    ps = OrderedSet()
+
+    # NOTE: this assumes that the order of algebraic equations doesn't matter
+    # reorder equations such that it is in the form of `diffeq, algeeq`
+    diffeq = Equation[]
+    algeeq = Equation[]
+    # initial loop for finding `iv`
+    if iv === nothing
+        for eq in eqs
+            if !(eq.lhs isa Number) # assume eq.lhs is either Differential or Number
+                iv = iv_from_nested_derivative(eq.lhs)
+                break
+            end
+        end
+    end
+    iv = value(iv)
+    iv === nothing && throw(ArgumentError("Please pass in independent variables."))
+
+    compressed_eqs = Equation[] # equations that need to be expanded later, like `connect(a, b)`
+    for eq in eqs
+        eq.lhs isa Union{Symbolic, Number} || (push!(compressed_eqs, eq); continue)
+        collect_vars!(allunknowns, ps, eq, iv)
+        if isdiffeq(eq)
+            diffvar, _ = var_from_nested_derivative(eq.lhs)
+            if check_scope_depth(getmetadata(diffvar, SymScope, LocalScope()), 0)
+                isequal(iv, iv_from_nested_derivative(eq.lhs)) ||
+                    throw(ArgumentError("An ODESystem can only have one independent variable."))
+                diffvar in diffvars &&
+                    throw(ArgumentError("The differential variable $diffvar is not unique in the system of equations."))
+                !(symtype(diffvar) === Real || eltype(symtype(diffvar)) === Real) &&
+                    throw(ArgumentError("Differential variable $diffvar has type $(symtype(diffvar)). Differential variables should not be concretely typed."))
+                push!(diffvars, diffvar)
+            end
+            push!(diffeq, eq)
+        else
+            push!(algeeq, eq)
+        end
+    end
+
+    diffvars, allunknowns, ps, Equation[diffeq; algeeq; compressed_eqs]
 end

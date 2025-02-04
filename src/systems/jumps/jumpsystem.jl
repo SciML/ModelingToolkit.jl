@@ -283,10 +283,8 @@ function generate_rate_function(js::JumpSystem, rate)
         rate = substitute(rate, csubs)
     end
     p = reorder_parameters(js, parameters(js))
-    rf = build_function(rate, unknowns(js), p...,
+    rf = build_function_wrapper(js, rate, unknowns(js), p...,
         get_iv(js),
-        wrap_code = wrap_array_vars(js, rate; dvs = unknowns(js), ps = parameters(js)) .∘
-                    wrap_parameter_dependencies(js, !(rate isa AbstractArray)),
         expression = Val{true})
 end
 
@@ -303,9 +301,7 @@ end
 
 function assemble_vrj(
         js, vrj, unknowntoid; eval_expression = false, eval_module = @__MODULE__)
-    _rate = eval_or_rgf(generate_rate_function(js, vrj.rate); eval_expression, eval_module)
-    rate(u, p, t) = _rate(u, p, t)
-    rate(u, p::MTKParameters, t) = _rate(u, p..., t)
+    rate = eval_or_rgf(generate_rate_function(js, vrj.rate); eval_expression, eval_module)
 
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
@@ -320,9 +316,7 @@ function assemble_vrj_expr(js, vrj, unknowntoid)
     outputidxs = ((unknowntoid[var] for var in outputvars)...,)
     affect = generate_affect_function(js, vrj.affect!, outputidxs)
     quote
-        _rate = $rate
-        rate(u, p, t) = _rate(u, p, t)
-        rate(u, p::MTKParameters, t) = _rate(u, p..., t)
+        rate = $rate
 
         affect = $affect
         VariableRateJump(rate, affect)
@@ -331,9 +325,7 @@ end
 
 function assemble_crj(
         js, crj, unknowntoid; eval_expression = false, eval_module = @__MODULE__)
-    _rate = eval_or_rgf(generate_rate_function(js, crj.rate); eval_expression, eval_module)
-    rate(u, p, t) = _rate(u, p, t)
-    rate(u, p::MTKParameters, t) = _rate(u, p..., t)
+    rate = eval_or_rgf(generate_rate_function(js, crj.rate); eval_expression, eval_module)
 
     outputvars = (value(affect.lhs) for affect in crj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
@@ -348,9 +340,7 @@ function assemble_crj_expr(js, crj, unknowntoid)
     outputidxs = ((unknowntoid[var] for var in outputvars)...,)
     affect = generate_affect_function(js, crj.affect!, outputidxs)
     quote
-        _rate = $rate
-        rate(u, p, t) = _rate(u, p, t)
-        rate(u, p::MTKParameters, t) = _rate(u, p..., t)
+        rate = $rate
 
         affect = $affect
         ConstantRateJump(rate, affect)

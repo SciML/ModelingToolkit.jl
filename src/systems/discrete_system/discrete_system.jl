@@ -260,9 +260,7 @@ end
 function generate_function(
         sys::DiscreteSystem, dvs = unknowns(sys), ps = parameters(sys); wrap_code = identity, kwargs...)
     exprs = [eq.rhs for eq in equations(sys)]
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, exprs) .∘
-                wrap_parameter_dependencies(sys, false)
-    generate_custom_function(sys, exprs, dvs, ps; wrap_code, kwargs...)
+    generate_custom_function(sys, exprs, dvs, ps; kwargs...)
 end
 
 function shift_u0map_forward(sys::DiscreteSystem, u0map, defs)

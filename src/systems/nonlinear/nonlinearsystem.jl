@@ -249,14 +249,10 @@ end
 
 function generate_jacobian(
         sys::NonlinearSystem, vs = unknowns(sys), ps = parameters(sys);
-        sparse = false, simplify = false, wrap_code = identity, kwargs...)
+        sparse = false, simplify = false, kwargs...)
     jac = calculate_jacobian(sys, sparse = sparse, simplify = simplify)
-    pre, sol_states = get_substitutions_and_solved_unknowns(sys)
     p = reorder_parameters(sys, ps)
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, jac; dvs = vs, ps) .∘
-                wrap_parameter_dependencies(sys, false)
-    return build_function(
-        jac, vs, p...; postprocess_fbody = pre, states = sol_states, wrap_code, kwargs...)
+    return build_function_wrapper(sys, jac, vs, p...; kwargs...)
 end
 
 function calculate_hessian(sys::NonlinearSystem; sparse = false, simplify = false)
@@ -273,30 +269,23 @@ end
 
 function generate_hessian(
         sys::NonlinearSystem, vs = unknowns(sys), ps = parameters(sys);
-        sparse = false, simplify = false, wrap_code = identity, kwargs...)
+        sparse = false, simplify = false, kwargs...)
     hess = calculate_hessian(sys, sparse = sparse, simplify = simplify)
-    pre = get_preprocess_constants(hess)
     p = reorder_parameters(sys, ps)
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, hess; dvs = vs, ps) .∘
-                wrap_parameter_dependencies(sys, false)
-    return build_function(hess, vs, p...; postprocess_fbody = pre, wrap_code, kwargs...)
+    return build_function_wrapper(sys, hess, vs, p...; kwargs...)
 end
 
 function generate_function(
         sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(sys);
-        wrap_code = identity, scalar = false, kwargs...)
+        scalar = false, kwargs...)
     rhss = [deq.rhs for deq in equations(sys)]
     dvs′ = value.(dvs)
     if scalar
         rhss = only(rhss)
         dvs′ = only(dvs)
     end
-    pre, sol_states = get_substitutions_and_solved_unknowns(sys)
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, rhss; dvs, ps) .∘
-                wrap_parameter_dependencies(sys, scalar)
     p = reorder_parameters(sys, value.(ps))
-    return build_function(rhss, dvs′, p...; postprocess_fbody = pre,
-        states = sol_states, wrap_code, kwargs...)
+    return build_function_wrapper(sys, rhss, dvs′, p...; kwargs...)
 end
 
 function jacobian_sparsity(sys::NonlinearSystem)
@@ -352,9 +341,7 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
     f_gen = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
     f(u, p) = f_oop(u, p)
-    f(u, p::MTKParameters) = f_oop(u, p...)
     f(du, u, p) = f_iip(du, u, p)
-    f(du, u, p::MTKParameters) = f_iip(du, u, p...)
 
     if jac
         jac_gen = generate_jacobian(sys, dvs, ps;
@@ -362,9 +349,7 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
             expression = Val{true}, kwargs...)
         jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
         _jac(u, p) = jac_oop(u, p)
-        _jac(u, p::MTKParameters) = jac_oop(u, p...)
         _jac(J, u, p) = jac_iip(J, u, p)
-        _jac(J, u, p::MTKParameters) = jac_iip(J, u, p...)
     else
         _jac = nothing
     end
@@ -408,9 +393,7 @@ function SciMLBase.IntervalNonlinearFunction(
 
     f_gen = generate_function(
         sys, dvs, ps; expression = Val{true}, scalar = true, kwargs...)
-    f_oop = eval_or_rgf(f_gen; eval_expression, eval_module)
-    f(u, p) = f_oop(u, p)
-    f(u, p::MTKParameters) = f_oop(u, p...)
+    f = eval_or_rgf(f_gen; eval_expression, eval_module)
 
     observedfun = ObservedFunctionCache(
         sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
@@ -580,7 +563,7 @@ struct CacheWriter{F}
 end
 
 function (cw::CacheWriter)(p, sols)
-    cw.fn(p.caches, sols, p...)
+    cw.fn(p.caches, sols, p)
 end
 
 function CacheWriter(sys::AbstractSystem, buffer_types::Vector{TypeT},
@@ -589,22 +572,15 @@ function CacheWriter(sys::AbstractSystem, buffer_types::Vector{TypeT},
     ps = parameters(sys)
     rps = reorder_parameters(sys, ps)
     obs_assigns = [eq.lhs ← eq.rhs for eq in obseqs]
-    cmap, cs = get_cmap(sys)
-    cmap_assigns = [eq.lhs ← eq.rhs for eq in cmap]
-
-    outsyms = [Symbol(:out, i) for i in eachindex(buffer_types)]
     body = map(eachindex(buffer_types), buffer_types) do i, T
         Symbol(:tmp, i) ← SetArray(true, :(out[$i]), get(exprs, T, []))
     end
-    fn = Func(
-             [:out, DestructuredArgs(DestructuredArgs.(solsyms)),
-                 DestructuredArgs.(rps)...],
-             [],
-             Let(body, :())
-         ) |> wrap_assignments(false, obs_assigns)[2] |>
-         wrap_parameter_dependencies(sys, false)[2] |>
-         wrap_array_vars(sys, []; dvs = nothing, inputs = [])[2] |>
-         wrap_assignments(false, cmap_assigns)[2] |> toexpr
+
+    fn = build_function_wrapper(
+        sys, nothing, :out, DestructuredArgs(DestructuredArgs.(solsyms)),
+        DestructuredArgs.(rps)...; p_start = 3, p_end = length(rps) + 2,
+        expression = Val{true}, add_observed = false,
+        extra_assignments = [obs_assigns; body])
     return CacheWriter(eval_or_rgf(fn; eval_expression, eval_module))
 end
 
@@ -618,21 +594,15 @@ function SCCNonlinearFunction{iip}(
 
     obs_assignments = [eq.lhs ← eq.rhs for eq in _obs]
 
-    cmap, cs = get_cmap(sys)
-    cmap_assignments = [eq.lhs ← eq.rhs for eq in cmap]
     rhss = [eq.rhs - eq.lhs for eq in _eqs]
-    wrap_code = wrap_assignments(false, cmap_assignments) .∘
-                (wrap_array_vars(sys, rhss; dvs = _dvs, cachesyms)) .∘
-                wrap_parameter_dependencies(sys, false) .∘
-                wrap_assignments(false, obs_assignments)
-    f_gen = build_function(
-        rhss, _dvs, rps..., cachesyms...; wrap_code, expression = Val{true})
+    f_gen = build_function_wrapper(sys,
+        rhss, _dvs, rps..., cachesyms...; p_start = 2,
+        p_end = length(rps) + length(cachesyms) + 1, add_observed = false,
+        extra_assignments = obs_assignments, expression = Val{true})
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
 
     f(u, p) = f_oop(u, p)
-    f(u, p::MTKParameters) = f_oop(u, p...)
     f(resid, u, p) = f_iip(resid, u, p)
-    f(resid, u, p::MTKParameters) = f_iip(resid, u, p...)
 
     subsys = NonlinearSystem(_eqs, _dvs, ps; observed = _obs,
         parameter_dependencies = parameter_dependencies(sys), name = nameof(sys))
@@ -710,7 +680,8 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         # precomputed subexpressions should not contain `banned_vars`
         banned_vars = Set{Any}(vcat(_dvs, getproperty.(_obs, (:lhs,))))
         filter!(banned_vars) do var
-            symbolic_type(var) != ArraySymbolic() || all(j -> var[j] in banned_vars, eachindex(var))
+            symbolic_type(var) != ArraySymbolic() ||
+                all(j -> var[j] in banned_vars, eachindex(var))
         end
         state = Dict()
         for i in eachindex(_obs)
@@ -772,7 +743,8 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         _obs = scc_obs[i]
         cachevars = scc_cachevars[i]
         cacheexprs = scc_cacheexprs[i]
-        _prevobsidxs = vcat(_prevobsidxs, observed_equations_used_by(sys, reduce(vcat, values(cacheexprs); init = [])))
+        _prevobsidxs = vcat(_prevobsidxs,
+            observed_equations_used_by(sys, reduce(vcat, values(cacheexprs); init = [])))
 
         if isempty(cachevars)
             push!(explicitfuns, Returns(nothing))

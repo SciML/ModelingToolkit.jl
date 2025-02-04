@@ -216,7 +216,7 @@ end
 
 prob = ODEProblem(ODEFunction{false}(lotka), [1.0, 1.0], (0.0, 1.0), [1.5, 1.0, 3.0, 1.0])
 de = complete(modelingtoolkitize(prob))
-ODEFunction(de)(similar(prob.u0), prob.u0, prob.p, 0.1)
+ODEFunction(de)(similar(prob.u0), prob.u0, (prob.p,), 0.1)
 
 function lotka(du, u, p, t)
     x = u[1]
@@ -228,7 +228,7 @@ end
 prob = ODEProblem(lotka, [1.0, 1.0], (0.0, 1.0), [1.5, 1.0, 3.0, 1.0])
 
 de = complete(modelingtoolkitize(prob))
-ODEFunction(de)(similar(prob.u0), prob.u0, prob.p, 0.1)
+ODEFunction(de)(similar(prob.u0), prob.u0, (prob.p,), 0.1)
 
 # automatic unknown detection for DAEs
 @parameters k₁ k₂ k₃
@@ -1269,7 +1269,7 @@ end
         t, [u..., x..., o...], [p...])
     sys1, = structural_simplify(sys, ([x...], []))
     fn1, = ModelingToolkit.generate_function(sys1; expression = Val{false})
-    @test_nowarn fn1(ones(4), 2ones(2), 3ones(2, 2), 4.0)
+    @test_nowarn fn1(ones(4), (2ones(2), 3ones(2, 2)), 4.0)
     sys2, = structural_simplify(sys, ([x...], []); split = false)
     fn2, = ModelingToolkit.generate_function(sys2; expression = Val{false})
     @test_nowarn fn2(ones(4), 2ones(6), 4.0)
@@ -1544,11 +1544,21 @@ end
     @test all(x -> any(isapprox(x, atol = 1e-6), sol2.t), expected_tstops)
 end
 
+@testset "Validate input types" begin
+    @parameters p d
+    @variables X(t)::Int64
+    eq = D(X) ~ p - d * X
+    @test_throws ArgumentError @mtkbuild osys = ODESystem([eq], t)
+    @variables Y(t)[1:3]::String
+    eq = D(Y) ~ [p, p, p]
+    @test_throws ArgumentError @mtkbuild osys = ODESystem([eq], t)
+end
+
 # Test `isequal`
 @testset "`isequal`" begin
     @variables X(t)
     @parameters p d
-    eq = D(X) ~ p - d*X
+    eq = D(X) ~ p - d * X
 
     osys1 = complete(ODESystem([eq], t; name = :osys))
     osys2 = complete(ODESystem([eq], t; name = :osys))
@@ -1559,7 +1569,7 @@ end
 
     osys1 = complete(ODESystem([eq], t; name = :osys, continuous_events))
     osys2 = complete(ODESystem([eq], t; name = :osys))
-    @test osys1 !== osys2 
+    @test osys1 !== osys2
 
     osys1 = complete(ODESystem([eq], t; name = :osys, discrete_events))
     osys2 = complete(ODESystem([eq], t; name = :osys))
@@ -1567,28 +1577,28 @@ end
 
     osys1 = complete(ODESystem([eq], t; name = :osys, continuous_events))
     osys2 = complete(ODESystem([eq], t; name = :osys, discrete_events))
-    @test osys1 !== osys2 
+    @test osys1 !== osys2
 end
 
 @testset "dae_order_lowering basic test" begin
     @parameters a
     @variables x(t) y(t) z(t)
     @named dae_sys = ODESystem([
-        D(x) ~ y,
-        0 ~ x + z,
-        0 ~ x - y + z
-    ], t, [z, y, x], [])
+            D(x) ~ y,
+            0 ~ x + z,
+            0 ~ x - y + z
+        ], t, [z, y, x], [])
 
     lowered_dae_sys = dae_order_lowering(dae_sys)
-    @variables x1(t) y1(t) z1(t) 
+    @variables x1(t) y1(t) z1(t)
     expected_eqs = [
         0 ~ x + z,
         0 ~ x - y + z,
         Differential(t)(x) ~ y
     ]
     lowered_eqs = equations(lowered_dae_sys)
-    sorted_lowered_eqs = sort(lowered_eqs, by=string)
-    sorted_expected_eqs = sort(expected_eqs, by=string)
+    sorted_lowered_eqs = sort(lowered_eqs, by = string)
+    sorted_expected_eqs = sort(expected_eqs, by = string)
     @test sorted_lowered_eqs == sorted_expected_eqs
 
     expected_vars = Set([z, y, x])
