@@ -150,6 +150,7 @@ include("systems/connectors.jl")
 include("systems/analysis_points.jl")
 include("systems/imperative_affect.jl")
 include("systems/callbacks.jl")
+include("systems/codegen_utils.jl")
 include("systems/problem_utils.jl")
 
 include("systems/nonlinear/nonlinearsystem.jl")
@@ -299,4 +300,6 @@ export HomotopyContinuationProblem
 export AnalysisPoint, get_sensitivity_function, get_comp_sensitivity_function,
        get_looptransfer_function, get_sensitivity, get_comp_sensitivity, get_looptransfer,
        open_loop
+function FMIComponent end
+
 end # module

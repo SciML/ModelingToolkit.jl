@@ -161,7 +161,7 @@ time-independent systems. If `split=true` (the default) was passed to [`complete
 object.
 """
 function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys),
-        ps = parameters(sys); wrap_code = nothing, postprocess_fbody = nothing, states = nothing,
+        ps = parameters(sys);
         expression = Val{true}, eval_expression = false, eval_module = @__MODULE__,
         cachesyms::Tuple = (), kwargs...)
     if !iscomplete(sys)
@@ -169,39 +169,19 @@ function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys
     end
     p = (reorder_parameters(sys, unwrap.(ps))..., cachesyms...)
     isscalar = !(exprs isa AbstractArray)
-    if wrap_code === nothing
-        wrap_code = isscalar ? identity : (identity, identity)
-    end
-    pre, sol_states = get_substitutions_and_solved_unknowns(sys, isscalar ? [exprs] : exprs)
-    if postprocess_fbody === nothing
-        postprocess_fbody = pre
-    end
-    if states === nothing
-        states = sol_states
-    end
     fnexpr = if is_time_dependent(sys)
-        build_function(exprs,
+        build_function_wrapper(sys, exprs,
             dvs,
             p...,
             get_iv(sys);
             kwargs...,
-            postprocess_fbody,
-            states,
-            wrap_code = wrap_code .∘ wrap_mtkparameters(sys, isscalar) .∘
-                        wrap_array_vars(sys, exprs; dvs, cachesyms) .∘
-                        wrap_parameter_dependencies(sys, isscalar),
             expression = Val{true}
         )
     else
-        build_function(exprs,
+        build_function_wrapper(sys, exprs,
             dvs,
             p...;
             kwargs...,
-            postprocess_fbody,
-            states,
-            wrap_code = wrap_code .∘ wrap_mtkparameters(sys, isscalar) .∘
-                        wrap_array_vars(sys, exprs; dvs, cachesyms) .∘
-                        wrap_parameter_dependencies(sys, isscalar),
             expression = Val{true}
         )
     end
@@ -844,7 +824,7 @@ end
 
 function SymbolicIndexingInterface.all_symbols(sys::AbstractSystem)
     syms = all_variable_symbols(sys)
-    for other in (parameter_symbols(sys), independent_variable_symbols(sys))
+    for other in (full_parameters(sys), independent_variable_symbols(sys))
         isempty(other) || (syms = vcat(syms, other))
     end
     return syms
@@ -2281,37 +2261,37 @@ macro mtkbuild(exprs...)
 end
 
 """
-$(SIGNATURES)
+    debug_system(sys::AbstractSystem; functions = [log, sqrt, (^), /, inv, asin, acos], error_nonfinite = true)
 
-Replace functions with singularities with a function that errors with symbolic
-information. E.g.
+Wrap `functions` in `sys` so any error thrown in them shows helpful symbolic-numeric
+information about its input. If `error_nonfinite`, functions that output nonfinite
+values (like `Inf` or `NaN`) also display errors, even though the raw function itself
+does not throw an exception (like `1/0`). For example:
 
 ```julia-repl
-julia> sys = debug_system(sys);
+julia> sys = debug_system(complete(sys))
 
-julia> sys = complete(sys);
+julia> prob = ODEProblem(sys, [0.0, 2.0], (0.0, 1.0))
 
-julia> prob = ODEProblem(sys, [], (0, 1.0));
-
-julia> du = zero(prob.u0);
-
-julia> prob.f(du, prob.u0, prob.p, 0.0)
-ERROR: DomainError with (-1.0,):
-log errors with input(s): -cos(Q(t)) => -1.0
-Stacktrace:
-  [1] (::ModelingToolkit.LoggedFun{typeof(log)})(args::Float64)
-  ...
+julia> prob.f(prob.u0, prob.p, 0.0)
+ERROR: Function /(1, sin(P(t))) output non-finite value Inf with input
+  1 => 1
+  sin(P(t)) => 0.0
 ```
 """
-function debug_system(sys::AbstractSystem)
+function debug_system(
+        sys::AbstractSystem; functions = [log, sqrt, (^), /, inv, asin, acos], kw...)
+    if !(functions isa Set)
+        functions = Set(functions) # more efficient "in" lookup
+    end
     if has_systems(sys) && !isempty(get_systems(sys))
-        error("debug_system only works on systems with no sub-systems!")
+        error("debug_system(sys) only works on systems with no sub-systems! Consider flattening it with flatten(sys) or structural_simplify(sys) first.")
     end
     if has_eqs(sys)
-        @set! sys.eqs = debug_sub.(equations(sys))
+        @set! sys.eqs = debug_sub.(equations(sys), Ref(functions); kw...)
     end
     if has_observed(sys)
-        @set! sys.observed = debug_sub.(observed(sys))
+        @set! sys.observed = debug_sub.(observed(sys), Ref(functions); kw...)
     end
     return sys
 end
@@ -2578,7 +2558,7 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
 
     fun_expr = generate_function(sys, sts, ps; expression = Val{true})[1]
     fun = eval_or_rgf(fun_expr; eval_expression, eval_module)
-    dx = fun(sts, p..., t)
+    dx = fun(sts, p, t)
 
     h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
     y = h(sts, p, t)

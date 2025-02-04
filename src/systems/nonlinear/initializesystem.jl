@@ -13,7 +13,9 @@ function generate_initializesystem(sys::AbstractSystem;
         check_units = true, check_defguess = false,
         name = nameof(sys), extra_metadata = (;), kwargs...)
     eqs = equations(sys)
-    eqs = filter(x -> x isa Equation, eqs)
+    if !(eqs isa Vector{Equation})
+        eqs = Equation[x for x in eqs if x isa Equation]
+    end
     trueobs, eqs = unhack_observed(observed(sys), eqs)
     vars = unique([unknowns(sys); getfield.(trueobs, :lhs)])
     vars_set = Set(vars) # for efficient in-lookup
@@ -40,51 +42,53 @@ function generate_initializesystem(sys::AbstractSystem;
         diffmap = Dict()
     end
 
-    if has_schedule(sys) && (schedule = get_schedule(sys); !isnothing(schedule))
-        # 2) process dummy derivatives and u0map into initialization system
-        # prepare map for dummy derivative substitution
-        for x in filter(x -> !isnothing(x[1]), schedule.dummy_sub)
-            # set dummy derivatives to default_dd_guess unless specified
-            push!(defs, x[1] => get(guesses, x[1], default_dd_guess))
-        end
-        function process_u0map_with_dummysubs(y, x)
-            y = get(schedule.dummy_sub, y, y)
-            y = fixpoint_sub(y, diffmap)
-            if y ∈ vars_set
-                # variables specified in u0 overrides defaults
-                push!(defs, y => x)
-            elseif y isa Symbolics.Arr
-                # TODO: don't scalarize arrays
-                merge!(defs, Dict(scalarize(y .=> x)))
-            elseif y isa Symbolics.BasicSymbolic
-                # y is a derivative expression expanded; add it to the initialization equations
-                push!(eqs_ics, y ~ x)
-            else
-                error("Initialization expression $y is currently not supported. If its a higher order derivative expression, then only the dummy derivative expressions are supported.")
+    if is_time_dependent(sys)
+        if has_schedule(sys) && (schedule = get_schedule(sys); !isnothing(schedule))
+            # 2) process dummy derivatives and u0map into initialization system
+            # prepare map for dummy derivative substitution
+            for x in filter(x -> !isnothing(x[1]), schedule.dummy_sub)
+                # set dummy derivatives to default_dd_guess unless specified
+                push!(defs, x[1] => get(guesses, x[1], default_dd_guess))
+            end
+            function process_u0map_with_dummysubs(y, x)
+                y = get(schedule.dummy_sub, y, y)
+                y = fixpoint_sub(y, diffmap)
+                if y ∈ vars_set
+                    # variables specified in u0 overrides defaults
+                    push!(defs, y => x)
+                elseif y isa Symbolics.Arr
+                    # TODO: don't scalarize arrays
+                    merge!(defs, Dict(scalarize(y .=> x)))
+                elseif y isa Symbolics.BasicSymbolic
+                    # y is a derivative expression expanded; add it to the initialization equations
+                    push!(eqs_ics, y ~ x)
+                else
+                    error("Initialization expression $y is currently not supported. If its a higher order derivative expression, then only the dummy derivative expressions are supported.")
+                end
+            end
+            for (y, x) in u0map
+                if Symbolics.isarraysymbolic(y)
+                    process_u0map_with_dummysubs.(collect(y), collect(x))
+                else
+                    process_u0map_with_dummysubs(y, x)
+                end
+            end
+        else
+            # 2) System doesn't have a schedule, so dummy derivatives don't exist/aren't handled (SDESystem)
+            for (k, v) in u0map
+                defs[k] = v
             end
         end
-        for (y, x) in u0map
-            if Symbolics.isarraysymbolic(y)
-                process_u0map_with_dummysubs.(collect(y), collect(x))
-            else
-                process_u0map_with_dummysubs(y, x)
-            end
-        end
-    else
-        # 2) System doesn't have a schedule, so dummy derivatives don't exist/aren't handled (SDESystem)
-        for (k, v) in u0map
-            defs[k] = v
-        end
-    end
 
-    # 3) process other variables
-    for var in vars
-        if var ∈ keys(defs)
-            push!(eqs_ics, var ~ defs[var])
-        elseif var ∈ keys(guesses)
-            push!(defs, var => guesses[var])
-        elseif check_defguess
-            error("Invalid setup: variable $(var) has no default value or initial guess")
+        # 3) process other variables
+        for var in vars
+            if var ∈ keys(defs)
+                push!(eqs_ics, var ~ defs[var])
+            elseif var ∈ keys(guesses)
+                push!(defs, var => guesses[var])
+            elseif check_defguess
+                error("Invalid setup: variable $(var) has no default value or initial guess")
+            end
         end
     end
 
@@ -108,9 +112,9 @@ function generate_initializesystem(sys::AbstractSystem;
             # If either of them are `missing` the parameter is an unknown
             # But if the parameter is passed a value, use that as an additional
             # equation in the system
-            _val1 = get(pmap, p, nothing)
-            _val2 = get(defs, p, nothing)
-            _val3 = get(guesses, p, nothing)
+            _val1 = get_possibly_array_fallback_singletons(pmap, p)
+            _val2 = get_possibly_array_fallback_singletons(defs, p)
+            _val3 = get_possibly_array_fallback_singletons(guesses, p)
             varp = tovar(p)
             paramsubs[p] = varp
             # Has a default of `missing`, and (either an equation using the value passed to `ODEProblem` or a guess)
@@ -135,7 +139,7 @@ function generate_initializesystem(sys::AbstractSystem;
                     error("Invalid setup: parameter $(p) has no default value, initial value, or guess")
                 end
                 # given a symbolic value to ODEProblem
-            elseif symbolic_type(_val1) != NotSymbolic()
+            elseif symbolic_type(_val1) != NotSymbolic() || is_array_of_symbolics(_val1)
                 push!(eqs_ics, varp ~ _val1)
                 push!(defs, varp => _val3)
                 # No value passed to `ODEProblem`, but a default and a guess are present
@@ -178,16 +182,33 @@ function generate_initializesystem(sys::AbstractSystem;
     pars = Vector{SymbolicParam}(filter(p -> !haskey(paramsubs, p), parameters(sys)))
     is_time_dependent(sys) && push!(pars, get_iv(sys))
 
-    # 8) use observed equations for guesses of observed variables if not provided
-    for eq in trueobs
-        haskey(defs, eq.lhs) && continue
-        any(x -> isequal(default_toterm(x), eq.lhs), keys(defs)) && continue
+    if is_time_dependent(sys)
+        # 8) use observed equations for guesses of observed variables if not provided
+        for eq in trueobs
+            haskey(defs, eq.lhs) && continue
+            any(x -> isequal(default_toterm(x), eq.lhs), keys(defs)) && continue
 
-        defs[eq.lhs] = eq.rhs
+            defs[eq.lhs] = eq.rhs
+        end
+        append!(eqs_ics, trueobs)
     end
 
-    eqs_ics = Symbolics.substitute.([eqs_ics; trueobs], (paramsubs,))
-    vars = [vars; collect(values(paramsubs))]
+    # even if `p => tovar(p)` is in `paramsubs`, `isparameter(p[1]) === true` after substitution
+    # so add scalarized versions as well
+    for k in collect(keys(paramsubs))
+        symbolic_type(k) == ArraySymbolic() || continue
+        for i in eachindex(k)
+            paramsubs[k[i]] = paramsubs[k][i]
+        end
+    end
+
+    eqs_ics = Symbolics.substitute.(eqs_ics, (paramsubs,))
+    if is_time_dependent(sys)
+        vars = [vars; collect(values(paramsubs))]
+    else
+        vars = collect(values(paramsubs))
+    end
+
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
@@ -211,15 +232,31 @@ struct ReconstructInitializeprob
 end
 
 function ReconstructInitializeprob(srcsys::AbstractSystem, dstsys::AbstractSystem)
-    syms = [unknowns(dstsys);
-            reduce(vcat, reorder_parameters(dstsys, parameters(dstsys)); init = [])]
+    syms = reduce(vcat, reorder_parameters(dstsys, parameters(dstsys)); init = [])
     getter = getu(srcsys, syms)
-    setter = setsym_oop(dstsys, syms)
+    setter = setp_oop(dstsys, syms)
     return ReconstructInitializeprob(getter, setter)
 end
 
 function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
-    rip.setter(dstvalp, rip.getter(srcvalp))
+    newp = rip.setter(dstvalp, rip.getter(srcvalp))
+    if state_values(dstvalp) === nothing
+        return nothing, newp
+    end
+    T = eltype(state_values(srcvalp))
+    if parameter_values(dstvalp) isa MTKParameters
+        if !isempty(newp.tunable)
+            T = promote_type(eltype(newp.tunable), T)
+        end
+    elseif !isempty(newp)
+        T = promote_type(eltype(newp), T)
+    end
+    if T == eltype(state_values(dstvalp))
+        u0 = state_values(dstvalp)
+    else
+        u0 = T.(state_values(dstvalp))
+    end
+    return u0, newp
 end
 
 struct InitializationSystemMetadata
@@ -231,16 +268,35 @@ struct InitializationSystemMetadata
     oop_reconstruct_u0_p::Union{Nothing, ReconstructInitializeprob}
 end
 
+function get_possibly_array_fallback_singletons(varmap, p)
+    if haskey(varmap, p)
+        return varmap[p]
+    end
+    symbolic_type(p) == ArraySymbolic() || return nothing
+    scal = collect(p)
+    if all(x -> haskey(varmap, x), scal)
+        res = [varmap[x] for x in scal]
+        if any(x -> x === nothing, res)
+            return nothing
+        elseif any(x -> x === missing, res)
+            return missing
+        end
+        return res
+    end
+    return nothing
+end
+
 function is_parameter_solvable(p, pmap, defs, guesses)
     p = unwrap(p)
     is_variable_floatingpoint(p) || return false
-    _val1 = pmap isa AbstractDict ? get(pmap, p, nothing) : nothing
-    _val2 = get(defs, p, nothing)
-    _val3 = get(guesses, p, nothing)
+    _val1 = pmap isa AbstractDict ? get_possibly_array_fallback_singletons(pmap, p) :
+            nothing
+    _val2 = get_possibly_array_fallback_singletons(defs, p)
+    _val3 = get_possibly_array_fallback_singletons(guesses, p)
     # either (missing is a default or was passed to the ODEProblem) or (nothing was passed to
     # the ODEProblem and it has a default and a guess)
     return ((_val1 === missing || _val2 === missing) ||
-            (symbolic_type(_val1) != NotSymbolic() ||
+            (symbolic_type(_val1) != NotSymbolic() || is_array_of_symbolics(_val1) ||
              _val1 === nothing && _val2 !== nothing)) && _val3 !== nothing
 end
 

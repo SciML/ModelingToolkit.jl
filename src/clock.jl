@@ -29,7 +29,7 @@ true if `x` contains only continuous-domain signals.
 See also [`has_continuous_domain`](@ref)
 """
 function is_continuous_domain(x)
-    issym(x) && return getmetadata(x, VariableTimeDomain, false) == Continuous
+    issym(x) && return getmetadata(x, VariableTimeDomain, false) == Continuous()
     !has_discrete_domain(x) && has_continuous_domain(x)
 end
 
@@ -58,8 +58,8 @@ has_time_domain(x::Num) = has_time_domain(value(x))
 has_time_domain(x) = false
 
 for op in [Differential]
-    @eval input_timedomain(::$op, arg = nothing) = Continuous
-    @eval output_timedomain(::$op, arg = nothing) = Continuous
+    @eval input_timedomain(::$op, arg = nothing) = Continuous()
+    @eval output_timedomain(::$op, arg = nothing) = Continuous()
 end
 
 """

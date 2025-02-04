@@ -296,53 +296,21 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
 end
 
 function ODESystem(eqs, iv; kwargs...)
-    eqs = collect(eqs)
-    # NOTE: this assumes that the order of algebraic equations doesn't matter
-    diffvars = OrderedSet()
-    allunknowns = OrderedSet()
-    ps = OrderedSet()
-    # reorder equations such that it is in the form of `diffeq, algeeq`
-    diffeq = Equation[]
-    algeeq = Equation[]
-    # initial loop for finding `iv`
-    if iv === nothing
-        for eq in eqs
-            if !(eq.lhs isa Number) # assume eq.lhs is either Differential or Number
-                iv = iv_from_nested_derivative(eq.lhs)
-                break
-            end
-        end
-    end
-    iv = value(iv)
-    iv === nothing && throw(ArgumentError("Please pass in independent variables."))
-    compressed_eqs = Equation[] # equations that need to be expanded later, like `connect(a, b)`
-    for eq in eqs
-        eq.lhs isa Union{Symbolic, Number} || (push!(compressed_eqs, eq); continue)
-        collect_vars!(allunknowns, ps, eq, iv)
-        if isdiffeq(eq)
-            diffvar, _ = var_from_nested_derivative(eq.lhs)
-            if check_scope_depth(getmetadata(diffvar, SymScope, LocalScope()), 0)
-                isequal(iv, iv_from_nested_derivative(eq.lhs)) ||
-                    throw(ArgumentError("An ODESystem can only have one independent variable."))
-                diffvar in diffvars &&
-                    throw(ArgumentError("The differential variable $diffvar is not unique in the system of equations."))
-                push!(diffvars, diffvar)
-            end
-            push!(diffeq, eq)
-        else
-            push!(algeeq, eq)
-        end
-    end
+    diffvars, allunknowns, ps, eqs = process_equations(eqs, iv)
+
     for eq in get(kwargs, :parameter_dependencies, Equation[])
         collect_vars!(allunknowns, ps, eq, iv)
     end
+
     for ssys in get(kwargs, :systems, ODESystem[])
         collect_scoped_vars!(allunknowns, ps, ssys, iv)
     end
+
     for v in allunknowns
         isdelay(v, iv) || continue
         collect_vars!(allunknowns, ps, arguments(v)[1], iv)
     end
+
     new_ps = OrderedSet()
     for p in ps
         if iscall(p) && operation(p) === getindex
@@ -358,9 +326,9 @@ function ODESystem(eqs, iv; kwargs...)
         end
     end
     algevars = setdiff(allunknowns, diffvars)
-    # the orders here are very important!
-    return ODESystem(Equation[diffeq; algeeq; compressed_eqs], iv,
-        collect(Iterators.flatten((diffvars, algevars))), collect(new_ps); kwargs...)
+
+    return ODESystem(eqs, iv, collect(Iterators.flatten((diffvars, algevars))),
+        collect(new_ps); kwargs...)
 end
 
 # NOTE: equality does not check cached Jacobian
@@ -373,6 +341,8 @@ function Base.:(==)(sys1::ODESystem, sys2::ODESystem)
         _eq_unordered(get_eqs(sys1), get_eqs(sys2)) &&
         _eq_unordered(get_unknowns(sys1), get_unknowns(sys2)) &&
         _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
+        _eq_unordered(continuous_events(sys1), continuous_events(sys2)) &&
+        _eq_unordered(discrete_events(sys1), discrete_events(sys2)) &&
         all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
 end
 
@@ -459,194 +429,94 @@ function build_explicit_observed_function(sys, ts;
         param_only = false,
         op = Operator,
         throw = true,
-        mkarray = MakeArray)
+        mkarray = nothing)
     is_tuple = ts isa Tuple
     if is_tuple
         ts = collect(ts)
+        output_type = Tuple
     end
-    if (isscalar = symbolic_type(ts) !== NotSymbolic())
-        ts = [ts]
+
+    allsyms = all_symbols(sys)
+    function symbol_to_symbolic(sym)
+        sym isa Symbol || return sym
+        idx = findfirst(x -> (hasname(x) ? getname(x) : Symbol(x)) == sym, allsyms)
+        idx === nothing && return sym
+        sym = allsyms[idx]
+        if iscall(sym) && operation(sym) == getindex
+            sym = arguments(sym)[1]
+        end
+        return sym
     end
-    ts = unwrap.(ts)
-    issplit = has_index_cache(sys) && get_index_cache(sys) !== nothing
-    if is_dde(sys)
-        if issplit
-            ts = map(
-                x -> delay_to_function(
-                    sys, x; history_arg = issplit ? MTKPARAMETERS_ARG : DEFAULT_PARAMS_ARG),
-                ts)
-        else
-            ts = map(x -> delay_to_function(sys, x), ts)
+    if symbolic_type(ts) == NotSymbolic() && ts isa AbstractArray
+        ts = map(symbol_to_symbolic, ts)
+    else
+        ts = symbol_to_symbolic(ts)
+    end
+
+    vs = ModelingToolkit.vars(ts; op)
+    namespace_subs = Dict()
+    ns_map = Dict{Any, Any}(renamespace(sys, eq.lhs) => eq.lhs for eq in observed(sys))
+    for sym in unknowns(sys)
+        ns_map[renamespace(sys, sym)] = sym
+        if iscall(sym) && operation(sym) === getindex
+            ns_map[renamespace(sys, arguments(sym)[1])] = arguments(sym)[1]
         end
     end
+    for sym in full_parameters(sys)
+        ns_map[renamespace(sys, sym)] = sym
+        if iscall(sym) && operation(sym) === getindex
+            ns_map[renamespace(sys, arguments(sym)[1])] = arguments(sym)[1]
+        end
+    end
+    allsyms = Set(all_symbols(sys))
+    for var in vs
+        var = unwrap(var)
+        newvar = get(ns_map, var, nothing)
+        if newvar !== nothing
+            namespace_subs[var] = newvar
+        end
+    end
+    ts = fast_substitute(ts, namespace_subs)
 
-    vars = Set()
-    foreach(v -> vars!(vars, v; op), ts)
-    ivs = independent_variables(sys)
-    dep_vars = scalarize(setdiff(vars, ivs))
-
-    obs = observed(sys)
-    if param_only
-        if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-            obs = filter(obs) do eq
-                !(ContinuousTimeseries() in ic.observed_syms_to_timeseries[eq.lhs])
+    obsfilter = if param_only
+        if is_split(sys)
+            let ic = get_index_cache(sys)
+                eq -> !(ContinuousTimeseries() in ic.observed_syms_to_timeseries[eq.lhs])
             end
         else
-            obs = Equation[]
-        end
-    end
-
-    cs = collect_constants(obs)
-    if !isempty(cs) > 0
-        cmap = map(x -> x => getdefault(x), cs)
-        obs = map(x -> x.lhs ~ substitute(x.rhs, cmap), obs)
-    end
-
-    sts = param_only ? Set() : Set(unknowns(sys))
-    sts = param_only ? Set() :
-          union(sts,
-        Set(arguments(st)[1] for st in sts if iscall(st) && operation(st) === getindex))
-
-    observed_idx = Dict(x.lhs => i for (i, x) in enumerate(obs))
-    param_set = Set(full_parameters(sys))
-    param_set = union(param_set,
-        Set(arguments(p)[1] for p in param_set if iscall(p) && operation(p) === getindex))
-    param_set_ns = Set(unknowns(sys, p) for p in full_parameters(sys))
-    param_set_ns = union(param_set_ns,
-        Set(arguments(p)[1]
-        for p in param_set_ns if iscall(p) && operation(p) === getindex))
-    namespaced_to_obs = Dict(unknowns(sys, x.lhs) => x.lhs for x in obs)
-    namespaced_to_sts = param_only ? Dict() :
-                        Dict(unknowns(sys, x) => x for x in unknowns(sys))
-
-    # FIXME: This is a rather rough estimate of dependencies. We assume
-    # the expression depends on everything before the `maxidx`.
-    subs = Dict()
-    maxidx = 0
-    for s in dep_vars
-        if s in param_set || s in param_set_ns ||
-           iscall(s) &&
-           operation(s) === getindex &&
-           (arguments(s)[1] in param_set || arguments(s)[1] in param_set_ns)
-            continue
-        end
-        idx = get(observed_idx, s, nothing)
-        if idx !== nothing
-            idx > maxidx && (maxidx = idx)
-        else
-            s′ = get(namespaced_to_obs, s, nothing)
-            if s′ !== nothing
-                subs[s] = s′
-                s = s′
-                idx = get(observed_idx, s, nothing)
-            end
-            if idx !== nothing
-                idx > maxidx && (maxidx = idx)
-            elseif !(s in sts)
-                s′ = get(namespaced_to_sts, s, nothing)
-                if s′ !== nothing
-                    subs[s] = s′
-                    continue
-                end
-                if throw
-                    Base.throw(ArgumentError("$s is neither an observed nor an unknown variable."))
-                else
-                    # TODO: return variables that don't exist in the system.
-                    return nothing
-                end
-            end
-            continue
-        end
-    end
-    ts = map(t -> substitute(t, subs), ts)
-    obsexprs = []
-
-    for i in 1:maxidx
-        eq = obs[i]
-        if is_dde(sys)
-            eq = delay_to_function(
-                sys, eq; history_arg = issplit ? MTKPARAMETERS_ARG : DEFAULT_PARAMS_ARG)
-        end
-        lhs = eq.lhs
-        rhs = eq.rhs
-        push!(obsexprs, lhs ← rhs)
-    end
-
-    if inputs !== nothing
-        ps = setdiff(ps, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
-    end
-    _ps = ps
-    if ps isa Tuple
-        ps = DestructuredArgs.(unwrap.(ps), inbounds = !checkbounds)
-    elseif has_index_cache(sys) && get_index_cache(sys) !== nothing
-        ps = DestructuredArgs.(reorder_parameters(get_index_cache(sys), unwrap.(ps)))
-        if isempty(ps) && inputs !== nothing
-            ps = (:EMPTY,)
+            Returns(false)
         end
     else
-        ps = (DestructuredArgs(unwrap.(ps), inbounds = !checkbounds),)
+        Returns(true)
     end
-    dvs = DestructuredArgs(unknowns(sys), inbounds = !checkbounds)
-    if is_dde(sys)
-        dvs = (dvs, DDE_HISTORY_FUN)
+    dvs = if param_only
+        ()
     else
-        dvs = (dvs,)
+        (unknowns(sys),)
     end
-    p_start = param_only ? 1 : (length(dvs) + 1)
     if inputs === nothing
-        args = param_only ? [ps..., ivs...] : [dvs..., ps..., ivs...]
+        inputs = ()
     else
-        inputs = unwrap.(inputs)
-        ipts = DestructuredArgs(inputs, inbounds = !checkbounds)
-        args = param_only ? [ipts, ps..., ivs...] : [dvs..., ipts, ps..., ivs...]
-        p_start += 1
+        ps = setdiff(ps, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
+        inputs = (inputs,)
     end
-    pre = get_postprocess_fbody(sys)
-
-    array_wrapper = if param_only
-        wrap_array_vars(sys, ts; ps = _ps, dvs = nothing, inputs, history = is_dde(sys)) .∘
-        wrap_parameter_dependencies(sys, isscalar)
+    ps = reorder_parameters(sys, ps)
+    iv = if is_time_dependent(sys)
+        (get_iv(sys),)
     else
-        wrap_array_vars(sys, ts; ps = _ps, inputs, history = is_dde(sys)) .∘
-        wrap_parameter_dependencies(sys, isscalar)
+        ()
     end
-    mtkparams_wrapper = wrap_mtkparameters(sys, isscalar, p_start)
-    if mtkparams_wrapper isa Tuple
-        oop_mtkp_wrapper = mtkparams_wrapper[1]
+    args = (dvs..., inputs..., ps..., iv...)
+    p_start = length(dvs) + length(inputs) + 1
+    p_end = length(dvs) + length(inputs) + length(ps)
+    fns = build_function_wrapper(
+        sys, ts, args...; p_start, p_end, filter_observed = obsfilter,
+        output_type, mkarray, try_namespaced = true, expression = Val{true})
+    if fns isa Tuple
+        oop, iip = eval_or_rgf.(fns; eval_expression, eval_module)
+        return return_inplace ? (oop, iip) : oop
     else
-        oop_mtkp_wrapper = mtkparams_wrapper
-    end
-
-    # Need to keep old method of building the function since it uses `output_type`,
-    # which can't be provided to `build_function`
-    return_value = if isscalar
-        ts[1]
-    elseif is_tuple
-        MakeTuple(Tuple(ts))
-    else
-        mkarray(ts, output_type)
-    end
-    oop_fn = Func(args, [],
-                 pre(Let(obsexprs,
-                     return_value,
-                     false))) |> array_wrapper[1] |> oop_mtkp_wrapper |> toexpr
-    oop_fn = expression ? oop_fn : eval_or_rgf(oop_fn; eval_expression, eval_module)
-
-    if !isscalar
-        iip_fn = build_function(ts,
-            args...;
-            postprocess_fbody = pre,
-            wrap_code = mtkparams_wrapper .∘ array_wrapper .∘
-                        wrap_assignments(isscalar, obsexprs),
-            expression = Val{true})[2]
-        if !expression
-            iip_fn = eval_or_rgf(iip_fn; eval_expression, eval_module)
-        end
-    end
-    if isscalar || !return_inplace
-        return oop_fn
-    else
-        return oop_fn, iip_fn
+        return eval_or_rgf(fns; eval_expression, eval_module)
     end
 end
 
@@ -665,13 +535,22 @@ function populate_delays(delays::Set, obsexprs, histfn, sys, sym)
 end
 
 function _eq_unordered(a, b)
+    # a and b may be multidimensional
+    # e.g. comparing noiseeqs of SDESystem
+    a = vec(a)
+    b = vec(b)
     length(a) === length(b) || return false
     n = length(a)
     idxs = Set(1:n)
     for x in a
         idx = findfirst(isequal(x), b)
+        # loop since there might be multiple identical entries in a/b
+        # and while we might have already matched the first there could
+        # be a second that is equal to x
+        while idx !== nothing && !(idx in idxs)
+            idx = findnext(isequal(x), b, idx + 1)
+        end
         idx === nothing && return false
-        idx ∈ idxs || return false
         delete!(idxs, idx)
     end
     return true
