@@ -899,14 +899,14 @@ get_callback(prob::BVProblem) = error("BVP solvers do not support callbacks.")
 """
 function generate_function_bc(sys::ODESystem, u0, u0_idxs, tspan; kwargs...)
     iv = get_iv(sys)
-    sts = get_unknowns(sys)
-    ps = get_ps(sys)
+    sts = unknowns(sys)
+    ps = parameters(sys)
     np = length(ps)
     ns = length(sts)
     stidxmap = Dict([v => i for (i, v) in enumerate(sts)])
     pidxmap = Dict([v => i for (i, v) in enumerate(ps)])
 
-    @variables sol(..)[1:ns] p[1:np]
+    @variables sol(..)[1:ns]
 
     conssys = get_constraintsystem(sys)
     cons = Any[]
@@ -931,7 +931,7 @@ function generate_function_bc(sys::ODESystem, u0, u0_idxs, tspan; kwargs...)
     exprs = vcat(init_conds, cons)
     _p = reorder_parameters(sys, ps)
 
-    build_function_wrapper(sys, exprs, sol, _p..., t; kwargs...)
+    build_function_wrapper(sys, exprs, sol, _p..., t; output_type = Array, kwargs...)
 end
 
 """

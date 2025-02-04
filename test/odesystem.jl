@@ -1670,4 +1670,16 @@ end
     @test_throws ArgumentError @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
     cons = [x(t) * v ~ 3]
     @test_throws ArgumentError @mtkbuild sys = ODESystem(eqs, t; constraints = cons) # Need time argument.
+
+    # Test array variables
+    @variables x(..)[1:5]
+    mat = [1 2 0 3 2
+           0 0 3 2 0
+           0 1 3 0 4
+           2 0 0 2 1
+           0 0 2 0 5]
+    eqs = D(x(t)) ~ mat * x(t)
+    cons = [x(3) ~ [2,3,3,5,4]]
+    @mtkbuild ode = ODESystem(D(x(t)) ~ mat * x(t), t; constraints = cons)
+    @test length(constraints(ModelingToolkit.get_constraintsystem(ode))) == 5
 end

@@ -123,7 +123,7 @@ function ConstraintsSystem(constraints, unknowns, ps;
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
 
-    cstr = value.(Symbolics.canonical_form.(scalarize(constraints)))
+    cstr = value.(Symbolics.canonical_form.(vcat(scalarize(constraints)...)))
     unknowns′ = value.(scalarize(unknowns))
     ps′ = value.(ps)
 

@@ -687,7 +687,6 @@ function process_constraint_system(constraints::Vector{Equation}, sts, ps, iv; c
     constraintsts = OrderedSet()
     constraintps = OrderedSet()
 
-    # Hack? to extract parameters from callable variables in constraints.
     for cons in constraints
         collect_vars!(constraintsts, constraintps, cons, iv)
     end
@@ -712,5 +711,6 @@ function process_constraint_system(constraints::Vector{Equation}, sts, ps, iv; c
         end
     end
 
+    @show constraints
     ConstraintsSystem(constraints, collect(constraintsts), collect(constraintps); name = consname)
 end
