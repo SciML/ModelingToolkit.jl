@@ -476,9 +476,6 @@ function shift_discrete_system(ts::TearingState, lowest_shift)
         vars!(discvars, eq; op = Union{Sample, Hold})
     end
     iv = get_iv(sys)
-    discmap = Dict(k => StructuralTransformations.simplify_shifts(Shift(iv, -get(lowest_shift, k, 0))(k))
-    for k in discvars
-    if any(isequal(k), fullvars) && !isa(operation(k), Union{Sample, Hold})) 
 
     discmap = Dict(k => StructuralTransformations.simplify_shifts(Shift(iv, 1)(k))    for k in discvars 
     if any(isequal(k), fullvars) && !isa(operation(k), Union{Sample, Hold})) 

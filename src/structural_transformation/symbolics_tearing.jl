@@ -241,6 +241,32 @@ function substitute_lower_order!(state::TearingState)
     
 end
 
+# Documenting the differences to structural simplification for discrete systems:
+# In discrete systems the lowest-order term is x_k-i, instead of x(t). In order
+# to substitute dummy variables for x_k-1, x_k-2, ... instead you need to reverse 
+# the order. So for discrete systems `var_order` is defined a little differently.
+#
+# The orders will also be off by one. The reason this is is that the dynamics of
+# the system should be given in terms of Shift(t, 1)(x(t), x(t-1), ...). But 
+# having the observables be indexed by the next time step is not so nice. So we 
+# handle the shifts in the renaming, rather than explicitly.
+#
+# The substitution should look like the following: 
+#   x(t) -> Shift(t, 1)(x(t))
+#   x(k-1) -> x(t)
+#   x(k-2) -> x_{t-1}(t)
+#   x(k-3) -> x_{t-2}(t)
+#   and so on...
+#
+# In the implicit discrete case this shouldn't happen. The simplification should 
+# look like a NonlinearSystem.
+#
+# For discrete systems Shift(t, 2)(x(t)) is not equivalent to Shift(t, 1)(Shift(t,1)(x(t))
+# This is different from the continuous case where D(D(x)) can be substituted for 
+# by iteratively substituting x_t ~ D(x), then x_tt ~ D(x_t). For this reason the
+# total_sub dict is updated at the time that the renamed variables are written,
+# inside the loop where new variables are generated.
+
 import ModelingToolkit: Shift
 function tearing_reassemble(state::TearingState, var_eq_matching,
         full_var_eq_matching = nothing; simplify = false, mm = nothing, cse_hack = true, array_hack = true)
@@ -318,9 +344,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
             diff_to_var[dv] = nothing
         end
     end
-    @show var_eq_matching
-
-    println("Post state selection.")
     
     # `SelectedState` information is no longer needed past here. State selection
     # is done. All non-differentiated variables are algebraic variables, and all
@@ -330,18 +353,19 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     is_solvable = let solvable_graph = solvable_graph
         (eq, iv) -> eq isa Int && iv isa Int && BipartiteEdge(eq, iv) in solvable_graph
     end
-    idx_to_lowest_shift = Dict{Int, Int}(var => 0 for var in 1:length(fullvars))
-    for (i,var) in enumerate(fullvars)
-        key = (operation(var) isa Shift) ? only(arguments(var)) : var
-        idx_to_lowest_shift[i] = get(lowest_shift, key, 0)
+
+    if is_only_discrete(state.structure)
+         idx_to_lowest_shift = Dict{Int, Int}(var => 0 for var in 1:length(fullvars))
+         for (i,var) in enumerate(fullvars)
+             key = (operation(var) isa Shift) ? only(arguments(var)) : var
+             idx_to_lowest_shift[i] = get(lowest_shift, key, 0)
+         end
     end
 
     # if var is like D(x)
     isdervar = let diff_to_var = diff_to_var
         var -> diff_to_var[var] !== nothing
     end
-    # For discrete variables, we want the substitution to turn 
-    # Shift(t, k)(x(t)) => x_t-k(t)
     var_order = let diff_to_var = diff_to_var
         dv -> begin
             order = 0
@@ -349,7 +373,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
                 order += 1
                 dv = dv′
             end
-            is_only_discrete(state.structure) && (order = -idx_to_lowest_shift[dv] - order - 1)
+            is_only_discrete(state.structure) && (order = -idx_to_lowest_shift[dv] - order)
             order, dv
         end
     end
@@ -403,6 +427,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     linear_eqs = mm === nothing ? Dict{Int, Int}() :
                  Dict(reverse(en) for en in enumerate(mm.nzrows))
 
+    total_sub = Dict()
     for v in 1:length(var_to_diff)
         is_highest_discrete = begin
             var = fullvars[v]
@@ -442,8 +467,13 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
         end
         dx = fullvars[dv]
         # add `x_t`
-        order, lv = var_order(dv)
+        println()
+        @show order, lv = var_order(dv)
         x_t = lower_name(fullvars[lv], iv, order)
+        @show fullvars[v]
+        @show fullvars[dv]
+        @show fullvars[lv]
+        @show dx, x_t
         push!(fullvars, simplify_shifts(x_t))
         v_t = length(fullvars)
         v_t_idx = add_vertex!(var_to_diff)
@@ -466,11 +496,16 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
         add_edge!(solvable_graph, dummy_eq, dv)
         @assert nsrcs(graph) == nsrcs(solvable_graph) == dummy_eq
         @label FOUND_DUMMY_EQ
-        is_only_discrete(state.structure) && (idx_to_lowest_shift[v_t] = idx_to_lowest_shift[dv])
+        is_only_discrete(state.structure) && begin
+            idx_to_lowest_shift[v_t] = idx_to_lowest_shift[dv]
+            operation(dx) isa Shift && (total_sub[dx] = x_t)
+            order == 1 && (total_sub[x_t] = fullvars[var_to_diff[dv]])
+        end
         var_to_diff[v_t] = var_to_diff[dv]
         var_eq_matching[dv] = unassigned
         eq_var_matching[dummy_eq] = dv
     end
+    @show total_sub
 
     # Will reorder equations and unknowns to be:
     # [diffeqs; ...]
@@ -490,15 +525,13 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     # Solve solvable equations
     println()
     println("SOLVING SOLVABLE EQUATIONS.")
-    @show eq_var_matching
     toporder = topological_sort(DiCMOBiGraph{false}(graph, var_eq_matching))
     eqs = Iterators.reverse(toporder)
-    @show eqs
-    @show neweqs
-    @show fullvars
-    total_sub = Dict()
     idep = iv
+    @show eq_var_matching
+
     for ieq in eqs
+        println()
         iv = eq_var_matching[ieq]
         if is_solvable(ieq, iv)
             # We don't solve differential equations, but we will need to try to
@@ -513,7 +546,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
                 dx = D(simplify_shifts(lower_name(
                     fullvars[lv], idep, order - 1)))
                 @show dx
-                @show neweqs[ieq]
                 eq = dx ~ simplify_shifts(Symbolics.fixpoint_sub(
                     Symbolics.symbolic_linear_solve(neweqs[ieq],
                         fullvars[iv]),
