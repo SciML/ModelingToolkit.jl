@@ -237,8 +237,49 @@ function check_diff_graph(var_to_diff, fullvars)
 end
 =#
 
-function substitute_lower_order!(state::TearingState) 
-    
+
+function substitute_dummy_derivatives!(fullvars, var_to_diff, diff_to_var, var_eq_matching, neweqs)
+    # Dummy derivatives may determine that some differential variables are
+    # algebraic variables in disguise. The derivative of such variables are
+    # called dummy derivatives.
+
+    # Step 1:
+    # Replace derivatives of non-selected unknown variables by dummy derivatives
+
+    dummy_sub = Dict()
+    for var in 1:length(fullvars)
+        dv = var_to_diff[var]
+        dv === nothing && continue
+        if var_eq_matching[var] !== SelectedState()
+            dd = fullvars[dv]
+            v_t = setio(diff2term_with_unit(unwrap(dd), unwrap(iv)), false, false)
+            for eq in 𝑑neighbors(graph, dv)
+                dummy_sub[dd] = v_t
+                neweqs[eq] = fast_substitute(neweqs[eq], dd => v_t)
+            end
+            fullvars[dv] = v_t
+            # If we have:
+            # x -> D(x) -> D(D(x))
+            # We need to to transform it to:
+            # x   x_t -> D(x_t)
+            # update the structural information
+            dx = dv
+            x_t = v_t
+            while (ddx = var_to_diff[dx]) !== nothing
+                dx_t = D(x_t)
+                for eq in 𝑑neighbors(graph, ddx)
+                    neweqs[eq] = fast_substitute(neweqs[eq], fullvars[ddx] => dx_t)
+                end
+                fullvars[ddx] = dx_t
+                dx = ddx
+                x_t = dx_t
+            end
+            diff_to_var[dv] = nothing
+        end
+    end
+end
+
+function generate_derivative_variables!()
 end
 
 # Documenting the differences to structural simplification for discrete systems:
@@ -281,8 +322,27 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
         end
     end
 
+    if ModelingToolkit.has_iv(state.sys)
+        iv = get_iv(state.sys)
+        if is_only_discrete(state.structure)
+            D = Shift(iv, 1)
+            lower_name = lower_varname_withshift
+            idx_to_lowest_shift = Dict{Int, Int}(var => 0 for var in 1:length(fullvars))
+            for (i,var) in enumerate(fullvars)
+                key = (operation(var) isa Shift) ? only(arguments(var)) : var
+                idx_to_lowest_shift[i] = get(lowest_shift, key, 0)
+            end
+        else
+            D = Differential(iv)
+            lower_name = lower_varname_with_unit
+        end
+    else
+        iv = D = nothing
+        lower_name = lower_varname_with_unit
+    end
+
+    diff_to_var = invview(var_to_diff)
     neweqs = collect(equations(state))
-    lower_name = is_only_discrete(state.structure) ? lower_varname_withshift : lower_varname_with_unit
 
     # Terminology and Definition:
     #
@@ -293,76 +353,19 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     # DAE system, i.e. `v'(t)` are all the variables in `u'(t)` that actually
     # appear in the system. Algebraic variables are variables that are not
     # differential variables.
-    #
-    # Dummy derivatives may determine that some differential variables are
-    # algebraic variables in disguise. The derivative of such variables are
-    # called dummy derivatives.
-
-    # Step 1:
-    # Replace derivatives of non-selected unknown variables by dummy derivatives
-
-    if ModelingToolkit.has_iv(state.sys)
-        iv = get_iv(state.sys)
-        if is_only_discrete(state.structure)
-            D = Shift(iv, 1)
-        else
-            D = Differential(iv)
-        end
-    else
-        iv = D = nothing
-    end
-    diff_to_var = invview(var_to_diff)
-
-    dummy_sub = Dict()
-    for var in 1:length(fullvars)
-        dv = var_to_diff[var]
-        dv === nothing && continue
-        if var_eq_matching[var] !== SelectedState()
-            dd = fullvars[dv]
-            v_t = setio(diff2term_with_unit(unwrap(dd), unwrap(iv)), false, false)
-            for eq in 𝑑neighbors(graph, dv)
-                dummy_sub[dd] = v_t
-                neweqs[eq] = fast_substitute(neweqs[eq], dd => v_t)
-            end
-            fullvars[dv] = v_t
-            # If we have:
-            # x -> D(x) -> D(D(x))
-            # We need to to transform it to:
-            # x   x_t -> D(x_t)
-            # update the structural information
-            dx = dv
-            x_t = v_t
-            while (ddx = var_to_diff[dx]) !== nothing
-                dx_t = D(x_t)
-                for eq in 𝑑neighbors(graph, ddx)
-                    neweqs[eq] = fast_substitute(neweqs[eq], fullvars[ddx] => dx_t)
-                end
-                fullvars[ddx] = dx_t
-                dx = ddx
-                x_t = dx_t
-            end
-            diff_to_var[dv] = nothing
-        end
-    end
     
+    substitute_dummy_derivatives!(fullvars, var_to_diff, diff_to_var, var_eq_matching, neweqs)
+
     # `SelectedState` information is no longer needed past here. State selection
     # is done. All non-differentiated variables are algebraic variables, and all
     # variables that appear differentiated are differential variables.
 
-    ### extract partition information
+    ### Extract partition information
     is_solvable = let solvable_graph = solvable_graph
         (eq, iv) -> eq isa Int && iv isa Int && BipartiteEdge(eq, iv) in solvable_graph
     end
 
-    if is_only_discrete(state.structure)
-         idx_to_lowest_shift = Dict{Int, Int}(var => 0 for var in 1:length(fullvars))
-         for (i,var) in enumerate(fullvars)
-             key = (operation(var) isa Shift) ? only(arguments(var)) : var
-             idx_to_lowest_shift[i] = get(lowest_shift, key, 0)
-         end
-    end
-
-    # if var is like D(x)
+    # if var is like D(x) or Shift(t, 1)(x)
     isdervar = let diff_to_var = diff_to_var
         var -> diff_to_var[var] !== nothing
     end
