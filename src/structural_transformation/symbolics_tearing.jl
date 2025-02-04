@@ -237,18 +237,6 @@ function check_diff_graph(var_to_diff, fullvars)
 end
 =#
 
-function state_selection() 
-    
-end
-
-function create_new_deriv_variables() 
-    
-end
-
-function solve_solvable_equations() 
-    
-end
-
 function tearing_reassemble(state::TearingState, var_eq_matching,
         full_var_eq_matching = nothing; simplify = false, mm = nothing, cse_hack = true, array_hack = true)
     @unpack fullvars, sys, structure = state
@@ -323,7 +311,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
             diff_to_var[dv] = nothing
         end
     end
-    @show neweqs
+    @show var_eq_matching
 
     println("Post state selection.")
     
@@ -337,7 +325,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     end
     idx_to_lowest_shift = Dict{Int, Int}(var => 0 for var in 1:length(fullvars))
     for (i,var) in enumerate(fullvars)
-        key = operation(var) isa Shift ? only(arguments(var)) : var
+        key = (operation(var) isa Shift) ? only(arguments(var)) : var
         idx_to_lowest_shift[i] = get(lowest_shift, key, 0)
     end
 
@@ -345,6 +333,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     isdervar = let diff_to_var = diff_to_var
         var -> diff_to_var[var] !== nothing
     end
+    # For discrete variables, we want the substitution to turn 
+    # Shift(t, k)(x(t)) => x_t-k(t)
     var_order = let diff_to_var = diff_to_var
         dv -> begin
             order = 0
@@ -358,7 +348,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     end
     lower_name = is_only_discrete(state.structure) ? lower_varname_withshift : lower_varname_with_unit
 
-    #retear = BitSet()
     # There are three cases where we want to generate new variables to convert
     # the system into first order (semi-implicit) ODEs.
     #
