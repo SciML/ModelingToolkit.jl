@@ -241,6 +241,7 @@ function substitute_lower_order!(state::TearingState)
     
 end
 
+import ModelingToolkit: Shift
 function tearing_reassemble(state::TearingState, var_eq_matching,
         full_var_eq_matching = nothing; simplify = false, mm = nothing, cse_hack = true, array_hack = true)
     @unpack fullvars, sys, structure = state
@@ -255,6 +256,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     end
 
     neweqs = collect(equations(state))
+    lower_name = is_only_discrete(state.structure) ? lower_varname_withshift : lower_varname_with_unit
+
     # Terminology and Definition:
     #
     # A general DAE is in the form of `F(u'(t), u(t), p, t) == 0`. We can
@@ -350,7 +353,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
             order, dv
         end
     end
-    lower_name = is_only_discrete(state.structure) ? lower_varname_withshift : lower_varname_with_unit
 
     # There are three cases where we want to generate new variables to convert
     # the system into first order (semi-implicit) ODEs.
@@ -464,7 +466,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
         add_edge!(solvable_graph, dummy_eq, dv)
         @assert nsrcs(graph) == nsrcs(solvable_graph) == dummy_eq
         @label FOUND_DUMMY_EQ
-        # If var = x with no shift, then 
         is_only_discrete(state.structure) && (idx_to_lowest_shift[v_t] = idx_to_lowest_shift[dv])
         var_to_diff[v_t] = var_to_diff[dv]
         var_eq_matching[dv] = unassigned
