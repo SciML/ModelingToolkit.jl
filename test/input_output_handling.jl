@@ -128,10 +128,11 @@ eqs = [connect(torque.flange, inertia1.flange_a)
        connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
        y ~ inertia2.w + torque.tau.u]
 model = ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
-    name = :name)
+    name = :name, guesses = [spring.flange_a.phi => 1.0])
 model_outputs = [inertia1.w, inertia2.w, inertia1.phi, inertia2.phi]
 model_inputs = [torque.tau.u]
-matrices, ssys = linearize(model, model_inputs, model_outputs);
+matrices, ssys = linearize(
+    model, model_inputs, model_outputs; op = Dict(torque.tau.u => 0.0));
 @test length(ModelingToolkit.outputs(ssys)) == 4
 
 if VERSION >= v"1.8" # :opaque_closure not supported before
