@@ -442,9 +442,20 @@ end
     $(TYPEDSIGNATURES)
 
 Remove keys in `varmap` whose values are `nothing`.
+
+If `missing_values` is not `nothing`, it is assumed to be a collection and all removed
+keys will be added to it.
 """
-function filter_missing_values!(varmap::AbstractDict)
-    filter!(kvp -> kvp[2] !== nothing, varmap)
+function filter_missing_values!(varmap::AbstractDict; missing_values = nothing)
+    filter!(varmap) do kvp
+        if kvp[2] !== nothing
+            return true
+        end
+        if missing_values !== nothing
+            push!(missing_values, kvp[1])
+        end
+        return false
+    end
 end
 
 struct GetUpdatedMTKParameters{G, S}
@@ -523,14 +534,17 @@ function build_operating_point(
         haskey(op, k) && continue
         op[k] = v
     end
+    filter_missing_values!(op; missing_values = missing_unknowns)
+
     merge!(op, pmap)
     missing_pars = add_fallbacks!(op, ps, defs)
+    filter_missing_values!(op; missing_values = missing_pars)
     for eq in cmap
         op[eq.lhs] = eq.rhs
     end
 
-    empty!(u0map)
-    empty!(pmap)
+    filter!(kvp -> kvp[2] === nothing, u0map)
+    filter!(kvp -> kvp[2] === nothing, pmap)
     for (k, v) in op
         k = unwrap(k)
         if isparameter(k)
@@ -539,6 +553,7 @@ function build_operating_point(
             u0map[k] = v
         end
     end
+
     return op, missing_unknowns, missing_pars
 end
 
@@ -749,9 +764,6 @@ function process_SciMLProblem(
 
     op, missing_unknowns, missing_pars = build_operating_point(
         u0map, pmap, defs, cmap, dvs, ps)
-    filter_missing_values!(op)
-    filter_missing_values!(u0map)
-    filter_missing_values!(pmap)
     substitute_extra_variables!(sys, u0map)
     substitute_extra_variables!(sys, pmap)
 
