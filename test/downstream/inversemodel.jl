@@ -173,3 +173,32 @@ matrices2, _ = Blocks.get_comp_sensitivity(model, :y; op) # Test that we get the
 @test_broken matrices1.f_x ≈ matrices2.A[1:7, 1:7]
 nsys = get_named_comp_sensitivity(model, :y; op) # Test that we get the same result when calling an even higher-level API
 @test matrices2.A ≈ nsys.A
+
+@testset "Issue #3319" begin
+    op1 = Dict(
+        D(cm.inverse_tank.xT) => 1,
+        cm.tank.xc => 0.65
+    )
+
+    op2 = Dict(
+        D(cm.inverse_tank.xT) => 1,
+        cm.tank.xc => 0.45
+    )
+
+    output = :y
+    lin_fun, ssys = Blocks.get_sensitivity_function(model, output)
+    matrices1 = linearize(ssys, lin_fun, op = op1)
+    matrices2 = linearize(ssys, lin_fun, op = op2)
+    S1f = ss(matrices1...)
+    S2f = ss(matrices2...)
+    @test S1f != S2f
+
+    matrices1, ssys = Blocks.get_sensitivity(model, output; op = op1)
+    matrices2, ssys = Blocks.get_sensitivity(model, output; op = op2)
+    S1 = ss(matrices1...)
+    S2 = ss(matrices2...)
+    @test S1 != S2
+
+    @test S1 == S1f
+    @test S2 == S2f
+end
