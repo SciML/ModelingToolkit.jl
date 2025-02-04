@@ -237,6 +237,10 @@ function check_diff_graph(var_to_diff, fullvars)
 end
 =#
 
+function substitute_lower_order!(state::TearingState) 
+    
+end
+
 function tearing_reassemble(state::TearingState, var_eq_matching,
         full_var_eq_matching = nothing; simplify = false, mm = nothing, cse_hack = true, array_hack = true)
     @unpack fullvars, sys, structure = state
