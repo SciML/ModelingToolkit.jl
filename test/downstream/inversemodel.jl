@@ -32,7 +32,7 @@ rc = 0.25 # Reference concentration
         gamma(t), [description = "Reaction speed"]
         xc(t) = c0, [description = "Concentration"]
         xT(t) = T0, [description = "Temperature"]
-        xT_c(t) = T0, [description = "Cooling temperature"]
+        xT_c(t), [description = "Cooling temperature"]
     end
 
     @components begin
@@ -77,7 +77,11 @@ begin
     end
 
     # Create an MTK-compatible constructor 
-    RefFilter(; y0, name) = ODESystem(Fss; name, x0 = init_filter(y0))
+    function RefFilter(; name)
+        sys = ODESystem(Fss; name)
+        delete!(defaults(sys), @nonamespace(sys.x)[1])
+        return sys
+    end
 end
 @mtkmodel InverseControlledTank begin
     begin
@@ -97,10 +101,10 @@ end
         ff_gain = Gain(k = 1) # To allow turning ff off
         controller = PI(gainPI.k = 10, T = 500)
         tank = MixingTank(xc = c_start, xT = T_start, c0 = c0, T0 = T0)
-        inverse_tank = MixingTank(xc = c_start, xT = T_start, c0 = c0, T0 = T0)
+        inverse_tank = MixingTank(xc = nothing, xT = T_start, c0 = c0, T0 = T0)
         feedback = Feedback()
         add = Add()
-        filter = RefFilter(y0 = c_start) # Initialize filter states to the initial concentration
+        filter = RefFilter()
         noise_filter = FirstOrder(k = 1, T = 1, x = T_start)
         # limiter = Gain(k=1)
         limiter = Limiter(y_max = 370, y_min = 250) # Saturate the control input 
