@@ -1,6 +1,6 @@
 ### TODO: update when BoundaryValueDiffEqAscher is updated to use the normal boundary condition conventions 
 
-using OrdinaryDiffEqVerner
+using OrdinaryDiffEqDefault
 using BoundaryValueDiffEqMIRK, BoundaryValueDiffEqAscher
 using BenchmarkTools
 using ModelingToolkit
@@ -24,7 +24,7 @@ let
      
      @mtkbuild lotkavolterra = ODESystem(eqs, t)
      op = ODEProblem(lotkavolterra, u0map, tspan, parammap)
-     osol = solve(op, Vern9())
+     osol = solve(op)
      
      bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(
          lotkavolterra, u0map, tspan, parammap; eval_expression = true)
@@ -61,7 +61,7 @@ let
      tspan = (0.0, 6.0)
      
      op = ODEProblem(pend, u0map, tspan, parammap)
-     osol = solve(op, Vern9())
+     osol = solve(op)
      
      bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap)
      for solver in solvers
