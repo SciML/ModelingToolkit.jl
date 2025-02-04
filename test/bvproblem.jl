@@ -113,8 +113,11 @@ let
         [u(0.0)[1] - 1., u(0.5)[2] - 2.]
     end
 
+    u0 = [1., 1.]
+    tspan = (0., 1.)
+    p = [1.5, 1., 1., 3.]
     bvpi1 = SciMLBase.BVProblem(lotkavolterra!, bc!, u0, tspan, p)
-    bvpi1 = SciMLBase.BVProblem(lotkavolterra, bc, u0, tspan, p)
+    bvpi2 = SciMLBase.BVProblem(lotkavolterra, bc, u0, tspan, p)
     bvpi3 = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, [x(t) => 1.], tspan; guesses = [y(t) => 1.])
     bvpi4 = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(lksys, [x(t) => 1.], tspan; guesses = [y(t) => 1.])
     
