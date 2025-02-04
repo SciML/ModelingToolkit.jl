@@ -59,7 +59,7 @@ let
      tspan = (0.0, 6.0)
      
      op = ODEProblem(pend, u0map, tspan, parammap)
-     osol = solve(op)
+     osol = solve(op, Vern9())
      
      bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap)
      for solver in solvers
@@ -111,8 +111,8 @@ let
     end
 
     u0 = [1., 2.]; p = [1.5, 1., 1., 3.]
-    genbc_iip = ModelingToolkit.generate_function_bc(lksys, u0, [1, 2], tspan, true)
-    genbc_oop = ModelingToolkit.generate_function_bc(lksys, u0, [1, 2], tspan, false)
+    fns = ModelingToolkit.generate_function_bc(lksys, u0, [1, 2], tspan)
+    genbc_oop, genbc_iip = ModelingToolkit.eval_or_rgf.(fns)
 
     bvpi1 = SciMLBase.BVProblem(lotkavolterra!, bc!, [1.,2.], tspan, p)
     bvpi2 = SciMLBase.BVProblem(lotkavolterra!, genbc_iip, [1.,2.], tspan, p)
@@ -141,8 +141,8 @@ let
     end
 
     u0 = [1, 1.]
-    genbc_iip = ModelingToolkit.generate_function_bc(lksys, u0, [1], tspan, true)
-    genbc_oop = ModelingToolkit.generate_function_bc(lksys, u0, [1], tspan, false)
+    fns = ModelingToolkit.generate_function_bc(lksys, u0, [1], tspan)
+    genbc_oop, genbc_iip = ModelingToolkit.eval_or_rgf.(fns)
 
     bvpi1 = SciMLBase.BVProblem(lotkavolterra!, bc!, u0, tspan, p)
     bvpi2 = SciMLBase.BVProblem(lotkavolterra!, genbc_iip, u0, tspan, p)
