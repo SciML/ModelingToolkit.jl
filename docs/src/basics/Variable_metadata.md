@@ -191,7 +191,7 @@ isirreducible(important_value)
 When a model is structurally simplified, the algorithm will try to ensure that the variables with higher state priority become states of the system. A variable's state priority is a number set using the `state_priority` metadata.
 
 ```@example metadata
-@variable important_dof [state_priority = 10] unimportant_dof [state_priority = 2]
+@variable important_dof [state_priority = 10] unimportant_dof [state_priority = -2]
 state_priority(important_dof)
 ```
 
