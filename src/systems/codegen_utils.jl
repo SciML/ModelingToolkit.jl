@@ -121,7 +121,7 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
         p_end = is_time_dependent(sys) ? length(args) - 1 : length(args),
         wrap_delays = is_dde(sys), wrap_code = identity,
         add_observed = true, filter_observed = Returns(true),
-        create_bindings = true, output_type = nothing, mkarray = nothing,
+        create_bindings = false, output_type = nothing, mkarray = nothing,
         wrap_mtkparameters = true, extra_assignments = Assignment[], kwargs...)
     isscalar = !(expr isa AbstractArray || symbolic_type(expr) == ArraySymbolic())
     # filter observed equations
