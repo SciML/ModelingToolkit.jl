@@ -56,6 +56,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables k(t) [connect = Stream]
 hasconnect(i)
 ```
+
 ```@example connect
 getconnect(k)
 ```
@@ -197,12 +198,13 @@ state_priority(important_dof)
 
 ## Units
 
-Units for variables can be designated using symbolic metadata. For more information, please see the [model validation and units](@ref units) section of the docs. Note that `getunit` is not equivalent to `get_unit` - the former is a metadata getter for individual variables (and is provided so the same interface function for `unit` exists like other metadata), while the latter is used to handle more general symbolic expressions. 
+Units for variables can be designated using symbolic metadata. For more information, please see the [model validation and units](@ref units) section of the docs. Note that `getunit` is not equivalent to `get_unit` - the former is a metadata getter for individual variables (and is provided so the same interface function for `unit` exists like other metadata), while the latter is used to handle more general symbolic expressions.
 
 ```@example metadata
-@variable speed [unit=u"m/s"]
+@variable speed [unit = u"m/s"]
 hasunit(speed)
 ```
+
 ```@example metadata
 getunit(speed)
 ```
