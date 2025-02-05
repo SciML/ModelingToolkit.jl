@@ -33,10 +33,10 @@ function MTKParameters(
     else
         error("Cannot create MTKParameters if system does not have index_cache")
     end
-    all_ps = Set(unwrap.(parameters(sys)))
-    union!(all_ps, default_toterm.(unwrap.(parameters(sys))))
+    all_ps = Set(unwrap.(parameters(sys; initial_parameters = true)))
+    union!(all_ps, default_toterm.(unwrap.(parameters(sys; initial_parameters = true))))
     if p isa Vector && !(eltype(p) <: Pair) && !isempty(p)
-        ps = parameters(sys)
+        ps = parameters(sys; initial_parameters = true)
         length(p) == length(ps) || error("Invalid parameters")
         p = ps .=> p
     end
