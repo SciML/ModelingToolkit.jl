@@ -211,7 +211,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     sys, _ = io_preprocessing(sys, inputs, []; simplify, kwargs...)
 
     dvs = unknowns(sys)
-    ps = parameters(sys)
+    ps = parameters(sys; initial_parameters = true)
     ps = setdiff(ps, inputs)
     if disturbance_inputs !== nothing
         # remove from inputs since we do not want them as actual inputs to the dynamics
@@ -234,16 +234,14 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
            [eq.rhs for eq in eqs]
 
     # TODO: add an optional check on the ordering of observed equations
-    u = map(x -> time_varying_as_func(value(x), sys), dvs)
-    p = map(x -> time_varying_as_func(value(x), sys), ps)
-    p = reorder_parameters(sys, p)
+    p = reorder_parameters(sys, ps)
     t = get_iv(sys)
 
     # pre = has_difference ? (ex -> ex) : get_postprocess_fbody(sys)
     if disturbance_argument
-        args = (u, inputs, p..., t, disturbance_inputs)
+        args = (dvs, inputs, p..., t, disturbance_inputs)
     else
-        args = (u, inputs, p..., t)
+        args = (dvs, inputs, p..., t)
     end
     if implicit_dae
         ddvs = map(Differential(get_iv(sys)), dvs)

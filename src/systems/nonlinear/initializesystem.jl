@@ -339,7 +339,9 @@ end
 
 function ReconstructInitializeprob(
         srcsys::AbstractSystem, dstsys::AbstractSystem; remap = Dict())
-    syms = reduce(vcat, reorder_parameters(dstsys, parameters(dstsys)); init = [])
+    syms = reduce(
+        vcat, reorder_parameters(dstsys, parameters(dstsys; initial_parameters = true));
+        init = [])
     getter = getu(srcsys, map(x -> get(remap, x, x), syms))
     setter = setp_oop(dstsys, syms)
     return ReconstructInitializeprob(getter, setter)

@@ -282,7 +282,7 @@ function generate_rate_function(js::JumpSystem, rate)
         csubs = Dict(c => getdefault(c) for c in consts)
         rate = substitute(rate, csubs)
     end
-    p = reorder_parameters(js, parameters(js))
+    p = reorder_parameters(js)
     rf = build_function_wrapper(js, rate, unknowns(js), p...,
         get_iv(js),
         expression = Val{true})
@@ -634,7 +634,7 @@ end
 function JumpSysMajParamMapper(js::JumpSystem, p; jseqs = nothing, rateconsttype = Float64)
     eqs = (jseqs === nothing) ? equations(js) : jseqs
     paramexprs = [maj.scaled_rates for maj in eqs.x[1]]
-    psyms = reduce(vcat, reorder_parameters(js, parameters(js)); init = [])
+    psyms = reduce(vcat, reorder_parameters(js); init = [])
     paramdict = Dict(value(k) => value(v) for (k, v) in zip(psyms, vcat(p...)))
     JumpSysMajParamMapper{typeof(paramexprs), typeof(psyms), rateconsttype}(paramexprs,
         psyms,

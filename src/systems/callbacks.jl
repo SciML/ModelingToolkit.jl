@@ -682,7 +682,7 @@ function compile_affect(eqs::Vector{Equation}, cb, sys, dvs, ps; outputidxs = no
 end
 
 function generate_rootfinding_callback(sys::AbstractTimeDependentSystem,
-        dvs = unknowns(sys), ps = parameters(sys); kwargs...)
+        dvs = unknowns(sys), ps = parameters(sys; initial_parameters = true); kwargs...)
     cbs = continuous_events(sys)
     isempty(cbs) && return nothing
     generate_rootfinding_callback(cbs, sys, dvs, ps; kwargs...)
@@ -693,7 +693,7 @@ generate_rootfinding_callback and thus we can produce a ContinuousCallback inste
 """
 function generate_single_rootfinding_callback(
         eq, cb, sys::AbstractTimeDependentSystem, dvs = unknowns(sys),
-        ps = parameters(sys); kwargs...)
+        ps = parameters(sys; initial_parameters = true); kwargs...)
     if !isequal(eq.lhs, 0)
         eq = 0 ~ eq.lhs - eq.rhs
     end
@@ -736,7 +736,7 @@ end
 
 function generate_vector_rootfinding_callback(
         cbs, sys::AbstractTimeDependentSystem, dvs = unknowns(sys),
-        ps = parameters(sys); rootfind = SciMLBase.RightRootFind,
+        ps = parameters(sys; initial_parameters = true); rootfind = SciMLBase.RightRootFind,
         reinitialization = SciMLBase.CheckInit(), kwargs...)
     eqs = map(cb -> flatten_equations(cb.eqs), cbs)
     num_eqs = length.(eqs)
@@ -861,7 +861,7 @@ function compile_affect_fn(cb, sys::AbstractTimeDependentSystem, dvs, ps, kwargs
 end
 
 function generate_rootfinding_callback(cbs, sys::AbstractTimeDependentSystem,
-        dvs = unknowns(sys), ps = parameters(sys); kwargs...)
+        dvs = unknowns(sys), ps = parameters(sys; initial_parameters = true); kwargs...)
     eqs = map(cb -> flatten_equations(cb.eqs), cbs)
     num_eqs = length.(eqs)
     total_eqs = sum(num_eqs)
@@ -949,7 +949,9 @@ function invalid_variables(sys, expr)
 end
 function unassignable_variables(sys, expr)
     assignable_syms = reduce(
-        vcat, Symbolics.scalarize.(vcat(unknowns(sys), parameters(sys))); init = [])
+        vcat, Symbolics.scalarize.(vcat(
+            unknowns(sys), parameters(sys; initial_parameters = true)));
+        init = [])
     written = reduce(vcat, Symbolics.scalarize.(vars(expr)); init = [])
     return filter(
         x -> !any(isequal(x), assignable_syms), written)
@@ -1075,7 +1077,7 @@ function generate_discrete_callback(cb, sys, dvs, ps; postprocess_affect_expr! =
 end
 
 function generate_discrete_callbacks(sys::AbstractSystem, dvs = unknowns(sys),
-        ps = parameters(sys); kwargs...)
+        ps = parameters(sys; initial_parameters = true); kwargs...)
     has_discrete_events(sys) || return nothing
     symcbs = discrete_events(sys)
     isempty(symcbs) && return nothing

@@ -161,7 +161,7 @@ time-independent systems. If `split=true` (the default) was passed to [`complete
 object.
 """
 function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys),
-        ps = parameters(sys);
+        ps = parameters(sys; initial_parameters = true);
         expression = Val{true}, eval_expression = false, eval_module = @__MODULE__,
         cachesyms::Tuple = (), kwargs...)
     if !iscomplete(sys)
@@ -533,7 +533,7 @@ function SymbolicIndexingInterface.get_all_timeseries_indexes(sys::AbstractSyste
 end
 
 function SymbolicIndexingInterface.parameter_symbols(sys::AbstractSystem)
-    return parameters(sys)
+    return parameters(sys; initial_parameters = true)
 end
 
 function SymbolicIndexingInterface.is_independent_variable(sys::AbstractSystem, sym)
@@ -2428,7 +2428,7 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
         kwargs...)
     sts = unknowns(sys)
     t = get_iv(sys)
-    ps = parameters(sys)
+    ps = parameters(sys; initial_parameters = true)
     p = reorder_parameters(sys, ps)
 
     fun_expr = generate_function(sys, sts, ps; expression = Val{true})[1]

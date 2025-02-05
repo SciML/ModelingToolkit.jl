@@ -418,7 +418,7 @@ function __get_num_diag_noise(mat)
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = unknowns(sys),
-        ps = parameters(sys); isdde = false, kwargs...)
+        ps = parameters(sys; initial_parameters = true); isdde = false, kwargs...)
     eqs = get_noiseeqs(sys)
     p = reorder_parameters(sys, ps)
     return build_function_wrapper(sys, eqs, dvs, p..., get_iv(sys); kwargs...)

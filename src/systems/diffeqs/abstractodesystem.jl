@@ -105,7 +105,8 @@ function calculate_control_jacobian(sys::AbstractODESystem;
 end
 
 function generate_tgrad(
-        sys::AbstractODESystem, dvs = unknowns(sys), ps = parameters(sys);
+        sys::AbstractODESystem, dvs = unknowns(sys), ps = parameters(
+            sys; initial_parameters = true);
         simplify = false, kwargs...)
     tgrad = calculate_tgrad(sys, simplify = simplify)
     p = reorder_parameters(sys, ps)
@@ -117,7 +118,7 @@ function generate_tgrad(
 end
 
 function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys);
+        ps = parameters(sys; initial_parameters = true);
         simplify = false, sparse = false, kwargs...)
     jac = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
     p = reorder_parameters(sys, ps)
@@ -129,7 +130,7 @@ function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
 end
 
 function generate_control_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys);
+        ps = parameters(sys; initial_parameters = true);
         simplify = false, sparse = false, kwargs...)
     jac = calculate_control_jacobian(sys; simplify = simplify, sparse = sparse)
     p = reorder_parameters(sys, ps)
@@ -137,7 +138,7 @@ function generate_control_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
 end
 
 function generate_dae_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys); simplify = false, sparse = false,
+        ps = parameters(sys; initial_parameters = true); simplify = false, sparse = false,
         kwargs...)
     jac_u = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
     derivatives = Differential(get_iv(sys)).(unknowns(sys))
@@ -153,7 +154,7 @@ function generate_dae_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
 end
 
 function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys);
+        ps = parameters(sys; initial_parameters = true);
         implicit_dae = false,
         ddvs = implicit_dae ? map(Differential(get_iv(sys)), dvs) :
                nothing,
@@ -699,7 +700,7 @@ function SymbolicTstops(
             term(:, t0, unwrap(val), t1; type = AbstractArray{Real})
         end
     end
-    rps = reorder_parameters(sys, parameters(sys))
+    rps = reorder_parameters(sys)
     tstops, _ = build_function_wrapper(sys, tstops,
         rps...,
         t0,
@@ -825,7 +826,7 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
 end
 
 function generate_history(sys::AbstractODESystem, u0; expression = Val{false}, kwargs...)
-    p = reorder_parameters(sys, parameters(sys))
+    p = reorder_parameters(sys)
     build_function_wrapper(
         sys, u0, p..., get_iv(sys); expression, p_start = 1, p_end = length(p),
         similarto = typeof(u0), wrap_delays = false, kwargs...)
