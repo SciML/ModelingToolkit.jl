@@ -526,7 +526,7 @@ no values can be determined, and the list of parameters for which no values can 
 Also updates `u0map` and `pmap` in-place to contain all the initial conditions in `op`, split
 by unknowns and parameters respectively.
 """
-function build_operating_point(
+function build_operating_point!(
         u0map::AbstractDict, pmap::AbstractDict, defs::AbstractDict, cmap, dvs, ps)
     op = add_toterms(u0map)
     missing_unknowns = add_fallbacks!(op, dvs, defs)
@@ -762,7 +762,7 @@ function process_SciMLProblem(
 
     is_time_dependent(sys) || add_observed!(sys, u0map)
 
-    op, missing_unknowns, missing_pars = build_operating_point(
+    op, missing_unknowns, missing_pars = build_operating_point!(
         u0map, pmap, defs, cmap, dvs, ps)
     substitute_extra_variables!(sys, u0map)
     substitute_extra_variables!(sys, pmap)
