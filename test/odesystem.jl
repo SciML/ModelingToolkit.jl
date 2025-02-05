@@ -109,8 +109,8 @@ for iip in (true, false)
     @test SciMLBase.specialization(f) === SciMLBase.specialization(f2)
 
     for specialize in (SciMLBase.AutoSpecialize, SciMLBase.FullSpecialize)
-        f = eval(ODEFunctionExpr{iip,specialize}(de, [x, y, z], [σ, ρ, β]))
-        f2 = ODEFunction{iip,specialize}(de, [x, y, z], [σ, ρ, β])
+        f = eval(ODEFunctionExpr{iip, specialize}(de, [x, y, z], [σ, ρ, β]))
+        f2 = ODEFunction{iip, specialize}(de, [x, y, z], [σ, ρ, β])
         @test SciMLBase.isinplace(f) === SciMLBase.isinplace(f2) === iip
         @test SciMLBase.specialization(f) === SciMLBase.specialization(f2) === specialize
     end

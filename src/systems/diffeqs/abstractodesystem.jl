@@ -542,7 +542,7 @@ Create a Julia expression for an `ODEFunction` from the [`ODESystem`](@ref).
 The arguments `dvs` and `ps` are used to set the order of the dependent
 variable and parameter vectors, respectively.
 """
-struct ODEFunctionExpr{iip,specialize} end
+struct ODEFunctionExpr{iip, specialize} end
 
 struct ODEFunctionClosure{O, I} <: Function
     f_oop::O
@@ -551,7 +551,7 @@ end
 (f::ODEFunctionClosure)(u, p, t) = f.f_oop(u, p, t)
 (f::ODEFunctionClosure)(du, u, p, t) = f.f_iip(du, u, p, t)
 
-function ODEFunctionExpr{iip,specialize}(sys::AbstractODESystem, dvs = unknowns(sys),
+function ODEFunctionExpr{iip, specialize}(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
         version = nothing, tgrad = false,
         jac = false, p = nothing,
@@ -560,7 +560,7 @@ function ODEFunctionExpr{iip,specialize}(sys::AbstractODESystem, dvs = unknowns(
         steady_state = false,
         sparsity = false,
         observedfun_exp = nothing,
-        kwargs...) where {iip,specialize}
+        kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEFunctionExpr`")
     end
@@ -601,7 +601,7 @@ function ODEFunctionExpr{iip,specialize}(sys::AbstractODESystem, dvs = unknowns(
     jp_expr = sparse ? :($similar($(get_jac(sys)[]), Float64)) : :nothing
     ex = quote
         let $_f, $_tgrad, $_jac, $_M
-            ODEFunction{$iip,$specialize}($fsym,
+            ODEFunction{$iip, $specialize}($fsym,
                 sys = $sys,
                 jac = $jacsym,
                 tgrad = $tgradsym,
