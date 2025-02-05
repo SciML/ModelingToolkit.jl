@@ -681,6 +681,31 @@ function (f::Initial)(x)
     return result
 end
 
+function add_initialization_parameters(sys::AbstractSystem)
+    is_time_dependent(sys) || return sys
+    @assert !has_systems(sys) || isempty(get_systems(sys))
+    eqs = equations(sys)
+    if !(eqs isa Vector{Equation})
+        eqs = Equation[x for x in eqs if x isa Equation]
+    end
+    obs, eqs = unhack_observed(observed(sys), eqs)
+    all_uvars = Set{BasicSymbolic}()
+    for x in Iterators.flatten((unknowns(sys), Iterators.map(eq -> eq.lhs, obs)))
+        x = unwrap(x)
+        if iscall(x) && operation(x) == getindex
+            push!(all_uvars, arguments(x)[1])
+        else
+            push!(all_uvars, x)
+        end
+    end
+    all_uvars = collect(all_uvars)
+    initials = map(Initial(), all_uvars)
+    # existing_initials = filter(x -> iscall(x) && (operation(x) isa Initial), parameters(sys))
+    @set! sys.ps = unique!([get_ps(sys); initials])
+    @set! sys.defaults = merge(get_defaults(sys), Dict(initials .=> zero_var.(initials)))
+    return sys
+end
+
 """
 $(TYPEDSIGNATURES)
 
@@ -713,6 +738,7 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
             @set! newsys.parent = complete(sys; split = false, flatten = false)
         end
         sys = newsys
+        sys = add_initialization_parameters(sys)
     end
     if split && has_index_cache(sys)
         @set! sys.index_cache = IndexCache(sys)
