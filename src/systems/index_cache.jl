@@ -445,7 +445,8 @@ function check_index_map(idxmap, sym)
     end
 end
 
-function reorder_parameters(sys::AbstractSystem, ps; kwargs...)
+function reorder_parameters(
+        sys::AbstractSystem, ps = parameters(sys; initial_parameters = true); kwargs...)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         reorder_parameters(get_index_cache(sys), ps; kwargs...)
     elseif ps isa Tuple
