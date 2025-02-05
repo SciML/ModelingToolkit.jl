@@ -650,6 +650,37 @@ function isscheduled(sys::AbstractSystem)
     end
 end
 
+struct Initial <: Symbolics.Operator end
+Initial(x) = Initial()(x)
+SymbolicUtils.promote_symtype(::Type{Initial}, T) = T
+SymbolicUtils.isbinop(::Initial) = false
+Base.nameof(::Initial) = :Initial
+Base.show(io::IO, x::Initial) = print(io, "Initial")
+input_timedomain(::Initial, _ = nothing) = Continuous()
+output_timedomain(::Initial, _ = nothing) = Continuous()
+
+function (f::Initial)(x)
+    iw = Symbolics.iswrapped(x)
+    x = unwrap(x)
+    if iscall(x) && operation(x) isa Differential
+        x = default_toterm(x)
+    end
+    iscall(x) && operation(x) isa Initial && return x
+    result = if symbolic_type(x) == ArraySymbolic()
+        Symbolics.array_term(f, toparam(x))
+    elseif iscall(x) && operation(x) == getindex
+        arr = arguments(x)[1]
+        term(getindex, f(toparam(arr)), arguments(x)[2:end]...)
+    else
+        term(f, toparam(x))
+    end
+    result = toparam(result)
+    if iw
+        result = wrap(result)
+    end
+    return result
+end
+
 """
 $(TYPEDSIGNATURES)
 
