@@ -414,7 +414,7 @@ end
 ## System interface
 
 """
-    tunable_parameters(sys, p = parameters(sys); default=true)
+    tunable_parameters(sys, p = parameters(sys; initial_parameters = true); default=true)
 
 Get all parameters of `sys` that are marked as `tunable`.
 
@@ -433,7 +433,8 @@ call `Symbolics.scalarize(tunable_parameters(sys))` and concatenate the resultin
 
 See also [`getbounds`](@ref), [`istunable`](@ref), [`MTKParameters`](@ref), [`complete`](@ref)
 """
-function tunable_parameters(sys, p = parameters(sys); default = true)
+function tunable_parameters(
+        sys, p = parameters(sys; initial_parameters = true); default = true)
     filter(x -> istunable(x, default), p)
 end
 
