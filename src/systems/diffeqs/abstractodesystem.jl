@@ -542,7 +542,7 @@ Create a Julia expression for an `ODEFunction` from the [`ODESystem`](@ref).
 The arguments `dvs` and `ps` are used to set the order of the dependent
 variable and parameter vectors, respectively.
 """
-struct ODEFunctionExpr{iip} end
+struct ODEFunctionExpr{iip, specialize} end
 
 struct ODEFunctionClosure{O, I} <: Function
     f_oop::O
@@ -551,7 +551,7 @@ end
 (f::ODEFunctionClosure)(u, p, t) = f.f_oop(u, p, t)
 (f::ODEFunctionClosure)(du, u, p, t) = f.f_iip(du, u, p, t)
 
-function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
+function ODEFunctionExpr{iip, specialize}(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
         version = nothing, tgrad = false,
         jac = false, p = nothing,
@@ -560,13 +560,11 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         steady_state = false,
         sparsity = false,
         observedfun_exp = nothing,
-        kwargs...) where {iip}
+        kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEFunctionExpr`")
     end
     f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
-
-    dict = Dict()
 
     fsym = gensym(:f)
     _f = :($fsym = $ODEFunctionClosure($f_oop, $f_iip))
@@ -590,36 +588,42 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         _jac = :($jacsym = nothing)
     end
 
+    Msym = gensym(:M)
     M = calculate_massmatrix(sys)
-
-    _M = if sparse && !(u0 === nothing || M === I)
-        SparseArrays.sparse(M)
+    if sparse && !(u0 === nothing || M === I)
+        _M = :($Msym = $(SparseArrays.sparse(M)))
     elseif u0 === nothing || M === I
-        M
+        _M = :($Msym = $M)
     else
-        ArrayInterface.restructure(u0 .* u0', M)
+        _M = :($Msym = $(ArrayInterface.restructure(u0 .* u0', M)))
     end
 
     jp_expr = sparse ? :($similar($(get_jac(sys)[]), Float64)) : :nothing
     ex = quote
-        $_f
-        $_tgrad
-        $_jac
-        M = $_M
-        ODEFunction{$iip}($fsym,
-            sys = $sys,
-            jac = $jacsym,
-            tgrad = $tgradsym,
-            mass_matrix = M,
-            jac_prototype = $jp_expr,
-            sparsity = $(sparsity ? jacobian_sparsity(sys) : nothing),
-            observed = $observedfun_exp)
+        let $_f, $_tgrad, $_jac, $_M
+            ODEFunction{$iip, $specialize}($fsym,
+                sys = $sys,
+                jac = $jacsym,
+                tgrad = $tgradsym,
+                mass_matrix = $Msym,
+                jac_prototype = $jp_expr,
+                sparsity = $(sparsity ? jacobian_sparsity(sys) : nothing),
+                observed = $observedfun_exp)
+        end
     end
     !linenumbers ? Base.remove_linenums!(ex) : ex
 end
 
 function ODEFunctionExpr(sys::AbstractODESystem, args...; kwargs...)
     ODEFunctionExpr{true}(sys, args...; kwargs...)
+end
+
+function ODEFunctionExpr{true}(sys::AbstractODESystem, args...; kwargs...)
+    return ODEFunctionExpr{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
+end
+
+function ODEFunctionExpr{false}(sys::AbstractODESystem, args...; kwargs...)
+    return ODEFunctionExpr{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
 """
