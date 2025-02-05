@@ -28,7 +28,8 @@ ModelingToolkit.dump_variable_metadata(p)
 """
 function dump_variable_metadata(var)
     uvar = unwrap(var)
-    variable_source, name = Symbolics.getmetadata(uvar, VariableSource, (:unknown, :unknown))
+    variable_source, name = Symbolics.getmetadata(
+        uvar, VariableSource, (:unknown, :unknown))
     type = symtype(uvar)
     if type <: AbstractArray
         shape = Symbolics.shape(var)
@@ -102,7 +103,9 @@ getconnect(x::Symbolic) = Symbolics.getmetadata(x, VariableConnectType, nothing)
 Determine whether variable `x` has a connect type. See also [`getconnect`](@ref).
 """
 hasconnect(x) = getconnect(x) !== nothing
-setconnect(x, t::Type{T}) where T <: AbstractConnectType = setmetadata(x, VariableConnectType, t)
+function setconnect(x, t::Type{T}) where {T <: AbstractConnectType}
+    setmetadata(x, VariableConnectType, t)
+end
 
 ### Input, Output, Irreducible 
 isvarkind(m, x::Union{Num, Symbolics.Arr}) = isvarkind(m, value(x))
@@ -581,7 +584,7 @@ metadata associated with it.
 See also [`getmisc(x)`](@ref).
 """
 hasmisc(x) = getmisc(x) !== nothing
-setmisc(x, miscdata) = setmetadata(x, VariableMisc, miscdata) 
+setmisc(x, miscdata) = setmetadata(x, VariableMisc, miscdata)
 
 ## Units ======================================================================
 """

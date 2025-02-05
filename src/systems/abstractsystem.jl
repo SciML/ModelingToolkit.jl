@@ -2248,15 +2248,20 @@ macro mtkbuild(exprs...)
     expr = exprs[1]
     named_expr = ModelingToolkit.named_expr(expr)
     name = named_expr.args[1]
-    kwargs = if length(exprs) > 1
-        NamedTuple{Tuple(ex.args[1] for ex in Base.tail(exprs))}(Tuple(ex.args[2]
-        for ex in Base.tail(exprs)))
-    else
-        (;)
+    kwargs = Base.tail(exprs)
+    kwargs = map(kwargs) do ex
+        @assert ex.head == :(=)
+        Expr(:kw, ex.args[1], ex.args[2])
     end
+    if isempty(kwargs)
+        kwargs = ()
+    else
+        kwargs = (Expr(:parameters, kwargs...),)
+    end
+    call_expr = Expr(:call, structural_simplify, kwargs..., name)
     esc(quote
         $named_expr
-        $name = $structural_simplify($name; $(kwargs)...)
+        $name = $call_expr
     end)
 end
 
