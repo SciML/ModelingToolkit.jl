@@ -30,6 +30,7 @@ fn5 = generate_custom_function(sys, ifelse(!p4, p1, p2[2]); expression = Val(fal
 
 @variables x y[1:3]
 sys = complete(NonlinearSystem(Equation[], [x; y], [p1, p2, p3, p4]; name = :sys))
+p = MTKParameters(sys, [])
 
 fn1 = generate_custom_function(sys, x + y[1] + p1 + p2[1] + p3; expression = Val(false))
 @test fn1(u0, p) == 6.0
