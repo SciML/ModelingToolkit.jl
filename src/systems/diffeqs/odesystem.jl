@@ -432,7 +432,7 @@ function build_explicit_observed_function(sys, ts;
         eval_module = @__MODULE__,
         output_type = Array,
         checkbounds = true,
-        ps = parameters(sys),
+        ps = parameters(sys; initial_parameters = true),
         return_inplace = false,
         param_only = false,
         op = Operator,
