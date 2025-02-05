@@ -251,7 +251,7 @@ symbolics return an empty array of the appropriate `eltype`.
 function zero_var(x::Symbolic{T}) where {V <: Number, T <: Union{V, AbstractArray{V}}}
     if Symbolics.isarraysymbolic(x)
         if is_sized_array_symbolic(x)
-            return zeros(T, size(x))
+            return zeros(eltype(T), size(x))
         else
             return T[]
         end
