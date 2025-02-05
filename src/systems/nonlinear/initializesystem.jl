@@ -520,7 +520,7 @@ function SciMLBase.remake_initialization_data(
     filter_missing_values!(u0map)
     filter_missing_values!(pmap)
 
-    op, missing_unknowns, missing_pars = build_operating_point(
+    op, missing_unknowns, missing_pars = build_operating_point!(
         u0map, pmap, defs, cmap, dvs, ps)
     kws = maybe_build_initialization_problem(
         sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns;
