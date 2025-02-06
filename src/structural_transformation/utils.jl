@@ -449,10 +449,9 @@ end
 ### Misc
 ###
 
-function lower_varname_withshift(var, iv, order)
-    order == 0 && return var
-    #order == -1 && return Shift(iv, 1)(var)
-    ds = "$iv-$(order-1)"
+function lower_varname_withshift(var, iv, backshift; unshifted = nothing)
+    backshift == 0 && return unshifted 
+    ds = "$iv-$backshift"
     d_separator = 'ˍ'
 
     if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)

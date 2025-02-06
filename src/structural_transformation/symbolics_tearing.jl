@@ -333,6 +333,32 @@ where `:=` denotes assignment.
 
 As a final note, in all the above cases where we need to introduce new
 variables and equations, don't add them when they already exist.
+
+###### DISCRETE SYSTEMS ####### 
+
+Documenting the differences to structural simplification for discrete systems:
+In discrete systems the lowest-order term is x_k-i, instead of x(t).
+
+The orders will also be off by one. The reason this is is that the dynamics of
+the system should be given in terms of Shift(t, 1)(x(t), x(t-1), ...). But 
+having the observables be indexed by the next time step is not so nice. So we 
+handle the shifts in the renaming, rather than explicitly.
+
+The substitution should look like the following: 
+  x(t) -> Shift(t, 1)(x(t))
+  Shift(t, -1)(x(t)) -> x(t)
+  Shift(t, -2)(x(t)) -> x_{t-1}(t)
+  Shift(t, -3)(x(t)) -> x_{t-2}(t)
+  and so on...
+
+In the implicit discrete case this shouldn't happen. The simplification should 
+look like a NonlinearSystem.
+
+For discrete systems Shift(t, 2)(x(t)) is not equivalent to Shift(t, 1)(Shift(t,1)(x(t))
+This is different from the continuous case where D(D(x)) can be substituted for 
+by iteratively substituting x_t ~ D(x), then x_tt ~ D(x_t). For this reason the
+total_sub dict is updated at the time that the renamed variables are written,
+inside the loop where new variables are generated.
 """
 function generate_derivative_variables!(ts::TearingState, neweqs, total_sub, var_eq_matching, var_order;
         is_discrete = false, mm = nothing)
@@ -342,26 +368,41 @@ function generate_derivative_variables!(ts::TearingState, neweqs, total_sub, var
     eq_var_matching = invview(var_eq_matching)
     diff_to_var = invview(var_to_diff)
     iv = ModelingToolkit.has_iv(sys) ? ModelingToolkit.get_iv(sys) : nothing
-    lower_name = is_discrete ? lower_name_withshift : lower_name_with_unit
+    lower_name = is_discrete ? lower_varname_withshift : lower_varname_with_unit
+
+    # index v gets mapped to the lowest shift and the index of the unshifted variable
+    if is_discrete
+        idx_to_lowest_shift = Dict{Int, Tuple{Int, Int}}(var => (0,0) for var in 1:length(fullvars))
+        var_to_unshiftedidx = Dict{Any, Int}(var => findfirst(x -> isequal(x, var), fullvars) for var in keys(lowest_shift))
+
+        for (i,var) in enumerate(fullvars)
+            key = (operation(var) isa Shift) ? only(arguments(var)) : var
+            idx_to_lowest_shift[i] = (get(lowest_shift, key, 0), get(var_to_unshiftedidx, key, i))
+        end
+    end
 
     linear_eqs = mm === nothing ? Dict{Int, Int}() :
                  Dict(reverse(en) for en in enumerate(mm.nzrows))
 
+    # v is the index of the current variable, x = fullvars[v]
+    # dv is the index of the derivative dx = D(x), x_t is the substituted variable 
+    #
+    # For ODESystems: lv is the index of the lowest-order variable (x(t))
+    # For DiscreteSystems: 
+    # - lv is the index of the lowest-order variable (Shift(t, k)(x(t)))
+    # - uv is the index of the highest-order variable (x(t))
     for v in 1:length(var_to_diff)
-        is_highest_discrete = begin
-            var = fullvars[v]
-            op = operation(var)
-            if (!is_discrete || op isa Shift) 
-                false
-            elseif !haskey(lowest_shift, var)
-                false
-            else
-                low = lowest_shift[var]
-                idx = findfirst(x -> isequal(x, Shift(iv, low)(var)), fullvars)
-                true
+        dv = var_to_diff[v]
+        if is_discrete 
+            x = fullvars[v]
+            op = operation(x)
+            (low, uv) = idx_to_lowest_shift[v]
+
+            # If v is unshifted (i.e. x(t)), then substitute the lowest-shift variable
+            if !(op isa Shift) && (low != 0)
+                dv = findfirst(_x -> isequal(_x, Shift(iv, low)(x)), fullvars)
             end
         end
-        dv = is_highest_discrete ? idx : var_to_diff[v]
         dv isa Int || continue
 
         solved = var_eq_matching[dv] isa Int
@@ -388,13 +429,9 @@ function generate_derivative_variables!(ts::TearingState, neweqs, total_sub, var
 
         dx = fullvars[dv]
         # add `x_t`
-        println()
-        @show order, lv = var_order(dv)
-        x_t = lower_name(fullvars[lv], iv, order)
-        @show fullvars[v]
-        @show fullvars[dv]
-        @show fullvars[lv]
-        @show dx, x_t
+        order, lv = var_order(dv)
+        x_t = is_discrete ? lower_name(fullvars[lv], iv, -low-order-1; unshifted = fullvars[uv]) :
+                            lower_name(fullvars[lv], iv, order)
         push!(fullvars, simplify_shifts(x_t))
         v_t = length(fullvars)
         v_t_idx = add_vertex!(var_to_diff)
@@ -402,11 +439,27 @@ function generate_derivative_variables!(ts::TearingState, neweqs, total_sub, var
         # TODO: do we care about solvable_graph? We don't use them after
         # `dummy_derivative_graph`.
         add_vertex!(solvable_graph, DST)
-        # var_eq_matching is a bit odd.
-        # length(var_eq_matching) == length(invview(var_eq_matching))
         push!(var_eq_matching, unassigned)
         @assert v_t_idx == ndsts(graph) == ndsts(solvable_graph) == length(fullvars) ==
                 length(var_eq_matching)
+
+        # Add the substitutions to total_sub directly.  
+        is_discrete && begin
+            idx_to_lowest_shift[v_t] = idx_to_lowest_shift[dv]
+            @show dx
+            if operation(dx) isa Shift 
+                total_sub[dx] = x_t
+                for e in 𝑑neighbors(graph, dv)
+                    add_edge!(graph, e, v_t)
+                    rem_edge!(graph, e, dv)
+                end
+                @show graph
+                !(operation(x) isa Shift) && begin
+                    var_to_diff[v_t] = var_to_diff[dv]
+                    continue
+                end
+            end
+        end
         # add `D(x) - x_t ~ 0`
         push!(neweqs, 0 ~ x_t - dx)
         add_vertex!(graph, SRC)
@@ -417,16 +470,10 @@ function generate_derivative_variables!(ts::TearingState, neweqs, total_sub, var
         add_edge!(solvable_graph, dummy_eq, dv)
         @assert nsrcs(graph) == nsrcs(solvable_graph) == dummy_eq
         @label FOUND_DUMMY_EQ
-        is_discrete && begin
-            idx_to_lowest_shift[v_t] = idx_to_lowest_shift[dv]
-            operation(dx) isa Shift && (total_sub[dx] = x_t)
-            order == 1 && (total_sub[x_t] = fullvars[var_to_diff[dv]])
-        end
         var_to_diff[v_t] = var_to_diff[dv]
         var_eq_matching[dv] = unassigned
         eq_var_matching[dummy_eq] = dv
     end
-    @show total_sub
 end
 
 """
@@ -442,7 +489,7 @@ such that the mass matrix is:
 
 Update the state to account for the new ordering and equations.
 """
-function solve_and_generate_equations!(state::TearingState, neweqs, total_sub, var_eq_matching, var_order)
+function solve_and_generate_equations!(state::TearingState, neweqs, total_sub, var_eq_matching, var_order; simplify = false)
     @unpack fullvars, sys, structure = state 
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph, lowest_shift = structure
     eq_var_matching = invview(var_eq_matching)
@@ -467,7 +514,7 @@ function solve_and_generate_equations!(state::TearingState, neweqs, total_sub, v
         var -> diff_to_var[var] !== nothing
     end
 
-    ### Extract partition information
+    # Extract partition information
     is_solvable = let solvable_graph = solvable_graph
         (eq, iv) -> eq isa Int && iv isa Int && BipartiteEdge(eq, iv) in solvable_graph
     end
@@ -485,9 +532,12 @@ function solve_and_generate_equations!(state::TearingState, neweqs, total_sub, v
     eqs = Iterators.reverse(toporder)
     idep = ModelingToolkit.has_iv(sys) ? ModelingToolkit.get_iv(sys) : nothing
 
-    # Generate differential equations in terms of the new variables. 
+    @show eq_var_matching
+    @show fullvars
+    @show neweqs
+
+    # Equation ieq is solved for the RHS of iv 
     for ieq in eqs
-        println()
         iv = eq_var_matching[ieq]
         if is_solvable(ieq, iv)
             # We don't solve differential equations, but we will need to try to
@@ -497,23 +547,14 @@ function solve_and_generate_equations!(state::TearingState, neweqs, total_sub, v
                 isnothing(D) &&
                     error("Differential found in a non-differential system. Likely this is a bug in the construction of an initialization system. Please report this issue with a reproducible example. Offending equation: $(equations(sys)[ieq])")
                 order, lv = var_order(iv)
-                @show fullvars[iv]
-                @show (order, lv)
-                dx = D(simplify_shifts(lower_name(
-                    fullvars[lv], idep, order - 1)))
-                @show dx
+                dx = D(fullvars[lv])
                 eq = dx ~ simplify_shifts(Symbolics.fixpoint_sub(
                     Symbolics.symbolic_linear_solve(neweqs[ieq],
                         fullvars[iv]),
                     total_sub; operator = ModelingToolkit.Shift))
-                @show total_sub
-                @show eq
                 for e in 𝑑neighbors(graph, iv)
-                    e == ieq && continue
-                    for v in 𝑠neighbors(graph, e)
-                        add_edge!(graph, e, v)
-                    end
                     rem_edge!(graph, e, iv)
+                    add_edge!(graph, e, lv)
                 end
                 push!(diff_eqs, eq)
                 total_sub[simplify_shifts(eq.lhs)] = eq.rhs
@@ -594,38 +635,10 @@ function solve_and_generate_equations!(state::TearingState, neweqs, total_sub, v
         new_eq_to_diff[v′] = d′ > 0 ? d′ : nothing
     end
 
-    fullvars[invvarsperm], new_var_to_diff, new_eq_to_diff, neweqs, subeqs
+    fullvars[invvarsperm], new_var_to_diff, new_eq_to_diff, neweqs, subeqs, graph
 end
 
-# Documenting the differences to structural simplification for discrete systems:
-# In discrete systems the lowest-order term is x_k-i, instead of x(t). In order
-# to substitute dummy variables for x_k-1, x_k-2, ... instead you need to reverse 
-# the order. So for discrete systems `var_order` is defined a little differently.
-#
-# The orders will also be off by one. The reason this is is that the dynamics of
-# the system should be given in terms of Shift(t, 1)(x(t), x(t-1), ...). But 
-# having the observables be indexed by the next time step is not so nice. So we 
-# handle the shifts in the renaming, rather than explicitly.
-#
-# The substitution should look like the following: 
-#   x(t) -> Shift(t, 1)(x(t))
-#   x(k-1) -> x(t)
-#   x(k-2) -> x_{t-1}(t)
-#   x(k-3) -> x_{t-2}(t)
-#   and so on...
-#
-# In the implicit discrete case this shouldn't happen. The simplification should 
-# look like a NonlinearSystem.
-#
-# For discrete systems Shift(t, 2)(x(t)) is not equivalent to Shift(t, 1)(Shift(t,1)(x(t))
-# This is different from the continuous case where D(D(x)) can be substituted for 
-# by iteratively substituting x_t ~ D(x), then x_tt ~ D(x_t). For this reason the
-# total_sub dict is updated at the time that the renamed variables are written,
-# inside the loop where new variables are generated.
-
-
 # Terminology and Definition:
-#
 # A general DAE is in the form of `F(u'(t), u(t), p, t) == 0`. We can
 # characterize variables in `u(t)` into two classes: differential variables
 # (denoted `v(t)`) and algebraic variables (denoted `z(t)`). Differential
@@ -654,13 +667,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     dummy_sub = Dict()
     is_discrete = is_only_discrete(state.structure)
 
-    if is_discrete
-        idx_to_lowest_shift = Dict{Int, Int}(var => 0 for var in 1:length(fullvars))
-        for (i,var) in enumerate(fullvars)
-            key = (operation(var) isa Shift) ? only(arguments(var)) : var
-            idx_to_lowest_shift[i] = get(lowest_shift, key, 0)
-        end
-    end
     var_order = let diff_to_var = diff_to_var
         dv -> begin
             order = 0
@@ -668,7 +674,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
                 order += 1
                 dv = dv′
             end
-            is_discrete && (order = -idx_to_lowest_shift[dv] - order)
             order, dv
         end
     end
@@ -677,7 +682,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     substitute_dummy_derivatives!(state, neweqs, dummy_sub, var_eq_matching)
     generate_derivative_variables!(state, neweqs, total_sub, var_eq_matching, var_order; 
                                    is_discrete, mm)
-    new_fullvars, new_var_to_diff, new_eq_to_diff, neweqs, subeqs = solve_and_generate_equations!(state, neweqs, total_sub, var_eq_matching, var_order)
+    new_fullvars, new_var_to_diff, new_eq_to_diff, neweqs, subeqs, graph = solve_and_generate_equations!(state, neweqs, total_sub, var_eq_matching, var_order; simplify)
 
     # Update system
     var_to_diff = new_var_to_diff
@@ -693,16 +698,25 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
         i -> (!isempty(𝑑neighbors(graph, i)) ||
               (var_to_diff[i] !== nothing && !isempty(𝑑neighbors(graph, var_to_diff[i]))))
     end
+    @show graph
+    println()
+    println("Shift test...")
+    @show neweqs
+    @show fullvars
+    @show 𝑑neighbors(graph, 5)
 
     sys = state.sys
-
-    @show dummy_sub
     obs_sub = dummy_sub
     for eq in neweqs
         isdiffeq(eq) || continue
         obs_sub[eq.lhs] = eq.rhs
     end
+    is_discrete && for eq in subeqs
+        obs_sub[eq.rhs] = eq.lhs
+    end
+
     @show obs_sub
+    @show observed(sys)
     # TODO: compute the dependency correctly so that we don't have to do this
     obs = [fast_substitute(observed(sys), obs_sub); subeqs]
 
