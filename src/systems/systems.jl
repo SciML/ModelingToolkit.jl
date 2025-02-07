@@ -58,8 +58,8 @@ function structural_simplify(
         for k in ks
             if Symbolics.isarraysymbolic(k) && Symbolics.shape(k) !== Symbolics.Unknown()
                 defs[k] === missing && continue
-                for i in eachindex(k)
-                    defs[k[i]] = defs[k][i]
+                for (i, j) in zip(eachindex(k), eachindex(defs[k]))
+                    defs[k[i]] = defs[k][j]
                 end
             end
         end
