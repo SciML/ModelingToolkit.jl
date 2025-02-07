@@ -684,6 +684,10 @@ function (f::Initial)(x)
     return result
 end
 
+function SymbolicUtils.maketerm(::Type{<:BasicSymbolic}, ::Initial, args, meta)
+    return metadata(Initial()(args...), meta)
+end
+
 function add_initialization_parameters(sys::AbstractSystem)
     is_time_dependent(sys) || return sys
     @assert !has_systems(sys) || isempty(get_systems(sys))
