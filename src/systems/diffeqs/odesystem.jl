@@ -361,7 +361,7 @@ function flatten(sys::ODESystem, noeqs = false)
         return ODESystem(noeqs ? Equation[] : equations(sys),
             get_iv(sys),
             unknowns(sys),
-            parameters(sys),
+            parameters(sys; initial_parameters = true),
             parameter_dependencies = parameter_dependencies(sys),
             guesses = guesses(sys),
             observed = observed(sys),
