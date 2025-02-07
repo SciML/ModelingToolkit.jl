@@ -1287,7 +1287,7 @@ Get the parameters of the system `sys` and its subsystems.
 
 See also [`@parameters`](@ref) and [`ModelingToolkit.get_ps`](@ref).
 """
-function parameters(sys::AbstractSystem; initial_parameters = false)
+function parameters(sys::AbstractSystem; initial_parameters = !is_time_dependent(sys))
     ps = get_ps(sys)
     if ps == SciMLBase.NullParameters()
         return []
