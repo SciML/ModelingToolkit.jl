@@ -852,7 +852,7 @@ function get_u0_p(sys,
         tofloat = true,
         symbolic_u0 = false)
     dvs = unknowns(sys)
-    ps = parameters(sys)
+    ps = parameters(sys; initial_parameters = true)
 
     defs = defaults(sys)
     if t0 !== nothing
