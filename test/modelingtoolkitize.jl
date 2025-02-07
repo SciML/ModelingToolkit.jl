@@ -460,7 +460,7 @@ sys = modelingtoolkitize(prob)
     p = [10.0, 28.0, 2.66]
     sprob = SDEProblem(sdef!, sdeg!, u0, tspan, p)
     sys = complete(modelingtoolkitize(sprob))
-    @test length(ModelingToolkit.defaults(sys)) == 6
+    @test length(ModelingToolkit.defaults(sys)) == 2length(u0) + length(p)
     sprob2 = SDEProblem(sys, [], tspan)
 
     truevals = similar(u0)
