@@ -459,10 +459,12 @@ function _remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true
     @set! newbuf.nonnumeric = Tuple(similar(buf, Any) for buf in newbuf.nonnumeric)
 
     function handle_parameter(ic, sym, idx, val)
-        if sym === nothing
-            validate_parameter_type(ic, idx, val)
-        else
-            validate_parameter_type(ic, sym, idx, val)
+        if validate
+            if sym === nothing
+                validate_parameter_type(ic, idx, val)
+            else
+                validate_parameter_type(ic, sym, idx, val)
+            end
         end
         # `ParameterIndex(idx)` turns off size validation since it relies on there
         # being an existing value
