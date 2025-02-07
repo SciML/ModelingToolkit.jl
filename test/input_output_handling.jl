@@ -128,7 +128,7 @@ eqs = [connect(torque.flange, inertia1.flange_a)
        connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
        y ~ inertia2.w + torque.tau.u]
 model = ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
-    name = :name, guesses = [spring.flange_a.phi => 1.0])
+    name = :name)
 model_outputs = [inertia1.w, inertia2.w, inertia1.phi, inertia2.phi]
 model_inputs = [torque.tau.u]
 matrices, ssys = linearize(
