@@ -38,6 +38,7 @@ function generate_initializesystem(sys::AbstractSystem;
         delete!(defs, k)
     end
     filter_missing_values!(u0map)
+    pmap = anydict(pmap)
 
     # 1) Use algebraic equations of time-dependent systems as initialization constraints
     if has_iv(sys)
