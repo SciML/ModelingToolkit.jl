@@ -311,7 +311,10 @@ function ReconstructInitializeprob(
     syms = reduce(
         vcat, reorder_parameters(dstsys, parameters(dstsys; initial_parameters = true));
         init = [])
-    getter = getu(srcsys, syms)
+    srcsyms = map(syms) do sym
+        iscall(sym) && operation(sym) isa Initial ? arguments(sym)[1] : sym
+    end
+    getter = getu(srcsys, srcsyms)
     setter = setp_oop(dstsys, syms)
     return ReconstructInitializeprob(getter, setter)
 end
