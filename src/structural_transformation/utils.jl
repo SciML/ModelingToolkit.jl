@@ -449,10 +449,9 @@ end
 ### Misc
 ###
 
-function lower_varname_withshift(var, iv, backshift; unshifted = nothing)
-    backshift < 0 && return Shift(iv, -backshift)(var)
-    backshift == 0 && return unshifted 
-    ds = "$iv-$backshift"
+function lower_varname_withshift(var, iv, backshift; unshifted = nothing, allow_zero = true)
+    backshift <= 0 && return Shift(iv, -backshift)(unshifted, allow_zero)
+    ds = backshift > 0 ? "$iv-$backshift" : "$iv+$(-backshift)"
     d_separator = 'ˍ'
 
     if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)
@@ -475,9 +474,15 @@ function isdoubleshift(var)
            ModelingToolkit.isoperator(arguments(var)[1], ModelingToolkit.Shift)
 end
 
+### Rules
+# 1. x(t) -> x(t)
+# 2. Shift(t, 0)(x(t)) -> x(t)
+# 3. Shift(t, 1)(x + z) -> Shift(t, 1)(x) + Shift(t, 1)(z)
+
 function simplify_shifts(var)
     ModelingToolkit.hasshift(var) || return var
     var isa Equation && return simplify_shifts(var.lhs) ~ simplify_shifts(var.rhs)
+    ((op = operation(var)) isa Shift) && op.steps == 0 && return simplify_shifts(arguments(var)[1])
     if isdoubleshift(var)
         op1 = operation(var)
         vv1 = arguments(var)[1]
