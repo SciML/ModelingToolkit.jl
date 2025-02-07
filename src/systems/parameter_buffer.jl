@@ -538,6 +538,15 @@ function _remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true
     return newbuf
 end
 
+function as_any_buffer(p::MTKParameters)
+    @set! p.tunable = similar(p.tunable, Any)
+    @set! p.discrete = Tuple(similar(buf, Any) for buf in p.discrete)
+    @set! p.constant = Tuple(similar(buf, Any) for buf in p.constant)
+    @set! p.nonnumeric = Tuple(similar(buf, Any) for buf in p.nonnumeric)
+    @set! p.caches = Tuple(similar(buf, Any) for buf in p.caches)
+    return p
+end
+
 struct NestedGetIndex{T}
     x::T
 end
