@@ -271,6 +271,8 @@ end
 
 function find_solvables!(state::TearingState; kwargs...)
     @assert state.structure.solvable_graph === nothing
+    println("in find_solvables")
+    @show eqs
     eqs = equations(state)
     graph = state.structure.graph
     state.structure.solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph))
@@ -278,6 +280,7 @@ function find_solvables!(state::TearingState; kwargs...)
     for ieq in 1:length(eqs)
         find_eq_solvables!(state, ieq, to_rm; kwargs...)
     end
+    @show eqs
     return nothing
 end
 
@@ -477,7 +480,7 @@ end
 ### Rules
 # 1. x(t) -> x(t)
 # 2. Shift(t, 0)(x(t)) -> x(t)
-# 3. Shift(t, 1)(x + z) -> Shift(t, 1)(x) + Shift(t, 1)(z)
+# 3. Shift(t, 3)(Shift(t, 2)(x(t)) -> Shift(t, 5)(x(t))
 
 function simplify_shifts(var)
     ModelingToolkit.hasshift(var) || return var
@@ -495,6 +498,61 @@ function simplify_shifts(var)
         return simplify_shifts(ModelingToolkit.Shift(t1 === nothing ? t2 : t1, s1 + s2)(vv2))
     else
         return maketerm(typeof(var), operation(var), simplify_shifts.(arguments(var)),
+            unwrap(var).metadata)
+    end
+end
+
+"""
+Power expand the shifts. Used for substitution.
+
+Shift(t, -3)(x(t)) -> Shift(t, -1)(Shift(t, -1)(Shift(t, -1)(x)))
+"""
+function expand_shifts(var)
+    ModelingToolkit.hasshift(var) || return var
+    var = ModelingToolkit.value(var)
+
+    var isa Equation && return expand_shifts(var.lhs) ~ expand_shifts(var.rhs)
+    op = operation(var)
+    s = sign(op.steps)
+    arg = only(arguments(var))
+
+    if ModelingToolkit.isvariable(arg) && (ModelingToolkit.getvariabletype(arg) === VARIABLE) && isequal(op.t, only(arguments(arg)))
+        out = arg
+        for i in 1:op.steps
+            out = Shift(op.t, s)(out)
+        end
+        return out
+    elseif iscall(arg)
+        return maketerm(typeof(var), operation(var), expand_shifts.(arguments(var)),
+            unwrap(var).metadata)
+    else
+        return arg
+    end
+end
+
+"""
+Shift(t, 1)(x + z) -> Shift(t, 1)(x) + Shift(t, 1)(z)
+"""
+function distribute_shift(var) 
+    ModelingToolkit.hasshift(var) || return var
+    var isa Equation && return distribute_shift(var.lhs) ~ distribute_shift(var.rhs)
+    shift = operation(var)
+    expr = only(arguments(var))
+    _distribute_shift(expr, shift)
+end
+
+function _distribute_shift(expr, shift)
+    op = operation(expr)
+    args = arguments(expr)
+
+    if length(args) == 1 
+        if ModelingToolkit.isvariable(only(args)) && isequal(op.t, only(args))
+            return shift(only(args))
+        else
+            return only(args)
+        end
+    else iscall(op)
+        return maketerm(typeof(expr), operation(expr), _distribute_shift.(args, shift),
             unwrap(var).metadata)
     end
 end

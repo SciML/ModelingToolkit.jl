@@ -4,6 +4,7 @@ using Graphs
 using SparseArrays
 using UnPack
 using ModelingToolkit: t_nounits as t, D_nounits as D
+const ST = StructuralTransformations
 
 # Define some variables
 @parameters L g
@@ -160,4 +161,20 @@ end
     pass(sys; kwargs...) = (value[] += 1; return sys)
     structural_simplify(sys; additional_passes = [pass])
     @test value[] == 1
+end
+
+@testset "Shift simplification" begin
+    @variables x(t) y(t) z(t)
+    @parameters a b c
+    
+    # Expand shifts
+    @test isequal(ST.expand_shifts(Shift(t, -3)(x)), Shift(t, -1)(Shift(t, -1)(Shift(t, -1)(x))))
+    expr = a * Shift(t, -2)(x) + Shift(t, 2)(y) + b
+    @test isequal(ST.expand_shifts(expr), 
+                    a * Shift(t, -1)(Shift(t, -1)(x)) + Shift(t, 1)(Shift(t, 1)(y)) + b)
+    @test isequal(ST.expand_shifts(Shift(t, 2)(Shift(t, 1)(a))), a)
+
+
+    # Distribute shifts
+
 end

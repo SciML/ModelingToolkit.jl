@@ -254,7 +254,9 @@ function substitute_dummy_derivatives!(ts::TearingState, neweqs, dummy_sub, var_
     diff_to_var = invview(var_to_diff)
     iv = ModelingToolkit.has_iv(sys) ? ModelingToolkit.get_iv(sys) : nothing
 
+    @show neweqs
     for var in 1:length(fullvars)
+        #@show neweqs
         dv = var_to_diff[var]
         dv === nothing && continue
         if var_eq_matching[var] !== SelectedState()
@@ -286,9 +288,7 @@ function substitute_dummy_derivatives!(ts::TearingState, neweqs, dummy_sub, var_
     end
 end
 
-"""
-Generate new derivative variables for the system.
-
+#= 
 There are three cases where we want to generate new variables to convert
 the system into first order (semi-implicit) ODEs.
     
@@ -361,6 +361,16 @@ This is different from the continuous case where D(D(x)) can be substituted for
 by iteratively substituting x_t ~ D(x), then x_tt ~ D(x_t). For this reason the
 shift_sub dict is updated at the time that the renamed variables are written,
 inside the loop where new variables are generated.
+=#
+"""
+Generate new derivative variables for the system.
+
+Effects on the state: 
+- fullvars: add the new derivative variables x_t
+- neweqs: add the identity equations for the new variables, D(x) ~ x_t
+- graph: update graph with the new equations and variables, and their connections
+- solvable_graph:
+- var_eq_matching: solvable equations
 """
 function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matching;
         is_discrete = false, mm = nothing, shift_sub = nothing)
@@ -406,7 +416,7 @@ function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matchin
             dx = fullvars[dv]
             order, lv = var_order(diff_to_var, dv)
             @show fullvars[uv]
-            x_t = lower_name(fullvars[lv], iv, -low-order-1; unshifted = fullvars[uv])
+            x_t = lower_name(fullvars[lv], iv, -low-order-1; unshifted = fullvars[uv], allow_zero = true)
             shift_sub[dx] = x_t
             (var_eq_matching[dv] isa Int) ? continue : @goto DISCRETE_VARIABLE
         end
@@ -439,7 +449,7 @@ function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matchin
         x_t = lower_name(fullvars[lv], iv, order)
         
         @label DISCRETE_VARIABLE
-        push!(fullvars, x_t)
+        push!(fullvars, simplify_shifts(x_t))
         v_t = length(fullvars)
         v_t_idx = add_vertex!(var_to_diff)
         add_vertex!(graph, DST)
@@ -448,7 +458,6 @@ function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matchin
         add_vertex!(solvable_graph, DST)
         push!(var_eq_matching, unassigned)
 
-        # Add discrete substitutions to total_sub directly.  
         is_discrete && begin
             idx_to_lowest_shift[v_t] = idx_to_lowest_shift[dv]
             for e in 𝑑neighbors(graph, dv)
@@ -463,7 +472,7 @@ function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matchin
         end
 
         # add `D(x) - x_t ~ 0`
-        push!(neweqs, 0 ~ x_t - dx)
+        push!(neweqs, 0 ~ dx - x_t)
         add_vertex!(graph, SRC)
         dummy_eq = length(neweqs)
         add_edge!(graph, dummy_eq, dv)
@@ -478,12 +487,11 @@ function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matchin
     end
 end
 
-function add_solvable_variable!() 
+function add_solvable_variable!(state::TearingState)
     
 end
 
-function add_solvable_equation!() 
-    
+function add_solvable_equation!(s::SystemStructure, neweqs, eq)
 end
 
 """
@@ -500,7 +508,8 @@ such that the mass matrix is:
 Update the state to account for the new ordering and equations.
 
 ####### DISCRETE CASE
-- only substitute Shift(t, -2) 
+- Differential equations: substitute variables with everything shifted forward one timestep.
+- Algebraic and observable equations: substitute variables with everything shifted back one timestep.
 """
 function solve_and_generate_equations!(state::TearingState, neweqs, var_eq_matching; simplify = false, shift_sub = Dict())
     @unpack fullvars, sys, structure = state 
@@ -562,8 +571,6 @@ function solve_and_generate_equations!(state::TearingState, neweqs, var_eq_match
                 isnothing(D) &&
                     error("Differential found in a non-differential system. Likely this is a bug in the construction of an initialization system. Please report this issue with a reproducible example. Offending equation: $(equations(sys)[ieq])")
                 order, lv = var_order(diff_to_var, iv)
-                @show fullvars[lv]
-                @show simplify_shifts(fullvars[lv])
                 dx = D(simplify_shifts(fullvars[lv]))
                 eq = dx ~ simplify_shifts(Symbolics.fixpoint_sub(
                     Symbolics.symbolic_linear_solve(neweqs[ieq],
@@ -576,8 +583,6 @@ function solve_and_generate_equations!(state::TearingState, neweqs, var_eq_match
                 push!(diff_eqs, eq)
                 total_sub[simplify_shifts(eq.lhs)] = eq.rhs
                 dx_sub[simplify_shifts(eq.lhs)] = eq.rhs
-                @show total_sub
-                @show eq
                 push!(diffeq_idxs, ieq)
                 push!(diff_vars, diff_to_var[iv])
                 continue
@@ -611,6 +616,8 @@ function solve_and_generate_equations!(state::TearingState, neweqs, var_eq_match
             push!(algeeq_idxs, ieq)
         end
     end
+    @show neweqs
+    @show subeqs
 
     # TODO: BLT sorting
     neweqs = [diff_eqs; alge_eqs]
