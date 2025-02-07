@@ -526,7 +526,7 @@ no values can be determined, and the list of parameters for which no values can 
 Also updates `u0map` and `pmap` in-place to contain all the initial conditions in `op`, split
 by unknowns and parameters respectively.
 """
-function build_operating_point!(
+function build_operating_point!(sys::AbstractSystem,
         u0map::AbstractDict, pmap::AbstractDict, defs::AbstractDict, cmap, dvs, ps)
     op = add_toterms(u0map)
     missing_unknowns = add_fallbacks!(op, dvs, defs)
@@ -545,13 +545,31 @@ function build_operating_point!(
 
     filter!(kvp -> kvp[2] === nothing, u0map)
     filter!(kvp -> kvp[2] === nothing, pmap)
+    neithermap = anydict()
+
     for (k, v) in op
         k = unwrap(k)
-        if isparameter(k)
+        if is_parameter(sys, k)
             pmap[k] = v
-        elseif !isconstant(k)
+        elseif is_variable(sys, k) || has_observed_with_lhs(sys, k)
+            if symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v) &&
+               v !== nothing
+                op[Initial(k)] = v
+                pmap[Initial(k)] = v
+                op[k] = Initial(k)
+                v = Initial(k)
+            end
             u0map[k] = v
+        else
+            neithermap[k] = v
         end
+    end
+
+    for k in keys(u0map)
+        u0map[k] = fixpoint_sub(u0map[k], neithermap)
+    end
+    for k in keys(pmap)
+        pmap[k] = fixpoint_sub(pmap[k], neithermap)
     end
 
     return op, missing_unknowns, missing_pars
@@ -760,10 +778,8 @@ function process_SciMLProblem(
 
     is_time_dependent(sys) || add_observed!(sys, u0map)
 
-    op, missing_unknowns, missing_pars = build_operating_point!(
+    op, missing_unknowns, missing_pars = build_operating_point!(sys,
         u0map, pmap, defs, cmap, dvs, ps)
-    substitute_extra_variables!(sys, u0map)
-    substitute_extra_variables!(sys, pmap)
 
     if build_initializeprob
         kws = maybe_build_initialization_problem(
