@@ -273,7 +273,10 @@ prob12 = ODEProblem(sys, u0, tspan, [k₁ => 0.04, k₂ => 3e7, k₃ => 1e4])
 prob13 = ODEProblem(sys, u0, tspan, (k₁ => 0.04, k₂ => 3e7, k₃ => 1e4))
 prob14 = ODEProblem(sys, u0, tspan, p2)
 for p in [prob1, prob14]
-    @test p.p == MTKParameters(sys, [k₁ => 0.04, k₂ => 3e7, k₃ => 1e4])
+    @test p.p isa MTKParameters
+    p.ps[k₁] ≈ 0.04
+    p.ps[k₂] ≈ 3e7
+    p.ps[k₃] ≈ 1e-4
     @test Set(Num.(unknowns(sys)) .=> p.u0) == Set([y₁ => 1, y₂ => 0, y₃ => 0])
 end
 # test remake with symbols
@@ -674,7 +677,8 @@ let
     prob = DAEProblem(sys, du0, u0, (0, 50))
     @test prob.u0 ≈ u0
     @test prob.du0 ≈ du0
-    @test vcat(prob.p...) ≈ [1]
+    @test prob.p isa MTKParameters
+    @test prob.ps[k] ≈ 1
     sol = solve(prob, IDA())
     @test sol[y] ≈ 0.9 * sol[x[1]] + sol[x[2]]
     @test isapprox(sol[x[1]][end], 1, atol = 1e-3)
@@ -683,7 +687,8 @@ let
         (0, 50))
     @test prob.u0 ≈ [0.5, 0]
     @test prob.du0 ≈ [0, 0]
-    @test vcat(prob.p...) ≈ [1]
+    @test prob.p isa MTKParameters
+    @test prob.ps[k] ≈ 1
     sol = solve(prob, IDA())
     @test isapprox(sol[x[1]][end], 1, atol = 1e-3)
 
@@ -691,7 +696,8 @@ let
         (0, 50), [k => 2])
     @test prob.u0 ≈ [0.5, 0]
     @test prob.du0 ≈ [0, 0]
-    @test vcat(prob.p...) ≈ [2]
+    @test prob.p isa MTKParameters
+    @test prob.ps[k] ≈ 2
     sol = solve(prob, IDA())
     @test isapprox(sol[x[1]][end], 2, atol = 1e-3)
 
@@ -715,7 +721,9 @@ let
     pmap = (k1 => 1.0, k2 => 1)
     tspan = (0.0, 1.0)
     prob = ODEProblem(sys, u0map, tspan, pmap; tofloat = false)
-    @test (prob.p...,) == ([1], [1.0]) || (prob.p...,) == ([1.0], [1])
+    @test prob.p isa MTKParameters
+    @test prob.ps[k1] ≈ 1.0
+    @test prob.ps[k2] == 1 && prob.ps[k2] isa Int
 
     prob = ODEProblem(sys, u0map, tspan, pmap)
     @test vcat(prob.p...) isa Vector{Float64}
@@ -1288,9 +1296,13 @@ end
         t, [u..., x..., o...], [p...])
     sys1, = structural_simplify(sys, ([x...], []))
     fn1, = ModelingToolkit.generate_function(sys1; expression = Val{false})
-    @test_nowarn fn1(ones(4), (2ones(2), 3ones(2, 2)), 4.0)
+    ps = MTKParameters(sys1, [x => 2ones(2), p => 3ones(2, 2)])
+    @test_nowarn fn1(ones(4), ps, 4.0)
     sys2, = structural_simplify(sys, ([x...], []); split = false)
     fn2, = ModelingToolkit.generate_function(sys2; expression = Val{false})
+    ps = zeros(8)
+    setp(sys2, x)(ps, 2ones(2))
+    setp(sys2, p)(ps, 2ones(2, 2))
     @test_nowarn fn2(ones(4), 2ones(6), 4.0)
 end
 
