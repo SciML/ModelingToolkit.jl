@@ -137,7 +137,7 @@ matrices, ssys = linearize(
 
 if VERSION >= v"1.8" # :opaque_closure not supported before
     let # Just to have a local scope for D
-        matrices, ssys = linearize(model, model_inputs, [y]; op = Dict(torque.tau.u => 0.0))
+        matrices, ssys = linearize(model, model_inputs, [y])
         A, B, C, D = matrices
         obsf = ModelingToolkit.build_explicit_observed_function(ssys,
             [y],
