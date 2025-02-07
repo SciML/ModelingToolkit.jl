@@ -730,7 +730,7 @@ function process_SciMLProblem(
         force_initialization_time_independent = false, algebraic_only = false,
         allow_incomplete = false, kwargs...)
     dvs = unknowns(sys)
-    ps = parameters(sys)
+    ps = parameters(sys; initial_parameters = true)
     iv = has_iv(sys) ? get_iv(sys) : nothing
     eqs = equations(sys)
 
@@ -742,7 +742,7 @@ function process_SciMLProblem(
     u0map = to_varmap(u0map, dvs)
     symbols_to_symbolics!(sys, u0map)
     _pmap = pmap
-    pmap = to_varmap(pmap, ps)
+    pmap = to_varmap(pmap, parameters(sys))
     symbols_to_symbolics!(sys, pmap)
     defs = add_toterms(recursive_unwrap(defaults(sys)))
     cmap, cs = get_cmap(sys)
