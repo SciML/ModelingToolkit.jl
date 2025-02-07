@@ -165,7 +165,7 @@ function SystemModel(u = nothing; name = :model)
             systems = [torque, inertia1, inertia2, spring, damper, u])
     end
     ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
-        name, guesses = [spring.flange_a.phi => 1.0])
+        name)
 end
 
 model = SystemModel() # Model with load disturbance
@@ -173,7 +173,7 @@ model = SystemModel() # Model with load disturbance
 model_outputs = [model.inertia1.w, model.inertia2.w, model.inertia1.phi, model.inertia2.phi] # This is the state realization we want to control
 inputs = [model.torque.tau.u]
 matrices, ssys = ModelingToolkit.linearize(
-    wr(model), inputs, model_outputs; op = Dict(model.torque.tau.u => 0.0))
+    wr(model), inputs, model_outputs)
 
 # Design state-feedback gain using LQR
 # Define cost matrices
