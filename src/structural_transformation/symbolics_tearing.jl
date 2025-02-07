@@ -360,9 +360,8 @@ by iteratively substituting x_t ~ D(x), then x_tt ~ D(x_t). For this reason the
 total_sub dict is updated at the time that the renamed variables are written,
 inside the loop where new variables are generated.
 """
-function generate_derivative_variables!(ts::TearingState, neweqs, total_sub, var_eq_matching, var_order;
+function generate_derivative_variables!(ts::TearingState, neweqs, total_sub, var_eq_matching;
         is_discrete = false, mm = nothing)
-
     @unpack fullvars, sys, structure = ts
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph, lowest_shift = structure
     eq_var_matching = invview(var_eq_matching)
@@ -386,13 +385,14 @@ function generate_derivative_variables!(ts::TearingState, neweqs, total_sub, var
 
     # v is the index of the current variable, x = fullvars[v]
     # dv is the index of the derivative dx = D(x), x_t is the substituted variable 
-    #
     # For ODESystems: lv is the index of the lowest-order variable (x(t))
     # For DiscreteSystems: 
     # - lv is the index of the lowest-order variable (Shift(t, k)(x(t)))
     # - uv is the index of the highest-order variable (x(t))
     for v in 1:length(var_to_diff)
         dv = var_to_diff[v]
+        println()
+        @show (v, dv)
         if is_discrete 
             x = fullvars[v]
             op = operation(x)
@@ -405,6 +405,9 @@ function generate_derivative_variables!(ts::TearingState, neweqs, total_sub, var
         end
         dv isa Int || continue
 
+        @show dv
+        @show var_eq_matching[dv]
+        @show fullvars
         solved = var_eq_matching[dv] isa Int
         solved && continue
 
@@ -429,9 +432,10 @@ function generate_derivative_variables!(ts::TearingState, neweqs, total_sub, var
 
         dx = fullvars[dv]
         # add `x_t`
-        order, lv = var_order(dv)
+        order, lv = var_order(diff_to_var, dv)
         x_t = is_discrete ? lower_name(fullvars[lv], iv, -low-order-1; unshifted = fullvars[uv]) :
                             lower_name(fullvars[lv], iv, order)
+        @show dx, x_t
         push!(fullvars, simplify_shifts(x_t))
         v_t = length(fullvars)
         v_t_idx = add_vertex!(var_to_diff)
@@ -443,23 +447,23 @@ function generate_derivative_variables!(ts::TearingState, neweqs, total_sub, var
         @assert v_t_idx == ndsts(graph) == ndsts(solvable_graph) == length(fullvars) ==
                 length(var_eq_matching)
 
-        # Add the substitutions to total_sub directly.  
+        # Add discrete substitutions to total_sub directly.  
         is_discrete && begin
             idx_to_lowest_shift[v_t] = idx_to_lowest_shift[dv]
-            @show dx
             if operation(dx) isa Shift 
                 total_sub[dx] = x_t
                 for e in 𝑑neighbors(graph, dv)
                     add_edge!(graph, e, v_t)
                     rem_edge!(graph, e, dv)
                 end
-                @show graph
+                # Do not add the lowest-order substitution as an equation, just substitute
                 !(operation(x) isa Shift) && begin
                     var_to_diff[v_t] = var_to_diff[dv]
                     continue
                 end
             end
         end
+
         # add `D(x) - x_t ~ 0`
         push!(neweqs, 0 ~ x_t - dx)
         add_vertex!(graph, SRC)
@@ -489,7 +493,7 @@ such that the mass matrix is:
 
 Update the state to account for the new ordering and equations.
 """
-function solve_and_generate_equations!(state::TearingState, neweqs, total_sub, var_eq_matching, var_order; simplify = false)
+function solve_and_generate_equations!(state::TearingState, neweqs, total_sub, var_eq_matching; simplify = false)
     @unpack fullvars, sys, structure = state 
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph, lowest_shift = structure
     eq_var_matching = invview(var_eq_matching)
@@ -530,13 +534,11 @@ function solve_and_generate_equations!(state::TearingState, neweqs, total_sub, v
 
     toporder = topological_sort(DiCMOBiGraph{false}(graph, var_eq_matching))
     eqs = Iterators.reverse(toporder)
-    idep = ModelingToolkit.has_iv(sys) ? ModelingToolkit.get_iv(sys) : nothing
+    idep = iv
 
-    @show eq_var_matching
-    @show fullvars
-    @show neweqs
-
-    # Equation ieq is solved for the RHS of iv 
+    # Generate differential equations.
+    # fullvars[iv] is a differential variable of the form D^n(x), and neweqs[ieq]
+    # is solved to give the RHS.
     for ieq in eqs
         iv = eq_var_matching[ieq]
         if is_solvable(ieq, iv)
@@ -546,7 +548,7 @@ function solve_and_generate_equations!(state::TearingState, neweqs, total_sub, v
             if isdervar(iv)
                 isnothing(D) &&
                     error("Differential found in a non-differential system. Likely this is a bug in the construction of an initialization system. Please report this issue with a reproducible example. Offending equation: $(equations(sys)[ieq])")
-                order, lv = var_order(iv)
+                order, lv = var_order(diff_to_var, iv)
                 dx = D(fullvars[lv])
                 eq = dx ~ simplify_shifts(Symbolics.fixpoint_sub(
                     Symbolics.symbolic_linear_solve(neweqs[ieq],
@@ -634,8 +636,9 @@ function solve_and_generate_equations!(state::TearingState, neweqs, total_sub, v
         d′ = eqsperm[d]
         new_eq_to_diff[v′] = d′ > 0 ? d′ : nothing
     end
+    new_fullvars = fullvars[invvarsperm]
 
-    fullvars[invvarsperm], new_var_to_diff, new_eq_to_diff, neweqs, subeqs, graph
+    new_fullvars, new_var_to_diff, new_eq_to_diff, neweqs, subeqs, graph
 end
 
 # Terminology and Definition:
@@ -648,6 +651,16 @@ end
 # differential variables.
     
 import ModelingToolkit: Shift
+
+# Give the order of the variable indexed by dv
+function var_order(diff_to_var, dv) 
+    order = 0
+    while (dv′ = diff_to_var[dv]) !== nothing
+        order += 1
+        dv = dv′
+    end
+    order, dv
+end
 
 function tearing_reassemble(state::TearingState, var_eq_matching,
         full_var_eq_matching = nothing; simplify = false, mm = nothing, cse_hack = true, array_hack = true)
@@ -667,22 +680,12 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     dummy_sub = Dict()
     is_discrete = is_only_discrete(state.structure)
 
-    var_order = let diff_to_var = diff_to_var
-        dv -> begin
-            order = 0
-            while (dv′ = diff_to_var[dv]) !== nothing
-                order += 1
-                dv = dv′
-            end
-            order, dv
-        end
-    end
-
     # Structural simplification 
     substitute_dummy_derivatives!(state, neweqs, dummy_sub, var_eq_matching)
-    generate_derivative_variables!(state, neweqs, total_sub, var_eq_matching, var_order; 
+    generate_derivative_variables!(state, neweqs, total_sub, var_eq_matching; 
                                    is_discrete, mm)
-    new_fullvars, new_var_to_diff, new_eq_to_diff, neweqs, subeqs, graph = solve_and_generate_equations!(state, neweqs, total_sub, var_eq_matching, var_order; simplify)
+    new_fullvars, new_var_to_diff, new_eq_to_diff, neweqs, subeqs, graph = 
+        solve_and_generate_equations!(state, neweqs, total_sub, var_eq_matching; simplify)
 
     # Update system
     var_to_diff = new_var_to_diff
@@ -698,25 +701,18 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
         i -> (!isempty(𝑑neighbors(graph, i)) ||
               (var_to_diff[i] !== nothing && !isempty(𝑑neighbors(graph, var_to_diff[i]))))
     end
-    @show graph
-    println()
-    println("Shift test...")
+    @show ispresent.(collect(1:length(fullvars)))
+    @show 𝑑neighbors(graph, 5)
+    @show var_to_diff[5]
+
     @show neweqs
     @show fullvars
-    @show 𝑑neighbors(graph, 5)
-
     sys = state.sys
     obs_sub = dummy_sub
     for eq in neweqs
         isdiffeq(eq) || continue
         obs_sub[eq.lhs] = eq.rhs
     end
-    is_discrete && for eq in subeqs
-        obs_sub[eq.rhs] = eq.lhs
-    end
-
-    @show obs_sub
-    @show observed(sys)
     # TODO: compute the dependency correctly so that we don't have to do this
     obs = [fast_substitute(observed(sys), obs_sub); subeqs]
 

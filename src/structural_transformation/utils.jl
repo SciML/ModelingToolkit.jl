@@ -450,6 +450,7 @@ end
 ###
 
 function lower_varname_withshift(var, iv, backshift; unshifted = nothing)
+    backshift < 0 && return Shift(iv, -backshift)(var)
     backshift == 0 && return unshifted 
     ds = "$iv-$backshift"
     d_separator = 'ˍ'
