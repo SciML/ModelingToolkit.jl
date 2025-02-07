@@ -38,37 +38,6 @@ function generate_initializesystem(sys::AbstractSystem;
         delete!(defs, k)
     end
     filter_missing_values!(u0map)
-    # for initial conditions of the form `var => constant`, we instead turn them into
-    # `var ~ var0` where `var0` is a new parameter, and make `update_initializeprob!`
-    # update `initializeprob.ps[var0] = prob[var]`.
-
-    # map parameters in `initprob` which need to be updated in `update_initializeprob!`
-    # to the corresponding expressions that determine their values
-    new_params = Dict()
-    pmap = copy(anydict(pmap))
-    if is_time_dependent(sys)
-        for (k, v) in u0map
-            k = unwrap(k)
-            is_variable(sys, k) || continue
-            (symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)) || continue
-            newvar = get_initial_value_parameter(k)
-            new_params[newvar] = k
-            pmap[newvar] = v
-            u0map[k] = newvar
-            defs[newvar] = v
-        end
-    end
-    for (k, v) in pmap
-        k = unwrap(k)
-        is_parameter_solvable(k, pmap, defs, guesses) || continue
-        (v !== missing && symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)) ||
-            continue
-        newvar = get_initial_value_parameter(k)
-        new_params[newvar] = k
-        pmap[newvar] = v
-        pmap[k] = newvar
-        defs[newvar] = v
-    end
 
     # 1) Use algebraic equations of time-dependent systems as initialization constraints
     if has_iv(sys)
@@ -222,8 +191,8 @@ function generate_initializesystem(sys::AbstractSystem;
     end
 
     # parameters do not include ones that became initialization unknowns
-    pars = Vector{SymbolicParam}(filter(p -> !haskey(paramsubs, p), parameters(sys)))
-    pars = [pars; map(unwrap, collect(keys(new_params)))]
+    pars = Vector{SymbolicParam}(filter(
+        p -> !haskey(paramsubs, p), parameters(sys; initial_parameters = true)))
     is_time_dependent(sys) && push!(pars, get_iv(sys))
 
     if is_time_dependent(sys)
@@ -258,7 +227,7 @@ function generate_initializesystem(sys::AbstractSystem;
     end
     meta = InitializationSystemMetadata(
         anydict(u0map), anydict(pmap), additional_guesses,
-        additional_initialization_eqs, extra_metadata, nothing, new_params)
+        additional_initialization_eqs, extra_metadata, nothing)
     return NonlinearSystem(eqs_ics,
         vars,
         pars;
@@ -338,11 +307,11 @@ struct ReconstructInitializeprob
 end
 
 function ReconstructInitializeprob(
-        srcsys::AbstractSystem, dstsys::AbstractSystem; remap = Dict())
+        srcsys::AbstractSystem, dstsys::AbstractSystem)
     syms = reduce(
         vcat, reorder_parameters(dstsys, parameters(dstsys; initial_parameters = true));
         init = [])
-    getter = getu(srcsys, map(x -> get(remap, x, x), syms))
+    getter = getu(srcsys, syms)
     setter = setp_oop(dstsys, syms)
     return ReconstructInitializeprob(getter, setter)
 end
@@ -375,7 +344,6 @@ struct InitializationSystemMetadata
     additional_initialization_eqs::Vector{Equation}
     extra_metadata::NamedTuple
     oop_reconstruct_u0_p::Union{Nothing, ReconstructInitializeprob}
-    new_params::Dict{Any, Any}
 end
 
 function get_possibly_array_fallback_singletons(varmap, p)
@@ -467,16 +435,6 @@ function SciMLBase.remake_initialization_data(
             merge!(guesses, meta.additional_guesses)
             use_scc = get(meta.extra_metadata, :use_scc, true)
             initialization_eqs = meta.additional_initialization_eqs
-
-            # remove occurrences of `keys(new_params)` from `u0map` and `pmap`
-            for (newvar, oldvar) in meta.new_params
-                if isequal(get(u0map, oldvar, nothing), newvar)
-                    u0map[oldvar] = pmap[newvar]
-                elseif isequal(get(pmap, oldvar, nothing), newvar)
-                    pmap[oldvar] = pmap[newvar]
-                end
-                delete!(pmap, newvar)
-            end
         end
     else
         # there is no initializeprob, so the original problem construction
@@ -520,7 +478,7 @@ function SciMLBase.remake_initialization_data(
     filter_missing_values!(u0map)
     filter_missing_values!(pmap)
 
-    op, missing_unknowns, missing_pars = build_operating_point!(
+    op, missing_unknowns, missing_pars = build_operating_point!(sys,
         u0map, pmap, defs, cmap, dvs, ps)
     kws = maybe_build_initialization_problem(
         sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns;

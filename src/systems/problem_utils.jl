@@ -579,7 +579,6 @@ function maybe_build_initialization_problem(
     initializeprob = ModelingToolkit.InitializationProblem(
         sys, t, u0map, pmap; guesses, kwargs...)
     meta = get_metadata(initializeprob.f.sys)
-    new_params = meta.new_params
 
     if is_time_dependent(sys)
         all_init_syms = Set(all_symbols(initializeprob))
@@ -601,13 +600,12 @@ function maybe_build_initialization_problem(
     end
 
     reqd_syms = parameter_symbols(initializeprob)
-    sources = [get(new_params, x, x) for x in reqd_syms]
     # we still want the `initialization_data` because it helps with `remake`
     if initializeprobmap === nothing && initializeprobpmap === nothing
         update_initializeprob! = nothing
     else
         update_initializeprob! = UpdateInitializeprob(
-            getu(sys, sources), setu(initializeprob, reqd_syms))
+            getu(sys, reqd_syms), setu(initializeprob, reqd_syms))
     end
 
     for p in punknowns
