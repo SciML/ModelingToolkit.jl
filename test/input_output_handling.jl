@@ -132,7 +132,7 @@ model = ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper]
 model_outputs = [inertia1.w, inertia2.w, inertia1.phi, inertia2.phi]
 model_inputs = [torque.tau.u]
 matrices, ssys = linearize(
-    model, model_inputs, model_outputs; op = Dict(torque.tau.u => 0.0));
+    model, model_inputs, model_outputs);
 @test length(ModelingToolkit.outputs(ssys)) == 4
 
 if VERSION >= v"1.8" # :opaque_closure not supported before
