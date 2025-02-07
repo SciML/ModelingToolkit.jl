@@ -714,7 +714,16 @@ function add_initialization_parameters(sys::AbstractSystem)
     for x in existing_initials
         delete!(defs, x)
     end
-    merge!(defs, Dict(initials .=> zero_var.(initials)))
+    for ivar in initials
+        if symbolic_type(ivar) == ScalarSymbolic()
+            defs[ivar] = zero_var(ivar)
+        else
+            defs[ivar] = collect(ivar)
+            for scal_ivar in defs[ivar]
+                defs[scal_ivar] = zero_var(scal_ivar)
+            end
+        end
+    end
     @set! sys.defaults = defs
     return sys
 end
