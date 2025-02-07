@@ -658,34 +658,6 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Remove all entries in `varmap` whose keys are not variables/parameters in `sys`,
-substituting their values into the rest of `varmap`. Modifies `varmap` in place.
-"""
-function substitute_extra_variables!(sys::AbstractSystem, varmap::AbstractDict)
-    tmpmap = anydict()
-    syms = all_symbols(sys)
-    for (k, v) in varmap
-        k = unwrap(k)
-        if any(isequal(k), syms) ||
-           iscall(k) &&
-           (operation(k) == getindex && any(isequal(arguments(k)[1]), syms) ||
-            operation(k) isa Differential) || isconstant(k)
-            continue
-        end
-        tmpmap[k] = v
-    end
-    for k in keys(tmpmap)
-        delete!(varmap, k)
-    end
-    for (k, v) in varmap
-        varmap[k] = unwrap(fixpoint_sub(v, tmpmap))
-    end
-    return varmap
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
 Return the SciMLFunction created via calling `constructor`, the initial conditions `u0`
 and parameter object `p` given the system `sys`, and user-provided initial values `u0map`
 and `pmap`. `u0map` and `pmap` are converted into variable maps via [`to_varmap`](@ref).
