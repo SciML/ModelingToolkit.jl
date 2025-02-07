@@ -1256,7 +1256,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
     meta = get_metadata(isys)
     if meta isa InitializationSystemMetadata
         @set! isys.metadata.oop_reconstruct_u0_p = ReconstructInitializeprob(
-            sys, isys; remap = meta.new_params)
+            sys, isys)
     end
 
     ts = get_tearing_state(isys)
