@@ -707,9 +707,15 @@ function add_initialization_parameters(sys::AbstractSystem)
     end
     all_uvars = collect(all_uvars)
     initials = map(Initial(), all_uvars)
-    # existing_initials = filter(x -> iscall(x) && (operation(x) isa Initial), parameters(sys))
-    @set! sys.ps = unique!([get_ps(sys); initials])
-    @set! sys.defaults = merge(get_defaults(sys), Dict(initials .=> zero_var.(initials)))
+    existing_initials = filter(
+        x -> iscall(x) && (operation(x) isa Initial), parameters(sys))
+    @set! sys.ps = unique!([setdiff(get_ps(sys), existing_initials); initials])
+    defs = copy(get_defaults(sys))
+    for x in existing_initials
+        delete!(defs, x)
+    end
+    merge!(defs, Dict(initials .=> zero_var.(initials)))
+    @set! sys.defaults = defs
     return sys
 end
 
