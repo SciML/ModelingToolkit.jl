@@ -551,7 +551,9 @@ function build_operating_point!(sys::AbstractSystem,
         k = unwrap(k)
         if is_parameter(sys, k)
             pmap[k] = v
-        elseif is_variable(sys, k) || has_observed_with_lhs(sys, k)
+        elseif is_variable(sys, k) || has_observed_with_lhs(sys, k) ||
+               iscall(k) &&
+               operation(k) isa Differential && is_variable(sys, arguments(k)[1])
             if symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v) &&
                v !== nothing
                 op[Initial(k)] = v
@@ -594,7 +596,7 @@ function maybe_build_initialization_problem(
         t = 0.0
     end
 
-    initializeprob = ModelingToolkit.InitializationProblem(
+    initializeprob = ModelingToolkit.InitializationProblem{true, SciMLBase.FullSpecialize}(
         sys, t, u0map, pmap; guesses, kwargs...)
     meta = get_metadata(initializeprob.f.sys)
 
