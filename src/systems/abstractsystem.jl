@@ -662,6 +662,9 @@ output_timedomain(::Initial, _ = nothing) = Continuous()
 function (f::Initial)(x)
     iw = Symbolics.iswrapped(x)
     x = unwrap(x)
+    if symbolic_type(x) == NotSymbolic()
+        return x
+    end
     if iscall(x) && operation(x) isa Differential
         x = default_toterm(x)
     end
