@@ -634,8 +634,6 @@ function reorder_vars!(state::TearingState, var_eq_matching, eq_ordering, var_or
     end
     new_fullvars = state.fullvars[var_ordering]
 
-    @show new_graph
-    @show new_var_to_diff
     # Update system structure 
     @set! state.structure.graph = complete(new_graph)
     @set! state.structure.var_to_diff = new_var_to_diff
@@ -650,8 +648,6 @@ Set the system equations, unknowns, observables post-tearing.
 function update_simplified_system!(state::TearingState, neweqs, solved_eqs, dummy_sub, var_eq_matching, extra_unknowns; 
         cse_hack = true, array_hack = true)
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = state.structure
-    @show graph
-    @show var_to_diff
     diff_to_var = invview(var_to_diff)
 
     ispresent = let var_to_diff = var_to_diff, graph = graph
@@ -671,12 +667,7 @@ function update_simplified_system!(state::TearingState, neweqs, solved_eqs, dumm
     unknowns = Any[v
                    for (i, v) in enumerate(state.fullvars)
                    if diff_to_var[i] === nothing && ispresent(i)]
-    @show unknowns
-    @show state.fullvars
-    @show 𝑑neighbors(graph, 5)
-    @show neweqs
     unknowns = [unknowns; extra_unknowns]
-    @show unknowns
     @set! sys.unknowns = unknowns
 
     obs, subeqs, deps = cse_and_array_hacks(

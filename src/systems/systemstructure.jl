@@ -140,14 +140,14 @@ get_fullvars(ts::TransformationState) = ts.fullvars
 has_equations(::TransformationState) = true
 
 Base.@kwdef mutable struct SystemStructure
-    """Maps the (index of) a variable to the (index of) the variable describing its derivative."""
+    """Maps the index of variable x to the index of variable D(x)."""
     var_to_diff::DiffGraph
-    """Maps the (index of) an equation."""
+    """Maps the index of an equation."""
     eq_to_diff::DiffGraph
     # Can be access as
     # `graph` to automatically look at the bipartite graph
     # or as `torn` to assert that tearing has run.
-    """Graph that maps equations to variables that appear in them."""
+    """Graph that connects equations to variables that appear in them."""
     graph::BipartiteGraph{Int, Nothing}
     """Graph that connects equations to the variable they will be solved for during simplification."""
     solvable_graph::Union{BipartiteGraph{Int, Nothing}, Nothing}
@@ -464,15 +464,10 @@ function lower_order_var(dervar, t)
     diffvar
 end
 
-"""
-    Shift variable x by the largest shift s such that x(k-s) appears in the system of equations.
-    The lowest-shift term will have.
-"""
 function shift_discrete_system(ts::TearingState)
     @unpack fullvars, sys = ts
     discvars = OrderedSet()
     eqs = equations(sys)
-
     for eq in eqs
         vars!(discvars, eq; op = Union{Sample, Hold})
     end
