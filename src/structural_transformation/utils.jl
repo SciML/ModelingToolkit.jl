@@ -271,8 +271,6 @@ end
 
 function find_solvables!(state::TearingState; kwargs...)
     @assert state.structure.solvable_graph === nothing
-    println("in find_solvables")
-    @show eqs
     eqs = equations(state)
     graph = state.structure.graph
     state.structure.solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph))
@@ -280,7 +278,6 @@ function find_solvables!(state::TearingState; kwargs...)
     for ieq in 1:length(eqs)
         find_eq_solvables!(state, ieq, to_rm; kwargs...)
     end
-    @show eqs
     return nothing
 end
 

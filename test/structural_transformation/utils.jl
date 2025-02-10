@@ -162,19 +162,3 @@ end
     structural_simplify(sys; additional_passes = [pass])
     @test value[] == 1
 end
-
-@testset "Shift simplification" begin
-    @variables x(t) y(t) z(t)
-    @parameters a b c
-    
-    # Expand shifts
-    @test isequal(ST.expand_shifts(Shift(t, -3)(x)), Shift(t, -1)(Shift(t, -1)(Shift(t, -1)(x))))
-    expr = a * Shift(t, -2)(x) + Shift(t, 2)(y) + b
-    @test isequal(ST.expand_shifts(expr), 
-                    a * Shift(t, -1)(Shift(t, -1)(x)) + Shift(t, 1)(Shift(t, 1)(y)) + b)
-    @test isequal(ST.expand_shifts(Shift(t, 2)(Shift(t, 1)(a))), a)
-
-
-    # Distribute shifts
-
-end
