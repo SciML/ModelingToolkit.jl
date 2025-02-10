@@ -490,6 +490,33 @@ function SciMLBase.remake_initialization_data(
     return get(kws, :initialization_data, nothing)
 end
 
+function SciMLBase.late_binding_update_u0_p(
+        prob, sys::AbstractSystem, u0, p, t0, newu0, newp)
+    u0 === missing && return newu0, newp
+    eltype(u0) <: Pair || return newu0, newp
+
+    newu0 = DiffEqBase.promote_u0(newu0, newp, t0)
+    tunables, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Tunable(), newp)
+    tunables = DiffEqBase.promote_u0(tunables, newu0, t0)
+    newp = repack(tunables)
+
+    allsyms = all_symbols(sys)
+    for (k, v) in u0
+        v === nothing && continue
+        (symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)) || continue
+        if k isa Symbol
+            k2 = symbol_to_symbolic(sys, k; allsyms)
+            # if it is returned as-is, there is no match so skip it
+            k2 === k && continue
+            k = k2
+        end
+        is_parameter(sys, Initial(k)) || continue
+        setp(sys, Initial(k))(newp, v)
+    end
+
+    return newu0, newp
+end
+
 """
 Counteracts the CSE/array variable hacks in `symbolics_tearing.jl` so it works with
 initialization.
