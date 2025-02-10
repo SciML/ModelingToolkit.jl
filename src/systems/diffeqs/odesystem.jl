@@ -711,6 +711,5 @@ function process_constraint_system(constraints::Vector{Equation}, sts, ps, iv; c
         end
     end
 
-    @show constraints
     ConstraintsSystem(constraints, collect(constraintsts), collect(constraintps); name = consname)
 end
