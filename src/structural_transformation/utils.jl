@@ -452,9 +452,10 @@ end
 ### Misc
 ###
 
-function lower_varname_withshift(var, iv)
+# For discrete variables. Turn Shift(t, k)(x(t)) into xₜ₋ₖ(t)
+function lower_shift_varname(var, iv)
     op = operation(var)
-    op isa Shift || return var
+    op isa Shift || return Shift(iv, 0)(var, true) # hack to prevent simplification of x(t) - x(t)
     backshift = op.steps
     backshift > 0 && return var
 
@@ -476,6 +477,14 @@ function lower_varname_withshift(var, iv)
     return ModelingToolkit._with_unit(identity, newvar, iv)
 end
 
+function lower_varname(var, iv, order; is_discrete = false)
+    if is_discrete
+        lower_shift_varname(var, iv)
+    else
+        lower_varname_with_unit(var, iv, order)
+    end
+end
+
 function isdoubleshift(var)
     return ModelingToolkit.isoperator(var, ModelingToolkit.Shift) &&
            ModelingToolkit.isoperator(arguments(var)[1], ModelingToolkit.Shift)
@@ -484,6 +493,7 @@ end
 function simplify_shifts(var)
     ModelingToolkit.hasshift(var) || return var
     var isa Equation && return simplify_shifts(var.lhs) ~ simplify_shifts(var.rhs)
+    (op = operation(var)) isa Shift && op.steps == 0 && return first(arguments(var))
     if isdoubleshift(var)
         op1 = operation(var)
         vv1 = arguments(var)[1]

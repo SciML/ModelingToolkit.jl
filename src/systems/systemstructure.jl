@@ -142,15 +142,16 @@ has_equations(::TransformationState) = true
 Base.@kwdef mutable struct SystemStructure
     """Maps the (index of) a variable to the (index of) the variable describing its derivative."""
     var_to_diff::DiffGraph
-    """Maps the (index of) a """
+    """Maps the (index of) an equation."""
     eq_to_diff::DiffGraph
     # Can be access as
     # `graph` to automatically look at the bipartite graph
     # or as `torn` to assert that tearing has run.
-    """Incidence graph of the system of equations. An edge from equation x to variable y exists if variable y appears in equation x."""
+    """Graph that maps equations to variables that appear in them."""
     graph::BipartiteGraph{Int, Nothing}
-    """."""
+    """Graph that connects equations to the variable they will be solved for during simplification."""
     solvable_graph::Union{BipartiteGraph{Int, Nothing}, Nothing}
+    """Variable types (brownian, variable, parameter) in the system."""
     var_types::Union{Vector{VariableType}, Nothing}
     """Whether the system is discrete."""
     only_discrete::Bool
@@ -200,7 +201,9 @@ function complete!(s::SystemStructure)
 end
 
 mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
+    """The system of equations."""
     sys::T
+    """The set of variables of the system."""
     fullvars::Vector
     structure::SystemStructure
     extra_eqs::Vector
@@ -438,7 +441,7 @@ function TearingState(sys; quick_cancel = false, check = true)
             complete(graph), nothing, var_types, sys isa DiscreteSystem),
         Any[])
     if sys isa DiscreteSystem
-        ts = shift_discrete_system(ts, lowest_shift)
+        ts = shift_discrete_system(ts)
     end
     return ts
 end
@@ -475,8 +478,9 @@ function shift_discrete_system(ts::TearingState)
     end
     iv = get_iv(sys)
 
-    discmap = Dict(k => StructuralTransformations.simplify_shifts(Shift(iv, 1)(k))    for k in discvars 
-    if any(isequal(k), fullvars) && !isa(operation(k), Union{Sample, Hold})) 
+    discmap = Dict(k => StructuralTransformations.simplify_shifts(Shift(iv, 1)(k))    
+                   for k in discvars 
+                   if any(isequal(k), fullvars) && !isa(operation(k), Union{Sample, Hold})) 
 
     for i in eachindex(fullvars)
         fullvars[i] = StructuralTransformations.simplify_shifts(fast_substitute(
