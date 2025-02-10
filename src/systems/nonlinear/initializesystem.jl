@@ -403,8 +403,13 @@ function SciMLBase.remake_initialization_data(
         else
             reconstruct_fn = ReconstructInitializeprob(sys, oldinitsys)
         end
+        # the history function doesn't matter because `reconstruct_fn` is only going to
+        # update the values of parameters, which aren't time dependent. The reason it
+        # is called is because `Initial` parameters are calculated from the corresponding
+        # state values.
+        history_fn = is_time_dependent(sys) && !is_markovian(sys) ? Returns(newu0) : nothing
         new_initu0, new_initp = reconstruct_fn(
-            ProblemState(; u = newu0, p = newp, t = t0), oldinitprob)
+            ProblemState(; u = newu0, p = newp, t = t0, h = history_fn), oldinitprob)
         if oldinitprob.f.resid_prototype === nothing
             newf = oldinitprob.f
         else
