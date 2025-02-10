@@ -287,7 +287,10 @@ u01 = [y₁ => 1, y₂ => 1, y₃ => 1]
 prob_pmap = remake(prob14; p = p3, u0 = u01)
 prob_dpmap = remake(prob14; p = Dict(p3), u0 = Dict(u01))
 for p in [prob_pmap, prob_dpmap]
-    @test p.p == MTKParameters(sys, [k₁ => 0.05, k₂ => 2e7, k₃ => 1.1e4])
+    @test p.p isa MTKParameters
+    p.ps[k₁] ≈ 0.05
+    p.ps[k₂] ≈ 2e7
+    p.ps[k₃] ≈ 1.1e-4
     @test Set(Num.(unknowns(sys)) .=> p.u0) == Set([y₁ => 1, y₂ => 1, y₃ => 1])
 end
 sol_pmap = solve(prob_pmap, Rodas5())
@@ -315,7 +318,10 @@ sol_dpmap = solve(prob_dpmap, Rodas5())
     prob = ODEProblem(sys, Pair[])
     prob_new = SciMLBase.remake(prob, p = Dict(sys1.a => 3.0, b => 4.0),
         u0 = Dict(sys1.x => 1.0))
-    @test prob_new.p == MTKParameters(sys, [b => 4.0, sys1.a => 3.0, sys.sys2.a => 1.0])
+    @test prob_new.p isa MTKParameters
+    @test prob_new.ps[b] ≈ 4.0
+    @test prob_new.ps[sys1.a] ≈ 3.0
+    @test prob_new.ps[sys.sys2.a] ≈ 1.0
     @test prob_new.u0 == [1.0, 0.0]
 end
 

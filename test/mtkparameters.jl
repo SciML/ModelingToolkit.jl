@@ -109,7 +109,7 @@ eq = D(X) ~ p[1] - p[2] * X
 u0 = [X => 1.0]
 ps = [p => [2.0, 0.1]]
 p = MTKParameters(osys, ps, u0)
-@test p.tunable == [2.0, 0.1]
+@test p.tunable == [2.0, 0.1, 1.0]
 
 # Ensure partial update promotes the buffer
 @parameters p q r
