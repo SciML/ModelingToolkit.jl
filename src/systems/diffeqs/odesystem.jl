@@ -445,20 +445,10 @@ function build_explicit_observed_function(sys, ts;
     end
 
     allsyms = all_symbols(sys)
-    function symbol_to_symbolic(sym)
-        sym isa Symbol || return sym
-        idx = findfirst(x -> (hasname(x) ? getname(x) : Symbol(x)) == sym, allsyms)
-        idx === nothing && return sym
-        sym = allsyms[idx]
-        if iscall(sym) && operation(sym) == getindex
-            sym = arguments(sym)[1]
-        end
-        return sym
-    end
     if symbolic_type(ts) == NotSymbolic() && ts isa AbstractArray
-        ts = map(symbol_to_symbolic, ts)
+        ts = map(x -> symbol_to_symbolic(sys, x; allsyms), ts)
     else
-        ts = symbol_to_symbolic(ts)
+        ts = symbol_to_symbolic(sys, ts; allsyms)
     end
 
     vs = ModelingToolkit.vars(ts; op)

@@ -1249,3 +1249,21 @@ function process_equations(eqs, iv)
 
     diffvars, allunknowns, ps, Equation[diffeq; algeeq; compressed_eqs]
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+If `sym isa Symbol`, try and convert it to a symbolic by matching against symbolic
+variables in `allsyms`. If `sym` is not a `Symbol` or no match was found, return
+`sym` as-is.
+"""
+function symbol_to_symbolic(sys::AbstractSystem, sym; allsyms = all_symbols(sys))
+    sym isa Symbol || return sym
+    idx = findfirst(x -> (hasname(x) ? getname(x) : Symbol(x)) == sym, allsyms)
+    idx === nothing && return sym
+    sym = allsyms[idx]
+    if iscall(sym) && operation(sym) == getindex
+        sym = arguments(sym)[1]
+    end
+    return sym
+end
