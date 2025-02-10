@@ -2303,12 +2303,11 @@ ERROR: Function /(1, sin(P(t))) output non-finite value Inf with input
   sin(P(t)) => 0.0
 ```
 
-Additionally, all assertions in the system are validated in the equations. If any of
-the conditions are false, the right hand side of at least one of the equations of
-the system will evaluate to `NaN`. A new parameter is also added to the system which
-controls whether the message associated with each assertion will be logged when the
-assertion fails. This parameter defaults to `true` and can be toggled by
-symbolic indexing with `ModelingToolkit.ASSERTION_LOG_VARIABLE`. For example,
+Additionally, all assertions in the system are optionally logged when they fail.
+A new parameter is also added to the system which controls whether the message associated
+with each assertion will be logged when the assertion fails. This parameter defaults to
+`true` and can be toggled by symbolic indexing with
+`ModelingToolkit.ASSERTION_LOG_VARIABLE`. For example,
 `prob.ps[ModelingToolkit.ASSERTION_LOG_VARIABLE] = false` will disable logging.
 """
 function debug_system(
@@ -2321,17 +2320,15 @@ function debug_system(
     end
     if has_eqs(sys)
         eqs = debug_sub.(equations(sys), Ref(functions); kw...)
-        expr = get_assertions_expr(assertions(sys))
-        eqs[end] = eqs[end].lhs ~ eqs[end].rhs + expr
         @set! sys.eqs = eqs
         @set! sys.ps = unique!([get_ps(sys); ASSERTION_LOG_VARIABLE])
         @set! sys.defaults = merge(get_defaults(sys), Dict(ASSERTION_LOG_VARIABLE => true))
-        if iscomplete(sys)
-            sys = complete(sys; split = is_split(sys))
-        end
     end
     if has_observed(sys)
         @set! sys.observed = debug_sub.(observed(sys), Ref(functions); kw...)
+    end
+    if iscomplete(sys)
+        sys = complete(sys; split = is_split(sys))
     end
     return sys
 end

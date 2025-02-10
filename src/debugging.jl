@@ -46,14 +46,26 @@ end
 """
     $(TYPEDSIGNATURES)
 
+A function which returns `NaN` if `condition` fails, and `0.0` otherwise.
+"""
+function _nan_condition(condition::Bool)
+    condition ? 0.0 : NaN
+end
+
+@register_symbolic _nan_condition(condition::Bool)
+
+"""
+    $(TYPEDSIGNATURES)
+
 A function which takes a condition `expr` and returns `NaN` if it is false,
 and zero if it is true. In case the condition is false and `log == true`,
 `message` will be logged as an `@error`.
 """
 function _debug_assertion(expr::Bool, message::String, log::Bool)
-    expr && return 0.0
+    value = _nan_condition(expr)
+    isnan(value) || return value
     log && @error message
-    return NaN
+    return value
 end
 
 @register_symbolic _debug_assertion(expr::Bool, message::String, log::Bool)
@@ -67,13 +79,22 @@ const ASSERTION_LOG_VARIABLE = only(@parameters __log_assertions_ₘₜₖ::Bool
 """
     $(TYPEDSIGNATURES)
 
-Get a symbolic expression as per the requirement of `debug_system` for all the assertions
-in `assertions`. `is_split` denotes whether the corresponding system is a split system.
+Get a symbolic expression for all the assertions in `sys`. The expression returns `NaN`
+if any of the assertions fail, and `0.0` otherwise. If `ASSERTION_LOG_VARIABLE` is a
+parameter in the system, it will control whether the message associated with each
+assertion is logged when it fails.
 """
-function get_assertions_expr(assertions::Dict{BasicSymbolic, String}, is_split::Bool)
+function get_assertions_expr(sys::AbstractSystem)
+    asserts = assertions(sys)
     term = 0
-    for (k, v) in assertions
-        term += _debug_assertion(k, "Assertion $k failed:\n$v", ASSERTION_LOG_VARIABLE)
+    if is_parameter(sys, ASSERTION_LOG_VARIABLE)
+        for (k, v) in asserts
+            term += _debug_assertion(k, "Assertion $k failed:\n$v", ASSERTION_LOG_VARIABLE)
+        end
+    else
+        for (k, v) in asserts
+            term += _nan_condition(k)
+        end
     end
     return term
 end
