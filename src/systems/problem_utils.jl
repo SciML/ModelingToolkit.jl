@@ -549,7 +549,7 @@ function build_operating_point!(sys::AbstractSystem,
 
     for (k, v) in op
         k = unwrap(k)
-        if is_parameter(sys, k)
+        if is_parameter(sys, k) || has_parameter_dependency_with_lhs(sys, k)
             pmap[k] = v
         elseif is_variable(sys, k) || has_observed_with_lhs(sys, k) ||
                iscall(k) &&
