@@ -310,12 +310,9 @@ end
 function ReconstructInitializeprob(
         srcsys::AbstractSystem, dstsys::AbstractSystem)
     syms = reduce(
-        vcat, reorder_parameters(dstsys, parameters(dstsys; initial_parameters = true));
+        vcat, reorder_parameters(dstsys, parameters(dstsys));
         init = [])
-    srcsyms = map(syms) do sym
-        iscall(sym) && operation(sym) isa Initial ? arguments(sym)[1] : sym
-    end
-    getter = getu(srcsys, srcsyms)
+    getter = getu(srcsys, syms)
     setter = setp_oop(dstsys, syms)
     return ReconstructInitializeprob(getter, setter)
 end
@@ -337,6 +334,10 @@ function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
         u0 = state_values(dstvalp)
     else
         u0 = T.(state_values(dstvalp))
+    end
+    buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Tunable(), newp)
+    if eltype(buf) != T
+        newp = repack(T.(buf))
     end
     return u0, newp
 end
