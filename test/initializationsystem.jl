@@ -1207,7 +1207,8 @@ end
     prob2 = remake(prob; u0 = [x => 2.0])
     @test prob2[x] == 2.0
     test_dummy_initialization_equation(prob2, x)
-    prob3 = remake(prob; u0 = [y => 2.0])
+    # otherwise we have `x ~ 2, y ~ 2` which is unsatisfiable
+    prob3 = remake(prob; u0 = [x => nothing, y => 2.0])
     @test prob3.f.initialization_data !== nothing
     @test init(prob3)[x] ≈ 1.0
     prob4 = remake(prob; p = [p => 1.0])
