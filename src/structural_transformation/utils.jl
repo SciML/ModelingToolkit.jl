@@ -452,9 +452,13 @@ end
 ### Misc
 ###
 
-function lower_varname_withshift(var, iv, backshift; unshifted = nothing, allow_zero = true)
-    backshift <= 0 && return Shift(iv, -backshift)(unshifted, allow_zero)
-    ds = backshift > 0 ? "$iv-$backshift" : "$iv+$(-backshift)"
+function lower_varname_withshift(var, iv)
+    op = operation(var)
+    op isa Shift || return var
+    backshift = op.steps
+    backshift > 0 && return var
+
+    ds = "$iv-$(-backshift)"
     d_separator = 'ˍ'
 
     if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)
@@ -477,15 +481,9 @@ function isdoubleshift(var)
            ModelingToolkit.isoperator(arguments(var)[1], ModelingToolkit.Shift)
 end
 
-### Rules
-# 1. x(t) -> x(t)
-# 2. Shift(t, 0)(x(t)) -> x(t)
-# 3. Shift(t, 3)(Shift(t, 2)(x(t)) -> Shift(t, 5)(x(t))
-
 function simplify_shifts(var)
     ModelingToolkit.hasshift(var) || return var
     var isa Equation && return simplify_shifts(var.lhs) ~ simplify_shifts(var.rhs)
-    ((op = operation(var)) isa Shift) && op.steps == 0 && return simplify_shifts(arguments(var)[1])
     if isdoubleshift(var)
         op1 = operation(var)
         vv1 = arguments(var)[1]
@@ -498,61 +496,6 @@ function simplify_shifts(var)
         return simplify_shifts(ModelingToolkit.Shift(t1 === nothing ? t2 : t1, s1 + s2)(vv2))
     else
         return maketerm(typeof(var), operation(var), simplify_shifts.(arguments(var)),
-            unwrap(var).metadata)
-    end
-end
-
-"""
-Power expand the shifts. Used for substitution.
-
-Shift(t, -3)(x(t)) -> Shift(t, -1)(Shift(t, -1)(Shift(t, -1)(x)))
-"""
-function expand_shifts(var)
-    ModelingToolkit.hasshift(var) || return var
-    var = ModelingToolkit.value(var)
-
-    var isa Equation && return expand_shifts(var.lhs) ~ expand_shifts(var.rhs)
-    op = operation(var)
-    s = sign(op.steps)
-    arg = only(arguments(var))
-
-    if ModelingToolkit.isvariable(arg) && (ModelingToolkit.getvariabletype(arg) === VARIABLE) && isequal(op.t, only(arguments(arg)))
-        out = arg
-        for i in 1:op.steps
-            out = Shift(op.t, s)(out)
-        end
-        return out
-    elseif iscall(arg)
-        return maketerm(typeof(var), operation(var), expand_shifts.(arguments(var)),
-            unwrap(var).metadata)
-    else
-        return arg
-    end
-end
-
-"""
-Shift(t, 1)(x + z) -> Shift(t, 1)(x) + Shift(t, 1)(z)
-"""
-function distribute_shift(var) 
-    ModelingToolkit.hasshift(var) || return var
-    var isa Equation && return distribute_shift(var.lhs) ~ distribute_shift(var.rhs)
-    shift = operation(var)
-    expr = only(arguments(var))
-    _distribute_shift(expr, shift)
-end
-
-function _distribute_shift(expr, shift)
-    op = operation(expr)
-    args = arguments(expr)
-
-    if length(args) == 1 
-        if ModelingToolkit.isvariable(only(args)) && isequal(op.t, only(args))
-            return shift(only(args))
-        else
-            return only(args)
-        end
-    else iscall(op)
-        return maketerm(typeof(expr), operation(expr), _distribute_shift.(args, shift),
             unwrap(var).metadata)
     end
 end

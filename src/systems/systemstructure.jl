@@ -154,7 +154,6 @@ Base.@kwdef mutable struct SystemStructure
     var_types::Union{Vector{VariableType}, Nothing}
     """Whether the system is discrete."""
     only_discrete::Bool
-    lowest_shift::Union{Dict, Nothing}
 end
 
 function Base.copy(structure::SystemStructure)
@@ -436,7 +435,7 @@ function TearingState(sys; quick_cancel = false, check = true)
 
     ts = TearingState(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
-            complete(graph), nothing, var_types, sys isa DiscreteSystem, lowest_shift),
+            complete(graph), nothing, var_types, sys isa DiscreteSystem),
         Any[])
     if sys isa DiscreteSystem
         ts = shift_discrete_system(ts, lowest_shift)
@@ -466,9 +465,8 @@ end
     Shift variable x by the largest shift s such that x(k-s) appears in the system of equations.
     The lowest-shift term will have.
 """
-function shift_discrete_system(ts::TearingState, lowest_shift)
+function shift_discrete_system(ts::TearingState)
     @unpack fullvars, sys = ts
-    return ts
     discvars = OrderedSet()
     eqs = equations(sys)
 

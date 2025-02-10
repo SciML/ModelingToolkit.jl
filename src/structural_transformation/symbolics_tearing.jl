@@ -244,19 +244,17 @@ State selection may determine that some differential variables are
 algebraic variables in disguise. The derivative of such variables are
 called dummy derivatives.
 
-`SelectedState` information is no longer needed past here. State selection
-is done. All non-differentiated variables are algebraic variables, and all
-variables that appear differentiated are differential variables.
+`SelectedState` information is no longer needed after this function is called. 
+State selection is done. All non-differentiated variables are algebraic 
+variables, and all variables that appear differentiated are differential variables.
 """
-function substitute_dummy_derivatives!(ts::TearingState, neweqs, dummy_sub, var_eq_matching)
+function substitute_derivatives_algevars!(ts::TearingState, neweqs, dummy_sub, var_eq_matching)
     @unpack fullvars, sys, structure = ts
-    @unpack solvable_graph, var_to_diff, eq_to_diff, graph, lowest_shift = structure
+    @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     diff_to_var = invview(var_to_diff)
     iv = ModelingToolkit.has_iv(sys) ? ModelingToolkit.get_iv(sys) : nothing
 
-    @show neweqs
     for var in 1:length(fullvars)
-        #@show neweqs
         dv = var_to_diff[var]
         dv === nothing && continue
         if var_eq_matching[var] !== SelectedState()
@@ -339,199 +337,137 @@ variables and equations, don't add them when they already exist.
 
 Documenting the differences to structural simplification for discrete systems:
 
-1. In discrete systems the lowest-order term is Shift(t, k)(x(t)), instead of x(t). We need to substitute the k-1 lowest order terms instead of the k-1 highest order terms.
+In discrete systems the lowest-order term is Shift(t, k)(x(t)), instead of x(t). 
+We want to substitute the k-1 lowest order terms instead of the k-1 highest order terms.
 
-The orders will also be off by one. The reason this is is that the dynamics of
-the system should be given in terms of Shift(t, 1)(x(t), x(t-1), ...). But 
-having the observables be indexed by the next time step is not so nice. So we 
-handle the shifts in the renaming.
-
-The substitution should look like the following: 
-  x(t) -> Shift(t, 1)(x(t))
-  Shift(t, -1)(x(t)) -> Shift(t, 0)(x(t))
-  Shift(t, -2)(x(t)) -> x_{t-1}(t)
-  Shift(t, -3)(x(t)) -> x_{t-2}(t)
-  and so on...
-
-In the implicit discrete case this shouldn't happen. The simplification should 
-look like a NonlinearSystem.
-
-2. For discrete systems Shift(t, 2)(x(t)) cannot be substituted as Shift(t, 1)(Shift(t,1)(x(t)). 
-This is different from the continuous case where D(D(x)) can be substituted for 
-by iteratively substituting x_t ~ D(x), then x_tt ~ D(x_t). For this reason the
-shift_sub dict is updated at the time that the renamed variables are written,
-inside the loop where new variables are generated.
+In the system x(k) ~ x(k-1) + x(k-2), we want to lower
+Shift(t, -1)(x(t)) -> x\_{t-1}(t)
 =#
 """
 Generate new derivative variables for the system.
 
-Effects on the state: 
+Effects on the system structure: 
 - fullvars: add the new derivative variables x_t
 - neweqs: add the identity equations for the new variables, D(x) ~ x_t
 - graph: update graph with the new equations and variables, and their connections
 - solvable_graph:
-- var_eq_matching: solvable equations
+- var_eq_matching: match D(x) to the added identity equation
 """
 function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matching;
-        is_discrete = false, mm = nothing, shift_sub = nothing)
+        is_discrete = false, mm = nothing)
     @unpack fullvars, sys, structure = ts
-    @unpack solvable_graph, var_to_diff, eq_to_diff, graph, lowest_shift = structure
+    @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     eq_var_matching = invview(var_eq_matching)
     diff_to_var = invview(var_to_diff)
     iv = ModelingToolkit.has_iv(sys) ? ModelingToolkit.get_iv(sys) : nothing
     lower_name = is_discrete ? lower_varname_withshift : lower_varname_with_unit
 
-    # index v gets mapped to the lowest shift and the index of the unshifted variable
-    if is_discrete
-        idx_to_lowest_shift = Dict{Int, Tuple{Int, Int}}(var => (0,0) for var in 1:length(fullvars))
-        var_to_unshiftedidx = Dict{Any, Int}(var => findfirst(x -> isequal(x, var), fullvars) for var in keys(lowest_shift))
-
-        for (i,var) in enumerate(fullvars)
-            key = (operation(var) isa Shift) ? only(arguments(var)) : var
-            idx_to_lowest_shift[i] = (get(lowest_shift, key, 0), get(var_to_unshiftedidx, key, i))
-        end
-    end
-
     linear_eqs = mm === nothing ? Dict{Int, Int}() :
                  Dict(reverse(en) for en in enumerate(mm.nzrows))
 
-    # v is the index of the current variable, x = fullvars[v]
-    # dv is the index of the derivative dx = D(x), x_t is the substituted variable 
-    # For ODESystems: lv is the index of the lowest-order variable (x(t))
-    # For DiscreteSystems: 
-    # - lv is the index of the lowest-order variable (Shift(t, k)(x(t)))
-    # - uv is the index of the highest-order variable (x(t))
+    # Generate new derivative variables for all unsolved variables that have a derivative in the system 
     for v in 1:length(var_to_diff)
+        # Check if a derivative 1) exists and 2) is unsolved for
         dv = var_to_diff[v]
-
-        if is_discrete 
-            x = fullvars[v]
-            op = operation(x)
-            (low, uv) = idx_to_lowest_shift[v]
-
-            # If v is unshifted (i.e. x(t)), then substitute the lowest-shift variable
-            if !(op isa Shift)
-                dv = findfirst(_x -> isequal(_x, Shift(iv, low)(x)), fullvars)
-            end
-            dx = fullvars[dv]
-            order, lv = var_order(diff_to_var, dv)
-            @show fullvars[uv]
-            x_t = lower_name(fullvars[lv], iv, -low-order-1; unshifted = fullvars[uv], allow_zero = true)
-            shift_sub[dx] = x_t
-            (var_eq_matching[dv] isa Int) ? continue : @goto DISCRETE_VARIABLE
-        end
         dv isa Int || continue
         solved = var_eq_matching[dv] isa Int
         solved && continue
 
-        # Check if there's `D(x) = x_t` already
-        local v_t, dummy_eq
-        for eq in 𝑑neighbors(solvable_graph, dv)
-            mi = get(linear_eqs, eq, 0)
-            iszero(mi) && continue
-            row = @view mm[mi, :]
-            nzs = nonzeros(row)
-            rvs = SparseArrays.nonzeroinds(row)
-            # note that `v_t` must not be differentiated
-            if length(nzs) == 2 &&
-               (abs(nzs[1]) == 1 && nzs[1] == -nzs[2]) &&
-               (v_t = rvs[1] == dv ? rvs[2] : rvs[1];
-               diff_to_var[v_t] === nothing)
-                @assert dv in rvs
-                dummy_eq = eq
-                @goto FOUND_DUMMY_EQ
-            end
+        # If there's `D(x) = x_t` already, update mappings and continue without
+        # adding new equations/variables
+        dd = find_duplicate_dd(dv, lineareqs, mm)
+
+        if !isnothing(dd)
+            dummy_eq, v_t = dd
+            var_to_diff[v_t] = var_to_diff[dv]
+            var_eq_matching[dv] = unassigned
+            eq_var_matching[dummy_eq] = dv
+            continue
         end
 
-        # add `x_t`
         dx = fullvars[dv]
         order, lv = var_order(diff_to_var, dv)
-        x_t = lower_name(fullvars[lv], iv, order)
+        x_t = is_discrete ? lower_name(fullvars[lv], iv)
+                      : lower_name(fullvars[lv], iv, order)
         
-        @label DISCRETE_VARIABLE
-        push!(fullvars, simplify_shifts(x_t))
-        v_t = length(fullvars)
-        v_t_idx = add_vertex!(var_to_diff)
-        add_vertex!(graph, DST)
-        # TODO: do we care about solvable_graph? We don't use them after
-        # `dummy_derivative_graph`.
-        add_vertex!(solvable_graph, DST)
+        # Add `x_t` to the graph
+        add_dd_variable!(structure, x_t, dv)
+        # Add `D(x) - x_t ~ 0` to the graph
+        add_dd_equation!(structure, neweqs, 0 ~ dx - x_t, dv)
+
+        # Update matching
         push!(var_eq_matching, unassigned)
-
-        is_discrete && begin
-            idx_to_lowest_shift[v_t] = idx_to_lowest_shift[dv]
-            for e in 𝑑neighbors(graph, dv)
-                add_edge!(graph, e, v_t)
-                rem_edge!(graph, e, dv)
-            end
-            # Do not add the lowest-order substitution as an equation, just substitute
-            !(operation(x) isa Shift) && begin
-                var_to_diff[v_t] = var_to_diff[dv]
-                continue
-            end
-        end
-
-        # add `D(x) - x_t ~ 0`
-        push!(neweqs, 0 ~ dx - x_t)
-        add_vertex!(graph, SRC)
-        dummy_eq = length(neweqs)
-        add_edge!(graph, dummy_eq, dv)
-        add_edge!(graph, dummy_eq, v_t)
-        add_vertex!(solvable_graph, SRC)
-        add_edge!(solvable_graph, dummy_eq, dv)
-
-        @label FOUND_DUMMY_EQ
-        var_to_diff[v_t] = var_to_diff[dv]
         var_eq_matching[dv] = unassigned
         eq_var_matching[dummy_eq] = dv
     end
 end
 
-function add_solvable_variable!(state::TearingState)
-    
+"""
+Check if there's `D(x) = x_t` already. 
+"""
+function find_duplicate_dd(dv, lineareqs, mm)
+    for eq in 𝑑neighbors(solvable_graph, dv)
+        mi = get(linear_eqs, eq, 0)
+        iszero(mi) && continue
+        row = @view mm[mi, :]
+        nzs = nonzeros(row)
+        rvs = SparseArrays.nonzeroinds(row)
+        # note that `v_t` must not be differentiated
+        if length(nzs) == 2 &&
+           (abs(nzs[1]) == 1 && nzs[1] == -nzs[2]) &&
+           (v_t = rvs[1] == dv ? rvs[2] : rvs[1];
+           diff_to_var[v_t] === nothing)
+            @assert dv in rvs
+            return eq, v_t
+        end
+    end
+    return nothing 
 end
 
-function add_solvable_equation!(s::SystemStructure, neweqs, eq)
+function add_dd_variable!(s::SystemStructure, x_t, dv)
+    push!(s.fullvars, simplify_shifts(x_t))
+    v_t_idx = add_vertex!(s.var_to_diff)
+    @assert v_t_idx == ndsts(graph) == ndsts(solvable_graph) == length(fullvars) ==
+        length(var_eq_matching)
+    add_vertex!(s.graph, DST)
+    # TODO: do we care about solvable_graph? We don't use them after
+    # `dummy_derivative_graph`.
+    add_vertex!(s.solvable_graph, DST)
+    var_to_diff[v_t] = var_to_diff[dv]
+end
+
+# dv = index of D(x), v_t = index of x_t
+function add_dd_equation!(s::SystemStructure, neweqs, eq, dv)
+    push!(neweqs, eq)
+    add_vertex!(s.graph, SRC)
+    v_t = length(s.fullvars)
+    dummy_eq = length(neweqs)
+    add_edge!(s.graph, dummy_eq, dv)
+    add_edge!(s.graph, dummy_eq, v_t)
+    add_vertex!(s.solvable_graph, SRC)
+    add_edge!(s.solvable_graph, dummy_eq, dv)
 end
 
 """
 Solve the solvable equations of the system and generate differential (or discrete)
 equations in terms of the selected states.
-
-Will reorder equations and unknowns to be:
-   [diffeqs; ...]
-   [diffvars; ...]
-such that the mass matrix is:
-   [I  0
-    0  0].
-
-Update the state to account for the new ordering and equations.
-
-####### DISCRETE CASE
-- Differential equations: substitute variables with everything shifted forward one timestep.
-- Algebraic and observable equations: substitute variables with everything shifted back one timestep.
 """
-function solve_and_generate_equations!(state::TearingState, neweqs, var_eq_matching; simplify = false, shift_sub = Dict())
+function generate_system_equations!(state::TearingState, neweqs, var_eq_matching; simplify = false)
     @unpack fullvars, sys, structure = state 
-    @unpack solvable_graph, var_to_diff, eq_to_diff, graph, lowest_shift = structure
+    @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     eq_var_matching = invview(var_eq_matching)
     diff_to_var = invview(var_to_diff)
-    dx_sub = Dict()
+    total_sub = Dict()
 
     if ModelingToolkit.has_iv(sys)
         iv = get_iv(sys)
         if is_only_discrete(structure)
             D = Shift(iv, 1)
-            lower_name = lower_varname_withshift
-            total_sub = shift_sub
         else
             D = Differential(iv)
-            lower_name = lower_varname_with_unit
-            total_sub = dx_sub
         end
     else
         iv = D = nothing
-        lower_name = lower_varname_with_unit
     end
 
     # if var is like D(x) or Shift(t, 1)(x)
@@ -544,14 +480,14 @@ function solve_and_generate_equations!(state::TearingState, neweqs, var_eq_match
         (eq, iv) -> eq isa Int && iv isa Int && BipartiteEdge(eq, iv) in solvable_graph
     end
 
-    diffeq_idxs = Int[]
-    algeeq_idxs = Int[]
     diff_eqs = Equation[]
-    alge_eqs = Equation[]
+    diffeq_idxs = Int[]
     diff_vars = Int[]
-    subeqs = Equation[]
-    solved_equations = Int[]
-    solved_variables = Int[]
+    alge_eqs = Equation[]
+    algeeq_idxs = Int[]
+    solved_eqs = Equation[]
+    solvedeq_idxs = Int[]
+    solved_vars = Int[]
 
     toporder = topological_sort(DiCMOBiGraph{false}(graph, var_eq_matching))
     eqs = Iterators.reverse(toporder)
@@ -561,100 +497,126 @@ function solve_and_generate_equations!(state::TearingState, neweqs, var_eq_match
     # fullvars[iv] is a differential variable of the form D^n(x), and neweqs[ieq]
     # is solved to give the RHS.
     for ieq in eqs
-        println()
         iv = eq_var_matching[ieq]
         if is_solvable(ieq, iv)
-            # We don't solve differential equations, but we will need to try to
-            # convert it into the mass matrix form.
-            # We cannot solve the differential variable like D(x)
             if isdervar(iv)
                 isnothing(D) &&
                     error("Differential found in a non-differential system. Likely this is a bug in the construction of an initialization system. Please report this issue with a reproducible example. Offending equation: $(equations(sys)[ieq])")
-                order, lv = var_order(diff_to_var, iv)
-                dx = D(simplify_shifts(fullvars[lv]))
-                eq = dx ~ simplify_shifts(Symbolics.fixpoint_sub(
-                    Symbolics.symbolic_linear_solve(neweqs[ieq],
-                        fullvars[iv]),
-                    total_sub; operator = ModelingToolkit.Shift))
-                for e in 𝑑neighbors(graph, iv)
-                    rem_edge!(graph, e, iv)
-                    add_edge!(graph, e, lv)
-                end
-                push!(diff_eqs, eq)
-                total_sub[simplify_shifts(eq.lhs)] = eq.rhs
-                dx_sub[simplify_shifts(eq.lhs)] = eq.rhs
-                push!(diffeq_idxs, ieq)
-                push!(diff_vars, diff_to_var[iv])
-                continue
-            end
-            eq = neweqs[ieq]
-            var = fullvars[iv]
-            residual = eq.lhs - eq.rhs
-            a, b, islinear = linear_expansion(residual, var)
-            @assert islinear
-            # 0 ~ a * var + b
-            # var ~ -b/a
-            if ModelingToolkit._iszero(a)
-                @warn "Tearing: solving $eq for $var is singular!"
+                add_differential_equation!(structure, iv, neweqs, ieq, 
+                                           diff_vars, diff_eqs, diffeq_idxs, total_sub)
             else
-                rhs = -b / a
-                neweq = var ~ simplify_shifts(Symbolics.fixpoint_sub(
-                    simplify ?
-                    Symbolics.simplify(rhs) : rhs,
-                    dx_sub; operator = ModelingToolkit.Shift))
-                push!(subeqs, neweq)
-                push!(solved_equations, ieq)
-                push!(solved_variables, iv)
+                add_solved_equation!(structure, iv, neweqs, ieq, 
+                                     solved_vars, solved_eqs, solvedeq_idxs, total_sub)
             end
         else
-            eq = neweqs[ieq]
-            rhs = eq.rhs
-            if !(eq.lhs isa Number && eq.lhs == 0)
-                rhs = eq.rhs - eq.lhs
-            end
-            push!(alge_eqs, 0 ~ simplify_shifts(Symbolics.fixpoint_sub(rhs, total_sub)))
-            push!(algeeq_idxs, ieq)
+            add_algebraic_equation!(structure, neweqs, ieq, 
+                                    alge_eqs, algeeq_idxs, total_sub)
         end
     end
-    @show neweqs
-    @show subeqs
 
-    # TODO: BLT sorting
+    # Generate new equations and orderings 
     neweqs = [diff_eqs; alge_eqs]
-    inveqsperm = [diffeq_idxs; algeeq_idxs]
-    eqsperm = zeros(Int, nsrcs(graph))
-    for (i, v) in enumerate(inveqsperm)
-        eqsperm[v] = i
-    end
+    eq_ordering = [diffeq_idxs; algeeq_idxs]
     diff_vars_set = BitSet(diff_vars)
     if length(diff_vars_set) != length(diff_vars)
         error("Tearing internal error: lowering DAE into semi-implicit ODE failed!")
     end
-    solved_variables_set = BitSet(solved_variables)
-    invvarsperm = [diff_vars;
+    solved_vars_set = BitSet(solved_vars)
+    var_ordering = [diff_vars;
                    setdiff!(setdiff(1:ndsts(graph), diff_vars_set),
-                       solved_variables_set)]
+                       solved_vars_set)]
+
+    return neweqs, solved_eqs, eq_ordering, var_ordering, length(solved_vars), length(solved_vars_set)
+end
+
+function add_differential_equation!(s::SystemStructure, iv, neweqs, ieq, diff_vars, diff_eqs, diffeqs_idxs, total_sub)
+    diff_to_var = invview(s.var_to_diff)
+
+    order, lv = var_order(diff_to_var, iv)
+    dx = D(simplify_shifts(fullvars[lv]))
+    eq = dx ~ simplify_shifts(Symbolics.fixpoint_sub(
+        Symbolics.symbolic_linear_solve(neweqs[ieq],
+            fullvars[iv]),
+        total_sub; operator = ModelingToolkit.Shift))
+    for e in 𝑑neighbors(s.graph, iv)
+        e == ieq && continue
+        rem_edge!(s.graph, e, iv)
+    end
+
+    push!(diff_eqs, eq)
+    total_sub[simplify_shifts(eq.lhs)] = eq.rhs
+    push!(diffeq_idxs, ieq)
+    push!(diff_vars, diff_to_var[iv])
+end
+
+function add_algebraic_equation!(s::SystemStructure, neweqs, ieq, alge_eqs, algeeq_idxs, total_sub)
+    eq = neweqs[ieq]
+    rhs = eq.rhs
+    if !(eq.lhs isa Number && eq.lhs == 0)
+        rhs = eq.rhs - eq.lhs
+    end
+    push!(alge_eqs, 0 ~ simplify_shifts(Symbolics.fixpoint_sub(rhs, total_sub)))
+    push!(algeeq_idxs, ieq)
+end
+
+function add_solved_equation!(s::SystemStructure, iv, neweqs, ieq, solved_vars, solved_eqs, solvedeq_idxs, total_sub)
+    eq = neweqs[ieq]
+    var = fullvars[iv]
+    residual = eq.lhs - eq.rhs
+    a, b, islinear = linear_expansion(residual, var)
+    @assert islinear
+    # 0 ~ a * var + b
+    # var ~ -b/a
+    if ModelingToolkit._iszero(a)
+        @warn "Tearing: solving $eq for $var is singular!"
+    else
+        rhs = -b / a
+        neweq = var ~ simplify_shifts(Symbolics.fixpoint_sub(
+            simplify ?
+            Symbolics.simplify(rhs) : rhs,
+            total_sub; operator = ModelingToolkit.Shift))
+        push!(solved_eqs, neweq)
+        push!(solvedeq_idxs, ieq)
+        push!(solved_vars, iv)
+    end
+end
+
+"""
+Reorder the equations and unknowns to be:
+   [diffeqs; ...]
+   [diffvars; ...]
+such that the mass matrix is:
+   [I  0
+    0  0].
+
+Update the state to account for the new ordering and equations.
+"""
+# TODO: BLT sorting
+function reorder_vars!(s::SystemStructure, var_eq_matching, eq_ordering, var_ordering, nelim_eq, nelim_var)
+    @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
+
+    eqsperm = zeros(Int, nsrcs(graph))
+    for (i, v) in enumerate(eq_ordering)
+        eqsperm[v] = i
+    end
     varsperm = zeros(Int, ndsts(graph))
-    for (i, v) in enumerate(invvarsperm)
+    for (i, v) in enumerate(var_ordering)
         varsperm[v] = i
     end
 
-    deps = Vector{Int}[i == 1 ? Int[] : collect(1:(i - 1))
-                       for i in 1:length(solved_equations)]
-
     # Contract the vertices in the structure graph to make the structure match
     # the new reality of the system we've just created.
-    graph = contract_variables(graph, var_eq_matching, varsperm, eqsperm,
-        length(solved_variables), length(solved_variables_set))
+    new_graph = contract_variables(graph, var_eq_matching, varsperm, eqsperm,
+        nelim_eq, nelim_var)
 
-    new_var_to_diff = complete(DiffGraph(length(invvarsperm)))
+    new_var_to_diff = complete(DiffGraph(length(var_ordering)))
     for (v, d) in enumerate(var_to_diff)
         v′ = varsperm[v]
         (v′ > 0 && d !== nothing) || continue
         d′ = varsperm[d]
         new_var_to_diff[v′] = d′ > 0 ? d′ : nothing
     end
-    new_eq_to_diff = complete(DiffGraph(length(inveqsperm)))
+    new_eq_to_diff = complete(DiffGraph(length(eq_ordering)))
     for (v, d) in enumerate(eq_to_diff)
         v′ = eqsperm[v]
         (v′ > 0 && d !== nothing) || continue
@@ -663,68 +625,20 @@ function solve_and_generate_equations!(state::TearingState, neweqs, var_eq_match
     end
     new_fullvars = fullvars[invvarsperm]
 
-    new_fullvars, new_var_to_diff, new_eq_to_diff, neweqs, subeqs, graph
+    # Update system structure 
+    @set! state.structure.graph = complete(new_graph)
+    @set! state.structure.var_to_diff = new_var_to_diff
+    @set! state.structure.eq_to_diff = new_eq_to_diff
+    @set! state.fullvars = new_fullvars
 end
 
-# Terminology and Definition:
-# A general DAE is in the form of `F(u'(t), u(t), p, t) == 0`. We can
-# characterize variables in `u(t)` into two classes: differential variables
-# (denoted `v(t)`) and algebraic variables (denoted `z(t)`). Differential
-# variables are marked as `SelectedState` and they are differentiated in the
-# DAE system, i.e. `v'(t)` are all the variables in `u'(t)` that actually
-# appear in the system. Algebraic variables are variables that are not
-# differential variables.
-    
-import ModelingToolkit: Shift
-
-# Give the order of the variable indexed by dv
-function var_order(diff_to_var, dv) 
-    order = 0
-    while (dv′ = diff_to_var[dv]) !== nothing
-        order += 1
-        dv = dv′
-    end
-    order, dv
-end
-
-function tearing_reassemble(state::TearingState, var_eq_matching,
-        full_var_eq_matching = nothing; simplify = false, mm = nothing, cse_hack = true, array_hack = true)
-    @unpack fullvars, sys, structure = state
-    @unpack solvable_graph, var_to_diff, eq_to_diff, graph, lowest_shift = structure
-    extra_vars = Int[]
-    if full_var_eq_matching !== nothing
-        for v in 𝑑vertices(state.structure.graph)
-            eq = full_var_eq_matching[v]
-            eq isa Int && continue
-            push!(extra_vars, v)
-        end
-    end
-    neweqs = collect(equations(state))
-    diff_to_var = invview(var_to_diff)
-    is_discrete = is_only_discrete(state.structure)
-
-    shift_sub = Dict() 
-
-    # Structural simplification 
-    dummy_sub = Dict()
-    substitute_dummy_derivatives!(state, neweqs, dummy_sub, var_eq_matching)
-
-    generate_derivative_variables!(state, neweqs, var_eq_matching; 
-                                   is_discrete, mm, shift_sub)
-
-    new_fullvars, new_var_to_diff, new_eq_to_diff, neweqs, subeqs, graph = 
-        solve_and_generate_equations!(state, neweqs, var_eq_matching; simplify, shift_sub)
-
-    # Update system
-    var_to_diff = new_var_to_diff
-    eq_to_diff = new_eq_to_diff
+"""
+Set the system equations, unknowns, observables post-tearing.
+"""
+function update_simplified_system!(state::TearingState, neweqs, solved_eqs, dummy_sub, var_eq_matching, extra_unknowns)
+    @unpack solvable_graph, var_to_diff, eq_to_diff, graph = state.structure
     diff_to_var = invview(var_to_diff)
 
-    old_fullvars = fullvars
-    @set! state.structure.graph = complete(graph)
-    @set! state.structure.var_to_diff = var_to_diff
-    @set! state.structure.eq_to_diff = eq_to_diff
-    @set! state.fullvars = fullvars = new_fullvars
     ispresent = let var_to_diff = var_to_diff, graph = graph
         i -> (!isempty(𝑑neighbors(graph, i)) ||
               (var_to_diff[i] !== nothing && !isempty(𝑑neighbors(graph, var_to_diff[i]))))
@@ -737,20 +651,16 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
         obs_sub[eq.lhs] = eq.rhs
     end
     # TODO: compute the dependency correctly so that we don't have to do this
-    obs = [fast_substitute(observed(sys), obs_sub); subeqs]
+    obs = [fast_substitute(observed(sys), obs_sub); solved_eqs]
 
     unknowns = Any[v
-                   for (i, v) in enumerate(fullvars)
+                   for (i, v) in enumerate(state.fullvars)
                    if diff_to_var[i] === nothing && ispresent(i)]
-    if !isempty(extra_vars)
-        for v in extra_vars
-            push!(unknowns, old_fullvars[v])
-        end
-    end
+    unknowns = [unknowns; extra_unknowns]
     @set! sys.unknowns = unknowns
 
     obs, subeqs, deps = cse_and_array_hacks(
-        sys, obs, subeqs, unknowns, neweqs; cse = cse_hack, array = array_hack)
+        sys, obs, solved_eqs, unknowns, neweqs; cse = cse_hack, array = array_hack)
 
     @set! sys.eqs = neweqs
     @set! sys.observed = obs
@@ -762,6 +672,53 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
         @set! sys.schedule = Schedule(var_eq_matching, dummy_sub)
     end
     sys = schedule(sys)
+end
+
+# Terminology and Definition:
+# A general DAE is in the form of `F(u'(t), u(t), p, t) == 0`. We can
+# characterize variables in `u(t)` into two classes: differential variables
+# (denoted `v(t)`) and algebraic variables (denoted `z(t)`). Differential
+# variables are marked as `SelectedState` and they are differentiated in the
+# DAE system, i.e. `v'(t)` are all the variables in `u'(t)` that actually
+# appear in the system. Algebraic variables are variables that are not
+# differential variables.
+    
+# Give the order of the variable indexed by dv
+function var_order(diff_to_var, dv)
+    order = 0
+    while (dv′ = diff_to_var[dv]) !== nothing
+        order += 1
+        dv = dv′
+    end
+    order, dv
+end
+
+function tearing_reassemble(state::TearingState, var_eq_matching,
+        full_var_eq_matching = nothing; simplify = false, mm = nothing, cse_hack = true, array_hack = true)
+
+    extra_vars = Int[]
+    if full_var_eq_matching !== nothing
+        for v in 𝑑vertices(state.structure.graph)
+            eq = full_var_eq_matching[v]
+            eq isa Int && continue
+            push!(extra_vars, v)
+        end
+    end
+    extra_unknowns = fullvars[extra_vars]
+    neweqs = collect(equations(state))
+
+    # Structural simplification 
+    dummy_sub = Dict()
+    substitute_derivatives_algevars!(state, neweqs, dummy_sub, var_eq_matching)
+
+    generate_derivative_variables!(state, neweqs, var_eq_matching; mm)
+
+    neweqs, solved_eqs, eq_ordering, var_ordering, nelim_eq, nelim_var = 
+        generate_system_equations!(state, neweqs, var_eq_matching; simplify)
+
+    reorder_vars!(state.structure, var_eq_matching, eq_ordering, var_ordering, nelim_eq, nelim_var)
+
+    sys = update_simplified_system!(state, neweqs, solved_eqs, dummy_sub, var_eq_matching, extra_unknowns)
     @set! state.sys = sys
     @set! sys.tearing_state = state
     return invalidate_cache!(sys)
