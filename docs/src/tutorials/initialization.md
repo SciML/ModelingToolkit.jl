@@ -14,8 +14,10 @@ principles of initialization of DAE systems. Take a DAE written in semi-explicit
 form:
 
 ```math
-x' = f(x,y,t)\\
-0 = g(x,y,t)
+\begin{aligned}
+    x^\prime &= f(x,y,t) \\
+    0 &= g(x,y,t)
+\end{aligned}
 ```
 
 where ``x`` are the differential variables and ``y`` are the algebraic variables.
