@@ -168,6 +168,10 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
            [eq.rhs for eq in eqs]
 
+    if !isempty(assertions(sys))
+        rhss[end] += unwrap(get_assertions_expr(sys))
+    end
+
     # TODO: add an optional check on the ordering of observed equations
     u = dvs
     p = reorder_parameters(sys, ps)

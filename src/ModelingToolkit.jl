@@ -249,7 +249,7 @@ export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbanc
        istunable, getdist, hasdist,
        tunable_parameters, isirreducible, getdescription, hasdescription,
        hasunit, getunit, hasconnect, getconnect,
-       hasmisc, getmisc
+       hasmisc, getmisc, state_priority
 export ode_order_lowering, dae_order_lowering, liouville_transform
 export PDESystem
 export Differential, expand_derivatives, @derivatives
