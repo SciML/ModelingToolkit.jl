@@ -183,7 +183,7 @@ A variable can be marked `irreducible` to prevent it from being moved to an
 it can be accessed in [callbacks](@ref events)
 
 ```@example metadata
-@variable important_value [irreducible = true]
+@variables important_value [irreducible = true]
 isirreducible(important_value)
 ```
 
@@ -192,7 +192,7 @@ isirreducible(important_value)
 When a model is structurally simplified, the algorithm will try to ensure that the variables with higher state priority become states of the system. A variable's state priority is a number set using the `state_priority` metadata.
 
 ```@example metadata
-@variable important_dof [state_priority = 10] unimportant_dof [state_priority = -2]
+@variables important_dof [state_priority = 10] unimportant_dof [state_priority = -2]
 state_priority(important_dof)
 ```
 
@@ -201,7 +201,7 @@ state_priority(important_dof)
 Units for variables can be designated using symbolic metadata. For more information, please see the [model validation and units](@ref units) section of the docs. Note that `getunit` is not equivalent to `get_unit` - the former is a metadata getter for individual variables (and is provided so the same interface function for `unit` exists like other metadata), while the latter is used to handle more general symbolic expressions.
 
 ```@example metadata
-@variable speed [unit = u"m/s"]
+@variables speed [unit = u"m/s"]
 hasunit(speed)
 ```
 
