@@ -67,8 +67,7 @@ function linearization_function(sys::AbstractSystem, inputs,
     end
 
     fun, u0, p = process_SciMLProblem(
-        ODEFunction{true, SciMLBase.FullSpecialize}, sys, merge(
-            defaults_and_guesses(sys), op), p;
+        ODEFunction{true, SciMLBase.FullSpecialize}, sys, op, p;
         t = 0.0, build_initializeprob = initializealg isa OverrideInit,
         allow_incomplete = true, algebraic_only = true)
     prob = ODEProblem(fun, u0, (nothing, nothing), p)
