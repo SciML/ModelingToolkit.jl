@@ -152,6 +152,7 @@ include("systems/imperative_affect.jl")
 include("systems/callbacks.jl")
 include("systems/codegen_utils.jl")
 include("systems/problem_utils.jl")
+include("linearization.jl")
 
 include("systems/nonlinear/nonlinearsystem.jl")
 include("systems/nonlinear/homotopy_continuation.jl")
