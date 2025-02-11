@@ -248,11 +248,10 @@ called dummy derivatives.
 State selection is done. All non-differentiated variables are algebraic 
 variables, and all variables that appear differentiated are differential variables.
 """
-function substitute_derivatives_algevars!(ts::TearingState, neweqs, var_eq_matching, dummy_sub)
+function substitute_derivatives_algevars!(ts::TearingState, neweqs, var_eq_matching, dummy_sub; iv = nothing, D = nothing)
     @unpack fullvars, sys, structure = ts
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     diff_to_var = invview(var_to_diff)
-    iv = ModelingToolkit.has_iv(sys) ? ModelingToolkit.get_iv(sys) : nothing
 
     for var in 1:length(fullvars)
         dv = var_to_diff[var]
@@ -361,12 +360,11 @@ Effects on the system structure:
 - solvable_graph:
 - var_eq_matching: match D(x) to the added identity equation
 """
-function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matching; mm = nothing)
+function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matching; mm = nothing, iv = nothing, D = nothing)
     @unpack fullvars, sys, structure = ts
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     eq_var_matching = invview(var_eq_matching)
     diff_to_var = invview(var_to_diff)
-    iv = ModelingToolkit.has_iv(sys) ? ModelingToolkit.get_iv(sys) : nothing
     is_discrete = is_only_discrete(structure)
     lower_varname = is_discrete ? lower_shift_varname : lower_varname_with_unit
     linear_eqs = mm === nothing ? Dict{Int, Int}() :
@@ -461,27 +459,18 @@ end
 Solve the solvable equations of the system and generate differential (or discrete)
 equations in terms of the selected states.
 """
-function generate_system_equations!(state::TearingState, neweqs, var_eq_matching; simplify = false)
+function generate_system_equations!(state::TearingState, neweqs, var_eq_matching; simplify = false, iv = nothing, D = nothing)
     @unpack fullvars, sys, structure = state 
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     eq_var_matching = invview(var_eq_matching)
     diff_to_var = invview(var_to_diff)
     total_sub = Dict()
-
-    if ModelingToolkit.has_iv(sys)
-        iv = get_iv(sys)
-        if is_only_discrete(structure)
-            D = Shift(iv, 1)
-            for v in fullvars
-                op = operation(v)
-                op isa Shift && (op.steps < 0) && (total_sub[v] = lower_shift_varname(v, iv))
-            end
-        else
-            D = Differential(iv)
+    if is_only_discrete(structure)
+        for v in fullvars
+            op = operation(v)
+            op isa Shift && (op.steps < 0) && (total_sub[v] = lower_shift_varname(v, iv))
         end
-    else
-        iv = D = nothing
-    end
+   end
 
     # if var is like D(x) or Shift(t, 1)(x)
     isdervar = let diff_to_var = diff_to_var
@@ -727,13 +716,23 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     neweqs = collect(equations(state))
     dummy_sub = Dict()
 
-    # Structural simplification 
-    substitute_derivatives_algevars!(state, neweqs, var_eq_matching, dummy_sub)
+    if ModelingToolkit.has_iv(state.sys)
+        iv = get_iv(state.sys)
+        if !is_only_discrete(state.structure)
+            D = Differential(iv)
+        else
+            D = Shift(iv, 1)
+        end
+        iv = D = nothing
+    end
 
-    generate_derivative_variables!(state, neweqs, var_eq_matching; mm)
+    # Structural simplification 
+    substitute_derivatives_algevars!(state, neweqs, var_eq_matching, dummy_sub; iv, D)
+
+    generate_derivative_variables!(state, neweqs, var_eq_matching; mm, iv, D)
 
     neweqs, solved_eqs, eq_ordering, var_ordering, nelim_eq, nelim_var = 
-        generate_system_equations!(state, neweqs, var_eq_matching; simplify)
+        generate_system_equations!(state, neweqs, var_eq_matching; simplify, iv, D)
 
     state = reorder_vars!(state, var_eq_matching, eq_ordering, var_ordering, nelim_eq, nelim_var)
 
