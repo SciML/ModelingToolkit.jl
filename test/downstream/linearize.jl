@@ -1,4 +1,5 @@
 using ModelingToolkit, Test
+using CommonSolve: solve
 
 # r is an input, and y is an output.
 @independent_variables t
@@ -14,11 +15,13 @@ eqs = [u ~ kp * (r - y)
 @named sys = ODESystem(eqs, t)
 
 lsys, ssys = linearize(sys, [r], [y])
+lprob = LinearizationProblem(sys, [r], [y])
+lsys2 = solve(lprob)
 
-@test lsys.A[] == -2
-@test lsys.B[] == 1
-@test lsys.C[] == 1
-@test lsys.D[] == 0
+@test lsys.A[] == lsys2.A[] == -2
+@test lsys.B[] == lsys2.B[] == 1
+@test lsys.C[] == lsys2.C[] == 1
+@test lsys.D[] == lsys2.D[] == 0
 
 lsys, ssys = linearize(sys, [r], [r])
 
