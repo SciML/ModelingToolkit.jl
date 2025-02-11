@@ -141,6 +141,13 @@ struct LinearizationFunction{
     initialize_kwargs::IK
 end
 
+SymbolicIndexingInterface.symbolic_container(f::LinearizationFunction) = f.prob
+SymbolicIndexingInterface.state_values(f::LinearizationFunction) = state_values(f.prob)
+function SymbolicIndexingInterface.parameter_values(f::LinearizationFunction)
+    parameter_values(f.prob)
+end
+SymbolicIndexingInterface.current_time(f::LinearizationFunction) = current_time(f.prob)
+
 function (linfun::LinearizationFunction)(u, p, t)
     if eltype(p) <: Pair
         p = todict(p)
@@ -233,6 +240,61 @@ SymbolicIndexingInterface.state_values(integ::MockIntegrator) = integ.u
 SymbolicIndexingInterface.parameter_values(integ::MockIntegrator) = integ.p
 SymbolicIndexingInterface.current_time(integ::MockIntegrator) = integ.t
 SciMLBase.get_tmp_cache(integ::MockIntegrator) = integ.cache
+
+mutable struct LinearizationProblem{F <: LinearizationFunction, T}
+    const f::F
+    t::T
+end
+
+SymbolicIndexingInterface.symbolic_container(p::LinearizationProblem) = p.f
+SymbolicIndexingInterface.state_values(p::LinearizationProblem) = state_values(p.f)
+SymbolicIndexingInterface.parameter_values(p::LinearizationProblem) = parameter_values(p.f)
+SymbolicIndexingInterface.current_time(p::LinearizationProblem) = p.t
+
+function CommonSolve.solve(prob::LinearizationProblem; allow_input_derivatives = false)
+    u0 = state_values(prob)
+    p = parameter_values(prob)
+    t = current_time(prob)
+    linres = prob.f(u0, p, t)
+    f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u = linres
+
+    nx, nu = size(f_u)
+    nz = size(f_z, 2)
+    ny = size(h_x, 1)
+
+    D = h_u
+
+    if isempty(g_z)
+        A = f_x
+        B = f_u
+        C = h_x
+        @assert iszero(g_x)
+        @assert iszero(g_z)
+        @assert iszero(g_u)
+    else
+        gz = lu(g_z; check = false)
+        issuccess(gz) ||
+            error("g_z not invertible, this indicates that the DAE is of index > 1.")
+        gzgx = -(gz \ g_x)
+        A = [f_x f_z
+             gzgx*f_x gzgx*f_z]
+        B = [f_u
+             gzgx * f_u] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
+
+        C = [h_x h_z]
+        Bs = -(gz \ g_u) # This equation differ from the cited paper, the paper is likely wrong since their equaiton leads to a dimension mismatch.
+        if !iszero(Bs)
+            if !allow_input_derivatives
+                der_inds = findall(vec(any(!=(0), Bs, dims = 1)))
+                error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(inputs(sys)[der_inds]). Call `linearize` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
+            end
+            B = [B [zeros(nx, nu); Bs]]
+            D = [D zeros(ny, nu)]
+        end
+    end
+
+    (; A, B, C, D)
+end
 
 """
     (; A, B, C, D), simplified_sys = linearize_symbolic(sys::AbstractSystem, inputs, outputs; simplify = false, allow_input_derivatives = false, kwargs...)
@@ -460,60 +522,24 @@ lsys_sym, _ = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 @assert substitute(lsys_sym.A, ModelingToolkit.defaults(cl)) == lsys.A
 ```
 """
-function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives = false,
+function linearize(sys, lin_fun::LinearizationFunction; t = 0.0,
+        op = Dict(), allow_input_derivatives = false,
         p = DiffEqBase.NullParameters())
-    x0 = merge(defaults(sys), Dict(missing_variable_defaults(sys)), op)
-    u0, defs = get_u0(sys, x0, p)
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        if p isa SciMLBase.NullParameters
-            p = op
-        elseif p isa Dict
-            p = merge(p, op)
-        elseif p isa Vector && eltype(p) <: Pair
-            p = merge(Dict(p), op)
-        elseif p isa Vector
-            p = merge(Dict(parameters(sys) .=> p), op)
+    prob = LinearizationProblem(lin_fun, t)
+    op = anydict(op)
+    evaluate_varmap!(op, unknowns(sys))
+    for (k, v) in op
+        if is_parameter(prob, Initial(k))
+            setu(prob, Initial(k))(prob, v)
+        else
+            setu(prob, k)(prob, v)
         end
     end
-    linres = lin_fun(u0, p, t)
-    f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u = linres
-
-    nx, nu = size(f_u)
-    nz = size(f_z, 2)
-    ny = size(h_x, 1)
-
-    D = h_u
-
-    if isempty(g_z)
-        A = f_x
-        B = f_u
-        C = h_x
-        @assert iszero(g_x)
-        @assert iszero(g_z)
-        @assert iszero(g_u)
-    else
-        gz = lu(g_z; check = false)
-        issuccess(gz) ||
-            error("g_z not invertible, this indicates that the DAE is of index > 1.")
-        gzgx = -(gz \ g_x)
-        A = [f_x f_z
-             gzgx*f_x gzgx*f_z]
-        B = [f_u
-             gzgx * f_u] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
-
-        C = [h_x h_z]
-        Bs = -(gz \ g_u) # This equation differ from the cited paper, the paper is likely wrong since their equaiton leads to a dimension mismatch.
-        if !iszero(Bs)
-            if !allow_input_derivatives
-                der_inds = findall(vec(any(!=(0), Bs, dims = 1)))
-                error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(inputs(sys)[der_inds]). Call `linearize` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
-            end
-            B = [B [zeros(nx, nu); Bs]]
-            D = [D zeros(ny, nu)]
-        end
+    p = anydict(p)
+    for (k, v) in p
+        setu(prob, k)(prob, v)
     end
-
-    (; A, B, C, D)
+    return solve(prob; allow_input_derivatives)
 end
 
 function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
