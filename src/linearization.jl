@@ -79,7 +79,8 @@ function linearization_function(sys::AbstractSystem, inputs,
         abstol = initialization_abstol, reltol = initialization_reltol,
         nlsolve_alg = initialization_solver_alg)
     lin_fun = LinearizationFunction(
-        diff_idxs, alge_idxs, input_idxs, length(unknowns(sys)), prob, h, similar(u0),
+        diff_idxs, alge_idxs, input_idxs, length(unknowns(sys)),
+        prob, h, u0 === nothing ? nothing : similar(u0),
         ForwardDiff.Chunk(input_idxs), initializealg, initialization_kwargs)
     return lin_fun, sys
 end
