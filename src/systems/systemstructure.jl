@@ -142,7 +142,7 @@ has_equations(::TransformationState) = true
 Base.@kwdef mutable struct SystemStructure
     """Maps the index of variable x to the index of variable D(x)."""
     var_to_diff::DiffGraph
-    """Maps the index of an equation."""
+    """Maps the index of an algebraic equation to the index of the equation it is differentiated into."""
     eq_to_diff::DiffGraph
     # Can be access as
     # `graph` to automatically look at the bipartite graph
