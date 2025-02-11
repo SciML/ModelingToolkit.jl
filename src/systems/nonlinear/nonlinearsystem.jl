@@ -578,7 +578,7 @@ function CacheWriter(sys::AbstractSystem, buffer_types::Vector{TypeT},
 
     fn = build_function_wrapper(
         sys, nothing, :out, DestructuredArgs(DestructuredArgs.(solsyms)),
-        DestructuredArgs.(rps)...; p_start = 3, p_end = length(rps) + 2,
+        rps...; p_start = 3, p_end = length(rps) + 2,
         expression = Val{true}, add_observed = false,
         extra_assignments = [obs_assigns; body])
     return CacheWriter(eval_or_rgf(fn; eval_expression, eval_module))
