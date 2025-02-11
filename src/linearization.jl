@@ -148,6 +148,11 @@ function SymbolicIndexingInterface.parameter_values(f::LinearizationFunction)
 end
 SymbolicIndexingInterface.current_time(f::LinearizationFunction) = current_time(f.prob)
 
+"""
+    $(TYPEDSIGNATURES)
+
+Linearize the wrapped system at the point given by `(u, p, t)`.
+"""
 function (linfun::LinearizationFunction)(u, p, t)
     if eltype(p) <: Pair
         p = todict(p)
@@ -241,11 +246,33 @@ SymbolicIndexingInterface.parameter_values(integ::MockIntegrator) = integ.p
 SymbolicIndexingInterface.current_time(integ::MockIntegrator) = integ.t
 SciMLBase.get_tmp_cache(integ::MockIntegrator) = integ.cache
 
+"""
+    $(TYPEDEF)
+
+A struct representing a linearization operation to be performed. Can be symbolically
+indexed to efficiently update the operating point for multiple linearizations in a loop.
+The value of the independent variable can be set by mutating the `.t` field of this struct.
+"""
 mutable struct LinearizationProblem{F <: LinearizationFunction, T}
+    """
+    The wrapped `LinearizationFunction`
+    """
     const f::F
     t::T
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Construct a `LinearizationProblem` for linearizing the system `sys` with the given
+`inputs` and `outputs`.
+
+# Keyword arguments
+
+- `t`: The value of the independent variable
+
+All other keyword arguments are forwarded to `linearization_function`.
+"""
 function LinearizationProblem(sys::AbstractSystem, inputs, outputs; t = 0.0, kwargs...)
     linfun, _ = linearization_function(sys, inputs, outputs; kwargs...)
     return LinearizationProblem(linfun, t)
