@@ -75,78 +75,125 @@ function linearization_function(sys::AbstractSystem, inputs,
 
     ps = parameters(sys)
     h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
-    lin_fun = let diff_idxs = diff_idxs,
-        alge_idxs = alge_idxs,
-        input_idxs = input_idxs,
-        sts = unknowns(sys),
-        fun = fun,
-        prob = prob,
-        sys_ps = p,
-        h = h,
-        integ_cache = (similar(u0)),
-        chunk = ForwardDiff.Chunk(input_idxs),
-        initializealg = initializealg,
-        initialization_abstol = initialization_abstol,
-        initialization_reltol = initialization_reltol,
-        initialization_solver_alg = initialization_solver_alg,
-        sys = sys
 
-        function (u, p, t)
-            if !isa(p, MTKParameters)
-                p = todict(p)
-                newps = deepcopy(sys_ps)
-                for (k, v) in p
-                    if is_parameter(sys, k)
-                        v = fixpoint_sub(v, p)
-                        setp(sys, k)(newps, v)
-                    end
-                end
-                p = newps
-            end
-
-            if u !== nothing # Handle systems without unknowns
-                length(sts) == length(u) ||
-                    error("Number of unknown variables ($(length(sts))) does not match the number of input unknowns ($(length(u)))")
-
-                integ = MockIntegrator{true}(u, p, t, integ_cache)
-                u, p, success = SciMLBase.get_initial_values(
-                    prob, integ, fun, initializealg, Val(true);
-                    abstol = initialization_abstol, reltol = initialization_reltol,
-                    nlsolve_alg = initialization_solver_alg)
-                if !success
-                    error("Initialization algorithm $(initializealg) failed with `u = $u` and `p = $p`.")
-                end
-                uf = SciMLBase.UJacobianWrapper(fun, t, p)
-                fg_xz = ForwardDiff.jacobian(uf, u)
-                h_xz = ForwardDiff.jacobian(
-                    let p = p, t = t
-                        xz -> h(xz, p, t)
-                    end, u)
-                pf = SciMLBase.ParamJacobianWrapper(fun, t, u)
-                fg_u = jacobian_wrt_vars(pf, p, input_idxs, chunk)
-            else
-                length(sts) == 0 ||
-                    error("Number of unknown variables (0) does not match the number of input unknowns ($(length(u)))")
-                fg_xz = zeros(0, 0)
-                h_xz = fg_u = zeros(0, length(inputs))
-            end
-            hp = let u = u, t = t
-                _hp(p) = h(u, p, t)
-                _hp
-            end
-            h_u = jacobian_wrt_vars(hp, p, input_idxs, chunk)
-            (f_x = fg_xz[diff_idxs, diff_idxs],
-                f_z = fg_xz[diff_idxs, alge_idxs],
-                g_x = fg_xz[alge_idxs, diff_idxs],
-                g_z = fg_xz[alge_idxs, alge_idxs],
-                f_u = fg_u[diff_idxs, :],
-                g_u = fg_u[alge_idxs, :],
-                h_x = h_xz[:, diff_idxs],
-                h_z = h_xz[:, alge_idxs],
-                h_u = h_u)
-        end
-    end
+    initialization_kwargs = (;
+        abstol = initialization_abstol, reltol = initialization_reltol,
+        nlsolve_alg = initialization_solver_alg)
+    lin_fun = LinearizationFunction(
+        diff_idxs, alge_idxs, input_idxs, length(unknowns(sys)), prob, h, similar(u0),
+        ForwardDiff.Chunk(input_idxs), initializealg, initialization_kwargs)
     return lin_fun, sys
+end
+
+"""
+    $(TYPEDEF)
+
+A callable struct which linearizes a system.
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
+struct LinearizationFunction{
+    DI <: AbstractVector{Int}, AI <: AbstractVector{Int}, II, P <: ODEProblem,
+    H, C, Ch, IA <: SciMLBase.DAEInitializationAlgorithm, IK}
+    """
+    The indexes of differential equations in the linearized system.
+    """
+    diff_idxs::DI
+    """
+    The indexes of algebraic equations in the linearized system.
+    """
+    alge_idxs::AI
+    """
+    The indexes of parameters in the linearized system which represent
+    input variables.
+    """
+    input_idxs::II
+    """
+    The number of unknowns in the linearized system.
+    """
+    num_states::Int
+    """
+    The `ODEProblem` of the linearized system.
+    """
+    prob::P
+    """
+    A function which takes `(u, p, t)` and returns the outputs of the linearized system.
+    """
+    h::H
+    """
+    Any required cache buffers.
+    """
+    caches::C
+    # TODO: Use DI?
+    """
+    A `ForwardDiff.Chunk` for taking the jacobian with respect to the inputs.
+    """
+    chunk::Ch
+    """
+    The initialization algorithm to use.
+    """
+    initializealg::IA
+    """
+    Keyword arguments to be passed to `SciMLBase.get_initial_values`.
+    """
+    initialize_kwargs::IK
+end
+
+function (linfun::LinearizationFunction)(u, p, t)
+    if eltype(p) <: Pair
+        p = todict(p)
+        newps = copy(parameter_values(linfun.prob))
+        for (k, v) in p
+            if is_parameter(linfun, k)
+                v = fixpoint_sub(v, p)
+                setp(linfun, k)(newps, v)
+            end
+        end
+        p = newps
+    end
+
+    fun = linfun.prob.f
+    if u !== nothing # Handle systems without unknowns
+        linfun.num_states == length(u) ||
+            error("Number of unknown variables ($(linfun.num_states)) does not match the number of input unknowns ($(length(u)))")
+        integ_cache = linfun.caches
+        integ = MockIntegrator{true}(u, p, t, integ_cache)
+        u, p, success = SciMLBase.get_initial_values(
+            linfun.prob, integ, fun, linfun.initializealg, Val(true);
+            linfun.initialize_kwargs...)
+        if !success
+            error("Initialization algorithm $(linfun.initializealg) failed with `u = $u` and `p = $p`.")
+        end
+        uf = SciMLBase.UJacobianWrapper(fun, t, p)
+        fg_xz = ForwardDiff.jacobian(uf, u)
+        h_xz = ForwardDiff.jacobian(
+            let p = p, t = t, h = linfun.h
+                xz -> h(xz, p, t)
+            end, u)
+        pf = SciMLBase.ParamJacobianWrapper(fun, t, u)
+        fg_u = jacobian_wrt_vars(pf, p, linfun.input_idxs, linfun.chunk)
+    else
+        linfun.num_states == 0 ||
+            error("Number of unknown variables (0) does not match the number of input unknowns ($(length(u)))")
+        fg_xz = zeros(0, 0)
+        h_xz = fg_u = zeros(0, length(linfun.input_idxs))
+    end
+    hp = let u = u, t = t, h = linfun.h
+        _hp(p) = h(u, p, t)
+        _hp
+    end
+    h_u = jacobian_wrt_vars(hp, p, linfun.input_idxs, linfun.chunk)
+    (f_x = fg_xz[linfun.diff_idxs, linfun.diff_idxs],
+        f_z = fg_xz[linfun.diff_idxs, linfun.alge_idxs],
+        g_x = fg_xz[linfun.alge_idxs, linfun.diff_idxs],
+        g_z = fg_xz[linfun.alge_idxs, linfun.alge_idxs],
+        f_u = fg_u[linfun.diff_idxs, :],
+        g_u = fg_u[linfun.alge_idxs, :],
+        h_x = h_xz[:, linfun.diff_idxs],
+        h_z = h_xz[:, linfun.alge_idxs],
+        h_u = h_u)
 end
 
 """
