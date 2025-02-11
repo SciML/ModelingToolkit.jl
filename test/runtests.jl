@@ -120,6 +120,7 @@ end
         @safetestset "Linearization Dummy Derivative Tests" include("downstream/linearization_dd.jl")
         @safetestset "Inverse Models Test" include("downstream/inversemodel.jl")
         @safetestset "Analysis Points Test" include("downstream/analysis_points.jl")
+        @safetestset "Analysis Points Test" include("downstream/test_disturbance_model.jl")
     end
 
     if GROUP == "All" || GROUP == "FMI"
