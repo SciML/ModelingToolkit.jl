@@ -126,6 +126,11 @@ struct SDESystem <: AbstractODESystem
     """
     parameter_dependencies::Vector{Equation}
     """
+    Mapping of conditions which should be true throughout the solution process to corresponding error
+    messages. These will be added to the equations when calling `debug_system`.
+    """
+    assertions::Dict{BasicSymbolic, String}
+    """
     Metadata for the system, to be used by downstream packages.
     """
     metadata::Any
@@ -159,7 +164,9 @@ struct SDESystem <: AbstractODESystem
     function SDESystem(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed,
             tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults,
             guesses, initializesystem, initialization_eqs, connector_type,
-            cevents, devents, parameter_dependencies, metadata = nothing, gui_metadata = nothing,
+            cevents, devents, parameter_dependencies, assertions = Dict{
+                BasicSymbolic, Nothing},
+            metadata = nothing, gui_metadata = nothing,
             complete = false, index_cache = nothing, parent = nothing, is_scalar_noise = false,
             is_dde = false,
             isscheduled = false;
@@ -185,9 +192,8 @@ struct SDESystem <: AbstractODESystem
         new(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, description, systems,
             defaults, guesses, initializesystem, initialization_eqs, connector_type, cevents,
-            devents,
-            parameter_dependencies, metadata, gui_metadata, complete, index_cache, parent, is_scalar_noise,
-            is_dde, isscheduled)
+            devents, parameter_dependencies, assertions, metadata, gui_metadata, complete,
+            index_cache, parent, is_scalar_noise, is_dde, isscheduled)
     end
 end
 
@@ -209,6 +215,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
         continuous_events = nothing,
         discrete_events = nothing,
         parameter_dependencies = Equation[],
+        assertions = Dict{BasicSymbolic, String}(),
         metadata = nothing,
         gui_metadata = nothing,
         complete = false,
@@ -261,11 +268,12 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
     if is_dde === nothing
         is_dde = _check_if_dde(deqs, iv′, systems)
     end
+    assertions = Dict{BasicSymbolic, Any}(unwrap(k) => v for (k, v) in assertions)
     SDESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, neqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
         ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses,
         initializesystem, initialization_eqs, connector_type,
-        cont_callbacks, disc_callbacks, parameter_dependencies, metadata, gui_metadata,
+        cont_callbacks, disc_callbacks, parameter_dependencies, assertions, metadata, gui_metadata,
         complete, index_cache, parent, is_scalar_noise, is_dde; checks = checks)
 end
 
@@ -378,6 +386,7 @@ function ODESystem(sys::SDESystem)
     newsys = ODESystem(neweqs, get_iv(sys), unknowns(sys), parameters(sys);
         parameter_dependencies = parameter_dependencies(sys), defaults = defaults(sys),
         continuous_events = continuous_events(sys), discrete_events = discrete_events(sys),
+        assertions = assertions(sys),
         name = nameof(sys), description = description(sys), metadata = get_metadata(sys))
     @set newsys.parent = sys
 end

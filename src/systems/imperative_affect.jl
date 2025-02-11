@@ -75,7 +75,12 @@ func(f::ImperativeAffect) = f.f
 context(a::ImperativeAffect) = a.ctx
 observed(a::ImperativeAffect) = a.obs
 observed_syms(a::ImperativeAffect) = a.obs_syms
-discretes(a::ImperativeAffect) = filter(ModelingToolkit.isparameter, a.modified)
+function discretes(a::ImperativeAffect)
+    Iterators.filter(ModelingToolkit.isparameter,
+        Iterators.flatten(Iterators.map(
+            x -> symbolic_type(x) == NotSymbolic() && x isa AbstractArray ? x : [x],
+            a.modified)))
+end
 modified(a::ImperativeAffect) = a.modified
 modified_syms(a::ImperativeAffect) = a.mod_syms
 

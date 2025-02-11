@@ -110,3 +110,17 @@ end
         @test operation(eq.rhs) === ifelse
     end
 end
+
+@testset "`@mtkbuild` macro accepts `additional_passes`" begin
+    @mtkmodel SimpleAbs begin
+        @variables begin
+            x(t)
+            y(t)
+        end
+        @equations begin
+            D(x) ~ abs(y)
+            y ~ sin(t)
+        end
+    end
+    @test_nowarn @mtkbuild sys=SimpleAbs() additional_passes=[IfLifting]
+end

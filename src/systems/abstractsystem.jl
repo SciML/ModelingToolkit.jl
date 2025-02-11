@@ -983,6 +983,7 @@ for prop in [:eqs
              :gui_metadata
              :discrete_subsystems
              :parameter_dependencies
+             :assertions
              :solved_unknowns
              :split_idxs
              :parent
@@ -1463,6 +1464,24 @@ end
 
 function full_parameters(sys::AbstractSystem)
     vcat(parameters(sys), dependent_parameters(sys))
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Get the assertions for a system `sys` and its subsystems.
+"""
+function assertions(sys::AbstractSystem)
+    has_assertions(sys) || return Dict{BasicSymbolic, String}()
+
+    asserts = get_assertions(sys)
+    systems = get_systems(sys)
+    namespaced_asserts = mapreduce(
+        merge!, systems; init = Dict{BasicSymbolic, String}()) do subsys
+        Dict{BasicSymbolic, String}(namespace_expr(k, subsys) => v
+        for (k, v) in assertions(subsys))
+    end
+    return merge(asserts, namespaced_asserts)
 end
 
 """
@@ -2248,15 +2267,20 @@ macro mtkbuild(exprs...)
     expr = exprs[1]
     named_expr = ModelingToolkit.named_expr(expr)
     name = named_expr.args[1]
-    kwargs = if length(exprs) > 1
-        NamedTuple{Tuple(ex.args[1] for ex in Base.tail(exprs))}(Tuple(ex.args[2]
-        for ex in Base.tail(exprs)))
-    else
-        (;)
+    kwargs = Base.tail(exprs)
+    kwargs = map(kwargs) do ex
+        @assert ex.head == :(=)
+        Expr(:kw, ex.args[1], ex.args[2])
     end
+    if isempty(kwargs)
+        kwargs = ()
+    else
+        kwargs = (Expr(:parameters, kwargs...),)
+    end
+    call_expr = Expr(:call, structural_simplify, kwargs..., name)
     esc(quote
         $named_expr
-        $name = $structural_simplify($name; $(kwargs)...)
+        $name = $call_expr
     end)
 end
 
@@ -2278,6 +2302,13 @@ ERROR: Function /(1, sin(P(t))) output non-finite value Inf with input
   1 => 1
   sin(P(t)) => 0.0
 ```
+
+Additionally, all assertions in the system are optionally logged when they fail.
+A new parameter is also added to the system which controls whether the message associated
+with each assertion will be logged when the assertion fails. This parameter defaults to
+`true` and can be toggled by symbolic indexing with
+`ModelingToolkit.ASSERTION_LOG_VARIABLE`. For example,
+`prob.ps[ModelingToolkit.ASSERTION_LOG_VARIABLE] = false` will disable logging.
 """
 function debug_system(
         sys::AbstractSystem; functions = [log, sqrt, (^), /, inv, asin, acos], kw...)
@@ -2288,10 +2319,16 @@ function debug_system(
         error("debug_system(sys) only works on systems with no sub-systems! Consider flattening it with flatten(sys) or structural_simplify(sys) first.")
     end
     if has_eqs(sys)
-        @set! sys.eqs = debug_sub.(equations(sys), Ref(functions); kw...)
+        eqs = debug_sub.(equations(sys), Ref(functions); kw...)
+        @set! sys.eqs = eqs
+        @set! sys.ps = unique!([get_ps(sys); ASSERTION_LOG_VARIABLE])
+        @set! sys.defaults = merge(get_defaults(sys), Dict(ASSERTION_LOG_VARIABLE => true))
     end
     if has_observed(sys)
         @set! sys.observed = debug_sub.(observed(sys), Ref(functions); kw...)
+    end
+    if iscomplete(sys)
+        sys = complete(sys; split = is_split(sys))
     end
     return sys
 end
@@ -3029,6 +3066,11 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
         ieqs = union(get_initialization_eqs(basesys), get_initialization_eqs(sys))
         guesses = merge(get_guesses(basesys), get_guesses(sys)) # prefer `sys`
         kwargs = merge(kwargs, (initialization_eqs = ieqs, guesses = guesses))
+    end
+
+    if has_assertions(basesys)
+        kwargs = merge(
+            kwargs, (; assertions = merge(get_assertions(basesys), get_assertions(sys))))
     end
 
     return T(args...; kwargs...)
