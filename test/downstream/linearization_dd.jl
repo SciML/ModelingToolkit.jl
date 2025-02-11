@@ -25,14 +25,11 @@ eqs = [connect(link1.TX1, cart.flange)
        connect(link1.TY1, fixed.flange)]
 
 @named model = ODESystem(eqs, t, [], []; systems = [link1, cart, force, fixed])
-def = ModelingToolkit.defaults(model)
-def[cart.s] = 10
-def[cart.v] = 0
-def[link1.A] = -pi / 2
-def[link1.dA] = 0
 lin_outputs = [cart.s, cart.v, link1.A, link1.dA]
 lin_inputs = [force.f.u]
 
+# => nothing to remove extra defaults
+op = Dict(cart.s => 10, cart.v => 0, link1.A => -pi/2, link1.dA => 0, force.f.u => 0, link1.x1 => nothing, link1.y1 => nothing, link1.x2 => nothing, link1.x_cm => nothing)
 @test_broken begin
     @info "named_ss"
     G = named_ss(model, lin_inputs, lin_outputs, allow_symbolic = true, op = def,
@@ -46,7 +43,7 @@ lin_inputs = [force.f.u]
     @test minimum(abs, ps) < 1e-6
     @test minimum(abs, complex(0, 1.3777260367206716) .- ps) < 1e-10
 
-    lsys, syss = linearize(model, lin_inputs, lin_outputs, allow_symbolic = true, op = def,
+    lsys, syss = linearize(model, lin_inputs, lin_outputs, allow_symbolic = true, op = op,
         allow_input_derivatives = true, zero_dummy_der = true)
     lsyss, sysss = ModelingToolkit.linearize_symbolic(model, lin_inputs, lin_outputs;
         allow_input_derivatives = true)
