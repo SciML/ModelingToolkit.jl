@@ -246,10 +246,30 @@ mutable struct LinearizationProblem{F <: LinearizationFunction, T}
     t::T
 end
 
+function LinearizationProblem(sys::AbstractSystem, inputs, outputs; t = 0.0, kwargs...)
+    linfun, _ = linearization_function(sys, inputs, outputs; kwargs...)
+    return LinearizationProblem(linfun, t)
+end
+
 SymbolicIndexingInterface.symbolic_container(p::LinearizationProblem) = p.f
 SymbolicIndexingInterface.state_values(p::LinearizationProblem) = state_values(p.f)
 SymbolicIndexingInterface.parameter_values(p::LinearizationProblem) = parameter_values(p.f)
 SymbolicIndexingInterface.current_time(p::LinearizationProblem) = p.t
+
+function Base.getindex(prob::LinearizationProblem, idx)
+    getu(prob, idx)(prob)
+end
+
+function Base.setindex!(prob::LinearizationProblem, val, idx)
+    setu(prob, idx)(prob, val)
+end
+
+function Base.getproperty(prob::LinearizationProblem, x::Symbol)
+    if x == :ps
+        return ParameterIndexingProxy(prob)
+    end
+    return getfield(prob, x)
+end
 
 function CommonSolve.solve(prob::LinearizationProblem; allow_input_derivatives = false)
     u0 = state_values(prob)
