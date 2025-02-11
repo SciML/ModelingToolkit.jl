@@ -964,6 +964,7 @@ for prop in [:eqs
              :structure
              :op
              :constraints
+             :constraintsystem
              :controls
              :loss
              :bcs
