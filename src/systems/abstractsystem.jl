@@ -689,26 +689,33 @@ function SymbolicUtils.maketerm(::Type{<:BasicSymbolic}, ::Initial, args, meta)
 end
 
 function add_initialization_parameters(sys::AbstractSystem)
-    is_time_dependent(sys) || return sys
     @assert !has_systems(sys) || isempty(get_systems(sys))
-    eqs = equations(sys)
-    if !(eqs isa Vector{Equation})
-        eqs = Equation[x for x in eqs if x isa Equation]
-    end
-    obs, eqs = unhack_observed(observed(sys), eqs)
-    all_uvars = Set{BasicSymbolic}()
-    for x in Iterators.flatten((unknowns(sys), Iterators.map(eq -> eq.lhs, obs)))
-        x = unwrap(x)
-        if iscall(x) && operation(x) == getindex
-            push!(all_uvars, arguments(x)[1])
-        else
-            push!(all_uvars, x)
+    all_initialvars = Set{BasicSymbolic}()
+    # time-independent systems don't initialize unknowns
+    if is_time_dependent(sys)
+        eqs = equations(sys)
+        if !(eqs isa Vector{Equation})
+            eqs = Equation[x for x in eqs if x isa Equation]
+        end
+        obs, eqs = unhack_observed(observed(sys), eqs)
+        for x in Iterators.flatten((unknowns(sys), Iterators.map(eq -> eq.lhs, obs)))
+            x = unwrap(x)
+            if iscall(x) && operation(x) == getindex
+                push!(all_initialvars, arguments(x)[1])
+            else
+                push!(all_initialvars, x)
+            end
         end
     end
-    all_uvars = collect(all_uvars)
-    initials = map(Initial(), all_uvars)
-    existing_initials = filter(
-        x -> iscall(x) && (operation(x) isa Initial), parameters(sys))
+    for eq in parameter_dependencies(sys)
+        is_variable_floatingpoint(eq.lhs) || continue
+        push!(all_initialvars, eq.lhs)
+    end
+    all_initialvars = collect(all_initialvars)
+    initials = map(Initial(), all_initialvars)
+    # existing_initials = filter(
+    #     x -> iscall(x) && (operation(x) isa Initial), parameters(sys))
+    existing_initials = []
     @set! sys.ps = unique!([setdiff(get_ps(sys), existing_initials); initials])
     defs = copy(get_defaults(sys))
     for x in existing_initials
@@ -1296,7 +1303,7 @@ Get the parameters of the system `sys` and its subsystems.
 
 See also [`@parameters`](@ref) and [`ModelingToolkit.get_ps`](@ref).
 """
-function parameters(sys::AbstractSystem; initial_parameters = !is_time_dependent(sys))
+function parameters(sys::AbstractSystem; initial_parameters = false)
     ps = get_ps(sys)
     if ps == SciMLBase.NullParameters()
         return []
@@ -1308,7 +1315,19 @@ function parameters(sys::AbstractSystem; initial_parameters = !is_time_dependent
     result = unique(isempty(systems) ? ps :
                     [ps; reduce(vcat, namespace_parameters.(systems))])
     if !initial_parameters
-        filter!(x -> !iscall(x) || !isa(operation(x), Initial), result)
+        if is_time_dependent(sys)
+            # time-dependent systems have `Initial` parameters for all their
+            # unknowns/pdeps, all of which should be hidden.
+            filter!(x -> !iscall(x) || !isa(operation(x), Initial), result)
+        else
+            # time-independent systems only have `Initial` parameters for
+            # pdeps. Any other `Initial` parameters should be kept (e.g. initialization
+            # systems)
+            filter!(
+                x -> !iscall(x) || !isa(operation(x), Initial) ||
+                         !has_parameter_dependency_with_lhs(sys, only(arguments(x))),
+                result)
+        end
     end
     return result
 end
