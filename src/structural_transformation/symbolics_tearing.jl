@@ -512,10 +512,10 @@ function generate_system_equations!(state::TearingState, neweqs, var_eq_matching
     #   Non-solvable equations become algebraic equations.
     for ieq in eqs
         iv = eq_var_matching[ieq]
-        var = fullvars[iv]
         eq = neweqs[ieq]
 
         if is_solvable(ieq, iv) && isdervar(iv)
+            var = fullvars[iv]
             isnothing(D) && throw(UnexpectedDifferentialError(equations(sys)[ieq]))
             order, lv = var_order(iv, diff_to_var)
             dx = D(simplify_shifts(fullvars[lv]))
@@ -530,6 +530,7 @@ function generate_system_equations!(state::TearingState, neweqs, var_eq_matching
             push!(diffeq_idxs, ieq)
             push!(diff_vars, diff_to_var[iv])
         elseif is_solvable(ieq, iv)
+            var = fullvars[iv]
             neweq = make_solved_equation(var, eq, total_sub; simplify)
             !isnothing(neweq) && begin
                 push!(solved_eqs, neweq)
@@ -537,7 +538,7 @@ function generate_system_equations!(state::TearingState, neweqs, var_eq_matching
                 push!(solved_vars, iv)
             end
         else
-            neweq = make_algebraic_equation(var, eq, total_sub)
+            neweq = make_algebraic_equation(eq, total_sub)
             push!(alge_eqs, neweq)
             push!(algeeq_idxs, ieq)
         end
@@ -572,7 +573,7 @@ function make_differential_equation(var, dx, eq, total_sub)
         total_sub; operator = ModelingToolkit.Shift))
 end
 
-function make_algebraic_equation(var, eq, total_sub)
+function make_algebraic_equation(eq, total_sub)
     rhs = eq.rhs
     if !(eq.lhs isa Number && eq.lhs == 0)
         rhs = eq.rhs - eq.lhs
