@@ -49,6 +49,8 @@ using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap, Ti
 using Distributed
 import JuliaFormatter
 using MLStyle
+import Moshi
+using Moshi.Data: @data
 using NonlinearSolve
 import SCCNonlinearSolve
 using Reexport
