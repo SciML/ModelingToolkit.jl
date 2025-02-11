@@ -139,6 +139,11 @@ struct ODESystem <: AbstractODESystem
     """
     parameter_dependencies::Vector{Equation}
     """
+    Mapping of conditions which should be true throughout the solution process to corresponding error
+    messages. These will be added to the equations when calling `debug_system`.
+    """
+    assertions::Dict{BasicSymbolic, String}
+    """
     Metadata for the system, to be used by downstream packages.
     """
     metadata::Any
@@ -192,7 +197,7 @@ struct ODESystem <: AbstractODESystem
             jac, ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses,
             torn_matching, initializesystem, initialization_eqs, schedule,
             connector_type, preface, cevents,
-            devents, parameter_dependencies,
+            devents, parameter_dependencies, assertions = Dict{BasicSymbolic, String}(),
             metadata = nothing, gui_metadata = nothing, is_dde = false,
             tstops = [], tearing_state = nothing,
             substitutions = nothing, complete = false, index_cache = nothing,
@@ -212,7 +217,7 @@ struct ODESystem <: AbstractODESystem
         new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, constraints, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses, torn_matching,
             initializesystem, initialization_eqs, schedule, connector_type, preface,
-            cevents, devents, parameter_dependencies, metadata,
+            cevents, devents, parameter_dependencies, assertions, metadata,
             gui_metadata, is_dde, tstops, tearing_state, substitutions, complete, index_cache,
             discrete_subsystems, solved_unknowns, split_idxs, parent)
     end
@@ -238,6 +243,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         continuous_events = nothing,
         discrete_events = nothing,
         parameter_dependencies = Equation[],
+        assertions = Dict(),
         checks = true,
         metadata = nothing,
         gui_metadata = nothing,
@@ -289,7 +295,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     if is_dde === nothing
         is_dde = _check_if_dde(deqs, iv′, systems)
     end
-
+            
     if !isempty(systems) && !isnothing(constraintsystem)
         conssystems = ConstraintsSystem[]
         for sys in systems
@@ -298,14 +304,16 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         end
         @show conssystems
         @set! constraintsystem.systems = conssystems
-    end
+    end        
+
+    assertions = Dict{BasicSymbolic, Any}(unwrap(k) => v for (k, v) in assertions)
 
     ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, constraintsystem, tgrad, jac,
         ctrl_jac, Wfact, Wfact_t, name, description, systems,
         defaults, guesses, nothing, initializesystem,
         initialization_eqs, schedule, connector_type, preface, cont_callbacks,
-        disc_callbacks, parameter_dependencies,
+        disc_callbacks, parameter_dependencies, assertions,
         metadata, gui_metadata, is_dde, tstops, checks = checks)
 end
 
@@ -392,6 +400,7 @@ function flatten(sys::ODESystem, noeqs = false)
             name = nameof(sys),
             description = description(sys),
             initialization_eqs = initialization_equations(sys),
+            assertions = assertions(sys),
             is_dde = is_dde(sys),
             tstops = symbolic_tstops(sys),
             metadata = get_metadata(sys),
@@ -711,6 +720,5 @@ function process_constraint_system(constraints::Vector{Equation}, sts, ps, iv; c
         end
     end
 
-    @show constraints
     ConstraintsSystem(constraints, collect(constraintsts), collect(constraintps); name = consname)
 end
