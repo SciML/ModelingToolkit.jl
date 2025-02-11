@@ -576,6 +576,7 @@ function linearize(sys, lin_fun::LinearizationFunction; t = 0.0,
     op = anydict(op)
     evaluate_varmap!(op, unknowns(sys))
     for (k, v) in op
+        v === nothing && continue
         if is_parameter(prob, Initial(k))
             setu(prob, Initial(k))(prob, v)
         else
