@@ -1377,3 +1377,60 @@ end
     prob = ODEProblem(decay, [], (0.0, 10.0), [])
     @test_nowarn solve(prob, Tsit5(), tstops = [1.0])
 end
+
+@testset "Array parameter updates in ImperativeEffect" begin
+    function weird1(max_time; name)
+        params = @parameters begin
+            θ(t) = 0.0
+        end
+        vars = @variables begin
+            x(t) = 0.0
+        end
+        eqs = reduce(vcat, Symbolics.scalarize.([
+            D(x) ~ 1.0
+        ]))
+        reset = ModelingToolkit.ImperativeAffect(
+            modified = (; x, θ)) do m, o, _, i
+            @set! m.θ = 0.0
+            @set! m.x = 0.0
+            return m
+        end
+        return ODESystem(eqs, t, vars, params; name = name,
+            continuous_events = [[x ~ max_time] => reset])
+    end
+
+    function weird2(max_time; name)
+        params = @parameters begin
+            θ(t) = 0.0
+        end
+        vars = @variables begin
+            x(t) = 0.0
+        end
+        eqs = reduce(vcat, Symbolics.scalarize.([
+            D(x) ~ 1.0
+        ]))
+        return ODESystem(eqs, t, vars, params; name = name) # note no event
+    end
+
+    @named wd1 = weird1(0.021)
+    @named wd2 = weird2(0.021)
+
+    sys1 = structural_simplify(ODESystem([], t; name = :parent,
+        discrete_events = [0.01 => ModelingToolkit.ImperativeAffect(
+            modified = (; θs = reduce(vcat, [[wd1.θ]])), ctx = [1]) do m, o, c, i
+            @set! m.θs[1] = c[] += 1
+        end],
+        systems = [wd1]))
+    sys2 = structural_simplify(ODESystem([], t; name = :parent,
+        discrete_events = [0.01 => ModelingToolkit.ImperativeAffect(
+            modified = (; θs = reduce(vcat, [[wd2.θ]])), ctx = [1]) do m, o, c, i
+            @set! m.θs[1] = c[] += 1
+        end],
+        systems = [wd2]))
+
+    sol1 = solve(ODEProblem(sys1, [], (0.0, 1.0)), Tsit5())
+    @test 100.0 ∈ sol1[sys1.wd1.θ]
+
+    sol2 = solve(ODEProblem(sys2, [], (0.0, 1.0)), Tsit5())
+    @test 100.0 ∈ sol2[sys2.wd2.θ]
+end

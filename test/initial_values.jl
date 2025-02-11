@@ -180,5 +180,6 @@ end
     @parameters p[1:2, 1:2]
     @mtkbuild sys = ODESystem(D(x) ~ p * x, t)
     # used to throw a `MethodError` complaining about `getindex(::Nothing, ::CartesianIndex{2})`
-    @test_throws ModelingToolkit.MissingParametersError ODEProblem(sys, [x => ones(2)], (0.0, 1.0))
+    @test_throws ModelingToolkit.MissingParametersError ODEProblem(
+        sys, [x => ones(2)], (0.0, 1.0))
 end

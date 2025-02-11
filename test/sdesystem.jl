@@ -24,14 +24,14 @@ noiseeqs = [0.1 * x,
 @named de = SDESystem(eqs, noiseeqs, tt, [x, y, z], [σ, ρ, β], tspan = (0.0, 10.0))
 de = complete(de)
 f = eval(generate_diffusion_function(de)[1])
-@test f(ones(3), rand(3), nothing) == 0.1ones(3)
+@test f(ones(3), (rand(3),), nothing) == 0.1ones(3)
 
 f = SDEFunction(de)
-prob = SDEProblem(SDEFunction(de), [1.0, 0.0, 0.0], (0.0, 100.0), (10.0, 26.0, 2.33))
+prob = SDEProblem(de, [1.0, 0.0, 0.0], (0.0, 100.0), [10.0, 26.0, 2.33])
 sol = solve(prob, SRIW1(), seed = 1)
 
-probexpr = SDEProblem(SDEFunction(de), [1.0, 0.0, 0.0], (0.0, 100.0),
-    (10.0, 26.0, 2.33))
+probexpr = SDEProblem(de, [1.0, 0.0, 0.0], (0.0, 100.0),
+    [10.0, 26.0, 2.33])
 solexpr = solve(eval(probexpr), SRIW1(), seed = 1)
 
 @test all(x -> x == 0, Array(sol - solexpr))
@@ -43,13 +43,13 @@ noiseeqs_nd = [0.01*x 0.01*x*y 0.02*x*z
 de = complete(de)
 f = eval(generate_diffusion_function(de)[1])
 p = MTKParameters(de, [σ => 0.1, ρ => 0.2, β => 0.3])
-@test f([1, 2, 3.0], p..., nothing) == [0.01*1 0.01*1*2 0.02*1*3
+@test f([1, 2, 3.0], p, nothing) == [0.01*1 0.01*1*2 0.02*1*3
        0.1 0.01*2 0.02*1*3
        0.2 0.3 0.01*3]
 
 f = eval(generate_diffusion_function(de)[2])
 du = ones(3, 3)
-f(du, [1, 2, 3.0], p..., nothing)
+f(du, [1, 2, 3.0], p, nothing)
 @test du == [0.01*1 0.01*1*2 0.02*1*3
              0.1 0.01*2 0.02*1*3
              0.2 0.3 0.01*3]
@@ -86,7 +86,7 @@ function test_SDEFunction_no_eval()
     # Need to test within a function scope to trigger world age issues
     f = SDEFunction(de, eval_expression = false)
     p = MTKParameters(de, [σ => 10.0, ρ => 26.0, β => 2.33])
-    @test f([1.0, 0.0, 0.0], p..., (0.0, 100.0)) ≈ [-10.0, 26.0, 0.0]
+    @test f([1.0, 0.0, 0.0], p, (0.0, 100.0)) ≈ [-10.0, 26.0, 0.0]
 end
 test_SDEFunction_no_eval()
 
@@ -869,6 +869,17 @@ end
     @test length(observed(sys)) == 1
 end
 
+# Test validating types of states
+@testset "Validate input types" begin
+    @parameters p d
+    @variables X(t)::Int64
+    @brownian z
+    eq2 = D(X) ~ p - d * X + z
+    @test_throws ArgumentError @mtkbuild ssys = System([eq2], t)
+    noiseeq = [1]
+    @test_throws ArgumentError @named ssys = SDESystem([eq2], [noiseeq], t)
+end
+
 @testset "SDEFunctionExpr" begin
     @parameters σ ρ β
     @variables x(tt) y(tt) z(tt)
@@ -882,10 +893,10 @@ end
         0.1 * z]
 
     @named sys = ODESystem(eqs, tt, [x, y, z], [σ, ρ, β])
-    
+
     @named de = SDESystem(eqs, noiseeqs, tt, [x, y, z], [σ, ρ, β], tspan = (0.0, 10.0))
     de = complete(de)
-    
+
     f = SDEFunctionExpr(de)
     @test f isa Expr
 
@@ -915,7 +926,7 @@ end
     @variables X(t)
     @parameters p d
     @brownian a
-    seq = D(X) ~ p - d*X + a
+    seq = D(X) ~ p - d * X + a
     @mtkbuild ssys1 = System([seq], t; name = :ssys)
     @mtkbuild ssys2 = System([seq], t; name = :ssys)
     @test ssys1 == ssys2 # true
@@ -925,7 +936,7 @@ end
 
     @mtkbuild ssys1 = System([seq], t; name = :ssys, continuous_events)
     @mtkbuild ssys2 = System([seq], t; name = :ssys)
-    @test ssys1 !== ssys2 
+    @test ssys1 !== ssys2
 
     @mtkbuild ssys1 = System([seq], t; name = :ssys, discrete_events)
     @mtkbuild ssys2 = System([seq], t; name = :ssys)
@@ -933,7 +944,7 @@ end
 
     @mtkbuild ssys1 = System([seq], t; name = :ssys, continuous_events)
     @mtkbuild ssys2 = System([seq], t; name = :ssys, discrete_events)
-    @test ssys1 !== ssys2 
+    @test ssys1 !== ssys2
 end
 
 @testset "Error when constructing SDESystem without `structural_simplify`" begin
@@ -950,7 +961,8 @@ end
     u0map = [x => 1.0, y => 0.0, z => 0.0]
     parammap = [σ => 10.0, β => 26.0, ρ => 2.33]
 
-    @test_throws ErrorException("SDESystem constructed by defining Brownian variables with @brownian must be simplified by calling `structural_simplify` before a SDEProblem can be constructed.") SDEProblem(de, u0map, (0.0, 100.0), parammap)
+    @test_throws ErrorException("SDESystem constructed by defining Brownian variables with @brownian must be simplified by calling `structural_simplify` before a SDEProblem can be constructed.") SDEProblem(
+        de, u0map, (0.0, 100.0), parammap)
     de = structural_simplify(de)
     @test SDEProblem(de, u0map, (0.0, 100.0), parammap) isa SDEProblem
 end
