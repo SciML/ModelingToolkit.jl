@@ -158,9 +158,9 @@ function (linfun::LinearizationFunction)(u, p, t)
         p = todict(p)
         newps = copy(parameter_values(linfun.prob))
         for (k, v) in p
-            if is_parameter(sys, k)
+            if is_parameter(linfun, k)
                 v = fixpoint_sub(v, p)
-                setp(sys, k)(newps, v)
+                setp(linfun, k)(newps, v)
             end
         end
         p = newps
@@ -190,7 +190,7 @@ function (linfun::LinearizationFunction)(u, p, t)
         linfun.num_states == 0 ||
             error("Number of unknown variables (0) does not match the number of input unknowns ($(length(u)))")
         fg_xz = zeros(0, 0)
-        h_xz = fg_u = zeros(0, length(inputs))
+        h_xz = fg_u = zeros(0, length(linfun.input_idxs))
     end
     hp = let u = u, t = t, h = linfun.h
         _hp(p) = h(u, p, t)
