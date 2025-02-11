@@ -337,11 +337,19 @@ variables and equations, don't add them when they already exist.
 
 Documenting the differences to structural simplification for discrete systems:
 
-In discrete systems the lowest-order term is Shift(t, k)(x(t)), instead of x(t). 
-We want to substitute the k-1 lowest order terms instead of the k-1 highest order terms.
+In discrete systems everything gets shifted forward a timestep by `shift_discrete_system`
+in order to properly generate the difference equations. 
 
-In the system x(k) ~ x(k-1) + x(k-2), we want to lower
+In the system x(k) ~ x(k-1) + x(k-2), becomes Shift(t, 1)(x(t)) ~ x(t) + Shift(t, -1)(x(t))
+
+The lowest-order term is Shift(t, k)(x(t)), instead of x(t).
+As such we actually want dummy variables for the k-1 lowest order terms instead of the k-1 highest order terms.
+
 Shift(t, -1)(x(t)) -> x\_{t-1}(t)
+
+Since Shift(t, -1)(x) is not a derivative, it is directly substituted in `fullvars`. No equation or variable is added for it. 
+
+For ODESystems D(D(D(x))) in equations is recursively substituted as D(x) ~ x_t, D(x_t) ~ x_tt, etc. The analogue for discrete systems, Shift(t, 1)(Shift(t,1)(Shift(t,1)(Shift(t, -3)(x(t))))) does not actually appear. So `total_sub` in generate_system_equations` is directly initialized with all of the lowered variables `Shift(t, -3)(x) -> x_t-3(t)`, etc. 
 =#
 """
 Generate new derivative variables for the system.
