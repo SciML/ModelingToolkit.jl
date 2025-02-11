@@ -33,17 +33,19 @@ function MTKParameters(
     else
         error("Cannot create MTKParameters if system does not have index_cache")
     end
+
     all_ps = Set(unwrap.(parameters(sys)))
     union!(all_ps, default_toterm.(unwrap.(parameters(sys))))
     if p isa Vector && !(eltype(p) <: Pair) && !isempty(p)
         ps = parameters(sys)
-        length(p) == length(ps) || error("Invalid parameters")
+        length(p) == length(ps) || error("The number of parameter values is not equal to the number of parameters.")
         p = ps .=> p
     end
     if p isa SciMLBase.NullParameters || isempty(p)
         p = Dict()
     end
     p = todict(p)
+
     defs = Dict(default_toterm(unwrap(k)) => v for (k, v) in defaults(sys))
     if eltype(u0) <: Pair
         u0 = todict(u0)
@@ -761,7 +763,7 @@ end
 
 function Base.showerror(io::IO, e::MissingParametersError)
     println(io, MISSING_PARAMETERS_MESSAGE)
-    println(io, e.vars)
+    println(io, join(e.vars, ", "))
 end
 
 function InvalidParameterSizeException(param, val)
