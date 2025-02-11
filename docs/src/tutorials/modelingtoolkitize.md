@@ -1,4 +1,4 @@
-# Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code
+# [Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code](@id modelingtoolkitize)
 
 ## What is `modelingtoolkitize`?
 
