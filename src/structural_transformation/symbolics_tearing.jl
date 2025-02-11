@@ -464,6 +464,7 @@ function generate_system_equations!(state::TearingState, neweqs, var_eq_matching
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     eq_var_matching = invview(var_eq_matching)
     diff_to_var = invview(var_to_diff)
+
     total_sub = Dict()
     if is_only_discrete(structure)
         for v in fullvars
@@ -515,6 +516,7 @@ function generate_system_equations!(state::TearingState, neweqs, var_eq_matching
                 rem_edge!(graph, e, iv)
             end
 
+            total_sub[simplify_shifts(neweq.lhs)] = neweq.rhs
             push!(diff_eqs, neweq)
             push!(diffeq_idxs, ieq)
             push!(diff_vars, diff_to_var[iv])
