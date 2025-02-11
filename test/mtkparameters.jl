@@ -40,7 +40,7 @@ setp(sys, a)(ps, 1.0)
 
 @test getp(sys, a)(ps) == getp(sys, b)(ps) / 2 == getp(sys, c)(ps) / 3 == 1.0
 
-for (portion, values) in [(Tunable(), [1.0, 5.0, 6.0, 7.0])
+for (portion, values) in [(Tunable(), [1.0, 2.0, 5.0, 6.0, 7.0])
                           (Discrete(), [3.0])
                           (Constants(), vcat([0.1, 0.2, 0.3], ones(9), [4.0]))]
     buffer, repack, alias = canonicalize(portion, ps)
