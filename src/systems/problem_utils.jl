@@ -549,8 +549,14 @@ function build_operating_point!(sys::AbstractSystem,
 
     for (k, v) in op
         k = unwrap(k)
-        if is_parameter(sys, k) || has_parameter_dependency_with_lhs(sys, k)
+        if is_parameter(sys, k)
             pmap[k] = v
+        elseif has_parameter_dependency_with_lhs(sys, k) && is_variable_floatingpoint(k) &&
+               v !== nothing && !isequal(v, Initial(k))
+            op[Initial(k)] = v
+            pmap[Initial(k)] = v
+            op[k] = Initial(k)
+            pmap[k] = Initial(k)
         elseif is_variable(sys, k) || has_observed_with_lhs(sys, k) ||
                iscall(k) &&
                operation(k) isa Differential && is_variable(sys, arguments(k)[1])
