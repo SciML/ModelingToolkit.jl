@@ -723,6 +723,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
         else
             D = Shift(iv, 1)
         end
+    else
         iv = D = nothing
     end
 
