@@ -245,7 +245,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         metadata = nothing,
         gui_metadata = nothing,
         is_dde = nothing,
-        tstops = [])
+        tstops = [],
+        discover_from_metadata = true)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
@@ -264,12 +265,16 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     defaults = Dict{Any, Any}(todict(defaults))
     guesses = Dict{Any, Any}(todict(guesses))
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, guesses, dvs′)
-    process_variables!(var_to_name, defaults, guesses, ps′)
-    process_variables!(
-        var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
-    process_variables!(
-        var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
+    let defaults = discover_from_metadata ? defaults : Dict(),
+        guesses = discover_from_metadata ? guesses : Dict()
+
+        process_variables!(var_to_name, defaults, guesses, dvs′)
+        process_variables!(var_to_name, defaults, guesses, ps′)
+        process_variables!(
+            var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
+        process_variables!(
+            var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
+    end
     defaults = Dict{Any, Any}(value(k) => value(v)
     for (k, v) in pairs(defaults) if v !== nothing)
     guesses = Dict{Any, Any}(value(k) => value(v)
@@ -375,7 +380,11 @@ function flatten(sys::ODESystem, noeqs = false)
             is_dde = is_dde(sys),
             tstops = symbolic_tstops(sys),
             metadata = get_metadata(sys),
-            checks = false)
+            checks = false,
+            # without this, any defaults/guesses obtained from metadata that were
+            # later removed by the user will be re-added. Right now, we just want to
+            # retain `defaults(sys)` as-is.
+            discover_from_metadata = false)
     end
 end
 
