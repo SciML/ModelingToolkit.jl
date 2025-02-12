@@ -374,9 +374,9 @@ function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matchin
     # derivative is in the system
     for v in 1:length(var_to_diff)
         dv = var_to_diff[v]
-        # For discrete systems, directly substitute lowest-order variable 
+        # For discrete systems, directly substitute lowest-order shift 
         if is_discrete && diff_to_var[v] == nothing
-            fullvars[v] = lower_varname(fullvars[v], iv)
+            operation(fullvars[v]) isa Shift && (fullvars[v] = lower_varname(fullvars[v], iv))
         end
         dv isa Int || continue
         solved = var_eq_matching[dv] isa Int
@@ -384,7 +384,7 @@ function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matchin
 
         # If there's `D(x) = x_t` already, update mappings and continue without
         # adding new equations/variables
-        dd = find_duplicate_dd(dv, solvable_graph, linear_eqs, mm)
+        dd = find_duplicate_dd(dv, solvable_graph, diff_to_var, linear_eqs, mm)
         if !isnothing(dd)
             dummy_eq, v_t = dd
             var_to_diff[v_t] = var_to_diff[dv]
@@ -412,7 +412,7 @@ end
 """
 Check if there's `D(x) = x_t` already.
 """
-function find_duplicate_dd(dv, solvable_graph, linear_eqs, mm)
+function find_duplicate_dd(dv, solvable_graph, diff_to_var, linear_eqs, mm)
     for eq in 𝑑neighbors(solvable_graph, dv)
         mi = get(linear_eqs, eq, 0)
         iszero(mi) && continue
