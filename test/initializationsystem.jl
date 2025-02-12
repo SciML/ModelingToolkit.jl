@@ -1354,3 +1354,10 @@ end
     @test final_x(0.3) ≈ 0.8 # should be 0.8
     @test ForwardDiff.derivative(final_x, 0.3) ≈ 1.0
 end
+
+@testset "Issue#3330: Initialization for unsimplified systems" begin
+    @variables x(t) [guess = 1.0]
+    @mtkbuild sys = ODESystem(D(x) ~ x, t; initialization_eqs = [x^2 ~ 4])
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    @test prob.f.initialization_data !== nothing
+end
