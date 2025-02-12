@@ -756,7 +756,12 @@ function process_SciMLProblem(
     cmap, cs = get_cmap(sys)
     kwargs = NamedTuple(kwargs)
 
-    is_time_dependent(sys) || add_observed!(sys, u0map)
+    if eltype(eqs) <: Equation
+        obs, eqs = unhack_observed(observed(sys), eqs)
+    else
+        obs, _ = unhack_observed(observed(sys), Equation[x for x in eqs if x isa Equation])
+    end
+    is_time_dependent(sys) || add_observed_equations!(u0map, obs)
 
     op, missing_unknowns, missing_pars = build_operating_point!(sys,
         u0map, pmap, defs, cmap, dvs, ps)
@@ -777,7 +782,7 @@ function process_SciMLProblem(
         op[iv] = t
     end
 
-    is_time_dependent(sys) && add_observed!(sys, op)
+    is_time_dependent(sys) && add_observed_equations!(op, obs)
     add_parameter_dependencies!(sys, op)
 
     if warn_cyclic_dependency
