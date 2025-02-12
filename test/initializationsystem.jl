@@ -1312,3 +1312,22 @@ end
     sol = solve(prob, Tsit5())
     @test sol.ps[p] ≈ [2.0, 4.0]
 end
+
+@testset "Issue#3318: Mutating `Initial` parameters works" begin
+    @variables x(t) y(t)[1:2] [guess = ones(2)]
+    @parameters p[1:2, 1:2]
+    @mtkbuild sys = ODESystem(
+        [D(x) ~ x, D(y) ~ p * y], t; initialization_eqs = [x^2 + y[1]^2 + y[2]^2 ~ 4])
+    prob = ODEProblem(sys, [x => 1.0, y[1] => 1], (0.0, 1.0), [p => 2ones(2, 2)])
+    integ = init(prob, Tsit5())
+    @test integ[x] ≈ 1.0
+    @test integ[y] ≈ [1.0, sqrt(2.0)]
+    prob.ps[Initial(x)] = 0.5
+    integ = init(prob, Tsit5())
+    @test integ[x] ≈ 0.5
+    @test integ[y] ≈ [1.0, sqrt(2.75)]
+    prob.ps[Initial(y[1])] = 0.5
+    integ = init(prob, Tsit5())
+    @test integ[x] ≈ 0.5
+    @test integ[y]≈[0.5, sqrt(3.5)] atol=1e-6
+end
