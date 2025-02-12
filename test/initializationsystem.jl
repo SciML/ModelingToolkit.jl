@@ -1331,3 +1331,26 @@ end
     @test integ[x] ≈ 0.5
     @test integ[y]≈[0.5, sqrt(3.5)] atol=1e-6
 end
+
+@testset "Issue#3342" begin
+    @variables x(t) y(t)
+    stop!(integrator, _, _, _) = terminate!(integrator)
+    @named sys = ODESystem([D(x) ~ 1.0
+                            D(y) ~ 1.0], t; initialization_eqs = [
+            y ~ 0.0
+        ],
+        continuous_events = [
+            [y ~ 0.5] => (stop!, [y], [], [], nothing)
+        ])
+    sys = structural_simplify(sys)
+    prob0 = ODEProblem(sys, [x => NaN], (0.0, 1.0), [])
+
+    # final_x(x0) is equivalent to x0 + 0.5
+    function final_x(x0)
+        prob = remake(prob0; u0 = [x => x0])
+        sol = solve(prob)
+        return sol[x][end]
+    end
+    @test final_x(0.3) ≈ 0.8 # should be 0.8
+    @test ForwardDiff.derivative(final_x, 0.3) ≈ 1.0
+end
