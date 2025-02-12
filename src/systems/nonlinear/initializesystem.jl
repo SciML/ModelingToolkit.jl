@@ -428,6 +428,7 @@ function SciMLBase.remake_initialization_data(
     ps = parameters(sys)
     u0map = to_varmap(u0, dvs)
     symbols_to_symbolics!(sys, u0map)
+    add_toterms!(u0map)
     pmap = to_varmap(p, ps)
     symbols_to_symbolics!(sys, pmap)
     guesses = Dict()
