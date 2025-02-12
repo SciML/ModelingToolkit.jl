@@ -956,6 +956,7 @@ function Base.propertynames(sys::AbstractSystem; private = false)
             push!(names, getname(s))
         end
         has_ps(sys) && for s in get_ps(sys)
+            hasname(s) || continue
             push!(names, getname(s))
         end
         has_observed(sys) && for s in get_observed(sys)
