@@ -17,7 +17,7 @@ eqs = [x(k+1) ~ σ*(y-x),
 @named de = DiscreteSystem(eqs)
 ```
 """
-struct DiscreteSystem <: AbstractDiscreteSystem
+struct DiscreteSystem <: AbstractTimeDependentSystem
     """
     A tag for the system. If two systems have the same tag, then they are
     structurally identical.
@@ -233,7 +233,6 @@ function DiscreteSystem(eqs, iv; kwargs...)
             push!(new_ps, p)
         end
     end
-    @show allunknowns
     return DiscreteSystem(eqs, iv,
         collect(allunknowns), collect(new_ps); kwargs...)
 end
@@ -276,10 +275,10 @@ function shift_u0map_forward(sys::DiscreteSystem, u0map, defs)
     end
     for var in unknowns(sys)
         op = operation(var)
-        op isa Shift || continue
         haskey(updated, var) && continue
-        root = first(arguments(var))
-        haskey(defs, root) || error("Initial condition for $var not provided.")
+        root = getunshifted(var)
+        isnothing(root) && continue
+        haskey(defs, root) || error("Initial condition for $root not provided.")
         updated[var] = defs[root]
     end
     return updated
