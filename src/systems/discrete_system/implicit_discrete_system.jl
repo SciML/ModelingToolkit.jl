@@ -238,8 +238,6 @@ function ImplicitDiscreteSystem(eqs, iv; kwargs...)
     return ImplicitDiscreteSystem(eqs, iv,
         collect(allunknowns), collect(new_ps); kwargs...)
 end
-# basically at every timestep it should build a nonlinear solve
-# Previous timesteps should be treated as parameters? is this right? 
 
 function flatten(sys::ImplicitDiscreteSystem, noeqs = false)
     systems = get_systems(sys)
@@ -263,25 +261,10 @@ end
 
 function generate_function(
         sys::ImplicitDiscreteSystem, dvs = unknowns(sys), ps = parameters(sys); wrap_code = identity, kwargs...)
-    if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system.")
-    end
-    p = (reorder_parameters(sys, unwrap.(ps))..., cachesyms...)
-    isscalar = !(exprs isa AbstractArray)
-    pre, sol_states = get_substitutions_and_solved_unknowns(sys, isscalar ? [exprs] : exprs)
-    if postprocess_fbody === nothing
-        postprocess_fbody = pre
-    end
-    if states === nothing
-        states = sol_states
-    end
     exprs = [eq.lhs - eq.rhs for eq in equations(sys)]
-    u = map(Shift(iv, -1), dvs)
-    u_next = dvs
-
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, exprs) .∘ wrap_parameter_dependencies(sys, false)
-
-    build_function(exprs, u_next, u, p..., get_iv(sys))
+    u = dvs
+    u_next = map(Shift(iv, 1), u)
+    generate_custom_function(sys, exprs, u_next, u, ps..., get_iv(sys); kwargs...)
 end
 
 function shift_u0map_forward(sys::ImplicitDiscreteSystem, u0map, defs)
