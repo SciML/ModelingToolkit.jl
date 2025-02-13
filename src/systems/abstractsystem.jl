@@ -650,6 +650,12 @@ function isscheduled(sys::AbstractSystem)
     end
 end
 
+"""
+    Initial(x)
+
+The `Initial` operator. Used by initializaton to store constant constraints on variables
+of a system. See the documentation section on initialization for more information.
+"""
 struct Initial <: Symbolics.Operator end
 Initial(x) = Initial()(x)
 SymbolicUtils.promote_symtype(::Type{Initial}, T) = T
@@ -660,23 +666,31 @@ input_timedomain(::Initial, _ = nothing) = Continuous()
 output_timedomain(::Initial, _ = nothing) = Continuous()
 
 function (f::Initial)(x)
+    # wrap output if wrapped input
     iw = Symbolics.iswrapped(x)
     x = unwrap(x)
+    # non-symbolic values don't change
     if symbolic_type(x) == NotSymbolic()
         return x
     end
+    # differential variables are default-toterm-ed
     if iscall(x) && operation(x) isa Differential
         x = default_toterm(x)
     end
+    # don't double wrap
     iscall(x) && operation(x) isa Initial && return x
     result = if symbolic_type(x) == ArraySymbolic()
+        # create an array for `Initial(array)`
         Symbolics.array_term(f, toparam(x))
     elseif iscall(x) && operation(x) == getindex
+        # instead of `Initial(x[1])` create `Initial(x)[1]`
+        # which allows parameter indexing to handle this case automatically.
         arr = arguments(x)[1]
         term(getindex, f(toparam(arr)), arguments(x)[2:end]...)
     else
         term(f, toparam(x))
     end
+    # the result should be a parameter
     result = toparam(result)
     if iw
         result = wrap(result)
@@ -684,6 +698,7 @@ function (f::Initial)(x)
     return result
 end
 
+# This is required so `fast_substitute` works
 function SymbolicUtils.maketerm(::Type{<:BasicSymbolic}, ::Initial, args, meta)
     return metadata(Initial()(args...), meta)
 end
