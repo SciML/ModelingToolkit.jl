@@ -56,6 +56,7 @@ using RecursiveArrayTools
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
 import BlockArrays: BlockArray, BlockedArray, Block, blocksize, blocksizes, blockpush!,
                     undef_blocks, blocks
+using OffsetArrays: Origin
 import CommonSolve
 import EnumX
 

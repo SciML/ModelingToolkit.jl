@@ -397,7 +397,8 @@ function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym)
         pidx = parameter_index(ic, args[1])
         pidx === nothing && return nothing
         if pidx.portion == SciMLStructures.Tunable()
-            ParameterIndex(pidx.portion, reshape(pidx.idx, size(args[1]))[args[2:end]...],
+            ParameterIndex(pidx.portion,
+                Origin(first.(axes((args[1]))))(reshape(pidx.idx, size(args[1])))[args[2:end]...],
                 pidx.validate_size)
         else
             ParameterIndex(pidx.portion, (pidx.idx..., args[2:end]...), pidx.validate_size)
