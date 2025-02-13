@@ -713,14 +713,8 @@ function add_initialization_parameters(sys::AbstractSystem)
     end
     all_initialvars = collect(all_initialvars)
     initials = map(Initial(), all_initialvars)
-    # existing_initials = filter(
-    #     x -> iscall(x) && (operation(x) isa Initial), parameters(sys))
-    existing_initials = []
-    @set! sys.ps = unique!([setdiff(get_ps(sys), existing_initials); initials])
+    @set! sys.ps = unique!([get_ps(sys); initials])
     defs = copy(get_defaults(sys))
-    for x in existing_initials
-        delete!(defs, x)
-    end
     for ivar in initials
         if symbolic_type(ivar) == ScalarSymbolic()
             defs[ivar] = zero_var(ivar)
