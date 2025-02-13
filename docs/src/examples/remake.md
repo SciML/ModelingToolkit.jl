@@ -45,12 +45,22 @@ parameters to optimize.
 
 ```@example Remake
 using SymbolicIndexingInterface: parameter_values, state_values
-using SciMLStructures: Tunable, replace, replace!
+using SciMLStructures: Tunable, canonicalize, replace, replace!
+using PreallocationTools
 
 function loss(x, p)
     odeprob = p[1] # ODEProblem stored as parameters to avoid using global variables
     ps = parameter_values(odeprob) # obtain the parameter object from the problem
-    ps = replace(Tunable(), ps, x) # create a copy with the values passed to the loss function
+    diffcache = p[5]
+    # get an appropriately typed preallocated buffer to store the `x` values in
+    buffer = get_tmp(diffcache, x)
+    # copy the current values to this buffer
+    copyto!(buffer, canonicalize(Tunable(), ps)[1])
+    # create a copy of the parameter object with the buffer
+    ps = replace(Tunable(), ps, buffer)
+    # set the updated values in the parameter object
+    setter = p[4]
+    setter(ps, x)
     # remake the problem, passing in our new parameter object
     newprob = remake(odeprob; p = ps)
     timesteps = p[2]
@@ -81,47 +91,20 @@ We can perform the optimization as below:
 ```@example Remake
 using Optimization
 using OptimizationOptimJL
+using SymbolicIndexingInterface
 
 # manually create an OptimizationFunction to ensure usage of `ForwardDiff`, which will
 # require changing the types of parameters from `Float64` to `ForwardDiff.Dual`
 optfn = OptimizationFunction(loss, Optimization.AutoForwardDiff())
+# function to set the parameters we are optimizing
+setter = setp(odeprob, [α, β, γ, δ])
+# `DiffCache` to avoid allocations
+diffcache = DiffCache(canonicalize(Tunable(), parameter_values(odeprob))[1])
 # parameter object is a tuple, to store differently typed objects together
 optprob = OptimizationProblem(
-    optfn, rand(4), (odeprob, timesteps, data), lb = 0.1zeros(4), ub = 3ones(4))
+    optfn, rand(4), (odeprob, timesteps, data, setter, diffcache),
+    lb = 0.1zeros(4), ub = 3ones(4))
 sol = solve(optprob, BFGS())
-```
-
-To identify which values correspond to which parameters, we can `replace!` them into the
-`ODEProblem`:
-
-```@example Remake
-replace!(Tunable(), parameter_values(odeprob), sol.u)
-odeprob.ps[[α, β, γ, δ]]
-```
-
-`replace!` operates in-place, so the values being replaced must be of the same type as those
-stored in the parameter object, or convertible to that type. For demonstration purposes, we
-can construct a loss function that uses `replace!`, and calculate gradients using
-`AutoFiniteDiff` rather than `AutoForwardDiff`.
-
-```@example Remake
-function loss2(x, p)
-    odeprob = p[1] # ODEProblem stored as parameters to avoid using global variables
-    newprob = remake(odeprob) # copy the problem with `remake`
-    # update the parameter values in-place
-    replace!(Tunable(), parameter_values(newprob), x)
-    timesteps = p[2]
-    sol = solve(newprob, AutoTsit5(Rosenbrock23()); saveat = timesteps)
-    truth = p[3]
-    data = Array(sol)
-    return sum((truth .- data) .^ 2) / length(truth)
-end
-
-# use finite-differencing to calculate derivatives
-optfn2 = OptimizationFunction(loss2, Optimization.AutoFiniteDiff())
-optprob2 = OptimizationProblem(
-    optfn2, rand(4), (odeprob, timesteps, data), lb = 0.1zeros(4), ub = 3ones(4))
-sol = solve(optprob2, BFGS())
 ```
 
 # Re-creating the problem

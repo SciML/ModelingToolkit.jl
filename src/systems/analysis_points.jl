@@ -591,7 +591,6 @@ function apply_transformation(tf::PerturbOutput, sys::AbstractSystem)
         # add output variable, equation, default
         out_var, out_def = get_analysis_variable(
             ap_ivar, nameof(ap), get_iv(sys); perturb = false)
-        defs[out_var] = out_def
         push!(ap_sys_eqs, out_var ~ ap_ivar + wrap(new_var))
         push!(unks, out_var)
 
@@ -863,7 +862,7 @@ for f in [:get_sensitivity, :get_comp_sensitivity, :get_looptransfer]
             sys, ap, args...; loop_openings = [], system_modifier = identity, kwargs...)
         lin_fun, ssys = $(utility_fun)(
             sys, ap, args...; loop_openings, system_modifier, kwargs...)
-        ModelingToolkit.linearize(ssys, lin_fun; kwargs...), ssys
+        ModelingToolkit.linearize(ssys, lin_fun), ssys
     end
 end
 

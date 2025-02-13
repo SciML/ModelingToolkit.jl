@@ -53,7 +53,7 @@ function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem;
                 idx = parameter_index(prob, sym)
                 old_to_new[unwrap(sym)] = unwrap(p_names[idx])
             end
-            order = reorder_parameters(prob.f.sys, parameters(prob.f.sys))
+            order = reorder_parameters(prob.f.sys)
             for arr in order
                 for i in eachindex(arr)
                     arr[i] = old_to_new[arr[i]]

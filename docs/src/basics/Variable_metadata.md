@@ -201,6 +201,7 @@ state_priority(important_dof)
 Units for variables can be designated using symbolic metadata. For more information, please see the [model validation and units](@ref units) section of the docs. Note that `getunit` is not equivalent to `get_unit` - the former is a metadata getter for individual variables (and is provided so the same interface function for `unit` exists like other metadata), while the latter is used to handle more general symbolic expressions.
 
 ```@example metadata
+using DynamicQuantities
 @variables speed [unit = u"m/s"]
 hasunit(speed)
 ```

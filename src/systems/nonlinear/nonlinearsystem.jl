@@ -248,7 +248,8 @@ function calculate_jacobian(sys::NonlinearSystem; sparse = false, simplify = fal
 end
 
 function generate_jacobian(
-        sys::NonlinearSystem, vs = unknowns(sys), ps = parameters(sys);
+        sys::NonlinearSystem, vs = unknowns(sys), ps = parameters(
+            sys; initial_parameters = true);
         sparse = false, simplify = false, kwargs...)
     jac = calculate_jacobian(sys, sparse = sparse, simplify = simplify)
     p = reorder_parameters(sys, ps)
@@ -268,7 +269,8 @@ function calculate_hessian(sys::NonlinearSystem; sparse = false, simplify = fals
 end
 
 function generate_hessian(
-        sys::NonlinearSystem, vs = unknowns(sys), ps = parameters(sys);
+        sys::NonlinearSystem, vs = unknowns(sys), ps = parameters(
+            sys; initial_parameters = true);
         sparse = false, simplify = false, kwargs...)
     hess = calculate_hessian(sys, sparse = sparse, simplify = simplify)
     p = reorder_parameters(sys, ps)
@@ -276,7 +278,8 @@ function generate_hessian(
 end
 
 function generate_function(
-        sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(sys);
+        sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(
+            sys; initial_parameters = true);
         scalar = false, kwargs...)
     rhss = [deq.rhs for deq in equations(sys)]
     dvs′ = value.(dvs)
@@ -569,7 +572,7 @@ end
 function CacheWriter(sys::AbstractSystem, buffer_types::Vector{TypeT},
         exprs::Dict{TypeT, Vector{Any}}, solsyms, obseqs::Vector{Equation};
         eval_expression = false, eval_module = @__MODULE__)
-    ps = parameters(sys)
+    ps = parameters(sys; initial_parameters = true)
     rps = reorder_parameters(sys, ps)
     obs_assigns = [eq.lhs ← eq.rhs for eq in obseqs]
     body = map(eachindex(buffer_types), buffer_types) do i, T
@@ -589,7 +592,7 @@ struct SCCNonlinearFunction{iip} end
 function SCCNonlinearFunction{iip}(
         sys::NonlinearSystem, _eqs, _dvs, _obs, cachesyms; eval_expression = false,
         eval_module = @__MODULE__, kwargs...) where {iip}
-    ps = parameters(sys)
+    ps = parameters(sys; initial_parameters = true)
     rps = reorder_parameters(sys, ps)
 
     obs_assignments = [eq.lhs ← eq.rhs for eq in _obs]

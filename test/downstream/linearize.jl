@@ -1,4 +1,5 @@
 using ModelingToolkit, Test
+using CommonSolve: solve
 
 # r is an input, and y is an output.
 @independent_variables t
@@ -14,11 +15,13 @@ eqs = [u ~ kp * (r - y)
 @named sys = ODESystem(eqs, t)
 
 lsys, ssys = linearize(sys, [r], [y])
+lprob = LinearizationProblem(sys, [r], [y])
+lsys2 = solve(lprob)
 
-@test lsys.A[] == -2
-@test lsys.B[] == 1
-@test lsys.C[] == 1
-@test lsys.D[] == 0
+@test lsys.A[] == lsys2.A[] == -2
+@test lsys.B[] == lsys2.B[] == 1
+@test lsys.C[] == lsys2.C[] == 1
+@test lsys.D[] == lsys2.D[] == 0
 
 lsys, ssys = linearize(sys, [r], [r])
 
@@ -47,8 +50,8 @@ lsys, ssys = linearize(sys, r, r) # Test allow scalars
 ```
 
 function plant(; name)
-    @variables x(t) = 1
-    @variables u(t)=0 y(t)=0
+    @variables x(t)
+    @variables u(t) y(t)
     D = Differential(t)
     eqs = [D(x) ~ -x + u
            y ~ x]
@@ -56,7 +59,7 @@ function plant(; name)
 end
 
 function filt_(; name)
-    @variables x(t)=0 y(t)=0
+    @variables x(t) y(t)
     @variables u(t)=0 [input = true]
     D = Differential(t)
     eqs = [D(x) ~ -2 * x + u
@@ -65,7 +68,7 @@ function filt_(; name)
 end
 
 function controller(kp; name)
-    @variables y(t)=0 r(t)=0 u(t)=0
+    @variables y(t)=0 r(t)=0 u(t)
     @parameters kp = kp
     eqs = [
         u ~ kp * (r - y)
@@ -108,7 +111,8 @@ Nd = 10
 @named pid = LimPID(; k, Ti, Td, Nd)
 
 @unpack reference, measurement, ctr_output = pid
-lsys0, ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u])
+lsys0, ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u];
+    op = Dict(reference.u => 0.0, measurement.u => 0.0))
 @unpack int, der = pid
 desired_order = [int.x, der.x]
 lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
@@ -314,7 +318,7 @@ matrices = linfun([1.0], Dict(p => 3.0), 1.0)
 end
 
 @testset "Issue #2941" begin
-    @variables x(t) y(t)
+    @variables x(t) y(t) [guess = 1.0]
     @parameters p
     eqs = [0 ~ x * log(y) - p]
     @named sys = ODESystem(eqs, t; defaults = [p => 1.0])

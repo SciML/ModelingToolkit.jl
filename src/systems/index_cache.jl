@@ -96,6 +96,7 @@ function IndexCache(sys::AbstractSystem)
     end
 
     tunable_buffers = Dict{Any, Set{BasicSymbolic}}()
+    initial_param_buffers = Dict{Any, Set{BasicSymbolic}}()
     constant_buffers = Dict{Any, Set{BasicSymbolic}}()
     nonnumeric_buffers = Dict{Any, Set{SymbolicParam}}()
 
@@ -191,7 +192,7 @@ function IndexCache(sys::AbstractSystem)
             [BufferTemplate(symtype, length(buf)) for buf in disc_syms_by_partition])
     end
 
-    for p in parameters(sys)
+    for p in parameters(sys; initial_parameters = true)
         p = unwrap(p)
         ctype = symtype(p)
         if ctype <: FnType
@@ -206,7 +207,11 @@ function IndexCache(sys::AbstractSystem)
                    (ctype == Real || ctype <: AbstractFloat ||
                     ctype <: AbstractArray{Real} ||
                     ctype <: AbstractArray{<:AbstractFloat})
-                    tunable_buffers
+                    if iscall(p) && operation(p) isa Initial
+                        initial_param_buffers
+                    else
+                        tunable_buffers
+                    end
                 else
                     constant_buffers
                 end
@@ -246,20 +251,22 @@ function IndexCache(sys::AbstractSystem)
 
     tunable_idxs = TunableIndexMap()
     tunable_buffer_size = 0
-    for (i, (_, buf)) in enumerate(tunable_buffers)
-        for (j, p) in enumerate(buf)
-            idx = if size(p) == ()
-                tunable_buffer_size + 1
-            else
-                reshape(
-                    (tunable_buffer_size + 1):(tunable_buffer_size + length(p)), size(p))
-            end
-            tunable_buffer_size += length(p)
-            tunable_idxs[p] = idx
-            tunable_idxs[default_toterm(p)] = idx
-            if hasname(p) && (!iscall(p) || operation(p) !== getindex)
-                symbol_to_variable[getname(p)] = p
-                symbol_to_variable[getname(default_toterm(p))] = p
+    for buffers in (tunable_buffers, initial_param_buffers)
+        for (i, (_, buf)) in enumerate(buffers)
+            for (j, p) in enumerate(buf)
+                idx = if size(p) == ()
+                    tunable_buffer_size + 1
+                else
+                    reshape(
+                        (tunable_buffer_size + 1):(tunable_buffer_size + length(p)), size(p))
+                end
+                tunable_buffer_size += length(p)
+                tunable_idxs[p] = idx
+                tunable_idxs[default_toterm(p)] = idx
+                if hasname(p) && (!iscall(p) || operation(p) !== getindex)
+                    symbol_to_variable[getname(p)] = p
+                    symbol_to_variable[getname(default_toterm(p))] = p
+                end
             end
         end
     end
@@ -390,7 +397,8 @@ function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym)
         pidx = parameter_index(ic, args[1])
         pidx === nothing && return nothing
         if pidx.portion == SciMLStructures.Tunable()
-            ParameterIndex(pidx.portion, reshape(pidx.idx, size(args[1]))[args[2:end]...],
+            ParameterIndex(pidx.portion,
+                Origin(first.(axes((args[1]))))(reshape(pidx.idx, size(args[1])))[args[2:end]...],
                 pidx.validate_size)
         else
             ParameterIndex(pidx.portion, (pidx.idx..., args[2:end]...), pidx.validate_size)
@@ -438,7 +446,8 @@ function check_index_map(idxmap, sym)
     end
 end
 
-function reorder_parameters(sys::AbstractSystem, ps; kwargs...)
+function reorder_parameters(
+        sys::AbstractSystem, ps = parameters(sys; initial_parameters = true); kwargs...)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         reorder_parameters(get_index_cache(sys), ps; kwargs...)
     elseif ps isa Tuple

@@ -105,7 +105,8 @@ function calculate_control_jacobian(sys::AbstractODESystem;
 end
 
 function generate_tgrad(
-        sys::AbstractODESystem, dvs = unknowns(sys), ps = parameters(sys);
+        sys::AbstractODESystem, dvs = unknowns(sys), ps = parameters(
+            sys; initial_parameters = true);
         simplify = false, kwargs...)
     tgrad = calculate_tgrad(sys, simplify = simplify)
     p = reorder_parameters(sys, ps)
@@ -117,7 +118,7 @@ function generate_tgrad(
 end
 
 function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys);
+        ps = parameters(sys; initial_parameters = true);
         simplify = false, sparse = false, kwargs...)
     jac = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
     p = reorder_parameters(sys, ps)
@@ -129,7 +130,7 @@ function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
 end
 
 function generate_control_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys);
+        ps = parameters(sys; initial_parameters = true);
         simplify = false, sparse = false, kwargs...)
     jac = calculate_control_jacobian(sys; simplify = simplify, sparse = sparse)
     p = reorder_parameters(sys, ps)
@@ -137,7 +138,7 @@ function generate_control_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
 end
 
 function generate_dae_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys); simplify = false, sparse = false,
+        ps = parameters(sys; initial_parameters = true); simplify = false, sparse = false,
         kwargs...)
     jac_u = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
     derivatives = Differential(get_iv(sys)).(unknowns(sys))
@@ -153,7 +154,7 @@ function generate_dae_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
 end
 
 function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys);
+        ps = parameters(sys; initial_parameters = true);
         implicit_dae = false,
         ddvs = implicit_dae ? map(Differential(get_iv(sys)), dvs) :
                nothing,
@@ -699,7 +700,7 @@ function SymbolicTstops(
             term(:, t0, unwrap(val), t1; type = AbstractArray{Real})
         end
     end
-    rps = reorder_parameters(sys, parameters(sys))
+    rps = reorder_parameters(sys)
     tstops, _ = build_function_wrapper(sys, tstops,
         rps...,
         t0,
@@ -825,7 +826,7 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
 end
 
 function generate_history(sys::AbstractODESystem, u0; expression = Val{false}, kwargs...)
-    p = reorder_parameters(sys, parameters(sys))
+    p = reorder_parameters(sys)
     build_function_wrapper(
         sys, u0, p..., get_iv(sys); expression, p_start = 1, p_end = length(p),
         similarto = typeof(u0), wrap_delays = false, kwargs...)
@@ -1045,7 +1046,7 @@ function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem, u0map,
     end
     f, u0, p = process_SciMLProblem(ODEFunction{iip}, sys, u0map, parammap;
         steady_state = true,
-        check_length, kwargs...)
+        check_length, force_initialization_time_independent = true, kwargs...)
     kwargs = filter_kwargs(kwargs)
     SteadyStateProblem{iip}(f, u0, p; kwargs...)
 end
@@ -1220,27 +1221,42 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
         check_units = true,
         use_scc = true,
         allow_incomplete = false,
+        force_time_independent = false,
+        algebraic_only = false,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
     end
     if isempty(u0map) && get_initializesystem(sys) !== nothing
         isys = get_initializesystem(sys; initialization_eqs, check_units)
+        simplify_system = false
     elseif isempty(u0map) && get_initializesystem(sys) === nothing
-        isys = structural_simplify(
-            generate_initializesystem(
-                sys; initialization_eqs, check_units, pmap = parammap,
-                guesses, extra_metadata = (; use_scc)); fully_determined)
+        isys = generate_initializesystem(
+            sys; initialization_eqs, check_units, pmap = parammap,
+            guesses, extra_metadata = (; use_scc), algebraic_only)
+        simplify_system = true
     else
-        isys = structural_simplify(
-            generate_initializesystem(
-                sys; u0map, initialization_eqs, check_units,
-                pmap = parammap, guesses, extra_metadata = (; use_scc)); fully_determined)
+        isys = generate_initializesystem(
+            sys; u0map, initialization_eqs, check_units,
+            pmap = parammap, guesses, extra_metadata = (; use_scc), algebraic_only)
+        simplify_system = true
+    end
+
+    # useful for `SteadyStateProblem` since `f` has to be autonomous and the
+    # initialization should be too
+    if force_time_independent
+        idx = findfirst(isequal(get_iv(sys)), get_ps(isys))
+        idx === nothing || deleteat!(get_ps(isys), idx)
+    end
+
+    if simplify_system
+        isys = structural_simplify(isys; fully_determined)
     end
 
     meta = get_metadata(isys)
     if meta isa InitializationSystemMetadata
-        @set! isys.metadata.oop_reconstruct_u0_p = ReconstructInitializeprob(sys, isys)
+        @set! isys.metadata.oop_reconstruct_u0_p = ReconstructInitializeprob(
+            sys, isys)
     end
 
     ts = get_tearing_state(isys)
@@ -1299,20 +1315,6 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
 
     u0map = merge(ModelingToolkit.guesses(sys), todict(guesses), todict(u0map))
 
-    # Replace dummy derivatives in u0map: D(x) -> x_t etc.
-    if has_schedule(sys)
-        schedule = get_schedule(sys)
-        if !isnothing(schedule)
-            for (var, val) in u0map
-                dvar = get(schedule.dummy_sub, var, var) # with dummy derivatives
-                if dvar !== var # then replace it
-                    delete!(u0map, var)
-                    push!(u0map, dvar => val)
-                end
-            end
-        end
-    end
-
     fullmap = merge(u0map, parammap)
     u0T = Union{}
     for sym in unknowns(isys)
@@ -1329,7 +1331,9 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
     end
     if u0T != Union{}
         u0T = eltype(u0T)
-        u0map = Dict(k => if symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)
+        u0map = Dict(k => if v === nothing
+                         nothing
+                     elseif symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)
                          v isa AbstractArray ? u0T.(v) : u0T(v)
                      else
                          v

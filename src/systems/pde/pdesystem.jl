@@ -166,3 +166,5 @@ function Base.show(io::IO, ::MIME"text/plain", sys::PDESystem)
     print(io, "Default Parameter Values", get_defaults(sys))
     return nothing
 end
+
+SymbolicIndexingInterface.is_time_dependent(::AbstractMultivariateSystem) = true

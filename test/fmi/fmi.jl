@@ -235,7 +235,8 @@ end
             t;
             systems = [adder1, adder2])
         prob = ODEProblem(
-            sys, [adder1.c => 1.0, adder2.c => 1.0, adder1.a => 2.0], (0.0, 1.0))
+            sys, [adder1.c => 1.0, adder2.c => 1.0, adder1.a => 2.0],
+            (0.0, 1.0); guesses = [adder2.a => 0.0])
         return sys, prob
     end
     @named adder1 = SimpleAdder()

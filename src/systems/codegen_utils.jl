@@ -34,7 +34,7 @@ function array_variable_assignments(args...)
             # get and/or construct the buffer storing indexes
             idxbuffer = get!(
                 () -> map(Returns((0, 0)), eachindex(arrvar)), var_to_arridxs, arrvar)
-            idxbuffer[arguments(var)[2:end]...] = (i, j)
+            Origin(first.(axes(arrvar))...)(idxbuffer)[arguments(var)[2:end]...] = (i, j)
         end
     end
 
@@ -59,18 +59,22 @@ function array_variable_assignments(args...)
                 idxs = SArray{Tuple{size(idxs)...}}(idxs)
             end
             # view and reshape
-            push!(assignments,
-                arrvar ←
-                term(reshape, term(view, generated_argument_name(buffer_idx), idxs),
-                    size(arrvar)))
+
+            expr = term(reshape, term(view, generated_argument_name(buffer_idx), idxs),
+                size(arrvar))
         else
             elems = map(idxs) do idx
                 i, j = idx
                 term(getindex, generated_argument_name(i), j)
             end
-            # use `MakeArray` and generate a stack-allocated array
-            push!(assignments, arrvar ← MakeArray(elems, SArray))
+            # use `MakeArray` syntax and generate a stack-allocated array
+            expr = term(SymbolicUtils.Code.create_array, SArray, nothing,
+                Val(ndims(arrvar)), Val(length(arrvar)), elems...)
         end
+        if any(x -> !isone(first(x)), axes(arrvar))
+            expr = term(Origin(first.(axes(arrvar))...), expr)
+        end
+        push!(assignments, arrvar ← expr)
     end
 
     return assignments
