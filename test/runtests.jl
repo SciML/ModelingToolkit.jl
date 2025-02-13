@@ -74,7 +74,7 @@ end
 
     if GROUP == "All" || GROUP == "InterfaceII"
         @testset "InterfaceII" begin
-            @safetestset "Generate Custom Function Test" include("generate_custom_function.jl")
+            @safetestset "Code Generation Test" include("code_generation.jl")
             @safetestset "IndexCache Test" include("index_cache.jl")
             @safetestset "Variable Utils Test" include("variable_utils.jl")
             @safetestset "Variable Metadata Test" include("test_variable_metadata.jl")
