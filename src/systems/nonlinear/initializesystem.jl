@@ -355,16 +355,27 @@ function get_possibly_array_fallback_singletons(varmap, p)
     if haskey(varmap, p)
         return varmap[p]
     end
-    symbolic_type(p) == ArraySymbolic() || return nothing
-    scal = collect(p)
-    if all(x -> haskey(varmap, x), scal)
-        res = [varmap[x] for x in scal]
-        if any(x -> x === nothing, res)
-            return nothing
-        elseif any(x -> x === missing, res)
-            return missing
+    if symbolic_type(p) == ArraySymbolic()
+        scal = collect(p)
+        if all(x -> haskey(varmap, x), scal)
+            res = [varmap[x] for x in scal]
+            if any(x -> x === nothing, res)
+                return nothing
+            elseif any(x -> x === missing, res)
+                return missing
+            end
+            return res
         end
-        return res
+    elseif iscall(p) && operation(p) == getindex
+        arrp = arguments(p)[1]
+        val = get_possibly_array_fallback_singletons(varmap, arrp)
+        if val === nothing
+            return nothing
+        elseif val === missing
+            return missing
+        else
+            return val
+        end
     end
     return nothing
 end
