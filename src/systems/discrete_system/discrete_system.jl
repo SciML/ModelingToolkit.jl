@@ -275,10 +275,10 @@ function shift_u0map_forward(sys::DiscreteSystem, u0map, defs)
     end
     for var in unknowns(sys)
         op = operation(var)
-        op isa Shift || continue
         haskey(updated, var) && continue
-        root = first(arguments(var))
-        haskey(defs, root) || error("Initial condition for $var not provided.")
+        root = getunshifted(var)
+        isnothing(root) && continue
+        haskey(defs, root) || error("Initial condition for $root not provided.")
         updated[var] = defs[root]
     end
     return updated

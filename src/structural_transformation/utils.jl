@@ -453,16 +453,25 @@ end
 function lower_shift_varname(var, iv)
     op = operation(var)
     op isa Shift || return Shift(iv, 0)(var, true) # hack to prevent simplification of x(t) - x(t)
-    backshift = op.steps
-    backshift > 0 && return var
+    if op.steps < 0
+        return shift2term(var)
+    else
+        return var
+    end
+end
 
-    ds = "$iv-$(-backshift)"
-    d_separator = 'ˍ'
+function shift2term(var) 
+    backshift = operation(var).steps
+    iv = operation(var).t
+    num = join(Char(0x2080 + d) for d in reverse!(digits(-backshift)))
+    ds = join([Char(0x209c), Char(0x208b), num])
+    #ds = "$iv-$(-backshift)"
+    #d_separator = 'ˍ'
 
     if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)
         O = only(arguments(var))
         oldop = operation(O)
-        newname = Symbol(string(nameof(oldop)), d_separator, ds)
+        newname = Symbol(string(nameof(oldop)), ds)
     else
         O = var
         oldop = operation(var) 
@@ -470,16 +479,9 @@ function lower_shift_varname(var, iv)
         newname = Symbol(varname, d_separator, ds)
     end
     newvar = maketerm(typeof(O), Symbolics.rename(oldop, newname), Symbolics.children(O), Symbolics.metadata(O))
-    setmetadata(newvar, Symbolics.VariableSource, (:variables, newname))
-    return ModelingToolkit._with_unit(identity, newvar, iv)
-end
-
-function lower_varname(var, iv, order; is_discrete = false)
-    if is_discrete
-        lower_shift_varname(var, iv)
-    else
-        lower_varname_with_unit(var, iv, order)
-    end
+    newvar = setmetadata(newvar, Symbolics.VariableSource, (:variables, newname))
+    newvar = setmetadata(newvar, ModelingToolkit.VariableUnshifted, O)
+    return newvar
 end
 
 function isdoubleshift(var)

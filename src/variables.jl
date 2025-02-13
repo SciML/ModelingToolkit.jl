@@ -6,6 +6,7 @@ struct VariableOutput end
 struct VariableIrreducible end
 struct VariableStatePriority end
 struct VariableMisc end
+struct VariableUnshifted end
 Symbolics.option_to_metadata_type(::Val{:unit}) = VariableUnit
 Symbolics.option_to_metadata_type(::Val{:connect}) = VariableConnectType
 Symbolics.option_to_metadata_type(::Val{:input}) = VariableInput
@@ -13,6 +14,7 @@ Symbolics.option_to_metadata_type(::Val{:output}) = VariableOutput
 Symbolics.option_to_metadata_type(::Val{:irreducible}) = VariableIrreducible
 Symbolics.option_to_metadata_type(::Val{:state_priority}) = VariableStatePriority
 Symbolics.option_to_metadata_type(::Val{:misc}) = VariableMisc
+Symbolics.option_to_metadata_type(::Val{:unshifted}) = VariableUnshifted
 
 """
     dump_variable_metadata(var)
@@ -133,7 +135,7 @@ function default_toterm(x)
     if iscall(x) && (op = operation(x)) isa Operator
         if !(op isa Differential)
             if op isa Shift && op.steps < 0
-                return x
+                return shift2term(x) 
             end
             x = normalize_to_differential(op)(arguments(x)...)
         end
@@ -600,3 +602,6 @@ getunit(x::Symbolic) = Symbolics.getmetadata(x, VariableUnit, nothing)
 Check if the variable `x` has a unit.
 """
 hasunit(x) = getunit(x) !== nothing
+
+getunshifted(x) = getunshifted(unwrap(x))
+getunshifted(x::Symbolic) = Symbolics.getmetadata(x, VariableUnshifted, nothing)

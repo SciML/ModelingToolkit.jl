@@ -366,7 +366,6 @@ function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matchin
     eq_var_matching = invview(var_eq_matching)
     diff_to_var = invview(var_to_diff)
     is_discrete = is_only_discrete(structure)
-    lower_varname = is_discrete ? lower_shift_varname : lower_varname_with_unit
     linear_eqs = mm === nothing ? Dict{Int, Int}() :
                  Dict(reverse(en) for en in enumerate(mm.nzrows))
 
@@ -375,9 +374,9 @@ function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matchin
     for v in 1:length(var_to_diff)
         dv = var_to_diff[v]
         # For discrete systems, directly substitute lowest-order shift 
-        if is_discrete && diff_to_var[v] == nothing
-            operation(fullvars[v]) isa Shift && (fullvars[v] = lower_varname(fullvars[v], iv))
-        end
+        #if is_discrete && diff_to_var[v] == nothing
+        #    operation(fullvars[v]) isa Shift && (fullvars[v] = lower_shift_varname_with_unit(fullvars[v], iv))
+        #end
         dv isa Int || continue
         solved = var_eq_matching[dv] isa Int
         solved && continue
@@ -395,7 +394,8 @@ function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matchin
 
         dx = fullvars[dv]
         order, lv = var_order(dv, diff_to_var)
-        x_t = is_discrete ? lower_varname(fullvars[dv], iv) : lower_varname(fullvars[lv], iv, order)
+        x_t = is_discrete ? lower_shift_varname_with_unit(fullvars[dv], iv) : 
+                            Symbolics.diff2term(fullvars[dv])
 
         # Add `x_t` to the graph
         v_t = add_dd_variable!(structure, fullvars, x_t, dv)
@@ -467,11 +467,15 @@ function generate_system_equations!(state::TearingState, neweqs, var_eq_matching
 
     total_sub = Dict()
     if is_only_discrete(structure)
-        for v in fullvars
+        for (i, v) in enumerate(fullvars)
             op = operation(v)
-            op isa Shift && (op.steps < 0) && (total_sub[v] = lower_shift_varname(v, iv))
+            op isa Shift && (op.steps < 0) && begin
+                lowered = lower_shift_varname_with_unit(v, iv)
+                total_sub[v] = lowered
+                fullvars[i] = lowered
+            end
         end
-   end
+    end
 
     # if var is like D(x) or Shift(t, 1)(x)
     isdervar = let diff_to_var = diff_to_var

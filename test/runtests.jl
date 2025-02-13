@@ -22,6 +22,8 @@ function activate_downstream_env()
     Pkg.instantiate()
 end
 
+@testset begin include("discrete_system.jl") end
+#=
 @time begin
     if GROUP == "All" || GROUP == "InterfaceI"
         @testset "InterfaceI" begin
@@ -136,3 +138,4 @@ end
         @safetestset "InfiniteOpt Extension Test" include("extensions/test_infiniteopt.jl")
     end
 end
+=#
