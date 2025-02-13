@@ -127,6 +127,7 @@ isoutput(x) = isvarkind(VariableOutput, x)
 # irreducibility is independent from IO.
 isirreducible(x) = isvarkind(VariableIrreducible, x)
 setirreducible(x, v::Bool) = setmetadata(x, VariableIrreducible, v)
+state_priority(x::Union{Num, Symbolics.Arr}) = state_priority(unwrap(x))
 state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))::Float64
 
 function default_toterm(x)
