@@ -366,7 +366,6 @@ function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matchin
     eq_var_matching = invview(var_eq_matching)
     diff_to_var = invview(var_to_diff)
     is_discrete = is_only_discrete(structure)
-    toterm = is_discrete ? shift2term_with_unit : diff2term_with_unit
     linear_eqs = mm === nothing ? Dict{Int, Int}() :
                  Dict(reverse(en) for en in enumerate(mm.nzrows))
 
@@ -391,7 +390,8 @@ function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matchin
 
         dx = fullvars[dv]
         order, lv = var_order(dv, diff_to_var)
-        x_t = toterm(fullvars[dv]) 
+        x_t = is_discrete ? lower_shift_varname_with_unit(fullvars[dv], iv)
+                          : lower_varname_with_unit(fullvars[lv], iv, order)
 
         # Add `x_t` to the graph
         v_t = add_dd_variable!(structure, fullvars, x_t, dv)
@@ -466,7 +466,7 @@ function generate_system_equations!(state::TearingState, neweqs, var_eq_matching
         for (i, v) in enumerate(fullvars)
             op = operation(v)
             op isa Shift && (op.steps < 0) && begin
-                lowered = shift2term_with_unit(v)
+                lowered = lower_shift_varname_with_unit(v, iv)
                 total_sub[v] = lowered
                 fullvars[i] = lowered
             end
