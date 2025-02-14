@@ -80,6 +80,7 @@ end
             @safetestset "Variable Metadata Test" include("test_variable_metadata.jl")
             @safetestset "OptimizationSystem Test" include("optimizationsystem.jl")
             @safetestset "Discrete System" include("discrete_system.jl")
+            @safetestset "Implicit Discrete System" include("implicit_discrete_system.jl")
             @safetestset "SteadyStateSystem Test" include("steadystatesystems.jl")
             @safetestset "SDESystem Test" include("sdesystem.jl")
             @safetestset "DDESystem Test" include("dde.jl")

@@ -452,11 +452,10 @@ end
 # For discrete variables. Turn Shift(t, k)(x(t)) into xₜ₋ₖ(t)
 function lower_shift_varname(var, iv)
     op = operation(var)
-    op isa Shift || return Shift(iv, 0)(var, true) # hack to prevent simplification of x(t) - x(t)
-    if op.steps < 0
+    if op isa Shift && op.steps < 0
         return shift2term(var)
     else
-        return var
+        return Shift(iv, 0)(var, true)
     end
 end
 

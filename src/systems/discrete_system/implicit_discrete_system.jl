@@ -239,6 +239,8 @@ function ImplicitDiscreteSystem(eqs, iv; kwargs...)
         collect(allunknowns), collect(new_ps); kwargs...)
 end
 
+ImplicitDiscreteSystem(eq::Equation, args...; kwargs...) = ImplicitDiscreteSystem([eq], args...; kwargs...)
+
 function flatten(sys::ImplicitDiscreteSystem, noeqs = false)
     systems = get_systems(sys)
     if isempty(systems)
@@ -261,10 +263,14 @@ end
 
 function generate_function(
         sys::ImplicitDiscreteSystem, dvs = unknowns(sys), ps = parameters(sys); wrap_code = identity, kwargs...)
-    exprs = [eq.lhs - eq.rhs for eq in equations(sys)]
-    u = dvs
-    u_next = map(Shift(iv, 1), u)
-    generate_custom_function(sys, exprs, u_next, u, ps..., get_iv(sys); kwargs...)
+    iv = get_iv(sys)
+    exprs = map(equations(sys)) do eq
+        _iszero(eq.lhs) ? eq.rhs : (simplify_shifts(Shift(iv, -1)(eq.rhs)) - simplify_shifts(Shift(iv, -1)(eq.lhs)))
+    end
+
+    u_next = dvs
+    u = map(Shift(iv, -1), u_next)
+    build_function_wrapper(sys, exprs, u_next, u, ps..., iv; p_start = 3, kwargs...)
 end
 
 function shift_u0map_forward(sys::ImplicitDiscreteSystem, u0map, defs)
@@ -275,13 +281,13 @@ function shift_u0map_forward(sys::ImplicitDiscreteSystem, u0map, defs)
         if !((op = operation(k)) isa Shift)
             error("Initial conditions must be for the past state of the unknowns. Instead of providing the condition for $k, provide the condition for $(Shift(iv, -1)(k)).")
         end
-        updated[Shift(iv, op.steps + 1)(arguments(k)[1])] = v
+        updated[shift2term(k)] = v
     end
     for var in unknowns(sys)
         op = operation(var)
-        op isa Shift || continue
         haskey(updated, var) && continue
-        root = first(arguments(var))
+        root = getunshifted(var)
+        isnothing(root) && continue
         haskey(defs, root) || error("Initial condition for $var not provided.")
         updated[var] = defs[root]
     end
@@ -301,7 +307,7 @@ function SciMLBase.ImplicitDiscreteProblem(
         kwargs...
 )
     if !iscomplete(sys)
-        error("A completed `ImplicitDiscreteSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `ImplicitDiscreteProblem`")
+        error("A completed `ImplicitDiscreteSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `ImplicitDiscreteProblem`.")
     end
     dvs = unknowns(sys)
     ps = parameters(sys)
@@ -312,8 +318,7 @@ function SciMLBase.ImplicitDiscreteProblem(
     u0map = shift_u0map_forward(sys, u0map, defaults(sys))
     f, u0, p = process_SciMLProblem(
         ImplicitDiscreteFunction, sys, u0map, parammap; eval_expression, eval_module)
-    u0 = f(u0, p, tspan[1])
-    NonlinearProblem(f, u0, tspan, p; kwargs...)
+    ImplicitDiscreteProblem(f, u0, tspan, p; kwargs...)
 end
 
 function SciMLBase.ImplicitDiscreteFunction(sys::ImplicitDiscreteSystem, args...; kwargs...)

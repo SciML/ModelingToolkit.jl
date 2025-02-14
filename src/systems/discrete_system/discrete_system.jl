@@ -17,7 +17,7 @@ eqs = [x(k+1) ~ σ*(y-x),
 @named de = DiscreteSystem(eqs)
 ```
 """
-struct DiscreteSystem <: AbstractTimeDependentSystem
+struct DiscreteSystem <: AbstractDiscreteSystem
     """
     A tag for the system. If two systems have the same tag, then they are
     structurally identical.
@@ -237,6 +237,8 @@ function DiscreteSystem(eqs, iv; kwargs...)
         collect(allunknowns), collect(new_ps); kwargs...)
 end
 
+DiscreteSystem(eq::Equation, args...; kwargs...) = DiscreteSystem([eq], args...; kwargs...)
+
 function flatten(sys::DiscreteSystem, noeqs = false)
     systems = get_systems(sys)
     if isempty(systems)
@@ -271,14 +273,16 @@ function shift_u0map_forward(sys::DiscreteSystem, u0map, defs)
         if !((op = operation(k)) isa Shift)
             error("Initial conditions must be for the past state of the unknowns. Instead of providing the condition for $k, provide the condition for $(Shift(iv, -1)(k)).")
         end
-        updated[Shift(iv, op.steps + 1)(arguments(k)[1])] = v
+        k_next = Shift(iv, op.steps + 1)(arguments(k)[1])
+        operation(k_next) isa Shift ? updated[shift2term(k_next)] = v :
+                                      updated[k_next] = v
     end
     for var in unknowns(sys)
         op = operation(var)
         haskey(updated, var) && continue
         root = getunshifted(var)
         isnothing(root) && continue
-        haskey(defs, root) || error("Initial condition for $root not provided.")
+        haskey(defs, root) || error("Initial condition for $var not provided.")
         updated[var] = defs[root]
     end
     return updated
