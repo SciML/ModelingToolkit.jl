@@ -390,8 +390,8 @@ function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matchin
 
         dx = fullvars[dv]
         order, lv = var_order(dv, diff_to_var)
-        x_t = is_discrete ? lower_shift_varname_with_unit(fullvars[dv], iv)
-                          : lower_varname_with_unit(fullvars[lv], iv, order)
+        x_t = is_discrete ? lower_shift_varname_with_unit(fullvars[dv], iv) :
+                          lower_varname_with_unit(fullvars[lv], iv, order)
 
         # Add `x_t` to the graph
         v_t = add_dd_variable!(structure, fullvars, x_t, dv)
