@@ -34,7 +34,7 @@ function array_variable_assignments(args...)
             # get and/or construct the buffer storing indexes
             idxbuffer = get!(
                 () -> map(Returns((0, 0)), eachindex(arrvar)), var_to_arridxs, arrvar)
-            idxbuffer[arguments(var)[2:end]...] = (i, j)
+            Origin(first.(axes(arrvar))...)(idxbuffer)[arguments(var)[2:end]...] = (i, j)
         end
     end
 
@@ -59,18 +59,22 @@ function array_variable_assignments(args...)
                 idxs = SArray{Tuple{size(idxs)...}}(idxs)
             end
             # view and reshape
-            push!(assignments,
-                arrvar ←
-                term(reshape, term(view, generated_argument_name(buffer_idx), idxs),
-                    size(arrvar)))
+
+            expr = term(reshape, term(view, generated_argument_name(buffer_idx), idxs),
+                size(arrvar))
         else
             elems = map(idxs) do idx
                 i, j = idx
                 term(getindex, generated_argument_name(i), j)
             end
-            # use `MakeArray` and generate a stack-allocated array
-            push!(assignments, arrvar ← MakeArray(elems, SArray))
+            # use `MakeArray` syntax and generate a stack-allocated array
+            expr = term(SymbolicUtils.Code.create_array, SArray, nothing,
+                Val(ndims(arrvar)), Val(length(arrvar)), elems...)
         end
+        if any(x -> !isone(first(x)), axes(arrvar))
+            expr = term(Origin(first.(axes(arrvar))...), expr)
+        end
+        push!(assignments, arrvar ← expr)
     end
 
     return assignments
@@ -156,6 +160,9 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
     end
     # similarly for parameter dependency equations
     pdepidxs = observed_equations_used_by(sys, expr; obs = pdeps)
+    for i in obsidxs
+        union!(pdepidxs, observed_equations_used_by(sys, obs[i].rhs; obs = pdeps))
+    end
     # assignments for reconstructing scalarized array symbolics
     assignments = array_variable_assignments(args...)
 

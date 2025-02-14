@@ -84,7 +84,7 @@ function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int; kwargs...)
 end
 
 function tearing_sub(expr, dict, s)
-    expr = Symbolics.fixpoint_sub(expr, dict)
+    expr = Symbolics.fixpoint_sub(expr, dict; operator = ModelingToolkit.Initial)
     s ? simplify(expr) : expr
 end
 

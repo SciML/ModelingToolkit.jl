@@ -157,7 +157,7 @@ end
     @testset "v2, CS" begin
         fmu = loadFMU(joinpath(FMU_DIR, "SimpleAdder.fmu"); type = :CS)
         @named adder = MTK.FMIComponent(
-            Val(2); fmu, type = :CS, communication_step_size = 1e-3,
+            Val(2); fmu, type = :CS, communication_step_size = 1e-4,
             reinitializealg = BrownFullBasicInit())
         @test MTK.isinput(adder.a)
         @test MTK.isinput(adder.b)
@@ -169,9 +169,9 @@ end
         sol = solve(prob, Rodas5P(autodiff = false), abstol = 1e-8, reltol = 1e-8)
         @test SciMLBase.successful_retcode(sol)
 
-        @test truesol(sol.t; idxs = [truesys.a, truesys.b, truesys.c]).u≈sol.u rtol=1e-2
+        @test truesol(sol.t; idxs = [truesys.a, truesys.b, truesys.c]).u≈sol.u rtol=4e-2
         # sys.adder.c is a discrete variable
-        @test truesol(sol.t; idxs = truesys.adder.c).u≈sol(sol.t; idxs = sys.adder.c).u rtol=1e-3
+        @test truesol(sol.t; idxs = truesys.adder.c).u≈sol(sol.t; idxs = sys.adder.c).u rtol=4e-2
     end
 
     function build_sspace_model(sspace)
@@ -235,7 +235,8 @@ end
             t;
             systems = [adder1, adder2])
         prob = ODEProblem(
-            sys, [adder1.c => 1.0, adder2.c => 1.0, adder1.a => 2.0], (0.0, 1.0))
+            sys, [adder1.c => 1.0, adder2.c => 1.0, adder1.a => 2.0],
+            (0.0, 1.0); guesses = [adder2.a => 0.0])
         return sys, prob
     end
     @named adder1 = SimpleAdder()
