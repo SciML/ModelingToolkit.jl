@@ -253,3 +253,13 @@ import ModelingToolkitStandardLibrary.Hydraulic.IsothermalCompressible as IC
     sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
 end
+
+@testset "Array variables split across SCCs" begin
+    @variables x[1:3]
+    @parameters (f::Function)(..)
+    @mtkbuild sys = NonlinearSystem([
+        0 ~ x[1]^2 - 9, x[2] ~ 2x[1], 0 ~ x[3]^2 - x[1]^2 + f(x)])
+    prob = SCCNonlinearProblem(sys, [x => ones(3)], [f => sum])
+    sol = solve(prob, NewtonRaphson())
+    @test SciMLBase.successful_retcode(sol)
+end
