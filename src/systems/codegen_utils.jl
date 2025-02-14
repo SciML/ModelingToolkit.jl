@@ -160,6 +160,9 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
     end
     # similarly for parameter dependency equations
     pdepidxs = observed_equations_used_by(sys, expr; obs = pdeps)
+    for i in obsidxs
+        union!(pdepidxs, observed_equations_used_by(sys, obs[i].rhs; obs = pdeps))
+    end
     # assignments for reconstructing scalarized array symbolics
     assignments = array_variable_assignments(args...)
 
