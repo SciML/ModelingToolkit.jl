@@ -356,6 +356,7 @@ function get_possibly_array_fallback_singletons(varmap, p)
         return varmap[p]
     end
     if symbolic_type(p) == ArraySymbolic()
+        is_sized_array_symbolic(p) || return nothing
         scal = collect(p)
         if all(x -> haskey(varmap, x), scal)
             res = [varmap[x] for x in scal]
