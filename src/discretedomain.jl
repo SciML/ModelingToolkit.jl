@@ -226,25 +226,25 @@ Base.:-(k::ShiftIndex, i::Int) = k + (-i)
 """
     input_timedomain(op::Operator)
 
-Return the time-domain type (`Continuous` or `InferredDiscrete`) that `op` operates on.
+Return the time-domain type (`Continuous()` or `InferredDiscrete()`) that `op` operates on.
 """
 function input_timedomain(s::Shift, arg = nothing)
     if has_time_domain(arg)
         return get_time_domain(arg)
     end
-    InferredDiscrete
+    InferredDiscrete()
 end
 
 """
     output_timedomain(op::Operator)
 
-Return the time-domain type (`Continuous` or `InferredDiscrete`) that `op` results in.
+Return the time-domain type (`Continuous()` or `InferredDiscrete()`) that `op` results in.
 """
 function output_timedomain(s::Shift, arg = nothing)
     if has_time_domain(t, arg)
         return get_time_domain(t, arg)
     end
-    InferredDiscrete
+    InferredDiscrete()
 end
 
 input_timedomain(::Sample, _ = nothing) = Continuous()

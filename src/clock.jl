@@ -1,20 +1,12 @@
-module InferredClock
-
-export InferredTimeDomain
-
-using Expronicon.ADT: @adt, @match
-using SciMLBase: TimeDomain
-
-@adt InferredTimeDomain begin
+@data InferredClock begin
     Inferred
     InferredDiscrete
 end
 
+const InferredTimeDomain = InferredClock.Type
+using .InferredClock: Inferred, InferredDiscrete
+
 Base.Broadcast.broadcastable(x::InferredTimeDomain) = Ref(x)
-
-end
-
-using .InferredClock
 
 struct VariableTimeDomain end
 Symbolics.option_to_metadata_type(::Val{:timedomain}) = VariableTimeDomain
@@ -104,8 +96,8 @@ function is_discrete_domain(x)
     !has_discrete_domain(x) && has_continuous_domain(x)
 end
 
-sampletime(c) = @match c begin
-    PeriodicClock(dt, _...) => dt
+sampletime(c) = Moshi.Match.@match c begin
+    PeriodicClock(dt) => dt
     _ => nothing
 end
 
