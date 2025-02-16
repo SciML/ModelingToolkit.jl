@@ -422,28 +422,7 @@ function SymbolicIndexingInterface.timeseries_parameter_index(sys::AbstractSyste
 end
 
 function SymbolicIndexingInterface.parameter_observed(sys::AbstractSystem, sym)
-    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        rawobs = build_explicit_observed_function(
-            sys, sym; param_only = true, return_inplace = true)
-        if rawobs isa Tuple
-            if is_time_dependent(sys)
-                obsfn = let oop = rawobs[1], iip = rawobs[2]
-                    f1a(p, t) = oop(p, t)
-                    f1a(out, p, t) = iip(out, p, t)
-                end
-            else
-                obsfn = let oop = rawobs[1], iip = rawobs[2]
-                    f1b(p) = oop(p)
-                    f1b(out, p) = iip(out, p)
-                end
-            end
-        else
-            obsfn = rawobs
-        end
-    else
-        obsfn = build_explicit_observed_function(sys, sym; param_only = true)
-    end
-    return obsfn
+    return build_explicit_observed_function(sys, sym; param_only = true)
 end
 
 function has_observed_with_lhs(sys, sym)
@@ -579,18 +558,8 @@ function SymbolicIndexingInterface.observed(
             end
         end
     end
-    _fn = build_explicit_observed_function(
+    return build_explicit_observed_function(
         sys, sym; eval_expression, eval_module, checkbounds)
-
-    if is_time_dependent(sys)
-        return _fn
-    else
-        return let _fn = _fn
-            fn2(u, p) = _fn(u, p)
-            fn2(::Nothing, p) = _fn([], p)
-            fn2
-        end
-    end
 end
 
 function SymbolicIndexingInterface.default_values(sys::AbstractSystem)

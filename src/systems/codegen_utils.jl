@@ -230,3 +230,59 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
     end
     return build_function(expr, args...; wrap_code, similarto, kwargs...)
 end
+
+"""
+    $(TYPEDEF)
+
+A wrapper around a generated in-place and out-of-place function. The type-parameter `P`
+must be a 3-tuple where the first element is the index of the parameter object in the
+arguments, the second is the expected number of arguments in the out-of-place variant
+of the function, and the third is a boolean indicating whether the generated functions
+are for a split system. For scalar functions, the inplace variant can be `nothing`.
+"""
+struct GeneratedFunctionWrapper{P, O, I} <: Function
+    f_oop::O
+    f_iip::I
+end
+
+function GeneratedFunctionWrapper{P}(foop::O, fiip::I) where {P, O, I}
+    GeneratedFunctionWrapper{P, O, I}(foop, fiip)
+end
+
+function (gfw::GeneratedFunctionWrapper)(args...)
+    _generated_call(gfw, args...)
+end
+
+@generated function _generated_call(gfw::GeneratedFunctionWrapper{P}, args...) where {P}
+    paramidx, nargs, issplit = P
+    iip = false
+    # IIP case has one more argument
+    if length(args) == nargs + 1
+        nargs += 1
+        paramidx += 1
+        iip = true
+    end
+    if length(args) != nargs
+        throw(ArgumentError("Expected $nargs arguments, got $(length(args))."))
+    end
+
+    # the function to use
+    f = iip ? :(gfw.f_iip) : :(gfw.f_oop)
+    # non-split systems just call it as-is
+    if !issplit
+        return :($f(args...))
+    end
+    if args[paramidx] <: Union{Tuple, MTKParameters} &&
+       !(args[paramidx] <: Tuple{Vararg{Number}})
+        # for split systems, call it as-is if the parameter object is a tuple or MTKParameters
+        # but not if it is a tuple of numbers
+        return :($f(args...))
+    else
+        # The user provided a single buffer/tuple for the parameter object, so wrap that
+        # one in a tuple
+        fargs = ntuple(Val(length(args))) do i
+            i == paramidx ? :((args[$i],)) : :(args[$i])
+        end
+        return :($f($(fargs...)))
+    end
+end
