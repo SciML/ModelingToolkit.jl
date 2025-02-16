@@ -235,7 +235,7 @@ end
 
 prob = ODEProblem(ODEFunction{false}(lotka), [1.0, 1.0], (0.0, 1.0), [1.5, 1.0, 3.0, 1.0])
 de = complete(modelingtoolkitize(prob))
-ODEFunction(de)(similar(prob.u0), prob.u0, (prob.p,), 0.1)
+ODEFunction(de)(similar(prob.u0), prob.u0, prob.p, 0.1)
 
 function lotka(du, u, p, t)
     x = u[1]
@@ -247,7 +247,7 @@ end
 prob = ODEProblem(lotka, [1.0, 1.0], (0.0, 1.0), [1.5, 1.0, 3.0, 1.0])
 
 de = complete(modelingtoolkitize(prob))
-ODEFunction(de)(similar(prob.u0), prob.u0, (prob.p,), 0.1)
+ODEFunction(de)(similar(prob.u0), prob.u0, prob.p, 0.1)
 
 # automatic unknown detection for DAEs
 @parameters k₁ k₂ k₃
