@@ -343,16 +343,14 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
     end
     f_gen = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
-    f(u, p) = f_oop(u, p)
-    f(du, u, p) = f_iip(du, u, p)
+    f = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, f_iip)
 
     if jac
         jac_gen = generate_jacobian(sys, dvs, ps;
             simplify = simplify, sparse = sparse,
             expression = Val{true}, kwargs...)
         jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
-        _jac(u, p) = jac_oop(u, p)
-        _jac(J, u, p) = jac_iip(J, u, p)
+        _jac = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(jac_oop, jac_iip)
     else
         _jac = nothing
     end
@@ -397,6 +395,7 @@ function SciMLBase.IntervalNonlinearFunction(
     f_gen = generate_function(
         sys, dvs, ps; expression = Val{true}, scalar = true, kwargs...)
     f = eval_or_rgf(f_gen; eval_expression, eval_module)
+    f = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f, nothing)
 
     observedfun = ObservedFunctionCache(
         sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
@@ -431,13 +430,14 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearFunctionExpr`")
     end
-    idx = iip ? 2 : 1
-    f = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)[idx]
+    f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
+    f = :($(GeneratedFunctionWrapper{(2, 2, is_split(sys))})($f_oop, $f_iip))
 
     if jac
-        _jac = generate_jacobian(sys, dvs, ps;
+        jac_oop, jac_iip = generate_jacobian(sys, dvs, ps;
             sparse = sparse, simplify = simplify,
-            expression = Val{true}, kwargs...)[idx]
+            expression = Val{true}, kwargs...)
+        _jac = :($(GeneratedFunctionWrapper{(2, 2, is_split(sys))})($jac_oop, $jac_iip))
     else
         _jac = :nothing
     end
@@ -484,8 +484,7 @@ function IntervalNonlinearFunctionExpr(
     end
 
     f = generate_function(sys, dvs, ps; expression = Val{true}, scalar = true, kwargs...)
-
-    IntervalNonlinearFunction{false}(f; sys = sys)
+    f = :($(GeneratedFunctionWrapper{2, 2, is_split(sys)})($f, nothing))
 
     ex = quote
         f = $f
@@ -584,7 +583,9 @@ function CacheWriter(sys::AbstractSystem, buffer_types::Vector{TypeT},
         DestructuredArgs.(rps)...; p_start = 3, p_end = length(rps) + 2,
         expression = Val{true}, add_observed = false,
         extra_assignments = [obs_assigns; body])
-    return CacheWriter(eval_or_rgf(fn; eval_expression, eval_module))
+    fn = eval_or_rgf(fn; eval_expression, eval_module)
+    fn = GeneratedFunctionWrapper{(3, 3, is_split(sys))}(fn, nothing)
+    return CacheWriter(fn)
 end
 
 struct SCCNonlinearFunction{iip} end
@@ -603,9 +604,7 @@ function SCCNonlinearFunction{iip}(
         p_end = length(rps) + length(cachesyms) + 1, add_observed = false,
         extra_assignments = obs_assignments, expression = Val{true})
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
-
-    f(u, p) = f_oop(u, p)
-    f(resid, u, p) = f_iip(resid, u, p)
+    f = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, f_iip)
 
     subsys = NonlinearSystem(_eqs, _dvs, ps; observed = _obs,
         parameter_dependencies = parameter_dependencies(sys), name = nameof(sys))

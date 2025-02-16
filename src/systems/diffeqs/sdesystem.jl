@@ -604,18 +604,14 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
         kwargs...)
     g_oop, g_iip = eval_or_rgf.(g_gen; eval_expression, eval_module)
 
-    f(u, p, t) = f_oop(u, p, t)
-    f(du, u, p, t) = f_iip(du, u, p, t)
-    g(u, p, t) = g_oop(u, p, t)
-    g(du, u, p, t) = g_iip(du, u, p, t)
+    f = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(f_oop, f_iip)
+    g = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(g_oop, g_iip)
 
     if tgrad
         tgrad_gen = generate_tgrad(sys, dvs, ps; expression = Val{true},
             kwargs...)
         tgrad_oop, tgrad_iip = eval_or_rgf.(tgrad_gen; eval_expression, eval_module)
-
-        _tgrad(u, p, t) = tgrad_oop(u, p, t)
-        _tgrad(J, u, p, t) = tgrad_iip(J, u, p, t)
+        _tgrad = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(tgrad_oop, tgrad_iip)
     else
         _tgrad = nothing
     end
@@ -625,8 +621,7 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
             sparse = sparse, kwargs...)
         jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
 
-        _jac(u, p, t) = jac_oop(u, p, t)
-        _jac(J, u, p, t) = jac_iip(J, u, p, t)
+        _jac = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(jac_oop, jac_iip)
     else
         _jac = nothing
     end
@@ -637,10 +632,8 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
         Wfact_oop, Wfact_iip = eval_or_rgf.(tmp_Wfact; eval_expression, eval_module)
         Wfact_oop_t, Wfact_iip_t = eval_or_rgf.(tmp_Wfact_t; eval_expression, eval_module)
 
-        _Wfact(u, p, dtgamma, t) = Wfact_oop(u, p, dtgamma, t)
-        _Wfact(W, u, p, dtgamma, t) = Wfact_iip(W, u, p, dtgamma, t)
-        _Wfact_t(u, p, dtgamma, t) = Wfact_oop_t(u, p, dtgamma, t)
-        _Wfact_t(W, u, p, dtgamma, t) = Wfact_iip_t(W, u, p, dtgamma, t)
+        _Wfact = GeneratedFunctionWrapper{(2, 4, is_split(sys))}(Wfact_oop, Wfact_iip)
+        _Wfact_t = GeneratedFunctionWrapper{(2, 4, is_split(sys))}(Wfact_oop_t, Wfact_iip_t)
     else
         _Wfact, _Wfact_t = nothing, nothing
     end

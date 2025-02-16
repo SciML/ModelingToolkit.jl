@@ -521,9 +521,14 @@ function build_explicit_observed_function(sys, ts;
         output_type, mkarray, try_namespaced = true, expression = Val{true})
     if fns isa Tuple
         oop, iip = eval_or_rgf.(fns; eval_expression, eval_module)
-        return return_inplace ? (oop, iip) : oop
+        f = GeneratedFunctionWrapper{(
+            p_start, length(args) - length(ps) + 1, is_split(sys))}(oop, iip)
+        return return_inplace ? (f, f) : f
     else
-        return eval_or_rgf(fns; eval_expression, eval_module)
+        f = eval_or_rgf(fns; eval_expression, eval_module)
+        f = GeneratedFunctionWrapper{(
+            p_start, length(args) - length(ps) + 1, is_split(sys))}(f, nothing)
+        return f
     end
 end
 

@@ -320,9 +320,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
-
-    f(u, p, t) = f_oop(u, p, t)
-    f(du, u, p, t) = f_iip(du, u, p, t)
+    f = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(f_oop, f_iip)
 
     if specialize === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
@@ -338,10 +336,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
             expression_module = eval_module,
             checkbounds = checkbounds, kwargs...)
         tgrad_oop, tgrad_iip = eval_or_rgf.(tgrad_gen; eval_expression, eval_module)
-
-        ___tgrad(u, p, t) = tgrad_oop(u, p, t)
-        ___tgrad(J, u, p, t) = tgrad_iip(J, u, p, t)
-        _tgrad = ___tgrad
+        _tgrad = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(tgrad_oop, tgrad_iip)
     else
         _tgrad = nothing
     end
@@ -354,8 +349,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
             checkbounds = checkbounds, kwargs...)
         jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
 
-        _jac(u, p, t) = jac_oop(u, p, t)
-        _jac(J, u, p, t) = jac_iip(J, u, p, t)
+        _jac = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(jac_oop, jac_iip)
     else
         _jac = nothing
     end
@@ -435,8 +429,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
-    f(du, u, p, t) = f_oop(du, u, p, t)
-    f(out, du, u, p, t) = f_iip(out, du, u, p, t)
+    f = GeneratedFunctionWrapper{(3, 4, is_split(sys))}(f_oop, f_iip)
 
     if jac
         jac_gen = generate_dae_jacobian(sys, dvs, ps;
@@ -446,8 +439,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
             checkbounds = checkbounds, kwargs...)
         jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
 
-        _jac(du, u, p, ˍ₋gamma, t) = jac_oop(du, u, p, ˍ₋gamma, t)
-        _jac(J, du, u, p, ˍ₋gamma, t) = jac_iip(J, du, u, p, ˍ₋gamma, t)
+        _jac = GeneratedFunctionWrapper{(3, 5, is_split(sys))}(jac_oop, jac_iip)
     else
         _jac = nothing
     end
@@ -496,8 +488,7 @@ function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
-    f(u, h, p, t) = f_oop(u, h, p, t)
-    f(du, u, h, p, t) = f_iip(du, u, h, p, t)
+    f = GeneratedFunctionWrapper{(3, 4, is_split(sys))}(f_oop, f_iip)
 
     DDEFunction{iip}(f; sys = sys, initialization_data)
 end
@@ -521,14 +512,12 @@ function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
-    f(u, h, p, t) = f_oop(u, h, p, t)
-    f(du, u, h, p, t) = f_iip(du, u, h, p, t)
+    f = GeneratedFunctionWrapper{(3, 4, is_split(sys))}(f_oop, f_iip)
 
     g_gen = generate_diffusion_function(sys, dvs, ps; expression = Val{true},
         isdde = true, kwargs...)
     g_oop, g_iip = eval_or_rgf.(g_gen; eval_expression, eval_module)
-    g(u, h, p, t) = g_oop(u, h, p, t)
-    g(du, u, h, p, t) = g_iip(du, u, h, p, t)
+    g = GeneratedFunctionWrapper{(3, 4, is_split(sys))}(g_oop, g_iip)
 
     SDDEFunction{iip}(f, g; sys = sys, initialization_data)
 end
@@ -549,13 +538,6 @@ variable and parameter vectors, respectively.
 """
 struct ODEFunctionExpr{iip, specialize} end
 
-struct ODEFunctionClosure{O, I} <: Function
-    f_oop::O
-    f_iip::I
-end
-(f::ODEFunctionClosure)(u, p, t) = f.f_oop(u, p, t)
-(f::ODEFunctionClosure)(du, u, p, t) = f.f_iip(du, u, p, t)
-
 function ODEFunctionExpr{iip, specialize}(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
         version = nothing, tgrad = false,
@@ -572,13 +554,14 @@ function ODEFunctionExpr{iip, specialize}(sys::AbstractODESystem, dvs = unknowns
     f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
 
     fsym = gensym(:f)
-    _f = :($fsym = $ODEFunctionClosure($f_oop, $f_iip))
+    _f = :($fsym = $(GeneratedFunctionWrapper{(2, 3, is_split(sys))})($f_oop, $f_iip))
     tgradsym = gensym(:tgrad)
     if tgrad
         tgrad_oop, tgrad_iip = generate_tgrad(sys, dvs, ps;
             simplify = simplify,
             expression = Val{true}, kwargs...)
-        _tgrad = :($tgradsym = $ODEFunctionClosure($tgrad_oop, $tgrad_iip))
+        _tgrad = :($tgradsym = $(GeneratedFunctionWrapper{(2, 3, is_split(sys))})(
+            $tgrad_oop, $tgrad_iip))
     else
         _tgrad = :($tgradsym = nothing)
     end
@@ -588,7 +571,8 @@ function ODEFunctionExpr{iip, specialize}(sys::AbstractODESystem, dvs = unknowns
         jac_oop, jac_iip = generate_jacobian(sys, dvs, ps;
             sparse = sparse, simplify = simplify,
             expression = Val{true}, kwargs...)
-        _jac = :($jacsym = $ODEFunctionClosure($jac_oop, $jac_iip))
+        _jac = :($jacsym = $(GeneratedFunctionWrapper{(2, 3, is_split(sys))})(
+            $jac_oop, $jac_iip))
     else
         _jac = :($jacsym = nothing)
     end
@@ -647,13 +631,6 @@ variable and parameter vectors, respectively.
 """
 struct DAEFunctionExpr{iip} end
 
-struct DAEFunctionClosure{O, I} <: Function
-    f_oop::O
-    f_iip::I
-end
-(f::DAEFunctionClosure)(du, u, p, t) = f.f_oop(du, u, p, t)
-(f::DAEFunctionClosure)(out, du, u, p, t) = f.f_iip(out, du, u, p, t)
-
 function DAEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
         version = nothing, tgrad = false,
@@ -667,7 +644,7 @@ function DAEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
     f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true},
         implicit_dae = true, kwargs...)
     fsym = gensym(:f)
-    _f = :($fsym = $DAEFunctionClosure($f_oop, $f_iip))
+    _f = :($fsym = $(GeneratedFunctionWrapper{(3, 4, is_split(sys))})($f_oop, $f_iip))
     ex = quote
         $_f
         ODEFunction{$iip}($fsym)
@@ -708,6 +685,7 @@ function SymbolicTstops(
         expression = Val{true},
         p_start = 1, p_end = length(rps), add_observed = false, force_SA = true)
     tstops = eval_or_rgf(tstops; eval_expression, eval_module)
+    tstops = GeneratedFunctionWrapper{(1, 3, is_split(sys))}(tstops, nothing)
     return SymbolicTstops(tstops)
 end
 
