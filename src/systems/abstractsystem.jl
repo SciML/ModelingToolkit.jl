@@ -669,7 +669,11 @@ end
 
 # This is required so `fast_substitute` works
 function SymbolicUtils.maketerm(::Type{<:BasicSymbolic}, ::Initial, args, meta)
-    return metadata(Initial()(args...), meta)
+    val = Initial()(args...)
+    if symbolic_type(val) == NotSymbolic()
+        return val
+    end
+    return metadata(val, meta)
 end
 
 function add_initialization_parameters(sys::AbstractSystem)
