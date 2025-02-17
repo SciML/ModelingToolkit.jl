@@ -17,6 +17,9 @@ function generate_initializesystem(sys::AbstractSystem;
         eqs = Equation[x for x in eqs if x isa Equation]
     end
     trueobs, eqs = unhack_observed(observed(sys), eqs)
+    # remove any observed equations that directly or indirectly contain
+    # delayed unknowns
+    isempty(trueobs) || filter_delay_equations_variables!(sys, trueobs)
     vars = unique([unknowns(sys); getfield.(trueobs, :lhs)])
     vars_set = Set(vars) # for efficient in-lookup
 
@@ -26,6 +29,16 @@ function generate_initializesystem(sys::AbstractSystem;
     additional_initialization_eqs = Vector{Equation}(initialization_eqs)
     guesses = merge(get_guesses(sys), additional_guesses)
     idxs_diff = isdiffeq.(eqs)
+
+    # PREPROCESSING
+    # If `=> nothing` in `u0map`, remove the key from `defs`
+    u0map = copy(anydict(u0map))
+    for (k, v) in u0map
+        v === nothing || continue
+        delete!(defs, k)
+    end
+    filter_missing_values!(u0map)
+    pmap = anydict(pmap)
 
     # 1) Use algebraic equations of time-dependent systems as initialization constraints
     if has_iv(sys)
@@ -53,6 +66,10 @@ function generate_initializesystem(sys::AbstractSystem;
             function process_u0map_with_dummysubs(y, x)
                 y = get(schedule.dummy_sub, y, y)
                 y = fixpoint_sub(y, diffmap)
+                # If we have `D(x) ~ x` and provide [D(x) => x, x => 1.0] to `u0map`, then
+                # without this condition `defs` would get `x => x` instead of retaining
+                # `x => 1.0`.
+                isequal(y, x) && return
                 if y ∈ vars_set
                     # variables specified in u0 overrides defaults
                     push!(defs, y => x)
@@ -103,18 +120,14 @@ function generate_initializesystem(sys::AbstractSystem;
 
     # 5) process parameters as initialization unknowns
     paramsubs = Dict()
-    if pmap isa SciMLBase.NullParameters
-        pmap = Dict()
-    end
-    pmap = todict(pmap)
     for p in parameters(sys)
         if is_parameter_solvable(p, pmap, defs, guesses)
             # If either of them are `missing` the parameter is an unknown
             # But if the parameter is passed a value, use that as an additional
             # equation in the system
-            _val1 = get(pmap, p, nothing)
-            _val2 = get(defs, p, nothing)
-            _val3 = get(guesses, p, nothing)
+            _val1 = get_possibly_array_fallback_singletons(pmap, p)
+            _val2 = get_possibly_array_fallback_singletons(defs, p)
+            _val3 = get_possibly_array_fallback_singletons(guesses, p)
             varp = tovar(p)
             paramsubs[p] = varp
             # Has a default of `missing`, and (either an equation using the value passed to `ODEProblem` or a guess)
@@ -139,7 +152,7 @@ function generate_initializesystem(sys::AbstractSystem;
                     error("Invalid setup: parameter $(p) has no default value, initial value, or guess")
                 end
                 # given a symbolic value to ODEProblem
-            elseif symbolic_type(_val1) != NotSymbolic()
+            elseif symbolic_type(_val1) != NotSymbolic() || is_array_of_symbolics(_val1)
                 push!(eqs_ics, varp ~ _val1)
                 push!(defs, varp => _val3)
                 # No value passed to `ODEProblem`, but a default and a guess are present
@@ -179,7 +192,8 @@ function generate_initializesystem(sys::AbstractSystem;
     end
 
     # parameters do not include ones that became initialization unknowns
-    pars = Vector{SymbolicParam}(filter(p -> !haskey(paramsubs, p), parameters(sys)))
+    pars = Vector{SymbolicParam}(filter(
+        p -> !haskey(paramsubs, p), parameters(sys; initial_parameters = true)))
     is_time_dependent(sys) && push!(pars, get_iv(sys))
 
     if is_time_dependent(sys)
@@ -193,13 +207,22 @@ function generate_initializesystem(sys::AbstractSystem;
         append!(eqs_ics, trueobs)
     end
 
-    eqs_ics = Symbolics.substitute.(eqs_ics, (paramsubs,))
     if is_time_dependent(sys)
         vars = [vars; collect(values(paramsubs))]
     else
         vars = collect(values(paramsubs))
     end
 
+    # even if `p => tovar(p)` is in `paramsubs`, `isparameter(p[1]) === true` after substitution
+    # so add scalarized versions as well
+    for k in collect(keys(paramsubs))
+        symbolic_type(k) == ArraySymbolic() || continue
+        for i in eachindex(k)
+            paramsubs[k[i]] = paramsubs[k][i]
+        end
+    end
+
+    eqs_ics = Symbolics.substitute.(eqs_ics, (paramsubs,))
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
@@ -217,21 +240,106 @@ function generate_initializesystem(sys::AbstractSystem;
         kwargs...)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Get a new symbolic variable of the same type and size as `sym`, which is a parameter.
+"""
+function get_initial_value_parameter(sym)
+    sym = default_toterm(unwrap(sym))
+    name = hasname(sym) ? getname(sym) : Symbol(sym)
+    if iscall(sym) && operation(sym) === getindex
+        name = Symbol(name, :_, join(arguments(sym)[2:end], "_"))
+    end
+    name = Symbol(name, :ₘₜₖ_₀)
+    newvar = unwrap(similar_variable(sym, name; use_gensym = false))
+    return toparam(newvar)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given `sys` and a list of observed equations `trueobs`, remove all the equations that
+directly or indirectly contain a delayed unknown of `sys`.
+"""
+function filter_delay_equations_variables!(sys::AbstractSystem, trueobs::Vector{Equation})
+    is_time_dependent(sys) || return trueobs
+    banned_vars = Set()
+    idxs_to_remove = Int[]
+    for (i, eq) in enumerate(trueobs)
+        _has_delays(sys, eq.rhs, banned_vars) || continue
+        push!(idxs_to_remove, i)
+        push!(banned_vars, eq.lhs)
+    end
+    return deleteat!(trueobs, idxs_to_remove)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Check if the expression `ex` contains a delayed unknown of `sys` or a term in
+`banned`.
+"""
+function _has_delays(sys::AbstractSystem, ex, banned)
+    ex = unwrap(ex)
+    ex in banned && return true
+    if symbolic_type(ex) == NotSymbolic()
+        if is_array_of_symbolics(ex)
+            return any(x -> _has_delays(sys, x, banned), ex)
+        end
+        return false
+    end
+    iscall(ex) || return false
+    op = operation(ex)
+    args = arguments(ex)
+    if iscalledparameter(ex)
+        return any(x -> _has_delays(sys, x, banned), args)
+    end
+    if issym(op) && length(args) == 1 && is_variable(sys, op(get_iv(sys))) &&
+       iscall(args[1]) && get_iv(sys) in vars(args[1])
+        return true
+    end
+    return any(x -> _has_delays(sys, x, banned), args)
+end
+
 struct ReconstructInitializeprob
     getter::Any
     setter::Any
 end
 
-function ReconstructInitializeprob(srcsys::AbstractSystem, dstsys::AbstractSystem)
-    syms = [unknowns(dstsys);
-            reduce(vcat, reorder_parameters(dstsys, parameters(dstsys)); init = [])]
+function ReconstructInitializeprob(
+        srcsys::AbstractSystem, dstsys::AbstractSystem)
+    syms = reduce(
+        vcat, reorder_parameters(dstsys, parameters(dstsys));
+        init = [])
     getter = getu(srcsys, syms)
-    setter = setsym_oop(dstsys, syms)
+    setter = setp_oop(dstsys, syms)
     return ReconstructInitializeprob(getter, setter)
 end
 
 function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
-    rip.setter(dstvalp, rip.getter(srcvalp))
+    newp = rip.setter(dstvalp, rip.getter(srcvalp))
+    if state_values(dstvalp) === nothing
+        return nothing, newp
+    end
+    T = eltype(state_values(srcvalp))
+    if parameter_values(dstvalp) isa MTKParameters
+        if !isempty(newp.tunable)
+            T = promote_type(eltype(newp.tunable), T)
+        end
+    elseif !isempty(newp)
+        T = promote_type(eltype(newp), T)
+    end
+    if T == eltype(state_values(dstvalp))
+        u0 = state_values(dstvalp)
+    else
+        u0 = T.(state_values(dstvalp))
+    end
+    buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Tunable(), newp)
+    if eltype(buf) != T
+        newp = repack(T.(buf))
+    end
+    return u0, newp
 end
 
 struct InitializationSystemMetadata
@@ -243,16 +351,47 @@ struct InitializationSystemMetadata
     oop_reconstruct_u0_p::Union{Nothing, ReconstructInitializeprob}
 end
 
+function get_possibly_array_fallback_singletons(varmap, p)
+    if haskey(varmap, p)
+        return varmap[p]
+    end
+    if symbolic_type(p) == ArraySymbolic()
+        is_sized_array_symbolic(p) || return nothing
+        scal = collect(p)
+        if all(x -> haskey(varmap, x), scal)
+            res = [varmap[x] for x in scal]
+            if any(x -> x === nothing, res)
+                return nothing
+            elseif any(x -> x === missing, res)
+                return missing
+            end
+            return res
+        end
+    elseif iscall(p) && operation(p) == getindex
+        arrp = arguments(p)[1]
+        val = get_possibly_array_fallback_singletons(varmap, arrp)
+        if val === nothing
+            return nothing
+        elseif val === missing
+            return missing
+        else
+            return val
+        end
+    end
+    return nothing
+end
+
 function is_parameter_solvable(p, pmap, defs, guesses)
     p = unwrap(p)
     is_variable_floatingpoint(p) || return false
-    _val1 = pmap isa AbstractDict ? get(pmap, p, nothing) : nothing
-    _val2 = get(defs, p, nothing)
-    _val3 = get(guesses, p, nothing)
+    _val1 = pmap isa AbstractDict ? get_possibly_array_fallback_singletons(pmap, p) :
+            nothing
+    _val2 = get_possibly_array_fallback_singletons(defs, p)
+    _val3 = get_possibly_array_fallback_singletons(guesses, p)
     # either (missing is a default or was passed to the ODEProblem) or (nothing was passed to
     # the ODEProblem and it has a default and a guess)
     return ((_val1 === missing || _val2 === missing) ||
-            (symbolic_type(_val1) != NotSymbolic() ||
+            (symbolic_type(_val1) != NotSymbolic() || is_array_of_symbolics(_val1) ||
              _val1 === nothing && _val2 !== nothing)) && _val3 !== nothing
 end
 
@@ -277,8 +416,13 @@ function SciMLBase.remake_initialization_data(
         else
             reconstruct_fn = ReconstructInitializeprob(sys, oldinitsys)
         end
+        # the history function doesn't matter because `reconstruct_fn` is only going to
+        # update the values of parameters, which aren't time dependent. The reason it
+        # is called is because `Initial` parameters are calculated from the corresponding
+        # state values.
+        history_fn = is_time_dependent(sys) && !is_markovian(sys) ? Returns(newu0) : nothing
         new_initu0, new_initp = reconstruct_fn(
-            ProblemState(; u = newu0, p = newp, t = t0), oldinitprob)
+            ProblemState(; u = newu0, p = newp, t = t0, h = history_fn), oldinitprob)
         if oldinitprob.f.resid_prototype === nothing
             newf = oldinitprob.f
         else
@@ -296,6 +440,7 @@ function SciMLBase.remake_initialization_data(
     ps = parameters(sys)
     u0map = to_varmap(u0, dvs)
     symbols_to_symbolics!(sys, u0map)
+    add_toterms!(u0map)
     pmap = to_varmap(p, ps)
     symbols_to_symbolics!(sys, pmap)
     guesses = Dict()
@@ -356,12 +501,39 @@ function SciMLBase.remake_initialization_data(
     filter_missing_values!(u0map)
     filter_missing_values!(pmap)
 
-    op, missing_unknowns, missing_pars = build_operating_point(
+    op, missing_unknowns, missing_pars = build_operating_point!(sys,
         u0map, pmap, defs, cmap, dvs, ps)
     kws = maybe_build_initialization_problem(
         sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns;
         use_scc, initialization_eqs, allow_incomplete = true)
     return get(kws, :initialization_data, nothing)
+end
+
+function SciMLBase.late_binding_update_u0_p(
+        prob, sys::AbstractSystem, u0, p, t0, newu0, newp)
+    u0 === missing && return newu0, newp
+    eltype(u0) <: Pair || return newu0, newp
+
+    newu0 = DiffEqBase.promote_u0(newu0, newp, t0)
+    tunables, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Tunable(), newp)
+    tunables = DiffEqBase.promote_u0(tunables, newu0, t0)
+    newp = repack(tunables)
+
+    allsyms = all_symbols(sys)
+    for (k, v) in u0
+        v === nothing && continue
+        (symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)) || continue
+        if k isa Symbol
+            k2 = symbol_to_symbolic(sys, k; allsyms)
+            # if it is returned as-is, there is no match so skip it
+            k2 === k && continue
+            k = k2
+        end
+        is_parameter(sys, Initial(k)) || continue
+        setp(sys, Initial(k))(newp, v)
+    end
+
+    return newu0, newp
 end
 
 """

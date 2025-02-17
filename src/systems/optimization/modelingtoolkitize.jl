@@ -53,7 +53,7 @@ function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem;
                 idx = parameter_index(prob, sym)
                 old_to_new[unwrap(sym)] = unwrap(p_names[idx])
             end
-            order = reorder_parameters(prob.f.sys, parameters(prob.f.sys))
+            order = reorder_parameters(prob.f.sys)
             for arr in order
                 for i in eachindex(arr)
                     arr[i] = old_to_new[arr[i]]
@@ -79,7 +79,11 @@ function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem;
 
     if DiffEqBase.isinplace(prob) && !isnothing(prob.f.cons)
         lhs = Array{Num}(undef, num_cons)
-        prob.f.cons(lhs, vars, params)
+        if p isa MTKParameters
+            prob.f.cons(lhs, vars, params...)
+        else
+            prob.f.cons(lhs, vars, params)
+        end
         cons = Union{Equation, Inequality}[]
 
         if !isnothing(prob.lcons)
@@ -108,7 +112,8 @@ function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem;
             or pass the lower and upper bounds for inequality constraints."))
         end
     elseif !isnothing(prob.f.cons)
-        cons = prob.f.cons(vars, params)
+        cons = p isa MTKParameters ? prob.f.cons(vars, params...) :
+               prob.f.cons(vars, params)
     else
         cons = []
     end

@@ -171,13 +171,12 @@ function calculate_jacobian(sys::ConstraintsSystem; sparse = false, simplify = f
 end
 
 function generate_jacobian(
-        sys::ConstraintsSystem, vs = unknowns(sys), ps = parameters(sys);
-        sparse = false, simplify = false, wrap_code = identity, kwargs...)
+        sys::ConstraintsSystem, vs = unknowns(sys), ps = parameters(
+            sys; initial_parameters = true);
+        sparse = false, simplify = false, kwargs...)
     jac = calculate_jacobian(sys, sparse = sparse, simplify = simplify)
     p = reorder_parameters(sys, ps)
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, jac; dvs = vs, ps) .∘
-                wrap_parameter_dependencies(sys, false)
-    return build_function(jac, vs, p...; wrap_code, kwargs...)
+    return build_function_wrapper(sys, jac, vs, p...; kwargs...)
 end
 
 function calculate_hessian(sys::ConstraintsSystem; sparse = false, simplify = false)
@@ -192,26 +191,20 @@ function calculate_hessian(sys::ConstraintsSystem; sparse = false, simplify = fa
 end
 
 function generate_hessian(
-        sys::ConstraintsSystem, vs = unknowns(sys), ps = parameters(sys);
-        sparse = false, simplify = false, wrap_code = identity, kwargs...)
+        sys::ConstraintsSystem, vs = unknowns(sys), ps = parameters(
+            sys; initial_parameters = true);
+        sparse = false, simplify = false, kwargs...)
     hess = calculate_hessian(sys, sparse = sparse, simplify = simplify)
     p = reorder_parameters(sys, ps)
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, hess; dvs = vs, ps) .∘
-                wrap_parameter_dependencies(sys, false)
-    return build_function(hess, vs, p...; wrap_code, kwargs...)
+    return build_function_wrapper(sys, hess, vs, p...; kwargs...)
 end
 
 function generate_function(sys::ConstraintsSystem, dvs = unknowns(sys),
-        ps = parameters(sys);
-        wrap_code = identity,
+        ps = parameters(sys; initial_parameters = true);
         kwargs...)
     lhss = generate_canonical_form_lhss(sys)
-    pre, sol_states = get_substitutions_and_solved_unknowns(sys)
     p = reorder_parameters(sys, value.(ps))
-    wrap_code = wrap_code .∘ wrap_array_vars(sys, lhss; dvs, ps) .∘
-                wrap_parameter_dependencies(sys, false)
-    func = build_function(lhss, value.(dvs), p...; postprocess_fbody = pre,
-        states = sol_states, wrap_code, kwargs...)
+    func = build_function_wrapper(sys, lhss, value.(dvs), p...; kwargs...)
 
     cstr = constraints(sys)
     lcons = fill(-Inf, length(cstr))

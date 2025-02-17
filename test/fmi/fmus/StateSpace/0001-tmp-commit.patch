@@ -1,0 +1,425 @@
+From 10ac73996a7c09772ff31ccd6e030112d3bb5c43 Mon Sep 17 00:00:00 2001
+From: Aayush Sabharwal <aayush.sabharwal@gmail.com>
+Date: Wed, 8 Jan 2025 11:04:01 +0000
+Subject: tmp commit
+
+---
+ StateSpace/FMI3.xml |  31 ++----
+ StateSpace/config.h |  18 ++--
+ StateSpace/model.c  | 230 +++++++++++++-------------------------------
+ 3 files changed, 83 insertions(+), 196 deletions(-)
+
+diff --git a/StateSpace/FMI3.xml b/StateSpace/FMI3.xml
+index 8d2e4d9..002fbab 100644
+--- a/StateSpace/FMI3.xml
++++ b/StateSpace/FMI3.xml
+@@ -33,36 +33,23 @@
+         <UInt64 name="m" valueReference="1" description="Number of inputs" causality="structuralParameter" variability="tunable" start="3" min="0" max="5"/>
+         <UInt64 name="n" valueReference="2" description="Number of states" causality="structuralParameter" variability="tunable" start="3" min="0" max="5"/>
+         <UInt64 name="r" valueReference="3" description="Number of outputs" causality="structuralParameter" variability="tunable" start="3" min="0" max="5"/>
+-        <Float64 name="A" valueReference="4" description="Matrix coefficient A" causality="parameter" variability="tunable" start="1 0 0 0 1 0 0 0 1">
+-            <Dimension valueReference="2"/>
+-            <Dimension valueReference="2"/>
++        <Float64 name="A" valueReference="4" description="coefficient A" causality="parameter" variability="tunable" start="1">
+         </Float64>
+-        <Float64 name="B" valueReference="5" description="Matrix coefficient B" causality="parameter" variability="tunable" start="1 0 0 0 1 0 0 0 1">
+-            <Dimension valueReference="2"/>
+-            <Dimension valueReference="1"/>
++        <Float64 name="B" valueReference="5" description="coefficient B" causality="parameter" variability="tunable" start="1">
+         </Float64>
+-        <Float64 name="C" valueReference="6" description="Matrix coefficient C" causality="parameter" variability="tunable" start="1 0 0 0 1 0 0 0 1">
+-            <Dimension valueReference="3"/>
+-            <Dimension valueReference="2"/>
++        <Float64 name="C" valueReference="6" description="coefficient C" causality="parameter" variability="tunable" start="1">
+         </Float64>
+-        <Float64 name="D" valueReference="7" description="Matrix coefficient D" causality="parameter" variability="tunable" start="1 0 0 0 1 0 0 0 1">
+-            <Dimension valueReference="3"/>
+-            <Dimension valueReference="1"/>
++        <Float64 name="D" valueReference="7" description="coefficient D" causality="parameter" variability="tunable" start="1">
+         </Float64>
+-        <Float64 name="x0" valueReference="8" description="Initial state vector" causality="parameter" variability="tunable" start="0 0 0">
+-            <Dimension valueReference="2"/>
++        <Float64 name="x0" valueReference="8" description="Initial state" causality="parameter" variability="tunable" start="0">
+         </Float64>
+-        <Float64 name="u" valueReference="9" description="Input vector" causality="input" start="1 2 3">
+-            <Dimension valueReference="1"/>
++        <Float64 name="u" valueReference="9" description="Input" causality="input" start="1">
+         </Float64>
+-        <Float64 name="y" valueReference="10" description="Output vector" causality="output">
+-            <Dimension valueReference="3"/>
++        <Float64 name="y" valueReference="10" description="Output" causality="output">
+         </Float64>
+-        <Float64 name="x" valueReference="11" description="State vector" causality="local">
+-            <Dimension valueReference="2"/>
++        <Float64 name="x" valueReference="11" description="State" causality="local" initial = "exact" start = "1">
+         </Float64>
+-        <Float64 name="der(x)" valueReference="12" description="Derivative of the state vector" causality="local" derivative="11">
+-            <Dimension valueReference="2"/>
++        <Float64 name="der(x)" valueReference="12" description="Derivative of the state" causality="local" derivative="11">
+         </Float64>
+     </ModelVariables>
+ 
+diff --git a/StateSpace/config.h b/StateSpace/config.h
+index 707e500..8b422e2 100644
+--- a/StateSpace/config.h
++++ b/StateSpace/config.h
+@@ -44,15 +44,15 @@ typedef struct {
+     uint64_t m;
+     uint64_t n;
+     uint64_t r;
+-    double A[M_MAX][N_MAX];
+-    double B[M_MAX][N_MAX];
+-    double C[M_MAX][N_MAX];
+-    double D[M_MAX][N_MAX];
+-    double x0[N_MAX];
+-    double u[N_MAX];
+-    double y[N_MAX];
+-    double x[N_MAX];
+-    double der_x[N_MAX];
++    double A;
++    double B;
++    double C;
++    double D;
++    double x0;
++    double u;
++    double y;
++    double x;
++    double der_x;
+ } ModelData;
+ 
+ #endif /* config_h */
+diff --git a/StateSpace/model.c b/StateSpace/model.c
+index 8a47e74..9c170d8 100644
+--- a/StateSpace/model.c
++++ b/StateSpace/model.c
+@@ -3,77 +3,29 @@
+ 
+ 
+ void setStartValues(ModelInstance *comp) {
+-
+-    M(m) = 3;
+-    M(n) = 3;
+-    M(r) = 3;
+-
+     // identity matrix
+-    for (int i = 0; i < M_MAX; i++)
+-    for (int j = 0; j < N_MAX; j++) {
+-        M(A)[i][j] = i == j ? 1 : 0;
+-        M(B)[i][j] = i == j ? 1 : 0;
+-        M(C)[i][j] = i == j ? 1 : 0;
+-        M(D)[i][j] = i == j ? 1 : 0;
+-    }
+-
+-    for (int i = 0; i < M_MAX; i++) {
+-        M(u)[i] = i + 1;
+-    }
+-
+-    for (int i = 0; i < N_MAX; i++) {
+-        M(y)[i] = 0;
+-    }
+-
+-    for (int i = 0; i < N_MAX; i++) {
+-        M(x)[i] = M(x0)[i];
+-        M(x)[i] = 0;
+-    }
+-
++    M(m) = 1;
++    M(n) = 1;
++    M(r) = 1;
++
++    M(A) = 1;
++    M(B) = 1;
++    M(C) = 1;
++    M(D) = 1;
++
++    M(u) = 1;
++    M(y) = 0;
++    M(x) = 0;
++    M(x0) = 0;
+ }
+ 
+ Status calculateValues(ModelInstance *comp) {
+-
+-    // der(x) = Ax + Bu
+-    for (size_t i = 0; i < M(n); i++) {
+-
+-        M(der_x)[i] = 0;
+-
+-        for (size_t j = 0; j < M(n); j++) {
+-            M(der_x)[i] += M(A)[i][j] * M(x)[j];
+-        }
+-    }
+-
+-    for (size_t i = 0; i < M(n); i++) {
+-
+-        for (size_t j = 0; j < M(r); j++) {
+-            M(der_x)[i] += M(B)[i][j] * M(u)[j];
+-        }
+-    }
+-
+-
+-    // y = Cx + Du
+-    for (size_t i = 0; i < M(r); i++) {
+-
+-        M(y)[i] = 0;
+-
+-        for (size_t j = 0; j < M(n); j++) {
+-            M(y)[i] += M(C)[i][j] * M(x)[j];
+-        }
+-    }
+-
+-    for (size_t i = 0; i < M(r); i++) {
+-
+-        for (size_t j = 0; j < M(m); j++) {
+-            M(y)[i] += M(D)[i][j] * M(u)[j];
+-        }
+-    }
+-
++    M(der_x) = M(A) * M(x) + M(B) * M(u);
++    M(y) = M(C) * M(x) + M(D) * M(u);
+     return OK;
+ }
+ 
+ Status getFloat64(ModelInstance* comp, ValueReference vr, double values[], size_t nValues, size_t* index) {
+-
+     calculateValues(comp);
+ 
+     switch (vr) {
+@@ -82,66 +34,40 @@ Status getFloat64(ModelInstance* comp, ValueReference vr, double values[], size_
+             values[(*index)++] = comp->time;
+             return OK;
+         case vr_A:
+-            ASSERT_NVALUES((size_t)(M(n) * M(n)));
+-            for (size_t i = 0; i < M(n); i++) {
+-                for (size_t j = 0; j < M(n); j++) {
+-                    values[(*index)++] = M(A)[i][j];
+-                }
+-            }
++            ASSERT_NVALUES(1);
++            values[(*index)++] = M(A);
+             return OK;
+         case vr_B:
+-            ASSERT_NVALUES((size_t)(M(m) * M(n)));
+-            for (size_t i = 0; i < M(m); i++) {
+-                for (size_t j = 0; j < M(n); j++) {
+-                    values[(*index)++] = M(B)[i][j];
+-                }
+-            }
++            ASSERT_NVALUES(1);
++            values[(*index)++] = M(B);
+             return OK;
+         case vr_C:
+-            ASSERT_NVALUES((size_t)(M(r) * M(n)));
+-            for (size_t i = 0; i < M(r); i++) {
+-                for (size_t j = 0; j < M(n); j++) {
+-                    values[(*index)++] = M(C)[i][j];
+-                }
+-            }
++            ASSERT_NVALUES(1);
++            values[(*index)++] = M(C);
+             return OK;
+         case vr_D:
+-            ASSERT_NVALUES((size_t)(M(r) * M(m)));
+-            for (size_t i = 0; i < M(r); i++) {
+-                for (size_t j = 0; j < M(m); j++) {
+-                    values[(*index)++] = M(D)[i][j];
+-                }
+-            }
++            ASSERT_NVALUES(1);
++            values[(*index)++] = M(D);
+             return OK;
+         case vr_x0:
+-            ASSERT_NVALUES((size_t)M(n));
+-            for (size_t i = 0; i < M(n); i++) {
+-                values[(*index)++] = M(x0)[i];
+-            }
++            ASSERT_NVALUES(1);
++            values[(*index)++] = M(x0);
+             return OK;
+         case vr_u:
+-            ASSERT_NVALUES((size_t)M(m));
+-            for (size_t i = 0; i < M(m); i++) {
+-                values[(*index)++] = M(u)[i];
+-            }
++            ASSERT_NVALUES(1);
++            values[(*index)++] = M(u);
+             return OK;
+         case vr_y:
+-            ASSERT_NVALUES((size_t)M(r));
+-            for (size_t i = 0; i < M(r); i++) {
+-                values[(*index)++] = M(y)[i];
+-            }
++            ASSERT_NVALUES(1);
++            values[(*index)++] = M(y);
+             return OK;
+         case vr_x:
+-            ASSERT_NVALUES((size_t)M(n));
+-            for (size_t i = 0; i < M(n); i++) {
+-                values[(*index)++] = M(x)[i];
+-            }
++            ASSERT_NVALUES(1);
++            values[(*index)++] = M(x);
+             return OK;
+         case vr_der_x:
+-            ASSERT_NVALUES((size_t)M(n));
+-            for (size_t i = 0; i < M(n); i++) {
+-                values[(*index)++] = M(der_x)[i];
+-            }
++            ASSERT_NVALUES(1);
++            values[(*index)++] = M(der_x);
+             return OK;
+         default:
+             logError(comp, "Get Float64 is not allowed for value reference %u.", vr);
+@@ -153,58 +79,40 @@ Status setFloat64(ModelInstance* comp, ValueReference vr, const double values[],
+ 
+     switch (vr) {
+     case vr_A:
+-        ASSERT_NVALUES((size_t)(M(n) * M(n)));
+-        for (size_t i = 0; i < M(n); i++) {
+-            for (size_t j = 0; j < M(n); j++) {
+-                M(A)[i][j] = values[(*index)++];
+-            }
+-        }
++        ASSERT_NVALUES(1);
++        M(A) = values[(*index)++];
+         break;
+     case vr_B:
+-        ASSERT_NVALUES((size_t)(M(n) * M(m)));
+-        for (size_t i = 0; i < M(n); i++) {
+-            for (size_t j = 0; j < M(m); j++) {
+-                M(B)[i][j] = values[(*index)++];
+-            }
+-        }
++        ASSERT_NVALUES(1);
++        M(B) = values[(*index)++];
+         break;
+     case vr_C:
+-        ASSERT_NVALUES((size_t)(M(r) * M(n)));
+-        for (size_t i = 0; i < M(r); i++) {
+-            for (size_t j = 0; j < M(n); j++) {
+-                M(C)[i][j] = values[(*index)++];
+-            }
+-        }
++        ASSERT_NVALUES(1);
++        M(C) = values[(*index)++];
+         break;
+     case vr_D:
+-        ASSERT_NVALUES((size_t)(M(r) * M(m)));
+-        for (size_t i = 0; i < M(r); i++) {
+-            for (size_t j = 0; j < M(m); j++) {
+-                M(D)[i][j] = values[(*index)++];
+-            }
+-        }
++        ASSERT_NVALUES(1);
++        M(D) = values[(*index)++];
+         break;
+     case vr_x0:
+-        ASSERT_NVALUES((size_t)M(n));
+-        for (size_t i = 0; i < M(n); i++) {
+-            M(x0)[i] = values[(*index)++];
+-        }
++        ASSERT_NVALUES(1);
++        M(x0) = values[(*index)++];
+         break;
+     case vr_u:
+-        ASSERT_NVALUES((size_t)M(m));
+-        for (size_t i = 0; i < M(m); i++) {
+-            M(u)[i] = values[(*index)++];
+-        }
++        ASSERT_NVALUES(1);
++        M(u) = values[(*index)++];
++        break;
++    case vr_y:
++        ASSERT_NVALUES(1);
++        M(y) = values[(*index)++];
+         break;
+     case vr_x:
+-        if (comp->state != ContinuousTimeMode && comp->state != EventMode) {
+-            logError(comp, "Variable \"x\" can only be set in Continuous Time Mode and Event Mode.");
+-            return Error;
+-        }
+-        ASSERT_NVALUES((size_t)M(n));
+-        for (size_t i = 0; i < M(n); i++) {
+-            M(x)[i] = values[(*index)++];
+-        }
++        ASSERT_NVALUES(1);
++        M(x) = values[(*index)++];
++        break;
++    case vr_der_x:
++        ASSERT_NVALUES(1);
++        M(der_x) = values[(*index)++];
+         break;
+     default:
+         logError(comp, "Set Float64 is not allowed for value reference %u.", vr);
+@@ -217,8 +125,6 @@ Status setFloat64(ModelInstance* comp, ValueReference vr, const double values[],
+ }
+ 
+ Status getUInt64(ModelInstance* comp, ValueReference vr, uint64_t values[], size_t nValues, size_t* index) {
+-
+-
+     switch (vr) {
+         case vr_m:
+             ASSERT_NVALUES(1);
+@@ -289,49 +195,43 @@ Status eventUpdate(ModelInstance *comp) {
+ }
+ 
+ size_t getNumberOfContinuousStates(ModelInstance* comp) {
+-    return (size_t)M(n);
++    return M(n) == 1 ? M(n) : 1;
+ }
+ 
+ Status getContinuousStates(ModelInstance* comp, double x[], size_t nx) {
+ 
+-    if (nx != M(n)) {
+-        logError(comp, "Expected nx=%zu but was %zu.", M(n), nx);
++    if (nx != 1) {
++        logError(comp, "Expected nx=%zu but was %zu.", 1, nx);
+         return Error;
+     }
+ 
+-    for (size_t i = 0; i < M(n); i++) {
+-        x[i] = M(x)[i];
+-    }
++    x[0] = M(x);
+ 
+     return OK;
+ }
+ 
+ Status setContinuousStates(ModelInstance* comp, const double x[], size_t nx) {
+ 
+-    if (nx != M(n)) {
+-        logError(comp, "Expected nx=%zu but was %zu.", M(n), nx);
++    if (nx != 1) {
++        logError(comp, "Expected nx=%zu but was %zu.", 1, nx);
+         return Error;
+     }
+ 
+-    for (size_t i = 0; i < M(n); i++) {
+-        M(x)[i] = x[i];
+-    }
++    M(x) = x[0];
+ 
+     return OK;
+ }
+ 
+ Status getDerivatives(ModelInstance* comp, double dx[], size_t nx) {
+ 
+-    if (nx != M(n)) {
+-        logError(comp, "Expected nx=%zu but was %zu.", M(n), nx);
++    if (nx != 1) {
++        logError(comp, "Expected nx=%zu but was %zu.", 1, nx);
+         return Error;
+     }
+ 
+     calculateValues(comp);
+ 
+-    for (size_t i = 0; i < M(n); i++) {
+-        dx[i] = M(der_x)[i];
+-    }
++    dx[0] = M(der_x);
+ 
+     return OK;
+ }
+-- 
+2.34.1
+

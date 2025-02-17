@@ -45,7 +45,7 @@ using Compat
 using AbstractTrees
 using DiffEqBase, SciMLBase, ForwardDiff
 using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap, TimeDomain,
-                 PeriodicClock, Clock, SolverStepClock, Continuous
+                 PeriodicClock, Clock, SolverStepClock, Continuous, OverrideInit, NoInit
 using Distributed
 import JuliaFormatter
 using MLStyle
@@ -56,6 +56,7 @@ using RecursiveArrayTools
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
 import BlockArrays: BlockArray, BlockedArray, Block, blocksize, blocksizes, blockpush!,
                     undef_blocks, blocks
+using OffsetArrays: Origin
 import CommonSolve
 import EnumX
 
@@ -150,7 +151,9 @@ include("systems/connectors.jl")
 include("systems/analysis_points.jl")
 include("systems/imperative_affect.jl")
 include("systems/callbacks.jl")
+include("systems/codegen_utils.jl")
 include("systems/problem_utils.jl")
+include("linearization.jl")
 
 include("systems/nonlinear/nonlinearsystem.jl")
 include("systems/nonlinear/homotopy_continuation.jl")
@@ -246,7 +249,9 @@ export initial_state, transition, activeState, entry, ticksInState, timeInState
 export @component, @mtkmodel, @mtkbuild
 export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbance,
        istunable, getdist, hasdist,
-       tunable_parameters, isirreducible, getdescription, hasdescription
+       tunable_parameters, isirreducible, getdescription, hasdescription,
+       hasunit, getunit, hasconnect, getconnect,
+       hasmisc, getmisc, state_priority
 export ode_order_lowering, dae_order_lowering, liouville_transform
 export PDESystem
 export Differential, expand_derivatives, @derivatives
@@ -255,7 +260,8 @@ export Term, Sym
 export SymScope, LocalScope, ParentScope, DelayParentScope, GlobalScope
 export independent_variable, equations, controls, observed, full_equations
 export initialization_equations, guesses, defaults, parameter_dependencies, hierarchy
-export structural_simplify, expand_connections, linearize, linearization_function
+export structural_simplify, expand_connections, linearize, linearization_function,
+       LinearizationProblem
 
 export calculate_jacobian, generate_jacobian, generate_function, generate_custom_function
 export calculate_control_jacobian, generate_control_jacobian
@@ -275,7 +281,7 @@ export toexpr, get_variables
 export simplify, substitute
 export build_function
 export modelingtoolkitize
-export generate_initializesystem
+export generate_initializesystem, Initial
 
 export alg_equations, diff_equations, has_alg_equations, has_diff_equations
 export get_alg_eqs, get_diff_eqs, has_alg_eqs, has_diff_eqs
@@ -297,4 +303,6 @@ export HomotopyContinuationProblem
 export AnalysisPoint, get_sensitivity_function, get_comp_sensitivity_function,
        get_looptransfer_function, get_sensitivity, get_comp_sensitivity, get_looptransfer,
        open_loop
+function FMIComponent end
+
 end # module

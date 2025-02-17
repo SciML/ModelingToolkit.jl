@@ -109,11 +109,13 @@ function _model_macro(mod, name, expr, isconnector)
     gui_metadata = isassigned(icon) > 0 ? GUIMetadata(GlobalRef(mod, name), icon[]) :
                    GUIMetadata(GlobalRef(mod, name))
 
+    description = get(dict, :description, "")
+
     @inline pop_structure_dict!.(
         Ref(dict), [:constants, :defaults, :kwargs, :structural_parameters])
 
     sys = :($ODESystem($(flatten_equations)(equations), $iv, variables, parameters;
-        name, systems, gui_metadata = $gui_metadata, defaults))
+        name, description = $description, systems, gui_metadata = $gui_metadata, defaults))
 
     if length(ext) == 0
         push!(exprs.args, :(var"#___sys___" = $sys))
@@ -598,7 +600,9 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps, c_evts, d_evts,
         dict, mod, arg, kwargs, where_types)
     mname = arg.args[1]
     body = arg.args[end]
-    if mname == Symbol("@components")
+    if mname == Symbol("@description")
+        parse_description!(body, dict)
+    elseif mname == Symbol("@components")
         parse_components!(exprs, comps, dict, body, kwargs)
     elseif mname == Symbol("@extend")
         parse_extend!(exprs, ext, dict, mod, body, kwargs)
@@ -1154,6 +1158,14 @@ end
 
 function parse_icon!(body::Symbol, dict, icon, mod)
     parse_icon!(getfield(mod, body), dict, icon, mod)
+end
+
+function parse_description!(body, dict)
+    if body isa String
+        dict[:description] = body
+    else
+        error("Invalid description string $body")
+    end
 end
 
 ### Parsing Components:

@@ -62,9 +62,9 @@ function modelingtoolkitize(
         fill!(rhs, 0)
         if prob.f isa ODEFunction &&
            prob.f.f isa FunctionWrappersWrappers.FunctionWrappersWrapper
-            prob.f.f.fw[1].obj[](rhs, vars, params, t)
+            prob.f.f.fw[1].obj[](rhs, vars, p isa MTKParameters ? (params,) : params, t)
         else
-            prob.f(rhs, vars, params, t)
+            prob.f(rhs, vars, p isa MTKParameters ? (params,) : params, t)
         end
     else
         rhs = prob.f(vars, params, t)
@@ -93,6 +93,8 @@ function modelingtoolkitize(
     else
         Dict()
     end
+    filter!(x -> !iscall(x) || !(operation(x) isa Initial), params)
+    filter!(x -> !iscall(x[1]) || !(operation(x[1]) isa Initial), default_p)
     de = ODESystem(eqs, t, sts, params,
         defaults = merge(default_u0, default_p);
         name = gensym(:MTKizedODE),
@@ -207,17 +209,17 @@ function define_params(p::MTKParameters, names = nothing)
             for _ in buf
                 push!(
                     ps,
-                    if names === nothing
-                        toparam(variable(:α, i))
-                    else
-                        toparam(variable(names[i]))
-                    end
+                    toparam(variable(:α, i))
                 )
             end
         end
         return identity.(ps)
     else
-        return collect(values(names))
+        new_p = as_any_buffer(p)
+        for (k, v) in names
+            new_p[k] = v
+        end
+        return reduce(vcat, new_p; init = [])
     end
 end
 
@@ -253,14 +255,14 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem; kwargs...)
     if DiffEqBase.isinplace(prob)
         lhs = similar(vars, Any)
 
-        prob.f(lhs, vars, params, t)
+        prob.f(lhs, vars, p isa MTKParameters ? (params,) : params, t)
 
         if DiffEqBase.is_diagonal_noise(prob)
             neqs = similar(vars, Any)
-            prob.g(neqs, vars, params, t)
+            prob.g(neqs, vars, p isa MTKParameters ? (params,) : params, t)
         else
             neqs = similar(vars, Any, size(prob.noise_rate_prototype))
-            prob.g(neqs, vars, params, t)
+            prob.g(neqs, vars, p isa MTKParameters ? (params,) : params, t)
         end
     else
         lhs = prob.f(vars, params, t)

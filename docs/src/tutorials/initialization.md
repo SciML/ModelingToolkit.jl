@@ -14,8 +14,10 @@ principles of initialization of DAE systems. Take a DAE written in semi-explicit
 form:
 
 ```math
-x' = f(x,y,t)\\
-0 = g(x,y,t)
+\begin{aligned}
+    x^\prime &= f(x,y,t) \\
+    0 &= g(x,y,t)
+\end{aligned}
 ```
 
 where ``x`` are the differential variables and ``y`` are the algebraic variables.
@@ -201,6 +203,73 @@ long enough you will see that `λ = 0` is required for this equation, but since 
     problem constructor. Additionally, any warning about not being fully determined can
     be suppressed via passing `warn_initialize_determined = false`.
 
+## Constant constraints in initialization
+
+Consider the pendulum system again:
+
+```@repl init
+equations(pend)
+observed(pend)
+```
+
+Suppose we want to solve the same system with multiple different initial
+y-velocities from a given position.
+
+```@example init
+prob = ODEProblem(
+    pend, [x => 1, D(y) => 0], (0.0, 1.5), [g => 1], guesses = [λ => 0, y => 1, x => 1])
+sol1 = solve(prob, Rodas5P())
+```
+
+```@example init
+sol1[D(y), 1]
+```
+
+Repeatedly re-creating the `ODEProblem` with different values of `D(y)` and `x` or
+repeatedly calling `remake` is slow. Instead, for any `variable => constant` constraint
+in the `ODEProblem` initialization (whether provided to the `ODEProblem` constructor or
+a default value) we can update the `constant` value. ModelingToolkit refers to these
+values using the `Initial` operator. For example:
+
+```@example init
+prob.ps[[Initial(x), Initial(D(y))]]
+```
+
+To solve with a different starting y-velocity, we can simply do
+
+```@example init
+prob.ps[Initial(D(y))] = -0.1
+sol2 = solve(prob, Rodas5P())
+```
+
+```@example init
+sol2[D(y), 1]
+```
+
+Note that this _only_ applies for constant constraints for the current ODEProblem.
+For example, `D(x)` does not have a constant constraint - it is solved for by
+initialization. Thus, mutating `Initial(D(x))` does not have any effect:
+
+```@repl init
+sol2[D(x), 1]
+prob.ps[Initial(D(x))] = 1.0
+sol3 = solve(prob, Rodas5P())
+sol3[D(x), 1]
+```
+
+To enforce this constraint, we would have to `remake` the problem (or construct a new one).
+
+```@repl init
+prob2 = remake(prob; u0 = [y => 0.0, D(x) => 0.0, x => nothing, D(y) => nothing]);
+sol4 = solve(prob2, Rodas5P())
+sol4[D(x), 1]
+```
+
+Note the need to provide `x => nothing, D(y) => nothing` to override the previously
+provided initial conditions. Since `remake` is a partial update, the constraints provided
+to it are merged with the ones already present in the problem. Existing constraints can be
+removed by providing a value of `nothing`.
+
 ## Initialization of parameters
 
 Parameters may also be treated as unknowns in the initialization system. Doing so works
@@ -228,6 +297,9 @@ become unknowns.
 constraints provided to it. The new values will be combined with the original
 variable-value mapping provided to `ODEProblem` and used to construct the initialization
 problem.
+
+The variable on the left hand side of all parameter dependencies also has an `Initial`
+variant, which is used if a constant constraint is provided for the variable.
 
 ### Parameter initialization by example
 

@@ -27,93 +27,40 @@ the default behavior).
 """
 function MTKParameters(
         sys::AbstractSystem, p, u0 = Dict(); tofloat = false, use_union = false,
-        t0 = nothing)
+        t0 = nothing, substitution_limit = 1000)
     ic = if has_index_cache(sys) && get_index_cache(sys) !== nothing
         get_index_cache(sys)
     else
         error("Cannot create MTKParameters if system does not have index_cache")
     end
+    all_ps = Set(unwrap.(parameters(sys; initial_parameters = true)))
+    union!(all_ps, default_toterm.(unwrap.(parameters(sys; initial_parameters = true))))
 
-    all_ps = Set(unwrap.(parameters(sys)))
-    union!(all_ps, default_toterm.(unwrap.(parameters(sys))))
-    if p isa Vector && !(eltype(p) <: Pair) && !isempty(p)
-        ps = parameters(sys)
-        length(p) == length(ps) || error("The number of parameter values is not equal to the number of parameters.")
-        p = ps .=> p
-    end
-    if p isa SciMLBase.NullParameters || isempty(p)
-        p = Dict()
-    end
-    p = todict(p)
+    dvs = unknowns(sys)
+    ps = parameters(sys; initial_parameters = true)
+    u0 = to_varmap(u0, dvs)
+    symbols_to_symbolics!(sys, u0)
+    p = to_varmap(p, ps)
+    symbols_to_symbolics!(sys, p)
+    defs = add_toterms(recursive_unwrap(defaults(sys)))
+    cmap, cs = get_cmap(sys)
 
-    defs = Dict(default_toterm(unwrap(k)) => v for (k, v) in defaults(sys))
-    if eltype(u0) <: Pair
-        u0 = todict(u0)
-    elseif u0 isa AbstractArray && !isempty(u0)
-        u0 = Dict(unknowns(sys) .=> vec(u0))
-    elseif u0 === nothing || isempty(u0)
-        u0 = Dict()
-    end
-    defs = merge(defs, u0)
-    defs = merge(Dict(eq.lhs => eq.rhs for eq in observed(sys)), defs)
-    bigdefs = merge(defs, p)
+    is_time_dependent(sys) && add_observed!(sys, u0)
+    add_parameter_dependencies!(sys, p)
+
+    op, missing_unknowns, missing_pars = build_operating_point!(sys,
+        u0, p, defs, cmap, dvs, ps)
+
     if t0 !== nothing
-        bigdefs[get_iv(sys)] = t0
-    end
-    p = Dict()
-    missing_params = Set()
-    pdeps = has_parameter_dependencies(sys) ? parameter_dependencies(sys) : []
-
-    for sym in all_ps
-        ttsym = default_toterm(sym)
-        isarr = iscall(sym) && operation(sym) === getindex
-        arrparent = isarr ? arguments(sym)[1] : nothing
-        ttarrparent = isarr ? default_toterm(arrparent) : nothing
-        pname = hasname(sym) ? getname(sym) : nothing
-        ttpname = hasname(ttsym) ? getname(ttsym) : nothing
-        p[sym] = p[ttsym] = if haskey(bigdefs, sym)
-            bigdefs[sym]
-        elseif haskey(bigdefs, ttsym)
-            bigdefs[ttsym]
-        elseif haskey(bigdefs, pname)
-            isarr ? bigdefs[pname][arguments(sym)[2:end]...] : bigdefs[pname]
-        elseif haskey(bigdefs, ttpname)
-            isarr ? bigdefs[ttpname][arguments(sym)[2:end]...] : bigdefs[pname]
-        elseif isarr && haskey(bigdefs, arrparent)
-            bigdefs[arrparent][arguments(sym)[2:end]...]
-        elseif isarr && haskey(bigdefs, ttarrparent)
-            bigdefs[ttarrparent][arguments(sym)[2:end]...]
-        end
-        if get(p, sym, nothing) === nothing
-            push!(missing_params, sym)
-            continue
-        end
-        # We may encounter the `ttsym` version first, add it to `missing_params`
-        # then encounter the "normal" version of a parameter or vice versa
-        # Remove the old one in `missing_params` just in case
-        delete!(missing_params, sym)
-        delete!(missing_params, ttsym)
+        op[get_iv(sys)] = t0
     end
 
-    if !isempty(pdeps)
-        for eq in pdeps
-            sym = eq.lhs
-            expr = eq.rhs
-            sym = unwrap(sym)
-            ttsym = default_toterm(sym)
-            delete!(missing_params, sym)
-            delete!(missing_params, ttsym)
-            p[sym] = p[ttsym] = expr
-        end
-    end
+    isempty(missing_pars) || throw(MissingParametersError(collect(missing_pars)))
+    evaluate_varmap!(op, ps; limit = substitution_limit)
 
-    isempty(missing_params) || throw(MissingParametersError(collect(missing_params)))
-    p = Dict(unwrap(k) => (bigdefs[unwrap(k)] = fixpoint_sub(v, bigdefs)) for (k, v) in p)
-    for (sym, _) in p
-        if iscall(sym) && operation(sym) === getindex &&
-           first(arguments(sym)) in all_ps
-            error("Scalarized parameter values ($sym) are not supported. Instead of `[p[1] => 1.0, p[2] => 2.0]` use `[p => [1.0, 2.0]]`")
-        end
+    p = op
+    filter!(p) do kvp
+        kvp[1] in all_ps
     end
 
     tunable_buffer = Vector{ic.tunable_buffer_size.type}(
@@ -512,10 +459,12 @@ function _remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true
     @set! newbuf.nonnumeric = Tuple(similar(buf, Any) for buf in newbuf.nonnumeric)
 
     function handle_parameter(ic, sym, idx, val)
-        if sym === nothing
-            validate_parameter_type(ic, idx, val)
-        else
-            validate_parameter_type(ic, sym, idx, val)
+        if validate
+            if sym === nothing
+                validate_parameter_type(ic, idx, val)
+            else
+                validate_parameter_type(ic, sym, idx, val)
+            end
         end
         # `ParameterIndex(idx)` turns off size validation since it relies on there
         # being an existing value
@@ -587,6 +536,15 @@ function _remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true
     @set! newbuf.nonnumeric = narrow_buffer_type_and_fallback_undefs.(
         oldbuf.nonnumeric, newbuf.nonnumeric)
     return newbuf
+end
+
+function as_any_buffer(p::MTKParameters)
+    @set! p.tunable = similar(p.tunable, Any)
+    @set! p.discrete = Tuple(similar(buf, Any) for buf in p.discrete)
+    @set! p.constant = Tuple(similar(buf, Any) for buf in p.constant)
+    @set! p.nonnumeric = Tuple(similar(buf, Any) for buf in p.nonnumeric)
+    @set! p.caches = Tuple(similar(buf, Any) for buf in p.caches)
+    return p
 end
 
 struct NestedGetIndex{T}

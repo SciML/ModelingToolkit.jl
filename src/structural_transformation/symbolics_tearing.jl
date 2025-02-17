@@ -84,7 +84,7 @@ function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int; kwargs...)
 end
 
 function tearing_sub(expr, dict, s)
-    expr = Symbolics.fixpoint_sub(expr, dict)
+    expr = Symbolics.fixpoint_sub(expr, dict; operator = ModelingToolkit.Initial)
     s ? simplify(expr) : expr
 end
 
@@ -593,7 +593,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
     @set! sys.unknowns = unknowns
 
     obs, subeqs, deps = cse_and_array_hacks(
-        obs, subeqs, unknowns, neweqs; cse = cse_hack, array = array_hack)
+        sys, obs, subeqs, unknowns, neweqs; cse = cse_hack, array = array_hack)
 
     @set! sys.eqs = neweqs
     @set! sys.observed = obs
@@ -627,7 +627,7 @@ if all `p[i]` are present and the unscalarized form is used in any equation (obs
 not) we first count the number of times the scalarized form of each observed variable
 occurs in observed equations (and unknowns if it's split).
 """
-function cse_and_array_hacks(obs, subeqs, unknowns, neweqs; cse = true, array = true)
+function cse_and_array_hacks(sys, obs, subeqs, unknowns, neweqs; cse = true, array = true)
     # HACK 1
     # mapping of rhs to temporary CSE variable
     # `f(...) => tmpvar` in above example
@@ -696,6 +696,7 @@ function cse_and_array_hacks(obs, subeqs, unknowns, neweqs; cse = true, array = 
                     tempvar; T = Symbolics.symtype(rhs_arr)))
                 tempvar = setmetadata(
                     tempvar, Symbolics.ArrayShapeCtx, Symbolics.shape(rhs_arr))
+                vars!(all_vars, rhs_arr)
                 tempeq = tempvar ~ rhs_arr
                 rhs_to_tempvar[rhs_arr] = tempvar
                 push!(obs, tempeq)
@@ -718,11 +719,15 @@ function cse_and_array_hacks(obs, subeqs, unknowns, neweqs; cse = true, array = 
         Symbolics.shape(sym) != Symbolics.Unknown() || continue
         arg1 = arguments(sym)[1]
         cnt = get(arr_obs_occurrences, arg1, 0)
-        cnt == 0 && continue
         arr_obs_occurrences[arg1] = cnt + 1
     end
     for eq in neweqs
         vars!(all_vars, eq.rhs)
+    end
+
+    # also count unscalarized variables used in callbacks
+    for ev in Iterators.flatten((continuous_events(sys), discrete_events(sys)))
+        vars!(all_vars, ev)
     end
     obs_arr_eqs = Equation[]
     for (arrvar, cnt) in arr_obs_occurrences
@@ -737,7 +742,9 @@ function cse_and_array_hacks(obs, subeqs, unknowns, neweqs; cse = true, array = 
         # try to `create_array(OffsetArray{...}, ...)` which errors.
         # `term(Origin(firstind), scal)` doesn't retain the `symtype` and `size`
         # of `scal`.
-        push!(obs_arr_eqs, arrvar ~ change_origin(Origin(firstind), scal))
+        rhs = scal
+        rhs = change_origin(firstind, rhs)
+        push!(obs_arr_eqs, arrvar ~ rhs)
     end
     append!(obs, obs_arr_eqs)
     append!(subeqs, obs_arr_eqs)
@@ -764,10 +771,13 @@ getindex_wrapper(x, i) = x[i...]
 
 # PART OF HACK 2
 function change_origin(origin, arr)
-    return origin(arr)
+    if all(isone, Tuple(origin))
+        return arr
+    end
+    return Origin(origin)(arr)
 end
 
-@register_array_symbolic change_origin(origin::Origin, arr::AbstractArray) begin
+@register_array_symbolic change_origin(origin::Any, arr::AbstractArray) begin
     size = size(arr)
     eltype = eltype(arr)
     ndims = ndims(arr)

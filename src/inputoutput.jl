@@ -211,7 +211,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     sys, _ = io_preprocessing(sys, inputs, []; simplify, kwargs...)
 
     dvs = unknowns(sys)
-    ps = parameters(sys)
+    ps = parameters(sys; initial_parameters = true)
     ps = setdiff(ps, inputs)
     if disturbance_inputs !== nothing
         # remove from inputs since we do not want them as actual inputs to the dynamics
@@ -234,33 +234,23 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
            [eq.rhs for eq in eqs]
 
     # TODO: add an optional check on the ordering of observed equations
-    u = map(x -> time_varying_as_func(value(x), sys), dvs)
-    p = map(x -> time_varying_as_func(value(x), sys), ps)
-    p = reorder_parameters(sys, p)
+    p = reorder_parameters(sys, ps)
     t = get_iv(sys)
 
     # pre = has_difference ? (ex -> ex) : get_postprocess_fbody(sys)
     if disturbance_argument
-        args = (u, inputs, p..., t, disturbance_inputs)
+        args = (dvs, inputs, p..., t, disturbance_inputs)
     else
-        args = (u, inputs, p..., t)
+        args = (dvs, inputs, p..., t)
     end
     if implicit_dae
         ddvs = map(Differential(get_iv(sys)), dvs)
         args = (ddvs, args...)
     end
-    process = get_postprocess_fbody(sys)
-    wrapped_arrays_vars = disturbance_argument ?
-                          wrap_array_vars(
-        sys, rhss; dvs, ps, inputs, extra_args = (disturbance_inputs,)) :
-                          wrap_array_vars(sys, rhss; dvs, ps, inputs)
-    f = build_function(rhss, args...; postprocess_fbody = process,
-        expression = Val{true}, wrap_code = wrap_mtkparameters(
-            sys, false, 3, Int(disturbance_argument) + 1) .∘
-                                            wrapped_arrays_vars .∘
-                                            wrap_parameter_dependencies(sys, false),
-        kwargs...)
+    f = build_function_wrapper(sys, rhss, args...; p_start = 3 + implicit_dae,
+        p_end = length(p) + 2 + implicit_dae)
     f = eval_or_rgf.(f; eval_expression, eval_module)
+    ps = setdiff(parameters(sys), inputs, disturbance_inputs)
     (; f, dvs, ps, io_sys = sys)
 end
 

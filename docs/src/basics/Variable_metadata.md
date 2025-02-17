@@ -54,6 +54,11 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @variables i(t) [connect = Flow]
 @variables k(t) [connect = Stream]
+hasconnect(i)
+```
+
+```@example connect
+getconnect(k)
 ```
 
 ## Input or output
@@ -177,8 +182,46 @@ A variable can be marked `irreducible` to prevent it from being moved to an
 `observed` state. This forces the variable to be computed during solving so that
 it can be accessed in [callbacks](@ref events)
 
-```julia
-@variable important_value [irreducible = true]
+```@example metadata
+@variables important_value [irreducible = true]
+isirreducible(important_value)
+```
+
+## State Priority
+
+When a model is structurally simplified, the algorithm will try to ensure that the variables with higher state priority become states of the system. A variable's state priority is a number set using the `state_priority` metadata.
+
+```@example metadata
+@variables important_dof [state_priority = 10] unimportant_dof [state_priority = -2]
+state_priority(important_dof)
+```
+
+## Units
+
+Units for variables can be designated using symbolic metadata. For more information, please see the [model validation and units](@ref units) section of the docs. Note that `getunit` is not equivalent to `get_unit` - the former is a metadata getter for individual variables (and is provided so the same interface function for `unit` exists like other metadata), while the latter is used to handle more general symbolic expressions.
+
+```@example metadata
+using DynamicQuantities
+@variables speed [unit = u"m/s"]
+hasunit(speed)
+```
+
+```@example metadata
+getunit(speed)
+```
+
+## Miscellaneous metadata
+
+User-defined metadata can be added using the `misc` metadata. This can be queried
+using the `hasmisc` and `getmisc` functions.
+
+```@example metadata
+@variables u [misc = :conserved_parameter] y [misc = [2, 4, 6]]
+hasmisc(u)
+```
+
+```@example metadata
+getmisc(y)
 ```
 
 ## Additional functions

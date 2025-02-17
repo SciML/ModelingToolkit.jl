@@ -77,6 +77,13 @@ function has_functional_affect(cb)
     (affects(cb) isa FunctionalAffect || affects(cb) isa ImperativeAffect)
 end
 
+function vars!(vars, aff::FunctionalAffect; op = Differential)
+    for var in Iterators.flatten((unknowns(aff), parameters(aff), discretes(aff)))
+        vars!(vars, var)
+    end
+    return vars
+end
+
 #################################### continuous events #####################################
 
 const NULL_AFFECT = Equation[]
@@ -333,6 +340,22 @@ function continuous_events(sys::AbstractSystem)
     filter(!isempty, cbs)
 end
 
+function vars!(vars, cb::SymbolicContinuousCallback; op = Differential)
+    for eq in equations(cb)
+        vars!(vars, eq; op)
+    end
+    for aff in (affects(cb), affect_negs(cb), initialize_affects(cb), finalize_affects(cb))
+        if aff isa Vector{Equation}
+            for eq in aff
+                vars!(vars, eq; op)
+            end
+        elseif aff !== nothing
+            vars!(vars, aff; op)
+        end
+    end
+    return vars
+end
+
 #################################### discrete events #####################################
 
 struct SymbolicDiscreteCallback
@@ -469,75 +492,46 @@ function discrete_events(sys::AbstractSystem)
     cbs
 end
 
+function vars!(vars, cb::SymbolicDiscreteCallback; op = Differential)
+    if symbolic_type(cb.condition) == NotSymbolic
+        if cb.condition isa AbstractArray
+            for eq in cb.condition
+                vars!(vars, eq; op)
+            end
+        end
+    else
+        vars!(vars, cb.condition; op)
+    end
+    for aff in (cb.affects, cb.initialize, cb.finalize)
+        if aff isa Vector{Equation}
+            for eq in aff
+                vars!(vars, eq; op)
+            end
+        elseif aff !== nothing
+            vars!(vars, aff; op)
+        end
+    end
+    return vars
+end
+
 ################################# compilation functions ####################################
 
 # handles ensuring that affect! functions work with integrator arguments
 function add_integrator_header(
         sys::AbstractSystem, integrator = gensym(:MTKIntegrator), out = :u)
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        function (expr)
-            p = gensym(:p)
-            Func(
-                [
-                    DestructuredArgs([expr.args[1], p, expr.args[end]],
-                    integrator, inds = [:u, :p, :t])
-                ],
-                [],
-                Let(
-                    [DestructuredArgs([arg.name for arg in expr.args[2:(end - 1)]], p),
-                        expr.args[2:(end - 1)]...],
-                    expr.body,
-                    false)
-            )
-        end,
-        function (expr)
-            p = gensym(:p)
-            Func(
-                [
-                    DestructuredArgs([expr.args[1], expr.args[2], p, expr.args[end]],
-                    integrator, inds = [out, :u, :p, :t])
-                ],
-                [],
-                Let(
-                    [DestructuredArgs([arg.name for arg in expr.args[3:(end - 1)]], p),
-                        expr.args[3:(end - 1)]...],
-                    expr.body,
-                    false)
-            )
-        end
-    else
-        expr -> Func([DestructuredArgs(expr.args, integrator, inds = [:u, :p, :t])], [],
-            expr.body),
-        expr -> Func(
-            [DestructuredArgs(expr.args, integrator, inds = [out, :u, :p, :t])], [],
-            expr.body)
-    end
+    expr -> Func([DestructuredArgs(expr.args, integrator, inds = [:u, :p, :t])], [],
+        expr.body),
+    expr -> Func(
+        [DestructuredArgs(expr.args, integrator, inds = [out, :u, :p, :t])], [],
+        expr.body)
 end
 
 function condition_header(sys::AbstractSystem, integrator = gensym(:MTKIntegrator))
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        function (expr)
-            p = gensym(:p)
-            res = Func(
-                [expr.args[1], expr.args[2],
-                    DestructuredArgs([p], integrator, inds = [:p])],
-                [],
-                Let(
-                    [
-                        DestructuredArgs([arg.name for arg in expr.args[3:end]], p),
-                        expr.args[3:end]...
-                    ], expr.body, false
-                )
-            )
-            return res
-        end
-    else
-        expr -> Func(
-            [expr.args[1], expr.args[2],
-                DestructuredArgs(expr.args[3:end], integrator, inds = [:p])],
-            [],
-            expr.body)
-    end
+    expr -> Func(
+        [expr.args[1], expr.args[2],
+            DestructuredArgs(expr.args[3:end], integrator, inds = [:p])],
+        [],
+        expr.body)
 end
 
 function callback_save_header(sys::AbstractSystem, cb)
@@ -583,11 +577,10 @@ function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
         cmap = map(x -> x => getdefault(x), cs)
         condit = substitute(condit, cmap)
     end
-    expr = build_function(
+    expr = build_function_wrapper(sys,
         condit, u, t, p...; expression = Val{true},
-        wrap_code = condition_header(sys) .∘
-                    wrap_array_vars(sys, condit; dvs, ps, inputs = true) .∘
-                    wrap_parameter_dependencies(sys, !(condit isa AbstractArray)),
+        p_start = 3, p_end = length(p) + 2,
+        wrap_code = condition_header(sys),
         kwargs...)
     if expression == Val{true}
         return expr
@@ -670,14 +663,12 @@ function compile_affect(eqs::Vector{Equation}, cb, sys, dvs, ps; outputidxs = no
         end
         t = get_iv(sys)
         integ = gensym(:MTKIntegrator)
-        pre = get_preprocess_constants(rhss)
-        rf_oop, rf_ip = build_function(rhss, u, p..., t; expression = Val{true},
+        rf_oop, rf_ip = build_function_wrapper(
+            sys, rhss, u, p..., t; expression = Val{true},
             wrap_code = callback_save_header(sys, cb) .∘
-                        add_integrator_header(sys, integ, outvar) .∘
-                        wrap_array_vars(sys, rhss; dvs, ps = _ps) .∘
-                        wrap_parameter_dependencies(sys, false),
+                        add_integrator_header(sys, integ, outvar),
             outputidxs = update_inds,
-            postprocess_fbody = pre,
+            create_bindings = false,
             kwargs...)
         # applied user-provided function to the generated expression
         if postprocess_affect_expr! !== nothing
@@ -691,7 +682,7 @@ function compile_affect(eqs::Vector{Equation}, cb, sys, dvs, ps; outputidxs = no
 end
 
 function generate_rootfinding_callback(sys::AbstractTimeDependentSystem,
-        dvs = unknowns(sys), ps = parameters(sys); kwargs...)
+        dvs = unknowns(sys), ps = parameters(sys; initial_parameters = true); kwargs...)
     cbs = continuous_events(sys)
     isempty(cbs) && return nothing
     generate_rootfinding_callback(cbs, sys, dvs, ps; kwargs...)
@@ -702,7 +693,7 @@ generate_rootfinding_callback and thus we can produce a ContinuousCallback inste
 """
 function generate_single_rootfinding_callback(
         eq, cb, sys::AbstractTimeDependentSystem, dvs = unknowns(sys),
-        ps = parameters(sys); kwargs...)
+        ps = parameters(sys; initial_parameters = true); kwargs...)
     if !isequal(eq.lhs, 0)
         eq = 0 ~ eq.lhs - eq.rhs
     end
@@ -745,7 +736,7 @@ end
 
 function generate_vector_rootfinding_callback(
         cbs, sys::AbstractTimeDependentSystem, dvs = unknowns(sys),
-        ps = parameters(sys); rootfind = SciMLBase.RightRootFind,
+        ps = parameters(sys; initial_parameters = true); rootfind = SciMLBase.RightRootFind,
         reinitialization = SciMLBase.CheckInit(), kwargs...)
     eqs = map(cb -> flatten_equations(cb.eqs), cbs)
     num_eqs = length.(eqs)
@@ -870,7 +861,7 @@ function compile_affect_fn(cb, sys::AbstractTimeDependentSystem, dvs, ps, kwargs
 end
 
 function generate_rootfinding_callback(cbs, sys::AbstractTimeDependentSystem,
-        dvs = unknowns(sys), ps = parameters(sys); kwargs...)
+        dvs = unknowns(sys), ps = parameters(sys; initial_parameters = true); kwargs...)
     eqs = map(cb -> flatten_equations(cb.eqs), cbs)
     num_eqs = length.(eqs)
     total_eqs = sum(num_eqs)
@@ -958,7 +949,9 @@ function invalid_variables(sys, expr)
 end
 function unassignable_variables(sys, expr)
     assignable_syms = reduce(
-        vcat, Symbolics.scalarize.(vcat(unknowns(sys), parameters(sys))); init = [])
+        vcat, Symbolics.scalarize.(vcat(
+            unknowns(sys), parameters(sys; initial_parameters = true)));
+        init = [])
     written = reduce(vcat, Symbolics.scalarize.(vars(expr)); init = [])
     return filter(
         x -> !any(isequal(x), assignable_syms), written)
@@ -1084,7 +1077,7 @@ function generate_discrete_callback(cb, sys, dvs, ps; postprocess_affect_expr! =
 end
 
 function generate_discrete_callbacks(sys::AbstractSystem, dvs = unknowns(sys),
-        ps = parameters(sys); kwargs...)
+        ps = parameters(sys; initial_parameters = true); kwargs...)
     has_discrete_events(sys) || return nothing
     symcbs = discrete_events(sys)
     isempty(symcbs) && return nothing
