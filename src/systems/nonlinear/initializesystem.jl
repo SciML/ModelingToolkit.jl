@@ -322,7 +322,8 @@ function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
     if state_values(dstvalp) === nothing
         return nothing, newp
     end
-    T = eltype(state_values(srcvalp))
+    srcu0 = state_values(srcvalp)
+    T = srcu0 === nothing || isempty(srcu0) ? Union{} : eltype(srcu0)
     if parameter_values(dstvalp) isa MTKParameters
         if !isempty(newp.tunable)
             T = promote_type(eltype(newp.tunable), T)
@@ -332,7 +333,7 @@ function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
     end
     if T == eltype(state_values(dstvalp))
         u0 = state_values(dstvalp)
-    else
+    elseif T != Union{}
         u0 = T.(state_values(dstvalp))
     end
     buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Tunable(), newp)

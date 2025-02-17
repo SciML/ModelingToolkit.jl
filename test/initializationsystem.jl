@@ -1361,3 +1361,12 @@ end
     prob = ODEProblem(sys, [], (0.0, 1.0))
     @test prob.f.initialization_data !== nothing
 end
+
+@testset "`ReconstructInitializeprob` with `nothing` state" begin
+    @parameters p
+    @variables x(t)
+    @mtkbuild sys = ODESystem(x ~ p * t, t)
+    prob = @test_nowarn ODEProblem(sys, [], (0.0, 1.0), [p => 1.0])
+    @test_nowarn remake(prob, p = [p => 1.0])
+    @test_nowarn remake(prob, p = [p => ForwardDiff.Dual(1.0)])
+end
