@@ -25,7 +25,7 @@ prob = ODEProblem(sys, u0, tspan, ps)
 sol = solve(prob, Tsit5())
 
 mtkparams = parameter_values(prob)
-new_p = rand(10)
+new_p = rand(14)
 gs = gradient(new_p) do new_p
     new_params = SciMLStructures.replace(SciMLStructures.Tunable(), mtkparams, new_p)
     new_prob = remake(prob, p = new_params)
