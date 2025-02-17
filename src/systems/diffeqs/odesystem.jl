@@ -481,6 +481,11 @@ function build_explicit_observed_function(sys, ts;
         newvar = get(ns_map, var, nothing)
         if newvar !== nothing
             namespace_subs[var] = newvar
+            var = newvar
+        end
+        if throw && !(var in allsyms) &&
+           (!iscall(var) || operation(var) !== getindex || !(arguments(var)[1] in allsyms))
+            Base.throw(ArgumentError("Symbol $var is not present in the system."))
         end
     end
     ts = fast_substitute(ts, namespace_subs)
