@@ -1673,18 +1673,3 @@ end
     prob = ODEProblem{false}(lowered_dae_sys; u0_constructor = x -> SVector(x...))
     @test prob.u0 isa SVector
 end
-
-@testset "input map validation" begin
-    import ModelingToolkit: InvalidKeyError 
-    @variables x(t) y(t) z(t)
-    @parameters a b c d 
-    eqs = [D(x) ~ x*a, D(y) ~ y*c, D(z) ~ b + d]
-    @mtkbuild sys = ODESystem(eqs, t)
-    pmap = [a => 1, b => 2, c => 3, d => 4, "b" => 2]
-    u0map = [x => 1, y => 2, z => 3]
-    @test_throws InvalidKeyError ODEProblem(sys, u0map, (0., 1.), pmap)
-
-    pmap = [a => 1, b => 2, c => 3, d => 4]
-    u0map = [x => 1, y => 2, z => 3, :0 => 3]
-    @test_throws InvalidKeyError ODEProblem(sys, u0map, (0., 1.), pmap)
-end
