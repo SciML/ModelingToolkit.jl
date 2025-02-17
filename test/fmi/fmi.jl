@@ -157,7 +157,7 @@ end
     @testset "v2, CS" begin
         fmu = loadFMU(joinpath(FMU_DIR, "SimpleAdder.fmu"); type = :CS)
         @named adder = MTK.FMIComponent(
-            Val(2); fmu, type = :CS, communication_step_size = 1e-4,
+            Val(2); fmu, type = :CS, communication_step_size = 1e-6,
             reinitializealg = BrownFullBasicInit())
         @test MTK.isinput(adder.a)
         @test MTK.isinput(adder.b)
