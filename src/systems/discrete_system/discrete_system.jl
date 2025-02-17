@@ -307,7 +307,7 @@ function SciMLBase.DiscreteProblem(
     u0map = to_varmap(u0map, dvs)
     u0map = shift_u0map_forward(sys, u0map, defaults(sys))
     f, u0, p = process_SciMLProblem(
-        DiscreteFunction, sys, u0map, parammap; eval_expression, eval_module)
+        DiscreteFunction, sys, u0map, parammap; eval_expression, eval_module, build_initializeprob = false)
     u0 = f(u0, p, tspan[1])
     DiscreteProblem(f, u0, tspan, p; kwargs...)
 end
@@ -323,6 +323,19 @@ end
 function SciMLBase.DiscreteFunction{false}(sys::DiscreteSystem, args...; kwargs...)
     DiscreteFunction{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
+
+"""
+```julia
+SciMLBase.DiscreteFunction{iip}(sys::DiscreteSystem,
+                            dvs = unknowns(sys),
+                            ps = parameters(sys);
+                            kwargs...) where {iip}
+```
+
+Create an `DiscreteFunction` from the [`DiscreteSystem`](@ref). The arguments `dvs` and `ps`
+are used to set the order of the dependent variable and parameter vectors,
+respectively.
+"""
 function SciMLBase.DiscreteFunction{iip, specialize}(
         sys::DiscreteSystem,
         dvs = unknowns(sys),
@@ -341,8 +354,7 @@ function SciMLBase.DiscreteFunction{iip, specialize}(
     f_gen = generate_function(sys, dvs, ps; expression = Val{true},
         expression_module = eval_module, kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
-    f(u, p, t) = f_oop(u, p, t)
-    f(du, u, p, t) = f_iip(du, u, p, t)
+    f = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(f_oop, f_iip)
 
     if specialize === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing

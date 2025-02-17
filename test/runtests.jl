@@ -60,7 +60,6 @@ end
             @safetestset "FuncAffect Test" include("funcaffect.jl")
             @safetestset "Constants Test" include("constants.jl")
             @safetestset "Parameter Dependency Test" include("parameter_dependencies.jl")
-            @safetestset "Generate Custom Function Test" include("generate_custom_function.jl")
             @safetestset "Equation Type Accessors Test" include("equation_type_accessors.jl")
             @safetestset "Equations with complex values" include("complex.jl")
         end
@@ -75,6 +74,7 @@ end
 
     if GROUP == "All" || GROUP == "InterfaceII"
         @testset "InterfaceII" begin
+            @safetestset "Code Generation Test" include("code_generation.jl")
             @safetestset "IndexCache Test" include("index_cache.jl")
             @safetestset "Variable Utils Test" include("variable_utils.jl")
             @safetestset "Variable Metadata Test" include("test_variable_metadata.jl")

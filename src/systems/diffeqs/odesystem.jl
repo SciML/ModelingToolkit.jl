@@ -248,7 +248,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         metadata = nothing,
         gui_metadata = nothing,
         is_dde = nothing,
-        tstops = [])
+        tstops = [],
+        discover_from_metadata = true)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
@@ -267,12 +268,16 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     defaults = Dict{Any, Any}(todict(defaults))
     guesses = Dict{Any, Any}(todict(guesses))
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, guesses, dvs′)
-    process_variables!(var_to_name, defaults, guesses, ps′)
-    process_variables!(
-        var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
-    process_variables!(
-        var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
+    let defaults = discover_from_metadata ? defaults : Dict(),
+        guesses = discover_from_metadata ? guesses : Dict()
+
+        process_variables!(var_to_name, defaults, guesses, dvs′)
+        process_variables!(var_to_name, defaults, guesses, ps′)
+        process_variables!(
+            var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
+        process_variables!(
+            var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
+    end
     defaults = Dict{Any, Any}(value(k) => value(v)
     for (k, v) in pairs(defaults) if v !== nothing)
     guesses = Dict{Any, Any}(value(k) => value(v)
@@ -390,7 +395,7 @@ function flatten(sys::ODESystem, noeqs = false)
         return ODESystem(noeqs ? Equation[] : equations(sys),
             get_iv(sys),
             unknowns(sys),
-            parameters(sys),
+            parameters(sys; initial_parameters = true),
             parameter_dependencies = parameter_dependencies(sys),
             guesses = guesses(sys),
             observed = observed(sys),
@@ -404,7 +409,11 @@ function flatten(sys::ODESystem, noeqs = false)
             is_dde = is_dde(sys),
             tstops = symbolic_tstops(sys),
             metadata = get_metadata(sys),
-            checks = false)
+            checks = false,
+            # without this, any defaults/guesses obtained from metadata that were
+            # later removed by the user will be re-added. Right now, we just want to
+            # retain `defaults(sys)` as-is.
+            discover_from_metadata = false)
     end
 end
 
@@ -461,7 +470,7 @@ function build_explicit_observed_function(sys, ts;
         eval_module = @__MODULE__,
         output_type = Array,
         checkbounds = true,
-        ps = parameters(sys),
+        ps = parameters(sys; initial_parameters = true),
         return_inplace = false,
         param_only = false,
         op = Operator,
@@ -474,20 +483,10 @@ function build_explicit_observed_function(sys, ts;
     end
 
     allsyms = all_symbols(sys)
-    function symbol_to_symbolic(sym)
-        sym isa Symbol || return sym
-        idx = findfirst(x -> (hasname(x) ? getname(x) : Symbol(x)) == sym, allsyms)
-        idx === nothing && return sym
-        sym = allsyms[idx]
-        if iscall(sym) && operation(sym) == getindex
-            sym = arguments(sym)[1]
-        end
-        return sym
-    end
     if symbolic_type(ts) == NotSymbolic() && ts isa AbstractArray
-        ts = map(symbol_to_symbolic, ts)
+        ts = map(x -> symbol_to_symbolic(sys, x; allsyms), ts)
     else
-        ts = symbol_to_symbolic(ts)
+        ts = symbol_to_symbolic(sys, ts; allsyms)
     end
 
     vs = ModelingToolkit.vars(ts; op)
@@ -551,9 +550,14 @@ function build_explicit_observed_function(sys, ts;
         output_type, mkarray, try_namespaced = true, expression = Val{true})
     if fns isa Tuple
         oop, iip = eval_or_rgf.(fns; eval_expression, eval_module)
-        return return_inplace ? (oop, iip) : oop
+        f = GeneratedFunctionWrapper{(
+            p_start, length(args) - length(ps) + 1, is_split(sys))}(oop, iip)
+        return return_inplace ? (f, f) : f
     else
-        return eval_or_rgf(fns; eval_expression, eval_module)
+        f = eval_or_rgf(fns; eval_expression, eval_module)
+        f = GeneratedFunctionWrapper{(
+            p_start, length(args) - length(ps) + 1, is_split(sys))}(f, nothing)
+        return f
     end
 end
 

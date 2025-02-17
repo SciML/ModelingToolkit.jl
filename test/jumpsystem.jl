@@ -104,8 +104,8 @@ sol = solve(jprob, SSAStepper(); saveat = 1.0)
 rate2(u, p, t) = 0.01u[2]
 jump2 = ConstantRateJump(rate2, affect2!)
 mtjumps = jprob.discrete_jump_aggregation
-@test abs(mtjumps.rates[1](u, (p,), tf) - jump1.rate(u, p, tf)) < 10 * eps()
-@test abs(mtjumps.rates[2](u, (p,), tf) - jump2.rate(u, p, tf)) < 10 * eps()
+@test abs(mtjumps.rates[1](u, p, tf) - jump1.rate(u, p, tf)) < 10 * eps()
+@test abs(mtjumps.rates[2](u, p, tf) - jump2.rate(u, p, tf)) < 10 * eps()
 mtjumps.affects![1](mtintegrator)
 jump1.affect!(integrator)
 @test all(integrator.u .== mtintegrator.u)
