@@ -626,40 +626,45 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
         check_consistency = true, fully_determined = true, warn_initialize_determined = true,
         kwargs...)
     if state.sys isa ODESystem
+        # split_system returns one or two systems and the inputs for each
+        # mod clock inference to be binary
+        # if it's continous keep going, if not then error unless given trait impl in additional passes
         ci = ModelingToolkit.ClockInference(state)
         ci = ModelingToolkit.infer_clocks!(ci)
         time_domains = merge(Dict(state.fullvars .=> ci.var_domain),
             Dict(default_toterm.(state.fullvars) .=> ci.var_domain))
         tss, inputs, continuous_id, id_to_clock = ModelingToolkit.split_system(ci)
+        if continuous_id == 0
+            # do a trait check here - handle fully discrete system
+            additional_passes = get(kwargs, :additional_passes, nothing)
+            if !isnothing(additional_passes) && any(discrete_compile_pass, additional_passes)
+                # take the first discrete compilation pass given for now
+                discrete_pass_idx = findfirst(discrete_compile_pass, additional_passes)
+                discrete_compile = additional_passes[discrete_pass_idx]
+                deleteat!(additional_passes, discrete_pass_idx)
+                return discrete_compile(tss, inputs)
+            else
+                # error goes here! this is a purely discrete system
+                throw(HybridSystemNotSupportedException("Discrete systems without JuliaSimCompiler are currently not supported in ODESystem."))
+            end
+        end
+        # puts the ios passed in to the call into the continous system
         cont_io = merge_io(io, inputs[continuous_id])
+        # simplify as normal
         sys, input_idxs = _structural_simplify!(tss[continuous_id], cont_io; simplify,
             check_consistency, fully_determined,
             kwargs...)
         if length(tss) > 1
-            if continuous_id > 0
+            if !isnothing(additional_passes) && any(discrete_compile_pass, additional_passes)
+                discrete_pass_idx = findfirst(discrete_compile_pass, additional_passes)
+                discrete_compile = additional_passes[discrete_pass_idx]
+                deleteat!(additional_passes, discrete_pass_idx)
+                # in the case of a hybrid system, the discrete_compile pass should take the currents of sys.discrete_subsystems
+                # and modifies discrete_subsystems to bea tuple of the io and anything else, while adding or manipulating the rest of sys as needed
+                sys = discrete_compile(sys, tss[2:end], inputs)
+            else
                 throw(HybridSystemNotSupportedException("Hybrid continuous-discrete systems are currently not supported with the standard MTK compiler. This system requires JuliaSimCompiler.jl, see https://help.juliahub.com/juliasimcompiler/stable/"))
             end
-            # TODO: rename it to something else
-            discrete_subsystems = Vector{ODESystem}(undef, length(tss))
-            # Note that the appended_parameters must agree with
-            # `generate_discrete_affect`!
-            appended_parameters = parameters(sys)
-            for (i, state) in enumerate(tss)
-                if i == continuous_id
-                    discrete_subsystems[i] = sys
-                    continue
-                end
-                dist_io = merge_io(io, inputs[i])
-                ss, = _structural_simplify!(state, dist_io; simplify, check_consistency,
-                    fully_determined, kwargs...)
-                append!(appended_parameters, inputs[i], unknowns(ss))
-                discrete_subsystems[i] = ss
-            end
-            @set! sys.discrete_subsystems = discrete_subsystems, inputs, continuous_id,
-            id_to_clock
-            @set! sys.ps = appended_parameters
-            @set! sys.defaults = merge(ModelingToolkit.defaults(sys),
-                Dict(v => 0.0 for v in Iterators.flatten(inputs)))
         end
         ps = [sym isa CallWithMetadata ? sym :
               setmetadata(sym, VariableTimeDomain, get(time_domains, sym, Continuous()))

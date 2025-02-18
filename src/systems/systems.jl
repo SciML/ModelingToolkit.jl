@@ -31,7 +31,7 @@ function structural_simplify(
         kwargs...)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
     newsys′ = __structural_simplify(sys, io; simplify,
-        allow_symbolic, allow_parameter, conservative, fully_determined,
+        allow_symbolic, allow_parameter, conservative, fully_determined, additional_passes,
         kwargs...)
     if newsys′ isa Tuple
         @assert length(newsys′) == 2
@@ -169,3 +169,9 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
             guesses = guesses(sys), initialization_eqs = initialization_equations(sys))
     end
 end
+
+"""
+Mark whether an extra pass `p` can support compiling discrete systems.
+"""
+discrete_compile_pass(p) = false
+
