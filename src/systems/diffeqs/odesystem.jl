@@ -476,6 +476,7 @@ function build_explicit_observed_function(sys, ts;
         end
     end
     allsyms = Set(all_symbols(sys))
+    iv = has_iv(sys) ? get_iv(sys) : nothing
     for var in vs
         var = unwrap(var)
         newvar = get(ns_map, var, nothing)
@@ -483,8 +484,7 @@ function build_explicit_observed_function(sys, ts;
             namespace_subs[var] = newvar
             var = newvar
         end
-        if throw && !(var in allsyms) &&
-           (!iscall(var) || operation(var) !== getindex || !(arguments(var)[1] in allsyms))
+        if throw && !var_in_varlist(var, allsyms, iv)
             Base.throw(ArgumentError("Symbol $var is not present in the system."))
         end
     end
