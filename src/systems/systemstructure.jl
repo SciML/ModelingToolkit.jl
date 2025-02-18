@@ -820,19 +820,40 @@ function mtkcompile!(state::TearingState; simplify = false,
     time_domains = merge(Dict(state.fullvars .=> ci.var_domain),
         Dict(default_toterm.(state.fullvars) .=> ci.var_domain))
     tss, clocked_inputs, continuous_id, id_to_clock = ModelingToolkit.split_system(ci)
-    if length(tss) > 1
-        if continuous_id == 0
-            throw(HybridSystemNotSupportedException("""
-            Discrete systems with multiple clocks are not supported with the standard \
-            MTK compiler.
-            """))
-        else
-            throw(HybridSystemNotSupportedException("""
-            Hybrid continuous-discrete systems are currently not supported with \
-            the standard MTK compiler. This system requires JuliaSimCompiler.jl, \
-            see https://help.juliahub.com/juliasimcompiler/stable/
-            """))
+    if continuous_id == 0
+        # do a trait check here - handle fully discrete system
+        additional_passes = get(kwargs, :additional_passes, nothing)
+        if !isnothing(additional_passes) && any(discrete_compile_pass, additional_passes)
+            # take the first discrete compilation pass given for now
+            discrete_pass_idx = findfirst(discrete_compile_pass, additional_passes)
+            discrete_compile = additional_passes[discrete_pass_idx]
+            deleteat!(additional_passes, discrete_pass_idx)
+            return discrete_compile(tss, clocked_inputs)
         end
+        throw(HybridSystemNotSupportedException("""
+        Discrete systems with multiple clocks are not supported with the standard \
+        MTK compiler.
+        """))
+    end
+    if length(tss) > 1
+        # simplify as normal
+        sys = _mtkcompile!(tss[continuous_id]; simplify,
+            inputs = [inputs; clocked_inputs[continuous_id]], outputs, disturbance_inputs,
+            check_consistency, fully_determined,
+            kwargs...)
+        if !isnothing(additional_passes) && any(discrete_compile_pass, additional_passes)
+            discrete_pass_idx = findfirst(discrete_compile_pass, additional_passes)
+            discrete_compile = additional_passes[discrete_pass_idx]
+            deleteat!(additional_passes, discrete_pass_idx)
+            # in the case of a hybrid system, the discrete_compile pass should take the currents of sys.discrete_subsystems
+            # and modifies discrete_subsystems to bea tuple of the io and anything else, while adding or manipulating the rest of sys as needed
+            return discrete_compile(sys, tss[2:end], inputs)
+        end
+        throw(HybridSystemNotSupportedException("""
+        Hybrid continuous-discrete systems are currently not supported with \
+        the standard MTK compiler. This system requires JuliaSimCompiler.jl, \
+        see https://help.juliahub.com/juliasimcompiler/stable/
+        """))
     end
     if get_is_discrete(state.sys) ||
        continuous_id == 1 && any(Base.Fix2(isoperator, Shift), state.fullvars)
