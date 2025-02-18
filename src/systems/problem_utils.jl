@@ -275,9 +275,9 @@ entry for `eq.lhs`, insert the reverse mapping if `eq.rhs` is not a number.
 """
 function add_observed_equations!(varmap::AbstractDict, eqs)
     for eq in eqs
-        if haskey(varmap, eq.lhs)
+        if var_in_varlist(eq.lhs, keys(varmap), nothing)
             eq.rhs isa Number && continue
-            haskey(varmap, eq.rhs) && continue
+            var_in_varlist(eq.rhs, keys(varmap), nothing) && continue
             !iscall(eq.rhs) || issym(operation(eq.rhs)) || continue
             varmap[eq.rhs] = eq.lhs
         else
