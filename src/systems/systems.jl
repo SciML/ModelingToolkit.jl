@@ -36,7 +36,7 @@ function mtkcompile(
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
     newsys′ = __mtkcompile(sys; simplify,
         allow_symbolic, allow_parameter, conservative, fully_determined,
-        inputs, outputs, disturbance_inputs,
+        inputs, outputs, disturbance_inputs, additional_passes,
         kwargs...)
     if newsys′ isa Tuple
         @assert length(newsys′) == 2
@@ -293,3 +293,8 @@ function map_variables_to_equations(sys::AbstractSystem; rename_dummy_derivative
 
     return mapping
 end
+
+"""
+Mark whether an extra pass `p` can support compiling discrete systems.
+"""
+discrete_compile_pass(p) = false
