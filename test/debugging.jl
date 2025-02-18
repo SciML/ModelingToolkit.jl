@@ -1,4 +1,5 @@
 using ModelingToolkit, OrdinaryDiffEq, StochasticDiffEq, SymbolicIndexingInterface
+import Logging
 using ModelingToolkit: t_nounits as t, D_nounits as D, ASSERTION_LOG_VARIABLE
 
 @variables x(t)
@@ -25,10 +26,10 @@ end
         dsys = debug_system(sys; functions = [])
         @test is_parameter(dsys, ASSERTION_LOG_VARIABLE)
         prob = Problem(dsys, [x => 0.1], (0.0, 5.0))
-        sol = solve(prob, alg)
-        @test !SciMLBase.successful_retcode(sol)
-        prob.ps[ASSERTION_LOG_VARIABLE] = true
         sol = @test_logs (:error, r"ohno") match_mode=:any solve(prob, alg)
+        @test !SciMLBase.successful_retcode(sol)
+        prob.ps[ASSERTION_LOG_VARIABLE] = false
+        sol = @test_logs min_level=Logging.Error solve(prob, alg)
         @test !SciMLBase.successful_retcode(sol)
     end
 end
@@ -41,10 +42,10 @@ end
         dsys = debug_system(outer; functions = [])
         @test is_parameter(dsys, ASSERTION_LOG_VARIABLE)
         prob = Problem(dsys, [inner.x => 0.1], (0.0, 5.0))
-        sol = solve(prob, alg)
-        @test !SciMLBase.successful_retcode(sol)
-        prob.ps[ASSERTION_LOG_VARIABLE] = true
         sol = @test_logs (:error, r"ohno") match_mode=:any solve(prob, alg)
+        @test !SciMLBase.successful_retcode(sol)
+        prob.ps[ASSERTION_LOG_VARIABLE] = false
+        sol = @test_logs min_level=Logging.Error solve(prob, alg)
         @test !SciMLBase.successful_retcode(sol)
     end
 end
