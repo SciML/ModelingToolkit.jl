@@ -449,7 +449,12 @@ end
 ### Misc
 ###
 
-# For discrete variables. Turn Shift(t, k)(x(t)) into xₜ₋ₖ(t)
+"""
+Handle renaming variable names for discrete structural simplification. Three cases: 
+- positive shift: do nothing
+- zero shift: x(t) => Shift(t, 0)(x(t))
+- negative shift: rename the variable
+"""
 function lower_shift_varname(var, iv)
     op = operation(var)
     op isa Shift || return Shift(iv, 0)(var, true) # hack to prevent simplification of x(t) - x(t)
@@ -460,28 +465,44 @@ function lower_shift_varname(var, iv)
     end
 end
 
-function shift2term(var) 
+"""
+Rename a Shift variable with negative shift, Shift(t, k)(x(t)) to xₜ₋ₖ(t).
+"""
+function shift2term(var)
     backshift = operation(var).steps
     iv = operation(var).t
-    num = join(Char(0x2080 + d) for d in reverse!(digits(-backshift)))
-    ds = join([Char(0x209c), Char(0x208b), num])
-    #ds = "$iv-$(-backshift)"
-    #d_separator = 'ˍ'
+    num = join(Char(0x2080 + d) for d in reverse!(digits(-backshift))) # subscripted number, e.g. ₁
+    ds = join([Char(0x209c), Char(0x208b), num]) 
+    # Char(0x209c) = ₜ
+    # Char(0x208b) = ₋ (subscripted minus)
 
-    if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)
-        O = only(arguments(var))
-        oldop = operation(O)
-        newname = Symbol(string(nameof(oldop)), ds)
-    else
-        O = var
-        oldop = operation(var) 
-        varname = split(string(nameof(oldop)), d_separator)[1]
-        newname = Symbol(varname, d_separator, ds)
-    end
+    O = only(arguments(var))
+    oldop = operation(O)
+    newname = Symbol(string(nameof(oldop)), ds)
+
     newvar = maketerm(typeof(O), Symbolics.rename(oldop, newname), Symbolics.children(O), Symbolics.metadata(O))
     newvar = setmetadata(newvar, Symbolics.VariableSource, (:variables, newname))
     newvar = setmetadata(newvar, ModelingToolkit.VariableUnshifted, O)
+    newvar = setmetadata(newvar, ModelingToolkit.VariableShift, backshift)
     return newvar
+end
+
+function term2shift(var)
+    var = Symbolics.unwrap(var)
+    name = Symbolics.getname(var)
+    O = only(arguments(var))
+    oldop = operation(O)
+    iv = only(arguments(x))
+    # Split on ₋
+    if occursin(Char(0x208b), name)
+        substrings = split(name, Char(0x208b))
+        shift = last(split(name, Char(0x208b)))
+        newname = join(substrings[1:end-1])[1:end-1]
+        newvar = maketerm(typeof(O), Symbolics.rename(oldop, newname), Symbolics.children(O), Symbolics.metadata(O))
+        return Shift(iv, -shift)(newvar)
+    else
+        return var
+    end
 end
 
 function isdoubleshift(var)

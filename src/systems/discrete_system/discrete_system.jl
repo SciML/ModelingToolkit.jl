@@ -270,15 +270,19 @@ function shift_u0map_forward(sys::DiscreteSystem, u0map, defs)
         v = u0map[k]
         if !((op = operation(k)) isa Shift)
             error("Initial conditions must be for the past state of the unknowns. Instead of providing the condition for $k, provide the condition for $(Shift(iv, -1)(k)).")
+        elseif op.steps > 0
+            error("Initial conditions must be for the past state of the unknowns. Instead of providing the condition for $k, provide the condition for $(Shift(iv, -1)(only(arguments(k)))).")
         end
+
         updated[Shift(iv, op.steps + 1)(arguments(k)[1])] = v
     end
     for var in unknowns(sys)
         op = operation(var)
-        haskey(updated, var) && continue
         root = getunshifted(var)
+        shift = getshift(var)
         isnothing(root) && continue
-        haskey(defs, root) || error("Initial condition for $root not provided.")
+        (haskey(updated, Shift(iv, shift)(root)) || haskey(updated, var)) && continue
+        haskey(defs, root) || error("Initial condition for $var not provided.")
         updated[var] = defs[root]
     end
     return updated

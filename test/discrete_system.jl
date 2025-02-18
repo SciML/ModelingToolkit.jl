@@ -220,21 +220,6 @@ sol = solve(prob, FunctionMap())
 
 @test reduce(vcat, sol.u) == 1:11
 
-# test that default values apply to the entire history
-@variables x(t) = 1.0
-@mtkbuild de = DiscreteSystem([x ~ x(k - 1) + x(k - 2)], t)
-prob = DiscreteProblem(de, [], (0, 10))
-@test prob[x] == 2.0
-@test prob[x(k - 1)] == 1.0
-
-# must provide initial conditions for history
-@test_throws ErrorException DiscreteProblem(de, [x => 2.0], (0, 10))
-
-# initial values only affect _that timestep_, not the entire history
-prob = DiscreteProblem(de, [x(k - 1) => 2.0], (0, 10))
-@test prob[x] == 3.0
-@test prob[x(k - 1)] == 2.0
-
 # Issue#2585
 getdata(buffer, t) = buffer[mod1(Int(t), length(buffer))]
 @register_symbolic getdata(buffer::Vector, t)
@@ -272,10 +257,63 @@ k = ShiftIndex(t)
 @named sys = DiscreteSystem([x ~ x^2 + y^2, y ~ x(k - 1) + y(k - 1)], t)
 @test_throws ["algebraic equations", "not yet supported"] structural_simplify(sys)
 
+
 @testset "Passing `nothing` to `u0`" begin
     @variables x(t) = 1
     k = ShiftIndex()
     @mtkbuild sys = DiscreteSystem([x(k) ~ x(k - 1) + 1], t)
     prob = @test_nowarn DiscreteProblem(sys, nothing, (0.0, 1.0))
     @test_nowarn solve(prob, FunctionMap())
+end
+
+@testset "Initialization" begin
+    # test that default values apply to the entire history
+    @variables x(t) = 1.0
+    @mtkbuild de = DiscreteSystem([x ~ x(k - 1) + x(k - 2)], t)
+    prob = DiscreteProblem(de, [], (0, 10))
+    @test prob[x] == 2.0
+    @test prob[x(k - 1)] == 1.0
+    
+    # must provide initial conditions for history
+    @test_throws ErrorException DiscreteProblem(de, [x => 2.0], (0, 10))
+    @test_throws ErrorException DiscreteProblem(de, [x(k+1) => 2.], (0, 10))
+    
+    # initial values only affect _that timestep_, not the entire history
+    prob = DiscreteProblem(de, [x(k - 1) => 2.0], (0, 10))
+    @test prob[x] == 3.0
+    @test prob[x(k - 1)] == 2.0
+    @test prob[xₜ₋₁] == 2.0
+
+    # Test initial assignment with lowered variable
+    @variables xₜ₋₁(t)
+    prob = DiscreteProblem(de, [xₜ₋₁(k-1) => 4.0], (0, 10))
+    @test prob[x(k-1)] == prob[xₜ₋₁] == 1.0
+    @test prob[x] == 5.
+
+    # Test missing initial throws error
+    @variables x(t)
+    @mtkbuild de = DiscreteSystem([x ~ x(k-1) + x(k-2)*x(k-3)], t)
+    @test_throws ErrorException prob = DiscreteProblem(de, [x(k-3) => 2.], (0, 10))
+    @test_throws ErrorException prob = DiscreteProblem(de, [x(k-3) => 2., x(k-1) => 3.], (0, 10))
+
+    # Test non-assigned initials are given default value
+    @variables x(t) = 2.
+    prob = DiscreteProblem(de, [x(k-3) => 12.], (0, 10))
+    @test prob[x] == 26.0
+    @test prob[x(k-1)] == 2.0
+    @test prob[x(k-2)] == 2.0
+
+    # Elaborate test
+    eqs = [x ~ x(k-1) + z(k-2), 
+           z ~ x(k-2) * x(k-3) - z(k-1)^2]
+    @mtkbuild de = DiscreteSystem(eqs, t)
+    @variables xₜ₋₂(t) zₜ₋₁(t)
+    u0 = [x(k-1) => 3, 
+          xₜ₋₂(k-1) => 4, 
+          x(k-2) => 1, 
+          z(k-1) => 5, 
+          zₜ₋₁(k-1) => 12]
+    prob = DiscreteProblem(de, u0, (0, 10))
+    @test prob[x] == 15
+    @test prob[z] == -21
 end
