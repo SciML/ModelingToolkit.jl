@@ -117,6 +117,7 @@ Variables as they are specified in `vars` will take priority over their `toterm`
 function add_fallbacks!(
         varmap::AnyDict, vars::Vector, fallbacks::Dict; toterm = default_toterm)
     missingvars = Set()
+    arrvars = Set()
     for var in vars
         haskey(varmap, var) && continue
         ttvar = toterm(var)
@@ -157,6 +158,7 @@ function add_fallbacks!(
                     fallbacks, arrvar, nothing) get(fallbacks, ttarrvar, nothing) Some(nothing)
                 if val !== nothing
                     val = val[idxs...]
+                    is_sized_array_symbolic(arrvar) && push!(arrvars, arrvar)
                 end
             else
                 val = nothing
@@ -168,6 +170,10 @@ function add_fallbacks!(
                 varmap[var] = val
             end
         end
+    end
+
+    for arrvar in arrvars
+        varmap[arrvar] = collect(arrvar)
     end
 
     return missingvars
