@@ -157,15 +157,21 @@ nsys = get_named_sensitivity(model, :y; op) # Test that we get the same result w
 
 # Test the same thing for comp sensitivities
 
-Sf, simplified_sys = Blocks.get_comp_sensitivity_function(model, :y; op); # This should work without providing an operating opint containing a dummy derivative
+# This should work without providing an operating opint containing a dummy derivative
+Sf, simplified_sys = Blocks.get_comp_sensitivity_function(
+    model, :y; op, initialization_solver_alg = NewtonRaphson());
 x = state_values(Sf)
 p = parameter_values(Sf)
 # If this somehow passes, mention it on
 # https://github.com/SciML/ModelingToolkit.jl/issues/2786
 matrices1 = Sf(x, p, 0)
-matrices2, _ = Blocks.get_comp_sensitivity(model, :y; op) # Test that we get the same result when calling the higher-level API
+# Test that we get the same result when calling the higher-level API
+matrices2, _ = Blocks.get_comp_sensitivity(
+    model, :y; op, initialization_solver_alg = NewtonRaphson())
 @test matrices1.f_x ≈ matrices2.A[1:7, 1:7]
-nsys = get_named_comp_sensitivity(model, :y; op) # Test that we get the same result when calling an even higher-level API
+# Test that we get the same result when calling an even higher-level API
+nsys = get_named_comp_sensitivity(
+    model, :y; op, initialization_solver_alg = NewtonRaphson())
 @test matrices2.A ≈ nsys.A
 
 @testset "Issue #3319" begin
