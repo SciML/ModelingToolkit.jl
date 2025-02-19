@@ -512,9 +512,10 @@ end
 
 function SciMLBase.late_binding_update_u0_p(
         prob, sys::AbstractSystem, u0, p, t0, newu0, newp)
-    u0 === missing && return newu0, newp
-    eltype(u0) <: Pair || return newu0, newp
+    u0 === missing && return newu0, (p === missing ? copy(newp) : newp)
+    eltype(u0) <: Pair || return newu0, (p === missing ? copy(newp) : newp)
 
+    newp = p === missing ? copy(newp) : newp
     newu0 = DiffEqBase.promote_u0(newu0, newp, t0)
     tunables, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Tunable(), newp)
     tunables = DiffEqBase.promote_u0(tunables, newu0, t0)
