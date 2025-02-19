@@ -469,40 +469,27 @@ end
 Rename a Shift variable with negative shift, Shift(t, k)(x(t)) to xₜ₋ₖ(t).
 """
 function shift2term(var)
-    backshift = operation(var).steps
-    iv = operation(var).t
+    op = operation(var)
+    iv = op.t
+    arg = only(arguments(var))
+    is_lowered = !isnothing(ModelingToolkit.getunshifted(arg))
+
+    backshift = is_lowered ? op.steps + ModelingToolkit.getshift(arg) : op.steps
+
     num = join(Char(0x2080 + d) for d in reverse!(digits(-backshift))) # subscripted number, e.g. ₁
     ds = join([Char(0x209c), Char(0x208b), num]) 
     # Char(0x209c) = ₜ
     # Char(0x208b) = ₋ (subscripted minus)
 
-    O = only(arguments(var))
+    O = is_lowered ? ModelingToolkit.getunshifted(arg) : arg
     oldop = operation(O)
-    newname = Symbol(string(nameof(oldop)), ds)
+    newname = backshift != 0 ? Symbol(string(nameof(oldop)), ds) : Symbol(string(nameof(oldop)))
 
     newvar = maketerm(typeof(O), Symbolics.rename(oldop, newname), Symbolics.children(O), Symbolics.metadata(O))
     newvar = setmetadata(newvar, Symbolics.VariableSource, (:variables, newname))
     newvar = setmetadata(newvar, ModelingToolkit.VariableUnshifted, O)
     newvar = setmetadata(newvar, ModelingToolkit.VariableShift, backshift)
     return newvar
-end
-
-function term2shift(var)
-    var = Symbolics.unwrap(var)
-    name = Symbolics.getname(var)
-    O = only(arguments(var))
-    oldop = operation(O)
-    iv = only(arguments(x))
-    # Split on ₋
-    if occursin(Char(0x208b), name)
-        substrings = split(name, Char(0x208b))
-        shift = last(split(name, Char(0x208b)))
-        newname = join(substrings[1:end-1])[1:end-1]
-        newvar = maketerm(typeof(O), Symbolics.rename(oldop, newname), Symbolics.children(O), Symbolics.metadata(O))
-        return Shift(iv, -shift)(newvar)
-    else
-        return var
-    end
 end
 
 function isdoubleshift(var)
