@@ -174,4 +174,3 @@ end
 Mark whether an extra pass `p` can support compiling discrete systems.
 """
 discrete_compile_pass(p) = false
-

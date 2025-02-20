@@ -637,7 +637,8 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
         if continuous_id == 0
             # do a trait check here - handle fully discrete system
             additional_passes = get(kwargs, :additional_passes, nothing)
-            if !isnothing(additional_passes) && any(discrete_compile_pass, additional_passes)
+            if !isnothing(additional_passes) &&
+               any(discrete_compile_pass, additional_passes)
                 # take the first discrete compilation pass given for now
                 discrete_pass_idx = findfirst(discrete_compile_pass, additional_passes)
                 discrete_compile = additional_passes[discrete_pass_idx]
@@ -655,7 +656,8 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
             check_consistency, fully_determined,
             kwargs...)
         if length(tss) > 1
-            if !isnothing(additional_passes) && any(discrete_compile_pass, additional_passes)
+            if !isnothing(additional_passes) &&
+               any(discrete_compile_pass, additional_passes)
                 discrete_pass_idx = findfirst(discrete_compile_pass, additional_passes)
                 discrete_compile = additional_passes[discrete_pass_idx]
                 deleteat!(additional_passes, discrete_pass_idx)
