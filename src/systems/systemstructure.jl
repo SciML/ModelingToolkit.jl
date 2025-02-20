@@ -203,6 +203,7 @@ end
 mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     """The system of equations."""
     sys::T
+    original_eqs::Vector{Equation}
     """The set of variables of the system."""
     fullvars::Vector{BasicSymbolic}
     structure::SystemStructure
@@ -213,6 +214,7 @@ end
 TransformationState(sys::AbstractSystem) = TearingState(sys)
 function system_subset(ts::TearingState, ieqs::Vector{Int})
     eqs = equations(ts)
+    @set! ts.original_eqs = ts.original_eqs[ieqs]
     @set! ts.sys.eqs = eqs[ieqs]
     @set! ts.structure = system_subset(ts.structure, ieqs)
     ts
@@ -274,8 +276,9 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
     sys = process_parameter_equations(sys)
     ivs = independent_variables(sys)
     iv = length(ivs) == 1 ? ivs[1] : nothing
-    # flatten array equations
-    eqs = flatten_equations(equations(sys))
+    # scalarize array equations, without scalarizing arguments to registered functions
+    original_eqs = flatten_equations(copy(equations(sys)))
+    eqs = copy(original_eqs)
     neqs = length(eqs)
     param_derivative_map = Dict{BasicSymbolic, Any}()
     # * Scalarize unknowns
@@ -415,6 +418,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
         end
     end
     eqs = eqs[eqs_to_retain]
+    original_eqs = original_eqs[eqs_to_retain]
     neqs = length(eqs)
     symbolic_incidence = symbolic_incidence[eqs_to_retain]
 
@@ -423,6 +427,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
         # depending on order due to NP-completeness of tearing.
         sortidxs = Base.sortperm(eqs, by = string)
         eqs = eqs[sortidxs]
+        original_eqs = original_eqs[sortidxs]
         symbolic_incidence = symbolic_incidence[sortidxs]
     end
 
@@ -513,7 +518,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
 
     eq_to_diff = DiffGraph(nsrcs(graph))
 
-    ts = TearingState(sys, fullvars,
+    ts = TearingState(sys, original_eqs, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
             complete(graph), nothing, var_types, false),
         Any[], param_derivative_map)
@@ -696,6 +701,22 @@ function Base.show(io::IO, mime::MIME"text/plain", ms::MatchedSystemStructure)
     printstyled(io, " SelectedState")
 end
 
+function make_eqs_zero_equals!(ts::TearingState)
+    neweqs = map(enumerate(get_eqs(ts.sys))) do kvp
+        i, eq = kvp
+        isalgeq = true
+        for j in 𝑠neighbors(ts.structure.graph, i)
+            isalgeq &= invview(ts.structure.var_to_diff)[j] === nothing
+        end
+        if isalgeq
+            return 0 ~ eq.rhs - eq.lhs
+        else
+            return eq
+        end
+    end
+    copyto!(get_eqs(ts.sys), neweqs)
+end
+
 function mtkcompile!(state::TearingState; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = true,
         inputs = Any[], outputs = Any[],
@@ -722,6 +743,7 @@ function mtkcompile!(state::TearingState; simplify = false,
         """))
     end
     if length(tss) > 1
+        make_eqs_zero_equals!(tss[continuous_id])
         # simplify as normal
         sys = _mtkcompile!(tss[continuous_id]; simplify,
             inputs = [inputs; clocked_inputs[continuous_id]], outputs, disturbance_inputs,
