@@ -31,7 +31,7 @@ function structural_simplify(
         kwargs...)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
     newsys′ = __structural_simplify(sys, io; simplify,
-        allow_symbolic, allow_parameter, conservative, fully_determined,
+        allow_symbolic, allow_parameter, conservative, fully_determined, additional_passes,
         kwargs...)
     if newsys′ isa Tuple
         @assert length(newsys′) == 2
@@ -76,7 +76,6 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
 
     @unpack structure, fullvars = state
     @unpack graph, var_to_diff, var_types = structure
-    eqs = equations(state)
     brown_vars = Int[]
     new_idxs = zeros(Int, length(var_types))
     idx = 0
@@ -93,7 +92,8 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
         Is = Int[]
         Js = Int[]
         vals = Num[]
-        new_eqs = copy(eqs)
+        make_eqs_zero_equals!(state)
+        new_eqs = copy(equations(state))
         dvar2eq = Dict{Any, Int}()
         for (v, dv) in enumerate(var_to_diff)
             dv === nothing && continue
@@ -158,3 +158,8 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
             guesses = guesses(sys), initialization_eqs = initialization_equations(sys))
     end
 end
+
+"""
+Mark whether an extra pass `p` can support compiling discrete systems.
+"""
+discrete_compile_pass(p) = false

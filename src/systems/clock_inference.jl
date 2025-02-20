@@ -93,7 +93,7 @@ function infer_clocks!(ci::ClockInference)
         c = BitSet(c′)
         idxs = intersect(c, inferred)
         isempty(idxs) && continue
-        if !allequal(var_domain[i] for i in idxs)
+        if !allequal(iscontinuous(var_domain[i]) for i in idxs)
             display(fullvars[c′])
             throw(ClockInferenceException("Clocks are not consistent in connected component $(fullvars[c′])"))
         end
@@ -144,6 +144,9 @@ function split_system(ci::ClockInference{S}) where {S}
     var_to_cid = Vector{Int}(undef, ndsts(graph))
     cid_to_var = Vector{Int}[]
     cid_counter = Ref(0)
+
+    # populates clock_to_id and id_to_clock
+    # checks if there is a continuous_id (for some reason? clock to id does this too)
     for (i, d) in enumerate(eq_domain)
         cid = let cid_counter = cid_counter, id_to_clock = id_to_clock,
             continuous_id = continuous_id
@@ -161,9 +164,13 @@ function split_system(ci::ClockInference{S}) where {S}
         resize_or_push!(cid_to_eq, i, cid)
     end
     continuous_id = continuous_id[]
+    # for each clock partition what are the input (indexes/vars)
     input_idxs = map(_ -> Int[], 1:cid_counter[])
     inputs = map(_ -> Any[], 1:cid_counter[])
+    # var_domain corresponds to fullvars/all variables in the system
     nvv = length(var_domain)
+    # put variables into the right clock partition
+    # keep track of inputs to each partition
     for i in 1:nvv
         d = var_domain[i]
         cid = get(clock_to_id, d, 0)
@@ -177,6 +184,7 @@ function split_system(ci::ClockInference{S}) where {S}
         resize_or_push!(cid_to_var, i, cid)
     end
 
+    # breaks the system up into a continous and 0 or more discrete systems
     tss = similar(cid_to_eq, S)
     for (id, ieqs) in enumerate(cid_to_eq)
         ts_i = system_subset(ts, ieqs)
@@ -186,6 +194,7 @@ function split_system(ci::ClockInference{S}) where {S}
         end
         tss[id] = ts_i
     end
+    # put the continous system at the back
     if continuous_id != 0
         tss[continuous_id], tss[end] = tss[end], tss[continuous_id]
         inputs[continuous_id], inputs[end] = inputs[end], inputs[continuous_id]
