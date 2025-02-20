@@ -1267,3 +1267,22 @@ function symbol_to_symbolic(sys::AbstractSystem, sym; allsyms = all_symbols(sys)
     end
     return sym
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Check if `var` is present in `varlist`. `iv` is the independent variable of the system,
+and should be `nothing` if not applicable.
+"""
+function var_in_varlist(var, varlist::AbstractSet, iv)
+    var = unwrap(var)
+    # simple case
+    return var in varlist ||
+           # indexed array symbolic, unscalarized array present
+           (iscall(var) && operation(var) === getindex && arguments(var)[1] in varlist) ||
+           # unscalarized sized array symbolic, all scalarized elements present
+           (symbolic_type(var) == ArraySymbolic() && is_sized_array_symbolic(var) &&
+            all(x -> x in varlist, collect(var))) ||
+           # delayed variables
+           (isdelay(var, iv) && var_in_varlist(operation(var)(iv), varlist, iv))
+end

@@ -12,8 +12,14 @@ end
 
 Given the arguments to `build_function_wrapper`, return a list of assignments which
 reconstruct array variables if they are present scalarized in `args`.
+
+# Keyword Arguments
+
+- `argument_name` a function of the form `(::Int) -> Symbol` which takes the index of
+  an argument to the generated function and returns the name of the argument in the
+  generated function.
 """
-function array_variable_assignments(args...)
+function array_variable_assignments(args...; argument_name = generated_argument_name)
     # map array symbolic to an identically sized array where each element is (buffer_idx, idx_in_buffer)
     var_to_arridxs = Dict{BasicSymbolic, Array{Tuple{Int, Int}}}()
     for (i, arg) in enumerate(args)
@@ -60,12 +66,12 @@ function array_variable_assignments(args...)
             end
             # view and reshape
 
-            expr = term(reshape, term(view, generated_argument_name(buffer_idx), idxs),
+            expr = term(reshape, term(view, argument_name(buffer_idx), idxs),
                 size(arrvar))
         else
             elems = map(idxs) do idx
                 i, j = idx
-                term(getindex, generated_argument_name(i), j)
+                term(getindex, argument_name(i), j)
             end
             # use `MakeArray` syntax and generate a stack-allocated array
             expr = term(SymbolicUtils.Code.create_array, SArray, nothing,

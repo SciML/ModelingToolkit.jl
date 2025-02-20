@@ -27,20 +27,17 @@ rc = 0.25 # Reference concentration
         k0 = 1.05e14
         ϵ = 34.2894
     end
-
     @variables begin
         gamma(t), [description = "Reaction speed"]
         xc(t) = c0, [description = "Concentration"]
         xT(t) = T0, [description = "Temperature"]
         xT_c(t), [description = "Cooling temperature"]
     end
-
     @components begin
         T_c = RealInput()
         c = RealOutput()
         T = RealOutput()
     end
-
     begin
         τ0 = 60
         wk0 = k0 / c0
@@ -57,20 +54,18 @@ rc = 0.25 # Reference concentration
         gamma ~ xc * wk0 * exp(-wϵ / xT)
         D(xc) ~ -wa11 * xc - wa12 * gamma + wa13
         D(xT) ~ -wa21 * xT + wa22 * gamma + wa23 + wb * xT_c
-
         xc ~ c.u
         xT ~ T.u
         xT_c ~ T_c.u
     end
 end
-
 begin
-    Ftf = tf(1, [(100), 1])^3
+    Ftf = tf(1, [(100), 1])^2
     Fss = ss(Ftf)
-
     # Create an MTK-compatible constructor 
     function RefFilter(; name)
         sys = ODESystem(Fss; name)
+        "Compute initial state that yields y0 as output"
         empty!(ModelingToolkit.get_defaults(sys))
         return sys
     end
@@ -82,7 +77,6 @@ end
         x10 = 0.42
         x20 = 0.01
         u0 = -0.0224
-
         c_start = c0 * (1 - x10) # Initial concentration
         T_start = T0 * (1 + x20) # Initial temperature
         c_high_start = c0 * (1 - 0.72) # Reference concentration
@@ -104,22 +98,13 @@ end
     @equations begin
         connect(ref.output, :r, filter.input)
         connect(filter.output, inverse_tank.c)
-
         connect(inverse_tank.T_c, ff_gain.input)
         connect(ff_gain.output, :uff, limiter.input)
         connect(limiter.output, add.input1)
-
         connect(controller.ctr_output, :u, add.input2)
-
-        #connect(add.output, :u_tot, limiter.input)
-        #connect(limiter.output, :v, tank.T_c)
-
         connect(add.output, :u_tot, tank.T_c)
-
         connect(inverse_tank.T, feedback.input1)
-
         connect(tank.T, :y, noise_filter.input)
-
         connect(noise_filter.output, feedback.input2)
         connect(feedback.output, :e, controller.err_input)
     end
@@ -128,8 +113,10 @@ end;
 ssys = structural_simplify(model)
 cm = complete(model)
 
-op = Dict(D(cm.inverse_tank.xT) => 1,
-    cm.tank.xc => 0.65)
+op = Dict(
+    cm.filter.y.u => 0.8 * (1 - 0.42),
+    D(cm.filter.y.u) => 0
+)
 tspan = (0.0, 1000.0)
 # https://github.com/SciML/ModelingToolkit.jl/issues/2786
 prob = ODEProblem(ssys, op, tspan)
@@ -151,31 +138,34 @@ p = parameter_values(Sf)
 # https://github.com/SciML/ModelingToolkit.jl/issues/2786
 matrices1 = Sf(x, p, 0)
 matrices2, _ = Blocks.get_sensitivity(model, :y; op); # Test that we get the same result when calling the higher-level API
-@test matrices1.f_x ≈ matrices2.A[1:7, 1:7]
+@test matrices1.f_x ≈ matrices2.A[1:6, 1:6]
 nsys = get_named_sensitivity(model, :y; op) # Test that we get the same result when calling an even higher-level API
 @test matrices2.A ≈ nsys.A
 
 # Test the same thing for comp sensitivities
 
-Sf, simplified_sys = Blocks.get_comp_sensitivity_function(model, :y; op); # This should work without providing an operating opint containing a dummy derivative
+# This should work without providing an operating opint containing a dummy derivative
+Sf, simplified_sys = Blocks.get_comp_sensitivity_function(model, :y; op);
 x = state_values(Sf)
 p = parameter_values(Sf)
 # If this somehow passes, mention it on
 # https://github.com/SciML/ModelingToolkit.jl/issues/2786
 matrices1 = Sf(x, p, 0)
-matrices2, _ = Blocks.get_comp_sensitivity(model, :y; op) # Test that we get the same result when calling the higher-level API
-@test matrices1.f_x ≈ matrices2.A[1:7, 1:7]
-nsys = get_named_comp_sensitivity(model, :y; op) # Test that we get the same result when calling an even higher-level API
+# Test that we get the same result when calling the higher-level API
+matrices2, _ = Blocks.get_comp_sensitivity(model, :y; op)
+@test matrices1.f_x ≈ matrices2.A[1:6, 1:6]
+# Test that we get the same result when calling an even higher-level API
+nsys = get_named_comp_sensitivity(model, :y; op)
 @test matrices2.A ≈ nsys.A
 
 @testset "Issue #3319" begin
     op1 = Dict(
-        D(cm.inverse_tank.xT) => 1,
+        cm.filter.y.u => 0.8 * (1 - 0.42),
         cm.tank.xc => 0.65
     )
 
     op2 = Dict(
-        D(cm.inverse_tank.xT) => 1,
+        cm.filter.y.u => 0.8 * (1 - 0.42),
         cm.tank.xc => 0.45
     )
 
