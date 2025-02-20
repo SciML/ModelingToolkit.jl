@@ -204,6 +204,7 @@ end
 mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     """The system of equations."""
     sys::T
+    original_eqs::Vector{Equation}
     """The set of variables of the system."""
     fullvars::Vector{BasicSymbolic}
     structure::SystemStructure
@@ -527,7 +528,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
 
     eq_to_diff = DiffGraph(nsrcs(graph))
 
-    ts = TearingState(sys, fullvars,
+    ts = TearingState(sys, original_eqs, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
             complete(graph), nothing, var_types, false),
         Any[], param_derivative_map, original_eqs, Equation[])
@@ -813,6 +814,22 @@ function Base.show(io::IO, mime::MIME"text/plain", ms::MatchedSystemStructure)
     printstyled(io, " SelectedState")
 end
 
+function make_eqs_zero_equals!(ts::TearingState)
+    neweqs = map(enumerate(get_eqs(ts.sys))) do kvp
+        i, eq = kvp
+        isalgeq = true
+        for j in 𝑠neighbors(ts.structure.graph, i)
+            isalgeq &= invview(ts.structure.var_to_diff)[j] === nothing
+        end
+        if isalgeq
+            return 0 ~ eq.rhs - eq.lhs
+        else
+            return eq
+        end
+    end
+    copyto!(get_eqs(ts.sys), neweqs)
+end
+
 function mtkcompile!(state::TearingState; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = true,
         inputs = Any[], outputs = Any[],
@@ -839,6 +856,7 @@ function mtkcompile!(state::TearingState; simplify = false,
         """))
     end
     if length(tss) > 1
+        make_eqs_zero_equals!(tss[continuous_id])
         # simplify as normal
         sys = _mtkcompile!(tss[continuous_id]; simplify,
             inputs = [inputs; clocked_inputs[continuous_id]], outputs, disturbance_inputs,

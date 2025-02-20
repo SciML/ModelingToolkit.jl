@@ -80,7 +80,6 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
 
     @unpack structure, fullvars = state
     @unpack graph, var_to_diff, var_types = structure
-    eqs = equations(state)
     brown_vars = Int[]
     new_idxs = zeros(Int, length(var_types))
     idx = 0
@@ -98,7 +97,8 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
         Is = Int[]
         Js = Int[]
         vals = Num[]
-        new_eqs = copy(eqs)
+        make_eqs_zero_equals!(state)
+        new_eqs = copy(equations(state))
         dvar2eq = Dict{Any, Int}()
         for (v, dv) in enumerate(var_to_diff)
             dv === nothing && continue
