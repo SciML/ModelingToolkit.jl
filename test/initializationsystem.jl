@@ -1361,3 +1361,30 @@ end
     prob = ODEProblem(sys, [], (0.0, 1.0))
     @test prob.f.initialization_data !== nothing
 end
+
+@testset "`ReconstructInitializeprob` with `nothing` state" begin
+    @parameters p
+    @variables x(t)
+    @mtkbuild sys = ODESystem(x ~ p * t, t)
+    prob = @test_nowarn ODEProblem(sys, [], (0.0, 1.0), [p => 1.0])
+    @test_nowarn remake(prob, p = [p => 1.0])
+    @test_nowarn remake(prob, p = [p => ForwardDiff.Dual(1.0)])
+end
+
+@testset "`late_binding_update_u0_p` copies `newp`" begin
+    @parameters k1 k2
+    @variables X1(t) X2(t)
+    @parameters Γ[1:1]=missing [guess = [1.0]]
+    eqs = [
+        D(X1) ~ k1 * (Γ[1] - X1) - k2 * X1
+    ]
+    obs = [X2 ~ Γ[1] - X1]
+    @mtkbuild osys = ODESystem(eqs, t, [X1, X2], [k1, k2, Γ]; observed = obs)
+    u0 = [X1 => 1.0, X2 => 2.0]
+    ps = [k1 => 0.1, k2 => 0.2]
+
+    oprob1 = ODEProblem(osys, u0, 1.0, ps)
+    oprob2 = remake(oprob1, u0 = [X1 => 10.0])
+    integ1 = init(oprob1)
+    @test integ1[X1] ≈ 1.0
+end

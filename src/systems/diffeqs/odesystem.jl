@@ -505,11 +505,16 @@ function build_explicit_observed_function(sys, ts;
         end
     end
     allsyms = Set(all_symbols(sys))
+    iv = has_iv(sys) ? get_iv(sys) : nothing
     for var in vs
         var = unwrap(var)
         newvar = get(ns_map, var, nothing)
         if newvar !== nothing
             namespace_subs[var] = newvar
+            var = newvar
+        end
+        if throw && !var_in_varlist(var, allsyms, iv)
+            Base.throw(ArgumentError("Symbol $var is not present in the system."))
         end
     end
     ts = fast_substitute(ts, namespace_subs)
@@ -551,12 +556,14 @@ function build_explicit_observed_function(sys, ts;
     if fns isa Tuple
         oop, iip = eval_or_rgf.(fns; eval_expression, eval_module)
         f = GeneratedFunctionWrapper{(
-            p_start, length(args) - length(ps) + 1, is_split(sys))}(oop, iip)
+            p_start + is_dde(sys), length(args) - length(ps) + 1 + is_dde(sys), is_split(sys))}(
+            oop, iip)
         return return_inplace ? (f, f) : f
     else
         f = eval_or_rgf(fns; eval_expression, eval_module)
         f = GeneratedFunctionWrapper{(
-            p_start, length(args) - length(ps) + 1, is_split(sys))}(f, nothing)
+            p_start + is_dde(sys), length(args) - length(ps) + 1 + is_dde(sys), is_split(sys))}(
+            f, nothing)
         return f
     end
 end

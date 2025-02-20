@@ -1455,7 +1455,9 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
         guesses = Dict()
     end
 
-    u0map = merge(ModelingToolkit.guesses(sys), todict(guesses), todict(u0map))
+    filter_missing_values!(u0map)
+    filter_missing_values!(parammap)
+    u0map = merge(ModelingToolkit.guesses(sys), todict(guesses), u0map)
 
     fullmap = merge(u0map, parammap)
     u0T = Union{}

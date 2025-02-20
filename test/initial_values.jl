@@ -1,5 +1,6 @@
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D, get_u0
+using OrdinaryDiffEq
 using SymbolicIndexingInterface: getu
 
 @variables x(t)[1:3]=[1.0, 2.0, 3.0] y(t) z(t)[1:2]
@@ -182,4 +183,19 @@ end
     # used to throw a `MethodError` complaining about `getindex(::Nothing, ::CartesianIndex{2})`
     @test_throws ModelingToolkit.MissingParametersError ODEProblem(
         sys, [x => ones(2)], (0.0, 1.0))
+end
+
+@testset "Unscalarized default for scalarized observed variable" begin
+    @parameters p[1:4] = rand(4)
+    @variables x(t)[1:4] y(t)[1:2]
+    eqs = [
+        D(x) ~ x,
+        y[1] ~ x[3],
+        y[2] ~ x[4]
+    ]
+    @mtkbuild sys = ODESystem(eqs, t; defaults = [x => vcat(ones(2), y), y => x[1:2] ./ 2])
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    sol = solve(prob)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol.u[1] ≈ [1.0, 1.0, 0.5, 0.5]
 end
