@@ -87,7 +87,6 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
 
     @unpack structure, fullvars = state
     @unpack graph, var_to_diff, var_types = structure
-    eqs = equations(state)
     brown_vars = Int[]
     new_idxs = zeros(Int, length(var_types))
     idx = 0
@@ -104,7 +103,8 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
         Is = Int[]
         Js = Int[]
         vals = Num[]
-        new_eqs = copy(eqs)
+        make_eqs_zero_equals!(state)
+        new_eqs = copy(equations(state))
         dvar2eq = Dict{Any, Int}()
         for (v, dv) in enumerate(var_to_diff)
             dv === nothing && continue

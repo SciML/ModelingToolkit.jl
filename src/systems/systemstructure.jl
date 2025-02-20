@@ -198,6 +198,7 @@ end
 
 mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     sys::T
+    original_eqs::Vector{Equation}
     fullvars::Vector
     structure::SystemStructure
     extra_eqs::Vector
@@ -206,6 +207,7 @@ end
 TransformationState(sys::AbstractSystem) = TearingState(sys)
 function system_subset(ts::TearingState, ieqs::Vector{Int})
     eqs = equations(ts)
+    @set! ts.original_eqs = ts.original_eqs[ieqs]
     @set! ts.sys.eqs = eqs[ieqs]
     @set! ts.structure = system_subset(ts.structure, ieqs)
     ts
@@ -252,7 +254,8 @@ function TearingState(sys; quick_cancel = false, check = true)
     ivs = independent_variables(sys)
     iv = length(ivs) == 1 ? ivs[1] : nothing
     # scalarize array equations, without scalarizing arguments to registered functions
-    eqs = flatten_equations(copy(equations(sys)))
+    original_eqs = flatten_equations(copy(equations(sys)))
+    eqs = copy(original_eqs)
     neqs = length(eqs)
     dervaridxs = OrderedSet{Int}()
     var2idx = Dict{Any, Int}()
@@ -428,7 +431,7 @@ function TearingState(sys; quick_cancel = false, check = true)
 
     eq_to_diff = DiffGraph(nsrcs(graph))
 
-    ts = TearingState(sys, fullvars,
+    ts = TearingState(sys, original_eqs, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
             complete(graph), nothing, var_types, sys isa DiscreteSystem),
         Any[])
@@ -622,6 +625,22 @@ function merge_io(io, inputs)
     return io
 end
 
+function make_eqs_zero_equals!(ts::TearingState)
+    neweqs = map(enumerate(get_eqs(ts.sys))) do kvp
+        i, eq = kvp
+        isalgeq = true
+        for j in 𝑠neighbors(ts.structure.graph, i)
+            isalgeq &= invview(ts.structure.var_to_diff)[j] === nothing
+        end
+        if isalgeq
+            return 0 ~ eq.rhs - eq.lhs
+        else
+            return eq
+        end
+    end
+    copyto!(get_eqs(ts.sys), neweqs)
+end
+
 function structural_simplify!(state::TearingState, io = nothing; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = true,
         kwargs...)
@@ -649,6 +668,7 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
                 throw(HybridSystemNotSupportedException("Discrete systems without JuliaSimCompiler are currently not supported in ODESystem."))
             end
         end
+        make_eqs_zero_equals!(tss[continuous_id])
         # puts the ios passed in to the call into the continous system
         cont_io = merge_io(io, inputs[continuous_id])
         # simplify as normal
