@@ -792,8 +792,8 @@ function DiffEqBase.SDEProblem{iip, specialize}(
 
     kwargs = filter_kwargs(kwargs)
 
-    SDEProblem{iip}(f, u0, tspan, p; callback = cbs, noise,
-        noise_rate_prototype = noise_rate_prototype, kwargs...)
+    return remake(SDEProblem{iip}(f, u0, tspan, p; callback = cbs, noise,
+        noise_rate_prototype = noise_rate_prototype, kwargs...))
 end
 
 function DiffEqBase.SDEProblem(sys::ODESystem, args...; kwargs...)
