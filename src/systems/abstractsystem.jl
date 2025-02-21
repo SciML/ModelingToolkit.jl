@@ -769,7 +769,9 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
     end
     if split && has_index_cache(sys)
         @set! sys.index_cache = IndexCache(sys)
-        all_ps = get_ps(sys)
+        # Ideally we'd do `get_ps` but if `flatten = false`
+        # we don't get all of them. So we call `parameters`.
+        all_ps = parameters(sys; initial_parameters = true)
         if !isempty(all_ps)
             # reorder parameters by portions
             ps_split = reorder_parameters(sys, all_ps)
