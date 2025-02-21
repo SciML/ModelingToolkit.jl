@@ -1388,3 +1388,29 @@ end
     integ1 = init(oprob1)
     @test integ1[X1] ≈ 1.0
 end
+
+@testset "Trivial initialization is run on problem construction" begin
+    @variables _x(..) y(t)
+    @brownian a
+    @parameters tot
+    x = _x(t)
+    @testset "$Problem" for (Problem, lhs, rhs) in [
+        (ODEProblem, D, 0.0),
+        (SDEProblem, D, a),
+        (DDEProblem, D, _x(t - 0.1)),
+        (SDDEProblem, D, _x(t - 0.1) + a)
+    ]
+        @mtkbuild sys = ModelingToolkit.System([lhs(x) ~ x + rhs, x + y ~ tot], t;
+            guesses = [tot => 1.0], defaults = [tot => missing])
+        prob = Problem(sys, [x => 1.0, y => 1.0], (0.0, 1.0))
+        @test prob.ps[tot] ≈ 2.0
+    end
+    @testset "$Problem" for Problem in [NonlinearProblem, NonlinearLeastSquaresProblem]
+        @parameters p1 p2
+        @mtkbuild sys = NonlinearSystem([x^2 + y^2 ~ p1, (x - 1)^2 + (y - 1)^2 ~ p2];
+            parameter_dependencies = [p2 ~ 2p1],
+            guesses = [p1 => 0.0], defaults = [p1 => missing])
+        prob = Problem(sys, [x => 1.0, y => 1.0], [p2 => 6.0])
+        @test prob.ps[p1] ≈ 3.0
+    end
+end
