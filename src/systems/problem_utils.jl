@@ -601,7 +601,7 @@ All other keyword arguments are forwarded to `InitializationProblem`.
 """
 function maybe_build_initialization_problem(
         sys::AbstractSystem, op::AbstractDict, u0map, pmap, t, defs,
-        guesses, missing_unknowns; implicit_dae = false, kwargs...)
+        guesses, missing_unknowns; implicit_dae = false, u0_constructor = identity, kwargs...)
     guesses = merge(ModelingToolkit.guesses(sys), todict(guesses))
 
     if t === nothing && is_time_dependent(sys)
@@ -615,7 +615,7 @@ function maybe_build_initialization_problem(
     if is_time_dependent(sys)
         all_init_syms = Set(all_symbols(initializeprob))
         solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
-        initializeprobmap = getu(initializeprob, solved_unknowns)
+        initializeprobmap = u0_constructor ∘ getu(initializeprob, solved_unknowns)
     else
         initializeprobmap = nothing
     end
@@ -781,7 +781,8 @@ function process_SciMLProblem(
             eval_expression, eval_module, fully_determined,
             warn_cyclic_dependency, check_units = check_initialization_units,
             circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
-            force_time_independent = force_initialization_time_independent, algebraic_only, allow_incomplete)
+            force_time_independent = force_initialization_time_independent, algebraic_only, allow_incomplete,
+            u0_constructor)
 
         kwargs = merge(kwargs, kws)
     end
