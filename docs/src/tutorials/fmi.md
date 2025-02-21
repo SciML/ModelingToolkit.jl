@@ -139,7 +139,7 @@ FMUs can also be imported as individual components. For this example, we will us
 in the test suite of ModelingToolkit.jl.
 
 ```@example fmi
-fmu = loadFMU(joinpath("test", "fmi", "fmus", "SimpleAdder.fmu"); type = :ME)
+fmu = loadFMU(joinpath("..", "test", "fmi", "fmus", "SimpleAdder.fmu"); type = :ME)
 fmu.modelDescription.modelVariables
 ```
 
@@ -207,7 +207,7 @@ CoSimulation FMUs are not directly involved in the RHS of the system - instead o
 callbacks - we can use a solver with automatic differentiation.
 
 ```@example fmi
-fmu = loadFMU(joinpath("test", "fmi", "fmus", "SimpleAdder.fmu"); type = :CS)
+fmu = loadFMU(joinpath("..", "test", "fmi", "fmus", "SimpleAdder.fmu"); type = :CS)
 @named adder = ModelingToolkit.FMIComponent(
     Val(2); fmu, type = :CS, communication_step_size = 1e-3,
     reinitializealg = BrownFullBasicInit())
