@@ -4,6 +4,7 @@ using Graphs
 using SparseArrays
 using UnPack
 using ModelingToolkit: t_nounits as t, D_nounits as D
+const ST = StructuralTransformations
 
 # Define some variables
 @parameters L g
