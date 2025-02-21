@@ -117,6 +117,7 @@ Variables as they are specified in `vars` will take priority over their `toterm`
 function add_fallbacks!(
         varmap::AnyDict, vars::Vector, fallbacks::Dict; toterm = default_toterm)
     missingvars = Set()
+    arrvars = Set()
     for var in vars
         haskey(varmap, var) && continue
         ttvar = toterm(var)
@@ -157,6 +158,7 @@ function add_fallbacks!(
                     fallbacks, arrvar, nothing) get(fallbacks, ttarrvar, nothing) Some(nothing)
                 if val !== nothing
                     val = val[idxs...]
+                    is_sized_array_symbolic(arrvar) && push!(arrvars, arrvar)
                 end
             else
                 val = nothing
@@ -168,6 +170,10 @@ function add_fallbacks!(
                 varmap[var] = val
             end
         end
+    end
+
+    for arrvar in arrvars
+        varmap[arrvar] = collect(arrvar)
     end
 
     return missingvars
@@ -269,9 +275,9 @@ entry for `eq.lhs`, insert the reverse mapping if `eq.rhs` is not a number.
 """
 function add_observed_equations!(varmap::AbstractDict, eqs)
     for eq in eqs
-        if haskey(varmap, eq.lhs)
+        if var_in_varlist(eq.lhs, keys(varmap), nothing)
             eq.rhs isa Number && continue
-            haskey(varmap, eq.rhs) && continue
+            var_in_varlist(eq.rhs, keys(varmap), nothing) && continue
             !iscall(eq.rhs) || issym(operation(eq.rhs)) || continue
             varmap[eq.rhs] = eq.lhs
         else

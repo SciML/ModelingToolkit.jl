@@ -578,11 +578,19 @@ function CacheWriter(sys::AbstractSystem, buffer_types::Vector{TypeT},
         Symbol(:tmp, i) ← SetArray(true, :(out[$i]), get(exprs, T, []))
     end
 
+    function argument_name(i::Int)
+        if i <= length(solsyms)
+            return :($(generated_argument_name(1))[$i])
+        end
+        return generated_argument_name(i - length(solsyms))
+    end
+    array_assignments = array_variable_assignments(solsyms...; argument_name)
     fn = build_function_wrapper(
-        sys, nothing, :out, DestructuredArgs(DestructuredArgs.(solsyms)),
-        DestructuredArgs.(rps)...; p_start = 3, p_end = length(rps) + 2,
+        sys, nothing, :out,
+        DestructuredArgs(DestructuredArgs.(solsyms), generated_argument_name(1)),
+        rps...; p_start = 3, p_end = length(rps) + 2,
         expression = Val{true}, add_observed = false,
-        extra_assignments = [obs_assigns; body])
+        extra_assignments = [array_assignments; obs_assigns; body])
     fn = eval_or_rgf(fn; eval_expression, eval_module)
     fn = GeneratedFunctionWrapper{(3, 3, is_split(sys))}(fn, nothing)
     return CacheWriter(fn)
