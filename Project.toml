@@ -83,6 +83,8 @@ AbstractTrees = "0.3, 0.4"
 ArrayInterface = "6, 7"
 BifurcationKit = "0.4"
 BlockArrays = "1.1"
+BoundaryValueDiffEqAscher = "1.1.0"
+BoundaryValueDiffEqMIRK = "1.4.0"
 ChainRulesCore = "1"
 Combinatorics = "1"
 CommonSolve = "0.2.4"
@@ -157,6 +159,8 @@ julia = "1.9"
 [extras]
 AmplNLWriter = "7c4d4715-977e-5154-bfe0-e096adeac482"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+BoundaryValueDiffEqMIRK = "1a22d4ce-7765-49ea-b6f2-13c8438986a6"
+BoundaryValueDiffEqAscher = "7227322d-7511-4e07-9247-ad6ff830280e"
 ControlSystemsBase = "aaaaaaaa-a6ca-5380-bf3e-84a91bcd477e"
 DataInterpolations = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
 DeepDiffs = "ab62b9b5-e342-54a8-a765-a90f495de1a6"
@@ -189,4 +193,4 @@ Sundials = "c3572dad-4567-51f8-b174-8c6c989267f4"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["AmplNLWriter", "BenchmarkTools", "ControlSystemsBase", "DataInterpolations", "DelayDiffEq", "NonlinearSolve", "ForwardDiff", "Ipopt", "Ipopt_jll", "ModelingToolkitStandardLibrary", "Optimization", "OptimizationOptimJL", "OptimizationMOI", "OrdinaryDiffEq", "OrdinaryDiffEqCore", "OrdinaryDiffEqDefault", "REPL", "Random", "ReferenceTests", "SafeTestsets", "StableRNGs", "Statistics", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials", "StochasticDelayDiffEq", "Pkg", "JET", "OrdinaryDiffEqNonlinearSolve", "Logging"]
+test = ["AmplNLWriter", "BenchmarkTools", "BoundaryValueDiffEqMIRK", "BoundaryValueDiffEqAscher", "ControlSystemsBase", "DataInterpolations", "DelayDiffEq", "NonlinearSolve", "ForwardDiff", "Ipopt", "Ipopt_jll", "ModelingToolkitStandardLibrary", "Optimization", "OptimizationOptimJL", "OptimizationMOI", "OrdinaryDiffEq", "OrdinaryDiffEqCore", "OrdinaryDiffEqDefault", "REPL", "Random", "ReferenceTests", "SafeTestsets", "StableRNGs", "Statistics", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials", "StochasticDelayDiffEq", "Pkg", "JET", "OrdinaryDiffEqNonlinearSolve", "Logging"]

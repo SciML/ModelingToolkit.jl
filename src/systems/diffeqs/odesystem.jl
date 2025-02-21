@@ -49,6 +49,8 @@ struct ODESystem <: AbstractODESystem
     ctrls::Vector
     """Observed variables."""
     observed::Vector{Equation}
+    """System of constraints that must be satisfied by the solution to the system."""
+    constraintsystem::Union{Nothing, ConstraintsSystem}
     """
     Time-derivative matrix. Note: this field will not be defined until
     [`calculate_tgrad`](@ref) is called on the system.
@@ -191,7 +193,7 @@ struct ODESystem <: AbstractODESystem
     """
     parent::Any
 
-    function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
+    function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, constraints, tgrad,
             jac, ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses,
             torn_matching, initializesystem, initialization_eqs, schedule,
             connector_type, preface, cevents,
@@ -212,7 +214,7 @@ struct ODESystem <: AbstractODESystem
             u = __get_unit_type(dvs, ps, iv)
             check_units(u, deqs)
         end
-        new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
+        new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, constraints, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses, torn_matching,
             initializesystem, initialization_eqs, schedule, connector_type, preface,
             cevents, devents, parameter_dependencies, assertions, metadata,
@@ -224,6 +226,7 @@ end
 function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         controls = Num[],
         observed = Equation[],
+        constraintsystem = nothing,
         systems = ODESystem[],
         tspan = nothing,
         name = nothing,
@@ -297,9 +300,21 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     if is_dde === nothing
         is_dde = _check_if_dde(deqs, iv′, systems)
     end
+            
+    if !isempty(systems) && !isnothing(constraintsystem)
+        conssystems = ConstraintsSystem[]
+        for sys in systems
+            cons = get_constraintsystem(sys)
+            cons !== nothing && push!(conssystems, cons) 
+        end
+        @show conssystems
+        @set! constraintsystem.systems = conssystems
+    end        
+
     assertions = Dict{BasicSymbolic, Any}(unwrap(k) => v for (k, v) in assertions)
+
     ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-        deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
+        deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, constraintsystem, tgrad, jac,
         ctrl_jac, Wfact, Wfact_t, name, description, systems,
         defaults, guesses, nothing, initializesystem,
         initialization_eqs, schedule, connector_type, preface, cont_callbacks,
@@ -307,7 +322,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         metadata, gui_metadata, is_dde, tstops, checks = checks)
 end
 
-function ODESystem(eqs, iv; kwargs...)
+function ODESystem(eqs, iv; constraints = Equation[], kwargs...)
     diffvars, allunknowns, ps, eqs = process_equations(eqs, iv)
 
     for eq in get(kwargs, :parameter_dependencies, Equation[])
@@ -339,8 +354,22 @@ function ODESystem(eqs, iv; kwargs...)
     end
     algevars = setdiff(allunknowns, diffvars)
 
-    return ODESystem(eqs, iv, collect(Iterators.flatten((diffvars, algevars))),
-        collect(new_ps); kwargs...)
+    consvars = OrderedSet()
+    constraintsystem = nothing
+    if !isempty(constraints)
+        constraintsystem = process_constraint_system(constraints, allunknowns, new_ps, iv)
+        for st in get_unknowns(constraintsystem)
+            iscall(st) ? 
+                !in(operation(st)(iv), allunknowns) && push!(consvars, st) :
+                !in(st, allunknowns) && push!(consvars, st)
+        end
+        for p in parameters(constraintsystem)
+            !in(p, new_ps) && push!(new_ps, p)
+        end
+    end
+
+    return ODESystem(eqs, iv, collect(Iterators.flatten((diffvars, algevars, consvars))),
+        collect(new_ps); constraintsystem, kwargs...)
 end
 
 # NOTE: equality does not check cached Jacobian
@@ -667,4 +696,40 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::ODESystem; hint = true, 
     nini > 0 && hint && print(io, " see initialization_equations(sys)")
 
     return nothing
+end
+
+# Validate that all the variables in the BVP constraints are well-formed states or parameters.
+#  - Callable/delay variables (e.g. of the form x(0.6) should be unknowns of the system (and have one arg, etc.)
+#  - Callable/delay parameters should be parameters of the system (and have one arg, etc.)
+function process_constraint_system(constraints::Vector{Equation}, sts, ps, iv; consname = :cons)
+    isempty(constraints) && return nothing
+
+    constraintsts = OrderedSet()
+    constraintps = OrderedSet()
+
+    for cons in constraints
+        collect_vars!(constraintsts, constraintps, cons, iv)
+    end
+
+    # Validate the states.
+    for var in constraintsts
+        if !iscall(var)
+            occursin(iv, var) && (var ∈ sts || throw(ArgumentError("Time-dependent variable $var is not an unknown of the system.")))
+        elseif length(arguments(var)) > 1
+            throw(ArgumentError("Too many arguments for variable $var."))
+        elseif length(arguments(var)) == 1
+            arg = only(arguments(var))
+            operation(var)(iv) ∈ sts || 
+                throw(ArgumentError("Variable $var is not a variable of the ODESystem. Called variables must be variables of the ODESystem."))
+
+            isequal(arg, iv) || isparameter(arg) || arg isa Integer || arg isa AbstractFloat || 
+                throw(ArgumentError("Invalid argument specified for variable $var. The argument of the variable should be either $iv, a parameter, or a value specifying the time that the constraint holds."))
+
+            isparameter(arg) && push!(constraintps, arg)
+        else
+            var ∈ sts && @warn "Variable $var has no argument. It will be interpreted as $var($iv), and the constraint will apply to the entire interval."
+        end
+    end
+
+    ConstraintsSystem(constraints, collect(constraintsts), collect(constraintps); name = consname)
 end
