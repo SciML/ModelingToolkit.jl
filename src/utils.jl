@@ -1028,6 +1028,8 @@ end
 
 diff2term_with_unit(x, t) = _with_unit(diff2term, x, t)
 lower_varname_with_unit(var, iv, order) = _with_unit(lower_varname, var, iv, iv, order)
+shift2term_with_unit(x, t) = _with_unit(shift2term, x, t)
+lower_shift_varname_with_unit(var, iv) = _with_unit(lower_shift_varname, var, iv, iv)
 
 """
     $(TYPEDSIGNATURES)
