@@ -253,3 +253,12 @@ import ModelingToolkitStandardLibrary.Hydraulic.IsothermalCompressible as IC
     sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
 end
+
+@testset "Vector parameters in function arguments" begin
+    @variables x y
+    @parameters p[1:2] (f::Function)(..)
+
+    @mtkbuild sys = NonlinearSystem([x^2 - p[1] ^ 2 ~ 0, y^2 ~ f(p)])
+    prob = NonlinearProblem(sys, [x => 1.0, y => 1.0], [p => ones(2), f=>sum])
+    @test_nowarn solve(prob, NewtonRaphson())
+end
