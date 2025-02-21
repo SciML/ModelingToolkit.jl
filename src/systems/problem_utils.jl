@@ -755,7 +755,7 @@ function process_SciMLProblem(
 
     u0map = to_varmap(u0map, dvs)
     symbols_to_symbolics!(sys, u0map)
-    pmap = to_varmap(pmap, ps)
+    pmap = to_varmap(pmap, parameters(sys))
     symbols_to_symbolics!(sys, pmap)
 
     check_inputmap_keys(sys, u0map, pmap)
