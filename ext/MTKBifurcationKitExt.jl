@@ -97,7 +97,10 @@ function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem,
     @set! nsys.index_cache = nothing # force usage of a parameter vector instead of `MTKParameters`
     # Creates F and J functions.
     ofun = NonlinearFunction(nsys; jac = jac)
-    F = ofun.f
+    F = let f = ofun.f
+        _f(resid, u, p) = (f(resid, u, p); resid)
+        _f(u, p) = f(u, p)
+    end
     J = jac ? ofun.jac : nothing
 
     # Converts the input state guess.
@@ -136,6 +139,7 @@ function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem,
         args...;
         record_from_solution = record_from_solution,
         J = J,
+        inplace = true,
         kwargs...)
 end
 

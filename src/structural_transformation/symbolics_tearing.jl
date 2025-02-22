@@ -84,7 +84,7 @@ function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int; kwargs...)
 end
 
 function tearing_sub(expr, dict, s)
-    expr = Symbolics.fixpoint_sub(expr, dict)
+    expr = Symbolics.fixpoint_sub(expr, dict; operator = ModelingToolkit.Initial)
     s ? simplify(expr) : expr
 end
 
@@ -786,6 +786,7 @@ function cse_and_array_hacks(sys, obs, subeqs, unknowns, neweqs; cse = true, arr
         # HACK 1
         if cse && is_getindexed_array(rhs)
             rhs_arr = arguments(rhs)[1]
+            iscall(rhs_arr) && operation(rhs_arr) isa Symbolics.Operator && continue
             if !haskey(rhs_to_tempvar, rhs_arr)
                 tempvar = gensym(Symbol(lhs))
                 N = length(rhs_arr)
@@ -858,6 +859,7 @@ function cse_and_array_hacks(sys, obs, subeqs, unknowns, neweqs; cse = true, arr
         Symbolics.shape(sym) != Symbolics.Unknown() || continue
         arg1 = arguments(sym)[1]
         cnt = get(arr_obs_occurrences, arg1, 0)
+        cnt == 0 && continue
         arr_obs_occurrences[arg1] = cnt + 1
     end
     for eq in neweqs

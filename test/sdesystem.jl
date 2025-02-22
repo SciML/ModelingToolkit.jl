@@ -24,7 +24,7 @@ noiseeqs = [0.1 * x,
 @named de = SDESystem(eqs, noiseeqs, tt, [x, y, z], [σ, ρ, β], tspan = (0.0, 10.0))
 de = complete(de)
 f = eval(generate_diffusion_function(de)[1])
-@test f(ones(3), (rand(3),), nothing) == 0.1ones(3)
+@test f(ones(3), rand(3), nothing) == 0.1ones(3)
 
 f = SDEFunction(de)
 prob = SDEProblem(de, [1.0, 0.0, 0.0], (0.0, 100.0), [10.0, 26.0, 2.33])

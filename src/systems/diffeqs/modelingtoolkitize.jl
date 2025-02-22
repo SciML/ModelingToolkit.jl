@@ -93,6 +93,8 @@ function modelingtoolkitize(
     else
         Dict()
     end
+    filter!(x -> !iscall(x) || !(operation(x) isa Initial), params)
+    filter!(x -> !iscall(x[1]) || !(operation(x[1]) isa Initial), default_p)
     de = ODESystem(eqs, t, sts, params,
         defaults = merge(default_u0, default_p);
         name = gensym(:MTKizedODE),
@@ -207,17 +209,17 @@ function define_params(p::MTKParameters, names = nothing)
             for _ in buf
                 push!(
                     ps,
-                    if names === nothing
-                        toparam(variable(:α, i))
-                    else
-                        toparam(variable(names[i]))
-                    end
+                    toparam(variable(:α, i))
                 )
             end
         end
         return identity.(ps)
     else
-        return collect(values(names))
+        new_p = as_any_buffer(p)
+        for (k, v) in names
+            new_p[k] = v
+        end
+        return reduce(vcat, new_p; init = [])
     end
 end
 

@@ -171,7 +171,8 @@ function calculate_jacobian(sys::ConstraintsSystem; sparse = false, simplify = f
 end
 
 function generate_jacobian(
-        sys::ConstraintsSystem, vs = unknowns(sys), ps = parameters(sys);
+        sys::ConstraintsSystem, vs = unknowns(sys), ps = parameters(
+            sys; initial_parameters = true);
         sparse = false, simplify = false, kwargs...)
     jac = calculate_jacobian(sys, sparse = sparse, simplify = simplify)
     p = reorder_parameters(sys, ps)
@@ -190,7 +191,8 @@ function calculate_hessian(sys::ConstraintsSystem; sparse = false, simplify = fa
 end
 
 function generate_hessian(
-        sys::ConstraintsSystem, vs = unknowns(sys), ps = parameters(sys);
+        sys::ConstraintsSystem, vs = unknowns(sys), ps = parameters(
+            sys; initial_parameters = true);
         sparse = false, simplify = false, kwargs...)
     hess = calculate_hessian(sys, sparse = sparse, simplify = simplify)
     p = reorder_parameters(sys, ps)
@@ -198,7 +200,7 @@ function generate_hessian(
 end
 
 function generate_function(sys::ConstraintsSystem, dvs = unknowns(sys),
-        ps = parameters(sys);
+        ps = parameters(sys; initial_parameters = true);
         kwargs...)
     lhss = generate_canonical_form_lhss(sys)
     p = reorder_parameters(sys, value.(ps))

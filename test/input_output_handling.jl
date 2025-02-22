@@ -128,15 +128,17 @@ eqs = [connect(torque.flange, inertia1.flange_a)
        connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
        y ~ inertia2.w + torque.tau.u]
 model = ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
-    name = :name)
+    name = :name, guesses = [spring.flange_a.phi => 0.0])
 model_outputs = [inertia1.w, inertia2.w, inertia1.phi, inertia2.phi]
 model_inputs = [torque.tau.u]
-matrices, ssys = linearize(model, model_inputs, model_outputs);
+op = Dict(torque.tau.u => 0.0)
+matrices, ssys = linearize(
+    model, model_inputs, model_outputs; op);
 @test length(ModelingToolkit.outputs(ssys)) == 4
 
 if VERSION >= v"1.8" # :opaque_closure not supported before
     let # Just to have a local scope for D
-        matrices, ssys = linearize(model, model_inputs, [y])
+        matrices, ssys = linearize(model, model_inputs, [y]; op)
         A, B, C, D = matrices
         obsf = ModelingToolkit.build_explicit_observed_function(ssys,
             [y],
@@ -168,7 +170,7 @@ end
         @test isequal(dvs[], x)
         @test isempty(ps)
 
-        p = nothing
+        p = [rand()]
         x = [rand()]
         u = [rand()]
         @test f[1](x, u, p, 1) == -x + u
@@ -186,7 +188,7 @@ end
         @test isequal(dvs[], x)
         @test isempty(ps)
 
-        p = nothing
+        p = [rand()]
         x = [rand()]
         u = [rand()]
         @test f[1](x, u, p, 1) == -x + u
@@ -204,7 +206,7 @@ end
         @test isequal(dvs[], x)
         @test isempty(ps)
 
-        p = nothing
+        p = [rand()]
         x = [rand()]
         u = [rand()]
         d = [rand()]
@@ -320,7 +322,8 @@ function SystemModel(u = nothing; name = :model)
                 u
             ])
     end
-    ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
+    ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
+        name, guesses = [spring.flange_a.phi => 0.0])
 end
 
 model = SystemModel() # Model with load disturbance
@@ -409,7 +412,8 @@ matrices, ssys = linearize(augmented_sys,
         augmented_sys.u,
         augmented_sys.input.u[2],
         augmented_sys.d
-    ], outs)
+    ], outs;
+    op = [augmented_sys.u => 0.0, augmented_sys.input.u[2] => 0.0, augmented_sys.d => 0.0])
 @test matrices.A ≈ [A [1; 0]; zeros(1, 2) -0.001]
 @test matrices.B == I
 @test matrices.C == [C zeros(2)]
@@ -430,7 +434,7 @@ matrices, ssys = linearize(augmented_sys,
     (; io_sys,) = ModelingToolkit.generate_control_function(sys, simplify = true)
     obsfn = ModelingToolkit.build_explicit_observed_function(
         io_sys, [x + u * t]; inputs = [u])
-    @test obsfn([1.0], [2.0], nothing, 3.0) == [7.0]
+    @test obsfn([1.0], [2.0], MTKParameters(io_sys, []), 3.0) == [7.0]
 end
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/2896
@@ -440,8 +444,8 @@ end
     eqs = [D(x) ~ c * x]
     @named sys = ODESystem(eqs, t, [x], [])
 
-    f, dvs, ps = ModelingToolkit.generate_control_function(sys, simplify = true)
-    @test f[1]([0.5], nothing, nothing, 0.0) == [1.0]
+    f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys, simplify = true)
+    @test f[1]([0.5], nothing, MTKParameters(io_sys, []), 0.0) == [1.0]
 end
 
 @testset "With callable symbolic" begin

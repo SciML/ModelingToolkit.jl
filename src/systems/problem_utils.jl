@@ -117,6 +117,7 @@ Variables as they are specified in `vars` will take priority over their `toterm`
 function add_fallbacks!(
         varmap::AnyDict, vars::Vector, fallbacks::Dict; toterm = default_toterm)
     missingvars = Set()
+    arrvars = Set()
     for var in vars
         haskey(varmap, var) && continue
         ttvar = toterm(var)
@@ -157,6 +158,7 @@ function add_fallbacks!(
                     fallbacks, arrvar, nothing) get(fallbacks, ttarrvar, nothing) Some(nothing)
                 if val !== nothing
                     val = val[idxs...]
+                    is_sized_array_symbolic(arrvar) && push!(arrvars, arrvar)
                 end
             else
                 val = nothing
@@ -168,6 +170,10 @@ function add_fallbacks!(
                 varmap[var] = val
             end
         end
+    end
+
+    for arrvar in arrvars
+        varmap[arrvar] = collect(arrvar)
     end
 
     return missingvars
@@ -251,7 +257,7 @@ symbolics return an empty array of the appropriate `eltype`.
 function zero_var(x::Symbolic{T}) where {V <: Number, T <: Union{V, AbstractArray{V}}}
     if Symbolics.isarraysymbolic(x)
         if is_sized_array_symbolic(x)
-            return zeros(T, size(x))
+            return zeros(eltype(T), size(x))
         else
             return T[]
         end
@@ -269,9 +275,9 @@ entry for `eq.lhs`, insert the reverse mapping if `eq.rhs` is not a number.
 """
 function add_observed_equations!(varmap::AbstractDict, eqs)
     for eq in eqs
-        if haskey(varmap, eq.lhs)
+        if var_in_varlist(eq.lhs, keys(varmap), nothing)
             eq.rhs isa Number && continue
-            haskey(varmap, eq.rhs) && continue
+            var_in_varlist(eq.rhs, keys(varmap), nothing) && continue
             !iscall(eq.rhs) || issym(operation(eq.rhs)) || continue
             varmap[eq.rhs] = eq.lhs
         else
@@ -442,9 +448,20 @@ end
     $(TYPEDSIGNATURES)
 
 Remove keys in `varmap` whose values are `nothing`.
+
+If `missing_values` is not `nothing`, it is assumed to be a collection and all removed
+keys will be added to it.
 """
-function filter_missing_values!(varmap::AbstractDict)
-    filter!(kvp -> kvp[2] !== nothing, varmap)
+function filter_missing_values!(varmap::AbstractDict; missing_values = nothing)
+    filter!(varmap) do kvp
+        if kvp[2] !== nothing
+            return true
+        end
+        if missing_values !== nothing
+            push!(missing_values, kvp[1])
+        end
+        return false
+    end
 end
 
 struct GetUpdatedMTKParameters{G, S}
@@ -455,7 +472,9 @@ struct GetUpdatedMTKParameters{G, S}
 end
 
 function (f::GetUpdatedMTKParameters)(prob, initializesol)
-    mtkp = copy(parameter_values(prob))
+    p = parameter_values(prob)
+    p === nothing && return nothing
+    mtkp = copy(p)
     f.setpunknowns(mtkp, f.getpunknowns(initializesol))
     mtkp
 end
@@ -509,8 +528,11 @@ Construct the operating point of the system from the user-provided `u0map` and `
 defaults `defs`, constant equations `cmap` (from `get_cmap(sys)`), unknowns `dvs` and
 parameters `ps`. Return the operating point as a dictionary, the list of unknowns for which
 no values can be determined, and the list of parameters for which no values can be determined.
+
+Also updates `u0map` and `pmap` in-place to contain all the initial conditions in `op`, split
+by unknowns and parameters respectively.
 """
-function build_operating_point(
+function build_operating_point!(sys::AbstractSystem,
         u0map::AbstractDict, pmap::AbstractDict, defs::AbstractDict, cmap, dvs, ps)
     op = add_toterms(u0map)
     missing_unknowns = add_fallbacks!(op, dvs, defs)
@@ -518,11 +540,52 @@ function build_operating_point(
         haskey(op, k) && continue
         op[k] = v
     end
+    filter_missing_values!(op; missing_values = missing_unknowns)
+
     merge!(op, pmap)
     missing_pars = add_fallbacks!(op, ps, defs)
+    filter_missing_values!(op; missing_values = missing_pars)
     for eq in cmap
         op[eq.lhs] = eq.rhs
     end
+
+    filter!(kvp -> kvp[2] === nothing, u0map)
+    filter!(kvp -> kvp[2] === nothing, pmap)
+    neithermap = anydict()
+
+    for (k, v) in op
+        k = unwrap(k)
+        if is_parameter(sys, k)
+            pmap[k] = v
+        elseif has_parameter_dependency_with_lhs(sys, k) && is_variable_floatingpoint(k) &&
+               v !== nothing && !isequal(v, Initial(k))
+            op[Initial(k)] = v
+            pmap[Initial(k)] = v
+            op[k] = Initial(k)
+            pmap[k] = Initial(k)
+        elseif is_variable(sys, k) || has_observed_with_lhs(sys, k) ||
+               iscall(k) &&
+               operation(k) isa Differential && is_variable(sys, arguments(k)[1])
+            if symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v) &&
+               v !== nothing
+                op[Initial(k)] = v
+                pmap[Initial(k)] = v
+                op[k] = Initial(k)
+                v = Initial(k)
+            end
+            u0map[k] = v
+        else
+            neithermap[k] = v
+        end
+    end
+
+    for k in keys(u0map)
+        u0map[k] = fixpoint_sub(u0map[k], neithermap)
+    end
+    for k in keys(pmap)
+        pmap[k] = fixpoint_sub(pmap[k], neithermap)
+    end
+
     return op, missing_unknowns, missing_pars
 end
 
@@ -540,75 +603,70 @@ function maybe_build_initialization_problem(
         sys::AbstractSystem, op::AbstractDict, u0map, pmap, t, defs,
         guesses, missing_unknowns; implicit_dae = false, kwargs...)
     guesses = merge(ModelingToolkit.guesses(sys), todict(guesses))
-    has_observed_u0s = any(
-        k -> has_observed_with_lhs(sys, k) || has_parameter_dependency_with_lhs(sys, k),
-        keys(op))
-    solvablepars = [p
-                    for p in parameters(sys)
-                    if is_parameter_solvable(p, pmap, defs, guesses)]
-    has_dependent_unknowns = any(unknowns(sys)) do sym
-        val = get(op, sym, nothing)
-        val === nothing && return false
-        return symbolic_type(val) != NotSymbolic() || is_array_of_symbolics(val)
+
+    if t === nothing && is_time_dependent(sys)
+        t = 0.0
     end
-    if (((implicit_dae || has_observed_u0s || !isempty(missing_unknowns) ||
-          !isempty(solvablepars) || has_dependent_unknowns) &&
-         (!has_tearing_state(sys) || get_tearing_state(sys) !== nothing)) ||
-        !isempty(initialization_equations(sys))) &&
-       (!is_time_dependent(sys) || t !== nothing)
-        initializeprob = ModelingToolkit.InitializationProblem(
-            sys, t, u0map, pmap; guesses, kwargs...)
 
-        if is_time_dependent(sys)
-            all_init_syms = Set(all_symbols(initializeprob))
-            solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
-            initializeprobmap = getu(initializeprob, solved_unknowns)
-        else
-            initializeprobmap = nothing
-        end
+    initializeprob = ModelingToolkit.InitializationProblem{true, SciMLBase.FullSpecialize}(
+        sys, t, u0map, pmap; guesses, kwargs...)
+    meta = get_metadata(initializeprob.f.sys)
 
-        punknowns = [p
-                     for p in all_variable_symbols(initializeprob)
-                     if is_parameter(sys, p)]
-        if isempty(punknowns)
-            initializeprobpmap = nothing
-        else
-            getpunknowns = getu(initializeprob, punknowns)
-            setpunknowns = setp(sys, punknowns)
-            initializeprobpmap = GetUpdatedMTKParameters(getpunknowns, setpunknowns)
-        end
-
-        reqd_syms = parameter_symbols(initializeprob)
-        # we still want the `initialization_data` because it helps with `remake`
-        if initializeprobmap === nothing && initializeprobpmap === nothing
-            update_initializeprob! = nothing
-        else
-            update_initializeprob! = UpdateInitializeprob(
-                getu(sys, reqd_syms), setu(initializeprob, reqd_syms))
-        end
-
-        for p in punknowns
-            p = unwrap(p)
-            stype = symtype(p)
-            op[p] = get_temporary_value(p)
-            if iscall(p) && operation(p) === getindex
-                arrp = arguments(p)[1]
-                op[arrp] = collect(arrp)
-            end
-        end
-
-        if is_time_dependent(sys)
-            for v in missing_unknowns
-                op[v] = zero_var(v)
-            end
-            empty!(missing_unknowns)
-        end
-        return (;
-            initialization_data = SciMLBase.OverrideInitData(
-                initializeprob, update_initializeprob!, initializeprobmap,
-                initializeprobpmap))
+    if is_time_dependent(sys)
+        all_init_syms = Set(all_symbols(initializeprob))
+        solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
+        initializeprobmap = getu(initializeprob, solved_unknowns)
+    else
+        initializeprobmap = nothing
     end
-    return (;)
+
+    punknowns = [p
+                 for p in all_variable_symbols(initializeprob)
+                 if is_parameter(sys, p)]
+    if isempty(punknowns)
+        initializeprobpmap = nothing
+    else
+        getpunknowns = getu(initializeprob, punknowns)
+        setpunknowns = setp(sys, punknowns)
+        initializeprobpmap = GetUpdatedMTKParameters(getpunknowns, setpunknowns)
+    end
+
+    reqd_syms = parameter_symbols(initializeprob)
+    # we still want the `initialization_data` because it helps with `remake`
+    if initializeprobmap === nothing && initializeprobpmap === nothing
+        update_initializeprob! = nothing
+    else
+        update_initializeprob! = UpdateInitializeprob(
+            getu(sys, reqd_syms), setu(initializeprob, reqd_syms))
+    end
+
+    for p in punknowns
+        is_parameter_solvable(p, pmap, defs, guesses) || continue
+        get(op, p, missing) === missing || continue
+        p = unwrap(p)
+        stype = symtype(p)
+        op[p] = get_temporary_value(p)
+        if iscall(p) && operation(p) === getindex
+            arrp = arguments(p)[1]
+            op[arrp] = collect(arrp)
+        end
+    end
+
+    if is_time_dependent(sys)
+        for v in missing_unknowns
+            op[v] = zero_var(v)
+        end
+        empty!(missing_unknowns)
+    end
+
+    for v in missing_unknowns
+        op[v] = zero_var(v)
+    end
+    empty!(missing_unknowns)
+    return (;
+        initialization_data = SciMLBase.OverrideInitData(
+            initializeprob, update_initializeprob!, initializeprobmap,
+            initializeprobpmap))
 end
 
 """
@@ -665,6 +723,10 @@ Keyword arguments:
   other to attempt to arrive at a numeric value.
 - `use_scc`: Whether to use `SCCNonlinearProblem` for initialization if the system is fully
   determined.
+- `force_initialization_time_independent`: Whether to force the initialization to not use
+  the independent variable of `sys`.
+- `algebraic_only`: Whether to build the initialization problem using only algebraic equations.
+- `allow_incomplete`: Whether to allow incomplete initialization problems.
 
 All other keyword arguments are passed as-is to `constructor`.
 """
@@ -678,9 +740,11 @@ function process_SciMLProblem(
         symbolic_u0 = false, warn_cyclic_dependency = false,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10,
-        substitution_limit = 100, use_scc = true, kwargs...)
+        substitution_limit = 100, use_scc = true,
+        force_initialization_time_independent = false, algebraic_only = false,
+        allow_incomplete = false, kwargs...)
     dvs = unknowns(sys)
-    ps = parameters(sys)
+    ps = parameters(sys; initial_parameters = true)
     iv = has_iv(sys) ? get_iv(sys) : nothing
     eqs = equations(sys)
 
@@ -692,13 +756,20 @@ function process_SciMLProblem(
     u0map = to_varmap(u0map, dvs)
     symbols_to_symbolics!(sys, u0map)
     _pmap = pmap
-    pmap = to_varmap(pmap, ps)
+    pmap = to_varmap(pmap, parameters(sys))
     symbols_to_symbolics!(sys, pmap)
     defs = add_toterms(recursive_unwrap(defaults(sys)))
     cmap, cs = get_cmap(sys)
     kwargs = NamedTuple(kwargs)
 
-    op, missing_unknowns, missing_pars = build_operating_point(
+    if eltype(eqs) <: Equation
+        obs, eqs = unhack_observed(observed(sys), eqs)
+    else
+        obs, _ = unhack_observed(observed(sys), Equation[x for x in eqs if x isa Equation])
+    end
+    is_time_dependent(sys) || add_observed_equations!(u0map, obs)
+
+    op, missing_unknowns, missing_pars = build_operating_point!(sys,
         u0map, pmap, defs, cmap, dvs, ps)
 
     if build_initializeprob
@@ -707,7 +778,8 @@ function process_SciMLProblem(
             implicit_dae, warn_initialize_determined, initialization_eqs,
             eval_expression, eval_module, fully_determined,
             warn_cyclic_dependency, check_units = check_initialization_units,
-            circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc)
+            circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
+            force_time_independent = force_initialization_time_independent, algebraic_only, allow_incomplete)
 
         kwargs = merge(kwargs, kws)
     end
@@ -716,7 +788,7 @@ function process_SciMLProblem(
         op[iv] = t
     end
 
-    add_observed!(sys, op)
+    is_time_dependent(sys) && add_observed_equations!(op, obs)
     add_parameter_dependencies!(sys, op)
 
     if warn_cyclic_dependency
@@ -799,7 +871,7 @@ function get_u0_p(sys,
         tofloat = true,
         symbolic_u0 = false)
     dvs = unknowns(sys)
-    ps = parameters(sys)
+    ps = parameters(sys; initial_parameters = true)
 
     defs = defaults(sys)
     if t0 !== nothing

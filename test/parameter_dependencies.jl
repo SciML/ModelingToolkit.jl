@@ -26,8 +26,8 @@ using NonlinearSolve
         continuous_events = [cb1, cb2],
         discrete_events = [cb3]
     )
-    @test isequal(only(parameters(sys)), p1)
-    @test Set(full_parameters(sys)) == Set([p1, p2])
+    @test !(p2 in Set(parameters(sys)))
+    @test p2 in Set(full_parameters(sys))
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.5), jac = true)
     @test prob.ps[p1] == 1.0
     @test prob.ps[p2] == 2.0
@@ -82,8 +82,8 @@ end
         parameter_dependencies = [p2 => 2p1]
     )
     sys = extend(sys2, sys1)
-    @test isequal(only(parameters(sys)), p1)
-    @test Set(full_parameters(sys)) == Set([p1, p2])
+    @test !(p2 in Set(parameters(sys)))
+    @test p2 in Set(full_parameters(sys))
     prob = ODEProblem(complete(sys))
     get_dep = getu(prob, 2p2)
     @test get_dep(prob) == 4
@@ -259,8 +259,8 @@ end
     @named sys = ODESystem(eqs, t)
     @named sdesys = SDESystem(sys, noiseeqs; parameter_dependencies = [ρ => 2σ])
     sdesys = complete(sdesys)
-    @test Set(parameters(sdesys)) == Set([σ, β])
-    @test Set(full_parameters(sdesys)) == Set([σ, β, ρ])
+    @test !(ρ in Set(parameters(sdesys)))
+    @test ρ in Set(full_parameters(sdesys))
 
     prob = SDEProblem(
         sdesys, [x => 1.0, y => 0.0, z => 0.0], (0.0, 100.0), [σ => 10.0, β => 2.33])
@@ -326,7 +326,7 @@ end
     eqs = [0 ~ p1 * x * exp(x) + p2]
     @mtkbuild sys = NonlinearSystem(eqs; parameter_dependencies = [p2 => 2p1])
     @test isequal(only(parameters(sys)), p1)
-    @test Set(full_parameters(sys)) == Set([p1, p2])
+    @test Set(full_parameters(sys)) == Set([p1, p2, Initial(p2)])
     prob = NonlinearProblem(sys, [x => 1.0])
     @test prob.ps[p1] == 1.0
     @test prob.ps[p2] == 2.0
@@ -358,17 +358,18 @@ end
 
     ps = prob.p
     buffer, repack, _ = canonicalize(Tunable(), ps)
-    @test only(buffer) == 3.0
-    buffer[1] = 4.0
+    idx = parameter_index(sys, p1)
+    @test buffer[idx.idx] == 3.0
+    buffer[idx.idx] = 4.0
     ps = repack(buffer)
     @test getp(sys, p1)(ps) == 4.0
     @test getp(sys, p2)(ps) == 8.0
 
-    replace!(Tunable(), ps, [1.0])
+    replace!(Tunable(), ps, ones(length(ps.tunable)))
     @test getp(sys, p1)(ps) == 1.0
     @test getp(sys, p2)(ps) == 2.0
 
-    ps2 = replace(Tunable(), ps, [2.0])
+    ps2 = replace(Tunable(), ps, 2 .* ps.tunable)
     @test getp(sys, p1)(ps2) == 2.0
     @test getp(sys, p2)(ps2) == 4.0
 end
