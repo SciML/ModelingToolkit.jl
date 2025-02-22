@@ -465,6 +465,8 @@ an array of inputs `inputs` is given, and `param_only` is false for a time-depen
 """
 function build_explicit_observed_function(sys, ts;
         inputs = nothing,
+        disturbance_inputs = nothing,
+        disturbance_argument = false,
         expression = false,
         eval_expression = false,
         eval_module = @__MODULE__,
@@ -541,13 +543,22 @@ function build_explicit_observed_function(sys, ts;
         ps = setdiff(ps, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
         inputs = (inputs,)
     end
+    if disturbance_inputs !== nothing
+        # Disturbance inputs may or may not be included as inputs, depending on disturbance_argument
+        ps = setdiff(ps, disturbance_inputs)
+    end
+    if disturbance_argument
+        disturbance_inputs = (disturbance_inputs,)
+    else
+        disturbance_inputs = ()
+    end
     ps = reorder_parameters(sys, ps)
     iv = if is_time_dependent(sys)
         (get_iv(sys),)
     else
         ()
     end
-    args = (dvs..., inputs..., ps..., iv...)
+    args = (dvs..., inputs..., ps..., iv..., disturbance_inputs...)
     p_start = length(dvs) + length(inputs) + 1
     p_end = length(dvs) + length(inputs) + length(ps)
     fns = build_function_wrapper(
