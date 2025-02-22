@@ -735,6 +735,12 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
     end
+
+    if !isnothing(get_constraintsystem(sys))
+        error("An ODESystem with constraints cannot be used to construct a regular ODEProblem. 
+              Consider a BVProblem instead.")
+    end
+
     f, u0, p = process_SciMLProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
         check_length, warn_initialize_determined, eval_expression, eval_module, kwargs...)
@@ -756,6 +762,164 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     return ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...)
 end
 get_callback(prob::ODEProblem) = prob.kwargs[:callback]
+
+"""
+```julia
+SciMLBase.BVProblem{iip}(sys::AbstractODESystem, u0map, tspan,
+                         parammap = DiffEqBase.NullParameters();
+                         constraints = nothing, guesses = nothing,
+                         version = nothing, tgrad = false,
+                         jac = true, sparse = true,
+                         simplify = false,
+                         kwargs...) where {iip}
+```
+
+Create a boundary value problem from the [`ODESystem`](@ref). 
+
+`u0map` is used to specify fixed initial values for the states. Every variable 
+must have either an initial guess supplied using `guesses` or a fixed initial 
+value specified using `u0map`.
+
+Boundary value conditions are supplied to ODESystems
+in the form of a ConstraintsSystem. These equations 
+should specify values that state variables should
+take at specific points, as in `x(0.5) ~ 1`). More general constraints that 
+should hold over the entire solution, such as `x(t)^2 + y(t)^2`, should be 
+specified as one of the equations used to build the `ODESystem`.
+
+If an ODESystem without `constraints` is specified, it will be treated as an initial value problem. 
+
+```julia
+    @parameters g t_c = 0.5
+    @variables x(..) y(t) [state_priority = 10] λ(t)
+    eqs = [D(D(x(t))) ~ λ * x(t)
+           D(D(y)) ~ λ * y - g
+           x(t)^2 + y^2 ~ 1]
+    cstr = [x(0.5) ~ 1]
+    @named cstrs = ConstraintsSystem(cstr, t)
+    @mtkbuild pend = ODESystem(eqs, t)
+
+    tspan = (0.0, 1.5)
+    u0map = [x(t) => 0.6, y => 0.8]
+    parammap = [g => 1]
+    guesses = [λ => 1]
+    constraints = [x(0.5) ~ 1]
+
+    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap; constraints, guesses, check_length = false)
+```
+
+If the `ODESystem` has algebraic equations, like `x(t)^2 + y(t)^2`, the resulting 
+`BVProblem` must be solved using BVDAE solvers, such as Ascher.
+"""
+function SciMLBase.BVProblem(sys::AbstractODESystem, args...; kwargs...)
+    BVProblem{true}(sys, args...; kwargs...)
+end
+
+function SciMLBase.BVProblem(sys::AbstractODESystem,
+        u0map::StaticArray,
+        args...;
+        kwargs...)
+    BVProblem{false, SciMLBase.FullSpecialize}(sys, u0map, args...; kwargs...)
+end
+
+function SciMLBase.BVProblem{true}(sys::AbstractODESystem, args...; kwargs...)
+    BVProblem{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
+end
+
+function SciMLBase.BVProblem{false}(sys::AbstractODESystem, args...; kwargs...)
+    BVProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
+end
+
+function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = [],
+        tspan = get_tspan(sys),
+        parammap = DiffEqBase.NullParameters();
+        guesses = Dict(),
+        version = nothing, tgrad = false,
+        callback = nothing,
+        check_length = true,
+        warn_initialize_determined = true,
+        eval_expression = false,
+        eval_module = @__MODULE__,
+        kwargs...) where {iip, specialize}
+
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `BVProblem`")
+    end
+    !isnothing(callback) && error("BVP solvers do not support callbacks.")
+
+    has_alg_eqs(sys) && error("The BVProblem constructor currently does not support ODESystems with algebraic equations.") # Remove this when the BVDAE solvers get updated, the codegen should work when it does.
+
+    sts = unknowns(sys)
+    ps = parameters(sys)
+    constraintsys = get_constraintsystem(sys)
+
+    if !isnothing(constraintsys)
+        (length(constraints(constraintsys)) + length(u0map) > length(sts)) && 
+        @warn "The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) exceeds the total number of states. The BVP solvers will default to doing a nonlinear least-squares optimization."
+    end
+
+    # ODESystems without algebraic equations should use both fixed values + guesses
+    # for initialization.
+    _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses)) 
+    f, u0, p = process_SciMLProblem(ODEFunction{iip, specialize}, sys, _u0map, parammap;
+        t = tspan !== nothing ? tspan[1] : tspan, guesses,
+        check_length, warn_initialize_determined, eval_expression, eval_module, kwargs...)
+
+    stidxmap = Dict([v => i for (i, v) in enumerate(sts)])
+    u0_idxs = has_alg_eqs(sys) ? collect(1:length(sts)) : [stidxmap[k] for (k,v) in u0map]
+
+    fns = generate_function_bc(sys, u0, u0_idxs, tspan)
+    bc_oop, bc_iip = eval_or_rgf.(fns; eval_expression, eval_module) 
+    bc(sol, p, t) = bc_oop(sol, p, t)
+    bc(resid, u, p, t) = bc_iip(resid, u, p, t)
+
+    return BVProblem{iip}(f, bc, u0, tspan, p; kwargs...)
+end
+
+get_callback(prob::BVProblem) = error("BVP solvers do not support callbacks.")
+
+"""
+    generate_function_bc(sys::ODESystem, u0, u0_idxs, tspan)
+
+    Given an ODESystem with constraints, generate the boundary condition function to pass to boundary value problem solvers.
+    Expression uses the constraints and the provided initial conditions.
+"""
+function generate_function_bc(sys::ODESystem, u0, u0_idxs, tspan; kwargs...)
+    iv = get_iv(sys)
+    sts = unknowns(sys)
+    ps = parameters(sys)
+    np = length(ps)
+    ns = length(sts)
+    stidxmap = Dict([v => i for (i, v) in enumerate(sts)])
+    pidxmap = Dict([v => i for (i, v) in enumerate(ps)])
+
+    @variables sol(..)[1:ns]
+
+    conssys = get_constraintsystem(sys)
+    cons = Any[]
+    if !isnothing(conssys)
+        cons = [con.lhs - con.rhs for con in constraints(conssys)]
+
+        for st in get_unknowns(conssys)
+            x = operation(st)
+            t = only(arguments(st))
+            idx = stidxmap[x(iv)]
+
+            cons = map(c -> Symbolics.substitute(c, Dict(x(t) => sol(t)[idx])), cons)
+        end
+    end
+
+    init_conds = Any[]
+    for i in u0_idxs
+        expr = sol(tspan[1])[i] - u0[i]
+        push!(init_conds, expr)
+    end
+
+    exprs = vcat(init_conds, cons)
+    _p = reorder_parameters(sys, ps)
+
+    build_function_wrapper(sys, exprs, sol, _p..., t; output_type = Array, kwargs...)
+end
 
 """
 ```julia
