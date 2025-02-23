@@ -32,3 +32,28 @@ u0 = [x => 1.0,
 prob = ODEProblem(sys2, u0, tspan, p, jac = true)
 sol = solve(prob, Tsit5())
 @test sol[end, end] ≈ 1.0742818931017244
+
+@testset "Change independent variable" begin
+    # Autonomous 1st order (t doesn't appear in the equations)
+    @independent_variables t
+    @variables x(t) y(t) z(t)
+    eqs = [
+        D(x) ~ y
+        D(y) ~ 2*D(x)
+        z ~ x + D(y)
+    ]
+    @named sys1 = ODESystem(eqs, t)
+
+    @independent_variables s
+    @named sys2 = ModelingToolkit.change_independent_variable(sys1, s, s^2)
+
+    sys1 = structural_simplify(sys1)
+    sys2 = structural_simplify(sys2)
+    prob1 = ODEProblem(sys1, unknowns(sys1) .=> 1.0, (0.0, 1.0))
+    prob2 = ODEProblem(sys2, unknowns(sys2) .=> 1.0, (0.0, 1.0))
+    sol1 = solve(prob1, Tsit5(); reltol = 1e-10, abstol = 1e-10)
+    sol2 = solve(prob2, Tsit5(); reltol = 1e-10, abstol = 1e-10)
+    ts = range(0.0, 1.0, length = 50)
+    ss = .√(ts)
+    @test isapprox(sol1(ts), sol2(ss); atol = 1e-8)
+end
