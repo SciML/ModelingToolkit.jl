@@ -55,3 +55,34 @@ function liouville_transform(sys::AbstractODESystem)
     vars = [unknowns(sys); trJ]
     ODESystem(neweqs, t, vars, parameters(sys), checks = false)
 end
+
+# TODO: handle case when new iv is a variable already in the system
+function change_independent_variable(sys::AbstractODESystem, iv, iv1_of_iv2; kwargs...)
+    iv1 = ModelingToolkit.get_iv(sys) # old independent variable
+    iv2 = iv # new independent variable
+
+    name2 = nameof(iv2)
+    iv2func, = @variables $name2(iv1)
+
+    eqs = ModelingToolkit.get_eqs(sys) |> copy # don't modify original system
+    vars = []
+    for (i, eq) in enumerate(eqs)
+        vars = Symbolics.get_variables(eq)
+        for var1 in vars
+            if Symbolics.iscall(var1) # skip e.g. constants
+                name = nameof(operation(var1))
+                var2, = @variables $name(iv2func)
+                eq = substitute(eq, var1 => var2; fold = false)
+            end
+        end
+        eq = expand_derivatives(eq) # expand out with chain rule to get d(iv2)/d(iv1)
+        div1_div2 = Differential(iv2)(iv1_of_iv2) |> expand_derivatives
+        div2_div1 = 1 / div1_div2
+        eq = substitute(eq, Differential(iv1)(iv2func) => div2_div1) # substitute in d(iv1)/d(iv2)
+        eq = substitute(eq, iv2func => iv2) # make iv2 independent
+        eqs[i] = eq
+    end
+
+    sys2 = typeof(sys)(eqs, iv2; name = nameof(sys), description = description(sys), kwargs...)
+    return sys2
+end
