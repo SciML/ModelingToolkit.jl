@@ -57,7 +57,7 @@ function liouville_transform(sys::AbstractODESystem)
 end
 
 # TODO: handle case when new iv is a variable already in the system
-function change_independent_variable(sys::AbstractODESystem, iv, iv1_of_iv2; kwargs...)
+function change_independent_variable(sys::AbstractODESystem, iv, iv1_of_iv2, iv2_of_iv1; kwargs...)
     iv1 = ModelingToolkit.get_iv(sys) # old independent variable
     iv2 = iv # new independent variable
 
@@ -76,10 +76,10 @@ function change_independent_variable(sys::AbstractODESystem, iv, iv1_of_iv2; kwa
             end
         end
         eq = expand_derivatives(eq) # expand out with chain rule to get d(iv2)/d(iv1)
-        div1_div2 = Differential(iv2)(iv1_of_iv2) |> expand_derivatives
-        div2_div1 = 1 / div1_div2
-        eq = substitute(eq, Differential(iv1)(iv2func) => div2_div1) # substitute in d(iv1)/d(iv2)
+        eq = substitute(eq, Differential(iv1)(iv2func) => Differential(iv1)(iv2_of_iv1)) # substitute in d(iv2)/d(iv1)
+        eq = expand_derivatives(eq)
         eq = substitute(eq, iv2func => iv2) # make iv2 independent
+        eq = substitute(eq, iv1 => iv1_of_iv2) # substitute any remaining old ivars
         eqs[i] = eq
     end
 
