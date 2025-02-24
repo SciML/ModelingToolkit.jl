@@ -774,6 +774,10 @@ function process_SciMLProblem(
     op, missing_unknowns, missing_pars = build_operating_point!(sys,
         u0map, pmap, defs, cmap, dvs, ps)
 
+    if u0_constructor === identity && u0Type <: StaticArray
+        u0_constructor = vals -> SymbolicUtils.Code.create_array(
+            u0Type, eltype(vals), Val(1), Val(length(vals)), vals...)
+    end
     if build_initializeprob
         kws = maybe_build_initialization_problem(
             sys, op, u0map, pmap, t, defs, guesses, missing_unknowns;
