@@ -148,6 +148,12 @@ function SymbolicIndexingInterface.parameter_values(f::LinearizationFunction)
 end
 SymbolicIndexingInterface.current_time(f::LinearizationFunction) = current_time(f.prob)
 
+function Base.show(io::IO, mime::MIME"text/plain", lf::LinearizationFunction)
+    printstyled(io, "LinearizationFunction"; bold = true, color = :blue)
+    println(io, " which wraps:")
+    show(io, mime, lf.prob)
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -263,6 +269,12 @@ mutable struct LinearizationProblem{F <: LinearizationFunction, T}
     """
     const f::F
     t::T
+end
+
+function Base.show(io::IO, mime::MIME"text/plain", prob::LinearizationProblem)
+    printstyled(io, "LinearizationProblem"; bold = true, color = :blue)
+    println(io, " at time ", prob.t, " which wraps:")
+    show(io, mime, prob.f.prob)
 end
 
 """
