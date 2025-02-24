@@ -262,6 +262,7 @@ export independent_variable, equations, controls, observed, full_equations
 export initialization_equations, guesses, defaults, parameter_dependencies, hierarchy
 export structural_simplify, expand_connections, linearize, linearization_function,
        LinearizationProblem
+export solve
 
 export calculate_jacobian, generate_jacobian, generate_function, generate_custom_function
 export calculate_control_jacobian, generate_control_jacobian
