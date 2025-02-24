@@ -22,7 +22,7 @@ The `linearize` function expects the user to specify the inputs ``u`` and the ou
 ```@example LINEARIZE
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
-@variables x(t)=0 y(t)=0 u(t)=0 r(t)=0
+@variables x(t)=0 y(t) u(t) r(t)=0
 @parameters kp = 1
 
 eqs = [u ~ kp * (r - y) # P controller
@@ -57,6 +57,74 @@ The operating point to linearize around can be specified with the keyword argume
 
 If linearization is to be performed around multiple operating points, the simplification of the system has to be carried out a single time only. To facilitate this, the lower-level function [`ModelingToolkit.linearization_function`](@ref) is available. This function further allows you to obtain separate Jacobians for the differential and algebraic parts of the model. For ODE models without algebraic equations, the statespace representation above is available from the output of `linearization_function` as `A, B, C, D = f_x, f_u, h_x, h_u`.
 
+All variables that will be fixed by an operating point _must_ be provided in the operating point to `linearization_function`. For example, if the operating points fix the value of
+`x`, `y` and `z` then an operating point with constant values for these variables (e.g. `Dict(x => 1.0, y => 1.0, z => 1.0)`) must be provided. The constant values themselves
+do not matter and can be changed by subsequent operating points.
+
+One approach to batch linearization would be to call `linearize` in a loop, providing a different operating point each time. For example:
+
+```@example LINEARIZE
+using ModelingToolkitStandardLibrary
+using ModelingToolkitStandardLibrary.Blocks
+
+@parameters k=10 k3=2 c=1
+@variables x(t)=0 [bounds = (-0.5, 1.5)]
+@variables v(t) = 0
+
+@named y = Blocks.RealOutput()
+@named u = Blocks.RealInput()
+
+eqs = [D(x) ~ v
+       D(v) ~ -k * x - k3 * x^3 - c * v + 10u.u
+       y.u ~ x]
+
+@named duffing = ODESystem(eqs, t, systems = [y, u], defaults = [u.u => 0])
+
+# pass a constant value for `x`, since it is the variable we will change in operating points
+linfun, simplified_sys = linearization_function(duffing, [u.u], [y.u]; op = Dict(x => NaN));
+
+println(linearize(simplified_sys, linfun; op = Dict(x => 1.0)))
+println(linearize(simplified_sys, linfun; op = Dict(x => 0.0)))
+
+@time linearize(simplified_sys, linfun; op = Dict(x => 0.0))
+
+nothing # hide
+```
+
+However, this route is still expensive since it has to repeatedly process the symbolic map provided to `op`. `linearize` is simply a wrapper for creating and solving a
+[`ModelingToolkit.LinearizationProblem`](@ref). This object is symbolically indexable, and can thus integrate with SymbolicIndexingInterface.jl for fast updates.
+
+```@example LINEARIZE
+using SymbolicIndexingInterface
+
+# The second argument is the value of the independent variable `t`.
+linprob = LinearizationProblem(linfun, 1.0)
+# It can be mutated
+linprob.t = 0.0
+# create a setter function to update `x` efficiently
+setter! = setu(linprob, x)
+
+function fast_linearize!(problem, setter!, value)
+    setter!(problem, value)
+    solve(problem)
+end
+
+println(fast_linearize!(linprob, setter!, 1.0))
+println(fast_linearize!(linprob, setter!, 0.0))
+
+@time fast_linearize!(linprob, setter!, 1.0)
+
+nothing # hide
+```
+
+Note that `linprob` above can be interacted with similar to a normal `ODEProblem`.
+
+```@repl LINEARIZE
+prob[x]
+prob[x] = 1.5
+prob[x]
+```
+
 ## Symbolic linearization
 
 The function [`ModelingToolkit.linearize_symbolic`](@ref) works similar to [`ModelingToolkit.linearize`](@ref) but returns symbolic rather than numeric Jacobians. Symbolic linearization have several limitations and no all systems that can be linearized numerically can be linearized symbolically.
@@ -89,4 +157,5 @@ Pages = ["Linearization.md"]
 linearize
 ModelingToolkit.linearize_symbolic
 ModelingToolkit.linearization_function
+ModelingToolkit.LinearizationProblem
 ```
