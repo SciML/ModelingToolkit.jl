@@ -222,7 +222,8 @@ function collect_ivs_from_nested_operator!(ivs, x, target_op)
 end
 
 function iv_from_nested_derivative(x, op = Differential)
-    if iscall(x) && operation(x) == getindex
+    if iscall(x) &&
+       (operation(x) == getindex || operation(x) == real || operation(x) == imag)
         iv_from_nested_derivative(arguments(x)[1], op)
     elseif iscall(x)
         operation(x) isa op ? iv_from_nested_derivative(arguments(x)[1], op) :
@@ -1204,7 +1205,7 @@ end
 Find all the unknowns and parameters from the equations of a SDESystem or ODESystem. Return re-ordered equations, differential variables, all variables, and parameters.
 """
 function process_equations(eqs, iv)
-    eqs = collect(eqs)
+    eqs = collect(Iterators.flatten(eqs))
 
     diffvars = OrderedSet()
     allunknowns = OrderedSet()
@@ -1237,8 +1238,8 @@ function process_equations(eqs, iv)
                     throw(ArgumentError("An ODESystem can only have one independent variable."))
                 diffvar in diffvars &&
                     throw(ArgumentError("The differential variable $diffvar is not unique in the system of equations."))
-                !(symtype(diffvar) === Real || eltype(symtype(diffvar)) === Real) &&
-                    throw(ArgumentError("Differential variable $diffvar has type $(symtype(diffvar)). Differential variables should not be concretely typed."))
+                !has_diffvar_type(diffvar) &&
+                    throw(ArgumentError("Differential variable $diffvar has type $(symtype(diffvar)). Differential variables should be of a continuous, non-concrete number type: Real, Complex, AbstractFloat, or Number."))
                 push!(diffvars, diffvar)
             end
             push!(diffeq, eq)
@@ -1248,6 +1249,13 @@ function process_equations(eqs, iv)
     end
 
     diffvars, allunknowns, ps, Equation[diffeq; algeeq; compressed_eqs]
+end
+
+function has_diffvar_type(diffvar)
+    st = symtype(diffvar)
+    st === Real || eltype(st) === Real || st === Complex || eltype(st) === Complex ||
+        st === Number || eltype(st) === Number || st === AbstractFloat ||
+        eltype(st) === AbstractFloat
 end
 
 """
