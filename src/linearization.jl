@@ -41,6 +41,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         initialization_solver_alg = TrustRegion(),
         eval_expression = false, eval_module = @__MODULE__,
         warn_initialize_determined = true,
+        guesses = Dict(),
         kwargs...)
     op = Dict(op)
     inputs isa AbstractVector || (inputs = [inputs])
@@ -66,11 +67,10 @@ function linearization_function(sys::AbstractSystem, inputs,
         initializealg = initialize ? OverrideInit() : NoInit()
     end
 
-    fun, u0, p = process_SciMLProblem(
-        ODEFunction{true, SciMLBase.FullSpecialize}, sys, op, p;
-        t = 0.0, build_initializeprob = initializealg isa OverrideInit,
-        allow_incomplete = true, algebraic_only = true)
-    prob = ODEProblem(fun, u0, (nothing, nothing), p)
+    prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+        sys, op, (nothing, nothing), p; allow_incomplete = true,
+        algebraic_only = true, guesses)
+    u0 = state_values(prob)
 
     ps = parameters(sys)
     h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
