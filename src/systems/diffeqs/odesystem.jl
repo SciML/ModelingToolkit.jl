@@ -193,7 +193,8 @@ struct ODESystem <: AbstractODESystem
     """
     parent::Any
 
-    function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, constraints, tgrad,
+    function ODESystem(
+            tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, constraints, tgrad,
             jac, ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses,
             torn_matching, initializesystem, initialization_eqs, schedule,
             connector_type, preface, cevents,
@@ -214,7 +215,8 @@ struct ODESystem <: AbstractODESystem
             u = __get_unit_type(dvs, ps, iv)
             check_units(u, deqs)
         end
-        new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, constraints, tgrad, jac,
+        new(tag, deqs, iv, dvs, ps, tspan, var_to_name,
+            ctrls, observed, constraints, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses, torn_matching,
             initializesystem, initialization_eqs, schedule, connector_type, preface,
             cevents, devents, parameter_dependencies, assertions, metadata,
@@ -300,16 +302,16 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     if is_dde === nothing
         is_dde = _check_if_dde(deqs, iv′, systems)
     end
-            
+
     if !isempty(systems) && !isnothing(constraintsystem)
         conssystems = ConstraintsSystem[]
         for sys in systems
             cons = get_constraintsystem(sys)
-            cons !== nothing && push!(conssystems, cons) 
+            cons !== nothing && push!(conssystems, cons)
         end
         @show conssystems
         @set! constraintsystem.systems = conssystems
-    end        
+    end
 
     assertions = Dict{BasicSymbolic, Any}(unwrap(k) => v for (k, v) in assertions)
 
@@ -359,9 +361,9 @@ function ODESystem(eqs, iv; constraints = Equation[], kwargs...)
     if !isempty(constraints)
         constraintsystem = process_constraint_system(constraints, allunknowns, new_ps, iv)
         for st in get_unknowns(constraintsystem)
-            iscall(st) ? 
-                !in(operation(st)(iv), allunknowns) && push!(consvars, st) :
-                !in(st, allunknowns) && push!(consvars, st)
+            iscall(st) ?
+            !in(operation(st)(iv), allunknowns) && push!(consvars, st) :
+            !in(st, allunknowns) && push!(consvars, st)
         end
         for p in parameters(constraintsystem)
             !in(p, new_ps) && push!(new_ps, p)
@@ -712,7 +714,8 @@ end
 # Validate that all the variables in the BVP constraints are well-formed states or parameters.
 #  - Callable/delay variables (e.g. of the form x(0.6) should be unknowns of the system (and have one arg, etc.)
 #  - Callable/delay parameters should be parameters of the system (and have one arg, etc.)
-function process_constraint_system(constraints::Vector{Equation}, sts, ps, iv; consname = :cons)
+function process_constraint_system(
+        constraints::Vector{Equation}, sts, ps, iv; consname = :cons)
     isempty(constraints) && return nothing
 
     constraintsts = OrderedSet()
@@ -725,22 +728,26 @@ function process_constraint_system(constraints::Vector{Equation}, sts, ps, iv; c
     # Validate the states.
     for var in constraintsts
         if !iscall(var)
-            occursin(iv, var) && (var ∈ sts || throw(ArgumentError("Time-dependent variable $var is not an unknown of the system.")))
+            occursin(iv, var) && (var ∈ sts ||
+             throw(ArgumentError("Time-dependent variable $var is not an unknown of the system.")))
         elseif length(arguments(var)) > 1
             throw(ArgumentError("Too many arguments for variable $var."))
         elseif length(arguments(var)) == 1
             arg = only(arguments(var))
-            operation(var)(iv) ∈ sts || 
+            operation(var)(iv) ∈ sts ||
                 throw(ArgumentError("Variable $var is not a variable of the ODESystem. Called variables must be variables of the ODESystem."))
 
-            isequal(arg, iv) || isparameter(arg) || arg isa Integer || arg isa AbstractFloat || 
+            isequal(arg, iv) || isparameter(arg) || arg isa Integer ||
+                arg isa AbstractFloat ||
                 throw(ArgumentError("Invalid argument specified for variable $var. The argument of the variable should be either $iv, a parameter, or a value specifying the time that the constraint holds."))
 
             isparameter(arg) && push!(constraintps, arg)
         else
-            var ∈ sts && @warn "Variable $var has no argument. It will be interpreted as $var($iv), and the constraint will apply to the entire interval."
+            var ∈ sts &&
+                @warn "Variable $var has no argument. It will be interpreted as $var($iv), and the constraint will apply to the entire interval."
         end
     end
 
-    ConstraintsSystem(constraints, collect(constraintsts), collect(constraintps); name = consname)
+    ConstraintsSystem(
+        constraints, collect(constraintsts), collect(constraintps); name = consname)
 end
