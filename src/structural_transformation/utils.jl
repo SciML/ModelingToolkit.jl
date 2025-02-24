@@ -477,15 +477,17 @@ function shift2term(var)
     backshift = is_lowered ? op.steps + ModelingToolkit.getshift(arg) : op.steps
 
     num = join(Char(0x2080 + d) for d in reverse!(digits(-backshift))) # subscripted number, e.g. ₁
-    ds = join([Char(0x209c), Char(0x208b), num]) 
+    ds = join([Char(0x209c), Char(0x208b), num])
     # Char(0x209c) = ₜ
     # Char(0x208b) = ₋ (subscripted minus)
 
     O = is_lowered ? ModelingToolkit.getunshifted(arg) : arg
     oldop = operation(O)
-    newname = backshift != 0 ? Symbol(string(nameof(oldop)), ds) : Symbol(string(nameof(oldop)))
+    newname = backshift != 0 ? Symbol(string(nameof(oldop)), ds) :
+              Symbol(string(nameof(oldop)))
 
-    newvar = maketerm(typeof(O), Symbolics.rename(oldop, newname), Symbolics.children(O), Symbolics.metadata(O))
+    newvar = maketerm(typeof(O), Symbolics.rename(oldop, newname),
+        Symbolics.children(O), Symbolics.metadata(O))
     newvar = setmetadata(newvar, Symbolics.VariableSource, (:variables, newname))
     newvar = setmetadata(newvar, ModelingToolkit.VariableUnshifted, O)
     newvar = setmetadata(newvar, ModelingToolkit.VariableShift, backshift)

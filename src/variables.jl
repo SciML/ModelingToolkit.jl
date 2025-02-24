@@ -138,7 +138,7 @@ function default_toterm(x)
     if iscall(x) && (op = operation(x)) isa Operator
         if !(op isa Differential)
             if op isa Shift && op.steps < 0
-                return shift2term(x) 
+                return shift2term(x)
             end
             x = normalize_to_differential(op)(arguments(x)...)
         end

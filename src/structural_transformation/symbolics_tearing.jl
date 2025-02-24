@@ -248,7 +248,8 @@ called dummy derivatives.
 State selection is done. All non-differentiated variables are algebraic 
 variables, and all variables that appear differentiated are differential variables.
 """
-function substitute_derivatives_algevars!(ts::TearingState, neweqs, var_eq_matching, dummy_sub; iv = nothing, D = nothing)
+function substitute_derivatives_algevars!(
+        ts::TearingState, neweqs, var_eq_matching, dummy_sub; iv = nothing, D = nothing)
     @unpack fullvars, sys, structure = ts
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     diff_to_var = invview(var_to_diff)
@@ -288,7 +289,7 @@ end
 #= 
 There are three cases where we want to generate new variables to convert
 the system into first order (semi-implicit) ODEs.
-    
+
 1. To first order:
 Whenever higher order differentiated variable like `D(D(D(x)))` appears,
 we introduce new variables `x_t`, `x_tt`, and `x_ttt` and new equations
@@ -364,7 +365,8 @@ Effects on the system structure:
 - solvable_graph:
 - var_eq_matching: match D(x) to the added identity equation D(x) ~ x_t
 """
-function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matching; mm = nothing, iv = nothing, D = nothing)
+function generate_derivative_variables!(
+        ts::TearingState, neweqs, var_eq_matching; mm = nothing, iv = nothing, D = nothing)
     @unpack fullvars, sys, structure = ts
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     eq_var_matching = invview(var_eq_matching)
@@ -395,7 +397,7 @@ function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matchin
         dx = fullvars[dv]
         order, lv = var_order(dv, diff_to_var)
         x_t = is_discrete ? lower_shift_varname_with_unit(fullvars[dv], iv) :
-                          lower_varname_with_unit(fullvars[lv], iv, order)
+              lower_varname_with_unit(fullvars[lv], iv, order)
 
         # Add `x_t` to the graph
         v_t = add_dd_variable!(structure, fullvars, x_t, dv)
@@ -405,7 +407,7 @@ function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matchin
         # Update matching
         push!(var_eq_matching, unassigned)
         var_eq_matching[dv] = unassigned
-        eq_var_matching[dummy_eq] = dv 
+        eq_var_matching[dummy_eq] = dv
     end
 end
 
@@ -428,7 +430,7 @@ function find_duplicate_dd(dv, solvable_graph, diff_to_var, linear_eqs, mm)
             return eq, v_t
         end
     end
-    return nothing 
+    return nothing
 end
 
 """
@@ -492,8 +494,9 @@ Order the new equations and variables such that the differential equations
 and variables come first. Return the new equations, the solved equations,
 the new orderings, and the number of solved variables and equations.
 """
-function generate_system_equations!(state::TearingState, neweqs, var_eq_matching; simplify = false, iv = nothing, D = nothing)
-    @unpack fullvars, sys, structure = state 
+function generate_system_equations!(state::TearingState, neweqs, var_eq_matching;
+        simplify = false, iv = nothing, D = nothing)
+    @unpack fullvars, sys, structure = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     eq_var_matching = invview(var_eq_matching)
     diff_to_var = invview(var_to_diff)
@@ -502,11 +505,12 @@ function generate_system_equations!(state::TearingState, neweqs, var_eq_matching
     if is_only_discrete(structure)
         for (i, v) in enumerate(fullvars)
             op = operation(v)
-            op isa Shift && (op.steps < 0) && begin
-                lowered = lower_shift_varname_with_unit(v, iv)
-                total_sub[v] = lowered
-                fullvars[i] = lowered
-            end
+            op isa Shift && (op.steps < 0) &&
+                begin
+                    lowered = lower_shift_varname_with_unit(v, iv)
+                    total_sub[v] = lowered
+                    fullvars[i] = lowered
+                end
         end
     end
 
@@ -581,10 +585,11 @@ function generate_system_equations!(state::TearingState, neweqs, var_eq_matching
     end
     solved_vars_set = BitSet(solved_vars)
     var_ordering = [diff_vars;
-                   setdiff!(setdiff(1:ndsts(graph), diff_vars_set),
-                       solved_vars_set)]
+                    setdiff!(setdiff(1:ndsts(graph), diff_vars_set),
+                        solved_vars_set)]
 
-    return neweqs, solved_eqs, eq_ordering, var_ordering, length(solved_vars), length(solved_vars_set)
+    return neweqs, solved_eqs, eq_ordering, var_ordering, length(solved_vars),
+    length(solved_vars_set)
 end
 
 """
@@ -648,7 +653,8 @@ Eliminate the solved variables and equations from the graph and permute the
 graph's vertices to account for the new variable/equation ordering.
 """
 # TODO: BLT sorting
-function reorder_vars!(state::TearingState, var_eq_matching, eq_ordering, var_ordering, nsolved_eq, nsolved_var)
+function reorder_vars!(state::TearingState, var_eq_matching, eq_ordering,
+        var_ordering, nsolved_eq, nsolved_var)
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = state.structure
 
     eqsperm = zeros(Int, nsrcs(graph))
@@ -692,7 +698,8 @@ end
 """
 Update the system equations, unknowns, and observables after simplification.
 """
-function update_simplified_system!(state::TearingState, neweqs, solved_eqs, dummy_sub, var_eq_matching, extra_unknowns; 
+function update_simplified_system!(
+        state::TearingState, neweqs, solved_eqs, dummy_sub, var_eq_matching, extra_unknowns;
         cse_hack = true, array_hack = true)
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = state.structure
     diff_to_var = invview(var_to_diff)
@@ -732,7 +739,6 @@ function update_simplified_system!(state::TearingState, neweqs, solved_eqs, dumm
     sys = schedule(sys)
 end
 
-    
 """
 Give the order of the variable indexed by dv.
 """
@@ -790,12 +796,14 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
 
     generate_derivative_variables!(state, neweqs, var_eq_matching; mm, iv, D)
 
-    neweqs, solved_eqs, eq_ordering, var_ordering, nelim_eq, nelim_var = 
-        generate_system_equations!(state, neweqs, var_eq_matching; simplify, iv, D)
+    neweqs, solved_eqs, eq_ordering, var_ordering, nelim_eq, nelim_var = generate_system_equations!(
+        state, neweqs, var_eq_matching; simplify, iv, D)
 
-    state = reorder_vars!(state, var_eq_matching, eq_ordering, var_ordering, nelim_eq, nelim_var)
+    state = reorder_vars!(
+        state, var_eq_matching, eq_ordering, var_ordering, nelim_eq, nelim_var)
 
-    sys = update_simplified_system!(state, neweqs, solved_eqs, dummy_sub, var_eq_matching, extra_unknowns; cse_hack, array_hack)
+    sys = update_simplified_system!(state, neweqs, solved_eqs, dummy_sub, var_eq_matching,
+        extra_unknowns; cse_hack, array_hack)
 
     @set! state.sys = sys
     @set! sys.tearing_state = state
