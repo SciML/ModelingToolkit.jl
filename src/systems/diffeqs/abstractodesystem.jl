@@ -841,35 +841,35 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
         eval_expression = false,
         eval_module = @__MODULE__,
         kwargs...) where {iip, specialize}
-
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `BVProblem`")
     end
     !isnothing(callback) && error("BVP solvers do not support callbacks.")
 
-    has_alg_eqs(sys) && error("The BVProblem constructor currently does not support ODESystems with algebraic equations.") # Remove this when the BVDAE solvers get updated, the codegen should work when it does.
+    has_alg_eqs(sys) &&
+        error("The BVProblem constructor currently does not support ODESystems with algebraic equations.") # Remove this when the BVDAE solvers get updated, the codegen should work when it does.
 
     sts = unknowns(sys)
     ps = parameters(sys)
     constraintsys = get_constraintsystem(sys)
 
     if !isnothing(constraintsys)
-        (length(constraints(constraintsys)) + length(u0map) > length(sts)) && 
-        @warn "The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) exceeds the total number of states. The BVP solvers will default to doing a nonlinear least-squares optimization."
+        (length(constraints(constraintsys)) + length(u0map) > length(sts)) &&
+            @warn "The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) exceeds the total number of states. The BVP solvers will default to doing a nonlinear least-squares optimization."
     end
 
     # ODESystems without algebraic equations should use both fixed values + guesses
     # for initialization.
-    _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses)) 
+    _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
     f, u0, p = process_SciMLProblem(ODEFunction{iip, specialize}, sys, _u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan, guesses,
         check_length, warn_initialize_determined, eval_expression, eval_module, kwargs...)
 
     stidxmap = Dict([v => i for (i, v) in enumerate(sts)])
-    u0_idxs = has_alg_eqs(sys) ? collect(1:length(sts)) : [stidxmap[k] for (k,v) in u0map]
+    u0_idxs = has_alg_eqs(sys) ? collect(1:length(sts)) : [stidxmap[k] for (k, v) in u0map]
 
     fns = generate_function_bc(sys, u0, u0_idxs, tspan)
-    bc_oop, bc_iip = eval_or_rgf.(fns; eval_expression, eval_module) 
+    bc_oop, bc_iip = eval_or_rgf.(fns; eval_expression, eval_module)
     bc(sol, p, t) = bc_oop(sol, p, t)
     bc(resid, u, p, t) = bc_iip(resid, u, p, t)
 

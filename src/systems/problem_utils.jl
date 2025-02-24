@@ -872,7 +872,8 @@ function check_inputmap_keys(sys, u0map, pmap)
             push!(badparamkeys, k)
         end
     end
-    (isempty(badvarkeys) && isempty(badparamkeys)) || throw(InvalidKeyError(collect(badvarkeys), collect(badparamkeys)))
+    (isempty(badvarkeys) && isempty(badparamkeys)) ||
+        throw(InvalidKeyError(collect(badvarkeys), collect(badparamkeys)))
 end
 
 const BAD_KEY_MESSAGE = """
@@ -885,13 +886,11 @@ struct InvalidKeyError <: Exception
     params::Any
 end
 
-function Base.showerror(io::IO, e::InvalidKeyError) 
+function Base.showerror(io::IO, e::InvalidKeyError)
     println(io, BAD_KEY_MESSAGE)
     println(io, "u0map: $(join(e.vars, ", "))")
     println(io, "pmap: $(join(e.params, ", "))")
 end
-
-
 
 ##############
 # Legacy functions for backward compatibility
