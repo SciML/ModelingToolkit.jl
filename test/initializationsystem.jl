@@ -720,7 +720,8 @@ end
         @parameters x0 y0
         @mtkbuild sys = ODESystem([x ~ x0, y ~ y0, s ~ x + y], t; guesses = [y0 => 0.0])
         prob = ODEProblem(sys, [s => 1.0], (0.0, 1.0), [x0 => 0.3, y0 => missing])
-        @test prob.ps[y0] ≈ 0.0
+        # trivial initialization run immediately
+        @test prob.ps[y0] ≈ 0.7
         @test init(prob, Tsit5()).ps[y0] ≈ 0.7
         @test solve(prob, Tsit5()).ps[y0] ≈ 0.7
     end
@@ -745,7 +746,8 @@ end
         systems = [fixed, spring, mass, gravity, constant, damper],
         guesses = [spring.s_rel0 => 1.0])
     prob = ODEProblem(sys, [], (0.0, 1.0), [spring.s_rel0 => missing])
-    @test prob.ps[spring.s_rel0] ≈ 0.0
+    # trivial initialization run immediately
+    @test prob.ps[spring.s_rel0] ≈ -3.905
     @test init(prob, Tsit5()).ps[spring.s_rel0] ≈ -3.905
     @test solve(prob, Tsit5()).ps[spring.s_rel0] ≈ -3.905
 end
