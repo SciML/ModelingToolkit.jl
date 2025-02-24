@@ -792,6 +792,7 @@ function DiffEqBase.SDEProblem{iip, specialize}(
 
     kwargs = filter_kwargs(kwargs)
 
+    # Call `remake` so it runs initialization if it is trivial
     return remake(SDEProblem{iip}(f, u0, tspan, p; callback = cbs, noise,
         noise_rate_prototype = noise_rate_prototype, kwargs...))
 end
