@@ -248,7 +248,8 @@ function calculate_jacobian(sys::NonlinearSystem; sparse = false, simplify = fal
 end
 
 function generate_jacobian(
-        sys::NonlinearSystem, vs = unknowns(sys), ps = parameters(sys);
+        sys::NonlinearSystem, vs = unknowns(sys), ps = parameters(
+            sys; initial_parameters = true);
         sparse = false, simplify = false, kwargs...)
     jac = calculate_jacobian(sys, sparse = sparse, simplify = simplify)
     p = reorder_parameters(sys, ps)
@@ -268,7 +269,8 @@ function calculate_hessian(sys::NonlinearSystem; sparse = false, simplify = fals
 end
 
 function generate_hessian(
-        sys::NonlinearSystem, vs = unknowns(sys), ps = parameters(sys);
+        sys::NonlinearSystem, vs = unknowns(sys), ps = parameters(
+            sys; initial_parameters = true);
         sparse = false, simplify = false, kwargs...)
     hess = calculate_hessian(sys, sparse = sparse, simplify = simplify)
     p = reorder_parameters(sys, ps)
@@ -276,7 +278,8 @@ function generate_hessian(
 end
 
 function generate_function(
-        sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(sys);
+        sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(
+            sys; initial_parameters = true);
         scalar = false, kwargs...)
     rhss = [deq.rhs for deq in equations(sys)]
     dvs′ = value.(dvs)
@@ -340,16 +343,14 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
     end
     f_gen = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
-    f(u, p) = f_oop(u, p)
-    f(du, u, p) = f_iip(du, u, p)
+    f = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, f_iip)
 
     if jac
         jac_gen = generate_jacobian(sys, dvs, ps;
             simplify = simplify, sparse = sparse,
             expression = Val{true}, kwargs...)
         jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
-        _jac(u, p) = jac_oop(u, p)
-        _jac(J, u, p) = jac_iip(J, u, p)
+        _jac = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(jac_oop, jac_iip)
     else
         _jac = nothing
     end
@@ -394,6 +395,7 @@ function SciMLBase.IntervalNonlinearFunction(
     f_gen = generate_function(
         sys, dvs, ps; expression = Val{true}, scalar = true, kwargs...)
     f = eval_or_rgf(f_gen; eval_expression, eval_module)
+    f = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f, nothing)
 
     observedfun = ObservedFunctionCache(
         sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
@@ -428,13 +430,14 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearFunctionExpr`")
     end
-    idx = iip ? 2 : 1
-    f = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)[idx]
+    f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
+    f = :($(GeneratedFunctionWrapper{(2, 2, is_split(sys))})($f_oop, $f_iip))
 
     if jac
-        _jac = generate_jacobian(sys, dvs, ps;
+        jac_oop, jac_iip = generate_jacobian(sys, dvs, ps;
             sparse = sparse, simplify = simplify,
-            expression = Val{true}, kwargs...)[idx]
+            expression = Val{true}, kwargs...)
+        _jac = :($(GeneratedFunctionWrapper{(2, 2, is_split(sys))})($jac_oop, $jac_iip))
     else
         _jac = :nothing
     end
@@ -481,8 +484,7 @@ function IntervalNonlinearFunctionExpr(
     end
 
     f = generate_function(sys, dvs, ps; expression = Val{true}, scalar = true, kwargs...)
-
-    IntervalNonlinearFunction{false}(f; sys = sys)
+    f = :($(GeneratedFunctionWrapper{2, 2, is_split(sys)})($f, nothing))
 
     ex = quote
         f = $f
@@ -569,19 +571,29 @@ end
 function CacheWriter(sys::AbstractSystem, buffer_types::Vector{TypeT},
         exprs::Dict{TypeT, Vector{Any}}, solsyms, obseqs::Vector{Equation};
         eval_expression = false, eval_module = @__MODULE__)
-    ps = parameters(sys)
+    ps = parameters(sys; initial_parameters = true)
     rps = reorder_parameters(sys, ps)
     obs_assigns = [eq.lhs ← eq.rhs for eq in obseqs]
     body = map(eachindex(buffer_types), buffer_types) do i, T
         Symbol(:tmp, i) ← SetArray(true, :(out[$i]), get(exprs, T, []))
     end
 
+    function argument_name(i::Int)
+        if i <= length(solsyms)
+            return :($(generated_argument_name(1))[$i])
+        end
+        return generated_argument_name(i - length(solsyms))
+    end
+    array_assignments = array_variable_assignments(solsyms...; argument_name)
     fn = build_function_wrapper(
-        sys, nothing, :out, DestructuredArgs(DestructuredArgs.(solsyms)),
-        DestructuredArgs.(rps)...; p_start = 3, p_end = length(rps) + 2,
+        sys, nothing, :out,
+        DestructuredArgs(DestructuredArgs.(solsyms), generated_argument_name(1)),
+        rps...; p_start = 3, p_end = length(rps) + 2,
         expression = Val{true}, add_observed = false,
-        extra_assignments = [obs_assigns; body])
-    return CacheWriter(eval_or_rgf(fn; eval_expression, eval_module))
+        extra_assignments = [array_assignments; obs_assigns; body])
+    fn = eval_or_rgf(fn; eval_expression, eval_module)
+    fn = GeneratedFunctionWrapper{(3, 3, is_split(sys))}(fn, nothing)
+    return CacheWriter(fn)
 end
 
 struct SCCNonlinearFunction{iip} end
@@ -589,7 +601,7 @@ struct SCCNonlinearFunction{iip} end
 function SCCNonlinearFunction{iip}(
         sys::NonlinearSystem, _eqs, _dvs, _obs, cachesyms; eval_expression = false,
         eval_module = @__MODULE__, kwargs...) where {iip}
-    ps = parameters(sys)
+    ps = parameters(sys; initial_parameters = true)
     rps = reorder_parameters(sys, ps)
 
     obs_assignments = [eq.lhs ← eq.rhs for eq in _obs]
@@ -600,9 +612,7 @@ function SCCNonlinearFunction{iip}(
         p_end = length(rps) + length(cachesyms) + 1, add_observed = false,
         extra_assignments = obs_assignments, expression = Val{true})
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
-
-    f(u, p) = f_oop(u, p)
-    f(resid, u, p) = f_iip(resid, u, p)
+    f = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, f_iip)
 
     subsys = NonlinearSystem(_eqs, _dvs, ps; observed = _obs,
         parameter_dependencies = parameter_dependencies(sys), name = nameof(sys))

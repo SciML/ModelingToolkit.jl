@@ -132,6 +132,7 @@ isoutput(x) = isvarkind(VariableOutput, x)
 # irreducibility is independent from IO.
 isirreducible(x) = isvarkind(VariableIrreducible, x)
 setirreducible(x, v::Bool) = setmetadata(x, VariableIrreducible, v)
+state_priority(x::Union{Num, Symbolics.Arr}) = state_priority(unwrap(x))
 state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))::Float64
 
 function default_toterm(x)
@@ -419,7 +420,7 @@ end
 ## System interface
 
 """
-    tunable_parameters(sys, p = parameters(sys); default=true)
+    tunable_parameters(sys, p = parameters(sys; initial_parameters = true); default=true)
 
 Get all parameters of `sys` that are marked as `tunable`.
 
@@ -438,7 +439,8 @@ call `Symbolics.scalarize(tunable_parameters(sys))` and concatenate the resultin
 
 See also [`getbounds`](@ref), [`istunable`](@ref), [`MTKParameters`](@ref), [`complete`](@ref)
 """
-function tunable_parameters(sys, p = parameters(sys); default = true)
+function tunable_parameters(
+        sys, p = parameters(sys; initial_parameters = true); default = true)
     filter(x -> istunable(x, default), p)
 end
 

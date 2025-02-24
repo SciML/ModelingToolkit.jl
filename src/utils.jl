@@ -358,7 +358,7 @@ isoperator(expr, op) = iscall(expr) && operation(expr) isa op
 isoperator(op) = expr -> isoperator(expr, op)
 
 isdifferential(expr) = isoperator(expr, Differential)
-isdiffeq(eq) = isdifferential(eq.lhs)
+isdiffeq(eq) = isdifferential(eq.lhs) || isoperator(eq.lhs, Shift)
 
 isvariable(x::Num)::Bool = isvariable(value(x))
 function isvariable(x)::Bool
@@ -1176,9 +1176,13 @@ end
 
 Create an anonymous symbolic variable of the same shape, size and symtype as `var`, with
 name `gensym(name)`. Does not support unsized array symbolics.
+
+If `use_gensym == false`, will not `gensym` the name.
 """
-function similar_variable(var::BasicSymbolic, name = :anon)
-    name = gensym(name)
+function similar_variable(var::BasicSymbolic, name = :anon; use_gensym = true)
+    if use_gensym
+        name = gensym(name)
+    end
     stype = symtype(var)
     sym = Symbolics.variable(name; T = stype)
     if size(var) !== ()
@@ -1246,4 +1250,41 @@ function process_equations(eqs, iv)
     end
 
     diffvars, allunknowns, ps, Equation[diffeq; algeeq; compressed_eqs]
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+If `sym isa Symbol`, try and convert it to a symbolic by matching against symbolic
+variables in `allsyms`. If `sym` is not a `Symbol` or no match was found, return
+`sym` as-is.
+"""
+function symbol_to_symbolic(sys::AbstractSystem, sym; allsyms = all_symbols(sys))
+    sym isa Symbol || return sym
+    idx = findfirst(x -> (hasname(x) ? getname(x) : Symbol(x)) == sym, allsyms)
+    idx === nothing && return sym
+    sym = allsyms[idx]
+    if iscall(sym) && operation(sym) == getindex
+        sym = arguments(sym)[1]
+    end
+    return sym
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Check if `var` is present in `varlist`. `iv` is the independent variable of the system,
+and should be `nothing` if not applicable.
+"""
+function var_in_varlist(var, varlist::AbstractSet, iv)
+    var = unwrap(var)
+    # simple case
+    return var in varlist ||
+           # indexed array symbolic, unscalarized array present
+           (iscall(var) && operation(var) === getindex && arguments(var)[1] in varlist) ||
+           # unscalarized sized array symbolic, all scalarized elements present
+           (symbolic_type(var) == ArraySymbolic() && is_sized_array_symbolic(var) &&
+            all(x -> x in varlist, collect(var))) ||
+           # delayed variables
+           (isdelay(var, iv) && var_in_varlist(operation(var)(iv), varlist, iv))
 end

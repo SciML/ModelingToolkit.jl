@@ -19,7 +19,7 @@ ff = ODEFunction(de, [x, y, z], [σ, ρ, β], jac = true)
 a = @SVector [1.0, 2.0, 3.0]
 b = SLVector(x = 1.0, y = 2.0, z = 3.0)
 c = [1.0, 2.0, 3.0]
-p = (SLVector(σ = 10.0, ρ = 26.0, β = 8 / 3),)
+p = SLVector(σ = 10.0, ρ = 26.0, β = 8 / 3)
 @test ff(a, p, 0.0) isa SVector
 @test typeof(ff(b, p, 0.0)) <: SLArray
 @test ff(c, p, 0.0) isa Vector

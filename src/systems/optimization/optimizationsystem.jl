@@ -194,7 +194,7 @@ function calculate_gradient(sys::OptimizationSystem)
 end
 
 function generate_gradient(sys::OptimizationSystem, vs = unknowns(sys),
-        ps = parameters(sys); kwargs...)
+        ps = parameters(sys; initial_parameters = true); kwargs...)
     grad = calculate_gradient(sys)
     p = reorder_parameters(sys, ps)
     return build_function_wrapper(sys, grad, vs, p...; kwargs...)
@@ -205,7 +205,8 @@ function calculate_hessian(sys::OptimizationSystem)
 end
 
 function generate_hessian(
-        sys::OptimizationSystem, vs = unknowns(sys), ps = parameters(sys);
+        sys::OptimizationSystem, vs = unknowns(sys), ps = parameters(
+            sys; initial_parameters = true);
         sparse = false, kwargs...)
     if sparse
         hess = sparsehessian(objective(sys), unknowns(sys))
@@ -217,7 +218,7 @@ function generate_hessian(
 end
 
 function generate_function(sys::OptimizationSystem, vs = unknowns(sys),
-        ps = parameters(sys);
+        ps = parameters(sys; initial_parameters = true);
         kwargs...)
     eqs = objective(sys)
     p = reorder_parameters(sys, ps)

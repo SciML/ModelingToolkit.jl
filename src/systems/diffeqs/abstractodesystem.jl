@@ -105,7 +105,8 @@ function calculate_control_jacobian(sys::AbstractODESystem;
 end
 
 function generate_tgrad(
-        sys::AbstractODESystem, dvs = unknowns(sys), ps = parameters(sys);
+        sys::AbstractODESystem, dvs = unknowns(sys), ps = parameters(
+            sys; initial_parameters = true);
         simplify = false, kwargs...)
     tgrad = calculate_tgrad(sys, simplify = simplify)
     p = reorder_parameters(sys, ps)
@@ -117,7 +118,7 @@ function generate_tgrad(
 end
 
 function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys);
+        ps = parameters(sys; initial_parameters = true);
         simplify = false, sparse = false, kwargs...)
     jac = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
     p = reorder_parameters(sys, ps)
@@ -129,7 +130,7 @@ function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
 end
 
 function generate_control_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys);
+        ps = parameters(sys; initial_parameters = true);
         simplify = false, sparse = false, kwargs...)
     jac = calculate_control_jacobian(sys; simplify = simplify, sparse = sparse)
     p = reorder_parameters(sys, ps)
@@ -137,7 +138,7 @@ function generate_control_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
 end
 
 function generate_dae_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys); simplify = false, sparse = false,
+        ps = parameters(sys; initial_parameters = true); simplify = false, sparse = false,
         kwargs...)
     jac_u = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
     derivatives = Differential(get_iv(sys)).(unknowns(sys))
@@ -153,7 +154,7 @@ function generate_dae_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
 end
 
 function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
-        ps = parameters(sys);
+        ps = parameters(sys; initial_parameters = true);
         implicit_dae = false,
         ddvs = implicit_dae ? map(Differential(get_iv(sys)), dvs) :
                nothing,
@@ -319,9 +320,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
-
-    f(u, p, t) = f_oop(u, p, t)
-    f(du, u, p, t) = f_iip(du, u, p, t)
+    f = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(f_oop, f_iip)
 
     if specialize === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
@@ -337,10 +336,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
             expression_module = eval_module,
             checkbounds = checkbounds, kwargs...)
         tgrad_oop, tgrad_iip = eval_or_rgf.(tgrad_gen; eval_expression, eval_module)
-
-        ___tgrad(u, p, t) = tgrad_oop(u, p, t)
-        ___tgrad(J, u, p, t) = tgrad_iip(J, u, p, t)
-        _tgrad = ___tgrad
+        _tgrad = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(tgrad_oop, tgrad_iip)
     else
         _tgrad = nothing
     end
@@ -353,8 +349,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
             checkbounds = checkbounds, kwargs...)
         jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
 
-        _jac(u, p, t) = jac_oop(u, p, t)
-        _jac(J, u, p, t) = jac_iip(J, u, p, t)
+        _jac = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(jac_oop, jac_iip)
     else
         _jac = nothing
     end
@@ -434,8 +429,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
-    f(du, u, p, t) = f_oop(du, u, p, t)
-    f(out, du, u, p, t) = f_iip(out, du, u, p, t)
+    f = GeneratedFunctionWrapper{(3, 4, is_split(sys))}(f_oop, f_iip)
 
     if jac
         jac_gen = generate_dae_jacobian(sys, dvs, ps;
@@ -445,8 +439,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
             checkbounds = checkbounds, kwargs...)
         jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
 
-        _jac(du, u, p, ˍ₋gamma, t) = jac_oop(du, u, p, ˍ₋gamma, t)
-        _jac(J, du, u, p, ˍ₋gamma, t) = jac_iip(J, du, u, p, ˍ₋gamma, t)
+        _jac = GeneratedFunctionWrapper{(3, 5, is_split(sys))}(jac_oop, jac_iip)
     else
         _jac = nothing
     end
@@ -495,8 +488,7 @@ function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
-    f(u, h, p, t) = f_oop(u, h, p, t)
-    f(du, u, h, p, t) = f_iip(du, u, h, p, t)
+    f = GeneratedFunctionWrapper{(3, 4, is_split(sys))}(f_oop, f_iip)
 
     DDEFunction{iip}(f; sys = sys, initialization_data)
 end
@@ -520,14 +512,12 @@ function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
-    f(u, h, p, t) = f_oop(u, h, p, t)
-    f(du, u, h, p, t) = f_iip(du, u, h, p, t)
+    f = GeneratedFunctionWrapper{(3, 4, is_split(sys))}(f_oop, f_iip)
 
     g_gen = generate_diffusion_function(sys, dvs, ps; expression = Val{true},
         isdde = true, kwargs...)
     g_oop, g_iip = eval_or_rgf.(g_gen; eval_expression, eval_module)
-    g(u, h, p, t) = g_oop(u, h, p, t)
-    g(du, u, h, p, t) = g_iip(du, u, h, p, t)
+    g = GeneratedFunctionWrapper{(3, 4, is_split(sys))}(g_oop, g_iip)
 
     SDDEFunction{iip}(f, g; sys = sys, initialization_data)
 end
@@ -548,13 +538,6 @@ variable and parameter vectors, respectively.
 """
 struct ODEFunctionExpr{iip, specialize} end
 
-struct ODEFunctionClosure{O, I} <: Function
-    f_oop::O
-    f_iip::I
-end
-(f::ODEFunctionClosure)(u, p, t) = f.f_oop(u, p, t)
-(f::ODEFunctionClosure)(du, u, p, t) = f.f_iip(du, u, p, t)
-
 function ODEFunctionExpr{iip, specialize}(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
         version = nothing, tgrad = false,
@@ -571,13 +554,14 @@ function ODEFunctionExpr{iip, specialize}(sys::AbstractODESystem, dvs = unknowns
     f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
 
     fsym = gensym(:f)
-    _f = :($fsym = $ODEFunctionClosure($f_oop, $f_iip))
+    _f = :($fsym = $(GeneratedFunctionWrapper{(2, 3, is_split(sys))})($f_oop, $f_iip))
     tgradsym = gensym(:tgrad)
     if tgrad
         tgrad_oop, tgrad_iip = generate_tgrad(sys, dvs, ps;
             simplify = simplify,
             expression = Val{true}, kwargs...)
-        _tgrad = :($tgradsym = $ODEFunctionClosure($tgrad_oop, $tgrad_iip))
+        _tgrad = :($tgradsym = $(GeneratedFunctionWrapper{(2, 3, is_split(sys))})(
+            $tgrad_oop, $tgrad_iip))
     else
         _tgrad = :($tgradsym = nothing)
     end
@@ -587,7 +571,8 @@ function ODEFunctionExpr{iip, specialize}(sys::AbstractODESystem, dvs = unknowns
         jac_oop, jac_iip = generate_jacobian(sys, dvs, ps;
             sparse = sparse, simplify = simplify,
             expression = Val{true}, kwargs...)
-        _jac = :($jacsym = $ODEFunctionClosure($jac_oop, $jac_iip))
+        _jac = :($jacsym = $(GeneratedFunctionWrapper{(2, 3, is_split(sys))})(
+            $jac_oop, $jac_iip))
     else
         _jac = :($jacsym = nothing)
     end
@@ -646,13 +631,6 @@ variable and parameter vectors, respectively.
 """
 struct DAEFunctionExpr{iip} end
 
-struct DAEFunctionClosure{O, I} <: Function
-    f_oop::O
-    f_iip::I
-end
-(f::DAEFunctionClosure)(du, u, p, t) = f.f_oop(du, u, p, t)
-(f::DAEFunctionClosure)(out, du, u, p, t) = f.f_iip(out, du, u, p, t)
-
 function DAEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
         version = nothing, tgrad = false,
@@ -666,7 +644,7 @@ function DAEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
     f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true},
         implicit_dae = true, kwargs...)
     fsym = gensym(:f)
-    _f = :($fsym = $DAEFunctionClosure($f_oop, $f_iip))
+    _f = :($fsym = $(GeneratedFunctionWrapper{(3, 4, is_split(sys))})($f_oop, $f_iip))
     ex = quote
         $_f
         ODEFunction{$iip}($fsym)
@@ -699,7 +677,7 @@ function SymbolicTstops(
             term(:, t0, unwrap(val), t1; type = AbstractArray{Real})
         end
     end
-    rps = reorder_parameters(sys, parameters(sys))
+    rps = reorder_parameters(sys)
     tstops, _ = build_function_wrapper(sys, tstops,
         rps...,
         t0,
@@ -707,6 +685,7 @@ function SymbolicTstops(
         expression = Val{true},
         p_start = 1, p_end = length(rps), add_observed = false, force_SA = true)
     tstops = eval_or_rgf(tstops; eval_expression, eval_module)
+    tstops = GeneratedFunctionWrapper{(1, 3, is_split(sys))}(tstops, nothing)
     return SymbolicTstops(tstops)
 end
 
@@ -756,6 +735,12 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
     end
+
+    if !isnothing(get_constraintsystem(sys))
+        error("An ODESystem with constraints cannot be used to construct a regular ODEProblem. 
+              Consider a BVProblem instead.")
+    end
+
     f, u0, p = process_SciMLProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
         check_length, warn_initialize_determined, eval_expression, eval_module, kwargs...)
@@ -777,6 +762,164 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     return ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...)
 end
 get_callback(prob::ODEProblem) = prob.kwargs[:callback]
+
+"""
+```julia
+SciMLBase.BVProblem{iip}(sys::AbstractODESystem, u0map, tspan,
+                         parammap = DiffEqBase.NullParameters();
+                         constraints = nothing, guesses = nothing,
+                         version = nothing, tgrad = false,
+                         jac = true, sparse = true,
+                         simplify = false,
+                         kwargs...) where {iip}
+```
+
+Create a boundary value problem from the [`ODESystem`](@ref). 
+
+`u0map` is used to specify fixed initial values for the states. Every variable 
+must have either an initial guess supplied using `guesses` or a fixed initial 
+value specified using `u0map`.
+
+Boundary value conditions are supplied to ODESystems
+in the form of a ConstraintsSystem. These equations 
+should specify values that state variables should
+take at specific points, as in `x(0.5) ~ 1`). More general constraints that 
+should hold over the entire solution, such as `x(t)^2 + y(t)^2`, should be 
+specified as one of the equations used to build the `ODESystem`.
+
+If an ODESystem without `constraints` is specified, it will be treated as an initial value problem. 
+
+```julia
+    @parameters g t_c = 0.5
+    @variables x(..) y(t) [state_priority = 10] λ(t)
+    eqs = [D(D(x(t))) ~ λ * x(t)
+           D(D(y)) ~ λ * y - g
+           x(t)^2 + y^2 ~ 1]
+    cstr = [x(0.5) ~ 1]
+    @named cstrs = ConstraintsSystem(cstr, t)
+    @mtkbuild pend = ODESystem(eqs, t)
+
+    tspan = (0.0, 1.5)
+    u0map = [x(t) => 0.6, y => 0.8]
+    parammap = [g => 1]
+    guesses = [λ => 1]
+    constraints = [x(0.5) ~ 1]
+
+    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap; constraints, guesses, check_length = false)
+```
+
+If the `ODESystem` has algebraic equations, like `x(t)^2 + y(t)^2`, the resulting 
+`BVProblem` must be solved using BVDAE solvers, such as Ascher.
+"""
+function SciMLBase.BVProblem(sys::AbstractODESystem, args...; kwargs...)
+    BVProblem{true}(sys, args...; kwargs...)
+end
+
+function SciMLBase.BVProblem(sys::AbstractODESystem,
+        u0map::StaticArray,
+        args...;
+        kwargs...)
+    BVProblem{false, SciMLBase.FullSpecialize}(sys, u0map, args...; kwargs...)
+end
+
+function SciMLBase.BVProblem{true}(sys::AbstractODESystem, args...; kwargs...)
+    BVProblem{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
+end
+
+function SciMLBase.BVProblem{false}(sys::AbstractODESystem, args...; kwargs...)
+    BVProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
+end
+
+function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = [],
+        tspan = get_tspan(sys),
+        parammap = DiffEqBase.NullParameters();
+        guesses = Dict(),
+        version = nothing, tgrad = false,
+        callback = nothing,
+        check_length = true,
+        warn_initialize_determined = true,
+        eval_expression = false,
+        eval_module = @__MODULE__,
+        kwargs...) where {iip, specialize}
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `BVProblem`")
+    end
+    !isnothing(callback) && error("BVP solvers do not support callbacks.")
+
+    has_alg_eqs(sys) &&
+        error("The BVProblem constructor currently does not support ODESystems with algebraic equations.") # Remove this when the BVDAE solvers get updated, the codegen should work when it does.
+
+    sts = unknowns(sys)
+    ps = parameters(sys)
+    constraintsys = get_constraintsystem(sys)
+
+    if !isnothing(constraintsys)
+        (length(constraints(constraintsys)) + length(u0map) > length(sts)) &&
+            @warn "The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) exceeds the total number of states. The BVP solvers will default to doing a nonlinear least-squares optimization."
+    end
+
+    # ODESystems without algebraic equations should use both fixed values + guesses
+    # for initialization.
+    _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
+    f, u0, p = process_SciMLProblem(ODEFunction{iip, specialize}, sys, _u0map, parammap;
+        t = tspan !== nothing ? tspan[1] : tspan, guesses,
+        check_length, warn_initialize_determined, eval_expression, eval_module, kwargs...)
+
+    stidxmap = Dict([v => i for (i, v) in enumerate(sts)])
+    u0_idxs = has_alg_eqs(sys) ? collect(1:length(sts)) : [stidxmap[k] for (k, v) in u0map]
+
+    fns = generate_function_bc(sys, u0, u0_idxs, tspan)
+    bc_oop, bc_iip = eval_or_rgf.(fns; eval_expression, eval_module)
+    bc(sol, p, t) = bc_oop(sol, p, t)
+    bc(resid, u, p, t) = bc_iip(resid, u, p, t)
+
+    return BVProblem{iip}(f, bc, u0, tspan, p; kwargs...)
+end
+
+get_callback(prob::BVProblem) = error("BVP solvers do not support callbacks.")
+
+"""
+    generate_function_bc(sys::ODESystem, u0, u0_idxs, tspan)
+
+    Given an ODESystem with constraints, generate the boundary condition function to pass to boundary value problem solvers.
+    Expression uses the constraints and the provided initial conditions.
+"""
+function generate_function_bc(sys::ODESystem, u0, u0_idxs, tspan; kwargs...)
+    iv = get_iv(sys)
+    sts = unknowns(sys)
+    ps = parameters(sys)
+    np = length(ps)
+    ns = length(sts)
+    stidxmap = Dict([v => i for (i, v) in enumerate(sts)])
+    pidxmap = Dict([v => i for (i, v) in enumerate(ps)])
+
+    @variables sol(..)[1:ns]
+
+    conssys = get_constraintsystem(sys)
+    cons = Any[]
+    if !isnothing(conssys)
+        cons = [con.lhs - con.rhs for con in constraints(conssys)]
+
+        for st in get_unknowns(conssys)
+            x = operation(st)
+            t = only(arguments(st))
+            idx = stidxmap[x(iv)]
+
+            cons = map(c -> Symbolics.substitute(c, Dict(x(t) => sol(t)[idx])), cons)
+        end
+    end
+
+    init_conds = Any[]
+    for i in u0_idxs
+        expr = sol(tspan[1])[i] - u0[i]
+        push!(init_conds, expr)
+    end
+
+    exprs = vcat(init_conds, cons)
+    _p = reorder_parameters(sys, ps)
+
+    build_function_wrapper(sys, exprs, sol, _p..., t; output_type = Array, kwargs...)
+end
 
 """
 ```julia
@@ -825,7 +968,7 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
 end
 
 function generate_history(sys::AbstractODESystem, u0; expression = Val{false}, kwargs...)
-    p = reorder_parameters(sys, parameters(sys))
+    p = reorder_parameters(sys)
     build_function_wrapper(
         sys, u0, p..., get_iv(sys); expression, p_start = 1, p_end = length(p),
         similarto = typeof(u0), wrap_delays = false, kwargs...)
@@ -1045,7 +1188,7 @@ function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem, u0map,
     end
     f, u0, p = process_SciMLProblem(ODEFunction{iip}, sys, u0map, parammap;
         steady_state = true,
-        check_length, kwargs...)
+        check_length, force_initialization_time_independent = true, kwargs...)
     kwargs = filter_kwargs(kwargs)
     SteadyStateProblem{iip}(f, u0, p; kwargs...)
 end
@@ -1220,27 +1363,42 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
         check_units = true,
         use_scc = true,
         allow_incomplete = false,
+        force_time_independent = false,
+        algebraic_only = false,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
     end
     if isempty(u0map) && get_initializesystem(sys) !== nothing
         isys = get_initializesystem(sys; initialization_eqs, check_units)
+        simplify_system = false
     elseif isempty(u0map) && get_initializesystem(sys) === nothing
-        isys = structural_simplify(
-            generate_initializesystem(
-                sys; initialization_eqs, check_units, pmap = parammap,
-                guesses, extra_metadata = (; use_scc)); fully_determined)
+        isys = generate_initializesystem(
+            sys; initialization_eqs, check_units, pmap = parammap,
+            guesses, extra_metadata = (; use_scc), algebraic_only)
+        simplify_system = true
     else
-        isys = structural_simplify(
-            generate_initializesystem(
-                sys; u0map, initialization_eqs, check_units,
-                pmap = parammap, guesses, extra_metadata = (; use_scc)); fully_determined)
+        isys = generate_initializesystem(
+            sys; u0map, initialization_eqs, check_units,
+            pmap = parammap, guesses, extra_metadata = (; use_scc), algebraic_only)
+        simplify_system = true
+    end
+
+    # useful for `SteadyStateProblem` since `f` has to be autonomous and the
+    # initialization should be too
+    if force_time_independent
+        idx = findfirst(isequal(get_iv(sys)), get_ps(isys))
+        idx === nothing || deleteat!(get_ps(isys), idx)
+    end
+
+    if simplify_system
+        isys = structural_simplify(isys; fully_determined)
     end
 
     meta = get_metadata(isys)
     if meta isa InitializationSystemMetadata
-        @set! isys.metadata.oop_reconstruct_u0_p = ReconstructInitializeprob(sys, isys)
+        @set! isys.metadata.oop_reconstruct_u0_p = ReconstructInitializeprob(
+            sys, isys)
     end
 
     ts = get_tearing_state(isys)
@@ -1297,21 +1455,9 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
         guesses = Dict()
     end
 
-    u0map = merge(ModelingToolkit.guesses(sys), todict(guesses), todict(u0map))
-
-    # Replace dummy derivatives in u0map: D(x) -> x_t etc.
-    if has_schedule(sys)
-        schedule = get_schedule(sys)
-        if !isnothing(schedule)
-            for (var, val) in u0map
-                dvar = get(schedule.dummy_sub, var, var) # with dummy derivatives
-                if dvar !== var # then replace it
-                    delete!(u0map, var)
-                    push!(u0map, dvar => val)
-                end
-            end
-        end
-    end
+    filter_missing_values!(u0map)
+    filter_missing_values!(parammap)
+    u0map = merge(ModelingToolkit.guesses(sys), todict(guesses), u0map)
 
     fullmap = merge(u0map, parammap)
     u0T = Union{}
@@ -1329,7 +1475,9 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
     end
     if u0T != Union{}
         u0T = eltype(u0T)
-        u0map = Dict(k => if symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)
+        u0map = Dict(k => if v === nothing
+                         nothing
+                     elseif symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)
                          v isa AbstractArray ? u0T.(v) : u0T(v)
                      else
                          v

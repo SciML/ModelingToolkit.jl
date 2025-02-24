@@ -49,6 +49,8 @@ struct ODESystem <: AbstractODESystem
     ctrls::Vector
     """Observed variables."""
     observed::Vector{Equation}
+    """System of constraints that must be satisfied by the solution to the system."""
+    constraintsystem::Union{Nothing, ConstraintsSystem}
     """
     Time-derivative matrix. Note: this field will not be defined until
     [`calculate_tgrad`](@ref) is called on the system.
@@ -191,7 +193,8 @@ struct ODESystem <: AbstractODESystem
     """
     parent::Any
 
-    function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
+    function ODESystem(
+            tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, constraints, tgrad,
             jac, ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses,
             torn_matching, initializesystem, initialization_eqs, schedule,
             connector_type, preface, cevents,
@@ -212,7 +215,8 @@ struct ODESystem <: AbstractODESystem
             u = __get_unit_type(dvs, ps, iv)
             check_units(u, deqs)
         end
-        new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
+        new(tag, deqs, iv, dvs, ps, tspan, var_to_name,
+            ctrls, observed, constraints, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses, torn_matching,
             initializesystem, initialization_eqs, schedule, connector_type, preface,
             cevents, devents, parameter_dependencies, assertions, metadata,
@@ -224,6 +228,7 @@ end
 function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         controls = Num[],
         observed = Equation[],
+        constraintsystem = nothing,
         systems = ODESystem[],
         tspan = nothing,
         name = nothing,
@@ -245,7 +250,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         metadata = nothing,
         gui_metadata = nothing,
         is_dde = nothing,
-        tstops = [])
+        tstops = [],
+        discover_from_metadata = true)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
@@ -264,12 +270,16 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     defaults = Dict{Any, Any}(todict(defaults))
     guesses = Dict{Any, Any}(todict(guesses))
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, guesses, dvs′)
-    process_variables!(var_to_name, defaults, guesses, ps′)
-    process_variables!(
-        var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
-    process_variables!(
-        var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
+    let defaults = discover_from_metadata ? defaults : Dict(),
+        guesses = discover_from_metadata ? guesses : Dict()
+
+        process_variables!(var_to_name, defaults, guesses, dvs′)
+        process_variables!(var_to_name, defaults, guesses, ps′)
+        process_variables!(
+            var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
+        process_variables!(
+            var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
+    end
     defaults = Dict{Any, Any}(value(k) => value(v)
     for (k, v) in pairs(defaults) if v !== nothing)
     guesses = Dict{Any, Any}(value(k) => value(v)
@@ -292,9 +302,21 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     if is_dde === nothing
         is_dde = _check_if_dde(deqs, iv′, systems)
     end
+
+    if !isempty(systems) && !isnothing(constraintsystem)
+        conssystems = ConstraintsSystem[]
+        for sys in systems
+            cons = get_constraintsystem(sys)
+            cons !== nothing && push!(conssystems, cons)
+        end
+        @show conssystems
+        @set! constraintsystem.systems = conssystems
+    end
+
     assertions = Dict{BasicSymbolic, Any}(unwrap(k) => v for (k, v) in assertions)
+
     ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-        deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
+        deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, constraintsystem, tgrad, jac,
         ctrl_jac, Wfact, Wfact_t, name, description, systems,
         defaults, guesses, nothing, initializesystem,
         initialization_eqs, schedule, connector_type, preface, cont_callbacks,
@@ -302,7 +324,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         metadata, gui_metadata, is_dde, tstops, checks = checks)
 end
 
-function ODESystem(eqs, iv; kwargs...)
+function ODESystem(eqs, iv; constraints = Equation[], kwargs...)
     diffvars, allunknowns, ps, eqs = process_equations(eqs, iv)
 
     for eq in get(kwargs, :parameter_dependencies, Equation[])
@@ -334,8 +356,22 @@ function ODESystem(eqs, iv; kwargs...)
     end
     algevars = setdiff(allunknowns, diffvars)
 
-    return ODESystem(eqs, iv, collect(Iterators.flatten((diffvars, algevars))),
-        collect(new_ps); kwargs...)
+    consvars = OrderedSet()
+    constraintsystem = nothing
+    if !isempty(constraints)
+        constraintsystem = process_constraint_system(constraints, allunknowns, new_ps, iv)
+        for st in get_unknowns(constraintsystem)
+            iscall(st) ?
+            !in(operation(st)(iv), allunknowns) && push!(consvars, st) :
+            !in(st, allunknowns) && push!(consvars, st)
+        end
+        for p in parameters(constraintsystem)
+            !in(p, new_ps) && push!(new_ps, p)
+        end
+    end
+
+    return ODESystem(eqs, iv, collect(Iterators.flatten((diffvars, algevars, consvars))),
+        collect(new_ps); constraintsystem, kwargs...)
 end
 
 # NOTE: equality does not check cached Jacobian
@@ -361,7 +397,7 @@ function flatten(sys::ODESystem, noeqs = false)
         return ODESystem(noeqs ? Equation[] : equations(sys),
             get_iv(sys),
             unknowns(sys),
-            parameters(sys),
+            parameters(sys; initial_parameters = true),
             parameter_dependencies = parameter_dependencies(sys),
             guesses = guesses(sys),
             observed = observed(sys),
@@ -375,7 +411,11 @@ function flatten(sys::ODESystem, noeqs = false)
             is_dde = is_dde(sys),
             tstops = symbolic_tstops(sys),
             metadata = get_metadata(sys),
-            checks = false)
+            checks = false,
+            # without this, any defaults/guesses obtained from metadata that were
+            # later removed by the user will be re-added. Right now, we just want to
+            # retain `defaults(sys)` as-is.
+            discover_from_metadata = false)
     end
 end
 
@@ -427,12 +467,14 @@ an array of inputs `inputs` is given, and `param_only` is false for a time-depen
 """
 function build_explicit_observed_function(sys, ts;
         inputs = nothing,
+        disturbance_inputs = nothing,
+        disturbance_argument = false,
         expression = false,
         eval_expression = false,
         eval_module = @__MODULE__,
         output_type = Array,
         checkbounds = true,
-        ps = parameters(sys),
+        ps = parameters(sys; initial_parameters = true),
         return_inplace = false,
         param_only = false,
         op = Operator,
@@ -445,20 +487,10 @@ function build_explicit_observed_function(sys, ts;
     end
 
     allsyms = all_symbols(sys)
-    function symbol_to_symbolic(sym)
-        sym isa Symbol || return sym
-        idx = findfirst(x -> (hasname(x) ? getname(x) : Symbol(x)) == sym, allsyms)
-        idx === nothing && return sym
-        sym = allsyms[idx]
-        if iscall(sym) && operation(sym) == getindex
-            sym = arguments(sym)[1]
-        end
-        return sym
-    end
     if symbolic_type(ts) == NotSymbolic() && ts isa AbstractArray
-        ts = map(symbol_to_symbolic, ts)
+        ts = map(x -> symbol_to_symbolic(sys, x; allsyms), ts)
     else
-        ts = symbol_to_symbolic(ts)
+        ts = symbol_to_symbolic(sys, ts; allsyms)
     end
 
     vs = ModelingToolkit.vars(ts; op)
@@ -477,11 +509,16 @@ function build_explicit_observed_function(sys, ts;
         end
     end
     allsyms = Set(all_symbols(sys))
+    iv = has_iv(sys) ? get_iv(sys) : nothing
     for var in vs
         var = unwrap(var)
         newvar = get(ns_map, var, nothing)
         if newvar !== nothing
             namespace_subs[var] = newvar
+            var = newvar
+        end
+        if throw && !var_in_varlist(var, allsyms, iv)
+            Base.throw(ArgumentError("Symbol $var is not present in the system."))
         end
     end
     ts = fast_substitute(ts, namespace_subs)
@@ -508,13 +545,22 @@ function build_explicit_observed_function(sys, ts;
         ps = setdiff(ps, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
         inputs = (inputs,)
     end
+    if disturbance_inputs !== nothing
+        # Disturbance inputs may or may not be included as inputs, depending on disturbance_argument
+        ps = setdiff(ps, disturbance_inputs)
+    end
+    if disturbance_argument
+        disturbance_inputs = (disturbance_inputs,)
+    else
+        disturbance_inputs = ()
+    end
     ps = reorder_parameters(sys, ps)
     iv = if is_time_dependent(sys)
         (get_iv(sys),)
     else
         ()
     end
-    args = (dvs..., inputs..., ps..., iv...)
+    args = (dvs..., inputs..., ps..., iv..., disturbance_inputs...)
     p_start = length(dvs) + length(inputs) + 1
     p_end = length(dvs) + length(inputs) + length(ps)
     fns = build_function_wrapper(
@@ -522,9 +568,16 @@ function build_explicit_observed_function(sys, ts;
         output_type, mkarray, try_namespaced = true, expression = Val{true})
     if fns isa Tuple
         oop, iip = eval_or_rgf.(fns; eval_expression, eval_module)
-        return return_inplace ? (oop, iip) : oop
+        f = GeneratedFunctionWrapper{(
+            p_start + is_dde(sys), length(args) - length(ps) + 1 + is_dde(sys), is_split(sys))}(
+            oop, iip)
+        return return_inplace ? (f, f) : f
     else
-        return eval_or_rgf(fns; eval_expression, eval_module)
+        f = eval_or_rgf(fns; eval_expression, eval_module)
+        f = GeneratedFunctionWrapper{(
+            p_start + is_dde(sys), length(args) - length(ps) + 1 + is_dde(sys), is_split(sys))}(
+            f, nothing)
+        return f
     end
 end
 
@@ -656,4 +709,45 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::ODESystem; hint = true, 
     nini > 0 && hint && print(io, " see initialization_equations(sys)")
 
     return nothing
+end
+
+# Validate that all the variables in the BVP constraints are well-formed states or parameters.
+#  - Callable/delay variables (e.g. of the form x(0.6) should be unknowns of the system (and have one arg, etc.)
+#  - Callable/delay parameters should be parameters of the system (and have one arg, etc.)
+function process_constraint_system(
+        constraints::Vector{Equation}, sts, ps, iv; consname = :cons)
+    isempty(constraints) && return nothing
+
+    constraintsts = OrderedSet()
+    constraintps = OrderedSet()
+
+    for cons in constraints
+        collect_vars!(constraintsts, constraintps, cons, iv)
+    end
+
+    # Validate the states.
+    for var in constraintsts
+        if !iscall(var)
+            occursin(iv, var) && (var ∈ sts ||
+             throw(ArgumentError("Time-dependent variable $var is not an unknown of the system.")))
+        elseif length(arguments(var)) > 1
+            throw(ArgumentError("Too many arguments for variable $var."))
+        elseif length(arguments(var)) == 1
+            arg = only(arguments(var))
+            operation(var)(iv) ∈ sts ||
+                throw(ArgumentError("Variable $var is not a variable of the ODESystem. Called variables must be variables of the ODESystem."))
+
+            isequal(arg, iv) || isparameter(arg) || arg isa Integer ||
+                arg isa AbstractFloat ||
+                throw(ArgumentError("Invalid argument specified for variable $var. The argument of the variable should be either $iv, a parameter, or a value specifying the time that the constraint holds."))
+
+            isparameter(arg) && push!(constraintps, arg)
+        else
+            var ∈ sts &&
+                @warn "Variable $var has no argument. It will be interpreted as $var($iv), and the constraint will apply to the entire interval."
+        end
+    end
+
+    ConstraintsSystem(
+        constraints, collect(constraintsts), collect(constraintps); name = consname)
 end

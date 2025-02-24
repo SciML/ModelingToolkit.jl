@@ -282,8 +282,8 @@ function generate_rate_function(js::JumpSystem, rate)
         csubs = Dict(c => getdefault(c) for c in consts)
         rate = substitute(rate, csubs)
     end
-    p = reorder_parameters(js, parameters(js))
-    rf = build_function_wrapper(js, rate, unknowns(js), p...,
+    p = reorder_parameters(js)
+    build_function_wrapper(js, rate, unknowns(js), p...,
         get_iv(js),
         expression = Val{true})
 end
@@ -302,7 +302,7 @@ end
 function assemble_vrj(
         js, vrj, unknowntoid; eval_expression = false, eval_module = @__MODULE__)
     rate = eval_or_rgf(generate_rate_function(js, vrj.rate); eval_expression, eval_module)
-
+    rate = GeneratedFunctionWrapper{(2, 3, is_split(js))}(rate, nothing)
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
     affect = eval_or_rgf(generate_affect_function(js, vrj.affect!, outputidxs);
@@ -326,7 +326,7 @@ end
 function assemble_crj(
         js, crj, unknowntoid; eval_expression = false, eval_module = @__MODULE__)
     rate = eval_or_rgf(generate_rate_function(js, crj.rate); eval_expression, eval_module)
-
+    rate = GeneratedFunctionWrapper{(2, 3, is_split(js))}(rate, nothing)
     outputvars = (value(affect.lhs) for affect in crj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
     affect = eval_or_rgf(generate_affect_function(js, crj.affect!, outputidxs);
@@ -416,7 +416,7 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
     end
 
     _f, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
-        t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false, check_length = false)
+        t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false, check_length = false, build_initializeprob = false)
     f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
 
     observedfun = ObservedFunctionCache(
@@ -513,7 +513,8 @@ function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothi
             parameter_dependencies = parameter_dependencies(sys),
             metadata = get_metadata(sys), gui_metadata = get_gui_metadata(sys))
         osys = complete(osys)
-        return ODEProblem(osys, u0map, tspan, parammap; check_length = false, kwargs...)
+        return ODEProblem(osys, u0map, tspan, parammap; check_length = false,
+            build_initializeprob = false, kwargs...)
     else
         _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
             t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false,
@@ -633,7 +634,7 @@ end
 function JumpSysMajParamMapper(js::JumpSystem, p; jseqs = nothing, rateconsttype = Float64)
     eqs = (jseqs === nothing) ? equations(js) : jseqs
     paramexprs = [maj.scaled_rates for maj in eqs.x[1]]
-    psyms = reduce(vcat, reorder_parameters(js, parameters(js)); init = [])
+    psyms = reduce(vcat, reorder_parameters(js); init = [])
     paramdict = Dict(value(k) => value(v) for (k, v) in zip(psyms, vcat(p...)))
     JumpSysMajParamMapper{typeof(paramexprs), typeof(psyms), rateconsttype}(paramexprs,
         psyms,

@@ -83,7 +83,9 @@ prob_map2 = DiscreteProblem(sys)
 sol_map2 = solve(prob_map2, FunctionMap());
 
 @test sol_map.u ≈ sol_map2.u
-@test sol_map.prob.p == sol_map2.prob.p
+for p in parameters(sys)
+    @test sol_map.prob.ps[p] ≈ sol_map2.prob.ps[p]
+end
 @test_throws Any sol_map2[R2]
 @test sol_map2[R2(k + 1)][begin:(end - 1)] == sol_map2[R][(begin + 1):end]
 # Direct Implementation

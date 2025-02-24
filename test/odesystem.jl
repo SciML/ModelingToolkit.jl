@@ -235,7 +235,7 @@ end
 
 prob = ODEProblem(ODEFunction{false}(lotka), [1.0, 1.0], (0.0, 1.0), [1.5, 1.0, 3.0, 1.0])
 de = complete(modelingtoolkitize(prob))
-ODEFunction(de)(similar(prob.u0), prob.u0, (prob.p,), 0.1)
+ODEFunction(de)(similar(prob.u0), prob.u0, prob.p, 0.1)
 
 function lotka(du, u, p, t)
     x = u[1]
@@ -247,7 +247,7 @@ end
 prob = ODEProblem(lotka, [1.0, 1.0], (0.0, 1.0), [1.5, 1.0, 3.0, 1.0])
 
 de = complete(modelingtoolkitize(prob))
-ODEFunction(de)(similar(prob.u0), prob.u0, (prob.p,), 0.1)
+ODEFunction(de)(similar(prob.u0), prob.u0, prob.p, 0.1)
 
 # automatic unknown detection for DAEs
 @parameters k₁ k₂ k₃
@@ -273,7 +273,10 @@ prob12 = ODEProblem(sys, u0, tspan, [k₁ => 0.04, k₂ => 3e7, k₃ => 1e4])
 prob13 = ODEProblem(sys, u0, tspan, (k₁ => 0.04, k₂ => 3e7, k₃ => 1e4))
 prob14 = ODEProblem(sys, u0, tspan, p2)
 for p in [prob1, prob14]
-    @test p.p == MTKParameters(sys, [k₁ => 0.04, k₂ => 3e7, k₃ => 1e4])
+    @test p.p isa MTKParameters
+    p.ps[k₁] ≈ 0.04
+    p.ps[k₂] ≈ 3e7
+    p.ps[k₃] ≈ 1e-4
     @test Set(Num.(unknowns(sys)) .=> p.u0) == Set([y₁ => 1, y₂ => 0, y₃ => 0])
 end
 # test remake with symbols
@@ -284,7 +287,10 @@ u01 = [y₁ => 1, y₂ => 1, y₃ => 1]
 prob_pmap = remake(prob14; p = p3, u0 = u01)
 prob_dpmap = remake(prob14; p = Dict(p3), u0 = Dict(u01))
 for p in [prob_pmap, prob_dpmap]
-    @test p.p == MTKParameters(sys, [k₁ => 0.05, k₂ => 2e7, k₃ => 1.1e4])
+    @test p.p isa MTKParameters
+    p.ps[k₁] ≈ 0.05
+    p.ps[k₂] ≈ 2e7
+    p.ps[k₃] ≈ 1.1e-4
     @test Set(Num.(unknowns(sys)) .=> p.u0) == Set([y₁ => 1, y₂ => 1, y₃ => 1])
 end
 sol_pmap = solve(prob_pmap, Rodas5())
@@ -312,7 +318,10 @@ sol_dpmap = solve(prob_dpmap, Rodas5())
     prob = ODEProblem(sys, Pair[])
     prob_new = SciMLBase.remake(prob, p = Dict(sys1.a => 3.0, b => 4.0),
         u0 = Dict(sys1.x => 1.0))
-    @test prob_new.p == MTKParameters(sys, [b => 4.0, sys1.a => 3.0, sys.sys2.a => 1.0])
+    @test prob_new.p isa MTKParameters
+    @test prob_new.ps[b] ≈ 4.0
+    @test prob_new.ps[sys1.a] ≈ 3.0
+    @test prob_new.ps[sys.sys2.a] ≈ 1.0
     @test prob_new.u0 == [1.0, 0.0]
 end
 
@@ -674,7 +683,8 @@ let
     prob = DAEProblem(sys, du0, u0, (0, 50))
     @test prob.u0 ≈ u0
     @test prob.du0 ≈ du0
-    @test vcat(prob.p...) ≈ [1]
+    @test prob.p isa MTKParameters
+    @test prob.ps[k] ≈ 1
     sol = solve(prob, IDA())
     @test sol[y] ≈ 0.9 * sol[x[1]] + sol[x[2]]
     @test isapprox(sol[x[1]][end], 1, atol = 1e-3)
@@ -683,7 +693,8 @@ let
         (0, 50))
     @test prob.u0 ≈ [0.5, 0]
     @test prob.du0 ≈ [0, 0]
-    @test vcat(prob.p...) ≈ [1]
+    @test prob.p isa MTKParameters
+    @test prob.ps[k] ≈ 1
     sol = solve(prob, IDA())
     @test isapprox(sol[x[1]][end], 1, atol = 1e-3)
 
@@ -691,7 +702,8 @@ let
         (0, 50), [k => 2])
     @test prob.u0 ≈ [0.5, 0]
     @test prob.du0 ≈ [0, 0]
-    @test vcat(prob.p...) ≈ [2]
+    @test prob.p isa MTKParameters
+    @test prob.ps[k] ≈ 2
     sol = solve(prob, IDA())
     @test isapprox(sol[x[1]][end], 2, atol = 1e-3)
 
@@ -715,7 +727,9 @@ let
     pmap = (k1 => 1.0, k2 => 1)
     tspan = (0.0, 1.0)
     prob = ODEProblem(sys, u0map, tspan, pmap; tofloat = false)
-    @test (prob.p...,) == ([1], [1.0]) || (prob.p...,) == ([1.0], [1])
+    @test prob.p isa MTKParameters
+    @test prob.ps[k1] ≈ 1.0
+    @test prob.ps[k2] == 1 && prob.ps[k2] isa Int
 
     prob = ODEProblem(sys, u0map, tspan, pmap)
     @test vcat(prob.p...) isa Vector{Float64}
@@ -1288,9 +1302,13 @@ end
         t, [u..., x..., o...], [p...])
     sys1, = structural_simplify(sys, ([x...], []))
     fn1, = ModelingToolkit.generate_function(sys1; expression = Val{false})
-    @test_nowarn fn1(ones(4), (2ones(2), 3ones(2, 2)), 4.0)
+    ps = MTKParameters(sys1, [x => 2ones(2), p => 3ones(2, 2)])
+    @test_nowarn fn1(ones(4), ps, 4.0)
     sys2, = structural_simplify(sys, ([x...], []); split = false)
     fn2, = ModelingToolkit.generate_function(sys2; expression = Val{false})
+    ps = zeros(8)
+    setp(sys2, x)(ps, 2ones(2))
+    setp(sys2, p)(ps, 2ones(2, 2))
     @test_nowarn fn2(ones(4), 2ones(6), 4.0)
 end
 
@@ -1654,4 +1672,51 @@ end
 
     prob = ODEProblem{false}(lowered_dae_sys; u0_constructor = x -> SVector(x...))
     @test prob.u0 isa SVector
+end
+
+@testset "Constraint system construction" begin
+    @variables x(..) y(..) z(..)
+    @parameters a b c d e
+    eqs = [D(x(t)) ~ 3 * a * y(t), D(y(t)) ~ x(t) - z(t), D(z(t)) ~ e * x(t)^2]
+    cons = [x(0.3) ~ c * d, y(0.7) ~ 3]
+
+    # Test variables + parameters infer correctly.
+    @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
+    @test issetequal(parameters(sys), [a, c, d, e])
+    @test issetequal(unknowns(sys), [x(t), y(t), z(t)])
+
+    @parameters t_c
+    cons = [x(t_c) ~ 3]
+    @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
+    @test issetequal(parameters(sys), [a, e, t_c])
+
+    @parameters g(..) h i
+    cons = [g(h, i) * x(3) ~ c]
+    @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
+    @test issetequal(parameters(sys), [g, h, i, a, e, c])
+
+    # Test that bad constraints throw errors.
+    cons = [x(3, 4) ~ 3] # unknowns cannot have multiple args.
+    @test_throws ArgumentError @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
+
+    cons = [x(y(t)) ~ 2] # unknown arg must be parameter, value, or t
+    @test_throws ArgumentError @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
+
+    @variables u(t) v
+    cons = [x(t) * u ~ 3]
+    @test_throws ArgumentError @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
+    cons = [x(t) * v ~ 3]
+    @test_throws ArgumentError @mtkbuild sys = ODESystem(eqs, t; constraints = cons) # Need time argument.
+
+    # Test array variables
+    @variables x(..)[1:5]
+    mat = [1 2 0 3 2
+           0 0 3 2 0
+           0 1 3 0 4
+           2 0 0 2 1
+           0 0 2 0 5]
+    eqs = D(x(t)) ~ mat * x(t)
+    cons = [x(3) ~ [2, 3, 3, 5, 4]]
+    @mtkbuild ode = ODESystem(D(x(t)) ~ mat * x(t), t; constraints = cons)
+    @test length(constraints(ModelingToolkit.get_constraintsystem(ode))) == 5
 end

@@ -16,7 +16,12 @@ end
 
 function subset_idxs(idxs, portion, template)
     ntuple(Val(length(template))) do subi
-        [Base.tail(idx.idx) for idx in idxs if idx.portion == portion && idx.idx[1] == subi]
+        result = [Base.tail(idx.idx)
+                  for idx in idxs if idx.portion == portion && idx.idx[1] == subi]
+        if isempty(result)
+            result = []
+        end
+        result
     end
 end
 
