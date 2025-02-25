@@ -1068,14 +1068,24 @@ Keyword arguments:
   providing this keyword is not necessary and is only useful to avoid repeatedly calling
   `vars(exprs)`
 - `obs`: the list of observed equations.
+- `available_vars`: If `exprs` involves a variable `x[1]`, this function will look for
+  observed equations whose LHS is `x[1]` OR `x`. Sometimes, the latter is not required
+  since `x[1]` might already be present elsewhere in the generated code (e.g. an argument
+  to the function) but other elements of `x` are part of the observed equations, thus
+  requiring them to be obtained from the equation for `x`. Any variable present in
+  `available_vars` will not be searched for in the observed equations.
 """
 function observed_equations_used_by(sys::AbstractSystem, exprs;
-        involved_vars = vars(exprs; op = Union{Shift, Differential}), obs = observed(sys))
+        involved_vars = vars(exprs; op = Union{Shift, Differential}), obs = observed(sys), available_vars = [])
     obsvars = getproperty.(obs, :lhs)
     graph = observed_dependency_graph(obs)
+    if !(available_vars isa Set)
+        available_vars = Set(available_vars)
+    end
 
     obsidxs = BitSet()
     for sym in involved_vars
+        sym in available_vars && continue
         arrsym = iscall(sym) && operation(sym) === getindex ? arguments(sym)[1] : nothing
         idx = findfirst(v -> isequal(v, sym) || isequal(v, arrsym), obsvars)
         idx === nothing && continue
