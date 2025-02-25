@@ -4,6 +4,7 @@ using Setfield: @set!, @set
 using UnPack: @unpack
 
 using Symbolics: unwrap, linear_expansion, fast_substitute
+import Symbolics
 using SymbolicUtils
 using SymbolicUtils.Code
 using SymbolicUtils.Rewriters
