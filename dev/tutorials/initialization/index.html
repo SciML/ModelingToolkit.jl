@@ -18,6 +18,8 @@ eqs = [D(D(x)) ~ λ * x
 0 &amp;=  - 2 \mathtt{xˍtt}\left( t \right) x\left( t \right) - 2 \left( \mathtt{xˍt}\left( t \right) \right)^{2} - 2 \left( \mathtt{yˍt}\left( t \right) \right)^{2} - 2 y\left( t \right) \left(  - g + y\left( t \right) \lambda\left( t \right) \right)
 \end{align}
  \]</p><p>While we defined the system using second derivatives and a length constraint, the structural simplification system improved the numerics of the system to be solvable using the dummy derivative technique, which results in 3 algebraic equations and 2 differential equations. In this case, the differential equations with respect to <code>y</code> and <code>D(y)</code>, though it could have just as easily have been <code>x</code> and <code>D(x)</code>. How do you initialize such a system if you don&#39;t know in advance what variables may defined the equation&#39;s state?</p><p>To see how the system works, let&#39;s start the pendulum in the far right position, i.e. <code>x(0) = 1</code> and <code>y(0) = 0</code>. We can do this by:</p><pre><code class="language-julia hljs">prob = ODEProblem(pend, [x =&gt; 1, y =&gt; 0], (0.0, 1.5), [g =&gt; 1], guesses = [λ =&gt; 1])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr38_2" style="color:#56b6c2">ODEProblem</span> with uType <span class="sgr38_2" style="color:#56b6c2">Vector{Float64}</span> and tType <span class="sgr38_2" style="color:#56b6c2">Float64</span>. In-place: <span class="sgr38_2" style="color:#56b6c2">true</span>
+Initialization status: <span class="sgr38_2" style="color:#56b6c2">FULLY_DETERMINED</span>
+Non-trivial mass matrix: <span class="sgr38_2" style="color:#56b6c2">true</span>
 timespan: (0.0, 1.5)
 u0: 5-element Vector{Float64}:
  0.0
@@ -25,7 +27,7 @@ u0: 5-element Vector{Float64}:
  0.0
  1.0
  0.0</code></pre><p>This solves via:</p><pre><code class="language-julia hljs">sol = solve(prob, Rodas5P())
-plot(sol, idxs = (x, y))</code></pre><img src="104f6694.svg" alt="Example block output"/><p>and we can check it satisfies our conditions via:</p><pre><code class="language-julia hljs">conditions = getfield.(equations(pend)[3:end], :rhs)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{SymbolicUtils.BasicSymbolic{Real}}:
+plot(sol, idxs = (x, y))</code></pre><img src="716fca82.svg" alt="Example block output"/><p>and we can check it satisfies our conditions via:</p><pre><code class="language-julia hljs">conditions = getfield.(equations(pend)[3:end], :rhs)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{SymbolicUtils.BasicSymbolic{Real}}:
  1 - (x(t)^2) - (y(t)^2)
  -2xˍt(t)*x(t) - 2y(t)*yˍt(t)
  -2xˍtt(t)*x(t) - 2(xˍt(t)^2) - 2(yˍt(t)^2) - 2y(t)*(-g + y(t)*λ(t))</code></pre><pre><code class="language-julia hljs">[sol[conditions][1]; sol[x][1] - 1; sol[y][1]]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">5-element Vector{Float64}:
@@ -35,19 +37,21 @@ plot(sol, idxs = (x, y))</code></pre><img src="104f6694.svg" alt="Example block 
   0.0
   0.0</code></pre><p>Notice that we set <code>[x =&gt; 1, y =&gt; 0]</code> as our initial conditions and <code>[λ =&gt; 1]</code> as our guess. The difference is that the initial conditions are <strong>required to be satisfied</strong>, while the guesses are simply a guess for what the initial value might be. Every variable must have either an initial condition or a guess, and thus since we did not know what <code>λ</code> would be we set it to 1 and let the initialization scheme find the correct value for λ. Indeed, the value for <code>λ</code> at the initial time is not 1:</p><pre><code class="language-julia hljs">sol[λ][1]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.0</code></pre><p>We can similarly choose <code>λ = 0</code> and solve for <code>y</code> to start the system:</p><pre><code class="language-julia hljs">prob = ODEProblem(pend, [x =&gt; 1, λ =&gt; 0], (0.0, 1.5), [g =&gt; 1], guesses = [y =&gt; 1])
 sol = solve(prob, Rodas5P())
-plot(sol, idxs = (x, y))</code></pre><img src="8ee9269b.svg" alt="Example block output"/><p>or choose to satisfy derivative conditions:</p><pre><code class="language-julia hljs">prob = ODEProblem(
+plot(sol, idxs = (x, y))</code></pre><img src="6adc5175.svg" alt="Example block output"/><p>or choose to satisfy derivative conditions:</p><pre><code class="language-julia hljs">prob = ODEProblem(
     pend, [x =&gt; 1, D(y) =&gt; 0], (0.0, 1.5), [g =&gt; 1], guesses = [λ =&gt; 0, y =&gt; 1])
 sol = solve(prob, Rodas5P())
-plot(sol, idxs = (x, y))</code></pre><img src="77bd1466.svg" alt="Example block output"/><p>Notice that since a derivative condition is given, we are required to give a guess for <code>y</code>.</p><p>We can also directly give equations to be satisfied at the initial point by using the <code>initialization_eqs</code> keyword argument, for example:</p><pre><code class="language-julia hljs">prob = ODEProblem(pend, [x =&gt; 1], (0.0, 1.5), [g =&gt; 1], guesses = [λ =&gt; 0, y =&gt; 1],
+plot(sol, idxs = (x, y))</code></pre><img src="825933c0.svg" alt="Example block output"/><p>Notice that since a derivative condition is given, we are required to give a guess for <code>y</code>.</p><p>We can also directly give equations to be satisfied at the initial point by using the <code>initialization_eqs</code> keyword argument, for example:</p><pre><code class="language-julia hljs">prob = ODEProblem(pend, [x =&gt; 1], (0.0, 1.5), [g =&gt; 1], guesses = [λ =&gt; 0, y =&gt; 1],
     initialization_eqs = [y ~ 0])
 sol = solve(prob, Rodas5P())
-plot(sol, idxs = (x, y))</code></pre><img src="43d8fe4d.svg" alt="Example block output"/><p>Additionally, note that the initial conditions are allowed to be functions of other variables and parameters:</p><pre><code class="language-julia hljs">prob = ODEProblem(
+plot(sol, idxs = (x, y))</code></pre><img src="30a0d14c.svg" alt="Example block output"/><p>Additionally, note that the initial conditions are allowed to be functions of other variables and parameters:</p><pre><code class="language-julia hljs">prob = ODEProblem(
     pend, [x =&gt; 1, D(y) =&gt; g], (0.0, 3.0), [g =&gt; 1], guesses = [λ =&gt; 0, y =&gt; 1])
 sol = solve(prob, Rodas5P())
-plot(sol, idxs = (x, y))</code></pre><img src="4a28e508.svg" alt="Example block output"/><h2 id="Determinability:-Underdetermined-and-Overdetermined-Systems"><a class="docs-heading-anchor" href="#Determinability:-Underdetermined-and-Overdetermined-Systems">Determinability: Underdetermined and Overdetermined Systems</a><a id="Determinability:-Underdetermined-and-Overdetermined-Systems-1"></a><a class="docs-heading-anchor-permalink" href="#Determinability:-Underdetermined-and-Overdetermined-Systems" title="Permalink"></a></h2><p>For this system we have 3 conditions to satisfy:</p><pre><code class="language-julia hljs">conditions = getfield.(equations(pend)[3:end], :rhs)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{SymbolicUtils.BasicSymbolic{Real}}:
+plot(sol, idxs = (x, y))</code></pre><img src="14d91815.svg" alt="Example block output"/><h2 id="Determinability:-Underdetermined-and-Overdetermined-Systems"><a class="docs-heading-anchor" href="#Determinability:-Underdetermined-and-Overdetermined-Systems">Determinability: Underdetermined and Overdetermined Systems</a><a id="Determinability:-Underdetermined-and-Overdetermined-Systems-1"></a><a class="docs-heading-anchor-permalink" href="#Determinability:-Underdetermined-and-Overdetermined-Systems" title="Permalink"></a></h2><p>For this system we have 3 conditions to satisfy:</p><pre><code class="language-julia hljs">conditions = getfield.(equations(pend)[3:end], :rhs)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{SymbolicUtils.BasicSymbolic{Real}}:
  1 - (x(t)^2) - (y(t)^2)
  -2xˍt(t)*x(t) - 2y(t)*yˍt(t)
  -2xˍtt(t)*x(t) - 2(xˍt(t)^2) - 2(yˍt(t)^2) - 2y(t)*(-g + y(t)*λ(t))</code></pre><p>when we initialize with</p><pre><code class="language-julia hljs">prob = ODEProblem(pend, [x =&gt; 1, y =&gt; 0], (0.0, 1.5), [g =&gt; 1], guesses = [y =&gt; 0, λ =&gt; 1])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr38_2" style="color:#56b6c2">ODEProblem</span> with uType <span class="sgr38_2" style="color:#56b6c2">Vector{Float64}</span> and tType <span class="sgr38_2" style="color:#56b6c2">Float64</span>. In-place: <span class="sgr38_2" style="color:#56b6c2">true</span>
+Initialization status: <span class="sgr38_2" style="color:#56b6c2">FULLY_DETERMINED</span>
+Non-trivial mass matrix: <span class="sgr38_2" style="color:#56b6c2">true</span>
 timespan: (0.0, 1.5)
 u0: 5-element Vector{Float64}:
  0.0
@@ -55,6 +59,8 @@ u0: 5-element Vector{Float64}:
  0.0
  1.0
  0.0</code></pre><p>we have two extra conditions to satisfy, <code>x ~ 1</code> and <code>y ~ 0</code> at the initial point. That gives 5 equations for 5 variables and thus the system is well-formed. What happens if that&#39;s not the case?</p><pre><code class="language-julia hljs">prob = ODEProblem(pend, [x =&gt; 1], (0.0, 1.5), [g =&gt; 1], guesses = [y =&gt; 0, λ =&gt; 1])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr38_2" style="color:#56b6c2">ODEProblem</span> with uType <span class="sgr38_2" style="color:#56b6c2">Vector{Float64}</span> and tType <span class="sgr38_2" style="color:#56b6c2">Float64</span>. In-place: <span class="sgr38_2" style="color:#56b6c2">true</span>
+Initialization status: <span class="sgr38_2" style="color:#56b6c2">UNDERDETERMINED</span>
+Non-trivial mass matrix: <span class="sgr38_2" style="color:#56b6c2">true</span>
 timespan: (0.0, 1.5)
 u0: 5-element Vector{Float64}:
  0.0
@@ -62,8 +68,10 @@ u0: 5-element Vector{Float64}:
  0.0
  1.0
  0.0</code></pre><p>Here we have 4 equations for 5 unknowns (note: the warning is post-simplification of the nonlinear system, which solves the trivial <code>x ~ 1</code> equation analytical and thus says 3 equations for 4 unknowns). This warning thus lets you know the system is underdetermined and thus the solution is not necessarily unique. It can still be solved:</p><pre><code class="language-julia hljs">sol = solve(prob, Rodas5P())
-plot(sol, idxs = (x, y))</code></pre><img src="b6bf76f4.svg" alt="Example block output"/><p>and the found initial condition satisfies all constraints which were given. In the opposite direction, we may have an overdetermined system:</p><pre><code class="language-julia hljs">prob = ODEProblem(
+plot(sol, idxs = (x, y))</code></pre><img src="d5696ec6.svg" alt="Example block output"/><p>and the found initial condition satisfies all constraints which were given. In the opposite direction, we may have an overdetermined system:</p><pre><code class="language-julia hljs">prob = ODEProblem(
     pend, [x =&gt; 1, y =&gt; 0.0, D(y) =&gt; 0], (0.0, 1.5), [g =&gt; 1], guesses = [λ =&gt; 1])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr38_2" style="color:#56b6c2">ODEProblem</span> with uType <span class="sgr38_2" style="color:#56b6c2">Vector{Float64}</span> and tType <span class="sgr38_2" style="color:#56b6c2">Float64</span>. In-place: <span class="sgr38_2" style="color:#56b6c2">true</span>
+Initialization status: <span class="sgr38_2" style="color:#56b6c2">OVERDETERMINED</span>
+Non-trivial mass matrix: <span class="sgr38_2" style="color:#56b6c2">true</span>
 timespan: (0.0, 1.5)
 u0: 5-element Vector{Float64}:
  0.0
@@ -71,7 +79,7 @@ u0: 5-element Vector{Float64}:
  0.0
  1.0
  0.0</code></pre><p>Can that be solved?</p><pre><code class="language-julia hljs">sol = solve(prob, Rodas5P())
-plot(sol, idxs = (x, y))</code></pre><img src="a75f75bd.svg" alt="Example block output"/><p>Indeed since we saw <code>D(y) = 0</code> at the initial point above, it turns out that this solution is solvable with the chosen initial conditions. However, for overdetermined systems we often aren&#39;t that lucky. If the set of initial conditions cannot be satisfied, then you will get a <code>SciMLBase.ReturnCode.InitialFailure</code>:</p><pre><code class="language-julia hljs">prob = ODEProblem(
+plot(sol, idxs = (x, y))</code></pre><img src="7e8db25e.svg" alt="Example block output"/><p>Indeed since we saw <code>D(y) = 0</code> at the initial point above, it turns out that this solution is solvable with the chosen initial conditions. However, for overdetermined systems we often aren&#39;t that lucky. If the set of initial conditions cannot be satisfied, then you will get a <code>SciMLBase.ReturnCode.InitialFailure</code>:</p><pre><code class="language-julia hljs">prob = ODEProblem(
     pend, [x =&gt; 1, y =&gt; 0.0, D(y) =&gt; 2.0, λ =&gt; 1], (0.0, 1.5), [g =&gt; 1], guesses = [λ =&gt; 1])
 sol = solve(prob, Rodas5P())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">retcode: InitialFailure
 Interpolation: specialized 4rd order &quot;free&quot; stiffness-aware interpolation
@@ -137,88 +145,88 @@ Interpolation: specialized 4rd order &quot;free&quot; stiffness-aware interpolat
 t: 21-element Vector{Float64}:
  0.0
  1.0e-6
- 1.1e-5
- 0.00011099999999999999
- 0.0011109999999999998
- 0.011110999999999996
- 0.041215093898905854
- 0.08993330820016343
- 0.14812222179944373
- 0.22329866507033358
+ 7.839990502450873e-6
+ 7.62398955269596e-5
+ 0.0007602389457720468
+ 0.007600229448222918
+ 0.03258435441725446
+ 0.07824587728502698
+ 0.13478694794970103
+ 0.20699558657810402
  ⋮
- 0.5370414123084308
- 0.671743376923075
- 0.8159140935032908
- 0.961394822363531
- 1.1068755512237711
- 1.2523562800840113
- 1.3716583013796808
- 1.4657632985175937
+ 0.51300012881399
+ 0.6453397579947092
+ 0.7885269933747133
+ 0.9344951662538534
+ 1.0804633391329936
+ 1.2264315120121339
+ 1.3493757999327063
+ 1.4477503377198364
  1.5
 u: 21-element Vector{Vector{Float64}}:
- [-0.1, 0.0007886435331230285, 7.886435331228014e-5, 1.0, -0.009211356957380068]
- [-0.10000100000726413, 0.000788543532623025, 7.885516632767382e-5, 0.9999996890995002, -0.009211662687967071]
- [-0.10001100007986786, 0.0007875434726225892, 7.87630347287516e-5, 0.9999996898875912, -0.009214662867968381]
- [-0.10011100080212508, 0.0007775373725784321, 7.784006805955089e-5, 0.9999996977177714, -0.00924468116810085]
- [-0.10111100763297366, 0.0006769263683004033, 6.844472287387398e-5, 0.9999997708853197, -0.009546514180934945]
- [-0.11111102201026807, -0.000384183874255689, -4.2687066075720016e-5, 0.999999926201371, -0.01272984490864228]
- [-0.14121379765139602, -0.004182196076764511, -0.0005905889703810596, 0.9999912545780697, -0.02412388154455972]
- [-0.18991730127525605, -0.012248349943529744, -0.0023263484222510846, 0.9999249860967343, -0.04832234358298618]
- [-0.24803279435426295, -0.024990709673709668, -0.006200453362596906, 0.9996876831826028, -0.086549423247728]
- [-0.3228896061909795, -0.046452933838936394, -0.0150153862845058, 0.998920477739512, -0.15093609309640404]
+ [-0.1, 0.0007886435331230285, 0.0, 1.0, 0.000788643042647863]
+ [-0.10000100000726468, 0.000788543532623025, 7.885516632767425e-5, 0.9999996890995002, -0.009211662687967184]
+ [-0.10000784004743542, 0.0007878595033398348, 7.87921516439004e-5, 0.9999996896386533, -0.009213714775816752]
+ [-0.10007624044737641, 0.0007810166372884358, 7.816123262534994e-5, 0.9999996950064596, -0.009234243373970948]
+ [-0.10076024426577371, 0.0007123306548702512, 7.177462899248767e-5, 0.9999997462924869, -0.0094403013212255]
+ [-0.10760025974406118, -2.6130557676250043e-7, -2.8116549651230473e-8, 0.9999999999999657, -0.011578077202570548]
+ [-0.1325837522335784, -0.0030006581731943146, -0.00039784031549446665, 0.9999954980146321, -0.020579267814781546]
+ [-0.17823576197767735, -0.010096966282433858, -0.0017997324432671084, 0.9999490243058781, -0.04186819245940789]
+ [-0.23472300551487812, -0.02177186204859472, -0.005111569560274124, 0.9997629647228433, -0.07689288033706691]
+ [-0.3066890230414843, -0.041320867644504836, -0.012683494744559614, 0.9991459267798576, -0.13553989627908725]
  ⋮
- [-0.622404407788208, -0.19561177128055107, -0.12414778702003192, 0.980681299702361, -0.598410090809222]
- [-0.7331489040112305, -0.2871116064702749, -0.2197456421951545, 0.957896865338694, -0.8729003121723832]
- [-0.8255832224794503, -0.399879440963532, -0.360176284954415, 0.9165673529054952, -1.2111747663614185]
- [-0.8767679660863394, -0.5243237832731887, -0.5398472940549871, 0.8515187098642971, -1.584440805702721]
- [-0.8695809417578766, -0.6521595016067954, -0.7480118779350775, 0.7580827888456899, -1.9677513923114516]
- [-0.7908157668314598, -0.7738710224363454, -0.9660265597229113, 0.6333547327628852, -2.3321450051510895]
- [-0.6687593111582784, -0.8614551129283098, -1.1340082804589173, 0.5078555528504792, -2.5942939269792045]
- [-0.5377150453851018, -0.918452421983576, -1.2480067428966037, 0.3955608045292966, -2.764788819826553]
- [-0.4832659563443786, -0.9359394736870904, -1.2843682873037399, 0.3521609714335674, -2.8190834123605746]</code></pre><pre><code class="language-julia hljs">sol2[D(y), 1]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">-0.1</code></pre><p>Note that this <em>only</em> applies for constant constraints for the current ODEProblem. For example, <code>D(x)</code> does not have a constant constraint - it is solved for by initialization. Thus, mutating <code>Initial(D(x))</code> does not have any effect:</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; sol2[D(x), 1]</code><code class="nohighlight hljs ansi" style="display:block;">7.886435331228014e-5</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; prob.ps[Initial(D(x))] = 1.0</code><code class="nohighlight hljs ansi" style="display:block;">1.0</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; sol3 = solve(prob, Rodas5P())</code><code class="nohighlight hljs ansi" style="display:block;">retcode: Success
+ [-0.6009719264414545, -0.18090515613944896, -0.11054270281666581, 0.9835004512781994, -0.5542909003724654]
+ [-0.7129336031416668, -0.2680186784552016, -0.19833453478262508, 0.9634134762399043, -0.8156242589050593]
+ [-0.8107336340873434, -0.3774687348565844, -0.33046756451476844, 0.9260219434658499, -1.1439501116479351]
+ [-0.8712341445793852, -0.500808315656577, -0.504072311136462, 0.8655579027917537, -1.5139105603998357]
+ [-0.8758922639480086, -0.6291021350334868, -0.708820504312131, 0.7773232226301511, -1.898630996415344]
+ [-0.8104683019607379, -0.7531070104623239, -0.9275558825528496, 0.6579060551360042, -2.270061709475889]
+ [-0.6954400954737939, -0.846251246082511, -1.104239265529211, 0.5328021758680457, -2.5488826073226813]
+ [-0.5649872472901759, -0.9085182073396657, -1.2278990796668765, 0.4178721667006524, -2.7351391999963854]
+ [-0.48326810874043546, -0.9359386572806162, -1.2843006323143036, 0.3521649178191256, -2.8188843338862712]</code></pre><pre><code class="language-julia hljs">sol2[D(y), 1]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">-0.1</code></pre><p>Note that this <em>only</em> applies for constant constraints for the current ODEProblem. For example, <code>D(x)</code> does not have a constant constraint - it is solved for by initialization. Thus, mutating <code>Initial(D(x))</code> does not have any effect:</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; sol2[D(x), 1]</code><code class="nohighlight hljs ansi" style="display:block;">0.0</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; prob.ps[Initial(D(x))] = 1.0</code><code class="nohighlight hljs ansi" style="display:block;">1.0</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; sol3 = solve(prob, Rodas5P())</code><code class="nohighlight hljs ansi" style="display:block;">retcode: Success
 Interpolation: specialized 4rd order &quot;free&quot; stiffness-aware interpolation
 t: 21-element Vector{Float64}:
  0.0
  1.0e-6
- 1.1e-5
- 0.00011099999999999999
- 0.0011109999999999998
- 0.011110999999999996
- 0.041215093898905854
- 0.08993330820016343
- 0.14812222179944373
- 0.22329866507033358
+ 8.80389126654692e-6
+ 8.684280393201612e-5
+ 0.0008672319305867082
+ 0.008671123197133628
+ 0.03533041926300296
+ 0.08206109009692322
+ 0.13916543729695852
+ 0.2124060165472449
  ⋮
- 0.5370414123084308
- 0.671743376923075
- 0.8159140935032908
- 0.961394822363531
- 1.1068755512237711
- 1.2523562800840113
- 1.3716583013796808
- 1.4657632985175937
+ 0.5210851159979536
+ 0.654258428655957
+ 0.7978272815127782
+ 0.9436653708145508
+ 1.0895034601163236
+ 1.2353415494180964
+ 1.357047683231244
+ 1.4539581254192064
  1.5
 u: 21-element Vector{Vector{Float64}}:
- [-0.1, 0.0007886435331230285, 7.886435331228014e-5, 1.0, -0.009211356957380068]
- [-0.10000100000726413, 0.000788543532623025, 7.885516632767382e-5, 0.9999996890995002, -0.009211662687967071]
- [-0.10001100007986786, 0.0007875434726225892, 7.87630347287516e-5, 0.9999996898875912, -0.009214662867968381]
- [-0.10011100080212508, 0.0007775373725784321, 7.784006805955089e-5, 0.9999996977177714, -0.00924468116810085]
- [-0.10111100763297366, 0.0006769263683004033, 6.844472287387398e-5, 0.9999997708853197, -0.009546514180934945]
- [-0.11111102201026807, -0.000384183874255689, -4.2687066075720016e-5, 0.999999926201371, -0.01272984490864228]
- [-0.14121379765139602, -0.004182196076764511, -0.0005905889703810596, 0.9999912545780697, -0.02412388154455972]
- [-0.18991730127525605, -0.012248349943529744, -0.0023263484222510846, 0.9999249860967343, -0.04832234358298618]
- [-0.24803279435426295, -0.024990709673709668, -0.006200453362596906, 0.9996876831826028, -0.086549423247728]
- [-0.3228896061909795, -0.046452933838936394, -0.0150153862845058, 0.998920477739512, -0.15093609309640404]
+ [-0.1, 0.0007886435331230285, -0.000788643533123079, 1.0, -0.9992113569573802]
+ [-0.10000100000721367, 0.000788543532623025, 7.885516632763404e-5, 0.9999996890995002, -0.009211662687956949]
+ [-0.10000880395514522, 0.0007877631052418421, 7.878327040052663e-5, 0.9999996897145969, -0.009214003970100521]
+ [-0.10008684343216087, 0.0007799554818662155, 7.806330594175017e-5, 0.999999695834677, -0.009237426840227402]
+ [-0.10086723796579816, 0.0007015442917979068, 7.076285243780712e-5, 0.9999997539177731, -0.009472660410432333]
+ [-0.10867115275858476, -0.00011606315756664436, -1.2612717214329636e-5, 0.9999999932646714, -0.011925482758534793]
+ [-0.13532963224654815, -0.003368511943441631, -0.00045586207580333916, 0.9999943265467918, -0.021682829129938522]
+ [-0.1820492658712504, -0.010784248368427663, -0.001963378932159086, 0.9999418482658533, -0.04393003876249073]
+ [-0.23909383816086063, -0.022809163286149313, -0.005454950697277657, 0.9997398369766379, -0.08000478406847268]
+ [-0.3120679641438278, -0.042994739409066916, -0.013429705429227822, 0.9990752970209837, -0.14056151110192233]
  ⋮
- [-0.622404407788208, -0.19561177128055107, -0.12414778702003192, 0.980681299702361, -0.598410090809222]
- [-0.7331489040112305, -0.2871116064702749, -0.2197456421951545, 0.957896865338694, -0.8729003121723832]
- [-0.8255832224794503, -0.399879440963532, -0.360176284954415, 0.9165673529054952, -1.2111747663614185]
- [-0.8767679660863394, -0.5243237832731887, -0.5398472940549871, 0.8515187098642971, -1.584440805702721]
- [-0.8695809417578766, -0.6521595016067954, -0.7480118779350775, 0.7580827888456899, -1.9677513923114516]
- [-0.7908157668314598, -0.7738710224363454, -0.9660265597229113, 0.6333547327628852, -2.3321450051510895]
- [-0.6687593111582784, -0.8614551129283098, -1.1340082804589173, 0.5078555528504792, -2.5942939269792045]
- [-0.5377150453851018, -0.918452421983576, -1.2480067428966037, 0.3955608045292966, -2.764788819826553]
- [-0.4832659563443786, -0.9359394736870904, -1.2843682873037399, 0.3521609714335674, -2.8190834123605746]</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; sol3[D(x), 1]</code><code class="nohighlight hljs ansi" style="display:block;">7.886435331228014e-5</code></pre><p>To enforce this constraint, we would have to <code>remake</code> the problem (or construct a new one).</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; prob2 = remake(prob; u0 = [y =&gt; 0.0, D(x) =&gt; 0.0, x =&gt; nothing, D(y) =&gt; nothing]);</code><code class="nohighlight hljs ansi" style="display:block;"></code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; sol4 = solve(prob2, Rodas5P())</code><code class="nohighlight hljs ansi" style="display:block;">retcode: Success
+ [-0.6082243311020922, -0.18579336565144433, -0.11500630047287337, 0.9825887372007794, -0.5689553254699077]
+ [-0.7198560300472043, -0.27440808842495423, -0.2054181605343777, 0.9616130816565738, -0.8347916243710193]
+ [-0.8159370078326864, -0.38503325526104315, -0.3404000495948541, 0.9229023100825337, -1.1666412446464456]
+ [-0.8733394342887209, -0.5088077887240962, -0.5161503973951692, 0.8608798492838201, -1.5379036966980613]
+ [-0.8739959909147386, -0.6370123774412544, -0.7221867633774519, 0.7708542795274468, -1.9223450028310924]
+ [-0.8039927093598952, -0.7603004302577998, -0.9408261253534568, 0.6495806925947647, -2.2915752681776205]
+ [-0.6864503441144905, -0.8515528253348226, -1.1145909980340527, 0.5242881528075883, -2.5647214434494296]
+ [-0.5556995901490656, -0.9119971891327197, -1.2349291624399337, 0.4102241686158989, -2.745524655435558]
+ [-0.4832678575040852, -0.935938865572464, -1.2843363254097955, 0.35216328752608783, -2.818990084342225]</code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; sol3[D(x), 1]</code><code class="nohighlight hljs ansi" style="display:block;">-0.000788643533123079</code></pre><p>To enforce this constraint, we would have to <code>remake</code> the problem (or construct a new one).</p><pre><code class="language-julia-repl hljs" style="display:block;">julia&gt; prob2 = remake(prob; u0 = [y =&gt; 0.0, D(x) =&gt; 0.0, x =&gt; nothing, D(y) =&gt; nothing]);</code><code class="nohighlight hljs ansi" style="display:block;"></code><br/><code class="language-julia-repl hljs" style="display:block;">julia&gt; sol4 = solve(prob2, Rodas5P())</code><code class="nohighlight hljs ansi" style="display:block;">retcode: Success
 Interpolation: specialized 4rd order &quot;free&quot; stiffness-aware interpolation
 t: 20-element Vector{Float64}:
  0.0
@@ -476,4 +484,4 @@ u: 40-element Vector{Vector{Float64}}:
   6.022050346396097
   8.748587312661025
  -2.3017582386173707
- -2.7718838506213714</code></pre><pre><code class="language-julia hljs">plot(sol)</code></pre><img src="56a33047.svg" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../nonlinear/">« Modeling Nonlinear Systems</a><a class="docs-footer-nextpage" href="../optimization/">Modeling Optimization Problems »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.8.1 on <span class="colophon-date" title="Saturday 22 February 2025 06:42">Saturday 22 February 2025</span>. Using Julia version 1.10.8.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ -2.7718838506213714</code></pre><pre><code class="language-julia hljs">plot(sol)</code></pre><img src="a384c206.svg" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../nonlinear/">« Modeling Nonlinear Systems</a><a class="docs-footer-nextpage" href="../optimization/">Modeling Optimization Problems »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.8.1 on <span class="colophon-date" title="Tuesday 25 February 2025 15:57">Tuesday 25 February 2025</span>. Using Julia version 1.10.8.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
