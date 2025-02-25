@@ -158,3 +158,57 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
             guesses = guesses(sys), initialization_eqs = initialization_equations(sys))
     end
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given a system that has been simplified via `structural_simplify`, return a `Dict` mapping
+variables of the system to equations that are used to solve for them. This includes
+observed variables.
+
+# Keyword Arguments
+
+- `rename_dummy_derivatives`: Whether to rename dummy derivative variable keys into their
+  `Differential` forms. For example, this would turn the key `yˍt(t)` into
+  `Differential(t)(y(t))`.
+"""
+function map_variables_to_equations(sys::AbstractSystem; rename_dummy_derivatives = true)
+    if !has_tearing_state(sys)
+        throw(ArgumentError("$(typeof(sys)) is not supported."))
+    end
+    ts = get_tearing_state(sys)
+    if ts === nothing
+        throw(ArgumentError("`map_variables_to_equations` requires a simplified system. Call `structural_simplify` on the system before calling this function."))
+    end
+
+    dummy_sub = Dict()
+    if rename_dummy_derivatives && has_schedule(sys) && (sc = get_schedule(sys)) !== nothing
+        dummy_sub = Dict(v => k for (k, v) in sc.dummy_sub if isequal(default_toterm(k), v))
+    end
+
+    mapping = Dict{Union{Num, BasicSymbolic}, Equation}()
+    eqs = equations(sys)
+    for eq in eqs
+        isdifferential(eq.lhs) || continue
+        var = arguments(eq.lhs)[1]
+        var = get(dummy_sub, var, var)
+        mapping[var] = eq
+    end
+
+    graph = ts.structure.graph
+    algvars = BitSet(findall(
+        Base.Fix1(StructuralTransformations.isalgvar, ts.structure), 1:ndsts(graph)))
+    algeqs = BitSet(findall(1:nsrcs(graph)) do eq
+        all(!Base.Fix1(isdervar, ts.structure), 𝑠neighbors(graph, eq))
+    end)
+    alge_var_eq_matching = complete(maximal_matching(graph, in(algeqs), in(algvars)))
+    for (i, eq) in enumerate(alge_var_eq_matching)
+        eq isa Unassigned && continue
+        mapping[get(dummy_sub, ts.fullvars[i], ts.fullvars[i])] = eqs[eq]
+    end
+    for eq in observed(sys)
+        mapping[get(dummy_sub, eq.lhs, eq.lhs)] = eq
+    end
+
+    return mapping
+end
