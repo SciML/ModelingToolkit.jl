@@ -22,3 +22,9 @@ asdigraph
 eqeq_dependencies
 varvar_dependencies
 ```
+
+# Miscellaneous
+
+```@docs
+map_variables_to_equations
+```
