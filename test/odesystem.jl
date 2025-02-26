@@ -1589,6 +1589,10 @@ end
     @variables Y(t)[1:3]::String
     eq = D(Y) ~ [p, p, p]
     @test_throws ArgumentError @mtkbuild osys = ODESystem([eq], t)
+
+    @variables X(t)::Complex
+    eq = D(X) ~ p - d * X
+    @test_nowarn @named osys = ODESystem([eq], t)
 end
 
 # Test `isequal`
