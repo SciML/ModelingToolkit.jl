@@ -248,7 +248,8 @@ called dummy derivatives.
 State selection is done. All non-differentiated variables are algebraic 
 variables, and all variables that appear differentiated are differential variables.
 """
-function substitute_derivatives_algevars!(ts::TearingState, neweqs, var_eq_matching, dummy_sub; iv = nothing, D = nothing)
+function substitute_derivatives_algevars!(
+        ts::TearingState, neweqs, var_eq_matching, dummy_sub; iv = nothing, D = nothing)
     @unpack fullvars, sys, structure = ts
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     diff_to_var = invview(var_to_diff)
@@ -288,7 +289,7 @@ end
 #= 
 There are three cases where we want to generate new variables to convert
 the system into first order (semi-implicit) ODEs.
-    
+
 1. To first order:
 Whenever higher order differentiated variable like `D(D(D(x)))` appears,
 we introduce new variables `x_t`, `x_tt`, and `x_ttt` and new equations
@@ -341,14 +342,18 @@ in order to properly generate the difference equations.
 
 In the system x(k) ~ x(k-1) + x(k-2), becomes Shift(t, 1)(x(t)) ~ x(t) + Shift(t, -1)(x(t))
 
-The lowest-order term is Shift(t, k)(x(t)), instead of x(t).
-As such we actually want dummy variables for the k-1 lowest order terms instead of the k-1 highest order terms.
+The lowest-order term is Shift(t, k)(x(t)), instead of x(t). As such we actually want 
+dummy variables for the k-1 lowest order terms instead of the k-1 highest order terms.
 
 Shift(t, -1)(x(t)) -> x\_{t-1}(t)
 
-Since Shift(t, -1)(x) is not a derivative, it is directly substituted in `fullvars`. No equation or variable is added for it. 
+Since Shift(t, -1)(x) is not a derivative, it is directly substituted in `fullvars`. 
+No equation or variable is added for it. 
 
-For ODESystems D(D(D(x))) in equations is recursively substituted as D(x) ~ x_t, D(x_t) ~ x_tt, etc. The analogue for discrete systems, Shift(t, 1)(Shift(t,1)(Shift(t,1)(Shift(t, -3)(x(t))))) does not actually appear. So `total_sub` in generate_system_equations` is directly initialized with all of the lowered variables `Shift(t, -3)(x) -> x_t-3(t)`, etc. 
+For ODESystems D(D(D(x))) in equations is recursively substituted as D(x) ~ x_t, D(x_t) ~ x_tt, etc. 
+The analogue for discrete systems, Shift(t, 1)(Shift(t,1)(Shift(t,1)(Shift(t, -3)(x(t))))) 
+does not actually appear. So `total_sub` in generate_system_equations` is directly 
+initialized with all of the lowered variables `Shift(t, -3)(x) -> x_t-3(t)`, etc. 
 =#
 """
 Generate new derivative variables for the system.
@@ -358,9 +363,10 @@ Effects on the system structure:
 - neweqs: add the identity equations for the new variables, D(x) ~ x_t
 - graph: update graph with the new equations and variables, and their connections
 - solvable_graph:
-- var_eq_matching: match D(x) to the added identity equation
+- var_eq_matching: match D(x) to the added identity equation D(x) ~ x_t
 """
-function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matching; mm = nothing, iv = nothing, D = nothing)
+function generate_derivative_variables!(
+        ts::TearingState, neweqs, var_eq_matching; mm = nothing, iv = nothing, D = nothing)
     @unpack fullvars, sys, structure = ts
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     eq_var_matching = invview(var_eq_matching)
@@ -373,10 +379,6 @@ function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matchin
     # derivative is in the system
     for v in 1:length(var_to_diff)
         dv = var_to_diff[v]
-        # For discrete systems, directly substitute lowest-order shift 
-        #if is_discrete && diff_to_var[v] == nothing
-        #    operation(fullvars[v]) isa Shift && (fullvars[v] = lower_shift_varname_with_unit(fullvars[v], iv))
-        #end
         dv isa Int || continue
         solved = var_eq_matching[dv] isa Int
         solved && continue
@@ -394,8 +396,8 @@ function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matchin
 
         dx = fullvars[dv]
         order, lv = var_order(dv, diff_to_var)
-        x_t = is_discrete ? lower_shift_varname_with_unit(fullvars[dv], iv) : 
-                            lower_varname_with_unit(fullvars[lv], iv, order)
+        x_t = is_discrete ? lower_shift_varname_with_unit(fullvars[dv], iv) :
+              lower_varname_with_unit(fullvars[lv], iv, order)
 
         # Add `x_t` to the graph
         v_t = add_dd_variable!(structure, fullvars, x_t, dv)
@@ -405,12 +407,12 @@ function generate_derivative_variables!(ts::TearingState, neweqs, var_eq_matchin
         # Update matching
         push!(var_eq_matching, unassigned)
         var_eq_matching[dv] = unassigned
-        eq_var_matching[dummy_eq] = dv 
+        eq_var_matching[dummy_eq] = dv
     end
 end
 
 """
-Check if there's `D(x) = x_t` already.
+Check if there's `D(x) ~ x_t` already.
 """
 function find_duplicate_dd(dv, solvable_graph, diff_to_var, linear_eqs, mm)
     for eq in 𝑑neighbors(solvable_graph, dv)
@@ -428,9 +430,13 @@ function find_duplicate_dd(dv, solvable_graph, diff_to_var, linear_eqs, mm)
             return eq, v_t
         end
     end
-    return nothing 
+    return nothing
 end
 
+"""
+Add a dummy derivative variable x_t corresponding to symbolic variable D(x) 
+which has index dv in `fullvars`. Return the new index of x_t.
+"""
 function add_dd_variable!(s::SystemStructure, fullvars, x_t, dv)
     push!(fullvars, simplify_shifts(x_t))
     v_t = length(fullvars)
@@ -443,7 +449,11 @@ function add_dd_variable!(s::SystemStructure, fullvars, x_t, dv)
     v_t
 end
 
-# dv = index of D(x), v_t = index of x_t
+"""
+Add the equation D(x) - x_t ~ 0 to `neweqs`. `dv` and `v_t` are the indices
+of the higher-order derivative variable and the newly-introduced dummy
+derivative variable. Return the index of the new equation in `neweqs`.
+"""
 function add_dd_equation!(s::SystemStructure, neweqs, eq, dv, v_t)
     push!(neweqs, eq)
     add_vertex!(s.graph, SRC)
@@ -456,11 +466,37 @@ function add_dd_equation!(s::SystemStructure, neweqs, eq, dv, v_t)
 end
 
 """
-Solve the solvable equations of the system and generate differential (or discrete)
-equations in terms of the selected states.
+Solve the equations in `neweqs` to obtain the final equations of the 
+system.
+
+For each equation of `neweqs`, do one of the following: 
+   1. If the equation is solvable for a differentiated variable D(x),
+      then solve for D(x), and add D(x) ~ sol as a differential equation
+      of the system.
+   2. If the equation is solvable for an un-differentiated variable x, 
+      solve for x and then add x ~ sol as a solved equation. These will
+      become observables.
+   3. If the equation is not solvable, add it as an algebraic equation.
+
+Solved equations are added to `total_sub`. Occurrences of differential
+or solved variables on the RHS of the final equations will get substituted.
+The topological sort of the equations ensures that variables are solved for
+before they appear in equations. 
+
+Reorder the equations and unknowns to be:
+   [diffeqs; ...]
+   [diffvars; ...]
+such that the mass matrix is:
+   [I  0
+    0  0].
+
+Order the new equations and variables such that the differential equations
+and variables come first. Return the new equations, the solved equations,
+the new orderings, and the number of solved variables and equations.
 """
-function generate_system_equations!(state::TearingState, neweqs, var_eq_matching; simplify = false, iv = nothing, D = nothing)
-    @unpack fullvars, sys, structure = state 
+function generate_system_equations!(state::TearingState, neweqs, var_eq_matching;
+        simplify = false, iv = nothing, D = nothing)
+    @unpack fullvars, sys, structure = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     eq_var_matching = invview(var_eq_matching)
     diff_to_var = invview(var_to_diff)
@@ -469,11 +505,12 @@ function generate_system_equations!(state::TearingState, neweqs, var_eq_matching
     if is_only_discrete(structure)
         for (i, v) in enumerate(fullvars)
             op = operation(v)
-            op isa Shift && (op.steps < 0) && begin
-                lowered = lower_shift_varname_with_unit(v, iv)
-                total_sub[v] = lowered
-                fullvars[i] = lowered
-            end
+            op isa Shift && (op.steps < 0) &&
+                begin
+                    lowered = lower_shift_varname_with_unit(v, iv)
+                    total_sub[v] = lowered
+                    fullvars[i] = lowered
+                end
         end
     end
 
@@ -548,12 +585,16 @@ function generate_system_equations!(state::TearingState, neweqs, var_eq_matching
     end
     solved_vars_set = BitSet(solved_vars)
     var_ordering = [diff_vars;
-                   setdiff!(setdiff(1:ndsts(graph), diff_vars_set),
-                       solved_vars_set)]
+                    setdiff!(setdiff(1:ndsts(graph), diff_vars_set),
+                        solved_vars_set)]
 
-    return neweqs, solved_eqs, eq_ordering, var_ordering, length(solved_vars), length(solved_vars_set)
+    return neweqs, solved_eqs, eq_ordering, var_ordering, length(solved_vars),
+    length(solved_vars_set)
 end
 
+"""
+Occurs when a variable D(x) occurs in a non-differential system.
+"""
 struct UnexpectedDifferentialError
     eq::Equation
 end
@@ -562,12 +603,20 @@ function Base.showerror(io::IO, err::UnexpectedDifferentialError)
     error("Differential found in a non-differential system. Likely this is a bug in the construction of an initialization system. Please report this issue with a reproducible example. Offending equation: $(err.eq)")
 end
 
+"""
+Generate a first-order differential equation whose LHS is `dx`.
+
+`var` and `dx` represent the same variable, but `var` may be a higher-order differential and `dx` is always first-order. For example, if `var` is D(D(x)), then `dx` would be `D(x_t)`. Solve `eq` for `var`, substitute previously solved variables, and return the differential equation.
+"""
 function make_differential_equation(var, dx, eq, total_sub)
     dx ~ simplify_shifts(Symbolics.fixpoint_sub(
         Symbolics.symbolic_linear_solve(eq, var),
         total_sub; operator = ModelingToolkit.Shift))
 end
 
+"""
+Generate an algebraic equation. Substitute solved variables into `eq` and return the equation.
+"""
 function make_algebraic_equation(eq, total_sub)
     rhs = eq.rhs
     if !(eq.lhs isa Number && eq.lhs == 0)
@@ -576,6 +625,9 @@ function make_algebraic_equation(eq, total_sub)
     0 ~ simplify_shifts(Symbolics.fixpoint_sub(rhs, total_sub))
 end
 
+"""
+Solve equation `eq` for `var`, substitute previously solved variables, and return the solved equation.
+"""
 function make_solved_equation(var, eq, total_sub; simplify = false)
     residual = eq.lhs - eq.rhs
     a, b, islinear = linear_expansion(residual, var)
@@ -595,17 +647,14 @@ function make_solved_equation(var, eq, total_sub; simplify = false)
 end
 
 """
-Reorder the equations and unknowns to be:
-   [diffeqs; ...]
-   [diffvars; ...]
-such that the mass matrix is:
-   [I  0
-    0  0].
-
-Update the state to account for the new ordering and equations.
+Given the ordering returned by `generate_system_equations!`, update the 
+tearing state to account for the new order. Permute the variables and equations.
+Eliminate the solved variables and equations from the graph and permute the
+graph's vertices to account for the new variable/equation ordering.
 """
 # TODO: BLT sorting
-function reorder_vars!(state::TearingState, var_eq_matching, eq_ordering, var_ordering, nelim_eq, nelim_var)
+function reorder_vars!(state::TearingState, var_eq_matching, eq_ordering,
+        var_ordering, nsolved_eq, nsolved_var)
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = state.structure
 
     eqsperm = zeros(Int, nsrcs(graph))
@@ -620,7 +669,7 @@ function reorder_vars!(state::TearingState, var_eq_matching, eq_ordering, var_or
     # Contract the vertices in the structure graph to make the structure match
     # the new reality of the system we've just created.
     new_graph = contract_variables(graph, var_eq_matching, varsperm, eqsperm,
-        nelim_eq, nelim_var)
+        nsolved_eq, nsolved_var)
 
     new_var_to_diff = complete(DiffGraph(length(var_ordering)))
     for (v, d) in enumerate(var_to_diff)
@@ -647,9 +696,10 @@ function reorder_vars!(state::TearingState, var_eq_matching, eq_ordering, var_or
 end
 
 """
-Set the system equations, unknowns, observables post-tearing.
+Update the system equations, unknowns, and observables after simplification.
 """
-function update_simplified_system!(state::TearingState, neweqs, solved_eqs, dummy_sub, var_eq_matching, extra_unknowns; 
+function update_simplified_system!(
+        state::TearingState, neweqs, solved_eqs, dummy_sub, var_eq_matching, extra_unknowns;
         cse_hack = true, array_hack = true)
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = state.structure
     diff_to_var = invview(var_to_diff)
@@ -689,16 +739,9 @@ function update_simplified_system!(state::TearingState, neweqs, solved_eqs, dumm
     sys = schedule(sys)
 end
 
-# Terminology and Definition:
-# A general DAE is in the form of `F(u'(t), u(t), p, t) == 0`. We can
-# characterize variables in `u(t)` into two classes: differential variables
-# (denoted `v(t)`) and algebraic variables (denoted `z(t)`). Differential
-# variables are marked as `SelectedState` and they are differentiated in the
-# DAE system, i.e. `v'(t)` are all the variables in `u'(t)` that actually
-# appear in the system. Algebraic variables are variables that are not
-# differential variables.
-    
-# Give the order of the variable indexed by dv
+"""
+Give the order of the variable indexed by dv.
+"""
 function var_order(dv, diff_to_var)
     order = 0
     while (dv′ = diff_to_var[dv]) !== nothing
@@ -708,6 +751,21 @@ function var_order(dv, diff_to_var)
     order, dv
 end
 
+"""
+Main internal function for structural simplification for DAE systems and discrete systems.
+Generate dummy derivative variables, new equations in terms of variables, return updated
+system and tearing state.
+
+Terminology and Definition:
+
+A general DAE is in the form of `F(u'(t), u(t), p, t) == 0`. We can
+characterize variables in `u(t)` into two classes: differential variables
+(denoted `v(t)`) and algebraic variables (denoted `z(t)`). Differential
+variables are marked as `SelectedState` and they are differentiated in the
+DAE system, i.e. `v'(t)` are all the variables in `u'(t)` that actually
+appear in the system. Algebraic variables are variables that are not
+differential variables.
+"""
 function tearing_reassemble(state::TearingState, var_eq_matching,
         full_var_eq_matching = nothing; simplify = false, mm = nothing, cse_hack = true, array_hack = true)
     extra_vars = Int[]
@@ -738,12 +796,14 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
 
     generate_derivative_variables!(state, neweqs, var_eq_matching; mm, iv, D)
 
-    neweqs, solved_eqs, eq_ordering, var_ordering, nelim_eq, nelim_var = 
-        generate_system_equations!(state, neweqs, var_eq_matching; simplify, iv, D)
+    neweqs, solved_eqs, eq_ordering, var_ordering, nelim_eq, nelim_var = generate_system_equations!(
+        state, neweqs, var_eq_matching; simplify, iv, D)
 
-    state = reorder_vars!(state, var_eq_matching, eq_ordering, var_ordering, nelim_eq, nelim_var)
+    state = reorder_vars!(
+        state, var_eq_matching, eq_ordering, var_ordering, nelim_eq, nelim_var)
 
-    sys = update_simplified_system!(state, neweqs, solved_eqs, dummy_sub, var_eq_matching, extra_unknowns; cse_hack, array_hack)
+    sys = update_simplified_system!(state, neweqs, solved_eqs, dummy_sub, var_eq_matching,
+        extra_unknowns; cse_hack, array_hack)
 
     @set! state.sys = sys
     @set! sys.tearing_state = state

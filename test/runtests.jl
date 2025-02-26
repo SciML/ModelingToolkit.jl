@@ -88,6 +88,7 @@ end
             @safetestset "SCCNonlinearProblem Test" include("scc_nonlinear_problem.jl")
             @safetestset "PDE Construction Test" include("pde.jl")
             @safetestset "JumpSystem Test" include("jumpsystem.jl")
+            @safetestset "BVProblem Test" include("bvproblem.jl")
             @safetestset "print_tree" include("print_tree.jl")
             @safetestset "Constraints Test" include("constraints.jl")
             @safetestset "IfLifting Test" include("if_lifting.jl")
@@ -121,6 +122,7 @@ end
         @safetestset "Linearization Dummy Derivative Tests" include("downstream/linearization_dd.jl")
         @safetestset "Inverse Models Test" include("downstream/inversemodel.jl")
         @safetestset "Analysis Points Test" include("downstream/analysis_points.jl")
+        @safetestset "Analysis Points Test" include("downstream/test_disturbance_model.jl")
     end
 
     if GROUP == "All" || GROUP == "FMI"

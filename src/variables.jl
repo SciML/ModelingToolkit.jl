@@ -6,7 +6,9 @@ struct VariableOutput end
 struct VariableIrreducible end
 struct VariableStatePriority end
 struct VariableMisc end
+# Metadata for renamed shift variables xₜ₋₁
 struct VariableUnshifted end
+struct VariableShift end
 Symbolics.option_to_metadata_type(::Val{:unit}) = VariableUnit
 Symbolics.option_to_metadata_type(::Val{:connect}) = VariableConnectType
 Symbolics.option_to_metadata_type(::Val{:input}) = VariableInput
@@ -15,6 +17,7 @@ Symbolics.option_to_metadata_type(::Val{:irreducible}) = VariableIrreducible
 Symbolics.option_to_metadata_type(::Val{:state_priority}) = VariableStatePriority
 Symbolics.option_to_metadata_type(::Val{:misc}) = VariableMisc
 Symbolics.option_to_metadata_type(::Val{:unshifted}) = VariableUnshifted
+Symbolics.option_to_metadata_type(::Val{:shift}) = VariableShift
 
 """
     dump_variable_metadata(var)
@@ -97,7 +100,7 @@ struct Stream <: AbstractConnectType end   # special stream connector
 
 Get the connect type of x. See also [`hasconnect`](@ref).
 """
-getconnect(x) = getconnect(unwrap(x))
+getconnect(x::Num) = getconnect(unwrap(x))
 getconnect(x::Symbolic) = Symbolics.getmetadata(x, VariableConnectType, nothing)
 """
     hasconnect(x)
@@ -136,7 +139,7 @@ function default_toterm(x)
     if iscall(x) && (op = operation(x)) isa Operator
         if !(op isa Differential)
             if op isa Shift && op.steps < 0
-                return shift2term(x) 
+                return shift2term(x)
             end
             x = normalize_to_differential(op)(arguments(x)...)
         end
@@ -265,7 +268,7 @@ end
 end
 
 struct IsHistory end
-ishistory(x) = ishistory(unwrap(x))
+ishistory(x::Num) = ishistory(unwrap(x))
 ishistory(x::Symbolic) = getmetadata(x, IsHistory, false)
 hist(x, t) = wrap(hist(unwrap(x), t))
 function hist(x::Symbolic, t)
@@ -577,7 +580,7 @@ end
 Fetch any miscellaneous data associated with symbolic variable `x`.
 See also [`hasmisc(x)`](@ref).
 """
-getmisc(x) = getmisc(unwrap(x))
+getmisc(x::Num) = getmisc(unwrap(x))
 getmisc(x::Symbolic) = Symbolics.getmetadata(x, VariableMisc, nothing)
 """
     hasmisc(x)
@@ -596,7 +599,7 @@ setmisc(x, miscdata) = setmetadata(x, VariableMisc, miscdata)
 
 Fetch the unit associated with variable `x`. This function is a metadata getter for an individual variable, while `get_unit` is used for unit inference on more complicated sdymbolic expressions.
 """
-getunit(x) = getunit(unwrap(x))
+getunit(x::Num) = getunit(unwrap(x))
 getunit(x::Symbolic) = Symbolics.getmetadata(x, VariableUnit, nothing)
 """
     hasunit(x)
@@ -605,5 +608,8 @@ Check if the variable `x` has a unit.
 """
 hasunit(x) = getunit(x) !== nothing
 
-getunshifted(x) = getunshifted(unwrap(x))
+getunshifted(x::Num) = getunshifted(unwrap(x))
 getunshifted(x::Symbolic) = Symbolics.getmetadata(x, VariableUnshifted, nothing)
+
+getshift(x::Num) = getshift(unwrap(x))
+getshift(x::Symbolic) = Symbolics.getmetadata(x, VariableShift, 0)

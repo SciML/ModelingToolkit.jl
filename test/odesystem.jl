@@ -1673,3 +1673,50 @@ end
     prob = ODEProblem{false}(lowered_dae_sys; u0_constructor = x -> SVector(x...))
     @test prob.u0 isa SVector
 end
+
+@testset "Constraint system construction" begin
+    @variables x(..) y(..) z(..)
+    @parameters a b c d e
+    eqs = [D(x(t)) ~ 3 * a * y(t), D(y(t)) ~ x(t) - z(t), D(z(t)) ~ e * x(t)^2]
+    cons = [x(0.3) ~ c * d, y(0.7) ~ 3]
+
+    # Test variables + parameters infer correctly.
+    @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
+    @test issetequal(parameters(sys), [a, c, d, e])
+    @test issetequal(unknowns(sys), [x(t), y(t), z(t)])
+
+    @parameters t_c
+    cons = [x(t_c) ~ 3]
+    @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
+    @test issetequal(parameters(sys), [a, e, t_c])
+
+    @parameters g(..) h i
+    cons = [g(h, i) * x(3) ~ c]
+    @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
+    @test issetequal(parameters(sys), [g, h, i, a, e, c])
+
+    # Test that bad constraints throw errors.
+    cons = [x(3, 4) ~ 3] # unknowns cannot have multiple args.
+    @test_throws ArgumentError @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
+
+    cons = [x(y(t)) ~ 2] # unknown arg must be parameter, value, or t
+    @test_throws ArgumentError @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
+
+    @variables u(t) v
+    cons = [x(t) * u ~ 3]
+    @test_throws ArgumentError @mtkbuild sys = ODESystem(eqs, t; constraints = cons)
+    cons = [x(t) * v ~ 3]
+    @test_throws ArgumentError @mtkbuild sys = ODESystem(eqs, t; constraints = cons) # Need time argument.
+
+    # Test array variables
+    @variables x(..)[1:5]
+    mat = [1 2 0 3 2
+           0 0 3 2 0
+           0 1 3 0 4
+           2 0 0 2 1
+           0 0 2 0 5]
+    eqs = D(x(t)) ~ mat * x(t)
+    cons = [x(3) ~ [2, 3, 3, 5, 4]]
+    @mtkbuild ode = ODESystem(D(x(t)) ~ mat * x(t), t; constraints = cons)
+    @test length(constraints(ModelingToolkit.get_constraintsystem(ode))) == 5
+end

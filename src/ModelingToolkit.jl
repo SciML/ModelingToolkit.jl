@@ -156,6 +156,10 @@ include("systems/codegen_utils.jl")
 include("systems/problem_utils.jl")
 include("linearization.jl")
 
+include("systems/optimization/constraints_system.jl")
+include("systems/optimization/optimizationsystem.jl")
+include("systems/optimization/modelingtoolkitize.jl")
+
 include("systems/nonlinear/nonlinearsystem.jl")
 include("systems/nonlinear/homotopy_continuation.jl")
 include("systems/diffeqs/odesystem.jl")
@@ -171,10 +175,6 @@ include("systems/discrete_system/discrete_system.jl")
 include("systems/discrete_system/implicit_discrete_system.jl")
 
 include("systems/jumps/jumpsystem.jl")
-
-include("systems/optimization/constraints_system.jl")
-include("systems/optimization/optimizationsystem.jl")
-include("systems/optimization/modelingtoolkitize.jl")
 
 include("systems/pde/pdesystem.jl")
 

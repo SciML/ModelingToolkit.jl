@@ -752,12 +752,14 @@ function process_SciMLProblem(
 
     u0Type = typeof(u0map)
     pType = typeof(pmap)
-    _u0map = u0map
+
     u0map = to_varmap(u0map, dvs)
     symbols_to_symbolics!(sys, u0map)
-    _pmap = pmap
     pmap = to_varmap(pmap, parameters(sys))
     symbols_to_symbolics!(sys, pmap)
+
+    check_inputmap_keys(sys, u0map, pmap)
+
     defs = add_toterms(recursive_unwrap(defaults(sys)))
     cmap, cs = get_cmap(sys)
     kwargs = NamedTuple(kwargs)
@@ -852,6 +854,42 @@ function process_SciMLProblem(
         eval_module = eval_module,
         kwargs...)
     implicit_dae ? (f, du0, u0, p) : (f, u0, p)
+end
+
+# Check that the keys of a u0map or pmap are valid
+# (i.e. are symbolic keys, and are defined for the system.)
+function check_inputmap_keys(sys, u0map, pmap)
+    badvarkeys = Any[]
+    for k in keys(u0map)
+        if symbolic_type(k) === NotSymbolic()
+            push!(badvarkeys, k)
+        end
+    end
+
+    badparamkeys = Any[]
+    for k in keys(pmap)
+        if symbolic_type(k) === NotSymbolic()
+            push!(badparamkeys, k)
+        end
+    end
+    (isempty(badvarkeys) && isempty(badparamkeys)) ||
+        throw(InvalidKeyError(collect(badvarkeys), collect(badparamkeys)))
+end
+
+const BAD_KEY_MESSAGE = """
+                        Undefined keys found in the parameter or initial condition maps. Check if symbolic variable names have been reassigned. 
+                        The following keys are invalid:
+                        """
+
+struct InvalidKeyError <: Exception
+    vars::Any
+    params::Any
+end
+
+function Base.showerror(io::IO, e::InvalidKeyError)
+    println(io, BAD_KEY_MESSAGE)
+    println(io, "u0map: $(join(e.vars, ", "))")
+    println(io, "pmap: $(join(e.params, ", "))")
 end
 
 ##############
