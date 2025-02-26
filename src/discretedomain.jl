@@ -71,6 +71,19 @@ Base.literal_pow(f::typeof(^), D::Shift, ::Val{n}) where {n} = Shift(D.t, D.step
 hasshift(eq::Equation) = hasshift(eq.lhs) || hasshift(eq.rhs)
 
 """
+    Next(x)
+
+An alias for Shift(t, 1)(x).
+"""
+Next(x) = Shift(t, 1)(x)
+"""
+    Prev(x)
+
+An alias for Shift(t, -1)(x).
+"""
+Prev(x) = Shift(t, -1)(x)
+
+"""
     hasshift(O)
 
 Returns true if the expression or equation `O` contains [`Shift`](@ref) terms.
