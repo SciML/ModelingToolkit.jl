@@ -1217,7 +1217,9 @@ end
 Find all the unknowns and parameters from the equations of a SDESystem or ODESystem. Return re-ordered equations, differential variables, all variables, and parameters.
 """
 function process_equations(eqs, iv)
-    eltype(eqs) <: Vector && (eqs = vcat(eqs...))
+    if eltype(eqs) <: AbstractVector
+        eqs = reduce(vcat, eqs)
+    end
     eqs = collect(eqs)
 
     diffvars = OrderedSet()
