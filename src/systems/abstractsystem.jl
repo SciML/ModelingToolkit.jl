@@ -631,8 +631,8 @@ SymbolicUtils.promote_symtype(::Type{Initial}, T) = T
 SymbolicUtils.isbinop(::Initial) = false
 Base.nameof(::Initial) = :Initial
 Base.show(io::IO, x::Initial) = print(io, "Initial")
-input_timedomain(::Initial, _ = nothing) = Continuous()
-output_timedomain(::Initial, _ = nothing) = Continuous()
+input_timedomain(::Initial, _ = nothing) = ContinuousClock()
+output_timedomain(::Initial, _ = nothing) = ContinuousClock()
 
 function (f::Initial)(x)
     # wrap output if wrapped input

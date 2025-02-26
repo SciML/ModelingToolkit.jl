@@ -1,5 +1,5 @@
 using ModelingToolkit, Test, Setfield, OrdinaryDiffEq, DiffEqCallbacks
-using ModelingToolkit: Continuous
+using ModelingToolkit: ContinuousClock
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 function infer_clocks(sys)
@@ -77,19 +77,19 @@ k = ShiftIndex(d)
 
 d = Clock(dt)
 # Note that TearingState reorders the equations
-@test eqmap[1] == Continuous()
+@test eqmap[1] == ContinuousClock()
 @test eqmap[2] == d
 @test eqmap[3] == d
 @test eqmap[4] == d
-@test eqmap[5] == Continuous()
-@test eqmap[6] == Continuous()
+@test eqmap[5] == ContinuousClock()
+@test eqmap[6] == ContinuousClock()
 
 @test varmap[yd] == d
 @test varmap[ud] == d
 @test varmap[r] == d
-@test varmap[x] == Continuous()
-@test varmap[y] == Continuous()
-@test varmap[u] == Continuous()
+@test varmap[x] == ContinuousClock()
+@test varmap[y] == ContinuousClock()
+@test varmap[u] == ContinuousClock()
 
 @info "Testing shift normalization"
 dt = 0.1
@@ -192,10 +192,10 @@ eqs = [yd ~ Sample(dt)(y)
     @test varmap[ud1] == d
     @test varmap[yd2] == d2
     @test varmap[ud2] == d2
-    @test varmap[r] == Continuous()
-    @test varmap[x] == Continuous()
-    @test varmap[y] == Continuous()
-    @test varmap[u] == Continuous()
+    @test varmap[r] == ContinuousClock()
+    @test varmap[x] == ContinuousClock()
+    @test varmap[y] == ContinuousClock()
+    @test varmap[u] == ContinuousClock()
 
     @info "test composed systems"
 
@@ -241,14 +241,14 @@ eqs = [yd ~ Sample(dt)(y)
     ci, varmap = infer_clocks(cl)
 
     @test varmap[f.x] == Clock(0.5)
-    @test varmap[p.x] == Continuous()
-    @test varmap[p.y] == Continuous()
+    @test varmap[p.x] == ContinuousClock()
+    @test varmap[p.y] == ContinuousClock()
     @test varmap[c.ud] == Clock(0.5)
     @test varmap[c.yd] == Clock(0.5)
-    @test varmap[c.y] == Continuous()
+    @test varmap[c.y] == ContinuousClock()
     @test varmap[f.y] == Clock(0.5)
     @test varmap[f.u] == Clock(0.5)
-    @test varmap[p.u] == Continuous()
+    @test varmap[p.u] == ContinuousClock()
     @test varmap[c.r] == Clock(0.5)
 
     ## Multiple clock rates
@@ -281,9 +281,9 @@ eqs = [yd ~ Sample(dt)(y)
     @test varmap[ud1] == d
     @test varmap[yd2] == d2
     @test varmap[ud2] == d2
-    @test varmap[x] == Continuous()
-    @test varmap[y] == Continuous()
-    @test varmap[u] == Continuous()
+    @test varmap[x] == ContinuousClock()
+    @test varmap[y] == ContinuousClock()
+    @test varmap[u] == ContinuousClock()
 
     ss = structural_simplify(cl)
     ss_nosplit = structural_simplify(cl; split = false)
@@ -398,13 +398,13 @@ eqs = [yd ~ Sample(dt)(y)
 
     ci, varmap = infer_clocks(expand_connections(_model))
 
-    @test varmap[_model.plant.input.u] == Continuous()
-    @test varmap[_model.plant.u] == Continuous()
-    @test varmap[_model.plant.x] == Continuous()
-    @test varmap[_model.plant.y] == Continuous()
-    @test varmap[_model.plant.output.u] == Continuous()
-    @test varmap[_model.holder.output.u] == Continuous()
-    @test varmap[_model.sampler.input.u] == Continuous()
+    @test varmap[_model.plant.input.u] == ContinuousClock()
+    @test varmap[_model.plant.u] == ContinuousClock()
+    @test varmap[_model.plant.x] == ContinuousClock()
+    @test varmap[_model.plant.y] == ContinuousClock()
+    @test varmap[_model.plant.output.u] == ContinuousClock()
+    @test varmap[_model.holder.output.u] == ContinuousClock()
+    @test varmap[_model.sampler.input.u] == ContinuousClock()
     @test varmap[_model.controller.u] == d
     @test varmap[_model.holder.input.u] == d
     @test varmap[_model.controller.output.u] == d
