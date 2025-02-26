@@ -222,7 +222,8 @@ function collect_ivs_from_nested_operator!(ivs, x, target_op)
 end
 
 function iv_from_nested_derivative(x, op = Differential)
-    if iscall(x) && operation(x) == getindex
+    if iscall(x) &&
+       (operation(x) == getindex || operation(x) == real || operation(x) == imag)
         iv_from_nested_derivative(arguments(x)[1], op)
     elseif iscall(x)
         operation(x) isa op ? iv_from_nested_derivative(arguments(x)[1], op) :
@@ -1070,14 +1071,24 @@ Keyword arguments:
   providing this keyword is not necessary and is only useful to avoid repeatedly calling
   `vars(exprs)`
 - `obs`: the list of observed equations.
+- `available_vars`: If `exprs` involves a variable `x[1]`, this function will look for
+  observed equations whose LHS is `x[1]` OR `x`. Sometimes, the latter is not required
+  since `x[1]` might already be present elsewhere in the generated code (e.g. an argument
+  to the function) but other elements of `x` are part of the observed equations, thus
+  requiring them to be obtained from the equation for `x`. Any variable present in
+  `available_vars` will not be searched for in the observed equations.
 """
 function observed_equations_used_by(sys::AbstractSystem, exprs;
-        involved_vars = vars(exprs; op = Union{Shift, Differential}), obs = observed(sys))
+        involved_vars = vars(exprs; op = Union{Shift, Differential}), obs = observed(sys), available_vars = [])
     obsvars = getproperty.(obs, :lhs)
     graph = observed_dependency_graph(obs)
+    if !(available_vars isa Set)
+        available_vars = Set(available_vars)
+    end
 
     obsidxs = BitSet()
     for sym in involved_vars
+        sym in available_vars && continue
         arrsym = iscall(sym) && operation(sym) === getindex ? arguments(sym)[1] : nothing
         idx = findfirst(v -> isequal(v, sym) || isequal(v, arrsym), obsvars)
         idx === nothing && continue
@@ -1206,6 +1217,9 @@ end
 Find all the unknowns and parameters from the equations of a SDESystem or ODESystem. Return re-ordered equations, differential variables, all variables, and parameters.
 """
 function process_equations(eqs, iv)
+    if eltype(eqs) <: AbstractVector
+        eqs = reduce(vcat, eqs)
+    end
     eqs = collect(eqs)
 
     diffvars = OrderedSet()
@@ -1239,8 +1253,8 @@ function process_equations(eqs, iv)
                     throw(ArgumentError("An ODESystem can only have one independent variable."))
                 diffvar in diffvars &&
                     throw(ArgumentError("The differential variable $diffvar is not unique in the system of equations."))
-                !(symtype(diffvar) === Real || eltype(symtype(diffvar)) === Real) &&
-                    throw(ArgumentError("Differential variable $diffvar has type $(symtype(diffvar)). Differential variables should not be concretely typed."))
+                !has_diffvar_type(diffvar) &&
+                    throw(ArgumentError("Differential variable $diffvar has type $(symtype(diffvar)). Differential variables should be of a continuous, non-concrete number type: Real, Complex, AbstractFloat, or Number."))
                 push!(diffvars, diffvar)
             end
             push!(diffeq, eq)
@@ -1250,6 +1264,13 @@ function process_equations(eqs, iv)
     end
 
     diffvars, allunknowns, ps, Equation[diffeq; algeeq; compressed_eqs]
+end
+
+function has_diffvar_type(diffvar)
+    st = symtype(diffvar)
+    st === Real || eltype(st) === Real || st === Complex || eltype(st) === Complex ||
+        st === Number || eltype(st) === Number || st === AbstractFloat ||
+        eltype(st) === AbstractFloat
 end
 
 """
