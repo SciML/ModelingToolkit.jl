@@ -1,4 +1,4 @@
-# Optimizing through an ODE solve and re-creating MTK Problems
+# [Optimizing through an ODE solve and re-creating MTK Problems](@id remake)
 
 Solving an ODE as part of an `OptimizationProblem`'s loss function is a common scenario.
 In this example, we will go through an efficient way to model such scenarios using
