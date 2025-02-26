@@ -759,7 +759,8 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
         kwargs1 = merge(kwargs1, (; tstops))
     end
 
-    return ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...)
+    # Call `remake` so it runs initialization if it is trivial
+    return remake(ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...))
 end
 get_callback(prob::ODEProblem) = prob.kwargs[:callback]
 
@@ -963,8 +964,10 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
         kwargs1 = merge(kwargs1, (; tstops))
     end
 
-    DAEProblem{iip}(f, du0, u0, tspan, p; differential_vars = differential_vars,
-        kwargs..., kwargs1...)
+    # Call `remake` so it runs initialization if it is trivial
+    return remake(DAEProblem{iip}(
+        f, du0, u0, tspan, p; differential_vars = differential_vars,
+        kwargs..., kwargs1...))
 end
 
 function generate_history(sys::AbstractODESystem, u0; expression = Val{false}, kwargs...)
@@ -1008,7 +1011,8 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     if cbs !== nothing
         kwargs1 = merge(kwargs1, (callback = cbs,))
     end
-    DDEProblem{iip}(f, u0, h, tspan, p; kwargs1..., kwargs...)
+    # Call `remake` so it runs initialization if it is trivial
+    return remake(DDEProblem{iip}(f, u0, h, tspan, p; kwargs1..., kwargs...))
 end
 
 function DiffEqBase.SDDEProblem(sys::AbstractODESystem, args...; kwargs...)
@@ -1057,9 +1061,10 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     else
         noise_rate_prototype = zeros(eltype(u0), size(noiseeqs))
     end
-    SDDEProblem{iip}(f, f.g, u0, h, tspan, p;
+    # Call `remake` so it runs initialization if it is trivial
+    return remake(SDDEProblem{iip}(f, f.g, u0, h, tspan, p;
         noise_rate_prototype =
-        noise_rate_prototype, kwargs1..., kwargs...)
+        noise_rate_prototype, kwargs1..., kwargs...))
 end
 
 """
