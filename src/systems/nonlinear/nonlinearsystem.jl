@@ -517,7 +517,7 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearProblem`")
     end
     f, u0, p = process_SciMLProblem(NonlinearFunction{iip}, sys, u0map, parammap;
-        check_length, kwargs...)
+        check_length, build_initializeprob = false, kwargs...)
     pt = something(get_metadata(sys), StandardNonlinearProblem())
     NonlinearProblem{iip}(f, u0, p, pt; filter_kwargs(kwargs)...)
 end
@@ -546,7 +546,7 @@ function DiffEqBase.NonlinearLeastSquaresProblem{iip}(sys::NonlinearSystem, u0ma
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearLeastSquaresProblem`")
     end
     f, u0, p = process_SciMLProblem(NonlinearFunction{iip}, sys, u0map, parammap;
-        check_length, kwargs...)
+        check_length, build_initializeprob = false, kwargs...)
     pt = something(get_metadata(sys), StandardNonlinearProblem())
     NonlinearLeastSquaresProblem{iip}(f, u0, p; filter_kwargs(kwargs)...)
 end
@@ -654,7 +654,8 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
     obs = observed(sys)
 
     _, u0, p = process_SciMLProblem(
-        EmptySciMLFunction, sys, u0map, parammap; eval_expression, eval_module, kwargs...)
+        EmptySciMLFunction, sys, u0map, parammap; eval_expression, eval_module,
+        build_initializeprob = false, kwargs...)
 
     explicitfuns = []
     nlfuns = []
@@ -811,7 +812,8 @@ function DiffEqBase.IntervalNonlinearProblem(sys::NonlinearSystem, uspan::NTuple
         error("`IntervalNonlinearProblem` only supports with a single equation and a single unknown.")
     end
     f, u0, p = process_SciMLProblem(
-        IntervalNonlinearFunction, sys, unknowns(sys) .=> uspan[1], parammap; kwargs...)
+        IntervalNonlinearFunction, sys, unknowns(sys) .=> uspan[1], parammap;
+        build_initializeprob = false, kwargs...)
 
     return IntervalNonlinearProblem(f, uspan, p; filter_kwargs(kwargs)...)
 end
@@ -844,7 +846,7 @@ function NonlinearProblemExpr{iip}(sys::NonlinearSystem, u0map,
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearProblemExpr`")
     end
     f, u0, p = process_SciMLProblem(NonlinearFunctionExpr{iip}, sys, u0map, parammap;
-        check_length, kwargs...)
+        check_length, build_initializeprob = false, kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
 
     ex = quote
@@ -884,7 +886,7 @@ function NonlinearLeastSquaresProblemExpr{iip}(sys::NonlinearSystem, u0map,
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearProblemExpr`")
     end
     f, u0, p = process_SciMLProblem(NonlinearFunctionExpr{iip}, sys, u0map, parammap;
-        check_length, kwargs...)
+        check_length, build_initializeprob = false, kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
 
     ex = quote
@@ -912,7 +914,8 @@ function IntervalNonlinearProblemExpr(sys::NonlinearSystem, uspan::NTuple{2},
         error("`IntervalNonlinearProblemExpr` only supports with a single equation and a single unknown.")
     end
     f, u0, p = process_SciMLProblem(
-        IntervalNonlinearFunctionExpr, sys, unknowns(sys) .=> uspan[1], parammap; kwargs...)
+        IntervalNonlinearFunctionExpr, sys, unknowns(sys) .=> uspan[1], parammap;
+        build_initializeprob = false, kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
 
     ex = quote
