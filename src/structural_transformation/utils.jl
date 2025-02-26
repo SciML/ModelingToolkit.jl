@@ -507,3 +507,38 @@ function simplify_shifts(var)
             unwrap(var).metadata)
     end
 end
+
+function distribute_shift(var) 
+    var = unwrap(var)
+    var isa Equation && return distribute_shift(var.lhs) ~ distribute_shift(var.rhs)
+
+    ModelingToolkit.hasshift(var) || return var
+    shift = operation(var)
+    shift isa Shift || return var
+
+    shift = operation(var)
+    expr = only(arguments(var))
+    if expr isa Equation
+        return distribute_shift(shift(expr.lhs)) ~ distribute_shift(shift(expr.rhs))
+    end
+    shiftexpr = _distribute_shift(expr, shift)
+    return simplify_shifts(shiftexpr)
+end
+
+function _distribute_shift(expr, shift)
+    if iscall(expr)
+        op = operation(expr)
+        args = arguments(expr)
+
+        if ModelingToolkit.isvariable(expr)
+            (length(args) == 1 && isequal(shift.t, only(args))) ? (return shift(expr)) : (return expr)
+        elseif op isa Shift
+            return shift(expr)
+        else
+            return maketerm(typeof(expr), operation(expr), Base.Fix2(_distribute_shift, shift).(args),
+                unwrap(expr).metadata)
+        end
+    else
+        return expr
+    end
+end

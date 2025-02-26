@@ -18,7 +18,6 @@ resid = rand(2)
 f(resid, u_next, [2.,3.], [], t)
 @test resid ≈ [3., -3.]
 
-# Initialization cases.
 prob = ImplicitDiscreteProblem(sys, [x(k-1) => 3.], tspan)
 @test prob.u0 == [3., 1.]
 prob = ImplicitDiscreteProblem(sys, [], tspan)
@@ -28,3 +27,17 @@ prob = ImplicitDiscreteProblem(sys, [], tspan)
 @test_throws ErrorException prob = ImplicitDiscreteProblem(sys, [], tspan)
 
 # Test solvers
+@testset "System with algebraic equations" begin
+    @variables x(t) y(t)
+    eqs = [x(k) ~ x(k-1) + x(k-2), 
+           x^2 ~ 1 - y^2]
+    @mtkbuild sys = ImplicitDiscreteSystem(eqs, t)
+end
+
+@testset "System with algebraic equations, implicit difference equations, explicit difference equations" begin
+    @variables x(t) y(t)
+    eqs = [x(k) ~ x(k-1) + x(k-2),
+           y(k) ~ x(k) + x(k-2)*y(k-1)]
+    @mtkbuild sys = ImplicitDiscreteSystem(eqs, t)
+end
+

@@ -265,7 +265,7 @@ function generate_function(
         sys::ImplicitDiscreteSystem, dvs = unknowns(sys), ps = parameters(sys); wrap_code = identity, kwargs...)
     iv = get_iv(sys)
     exprs = map(equations(sys)) do eq
-        _iszero(eq.lhs) ? eq.rhs : (simplify_shifts(Shift(iv, -1)(eq.rhs)) - simplify_shifts(Shift(iv, -1)(eq.lhs)))
+        _iszero(eq.lhs) ? eq.rhs : (distribute_shift(Shift(iv, -1)(eq.rhs)) - distribute_shift(Shift(iv, -1)(eq.lhs)))
     end
 
     u_next = dvs
