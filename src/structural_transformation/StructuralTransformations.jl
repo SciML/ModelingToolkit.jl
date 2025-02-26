@@ -11,7 +11,8 @@ using SymbolicUtils: maketerm, iscall
 
 using ModelingToolkit
 using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Differential,
-                       unknowns, equations, vars, Symbolic, diff2term_with_unit, value,
+                       unknowns, equations, vars, Symbolic, diff2term_with_unit,
+                       shift2term_with_unit, value,
                        operation, arguments, Sym, Term, simplify, symbolic_linear_solve,
                        isdiffeq, isdifferential, isirreducible,
                        empty_substitutions, get_substitutions,
@@ -22,7 +23,8 @@ using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Di
                        get_postprocess_fbody, vars!,
                        IncrementalCycleTracker, add_edge_checked!, topological_sort,
                        invalidate_cache!, Substitutions, get_or_construct_tearing_state,
-                       filter_kwargs, lower_varname_with_unit, setio, SparseMatrixCLIL,
+                       filter_kwargs, lower_varname_with_unit,
+                       lower_shift_varname_with_unit, setio, SparseMatrixCLIL,
                        get_fullvars, has_equations, observed,
                        Schedule, schedule
 
@@ -63,6 +65,7 @@ export torn_system_jacobian_sparsity
 export full_equations
 export but_ordered_incidence, lowest_order_variable_mask, highest_order_variable_mask
 export computed_highest_diff_variables
+export shift2term, lower_shift_varname
 
 include("utils.jl")
 include("pantelides.jl")

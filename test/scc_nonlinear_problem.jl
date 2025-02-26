@@ -261,4 +261,13 @@ end
     @mtkbuild sys = NonlinearSystem([x^2 - p[1] ^ 2 ~ 0, y^2 ~ f(p)])
     prob = NonlinearProblem(sys, [x => 1.0, y => 1.0], [p => ones(2), f=>sum])
     @test_nowarn solve(prob, NewtonRaphson())
+
+@testset "Array variables split across SCCs" begin
+    @variables x[1:3]
+    @parameters (f::Function)(..)
+    @mtkbuild sys = NonlinearSystem([
+        0 ~ x[1]^2 - 9, x[2] ~ 2x[1], 0 ~ x[3]^2 - x[1]^2 + f(x)])
+    prob = SCCNonlinearProblem(sys, [x => ones(3)], [f => sum])
+    sol = solve(prob, NewtonRaphson())
+    @test SciMLBase.successful_retcode(sol)
 end

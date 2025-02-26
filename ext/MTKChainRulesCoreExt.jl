@@ -103,4 +103,6 @@ function ChainRulesCore.rrule(
     newbuf, pullback
 end
 
+ChainRulesCore.@non_differentiable Base.getproperty(sys::MTK.AbstractSystem, x::Symbol)
+
 end

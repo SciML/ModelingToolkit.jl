@@ -960,3 +960,36 @@ Compute the (linearized) loop-transfer function in analysis point `ap`, from `ap
 
 See also [`get_sensitivity`](@ref), [`get_comp_sensitivity`](@ref), [`open_loop`](@ref).
 """ get_looptransfer
+# 
+
+"""
+    generate_control_function(sys::ModelingToolkit.AbstractODESystem, input_ap_name::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}}, dist_ap_name::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}}; system_modifier = identity, kwargs)
+
+When called with analysis points as input arguments, we assume that all analysis points corresponds to connections that should be opened (broken). The use case for this is to get rid of input signal blocks, such as `Step` or `Sine`, since these are useful for simulation but are not needed when using the plant model in a controller or state estimator.
+"""
+function generate_control_function(
+        sys::ModelingToolkit.AbstractODESystem, input_ap_name::Union{
+            Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
+        dist_ap_name::Union{
+            Nothing, Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}} = nothing;
+        system_modifier = identity,
+        kwargs...)
+    input_ap_name = canonicalize_ap(sys, input_ap_name)
+    u = []
+    for input_ap in input_ap_name
+        sys, (du, _) = open_loop(sys, input_ap)
+        push!(u, du)
+    end
+    if dist_ap_name === nothing
+        return ModelingToolkit.generate_control_function(system_modifier(sys), u; kwargs...)
+    end
+
+    dist_ap_name = canonicalize_ap(sys, dist_ap_name)
+    d = []
+    for dist_ap in dist_ap_name
+        sys, (du, _) = open_loop(sys, dist_ap)
+        push!(d, du)
+    end
+
+    ModelingToolkit.generate_control_function(system_modifier(sys), u, d; kwargs...)
+end

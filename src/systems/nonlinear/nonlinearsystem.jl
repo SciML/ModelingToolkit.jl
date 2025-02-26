@@ -512,16 +512,9 @@ end
 
 function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         parammap = DiffEqBase.NullParameters();
-        check_length = true, use_homotopy_continuation = false, kwargs...) where {iip}
+        check_length = true, kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearProblem`")
-    end
-    if use_homotopy_continuation
-        prob = safe_HomotopyContinuationProblem(
-            sys, u0map, parammap; check_length, kwargs...)
-        if prob isa HomotopyContinuationProblem
-            return prob
-        end
     end
     f, u0, p = process_SciMLProblem(NonlinearFunction{iip}, sys, u0map, parammap;
         check_length, kwargs...)
@@ -676,23 +669,23 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
     scc_cacheexprs = Dict{TypeT, Vector{Any}}[]
     scc_eqs = Vector{Equation}[]
     scc_obs = Vector{Equation}[]
+    # variables solved in previous SCCs
+    available_vars = Set()
     for (i, (escc, vscc)) in enumerate(zip(eq_sccs, var_sccs))
         # subset unknowns and equations
         _dvs = dvs[vscc]
         _eqs = eqs[escc]
         # get observed equations required by this SCC
-        obsidxs = observed_equations_used_by(sys, _eqs)
+        union!(available_vars, _dvs)
+        obsidxs = observed_equations_used_by(sys, _eqs; available_vars)
         # the ones used by previous SCCs can be precomputed into the cache
         setdiff!(obsidxs, prevobsidxs)
         _obs = obs[obsidxs]
+        union!(available_vars, getproperty.(_obs, (:lhs,)))
 
         # get all subexpressions in the RHS which we can precompute in the cache
         # precomputed subexpressions should not contain `banned_vars`
         banned_vars = Set{Any}(vcat(_dvs, getproperty.(_obs, (:lhs,))))
-        filter!(banned_vars) do var
-            symbolic_type(var) != ArraySymbolic() ||
-                all(j -> var[j] in banned_vars, eachindex(var))
-        end
         state = Dict()
         for i in eachindex(_obs)
             _obs[i] = _obs[i].lhs ~ subexpressions_not_involving_vars!(
@@ -753,9 +746,12 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         _obs = scc_obs[i]
         cachevars = scc_cachevars[i]
         cacheexprs = scc_cacheexprs[i]
+        available_vars = [dvs[reduce(vcat, var_sccs[1:(i - 1)]; init = Int[])];
+                          getproperty.(
+                              reduce(vcat, scc_obs[1:(i - 1)]; init = []), (:lhs,))]
         _prevobsidxs = vcat(_prevobsidxs,
-            observed_equations_used_by(sys, reduce(vcat, values(cacheexprs); init = [])))
-
+            observed_equations_used_by(
+                sys, reduce(vcat, values(cacheexprs); init = []); available_vars))
         if isempty(cachevars)
             push!(explicitfuns, Returns(nothing))
         else

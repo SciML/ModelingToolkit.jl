@@ -721,7 +721,7 @@ end
 
 function Base.showerror(io::IO, e::MissingParametersError)
     println(io, MISSING_PARAMETERS_MESSAGE)
-    println(io, e.vars)
+    println(io, join(e.vars, ", "))
 end
 
 function InvalidParameterSizeException(param, val)
