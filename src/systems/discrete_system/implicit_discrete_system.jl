@@ -264,13 +264,20 @@ end
 function generate_function(
         sys::ImplicitDiscreteSystem, dvs = unknowns(sys), ps = parameters(sys); wrap_code = identity, kwargs...)
     iv = get_iv(sys)
+    # Algebraic equations get shifted forward 1, to match with differential equations
     exprs = map(equations(sys)) do eq
-        _iszero(eq.lhs) ? eq.rhs : (distribute_shift(Shift(iv, -1)(eq.rhs)) - distribute_shift(Shift(iv, -1)(eq.lhs)))
+        _iszero(eq.lhs) ? distribute_shift(Shift(iv, 1)(eq.rhs)) : (eq.rhs - eq.lhs)
     end
 
-    u_next = dvs
-    u = map(Shift(iv, -1), u_next)
-    build_function_wrapper(sys, exprs, u_next, u, ps..., iv; p_start = 3, kwargs...)
+    # Handle observables in algebraic equations, since they are shifted
+    obs = observed(sys)
+    shifted_obs = [distribute_shift(Shift(iv, 1)(eq)) for eq in obs]
+    obsidxs = observed_equations_used_by(sys, exprs; obs = shifted_obs)
+    extra_assignments = [Assignment(shifted_obs[i].lhs, shifted_obs[i].rhs) for i in obsidxs]
+
+    u_next = map(Shift(iv, 1), dvs)
+    u = dvs
+    build_function_wrapper(sys, exprs, u_next, u, ps..., iv; p_start = 3, extra_assignments, kwargs...)
 end
 
 function shift_u0map_forward(sys::ImplicitDiscreteSystem, u0map, defs)
@@ -279,15 +286,22 @@ function shift_u0map_forward(sys::ImplicitDiscreteSystem, u0map, defs)
     for k in collect(keys(u0map))
         v = u0map[k]
         if !((op = operation(k)) isa Shift)
-            error("Initial conditions must be for the past state of the unknowns. Instead of providing the condition for $k, provide the condition for $(Shift(iv, -1)(k)).")
+            isnothing(getunshifted(k)) &&
+                error("Initial conditions must be for the past state of the unknowns. Instead of providing the condition for $k, provide the condition for $(Shift(iv, -1)(k)).")
+
+            updated[k] = v
+        elseif op.steps > 0
+            error("Initial conditions must be for the past state of the unknowns. Instead of providing the condition for $k, provide the condition for $(Shift(iv, -1)(k))).")
+        else
+            updated[k] = v
         end
-        updated[shift2term(k)] = v
     end
     for var in unknowns(sys)
         op = operation(var)
-        haskey(updated, var) && continue
         root = getunshifted(var)
+        shift = getshift(var)
         isnothing(root) && continue
+        (haskey(updated, Shift(iv, shift)(root)) || haskey(updated, var)) && continue
         haskey(defs, root) || error("Initial condition for $var not provided.")
         updated[var] = defs[root]
     end
@@ -317,7 +331,9 @@ function SciMLBase.ImplicitDiscreteProblem(
     u0map = to_varmap(u0map, dvs)
     u0map = shift_u0map_forward(sys, u0map, defaults(sys))
     f, u0, p = process_SciMLProblem(
-        ImplicitDiscreteFunction, sys, u0map, parammap; eval_expression, eval_module)
+        ImplicitDiscreteFunction, sys, u0map, parammap; eval_expression, eval_module, kwargs...)
+
+    kwargs = filter_kwargs(kwargs)
     ImplicitDiscreteProblem(f, u0, tspan, p; kwargs...)
 end
 

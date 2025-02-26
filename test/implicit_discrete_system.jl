@@ -5,12 +5,13 @@ using StableRNGs
 k = ShiftIndex(t)
 rng = StableRNG(22525) 
 
-# Shift(t, -1)(x(t)) - x_{t-1}(t)
-# -3 - x(t) + x(t)*x_{t-1}
 @testset "Correct ImplicitDiscreteFunction" begin
     @variables x(t) = 1
     @mtkbuild sys = ImplicitDiscreteSystem([x(k) ~ x(k)*x(k-1) - 3], t)
     tspan = (0, 10)
+
+    # u[2] - u_next[1]
+    # -3 - u_next[2] + u_next[2]*u_next[1]
     f = ImplicitDiscreteFunction(sys)
     u_next = [3., 1.5]
     @test f(u_next, [2.,3.], [], t) ≈ [0., 0.]
@@ -30,7 +31,6 @@ rng = StableRNG(22525)
     @test_throws ErrorException prob = ImplicitDiscreteProblem(sys, [], tspan)
 end
 
-# Test solvers
 @testset "System with algebraic equations" begin
     @variables x(t) y(t)
     eqs = [x(k) ~ x(k-1) + x(k-2), 
@@ -51,13 +51,24 @@ end
     end
 
     # Initialization is satisfied.
-    prob = ImplicitDiscreteProblem(sys, [x(k-1) => 3.], tspan)
+    prob = ImplicitDiscreteProblem(sys, [x(k-1) => .3, x(k-2) => .4], (0, 10), guesses = [y => 1])
     @test (prob.u0[1] + prob.u0[2])^2 + prob.u0[3]^2 ≈ 1
 end
 
-@testset "System with algebraic equations, implicit difference equations, explicit difference equations" begin
-    @variables x(t) y(t)
+@testset "Handle observables in function codegen" begin
+    # Observable appears in differential equation
+    @variables x(t) y(t) z(t)
     eqs = [x(k) ~ x(k-1) + x(k-2),
-           y(k) ~ x(k) + x(k-2)*y(k-1)]
+           y(k) ~ x(k) + x(k-2)*z(k-1), 
+           x + y + z ~ 2]
     @mtkbuild sys = ImplicitDiscreteSystem(eqs, t)
+    @test length(unknowns(sys)) == length(equations(sys)) == 3
+    @test occursin("var\"y(t)\"", string(ImplicitDiscreteFunctionExpr(sys)))
+
+    # Shifted observable that appears in algebraic equation is properly handled.
+    eqs = [z(k) ~ x(k) + sin(x(k)), 
+           y(k) ~ x(k-1) + x(k-2),
+           z(k) * x(k) ~ 3]
+    @mtkbuild sys = ImplicitDiscreteSystem(eqs, t)
+    @test occursin("var\"Shift(t, 1)(z(t))\"", string(ImplicitDiscreteFunctionExpr(sys)))
 end
