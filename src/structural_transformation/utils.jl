@@ -449,13 +449,49 @@ end
 ### Misc
 ###
 
-function lower_varname_withshift(var, iv, order)
-    order == 0 && return var
-    if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)
-        op = operation(var)
-        return Shift(op.t, order)(var)
+"""
+Handle renaming variable names for discrete structural simplification. Three cases: 
+- positive shift: do nothing
+- zero shift: x(t) => Shift(t, 0)(x(t))
+- negative shift: rename the variable
+"""
+function lower_shift_varname(var, iv)
+    op = operation(var)
+    op isa Shift || return Shift(iv, 0)(var, true) # hack to prevent simplification of x(t) - x(t)
+    if op.steps < 0
+        return shift2term(var)
+    else
+        return var
     end
-    return lower_varname_with_unit(var, iv, order)
+end
+
+"""
+Rename a Shift variable with negative shift, Shift(t, k)(x(t)) to xₜ₋ₖ(t).
+"""
+function shift2term(var)
+    op = operation(var)
+    iv = op.t
+    arg = only(arguments(var))
+    is_lowered = !isnothing(ModelingToolkit.getunshifted(arg))
+
+    backshift = is_lowered ? op.steps + ModelingToolkit.getshift(arg) : op.steps
+
+    num = join(Char(0x2080 + d) for d in reverse!(digits(-backshift))) # subscripted number, e.g. ₁
+    ds = join([Char(0x209c), Char(0x208b), num])
+    # Char(0x209c) = ₜ
+    # Char(0x208b) = ₋ (subscripted minus)
+
+    O = is_lowered ? ModelingToolkit.getunshifted(arg) : arg
+    oldop = operation(O)
+    newname = backshift != 0 ? Symbol(string(nameof(oldop)), ds) :
+              Symbol(string(nameof(oldop)))
+
+    newvar = maketerm(typeof(O), Symbolics.rename(oldop, newname),
+        Symbolics.children(O), Symbolics.metadata(O))
+    newvar = setmetadata(newvar, Symbolics.VariableSource, (:variables, newname))
+    newvar = setmetadata(newvar, ModelingToolkit.VariableUnshifted, O)
+    newvar = setmetadata(newvar, ModelingToolkit.VariableShift, backshift)
+    return newvar
 end
 
 function isdoubleshift(var)
@@ -466,6 +502,7 @@ end
 function simplify_shifts(var)
     ModelingToolkit.hasshift(var) || return var
     var isa Equation && return simplify_shifts(var.lhs) ~ simplify_shifts(var.rhs)
+    (op = operation(var)) isa Shift && op.steps == 0 && return first(arguments(var))
     if isdoubleshift(var)
         op1 = operation(var)
         vv1 = arguments(var)[1]
