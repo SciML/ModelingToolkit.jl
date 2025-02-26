@@ -41,6 +41,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         initialization_solver_alg = TrustRegion(),
         eval_expression = false, eval_module = @__MODULE__,
         warn_initialize_determined = true,
+        guesses = Dict(),
         kwargs...)
     op = Dict(op)
     inputs isa AbstractVector || (inputs = [inputs])
@@ -66,11 +67,10 @@ function linearization_function(sys::AbstractSystem, inputs,
         initializealg = initialize ? OverrideInit() : NoInit()
     end
 
-    fun, u0, p = process_SciMLProblem(
-        ODEFunction{true, SciMLBase.FullSpecialize}, sys, op, p;
-        t = 0.0, build_initializeprob = initializealg isa OverrideInit,
-        allow_incomplete = true, algebraic_only = true)
-    prob = ODEProblem(fun, u0, (nothing, nothing), p)
+    prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+        sys, op, (nothing, nothing), p; allow_incomplete = true,
+        algebraic_only = true, guesses)
+    u0 = state_values(prob)
 
     ps = parameters(sys)
     h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
@@ -147,6 +147,12 @@ function SymbolicIndexingInterface.parameter_values(f::LinearizationFunction)
     parameter_values(f.prob)
 end
 SymbolicIndexingInterface.current_time(f::LinearizationFunction) = current_time(f.prob)
+
+function Base.show(io::IO, mime::MIME"text/plain", lf::LinearizationFunction)
+    printstyled(io, "LinearizationFunction"; bold = true, color = :blue)
+    println(io, " which wraps:")
+    show(io, mime, lf.prob)
+end
 
 """
     $(TYPEDSIGNATURES)
@@ -263,6 +269,12 @@ mutable struct LinearizationProblem{F <: LinearizationFunction, T}
     """
     const f::F
     t::T
+end
+
+function Base.show(io::IO, mime::MIME"text/plain", prob::LinearizationProblem)
+    printstyled(io, "LinearizationProblem"; bold = true, color = :blue)
+    println(io, " at time ", prob.t, " which wraps:")
+    show(io, mime, prob.f.prob)
 end
 
 """
