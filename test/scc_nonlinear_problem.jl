@@ -263,3 +263,22 @@ end
     sol = solve(prob, NewtonRaphson())
     @test SciMLBase.successful_retcode(sol)
 end
+
+@testset "SCCNonlinearProblem retains parameter order" begin
+    @variables x y z
+    @parameters σ β ρ
+    @mtkbuild fullsys = NonlinearSystem(
+        [0 ~ x^3 * β + y^3 * ρ - σ, 0 ~ x^2 + 2x * y + y^2, 0 ~ z^2 - 4z + 4],
+        [x, y, z], [σ, β, ρ])
+
+    u0 = [x => 1.0,
+        y => 0.0,
+        z => 0.0]
+
+    p = [σ => 28.0,
+        ρ => 10.0,
+        β => 8 / 3]
+
+    sccprob = SCCNonlinearProblem(fullsys, u0, p)
+    @test isequal(parameters(fullsys), parameters(sccprob.f.sys))
+end
