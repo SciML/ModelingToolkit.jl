@@ -792,7 +792,8 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
     new_eqs = eqs[reduce(vcat, eq_sccs)]
     @set! sys.unknowns = new_dvs
     @set! sys.eqs = new_eqs
-    sys = complete(sys)
+    @set! sys.index_cache = subset_unknowns_observed(
+        get_index_cache(sys), sys, new_dvs, getproperty.(obs, (:lhs,)))
     return SCCNonlinearProblem(subprobs, explicitfuns, p, true; sys)
 end
 
