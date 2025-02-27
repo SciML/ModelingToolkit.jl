@@ -994,7 +994,7 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     end
     f, u0, p = process_SciMLProblem(DDEFunction{iip}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
-        symbolic_u0 = true,
+        symbolic_u0 = true, u0_constructor,
         check_length, eval_expression, eval_module, kwargs...)
     h_gen = generate_history(sys, u0; expression = Val{true})
     h_oop, h_iip = eval_or_rgf.(h_gen; eval_expression, eval_module)
@@ -1033,7 +1033,7 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     end
     f, u0, p = process_SciMLProblem(SDDEFunction{iip}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
-        symbolic_u0 = true, eval_expression, eval_module,
+        symbolic_u0 = true, eval_expression, eval_module, u0_constructor,
         check_length, kwargs...)
     h_gen = generate_history(sys, u0; expression = Val{true})
     h_oop, h_iip = eval_or_rgf.(h_gen; eval_expression, eval_module)
