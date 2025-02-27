@@ -519,7 +519,8 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
     f, u0, p = process_SciMLProblem(NonlinearFunction{iip}, sys, u0map, parammap;
         check_length, kwargs...)
     pt = something(get_metadata(sys), StandardNonlinearProblem())
-    NonlinearProblem{iip}(f, u0, p, pt; filter_kwargs(kwargs)...)
+    # Call `remake` so it runs initialization if it is trivial
+    return remake(NonlinearProblem{iip}(f, u0, p, pt; filter_kwargs(kwargs)...))
 end
 
 """
@@ -548,7 +549,8 @@ function DiffEqBase.NonlinearLeastSquaresProblem{iip}(sys::NonlinearSystem, u0ma
     f, u0, p = process_SciMLProblem(NonlinearFunction{iip}, sys, u0map, parammap;
         check_length, kwargs...)
     pt = something(get_metadata(sys), StandardNonlinearProblem())
-    NonlinearLeastSquaresProblem{iip}(f, u0, p; filter_kwargs(kwargs)...)
+    # Call `remake` so it runs initialization if it is trivial
+    return remake(NonlinearLeastSquaresProblem{iip}(f, u0, p; filter_kwargs(kwargs)...))
 end
 
 const TypeT = Union{DataType, UnionAll}
