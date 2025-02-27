@@ -317,12 +317,15 @@ matrices = linfun([1.0], Dict(p => 3.0), 1.0)
     @test matrices.f_u[] == 3.0
 end
 
-@testset "Issue #2941" begin
-    @variables x(t) y(t) [guess = 1.0]
+@testset "Issue #2941 and #3400" begin
+    @variables x(t) y(t)
     @parameters p
     eqs = [0 ~ x * log(y) - p]
     @named sys = ODESystem(eqs, t; defaults = [p => 1.0])
     sys = complete(sys)
-    @test_nowarn linearize(
+    @test_throws ModelingToolkit.MissingVariablesError linearize(
         sys, [x], []; op = Dict(x => 1.0), allow_input_derivatives = true)
+    @test_nowarn linearize(
+        sys, [x], []; op = Dict(x => 1.0), guesses = Dict(y => 1.0),
+        allow_input_derivatives = true)
 end
