@@ -277,6 +277,7 @@ export TearingState
 export BipartiteGraph, equation_dependencies, variable_dependencies
 export eqeq_dependencies, varvar_dependencies
 export asgraph, asdigraph
+export map_variables_to_equations
 
 export toexpr, get_variables
 export simplify, substitute
