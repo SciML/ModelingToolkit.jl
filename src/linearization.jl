@@ -42,8 +42,12 @@ function linearization_function(sys::AbstractSystem, inputs,
         eval_expression = false, eval_module = @__MODULE__,
         warn_initialize_determined = true,
         guesses = Dict(),
+        warn_empty_op = true,
         kwargs...)
     op = Dict(op)
+    if isempty(op)
+        @warn "An empty operating point was passed to `linearization_function`. An operating point containing the variables that will be changed in `linearize` should be provided. Disable this warning by passing `warn_empty_op = false`."
+    end
     inputs isa AbstractVector || (inputs = [inputs])
     outputs isa AbstractVector || (outputs = [outputs])
     inputs = mapreduce(vcat, inputs; init = []) do var
