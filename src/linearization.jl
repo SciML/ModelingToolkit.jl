@@ -590,9 +590,12 @@ function linearize(sys, lin_fun::LinearizationFunction; t = 0.0,
         p = DiffEqBase.NullParameters())
     prob = LinearizationProblem(lin_fun, t)
     op = anydict(op)
-    evaluate_varmap!(op, unknowns(sys))
+    evaluate_varmap!(op, keys(op))
     for (k, v) in op
         v === nothing && continue
+        if symbolic_type(v) != NotSymbolic() || is_array_of_symbolics(v)
+            v = getu(prob, v)(prob)
+        end
         if is_parameter(prob, Initial(k))
             setu(prob, Initial(k))(prob, v)
         else
