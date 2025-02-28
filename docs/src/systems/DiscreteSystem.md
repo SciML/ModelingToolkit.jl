@@ -28,6 +28,7 @@ DiscreteFunction(sys::DiscreteSystem, args...)
 ```
 
 ## Discrete Domain
+
 ```@docs; canonical=false
 Shift
 Prev

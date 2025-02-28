@@ -28,6 +28,7 @@ ImplicitDiscreteFunction(sys::ImplicitDiscreteSystem, args...)
 ```
 
 ## Discrete Domain
+
 ```@docs; canonical=false
 Shift
 Prev

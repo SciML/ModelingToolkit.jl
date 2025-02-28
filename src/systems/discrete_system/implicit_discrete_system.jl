@@ -239,7 +239,9 @@ function ImplicitDiscreteSystem(eqs, iv; kwargs...)
         collect(allunknowns), collect(new_ps); kwargs...)
 end
 
-ImplicitDiscreteSystem(eq::Equation, args...; kwargs...) = ImplicitDiscreteSystem([eq], args...; kwargs...)
+function ImplicitDiscreteSystem(eq::Equation, args...; kwargs...)
+    ImplicitDiscreteSystem([eq], args...; kwargs...)
+end
 
 function flatten(sys::ImplicitDiscreteSystem, noeqs = false)
     systems = get_systems(sys)
@@ -273,11 +275,13 @@ function generate_function(
     obs = observed(sys)
     shifted_obs = Symbolics.Equation[distribute_shift(Next(eq)) for eq in obs]
     obsidxs = observed_equations_used_by(sys, exprs; obs = shifted_obs)
-    extra_assignments = [Assignment(shifted_obs[i].lhs, shifted_obs[i].rhs) for i in obsidxs]
+    extra_assignments = [Assignment(shifted_obs[i].lhs, shifted_obs[i].rhs)
+                         for i in obsidxs]
 
     u_next = map(Next, dvs)
     u = dvs
-    build_function_wrapper(sys, exprs, u_next, u, ps..., iv; p_start = 3, extra_assignments, kwargs...)
+    build_function_wrapper(
+        sys, exprs, u_next, u, ps..., iv; p_start = 3, extra_assignments, kwargs...)
 end
 
 function shift_u0map_forward(sys::ImplicitDiscreteSystem, u0map, defs)
@@ -341,11 +345,13 @@ function SciMLBase.ImplicitDiscreteFunction(sys::ImplicitDiscreteSystem, args...
     ImplicitDiscreteFunction{true}(sys, args...; kwargs...)
 end
 
-function SciMLBase.ImplicitDiscreteFunction{true}(sys::ImplicitDiscreteSystem, args...; kwargs...)
+function SciMLBase.ImplicitDiscreteFunction{true}(
+        sys::ImplicitDiscreteSystem, args...; kwargs...)
     ImplicitDiscreteFunction{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
 end
 
-function SciMLBase.ImplicitDiscreteFunction{false}(sys::ImplicitDiscreteSystem, args...; kwargs...)
+function SciMLBase.ImplicitDiscreteFunction{false}(
+        sys::ImplicitDiscreteSystem, args...; kwargs...)
     ImplicitDiscreteFunction{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 function SciMLBase.ImplicitDiscreteFunction{iip, specialize}(
@@ -360,7 +366,6 @@ function SciMLBase.ImplicitDiscreteFunction{iip, specialize}(
         eval_module = @__MODULE__,
         analytic = nothing,
         kwargs...) where {iip, specialize}
-
     if !iscomplete(sys)
         error("A completed `ImplicitDiscreteSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `ImplicitDiscreteProblem`")
     end
@@ -404,9 +409,12 @@ struct ImplicitDiscreteFunctionClosure{O, I} <: Function
     f_iip::I
 end
 (f::ImplicitDiscreteFunctionClosure)(u_next, u, p, t) = f.f_oop(u_next, u, p, t)
-(f::ImplicitDiscreteFunctionClosure)(resid, u_next, u, p, t) = f.f_iip(resid, u_next, u, p, t)
+function (f::ImplicitDiscreteFunctionClosure)(resid, u_next, u, p, t)
+    f.f_iip(resid, u_next, u, p, t)
+end
 
-function ImplicitDiscreteFunctionExpr{iip}(sys::ImplicitDiscreteSystem, dvs = unknowns(sys),
+function ImplicitDiscreteFunctionExpr{iip}(
+        sys::ImplicitDiscreteSystem, dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing;
         version = nothing, p = nothing,
         linenumbers = false,
@@ -427,4 +435,3 @@ end
 function ImplicitDiscreteFunctionExpr(sys::ImplicitDiscreteSystem, args...; kwargs...)
     ImplicitDiscreteFunctionExpr{true}(sys, args...; kwargs...)
 end
-

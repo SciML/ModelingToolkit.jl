@@ -530,7 +530,7 @@ Distribute a shift applied to a whole expression or equation.
 Shift(t, 1)(x + y) will become Shift(t, 1)(x) + Shift(t, 1)(y).
 Only shifts variables whose independent variable is the same t that appears in the Shift (i.e. constants, time-independent parameters, etc. do not get shifted).
 """
-function distribute_shift(var) 
+function distribute_shift(var)
     var = unwrap(var)
     var isa Equation && return distribute_shift(var.lhs) ~ distribute_shift(var.rhs)
 
@@ -553,11 +553,13 @@ function _distribute_shift(expr, shift)
         args = arguments(expr)
 
         if ModelingToolkit.isvariable(expr)
-            (length(args) == 1 && isequal(shift.t, only(args))) ? (return shift(expr)) : (return expr)
+            (length(args) == 1 && isequal(shift.t, only(args))) ? (return shift(expr)) :
+            (return expr)
         elseif op isa Shift
             return shift(expr)
         else
-            return maketerm(typeof(expr), operation(expr), Base.Fix2(_distribute_shift, shift).(args),
+            return maketerm(
+                typeof(expr), operation(expr), Base.Fix2(_distribute_shift, shift).(args),
                 unwrap(expr).metadata)
         end
     else

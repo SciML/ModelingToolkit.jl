@@ -237,7 +237,8 @@ export DAEFunctionExpr, DAEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDEProblemExpr
 export SystemStructure
 export DiscreteSystem, DiscreteProblem, DiscreteFunction, DiscreteFunctionExpr
-export ImplicitDiscreteSystem, ImplicitDiscreteProblem, ImplicitDiscreteFunction, ImplicitDiscreteFunctionExpr
+export ImplicitDiscreteSystem, ImplicitDiscreteProblem, ImplicitDiscreteFunction,
+       ImplicitDiscreteFunctionExpr
 export JumpSystem
 export ODEProblem, SDEProblem
 export NonlinearFunction, NonlinearFunctionExpr
