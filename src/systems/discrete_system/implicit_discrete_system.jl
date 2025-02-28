@@ -10,9 +10,9 @@ using ModelingToolkit: t_nounits as t
 @parameters σ=28.0 ρ=10.0 β=8/3 δt=0.1
 @variables x(t)=1.0 y(t)=0.0 z(t)=0.0
 k = ShiftIndex(t)
-eqs = [x ~ σ*(y-x),
-       y ~ x*(ρ-z)-y,
-       z ~ x*y - β*z]
+eqs = [x ~ σ*(y-x(k-1)),
+       y ~ x(k-1)*(ρ-z(k-1))-y,
+       z ~ x(k-1)*y(k-1) - β*z]
 @named ide = ImplicitDiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β]; tspan = (0, 1000.0))
 ```
 """
@@ -266,16 +266,16 @@ function generate_function(
     iv = get_iv(sys)
     # Algebraic equations get shifted forward 1, to match with differential equations
     exprs = map(equations(sys)) do eq
-        _iszero(eq.lhs) ? distribute_shift(Shift(iv, 1)(eq.rhs)) : (eq.rhs - eq.lhs)
+        _iszero(eq.lhs) ? distribute_shift(Next(eq.rhs)) : (eq.rhs - eq.lhs)
     end
 
     # Handle observables in algebraic equations, since they are shifted
     obs = observed(sys)
-    shifted_obs = [distribute_shift(Shift(iv, 1)(eq)) for eq in obs]
+    shifted_obs = Symbolics.Equation[distribute_shift(Next(eq)) for eq in obs]
     obsidxs = observed_equations_used_by(sys, exprs; obs = shifted_obs)
     extra_assignments = [Assignment(shifted_obs[i].lhs, shifted_obs[i].rhs) for i in obsidxs]
 
-    u_next = map(Shift(iv, 1), dvs)
+    u_next = map(Next, dvs)
     u = dvs
     build_function_wrapper(sys, exprs, u_next, u, ps..., iv; p_start = 3, extra_assignments, kwargs...)
 end
@@ -291,7 +291,7 @@ function shift_u0map_forward(sys::ImplicitDiscreteSystem, u0map, defs)
 
             updated[k] = v
         elseif op.steps > 0
-            error("Initial conditions must be for the past state of the unknowns. Instead of providing the condition for $k, provide the condition for $(Shift(iv, -1)(k))).")
+            error("Initial conditions must be for the past state of the unknowns. Instead of providing the condition for $k, provide the condition for $(Shift(iv, -1)(only(arguments(k)))).")
         else
             updated[k] = v
         end

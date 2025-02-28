@@ -3,8 +3,8 @@ using ModelingToolkit
 using Graphs
 using SparseArrays
 using UnPack
-using ModelingToolkit: t_nounits as t, D_nounits as D
-const ST = StructuralTransformations
+using ModelingToolkit: t_nounits as t, D_nounits as D, default_toterm
+using Symbolics: unwrap
 
 # Define some variables
 @parameters L g
@@ -166,6 +166,7 @@ end
 @testset "Distribute shifts" begin
     @variables x(t) y(t) z(t)
     @parameters a b c
+    k = ShiftIndex(t)
 
     # Expand shifts
     @test isequal(ST.distribute_shift(Shift(t, -1)(x + y)), Shift(t, -1)(x) + Shift(t, -1)(y))
@@ -181,4 +182,98 @@ end
 
     expr = x(k+1) ~ x + x(k-1)
     @test isequal(ST.distribute_shift(Shift(t, -1)(expr)), x ~ x(k-1) + x(k-2))
+end
+
+@testset "`map_variables_to_equations`" begin
+    @testset "Not supported for systems without `.tearing_state`" begin
+        @variables x
+        @mtkbuild sys = OptimizationSystem(x^2)
+        @test_throws ArgumentError map_variables_to_equations(sys)
+    end
+    @testset "Requires simplified system" begin
+        @variables x(t) y(t)
+        @named sys = ODESystem([D(x) ~ x, y ~ 2x], t)
+        sys = complete(sys)
+        @test_throws ArgumentError map_variables_to_equations(sys)
+    end
+    @testset "`ODESystem`" begin
+        @variables x(t) y(t) z(t)
+        @mtkbuild sys = ODESystem([D(x) ~ 2x + y, y ~ x + z, z^3 + x^3 ~ 12], t)
+        mapping = map_variables_to_equations(sys)
+        @test mapping[x] == (D(x) ~ 2x + y)
+        @test mapping[y] == (y ~ x + z)
+        @test mapping[z] == (0 ~ 12 - z^3 - x^3)
+        @test length(mapping) == 3
+
+        @testset "With dummy derivatives" begin
+            @parameters g
+            @variables x(t) y(t) [state_priority = 10] λ(t)
+            eqs = [D(D(x)) ~ λ * x
+                   D(D(y)) ~ λ * y - g
+                   x^2 + y^2 ~ 1]
+            @mtkbuild sys = ODESystem(eqs, t)
+            mapping = map_variables_to_equations(sys)
+
+            yt = default_toterm(unwrap(D(y)))
+            xt = default_toterm(unwrap(D(x)))
+            xtt = default_toterm(unwrap(D(D(x))))
+            @test mapping[x] == (0 ~ 1 - x^2 - y^2)
+            @test mapping[y] == (D(y) ~ yt)
+            @test mapping[D(y)] == (D(yt) ~ -g + y * λ)
+            @test mapping[D(x)] == (0 ~ -2xt * x - 2yt * y)
+            @test mapping[D(D(x))] == (xtt ~ x * λ)
+            @test length(mapping) == 5
+
+            @testset "`rename_dummy_derivatives = false`" begin
+                mapping = map_variables_to_equations(sys; rename_dummy_derivatives = false)
+
+                @test mapping[x] == (0 ~ 1 - x^2 - y^2)
+                @test mapping[y] == (D(y) ~ yt)
+                @test mapping[yt] == (D(yt) ~ -g + y * λ)
+                @test mapping[xt] == (0 ~ -2xt * x - 2yt * y)
+                @test mapping[xtt] == (xtt ~ x * λ)
+                @test length(mapping) == 5
+            end
+        end
+        @testset "DDEs" begin
+            function oscillator(; name, k = 1.0, τ = 0.01)
+                @parameters k=k τ=τ
+                @variables x(..)=0.1 y(t)=0.1 jcn(t)=0.0 delx(t)
+                eqs = [D(x(t)) ~ y,
+                    D(y) ~ -k * x(t - τ) + jcn,
+                    delx ~ x(t - τ)]
+                return System(eqs, t; name = name)
+            end
+
+            systems = @named begin
+                osc1 = oscillator(k = 1.0, τ = 0.01)
+                osc2 = oscillator(k = 2.0, τ = 0.04)
+            end
+            eqs = [osc1.jcn ~ osc2.delx,
+                osc2.jcn ~ osc1.delx]
+            @named coupledOsc = System(eqs, t)
+            @mtkbuild sys = compose(coupledOsc, systems)
+            mapping = map_variables_to_equations(sys)
+            x1 = operation(unwrap(osc1.x))
+            x2 = operation(unwrap(osc2.x))
+            @test mapping[osc1.x] == (D(osc1.x) ~ osc1.y)
+            @test mapping[osc1.y] == (D(osc1.y) ~ osc1.jcn - osc1.k * x1(t - osc1.τ))
+            @test mapping[osc1.delx] == (osc1.delx ~ x1(t - osc1.τ))
+            @test mapping[osc1.jcn] == (osc1.jcn ~ osc2.delx)
+            @test mapping[osc2.x] == (D(osc2.x) ~ osc2.y)
+            @test mapping[osc2.y] == (D(osc2.y) ~ osc2.jcn - osc2.k * x2(t - osc2.τ))
+            @test mapping[osc2.delx] == (osc2.delx ~ x2(t - osc2.τ))
+            @test mapping[osc2.jcn] == (osc2.jcn ~ osc1.delx)
+            @test length(mapping) == 8
+        end
+    end
+    @testset "`NonlinearSystem`" begin
+        @variables x y z
+        @mtkbuild sys = NonlinearSystem([x^2 ~ 2y^2 + 1, sin(z) ~ y, z^3 + 4z + 1 ~ 0])
+        mapping = map_variables_to_equations(sys)
+        @test mapping[x] == (0 ~ 2y^2 + 1 - x^2)
+        @test mapping[y] == (y ~ sin(z))
+        @test mapping[z] == (0 ~ -1 - 4z - z^3)
+        @test length(mapping) == 3
+    end
 end

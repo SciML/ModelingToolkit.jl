@@ -45,10 +45,13 @@ using Compat
 using AbstractTrees
 using DiffEqBase, SciMLBase, ForwardDiff
 using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap, TimeDomain,
-                 PeriodicClock, Clock, SolverStepClock, Continuous, OverrideInit, NoInit
+                 PeriodicClock, Clock, SolverStepClock, ContinuousClock, OverrideInit,
+                 NoInit
 using Distributed
 import JuliaFormatter
 using MLStyle
+import Moshi
+using Moshi.Data: @data
 using NonlinearSolve
 import SCCNonlinearSolve
 using Reexport
@@ -265,6 +268,7 @@ export independent_variable, equations, controls, observed, full_equations
 export initialization_equations, guesses, defaults, parameter_dependencies, hierarchy
 export structural_simplify, expand_connections, linearize, linearization_function,
        LinearizationProblem
+export solve
 
 export calculate_jacobian, generate_jacobian, generate_function, generate_custom_function
 export calculate_control_jacobian, generate_control_jacobian
@@ -279,6 +283,7 @@ export TearingState
 export BipartiteGraph, equation_dependencies, variable_dependencies
 export eqeq_dependencies, varvar_dependencies
 export asgraph, asdigraph
+export map_variables_to_equations
 
 export toexpr, get_variables
 export simplify, substitute
@@ -293,7 +298,7 @@ export @variables, @parameters, @independent_variables, @constants, @brownian
 export @named, @nonamespace, @namespace, extend, compose, complete
 export debug_system
 
-#export Continuous, Discrete, sampletime, input_timedomain, output_timedomain
+#export ContinuousClock, Discrete, sampletime, input_timedomain, output_timedomain
 #export has_discrete_domain, has_continuous_domain
 #export is_discrete_domain, is_continuous_domain, is_hybrid_domain
 export Sample, Hold, Shift, ShiftIndex, sampletime, SampleTime

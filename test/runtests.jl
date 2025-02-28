@@ -86,7 +86,7 @@ end
             @safetestset "DDESystem Test" include("dde.jl")
             @safetestset "NonlinearSystem Test" include("nonlinearsystem.jl")
             @safetestset "SCCNonlinearProblem Test" include("scc_nonlinear_problem.jl")
-            @safetestset "PDE Construction Test" include("pde.jl")
+            @safetestset "PDE Construction Test" include("pdesystem.jl")
             @safetestset "JumpSystem Test" include("jumpsystem.jl")
             @safetestset "BVProblem Test" include("bvproblem.jl")
             @safetestset "print_tree" include("print_tree.jl")

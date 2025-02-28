@@ -720,7 +720,8 @@ end
         @parameters x0 y0
         @mtkbuild sys = ODESystem([x ~ x0, y ~ y0, s ~ x + y], t; guesses = [y0 => 0.0])
         prob = ODEProblem(sys, [s => 1.0], (0.0, 1.0), [x0 => 0.3, y0 => missing])
-        @test prob.ps[y0] ≈ 0.0
+        # trivial initialization run immediately
+        @test prob.ps[y0] ≈ 0.7
         @test init(prob, Tsit5()).ps[y0] ≈ 0.7
         @test solve(prob, Tsit5()).ps[y0] ≈ 0.7
     end
@@ -745,7 +746,8 @@ end
         systems = [fixed, spring, mass, gravity, constant, damper],
         guesses = [spring.s_rel0 => 1.0])
     prob = ODEProblem(sys, [], (0.0, 1.0), [spring.s_rel0 => missing])
-    @test prob.ps[spring.s_rel0] ≈ 0.0
+    # trivial initialization run immediately
+    @test prob.ps[spring.s_rel0] ≈ -3.905
     @test init(prob, Tsit5()).ps[spring.s_rel0] ≈ -3.905
     @test solve(prob, Tsit5()).ps[spring.s_rel0] ≈ -3.905
 end
@@ -1387,4 +1389,30 @@ end
     oprob2 = remake(oprob1, u0 = [X1 => 10.0])
     integ1 = init(oprob1)
     @test integ1[X1] ≈ 1.0
+end
+
+@testset "Trivial initialization is run on problem construction" begin
+    @variables _x(..) y(t)
+    @brownian a
+    @parameters tot
+    x = _x(t)
+    @testset "$Problem" for (Problem, lhs, rhs) in [
+        (ODEProblem, D, 0.0),
+        (SDEProblem, D, a),
+        (DDEProblem, D, _x(t - 0.1)),
+        (SDDEProblem, D, _x(t - 0.1) + a)
+    ]
+        @mtkbuild sys = ModelingToolkit.System([lhs(x) ~ x + rhs, x + y ~ tot], t;
+            guesses = [tot => 1.0], defaults = [tot => missing])
+        prob = Problem(sys, [x => 1.0, y => 1.0], (0.0, 1.0))
+        @test prob.ps[tot] ≈ 2.0
+    end
+    @testset "$Problem" for Problem in [NonlinearProblem, NonlinearLeastSquaresProblem]
+        @parameters p1 p2
+        @mtkbuild sys = NonlinearSystem([x^2 + y^2 ~ p1, (x - 1)^2 + (y - 1)^2 ~ p2];
+            parameter_dependencies = [p2 ~ 2p1],
+            guesses = [p1 => 0.0], defaults = [p1 => missing])
+        prob = Problem(sys, [x => 1.0, y => 1.0], [p2 => 6.0])
+        @test prob.ps[p1] ≈ 3.0
+    end
 end
