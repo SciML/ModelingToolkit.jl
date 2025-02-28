@@ -288,6 +288,6 @@ end
     @parameters p[1:2] (f::Function)(..)
 
     @mtkbuild sys = NonlinearSystem([x^2 - p[1]^2 ~ 0, y^2 ~ f(p)])
-    prob = NonlinearProblem(sys, [x => 1.0, y => 1.0], [p => ones(2), f => sum])
+    prob = SCCNonlinearProblem(sys, [x => 1.0, y => 1.0], [p => ones(2), f => sum])
     @test_nowarn solve(prob, NewtonRaphson())
 end
