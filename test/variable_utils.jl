@@ -145,3 +145,16 @@ end
         @test isequal(parse_variable(sys, str), var)
     end
 end
+
+@testset "isInitial" begin
+    t = ModelingToolkit.to_nounits
+    @variables x(t) z(t)[1:5]
+    @parameters a b c[1:4]
+    @test isInitial(Initial(z))
+    @test isInitial(Initial(x))
+    @test isInitial(Initial(a))
+    @test isInitial(Initial(z[1]))
+    @test isInitial(Initial(c[4]))
+    @test !isInitial(c)
+    @test !isInitial(x)
+end
