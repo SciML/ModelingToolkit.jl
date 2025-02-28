@@ -147,7 +147,7 @@ end
 end
 
 @testset "isInitial" begin
-    t = ModelingToolkit.to_nounits
+    t = ModelingToolkit.t_nounits
     @variables x(t) z(t)[1:5]
     @parameters a b c[1:4]
     @test isInitial(Initial(z))
