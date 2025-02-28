@@ -5,6 +5,7 @@ using SparseArrays
 using UnPack
 using ModelingToolkit: t_nounits as t, D_nounits as D, default_toterm
 using Symbolics: unwrap
+const ST = StructuralTransformations
 
 # Define some variables
 @parameters L g
