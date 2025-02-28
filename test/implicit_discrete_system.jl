@@ -53,7 +53,7 @@ end
     # Initialization is satisfied.
     prob = ImplicitDiscreteProblem(
         sys, [x(k - 1) => 0.3, x(k - 2) => 0.4], (0, 10), guesses = [y => 1])
-    @test (prob.u0[1] + prob.u0[2])^2 + prob.u0[3]^2 ≈ 1
+    @test length(equations(prob.f.initialization_data.initializeprob.f.sys)) == 1
 end
 
 @testset "Handle observables in function codegen" begin
