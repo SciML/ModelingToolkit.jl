@@ -85,7 +85,7 @@ $(TYPEDEF)
 Represents a sample operator. A discrete-time signal is created by sampling a continuous-time signal.
 
 # Constructors
-`Sample(clock::Union{TimeDomain, InferredTimeDomain} = InferredDiscrete)`
+`Sample(clock::Union{TimeDomain, InferredTimeDomain} = InferredDiscrete())`
 `Sample(dt::Real)`
 
 `Sample(x::Num)`, with a single argument, is shorthand for `Sample()(x)`.
@@ -106,7 +106,7 @@ julia> Δ = Sample(0.01)
 """
 struct Sample <: Operator
     clock::Any
-    Sample(clock::Union{TimeDomain, InferredTimeDomain} = InferredDiscrete) = new(clock)
+    Sample(clock::Union{TimeDomain, InferredTimeDomain} = InferredDiscrete()) = new(clock)
 end
 
 function Sample(arg::Real)
@@ -190,7 +190,7 @@ struct ShiftIndex
     clock::Union{InferredTimeDomain, TimeDomain, IntegerSequence}
     steps::Int
     function ShiftIndex(
-            clock::Union{TimeDomain, InferredTimeDomain, IntegerSequence} = Inferred, steps::Int = 0)
+            clock::Union{TimeDomain, InferredTimeDomain, IntegerSequence} = Inferred(), steps::Int = 0)
         new(clock, steps)
     end
     ShiftIndex(dt::Real, steps::Int = 0) = new(Clock(dt), steps)
@@ -232,7 +232,7 @@ function input_timedomain(s::Shift, arg = nothing)
     if has_time_domain(arg)
         return get_time_domain(arg)
     end
-    InferredDiscrete
+    InferredDiscrete()
 end
 
 """
@@ -244,7 +244,7 @@ function output_timedomain(s::Shift, arg = nothing)
     if has_time_domain(t, arg)
         return get_time_domain(t, arg)
     end
-    InferredDiscrete
+    InferredDiscrete()
 end
 
 input_timedomain(::Sample, _ = nothing) = Continuous()
@@ -254,7 +254,7 @@ function input_timedomain(h::Hold, arg = nothing)
     if has_time_domain(arg)
         return get_time_domain(arg)
     end
-    InferredDiscrete # the Hold accepts any discrete
+    InferredDiscrete() # the Hold accepts any discrete
 end
 output_timedomain(::Hold, _ = nothing) = Continuous()
 
