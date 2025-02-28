@@ -98,8 +98,10 @@ using SymbolicIndexingInterface
 optfn = OptimizationFunction(loss, Optimization.AutoForwardDiff())
 # function to set the parameters we are optimizing
 setter = setp(odeprob, [α, β, γ, δ])
-# `DiffCache` to avoid allocations
-diffcache = DiffCache(canonicalize(Tunable(), parameter_values(odeprob))[1])
+# `DiffCache` to avoid allocations.
+# `copy` prevents the buffer stored by `DiffCache` from aliasing the one in
+# `parameter_values(odeprob)`.
+diffcache = DiffCache(copy(canonicalize(Tunable(), parameter_values(odeprob))[1]))
 # parameter object is a tuple, to store differently typed objects together
 optprob = OptimizationProblem(
     optfn, rand(4), (odeprob, timesteps, data, setter, diffcache),

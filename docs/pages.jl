@@ -14,7 +14,8 @@ pages = [
         "tutorials/SampledData.md",
         "tutorials/domain_connections.md",
         "tutorials/callable_params.md",
-        "tutorials/linear_analysis.md"],
+        "tutorials/linear_analysis.md",
+        "tutorials/fmi.md"],
     "Examples" => Any[
         "Basic Examples" => Any["examples/higher_order.md",
             "examples/spring_mass.md",
