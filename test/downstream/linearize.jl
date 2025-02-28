@@ -329,3 +329,11 @@ end
         sys, [x], []; op = Dict(x => 1.0), guesses = Dict(y => 1.0),
         allow_input_derivatives = true)
 end
+
+@testset "Symbolic values for parameters in `linearize`" begin
+    @named tank_noi = Tank_noi()
+    @unpack md_i, h, m, ρ, A, K = tank_noi
+    m_ss = 2.4000000003229878
+    @test_nowarn linearize(
+        tank_noi, [md_i], [h]; op = Dict(m => m_ss, md_i => 2, ρ => A / K, A => 5))
+end
