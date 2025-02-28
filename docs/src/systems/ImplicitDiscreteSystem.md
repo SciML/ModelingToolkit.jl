@@ -26,3 +26,10 @@ structural_simplify
 ImplicitDiscreteProblem(sys::ImplicitDiscreteSystem, u0map, tspan)
 ImplicitDiscreteFunction(sys::ImplicitDiscreteSystem, args...)
 ```
+
+## Discrete Domain
+```@docs; canonical=false
+Shift
+Prev
+Next
+```
