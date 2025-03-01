@@ -122,11 +122,49 @@ function namespace_affect(affect::ImperativeAffect, s)
         affect.skip_checks)
 end
 
-function compile_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs...)
-    compile_user_affect(affect, cb, sys, dvs, ps; kwargs...)
+function invalid_variables(sys, expr)
+    filter(x -> !any(isequal(x), all_symbols(sys)), reduce(vcat, vars(expr); init = []))
 end
 
-function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs...)
+function unassignable_variables(sys, expr)
+    assignable_syms = reduce(
+        vcat, Symbolics.scalarize.(vcat(
+            unknowns(sys), parameters(sys; initial_parameters = true)));
+        init = [])
+    written = reduce(vcat, Symbolics.scalarize.(vars(expr)); init = [])
+    return filter(
+        x -> !any(isequal(x), assignable_syms), written)
+end
+
+@generated function _generated_writeback(integ, setters::NamedTuple{NS1, <:Tuple},
+        values::NamedTuple{NS2, <:Tuple}) where {NS1, NS2}
+    setter_exprs = []
+    for name in NS2
+        if !(name in NS1)
+            missing_name = "Tried to write back to $name from affect; only declared states ($NS1) may be written to."
+            error(missing_name)
+        end
+        push!(setter_exprs, :(setters.$name(integ, values.$name)))
+    end
+    return :(begin
+        $(setter_exprs...)
+    end)
+end
+
+function check_assignable(sys, sym)
+    if symbolic_type(sym) == ScalarSymbolic()
+        is_variable(sys, sym) || is_parameter(sys, sym)
+    elseif symbolic_type(sym) == ArraySymbolic()
+        is_variable(sys, sym) || is_parameter(sys, sym) ||
+            all(x -> check_assignable(sys, x), collect(sym))
+    elseif sym isa Union{AbstractArray, Tuple}
+        all(x -> check_assignable(sys, x), sym)
+    else
+        false
+    end
+end
+
+function compile_functional_affect(affect::ImperativeAffect, sys; kwargs...)
     #=
     Implementation sketch:
         generate observed function (oop), should save to a component array under obs_syms
@@ -149,6 +187,9 @@ function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs.
         end
         return (syms_dedup, exprs_dedup)
     end
+
+    dvs = unknowns(sys)
+    ps = parameters(sys)
 
     obs_exprs = observed(affect)
     if !affect.skip_checks
@@ -203,14 +244,8 @@ function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs.
 
     upd_funs = NamedTuple{mod_names}((setu.((sys,), first.(mod_pairs))...,))
 
-    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        save_idxs = get(ic.callback_to_clocks, cb, Int[])
-    else
-        save_idxs = Int[]
-    end
-
     let user_affect = func(affect), ctx = context(affect)
-        function (integ)
+        @inline function (integ)
             # update the to-be-mutated values; this ensures that if you do a no-op then nothing happens
             modvals = mod_og_val_fun(integ.u, integ.p, integ.t)
             upd_component_array = NamedTuple{mod_names}(modvals)
@@ -224,10 +259,6 @@ function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs.
 
             # write the new values back to the integrator
             _generated_writeback(integ, upd_funs, upd_vals)
-
-            for idx in save_idxs
-                SciMLBase.save_discretes!(integ, idx)
-            end
         end
     end
 end
