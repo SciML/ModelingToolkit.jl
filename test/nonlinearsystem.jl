@@ -4,6 +4,7 @@ using DiffEqBase, SparseArrays
 using Test
 using NonlinearSolve
 using ForwardDiff
+using SymbolicIndexingInterface
 using ModelingToolkit: value
 using ModelingToolkit: get_default_or_guess, MTKParameters
 
@@ -379,4 +380,13 @@ end
         sys, (0.0, 1.0))
     @test_throws ["single equation", "unknown"] IntervalNonlinearFunctionExpr(
         sys, (0.0, 1.0))
+end
+
+@testset "Vector parameter used unscalarized and partially scalarized" begin
+    @variables x y
+    @parameters p[1:2] (f::Function)(..)
+
+    @mtkbuild sys = NonlinearSystem([x^2 - p[1]^2 ~ 0, y^2 ~ f(p)])
+    @test !any(isequal(p[1]), parameters(sys))
+    @test is_parameter(sys, p)
 end

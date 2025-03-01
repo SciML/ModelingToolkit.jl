@@ -219,6 +219,12 @@ function NonlinearSystem(eqs; kwargs...)
                 push!(new_ps, p)
             end
         else
+            if symbolic_type(p) == ArraySymbolic() &&
+               Symbolics.shape(unwrap(p)) != Symbolics.Unknown()
+                for i in eachindex(p)
+                    delete!(new_ps, p[i])
+                end
+            end
             push!(new_ps, p)
         end
     end

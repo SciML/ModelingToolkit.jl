@@ -282,3 +282,12 @@ end
     sccprob = SCCNonlinearProblem(fullsys, u0, p)
     @test isequal(parameters(fullsys), parameters(sccprob.f.sys))
 end
+
+@testset "Vector parameters in function arguments" begin
+    @variables x y
+    @parameters p[1:2] (f::Function)(..)
+
+    @mtkbuild sys = NonlinearSystem([x^2 - p[1]^2 ~ 0, y^2 ~ f(p)])
+    prob = SCCNonlinearProblem(sys, [x => 1.0, y => 1.0], [p => ones(2), f => sum])
+    @test_nowarn solve(prob, NewtonRaphson())
+end
