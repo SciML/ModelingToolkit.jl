@@ -34,22 +34,23 @@ sol = solve(prob, Tsit5())
 @test sol[end, end] ≈ 1.0742818931017244
 
 @testset "Change independent variable" begin
-    # Autonomous 1st order (t doesn't appear in the equations)
     @independent_variables t
-    @variables x(t) y(t) z(t)
+    @variables x(t) y(t) z(t) s(t)
     eqs = [
         D(x) ~ y
         D(D(y)) ~ 2 * x * D(y)
         z ~ x + D(y)
+        D(s) ~ 1 / (2*s)
     ]
     @named sys1 = ODESystem(eqs, t)
+    sys1 = complete(sys1)
 
     @independent_variables s
-    @named sys2 = ModelingToolkit.change_independent_variable(sys1, s, s^2, √(t))
+    sys2 = ModelingToolkit.change_independent_variable(sys1, s)
 
-    sys1 = structural_simplify(sys1)
-    sys2 = structural_simplify(sys2)
-    prob1 = ODEProblem(sys1, [sys1.x => 1.0, sys1.y => 1.0, Differential(t)(sys1.y) => 0.0], (1.0, 4.0))
+    sys1 = structural_simplify(sys1; allow_symbolic = true)
+    sys2 = structural_simplify(sys2; allow_symbolic = true)
+    prob1 = ODEProblem(sys1, [sys1.x => 1.0, sys1.y => 1.0, Differential(t)(sys1.y) => 0.0, sys1.s => 1.0], (1.0, 4.0))
     prob2 = ODEProblem(sys2, [sys2.x => 1.0, sys2.y => 1.0, Differential(s)(sys2.y) => 0.0], (1.0, 2.0))
     sol1 = solve(prob1, Tsit5(); reltol = 1e-10, abstol = 1e-10)
     sol2 = solve(prob2, Tsit5(); reltol = 1e-10, abstol = 1e-10)
@@ -59,10 +60,10 @@ sol = solve(prob, Tsit5())
           all(isapprox.(sol1(ts, idxs=sys1.y), sol2(ss, idxs=sys2.y); atol = 1e-7))
 end
 
-#@testset "Change independent variable (Friedmann equation)" begin
+@testset "Change independent variable (Friedmann equation)" begin
     @independent_variables t
     D = Differential(t)
-    @variables a(t) ρr(t) ρm(t) ρΛ(t) ρ(t) ϕ(t)
+    @variables a(t) ρr(t) ρm(t) ρΛ(t) ρ(t) P(t) ϕ(t)
     @parameters Ωr0 Ωm0 ΩΛ0
     eqs = [
         ρr ~ 3/(8*Num(π)) * Ωr0 / a^4
@@ -75,7 +76,8 @@ end
     @named M1 = ODESystem(eqs, t)
     M1 = complete(M1)
 
-    M2 = ModelingToolkit.change_independent_variable(M1, M1.a)
-
+    @independent_variables a
+    M2 = ModelingToolkit.change_independent_variable(M1, a)
     M2 = structural_simplify(M2; allow_symbolic = true)
-#end
+    @test length(unknowns(M2)) == 2
+end

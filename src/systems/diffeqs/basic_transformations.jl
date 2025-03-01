@@ -56,52 +56,28 @@ function liouville_transform(sys::AbstractODESystem)
     ODESystem(neweqs, t, vars, parameters(sys), checks = false)
 end
 
-# TODO: handle case when new iv is a variable already in the system
-function change_independent_variable(sys::AbstractODESystem, iv, iv1_of_iv2, iv2_of_iv1; kwargs...)
-    iv1 = ModelingToolkit.get_iv(sys) # old independent variable
-    iv2 = iv # new independent variable
-
-    name2 = nameof(iv2)
-    iv2func, = @variables $name2(iv1)
-
-    eqs = ModelingToolkit.get_eqs(sys) |> copy # don't modify original system
-    vars = []
-    for (i, eq) in enumerate(eqs)
-        vars = Symbolics.get_variables(eq)
-        for var1 in vars
-            if Symbolics.iscall(var1) # skip e.g. constants
-                name = nameof(operation(var1))
-                var2, = @variables $name(iv2func)
-                eq = substitute(eq, var1 => var2; fold = false)
-            end
-        end
-        eq = expand_derivatives(eq) # expand out with chain rule to get d(iv2)/d(iv1)
-        eq = substitute(eq, Differential(iv1)(iv2func) => Differential(iv1)(iv2_of_iv1)) # substitute in d(iv2)/d(iv1)
-        eq = expand_derivatives(eq)
-        eq = substitute(eq, iv2func => iv2) # make iv2 independent
-        eq = substitute(eq, iv1 => iv1_of_iv2) # substitute any remaining old ivars
-        eqs[i] = eq
-    end
-
-    sys2 = typeof(sys)(eqs, iv2; name = nameof(sys), description = description(sys), kwargs...)
-    return sys2
-end
-
-function change_independent_variable(sys::AbstractODESystem, iv; kwargs...)
+function change_independent_variable(sys::AbstractODESystem, iv, eq = nothing; verbose = false, kwargs...)
     iv1 = get_iv(sys) # e.g. t
-    iv2func = iv # e.g. a(t)
-    iv2name = nameof(operation(unwrap(iv))) # TODO: handle namespacing?
-    iv2, = @independent_variables $iv2name
-
-    # TODO: find iv2func in system and replace it with some dummy variable
-    # TODO: not just to 1st, but to all orders
+    iv2name = nameof(iv) # TODO: handle namespacing?
+    iv2, = @independent_variables $iv2name # e.g. a
+    iv2func, = @variables $iv2name(iv1) # e.g. a(t)
+    D1 = Differential(iv1)
+    D2 = Differential(iv2)
 
     div2name = Symbol(iv2name, :_t)
-    div2, = @variables $div2name(iv2)
+    div2, = @variables $div2name(iv2) # e.g. a_t(a)
+
+    ddiv2name = Symbol(iv2name, :_tt)
+    ddiv2, = @variables $ddiv2name(iv2) # e.g. a_tt(a)
 
     eqs = ModelingToolkit.get_eqs(sys) |> copy # don't modify original system
+    !isnothing(eq) && push!(eqs, eq)
     vars = []
+    div2_div1 = nothing
     for (i, eq) in enumerate(eqs)
+        verbose && println("1. ", eq)
+
+        # 1) Substitute f(t₁) => f(t₂(t₁)) in all variables
         vars = Symbolics.get_variables(eq)
         for var1 in vars
             if Symbolics.iscall(var1) && !isequal(var1, iv2func) # && isequal(only(arguments(var1)), iv1) # skip e.g. constants
@@ -110,17 +86,32 @@ function change_independent_variable(sys::AbstractODESystem, iv; kwargs...)
                 eq = substitute(eq, var1 => var2; fold = false)
             end
         end
+        verbose && println("2. ", eq)
+
+        # 2) Substitute in dummy variables for dⁿt₂/dt₁ⁿ
         eq = expand_derivatives(eq) # expand out with chain rule to get d(iv2)/d(iv1)
-        #eq = substitute(eq, Differential(iv1)(iv2func) => Differential(iv1)(iv2_of_iv1)) # substitute in d(iv2)/d(iv1)
-        #eq = expand_derivatives(eq)
-        eq = substitute(eq, Differential(iv1)(Differential(iv1)(iv2func)) => div2) # e.g. D(a(t)) => a_t(t) # TODO: more orders
-        eq = substitute(eq, Differential(iv1)(iv2func) => div2) # e.g. D(a(t)) => a_t(t) # TODO: more orders
-        eq = substitute(eq, iv2func => iv2) # make iv2 independent
-        #eq = substitute(eq, iv1 => iv1_of_iv2) # substitute any remaining old ivars
+        verbose && println("3. ", eq)
+        eq = substitute(eq, D1(D1(iv2func)) => ddiv2) # order 2 # TODO: more orders
+        eq = substitute(eq, D1(iv2func) => div2) # order 1; e.g. D(a(t)) => a_t(t)
+        eq = substitute(eq, iv2func => iv2) # order 0; make iv2 independent
+        verbose && println("4. ", eq)
+        verbose && println()
+
         eqs[i] = eq
-        println(eq)
+
+        if isequal(eq.lhs, div2)
+            div2_div1 = eq.rhs
+        end
     end
 
+    isnothing(div2_div1) && error("No equation for $D1($iv2func) was specified.")
+    verbose && println("Found $div2 = $div2_div1")
+
+    # 3) Add equations for dummy variables
+    div1_div2 = 1 / div2_div1
+    push!(eqs, ddiv2 ~ expand_derivatives(-D2(div1_div2) / div1_div2^3)) # e.g. https://math.stackexchange.com/questions/249253/second-derivative-of-the-inverse-function # TODO: higher orders
+
+    # 4) Recreate system with new equations
     sys2 = typeof(sys)(eqs, iv2; name = nameof(sys), description = description(sys), kwargs...)
     return sys2
 end
