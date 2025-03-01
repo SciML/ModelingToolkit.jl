@@ -1,4 +1,4 @@
-#################################### system operations #####################################
+#################################### System operations #####################################
 has_continuous_events(sys::AbstractSystem) = isdefined(sys, :continuous_events)
 function get_continuous_events(sys::AbstractSystem)
     has_continuous_events(sys) || return SymbolicContinuousCallback[]
@@ -11,6 +11,35 @@ function get_discrete_events(sys::AbstractSystem)
     getfield(sys, :discrete_events)
 end
 
+struct Callback
+    eqs::Vector{Equation}
+    initialize::Union{ImplicitDiscreteSystem, FunctionalAffect, ImperativeAffect}
+    finalize::ImplicitDiscreteSystem
+    affect::ImplicitDiscreteSystem
+    affect_neg::ImplicitDiscreteSystem
+    rootfind::Union{Nothing, SciMLBase.RootfindOpt}
+end
+
+# Callbacks: 
+#   mapping (cond) => ImplicitDiscreteSystem
+function generate_continuous_callbacks(events, sys)
+    algeeqs = alg_equations(sys)
+    callbacks = Callback[]
+    for (cond, aff) in events
+        @mtkbuild affect = ImplicitDiscreteSystem([aff, algeeqs], t)
+        push!(callbacks, Callback(cond, NULL_AFFECT, NULL_AFFECT, affect, affect, SciMLBase.LeftRootFind)) 
+    end
+    callbacks
+end
+
+function generate_discrete_callback_system(events, sys)
+end
+
+function generate_callback_function() 
+    
+end
+
+############# Old implementation ###
 struct FunctionalAffect
     f::Any
     sts::Vector
