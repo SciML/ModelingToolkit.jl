@@ -86,3 +86,41 @@ function change_independent_variable(sys::AbstractODESystem, iv, iv1_of_iv2, iv2
     sys2 = typeof(sys)(eqs, iv2; name = nameof(sys), description = description(sys), kwargs...)
     return sys2
 end
+
+function change_independent_variable(sys::AbstractODESystem, iv; kwargs...)
+    iv1 = get_iv(sys) # e.g. t
+    iv2func = iv # e.g. a(t)
+    iv2name = nameof(operation(unwrap(iv))) # TODO: handle namespacing?
+    iv2, = @independent_variables $iv2name
+
+    # TODO: find iv2func in system and replace it with some dummy variable
+    # TODO: not just to 1st, but to all orders
+
+    div2name = Symbol(iv2name, :_t)
+    div2, = @variables $div2name(iv2)
+
+    eqs = ModelingToolkit.get_eqs(sys) |> copy # don't modify original system
+    vars = []
+    for (i, eq) in enumerate(eqs)
+        vars = Symbolics.get_variables(eq)
+        for var1 in vars
+            if Symbolics.iscall(var1) && !isequal(var1, iv2func) # && isequal(only(arguments(var1)), iv1) # skip e.g. constants
+                name = nameof(operation(var1))
+                var2, = @variables $name(iv2func)
+                eq = substitute(eq, var1 => var2; fold = false)
+            end
+        end
+        eq = expand_derivatives(eq) # expand out with chain rule to get d(iv2)/d(iv1)
+        #eq = substitute(eq, Differential(iv1)(iv2func) => Differential(iv1)(iv2_of_iv1)) # substitute in d(iv2)/d(iv1)
+        #eq = expand_derivatives(eq)
+        eq = substitute(eq, Differential(iv1)(Differential(iv1)(iv2func)) => div2) # e.g. D(a(t)) => a_t(t) # TODO: more orders
+        eq = substitute(eq, Differential(iv1)(iv2func) => div2) # e.g. D(a(t)) => a_t(t) # TODO: more orders
+        eq = substitute(eq, iv2func => iv2) # make iv2 independent
+        #eq = substitute(eq, iv1 => iv1_of_iv2) # substitute any remaining old ivars
+        eqs[i] = eq
+        println(eq)
+    end
+
+    sys2 = typeof(sys)(eqs, iv2; name = nameof(sys), description = description(sys), kwargs...)
+    return sys2
+end
