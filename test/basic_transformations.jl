@@ -58,3 +58,24 @@ sol = solve(prob, Tsit5())
     @test all(isapprox.(sol1(ts, idxs=sys1.x), sol2(ss, idxs=sys2.x); atol = 1e-7)) &&
           all(isapprox.(sol1(ts, idxs=sys1.y), sol2(ss, idxs=sys2.y); atol = 1e-7))
 end
+
+#@testset "Change independent variable (Friedmann equation)" begin
+    @independent_variables t
+    D = Differential(t)
+    @variables a(t) ρr(t) ρm(t) ρΛ(t) ρ(t) ϕ(t)
+    @parameters Ωr0 Ωm0 ΩΛ0
+    eqs = [
+        ρr ~ 3/(8*Num(π)) * Ωr0 / a^4
+        ρm ~ 3/(8*Num(π)) * Ωm0 / a^3
+        ρΛ ~ 3/(8*Num(π)) * ΩΛ0
+        ρ ~ ρr + ρm + ρΛ
+        D(a) ~ √(8*Num(π)/3*ρ*a^4)
+        D(D(ϕ)) ~ -3*D(a)/a*D(ϕ)
+    ]
+    @named M1 = ODESystem(eqs, t)
+    M1 = complete(M1)
+
+    M2 = ModelingToolkit.change_independent_variable(M1, M1.a)
+
+    M2 = structural_simplify(M2; allow_symbolic = true)
+#end
