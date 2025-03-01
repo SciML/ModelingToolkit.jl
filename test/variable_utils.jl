@@ -146,15 +146,15 @@ end
     end
 end
 
-@testset "isInitial" begin
+@testset "isinitial" begin
     t = ModelingToolkit.t_nounits
     @variables x(t) z(t)[1:5]
     @parameters a b c[1:4]
-    @test isInitial(Initial(z))
-    @test isInitial(Initial(x))
-    @test isInitial(Initial(a))
-    @test isInitial(Initial(z[1]))
-    @test isInitial(Initial(c[4]))
-    @test !isInitial(c)
-    @test !isInitial(x)
+    @test isinitial(Initial(z))
+    @test isinitial(Initial(x))
+    @test isinitial(Initial(a))
+    @test isinitial(Initial(z[1]))
+    @test isinitial(Initial(c[4]))
+    @test !isinitial(c)
+    @test !isinitial(x)
 end

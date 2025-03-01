@@ -720,7 +720,7 @@ end
 """
 Returns true if the parameter `p` is of the form `Initial(x)`.
 """
-function isInitial(p)
+function isinitial(p)
     p = unwrap(p)
     if iscall(p)
         operation(p) isa Initial && return true
