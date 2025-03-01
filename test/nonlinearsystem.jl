@@ -380,3 +380,22 @@ end
     @test_throws ["single equation", "unknown"] IntervalNonlinearFunctionExpr(
         sys, (0.0, 1.0))
 end
+
+@testset "Overconditioned Initial Conditions" begin
+    # Define the nonlinear system
+    @variables x=1.0 y=0.0 z=0.0
+    @parameters σ=10.0 ρ=26.0 β=8 / 3
+
+    eqs = [0 ~ σ * (y - x),
+        0 ~ x * (ρ - z) - y,
+        0 ~ x * y - β * z]
+    @mtkbuild ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
+
+    # Convert the symbolic system into a numerical system
+    prob = NonlinearProblem(ns, [])
+
+    # Solve the numerical problem
+    sol = solve(prob, NewtonRaphson())
+    @test SciMLBase.successful_retcode(sol)
+    @test norm(sol.resid) < 1e-12
+end
