@@ -1,15 +1,4 @@
-#################################### system operations #####################################
-has_continuous_events(sys::AbstractSystem) = isdefined(sys, :continuous_events)
-function get_continuous_events(sys::AbstractSystem)
-    has_continuous_events(sys) || return SymbolicContinuousCallback[]
-    getfield(sys, :continuous_events)
-end
-
-has_discrete_events(sys::AbstractSystem) = isdefined(sys, :discrete_events)
-function get_discrete_events(sys::AbstractSystem)
-    has_discrete_events(sys) || return SymbolicDiscreteCallback[]
-    getfield(sys, :discrete_events)
-end
+abstract type AbstractCallback end
 
 struct FunctionalAffect
     f::Any
@@ -38,7 +27,7 @@ function FunctionalAffect(; f, sts, pars, discretes, ctx = nothing)
     FunctionalAffect(f, sts, pars, discretes, ctx)
 end
 
-func(f::FunctionalAffect) = f.f
+func(a::FunctionalAffect) = a.f
 context(a::FunctionalAffect) = a.ctx
 parameters(a::FunctionalAffect) = a.pars
 parameters_syms(a::FunctionalAffect) = a.pars_syms
@@ -62,33 +51,118 @@ function Base.hash(a::FunctionalAffect, s::UInt)
     hash(a.ctx, s)
 end
 
-namespace_affect(affect, s) = namespace_equation(affect, s)
-function namespace_affect(affect::FunctionalAffect, s)
-    FunctionalAffect(func(affect),
-        renamespace.((s,), unknowns(affect)),
-        unknowns_syms(affect),
-        renamespace.((s,), parameters(affect)),
-        parameters_syms(affect),
-        renamespace.((s,), discretes(affect)),
-        context(affect))
-end
-
 function has_functional_affect(cb)
     (affects(cb) isa FunctionalAffect || affects(cb) isa ImperativeAffect)
 end
 
-function vars!(vars, aff::FunctionalAffect; op = Differential)
+struct AffectSystem
+    """The internal implicit discrete system whose equations are solved to obtain values after the affect."""
+    system::ImplicitDiscreteSystem
+    """Unknowns of the parent ODESystem whose values are modified or accessed by the affect."""
+    unknowns::Vector
+    """Parameters of the parent ODESystem whose values are accessed by the affect."""
+    parameters::Vector
+    """Parameters of the parent ODESystem whose values are modified by the affect."""
+    discretes::Vector
+    """Maps the symbols of unknowns/observed in the ImplicitDiscreteSystem to its corresponding unknown/parameter in the parent system."""
+    aff_to_sys::Dict
+end
+
+system(a::AffectSystem) = a.system
+discretes(a::AffectSystem) = a.discretes
+unknowns(a::AffectSystem) = a.unknowns
+parameters(a::AffectSystem) = a.parameters
+aff_to_sys(a::AffectSystem) = a.aff_to_sys
+all_equations(a::AffectSystem) = vcat(equations(system(a)), observed(system(a)))
+
+function Base.show(iio::IO, aff::AffectSystem)
+    println(iio, "Affect system defined by equations:")
+    eqs = all_equations(aff)
+    show(iio, eqs)
+end
+
+function Base.:(==)(a1::AffectSystem, a2::AffectSystem)
+    isequal(system(a1), system(a2)) &&
+        isequal(discretes(a1), discretes(a2)) &&
+        isequal(unknowns(a1), unknowns(a2)) &&
+        isequal(parameters(a1), parameters(a2)) &&
+        isequal(aff_to_sys(a1), aff_to_sys(a2))
+end
+
+function Base.hash(a::AffectSystem, s::UInt)
+    s = hash(system(a), s)
+    s = hash(unknowns(a), s)
+    s = hash(parameters(a), s)
+    s = hash(discretes(a), s)
+    hash(aff_to_sys(a), s)
+end
+
+function vars!(vars, aff::Union{FunctionalAffect, AffectSystem}; op = Differential)
     for var in Iterators.flatten((unknowns(aff), parameters(aff), discretes(aff)))
         vars!(vars, var)
     end
-    return vars
+    vars
 end
 
-#################################### continuous events #####################################
-
-const NULL_AFFECT = Equation[]
 """
-    SymbolicContinuousCallback(eqs::Vector{Equation}, affect, affect_neg, rootfind)
+    Pre(x)
+
+The `Pre` operator. Used by the callback system to indicate the value of a parameter or variable
+before the callback is triggered.
+"""
+struct Pre <: Symbolics.Operator end
+Pre(x) = Pre()(x)
+SymbolicUtils.promote_symtype(::Type{Pre}, T) = T
+SymbolicUtils.isbinop(::Pre) = false
+Base.nameof(::Pre) = :Pre
+Base.show(io::IO, x::Pre) = print(io, "Pre")
+input_timedomain(::Pre, _ = nothing) = ContinuousClock()
+output_timedomain(::Pre, _ = nothing) = ContinuousClock()
+unPre(x::Num) = unPre(unwrap(x))
+unPre(x::BasicSymbolic) = (iscall(x) && operation(x) isa Pre) ? only(arguments(x)) : x
+
+function (p::Pre)(x)
+    iw = Symbolics.iswrapped(x)
+    x = unwrap(x)
+    # non-symbolic values don't change
+    if symbolic_type(x) == NotSymbolic()
+        return x
+    end
+    # differential variables are default-toterm-ed
+    if iscall(x) && operation(x) isa Differential
+        x = default_toterm(x)
+    end
+    # don't double wrap
+    iscall(x) && operation(x) isa Pre && return x
+    result = if symbolic_type(x) == ArraySymbolic()
+        # create an array for `Pre(array)`
+        Symbolics.array_term(p, x)
+    elseif iscall(x) && operation(x) == getindex
+        # instead of `Pre(x[1])` create `Pre(x)[1]`
+        # which allows parameter indexing to handle this case automatically.
+        arr = arguments(x)[1]
+        term(getindex, p(arr), arguments(x)[2:end]...)
+    else
+        term(p, x)
+    end
+    # the result should be a parameter
+    result = toparam(result)
+    if iw
+        result = wrap(result)
+    end
+    return result
+end
+haspre(eq::Equation) = haspre(eq.lhs) || haspre(eq.rhs)
+haspre(O) = recursive_hasoperator(Pre, O)
+
+###############################
+###### Continuous events ######
+###############################
+const Affect = Union{AffectSystem, FunctionalAffect, ImperativeAffect}
+
+"""
+    SymbolicContinuousCallback(eqs::Vector{Equation}, affect = nothing, iv = nothing; 
+                               affect_neg = affect, initialize = nothing, finalize = nothing, rootfind = SciMLBase.LeftRootFind, alg_eqs = Equation[])
 
 A [`ContinuousCallback`](@ref SciMLBase.ContinuousCallback) specified symbolically. Takes a vector of equations `eq`
 as well as the positive-edge `affect` and negative-edge `affect_neg` that apply when *any* of `eq` are satisfied.
@@ -128,366 +202,782 @@ Affects (i.e. `affect` and `affect_neg`) can be specified as either:
     + `ctx` is a user-defined context object passed to `f!` when invoked. This value is aliased for each problem.
 * A [`ImperativeAffect`](@ref); refer to its documentation for details.
 
-DAEs will be reinitialized using `reinitializealg` (which defaults to `SciMLBase.CheckInit`) after callbacks are applied.
-This reinitialization algorithm ensures that the DAE is satisfied after the callback runs. The default value of `CheckInit` will simply validate
-that the newly-assigned values indeed satisfy the algebraic system; see the documentation on DAE initialization for a more detailed discussion of
-initialization.
+`reinitializealg` is used to set how the system will be reinitialized after the callback. 
+- Symbolic affects have reinitialization built in. In this case the algorithm will default to SciMLBase.NoInit(), and should **not** be provided.
+- Functional and imperative affects will default to SciMLBase.CheckInit(), which will error if the system is not properly reinitialized after the callback. If your system is a DAE, pass in an algorithm like SciMLBase.BrownBasicFullInit() to properly re-initialize.
 
-Initial and final affects can also be specified with SCC, which are specified identically to positive and negative edge affects. Initialization affects
+Initial and final affects can also be specified identically to positive and negative edge affects. Initialization affects
 will run as soon as the solver starts, while finalization affects will be executed after termination.
 """
-struct SymbolicContinuousCallback
-    eqs::Vector{Equation}
-    initialize::Union{Vector{Equation}, FunctionalAffect, ImperativeAffect}
-    finalize::Union{Vector{Equation}, FunctionalAffect, ImperativeAffect}
-    affect::Union{Vector{Equation}, FunctionalAffect, ImperativeAffect}
-    affect_neg::Union{Vector{Equation}, FunctionalAffect, ImperativeAffect, Nothing}
-    rootfind::SciMLBase.RootfindOpt
+struct SymbolicContinuousCallback <: AbstractCallback
+    conditions::Vector{Equation}
+    affect::Union{Affect, Nothing}
+    affect_neg::Union{Affect, Nothing}
+    initialize::Union{Affect, Nothing}
+    finalize::Union{Affect, Nothing}
+    rootfind::Union{Nothing, SciMLBase.RootfindOpt}
     reinitializealg::SciMLBase.DAEInitializationAlgorithm
-    function SymbolicContinuousCallback(;
-            eqs::Vector{Equation},
-            affect = NULL_AFFECT,
+
+    function SymbolicContinuousCallback(
+            conditions::Union{Equation, Vector{Equation}},
+            affect = nothing;
             affect_neg = affect,
-            initialize = NULL_AFFECT,
-            finalize = NULL_AFFECT,
+            initialize = nothing,
+            finalize = nothing,
             rootfind = SciMLBase.LeftRootFind,
-            reinitializealg = SciMLBase.CheckInit())
-        new(eqs, initialize, finalize, make_affect(affect),
-            make_affect(affect_neg), rootfind, reinitializealg)
+            reinitializealg = nothing,
+            kwargs...)
+        conditions = (conditions isa AbstractVector) ? conditions : [conditions]
+
+        if isnothing(reinitializealg)
+            if any(a -> (a isa FunctionalAffect || a isa ImperativeAffect),
+                [affect, affect_neg, initialize, finalize])
+                reinitializealg = SciMLBase.CheckInit()
+            else
+                reinitializealg = SciMLBase.NoInit()
+            end
+        end
+
+        new(conditions, make_affect(affect; kwargs...),
+            make_affect(affect_neg; kwargs...),
+            make_affect(initialize; kwargs...), make_affect(
+                finalize; kwargs...),
+            rootfind, reinitializealg)
     end # Default affect to nothing
 end
-make_affect(affect) = affect
-make_affect(affect::Tuple) = FunctionalAffect(affect...)
-make_affect(affect::NamedTuple) = FunctionalAffect(; affect...)
 
-function Base.:(==)(e1::SymbolicContinuousCallback, e2::SymbolicContinuousCallback)
-    isequal(e1.eqs, e2.eqs) && isequal(e1.affect, e2.affect) &&
-        isequal(e1.initialize, e2.initialize) && isequal(e1.finalize, e2.finalize) &&
-        isequal(e1.affect_neg, e2.affect_neg) && isequal(e1.rootfind, e2.rootfind)
+function SymbolicContinuousCallback(p::Pair, args...; kwargs...)
+    SymbolicContinuousCallback(p[1], p[2], args...; kwargs...)
 end
-Base.isempty(cb::SymbolicContinuousCallback) = isempty(cb.eqs)
-function Base.hash(cb::SymbolicContinuousCallback, s::UInt)
-    hash_affect(affect::AbstractVector, s) = foldr(hash, affect, init = s)
-    hash_affect(affect, s) = hash(affect, s)
-    s = foldr(hash, cb.eqs, init = s)
-    s = hash_affect(cb.affect, s)
-    s = hash_affect(cb.affect_neg, s)
-    s = hash_affect(cb.initialize, s)
-    s = hash_affect(cb.finalize, s)
-    s = hash(cb.reinitializealg, s)
-    hash(cb.rootfind, s)
+SymbolicContinuousCallback(cb::SymbolicContinuousCallback, args...; kwargs...) = cb
+SymbolicContinuousCallback(cb::Nothing, args...; kwargs...) = nothing
+function SymbolicContinuousCallback(cb::Tuple, args...; kwargs...)
+    if length(cb) == 2
+        SymbolicContinuousCallback(cb[1]; kwargs..., cb[2]...)
+    else
+        error("Malformed tuple specifying callback. Should be a condition => affect pair, followed by a vector of kwargs.")
+    end
 end
 
-function Base.show(io::IO, cb::SymbolicContinuousCallback)
+make_affect(affect::Nothing; kwargs...) = nothing
+make_affect(affect::Tuple; kwargs...) = FunctionalAffect(affect...)
+make_affect(affect::NamedTuple; kwargs...) = FunctionalAffect(; affect...)
+make_affect(affect::Affect; kwargs...) = affect
+
+function make_affect(affect::Vector{Equation}; discrete_parameters = Any[],
+        iv = nothing, alg_eqs::Vector{Equation} = Equation[], warn_no_algebraic = true, kwargs...)
+    isempty(affect) && return nothing
+    if isnothing(iv)
+        iv = t_nounits
+        @warn "No independent variable specified. Defaulting to t_nounits."
+    end
+
+    discrete_parameters isa AbstractVector || (discrete_parameters = [discrete_parameters])
+    for p in discrete_parameters
+        occursin(unwrap(iv), unwrap(p)) ||
+            error("Non-time dependent parameter $p passed in as a discrete. Must be declared as @parameters $p(t).")
+    end
+
+    dvs = OrderedSet()
+    params = OrderedSet()
+    for eq in affect
+        if !haspre(eq) && !(symbolic_type(eq.rhs) === NotSymbolic() ||
+             symbolic_type(eq.lhs) === NotSymbolic())
+            @warn "Affect equation $eq has no `Pre` operator. As such it will be interpreted as an algebraic equation to be satisfied after the callback. If you intended to use the value of a variable x before the affect, use Pre(x). Errors may be thrown if there is no `Pre` and the algebraic equation is unsatisfiable, such as X ~ X + 1."
+        end
+        collect_vars!(dvs, params, eq, iv; op = Pre)
+        diffvs = collect_applied_operators(eq, Differential)
+        union!(dvs, diffvs)
+    end
+    for eq in alg_eqs
+        collect_vars!(dvs, params, eq, iv)
+    end
+
+    pre_params = filter(haspre ∘ value, params)
+    sys_params = collect(setdiff(params, union(discrete_parameters, pre_params)))
+    discretes = map(tovar, discrete_parameters)
+    dvs = collect(dvs)
+    _dvs = map(default_toterm, dvs)
+
+    aff_map = Dict(zip(discretes, discrete_parameters))
+    rev_map = Dict(zip(discrete_parameters, discretes))
+    subs = merge(rev_map, Dict(zip(dvs, _dvs)))
+    affect = Symbolics.fast_substitute(affect, subs)
+    alg_eqs = Symbolics.fast_substitute(alg_eqs, subs)
+
+    @named affectsys = ImplicitDiscreteSystem(
+        vcat(affect, alg_eqs), iv, collect(union(_dvs, discretes)),
+        collect(union(pre_params, sys_params)))
+    affectsys = structural_simplify(affectsys; fully_determined = nothing)
+    # get accessed parameters p from Pre(p) in the callback parameters
+    accessed_params = filter(isparameter, map(unPre, collect(pre_params)))
+    union!(accessed_params, sys_params)
+
+    # add scalarized unknowns to the map.
+    _dvs = reduce(vcat, map(scalarize, _dvs), init = Any[])
+    for u in _dvs
+        aff_map[u] = u
+    end
+
+    AffectSystem(affectsys, collect(_dvs), collect(accessed_params),
+        collect(discrete_parameters), aff_map)
+end
+
+function make_affect(affect; kwargs...)
+    error("Malformed affect $(affect). This should be a vector of equations or a tuple specifying a functional affect.")
+end
+
+function Base.show(io::IO, cb::AbstractCallback)
     indent = get(io, :indent, 0)
     iio = IOContext(io, :indent => indent + 1)
+    is_discrete(cb) ? print(io, "SymbolicDiscreteCallback(") :
     print(io, "SymbolicContinuousCallback(")
-    print(iio, "Equations:")
+    print(iio, "Conditions:")
     show(iio, equations(cb))
     print(iio, "; ")
-    if affects(cb) != NULL_AFFECT
+    if affects(cb) != nothing
         print(iio, "Affect:")
         show(iio, affects(cb))
         print(iio, ", ")
     end
-    if affect_negs(cb) != NULL_AFFECT
+    if !is_discrete(cb) && affect_negs(cb) != nothing
         print(iio, "Negative-edge affect:")
         show(iio, affect_negs(cb))
         print(iio, ", ")
     end
-    if initialize_affects(cb) != NULL_AFFECT
+    if initialize_affects(cb) != nothing
         print(iio, "Initialization affect:")
         show(iio, initialize_affects(cb))
         print(iio, ", ")
     end
-    if finalize_affects(cb) != NULL_AFFECT
+    if finalize_affects(cb) != nothing
         print(iio, "Finalization affect:")
         show(iio, finalize_affects(cb))
     end
     print(iio, ")")
 end
 
-function Base.show(io::IO, mime::MIME"text/plain", cb::SymbolicContinuousCallback)
+function Base.show(io::IO, mime::MIME"text/plain", cb::AbstractCallback)
     indent = get(io, :indent, 0)
     iio = IOContext(io, :indent => indent + 1)
+    is_discrete(cb) ? println(io, "SymbolicDiscreteCallback:") :
     println(io, "SymbolicContinuousCallback:")
-    println(iio, "Equations:")
+    println(iio, "Conditions:")
     show(iio, mime, equations(cb))
     print(iio, "\n")
-    if affects(cb) != NULL_AFFECT
+    if affects(cb) != nothing
         println(iio, "Affect:")
         show(iio, mime, affects(cb))
         print(iio, "\n")
     end
-    if affect_negs(cb) != NULL_AFFECT
-        println(iio, "Negative-edge affect:")
+    if !is_discrete(cb) && affect_negs(cb) != nothing
+        print(iio, "Negative-edge affect:\n")
         show(iio, mime, affect_negs(cb))
         print(iio, "\n")
     end
-    if initialize_affects(cb) != NULL_AFFECT
+    if initialize_affects(cb) != nothing
         println(iio, "Initialization affect:")
         show(iio, mime, initialize_affects(cb))
         print(iio, "\n")
     end
-    if finalize_affects(cb) != NULL_AFFECT
+    if finalize_affects(cb) != nothing
         println(iio, "Finalization affect:")
         show(iio, mime, finalize_affects(cb))
         print(iio, "\n")
     end
 end
 
-to_equation_vector(eq::Equation) = [eq]
-to_equation_vector(eqs::Vector{Equation}) = eqs
-function to_equation_vector(eqs::Vector{Any})
-    isempty(eqs) || error("This should never happen")
-    Equation[]
+function vars!(vars, cb::AbstractCallback; op = Differential)
+    if symbolic_type(conditions(cb)) == NotSymbolic
+        if conditions(cb) isa AbstractArray
+            for eq in conditions(cb)
+                vars!(vars, eq; op)
+            end
+        end
+    else
+        vars!(vars, conditions(cb); op)
+    end
+    for aff in (affects(cb), initialize_affects(cb), finalize_affects(cb))
+        isnothing(aff) || vars!(vars, aff; op)
+    end
+    !is_discrete(cb) && vars!(vars, affect_negs(cb); op)
+    return vars
 end
 
-function SymbolicContinuousCallback(args...)
-    SymbolicContinuousCallback(to_equation_vector.(args)...)
-end # wrap eq in vector
-SymbolicContinuousCallback(p::Pair) = SymbolicContinuousCallback(p[1], p[2])
-SymbolicContinuousCallback(cb::SymbolicContinuousCallback) = cb # passthrough
-function SymbolicContinuousCallback(eqs::Equation, affect = NULL_AFFECT;
-        initialize = NULL_AFFECT, finalize = NULL_AFFECT,
-        affect_neg = affect, rootfind = SciMLBase.LeftRootFind)
+################################
+######## Discrete events #######
+################################
+"""
+    SymbolicDiscreteCallback(conditions::Vector{Equation}, affect = nothing, iv = nothing;
+                             initialize = nothing, finalize = nothing, alg_eqs = Equation[])
+
+A callback that triggers at the first timestep that the conditions are satisfied.
+
+The condition can be one of: 
+- Δt::Real              - periodic events with period Δt
+- ts::Vector{Real}      - events trigger at these preset times given by `ts`
+- eqs::Vector{Symbolic} - events trigger when the condition evaluates to true
+
+Arguments: 
+- iv: The independent variable of the system. This must be specified if the independent variable appears in one of the equations explicitly, as in x ~ t + 1.
+- alg_eqs: Algebraic equations of the system that must be satisfied after the callback occurs.
+"""
+struct SymbolicDiscreteCallback <: AbstractCallback
+    conditions::Union{Number, Vector{<:Number}, Symbolic{Bool}}
+    affect::Union{Affect, Nothing}
+    initialize::Union{Affect, Nothing}
+    finalize::Union{Affect, Nothing}
+    reinitializealg::SciMLBase.DAEInitializationAlgorithm
+
+    function SymbolicDiscreteCallback(
+            condition::Union{Symbolic{Bool}, Number, Vector{<:Number}}, affect = nothing;
+            initialize = nothing, finalize = nothing,
+            reinitializealg = nothing, kwargs...)
+        c = is_timed_condition(condition) ? condition : value(scalarize(condition))
+
+        if isnothing(reinitializealg)
+            reinitializealg = SciMLBase.CheckInit()
+        else
+            reinitializealg = SciMLBase.NoInit()
+        end
+        new(c, make_affect(affect; kwargs...),
+            make_affect(initialize; kwargs...),
+            make_affect(finalize; kwargs...), reinitializealg)
+    end # Default affect to nothing
+end
+
+function SymbolicDiscreteCallback(p::Pair, args...; kwargs...)
+    SymbolicDiscreteCallback(p[1], p[2], args...; kwargs...)
+end
+SymbolicDiscreteCallback(cb::SymbolicDiscreteCallback, args...; kwargs...) = cb
+SymbolicDiscreteCallback(cb::Nothing, args...; kwargs...) = nothing
+function SymbolicDiscreteCallback(cb::Tuple, args...; kwargs...)
+    if length(cb) == 2
+        SymbolicDiscreteCallback(cb[1]; cb[2]...)
+    else
+        error("Malformed tuple specifying callback. Should be a condition => affect pair, followed by a vector of kwargs.")
+    end
+end
+
+function is_timed_condition(condition::T) where {T}
+    if T === Num
+        false
+    elseif T <: Real
+        true
+    elseif T <: AbstractVector
+        eltype(condition) <: Real
+    else
+        false
+    end
+end
+
+to_cb_vector(cbs::Vector{<:AbstractCallback}; kwargs...) = cbs
+to_cb_vector(cbs::Union{Nothing, Vector{Nothing}}; kwargs...) = AbstractCallback[]
+to_cb_vector(cb::AbstractCallback; kwargs...) = [cb]
+function to_cb_vector(cbs; CB_TYPE = SymbolicContinuousCallback, kwargs...)
+    if cbs isa Pair
+        [CB_TYPE(cbs; kwargs...)]
+    else
+        Vector{CB_TYPE}([CB_TYPE(cb; kwargs...) for cb in cbs])
+    end
+end
+
+############################################
+########## Namespacing Utilities ###########
+############################################
+function namespace_affects(affect::FunctionalAffect, s)
+    FunctionalAffect(func(affect),
+        renamespace.((s,), unknowns(affect)),
+        unknowns_syms(affect),
+        renamespace.((s,), parameters(affect)),
+        parameters_syms(affect),
+        renamespace.((s,), discretes(affect)),
+        context(affect))
+end
+
+function namespace_affects(affect::AffectSystem, s)
+    AffectSystem(renamespace(s, system(affect)),
+        renamespace.((s,), unknowns(affect)),
+        renamespace.((s,), parameters(affect)),
+        renamespace.((s,), discretes(affect)),
+        Dict([k => renamespace(s, v) for (k, v) in aff_to_sys(affect)]))
+end
+namespace_affects(af::Nothing, s) = nothing
+
+function namespace_callback(cb::SymbolicContinuousCallback, s)::SymbolicContinuousCallback
     SymbolicContinuousCallback(
-        eqs = [eqs], affect = affect, affect_neg = affect_neg,
-        initialize = initialize, finalize = finalize, rootfind = rootfind)
-end
-function SymbolicContinuousCallback(eqs::Vector{Equation}, affect = NULL_AFFECT;
-        affect_neg = affect, initialize = NULL_AFFECT, finalize = NULL_AFFECT,
-        rootfind = SciMLBase.LeftRootFind)
-    SymbolicContinuousCallback(
-        eqs = eqs, affect = affect, affect_neg = affect_neg,
-        initialize = initialize, finalize = finalize, rootfind = rootfind)
+        namespace_equation.(equations(cb), (s,)),
+        namespace_affects(affects(cb), s),
+        affect_neg = namespace_affects(affect_negs(cb), s),
+        initialize = namespace_affects(initialize_affects(cb), s),
+        finalize = namespace_affects(finalize_affects(cb), s),
+        rootfind = cb.rootfind, reinitializealg = cb.reinitializealg)
 end
 
-SymbolicContinuousCallbacks(cb::SymbolicContinuousCallback) = [cb]
-SymbolicContinuousCallbacks(cbs::Vector{<:SymbolicContinuousCallback}) = cbs
-SymbolicContinuousCallbacks(cbs::Vector) = SymbolicContinuousCallback.(cbs)
-function SymbolicContinuousCallbacks(ve::Vector{Equation})
-    SymbolicContinuousCallbacks(SymbolicContinuousCallback(ve))
-end
-function SymbolicContinuousCallbacks(others)
-    SymbolicContinuousCallbacks(SymbolicContinuousCallback(others))
-end
-SymbolicContinuousCallbacks(::Nothing) = SymbolicContinuousCallback[]
-
-equations(cb::SymbolicContinuousCallback) = cb.eqs
-function equations(cbs::Vector{<:SymbolicContinuousCallback})
-    mapreduce(equations, vcat, cbs, init = Equation[])
+function namespace_conditions(condition, s)
+    is_timed_condition(condition) ? condition : namespace_expr(condition, s)
 end
 
-affects(cb::SymbolicContinuousCallback) = cb.affect
-function affects(cbs::Vector{SymbolicContinuousCallback})
-    mapreduce(affects, vcat, cbs, init = Equation[])
+function namespace_callback(cb::SymbolicDiscreteCallback, s)::SymbolicDiscreteCallback
+    SymbolicDiscreteCallback(
+        namespace_conditions(conditions(cb), s),
+        namespace_affects(affects(cb), s),
+        initialize = namespace_affects(initialize_affects(cb), s),
+        finalize = namespace_affects(finalize_affects(cb), s), reinitializealg = cb.reinitializealg)
+end
+
+function Base.hash(cb::AbstractCallback, s::UInt)
+    s = conditions(cb) isa AbstractVector ? foldr(hash, conditions(cb), init = s) :
+        hash(conditions(cb), s)
+    s = hash(affects(cb), s)
+    !is_discrete(cb) && (s = hash(affect_negs(cb), s))
+    s = hash(initialize_affects(cb), s)
+    s = hash(finalize_affects(cb), s)
+    !is_discrete(cb) && (s = hash(cb.rootfind, s))
+    hash(cb.reinitializealg, s)
+end
+
+###########################
+######### Helpers #########
+###########################
+
+conditions(cb::AbstractCallback) = cb.conditions
+function conditions(cbs::Vector{<:AbstractCallback})
+    reduce(vcat, conditions(cb) for cb in cbs; init = [])
+end
+equations(cb::AbstractCallback) = conditions(cb)
+equations(cb::Vector{<:AbstractCallback}) = conditions(cb)
+
+affects(cb::AbstractCallback) = cb.affect
+function affects(cbs::Vector{<:AbstractCallback})
+    reduce(vcat, affects(cb) for cb in cbs; init = [])
 end
 
 affect_negs(cb::SymbolicContinuousCallback) = cb.affect_neg
 function affect_negs(cbs::Vector{SymbolicContinuousCallback})
-    mapreduce(affect_negs, vcat, cbs, init = Equation[])
+    reduce(vcat, affect_negs(cb) for cb in cbs; init = [])
 end
 
-reinitialization_alg(cb::SymbolicContinuousCallback) = cb.reinitializealg
-function reinitialization_algs(cbs::Vector{SymbolicContinuousCallback})
-    mapreduce(
-        reinitialization_alg, vcat, cbs, init = SciMLBase.DAEInitializationAlgorithm[])
+initialize_affects(cb::AbstractCallback) = cb.initialize
+function initialize_affects(cbs::Vector{<:AbstractCallback})
+    reduce(initialize_affects, vcat, cbs; init = [])
 end
 
-initialize_affects(cb::SymbolicContinuousCallback) = cb.initialize
-function initialize_affects(cbs::Vector{SymbolicContinuousCallback})
-    mapreduce(initialize_affects, vcat, cbs, init = Equation[])
+finalize_affects(cb::AbstractCallback) = cb.finalize
+function finalize_affects(cbs::Vector{<:AbstractCallback})
+    reduce(finalize_affects, vcat, cbs; init = [])
 end
 
-finalize_affects(cb::SymbolicContinuousCallback) = cb.finalize
-function finalize_affects(cbs::Vector{SymbolicContinuousCallback})
-    mapreduce(finalize_affects, vcat, cbs, init = Equation[])
+function Base.:(==)(e1::AbstractCallback, e2::AbstractCallback)
+    (is_discrete(e1) === is_discrete(e2)) || return false
+    (isequal(e1.conditions, e2.conditions) && isequal(e1.affect, e2.affect) &&
+     isequal(e1.initialize, e2.initialize) && isequal(e1.finalize, e2.finalize)) &&
+        isequal(e1.reinitializealg, e2.reinitializealg) ||
+        return false
+    is_discrete(e1) ||
+        (isequal(e1.affect_neg, e2.affect_neg) && isequal(e1.rootfind, e2.rootfind))
 end
 
-namespace_affects(af::Vector, s) = Equation[namespace_affect(a, s) for a in af]
-namespace_affects(af::FunctionalAffect, s) = namespace_affect(af, s)
-namespace_affects(::Nothing, s) = nothing
+Base.isempty(cb::AbstractCallback) = isempty(cb.conditions)
 
-function namespace_callback(cb::SymbolicContinuousCallback, s)::SymbolicContinuousCallback
-    SymbolicContinuousCallback(;
-        eqs = namespace_equation.(equations(cb), (s,)),
-        affect = namespace_affects(affects(cb), s),
-        affect_neg = namespace_affects(affect_negs(cb), s),
-        initialize = namespace_affects(initialize_affects(cb), s),
-        finalize = namespace_affects(finalize_affects(cb), s),
-        rootfind = cb.rootfind)
-end
-
+####################################
+####### Compilation functions ######
+####################################
 """
-    continuous_events(sys::AbstractSystem)::Vector{SymbolicContinuousCallback}
+    compile_condition(cb::AbstractCallback, sys, dvs, ps; expression, kwargs...)
 
-Returns a vector of all the `continuous_events` in an abstract system and its component subsystems.
-The `SymbolicContinuousCallback`s in the returned vector are structs with two fields: `eqs` and
-`affect` which correspond to the first and second elements of a `Pair` used to define an event, i.e.
-`eqs => affect`.
+Returns a function `condition(u,t,integrator)`, condition(out,u,t,integrator)` returning the `condition(cb)`.
 """
-function continuous_events(sys::AbstractSystem)
-    cbs = get_continuous_events(sys)
-    filter(!isempty, cbs)
-
-    systems = get_systems(sys)
-    cbs = [cbs;
-           reduce(vcat,
-               (map(cb -> namespace_callback(cb, s), continuous_events(s))
-               for s in systems),
-               init = SymbolicContinuousCallback[])]
-    filter(!isempty, cbs)
-end
-
-function vars!(vars, cb::SymbolicContinuousCallback; op = Differential)
-    for eq in equations(cb)
-        vars!(vars, eq; op)
+function compile_condition(
+        cbs::Union{AbstractCallback, Vector{<:AbstractCallback}}, sys, dvs, ps;
+        eval_expression = false, eval_module = @__MODULE__, kwargs...)
+    u = map(value, dvs)
+    p = map.(value, reorder_parameters(sys, ps))
+    t = get_iv(sys)
+    condit = conditions(cbs)
+    cs = collect_constants(condit)
+    if !isempty(cs)
+        cmap = map(x -> x => getdefault(x), cs)
+        condit = substitute(condit, Dict(cmap))
     end
-    for aff in (affects(cb), affect_negs(cb), initialize_affects(cb), finalize_affects(cb))
-        if aff isa Vector{Equation}
-            for eq in aff
-                vars!(vars, eq; op)
-            end
-        elseif aff !== nothing
-            vars!(vars, aff; op)
-        end
+
+    if !is_discrete(cbs)
+        condit = reduce(vcat, flatten_equations(condit))
+        condit = condit isa AbstractVector ? [c.lhs - c.rhs for c in condit] :
+                 [condit.lhs - condit.rhs]
     end
-    return vars
-end
 
-"""
-    continuous_events_toplevel(sys::AbstractSystem)
+    fs = build_function_wrapper(
+        sys, condit, u, p..., t; kwargs..., expression = Val{false}, cse = false)
+    (f_oop, f_iip) = is_discrete(cbs) ? (fs, nothing) : fs
 
-Replicates the behaviour of `continuous_events`, but ignores events of subsystems.
-
-Notes:
-- Cannot be applied to non-complete systems.
-"""
-function continuous_events_toplevel(sys::AbstractSystem)
-    if has_parent(sys) && (parent = get_parent(sys)) !== nothing
-        return continuous_events_toplevel(parent)
-    end
-    return get_continuous_events(sys)
-end
-
-#################################### discrete events #####################################
-
-struct SymbolicDiscreteCallback
-    # condition can be one of:
-    #   Δt::Real - Periodic with period Δt
-    #   Δts::Vector{Real} - events trigger in this times (Preset)
-    #   condition::Vector{Equation} - event triggered when condition is true
-    # TODO: Iterative
-    condition::Any
-    affects::Any
-    initialize::Any
-    finalize::Any
-    reinitializealg::SciMLBase.DAEInitializationAlgorithm
-
-    function SymbolicDiscreteCallback(
-            condition, affects = NULL_AFFECT; reinitializealg = SciMLBase.CheckInit(),
-            initialize = NULL_AFFECT, finalize = NULL_AFFECT)
-        c = scalarize_condition(condition)
-        a = scalarize_affects(affects)
-        new(c, a, scalarize_affects(initialize),
-            scalarize_affects(finalize), reinitializealg)
-    end # Default affect to nothing
-end
-
-is_timed_condition(cb) = false
-is_timed_condition(::R) where {R <: Real} = true
-is_timed_condition(::V) where {V <: AbstractVector} = eltype(V) <: Real
-is_timed_condition(::Num) = false
-is_timed_condition(cb::SymbolicDiscreteCallback) = is_timed_condition(condition(cb))
-
-function scalarize_condition(condition)
-    is_timed_condition(condition) ? condition : value(scalarize(condition))
-end
-function namespace_condition(condition, s)
-    is_timed_condition(condition) ? condition : namespace_expr(condition, s)
-end
-
-scalarize_affects(affects) = scalarize(affects)
-scalarize_affects(affects::Tuple) = FunctionalAffect(affects...)
-scalarize_affects(affects::NamedTuple) = FunctionalAffect(; affects...)
-scalarize_affects(affects::FunctionalAffect) = affects
-
-SymbolicDiscreteCallback(p::Pair) = SymbolicDiscreteCallback(p[1], p[2])
-SymbolicDiscreteCallback(cb::SymbolicDiscreteCallback) = cb # passthrough
-
-function Base.show(io::IO, db::SymbolicDiscreteCallback)
-    println(io, "condition: ", db.condition)
-    println(io, "affects:")
-    if db.affects isa FunctionalAffect || db.affects isa ImperativeAffect
-        # TODO
-        println(io, " ", db.affects)
+    cond = if cbs isa AbstractVector
+        (out, u, t, integ) -> f_iip(out, u, parameter_values(integ), t)
+    elseif is_discrete(cbs)
+        (u, t, integ) -> f_oop(u, parameter_values(integ), t)
     else
-        for affect in db.affects
-            println(io, "  ", affect)
+        function (u, t, integ)
+            if DiffEqBase.isinplace(SciMLBase.get_sol(integ).prob)
+                tmp, = DiffEqBase.get_tmp_cache(integ)
+                f_iip(tmp, u, parameter_values(integ), t)
+                tmp[1]
+            else
+                f_oop(u, parameter_values(integ), t)
+            end
         end
     end
 end
 
-function Base.:(==)(e1::SymbolicDiscreteCallback, e2::SymbolicDiscreteCallback)
-    isequal(e1.condition, e2.condition) && isequal(e1.affects, e2.affects) &&
-        isequal(e1.initialize, e2.initialize) && isequal(e1.finalize, e2.finalize)
-end
-function Base.hash(cb::SymbolicDiscreteCallback, s::UInt)
-    s = hash(cb.condition, s)
-    s = cb.affects isa AbstractVector ? foldr(hash, cb.affects, init = s) :
-        hash(cb.affects, s)
-    s = cb.initialize isa AbstractVector ? foldr(hash, cb.initialize, init = s) :
-        hash(cb.initialize, s)
-    s = cb.finalize isa AbstractVector ? foldr(hash, cb.finalize, init = s) :
-        hash(cb.finalize, s)
-    s = hash(cb.reinitializealg, s)
-    return s
-end
+"""
+Compile user-defined functional affect.
+"""
+function compile_functional_affect(affect::FunctionalAffect, sys; kwargs...)
+    dvs = unknowns(sys)
+    ps = parameters(sys)
+    dvs_ind = Dict(reverse(en) for en in enumerate(dvs))
+    v_inds = map(sym -> dvs_ind[sym], unknowns(affect))
 
-condition(cb::SymbolicDiscreteCallback) = cb.condition
-function conditions(cbs::Vector{<:SymbolicDiscreteCallback})
-    reduce(vcat, condition(cb) for cb in cbs)
-end
-
-affects(cb::SymbolicDiscreteCallback) = cb.affects
-
-function affects(cbs::Vector{SymbolicDiscreteCallback})
-    reduce(vcat, affects(cb) for cb in cbs; init = [])
-end
-
-reinitialization_alg(cb::SymbolicDiscreteCallback) = cb.reinitializealg
-function reinitialization_algs(cbs::Vector{SymbolicDiscreteCallback})
-    mapreduce(
-        reinitialization_alg, vcat, cbs, init = SciMLBase.DAEInitializationAlgorithm[])
-end
-
-initialize_affects(cb::SymbolicDiscreteCallback) = cb.initialize
-function initialize_affects(cbs::Vector{SymbolicDiscreteCallback})
-    mapreduce(initialize_affects, vcat, cbs, init = Equation[])
-end
-
-finalize_affects(cb::SymbolicDiscreteCallback) = cb.finalize
-function finalize_affects(cbs::Vector{SymbolicDiscreteCallback})
-    mapreduce(finalize_affects, vcat, cbs, init = Equation[])
-end
-
-function namespace_callback(cb::SymbolicDiscreteCallback, s)::SymbolicDiscreteCallback
-    function namespace_affects(af)
-        return af isa AbstractVector ? namespace_affect.(af, Ref(s)) :
-               namespace_affect(af, s)
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+        p_inds = [(pind = parameter_index(sys, sym)) === nothing ? sym : pind
+                  for sym in parameters(affect)]
+    else
+        ps_ind = Dict(reverse(en) for en in enumerate(ps))
+        p_inds = map(sym -> get(ps_ind, sym, sym), parameters(affect))
     end
-    SymbolicDiscreteCallback(
-        namespace_condition(condition(cb), s), namespace_affects(affects(cb)),
-        reinitializealg = cb.reinitializealg, initialize = namespace_affects(initialize_affects(cb)),
-        finalize = namespace_affects(finalize_affects(cb)))
+    # HACK: filter out eliminated symbols. Not clear this is the right thing to do
+    # (MTK should keep these symbols)
+    u = filter(x -> !isnothing(x[2]), collect(zip(unknowns_syms(affect), v_inds))) |>
+        NamedTuple
+    p = filter(x -> !isnothing(x[2]), collect(zip(parameters_syms(affect), p_inds))) |>
+        NamedTuple
+
+    let u = u, p = p, user_affect = func(affect), ctx = context(affect)
+        (integ) -> begin
+            user_affect(integ, u, p, ctx)
+        end
+    end
 end
 
-SymbolicDiscreteCallbacks(cb::Pair) = SymbolicDiscreteCallback[SymbolicDiscreteCallback(cb)]
-SymbolicDiscreteCallbacks(cbs::Vector) = SymbolicDiscreteCallback.(cbs)
-SymbolicDiscreteCallbacks(cb::SymbolicDiscreteCallback) = [cb]
-SymbolicDiscreteCallbacks(cbs::Vector{<:SymbolicDiscreteCallback}) = cbs
-SymbolicDiscreteCallbacks(::Nothing) = SymbolicDiscreteCallback[]
+is_discrete(cb::AbstractCallback) = cb isa SymbolicDiscreteCallback
+is_discrete(cb::Vector{<:AbstractCallback}) = eltype(cb) isa SymbolicDiscreteCallback
+
+function generate_continuous_callbacks(sys::AbstractSystem, dvs = unknowns(sys),
+        ps = parameters(sys; initial_parameters = true); kwargs...)
+    cbs = continuous_events(sys)
+    isempty(cbs) && return nothing
+    cb_classes = Dict{Tuple{SciMLBase.RootfindOpt, SciMLBase.DAEInitializationAlgorithm},
+        Vector{SymbolicContinuousCallback}}()
+
+    # Sort the callbacks by their rootfinding method
+    for cb in cbs
+        _cbs = get!(() -> SymbolicContinuousCallback[],
+            cb_classes, (cb.rootfind, cb.reinitializealg))
+        push!(_cbs, cb)
+    end
+    sort!(OrderedDict(cb_classes), by = cb -> cb[1])
+    compiled_callbacks = [generate_callback(cb, sys; kwargs...)
+                          for ((rf, reinit), cb) in cb_classes]
+    if length(compiled_callbacks) == 1
+        return only(compiled_callbacks)
+    else
+        return CallbackSet(compiled_callbacks...)
+    end
+end
+
+function generate_discrete_callbacks(sys::AbstractSystem, dvs = unknowns(sys),
+        ps = parameters(sys; initial_parameters = true); kwargs...)
+    dbs = discrete_events(sys)
+    isempty(dbs) && return nothing
+    [generate_callback(db, sys; kwargs...) for db in dbs]
+end
+
+EMPTY_AFFECT(args...) = nothing
+
+"""
+Codegen a DifferentialEquations callback. A (set of) continuous callback with multiple equations becomes a VectorContinuousCallback.
+Continuous callbacks with only one equation will become a ContinuousCallback.
+Individual discrete callbacks become DiscreteCallback, PresetTimeCallback, PeriodicCallback depending on the case.
+"""
+function generate_callback(cbs::Vector{SymbolicContinuousCallback}, sys; kwargs...)
+    eqs = map(cb -> flatten_equations(equations(cb)), cbs)
+    num_eqs = length.(eqs)
+    (isempty(eqs) || sum(num_eqs) == 0) && return nothing
+    if sum(num_eqs) == 1
+        cb_ind = findfirst(>(0), num_eqs)
+        return generate_callback(cbs[cb_ind], sys; kwargs...)
+    end
+
+    trigger = compile_condition(
+        cbs, sys, unknowns(sys), parameters(sys; initial_parameters = true); kwargs...)
+    affects = []
+    affect_negs = []
+    inits = []
+    finals = []
+    for cb in cbs
+        affect = compile_affect(cb.affect, cb, sys; default = EMPTY_AFFECT, kwargs...)
+        push!(affects, affect)
+        affect_neg = (cb.affect_neg === cb.affect) ? affect :
+                     compile_affect(
+            cb.affect_neg, cb, sys; default = EMPTY_AFFECT, kwargs...)
+        push!(affect_negs, affect_neg)
+        push!(inits,
+            compile_affect(
+                cb.initialize, cb, sys; default = nothing, is_init = true, kwargs...))
+        push!(finals, compile_affect(cb.finalize, cb, sys; default = nothing, kwargs...))
+    end
+
+    # Since there may be different number of conditions and affects,
+    # we build a map that translates the condition eq. number to the affect number
+    eq2affect = reduce(vcat,
+        [fill(i, num_eqs[i]) for i in eachindex(affects)])
+    eqs = reduce(vcat, eqs)
+
+    affect = let eq2affect = eq2affect, affects = affects
+        function (integ, idx)
+            affects[eq2affect[idx]](integ)
+        end
+    end
+    affect_neg = let eq2affect = eq2affect, affect_negs = affect_negs
+        function (integ, idx)
+            f = affect_negs[eq2affect[idx]]
+            isnothing(f) && return
+            f(integ)
+        end
+    end
+    initialize = wrap_vector_optional_affect(inits, SciMLBase.INITIALIZE_DEFAULT)
+    finalize = wrap_vector_optional_affect(finals, SciMLBase.FINALIZE_DEFAULT)
+
+    return VectorContinuousCallback(
+        trigger, affect, affect_neg, length(eqs); initialize, finalize,
+        rootfind = cbs[1].rootfind, initializealg = cbs[1].reinitializealg)
+end
+
+function generate_callback(cb, sys; kwargs...)
+    is_timed = is_timed_condition(conditions(cb))
+    dvs = unknowns(sys)
+    ps = parameters(sys; initial_parameters = true)
+
+    trigger = is_timed ? conditions(cb) : compile_condition(cb, sys, dvs, ps; kwargs...)
+    affect = compile_affect(cb.affect, cb, sys; default = EMPTY_AFFECT, kwargs...)
+    affect_neg = if is_discrete(cb)
+        nothing
+    else
+        (cb.affect === cb.affect_neg) ? affect :
+        compile_affect(cb.affect_neg, cb, sys; default = EMPTY_AFFECT, kwargs...)
+    end
+    init = compile_affect(cb.initialize, cb, sys; default = SciMLBase.INITIALIZE_DEFAULT,
+        is_init = true, kwargs...)
+    final = compile_affect(
+        cb.finalize, cb, sys; default = SciMLBase.FINALIZE_DEFAULT, kwargs...)
+
+    initialize = isnothing(cb.initialize) ? init : ((c, u, t, i) -> init(i))
+    finalize = isnothing(cb.finalize) ? final : ((c, u, t, i) -> final(i))
+
+    if is_discrete(cb)
+        if is_timed && conditions(cb) isa AbstractVector
+            return PresetTimeCallback(trigger, affect; initialize,
+                finalize, initializealg = cb.reinitializealg)
+        elseif is_timed
+            return PeriodicCallback(
+                affect, trigger; initialize, finalize, initializealg = cb.reinitializealg)
+        else
+            return DiscreteCallback(trigger, affect; initialize,
+                finalize, initializealg = cb.reinitializealg)
+        end
+    else
+        return ContinuousCallback(trigger, affect, affect_neg; initialize, finalize,
+            rootfind = cb.rootfind, initializealg = cb.reinitializealg)
+    end
+end
+
+"""
+    compile_affect(cb::AbstractCallback, sys::AbstractSystem, dvs, ps; expression, outputidxs, kwargs...)
+
+Returns a function that takes an integrator as argument and modifies the state with the
+affect. The generated function has the signature `affect!(integrator)`.
+
+Notes
+  - `kwargs` are passed through to `Symbolics.build_function`.
+"""
+function compile_affect(
+        aff::Union{Nothing, Affect}, cb::AbstractCallback, sys::AbstractSystem;
+        default = nothing, is_init = false, kwargs...)
+    save_idxs = if !(has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing)
+        Int[]
+    else
+        get(ic.callback_to_clocks, cb, Int[])
+    end
+
+    if isnothing(aff)
+        is_init ? wrap_save_discretes(default, save_idxs) : default
+    elseif aff isa AffectSystem
+        f = compile_equational_affect(aff, sys; kwargs...)
+        wrap_save_discretes(f, save_idxs)
+    elseif aff isa FunctionalAffect || aff isa ImperativeAffect
+        f = compile_functional_affect(aff, sys; kwargs...)
+        wrap_save_discretes(f, save_idxs)
+    end
+end
+
+function wrap_save_discretes(f, save_idxs)
+    let save_idxs = save_idxs, f = f
+        if f === SciMLBase.INITIALIZE_DEFAULT
+            (c, u, t, i) -> begin
+                f(c, u, t, i)
+                for idx in save_idxs
+                    SciMLBase.save_discretes!(i, idx)
+                end
+            end
+        else
+            (i) -> begin
+                isnothing(f) || f(i)
+                for idx in save_idxs
+                    SciMLBase.save_discretes!(i, idx)
+                end
+            end
+        end
+    end
+end
+
+"""
+Initialize and finalize for VectorContinuousCallback.
+"""
+function wrap_vector_optional_affect(funs, default)
+    all(isnothing, funs) && return default
+    return let funs = funs
+        function (cb, u, t, integ)
+            for func in funs
+                isnothing(func) ? continue : func(integ)
+            end
+        end
+    end
+end
+
+function add_integrator_header(
+        sys::AbstractSystem, integrator = gensym(:MTKIntegrator), out = :u)
+    expr -> Func([DestructuredArgs(expr.args, integrator, inds = [:u, :p, :t])], [],
+        expr.body),
+    expr -> Func(
+        [DestructuredArgs(expr.args, integrator, inds = [out, :u, :p, :t])], [],
+        expr.body)
+end
+
+"""
+Compile an affect defined by a set of equations. Systems with algebraic equations will solve implicit discrete problems to obtain their next state. Systems without will generate functions that perform explicit updates.
+"""
+function compile_equational_affect(
+        aff::Union{AffectSystem, Vector{Equation}}, sys; reset_jumps = false, kwargs...)
+    if aff isa AbstractVector
+        aff = make_affect(
+            aff; iv = get_iv(sys), warn_no_algebraic = false)
+    end
+    affsys = system(aff)
+    ps_to_update = discretes(aff)
+    dvs_to_update = setdiff(unknowns(aff), getfield.(observed(sys), :lhs))
+    aff_map = aff_to_sys(aff)
+    sys_map = Dict([v => k for (k, v) in aff_map])
+
+    if isempty(equations(affsys))
+        update_eqs = Symbolics.fast_substitute(
+            observed(affsys), Dict([p => unPre(p) for p in parameters(affsys)]))
+        rhss = map(x -> x.rhs, update_eqs)
+        lhss = map(x -> aff_map[x.lhs], update_eqs)
+        is_p = [lhs ∈ Set(ps_to_update) for lhs in lhss]
+        is_u = [lhs ∈ Set(dvs_to_update) for lhs in lhss]
+        dvs = unknowns(sys)
+        ps = parameters(sys)
+        t = get_iv(sys)
+
+        u_idxs = indexin((@view lhss[is_u]), dvs)
+
+        wrap_mtkparameters = has_index_cache(sys) && (get_index_cache(sys) !== nothing)
+        p_idxs = if wrap_mtkparameters
+            [parameter_index(sys, p) for (i, p) in enumerate(lhss)
+             if is_p[i]]
+        else
+            indexin((@view lhss[is_p]), ps)
+        end
+        _ps = reorder_parameters(sys, ps)
+        integ = gensym(:MTKIntegrator)
+
+        u_up, u_up! = build_function_wrapper(sys, (@view rhss[is_u]), dvs, _ps..., t;
+            wrap_code = add_integrator_header(sys, integ, :u),
+            expression = Val{false}, outputidxs = u_idxs, wrap_mtkparameters, cse = false)
+        p_up, p_up! = build_function_wrapper(sys, (@view rhss[is_p]), dvs, _ps..., t;
+            wrap_code = add_integrator_header(sys, integ, :p),
+            expression = Val{false}, outputidxs = p_idxs, wrap_mtkparameters, cse = false)
+
+        return let dvs_to_update = dvs_to_update, ps_to_update = ps_to_update,
+            reset_jumps = reset_jumps, u_up! = u_up!, p_up! = p_up!
+
+            function explicit_affect!(integ)
+                isempty(dvs_to_update) || u_up!(integ)
+                isempty(ps_to_update) || p_up!(integ)
+                reset_jumps && reset_aggregated_jumps!(integ)
+            end
+        end
+    else
+        return let dvs_to_update = dvs_to_update, aff_map = aff_map, sys_map = sys_map,
+            affsys = affsys, ps_to_update = ps_to_update, aff = aff, sys = sys
+
+            dvs_to_access = [aff_map[u] for u in unknowns(affsys)]
+            ps_to_access = [unPre(p) for p in parameters(affsys)]
+
+            affu_getter = getsym(sys, dvs_to_access)
+            affp_getter = getsym(sys, ps_to_access)
+            affu_setter! = setsym(affsys, unknowns(affsys))
+            affp_setter! = setsym(affsys, parameters(affsys))
+            u_setter! = setsym(sys, dvs_to_update)
+            p_setter! = setsym(sys, ps_to_update)
+            u_getter = getsym(affsys, [sys_map[u] for u in dvs_to_update])
+            p_getter = getsym(affsys, [sys_map[p] for p in ps_to_update])
+
+            affprob = ImplicitDiscreteProblem(affsys, [dv => 0 for dv in unknowns(affsys)],
+                (0, 0), [p => 0.0 for p in parameters(affsys)];
+                build_initializeprob = false, check_length = false)
+
+            function implicit_affect!(integ)
+                new_u0 = affu_getter(integ)
+                affu_setter!(affprob, new_u0)
+                new_ps = affp_getter(integ)
+                affp_setter!(affprob, new_ps)
+
+                affprob = remake(
+                    affprob, tspan = (integ.t, integ.t))
+                affsol = init(affprob, IDSolve())
+                (check_error(affsol) === ReturnCode.InitialFailure) &&
+                    throw(UnsolvableCallbackError(all_equations(aff)))
+
+                u_setter!(integ, u_getter(affsol))
+                p_setter!(integ, p_getter(affsol))
+            end
+        end
+    end
+end
+
+struct UnsolvableCallbackError
+    eqs::Vector{Equation}
+end
+
+function Base.showerror(io::IO, err::UnsolvableCallbackError)
+    println(io,
+        "The callback defined by the following equations:\n\n$(join(err.eqs, "\n"))\n\nis not solvable. Please check that the algebraic equations and affect equations are correct, and that all parameters intended to be changed are passed in as `discrete_parameters`.")
+end
+
+merge_cb(::Nothing, ::Nothing) = nothing
+merge_cb(::Nothing, x) = merge_cb(x, nothing)
+merge_cb(x, ::Nothing) = x
+merge_cb(x, y) = CallbackSet(x, y)
+
+"""
+Generate the CallbackSet for a ODESystem or SDESystem.
+"""
+function process_events(sys; callback = nothing, kwargs...)
+    contin_cbs = generate_continuous_callbacks(sys; kwargs...)
+    discrete_cbs = generate_discrete_callbacks(sys; kwargs...)
+    cb = merge_cb(contin_cbs, callback)
+    (discrete_cbs === nothing) ? cb : CallbackSet(contin_cbs, discrete_cbs...)
+end
 
 """
     discrete_events(sys::AbstractSystem) :: Vector{SymbolicDiscreteCallback}
@@ -496,37 +986,23 @@ Returns a vector of all the `discrete_events` in an abstract system and its comp
 The `SymbolicDiscreteCallback`s in the returned vector are structs with two fields: `condition` and
 `affect` which correspond to the first and second elements of a `Pair` used to define an event, i.e.
 `condition => affect`.
+
+See also `get_discrete_events`, which only returns the events of the top-level system.
 """
 function discrete_events(sys::AbstractSystem)
-    cbs = get_discrete_events(sys)
+    obs = get_discrete_events(sys)
     systems = get_systems(sys)
-    cbs = [cbs;
+    cbs = [obs;
            reduce(vcat,
                (map(cb -> namespace_callback(cb, s), discrete_events(s)) for s in systems),
                init = SymbolicDiscreteCallback[])]
     cbs
 end
 
-function vars!(vars, cb::SymbolicDiscreteCallback; op = Differential)
-    if symbolic_type(cb.condition) == NotSymbolic
-        if cb.condition isa AbstractArray
-            for eq in cb.condition
-                vars!(vars, eq; op)
-            end
-        end
-    else
-        vars!(vars, cb.condition; op)
-    end
-    for aff in (cb.affects, cb.initialize, cb.finalize)
-        if aff isa Vector{Equation}
-            for eq in aff
-                vars!(vars, eq; op)
-            end
-        elseif aff !== nothing
-            vars!(vars, aff; op)
-        end
-    end
-    return vars
+has_discrete_events(sys::AbstractSystem) = isdefined(sys, :discrete_events)
+function get_discrete_events(sys::AbstractSystem)
+    has_discrete_events(sys) || return SymbolicDiscreteCallback[]
+    getfield(sys, :discrete_events)
 end
 
 """
@@ -544,598 +1020,58 @@ function discrete_events_toplevel(sys::AbstractSystem)
     return get_discrete_events(sys)
 end
 
-################################# compilation functions ####################################
+"""
+    continuous_events(sys::AbstractSystem)::Vector{SymbolicContinuousCallback}
 
-# handles ensuring that affect! functions work with integrator arguments
-function add_integrator_header(
-        sys::AbstractSystem, integrator = gensym(:MTKIntegrator), out = :u)
-    expr -> Func([DestructuredArgs(expr.args, integrator, inds = [:u, :p, :t])], [],
-        expr.body),
-    expr -> Func(
-        [DestructuredArgs(expr.args, integrator, inds = [out, :u, :p, :t])], [],
-        expr.body)
+Returns a vector of all the `continuous_events` in an abstract system and its component subsystems.
+The `SymbolicContinuousCallback`s in the returned vector are structs with two fields: `eqs` and
+`affect` which correspond to the first and second elements of a `Pair` used to define an event, i.e.
+`eqs => affect`.
+
+See also `get_continuous_events`, which only returns the events of the top-level system.
+"""
+function continuous_events(sys::AbstractSystem)
+    obs = get_continuous_events(sys)
+    filter(!isempty, obs)
+
+    systems = get_systems(sys)
+    cbs = [obs;
+           reduce(vcat,
+               (map(o -> namespace_callback(o, s), continuous_events(s)) for s in systems),
+               init = SymbolicContinuousCallback[])]
+    filter(!isempty, cbs)
 end
 
-function condition_header(sys::AbstractSystem, integrator = gensym(:MTKIntegrator))
-    expr -> Func(
-        [expr.args[1], expr.args[2],
-            DestructuredArgs(expr.args[3:end], integrator, inds = [:p])],
-        [],
-        expr.body)
-end
-
-function callback_save_header(sys::AbstractSystem, cb)
-    if !(has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing)
-        return (identity, identity)
-    end
-    save_idxs = get(ic.callback_to_clocks, cb, Int[])
-    isempty(save_idxs) && return (identity, identity)
-
-    wrapper = function (expr)
-        return Func(expr.args, [],
-            LiteralExpr(quote
-                $(expr.body)
-                save_idxs = $(save_idxs)
-                for idx in save_idxs
-                    $(SciMLBase.save_discretes!)($(expr.args[1]), idx)
-                end
-            end))
-    end
-
-    return wrapper, wrapper
+has_continuous_events(sys::AbstractSystem) = isdefined(sys, :continuous_events)
+function get_continuous_events(sys::AbstractSystem)
+    has_continuous_events(sys) || return SymbolicContinuousCallback[]
+    getfield(sys, :continuous_events)
 end
 
 """
-    compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps; expression, kwargs...)
+    continuous_events_toplevel(sys::AbstractSystem)
 
-Returns a function `condition(u,t,integrator)` returning the `condition(cb)`.
+Replicates the behaviour of `continuous_events`, but ignores events of subsystems.
 
-Notes
-
-  - `expression = Val{true}`, causes the generated function to be returned as an expression.
-    If  set to `Val{false}` a `RuntimeGeneratedFunction` will be returned.
-  - `kwargs` are passed through to `Symbolics.build_function`.
+Notes:
+- Cannot be applied to non-complete systems.
 """
-function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
-        expression = Val{true}, eval_expression = false, eval_module = @__MODULE__, kwargs...)
-    u = map(value, dvs)
-    p = map.(value, reorder_parameters(sys, ps))
-    t = get_iv(sys)
-    condit = condition(cb)
-    cs = collect_constants(condit)
-    if !isempty(cs)
-        cmap = map(x -> x => getdefault(x), cs)
-        condit = substitute(condit, cmap)
+function continuous_events_toplevel(sys::AbstractSystem)
+    if has_parent(sys) && (parent = get_parent(sys)) !== nothing
+        return continuous_events_toplevel(parent)
     end
-    expr = build_function_wrapper(sys,
-        condit, u, t, p...; expression = Val{true},
-        p_start = 3, p_end = length(p) + 2,
-        wrap_code = condition_header(sys),
-        kwargs...)
-    if expression == Val{true}
-        return expr
-    end
-    return eval_or_rgf(expr; eval_expression, eval_module)
-end
-
-function compile_affect(cb::SymbolicContinuousCallback, args...; kwargs...)
-    compile_affect(affects(cb), cb, args...; kwargs...)
+    return get_continuous_events(sys)
 end
 
 """
-    compile_affect(eqs::Vector{Equation}, sys, dvs, ps; expression, outputidxs, kwargs...)
-    compile_affect(cb::SymbolicContinuousCallback, args...; kwargs...)
-
-Returns a function that takes an integrator as argument and modifies the state with the
-affect. The generated function has the signature `affect!(integrator)`.
-
-Notes
-
-  - `expression = Val{true}`, causes the generated function to be returned as an expression.
-    If  set to `Val{false}` a `RuntimeGeneratedFunction` will be returned.
-  - `outputidxs`, a vector of indices of the output variables which should correspond to
-    `unknowns(sys)`. If provided, checks that the LHS of affect equations are variables are
-    dropped, i.e. it is assumed these indices are correct and affect equations are
-    well-formed.
-  - `kwargs` are passed through to `Symbolics.build_function`.
+Process the symbolic events of a system.
 """
-function compile_affect(eqs::Vector{Equation}, cb, sys, dvs, ps; outputidxs = nothing,
-        expression = Val{true}, checkvars = true, eval_expression = false,
-        eval_module = @__MODULE__,
-        postprocess_affect_expr! = nothing, kwargs...)
-    if isempty(eqs)
-        if expression == Val{true}
-            return :((args...) -> ())
-        else
-            return (args...) -> () # We don't do anything in the callback, we're just after the event
-        end
-    else
-        eqs = flatten_equations(eqs)
-        rhss = map(x -> x.rhs, eqs)
-        outvar = :u
-        if outputidxs === nothing
-            lhss = map(x -> x.lhs, eqs)
-            all(isvariable, lhss) ||
-                error("Non-variable symbolic expression found on the left hand side of an affect equation. Such equations must be of the form variable ~ symbolic expression for the new value of the variable.")
-            update_vars = collect(Iterators.flatten(map(ModelingToolkit.vars, lhss))) # these are the ones we're changing
-            length(update_vars) == length(unique(update_vars)) == length(eqs) ||
-                error("affected variables not unique, each unknown can only be affected by one equation for a single `root_eqs => affects` pair.")
-            alleq = all(isequal(isparameter(first(update_vars))),
-                Iterators.map(isparameter, update_vars))
-            if !isparameter(first(lhss)) && alleq
-                unknownind = Dict(reverse(en) for en in enumerate(dvs))
-                update_inds = map(sym -> unknownind[sym], update_vars)
-            elseif isparameter(first(lhss)) && alleq
-                if has_index_cache(sys) && get_index_cache(sys) !== nothing
-                    update_inds = map(update_vars) do sym
-                        return parameter_index(sys, sym)
-                    end
-                else
-                    psind = Dict(reverse(en) for en in enumerate(ps))
-                    update_inds = map(sym -> psind[sym], update_vars)
-                end
-                outvar = :p
-            else
-                error("Error, building an affect function for a callback that wants to modify both parameters and unknowns. This is not currently allowed in one individual callback.")
-            end
-        else
-            update_inds = outputidxs
-        end
-
-        _ps = ps
-        ps = reorder_parameters(sys, ps)
-        if checkvars
-            u = map(value, dvs)
-            p = map.(value, ps)
-        else
-            u = dvs
-            p = ps
-        end
-        t = get_iv(sys)
-        integ = gensym(:MTKIntegrator)
-        rf_oop, rf_ip = build_function_wrapper(
-            sys, rhss, u, p..., t; expression = Val{true},
-            wrap_code = callback_save_header(sys, cb) .∘
-                        add_integrator_header(sys, integ, outvar),
-            outputidxs = update_inds,
-            create_bindings = false,
-            kwargs..., cse = false)
-        # applied user-provided function to the generated expression
-        if postprocess_affect_expr! !== nothing
-            postprocess_affect_expr!(rf_ip, integ)
-        end
-        if expression == Val{false}
-            return eval_or_rgf(rf_ip; eval_expression, eval_module)
-        end
-        return rf_ip
-    end
-end
-
-function generate_rootfinding_callback(sys::AbstractTimeDependentSystem,
-        dvs = unknowns(sys), ps = parameters(sys; initial_parameters = true); kwargs...)
-    cbs = continuous_events(sys)
-    isempty(cbs) && return nothing
-    generate_rootfinding_callback(cbs, sys, dvs, ps; kwargs...)
-end
-"""
-Generate a single rootfinding callback; this happens if there is only one equation in `cbs` passed to
-generate_rootfinding_callback and thus we can produce a ContinuousCallback instead of a VectorContinuousCallback.
-"""
-function generate_single_rootfinding_callback(
-        eq, cb, sys::AbstractTimeDependentSystem, dvs = unknowns(sys),
-        ps = parameters(sys; initial_parameters = true); kwargs...)
-    if !isequal(eq.lhs, 0)
-        eq = 0 ~ eq.lhs - eq.rhs
-    end
-
-    rf_oop, rf_ip = generate_custom_function(
-        sys, [eq.rhs], dvs, ps; expression = Val{false}, kwargs..., cse = false)
-    affect_function = compile_affect_fn(cb, sys, dvs, ps, kwargs)
-    cond = function (u, t, integ)
-        if DiffEqBase.isinplace(integ.sol.prob)
-            tmp, = DiffEqBase.get_tmp_cache(integ)
-            rf_ip(tmp, u, parameter_values(integ), t)
-            tmp[1]
-        else
-            rf_oop(u, parameter_values(integ), t)
-        end
-    end
-    user_initfun = isnothing(affect_function.initialize) ? SciMLBase.INITIALIZE_DEFAULT :
-                   (c, u, t, i) -> affect_function.initialize(i)
-    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing &&
-       (save_idxs = get(ic.callback_to_clocks, cb, nothing)) !== nothing
-        initfn = let save_idxs = save_idxs
-            function (cb, u, t, integrator)
-                user_initfun(cb, u, t, integrator)
-                for idx in save_idxs
-                    SciMLBase.save_discretes!(integrator, idx)
-                end
-            end
-        end
-    else
-        initfn = user_initfun
-    end
-
-    return ContinuousCallback(
-        cond, affect_function.affect, affect_function.affect_neg, rootfind = cb.rootfind,
-        initialize = initfn,
-        finalize = isnothing(affect_function.finalize) ? SciMLBase.FINALIZE_DEFAULT :
-                   (c, u, t, i) -> affect_function.finalize(i),
-        initializealg = reinitialization_alg(cb))
-end
-
-function generate_vector_rootfinding_callback(
-        cbs, sys::AbstractTimeDependentSystem, dvs = unknowns(sys),
-        ps = parameters(sys; initial_parameters = true); rootfind = SciMLBase.RightRootFind,
-        reinitialization = SciMLBase.CheckInit(), kwargs...)
-    eqs = map(cb -> flatten_equations(cb.eqs), cbs)
-    num_eqs = length.(eqs)
-    # fuse equations to create VectorContinuousCallback
-    eqs = reduce(vcat, eqs)
-    # rewrite all equations as 0 ~ interesting stuff
-    eqs = map(eqs) do eq
-        isequal(eq.lhs, 0) && return eq
-        0 ~ eq.lhs - eq.rhs
-    end
-
-    rhss = map(x -> x.rhs, eqs)
-    _, rf_ip = generate_custom_function(
-        sys, rhss, dvs, ps; expression = Val{false}, kwargs..., cse = false)
-
-    affect_functions = @NamedTuple{
-        affect::Function,
-        affect_neg::Union{Function, Nothing},
-        initialize::Union{Function, Nothing},
-        finalize::Union{Function, Nothing}}[
-                                            compile_affect_fn(cb, sys, dvs, ps, kwargs)
-                                            for cb in cbs]
-    cond = function (out, u, t, integ)
-        rf_ip(out, u, parameter_values(integ), t)
-    end
-
-    # since there may be different number of conditions and affects,
-    # we build a map that translates the condition eq. number to the affect number
-    eq_ind2affect = reduce(vcat,
-        [fill(i, num_eqs[i]) for i in eachindex(affect_functions)])
-    @assert length(eq_ind2affect) == length(eqs)
-    @assert maximum(eq_ind2affect) == length(affect_functions)
-
-    affect = let affect_functions = affect_functions, eq_ind2affect = eq_ind2affect
-        function (integ, eq_ind) # eq_ind refers to the equation index that triggered the event, each event has num_eqs[i] equations
-            affect_functions[eq_ind2affect[eq_ind]].affect(integ)
-        end
-    end
-    affect_neg = let affect_functions = affect_functions, eq_ind2affect = eq_ind2affect
-        function (integ, eq_ind) # eq_ind refers to the equation index that triggered the event, each event has num_eqs[i] equations
-            affect_neg = affect_functions[eq_ind2affect[eq_ind]].affect_neg
-            if isnothing(affect_neg)
-                return # skip if the neg function doesn't exist - don't want to split this into a separate VCC because that'd break ordering
-            end
-            affect_neg(integ)
-        end
-    end
-    function handle_optional_setup_fn(funs, default)
-        if all(isnothing, funs)
-            return default
-        else
-            return let funs = funs
-                function (cb, u, t, integ)
-                    for func in funs
-                        if isnothing(func)
-                            continue
-                        else
-                            func(integ)
-                        end
-                    end
-                end
-            end
-        end
-    end
-    initialize = nothing
-    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        initialize = handle_optional_setup_fn(
-            map(cbs, affect_functions) do cb, fn
-                if (save_idxs = get(ic.callback_to_clocks, cb, nothing)) !== nothing
-                    let save_idxs = save_idxs
-                        custom_init = fn.initialize
-                        (i) -> begin
-                            !isnothing(custom_init) && custom_init(i)
-                            for idx in save_idxs
-                                SciMLBase.save_discretes!(i, idx)
-                            end
-                        end
-                    end
-                else
-                    fn.initialize
-                end
-            end,
-            SciMLBase.INITIALIZE_DEFAULT)
-
-    else
-        initialize = handle_optional_setup_fn(
-            map(fn -> fn.initialize, affect_functions), SciMLBase.INITIALIZE_DEFAULT)
-    end
-
-    finalize = handle_optional_setup_fn(
-        map(fn -> fn.finalize, affect_functions), SciMLBase.FINALIZE_DEFAULT)
-    return VectorContinuousCallback(
-        cond, affect, affect_neg, length(eqs), rootfind = rootfind,
-        initialize = initialize, finalize = finalize, initializealg = reinitialization)
-end
-
-"""
-Compile a single continuous callback affect function(s).
-"""
-function compile_affect_fn(cb, sys::AbstractTimeDependentSystem, dvs, ps, kwargs)
-    eq_aff = affects(cb)
-    eq_neg_aff = affect_negs(cb)
-    affect = compile_affect(eq_aff, cb, sys, dvs, ps; expression = Val{false}, kwargs...)
-    function compile_optional_affect(aff, default = nothing)
-        if isnothing(aff) || aff == default
-            return nothing
-        else
-            return compile_affect(aff, cb, sys, dvs, ps; expression = Val{false}, kwargs...)
-        end
-    end
-    if eq_neg_aff === eq_aff
-        affect_neg = affect
-    else
-        affect_neg = _compile_optional_affect(
-            NULL_AFFECT, eq_neg_aff, cb, sys, dvs, ps; kwargs...)
-    end
-    initialize = _compile_optional_affect(
-        NULL_AFFECT, initialize_affects(cb), cb, sys, dvs, ps; kwargs...)
-    finalize = _compile_optional_affect(
-        NULL_AFFECT, finalize_affects(cb), cb, sys, dvs, ps; kwargs...)
-    (affect = affect, affect_neg = affect_neg, initialize = initialize, finalize = finalize)
-end
-
-function generate_rootfinding_callback(cbs, sys::AbstractTimeDependentSystem,
-        dvs = unknowns(sys), ps = parameters(sys; initial_parameters = true); kwargs...)
-    eqs = map(cb -> flatten_equations(cb.eqs), cbs)
-    num_eqs = length.(eqs)
-    total_eqs = sum(num_eqs)
-    (isempty(eqs) || total_eqs == 0) && return nothing
-    if total_eqs == 1
-        # find the callback with only one eq
-        cb_ind = findfirst(>(0), num_eqs)
-        if isnothing(cb_ind)
-            error("Inconsistent state in affect compilation; one equation but no callback with equations?")
-        end
-        cb = cbs[cb_ind]
-        return generate_single_rootfinding_callback(cb.eqs[], cb, sys, dvs, ps; kwargs...)
-    end
-
-    # group the cbs by what rootfind op they use
-    # groupby would be very useful here, but alas
-    cb_classes = Dict{
-        @NamedTuple{
-            rootfind::SciMLBase.RootfindOpt,
-            reinitialization::SciMLBase.DAEInitializationAlgorithm}, Vector{SymbolicContinuousCallback}}()
-    for cb in cbs
-        push!(
-            get!(() -> SymbolicContinuousCallback[], cb_classes,
-                (
-                    rootfind = cb.rootfind,
-                    reinitialization = reinitialization_alg(cb))),
-            cb)
-    end
-
-    # generate the callbacks out; we sort by the equivalence class to ensure a deterministic preference order
-    compiled_callbacks = map(collect(pairs(sort!(
-        OrderedDict(cb_classes); by = p -> p.rootfind)))) do (equiv_class, cbs_in_class)
-        return generate_vector_rootfinding_callback(
-            cbs_in_class, sys, dvs, ps; rootfind = equiv_class.rootfind,
-            reinitialization = equiv_class.reinitialization, kwargs...)
-    end
-    if length(compiled_callbacks) == 1
-        return compiled_callbacks[]
-    else
-        return CallbackSet(compiled_callbacks...)
-    end
-end
-
-function compile_user_affect(affect::FunctionalAffect, cb, sys, dvs, ps; kwargs...)
-    dvs_ind = Dict(reverse(en) for en in enumerate(dvs))
-    v_inds = map(sym -> dvs_ind[sym], unknowns(affect))
-
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        p_inds = [if (pind = parameter_index(sys, sym)) === nothing
-                      sym
-                  else
-                      pind
-                  end
-                  for sym in parameters(affect)]
-    else
-        ps_ind = Dict(reverse(en) for en in enumerate(ps))
-        p_inds = map(sym -> get(ps_ind, sym, sym), parameters(affect))
-    end
-    # HACK: filter out eliminated symbols. Not clear this is the right thing to do
-    # (MTK should keep these symbols)
-    u = filter(x -> !isnothing(x[2]), collect(zip(unknowns_syms(affect), v_inds))) |>
-        NamedTuple
-    p = filter(x -> !isnothing(x[2]), collect(zip(parameters_syms(affect), p_inds))) |>
-        NamedTuple
-
-    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        save_idxs = get(ic.callback_to_clocks, cb, Int[])
-    else
-        save_idxs = Int[]
-    end
-    let u = u, p = p, user_affect = func(affect), ctx = context(affect),
-        save_idxs = save_idxs
-
-        function (integ)
-            user_affect(integ, u, p, ctx)
-            for idx in save_idxs
-                SciMLBase.save_discretes!(integ, idx)
-            end
-        end
-    end
-end
-
-function invalid_variables(sys, expr)
-    filter(x -> !any(isequal(x), all_symbols(sys)), reduce(vcat, vars(expr); init = []))
-end
-function unassignable_variables(sys, expr)
-    assignable_syms = reduce(
-        vcat, Symbolics.scalarize.(vcat(
-            unknowns(sys), parameters(sys; initial_parameters = true)));
-        init = [])
-    written = reduce(vcat, Symbolics.scalarize.(vars(expr)); init = [])
-    return filter(
-        x -> !any(isequal(x), assignable_syms), written)
-end
-
-@generated function _generated_writeback(integ, setters::NamedTuple{NS1, <:Tuple},
-        values::NamedTuple{NS2, <:Tuple}) where {NS1, NS2}
-    setter_exprs = []
-    for name in NS2
-        if !(name in NS1)
-            missing_name = "Tried to write back to $name from affect; only declared states ($NS1) may be written to."
-            error(missing_name)
-        end
-        push!(setter_exprs, :(setters.$name(integ, values.$name)))
-    end
-    return :(begin
-        $(setter_exprs...)
-    end)
-end
-
-function check_assignable(sys, sym)
-    if symbolic_type(sym) == ScalarSymbolic()
-        is_variable(sys, sym) || is_parameter(sys, sym)
-    elseif symbolic_type(sym) == ArraySymbolic()
-        is_variable(sys, sym) || is_parameter(sys, sym) ||
-            all(x -> check_assignable(sys, x), collect(sym))
-    elseif sym isa Union{AbstractArray, Tuple}
-        all(x -> check_assignable(sys, x), sym)
-    else
-        false
-    end
-end
-
-function compile_affect(affect::FunctionalAffect, cb, sys, dvs, ps; kwargs...)
-    compile_user_affect(affect, cb, sys, dvs, ps; kwargs...)
-end
-function _compile_optional_affect(default, aff, cb, sys, dvs, ps; kwargs...)
-    if isnothing(aff) || aff == default
-        return nothing
-    else
-        return compile_affect(aff, cb, sys, dvs, ps; expression = Val{false}, kwargs...)
-    end
-end
-function generate_timed_callback(cb, sys, dvs, ps; postprocess_affect_expr! = nothing,
-        kwargs...)
-    cond = condition(cb)
-    as = compile_affect(affects(cb), cb, sys, dvs, ps; expression = Val{false},
-        postprocess_affect_expr!, kwargs...)
-
-    user_initfun = _compile_optional_affect(
-        NULL_AFFECT, initialize_affects(cb), cb, sys, dvs, ps; kwargs...)
-    user_finfun = _compile_optional_affect(
-        NULL_AFFECT, finalize_affects(cb), cb, sys, dvs, ps; kwargs...)
-    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing &&
-       (save_idxs = get(ic.callback_to_clocks, cb, nothing)) !== nothing
-        initfn = let
-            save_idxs = save_idxs
-            initfun = user_initfun
-            function (cb, u, t, integrator)
-                if !isnothing(initfun)
-                    initfun(integrator)
-                end
-                for idx in save_idxs
-                    SciMLBase.save_discretes!(integrator, idx)
-                end
-            end
-        end
-    else
-        initfn = isnothing(user_initfun) ? SciMLBase.INITIALIZE_DEFAULT :
-                 (_, _, _, i) -> user_initfun(i)
-    end
-    finfun = isnothing(user_finfun) ? SciMLBase.FINALIZE_DEFAULT :
-             (_, _, _, i) -> user_finfun(i)
-    if cond isa AbstractVector
-        # Preset Time
-        return PresetTimeCallback(
-            cond, as; initialize = initfn, finalize = finfun,
-            initializealg = reinitialization_alg(cb))
-    else
-        # Periodic
-        return PeriodicCallback(
-            as, cond; initialize = initfn, finalize = finfun,
-            initializealg = reinitialization_alg(cb))
-    end
-end
-
-function generate_discrete_callback(cb, sys, dvs, ps; postprocess_affect_expr! = nothing,
-        kwargs...)
-    if is_timed_condition(cb)
-        return generate_timed_callback(cb, sys, dvs, ps; postprocess_affect_expr!,
-            kwargs...)
-    else
-        c = compile_condition(cb, sys, dvs, ps; expression = Val{false}, kwargs...)
-        as = compile_affect(affects(cb), cb, sys, dvs, ps; expression = Val{false},
-            postprocess_affect_expr!, kwargs...)
-
-        user_initfun = _compile_optional_affect(
-            NULL_AFFECT, initialize_affects(cb), cb, sys, dvs, ps; kwargs...)
-        user_finfun = _compile_optional_affect(
-            NULL_AFFECT, finalize_affects(cb), cb, sys, dvs, ps; kwargs...)
-        if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing &&
-           (save_idxs = get(ic.callback_to_clocks, cb, nothing)) !== nothing
-            initfn = let save_idxs = save_idxs, initfun = user_initfun
-                function (cb, u, t, integrator)
-                    if !isnothing(initfun)
-                        initfun(integrator)
-                    end
-                    for idx in save_idxs
-                        SciMLBase.save_discretes!(integrator, idx)
-                    end
-                end
-            end
-        else
-            initfn = isnothing(user_initfun) ? SciMLBase.INITIALIZE_DEFAULT :
-                     (_, _, _, i) -> user_initfun(i)
-        end
-        finfun = isnothing(user_finfun) ? SciMLBase.FINALIZE_DEFAULT :
-                 (_, _, _, i) -> user_finfun(i)
-        return DiscreteCallback(
-            c, as; initialize = initfn, finalize = finfun,
-            initializealg = reinitialization_alg(cb))
-    end
-end
-
-function generate_discrete_callbacks(sys::AbstractSystem, dvs = unknowns(sys),
-        ps = parameters(sys; initial_parameters = true); kwargs...)
-    has_discrete_events(sys) || return nothing
-    symcbs = discrete_events(sys)
-    isempty(symcbs) && return nothing
-
-    dbs = map(symcbs) do cb
-        generate_discrete_callback(cb, sys, dvs, ps; kwargs...)
-    end
-
-    dbs
-end
-
-merge_cb(::Nothing, ::Nothing) = nothing
-merge_cb(::Nothing, x) = merge_cb(x, nothing)
-merge_cb(x, ::Nothing) = x
-merge_cb(x, y) = CallbackSet(x, y)
-
-function process_events(sys; callback = nothing, kwargs...)
-    if has_continuous_events(sys) && !isempty(continuous_events(sys))
-        contin_cb = generate_rootfinding_callback(sys; kwargs...)
-    else
-        contin_cb = nothing
-    end
-    if has_discrete_events(sys) && !isempty(discrete_events(sys))
-        discrete_cb = generate_discrete_callbacks(sys; kwargs...)
-    else
-        discrete_cb = nothing
-    end
-
-    cb = merge_cb(contin_cb, callback)
-    (discrete_cb === nothing) ? cb : CallbackSet(contin_cb, discrete_cb...)
+function create_symbolic_events(cont_events, disc_events, sys_eqs, iv)
+    alg_eqs = filter(eq -> eq.lhs isa Union{Symbolic, Number} && !is_diff_equation(eq),
+        sys_eqs)
+    cont_callbacks = to_cb_vector(cont_events; CB_TYPE = SymbolicContinuousCallback,
+        iv = iv, alg_eqs = alg_eqs, warn_no_algebraic = false)
+    disc_callbacks = to_cb_vector(disc_events; CB_TYPE = SymbolicDiscreteCallback,
+        iv = iv, alg_eqs = alg_eqs, warn_no_algebraic = false)
+    cont_callbacks, disc_callbacks
 end
