@@ -257,7 +257,7 @@ end
 @variables x(t) y(t)
 k = ShiftIndex(t)
 @named sys = DiscreteSystem([x ~ x^2 + y^2, y ~ x(k - 1) + y(k - 1)], t)
-@test_throws ["algebraic equations", "not yet supported"] structural_simplify(sys)
+@test_throws ["algebraic equations", "ImplicitDiscreteSystem"] structural_simplify(sys)
 
 @testset "Passing `nothing` to `u0`" begin
     @variables x(t) = 1
