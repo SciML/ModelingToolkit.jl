@@ -52,7 +52,7 @@ end
 
 function change_independent_variable(sys::AbstractODESystem, iv, eq = nothing; verbose = false, kwargs...)
     iv1 = get_iv(sys) # e.g. t
-    iv2name = nameof(iv) # TODO: handle namespacing?
+    iv2name = nameof(operation(unwrap(iv))) # TODO: handle namespacing?
     iv2, = @independent_variables $iv2name # e.g. a
     iv2func, = @variables $iv2name(iv1) # e.g. a(t)
     D1 = Differential(iv1)
