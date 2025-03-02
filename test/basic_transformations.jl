@@ -25,6 +25,15 @@ D = Differential(t)
     @test sol[end, end] ≈ 1.0742818931017244
 end
 
+@testset "Change independent variable (trivial)" begin
+    @variables x(t) y(t)
+    eqs1 = [D(D(x)) ~ D(x) + x, D(y) ~ 1]
+    M1 = ODESystem(eqs1, t; name = :M) |> complete
+    M2 = ModelingToolkit.change_independent_variable(M1, M1.y)
+    eqs2 = substitute(equations(M2), M2.y => M1.t) # system should be equivalent when parametrized with y (since D(y) ~ 1), so substitute back ...
+    @test eqs1[1] == only(eqs2) # ... and check that the equations are unmodified
+end
+
 @testset "Change independent variable" begin
     @variables x(t) y(t) z(t) s(t)
     eqs = [
@@ -75,7 +84,7 @@ end
 @testset "Change independent variable (simple)" begin
     @variables x(t)
     Mt = ODESystem([D(x) ~ 2*x], t; name = :M) |> complete
-    Mx = ModelingToolkit.change_independent_variable(Mt, Mt.x)
+    Mx = ModelingToolkit.change_independent_variable(Mt, Mt.x; dummies = true)
     @test (@variables x x_t(x) x_tt(x); Set(equations(Mx)) == Set([x_t ~ 2x, x_tt ~ 4x]))
 end
 
@@ -83,10 +92,10 @@ end
     @variables x(t) y(t)
     @parameters g v # gravitational acceleration and constant horizontal velocity
     Mt = ODESystem([D(D(y)) ~ -g, D(x) ~ v], t; name = :M) |> complete # gives (x, y) as function of t, ...
-    Mx = ModelingToolkit.change_independent_variable(Mt, Mt.x) # ... but we want y as a function of x
+    Mx = ModelingToolkit.change_independent_variable(Mt, Mt.x; dummies = false) # ... but we want y as a function of x
     Mx = structural_simplify(Mx; allow_symbolic = true)
     Dx = Differential(Mx.x)
     prob = ODEProblem(Mx, [Mx.y => 0.0, Dx(Mx.y) => 1.0], (0.0, 20.0), [g => 9.81, v => 10.0]) # 1 = dy/dx = (dy/dt)/(dx/dt) means equal initial horizontal and vertical velocities
     sol = solve(prob, Tsit5(); reltol = 1e-5)
-    @test all(isapprox.(sol[Mx.y], sol[Mx.x - g*(Mx.x/v)^2/2]; atol = 1e-10)) # eliminate t from anal solution x(t) = v*t, y(t) = v*t - g*t^2/2
+    @test all(isapprox.(sol[Mx.y], sol[Mx.x - g*(Mx.x/v)^2/2]; atol = 1e-10)) # compare to analytical solution (x(t) = v*t, y(t) = v*t - g*t^2/2)
 end
