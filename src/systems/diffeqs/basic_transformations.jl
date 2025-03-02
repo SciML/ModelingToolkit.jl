@@ -14,26 +14,20 @@ the final value of `trJ` is the probability of ``u(t)``.
 Example:
 
 ```julia
-using ModelingToolkit, OrdinaryDiffEq, Test
+using ModelingToolkit, OrdinaryDiffEq
 
 @independent_variables t
 @parameters α β γ δ
 @variables x(t) y(t)
 D = Differential(t)
+eqs = [D(x) ~ α*x - β*x*y, D(y) ~ -δ*y + γ*x*y]
+@named sys = ODESystem(eqs, t)
 
-eqs = [D(x) ~ α*x - β*x*y,
-       D(y) ~ -δ*y + γ*x*y]
-
-sys = ODESystem(eqs)
 sys2 = liouville_transform(sys)
-@variables trJ
-
-u0 = [x => 1.0,
-      y => 1.0,
-      trJ => 1.0]
-
-prob = ODEProblem(complete(sys2),u0,tspan,p)
-sol = solve(prob,Tsit5())
+sys2 = complete(sys2)
+u0 = [x => 1.0, y => 1.0, sys2.trJ => 1.0]
+prob = ODEProblem(sys2, u0, tspan, p)
+sol = solve(prob, Tsit5())
 ```
 
 Where `sol[3,:]` is the evolution of `trJ` over time.
@@ -46,14 +40,14 @@ Optimal Transport Approach
 Abhishek Halder, Kooktae Lee, and Raktim Bhattacharya
 https://abhishekhalder.bitbucket.io/F16ACC2013Final.pdf
 """
-function liouville_transform(sys::AbstractODESystem)
+function liouville_transform(sys::AbstractODESystem; kwargs...)
     t = get_iv(sys)
     @variables trJ
     D = ModelingToolkit.Differential(t)
     neweq = D(trJ) ~ trJ * -tr(calculate_jacobian(sys))
     neweqs = [equations(sys); neweq]
     vars = [unknowns(sys); trJ]
-    ODESystem(neweqs, t, vars, parameters(sys), checks = false)
+    ODESystem(neweqs, t, vars, parameters(sys); checks = false, name = nameof(sys), kwargs...)
 end
 
 function change_independent_variable(sys::AbstractODESystem, iv, eq = nothing; verbose = false, kwargs...)
