@@ -29,7 +29,7 @@ end
     @variables x(t) y(t)
     eqs1 = [D(D(x)) ~ D(x) + x, D(y) ~ 1]
     M1 = ODESystem(eqs1, t; name = :M) |> complete
-    M2 = ModelingToolkit.change_independent_variable(M1, M1.y)
+    M2 = change_independent_variable(M1, M1.y)
     eqs2 = substitute(equations(M2), M2.y => M1.t) # system should be equivalent when parametrized with y (since D(y) ~ 1), so substitute back ...
     @test eqs1[1] == only(eqs2) # ... and check that the equations are unmodified
 end
@@ -43,10 +43,10 @@ end
         D(s) ~ 1 / (2*s)
     ]
     M1 = ODESystem(eqs, t; name = :M) |> complete
-    M2 = ModelingToolkit.change_independent_variable(M1, M1.s)
+    M2 = change_independent_variable(M1, M1.s)
 
-    M1 = structural_simplify(M1; allow_symbolic = true)
-    M2 = structural_simplify(M2; allow_symbolic = true)
+    M1 = structural_simplify(M1)
+    M2 = structural_simplify(M2)
     prob1 = ODEProblem(M1, [M1.x => 1.0, M1.y => 1.0, Differential(M1.t)(M1.y) => 0.0, M1.s => 1.0], (1.0, 4.0))
     prob2 = ODEProblem(M2, [M2.x => 1.0, M2.y => 1.0, Differential(M2.s)(M2.y) => 0.0], (1.0, 2.0))
     sol1 = solve(prob1, Tsit5(); reltol = 1e-10, abstol = 1e-10)
@@ -73,18 +73,18 @@ end
     M1 = ODESystem(eqs, t; name = :M) |> complete
 
     # Apply in two steps, where derivatives are defined at each step: first t -> a, then a -> b
-    M2 = ModelingToolkit.change_independent_variable(M1, M1.a) |> complete #, D(b) ~ D(a)/a; verbose = true)
+    M2 = change_independent_variable(M1, M1.a) |> complete #, D(b) ~ D(a)/a; verbose = true)
     @variables b(M2.a)
-    M3 = ModelingToolkit.change_independent_variable(M2, b, Differential(M2.a)(b) ~ exp(-b))
+    M3 = change_independent_variable(M2, b, Differential(M2.a)(b) ~ exp(-b))
     M2 = structural_simplify(M2; allow_symbolic = true)
     M3 = structural_simplify(M3; allow_symbolic = true)
-    @test length(unknowns(M2)) == 2
+    @test length(unknowns(M2)) == 2 && length(unknowns(M3)) == 2
 end
 
 @testset "Change independent variable (simple)" begin
     @variables x(t)
-    Mt = ODESystem([D(x) ~ 2*x], t; name = :M) |> complete
-    Mx = ModelingToolkit.change_independent_variable(Mt, Mt.x; dummies = true)
+    Mt = ODESystem([D(x) ~ 2*x], t; name = :M) |> complete # TODO: avoid complete. can avoid it if passing defined $variable directly to change_independent_variable
+    Mx = change_independent_variable(Mt, Mt.x; dummies = true)
     @test (@variables x x_t(x) x_tt(x); Set(equations(Mx)) == Set([x_t ~ 2x, x_tt ~ 4x]))
 end
 
@@ -92,7 +92,7 @@ end
     @variables x(t) y(t)
     @parameters g v # gravitational acceleration and constant horizontal velocity
     Mt = ODESystem([D(D(y)) ~ -g, D(x) ~ v], t; name = :M) |> complete # gives (x, y) as function of t, ...
-    Mx = ModelingToolkit.change_independent_variable(Mt, Mt.x; dummies = false) # ... but we want y as a function of x
+    Mx = change_independent_variable(Mt, Mt.x; dummies = false) # ... but we want y as a function of x
     Mx = structural_simplify(Mx; allow_symbolic = true)
     Dx = Differential(Mx.x)
     prob = ODEProblem(Mx, [Mx.y => 0.0, Dx(Mx.y) => 1.0], (0.0, 20.0), [g => 9.81, v => 10.0]) # 1 = dy/dx = (dy/dt)/(dx/dt) means equal initial horizontal and vertical velocities
@@ -103,14 +103,14 @@ end
 @testset "Change independent variable (errors)" begin
     @variables x(t) y z(y) w(t) v(t)
     M = ODESystem([D(x) ~ 0, v ~ x], t; name = :M)
-    @test_throws "incomplete" ModelingToolkit.change_independent_variable(M, M.x)
+    @test_throws "incomplete" change_independent_variable(M, M.x)
     M = complete(M)
-    @test_throws "singular" ModelingToolkit.change_independent_variable(M, M.x)
-    @test_throws "structurally simplified" ModelingToolkit.change_independent_variable(structural_simplify(M), y)
-    @test_throws "No equation" ModelingToolkit.change_independent_variable(M, w)
-    @test_throws "No equation" ModelingToolkit.change_independent_variable(M, v)
-    @test_throws "not a function of the independent variable" ModelingToolkit.change_independent_variable(M, y)
-    @test_throws "not a function of the independent variable" ModelingToolkit.change_independent_variable(M, z)
+    @test_throws "singular" change_independent_variable(M, M.x)
+    @test_throws "structurally simplified" change_independent_variable(structural_simplify(M), y)
+    @test_throws "No equation" change_independent_variable(M, w)
+    @test_throws "No equation" change_independent_variable(M, v)
+    @test_throws "not a function of the independent variable" change_independent_variable(M, y)
+    @test_throws "not a function of the independent variable" change_independent_variable(M, z)
     M = compose(M, M)
-    @test_throws "hierarchical" ModelingToolkit.change_independent_variable(M, M.x)
+    @test_throws "hierarchical" change_independent_variable(M, M.x)
 end
