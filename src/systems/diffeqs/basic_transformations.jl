@@ -50,7 +50,46 @@ function liouville_transform(sys::AbstractODESystem; kwargs...)
     ODESystem(neweqs, t, vars, parameters(sys); checks = false, name = nameof(sys), kwargs...)
 end
 
-function change_independent_variable(sys::AbstractODESystem, iv, eq = nothing; verbose = false, simplify = true, dummies = false, kwargs...)
+"""
+    function change_independent_variable(sys::AbstractODESystem, iv, eq = nothing; dummies = false, simplify = true, verbose = false, kwargs...)
+
+Transform the independent variable (e.g. ``t``) of the ODE system `sys` to a dependent variable `iv` (e.g. ``f(t)``).
+An equation in `sys` must define the rate of change of the new independent variable (e.g. ``df(t)/dt``).
+Alternatively, `eq` can specify such an equation.
+
+The transformation is well-defined when the mapping between the new and old independent variables are one-to-one.
+This is satisfied if one is a strictly increasing function of the other (e.g. ``df(t)/dt > 0`` or ``df(t)/dt < 0``).
+
+Keyword arguments
+=================
+If `dummies`, derivatives of the new independent variable are expressed through dummy equations; otherwise they are explicitly inserted into the equations.
+If `simplify`, these dummy expressions are simplified and often give a tidier transformation.
+If `verbose`, the function prints intermediate transformations of equations to aid debugging.
+Any additional keyword arguments `kwargs...` are forwarded to the constructor that rebuilds the system.
+
+Usage before structural simplification
+======================================
+The variable change must take place before structural simplification.
+Subsequently, consider passing `allow_symbolic = true` to `structural_simplify(sys)` to reduce the number of unknowns, with the understanding that the transformation is well-defined.
+
+Example
+=======
+Consider a free fall with constant horizontal velocity.
+The laws of physics naturally describes position as a function of time.
+By changing the independent variable, it can be reformulated for vertical position as a function of horizontal distance:
+```julia
+julia> @variables x(t) y(t);
+
+julia> @named M = ODESystem([D(D(y)) ~ -9.81, D(x) ~ 10.0], t);
+
+julia> M′ = change_independent_variable(complete(M), x);
+
+julia> unknowns(M′)
+1-element Vector{SymbolicUtils.BasicSymbolic{Real}}:
+ y(x)
+```
+"""
+function change_independent_variable(sys::AbstractODESystem, iv, eq = nothing; dummies = false, simplify = true, verbose = false, kwargs...)
     if !iscomplete(sys)
         error("Cannot change independent variable of incomplete system $(nameof(sys))")
     elseif isscheduled(sys)

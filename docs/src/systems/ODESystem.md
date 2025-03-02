@@ -30,6 +30,7 @@ ODESystem
 structural_simplify
 ode_order_lowering
 dae_index_lowering
+change_independent_variable
 liouville_transform
 alias_elimination
 tearing
