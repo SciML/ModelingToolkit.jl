@@ -50,20 +50,43 @@ end
 
 @testset "Change independent variable (Friedmann equation)" begin
     D = Differential(t)
-    @variables a(t) ρr(t) ρm(t) ρΛ(t) ρ(t) P(t) ϕ(t)
+    @variables a(t) ȧ(t) ρr(t) ρm(t) ρΛ(t) ρ(t) P(t) ϕ(t)
     @parameters Ωr0 Ωm0 ΩΛ0
     eqs = [
         ρr ~ 3/(8*Num(π)) * Ωr0 / a^4
         ρm ~ 3/(8*Num(π)) * Ωm0 / a^3
         ρΛ ~ 3/(8*Num(π)) * ΩΛ0
         ρ ~ ρr + ρm + ρΛ
-        D(a) ~ √(8*Num(π)/3*ρ*a^4)
+        ȧ ~ √(8*Num(π)/3*ρ*a^4)
+        D(a) ~ ȧ
         D(D(ϕ)) ~ -3*D(a)/a*D(ϕ)
     ]
-    @named M1 = ODESystem(eqs, t)
-    M1 = complete(M1)
+    M1 = ODESystem(eqs, t; name = :M) |> complete
 
-    M2 = ModelingToolkit.change_independent_variable(M1, M1.a)
+    # Apply in two steps, where derivatives are defined at each step: first t -> a, then a -> b
+    M2 = ModelingToolkit.change_independent_variable(M1, M1.a) |> complete #, D(b) ~ D(a)/a; verbose = true)
+    @variables b(M2.a)
+    M3 = ModelingToolkit.change_independent_variable(M2, b, Differential(M2.a)(b) ~ exp(-b))
     M2 = structural_simplify(M2; allow_symbolic = true)
+    M3 = structural_simplify(M3; allow_symbolic = true)
     @test length(unknowns(M2)) == 2
+end
+
+@testset "Change independent variable (simple)" begin
+    @variables x(t)
+    Mt = ODESystem([D(x) ~ 2*x], t; name = :M) |> complete
+    Mx = ModelingToolkit.change_independent_variable(Mt, Mt.x)
+    @test (@variables x x_t(x) x_tt(x); Set(equations(Mx)) == Set([x_t ~ 2x, x_tt ~ 4x]))
+end
+
+@testset "Change independent variable (free fall)" begin
+    @variables x(t) y(t)
+    @parameters g v # gravitational acceleration and constant horizontal velocity
+    Mt = ODESystem([D(D(y)) ~ -g, D(x) ~ v], t; name = :M) |> complete # gives (x, y) as function of t, ...
+    Mx = ModelingToolkit.change_independent_variable(Mt, Mt.x) # ... but we want y as a function of x
+    Mx = structural_simplify(Mx; allow_symbolic = true)
+    Dx = Differential(Mx.x)
+    prob = ODEProblem(Mx, [Mx.y => 0.0, Dx(Mx.y) => 1.0], (0.0, 20.0), [g => 9.81, v => 10.0]) # 1 = dy/dx = (dy/dt)/(dx/dt) means equal initial horizontal and vertical velocities
+    sol = solve(prob, Tsit5(); reltol = 1e-5)
+    @test all(isapprox.(sol[Mx.y], sol[Mx.x - g*(Mx.x/v)^2/2]; atol = 1e-10)) # eliminate t from anal solution x(t) = v*t, y(t) = v*t - g*t^2/2
 end
