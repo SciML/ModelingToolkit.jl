@@ -99,3 +99,18 @@ end
     sol = solve(prob, Tsit5(); reltol = 1e-5)
     @test all(isapprox.(sol[Mx.y], sol[Mx.x - g*(Mx.x/v)^2/2]; atol = 1e-10)) # compare to analytical solution (x(t) = v*t, y(t) = v*t - g*t^2/2)
 end
+
+@testset "Change independent variable (errors)" begin
+    @variables x(t) y z(y) w(t) v(t)
+    M = ODESystem([D(x) ~ 0, v ~ x], t; name = :M)
+    @test_throws "incomplete" ModelingToolkit.change_independent_variable(M, M.x)
+    M = complete(M)
+    @test_throws "singular" ModelingToolkit.change_independent_variable(M, M.x)
+    @test_throws "structurally simplified" ModelingToolkit.change_independent_variable(structural_simplify(M), y)
+    @test_throws "No equation" ModelingToolkit.change_independent_variable(M, w)
+    @test_throws "No equation" ModelingToolkit.change_independent_variable(M, v)
+    @test_throws "not a function of the independent variable" ModelingToolkit.change_independent_variable(M, y)
+    @test_throws "not a function of the independent variable" ModelingToolkit.change_independent_variable(M, z)
+    M = compose(M, M)
+    @test_throws "hierarchical" ModelingToolkit.change_independent_variable(M, M.x)
+end
