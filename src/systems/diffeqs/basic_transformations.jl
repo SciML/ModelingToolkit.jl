@@ -51,10 +51,24 @@ function liouville_transform(sys::AbstractODESystem; kwargs...)
 end
 
 function change_independent_variable(sys::AbstractODESystem, iv, eq = nothing; verbose = false, simplify = true, dummies = false, kwargs...)
+    if !iscomplete(sys)
+        error("Cannot change independent variable of incomplete system $(nameof(sys))")
+    elseif isscheduled(sys)
+        error("Cannot change independent variable of structurally simplified system $(nameof(sys))")
+    elseif !isempty(get_systems(sys))
+        error("Cannot change independent variable of hierarchical system $(nameof(sys)). Flatten it first.") # TODO: implement
+    end
+
+    iv = unwrap(iv)
     iv1 = get_iv(sys) # e.g. t
-    iv2name = nameof(operation(unwrap(iv))) # TODO: handle namespacing?
+
+    if !iscall(iv) || !isequal(only(arguments(iv)), iv1)
+        error("New independent variable $iv is not a function of the independent variable $iv1 of the system $(nameof(sys))")
+    end
+
+    iv2func = iv # e.g. a(t)
+    iv2name = nameof(operation(iv))
     iv2, = @independent_variables $iv2name # e.g. a
-    iv2func, = @variables $iv2name(iv1) # e.g. a(t)
     D1 = Differential(iv1)
     D2 = Differential(iv2)
 
@@ -98,8 +112,12 @@ function change_independent_variable(sys::AbstractODESystem, iv, eq = nothing; v
         end
     end
 
-    isnothing(div2_div1) && error("No equation for $D1($iv2func) was specified.")
     verbose && println("Found $div2 = $div2_div1")
+    if isnothing(div2_div1)
+        error("No equation for $D1($iv2func) was specified.")
+    elseif isequal(div2_div1, 0)
+        error("Cannot change independent variable from $iv1 to $iv2 with singular transformation $(div2 ~ div2_div1).")
+    end
 
     # 3) Add equations for dummy variables
     div1_div2 = 1 / div2_div1
