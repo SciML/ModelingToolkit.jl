@@ -50,7 +50,7 @@ function liouville_transform(sys::AbstractODESystem; kwargs...)
     ODESystem(neweqs, t, vars, parameters(sys); checks = false, name = nameof(sys), kwargs...)
 end
 
-function change_independent_variable(sys::AbstractODESystem, iv, eq = nothing; verbose = false, kwargs...)
+function change_independent_variable(sys::AbstractODESystem, iv, eq = nothing; verbose = false, simplify = true, kwargs...)
     iv1 = get_iv(sys) # e.g. t
     iv2name = nameof(operation(unwrap(iv))) # TODO: handle namespacing?
     iv2, = @independent_variables $iv2name # e.g. a
@@ -103,7 +103,11 @@ function change_independent_variable(sys::AbstractODESystem, iv, eq = nothing; v
 
     # 3) Add equations for dummy variables
     div1_div2 = 1 / div2_div1
-    push!(eqs, ddiv2 ~ expand_derivatives(-D2(div1_div2) / div1_div2^3)) # e.g. https://math.stackexchange.com/questions/249253/second-derivative-of-the-inverse-function # TODO: higher orders
+    ddiv1_ddiv2 = expand_derivatives(-D2(div1_div2) / div1_div2^3)
+    if simplify
+        ddiv1_ddiv2 = Symbolics.simplify(ddiv1_ddiv2)
+    end
+    push!(eqs, ddiv2 ~ ddiv1_ddiv2) # e.g. https://math.stackexchange.com/questions/249253/second-derivative-of-the-inverse-function # TODO: higher orders
 
     # 4) Recreate system with new equations
     sys2 = typeof(sys)(eqs, iv2; name = nameof(sys), description = description(sys), kwargs...)
