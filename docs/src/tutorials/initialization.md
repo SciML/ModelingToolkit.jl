@@ -538,6 +538,7 @@ plot(sol)
 ```
 
 ## Summary of Initialization API
+
 ```@docs; canonical=false
 Initial
 isinitial
