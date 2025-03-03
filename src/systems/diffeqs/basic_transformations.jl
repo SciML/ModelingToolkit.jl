@@ -110,20 +110,59 @@ function change_independent_variable(sys::AbstractODESystem, iv, eqs = []; dummi
     iv2name = nameof(operation(iv))
     iv2, = @independent_variables $iv2name # e.g. a
     D1 = Differential(iv1)
-    D2 = Differential(iv2)
 
     iv1name = nameof(iv1) # e.g. t
     iv1func, = @variables $iv1name(iv2) # e.g. t(a)
 
-    div2name = Symbol(iv2name, :_t)
-    div2, = @variables $div2name(iv2) # e.g. a_t(a)
+    eqs = [get_eqs(sys); eqs] # copies system equations to avoid modifying original system
 
-    ddiv2name = Symbol(iv2name, :_tt)
-    ddiv2, = @variables $ddiv2name(iv2) # e.g. a_tt(a)
+    # 1) Find and compute all necessary expressions for e.g. df/dt, d²f/dt², ...
+    # 1.1) Find the 1st order derivative of the new independent variable (e.g. da(t)/dt = ...), ...
+    div2_div1_idxs = findall(eq -> isequal(eq.lhs, D1(iv2func)), eqs) # index of e.g. da/dt = ...
+    if length(div2_div1_idxs) != 1
+        error("Exactly one equation for $D1($iv2func) was not specified.")
+    end
+    div2_div1_eq = popat!(eqs, only(div2_div1_idxs)) # get and remove e.g. df/dt = ... (may be added back later)
+    div2_div1 = div2_div1_eq.rhs
+    if isequal(div2_div1, 0)
+        error("Cannot change independent variable from $iv1 to $iv2 with singular transformation $div2_div1_eq.")
+    end
+    # 1.2) ... then compute the 2nd order derivative of the new independent variable
+    div1_div2 = 1 / div2_div1 # TODO: URL reference for clarity
+    ddiv2_ddiv1 = expand_derivatives(-Differential(iv2func)(div1_div2) / div1_div2^3, simplify) # e.g. https://math.stackexchange.com/questions/249253/second-derivative-of-the-inverse-function # TODO: higher orders # TODO: pass simplify here
+    # 1.3) # TODO: handle higher orders (3+) derivatives ...
 
+    # 2) If requested, insert extra dummy equations for e.g. df/dt, d²f/dt², ...
+    #    Otherwise, replace all these derivatives by their explicit expressions
+    if dummies
+        div2name = Symbol(iv2name, :_t) # TODO: not always t
+        div2, = @variables $div2name(iv2) # e.g. a_t(a)
+        ddiv2name = Symbol(iv2name, :_tt) # TODO: not always t
+        ddiv2, = @variables $ddiv2name(iv2) # e.g. a_tt(a)
+        eqs = [eqs; [div2 ~ div2_div1, ddiv2 ~ ddiv2_ddiv1]] # add dummy equations
+        derivsubs = [D1(D1(iv2func)) => ddiv2, D1(iv2func) => div2] # order is crucial!
+    else
+        derivsubs = [D1(D1(iv2func)) => ddiv2_ddiv1, D1(iv2func) => div2_div1] # order is crucial!
+    end
+    derivsubs = [derivsubs; [iv2func => iv2, iv1 => iv1func]]
+
+    if verbose
+        # Explain what we just did
+        println("Order 1 (found):    $div2_div1_eq")
+        println("Order 2 (computed): $(D1(div2_div1_eq.lhs) ~ ddiv2_ddiv1)")
+        println()
+        println("Substitutions will be made in this order:")
+        for (n, sub) in enumerate(derivsubs)
+            println("$n: $(sub[1]) => $(sub[2])")
+        end
+        println()
+    end
+
+    # 3) Define a transformation function that performs the change of variable on any expression/equation
     function transform(ex)
-        # 1) Substitute f(t₁) => f(t₂(t₁)) in all variables
-        verbose && println("1. ", ex)
+        verbose && println("Step 0: ", ex)
+
+        # Step 1: substitute f(t₁) => f(t₂(t₁)) in all variables in the expression
         vars = Symbolics.get_variables(ex)
         for var1 in vars
             if Symbolics.iscall(var1) && !isequal(var1, iv2func) # && isequal(only(arguments(var1)), iv1) # skip e.g. constants
@@ -132,53 +171,36 @@ function change_independent_variable(sys::AbstractODESystem, iv, eqs = []; dummi
                 ex = substitute(ex, var1 => var2; fold = false)
             end
         end
+        verbose && println("Step 1: ", ex)
 
-        # 2) Substitute in dummy variables for dⁿt₂/dt₁ⁿ
-        verbose && println("2. ", ex)
+        # Step 2: expand out all chain rule derivatives
         ex = expand_derivatives(ex) # expand out with chain rule to get d(iv2)/d(iv1)
-        verbose && println("3. ", ex)
-        ex = substitute(ex, D1(D1(iv2func)) => ddiv2) # order 2 # TODO: more orders
-        ex = substitute(ex, D1(iv2func) => div2) # order 1; e.g. D(a(t)) => a_t(t)
-        ex = substitute(ex, iv2func => iv2) # order 0; make iv2 independent
-        verbose && println("4. ", ex)
-        ex = substitute(ex, iv1 => iv1func) # if autonomous
-        verbose && println("5. ", ex)
+        verbose && println("Step 2: ", ex)
+
+        # Step 3: substitute d²f/dt², df/dt, ... (to dummy variables or explicit expressions, depending on dummies)
+        for sub in derivsubs
+            ex = substitute(ex, sub)
+        end
+        verbose && println("Step 3: ", ex)
+        verbose && println()
+
         return ex
     end
 
-    eqs = [get_eqs(sys); eqs]
+    # 4) Transform all fields
     eqs = map(transform, eqs)
-
+    observed = map(transform, get_observed(sys))
     initialization_eqs = map(transform, get_initialization_eqs(sys))
+    parameter_dependencies = map(transform, get_parameter_dependencies(sys))
+    defaults = Dict(transform(var) => transform(val) for (var, val) in get_defaults(sys))
+    guesses = Dict(transform(var) => transform(val) for (var, val) in get_guesses(sys))
+    assertions = Dict(transform(condition) => msg for (condition, msg) in get_assertions(sys))
+    # TODO: handle subsystems
 
-    div2_div1_idxs = findall(eq -> isequal(eq.lhs, div2), eqs)
-    if length(div2_div1_idxs) == 0
-        error("No equation for $D1($iv2func) was specified.")
-    elseif length(div2_div1_idxs) >= 2
-        error("Multiple equations for $D1($iv2func) were specified.")
-    end
-    div2_div1 = eqs[only(div2_div1_idxs)].rhs
-    if isequal(div2_div1, 0)
-        error("Cannot change independent variable from $iv1 to $iv2 with singular transformation $(div2 ~ div2_div1).")
-    end
-
-    # 3) Add equations for dummy variables
-    div1_div2 = 1 / div2_div1
-    ddiv1_ddiv2 = expand_derivatives(-D2(div1_div2) / div1_div2^3)
-    if simplify
-        ddiv1_ddiv2 = Symbolics.simplify(ddiv1_ddiv2)
-    end
-    push!(eqs, ddiv2 ~ ddiv1_ddiv2) # e.g. https://math.stackexchange.com/questions/249253/second-derivative-of-the-inverse-function # TODO: higher orders
-
-    # 4) If requested, instead remove and insert dummy equations
-    if !dummies # TODO: make dummies = false work with more fields!
-        dummyidxs = findall(eq -> isequal(eq.lhs, div2) || isequal(eq.lhs, ddiv2), eqs)
-        dummyeqs = splice!(eqs, dummyidxs) # return and remove dummy equations
-        dummysubs = Dict(eq.lhs => eq.rhs for eq in dummyeqs)
-        eqs = substitute.(eqs, Ref(dummysubs)) # don't iterate over dummysubs
-    end
-
-    # 5) Recreate system with new equations
-    sys2 = typeof(sys)(eqs, iv2; initialization_eqs, name = nameof(sys), description = description(sys), kwargs...)
-    return sys2
+    # 5) Recreate system with transformed fields
+    return typeof(sys)(
+        eqs, iv2;
+        observed, initialization_eqs, parameter_dependencies, defaults, guesses, assertions,
+        name = nameof(sys), description = description(sys), kwargs...
+    ) |> complete # original system had to be complete
 end

@@ -23,9 +23,11 @@ D = Differential(t)
 @parameters g = 9.81 v # gravitational acceleration and constant horizontal velocity
 M1 = ODESystem([
     D(D(y)) ~ -g, D(x) ~ v # constant horizontal velocity
-], t; initialization_eqs = [
+], t; defaults = [
+    y => 0.0
+], initialization_eqs = [
     #x ~ 0.0, # TODO: handle?
-    y ~ 0.0, D(x) ~ D(y) # equal initial horizontal and vertical velocity (45 °)
+    D(x) ~ D(y) # equal initial horizontal and vertical velocity (45 °)
 ], name = :M) |> complete
 M1s = structural_simplify(M1)
 ```
