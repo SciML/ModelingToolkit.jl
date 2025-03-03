@@ -25,8 +25,10 @@ The operators [`Sample`](@ref) and [`Hold`](@ref) are thus providing the interfa
 The [`ShiftIndex`](@ref) operator is used to refer to past and future values of discrete-time variables. The example below illustrates its use, implementing the discrete-time system
 
 ```math
-x(k+1) = 0.5x(k) + u(k)
-y(k) = x(k)
+\begin{align}
+    x(k+1) &= 0.5x(k) + u(k) \\ 
+    y(k) &= x(k)
+\end{align}
 ```
 
 ```@example clocks
@@ -186,4 +188,11 @@ connections = [r ~ sin(t)          # reference signal
                p.y ~ c.y]          # plant output to controller feedback
 
 @named cl = ODESystem(connections, t, systems = [f, c, p])
+```
+
+```@docs
+Sample
+Hold
+ShiftIndex
+Clock
 ```
