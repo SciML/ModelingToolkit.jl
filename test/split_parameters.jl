@@ -268,3 +268,12 @@ end
         @test_nowarn sol = solve(prob)
     end
 end
+
+@testset "Array and scalar parameters with `split = false`" begin
+    @variables x(t)
+    @parameters p[1:2] q
+    @mtkbuild sys=ODESystem(D(x) ~ sum(p) * x + q, t) split=false
+    @test length(parameters(sys)) == 3
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [p => ones(2), q => 1.0])
+    @test prob.p isa Vector{Float64}
+end
