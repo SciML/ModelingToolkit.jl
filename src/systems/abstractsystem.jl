@@ -791,8 +791,16 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
             end
             @set! sys.ps = ordered_ps
         end
-    elseif has_index_cache(sys)
-        @set! sys.index_cache = nothing
+    else
+        if has_index_cache(sys)
+            @set! sys.index_cache = nothing
+        end
+        ps = mapreduce(
+            Symbolics.scalarize, vcat, parameters(sys; initial_parameters = true); init = [])
+        if !(ps isa Vector)
+            ps = [ps]
+        end
+        @set! sys.ps = ps
     end
     if isdefined(sys, :initializesystem) && get_initializesystem(sys) !== nothing
         @set! sys.initializesystem = complete(get_initializesystem(sys); split)
