@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Home · ModelingToolkit.jl</title><meta name="title" content="Home · ModelingToolkit.jl"/><meta property="og:title" content="Home · ModelingToolkit.jl"/><meta property="twitter:title" content="Home · ModelingToolkit.jl"/><meta name="description" content="Documentation for ModelingToolkit.jl."/><meta property="og:description" content="Documentation for ModelingToolkit.jl."/><meta property="twitter:description" content="Documentation for ModelingToolkit.jl."/><meta property="og:url" content="https://docs.sciml.ai/ModelingToolkit/stable/"/><meta property="twitter:url" content="https://docs.sciml.ai/ModelingToolkit/stable/"/><link rel="canonical" href="https://docs.sciml.ai/ModelingToolkit/stable/"/><script data-outdated-warner src="assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="assets/documenter.js"></script><script src="search_index.js"></script><script src="siteinfo.js"></script><script src="../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="assets/themeswap.js"></script><link href="assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href><img src="assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href>ModelingToolkit.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li class="is-active"><a class="tocitem" href>Home</a><ul class="internal"><li><a class="tocitem" href="#Installation"><span>Installation</span></a></li><li><a class="tocitem" href="#Citation"><span>Citation</span></a></li><li><a class="tocitem" href="#Feature-Summary"><span>Feature Summary</span></a></li><li><a class="tocitem" href="#Standard-Library"><span>Standard Library</span></a></li><li><a class="tocitem" href="#Model-Import-Formats"><span>Model Import Formats</span></a></li><li><a class="tocitem" href="#Extension-Libraries"><span>Extension Libraries</span></a></li><li><a class="tocitem" href="#Compatible-Numerical-Solvers"><span>Compatible Numerical Solvers</span></a></li><li><a class="tocitem" href="#Contributing"><span>Contributing</span></a></li><li><a class="tocitem" href="#Reproducibility"><span>Reproducibility</span></a></li></ul></li><li><a class="tocitem" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="tutorials/acausal_components/">Acausal Component-Based Modeling</a></li><li><a class="tocitem" href="tutorials/nonlinear/">Modeling Nonlinear Systems</a></li><li><a class="tocitem" href="tutorials/initialization/">Initialization of ODESystems</a></li><li><a class="tocitem" href="tutorials/optimization/">Modeling Optimization Problems</a></li><li><a class="tocitem" href="tutorials/modelingtoolkitize/">Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code</a></li><li><a class="tocitem" href="tutorials/programmatically_generating/">Programmatically Generating and Scripting ODESystems</a></li><li><a class="tocitem" href="tutorials/stochastic_diffeq/">Modeling with Stochasticity</a></li><li><a class="tocitem" href="tutorials/discrete_system/">(Experimental) Modeling Discrete Systems</a></li><li><a class="tocitem" href="tutorials/parameter_identifiability/">Parameter Identifiability in ODE Models</a></li><li><a class="tocitem" href="tutorials/bifurcation_diagram_computation/">Bifurcation Diagrams</a></li><li><a class="tocitem" href="tutorials/SampledData/">Clocks and Sampled-Data Systems</a></li><li><a class="tocitem" href="tutorials/domain_connections/">Domains</a></li><li><a class="tocitem" href="tutorials/callable_params/">Callable parameters and interpolating data</a></li><li><a class="tocitem" href="tutorials/linear_analysis/">Linear Analysis</a></li></ul></li><li><span class="tocitem">Examples</span><ul><li><input class="collapse-toggle" id="menuitem-4-1" type="checkbox"/><label class="tocitem" for="menuitem-4-1"><span class="docs-label">Basic Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="examples/higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li><a class="tocitem" href="examples/spring_mass/">Component-Based Modeling of a Spring-Mass System</a></li><li><a class="tocitem" href="examples/modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs</a></li><li><a class="tocitem" href="examples/remake/">Optimizing through an ODE solve and re-creating MTK Problems</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-4-2" type="checkbox"/><label class="tocitem" for="menuitem-4-2"><span class="docs-label">Advanced Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="examples/tearing_parallelism/">Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a></li><li><a class="tocitem" href="examples/sparse_jacobians/">Automated Sparse Analytical Jacobians</a></li><li><a class="tocitem" href="examples/perturbation/">Symbolic-Numeric Perturbation Theory for ODEs</a></li></ul></li></ul></li><li><span class="tocitem">Basics</span><ul><li><a class="tocitem" href="basics/AbstractSystem/">The AbstractSystem Interface</a></li><li><a class="tocitem" href="basics/ContextualVariables/">Contextual Variable Types</a></li><li><a class="tocitem" href="basics/Variable_metadata/">Symbolic Metadata</a></li><li><a class="tocitem" href="basics/Composition/">Composing Models and Building Reusable Components</a></li><li><a class="tocitem" href="basics/Events/">Event Handling and Callback Functions</a></li><li><a class="tocitem" href="basics/Linearization/">Linearization</a></li><li><a class="tocitem" href="basics/InputOutput/">Input output</a></li><li><a class="tocitem" href="basics/MTKLanguage/">ModelingToolkit Language: Modeling with <code>@mtkmodel</code>, <code>@connectors</code> and <code>@mtkbuild</code></a></li><li><a class="tocitem" href="basics/Validation/">Model Validation and Units</a></li><li><a class="tocitem" href="basics/Debugging/">Debugging</a></li><li><a class="tocitem" href="basics/DependencyGraphs/">Dependency Graphs</a></li><li><a class="tocitem" href="basics/Precompilation/">Working with Precompilation and Binary Building</a></li><li><a class="tocitem" href="basics/FAQ/">Frequently Asked Questions</a></li></ul></li><li><span class="tocitem">System Types</span><ul><li><a class="tocitem" href="systems/ODESystem/">ODESystem</a></li><li><a class="tocitem" href="systems/SDESystem/">SDESystem</a></li><li><a class="tocitem" href="systems/JumpSystem/">JumpSystem</a></li><li><a class="tocitem" href="systems/NonlinearSystem/">NonlinearSystem</a></li><li><a class="tocitem" href="systems/OptimizationSystem/">OptimizationSystem</a></li><li><a class="tocitem" href="systems/PDESystem/">PDESystem</a></li><li><a class="tocitem" href="systems/DiscreteSystem/">DiscreteSystem</a></li></ul></li><li><a class="tocitem" href="comparison/">Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages</a></li><li><a class="tocitem" href="internals/">Internal Details</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Home</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Home</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/index.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="ModelingToolkit.jl:-High-Performance-Symbolic-Numeric-Equation-Based-Modeling"><a class="docs-heading-anchor" href="#ModelingToolkit.jl:-High-Performance-Symbolic-Numeric-Equation-Based-Modeling">ModelingToolkit.jl: High-Performance Symbolic-Numeric Equation-Based Modeling</a><a id="ModelingToolkit.jl:-High-Performance-Symbolic-Numeric-Equation-Based-Modeling-1"></a><a class="docs-heading-anchor-permalink" href="#ModelingToolkit.jl:-High-Performance-Symbolic-Numeric-Equation-Based-Modeling" title="Permalink"></a></h1><p>ModelingToolkit.jl is a modeling language for high-performance symbolic-numeric computation in scientific computing and scientific machine learning. It then mixes ideas from symbolic computational algebra systems with causal and acausal equation-based modeling frameworks to give an extendable and parallel modeling system. It allows for users to give a high-level description of a model for symbolic preprocessing to analyze and enhance the model. Automatic symbolic transformations, such as index reduction of differential-algebraic equations, make it possible to solve equations that are impossible to solve with a purely numeric-based technique.</p><h2 id="Installation"><a class="docs-heading-anchor" href="#Installation">Installation</a><a id="Installation-1"></a><a class="docs-heading-anchor-permalink" href="#Installation" title="Permalink"></a></h2><p>To install ModelingToolkit.jl, use the Julia package manager:</p><pre><code class="language-julia hljs">using Pkg
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Home · ModelingToolkit.jl</title><meta name="title" content="Home · ModelingToolkit.jl"/><meta property="og:title" content="Home · ModelingToolkit.jl"/><meta property="twitter:title" content="Home · ModelingToolkit.jl"/><meta name="description" content="Documentation for ModelingToolkit.jl."/><meta property="og:description" content="Documentation for ModelingToolkit.jl."/><meta property="twitter:description" content="Documentation for ModelingToolkit.jl."/><meta property="og:url" content="https://docs.sciml.ai/ModelingToolkit/stable/"/><meta property="twitter:url" content="https://docs.sciml.ai/ModelingToolkit/stable/"/><link rel="canonical" href="https://docs.sciml.ai/ModelingToolkit/stable/"/><script data-outdated-warner src="assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="assets/documenter.js"></script><script src="search_index.js"></script><script src="siteinfo.js"></script><script src="../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="assets/themeswap.js"></script><link href="assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href><img src="assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href>ModelingToolkit.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li class="is-active"><a class="tocitem" href>Home</a><ul class="internal"><li><a class="tocitem" href="#Installation"><span>Installation</span></a></li><li><a class="tocitem" href="#Citation"><span>Citation</span></a></li><li><a class="tocitem" href="#Feature-Summary"><span>Feature Summary</span></a></li><li><a class="tocitem" href="#Standard-Library"><span>Standard Library</span></a></li><li><a class="tocitem" href="#Model-Import-Formats"><span>Model Import Formats</span></a></li><li><a class="tocitem" href="#Extension-Libraries"><span>Extension Libraries</span></a></li><li><a class="tocitem" href="#Compatible-Numerical-Solvers"><span>Compatible Numerical Solvers</span></a></li><li><a class="tocitem" href="#Contributing"><span>Contributing</span></a></li><li><a class="tocitem" href="#Reproducibility"><span>Reproducibility</span></a></li></ul></li><li><a class="tocitem" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="tutorials/acausal_components/">Acausal Component-Based Modeling</a></li><li><a class="tocitem" href="tutorials/nonlinear/">Modeling Nonlinear Systems</a></li><li><a class="tocitem" href="tutorials/initialization/">Initialization of ODESystems</a></li><li><a class="tocitem" href="tutorials/optimization/">Modeling Optimization Problems</a></li><li><a class="tocitem" href="tutorials/modelingtoolkitize/">Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code</a></li><li><a class="tocitem" href="tutorials/programmatically_generating/">Programmatically Generating and Scripting ODESystems</a></li><li><a class="tocitem" href="tutorials/stochastic_diffeq/">Modeling with Stochasticity</a></li><li><a class="tocitem" href="tutorials/discrete_system/">(Experimental) Modeling Discrete Systems</a></li><li><a class="tocitem" href="tutorials/parameter_identifiability/">Parameter Identifiability in ODE Models</a></li><li><a class="tocitem" href="tutorials/bifurcation_diagram_computation/">Bifurcation Diagrams</a></li><li><a class="tocitem" href="tutorials/SampledData/">Clocks and Sampled-Data Systems</a></li><li><a class="tocitem" href="tutorials/domain_connections/">Domains</a></li><li><a class="tocitem" href="tutorials/callable_params/">Callable parameters and interpolating data</a></li><li><a class="tocitem" href="tutorials/linear_analysis/">Linear Analysis</a></li><li><a class="tocitem" href="tutorials/fmi/">Importing FMUs</a></li></ul></li><li><span class="tocitem">Examples</span><ul><li><input class="collapse-toggle" id="menuitem-4-1" type="checkbox"/><label class="tocitem" for="menuitem-4-1"><span class="docs-label">Basic Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="examples/higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li><a class="tocitem" href="examples/spring_mass/">Component-Based Modeling of a Spring-Mass System</a></li><li><a class="tocitem" href="examples/modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs</a></li><li><a class="tocitem" href="examples/remake/">Optimizing through an ODE solve and re-creating MTK Problems</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-4-2" type="checkbox"/><label class="tocitem" for="menuitem-4-2"><span class="docs-label">Advanced Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="examples/tearing_parallelism/">Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a></li><li><a class="tocitem" href="examples/sparse_jacobians/">Automated Sparse Analytical Jacobians</a></li><li><a class="tocitem" href="examples/perturbation/">Symbolic-Numeric Perturbation Theory for ODEs</a></li></ul></li></ul></li><li><span class="tocitem">Basics</span><ul><li><a class="tocitem" href="basics/AbstractSystem/">The AbstractSystem Interface</a></li><li><a class="tocitem" href="basics/ContextualVariables/">Contextual Variable Types</a></li><li><a class="tocitem" href="basics/Variable_metadata/">Symbolic Metadata</a></li><li><a class="tocitem" href="basics/Composition/">Composing Models and Building Reusable Components</a></li><li><a class="tocitem" href="basics/Events/">Event Handling and Callback Functions</a></li><li><a class="tocitem" href="basics/Linearization/">Linearization</a></li><li><a class="tocitem" href="basics/InputOutput/">Input output</a></li><li><a class="tocitem" href="basics/MTKLanguage/">ModelingToolkit Language: Modeling with <code>@mtkmodel</code>, <code>@connectors</code> and <code>@mtkbuild</code></a></li><li><a class="tocitem" href="basics/Validation/">Model Validation and Units</a></li><li><a class="tocitem" href="basics/Debugging/">Debugging</a></li><li><a class="tocitem" href="basics/DependencyGraphs/">Dependency Graphs</a></li><li><a class="tocitem" href="basics/Precompilation/">Working with Precompilation and Binary Building</a></li><li><a class="tocitem" href="basics/FAQ/">Frequently Asked Questions</a></li></ul></li><li><span class="tocitem">System Types</span><ul><li><a class="tocitem" href="systems/ODESystem/">ODESystem</a></li><li><a class="tocitem" href="systems/SDESystem/">SDESystem</a></li><li><a class="tocitem" href="systems/JumpSystem/">JumpSystem</a></li><li><a class="tocitem" href="systems/NonlinearSystem/">NonlinearSystem</a></li><li><a class="tocitem" href="systems/OptimizationSystem/">OptimizationSystem</a></li><li><a class="tocitem" href="systems/PDESystem/">PDESystem</a></li><li><a class="tocitem" href="systems/DiscreteSystem/">DiscreteSystem</a></li></ul></li><li><a class="tocitem" href="comparison/">Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages</a></li><li><a class="tocitem" href="internals/">Internal Details</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Home</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Home</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/index.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="ModelingToolkit.jl:-High-Performance-Symbolic-Numeric-Equation-Based-Modeling"><a class="docs-heading-anchor" href="#ModelingToolkit.jl:-High-Performance-Symbolic-Numeric-Equation-Based-Modeling">ModelingToolkit.jl: High-Performance Symbolic-Numeric Equation-Based Modeling</a><a id="ModelingToolkit.jl:-High-Performance-Symbolic-Numeric-Equation-Based-Modeling-1"></a><a class="docs-heading-anchor-permalink" href="#ModelingToolkit.jl:-High-Performance-Symbolic-Numeric-Equation-Based-Modeling" title="Permalink"></a></h1><p>ModelingToolkit.jl is a modeling language for high-performance symbolic-numeric computation in scientific computing and scientific machine learning. It then mixes ideas from symbolic computational algebra systems with causal and acausal equation-based modeling frameworks to give an extendable and parallel modeling system. It allows for users to give a high-level description of a model for symbolic preprocessing to analyze and enhance the model. Automatic symbolic transformations, such as index reduction of differential-algebraic equations, make it possible to solve equations that are impossible to solve with a purely numeric-based technique.</p><h2 id="Installation"><a class="docs-heading-anchor" href="#Installation">Installation</a><a id="Installation-1"></a><a class="docs-heading-anchor-permalink" href="#Installation" title="Permalink"></a></h2><p>To install ModelingToolkit.jl, use the Julia package manager:</p><pre><code class="language-julia hljs">using Pkg
 Pkg.add(&quot;ModelingToolkit&quot;)</code></pre><h2 id="Citation"><a class="docs-heading-anchor" href="#Citation">Citation</a><a id="Citation-1"></a><a class="docs-heading-anchor-permalink" href="#Citation" title="Permalink"></a></h2><p>If you use ModelingToolkit in your work, please cite the following:</p><pre><code class="nohighlight hljs">@misc{ma2021modelingtoolkit,
       title={ModelingToolkit: A Composable Graph Transformation System For Equation-Based Modeling},
       author={Yingbo Ma and Shashi Gowda and Ranjan Anantharaman and Chris Laughman and Viral Shah and Chris Rackauckas},
@@ -15,6 +15,8 @@ Pkg.add(&quot;ModelingToolkit&quot;)</code></pre><h2 id="Citation"><a class="doc
   [31c24e10] Distributions v0.25.117
   [e30172f5] Documenter v1.8.1
   [06fc5a27] DynamicQuantities v1.4.0
+  [14a09403] FMI v0.14.3
+  [724179cf] FMIZoo v1.2.1
   [961ee093] ModelingToolkit v9.64.3 `~/work/ModelingToolkit.jl/ModelingToolkit.jl`
   [16a59e39] ModelingToolkitStandardLibrary v2.19.0
   [8913a72c] NonlinearSolve v4.4.0
@@ -29,7 +31,7 @@ Pkg.add(&quot;ModelingToolkit&quot;)</code></pre><h2 id="Citation"><a class="doc
   [789caeaf] StochasticDiffEq v6.74.0
   [2efcf032] SymbolicIndexingInterface v0.3.38
   [d1185830] SymbolicUtils v3.16.0
-  [0c5d862f] Symbolics v6.29.1
+  [0c5d862f] Symbolics v6.29.2
   [1986cc42] Unitful v1.22.0
   [37e2e46d] LinearAlgebra
 Info Packages marked with ⌅ have new versions available but compatibility constraints restrict them from upgrading. To see why use `status --outdated`</code></pre></details><details><summary>and using this machine and Julia version.</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Julia Version 1.10.8
@@ -55,6 +57,7 @@ Environment:
 ⌅ [7d9fca2a] Arpack v0.5.3
   [4fba245c] ArrayInterface v7.18.0
   [4c555306] ArrayLayouts v1.11.1
+  [13072b0f] AxisAlgorithms v1.1.0
   [6e4b80f9] BenchmarkTools v1.6.0
   [0f109fa4] BifurcationKit v0.4.9
   [e2ed5e7c] Bijections v0.1.9
@@ -62,6 +65,7 @@ Environment:
   [62783981] BitTwiddlingConvenienceFunctions v0.1.6
   [8e7c35d0] BlockArrays v1.4.0
   [70df07ce] BracketingNonlinearSolve v1.1.0
+  [e1450e63] BufferedStreams v1.2.2
   [2a0fbf3d] CPUSummary v0.2.6
   [00ebfdb7] CSTParser v3.4.3
   [d360d2e6] ChainRulesCore v1.25.1
@@ -111,13 +115,21 @@ Environment:
   [460bff9d] ExceptionUnwrapping v0.1.11
   [d4d017d3] ExponentialUtilities v1.27.0
   [e2ba6199] ExprTools v0.1.10
-⌅ [6b7a57c9] Expronicon v0.8.5
   [55351af7] ExproniconLite v0.10.14
+  [8f5d6c58] EzXML v1.2.0
   [c87230d0] FFMPEG v0.4.2
+  [14a09403] FMI v0.14.3
+  [900ee838] FMIBase v1.1.0
+  [8af89139] FMICore v1.1.1
+  [31b88311] FMIExport v0.4.1
+  [9fcbc62e] FMIImport v1.0.10
+  [724179cf] FMIZoo v1.2.1
   [7034ab61] FastBroadcast v0.3.5
   [9aa1b823] FastClosures v0.3.2
   [442a2c76] FastGaussQuadrature v1.0.2
   [a4df4552] FastPower v1.1.1
+  [8fc22ac5] FilePaths v0.8.3
+  [48062228] FilePathsBase v0.9.23
   [1a297f60] FillArrays v1.13.0
   [64ca27bc] FindFirstFunctions v1.4.1
   [6a86dc24] FiniteDiff v2.27.0
@@ -134,12 +146,14 @@ Environment:
   [c27321d9] Glob v1.3.1
   [86223c79] Graphs v1.12.0
   [42e2da0e] Grisu v1.0.2
+  [f67ccb44] HDF5 v0.17.2
   [cd3eb016] HTTP v1.10.15
   [34004b35] HypergeometricFunctions v0.3.27
   [b5f81e59] IOCapture v0.2.5
   [615f187c] IfElse v0.1.1
   [d25df0c9] Inflate v0.1.5
   [18e54dd8] IntegerMathUtils v0.1.2
+  [a98d9a8b] Interpolations v0.15.1
   [8197267c] IntervalSets v0.7.10
   [3587e190] InverseFunctions v0.1.17
   [92d709cd] IrrationalConstants v0.2.4
@@ -164,10 +178,12 @@ Environment:
   [87fe0de2] LineSearch v0.1.4
   [d3d80556] LineSearches v7.3.0
   [7a12625a] LinearMaps v3.11.4
-  [7ed4a6bd] LinearSolve v3.3.1
+  [7ed4a6bd] LinearSolve v3.4.0
   [2ab3a3ac] LogExpFunctions v0.3.29
   [e6f89c97] LoggingExtras v1.1.0
+  [23992714] MAT v0.10.7
   [d8e11817] MLStyle v0.4.17
+  [3da0fdf6] MPIPreferences v0.1.11
   [1914dd2f] MacroTools v0.5.15
   [d125e4d3] ManualMemory v0.1.8
   [d0879d2d] MarkdownAST v0.1.2
@@ -240,7 +256,7 @@ Environment:
   [e409e4f3] PoissonRandom v0.4.4
   [f517fe37] Polyester v0.7.16
   [1d0040c9] PolyesterWeave v0.2.2
-  [f27b6e38] Polynomials v4.0.17
+  [f27b6e38] Polynomials v4.0.18
   [85a6dd25] PositiveFactorizations v0.2.4
   [d236fae5] PreallocationTools v0.4.25
   [aea7be01] PrecompileTools v1.2.1
@@ -253,13 +269,14 @@ Environment:
   [1fd47b50] QuadGK v2.11.2
   [74087812] Random123 v1.7.0
   [e6cf234a] RandomNumbers v1.6.0
+  [c84ed2f1] Ratios v0.4.5
   [3cdcf5f2] RecipesBase v1.3.4
   [01d81517] RecipesPipeline v0.6.12
   [731186ca] RecursiveArrayTools v3.31.0
   [189a3867] Reexport v1.2.2
   [2792f1a3] RegistryInstances v0.1.0
   [05181044] RelocatableFolders v1.0.1
-  [ae029012] Requires v1.3.0
+  [ae029012] Requires v1.3.1
   [ae5879a3] ResettableStacks v1.1.1
   [79098fc4] Rmath v0.8.0
   [7e49a35a] RuntimeGeneratedFunctions v0.5.13
@@ -284,7 +301,7 @@ Environment:
   [860ef19b] StableRNGs v1.0.2
   [aedffcd0] Static v1.1.1
   [0d7ed370] StaticArrayInterface v1.8.0
-  [90137ffa] StaticArrays v1.9.12
+  [90137ffa] StaticArrays v1.9.13
   [1e83bf80] StaticArraysCore v1.4.3
   [82ae8749] StatsAPI v1.7.0
   [2913bbd2] StatsBase v0.34.4
@@ -296,7 +313,7 @@ Environment:
   [2efcf032] SymbolicIndexingInterface v0.3.38
   [19f23fe9] SymbolicLimits v0.2.2
   [d1185830] SymbolicUtils v3.16.0
-  [0c5d862f] Symbolics v6.29.1
+  [0c5d862f] Symbolics v6.29.2
   [3783bdb8] TableTraits v1.0.1
   [bd369af6] Tables v1.12.0
   [62fd8b95] TensorCore v0.1.1
@@ -304,7 +321,7 @@ Environment:
   [5d786b92] TerminalLoggers v0.1.7
   [1c621080] TestItems v1.0.0
   [8290d209] ThreadingUtilities v0.5.2
-  [a759f4b9] TimerOutputs v0.5.27
+  [a759f4b9] TimerOutputs v0.5.28
   [0796e94c] Tokenize v0.5.29
   [3bb67fe8] TranscodingStreams v0.11.3
   [410a4b4d] Tricks v0.1.10
@@ -319,6 +336,8 @@ Environment:
 ⌅ [409d34a3] VectorInterface v0.4.9
   [19fa3120] VertexSafeGraphs v0.2.0
   [897b6980] WeakValueDicts v0.1.0
+  [efce3f68] WoodburyMatrices v1.0.0
+  [a5390f91] ZipFile v0.10.1
 ⌅ [68821587] Arpack_jll v3.5.1+1
   [6e34b625] Bzip2_jll v1.0.9+0
   [83423d85] Cairo_jll v1.18.2+1
@@ -335,7 +354,9 @@ Environment:
   [f8c6e375] Git_jll v2.47.1+0
   [7746bdde] Glib_jll v2.82.4+0
   [3b182d85] Graphite2_jll v1.3.14+1
+  [0234f1f7] HDF5_jll v1.14.5+0
   [2e76f6c2] HarfBuzz_jll v8.5.0+0
+  [e33a78d0] Hwloc_jll v2.12.0+0
   [1d5cc7b8] IntelOpenMP_jll v2025.0.4+0
   [aacddb02] JpegTurbo_jll v3.1.1+0
   [c1c5ebd0] LAME_jll v3.100.2+0
@@ -352,7 +373,11 @@ Environment:
   [89763e89] Libtiff_jll v4.7.1+0
   [38a345b3] Libuuid_jll v2.40.3+0
   [856f044c] MKL_jll v2025.0.1+1
+  [7cb0a576] MPICH_jll v4.3.0+0
+  [f1f71cc9] MPItrampoline_jll v5.5.2+0
+  [9237b28f] MicrosoftMPI_jll v10.1.4+3
   [e7412a2a] Ogg_jll v1.3.5+1
+  [fe0851c0] OpenMPI_jll v5.0.7+0
   [458c3c95] OpenSSL_jll v3.0.16+0
   [efe28fd5] OpenSpecFun_jll v0.5.6+0
   [91d4177d] Opus_jll v1.3.3+0
@@ -397,6 +422,7 @@ Environment:
   [35ca27e7] eudev_jll v3.2.9+0
   [214eeab7] fzf_jll v0.56.3+0
   [1a1c6b14] gperf_jll v3.1.1+1
+  [477f73a3] libaec_jll v1.1.3+0
   [a4ae2306] libaom_jll v3.11.0+0
   [0ac62f75] libass_jll v0.15.2+0
   [1183f4f0] libdecor_jll v0.2.2+0
@@ -459,4 +485,4 @@ Environment:
   [8e850b90] libblastrampoline_jll v5.11.0+0
   [8e850ede] nghttp2_jll v1.52.0+1
   [3f19e933] p7zip_jll v17.4.0+2
-Info Packages marked with ⌃ and ⌅ have new versions available. Those with ⌃ may be upgradable, but those with ⌅ are restricted by compatibility constraints from upgrading. To see why use `status --outdated -m`</code></pre></details><p>You can also download the <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v9.64.3/assets/Manifest.toml">manifest</a> file and the <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v9.64.3/assets/Project.toml">project</a> file.</p></article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.8.1 on <span class="colophon-date" title="Thursday 27 February 2025 14:45">Thursday 27 February 2025</span>. Using Julia version 1.10.8.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+Info Packages marked with ⌃ and ⌅ have new versions available. Those with ⌃ may be upgradable, but those with ⌅ are restricted by compatibility constraints from upgrading. To see why use `status --outdated -m`</code></pre></details><p>You can also download the <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v9.64.3/assets/Manifest.toml">manifest</a> file and the <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v9.64.3/assets/Project.toml">project</a> file.</p></article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.8.1 on <span class="colophon-date" title="Monday 3 March 2025 12:04">Monday 3 March 2025</span>. Using Julia version 1.10.8.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
