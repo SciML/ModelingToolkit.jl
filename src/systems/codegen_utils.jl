@@ -234,6 +234,7 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
     if wrap_code isa Tuple && symbolic_type(expr) == ScalarSymbolic()
         wrap_code = wrap_code[1]
     end
+    @show build_function(expr, args...)[1]
     return build_function(expr, args...; wrap_code, similarto, kwargs...)
 end
 
