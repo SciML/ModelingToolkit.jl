@@ -718,6 +718,22 @@ function add_initialization_parameters(sys::AbstractSystem)
 end
 
 """
+Returns true if the parameter `p` is of the form `Initial(x)`.
+"""
+function isinitial(p)
+    p = unwrap(p)
+    if iscall(p)
+        operation(p) isa Initial && return true
+        if operation(p) === getindex
+            operation(arguments(p)[1]) isa Initial && return true
+        end
+    else
+        return false
+    end
+    return false
+end
+
+"""
 $(TYPEDSIGNATURES)
 
 Mark a system as completed. A completed system is a system which is done being

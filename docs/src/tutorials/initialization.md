@@ -536,3 +536,14 @@ sol[α * x - β * x * y]
 ```@example init
 plot(sol)
 ```
+
+## Summary of Initialization API
+
+```@docs; canonical=false
+Initial
+isinitial
+generate_initializesystem
+initialization_equations
+guesses
+defaults
+```
