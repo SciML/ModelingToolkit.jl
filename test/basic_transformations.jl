@@ -42,13 +42,14 @@ end
         z ~ x + D(y)
         D(s) ~ 1 / (2*s)
     ]
-    M1 = ODESystem(eqs, t; name = :M) |> complete
-    M2 = change_independent_variable(M1, M1.s)
+    initialization_eqs = [x ~ 1.0, y ~ 1.0, D(y) ~ 0.0]
+    M1 = ODESystem(eqs, t; initialization_eqs, name = :M) |> complete
+    M2 = change_independent_variable(M1, M1.s; dummies = true)
 
-    M1 = structural_simplify(M1)
-    M2 = structural_simplify(M2)
-    prob1 = ODEProblem(M1, [M1.x => 1.0, M1.y => 1.0, Differential(M1.t)(M1.y) => 0.0, M1.s => 1.0], (1.0, 4.0))
-    prob2 = ODEProblem(M2, [M2.x => 1.0, M2.y => 1.0, Differential(M2.s)(M2.y) => 0.0], (1.0, 2.0))
+    M1 = structural_simplify(M1; allow_symbolic = true)
+    M2 = structural_simplify(M2; allow_symbolic = true)
+    prob1 = ODEProblem(M1, [M1.s => 1.0], (1.0, 4.0), [])
+    prob2 = ODEProblem(M2, [], (1.0, 2.0), [])
     sol1 = solve(prob1, Tsit5(); reltol = 1e-10, abstol = 1e-10)
     sol2 = solve(prob2, Tsit5(); reltol = 1e-10, abstol = 1e-10)
     ts = range(0.0, 1.0, length = 50)
@@ -75,7 +76,7 @@ end
     # Apply in two steps, where derivatives are defined at each step: first t -> a, then a -> b
     M2 = change_independent_variable(M1, M1.a) |> complete #, D(b) ~ D(a)/a; verbose = true)
     @variables b(M2.a)
-    M3 = change_independent_variable(M2, b, Differential(M2.a)(b) ~ exp(-b))
+    M3 = change_independent_variable(M2, b, [Differential(M2.a)(b) ~ exp(-b), M2.a ~ exp(b)])
     M2 = structural_simplify(M2; allow_symbolic = true)
     M3 = structural_simplify(M3; allow_symbolic = true)
     @test length(unknowns(M2)) == 2 && length(unknowns(M3)) == 2
@@ -98,6 +99,12 @@ end
     prob = ODEProblem(Mx, [Mx.y => 0.0, Dx(Mx.y) => 1.0], (0.0, 20.0), [g => 9.81, v => 10.0]) # 1 = dy/dx = (dy/dt)/(dx/dt) means equal initial horizontal and vertical velocities
     sol = solve(prob, Tsit5(); reltol = 1e-5)
     @test all(isapprox.(sol[Mx.y], sol[Mx.x - g*(Mx.x/v)^2/2]; atol = 1e-10)) # compare to analytical solution (x(t) = v*t, y(t) = v*t - g*t^2/2)
+end
+
+@testset "Change independent variable (autonomous system)" begin
+    M = ODESystem([D(x) ~ t], t; name = :M) |> complete # non-autonomous
+    @test_throws "t ~ F(x(t)) must be provided" change_independent_variable(M, M.x)
+    @test_nowarn change_independent_variable(M, M.x, [t ~ 2*x])
 end
 
 @testset "Change independent variable (errors)" begin
