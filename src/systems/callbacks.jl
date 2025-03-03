@@ -11,35 +11,139 @@ function get_discrete_events(sys::AbstractSystem)
     getfield(sys, :discrete_events)
 end
 
-struct Callback
-    eqs::Vector{Equation}
-    initialize::Union{ImplicitDiscreteSystem, FunctionalAffect, ImperativeAffect}
-    finalize::ImplicitDiscreteSystem
-    affect::ImplicitDiscreteSystem
-    affect_neg::ImplicitDiscreteSystem
-    rootfind::Union{Nothing, SciMLBase.RootfindOpt}
-end
+abstract type Callback end
+
+const Affect = Union{ImplicitDiscreteSystem, FunctionalAffect, ImperativeAffect}
 
 # Callbacks: 
 #   mapping (cond) => ImplicitDiscreteSystem
 function generate_continuous_callbacks(events, sys)
     algeeqs = alg_equations(sys)
-    callbacks = Callback[]
-    for (cond, aff) in events
-        @mtkbuild affect = ImplicitDiscreteSystem([aff, algeeqs], t)
-        push!(callbacks, Callback(cond, NULL_AFFECT, NULL_AFFECT, affect, affect, SciMLBase.LeftRootFind)) 
+    callbacks = MTKContinuousCallback[]
+    for (cond, affs) in events
+        @mtkbuild affect = ImplicitDiscreteSystem([affs, algeeqs], t)
+        push!(callbacks, MTKContinuousCallback(cond, NULL_AFFECT, NULL_AFFECT, affect, affect, SciMLBase.LeftRootFind)) 
     end
     callbacks
 end
 
-function generate_discrete_callback_system(events, sys)
+function generate_discrete_callbacks(events, sys)
+    algeeqs = alg_equations(sys)
+    callbacks = MTKDiscreteCallback[]
+    for (cond, affs) in events
+        @mtkbuild affect = ImplicitDiscreteSystem([affs, algeeqs], t)
+        push!(callbacks, MTKDiscreteCallback(cond, NULL_AFFECT, NULL_AFFECT, affect)) 
+    end
+    callbacks
 end
 
-function generate_callback_function() 
-    
+"""
+Create a DifferentialEquations callback. A set of continuous callbacks becomes a VectorContinuousCallback.
+"""
+function create_callback(cbs::Vector{MTKContinuousCallback}, sys; is_discrete = false)
+    eqs = flatten_equations(cbs)
+    _, f_iip = generate_custom_function(
+        sys, [eq.lhs - eq.rhs for eq in eqs], unknowns(sys), parameters(sys); 
+        expression = Val{false})
+    trigger = (out, u, t, integ) -> f_iip(out, u, parameter_values(integ), t)
+
+    affects = []
+    affect_negs = []
+    inits = []
+    finals = []
+    for cb in cbs
+        affect = compile_affect(cb.affect)
+        push!(affects, affect)
+        isnothing(cb.affect_neg) ? push!(affect_negs, affect) : push!(affect_negs, compile_affect(cb.affect_neg))
+        push!(inits, compile_affect(cb.initialize, default = SciMLBase.INITALIZE_DEFAULT))
+        push!(finals, compile_affect(cb.finalize, default = SciMLBase.FINALIZE_DEFAULT))
+    end
+
+    # since there may be different number of conditions and affects,
+    # we build a map that translates the condition eq. number to the affect number
+    num_eqs = length.(eqs)
+    eq2affect = reduce(vcat,
+        [fill(i, num_eqs[i]) for i in eachindex(affects)])
+    @assert length(eq2affect) == length(eqs)
+    @assert maximum(eq2affect) == length(affect_functions)
+
+    affect = function (integ, idx)
+        affects[eq2affect[idx]](integ)
+    end
+    affect_neg = function (integ, idx)
+        f = affect_negs[eq2affect[idx]]
+        isnothing(f) && return
+        f(integ)
+    end
+    initialize = compile_optional_setup(inits, SciMLBase.INITIALIZE_DEFAULT)
+    finalize = compile_optional_setup(finals, SciMLBase.FINALIZE_DEFAULT)
+
+    return VectorContinuousCallback(trigger, affect; affect_neg, initialize, finalize, rootfind = callback.rootfind, initializealg = SciMLBase.NoInit)
 end
 
-############# Old implementation ###
+function create_callback(cb, sys; is_discrete = false)
+    is_timed = is_timed_condition(cb)
+
+    trigger = if is_discrete
+        is_timed ? condition(cb) :
+            compile_condition(callback, sys, unknowns(sys), parameters(sys))
+        else
+            _, f_iip = generate_custom_function(
+                sys, [eq.rhs - eq.lhs for eq in equations(cb)], unknowns(sys), parameters(sys); 
+                expression = Val{false})
+            (out, u, t, integ) -> f_iip(out, u, parameter_values(integ), t)
+        end
+
+    affect = compile_affect(cb.affect) 
+    affect_neg = isnothing(cb.affect_neg) ? affect_fn : compile_affect(cb.affect_neg)
+    initialize = compile_affect(cb.initialize, default = SciMLBase.INITIALIZE_DEFAULT)
+    finalize = compile_affect(cb.finalize, default = SciMLBase.FINALIZE_DEFAULT)
+
+    if is_discrete
+        if is_timed && condition(cb) isa AbstractVector
+            return PresetTimeCallback(trigger, affect; affect_neg, initialize, finalize, initializealg = SciMLBase.NoInit)
+        elseif is_timed
+            return PeriodicCallback(affect, trigger; initialize, finalize)
+        else
+            return DiscreteCallback(trigger, affect; affect_neg, initialize, finalize, initializealg = SciMLBase.NoInit)
+        end
+    else
+        return ContinuousCallback(trigger, affect; affect_neg, initialize, finalize, rootfind = callback.rootfind, initializealg = SciMLBase.NoInit)
+    end
+end
+
+function compile_affect(aff; default = nothing)
+    if aff isa ImplicitDiscreteSystem
+        function affect!(integrator) 
+            u0map = [u => integrator[u] for u in unknowns(aff)]
+            pmap = [p => integrator[p] for p in parameters(aff)]
+            prob = ImplicitDiscreteProblem(aff, u0map, (0, 1), pmap)
+            sol = solve(prob)
+            for u in unknowns(aff)
+                integrator[u] = sol[u][end]
+            end
+            for p in parameters(aff)
+                integrator[p] = sol[p][end]
+            end
+        end
+    elseif aff isa FunctionalAffect || aff isa ImperativeAffect
+        compile_user_affect(aff, callback, sys, unknowns(sys), parameters(sys))
+    else
+        default
+    end
+end
+
+function compile_setup_funcs(funs, default)
+    all(isnothing, funs) && return default
+    return let funs = funs
+        function (cb, u, t, integ)
+           for func in funs
+               isnothing(func) ? continue : func(integ)
+           end
+        end
+    end
+end
+
 struct FunctionalAffect
     f::Any
     sts::Vector
@@ -48,6 +152,22 @@ struct FunctionalAffect
     pars_syms::Vector{Symbol}
     discretes::Vector
     ctx::Any
+end
+
+struct MTKContinuousCallback <: Callback
+    eqs::Vector{Equation}
+    initialize::Union{Affect, Nothing}
+    finalize::Union{Affect, Nothing}
+    affect::Affect
+    affect_neg::Union{Affect, Nothing}
+    rootfind::Union{Nothing, SciMLBase.RootfindOpt}
+end
+
+struct MTKDiscreteCallback <: Callback
+    conds::Vector{Equation}
+    initialize::Union{Affect, Nothing}
+    finalize::Union{Affect, Nothing}
+    affect::Affect
 end
 
 function FunctionalAffect(f, sts, pars, discretes, ctx = nothing)
@@ -67,7 +187,7 @@ function FunctionalAffect(; f, sts, pars, discretes, ctx = nothing)
     FunctionalAffect(f, sts, pars, discretes, ctx)
 end
 
-func(f::FunctionalAffect) = f.f
+func(a::FunctionalAffect) = a.f
 context(a::FunctionalAffect) = a.ctx
 parameters(a::FunctionalAffect) = a.pars
 parameters_syms(a::FunctionalAffect) = a.pars_syms
@@ -899,13 +1019,7 @@ function compile_affect_fn(cb, sys::AbstractTimeDependentSystem, dvs, ps, kwargs
     eq_aff = affects(cb)
     eq_neg_aff = affect_negs(cb)
     affect = compile_affect(eq_aff, cb, sys, dvs, ps; expression = Val{false}, kwargs...)
-    function compile_optional_affect(aff, default = nothing)
-        if isnothing(aff) || aff == default
-            return nothing
-        else
-            return compile_affect(aff, cb, sys, dvs, ps; expression = Val{false}, kwargs...)
-        end
-    end
+
     if eq_neg_aff === eq_aff
         affect_neg = affect
     else
@@ -1047,6 +1161,7 @@ end
 function compile_affect(affect::FunctionalAffect, cb, sys, dvs, ps; kwargs...)
     compile_user_affect(affect, cb, sys, dvs, ps; kwargs...)
 end
+
 function _compile_optional_affect(default, aff, cb, sys, dvs, ps; kwargs...)
     if isnothing(aff) || aff == default
         return nothing
@@ -1054,6 +1169,7 @@ function _compile_optional_affect(default, aff, cb, sys, dvs, ps; kwargs...)
         return compile_affect(aff, cb, sys, dvs, ps; expression = Val{false}, kwargs...)
     end
 end
+
 function generate_timed_callback(cb, sys, dvs, ps; postprocess_affect_expr! = nothing,
         kwargs...)
     cond = condition(cb)
