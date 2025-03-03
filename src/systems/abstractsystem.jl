@@ -796,7 +796,10 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
             @set! sys.index_cache = nothing
         end
         ps = mapreduce(
-            Symbolics.scalarize, vcat, parameters(sys; initial_parameters = true))
+            Symbolics.scalarize, vcat, parameters(sys; initial_parameters = true); init = [])
+        if !(ps isa Vector)
+            ps = [ps]
+        end
         @set! sys.ps = ps
     end
     if isdefined(sys, :initializesystem) && get_initializesystem(sys) !== nothing
