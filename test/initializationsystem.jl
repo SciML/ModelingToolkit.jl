@@ -979,6 +979,7 @@ end
               ForwardDiff.Dual
         @test state_values(prob2.f.initialization_data.initializeprob) ≈
               state_values(prob.f.initialization_data.initializeprob)
+        @test eltype(prob2.p.initials) <: ForwardDiff.Dual
     end
 end
 
