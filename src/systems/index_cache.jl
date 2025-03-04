@@ -428,6 +428,8 @@ function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym)
                     Symbolics.shape(sym) !== Symbolics.Unknown()
     return if (idx = check_index_map(ic.tunable_idx, sym)) !== nothing
         ParameterIndex(SciMLStructures.Tunable(), idx, validate_size)
+    elseif (idx = check_index_map(ic.initials_idx, sym)) !== nothing
+        ParameterIndex(SciMLStructures.Initials(), idx, validate_size)
     elseif (idx = check_index_map(ic.discrete_idx, sym)) !== nothing
         ParameterIndex(
             SciMLStructures.Discrete(), (idx.buffer_idx, idx.idx_in_buffer), validate_size)
