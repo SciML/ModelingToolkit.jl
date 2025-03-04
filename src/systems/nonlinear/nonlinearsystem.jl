@@ -239,7 +239,7 @@ Convert an `ODESystem` to a `NonlinearSystem` solving for its steady state (wher
 Any differential variable `D(x) ~ f(...)` will be turned into `0 ~ f(...)`. The returned system is not
 simplified. If the input system is `complete`d, then so will the returned system.
 """
-function NonlinearSystem(sys::ODESystem)
+function NonlinearSystem(sys::AbstractODESystem)
     eqs = equations(sys)
     obs = observed(sys)
     subrules = Dict(D(x) => 0.0 for x in unknowns(sys))
@@ -555,7 +555,7 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
     return remake(NonlinearProblem{iip}(f, u0, p, pt; filter_kwargs(kwargs)...))
 end
 
-function DiffEqBase.NonlinearProblem(sys::ODESystem, args...; kwargs...)
+function DiffEqBase.NonlinearProblem(sys::AbstractODESystem, args...; kwargs...)
     NonlinearProblem(NonlinearSystem(sys), args...; kwargs...)
 end
 
