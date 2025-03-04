@@ -5,7 +5,7 @@ using DataInterpolations
 using BlockArrays: BlockedArray
 using ModelingToolkit: t_nounits as t, D_nounits as D
 using ModelingToolkit: MTKParameters, ParameterIndex, NONNUMERIC_PORTION
-using SciMLStructures: Tunable, Discrete, Constants
+using SciMLStructures: Tunable, Discrete, Constants, Initials
 using StaticArrays: SizedVector
 using SymbolicIndexingInterface: is_parameter, getp
 
@@ -204,7 +204,7 @@ connections = [[state_feedback.input.u[i] ~ model_outputs[i] for i in 1:4]
 S = get_sensitivity(closed_loop, :u)
 
 @testset "Indexing MTKParameters with ParameterIndex" begin
-    ps = MTKParameters(collect(1.0:10.0),
+    ps = MTKParameters(collect(1.0:10.0), collect(11.0:20.0),
         (BlockedArray([true, false, false, true], [2, 2]),
             BlockedArray([[1 2; 3 4], [2 4; 6 8]], [1, 1])),
         # (BlockedArray([[true, false], [false, true]]), BlockedArray([[[1 2; 3 4]], [[2 4; 6 8]]])),
@@ -213,6 +213,9 @@ S = get_sensitivity(closed_loop, :u)
     @test ps[ParameterIndex(Tunable(), 1)] == 1.0
     @test ps[ParameterIndex(Tunable(), 2:4)] == collect(2.0:4.0)
     @test ps[ParameterIndex(Tunable(), reshape(4:7, 2, 2))] == reshape(4.0:7.0, 2, 2)
+    @test ps[ParameterIndex(Initials(), 1)] == 11.0
+    @test ps[ParameterIndex(Initials(), 2:4)] == collect(12.0:14.0)
+    @test ps[ParameterIndex(Initials(), reshape(4:7, 2, 2))] == reshape(14.0:17.0, 2, 2)
     @test ps[ParameterIndex(Discrete(), (2, 1, 2, 2))] == 4
     @test ps[ParameterIndex(Discrete(), (2, 2))] == [2 4; 6 8]
     @test ps[ParameterIndex(Constants(), (1, 1))] == 5
@@ -221,8 +224,12 @@ S = get_sensitivity(closed_loop, :u)
     ps[ParameterIndex(Tunable(), 1)] = 1.5
     ps[ParameterIndex(Tunable(), 2:4)] = [2.5, 3.5, 4.5]
     ps[ParameterIndex(Tunable(), reshape(5:8, 2, 2))] = [5.5 7.5; 6.5 8.5]
+    ps[ParameterIndex(Initials(), 1)] = 11.5
+    ps[ParameterIndex(Initials(), 2:4)] = [12.5, 13.5, 14.5]
+    ps[ParameterIndex(Initials(), reshape(5:8, 2, 2))] = [15.5 17.5; 16.5 18.5]
     ps[ParameterIndex(Discrete(), (2, 1, 2, 2))] = 5
     @test ps[ParameterIndex(Tunable(), 1:8)] == collect(1.0:8.0) .+ 0.5
+    @test ps[ParameterIndex(Initials(), 1:8)] == collect(11.0:18.0) .+ 0.5
     @test ps[ParameterIndex(Discrete(), (2, 1, 2, 2))] == 5
 end
 
