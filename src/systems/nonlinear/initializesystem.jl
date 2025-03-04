@@ -528,6 +528,9 @@ function SciMLBase.late_binding_update_u0_p(
     tunables, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Tunable(), newp)
     tunables = DiffEqBase.promote_u0(tunables, newu0, t0)
     newp = repack(tunables)
+    initials, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Initials(), newp)
+    initials = DiffEqBase.promote_u0(initials, newu0, t0)
+    newp = repack(initials)
 
     allsyms = all_symbols(sys)
     for (k, v) in u0
