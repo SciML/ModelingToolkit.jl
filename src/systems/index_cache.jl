@@ -510,6 +510,12 @@ function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
         (BasicSymbolic[unwrap(variable(:DEF))
                        for _ in 1:(ic.tunable_buffer_size.length)],)
     end
+    initials_buf = if ic.initials_buffer_size.length == 0
+        ()
+    else
+        (BasicSymbolic[unwrap(variable(:DEF))
+                       for _ in 1:(ic.initials_buffer_size.length)],)
+    end
 
     disc_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF))
                                    for _ in 1:(sum(x -> x.length, temp))]
@@ -531,6 +537,13 @@ function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
             else
                 param_buf[1][i] = unwrap.(collect(p))
             end
+        elseif haskey(ic.initials_idx, p)
+            i = ic.initials_idx[p]
+            if i isa Int
+                initials_buf[1][i] = unwrap(p)
+            else
+                initials_buf[1][i] = unwrap.(collect(p))
+            end
         elseif haskey(ic.constant_idx, p)
             i, j = ic.constant_idx[p]
             const_buf[i][j] = p
@@ -543,7 +556,8 @@ function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
     end
 
     result = broadcast.(
-        unwrap, (param_buf..., disc_buf..., const_buf..., nonnumeric_buf...))
+        unwrap, (
+            param_buf..., initials_buf..., disc_buf..., const_buf..., nonnumeric_buf...))
     if drop_missing
         result = map(result) do buf
             filter(buf) do sym
@@ -564,6 +578,11 @@ function iterated_buffer_index(ic::IndexCache, ind::ParameterIndex)
     if ind.portion isa SciMLStructures.Tunable
         return idx + 1
     elseif ic.tunable_buffer_size.length > 0
+        idx += 1
+    end
+    if ind.portion isa SciMLStructures.Initials
+        return idx + 1
+    elseif ic.initials_buffer_size.length > 0
         idx += 1
     end
     if ind.portion isa SciMLStructures.Discrete
@@ -587,6 +606,8 @@ function get_buffer_template(ic::IndexCache, pidx::ParameterIndex)
 
     if portion isa SciMLStructures.Tunable
         return ic.tunable_buffer_size
+    elseif portion isa SciMLStructures.Initials
+        return ic.initials_buffer_size
     elseif portion isa SciMLStructures.Discrete
         return ic.discrete_buffer_sizes[idx[1]][1]
     elseif portion isa SciMLStructures.Constants
