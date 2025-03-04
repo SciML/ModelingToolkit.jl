@@ -3,8 +3,9 @@ symconvert(::Type{T}, x) where {T} = convert(T, x)
 symconvert(::Type{Real}, x::Integer) = convert(Float64, x)
 symconvert(::Type{V}, x) where {V <: AbstractArray} = convert(V, symconvert.(eltype(V), x))
 
-struct MTKParameters{T, D, C, N, H}
+struct MTKParameters{T, I, D, C, N, H}
     tunable::T
+    initials::I
     discrete::D
     constant::C
     nonnumeric::N
@@ -65,6 +66,8 @@ function MTKParameters(
 
     tunable_buffer = Vector{ic.tunable_buffer_size.type}(
         undef, ic.tunable_buffer_size.length)
+    initials_buffer = Vector{ic.initials_buffer_size.type}(
+        undef, ic.initials_buffer_size.length)
     disc_buffer = Tuple(BlockedArray(
                             Vector{subbuffer_sizes[1].type}(
                                 undef, sum(x -> x.length, subbuffer_sizes)),
@@ -79,6 +82,9 @@ function MTKParameters(
         if haskey(ic.tunable_idx, sym)
             idx = ic.tunable_idx[sym]
             tunable_buffer[idx] = val
+        elseif haskey(ic.initials_idx, sym)
+            idx = ic.initials_idx[sym]
+            initials_buffer[idx] = val
         elseif haskey(ic.discrete_idx, sym)
             idx = ic.discrete_idx[sym]
             disc_buffer[idx.buffer_idx][idx.idx_in_buffer] = val
@@ -124,15 +130,19 @@ function MTKParameters(
     if isempty(tunable_buffer)
         tunable_buffer = SizedVector{0, Float64}()
     end
+    initials_buffer = narrow_buffer_type(initials_buffer)
+    if isempty(initials_buffer)
+        initials_buffer = SizedVector{0, Float64}()
+    end
     disc_buffer = narrow_buffer_type.(disc_buffer)
     const_buffer = narrow_buffer_type.(const_buffer)
     # Don't narrow nonnumeric types
     nonnumeric_buffer = nonnumeric_buffer
 
     mtkps = MTKParameters{
-        typeof(tunable_buffer), typeof(disc_buffer), typeof(const_buffer),
-        typeof(nonnumeric_buffer), typeof(())}(tunable_buffer,
-        disc_buffer, const_buffer, nonnumeric_buffer, ())
+        typeof(tunable_buffer), typeof(initials_buffer), typeof(disc_buffer),
+        typeof(const_buffer), typeof(nonnumeric_buffer), typeof(())}(tunable_buffer,
+        initials_buffer, disc_buffer, const_buffer, nonnumeric_buffer, ())
     return mtkps
 end
 
@@ -252,6 +262,26 @@ function SciMLStructures.replace!(::SciMLStructures.Tunable, p::MTKParameters, n
     return nothing
 end
 
+function SciMLStructures.canonicalize(::SciMLStructures.Initials, p::MTKParameters)
+    arr = p.initials
+    repack = let p = p
+        function (new_val)
+            return SciMLStructures.replace(SciMLStructures.Initials(), p, new_val)
+        end
+    end
+    return arr, repack, true
+end
+
+function SciMLStructures.replace(::SciMLStructures.Initials, p::MTKParameters, newvals)
+    @set! p.initials = newvals
+    return p
+end
+
+function SciMLStructures.replace!(::SciMLStructures.Initials, p::MTKParameters, newvals)
+    copyto!(p.initials, newvals)
+    return nothing
+end
+
 for (Portion, field, recurse) in [(SciMLStructures.Discrete, :discrete, 1)
                                   (SciMLStructures.Constants, :constant, 1)
                                   (Nonnumeric, :nonnumeric, 1)
@@ -279,12 +309,14 @@ end
 
 function Base.copy(p::MTKParameters)
     tunable = copy(p.tunable)
+    initials = copy(p.initials)
     discrete = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.discrete)
     constant = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.constant)
     nonnumeric = copy.(p.nonnumeric)
     caches = copy.(p.caches)
     return MTKParameters(
         tunable,
+        initials,
         discrete,
         constant,
         nonnumeric,
@@ -299,6 +331,9 @@ function _ducktyped_parameter_values(p, pind::ParameterIndex)
     @unpack portion, idx = pind
     if portion isa SciMLStructures.Tunable
         return idx isa Int ? p.tunable[idx] : view(p.tunable, idx)
+    end
+    if portion isa SciMLStructures.Initials
+        return idx isa Int ? p.initials[idx] : view(p.initials, idx)
     end
     i, j, k... = idx
     if portion isa SciMLStructures.Discrete
@@ -320,6 +355,11 @@ function SymbolicIndexingInterface.set_parameter!(
             throw(InvalidParameterSizeException(size(idx), size(val)))
         end
         p.tunable[idx] = val
+    elseif portion isa SciMLStructures.Initials
+        if validate_size && size(val) !== size(idx)
+            throw(InvalidParameterSizeException(size(idx), size(val)))
+        end
+        p.initials[idx] = val
     else
         i, j, k... = idx
         if portion isa SciMLStructures.Discrete
@@ -394,7 +434,8 @@ end
 
 function validate_parameter_type(ic::IndexCache, idx::ParameterIndex, val)
     stype = get_buffer_template(ic, idx).type
-    if idx.portion == SciMLStructures.Tunable() && !(idx.idx isa Int)
+    if (idx.portion == SciMLStructures.Tunable() ||
+        idx.portion == SciMLStructures.Initials()) && !(idx.idx isa Int)
         stype = AbstractArray{<:stype}
     end
     validate_parameter_type(
@@ -454,6 +495,7 @@ function SymbolicIndexingInterface.remake_buffer(indp, oldbuf::MTKParameters, id
 end
 function _remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true)
     newbuf = @set oldbuf.tunable = similar(oldbuf.tunable, Any)
+    @set! newbuf.initials = similar(oldbuf.initials, Any)
     @set! newbuf.discrete = Tuple(similar(buf, Any) for buf in newbuf.discrete)
     @set! newbuf.constant = Tuple(similar(buf, Any) for buf in newbuf.constant)
     @set! newbuf.nonnumeric = Tuple(similar(buf, Any) for buf in newbuf.nonnumeric)
@@ -529,6 +571,12 @@ function _remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true
         T = promote_type(eltype(newbuf.tunable), Float64)
         @set! newbuf.tunable = T.(newbuf.tunable)
     end
+    @set! newbuf.initials = narrow_buffer_type_and_fallback_undefs(
+        oldbuf.initials, newbuf.initials)
+    if eltype(newbuf.initials) <: Integer
+        T = promote_type(eltype(newbuf.initials), Float64)
+        @set! newbuf.initials = T.(newbuf.initials)
+    end
     @set! newbuf.discrete = narrow_buffer_type_and_fallback_undefs.(
         oldbuf.discrete, newbuf.discrete)
     @set! newbuf.constant = narrow_buffer_type_and_fallback_undefs.(
@@ -540,6 +588,7 @@ end
 
 function as_any_buffer(p::MTKParameters)
     @set! p.tunable = similar(p.tunable, Any)
+    @set! p.initials = similar(p.initials, Any)
     @set! p.discrete = Tuple(similar(buf, Any) for buf in p.discrete)
     @set! p.constant = Tuple(similar(buf, Any) for buf in p.constant)
     @set! p.nonnumeric = Tuple(similar(buf, Any) for buf in p.nonnumeric)
@@ -615,10 +664,13 @@ end
 # getindex indexes the vectors, setindex! linearly indexes values
 # it's inconsistent, but we need it to be this way
 @generated function Base.getindex(
-        ps::MTKParameters{T, D, C, N, H}, idx::Int) where {T, D, C, N, H}
+        ps::MTKParameters{T, I, D, C, N, H}, idx::Int) where {T, I, D, C, N, H}
     paths = []
     if !(T <: SizedVector{0, Float64})
         push!(paths, :(ps.tunable))
+    end
+    if !(I <: SizedVector{0, Float64})
+        push!(paths, :(ps.initials))
     end
     for i in 1:fieldcount(D)
         push!(paths, :(ps.discrete[$i]))
@@ -641,9 +693,13 @@ end
     return Expr(:block, expr, :(throw(BoundsError(ps, idx))))
 end
 
-@generated function Base.length(ps::MTKParameters{T, D, C, N, H}) where {T, D, C, N, H}
+@generated function Base.length(ps::MTKParameters{
+        T, I, D, C, N, H}) where {T, I, D, C, N, H}
     len = 0
     if !(T <: SizedVector{0, Float64})
+        len += 1
+    end
+    if !(I <: SizedVector{0, Float64})
         len += 1
     end
     len += fieldcount(D) + fieldcount(C) + fieldcount(N) + fieldcount(H)
@@ -668,7 +724,7 @@ function Base.iterate(buf::MTKParameters, state = 1)
 end
 
 function Base.:(==)(a::MTKParameters, b::MTKParameters)
-    return a.tunable == b.tunable && a.discrete == b.discrete &&
+    return a.tunable == b.tunable && a.initials == b.initials && a.discrete == b.discrete &&
            a.constant == b.constant && a.nonnumeric == b.nonnumeric &&
            all(Iterators.map(a.caches, b.caches) do acache, bcache
                eltype(acache) == eltype(bcache) && length(acache) == length(bcache)
