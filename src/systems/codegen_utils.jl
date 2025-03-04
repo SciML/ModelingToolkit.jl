@@ -287,7 +287,7 @@ end
         # The user provided a single buffer/tuple for the parameter object, so wrap that
         # one in a tuple
         fargs = ntuple(Val(length(args))) do i
-            i == paramidx ? :((args[$i],)) : :(args[$i])
+            i == paramidx ? :((args[$i], nothing)) : :(args[$i])
         end
         return :($f($(fargs...)))
     end
