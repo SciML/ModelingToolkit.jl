@@ -760,12 +760,6 @@ function jacobian_wrt_vars(pf::F, p::MTKParameters, input_idxs, chunk::C) where 
     ForwardDiff.jacobian(p_closure, p_small, cfg, Val(false))
 end
 
-function as_duals(p::MTKParameters, dualtype)
-    tunable = dualtype.(p.tunable)
-    discrete = dualtype.(p.discrete)
-    return MTKParameters{typeof(tunable), typeof(discrete)}(tunable, discrete)
-end
-
 const MISSING_PARAMETERS_MESSAGE = """
                                 Some parameters are missing from the variable map.
                                 Please provide a value or default for the following variables:
