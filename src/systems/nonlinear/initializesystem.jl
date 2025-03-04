@@ -338,7 +338,15 @@ function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
     end
     buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Tunable(), newp)
     if eltype(buf) != T
-        newp = repack(T.(buf))
+        newbuf = similar(buf, T)
+        copyto!(newbuf, buf)
+        newp = repack(newbuf)
+    end
+    buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Initials(), newp)
+    if eltype(buf) != T
+        newbuf = similar(buf, T)
+        copyto!(newbuf, buf)
+        newp = repack(newbuf)
     end
     return u0, newp
 end
