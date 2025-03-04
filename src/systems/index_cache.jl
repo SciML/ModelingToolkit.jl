@@ -49,6 +49,7 @@ struct IndexCache
     # sym => (clockidx, idx_in_clockbuffer)
     callback_to_clocks::Dict{Any, Vector{Int}}
     tunable_idx::TunableIndexMap
+    initials_idx::TunableIndexMap
     constant_idx::ParamIndexMap
     nonnumeric_idx::NonnumericMap
     observed_syms_to_timeseries::Dict{BasicSymbolic, TimeseriesSetType}
@@ -56,6 +57,7 @@ struct IndexCache
         Union{BasicSymbolic, CallWithMetadata}, TimeseriesSetType}
     discrete_buffer_sizes::Vector{Vector{BufferTemplate}}
     tunable_buffer_size::BufferTemplate
+    initials_buffer_size::BufferTemplate
     constant_buffer_sizes::Vector{BufferTemplate}
     nonnumeric_buffer_sizes::Vector{BufferTemplate}
     symbol_to_variable::Dict{Symbol, SymbolicParam}
@@ -251,7 +253,9 @@ function IndexCache(sys::AbstractSystem)
 
     tunable_idxs = TunableIndexMap()
     tunable_buffer_size = 0
-    for buffers in (tunable_buffers, initial_param_buffers)
+    bufferlist = is_initializesystem(sys) ? (tunable_buffers, initial_param_buffers) :
+                 (tunable_buffers,)
+    for buffers in bufferlist
         for (i, (_, buf)) in enumerate(buffers)
             for (j, p) in enumerate(buf)
                 idx = if size(p) == ()
@@ -268,6 +272,43 @@ function IndexCache(sys::AbstractSystem)
                     symbol_to_variable[getname(default_toterm(p))] = p
                 end
             end
+        end
+    end
+
+    initials_idxs = TunableIndexMap()
+    initials_buffer_size = 0
+    if !is_initializesystem(sys)
+        for (i, (_, buf)) in enumerate(initial_param_buffers)
+            for (j, p) in enumerate(buf)
+                idx = if size(p) == ()
+                    initials_buffer_size + 1
+                else
+                    reshape(
+                        (initials_buffer_size + 1):(initials_buffer_size + length(p)), size(p))
+                end
+                initials_buffer_size += length(p)
+                initials_idxs[p] = idx
+                initials_idxs[default_toterm(p)] = idx
+                if hasname(p) && (!iscall(p) || operation(p) !== getindex)
+                    symbol_to_variable[getname(p)] = p
+                    symbol_to_variable[getname(default_toterm(p))] = p
+                end
+            end
+        end
+    end
+
+    for k in collect(keys(tunable_idxs))
+        v = tunable_idxs[k]
+        v isa AbstractArray || continue
+        for (kk, vv) in zip(collect(k), v)
+            tunable_idxs[kk] = vv
+        end
+    end
+    for k in collect(keys(initials_idxs))
+        v = initials_idxs[k]
+        v isa AbstractArray || continue
+        for (kk, vv) in zip(collect(k), v)
+            initials_idxs[kk] = vv
         end
     end
 
@@ -341,12 +382,14 @@ function IndexCache(sys::AbstractSystem)
         disc_idxs,
         callback_to_clocks,
         tunable_idxs,
+        initials_idxs,
         const_idxs,
         nonnumeric_idxs,
         observed_syms_to_timeseries,
         dependent_pars_to_timeseries,
         disc_buffer_templates,
         BufferTemplate(Real, tunable_buffer_size),
+        BufferTemplate(Real, initials_buffer_size),
         const_buffer_sizes,
         nonnumeric_buffer_sizes,
         symbol_to_variable

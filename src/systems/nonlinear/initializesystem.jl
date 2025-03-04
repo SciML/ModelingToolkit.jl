@@ -539,6 +539,15 @@ function SciMLBase.late_binding_update_u0_p(
 end
 
 """
+    $(TYPEDSIGNATURES)
+
+Check if the given system is an initialization system.
+"""
+function is_initializesystem(sys::AbstractSystem)
+    sys isa NonlinearSystem && get_metadata(sys) isa InitializationSystemMetadata
+end
+
+"""
 Counteracts the CSE/array variable hacks in `symbolics_tearing.jl` so it works with
 initialization.
 """
