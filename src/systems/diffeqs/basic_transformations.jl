@@ -51,32 +51,37 @@ function liouville_transform(sys::AbstractODESystem; kwargs...)
 end
 
 """
-    function change_independent_variable(sys::AbstractODESystem, iv, eqs = []; dummies = false, simplify = true, verbose = false, kwargs...)
+    change_independent_variable(sys::AbstractODESystem, iv, eqs = []; dummies = false, simplify = true, fold = false, kwargs...)
 
-Transform the independent variable (e.g. ``t``) of the ODE system `sys` to a dependent variable `iv` (e.g. ``f(t)``).
-An equation in `sys` must define the rate of change of the new independent variable (e.g. ``df(t)/dt``).
-Alternatively, `eq` can specify such an equation.
+Transform the independent variable (e.g. ``t``) of the ODE system `sys` to a dependent variable `iv` (e.g. ``u(t)``).
+An equation in `sys` must define the rate of change of the new independent variable (e.g. ``du(t)/dt``).
+This or other additional equations can also be specified through `eqs`.
 
 The transformation is well-defined when the mapping between the new and old independent variables are one-to-one.
-This is satisfied if one is a strictly increasing function of the other (e.g. ``df(t)/dt > 0`` or ``df(t)/dt < 0``).
+This is satisfied if one is a strictly increasing function of the other (e.g. ``du(t)/dt > 0`` or ``du(t)/dt < 0``).
 
 Keyword arguments
 =================
-If `dummies`, derivatives of the new independent variable are expressed through dummy equations; otherwise they are explicitly inserted into the equations.
+If `dummies`, derivatives of the new independent variable with respect to the old one are expressed through dummy equations; otherwise they are explicitly inserted into the equations.
 If `simplify`, these dummy expressions are simplified and often give a tidier transformation.
-If `verbose`, the function prints intermediate transformations of equations to aid debugging.
-Any additional keyword arguments `kwargs...` are forwarded to the constructor that rebuilds the system.
+If `fold`, internal substitutions will evaluate numerical expressions.
+Additional keyword arguments `kwargs...` are forwarded to the constructor that rebuilds `sys`.
 
 Usage before structural simplification
 ======================================
 The variable change must take place before structural simplification.
 Subsequently, consider passing `allow_symbolic = true` to `structural_simplify(sys)` to reduce the number of unknowns, with the understanding that the transformation is well-defined.
 
+Usage with non-autonomous systems
+=================================
+If `sys` is autonomous (i.e. ``t`` appears explicitly in its equations), it is often desirable to also pass an algebraic equation relating the new and old independent variables (e.g. ``t = f(u(t))``).
+Otherwise the transformed system will be underdetermined and cannot be structurally simplified without additional changes.
+
 Example
 =======
 Consider a free fall with constant horizontal velocity.
-The laws of physics naturally describes position as a function of time.
-By changing the independent variable, it can be reformulated for vertical position as a function of horizontal distance:
+Physics naturally describes position as a function of time.
+By changing the independent variable, it can be reformulated for vertical position as a function of horizontal position:
 ```julia
 julia> @variables x(t) y(t);
 
@@ -89,118 +94,94 @@ julia> unknowns(M′)
  y(x)
 ```
 """
-function change_independent_variable(sys::AbstractODESystem, iv, eqs = []; dummies = false, simplify = true, verbose = false, kwargs...)
-    if !iscomplete(sys)
-        error("Cannot change independent variable of incomplete system $(nameof(sys))")
-    elseif isscheduled(sys)
-        error("Cannot change independent variable of structurally simplified system $(nameof(sys))")
-    elseif !isempty(get_systems(sys))
-        error("Cannot change independent variable of hierarchical system $(nameof(sys)). Flatten it first.") # TODO: implement
-    end
-
-    iv = unwrap(iv)
+function change_independent_variable(sys::AbstractODESystem, iv, eqs = []; dummies = false, simplify = true, fold = false, kwargs...)
+    iv2_of_iv1 = unwrap(iv) # e.g. u(t)
     iv1 = get_iv(sys) # e.g. t
-    if !iscall(iv) || !isequal(only(arguments(iv)), iv1)
-        error("New independent variable $iv is not a function of the independent variable $iv1 of the system $(nameof(sys))")
-    elseif !isautonomous(sys) && isempty(findall(eq -> isequal(eq.lhs, iv1), eqs))
-        error("System $(nameof(sys)) is autonomous in $iv1. An equation of the form $iv1 ~ F($iv) must be provided.")
+
+    if !iscomplete(sys)
+        error("System $(nameof(sys)) is incomplete. Complete it first!")
+    elseif isscheduled(sys)
+        error("System $(nameof(sys)) is structurally simplified. Change independent variable before structural simplification!")
+    elseif !isempty(get_systems(sys))
+        error("System $(nameof(sys)) is hierarchical. Flatten it first!") # TODO: implement and allow?
+    elseif !iscall(iv2_of_iv1) || !isequal(only(arguments(iv2_of_iv1)), iv1)
+        error("Variable $iv is not a function of the independent variable $iv1 of the system $(nameof(sys))!")
     end
 
-    iv2func = iv # e.g. a(t)
-    iv2name = nameof(operation(iv))
-    iv2, = @independent_variables $iv2name # e.g. a
-    D1 = Differential(iv1)
+    iv1name = nameof(iv1) # e.g. :t
+    iv2name = nameof(operation(iv2_of_iv1)) # e.g. :u
+    iv2, = @independent_variables $iv2name # e.g. u
+    iv1_of_iv2, = @variables $iv1name(iv2) # inverse in case sys is autonomous; e.g. t(u)
+    D1 = Differential(iv1) # e.g. d/d(t)
+    D2 = Differential(iv2_of_iv1) # e.g. d/d(u(t))
 
-    iv1name = nameof(iv1) # e.g. t
-    iv1func, = @variables $iv1name(iv2) # e.g. t(a)
-
-    eqs = [get_eqs(sys); eqs] # copies system equations to avoid modifying original system
-
-    # 1) Find and compute all necessary expressions for e.g. df/dt, d²f/dt², ...
-    # 1.1) Find the 1st order derivative of the new independent variable (e.g. da(t)/dt = ...), ...
-    div2_div1_idxs = findall(eq -> isequal(eq.lhs, D1(iv2func)), eqs) # index of e.g. da/dt = ...
-    if length(div2_div1_idxs) != 1
-        error("Exactly one equation for $D1($iv2func) was not specified.")
-    end
-    div2_div1_eq = popat!(eqs, only(div2_div1_idxs)) # get and remove e.g. df/dt = ... (may be added back later)
-    div2_div1 = div2_div1_eq.rhs
-    if isequal(div2_div1, 0)
-        error("Cannot change independent variable from $iv1 to $iv2 with singular transformation $div2_div1_eq.")
-    end
-    # 1.2) ... then compute the 2nd order derivative of the new independent variable
-    div1_div2 = 1 / div2_div1 # TODO: URL reference for clarity
-    ddiv2_ddiv1 = expand_derivatives(-Differential(iv2func)(div1_div2) / div1_div2^3, simplify) # e.g. https://math.stackexchange.com/questions/249253/second-derivative-of-the-inverse-function # TODO: higher orders # TODO: pass simplify here
-    # 1.3) # TODO: handle higher orders (3+) derivatives ...
-
-    # 2) If requested, insert extra dummy equations for e.g. df/dt, d²f/dt², ...
-    #    Otherwise, replace all these derivatives by their explicit expressions
-    if dummies
-        div2name = Symbol(iv2name, :_t) # TODO: not always t
-        div2, = @variables $div2name(iv2) # e.g. a_t(a)
-        ddiv2name = Symbol(iv2name, :_tt) # TODO: not always t
-        ddiv2, = @variables $ddiv2name(iv2) # e.g. a_tt(a)
-        eqs = [eqs; [div2 ~ div2_div1, ddiv2 ~ ddiv2_ddiv1]] # add dummy equations
-        derivsubs = [D1(D1(iv2func)) => ddiv2, D1(iv2func) => div2] # order is crucial!
-    else
-        derivsubs = [D1(D1(iv2func)) => ddiv2_ddiv1, D1(iv2func) => div2_div1] # order is crucial!
-    end
-    derivsubs = [derivsubs; [iv2func => iv2, iv1 => iv1func]]
-
-    if verbose
-        # Explain what we just did
-        println("Order 1 (found):    $div2_div1_eq")
-        println("Order 2 (computed): $(D1(div2_div1_eq.lhs) ~ ddiv2_ddiv1)")
-        println()
-        println("Substitutions will be made in this order:")
-        for (n, sub) in enumerate(derivsubs)
-            println("$n: $(sub[1]) => $(sub[2])")
-        end
-        println()
-    end
-
-    # 3) Define a transformation function that performs the change of variable on any expression/equation
-    function transform(ex)
-        verbose && println("Step 0: ", ex)
-
-        # Step 1: substitute f(t₁) => f(t₂(t₁)) in all variables in the expression
-        vars = Symbolics.get_variables(ex)
-        for var1 in vars
-            if Symbolics.iscall(var1) && !isequal(var1, iv2func) # && isequal(only(arguments(var1)), iv1) # skip e.g. constants
-                name = nameof(operation(var1))
-                var2, = @variables $name(iv2func)
-                ex = substitute(ex, var1 => var2; fold = false)
+    # 1) Utility that performs the chain rule on an expression, e.g. (d/dt)(f(t)) -> (d/dt)(f(u(t))) -> df(u(t))/du(t) * du(t)/dt
+    function chain_rule(ex)
+        vars = get_variables(ex)
+        for var_of_iv1 in vars # loop through e.g. f(t)
+            if iscall(var_of_iv1) && !isequal(var_of_iv1, iv2_of_iv1) # handle e.g. f(t) -> f(u(t)), but not u(t) -> u(u(t))
+                varname = nameof(operation(var_of_iv1)) # e.g. :f
+                var_of_iv2, = @variables $varname(iv2_of_iv1) # e.g. f(u(t))
+                ex = substitute(ex, var_of_iv1 => var_of_iv2; fold) # e.g. f(t) -> f(u(t))
             end
         end
-        verbose && println("Step 1: ", ex)
-
-        # Step 2: expand out all chain rule derivatives
-        ex = expand_derivatives(ex) # expand out with chain rule to get d(iv2)/d(iv1)
-        verbose && println("Step 2: ", ex)
-
-        # Step 3: substitute d²f/dt², df/dt, ... (to dummy variables or explicit expressions, depending on dummies)
-        for sub in derivsubs
-            ex = substitute(ex, sub)
-        end
-        verbose && println("Step 3: ", ex)
-        verbose && println()
-
+        ex = expand_derivatives(ex, simplify) # expand chain rule, e.g. (d/dt)(f(u(t)))) -> df(u(t))/du(t) * du(t)/dt
         return ex
     end
 
-    # 4) Transform all fields
-    eqs = map(transform, eqs)
+    # 2) Find e.g. du/dt in equations, then calculate e.g. d²u/dt², ...
+    eqs = [get_eqs(sys); eqs] # all equations (system-defined + user-provided) we may use
+    idxs = findall(eq -> isequal(eq.lhs, D1(iv2_of_iv1)), eqs)
+    if length(idxs) != 1
+        error("Exactly one equation for $D1($iv2_of_iv1) was not specified!")
+    end
+    div2_of_iv1_eq = popat!(eqs, only(idxs)) # get and remove e.g. du/dt = ... (may be added back later as a dummy)
+    div2_of_iv1 = chain_rule(div2_of_iv1_eq.rhs)
+    if isequal(div2_of_iv1, 0) # e.g. du/dt ~ 0
+        error("Independent variable transformation $(div2_of_iv1_eq) is singular!")
+    end
+    ddiv2_of_iv1 = chain_rule(D1(div2_of_iv1)) # TODO: implement higher orders (order >= 3) derivatives with a loop
+
+    # 3) If requested, insert extra dummy equations for e.g. du/dt, d²u/dt², ...
+    #    Otherwise, replace all these derivatives by their explicit expressions
+    if dummies
+        div2name = Symbol(iv2name, :_, iv1name) # e.g. :u_t # TODO: customize
+        ddiv2name = Symbol(div2name, iv1name) # e.g. :u_tt # TODO: customize
+        div2, ddiv2 = @variables $div2name(iv2) $ddiv2name(iv2) # e.g. u_t(u), u_tt(u)
+        eqs = [eqs; [div2 ~ div2_of_iv1, ddiv2 ~ ddiv2_of_iv1]] # add dummy equations
+    else
+        div2 = div2_of_iv1
+        ddiv2 = ddiv2_of_iv1
+    end
+
+    # 4) Transform everything from old to new independent variable, e.g. t -> u.
+    #    Substitution order matters! Must begin with highest order to get D(D(u(t))) -> u_tt(u).
+    #    If we had started with the lowest order, we would get D(D(u(t))) -> D(u_t(u)) -> 0!
+    iv1_to_iv2_subs = [ # a vector ensures substitution order
+        D1(D1(iv2_of_iv1)) => ddiv2 # order 2, e.g. D(D(u(t))) -> u_tt(u)
+        D1(iv2_of_iv1) => div2 # order 1, e.g. D(u(t)) -> u_t(u)
+        iv2_of_iv1 => iv2 # order 0, e.g. u(t) -> u
+        iv1 => iv1_of_iv2 # in case sys was autonomous, e.g. t -> t(u)
+    ]
+    function transform(ex)
+        ex = chain_rule(ex)
+        for sub in iv1_to_iv2_subs
+            ex = substitute(ex, sub; fold)
+        end
+        return ex
+    end
+    eqs = map(transform, eqs) # we derived and added equations to eqs; they are not in get_eqs(sys)!
     observed = map(transform, get_observed(sys))
     initialization_eqs = map(transform, get_initialization_eqs(sys))
     parameter_dependencies = map(transform, get_parameter_dependencies(sys))
     defaults = Dict(transform(var) => transform(val) for (var, val) in get_defaults(sys))
     guesses = Dict(transform(var) => transform(val) for (var, val) in get_guesses(sys))
     assertions = Dict(transform(condition) => msg for (condition, msg) in get_assertions(sys))
-    # TODO: handle subsystems
 
     # 5) Recreate system with transformed fields
     return typeof(sys)(
         eqs, iv2;
         observed, initialization_eqs, parameter_dependencies, defaults, guesses, assertions,
         name = nameof(sys), description = description(sys), kwargs...
-    ) |> complete # original system had to be complete
+    ) |> complete # input system must be complete, so complete the output system
 end

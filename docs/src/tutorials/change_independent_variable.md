@@ -26,7 +26,7 @@ M1 = ODESystem([
 ], t; defaults = [
     y => 0.0
 ], initialization_eqs = [
-    #x ~ 0.0, # TODO: handle?
+    #x ~ 0.0, # TODO: handle? # hide
     D(x) ~ D(y) # equal initial horizontal and vertical velocity (45 °)
 ], name = :M) |> complete
 M1s = structural_simplify(M1)

@@ -59,34 +59,44 @@ end
 end
 
 @testset "Change independent variable (Friedmann equation)" begin
+    @independent_variables t
     D = Differential(t)
-    @variables a(t) ȧ(t) ρr(t) ρm(t) ρΛ(t) ρ(t) P(t) ϕ(t)
-    @parameters Ωr0 Ωm0 ΩΛ0
+    @variables a(t) ȧ(t) Ω(t) ϕ(t)
     eqs = [
-        ρr ~ 3/(8*Num(π)) * Ωr0 / a^4
-        ρm ~ 3/(8*Num(π)) * Ωm0 / a^3
-        ρΛ ~ 3/(8*Num(π)) * ΩΛ0
-        ρ ~ ρr + ρm + ρΛ
-        ȧ ~ √(8*Num(π)/3*ρ*a^4)
+        Ω ~ 123
         D(a) ~ ȧ
+        ȧ ~ √(Ω) * a^2
         D(D(ϕ)) ~ -3*D(a)/a*D(ϕ)
     ]
     M1 = ODESystem(eqs, t; name = :M) |> complete
 
     # Apply in two steps, where derivatives are defined at each step: first t -> a, then a -> b
-    M2 = change_independent_variable(M1, M1.a) |> complete #, D(b) ~ D(a)/a; verbose = true)
+    M2 = change_independent_variable(M1, M1.a; dummies = true)
+    @independent_variables a
+    @variables ȧ(a) Ω(a) ϕ(a) a_t(a) a_tt(a)
+    Da = Differential(a)
+    @test Set(equations(M2)) == Set([
+        a_tt*Da(ϕ) + a_t^2*(Da^2)(ϕ) ~ -3*a_t^2/a*Da(ϕ)
+        ȧ ~ √(Ω) * a^2
+        Ω ~ 123
+        a_t ~ ȧ # 1st order dummy equation
+        a_tt ~ Da(ȧ) * a_t # 2nd order dummy equation
+    ])
+
     @variables b(M2.a)
     M3 = change_independent_variable(M2, b, [Differential(M2.a)(b) ~ exp(-b), M2.a ~ exp(b)])
+
+    M1 = structural_simplify(M1)
     M2 = structural_simplify(M2; allow_symbolic = true)
     M3 = structural_simplify(M3; allow_symbolic = true)
-    @test length(unknowns(M2)) == 2 && length(unknowns(M3)) == 2
+    @test length(unknowns(M3)) == length(unknowns(M2)) == length(unknowns(M1)) - 1
 end
 
 @testset "Change independent variable (simple)" begin
     @variables x(t)
-    Mt = ODESystem([D(x) ~ 2*x], t; name = :M) |> complete # TODO: avoid complete. can avoid it if passing defined $variable directly to change_independent_variable
+    Mt = ODESystem([D(x) ~ 2*x], t; name = :M) |> complete
     Mx = change_independent_variable(Mt, Mt.x; dummies = true)
-    @test (@variables x x_t(x) x_tt(x); Set(equations(Mx)) == Set([x_t ~ 2x, x_tt ~ 4x]))
+    @test (@variables x x_t(x) x_tt(x); Set(equations(Mx)) == Set([x_t ~ 2*x, x_tt ~ 2*x_t]))
 end
 
 @testset "Change independent variable (free fall)" begin
@@ -101,10 +111,25 @@ end
     @test all(isapprox.(sol[Mx.y], sol[Mx.x - g*(Mx.x/v)^2/2]; atol = 1e-10)) # compare to analytical solution (x(t) = v*t, y(t) = v*t - g*t^2/2)
 end
 
-@testset "Change independent variable (autonomous system)" begin
-    M = ODESystem([D(x) ~ t], t; name = :M) |> complete # non-autonomous
-    @test_throws "t ~ F(x(t)) must be provided" change_independent_variable(M, M.x)
-    @test_nowarn change_independent_variable(M, M.x, [t ~ 2*x])
+@testset "Change independent variable (crazy analytical example)" begin
+    @independent_variables t
+    D = Differential(t)
+    @variables x(t) y(t)
+    M1 = ODESystem([ # crazy non-autonomous non-linear 2nd order ODE
+        D(D(y)) ~ D(x)^2 + D(y^3) |> expand_derivatives # expand D(y^3) # TODO: make this test 3rd order
+        D(x) ~ x^4 + y^5 + t^6
+    ], t; name = :M) |> complete
+    M2 = change_independent_variable(M1, M1.x; dummies = true)
+
+    # Compare to pen-and-paper result
+    @independent_variables x
+    Dx = Differential(x)
+    @variables x_t(x) x_tt(x) y(x) t(x)
+    @test Set(equations(M2)) == Set([
+        x_t^2*(Dx^2)(y) + x_tt*Dx(y) ~ x_t^2 + 3*y^2*Dx(y)*x_t # from D(D(y))
+        x_t ~ x^4 + y^5 + t^6 # 1st order dummy equation
+        x_tt ~ 4*x^3*x_t + 5*y^4*Dx(y)*x_t + 6*t^5 # 2nd order dummy equation
+    ])
 end
 
 @testset "Change independent variable (errors)" begin
