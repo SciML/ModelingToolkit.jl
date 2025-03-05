@@ -42,7 +42,7 @@ There are at least three ways of answering this:
 We will demonstrate the last method by changing the independent variable from $t$ to $x$.
 This transformation is well-defined for any non-zero horizontal velocity $v$.
 ```@example changeivar
-M2 = change_independent_variable(M1, M1.x; dummies = true) |> complete
+M2 = change_independent_variable(M1, M1.x; dummies = true)
 @assert M2.x isa Num # hide
 M2s = structural_simplify(M2; allow_symbolic = true)
 ```
@@ -56,29 +56,38 @@ sol = solve(prob, Tsit5())
 plot(sol; idxs = M2.y) # must index by M2.y = y(x); not M1.y = y(t)!
 ```
 
-## 2. Reduce stiffness by changing to a logarithmic time axis
+## 2. Alleviating stiffness by changing to logarithmic time
 
 In cosmology, the [Friedmann equations](https://en.wikipedia.org/wiki/Friedmann_equations) describe the expansion of the universe.
 In terms of conformal time $t$, they can be written
 ```@example changeivar
-@variables a(t) Ω(t) Ωr(t) Ωm(t) ΩΛ(t)
-M1 = ODESystem([
+@variables a(t) Ω(t)
+a = GlobalScope(a) # global var needed by all species
+function species(w; kw...)
+    eqs = [D(Ω) ~ -3(1 + w) * D(a)/a * Ω]
+    return ODESystem(eqs, t, [Ω], []; kw...)
+end
+@named r = species(1//3) # radiation
+@named m = species(0) # matter
+@named Λ = species(-1) # dark energy / cosmological constant
+eqs = [
+    Ω ~ r.Ω + m.Ω + Λ.Ω # total energy density
     D(a) ~ √(Ω) * a^2
-    Ω ~ Ωr + Ωm + ΩΛ
-    D(Ωm) ~ -3 * D(a)/a * Ωm
-    D(Ωr) ~ -4 * D(a)/a * Ωr
-    D(ΩΛ) ~ 0
-], t; initialization_eqs = [
-    ΩΛ + Ωr + Ωm ~ 1
-], name = :M) |> complete
+]
+initialization_eqs = [
+    Λ.Ω + r.Ω + m.Ω ~ 1
+]
+M1 = ODESystem(eqs, t, [Ω, a], []; initialization_eqs, name = :M)
+M1 = compose(M1, r, m, Λ)
+M1 = complete(M1; flatten = false)
 M1s = structural_simplify(M1)
 ```
 Of course, we can solve this ODE as it is:
 ```@example changeivar
-prob = ODEProblem(M1s, [M1.a => 1.0, M1.Ωr => 5e-5, M1.Ωm => 0.3], (0.0, -3.3), [])
+prob = ODEProblem(M1s, [M1.a => 1.0, M1.r.Ω => 5e-5, M1.m.Ω => 0.3], (0.0, -3.3), [])
 sol = solve(prob, Tsit5(); reltol = 1e-5)
 @assert Symbol(sol.retcode) == :Unstable # surrounding text assumes this was unstable # hide
-plot(sol, idxs = [M1.a, M1.Ωr/M1.Ω, M1.Ωm/M1.Ω, M1.ΩΛ/M1.Ω])
+plot(sol, idxs = [M1.a, M1.r.Ω/M1.Ω, M1.m.Ω/M1.Ω, M1.Λ.Ω/M1.Ω])
 ```
 The solver becomes unstable due to stiffness.
 Also notice the interesting dynamics taking place towards the end of the integration (in the early universe), which gets compressed into a very small time interval.
@@ -89,7 +98,7 @@ To do this, we will change the independent variable in two stages; from $t$ to $
 Notice that $\mathrm{d}a/\mathrm{d}t > 0$ provided that $\Omega > 0$, and $\mathrm{d}b/\mathrm{d}a > 0$, so the transformation is well-defined.
 First, we transform from $t$ to $a$:
 ```@example changeivar
-M2 = change_independent_variable(M1, M1.a; dummies = true) |> complete
+M2 = change_independent_variable(M1, M1.a; dummies = true)
 ```
 Unlike the original, notice that this system is *non-autonomous* because the independent variable $a$ appears explicitly in the equations!
 This means that to change the independent variable from $a$ to $b$, we must provide not only the rate of change relation $db(a)/da = \exp(-b)$, but *also* the equation $a(b) = \exp(b)$ so $a$ can be eliminated in favor of $b$:
@@ -97,14 +106,14 @@ This means that to change the independent variable from $a$ to $b$, we must prov
 a = M2.a
 Da = Differential(a)
 @variables b(a)
-M3 = change_independent_variable(M2, b, [Da(b) ~ exp(-b), a ~ exp(b)]) |> complete
+M3 = change_independent_variable(M2, b, [Da(b) ~ exp(-b), a ~ exp(b)])
 ```
 We can now solve and plot the ODE in terms of $b$:
 ```@example changeivar
 M3s = structural_simplify(M3; allow_symbolic = true)
-prob = ODEProblem(M3s, [M3.Ωr => 5e-5, M3.Ωm => 0.3], (0, -15), [])
+prob = ODEProblem(M3s, [M3.r.Ω => 5e-5, M3.m.Ω => 0.3], (0, -15), [])
 sol = solve(prob, Tsit5())
 @assert Symbol(sol.retcode) == :Success # surrounding text assumes the solution was successful # hide
-plot(sol, idxs = [M3.Ωr/M3.Ω, M3.Ωm/M3.Ω, M3.ΩΛ/M3.Ω])
+plot(sol, idxs = [M3.r.Ω/M3.Ω, M3.m.Ω/M3.Ω, M3.Λ.Ω/M3.Ω])
 ```
 Notice that the variables vary "more nicely" with respect to $b$ than $t$, making the solver happier and avoiding numerical problems.

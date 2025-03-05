@@ -62,25 +62,34 @@ end
     @independent_variables t
     D = Differential(t)
     @variables a(t) ȧ(t) Ω(t) ϕ(t)
+    a, ȧ = GlobalScope.([a, ȧ])
+    species(w; kw...) = ODESystem([D(Ω) ~ -3(1 + w) * D(a)/a * Ω], t, [Ω], []; kw...)
+    @named r = species(1//3)
+    @named m = species(0)
+    @named Λ = species(-1)
     eqs = [
-        Ω ~ 123
+        Ω ~ r.Ω + m.Ω + Λ.Ω
         D(a) ~ ȧ
         ȧ ~ √(Ω) * a^2
         D(D(ϕ)) ~ -3*D(a)/a*D(ϕ)
     ]
-    M1 = ODESystem(eqs, t; name = :M) |> complete
+    M1 = ODESystem(eqs, t, [Ω, a, ȧ, ϕ], []; name = :M)
+    M1 = compose(M1, r, m, Λ)
+    M1 = complete(M1; flatten = false)
 
     # Apply in two steps, where derivatives are defined at each step: first t -> a, then a -> b
     M2 = change_independent_variable(M1, M1.a; dummies = true)
-    @independent_variables a
-    @variables ȧ(a) Ω(a) ϕ(a) a_t(a) a_tt(a)
+    a, ȧ, Ω, Ωr, Ωm, ΩΛ, ϕ, a_t, a_tt = M2.a, M2.ȧ, M2.Ω, M2.r.Ω, M2.m.Ω, M2.Λ.Ω, M2.ϕ, M2.a_t, M2.a_tt
     Da = Differential(a)
     @test Set(equations(M2)) == Set([
-        a_tt*Da(ϕ) + a_t^2*(Da^2)(ϕ) ~ -3*a_t^2/a*Da(ϕ)
-        ȧ ~ √(Ω) * a^2
-        Ω ~ 123
         a_t ~ ȧ # 1st order dummy equation
         a_tt ~ Da(ȧ) * a_t # 2nd order dummy equation
+        Ω ~ Ωr + Ωm + ΩΛ
+        ȧ ~ √(Ω) * a^2
+        a_tt*Da(ϕ) + a_t^2*(Da^2)(ϕ) ~ -3*a_t^2/a*Da(ϕ)
+        a_t*Da(Ωr) ~ -4*Ωr*a_t/a
+        a_t*Da(Ωm) ~ -3*Ωm*a_t/a
+        a_t*Da(ΩΛ) ~ 0
     ])
 
     @variables b(M2.a)
@@ -143,6 +152,4 @@ end
     @test_throws "not specified" change_independent_variable(M, v)
     @test_throws "not a function of the independent variable" change_independent_variable(M, y)
     @test_throws "not a function of the independent variable" change_independent_variable(M, z)
-    M = compose(M, M)
-    @test_throws "hierarchical" change_independent_variable(M, M.x)
 end
