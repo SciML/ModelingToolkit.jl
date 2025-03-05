@@ -79,9 +79,11 @@ function ChainRulesCore.rrule(
     end
     newbuf = MTK.remake_buffer(indp, oldbuf, idxs, vals)
     tunable_idxs = reduce(
-        vcat, (idx.idx for idx in idxs if idx.portion isa MTK.SciMLStructures.Tunable))
+        vcat, (idx.idx for idx in idxs if idx.portion isa MTK.SciMLStructures.Tunable);
+        init = Union{Int, AbstractVector{Int}}[])
     initials_idxs = reduce(
-        vcat, (idx.idx for idx in idxs if idx.portion isa MTK.SciMLStructures.Initials))
+        vcat, (idx.idx for idx in idxs if idx.portion isa MTK.SciMLStructures.Initials);
+        init = Union{Int, AbstractVector{Int}}[])
     disc_idxs = subset_idxs(idxs, MTK.SciMLStructures.Discrete(), oldbuf.discrete)
     const_idxs = subset_idxs(idxs, MTK.SciMLStructures.Constants(), oldbuf.constant)
     nn_idxs = subset_idxs(idxs, MTK.NONNUMERIC_PORTION, oldbuf.nonnumeric)
