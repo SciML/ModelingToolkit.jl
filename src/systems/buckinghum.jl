@@ -24,10 +24,10 @@ end
     get_dims_of_vars(Vector{Any}, Number, Vector{Any})
 
     Gets units of each variable in an array. Returns a matrix where each row corresponds
-    to binary 
-    Example : kg*m^3
-    Each index corresponds to length, mass, time, current, luminosity and temperature
-    respectively. 
+    to units represented in binary values
+    Example : kg*m^3 - [3, 1, 0, 0, 0, 0]
+    In the returned value each row corresponds to length, mass, time, current, luminosity 
+    and temperature respectively. 
 """
 function get_dims_of_vars(dims_vars, total_vars, dim_map)
     # For every single variable it contains row of 1s and 0s mentioning which unit is present
@@ -118,9 +118,7 @@ function retrieve_pi_terms(pi_term,  var_names)
     exp_arr = pi_term["exponents"]
     final_pi_term = 1
 
-    for (ind, val) in enumerate(exp_arr)
-        exp_arr[ind] = round(val, digits=2)
-    end
+    @. exp_arr = round(exp_arr, digits=2)
 
     for (ind, val) in enumerate(repeating_idx)
         final_pi_term *= var_names[val]^exp_arr[ind]

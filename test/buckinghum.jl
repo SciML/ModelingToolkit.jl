@@ -4,7 +4,7 @@ using LinearAlgebra
 using Test
 
 @variables f, d, v, ρ, μ
-vars1_arr = [ ρ, d, v, μ, f]
+vars1_arr = [ρ, d, v, μ, f]
 
 vars1_quants = [DynamicQuantities.Quantity(0, mass=1, length=-1, time=-1), DynamicQuantities.Quantity(0, length=1) , DynamicQuantities.Quantity(0, length=1, time=-1),  DynamicQuantities.Quantity(0, mass=1, length=1, time=-2), DynamicQuantities.Quantity(0, mass=1,  length=-1, time=-1)]
 
@@ -13,7 +13,7 @@ vars1_quants = [DynamicQuantities.Quantity(0, mass=1, length=-1, time=-1), Dynam
 
 
 @variables  a, b, c, d
-vars2_arr = [ a, b , c, d]
+vars2_arr = [a, b, c, d]
 
 vars2_quants =[DynamicQuantities.Quantity(0, mass=1, length=-3), DynamicQuantities.Quantity(0, mass=1, length=-1, time=-1), DynamicQuantities.Quantity(0, length=1, time=-1), DynamicQuantities.Quantity(0, length=1)]
 
