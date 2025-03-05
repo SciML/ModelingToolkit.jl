@@ -773,38 +773,21 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
         if !isempty(all_ps)
             # reorder parameters by portions
             ps_split = reorder_parameters(sys, all_ps)
+            # if there are tunables, they will all be in `ps_split[1]`
+            # and the arrays will have been scalarized
+            ordered_ps = eltype(all_ps)[]
             # if there are no tunables, vcat them
-            if isempty(get_index_cache(sys).tunable_idx)
-                ordered_ps = reduce(vcat, ps_split)
-            else
-                # if there are tunables, they will all be in `ps_split[1]`
-                # and the arrays will have been scalarized
-                ordered_ps = eltype(all_ps)[]
-                i = 1
-                # go through all the tunables
-                while i <= length(ps_split[1])
-                    sym = ps_split[1][i]
-                    # if the sym is not a scalarized array symbolic OR it was already scalarized,
-                    # just push it as-is
-                    if !iscall(sym) || operation(sym) != getindex ||
-                       any(isequal(sym), all_ps)
-                        push!(ordered_ps, sym)
-                        i += 1
-                        continue
-                    end
-                    # the next `length(sym)` symbols should be scalarized versions of the same
-                    # array symbolic
-                    if !allequal(first(arguments(x))
-                    for x in view(ps_split[1], i:(i + length(sym) - 1)))
-                        error("This should not be possible. Please open an issue in ModelingToolkit.jl with an MWE and stacktrace.")
-                    end
-                    arrsym = first(arguments(sym))
-                    push!(ordered_ps, arrsym)
-                    i += length(arrsym)
-                end
-                ordered_ps = vcat(
-                    ordered_ps, reduce(vcat, ps_split[2:end]; init = eltype(ordered_ps)[]))
+            if !isempty(get_index_cache(sys).tunable_idx)
+                unflatten_parameters!(ordered_ps, ps_split[1], all_ps)
+                ps_split = Base.tail(ps_split)
             end
+            # unflatten initial parameters
+            if !isempty(get_index_cache(sys).initials_idx)
+                unflatten_parameters!(ordered_ps, ps_split[1], all_ps)
+                ps_split = Base.tail(ps_split)
+            end
+            ordered_ps = vcat(
+                ordered_ps, reduce(vcat, ps_split; init = eltype(ordered_ps)[]))
             @set! sys.ps = ordered_ps
         end
     elseif has_index_cache(sys)
@@ -814,6 +797,39 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
         @set! sys.initializesystem = complete(get_initializesystem(sys); split)
     end
     isdefined(sys, :complete) ? (@set! sys.complete = true) : sys
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given a flattened array of parameters `params` and a collection of all (unscalarized)
+parameters in the system `all_ps`, unscalarize the elements in `params` and append
+to `buffer` in the same order as they are present in `params`. Effectively, if
+`params = [p[1], p[2], p[3], q]` then this is equivalent to `push!(buffer, p, q)`.
+"""
+function unflatten_parameters!(buffer, params, all_ps)
+    i = 1
+    # go through all the tunables
+    while i <= length(params)
+        sym = params[i]
+        # if the sym is not a scalarized array symbolic OR it was already scalarized,
+        # just push it as-is
+        if !iscall(sym) || operation(sym) != getindex ||
+           any(isequal(sym), all_ps)
+            push!(buffer, sym)
+            i += 1
+            continue
+        end
+        # the next `length(sym)` symbols should be scalarized versions of the same
+        # array symbolic
+        if !allequal(first(arguments(x))
+        for x in view(params, i:(i + length(sym) - 1)))
+            error("This should not be possible. Please open an issue in ModelingToolkit.jl with an MWE and stacktrace.")
+        end
+        arrsym = first(arguments(sym))
+        push!(buffer, arrsym)
+        i += length(arrsym)
+    end
 end
 
 for prop in [:eqs

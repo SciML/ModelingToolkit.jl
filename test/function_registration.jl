@@ -22,7 +22,7 @@ sys = complete(sys)
 fun = ODEFunction(sys)
 
 u0 = 5.0
-@test fun([0.5], [u0], 0.0) == [do_something(u0) * 2]
+@test fun([0.5], u0, 0.0) == [do_something(u0) * 2]
 end
 
 # TEST: Function registration in a nested module.
@@ -45,7 +45,7 @@ sys = complete(sys)
 fun = ODEFunction(sys)
 
 u0 = 3.0
-@test fun([0.5], [u0], 0.0) == [do_something_2(u0) * 2]
+@test fun([0.5], u0, 0.0) == [do_something_2(u0) * 2]
 end
 end
 
@@ -67,7 +67,7 @@ sys = complete(sys)
 fun = ODEFunction(sys)
 
 u0 = 7.0
-@test fun([0.5], [u0], 0.0) == [do_something_3(u0) * 2]
+@test fun([0.5], u0, 0.0) == [do_something_3(u0) * 2]
 
 # TEST: Function registration works with derivatives.
 # ---------------------------------------------------
@@ -106,7 +106,7 @@ end
 function run_test()
     fun = build_ode()
     u0 = 10.0
-    @test fun([0.5], [u0], 0.0) == [do_something_4(u0) * 2]
+    @test fun([0.5], u0, 0.0) == [do_something_4(u0) * 2]
 end
 run_test()
 

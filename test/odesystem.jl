@@ -1223,7 +1223,7 @@ end
         sys, [x + 1, x + P, x + t], return_inplace = true)[2]
     ps = ModelingToolkit.MTKParameters(sys, [P => 2.0])
     buffer = zeros(3)
-    @test_nowarn obsfn(buffer, [1.0], ps..., 3.0)
+    @test_nowarn obsfn(buffer, [1.0], ps, 3.0)
     @test buffer ≈ [2.0, 3.0, 4.0]
 end
 

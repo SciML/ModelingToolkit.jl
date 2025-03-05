@@ -49,6 +49,7 @@ struct IndexCache
     # sym => (clockidx, idx_in_clockbuffer)
     callback_to_clocks::Dict{Any, Vector{Int}}
     tunable_idx::TunableIndexMap
+    initials_idx::TunableIndexMap
     constant_idx::ParamIndexMap
     nonnumeric_idx::NonnumericMap
     observed_syms_to_timeseries::Dict{BasicSymbolic, TimeseriesSetType}
@@ -56,6 +57,7 @@ struct IndexCache
         Union{BasicSymbolic, CallWithMetadata}, TimeseriesSetType}
     discrete_buffer_sizes::Vector{Vector{BufferTemplate}}
     tunable_buffer_size::BufferTemplate
+    initials_buffer_size::BufferTemplate
     constant_buffer_sizes::Vector{BufferTemplate}
     nonnumeric_buffer_sizes::Vector{BufferTemplate}
     symbol_to_variable::Dict{Symbol, SymbolicParam}
@@ -251,7 +253,9 @@ function IndexCache(sys::AbstractSystem)
 
     tunable_idxs = TunableIndexMap()
     tunable_buffer_size = 0
-    for buffers in (tunable_buffers, initial_param_buffers)
+    bufferlist = is_initializesystem(sys) ? (tunable_buffers, initial_param_buffers) :
+                 (tunable_buffers,)
+    for buffers in bufferlist
         for (i, (_, buf)) in enumerate(buffers)
             for (j, p) in enumerate(buf)
                 idx = if size(p) == ()
@@ -268,6 +272,43 @@ function IndexCache(sys::AbstractSystem)
                     symbol_to_variable[getname(default_toterm(p))] = p
                 end
             end
+        end
+    end
+
+    initials_idxs = TunableIndexMap()
+    initials_buffer_size = 0
+    if !is_initializesystem(sys)
+        for (i, (_, buf)) in enumerate(initial_param_buffers)
+            for (j, p) in enumerate(buf)
+                idx = if size(p) == ()
+                    initials_buffer_size + 1
+                else
+                    reshape(
+                        (initials_buffer_size + 1):(initials_buffer_size + length(p)), size(p))
+                end
+                initials_buffer_size += length(p)
+                initials_idxs[p] = idx
+                initials_idxs[default_toterm(p)] = idx
+                if hasname(p) && (!iscall(p) || operation(p) !== getindex)
+                    symbol_to_variable[getname(p)] = p
+                    symbol_to_variable[getname(default_toterm(p))] = p
+                end
+            end
+        end
+    end
+
+    for k in collect(keys(tunable_idxs))
+        v = tunable_idxs[k]
+        v isa AbstractArray || continue
+        for (kk, vv) in zip(collect(k), v)
+            tunable_idxs[kk] = vv
+        end
+    end
+    for k in collect(keys(initials_idxs))
+        v = initials_idxs[k]
+        v isa AbstractArray || continue
+        for (kk, vv) in zip(collect(k), v)
+            initials_idxs[kk] = vv
         end
     end
 
@@ -341,12 +382,14 @@ function IndexCache(sys::AbstractSystem)
         disc_idxs,
         callback_to_clocks,
         tunable_idxs,
+        initials_idxs,
         const_idxs,
         nonnumeric_idxs,
         observed_syms_to_timeseries,
         dependent_pars_to_timeseries,
         disc_buffer_templates,
         BufferTemplate(Real, tunable_buffer_size),
+        BufferTemplate(Real, initials_buffer_size),
         const_buffer_sizes,
         nonnumeric_buffer_sizes,
         symbol_to_variable
@@ -385,6 +428,8 @@ function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym)
                     Symbolics.shape(sym) !== Symbolics.Unknown()
     return if (idx = check_index_map(ic.tunable_idx, sym)) !== nothing
         ParameterIndex(SciMLStructures.Tunable(), idx, validate_size)
+    elseif (idx = check_index_map(ic.initials_idx, sym)) !== nothing
+        ParameterIndex(SciMLStructures.Initials(), idx, validate_size)
     elseif (idx = check_index_map(ic.discrete_idx, sym)) !== nothing
         ParameterIndex(
             SciMLStructures.Discrete(), (idx.buffer_idx, idx.idx_in_buffer), validate_size)
@@ -465,6 +510,12 @@ function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
         (BasicSymbolic[unwrap(variable(:DEF))
                        for _ in 1:(ic.tunable_buffer_size.length)],)
     end
+    initials_buf = if ic.initials_buffer_size.length == 0
+        ()
+    else
+        (BasicSymbolic[unwrap(variable(:DEF))
+                       for _ in 1:(ic.initials_buffer_size.length)],)
+    end
 
     disc_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF))
                                    for _ in 1:(sum(x -> x.length, temp))]
@@ -486,6 +537,13 @@ function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
             else
                 param_buf[1][i] = unwrap.(collect(p))
             end
+        elseif haskey(ic.initials_idx, p)
+            i = ic.initials_idx[p]
+            if i isa Int
+                initials_buf[1][i] = unwrap(p)
+            else
+                initials_buf[1][i] = unwrap.(collect(p))
+            end
         elseif haskey(ic.constant_idx, p)
             i, j = ic.constant_idx[p]
             const_buf[i][j] = p
@@ -498,7 +556,8 @@ function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
     end
 
     result = broadcast.(
-        unwrap, (param_buf..., disc_buf..., const_buf..., nonnumeric_buf...))
+        unwrap, (
+            param_buf..., initials_buf..., disc_buf..., const_buf..., nonnumeric_buf...))
     if drop_missing
         result = map(result) do buf
             filter(buf) do sym
@@ -519,6 +578,11 @@ function iterated_buffer_index(ic::IndexCache, ind::ParameterIndex)
     if ind.portion isa SciMLStructures.Tunable
         return idx + 1
     elseif ic.tunable_buffer_size.length > 0
+        idx += 1
+    end
+    if ind.portion isa SciMLStructures.Initials
+        return idx + 1
+    elseif ic.initials_buffer_size.length > 0
         idx += 1
     end
     if ind.portion isa SciMLStructures.Discrete
@@ -542,6 +606,8 @@ function get_buffer_template(ic::IndexCache, pidx::ParameterIndex)
 
     if portion isa SciMLStructures.Tunable
         return ic.tunable_buffer_size
+    elseif portion isa SciMLStructures.Initials
+        return ic.initials_buffer_size
     elseif portion isa SciMLStructures.Discrete
         return ic.discrete_buffer_sizes[idx[1]][1]
     elseif portion isa SciMLStructures.Constants
