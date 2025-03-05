@@ -335,8 +335,10 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
-    disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
+
+    algeeqs = filter(is_alg_equation, deqs)
+    cont_callbacks = generate_continuous_callbacks(continuous_events, algeeqs)
+    disc_callbacks = generate_discrete_callbacks(discrete_events, algeeqs)
 
     if is_dde === nothing
         is_dde = _check_if_dde(deqs, iv′, systems)
