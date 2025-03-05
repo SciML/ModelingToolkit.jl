@@ -232,6 +232,32 @@ function NonlinearSystem(eqs; kwargs...)
     return NonlinearSystem(eqs, collect(allunknowns), collect(new_ps); kwargs...)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Convert an `ODESystem` to a `NonlinearSystem` solving for its steady state (where derivatives are zero).
+Any differential variable `D(x) ~ f(...)` will be turned into `0 ~ f(...)`. The returned system is not
+simplified. If the input system is `complete`d, then so will the returned system.
+"""
+function NonlinearSystem(sys::AbstractODESystem)
+    eqs = equations(sys)
+    obs = observed(sys)
+    subrules = Dict(D(x) => 0.0 for x in unknowns(sys))
+    eqs = map(eqs) do eq
+        fast_substitute(eq, subrules)
+    end
+
+    nsys = NonlinearSystem(eqs, unknowns(sys), [parameters(sys); get_iv(sys)];
+        parameter_dependencies = parameter_dependencies(sys),
+        defaults = merge(defaults(sys), Dict(get_iv(sys) => Inf)), guesses = guesses(sys),
+        initialization_eqs = initialization_equations(sys), name = nameof(sys),
+        observed = obs)
+    if iscomplete(sys)
+        nsys = complete(nsys; split = is_split(sys))
+    end
+    return nsys
+end
+
 function calculate_jacobian(sys::NonlinearSystem; sparse = false, simplify = false)
     cache = get_jac(sys)[]
     if cache isa Tuple && cache[2] == (sparse, simplify)
@@ -527,6 +553,10 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
     pt = something(get_metadata(sys), StandardNonlinearProblem())
     # Call `remake` so it runs initialization if it is trivial
     return remake(NonlinearProblem{iip}(f, u0, p, pt; filter_kwargs(kwargs)...))
+end
+
+function DiffEqBase.NonlinearProblem(sys::AbstractODESystem, args...; kwargs...)
+    NonlinearProblem(NonlinearSystem(sys), args...; kwargs...)
 end
 
 """
