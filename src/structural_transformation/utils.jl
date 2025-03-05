@@ -457,11 +457,10 @@ Handle renaming variable names for discrete structural simplification. Three cas
 """
 function lower_shift_varname(var, iv)
     op = operation(var)
-    op isa Shift || return Shift(iv, 0)(var, true) # hack to prevent simplification of x(t) - x(t)
-    if op.steps < 0
+    if op isa Shift
         return shift2term(var)
     else
-        return var
+        return Shift(iv, 0)(var, true)
     end
 end
 
@@ -476,10 +475,14 @@ function shift2term(var)
 
     backshift = is_lowered ? op.steps + ModelingToolkit.getshift(arg) : op.steps
 
-    num = join(Char(0x2080 + d) for d in reverse!(digits(-backshift))) # subscripted number, e.g. ₁
-    ds = join([Char(0x209c), Char(0x208b), num])
-    # Char(0x209c) = ₜ
     # Char(0x208b) = ₋ (subscripted minus)
+    # Char(0x208a) = ₊ (subscripted plus)
+    pm = backshift > 0 ? Char(0x208a) : Char(0x208b)
+    # subscripted number, e.g. ₁
+    num = join(Char(0x2080 + d) for d in reverse!(digits(abs(backshift))))
+    # Char(0x209c) = ₜ
+    # ds = ₜ₋₁
+    ds = join([Char(0x209c), pm, num])
 
     O = is_lowered ? ModelingToolkit.getunshifted(arg) : arg
     oldop = operation(O)
@@ -499,6 +502,9 @@ function isdoubleshift(var)
            ModelingToolkit.isoperator(arguments(var)[1], ModelingToolkit.Shift)
 end
 
+"""
+Simplify multiple shifts: Shift(t, k1)(Shift(t, k2)(x)) becomes Shift(t, k1+k2)(x).
+"""
 function simplify_shifts(var)
     ModelingToolkit.hasshift(var) || return var
     var isa Equation && return simplify_shifts(var.lhs) ~ simplify_shifts(var.rhs)
@@ -516,5 +522,47 @@ function simplify_shifts(var)
     else
         return maketerm(typeof(var), operation(var), simplify_shifts.(arguments(var)),
             unwrap(var).metadata)
+    end
+end
+
+"""
+Distribute a shift applied to a whole expression or equation. 
+Shift(t, 1)(x + y) will become Shift(t, 1)(x) + Shift(t, 1)(y).
+Only shifts variables whose independent variable is the same t that appears in the Shift (i.e. constants, time-independent parameters, etc. do not get shifted).
+"""
+function distribute_shift(var)
+    var = unwrap(var)
+    var isa Equation && return distribute_shift(var.lhs) ~ distribute_shift(var.rhs)
+
+    ModelingToolkit.hasshift(var) || return var
+    shift = operation(var)
+    shift isa Shift || return var
+
+    shift = operation(var)
+    expr = only(arguments(var))
+    if expr isa Equation
+        return distribute_shift(shift(expr.lhs)) ~ distribute_shift(shift(expr.rhs))
+    end
+    shiftexpr = _distribute_shift(expr, shift)
+    return simplify_shifts(shiftexpr)
+end
+
+function _distribute_shift(expr, shift)
+    if iscall(expr)
+        op = operation(expr)
+        args = arguments(expr)
+
+        if ModelingToolkit.isvariable(expr)
+            (length(args) == 1 && isequal(shift.t, only(args))) ? (return shift(expr)) :
+            (return expr)
+        elseif op isa Shift
+            return shift(expr)
+        else
+            return maketerm(
+                typeof(expr), operation(expr), Base.Fix2(_distribute_shift, shift).(args),
+                unwrap(expr).metadata)
+        end
+    else
+        return expr
     end
 end
