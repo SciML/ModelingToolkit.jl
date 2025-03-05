@@ -424,7 +424,7 @@ end
 
     sys3 = structural_simplify(sys)
     nlsys = NonlinearSystem(sys3)
-    @test length(equations(nlsys)) == length(observed(nlsys)) == 1
+    @test length(equations(nlsys)) == length(ModelingToolkit.observed(nlsys)) == 1
 
     prob = NonlinearProblem(sys3, [q => 2.0])
     @test prob.f.initialization_data.initializeprobmap === nothing
