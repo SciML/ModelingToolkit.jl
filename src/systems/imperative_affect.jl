@@ -99,7 +99,6 @@ function Base.hash(a::ImperativeAffect, s::UInt)
     hash(a.ctx, s)
 end
 
-namespace_affects(af::ImperativeAffect, s) = namespace_affect(af, s)
 function namespace_affect(affect::ImperativeAffect, s)
     ImperativeAffect(func(affect),
         namespace_expr.(observed(affect), (s,)),
@@ -113,6 +112,49 @@ end
 function compile_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs...)
     compile_user_affect(affect, cb, sys, dvs, ps; kwargs...)
 end
+
+function invalid_variables(sys, expr)
+    filter(x -> !any(isequal(x), all_symbols(sys)), reduce(vcat, vars(expr); init = []))
+end
+
+function unassignable_variables(sys, expr)
+    assignable_syms = reduce(
+        vcat, Symbolics.scalarize.(vcat(
+            unknowns(sys), parameters(sys; initial_parameters = true)));
+        init = [])
+    written = reduce(vcat, Symbolics.scalarize.(vars(expr)); init = [])
+    return filter(
+        x -> !any(isequal(x), assignable_syms), written)
+end
+
+@generated function _generated_writeback(integ, setters::NamedTuple{NS1, <:Tuple},
+        values::NamedTuple{NS2, <:Tuple}) where {NS1, NS2}
+    setter_exprs = []
+    for name in NS2
+        if !(name in NS1)
+            missing_name = "Tried to write back to $name from affect; only declared states ($NS1) may be written to."
+            error(missing_name)
+        end
+        push!(setter_exprs, :(setters.$name(integ, values.$name)))
+    end
+    return :(begin
+        $(setter_exprs...)
+    end)
+end
+
+function check_assignable(sys, sym)
+    if symbolic_type(sym) == ScalarSymbolic()
+        is_variable(sys, sym) || is_parameter(sys, sym)
+    elseif symbolic_type(sym) == ArraySymbolic()
+        is_variable(sys, sym) || is_parameter(sys, sym) ||
+            all(x -> check_assignable(sys, x), collect(sym))
+    elseif sym isa Union{AbstractArray, Tuple}
+        all(x -> check_assignable(sys, x), sym)
+    else
+        false
+    end
+end
+
 
 function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs...)
     #=
@@ -238,3 +280,4 @@ function vars!(vars, aff::ImperativeAffect; op = Differential)
     end
     return vars
 end
+
