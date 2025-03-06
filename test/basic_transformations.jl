@@ -148,6 +148,8 @@ end
     @test_throws "structurally simplified" change_independent_variable(structural_simplify(M), y)
     @test_throws "Got 0 equations:" change_independent_variable(M, w)
     @test_throws "Got 0 equations:" change_independent_variable(M, v)
+    M = ODESystem([2 * D(x) ~ 1, v ~ x], t; name = :M) # TODO: allow equations like this
+    @test_throws "Got 0 equations:" change_independent_variable(M, x)
     M = ODESystem([D(x) ~ 1, v ~ 1], t; name = :M)
     @test_throws "Got 2 equations:" change_independent_variable(M, x, [D(x) ~ 2])
     @test_throws "not a function of the independent variable" change_independent_variable(M, y)
