@@ -24,11 +24,11 @@ D = Differential(t)
 M1 = ODESystem([
     D(D(y)) ~ -g, D(x) ~ v # constant horizontal velocity
 ], t; defaults = [
-    y => 0.0
+    y => 0.0 # start on the ground
 ], initialization_eqs = [
     #x ~ 0.0, # TODO: handle? # hide
     D(x) ~ D(y) # equal initial horizontal and vertical velocity (45 °)
-], name = :M) |> complete
+], name = :M)
 M1s = structural_simplify(M1)
 ```
 This is the standard parametrization that arises naturally from kinematics and Newton's laws.
@@ -42,7 +42,7 @@ There are at least three ways of answering this:
 We will demonstrate the last method by changing the independent variable from $t$ to $x$.
 This transformation is well-defined for any non-zero horizontal velocity $v$.
 ```@example changeivar
-M2 = change_independent_variable(M1, M1.x; dummies = true)
+M2 = change_independent_variable(M1, x; dummies = true)
 @assert M2.x isa Num # hide
 M2s = structural_simplify(M2; allow_symbolic = true)
 ```
@@ -79,12 +79,11 @@ initialization_eqs = [
 ]
 M1 = ODESystem(eqs, t, [Ω, a], []; initialization_eqs, name = :M)
 M1 = compose(M1, r, m, Λ)
-M1 = complete(M1; flatten = false)
 M1s = structural_simplify(M1)
 ```
 Of course, we can solve this ODE as it is:
 ```@example changeivar
-prob = ODEProblem(M1s, [M1.a => 1.0, M1.r.Ω => 5e-5, M1.m.Ω => 0.3], (0.0, -3.3), [])
+prob = ODEProblem(M1s, [M1s.a => 1.0, M1s.r.Ω => 5e-5, M1s.m.Ω => 0.3], (0.0, -3.3), [])
 sol = solve(prob, Tsit5(); reltol = 1e-5)
 @assert Symbol(sol.retcode) == :Unstable # surrounding text assumes this was unstable # hide
 plot(sol, idxs = [M1.a, M1.r.Ω/M1.Ω, M1.m.Ω/M1.Ω, M1.Λ.Ω/M1.Ω])
@@ -111,7 +110,7 @@ M3 = change_independent_variable(M2, b, [Da(b) ~ exp(-b), a ~ exp(b)])
 We can now solve and plot the ODE in terms of $b$:
 ```@example changeivar
 M3s = structural_simplify(M3; allow_symbolic = true)
-prob = ODEProblem(M3s, [M3.r.Ω => 5e-5, M3.m.Ω => 0.3], (0, -15), [])
+prob = ODEProblem(M3s, [M3s.r.Ω => 5e-5, M3s.m.Ω => 0.3], (0, -15), [])
 sol = solve(prob, Tsit5())
 @assert Symbol(sol.retcode) == :Success # surrounding text assumes the solution was successful # hide
 plot(sol, idxs = [M3.r.Ω/M3.Ω, M3.m.Ω/M3.Ω, M3.Λ.Ω/M3.Ω])

@@ -28,8 +28,8 @@ end
 @testset "Change independent variable (trivial)" begin
     @variables x(t) y(t)
     eqs1 = [D(D(x)) ~ D(x) + x, D(y) ~ 1]
-    M1 = ODESystem(eqs1, t; name = :M) |> complete
-    M2 = change_independent_variable(M1, M1.y)
+    M1 = ODESystem(eqs1, t; name = :M)
+    M2 = change_independent_variable(M1, y)
     eqs2 = substitute(equations(M2), M2.y => M1.t) # system should be equivalent when parametrized with y (since D(y) ~ 1), so substitute back ...
     @test eqs1[1] == only(eqs2) # ... and check that the equations are unmodified
 end
@@ -43,8 +43,8 @@ end
         D(s) ~ 1 / (2*s)
     ]
     initialization_eqs = [x ~ 1.0, y ~ 1.0, D(y) ~ 0.0]
-    M1 = ODESystem(eqs, t; initialization_eqs, name = :M) |> complete
-    M2 = change_independent_variable(M1, M1.s; dummies = true)
+    M1 = ODESystem(eqs, t; initialization_eqs, name = :M)
+    M2 = change_independent_variable(M1, s; dummies = true)
 
     M1 = structural_simplify(M1; allow_symbolic = true)
     M2 = structural_simplify(M2; allow_symbolic = true)
@@ -75,11 +75,11 @@ end
     ]
     M1 = ODESystem(eqs, t, [Ω, a, ȧ, ϕ], []; name = :M)
     M1 = compose(M1, r, m, Λ)
-    M1 = complete(M1; flatten = false)
 
     # Apply in two steps, where derivatives are defined at each step: first t -> a, then a -> b
     M2 = change_independent_variable(M1, M1.a; dummies = true)
-    a, ȧ, Ω, Ωr, Ωm, ΩΛ, ϕ, aˍt, aˍtt = M2.a, M2.ȧ, M2.Ω, M2.r.Ω, M2.m.Ω, M2.Λ.Ω, M2.ϕ, M2.aˍt, M2.aˍtt
+    M2c = complete(M2) # just for the following equation comparison (without namespacing)
+    a, ȧ, Ω, Ωr, Ωm, ΩΛ, ϕ, aˍt, aˍtt = M2c.a, M2c.ȧ, M2c.Ω, M2c.r.Ω, M2c.m.Ω, M2c.Λ.Ω, M2c.ϕ, M2c.aˍt, M2c.aˍtt
     Da = Differential(a)
     @test Set(equations(M2)) == Set([
         aˍt ~ ȧ # 1st order dummy equation
@@ -103,16 +103,16 @@ end
 
 @testset "Change independent variable (simple)" begin
     @variables x(t)
-    Mt = ODESystem([D(x) ~ 2*x], t; name = :M) |> complete
-    Mx = change_independent_variable(Mt, Mt.x; dummies = true)
+    Mt = ODESystem([D(x) ~ 2*x], t; name = :M)
+    Mx = change_independent_variable(Mt, x; dummies = true)
     @test (@variables x xˍt(x) xˍtt(x); Set(equations(Mx)) == Set([xˍt ~ 2*x, xˍtt ~ 2*xˍt]))
 end
 
 @testset "Change independent variable (free fall)" begin
     @variables x(t) y(t)
     @parameters g v # gravitational acceleration and constant horizontal velocity
-    Mt = ODESystem([D(D(y)) ~ -g, D(x) ~ v], t; name = :M) |> complete # gives (x, y) as function of t, ...
-    Mx = change_independent_variable(Mt, Mt.x; dummies = false) # ... but we want y as a function of x
+    Mt = ODESystem([D(D(y)) ~ -g, D(x) ~ v], t; name = :M) # gives (x, y) as function of t, ...
+    Mx = change_independent_variable(Mt, x; dummies = false) # ... but we want y as a function of x
     Mx = structural_simplify(Mx; allow_symbolic = true)
     Dx = Differential(Mx.x)
     prob = ODEProblem(Mx, [Mx.y => 0.0, Dx(Mx.y) => 1.0], (0.0, 20.0), [g => 9.81, v => 10.0]) # 1 = dy/dx = (dy/dt)/(dx/dt) means equal initial horizontal and vertical velocities
@@ -127,8 +127,8 @@ end
     M1 = ODESystem([ # crazy non-autonomous non-linear 2nd order ODE
         D(D(y)) ~ D(x)^2 + D(y^3) |> expand_derivatives # expand D(y^3) # TODO: make this test 3rd order
         D(x) ~ x^4 + y^5 + t^6
-    ], t; name = :M) |> complete
-    M2 = change_independent_variable(M1, M1.x; dummies = true)
+    ], t; name = :M)
+    M2 = change_independent_variable(M1, x; dummies = true)
 
     # Compare to pen-and-paper result
     @independent_variables x
@@ -144,18 +144,16 @@ end
 @testset "Change independent variable (errors)" begin
     @variables x(t) y z(y) w(t) v(t)
     M = ODESystem([D(x) ~ 0, v ~ x], t; name = :M)
-    @test_throws "incomplete" change_independent_variable(M, M.x)
-    M = complete(M)
-    @test_throws "singular" change_independent_variable(M, M.x)
+    @test_throws "singular" change_independent_variable(M, x)
     @test_throws "structurally simplified" change_independent_variable(structural_simplify(M), y)
     @test_throws "Got 0 equations:" change_independent_variable(M, w)
     @test_throws "Got 0 equations:" change_independent_variable(M, v)
-    M = ODESystem([D(x) ~ 1, v ~ 1], t; name = :M) |> complete
-    @test_throws "Got 2 equations:" change_independent_variable(M, M.x, [D(x) ~ 2])
+    M = ODESystem([D(x) ~ 1, v ~ 1], t; name = :M)
+    @test_throws "Got 2 equations:" change_independent_variable(M, x, [D(x) ~ 2])
     @test_throws "not a function of the independent variable" change_independent_variable(M, y)
     @test_throws "not a function of the independent variable" change_independent_variable(M, z)
     M = ODESystem([D(x) ~ 0, v ~ x], t; name = :M)
     @variables x(..) # require explicit argument
-    M = ODESystem([D(x(t)) ~ x(t-1)], t; name = :M) |> complete
-    @test_throws "DDE" change_independent_variable(M, M.x)
+    M = ODESystem([D(x(t)) ~ x(t-1)], t; name = :M)
+    @test_throws "DDE" change_independent_variable(M, x(t))
 end
