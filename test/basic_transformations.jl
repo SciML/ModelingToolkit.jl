@@ -152,4 +152,8 @@ end
     @test_throws "not specified" change_independent_variable(M, v)
     @test_throws "not a function of the independent variable" change_independent_variable(M, y)
     @test_throws "not a function of the independent variable" change_independent_variable(M, z)
+    M = ODESystem([D(x) ~ 0, v ~ x], t; name = :M)
+    @variables x(..) # require explicit argument
+    M = ODESystem([D(x(t)) ~ x(t-1)], t; name = :M) |> complete
+    @test_throws "DDE" change_independent_variable(M, M.x)
 end

@@ -105,6 +105,8 @@ function change_independent_variable(sys::AbstractODESystem, iv, eqs = []; dummi
 
     if !iscomplete(sys)
         error("System $(nameof(sys)) is incomplete. Complete it first!")
+    elseif is_dde(sys)
+        error("System $(nameof(sys)) contains delay differential equations (DDEs). This is currently not supported!")
     elseif isscheduled(sys)
         error("System $(nameof(sys)) is structurally simplified. Change independent variable before structural simplification!")
     elseif !iscall(iv2_of_iv1) || !isequal(only(arguments(iv2_of_iv1)), iv1)
