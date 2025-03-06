@@ -79,17 +79,17 @@ end
 
     # Apply in two steps, where derivatives are defined at each step: first t -> a, then a -> b
     M2 = change_independent_variable(M1, M1.a; dummies = true)
-    a, ȧ, Ω, Ωr, Ωm, ΩΛ, ϕ, a_t, a_tt = M2.a, M2.ȧ, M2.Ω, M2.r.Ω, M2.m.Ω, M2.Λ.Ω, M2.ϕ, M2.a_t, M2.a_tt
+    a, ȧ, Ω, Ωr, Ωm, ΩΛ, ϕ, aˍt, aˍtt = M2.a, M2.ȧ, M2.Ω, M2.r.Ω, M2.m.Ω, M2.Λ.Ω, M2.ϕ, M2.aˍt, M2.aˍtt
     Da = Differential(a)
     @test Set(equations(M2)) == Set([
-        a_t ~ ȧ # 1st order dummy equation
-        a_tt ~ Da(ȧ) * a_t # 2nd order dummy equation
+        aˍt ~ ȧ # 1st order dummy equation
+        aˍtt ~ Da(ȧ) * aˍt # 2nd order dummy equation
         Ω ~ Ωr + Ωm + ΩΛ
         ȧ ~ √(Ω) * a^2
-        a_tt*Da(ϕ) + a_t^2*(Da^2)(ϕ) ~ -3*a_t^2/a*Da(ϕ)
-        a_t*Da(Ωr) ~ -4*Ωr*a_t/a
-        a_t*Da(Ωm) ~ -3*Ωm*a_t/a
-        a_t*Da(ΩΛ) ~ 0
+        aˍtt*Da(ϕ) + aˍt^2*(Da^2)(ϕ) ~ -3*aˍt^2/a*Da(ϕ)
+        aˍt*Da(Ωr) ~ -4*Ωr*aˍt/a
+        aˍt*Da(Ωm) ~ -3*Ωm*aˍt/a
+        aˍt*Da(ΩΛ) ~ 0
     ])
 
     @variables b(M2.a)
@@ -105,7 +105,7 @@ end
     @variables x(t)
     Mt = ODESystem([D(x) ~ 2*x], t; name = :M) |> complete
     Mx = change_independent_variable(Mt, Mt.x; dummies = true)
-    @test (@variables x x_t(x) x_tt(x); Set(equations(Mx)) == Set([x_t ~ 2*x, x_tt ~ 2*x_t]))
+    @test (@variables x xˍt(x) xˍtt(x); Set(equations(Mx)) == Set([xˍt ~ 2*x, xˍtt ~ 2*xˍt]))
 end
 
 @testset "Change independent variable (free fall)" begin
@@ -133,11 +133,11 @@ end
     # Compare to pen-and-paper result
     @independent_variables x
     Dx = Differential(x)
-    @variables x_t(x) x_tt(x) y(x) t(x)
+    @variables xˍt(x) xˍtt(x) y(x) t(x)
     @test Set(equations(M2)) == Set([
-        x_t^2*(Dx^2)(y) + x_tt*Dx(y) ~ x_t^2 + 3*y^2*Dx(y)*x_t # from D(D(y))
-        x_t ~ x^4 + y^5 + t^6 # 1st order dummy equation
-        x_tt ~ 4*x^3*x_t + 5*y^4*Dx(y)*x_t + 6*t^5 # 2nd order dummy equation
+        xˍt^2*(Dx^2)(y) + xˍtt*Dx(y) ~ xˍt^2 + 3*y^2*Dx(y)*xˍt # from D(D(y))
+        xˍt ~ x^4 + y^5 + t^6 # 1st order dummy equation
+        xˍtt ~ 4*x^3*xˍt + 5*y^4*Dx(y)*xˍt + 6*t^5 # 2nd order dummy equation
     ])
 end
 

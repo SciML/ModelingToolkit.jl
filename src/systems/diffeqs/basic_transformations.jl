@@ -149,9 +149,8 @@ function change_independent_variable(sys::AbstractODESystem, iv, eqs = []; dummi
     # 3) If requested, insert extra dummy equations for e.g. du/dt, d²u/dt², ...
     #    Otherwise, replace all these derivatives by their explicit expressions
     if dummies
-        div2name = Symbol(iv2name, :_, iv1name) # e.g. :u_t # TODO: customize
-        ddiv2name = Symbol(div2name, iv1name) # e.g. :u_tt # TODO: customize
-        div2, ddiv2 = @variables $div2name(iv2) $ddiv2name(iv2) # e.g. u_t(u), u_tt(u)
+        div2 = substitute(default_toterm(D1(iv2_of_iv1)), iv1 => iv2) # e.g. uˍt(u)
+        ddiv2 = substitute(default_toterm(D1(D1(iv2_of_iv1))), iv1 => iv2) # e.g. uˍtt(u)
         div2, ddiv2 = GlobalScope.([div2, ddiv2]) # do not namespace dummies in new system
         eqs = [[div2 ~ div2_of_iv1, ddiv2 ~ ddiv2_of_iv1]; eqs] # add dummy equations
         @set! sys.unknowns = [get_unknowns(sys); [div2, ddiv2]] # add dummy variables
