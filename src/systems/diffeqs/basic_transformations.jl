@@ -60,30 +60,30 @@ This or other additional equations can also be specified through `eqs`.
 The transformation is well-defined when the mapping between the new and old independent variables are one-to-one.
 This is satisfied if one is a strictly increasing function of the other (e.g. ``du(t)/dt > 0`` or ``du(t)/dt < 0``).
 
-Keyword arguments
-=================
-If `dummies`, derivatives of the new independent variable with respect to the old one are expressed through dummy equations; otherwise they are explicitly inserted into the equations.
-If `simplify`, these dummy expressions are simplified and often give a tidier transformation.
-If `fold`, internal substitutions will evaluate numerical expressions.
+# Keyword arguments
+
+- `dummies`: Whether derivatives of the new independent variable with respect to the old one are expressed through dummy equations or explicitly inserted into the equations.
+- `simplify`: Whether expanded derivative expressions are simplified. This can give a tidier transformation.
+- `fold`: Whether internal substitutions will evaluate numerical expressions.
 Additional keyword arguments `kwargs...` are forwarded to the constructor that rebuilds `sys`.
 
-Usage before structural simplification
-======================================
+# Usage before structural simplification
+
 The variable change must take place before structural simplification.
 Subsequently, consider passing `allow_symbolic = true` to `structural_simplify(sys)` to reduce the number of unknowns, with the understanding that the transformation is well-defined.
 
-Usage with non-autonomous systems
-=================================
-If `sys` is autonomous (i.e. ``t`` appears explicitly in its equations), it is often desirable to also pass an algebraic equation relating the new and old independent variables (e.g. ``t = f(u(t))``).
+# Usage with non-autonomous systems
+
+If `sys` is non-autonomous (i.e. ``t`` appears explicitly in its equations), it is often desirable to also pass an algebraic equation relating the new and old independent variables (e.g. ``t = f(u(t))``).
 Otherwise the transformed system will be underdetermined and cannot be structurally simplified without additional changes.
 
-Usage with hierarchical systems
-===============================
+# Usage with hierarchical systems
+
 It is recommended that `iv` is a non-namespaced variable in `sys`.
 This means it can belong to the top-level system or be a variable in a subsystem declared with `GlobalScope`.
 
-Example
-=======
+# Example
+
 Consider a free fall with constant horizontal velocity.
 Physics naturally describes position as a function of time.
 By changing the independent variable, it can be reformulated for vertical position as a function of horizontal position:
