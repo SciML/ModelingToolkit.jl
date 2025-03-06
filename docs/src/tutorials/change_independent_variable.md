@@ -23,11 +23,8 @@ D = Differential(t)
 @parameters g = 9.81 v # gravitational acceleration and constant horizontal velocity
 M1 = ODESystem([
     D(D(y)) ~ -g, D(x) ~ v # constant horizontal velocity
-], t; defaults = [
-    y => 0.0 # start on the ground
-], initialization_eqs = [
-    #x ~ 0.0, # TODO: handle? # hide
-    D(x) ~ D(y) # equal initial horizontal and vertical velocity (45 °)
+], t; initialization_eqs = [
+    D(x) ~ D(y) # equal initial horizontal and vertical velocity (45°)
 ], name = :M)
 M1s = structural_simplify(M1)
 ```
@@ -43,15 +40,26 @@ We will demonstrate the last method by changing the independent variable from $t
 This transformation is well-defined for any non-zero horizontal velocity $v$.
 ```@example changeivar
 M2 = change_independent_variable(M1, x; dummies = true)
-@assert M2.x isa Num # hide
 M2s = structural_simplify(M2; allow_symbolic = true)
+# a sanity test on the 10 x/y variables that are accessible to the user # hide
+@assert allequal([x, M1s.x]) # hide
+@assert allequal([M2.x, M2s.x]) # hide
+@assert allequal([y, M1s.y]) # hide
+@assert allunique([M1.x, M1.y, M2.y, M2s.y]) # hide
+M2s # display this # hide
 ```
 The derivatives are now with respect to the new independent variable $x$, which can be accessed with `M2.x`.
+
+!!! warn
+    At this point `x`, `M1.x`, `M1s.x`, `M2.x`, `M2s.x` are *three* different variables.
+    Meanwhile `y`, `M1.y`, `M1s.y`, `M2.y` and `M2s.y` are *four* different variables.
+    It can be instructive to inspect these yourself to see their subtle differences.
+
 Notice how the number of equations has also decreased from three to two, as $\mathrm{d}x/\mathrm{d}t$ has been turned into an observed equation.
 It is straightforward to evolve the ODE for 10 meters and plot the resulting trajectory $y(x)$:
 ```@example changeivar
 using OrdinaryDiffEq, Plots
-prob = ODEProblem(M2s, [], [0.0, 10.0], [v => 8.0]) # throw 10 meters with x-velocity 8 m/s
+prob = ODEProblem(M2s, [M2s.y => 0.0], [0.0, 10.0], [v => 8.0]) # throw 10 meters with x-velocity 8 m/s
 sol = solve(prob, Tsit5())
 plot(sol; idxs = M2.y) # must index by M2.y = y(x); not M1.y = y(t)!
 ```
