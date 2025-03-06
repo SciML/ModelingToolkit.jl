@@ -123,8 +123,7 @@ function change_independent_variable(sys::AbstractODESystem, iv, eqs = []; dummi
 
     # 1) Utility that performs the chain rule on an expression, e.g. (d/dt)(f(t)) -> (d/dt)(f(u(t))) -> df(u(t))/du(t) * du(t)/dt
     function chain_rule(ex)
-        vars = get_variables(ex)
-        for var_of_iv1 in vars # loop through e.g. f(t)
+        for var_of_iv1 in vars(ex; op = Nothing) # loop over all variables in expression, e.g. f(t) (op = Nothing so "D(f(t))" yields only "f(t)" and not "D(f(t))"; we want to replace *inside* derivative signs)
             if iscall(var_of_iv1) && isequal(only(arguments(var_of_iv1)), iv1) && !isequal(var_of_iv1, iv2_of_iv1) # handle e.g. f(t) -> f(u(t)), but not u(t) -> u(u(t))
                 var_of_iv2 = substitute(var_of_iv1, iv1 => iv2_of_iv1) # e.g. f(t) -> f(u(t))
                 ex = substitute(ex, var_of_iv1 => var_of_iv2)
