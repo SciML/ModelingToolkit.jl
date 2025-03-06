@@ -897,6 +897,13 @@ function Base.showerror(io::IO, e::InvalidKeyError)
     println(io, "pmap: $(join(e.params, ", "))")
 end
 
+function SciMLBase.detect_cycles(sys::AbstractSystem, varmap::Dict{Any, Any}, vars)
+    varmap = AnyDict(unwrap(k) => unwrap(v) for (k, v) in varmap)
+    vars = map(unwrap, vars)
+    cycles = check_substitution_cycles(varmap, vars)
+    return !isempty(cycles)
+end
+
 ##############
 # Legacy functions for backward compatibility
 ##############
