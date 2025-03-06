@@ -137,7 +137,7 @@ function change_independent_variable(sys::AbstractODESystem, iv, eqs = []; dummi
     eqs = [eqs; get_eqs(sys)] # all equations (system-defined + user-provided) we may use
     idxs = findall(eq -> isequal(eq.lhs, D1(iv2_of_iv1)), eqs)
     if length(idxs) != 1
-        error("Exactly one equation for $D1($iv2_of_iv1) was not specified!")
+        error("Exactly one equation for $D1($iv2_of_iv1) was not specified! Got $(length(idxs)) equations:\n", join(eqs[idxs], '\n'))
     end
     div2_of_iv1_eq = popat!(eqs, only(idxs)) # get and remove e.g. du/dt = ... (may be added back later as a dummy)
     div2_of_iv1 = chain_rule(div2_of_iv1_eq.rhs)

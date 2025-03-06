@@ -148,8 +148,10 @@ end
     M = complete(M)
     @test_throws "singular" change_independent_variable(M, M.x)
     @test_throws "structurally simplified" change_independent_variable(structural_simplify(M), y)
-    @test_throws "not specified" change_independent_variable(M, w)
-    @test_throws "not specified" change_independent_variable(M, v)
+    @test_throws "Got 0 equations:" change_independent_variable(M, w)
+    @test_throws "Got 0 equations:" change_independent_variable(M, v)
+    M = ODESystem([D(x) ~ 1, v ~ 1], t; name = :M) |> complete
+    @test_throws "Got 2 equations:" change_independent_variable(M, M.x, [D(x) ~ 2])
     @test_throws "not a function of the independent variable" change_independent_variable(M, y)
     @test_throws "not a function of the independent variable" change_independent_variable(M, z)
     M = ODESystem([D(x) ~ 0, v ~ x], t; name = :M)
