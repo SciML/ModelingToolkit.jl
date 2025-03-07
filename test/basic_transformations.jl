@@ -102,10 +102,12 @@ end
 end
 
 @testset "Change independent variable (simple)" begin
-    @variables x(t)
-    Mt = ODESystem([D(x) ~ 2*x], t; name = :M)
+    @variables x(t) y1(t) # y(t)[1:1] # TODO: use array variables y(t)[1:2] when fixed: https://github.com/JuliaSymbolics/Symbolics.jl/issues/1383
+    Mt = ODESystem([D(x) ~ 2*x, D(y1) ~ y1], t; name = :M)
     Mx = change_independent_variable(Mt, x; dummies = true)
-    @test (@variables x xˍt(x) xˍtt(x); Set(equations(Mx)) == Set([xˍt ~ 2*x, xˍtt ~ 2*xˍt]))
+    @variables x xˍt(x) xˍtt(x) y1(x) # y(x)[1:1] # TODO: array variables
+    Dx = Differential(x)
+    @test (Set(equations(Mx)) == Set([xˍt ~ 2*x, xˍtt ~ 2*xˍt, xˍt*Dx(y1) ~ y1]))
 end
 
 @testset "Change independent variable (free fall)" begin
