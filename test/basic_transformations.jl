@@ -1,4 +1,4 @@
-using ModelingToolkit, OrdinaryDiffEq, Test
+using ModelingToolkit, OrdinaryDiffEq, DataInterpolations, Test
 
 @independent_variables t
 D = Differential(t)
@@ -141,6 +141,34 @@ end
         xˍt ~ x^4 + y^5 + t^6 # 1st order dummy equation
         xˍtt ~ 4*x^3*xˍt + 5*y^4*Dx(y)*xˍt + 6*t^5 # 2nd order dummy equation
     ])
+end
+
+@testset "Change independent variable (registered function / callable parameter)" begin
+    @independent_variables t
+    D = Differential(t)
+    @variables x(t) y(t)
+    @parameters f::LinearInterpolation (fc::LinearInterpolation)(..) # non-callable and callable
+    callme(interp::LinearInterpolation, input) = interp(input)
+    @register_symbolic callme(interp::LinearInterpolation, input)
+    M1 = ODESystem([
+        D(x) ~ 2*t
+        D(y) ~ 1*fc(t) + 2*fc(x) + 3*fc(y) + 1*callme(f, t) + 2*callme(f, x) + 3*callme(f, y)
+    ], t; name = :M)
+
+    # Ensure that interpolations are called with the same variables
+    M2 = change_independent_variable(M1, x, [t ~ √(x)])
+    @variables x y(x) t(x)
+    Dx = Differential(x)
+    @test Set(equations(M2)) == Set([
+        t ~ √(x)
+        2*t*Dx(y) ~ 1*fc(t) + 2*fc(x) + 3*fc(y) + 1*callme(f, t) + 2*callme(f, x) + 3*callme(f, y)
+    ])
+
+    _f = LinearInterpolation([1.0, 1.0], [-100.0, +100.0]) # constant value 1
+    M2s = structural_simplify(M2; allow_symbolic = true)
+    prob = ODEProblem(M2s, [M2s.y => 0.0], (1.0, 4.0), [fc => _f, f => _f])
+    sol = solve(prob, Tsit5(); abstol = 1e-5)
+    @test isapprox(sol(4.0, idxs=M2.y), 12.0; atol = 1e-5) # Anal solution is D(y) ~ 12 => y(t) ~ 12*t + C => y(x) ~ 12*√(x) + C. With y(x=1)=0 => 12*(√(x)-1), so y(x=4) ~ 12
 end
 
 @testset "Change independent variable (errors)" begin
