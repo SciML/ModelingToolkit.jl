@@ -363,7 +363,7 @@ Keyword arguments:
 - `is_initializeprob, guesses`: Used to determine whether the system is missing guesses.
 """
 function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
-        tofloat = true, use_union = true, container_type = Array,
+        tofloat = true, container_type = Array,
         toterm = default_toterm, promotetoconcrete = nothing, check = true, allow_symbolic = false, is_initializeprob = false)
     isempty(vars) && return nothing
 
@@ -841,8 +841,13 @@ function process_SciMLProblem(
     evaluate_varmap!(op, dvs; limit = substitution_limit)
 
     u0 = better_varmap_to_vars(
+<<<<<<< HEAD
         op, dvs; tofloat = true, use_union = false,
         container_type = u0Type, allow_symbolic = symbolic_u0, is_initializeprob)
+=======
+        op, dvs; tofloat, use_union,
+        container_type = u0Type, allow_symbolic = symbolic_u0)
+>>>>>>> e31ae1bcc9 (fix: propagate `tofloat`, `use_union` to `better_varmap_to_vars`)
 
     if u0 !== nothing
         u0 = u0_constructor(u0)
@@ -875,7 +880,7 @@ function process_SciMLProblem(
         du0map = to_varmap(du0map, ddvs)
         merge!(op, du0map)
         du0 = varmap_to_vars(op, ddvs; toterm = identity,
-            tofloat = true)
+            tofloat)
         kwargs = merge(kwargs, (; ddvs))
     else
         du0 = nothing
