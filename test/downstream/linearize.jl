@@ -262,7 +262,7 @@ closed_loop = ODESystem(connections, t, systems = [model, pid, filt, sensor, r, 
         filt.xd => 0.0
     ])
 
-@test_nowarn linearize(closed_loop, :r, :y)
+@test_nowarn linearize(closed_loop, :r, :y; warn_empty_op = false)
 
 # https://discourse.julialang.org/t/mtk-change-in-linearize/115760/3
 @mtkmodel Tank_noi begin
