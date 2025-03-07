@@ -51,7 +51,7 @@ function liouville_transform(sys::AbstractODESystem; kwargs...)
 end
 
 """
-    change_independent_variable(sys::AbstractODESystem, iv, eqs = []; dummies = false, simplify = true, fold = false, kwargs...)
+    change_independent_variable(sys::AbstractODESystem, iv, eqs = []; dummies = false, add_old_diff = false, simplify = true, fold = false, kwargs...)
 
 Transform the independent variable (e.g. ``t``) of the ODE system `sys` to a dependent variable `iv` (e.g. ``u(t)``).
 An equation in `sys` must define the rate of change of the new independent variable (e.g. ``du(t)/dt``).
@@ -63,6 +63,7 @@ This is satisfied if one is a strictly increasing function of the other (e.g. ``
 # Keyword arguments
 
 - `dummies`: Whether derivatives of the new independent variable with respect to the old one are expressed through dummy equations or explicitly inserted into the equations.
+- `add_old_diff`: Whether to add a differential equation for the old independent variable in terms of the new one using the inverse function rule.
 - `simplify`: Whether expanded derivative expressions are simplified. This can give a tidier transformation.
 - `fold`: Whether internal substitutions will evaluate numerical expressions.
 Additional keyword arguments `kwargs...` are forwarded to the constructor that rebuilds `sys`.
@@ -99,7 +100,7 @@ julia> unknowns(M′)
  y(x)
 ```
 """
-function change_independent_variable(sys::AbstractODESystem, iv, eqs = []; dummies = false, simplify = true, fold = false, kwargs...)
+function change_independent_variable(sys::AbstractODESystem, iv, eqs = []; dummies = false, add_old_diff = false, simplify = true, fold = false, kwargs...)
     iv2_of_iv1 = unwrap(iv) # e.g. u(t)
     iv1 = get_iv(sys) # e.g. t
 
@@ -148,24 +149,34 @@ function change_independent_variable(sys::AbstractODESystem, iv, eqs = []; dummi
 
     # 3) If requested, insert extra dummy equations for e.g. du/dt, d²u/dt², ...
     #    Otherwise, replace all these derivatives by their explicit expressions
+    unks = get_unknowns(sys)
     if dummies
         div2 = substitute(default_toterm(D1(iv2_of_iv1)), iv1 => iv2) # e.g. uˍt(u)
         ddiv2 = substitute(default_toterm(D1(D1(iv2_of_iv1))), iv1 => iv2) # e.g. uˍtt(u)
         div2, ddiv2 = GlobalScope.([div2, ddiv2]) # do not namespace dummies in new system
         eqs = [[div2 ~ div2_of_iv1, ddiv2 ~ ddiv2_of_iv1]; eqs] # add dummy equations
-        @set! sys.unknowns = [get_unknowns(sys); [div2, ddiv2]] # add dummy variables
+        unks = [unks; [div2, ddiv2]] # add dummy variables
     else
         div2 = div2_of_iv1
         ddiv2 = ddiv2_of_iv1
     end
-    @set! sys.eqs = eqs # add extra equations we derived before starting transformation process
 
-    # 4) Transform everything from old to new independent variable, e.g. t -> u.
+    # 4) If requested, add a differential equation for the old independent variable as a function of the old one
+    if add_old_diff
+        div1lhs = substitute(D2(iv1_of_iv2), iv2 => iv2_of_iv1) # e.g. (d/du(t))(t(u(t))); will be transformed to (d/du)(t(u)) by chain rule
+        div1rhs = 1 / div2 # du/dt = 1/(dt/du) (https://en.wikipedia.org/wiki/Inverse_function_rule)
+        eqs = [eqs; div1lhs ~ div1rhs]
+        unks = [unks; iv1_of_iv2]
+    end
+    @set! sys.eqs = eqs # add extra equations we derived before starting transformation process
+    @set! sys.unknowns = unks # add dummy variables and old independent variable as a function of the new one
+
+    # 5) Transform everything from old to new independent variable, e.g. t -> u.
     #    Substitution order matters! Must begin with highest order to get D(D(u(t))) -> u_tt(u).
     #    If we had started with the lowest order, we would get D(D(u(t))) -> D(u_t(u)) -> 0!
     iv1_to_iv2_subs = [ # a vector ensures substitution order
-        D1(D1(iv2_of_iv1)) => ddiv2 # order 2, e.g. D(D(u(t))) -> u_tt(u)
-        D1(iv2_of_iv1) => div2 # order 1, e.g. D(u(t)) -> u_t(u)
+        D1(D1(iv2_of_iv1)) => ddiv2 # order 2, e.g. D(D(u(t))) -> u_tt(u) or explicit expression
+        D1(iv2_of_iv1) => div2 # order 1, e.g. D(u(t)) -> u_t(u) or explicit expression
         iv2_of_iv1 => iv2 # order 0, e.g. u(t) -> u
         iv1 => iv1_of_iv2 # in case sys was autonomous, e.g. t -> t(u)
     ]

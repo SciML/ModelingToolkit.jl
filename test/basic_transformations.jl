@@ -114,12 +114,12 @@ end
     @variables x(t) y(t)
     @parameters g v # gravitational acceleration and constant horizontal velocity
     Mt = ODESystem([D(D(y)) ~ -g, D(x) ~ v], t; name = :M) # gives (x, y) as function of t, ...
-    Mx = change_independent_variable(Mt, x; dummies = false) # ... but we want y as a function of x
+    Mx = change_independent_variable(Mt, x; add_old_diff = true) # ... but we want y as a function of x
     Mx = structural_simplify(Mx; allow_symbolic = true)
     Dx = Differential(Mx.x)
-    prob = ODEProblem(Mx, [Mx.y => 0.0, Dx(Mx.y) => 1.0], (0.0, 20.0), [g => 9.81, v => 10.0]) # 1 = dy/dx = (dy/dt)/(dx/dt) means equal initial horizontal and vertical velocities
+    prob = ODEProblem(Mx, [Mx.y => 0.0, Dx(Mx.y) => 1.0, Mx.t => 0.0], (0.0, 20.0), [g => 9.81, v => 10.0]) # 1 = dy/dx = (dy/dt)/(dx/dt) means equal initial horizontal and vertical velocities
     sol = solve(prob, Tsit5(); reltol = 1e-5)
-    @test all(isapprox.(sol[Mx.y], sol[Mx.x - g*(Mx.x/v)^2/2]; atol = 1e-10)) # compare to analytical solution (x(t) = v*t, y(t) = v*t - g*t^2/2)
+    @test all(isapprox.(sol[Mx.y], sol[Mx.x - g*(Mx.t)^2/2]; atol = 1e-10)) # compare to analytical solution (x(t) = v*t, y(t) = v*t - g*t^2/2)
 end
 
 @testset "Change independent variable (crazy analytical example)" begin
