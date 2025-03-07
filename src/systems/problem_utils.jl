@@ -814,7 +814,7 @@ function process_SciMLProblem(
     evaluate_varmap!(op, dvs; limit = substitution_limit)
 
     u0 = better_varmap_to_vars(
-        op, dvs; tofloat = true, use_union = false,
+        op, dvs; tofloat, use_union,
         container_type = u0Type, allow_symbolic = symbolic_u0)
 
     if u0 !== nothing
@@ -848,7 +848,7 @@ function process_SciMLProblem(
         du0map = to_varmap(du0map, ddvs)
         merge!(op, du0map)
         du0 = varmap_to_vars(op, ddvs; toterm = identity,
-            tofloat = true)
+            tofloat)
         kwargs = merge(kwargs, (; ddvs))
     else
         du0 = nothing
