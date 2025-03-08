@@ -39,7 +39,7 @@ There are at least three ways of answering this:
 We will demonstrate the last method by changing the independent variable from $t$ to $x$.
 This transformation is well-defined for any non-zero horizontal velocity $v$.
 ```@example changeivar
-M2 = change_independent_variable(M1, x; dummies = true)
+M2 = change_independent_variable(M1, x)
 M2s = structural_simplify(M2; allow_symbolic = true)
 # a sanity test on the 10 x/y variables that are accessible to the user # hide
 @assert allequal([x, M1s.x]) # hide
@@ -110,7 +110,7 @@ To do this, we will change the independent variable in two stages; from $t$ to $
 Notice that $\mathrm{d}a/\mathrm{d}t > 0$ provided that $\Omega > 0$, and $\mathrm{d}b/\mathrm{d}a > 0$, so the transformation is well-defined.
 First, we transform from $t$ to $a$:
 ```@example changeivar
-M2 = change_independent_variable(M1, M1.a; dummies = true)
+M2 = change_independent_variable(M1, M1.a)
 ```
 Unlike the original, notice that this system is *non-autonomous* because the independent variable $a$ appears explicitly in the equations!
 This means that to change the independent variable from $a$ to $b$, we must provide not only the rate of change relation $db(a)/da = \exp(-b)$, but *also* the equation $a(b) = \exp(b)$ so $a$ can be eliminated in favor of $b$:

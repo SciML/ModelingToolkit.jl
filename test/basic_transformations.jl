@@ -30,8 +30,9 @@ end
     eqs1 = [D(D(x)) ~ D(x) + x, D(y) ~ 1]
     M1 = ODESystem(eqs1, t; name = :M)
     M2 = change_independent_variable(M1, y)
-    eqs2 = substitute(equations(M2), M2.y => M1.t) # system should be equivalent when parametrized with y (since D(y) ~ 1), so substitute back ...
-    @test eqs1[1] == only(eqs2) # ... and check that the equations are unmodified
+    @variables y x(y) yˍt(y)
+    Dy = Differential(y)
+    @test Set(equations(M2)) == Set([yˍt^2*(Dy^2)(x) + yˍt*Dy(yˍt)*Dy(x) ~ x + Dy(x)*yˍt, yˍt ~ 1])
 end
 
 @testset "Change independent variable" begin
@@ -44,7 +45,7 @@ end
     ]
     initialization_eqs = [x ~ 1.0, y ~ 1.0, D(y) ~ 0.0]
     M1 = ODESystem(eqs, t; initialization_eqs, name = :M)
-    M2 = change_independent_variable(M1, s; dummies = true)
+    M2 = change_independent_variable(M1, s)
 
     M1 = structural_simplify(M1; allow_symbolic = true)
     M2 = structural_simplify(M2; allow_symbolic = true)
@@ -77,16 +78,15 @@ end
     M1 = compose(M1, r, m, Λ)
 
     # Apply in two steps, where derivatives are defined at each step: first t -> a, then a -> b
-    M2 = change_independent_variable(M1, M1.a; dummies = true)
+    M2 = change_independent_variable(M1, M1.a)
     M2c = complete(M2) # just for the following equation comparison (without namespacing)
-    a, ȧ, Ω, Ωr, Ωm, ΩΛ, ϕ, aˍt, aˍtt = M2c.a, M2c.ȧ, M2c.Ω, M2c.r.Ω, M2c.m.Ω, M2c.Λ.Ω, M2c.ϕ, M2c.aˍt, M2c.aˍtt
+    a, ȧ, Ω, Ωr, Ωm, ΩΛ, ϕ, aˍt = M2c.a, M2c.ȧ, M2c.Ω, M2c.r.Ω, M2c.m.Ω, M2c.Λ.Ω, M2c.ϕ, M2c.aˍt
     Da = Differential(a)
     @test Set(equations(M2)) == Set([
-        aˍt ~ ȧ # 1st order dummy equation
-        aˍtt ~ Da(ȧ) * aˍt # 2nd order dummy equation
+        aˍt ~ ȧ # dummy equation
         Ω ~ Ωr + Ωm + ΩΛ
         ȧ ~ √(Ω) * a^2
-        aˍtt*Da(ϕ) + aˍt^2*(Da^2)(ϕ) ~ -3*aˍt^2/a*Da(ϕ)
+        Da(aˍt)*Da(ϕ)*aˍt + aˍt^2*(Da^2)(ϕ) ~ -3*aˍt^2/a*Da(ϕ)
         aˍt*Da(Ωr) ~ -4*Ωr*aˍt/a
         aˍt*Da(Ωm) ~ -3*Ωm*aˍt/a
         aˍt*Da(ΩΛ) ~ 0
@@ -104,13 +104,13 @@ end
 @testset "Change independent variable (simple)" begin
     @variables x(t) y1(t) # y(t)[1:1] # TODO: use array variables y(t)[1:2] when fixed: https://github.com/JuliaSymbolics/Symbolics.jl/issues/1383
     Mt = ODESystem([D(x) ~ 2*x, D(y1) ~ y1], t; name = :M)
-    Mx = change_independent_variable(Mt, x; dummies = true)
+    Mx = change_independent_variable(Mt, x)
     @variables x xˍt(x) xˍtt(x) y1(x) # y(x)[1:1] # TODO: array variables
     Dx = Differential(x)
-    @test (Set(equations(Mx)) == Set([xˍt ~ 2*x, xˍtt ~ 2*xˍt, xˍt*Dx(y1) ~ y1]))
+    @test (Set(equations(Mx)) == Set([xˍt ~ 2*x, xˍt*Dx(y1) ~ y1]))
 end
 
-@testset "Change independent variable (free fall)" begin
+@testset "Change independent variable (free fall with 1st order horizontal equation)" begin
     @variables x(t) y(t)
     @parameters g v # gravitational acceleration and constant horizontal velocity
     Mt = ODESystem([D(D(y)) ~ -g, D(x) ~ v], t; name = :M) # gives (x, y) as function of t, ...
@@ -118,6 +118,18 @@ end
     Mx = structural_simplify(Mx; allow_symbolic = true)
     Dx = Differential(Mx.x)
     prob = ODEProblem(Mx, [Mx.y => 0.0, Dx(Mx.y) => 1.0, Mx.t => 0.0], (0.0, 20.0), [g => 9.81, v => 10.0]) # 1 = dy/dx = (dy/dt)/(dx/dt) means equal initial horizontal and vertical velocities
+    sol = solve(prob, Tsit5(); reltol = 1e-5)
+    @test all(isapprox.(sol[Mx.y], sol[Mx.x - g*(Mx.t)^2/2]; atol = 1e-10)) # compare to analytical solution (x(t) = v*t, y(t) = v*t - g*t^2/2)
+end
+
+@testset "Change independent variable (free fall with 2nd order horizontal equation)" begin
+    @variables x(t) y(t)
+    @parameters g # gravitational acceleration
+    Mt = ODESystem([D(D(y)) ~ -g, D(D(x)) ~ 0], t; name = :M) # gives (x, y) as function of t, ...
+    Mx = change_independent_variable(Mt, x; add_old_diff = true) # ... but we want y as a function of x
+    Mx = structural_simplify(Mx; allow_symbolic = true)
+    Dx = Differential(Mx.x)
+    prob = ODEProblem(Mx, [Mx.y => 0.0, Dx(Mx.y) => 1.0, Mx.t => 0.0, Mx.xˍt => 10.0], (0.0, 20.0), [g => 9.81]) # 1 = dy/dx = (dy/dt)/(dx/dt) means equal initial horizontal and vertical velocities
     sol = solve(prob, Tsit5(); reltol = 1e-5)
     @test all(isapprox.(sol[Mx.y], sol[Mx.x - g*(Mx.t)^2/2]; atol = 1e-10)) # compare to analytical solution (x(t) = v*t, y(t) = v*t - g*t^2/2)
 end
@@ -130,16 +142,15 @@ end
         D(D(y)) ~ D(x)^2 + D(y^3) |> expand_derivatives # expand D(y^3) # TODO: make this test 3rd order
         D(x) ~ x^4 + y^5 + t^6
     ], t; name = :M)
-    M2 = change_independent_variable(M1, x; dummies = true)
+    M2 = change_independent_variable(M1, x)
 
     # Compare to pen-and-paper result
     @independent_variables x
     Dx = Differential(x)
     @variables xˍt(x) xˍtt(x) y(x) t(x)
     @test Set(equations(M2)) == Set([
-        xˍt^2*(Dx^2)(y) + xˍtt*Dx(y) ~ xˍt^2 + 3*y^2*Dx(y)*xˍt # from D(D(y))
-        xˍt ~ x^4 + y^5 + t^6 # 1st order dummy equation
-        xˍtt ~ 4*x^3*xˍt + 5*y^4*Dx(y)*xˍt + 6*t^5 # 2nd order dummy equation
+        xˍt^2*(Dx^2)(y) + xˍt*Dx(xˍt)*Dx(y) ~ xˍt^2 + 3*y^2*Dx(y)*xˍt # from D(D(y))
+        xˍt ~ x^4 + y^5 + t^6 # dummy equation
     ])
 end
 
@@ -157,11 +168,12 @@ end
 
     # Ensure that interpolations are called with the same variables
     M2 = change_independent_variable(M1, x, [t ~ √(x)])
-    @variables x y(x) t(x)
+    @variables x xˍt(x) y(x) t(x)
     Dx = Differential(x)
     @test Set(equations(M2)) == Set([
         t ~ √(x)
-        2*t*Dx(y) ~ 1*fc(t) + 2*fc(x) + 3*fc(y) + 1*callme(f, t) + 2*callme(f, x) + 3*callme(f, y)
+        xˍt ~ 2*t
+        xˍt*Dx(y) ~ 1*fc(t) + 2*fc(x) + 3*fc(y) + 1*callme(f, t) + 2*callme(f, x) + 3*callme(f, y)
     ])
 
     _f = LinearInterpolation([1.0, 1.0], [-100.0, +100.0]) # constant value 1
@@ -173,18 +185,10 @@ end
 
 @testset "Change independent variable (errors)" begin
     @variables x(t) y z(y) w(t) v(t)
-    M = ODESystem([D(x) ~ 0, v ~ x], t; name = :M)
-    @test_throws "singular" change_independent_variable(M, x)
+    M = ODESystem([D(x) ~ 1, v ~ x], t; name = :M)
     @test_throws "structurally simplified" change_independent_variable(structural_simplify(M), y)
-    @test_throws "Got 0 equations:" change_independent_variable(M, w)
-    @test_throws "Got 0 equations:" change_independent_variable(M, v)
-    M = ODESystem([2 * D(x) ~ 1, v ~ x], t; name = :M) # TODO: allow equations like this
-    @test_throws "Got 0 equations:" change_independent_variable(M, x)
-    M = ODESystem([D(x) ~ 1, v ~ 1], t; name = :M)
-    @test_throws "Got 2 equations:" change_independent_variable(M, x, [D(x) ~ 2])
     @test_throws "not a function of the independent variable" change_independent_variable(M, y)
     @test_throws "not a function of the independent variable" change_independent_variable(M, z)
-    M = ODESystem([D(x) ~ 0, v ~ x], t; name = :M)
     @variables x(..) # require explicit argument
     M = ODESystem([D(x(t)) ~ x(t-1)], t; name = :M)
     @test_throws "DDE" change_independent_variable(M, x(t))
