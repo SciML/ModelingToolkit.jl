@@ -47,11 +47,17 @@ function liouville_transform(sys::AbstractODESystem; kwargs...)
     neweq = D(trJ) ~ trJ * -tr(calculate_jacobian(sys))
     neweqs = [equations(sys); neweq]
     vars = [unknowns(sys); trJ]
-    ODESystem(neweqs, t, vars, parameters(sys); checks = false, name = nameof(sys), kwargs...)
+    ODESystem(
+        neweqs, t, vars, parameters(sys);
+        checks = false, name = nameof(sys), kwargs...
+    )
 end
 
 """
-    change_independent_variable(sys::AbstractODESystem, iv, eqs = []; add_old_diff = false, simplify = true, fold = false, kwargs...)
+    change_independent_variable(
+        sys::AbstractODESystem, iv, eqs = [];
+        add_old_diff = false, simplify = true, fold = false
+    )
 
 Transform the independent variable (e.g. ``t``) of the ODE system `sys` to a dependent variable `iv` (e.g. ``u(t)``).
 The transformation is well-defined when the mapping between the new and old independent variables are one-to-one.
@@ -68,13 +74,13 @@ Any extra equations `eqs` involving the new and old independent variables will b
 # Usage before structural simplification
 
 The variable change must take place before structural simplification.
-Subsequently, consider passing `allow_symbolic = true` to `structural_simplify(sys)` to reduce the number of unknowns, with the understanding that the transformation is well-defined.
+In following calls to `structural_simplify`, consider passing `allow_symbolic = true` to avoid undesired constraint equations between between dummy variables.
 
 # Usage with non-autonomous systems
 
-If `sys` is non-autonomous (i.e. ``t`` appears explicitly in its equations), it is often desirable to also pass an algebraic equation relating the new and old independent variables (e.g. ``t = f(u(t))``).
-Otherwise the transformed system will be underdetermined and cannot be structurally simplified without additional changes.
-If an algebraic relation is not known, consider using `add_old_diff`.
+If `sys` is non-autonomous (i.e. ``t`` appears explicitly in its equations), consider passing an algebraic equation relating the new and old independent variables (e.g. ``t = f(u(t))``).
+Otherwise the transformed system can be underdetermined.
+If an algebraic relation is not known, consider using `add_old_diff` instead.
 
 # Usage with hierarchical systems
 
@@ -102,7 +108,10 @@ julia> unknowns(M)
  yˍx(x)
 ```
 """
-function change_independent_variable(sys::AbstractODESystem, iv, eqs = []; add_old_diff = false, simplify = true, fold = false, kwargs...)
+function change_independent_variable(
+        sys::AbstractODESystem, iv, eqs = [];
+        add_old_diff = false, simplify = true, fold = false
+)
     iv2_of_iv1 = unwrap(iv) # e.g. u(t)
     iv1 = get_iv(sys) # e.g. t
 
@@ -114,6 +123,7 @@ function change_independent_variable(sys::AbstractODESystem, iv, eqs = []; add_o
         error("Variable $iv is not a function of the independent variable $iv1 of the system $(nameof(sys))!")
     end
 
+    # Set up intermediate and final variables for the transformation
     iv1name = nameof(iv1) # e.g. :t
     iv2name = nameof(operation(iv2_of_iv1)) # e.g. :u
     iv2, = @independent_variables $iv2name # e.g. u
@@ -127,23 +137,22 @@ function change_independent_variable(sys::AbstractODESystem, iv, eqs = []; add_o
     if add_old_diff
         eqs = [eqs; Differential(iv2)(iv1_of_iv2) ~ 1 / div2_of_iv2] # e.g. dt(u)/du ~ 1 / uˍt(u) (https://en.wikipedia.org/wiki/Inverse_function_rule)
     end
-    @set! sys.eqs = [get_eqs(sys); eqs] # add extra equations we derived before starting transformation process
-    @set! sys.unknowns = [get_unknowns(sys); [iv1, div2_of_iv1]] # add new variables, will be transformed to e.g. t(u) and uˍt(u) # add dummy variables and old independent variable as a function of the new one
+    @set! sys.eqs = [get_eqs(sys); eqs] # add extra equations we derived
+    @set! sys.unknowns = [get_unknowns(sys); [iv1, div2_of_iv1]] # add new variables, will be transformed to e.g. t(u) and uˍt(u)
 
-    # Create a utility that performs the chain rule on an expression, followed by insertion of the new independent variable
-    #   e.g. (d/dt)(f(t)) -> (d/dt)(f(u(t))) -> df(u(t))/du(t) * du(t)/dt -> df(u)/du * uˍt(u)
-    # Then use it to transform everything in the system!
+    # Create a utility that performs the chain rule on an expression, followed by insertion of the new independent variable:
+    # e.g. (d/dt)(f(t)) -> (d/dt)(f(u(t))) -> df(u(t))/du(t) * du(t)/dt -> df(u)/du * uˍt(u)
     function transform(ex)
         # 1) Replace the argument of every function; e.g. f(t) -> f(u(t))
         for var in vars(ex; op = Nothing) # loop over all variables in expression (op = Nothing prevents interpreting "D(f(t))" as one big variable)
-            is_function_of_iv1 = iscall(var) && isequal(only(arguments(var)), iv1) # is the expression of the form f(t)?
+            is_function_of_iv1 = iscall(var) && isequal(only(arguments(var)), iv1) # of the form f(t)?
             if is_function_of_iv1 && !isequal(var, iv2_of_iv1) # prevent e.g. u(t) -> u(u(t))
                 var_of_iv1 = var # e.g. f(t)
                 var_of_iv2_of_iv1 = substitute(var_of_iv1, iv1 => iv2_of_iv1) # e.g. f(u(t))
                 ex = substitute(ex, var_of_iv1 => var_of_iv2_of_iv1; fold)
             end
         end
-        # 2) Expand with chain rule until nothing changes anymore
+        # 2) Repeatedly expand chain rule until nothing changes anymore
         orgex = nothing
         while !isequal(ex, orgex)
             orgex = ex # save original
@@ -156,22 +165,25 @@ function change_independent_variable(sys::AbstractODESystem, iv, eqs = []; add_o
         return ex
     end
 
+    # Use the utility function to transform everything in the system!
     function transform(sys::AbstractODESystem)
         eqs = map(transform, get_eqs(sys))
         unknowns = map(transform, get_unknowns(sys))
         unknowns = filter(var -> !isequal(var, iv2), unknowns) # remove e.g. u
         ps = map(transform, get_ps(sys))
-        ps = filter(!isinitial, ps) # remove Initial(...) # # TODO: shouldn't have to touch this
+        ps = filter(!isinitial, ps) # remove Initial(...) # TODO: shouldn't have to touch this
         observed = map(transform, get_observed(sys))
         initialization_eqs = map(transform, get_initialization_eqs(sys))
         parameter_dependencies = map(transform, get_parameter_dependencies(sys))
-        defaults = Dict(transform(var) => transform(val) for (var, val) in get_defaults(sys))
+        defaults = Dict(transform(var) => transform(val)
+        for (var, val) in get_defaults(sys))
         guesses = Dict(transform(var) => transform(val) for (var, val) in get_guesses(sys))
-        assertions = Dict(transform(condition) => msg for (condition, msg) in get_assertions(sys))
+        assertions = Dict(transform(ass) => msg for (ass, msg) in get_assertions(sys))
         systems = get_systems(sys) # save before reconstructing system
         wascomplete = iscomplete(sys) # save before reconstructing system
         sys = typeof(sys)( # recreate system with transformed fields
-            eqs, iv2, unknowns, ps; observed, initialization_eqs, parameter_dependencies, defaults, guesses,
+            eqs, iv2, unknowns, ps; observed, initialization_eqs,
+            parameter_dependencies, defaults, guesses,
             assertions, name = nameof(sys), description = description(sys)
         )
         systems = map(transform, systems) # recurse through subsystems
@@ -182,6 +194,5 @@ function change_independent_variable(sys::AbstractODESystem, iv, eqs = []; add_o
         end
         return sys
     end
-
     return transform(sys)
 end
