@@ -134,24 +134,24 @@ end
     @test all(isapprox.(sol[Mx.y], sol[Mx.x - g*(Mx.t)^2/2]; atol = 1e-10)) # compare to analytical solution (x(t) = v*t, y(t) = v*t - g*t^2/2)
 end
 
-@testset "Change independent variable (crazy analytical example)" begin
+@testset "Change independent variable (crazy 3rd order nonlinear system)" begin
     @independent_variables t
     D = Differential(t)
     @variables x(t) y(t)
-    M1 = ODESystem([ # crazy non-autonomous non-linear 2nd order ODE
-        D(D(y)) ~ D(x)^2 + D(y^3) |> expand_derivatives # expand D(y^3) # TODO: make this test 3rd order
-        D(x) ~ x^4 + y^5 + t^6
+    M1 = ODESystem([
+        (D^3)(y) ~ D(x)^2 + (D^2)(y^2) |> expand_derivatives
+        D(x)^2 + D(y)^2 ~ x^4 + y^5 + t^6
     ], t; name = :M)
-    M2 = change_independent_variable(M1, x)
+    M2 = change_independent_variable(M1, x; add_old_diff = true)
+    @test_nowarn structural_simplify(M2)
 
     # Compare to pen-and-paper result
-    @independent_variables x
+    @variables x xˍt(x) xˍt(x) y(x) t(x)
     Dx = Differential(x)
-    @variables xˍt(x) xˍtt(x) y(x) t(x)
-    @test Set(equations(M2)) == Set([
-        xˍt^2*(Dx^2)(y) + xˍt*Dx(xˍt)*Dx(y) ~ xˍt^2 + 3*y^2*Dx(y)*xˍt # from D(D(y))
-        xˍt ~ x^4 + y^5 + t^6 # dummy equation
-    ])
+    areequivalent(eq1, eq2) = isequal(expand(eq1.lhs - eq2.lhs), 0) && isequal(expand(eq1.rhs - eq2.rhs), 0)
+    @test areequivalent(equations(M2)[1], xˍt^3*(Dx^3)(y) + xˍt^2*Dx(y)*(Dx^2)(xˍt) + xˍt*Dx(y)*(Dx(xˍt))^2 + 3*xˍt^2*(Dx^2)(y)*Dx(xˍt) ~ xˍt^2 + 2*xˍt^2*Dx(y)^2 + 2*xˍt^2*y*(Dx^2)(y) + 2*y*Dx(y)*Dx(xˍt)*xˍt)
+    @test areequivalent(equations(M2)[2], xˍt^2 + xˍt^2*Dx(y)^2 ~ x^4 + y^5 + t^6)
+    @test areequivalent(equations(M2)[3], Dx(t) ~ 1 / xˍt)
 end
 
 @testset "Change independent variable (registered function / callable parameter)" begin
