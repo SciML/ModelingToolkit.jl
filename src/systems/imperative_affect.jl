@@ -122,7 +122,7 @@ function namespace_affect(affect::ImperativeAffect, s)
 end
 
 function compile_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs...)
-    compile_user_affect(affect, cb, sys, dvs, ps; kwargs...)
+    compile_functional_affect(affect, cb, sys, dvs, ps; kwargs...)
 end
 
 function invalid_variables(sys, expr)
@@ -168,7 +168,7 @@ function check_assignable(sys, sym)
 end
 
 
-function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs...)
+function compile_functional_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs...)
     #=
     Implementation sketch:
         generate observed function (oop), should save to a component array under obs_syms
