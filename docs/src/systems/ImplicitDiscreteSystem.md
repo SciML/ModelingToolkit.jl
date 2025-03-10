@@ -31,6 +31,4 @@ ImplicitDiscreteFunction(sys::ImplicitDiscreteSystem, args...)
 
 ```@docs; canonical=false
 Shift
-Prev
-Next
 ```

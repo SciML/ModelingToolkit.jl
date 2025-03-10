@@ -31,6 +31,4 @@ DiscreteFunction(sys::DiscreteSystem, args...)
 
 ```@docs; canonical=false
 Shift
-Prev
-Next
 ```
