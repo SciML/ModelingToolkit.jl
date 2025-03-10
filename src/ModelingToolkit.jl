@@ -303,6 +303,7 @@ export initialization_equations, guesses, defaults, parameter_dependencies, hier
 export structural_simplify, expand_connections, linearize, linearization_function,
        LinearizationProblem
 export solve
+export Pre
 
 export calculate_jacobian, generate_jacobian, generate_function, generate_custom_function,
        generate_W
