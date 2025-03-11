@@ -337,8 +337,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     end
 
     algeeqs = filter(is_alg_equation, deqs)
-    cont_callbacks = SymbolicContinuousCallbacks(continuous_events, algeeqs, iv)
-    disc_callbacks = SymbolicDiscreteCallbacks(discrete_events, algeeqs, iv)
+    cont_callbacks = SymbolicContinuousCallbacks(continuous_events, algeeqs)
+    disc_callbacks = SymbolicDiscreteCallbacks(discrete_events, algeeqs)
 
     if is_dde === nothing
         is_dde = _check_if_dde(deqs, iv′, systems)
