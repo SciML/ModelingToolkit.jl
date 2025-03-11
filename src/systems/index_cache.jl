@@ -121,6 +121,8 @@ function IndexCache(sys::AbstractSystem)
                 is_parameter(sys, affect.lhs) && push!(discs, affect.lhs)
             elseif affect isa FunctionalAffect || affect isa ImperativeAffect
                 union!(discs, unwrap.(discretes(affect)))
+            elseif isnothing(affect)
+                continue
             else
                 error("Unhandled affect type $(typeof(affect))")
             end
