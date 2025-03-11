@@ -155,7 +155,6 @@ function check_assignable(sys, sym)
     end
 end
 
-
 function compile_functional_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs...)
     #=
     Implementation sketch:
@@ -280,4 +279,3 @@ function vars!(vars, aff::ImperativeAffect; op = Differential)
     end
     return vars
 end
-
