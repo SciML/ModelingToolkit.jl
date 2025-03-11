@@ -484,7 +484,7 @@ using ModelingToolkit: D_nounits
             [x ~ 1.5] => [x ~ 5, y ~ 1]
         end
         @discrete_events begin
-            (t == 1.5) => [x ~ x + 5, z ~ 2]
+            (t == 1.5) => [x ~ Pre(x) + 5, z ~ 2]
         end
     end
 
