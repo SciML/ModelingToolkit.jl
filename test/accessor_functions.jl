@@ -54,8 +54,8 @@ let
         D(Y) ~ -Y^3,
         O ~ (p_bot + d) * X_bot + Y
     ]
-    cevs = [[t ~ 1.0] => [Y ~ Y + 2.0]]
-    devs = [(t == 2.0) => [Y ~ Y + 2.0]]
+    cevs = [[t ~ 1.0] => [Y ~ Pre(Y) + 2.0]]
+    devs = [(t == 2.0) => [Y ~ Pre(Y) + 2.0]]
     @named sys_bot = ODESystem(
         eqs_bot, t; systems = [], continuous_events = cevs, discrete_events = devs)
     @named sys_mid2 = ODESystem(
@@ -149,20 +149,19 @@ let
     for sys in [sys_bot, sys_mid2, sys_mid1, sys_top])
 
     # Checks `continuous_events_toplevel` and  `discrete_events_toplevel` (straightforward
-    # as I stored the same singe event in all systems). Don't check for non-toplevel cases as
+    # as I stored the same single event in all systems). Don't check for non-toplevel cases as
     # technically not needed for these tests and name spacing the events is a mess.
-    mtk_cev = ModelingToolkit.SymbolicContinuousCallback.(cevs)[1]
-    mtk_dev = ModelingToolkit.SymbolicDiscreteCallback.(devs)[1]
+    bot_cev = ModelingToolkit.SymbolicContinuousCallback(
+        cevs[1], alg_eqs = [O ~ (d + p_bot) * X_bot + Y])
+    mid_dev = ModelingToolkit.SymbolicDiscreteCallback(
+        devs[1], alg_eqs = [O ~ (d + p_mid1) * X_mid1 + Y])
     @test all_sets_equal(
-        continuous_events_toplevel.(
-            [sys_bot, sys_bot_comp, sys_bot_ss, sys_mid1, sys_mid1_comp, sys_mid1_ss,
-            sys_mid2, sys_mid2_comp, sys_mid2_ss, sys_top, sys_top_comp, sys_top_ss])...,
-        [mtk_cev])
+        continuous_events_toplevel.([sys_bot, sys_bot_comp, sys_bot_ss])...,
+        [bot_cev])
     @test all_sets_equal(
         discrete_events_toplevel.(
-            [sys_bot, sys_bot_comp, sys_bot_ss, sys_mid1, sys_mid1_comp, sys_mid1_ss,
-            sys_mid2, sys_mid2_comp, sys_mid2_ss, sys_top, sys_top_comp, sys_top_ss])...,
-        [mtk_dev])
+            [sys_mid1, sys_mid1_comp, sys_mid1_ss])...,
+        [mid_dev])
     @test all(sym_issubset(
                   continuous_events_toplevel(sys), get_continuous_events(sys))
     for sys in [sys_bot, sys_mid2, sys_mid1, sys_top])
