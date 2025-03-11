@@ -2,6 +2,7 @@ using ModelingToolkit, DiffEqBase, JumpProcesses, Test, LinearAlgebra
 using Random, StableRNGs, NonlinearSolve
 using OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using BenchmarkTools
 MT = ModelingToolkit
 
 rng = StableRNG(12345)
@@ -11,9 +12,9 @@ rng = StableRNG(12345)
 @constants h = 1
 @variables S(t) I(t) R(t)
 rate₁ = β * S * I * h
-affect₁ = [S ~ S - 1 * h, I ~ I + 1]
+affect₁ = [S ~ Pre(S) - 1 * h, I ~ Pre(I) + 1]
 rate₂ = γ * I + t
-affect₂ = [I ~ I - 1, R ~ R + 1]
+affect₂ = [I ~ Pre(I) - 1, R ~ Pre(R) + 1]
 j₁ = ConstantRateJump(rate₁, affect₁)
 j₂ = VariableRateJump(rate₂, affect₂)
 @named js = JumpSystem([j₁, j₂], t, [S, I, R], [β, γ])
@@ -59,7 +60,7 @@ jump2.affect!(integrator)
 
 # test MT can make and solve a jump problem
 rate₃ = γ * I * h
-affect₃ = [I ~ I * h - 1, R ~ R + 1]
+affect₃ = [I ~ Pre(I) * h - 1, R ~ Pre(R) + 1]
 j₃ = ConstantRateJump(rate₃, affect₃)
 @named js2 = JumpSystem([j₁, j₃], t, [S, I, R], [β, γ])
 js2 = complete(js2)
@@ -247,7 +248,7 @@ end
 rate = k
 affect = [X ~ X - 1]
 
-crj = ConstantRateJump(1.0, [X ~ X - 1])
+crj = ConstantRateJump(1.0, [X ~ Pre(X) - 1])
 js1 = complete(JumpSystem([crj], t, [X], [k]; name = :js1))
 js2 = complete(JumpSystem([crj], t, [X], []; name = :js2))
 
@@ -274,9 +275,9 @@ dp4 = DiscreteProblem(js4, u0, tspan)
 @parameters k
 @variables X(t)
 rate = k
-affect = [X ~ X - 1]
+affect = [X ~ Pre(X) - 1]
 
-j1 = ConstantRateJump(k, [X ~ X - 1])
+j1 = ConstantRateJump(k, [X ~ Pre(X) - 1])
 @test_nowarn @mtkbuild js1 = JumpSystem([j1], t, [X], [k])
 
 # test correct autosolver is selected, which implies appropriate dep graphs are available
@@ -284,8 +285,8 @@ let
     @parameters k
     @variables X(t)
     rate = k
-    affect = [X ~ X - 1]
-    j1 = ConstantRateJump(k, [X ~ X - 1])
+    affect = [X ~ Pre(X) - 1]
+    j1 = ConstantRateJump(k, [X ~ Pre(X) - 1])
 
     Nv = [1, JumpProcesses.USE_DIRECT_THRESHOLD + 1, JumpProcesses.USE_RSSA_THRESHOLD + 1]
     algtypes = [Direct, RSSA, RSSACR]
@@ -304,7 +305,7 @@ let
     Random.seed!(rng, 1111)
     @variables A(t) B(t) C(t)
     @parameters k
-    vrj = VariableRateJump(k * (sin(t) + 1), [A ~ A + 1, C ~ C + 2])
+    vrj = VariableRateJump(k * (sin(t) + 1), [A ~ Pre(A) + 1, C ~ Pre(C) + 2])
     js = complete(JumpSystem([vrj], t, [A, C], [k]; name = :js, observed = [B ~ C * A]))
     oprob = ODEProblem(js, [A => 0, C => 0], (0.0, 10.0), [k => 1.0])
     jprob = JumpProblem(js, oprob, Direct(); rng)
@@ -345,9 +346,9 @@ end
 let
     @variables x1(t) x2(t) x3(t) x4(t) x5(t)
     @parameters p1 p2 p3 p4 p5
-    j1 = ConstantRateJump(p1, [x1 ~ x1 + 1])
+    j1 = ConstantRateJump(p1, [x1 ~ Pre(x1) + 1])
     j2 = MassActionJump(p2, [x2 => 1], [x3 => -1])
-    j3 = VariableRateJump(p3, [x3 ~ x3 + 1, x4 ~ x4 + 1])
+    j3 = VariableRateJump(p3, [x3 ~ Pre(x3) + 1, x4 ~ Pre(x4) + 1])
     j4 = MassActionJump(p4 * p5, [x1 => 1, x5 => 1], [x1 => -1, x5 => -1, x2 => 1])
     us = Set()
     ps = Set()
@@ -387,9 +388,9 @@ let
     p3 = ParentScope(ParentScope(p3))
     p4 = GlobalScope(p4)
 
-    j1 = ConstantRateJump(p1, [x1 ~ x1 + 1])
+    j1 = ConstantRateJump(p1, [x1 ~ Pre(x1) + 1])
     j2 = MassActionJump(p2, [x2 => 1], [x3 => -1])
-    j3 = VariableRateJump(p3, [x3 ~ x3 + 1, x4 ~ x4 + 1])
+    j3 = VariableRateJump(p3, [x3 ~ Pre(x3) + 1, x4 ~ Pre(x4) + 1])
     j4 = MassActionJump(p4 * p4, [x1 => 1, x4 => 1], [x1 => -1, x4 => -1, x2 => 1])
     @named js = JumpSystem([j1, j2, j3, j4], t, [x1, x2, x3, x4], [p1, p2, p3, p4])
 
@@ -427,8 +428,8 @@ let
     Random.seed!(rng, seed)
     @variables X(t) Y(t)
     @parameters k1 k2
-    vrj1 = VariableRateJump(k1 * X, [X ~ X - 1]; save_positions = (false, false))
-    vrj2 = VariableRateJump(k1, [Y ~ Y + 1]; save_positions = (false, false))
+    vrj1 = VariableRateJump(k1 * X, [X ~ Pre(X) - 1]; save_positions = (false, false))
+    vrj2 = VariableRateJump(k1, [Y ~ Pre(Y) + 1]; save_positions = (false, false))
     eqs = [D(X) ~ k2, D(Y) ~ -k2 / 10 * Y]
     @named jsys = JumpSystem([vrj1, vrj2, eqs[1], eqs[2]], t, [X, Y], [k1, k2])
     jsys = complete(jsys)
@@ -469,8 +470,8 @@ let
     Random.seed!(rng, seed)
     @variables X(t) Y(t)
     @parameters α β
-    vrj = VariableRateJump(β * X, [X ~ X - 1]; save_positions = (false, false))
-    crj = ConstantRateJump(β * Y, [Y ~ Y - 1])
+    vrj = VariableRateJump(β * X, [X ~ Pre(X) - 1]; save_positions = (false, false))
+    crj = ConstantRateJump(β * Y, [Y ~ Pre(Y) - 1])
     maj = MassActionJump(α, [0 => 1], [Y => 1])
     eqs = [D(X) ~ α * (1 + Y)]
     @named jsys = JumpSystem([maj, crj, vrj, eqs[1]], t, [X, Y], [α, β])
@@ -537,8 +538,8 @@ end
     @variables X(t)
     rate1 = p
     rate2 = X * d
-    affect1 = [X ~ X + 1]
-    affect2 = [X ~ X - 1]
+    affect1 = [X ~ Pre(X) + 1]
+    affect2 = [X ~ Pre(X) - 1]
     j1 = ConstantRateJump(rate1, affect1)
     j2 = ConstantRateJump(rate2, affect2)
 
@@ -555,7 +556,7 @@ end
     @parameters a b
     eq = D(X) ~ a
     rate = b * X
-    affect = [X ~ X - 1]
+    affect = [X ~ Pre(X) - 1]
     crj = ConstantRateJump(rate, affect)
     @named jsys = JumpSystem([crj, eq], t, [X], [a, b])
     jsys = complete(jsys)
