@@ -1291,9 +1291,9 @@ end
     @parameters β γ S0
     @variables S(t)=S0 I(t) R(t)
     rate₁ = β * S * I
-    affect₁ = [S ~ S - 1, I ~ I + 1]
+    affect₁ = [S ~ Pre(S) - 1, I ~ Pre(I) + 1]
     rate₂ = γ * I
-    affect₂ = [I ~ I - 1, R ~ R + 1]
+    affect₂ = [I ~ Pre(I) - 1, R ~ Pre(R) + 1]
     j₁ = ConstantRateJump(rate₁, affect₁)
     j₂ = ConstantRateJump(rate₂, affect₂)
     j₃ = MassActionJump(2 * β + γ, [R => 1], [S => 1, R => -1])
