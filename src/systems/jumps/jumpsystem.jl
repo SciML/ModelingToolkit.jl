@@ -1,19 +1,5 @@
 const JumpType = Union{VariableRateJump, ConstantRateJump, MassActionJump}
 
-# modifies the expression representing an affect function to
-# call reset_aggregated_jumps!(integrator).
-# assumes iip
-function _reset_aggregator!(expr, integrator)
-    @assert Meta.isexpr(expr, :function)
-    body = expr.args[end]
-    body = quote
-        $body
-        $reset_aggregated_jumps!($integrator)
-    end
-    expr.args[end] = body
-    return nothing
-end
-
 """
 $(TYPEDEF)
 
@@ -230,8 +216,10 @@ function JumpSystem(eqs, iv, unknowns, ps;
         end
     end
 
-    cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
-    disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
+    cont_callbacks = to_cb_vector(continuous_events; CB_TYPE = SymbolicContinuousCallback,
+        iv = iv, warn_no_algebraic = false)
+    disc_callbacks = to_cb_vector(discrete_events; CB_TYPE = SymbolicDiscreteCallback,
+        iv = iv, warn_no_algebraic = false)
 
     JumpSystem{typeof(ap)}(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         ap, iv′, us′, ps′, var_to_name, observed, name, description, systems,
@@ -282,15 +270,13 @@ function generate_rate_function(js::JumpSystem, rate)
         expression = Val{true})
 end
 
-function generate_affect_function(js::JumpSystem, affect, outputidxs)
+function generate_affect_function(js::JumpSystem, affect)
     consts = collect_constants(affect)
     if !isempty(consts) # The SymbolicUtils._build_function method of this case doesn't support postprocess_fbody
         csubs = Dict(c => getdefault(c) for c in consts)
         affect = substitute(affect, csubs)
     end
-    compile_affect(
-        affect, nothing, js, unknowns(js), parameters(js); outputidxs = outputidxs,
-        expression = Val{true}, checkvars = false)
+    compile_equational_affect(affect, js; expression = Val{true}, checkvars = false)
 end
 
 function assemble_vrj(
@@ -299,8 +285,7 @@ function assemble_vrj(
     rate = GeneratedFunctionWrapper{(2, 3, is_split(js))}(rate, nothing)
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
-    affect = eval_or_rgf(generate_affect_function(js, vrj.affect!, outputidxs);
-        eval_expression, eval_module)
+    affect = generate_affect_function(js, vrj.affect!)
     VariableRateJump(rate, affect; save_positions = vrj.save_positions)
 end
 
@@ -308,10 +293,9 @@ function assemble_vrj_expr(js, vrj, unknowntoid)
     rate = generate_rate_function(js, vrj.rate)
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
     outputidxs = ((unknowntoid[var] for var in outputvars)...,)
-    affect = generate_affect_function(js, vrj.affect!, outputidxs)
+    affect = generate_affect_function(js, vrj.affect!)
     quote
         rate = $rate
-
         affect = $affect
         VariableRateJump(rate, affect)
     end
@@ -323,8 +307,7 @@ function assemble_crj(
     rate = GeneratedFunctionWrapper{(2, 3, is_split(js))}(rate, nothing)
     outputvars = (value(affect.lhs) for affect in crj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
-    affect = eval_or_rgf(generate_affect_function(js, crj.affect!, outputidxs);
-        eval_expression, eval_module)
+    affect = generate_affect_function(js, crj.affect!)
     ConstantRateJump(rate, affect)
 end
 
@@ -332,10 +315,9 @@ function assemble_crj_expr(js, crj, unknowntoid)
     rate = generate_rate_function(js, crj.rate)
     outputvars = (value(affect.lhs) for affect in crj.affect!)
     outputidxs = ((unknowntoid[var] for var in outputvars)...,)
-    affect = generate_affect_function(js, crj.affect!, outputidxs)
+    affect = generate_affect_function(js, crj.affect!)
     quote
         rate = $rate
-
         affect = $affect
         ConstantRateJump(rate, affect)
     end
@@ -574,8 +556,7 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob,
     end
 
     # handle events, making sure to reset aggregators in the generated affect functions
-    cbs = process_events(js; callback, eval_expression, eval_module,
-        postprocess_affect_expr! = _reset_aggregator!)
+    cbs = process_events(js; callback, eval_expression, eval_module, reset_jumps = true)
 
     JumpProblem(prob, aggregator, jset; dep_graph = jtoj, vartojumps_map = vtoj,
         jumptovars_map = jtov, scale_rates = false, nocopy = true,
