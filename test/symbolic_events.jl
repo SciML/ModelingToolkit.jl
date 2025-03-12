@@ -644,6 +644,7 @@ end
         dprob = DiscreteProblem(jsys, u0, tspan, p)
         jprob = JumpProblem(jsys, dprob, Direct(); kwargs...)
         sol = solve(jprob, SSAStepper(); tstops = tstops)
+        @show sol
         @test (sol(1.000000000001)[1] - sol(0.99999999999)[1]) == 1
         paramtotest === nothing || (@test sol.ps[paramtotest] == 1.0)
         @test sol(40.0)[1] == 0
@@ -654,7 +655,7 @@ end
     @variables A(t) B(t)
 
     cond1 = (t == t1)
-    affect1 = [A ~ Pre(A) + 1]
+    affect1 = [A ~ A + 1]
     cb1 = cond1 => affect1
     cond2 = (t == t2)
     affect2 = [k ~ 1.0]
@@ -704,7 +705,7 @@ end
     testsol(jsys6, u0, p, tspan; tstops = [1.0, 2.0], rng, paramtotest = k)
 end
 
-@testset "Oscillator" begin
+@testset "Namespacing" begin
     function oscillator_ce(k = 1.0; name)
         sts = @variables x(t)=1.0 v(t)=0.0 F(t)
         ps = @parameters k=k Θ=0.5
@@ -1152,7 +1153,7 @@ end
     f = ModelingToolkit.FunctionalAffect(
         f = (i, u, p, c) -> seen = true, sts = [], pars = [], discretes = [])
     cb1 = ModelingToolkit.SymbolicContinuousCallback(
-        [x ~ 0], Equation[], initialize = [x ~ 1.5], finalize = f)
+        [x ~ 0], nothing, initialize = [x ~ 1.5], finalize = f)
     @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; continuous_events = [cb1])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
     sol = solve(prob, Tsit5(); dtmax = 0.01)
