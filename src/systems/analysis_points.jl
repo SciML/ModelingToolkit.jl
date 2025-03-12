@@ -412,6 +412,27 @@ function get_analysis_variable(var, name, iv; perturb = true)
     return pvar, default
 end
 
+function with_analysis_point_ignored(sys::AbstractSystem, ap::AnalysisPoint)
+    has_ignored_connections(sys) || return sys
+    ignored = get_ignored_connections(sys)
+    if ignored === nothing
+        ignored = (ODESystem[], BasicSymbolic[])
+    else
+        ignored = copy.(ignored)
+    end
+    if ap.outputs === nothing
+        error("Empty analysis point")
+    end
+    for x in ap.outputs
+        if x isa ODESystem
+            push!(ignored[1], x)
+        else
+            push!(ignored[2], unwrap(x))
+        end
+    end
+    return @set sys.ignored_connections = ignored
+end
+
 #### PRIMITIVE TRANSFORMATIONS
 
 const DOC_WILL_REMOVE_AP = """
@@ -469,7 +490,9 @@ function apply_transformation(tf::Break, sys::AbstractSystem)
         ap = breaksys_eqs[ap_idx].rhs
         deleteat!(breaksys_eqs, ap_idx)
 
-        tf.add_input || return sys, ()
+        breaksys = with_analysis_point_ignored(breaksys, ap)
+
+        tf.add_input || return breaksys, ()
 
         ap_ivar = ap_var(ap.input)
         new_var, new_def = get_analysis_variable(ap_ivar, nameof(ap), get_iv(sys))
@@ -511,7 +534,7 @@ function apply_transformation(tf::GetInput, sys::AbstractSystem)
         ap_idx === nothing &&
             error("Analysis point $(nameof(tf.ap)) not found in system $(nameof(sys)).")
         # get the anlysis point
-        ap_sys_eqs = copy(get_eqs(ap_sys))
+        ap_sys_eqs = get_eqs(ap_sys)
         ap = ap_sys_eqs[ap_idx].rhs
 
         # input variable
@@ -570,6 +593,7 @@ function apply_transformation(tf::PerturbOutput, sys::AbstractSystem)
         ap = ap_sys_eqs[ap_idx].rhs
         # remove analysis point
         deleteat!(ap_sys_eqs, ap_idx)
+        ap_sys = with_analysis_point_ignored(ap_sys, ap)
 
         # add equations involving new variable
         ap_ivar = ap_var(ap.input)
@@ -634,7 +658,7 @@ function apply_transformation(tf::AddVariable, sys::AbstractSystem)
         ap_idx = analysis_point_index(ap_sys, tf.ap)
         ap_idx === nothing &&
             error("Analysis point $(nameof(tf.ap)) not found in system $(nameof(sys)).")
-        ap_sys_eqs = copy(get_eqs(ap_sys))
+        ap_sys_eqs = get_eqs(ap_sys)
         ap = ap_sys_eqs[ap_idx].rhs
 
         # add equations involving new variable
