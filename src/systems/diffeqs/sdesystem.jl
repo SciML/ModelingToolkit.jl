@@ -269,8 +269,10 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
     ctrl_jac = RefValue{Any}(EMPTY_JAC)
     Wfact = RefValue(EMPTY_JAC)
     Wfact_t = RefValue(EMPTY_JAC)
-    cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
-    disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
+
+    algeeqs = filter(is_alg_equation, deqs)
+    cont_callbacks = SymbolicContinuousCallbacks(continuous_events, algeeqs)
+    disc_callbacks = SymbolicDiscreteCallbacks(discrete_events, algeeqs)
     if is_dde === nothing
         is_dde = _check_if_dde(deqs, iv′, systems)
     end
