@@ -315,7 +315,34 @@ function ori(sys)
     end
 end
 
-function connection2set!(connectionsets, namespace, ss, isouter)
+"""
+    $(TYPEDSIGNATURES)
+
+Populate `connectionsets` with connections between the connectors `ss`, all of which are
+namespaced by `namespace`.
+
+# Keyword Arguments
+- `ignored_connects`: A tuple of the systems and variables for which connections should be
+  ignored. Of the format returned from `as_hierarchy`.
+- `namespaced_ignored_systems`: The `from_hierarchy` versions of entries in
+  `ignored_connects[1]`, purely to avoid unnecessary recomputation.
+"""
+function connection2set!(connectionsets, namespace, ss, isouter;
+        ignored_connects = (HierarchySystemT[], HierarchyVariableT[]),
+        namespaced_ignored_systems = ODESystem[])
+    ignored_systems, ignored_variables = ignored_connects
+    # ignore specified systems
+    ss = filter(ss) do s
+        all(namespaced_ignored_systems) do igsys
+            nameof(igsys) != nameof(s)
+        end
+    end
+    # `ignored_variables` for each `s` in `ss`
+    corresponding_ignored_variables = map(
+        Base.Fix2(ignored_systems_for_subsystem, ignored_variables), ss)
+    corresponding_namespaced_ignored_variables = map(
+        Broadcast.BroadcastFunction(from_hierarchy), corresponding_ignored_variables)
+
     regular_ss = []
     domain_ss = nothing
     for s in ss
@@ -340,9 +367,12 @@ function connection2set!(connectionsets, namespace, ss, isouter)
         for (i, s) in enumerate(ss)
             sts = unknowns(s)
             io = isouter(s)
-            for (j, v) in enumerate(sts)
+            _ignored_variables = corresponding_ignored_variables[i]
+            _namespaced_ignored_variables = corresponding_namespaced_ignored_variables[i]
+            for v in sts
                 vtype = get_connection_type(v)
                 (vtype === Flow && isequal(v, dv)) || continue
+                any(isequal(v), _namespaced_ignored_variables) && continue
                 push!(cset, T(LazyNamespace(namespace, domain_ss), dv, false))
                 push!(cset, T(LazyNamespace(namespace, s), v, io))
             end
@@ -360,6 +390,12 @@ function connection2set!(connectionsets, namespace, ss, isouter)
     end
     sts1 = Set(sts1v)
     num_unknowns = length(sts1)
+
+    # we don't filter here because `csets` should include the full set of unknowns.
+    # not all of `ss` will have the same (or any) variables filtered so the ones
+    # that aren't should still go in the right cset. Since `sts1` is only used for
+    # validating that all systems being connected are of the same type, it has
+    # unfiltered entries.
     csets = [T[] for _ in 1:num_unknowns] # Add 9 orientation variables if connection is between multibody frames
     for (i, s) in enumerate(ss)
         unknown_vars = unknowns(s)
@@ -372,7 +408,10 @@ function connection2set!(connectionsets, namespace, ss, isouter)
           all(Base.Fix2(in, sts1), unknown_vars)) ||
          connection_error(ss))
         io = isouter(s)
+        # don't `filter!` here so that `j` points to the correct cset regardless of
+        # which variables are filtered.
         for (j, v) in enumerate(unknown_vars)
+            any(isequal(v), corresponding_namespaced_ignored_variables[i]) && continue
             push!(csets[j], T(LazyNamespace(namespace, s), v, io))
         end
     end
@@ -397,7 +436,7 @@ function generate_connection_set(
     sys = generate_connection_set!(
         connectionsets, domain_csets, sys, find, replace, scalarize, nothing,
         # include systems to be ignored
-        ignored_connections(sys)[1])
+        ignored_connections(sys))
     csets = merge(connectionsets)
     domain_csets = merge([csets; domain_csets], true)
 
@@ -417,18 +456,23 @@ Generate connection sets from `connect` equations.
 - `sys` is the system whose equations are to be searched.
 - `namespace` is a system representing the namespace in which `sys` exists, or `nothing`
   for no namespace (if `sys` is top-level).
-- `ignored_systems` is a list of systems (in the format returned by `as_hierarchy`) to
-  be ignored when generating connections. This is typically because the connections
-  they are used in were removed by analysis point transformations.
+- `ignored_connects` is a tuple. The first (second) element is a list of systems
+  (variables) in the format returned by `as_hierarchy` to be ignored when generating
+  connections. This is typically because the connections they are used in were removed by
+  analysis point transformations.
 """
 function generate_connection_set!(connectionsets, domain_csets,
-        sys::AbstractSystem, find, replace, scalarize, namespace = nothing, ignored_systems = [])
+        sys::AbstractSystem, find, replace, scalarize, namespace = nothing,
+        ignored_connects = (HierarchySystemT[], HierarchyVariableT[]))
     subsys = get_systems(sys)
+    ignored_systems, ignored_variables = ignored_connects
     # turn hierarchies into namespaced systems
-    namespaced_ignored = from_hierarchy.(ignored_systems)
+    namespaced_ignored_systems = from_hierarchy.(ignored_systems)
+    namespaced_ignored_variables = from_hierarchy.(ignored_variables)
+    namespaced_ignored = (namespaced_ignored_systems, namespaced_ignored_variables)
     # filter the subsystems of `sys` to exclude ignored ones
     filtered_subsys = filter(subsys) do ss
-        all(namespaced_ignored) do igsys
+        all(namespaced_ignored_systems) do igsys
             nameof(igsys) != nameof(ss)
         end
     end
@@ -457,21 +501,10 @@ function generate_connection_set!(connectionsets, domain_csets,
             neweq isa AbstractArray ? append!(eqs, neweq) : push!(eqs, neweq)
         else
             if lhs isa Connection && get_systems(lhs) === :domain
-                # don't consider systems that should be ignored
-                systems_to_connect = filter(get_systems(rhs)) do ss
-                    all(namespaced_ignored) do igsys
-                        nameof(igsys) != nameof(ss)
-                    end
-                end
-                connection2set!(domain_csets, namespace, systems_to_connect, isouter)
+                connection2set!(domain_csets, namespace, get_systems(rhs), isouter;
+                    ignored_connects, namespaced_ignored_systems)
             elseif isconnection(rhs)
-                # ignore required systems
-                systems_to_connect = filter(get_systems(rhs)) do ss
-                    all(namespaced_ignored) do igsys
-                        nameof(igsys) != nameof(ss)
-                    end
-                end
-                push!(cts, systems_to_connect)
+                push!(cts, get_systems(rhs))
             else
                 # split connections and equations
                 if eq.lhs isa AbstractArray || eq.rhs isa AbstractArray
@@ -489,14 +522,19 @@ function generate_connection_set!(connectionsets, domain_csets,
     for s in filtered_subsys
         isconnector(s) || continue
         is_domain_connector(s) && continue
+        _ignored_variables = ignored_systems_for_subsystem(s, ignored_variables)
+        _namespaced_ignored_variables = from_hierarchy.(_ignored_variables)
         for v in unknowns(s)
             Flow === get_connection_type(v) || continue
+            # ignore specified variables
+            any(isequal(v), _namespaced_ignored_variables) && continue
             push!(connectionsets, ConnectionSet([T(LazyNamespace(namespace, s), v, false)]))
         end
     end
 
     for ct in cts
-        connection2set!(connectionsets, namespace, ct, isouter)
+        connection2set!(connectionsets, namespace, ct, isouter;
+            ignored_connects, namespaced_ignored_systems)
     end
 
     # pre order traversal
@@ -506,7 +544,7 @@ function generate_connection_set!(connectionsets, domain_csets,
     @set! sys.systems = map(
         s -> generate_connection_set!(connectionsets, domain_csets, s,
             find, replace, scalarize, renamespace(namespace, s),
-            ignored_systems_for_subsystem(s, ignored_systems)),
+            ignored_systems_for_subsystem.((s,), ignored_connects)),
         subsys)
     @set! sys.eqs = eqs
 end
@@ -522,10 +560,16 @@ their hierarchy to not include `subsys`.
 function ignored_systems_for_subsystem(
         subsys::AbstractSystem, ignored_systems::Vector{<:HierarchyT})
     result = eltype(ignored_systems)[]
+    # in case `subsys` is namespaced, get its hierarchy and compare suffixes
+    # instead of the just the last element
+    suffix = reverse!(namespace_hierarchy(nameof(subsys)))
+    N = length(suffix)
     for igsys in ignored_systems
-        if igsys[end] == nameof(subsys)
+        if igsys[(end - N + 1):end] == suffix
             push!(result, copy(igsys))
-            pop!(result[end])
+            for i in 1:N
+                pop!(result[end])
+            end
         end
     end
     return result
