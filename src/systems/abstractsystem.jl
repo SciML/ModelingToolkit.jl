@@ -878,6 +878,7 @@ for prop in [:eqs
              :assertions
              :solved_unknowns
              :split_idxs
+             :ignored_connections
              :parent
              :is_dde
              :tstops
@@ -1392,6 +1393,75 @@ function assertions(sys::AbstractSystem)
         for (k, v) in assertions(subsys))
     end
     return merge(asserts, namespaced_asserts)
+end
+
+const HierarchyVariableT = Vector{Union{BasicSymbolic, Symbol}}
+const HierarchySystemT = Vector{Union{AbstractSystem, Symbol}}
+"""
+The type returned from `as_hierarchy`.
+"""
+const HierarchyT = Union{HierarchyVariableT, HierarchySystemT}
+
+"""
+    $(TYPEDSIGNATURES)
+
+The inverse operation of `as_hierarchy`.
+"""
+function from_hierarchy(hierarchy::HierarchyT)
+    namefn = hierarchy[1] isa AbstractSystem ? nameof : getname
+    foldl(@view hierarchy[2:end]; init = hierarchy[1]) do sys, name
+        rename(sys, Symbol(name, NAMESPACE_SEPARATOR, namefn(sys)))
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Represent a namespaced system (or variable) `sys` as a hierarchy. Return a vector, where
+the first element is the unnamespaced system (variable) and subsequent elements are
+`Symbol`s representing the parents of the unnamespaced system (variable) in order from
+inner to outer.
+"""
+function as_hierarchy(sys::Union{AbstractSystem, BasicSymbolic})::HierarchyT
+    namefn = sys isa AbstractSystem ? nameof : getname
+    # get the hierarchy
+    hierarchy = namespace_hierarchy(namefn(sys))
+    # rename the system with unnamespaced name
+    newsys = rename(sys, hierarchy[end])
+    # and remove it from the list
+    pop!(hierarchy)
+    # reverse it to go from inner to outer
+    reverse!(hierarchy)
+    # concatenate
+    T = sys isa AbstractSystem ? AbstractSystem : BasicSymbolic
+    return Union{Symbol, T}[newsys; hierarchy]
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Get the connections to ignore for `sys` and its subsystems. The returned value is a
+`Tuple` similar in structure to the `ignored_connections` field. Each system (variable)
+in the first (second) element of the tuple is also passed through `as_hierarchy`.
+"""
+function ignored_connections(sys::AbstractSystem)
+    has_ignored_connections(sys) || return (HierarchySystemT[], HierarchyVariableT[])
+
+    ics = get_ignored_connections(sys)
+    if ics === nothing
+        ics = (HierarchySystemT[], HierarchyVariableT[])
+    end
+    # turn into hierarchies
+    ics = (map(as_hierarchy, ics[1]), map(as_hierarchy, ics[2]))
+    systems = get_systems(sys)
+    # for each subsystem, get its ignored connections, add the name of the subsystem
+    # to the hierarchy and concatenate corresponding buffers of the result
+    result = mapreduce(Broadcast.BroadcastFunction(vcat), systems; init = ics) do subsys
+        sub_ics = ignored_connections(subsys)
+        (map(Base.Fix2(push!, nameof(subsys)), sub_ics[1]),
+            map(Base.Fix2(push!, nameof(subsys)), sub_ics[2]))
+    end
+    return (Vector{HierarchySystemT}(result[1]), Vector{HierarchyVariableT}(result[2]))
 end
 
 """

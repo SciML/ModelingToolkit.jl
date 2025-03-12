@@ -189,6 +189,12 @@ struct ODESystem <: AbstractODESystem
     """
     split_idxs::Union{Nothing, Vector{Vector{Int}}}
     """
+    The connections to ignore (since they're removed by analysis point transformations).
+    The first element of the tuple are systems that can't be in the same connection set,
+    and the second are variables (for the trivial form of `connect`).
+    """
+    ignored_connections::Union{Nothing, Tuple{Vector{ODESystem}, Vector{BasicSymbolic}}}
+    """
     The hierarchical parent system before simplification.
     """
     parent::Any
@@ -203,7 +209,8 @@ struct ODESystem <: AbstractODESystem
             tstops = [], tearing_state = nothing,
             substitutions = nothing, complete = false, index_cache = nothing,
             discrete_subsystems = nothing, solved_unknowns = nothing,
-            split_idxs = nothing, parent = nothing; checks::Union{Bool, Int} = true)
+            split_idxs = nothing, ignored_connections = nothing, parent = nothing;
+            checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_independent_variables([iv])
             check_variables(dvs, iv)
@@ -221,7 +228,7 @@ struct ODESystem <: AbstractODESystem
             initializesystem, initialization_eqs, schedule, connector_type, preface,
             cevents, devents, parameter_dependencies, assertions, metadata,
             gui_metadata, is_dde, tstops, tearing_state, substitutions, complete, index_cache,
-            discrete_subsystems, solved_unknowns, split_idxs, parent)
+            discrete_subsystems, solved_unknowns, split_idxs, ignored_connections, parent)
     end
 end
 
