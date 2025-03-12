@@ -333,9 +333,13 @@ end
 function Base.showerror(io::IO, err::MissingGuessError) 
     println(io, 
             """
-            The problem cannot be initialized without providing an additional numeric \
-            guess to serve as a starting point for solving for the initial state. Please \
-            provide another numeric value to `guesses` in the problem constructor.
+            Unable to resolve numeric guesses for all of the variables in the system. \
+            This may be because your guesses are cyclic.
+
+            In order for the problem to be initialized, all of the variables must have \
+            a numeric value to serve as a starting point for the nonlinear solve. \
+            Please provide one or more additional numeric guesses to `guesses` in \
+            the problem constructor.
 
             This error was thrown because symbolic value $(err.val) was found for variable $(err.sym).
             """)
@@ -358,7 +362,7 @@ Keyword arguments:
   [`missingvars`](@ref) to perform the check.
 - `allow_symbolic` allows the returned array to contain symbolic values. If this is `true`,
   `promotetoconcrete` is set to `false`.
-- `is_initializeprob`: Whether the parent problem is an initialization problem.
+- `is_initializeprob, guesses`: Used to determine whether the system is missing guesses.
 """
 function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
         tofloat = true, use_union = true, container_type = Array,
