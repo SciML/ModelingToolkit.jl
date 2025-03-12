@@ -132,13 +132,13 @@ sol = solve(prob, Rodas5P())
 
 # we need to provide `op` so the initialization system knows what to hold constant
 # the values don't matter
-Sf, simplified_sys = Blocks.get_sensitivity_function(model, :y; op); # This should work without providing an operating opint containing a dummy derivative
+Sf, simplified_sys = get_sensitivity_function(model, :y; op); # This should work without providing an operating opint containing a dummy derivative
 x = state_values(Sf)
 p = parameter_values(Sf)
 # If this somehow passes, mention it on
 # https://github.com/SciML/ModelingToolkit.jl/issues/2786
 matrices1 = Sf(x, p, 0)
-matrices2, _ = Blocks.get_sensitivity(model, :y; op); # Test that we get the same result when calling the higher-level API
+matrices2, _ = get_sensitivity(model, :y; op); # Test that we get the same result when calling the higher-level API
 @test matrices1.f_x ≈ matrices2.A[1:6, 1:6]
 nsys = get_named_sensitivity(model, :y; op) # Test that we get the same result when calling an even higher-level API
 @test matrices2.A ≈ nsys.A
@@ -146,14 +146,14 @@ nsys = get_named_sensitivity(model, :y; op) # Test that we get the same result w
 # Test the same thing for comp sensitivities
 
 # This should work without providing an operating opint containing a dummy derivative
-Sf, simplified_sys = Blocks.get_comp_sensitivity_function(model, :y; op);
+Sf, simplified_sys = get_comp_sensitivity_function(model, :y; op);
 x = state_values(Sf)
 p = parameter_values(Sf)
 # If this somehow passes, mention it on
 # https://github.com/SciML/ModelingToolkit.jl/issues/2786
 matrices1 = Sf(x, p, 0)
 # Test that we get the same result when calling the higher-level API
-matrices2, _ = Blocks.get_comp_sensitivity(model, :y; op)
+matrices2, _ = get_comp_sensitivity(model, :y; op)
 @test matrices1.f_x ≈ matrices2.A[1:6, 1:6]
 # Test that we get the same result when calling an even higher-level API
 nsys = get_named_comp_sensitivity(model, :y; op)
@@ -173,15 +173,16 @@ nsys = get_named_comp_sensitivity(model, :y; op)
     output = :y
     # we need to provide `op` so the initialization system knows which
     # values to hold constant
-    lin_fun, ssys = Blocks.get_sensitivity_function(model, output; op = op1)
-    matrices1 = linearize(ssys, lin_fun, op = op1)
-    matrices2 = linearize(ssys, lin_fun, op = op2)
+    lin_fun, ssys = get_sensitivity_function(model, output; op = op1)
+    matrices1, extras1 = linearize(ssys, lin_fun, op = op1)
+    matrices2, extras2 = linearize(ssys, lin_fun, op = op2)
+    @test extras1.x != extras2.x
     S1f = ss(matrices1...)
     S2f = ss(matrices2...)
     @test S1f != S2f
 
-    matrices1, ssys = Blocks.get_sensitivity(model, output; op = op1)
-    matrices2, ssys = Blocks.get_sensitivity(model, output; op = op2)
+    matrices1, ssys = get_sensitivity(model, output; op = op1)
+    matrices2, ssys = get_sensitivity(model, output; op = op2)
     S1 = ss(matrices1...)
     S2 = ss(matrices2...)
     @test S1 != S2
