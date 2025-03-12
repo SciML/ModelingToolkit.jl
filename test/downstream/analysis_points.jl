@@ -80,18 +80,14 @@ import ControlSystemsBase as CS
     @test tf(So) ≈ tf(Si)
 end
 
-@testset "Analysis points with subsystems" begin
+@testset "Duplicate `connect` statements across subsystems with AP transforms - standard `connect`" begin
     @named P = FirstOrder(k = 1, T = 1)
     @named C = Gain(; k = 1)
     @named add = Blocks.Add(k2 = -1)
 
     eqs = [connect(P.output, :plant_output, add.input2)
            connect(add.output, C.input)
-           connect(C.output, :plant_input, P.input)]
-
-    # eqs = [connect(P.output, add.input2)
-    #        connect(add.output, C.input)
-    #        connect(C.output, P.input)]
+           connect(C.output, P.input)]
 
     sys_inner = ODESystem(eqs, t, systems = [P, C, add], name = :inner)
 
@@ -99,6 +95,8 @@ end
     @named F = FirstOrder(k = 1, T = 3)
 
     eqs = [connect(r.output, F.input)
+           connect(sys_inner.P.output, sys_inner.add.input2)
+           connect(sys_inner.C.output, :plant_input, sys_inner.P.input)
            connect(F.output, sys_inner.add.input1)]
     sys_outer = ODESystem(eqs, t, systems = [F, sys_inner, r], name = :outer)
 
@@ -107,7 +105,43 @@ end
     prob = ODEProblem(ssys, Pair[], (0, 10))
     @test_nowarn solve(prob, Rodas5())
 
-    matrices, _ = get_sensitivity(sys_outer, sys_outer.inner.plant_input)
+    matrices, _ = get_sensitivity(sys_outer, sys_outer.plant_input)
+    lsys = sminreal(ss(matrices...))
+    @test lsys.A[] == -2
+    @test lsys.B[] * lsys.C[] == -1 # either one negative
+    @test lsys.D[] == 1
+
+    matrices_So, _ = get_sensitivity(sys_outer, sys_outer.inner.plant_output)
+    lsyso = sminreal(ss(matrices_So...))
+    @test lsys == lsyso || lsys == -1 * lsyso * (-1) # Output and input sensitivities are equal for SISO systems
+end
+
+@testset "Duplicate `connect` statements across subsystems with AP transforms - causal variable `connect`" begin
+    @named P = FirstOrder(k = 1, T = 1)
+    @named C = Gain(; k = 1)
+    @named add = Blocks.Add(k2 = -1)
+
+    eqs = [connect(P.output.u, :plant_output, add.input2.u)
+           connect(add.output, C.input)
+           connect(C.output.u, P.input.u)]
+
+    sys_inner = ODESystem(eqs, t, systems = [P, C, add], name = :inner)
+
+    @named r = Constant(k = 1)
+    @named F = FirstOrder(k = 1, T = 3)
+
+    eqs = [connect(r.output, F.input)
+           connect(sys_inner.P.output.u, sys_inner.add.input2.u)
+           connect(sys_inner.C.output.u, :plant_input, sys_inner.P.input.u)
+           connect(F.output, sys_inner.add.input1)]
+    sys_outer = ODESystem(eqs, t, systems = [F, sys_inner, r], name = :outer)
+
+    # test first that the structural_simplify works correctly
+    ssys = structural_simplify(sys_outer)
+    prob = ODEProblem(ssys, Pair[], (0, 10))
+    @test_nowarn solve(prob, Rodas5())
+
+    matrices, _ = get_sensitivity(sys_outer, sys_outer.plant_input)
     lsys = sminreal(ss(matrices...))
     @test lsys.A[] == -2
     @test lsys.B[] * lsys.C[] == -1 # either one negative
