@@ -878,6 +878,7 @@ for prop in [:eqs
              :assertions
              :solved_unknowns
              :split_idxs
+             :ignored_connections
              :parent
              :is_dde
              :tstops
