@@ -340,3 +340,101 @@ end
     G = CS.ss(matrices...) |> sminreal
     @test tf(G) ≈ tf(CS.feedback(Ps, Cs))
 end
+
+function normal_test_system()
+    @named F1 = FirstOrder(k = 1, T = 1)
+    @named F2 = FirstOrder(k = 1, T = 1)
+    @named add = Blocks.Add(k1 = 1, k2 = 2)
+    @named back = Feedback()
+
+    eqs_normal = [connect(back.output, :ap, F1.input)
+                  connect(back.output, F2.input)
+                  connect(F1.output, add.input1)
+                  connect(F2.output, add.input2)
+                  connect(add.output, back.input2)]
+    @named normal_inner = ODESystem(eqs_normal, t; systems = [F1, F2, add, back])
+
+    @named step = Step()
+    eqs2_normal = [
+        connect(step.output, normal_inner.back.input1)
+    ]
+    @named sys_normal = ODESystem(eqs2_normal, t; systems = [normal_inner, step])
+end
+
+sys_normal = normal_test_system()
+
+prob = ODEProblem(structural_simplify(sys_normal), [], (0.0, 10.0))
+@test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
+matrices_normal, _ = get_sensitivity(sys_normal, sys_normal.normal_inner.ap)
+
+@testset "Analysis point overriding part of connection - normal connect" begin
+    @named F1 = FirstOrder(k = 1, T = 1)
+    @named F2 = FirstOrder(k = 1, T = 1)
+    @named add = Blocks.Add(k1 = 1, k2 = 2)
+    @named back = Feedback()
+
+    eqs = [connect(back.output, F1.input, F2.input)
+           connect(F1.output, add.input1)
+           connect(F2.output, add.input2)
+           connect(add.output, back.input2)]
+    @named inner = ODESystem(eqs, t; systems = [F1, F2, add, back])
+
+    @named step = Step()
+    eqs2 = [connect(step.output, inner.back.input1)
+            connect(inner.back.output, :ap, inner.F1.input)]
+    @named sys = ODESystem(eqs2, t; systems = [inner, step])
+
+    prob = ODEProblem(structural_simplify(sys), [], (0.0, 10.0))
+    @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
+
+    matrices, _ = get_sensitivity(sys, sys.ap)
+    @test matrices == matrices_normal
+end
+
+@testset "Analysis point overriding part of connection - variable connect" begin
+    @named F1 = FirstOrder(k = 1, T = 1)
+    @named F2 = FirstOrder(k = 1, T = 1)
+    @named add = Blocks.Add(k1 = 1, k2 = 2)
+    @named back = Feedback()
+
+    eqs = [connect(back.output.u, F1.input.u, F2.input.u)
+           connect(F1.output, add.input1)
+           connect(F2.output, add.input2)
+           connect(add.output, back.input2)]
+    @named inner = ODESystem(eqs, t; systems = [F1, F2, add, back])
+
+    @named step = Step()
+    eqs2 = [connect(step.output, inner.back.input1)
+            connect(inner.back.output.u, :ap, inner.F1.input.u)]
+    @named sys = ODESystem(eqs2, t; systems = [inner, step])
+
+    prob = ODEProblem(structural_simplify(sys), [], (0.0, 10.0))
+    @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
+
+    matrices, _ = get_sensitivity(sys, sys.ap)
+    @test matrices == matrices_normal
+end
+
+@testset "Analysis point overriding part of connection - mixed connect" begin
+    @named F1 = FirstOrder(k = 1, T = 1)
+    @named F2 = FirstOrder(k = 1, T = 1)
+    @named add = Blocks.Add(k1 = 1, k2 = 2)
+    @named back = Feedback()
+
+    eqs = [connect(back.output, F1.input, F2.input)
+           connect(F1.output, add.input1)
+           connect(F2.output, add.input2)
+           connect(add.output, back.input2)]
+    @named inner = ODESystem(eqs, t; systems = [F1, F2, add, back])
+
+    @named step = Step()
+    eqs2 = [connect(step.output, inner.back.input1)
+            connect(inner.back.output.u, :ap, inner.F1.input.u)]
+    @named sys = ODESystem(eqs2, t; systems = [inner, step])
+
+    prob = ODEProblem(structural_simplify(sys), [], (0.0, 10.0))
+    @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
+
+    matrices, _ = get_sensitivity(sys, sys.ap)
+    @test matrices == matrices_normal
+end
