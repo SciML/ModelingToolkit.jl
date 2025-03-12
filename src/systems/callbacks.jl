@@ -258,17 +258,11 @@ function make_affect(affect::Vector{Equation}; warn = true)
     aff_map = Dict(zip(p_as_unknowns, discretes))
     rev_map = Dict([v => k for (k, v) in aff_map])
     affect = Symbolics.substitute(affect, rev_map)
-    @mtkbuild affectsys = ImplicitDiscreteSystem(
-                  affect, iv, collect(union(unknowns, p_as_unknowns)), cb_params)
+    @mtkbuild affectsys = ImplicitDiscreteSystem(affect, iv, collect(union(unknowns, p_as_unknowns)), cb_params)
     params = filter(isparameter, map(x -> only(arguments(unwrap(x))), cb_params))
-    @show params
-
     for u in unknowns
         aff_map[u] = u
     end
-
-    @show unknowns
-    @show params
 
     return AffectSystem(affectsys, collect(unknowns), params, discretes, aff_map)
 end
@@ -494,16 +488,22 @@ function namespace_affect(affect::FunctionalAffect, s)
         context(affect))
 end
 
-namespace_affect(affect::AffectSystem, s) = AffectSystem(system(affect), renamespace.((s,), discretes(affect)))
-namespace_affects(af::Union{Nothing, Affect}, s) = af isa Affect ? namespace_affect(af, s) : nothing
+function namespace_affect(affect::AffectSystem, s) 
+    AffectSystem(renamespace(s, system(affect)),
+        renamespace.((s,), unknowns(affect)),
+        renamespace.((s,), parameters(affect)),
+        renamespace.((s,), discretes(affect)),
+        Dict([k => renamespace(s, v) for (k, v) in aff_to_sys(affect)]))
+end
+namespace_affect(af::Nothing, s) = nothing
 
 function namespace_callback(cb::SymbolicContinuousCallback, s)::SymbolicContinuousCallback
     SymbolicContinuousCallback(
         namespace_equation.(equations(cb), (s,)),
-        namespace_affects(affects(cb), s),
-        affect_neg = namespace_affects(affect_negs(cb), s),
-        initialize = namespace_affects(initialize_affects(cb), s),
-        finalize = namespace_affects(finalize_affects(cb), s),
+        namespace_affect(affects(cb), s),
+        affect_neg = namespace_affect(affect_negs(cb), s),
+        initialize = namespace_affect(initialize_affects(cb), s),
+        finalize = namespace_affect(finalize_affects(cb), s),
         rootfind = cb.rootfind)
 end
 
@@ -794,9 +794,9 @@ function compile_affect(
 
     ps = parameters(aff)
     dvs = unknowns(aff)
-    @show ps
 
     if aff isa AffectSystem
+        affsys = system(aff)
         aff_map = aff_to_sys(aff)
         sys_map = Dict([v => k for (k, v) in aff_map])
         build_initializeprob = has_alg_eqs(sys)
@@ -809,11 +809,11 @@ function compile_affect(
                 push!(pmap, pre_p => pval)
             end
             guesses = Pair[u => integrator[aff_map[u]] for u in updated_vals(aff)]
-            affprob = ImplicitDiscreteProblem(system(aff), Pair[], (0, 1), pmap; guesses, build_initializeprob)
+            affprob = ImplicitDiscreteProblem(affsys, Pair[], (0, 1), pmap; guesses, build_initializeprob)
 
             affsol = init(affprob, SimpleIDSolve())
             for u in unknowns(aff)
-                integrator[u] = affsol[u]
+                integrator[u] = affsol[sys_map[u]]
             end
             for p in discretes(aff)
                 integrator.ps[p] = affsol[sys_map[p]]
@@ -899,9 +899,9 @@ function continuous_events(sys::AbstractSystem)
     systems = get_systems(sys)
     cbs = [obs;
            reduce(vcat,
-               (map(o -> namespace_callback(o, s), continuous_events(s))
-               for s in systems),
+               (map(o -> namespace_callback(o, s), continuous_events(s)) for s in systems),
                init = SymbolicContinuousCallback[])]
+    @show cbs
     filter(!isempty, cbs)
 end
 
