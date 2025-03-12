@@ -473,7 +473,7 @@ prob = ODEProblem(pend, [x => 1], (0.0, 1.5), [g => 1],
 
 unsimp = generate_initializesystem(pend; u0map = [x => 1], initialization_eqs = [y ~ 1])
 sys = structural_simplify(unsimp; fully_determined = false)
-@test length(equations(sys)) == 3
+@test length(equations(sys)) in (3, 4) # could be either depending on tearing
 
 # Extend two systems with initialization equations and guesses
 # https://github.com/SciML/ModelingToolkit.jl/issues/2845
