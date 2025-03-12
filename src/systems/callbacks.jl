@@ -355,8 +355,8 @@ function vars!(vars, cb::SymbolicContinuousCallback; op = Differential)
         vars!(vars, eq; op)
     end
     for aff in (affects(cb), affect_negs(cb), initialize_affects(cb), finalize_affects(cb))
-        if aff isa Vector{Equation}
-            for eq in aff
+        if aff isa AffectSystem
+            for eq in vcat(observed(system(aff)), equations(system(aff)))
                 vars!(vars, eq; op)
             end
         elseif aff !== nothing
@@ -453,18 +453,18 @@ function Base.show(io::IO, db::SymbolicDiscreteCallback)
 end
 
 function vars!(vars, cb::SymbolicDiscreteCallback; op = Differential)
-    if symbolic_type(cb.condition) == NotSymbolic
-        if cb.condition isa AbstractArray
-            for eq in cb.condition
+    if symbolic_type(conditions(cb)) == NotSymbolic
+        if conditions(cb) isa AbstractArray
+            for eq in conditions(cb)
                 vars!(vars, eq; op)
             end
         end
     else
-        vars!(vars, cb.condition; op)
+        vars!(vars, conditions(cb); op)
     end
-    for aff in (cb.affects, cb.initialize, cb.finalize)
-        if aff isa Vector{Equation}
-            for eq in aff
+    for aff in (affects(cb), initialize_affects(cb), finalize_affects(cb))
+        if aff isa AffectSystem
+            for eq in vcat(observed(system(aff)), equations(system(aff)))
                 vars!(vars, eq; op)
             end
         elseif aff !== nothing
@@ -709,7 +709,7 @@ function generate_callback(cbs::Vector{SymbolicContinuousCallback}, sys; kwargs.
         affect = compile_affect(cb.affect, cb, sys, default = (args...) -> ())
 
         push!(affects, affect)
-        push!(affect_negs, compile_affect(cb.affect_neg, cb, sys, default = affect))
+        push!(affect_negs, compile_affect(cb.affect_neg, cb, sys, default = affect)
         push!(inits, compile_affect(cb.initialize, cb, sys, default = nothing))
         push!(finals, compile_affect(cb.finalize, cb, sys, default = nothing))
     end
@@ -821,6 +821,8 @@ function compile_affect(
             for idx in save_idxs
                 SciMLBase.save_discretes!(integ, idx)
             end
+
+            sys isa JumpSystem && reset_aggregated_jumps!(integrator)
         end
     elseif aff isa FunctionalAffect || aff isa ImperativeAffect
         compile_functional_affect(aff, cb, sys, dvs, ps; kwargs...)

@@ -336,7 +336,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         throw(ArgumentError("System names must be unique."))
     end
 
-    algeeqs = filter(is_alg_equation, deqs)
+    alg_eqs = filter(eq -> eq.lhs isa Union{Symbolic, Number} && !isdiffeq(eq), deqs)
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events, algeeqs)
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events, algeeqs)
 

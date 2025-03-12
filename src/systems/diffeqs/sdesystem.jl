@@ -270,7 +270,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
     Wfact = RefValue(EMPTY_JAC)
     Wfact_t = RefValue(EMPTY_JAC)
 
-    algeeqs = filter(is_alg_equation, deqs)
+    alg_eqs = filter(eq -> eq.lhs isa Union{Symbolic, Number} && !isdiffeq(eq), deqs)
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events, algeeqs)
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events, algeeqs)
     if is_dde === nothing
