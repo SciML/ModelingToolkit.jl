@@ -395,16 +395,43 @@ function generate_connection_set(
     connectionsets = ConnectionSet[]
     domain_csets = ConnectionSet[]
     sys = generate_connection_set!(
-        connectionsets, domain_csets, sys, find, replace, scalarize)
+        connectionsets, domain_csets, sys, find, replace, scalarize, nothing,
+        # include systems to be ignored
+        ignored_connections(sys)[1])
     csets = merge(connectionsets)
     domain_csets = merge([csets; domain_csets], true)
 
     sys, (csets, domain_csets)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Generate connection sets from `connect` equations.
+
+# Arguments
+
+- `connectionsets` is the list of connection sets to be populated by recursively
+  descending `sys`.
+- `domain_csets` is the list of connection sets for domain connections.
+- `sys` is the system whose equations are to be searched.
+- `namespace` is a system representing the namespace in which `sys` exists, or `nothing`
+  for no namespace (if `sys` is top-level).
+- `ignored_systems` is a list of systems (in the format returned by `as_hierarchy`) to
+  be ignored when generating connections. This is typically because the connections
+  they are used in were removed by analysis point transformations.
+"""
 function generate_connection_set!(connectionsets, domain_csets,
-        sys::AbstractSystem, find, replace, scalarize, namespace = nothing)
+        sys::AbstractSystem, find, replace, scalarize, namespace = nothing, ignored_systems = [])
     subsys = get_systems(sys)
+    # turn hierarchies into namespaced systems
+    namespaced_ignored = from_hierarchy.(ignored_systems)
+    # filter the subsystems of `sys` to exclude ignored ones
+    filtered_subsys = filter(subsys) do ss
+        all(namespaced_ignored) do igsys
+            nameof(igsys) != nameof(ss)
+        end
+    end
 
     isouter = generate_isouter(sys)
     eqs′ = get_eqs(sys)
@@ -430,9 +457,21 @@ function generate_connection_set!(connectionsets, domain_csets,
             neweq isa AbstractArray ? append!(eqs, neweq) : push!(eqs, neweq)
         else
             if lhs isa Connection && get_systems(lhs) === :domain
-                connection2set!(domain_csets, namespace, get_systems(rhs), isouter)
+                # don't consider systems that should be ignored
+                systems_to_connect = filter(get_systems(rhs)) do ss
+                    all(namespaced_ignored) do igsys
+                        nameof(igsys) != nameof(ss)
+                    end
+                end
+                connection2set!(domain_csets, namespace, systems_to_connect, isouter)
             elseif isconnection(rhs)
-                push!(cts, get_systems(rhs))
+                # ignore required systems
+                systems_to_connect = filter(get_systems(rhs)) do ss
+                    all(namespaced_ignored) do igsys
+                        nameof(igsys) != nameof(ss)
+                    end
+                end
+                push!(cts, systems_to_connect)
             else
                 # split connections and equations
                 if eq.lhs isa AbstractArray || eq.rhs isa AbstractArray
@@ -446,7 +485,8 @@ function generate_connection_set!(connectionsets, domain_csets,
 
     # all connectors are eventually inside connectors.
     T = ConnectionElement
-    for s in subsys
+    # only generate connection sets for systems that are not ignored
+    for s in filtered_subsys
         isconnector(s) || continue
         is_domain_connector(s) && continue
         for v in unknowns(s)
@@ -465,10 +505,30 @@ function generate_connection_set!(connectionsets, domain_csets,
     end
     @set! sys.systems = map(
         s -> generate_connection_set!(connectionsets, domain_csets, s,
-            find, replace, scalarize,
-            renamespace(namespace, s)),
+            find, replace, scalarize, renamespace(namespace, s),
+            ignored_systems_for_subsystem(s, ignored_systems)),
         subsys)
     @set! sys.eqs = eqs
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given a subsystem `subsys` of a parent system and a list of systems (variables) to be
+ignored by `generate_connection_set!` (`expand_variable_connections`), filter
+`ignored_systems` to only include those present in the subtree of `subsys` and update
+their hierarchy to not include `subsys`.
+"""
+function ignored_systems_for_subsystem(
+        subsys::AbstractSystem, ignored_systems::Vector{<:HierarchyT})
+    result = eltype(ignored_systems)[]
+    for igsys in ignored_systems
+        if igsys[end] == nameof(subsys)
+            push!(result, copy(igsys))
+            pop!(result[end])
+        end
+    end
+    return result
 end
 
 function Base.merge(csets::AbstractVector{<:ConnectionSet}, allouter = false)
@@ -576,7 +636,11 @@ end
 Recursively descend through the hierarchy of `sys` and expand all connection equations
 of causal variables. Return the modified system.
 """
-function expand_variable_connections(sys::AbstractSystem)
+function expand_variable_connections(sys::AbstractSystem; ignored_variables = nothing)
+    if ignored_variables === nothing
+        ignored_variables = ignored_connections(sys)[2]
+    end
+    namespaced_ignored = from_hierarchy.(ignored_variables)
     eqs = copy(get_eqs(sys))
     valid_idxs = trues(length(eqs))
     additional_eqs = Equation[]
@@ -584,8 +648,13 @@ function expand_variable_connections(sys::AbstractSystem)
     for (i, eq) in enumerate(eqs)
         eq.lhs isa Connection || continue
         connection = eq.rhs
-        elements = connection.systems
+        elements = get_systems(connection)
         is_causal_variable_connection(connection) || continue
+        elements = filter(elements) do el
+            all(namespaced_ignored) do var
+                getname(var) != getname(el.var)
+            end
+        end
 
         valid_idxs[i] = false
         elements = map(x -> x.var, elements)
@@ -595,7 +664,10 @@ function expand_variable_connections(sys::AbstractSystem)
         end
     end
     eqs = [eqs[valid_idxs]; additional_eqs]
-    subsystems = map(expand_variable_connections, get_systems(sys))
+    subsystems = map(get_systems(sys)) do subsys
+        expand_variable_connections(subsys;
+            ignored_variables = ignored_systems_for_subsystem(subsys, ignored_variables))
+    end
     @set! sys.eqs = eqs
     @set! sys.systems = subsystems
     return sys
