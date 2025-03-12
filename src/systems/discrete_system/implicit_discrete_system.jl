@@ -334,10 +334,8 @@ function SciMLBase.ImplicitDiscreteProblem(
 
     u0map = to_varmap(u0map, dvs)
     u0map = shift_u0map_forward(sys, u0map, defaults(sys))
-    @show u0map
     f, u0, p = process_SciMLProblem(
         ImplicitDiscreteFunction, sys, u0map, parammap; eval_expression, eval_module, kwargs...)
-    @show u0
 
     kwargs = filter_kwargs(kwargs)
     ImplicitDiscreteProblem(f, u0, tspan, p; kwargs...)
@@ -437,4 +435,14 @@ end
 
 function ImplicitDiscreteFunctionExpr(sys::ImplicitDiscreteSystem, args...; kwargs...)
     ImplicitDiscreteFunctionExpr{true}(sys, args...; kwargs...)
+end
+
+function Base.:(==)(sys1::ImplicitDiscreteSystem, sys2::ImplicitDiscreteSystem)
+    sys1 === sys2 && return true
+    isequal(nameof(sys1), nameof(sys2)) &&
+        isequal(get_iv(sys1), get_iv(sys2)) && 
+        _eq_unordered(get_eqs(sys1), get_eqs(sys2)) &&
+        _eq_unordered(get_unknowns(sys1), get_unknowns(sys2)) &&
+        _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
+        all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
 end
