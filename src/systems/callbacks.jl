@@ -709,7 +709,7 @@ function generate_callback(cbs::Vector{SymbolicContinuousCallback}, sys; kwargs.
         affect = compile_affect(cb.affect, cb, sys, default = (args...) -> ())
 
         push!(affects, affect)
-        push!(affect_negs, compile_affect(cb.affect_neg, cb, sys, default = affect)
+        push!(affect_negs, compile_affect(cb.affect_neg, cb, sys, default = affect))
         push!(inits, compile_affect(cb.initialize, cb, sys, default = nothing))
         push!(finals, compile_affect(cb.finalize, cb, sys, default = nothing))
     end
