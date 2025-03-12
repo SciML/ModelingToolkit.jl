@@ -219,8 +219,8 @@ SymbolicContinuousCallback(p::Pair) = SymbolicContinuousCallback(p[1], p[2])
 SymbolicContinuousCallback(cb::SymbolicContinuousCallback, args...) = cb
 
 make_affect(affect::Nothing) = nothing
-make_affect(affect::Tuple) = FunctionalAffect(affects...)
-make_affect(affect::NamedTuple) = FunctionalAffect(; affects...)
+make_affect(affect::Tuple) = FunctionalAffect(affect...)
+make_affect(affect::NamedTuple) = FunctionalAffect(; affect...)
 make_affect(affect::FunctionalAffect) = affect
 make_affect(affect::AffectSystem) = affect
 
@@ -616,7 +616,7 @@ function compile_condition(cbs::Union{AbstractCallback, Vector{<:AbstractCallbac
     if expression == Val{true}
         fs = eval_or_rgf.(fs; eval_expression, eval_module)
     end
-    is_discrete(cbs) ? (f_oop = fs) : (f_oop, f_iip = fs)
+    f_oop, f_iip = is_discrete(cbs) ? (fs, nothing) : fs # no iip function for discrete condition.
 
     cond = if cbs isa AbstractVector
         (out, u, t, integ) -> f_iip(out, u, parameter_values(integ), t)
@@ -644,7 +644,7 @@ function compile_functional_affect(affect::FunctionalAffect, cb, sys, dvs, ps; k
     dvs_ind = Dict(reverse(en) for en in enumerate(dvs))
     v_inds = map(sym -> dvs_ind[sym], unknowns(affect))
 
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
+    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         p_inds = [(pind = parameter_index(sys, sym)) === nothing ? sym : pind
                   for sym in parameters(affect)]
         save_idxs = get(ic.callback_to_clocks, cb, Int[])
@@ -752,7 +752,7 @@ function generate_callback(cb, sys; kwargs...)
 
     if is_discrete(cb)
         if is_timed && conditions(cb) isa AbstractVector
-            return PresetTimeCallback(trigger, affect; affect_neg, initialize,
+            return PresetTimeCallback(trigger, affect; initialize,
                 finalize, initializealg = SciMLBase.NoInit)
         elseif is_timed
             return PeriodicCallback(affect, trigger; initialize, finalize)
@@ -783,7 +783,7 @@ Notes
   - `kwargs` are passed through to `Symbolics.build_function`.
 """
 function compile_affect(
-        aff::Union{Nothing, Affect}, cb::AbstractCallback, sys::AbstractSystem; default = nothing)
+        aff::Union{Nothing, Affect}, cb::AbstractCallback, sys::AbstractSystem; default = nothing, kwargs...)
     save_idxs = if !(has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing)
         Int[]
     else
