@@ -380,9 +380,7 @@ function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
         vals = promote_to_concrete(vals; tofloat = tofloat, use_union = false)
     end
 
-    if isempty(vals)
-        return nothing
-    elseif container_type <: Tuple
+    if container_type <: Tuple
         return (vals...,)
     else
         return SymbolicUtils.Code.create_array(container_type, eltype(vals), Val{1}(),

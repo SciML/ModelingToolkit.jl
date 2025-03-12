@@ -117,9 +117,7 @@ function IndexCache(sys::AbstractSystem)
             affs = [affs]
         end
         for affect in affs
-            if affect isa Equation
-                is_parameter(sys, affect.lhs) && push!(discs, affect.lhs)
-            elseif affect isa FunctionalAffect || affect isa ImperativeAffect
+            if affect isa AffectSystem || affect isa FunctionalAffect || affect isa ImperativeAffect
                 union!(discs, unwrap.(discretes(affect)))
             elseif isnothing(affect)
                 continue
