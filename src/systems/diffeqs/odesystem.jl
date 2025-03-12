@@ -567,12 +567,18 @@ function build_explicit_observed_function(sys, ts;
         sys, ts, args...; p_start, p_end, filter_observed = obsfilter,
         output_type, mkarray, try_namespaced = true, expression = Val{true})
     if fns isa Tuple
+        if expression
+            return return_inplace ? fns : fns[1]
+        end
         oop, iip = eval_or_rgf.(fns; eval_expression, eval_module)
         f = GeneratedFunctionWrapper{(
             p_start + is_dde(sys), length(args) - length(ps) + 1 + is_dde(sys), is_split(sys))}(
             oop, iip)
         return return_inplace ? (f, f) : f
     else
+        if expression 
+            return fns 
+        end
         f = eval_or_rgf(fns; eval_expression, eval_module)
         f = GeneratedFunctionWrapper{(
             p_start + is_dde(sys), length(args) - length(ps) + 1 + is_dde(sys), is_split(sys))}(
