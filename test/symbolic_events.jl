@@ -237,7 +237,7 @@ end
     @test m.ctx === 3
 end
 
-@testset "Basic ODESystem Tests" begin
+@testset "Condition Compilation" begin
     @named sys = ODESystem(eqs, t, continuous_events = [x ~ 1])
     @test getfield(sys, :continuous_events)[] ==
           SymbolicContinuousCallback(Equation[x ~ 1], nothing)
@@ -270,11 +270,11 @@ end
     cb = ModelingToolkit.generate_continuous_callbacks(sys)
     cond = cb.condition
     out = [0.0]
-    cond(out, [0], p0, t0)
+    cond.f_iip.contents(out, [0], p0, t0)
     @test out[] ≈ -1 # signature is u,p,t
-    cond.rf_ip(out, [1], p0, t0)
+    cond.f_iip.contents(out, [1], p0, t0)
     @test out[] ≈ 0  # signature is u,p,t
-    cond.rf_ip(out, [2], p0, t0)
+    cond.f_iip.contents(out, [2], p0, t0)
     @test out[] ≈ 1  # signature is u,p,t
 
     prob = ODEProblem(sys, Pair[], (0.0, 2.0))
@@ -302,20 +302,20 @@ end
     cond = cb.condition
     out = [0.0, 0.0]
     # the root to find is 2
-    cond.rf_ip(out, [0, 0], p0, t0)
+    cond.f_iip.contents(out, [0, 0], p0, t0)
     @test out[1] ≈ -2 # signature is u,p,t
-    cond.rf_ip(out, [1, 0], p0, t0)
+    cond.f_iip.contents(out, [1, 0], p0, t0)
     @test out[1] ≈ -1  # signature is u,p,t
-    cond.rf_ip(out, [2, 0], p0, t0) # this should return 0
+    cond.f_iip.contents(out, [2, 0], p0, t0) # this should return 0
     @test out[1] ≈ 0  # signature is u,p,t
 
     # the root to find is 1
     out = [0.0, 0.0]
-    cond.rf_ip(out, [0, 0], p0, t0)
+    cond.f_iip.contents(out, [0, 0], p0, t0)
     @test out[2] ≈ -1 # signature is u,p,t
-    cond.rf_ip(out, [0, 1], p0, t0) # this should return 0
+    cond.f_iip.contents(out, [0, 1], p0, t0) # this should return 0
     @test out[2] ≈ 0  # signature is u,p,t
-    cond.rf_ip(out, [0, 2], p0, t0)
+    cond.f_iip.contents(out, [0, 2], p0, t0)
     @test out[2] ≈ 1  # signature is u,p,t
 
     sol = solve(prob, Tsit5())
@@ -336,14 +336,14 @@ end
     @variables x(t)=1 v(t)=0
 
     root_eqs = [x ~ 0]
-    affect = [v ~ -v]
+    affect = [v ~ -Pre(v)]
 
     @named ball = ODESystem(
         [D(x) ~ v
          D(v) ~ -9.8], t, continuous_events = root_eqs => affect)
 
-    @test getfield(ball, :continuous_events)[] ==
-          SymbolicContinuousCallback(Equation[x ~ 0], Equation[v ~ -v])
+    @test only(continuous_events(ball)) ==
+        SymbolicContinuousCallback(Equation[x ~ 0], Equation[v ~ -Pre(v)])
     ball = structural_simplify(ball)
 
     @test length(ModelingToolkit.continuous_events(ball)) == 1
@@ -356,14 +356,14 @@ end
     ###### 2D bouncing ball
     @variables x(t)=1 y(t)=0 vx(t)=0 vy(t)=1
 
-    continuous_events = [[x ~ 0] => [vx ~ -vx]
-                         [y ~ -1.5, y ~ 1.5] => [vy ~ -vy]]
+    events = [[x ~ 0] => [vx ~ -Pre(vx)]
+              [y ~ -1.5, y ~ 1.5] => [vy ~ -Pre(vy)]]
 
     @named ball = ODESystem(
         [D(x) ~ vx
          D(y) ~ vy
          D(vx) ~ -9.8
-         D(vy) ~ -0.01vy], t; continuous_events)
+         D(vy) ~ -0.01vy], t; continuous_events = events)
 
     _ball = ball
     ball = structural_simplify(_ball)
@@ -381,7 +381,9 @@ end
           SymbolicContinuousCallback(Equation[y ~ -1.5, y ~ 1.5], Equation[vy ~ -vy])
     cond = cb.condition
     out = [0.0, 0.0, 0.0]
-    cond.rf_ip(out, [0, 0, 0, 0], p0, t0)
+    p0 = 0.
+    t0 = 0.
+    cond.f_iip.contents(out, [0, 0, 0, 0], p0, t0)
     @test out ≈ [0, 1.5, -1.5]
 
     sol = solve(prob, Tsit5())
@@ -394,22 +396,15 @@ end
     @test maximum(sol_nosplit[y]) ≈ 1.5  # check wall conditions
 end
 
-# tv = sort([LinRange(0, 5, 200); sol.t])
-# plot(sol(tv)[y], sol(tv)[x], line_z=tv)
-# vline!([-1.5, 1.5], l=(:black, 5), primary=false)
-# hline!([0], l=(:black, 5), primary=false)
-
 ## Test multi-variable affect
 # in this test, there are two variables affected by a single event.
 @testset "Multi-variable affect" begin
-    continuous_events = [
-        [x ~ 0] => [vx ~ -vx, vy ~ -vy]
-    ]
+    events = [[x ~ 0] => [vx ~ -Pre(vx), vy ~ -Pre(vy)]]
 
     @named ball = ODESystem([D(x) ~ vx
                              D(y) ~ vy
                              D(vx) ~ -1
-                             D(vy) ~ 0], t; continuous_events)
+                             D(vy) ~ 0], t; continuous_events = events)
 
     ball_nosplit = structural_simplify(ball)
     ball = structural_simplify(ball)
@@ -425,24 +420,21 @@ end
     @test -minimum(sol_nosplit[y]) ≈ maximum(sol_nosplit[y]) ≈ sqrt(2)  # the ball will never go further than √2 in either direction (gravity was changed to 1 to get this particular number)
 end
 
-# tv = sort([LinRange(0, 5, 200); sol.t])
-# plot(sol(tv)[y], sol(tv)[x], line_z=tv)
-# vline!([-1.5, 1.5], l=(:black, 5), primary=false)
-# hline!([0], l=(:black, 5), primary=false)
-
 # issue https://github.com/SciML/ModelingToolkit.jl/issues/1386
 # tests that it works for ODAESystem
-@variables vs(t) v(t) vmeasured(t)
-eq = [vs ~ sin(2pi * t)
-      D(v) ~ vs - v
-      D(vmeasured) ~ 0.0]
-ev = [sin(20pi * t) ~ 0.0] => [vmeasured ~ v]
-@named sys = ODESystem(eq, t, continuous_events = ev)
-sys = structural_simplify(sys)
-prob = ODEProblem(sys, zeros(2), (0.0, 5.1))
-sol = solve(prob, Tsit5())
-@test all(minimum((0:0.05:5) .- sol.t', dims = 2) .< 0.0001) # test that the solver stepped every 0.05s as dictated by event
-@test sol([0.25 - eps()])[vmeasured][] == sol([0.23])[vmeasured][] # test the hold property
+@testset "ODAESystem" begin
+    @variables vs(t) v(t) vmeasured(t)
+    eq = [vs ~ sin(2pi * t)
+          D(v) ~ vs - v
+          D(vmeasured) ~ 0.0]
+    ev = [sin(20pi * t) ~ 0.0] => [vmeasured ~ Pre(v)]
+    @named sys = ODESystem(eq, t, continuous_events = ev)
+    sys = structural_simplify(sys)
+    prob = ODEProblem(sys, zeros(2), (0.0, 5.1))
+    sol = solve(prob, Tsit5())
+    @test all(minimum((0:0.1:5) .- sol.t', dims = 2) .< 0.0001) # test that the solver stepped every 0.1s as dictated by event
+    @test sol([0.25])[vmeasured][] == sol([0.23])[vmeasured][] # test the hold property
+end
 
 ##  https://github.com/SciML/ModelingToolkit.jl/issues/1528
 @testset "Handle Empty Events" begin
@@ -506,7 +498,7 @@ end
     @variables A(t) B(t)
 
     cond1 = (t == t1)
-    affect1 = [A ~ A + 1]
+    affect1 = [A ~ Pre(A) + 1]
     cb1 = cond1 => affect1
     cond2 = (t == t2)
     affect2 = [k ~ 1.0]
@@ -581,7 +573,7 @@ end
     @variables A(t) B(t)
 
     cond1 = (t == t1)
-    affect1 = [A ~ A + 1]
+    affect1 = [A ~ Pre(A) + 1]
     cb1 = cond1 => affect1
     cond2 = (t == t2)
     affect2 = [k ~ 1.0]
@@ -597,7 +589,7 @@ end
     testsol(ssys, u0, p, tspan; tstops = [1.0, 2.0], paramtotest = k)
 
     cond1a = (t == t1)
-    affect1a = [A ~ A + 1, B ~ A]
+    affect1a = [A ~ Pre(A) + 1, B ~ Pre(A)]
     cb1a = cond1a => affect1a
     @named ssys1 = SDESystem(eqs, [0.0], t, [A, B], [k, t1, t2],
         discrete_events = [cb1a, cb2])
@@ -665,7 +657,7 @@ end
     @variables A(t) B(t)
 
     cond1 = (t == t1)
-    affect1 = [A ~ A + 1]
+    affect1 = [A ~ Pre(A) + 1]
     cb1 = cond1 => affect1
     cond2 = (t == t2)
     affect2 = [k ~ 1.0]
@@ -679,7 +671,7 @@ end
     testsol(jsys, u0, p, tspan; tstops = [1.0, 2.0], rng, paramtotest = k)
 
     cond1a = (t == t1)
-    affect1a = [A ~ A + 1, B ~ A]
+    affect1a = [A ~ Pre(A) + 1, B ~ Pre(A)]
     cb1a = cond1a => affect1a
     @named jsys1 = JumpSystem(eqs, t, [A, B], [k, t1, t2], discrete_events = [cb1a, cb2])
     u0′ = [A => 1, B => 0]
