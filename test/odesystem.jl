@@ -578,6 +578,11 @@ obsfn = ModelingToolkit.build_explicit_observed_function(
     outersys, bar(3outersys.sys.ms, 3outersys.sys.p))
 @test_nowarn obsfn(sol.u[1], prob.p, sol.t[1])
 
+obsfn_expr = ModelingToolkit.build_explicit_observed_function(
+        outersys, bar(3outersys.sys.ms, 3outersys.sys.p), expression = true)
+@test obsfn_expr isa Expr
+
+
 # x/x
 @variables x(t)
 @named sys = ODESystem([D(x) ~ x / x], t)
@@ -1225,6 +1230,11 @@ end
     buffer = zeros(3)
     @test_nowarn obsfn(buffer, [1.0], ps, 3.0)
     @test buffer ≈ [2.0, 3.0, 4.0]
+
+    obsfn_expr_oop, obsfn_expr_iip = ModelingToolkit.build_explicit_observed_function(
+        sys, [x + 1, x + P, x + t], return_inplace = true, expression = true)
+    @test obsfn_expr_oop isa Expr 
+    @test obsfn_expr_iip isa Expr
 end
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/2818
