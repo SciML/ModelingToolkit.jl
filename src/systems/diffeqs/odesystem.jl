@@ -576,8 +576,8 @@ function build_explicit_observed_function(sys, ts;
             oop, iip)
         return return_inplace ? (f, f) : f
     else
-        if expression 
-            return fns 
+        if expression
+            return fns
         end
         f = eval_or_rgf(fns; eval_expression, eval_module)
         f = GeneratedFunctionWrapper{(

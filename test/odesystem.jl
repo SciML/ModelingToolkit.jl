@@ -579,9 +579,8 @@ obsfn = ModelingToolkit.build_explicit_observed_function(
 @test_nowarn obsfn(sol.u[1], prob.p, sol.t[1])
 
 obsfn_expr = ModelingToolkit.build_explicit_observed_function(
-        outersys, bar(3outersys.sys.ms, 3outersys.sys.p), expression = true)
+    outersys, bar(3outersys.sys.ms, 3outersys.sys.p), expression = true)
 @test obsfn_expr isa Expr
-
 
 # x/x
 @variables x(t)
@@ -1233,7 +1232,7 @@ end
 
     obsfn_expr_oop, obsfn_expr_iip = ModelingToolkit.build_explicit_observed_function(
         sys, [x + 1, x + P, x + t], return_inplace = true, expression = true)
-    @test obsfn_expr_oop isa Expr 
+    @test obsfn_expr_oop isa Expr
     @test obsfn_expr_iip isa Expr
 end
 
