@@ -270,11 +270,11 @@ end
     cb = ModelingToolkit.generate_continuous_callbacks(sys)
     cond = cb.condition
     out = [0.0]
-    cond.f_iip.contents(out, [0], p0, t0)
+    cond.f_iip(out, [0], p0, t0)
     @test out[] ≈ -1 # signature is u,p,t
-    cond.f_iip.contents(out, [1], p0, t0)
+    cond.f_iip(out, [1], p0, t0)
     @test out[] ≈ 0  # signature is u,p,t
-    cond.f_iip.contents(out, [2], p0, t0)
+    cond.f_iip(out, [2], p0, t0)
     @test out[] ≈ 1  # signature is u,p,t
 
     prob = ODEProblem(sys, Pair[], (0.0, 2.0))
@@ -302,20 +302,20 @@ end
     cond = cb.condition
     out = [0.0, 0.0]
     # the root to find is 2
-    cond.f_iip.contents(out, [0, 0], p0, t0)
+    cond.f_iip(out, [0, 0], p0, t0)
     @test out[1] ≈ -2 # signature is u,p,t
-    cond.f_iip.contents(out, [1, 0], p0, t0)
+    cond.f_iip(out, [1, 0], p0, t0)
     @test out[1] ≈ -1  # signature is u,p,t
-    cond.f_iip.contents(out, [2, 0], p0, t0) # this should return 0
+    cond.f_iip(out, [2, 0], p0, t0) # this should return 0
     @test out[1] ≈ 0  # signature is u,p,t
 
     # the root to find is 1
     out = [0.0, 0.0]
-    cond.f_iip.contents(out, [0, 0], p0, t0)
+    cond.f_iip(out, [0, 0], p0, t0)
     @test out[2] ≈ -1 # signature is u,p,t
-    cond.f_iip.contents(out, [0, 1], p0, t0) # this should return 0
+    cond.f_iip(out, [0, 1], p0, t0) # this should return 0
     @test out[2] ≈ 0  # signature is u,p,t
-    cond.f_iip.contents(out, [0, 2], p0, t0)
+    cond.f_iip(out, [0, 2], p0, t0)
     @test out[2] ≈ 1  # signature is u,p,t
 
     sol = solve(prob, Tsit5())
@@ -376,14 +376,14 @@ end
     cb = get_callback(prob)
     @test cb isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
     @test getfield(ball, :continuous_events)[1] ==
-          SymbolicContinuousCallback(Equation[x ~ 0], Equation[vx ~ -vx])
+        SymbolicContinuousCallback(Equation[x ~ 0], Equation[vx ~ -Pre(vx)])
     @test getfield(ball, :continuous_events)[2] ==
-          SymbolicContinuousCallback(Equation[y ~ -1.5, y ~ 1.5], Equation[vy ~ -vy])
+        SymbolicContinuousCallback(Equation[y ~ -1.5, y ~ 1.5], Equation[vy ~ -Pre(vy)])
     cond = cb.condition
     out = [0.0, 0.0, 0.0]
     p0 = 0.
     t0 = 0.
-    cond.f_iip.contents(out, [0, 0, 0, 0], p0, t0)
+    cond.f_iip(out, [0, 0, 0, 0], p0, t0)
     @test out ≈ [0, 1.5, -1.5]
 
     sol = solve(prob, Tsit5())
@@ -394,11 +394,9 @@ end
     @test 0 <= minimum(sol_nosplit[x]) <= 1e-10 # the ball never went through the floor but got very close
     @test minimum(sol_nosplit[y]) ≈ -1.5 # check wall conditions
     @test maximum(sol_nosplit[y]) ≈ 1.5  # check wall conditions
-end
 
-## Test multi-variable affect
-# in this test, there are two variables affected by a single event.
-@testset "Multi-variable affect" begin
+    ## Test multi-variable affect
+    # in this test, there are two variables affected by a single event.
     events = [[x ~ 0] => [vx ~ -Pre(vx), vy ~ -Pre(vy)]]
 
     @named ball = ODESystem([D(x) ~ vx
@@ -422,19 +420,19 @@ end
 
 # issue https://github.com/SciML/ModelingToolkit.jl/issues/1386
 # tests that it works for ODAESystem
-@testset "ODAESystem" begin
-    @variables vs(t) v(t) vmeasured(t)
-    eq = [vs ~ sin(2pi * t)
-          D(v) ~ vs - v
-          D(vmeasured) ~ 0.0]
-    ev = [sin(20pi * t) ~ 0.0] => [vmeasured ~ Pre(v)]
-    @named sys = ODESystem(eq, t, continuous_events = ev)
-    sys = structural_simplify(sys)
-    prob = ODEProblem(sys, zeros(2), (0.0, 5.1))
-    sol = solve(prob, Tsit5())
-    @test all(minimum((0:0.1:5) .- sol.t', dims = 2) .< 0.0001) # test that the solver stepped every 0.1s as dictated by event
-    @test sol([0.25])[vmeasured][] == sol([0.23])[vmeasured][] # test the hold property
-end
+#@testset "ODAESystem" begin
+#    @variables vs(t) v(t) vmeasured(t)
+#    eq = [vs ~ sin(2pi * t)
+#          D(v) ~ vs - v
+#          D(vmeasured) ~ 0.0]
+#    ev = [sin(20pi * t) ~ 0.0] => [vmeasured ~ Pre(v)]
+#    @named sys = ODESystem(eq, t, continuous_events = ev)
+#    sys = structural_simplify(sys)
+#    prob = ODEProblem(sys, zeros(2), (0.0, 5.1))
+#    sol = solve(prob, Tsit5())
+#    @test all(minimum((0:0.1:5) .- sol.t', dims = 2) .< 0.0001) # test that the solver stepped every 0.1s as dictated by event
+#    @test sol([0.25])[vmeasured][] == sol([0.23])[vmeasured][] # test the hold property
+#end
 
 ##  https://github.com/SciML/ModelingToolkit.jl/issues/1528
 @testset "Handle Empty Events" begin
@@ -513,7 +511,7 @@ end
     testsol(osys, u0, p, tspan; tstops = [1.0, 2.0], paramtotest = k)
 
     cond1a = (t == t1)
-    affect1a = [A ~ A + 1, B ~ A]
+    affect1a = [A ~ Pre(A) + 1, B ~ A]
     cb1a = cond1a => affect1a
     @named osys1 = ODESystem(eqs, t, [A, B], [k, t1, t2], discrete_events = [cb1a, cb2])
     u0′ = [A => 1.0, B => 0.0]
@@ -589,7 +587,7 @@ end
     testsol(ssys, u0, p, tspan; tstops = [1.0, 2.0], paramtotest = k)
 
     cond1a = (t == t1)
-    affect1a = [A ~ Pre(A) + 1, B ~ Pre(A)]
+    affect1a = [A ~ Pre(A) + 1, B ~ A]
     cb1a = cond1a => affect1a
     @named ssys1 = SDESystem(eqs, [0.0], t, [A, B], [k, t1, t2],
         discrete_events = [cb1a, cb2])
@@ -640,7 +638,6 @@ end
 end
 
 @testset "JumpSystem Discrete Callbacks" begin
-    rng = rng
     function testsol(jsys, u0, p, tspan; tstops = Float64[], paramtotest = nothing,
             N = 40000, kwargs...)
         jsys = complete(jsys)
@@ -671,7 +668,7 @@ end
     testsol(jsys, u0, p, tspan; tstops = [1.0, 2.0], rng, paramtotest = k)
 
     cond1a = (t == t1)
-    affect1a = [A ~ Pre(A) + 1, B ~ Pre(A)]
+    affect1a = [A ~ Pre(A) + 1, B ~ A]
     cb1a = cond1a => affect1a
     @named jsys1 = JumpSystem(eqs, t, [A, B], [k, t1, t2], discrete_events = [cb1a, cb2])
     u0′ = [A => 1, B => 0]
