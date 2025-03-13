@@ -578,11 +578,6 @@ obsfn = ModelingToolkit.build_explicit_observed_function(
     outersys, bar(3outersys.sys.ms, 3outersys.sys.p))
 @test_nowarn obsfn(sol.u[1], prob.p, sol.t[1])
 
-@testset "Observed Function: Expression" begin
-    obsfn_expr = ModelingToolkit.build_explicit_observed_function(
-        outersys, bar(3outersys.sys.ms, 3outersys.sys.p), expression = true)
-    @test obsfn_expr isa Expr
-end
 # x/x
 @variables x(t)
 @named sys = ODESystem([D(x) ~ x / x], t)
@@ -1230,13 +1225,6 @@ end
     buffer = zeros(3)
     @test_nowarn obsfn(buffer, [1.0], ps, 3.0)
     @test buffer ≈ [2.0, 3.0, 4.0]
-
-    @testset "Observed Function: Expression" begin
-        obsfn_expr_oop, obsfn_expr_iip = ModelingToolkit.build_explicit_observed_function(
-            sys, [x + 1, x + P, x + t], return_inplace = true, expression = true)
-        @test obsfn_expr_oop isa Expr
-        @test obsfn_expr_iip isa Expr
-    end
 end
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/2818
@@ -1735,4 +1723,16 @@ end
     cons = [x(3) ~ [2, 3, 3, 5, 4]]
     @mtkbuild ode = ODESystem(D(x(t)) ~ mat * x(t), t; constraints = cons)
     @test length(constraints(ModelingToolkit.get_constraintsystem(ode))) == 5
+end
+
+@testset "`build_explicit_observed_function` with `expression = true` returns `Expr`" begin
+    @variables x(t)
+    @mtkbuild sys = ODESystem(D(x) ~ 2x, t)
+    obsfn_expr = ModelingToolkit.build_explicit_observed_function(
+        sys, 2x + 1, expression = true)
+    @test obsfn_expr isa Expr
+    obsfn_expr_oop, obsfn_expr_iip = ModelingToolkit.build_explicit_observed_function(
+        sys, [x + 1, x + 2, x + t], return_inplace = true, expression = true)
+    @test obsfn_expr_oop isa Expr
+    @test obsfn_expr_iip isa Expr
 end
