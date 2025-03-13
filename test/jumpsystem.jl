@@ -537,16 +537,16 @@ end
 @testset "JumpProcess simulation should be Int64 valued (#3446)" begin
     @parameters p d
     @variables X(t)
-    rate1   = p
-    rate2   = X*d
+    rate1 = p
+    rate2 = X * d
     affect1 = [X ~ X + 1]
     affect2 = [X ~ X - 1]
     j1 = ConstantRateJump(rate1, affect1)
     j2 = ConstantRateJump(rate2, affect2)
 
     # Works.
-    @mtkbuild js = JumpSystem([j1, j2], t, [X], [p,d])
-    dprob = DiscreteProblem(js, [X => 15], (0.0, 10.), [p => 2.0, d => 0.5])
+    @mtkbuild js = JumpSystem([j1, j2], t, [X], [p, d])
+    dprob = DiscreteProblem(js, [X => 15], (0.0, 10.0), [p => 2.0, d => 0.5])
     jprob = JumpProblem(js, dprob, Direct())
     sol = solve(jprob, SSAStepper())
     @test eltype(sol[X]) === Int64
