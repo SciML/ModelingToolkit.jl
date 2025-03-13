@@ -46,6 +46,7 @@ end
             @safetestset "Model Parsing Test" include("model_parsing.jl")
             @safetestset "Error Handling" include("error_handling.jl")
             @safetestset "StructuralTransformations" include("structural_transformation/runtests.jl")
+            @safetestset "Basic transformations" include("basic_transformations.jl")
             @safetestset "State Selection Test" include("state_selection.jl")
             @safetestset "Symbolic Event Test" include("symbolic_events.jl")
             @safetestset "Stream Connect Test" include("stream_connectors.jl")
