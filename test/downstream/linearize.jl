@@ -14,14 +14,15 @@ eqs = [u ~ kp * (r - y)
 
 @named sys = ODESystem(eqs, t)
 
-lsys, ssys = linearize(sys, [r], [y])
+lsys, ssys, extras = linearize(sys, [r], [y])
 lprob = LinearizationProblem(sys, [r], [y])
-lsys2 = solve(lprob)
+lsys2, extras2 = solve(lprob)
 
 @test lsys.A[] == lsys2.A[] == -2
 @test lsys.B[] == lsys2.B[] == 1
 @test lsys.C[] == lsys2.C[] == 1
 @test lsys.D[] == lsys2.D[] == 0
+@test extras == extras2
 
 lsys, ssys = linearize(sys, [r], [r])
 
