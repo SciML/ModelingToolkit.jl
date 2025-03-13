@@ -45,7 +45,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         warn_empty_op = true,
         kwargs...)
     op = Dict(op)
-    if isempty(op)
+    if isempty(op) && warn_empty_op
         @warn "An empty operating point was passed to `linearization_function`. An operating point containing the variables that will be changed in `linearize` should be provided. Disable this warning by passing `warn_empty_op = false`."
     end
     inputs isa AbstractVector || (inputs = [inputs])
