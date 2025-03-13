@@ -32,7 +32,7 @@ const FMU_DIR = joinpath(@__DIR__, "fmus")
     @testset "v2, CS" begin
         fmu = loadFMU("SpringPendulum1D", "Dymola", "2022x"; type = :CS)
         @named inner = MTK.FMIComponent(
-            Val(2); fmu, communication_step_size = 0.001, type = :CS)
+            Val(2); fmu, communication_step_size = 1e-5, type = :CS)
         @variables x(t) = 1.0
         @mtkbuild sys = ODESystem([D(x) ~ x], t; systems = [inner])
         test_no_inputs_outputs(sys)
@@ -66,7 +66,7 @@ const FMU_DIR = joinpath(@__DIR__, "fmus")
     @testset "v3, CS" begin
         fmu = loadFMU("SpringPendulum1D", "Dymola", "2023x", "3.0"; type = :CS)
         @named inner = MTK.FMIComponent(
-            Val(3); fmu, communication_step_size = 0.001, type = :CS)
+            Val(3); fmu, communication_step_size = 1e-5, type = :CS)
         @variables x(t) = 1.0
         @mtkbuild sys = ODESystem([D(x) ~ x], t; systems = [inner])
         test_no_inputs_outputs(sys)
@@ -210,7 +210,7 @@ end
     @testset "v3, CS" begin
         fmu = loadFMU(joinpath(FMU_DIR, "StateSpace.fmu"); type = :CS)
         @named sspace = MTK.FMIComponent(
-            Val(3); fmu, communication_step_size = 1e-4, type = :CS,
+            Val(3); fmu, communication_step_size = 1e-6, type = :CS,
             reinitializealg = BrownFullBasicInit())
         @test MTK.isinput(sspace.u)
         @test MTK.isoutput(sspace.y)
@@ -259,9 +259,9 @@ end
     @testset "v2, CS" begin
         fmu = loadFMU(joinpath(FMU_DIR, "SimpleAdder.fmu"); type = :CS)
         @named adder1 = MTK.FMIComponent(
-            Val(2); fmu, type = :CS, communication_step_size = 1e-3)
+            Val(2); fmu, type = :CS, communication_step_size = 1e-5)
         @named adder2 = MTK.FMIComponent(
-            Val(2); fmu, type = :CS, communication_step_size = 1e-3)
+            Val(2); fmu, type = :CS, communication_step_size = 1e-5)
         sys, prob = build_looped_adders(adder1, adder2)
         sol = solve(prob,
             Tsit5();
@@ -300,9 +300,9 @@ end
     @testset "v3, CS" begin
         fmu = loadFMU(joinpath(FMU_DIR, "StateSpace.fmu"); type = :CS)
         @named sspace1 = MTK.FMIComponent(
-            Val(3); fmu, type = :CS, communication_step_size = 1e-4)
+            Val(3); fmu, type = :CS, communication_step_size = 1e-5)
         @named sspace2 = MTK.FMIComponent(
-            Val(3); fmu, type = :CS, communication_step_size = 1e-4)
+            Val(3); fmu, type = :CS, communication_step_size = 1e-5)
         sys, prob = build_looped_sspace(sspace1, sspace2)
         sol = solve(prob, Rodas5P(autodiff = false); reltol = 1e-8)
         @test SciMLBase.successful_retcode(sol)

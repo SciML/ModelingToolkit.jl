@@ -275,3 +275,40 @@ end
         @test_nowarn sol = solve(prob)
     end
 end
+
+@testset "" begin
+    @mtkmodel SubSystem begin
+        @parameters begin
+            c = 1
+        end
+        @variables begin
+            x(t)
+        end
+        @equations begin
+            D(x) ~ c * x
+        end
+    end
+
+    @mtkmodel System begin
+        @components begin
+            subsys = SubSystem()
+        end
+        @parameters begin
+            k = 1
+        end
+        @variables begin
+            y(t)
+        end
+        @equations begin
+            D(y) ~ k * y + subsys.x
+        end
+    end
+
+    @named sys = System()
+    sysref = complete(sys)
+    sys2 = complete(sys; split = true, flatten = false)
+    ps = Set(full_parameters(sys2))
+    @test sysref.k in ps
+    @test sysref.subsys.c in ps
+    @test length(ps) == 2
+end
