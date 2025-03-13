@@ -338,7 +338,15 @@ function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
     end
     buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Tunable(), newp)
     if eltype(buf) != T
-        newp = repack(T.(buf))
+        newbuf = similar(buf, T)
+        copyto!(newbuf, buf)
+        newp = repack(newbuf)
+    end
+    buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Initials(), newp)
+    if eltype(buf) != T
+        newbuf = similar(buf, T)
+        copyto!(newbuf, buf)
+        newp = repack(newbuf)
     end
     return u0, newp
 end
@@ -520,6 +528,9 @@ function SciMLBase.late_binding_update_u0_p(
     tunables, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Tunable(), newp)
     tunables = DiffEqBase.promote_u0(tunables, newu0, t0)
     newp = repack(tunables)
+    initials, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Initials(), newp)
+    initials = DiffEqBase.promote_u0(initials, newu0, t0)
+    newp = repack(initials)
 
     allsyms = all_symbols(sys)
     for (k, v) in u0
@@ -536,6 +547,15 @@ function SciMLBase.late_binding_update_u0_p(
     end
 
     return newu0, newp
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Check if the given system is an initialization system.
+"""
+function is_initializesystem(sys::AbstractSystem)
+    sys isa NonlinearSystem && get_metadata(sys) isa InitializationSystemMetadata
 end
 
 """

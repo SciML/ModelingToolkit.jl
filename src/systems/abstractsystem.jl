@@ -718,6 +718,22 @@ function add_initialization_parameters(sys::AbstractSystem)
 end
 
 """
+Returns true if the parameter `p` is of the form `Initial(x)`.
+"""
+function isinitial(p)
+    p = unwrap(p)
+    if iscall(p)
+        operation(p) isa Initial && return true
+        if operation(p) === getindex
+            operation(arguments(p)[1]) isa Initial && return true
+        end
+    else
+        return false
+    end
+    return false
+end
+
+"""
 $(TYPEDSIGNATURES)
 
 Mark a system as completed. A completed system is a system which is done being
@@ -757,38 +773,21 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
         if !isempty(all_ps)
             # reorder parameters by portions
             ps_split = reorder_parameters(sys, all_ps)
+            # if there are tunables, they will all be in `ps_split[1]`
+            # and the arrays will have been scalarized
+            ordered_ps = eltype(all_ps)[]
             # if there are no tunables, vcat them
-            if isempty(get_index_cache(sys).tunable_idx)
-                ordered_ps = reduce(vcat, ps_split)
-            else
-                # if there are tunables, they will all be in `ps_split[1]`
-                # and the arrays will have been scalarized
-                ordered_ps = eltype(all_ps)[]
-                i = 1
-                # go through all the tunables
-                while i <= length(ps_split[1])
-                    sym = ps_split[1][i]
-                    # if the sym is not a scalarized array symbolic OR it was already scalarized,
-                    # just push it as-is
-                    if !iscall(sym) || operation(sym) != getindex ||
-                       any(isequal(sym), all_ps)
-                        push!(ordered_ps, sym)
-                        i += 1
-                        continue
-                    end
-                    # the next `length(sym)` symbols should be scalarized versions of the same
-                    # array symbolic
-                    if !allequal(first(arguments(x))
-                    for x in view(ps_split[1], i:(i + length(sym) - 1)))
-                        error("This should not be possible. Please open an issue in ModelingToolkit.jl with an MWE and stacktrace.")
-                    end
-                    arrsym = first(arguments(sym))
-                    push!(ordered_ps, arrsym)
-                    i += length(arrsym)
-                end
-                ordered_ps = vcat(
-                    ordered_ps, reduce(vcat, ps_split[2:end]; init = eltype(ordered_ps)[]))
+            if !isempty(get_index_cache(sys).tunable_idx)
+                unflatten_parameters!(ordered_ps, ps_split[1], all_ps)
+                ps_split = Base.tail(ps_split)
             end
+            # unflatten initial parameters
+            if !isempty(get_index_cache(sys).initials_idx)
+                unflatten_parameters!(ordered_ps, ps_split[1], all_ps)
+                ps_split = Base.tail(ps_split)
+            end
+            ordered_ps = vcat(
+                ordered_ps, reduce(vcat, ps_split; init = eltype(ordered_ps)[]))
             @set! sys.ps = ordered_ps
         end
     elseif has_index_cache(sys)
@@ -798,6 +797,39 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
         @set! sys.initializesystem = complete(get_initializesystem(sys); split)
     end
     isdefined(sys, :complete) ? (@set! sys.complete = true) : sys
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given a flattened array of parameters `params` and a collection of all (unscalarized)
+parameters in the system `all_ps`, unscalarize the elements in `params` and append
+to `buffer` in the same order as they are present in `params`. Effectively, if
+`params = [p[1], p[2], p[3], q]` then this is equivalent to `push!(buffer, p, q)`.
+"""
+function unflatten_parameters!(buffer, params, all_ps)
+    i = 1
+    # go through all the tunables
+    while i <= length(params)
+        sym = params[i]
+        # if the sym is not a scalarized array symbolic OR it was already scalarized,
+        # just push it as-is
+        if !iscall(sym) || operation(sym) != getindex ||
+           any(isequal(sym), all_ps)
+            push!(buffer, sym)
+            i += 1
+            continue
+        end
+        # the next `length(sym)` symbols should be scalarized versions of the same
+        # array symbolic
+        if !allequal(first(arguments(x))
+        for x in view(params, i:(i + length(sym) - 1)))
+            error("This should not be possible. Please open an issue in ModelingToolkit.jl with an MWE and stacktrace.")
+        end
+        arrsym = first(arguments(sym))
+        push!(buffer, arrsym)
+        i += length(arrsym)
+    end
 end
 
 for prop in [:eqs
@@ -846,6 +878,7 @@ for prop in [:eqs
              :assertions
              :solved_unknowns
              :split_idxs
+             :ignored_connections
              :parent
              :is_dde
              :tstops
@@ -1360,6 +1393,75 @@ function assertions(sys::AbstractSystem)
         for (k, v) in assertions(subsys))
     end
     return merge(asserts, namespaced_asserts)
+end
+
+const HierarchyVariableT = Vector{Union{BasicSymbolic, Symbol}}
+const HierarchySystemT = Vector{Union{AbstractSystem, Symbol}}
+"""
+The type returned from `as_hierarchy`.
+"""
+const HierarchyT = Union{HierarchyVariableT, HierarchySystemT}
+
+"""
+    $(TYPEDSIGNATURES)
+
+The inverse operation of `as_hierarchy`.
+"""
+function from_hierarchy(hierarchy::HierarchyT)
+    namefn = hierarchy[1] isa AbstractSystem ? nameof : getname
+    foldl(@view hierarchy[2:end]; init = hierarchy[1]) do sys, name
+        rename(sys, Symbol(name, NAMESPACE_SEPARATOR, namefn(sys)))
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Represent a namespaced system (or variable) `sys` as a hierarchy. Return a vector, where
+the first element is the unnamespaced system (variable) and subsequent elements are
+`Symbol`s representing the parents of the unnamespaced system (variable) in order from
+inner to outer.
+"""
+function as_hierarchy(sys::Union{AbstractSystem, BasicSymbolic})::HierarchyT
+    namefn = sys isa AbstractSystem ? nameof : getname
+    # get the hierarchy
+    hierarchy = namespace_hierarchy(namefn(sys))
+    # rename the system with unnamespaced name
+    newsys = rename(sys, hierarchy[end])
+    # and remove it from the list
+    pop!(hierarchy)
+    # reverse it to go from inner to outer
+    reverse!(hierarchy)
+    # concatenate
+    T = sys isa AbstractSystem ? AbstractSystem : BasicSymbolic
+    return Union{Symbol, T}[newsys; hierarchy]
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Get the connections to ignore for `sys` and its subsystems. The returned value is a
+`Tuple` similar in structure to the `ignored_connections` field. Each system (variable)
+in the first (second) element of the tuple is also passed through `as_hierarchy`.
+"""
+function ignored_connections(sys::AbstractSystem)
+    has_ignored_connections(sys) || return (HierarchySystemT[], HierarchyVariableT[])
+
+    ics = get_ignored_connections(sys)
+    if ics === nothing
+        ics = (HierarchySystemT[], HierarchyVariableT[])
+    end
+    # turn into hierarchies
+    ics = (map(as_hierarchy, ics[1]), map(as_hierarchy, ics[2]))
+    systems = get_systems(sys)
+    # for each subsystem, get its ignored connections, add the name of the subsystem
+    # to the hierarchy and concatenate corresponding buffers of the result
+    result = mapreduce(Broadcast.BroadcastFunction(vcat), systems; init = ics) do subsys
+        sub_ics = ignored_connections(subsys)
+        (map(Base.Fix2(push!, nameof(subsys)), sub_ics[1]),
+            map(Base.Fix2(push!, nameof(subsys)), sub_ics[2]))
+    end
+    return (Vector{HierarchySystemT}(result[1]), Vector{HierarchyVariableT}(result[2]))
 end
 
 """

@@ -1,7 +1,7 @@
 name = "ModelingToolkit"
 uuid = "961ee093-0014-501f-94e3-6117800e7a78"
 authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
-version = "9.64.3"
+version = "9.65.0"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
@@ -136,7 +136,7 @@ Reexport = "0.2, 1"
 RuntimeGeneratedFunctions = "0.5.9"
 SCCNonlinearSolve = "1.0.0"
 SciMLBase = "2.75"
-SciMLStructures = "1.0"
+SciMLStructures = "1.7"
 Serialization = "1"
 Setfield = "0.7, 0.8, 1"
 SimpleNonlinearSolve = "0.1.0, 1, 2"

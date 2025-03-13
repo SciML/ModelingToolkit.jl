@@ -159,7 +159,7 @@ du = [0.0, 0.0];
 u = [1.0, -0.5π];
 pr = 0.2;
 tt = 0.1;
-@test_skip (@ballocated $(prob.f)($du, $u, $pr, $tt)) == 0
+@test (@ballocated $(prob.f)($du, $u, $pr, $tt)) == 0
 prob.f(du, u, pr, tt)
 @test du≈[u[2], u[1] + sin(u[2]) - pr * tt] atol=1e-5
 

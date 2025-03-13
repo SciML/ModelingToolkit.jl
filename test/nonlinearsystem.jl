@@ -390,3 +390,53 @@ end
     @test !any(isequal(p[1]), parameters(sys))
     @test is_parameter(sys, p)
 end
+
+@testset "Can convert from `ODESystem`" begin
+    @variables x(t) y(t)
+    @parameters p q r
+    @named sys = ODESystem([D(x) ~ p * x^3 + q, 0 ~ -y + q * x - r], t;
+        defaults = [x => 1.0, p => missing], guesses = [p => 1.0],
+        initialization_eqs = [p^3 + q^3 ~ 4r], parameter_dependencies = [r ~ 3p])
+    nlsys = NonlinearSystem(sys)
+    defs = defaults(nlsys)
+    @test length(defs) == 3
+    @test defs[x] == 1.0
+    @test defs[p] === missing
+    @test isinf(defs[t])
+    @test length(guesses(nlsys)) == 1
+    @test guesses(nlsys)[p] == 1.0
+    @test length(initialization_equations(nlsys)) == 1
+    @test length(parameter_dependencies(nlsys)) == 1
+    @test length(equations(nlsys)) == 2
+    @test all(iszero, [eq.lhs for eq in equations(nlsys)])
+    @test nameof(nlsys) == nameof(sys)
+    @test !ModelingToolkit.iscomplete(nlsys)
+
+    sys1 = complete(sys; split = false)
+    nlsys = NonlinearSystem(sys1)
+    @test ModelingToolkit.iscomplete(nlsys)
+    @test !ModelingToolkit.is_split(nlsys)
+
+    sys2 = complete(sys)
+    nlsys = NonlinearSystem(sys2)
+    @test ModelingToolkit.iscomplete(nlsys)
+    @test ModelingToolkit.is_split(nlsys)
+
+    sys3 = structural_simplify(sys)
+    nlsys = NonlinearSystem(sys3)
+    @test length(equations(nlsys)) == length(ModelingToolkit.observed(nlsys)) == 1
+
+    prob = NonlinearProblem(sys3, [q => 2.0])
+    @test prob.f.initialization_data.initializeprobmap === nothing
+    sol = solve(prob)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol.ps[p^3 + q^3]≈sol.ps[4r] atol=1e-10
+
+    @testset "Differential inside expression also substituted" begin
+        @named sys = ODESystem([0 ~ y * D(x) + x^2 - p, 0 ~ x * D(y) + y * p], t)
+        nlsys = NonlinearSystem(sys)
+        vs = ModelingToolkit.vars(equations(nlsys))
+        @test !in(D(x), vs)
+        @test !in(D(y), vs)
+    end
+end
