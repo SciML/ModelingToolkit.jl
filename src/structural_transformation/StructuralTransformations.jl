@@ -65,7 +65,7 @@ export torn_system_jacobian_sparsity
 export full_equations
 export but_ordered_incidence, lowest_order_variable_mask, highest_order_variable_mask
 export computed_highest_diff_variables
-export shift2term, lower_shift_varname
+export shift2term, lower_shift_varname, simplify_shifts, distribute_shift
 
 include("utils.jl")
 include("pantelides.jl")

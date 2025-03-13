@@ -43,7 +43,8 @@ pages = [
         "systems/NonlinearSystem.md",
         "systems/OptimizationSystem.md",
         "systems/PDESystem.md",
-        "systems/DiscreteSystem.md"],
+        "systems/DiscreteSystem.md",
+        "systems/ImplicitDiscreteSystem.md"],
     "comparison.md",
     "internals.md"
 ]

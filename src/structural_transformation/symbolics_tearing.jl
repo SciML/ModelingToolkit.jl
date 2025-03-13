@@ -558,6 +558,10 @@ function generate_system_equations!(state::TearingState, neweqs, var_eq_matching
             end
 
             total_sub[simplify_shifts(neweq.lhs)] = neweq.rhs
+            # Substitute unshifted variables x(k), y(k) on RHS of implicit equations
+            if is_only_discrete(structure)
+                var_to_diff[iv] === nothing && (total_sub[var] = neweq.rhs)
+            end
             push!(diff_eqs, neweq)
             push!(diffeq_idxs, ieq)
             push!(diff_vars, diff_to_var[iv])

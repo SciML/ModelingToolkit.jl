@@ -26,3 +26,9 @@ structural_simplify
 DiscreteProblem(sys::DiscreteSystem, u0map, tspan)
 DiscreteFunction(sys::DiscreteSystem, args...)
 ```
+
+## Discrete Domain
+
+```@docs; canonical=false
+Shift
+```
