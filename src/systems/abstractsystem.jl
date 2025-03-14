@@ -1228,6 +1228,7 @@ function namespace_expr(
         O
     end
 end
+
 _nonum(@nospecialize x) = x isa Num ? x.val : x
 
 """
