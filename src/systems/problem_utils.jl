@@ -338,7 +338,7 @@ function Base.showerror(io::IO, err::MissingGuessError)
 
             In order for the problem to be initialized, all of the variables must have \
             a numeric value to serve as a starting point for the nonlinear solve. \
-            Please provide one or more additional numeric guesses to `guesses` in \
+            Please provide an additional numeric guess to `guesses` in \
             the problem constructor.
 
             This error was thrown because symbolic value $(err.val) was found for variable $(err.sym).
