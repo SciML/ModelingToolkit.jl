@@ -346,7 +346,7 @@ Keyword arguments:
 function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
         tofloat = true, use_union = true, container_type = Array,
         toterm = default_toterm, promotetoconcrete = nothing, check = true, allow_symbolic = false)
-    isempty(vars) && return Float64[]
+    isempty(vars) && return nothing
 
     if check
         missing_vars = missingvars(varmap, vars; toterm)
@@ -366,7 +366,7 @@ function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
 
     promotetoconcrete === nothing && (promotetoconcrete = container_type <: AbstractArray)
     if promotetoconcrete && !allow_symbolic
-        vals = promote_to_concrete(vals; tofloat = tofloat, use_union = use_union)
+        vals = promote_to_concrete(vals; tofloat, use_union)
     end
 
     if container_type <: Tuple
