@@ -82,8 +82,10 @@ end
 
 function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
         kwargs...)
+    sys, statemachines = extract_top_level_statemachines(sys)
     sys = expand_connections(sys)
     state = TearingState(sys)
+    append!(state.statemachines, statemachines)
 
     @unpack structure, fullvars = state
     @unpack graph, var_to_diff, var_types = structure

@@ -1,5 +1,5 @@
 using DataStructures
-using Symbolics: linear_expansion, unwrap, Connection
+using Symbolics: linear_expansion, unwrap, Connection, Transition, InitialState
 using SymbolicUtils: iscall, operation, arguments, Symbolic
 using SymbolicUtils: quick_cancel, maketerm
 using ..ModelingToolkit
@@ -202,6 +202,7 @@ mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     fullvars::Vector
     structure::SystemStructure
     extra_eqs::Vector
+    statemachines::Vector{T}
 end
 
 TransformationState(sys::AbstractSystem) = TearingState(sys)
@@ -210,6 +211,22 @@ function system_subset(ts::TearingState, ieqs::Vector{Int})
     @set! ts.original_eqs = ts.original_eqs[ieqs]
     @set! ts.sys.eqs = eqs[ieqs]
     @set! ts.structure = system_subset(ts.structure, ieqs)
+    if all(eq -> eq.rhs isa StateMachineOperator, get_eqs(ts.sys))
+        names = Symbol[]
+        for eq in get_eqs(ts.sys)
+            if eq.lhs isa Transition
+                push!(names, first(namespace_hierarchy(nameof(eq.rhs.from))))
+                push!(names, first(namespace_hierarchy(nameof(eq.rhs.to))))
+            elseif eq.lhs isa InitialState
+                push!(names, first(namespace_hierarchy(nameof(eq.rhs.s))))
+            else
+                error("Unhandled state machine operator")
+            end
+        end
+        @set! ts.statemachines = filter(x -> nameof(x) in names, ts.statemachines)
+    else
+        @set! ts.statemachines = eltype(ts.statemachines)[]
+    end
     ts
 end
 
@@ -249,6 +266,49 @@ function Base.push!(ev::EquationsView, eq)
     push!(ev.ts.extra_eqs, eq)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Descend through the system hierarchy and look for statemachines. Remove equations from
+the inner statemachine systems. Return the new `sys` and an array of top-level
+statemachines.
+"""
+function extract_top_level_statemachines(sys::AbstractSystem)
+    eqs = get_eqs(sys)
+
+    if !isempty(eqs) && all(eq -> eq.lhs isa StateMachineOperator, eqs)
+        # top-level statemachine
+        with_removed = @set sys.systems = map(remove_child_equations, get_systems(sys))
+        return with_removed, [sys]
+    elseif !isempty(eqs) && any(eq -> eq.lhs isa StateMachineOperator, eqs)
+        # error: can't mix
+        error("Mixing statemachine equations and standard equations in a top-level statemachine is not allowed.")
+    else
+        # descend
+        subsystems = get_systems(sys)
+        newsubsystems = eltype(subsystems)[]
+        statemachines = eltype(subsystems)[]
+        for subsys in subsystems
+            newsubsys, sub_statemachines = extract_top_level_statemachines(subsys)
+            push!(newsubsystems, newsubsys)
+            append!(statemachines, sub_statemachines)
+        end
+        @set! sys.systems = newsubsystems
+        return sys, statemachines
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return `sys` with all equations (including those in subsystems) removed.
+"""
+function remove_child_equations(sys::AbstractSystem)
+    @set! sys.eqs = eltype(get_eqs(sys))[]
+    @set! sys.systems = map(remove_child_equations, get_systems(sys))
+    return sys
+end
+
 function TearingState(sys; quick_cancel = false, check = true)
     sys = flatten(sys)
     ivs = independent_variables(sys)
@@ -278,7 +338,12 @@ function TearingState(sys; quick_cancel = false, check = true)
             check ? error("$(nameof(sys)) has unexpanded `connect` statements") :
             return nothing
         end
-        if _iszero(eq′.lhs)
+        is_statemachine_equation = false
+        if eq′.lhs isa StateMachineOperation
+            is_statemachine_equation = true
+            eq = eq′
+            rhs = eq.rhs
+        elseif _iszero(eq′.lhs)
             rhs = quick_cancel ? quick_cancel_expr(eq′.rhs) : eq′.rhs
             eq = eq′
         else
@@ -343,7 +408,7 @@ function TearingState(sys; quick_cancel = false, check = true)
         empty!(unknownvars)
         empty!(vars)
         empty!(varsvec)
-        if isalgeq
+        if isalgeq || is_statemachine_equation
             eqs[i] = eq
         else
             eqs[i] = eqs[i].lhs ~ rhs
@@ -434,7 +499,7 @@ function TearingState(sys; quick_cancel = false, check = true)
     ts = TearingState(sys, original_eqs, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
             complete(graph), nothing, var_types, sys isa DiscreteSystem),
-        Any[])
+        Any[], typeof(sys)[])
     if sys isa DiscreteSystem
         ts = shift_discrete_system(ts)
     end
@@ -676,6 +741,7 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
             check_consistency, fully_determined,
             kwargs...)
         if length(tss) > 1
+            additional_passes = get(kwargs, :additional_passes, nothing)
             if !isnothing(additional_passes) &&
                any(discrete_compile_pass, additional_passes)
                 discrete_pass_idx = findfirst(discrete_compile_pass, additional_passes)
