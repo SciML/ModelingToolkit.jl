@@ -903,7 +903,6 @@ function continuous_events(sys::AbstractSystem)
            reduce(vcat,
                (map(o -> namespace_callback(o, s), continuous_events(s)) for s in systems),
                init = SymbolicContinuousCallback[])]
-    @show cbs
     filter(!isempty, cbs)
 end
 
