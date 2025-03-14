@@ -154,7 +154,6 @@ include("systems/model_parsing.jl")
 include("systems/connectors.jl")
 include("systems/analysis_points.jl")
 include("systems/imperative_affect.jl")
-include("systems/callbacks.jl")
 include("systems/codegen_utils.jl")
 include("systems/problem_utils.jl")
 include("linearization.jl")
@@ -164,18 +163,19 @@ include("systems/optimization/optimizationsystem.jl")
 include("systems/optimization/modelingtoolkitize.jl")
 
 include("systems/nonlinear/nonlinearsystem.jl")
-include("systems/nonlinear/homotopy_continuation.jl")
+include("systems/discrete_system/discrete_system.jl")
+include("systems/discrete_system/implicit_discrete_system.jl")
+include("systems/callbacks.jl")
+
 include("systems/diffeqs/odesystem.jl")
 include("systems/diffeqs/sdesystem.jl")
 include("systems/diffeqs/abstractodesystem.jl")
+include("systems/nonlinear/homotopy_continuation.jl")
 include("systems/nonlinear/modelingtoolkitize.jl")
 include("systems/nonlinear/initializesystem.jl")
 include("systems/diffeqs/first_order_transform.jl")
 include("systems/diffeqs/modelingtoolkitize.jl")
 include("systems/diffeqs/basic_transformations.jl")
-
-include("systems/discrete_system/discrete_system.jl")
-include("systems/discrete_system/implicit_discrete_system.jl")
 
 include("systems/jumps/jumpsystem.jl")
 
@@ -270,6 +270,7 @@ export initialization_equations, guesses, defaults, parameter_dependencies, hier
 export structural_simplify, expand_connections, linearize, linearization_function,
        LinearizationProblem
 export solve
+export Pre
 
 export calculate_jacobian, generate_jacobian, generate_function, generate_custom_function
 export calculate_control_jacobian, generate_control_jacobian
@@ -302,7 +303,7 @@ export debug_system
 #export ContinuousClock, Discrete, sampletime, input_timedomain, output_timedomain
 #export has_discrete_domain, has_continuous_domain
 #export is_discrete_domain, is_continuous_domain, is_hybrid_domain
-export Sample, Hold, Shift, ShiftIndex, sampletime, SampleTime, Next, Prev
+export Sample, Hold, Shift, ShiftIndex, sampletime, SampleTime
 export Clock, SolverStepClock, TimeDomain
 
 export MTKParameters, reorder_dimension_by_tunables!, reorder_dimension_by_tunables

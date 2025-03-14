@@ -303,8 +303,10 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
-    disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
+
+    alg_eqs = filter(eq -> eq.lhs isa Union{Symbolic, Number} && !isdiffeq(eq), deqs)
+    cont_callbacks = SymbolicContinuousCallbacks(continuous_events, alg_eqs)
+    disc_callbacks = SymbolicDiscreteCallbacks(discrete_events, alg_eqs)
 
     if is_dde === nothing
         is_dde = _check_if_dde(deqs, iv′, systems)
@@ -316,7 +318,6 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
             cons = get_constraintsystem(sys)
             cons !== nothing && push!(conssystems, cons)
         end
-        @show conssystems
         @set! constraintsystem.systems = conssystems
     end
 

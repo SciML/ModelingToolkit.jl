@@ -366,12 +366,10 @@ function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
 
     promotetoconcrete === nothing && (promotetoconcrete = container_type <: AbstractArray)
     if promotetoconcrete && !allow_symbolic
-        vals = promote_to_concrete(vals; tofloat = tofloat, use_union = use_union)
+        vals = promote_to_concrete(vals; tofloat, use_union)
     end
 
-    if isempty(vals)
-        return nothing
-    elseif container_type <: Tuple
+    if container_type <: Tuple
         return (vals...,)
     else
         return SymbolicUtils.Code.create_array(container_type, eltype(vals), Val{1}(),
