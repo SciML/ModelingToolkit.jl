@@ -814,7 +814,7 @@ function process_SciMLProblem(
     evaluate_varmap!(op, dvs; limit = substitution_limit)
 
     u0 = better_varmap_to_vars(
-        op, dvs; tofloat, use_union,
+        op, dvs; tofloat, use_union = false,
         container_type = u0Type, allow_symbolic = symbolic_u0)
 
     if u0 !== nothing
