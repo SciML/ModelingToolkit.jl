@@ -391,6 +391,12 @@ vars(eq::Equation; op = Differential) = vars!(Set(), eq; op = op)
 function vars!(vars, eq::Equation; op = Differential)
     (vars!(vars, eq.lhs; op = op); vars!(vars, eq.rhs; op = op); vars)
 end
+function vars!(vars, O::AbstractSystem; op = Differential)
+    for eq in equations(O)
+        vars!(vars, eq; op)
+    end
+    return vars
+end
 function vars!(vars, O; op = Differential)
     if isvariable(O)
         if iscall(O) && operation(O) === getindex && iscalledparameter(first(arguments(O)))
