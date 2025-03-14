@@ -219,7 +219,7 @@ end
 
 function Base.showerror(io::IO, e::MissingVariablesError)
     println(io, MISSING_VARIABLES_MESSAGE)
-    println(io, e.vars)
+    println(io, join(e.vars, ", "))
 end
 
 function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false,

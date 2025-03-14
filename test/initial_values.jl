@@ -172,7 +172,7 @@ end
             [p => 2q, q => 3p]; warn_cyclic_dependency = true)
     catch
     end
-    @test_throws ModelingToolkit.UnexpectedSymbolicValueInVarmap ODEProblem(
+    @test_throws ModelingToolkit.MissingGuessError ODEProblem(
         sys, [x => 1, y => 2], (0.0, 1.0), [p => 2q, q => 3p])
 end
 
@@ -198,4 +198,16 @@ end
     sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
     @test sol.u[1] ≈ [1.0, 1.0, 0.5, 0.5]
+end
+
+@testset "Missing/cyclic guesses throws error" begin
+    @parameters g
+    @variables x(t) y(t) [state_priority = 10] λ(t)
+    eqs = [D(D(x)) ~ λ * x
+           D(D(y)) ~ λ * y - g
+           x^2 + y^2 ~ 1]
+    @mtkbuild pend = ODESystem(eqs, t)
+
+    @test_throws ModelingToolkit.MissingGuessError ODEProblem(pend, [x => 1], (0, 1), [g => 1], guesses = [y => λ, λ => y + 1])
+    ODEProblem(pend, [x => 1], (0, 1), [g => 1], guesses = [y => λ, λ => 0.5])
 end
