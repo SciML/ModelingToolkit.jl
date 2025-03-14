@@ -1390,6 +1390,26 @@ function namespace_expr(
         O
     end
 end
+
+function namespace_expr(
+        O::Transition, sys, n = nameof(sys); ivs = independent_variables(sys))
+    return Transition(
+        O.from === nothing ? O.from : renamespace(sys, O.from),
+        O.to === nothing ? O.to : renamespace(sys, O.to),
+        O.cond === nothing ? O.cond : namespace_expr(O.cond, sys),
+        O.immediate, O.reset, O.synchronize, O.priority
+    )
+end
+
+function namespace_expr(
+        O::InitialState, sys, n = nameof(sys); ivs = independent_variables(sys))
+    return InitialState(O.s === nothing ? O.s : renamespace(sys, O.s))
+end
+
+function namespace_expr(O::StateMachineOperator, sys, n = nameof(sys); kwargs...)
+    error("Unhandled state machine operator")
+end
+
 _nonum(@nospecialize x) = x isa Num ? x.val : x
 
 """
