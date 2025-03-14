@@ -401,6 +401,25 @@ vars(eq::Equation; op = Differential) = vars!(Set(), eq; op = op)
 function vars!(vars, eq::Equation; op = Differential)
     (vars!(vars, eq.lhs; op = op); vars!(vars, eq.rhs; op = op); vars)
 end
+function vars!(vars, O::AbstractSystem; op = Differential)
+    for eq in equations(O)
+        vars!(vars, eq; op)
+    end
+    return vars
+end
+function vars!(vars, O::Transition; op = Differential)
+    vars!(vars, O.from)
+    vars!(vars, O.to)
+    vars!(vars, O.cond; op)
+    return vars
+end
+function vars!(vars, O::InitialState; op = Differential)
+    vars!(vars, O.s; op)
+    return vars
+end
+function vars!(vars, O::StateMachineOperator; op = Differential)
+    error("Unhandled state machine operator")
+end
 function vars!(vars, O; op = Differential)
     if isvariable(O)
         if iscall(O) && operation(O) === getindex && iscalledparameter(first(arguments(O)))
