@@ -351,11 +351,10 @@ in `varmap`. Does not perform symbolic substitution in the values of `varmap`.
 
 Keyword arguments:
 - `tofloat`: Convert values to floating point numbers using `float`.
-- `use_union`: Use a `Union`-typed array if the values have heterogeneous types.
 - `container_type`: The type of container to use for the values.
 - `toterm`: The `toterm` method to use for converting symbolics.
 - `promotetoconcrete`: whether the promote to a concrete buffer (respecting
-  `tofloat` and `use_union`). Defaults to `container_type <: AbstractArray`.
+  `tofloat`). Defaults to `container_type <: AbstractArray`.
 - `check`: Error if any variables in `vars` do not have a mapping in `varmap`. Uses
   [`missingvars`](@ref) to perform the check.
 - `allow_symbolic` allows the returned array to contain symbolic values. If this is `true`,
@@ -393,7 +392,7 @@ function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
 
     promotetoconcrete === nothing && (promotetoconcrete = container_type <: AbstractArray)
     if promotetoconcrete && !allow_symbolic
-        vals = promote_to_concrete(vals; tofloat = tofloat, use_union = use_union)
+        vals = promote_to_concrete(vals; tofloat = tofloat, use_union = false)
     end
 
     if isempty(vals)
@@ -842,10 +841,14 @@ function process_SciMLProblem(
 
     u0 = better_varmap_to_vars(
 <<<<<<< HEAD
+<<<<<<< HEAD
         op, dvs; tofloat = true, use_union = false,
         container_type = u0Type, allow_symbolic = symbolic_u0, is_initializeprob)
 =======
         op, dvs; tofloat, use_union,
+=======
+        op, dvs; tofloat, use_union = false,
+>>>>>>> 6951e652f2 (fix: don't propagate  for u0)
         container_type = u0Type, allow_symbolic = symbolic_u0)
 >>>>>>> e31ae1bcc9 (fix: propagate `tofloat`, `use_union` to `better_varmap_to_vars`)
 
