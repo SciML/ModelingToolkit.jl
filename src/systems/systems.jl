@@ -75,8 +75,10 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
         return simplify_optimization_system(sys; kwargs..., sort_eqs, simplify)
     end
 
+    sys, statemachines = extract_top_level_statemachines(sys)
     sys = expand_connections(sys)
-    state = TearingState(sys; sort_eqs)
+    state = TearingState(sys)
+    append!(state.statemachines, statemachines)
 
     @unpack structure, fullvars = state
     @unpack graph, var_to_diff, var_types = structure
