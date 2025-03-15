@@ -1293,10 +1293,10 @@ Get the unknown variables of the system `sys` and its subsystems.
 
 See also [`ModelingToolkit.get_unknowns`](@ref).
 """
-function unknowns(sys::AbstractSystem)
+function unknowns(sys::AbstractSystem; toplevel = false)
     sts = get_unknowns(sys)
     systems = get_systems(sys)
-    nonunique_unknowns = if isempty(systems)
+    nonunique_unknowns = if toplevel || isempty(systems)
         sts
     else
         system_unknowns = reduce(vcat, namespace_variables.(systems))
@@ -1320,7 +1320,7 @@ Get the parameters of the system `sys` and its subsystems.
 
 See also [`@parameters`](@ref) and [`ModelingToolkit.get_ps`](@ref).
 """
-function parameters(sys::AbstractSystem; initial_parameters = false)
+function parameters(sys::AbstractSystem; initial_parameters = false, toplevel = false)
     ps = get_ps(sys)
     if ps == SciMLBase.NullParameters()
         return []
@@ -1329,8 +1329,8 @@ function parameters(sys::AbstractSystem; initial_parameters = false)
         ps = first.(ps)
     end
     systems = get_systems(sys)
-    result = unique(isempty(systems) ? ps :
-                    [ps; reduce(vcat, namespace_parameters.(systems))])
+    result = unique(toplevel || isempty(systems) ?
+                    ps : [ps; reduce(vcat, namespace_parameters.(systems))])
     if !initial_parameters
         if is_time_dependent(sys)
             # time-dependent systems have `Initial` parameters for all their
@@ -1490,8 +1490,9 @@ function controls(sys::AbstractSystem)
     isempty(systems) ? ctrls : [ctrls; reduce(vcat, namespace_controls.(systems))]
 end
 
-function observed(sys::AbstractSystem)
+function observed(sys::AbstractSystem; toplevel = false)
     obs = get_observed(sys)
+    toplevel && return obs
     systems = get_systems(sys)
     [obs;
      reduce(vcat,
@@ -1510,7 +1511,7 @@ If they are not explicitly provided, variables and parameters are initialized to
 
 See also [`initialization_equations`](@ref), [`parameter_dependencies`](@ref) and [`ModelingToolkit.get_defaults`](@ref).
 """
-function defaults(sys::AbstractSystem)
+function defaults(sys::AbstractSystem; toplevel = false)
     systems = get_systems(sys)
     defs = get_defaults(sys)
     # `mapfoldr` is really important!!! We should prefer the base model for
@@ -1519,7 +1520,8 @@ function defaults(sys::AbstractSystem)
     # `compose(ODESystem(...; defaults=defs), ...)`
     #
     # Thus, right associativity is required and crucial for correctness.
-    isempty(systems) ? defs : mapfoldr(namespace_defaults, merge, systems; init = defs)
+    (toplevel ||isempty(systems)) ?
+        defs : mapfoldr(namespace_defaults, merge, systems; init = defs)
 end
 
 function defaults_and_guesses(sys::AbstractSystem)
@@ -1549,10 +1551,10 @@ It is often the most useful way to inspect the equations of a system.
 
 See also [`full_equations`](@ref) and [`ModelingToolkit.get_eqs`](@ref).
 """
-function equations(sys::AbstractSystem)
+function equations(sys::AbstractSystem; toplevel = false)
     eqs = get_eqs(sys)
     systems = get_systems(sys)
-    if isempty(systems)
+    if toplevel || isempty(systems)
         return eqs
     else
         eqs = Equation[eqs;
