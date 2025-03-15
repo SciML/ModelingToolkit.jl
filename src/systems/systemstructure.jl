@@ -727,7 +727,7 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
                 discrete_pass_idx = findfirst(discrete_compile_pass, additional_passes)
                 discrete_compile = additional_passes[discrete_pass_idx]
                 deleteat!(additional_passes, discrete_pass_idx)
-                return discrete_compile(tss, inputs)
+                return discrete_compile(tss, inputs, ci)
             else
                 # error goes here! this is a purely discrete system
                 throw(HybridSystemNotSupportedException("Discrete systems without JuliaSimCompiler are currently not supported in ODESystem."))
@@ -749,7 +749,7 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
                 deleteat!(additional_passes, discrete_pass_idx)
                 # in the case of a hybrid system, the discrete_compile pass should take the currents of sys.discrete_subsystems
                 # and modifies discrete_subsystems to bea tuple of the io and anything else, while adding or manipulating the rest of sys as needed
-                sys = discrete_compile(sys, tss[2:end], inputs)
+                sys = discrete_compile(sys, tss[[i for i in eachindex(tss) if i != continuous_id]], inputs, ci)
             else
                 throw(HybridSystemNotSupportedException("Hybrid continuous-discrete systems are currently not supported with the standard MTK compiler. This system requires JuliaSimCompiler.jl, see https://help.juliahub.com/juliasimcompiler/stable/"))
             end
