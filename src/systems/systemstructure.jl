@@ -899,6 +899,9 @@ function mtkcompile!(state::TearingState; simplify = false,
         inputs = Any[], outputs = Any[],
         disturbance_inputs = Any[],
         kwargs...)
+    # split_system returns one or two systems and the inputs for each
+    # mod clock inference to be binary
+    # if it's continous keep going, if not then error unless given trait impl in additional passes
     ci = ModelingToolkit.ClockInference(state)
     ci = ModelingToolkit.infer_clocks!(ci)
     time_domains = merge(Dict(state.fullvars .=> ci.var_domain),
@@ -912,7 +915,7 @@ function mtkcompile!(state::TearingState; simplify = false,
             discrete_pass_idx = findfirst(discrete_compile_pass, additional_passes)
             discrete_compile = additional_passes[discrete_pass_idx]
             deleteat!(additional_passes, discrete_pass_idx)
-            return discrete_compile(tss, clocked_inputs)
+            return discrete_compile(tss, clocked_inputs, ci)
         end
         throw(HybridSystemNotSupportedException("""
         Discrete systems with multiple clocks are not supported with the standard \
@@ -933,7 +936,7 @@ function mtkcompile!(state::TearingState; simplify = false,
             deleteat!(additional_passes, discrete_pass_idx)
             # in the case of a hybrid system, the discrete_compile pass should take the currents of sys.discrete_subsystems
             # and modifies discrete_subsystems to bea tuple of the io and anything else, while adding or manipulating the rest of sys as needed
-            return discrete_compile(sys, tss[2:end], inputs)
+            return discrete_compile(sys, tss[[i for i in eachindex(tss) if i != continuous_id]], clocked_inputs, ci)
         end
         throw(HybridSystemNotSupportedException("""
         Hybrid continuous-discrete systems are currently not supported with \
