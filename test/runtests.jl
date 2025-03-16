@@ -61,6 +61,7 @@ end
             @safetestset "Constants Test" include("constants.jl")
             @safetestset "Parameter Dependency Test" include("parameter_dependencies.jl")
             @safetestset "Equation Type Accessors Test" include("equation_type_accessors.jl")
+            @safetestset "System Accessor Functions Test" include("accessor_functions.jl")
             @safetestset "Equations with complex values" include("complex.jl")
         end
     end
