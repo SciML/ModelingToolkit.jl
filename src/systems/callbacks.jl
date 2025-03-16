@@ -320,14 +320,18 @@ function namespace_callback(cb::SymbolicContinuousCallback, s)::SymbolicContinuo
 end
 
 """
-    continuous_events(sys::AbstractSystem)::Vector{SymbolicContinuousCallback}
+    continuous_events(sys::AbstractSystem; toplevel = false)::Vector{SymbolicContinuousCallback}
 
 Returns a vector of all the `continuous_events` in an abstract system and its component subsystems.
 The `SymbolicContinuousCallback`s in the returned vector are structs with two fields: `eqs` and
 `affect` which correspond to the first and second elements of a `Pair` used to define an event, i.e.
 `eqs => affect`.
+
+Arguments:
+- `toplevel = false`: if set to true, do not return the continuous events of the subsystems.
 """
 function continuous_events(sys::AbstractSystem; toplevel = false)
+    toplevel && (sys = recursive_get_parent(sys))
     cbs = get_continuous_events(sys)
     filter(!isempty, cbs)
     toplevel && return cbs
@@ -476,14 +480,18 @@ SymbolicDiscreteCallbacks(cbs::Vector{<:SymbolicDiscreteCallback}) = cbs
 SymbolicDiscreteCallbacks(::Nothing) = SymbolicDiscreteCallback[]
 
 """
-    discrete_events(sys::AbstractSystem) :: Vector{SymbolicDiscreteCallback}
+    discrete_events(sys::AbstractSystem; toplevel = false) :: Vector{SymbolicDiscreteCallback}
 
 Returns a vector of all the `discrete_events` in an abstract system and its component subsystems.
 The `SymbolicDiscreteCallback`s in the returned vector are structs with two fields: `condition` and
 `affect` which correspond to the first and second elements of a `Pair` used to define an event, i.e.
 `condition => affect`.
+
+Arguments:
+- `toplevel = false`: if set to true, do not return the discrete events of the subsystems.
 """
 function discrete_events(sys::AbstractSystem; toplevel = false)
+    toplevel && (sys = recursive_get_parent(sys))
     cbs = get_discrete_events(sys)
     toplevel && return cbs
     systems = get_systems(sys)

@@ -1292,8 +1292,12 @@ $(TYPEDSIGNATURES)
 Get the unknown variables of the system `sys` and its subsystems.
 
 See also [`ModelingToolkit.get_unknowns`](@ref).
+
+Arguments:
+- `toplevel = false`: if set to true, do not return the continuous events of the subsystems.
 """
 function unknowns(sys::AbstractSystem; toplevel = false)
+    toplevel && (sys = recursive_get_parent(sys))
     sts = get_unknowns(sys)
     systems = get_systems(sys)
     nonunique_unknowns = if toplevel || isempty(systems)
@@ -1319,8 +1323,12 @@ $(TYPEDSIGNATURES)
 Get the parameters of the system `sys` and its subsystems.
 
 See also [`@parameters`](@ref) and [`ModelingToolkit.get_ps`](@ref).
+
+Arguments:
+- `toplevel = false`: if set to true, do not return the continuous events of the subsystems.
 """
 function parameters(sys::AbstractSystem; initial_parameters = false, toplevel = false)
+    toplevel && (sys = recursive_get_parent(sys))
     ps = get_ps(sys)
     if ps == SciMLBase.NullParameters()
         return []
@@ -1351,6 +1359,22 @@ end
 
 function dependent_parameters(sys::AbstractSystem)
     return map(eq -> eq.lhs, parameter_dependencies(sys))
+end
+
+"""
+    recursive_get_parent(sys::AbstractSystem)
+
+Loops through parent systems to find the original parent system.
+
+Warning:
+- Curently only used (and tested) in the context of accessor functions (e.g. `parameters`),
+specifically in the context of the `toplevel` keyword argument.
+"""
+function recursive_get_parent(sys::AbstractSystem)
+    if ModelingToolkit.has_parent(sys) && (p = ModelingToolkit.get_parent(sys)) !== nothing
+        return recursive_get_parent(p)
+    end
+    return sys
 end
 
 """
@@ -1491,6 +1515,7 @@ function controls(sys::AbstractSystem)
 end
 
 function observed(sys::AbstractSystem; toplevel = false)
+    toplevel && (sys = recursive_get_parent(sys))
     obs = get_observed(sys)
     toplevel && return obs
     systems = get_systems(sys)
@@ -1550,8 +1575,12 @@ It may include some abbreviations and aliases of observables.
 It is often the most useful way to inspect the equations of a system.
 
 See also [`full_equations`](@ref) and [`ModelingToolkit.get_eqs`](@ref).
+
+Arguments:
+- `toplevel = false`: if set to true, do not return the continuous events of the subsystems.
 """
 function equations(sys::AbstractSystem; toplevel = false)
+    toplevel && (sys = recursive_get_parent(sys))
     eqs = get_eqs(sys)
     systems = get_systems(sys)
     if toplevel || isempty(systems)
