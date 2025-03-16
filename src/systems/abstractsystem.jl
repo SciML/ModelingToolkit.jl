@@ -1545,8 +1545,8 @@ function defaults(sys::AbstractSystem; toplevel = false)
     # `compose(ODESystem(...; defaults=defs), ...)`
     #
     # Thus, right associativity is required and crucial for correctness.
-    (toplevel ||isempty(systems)) ?
-        defs : mapfoldr(namespace_defaults, merge, systems; init = defs)
+    (toplevel || isempty(systems)) ?
+    defs : mapfoldr(namespace_defaults, merge, systems; init = defs)
 end
 
 function defaults_and_guesses(sys::AbstractSystem)
