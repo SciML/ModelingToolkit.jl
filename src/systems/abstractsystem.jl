@@ -1325,7 +1325,6 @@ function unknowns_toplevel(sys::AbstractSystem)
     return get_unknowns(sys)
 end
 
-
 """
 $(TYPEDSIGNATURES)
 
@@ -1589,7 +1588,6 @@ function equations(sys::AbstractSystem)
         return eqs
     end
 end
-
 
 """
     equations_toplevel(sys::AbstractSystem)
