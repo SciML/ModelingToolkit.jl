@@ -502,7 +502,7 @@ function discrete_events(sys::AbstractSystem)
     systems = get_systems(sys)
     cbs = [cbs;
            reduce(vcat,
-               (map(o -> namespace_callback(o, s), discrete_events(s)) for s in systems),
+               (map(cb -> namespace_callback(cb, s), discrete_events(s)) for s in systems),
                init = SymbolicDiscreteCallback[])]
     cbs
 end

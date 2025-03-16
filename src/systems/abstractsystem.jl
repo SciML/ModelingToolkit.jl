@@ -1342,8 +1342,8 @@ function parameters(sys::AbstractSystem; initial_parameters = false)
         ps = first.(ps)
     end
     systems = get_systems(sys)
-    result = unique(isempty(systems) ?
-                    ps : [ps; reduce(vcat, namespace_parameters.(systems))])
+    result = unique(isempty(systems) ? ps :
+                    [ps; reduce(vcat, namespace_parameters.(systems))])
     if !initial_parameters
         if is_time_dependent(sys)
             # time-dependent systems have `Initial` parameters for all their
@@ -1573,7 +1573,6 @@ It may include some abbreviations and aliases of observables.
 It is often the most useful way to inspect the equations of a system.
 
 See also [`full_equations`](@ref) and [`ModelingToolkit.get_eqs`](@ref).
-
 """
 function equations(sys::AbstractSystem)
     eqs = get_eqs(sys)
