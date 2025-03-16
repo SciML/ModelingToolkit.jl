@@ -1292,15 +1292,11 @@ $(TYPEDSIGNATURES)
 Get the unknown variables of the system `sys` and its subsystems.
 
 See also [`ModelingToolkit.get_unknowns`](@ref).
-
-Arguments:
-- `toplevel = false`: if set to true, do not return the continuous events of the subsystems.
 """
-function unknowns(sys::AbstractSystem; toplevel = false)
-    toplevel && (sys = recursive_get_parent(sys))
+function unknowns(sys::AbstractSystem)
     sts = get_unknowns(sys)
     systems = get_systems(sys)
-    nonunique_unknowns = if toplevel || isempty(systems)
+    nonunique_unknowns = if isempty(systems)
         sts
     else
         system_unknowns = reduce(vcat, namespace_variables.(systems))
@@ -1318,17 +1314,27 @@ function unknowns(sys::AbstractSystem; toplevel = false)
 end
 
 """
+    unknowns_toplevel(sys::AbstractSystem)
+
+Replicates the behaviour of `unknowns`, but ignores unknowns of subsystems.
+"""
+function unknowns_toplevel(sys::AbstractSystem)
+    if has_parent(sys) && (parent = get_parent(sys)) !== nothing
+        return unknowns_toplevel(parent)
+    end
+    return get_unknowns(sys)
+end
+
+
+"""
 $(TYPEDSIGNATURES)
 
 Get the parameters of the system `sys` and its subsystems.
 
 See also [`@parameters`](@ref) and [`ModelingToolkit.get_ps`](@ref).
 
-Arguments:
-- `toplevel = false`: if set to true, do not return the continuous events of the subsystems.
 """
-function parameters(sys::AbstractSystem; initial_parameters = false, toplevel = false)
-    toplevel && (sys = recursive_get_parent(sys))
+function parameters(sys::AbstractSystem; initial_parameters = false)
     ps = get_ps(sys)
     if ps == SciMLBase.NullParameters()
         return []
@@ -1337,7 +1343,7 @@ function parameters(sys::AbstractSystem; initial_parameters = false, toplevel = 
         ps = first.(ps)
     end
     systems = get_systems(sys)
-    result = unique(toplevel || isempty(systems) ?
+    result = unique(isempty(systems) ?
                     ps : [ps; reduce(vcat, namespace_parameters.(systems))])
     if !initial_parameters
         if is_time_dependent(sys)
@@ -1362,19 +1368,15 @@ function dependent_parameters(sys::AbstractSystem)
 end
 
 """
-    recursive_get_parent(sys::AbstractSystem)
+    parameters_toplevel(sys::AbstractSystem)
 
-Loops through parent systems to find the original parent system.
-
-Warning:
-- Curently only used (and tested) in the context of accessor functions (e.g. `parameters`),
-specifically in the context of the `toplevel` keyword argument.
+Replicates the behaviour of `parameters`, but ignores parameters of subsystems.
 """
-function recursive_get_parent(sys::AbstractSystem)
-    if ModelingToolkit.has_parent(sys) && (p = ModelingToolkit.get_parent(sys)) !== nothing
-        return recursive_get_parent(p)
+function parameters_toplevel(sys::AbstractSystem)
+    if has_parent(sys) && (parent = get_parent(sys)) !== nothing
+        return parameters_toplevel(parent)
     end
-    return sys
+    return get_ps(sys)
 end
 
 """
@@ -1514,10 +1516,8 @@ function controls(sys::AbstractSystem)
     isempty(systems) ? ctrls : [ctrls; reduce(vcat, namespace_controls.(systems))]
 end
 
-function observed(sys::AbstractSystem; toplevel = false)
-    toplevel && (sys = recursive_get_parent(sys))
+function observed(sys::AbstractSystem)
     obs = get_observed(sys)
-    toplevel && return obs
     systems = get_systems(sys)
     [obs;
      reduce(vcat,
@@ -1536,7 +1536,7 @@ If they are not explicitly provided, variables and parameters are initialized to
 
 See also [`initialization_equations`](@ref), [`parameter_dependencies`](@ref) and [`ModelingToolkit.get_defaults`](@ref).
 """
-function defaults(sys::AbstractSystem; toplevel = false)
+function defaults(sys::AbstractSystem)
     systems = get_systems(sys)
     defs = get_defaults(sys)
     # `mapfoldr` is really important!!! We should prefer the base model for
@@ -1545,8 +1545,7 @@ function defaults(sys::AbstractSystem; toplevel = false)
     # `compose(ODESystem(...; defaults=defs), ...)`
     #
     # Thus, right associativity is required and crucial for correctness.
-    (toplevel || isempty(systems)) ?
-    defs : mapfoldr(namespace_defaults, merge, systems; init = defs)
+    isempty(systems) ? defs : mapfoldr(namespace_defaults, merge, systems; init = defs)
 end
 
 function defaults_and_guesses(sys::AbstractSystem)
@@ -1576,14 +1575,11 @@ It is often the most useful way to inspect the equations of a system.
 
 See also [`full_equations`](@ref) and [`ModelingToolkit.get_eqs`](@ref).
 
-Arguments:
-- `toplevel = false`: if set to true, do not return the continuous events of the subsystems.
 """
-function equations(sys::AbstractSystem; toplevel = false)
-    toplevel && (sys = recursive_get_parent(sys))
+function equations(sys::AbstractSystem)
     eqs = get_eqs(sys)
     systems = get_systems(sys)
-    if toplevel || isempty(systems)
+    if isempty(systems)
         return eqs
     else
         eqs = Equation[eqs;
@@ -1592,6 +1588,23 @@ function equations(sys::AbstractSystem; toplevel = false)
                            init = Equation[])]
         return eqs
     end
+end
+
+
+"""
+    equations_toplevel(sys::AbstractSystem)
+
+Replicates the behaviour of `equations`, but ignores equations of subsystems.
+
+Notes:
+- Cannot be applied to non-complete systems.
+"""
+function equations_toplevel(sys::AbstractSystem)
+    iscomplete(sys) && error("Cannot apply `equations_toplevel` to complete systems.")
+    if has_parent(sys) && (parent = get_parent(sys)) !== nothing
+        return equations_toplevel(parent)
+    end
+    return get_eqs(sys)
 end
 
 """
