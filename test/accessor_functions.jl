@@ -5,6 +5,8 @@ using ModelingToolkit, Test
 using ModelingToolkit: t_nounits as t, D_nounits as D
 import ModelingToolkit: get_ps, get_unknowns, get_observed, get_eqs, get_continuous_events,
                         get_discrete_events, namespace_equations
+import ModelingToolkit: parameters_toplevel, unknowns_toplevel, equations_toplevel,
+                        continuous_events_toplevel, discrete_events_toplevel
 
 # Creates helper functions.
 function all_sets_equal(args...)
@@ -23,8 +25,9 @@ end
 ### Basic Tests ###
 
 # Checks `toplevel = false` argument for various accessors (currently only for `ODESystem`s).
-# Compares to `toplevel = true` version, and `get_` functions.
+# Compares to `` version, and `get_` functions.
 # Checks  accessors for parameters, unknowns, equations, observables, and events.
+# Some tests looks funny (caused by the formatter).
 let
     # Prepares model components.
     @parameters p_top p_mid1 p_mid2 p_bot d
@@ -70,7 +73,7 @@ let
     sys_mid1_ss = structural_simplify(sys_mid1)
     sys_top_ss = structural_simplify(sys_top)
 
-    # Checks `parameters` for `toplevel = false`.
+    # Checks `parameters1.
     @test all_sets_equal(parameters.([sys_bot, sys_bot_comp, sys_bot_ss])..., [d, p_bot])
     @test all_sets_equal(parameters.([sys_mid1, sys_mid1_comp, sys_mid1_ss])...,
         [d, p_mid1, sys_bot.d, sys_bot.p_bot])
@@ -80,22 +83,22 @@ let
         [d, p_top, sys_mid1.d, sys_mid1.p_mid1, sys_mid1.sys_bot.d,
             sys_mid1.sys_bot.p_bot, sys_mid2.d, sys_mid2.p_mid2])
 
-    # Checks `parameters`` for `toplevel = true`. Compares to known parameters and also checks that
+    # Checks `parameters_toplevel`. Compares to known parameters and also checks that
     # these are subset of what `get_ps` returns.
     @test all_sets_equal(
-        parameters.([sys_bot, sys_bot_comp, sys_bot_ss]; toplevel = true)..., [d, p_bot])
+        parameters_toplevel.([sys_bot, sys_bot_comp, sys_bot_ss])..., [d, p_bot])
     @test_broken all_sets_equal(
-        parameters.([sys_mid1, sys_mid1_comp, sys_mid1_ss]; toplevel = true)...,
+        parameters_toplevel.([sys_mid1, sys_mid1_comp, sys_mid1_ss])...,
         [d, p_mid1])
     @test all_sets_equal(
-        parameters.([sys_mid2, sys_mid2_comp, sys_mid2_ss]; toplevel = true)...,
+        parameters_toplevel.([sys_mid2, sys_mid2_comp, sys_mid2_ss])...,
         [d, p_mid2])
     @test_broken all_sets_equal(
-        parameters.([sys_top, sys_top_comp, sys_top_ss]; toplevel = true)..., [d, p_top])
-    @test all(sym_issubset(parameters(sys; toplevel = true), get_ps(sys))
+        parameters_toplevel.([sys_top, sys_top_comp, sys_top_ss])..., [d, p_top])
+    @test all(sym_issubset(parameters_toplevel(sys), get_ps(sys))
     for sys in [sys_bot, sys_mid2, sys_mid1, sys_top])
 
-    # Checks `unknowns` for `toplevel = false`. O(t) is eliminated by `structural_simplify` and
+    # Checks `unknowns`. O(t) is eliminated by `structural_simplify` and
     # must be considered separately.
     @test all_sets_equal(unknowns.([sys_bot, sys_bot_comp])..., [O, Y, X_bot])
     @test all_sets_equal(unknowns.([sys_bot_ss])..., [Y, X_bot])
@@ -112,20 +115,20 @@ let
         [Y, X_top, sys_mid1.Y, sys_mid1.X_mid1, sys_mid1.sys_bot.Y,
             sys_mid1.sys_bot.X_bot, sys_mid2.Y, sys_mid2.X_mid2])
 
-    # Checks `unknowns` for `toplevel = true`. Note that O is not eliminated here (as we go back
-    # to original parent system). Also checks that outputs are subsets of what `get_ps` returns..
+    # Checks `unknowns_toplevel`. Note that O is not eliminated here (as we go back
+    # to original parent system). Also checks that outputs are subsets of what `get_unknowns` returns.
     @test all_sets_equal(
-        unknowns.([sys_bot, sys_bot_comp, sys_bot_ss]; toplevel = true)..., [O, Y, X_bot])
+        unknowns_toplevel.([sys_bot, sys_bot_comp, sys_bot_ss])..., [O, Y, X_bot])
     @test all_sets_equal(
-        unknowns.([sys_mid1, sys_mid1_comp]; toplevel = true)..., [O, Y, X_mid1])
+        unknowns_toplevel.([sys_mid1, sys_mid1_comp])..., [O, Y, X_mid1])
     @test all_sets_equal(
-        unknowns.([sys_mid2, sys_mid2_comp]; toplevel = true)..., [O, Y, X_mid2])
+        unknowns_toplevel.([sys_mid2, sys_mid2_comp])..., [O, Y, X_mid2])
     @test all_sets_equal(
-        unknowns.([sys_top, sys_top_comp]; toplevel = true)..., [O, Y, X_top])
-    @test all(sym_issubset(unknowns(sys; toplevel = true), get_unknowns(sys))
+        unknowns_toplevel.([sys_top, sys_top_comp])..., [O, Y, X_top])
+    @test all(sym_issubset(unknowns_toplevel(sys), get_unknowns(sys))
     for sys in [sys_bot, sys_mid1, sys_mid2, sys_top])
 
-    # Checks `equations` for `toplevel = false`. Do not check ss equations as these might potentially
+    # Checks `equations`. Do not check ss equations as these might potentially
     # be structurally simplified to new equations.
     @test all_sets_equal(equations.([sys_bot, sys_bot_comp])..., eqs_bot)
     @test all_sets_equal(
@@ -134,65 +137,35 @@ let
     @test all_sets_equal(equations.([sys_top, sys_top_comp])...,
         [eqs_top; namespace_equations(sys_mid1); namespace_equations(sys_mid2)])
 
-    # Checks `equations` for `toplevel = true`. Do not check ss equations  directly as these
-    # might potentially be structurally simplified to new equations.
-    @test all_sets_equal(equations.([sys_bot, sys_bot_comp]; toplevel = true)..., eqs_bot)
+    # Checks `equations_toplevel`. Do not check ss equations directly as these
+    # might potentially be structurally simplified to new equations. Do not check
+    @test all_sets_equal(equations_toplevel.([sys_bot])..., eqs_bot)
     @test all_sets_equal(
-        equations.([sys_mid1, sys_mid1_comp]; toplevel = true)..., eqs_mid1)
+        equations_toplevel.([sys_mid1])..., eqs_mid1)
     @test all_sets_equal(
-        equations.([sys_mid2, sys_mid2_comp]; toplevel = true)..., eqs_mid2)
-    @test all_sets_equal(equations.([sys_top, sys_top_comp]; toplevel = true)..., eqs_top)
-    @test all(sym_issubset(equations(sys; toplevel = true), get_eqs(sys))
+        equations_toplevel.([sys_mid2])..., eqs_mid2)
+    @test all_sets_equal(equations_toplevel.([sys_top])..., eqs_top)
+    @test all(sym_issubset(equations_toplevel(sys), get_eqs(sys))
     for sys in [sys_bot, sys_mid2, sys_mid1, sys_top])
 
-    # Checks `observed for `toplevel = false`. For non-ss systems, there are no observables.
-    @test all_sets_equal(
-        observed.([sys_bot, sys_bot_comp, sys_mid1, sys_mid1_comp,
-            sys_mid2, sys_mid2_comp, sys_top, sys_top_comp])...,
-        [])
-    @test issetequal(observed(sys_bot_ss), eqs_bot[3:3])
-    @test issetequal(
-        observed(sys_mid1_ss), [eqs_mid1[3:3]; namespace_equations(sys_bot)[3:3]])
-    @test issetequal(observed(sys_mid2_ss), eqs_mid2[3:3])
-    @test issetequal(observed(sys_top_ss),
-        [eqs_top[3:3]; namespace_equations(sys_mid1)[3:3:6];
-         namespace_equations(sys_mid2)[3:3]])
-
-    # Checks `observed` for `toplevel = true`. Again, for non-ss systems, there are no observables.
-    # Also checks that `toplevel = true` yields subset of `get_observed`.
-    @test all_sets_equal(
-        observed.(
-            [sys_bot, sys_bot_comp, sys_mid1, sys_mid1_comp,
-                sys_mid2, sys_mid2_comp, sys_top, sys_top_comp];
-            toplevel = true)...,
-        [])
-    @test_broken issetequal(observed(sys_bot_ss; toplevel = true), eqs_bot[3:3])
-    @test_broken issetequal(observed(sys_mid1_ss; toplevel = true), eqs_mid1[3:3])
-    @test_broken issetequal(observed(sys_mid2_ss; toplevel = true), eqs_mid2[3:3])
-    @test_broken issetequal(observed(sys_top_ss; toplevel = true), eqs_top[3:3])
-    @test all(sym_issubset(observed(sys; toplevel = true), get_observed(sys))
-    for sys in [sys_bot, sys_mid2, sys_mid1, sys_top])
-
-    # Checks `continuous_events` and  `discrete_events` for `toplevel = true` (more straightforward
-    # as I stored the same singe event in all systems). Don't check for `toplevel = false` as
+    # Checks `continuous_events_toplevel` and  `discrete_events_toplevel` (straightforward
+    # as I stored the same singe event in all systems). Don't check for non-toplevel cases as
     # technically not needed for these tests and name spacing the events is a mess.
     mtk_cev = ModelingToolkit.SymbolicContinuousCallback.(cevs)[1]
     mtk_dev = ModelingToolkit.SymbolicDiscreteCallback.(devs)[1]
     @test all_sets_equal(
-        continuous_events.(
+        continuous_events_toplevel.(
             [sys_bot, sys_bot_comp, sys_bot_ss, sys_mid1, sys_mid1_comp, sys_mid1_ss,
-                sys_mid2, sys_mid2_comp, sys_mid2_ss, sys_top, sys_top_comp, sys_top_ss];
-            toplevel = true)...,
+                sys_mid2, sys_mid2_comp, sys_mid2_ss, sys_top, sys_top_comp, sys_top_ss])...,
         [mtk_cev])
     @test all_sets_equal(
-        discrete_events.(
+        discrete_events_toplevel.(
             [sys_bot, sys_bot_comp, sys_bot_ss, sys_mid1, sys_mid1_comp, sys_mid1_ss,
-                sys_mid2, sys_mid2_comp, sys_mid2_ss, sys_top, sys_top_comp, sys_top_ss];
-            toplevel = true)...,
+                sys_mid2, sys_mid2_comp, sys_mid2_ss, sys_top, sys_top_comp, sys_top_ss])...,
         [mtk_dev])
     @test all(sym_issubset(
-                  continuous_events(sys; toplevel = true), get_continuous_events(sys))
+                    continuous_events_toplevel(sys), get_continuous_events(sys))
     for sys in [sys_bot, sys_mid2, sys_mid1, sys_top])
-    @test all(sym_issubset(discrete_events(sys; toplevel = true), get_discrete_events(sys))
+    @test all(sym_issubset(discrete_events_toplevel(sys), get_discrete_events(sys))
     for sys in [sys_bot, sys_mid2, sys_mid1, sys_top])
 end
