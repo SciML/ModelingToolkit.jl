@@ -622,7 +622,7 @@ end
 """
     Initial(x)
 
-The `Initial` operator. Used by initializaton to store constant constraints on variables
+The `Initial` operator. Used by initialization to store constant constraints on variables
 of a system. See the documentation section on initialization for more information.
 """
 struct Initial <: Symbolics.Operator end
