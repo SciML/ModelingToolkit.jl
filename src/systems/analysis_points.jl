@@ -533,7 +533,7 @@ function apply_transformation(tf::GetInput, sys::AbstractSystem)
         ap_idx = analysis_point_index(ap_sys, tf.ap)
         ap_idx === nothing &&
             error("Analysis point $(nameof(tf.ap)) not found in system $(nameof(sys)).")
-        # get the anlysis point
+        # get the analysis point
         ap_sys_eqs = get_eqs(ap_sys)
         ap = ap_sys_eqs[ap_idx].rhs
 
@@ -587,7 +587,7 @@ function apply_transformation(tf::PerturbOutput, sys::AbstractSystem)
         ap_idx = analysis_point_index(ap_sys, tf.ap)
         ap_idx === nothing &&
             error("Analysis point $(nameof(tf.ap)) not found in system $(nameof(sys)).")
-        # modified quations
+        # modified equations
         ap_sys_eqs = copy(get_eqs(ap_sys))
         @set! ap_sys.eqs = ap_sys_eqs
         ap = ap_sys_eqs[ap_idx].rhs
@@ -899,7 +899,7 @@ result of `apply_transformation`.
 # Keyword Arguments
 
 - `system_modifier`: a function which takes the modified system and returns a new system
-  with any required further modifications peformed.
+  with any required further modifications performed.
 """
 function open_loop(sys, ap::Union{Symbol, AnalysisPoint}; system_modifier = identity)
     ap = only(canonicalize_ap(sys, ap))
