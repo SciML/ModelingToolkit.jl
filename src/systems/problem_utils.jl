@@ -333,17 +333,14 @@ end
 function Base.showerror(io::IO, err::MissingGuessError) 
     println(io, 
             """
-            Unable to resolve numeric guesses for all of the variables in the system. \
-            This may be because your guesses are cyclic. In order for the problem to be \
-            initialized, all of the variables must have a numeric value to serve as a \
-            starting point for the nonlinear solve. 
-
-            Symbolic values were found for the following variables/parameters in the map; \
-            please provide additional numeric guesses so they can resolve to numbers:
+            Cyclic guesses detected in the system. Symbolic values were found for the following variables/parameters in the map: \
             """)
     for (sym, val) in zip(err.syms, err.vals)
-        println(sym, " => ", val)
+        println(io, "$sym  => $val")
     end
+    println(io,
+            """
+            In order to resolve this, please provide additional numeric guesses so that the chain can be resolved to assign numeric values to each variable.            """)
 end
 
 """
