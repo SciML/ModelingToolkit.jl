@@ -50,7 +50,7 @@ function structural_simplify(
         newsys = pass(newsys)
     end
     if newsys isa ODESystem || has_parent(newsys)
-        @set! newsys.parent = complete(sys; split, flatten = false)
+        @set! newsys.parent = complete(sys; split = false, flatten = false)
     end
     newsys = complete(newsys; split)
     if newsys′ isa Tuple
