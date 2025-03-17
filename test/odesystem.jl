@@ -1724,3 +1724,15 @@ end
     @mtkbuild ode = ODESystem(D(x(t)) ~ mat * x(t), t; constraints = cons)
     @test length(constraints(ModelingToolkit.get_constraintsystem(ode))) == 5
 end
+
+@testset "`build_explicit_observed_function` with `expression = true` returns `Expr`" begin
+    @variables x(t)
+    @mtkbuild sys = ODESystem(D(x) ~ 2x, t)
+    obsfn_expr = ModelingToolkit.build_explicit_observed_function(
+        sys, 2x + 1, expression = true)
+    @test obsfn_expr isa Expr
+    obsfn_expr_oop, obsfn_expr_iip = ModelingToolkit.build_explicit_observed_function(
+        sys, [x + 1, x + 2, x + t], return_inplace = true, expression = true)
+    @test obsfn_expr_oop isa Expr
+    @test obsfn_expr_iip isa Expr
+end
