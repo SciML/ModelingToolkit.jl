@@ -87,13 +87,13 @@ let
     # these are subset of what `get_ps` returns.
     @test all_sets_equal(
         parameters_toplevel.([sys_bot, sys_bot_comp, sys_bot_ss])..., [d, p_bot])
-    @test_broken all_sets_equal(
+    @test all_sets_equal(
         parameters_toplevel.([sys_mid1, sys_mid1_comp, sys_mid1_ss])...,
         [d, p_mid1])
     @test all_sets_equal(
         parameters_toplevel.([sys_mid2, sys_mid2_comp, sys_mid2_ss])...,
         [d, p_mid2])
-    @test_broken all_sets_equal(
+    @test all_sets_equal(
         parameters_toplevel.([sys_top, sys_top_comp, sys_top_ss])..., [d, p_top])
     @test all(sym_issubset(parameters_toplevel(sys), get_ps(sys))
     for sys in [sys_bot, sys_mid2, sys_mid1, sys_top])
