@@ -363,7 +363,11 @@ Keyword arguments:
 """
 function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
         tofloat = true, container_type = Array,
+<<<<<<< HEAD
         toterm = default_toterm, promotetoconcrete = nothing, check = true, allow_symbolic = false, is_initializeprob = false)
+=======
+        toterm = default_toterm, promotetoconcrete = nothing, check = true, allow_symbolic = false)
+>>>>>>> a5e1e0239a (remove instances of)
     isempty(vars) && return nothing
 
     if check
@@ -730,8 +734,12 @@ Keyword arguments:
 - `fully_determined`: Override whether the initialization system is fully determined.
 - `check_initialization_units`: Enable or disable unit checks when constructing the
   initialization problem.
+<<<<<<< HEAD
 - `tofloat`, `use_union`, `is_initializeprob`: Passed to [`better_varmap_to_vars`](@ref) for building `u0` (and
   possibly `p`).
+=======
+- `tofloat`: Passed to [`better_varmap_to_vars`](@ref) for building `u0` (and possibly `p`).
+>>>>>>> a5e1e0239a (remove instances of)
 - `u0_constructor`: A function to apply to the `u0` value returned from `better_varmap_to_vars`
   to construct the final `u0` value.
 - `du0map`: A map of derivatives to values. See `implicit_dae`.
@@ -761,7 +769,7 @@ function process_SciMLProblem(
         implicit_dae = false, t = nothing, guesses = AnyDict(),
         warn_initialize_determined = true, initialization_eqs = [],
         eval_expression = false, eval_module = @__MODULE__, fully_determined = nothing,
-        check_initialization_units = false, tofloat = true, use_union = false,
+        check_initialization_units = false, tofloat = true,
         u0_constructor = identity, du0map = nothing, check_length = true,
         symbolic_u0 = false, warn_cyclic_dependency = false,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
@@ -842,6 +850,7 @@ function process_SciMLProblem(
     u0 = better_varmap_to_vars(
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
         op, dvs; tofloat = true, use_union = false,
         container_type = u0Type, allow_symbolic = symbolic_u0, is_initializeprob)
 =======
@@ -851,6 +860,9 @@ function process_SciMLProblem(
 >>>>>>> 6951e652f2 (fix: don't propagate  for u0)
         container_type = u0Type, allow_symbolic = symbolic_u0)
 >>>>>>> e31ae1bcc9 (fix: propagate `tofloat`, `use_union` to `better_varmap_to_vars`)
+=======
+        op, dvs; tofloat, container_type = u0Type, allow_symbolic = symbolic_u0)
+>>>>>>> a5e1e0239a (remove instances of)
 
     if u0 !== nothing
         u0 = u0_constructor(u0)
@@ -875,7 +887,7 @@ function process_SciMLProblem(
     if is_split(sys)
         p = MTKParameters(sys, op)
     else
-        p = better_varmap_to_vars(op, ps; tofloat, use_union, container_type = pType)
+        p = better_varmap_to_vars(op, ps; tofloat, container_type = pType)
     end
 
     if implicit_dae && du0map !== nothing
@@ -944,7 +956,7 @@ end
 ##############
 
 """
-    u0, p, defs = get_u0_p(sys, u0map, parammap; use_union=true, tofloat=true)
+    u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat=true)
 
 Take dictionaries with initial conditions and parameters and convert them to numeric arrays `u0` and `p`. Also return the merged dictionary `defs` containing the entire operating point.
 """
@@ -952,7 +964,6 @@ function get_u0_p(sys,
         u0map,
         parammap = nothing;
         t0 = nothing,
-        use_union = true,
         tofloat = true,
         symbolic_u0 = false)
     dvs = unknowns(sys)
@@ -991,11 +1002,11 @@ function get_u0_p(sys,
     end
 
     if symbolic_u0
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false, use_union = false)
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
     else
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, use_union)
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
     end
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
+    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat)
     p = p === nothing ? SciMLBase.NullParameters() : p
     t0 !== nothing && delete!(defs, get_iv(sys))
     u0, p, defs
@@ -1003,7 +1014,7 @@ end
 
 function get_u0(
         sys, u0map, parammap = nothing; symbolic_u0 = false,
-        toterm = default_toterm, t0 = nothing, use_union = true)
+        toterm = default_toterm, t0 = nothing)
     dvs = unknowns(sys)
     ps = parameters(sys)
     defs = defaults(sys)
@@ -1026,9 +1037,9 @@ function get_u0(
     defs = mergedefaults(defs, obsmap, u0map, dvs)
     if symbolic_u0
         u0 = varmap_to_vars(
-            u0map, dvs; defaults = defs, tofloat = false, use_union = false, toterm)
+            u0map, dvs; defaults = defs, tofloat = false, toterm)
     else
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, use_union, toterm)
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, toterm)
     end
     t0 !== nothing && delete!(defs, get_iv(sys))
     return u0, defs

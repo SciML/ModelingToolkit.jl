@@ -736,7 +736,7 @@ let
 
     pmap = [k1 => 1, k2 => 1]
     tspan = (0.0, 1.0)
-    prob = ODEProblem(sys, u0map, tspan, pmap)
+    prob = ODEProblem(sys, u0map, tspan, pmap);
     @test eltype(vcat(prob.p...)) === Float64
 
     prob = ODEProblem(sys, u0map, tspan, pmap)
@@ -745,7 +745,7 @@ let
     # No longer supported, Tuple used instead
     # pmap = Pair{Any, Union{Int, Float64}}[k1 => 1, k2 => 1.0]
     # tspan = (0.0, 1.0)
-    # prob = ODEProblem(sys, u0map, tspan, pmap, use_union = true)
+    # prob = ODEProblem(sys, u0map, tspan, pmap)
     # @test eltype(prob.p) === Union{Float64, Int}
 end
 
@@ -1208,7 +1208,7 @@ end
     sys = structural_simplify(ODESystem([D(x) ~ P], t, [x], [P]; name = :sys))
 
     function x_at_1(P)
-        prob = ODEProblem(sys, [x => P], (0.0, 1.0), [sys.P => P], use_union = false)
+        prob = ODEProblem(sys, [x => P], (0.0, 1.0), [sys.P => P])
         return solve(prob, Tsit5())(1.0)
     end
 

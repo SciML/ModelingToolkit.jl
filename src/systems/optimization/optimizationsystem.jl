@@ -295,7 +295,6 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         cons_sparse = false, checkbounds = false,
         linenumbers = true, parallel = SerialForm(),
         eval_expression = false, eval_module = @__MODULE__,
-        use_union = false,
         checks = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
@@ -338,10 +337,10 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     elseif has_index_cache(sys) && get_index_cache(sys) !== nothing
         p = MTKParameters(sys, parammap, u0map)
     else
-        p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+        p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false)
     end
-    lb = varmap_to_vars(dvs .=> lb, dvs; defaults = defs, tofloat = false, use_union)
-    ub = varmap_to_vars(dvs .=> ub, dvs; defaults = defs, tofloat = false, use_union)
+    lb = varmap_to_vars(dvs .=> lb, dvs; defaults = defs, tofloat = false)
+    ub = varmap_to_vars(dvs .=> ub, dvs; defaults = defs, tofloat = false)
 
     if !isnothing(lb) && all(lb .== -Inf) && !isnothing(ub) && all(ub .== Inf)
         lb = nothing
@@ -538,7 +537,6 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
         checkbounds = false,
         linenumbers = false, parallel = SerialForm(),
         eval_expression = false, eval_module = @__MODULE__,
-        use_union = false,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed `OptimizationSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `OptimizationProblemExpr`")
@@ -578,10 +576,10 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         p = MTKParameters(sys, parammap, u0map)
     else
-        p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+        p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false)
     end
-    lb = varmap_to_vars(dvs .=> lb, dvs; defaults = defs, tofloat = false, use_union)
-    ub = varmap_to_vars(dvs .=> ub, dvs; defaults = defs, tofloat = false, use_union)
+    lb = varmap_to_vars(dvs .=> lb, dvs; defaults = defs, tofloat = false)
+    ub = varmap_to_vars(dvs .=> ub, dvs; defaults = defs, tofloat = false)
 
     if !isnothing(lb) && all(lb .== -Inf) && !isnothing(ub) && all(ub .== Inf)
         lb = nothing

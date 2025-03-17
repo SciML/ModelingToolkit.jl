@@ -302,7 +302,6 @@ function SciMLBase.DiscreteProblem(
         parammap = SciMLBase.NullParameters();
         eval_module = @__MODULE__,
         eval_expression = false,
-        use_union = false,
         kwargs...
 )
     if !iscomplete(sys)
