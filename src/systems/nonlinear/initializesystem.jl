@@ -1,9 +1,9 @@
 """
 $(TYPEDSIGNATURES)
 
-Generate `NonlinearSystem` which initializes an ODE problem from specified initial conditions of an `ODESystem`.
+Generate `NonlinearSystem` which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
 """
-function generate_initializesystem(sys::AbstractSystem;
+function generate_initializesystem(sys::AbstractTimeDependentSystem;
         u0map = Dict(),
         pmap = Dict(),
         initialization_eqs = [],
@@ -31,81 +31,70 @@ function generate_initializesystem(sys::AbstractSystem;
     idxs_diff = isdiffeq.(eqs)
 
     # PREPROCESSING
-    # If `=> nothing` in `u0map`, remove the key from `defs`
     u0map = copy(anydict(u0map))
-    for (k, v) in u0map
-        v === nothing || continue
-        delete!(defs, k)
-    end
-    filter_missing_values!(u0map)
     pmap = anydict(pmap)
+    initsys_preprocessing!(u0map, defs)
 
-    # 1) Use algebraic equations of time-dependent systems as initialization constraints
-    if has_iv(sys)
-        idxs_alge = .!idxs_diff
-        append!(eqs_ics, eqs[idxs_alge]) # start equation list with algebraic equations
+    # 1) Use algebraic equations of system as initialization constraints
+    idxs_alge = .!idxs_diff
+    append!(eqs_ics, eqs[idxs_alge]) # start equation list with algebraic equations
 
-        eqs_diff = eqs[idxs_diff]
-        D = Differential(get_iv(sys))
-        diffmap = merge(
-            Dict(eq.lhs => eq.rhs for eq in eqs_diff),
-            Dict(D(eq.lhs) => D(eq.rhs) for eq in trueobs)
-        )
-    else
-        diffmap = Dict()
-    end
+    eqs_diff = eqs[idxs_diff]
+    D = Differential(get_iv(sys))
+    diffmap = merge(
+        Dict(eq.lhs => eq.rhs for eq in eqs_diff),
+        Dict(D(eq.lhs) => D(eq.rhs) for eq in trueobs)
+    )
 
-    if is_time_dependent(sys)
-        if has_schedule(sys) && (schedule = get_schedule(sys); !isnothing(schedule))
-            # 2) process dummy derivatives and u0map into initialization system
-            # prepare map for dummy derivative substitution
-            for x in filter(x -> !isnothing(x[1]), schedule.dummy_sub)
-                # set dummy derivatives to default_dd_guess unless specified
-                push!(defs, x[1] => get(guesses, x[1], default_dd_guess))
-            end
-            function process_u0map_with_dummysubs(y, x)
-                y = get(schedule.dummy_sub, y, y)
-                y = fixpoint_sub(y, diffmap)
-                # If we have `D(x) ~ x` and provide [D(x) => x, x => 1.0] to `u0map`, then
-                # without this condition `defs` would get `x => x` instead of retaining
-                # `x => 1.0`.
-                isequal(y, x) && return
-                if y ∈ vars_set
-                    # variables specified in u0 overrides defaults
-                    push!(defs, y => x)
-                elseif y isa Symbolics.Arr
-                    # TODO: don't scalarize arrays
-                    merge!(defs, Dict(scalarize(y .=> x)))
-                elseif y isa Symbolics.BasicSymbolic
-                    # y is a derivative expression expanded; add it to the initialization equations
-                    push!(eqs_ics, y ~ x)
-                else
-                    error("Initialization expression $y is currently not supported. If its a higher order derivative expression, then only the dummy derivative expressions are supported.")
-                end
-            end
-            for (y, x) in u0map
-                if Symbolics.isarraysymbolic(y)
-                    process_u0map_with_dummysubs.(collect(y), collect(x))
-                else
-                    process_u0map_with_dummysubs(y, x)
-                end
-            end
-        else
-            # 2) System doesn't have a schedule, so dummy derivatives don't exist/aren't handled (SDESystem)
-            for (k, v) in u0map
-                defs[k] = v
+    if has_schedule(sys) && (schedule = get_schedule(sys); !isnothing(schedule))
+        # 2) process dummy derivatives and u0map into initialization system
+        # prepare map for dummy derivative substitution
+        for x in filter(x -> !isnothing(x[1]), schedule.dummy_sub)
+            # set dummy derivatives to default_dd_guess unless specified
+            push!(defs, x[1] => get(guesses, x[1], default_dd_guess))
+        end
+        function process_u0map_with_dummysubs(y, x)
+            y = get(schedule.dummy_sub, y, y)
+            y = fixpoint_sub(y, diffmap)
+            # If we have `D(x) ~ x` and provide [D(x) => x, x => 1.0] to `u0map`, then
+            # without this condition `defs` would get `x => x` instead of retaining
+            # `x => 1.0`.
+            isequal(y, x) && return
+            if y ∈ vars_set
+                # variables specified in u0 overrides defaults
+                push!(defs, y => x)
+            elseif y isa Symbolics.Arr
+                # TODO: don't scalarize arrays
+                merge!(defs, Dict(scalarize(y .=> x)))
+            elseif y isa Symbolics.BasicSymbolic
+                # y is a derivative expression expanded; add it to the initialization equations
+                push!(eqs_ics, y ~ x)
+            else
+                error("Initialization expression $y is currently not supported. If its a higher order derivative expression, then only the dummy derivative expressions are supported.")
             end
         end
-
-        # 3) process other variables
-        for var in vars
-            if var ∈ keys(defs)
-                push!(eqs_ics, var ~ defs[var])
-            elseif var ∈ keys(guesses)
-                push!(defs, var => guesses[var])
-            elseif check_defguess
-                error("Invalid setup: variable $(var) has no default value or initial guess")
+        for (y, x) in u0map
+            if Symbolics.isarraysymbolic(y)
+                process_u0map_with_dummysubs.(collect(y), collect(x))
+            else
+                process_u0map_with_dummysubs(y, x)
             end
+        end
+    else
+        # 2) System doesn't have a schedule, so dummy derivatives don't exist/aren't handled (SDESystem)
+        for (k, v) in u0map
+            defs[k] = v
+        end
+    end
+
+    # 3) process other variables
+    for var in vars
+        if var ∈ keys(defs)
+            push!(eqs_ics, var ~ defs[var])
+        elseif var ∈ keys(guesses)
+            push!(defs, var => guesses[var])
+        elseif check_defguess
+            error("Invalid setup: variable $(var) has no default value or initial guess")
         end
     end
 
@@ -119,6 +108,179 @@ function generate_initializesystem(sys::AbstractSystem;
     end
 
     # 5) process parameters as initialization unknowns
+    paramsubs = setup_parameter_initialization!(
+        sys, pmap, defs, guesses, eqs_ics; check_defguess)
+
+    # 6) parameter dependencies become equations, their LHS become unknowns
+    # non-numeric dependent parameters stay as parameter dependencies
+    new_parameter_deps = solve_parameter_dependencies!(
+        sys, paramsubs, eqs_ics, defs, guesses)
+
+    # 7) handle values provided for dependent parameters similar to values for observed variables
+    handle_dependent_parameter_constraints!(sys, pmap, eqs_ics, paramsubs)
+
+    # parameters do not include ones that became initialization unknowns
+    pars = Vector{SymbolicParam}(filter(
+        p -> !haskey(paramsubs, p), parameters(sys; initial_parameters = true)))
+    push!(pars, get_iv(sys))
+
+    # 8) use observed equations for guesses of observed variables if not provided
+    for eq in trueobs
+        haskey(defs, eq.lhs) && continue
+        any(x -> isequal(default_toterm(x), eq.lhs), keys(defs)) && continue
+
+        defs[eq.lhs] = eq.rhs
+    end
+    append!(eqs_ics, trueobs)
+
+    vars = [vars; collect(values(paramsubs))]
+
+    # even if `p => tovar(p)` is in `paramsubs`, `isparameter(p[1]) === true` after substitution
+    # so add scalarized versions as well
+    scalarize_varmap!(paramsubs)
+
+    eqs_ics = Symbolics.substitute.(eqs_ics, (paramsubs,))
+    for k in keys(defs)
+        defs[k] = substitute(defs[k], paramsubs)
+    end
+    meta = InitializationSystemMetadata(
+        anydict(u0map), anydict(pmap), additional_guesses,
+        additional_initialization_eqs, extra_metadata, nothing)
+    return NonlinearSystem(eqs_ics,
+        vars,
+        pars;
+        defaults = defs,
+        checks = check_units,
+        parameter_dependencies = new_parameter_deps,
+        name,
+        metadata = meta,
+        kwargs...)
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Generate `NonlinearSystem` which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
+"""
+function generate_initializesystem(sys::AbstractTimeIndependentSystem;
+        u0map = Dict(),
+        pmap = Dict(),
+        initialization_eqs = [],
+        guesses = Dict(),
+        algebraic_only = false,
+        check_units = true, check_defguess = false,
+        name = nameof(sys), extra_metadata = (;), kwargs...)
+    eqs = equations(sys)
+    trueobs, eqs = unhack_observed(observed(sys), eqs)
+    vars = unique([unknowns(sys); getfield.(trueobs, :lhs)])
+    vars_set = Set(vars) # for efficient in-lookup
+
+    eqs_ics = Equation[]
+    defs = copy(defaults(sys)) # copy so we don't modify sys.defaults
+    additional_guesses = anydict(guesses)
+    additional_initialization_eqs = Vector{Equation}(initialization_eqs)
+    guesses = merge(get_guesses(sys), additional_guesses)
+
+    # PREPROCESSING
+    u0map = copy(anydict(u0map))
+    pmap = anydict(pmap)
+    initsys_preprocessing!(u0map, defs)
+
+    # Calculate valid `Initial` parameters. These are unknowns for
+    # which constant initial values were provided. By this point,
+    # they have been separated into `x => Initial(x)` in `u0map`
+    # and `Initial(x) => val` in `pmap`.
+    valid_initial_parameters = Set{BasicSymbolic}()
+    for (k, v) in u0map
+        isequal(Initial(k), v) || continue
+        push!(valid_initial_parameters, v)
+    end
+
+    # get the initialization equations
+    if !algebraic_only
+        initialization_eqs = [get_initialization_eqs(sys); initialization_eqs]
+    end
+
+    # only include initialization equations where all the involved `Initial`
+    # parameters are valid.
+    vs = Set()
+    initialization_eqs = filter(initialization_eqs) do eq
+        empty!(vs)
+        vars!(vs, eq; op = Initial)
+        non_params = filter(!isparameter, vs)
+        # error if non-parameters are present in the initialization equations
+        if !isempty(non_params)
+            throw(UnknownsInTimeIndependentInitializationError(eq, non_params))
+        end
+        filter!(x -> iscall(x) && isinitial(x), vs)
+        invalid_initials = setdiff(vs, valid_initial_parameters)
+        return isempty(invalid_initials)
+    end
+
+    append!(eqs_ics, initialization_eqs)
+
+    # process parameters as initialization unknowns
+    paramsubs = setup_parameter_initialization!(
+        sys, pmap, defs, guesses, eqs_ics; check_defguess)
+
+    # parameter dependencies become equations, their LHS become unknowns
+    # non-numeric dependent parameters stay as parameter dependencies
+    new_parameter_deps = solve_parameter_dependencies!(
+        sys, paramsubs, eqs_ics, defs, guesses)
+
+    # handle values provided for dependent parameters similar to values for observed variables
+    handle_dependent_parameter_constraints!(sys, pmap, eqs_ics, paramsubs)
+
+    # parameters do not include ones that became initialization unknowns
+    pars = Vector{SymbolicParam}(filter(
+        p -> !haskey(paramsubs, p), parameters(sys; initial_parameters = true)))
+    vars = collect(values(paramsubs))
+
+    # even if `p => tovar(p)` is in `paramsubs`, `isparameter(p[1]) === true` after substitution
+    # so add scalarized versions as well
+    scalarize_varmap!(paramsubs)
+
+    eqs_ics = Symbolics.substitute.(eqs_ics, (paramsubs,))
+    for k in keys(defs)
+        defs[k] = substitute(defs[k], paramsubs)
+    end
+    meta = InitializationSystemMetadata(
+        anydict(u0map), anydict(pmap), additional_guesses,
+        additional_initialization_eqs, extra_metadata, nothing)
+    return NonlinearSystem(eqs_ics,
+        vars,
+        pars;
+        defaults = defs,
+        checks = check_units,
+        parameter_dependencies = new_parameter_deps,
+        name,
+        metadata = meta,
+        kwargs...)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Preprocessing step for initialization. Currently removes key `k` from `defs` and `u0map`
+if `k => nothing` is present in `u0map`.
+"""
+function initsys_preprocessing!(u0map::AbstractDict, defs::AbstractDict)
+    for (k, v) in u0map
+        v === nothing || continue
+        delete!(defs, k)
+    end
+    filter_missing_values!(u0map)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Update `defs` and `eqs_ics` appropriately for parameter initialization. Return a dictionary
+mapping solvable parameters to their `tovar` variants.
+"""
+function setup_parameter_initialization!(
+        sys::AbstractSystem, pmap::AbstractDict, defs::AbstractDict,
+        guesses::AbstractDict, eqs_ics::Vector{Equation}; check_defguess = false)
     paramsubs = Dict()
     for p in parameters(sys)
         if is_parameter_solvable(p, pmap, defs, guesses)
@@ -169,8 +331,17 @@ function generate_initializesystem(sys::AbstractSystem;
         end
     end
 
-    # 6) parameter dependencies become equations, their LHS become unknowns
-    # non-numeric dependent parameters stay as parameter dependencies
+    return paramsubs
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Add appropriate parameter dependencies as initialization equations. Return the new list of
+parameter dependencies for the initialization system.
+"""
+function solve_parameter_dependencies!(sys::AbstractSystem, paramsubs::AbstractDict,
+        eqs_ics::Vector{Equation}, defs::AbstractDict, guesses::AbstractDict)
     new_parameter_deps = Equation[]
     for eq in parameter_dependencies(sys)
         if !is_variable_floatingpoint(eq.lhs)
@@ -184,60 +355,23 @@ function generate_initializesystem(sys::AbstractSystem;
         push!(defs, varp => guessval)
     end
 
-    # 7) handle values provided for dependent parameters similar to values for observed variables
+    return new_parameter_deps
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Turn values provided for parameter dependencies into initialization equations.
+"""
+function handle_dependent_parameter_constraints!(sys::AbstractSystem, pmap::AbstractDict,
+        eqs_ics::Vector{Equation}, paramsubs::AbstractDict)
     for (k, v) in merge(defaults(sys), pmap)
         if is_variable_floatingpoint(k) && has_parameter_dependency_with_lhs(sys, k)
             push!(eqs_ics, paramsubs[k] ~ v)
         end
     end
 
-    # parameters do not include ones that became initialization unknowns
-    pars = Vector{SymbolicParam}(filter(
-        p -> !haskey(paramsubs, p), parameters(sys; initial_parameters = true)))
-    is_time_dependent(sys) && push!(pars, get_iv(sys))
-
-    if is_time_dependent(sys)
-        # 8) use observed equations for guesses of observed variables if not provided
-        for eq in trueobs
-            haskey(defs, eq.lhs) && continue
-            any(x -> isequal(default_toterm(x), eq.lhs), keys(defs)) && continue
-
-            defs[eq.lhs] = eq.rhs
-        end
-        append!(eqs_ics, trueobs)
-    end
-
-    if is_time_dependent(sys)
-        vars = [vars; collect(values(paramsubs))]
-    else
-        vars = collect(values(paramsubs))
-    end
-
-    # even if `p => tovar(p)` is in `paramsubs`, `isparameter(p[1]) === true` after substitution
-    # so add scalarized versions as well
-    for k in collect(keys(paramsubs))
-        symbolic_type(k) == ArraySymbolic() || continue
-        for i in eachindex(k)
-            paramsubs[k[i]] = paramsubs[k][i]
-        end
-    end
-
-    eqs_ics = Symbolics.substitute.(eqs_ics, (paramsubs,))
-    for k in keys(defs)
-        defs[k] = substitute(defs[k], paramsubs)
-    end
-    meta = InitializationSystemMetadata(
-        anydict(u0map), anydict(pmap), additional_guesses,
-        additional_initialization_eqs, extra_metadata, nothing)
-    return NonlinearSystem(eqs_ics,
-        vars,
-        pars;
-        defaults = defs,
-        checks = check_units,
-        parameter_dependencies = new_parameter_deps,
-        name,
-        metadata = meta,
-        kwargs...)
+    return nothing
 end
 
 """
@@ -603,4 +737,12 @@ function unhack_observed(obseqs::Vector{Equation}, eqs::Vector{Equation})
         fixpoint_sub(eq.lhs, subs) ~ fixpoint_sub(eq.rhs, subs)
     end
     return obseqs, eqs
+end
+
+function UnknownsInTimeIndependentInitializationError(eq, non_params)
+    ArgumentError("""
+    Initialization equations for time-independent systems can only contain parameters. \
+    Found $non_params in $eq. If the equations refer to the initial guess for unknowns, \
+    use the `Initial` operator.
+    """)
 end

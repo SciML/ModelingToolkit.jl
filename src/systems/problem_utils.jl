@@ -491,6 +491,22 @@ function filter_missing_values!(varmap::AbstractDict; missing_values = nothing)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+For each `k => v` in `varmap` where `k` is an array (or array symbolic) add
+`k[i] => v[i]` for all `i  in eachindex(k)`. Return the modified `varmap`.
+"""
+function scalarize_varmap!(varmap::AbstractDict)
+    for k in collect(keys(varmap))
+        symbolic_type(k) == ArraySymbolic() || continue
+        for i in eachindex(k)
+            varmap[k[i]] = varmap[k][i]
+        end
+    end
+    return varmap
+end
+
 struct GetUpdatedMTKParameters{G, S}
     # `getu` functor which gets parameters that are unknowns during initialization
     getpunknowns::G
@@ -800,6 +816,7 @@ function process_SciMLProblem(
     op, missing_unknowns, missing_pars = build_operating_point!(sys,
         u0map, pmap, defs, cmap, dvs, ps)
 
+    # Main.@infiltrate sys isa NonlinearSystem
     if u0_constructor === identity && u0Type <: StaticArray
         u0_constructor = vals -> SymbolicUtils.Code.create_array(
             u0Type, eltype(vals), Val(1), Val(length(vals)), vals...)
