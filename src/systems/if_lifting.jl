@@ -85,7 +85,7 @@ function (cw::CondRewriter)(expr, dep)
         return (expr, true, true)
         # other singleton symbolic variables
     elseif !iscall(expr)
-        @warn "Automatic conversion of if statments to events requires use of a limited conditional grammar; see the documentation. Skipping due to $expr"
+        @warn "Automatic conversion of if statements to events requires use of a limited conditional grammar; see the documentation. Skipping due to $expr"
         return (expr, true, true) # error case => conservative assumption is that both true and false have to be evaluated
     elseif operation(expr) == Base.:(|) # OR of two conditions
         a, b = arguments(expr)
@@ -405,7 +405,7 @@ const CONDITION_SIMPLIFIER = Rewriters.Fixpoint(Rewriters.Postwalk(Rewriters.Cha
                                                                                     (@rule ifelse(false, (~x), (~y)) => (~y))])))
 
 """
-If lifting converts (nested) if statements into a series of continous events + a logically equivalent if statement + parameters.
+If lifting converts (nested) if statements into a series of continuous events + a logically equivalent if statement + parameters.
 
 Lifting proceeds through the following process:
 * rewrite comparisons to be of the form eqn [op] 0; subtract the RHS from the LHS 
