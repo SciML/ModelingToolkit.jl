@@ -420,19 +420,19 @@ end
 
 # issue https://github.com/SciML/ModelingToolkit.jl/issues/1386
 # tests that it works for ODAESystem
-#@testset "ODAESystem" begin
-#    @variables vs(t) v(t) vmeasured(t)
-#    eq = [vs ~ sin(2pi * t)
-#          D(v) ~ vs - v
-#          D(vmeasured) ~ 0.0]
-#    ev = [sin(20pi * t) ~ 0.0] => [vmeasured ~ Pre(v)]
-#    @named sys = ODESystem(eq, t, continuous_events = ev)
-#    sys = structural_simplify(sys)
-#    prob = ODEProblem(sys, zeros(2), (0.0, 5.1))
-#    sol = solve(prob, Tsit5())
-#    @test all(minimum((0:0.1:5) .- sol.t', dims = 2) .< 0.0001) # test that the solver stepped every 0.1s as dictated by event
-#    @test sol([0.25])[vmeasured][] == sol([0.23])[vmeasured][] # test the hold property
-#end
+@testset "ODAESystem" begin
+    @variables vs(t) v(t) vmeasured(t)
+    eq = [vs ~ sin(2pi * t)
+          D(v) ~ vs - v
+          D(vmeasured) ~ 0.0]
+    ev = [sin(20pi * t) ~ 0.0] => [vmeasured ~ Pre(v)]
+    @named sys = ODESystem(eq, t, continuous_events = ev)
+    sys = structural_simplify(sys)
+    prob = ODEProblem(sys, zeros(2), (0.0, 5.1))
+    sol = solve(prob, Tsit5())
+    @test all(minimum((0:0.1:5) .- sol.t', dims = 2) .< 0.0001) # test that the solver stepped every 0.1s as dictated by event
+    @test sol([0.25])[vmeasured][] == sol([0.23])[vmeasured][] # test the hold property
+end
 
 ##  https://github.com/SciML/ModelingToolkit.jl/issues/1528
 @testset "Handle Empty Events" begin
