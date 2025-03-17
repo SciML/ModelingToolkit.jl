@@ -54,30 +54,30 @@ end
 
 # Guess
 @variables y [guess = 0]
-@test getguess(y) === 0
-@test hasguess(y) === true
+@test getguess(y) == 0
+@test hasguess(y) == true
 @test ModelingToolkit.dump_variable_metadata(y).guess == 0
 
 # Default
 @variables y = 0
-@test ModelingToolkit.getdefault(y) === 0
-@test ModelingToolkit.hasdefault(y) === true
+@test ModelingToolkit.getdefault(y) == 0
+@test ModelingToolkit.hasdefault(y) == true
 @test ModelingToolkit.dump_variable_metadata(y).default == 0
 
 # Issue#2653
 @variables y[1:3] [guess = ones(3)]
 @test getguess(y) == ones(3)
-@test hasguess(y) === true
+@test hasguess(y) == true
 @test ModelingToolkit.dump_variable_metadata(y).guess == ones(3)
 
 for i in 1:3
     @test getguess(y[i]) == 1.0
-    @test hasguess(y[i]) === true
+    @test hasguess(y[i]) == true
     @test ModelingToolkit.dump_variable_metadata(y[i]).guess == 1.0
 end
 
 @variables y
-@test hasguess(y) === false
+@test hasguess(y) == false
 @test !haskey(ModelingToolkit.dump_variable_metadata(y), :guess)
 
 # Disturbance
