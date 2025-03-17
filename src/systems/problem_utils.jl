@@ -326,23 +326,24 @@ function Base.showerror(io::IO, err::UnexpectedSymbolicValueInVarmap)
 end
 
 struct MissingGuessError <: Exception
-    sym::Any
-    val::Any
+    syms::Vector{Any}
+    vals::Vector{Any}
 end
 
 function Base.showerror(io::IO, err::MissingGuessError) 
     println(io, 
             """
             Unable to resolve numeric guesses for all of the variables in the system. \
-            This may be because your guesses are cyclic.
+            This may be because your guesses are cyclic. In order for the problem to be \
+            initialized, all of the variables must have a numeric value to serve as a \
+            starting point for the nonlinear solve. 
 
-            In order for the problem to be initialized, all of the variables must have \
-            a numeric value to serve as a starting point for the nonlinear solve. \
-            Please provide an additional numeric guess to `guesses` in \
-            the problem constructor.
-
-            This error was thrown because symbolic value $(err.val) was found for variable $(err.sym).
+            Symbolic values were found for the following variables/parameters in the map; \
+            please provide additional numeric guesses so they can resolve to numbers:
             """)
+    for (sym, val) in zip(err.syms, err.vals)
+        println(sym, " => ", val)
+    end
 end
 
 """
@@ -375,13 +376,17 @@ function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
     end
     vals = map(x -> varmap[x], vars)
     if !allow_symbolic
+        missingsyms = Any[]
+        missingvals = Any[]
         for (sym, val) in zip(vars, vals)
             symbolic_type(val) == NotSymbolic() && continue
-            if is_initializeprob
-                throw(MissingGuessError(sym, val))
-            else
-                throw(UnexpectedSymbolicValueInVarmap(sym, val))
-            end
+            push!(missingsyms, sym)
+            push!(missingvals, val)
+        end
+
+        if !isempty(missingsyms)
+            is_initializeprob ? throw(MissingGuessError(missingsyms, missingvals)) : 
+                throw(UnexpectedSymbolicValueInVarmap(missingsyms[1], missingvals[1]))
         end
     end
 
