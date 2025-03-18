@@ -956,7 +956,7 @@ end
 ##############
 
 """
-    u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat=true)
+    u0, p, defs = get_u0_p(sys, u0map, parammap; use_union=true, tofloat=true)
 
 Take dictionaries with initial conditions and parameters and convert them to numeric arrays `u0` and `p`. Also return the merged dictionary `defs` containing the entire operating point.
 """
@@ -965,6 +965,7 @@ function get_u0_p(sys,
         parammap = nothing;
         t0 = nothing,
         tofloat = true,
+        use_union = true,
         symbolic_u0 = false)
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
@@ -1002,11 +1003,11 @@ function get_u0_p(sys,
     end
 
     if symbolic_u0
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false, use_union = false)
     else
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, use_union)
     end
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat)
+    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
     p = p === nothing ? SciMLBase.NullParameters() : p
     t0 !== nothing && delete!(defs, get_iv(sys))
     u0, p, defs
@@ -1014,7 +1015,7 @@ end
 
 function get_u0(
         sys, u0map, parammap = nothing; symbolic_u0 = false,
-        toterm = default_toterm, t0 = nothing)
+        toterm = default_toterm, t0 = nothing, use_union = true)
     dvs = unknowns(sys)
     ps = parameters(sys)
     defs = defaults(sys)
@@ -1037,9 +1038,9 @@ function get_u0(
     defs = mergedefaults(defs, obsmap, u0map, dvs)
     if symbolic_u0
         u0 = varmap_to_vars(
-            u0map, dvs; defaults = defs, tofloat = false, toterm)
+            u0map, dvs; defaults = defs, tofloat = false, use_union = false, toterm)
     else
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, toterm)
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, use_union, toterm)
     end
     t0 !== nothing && delete!(defs, get_iv(sys))
     return u0, defs
