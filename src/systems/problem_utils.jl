@@ -325,6 +325,24 @@ function Base.showerror(io::IO, err::UnexpectedSymbolicValueInVarmap)
         """)
 end
 
+struct MissingGuessError <: Exception
+    syms::Vector{Any}
+    vals::Vector{Any}
+end
+
+function Base.showerror(io::IO, err::MissingGuessError) 
+    println(io, 
+            """
+            Cyclic guesses detected in the system. Symbolic values were found for the following variables/parameters in the map: \
+            """)
+    for (sym, val) in zip(err.syms, err.vals)
+        println(io, "$sym  => $val")
+    end
+    println(io,
+            """
+            In order to resolve this, please provide additional numeric guesses so that the chain can be resolved to assign numeric values to each variable.            """)
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -342,10 +360,11 @@ Keyword arguments:
   [`missingvars`](@ref) to perform the check.
 - `allow_symbolic` allows the returned array to contain symbolic values. If this is `true`,
   `promotetoconcrete` is set to `false`.
+- `is_initializeprob, guesses`: Used to determine whether the system is missing guesses.
 """
 function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
         tofloat = true, use_union = true, container_type = Array,
-        toterm = default_toterm, promotetoconcrete = nothing, check = true, allow_symbolic = false)
+        toterm = default_toterm, promotetoconcrete = nothing, check = true, allow_symbolic = false, is_initializeprob = false)
     isempty(vars) && return nothing
 
     if check
@@ -354,9 +373,17 @@ function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
     end
     vals = map(x -> varmap[x], vars)
     if !allow_symbolic
+        missingsyms = Any[]
+        missingvals = Any[]
         for (sym, val) in zip(vars, vals)
             symbolic_type(val) == NotSymbolic() && continue
-            throw(UnexpectedSymbolicValueInVarmap(sym, val))
+            push!(missingsyms, sym)
+            push!(missingvals, val)
+        end
+
+        if !isempty(missingsyms)
+            is_initializeprob ? throw(MissingGuessError(missingsyms, missingvals)) : 
+                throw(UnexpectedSymbolicValueInVarmap(missingsyms[1], missingvals[1]))
         end
     end
 
@@ -704,7 +731,7 @@ Keyword arguments:
 - `fully_determined`: Override whether the initialization system is fully determined.
 - `check_initialization_units`: Enable or disable unit checks when constructing the
   initialization problem.
-- `tofloat`, `use_union`: Passed to [`better_varmap_to_vars`](@ref) for building `u0` (and
+- `tofloat`, `use_union`, `is_initializeprob`: Passed to [`better_varmap_to_vars`](@ref) for building `u0` (and
   possibly `p`).
 - `u0_constructor`: A function to apply to the `u0` value returned from `better_varmap_to_vars`
   to construct the final `u0` value.
@@ -742,7 +769,7 @@ function process_SciMLProblem(
         circular_dependency_max_cycles = 10,
         substitution_limit = 100, use_scc = true,
         force_initialization_time_independent = false, algebraic_only = false,
-        allow_incomplete = false, kwargs...)
+        allow_incomplete = false, is_initializeprob = false, kwargs...)
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     iv = has_iv(sys) ? get_iv(sys) : nothing
@@ -815,7 +842,7 @@ function process_SciMLProblem(
 
     u0 = better_varmap_to_vars(
         op, dvs; tofloat = true, use_union = false,
-        container_type = u0Type, allow_symbolic = symbolic_u0)
+        container_type = u0Type, allow_symbolic = symbolic_u0, is_initializeprob)
 
     if u0 !== nothing
         u0 = u0_constructor(u0)
