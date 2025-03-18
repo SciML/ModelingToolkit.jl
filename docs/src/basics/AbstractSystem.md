@@ -69,6 +69,8 @@ Optionally, a system could have:
 Note that if you know a system is an `AbstractTimeDependentSystem` you could use `get_iv` to get the
 unique independent variable directly, rather than using `independent_variables(sys)[1]`, which is clunky and may cause problems if `sys` is an `AbstractMultivariateSystem` because there may be more than one independent variable. `AbstractTimeIndependentSystem`s do not have a method `get_iv`, and `independent_variables(sys)` will return a size-zero result for such. For an `AbstractMultivariateSystem`, `get_ivs` is equivalent.
 
+For the `parameters`, `unknowns`, `continuous_events`, and `discrete_events` accessors there are corresponding `parameters_toplevel`, `unknowns_toplevel`, `continuous_events_toplevel`, and `discrete_events_toplevel` accessors which work similarly, but ignore the content of subsystems. Furthermore, a `equations_toplevel` version of `equations` exists as well, however, it can only be applied to non-complete systems.
+
 A system could also have caches:
 
   - `get_jac(sys)`: The Jacobian of a system.

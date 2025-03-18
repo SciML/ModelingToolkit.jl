@@ -1316,6 +1316,18 @@ function unknowns(sys::AbstractSystem)
 end
 
 """
+    unknowns_toplevel(sys::AbstractSystem)
+
+Replicates the behaviour of `unknowns`, but ignores unknowns of subsystems.
+"""
+function unknowns_toplevel(sys::AbstractSystem)
+    if has_parent(sys) && (parent = get_parent(sys)) !== nothing
+        return unknowns_toplevel(parent)
+    end
+    return get_unknowns(sys)
+end
+
+"""
 $(TYPEDSIGNATURES)
 
 Get the parameters of the system `sys` and its subsystems.
@@ -1353,6 +1365,18 @@ end
 
 function dependent_parameters(sys::AbstractSystem)
     return map(eq -> eq.lhs, parameter_dependencies(sys))
+end
+
+"""
+    parameters_toplevel(sys::AbstractSystem)
+
+Replicates the behaviour of `parameters`, but ignores parameters of subsystems.
+"""
+function parameters_toplevel(sys::AbstractSystem)
+    if has_parent(sys) && (parent = get_parent(sys)) !== nothing
+        return parameters_toplevel(parent)
+    end
+    return get_ps(sys)
 end
 
 """
@@ -1563,6 +1587,22 @@ function equations(sys::AbstractSystem)
                            init = Equation[])]
         return eqs
     end
+end
+
+"""
+    equations_toplevel(sys::AbstractSystem)
+
+Replicates the behaviour of `equations`, but ignores equations of subsystems.
+
+Notes:
+- Cannot be applied to non-complete systems.
+"""
+function equations_toplevel(sys::AbstractSystem)
+    iscomplete(sys) && error("Cannot apply `equations_toplevel` to complete systems.")
+    if has_parent(sys) && (parent = get_parent(sys)) !== nothing
+        return equations_toplevel(parent)
+    end
+    return get_eqs(sys)
 end
 
 """

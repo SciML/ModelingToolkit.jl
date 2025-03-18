@@ -94,17 +94,17 @@ A [`ContinuousCallback`](@ref SciMLBase.ContinuousCallback) specified symbolical
 as well as the positive-edge `affect` and negative-edge `affect_neg` that apply when *any* of `eq` are satisfied.
 By default `affect_neg = affect`; to only get rising edges specify `affect_neg = nothing`.
 
-Assume without loss of generality that the equation is of the form `c(u,p,t) ~ 0`; we denote the integrator state as `i.u`. 
+Assume without loss of generality that the equation is of the form `c(u,p,t) ~ 0`; we denote the integrator state as `i.u`.
 For compactness, we define `prev_sign = sign(c(u[t-1], p[t-1], t-1))` and `cur_sign = sign(c(u[t], p[t], t))`.
-A condition edge will be detected and the callback will be invoked iff `prev_sign * cur_sign <= 0`. 
+A condition edge will be detected and the callback will be invoked iff `prev_sign * cur_sign <= 0`.
 The positive edge `affect` will be triggered iff an edge is detected and if `prev_sign < 0`; similarly, `affect_neg` will be
-triggered iff an edge is detected and `prev_sign > 0`. 
+triggered iff an edge is detected and `prev_sign > 0`.
 
-Inter-sample condition activation is not guaranteed; for example if we use the dirac delta function as `c` to insert a 
+Inter-sample condition activation is not guaranteed; for example if we use the dirac delta function as `c` to insert a
 sharp discontinuity between integrator steps (which in this example would not normally be identified by adaptivity) then the condition is not
 guaranteed to be triggered.
 
-Once detected the integrator will "wind back" through a root-finding process to identify the point when the condition became active; the method used 
+Once detected the integrator will "wind back" through a root-finding process to identify the point when the condition became active; the method used
 is specified by `rootfind` from [`SciMLBase.RootfindOpt`](@ref). If we denote the time when the condition becomes active as `tc`,
 the value in the integrator after windback will be:
 * `u[tc-epsilon], p[tc-epsilon], tc` if `LeftRootFind` is used,
@@ -116,7 +116,7 @@ it passed through 0.
 
 Multiple callbacks in the same system with different `rootfind` operations will be grouped
 by their `rootfind` value into separate VectorContinuousCallbacks in the enumeration order of `SciMLBase.RootfindOpt`. This may cause some callbacks to not fire if several become
-active at the same instant. See the `SciMLBase` documentation for more information on the semantic rules. 
+active at the same instant. See the `SciMLBase` documentation for more information on the semantic rules.
 
 Affects (i.e. `affect` and `affect_neg`) can be specified as either:
 * A list of equations that should be applied when the callback is triggered (e.g. `x ~ 3, y ~ 7`) which must be of the form `unknown ~ observed value` where each `unknown` appears only once. Equations will be applied in the order that they appear in the vector; parameters and state updates will become immediately visible to following equations.
@@ -328,13 +328,13 @@ The `SymbolicContinuousCallback`s in the returned vector are structs with two fi
 `eqs => affect`.
 """
 function continuous_events(sys::AbstractSystem)
-    obs = get_continuous_events(sys)
-    filter(!isempty, obs)
+    cbs = get_continuous_events(sys)
+    filter(!isempty, cbs)
 
     systems = get_systems(sys)
-    cbs = [obs;
+    cbs = [cbs;
            reduce(vcat,
-               (map(o -> namespace_callback(o, s), continuous_events(s))
+               (map(cb -> namespace_callback(cb, s), continuous_events(s))
                for s in systems),
                init = SymbolicContinuousCallback[])]
     filter(!isempty, cbs)
@@ -354,6 +354,21 @@ function vars!(vars, cb::SymbolicContinuousCallback; op = Differential)
         end
     end
     return vars
+end
+
+"""
+    continuous_events_toplevel(sys::AbstractSystem)
+
+Replicates the behaviour of `continuous_events`, but ignores events of subsystems.
+
+Notes:
+- Cannot be applied to non-complete systems.
+"""
+function continuous_events_toplevel(sys::AbstractSystem)
+    if has_parent(sys) && (parent = get_parent(sys)) !== nothing
+        return continuous_events_toplevel(parent)
+    end
+    return get_continuous_events(sys)
 end
 
 #################################### discrete events #####################################
@@ -483,11 +498,11 @@ The `SymbolicDiscreteCallback`s in the returned vector are structs with two fiel
 `condition => affect`.
 """
 function discrete_events(sys::AbstractSystem)
-    obs = get_discrete_events(sys)
+    cbs = get_discrete_events(sys)
     systems = get_systems(sys)
-    cbs = [obs;
+    cbs = [cbs;
            reduce(vcat,
-               (map(o -> namespace_callback(o, s), discrete_events(s)) for s in systems),
+               (map(cb -> namespace_callback(cb, s), discrete_events(s)) for s in systems),
                init = SymbolicDiscreteCallback[])]
     cbs
 end
@@ -512,6 +527,21 @@ function vars!(vars, cb::SymbolicDiscreteCallback; op = Differential)
         end
     end
     return vars
+end
+
+"""
+    discrete_events_toplevel(sys::AbstractSystem)
+
+Replicates the behaviour of `discrete_events`, but ignores events of subsystems.
+
+Notes:
+- Cannot be applied to non-complete systems.
+"""
+function discrete_events_toplevel(sys::AbstractSystem)
+    if has_parent(sys) && (parent = get_parent(sys)) !== nothing
+        return discrete_events_toplevel(parent)
+    end
+    return get_discrete_events(sys)
 end
 
 ################################# compilation functions ####################################
@@ -688,7 +718,7 @@ function generate_rootfinding_callback(sys::AbstractTimeDependentSystem,
     generate_rootfinding_callback(cbs, sys, dvs, ps; kwargs...)
 end
 """
-Generate a single rootfinding callback; this happens if there is only one equation in `cbs` passed to 
+Generate a single rootfinding callback; this happens if there is only one equation in `cbs` passed to
 generate_rootfinding_callback and thus we can produce a ContinuousCallback instead of a VectorContinuousCallback.
 """
 function generate_single_rootfinding_callback(
