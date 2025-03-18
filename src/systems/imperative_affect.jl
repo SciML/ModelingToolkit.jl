@@ -167,7 +167,7 @@ function check_assignable(sys, sym)
     end
 end
 
-function compile_functional_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs...)
+function compile_functional_affect(affect::ImperativeAffect, cb, sys; kwargs...)
     #=
     Implementation sketch:
         generate observed function (oop), should save to a component array under obs_syms
@@ -190,6 +190,9 @@ function compile_functional_affect(affect::ImperativeAffect, cb, sys, dvs, ps; k
         end
         return (syms_dedup, exprs_dedup)
     end
+
+    dvs = unknowns(sys)
+    ps = parameters(sys)
 
     obs_exprs = observed(affect)
     if !affect.skip_checks
