@@ -751,3 +751,5 @@ function structural_simplify(sys::OptimizationSystem; split = true, kwargs...)
     sys = complete(sys; split)
     return sys
 end
+
+supports_initialization(::OptimizationSystem) = false

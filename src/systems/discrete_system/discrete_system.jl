@@ -421,3 +421,5 @@ end
 function DiscreteFunctionExpr(sys::DiscreteSystem, args...; kwargs...)
     DiscreteFunctionExpr{true}(sys, args...; kwargs...)
 end
+
+supports_initialization(::DiscreteSystem) = false

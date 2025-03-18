@@ -676,6 +676,8 @@ function SymbolicUtils.maketerm(::Type{<:BasicSymbolic}, ::Initial, args, meta)
     return metadata(val, meta)
 end
 
+supports_initialization(sys::AbstractSystem) = true
+
 function add_initialization_parameters(sys::AbstractSystem)
     @assert !has_systems(sys) || isempty(get_systems(sys))
     is_initializesystem(sys) && return sys

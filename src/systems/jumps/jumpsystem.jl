@@ -685,3 +685,5 @@ function (ratemap::JumpSysMajParamMapper{U, V, W})(maj::MassActionJump, newparam
     scale_rates && JumpProcesses.scalerates!(maj.scaled_rates, maj.reactant_stoch)
     nothing
 end
+
+supports_initialization(::JumpSystem) = false
