@@ -77,7 +77,6 @@ unknowns(a::AffectSystem) = a.unknowns
 parameters(a::AffectSystem) = a.parameters
 aff_to_sys(a::AffectSystem) = a.aff_to_sys
 previous_vals(a::AffectSystem) = parameters(system(a))
-updated_vals(a::AffectSystem) = unknowns(system(a))
 
 function Base.show(iio::IO, aff::AffectSystem) 
     eqs = vcat(equations(system(aff)), observed(system(aff)))
@@ -148,7 +147,8 @@ haspre(O) = recursive_hasoperator(Pre, O)
 const Affect = Union{AffectSystem, FunctionalAffect, ImperativeAffect}
 
 """
-    SymbolicContinuousCallback(eqs::Vector{Equation}, affect, affect_neg, rootfind)
+    SymbolicContinuousCallback(eqs::Vector{Equation}, affect = nothing, iv = nothing; 
+                               affect_neg = affect, initialize = nothing, finalize = nothing, rootfind = SciMLBase.LeftRootFind, algeeqs = Equation[])
 
 A [`ContinuousCallback`](@ref SciMLBase.ContinuousCallback) specified symbolically. Takes a vector of equations `eq`
 as well as the positive-edge `affect` and negative-edge `affect_neg` that apply when *any* of `eq` are satisfied.
@@ -203,32 +203,31 @@ struct SymbolicContinuousCallback <: AbstractCallback
 
     function SymbolicContinuousCallback(
             conditions::Union{Equation, Vector{Equation}},
-            affect = nothing, iv = nothing;
+            affect = nothing;
             affect_neg = affect,
             initialize = nothing,
             finalize = nothing,
             rootfind = SciMLBase.LeftRootFind, 
+            iv = nothing,
             algeeqs = Equation[])
 
-        affect isa AbstractVector && isnothing(iv) && @warn "No independent variable specified. If t appears in an affect equation explicitly, like x ~ t + 1, then this must be specified. Otherwise this can be disregarded."
         conditions = (conditions isa AbstractVector) ? conditions : [conditions]
-        new(conditions, make_affect(affect, iv; algeeqs), make_affect(affect_neg, iv; algeeqs),
-            make_affect(initialize, iv; algeeqs), make_affect(finalize, iv; algeeqs), rootfind)
+        new(conditions, make_affect(affect; iv, algeeqs), make_affect(affect_neg; iv, algeeqs),
+            make_affect(initialize; iv, algeeqs), make_affect(finalize; iv, algeeqs), rootfind)
     end # Default affect to nothing
 end
 
-SymbolicContinuousCallback(p::Pair) = SymbolicContinuousCallback(p[1], p[2])
-SymbolicContinuousCallback(cb::SymbolicContinuousCallback, args...) = cb
+SymbolicContinuousCallback(p::Pair, args...; kwargs...) = SymbolicContinuousCallback(p[1], p[2])
+SymbolicContinuousCallback(cb::SymbolicContinuousCallback, args...; kwargs...) = cb
 
-make_affect(affect::Nothing, iv; kwargs...) = nothing
-make_affect(affect::Tuple, iv; kwargs...) = FunctionalAffect(affect...)
-make_affect(affect::NamedTuple, iv; kwargs...) = FunctionalAffect(; affect...)
-make_affect(affect::FunctionalAffect, iv; kwargs...) = affect
-make_affect(affect::AffectSystem, iv; kwargs...) = affect
+make_affect(affect::Nothing; kwargs...) = nothing
+make_affect(affect::Tuple; kwargs...) = FunctionalAffect(affect...)
+make_affect(affect::NamedTuple; kwargs...) = FunctionalAffect(; affect...)
+make_affect(affect::Affect; kwargs...) = affect
 
-function make_affect(affect::Vector{Equation}, iv; algeeqs = Equation[])
+function make_affect(affect::Vector{Equation}; iv = nothing, algeeqs = Equation[])
     isempty(affect) && return nothing
-    isempty(algeeqs) && @warn "No algebraic equations were found. If the system has no algebraic equations, this can be disregarded. Otherwise consider passing in `algeeqs` to the SymbolicContinuousCallbacks constructor."
+    isempty(algeeqs) && @warn "No algebraic equations were found. If the system has no algebraic equations, this can be disregarded. Otherwise pass in `algeeqs` to the SymbolicContinuousCallback constructor."
 
     affect = scalarize(affect)
     dvs = OrderedSet()
@@ -243,6 +242,7 @@ function make_affect(affect::Vector{Equation}, iv; algeeqs = Equation[])
     end
     if isnothing(iv)
         iv = isempty(dvs) ? iv : only(arguments(dvs[1]))
+        isnothing(iv) && @warn "No independent variable specified and could not be inferred. If the iv appears in an affect equation explicitly, like x ~ t + 1, then it must be specified as an argument to the SymbolicContinuousCallback or SymbolicDiscreteCallback constructor. Otherwise this warning can be disregarded."
     end
 
     # System parameters should become unknowns in the ImplicitDiscreteSystem.
@@ -271,21 +271,21 @@ function make_affect(affect::Vector{Equation}, iv; algeeqs = Equation[])
     # get accessed parameters p from Pre(p) in the callback parameters
     params = filter(isparameter, map(x -> only(arguments(unwrap(x))), cb_params))
     # add unknowns to the map
-    for u in unknowns(affectsys)
+    for u in dvs
         aff_map[u] = u
     end
 
-    return AffectSystem(affectsys, unknowns(affectsys), params, discretes, aff_map)
+    return AffectSystem(affectsys, collect(dvs), params, discretes, aff_map)
 end
 
-function make_affect(affect)
+function make_affect(affect; kwargs...)
     error("Malformed affect $(affect). This should be a vector of equations or a tuple specifying a functional affect.")
 end
 
 """
 Generate continuous callbacks.
 """
-function SymbolicContinuousCallbacks(events, algeeqs::Vector{Equation} = Equation[], iv = nothing)
+function SymbolicContinuousCallbacks(events; algeeqs::Vector{Equation} = Equation[], iv = nothing)
     callbacks = SymbolicContinuousCallback[]
     isnothing(events) && return callbacks
 
@@ -294,8 +294,7 @@ function SymbolicContinuousCallbacks(events, algeeqs::Vector{Equation} = Equatio
 
     for event in events
         cond, affs = event isa Pair ? (event[1], event[2]) : (event, nothing)
-        affect = make_affect(affs, iv; algeeqs)
-        push!(callbacks, SymbolicContinuousCallback(cond, affect))
+        push!(callbacks, SymbolicContinuousCallback(cond, affs; iv, algeeqs))
     end
     callbacks
 end
@@ -380,7 +379,8 @@ end
 
 # TODO: Iterative callbacks
 """
-    SymbolicDiscreteCallback(conditions::Vector{Equation}, affect)
+    SymbolicDiscreteCallback(conditions::Vector{Equation}, affect = nothing, iv = nothing;
+                             initialize = nothing, finalize = nothing, algeeqs = Equation[])
 
 A callback that triggers at the first timestep that the conditions are satisfied.
 
@@ -388,6 +388,10 @@ The condition can be one of:
 - Δt::Real              - periodic events with period Δt
 - ts::Vector{Real}      - events trigger at these preset times given by `ts`
 - eqs::Vector{Equation} - events trigger when the condition evaluates to true
+
+Arguments: 
+- iv: The independent variable of the system. This must be specified if the independent variable appaers in one of the equations explicitly, as in x ~ t + 1.
+- algeeqs: Algebraic equations of the system that must be satisfied after the callback occurs.
 """
 struct SymbolicDiscreteCallback <: AbstractCallback
     conditions::Any
@@ -397,19 +401,18 @@ struct SymbolicDiscreteCallback <: AbstractCallback
 
     function SymbolicDiscreteCallback(
             condition, affect = nothing;
-            initialize = nothing, finalize = nothing)
+            initialize = nothing, finalize = nothing, iv = nothing, algeeqs = Equation[])
         c = is_timed_condition(condition) ? condition : value(scalarize(condition))
 
-        isnothing(iv) && @warn "No independent variable specified. If t appears in an affect equation explicitly, like x ~ t + 1, then this must be specified. Otherwise this can be disregarded."
-        new(c, make_affect(affect), make_affect(initialize),
-            make_affect(finalize))
+        new(c, make_affect(affect; iv, algeeqs), make_affect(initialize; iv, algeeqs),
+            make_affect(finalize; iv, algeeqs))
     end # Default affect to nothing
 end
 
 """
 Generate discrete callbacks.
 """
-function SymbolicDiscreteCallbacks(events, algeeqs::Vector{Equation} = Equation[], iv = nothing)
+function SymbolicDiscreteCallbacks(events; algeeqs::Vector{Equation} = Equation[], iv = nothing)
     callbacks = SymbolicDiscreteCallback[]
 
     isnothing(events) && return callbacks
@@ -418,8 +421,7 @@ function SymbolicDiscreteCallbacks(events, algeeqs::Vector{Equation} = Equation[
 
     for event in events
         cond, affs = event isa Pair ? (event[1], event[2]) : (event, nothing)
-        affect = make_affect(affs, iv; algeeqs)
-        push!(callbacks, SymbolicDiscreteCallback(cond, affect))
+        push!(callbacks, SymbolicDiscreteCallback(cond, affs; iv, algeeqs))
     end
     callbacks
 end
@@ -801,12 +803,13 @@ function compile_affect(
 
     ps = parameters(aff)
     dvs = unknowns(aff)
+    dvs_to_modify = setdiff(dvs, getfield.(observed(sys), :lhs))
 
     if aff isa AffectSystem
         affsys = system(aff)
         aff_map = aff_to_sys(aff)
         sys_map = Dict([v => k for (k, v) in aff_map])
-        build_initializeprob = has_alg_eqs(sys)
+        reinit = has_alg_eqs(sys)
 
         function affect!(integrator)
             pmap = Pair[]
@@ -815,12 +818,11 @@ function compile_affect(
                 pval = isparameter(p) ? integrator.ps[p] : integrator[p]
                 push!(pmap, pre_p => pval)
             end
-            guesses = Pair[u => integrator[aff_map[u]] for u in updated_vals(aff)]
-            affprob = ImplicitDiscreteProblem(affsys, Pair[], (0, 1), pmap; guesses, build_initializeprob)
+            guesses = Pair[u => integrator[aff_map[u]] for u in unknowns(affsys)]
+            affprob = ImplicitDiscreteProblem(affsys, Pair[], (0, 1), pmap; guesses, build_initializeprob = reinit)
 
             affsol = init(affprob, SimpleIDSolve())
-            for u in unknowns(aff)
-                @show u
+            for u in dvs_to_modify
                 integrator[u] = affsol[sys_map[u]]
             end
             for p in discretes(aff)
