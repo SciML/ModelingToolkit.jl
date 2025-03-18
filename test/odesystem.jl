@@ -736,7 +736,7 @@ let
 
     pmap = [k1 => 1, k2 => 1]
     tspan = (0.0, 1.0)
-    prob = ODEProblem(sys, u0map, tspan, pmap);
+    prob = ODEProblem(sys, u0map, tspan, pmap)
     @test eltype(vcat(prob.p...)) === Float64
 
     prob = ODEProblem(sys, u0map, tspan, pmap)
