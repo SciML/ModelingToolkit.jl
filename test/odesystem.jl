@@ -1736,3 +1736,13 @@ end
     @test obsfn_expr_oop isa Expr
     @test obsfn_expr_iip isa Expr
 end
+
+@testset "`complete` with and without initial conditions" begin
+    @variables x(t)
+    @parameters p
+    @mtkbuild sys = ODESystem(D(x) ~ p * t, t)
+    @test issetequal(ModelingToolkit.get_ps(sys), [p, Initial(x)])
+    @named sys2 = ODESystem(D(x) ~ p * t, t)
+    sys2 = ModelingToolkit._complete(sys2; allow_additional_ps = false)
+    @test issetequal(ModelingToolkit.get_ps(sys2), [p]) 
+end

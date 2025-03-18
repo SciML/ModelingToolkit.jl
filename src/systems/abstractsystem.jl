@@ -734,17 +734,15 @@ function isinitial(p)
 end
 
 """
-$(TYPEDSIGNATURES)
+Allow systems to dispatch `complete` but still get at the underlying functionality it
+implements in a uniform way.
 
-Mark a system as completed. A completed system is a system which is done being
-defined/modified and is ready for structural analysis or other transformations.
-This allows for analyses and optimizations to be performed which require knowing
-the global structure of the system.
-
-One property to note is that if a system is complete, the system will no longer
-namespace its subsystems or variables, i.e. `isequal(complete(sys).v.i, v.i)`.
+Notes:
+- `allow_additional_ps = true` is used to allow additional parameters to be added to the
+  system during completion (such as initial conditions). 
 """
-function complete(sys::AbstractSystem; split = true, flatten = true)
+function _complete(sys::AbstractSystem; split = true, flatten = true, 
+        allow_additional_ps = true)
     newunknowns = OrderedSet()
     newparams = OrderedSet()
     iv = has_iv(sys) ? get_iv(sys) : nothing
@@ -765,7 +763,9 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
             @set! newsys.parent = complete(sys; split = false, flatten = false)
         end
         sys = newsys
-        sys = add_initialization_parameters(sys)
+        if allow_additional_ps
+            sys = add_initialization_parameters(sys)
+        end
     end
     if split && has_index_cache(sys)
         @set! sys.index_cache = IndexCache(sys)
@@ -799,6 +799,21 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
         @set! sys.initializesystem = complete(get_initializesystem(sys); split)
     end
     isdefined(sys, :complete) ? (@set! sys.complete = true) : sys
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Mark a system as completed. A completed system is a system which is done being
+defined/modified and is ready for structural analysis or other transformations.
+This allows for analyses and optimizations to be performed which require knowing
+the global structure of the system.
+
+One property to note is that if a system is complete, the system will no longer
+namespace its subsystems or variables, i.e. `isequal(complete(sys).v.i, v.i)`.
+"""
+function complete(sys::AbstractSystem; split = true, flatten = true)
+    _complete(sys; split, flatten)
 end
 
 """
