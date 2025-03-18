@@ -1421,8 +1421,33 @@ function assertions(sys::AbstractSystem)
     return merge(asserts, namespaced_asserts)
 end
 
+"""
+    $(TYPEDEF)
+
+Information about an `AnalysisPoint` for which the corresponding connection must be
+ignored during `expand_connections`, since the analysis point has been transformed.
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
+struct IgnoredAnalysisPoint
+    """
+    The input variable/connector.
+    """
+    input::Union{BasicSymbolic, AbstractSystem}
+    """
+    The output variables/connectors.
+    """
+    outputs::Vector{Union{BasicSymbolic, AbstractSystem}}
+end
+
 const HierarchyVariableT = Vector{Union{BasicSymbolic, Symbol}}
 const HierarchySystemT = Vector{Union{AbstractSystem, Symbol}}
+"""
+The type returned from `analysis_point_common_hierarchy`.
+"""
+const HierarchyAnalysisPointT = Vector{Union{IgnoredAnalysisPoint, Symbol}}
 """
 The type returned from `as_hierarchy`.
 """
@@ -1438,6 +1463,29 @@ function from_hierarchy(hierarchy::HierarchyT)
     foldl(@view hierarchy[2:end]; init = hierarchy[1]) do sys, name
         rename(sys, Symbol(name, NAMESPACE_SEPARATOR, namefn(sys)))
     end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Represent an ignored analysis point as a namespaced hierarchy. The hierarchy is built
+using the common hierarchy of all involved systems/variables.
+"""
+function analysis_point_common_hierarchy(ap::IgnoredAnalysisPoint)::HierarchyAnalysisPointT
+    isys = as_hierarchy(ap.input)
+    osyss = as_hierarchy.(ap.outputs)
+    suffix = Symbol[]
+    while isys[end] == osyss[1][end] && allequal(last.(osyss))
+        push!(suffix, isys[end])
+        pop!(isys)
+        pop!.(osyss)
+    end
+    isys = from_hierarchy(isys)
+    osyss = from_hierarchy.(osyss)
+    newap = IgnoredAnalysisPoint(isys, osyss)
+    hierarchy = HierarchyAnalysisPointT([suffix; newap])
+    reverse!(hierarchy)
+    return hierarchy
 end
 
 """
@@ -1466,19 +1514,20 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Get the connections to ignore for `sys` and its subsystems. The returned value is a
-`Tuple` similar in structure to the `ignored_connections` field. Each system (variable)
-in the first (second) element of the tuple is also passed through `as_hierarchy`.
+Get the analysis points to ignore for `sys` and its subsystems. The returned value is a
+`Tuple` similar in structure to the `ignored_connections` field.
 """
 function ignored_connections(sys::AbstractSystem)
-    has_ignored_connections(sys) || return (HierarchySystemT[], HierarchyVariableT[])
+    has_ignored_connections(sys) ||
+        return (HierarchyAnalysisPointT[], HierarchyAnalysisPointT[])
 
     ics = get_ignored_connections(sys)
     if ics === nothing
-        ics = (HierarchySystemT[], HierarchyVariableT[])
+        ics = (HierarchyAnalysisPointT[], HierarchyAnalysisPointT[])
     end
     # turn into hierarchies
-    ics = (map(as_hierarchy, ics[1]), map(as_hierarchy, ics[2]))
+    ics = (map(analysis_point_common_hierarchy, ics[1]),
+        map(analysis_point_common_hierarchy, ics[2]))
     systems = get_systems(sys)
     # for each subsystem, get its ignored connections, add the name of the subsystem
     # to the hierarchy and concatenate corresponding buffers of the result
@@ -1487,7 +1536,8 @@ function ignored_connections(sys::AbstractSystem)
         (map(Base.Fix2(push!, nameof(subsys)), sub_ics[1]),
             map(Base.Fix2(push!, nameof(subsys)), sub_ics[2]))
     end
-    return (Vector{HierarchySystemT}(result[1]), Vector{HierarchyVariableT}(result[2]))
+    return (Vector{HierarchyAnalysisPointT}(result[1]),
+        Vector{HierarchyAnalysisPointT}(result[2]))
 end
 
 """
