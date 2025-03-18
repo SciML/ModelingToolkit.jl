@@ -18,8 +18,7 @@ Consider a projectile shot with some initial velocity in a vertical gravitationa
 
 ```@example changeivar
 using ModelingToolkit
-@independent_variables t
-D = Differential(t)
+using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables x(t) y(t)
 @parameters g=9.81 v # gravitational acceleration and horizontal velocity
 eqs = [D(D(y)) ~ -g, D(x) ~ v]
@@ -128,7 +127,7 @@ Unlike the original, notice that this system is *non-autonomous* because the ind
 This means that to change the independent variable from $a$ to $b$, we must provide not only the rate of change relation $db(a)/da = \exp(-b)$, but *also* the equation $a(b) = \exp(b)$ so $a$ can be eliminated in favor of $b$:
 
 ```@example changeivar
-a = M2.a
+a = M2.a # get independent variable of M2
 Da = Differential(a)
 @variables b(a)
 M3 = change_independent_variable(M2, b, [Da(b) ~ exp(-b), a ~ exp(b)])
