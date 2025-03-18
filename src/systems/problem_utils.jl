@@ -874,7 +874,7 @@ function process_SciMLProblem(
         du0map = to_varmap(du0map, ddvs)
         merge!(op, du0map)
         du0 = varmap_to_vars(op, ddvs; toterm = identity,
-            tofloat)
+            tofloat = true)
         kwargs = merge(kwargs, (; ddvs))
     else
         du0 = nothing
