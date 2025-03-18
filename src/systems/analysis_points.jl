@@ -428,7 +428,7 @@ function with_analysis_point_ignored(sys::AbstractSystem, ap::AnalysisPoint)
     if ap.input isa AbstractSystem && all(x -> x isa AbstractSystem, ap.outputs)
         push!(ignored[1], IgnoredAnalysisPoint(ap.input, ap.outputs))
     else
-        push!(ignored[2], IgnoredAnalysisPoint(ap.input, ap.outputs))
+        push!(ignored[2], IgnoredAnalysisPoint(unwrap(ap.input), unwrap.(ap.outputs)))
     end
 
     return @set sys.ignored_connections = ignored
