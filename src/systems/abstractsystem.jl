@@ -680,6 +680,7 @@ supports_initialization(sys::AbstractSystem) = true
 
 function add_initialization_parameters(sys::AbstractSystem)
     @assert !has_systems(sys) || isempty(get_systems(sys))
+    supports_initialization(sys) || return sys
     is_initializesystem(sys) && return sys
 
     all_initialvars = Set{BasicSymbolic}()
