@@ -1019,7 +1019,7 @@ function get_u0(
         u0 = varmap_to_vars(
             u0map, dvs; defaults = defs, tofloat = false, use_union = false, toterm)
     else
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat, use_union, toterm)
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, use_union, toterm)
     end
     t0 !== nothing && delete!(defs, get_iv(sys))
     return u0, defs
