@@ -840,7 +840,7 @@ function process_SciMLProblem(
     evaluate_varmap!(op, dvs; limit = substitution_limit)
 
     u0 = better_varmap_to_vars(
-        op, dvs; tofloat = true,
+        op, dvs; tofloat,
         container_type = u0Type, allow_symbolic = symbolic_u0, is_initializeprob)
 
     if u0 !== nothing
@@ -874,7 +874,7 @@ function process_SciMLProblem(
         du0map = to_varmap(du0map, ddvs)
         merge!(op, du0map)
         du0 = varmap_to_vars(op, ddvs; toterm = identity,
-            tofloat = true)
+            tofloat)
         kwargs = merge(kwargs, (; ddvs))
     else
         du0 = nothing
@@ -984,7 +984,7 @@ function get_u0_p(sys,
     if symbolic_u0
         u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false, use_union = false)
     else
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, use_union)
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat, use_union)
     end
     p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
     p = p === nothing ? SciMLBase.NullParameters() : p
@@ -1019,7 +1019,7 @@ function get_u0(
         u0 = varmap_to_vars(
             u0map, dvs; defaults = defs, tofloat = false, use_union = false, toterm)
     else
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, use_union, toterm)
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat, use_union, toterm)
     end
     t0 !== nothing && delete!(defs, get_iv(sys))
     return u0, defs
