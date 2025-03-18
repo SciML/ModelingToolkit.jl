@@ -54,6 +54,7 @@ import Moshi
 using Moshi.Data: @data
 using NonlinearSolve
 import SCCNonlinearSolve
+using ImplicitDiscreteSolve
 using Reexport
 using RecursiveArrayTools
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix

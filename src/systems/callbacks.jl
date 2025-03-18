@@ -233,8 +233,9 @@ function make_affect(affect::Vector{Equation}; iv = nothing, algeeqs = Equation[
     dvs = OrderedSet()
     params = OrderedSet()
     for eq in affect
-        !haspre(eq) &&
+        if !haspre(eq) && !(symbolic_type(eq.rhs) === NotSymbolic())
             @warn "Affect equation $eq has no `Pre` operator. As such it will be interpreted as an algebraic equation to be satisfied after the callback. If you intended to use the value of a variable x before the affect, use Pre(x)."
+        end
         collect_vars!(dvs, params, eq, iv; op = Pre)
     end
     for eq in algeeqs 
@@ -299,11 +300,11 @@ function SymbolicContinuousCallbacks(events; algeeqs::Vector{Equation} = Equatio
     callbacks
 end
 
-function Base.show(io::IO, cb::SymbolicContinuousCallback)
+function Base.show(io::IO, cb::AbstractCallback)
     indent = get(io, :indent, 0)
     iio = IOContext(io, :indent => indent + 1)
-    print(io, "SymbolicContinuousCallback(")
-    print(iio, "Equations:")
+    is_discrete(cb) ? print(io, "SymbolicDiscreteCallback(") : print(io, "SymbolicContinuousCallback(")
+    print(iio, "Conditions:")
     show(iio, equations(cb))
     print(iio, "; ")
     if affects(cb) != nothing
@@ -311,7 +312,7 @@ function Base.show(io::IO, cb::SymbolicContinuousCallback)
         show(iio, affects(cb))
         print(iio, ", ")
     end
-    if affect_negs(cb) != nothing
+    if !is_discrete(cb) && affect_negs(cb) != nothing
         print(iio, "Negative-edge affect:")
         show(iio, affect_negs(cb))
         print(iio, ", ")
@@ -328,11 +329,11 @@ function Base.show(io::IO, cb::SymbolicContinuousCallback)
     print(iio, ")")
 end
 
-function Base.show(io::IO, mime::MIME"text/plain", cb::SymbolicContinuousCallback)
+function Base.show(io::IO, mime::MIME"text/plain", cb::AbstractCallback)
     indent = get(io, :indent, 0)
     iio = IOContext(io, :indent => indent + 1)
-    println(io, "SymbolicContinuousCallback:")
-    println(iio, "Equations:")
+    is_discrete(cb) ? println(io, "SymbolicDiscreteCallback:") : println(io, "SymbolicContinuousCallback:")
+    println(iio, "Conditions:")
     show(iio, mime, equations(cb))
     print(iio, "\n")
     if affects(cb) != nothing
@@ -340,7 +341,7 @@ function Base.show(io::IO, mime::MIME"text/plain", cb::SymbolicContinuousCallbac
         show(iio, mime, affects(cb))
         print(iio, "\n")
     end
-    if affect_negs(cb) != nothing
+    if !is_discrete(cb) && affect_negs(cb) != nothing
         print(iio, "Negative-edge affect:\n")
         show(iio, mime, affect_negs(cb))
         print(iio, "\n")
@@ -394,8 +395,8 @@ Arguments:
 - algeeqs: Algebraic equations of the system that must be satisfied after the callback occurs.
 """
 struct SymbolicDiscreteCallback <: AbstractCallback
-    conditions::Any
-    affect::Affect
+    conditions::Union{Real, Vector{<:Real}, Vector{Equation}}
+    affect::Union{Affect, Nothing}
     initialize::Union{Affect, Nothing}
     finalize::Union{Affect, Nothing}
 
@@ -408,6 +409,9 @@ struct SymbolicDiscreteCallback <: AbstractCallback
             make_affect(finalize; iv, algeeqs))
     end # Default affect to nothing
 end
+
+SymbolicDiscreteCallback(p::Pair, args...; kwargs...) = SymbolicDiscreteCallback(p[1], p[2])
+SymbolicDiscreteCallback(cb::SymbolicDiscreteCallback, args...; kwargs...) = cb
 
 """
 Generate discrete callbacks.
@@ -436,29 +440,6 @@ function is_timed_condition(condition::T) where {T}
     else
         false
     end
-end
-
-function Base.show(io::IO, db::SymbolicDiscreteCallback)
-    indent = get(io, :indent, 0)
-    iio = IOContext(io, :indent => indent + 1)
-    println(io, "SymbolicDiscreteCallback:")
-    println(iio, "Conditions:")
-    print(iio, "; ")
-    if affects(db) != nothing
-        print(iio, "Affect:")
-        show(iio, affects(db))
-        print(iio, ", ")
-    end
-    if initialize_affects(db) != nothing
-        print(iio, "Initialization affect:")
-        show(iio, initialize_affects(db))
-        print(iio, ", ")
-    end
-    if finalize_affects(db) != nothing
-        print(iio, "Finalization affect:")
-        show(iio, finalize_affects(db))
-    end
-    print(iio, ")")
 end
 
 function vars!(vars, cb::SymbolicDiscreteCallback; op = Differential)
@@ -529,7 +510,7 @@ function namespace_callback(cb::SymbolicDiscreteCallback, s)::SymbolicDiscreteCa
 end
 
 function Base.hash(cb::SymbolicContinuousCallback, s::UInt)
-    s = foldr(hash, cb.eqs, init = s)
+    s = foldr(hash, cb.conditions, init = s)
     s = hash(cb.affect, s)
     s = hash(cb.affect_neg, s)
     s = hash(cb.initialize, s)
@@ -538,8 +519,8 @@ function Base.hash(cb::SymbolicContinuousCallback, s::UInt)
 end
 
 function Base.hash(cb::SymbolicDiscreteCallback, s::UInt)
-    s = hash(cb.condition, s)
-    s = hash(cb.affects, s)
+    s = foldr(hash, cb.conditions, init = s)
+    s = hash(cb.affect, s)
     s = hash(cb.initialize, s)
     hash(cb.finalize, s)
 end
@@ -649,7 +630,9 @@ end
 """
 Compile user-defined functional affect.
 """
-function compile_functional_affect(affect::FunctionalAffect, cb, sys, dvs, ps; kwargs...)
+function compile_functional_affect(affect::FunctionalAffect, cb, sys; kwargs...)
+    dvs = unknowns(sys)
+    ps = parameters(sys)
     dvs_ind = Dict(reverse(en) for en in enumerate(dvs))
     v_inds = map(sym -> dvs_ind[sym], unknowns(affect))
 
@@ -686,7 +669,18 @@ is_discrete(cb::Vector{<:AbstractCallback}) = eltype(cb) isa SymbolicDiscreteCal
 function generate_continuous_callbacks(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys; initial_parameters = true); kwargs...) 
     cbs = continuous_events(sys)
     isempty(cbs) && return nothing
-    generate_callback(cbs, sys; kwargs...)
+    cb_classes = Dict{SciMLBase.RootfindOpt, Vector{SymbolicContinuousCallback}}()
+    for cb in cbs
+        _cbs = get!(() -> SymbolicContinuousCallback[], cb_classes, cb.rootfind)
+        push!(_cbs, cb)
+    end
+    cb_classes = sort!(OrderedDict(cb_classes))
+    compiled_callbacks = [generate_callback(cb, sys; kwargs...) for (rf, cb) in cb_classes]
+    if length(compiled_callbacks) == 1
+        return only(compiled_callbacks)
+    else
+        return CallbackSet(compiled_callbacks...)
+    end
 end
 
 function generate_discrete_callbacks(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys; initial_parameters = true); kwargs...) 
@@ -716,9 +710,9 @@ function generate_callback(cbs::Vector{SymbolicContinuousCallback}, sys; kwargs.
     finals = []
     for cb in cbs
         affect = compile_affect(cb.affect, cb, sys, default = (args...) -> ())
-
         push!(affects, affect)
-        push!(affect_negs, compile_affect(cb.affect_neg, cb, sys, default = affect))
+        affect_neg = (cb.affect_neg === cb.affect) ? affect : compile_affect(cb.affect_neg, cb, sys, default = (args...) -> ())
+        push!(affect_negs, affect_neg)
         push!(inits, compile_affect(cb.initialize, cb, sys, default = nothing))
         push!(finals, compile_affect(cb.finalize, cb, sys, default = nothing))
     end
@@ -728,8 +722,6 @@ function generate_callback(cbs::Vector{SymbolicContinuousCallback}, sys; kwargs.
     eq2affect = reduce(vcat,
         [fill(i, num_eqs[i]) for i in eachindex(affects)])
     eqs = reduce(vcat, eqs)
-    @assert length(eq2affect) == length(eqs)
-    @assert maximum(eq2affect) == length(affects)
 
     affect = function (integ, idx)
         affects[eq2affect[idx]](integ)
@@ -744,7 +736,7 @@ function generate_callback(cbs::Vector{SymbolicContinuousCallback}, sys; kwargs.
 
     return VectorContinuousCallback(
                                     trigger, affect, affect_neg, length(eqs); initialize, finalize,
-        rootfind = cbs[1].rootfind, initializealg = SciMLBase.NoInit)
+                                    rootfind = cbs[1].rootfind, initializealg = SciMLBase.NoInit())
 end
 
 function generate_callback(cb, sys; kwargs...)
@@ -762,16 +754,16 @@ function generate_callback(cb, sys; kwargs...)
     if is_discrete(cb)
         if is_timed && conditions(cb) isa AbstractVector
             return PresetTimeCallback(trigger, affect; initialize,
-                finalize, initializealg = SciMLBase.NoInit)
+                                      finalize, initializealg = SciMLBase.NoInit())
         elseif is_timed
             return PeriodicCallback(affect, trigger; initialize, finalize)
         else
             return DiscreteCallback(trigger, affect; initialize,
-                finalize, initializealg = SciMLBase.NoInit)
+                                    finalize, initializealg = SciMLBase.NoInit())
         end
     else
         return ContinuousCallback(trigger, affect, affect_neg; initialize, finalize,
-            rootfind = cb.rootfind, initializealg = SciMLBase.NoInit)
+                                  rootfind = cb.rootfind, initializealg = SciMLBase.NoInit())
     end
 end
 
@@ -793,27 +785,25 @@ Notes
 """
 function compile_affect(
         aff::Union{Nothing, Affect}, cb::AbstractCallback, sys::AbstractSystem; default = nothing, kwargs...)
+    isnothing(aff) && return default
+
     save_idxs = if !(has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing)
         Int[]
     else
         get(ic.callback_to_clocks, cb, Int[])
     end
 
-    isnothing(aff) && return default
-
-    ps = parameters(aff)
-    dvs = unknowns(aff)
-    dvs_to_modify = setdiff(dvs, getfield.(observed(sys), :lhs))
-
     if aff isa AffectSystem
         affsys = system(aff)
         aff_map = aff_to_sys(aff)
         sys_map = Dict([v => k for (k, v) in aff_map])
         reinit = has_alg_eqs(sys)
+        ps_to_modify = discretes(aff)
+        dvs_to_modify = setdiff(unknowns(aff), getfield.(observed(sys), :lhs))
 
         function affect!(integrator)
             pmap = Pair[]
-            for pre_p in previous_vals(aff)
+            for pre_p in parameters(affsys)
                 p = only(arguments(unwrap(pre_p)))
                 pval = isparameter(p) ? integrator.ps[p] : integrator[p]
                 push!(pmap, pre_p => pval)
@@ -825,17 +815,17 @@ function compile_affect(
             for u in dvs_to_modify
                 integrator[u] = affsol[sys_map[u]]
             end
-            for p in discretes(aff)
+            for p in ps_to_modify
                 integrator.ps[p] = affsol[sys_map[p]]
             end
             for idx in save_idxs
-                SciMLBase.save_discretes!(integ, idx)
+                SciMLBase.save_discretes!(integrator, idx)
             end
 
             sys isa JumpSystem && reset_aggregated_jumps!(integrator)
         end
     elseif aff isa FunctionalAffect || aff isa ImperativeAffect
-        compile_functional_affect(aff, cb, sys, dvs, ps; kwargs...)
+        compile_functional_affect(aff, cb, sys; kwargs...)
     end
 end
 
