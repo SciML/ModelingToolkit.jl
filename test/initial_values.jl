@@ -208,12 +208,14 @@ end
            x^2 + y^2 ~ 1]
     @mtkbuild pend = ODESystem(eqs, t)
 
-    @test_throws ModelingToolkit.MissingGuessError ODEProblem(pend, [x => 1], (0, 1), [g => 1], guesses = [y => λ, λ => y + 1])
+    @test_throws ModelingToolkit.MissingGuessError ODEProblem(
+        pend, [x => 1], (0, 1), [g => 1], guesses = [y => λ, λ => y + 1])
     ODEProblem(pend, [x => 1], (0, 1), [g => 1], guesses = [y => λ, λ => 0.5])
 
     # Throw multiple if multiple are missing
     @variables a(t) b(t) c(t) d(t) e(t)
     eqs = [D(a) ~ b, D(b) ~ c, D(c) ~ d, D(d) ~ e, D(e) ~ 1]
     @mtkbuild sys = ODESystem(eqs, t)
-    @test_throws ["a(t)", "c(t)"] ODEProblem(sys, [e => 2, a => b, b => a + 1, c => d, d => c + 1], (0, 1))
+    @test_throws ["a(t)", "c(t)"] ODEProblem(
+        sys, [e => 2, a => b, b => a + 1, c => d, d => c + 1], (0, 1))
 end
