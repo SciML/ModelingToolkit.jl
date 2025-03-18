@@ -152,7 +152,7 @@ function Symbolics.connect(var1::ConnectableSymbolicT, var2::ConnectableSymbolic
         vars::ConnectableSymbolicT...)
     allvars = (var1, var2, vars...)
     validate_causal_variables_connection(allvars)
-    return Equation(Connection(), Connection(map(SymbolicWithNameof, allvars)))
+    return Equation(Connection(), Connection(map(SymbolicWithNameof, unwrap.(allvars))))
 end
 
 function flowvar(sys::AbstractSystem)

@@ -213,7 +213,8 @@ function Symbolics.connect(
         outs::ConnectableSymbolicT...; verbose = true)
     allvars = (in, out, outs...)
     validate_causal_variables_connection(allvars)
-    return AnalysisPoint() ~ AnalysisPoint(in, name, [out; collect(outs)]; verbose)
+    return AnalysisPoint() ~ AnalysisPoint(
+        unwrap(in), name, unwrap.([out; collect(outs)]); verbose)
 end
 
 """
