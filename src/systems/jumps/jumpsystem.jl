@@ -383,7 +383,6 @@ end
 ```julia
 DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan,
                            parammap = DiffEqBase.NullParameters;
-                           use_union = true,
                            kwargs...)
 ```
 
@@ -403,7 +402,6 @@ dprob = DiscreteProblem(complete(js), u₀map, tspan, parammap)
 """
 function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing},
         parammap = DiffEqBase.NullParameters();
-        use_union = true,
         eval_expression = false,
         eval_module = @__MODULE__,
         kwargs...)
@@ -416,7 +414,7 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
     end
 
     _f, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
-        t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false, check_length = false, build_initializeprob = false)
+        t = tspan === nothing ? nothing : tspan[1], tofloat = false, check_length = false, build_initializeprob = false)
     f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
 
     observedfun = ObservedFunctionCache(
@@ -451,14 +449,13 @@ struct DiscreteProblemExpr{iip} end
 
 function DiscreteProblemExpr{iip}(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing},
         parammap = DiffEqBase.NullParameters();
-        use_union = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblemExpr`")
     end
 
     _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
-        t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false, check_length = false)
+        t = tspan === nothing ? nothing : tspan[1], tofloat = false, check_length = false)
     # identity function to make syms works
     quote
         f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
@@ -475,7 +472,6 @@ end
 ```julia
 DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan,
                            parammap = DiffEqBase.NullParameters;
-                           use_union = true,
                            kwargs...)
 ```
 
@@ -497,7 +493,6 @@ oprob = ODEProblem(complete(js), u₀map, tspan, parammap)
 """
 function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing},
         parammap = DiffEqBase.NullParameters();
-        use_union = false,
         eval_expression = false,
         eval_module = @__MODULE__,
         kwargs...)
@@ -517,7 +512,7 @@ function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothi
             build_initializeprob = false, kwargs...)
     else
         _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
-            t = tspan === nothing ? nothing : tspan[1], use_union, tofloat = false,
+            t = tspan === nothing ? nothing : tspan[1], tofloat = false,
             check_length = false)
         f = (du, u, p, t) -> (du .= 0; nothing)
         observedfun = ObservedFunctionCache(sys; eval_expression, eval_module,

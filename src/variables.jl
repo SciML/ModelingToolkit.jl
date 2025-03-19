@@ -186,15 +186,14 @@ function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
 
     vals = if eltype(varmap) <: Pair # `varmap` is a dict or an array of pairs
         varmap = todict(varmap)
-        _varmap_to_vars(varmap, varlist; defaults = defaults, check = check,
-            toterm = toterm)
+        _varmap_to_vars(varmap, varlist; defaults, check, toterm)
     else # plain array-like initialization
         varmap
     end
 
     promotetoconcrete === nothing && (promotetoconcrete = container_type <: AbstractArray)
     if promotetoconcrete
-        vals = promote_to_concrete(vals; tofloat = tofloat, use_union = use_union)
+        vals = promote_to_concrete(vals; tofloat, use_union)
     end
 
     if isempty(vals)

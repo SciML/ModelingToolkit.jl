@@ -27,7 +27,7 @@ This requires that `complete` has been called on the system (usually via
 the default behavior).
 """
 function MTKParameters(
-        sys::AbstractSystem, p, u0 = Dict(); tofloat = false, use_union = false,
+        sys::AbstractSystem, p, u0 = Dict(); tofloat = false,
         t0 = nothing, substitution_limit = 1000)
     ic = if has_index_cache(sys) && get_index_cache(sys) !== nothing
         get_index_cache(sys)

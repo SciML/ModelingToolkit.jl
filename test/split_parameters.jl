@@ -123,9 +123,8 @@ sol = solve(prob, ImplicitEuler());
 # ------------------------ Mixed Type Conserved
 
 prob = ODEProblem(
-    sys, [], tspan, []; tofloat = false, use_union = true, build_initializeprob = false)
+    sys, [], tspan, []; tofloat = false, build_initializeprob = false)
 
-@test prob.p isa Vector{Union{Float64, Int64}}
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
 

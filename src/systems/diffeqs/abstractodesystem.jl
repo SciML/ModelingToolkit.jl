@@ -1504,5 +1504,6 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
     else
         NonlinearLeastSquaresProblem
     end
-    TProb(isys, u0map, parammap; kwargs..., build_initializeprob = false, is_initializeprob = true)
+    TProb(isys, u0map, parammap; kwargs...,
+        build_initializeprob = false, is_initializeprob = true)
 end

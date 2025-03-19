@@ -330,17 +330,17 @@ struct MissingGuessError <: Exception
     vals::Vector{Any}
 end
 
-function Base.showerror(io::IO, err::MissingGuessError) 
-    println(io, 
-            """
-            Cyclic guesses detected in the system. Symbolic values were found for the following variables/parameters in the map: \
-            """)
+function Base.showerror(io::IO, err::MissingGuessError)
+    println(io,
+        """
+        Cyclic guesses detected in the system. Symbolic values were found for the following variables/parameters in the map: \
+        """)
     for (sym, val) in zip(err.syms, err.vals)
         println(io, "$sym  => $val")
     end
     println(io,
-            """
-            In order to resolve this, please provide additional numeric guesses so that the chain can be resolved to assign numeric values to each variable.            """)
+        """
+        In order to resolve this, please provide additional numeric guesses so that the chain can be resolved to assign numeric values to each variable.            """)
 end
 
 """
@@ -351,11 +351,10 @@ in `varmap`. Does not perform symbolic substitution in the values of `varmap`.
 
 Keyword arguments:
 - `tofloat`: Convert values to floating point numbers using `float`.
-- `use_union`: Use a `Union`-typed array if the values have heterogeneous types.
 - `container_type`: The type of container to use for the values.
 - `toterm`: The `toterm` method to use for converting symbolics.
 - `promotetoconcrete`: whether the promote to a concrete buffer (respecting
-  `tofloat` and `use_union`). Defaults to `container_type <: AbstractArray`.
+  `tofloat`). Defaults to `container_type <: AbstractArray`.
 - `check`: Error if any variables in `vars` do not have a mapping in `varmap`. Uses
   [`missingvars`](@ref) to perform the check.
 - `allow_symbolic` allows the returned array to contain symbolic values. If this is `true`,
@@ -363,8 +362,9 @@ Keyword arguments:
 - `is_initializeprob, guesses`: Used to determine whether the system is missing guesses.
 """
 function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
-        tofloat = true, use_union = true, container_type = Array,
-        toterm = default_toterm, promotetoconcrete = nothing, check = true, allow_symbolic = false, is_initializeprob = false)
+        tofloat = true, container_type = Array,
+        toterm = default_toterm, promotetoconcrete = nothing, check = true,
+        allow_symbolic = false, is_initializeprob = false)
     isempty(vars) && return nothing
 
     if check
@@ -382,8 +382,8 @@ function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
         end
 
         if !isempty(missingsyms)
-            is_initializeprob ? throw(MissingGuessError(missingsyms, missingvals)) : 
-                throw(UnexpectedSymbolicValueInVarmap(missingsyms[1], missingvals[1]))
+            is_initializeprob ? throw(MissingGuessError(missingsyms, missingvals)) :
+            throw(UnexpectedSymbolicValueInVarmap(missingsyms[1], missingvals[1]))
         end
     end
 
@@ -393,7 +393,7 @@ function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
 
     promotetoconcrete === nothing && (promotetoconcrete = container_type <: AbstractArray)
     if promotetoconcrete && !allow_symbolic
-        vals = promote_to_concrete(vals; tofloat = tofloat, use_union = use_union)
+        vals = promote_to_concrete(vals; tofloat = tofloat, use_union = false)
     end
 
     if isempty(vals)
@@ -731,8 +731,7 @@ Keyword arguments:
 - `fully_determined`: Override whether the initialization system is fully determined.
 - `check_initialization_units`: Enable or disable unit checks when constructing the
   initialization problem.
-- `tofloat`, `use_union`, `is_initializeprob`: Passed to [`better_varmap_to_vars`](@ref) for building `u0` (and
-  possibly `p`).
+- `tofloat`, `is_initializeprob`: Passed to [`better_varmap_to_vars`](@ref) for building `u0` (and possibly `p`).
 - `u0_constructor`: A function to apply to the `u0` value returned from `better_varmap_to_vars`
   to construct the final `u0` value.
 - `du0map`: A map of derivatives to values. See `implicit_dae`.
@@ -762,7 +761,7 @@ function process_SciMLProblem(
         implicit_dae = false, t = nothing, guesses = AnyDict(),
         warn_initialize_determined = true, initialization_eqs = [],
         eval_expression = false, eval_module = @__MODULE__, fully_determined = nothing,
-        check_initialization_units = false, tofloat = true, use_union = false,
+        check_initialization_units = false, tofloat = true,
         u0_constructor = identity, du0map = nothing, check_length = true,
         symbolic_u0 = false, warn_cyclic_dependency = false,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
@@ -841,7 +840,7 @@ function process_SciMLProblem(
     evaluate_varmap!(op, dvs; limit = substitution_limit)
 
     u0 = better_varmap_to_vars(
-        op, dvs; tofloat = true, use_union = false,
+        op, dvs; tofloat,
         container_type = u0Type, allow_symbolic = symbolic_u0, is_initializeprob)
 
     if u0 !== nothing
@@ -867,7 +866,7 @@ function process_SciMLProblem(
     if is_split(sys)
         p = MTKParameters(sys, op)
     else
-        p = better_varmap_to_vars(op, ps; tofloat, use_union, container_type = pType)
+        p = better_varmap_to_vars(op, ps; tofloat, container_type = pType)
     end
 
     if implicit_dae && du0map !== nothing
@@ -875,7 +874,7 @@ function process_SciMLProblem(
         du0map = to_varmap(du0map, ddvs)
         merge!(op, du0map)
         du0 = varmap_to_vars(op, ddvs; toterm = identity,
-            tofloat = true)
+            tofloat)
         kwargs = merge(kwargs, (; ddvs))
     else
         du0 = nothing
@@ -944,8 +943,8 @@ function get_u0_p(sys,
         u0map,
         parammap = nothing;
         t0 = nothing,
-        use_union = true,
         tofloat = true,
+        use_union = true,
         symbolic_u0 = false)
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
@@ -985,7 +984,7 @@ function get_u0_p(sys,
     if symbolic_u0
         u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false, use_union = false)
     else
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, use_union)
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat, use_union)
     end
     p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
     p = p === nothing ? SciMLBase.NullParameters() : p
