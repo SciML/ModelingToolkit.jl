@@ -224,6 +224,25 @@ PrecompileTools.@compile_workload begin
     @variables x(ModelingToolkit.t_nounits)
     @named sys = ODESystem([ModelingToolkit.D_nounits(x) ~ -x], ModelingToolkit.t_nounits)
     prob = ODEProblem(structural_simplify(sys), [x => 30.0], (0, 100), [], jac = true)
+    @mtkmodel __testmod__ begin
+        @structural_parameters begin
+            structp = false
+        end
+        @variables begin
+            x(t) = 0.0, [description="foo", guess=1.0]
+        end
+        @parameters begin
+            a = 1.0, [description="bar"]
+            if structp
+                b=2*a, [description="if"]
+            else
+                c
+            end
+        end
+        @equations begin
+            x ~ a + b
+        end
+    end;
 end
 
 export AbstractTimeDependentSystem,
