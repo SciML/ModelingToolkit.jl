@@ -246,8 +246,9 @@ end
 # The comments indicate the syntax matched by a block; either when parsed directly
 # when it is called recursively for parsing a part of an expression.
 # These variable definitions are part of test suite in `test/model_parsing.jl`
-function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
+Base.@nospecializeinfer function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
         def = nothing, type::Type = Real, meta = Dict{DataType, Expr}())
+    @nospecialize
     arg isa LineNumberNode && return
     MLStyle.@match arg begin
         # Parses: `a`
