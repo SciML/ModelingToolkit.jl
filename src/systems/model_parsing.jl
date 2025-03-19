@@ -1358,8 +1358,8 @@ push_something!(v, x...) = push_something!.(Ref(v), x)
 
 define_blocks(branch) = [Expr(branch), Expr(branch), Expr(branch), Expr(branch)]
 
-Base.@nospecializeinfer function parse_top_level_branch(condition, x::Expr, y::Union{Expr,Nothing} = nothing, branch::Symbol = :if)
-    @nospecialize condition x y
+Base.@nospecializeinfer function parse_top_level_branch(condition, x, y = nothing, branch::Symbol = :if)
+    @nospecialize
     blocks::Vector{Union{Expr, Nothing}} = component_blk, equations_blk, parameter_blk, variable_blk = define_blocks(branch)
 
     for arg in x
