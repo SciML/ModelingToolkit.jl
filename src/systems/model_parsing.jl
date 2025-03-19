@@ -512,10 +512,9 @@ function generate_var!(dict, a, b, varclass, mod;
 end
 
 # Use the `t` defined in the `mod`. When it is unavailable, generate a new `t` with a warning.
-get_t(mod, t) = invokelatest(_get_t, mod, t)
-function _get_t(mod, t)
+function get_t(mod, t)
     try
-        _get_var(mod, t)
+        get_var(mod, t)
     catch e
         if e isa UndefVarError
             @warn("Could not find a predefined `t` in `$mod`; generating a new one within this model.\nConsider defining it or importing `t` (or `t_nounits`, `t_unitful` as `t`) from ModelingToolkit.")
@@ -590,8 +589,7 @@ function set_var_metadata(a, ms)
     a, metadata_with_exprs
 end
 
-get_var(mod, b) = invokelatest(_get_var, mod, b)
-function _get_var(mod::Module, b)
+function get_var(mod::Module, b)
     if b isa Symbol
         isdefined(mod, b) && return getproperty(mod, b)
         isdefined(@__MODULE__, b) && return getproperty(@__MODULE__, b)
