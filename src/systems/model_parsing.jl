@@ -640,7 +640,7 @@ function parse_constants!(exprs, dict, body, mod)
                 type = getfield(mod, type)
                 b = _type_check!(get_var(mod, b), a, type, :constants)
                 push!(exprs,
-                    :($(Symbolics_parse_vars(
+                    :($(Symbolics._parse_vars(
                         :constants, type, [:($a = $b), metadata], toconstant))))
                 dict[:constants][a] = Dict(:value => b, :type => type)
                 if @isdefined metadata
@@ -651,7 +651,7 @@ function parse_constants!(exprs, dict, body, mod)
             end
             Expr(:(=), a, Expr(:tuple, b, metadata)) => begin
                 push!(exprs,
-                    :($(Symbolics_parse_vars(
+                    :($(Symbolics._parse_vars(
                         :constants, Real, [:($a = $b), metadata], toconstant))))
                 dict[:constants][a] = Dict{Symbol, Any}(:value => get_var(mod, b))
                 for data in metadata.args
@@ -660,7 +660,7 @@ function parse_constants!(exprs, dict, body, mod)
             end
             Expr(:(=), a, b) => begin
                 push!(exprs,
-                    :($(Symbolics_parse_vars(
+                    :($(Symbolics._parse_vars(
                         :constants, Real, [:($a = $b)], toconstant))))
                 dict[:constants][a] = Dict(:value => get_var(mod, b))
             end
@@ -674,8 +674,6 @@ function parse_constants!(exprs, dict, body, mod)
         end
     end
 end
-# HACK: _parse_vars seems invalidated, so we use invokelatest
-Symbolics_parse_vars(x...) = invokelatest(Symbolics._parse_vars, x...)
 
 push_additional_defaults!(dict, a, b::Number) = dict[:defaults][a] = b
 push_additional_defaults!(dict, a, b::QuoteNode) = dict[:defaults][a] = b.value
