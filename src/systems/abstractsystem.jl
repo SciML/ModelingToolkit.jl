@@ -741,7 +741,8 @@ the global structure of the system.
 One property to note is that if a system is complete, the system will no longer
 namespace its subsystems or variables, i.e. `isequal(complete(sys).v.i, v.i)`.
 """
-function complete(sys::AbstractSystem; split = true, flatten = true)
+function complete(
+        sys::AbstractSystem; split = true, flatten = true, add_initial_parameters = true)
     newunknowns = OrderedSet()
     newparams = OrderedSet()
     iv = has_iv(sys) ? get_iv(sys) : nothing
@@ -762,7 +763,9 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
             @set! newsys.parent = complete(sys; split = false, flatten = false)
         end
         sys = newsys
-        sys = add_initialization_parameters(sys)
+        if add_initial_parameters
+            sys = add_initialization_parameters(sys)
+        end
     end
     if split && has_index_cache(sys)
         @set! sys.index_cache = IndexCache(sys)
