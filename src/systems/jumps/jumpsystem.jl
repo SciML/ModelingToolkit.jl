@@ -507,7 +507,7 @@ function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothi
             systems = get_systems(sys), defaults = defaults(sys), guesses = guesses(sys),
             parameter_dependencies = parameter_dependencies(sys),
             metadata = get_metadata(sys), gui_metadata = get_gui_metadata(sys))
-        osys = complete(osys)
+        osys = complete(osys; add_initial_parameters = false)
         return ODEProblem(osys, u0map, tspan, parammap; check_length = false,
             build_initializeprob = false, kwargs...)
     else
