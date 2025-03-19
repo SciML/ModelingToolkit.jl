@@ -77,6 +77,7 @@ end
     @test length(equations(sys)) == 1
     @test length(observed(sys)) == 3
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [foo => _tmp_fn2])
+    val[] = 0
     @test_nowarn prob.f(prob.u0, prob.p, 0.0)
     @test val[] == 1
 
@@ -97,6 +98,7 @@ end
         @test length(observed(sys)) == 2
         prob = ODEProblem(
             sys, [y => ones(2), z => 2ones(2), x => 3.0], (0.0, 1.0), [foo => _tmp_fn2])
+        val[] = 0
         @test_nowarn prob.f(prob.u0, prob.p, 0.0)
         @test val[] == 2
 
