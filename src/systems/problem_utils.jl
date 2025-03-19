@@ -815,7 +815,9 @@ function process_SciMLProblem(
     op, missing_unknowns, missing_pars = build_operating_point!(sys,
         u0map, pmap, defs, cmap, dvs, ps)
 
-    add_observed_equations!(u0map, obs)
+    if !is_time_dependent(sys) || is_initializesystem(sys)
+        add_observed_equations!(u0map, obs)
+    end
     if u0_constructor === identity && u0Type <: StaticArray
         u0_constructor = vals -> SymbolicUtils.Code.create_array(
             u0Type, eltype(vals), Val(1), Val(length(vals)), vals...)
