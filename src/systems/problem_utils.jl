@@ -706,10 +706,6 @@ function maybe_build_initialization_problem(
         empty!(missing_unknowns)
     end
 
-    for v in missing_unknowns
-        op[v] = zero_var(v)
-    end
-    empty!(missing_unknowns)
     return (;
         initialization_data = SciMLBase.OverrideInitData(
             initializeprob, update_initializeprob!, initializeprobmap,
