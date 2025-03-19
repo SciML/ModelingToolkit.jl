@@ -511,9 +511,10 @@ function generate_var!(dict, a, b, varclass, mod;
 end
 
 # Use the `t` defined in the `mod`. When it is unavailable, generate a new `t` with a warning.
-function get_t(mod, t)
+get_t(mod, t) = invokelatest(_get_t, mod, t)
+function _get_t(mod, t)
     try
-        get_var(mod, t)
+        _get_var(mod, t)
     catch e
         if e isa UndefVarError
             @warn("Could not find a predefined `t` in `$mod`; generating a new one within this model.\nConsider defining it or importing `t` (or `t_nounits`, `t_unitful` as `t`) from ModelingToolkit.")
@@ -588,7 +589,8 @@ function set_var_metadata(a, ms)
     a, metadata_with_exprs
 end
 
-function get_var(mod::Module, b)
+get_var(mod, b) = invokelatest(_get_var, mod, b)
+function _get_var(mod::Module, b)
     if b isa Symbol
         isdefined(mod, b) && return getproperty(mod, b)
         isdefined(@__MODULE__, b) && return getproperty(@__MODULE__, b)
@@ -1355,7 +1357,8 @@ push_something!(v, x...) = push_something!.(Ref(v), x)
 
 define_blocks(branch) = [Expr(branch), Expr(branch), Expr(branch), Expr(branch)]
 
-function parse_top_level_branch(condition, x, y = nothing, branch = :if)
+Base.@nospecializeinfer function parse_top_level_branch(condition, x::Expr, y::Union{Expr,Nothing} = nothing, branch::Symbol = :if)
+    @nospecialize condition x y
     blocks::Vector{Union{Expr, Nothing}} = component_blk, equations_blk, parameter_blk, variable_blk = define_blocks(branch)
 
     for arg in x
