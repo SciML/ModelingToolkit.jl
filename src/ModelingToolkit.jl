@@ -233,17 +233,17 @@ PrecompileTools.@compile_workload begin
         end
         if structp
             @variables begin
-                x(t) = 0.0, [description="foo", guess=1.0]
+                x(t) = 0.0, [description = "foo", guess = 1.0]
             end
         else
             @variables begin
-                x(t) = 0.0, [description="foo w/o structp", guess=1.0]
+                x(t) = 0.0, [description = "foo w/o structp", guess = 1.0]
             end
         end
         @parameters begin
-            a = 1.0, [description="bar"]
+            a = 1.0, [description = "bar"]
             if structp
-                b=2*a, [description="if"]
+                b = 2 * a, [description = "if"]
             else
                 c
             end
@@ -251,7 +251,7 @@ PrecompileTools.@compile_workload begin
         @equations begin
             x ~ a + b
         end
-    end;
+    end
 end
 
 export AbstractTimeDependentSystem,
