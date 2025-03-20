@@ -3,6 +3,7 @@ using ModelingToolkit: get_connector_type, get_defaults, get_gui_metadata,
                        get_systems, get_ps, getdefault, getname, readable_code,
                        scalarize, symtype, VariableDescription, RegularConnector,
                        get_unit
+using SymbolicIndexingInterface
 using URIs: URI
 using Distributions
 using DynamicQuantities, OrdinaryDiffEq
@@ -819,15 +820,15 @@ end
     @named guess_model = GuessModel()
 
     j_guess = getguess(guess_model.j)
-    @test typeof(j_guess) == Num
+    @test symbolic_type(j_guess) == ScalarSymbolic()
     @test readable_code(j_guess) == "l(t) / i(t) + k(t)"
 
     i_guess = getguess(guess_model.i)
-    @test typeof(i_guess) == Num
+    @test symbolic_type(i_guess) == ScalarSymbolic()
     @test readable_code(i_guess) == "k(t)"
 
     l_guess = getguess(guess_model.l)
-    @test typeof(l_guess) == Num
+    @test symbolic_type(l_guess) == ScalarSymbolic()
     @test readable_code(l_guess) == "k(t)"
 end
 
