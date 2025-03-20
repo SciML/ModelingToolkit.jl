@@ -246,7 +246,8 @@ end
 # The comments indicate the syntax matched by a block; either when parsed directly
 # when it is called recursively for parsing a part of an expression.
 # These variable definitions are part of test suite in `test/model_parsing.jl`
-Base.@nospecializeinfer function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
+Base.@nospecializeinfer function parse_variable_def!(
+        dict, mod, arg, varclass, kwargs, where_types;
         def = nothing, type::Type = Real, meta = Dict{DataType, Expr}())
     @nospecialize
     arg isa LineNumberNode && return
@@ -1356,7 +1357,8 @@ push_something!(v, x...) = push_something!.(Ref(v), x)
 
 define_blocks(branch) = [Expr(branch), Expr(branch), Expr(branch), Expr(branch)]
 
-Base.@nospecializeinfer function parse_top_level_branch(condition, x, y = nothing, branch::Symbol = :if)
+Base.@nospecializeinfer function parse_top_level_branch(
+        condition, x, y = nothing, branch::Symbol = :if)
     @nospecialize
     blocks::Vector{Union{Expr, Nothing}} = component_blk, equations_blk, parameter_blk, variable_blk = define_blocks(branch)
 
