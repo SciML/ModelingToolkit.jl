@@ -45,7 +45,7 @@ function modelingtoolkitize(
             eqs = vcat([0.0 ~ rhs[i] for i in 1:length(prob.f.resid_prototype)]...)
         else
             rhs = ArrayInterface.restructure(prob.u0, similar(vars, Num))
-            prob.f(rhs, vars, p isa MTKParameters ? (params,) : params)
+            prob.f(rhs, vars, params)
             eqs = vcat([0.0 ~ rhs[i] for i in 1:length(rhs)]...)
         end
 

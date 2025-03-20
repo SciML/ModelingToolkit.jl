@@ -326,7 +326,7 @@ end
     eqs = [0 ~ p1 * x * exp(x) + p2]
     @mtkbuild sys = NonlinearSystem(eqs; parameter_dependencies = [p2 => 2p1])
     @test isequal(only(parameters(sys)), p1)
-    @test Set(full_parameters(sys)) == Set([p1, p2, Initial(p2)])
+    @test Set(full_parameters(sys)) == Set([p1, p2, Initial(p2), Initial(x)])
     prob = NonlinearProblem(sys, [x => 1.0])
     @test prob.ps[p1] == 1.0
     @test prob.ps[p2] == 2.0

@@ -676,23 +676,27 @@ function SymbolicUtils.maketerm(::Type{<:BasicSymbolic}, ::Initial, args, meta)
     return metadata(val, meta)
 end
 
+supports_initialization(sys::AbstractSystem) = true
+
 function add_initialization_parameters(sys::AbstractSystem)
     @assert !has_systems(sys) || isempty(get_systems(sys))
+    supports_initialization(sys) || return sys
+    is_initializesystem(sys) && return sys
+
     all_initialvars = Set{BasicSymbolic}()
     # time-independent systems don't initialize unknowns
-    if is_time_dependent(sys)
-        eqs = equations(sys)
-        if !(eqs isa Vector{Equation})
-            eqs = Equation[x for x in eqs if x isa Equation]
-        end
-        obs, eqs = unhack_observed(observed(sys), eqs)
-        for x in Iterators.flatten((unknowns(sys), Iterators.map(eq -> eq.lhs, obs)))
-            x = unwrap(x)
-            if iscall(x) && operation(x) == getindex
-                push!(all_initialvars, arguments(x)[1])
-            else
-                push!(all_initialvars, x)
-            end
+    # but may initialize parameters using guesses for unknowns
+    eqs = equations(sys)
+    if !(eqs isa Vector{Equation})
+        eqs = Equation[x for x in eqs if x isa Equation]
+    end
+    obs, eqs = unhack_observed(observed(sys), eqs)
+    for x in Iterators.flatten((unknowns(sys), Iterators.map(eq -> eq.lhs, obs)))
+        x = unwrap(x)
+        if iscall(x) && operation(x) == getindex
+            push!(all_initialvars, arguments(x)[1])
+        else
+            push!(all_initialvars, x)
         end
     end
     for eq in parameter_dependencies(sys)
@@ -722,15 +726,8 @@ Returns true if the parameter `p` is of the form `Initial(x)`.
 """
 function isinitial(p)
     p = unwrap(p)
-    if iscall(p)
-        operation(p) isa Initial && return true
-        if operation(p) === getindex
-            operation(arguments(p)[1]) isa Initial && return true
-        end
-    else
-        return false
-    end
-    return false
+    return iscall(p) && (operation(p) isa Initial ||
+            operation(p) === getindex && isinitial(arguments(p)[1]))
 end
 
 """
@@ -744,7 +741,8 @@ the global structure of the system.
 One property to note is that if a system is complete, the system will no longer
 namespace its subsystems or variables, i.e. `isequal(complete(sys).v.i, v.i)`.
 """
-function complete(sys::AbstractSystem; split = true, flatten = true)
+function complete(
+        sys::AbstractSystem; split = true, flatten = true, add_initial_parameters = true)
     newunknowns = OrderedSet()
     newparams = OrderedSet()
     iv = has_iv(sys) ? get_iv(sys) : nothing
@@ -765,7 +763,9 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
             @set! newsys.parent = complete(sys; split = false, flatten = false)
         end
         sys = newsys
-        sys = add_initialization_parameters(sys)
+        if add_initial_parameters
+            sys = add_initialization_parameters(sys)
+        end
     end
     if split && has_index_cache(sys)
         @set! sys.index_cache = IndexCache(sys)
@@ -1345,20 +1345,8 @@ function parameters(sys::AbstractSystem; initial_parameters = false)
     systems = get_systems(sys)
     result = unique(isempty(systems) ? ps :
                     [ps; reduce(vcat, namespace_parameters.(systems))])
-    if !initial_parameters
-        if is_time_dependent(sys)
-            # time-dependent systems have `Initial` parameters for all their
-            # unknowns/pdeps, all of which should be hidden.
-            filter!(x -> !iscall(x) || !isa(operation(x), Initial), result)
-        else
-            # time-independent systems only have `Initial` parameters for
-            # pdeps. Any other `Initial` parameters should be kept (e.g. initialization
-            # systems)
-            filter!(
-                x -> !iscall(x) || !isa(operation(x), Initial) ||
-                         !has_parameter_dependency_with_lhs(sys, only(arguments(x))),
-                result)
-        end
+    if !initial_parameters && !is_initializesystem(sys)
+        filter!(x -> !iscall(x) || !isa(operation(x), Initial), result)
     end
     return result
 end

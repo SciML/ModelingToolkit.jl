@@ -246,3 +246,5 @@ function get_cmap(sys::ConstraintsSystem, exprs = nothing)
     cmap = map(x -> x ~ getdefault(x), cs)
     return cmap, cs
 end
+
+supports_initialization(::ConstraintsSystem) = false

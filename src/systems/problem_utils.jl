@@ -491,6 +491,22 @@ function filter_missing_values!(varmap::AbstractDict; missing_values = nothing)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+For each `k => v` in `varmap` where `k` is an array (or array symbolic) add
+`k[i] => v[i]` for all `i  in eachindex(k)`. Return the modified `varmap`.
+"""
+function scalarize_varmap!(varmap::AbstractDict)
+    for k in collect(keys(varmap))
+        symbolic_type(k) == ArraySymbolic() || continue
+        for i in eachindex(k)
+            varmap[k[i]] = varmap[k][i]
+        end
+    end
+    return varmap
+end
+
 struct GetUpdatedMTKParameters{G, S}
     # `getu` functor which gets parameters that are unknowns during initialization
     getpunknowns::G
@@ -607,10 +623,14 @@ function build_operating_point!(sys::AbstractSystem,
     end
 
     for k in keys(u0map)
-        u0map[k] = fixpoint_sub(u0map[k], neithermap)
+        v = fixpoint_sub(u0map[k], neithermap)
+        isequal(k, v) && continue
+        u0map[k] = v
     end
     for k in keys(pmap)
-        pmap[k] = fixpoint_sub(pmap[k], neithermap)
+        v = fixpoint_sub(pmap[k], neithermap)
+        isequal(k, v) && continue
+        pmap[k] = v
     end
 
     return op, missing_unknowns, missing_pars
@@ -686,10 +706,6 @@ function maybe_build_initialization_problem(
         empty!(missing_unknowns)
     end
 
-    for v in missing_unknowns
-        op[v] = zero_var(v)
-    end
-    empty!(missing_unknowns)
     return (;
         initialization_data = SciMLBase.OverrideInitData(
             initializeprob, update_initializeprob!, initializeprobmap,
@@ -795,11 +811,13 @@ function process_SciMLProblem(
     else
         obs, _ = unhack_observed(observed(sys), Equation[x for x in eqs if x isa Equation])
     end
-    is_time_dependent(sys) || add_observed_equations!(u0map, obs)
 
     op, missing_unknowns, missing_pars = build_operating_point!(sys,
         u0map, pmap, defs, cmap, dvs, ps)
 
+    if !is_time_dependent(sys) || is_initializesystem(sys)
+        add_observed_equations!(u0map, obs)
+    end
     if u0_constructor === identity && u0Type <: StaticArray
         u0_constructor = vals -> SymbolicUtils.Code.create_array(
             u0Type, eltype(vals), Val(1), Val(length(vals)), vals...)
@@ -821,7 +839,7 @@ function process_SciMLProblem(
         op[iv] = t
     end
 
-    is_time_dependent(sys) && add_observed_equations!(op, obs)
+    add_observed_equations!(op, obs)
     add_parameter_dependencies!(sys, op)
 
     if warn_cyclic_dependency

@@ -333,10 +333,8 @@ function SciMLBase.ImplicitDiscreteProblem(
 
     u0map = to_varmap(u0map, dvs)
     u0map = shift_u0map_forward(sys, u0map, defaults(sys))
-    @show u0map
     f, u0, p = process_SciMLProblem(
         ImplicitDiscreteFunction, sys, u0map, parammap; eval_expression, eval_module, kwargs...)
-    @show u0
 
     kwargs = filter_kwargs(kwargs)
     ImplicitDiscreteProblem(f, u0, tspan, p; kwargs...)

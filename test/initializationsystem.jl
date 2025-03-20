@@ -1417,3 +1417,62 @@ end
         @test prob.ps[p1] ≈ 3.0
     end
 end
+
+@testset "`Initial(X)` in time-independent systems: $Problem" for Problem in [
+    NonlinearProblem, NonlinearLeastSquaresProblem]
+    @parameters k1 k2
+    @variables X1(t) X2(t)
+    @parameters Γ[1:1]=missing [guess = [1.0]]
+    eqs = [
+        0 ~ k1 * (Γ[1] - X1) - k2 * X1
+    ]
+    initialization_eqs = [
+        X2 ~ Γ[1] - X1
+    ]
+    @mtkbuild nlsys = NonlinearSystem(eqs, [X1, X2], [k1, k2, Γ]; initialization_eqs)
+
+    @testset "throws if initialization_eqs contain unknowns" begin
+        u0 = [X1 => 1.0, X2 => 2.0]
+        ps = [k1 => 0.1, k2 => 0.2]
+        @test_throws ArgumentError Problem(nlsys, u0, ps)
+    end
+
+    eqs = [0 ~ k1 * (Γ[1] - X1) - k2 * X1
+           X2 ~ Γ[1] - X1]
+    initialization_eqs = [
+        Initial(X2) ~ Γ[1] - Initial(X1)
+    ]
+    @mtkbuild nlsys = NonlinearSystem(eqs, [X1, X2], [k1, k2, Γ]; initialization_eqs)
+
+    @testset "solves initialization" begin
+        u0 = [X1 => 1.0, X2 => 2.0]
+        ps = [k1 => 0.1, k2 => 0.2]
+        prob = Problem(nlsys, u0, ps)
+        @test state_values(prob.f.initialization_data.initializeprob) === nothing
+        @test prob.ps[Γ[1]] ≈ 3.0
+    end
+
+    @testset "respects explicitly provided value" begin
+        u0 = []
+        ps = [k1 => 0.1, k2 => 0.2, Γ => [5.0]]
+        prob = Problem(nlsys, u0, ps)
+        @test prob.ps[Γ[1]] ≈ 5.0
+    end
+
+    @testset "fails initialization if inconsistent explicit value" begin
+        u0 = [X1 => 1.0, X2 => 2.0]
+        ps = [k1 => 0.1, k2 => 0.2, Γ => [5.0]]
+        prob = Problem(nlsys, u0, ps)
+        sol = solve(prob)
+        @test sol.retcode == SciMLBase.ReturnCode.InitialFailure
+    end
+
+    @testset "Ignores initial equation if given insufficient u0" begin
+        u0 = [X2 => 2.0]
+        ps = [k1 => 0.1, k2 => 0.2, Γ => [5.0]]
+        prob = Problem(nlsys, u0, ps)
+        sol = solve(prob)
+        @test SciMLBase.successful_retcode(sol)
+        @test sol.ps[Γ[1]] ≈ 5.0
+    end
+end
