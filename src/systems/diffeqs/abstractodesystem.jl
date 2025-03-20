@@ -1306,7 +1306,7 @@ struct InitializationProblem{iip, specialization} end
 
 """
 ```julia
-InitializationProblem{iip}(sys::AbstractODESystem, u0map, tspan,
+InitializationProblem{iip}(sys::AbstractODESystem, t, u0map,
                            parammap = DiffEqBase.NullParameters();
                            version = nothing, tgrad = false,
                            jac = false,
