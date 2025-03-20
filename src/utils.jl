@@ -963,27 +963,6 @@ function Base.iterate(it::StatefulBFS, queue = (eltype(it)[(0, it.t)]))
     return (lv, t), queue
 end
 
-function jacobian_wrt_vars(pf::F, p, input_idxs, chunk::C) where {F, C}
-    E = eltype(p)
-    tag = ForwardDiff.Tag(pf, E)
-    T = typeof(tag)
-    dualtype = ForwardDiff.Dual{T, E, ForwardDiff.chunksize(chunk)}
-    p_big = similar(p, dualtype)
-    copyto!(p_big, p)
-    p_closure = let pf = pf,
-        input_idxs = input_idxs,
-        p_big = p_big
-
-        function (p_small_inner)
-            p_big[input_idxs] .= p_small_inner
-            pf(p_big)
-        end
-    end
-    p_small = p[input_idxs]
-    cfg = ForwardDiff.JacobianConfig(p_closure, p_small, chunk, tag)
-    ForwardDiff.jacobian(p_closure, p_small, cfg, Val(false))
-end
-
 function fold_constants(ex)
     if iscall(ex)
         maketerm(typeof(ex), operation(ex), map(fold_constants, arguments(ex)),
