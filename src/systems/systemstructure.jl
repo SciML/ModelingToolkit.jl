@@ -688,6 +688,7 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = false,
         dummy_derivative = true,
         kwargs...)
+
     if fully_determined isa Bool
         check_consistency &= fully_determined
     else
