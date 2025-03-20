@@ -96,7 +96,7 @@ function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
     ieqs = Int[]
     filtered_vars = BitSet()
     free_eqs = free_equations(graph, var_sccs, var_eq_matching, varfilter)
-    is_overdetemined = !isempty(free_eqs)
+    is_overdetermined = !isempty(free_eqs)
     for vars in var_sccs
         for var in vars
             if varfilter(var)
@@ -112,7 +112,7 @@ function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
             filtered_vars, isder)
         # If the systems is overdetemined, we cannot assume the free equations
         # will not form algebraic loops with equations in the sccs.
-        if !is_overdetemined
+        if !is_overdetermined
             vargraph.ne = 0
             for var in vars
                 vargraph.matching[var] = unassigned
@@ -121,7 +121,7 @@ function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
         empty!(ieqs)
         empty!(filtered_vars)
     end
-    if is_overdetemined
+    if is_overdetermined
         free_vars = findall(x -> !(x isa Int), var_eq_matching)
         tear_graph_block_modia!(var_eq_matching, ict, solvable_graph, free_eqs,
             BitSet(free_vars), isder)
