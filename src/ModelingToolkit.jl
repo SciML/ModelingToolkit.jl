@@ -94,6 +94,9 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 import DynamicQuantities, Unitful
 const DQ = DynamicQuantities
 
+import DifferentiationInterface as DI
+using ADTypes: AutoForwardDiff
+
 export @derivatives
 
 for fun in [:toexpr]
