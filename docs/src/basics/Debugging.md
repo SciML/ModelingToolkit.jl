@@ -65,7 +65,7 @@ logging in a system returned from `debug_system`, use `ModelingToolkit.ASSERTION
 
 ```@repl debug
 dprob[ModelingToolkit.ASSERTION_LOG_VARIABLE] = false;
-solve(drob, Tsit5());
+solve(dprob, Tsit5());
 ```
 
 ```@docs
