@@ -189,11 +189,12 @@ struct ODESystem <: AbstractODESystem
     """
     split_idxs::Union{Nothing, Vector{Vector{Int}}}
     """
-    The connections to ignore (since they're removed by analysis point transformations).
-    The first element of the tuple are systems that can't be in the same connection set,
-    and the second are variables (for the trivial form of `connect`).
+    The analysis points removed by transformations, representing connections to be
+    ignored. The first element of the tuple analysis points connecting systems and
+    the second are ones connecting variables (for the trivial form of `connect`).
     """
-    ignored_connections::Union{Nothing, Tuple{Vector{ODESystem}, Vector{BasicSymbolic}}}
+    ignored_connections::Union{
+        Nothing, Tuple{Vector{IgnoredAnalysisPoint}, Vector{IgnoredAnalysisPoint}}}
     """
     The hierarchical parent system before simplification.
     """

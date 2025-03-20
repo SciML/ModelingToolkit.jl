@@ -213,7 +213,8 @@ function Symbolics.connect(
         outs::ConnectableSymbolicT...; verbose = true)
     allvars = (in, out, outs...)
     validate_causal_variables_connection(allvars)
-    return AnalysisPoint() ~ AnalysisPoint(in, name, [out; collect(outs)]; verbose)
+    return AnalysisPoint() ~ AnalysisPoint(
+        unwrap(in), name, unwrap.([out; collect(outs)]); verbose)
 end
 
 """
@@ -416,20 +417,20 @@ function with_analysis_point_ignored(sys::AbstractSystem, ap::AnalysisPoint)
     has_ignored_connections(sys) || return sys
     ignored = get_ignored_connections(sys)
     if ignored === nothing
-        ignored = (ODESystem[], BasicSymbolic[])
+        ignored = (IgnoredAnalysisPoint[], IgnoredAnalysisPoint[])
     else
         ignored = copy.(ignored)
     end
     if ap.outputs === nothing
         error("Empty analysis point")
     end
-    for x in ap.outputs
-        if x isa ODESystem
-            push!(ignored[1], x)
-        else
-            push!(ignored[2], unwrap(x))
-        end
+
+    if ap.input isa AbstractSystem && all(x -> x isa AbstractSystem, ap.outputs)
+        push!(ignored[1], IgnoredAnalysisPoint(ap.input, ap.outputs))
+    else
+        push!(ignored[2], IgnoredAnalysisPoint(unwrap(ap.input), unwrap.(ap.outputs)))
     end
+
     return @set sys.ignored_connections = ignored
 end
 

@@ -438,3 +438,59 @@ end
     matrices, _ = get_sensitivity(sys, sys.ap)
     @test matrices == matrices_normal
 end
+
+@testset "Ignored analysis points only affect relevant connection sets" begin
+    m1 = 1
+    m2 = 1
+    k = 1000 # Spring stiffness
+    c = 10   # Damping coefficient
+
+    @named inertia1 = Inertia(; J = m1, phi = 0, w = 0)
+    @named inertia2 = Inertia(; J = m2, phi = 0, w = 0)
+
+    @named spring = Spring(; c = k)
+    @named damper = Damper(; d = c)
+
+    @named torque = Torque(use_support = false)
+
+    function SystemModel(u = nothing; name = :model)
+        eqs = [connect(torque.flange, inertia1.flange_a)
+               connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
+               connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
+        if u !== nothing
+            push!(eqs, connect(torque.tau, u.output))
+            return @named model = ODESystem(
+                eqs, t; systems = [torque, inertia1, inertia2, spring, damper, u])
+        end
+        ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
+    end
+
+    @named r = Step(start_time = 1)
+    @named pid = LimPID(k = 400, Ti = 0.5, Td = 1, u_max = 350)
+    @named filt = SecondOrder(d = 0.9, w = 10, x = 0, xd = 0)
+    @named sensor = AngleSensor()
+    @named add = Add() # To add the feedback and feedforward control signals
+    model = SystemModel()
+    @named inverse_model = SystemModel()
+    @named inverse_sensor = AngleSensor()
+    connections = [connect(r.output, :r, filt.input) # Name connection r to form an analysis point
+                   connect(inverse_model.inertia1.flange_b, inverse_sensor.flange) # Attach the inverse sensor to the inverse model
+                   connect(filt.output, pid.reference, inverse_sensor.phi) # the filtered reference now goes to both the PID controller and the inverse model input
+                   connect(inverse_model.torque.tau, add.input1)
+                   connect(pid.ctr_output, add.input2)
+                   connect(add.output, :u, model.torque.tau) # Name connection u to form an analysis point
+                   connect(model.inertia1.flange_b, sensor.flange)
+                   connect(sensor.phi, :y, pid.measurement)]
+    closed_loop = ODESystem(connections, t,
+        systems = [model, inverse_model, pid, filt, sensor, inverse_sensor, r, add],
+        name = :closed_loop)
+    # just ensure the system simplifies
+    mats, _ = get_sensitivity(closed_loop, :y)
+    S = CS.ss(mats...)
+    fr = CS.freqrespv(S, [0.01, 1, 100])
+    # https://github.com/SciML/ModelingToolkit.jl/pull/3469
+    reference_fr = ComplexF64[-1.2505330104772838e-11 - 2.500062613816021e-9im,
+        -0.0024688370221621625 - 0.002279011866413123im,
+        1.8100018764334602 + 0.3623845793211718im]
+    @test isapprox(fr, reference_fr)
+end
