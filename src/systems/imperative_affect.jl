@@ -109,10 +109,6 @@ function namespace_affect(affect::ImperativeAffect, s)
         affect.skip_checks)
 end
 
-function compile_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs...)
-    compile_functional_affect(affect, cb, sys, dvs, ps; kwargs...)
-end
-
 function invalid_variables(sys, expr)
     filter(x -> !any(isequal(x), all_symbols(sys)), reduce(vcat, vars(expr); init = []))
 end
@@ -155,7 +151,7 @@ function check_assignable(sys, sym)
     end
 end
 
-function compile_functional_affect(affect::ImperativeAffect, cb, sys; kwargs...)
+function compile_functional_affect(affect::ImperativeAffect, sys; kwargs...)
     #=
     Implementation sketch:
         generate observed function (oop), should save to a component array under obs_syms
@@ -235,14 +231,8 @@ function compile_functional_affect(affect::ImperativeAffect, cb, sys; kwargs...)
 
     upd_funs = NamedTuple{mod_names}((setu.((sys,), first.(mod_pairs))...,))
 
-    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        save_idxs = get(ic.callback_to_clocks, cb, Int[])
-    else
-        save_idxs = Int[]
-    end
-
     let user_affect = func(affect), ctx = context(affect)
-        function (integ)
+        @inline function (integ)
             # update the to-be-mutated values; this ensures that if you do a no-op then nothing happens
             modvals = mod_og_val_fun(integ.u, integ.p, integ.t)
             upd_component_array = NamedTuple{mod_names}(modvals)
@@ -256,10 +246,6 @@ function compile_functional_affect(affect::ImperativeAffect, cb, sys; kwargs...)
 
             # write the new values back to the integrator
             _generated_writeback(integ, upd_funs, upd_vals)
-
-            for idx in save_idxs
-                SciMLBase.save_discretes!(integ, idx)
-            end
         end
     end
 end
