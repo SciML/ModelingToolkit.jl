@@ -89,21 +89,6 @@ function linearization_function(sys::AbstractSystem, inputs,
     t0 = current_time(prob)
     inputvals = [p[idx] for idx in input_idxs]
 
-    uf_fun = let fun = prob.f
-        function uff(du, u, p, t)
-            SciMLBase.UJacobianWrapper(fun, t, p)(du, u)
-        end
-    end
-    uf_jac = PreparedJacobian{true}(uf_fun, similar(prob.u0), autodiff, prob.u0, DI.Constant(p), DI.Constant(t0))
-    # observed function is a `GeneratedFunctionWrapper` with iip component
-    h_jac = PreparedJacobian{true}(h, similar(prob.u0, size(outputs)), autodiff, prob.u0, DI.Constant(p), DI.Constant(t0))
-    pf_fun = let fun = prob.f, setter = setp_oop(sys, input_idxs)
-        function pff(du, input, u, p, t)
-            p = setter(p, input)
-            SciMLBase.ParamJacobianWrapper(fun, t, u)(du, p)
-        end
-    end
-    pf_jac = PreparedJacobian{true}(pf_fun, similar(prob.u0), autodiff, inputvals, DI.Constant(prob.u0), DI.Constant(p), DI.Constant(t0))
     hp_fun = let fun = h, setter = setp_oop(sys, input_idxs)
         function hpf(du, input, u, p, t)
             p = setter(p, input)
@@ -111,8 +96,36 @@ function linearization_function(sys::AbstractSystem, inputs,
             return du
         end
     end
-    hp_jac = PreparedJacobian{true}(hp_fun, similar(prob.u0, size(outputs)), autodiff, inputvals, DI.Constant(prob.u0), DI.Constant(p), DI.Constant(t0))
-    
+    if u0 === nothing
+        uf_jac = h_jac = pf_jac = nothing
+        T = p isa MTKParameters ? eltype(p.tunable) : eltype(p)
+        hp_jac = PreparedJacobian{true}(
+            hp_fun, zeros(T, size(outputs)), autodiff, inputvals,
+            DI.Constant(prob.u0), DI.Constant(p), DI.Constant(t0))
+    else
+        uf_fun = let fun = prob.f
+            function uff(du, u, p, t)
+                SciMLBase.UJacobianWrapper(fun, t, p)(du, u)
+            end
+        end
+        uf_jac = PreparedJacobian{true}(
+            uf_fun, similar(prob.u0), autodiff, prob.u0, DI.Constant(p), DI.Constant(t0))
+        # observed function is a `GeneratedFunctionWrapper` with iip component
+        h_jac = PreparedJacobian{true}(h, similar(prob.u0, size(outputs)), autodiff,
+            prob.u0, DI.Constant(p), DI.Constant(t0))
+        pf_fun = let fun = prob.f, setter = setp_oop(ssimilarys, input_idxs)
+            function pff(du, input, u, p, t)
+                p = setter(p, input)
+                SciMLBase.ParamJacobianWrapper(fun, t, u)(du, p)
+            end
+        end
+        pf_jac = PreparedJacobian{true}(pf_fun, similar(prob.u0), autodiff, inputvals,
+            DI.Constant(prob.u0), DI.Constant(p), DI.Constant(t0))
+        hp_jac = PreparedJacobian{true}(
+            hp_fun, similar(prob.u0, size(outputs)), autodiff, inputvals,
+            DI.Constant(prob.u0), DI.Constant(p), DI.Constant(t0))
+    end
+
     lin_fun = LinearizationFunction(
         diff_idxs, alge_idxs, input_idxs, length(unknowns(sys)),
         prob, h, u0 === nothing ? nothing : similar(u0), uf_jac, h_jac, pf_jac,
@@ -151,12 +164,14 @@ end
 
 function PreparedJacobian{true}(f, buf, autodiff, args...)
     prep = DI.prepare_jacobian(f, buf, autodiff, args...)
-    return PreparedJacobian{true, typeof(prep), typeof(f), typeof(buf), typeof(autodiff)}(prep, f, buf, autodiff)
+    return PreparedJacobian{true, typeof(prep), typeof(f), typeof(buf), typeof(autodiff)}(
+        prep, f, buf, autodiff)
 end
 
 function PreparedJacobian{false}(f, autodiff, args...)
     prep = DI.prepare_jacobian(f, autodiff, args...)
-    return PreparedJacobian{true, typeof(prep), typeof(f), Nothing, typeof(autodiff)}(prep, f, nothing)
+    return PreparedJacobian{true, typeof(prep), typeof(f), Nothing, typeof(autodiff)}(
+        prep, f, nothing)
 end
 
 function (pj::PreparedJacobian{true})(args...)
@@ -279,14 +294,16 @@ function (linfun::LinearizationFunction)(u, p, t)
         end
         fg_xz = linfun.uf_jac(u, DI.Constant(p), DI.Constant(t))
         h_xz = linfun.h_jac(u, DI.Constant(p), DI.Constant(t))
-        fg_u = linfun.pf_jac([p[idx] for idx in linfun.input_idxs], DI.Constant(u), DI.Constant(p), DI.Constant(t))
+        fg_u = linfun.pf_jac([p[idx] for idx in linfun.input_idxs],
+            DI.Constant(u), DI.Constant(p), DI.Constant(t))
     else
         linfun.num_states == 0 ||
             error("Number of unknown variables (0) does not match the number of input unknowns ($(length(u)))")
         fg_xz = zeros(0, 0)
         h_xz = fg_u = zeros(0, length(linfun.input_idxs))
     end
-    h_u = linfun.hp_jac([p[idx] for idx in linfun.input_idxs], DI.Constant(u), DI.Constant(p), DI.Constant(t))
+    h_u = linfun.hp_jac([p[idx] for idx in linfun.input_idxs],
+        DI.Constant(u), DI.Constant(p), DI.Constant(t))
     (f_x = fg_xz[linfun.diff_idxs, linfun.diff_idxs],
         f_z = fg_xz[linfun.diff_idxs, linfun.alge_idxs],
         g_x = fg_xz[linfun.alge_idxs, linfun.diff_idxs],
