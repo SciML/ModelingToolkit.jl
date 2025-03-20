@@ -114,8 +114,8 @@ function OptimizationSystem(op, unknowns, ps;
             unknowns′[i] = irrvar
         end
     end
-    op′ = substitute(op′, irreducible_subs)
-    constraints = substitute.(constraints, (irreducible_subs,))
+    op′ = fast_substitute(op′, irreducible_subs)
+    constraints = fast_substitute.(constraints, (irreducible_subs,))
 
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn(
@@ -127,7 +127,7 @@ function OptimizationSystem(op, unknowns, ps;
         throw(ArgumentError("System names must be unique."))
     end
     defaults = todict(defaults)
-    defaults = Dict(substitute(value(k), irreducible_subs) => substitute(
+    defaults = Dict(fast_substitute(value(k), irreducible_subs) => fast_substitute(
                         value(v), irreducible_subs)
     for (k, v) in pairs(defaults) if value(v) !== nothing)
 
