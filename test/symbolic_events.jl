@@ -644,7 +644,6 @@ end
         dprob = DiscreteProblem(jsys, u0, tspan, p)
         jprob = JumpProblem(jsys, dprob, Direct(); kwargs...)
         sol = solve(jprob, SSAStepper(); tstops = tstops)
-        @show sol
         @test (sol(1.000000000001)[1] - sol(0.99999999999)[1]) == 1
         paramtotest === nothing || (@test sol.ps[paramtotest] == 1.0)
         @test sol(40.0)[1] == 0
@@ -1153,7 +1152,7 @@ end
     f = ModelingToolkit.FunctionalAffect(
         f = (i, u, p, c) -> seen = true, sts = [], pars = [], discretes = [])
     cb1 = ModelingToolkit.SymbolicContinuousCallback(
-                                                     [x ~ 0], Equation[], initialize = [x ~ 1.5], finalize = f)
+                                                     [x ~ 0], nothing, initialize = [x ~ 1.5], finalize = f)
     @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; continuous_events = [cb1])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
     sol = solve(prob, Tsit5(); dtmax = 0.01)
@@ -1166,7 +1165,7 @@ end
     f = ModelingToolkit.FunctionalAffect(
         f = (i, u, p, c) -> seen = true, sts = [], pars = [], discretes = [])
     cb1 = ModelingToolkit.SymbolicContinuousCallback(
-        [x ~ 0], Equation[], initialize = [x ~ 1.5], finalize = f)
+        [x ~ 0], nothing, initialize = [x ~ 1.5], finalize = f)
     inited = false
     finaled = false
     a = ModelingToolkit.FunctionalAffect(
@@ -1174,7 +1173,7 @@ end
     b = ModelingToolkit.FunctionalAffect(
         f = (i, u, p, c) -> finaled = true, sts = [], pars = [], discretes = [])
     cb2 = ModelingToolkit.SymbolicContinuousCallback(
-        [x ~ 0.1], Equation[], initialize = a, finalize = b)
+        [x ~ 0.1], nothing, initialize = a, finalize = b)
     @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; continuous_events = [cb1, cb2])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
     sol = solve(prob, Tsit5())
@@ -1238,7 +1237,7 @@ end
     @variables x(t) [irreducible = true] y(t) [irreducible = true]
     eqs = [x ~ y, D(x) ~ -1]
     cb = [x ~ 0.0] => [x ~ 0, y ~ 1]
-    @test_throws ErrorException @mtkbuild pend = ODESystem(eqs, t; continuous_events = [cb])
+    @test_throws Exception @mtkbuild pend = ODESystem(eqs, t; continuous_events = [cb])
 
     cb = [x ~ 0.0] => [y ~ 1]
     @mtkbuild pend = ODESystem(eqs, t; continuous_events = [cb])

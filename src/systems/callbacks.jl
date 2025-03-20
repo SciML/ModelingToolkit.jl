@@ -685,6 +685,8 @@ function generate_discrete_callbacks(sys::AbstractSystem, dvs = unknowns(sys), p
     [generate_callback(db, sys; kwargs...) for db in dbs]
 end
 
+const EMPTY_FUNCTION = (args...) -> ()
+
 """
 Codegen a DifferentialEquations callback. A (set of) continuous callback with multiple equations becomes a VectorContinuousCallback.
 Continuous callbacks with only one equation will become a ContinuousCallback.
@@ -705,9 +707,9 @@ function generate_callback(cbs::Vector{SymbolicContinuousCallback}, sys; kwargs.
     inits = []
     finals = []
     for cb in cbs
-        affect = compile_affect(cb.affect, cb, sys, default = nothing)
+        affect = compile_affect(cb.affect, cb, sys, default = EMPTY_FUNCTION) 
         push!(affects, affect)
-        affect_neg = (cb.affect_neg == cb.affect) ? affect : compile_affect(cb.affect_neg, cb, sys, default = nothing)
+        affect_neg = (cb.affect_neg === cb.affect) ? affect : compile_affect(cb.affect_neg, cb, sys, default = EMPTY_FUNCTION)
         push!(affect_negs, affect_neg)
         push!(inits, compile_affect(cb.initialize, cb, sys; default = nothing, is_init = true))
         push!(finals, compile_affect(cb.finalize, cb, sys; default = nothing))
@@ -741,11 +743,11 @@ function generate_callback(cb, sys; kwargs...)
     ps = parameters(sys; initial_parameters = true)
 
     trigger = is_timed ? conditions(cb) : compile_condition(cb, sys, dvs, ps; kwargs...)
-    affect = compile_affect(cb.affect, cb, sys, default = (args...) -> ())
+    affect = compile_affect(cb.affect, cb, sys, default = EMPTY_FUNCTION)
     affect_neg = if is_discrete(cb)
         nothing
     else
-        (cb.affect == cb.affect_neg) ? affect : compile_affect(cb.affect_neg, cb, sys, default = nothing)
+        (cb.affect === cb.affect_neg) ? affect : compile_affect(cb.affect_neg, cb, sys, default = EMPTY_FUNCTION)
     end
     init = compile_affect(cb.initialize, cb, sys, default = SciMLBase.INITIALIZE_DEFAULT, is_init = true)
     final = compile_affect(cb.finalize, cb, sys, default = SciMLBase.FINALIZE_DEFAULT)
@@ -860,7 +862,7 @@ function compile_equational_affect(aff::AffectSystem, sys; kwargs...)
                 push!(pmap, pre_p => pval)
             end
             guesses = Pair[u => integrator[aff_map[u]] for u in unknowns(affsys)]
-            affprob = ImplicitDiscreteProblem(affsys, Pair[], (0, 1), pmap; guesses, build_initializeprob = false)
+            affprob = ImplicitDiscreteProblem(affsys, Pair[], (integrator.t, integrator.t), pmap; guesses, build_initializeprob = false)
 
             affsol = init(affprob, SimpleIDSolve())
             for u in dvs_to_modify
