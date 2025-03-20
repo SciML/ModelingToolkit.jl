@@ -719,6 +719,7 @@ function _structural_simplify!(state::TearingState; simplify = false,
         inputs = Any[], outputs = Any[],
         disturbance_inputs = Any[],
         kwargs...)
+
     if fully_determined isa Bool
         check_consistency &= fully_determined
     else

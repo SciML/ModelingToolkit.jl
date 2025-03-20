@@ -218,6 +218,7 @@ function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = no
     all_int_vars = true
     coeffs === nothing || empty!(coeffs)
     empty!(to_rm)
+
     for j in 𝑠neighbors(graph, ieq)
         var = fullvars[j]
         isirreducible(var) && (all_int_vars = false; continue)
