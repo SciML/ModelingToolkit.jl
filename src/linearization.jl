@@ -25,7 +25,7 @@ The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occ
   - `simplify`: Apply simplification in tearing.
   - `initialize`: If true, a check is performed to ensure that the operating point is consistent (satisfies algebraic equations). If the op is not consistent, initialization is performed.
   - `initialization_solver_alg`: A NonlinearSolve algorithm to use for solving for a feasible set of state and algebraic variables that satisfies the specified operating point.
-  - `autodiff`: An `ADType` supported by DifferentiationInterface.jl to use for calculating the necessary jacobians.
+  - `autodiff`: An `ADType` supported by DifferentiationInterface.jl to use for calculating the necessary jacobians. Defaults to using `AutoForwardDiff()`
   - `kwargs`: Are passed on to `find_solvables!`
 
 See also [`linearize`](@ref) which provides a higher-level interface.
