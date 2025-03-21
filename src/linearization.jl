@@ -113,7 +113,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         # observed function is a `GeneratedFunctionWrapper` with iip component
         h_jac = PreparedJacobian{true}(h, similar(prob.u0, size(outputs)), autodiff,
             prob.u0, DI.Constant(p), DI.Constant(t0))
-        pf_fun = let fun = prob.f, setter = setp_oop(ssimilarys, input_idxs)
+        pf_fun = let fun = prob.f, setter = setp_oop(sys, input_idxs)
             function pff(du, input, u, p, t)
                 p = setter(p, input)
                 SciMLBase.ParamJacobianWrapper(fun, t, u)(du, p)
