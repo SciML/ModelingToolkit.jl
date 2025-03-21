@@ -23,9 +23,9 @@
   - Modelica is an object-oriented single dispatch language. ModelingToolkit.jl,
     built on Julia, uses multiple dispatch extensively to simplify code.
   - Many Modelica compilers supply a GUI. ModelingToolkit.jl does not.
-  - Modelica can be used to simulate ODE and DAE systems. ModelingToolkit.jl
-    has a much more expansive set of system types, including nonlinear systems,
-    SDEs, PDEs, and more.
+  - Modelica is designed for simulating ODE and DAE systems (which can include nonlinear dynamics).
+    In contrast, ModelingToolkit.jl supports a much broader range of system types, including SDEs,
+    PDEs, time-independent nonlinear systems (e.g. various forms of optimization problems) and more.
 
 ## Comparison Against Simulink
 
