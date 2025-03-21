@@ -1,4 +1,4 @@
-using ModelingToolkit, Test
+using ModelingToolkit, ADTypes, Test
 using CommonSolve: solve
 
 # r is an input, and y is an output.
@@ -17,11 +17,12 @@ eqs = [u ~ kp * (r - y)
 lsys, ssys = linearize(sys, [r], [y])
 lprob = LinearizationProblem(sys, [r], [y])
 lsys2 = solve(lprob)
+lsys3, _ = linearize(sys, [r], [y]; autodiff = AutoFiniteDiff())
 
-@test lsys.A[] == lsys2.A[] == -2
-@test lsys.B[] == lsys2.B[] == 1
-@test lsys.C[] == lsys2.C[] == 1
-@test lsys.D[] == lsys2.D[] == 0
+@test lsys.A[] == lsys2.A[] == lsys3.A[] == -2
+@test lsys.B[] == lsys2.B[] == lsys3.B[] == 1
+@test lsys.C[] == lsys2.C[] == lsys3.C[] == 1
+@test lsys.D[] == lsys2.D[] == lsys3.D[] == 0
 
 lsys, ssys = linearize(sys, [r], [r])
 
@@ -89,11 +90,13 @@ connections = [f.y ~ c.r # filtered reference to controller reference
 lsys0, ssys = linearize(cl, [f.u], [p.x])
 desired_order = [f.x, p.x]
 lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
+lsys1, ssys = linearize(cl, [f.u], [p.x]; autodiff = AutoFiniteDiff())
+lsys2 = ModelingToolkit.reorder_unknowns(lsys1, unknowns(ssys), desired_order)
 
-@test lsys.A == [-2 0; 1 -2]
-@test lsys.B == reshape([1, 0], 2, 1)
-@test lsys.C == [0 1]
-@test lsys.D[] == 0
+@test lsys.A == lsys2.A == [-2 0; 1 -2]
+@test lsys.B == lsys2.B == reshape([1, 0], 2, 1)
+@test lsys.C == lsys2.C == [0 1]
+@test lsys.D[] == lsys2.D[] == 0
 
 ## Symbolic linearization
 lsyss, _ = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
