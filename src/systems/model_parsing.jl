@@ -115,7 +115,8 @@ function _model_macro(mod, name, expr, isconnector)
         Ref(dict), [:constants, :defaults, :kwargs, :structural_parameters])
 
     sys = :($ODESystem($(flatten_equations)(equations), $iv, variables, parameters;
-        name, description = $description, systems, gui_metadata = $gui_metadata, defaults))
+        name, description = $description, systems,
+        gui_metadata = $gui_metadata, defaults, syskwargs...))
 
     if length(ext) == 0
         push!(exprs.args, :(var"#___sys___" = $sys))
@@ -137,11 +138,11 @@ function _model_macro(mod, name, expr, isconnector)
         ]))))
 
     f = if length(where_types) == 0
-        :($(Symbol(:__, name, :__))(; name, $(kwargs...)) = $exprs)
+        :($(Symbol(:__, name, :__))(; name, $(kwargs...), syskwargs...) = $exprs)
     else
         f_with_where = Expr(:where)
         push!(f_with_where.args,
-            :($(Symbol(:__, name, :__))(; name, $(kwargs...))), where_types...)
+            :($(Symbol(:__, name, :__))(; name, $(kwargs...), syskwargs...)), where_types...)
         :($f_with_where = $exprs)
     end
 
