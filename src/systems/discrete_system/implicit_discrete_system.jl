@@ -264,7 +264,7 @@ function flatten(sys::ImplicitDiscreteSystem, noeqs = false)
 end
 
 function generate_function(
-        sys::ImplicitDiscreteSystem, dvs = unknowns(sys), ps = parameters(sys); wrap_code = identity, kwargs...)
+        sys::ImplicitDiscreteSystem, dvs = unknowns(sys), ps = parameters(sys); wrap_code = identity, cachesyms::Tuple = (), kwargs...)
     iv = get_iv(sys)
     # Algebraic equations get shifted forward 1, to match with differential equations
     exprs = map(equations(sys)) do eq
@@ -280,8 +280,9 @@ function generate_function(
 
     u_next = map(Shift(iv, 1), dvs)
     u = dvs
+    p = (reorder_parameters(sys, unwrap.(ps))..., cachesyms...)
     build_function_wrapper(
-        sys, exprs, u_next, u, ps..., iv; p_start = 3, extra_assignments, kwargs...)
+        sys, exprs, u_next, u, p..., iv; p_start = 3, extra_assignments, kwargs...)
 end
 
 function shift_u0map_forward(sys::ImplicitDiscreteSystem, u0map, defs)
@@ -434,4 +435,14 @@ end
 
 function ImplicitDiscreteFunctionExpr(sys::ImplicitDiscreteSystem, args...; kwargs...)
     ImplicitDiscreteFunctionExpr{true}(sys, args...; kwargs...)
+end
+
+function Base.:(==)(sys1::ImplicitDiscreteSystem, sys2::ImplicitDiscreteSystem)
+    sys1 === sys2 && return true
+    isequal(nameof(sys1), nameof(sys2)) &&
+        isequal(get_iv(sys1), get_iv(sys2)) && 
+        _eq_unordered(get_eqs(sys1), get_eqs(sys2)) &&
+        _eq_unordered(get_unknowns(sys1), get_unknowns(sys2)) &&
+        _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
+        all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
 end
