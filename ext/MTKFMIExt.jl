@@ -93,7 +93,7 @@ with the name `namespace__variable`.
 - `name`: The name of the system.
 """
 function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
-        communication_step_size = nothing, reinitializealg = SciMLBase.NoInit(), type, name) where {Ver}
+        communication_step_size = nothing, type, name) where {Ver}
     if Ver != 2 && Ver != 3
         throw(ArgumentError("FMI Version must be `2` or `3`"))
     end
@@ -238,7 +238,7 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
         finalize_affect = MTK.FunctionalAffect(fmiFinalize!, [], [wrapper], [])
         step_affect = MTK.FunctionalAffect(Returns(nothing), [], [], [])
         instance_management_callback = MTK.SymbolicDiscreteCallback(
-            (t != t - 1), step_affect; finalize = finalize_affect, reinitializealg = reinitializealg)
+            (t != t - 1), step_affect; finalize = finalize_affect)
 
         push!(params, wrapper)
         append!(observed, der_observed)
@@ -279,8 +279,7 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
             fmiCSStep!; observed = cb_observed, modified = cb_modified, ctx = _functor)
         instance_management_callback = MTK.SymbolicDiscreteCallback(
             communication_step_size, step_affect; initialize = initialize_affect,
-            finalize = finalize_affect, reinitializealg = reinitializealg
-        )
+            finalize = finalize_affect)
 
         # guarded in case there are no outputs/states and the variable is `[]`.
         symbolic_type(__mtk_internal_o) == NotSymbolic() || push!(params, __mtk_internal_o)
