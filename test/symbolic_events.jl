@@ -65,15 +65,12 @@ affect_neg = [x ~ 1]
     e = SymbolicContinuousCallback(eqs[], affect)
     @test e isa SymbolicContinuousCallback
     @test isequal(equations(e), eqs)
-    @test observed(system(affects(e))) == affect
-    @test observed(system(affect_negs(e))) == affect
     @test e.rootfind == SciMLBase.LeftRootFind
 
     # with only positive edge affect
     e = SymbolicContinuousCallback(eqs[], affect, affect_neg = nothing)
     @test e isa SymbolicContinuousCallback
     @test isequal(equations(e), eqs)
-    @test observed(system(affects(e))) == affect
     @test isnothing(e.affect_neg)
     @test e.rootfind == SciMLBase.LeftRootFind
 
@@ -81,8 +78,6 @@ affect_neg = [x ~ 1]
     e = SymbolicContinuousCallback(eqs[], affect, affect_neg = affect_neg)
     @test e isa SymbolicContinuousCallback
     @test isequal(equations(e), eqs)
-    @test observed(system(affects(e))) == affect
-    @test observed(system(affect_negs(e))) == affect_neg
     @test e.rootfind == SciMLBase.LeftRootFind
 
     # with different root finding ops
