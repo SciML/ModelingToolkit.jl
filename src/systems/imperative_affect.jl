@@ -99,7 +99,7 @@ function Base.hash(a::ImperativeAffect, s::UInt)
     hash(a.ctx, s)
 end
 
-function namespace_affect(affect::ImperativeAffect, s)
+function namespace_affects(affect::ImperativeAffect, s)
     ImperativeAffect(func(affect),
         namespace_expr.(observed(affect), (s,)),
         observed_syms(affect),
