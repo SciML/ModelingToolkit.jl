@@ -1332,3 +1332,5 @@ end
 # - Functional affects reinitialize correctly
 # - explicit equation of t in a functional affect
 # - modifying both u and p in an affect
+# - affects that have Pre but are also algebraic in nature
+# - reinitialization after affects
