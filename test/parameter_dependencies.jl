@@ -287,13 +287,13 @@ end
     @constants h = 1
     @variables S(t) I(t) R(t)
     rate₁ = β * S * I * h
-    affect₁ = [S ~ S - 1 * h, I ~ I + 1]
+    affect₁ = [S ~ Pre(S) - 1 * h, I ~ Pre(I) + 1]
     rate₃ = γ * I * h
-    affect₃ = [I ~ I * h - 1, R ~ R + 1]
+    affect₃ = [I ~ Pre(I) * h - 1, R ~ Pre(R) + 1]
     j₁ = ConstantRateJump(rate₁, affect₁)
     j₃ = ConstantRateJump(rate₃, affect₃)
     @named js2 = JumpSystem(
-        [j₁, j₃], t, [S, I, R], [γ]; parameter_dependencies = [β => 0.01γ])
+        [j₃], t, [S, I, R], [γ]; parameter_dependencies = [β => 0.01γ])
     @test isequal(only(parameters(js2)), γ)
     @test Set(full_parameters(js2)) == Set([γ, β])
     js2 = complete(js2)
