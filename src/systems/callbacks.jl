@@ -244,7 +244,6 @@ function make_affect(affect::Vector{Equation}; iv = nothing, algeeqs = Equation[
     isempty(affect) && return nothing
     isempty(algeeqs) && @warn "No algebraic equations were found. If the system has no algebraic equations, this can be disregarded. Otherwise pass in `algeeqs` to the SymbolicContinuousCallback constructor."
 
-    @show affect
     explicit = true 
     affect = scalarize(affect)
     dvs = OrderedSet()
@@ -288,6 +287,7 @@ function make_affect(affect::Vector{Equation}; iv = nothing, algeeqs = Equation[
     rev_map = Dict([v => k for (k, v) in aff_map])
     affect = Symbolics.substitute(affect, rev_map)
     @named affectsys = ImplicitDiscreteSystem(vcat(affect, algeeqs), iv, collect(union(dvs, p_as_dvs)), cb_params)
+    affectsys = complete(affectsys)
     # get accessed parameters p from Pre(p) in the callback parameters
     params = filter(isparameter, map(x -> unPre(x), cb_params))
     # add unknowns to the map
