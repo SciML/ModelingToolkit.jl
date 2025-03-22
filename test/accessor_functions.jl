@@ -54,8 +54,8 @@ let
         D(Y) ~ -Y^3,
         O ~ (p_bot + d) * X_bot + Y
     ]
-    cevs = [[t ~ 1.0] => [Y ~ Y + 2.0]]
-    devs = [(t == 2.0) => [Y ~ Y + 2.0]]
+    cevs = [[t ~ 1.0] => [Y ~ Pre(Y) + 2.0]]
+    devs = [(t == 2.0) => [Y ~ Pre(Y) + 2.0]]
     @named sys_bot = ODESystem(
         eqs_bot, t; systems = [], continuous_events = cevs, discrete_events = devs)
     @named sys_mid2 = ODESystem(

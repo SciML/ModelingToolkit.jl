@@ -99,6 +99,7 @@ function Base.hash(a::ImperativeAffect, s::UInt)
     hash(a.ctx, s)
 end
 
+namespace_affects(af::ImperativeAffect, s) = namespace_affect(af, s)
 function namespace_affect(affect::ImperativeAffect, s)
     rmn = []
     for modded in modified(affect)
