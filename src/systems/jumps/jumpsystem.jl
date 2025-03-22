@@ -4,25 +4,14 @@ const JumpType = Union{VariableRateJump, ConstantRateJump, MassActionJump}
 # call reset_aggregated_jumps!(integrator).
 # assumes iip
 function _reset_aggregator!(expr, integrator)
-    if expr isa Symbol
-        error("Error, encountered a symbol. This should not happen.")
+    @assert Meta.isexpr(expr, :function)
+    body = expr.args[end]
+    body = quote
+        $body
+        $reset_aggregated_jumps!($integrator)
     end
-    if expr isa LineNumberNode
-        return
-    end
-
-    if (expr.head == :function)
-        _reset_aggregator!(expr.args[end], integrator)
-    else
-        if expr.args[end] == :nothing
-            expr.args[end] = :(reset_aggregated_jumps!($integrator))
-            push!(expr.args, :nothing)
-        else
-            _reset_aggregator!(expr.args[end], integrator)
-        end
-    end
-
-    nothing
+    expr.args[end] = body
+    return nothing
 end
 
 """
