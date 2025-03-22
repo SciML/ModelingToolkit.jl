@@ -288,8 +288,8 @@ function generate_affect_function(js::JumpSystem, affect)
         csubs = Dict(c => getdefault(c) for c in consts)
         affect = substitute(affect, csubs)
     end
-    compile_equational_affect(
-        affect, js; expression = Val{true}, checkvars = false)
+    @show dump(affect[1])
+    compile_equational_affect(affect, js; expression = Val{true}, checkvars = false)
 end
 
 function assemble_vrj(
@@ -298,7 +298,7 @@ function assemble_vrj(
     rate = GeneratedFunctionWrapper{(2, 3, is_split(js))}(rate, nothing)
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
-    affect = eval_or_rgf(generate_affect_function(js, vrj.affect!); eval_expression, eval_module)
+    affect = generate_affect_function(js, vrj.affect!)
     VariableRateJump(rate, affect; save_positions = vrj.save_positions)
 end
 
@@ -309,7 +309,6 @@ function assemble_vrj_expr(js, vrj, unknowntoid)
     affect = generate_affect_function(js, vrj.affect!)
     quote
         rate = $rate
-
         affect = $affect
         VariableRateJump(rate, affect)
     end
@@ -321,7 +320,7 @@ function assemble_crj(
     rate = GeneratedFunctionWrapper{(2, 3, is_split(js))}(rate, nothing)
     outputvars = (value(affect.lhs) for affect in crj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
-    affect = eval_or_rgf(generate_affect_function(js, crj.affect!); eval_expression, eval_module)
+    affect = generate_affect_function(js, crj.affect!)
     ConstantRateJump(rate, affect)
 end
 
@@ -332,7 +331,6 @@ function assemble_crj_expr(js, crj, unknowntoid)
     affect = generate_affect_function(js, crj.affect!)
     quote
         rate = $rate
-
         affect = $affect
         ConstantRateJump(rate, affect)
     end
@@ -543,6 +541,7 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob,
 
     majpmapper = JumpSysMajParamMapper(js, p; jseqs = eqs, rateconsttype = invttype)
     majs = isempty(eqs.x[1]) ? nothing : assemble_maj(eqs.x[1], unknowntoid, majpmapper)
+    @show eqs.x[2]
     crjs = ConstantRateJump[assemble_crj(js, j, unknowntoid; eval_expression, eval_module)
                             for j in eqs.x[2]]
     vrjs = VariableRateJump[assemble_vrj(js, j, unknowntoid; eval_expression, eval_module)
