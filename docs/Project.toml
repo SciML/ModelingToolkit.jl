@@ -29,7 +29,7 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 [compat]
 BenchmarkTools = "1.3"
 BifurcationKit = "0.4"
-DataInterpolations = "6.5"
+DataInterpolations = "6.5, 8"
 Distributions = "0.25"
 Documenter = "1"
 DynamicQuantities = "^0.11.2, 0.12, 1"
