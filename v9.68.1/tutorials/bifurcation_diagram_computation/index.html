@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Bifurcation Diagrams · ModelingToolkit.jl</title><meta name="title" content="Bifurcation Diagrams · ModelingToolkit.jl"/><meta property="og:title" content="Bifurcation Diagrams · ModelingToolkit.jl"/><meta property="twitter:title" content="Bifurcation Diagrams · ModelingToolkit.jl"/><meta name="description" content="Documentation for ModelingToolkit.jl."/><meta property="og:description" content="Documentation for ModelingToolkit.jl."/><meta property="twitter:description" content="Documentation for ModelingToolkit.jl."/><meta property="og:url" content="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/bifurcation_diagram_computation/"/><meta property="twitter:url" content="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/bifurcation_diagram_computation/"/><link rel="canonical" href="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/bifurcation_diagram_computation/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">ModelingToolkit.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../ode_modeling/">Getting Started with ModelingToolkit.jl</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../acausal_components/">Acausal Component-Based Modeling</a></li><li><a class="tocitem" href="../nonlinear/">Modeling Nonlinear Systems</a></li><li><a class="tocitem" href="../initialization/">Initialization of ODESystems</a></li><li><a class="tocitem" href="../optimization/">Modeling Optimization Problems</a></li><li><a class="tocitem" href="../modelingtoolkitize/">Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code</a></li><li><a class="tocitem" href="../programmatically_generating/">Programmatically Generating and Scripting ODESystems</a></li><li><a class="tocitem" href="../stochastic_diffeq/">Modeling with Stochasticity</a></li><li><a class="tocitem" href="../discrete_system/">(Experimental) Modeling Discrete Systems</a></li><li><a class="tocitem" href="../parameter_identifiability/">Parameter Identifiability in ODE Models</a></li><li><a class="tocitem" href="../change_independent_variable/">Changing the independent variable of ODEs</a></li><li class="is-active"><a class="tocitem" href>Bifurcation Diagrams</a></li><li><a class="tocitem" href="../SampledData/">Clocks and Sampled-Data Systems</a></li><li><a class="tocitem" href="../domain_connections/">Domains</a></li><li><a class="tocitem" href="../callable_params/">Callable parameters and interpolating data</a></li><li><a class="tocitem" href="../linear_analysis/">Linear Analysis</a></li><li><a class="tocitem" href="../fmi/">Importing FMUs</a></li></ul></li><li><span class="tocitem">Examples</span><ul><li><input class="collapse-toggle" id="menuitem-4-1" type="checkbox"/><label class="tocitem" for="menuitem-4-1"><span class="docs-label">Basic Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../examples/higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li><a class="tocitem" href="../../examples/spring_mass/">Component-Based Modeling of a Spring-Mass System</a></li><li><a class="tocitem" href="../../examples/modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs</a></li><li><a class="tocitem" href="../../examples/remake/">Optimizing through an ODE solve and re-creating MTK Problems</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-4-2" type="checkbox"/><label class="tocitem" for="menuitem-4-2"><span class="docs-label">Advanced Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../examples/tearing_parallelism/">Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a></li><li><a class="tocitem" href="../../examples/sparse_jacobians/">Automated Sparse Analytical Jacobians</a></li><li><a class="tocitem" href="../../examples/perturbation/">Symbolic-Numeric Perturbation Theory for ODEs</a></li></ul></li></ul></li><li><span class="tocitem">Basics</span><ul><li><a class="tocitem" href="../../basics/AbstractSystem/">The AbstractSystem Interface</a></li><li><a class="tocitem" href="../../basics/ContextualVariables/">Contextual Variable Types</a></li><li><a class="tocitem" href="../../basics/Variable_metadata/">Symbolic Metadata</a></li><li><a class="tocitem" href="../../basics/Composition/">Composing Models and Building Reusable Components</a></li><li><a class="tocitem" href="../../basics/Events/">Event Handling and Callback Functions</a></li><li><a class="tocitem" href="../../basics/Linearization/">Linearization</a></li><li><a class="tocitem" href="../../basics/InputOutput/">Input output</a></li><li><a class="tocitem" href="../../basics/MTKLanguage/">ModelingToolkit Language: Modeling with <code>@mtkmodel</code>, <code>@connectors</code> and <code>@mtkbuild</code></a></li><li><a class="tocitem" href="../../basics/Validation/">Model Validation and Units</a></li><li><a class="tocitem" href="../../basics/Debugging/">Debugging</a></li><li><a class="tocitem" href="../../basics/DependencyGraphs/">Dependency Graphs</a></li><li><a class="tocitem" href="../../basics/Precompilation/">Working with Precompilation and Binary Building</a></li><li><a class="tocitem" href="../../basics/FAQ/">Frequently Asked Questions</a></li></ul></li><li><span class="tocitem">System Types</span><ul><li><a class="tocitem" href="../../systems/ODESystem/">ODESystem</a></li><li><a class="tocitem" href="../../systems/SDESystem/">SDESystem</a></li><li><a class="tocitem" href="../../systems/JumpSystem/">JumpSystem</a></li><li><a class="tocitem" href="../../systems/NonlinearSystem/">NonlinearSystem</a></li><li><a class="tocitem" href="../../systems/OptimizationSystem/">OptimizationSystem</a></li><li><a class="tocitem" href="../../systems/PDESystem/">PDESystem</a></li><li><a class="tocitem" href="../../systems/DiscreteSystem/">DiscreteSystem</a></li><li><a class="tocitem" href="../../systems/ImplicitDiscreteSystem/">ImplicitDiscreteSystem</a></li></ul></li><li><a class="tocitem" href="../../comparison/">Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages</a></li><li><a class="tocitem" href="../../internals/">Internal Details</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Bifurcation Diagrams</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Bifurcation Diagrams</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/tutorials/bifurcation_diagram_computation.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="bifurcation_diagrams"><a class="docs-heading-anchor" href="#bifurcation_diagrams">Bifurcation Diagrams</a><a id="bifurcation_diagrams-1"></a><a class="docs-heading-anchor-permalink" href="#bifurcation_diagrams" title="Permalink"></a></h1><p>Bifurcation diagrams describes how, for a dynamic system, the quantity and quality of its steady states changes with a parameter&#39;s value. These can be computed through the <a href="https://github.com/bifurcationkit/BifurcationKit.jl">BifurcationKit.jl</a> package. ModelingToolkit provides a simple interface for creating BifurcationKit compatible <code>BifurcationProblem</code>s from <code>NonlinearSystem</code>s and <code>ODESystem</code>s. All the features provided by BifurcationKit can then be applied to these systems. This tutorial provides a brief introduction for these features, with BifurcationKit.jl providing <a href="https://bifurcationkit.github.io/BifurcationKitDocs.jl/stable/">a more extensive documentation</a>.</p><h3 id="Creating-a-BifurcationProblem"><a class="docs-heading-anchor" href="#Creating-a-BifurcationProblem">Creating a <code>BifurcationProblem</code></a><a id="Creating-a-BifurcationProblem-1"></a><a class="docs-heading-anchor-permalink" href="#Creating-a-BifurcationProblem" title="Permalink"></a></h3><p>Let us first consider a simple <code>NonlinearSystem</code>:</p><pre><code class="language-julia hljs">using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) y(t)
+@parameters μ α
+eqs = [0 ~ μ * x - x^3 + α * y,
+    0 ~ -y]
+@mtkbuild nsys = NonlinearSystem(eqs, [x, y], [μ, α])</code></pre><p class="math-container">\[ \begin{align}
+0 &amp;= x\left( t \right) \mu + y\left( t \right) \alpha - \left( x\left( t \right) \right)^{3}
+\end{align}
+ \]</p><p>we wish to compute a bifurcation diagram for this system as we vary the parameter <code>μ</code>. For this, we need to provide the following information:</p><ol><li>The system for which we wish to compute the bifurcation diagram (<code>nsys</code>).</li><li>The parameter which we wish to vary (<code>μ</code>).</li><li>The parameter set for which we want to compute the bifurcation diagram.</li><li>An initial guess of the state of the system for which there is a steady state at our provided parameter value.</li><li>The variable which value we wish to plot in the bifurcation diagram (this argument is optional, if not provided, BifurcationKit default plot functions are used).</li></ol><p>We declare this additional information:</p><pre><code class="language-julia hljs">bif_par = μ
+p_start = [μ =&gt; -1.0, α =&gt; 1.0]
+u0_guess = [x =&gt; 1.0, y =&gt; 1.0]
+plot_var = x;</code></pre><p class="math-container">\[ \begin{equation}
+x\left( t \right)
+\end{equation}
+ \]</p><p>For the initial state guess (<code>u0_guess</code>), typically any value can be provided, however, read BifurcatioKit&#39;s documentation for more details.</p><p>We can now create our <code>BifurcationProblem</code>, which can be provided as input to BifurcationKit&#39;s various functions.</p><pre><code class="language-julia hljs">using BifurcationKit
+bprob = BifurcationProblem(nsys,
+    u0_guess,
+    p_start,
+    bif_par;
+    plot_var = plot_var,
+    jac = false)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">┌─ Bifurcation Problem with uType <span class="sgr36"><span class="sgr1">Vector{Float64}</span></span>
+├─ Inplace:  <span class="sgr36"><span class="sgr1">true</span></span>
+├─ Dimension:  <span class="sgr36"><span class="sgr1">1</span></span>
+├─ Symmetric: <span class="sgr36"><span class="sgr1">false</span></span>
+└─ Parameter: <span class="sgr36"><span class="sgr1">p</span></span></code></pre><p>Here, the <code>jac</code> argument (by default set to <code>true</code>) sets whenever to provide BifurcationKit with a Jacobian or not.</p><h3 id="Computing-a-bifurcation-diagram"><a class="docs-heading-anchor" href="#Computing-a-bifurcation-diagram">Computing a bifurcation diagram</a><a id="Computing-a-bifurcation-diagram-1"></a><a class="docs-heading-anchor-permalink" href="#Computing-a-bifurcation-diagram" title="Permalink"></a></h3><p>Let us consider the <code>BifurcationProblem</code> from the last section. If we wish to compute the corresponding bifurcation diagram we must first declare various settings used by BifurcationKit to compute the diagram. These are stored in a <code>ContinuationPar</code> structure (which also contain a <code>NewtonPar</code> structure).</p><pre><code class="language-julia hljs">p_span = (-4.0, 6.0)
+opts_br = ContinuationPar(nev = 2,
+    p_min = p_span[1],
+    p_max = p_span[2])</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">BifurcationKit.ContinuationPar{Float64, BifurcationKit.DefaultLS, BifurcationKit.DefaultEig{typeof(real)}}
+  dsmin: Float64 0.0001
+  dsmax: Float64 0.1
+  ds: Float64 0.01
+  a: Float64 0.5
+  p_min: Float64 -4.0
+  p_max: Float64 6.0
+  max_steps: Int64 400
+  newton_options: BifurcationKit.NewtonPar{Float64, BifurcationKit.DefaultLS, BifurcationKit.DefaultEig{typeof(real)}}
+  η: Float64 150.0
+  save_to_file: Bool false
+  save_sol_every_step: Int64 1
+  nev: Int64 2
+  save_eig_every_step: Int64 1
+  save_eigenvectors: Bool true
+  plot_every_step: Int64 10
+  tol_stability: Float64 1.0e-10
+  detect_fold: Bool true
+  detect_bifurcation: Int64 3
+  dsmin_bisection: Float64 1.0e-16
+  n_inversion: Int64 2
+  max_bisection_steps: Int64 25
+  tol_bisection_eigenvalue: Float64 1.0e-16
+  detect_event: Int64 0
+  tol_param_bisection_event: Float64 1.0e-16
+  detect_loop: Bool false
+</code></pre><p>Here, <code>p_span</code> sets the interval over which we wish to compute the diagram.</p><p>Next, we can use this as input to our bifurcation diagram, and then plot it.</p><pre><code class="language-julia hljs">bf = bifurcationdiagram(bprob, PALC(), 2, (args...) -&gt; opts_br; bothside = true)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">[Bifurcation diagram]
+ ┌─ From 0-th bifurcation point.
+ ├─ Children number: 2
+ └─ Root (recursion level 1)
+      ┌─ Curve type: <span class="sgr36"><span class="sgr1">EquilibriumCont</span></span>
+      ├─ Number of points: 82
+      ├─ Type of vectors: <span class="sgr36"><span class="sgr1">Vector{Float64}</span></span>
+      ├─ Parameter <span class="sgr36"><span class="sgr1">p</span></span> starts at -4.0, ends at 6.0
+      ├─ Algo: <span class="sgr36"><span class="sgr1">PALC</span></span>
+      └─ Special points:
+
+- #  1, <span class="sgr1">endpoint</span> at p ≈ -4.00000000,                                                                     step =   0
+- #  2, <span class="sgr34"><span class="sgr1">      bp</span></span> at p ≈ +0.00044561 ∈ (-0.00010682, +0.00044561), |δp|=6e-04, [<span class="sgr32"><span class="sgr1">converged</span></span>], δ = ( 1,  0), step =  38
+- #  3, <span class="sgr1">endpoint</span> at p ≈ +6.00000000,                                                                     step =  81
+</code></pre><p>Here, the value <code>2</code> sets how sub-branches of the diagram that BifurcationKit should compute. Generally, for bifurcation diagrams, it is recommended to use the <code>bothside=true</code> argument.</p><pre><code class="language-julia hljs">using Plots
+plot(bf;
+    putspecialptlegend = false,
+    markersize = 2,
+    plotfold = false,
+    xguide = &quot;μ&quot;,
+    yguide = &quot;x&quot;)</code></pre><img src="95799b98.svg" alt="Example block output"/><p>Here, the system exhibits a pitchfork bifurcation at <em>μ=0.0</em>.</p><h3 id="Using-ODESystem-inputs"><a class="docs-heading-anchor" href="#Using-ODESystem-inputs">Using <code>ODESystem</code> inputs</a><a id="Using-ODESystem-inputs-1"></a><a class="docs-heading-anchor-permalink" href="#Using-ODESystem-inputs" title="Permalink"></a></h3><p>It is also possible to use <code>ODESystem</code>s (rather than <code>NonlinearSystem</code>s) as input to <code>BifurcationProblem</code>. Here follows a brief such example.</p><pre><code class="language-julia hljs">using BifurcationKit, ModelingToolkit, Plots
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) y(t)
+@parameters μ
+eqs = [D(x) ~ μ * x - y - x * (x^2 + y^2),
+    D(y) ~ x + μ * y - y * (x^2 + y^2)]
+@mtkbuild osys = ODESystem(eqs, t)
+
+bif_par = μ
+plot_var = x
+p_start = [μ =&gt; 1.0]
+u0_guess = [x =&gt; 0.0, y =&gt; 0.0]
+
+bprob = BifurcationProblem(osys,
+    u0_guess,
+    p_start,
+    bif_par;
+    plot_var = plot_var,
+    jac = false)
+
+p_span = (-3.0, 3.0)
+opts_br = ContinuationPar(nev = 2,
+    p_max = p_span[2], p_min = p_span[1])
+
+bf = bifurcationdiagram(bprob, PALC(), 2, (args...) -&gt; opts_br; bothside = true)
+using Plots
+plot(bf;
+    putspecialptlegend = false,
+    markersize = 2,
+    plotfold = false,
+    xguide = &quot;μ&quot;,
+    yguide = &quot;x&quot;)</code></pre><img src="0c062da6.svg" alt="Example block output"/><p>Here, the value of <code>x</code> in the steady state does not change, however, at <code>μ=0</code> a Hopf bifurcation occur and the steady state turn unstable.</p><p>We compute the branch of periodic orbits which is nearby the Hopf Bifurcation. We thus provide the branch <code>bf.γ</code>, the index of the Hopf point we want to branch from: 2 in this case and a method <code>PeriodicOrbitOCollProblem(20, 5)</code> to compute periodic orbits.</p><pre><code class="language-julia hljs">br_po = continuation(bf.γ, 2, opts_br,
+    PeriodicOrbitOCollProblem(20, 5);)
+
+plot(bf; putspecialptlegend = false,
+    markersize = 2,
+    plotfold = false,
+    xguide = &quot;μ&quot;,
+    yguide = &quot;x&quot;)
+plot!(br_po, xguide = &quot;μ&quot;, yguide = &quot;x&quot;, label = &quot;Maximum of periodic orbit&quot;)</code></pre><img src="5c572637.svg" alt="Example block output"/><p>Let&#39;s see how to plot the periodic solution we just computed:</p><pre><code class="language-julia hljs">sol = get_periodic_orbit(br_po, 10)
+plot(sol.t, sol[1, :], yguide = &quot;x&quot;, xguide = &quot;time&quot;, label = &quot;&quot;)</code></pre><img src="dc23988a.svg" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../change_independent_variable/">« Changing the independent variable of ODEs</a><a class="docs-footer-nextpage" href="../SampledData/">Clocks and Sampled-Data Systems »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.9.0 on <span class="colophon-date" title="Sunday 23 March 2025 12:53">Sunday 23 March 2025</span>. Using Julia version 1.10.9.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
