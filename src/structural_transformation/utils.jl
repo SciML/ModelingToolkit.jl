@@ -551,6 +551,7 @@ end
 function _distribute_shift(expr, shift)
     if iscall(expr)
         op = operation(expr)
+        (op isa Pre || op isa Initial) && return expr
         args = arguments(expr)
 
         if ModelingToolkit.isvariable(expr)
