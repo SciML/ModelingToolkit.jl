@@ -288,7 +288,6 @@ function generate_affect_function(js::JumpSystem, affect)
         csubs = Dict(c => getdefault(c) for c in consts)
         affect = substitute(affect, csubs)
     end
-    @show dump(affect[1])
     compile_equational_affect(affect, js; expression = Val{true}, checkvars = false)
 end
 
@@ -541,7 +540,6 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob,
 
     majpmapper = JumpSysMajParamMapper(js, p; jseqs = eqs, rateconsttype = invttype)
     majs = isempty(eqs.x[1]) ? nothing : assemble_maj(eqs.x[1], unknowntoid, majpmapper)
-    @show eqs.x[2]
     crjs = ConstantRateJump[assemble_crj(js, j, unknowntoid; eval_expression, eval_module)
                             for j in eqs.x[2]]
     vrjs = VariableRateJump[assemble_vrj(js, j, unknowntoid; eval_expression, eval_module)

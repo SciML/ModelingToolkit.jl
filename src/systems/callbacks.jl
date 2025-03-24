@@ -242,7 +242,7 @@ make_affect(affect::Affect; kwargs...) = affect
 
 function make_affect(affect::Vector{Equation}; iv = nothing, algeeqs = Equation[])
     isempty(affect) && return nothing
-    isempty(algeeqs) && @warn "No algebraic equations were found. If the system has no algebraic equations, this can be disregarded. Otherwise pass in `algeeqs` to the SymbolicContinuousCallback constructor."
+    isempty(algeeqs) && @warn "No algebraic equations were found for the callback defined by $(join(affect, ", ")). If the system has no algebraic equations, this can be disregarded. Otherwise pass in `algeeqs` to the SymbolicContinuousCallback constructor."
 
     explicit = true 
     affect = scalarize(affect)
@@ -259,6 +259,8 @@ function make_affect(affect::Vector{Equation}; iv = nothing, algeeqs = Equation[
         collect_vars!(dvs, params, eq, iv)
         explicit = false
     end
+    any(isirreducible, dvs) && (explicit = false)
+
     if isnothing(iv)
         iv = isempty(dvs) ? iv : only(arguments(dvs[1]))
         isnothing(iv) && @warn "No independent variable specified and could not be inferred. If the iv appears in an affect equation explicitly, like x ~ t + 1, then it must be specified as an argument to the SymbolicContinuousCallback or SymbolicDiscreteCallback constructor. Otherwise this warning can be disregarded."
@@ -858,16 +860,19 @@ function compile_equational_affect(aff::Union{AffectSystem, Vector{Equation}}, s
         t = get_iv(sys)
 
         u_idxs = indexin((@view lhss[.!is_p]), dvs)
-        p_idxs = if has_index_cache(sys) && (get_index_cache(sys) !== nothing)
-            [parameter_index(sys, p) for p in lhss[is_p]]
+
+        wrap_mtkparameters = has_index_cache(sys) && (get_index_cache(sys) !== nothing)
+        p_idxs = if wrap_mtkparameters
+            [parameter_index(sys, p) for (i, p) in enumerate(lhss)
+             if is_p[i]]
         else
             indexin((@view lhss[is_p]), ps)
         end
         _ps = reorder_parameters(sys, ps)
         integ = gensym(:MTKIntegrator)
         
-        u_up, u_up! = build_function_wrapper(sys, (@view rhss[.!is_p]), dvs, _ps..., t; wrap_code = add_integrator_header(sys, integ, :u), expression = Val{false}, outputidxs = u_idxs, wrap_mtkparameters = false)
-        p_up, p_up! = build_function_wrapper(sys, (@view rhss[is_p]), dvs, _ps..., t; wrap_code = add_integrator_header(sys, integ, :p), expression = Val{false}, outputidxs = p_idxs, wrap_mtkparameters = false)
+        u_up, u_up! = build_function_wrapper(sys, (@view rhss[.!is_p]), dvs, _ps..., t; wrap_code = add_integrator_header(sys, integ, :u), expression = Val{false}, outputidxs = u_idxs, wrap_mtkparameters)
+        p_up, p_up! = build_function_wrapper(sys, (@view rhss[is_p]), dvs, _ps..., t; wrap_code = add_integrator_header(sys, integ, :p), expression = Val{false}, outputidxs = p_idxs, wrap_mtkparameters)
 
         return function explicit_affect!(integ)
             u_up!(integ)
@@ -883,9 +888,12 @@ function compile_equational_affect(aff::Union{AffectSystem, Vector{Equation}}, s
                     pval = isparameter(p) ? integ.ps[p] : integ[p]
                     push!(pmap, pre_p => pval)
                 end
-                guesses = Pair[u => integ[aff_map[u]] for u in unknowns(affsys)]
-                affprob = ImplicitDiscreteProblem(affsys, Pair[], (integ.t, integ.t), pmap; guesses, build_initializeprob = false)
-
+                u0 = Pair[]
+                for u in unknowns(affsys)
+                    uval = isparameter(aff_map[u]) ? integ.ps[u] : integ[u]
+                    push!(u0, u => uval)
+                end
+                affprob = ImplicitDiscreteProblem(affsys, u0, (integ.t, integ.t), pmap; build_initializeprob = false, check_length = false)
                 affsol = init(affprob, SimpleIDSolve())
                 for u in dvs_to_update
                     integ[u] = affsol[sys_map[u]]
