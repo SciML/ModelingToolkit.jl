@@ -207,6 +207,7 @@ mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     fullvars::Vector
     structure::SystemStructure
     extra_eqs::Vector
+    param_derivative_map::Dict{BasicSymbolic, Real}
 end
 
 TransformationState(sys::AbstractSystem) = TearingState(sys)
@@ -264,6 +265,7 @@ function TearingState(sys; quick_cancel = false, check = true)
     var2idx = Dict{Any, Int}()
     symbolic_incidence = []
     fullvars = []
+    param_derivative_map = Dict{BasicSymbolic, Real}()
     var_counter = Ref(0)
     var_types = VariableType[]
     addvar! = let fullvars = fullvars, var_counter = var_counter, var_types = var_types
@@ -295,6 +297,10 @@ function TearingState(sys; quick_cancel = false, check = true)
             any(isequal(_var), ivs) && continue
             if isparameter(_var) ||
                (iscall(_var) && isparameter(operation(_var)) || isconstant(_var))
+                if iv !== nothing && isparameter(_var) && iscall(_var) &&
+                   (args = arguments(_var); length(args)) == 1 && isequal(only(args), iv)
+                    param_derivative_map[Differential(iv)(_var)] = 0.0
+                end
                 continue
             end
             v = scalarize(v)
@@ -438,7 +444,7 @@ function TearingState(sys; quick_cancel = false, check = true)
     ts = TearingState(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
             complete(graph), nothing, var_types, sys isa AbstractDiscreteSystem),
-        Any[])
+        Any[], param_derivative_map)
     if sys isa DiscreteSystem
         ts = shift_discrete_system(ts)
     end
