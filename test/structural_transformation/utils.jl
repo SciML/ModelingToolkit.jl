@@ -282,3 +282,33 @@ end
         @test length(mapping) == 3
     end
 end
+
+@testset "Issue#3480: Derivatives of time-dependent parameters" begin
+    @component function FilteredInput(; name, x0 = 0, T = 0.1)
+        params = @parameters begin
+            k(t) = x0
+            T = T
+        end
+        vars = @variables begin
+            x(t) = k
+            dx(t) = 0
+            ddx(t)
+        end
+        systems = []
+        eqs = [D(x) ~ dx
+               D(dx) ~ ddx
+               dx ~ (k - x) / T]
+        return ODESystem(eqs, t, vars, params; systems, name)
+    end
+
+    @mtkbuild sys = FilteredInput()
+    vs = Set()
+    for eq in equations(sys)
+        ModelingToolkit.vars!(vs, eq)
+    end
+    for eq in observed(sys)
+        ModelingToolkit.vars!(vs, eq)
+    end
+
+    @test !(D(sys.k) in vs)
+end
