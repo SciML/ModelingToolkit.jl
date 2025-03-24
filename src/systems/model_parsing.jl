@@ -1136,7 +1136,6 @@ function parse_equations!(exprs, eqs, dict, body)
 end
 
 function parse_continuous_events!(c_evts, dict, body)
-    @show body
     dict[:continuous_events] = []
     Base.remove_linenums!(body)
     for arg in body.args
@@ -1146,7 +1145,6 @@ function parse_continuous_events!(c_evts, dict, body)
 end
 
 function parse_discrete_events!(d_evts, dict, body)
-    @show body
     dict[:discrete_events] = []
     Base.remove_linenums!(body)
     for arg in body.args
