@@ -134,8 +134,8 @@ let pss_pendulum = partial_state_selection(pendulum)
 end
 
 let sys = structural_simplify(pendulum2)
-    @test length(equations(sys)) == 5
-    @test length(unknowns(sys)) == 5
+    @test length(equations(sys)) == 4
+    @test length(unknowns(sys)) == 4
 
     u0 = [
         x => sqrt(2) / 2,
