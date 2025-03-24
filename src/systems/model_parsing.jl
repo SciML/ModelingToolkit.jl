@@ -77,6 +77,8 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     push!(exprs.args, :(systems = ModelingToolkit.AbstractSystem[]))
     push!(exprs.args, :(equations = Union{Equation, Vector{Equation}}[]))
     push!(exprs.args, :(defaults = Dict{Num, Union{Number, Symbol, Function}}()))
+    push!(exprs.args, :(disc_events = []))
+    push!(exprs.args, :(cont_events = []))
 
     Base.remove_linenums!(expr)
     for arg in expr.args
@@ -118,6 +120,8 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     push!(exprs.args, :(push!(parameters, $(ps...))))
     push!(exprs.args, :(push!(systems, $(comps...))))
     push!(exprs.args, :(push!(variables, $(vs...))))
+    push!(exprs.args, :(push!(disc_events, $(d_evts...))))
+    push!(exprs.args, :(push!(cont_events, $(c_evts...))))
 
     gui_metadata = isassigned(icon) > 0 ? GUIMetadata(GlobalRef(mod, name), icon[]) :
                    GUIMetadata(GlobalRef(mod, name))
@@ -140,16 +144,6 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
 
     isconnector && push!(exprs.args,
         :($Setfield.@set!(var"#___sys___".connector_type=$connector_type(var"#___sys___"))))
-
-    !isempty(c_evts) && push!(exprs.args,
-        :($Setfield.@set!(var"#___sys___".continuous_events=$SymbolicContinuousCallback.([
-            $(c_evts...)
-        ]))))
-
-    !isempty(d_evts) && push!(exprs.args,
-        :($Setfield.@set!(var"#___sys___".discrete_events=$SymbolicDiscreteCallback.([
-            $(d_evts...)
-        ]))))
 
     f = if length(where_types) == 0
         :($(Symbol(:__, name, :__))(; name, $(kwargs...)) = $exprs)
@@ -1142,6 +1136,7 @@ function parse_equations!(exprs, eqs, dict, body)
 end
 
 function parse_continuous_events!(c_evts, dict, body)
+    @show body
     dict[:continuous_events] = []
     Base.remove_linenums!(body)
     for arg in body.args
@@ -1151,6 +1146,7 @@ function parse_continuous_events!(c_evts, dict, body)
 end
 
 function parse_discrete_events!(d_evts, dict, body)
+    @show body
     dict[:discrete_events] = []
     Base.remove_linenums!(body)
     for arg in body.args
