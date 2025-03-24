@@ -129,8 +129,9 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
         Ref(dict), [:constants, :defaults, :kwargs, :structural_parameters])
 
     sys = :($type($(flatten_equations)(equations), $iv, variables, parameters;
-        name, description = $description, systems, gui_metadata = $gui_metadata, defaults,
-        costs = [$(costs...)], constraints = [$(cons...)], consolidate = $consolidate))
+        name, description = $description, systems, gui_metadata = $gui_metadata,
+        continuous_events = [$(c_evts...)], discrete_events = [$(d_evts...)],
+        defaults, costs = [$(costs...)], constraints = [$(cons...)], consolidate = $consolidate))
 
     if length(ext) == 0
         push!(exprs.args, :(var"#___sys___" = $sys))
@@ -140,16 +141,6 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
 
     isconnector && push!(exprs.args,
         :($Setfield.@set!(var"#___sys___".connector_type=$connector_type(var"#___sys___"))))
-
-    !isempty(c_evts) && push!(exprs.args,
-        :($Setfield.@set!(var"#___sys___".continuous_events=$SymbolicContinuousCallback.([
-            $(c_evts...)
-        ]))))
-
-    !isempty(d_evts) && push!(exprs.args,
-        :($Setfield.@set!(var"#___sys___".discrete_events=$SymbolicDiscreteCallback.([
-            $(d_evts...)
-        ]))))
 
     f = if length(where_types) == 0
         :($(Symbol(:__, name, :__))(; name, $(kwargs...)) = $exprs)
@@ -1144,8 +1135,16 @@ end
 function parse_continuous_events!(c_evts, dict, body)
     dict[:continuous_events] = []
     Base.remove_linenums!(body)
-    for arg in body.args
-        push!(c_evts, arg)
+    for line in body.args
+        if length(line.args) == 3 && line.args[1] == :(=>)
+            push!(c_evts, :(($line, ())))
+        elseif length(line.args) == 2
+            event = line.args[1]
+            kwargs = parse_event_kwargs(line.args[2])
+            push!(c_evts, :(($event, $kwargs)))
+        else
+            error("Malformed continuous event $line.")
+        end
         push!(dict[:continuous_events], readable_code.(c_evts)...)
     end
 end
@@ -1153,10 +1152,28 @@ end
 function parse_discrete_events!(d_evts, dict, body)
     dict[:discrete_events] = []
     Base.remove_linenums!(body)
-    for arg in body.args
-        push!(d_evts, arg)
+    for line in body.args
+        if length(line.args) == 3 && line.args[1] == :(=>)
+            push!(d_evts, :(($line, ())))
+        elseif length(line.args) == 2
+            event = line.args[1]
+            kwargs = parse_event_kwargs(line.args[2])
+            push!(d_evts, :(($event, $kwargs)))
+        else
+            error("Malformed discrete event $line.")
+        end
         push!(dict[:discrete_events], readable_code.(d_evts)...)
     end
+end
+
+function parse_event_kwargs(disc_expr)
+    kwargs = :([])
+    for arg in disc_expr.args
+        (arg.head != :(=)) && error("Malformed event kwarg $arg.")
+        (arg.args[1] isa Symbol) || error("Invalid keyword argument name $(arg.args[1]).")
+        push!(kwargs.args, :($(QuoteNode(arg.args[1])) => $(arg.args[2])))
+    end
+    kwargs
 end
 
 function parse_constraints!(cons, dict, body)
