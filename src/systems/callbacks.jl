@@ -295,7 +295,6 @@ function make_affect(affect::Vector{Equation}; iv = nothing, algeeqs::Vector{Equ
     for u in dvs
         aff_map[u] = u
     end
-    @show explicit
 
     AffectSystem(affectsys, collect(dvs), params, discretes, aff_map, explicit)
 end
@@ -842,7 +841,6 @@ Compile an affect defined by a set of equations. Systems with algebraic equation
 function compile_equational_affect(aff::Union{AffectSystem, Vector{Equation}}, sys; reset_jumps = false, kwargs...)
     if aff isa AbstractVector
         aff = make_affect(aff; iv = get_iv(sys))
-        @show is_explicit(aff)
     end
     affsys = system(aff)
     ps_to_update = discretes(aff)
