@@ -444,6 +444,9 @@ end
 
 function validate_parameter_type(ic::IndexCache, stype, sz, sym, index, val)
     (; portion) = index
+    if stype <: FnType
+        stype = fntype_to_function_type(stype)
+    end
     # Nonnumeric parameters have to match the type
     if portion === NONNUMERIC_PORTION
         val isa stype && return nothing
