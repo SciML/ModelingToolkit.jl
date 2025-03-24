@@ -1,6 +1,7 @@
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D, get_u0
 using OrdinaryDiffEq
+using DataInterpolations
 using SymbolicIndexingInterface: getu
 
 @variables x(t)[1:3]=[1.0, 2.0, 3.0] y(t) z(t)[1:2]
@@ -218,4 +219,20 @@ end
     @mtkbuild sys = ODESystem(eqs, t)
     @test_throws ["a(t)", "c(t)"] ODEProblem(
         sys, [e => 2, a => b, b => a + 1, c => d, d => c + 1], (0, 1))
+end
+
+@testset "Issue#3490: `remake` works with callable parameters" begin
+    ts = collect(0.0:0.1:10.0)
+    spline = LinearInterpolation(ts .^ 2, ts)
+    Tspline = typeof(spline)
+    @variables x(t)
+    @parameters (interp::Tspline)(..)
+
+    @mtkbuild sys = ODESystem(D(x) ~ interp(t), t)
+
+    prob = ODEProblem(sys, [x => 0.0], (0.0, 1.0), [interp => spline])
+    spline2 = LinearInterpolation(ts .^ 2, ts .^ 2)
+    p_new = [interp => spline2]
+    prob2 = remake(prob; p = p_new)
+    @test prob2.ps[interp] == spline2
 end
