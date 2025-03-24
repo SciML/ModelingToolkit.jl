@@ -202,6 +202,14 @@ w = [1.0, 2.0]
 @test sort(f_oop(x0, u, p, t, w)) == [0, 0, 0, 1, 2]
 ```
 
+## Input signal library
+
+The [`Blocks` module in ModelingToolkitStandardLibrary](https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/API/blocks/) contains several predefined input signals, such as `Sine, Step, Ramp, Constant` etc., a few of which were used in the examples above. If you have an input signal represented as a sequence of samples, you may use an [`Interpolation` block](https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/tutorials/input_component/), e.g., as `src = Interpolation(ConstantInterpolation, data, timepoints)`, see the docstring for a complete example.
+
+## Disturbance-model library
+
+There is no library explicitly constructed for disturbance modeling. Standard blocks from the [`Blocks` module in ModelingToolkitStandardLibrary](https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/API/blocks/), such as `Integrator, TransferFunction, StateSpace`, can model any disturbance with rational spectrum. Examples of this includes disturbance models such as constants, piecewise constant, periodic, highpass, lowpass, and bandpass. For help with filter design, see [ControlSystems.jl: Filter-design](https://juliacontrol.github.io/ControlSystems.jl/stable/man/creating_systems/#Filter-design) and the interface package [ControlSystemsMTK.jl](https://juliacontrol.github.io/ControlSystemsMTK.jl/dev/). In the example above, we made use of `Blocks.Integrator`, which is a disturbance model suitable for disturbances dominated by low-frequency components, such as piecewise constant signals or slowly drifting signals.
+
 ## Further reading
 
 To see full examples that perform state estimation with ModelingToolkit models, see the following resources:
