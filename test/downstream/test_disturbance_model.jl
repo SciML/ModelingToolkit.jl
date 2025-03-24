@@ -35,10 +35,11 @@ indexof(sym, syms) = findfirst(isequal(sym), syms)
     end
 end
 
+# The addition of disturbance inputs relies on the fact that the plant model has been constructed using connectors, we use these to connect the disturbance inputs from outside the plant-model definition
 @mtkmodel ModelWithInputs begin
     @components begin
         input_signal = Blocks.Sine(frequency = 1, amplitude = 1)
-        disturbance_signal1 = Blocks.Constant(k = 0)
+        disturbance_signal1 = Blocks.Constant(k = 0) # We add an input signal that equals zero by default so that it has no effect during normal simulation
         disturbance_signal2 = Blocks.Constant(k = 0)
         disturbance_torque1 = Torque(use_support = false)
         disturbance_torque2 = Torque(use_support = false)
@@ -46,7 +47,7 @@ end
     end
     @equations begin
         connect(input_signal.output, :u, system_model.torque.tau)
-        connect(disturbance_signal1.output, :d1, disturbance_torque1.tau)
+        connect(disturbance_signal1.output, :d1, disturbance_torque1.tau) # When we connect the input _signals_, we do so through an analysis point. This allows us to easily disconnect the input signals in situations when we do not need them. 
         connect(disturbance_signal2.output, :d2, disturbance_torque2.tau)
         connect(disturbance_torque1.flange, system_model.inertia1.flange_b)
         connect(disturbance_torque2.flange, system_model.inertia2.flange_b)
@@ -67,7 +68,7 @@ lsys = named_ss(
     model, [:u, :d1], [P.inertia1.phi, P.inertia2.phi, P.inertia1.w, P.inertia2.w])
 
 ##
-# If we now want to add a disturbance model, we cannot do that since we have already connected a constant to the disturbance input. We have also already used the name `d` for an analysis point, but that might not be an issue since we create an outer model and get a new namespace.
+# If we now want to add a disturbance model, we cannot do that since we have already connected a constant to the disturbance input, we thus create a new wrapper model with inputs
 
 s = tf("s")
 dist(; name) = ODESystem(1 / s; name)

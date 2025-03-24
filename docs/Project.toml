@@ -2,6 +2,7 @@
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 BifurcationKit = "0f109fa4-8a5d-4b75-95aa-f515264e7665"
 ControlSystemsBase = "aaaaaaaa-a6ca-5380-bf3e-84a91bcd477e"
+ControlSystemsMTK = "687d7614-c7e5-45fc-bfc3-9ee385575c88"
 DataInterpolations = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
