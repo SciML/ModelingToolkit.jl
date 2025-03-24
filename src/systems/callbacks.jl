@@ -240,12 +240,11 @@ make_affect(affect::Tuple; kwargs...) = FunctionalAffect(affect...)
 make_affect(affect::NamedTuple; kwargs...) = FunctionalAffect(; affect...)
 make_affect(affect::Affect; kwargs...) = affect
 
-function make_affect(affect::Vector{Equation}; iv = nothing, algeeqs = Equation[])
+function make_affect(affect::Vector{Equation}; iv = nothing, algeeqs::Vector{Equation} = Equation[])
     isempty(affect) && return nothing
     isempty(algeeqs) && @warn "No algebraic equations were found for the callback defined by $(join(affect, ", ")). If the system has no algebraic equations, this can be disregarded. Otherwise pass in `algeeqs` to the SymbolicContinuousCallback constructor."
 
     explicit = true 
-    affect = scalarize(affect)
     dvs = OrderedSet()
     params = OrderedSet()
     for eq in affect
@@ -296,8 +295,9 @@ function make_affect(affect::Vector{Equation}; iv = nothing, algeeqs = Equation[
     for u in dvs
         aff_map[u] = u
     end
+    @show explicit
 
-    return AffectSystem(affectsys, collect(dvs), params, discretes, aff_map, explicit)
+    AffectSystem(affectsys, collect(dvs), params, discretes, aff_map, explicit)
 end
 
 function make_affect(affect; kwargs...)
@@ -840,7 +840,10 @@ end
 Compile an affect defined by a set of equations. Systems with algebraic equations will solve implicit discrete problems to obtain their next state. Systems without will generate functions that perform explicit updates.
 """
 function compile_equational_affect(aff::Union{AffectSystem, Vector{Equation}}, sys; reset_jumps = false, kwargs...)
-    aff isa AbstractVector && (aff = make_affect(aff, iv = get_iv(sys)))
+    if aff isa AbstractVector
+        aff = make_affect(aff; iv = get_iv(sys))
+        @show is_explicit(aff)
+    end
     affsys = system(aff)
     ps_to_update = discretes(aff)
     dvs_to_update = setdiff(unknowns(aff), getfield.(observed(sys), :lhs))
