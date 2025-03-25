@@ -942,7 +942,10 @@ DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
 Generates a DAEProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 
-Note: Solvers for DAEProblems like DFBDF, DImplicitEuler, DABDF2 are generally slower than the ones for ODEProblems. If possible, it is recommended to formulate your problem in terms of an ODEProblem and use the corresponding ODE Solvers.
+Note: Solvers for DAEProblems like DFBDF, DImplicitEuler, DABDF2 are 
+generally slower than the ones for ODEProblems. If possible, it is 
+recommended to formulate your problem in terms of an ODEProblem and 
+use the corresponding ODE Solvers.
 """
 function DiffEqBase.DAEProblem(sys::AbstractODESystem, args...; kwargs...)
     DAEProblem{true}(sys, args...; kwargs...)
