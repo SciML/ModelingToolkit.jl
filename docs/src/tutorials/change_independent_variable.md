@@ -4,9 +4,10 @@ Ordinary differential equations describe the rate of change of some dependent va
 For the modeler it is often most natural to write down the equations with a particular independent variable, say time $t$.
 However, in many cases there are good reasons for changing the independent variable:
 
-    1. One may want $y(x)$ as a function of $x$ instead of $(x(t), y(t))$ as a function of $t$
-    2. Some differential equations vary more nicely (e.g. less stiff) with respect to one independent variable than another.
-    3. It can reduce the number of equations that must be solved (e.g. $y(x)$ is one equation, while $(x(t), y(t))$ are two).
+ 1. One may want $y(x)$ as a function of $x$ instead of $(x(t), y(t))$ as a function of $t$
+
+ 2. Some differential equations vary more nicely (e.g. less stiff) with respect to one independent variable than another.
+ 3. It can reduce the number of equations that must be solved (e.g. $y(x)$ is one equation, while $(x(t), y(t))$ are two).
 
 To manually change the independent variable of an ODE, one must rewrite all equations in terms of a new variable and transform differentials with the chain rule.
 This is mechanical and error-prone.
@@ -34,9 +35,9 @@ It expresses the position $(x(t), y(t))$ as a function of time $t$.
 But suppose we want to determine whether the projectile hits a target 10 meters away.
 There are at least three ways of answering this:
 
-    - Solve the ODE for $(x(t), y(t))$ and use a callback to terminate when $x$ reaches 10 meters, and evaluate $y$ at the final time.
-    - Solve the ODE for $(x(t), y(t))$ and use root finding to find the time when $x$ reaches 10 meters, and evaluate $y$ at that time.
-    - Solve the ODE for $y(x)$ and evaluate it at 10 meters.
+  - Solve the ODE for $(x(t), y(t))$ and use a callback to terminate when $x$ reaches 10 meters, and evaluate $y$ at the final time.
+  - Solve the ODE for $(x(t), y(t))$ and use root finding to find the time when $x$ reaches 10 meters, and evaluate $y$ at that time.
+  - Solve the ODE for $y(x)$ and evaluate it at 10 meters.
 
 We will demonstrate the last method by changing the independent variable from $t$ to $x$.
 This transformation is well-defined for any non-zero horizontal velocity $v$, so $x$ and $t$ are one-to-one.
@@ -55,7 +56,7 @@ M2s # display this # hide
 
 The derivatives are now with respect to the new independent variable $x$, which can be accessed with `M2.x`.
 
-!!! warn
+!!! info
     
     At this point `x`, `M1.x`, `M1s.x`, `M2.x`, `M2s.x` are *three* different variables.
     Meanwhile `y`, `M1.y`, `M1s.y`, `M2.y` and `M2s.y` are *four* different variables.
@@ -66,7 +67,7 @@ It is straightforward to evolve the ODE for 10 meters and plot the resulting tra
 
 ```@example changeivar
 using OrdinaryDiffEq, Plots
-prob = ODEProblem(M2s, [M2s.y => 0.0], [0.0, 10.0], [v => 8.0]) # throw 10 meters with x-velocity 8 m/s
+prob = ODEProblem(M2s, [M2s.y => 0.0], [0.0, 10.0], [v => 8.0]) # throw 10 meters
 sol = solve(prob, Tsit5())
 plot(sol; idxs = M2.y) # must index by M2.y = y(x); not M1.y = y(t)!
 ```
