@@ -170,3 +170,29 @@ function buckinghumFun(vars_quants, var_names)
 
     return pis_arr
 end
+
+
+"""
+    transform_eqs_from_pi_terms(Vector{Any}, Dict{Any, Any})
+
+    Substitutes the PI terms in the equations to form new set of equations and returns them 
+    in a form of an array. 
+"""
+function transform_eqs_from_pi_terms(pi_eqs, original_equations, iv) 
+    D = ModelingToolkit.Differential(iv)
+    transformed_eqs = []
+    for eq in pi_eqs
+        pi_term = eq
+        for each_var in get_variables(pi_term)
+            println(each_var)
+            if haskey(original_equations, D(each_var)) != true
+                original_equations[D(each_var)] = 0
+            end
+        end
+    
+        der_eq = expand_derivatives(D(pi_term))
+        sub_eq = substitute(der_eq, original_equations)
+        push!(transformed_eqs, sub_eq)
+    end
+    return transformed_eqs
+end
