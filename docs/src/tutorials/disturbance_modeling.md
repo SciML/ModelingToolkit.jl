@@ -74,7 +74,7 @@ using Plots
 plot(sol)
 ```
 
-A thing to note in the specification of `ModelWithInputs` is the presence of three _analysis points_, `:u`, `:d1`, and `:d2`. When signals are connected through an analysis point, we may at any time linearize the model as if the signals were not connected, i.e., as if the corresponding inputs were unbound. We may also use this to generate a julia function for the dynamics on the form ``f(x,u,p,t,w)`` where the input ``u`` and disturbance ``w`` may be provided as separate function arguments, as if the corresponding input signals were not present in the model. More details regarding this will be presented further below, here, we just demonstrate how we could linearize this system model from the inputs to the angular velocity of the inertias
+A thing to note in the specification of `ModelWithInputs` is the presence of three [analysis points](https://docs.sciml.ai/ModelingToolkit/dev/tutorials/linear_analysis/#ModelingToolkit.AnalysisPoint), `:u`, `:d1`, and `:d2`. When signals are connected through an analysis point, we may at any time linearize the model as if the signals were not connected, i.e., as if the corresponding inputs were unbound. We may also use this to generate a julia function for the dynamics on the form ``f(x,u,p,t,w)`` where the input ``u`` and disturbance ``w`` may be provided as separate function arguments, as if the corresponding input signals were not present in the model. More details regarding this will be presented further below, here, we just demonstrate how we could linearize this system model from the inputs to the angular velocity of the inertias
 
 ```@example DISTURBANCE_MODELING
 using ControlSystemsBase, ControlSystemsMTK # ControlSystemsMTK provides the high-level function named_ss and ControlSystemsBase provides the bodeplot function
@@ -105,6 +105,7 @@ When modeling a system in MTK, we essentially (without considering algebraic equ
 \begin{aligned}
 \dot x &= f(x, p, t) \\
 y &= g(x, p, t)
+\end{aligned}
 ```
 
 where ``x`` is the state, ``y`` are observed variables, ``p`` are parameters, and ``t`` is time. When using MTK, which variables constitute ``x`` and which are considered part of the output, ``y``, is up to the tool rather than the user, this choice is made by MTK during the call to `@mtkbuild` or the lower-level function `structural_simplify`.
