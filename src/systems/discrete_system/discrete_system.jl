@@ -97,7 +97,11 @@ struct DiscreteSystem <: AbstractDiscreteSystem
     """
     substitutions::Any
     """
-    If a model `sys` is complete, then `sys.x` no longer performs namespacing.
+    If false, then `sys.x` no longer performs namespacing.
+    """
+    namespacing::Bool
+    """
+    If true, denotes the model will not be modified any further.
     """
     complete::Bool
     """
@@ -114,7 +118,7 @@ struct DiscreteSystem <: AbstractDiscreteSystem
             observed, name, description, systems, defaults, guesses, initializesystem,
             initialization_eqs, preface, connector_type, parameter_dependencies = Equation[],
             metadata = nothing, gui_metadata = nothing,
-            tearing_state = nothing, substitutions = nothing,
+            tearing_state = nothing, substitutions = nothing, namespacing = true,
             complete = false, index_cache = nothing, parent = nothing,
             isscheduled = false;
             checks::Union{Bool, Int} = true)
@@ -122,6 +126,7 @@ struct DiscreteSystem <: AbstractDiscreteSystem
             check_independent_variables([iv])
             check_variables(dvs, iv)
             check_parameters(ps, iv)
+            check_subsystems(systems)
         end
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(dvs, ps, iv)
@@ -130,7 +135,8 @@ struct DiscreteSystem <: AbstractDiscreteSystem
         new(tag, discreteEqs, iv, dvs, ps, tspan, var_to_name, observed, name, description,
             systems, defaults, guesses, initializesystem, initialization_eqs,
             preface, connector_type, parameter_dependencies, metadata, gui_metadata,
-            tearing_state, substitutions, complete, index_cache, parent, isscheduled)
+            tearing_state, substitutions, namespacing, complete, index_cache, parent,
+            isscheduled)
     end
 end
 

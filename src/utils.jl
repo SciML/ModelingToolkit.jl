@@ -202,6 +202,20 @@ function check_equations(eqs, iv)
             throw(ArgumentError("Differential w.r.t. variable ($single_iv) other than the independent variable ($iv) are not allowed."))
     end
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Assert that the subsystems have the appropriate namespacing behavior.
+"""
+function check_subsystems(systems)
+    idxs = findall(!does_namespacing, systems)
+    if !isempty(idxs)
+        names = join("  " .* string.(nameof.(systems[idxs])), "\n")
+        throw(ArgumentError("All subsystems have namespacing enabled. The following subsystems do not perform namespacing:\n$(names)"))
+    end
+end
+
 """
 Get all the independent variables with respect to which differentials are taken.
 """

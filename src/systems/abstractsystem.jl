@@ -590,7 +590,24 @@ function SymbolicIndexingInterface.all_symbols(sys::AbstractSystem)
     return syms
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Check whether a system is marked as `complete`.
+"""
 iscomplete(sys::AbstractSystem) = isdefined(sys, :complete) && getfield(sys, :complete)
+"""
+    $(TYPEDSIGNATURES)
+
+Check whether a system performs namespacing.
+"""
+function does_namespacing(sys::AbstractSystem)
+    if isdefined(sys, :namespacing)
+        getfield(sys, :namespacing)
+    else
+        iscomplete(sys)
+    end
+end
 
 """
 $(TYPEDSIGNATURES)
@@ -798,7 +815,23 @@ function complete(
     if isdefined(sys, :initializesystem) && get_initializesystem(sys) !== nothing
         @set! sys.initializesystem = complete(get_initializesystem(sys); split)
     end
+    sys = toggle_namespacing(sys, false; safe = true)
     isdefined(sys, :complete) ? (@set! sys.complete = true) : sys
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return a new `sys` with namespacing enabled or disabled, depending on `value`. The
+keyword argument `safe` denotes whether systems that do not support such a toggle
+should error or be ignored.
+"""
+function toggle_namespacing(sys::AbstractSystem, value::Bool; safe = false)
+    if !isdefined(sys, :namespacing)
+        safe && return sys
+        throw(ArgumentError("The system must define the `namespacing` flag to toggle namespacing"))
+    end
+    @set sys.namespacing = value
 end
 
 """
@@ -985,13 +1018,14 @@ function Base.propertynames(sys::AbstractSystem; private = false)
     end
 end
 
-function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
+function Base.getproperty(
+        sys::AbstractSystem, name::Symbol; namespace = does_namespacing(sys))
     if has_parent(sys) && (parent = get_parent(sys); parent !== nothing)
         return getproperty(parent, name; namespace)
     end
     wrap(getvar(sys, name; namespace = namespace))
 end
-function getvar(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
+function getvar(sys::AbstractSystem, name::Symbol; namespace = does_namespacing(sys))
     systems = get_systems(sys)
     if isdefined(sys, name)
         Base.depwarn(

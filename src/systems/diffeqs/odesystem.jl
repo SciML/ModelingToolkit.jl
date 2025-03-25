@@ -169,7 +169,11 @@ struct ODESystem <: AbstractODESystem
     """
     substitutions::Any
     """
-    If a model `sys` is complete, then `sys.x` no longer performs namespacing.
+    If false, then `sys.x` no longer performs namespacing.
+    """
+    namespacing::Bool
+    """
+    If true, denotes the model will not be modified any further.
     """
     complete::Bool
     """
@@ -207,8 +211,8 @@ struct ODESystem <: AbstractODESystem
             connector_type, preface, cevents,
             devents, parameter_dependencies, assertions = Dict{BasicSymbolic, String}(),
             metadata = nothing, gui_metadata = nothing, is_dde = false,
-            tstops = [], tearing_state = nothing,
-            substitutions = nothing, complete = false, index_cache = nothing,
+            tstops = [], tearing_state = nothing, substitutions = nothing,
+            namespacing = true, complete = false, index_cache = nothing,
             discrete_subsystems = nothing, solved_unknowns = nothing,
             split_idxs = nothing, ignored_connections = nothing, parent = nothing;
             checks::Union{Bool, Int} = true)
@@ -218,6 +222,7 @@ struct ODESystem <: AbstractODESystem
             check_parameters(ps, iv)
             check_equations(deqs, iv)
             check_equations(equations(cevents), iv)
+            check_subsystems(systems)
         end
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(dvs, ps, iv)
@@ -228,7 +233,8 @@ struct ODESystem <: AbstractODESystem
             ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses, torn_matching,
             initializesystem, initialization_eqs, schedule, connector_type, preface,
             cevents, devents, parameter_dependencies, assertions, metadata,
-            gui_metadata, is_dde, tstops, tearing_state, substitutions, complete, index_cache,
+            gui_metadata, is_dde, tstops, tearing_state, substitutions, namespacing,
+            complete, index_cache,
             discrete_subsystems, solved_unknowns, split_idxs, ignored_connections, parent)
     end
 end

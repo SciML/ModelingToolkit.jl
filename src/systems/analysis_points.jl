@@ -768,7 +768,13 @@ already an `AnalysisPoint` or `Symbol`) is simply wrapped in an array. `Symbol` 
 `AnalysisPoint`s are namespaced with `sys`.
 """
 canonicalize_ap(sys::AbstractSystem, ap::Symbol) = [AnalysisPoint(renamespace(sys, ap))]
-canonicalize_ap(sys::AbstractSystem, ap::AnalysisPoint) = [ap]
+function canonicalize_ap(sys::AbstractSystem, ap::AnalysisPoint)
+    if does_namespacing(sys)
+        return [ap]
+    else
+        return [renamespace(sys, ap)]
+    end
+end
 canonicalize_ap(sys::AbstractSystem, ap) = [ap]
 function canonicalize_ap(sys::AbstractSystem, aps::Vector)
     mapreduce(Base.Fix1(canonicalize_ap, sys), vcat, aps; init = [])
