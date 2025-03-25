@@ -204,7 +204,7 @@ function transform_sys(pi_eqs, sys::ODESystem, pis_vars)
         push!(equations_for_system, D(pis_vars[i]) ~ eq)
     end
 
-    @named new_sys = ODESystem(equations_for_system, ModelingToolkit.get_iv(sys),[π1,a,b,c,d], [α]; defaults=defaults(sys))
+    @named new_sys = ODESystem(equations_for_system, ModelingToolkit.get_iv(sys),dependent_vars, [α]; defaults=defaults(sys))
 
     return new_sys
 end
