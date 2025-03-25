@@ -62,6 +62,7 @@ jacobian_sparsity
 ODEFunction(sys::ModelingToolkit.AbstractODESystem, args...)
 ODEProblem(sys::ModelingToolkit.AbstractODESystem, args...)
 SteadyStateProblem(sys::ModelingToolkit.AbstractODESystem, args...)
+DAEProblem(sys::ModelingToolkit.AbstractODESystem, args...)
 ```
 
 ## Expression Constructors
