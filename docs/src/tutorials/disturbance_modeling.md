@@ -90,7 +90,7 @@ We summarize the findings so far as a number of best practices:
 !!! tip "Best practices"
     
       - Use a component-based workflow to model the plant
-      - Model the plant without disturbance inputs to make it as generic as possible
+      - If possible, model the plant without explicit disturbance inputs to make it as generic as possible
       - When disturbance inputs are needed, create a new model that includes the plant model and the disturbance inputs
       - Only add input _signals_ at the top level of the model, this applies to both control inputs and disturbance inputs.
       - Use analysis points to connect signals to inputs, this allows for easy disconnection of signals when needed, e.g., for linearization or function generation.
