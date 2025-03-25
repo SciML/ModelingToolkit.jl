@@ -941,6 +941,8 @@ DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
 
 Generates a DAEProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
+
+Note: Solvers for DAEProblems like DFBDF, DImplicitEuler, DABDF2 are generally slower than the ones for ODEProblems. If possible, it is recommended to formulate your problem in terms of an ODEProblem and use the corresponding ODE Solvers.
 """
 function DiffEqBase.DAEProblem(sys::AbstractODESystem, args...; kwargs...)
     DAEProblem{true}(sys, args...; kwargs...)
@@ -951,7 +953,7 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
         warn_initialize_determined = true,
         check_length = true, eval_expression = false, eval_module = @__MODULE__, kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEProblem`")
+        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEProblem`.")
     end
     f, du0, u0, p = process_SciMLProblem(DAEFunction{iip}, sys, u0map, parammap;
         implicit_dae = true, du0map = du0map, check_length,
