@@ -47,8 +47,11 @@ end
     @named sys = ODESystem(Equation[], t; systems = [sys_ap])
     ap3 = @test_nowarn sys.hej.plant_input
     @test nameof(ap3) == Symbol(join(["sys", "hej", "plant_input"], NAMESPACE_SEPARATOR))
-    sys = complete(sys)
-    ap4 = sys.hej.plant_input
+    csys = complete(sys)
+    ap4 = csys.hej.plant_input
+    @test nameof(ap4) == Symbol(join(["hej", "plant_input"], NAMESPACE_SEPARATOR))
+    nsys = toggle_namespacing(sys, false)
+    ap5 = nsys.hej.plant_input
     @test nameof(ap4) == Symbol(join(["hej", "plant_input"], NAMESPACE_SEPARATOR))
 end
 
@@ -61,6 +64,7 @@ ap = AnalysisPoint(:plant_input)
 eqs = [connect(P.output, C.input), connect(C.output, ap, P.input)]
 sys = ODESystem(eqs, t, systems = [P, C], name = :hej)
 @named nested_sys = ODESystem(Equation[], t; systems = [sys])
+nonamespace_sys = toggle_namespacing(nested_sys, false)
 
 @testset "simplifies and solves" begin
     ssys = structural_simplify(sys)
@@ -73,6 +77,7 @@ end
 test_cases = [
     ("inner", sys, sys.plant_input),
     ("nested", nested_sys, nested_sys.hej.plant_input),
+    ("nonamespace", nonamespace_sys, nonamespace_sys.hej.plant_input),
     ("inner - Symbol", sys, :plant_input),
     ("nested - Symbol", nested_sys, nameof(sys.plant_input))
 ]
