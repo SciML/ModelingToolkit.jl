@@ -173,26 +173,38 @@ end
 
 
 """
-    transform_eqs_from_pi_terms(Vector{Any}, Dict{Any, Any})
+    transform_sys(Vector{Any}, system::ODESystem)
 
-    Substitutes the PI terms in the equations to form new set of equations and returns them 
-    in a form of an array. 
+    Substitutes the PI terms in the equations to form new set of equations and returns the
+    new ODESystem
 """
-function transform_eqs_from_pi_terms(pi_eqs, original_equations, iv) 
-    D = ModelingToolkit.Differential(iv)
+
+function transform_sys(pi_eqs, sys::ODESystem, pis_vars)
+    original_equations = equations(sys)
+    orginal_eqs_mp = Dict{Any, Any}(eq.lhs => eq.rhs for eq in original_equations)
     transformed_eqs = []
     for eq in pi_eqs
         pi_term = eq
         for each_var in get_variables(pi_term)
             println(each_var)
-            if haskey(original_equations, D(each_var)) != true
-                original_equations[D(each_var)] = 0
+            if haskey(orginal_eqs_mp, D(each_var)) != true
+                orginal_eqs_mp[D(each_var)] = 0
             end
         end
     
         der_eq = expand_derivatives(D(pi_term))
-        sub_eq = substitute(der_eq, original_equations)
+        sub_eq = substitute(der_eq, orginal_eqs_mp)
         push!(transformed_eqs, sub_eq)
     end
-    return transformed_eqs
+
+    equations_for_system = Equation[]
+    dependent_vars = Any[unknowns(sys)...]
+    for (i, eq) in pairs(transformed_eqs)
+        push!(dependent_vars, pis_vars[i])
+        push!(equations_for_system, D(pis_vars[i]) ~ eq)
+    end
+
+    @named new_sys = ODESystem(equations_for_system, ModelingToolkit.get_iv(sys),[π1,a,b,c,d], [α]; defaults=defaults(sys))
+
+    return new_sys
 end
