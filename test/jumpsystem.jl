@@ -2,6 +2,7 @@ using ModelingToolkit, DiffEqBase, JumpProcesses, Test, LinearAlgebra
 using Random, StableRNGs, NonlinearSolve
 using OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using BenchmarkTools
 MT = ModelingToolkit
 
 rng = StableRNG(12345)
@@ -79,7 +80,7 @@ function getmean(jprob, Nsims; use_stepper = true)
     end
     m / Nsims
 end
-m = getmean(jprob, Nsims)
+@btime m = $getmean($jprob, $Nsims)
 
 # test auto-alg selection works
 jprobb = JumpProblem(js2, dprob; save_positions = (false, false), rng)
