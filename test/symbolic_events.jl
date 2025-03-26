@@ -3,7 +3,7 @@ using SciMLStructures: canonicalize, Discrete
 using ModelingToolkit: SymbolicContinuousCallback,
                        SymbolicContinuousCallbacks,
                        SymbolicDiscreteCallback,
-                       SymbolicDiscreteCallbacks, 
+                       SymbolicDiscreteCallbacks,
                        get_callback,
                        t_nounits as t,
                        D_nounits as D,
@@ -340,7 +340,7 @@ end
          D(v) ~ -9.8], t, continuous_events = root_eqs => affect)
 
     @test only(continuous_events(ball)) ==
-        SymbolicContinuousCallback(Equation[x ~ 0], Equation[v ~ -Pre(v)])
+          SymbolicContinuousCallback(Equation[x ~ 0], Equation[v ~ -Pre(v)])
     ball = structural_simplify(ball)
 
     @test length(ModelingToolkit.continuous_events(ball)) == 1
@@ -373,13 +373,13 @@ end
     cb = get_callback(prob)
     @test cb isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
     @test getfield(ball, :continuous_events)[1] ==
-        SymbolicContinuousCallback(Equation[x ~ 0], Equation[vx ~ -Pre(vx)])
+          SymbolicContinuousCallback(Equation[x ~ 0], Equation[vx ~ -Pre(vx)])
     @test getfield(ball, :continuous_events)[2] ==
-        SymbolicContinuousCallback(Equation[y ~ -1.5, y ~ 1.5], Equation[vy ~ -Pre(vy)])
+          SymbolicContinuousCallback(Equation[y ~ -1.5, y ~ 1.5], Equation[vy ~ -Pre(vy)])
     cond = cb.condition
     out = [0.0, 0.0, 0.0]
-    p0 = 0.
-    t0 = 0.
+    p0 = 0.0
+    t0 = 0.0
     cond.f_iip(out, [0, 0, 0, 0], p0, t0)
     @test out ≈ [0, 1.5, -1.5]
 
@@ -396,10 +396,11 @@ end
     # in this test, there are two variables affected by a single event.
     events = [[x ~ 0] => [vx ~ -Pre(vx), vy ~ -Pre(vy)]]
 
-    @named ball = ODESystem([D(x) ~ vx
-                             D(y) ~ vy
-                             D(vx) ~ -1
-                             D(vy) ~ 0], t; continuous_events = events)
+    @named ball = ODESystem(
+        [D(x) ~ vx
+         D(y) ~ vy
+         D(vx) ~ -1
+         D(vy) ~ 0], t; continuous_events = events)
 
     ball_nosplit = structural_simplify(ball)
     ball = structural_simplify(ball)
@@ -479,12 +480,13 @@ end
 end
 
 @testset "SDE/ODESystem Discrete Callbacks" begin
-    function testsol(sys, probtype, solver, u0, p, tspan; tstops = Float64[], paramtotest = nothing,
+    function testsol(
+            sys, probtype, solver, u0, p, tspan; tstops = Float64[], paramtotest = nothing,
             kwargs...)
         prob = probtype(complete(sys), u0, tspan, p; kwargs...)
         sol = solve(prob, solver(); tstops = tstops, abstol = 1e-10, reltol = 1e-10)
         @test isapprox(sol(1.0000000001)[1] - sol(0.999999999)[1], 1.0; rtol = 1e-6)
-        paramtotest === nothing || (@test sol.ps[paramtotest] == [0., 1.])
+        paramtotest === nothing || (@test sol.ps[paramtotest] == [0.0, 1.0])
         @test isapprox(sol(4.0)[1], 2 * exp(-2.0); rtol = 1e-6)
         sol
     end
@@ -503,8 +505,7 @@ end
     ∂ₜ = D
     eqs = [∂ₜ(A) ~ -k * A]
     @named osys = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2])
-    @named ssys = SDESystem(eqs, [0.0], t, [A], [k, t1, t2],
-        discrete_events = [cb1, cb2])
+    @named ssys = SDESystem(eqs, [0.0], t, [A], [k, t1, t2], discrete_events = [cb1, cb2])
     u0 = [A => 1.0]
     p = [k => 0.0, t1 => 1.0, t2 => 2.0]
     tspan = (0.0, 4.0)
@@ -518,10 +519,12 @@ end
     @named ssys1 = SDESystem(eqs, [0.0], t, [A, B], [k, t1, t2],
         discrete_events = [cb1a, cb2])
     u0′ = [A => 1.0, B => 0.0]
-    sol = testsol(osys1, ODEProblem, Tsit5, u0′, p, tspan; tstops = [1.0, 2.0], check_length = false, paramtotest = k)
+    sol = testsol(osys1, ODEProblem, Tsit5, u0′, p, tspan;
+        tstops = [1.0, 2.0], check_length = false, paramtotest = k)
     @test sol(1.0000001, idxs = B) == 2.0
 
-    sol = testsol(ssys1, SDEProblem, RI5, u0′, p, tspan; tstops = [1.0, 2.0], check_length = false, paramtotest = k)
+    sol = testsol(ssys1, SDEProblem, RI5, u0′, p, tspan; tstops = [1.0, 2.0],
+        check_length = false, paramtotest = k)
     @test sol(1.0000001, idxs = B) == 2.0
 
     # same as above - but with set-time event syntax
@@ -589,7 +592,7 @@ end
         jprob = JumpProblem(jsys, dprob, Direct(); kwargs...)
         sol = solve(jprob, SSAStepper(); tstops = tstops)
         @test (sol(1.000000000001)[1] - sol(0.99999999999)[1]) == 1
-        paramtotest === nothing || (@test sol.ps[paramtotest] == [0., 1.0])
+        paramtotest === nothing || (@test sol.ps[paramtotest] == [0.0, 1.0])
         @test sol(40.0)[1] == 0
         sol
     end
@@ -1282,53 +1285,56 @@ end
     eqs = [D(D(x)) ~ λ * x
            D(D(y)) ~ λ * y - g
            x^2 + y^2 ~ 1]
-    c_evt = [t ~ 5.] => [x ~ Pre(x) + 0.1]
+    c_evt = [t ~ 5.0] => [x ~ Pre(x) + 0.1]
     @mtkbuild pend = ODESystem(eqs, t, continuous_events = c_evt)
-    prob = ODEProblem(pend, [x => -1, y => 0], (0., 10.), [g => 1], guesses = [λ => 1])
+    prob = ODEProblem(pend, [x => -1, y => 0], (0.0, 10.0), [g => 1], guesses = [λ => 1])
     sol = solve(prob, FBDF())
     @test ≈(sol(5.000001, idxs = x) - sol(4.999999, idxs = x), 0.1, rtol = 1e-4)
     @test ≈(sol(5.000001, idxs = x)^2 + sol(5.000001, idxs = y)^2, 1, rtol = 1e-4)
 
     # Implicit affect with Pre
-    c_evt = [t ~ 5.] => [x ~ Pre(x) + y^2]
+    c_evt = [t ~ 5.0] => [x ~ Pre(x) + y^2]
     @mtkbuild pend = ODESystem(eqs, t, continuous_events = c_evt)
-    prob = ODEProblem(pend, [x => 1, y => 0], (0., 10.), [g => 1], guesses = [λ => 1])
+    prob = ODEProblem(pend, [x => 1, y => 0], (0.0, 10.0), [g => 1], guesses = [λ => 1])
     sol = solve(prob, FBDF())
-    @test ≈(sol(5.000001, idxs = y)^2 + sol(4.999999, idxs = x), sol(5.000001, idxs = x), rtol = 1e-4)
+    @test ≈(sol(5.000001, idxs = y)^2 + sol(4.999999, idxs = x),
+        sol(5.000001, idxs = x), rtol = 1e-4)
     @test ≈(sol(5.000001, idxs = x)^2 + sol(5.000001, idxs = y)^2, 1, rtol = 1e-4)
 
     # Impossible affect errors
-    c_evt = [t ~ 5.] => [x ~ Pre(x) + 2]
+    c_evt = [t ~ 5.0] => [x ~ Pre(x) + 2]
     @mtkbuild pend = ODESystem(eqs, t, continuous_events = c_evt)
-    prob = ODEProblem(pend, [x => 1, y => 0], (0., 10.), [g => 1], guesses = [λ => 1])
-    @test_throws UnsolvableCallbackError sol = solve(prob, FBDF())
-    
+    prob = ODEProblem(pend, [x => 1, y => 0], (0.0, 10.0), [g => 1], guesses = [λ => 1])
+    @test_throws UnsolvableCallbackError sol=solve(prob, FBDF())
+
     # Changing both variables and parameters in the same affect.
     @parameters g(t)
     eqs = [D(D(x)) ~ λ * x
            D(D(y)) ~ λ * y - g
            x^2 + y^2 ~ 1]
-    c_evt = SymbolicContinuousCallback([t ~ 5.0], [x ~ Pre(x) + 0.1, g ~ Pre(g) + 1], discrete_parameters = [g], iv = t)
+    c_evt = SymbolicContinuousCallback(
+        [t ~ 5.0], [x ~ Pre(x) + 0.1, g ~ Pre(g) + 1], discrete_parameters = [g], iv = t)
     @mtkbuild pend = ODESystem(eqs, t, continuous_events = c_evt)
-    prob = ODEProblem(pend, [x => 1, y => 0], (0., 10.), [g => 1], guesses = [λ => 1])
+    prob = ODEProblem(pend, [x => 1, y => 0], (0.0, 10.0), [g => 1], guesses = [λ => 1])
     sol = solve(prob, FBDF())
     @test sol.ps[g] ≈ [1, 2]
-    @test ≈(sol(5.0000001, idxs = x) - sol(4.999999, idxs = x), .1, rtol = 1e-4)
+    @test ≈(sol(5.0000001, idxs = x) - sol(4.999999, idxs = x), 0.1, rtol = 1e-4)
 
     # Proper re-initialization after parameter change
     eqs = [y ~ g^2 - x, D(x) ~ x]
-    c_evt = SymbolicContinuousCallback([t ~ 5.0], [x ~ Pre(x) + 1, g ~ Pre(g) + 1], discrete_parameters = [g], iv = t)
+    c_evt = SymbolicContinuousCallback(
+        [t ~ 5.0], [x ~ Pre(x) + 1, g ~ Pre(g) + 1], discrete_parameters = [g], iv = t)
     @mtkbuild sys = ODESystem(eqs, t, continuous_events = c_evt)
-    prob = ODEProblem(sys, [x => 1.0], (0., 10.), [g => 2])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 10.0), [g => 2])
     sol = solve(prob, FBDF())
-    @test sol.ps[g] ≈ [2., 3.] 
+    @test sol.ps[g] ≈ [2.0, 3.0]
     @test ≈(sol(5.00000001, idxs = x) - sol(4.9999999, idxs = x), 1; rtol = 1e-4)
     @test ≈(sol(5.00000001, idxs = y), 9 - sol(5.00000001, idxs = x), rtol = 1e-4)
 
     # Parameters that don't appear in affects should not be mutated.
     c_evt = [t ~ 5.0] => [x ~ Pre(x) + 1]
     @mtkbuild sys = ODESystem(eqs, t, continuous_events = c_evt)
-    prob = ODEProblem(sys, [x => 0.5], (0., 10.), [g => 2], guesses = [y => 0])
+    prob = ODEProblem(sys, [x => 0.5], (0.0, 10.0), [g => 2], guesses = [y => 0])
     sol = solve(prob, FBDF())
     @test prob.ps[g] == sol.ps[g]
 end

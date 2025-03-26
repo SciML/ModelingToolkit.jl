@@ -119,7 +119,8 @@ function _model_macro(mod, name, expr, isconnector)
         Ref(dict), [:constants, :defaults, :kwargs, :structural_parameters])
 
     sys = :($ODESystem($(flatten_equations)(equations), $iv, variables, parameters;
-        name, description = $description, systems, gui_metadata = $gui_metadata, defaults, continuous_events = cont_events, discrete_events = disc_events))
+        name, description = $description, systems, gui_metadata = $gui_metadata,
+        defaults, continuous_events = cont_events, discrete_events = disc_events))
 
     if length(ext) == 0
         push!(exprs.args, :(var"#___sys___" = $sys))
