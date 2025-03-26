@@ -20,463 +20,463 @@ eqs = [D(x) ~ 1]
 affect = [x ~ 0]
 affect_neg = [x ~ 1]
 
-#@testset "SymbolicContinuousCallback constructors" begin
-#    e = SymbolicContinuousCallback(eqs[])
-#    @test e isa SymbolicContinuousCallback
-#    @test isequal(equations(e), eqs)
-#    @test e.affect == nothing
-#    @test e.affect_neg == nothing
-#    @test e.rootfind == SciMLBase.LeftRootFind
-#
-#    e = SymbolicContinuousCallback(eqs)
-#    @test e isa SymbolicContinuousCallback
-#    @test isequal(equations(e), eqs)
-#    @test e.affect == nothing
-#    @test e.affect_neg == nothing
-#    @test e.rootfind == SciMLBase.LeftRootFind
-#
-#    e = SymbolicContinuousCallback(eqs, nothing)
-#    @test e isa SymbolicContinuousCallback
-#    @test isequal(equations(e), eqs)
-#    @test e.affect == nothing
-#    @test e.affect_neg == nothing
-#    @test e.rootfind == SciMLBase.LeftRootFind
-#
-#    e = SymbolicContinuousCallback(eqs[], nothing)
-#    @test e isa SymbolicContinuousCallback
-#    @test isequal(equations(e), eqs)
-#    @test e.affect == nothing
-#    @test e.affect_neg == nothing
-#    @test e.rootfind == SciMLBase.LeftRootFind
-#
-#    e = SymbolicContinuousCallback(eqs => nothing)
-#    @test e isa SymbolicContinuousCallback
-#    @test isequal(equations(e), eqs)
-#    @test e.affect == nothing
-#    @test e.affect_neg == nothing
-#    @test e.rootfind == SciMLBase.LeftRootFind
-#
-#    e = SymbolicContinuousCallback(eqs[] => nothing)
-#    @test e isa SymbolicContinuousCallback
-#    @test isequal(equations(e), eqs)
-#    @test e.affect == nothing
-#    @test e.affect_neg == nothing
-#    @test e.rootfind == SciMLBase.LeftRootFind
-#
-#    ## With affect
-#    e = SymbolicContinuousCallback(eqs[], affect)
-#    @test e isa SymbolicContinuousCallback
-#    @test isequal(equations(e), eqs)
-#    @test e.rootfind == SciMLBase.LeftRootFind
-#
-#    # with only positive edge affect
-#    e = SymbolicContinuousCallback(eqs[], affect, affect_neg = nothing)
-#    @test e isa SymbolicContinuousCallback
-#    @test isequal(equations(e), eqs)
-#    @test isnothing(e.affect_neg)
-#    @test e.rootfind == SciMLBase.LeftRootFind
-#
-#    # with explicit edge affects
-#    e = SymbolicContinuousCallback(eqs[], affect, affect_neg = affect_neg)
-#    @test e isa SymbolicContinuousCallback
-#    @test isequal(equations(e), eqs)
-#    @test e.rootfind == SciMLBase.LeftRootFind
-#
-#    # with different root finding ops
-#    e = SymbolicContinuousCallback(
-#        eqs[], affect, affect_neg = affect_neg, rootfind = SciMLBase.LeftRootFind)
-#    @test e isa SymbolicContinuousCallback
-#    @test isequal(equations(e), eqs)
-#    @test e.rootfind == SciMLBase.LeftRootFind
-#
-#    # test plural constructor
-#    e = SymbolicContinuousCallbacks(eqs[])
-#    @test e isa Vector{SymbolicContinuousCallback}
-#    @test isequal(equations(e[]), eqs)
-#    @test e[].affect == nothing
-#
-#    e = SymbolicContinuousCallbacks(eqs)
-#    @test e isa Vector{SymbolicContinuousCallback}
-#    @test isequal(equations(e[]), eqs)
-#    @test e[].affect == nothing
-#
-#    e = SymbolicContinuousCallbacks(eqs[] => affect)
-#    @test e isa Vector{SymbolicContinuousCallback}
-#    @test isequal(equations(e[]), eqs)
-#    @test e[].affect isa AffectSystem
-#
-#    e = SymbolicContinuousCallbacks(eqs => affect)
-#    @test e isa Vector{SymbolicContinuousCallback}
-#    @test isequal(equations(e[]), eqs)
-#    @test e[].affect isa AffectSystem
-#
-#    e = SymbolicContinuousCallbacks([eqs[] => affect])
-#    @test e isa Vector{SymbolicContinuousCallback}
-#    @test isequal(equations(e[]), eqs)
-#    @test e[].affect isa AffectSystem
-#
-#    e = SymbolicContinuousCallbacks([eqs => affect])
-#    @test e isa Vector{SymbolicContinuousCallback}
-#    @test isequal(equations(e[]), eqs)
-#    @test e[].affect isa AffectSystem
-#end
-#
-#@testset "ImperativeAffect constructors" begin
-#    fmfa(o, x, i, c) = nothing
-#    m = ModelingToolkit.ImperativeAffect(fmfa)
-#    @test m isa ModelingToolkit.ImperativeAffect
-#    @test m.f == fmfa
-#    @test m.obs == []
-#    @test m.obs_syms == []
-#    @test m.modified == []
-#    @test m.mod_syms == []
-#    @test m.ctx === nothing
-#
-#    m = ModelingToolkit.ImperativeAffect(fmfa, (;))
-#    @test m isa ModelingToolkit.ImperativeAffect
-#    @test m.f == fmfa
-#    @test m.obs == []
-#    @test m.obs_syms == []
-#    @test m.modified == []
-#    @test m.mod_syms == []
-#    @test m.ctx === nothing
-#
-#    m = ModelingToolkit.ImperativeAffect(fmfa, (; x))
-#    @test m isa ModelingToolkit.ImperativeAffect
-#    @test m.f == fmfa
-#    @test isequal(m.obs, [])
-#    @test m.obs_syms == []
-#    @test isequal(m.modified, [x])
-#    @test m.mod_syms == [:x]
-#    @test m.ctx === nothing
-#
-#    m = ModelingToolkit.ImperativeAffect(fmfa, (; y = x))
-#    @test m isa ModelingToolkit.ImperativeAffect
-#    @test m.f == fmfa
-#    @test isequal(m.obs, [])
-#    @test m.obs_syms == []
-#    @test isequal(m.modified, [x])
-#    @test m.mod_syms == [:y]
-#    @test m.ctx === nothing
-#
-#    m = ModelingToolkit.ImperativeAffect(fmfa; observed = (; y = x))
-#    @test m isa ModelingToolkit.ImperativeAffect
-#    @test m.f == fmfa
-#    @test isequal(m.obs, [x])
-#    @test m.obs_syms == [:y]
-#    @test m.modified == []
-#    @test m.mod_syms == []
-#    @test m.ctx === nothing
-#
-#    m = ModelingToolkit.ImperativeAffect(fmfa; modified = (; x))
-#    @test m isa ModelingToolkit.ImperativeAffect
-#    @test m.f == fmfa
-#    @test isequal(m.obs, [])
-#    @test m.obs_syms == []
-#    @test isequal(m.modified, [x])
-#    @test m.mod_syms == [:x]
-#    @test m.ctx === nothing
-#
-#    m = ModelingToolkit.ImperativeAffect(fmfa; modified = (; y = x))
-#    @test m isa ModelingToolkit.ImperativeAffect
-#    @test m.f == fmfa
-#    @test isequal(m.obs, [])
-#    @test m.obs_syms == []
-#    @test isequal(m.modified, [x])
-#    @test m.mod_syms == [:y]
-#    @test m.ctx === nothing
-#
-#    m = ModelingToolkit.ImperativeAffect(fmfa, (; x), (; x))
-#    @test m isa ModelingToolkit.ImperativeAffect
-#    @test m.f == fmfa
-#    @test isequal(m.obs, [x])
-#    @test m.obs_syms == [:x]
-#    @test isequal(m.modified, [x])
-#    @test m.mod_syms == [:x]
-#    @test m.ctx === nothing
-#
-#    m = ModelingToolkit.ImperativeAffect(fmfa, (; y = x), (; y = x))
-#    @test m isa ModelingToolkit.ImperativeAffect
-#    @test m.f == fmfa
-#    @test isequal(m.obs, [x])
-#    @test m.obs_syms == [:y]
-#    @test isequal(m.modified, [x])
-#    @test m.mod_syms == [:y]
-#    @test m.ctx === nothing
-#
-#    m = ModelingToolkit.ImperativeAffect(
-#        fmfa; modified = (; y = x), observed = (; y = x))
-#    @test m isa ModelingToolkit.ImperativeAffect
-#    @test m.f == fmfa
-#    @test isequal(m.obs, [x])
-#    @test m.obs_syms == [:y]
-#    @test isequal(m.modified, [x])
-#    @test m.mod_syms == [:y]
-#    @test m.ctx === nothing
-#
-#    m = ModelingToolkit.ImperativeAffect(
-#        fmfa; modified = (; y = x), observed = (; y = x), ctx = 3)
-#    @test m isa ModelingToolkit.ImperativeAffect
-#    @test m.f == fmfa
-#    @test isequal(m.obs, [x])
-#    @test m.obs_syms == [:y]
-#    @test isequal(m.modified, [x])
-#    @test m.mod_syms == [:y]
-#    @test m.ctx === 3
-#
-#    m = ModelingToolkit.ImperativeAffect(fmfa, (; x), (; x), 3)
-#    @test m isa ModelingToolkit.ImperativeAffect
-#    @test m.f == fmfa
-#    @test isequal(m.obs, [x])
-#    @test m.obs_syms == [:x]
-#    @test isequal(m.modified, [x])
-#    @test m.mod_syms == [:x]
-#    @test m.ctx === 3
-#end
-#
-#@testset "Condition Compilation" begin
-#    @named sys = ODESystem(eqs, t, continuous_events = [x ~ 1])
-#    @test getfield(sys, :continuous_events)[] ==
-#          SymbolicContinuousCallback(Equation[x ~ 1], nothing)
-#    @test isequal(equations(getfield(sys, :continuous_events))[], x ~ 1)
-#    fsys = flatten(sys)
-#    @test isequal(equations(getfield(fsys, :continuous_events))[], x ~ 1)
-#
-#    @named sys2 = ODESystem([D(x) ~ 1], t, continuous_events = [x ~ 2], systems = [sys])
-#    @test getfield(sys2, :continuous_events)[] ==
-#          SymbolicContinuousCallback(Equation[x ~ 2], nothing)
-#    @test all(ModelingToolkit.continuous_events(sys2) .== [
-#        SymbolicContinuousCallback(Equation[x ~ 2], nothing),
-#        SymbolicContinuousCallback(Equation[sys.x ~ 1], nothing)
-#    ])
-#
-#    @test isequal(equations(getfield(sys2, :continuous_events))[1], x ~ 2)
-#    @test length(ModelingToolkit.continuous_events(sys2)) == 2
-#    @test isequal(equations(ModelingToolkit.continuous_events(sys2)[1])[], x ~ 2)
-#    @test isequal(equations(ModelingToolkit.continuous_events(sys2)[2])[], sys.x ~ 1)
-#
-#    sys = complete(sys)
-#    sys_nosplit = complete(sys; split = false)
-#    sys2 = complete(sys2)
-#
-#    # Test proper rootfinding
-#    prob = ODEProblem(sys, Pair[], (0.0, 2.0))
-#    p0 = 0
-#    t0 = 0
-#    @test get_callback(prob) isa ModelingToolkit.DiffEqCallbacks.ContinuousCallback
-#    cb = ModelingToolkit.generate_continuous_callbacks(sys)
-#    cond = cb.condition
-#    out = [0.0]
-#    cond.f_iip(out, [0], p0, t0)
-#    @test out[] ≈ -1 # signature is u,p,t
-#    cond.f_iip(out, [1], p0, t0)
-#    @test out[] ≈ 0  # signature is u,p,t
-#    cond.f_iip(out, [2], p0, t0)
-#    @test out[] ≈ 1  # signature is u,p,t
-#
-#    prob = ODEProblem(sys, Pair[], (0.0, 2.0))
-#    prob_nosplit = ODEProblem(sys_nosplit, Pair[], (0.0, 2.0))
-#    sol = solve(prob, Tsit5())
-#    sol_nosplit = solve(prob_nosplit, Tsit5())
-#    @test minimum(t -> abs(t - 1), sol.t) < 1e-10 # test that the solver stepped at the root
-#    @test minimum(t -> abs(t - 1), sol_nosplit.t) < 1e-10 # test that the solver stepped at the root
-#
-#    # Test user-provided callback is respected
-#    test_callback = DiscreteCallback(x -> x, x -> x)
-#    prob = ODEProblem(sys, Pair[], (0.0, 2.0), callback = test_callback)
-#    prob_nosplit = ODEProblem(sys_nosplit, Pair[], (0.0, 2.0), callback = test_callback)
-#    cbs = get_callback(prob)
-#    cbs_nosplit = get_callback(prob_nosplit)
-#    @test cbs isa CallbackSet
-#    @test cbs.discrete_callbacks[1] == test_callback
-#    @test cbs_nosplit isa CallbackSet
-#    @test cbs_nosplit.discrete_callbacks[1] == test_callback
-#
-#    prob = ODEProblem(sys2, Pair[], (0.0, 3.0))
-#    cb = get_callback(prob)
-#    @test cb isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
-#
-#    cond = cb.condition
-#    out = [0.0, 0.0]
-#    # the root to find is 2
-#    cond.f_iip(out, [0, 0], p0, t0)
-#    @test out[1] ≈ -2 # signature is u,p,t
-#    cond.f_iip(out, [1, 0], p0, t0)
-#    @test out[1] ≈ -1  # signature is u,p,t
-#    cond.f_iip(out, [2, 0], p0, t0) # this should return 0
-#    @test out[1] ≈ 0  # signature is u,p,t
-#
-#    # the root to find is 1
-#    out = [0.0, 0.0]
-#    cond.f_iip(out, [0, 0], p0, t0)
-#    @test out[2] ≈ -1 # signature is u,p,t
-#    cond.f_iip(out, [0, 1], p0, t0) # this should return 0
-#    @test out[2] ≈ 0  # signature is u,p,t
-#    cond.f_iip(out, [0, 2], p0, t0)
-#    @test out[2] ≈ 1  # signature is u,p,t
-#
-#    sol = solve(prob, Tsit5())
-#    @test minimum(t -> abs(t - 1), sol.t) < 1e-10 # test that the solver stepped at the first root
-#    @test minimum(t -> abs(t - 2), sol.t) < 1e-10 # test that the solver stepped at the second root
-#
-#    @named sys = ODESystem(eqs, t, continuous_events = [x ~ 1, x ~ 2]) # two root eqs using the same unknown
-#    sys = complete(sys)
-#    prob = ODEProblem(sys, Pair[], (0.0, 3.0))
-#    @test get_callback(prob) isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
-#    sol = solve(prob, Tsit5())
-#    @test minimum(t -> abs(t - 1), sol.t) < 1e-10 # test that the solver stepped at the first root
-#    @test minimum(t -> abs(t - 2), sol.t) < 1e-10 # test that the solver stepped at the second root
-#end
-#
-#@testset "Bouncing Ball" begin
-#    ###### 1D Bounce
-#    @variables x(t)=1 v(t)=0
-#
-#    root_eqs = [x ~ 0]
-#    affect = [v ~ -Pre(v)]
-#
-#    @named ball = ODESystem(
-#        [D(x) ~ v
-#         D(v) ~ -9.8], t, continuous_events = root_eqs => affect)
-#
-#    @test only(continuous_events(ball)) ==
-#        SymbolicContinuousCallback(Equation[x ~ 0], Equation[v ~ -Pre(v)])
-#    ball = structural_simplify(ball)
-#
-#    @test length(ModelingToolkit.continuous_events(ball)) == 1
-#
-#    tspan = (0.0, 5.0)
-#    prob = ODEProblem(ball, Pair[], tspan)
-#    sol = solve(prob, Tsit5())
-#    @test 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
-#
-#    ###### 2D bouncing ball
-#    @variables x(t)=1 y(t)=0 vx(t)=0 vy(t)=1
-#
-#    events = [[x ~ 0] => [vx ~ -Pre(vx)]
-#              [y ~ -1.5, y ~ 1.5] => [vy ~ -Pre(vy)]]
-#
-#    @named ball = ODESystem(
-#        [D(x) ~ vx
-#         D(y) ~ vy
-#         D(vx) ~ -9.8
-#         D(vy) ~ -0.01vy], t; continuous_events = events)
-#
-#    _ball = ball
-#    ball = structural_simplify(_ball)
-#    ball_nosplit = structural_simplify(_ball; split = false)
-#
-#    tspan = (0.0, 5.0)
-#    prob = ODEProblem(ball, Pair[], tspan)
-#    prob_nosplit = ODEProblem(ball_nosplit, Pair[], tspan)
-#
-#    cb = get_callback(prob)
-#    @test cb isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
-#    @test getfield(ball, :continuous_events)[1] ==
-#        SymbolicContinuousCallback(Equation[x ~ 0], Equation[vx ~ -Pre(vx)])
-#    @test getfield(ball, :continuous_events)[2] ==
-#        SymbolicContinuousCallback(Equation[y ~ -1.5, y ~ 1.5], Equation[vy ~ -Pre(vy)])
-#    cond = cb.condition
-#    out = [0.0, 0.0, 0.0]
-#    p0 = 0.
-#    t0 = 0.
-#    cond.f_iip(out, [0, 0, 0, 0], p0, t0)
-#    @test out ≈ [0, 1.5, -1.5]
-#
-#    sol = solve(prob, Tsit5())
-#    sol_nosplit = solve(prob_nosplit, Tsit5())
-#    @test 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
-#    @test minimum(sol[y]) ≈ -1.5 # check wall conditions
-#    @test maximum(sol[y]) ≈ 1.5  # check wall conditions
-#    @test 0 <= minimum(sol_nosplit[x]) <= 1e-10 # the ball never went through the floor but got very close
-#    @test minimum(sol_nosplit[y]) ≈ -1.5 # check wall conditions
-#    @test maximum(sol_nosplit[y]) ≈ 1.5  # check wall conditions
-#
-#    ## Test multi-variable affect
-#    # in this test, there are two variables affected by a single event.
-#    events = [[x ~ 0] => [vx ~ -Pre(vx), vy ~ -Pre(vy)]]
-#
-#    @named ball = ODESystem([D(x) ~ vx
-#                             D(y) ~ vy
-#                             D(vx) ~ -1
-#                             D(vy) ~ 0], t; continuous_events = events)
-#
-#    ball_nosplit = structural_simplify(ball)
-#    ball = structural_simplify(ball)
-#
-#    tspan = (0.0, 5.0)
-#    prob = ODEProblem(ball, Pair[], tspan)
-#    prob_nosplit = ODEProblem(ball_nosplit, Pair[], tspan)
-#    sol = solve(prob, Tsit5())
-#    sol_nosplit = solve(prob_nosplit, Tsit5())
-#    @test 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
-#    @test -minimum(sol[y]) ≈ maximum(sol[y]) ≈ sqrt(2)  # the ball will never go further than √2 in either direction (gravity was changed to 1 to get this particular number)
-#    @test 0 <= minimum(sol_nosplit[x]) <= 1e-10 # the ball never went through the floor but got very close
-#    @test -minimum(sol_nosplit[y]) ≈ maximum(sol_nosplit[y]) ≈ sqrt(2)  # the ball will never go further than √2 in either direction (gravity was changed to 1 to get this particular number)
-#end
-#
-## issue https://github.com/SciML/ModelingToolkit.jl/issues/1386
-## tests that it works for ODAESystem
-#@testset "ODAESystem" begin
-#    @variables vs(t) v(t) vmeasured(t)
-#    eq = [vs ~ sin(2pi * t)
-#          D(v) ~ vs - v
-#          D(vmeasured) ~ 0.0]
-#    ev = [sin(20pi * t) ~ 0.0] => [vmeasured ~ Pre(v)]
-#    @named sys = ODESystem(eq, t, continuous_events = ev)
-#    sys = structural_simplify(sys)
-#    prob = ODEProblem(sys, zeros(2), (0.0, 5.1))
-#    sol = solve(prob, Tsit5())
-#    @test all(minimum((0:0.1:5) .- sol.t', dims = 2) .< 0.0001) # test that the solver stepped every 0.1s as dictated by event
-#    @test sol([0.25])[vmeasured][] == sol([0.23])[vmeasured][] # test the hold property
-#end
-#
-###  https://github.com/SciML/ModelingToolkit.jl/issues/1528
-#@testset "Handle Empty Events" begin
-#    Dₜ = D
-#
-#    @parameters u(t) [input = true]  # Indicate that this is a controlled input
-#    @parameters y(t) [output = true] # Indicate that this is a measured output
-#
-#    function Mass(; name, m = 1.0, p = 0, v = 0)
-#        ps = @parameters m = m
-#        sts = @variables pos(t)=p vel(t)=v
-#        eqs = Dₜ(pos) ~ vel
-#        ODESystem(eqs, t, [pos, vel], ps; name)
-#    end
-#    function Spring(; name, k = 1e4)
-#        ps = @parameters k = k
-#        @variables x(t) = 0 # Spring deflection
-#        ODESystem(Equation[], t, [x], ps; name)
-#    end
-#    function Damper(; name, c = 10)
-#        ps = @parameters c = c
-#        @variables vel(t) = 0
-#        ODESystem(Equation[], t, [vel], ps; name)
-#    end
-#    function SpringDamper(; name, k = false, c = false)
-#        spring = Spring(; name = :spring, k)
-#        damper = Damper(; name = :damper, c)
-#        compose(ODESystem(Equation[], t; name),
-#            spring, damper)
-#    end
-#    connect_sd(sd, m1, m2) = [
-#        sd.spring.x ~ m1.pos - m2.pos, sd.damper.vel ~ m1.vel - m2.vel]
-#    sd_force(sd) = -sd.spring.k * sd.spring.x - sd.damper.c * sd.damper.vel
-#    @named mass1 = Mass(; m = 1)
-#    @named mass2 = Mass(; m = 1)
-#    @named sd = SpringDamper(; k = 1000, c = 10)
-#    function Model(u, d = 0)
-#        eqs = [connect_sd(sd, mass1, mass2)
-#               Dₜ(mass1.vel) ~ (sd_force(sd) + u) / mass1.m
-#               Dₜ(mass2.vel) ~ (-sd_force(sd) + d) / mass2.m]
-#        @named _model = ODESystem(eqs, t; observed = [y ~ mass2.pos])
-#        @named model = compose(_model, mass1, mass2, sd)
-#    end
-#    model = Model(sin(30t))
-#    sys = structural_simplify(model)
-#    @test isempty(ModelingToolkit.continuous_events(sys))
-#end
+@testset "SymbolicContinuousCallback constructors" begin
+    e = SymbolicContinuousCallback(eqs[])
+    @test e isa SymbolicContinuousCallback
+    @test isequal(equations(e), eqs)
+    @test e.affect == nothing
+    @test e.affect_neg == nothing
+    @test e.rootfind == SciMLBase.LeftRootFind
+
+    e = SymbolicContinuousCallback(eqs)
+    @test e isa SymbolicContinuousCallback
+    @test isequal(equations(e), eqs)
+    @test e.affect == nothing
+    @test e.affect_neg == nothing
+    @test e.rootfind == SciMLBase.LeftRootFind
+
+    e = SymbolicContinuousCallback(eqs, nothing)
+    @test e isa SymbolicContinuousCallback
+    @test isequal(equations(e), eqs)
+    @test e.affect == nothing
+    @test e.affect_neg == nothing
+    @test e.rootfind == SciMLBase.LeftRootFind
+
+    e = SymbolicContinuousCallback(eqs[], nothing)
+    @test e isa SymbolicContinuousCallback
+    @test isequal(equations(e), eqs)
+    @test e.affect == nothing
+    @test e.affect_neg == nothing
+    @test e.rootfind == SciMLBase.LeftRootFind
+
+    e = SymbolicContinuousCallback(eqs => nothing)
+    @test e isa SymbolicContinuousCallback
+    @test isequal(equations(e), eqs)
+    @test e.affect == nothing
+    @test e.affect_neg == nothing
+    @test e.rootfind == SciMLBase.LeftRootFind
+
+    e = SymbolicContinuousCallback(eqs[] => nothing)
+    @test e isa SymbolicContinuousCallback
+    @test isequal(equations(e), eqs)
+    @test e.affect == nothing
+    @test e.affect_neg == nothing
+    @test e.rootfind == SciMLBase.LeftRootFind
+
+    ## With affect
+    e = SymbolicContinuousCallback(eqs[], affect)
+    @test e isa SymbolicContinuousCallback
+    @test isequal(equations(e), eqs)
+    @test e.rootfind == SciMLBase.LeftRootFind
+
+    # with only positive edge affect
+    e = SymbolicContinuousCallback(eqs[], affect, affect_neg = nothing)
+    @test e isa SymbolicContinuousCallback
+    @test isequal(equations(e), eqs)
+    @test isnothing(e.affect_neg)
+    @test e.rootfind == SciMLBase.LeftRootFind
+
+    # with explicit edge affects
+    e = SymbolicContinuousCallback(eqs[], affect, affect_neg = affect_neg)
+    @test e isa SymbolicContinuousCallback
+    @test isequal(equations(e), eqs)
+    @test e.rootfind == SciMLBase.LeftRootFind
+
+    # with different root finding ops
+    e = SymbolicContinuousCallback(
+        eqs[], affect, affect_neg = affect_neg, rootfind = SciMLBase.LeftRootFind)
+    @test e isa SymbolicContinuousCallback
+    @test isequal(equations(e), eqs)
+    @test e.rootfind == SciMLBase.LeftRootFind
+
+    # test plural constructor
+    e = SymbolicContinuousCallbacks(eqs[])
+    @test e isa Vector{SymbolicContinuousCallback}
+    @test isequal(equations(e[]), eqs)
+    @test e[].affect == nothing
+
+    e = SymbolicContinuousCallbacks(eqs)
+    @test e isa Vector{SymbolicContinuousCallback}
+    @test isequal(equations(e[]), eqs)
+    @test e[].affect == nothing
+
+    e = SymbolicContinuousCallbacks(eqs[] => affect)
+    @test e isa Vector{SymbolicContinuousCallback}
+    @test isequal(equations(e[]), eqs)
+    @test e[].affect isa AffectSystem
+
+    e = SymbolicContinuousCallbacks(eqs => affect)
+    @test e isa Vector{SymbolicContinuousCallback}
+    @test isequal(equations(e[]), eqs)
+    @test e[].affect isa AffectSystem
+
+    e = SymbolicContinuousCallbacks([eqs[] => affect])
+    @test e isa Vector{SymbolicContinuousCallback}
+    @test isequal(equations(e[]), eqs)
+    @test e[].affect isa AffectSystem
+
+    e = SymbolicContinuousCallbacks([eqs => affect])
+    @test e isa Vector{SymbolicContinuousCallback}
+    @test isequal(equations(e[]), eqs)
+    @test e[].affect isa AffectSystem
+end
+
+@testset "ImperativeAffect constructors" begin
+    fmfa(o, x, i, c) = nothing
+    m = ModelingToolkit.ImperativeAffect(fmfa)
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test m.obs == []
+    @test m.obs_syms == []
+    @test m.modified == []
+    @test m.mod_syms == []
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.ImperativeAffect(fmfa, (;))
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test m.obs == []
+    @test m.obs_syms == []
+    @test m.modified == []
+    @test m.mod_syms == []
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.ImperativeAffect(fmfa, (; x))
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [])
+    @test m.obs_syms == []
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:x]
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.ImperativeAffect(fmfa, (; y = x))
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [])
+    @test m.obs_syms == []
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:y]
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.ImperativeAffect(fmfa; observed = (; y = x))
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [x])
+    @test m.obs_syms == [:y]
+    @test m.modified == []
+    @test m.mod_syms == []
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.ImperativeAffect(fmfa; modified = (; x))
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [])
+    @test m.obs_syms == []
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:x]
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.ImperativeAffect(fmfa; modified = (; y = x))
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [])
+    @test m.obs_syms == []
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:y]
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.ImperativeAffect(fmfa, (; x), (; x))
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [x])
+    @test m.obs_syms == [:x]
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:x]
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.ImperativeAffect(fmfa, (; y = x), (; y = x))
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [x])
+    @test m.obs_syms == [:y]
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:y]
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.ImperativeAffect(
+        fmfa; modified = (; y = x), observed = (; y = x))
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [x])
+    @test m.obs_syms == [:y]
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:y]
+    @test m.ctx === nothing
+
+    m = ModelingToolkit.ImperativeAffect(
+        fmfa; modified = (; y = x), observed = (; y = x), ctx = 3)
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [x])
+    @test m.obs_syms == [:y]
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:y]
+    @test m.ctx === 3
+
+    m = ModelingToolkit.ImperativeAffect(fmfa, (; x), (; x), 3)
+    @test m isa ModelingToolkit.ImperativeAffect
+    @test m.f == fmfa
+    @test isequal(m.obs, [x])
+    @test m.obs_syms == [:x]
+    @test isequal(m.modified, [x])
+    @test m.mod_syms == [:x]
+    @test m.ctx === 3
+end
+
+@testset "Condition Compilation" begin
+    @named sys = ODESystem(eqs, t, continuous_events = [x ~ 1])
+    @test getfield(sys, :continuous_events)[] ==
+          SymbolicContinuousCallback(Equation[x ~ 1], nothing)
+    @test isequal(equations(getfield(sys, :continuous_events))[], x ~ 1)
+    fsys = flatten(sys)
+    @test isequal(equations(getfield(fsys, :continuous_events))[], x ~ 1)
+
+    @named sys2 = ODESystem([D(x) ~ 1], t, continuous_events = [x ~ 2], systems = [sys])
+    @test getfield(sys2, :continuous_events)[] ==
+          SymbolicContinuousCallback(Equation[x ~ 2], nothing)
+    @test all(ModelingToolkit.continuous_events(sys2) .== [
+        SymbolicContinuousCallback(Equation[x ~ 2], nothing),
+        SymbolicContinuousCallback(Equation[sys.x ~ 1], nothing)
+    ])
+
+    @test isequal(equations(getfield(sys2, :continuous_events))[1], x ~ 2)
+    @test length(ModelingToolkit.continuous_events(sys2)) == 2
+    @test isequal(equations(ModelingToolkit.continuous_events(sys2)[1])[], x ~ 2)
+    @test isequal(equations(ModelingToolkit.continuous_events(sys2)[2])[], sys.x ~ 1)
+
+    sys = complete(sys)
+    sys_nosplit = complete(sys; split = false)
+    sys2 = complete(sys2)
+
+    # Test proper rootfinding
+    prob = ODEProblem(sys, Pair[], (0.0, 2.0))
+    p0 = 0
+    t0 = 0
+    @test get_callback(prob) isa ModelingToolkit.DiffEqCallbacks.ContinuousCallback
+    cb = ModelingToolkit.generate_continuous_callbacks(sys)
+    cond = cb.condition
+    out = [0.0]
+    cond.f_iip(out, [0], p0, t0)
+    @test out[] ≈ -1 # signature is u,p,t
+    cond.f_iip(out, [1], p0, t0)
+    @test out[] ≈ 0  # signature is u,p,t
+    cond.f_iip(out, [2], p0, t0)
+    @test out[] ≈ 1  # signature is u,p,t
+
+    prob = ODEProblem(sys, Pair[], (0.0, 2.0))
+    prob_nosplit = ODEProblem(sys_nosplit, Pair[], (0.0, 2.0))
+    sol = solve(prob, Tsit5())
+    sol_nosplit = solve(prob_nosplit, Tsit5())
+    @test minimum(t -> abs(t - 1), sol.t) < 1e-10 # test that the solver stepped at the root
+    @test minimum(t -> abs(t - 1), sol_nosplit.t) < 1e-10 # test that the solver stepped at the root
+
+    # Test user-provided callback is respected
+    test_callback = DiscreteCallback(x -> x, x -> x)
+    prob = ODEProblem(sys, Pair[], (0.0, 2.0), callback = test_callback)
+    prob_nosplit = ODEProblem(sys_nosplit, Pair[], (0.0, 2.0), callback = test_callback)
+    cbs = get_callback(prob)
+    cbs_nosplit = get_callback(prob_nosplit)
+    @test cbs isa CallbackSet
+    @test cbs.discrete_callbacks[1] == test_callback
+    @test cbs_nosplit isa CallbackSet
+    @test cbs_nosplit.discrete_callbacks[1] == test_callback
+
+    prob = ODEProblem(sys2, Pair[], (0.0, 3.0))
+    cb = get_callback(prob)
+    @test cb isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
+
+    cond = cb.condition
+    out = [0.0, 0.0]
+    # the root to find is 2
+    cond.f_iip(out, [0, 0], p0, t0)
+    @test out[1] ≈ -2 # signature is u,p,t
+    cond.f_iip(out, [1, 0], p0, t0)
+    @test out[1] ≈ -1  # signature is u,p,t
+    cond.f_iip(out, [2, 0], p0, t0) # this should return 0
+    @test out[1] ≈ 0  # signature is u,p,t
+
+    # the root to find is 1
+    out = [0.0, 0.0]
+    cond.f_iip(out, [0, 0], p0, t0)
+    @test out[2] ≈ -1 # signature is u,p,t
+    cond.f_iip(out, [0, 1], p0, t0) # this should return 0
+    @test out[2] ≈ 0  # signature is u,p,t
+    cond.f_iip(out, [0, 2], p0, t0)
+    @test out[2] ≈ 1  # signature is u,p,t
+
+    sol = solve(prob, Tsit5())
+    @test minimum(t -> abs(t - 1), sol.t) < 1e-10 # test that the solver stepped at the first root
+    @test minimum(t -> abs(t - 2), sol.t) < 1e-10 # test that the solver stepped at the second root
+
+    @named sys = ODESystem(eqs, t, continuous_events = [x ~ 1, x ~ 2]) # two root eqs using the same unknown
+    sys = complete(sys)
+    prob = ODEProblem(sys, Pair[], (0.0, 3.0))
+    @test get_callback(prob) isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
+    sol = solve(prob, Tsit5())
+    @test minimum(t -> abs(t - 1), sol.t) < 1e-10 # test that the solver stepped at the first root
+    @test minimum(t -> abs(t - 2), sol.t) < 1e-10 # test that the solver stepped at the second root
+end
+
+@testset "Bouncing Ball" begin
+    ###### 1D Bounce
+    @variables x(t)=1 v(t)=0
+
+    root_eqs = [x ~ 0]
+    affect = [v ~ -Pre(v)]
+
+    @named ball = ODESystem(
+        [D(x) ~ v
+         D(v) ~ -9.8], t, continuous_events = root_eqs => affect)
+
+    @test only(continuous_events(ball)) ==
+        SymbolicContinuousCallback(Equation[x ~ 0], Equation[v ~ -Pre(v)])
+    ball = structural_simplify(ball)
+
+    @test length(ModelingToolkit.continuous_events(ball)) == 1
+
+    tspan = (0.0, 5.0)
+    prob = ODEProblem(ball, Pair[], tspan)
+    sol = solve(prob, Tsit5())
+    @test 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
+
+    ###### 2D bouncing ball
+    @variables x(t)=1 y(t)=0 vx(t)=0 vy(t)=1
+
+    events = [[x ~ 0] => [vx ~ -Pre(vx)]
+              [y ~ -1.5, y ~ 1.5] => [vy ~ -Pre(vy)]]
+
+    @named ball = ODESystem(
+        [D(x) ~ vx
+         D(y) ~ vy
+         D(vx) ~ -9.8
+         D(vy) ~ -0.01vy], t; continuous_events = events)
+
+    _ball = ball
+    ball = structural_simplify(_ball)
+    ball_nosplit = structural_simplify(_ball; split = false)
+
+    tspan = (0.0, 5.0)
+    prob = ODEProblem(ball, Pair[], tspan)
+    prob_nosplit = ODEProblem(ball_nosplit, Pair[], tspan)
+
+    cb = get_callback(prob)
+    @test cb isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
+    @test getfield(ball, :continuous_events)[1] ==
+        SymbolicContinuousCallback(Equation[x ~ 0], Equation[vx ~ -Pre(vx)])
+    @test getfield(ball, :continuous_events)[2] ==
+        SymbolicContinuousCallback(Equation[y ~ -1.5, y ~ 1.5], Equation[vy ~ -Pre(vy)])
+    cond = cb.condition
+    out = [0.0, 0.0, 0.0]
+    p0 = 0.
+    t0 = 0.
+    cond.f_iip(out, [0, 0, 0, 0], p0, t0)
+    @test out ≈ [0, 1.5, -1.5]
+
+    sol = solve(prob, Tsit5())
+    sol_nosplit = solve(prob_nosplit, Tsit5())
+    @test 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
+    @test minimum(sol[y]) ≈ -1.5 # check wall conditions
+    @test maximum(sol[y]) ≈ 1.5  # check wall conditions
+    @test 0 <= minimum(sol_nosplit[x]) <= 1e-10 # the ball never went through the floor but got very close
+    @test minimum(sol_nosplit[y]) ≈ -1.5 # check wall conditions
+    @test maximum(sol_nosplit[y]) ≈ 1.5  # check wall conditions
+
+    ## Test multi-variable affect
+    # in this test, there are two variables affected by a single event.
+    events = [[x ~ 0] => [vx ~ -Pre(vx), vy ~ -Pre(vy)]]
+
+    @named ball = ODESystem([D(x) ~ vx
+                             D(y) ~ vy
+                             D(vx) ~ -1
+                             D(vy) ~ 0], t; continuous_events = events)
+
+    ball_nosplit = structural_simplify(ball)
+    ball = structural_simplify(ball)
+
+    tspan = (0.0, 5.0)
+    prob = ODEProblem(ball, Pair[], tspan)
+    prob_nosplit = ODEProblem(ball_nosplit, Pair[], tspan)
+    sol = solve(prob, Tsit5())
+    sol_nosplit = solve(prob_nosplit, Tsit5())
+    @test 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
+    @test -minimum(sol[y]) ≈ maximum(sol[y]) ≈ sqrt(2)  # the ball will never go further than √2 in either direction (gravity was changed to 1 to get this particular number)
+    @test 0 <= minimum(sol_nosplit[x]) <= 1e-10 # the ball never went through the floor but got very close
+    @test -minimum(sol_nosplit[y]) ≈ maximum(sol_nosplit[y]) ≈ sqrt(2)  # the ball will never go further than √2 in either direction (gravity was changed to 1 to get this particular number)
+end
+
+# issue https://github.com/SciML/ModelingToolkit.jl/issues/1386
+# tests that it works for ODAESystem
+@testset "ODAESystem" begin
+    @variables vs(t) v(t) vmeasured(t)
+    eq = [vs ~ sin(2pi * t)
+          D(v) ~ vs - v
+          D(vmeasured) ~ 0.0]
+    ev = [sin(20pi * t) ~ 0.0] => [vmeasured ~ Pre(v)]
+    @named sys = ODESystem(eq, t, continuous_events = ev)
+    sys = structural_simplify(sys)
+    prob = ODEProblem(sys, zeros(2), (0.0, 5.1))
+    sol = solve(prob, Tsit5())
+    @test all(minimum((0:0.1:5) .- sol.t', dims = 2) .< 0.0001) # test that the solver stepped every 0.1s as dictated by event
+    @test sol([0.25])[vmeasured][] == sol([0.23])[vmeasured][] # test the hold property
+end
+
+##  https://github.com/SciML/ModelingToolkit.jl/issues/1528
+@testset "Handle Empty Events" begin
+    Dₜ = D
+
+    @parameters u(t) [input = true]  # Indicate that this is a controlled input
+    @parameters y(t) [output = true] # Indicate that this is a measured output
+
+    function Mass(; name, m = 1.0, p = 0, v = 0)
+        ps = @parameters m = m
+        sts = @variables pos(t)=p vel(t)=v
+        eqs = Dₜ(pos) ~ vel
+        ODESystem(eqs, t, [pos, vel], ps; name)
+    end
+    function Spring(; name, k = 1e4)
+        ps = @parameters k = k
+        @variables x(t) = 0 # Spring deflection
+        ODESystem(Equation[], t, [x], ps; name)
+    end
+    function Damper(; name, c = 10)
+        ps = @parameters c = c
+        @variables vel(t) = 0
+        ODESystem(Equation[], t, [vel], ps; name)
+    end
+    function SpringDamper(; name, k = false, c = false)
+        spring = Spring(; name = :spring, k)
+        damper = Damper(; name = :damper, c)
+        compose(ODESystem(Equation[], t; name),
+            spring, damper)
+    end
+    connect_sd(sd, m1, m2) = [
+        sd.spring.x ~ m1.pos - m2.pos, sd.damper.vel ~ m1.vel - m2.vel]
+    sd_force(sd) = -sd.spring.k * sd.spring.x - sd.damper.c * sd.damper.vel
+    @named mass1 = Mass(; m = 1)
+    @named mass2 = Mass(; m = 1)
+    @named sd = SpringDamper(; k = 1000, c = 10)
+    function Model(u, d = 0)
+        eqs = [connect_sd(sd, mass1, mass2)
+               Dₜ(mass1.vel) ~ (sd_force(sd) + u) / mass1.m
+               Dₜ(mass2.vel) ~ (-sd_force(sd) + d) / mass2.m]
+        @named _model = ODESystem(eqs, t; observed = [y ~ mass2.pos])
+        @named model = compose(_model, mass1, mass2, sd)
+    end
+    model = Model(sin(30t))
+    sys = structural_simplify(model)
+    @test isempty(ModelingToolkit.continuous_events(sys))
+end
 
 @testset "SDE/ODESystem Discrete Callbacks" begin
     function testsol(sys, probtype, solver, u0, p, tspan; tstops = Float64[], paramtotest = nothing,
@@ -1319,7 +1319,7 @@ end
     eqs = [y ~ g^2 - x, D(x) ~ x]
     c_evt = SymbolicContinuousCallback([t ~ 5.0], [x ~ Pre(x) + 1, g ~ Pre(g) + 1], discrete_parameters = [g], iv = t)
     @mtkbuild sys = ODESystem(eqs, t, continuous_events = c_evt)
-    prob = ODEProblem(sys, [x => 1.0], (0., 10.), [g => 2], guesses = [y => 0.])
+    prob = ODEProblem(sys, [x => 1.0], (0., 10.), [g => 2])
     sol = solve(prob, FBDF())
     @test sol.ps[g] ≈ [2., 3.] 
     @test ≈(sol(5.00000001, idxs = x) - sol(4.9999999, idxs = x), 1; rtol = 1e-4)
