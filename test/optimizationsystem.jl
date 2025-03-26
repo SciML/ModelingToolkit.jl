@@ -1,5 +1,6 @@
 using ModelingToolkit, SparseArrays, Test, Optimization, OptimizationOptimJL,
-      OptimizationMOI, Ipopt, AmplNLWriter, Ipopt_jll, SymbolicIndexingInterface
+      OptimizationMOI, Ipopt, AmplNLWriter, Ipopt_jll, SymbolicIndexingInterface,
+      LinearAlgebra
 using ModelingToolkit: get_metadata
 
 @testset "basic" begin
@@ -387,4 +388,24 @@ end
     @test isequal(only(parameters(sys1)), p1)
     @test all(y -> any(x -> isequal(x, y), unknowns(sys2)), [x2, sys1.x1])
     @test all(y -> any(x -> isequal(x, y), parameters(sys2)), [p2, sys1.p1])
+end
+
+function myeigvals_1(A::AbstractMatrix)
+    eigvals(A)[1]
+end
+
+@register_symbolic myeigvals_1(A::AbstractMatrix)
+
+@testset "Issue#3473: Registered array function in objective, no irreducible variables" begin
+    p_free = @variables begin
+        p1, [bounds = (0, 1)]
+        p2, [bounds = (0, 1)]
+        p3, [bounds = (0, 1)]
+        p4, [bounds = (0, 1)]
+    end
+
+    m = diagm(p_free)
+
+    obj = myeigvals_1(m)
+    @test_nowarn OptimizationSystem(obj, p_free, []; name = :osys)
 end
