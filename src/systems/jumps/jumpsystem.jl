@@ -502,7 +502,7 @@ function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothi
     else
         _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
             t = tspan === nothing ? nothing : tspan[1], tofloat = false,
-            check_length = false)
+            check_length = false, build_initializeprob = false)
         f = (du, u, p, t) -> (du .= 0; nothing)
         observedfun = ObservedFunctionCache(sys; eval_expression, eval_module,
             checkbounds = get(kwargs, :checkbounds, false))
