@@ -62,7 +62,6 @@ struct AffectSystem
     discretes::Vector
     """Maps the symbols of unknowns/observed in the ImplicitDiscreteSystem to its corresponding unknown/parameter in the parent system."""
     aff_to_sys::Dict
-    explicit::Bool
 end
 
 system(a::AffectSystem) = a.system
@@ -71,11 +70,11 @@ unknowns(a::AffectSystem) = a.unknowns
 parameters(a::AffectSystem) = a.parameters
 aff_to_sys(a::AffectSystem) = a.aff_to_sys
 previous_vals(a::AffectSystem) = parameters(system(a))
-is_explicit(a::AffectSystem) = a.explicit
+all_equations(a::AffectSystem) = vcat(equations(system(a)), observed(system(a)))
 
 function Base.show(iio::IO, aff::AffectSystem) 
     println(iio, "Affect system defined by equations:")
-    eqs = vcat(equations(system(aff)), observed(system(aff)))
+    eqs = all_equations(aff)
     show(iio, eqs)
 end
 
@@ -84,8 +83,7 @@ function Base.:(==)(a1::AffectSystem, a2::AffectSystem)
         isequal(discretes(a1), discretes(a2)) &&
         isequal(unknowns(a1), unknowns(a2)) && 
         isequal(parameters(a1), parameters(a2)) && 
-        isequal(aff_to_sys(a1), aff_to_sys(a2)) &&
-        isequal(is_explicit(a1), is_explicit(a2))
+        isequal(aff_to_sys(a1), aff_to_sys(a2))
 end
 
 function Base.hash(a::AffectSystem, s::UInt)
@@ -93,8 +91,7 @@ function Base.hash(a::AffectSystem, s::UInt)
     s = hash(unknowns(a), s)
     s = hash(parameters(a), s)
     s = hash(discretes(a), s)
-    s = hash(aff_to_sys(a), s)
-    hash(is_explicit(a), s)
+    hash(aff_to_sys(a), s)
 end
 
 function vars!(vars, aff::Union{FunctionalAffect, AffectSystem}; op = Differential) 
@@ -241,51 +238,44 @@ make_affect(affect::Tuple; kwargs...) = FunctionalAffect(affect...)
 make_affect(affect::NamedTuple; kwargs...) = FunctionalAffect(; affect...)
 make_affect(affect::Affect; kwargs...) = affect
 
-function make_affect(affect::Vector{Equation}; discrete_parameters = Any[], iv = nothing, algeeqs::Vector{Equation} = Equation[])
+function make_affect(affect::Vector{Equation}; discrete_parameters::AbstractVector = Any[], iv = nothing, algeeqs::Vector{Equation} = Equation[])
     isempty(affect) && return nothing
     isempty(algeeqs) && @warn "No algebraic equations were found for the callback defined by $(join(affect, ", ")). If the system has no algebraic equations, this can be disregarded. Otherwise pass in `algeeqs` to the SymbolicContinuousCallback constructor."
+    isnothing(iv) && error("Must specify iv.")
 
-    for p in discretes
-        # Check if p is time-dependent
-        false && error("Non-time dependent parameter $p passed in as a discrete. Must be declared as $p(t).")
+    for p in discrete_parameters
+        occursin(unwrap(iv), unwrap(p)) || error("Non-time dependent parameter $p passed in as a discrete. Must be declared as @parameters $p(t).")
     end
 
-    explicit = true 
     dvs = OrderedSet()
     params = OrderedSet()
     for eq in affect
-        if !haspre(eq) && !(symbolic_type(eq.rhs) === NotSymbolic())
+        if !haspre(eq) && !(symbolic_type(eq.rhs) === NotSymbolic() || symbolic_type(eq.lhs) === NotSymbolic())
             @warn "Affect equation $eq has no `Pre` operator. As such it will be interpreted as an algebraic equation to be satisfied after the callback. If you intended to use the value of a variable x before the affect, use Pre(x)."
-            explicit = false
         end
         collect_vars!(dvs, params, eq, iv; op = Pre)
     end
     for eq in algeeqs 
         collect_vars!(dvs, params, eq, iv)
-        explicit = false
-    end
-    any(isirreducible, dvs) && (explicit = false)
-
-    if isnothing(iv)
-        iv = isempty(dvs) ? iv : only(arguments(dvs[1]))
-        isnothing(iv) && @warn "No independent variable specified and could not be inferred. If the iv appears in an affect equation explicitly, like x ~ t + 1, then it must be specified as an argument to the SymbolicContinuousCallback or SymbolicDiscreteCallback constructor. Otherwise this warning can be disregarded."
     end
 
     pre_params = filter(haspre ∘ value, params)
-    sys_params = setdiff(params, union(discrete_parameters, pre_params))
+    sys_params = collect(setdiff(params, union(discrete_parameters, pre_params)))
     discretes = map(tovar, discrete_parameters)
     aff_map = Dict(zip(discretes, discrete_parameters))
-    @named affectsys = ImplicitDiscreteSystem(vcat(affect, algeeqs), iv, collect(union(dvs, discretes)), collect(union(pre_params, sys_params)))
-    affectsys = complete(affectsys)
+    rev_map = Dict(zip(discrete_parameters, discretes))
+    affect = Symbolics.fast_substitute(affect, rev_map)
+    algeeqs = Symbolics.fast_substitute(algeeqs, rev_map)
+    @mtkbuild affectsys = ImplicitDiscreteSystem(vcat(affect, algeeqs), iv, collect(union(dvs, discretes)), collect(union(pre_params, sys_params)))
     # get accessed parameters p from Pre(p) in the callback parameters
-    accessed_params = filter(isparameter, map(x -> unPre(x), cb_params))
+    accessed_params = filter(isparameter, map(unPre, collect(pre_params)))
     union!(accessed_params, sys_params)
     # add unknowns to the map
     for u in dvs
         aff_map[u] = u
     end
 
-    AffectSystem(affectsys, collect(dvs), collect(accessed_params), collect(discrete_parameters), aff_map, explicit)
+    AffectSystem(affectsys, collect(dvs), collect(accessed_params), collect(discrete_parameters), aff_map)
 end
 
 function make_affect(affect; kwargs...)
@@ -295,7 +285,7 @@ end
 """
 Generate continuous callbacks.
 """
-function SymbolicContinuousCallbacks(events; algeeqs::Vector{Equation} = Equation[], iv = nothing)
+function SymbolicContinuousCallbacks(events; discrete_parameters = Any[], algeeqs::Vector{Equation} = Equation[], iv = nothing)
     callbacks = SymbolicContinuousCallback[]
     isnothing(events) && return callbacks
 
@@ -304,7 +294,7 @@ function SymbolicContinuousCallbacks(events; algeeqs::Vector{Equation} = Equatio
 
     for event in events
         cond, affs = event isa Pair ? (event[1], event[2]) : (event, nothing)
-        push!(callbacks, SymbolicContinuousCallback(cond, affs; iv, algeeqs))
+        push!(callbacks, SymbolicContinuousCallback(cond, affs; iv, algeeqs, discrete_parameters))
     end
     callbacks
 end
@@ -412,11 +402,11 @@ struct SymbolicDiscreteCallback <: AbstractCallback
 
     function SymbolicDiscreteCallback(
             condition, affect = nothing;
-            initialize = nothing, finalize = nothing, iv = nothing, algeeqs = Equation[])
+            initialize = nothing, finalize = nothing, iv = nothing, algeeqs = Equation[], discrete_parameters = Any[])
         c = is_timed_condition(condition) ? condition : value(scalarize(condition))
 
-        new(c, make_affect(affect; iv, algeeqs), make_affect(initialize; iv, algeeqs),
-            make_affect(finalize; iv, algeeqs))
+        new(c, make_affect(affect; iv, algeeqs, discrete_parameters), make_affect(initialize; iv, algeeqs, discrete_parameters),
+            make_affect(finalize; iv, algeeqs, discrete_parameters))
     end # Default affect to nothing
 end
 
@@ -426,7 +416,7 @@ SymbolicDiscreteCallback(cb::SymbolicDiscreteCallback, args...; kwargs...) = cb
 """
 Generate discrete callbacks.
 """
-function SymbolicDiscreteCallbacks(events; algeeqs::Vector{Equation} = Equation[], iv = nothing)
+function SymbolicDiscreteCallbacks(events; discrete_parameters::Vector = Any[], algeeqs::Vector{Equation} = Equation[], iv = nothing)
     callbacks = SymbolicDiscreteCallback[]
 
     isnothing(events) && return callbacks
@@ -435,7 +425,7 @@ function SymbolicDiscreteCallbacks(events; algeeqs::Vector{Equation} = Equation[
 
     for event in events
         cond, affs = event isa Pair ? (event[1], event[2]) : (event, nothing)
-        push!(callbacks, SymbolicDiscreteCallback(cond, affs; iv, algeeqs))
+        push!(callbacks, SymbolicDiscreteCallback(cond, affs; iv, algeeqs, discrete_parameters))
     end
     callbacks
 end
@@ -471,7 +461,7 @@ function namespace_affects(affect::AffectSystem, s)
         renamespace.((s,), unknowns(affect)),
         renamespace.((s,), parameters(affect)),
         renamespace.((s,), discretes(affect)),
-        Dict([k => renamespace(s, v) for (k, v) in aff_to_sys(affect)]), is_explicit(affect))
+        Dict([k => renamespace(s, v) for (k, v) in aff_to_sys(affect)]))
 end
 namespace_affects(af::Nothing, s) = nothing
 
@@ -837,19 +827,17 @@ function compile_equational_affect(aff::Union{AffectSystem, Vector{Equation}}, s
     aff_map = aff_to_sys(aff)
     sys_map = Dict([v => k for (k, v) in aff_map])
 
-    if is_explicit(aff)
-        affsys = structural_simplify(affsys)
-        @assert isempty(equations(affsys))
+    if isempty(equations(affsys))
         update_eqs = Symbolics.fast_substitute(observed(affsys), Dict([p => unPre(p) for p in parameters(affsys)]))
         rhss = map(x -> x.rhs, update_eqs)
         lhss = map(x -> aff_map[x.lhs], update_eqs)
         is_p = [lhs ∈ Set(ps_to_update) for lhs in lhss]
-
+        is_u = [lhs ∈ Set(dvs_to_update) for lhs in lhss]
         dvs = unknowns(sys)
         ps = parameters(sys)
         t = get_iv(sys)
 
-        u_idxs = indexin((@view lhss[.!is_p]), dvs)
+        u_idxs = indexin((@view lhss[is_u]), dvs)
 
         wrap_mtkparameters = has_index_cache(sys) && (get_index_cache(sys) !== nothing)
         p_idxs = if wrap_mtkparameters
@@ -861,7 +849,7 @@ function compile_equational_affect(aff::Union{AffectSystem, Vector{Equation}}, s
         _ps = reorder_parameters(sys, ps)
         integ = gensym(:MTKIntegrator)
         
-        u_up, u_up! = build_function_wrapper(sys, (@view rhss[.!is_p]), dvs, _ps..., t; wrap_code = add_integrator_header(sys, integ, :u), expression = Val{false}, outputidxs = u_idxs, wrap_mtkparameters)
+        u_up, u_up! = build_function_wrapper(sys, (@view rhss[is_u]), dvs, _ps..., t; wrap_code = add_integrator_header(sys, integ, :u), expression = Val{false}, outputidxs = u_idxs, wrap_mtkparameters)
         p_up, p_up! = build_function_wrapper(sys, (@view rhss[is_p]), dvs, _ps..., t; wrap_code = add_integrator_header(sys, integ, :p), expression = Val{false}, outputidxs = p_idxs, wrap_mtkparameters)
 
         return function explicit_affect!(integ)
@@ -870,7 +858,7 @@ function compile_equational_affect(aff::Union{AffectSystem, Vector{Equation}}, s
             reset_jumps && reset_aggregated_jumps!(integ)
         end
     else
-        return let dvs_to_update = dvs_to_update, aff_map = aff_map, sys_map = sys_map, affsys = affsys, ps_to_update = ps_to_update
+        return let dvs_to_update = dvs_to_update, aff_map = aff_map, sys_map = sys_map, affsys = affsys, ps_to_update = ps_to_update, aff = aff
             function implicit_affect!(integ)
                 pmap = Pair[]
                 for pre_p in parameters(affsys)
@@ -885,7 +873,7 @@ function compile_equational_affect(aff::Union{AffectSystem, Vector{Equation}}, s
                 end
                 affprob = ImplicitDiscreteProblem(affsys, u0, (integ.t, integ.t), pmap; build_initializeprob = false, check_length = false)
                 affsol = init(affprob, IDSolve())
-                check_error(affsol) && throw(UnsolvableCallbackError(equations(affsys)))
+                (check_error(affsol) === ReturnCode.InitialFailure) && throw(UnsolvableCallbackError(all_equations(aff)))
                 for u in dvs_to_update
                     integ[u] = affsol[sys_map[u]]
                 end
@@ -901,8 +889,8 @@ struct UnsolvableCallbackError
     eqs::Vector{Equation}
 end
 
-function Base.showerror(io, err::UnsolvableCallbackError)
-    println(io, "The callback defined by the equations, $(join(err.eqs, "\n")), with discrete parameters  is not solvable. Please check the algebraic equations, affect equations, and declared discrete parameters.")
+function Base.showerror(io::IO, err::UnsolvableCallbackError)
+    println(io, "The callback defined by the following equations:\n\n$(join(err.eqs, "\n"))\n\nis not solvable. Please check that the algebraic equations and affect equations are correct, and that all parameters intended to be changed are passed in as `discrete_parameters`.")
 end
 
 merge_cb(::Nothing, ::Nothing) = nothing
