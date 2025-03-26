@@ -241,7 +241,10 @@ make_affect(affect::Affect; kwargs...) = affect
 function make_affect(affect::Vector{Equation}; discrete_parameters::AbstractVector = Any[], iv = nothing, algeeqs::Vector{Equation} = Equation[])
     isempty(affect) && return nothing
     isempty(algeeqs) && @warn "No algebraic equations were found for the callback defined by $(join(affect, ", ")). If the system has no algebraic equations, this can be disregarded. Otherwise pass in `algeeqs` to the SymbolicContinuousCallback constructor."
-    isnothing(iv) && error("Must specify iv.")
+    if isnothing(iv)
+        iv = t_nounits
+        @warn "No independent variable specified. Defaulting to t_nounits."
+    end
 
     for p in discrete_parameters
         occursin(unwrap(iv), unwrap(p)) || error("Non-time dependent parameter $p passed in as a discrete. Must be declared as @parameters $p(t).")
