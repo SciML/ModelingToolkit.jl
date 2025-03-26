@@ -734,35 +734,6 @@ function Base.:(==)(a::MTKParameters, b::MTKParameters)
            end)
 end
 
-# to support linearize/linearization_function
-function jacobian_wrt_vars(pf::F, p::MTKParameters, input_idxs, chunk::C) where {F, C}
-    tunable, _, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)
-    T = eltype(tunable)
-    tag = ForwardDiff.Tag(pf, T)
-    dualtype = ForwardDiff.Dual{typeof(tag), T, ForwardDiff.chunksize(chunk)}
-    p_big = SciMLStructures.replace(SciMLStructures.Tunable(), p, dualtype.(tunable))
-    p_closure = let pf = pf,
-        input_idxs = input_idxs,
-        p_big = p_big
-
-        function (p_small_inner)
-            for (i, val) in zip(input_idxs, p_small_inner)
-                set_parameter!(p_big, val, i)
-            end
-            return if pf isa SciMLBase.ParamJacobianWrapper
-                buffer = Array{dualtype}(undef, size(pf.u))
-                pf(buffer, p_big)
-                buffer
-            else
-                pf(p_big)
-            end
-        end
-    end
-    p_small = parameter_values.((p,), input_idxs)
-    cfg = ForwardDiff.JacobianConfig(p_closure, p_small, chunk, tag)
-    ForwardDiff.jacobian(p_closure, p_small, cfg, Val(false))
-end
-
 const MISSING_PARAMETERS_MESSAGE = """
                                 Some parameters are missing from the variable map.
                                 Please provide a value or default for the following variables:

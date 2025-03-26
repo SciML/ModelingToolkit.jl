@@ -25,6 +25,7 @@ The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occ
   - `simplify`: Apply simplification in tearing.
   - `initialize`: If true, a check is performed to ensure that the operating point is consistent (satisfies algebraic equations). If the op is not consistent, initialization is performed.
   - `initialization_solver_alg`: A NonlinearSolve algorithm to use for solving for a feasible set of state and algebraic variables that satisfies the specified operating point.
+  - `autodiff`: An `ADType` supported by DifferentiationInterface.jl to use for calculating the necessary jacobians. Defaults to using `AutoForwardDiff()`
   - `kwargs`: Are passed on to `find_solvables!`
 
 See also [`linearize`](@ref) which provides a higher-level interface.
@@ -39,6 +40,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         p = DiffEqBase.NullParameters(),
         zero_dummy_der = false,
         initialization_solver_alg = TrustRegion(),
+        autodiff = AutoForwardDiff(),
         eval_expression = false, eval_module = @__MODULE__,
         warn_initialize_determined = true,
         guesses = Dict(),
@@ -82,11 +84,102 @@ function linearization_function(sys::AbstractSystem, inputs,
     initialization_kwargs = (;
         abstol = initialization_abstol, reltol = initialization_reltol,
         nlsolve_alg = initialization_solver_alg)
+
+    p = parameter_values(prob)
+    t0 = current_time(prob)
+    inputvals = [p[idx] for idx in input_idxs]
+
+    hp_fun = let fun = h, setter = setp_oop(sys, input_idxs)
+        function hpf(du, input, u, p, t)
+            p = setter(p, input)
+            fun(du, u, p, t)
+            return du
+        end
+    end
+    if u0 === nothing
+        uf_jac = h_jac = pf_jac = nothing
+        T = p isa MTKParameters ? eltype(p.tunable) : eltype(p)
+        hp_jac = PreparedJacobian{true}(
+            hp_fun, zeros(T, size(outputs)), autodiff, inputvals,
+            DI.Constant(prob.u0), DI.Constant(p), DI.Constant(t0))
+    else
+        uf_fun = let fun = prob.f
+            function uff(du, u, p, t)
+                SciMLBase.UJacobianWrapper(fun, t, p)(du, u)
+            end
+        end
+        uf_jac = PreparedJacobian{true}(
+            uf_fun, similar(prob.u0), autodiff, prob.u0, DI.Constant(p), DI.Constant(t0))
+        # observed function is a `GeneratedFunctionWrapper` with iip component
+        h_jac = PreparedJacobian{true}(h, similar(prob.u0, size(outputs)), autodiff,
+            prob.u0, DI.Constant(p), DI.Constant(t0))
+        pf_fun = let fun = prob.f, setter = setp_oop(sys, input_idxs)
+            function pff(du, input, u, p, t)
+                p = setter(p, input)
+                SciMLBase.ParamJacobianWrapper(fun, t, u)(du, p)
+            end
+        end
+        pf_jac = PreparedJacobian{true}(pf_fun, similar(prob.u0), autodiff, inputvals,
+            DI.Constant(prob.u0), DI.Constant(p), DI.Constant(t0))
+        hp_jac = PreparedJacobian{true}(
+            hp_fun, similar(prob.u0, size(outputs)), autodiff, inputvals,
+            DI.Constant(prob.u0), DI.Constant(p), DI.Constant(t0))
+    end
+
     lin_fun = LinearizationFunction(
         diff_idxs, alge_idxs, input_idxs, length(unknowns(sys)),
-        prob, h, u0 === nothing ? nothing : similar(u0),
-        ForwardDiff.Chunk(input_idxs), initializealg, initialization_kwargs)
+        prob, h, u0 === nothing ? nothing : similar(u0), uf_jac, h_jac, pf_jac,
+        hp_jac, initializealg, initialization_kwargs)
     return lin_fun, sys
+end
+
+"""
+    $(TYPEDEF)
+
+Callable struct which stores a function and its prepared `DI.jacobian`. Calling with the
+appropriate arguments for DI returns the jacobian.
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
+struct PreparedJacobian{iip, P, F, B, A}
+    """
+    The preparation object.
+    """
+    prep::P
+    """
+    The function whose jacobian is calculated.
+    """
+    f::F
+    """
+    Buffer for in-place functions.
+    """
+    buf::B
+    """
+    ADType to use for differentiation.
+    """
+    autodiff::A
+end
+
+function PreparedJacobian{true}(f, buf, autodiff, args...)
+    prep = DI.prepare_jacobian(f, buf, autodiff, args...)
+    return PreparedJacobian{true, typeof(prep), typeof(f), typeof(buf), typeof(autodiff)}(
+        prep, f, buf, autodiff)
+end
+
+function PreparedJacobian{false}(f, autodiff, args...)
+    prep = DI.prepare_jacobian(f, autodiff, args...)
+    return PreparedJacobian{true, typeof(prep), typeof(f), Nothing, typeof(autodiff)}(
+        prep, f, nothing)
+end
+
+function (pj::PreparedJacobian{true})(args...)
+    DI.jacobian(pj.f, pj.buf, pj.prep, pj.autodiff, args...)
+end
+
+function (pj::PreparedJacobian{false})(args...)
+    DI.jacobian(pj.f, pj.prep, pj.autodiff, args...)
 end
 
 """
@@ -100,7 +193,7 @@ $(TYPEDFIELDS)
 """
 struct LinearizationFunction{
     DI <: AbstractVector{Int}, AI <: AbstractVector{Int}, II, P <: ODEProblem,
-    H, C, Ch, IA <: SciMLBase.DAEInitializationAlgorithm, IK}
+    H, C, J1, J2, J3, J4, IA <: SciMLBase.DAEInitializationAlgorithm, IK}
     """
     The indexes of differential equations in the linearized system.
     """
@@ -130,11 +223,22 @@ struct LinearizationFunction{
     Any required cache buffers.
     """
     caches::C
-    # TODO: Use DI?
     """
-    A `ForwardDiff.Chunk` for taking the jacobian with respect to the inputs.
+    `PreparedJacobian` for calculating jacobian of `prob.f` w.r.t. `u`
     """
-    chunk::Ch
+    uf_jac::J1
+    """
+    `PreparedJacobian` for calculating jacobian of `h` w.r.t. `u`
+    """
+    h_jac::J2
+    """
+    `PreparedJacobian` for calculating jacobian of `prob.f` w.r.t. `p`
+    """
+    pf_jac::J3
+    """
+    `PreparedJacobian` for calculating jacobian of `h` w.r.t. `p`
+    """
+    hp_jac::J4
     """
     The initialization algorithm to use.
     """
@@ -188,25 +292,18 @@ function (linfun::LinearizationFunction)(u, p, t)
         if !success
             error("Initialization algorithm $(linfun.initializealg) failed with `u = $u` and `p = $p`.")
         end
-        uf = SciMLBase.UJacobianWrapper(fun, t, p)
-        fg_xz = ForwardDiff.jacobian(uf, u)
-        h_xz = ForwardDiff.jacobian(
-            let p = p, t = t, h = linfun.h
-                xz -> h(xz, p, t)
-            end, u)
-        pf = SciMLBase.ParamJacobianWrapper(fun, t, u)
-        fg_u = jacobian_wrt_vars(pf, p, linfun.input_idxs, linfun.chunk)
+        fg_xz = linfun.uf_jac(u, DI.Constant(p), DI.Constant(t))
+        h_xz = linfun.h_jac(u, DI.Constant(p), DI.Constant(t))
+        fg_u = linfun.pf_jac([p[idx] for idx in linfun.input_idxs],
+            DI.Constant(u), DI.Constant(p), DI.Constant(t))
     else
         linfun.num_states == 0 ||
             error("Number of unknown variables (0) does not match the number of input unknowns ($(length(u)))")
         fg_xz = zeros(0, 0)
         h_xz = fg_u = zeros(0, length(linfun.input_idxs))
     end
-    hp = let u = u, t = t, h = linfun.h
-        _hp(p) = h(u, p, t)
-        _hp
-    end
-    h_u = jacobian_wrt_vars(hp, p, linfun.input_idxs, linfun.chunk)
+    h_u = linfun.hp_jac([p[idx] for idx in linfun.input_idxs],
+        DI.Constant(u), DI.Constant(p), DI.Constant(t))
     (f_x = fg_xz[linfun.diff_idxs, linfun.diff_idxs],
         f_z = fg_xz[linfun.diff_idxs, linfun.alge_idxs],
         g_x = fg_xz[linfun.alge_idxs, linfun.diff_idxs],
