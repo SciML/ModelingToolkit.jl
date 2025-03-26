@@ -69,7 +69,8 @@ using Symbolics: _parse_vars, value, @derivatives, get_variables,
                  NAMESPACE_SEPARATOR, set_scalar_metadata, setdefaultval,
                  initial_state, transition, activeState, entry, hasnode,
                  ticksInState, timeInState, fixpoint_sub, fast_substitute,
-                 CallWithMetadata, CallWithParent, Transition, InitialState
+                 CallWithMetadata, CallWithParent, Transition, InitialState,
+                 StateMachineOperator
 const NAMESPACE_SEPARATOR_SYMBOL = Symbol(NAMESPACE_SEPARATOR)
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   jacobian_sparsity, isaffine, islinear, _iszero, _isone,
