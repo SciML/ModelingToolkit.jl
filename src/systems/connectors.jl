@@ -448,7 +448,7 @@ ignored. All analysis points in `ignored_system_aps` must contain systems (conne
 as their input/outputs.
 """
 function systems_to_ignore(ignored_system_aps::Vector{HierarchyAnalysisPointT},
-        systems::Union{Vector{<:AbstractSystem}, Tuple{Vararg{<:AbstractSystem}}})
+        systems::Union{Vector{S}, Tuple{Vararg{S}}}) where S <: AbstractSystem
     to_ignore = HierarchySystemT[]
     for ap in ignored_system_aps
         # if `systems` contains the input of the AP, ignore any outputs of the AP present in it.
@@ -476,7 +476,7 @@ points to be ignored. All analysis points in `ignored_system_aps` must contain v
 as their input/outputs.
 """
 function variables_to_ignore(ignored_variable_aps::Vector{HierarchyAnalysisPointT},
-        systems::Union{Vector{<:AbstractSystem}, Tuple{Vararg{<:AbstractSystem}}})
+        systems::Union{Vector{S}, Tuple{Vararg{S}}}) where S <: AbstractSystem
     to_ignore = HierarchyVariableT[]
     for ap in ignored_variable_aps
         ivar_hierarchy = HierarchyVariableT([ap[1].input; @view ap[2:end]])
@@ -503,7 +503,7 @@ be ignored. All analysis points in `ignored_system_aps` must contain variables a
 input/outputs.
 """
 function variables_to_ignore(ignored_variable_aps::Vector{HierarchyAnalysisPointT},
-        vars::Union{Vector{<:BasicSymbolic}, Tuple{Vararg{<:BasicSymbolic}}})
+        vars::Union{Vector{S}, Tuple{Vararg{S}}}) where S <: BasicSymbolic
     to_ignore = eltype(vars)[]
     for ap in ignored_variable_aps
         ivar_hierarchy = HierarchyVariableT([ap[1].input; @view ap[2:end]])
