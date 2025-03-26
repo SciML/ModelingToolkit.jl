@@ -212,7 +212,7 @@ function check_subsystems(systems)
     idxs = findall(!does_namespacing, systems)
     if !isempty(idxs)
         names = join("  " .* string.(nameof.(systems[idxs])), "\n")
-        throw(ArgumentError("All subsystems have namespacing enabled. The following subsystems do not perform namespacing:\n$(names)"))
+        throw(ArgumentError("All subsystems must have namespacing enabled. The following subsystems do not perform namespacing:\n$(names)"))
     end
 end
 
