@@ -121,7 +121,7 @@ end
     @parameters p1=1.0 p2=2.0
     @variables x(t) = 0
 
-    @mtkbuild sys1 = ODESystem(
+    @named sys1 = ODESystem(
         [D(x) ~ p1 * t + p2],
         t
     )
