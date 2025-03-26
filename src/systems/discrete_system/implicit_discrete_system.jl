@@ -270,7 +270,8 @@ function flatten(sys::ImplicitDiscreteSystem, noeqs = false)
 end
 
 function generate_function(
-        sys::ImplicitDiscreteSystem, dvs = unknowns(sys), ps = parameters(sys); wrap_code = identity, cachesyms::Tuple = (), kwargs...)
+        sys::ImplicitDiscreteSystem, dvs = unknowns(sys), ps = parameters(sys);
+        wrap_code = identity, cachesyms::Tuple = (), kwargs...)
     iv = get_iv(sys)
     # Algebraic equations get shifted forward 1, to match with differential equations
     exprs = map(equations(sys)) do eq
@@ -453,7 +454,7 @@ end
 function Base.:(==)(sys1::ImplicitDiscreteSystem, sys2::ImplicitDiscreteSystem)
     sys1 === sys2 && return true
     isequal(nameof(sys1), nameof(sys2)) &&
-        isequal(get_iv(sys1), get_iv(sys2)) && 
+        isequal(get_iv(sys1), get_iv(sys2)) &&
         _eq_unordered(get_eqs(sys1), get_eqs(sys2)) &&
         _eq_unordered(get_unknowns(sys1), get_unknowns(sys2)) &&
         _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
