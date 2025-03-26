@@ -287,7 +287,6 @@ function generate_function(
     u_next = map(Shift(iv, 1), dvs)
     u = dvs
     p = (reorder_parameters(sys, unwrap.(ps))..., cachesyms...)
-    @show exprs
     build_function_wrapper(
         sys, exprs, u_next, u, p..., iv; p_start = 3, extra_assignments, kwargs...)
 end
