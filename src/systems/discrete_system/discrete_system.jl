@@ -431,7 +431,7 @@ end
 function Base.:(==)(sys1::DiscreteSystem, sys2::DiscreteSystem)
     sys1 === sys2 && return true
     isequal(nameof(sys1), nameof(sys2)) &&
-        isequal(get_iv(sys1), get_iv(sys2)) && 
+        isequal(get_iv(sys1), get_iv(sys2)) &&
         _eq_unordered(get_eqs(sys1), get_eqs(sys2)) &&
         _eq_unordered(get_unknowns(sys1), get_unknowns(sys2)) &&
         _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
