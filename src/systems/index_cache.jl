@@ -127,6 +127,7 @@ function IndexCache(sys::AbstractSystem)
         end
 
         for sym in discs
+            @show sym
             is_parameter(sys, sym) ||
                 error("Expected discrete variable $sym in callback to be a parameter")
 
