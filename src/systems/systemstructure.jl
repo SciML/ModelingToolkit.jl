@@ -339,7 +339,7 @@ function TearingState(sys; quick_cancel = false, check = true)
             return nothing
         end
         is_statemachine_equation = false
-        if eq′.lhs isa StateMachineOperation
+        if eq′.lhs isa StateMachineOperator
             is_statemachine_equation = true
             eq = eq′
             rhs = eq.rhs
