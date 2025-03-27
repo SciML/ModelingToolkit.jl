@@ -275,6 +275,22 @@ function find_eq_solvables!(state::TearingState, ieq::Int, to_rm = Int[], coeffs
     all_int_vars, term
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Remove edges in `structure.solvable_graph` that require differential variables in the
+denominator to solve. `additional_algevars` is a collection of integers corresponding to
+differential variables that should be considered as algebraic for the purpose of this
+transformation.
+"""
+function make_differential_denominators_unsolvable!(
+        structure::SystemStructure, additional_algevars = ())
+    for ((eqi, vari), denoms) in structure.denominators
+        all(i -> isalgvar(structure, i) || i in additional_algevars, denoms) && continue
+        rem_edge!(structure.solvable_graph, eqi, vari)
+    end
+end
+
 function find_solvables!(state::TearingState; kwargs...)
     @assert state.structure.solvable_graph === nothing
     eqs = equations(state)

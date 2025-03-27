@@ -693,7 +693,7 @@ end
 
 function _structural_simplify!(state::TearingState, io; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = false,
-        dummy_derivative = true,
+        dummy_derivative = true, allow_symbolic = false,
         kwargs...)
     if fully_determined isa Bool
         check_consistency &= fully_determined
@@ -710,24 +710,27 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
     else
         input_idxs = 0:-1 # Empty range
     end
-    sys, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
+    sys, mm = ModelingToolkit.alias_elimination!(state; allow_symbolic, kwargs...)
     if check_consistency
         fully_determined = ModelingToolkit.check_consistency(
             state, orig_inputs; nothrow = fully_determined === nothing)
     end
     if fully_determined && dummy_derivative
         sys = ModelingToolkit.dummy_derivative(
-            sys, state; simplify, mm, check_consistency, kwargs...)
+            sys, state; simplify, mm, check_consistency, allow_symbolic, kwargs...)
     elseif fully_determined
-        var_eq_matching = pantelides!(state; finalize = false, kwargs...)
+        var_eq_matching = pantelides!(state; finalize = false, allow_symbolic, kwargs...)
+        if !allow_symbolic
+            StructuralTransformations.make_differential_denominators_unsolvable!(state.structure)
+        end
         sys = pantelides_reassemble(state, var_eq_matching)
         state = TearingState(sys)
-        sys, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
+        sys, mm = ModelingToolkit.alias_elimination!(state; allow_symbolic, kwargs...)
         sys = ModelingToolkit.dummy_derivative(
-            sys, state; simplify, mm, check_consistency, kwargs...)
+            sys, state; simplify, mm, check_consistency, allow_symbolic, kwargs...)
     else
         sys = ModelingToolkit.tearing(
-            sys, state; simplify, mm, check_consistency, kwargs...)
+            sys, state; simplify, mm, check_consistency, allow_symbolic, kwargs...)
     end
     fullunknowns = [map(eq -> eq.lhs, observed(sys)); unknowns(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)
