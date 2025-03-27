@@ -311,3 +311,20 @@ end
     @test sysref.subsys.c in ps
     @test length(ps) == 2
 end
+
+@testset "Parameter getter flags" begin
+    evalinterp(I, t) = I(t)
+    @register_symbolic evalinterp(I::LinearInterpolation, t)
+
+    @parameters P1 P2 (C::LinearInterpolation)(..) I::LinearInterpolation
+    @variables x(t) y(t)
+    eqs = [D(x) ~ P1 + P2 + C(t) + evalinterp(I, y), y ~ 2 * x]
+    pdeps = [P1 ~ 2 * P2]
+    @named M = ODESystem(eqs, t; parameter_dependencies = pdeps)
+    Ms = structural_simplify(M)
+
+    @test Set(parameters(Ms)) == Set([P2, I, C])
+    @test Set(parameters(Ms; initial_parameters = true)) ==
+          Set([P2, I, C, Initial(P1), Initial(x), Initial(y)])
+    @test Set(parameters(Ms; dependent_parameters = true)) == Set([P2, I, C, P1])
+end
