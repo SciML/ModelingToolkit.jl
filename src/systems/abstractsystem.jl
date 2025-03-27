@@ -1330,9 +1330,13 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Get the parameters of the system `sys` and its subsystems.
+Get the standard parameters of the system `sys` and its subsystems.
 
-See also [`@parameters`](@ref) and [`ModelingToolkit.get_ps`](@ref).
+# Keyword arguments
+
+- `initial_parameters`: Whether to include parameters for initial values of variables in the initialization system.
+
+See also [`full_parameters`](@ref) and [`ModelingToolkit.get_ps`](@ref).
 """
 function parameters(sys::AbstractSystem; initial_parameters = false)
     ps = get_ps(sys)
@@ -1387,6 +1391,13 @@ function parameter_dependencies(sys::AbstractSystem)
     return vcat(namespaced_deps, pdeps)
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Get all parameters of the system `sys` and its subsystems, including initial values and dependent parameters.
+
+See also [`parameters`](@ref) and [`ModelingToolkit.get_ps`](@ref).
+"""
 function full_parameters(sys::AbstractSystem)
     vcat(parameters(sys; initial_parameters = true), dependent_parameters(sys))
 end
