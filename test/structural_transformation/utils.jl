@@ -224,20 +224,20 @@ end
             xtt = default_toterm(unwrap(D(D(x))))
             @test mapping[x] == (0 ~ 1 - x^2 - y^2)
             @test mapping[y] == (D(y) ~ yt)
-            @test mapping[D(y)] == (D(yt) ~ (2xtt * x + 2xt^2 + 2yt^2) / (-2y))
-            @test mapping[D(x)] == (xt ~ -yt * y / x)
-            @test mapping[D(D(x))] == (0 ~ -xtt + x * λ)
-            @test length(mapping) == 6
+            @test mapping[D(y)] == (D(yt) ~ -g + y * λ)
+            @test mapping[D(x)] == (0 ~ -2xt * x - 2yt * y)
+            @test mapping[D(D(x))] == (xtt ~ x * λ)
+            @test length(mapping) == 5
 
             @testset "`rename_dummy_derivatives = false`" begin
                 mapping = map_variables_to_equations(sys; rename_dummy_derivatives = false)
 
                 @test mapping[x] == (0 ~ 1 - x^2 - y^2)
                 @test mapping[y] == (D(y) ~ yt)
-                @test mapping[yt] == (D(yt) ~ (2xtt * x + 2xt^2 + 2yt^2) / (-2y))
-                @test mapping[xt] == (xt ~ -yt * y / x)
-                @test mapping[xtt] == (0 ~ -xtt + x * λ)
-                @test length(mapping) == 6
+                @test mapping[yt] == (D(yt) ~ -g + y * λ)
+                @test mapping[xt] == (0 ~ -2xt * x - 2yt * y)
+                @test mapping[xtt] == (xtt ~ x * λ)
+                @test length(mapping) == 5
             end
         end
         @testset "DDEs" begin

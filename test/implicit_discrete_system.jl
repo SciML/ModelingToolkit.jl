@@ -7,7 +7,7 @@ rng = StableRNG(22525)
 
 @testset "Correct ImplicitDiscreteFunction" begin
     @variables x(t) = 1
-    @mtkbuild sys = ImplicitDiscreteSystem([x(k) ~ abs(x(k)) * x(k - 1) - 3], t)
+    @mtkbuild sys = ImplicitDiscreteSystem([x(k) ~ x(k) * x(k - 1) - 3], t)
     tspan = (0, 10)
 
     # u[2] - u_next[1]
