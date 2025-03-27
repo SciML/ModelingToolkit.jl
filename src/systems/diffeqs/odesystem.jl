@@ -717,10 +717,12 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::ODESystem; hint = true, 
     invoke(Base.show, Tuple{typeof(io), typeof(mime), AbstractSystem},
         io, mime, sys; hint, bold)
 
+    name = nameof(sys)
+
     # Print initialization equations (unique to ODESystems)
     nini = length(initialization_equations(sys))
     nini > 0 && printstyled(io, "\nInitialization equations ($nini):"; bold)
-    nini > 0 && hint && print(io, " see initialization_equations(sys)")
+    nini > 0 && hint && print(io, " see initialization_equations($name)")
 
     return nothing
 end

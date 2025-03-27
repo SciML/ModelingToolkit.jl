@@ -2045,6 +2045,11 @@ function Base.show(
         limited && printstyled(io, "\n  ⋮") # too many variables to print
     end
 
+    # Print parameter dependencies
+    npdeps = has_parameter_dependencies(sys) ? length(parameter_dependencies(sys)) : 0
+    npdeps > 0 && printstyled(io, "\nParameter dependencies ($npdeps):"; bold)
+    npdeps > 0 && hint && print(io, " see parameter_dependencies($name)")
+
     # Print observed
     nobs = has_observed(sys) ? length(observed(sys)) : 0
     nobs > 0 && printstyled(io, "\nObserved ($nobs):"; bold)
