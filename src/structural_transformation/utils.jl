@@ -283,7 +283,8 @@ denominator to solve. `additional_algevars` is a collection of integers correspo
 differential variables that should be considered as algebraic for the purpose of this
 transformation.
 """
-function make_differential_denominators_unsolvable!(structure::SystemStructure, additional_algevars = ())
+function make_differential_denominators_unsolvable!(
+        structure::SystemStructure, additional_algevars = ())
     for ((eqi, vari), denoms) in structure.denominators
         all(i -> isalgvar(structure, i) || i in additional_algevars, denoms) && continue
         rem_edge!(structure.solvable_graph, eqi, vari)

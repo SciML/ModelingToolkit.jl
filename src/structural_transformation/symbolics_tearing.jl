@@ -989,7 +989,8 @@ end
 end
 
 function tearing(state::TearingState; allow_symbolic = false, kwargs...)
-    state.structure.solvable_graph === nothing && find_solvables!(state; allow_symbolic, kwargs...)
+    state.structure.solvable_graph === nothing &&
+        find_solvables!(state; allow_symbolic, kwargs...)
     if !allow_symbolic
         make_differential_denominators_unsolvable!(state.structure)
     end

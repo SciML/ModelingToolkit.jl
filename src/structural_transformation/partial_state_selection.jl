@@ -171,10 +171,12 @@ end
 
 function dummy_derivative_graph!(state::TransformationState, jac = nothing;
         state_priority = nothing, log = Val(false), allow_symbolic = false, kwargs...)
-    state.structure.solvable_graph === nothing && find_solvables!(state; allow_symbolic, kwargs...)
+    state.structure.solvable_graph === nothing &&
+        find_solvables!(state; allow_symbolic, kwargs...)
     complete!(state.structure)
     var_eq_matching = complete(pantelides!(state; allow_symbolic, kwargs...))
-    dummy_derivative_graph!(state.structure, var_eq_matching, jac, state_priority, log; allow_symbolic)
+    dummy_derivative_graph!(
+        state.structure, var_eq_matching, jac, state_priority, log; allow_symbolic)
 end
 
 struct DummyDerivativeSummary
