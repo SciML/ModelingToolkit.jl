@@ -170,11 +170,13 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
 end
 
 function dummy_derivative_graph!(state::TransformationState, jac = nothing;
-        state_priority = nothing, log = Val(false), kwargs...)
-    state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
+        state_priority = nothing, log = Val(false), allow_symbolic = false, kwargs...)
+    state.structure.solvable_graph === nothing &&
+        find_solvables!(state; allow_symbolic, kwargs...)
     complete!(state.structure)
-    var_eq_matching = complete(pantelides!(state; kwargs...))
-    dummy_derivative_graph!(state.structure, var_eq_matching, jac, state_priority, log)
+    var_eq_matching = complete(pantelides!(state; allow_symbolic, kwargs...))
+    dummy_derivative_graph!(
+        state.structure, var_eq_matching, jac, state_priority, log; allow_symbolic)
 end
 
 struct DummyDerivativeSummary
@@ -184,7 +186,7 @@ end
 
 function dummy_derivative_graph!(
         structure::SystemStructure, var_eq_matching, jac = nothing,
-        state_priority = nothing, ::Val{log} = Val(false)) where {log}
+        state_priority = nothing, ::Val{log} = Val(false); allow_symbolic = false) where {log}
     @unpack eq_to_diff, var_to_diff, graph = structure
     diff_to_eq = invview(eq_to_diff)
     diff_to_var = invview(var_to_diff)
@@ -342,7 +344,12 @@ function dummy_derivative_graph!(
         @warn "The number of dummy derivatives ($n_dummys) does not match the number of differentiated equations ($n_diff_eqs)."
     end
 
-    ret = tearing_with_dummy_derivatives(structure, BitSet(dummy_derivatives))
+    dummy_derivatives_set = BitSet(dummy_derivatives)
+    if !allow_symbolic
+        make_differential_denominators_unsolvable!(structure, dummy_derivatives_set)
+    end
+
+    ret = tearing_with_dummy_derivatives(structure, dummy_derivatives_set)
     if log
         (ret..., DummyDerivativeSummary(var_dummy_scc, var_state_priority))
     else
