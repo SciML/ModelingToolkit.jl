@@ -337,7 +337,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     end
 
     algeeqs = filter(eq -> eq.lhs isa Union{Symbolic, Number} && !is_diff_equation(eq),
-        flatten_equations(deqs))
+        deqs)
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events; algeeqs, iv)
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events; algeeqs, iv)
 
