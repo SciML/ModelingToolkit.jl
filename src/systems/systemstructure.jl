@@ -719,10 +719,8 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
         sys = ModelingToolkit.dummy_derivative(
             sys, state; simplify, mm, check_consistency, allow_symbolic, kwargs...)
     elseif fully_determined
-        var_eq_matching = pantelides!(state; finalize = false, allow_symbolic, kwargs...)
-        if !allow_symbolic
-            StructuralTransformations.make_differential_denominators_unsolvable!(state.structure)
-        end
+        var_eq_matching = pantelides!(state; finalize = false, kwargs...)
+        StructuralTransformations.make_differential_denominators_unsolvable!(state.structure)
         sys = pantelides_reassemble(state, var_eq_matching)
         state = TearingState(sys)
         sys, mm = ModelingToolkit.alias_elimination!(state; allow_symbolic, kwargs...)

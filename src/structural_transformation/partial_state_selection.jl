@@ -345,9 +345,7 @@ function dummy_derivative_graph!(
     end
 
     dummy_derivatives_set = BitSet(dummy_derivatives)
-    if !allow_symbolic
-        make_differential_denominators_unsolvable!(structure, dummy_derivatives_set)
-    end
+    make_differential_denominators_unsolvable!(structure, dummy_derivatives_set)
 
     ret = tearing_with_dummy_derivatives(structure, dummy_derivatives_set)
     if log

@@ -992,12 +992,9 @@ end
     ndims = ndims(arr)
 end
 
-function tearing(state::TearingState; allow_symbolic = false, kwargs...)
-    state.structure.solvable_graph === nothing &&
-        find_solvables!(state; allow_symbolic, kwargs...)
-    if !allow_symbolic
-        make_differential_denominators_unsolvable!(state.structure)
-    end
+function tearing(state::TearingState; kwargs...)
+    state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
+    make_differential_denominators_unsolvable!(state.structure)
     complete!(state.structure)
     tearing_with_dummy_derivatives(state.structure, ())
 end
