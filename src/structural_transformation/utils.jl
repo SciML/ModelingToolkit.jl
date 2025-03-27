@@ -206,9 +206,9 @@ end
 ### Structural and symbolic utilities
 ###
 
-function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = nothing;
+function find_eq_solvables!(state::TearingState, ieq::Int, to_rm = Int[], coeffs = nothing;
         may_be_zero = false,
-        allow_symbolic = false, allow_parameter = true,
+        allow_symbolic = false, allow_parameter = true, allow_algebraic = true,
         conservative = false,
         kwargs...)
     fullvars = state.fullvars
@@ -218,6 +218,7 @@ function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = no
     all_int_vars = true
     coeffs === nothing || empty!(coeffs)
     empty!(to_rm)
+    varsbuf = Set()
     for j in 𝑠neighbors(graph, ieq)
         var = fullvars[j]
         isirreducible(var) && (all_int_vars = false; continue)
@@ -229,13 +230,18 @@ function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = no
         if a isa Symbolic
             all_int_vars = false
             if !allow_symbolic
-                if allow_parameter
-                    all(
-                        x -> ModelingToolkit.isparameter(x) || ModelingToolkit.isconstant(x),
-                        vars(a)) || continue
-                else
+                allow_parameter || allow_algebraic || continue
+                empty!(varsbuf)
+                vars!(varsbuf, a)
+                denomvars = Int[]
+                for v in varsbuf
+                    idx = findfirst(isequal(v), fullvars)
+                    idx === nothing || push!(denomvars, idx)
+                end
+                if !allow_algebraic && !isempty(denomvars)
                     continue
                 end
+                state.structure.denominators[ieq => j] = denomvars
             end
             add_edge!(solvable_graph, ieq, j)
             continue
