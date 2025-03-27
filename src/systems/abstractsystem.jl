@@ -1339,7 +1339,8 @@ Get the standard parameters of the system `sys` and its subsystems.
 
 See also [`full_parameters`](@ref) and [`ModelingToolkit.get_ps`](@ref).
 """
-function parameters(sys::AbstractSystem; initial_parameters = false, dependent_parameters = false)
+function parameters(
+        sys::AbstractSystem; initial_parameters = false, dependent_parameters = false)
     ps = get_ps(sys)
     if ps == SciMLBase.NullParameters()
         return []
@@ -1349,7 +1350,7 @@ function parameters(sys::AbstractSystem; initial_parameters = false, dependent_p
     end
     systems = get_systems(sys)
     ps = unique(isempty(systems) ? ps :
-                    [ps; reduce(vcat, namespace_parameters.(systems))])
+                [ps; reduce(vcat, namespace_parameters.(systems))])
     if !initial_parameters && !is_initializesystem(sys)
         filter!(x -> !iscall(x) || !isa(operation(x), Initial), ps)
     end
