@@ -263,8 +263,11 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
     ctrl_jac = RefValue{Any}(EMPTY_JAC)
     Wfact = RefValue(EMPTY_JAC)
     Wfact_t = RefValue(EMPTY_JAC)
-    cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
-    disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
+
+    algeeqs = filter(eq -> eq.lhs isa Union{Symbolic, Number} && !is_diff_equation(eq),
+        flatten_equations(deqs))
+    cont_callbacks = SymbolicContinuousCallbacks(continuous_events; algeeqs, iv)
+    disc_callbacks = SymbolicDiscreteCallbacks(discrete_events; algeeqs, iv)
     if is_dde === nothing
         is_dde = _check_if_dde(deqs, iv′, systems)
     end

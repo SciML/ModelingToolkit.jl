@@ -535,7 +535,6 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
         if !iszero(Bs)
             if !allow_input_derivatives
                 der_inds = findall(vec(any(!iszero, Bs, dims = 1)))
-                @show typeof(der_inds)
                 error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(ModelingToolkit.inputs(sys)[der_inds]). Call `linearize_symbolic` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
             end
             B = [B [zeros(nx, nu); Bs]]

@@ -2,6 +2,7 @@ using ModelingToolkit, DiffEqBase, JumpProcesses, Test, LinearAlgebra
 using Random, StableRNGs, NonlinearSolve
 using OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using BenchmarkTools
 MT = ModelingToolkit
 
 rng = StableRNG(12345)
@@ -11,9 +12,9 @@ rng = StableRNG(12345)
 @constants h = 1
 @variables S(t) I(t) R(t)
 rate₁ = β * S * I * h
-affect₁ = [S ~ S - 1 * h, I ~ I + 1]
+affect₁ = [S ~ Pre(S) - 1 * h, I ~ Pre(I) + 1]
 rate₂ = γ * I + t
-affect₂ = [I ~ I - 1, R ~ R + 1]
+affect₂ = [I ~ Pre(I) - 1, R ~ Pre(R) + 1]
 j₁ = ConstantRateJump(rate₁, affect₁)
 j₂ = VariableRateJump(rate₂, affect₂)
 @named js = JumpSystem([j₁, j₂], t, [S, I, R], [β, γ])
@@ -59,7 +60,7 @@ jump2.affect!(integrator)
 
 # test MT can make and solve a jump problem
 rate₃ = γ * I * h
-affect₃ = [I ~ I * h - 1, R ~ R + 1]
+affect₃ = [I ~ Pre(I) * h - 1, R ~ Pre(R) + 1]
 j₃ = ConstantRateJump(rate₃, affect₃)
 @named js2 = JumpSystem([j₁, j₃], t, [S, I, R], [β, γ])
 js2 = complete(js2)
@@ -79,7 +80,7 @@ function getmean(jprob, Nsims; use_stepper = true)
     end
     m / Nsims
 end
-m = getmean(jprob, Nsims)
+@btime m = $getmean($jprob, $Nsims)
 
 # test auto-alg selection works
 jprobb = JumpProblem(js2, dprob; save_positions = (false, false), rng)
