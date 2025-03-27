@@ -149,8 +149,16 @@ Base.@kwdef mutable struct SystemStructure
     # or as `torn` to assert that tearing has run.
     """Graph that connects equations to variables that appear in them."""
     graph::BipartiteGraph{Int, Nothing}
-    """Graph that connects equations to the variable they will be solved for during simplification."""
+    """
+    Graph that connects equations to the variables that they can be analytically solved
+    for.
+    """
     solvable_graph::Union{BipartiteGraph{Int, Nothing}, Nothing}
+    """
+    Dict mapping `eq => var` edges in `solvable_graph` to the variables that occur in the
+    denominator when `eq` is analytically solved for `var`.
+    """
+    denominators::Dict{Pair{Int, Int}, Vector{Int}}
     """Variable types (brownian, variable, parameter) in the system."""
     var_types::Union{Vector{VariableType}, Nothing}
     """Whether the system is discrete."""
@@ -160,7 +168,7 @@ end
 function Base.copy(structure::SystemStructure)
     var_types = structure.var_types === nothing ? nothing : copy(structure.var_types)
     SystemStructure(copy(structure.var_to_diff), copy(structure.eq_to_diff),
-        copy(structure.graph), copy(structure.solvable_graph),
+        copy(structure.graph), copy(structure.solvable_graph), copy(structure.denominators),
         var_types, structure.only_discrete)
 end
 
@@ -437,7 +445,7 @@ function TearingState(sys; quick_cancel = false, check = true)
 
     ts = TearingState(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
-            complete(graph), nothing, var_types, sys isa AbstractDiscreteSystem),
+            complete(graph), nothing, Dict(), var_types, sys isa AbstractDiscreteSystem),
         Any[])
     if sys isa DiscreteSystem
         ts = shift_discrete_system(ts)
