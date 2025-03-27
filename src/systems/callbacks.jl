@@ -264,6 +264,8 @@ function make_affect(affect::Vector{Equation}; discrete_parameters::AbstractVect
             @warn "Affect equation $eq has no `Pre` operator. As such it will be interpreted as an algebraic equation to be satisfied after the callback. If you intended to use the value of a variable x before the affect, use Pre(x)."
         end
         collect_vars!(dvs, params, eq, iv; op = Pre)
+        diffvs = collect_applied_operators(eq, Differential)
+        union!(dvs, diffvs)
     end
     for eq in algeeqs
         collect_vars!(dvs, params, eq, iv)
@@ -272,23 +274,28 @@ function make_affect(affect::Vector{Equation}; discrete_parameters::AbstractVect
     pre_params = filter(haspre ∘ value, params)
     sys_params = collect(setdiff(params, union(discrete_parameters, pre_params)))
     discretes = map(tovar, discrete_parameters)
+    dvs = collect(dvs)
+    _dvs = map(default_toterm, dvs) 
+
     aff_map = Dict(zip(discretes, discrete_parameters))
     rev_map = Dict(zip(discrete_parameters, discretes))
-    affect = Symbolics.fast_substitute(affect, rev_map)
-    algeeqs = Symbolics.fast_substitute(algeeqs, rev_map)
+    subs = merge(rev_map, Dict(zip(dvs, _dvs)))
+    affect = Symbolics.fast_substitute(affect, subs)
+    algeeqs = Symbolics.fast_substitute(algeeqs, subs)
+
     @named affectsys = ImplicitDiscreteSystem(
-        vcat(affect, algeeqs), iv, collect(union(dvs, discretes)),
+        vcat(affect, algeeqs), iv, collect(union(_dvs, discretes)),
         collect(union(pre_params, sys_params)))
-    affectsys = structural_simplify(affect_sys; fully_determined = false)
+    affectsys = structural_simplify(affectsys; fully_determined = false)
     # get accessed parameters p from Pre(p) in the callback parameters
     accessed_params = filter(isparameter, map(unPre, collect(pre_params)))
     union!(accessed_params, sys_params)
     # add unknowns to the map
-    for u in dvs
+    for u in _dvs
         aff_map[u] = u
     end
 
-    AffectSystem(affectsys, collect(dvs), collect(accessed_params),
+    AffectSystem(affectsys, collect(_dvs), collect(accessed_params),
         collect(discrete_parameters), aff_map)
 end
 
@@ -811,7 +818,6 @@ function compile_affect(
 end
 
 function wrap_save_discretes(f, save_idxs)
-    @show save_idxs
     let save_idxs = save_idxs
         if f === SciMLBase.INITIALIZE_DEFAULT
             (c, u, t, i) -> begin
