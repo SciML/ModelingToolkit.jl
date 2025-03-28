@@ -148,3 +148,15 @@ The `AbstractSystem` types allow for specifying default values, for example
 into the value maps, where for any repeats the value maps override the default.
 In addition, defaults of a higher level in the system override the defaults of
 a lower level in the system.
+
+## Namespacing
+
+By default, unsimplified systems will namespace variables accessed via `getproperty`.
+Systems created via `@mtkbuild`, or ones passed through `structural_simplify` or
+`complete` will not perform this namespacing. However, all of these processes modify
+the system in a variety of ways. To toggle namespacing without transforming any other
+property of the system, use `toggle_namespacing`.
+
+```@docs
+toggle_namespacing
+```

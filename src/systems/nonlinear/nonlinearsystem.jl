@@ -95,7 +95,11 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     """
     substitutions::Any
     """
-    If a model `sys` is complete, then `sys.x` no longer performs namespacing.
+    If false, then `sys.x` no longer performs namespacing.
+    """
+    namespacing::Bool
+    """
+    If true, denotes the model will not be modified any further.
     """
     complete::Bool
     """
@@ -112,17 +116,18 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
             tag, eqs, unknowns, ps, var_to_name, observed, jac, name, description,
             systems, defaults, guesses, initializesystem, initialization_eqs, connector_type,
             parameter_dependencies = Equation[], metadata = nothing, gui_metadata = nothing,
-            tearing_state = nothing, substitutions = nothing,
+            tearing_state = nothing, substitutions = nothing, namespacing = true,
             complete = false, index_cache = nothing, parent = nothing,
             isscheduled = false; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(unknowns, ps)
             check_units(u, eqs)
+            check_subsystems(systems)
         end
         new(tag, eqs, unknowns, ps, var_to_name, observed, jac, name, description,
             systems, defaults, guesses, initializesystem, initialization_eqs,
             connector_type, parameter_dependencies, metadata, gui_metadata, tearing_state,
-            substitutions, complete, index_cache, parent, isscheduled)
+            substitutions, namespacing, complete, index_cache, parent, isscheduled)
     end
 end
 

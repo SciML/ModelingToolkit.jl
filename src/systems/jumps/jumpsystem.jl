@@ -116,7 +116,11 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
     gui_metadata::Union{Nothing, GUIMetadata}
     """
-    If a model `sys` is complete, then `sys.x` no longer performs namespacing.
+    If false, then `sys.x` no longer performs namespacing.
+    """
+    namespacing::Bool
+    """
+    If true, denotes the model will not be modified any further.
     """
     complete::Bool
     """
@@ -130,12 +134,13 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             systems, defaults, guesses, initializesystem, initialization_eqs, connector_type,
             cevents, devents,
             parameter_dependencies, metadata = nothing, gui_metadata = nothing,
-            complete = false, index_cache = nothing, isscheduled = false;
+            namespacing = true, complete = false, index_cache = nothing, isscheduled = false;
             checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
         if checks == true || (checks & CheckComponents) > 0
             check_independent_variables([iv])
             check_variables(unknowns, iv)
             check_parameters(ps, iv)
+            check_subsystems(systems)
         end
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(unknowns, ps, iv)
@@ -145,7 +150,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             observed, name, description, systems, defaults, guesses, initializesystem,
             initialization_eqs,
             connector_type, cevents, devents, parameter_dependencies, metadata,
-            gui_metadata, complete, index_cache, isscheduled)
+            gui_metadata, namespacing, complete, index_cache, isscheduled)
     end
 end
 function JumpSystem(tag, ap, iv, states, ps, var_to_name, args...; kwargs...)

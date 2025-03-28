@@ -139,7 +139,11 @@ struct SDESystem <: AbstractODESystem
     """
     gui_metadata::Union{Nothing, GUIMetadata}
     """
-    If a model `sys` is complete, then `sys.x` no longer performs namespacing.
+    If false, then `sys.x` no longer performs namespacing.
+    """
+    namespacing::Bool
+    """
+    If true, denotes the model will not be modified any further.
     """
     complete::Bool
     """
@@ -166,7 +170,7 @@ struct SDESystem <: AbstractODESystem
             guesses, initializesystem, initialization_eqs, connector_type,
             cevents, devents, parameter_dependencies, assertions = Dict{
                 BasicSymbolic, Nothing},
-            metadata = nothing, gui_metadata = nothing,
+            metadata = nothing, gui_metadata = nothing, namespacing = true,
             complete = false, index_cache = nothing, parent = nothing, is_scalar_noise = false,
             is_dde = false,
             isscheduled = false;
@@ -184,6 +188,7 @@ struct SDESystem <: AbstractODESystem
             if is_scalar_noise && neqs isa AbstractMatrix
                 throw(ArgumentError("Noise equations ill-formed. Received a matrix of noise equations of size $(size(neqs)), but `is_scalar_noise` was set to `true`. Scalar noise is only compatible with an `AbstractVector` of noise equations."))
             end
+            check_subsystems(systems)
         end
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(dvs, ps, iv)
@@ -192,8 +197,8 @@ struct SDESystem <: AbstractODESystem
         new(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, description, systems,
             defaults, guesses, initializesystem, initialization_eqs, connector_type, cevents,
-            devents, parameter_dependencies, assertions, metadata, gui_metadata, complete,
-            index_cache, parent, is_scalar_noise, is_dde, isscheduled)
+            devents, parameter_dependencies, assertions, metadata, gui_metadata, namespacing,
+            complete, index_cache, parent, is_scalar_noise, is_dde, isscheduled)
     end
 end
 
@@ -218,7 +223,6 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
         assertions = Dict{BasicSymbolic, String}(),
         metadata = nothing,
         gui_metadata = nothing,
-        complete = false,
         index_cache = nothing,
         parent = nothing,
         is_scalar_noise = false,
@@ -274,7 +278,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
         ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses,
         initializesystem, initialization_eqs, connector_type,
         cont_callbacks, disc_callbacks, parameter_dependencies, assertions, metadata, gui_metadata,
-        complete, index_cache, parent, is_scalar_noise, is_dde; checks = checks)
+        true, false, index_cache, parent, is_scalar_noise, is_dde; checks = checks)
 end
 
 function SDESystem(sys::ODESystem, neqs; kwargs...)
@@ -321,9 +325,8 @@ function SDESystem(eqs::Vector{Equation}, noiseeqs::AbstractArray, iv; kwargs...
             throw(ArgumentError("Variable $dv in noise equations is not an unknown of the system."))
     end
     algevars = setdiff(allunknowns, diffvars)
-
     return SDESystem(eqs, noiseeqs, iv, Iterators.flatten((diffvars, algevars)),
-        [ps; collect(noiseps)]; kwargs...)
+        [collect(ps); collect(noiseps)]; kwargs...)
 end
 
 function SDESystem(eq::Equation, noiseeqs::AbstractArray, args...; kwargs...)

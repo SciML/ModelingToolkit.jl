@@ -328,7 +328,7 @@ export alg_equations, diff_equations, has_alg_equations, has_diff_equations
 export get_alg_eqs, get_diff_eqs, has_alg_eqs, has_diff_eqs
 
 export @variables, @parameters, @independent_variables, @constants, @brownian
-export @named, @nonamespace, @namespace, extend, compose, complete
+export @named, @nonamespace, @namespace, extend, compose, complete, toggle_namespacing
 export debug_system
 
 #export ContinuousClock, Discrete, sampletime, input_timedomain, output_timedomain

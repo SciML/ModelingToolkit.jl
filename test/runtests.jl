@@ -97,6 +97,7 @@ end
             @safetestset "Analysis Points Test" include("analysis_points.jl")
             @safetestset "Causal Variables Connection Test" include("causal_variables_connection.jl")
             @safetestset "Debugging Test" include("debugging.jl")
+            @safetestset "Namespacing test" include("namespacing.jl")
         end
     end
 
