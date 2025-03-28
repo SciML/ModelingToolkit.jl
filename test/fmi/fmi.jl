@@ -157,7 +157,7 @@ end
     @testset "v2, CS" begin
         fmu = loadFMU(joinpath(FMU_DIR, "SimpleAdder.fmu"); type = :CS)
         @named adder = MTK.FMIComponent(
-            Val(2); fmu, type = :CS, communication_step_size = 1e-6)
+                                        Val(2); fmu, type = :CS, communication_step_size = 1e-6, reinitializealg = BrownFullBasicInit())
         @test MTK.isinput(adder.a)
         @test MTK.isinput(adder.b)
         @test MTK.isoutput(adder.out)
@@ -209,7 +209,7 @@ end
     @testset "v3, CS" begin
         fmu = loadFMU(joinpath(FMU_DIR, "StateSpace.fmu"); type = :CS)
         @named sspace = MTK.FMIComponent(
-            Val(3); fmu, communication_step_size = 1e-6, type = :CS)
+                                         Val(3); fmu, communication_step_size = 1e-6, type = :CS, reinitializealg = BrownFullBasicInit())
         @test MTK.isinput(sspace.u)
         @test MTK.isoutput(sspace.y)
         @test !MTK.isinput(sspace.x) && !MTK.isoutput(sspace.x)

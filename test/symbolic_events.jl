@@ -1204,7 +1204,7 @@ end
     @mtkmodel DECAY begin
         @parameters begin
             unrelated[1:2] = zeros(2)
-            k = 0.0
+            k(t) = 0.0
         end
         @variables begin
             x(t) = 10.0
@@ -1213,7 +1213,7 @@ end
             D(x) ~ -k * x
         end
         @discrete_events begin
-            (t == 1.0) => [k ~ 1.0]
+            (t == 1.0) => [k ~ 1.0], discrete_parameters = [k]
         end
     end
     @mtkbuild decay = DECAY()
@@ -1338,7 +1338,4 @@ end
     sol = solve(prob, FBDF())
     @test prob.ps[g] == sol.ps[g]
 end
-# TODO: test:
-# - Functional affects reinitialize correctly
 # - explicit equation of t in a functional affect
-# - reinitialization after affects
