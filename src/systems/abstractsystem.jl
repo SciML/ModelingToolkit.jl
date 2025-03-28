@@ -3286,7 +3286,7 @@ function recursive_getproperty(
     for (i, name) in enumerate(hierarchy)
         cur = getproperty(cur, name; namespace = i > 1 || !skip_namespace_first)
     end
-    return cur
+    return unwrap(cur)
 end
 
 """
@@ -3306,9 +3306,17 @@ function recreate_connections(sys::AbstractSystem)
             oldargs = [ap.input; ap.outputs]
         end
         newargs = map(get_systems(eq.rhs)) do arg
+            rewrap_nameof = arg isa SymbolicWithNameof
+            if rewrap_nameof
+                arg = arg.var
+            end
             name = arg isa AbstractSystem ? nameof(arg) : getname(arg)
             hierarchy = namespace_hierarchy(name)
-            return recursive_getproperty(sys, hierarchy)
+            newarg = recursive_getproperty(sys, hierarchy)
+            if rewrap_nameof
+                newarg = SymbolicWithNameof(newarg)
+            end
+            return newarg
         end
         if eq.lhs isa Connection
             return eq.lhs ~ Connection(newargs)
