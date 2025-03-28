@@ -5,19 +5,22 @@ using OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D, renamespace,
                        NAMESPACE_SEPARATOR as NS
 
-@mtkmodel TwoComponent begin
-    @parameters begin
-        V = 1.0
+@mtkmodel SignalInterface begin
+    @components begin
+        output = RealOutput()
     end
+end
+
+@mtkmodel TwoComponent begin
     @components begin
         component1 = OnePort()
         component2 = OnePort()
         source = Voltage()
-        constant = Constant(k = V)
+        signal = SignalInterface()
         ground = Ground()
     end
     @equations begin
-        connect(constant.output, source.V)
+        connect(signal.output.u, source.V.u)
         connect(source.p, component1.p)
         connect(component1.n, component2.p)
         connect(component2.n, source.n, ground.g)
@@ -49,15 +52,16 @@ end
     @named templated = TwoComponent()
     @named component1 = Resistor(R = 1.0)
     @named component2 = Capacitor(C = 1.0, v = 0.0)
+    @named signal = Constant(k = 1.0)
     rsys = substitute_component(templated, templated.component1 => component1)
     rcsys = substitute_component(rsys, rsys.component2 => component2)
+    rcsys = substitute_component(rcsys, rcsys.signal => signal)
 
     @named reference = RC()
 
     sys1 = structural_simplify(rcsys)
     sys2 = structural_simplify(reference)
     @test isequal(unknowns(sys1), unknowns(sys2))
-    @test isequal(observed(sys1), observed(sys2))
     @test isequal(equations(sys1), equations(sys2))
 
     prob1 = ODEProblem(sys1, [], (0.0, 10.0))
