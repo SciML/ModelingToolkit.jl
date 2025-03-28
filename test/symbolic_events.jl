@@ -422,7 +422,7 @@ cond.rf_ip(out, [0, 1], p0, t0) # this should return 0
 cond.rf_ip(out, [0, 2], p0, t0)
 @test out[2] ≈ 1  # signature is u,p,t
 
-sol = solve(prob, Tsit5())
+sol = solve(prob, Tsit5(); abstol = 1e-14, reltol = 1e-14)
 @test minimum(t -> abs(t - 1), sol.t) < 1e-10 # test that the solver stepped at the first root
 @test minimum(t -> abs(t - 2), sol.t) < 1e-10 # test that the solver stepped at the second root
 
@@ -430,7 +430,7 @@ sol = solve(prob, Tsit5())
 sys = complete(sys)
 prob = ODEProblem(sys, Pair[], (0.0, 3.0))
 @test get_callback(prob) isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
-sol = solve(prob, Tsit5())
+sol = solve(prob, Tsit5(); abstol = 1e-14, reltol = 1e-14)
 @test minimum(t -> abs(t - 1), sol.t) < 1e-10 # test that the solver stepped at the first root
 @test minimum(t -> abs(t - 2), sol.t) < 1e-10 # test that the solver stepped at the second root
 
@@ -540,8 +540,8 @@ ev = [sin(20pi * t) ~ 0.0] => [vmeasured ~ v]
 sys = structural_simplify(sys)
 prob = ODEProblem(sys, zeros(2), (0.0, 5.1))
 sol = solve(prob, Tsit5())
-@test all(minimum((0:0.1:5) .- sol.t', dims = 2) .< 0.0001) # test that the solver stepped every 0.1s as dictated by event
-@test sol([0.25])[vmeasured][] == sol([0.23])[vmeasured][] # test the hold property
+@test all(minimum((0:0.05:5) .- sol.t', dims = 2) .< 0.0001) # test that the solver stepped every 0.05s as dictated by event
+@test sol([0.25 - eps()])[vmeasured][] == sol([0.23])[vmeasured][] # test the hold property
 
 ##  https://github.com/SciML/ModelingToolkit.jl/issues/1528
 Dₜ = D
