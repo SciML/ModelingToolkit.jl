@@ -605,7 +605,7 @@ function does_namespacing(sys::AbstractSystem)
     if isdefined(sys, :namespacing)
         getfield(sys, :namespacing)
     else
-        iscomplete(sys)
+        !iscomplete(sys)
     end
 end
 
