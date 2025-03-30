@@ -130,7 +130,9 @@ fig
 
 ## Basins of attraction
 
-Estimating the basins of attraction of these attractor is a matter of a couple lines of code. First we define the state space are to estimate the basins for. Here we can re-use the `grid` we defined above. Then we only have to call
+Estimating the basins of attraction of these attractors is a matter of a couple lines of code. 
+First we define the state space are to estimate the basins for. 
+Here we can re-use the `grid` we defined above. Then we only have to call
 
 ```julia
 basins = basins_of_attraction(mapper, grid)
