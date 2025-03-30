@@ -132,7 +132,7 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
         wrap_delays = is_dde(sys), wrap_code = identity,
         add_observed = true, filter_observed = Returns(true),
         create_bindings = false, output_type = nothing, mkarray = nothing,
-        wrap_mtkparameters = true, extra_assignments = Assignment[], kwargs...)
+        wrap_mtkparameters = true, extra_assignments = Assignment[], cse = true, kwargs...)
     isscalar = !(expr isa AbstractArray || symbolic_type(expr) == ArraySymbolic())
     # filter observed equations
     obs = filter(filter_observed, observed(sys))
@@ -234,7 +234,7 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
     if wrap_code isa Tuple && symbolic_type(expr) == ScalarSymbolic()
         wrap_code = wrap_code[1]
     end
-    return build_function(expr, args...; wrap_code, similarto, kwargs...)
+    return build_function(expr, args...; wrap_code, similarto, cse, kwargs...)
 end
 
 """
