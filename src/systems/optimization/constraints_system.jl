@@ -74,7 +74,11 @@ struct ConstraintsSystem <: AbstractTimeIndependentSystem
     """
     substitutions::Any
     """
-    If a model `sys` is complete, then `sys.x` no longer performs namespacing.
+    If false, then `sys.x` no longer performs namespacing.
+    """
+    namespacing::Bool
+    """
+    If true, denotes the model will not be modified any further.
     """
     complete::Bool
     """
@@ -86,17 +90,18 @@ struct ConstraintsSystem <: AbstractTimeIndependentSystem
             name, description,
             systems,
             defaults, connector_type, metadata = nothing,
-            tearing_state = nothing, substitutions = nothing,
+            tearing_state = nothing, substitutions = nothing, namespacing = true,
             complete = false, index_cache = nothing;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(unknowns, ps)
             check_units(u, constraints)
+            check_subsystems(systems)
         end
         new(tag, constraints, unknowns, ps, var_to_name,
             observed, jac, name, description, systems,
-            defaults,
-            connector_type, metadata, tearing_state, substitutions, complete, index_cache)
+            defaults, connector_type, metadata, tearing_state, substitutions,
+            namespacing, complete, index_cache)
     end
 end
 

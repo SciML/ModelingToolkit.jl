@@ -55,7 +55,11 @@ struct OptimizationSystem <: AbstractOptimizationSystem
     """
     gui_metadata::Union{Nothing, GUIMetadata}
     """
-    If a model `sys` is complete, then `sys.x` no longer performs namespacing.
+    If false, then `sys.x` no longer performs namespacing.
+    """
+    namespacing::Bool
+    """
+    If true, denotes the model will not be modified any further.
     """
     complete::Bool
     """
@@ -70,18 +74,19 @@ struct OptimizationSystem <: AbstractOptimizationSystem
 
     function OptimizationSystem(tag, op, unknowns, ps, var_to_name, observed,
             constraints, name, description, systems, defaults, metadata = nothing,
-            gui_metadata = nothing, complete = false, index_cache = nothing, parent = nothing,
-            isscheduled = false;
+            gui_metadata = nothing, namespacing = true, complete = false,
+            index_cache = nothing, parent = nothing, isscheduled = false;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(unknowns, ps)
             unwrap(op) isa Symbolic && check_units(u, op)
             check_units(u, observed)
             check_units(u, constraints)
+            check_subsystems(systems)
         end
         new(tag, op, unknowns, ps, var_to_name, observed,
-            constraints, name, description, systems, defaults, metadata, gui_metadata, complete,
-            index_cache, parent, isscheduled)
+            constraints, name, description, systems, defaults, metadata, gui_metadata,
+            namespacing, complete, index_cache, parent, isscheduled)
     end
 end
 
