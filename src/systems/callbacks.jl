@@ -230,15 +230,17 @@ struct SymbolicContinuousCallback <: AbstractCallback
         conditions = (conditions isa AbstractVector) ? conditions : [conditions]
 
         if isnothing(reinitializealg)
-            any(a -> (a isa FunctionalAffect || a isa ImperativeAffect), [affect, affect_neg, initialize, finalize]) ? 
-                reinitializealg = SciMLBase.CheckInit() : 
-                reinitializealg = SciMLBase.NoInit()
+            any(a -> (a isa FunctionalAffect || a isa ImperativeAffect),
+                [affect, affect_neg, initialize, finalize]) ?
+            reinitializealg = SciMLBase.CheckInit() :
+            reinitializealg = SciMLBase.NoInit()
         end
 
         new(conditions, make_affect(affect; iv, algeeqs, discrete_parameters),
             make_affect(affect_neg; iv, algeeqs, discrete_parameters),
             make_affect(initialize; iv, algeeqs, discrete_parameters), make_affect(
-                finalize; iv, algeeqs, discrete_parameters), rootfind, reinitializealg)
+                finalize; iv, algeeqs, discrete_parameters),
+            rootfind, reinitializealg)
     end # Default affect to nothing
 end
 
@@ -286,7 +288,7 @@ function make_affect(affect::Vector{Equation}; discrete_parameters::AbstractVect
     sys_params = collect(setdiff(params, union(discrete_parameters, pre_params)))
     discretes = map(tovar, discrete_parameters)
     dvs = collect(dvs)
-    _dvs = map(default_toterm, dvs) 
+    _dvs = map(default_toterm, dvs)
 
     aff_map = Dict(zip(discretes, discrete_parameters))
     rev_map = Dict(zip(discrete_parameters, discretes))
@@ -446,9 +448,10 @@ struct SymbolicDiscreteCallback <: AbstractCallback
         c = is_timed_condition(condition) ? condition : value(scalarize(condition))
 
         if isnothing(reinitializealg)
-            any(a -> (a isa FunctionalAffect || a isa ImperativeAffect), [affect, initialize, finalize]) ? 
-                reinitializealg = SciMLBase.CheckInit() : 
-                reinitializealg = SciMLBase.NoInit()
+            any(a -> (a isa FunctionalAffect || a isa ImperativeAffect),
+                [affect, initialize, finalize]) ?
+            reinitializealg = SciMLBase.CheckInit() :
+            reinitializealg = SciMLBase.NoInit()
         end
         new(c, make_affect(affect; iv, algeeqs, discrete_parameters),
             make_affect(initialize; iv, algeeqs, discrete_parameters),
@@ -582,7 +585,8 @@ end
 function Base.:(==)(e1::AbstractCallback, e2::AbstractCallback)
     (is_discrete(e1) === is_discrete(e2)) || return false
     (isequal(e1.conditions, e2.conditions) && isequal(e1.affect, e2.affect) &&
-     isequal(e1.initialize, e2.initialize) && isequal(e1.finalize, e2.finalize)) && isequal(e1.reinitializealg, e2.reinitializealg) ||
+     isequal(e1.initialize, e2.initialize) && isequal(e1.finalize, e2.finalize)) &&
+        isequal(e1.reinitializealg, e2.reinitializealg) ||
         return false
     is_discrete(e1) ||
         (isequal(e1.affect_neg, e2.affect_neg) && isequal(e1.rootfind, e2.rootfind))
@@ -619,7 +623,8 @@ function compile_condition(
 
     if !is_discrete(cbs)
         condit = reduce(vcat, flatten_equations(condit))
-        condit = condit isa AbstractVector ? [c.lhs - c.rhs for c in condit] : [condit.lhs - condit.rhs]
+        condit = condit isa AbstractVector ? [c.lhs - c.rhs for c in condit] :
+                 [condit.lhs - condit.rhs]
     end
 
     fs = build_function_wrapper(sys,
@@ -685,15 +690,18 @@ function generate_continuous_callbacks(sys::AbstractSystem, dvs = unknowns(sys),
         ps = parameters(sys; initial_parameters = true); kwargs...)
     cbs = continuous_events(sys)
     isempty(cbs) && return nothing
-    cb_classes = Dict{Tuple{SciMLBase.RootfindOpt, SciMLBase.DAEInitializationAlgorithm}, Vector{SymbolicContinuousCallback}}()
+    cb_classes = Dict{Tuple{SciMLBase.RootfindOpt, SciMLBase.DAEInitializationAlgorithm},
+        Vector{SymbolicContinuousCallback}}()
 
     # Sort the callbacks by their rootfinding method
     for cb in cbs
-        _cbs = get!(() -> SymbolicContinuousCallback[], cb_classes, (cb.rootfind, cb.reinitializealg))
+        _cbs = get!(() -> SymbolicContinuousCallback[],
+            cb_classes, (cb.rootfind, cb.reinitializealg))
         push!(_cbs, cb)
     end
     sort!(OrderedDict(cb_classes), by = cb -> cb[1])
-    compiled_callbacks = [generate_callback(cb, sys; kwargs...) for ((rf, reinit), cb) in cb_classes]
+    compiled_callbacks = [generate_callback(cb, sys; kwargs...)
+                          for ((rf, reinit), cb) in cb_classes]
     if length(compiled_callbacks) == 1
         return only(compiled_callbacks)
     else
@@ -791,7 +799,8 @@ function generate_callback(cb, sys; kwargs...)
             return PresetTimeCallback(trigger, affect; initialize,
                 finalize, initializealg = cb.reinitializealg)
         elseif is_timed
-            return PeriodicCallback(affect, trigger; initialize, finalize, initializealg = cb.reinitializealg)
+            return PeriodicCallback(
+                affect, trigger; initialize, finalize, initializealg = cb.reinitializealg)
         else
             return DiscreteCallback(trigger, affect; initialize,
                 finalize, initializealg = cb.reinitializealg)
