@@ -149,7 +149,6 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
             $(c_evts...)
         ]))))
 
-    @show d_evts
     !isempty(d_evts) && push!(exprs.args,
         :($Setfield.@set!(var"#___sys___".discrete_events=$SymbolicDiscreteCallback.([
             $(d_evts...)
