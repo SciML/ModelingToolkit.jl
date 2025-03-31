@@ -303,7 +303,9 @@ function make_affect(affect::Vector{Equation}; discrete_parameters::AbstractVect
     # get accessed parameters p from Pre(p) in the callback parameters
     accessed_params = filter(isparameter, map(unPre, collect(pre_params)))
     union!(accessed_params, sys_params)
-    # add unknowns to the map
+
+    # add scalarized unknowns to the map.
+    _dvs = reduce(vcat, map(scalarize, _dvs), init = Any[])
     for u in _dvs
         aff_map[u] = u
     end
@@ -618,7 +620,9 @@ function compile_condition(
     end
 
     if !is_discrete(cbs)
-        condit = [cond.lhs - cond.rhs for cond in condit]
+        condit = reduce(vcat, flatten_equations(condit))
+        condit = condit isa AbstractVector ? [c.lhs - c.rhs for c in condit] :
+                 [condit.lhs - condit.rhs]
     end
 
     fs = build_function_wrapper(sys,

@@ -594,6 +594,7 @@ end
 
 function collect_var!(unknowns, parameters, var, iv; depth = 0)
     isequal(var, iv) && return nothing
+    var = unwrap(var)
     check_scope_depth(getmetadata(var, SymScope, LocalScope()), depth) || return nothing
     var = setmetadata(var, SymScope, LocalScope())
     if iscalledparameter(var)
