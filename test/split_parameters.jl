@@ -51,8 +51,8 @@ end
 
 get_value(interp::Interpolator, t) = interp(t)
 @register_symbolic get_value(interp::Interpolator, t)
-# get_value(data, t, dt) = data[round(Int, t / dt + 1)]
-# @register_symbolic get_value(data::Vector, t, dt)
+
+Symbolics.derivative(::typeof(get_value), args::NTuple{2, Any}, ::Val{2}) = 0
 
 function Sampled(; name, interp = Interpolator(Float64[], 0.0))
     pars = @parameters begin
@@ -68,11 +68,10 @@ function Sampled(; name, interp = Interpolator(Float64[], 0.0))
         output.u ~ get_value(interpolator, t)
     ]
 
-    return ODESystem(eqs, t, vars, [interpolator]; name, systems,
-        defaults = [output.u => interp.data[1]])
+    return ODESystem(eqs, t, vars, [interpolator]; name, systems)
 end
 
-vars = @variables y(t)=1 dy(t)=0 ddy(t)=0
+vars = @variables y(t) dy(t) ddy(t)
 @named src = Sampled(; interp = Interpolator(x, dt))
 @named int = Integrator()
 
@@ -84,11 +83,9 @@ eqs = [y ~ src.output.u
 @named sys = ODESystem(eqs, t, vars, []; systems = [int, src])
 s = complete(sys)
 sys = structural_simplify(sys)
-@test_broken ODEProblem(
-    sys, [], (0.0, t_end), [s.src.interpolator => Interpolator(x, dt)]; tofloat = false)
 prob = ODEProblem(
     sys, [], (0.0, t_end), [s.src.interpolator => Interpolator(x, dt)];
-    tofloat = false, build_initializeprob = false)
+    tofloat = false)
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
 @test sol[y][end] == x[end]

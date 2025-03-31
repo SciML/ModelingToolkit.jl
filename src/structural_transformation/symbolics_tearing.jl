@@ -65,7 +65,7 @@ function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int; kwargs...)
 
     sys = ts.sys
     eq = equations(ts)[ieq]
-    eq = 0 ~ ModelingToolkit.derivative(eq.rhs - eq.lhs, get_iv(sys))
+    eq = 0 ~ Symbolics.derivative(eq.rhs - eq.lhs, get_iv(sys); throw_no_derivative = true)
     push!(equations(ts), eq)
     # Analyze the new equation and update the graph/solvable_graph
     # First, copy the previous incidence and add the derivative terms.
