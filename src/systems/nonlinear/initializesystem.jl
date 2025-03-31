@@ -575,7 +575,7 @@ function SciMLBase.remake_initialization_data(
                 resid_prototype = calculate_resid_prototype(
                     length(oldinitprob.f.resid_prototype), new_initu0, new_initp))
         end
-        initprob = remake(oldinitprob; f = newf, u0 = new_initu0, p = new_initp)
+        initprob = remake(oldinitprob; f = newf, u0 = new_initu0, p = new_initp, kwargs...)
         return SciMLBase.OverrideInitData(initprob, oldinitdata.update_initializeprob!,
             oldinitdata.initializeprobmap, oldinitdata.initializeprobpmap)
     end
