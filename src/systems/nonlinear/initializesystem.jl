@@ -539,7 +539,7 @@ function is_parameter_solvable(p, pmap, defs, guesses)
 end
 
 function SciMLBase.remake_initialization_data(
-        sys::AbstractSystem, odefn, u0, t0, p, newu0, newp)
+        sys::AbstractSystem, odefn, u0, t0, p, newu0, newp, kwargs...)
     if u0 === missing && p === missing
         return odefn.initialization_data
     end
@@ -648,7 +648,7 @@ function SciMLBase.remake_initialization_data(
         u0map, pmap, defs, cmap, dvs, ps)
     kws = maybe_build_initialization_problem(
         sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns;
-        use_scc, initialization_eqs, allow_incomplete = true)
+        use_scc, initialization_eqs, allow_incomplete = true, kwargs...)
     return get(kws, :initialization_data, nothing)
 end
 
