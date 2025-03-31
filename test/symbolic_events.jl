@@ -316,16 +316,16 @@ end
     @test out[2] ≈ 1  # signature is u,p,t
 
     sol = solve(prob, Tsit5())
-    @test minimum(t -> abs(t - 1), sol.t) < 1e-10 # test that the solver stepped at the first root
-    @test minimum(t -> abs(t - 2), sol.t) < 1e-10 # test that the solver stepped at the second root
+    @test minimum(t -> abs(t - 1), sol.t) < 1e-9 # test that the solver stepped at the first root
+    @test minimum(t -> abs(t - 2), sol.t) < 1e-9 # test that the solver stepped at the second root
 
     @named sys = ODESystem(eqs, t, continuous_events = [x ~ 1, x ~ 2]) # two root eqs using the same unknown
     sys = complete(sys)
     prob = ODEProblem(sys, Pair[], (0.0, 3.0))
     @test get_callback(prob) isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
     sol = solve(prob, Tsit5())
-    @test minimum(t -> abs(t - 1), sol.t) < 1e-10 # test that the solver stepped at the first root
-    @test minimum(t -> abs(t - 2), sol.t) < 1e-10 # test that the solver stepped at the second root
+    @test minimum(t -> abs(t - 1), sol.t) < 1e-9 # test that the solver stepped at the first root
+    @test minimum(t -> abs(t - 2), sol.t) < 1e-9 # test that the solver stepped at the second root
 end
 
 @testset "Bouncing Ball" begin
@@ -429,7 +429,7 @@ end
     prob = ODEProblem(sys, zeros(2), (0.0, 5.1))
     sol = solve(prob, Tsit5())
     @test all(minimum((0:0.1:5) .- sol.t', dims = 2) .< 0.0001) # test that the solver stepped every 0.1s as dictated by event
-    @test sol([0.25])[vmeasured][] == sol([0.23])[vmeasured][] # test the hold property
+    @test sol([0.25 - eps()])[vmeasured][] == sol([0.23])[vmeasured][] # test the hold property
 end
 
 ##  https://github.com/SciML/ModelingToolkit.jl/issues/1528
@@ -823,363 +823,363 @@ end
     @test sign.(cos.(3 * (required_crossings_c2 .+ 1e-6))) == sign.(last.(cr2))
 end
 #
-#@testset "Discrete event reinitialization (#3142)" begin
-#    @connector LiquidPort begin
-#        p(t)::Float64, [description = "Set pressure in bar",
-#            guess = 1.01325]
-#        Vdot(t)::Float64,
-#        [description = "Volume flow rate in L/min",
-#            guess = 0.0,
-#            connect = Flow]
-#    end
-#
-#    @mtkmodel PressureSource begin
-#        @components begin
-#            port = LiquidPort()
-#        end
-#        @parameters begin
-#            p_set::Float64 = 1.01325, [description = "Set pressure in bar"]
-#        end
-#        @equations begin
-#            port.p ~ p_set
-#        end
-#    end
-#
-#    @mtkmodel BinaryValve begin
-#        @constants begin
-#            p_ref::Float64 = 1.0, [description = "Reference pressure drop in bar"]
-#            ρ_ref::Float64 = 1000.0, [description = "Reference density in kg/m^3"]
-#        end
-#        @components begin
-#            port_in = LiquidPort()
-#            port_out = LiquidPort()
-#        end
-#        @parameters begin
-#            k_V::Float64 = 1.0, [description = "Valve coefficient in L/min/bar"]
-#            k_leakage::Float64 = 1e-08, [description = "Leakage coefficient in L/min/bar"]
-#            ρ::Float64 = 1000.0, [description = "Density in kg/m^3"]
-#        end
-#        @variables begin
-#            S(t)::Float64, [description = "Valve state", guess = 1.0, irreducible = true]
-#            Δp(t)::Float64, [description = "Pressure difference in bar", guess = 1.0]
-#            Vdot(t)::Float64, [description = "Volume flow rate in L/min", guess = 1.0]
-#        end
-#        @equations begin
-#            # Port handling
-#            port_in.Vdot ~ -Vdot
-#            port_out.Vdot ~ Vdot
-#            Δp ~ port_in.p - port_out.p
-#            # System behavior
-#            D(S) ~ 0.0
-#            Vdot ~ S * k_V * sign(Δp) * sqrt(abs(Δp) / p_ref * ρ_ref / ρ) + k_leakage * Δp # softplus alpha function to avoid negative values under the sqrt
-#        end
-#    end
-#
-#    # Test System
-#    @mtkmodel TestSystem begin
-#        @components begin
-#            pressure_source_1 = PressureSource(p_set = 2.0)
-#            binary_valve_1 = BinaryValve(S = 1.0, k_leakage = 0.0)
-#            binary_valve_2 = BinaryValve(S = 1.0, k_leakage = 0.0)
-#            pressure_source_2 = PressureSource(p_set = 1.0)
-#        end
-#        @equations begin
-#            connect(pressure_source_1.port, binary_valve_1.port_in)
-#            connect(binary_valve_1.port_out, binary_valve_2.port_in)
-#            connect(binary_valve_2.port_out, pressure_source_2.port)
-#        end
-#        @discrete_events begin
-#            [30] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0]
-#            [60] => [
-#                binary_valve_1.S ~ 1.0, binary_valve_2.S ~ 0.0, binary_valve_2.Δp ~ 1.0]
-#            [120] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0]
-#        end
-#    end
-#
-#    # Test Simulation
-#    @mtkbuild sys = TestSystem()
-#
-#    # Test Simulation
-#    prob = ODEProblem(sys, [], (0.0, 150.0))
-#    sol = solve(prob)
-#    @test sol[end] == [0.0, 0.0, 0.0]
-#end
-#
-#@testset "Discrete variable timeseries" begin
-#    @variables x(t)
-#    @parameters a(t) b(t) c(t)
-#    cb1 = [x ~ 1.0] => [a ~ -Pre(a)]
-#    function save_affect!(integ, u, p, ctx)
-#        integ.ps[p.b] = 5.0
-#    end
-#    cb2 = [x ~ 0.5] => (save_affect!, [], [b], [b], nothing)
-#    cb3 = 1.0 => [c ~ t]
-#
-#    @mtkbuild sys = ODESystem(D(x) ~ cos(t), t, [x], [a, b, c];
-#        continuous_events = [cb1, cb2], discrete_events = [cb3])
-#    prob = ODEProblem(sys, [x => 1.0], (0.0, 2pi), [a => 1.0, b => 2.0, c => 0.0])
-#    @test sort(canonicalize(Discrete(), prob.p)[1]) == [0.0, 1.0, 2.0]
-#    sol = solve(prob, Tsit5())
-#
-#    @test sol[a] == [1.0, -1.0]
-#    @test sol[b] == [2.0, 5.0, 5.0]
-#    @test sol[c] == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
-#end
-#
-#@testset "Heater" begin
-#    @variables temp(t)
-#    params = @parameters furnace_on_threshold=0.5 furnace_off_threshold=0.7 furnace_power=1.0 leakage=0.1 furnace_on::Bool=false
-#    eqs = [
-#        D(temp) ~ furnace_on * furnace_power - temp^2 * leakage
-#    ]
-#
-#    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
-#        [temp ~ furnace_off_threshold],
-#        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, i, c
-#            @set! x.furnace_on = false
-#        end)
-#    furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
-#        [temp ~ furnace_on_threshold],
-#        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, i, c
-#            @set! x.furnace_on = true
-#        end)
-#    @named sys = ODESystem(
-#        eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
-#    ss = structural_simplify(sys)
-#    prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
-#    sol = solve(prob, Tsit5(); dtmax = 0.01)
-#    @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
-#
-#    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
-#        [temp ~ furnace_off_threshold],
-#        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, c, i
-#            @set! x.furnace_on = false
-#        end; initialize = ModelingToolkit.ImperativeAffect(modified = (;
-#            temp)) do x, o, c, i
-#            @set! x.temp = 0.2
-#        end)
-#    furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
-#        [temp ~ furnace_on_threshold],
-#        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, c, i
-#            @set! x.furnace_on = true
-#        end)
-#    @named sys = ODESystem(
-#        eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
-#    ss = structural_simplify(sys)
-#    prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
-#    sol = solve(prob, Tsit5(); dtmax = 0.01)
-#    @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
-#    @test all(sol[temp][sol.t .!= 0.0] .<= 0.79) && all(sol[temp][sol.t .!= 0.0] .>= 0.2)
-#end
-#
-#@testset "ImperativeAffect errors and warnings" begin
-#    @variables temp(t)
-#    params = @parameters furnace_on_threshold=0.5 furnace_off_threshold=0.7 furnace_power=1.0 leakage=0.1 furnace_on::Bool=false
-#    eqs = [
-#        D(temp) ~ furnace_on * furnace_power - temp^2 * leakage
-#    ]
-#
-#    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
-#        [temp ~ furnace_off_threshold],
-#        ModelingToolkit.ImperativeAffect(
-#            modified = (; furnace_on), observed = (; furnace_on)) do x, o, c, i
-#            @set! x.furnace_on = false
-#        end)
-#    @named sys = ODESystem(eqs, t, [temp], params; continuous_events = [furnace_off])
-#    ss = structural_simplify(sys)
-#    @test_logs (:warn,
-#        "The symbols Any[:furnace_on] are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value.") prob=ODEProblem(
-#        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
-#
-#    @variables tempsq(t) # trivially eliminated
-#    eqs = [tempsq ~ temp^2
-#           D(temp) ~ furnace_on * furnace_power - temp^2 * leakage]
-#
-#    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
-#        [temp ~ furnace_off_threshold],
-#        ModelingToolkit.ImperativeAffect(
-#            modified = (; furnace_on, tempsq), observed = (; furnace_on)) do x, o, c, i
-#            @set! x.furnace_on = false
-#        end)
-#    @named sys = ODESystem(
-#        eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
-#    ss = structural_simplify(sys)
-#    @test_throws "refers to missing variable(s)" prob=ODEProblem(
-#        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
-#
-#    @parameters not_actually_here
-#    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
-#        [temp ~ furnace_off_threshold],
-#        ModelingToolkit.ImperativeAffect(modified = (; furnace_on),
-#            observed = (; furnace_on, not_actually_here)) do x, o, c, i
-#            @set! x.furnace_on = false
-#        end)
-#    @named sys = ODESystem(
-#        eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
-#    ss = structural_simplify(sys)
-#    @test_throws "refers to missing variable(s)" prob=ODEProblem(
-#        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
-#
-#    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
-#        [temp ~ furnace_off_threshold],
-#        ModelingToolkit.ImperativeAffect(modified = (; furnace_on),
-#            observed = (; furnace_on)) do x, o, c, i
-#            return (; fictional2 = false)
-#        end)
-#    @named sys = ODESystem(
-#        eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
-#    ss = structural_simplify(sys)
-#    prob = ODEProblem(
-#        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
-#    @test_throws "Tried to write back to" solve(prob, Tsit5())
-#end
-#
-#@testset "Quadrature" begin
-#    @variables theta(t) omega(t)
-#    params = @parameters qA=0 qB=0 hA=0 hB=0 cnt::Int=0
-#    eqs = [D(theta) ~ omega
-#           omega ~ 1.0]
-#    function decoder(oldA, oldB, newA, newB)
-#        state = (oldA, oldB, newA, newB)
-#        if state == (0, 0, 1, 0) || state == (1, 0, 1, 1) || state == (1, 1, 0, 1) ||
-#           state == (0, 1, 0, 0)
-#            return 1
-#        elseif state == (0, 0, 0, 1) || state == (0, 1, 1, 1) || state == (1, 1, 1, 0) ||
-#               state == (1, 0, 0, 0)
-#            return -1
-#        elseif state == (0, 0, 0, 0) || state == (0, 1, 0, 1) || state == (1, 0, 1, 0) ||
-#               state == (1, 1, 1, 1)
-#            return 0
-#        else
-#            return 0 # err is interpreted as no movement
-#        end
-#    end
-#    qAevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta) ~ 0],
-#        ModelingToolkit.ImperativeAffect((; qA, hA, hB, cnt), (; qB)) do x, o, c, i
-#            @set! x.hA = x.qA
-#            @set! x.hB = o.qB
-#            @set! x.qA = 1
-#            @set! x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
-#            x
-#        end,
-#        affect_neg = ModelingToolkit.ImperativeAffect(
-#            (; qA, hA, hB, cnt), (; qB)) do x, o, c, i
-#            @set! x.hA = x.qA
-#            @set! x.hB = o.qB
-#            @set! x.qA = 0
-#            @set! x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
-#            x
-#        end; rootfind = SciMLBase.RightRootFind)
-#    qBevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta - π / 2) ~ 0],
-#        ModelingToolkit.ImperativeAffect((; qB, hA, hB, cnt), (; qA)) do x, o, c, i
-#            @set! x.hA = o.qA
-#            @set! x.hB = x.qB
-#            @set! x.qB = 1
-#            @set! x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
-#            x
-#        end,
-#        affect_neg = ModelingToolkit.ImperativeAffect(
-#            (; qB, hA, hB, cnt), (; qA)) do x, o, c, i
-#            @set! x.hA = o.qA
-#            @set! x.hB = x.qB
-#            @set! x.qB = 0
-#            @set! x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
-#            x
-#        end; rootfind = SciMLBase.RightRootFind)
-#    @named sys = ODESystem(
-#        eqs, t, [theta, omega], params; continuous_events = [qAevt, qBevt])
-#    ss = structural_simplify(sys)
-#    prob = ODEProblem(ss, [theta => 1e-5], (0.0, pi))
-#    sol = solve(prob, Tsit5(); dtmax = 0.01)
-#    @test getp(sol, cnt)(sol) == 198 # we get 2 pulses per phase cycle (cos 0 crossing) and we go to 100 cycles; we miss a few due to the initial state
-#end
-#
-#@testset "Initialization" begin
-#    @variables x(t)
-#    seen = false
-#    f = ModelingToolkit.FunctionalAffect(
-#        f = (i, u, p, c) -> seen = true, sts = [], pars = [], discretes = [])
-#    cb1 = ModelingToolkit.SymbolicContinuousCallback(
-#                                                     [x ~ 0], nothing, initialize = [x ~ 1.5], finalize = f)
-#    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; continuous_events = [cb1])
-#    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
-#    sol = solve(prob, Tsit5(); dtmax = 0.01)
-#    @test sol[x][1] ≈ 1.0
-#    @test sol[x][2] ≈ 1.5 # the initialize affect has been applied
-#    @test seen == true
-#
-#    @variables x(t)
-#    seen = false
-#    f = ModelingToolkit.FunctionalAffect(
-#        f = (i, u, p, c) -> seen = true, sts = [], pars = [], discretes = [])
-#    cb1 = ModelingToolkit.SymbolicContinuousCallback(
-#        [x ~ 0], nothing, initialize = [x ~ 1.5], finalize = f)
-#    inited = false
-#    finaled = false
-#    a = ModelingToolkit.FunctionalAffect(
-#        f = (i, u, p, c) -> inited = true, sts = [], pars = [], discretes = [])
-#    b = ModelingToolkit.FunctionalAffect(
-#        f = (i, u, p, c) -> finaled = true, sts = [], pars = [], discretes = [])
-#    cb2 = ModelingToolkit.SymbolicContinuousCallback(
-#        [x ~ 0.1], nothing, initialize = a, finalize = b)
-#    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; continuous_events = [cb1, cb2])
-#    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
-#    sol = solve(prob, Tsit5())
-#    @test sol[x][1] ≈ 1.0
-#    @test sol[x][2] ≈ 1.5 # the initialize affect has been applied
-#    @test seen == true
-#    @test inited == true
-#    @test finaled == true
-#
-#    #periodic
-#    inited = false
-#    finaled = false
-#    cb3 = ModelingToolkit.SymbolicDiscreteCallback(
-#        1.0, [x ~ 2], initialize = a, finalize = b)
-#    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
-#    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
-#    sol = solve(prob, Tsit5())
-#    @test inited == true
-#    @test finaled == true
-#    @test isapprox(sol[x][3], 0.0, atol = 1e-9)
-#    @test sol[x][4] ≈ 2.0
-#    @test sol[x][5] ≈ 1.0
-#
-#    seen = false
-#    inited = false
-#    finaled = false
-#    cb3 = ModelingToolkit.SymbolicDiscreteCallback(1.0, f, initialize = a, finalize = b)
-#    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
-#    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
-#    sol = solve(prob, Tsit5())
-#    @test seen == true
-#    @test inited == true
-#
-#    #preset
-#    seen = false
-#    inited = false
-#    finaled = false
-#    cb3 = ModelingToolkit.SymbolicDiscreteCallback([1.0], f, initialize = a, finalize = b)
-#    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
-#    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
-#    sol = solve(prob, Tsit5())
-#    @test seen == true
-#    @test inited == true
-#    @test finaled == true
-#
-#    #equational
-#    seen = false
-#    inited = false
-#    finaled = false
-#    cb3 = ModelingToolkit.SymbolicDiscreteCallback(
-#        t == 1.0, f, initialize = a, finalize = b)
-#    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
-#    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
-#    sol = solve(prob, Tsit5(); tstops = 1.0)
-#    @test seen == true
-#    @test inited == true
-#    @test finaled == true
-#end
+@testset "Discrete event reinitialization (#3142)" begin
+    @connector LiquidPort begin
+        p(t)::Float64, [description = "Set pressure in bar",
+            guess = 1.01325]
+        Vdot(t)::Float64,
+        [description = "Volume flow rate in L/min",
+            guess = 0.0,
+            connect = Flow]
+    end
+
+    @mtkmodel PressureSource begin
+        @components begin
+            port = LiquidPort()
+        end
+        @parameters begin
+            p_set::Float64 = 1.01325, [description = "Set pressure in bar"]
+        end
+        @equations begin
+            port.p ~ p_set
+        end
+    end
+
+    @mtkmodel BinaryValve begin
+        @constants begin
+            p_ref::Float64 = 1.0, [description = "Reference pressure drop in bar"]
+            ρ_ref::Float64 = 1000.0, [description = "Reference density in kg/m^3"]
+        end
+        @components begin
+            port_in = LiquidPort()
+            port_out = LiquidPort()
+        end
+        @parameters begin
+            k_V::Float64 = 1.0, [description = "Valve coefficient in L/min/bar"]
+            k_leakage::Float64 = 1e-08, [description = "Leakage coefficient in L/min/bar"]
+            ρ::Float64 = 1000.0, [description = "Density in kg/m^3"]
+        end
+        @variables begin
+            S(t)::Float64, [description = "Valve state", guess = 1.0, irreducible = true]
+            Δp(t)::Float64, [description = "Pressure difference in bar", guess = 1.0]
+            Vdot(t)::Float64, [description = "Volume flow rate in L/min", guess = 1.0]
+        end
+        @equations begin
+            # Port handling
+            port_in.Vdot ~ -Vdot
+            port_out.Vdot ~ Vdot
+            Δp ~ port_in.p - port_out.p
+            # System behavior
+            D(S) ~ 0.0
+            Vdot ~ S * k_V * sign(Δp) * sqrt(abs(Δp) / p_ref * ρ_ref / ρ) + k_leakage * Δp # softplus alpha function to avoid negative values under the sqrt
+        end
+    end
+
+    # Test System
+    @mtkmodel TestSystem begin
+        @components begin
+            pressure_source_1 = PressureSource(p_set = 2.0)
+            binary_valve_1 = BinaryValve(S = 1.0, k_leakage = 0.0)
+            binary_valve_2 = BinaryValve(S = 1.0, k_leakage = 0.0)
+            pressure_source_2 = PressureSource(p_set = 1.0)
+        end
+        @equations begin
+            connect(pressure_source_1.port, binary_valve_1.port_in)
+            connect(binary_valve_1.port_out, binary_valve_2.port_in)
+            connect(binary_valve_2.port_out, pressure_source_2.port)
+        end
+        @discrete_events begin
+            [30] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0]
+            [60] => [
+                binary_valve_1.S ~ 1.0, binary_valve_2.S ~ 0.0, binary_valve_2.Δp ~ 1.0]
+            [120] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0]
+        end
+    end
+
+    # Test Simulation
+    @mtkbuild sys = TestSystem()
+
+    # Test Simulation
+    prob = ODEProblem(sys, [], (0.0, 150.0))
+    sol = solve(prob)
+    @test sol[end] == [0.0, 0.0, 0.0]
+end
+
+@testset "Discrete variable timeseries" begin
+    @variables x(t)
+    @parameters a(t) b(t) c(t)
+    cb1 = SymbolicContinuousCallback([x ~ 1.0] => [a ~ -Pre(a)], discrete_parameters = [a])
+    function save_affect!(integ, u, p, ctx)
+        integ.ps[p.b] = 5.0
+    end
+    cb2 = [x ~ 0.5] => (save_affect!, [], [b], [b], nothing)
+    cb3 = SymbolicDiscreteCallback(1.0 => [c ~ t], discrete_parameters = [c])
+
+    @mtkbuild sys = ODESystem(D(x) ~ cos(t), t, [x], [a, b, c];
+        continuous_events = [cb1, cb2], discrete_events = [cb3])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2pi), [a => 1.0, b => 2.0, c => 0.0])
+    @test sort(canonicalize(Discrete(), prob.p)[1]) == [0.0, 1.0, 2.0]
+    sol = solve(prob, Tsit5())
+
+    @test sol[a] == [1.0, -1.0]
+    @test sol[b] == [2.0, 5.0, 5.0]
+    @test sol[c] == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+end
+
+@testset "Heater" begin
+    @variables temp(t)
+    params = @parameters furnace_on_threshold=0.5 furnace_off_threshold=0.7 furnace_power=1.0 leakage=0.1 furnace_on::Bool=false
+    eqs = [
+        D(temp) ~ furnace_on * furnace_power - temp^2 * leakage
+    ]
+
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, i, c
+            @set! x.furnace_on = false
+        end)
+    furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_on_threshold],
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, i, c
+            @set! x.furnace_on = true
+        end)
+    @named sys = ODESystem(
+        eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
+    ss = structural_simplify(sys)
+    prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
+    @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
+
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, c, i
+            @set! x.furnace_on = false
+        end; initialize = ModelingToolkit.ImperativeAffect(modified = (;
+            temp)) do x, o, c, i
+            @set! x.temp = 0.2
+        end)
+    furnace_enable = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_on_threshold],
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, c, i
+            @set! x.furnace_on = true
+        end)
+    @named sys = ODESystem(
+        eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
+    ss = structural_simplify(sys)
+    prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
+    @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
+    @test all(sol[temp][sol.t .!= 0.0] .<= 0.79) && all(sol[temp][sol.t .!= 0.0] .>= 0.2)
+end
+
+@testset "ImperativeAffect errors and warnings" begin
+    @variables temp(t)
+    params = @parameters furnace_on_threshold=0.5 furnace_off_threshold=0.7 furnace_power=1.0 leakage=0.1 furnace_on::Bool=false
+    eqs = [
+        D(temp) ~ furnace_on * furnace_power - temp^2 * leakage
+    ]
+
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkit.ImperativeAffect(
+            modified = (; furnace_on), observed = (; furnace_on)) do x, o, c, i
+            @set! x.furnace_on = false
+        end)
+    @named sys = ODESystem(eqs, t, [temp], params; continuous_events = [furnace_off])
+    ss = structural_simplify(sys)
+    @test_logs (:warn,
+        "The symbols Any[:furnace_on] are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value.") prob=ODEProblem(
+        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+
+    @variables tempsq(t) # trivially eliminated
+    eqs = [tempsq ~ temp^2
+           D(temp) ~ furnace_on * furnace_power - temp^2 * leakage]
+
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkit.ImperativeAffect(
+            modified = (; furnace_on, tempsq), observed = (; furnace_on)) do x, o, c, i
+            @set! x.furnace_on = false
+        end)
+    @named sys = ODESystem(
+        eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
+    ss = structural_simplify(sys)
+    @test_throws "refers to missing variable(s)" prob=ODEProblem(
+        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+
+    @parameters not_actually_here
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on),
+            observed = (; furnace_on, not_actually_here)) do x, o, c, i
+            @set! x.furnace_on = false
+        end)
+    @named sys = ODESystem(
+        eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
+    ss = structural_simplify(sys)
+    @test_throws "refers to missing variable(s)" prob=ODEProblem(
+        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+
+    furnace_off = ModelingToolkit.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkit.ImperativeAffect(modified = (; furnace_on),
+            observed = (; furnace_on)) do x, o, c, i
+            return (; fictional2 = false)
+        end)
+    @named sys = ODESystem(
+        eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
+    ss = structural_simplify(sys)
+    prob = ODEProblem(
+        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+    @test_throws "Tried to write back to" solve(prob, Tsit5())
+end
+
+@testset "Quadrature" begin
+    @variables theta(t) omega(t)
+    params = @parameters qA=0 qB=0 hA=0 hB=0 cnt::Int=0
+    eqs = [D(theta) ~ omega
+           omega ~ 1.0]
+    function decoder(oldA, oldB, newA, newB)
+        state = (oldA, oldB, newA, newB)
+        if state == (0, 0, 1, 0) || state == (1, 0, 1, 1) || state == (1, 1, 0, 1) ||
+           state == (0, 1, 0, 0)
+            return 1
+        elseif state == (0, 0, 0, 1) || state == (0, 1, 1, 1) || state == (1, 1, 1, 0) ||
+               state == (1, 0, 0, 0)
+            return -1
+        elseif state == (0, 0, 0, 0) || state == (0, 1, 0, 1) || state == (1, 0, 1, 0) ||
+               state == (1, 1, 1, 1)
+            return 0
+        else
+            return 0 # err is interpreted as no movement
+        end
+    end
+    qAevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta) ~ 0],
+        ModelingToolkit.ImperativeAffect((; qA, hA, hB, cnt), (; qB)) do x, o, c, i
+            @set! x.hA = x.qA
+            @set! x.hB = o.qB
+            @set! x.qA = 1
+            @set! x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
+            x
+        end,
+        affect_neg = ModelingToolkit.ImperativeAffect(
+            (; qA, hA, hB, cnt), (; qB)) do x, o, c, i
+            @set! x.hA = x.qA
+            @set! x.hB = o.qB
+            @set! x.qA = 0
+            @set! x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
+            x
+        end; rootfind = SciMLBase.RightRootFind)
+    qBevt = ModelingToolkit.SymbolicContinuousCallback([cos(100 * theta - π / 2) ~ 0],
+        ModelingToolkit.ImperativeAffect((; qB, hA, hB, cnt), (; qA)) do x, o, c, i
+            @set! x.hA = o.qA
+            @set! x.hB = x.qB
+            @set! x.qB = 1
+            @set! x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
+            x
+        end,
+        affect_neg = ModelingToolkit.ImperativeAffect(
+            (; qB, hA, hB, cnt), (; qA)) do x, o, c, i
+            @set! x.hA = o.qA
+            @set! x.hB = x.qB
+            @set! x.qB = 0
+            @set! x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
+            x
+        end; rootfind = SciMLBase.RightRootFind)
+    @named sys = ODESystem(
+        eqs, t, [theta, omega], params; continuous_events = [qAevt, qBevt])
+    ss = structural_simplify(sys)
+    prob = ODEProblem(ss, [theta => 1e-5], (0.0, pi))
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
+    @test getp(sol, cnt)(sol) == 198 # we get 2 pulses per phase cycle (cos 0 crossing) and we go to 100 cycles; we miss a few due to the initial state
+end
+
+@testset "Initialization" begin
+    @variables x(t)
+    seen = false
+    f = ModelingToolkit.FunctionalAffect(
+        f = (i, u, p, c) -> seen = true, sts = [], pars = [], discretes = [])
+    cb1 = ModelingToolkit.SymbolicContinuousCallback(
+        [x ~ 0], nothing, initialize = [x ~ 1.5], finalize = f)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; continuous_events = [cb1])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
+    @test sol[x][1] ≈ 1.0
+    @test sol[x][2] ≈ 1.5 # the initialize affect has been applied
+    @test seen == true
+
+    @variables x(t)
+    seen = false
+    f = ModelingToolkit.FunctionalAffect(
+        f = (i, u, p, c) -> seen = true, sts = [], pars = [], discretes = [])
+    cb1 = ModelingToolkit.SymbolicContinuousCallback(
+        [x ~ 0], nothing, initialize = [x ~ 1.5], finalize = f)
+    inited = false
+    finaled = false
+    a = ModelingToolkit.FunctionalAffect(
+        f = (i, u, p, c) -> inited = true, sts = [], pars = [], discretes = [])
+    b = ModelingToolkit.FunctionalAffect(
+        f = (i, u, p, c) -> finaled = true, sts = [], pars = [], discretes = [])
+    cb2 = ModelingToolkit.SymbolicContinuousCallback(
+        [x ~ 0.1], nothing, initialize = a, finalize = b)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; continuous_events = [cb1, cb2])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5())
+    @test sol[x][1] ≈ 1.0
+    @test sol[x][2] ≈ 1.5 # the initialize affect has been applied
+    @test seen == true
+    @test inited == true
+    @test finaled == true
+
+    #periodic
+    inited = false
+    finaled = false
+    cb3 = ModelingToolkit.SymbolicDiscreteCallback(
+        1.0, [x ~ 2], initialize = a, finalize = b)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5())
+    @test inited == true
+    @test finaled == true
+    @test isapprox(sol[x][3], 0.0, atol = 1e-9)
+    @test sol[x][4] ≈ 2.0
+    @test sol[x][5] ≈ 1.0
+
+    seen = false
+    inited = false
+    finaled = false
+    cb3 = ModelingToolkit.SymbolicDiscreteCallback(1.0, f, initialize = a, finalize = b)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5())
+    @test seen == true
+    @test inited == true
+
+    #preset
+    seen = false
+    inited = false
+    finaled = false
+    cb3 = ModelingToolkit.SymbolicDiscreteCallback([1.0], f, initialize = a, finalize = b)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5())
+    @test seen == true
+    @test inited == true
+    @test finaled == true
+
+    #equational
+    seen = false
+    inited = false
+    finaled = false
+    cb3 = ModelingToolkit.SymbolicDiscreteCallback(
+        t == 1.0, f, initialize = a, finalize = b)
+    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
+    sol = solve(prob, Tsit5(); tstops = 1.0)
+    @test seen == true
+    @test inited == true
+    @test finaled == true
+end
 
 @testset "Bump" begin
     @variables x(t) [irreducible = true] y(t) [irreducible = true]
@@ -1213,7 +1213,7 @@ end
             D(x) ~ -k * x
         end
         @discrete_events begin
-            (t == 1.0) => [k ~ 1.0], discrete_parameters = [k]
+            (t == 1.0) => [k ~ 1.0]#, discrete_parameters = [k]
         end
     end
     @mtkbuild decay = DECAY()

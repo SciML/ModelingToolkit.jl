@@ -446,10 +446,8 @@ struct SymbolicDiscreteCallback <: AbstractCallback
         c = is_timed_condition(condition) ? condition : value(scalarize(condition))
 
         if isnothing(reinitializealg)
-            any(a -> (a isa FunctionalAffect || a isa ImperativeAffect),
-                [affect, initialize, finalize]) ?
-            reinitializealg = SciMLBase.CheckInit() :
-            reinitializealg = SciMLBase.NoInit()
+                reinitializealg = SciMLBase.CheckInit() : 
+                reinitializealg = SciMLBase.NoInit()
         end
         new(c, make_affect(affect; iv, algeeqs, discrete_parameters),
             make_affect(initialize; iv, algeeqs, discrete_parameters),
@@ -686,7 +684,8 @@ function generate_continuous_callbacks(sys::AbstractSystem, dvs = unknowns(sys),
         ps = parameters(sys; initial_parameters = true); kwargs...)
     cbs = continuous_events(sys)
     isempty(cbs) && return nothing
-    cb_classes = Dict{Tuple{SciMLBase.RootfindOpt, SciMLBase.DAEReinitializationAlg}, Vector{SymbolicContinuousCallback}}()
+    cb_classes = Dict{Tuple{SciMLBase.RootfindOpt, SciMLBase.DAEInitializationAlgorithm},
+        Vector{SymbolicContinuousCallback}}()
 
     # Sort the callbacks by their rootfinding method
     for cb in cbs

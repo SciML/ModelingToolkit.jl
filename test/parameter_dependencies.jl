@@ -1,6 +1,7 @@
 using ModelingToolkit
 using Test
-using ModelingToolkit: t_nounits as t, D_nounits as D
+using ModelingToolkit: t_nounits as t, D_nounits as D, SymbolicDiscreteCallback,
+                       SymbolicContinuousCallback
 using OrdinaryDiffEq
 using StochasticDiffEq
 using JumpProcesses
@@ -10,14 +11,14 @@ using SymbolicIndexingInterface
 using NonlinearSolve
 
 @testset "ODESystem with callbacks" begin
-    @parameters p1=1.0 p2
+    @parameters p1(t)=1.0 p2
     @variables x(t)
-    cb1 = [x ~ 2.0] => [p1 ~ 2.0] # triggers at t=-2+√6
+    cb1 = SymbolicContinuousCallback([x ~ 2.0] => [p1 ~ 2.0], discrete_parameters = [p1]) # triggers at t=-2+√6
     function affect1!(integ, u, p, ctx)
         integ.ps[p[1]] = integ.ps[p[2]]
     end
     cb2 = [x ~ 4.0] => (affect1!, [], [p1, p2], [p1]) # triggers at t=-2+√7
-    cb3 = [1.0] => [p1 ~ 5.0]
+    cb3 = SymbolicDiscreteCallback([1.0] => [p1 ~ 5.0], discrete_parameters = [p1])
 
     @mtkbuild sys = ODESystem(
         [D(x) ~ p1 * t + p2],
@@ -203,7 +204,7 @@ end
 @testset "Clock system" begin
     dt = 0.1
     @variables x(t) y(t) u(t) yd(t) ud(t) r(t) z(t)
-    @parameters kp kq
+    @parameters kp(t) kq
     d = Clock(dt)
     k = ShiftIndex(d)
 
@@ -225,7 +226,8 @@ end
         @test_nowarn solve(prob, Tsit5())
 
         @mtkbuild sys = ODESystem(eqs, t; parameter_dependencies = [kq => 2kp],
-            discrete_events = [[0.5] => [kp ~ 2.0]])
+            discrete_events = [SymbolicDiscreteCallback(
+                [0.5] => [kp ~ 2.0], discrete_parameters = [kp])])
         prob = ODEProblem(sys, [x => 0.0, y => 0.0], (0.0, Tf),
             [kp => 1.0; z(k - 1) => 3.0; yd(k - 1) => 0.0; z(k - 2) => 4.0;
              yd(k - 2) => 2.0])
@@ -245,7 +247,7 @@ end
 end
 
 @testset "SDESystem" begin
-    @parameters σ ρ β
+    @parameters σ(t) ρ β
     @variables x(t) y(t) z(t)
 
     eqs = [D(x) ~ σ * (y - x),
@@ -269,7 +271,8 @@ end
 
     @named sys = ODESystem(eqs, t)
     @named sdesys = SDESystem(sys, noiseeqs; parameter_dependencies = [ρ => 2σ],
-        discrete_events = [[10.0] => [σ ~ 15.0]])
+        discrete_events = [SymbolicDiscreteCallback(
+            [10.0] => [σ ~ 15.0], discrete_parameters = [σ])])
     sdesys = complete(sdesys)
     prob = SDEProblem(
         sdesys, [x => 1.0, y => 0.0, z => 0.0], (0.0, 100.0), [σ => 10.0, β => 2.33])
@@ -283,7 +286,7 @@ end
 
 @testset "JumpSystem" begin
     rng = StableRNG(12345)
-    @parameters β γ
+    @parameters β γ(t)
     @constants h = 1
     @variables S(t) I(t) R(t)
     rate₁ = β * S * I * h
@@ -308,7 +311,8 @@ end
 
     @named js2 = JumpSystem(
         [j₁, j₃], t, [S, I, R], [γ]; parameter_dependencies = [β => 0.01γ],
-        discrete_events = [[10.0] => [γ ~ 0.02]])
+        discrete_events = [SymbolicDiscreteCallback(
+            [10.0] => [γ ~ 0.02], discrete_parameters = [γ])])
     js2 = complete(js2)
     dprob = DiscreteProblem(js2, u₀map, tspan, parammap)
     jprob = JumpProblem(js2, dprob, Direct(), save_positions = (false, false), rng = rng)
