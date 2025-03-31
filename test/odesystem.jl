@@ -1023,18 +1023,19 @@ prob = ODEProblem(sys, [x => 1.0], (0.0, 10.0))
     eqs = [
         D(x) ~ p * x
     ]
-    @mtkbuild sys = ODESystem(eqs, t; continuous_events = [[norm(x) ~ 3.0] => [x ~ ones(3)]])
+    @mtkbuild sys = ODESystem(
+        eqs, t; continuous_events = [[norm(x) ~ 3.0] => [x ~ ones(3)]])
     # array affect equations used to not work
     prob1 = @test_nowarn ODEProblem(sys, [x => ones(3)], (0.0, 10.0), [p => ones(3, 3)])
     sol1 = @test_nowarn solve(prob1, Tsit5())
-    
+
     # array condition equations also used to not work
     @mtkbuild sys = ODESystem(
         eqs, t; continuous_events = [[x ~ sqrt(3) * ones(3)] => [x ~ ones(3)]])
     # array affect equations used to not work
     prob2 = @test_nowarn ODEProblem(sys, [x => ones(3)], (0.0, 10.0), [p => ones(3, 3)])
     sol2 = @test_nowarn solve(prob2, Tsit5())
-    
+
     @test sol1.u ≈ sol2.u[2:end]
 end
 
@@ -1526,7 +1527,12 @@ end
 @testset "Observed variables dependent on discrete parameters" begin
     @variables x(t) obs(t)
     @parameters c(t)
-    @mtkbuild sys = ODESystem([D(x) ~ c * cos(x), obs ~ c], t, [x], [c]; discrete_events = [SymbolicDiscreteCallback(1.0 => [c ~ Pre(c) + 1], discrete_parameters = [c])])
+    @mtkbuild sys = ODESystem([D(x) ~ c * cos(x), obs ~ c],
+        t,
+        [x],
+        [c];
+        discrete_events = [SymbolicDiscreteCallback(
+            1.0 => [c ~ Pre(c) + 1], discrete_parameters = [c])])
     prob = ODEProblem(sys, [x => 0.0], (0.0, 2pi), [c => 1.0])
     sol = solve(prob, Tsit5())
     @test sol[obs] ≈ 1:7
@@ -1594,7 +1600,8 @@ end
     @test osys1 == osys2 # true
 
     continuous_events = [[X ~ 1.0] => [X ~ Pre(X) + 5.0]]
-    discrete_events = [SymbolicDiscreteCallback(5.0 => [d ~ d / 2.0], discrete_parameters = [d])]
+    discrete_events = [SymbolicDiscreteCallback(
+        5.0 => [d ~ d / 2.0], discrete_parameters = [d])]
 
     osys1 = complete(ODESystem([eq], t; name = :osys, continuous_events))
     osys2 = complete(ODESystem([eq], t; name = :osys))

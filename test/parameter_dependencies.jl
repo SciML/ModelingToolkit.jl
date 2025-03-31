@@ -1,6 +1,7 @@
 using ModelingToolkit
 using Test
-using ModelingToolkit: t_nounits as t, D_nounits as D, SymbolicDiscreteCallback, SymbolicContinuousCallback
+using ModelingToolkit: t_nounits as t, D_nounits as D, SymbolicDiscreteCallback,
+                       SymbolicContinuousCallback
 using OrdinaryDiffEq
 using StochasticDiffEq
 using JumpProcesses
@@ -225,7 +226,8 @@ end
         @test_nowarn solve(prob, Tsit5())
 
         @mtkbuild sys = ODESystem(eqs, t; parameter_dependencies = [kq => 2kp],
-                                  discrete_events = [SymbolicDiscreteCallback([0.5] => [kp ~ 2.0], discrete_parameters = [kp])])
+            discrete_events = [SymbolicDiscreteCallback(
+                [0.5] => [kp ~ 2.0], discrete_parameters = [kp])])
         prob = ODEProblem(sys, [x => 0.0, y => 0.0], (0.0, Tf),
             [kp => 1.0; z(k - 1) => 3.0; yd(k - 1) => 0.0; z(k - 2) => 4.0;
              yd(k - 2) => 2.0])
@@ -269,7 +271,8 @@ end
 
     @named sys = ODESystem(eqs, t)
     @named sdesys = SDESystem(sys, noiseeqs; parameter_dependencies = [ρ => 2σ],
-                              discrete_events = [SymbolicDiscreteCallback([10.0] => [σ ~ 15.0], discrete_parameters = [σ])])
+        discrete_events = [SymbolicDiscreteCallback(
+            [10.0] => [σ ~ 15.0], discrete_parameters = [σ])])
     sdesys = complete(sdesys)
     prob = SDEProblem(
         sdesys, [x => 1.0, y => 0.0, z => 0.0], (0.0, 100.0), [σ => 10.0, β => 2.33])
@@ -308,7 +311,8 @@ end
 
     @named js2 = JumpSystem(
         [j₁, j₃], t, [S, I, R], [γ]; parameter_dependencies = [β => 0.01γ],
-        discrete_events = [SymbolicDiscreteCallback([10.0] => [γ ~ 0.02], discrete_parameters = [γ])])
+        discrete_events = [SymbolicDiscreteCallback(
+            [10.0] => [γ ~ 0.02], discrete_parameters = [γ])])
     js2 = complete(js2)
     dprob = DiscreteProblem(js2, u₀map, tspan, parammap)
     jprob = JumpProblem(js2, dprob, Direct(), save_positions = (false, false), rng = rng)

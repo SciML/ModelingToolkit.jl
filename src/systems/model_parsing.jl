@@ -154,7 +154,6 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
             $(d_evts...)
         ]))))
 
-
     f = if length(where_types) == 0
         :($(Symbol(:__, name, :__))(; name, $(kwargs...)) = $exprs)
     else
