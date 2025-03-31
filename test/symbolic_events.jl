@@ -1100,7 +1100,7 @@ end
     f = ModelingToolkit.FunctionalAffect(
         f = (i, u, p, c) -> seen = true, sts = [], pars = [], discretes = [])
     cb1 = ModelingToolkit.SymbolicContinuousCallback(
-                                                     [x ~ 0], nothing, initialize = [x ~ 1.5], finalize = f)
+        [x ~ 0], nothing, initialize = [x ~ 1.5], finalize = f)
     @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; continuous_events = [cb1])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
     sol = solve(prob, Tsit5(); dtmax = 0.01)
