@@ -1475,4 +1475,12 @@ end
         @test SciMLBase.successful_retcode(sol)
         @test sol.ps[Γ[1]] ≈ 5.0
     end
+
+    @testset "warn_initialize_determined propagates through remake" begin
+        u0 = [X1 => 1.0, X2 => 2.0]
+        ps = [k1 => 0.1, k2 => 0.2, Γ => [5.0]]
+        @test_nowarn prob = Problem(nlsys, u0, ps, warn_initialize_determined = false)
+        @test_nowarn prob2 = remake(prob; p = [k2 => 2.], warn_initialize_determined = false)
+    end
 end
+
