@@ -203,6 +203,7 @@ getdefault(model_c3.model_a.k_array[2])
 
   - Defining continuous events as described [here](https://docs.sciml.ai/ModelingToolkit/stable/basics/Events/#Continuous-Events).
   - If this block is not defined in the model, no continuous events will be added.
+  - Discrete parameters and other keyword arguments should be specified in a vector, as seen below.
 
 ```@example mtkmodel-example
 using ModelingToolkit
@@ -210,7 +211,7 @@ using ModelingToolkit: t
 
 @mtkmodel M begin
     @parameters begin
-        k
+        k(t)
     end
     @variables begin
         x(t)
@@ -223,21 +224,24 @@ using ModelingToolkit: t
     @continuous_events begin
         [x ~ 1.5] => [x ~ 5, y ~ 5]
         [t ~ 4] => [x ~ 10]
+        [t ~ 5] => [k ~ 3], [discrete_parameters = k]
     end
 end
 ```
+
 
 #### `@discrete_events` begin block
 
   - Defining discrete events as described [here](https://docs.sciml.ai/ModelingToolkit/stable/basics/Events/#Discrete-events-support).
   - If this block is not defined in the model, no discrete events will be added.
+  - Discrete parameters and other keyword arguments should be specified in a vector, as seen below.
 
 ```@example mtkmodel-example
 using ModelingToolkit
 
 @mtkmodel M begin
     @parameters begin
-        k
+        k(t)
     end
     @variables begin
         x(t)
@@ -248,7 +252,8 @@ using ModelingToolkit
         D(y) ~ -k
     end
     @discrete_events begin
-        (t == 1.5) => [x ~ x + 5, y ~ 5]
+        (t == 1.5) => [x ~ Pre(x) + 5, y ~ 5]
+        (t == 2.5) => [k ~ Pre(k) * 2], [discrete_parameters = k]
     end
 end
 ```
