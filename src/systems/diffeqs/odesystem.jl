@@ -51,6 +51,10 @@ struct ODESystem <: AbstractODESystem
     observed::Vector{Equation}
     """System of constraints that must be satisfied by the solution to the system."""
     constraintsystem::Union{Nothing, ConstraintsSystem}
+    """A set of expressions defining the costs of the system for optimal control."""
+    costs::Vector
+    """Takes the cost vector and returns a scalar for optimization."""
+    coalesce::Function
     """
     Time-derivative matrix. Note: this field will not be defined until
     [`calculate_tgrad`](@ref) is called on the system.
@@ -338,7 +342,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         metadata, gui_metadata, is_dde, tstops, checks = checks)
 end
 
-function ODESystem(eqs, iv; constraints = Equation[], kwargs...)
+function ODESystem(eqs, iv; constraints = Equation[], costs = Equation[], kwargs...)
     diffvars, allunknowns, ps, eqs = process_equations(eqs, iv)
 
     for eq in get(kwargs, :parameter_dependencies, Equation[])
@@ -380,6 +384,13 @@ function ODESystem(eqs, iv; constraints = Equation[], kwargs...)
             !in(st, allunknowns) && push!(consvars, st)
         end
         for p in parameters(constraintsystem)
+            !in(p, new_ps) && push!(new_ps, p)
+        end
+    end
+
+    if !isempty(costs)
+        coststs, costps = process_costs(costs, allunknowns, new_ps, iv)
+        for p in costps
             !in(p, new_ps) && push!(new_ps, p)
         end
     end
@@ -734,22 +745,52 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::ODESystem; hint = true, 
     return nothing
 end
 
-# Validate that all the variables in the BVP constraints are well-formed states or parameters.
-#  - Callable/delay variables (e.g. of the form x(0.6) should be unknowns of the system (and have one arg, etc.)
-#  - Callable/delay parameters should be parameters of the system (and have one arg, etc.)
+"""
+Build the constraint system for the ODESystem.
+"""
 function process_constraint_system(
         constraints::Vector{Equation}, sts, ps, iv; consname = :cons)
     isempty(constraints) && return nothing
 
     constraintsts = OrderedSet()
     constraintps = OrderedSet()
-
     for cons in constraints
         collect_vars!(constraintsts, constraintps, cons, iv)
     end
 
     # Validate the states.
-    for var in constraintsts
+    validate_vars_and_find_ps!(coststs, costps, sts, iv)
+
+    ConstraintsSystem(
+        constraints, collect(constraintsts), collect(constraintps); name = consname)
+end
+
+"""
+Process the costs for the constraint system.
+"""
+function process_costs(costs::Vector{Equation}, sts, ps, iv)
+    coststs = OrderedSet()
+    costps = OrderedSet()
+    for cost in costs
+        collect_vars!(coststs, costps, cost, iv)
+    end
+
+    validate_vars_and_find_ps!(coststs, costps, sts, iv)
+end
+
+"""
+Validate that all the variables in an auxiliary system of the ODESystem (constraint or costs) are 
+well-formed states or parameters.
+ - Callable/delay variables (e.g. of the form x(0.6) should be unknowns of the system (and have one arg, etc.)
+ - Callable/delay parameters should be parameters of the system
+
+Return the set of additional parameters found in the system, e.g. in x(p) ~ 3 then p should be added as a 
+parameter of the system.
+"""
+function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
+    sts = sysvars
+
+    for var in auxvars 
         if !iscall(var)
             occursin(iv, var) && (var ∈ sts ||
              throw(ArgumentError("Time-dependent variable $var is not an unknown of the system.")))
@@ -764,13 +805,17 @@ function process_constraint_system(
                 arg isa AbstractFloat ||
                 throw(ArgumentError("Invalid argument specified for variable $var. The argument of the variable should be either $iv, a parameter, or a value specifying the time that the constraint holds."))
 
-            isparameter(arg) && push!(constraintps, arg)
+            isparameter(arg) && push!(auxps, arg)
         else
             var ∈ sts &&
                 @warn "Variable $var has no argument. It will be interpreted as $var($iv), and the constraint will apply to the entire interval."
         end
     end
+end
 
-    ConstraintsSystem(
-        constraints, collect(constraintsts), collect(constraintps); name = consname)
+function generate_cost_function(sys::ODESystem)
+    costs = get_costs(sys)
+    coalesce = get_coalesce(sys)
+    cost_fn = build_function_wrapper()
+    return (u, p, t) -> coalesce(cost_fn(u, p, t))
 end
