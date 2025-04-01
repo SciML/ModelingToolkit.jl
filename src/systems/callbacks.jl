@@ -258,7 +258,7 @@ make_affect(affect::Tuple; kwargs...) = FunctionalAffect(affect...)
 make_affect(affect::NamedTuple; kwargs...) = FunctionalAffect(; affect...)
 make_affect(affect::Affect; kwargs...) = affect
 
-function make_affect(affect::Vector{Equation}; discrete_parameters::AbstractVector = Any[],
+function make_affect(affect::Vector{Equation}; discrete_parameters = Any[],
         iv = nothing, alg_eqs::Vector{Equation} = Equation[])
     isempty(affect) && return nothing
     isempty(alg_eqs) &&
