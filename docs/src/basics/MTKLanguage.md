@@ -229,7 +229,6 @@ using ModelingToolkit: t
 end
 ```
 
-
 #### `@discrete_events` begin block
 
   - Defining discrete events as described [here](https://docs.sciml.ai/ModelingToolkit/stable/basics/Events/#Discrete-events-support).

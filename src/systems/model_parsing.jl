@@ -146,7 +146,7 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
 
     push!(exprs.args, :(alg_eqs = $(alg_equations)(var"#___sys___")))
     d_evt_exs = map(d_evts) do evt
-        length(evt.args) == 2 ? 
+        length(evt.args) == 2 ?
         :($SymbolicDiscreteCallback($(evt.args[1]); iv = $iv, alg_eqs, $(evt.args[2]...))) :
         :($SymbolicDiscreteCallback($(evt.args[1]); iv = $iv, alg_eqs))
     end
@@ -155,8 +155,9 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
         :($Setfield.@set!(var"#___sys___".discrete_events=[$(d_evt_exs...)])))
 
     c_evt_exs = map(c_evts) do evt
-        length(evt.args) == 2 ? 
-        :($SymbolicContinuousCallback($(evt.args[1]); iv = $iv, alg_eqs, $(evt.args[2]...))) :
+        length(evt.args) == 2 ?
+        :($SymbolicContinuousCallback(
+            $(evt.args[1]); iv = $iv, alg_eqs, $(evt.args[2]...))) :
         :($SymbolicContinuousCallback($(evt.args[1]); iv = $iv, alg_eqs))
     end
     !isempty(c_evts) && push!(exprs.args,
@@ -1156,9 +1157,9 @@ function parse_continuous_events!(c_evts, dict, body)
     dict[:continuous_events] = []
     Base.remove_linenums!(body)
     for line in body.args
-        if length(line.args) == 3 && line.args[1] == :(=>) 
+        if length(line.args) == 3 && line.args[1] == :(=>)
             push!(c_evts, :(($line,)))
-        elseif length(line.args) == 2 
+        elseif length(line.args) == 2
             event = line.args[1]
             kwargs = parse_event_kwargs(line.args[2])
             push!(c_evts, :(($event, $kwargs)))
@@ -1173,9 +1174,9 @@ function parse_discrete_events!(d_evts, dict, body)
     dict[:discrete_events] = []
     Base.remove_linenums!(body)
     for line in body.args
-        if length(line.args) == 3 && line.args[1] == :(=>) 
+        if length(line.args) == 3 && line.args[1] == :(=>)
             push!(d_evts, :(($line,)))
-        elseif length(line.args) == 2 
+        elseif length(line.args) == 2
             event = line.args[1]
             kwargs = parse_event_kwargs(line.args[2])
             push!(d_evts, :(($event, $kwargs)))

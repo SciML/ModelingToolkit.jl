@@ -244,9 +244,12 @@ struct SymbolicContinuousCallback <: AbstractCallback
     end # Default affect to nothing
 end
 
-SymbolicContinuousCallback(p::Pair, args...; kwargs...) = SymbolicContinuousCallback(p[1], p[2], args...; kwargs...)
+function SymbolicContinuousCallback(p::Pair, args...; kwargs...)
+    SymbolicContinuousCallback(p[1], p[2], args...; kwargs...)
+end
 
-function SymbolicContinuousCallback(cb::SymbolicContinuousCallback, args...; iv = nothing, alg_eqs = Equation[], kwargs...)
+function SymbolicContinuousCallback(cb::SymbolicContinuousCallback, args...;
+        iv = nothing, alg_eqs = Equation[], kwargs...)
     cb
 end
 
@@ -461,7 +464,9 @@ struct SymbolicDiscreteCallback <: AbstractCallback
     end # Default affect to nothing
 end
 
-SymbolicDiscreteCallback(p::Pair, args...; kwargs...) = SymbolicDiscreteCallback(p[1], p[2], args...; kwargs...)
+function SymbolicDiscreteCallback(p::Pair, args...; kwargs...)
+    SymbolicDiscreteCallback(p[1], p[2], args...; kwargs...)
+end
 SymbolicDiscreteCallback(cb::SymbolicDiscreteCallback, args...; kwargs...) = cb
 
 """
