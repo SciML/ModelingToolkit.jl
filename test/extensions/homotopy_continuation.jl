@@ -151,7 +151,7 @@ end
     @variables x=0.25 y=0.125
     a = sin(x^2 - 4x + 1)
     b = cos(3log(y) + 4)
-    @mtkbuild sys = NonlinearSystem([(a^2 - 4a * b + 4b^2) / (a - 0.25) ~ 0
+    @mtkbuild sys = NonlinearSystem([(a^2 - 5a * b + 6b^2) / (a - 0.25) ~ 0
                                      (a^2 - 0.75a + 0.125) ~ 0])
     prob = HomotopyContinuationProblem(sys, [])
     @test prob[x] ≈ 0.25
@@ -159,7 +159,7 @@ end
     sol = solve(prob, allrootsalg).u[1]
     @test SciMLBase.successful_retcode(sol)
     @test sol[a]≈0.5 atol=1e-6
-    @test sol[b]≈0.25 atol=1e-6
+    @test isapprox(sol[b], 0.25; atol = 1e-6) || isapprox(sol[b], 0.5 / 3; atol = 1e-6)
 end
 
 @testset "Rational functions" begin
