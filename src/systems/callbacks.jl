@@ -310,6 +310,7 @@ function make_affect(affect::Vector{Equation}; discrete_parameters::AbstractVect
 
     # add scalarized unknowns to the map.
     _dvs = reduce(vcat, map(scalarize, _dvs), init = Any[])
+    @show _dvs
     for u in _dvs
         aff_map[u] = u
     end
