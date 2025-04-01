@@ -307,6 +307,7 @@ function make_affect(affect::Vector{Equation}; discrete_parameters::AbstractVect
 
     # add scalarized unknowns to the map.
     _dvs = reduce(vcat, map(scalarize, _dvs), init = Any[])
+    @show _dvs
     for u in _dvs
         aff_map[u] = u
     end
@@ -460,9 +461,7 @@ struct SymbolicDiscreteCallback <: AbstractCallback
     end # Default affect to nothing
 end
 
-function SymbolicDiscreteCallback(p::Pair, args...; kwargs...)
-    SymbolicDiscreteCallback(p[1], p[2], args...; kwargs...)
-end
+SymbolicDiscreteCallback(p::Pair, args...; kwargs...) = SymbolicDiscreteCallback(p[1], p[2], args...; kwargs...)
 SymbolicDiscreteCallback(cb::SymbolicDiscreteCallback, args...; kwargs...) = cb
 
 """
