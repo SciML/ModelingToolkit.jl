@@ -152,7 +152,7 @@ like this
 @variables x(t)=1 v(t)=0
 
 root_eqs = [x ~ 0]  # the event happens at the ground x(t) = 0
-affect = [v ~ -v] # the effect is that the velocity changes sign
+affect = [v ~ -Pre(v)] # the effect is that the velocity changes sign
 
 @mtkbuild ball = ODESystem([D(x) ~ v
                             D(v) ~ -9.8], t; continuous_events = root_eqs => affect) # equation => affect
@@ -171,8 +171,8 @@ Multiple events? No problem! This example models a bouncing ball in 2D that is e
 ```@example events
 @variables x(t)=1 y(t)=0 vx(t)=0 vy(t)=2
 
-continuous_events = [[x ~ 0] => [vx ~ -vx]
-                     [y ~ -1.5, y ~ 1.5] => [vy ~ -vy]]
+continuous_events = [[x ~ 0] => [vx ~ -Pre(vx)]
+                     [y ~ -1.5, y ~ 1.5] => [vy ~ -Pre(vy)]]
 
 @mtkbuild ball = ODESystem(
     [
@@ -265,7 +265,7 @@ bb_sol = solve(bb_prob, Tsit5())
 plot(bb_sol)
 ```
 
-## Discrete events support
+## Discrete Events
 
 In addition to continuous events, discrete events are also supported. The
 general interface to represent a collection of discrete events is
@@ -288,13 +288,13 @@ Suppose we have a population of `N(t)` cells that can grow and die, and at time
 `t1` we want to inject `M` more cells into the population. We can model this by
 
 ```@example events
-@parameters M tinject α
+@parameters M tinject α(t)
 @variables N(t)
 Dₜ = Differential(t)
 eqs = [Dₜ(N) ~ α - N]
 
 # at time tinject we inject M cells
-injection = (t == tinject) => [N ~ N + M]
+injection = (t == tinject) => [N ~ Pre(N) + M]
 
 u0 = [N => 0.0]
 tspan = (0.0, 20.0)
@@ -316,7 +316,7 @@ its steady-state value (which is 100). We can encode this by modifying the event
 to
 
 ```@example events
-injection = ((t == tinject) & (N < 50)) => [N ~ N + M]
+injection = ((t == tinject) & (N < 50)) => [N ~ Pre(N) + M]
 
 @mtkbuild osys = ODESystem(eqs, t, [N], [M, tinject, α]; discrete_events = injection)
 oprob = ODEProblem(osys, u0, tspan, p)
@@ -330,16 +330,18 @@ event time, the event condition now returns false. Here we used logical and,
 cannot be used within symbolic expressions.
 
 Let's now also add a drug at time `tkill` that turns off production of new
-cells, modeled by setting `α = 0.0`
+cells, modeled by setting `α = 0.0`. Since this is a parameter we must explicitly
+set it as `discrete_parameters`.
 
 ```@example events
 @parameters tkill
 
 # we reset the first event to just occur at tinject
-injection = (t == tinject) => [N ~ N + M]
+injection = (t == tinject) => [N ~ Pre(N) + M]
 
 # at time tkill we turn off production of cells
-killing = (t == tkill) => [α ~ 0.0]
+killing = ModelingToolkit.SymbolicDiscreteCallback(
+    (t == tkill) => [α ~ 0.0]; discrete_parameters = α, iv = t)
 
 tspan = (0.0, 30.0)
 p = [α => 100.0, tinject => 10.0, M => 50, tkill => 20.0]
@@ -359,7 +361,7 @@ A preset-time event is triggered at specific set times, which can be
 passed in a vector like
 
 ```julia
-discrete_events = [[1.0, 4.0] => [v ~ -v]]
+discrete_events = [[1.0, 4.0] => [v ~ -Pre(v)]]
 ```
 
 This will change the sign of `v` *only* at `t = 1.0` and `t = 4.0`.
@@ -367,8 +369,9 @@ This will change the sign of `v` *only* at `t = 1.0` and `t = 4.0`.
 As such, our last example with treatment and killing could instead be modeled by
 
 ```@example events
-injection = [10.0] => [N ~ N + M]
-killing = [20.0] => [α ~ 0.0]
+injection = [10.0] => [N ~ Pre(N) + M]
+killing = ModelingToolkit.SymbolicDiscreteCallback(
+    [20.0] => [α ~ 0.0], discrete_parameters = α, iv = t)
 
 p = [α => 100.0, M => 50]
 @mtkbuild osys = ODESystem(eqs, t, [N], [α, M];
@@ -386,7 +389,7 @@ specify a periodic interval, pass the interval as the condition for the event.
 For example,
 
 ```julia
-discrete_events = [1.0 => [v ~ -v]]
+discrete_events = [1.0 => [v ~ -Pre(v)]]
 ```
 
 will change the sign of `v` at `t = 1.0`, `2.0`, ...
@@ -395,10 +398,10 @@ Finally, we note that to specify an event at precisely one time, say 2.0 below,
 one must still use a vector
 
 ```julia
-discrete_events = [[2.0] => [v ~ -v]]
+discrete_events = [[2.0] => [v ~ -Pre(v)]]
 ```
 
-## Saving discrete values
+## [Saving discrete values](@id save_discretes)
 
 Time-dependent parameters which are updated in callbacks are termed as discrete variables.
 ModelingToolkit enables automatically saving the timeseries of these discrete variables,
@@ -409,8 +412,10 @@ example:
 @variables x(t)
 @parameters c(t)
 
+ev = ModelingToolkit.SymbolicDiscreteCallback(
+    1.0 => [c ~ Pre(c) + 1], discrete_parameters = c, iv = t)
 @mtkbuild sys = ODESystem(
-    D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [1.0 => [c ~ c + 1]])
+    D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [ev])
 
 prob = ODEProblem(sys, [x => 0.0], (0.0, 2pi), [c => 1.0])
 sol = solve(prob, Tsit5())
@@ -423,15 +428,15 @@ The solution object can also be interpolated with the discrete variables
 sol([1.0, 2.0], idxs = [c, c * cos(x)])
 ```
 
-Note that only time-dependent parameters will be saved. If we repeat the above example with
-this change:
+Note that only time-dependent parameters that are explicitly passed as `discrete_parameters`
+will be saved. If we repeat the above example with `c` not a `discrete_parameter`:
 
 ```@example events
 @variables x(t)
-@parameters c
+@parameters c(t)
 
 @mtkbuild sys = ODESystem(
-    D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [1.0 => [c ~ c + 1]])
+    D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [1.0 => [c ~ Pre(c) + 1]])
 
 prob = ODEProblem(sys, [x => 0.0], (0.0, 2pi), [c => 1.0])
 sol = solve(prob, Tsit5())
