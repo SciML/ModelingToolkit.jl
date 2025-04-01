@@ -1,4 +1,5 @@
 [deps]
+Attractors = "f3fd9213-ca85-4dba-9dfd-7fc91308fec7"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 BifurcationKit = "0f109fa4-8a5d-4b75-95aa-f515264e7665"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
@@ -28,6 +29,7 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
+Attractors = "1.24"
 BenchmarkTools = "1.3"
 BifurcationKit = "0.4"
 CairoMakie = "0.13"
