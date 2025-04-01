@@ -160,7 +160,7 @@ const Affect = Union{AffectSystem, FunctionalAffect, ImperativeAffect}
 
 """
     SymbolicContinuousCallback(eqs::Vector{Equation}, affect = nothing, iv = nothing; 
-                               affect_neg = affect, initialize = nothing, finalize = nothing, rootfind = SciMLBase.LeftRootFind, algeeqs = Equation[])
+                               affect_neg = affect, initialize = nothing, finalize = nothing, rootfind = SciMLBase.LeftRootFind, alg_eqs = Equation[])
 
 A [`ContinuousCallback`](@ref SciMLBase.ContinuousCallback) specified symbolically. Takes a vector of equations `eq`
 as well as the positive-edge `affect` and negative-edge `affect_neg` that apply when *any* of `eq` are satisfied.
@@ -226,7 +226,7 @@ struct SymbolicContinuousCallback <: AbstractCallback
             rootfind = SciMLBase.LeftRootFind,
             reinitializealg = nothing,
             iv = nothing,
-            algeeqs = Equation[])
+            alg_eqs = Equation[])
         conditions = (conditions isa AbstractVector) ? conditions : [conditions]
 
         if isnothing(reinitializealg)
@@ -236,10 +236,10 @@ struct SymbolicContinuousCallback <: AbstractCallback
             reinitializealg = SciMLBase.NoInit()
         end
 
-        new(conditions, make_affect(affect; iv, algeeqs, discrete_parameters),
-            make_affect(affect_neg; iv, algeeqs, discrete_parameters),
-            make_affect(initialize; iv, algeeqs, discrete_parameters), make_affect(
-                finalize; iv, algeeqs, discrete_parameters),
+        new(conditions, make_affect(affect; iv, alg_eqs, discrete_parameters),
+            make_affect(affect_neg; iv, alg_eqs, discrete_parameters),
+            make_affect(initialize; iv, alg_eqs, discrete_parameters), make_affect(
+                finalize; iv, alg_eqs, discrete_parameters),
             rootfind, reinitializealg)
     end # Default affect to nothing
 end
@@ -247,7 +247,11 @@ end
 function SymbolicContinuousCallback(p::Pair, args...; kwargs...)
     SymbolicContinuousCallback(p[1], p[2], args...; kwargs...)
 end
-SymbolicContinuousCallback(cb::SymbolicContinuousCallback, args...; kwargs...) = cb
+
+function SymbolicContinuousCallback(cb::SymbolicContinuousCallback, args...;
+        iv = nothing, alg_eqs = Equation[], kwargs...)
+    cb
+end
 
 make_affect(affect::Nothing; kwargs...) = nothing
 make_affect(affect::Tuple; kwargs...) = FunctionalAffect(affect...)
@@ -255,10 +259,10 @@ make_affect(affect::NamedTuple; kwargs...) = FunctionalAffect(; affect...)
 make_affect(affect::Affect; kwargs...) = affect
 
 function make_affect(affect::Vector{Equation}; discrete_parameters::AbstractVector = Any[],
-        iv = nothing, algeeqs::Vector{Equation} = Equation[])
+        iv = nothing, alg_eqs::Vector{Equation} = Equation[])
     isempty(affect) && return nothing
-    isempty(algeeqs) &&
-        @warn "No algebraic equations were found for the callback defined by $(join(affect, ", ")). If the system has no algebraic equations, this can be disregarded. Otherwise pass in `algeeqs` to the SymbolicContinuousCallback constructor."
+    isempty(alg_eqs) &&
+        @warn "No algebraic equations were found for the callback defined by $(join(affect, ", ")). If the system has no algebraic equations, this can be disregarded. Otherwise pass in `alg_eqs` to the SymbolicContinuousCallback constructor."
     if isnothing(iv)
         iv = t_nounits
         @warn "No independent variable specified. Defaulting to t_nounits."
@@ -280,7 +284,7 @@ function make_affect(affect::Vector{Equation}; discrete_parameters::AbstractVect
         diffvs = collect_applied_operators(eq, Differential)
         union!(dvs, diffvs)
     end
-    for eq in algeeqs
+    for eq in alg_eqs
         collect_vars!(dvs, params, eq, iv)
     end
 
@@ -294,10 +298,10 @@ function make_affect(affect::Vector{Equation}; discrete_parameters::AbstractVect
     rev_map = Dict(zip(discrete_parameters, discretes))
     subs = merge(rev_map, Dict(zip(dvs, _dvs)))
     affect = Symbolics.fast_substitute(affect, subs)
-    algeeqs = Symbolics.fast_substitute(algeeqs, subs)
+    alg_eqs = Symbolics.fast_substitute(alg_eqs, subs)
 
     @named affectsys = ImplicitDiscreteSystem(
-        vcat(affect, algeeqs), iv, collect(union(_dvs, discretes)),
+        vcat(affect, alg_eqs), iv, collect(union(_dvs, discretes)),
         collect(union(pre_params, sys_params)))
     affectsys = structural_simplify(affectsys; fully_determined = false)
     # get accessed parameters p from Pre(p) in the callback parameters
@@ -322,7 +326,7 @@ end
 Generate continuous callbacks.
 """
 function SymbolicContinuousCallbacks(events; discrete_parameters = Any[],
-        algeeqs::Vector{Equation} = Equation[], iv = nothing)
+        alg_eqs::Vector{Equation} = Equation[], iv = nothing)
     callbacks = SymbolicContinuousCallback[]
     isnothing(events) && return callbacks
 
@@ -332,7 +336,7 @@ function SymbolicContinuousCallbacks(events; discrete_parameters = Any[],
     for event in events
         cond, affs = event isa Pair ? (event[1], event[2]) : (event, nothing)
         push!(callbacks,
-            SymbolicContinuousCallback(cond, affs; iv, algeeqs, discrete_parameters))
+            SymbolicContinuousCallback(cond, affs; iv, alg_eqs, discrete_parameters))
     end
     callbacks
 end
@@ -421,7 +425,7 @@ end
 # TODO: Iterative callbacks
 """
     SymbolicDiscreteCallback(conditions::Vector{Equation}, affect = nothing, iv = nothing;
-                             initialize = nothing, finalize = nothing, algeeqs = Equation[])
+                             initialize = nothing, finalize = nothing, alg_eqs = Equation[])
 
 A callback that triggers at the first timestep that the conditions are satisfied.
 
@@ -432,7 +436,7 @@ The condition can be one of:
 
 Arguments: 
 - iv: The independent variable of the system. This must be specified if the independent variable appaers in one of the equations explicitly, as in x ~ t + 1.
-- algeeqs: Algebraic equations of the system that must be satisfied after the callback occurs.
+- alg_eqs: Algebraic equations of the system that must be satisfied after the callback occurs.
 """
 struct SymbolicDiscreteCallback <: AbstractCallback
     conditions::Any
@@ -444,16 +448,16 @@ struct SymbolicDiscreteCallback <: AbstractCallback
     function SymbolicDiscreteCallback(
             condition, affect = nothing;
             initialize = nothing, finalize = nothing, iv = nothing,
-            algeeqs = Equation[], discrete_parameters = Any[], reinitializealg = nothing)
+            alg_eqs = Equation[], discrete_parameters = Any[], reinitializealg = nothing)
         c = is_timed_condition(condition) ? condition : value(scalarize(condition))
 
         if isnothing(reinitializealg)
                 reinitializealg = SciMLBase.CheckInit() : 
                 reinitializealg = SciMLBase.NoInit()
         end
-        new(c, make_affect(affect; iv, algeeqs, discrete_parameters),
-            make_affect(initialize; iv, algeeqs, discrete_parameters),
-            make_affect(finalize; iv, algeeqs, discrete_parameters), reinitializealg)
+        new(c, make_affect(affect; iv, alg_eqs, discrete_parameters),
+            make_affect(initialize; iv, alg_eqs, discrete_parameters),
+            make_affect(finalize; iv, alg_eqs, discrete_parameters), reinitializealg)
     end # Default affect to nothing
 end
 
@@ -466,7 +470,7 @@ SymbolicDiscreteCallback(cb::SymbolicDiscreteCallback, args...; kwargs...) = cb
 Generate discrete callbacks.
 """
 function SymbolicDiscreteCallbacks(events; discrete_parameters::Vector = Any[],
-        algeeqs::Vector{Equation} = Equation[], iv = nothing)
+        alg_eqs::Vector{Equation} = Equation[], iv = nothing)
     callbacks = SymbolicDiscreteCallback[]
 
     isnothing(events) && return callbacks
@@ -476,7 +480,7 @@ function SymbolicDiscreteCallbacks(events; discrete_parameters::Vector = Any[],
     for event in events
         cond, affs = event isa Pair ? (event[1], event[2]) : (event, nothing)
         push!(callbacks,
-            SymbolicDiscreteCallback(cond, affs; iv, algeeqs, discrete_parameters))
+            SymbolicDiscreteCallback(cond, affs; iv, alg_eqs, discrete_parameters))
     end
     callbacks
 end

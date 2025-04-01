@@ -152,9 +152,9 @@ let
     # as I stored the same single event in all systems). Don't check for non-toplevel cases as
     # technically not needed for these tests and name spacing the events is a mess.
     bot_cev = ModelingToolkit.SymbolicContinuousCallback(
-        cevs[1], algeeqs = [O ~ (d + p_bot) * X_bot + Y])
+        cevs[1], alg_eqs = [O ~ (d + p_bot) * X_bot + Y])
     mid_dev = ModelingToolkit.SymbolicDiscreteCallback(
-        devs[1], algeeqs = [O ~ (d + p_mid1) * X_mid1 + Y])
+        devs[1], alg_eqs = [O ~ (d + p_mid1) * X_mid1 + Y])
     @test all_sets_equal(
         continuous_events_toplevel.([sys_bot, sys_bot_comp, sys_bot_ss])...,
         [bot_cev])
