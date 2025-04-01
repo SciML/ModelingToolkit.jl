@@ -1,19 +1,5 @@
 const JumpType = Union{VariableRateJump, ConstantRateJump, MassActionJump}
 
-# modifies the expression representing an affect function to
-# call reset_aggregated_jumps!(integrator).
-# assumes iip
-function _reset_aggregator!(expr, integrator)
-    @assert Meta.isexpr(expr, :function)
-    body = expr.args[end]
-    body = quote
-        $body
-        $reset_aggregated_jumps!($integrator)
-    end
-    expr.args[end] = body
-    return nothing
-end
-
 """
 $(TYPEDEF)
 
@@ -89,11 +75,6 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     Type of the system.
     """
     connector_type::Any
-    """
-    A `Vector{SymbolicContinuousCallback}` that model events.
-    The integrator will use root finding to guarantee that it steps at each zero crossing.
-    """
-    continuous_events::Vector{SymbolicContinuousCallback}
     """
     A `Vector{SymbolicDiscreteCallback}` that models events. Symbolic
     analog to `SciMLBase.DiscreteCallback` that executes an affect when a given condition is
@@ -230,8 +211,7 @@ function JumpSystem(eqs, iv, unknowns, ps;
         end
     end
 
-    cont_callbacks = SymbolicContinuousCallbacks(continuous_events; iv)
-    disc_callbacks = SymbolicDiscreteCallbacks(discrete_events; iv)
+    disc_callbacks = to_cb_vector(SymbolicDiscreteCallback.(discrete_events; iv))
 
     JumpSystem{typeof(ap)}(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         ap, iv′, us′, ps′, var_to_name, observed, name, description, systems,

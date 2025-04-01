@@ -1,9 +1,7 @@
 using ModelingToolkit, OrdinaryDiffEq, StochasticDiffEq, JumpProcesses, Test
 using SciMLStructures: canonicalize, Discrete
 using ModelingToolkit: SymbolicContinuousCallback,
-                       SymbolicContinuousCallbacks,
                        SymbolicDiscreteCallback,
-                       SymbolicDiscreteCallbacks,
                        get_callback,
                        t_nounits as t,
                        D_nounits as D,
@@ -88,37 +86,6 @@ affect_neg = [x ~ 1]
     @test e isa SymbolicContinuousCallback
     @test isequal(equations(e), eqs)
     @test e.rootfind == SciMLBase.LeftRootFind
-
-    # test plural constructor
-    e = SymbolicContinuousCallbacks(eqs[])
-    @test e isa Vector{SymbolicContinuousCallback}
-    @test isequal(equations(e[]), eqs)
-    @test e[].affect == nothing
-
-    e = SymbolicContinuousCallbacks(eqs)
-    @test e isa Vector{SymbolicContinuousCallback}
-    @test isequal(equations(e[]), eqs)
-    @test e[].affect == nothing
-
-    e = SymbolicContinuousCallbacks(eqs[] => affect)
-    @test e isa Vector{SymbolicContinuousCallback}
-    @test isequal(equations(e[]), eqs)
-    @test e[].affect isa AffectSystem
-
-    e = SymbolicContinuousCallbacks(eqs => affect)
-    @test e isa Vector{SymbolicContinuousCallback}
-    @test isequal(equations(e[]), eqs)
-    @test e[].affect isa AffectSystem
-
-    e = SymbolicContinuousCallbacks([eqs[] => affect])
-    @test e isa Vector{SymbolicContinuousCallback}
-    @test isequal(equations(e[]), eqs)
-    @test e[].affect isa AffectSystem
-
-    e = SymbolicContinuousCallbacks([eqs => affect])
-    @test e isa Vector{SymbolicContinuousCallback}
-    @test isequal(equations(e[]), eqs)
-    @test e[].affect isa AffectSystem
 end
 
 @testset "ImperativeAffect constructors" begin
