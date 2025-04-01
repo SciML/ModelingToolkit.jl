@@ -338,8 +338,11 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
 
     alg_eqs = filter(eq -> eq.lhs isa Union{Symbolic, Number} && !is_diff_equation(eq),
         deqs)
-    cont_callbacks = SymbolicContinuousCallbacks(continuous_events; alg_eqs, iv)
-    disc_callbacks = SymbolicDiscreteCallbacks(discrete_events; alg_eqs, iv)
+    @show continuous_events
+    @show discrete_events
+    cont_callbacks = to_cb_vector(SymbolicContinuousCallback.(
+        continuous_events; alg_eqs, iv))
+    disc_callbacks = to_cb_vector(SymbolicDiscreteCallback.(discrete_events; alg_eqs, iv))
 
     if is_dde === nothing
         is_dde = _check_if_dde(deqs, iv′, systems)
