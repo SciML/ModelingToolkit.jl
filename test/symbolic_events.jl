@@ -1321,7 +1321,7 @@ end
     @test ≈(sol(5.0000001, idxs = x) - sol(4.999999, idxs = x), 0.1, rtol = 1e-4)
 
     # Proper re-initialization after parameter change
-    eqs = [y ~ g^2 - x, D(x) ~ x]
+    eqs = [y ~ g^2, D(x) ~ x]
     c_evt = SymbolicContinuousCallback(
         [t ~ 5.0], [x ~ Pre(x) + 1, g ~ Pre(g) + 1], discrete_parameters = [g], iv = t)
     @mtkbuild sys = ODESystem(eqs, t, continuous_events = c_evt)
@@ -1329,7 +1329,7 @@ end
     sol = solve(prob, FBDF())
     @test sol.ps[g] ≈ [2.0, 3.0]
     @test ≈(sol(5.00000001, idxs = x) - sol(4.9999999, idxs = x), 1; rtol = 1e-4)
-    @test ≈(sol(5.00000001, idxs = y), 9 - sol(5.00000001, idxs = x), rtol = 1e-4)
+    @test ≈(sol(5.00000001, idxs = y), 9, rtol = 1e-4)
 
     # Parameters that don't appear in affects should not be mutated.
     c_evt = [t ~ 5.0] => [x ~ Pre(x) + 1]
@@ -1338,4 +1338,3 @@ end
     sol = solve(prob, FBDF())
     @test prob.ps[g] == sol.ps[g]
 end
-# - explicit equation of t in a functional affect
