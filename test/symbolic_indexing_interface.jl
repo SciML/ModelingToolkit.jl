@@ -1,5 +1,6 @@
 using ModelingToolkit, SymbolicIndexingInterface, SciMLBase
-using ModelingToolkit: t_nounits as t, D_nounits as D, ParameterIndex
+using ModelingToolkit: t_nounits as t, D_nounits as D, ParameterIndex,
+                       SymbolicContinuousCallback
 using SciMLStructures: Tunable
 
 @testset "ODESystem" begin

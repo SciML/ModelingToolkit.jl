@@ -69,7 +69,6 @@ discretes(a::AffectSystem) = a.discretes
 unknowns(a::AffectSystem) = a.unknowns
 parameters(a::AffectSystem) = a.parameters
 aff_to_sys(a::AffectSystem) = a.aff_to_sys
-previous_vals(a::AffectSystem) = parameters(system(a))
 all_equations(a::AffectSystem) = vcat(equations(system(a)), observed(system(a)))
 
 function Base.show(iio::IO, aff::AffectSystem)
@@ -149,7 +148,6 @@ function (p::Pre)(x)
     end
     return result
 end
-
 haspre(eq::Equation) = haspre(eq.lhs) || haspre(eq.rhs)
 haspre(O) = recursive_hasoperator(Pre, O)
 
@@ -247,11 +245,8 @@ end
 function SymbolicContinuousCallback(p::Pair, args...; kwargs...)
     SymbolicContinuousCallback(p[1], p[2], args...; kwargs...)
 end
-
-function SymbolicContinuousCallback(cb::SymbolicContinuousCallback, args...;
-        iv = nothing, alg_eqs = Equation[], kwargs...)
-    cb
-end
+SymbolicContinuousCallback(cb::SymbolicContinuousCallback, args...; kwargs...) = cb
+SymbolicContinuousCallback(cb::Nothing, args...; kwargs...) = nothing
 
 make_affect(affect::Nothing; kwargs...) = nothing
 make_affect(affect::Tuple; kwargs...) = FunctionalAffect(affect...)
@@ -310,7 +305,6 @@ function make_affect(affect::Vector{Equation}; discrete_parameters = Any[],
 
     # add scalarized unknowns to the map.
     _dvs = reduce(vcat, map(scalarize, _dvs), init = Any[])
-    @show _dvs
     for u in _dvs
         aff_map[u] = u
     end
@@ -321,25 +315,6 @@ end
 
 function make_affect(affect; kwargs...)
     error("Malformed affect $(affect). This should be a vector of equations or a tuple specifying a functional affect.")
-end
-
-"""
-Generate continuous callbacks.
-"""
-function SymbolicContinuousCallbacks(events; discrete_parameters = Any[],
-        alg_eqs::Vector{Equation} = Equation[], iv = nothing)
-    callbacks = SymbolicContinuousCallback[]
-    isnothing(events) && return callbacks
-
-    events isa AbstractVector || (events = [events])
-    isempty(events) && return callbacks
-
-    for event in events
-        cond, affs = event isa Pair ? (event[1], event[2]) : (event, nothing)
-        push!(callbacks,
-            SymbolicContinuousCallback(cond, affs; iv, alg_eqs, discrete_parameters))
-    end
-    callbacks
 end
 
 function Base.show(io::IO, cb::AbstractCallback)
@@ -422,8 +397,6 @@ end
 ################################
 ######## Discrete events #######
 ################################
-
-# TODO: Iterative callbacks
 """
     SymbolicDiscreteCallback(conditions::Vector{Equation}, affect = nothing, iv = nothing;
                              initialize = nothing, finalize = nothing, alg_eqs = Equation[])
@@ -468,25 +441,7 @@ function SymbolicDiscreteCallback(p::Pair, args...; kwargs...)
     SymbolicDiscreteCallback(p[1], p[2], args...; kwargs...)
 end
 SymbolicDiscreteCallback(cb::SymbolicDiscreteCallback, args...; kwargs...) = cb
-
-"""
-Generate discrete callbacks.
-"""
-function SymbolicDiscreteCallbacks(events; discrete_parameters::Vector = Any[],
-        alg_eqs::Vector{Equation} = Equation[], iv = nothing)
-    callbacks = SymbolicDiscreteCallback[]
-
-    isnothing(events) && return callbacks
-    events isa AbstractVector || (events = [events])
-    isempty(events) && return callbacks
-
-    for event in events
-        cond, affs = event isa Pair ? (event[1], event[2]) : (event, nothing)
-        push!(callbacks,
-            SymbolicDiscreteCallback(cond, affs; iv, alg_eqs, discrete_parameters))
-    end
-    callbacks
-end
+SymbolicDiscreteCallback(cb::Nothing, args...; kwargs...) = nothing
 
 function is_timed_condition(condition::T) where {T}
     if T === Num
@@ -500,10 +455,14 @@ function is_timed_condition(condition::T) where {T}
     end
 end
 
+to_cb_vector(cbs::Vector{<:AbstractCallback}) = cbs
+to_cb_vector(cbs::Vector) = Vector{AbstractCallback}(cbs)
+to_cb_vector(cbs::Nothing) = AbstractCallback[]
+to_cb_vector(cb::AbstractCallback) = [cb]
+
 ############################################
 ########## Namespacing Utilities ###########
 ############################################
-
 function namespace_affects(affect::FunctionalAffect, s)
     FunctionalAffect(func(affect),
         renamespace.((s,), unknowns(affect)),
@@ -530,7 +489,7 @@ function namespace_callback(cb::SymbolicContinuousCallback, s)::SymbolicContinuo
         affect_neg = namespace_affects(affect_negs(cb), s),
         initialize = namespace_affects(initialize_affects(cb), s),
         finalize = namespace_affects(finalize_affects(cb), s),
-        rootfind = cb.rootfind)
+        rootfind = cb.rootfind, reinitializealg = cb.reinitializealg)
 end
 
 function namespace_conditions(condition, s)
@@ -542,7 +501,7 @@ function namespace_callback(cb::SymbolicDiscreteCallback, s)::SymbolicDiscreteCa
         namespace_conditions(conditions(cb), s),
         namespace_affects(affects(cb), s),
         initialize = namespace_affects(initialize_affects(cb), s),
-        finalize = namespace_affects(finalize_affects(cb), s))
+        finalize = namespace_affects(finalize_affects(cb), s), reinitializealg = cb.reinitializealg)
 end
 
 function Base.hash(cb::AbstractCallback, s::UInt)
