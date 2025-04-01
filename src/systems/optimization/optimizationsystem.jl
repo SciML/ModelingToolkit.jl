@@ -354,7 +354,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
 
     f = let _f = eval_or_rgf(
             generate_function(
-                sys, checkbounds = checkbounds, linenumbers = linenumbers,
+                sys; checkbounds = checkbounds, linenumbers = linenumbers,
                 expression = Val{true}, wrap_mtkparameters = false, cse);
             eval_expression,
             eval_module)
@@ -367,7 +367,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     if grad
         _grad = let (grad_oop, grad_iip) = eval_or_rgf.(
                 generate_gradient(
-                    sys, checkbounds = checkbounds,
+                    sys; checkbounds = checkbounds,
                     linenumbers = linenumbers,
                     parallel = parallel, expression = Val{true},
                     wrap_mtkparameters = false, cse);
@@ -386,7 +386,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     if hess
         _hess = let (hess_oop, hess_iip) = eval_or_rgf.(
                 generate_hessian(
-                    sys, checkbounds = checkbounds,
+                    sys; checkbounds = checkbounds,
                     linenumbers = linenumbers,
                     sparse = sparse, parallel = parallel,
                     expression = Val{true}, wrap_mtkparameters = false, cse);
@@ -413,9 +413,9 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     if length(cstr) > 0
         @named cons_sys = ConstraintsSystem(cstr, dvs, ps; checks)
         cons_sys = complete(cons_sys)
-        cons, lcons_, ucons_ = generate_function(cons_sys, checkbounds = checkbounds,
+        cons, lcons_, ucons_ = generate_function(cons_sys; checkbounds = checkbounds,
             linenumbers = linenumbers,
-            expression = Val{true}; wrap_mtkparameters = false, cse)
+            expression = Val{true}, wrap_mtkparameters = false, cse)
         cons = let (cons_oop, cons_iip) = eval_or_rgf.(cons; eval_expression, eval_module)
             _cons(u, p) = cons_oop(u, p)
             _cons(resid, u, p) = cons_iip(resid, u, p)
@@ -443,7 +443,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         if cons_h
             _cons_h = let (cons_hess_oop, cons_hess_iip) = eval_or_rgf.(
                     generate_hessian(
-                        cons_sys, checkbounds = checkbounds,
+                        cons_sys; checkbounds = checkbounds,
                         linenumbers = linenumbers,
                         sparse = cons_sparse, parallel = parallel,
                         expression = Val{true}, wrap_mtkparameters = false, cse);
