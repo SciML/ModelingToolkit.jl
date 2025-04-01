@@ -1,5 +1,6 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
-using ModelingToolkit: get_metadata, MTKParameters
+using ModelingToolkit: get_metadata, MTKParameters, SymbolicDiscreteCallback,
+                       SymbolicContinuousCallback
 using SymbolicIndexingInterface
 using OrdinaryDiffEq, Sundials
 using DiffEqBase, SparseArrays
