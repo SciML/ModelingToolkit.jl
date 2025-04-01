@@ -1213,7 +1213,7 @@ end
             D(x) ~ -k * x
         end
         @discrete_events begin
-            (t == 1.0) => [k ~ 1.0]#, discrete_parameters = [k]
+            (t == 1.0) => [k ~ 1.0], [discrete_parameters = k]
         end
     end
     @mtkbuild decay = DECAY()
