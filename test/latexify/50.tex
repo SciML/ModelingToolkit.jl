@@ -1,0 +1,19 @@
+\begin{equation}
+\left[
+\begin{array}{c}
+\mathrm{connect}\left( P_{+}output, C_{+}input \right) \\
+AnalysisPoint\left( \mathtt{C.output.u}\left( t \right), plant\_input, \left[
+\begin{array}{c}
+\mathtt{P.input.u}\left( t \right) \\
+\end{array}
+\right] \right) \\
+\mathtt{P.u}\left( t \right) = \mathtt{P.input.u}\left( t \right) \\
+\mathtt{P.y}\left( t \right) = \mathtt{P.output.u}\left( t \right) \\
+\mathtt{P.y}\left( t \right) = \mathtt{P.x}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{P.x}\left( t \right)}{\mathrm{d}t} = \frac{ - \mathtt{P.x}\left( t \right) + \mathtt{P.k} \mathtt{P.u}\left( t \right)}{\mathtt{P.T}} \\
+\mathtt{C.u}\left( t \right) = \mathtt{C.input.u}\left( t \right) \\
+\mathtt{C.y}\left( t \right) = \mathtt{C.output.u}\left( t \right) \\
+\mathtt{C.y}\left( t \right) = \mathtt{C.k} \mathtt{C.u}\left( t \right) \\
+\end{array}
+\right]
+\end{equation}
