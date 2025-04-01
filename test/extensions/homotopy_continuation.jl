@@ -164,9 +164,9 @@ end
 
 @testset "Rational functions" begin
     @variables x=2.0 y=2.0
-    @parameters n = 4
+    @parameters n = 5
     @mtkbuild sys = NonlinearSystem([
-        0 ~ (x^2 - n * x + n) * (x - 1) / (x - 2) / (x - 3)
+        0 ~ (x^2 - n * x + 6) * (x - 1) / (x - 2) / (x - 3)
     ])
     prob = HomotopyContinuationProblem(sys, [])
     sol = solve_allroots_closest(prob)
@@ -184,7 +184,7 @@ end
             0 ~ ((y - 3) / (y - 4)) * (n / (y - 5)) + ((x - 1.5) / (x - 5.5))^2
         ],
         [x, y],
-        [n])
+        [n]; defaults = [n => 4])
     sys = complete(sys)
     prob = HomotopyContinuationProblem(sys, [])
     sol = solve(prob, singlerootalg)
