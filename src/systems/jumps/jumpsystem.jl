@@ -398,6 +398,7 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
         parammap = DiffEqBase.NullParameters();
         eval_expression = false,
         eval_module = @__MODULE__,
+        cse = true,
         kwargs...)
     if !iscomplete(sys)
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
@@ -408,11 +409,11 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
     end
 
     _f, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
-        t = tspan === nothing ? nothing : tspan[1], tofloat = false, check_length = false, build_initializeprob = false)
+        t = tspan === nothing ? nothing : tspan[1], tofloat = false, check_length = false, build_initializeprob = false, cse)
     f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
 
     observedfun = ObservedFunctionCache(
-        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
+        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false), cse)
 
     df = DiscreteFunction{true, true}(f; sys = sys, observed = observedfun,
         initialization_data = get(_f.kwargs, :initialization_data, nothing))
@@ -488,7 +489,7 @@ oprob = ODEProblem(complete(js), u₀map, tspan, parammap)
 function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing},
         parammap = DiffEqBase.NullParameters();
         eval_expression = false,
-        eval_module = @__MODULE__,
+        eval_module = @__MODULE__, cse = true,
         kwargs...)
     if !iscomplete(sys)
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
@@ -507,10 +508,10 @@ function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothi
     else
         _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
             t = tspan === nothing ? nothing : tspan[1], tofloat = false,
-            check_length = false, build_initializeprob = false)
+            check_length = false, build_initializeprob = false, cse)
         f = (du, u, p, t) -> (du .= 0; nothing)
         observedfun = ObservedFunctionCache(sys; eval_expression, eval_module,
-            checkbounds = get(kwargs, :checkbounds, false))
+            checkbounds = get(kwargs, :checkbounds, false), cse)
         df = ODEFunction(f; sys, observed = observedfun)
         return ODEProblem(df, u0, tspan, p; kwargs...)
     end

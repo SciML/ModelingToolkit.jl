@@ -300,7 +300,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         cons_sparse = false, checkbounds = false,
         linenumbers = true, parallel = SerialForm(),
         eval_expression = false, eval_module = @__MODULE__,
-        checks = true,
+        checks = true, cse = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed `OptimizationSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `OptimizationProblem`")
@@ -355,7 +355,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     f = let _f = eval_or_rgf(
             generate_function(
                 sys, checkbounds = checkbounds, linenumbers = linenumbers,
-                expression = Val{true}, wrap_mtkparameters = false);
+                expression = Val{true}, wrap_mtkparameters = false, cse);
             eval_expression,
             eval_module)
         __f(u, p) = _f(u, p)
@@ -370,7 +370,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                     sys, checkbounds = checkbounds,
                     linenumbers = linenumbers,
                     parallel = parallel, expression = Val{true},
-                    wrap_mtkparameters = false);
+                    wrap_mtkparameters = false, cse);
                 eval_expression,
                 eval_module)
             _grad(u, p) = grad_oop(u, p)
@@ -389,7 +389,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                     sys, checkbounds = checkbounds,
                     linenumbers = linenumbers,
                     sparse = sparse, parallel = parallel,
-                    expression = Val{true}, wrap_mtkparameters = false);
+                    expression = Val{true}, wrap_mtkparameters = false, cse);
                 eval_expression,
                 eval_module)
             _hess(u, p) = hess_oop(u, p)
@@ -408,14 +408,14 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         hess_prototype = nothing
     end
 
-    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module, checkbounds)
+    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module, checkbounds, cse)
 
     if length(cstr) > 0
         @named cons_sys = ConstraintsSystem(cstr, dvs, ps; checks)
         cons_sys = complete(cons_sys)
         cons, lcons_, ucons_ = generate_function(cons_sys, checkbounds = checkbounds,
             linenumbers = linenumbers,
-            expression = Val{true}; wrap_mtkparameters = false)
+            expression = Val{true}; wrap_mtkparameters = false, cse)
         cons = let (cons_oop, cons_iip) = eval_or_rgf.(cons; eval_expression, eval_module)
             _cons(u, p) = cons_oop(u, p)
             _cons(resid, u, p) = cons_iip(resid, u, p)
@@ -428,7 +428,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                         checkbounds = checkbounds,
                         linenumbers = linenumbers,
                         parallel = parallel, expression = Val{true},
-                        sparse = cons_sparse, wrap_mtkparameters = false);
+                        sparse = cons_sparse, wrap_mtkparameters = false, cse);
                     eval_expression,
                     eval_module)
                 _cons_j(u, p) = cons_jac_oop(u, p)
@@ -446,7 +446,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                         cons_sys, checkbounds = checkbounds,
                         linenumbers = linenumbers,
                         sparse = cons_sparse, parallel = parallel,
-                        expression = Val{true}, wrap_mtkparameters = false);
+                        expression = Val{true}, wrap_mtkparameters = false, cse);
                     eval_expression,
                     eval_module)
                 _cons_h(u, p) = cons_hess_oop(u, p)

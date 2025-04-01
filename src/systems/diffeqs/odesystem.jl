@@ -454,8 +454,8 @@ Generates a function that computes the observed value(s) `ts` in the system `sys
 - `checkbounds = true` checks bounds if true when destructuring parameters
 - `op = Operator` sets the recursion terminator for the walk done by `vars` to identify the variables that appear in `ts`. See the documentation for `vars` for more detail.
 - `throw = true` if true, throw an error when generating a function for `ts` that reference variables that do not exist.
-- `mkarray`; only used if the output is an array (that is, `!isscalar(ts)`  and `ts` is not a tuple, in which case the result will always be a tuple). Called as `mkarray(ts, output_type)` where `ts` are the expressions to put in 
-the array and `output_type` is the argument of the same name passed to build_explicit_observed_function.
+- `mkarray`: only used if the output is an array (that is, `!isscalar(ts)`  and `ts` is not a tuple, in which case the result will always be a tuple). Called as `mkarray(ts, output_type)` where `ts` are the expressions to put in the array and `output_type` is the argument of the same name passed to build_explicit_observed_function.
+- `cse = true`: Whether to use Common Subexpression Elimination (CSE) to generate a more efficient function.
 
 ## Returns
 
@@ -493,6 +493,7 @@ function build_explicit_observed_function(sys, ts;
         param_only = false,
         op = Operator,
         throw = true,
+        cse = true,
         mkarray = nothing)
     is_tuple = ts isa Tuple
     if is_tuple
@@ -579,7 +580,7 @@ function build_explicit_observed_function(sys, ts;
     p_end = length(dvs) + length(inputs) + length(ps)
     fns = build_function_wrapper(
         sys, ts, args...; p_start, p_end, filter_observed = obsfilter,
-        output_type, mkarray, try_namespaced = true, expression = Val{true})
+        output_type, mkarray, try_namespaced = true, expression = Val{true}, cse)
     if fns isa Tuple
         if expression
             return return_inplace ? fns : fns[1]

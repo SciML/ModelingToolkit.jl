@@ -489,7 +489,7 @@ end
 
 function SciMLBase.HomotopyNonlinearFunction{iip, specialize}(
         sys::NonlinearSystem, args...; eval_expression = false, eval_module = @__MODULE__,
-        p = nothing, fraction_cancel_fn = SymbolicUtils.simplify_fractions,
+        p = nothing, fraction_cancel_fn = SymbolicUtils.simplify_fractions, cse = true,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `HomotopyContinuationFunction`")
@@ -511,9 +511,9 @@ function SciMLBase.HomotopyNonlinearFunction{iip, specialize}(
 
     # we want to create f, jac etc. according to `sys2` since that will do the solving
     # but the `sys` inside for symbolic indexing should be the non-polynomial system
-    fn = NonlinearFunction{iip}(sys2; eval_expression, eval_module, kwargs...)
+    fn = NonlinearFunction{iip}(sys2; eval_expression, eval_module, cse, kwargs...)
     obsfn = ObservedFunctionCache(
-        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
+        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false), cse)
     fn = remake(fn; sys = sys, observed = obsfn)
 
     denominator = build_explicit_observed_function(sys2, denoms)

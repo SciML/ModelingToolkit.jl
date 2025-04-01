@@ -595,23 +595,23 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
         jac = false, Wfact = false, eval_expression = false,
         eval_module = @__MODULE__,
         checkbounds = false, initialization_data = nothing,
-        kwargs...) where {iip, specialize}
+        cse = true, kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEFunction`")
     end
     dvs = scalarize.(dvs)
 
-    f_gen = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
+    f_gen = generate_function(sys, dvs, ps; expression = Val{true}, cse, kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
     g_gen = generate_diffusion_function(sys, dvs, ps; expression = Val{true},
-        kwargs...)
+        cse, kwargs...)
     g_oop, g_iip = eval_or_rgf.(g_gen; eval_expression, eval_module)
 
     f = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(f_oop, f_iip)
     g = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(g_oop, g_iip)
 
     if tgrad
-        tgrad_gen = generate_tgrad(sys, dvs, ps; expression = Val{true},
+        tgrad_gen = generate_tgrad(sys, dvs, ps; expression = Val{true}, cse,
             kwargs...)
         tgrad_oop, tgrad_iip = eval_or_rgf.(tgrad_gen; eval_expression, eval_module)
         _tgrad = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(tgrad_oop, tgrad_iip)
@@ -621,7 +621,7 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
 
     if jac
         jac_gen = generate_jacobian(sys, dvs, ps; expression = Val{true},
-            sparse = sparse, kwargs...)
+            sparse = sparse, cse, kwargs...)
         jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
 
         _jac = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(jac_oop, jac_iip)
@@ -631,7 +631,7 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
 
     if Wfact
         tmp_Wfact, tmp_Wfact_t = generate_factorized_W(sys, dvs, ps, true;
-            expression = Val{true}, kwargs...)
+            expression = Val{true}, cse, kwargs...)
         Wfact_oop, Wfact_iip = eval_or_rgf.(tmp_Wfact; eval_expression, eval_module)
         Wfact_oop_t, Wfact_iip_t = eval_or_rgf.(tmp_Wfact_t; eval_expression, eval_module)
 
@@ -645,7 +645,7 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0', M)
 
     observedfun = ObservedFunctionCache(
-        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
+        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false), cse)
 
     SDEFunction{iip, specialize}(f, g;
         sys = sys,

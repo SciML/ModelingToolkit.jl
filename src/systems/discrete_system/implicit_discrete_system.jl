@@ -369,13 +369,13 @@ function SciMLBase.ImplicitDiscreteFunction{iip, specialize}(
         t = nothing,
         eval_expression = false,
         eval_module = @__MODULE__,
-        analytic = nothing,
+        analytic = nothing, cse = true,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed `ImplicitDiscreteSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `ImplicitDiscreteProblem`")
     end
     f_gen = generate_function(sys, dvs, ps; expression = Val{true},
-        expression_module = eval_module, kwargs...)
+        expression_module = eval_module, cse, kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
     f(u_next, u, p, t) = f_oop(u_next, u, p, t)
     f(resid, u_next, u, p, t) = f_iip(resid, u_next, u, p, t)
@@ -388,7 +388,7 @@ function SciMLBase.ImplicitDiscreteFunction{iip, specialize}(
     end
 
     observedfun = ObservedFunctionCache(
-        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
+        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false), cse)
 
     ImplicitDiscreteFunction{iip, specialize}(f;
         sys = sys,
