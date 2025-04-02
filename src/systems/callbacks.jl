@@ -419,7 +419,7 @@ Arguments:
 - alg_eqs: Algebraic equations of the system that must be satisfied after the callback occurs.
 """
 struct SymbolicDiscreteCallback <: AbstractCallback
-    conditions::Union{Number, Vector{<:Number}, Symbolic}
+    conditions::Union{Number, Vector{<:Number}, Symbolic{Bool}}
     affect::Union{Affect, Nothing}
     initialize::Union{Affect, Nothing}
     finalize::Union{Affect, Nothing}
