@@ -263,6 +263,7 @@ function make_affect(affect::Vector{Equation}; discrete_parameters = Any[],
         @warn "No independent variable specified. Defaulting to t_nounits."
     end
 
+    discrete_parameters isa AbstractVector || (discrete_parameters = [discrete_parameters])
     for p in discrete_parameters
         occursin(unwrap(iv), unwrap(p)) ||
             error("Non-time dependent parameter $p passed in as a discrete. Must be declared as @parameters $p(t).")

@@ -144,24 +144,24 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     isconnector && push!(exprs.args,
         :($Setfield.@set!(var"#___sys___".connector_type=$connector_type(var"#___sys___"))))
 
-    push!(exprs.args, :(alg_eqs = $(alg_equations)(var"#___sys___")))
-    d_evt_exs = map(d_evts) do evt
-        length(evt.args) == 2 ?
-        :($SymbolicDiscreteCallback($(evt.args[1]); iv = $iv, alg_eqs, $(evt.args[2]...))) :
-        :($SymbolicDiscreteCallback($(evt.args[1]); iv = $iv, alg_eqs))
-    end
+    if !isempty(d_evts) || !isempty(c_evts)
+        push!(exprs.args, :(alg_eqs = $(alg_equations)(var"#___sys___")))
+        !isempty(d_evts) && begin
+            d_exprs = [:($(SymbolicDiscreteCallback)(
+                           $(evt.args[1]); iv = $iv, alg_eqs, $(evt.args[2])...))
+                       for evt in d_evts]
+            push!(exprs.args,
+                :($Setfield.@set!(var"#___sys___".discrete_events=[$(d_exprs...)])))
+        end
 
-    !isempty(d_evts) && push!(exprs.args,
-        :($Setfield.@set!(var"#___sys___".discrete_events=[$(d_evt_exs...)])))
-
-    c_evt_exs = map(c_evts) do evt
-        length(evt.args) == 2 ?
-        :($SymbolicContinuousCallback(
-            $(evt.args[1]); iv = $iv, alg_eqs, $(evt.args[2]...))) :
-        :($SymbolicContinuousCallback($(evt.args[1]); iv = $iv, alg_eqs))
+        !isempty(c_evts) && begin
+            c_exprs = [:($(SymbolicContinuousCallback)(
+                           $(evt.args[1]); iv = $iv, alg_eqs, $(evt.args[2])...))
+                       for evt in c_evts]
+            push!(exprs.args,
+                :($Setfield.@set!(var"#___sys___".continuous_events=[$(c_exprs...)])))
+        end
     end
-    !isempty(c_evts) && push!(exprs.args,
-        :($Setfield.@set!(var"#___sys___".continuous_events=[$(c_evt_exs...)])))
 
     f = if length(where_types) == 0
         :($(Symbol(:__, name, :__))(; name, $(kwargs...)) = $exprs)
@@ -1158,7 +1158,7 @@ function parse_continuous_events!(c_evts, dict, body)
     Base.remove_linenums!(body)
     for line in body.args
         if length(line.args) == 3 && line.args[1] == :(=>)
-            push!(c_evts, :(($line,)))
+            push!(c_evts, :(($line, ())))
         elseif length(line.args) == 2
             event = line.args[1]
             kwargs = parse_event_kwargs(line.args[2])
@@ -1175,7 +1175,7 @@ function parse_discrete_events!(d_evts, dict, body)
     Base.remove_linenums!(body)
     for line in body.args
         if length(line.args) == 3 && line.args[1] == :(=>)
-            push!(d_evts, :(($line,)))
+            push!(d_evts, :(($line, ())))
         elseif length(line.args) == 2
             event = line.args[1]
             kwargs = parse_event_kwargs(line.args[2])
@@ -1192,7 +1192,7 @@ function parse_event_kwargs(disc_expr)
     for arg in disc_expr.args
         (arg.head != :(=)) && error("Malformed event kwarg $arg.")
         (arg.args[1] isa Symbol) || error("Invalid keyword argument name $(arg.args[1]).")
-        push!(kwargs.args, arg)
+        push!(kwargs.args, :($(QuoteNode(arg.args[1])) => $(arg.args[2])))
     end
     kwargs
 end
