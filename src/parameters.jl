@@ -62,7 +62,7 @@ toparam(s::Num) = wrap(toparam(value(s)))
 
 Maps the variable to an unknown.
 """
-tovar(s::Union{Symbolic, Symbolics.Arr}) = setmetadata(s, MTKVariableTypeCtx, VARIABLE)
+tovar(s::Union{Symbolic, Symbolics.Arr}) = setmetadata(unwrap(s), MTKVariableTypeCtx, VARIABLE)
 tovar(s::Num) = Num(tovar(value(s)))
 
 """
