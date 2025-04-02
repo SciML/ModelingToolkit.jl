@@ -41,10 +41,10 @@ function structural_simplify(
     end
     if newsys isa DiscreteSystem &&
        any(eq -> symbolic_type(eq.lhs) == NotSymbolic(), equations(newsys))
-        error("""
-            Encountered algebraic equations when simplifying discrete system. Please construct \
-            an ImplicitDiscreteSystem instead.
-        """)
+        #error("""
+        #    Encountered algebraic equations when simplifying discrete system. Please construct \
+        #    an ImplicitDiscreteSystem instead.
+        #""")
     end
     for pass in additional_passes
         newsys = pass(newsys)
@@ -155,7 +155,9 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
             get_iv(ode_sys), unknowns(ode_sys), parameters(ode_sys);
             name = nameof(ode_sys), is_scalar_noise, observed = observed(ode_sys), defaults = defaults(sys),
             parameter_dependencies = parameter_dependencies(sys), assertions = assertions(sys),
-            guesses = guesses(sys), initialization_eqs = initialization_equations(sys))
+            guesses = guesses(sys), initialization_eqs = initialization_equations(sys),
+            continuous_events = continuous_events(sys),
+            discrete_events = discrete_events(sys))
     end
 end
 
