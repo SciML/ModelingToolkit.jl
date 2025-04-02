@@ -93,7 +93,7 @@ with the name `namespace__variable`.
 - `name`: The name of the system.
 """
 function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
-        communication_step_size = nothing, type, name, reinitializealg = nothing) where {Ver}
+        communication_step_size = nothing, reinitializealg = nothing, type, name) where {Ver}
     if Ver != 2 && Ver != 3
         throw(ArgumentError("FMI Version must be `2` or `3`"))
     end
