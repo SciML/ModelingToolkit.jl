@@ -330,7 +330,8 @@ event time, the event condition now returns false. Here we used logical and,
 cannot be used within symbolic expressions.
 
 Let's now also add a drug at time `tkill` that turns off production of new
-cells, modeled by setting `α = 0.0`
+cells, modeled by setting `α = 0.0`. Since this is a parameter we must explicitly
+set it as `discrete_parameters`.
 
 ```@example events
 @parameters tkill
@@ -339,7 +340,8 @@ cells, modeled by setting `α = 0.0`
 injection = (t == tinject) => [N ~ Pre(N) + M]
 
 # at time tkill we turn off production of cells
-killing = (t == tkill) => [α ~ 0.0]
+killing = ModelingToolkit.SymbolicDiscreteCallback(
+    (t == tkill) => [α ~ 0.0]; discrete_parameters = α, iv = t)
 
 tspan = (0.0, 30.0)
 p = [α => 100.0, tinject => 10.0, M => 50, tkill => 20.0]
@@ -368,7 +370,8 @@ As such, our last example with treatment and killing could instead be modeled by
 
 ```@example events
 injection = [10.0] => [N ~ Pre(N) + M]
-killing = [20.0] => [α ~ 0.0]
+killing = ModelingToolkit.SymbolicDiscreteCallback(
+    [20.0] => [α ~ 0.0], discrete_parameters = α, iv = t)
 
 p = [α => 100.0, M => 50]
 @mtkbuild osys = ODESystem(eqs, t, [N], [α, M];
@@ -409,7 +412,8 @@ example:
 @variables x(t)
 @parameters c(t)
 
-ev = ModelingToolkit.SymbolicDiscreteCallback(1.0 => [c ~ Pre(c) + 1], discrete_parameters = c, iv = t)
+ev = ModelingToolkit.SymbolicDiscreteCallback(
+    1.0 => [c ~ Pre(c) + 1], discrete_parameters = c, iv = t)
 @mtkbuild sys = ODESystem(
     D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [ev])
 
@@ -424,7 +428,7 @@ The solution object can also be interpolated with the discrete variables
 sol([1.0, 2.0], idxs = [c, c * cos(x)])
 ```
 
-Note that only time-dependent parameters that are explicitly passed as `discrete_parameters` 
+Note that only time-dependent parameters that are explicitly passed as `discrete_parameters`
 will be saved. If we repeat the above example with `c` not a `discrete_parameter`:
 
 ```@example events
