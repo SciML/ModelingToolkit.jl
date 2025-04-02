@@ -213,7 +213,7 @@ function JumpSystem(eqs, iv, unknowns, ps;
     end
 
     disc_callbacks = to_cb_vector(SymbolicDiscreteCallback.(discrete_events; iv))
-    cont_callbacks = to_cb_vector(SymbolicContinuousCallback.(discrete_events; iv))
+    cont_callbacks = to_cb_vector(SymbolicContinuousCallback.(continuous_events; iv))
 
     JumpSystem{typeof(ap)}(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         ap, iv′, us′, ps′, var_to_name, observed, name, description, systems,
