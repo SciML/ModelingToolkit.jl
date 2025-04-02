@@ -217,14 +217,12 @@ struct SymbolicContinuousCallback <: AbstractCallback
     function SymbolicContinuousCallback(
             conditions::Union{Equation, Vector{Equation}},
             affect = nothing;
-            discrete_parameters = Any[],
             affect_neg = affect,
             initialize = nothing,
             finalize = nothing,
             rootfind = SciMLBase.LeftRootFind,
             reinitializealg = nothing,
-            iv = nothing,
-            alg_eqs = Equation[])
+            kwargs...)
         conditions = (conditions isa AbstractVector) ? conditions : [conditions]
 
         if isnothing(reinitializealg)
@@ -233,11 +231,12 @@ struct SymbolicContinuousCallback <: AbstractCallback
             reinitializealg = SciMLBase.CheckInit() :
             reinitializealg = SciMLBase.NoInit()
         end
+        @show kwargs
 
-        new(conditions, make_affect(affect; iv, alg_eqs, discrete_parameters),
-            make_affect(affect_neg; iv, alg_eqs, discrete_parameters),
-            make_affect(initialize; iv, alg_eqs, discrete_parameters), make_affect(
-                finalize; iv, alg_eqs, discrete_parameters),
+        new(conditions, make_affect(affect; kwargs...),
+            make_affect(affect_neg; kwargs...),
+            make_affect(initialize; kwargs...), make_affect(
+                finalize; kwargs...),
             rootfind, reinitializealg)
     end # Default affect to nothing
 end
@@ -247,6 +246,13 @@ function SymbolicContinuousCallback(p::Pair, args...; kwargs...)
 end
 SymbolicContinuousCallback(cb::SymbolicContinuousCallback, args...; kwargs...) = cb
 SymbolicContinuousCallback(cb::Nothing, args...; kwargs...) = nothing
+function SymbolicContinuousCallback(cb::Tuple, args...; kwargs...)
+    if length(cb) == 2
+        SymbolicContinuousCallback(cb[1]; kwargs..., cb[2]...)
+    else
+        error("Malformed tuple specifying callback. Should be a condition => affect pair, followed by a vector of kwargs.")
+    end
+end
 
 make_affect(affect::Nothing; kwargs...) = nothing
 make_affect(affect::Tuple; kwargs...) = FunctionalAffect(affect...)
@@ -254,9 +260,9 @@ make_affect(affect::NamedTuple; kwargs...) = FunctionalAffect(; affect...)
 make_affect(affect::Affect; kwargs...) = affect
 
 function make_affect(affect::Vector{Equation}; discrete_parameters = Any[],
-        iv = nothing, alg_eqs::Vector{Equation} = Equation[])
+        iv = nothing, alg_eqs::Vector{Equation} = Equation[], warn_no_algebraic = true, kwargs...)
     isempty(affect) && return nothing
-    isempty(alg_eqs) &&
+    isempty(alg_eqs) && warn_no_algebraic &&
         @warn "No algebraic equations were found for the callback defined by $(join(affect, ", ")). If the system has no algebraic equations, this can be disregarded. Otherwise pass in `alg_eqs` to the SymbolicContinuousCallback constructor."
     if isnothing(iv)
         iv = t_nounits
@@ -423,7 +429,7 @@ struct SymbolicDiscreteCallback <: AbstractCallback
     function SymbolicDiscreteCallback(
             condition, affect = nothing;
             initialize = nothing, finalize = nothing, iv = nothing,
-            alg_eqs = Equation[], discrete_parameters = Any[], reinitializealg = nothing)
+            reinitializealg = nothing, kwargs...)
         c = is_timed_condition(condition) ? condition : value(scalarize(condition))
 
         if isnothing(reinitializealg)
@@ -432,9 +438,9 @@ struct SymbolicDiscreteCallback <: AbstractCallback
             reinitializealg = SciMLBase.CheckInit() :
             reinitializealg = SciMLBase.NoInit()
         end
-        new(c, make_affect(affect; iv, alg_eqs, discrete_parameters),
-            make_affect(initialize; iv, alg_eqs, discrete_parameters),
-            make_affect(finalize; iv, alg_eqs, discrete_parameters), reinitializealg)
+        new(c, make_affect(affect; kwargs...),
+            make_affect(initialize; kwargs...),
+            make_affect(finalize; kwargs...), reinitializealg)
     end # Default affect to nothing
 end
 
@@ -443,6 +449,13 @@ function SymbolicDiscreteCallback(p::Pair, args...; kwargs...)
 end
 SymbolicDiscreteCallback(cb::SymbolicDiscreteCallback, args...; kwargs...) = cb
 SymbolicDiscreteCallback(cb::Nothing, args...; kwargs...) = nothing
+function SymbolicDiscreteCallback(cb::Tuple, args...; kwargs...)
+    if length(cb) == 2
+        SymbolicDiscreteCallback(cb[1]; cb[2]...)
+    else
+        error("Malformed tuple specifying callback. Should be a condition => affect pair, followed by a vector of kwargs.")
+    end
+end
 
 function is_timed_condition(condition::T) where {T}
     if T === Num
@@ -861,7 +874,7 @@ Compile an affect defined by a set of equations. Systems with algebraic equation
 function compile_equational_affect(
         aff::Union{AffectSystem, Vector{Equation}}, sys; reset_jumps = false, kwargs...)
     if aff isa AbstractVector
-        aff = make_affect(aff; iv = get_iv(sys))
+        aff = make_affect(aff; iv = get_iv(sys), warn_no_algebraic = false)
     end
     affsys = system(aff)
     ps_to_update = discretes(aff)
