@@ -409,7 +409,7 @@ example:
 @variables x(t)
 @parameters c(t)
 
-ev = SymbolicDiscreteCallback(1.0 => [c ~ Pre(c) + 1], discrete_parameters = c)
+ev = ModelingToolkit.SymbolicDiscreteCallback(1.0 => [c ~ Pre(c) + 1], discrete_parameters = c, iv = t)
 @mtkbuild sys = ODESystem(
     D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [ev])
 
