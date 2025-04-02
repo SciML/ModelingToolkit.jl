@@ -412,14 +412,14 @@ A callback that triggers at the first timestep that the conditions are satisfied
 The condition can be one of: 
 - Δt::Real              - periodic events with period Δt
 - ts::Vector{Real}      - events trigger at these preset times given by `ts`
-- eqs::Vector{Equation} - events trigger when the condition evaluates to true
+- eqs::Vector{Symbolic} - events trigger when the condition evaluates to true
 
 Arguments: 
 - iv: The independent variable of the system. This must be specified if the independent variable appaers in one of the equations explicitly, as in x ~ t + 1.
 - alg_eqs: Algebraic equations of the system that must be satisfied after the callback occurs.
 """
 struct SymbolicDiscreteCallback <: AbstractCallback
-    conditions::Union{Number, Vector{<:Number}}
+    conditions::Union{Number, Vector{<:Number}, Symbolic}
     affect::Union{Affect, Nothing}
     initialize::Union{Affect, Nothing}
     finalize::Union{Affect, Nothing}
