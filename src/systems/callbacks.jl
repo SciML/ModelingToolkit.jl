@@ -231,7 +231,6 @@ struct SymbolicContinuousCallback <: AbstractCallback
             reinitializealg = SciMLBase.CheckInit() :
             reinitializealg = SciMLBase.NoInit()
         end
-        @show kwargs
 
         new(conditions, make_affect(affect; kwargs...),
             make_affect(affect_neg; kwargs...),
@@ -420,15 +419,15 @@ Arguments:
 - alg_eqs: Algebraic equations of the system that must be satisfied after the callback occurs.
 """
 struct SymbolicDiscreteCallback <: AbstractCallback
-    conditions::Any
+    conditions::Union{Number, Vector{<:Number}}
     affect::Union{Affect, Nothing}
     initialize::Union{Affect, Nothing}
     finalize::Union{Affect, Nothing}
     reinitializealg::SciMLBase.DAEInitializationAlgorithm
 
     function SymbolicDiscreteCallback(
-            condition, affect = nothing;
-            initialize = nothing, finalize = nothing, iv = nothing,
+            condition::Union{Number, Vector{<:Number}}, affect = nothing;
+            initialize = nothing, finalize = nothing,
             reinitializealg = nothing, kwargs...)
         c = is_timed_condition(condition) ? condition : value(scalarize(condition))
 
