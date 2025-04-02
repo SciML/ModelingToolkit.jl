@@ -173,7 +173,7 @@ end
         p = [rand()]
         x = [rand()]
         u = [rand()]
-        @test f[1](x, u, p, 1) == -x + u
+        @test f[1](x, u, p, 1) ≈ -x + u
 
         # With disturbance inputs
         @variables x(t)=0 u(t)=0 [input = true] d(t)=0
@@ -191,7 +191,7 @@ end
         p = [rand()]
         x = [rand()]
         u = [rand()]
-        @test f[1](x, u, p, 1) == -x + u
+        @test f[1](x, u, p, 1) ≈ -x + u
 
         ## With added d argument
         @variables x(t)=0 u(t)=0 [input = true] d(t)=0
@@ -210,7 +210,7 @@ end
         x = [rand()]
         u = [rand()]
         d = [rand()]
-        @test f[1](x, u, p, t, d) == -x + u + [d[]^2]
+        @test f[1](x, u, p, t, d) ≈ -x + u + [d[]^2]
     end
 end
 
@@ -434,7 +434,7 @@ matrices, ssys = linearize(augmented_sys,
     (; io_sys,) = ModelingToolkit.generate_control_function(sys, simplify = true)
     obsfn = ModelingToolkit.build_explicit_observed_function(
         io_sys, [x + u * t]; inputs = [u])
-    @test obsfn([1.0], [2.0], MTKParameters(io_sys, []), 3.0) == [7.0]
+    @test obsfn([1.0], [2.0], MTKParameters(io_sys, []), 3.0) ≈ [7.0]
 end
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/2896
@@ -445,7 +445,7 @@ end
     @named sys = ODESystem(eqs, t, [x], [])
 
     f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys, simplify = true)
-    @test f[1]([0.5], nothing, MTKParameters(io_sys, []), 0.0) == [1.0]
+    @test f[1]([0.5], nothing, MTKParameters(io_sys, []), 0.0) ≈ [1.0]
 end
 
 @testset "With callable symbolic" begin
