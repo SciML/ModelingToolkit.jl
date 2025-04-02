@@ -209,7 +209,8 @@ struct ODESystem <: AbstractODESystem
     parent::Any
 
     function ODESystem(
-            tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, constraints, costs, coalesce, tgrad,
+            tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls,
+            observed, constraints, costs, coalesce, tgrad,
             jac, ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses,
             torn_matching, initializesystem, initialization_eqs, schedule,
             connector_type, preface, cevents,
@@ -332,7 +333,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         @set! constraintsystem.systems = conssystems
     end
     costs = wrap.(costs)
-    
+
     if length(costs) > 1 && isnothing(coalesce)
         error("Must specify a coalesce function for the costs vector.")
     end
@@ -340,7 +341,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     assertions = Dict{BasicSymbolic, Any}(unwrap(k) => v for (k, v) in assertions)
 
     ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-        deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, constraintsystem, costs, coalesce, tgrad, jac,
+        deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed,
+        constraintsystem, costs, coalesce, tgrad, jac,
         ctrl_jac, Wfact, Wfact_t, name, description, systems,
         defaults, guesses, nothing, initializesystem,
         initialization_eqs, schedule, connector_type, preface, cont_callbacks,
@@ -403,7 +405,7 @@ function ODESystem(eqs, iv; constraints = Equation[], costs = Num[], kwargs...)
     costs = wrap.(costs)
 
     return ODESystem(eqs, iv, collect(Iterators.flatten((diffvars, algevars, consvars))),
-                     collect(new_ps); constraintsystem, costs, kwargs...)
+        collect(new_ps); constraintsystem, costs, kwargs...)
 end
 
 # NOTE: equality does not check cached Jacobian
@@ -800,7 +802,7 @@ parameter of the system.
 function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
     sts = sysvars
 
-    for var in auxvars 
+    for var in auxvars
         if !iscall(var)
             occursin(iv, var) && (var ∈ sts ||
              throw(ArgumentError("Time-dependent variable $var is not an unknown of the system.")))
