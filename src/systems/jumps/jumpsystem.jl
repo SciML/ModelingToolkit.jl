@@ -75,6 +75,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     Type of the system.
     """
     connector_type::Any
+    continuous_events::Vector{SymbolicContinuousCallback}
     """
     A `Vector{SymbolicDiscreteCallback}` that models events. Symbolic
     analog to `SciMLBase.DiscreteCallback` that executes an affect when a given condition is
@@ -212,11 +213,12 @@ function JumpSystem(eqs, iv, unknowns, ps;
     end
 
     disc_callbacks = to_cb_vector(SymbolicDiscreteCallback.(discrete_events; iv))
+    cont_callbacks = to_cb_vector(SymbolicContinuousCallback.(discrete_events; iv))
 
     JumpSystem{typeof(ap)}(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         ap, iv′, us′, ps′, var_to_name, observed, name, description, systems,
         defaults, guesses, initializesystem, initialization_eqs, connector_type,
-        disc_callbacks,
+        cont_callbacks, disc_callbacks,
         parameter_dependencies, metadata, gui_metadata, checks = checks)
 end
 
