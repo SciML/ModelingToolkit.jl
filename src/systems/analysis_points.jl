@@ -140,6 +140,19 @@ function Base.show(io::IO, ::MIME"text/plain", ap::AnalysisPoint)
     end
 end
 
+@latexrecipe function f(ap::AnalysisPoint)
+    index --> :subscript
+    snakecase --> true
+    ap.input === nothing && return 0
+    outs = Expr(:vect)
+    append!(outs.args, ap_var.(ap.outputs))
+    return Expr(:call, :AnalysisPoint, ap_var(ap.input), ap.name, outs)
+end
+
+function Base.show(io::IO, ::MIME"text/latex", ap::AnalysisPoint)
+    print(io, latexify(ap))
+end
+
 """
     $(TYPEDSIGNATURES)
 
