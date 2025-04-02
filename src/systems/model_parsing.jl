@@ -7,7 +7,7 @@ ModelingToolkit component or connector with metadata
 $(FIELDS)
 """
 struct Model{F, S}
-    """The constructor that returns ODESystem."""
+    """The constructor that returns System."""
     f::F
     """
     The dictionary with metadata like keyword arguments (:kwargs), base
@@ -29,8 +29,8 @@ Base.parentmodule(m::Model) = parentmodule(m.f)
 for f in (:connector, :mtkmodel)
     isconnector = f == :connector ? true : false
     @eval begin
-        macro $f(name::Symbol, body)
-            esc($(:_model_macro)(__module__, name, body, $isconnector))
+        macro $f(fullname::Union{Expr, Symbol}, body)
+            esc($(:_model_macro)(__module__, fullname, body, $isconnector))
         end
     end
 end
@@ -41,7 +41,16 @@ function flatten_equations(eqs::Vector{Union{Equation, Vector{Equation}}})
     foldl(flatten_equations, eqs; init = Equation[])
 end
 
-function _model_macro(mod, name, expr, isconnector)
+function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
+    if fullname isa Symbol
+        name, type = fullname, :System
+    else
+        if fullname.head == :(::)
+            name, type = fullname.args
+        else
+            error("`$fullname` is not a valid name.")
+        end
+    end
     exprs = Expr(:block)
     dict = Dict{Symbol, Any}(
         :constants => Dict{Symbol, Dict}(),
@@ -61,7 +70,9 @@ function _model_macro(mod, name, expr, isconnector)
 
     push!(exprs.args, :(variables = []))
     push!(exprs.args, :(parameters = []))
-    push!(exprs.args, :(systems = ODESystem[]))
+    # We build `System` by default; vectors can't be created for `System` as it is
+    # a function.
+    push!(exprs.args, :(systems = ModelingToolkit.AbstractSystem[]))
     push!(exprs.args, :(equations = Union{Equation, Vector{Equation}}[]))
     push!(exprs.args, :(defaults = Dict{Num, Union{Number, Symbol, Function}}()))
 
@@ -114,7 +125,7 @@ function _model_macro(mod, name, expr, isconnector)
     @inline pop_structure_dict!.(
         Ref(dict), [:constants, :defaults, :kwargs, :structural_parameters])
 
-    sys = :($ODESystem($(flatten_equations)(equations), $iv, variables, parameters;
+    sys = :($type($(flatten_equations)(equations), $iv, variables, parameters;
         name, description = $description, systems, gui_metadata = $gui_metadata, defaults))
 
     if length(ext) == 0
