@@ -717,6 +717,11 @@ function add_initialization_parameters(sys::AbstractSystem)
             push!(all_initialvars, x)
         end
     end
+
+    # add derivatives of all variables for steady-state initial conditions
+    if is_time_dependent(sys) && !(sys isa AbstractDiscreteSystem)
+        union!(all_initialvars, Differential(get_iv(sys)).(all_initialvars))
+    end
     for eq in parameter_dependencies(sys)
         is_variable_floatingpoint(eq.lhs) || continue
         push!(all_initialvars, eq.lhs)
