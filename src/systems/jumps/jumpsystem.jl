@@ -216,7 +216,7 @@ function JumpSystem(eqs, iv, unknowns, ps;
     JumpSystem{typeof(ap)}(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         ap, iv′, us′, ps′, var_to_name, observed, name, description, systems,
         defaults, guesses, initializesystem, initialization_eqs, connector_type,
-        cont_callbacks, disc_callbacks,
+        disc_callbacks,
         parameter_dependencies, metadata, gui_metadata, checks = checks)
 end
 
