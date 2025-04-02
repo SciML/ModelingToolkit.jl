@@ -409,8 +409,9 @@ example:
 @variables x(t)
 @parameters c(t)
 
+ev = SymbolicDiscreteCallback(1.0 => [c ~ Pre(c) + 1], discrete_parameters = c)
 @mtkbuild sys = ODESystem(
-    D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [1.0 => [c ~ Pre(c) + 1]])
+    D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [ev])
 
 prob = ODEProblem(sys, [x => 0.0], (0.0, 2pi), [c => 1.0])
 sol = solve(prob, Tsit5())
@@ -423,12 +424,12 @@ The solution object can also be interpolated with the discrete variables
 sol([1.0, 2.0], idxs = [c, c * cos(x)])
 ```
 
-Note that only time-dependent parameters will be saved. If we repeat the above example with
-this change:
+Note that only time-dependent parameters that are explicitly passed as `discrete_parameters` 
+will be saved. If we repeat the above example with `c` not a `discrete_parameter`:
 
 ```@example events
 @variables x(t)
-@parameters c
+@parameters c(t)
 
 @mtkbuild sys = ODESystem(
     D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [1.0 => [c ~ Pre(c) + 1]])
