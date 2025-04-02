@@ -14,6 +14,7 @@ Hence the "nonlocal-" component.
 More differences and pros & cons are discussed in the documentation of Attractors.jl.
 
 !!! note "Attractors and basins"
+    
     This tutorial assumes that you have some familiarity with dynamical systems,
     specifically what are attractors and basins of attraction. If you don't have
     this yet, we recommend Chapter 1 of the textbook
@@ -27,13 +28,13 @@ Let's showcase this framework by modelling a chaotic bistable dynamical system t
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@variables x(t) = -4.0 y(t) = 5.0 z(t) = 0.0
-@parameters a = 5.0 b = 0.1
+@variables x(t)=-4.0 y(t)=5.0 z(t)=0.0
+@parameters a=5.0 b=0.1
 
 eqs = [
     D(x) ~ y - x,
-    D(y) ~ - x*z + b*abs(z),
-    D(z) ~ x*y - a,
+    D(y) ~ -x * z + b * abs(z),
+    D(z) ~ x * y - a
 ]
 ```
 
@@ -74,7 +75,7 @@ To use this technique, we first need to create a tessellation of the state space
 grid = (
     range(-15.0, 15.0; length = 150), # x
     range(-20.0, 20.0; length = 150), # y
-    range(-20.0, 20.0; length = 150), # z
+    range(-20.0, 20.0; length = 150) # z
 )
 ```
 
@@ -83,9 +84,10 @@ which we then give as input to the `AttractorsViaRecurrences` mapper along with 
 ```@example Attractors
 mapper = AttractorsViaRecurrences(ds, grid;
     consecutive_recurrences = 1000,
-    consecutive_lost_steps = 100,
+    consecutive_lost_steps = 100
 )
 ```
+
 to learn about the metaparameters of the algorithm visit the documentation of Attractors.jl.
 
 This `mapper` object is incredibly powerful! It can be used to map initial conditions to attractor they converge to, while ensuring that initial conditions that converge to the same attractor are given the same label.
@@ -120,7 +122,7 @@ This is a dictionary that maps attractor IDs to the attractor sets themselves.
 ```@example Attractors
 using CairoMakie
 fig = Figure()
-ax = Axis(fig[1,1])
+ax = Axis(fig[1, 1])
 colors = ["#7143E0", "#191E44"]
 for (id, A) in attractors
     scatter!(ax, A[:, [1, 3]]; color = colors[id])
@@ -130,8 +132,8 @@ fig
 
 ## Basins of attraction
 
-Estimating the basins of attraction of these attractors is a matter of a couple lines of code. 
-First we define the state space are to estimate the basins for. 
+Estimating the basins of attraction of these attractors is a matter of a couple lines of code.
+First we define the state space are to estimate the basins for.
 Here we can re-use the `grid` we defined above. Then we only have to call
 
 ```julia
@@ -141,8 +143,9 @@ basins = basins_of_attraction(mapper, grid)
 We won't run this in this tutorial because it is a length computation (150×150×150).
 We will however estimate a slice of the 3D basins of attraction.
 DynamicalSystems.jl allows for a rather straightforward setting of initial conditions:
+
 ```@example Attractors
-ics = [Dict(:x => x, :y => 0, :z=>z) for x in grid[1] for z in grid[3]]
+ics = [Dict(:x => x, :y => 0, :z => z) for x in grid[1] for z in grid[3]]
 ```
 
 now we can estimate the basins of attraction on a slice on the x-z grid
@@ -186,6 +189,7 @@ params(θ) = [:a => 5 + 0.5cos(θ), :b => 0.1 + 0.01sin(θ)]
 θs = range(0, 2π; length = 101)
 pcurve = params.(θs)
 ```
+
 which makes an ellipsis over the parameter space.
 
 We put these three ingredients together to call the global continuation
@@ -198,7 +202,7 @@ The output of the continuation is how the attractors and their basins fractions 
 
 ```@example Attractors
 fig = plot_basins_attractors_curves(
-	fractions_cont, attractors_cont, A -> minimum(A[:, 1]), θs,
+    fractions_cont, attractors_cont, A -> minimum(A[:, 1]), θs
 )
 ```
 
