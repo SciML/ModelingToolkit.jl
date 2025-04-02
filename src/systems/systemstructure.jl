@@ -299,7 +299,6 @@ function TearingState(sys; quick_cancel = false, check = true)
             end
             v = scalarize(v)
             if v isa AbstractArray
-                v = setmetadata.(v, VariableIrreducible, true)
                 append!(varsvec, v)
             else
                 push!(varsvec, v)
