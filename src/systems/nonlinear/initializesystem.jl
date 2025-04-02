@@ -655,7 +655,17 @@ end
 function SciMLBase.late_binding_update_u0_p(
         prob, sys::AbstractSystem, u0, p, t0, newu0, newp)
     u0 === missing && return newu0, (p === missing ? copy(newp) : newp)
-    eltype(u0) <: Pair || return newu0, (p === missing ? copy(newp) : newp)
+    if !(eltype(u0) <: Pair)
+        p === missing || return newu0, newp
+        newu0 === nothing && return newu0, newp
+        newp = p === missing ? copy(newp) : newp
+        initials, repack, alias = SciMLStructures.canonicalize(
+            SciMLStructures.Initials(), newp)
+        initials = DiffEqBase.promote_u0(initials, newu0, t0)
+        newp = repack(initials)
+        setp(sys, Initial.(unknowns(sys)))(newp, newu0)
+        return newu0, newp
+    end
 
     newp = p === missing ? copy(newp) : newp
     newu0 = DiffEqBase.promote_u0(newu0, newp, t0)
