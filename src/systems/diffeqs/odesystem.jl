@@ -54,7 +54,7 @@ struct ODESystem <: AbstractODESystem
     """A set of expressions defining the costs of the system for optimal control."""
     costs::Vector
     """Takes the cost vector and returns a scalar for optimization."""
-    coalesce::Function
+    coalesce::Union{Nothing, Function}
     """
     Time-derivative matrix. Note: this field will not be defined until
     [`calculate_tgrad`](@ref) is called on the system.
@@ -209,7 +209,7 @@ struct ODESystem <: AbstractODESystem
     parent::Any
 
     function ODESystem(
-            tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, constraints, tgrad,
+            tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, constraints, costs, coalesce, tgrad,
             jac, ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses,
             torn_matching, initializesystem, initialization_eqs, schedule,
             connector_type, preface, cevents,
@@ -233,7 +233,7 @@ struct ODESystem <: AbstractODESystem
             check_units(u, deqs)
         end
         new(tag, deqs, iv, dvs, ps, tspan, var_to_name,
-            ctrls, observed, constraints, tgrad, jac,
+            ctrls, observed, constraints, costs, coalesce, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses, torn_matching,
             initializesystem, initialization_eqs, schedule, connector_type, preface,
             cevents, devents, parameter_dependencies, assertions, metadata,
@@ -247,6 +247,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         controls = Num[],
         observed = Equation[],
         constraintsystem = nothing,
+        costs = Num[],
+        coalesce = nothing,
         systems = ODESystem[],
         tspan = nothing,
         name = nothing,
@@ -327,14 +329,18 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
             cons = get_constraintsystem(sys)
             cons !== nothing && push!(conssystems, cons)
         end
-        @show conssystems
         @set! constraintsystem.systems = conssystems
+    end
+    costs = wrap.(costs)
+    
+    if length(costs) > 1 && isnothing(coalesce)
+        error("Must specify a coalesce function for the costs vector.")
     end
 
     assertions = Dict{BasicSymbolic, Any}(unwrap(k) => v for (k, v) in assertions)
 
     ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-        deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, constraintsystem, tgrad, jac,
+        deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, constraintsystem, costs, coalesce, tgrad, jac,
         ctrl_jac, Wfact, Wfact_t, name, description, systems,
         defaults, guesses, nothing, initializesystem,
         initialization_eqs, schedule, connector_type, preface, cont_callbacks,
@@ -342,7 +348,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         metadata, gui_metadata, is_dde, tstops, checks = checks)
 end
 
-function ODESystem(eqs, iv; constraints = Equation[], costs = Equation[], kwargs...)
+function ODESystem(eqs, iv; constraints = Equation[], costs = Num[], kwargs...)
     diffvars, allunknowns, ps, eqs = process_equations(eqs, iv)
 
     for eq in get(kwargs, :parameter_dependencies, Equation[])
@@ -394,9 +400,10 @@ function ODESystem(eqs, iv; constraints = Equation[], costs = Equation[], kwargs
             !in(p, new_ps) && push!(new_ps, p)
         end
     end
+    costs = wrap.(costs)
 
     return ODESystem(eqs, iv, collect(Iterators.flatten((diffvars, algevars, consvars))),
-        collect(new_ps); constraintsystem, kwargs...)
+                     collect(new_ps); constraintsystem, costs, kwargs...)
 end
 
 # NOTE: equality does not check cached Jacobian
@@ -411,7 +418,9 @@ function Base.:(==)(sys1::ODESystem, sys2::ODESystem)
         _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
         _eq_unordered(continuous_events(sys1), continuous_events(sys2)) &&
         _eq_unordered(discrete_events(sys1), discrete_events(sys2)) &&
-        all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
+        all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2))) &&
+        isequal(get_constraintsystem(sys1), get_constraintssystem(sys2)) &&
+        _eq_unordered(get_costs(sys1), get_costs(sys2))
 end
 
 function flatten(sys::ODESystem, noeqs = false)
@@ -768,7 +777,7 @@ end
 """
 Process the costs for the constraint system.
 """
-function process_costs(costs::Vector{Equation}, sts, ps, iv)
+function process_costs(costs::Vector, sts, ps, iv)
     coststs = OrderedSet()
     costps = OrderedSet()
     for cost in costs
@@ -776,6 +785,7 @@ function process_costs(costs::Vector{Equation}, sts, ps, iv)
     end
 
     validate_vars_and_find_ps!(coststs, costps, sts, iv)
+    coststs, costps
 end
 
 """
@@ -813,9 +823,34 @@ function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
     end
 end
 
-function generate_cost_function(sys::ODESystem)
+"""
+Generate a function that takes a solution object and computes the cost function obtained by coalescing the costs vector.
+"""
+function generate_cost_function(sys::ODESystem, kwargs...)
     costs = get_costs(sys)
     coalesce = get_coalesce(sys)
-    cost_fn = build_function_wrapper()
-    return (u, p, t) -> coalesce(cost_fn(u, p, t))
+    iv = get_iv(sys)
+
+    ps = parameters(sys; initial_parameters = false)
+    sts = unknowns(sys)
+    np = length(ps)
+    ns = length(sts)
+    stidxmap = Dict([v => i for (i, v) in enumerate(sts)])
+    pidxmap = Dict([v => i for (i, v) in enumerate(ps)])
+
+    @variables sol(..)[1:ns]
+    for st in vars(costs)
+        x = operation(st)
+        t = only(arguments(st))
+        idx = stidxmap[x(iv)]
+
+        costs = map(c -> Symbolics.fast_substitute(c, Dict(x(t) => sol(t)[idx])), costs)
+    end
+
+    _p = reorder_parameters(sys, ps)
+    fs = build_function_wrapper(sys, costs, sol, _p..., t; output_type = Array, kwargs...)
+    vc_oop, vc_iip = eval_or_rgf.(fs)
+
+    cost(sol, p, t) = coalesce(vc_oop(sol, p, t))
+    return cost
 end

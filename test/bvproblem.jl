@@ -11,7 +11,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 solvers = [MIRK4]
 daesolvers = [Ascher2, Ascher4, Ascher6]
 
-let
+@testset "Lotka-Volterra" begin
     @parameters α=7.5 β=4.0 γ=8.0 δ=5.0
     @variables x(t)=1.0 y(t)=2.0
 
@@ -47,7 +47,7 @@ let
 end
 
 ### Testing on pendulum
-let
+@testset "Pendulum" begin
     @parameters g=9.81 L=1.0
     @variables θ(t)=π / 2 θ_t(t)
 
@@ -86,7 +86,7 @@ end
 ##################################################################
 
 # Test generation of boundary condition function using `generate_function_bc`. Compare solutions to manually written boundary conditions
-let
+@testset "Boundary Condition Compilation" begin
     @parameters α=1.5 β=1.0 γ=3.0 δ=1.0
     @variables x(..) y(..)
     eqs = [D(x(t)) ~ α * x(t) - β * x(t) * y(t),
@@ -168,7 +168,7 @@ function test_solvers(
 end
 
 # Simple ODESystem with BVP constraints.
-let
+@testset "ODE with constraints" begin
     @parameters α=1.5 β=1.0 γ=3.0 δ=1.0
     @variables x(..) y(..)
 
@@ -274,3 +274,26 @@ end
 #     bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap; guesses, check_length = false)
 #     test_solvers(daesolvers, bvp, u0map, constr, get_alg_eqs(pend))
 # end
+
+@testset "Cost function compilation" begin
+    @parameters α=1.5 β=1.0 γ=3.0 δ=1.0
+    @variables x(..) y(..)
+
+    eqs = [D(x(t)) ~ α * x(t) - β * x(t) * y(t),
+        D(y(t)) ~ -γ * y(t) + δ * x(t) * y(t)]
+
+    tspan = (0.0, 1.0)
+    u0map = [x(t) => 4.0, y(t) => 2.0]
+    parammap = [α => 7.5, β => 4, γ => 8.0, δ => 5.0]
+    costs = [x(0.6), x(0.3)^2]
+    consolidate(u) = (u[1] + 3)^2 + u[2]
+    @mtkbuild lksys = ODESystem(eqs, t; costs, coalesce = consolidate)
+    @test_throws ErrorException @mtkbuild lksys2 = ODESystem(eqs, t; costs)
+
+    prob = ODEProblem(lksys, u0map, tspan, parammap)
+    sol = solve(prob, Tsit5())
+    costfn = ModelingToolkit.generate_cost_function(lksys)
+    p = prob.p 
+    t = tspan[2]
+    @test costfn(sol, p, t) ≈ (sol(0.6)[1] + 3)^2 + sol(0.3)[1]^2
+end
