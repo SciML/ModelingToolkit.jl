@@ -60,7 +60,8 @@ end
 @parameters a b[1:3] c(t) d::Integer e[1:3] f[1:3, 1:3]::Int g::Vector{AbstractFloat} h::String
 @named sys = ODESystem(
     Equation[], t, [], [a, b, c, d, e, f, g, h],
-    continuous_events = [[a ~ 0] => [c ~ 0]])
+    continuous_events = [ModelingToolkit.SymbolicContinuousCallback(
+        [a ~ 0] => [c ~ 0], discrete_parameters = c)])
 sys = complete(sys)
 
 ivs = Dict(c => 3a, b => ones(3), a => 1.0, d => 4, e => [5.0, 6.0, 7.0],

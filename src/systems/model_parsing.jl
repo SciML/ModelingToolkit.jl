@@ -130,7 +130,8 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
 
     sys = :($ODESystem($(flatten_equations)(equations), $iv, variables, parameters;
         name, description = $description, systems, gui_metadata = $gui_metadata,
-        defaults, continuous_events = cont_events, discrete_events = disc_events))
+        continuous_events = [$(c_evts...)], discrete_events = [$(d_evts...)],
+        defaults))
     sys = :($type($(flatten_equations)(equations), $iv, variables, parameters;
         name, description = $description, systems, gui_metadata = $gui_metadata, defaults,
         costs = [$(costs...)], constraints = [$(cons...)], consolidate = $consolidate))
@@ -143,25 +144,6 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
 
     isconnector && push!(exprs.args,
         :($Setfield.@set!(var"#___sys___".connector_type=$connector_type(var"#___sys___"))))
-
-    if !isempty(d_evts) || !isempty(c_evts)
-        push!(exprs.args, :(alg_eqs = $(alg_equations)(var"#___sys___")))
-        !isempty(d_evts) && begin
-            d_exprs = [:($(SymbolicDiscreteCallback)(
-                           $(evt.args[1]); iv = $iv, alg_eqs, $(evt.args[2])...))
-                       for evt in d_evts]
-            push!(exprs.args,
-                :($Setfield.@set!(var"#___sys___".discrete_events=[$(d_exprs...)])))
-        end
-
-        !isempty(c_evts) && begin
-            c_exprs = [:($(SymbolicContinuousCallback)(
-                           $(evt.args[1]); iv = $iv, alg_eqs, $(evt.args[2])...))
-                       for evt in c_evts]
-            push!(exprs.args,
-                :($Setfield.@set!(var"#___sys___".continuous_events=[$(c_exprs...)])))
-        end
-    end
 
     f = if length(where_types) == 0
         :($(Symbol(:__, name, :__))(; name, $(kwargs...)) = $exprs)
