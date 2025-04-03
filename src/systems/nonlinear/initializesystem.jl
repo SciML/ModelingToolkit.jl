@@ -654,6 +654,7 @@ end
 
 function SciMLBase.late_binding_update_u0_p(
         prob, sys::AbstractSystem, u0, p, t0, newu0, newp)
+    supports_initialization(sys) || return newu0, newp
     u0 === missing && return newu0, (p === missing ? copy(newp) : newp)
     # non-symbolic u0 updates initials...
     if !(eltype(u0) <: Pair)
