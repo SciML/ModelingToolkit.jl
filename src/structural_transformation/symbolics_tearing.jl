@@ -378,6 +378,7 @@ function generate_derivative_variables!(
     # For variable x, make dummy derivative x_t if the
     # derivative is in the system
     for v in 1:length(var_to_diff)
+        @show graph
         dv = var_to_diff[v]
         dv isa Int || continue
         solved = var_eq_matching[dv] isa Int
@@ -403,6 +404,10 @@ function generate_derivative_variables!(
         v_t = add_dd_variable!(structure, fullvars, x_t, dv)
         # Add `D(x) - x_t ~ 0` to the graph
         dummy_eq = add_dd_equation!(structure, neweqs, 0 ~ dx - x_t, dv, v_t)
+        # Update graph to say, all the equations featuring D(x) also feature x_t
+        for e in 𝑑neighbors(graph, dv)
+            add_edge!(graph, e, v_t)
+        end
 
         # Update matching
         push!(var_eq_matching, unassigned)

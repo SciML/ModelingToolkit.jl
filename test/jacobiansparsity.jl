@@ -86,7 +86,7 @@ prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
 @testset "W matrix sparsity" begin
     t = ModelingToolkit.t_nounits
     @parameters g
-    @variables x(t) y(t) [state_priority = 10] λ(t)
+    @variables x(t) y(t) λ(t)
     eqs = [D(D(x)) ~ λ * x
            D(D(y)) ~ λ * y - g
            x^2 + y^2 ~ 1]
@@ -105,4 +105,10 @@ prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
     p = prob.p
     t = 0.0
     @test_throws AssertionError jac!(similar(jac_prototype, Float64), u, p, t)
+
+    W, W! = generate_W(pend; expression = Val{false}, sparse = true)
+    γ = .1
+    M = sparse(calculate_massmatrix(pend))
+    @test_throws AssertionError W!(similar(jac_prototype, Float64), u, p, γ, t)
+    @test W!(similar(W_prototype, Float64), u, p, γ, t) == 0.1 * M + jac!(similar(W_prototype, Float64), u, p, t)
 end

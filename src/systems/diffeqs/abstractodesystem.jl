@@ -143,15 +143,20 @@ function generate_W(sys::AbstractODESystem, γ = 1., dvs = unknowns(sys),
         simplify = false, sparse = false, kwargs...)
     @variables ˍ₋gamma
     M = calculate_massmatrix(sys; simplify)
+    sparse && (M = SparseArrays.sparse(M))
     J = calculate_jacobian(sys; simplify, sparse, dvs)
     W = ˍ₋gamma*M + J
+    @show W
 
     p = reorder_parameters(sys, ps)
+    @show length(p)
     return build_function_wrapper(sys, W, 
         dvs,
         p...,
         ˍ₋gamma,
         get_iv(sys);
+        wrap_code = sparse ? assert_jac_length_header(sys) : (identity, identity),
+        p_end = 1 + length(p),
         kwargs...)
 end
 
