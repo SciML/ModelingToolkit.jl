@@ -699,7 +699,7 @@ function compile_affect(eqs::Vector{Equation}, cb, sys, dvs, ps; outputidxs = no
                         add_integrator_header(sys, integ, outvar),
             outputidxs = update_inds,
             create_bindings = false,
-            kwargs...)
+            kwargs..., cse = false)
         # applied user-provided function to the generated expression
         if postprocess_affect_expr! !== nothing
             postprocess_affect_expr!(rf_ip, integ)
@@ -729,7 +729,7 @@ function generate_single_rootfinding_callback(
     end
 
     rf_oop, rf_ip = generate_custom_function(
-        sys, [eq.rhs], dvs, ps; expression = Val{false}, kwargs...)
+        sys, [eq.rhs], dvs, ps; expression = Val{false}, kwargs..., cse = false)
     affect_function = compile_affect_fn(cb, sys, dvs, ps, kwargs)
     cond = function (u, t, integ)
         if DiffEqBase.isinplace(integ.sol.prob)
@@ -780,7 +780,7 @@ function generate_vector_rootfinding_callback(
 
     rhss = map(x -> x.rhs, eqs)
     _, rf_ip = generate_custom_function(
-        sys, rhss, dvs, ps; expression = Val{false}, kwargs...)
+        sys, rhss, dvs, ps; expression = Val{false}, kwargs..., cse = false)
 
     affect_functions = @NamedTuple{
         affect::Function,

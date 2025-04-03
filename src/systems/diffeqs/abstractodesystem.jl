@@ -312,12 +312,13 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         analytic = nothing,
         split_idxs = nothing,
         initialization_data = nothing,
+        cse = true,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEFunction`")
     end
     f_gen = generate_function(sys, dvs, ps; expression = Val{true},
-        expression_module = eval_module, checkbounds = checkbounds,
+        expression_module = eval_module, checkbounds = checkbounds, cse,
         kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
     f = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(f_oop, f_iip)
@@ -333,7 +334,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         tgrad_gen = generate_tgrad(sys, dvs, ps;
             simplify = simplify,
             expression = Val{true},
-            expression_module = eval_module,
+            expression_module = eval_module, cse,
             checkbounds = checkbounds, kwargs...)
         tgrad_oop, tgrad_iip = eval_or_rgf.(tgrad_gen; eval_expression, eval_module)
         _tgrad = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(tgrad_oop, tgrad_iip)
@@ -345,7 +346,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         jac_gen = generate_jacobian(sys, dvs, ps;
             simplify = simplify, sparse = sparse,
             expression = Val{true},
-            expression_module = eval_module,
+            expression_module = eval_module, cse,
             checkbounds = checkbounds, kwargs...)
         jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
 
@@ -365,7 +366,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
     end
 
     observedfun = ObservedFunctionCache(
-        sys; steady_state, eval_expression, eval_module, checkbounds)
+        sys; steady_state, eval_expression, eval_module, checkbounds, cse)
 
     jac_prototype = if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
@@ -420,12 +421,13 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         eval_module = @__MODULE__,
         checkbounds = false,
         initialization_data = nothing,
+        cse = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEFunction`")
     end
     f_gen = generate_function(sys, dvs, ps; implicit_dae = true,
-        expression = Val{true},
+        expression = Val{true}, cse,
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
@@ -435,7 +437,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         jac_gen = generate_dae_jacobian(sys, dvs, ps;
             simplify = simplify, sparse = sparse,
             expression = Val{true},
-            expression_module = eval_module,
+            expression_module = eval_module, cse,
             checkbounds = checkbounds, kwargs...)
         jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
 
@@ -445,7 +447,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
     end
 
     observedfun = ObservedFunctionCache(
-        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
+        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false), cse)
 
     jac_prototype = if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
@@ -479,6 +481,7 @@ function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         eval_module = @__MODULE__,
         checkbounds = false,
         initialization_data = nothing,
+        cse = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `DDEFunction`")
@@ -486,7 +489,7 @@ function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
     f_gen = generate_function(sys, dvs, ps; isdde = true,
         expression = Val{true},
         expression_module = eval_module, checkbounds = checkbounds,
-        kwargs...)
+        cse, kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
     f = GeneratedFunctionWrapper{(3, 4, is_split(sys))}(f_oop, f_iip)
 
@@ -503,6 +506,7 @@ function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys
         eval_module = @__MODULE__,
         checkbounds = false,
         initialization_data = nothing,
+        cse = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `SDDEFunction`")
@@ -510,12 +514,12 @@ function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys
     f_gen = generate_function(sys, dvs, ps; isdde = true,
         expression = Val{true},
         expression_module = eval_module, checkbounds = checkbounds,
-        kwargs...)
+        cse, kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
     f = GeneratedFunctionWrapper{(3, 4, is_split(sys))}(f_oop, f_iip)
 
     g_gen = generate_diffusion_function(sys, dvs, ps; expression = Val{true},
-        isdde = true, kwargs...)
+        isdde = true, cse, kwargs...)
     g_oop, g_iip = eval_or_rgf.(g_gen; eval_expression, eval_module)
     g = GeneratedFunctionWrapper{(3, 4, is_split(sys))}(g_oop, g_iip)
 
@@ -841,6 +845,7 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
         warn_initialize_determined = true,
         eval_expression = false,
         eval_module = @__MODULE__,
+        cse = true,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `BVProblem`")
@@ -864,12 +869,12 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
     _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
     f, u0, p = process_SciMLProblem(ODEFunction{iip, specialize}, sys, _u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan, guesses,
-        check_length, warn_initialize_determined, eval_expression, eval_module, kwargs...)
+        check_length, warn_initialize_determined, eval_expression, eval_module, cse, kwargs...)
 
     stidxmap = Dict([v => i for (i, v) in enumerate(sts)])
     u0_idxs = has_alg_eqs(sys) ? collect(1:length(sts)) : [stidxmap[k] for (k, v) in u0map]
 
-    fns = generate_function_bc(sys, u0, u0_idxs, tspan)
+    fns = generate_function_bc(sys, u0, u0_idxs, tspan; cse)
     bc_oop, bc_iip = eval_or_rgf.(fns; eval_expression, eval_module)
     bc(sol, p, t) = bc_oop(sol, p, t)
     bc(resid, u, p, t) = bc_iip(resid, u, p, t)
@@ -988,15 +993,16 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         eval_expression = false,
         eval_module = @__MODULE__,
         u0_constructor = identity,
+        cse = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DDEProblem`")
     end
     f, u0, p = process_SciMLProblem(DDEFunction{iip}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
-        symbolic_u0 = true, u0_constructor,
+        symbolic_u0 = true, u0_constructor, cse,
         check_length, eval_expression, eval_module, kwargs...)
-    h_gen = generate_history(sys, u0; expression = Val{true})
+    h_gen = generate_history(sys, u0; expression = Val{true}, cse)
     h_oop, h_iip = eval_or_rgf.(h_gen; eval_expression, eval_module)
     h = h_oop
     u0 = float.(h(p, tspan[1]))
@@ -1027,6 +1033,7 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         eval_expression = false,
         eval_module = @__MODULE__,
         u0_constructor = identity,
+        cse = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `SDDEProblem`")
@@ -1034,8 +1041,8 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     f, u0, p = process_SciMLProblem(SDDEFunction{iip}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
         symbolic_u0 = true, eval_expression, eval_module, u0_constructor,
-        check_length, kwargs...)
-    h_gen = generate_history(sys, u0; expression = Val{true})
+        check_length, cse, kwargs...)
+    h_gen = generate_history(sys, u0; expression = Val{true}, cse)
     h_oop, h_iip = eval_or_rgf.(h_gen; eval_expression, eval_module)
     h = h_oop
     u0 = h(p, tspan[1])

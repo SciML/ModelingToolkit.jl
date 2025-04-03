@@ -373,19 +373,19 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
         eval_expression = false,
         eval_module = @__MODULE__,
         sparse = false, simplify = false,
-        initialization_data = nothing,
+        initialization_data = nothing, cse = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearFunction`")
     end
-    f_gen = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
+    f_gen = generate_function(sys, dvs, ps; expression = Val{true}, cse, kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
     f = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, f_iip)
 
     if jac
         jac_gen = generate_jacobian(sys, dvs, ps;
             simplify = simplify, sparse = sparse,
-            expression = Val{true}, kwargs...)
+            expression = Val{true}, cse, kwargs...)
         jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
         _jac = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(jac_oop, jac_iip)
     else
@@ -393,7 +393,7 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
     end
 
     observedfun = ObservedFunctionCache(
-        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false))
+        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false), cse)
 
     if length(dvs) == length(equations(sys))
         resid_prototype = nothing
@@ -606,7 +606,7 @@ end
 
 function CacheWriter(sys::AbstractSystem, buffer_types::Vector{TypeT},
         exprs::Dict{TypeT, Vector{Any}}, solsyms, obseqs::Vector{Equation};
-        eval_expression = false, eval_module = @__MODULE__)
+        eval_expression = false, eval_module = @__MODULE__, cse = true)
     ps = parameters(sys; initial_parameters = true)
     rps = reorder_parameters(sys, ps)
     obs_assigns = [eq.lhs ← eq.rhs for eq in obseqs]
@@ -625,7 +625,7 @@ function CacheWriter(sys::AbstractSystem, buffer_types::Vector{TypeT},
         sys, nothing, :out,
         DestructuredArgs(DestructuredArgs.(solsyms), generated_argument_name(1)),
         rps...; p_start = 3, p_end = length(rps) + 2,
-        expression = Val{true}, add_observed = false,
+        expression = Val{true}, add_observed = false, cse,
         extra_assignments = [array_assignments; obs_assigns; body])
     fn = eval_or_rgf(fn; eval_expression, eval_module)
     fn = GeneratedFunctionWrapper{(3, 3, is_split(sys))}(fn, nothing)
@@ -636,7 +636,7 @@ struct SCCNonlinearFunction{iip} end
 
 function SCCNonlinearFunction{iip}(
         sys::NonlinearSystem, _eqs, _dvs, _obs, cachesyms; eval_expression = false,
-        eval_module = @__MODULE__, kwargs...) where {iip}
+        eval_module = @__MODULE__, cse = true, kwargs...) where {iip}
     ps = parameters(sys; initial_parameters = true)
     rps = reorder_parameters(sys, ps)
 
@@ -646,7 +646,7 @@ function SCCNonlinearFunction{iip}(
     f_gen = build_function_wrapper(sys,
         rhss, _dvs, rps..., cachesyms...; p_start = 2,
         p_end = length(rps) + length(cachesyms) + 1, add_observed = false,
-        extra_assignments = obs_assignments, expression = Val{true})
+        extra_assignments = obs_assignments, expression = Val{true}, cse)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
     f = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, f_iip)
 
@@ -666,7 +666,8 @@ function SciMLBase.SCCNonlinearProblem(sys::NonlinearSystem, args...; kwargs...)
 end
 
 function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
-        parammap = SciMLBase.NullParameters(); eval_expression = false, eval_module = @__MODULE__, kwargs...) where {iip}
+        parammap = SciMLBase.NullParameters(); eval_expression = false, eval_module = @__MODULE__,
+        cse = true, kwargs...) where {iip}
     if !iscomplete(sys) || get_tearing_state(sys) === nothing
         error("A simplified `NonlinearSystem` is required. Call `structural_simplify` on the system before creating an `SCCNonlinearProblem`.")
     end
@@ -801,14 +802,14 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
             solsyms = getindex.((dvs,), view(var_sccs, 1:(i - 1)))
             push!(explicitfuns,
                 CacheWriter(sys, cachetypes, cacheexprs, solsyms, obs[_prevobsidxs];
-                    eval_expression, eval_module))
+                    eval_expression, eval_module, cse))
         end
 
         cachebufsyms = Tuple(map(cachetypes) do T
             get(cachevars, T, [])
         end)
         f = SCCNonlinearFunction{iip}(
-            sys, _eqs, _dvs, _obs, cachebufsyms; eval_expression, eval_module, kwargs...)
+            sys, _eqs, _dvs, _obs, cachebufsyms; eval_expression, eval_module, cse, kwargs...)
         push!(nlfuns, f)
     end
 
