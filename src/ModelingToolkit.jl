@@ -291,7 +291,7 @@ export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbanc
        hasunit, getunit, hasconnect, getconnect,
        hasmisc, getmisc, state_priority
 export ode_order_lowering, dae_order_lowering, liouville_transform,
-       change_independent_variable
+       change_independent_variable, substitute_component
 export PDESystem
 export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
