@@ -126,6 +126,33 @@ function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
         dvs,
         p...,
         get_iv(sys);
+        wrap_code = sparse ? assert_jac_length_header(sys) : (identity, identity),
+        kwargs...)
+end
+
+function assert_jac_length_header(sys)
+    W = W_sparsity(sys)
+
+    identity, expr -> Func([expr.args...], [], LiteralExpr(quote
+        @assert nnz($(expr.args[1])) == nnz(W)
+        expr.body
+    end))
+end
+
+function generate_W(sys::AbstractODESystem, γ = 1., dvs = unknowns(sys),
+        ps = parameters(sys; initial_parameters = true); 
+        simplify = false, sparse = false, kwargs...)
+    @variables ˍ₋gamma
+    M = calculate_massmatrix(sys; simplify)
+    J = calculate_jacobian(sys; simplify, sparse, dvs)
+    W = ˍ₋gamma*M + J
+
+    p = reorder_parameters(sys, ps)
+    return build_function_wrapper(sys, W, 
+        dvs,
+        p...,
+        ˍ₋gamma,
+        get_iv(sys);
         kwargs...)
 end
 
@@ -264,6 +291,12 @@ function jacobian_dae_sparsity(sys::AbstractODESystem)
     J1 + J2
 end
 
+function W_sparsity(sys::AbstractODESystem) 
+    jac_sparsity = jacobian_sparsity(sys)
+    M_sparsity = sparse(iszero.(calculate_massmatrix(sys)))
+    jac_sparsity .|| M_sparsity
+end
+
 function isautonomous(sys::AbstractODESystem)
     tgrad = calculate_tgrad(sys; simplify = true)
     all(iszero, tgrad)
@@ -368,15 +401,17 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
     observedfun = ObservedFunctionCache(
         sys; steady_state, eval_expression, eval_module, checkbounds, cse)
 
-    jac_prototype = if sparse
+    if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
         if jac
-            similar(calculate_jacobian(sys, sparse = sparse), uElType)
+            jac_prototype = similar(calculate_jacobian(sys; sparse), uElType)
         else
-            similar(jacobian_sparsity(sys), uElType)
+            jac_prototype = similar(jacobian_sparsity(sys), uElType)
         end
+        W_prototype = similar(W_sparsity(sys), uElType)
     else
-        nothing
+        jac_prototype = nothing
+        W_prototype = nothing
     end
 
     @set! sys.split_idxs = split_idxs
@@ -386,7 +421,8 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         jac = _jac === nothing ? nothing : _jac,
         tgrad = _tgrad === nothing ? nothing : _tgrad,
         mass_matrix = _M,
-        jac_prototype = jac_prototype,
+        jac_prototype = W_prototype,
+        W_prototype = W_prototype,
         observed = observedfun,
         sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
         analytic = analytic,

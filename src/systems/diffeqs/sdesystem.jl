@@ -642,15 +642,17 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
         _Wfact, _Wfact_t = nothing, nothing
     end
 
-    jac_prototype = if sparse
+    if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
         if jac
-            similar(calculate_jacobian(sys, sparse = sparse), uElType)
+            jac_prototype = similar(calculate_jacobian(sys; sparse), uElType)
         else
-            similar(jacobian_sparsity(sys), uElType)
+            jac_prototype = similar(jacobian_sparsity(sys), uElType)
         end
+        W_prototype = similar(W_sparsity(sys), uElType)
     else
-        nothing
+        jac_prototype = nothing
+        W_prototype = nothing
     end
 
     M = calculate_massmatrix(sys)
@@ -664,7 +666,8 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
         jac = _jac === nothing ? nothing : _jac,
         tgrad = _tgrad === nothing ? nothing : _tgrad,
         mass_matrix = _M,
-        jac_prototype = jac_prototype,
+        jac_prototype = W_prototype,
+        W_prototype = W_prototype,
         observed = observedfun,
         sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
         analytic = analytic,
