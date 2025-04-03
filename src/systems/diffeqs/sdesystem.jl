@@ -663,7 +663,7 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
         tgrad = _tgrad === nothing ? nothing : _tgrad,
-        mass_matrix = _M
+        mass_matrix = _M,
         jac_prototype = jac_prototype,
         observed = observedfun,
         sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
