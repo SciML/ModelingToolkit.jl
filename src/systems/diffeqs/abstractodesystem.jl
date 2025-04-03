@@ -146,10 +146,8 @@ function generate_W(sys::AbstractODESystem, γ = 1., dvs = unknowns(sys),
     sparse && (M = SparseArrays.sparse(M))
     J = calculate_jacobian(sys; simplify, sparse, dvs)
     W = ˍ₋gamma*M + J
-    @show W
 
     p = reorder_parameters(sys, ps)
-    @show length(p)
     return build_function_wrapper(sys, W, 
         dvs,
         p...,

@@ -378,7 +378,6 @@ function generate_derivative_variables!(
     # For variable x, make dummy derivative x_t if the
     # derivative is in the system
     for v in 1:length(var_to_diff)
-        @show graph
         dv = var_to_diff[v]
         dv isa Int || continue
         solved = var_eq_matching[dv] isa Int

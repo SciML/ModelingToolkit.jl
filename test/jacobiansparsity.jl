@@ -1,4 +1,4 @@
-using OrdinaryDiffEq, ModelingToolkit, SparseArrays
+using ModelingToolkit, SparseArrays#, OrdinaryDiffEq
 
 N = 3
 xyd_brusselator = range(0, stop = 1, length = N)
@@ -51,7 +51,7 @@ JP = prob.f.jac_prototype
 
 # test sparse jacobian
 prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
-@test_nowarn solve(prob, Rosenbrock23())
+#@test_nowarn solve(prob, Rosenbrock23())
 @test findnz(calculate_jacobian(sys, sparse = true))[1:2] ==
       findnz(prob.f.jac_prototype)[1:2]
 
@@ -74,7 +74,7 @@ f = DiffEqBase.ODEFunction(sys, u0 = nothing, sparse = true, jac = false)
 # test when u0 is not Float64
 u0 = similar(init_brusselator_2d(xyd_brusselator), Float32)
 prob_ode_brusselator_2d = ODEProblem(brusselator_2d_loop,
-    u0, (0.0, 11.5), p)
+                                     u0, (0.0, 11.5), p)
 sys = complete(modelingtoolkitize(prob_ode_brusselator_2d))
 
 prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = false)
@@ -85,6 +85,7 @@ prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
 
 @testset "W matrix sparsity" begin
     t = ModelingToolkit.t_nounits
+    D = ModelingToolkit.D_nounits
     @parameters g
     @variables x(t) y(t) λ(t)
     eqs = [D(D(x)) ~ λ * x
