@@ -239,7 +239,7 @@ testdict = Dict([:test => 1])
 
     prob_ = remake(prob, u0 = [1.0, 2.0, 3.0], p = [a => 1.1, b => 1.2, c => 1.3])
     @test prob_.u0 == [1.0, 2.0, 3.0]
-    initials = unknowns(sys) .=> ones(3)
+    initials = unknowns(sys) .=> [1.0, 2.0, 3.0]
     @test prob_.p == MTKParameters(sys, [a => 1.1, b => 1.2, c => 1.3, initials...])
 
     prob_ = remake(prob, u0 = Dict(y => 2.0), p = Dict(a => 2.0))

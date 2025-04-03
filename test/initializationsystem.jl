@@ -1476,3 +1476,18 @@ end
         @test sol.ps[Γ[1]] ≈ 5.0
     end
 end
+
+@testset "Issue#3504: Update initials when `remake` called with non-symbolic `u0`" begin
+    @variables x(t) y(t)
+    @parameters c1 c2
+    @mtkbuild sys = ODESystem([D(x) ~ -c1 * x + c2 * y, D(y) ~ c1 * x - c2 * y], t)
+    prob1 = ODEProblem(sys, [1.0, 2.0], (0.0, 1.0), [c1 => 1.0, c2 => 2.0])
+    prob2 = remake(prob1, u0 = [2.0, 3.0])
+    prob3 = remake(prob1, u0 = [2.0, 3.0], p = [c1 => 2.0])
+    integ1 = init(prob1, Tsit5())
+    integ2 = init(prob2, Tsit5())
+    integ3 = init(prob3, Tsit5())
+    @test integ2.u ≈ [2.0, 3.0]
+    @test integ3.u ≈ [2.0, 3.0]
+    @test integ3.ps[c1] ≈ 2.0
+end

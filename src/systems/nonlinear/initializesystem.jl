@@ -654,17 +654,40 @@ end
 
 function SciMLBase.late_binding_update_u0_p(
         prob, sys::AbstractSystem, u0, p, t0, newu0, newp)
+    supports_initialization(sys) || return newu0, newp
     u0 === missing && return newu0, (p === missing ? copy(newp) : newp)
-    eltype(u0) <: Pair || return newu0, (p === missing ? copy(newp) : newp)
+    # non-symbolic u0 updates initials...
+    if !(eltype(u0) <: Pair)
+        # if `p` is not provided or is symbolic
+        p === missing || eltype(p) <: Pair || return newu0, newp
+        newu0 === nothing && return newu0, newp
+        all(is_parameter(sys, Initial(x)) for x in unknowns(sys)) || return newu0, newp
+        newp = p === missing ? copy(newp) : newp
+        initials, repack, alias = SciMLStructures.canonicalize(
+            SciMLStructures.Initials(), newp)
+        if eltype(initials) != eltype(newu0)
+            initials = DiffEqBase.promote_u0(initials, newu0, t0)
+            newp = repack(initials)
+        end
+        if length(newu0) != length(unknowns(sys))
+            throw(ArgumentError("Expected `newu0` to be of same length as unknowns ($(length(unknowns(sys)))). Got $(typeof(newu0)) of length $(length(newu0))"))
+        end
+        setp(sys, Initial.(unknowns(sys)))(newp, newu0)
+        return newu0, newp
+    end
 
     newp = p === missing ? copy(newp) : newp
     newu0 = DiffEqBase.promote_u0(newu0, newp, t0)
     tunables, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Tunable(), newp)
-    tunables = DiffEqBase.promote_u0(tunables, newu0, t0)
-    newp = repack(tunables)
+    if eltype(tunables) != eltype(newu0)
+        tunables = DiffEqBase.promote_u0(tunables, newu0, t0)
+        newp = repack(tunables)
+    end
     initials, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Initials(), newp)
-    initials = DiffEqBase.promote_u0(initials, newu0, t0)
-    newp = repack(initials)
+    if eltype(initials) != eltype(newu0)
+        initials = DiffEqBase.promote_u0(initials, newu0, t0)
+        newp = repack(initials)
+    end
 
     allsyms = all_symbols(sys)
     for (k, v) in u0
