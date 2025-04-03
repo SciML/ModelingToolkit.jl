@@ -132,9 +132,10 @@ end
 
 function assert_jac_length_header(sys)
     W = W_sparsity(sys)
-
+    (W_Is, W_Js, W_Vs) = findnz(W)
     identity, expr -> Func([expr.args...], [], LiteralExpr(quote
-        @assert nnz($(expr.args[1])) == nnz(W)
+        J_Is, J_Js, J_Vs = $(findnz)($(expr.args[1]))
+        @assert (J_Is, J_Js) == ($W_Is, $W_Js)
         expr.body
     end))
 end
