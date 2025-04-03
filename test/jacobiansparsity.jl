@@ -1,4 +1,4 @@
-using OrdinaryDiffEq, ModelingToolkit, Test, SparseArrays
+using OrdinaryDiffEq, ModelingToolkit, SparseArrays
 
 N = 3
 xyd_brusselator = range(0, stop = 1, length = N)
@@ -82,3 +82,26 @@ prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = false)
 
 prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
 @test eltype(prob.f.jac_prototype) == Float32
+
+@testset "W matrix sparsity" begin
+    @parameters g
+    @variables x(t) y(t) [state_priority = 10] λ(t)
+    eqs = [D(D(x)) ~ λ * x
+           D(D(y)) ~ λ * y - g
+           x^2 + y^2 ~ 1]
+    @mtkbuild pend = ODESystem(eqs, t)
+
+    u0 = [x => 1, y => 0]
+    prob = ODEProblem(pend, u0, (0, 11.5), [g => 1], guesses = [λ => 1], sparse = true, jac = true)
+    jac, jac! = generate_jacobian(pend; expression = Val{false}, sparse = true)
+    jac_prototype = ModelingToolkit.jacobian_sparsity(pend)
+    W_prototype = ModelingToolkit.W_sparsity(pend)
+    @test nnz(W_prototype) == nnz(jac_prototype) + 2
+
+    @test findnz(prob.f.jac_prototype)[1:2] == findnz(W_prototype)[1:2]
+
+    u = zeros(5)
+    p = prob.p
+    t = 0.0
+    @test_throws AssertionError jac!(similar(jac_prototype, Float64), u, p, t)
+end

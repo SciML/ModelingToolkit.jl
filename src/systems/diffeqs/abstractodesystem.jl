@@ -132,10 +132,8 @@ end
 
 function assert_jac_length_header(sys)
     W = W_sparsity(sys)
-    (W_Is, W_Js, W_Vs) = findnz(W)
     identity, expr -> Func([expr.args...], [], LiteralExpr(quote
-        J_Is, J_Js, J_Vs = $(findnz)($(expr.args[1]))
-        @assert (J_Is, J_Js) == ($W_Is, $W_Js)
+        @assert $(findnz)($(expr.args[1]))[1:2] == $(findnz)($W)[1:2]
         expr.body
     end))
 end
@@ -294,7 +292,7 @@ end
 
 function W_sparsity(sys::AbstractODESystem) 
     jac_sparsity = jacobian_sparsity(sys)
-    M_sparsity = sparse(iszero.(calculate_massmatrix(sys)))
+    M_sparsity = sparse((!iszero).(calculate_massmatrix(sys)))
     jac_sparsity .|| M_sparsity
 end
 
