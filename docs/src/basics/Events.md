@@ -288,7 +288,7 @@ Suppose we have a population of `N(t)` cells that can grow and die, and at time
 `t1` we want to inject `M` more cells into the population. We can model this by
 
 ```@example events
-@parameters M tinject α
+@parameters M tinject α(t)
 @variables N(t)
 Dₜ = Differential(t)
 eqs = [Dₜ(N) ~ α - N]
