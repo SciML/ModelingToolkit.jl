@@ -664,8 +664,10 @@ function SciMLBase.late_binding_update_u0_p(
         newp = p === missing ? copy(newp) : newp
         initials, repack, alias = SciMLStructures.canonicalize(
             SciMLStructures.Initials(), newp)
-        initials = DiffEqBase.promote_u0(initials, newu0, t0)
-        newp = repack(initials)
+        if eltype(initials) != eltype(newu0)
+            initials = DiffEqBase.promote_u0(initials, newu0, t0)
+            newp = repack(initials)
+        end
         setp(sys, Initial.(unknowns(sys)))(newp, newu0)
         return newu0, newp
     end
@@ -673,11 +675,15 @@ function SciMLBase.late_binding_update_u0_p(
     newp = p === missing ? copy(newp) : newp
     newu0 = DiffEqBase.promote_u0(newu0, newp, t0)
     tunables, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Tunable(), newp)
-    tunables = DiffEqBase.promote_u0(tunables, newu0, t0)
-    newp = repack(tunables)
+    if eltype(tunables) != eltype(newu0)
+        tunables = DiffEqBase.promote_u0(tunables, newu0, t0)
+        newp = repack(tunables)
+    end
     initials, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Initials(), newp)
-    initials = DiffEqBase.promote_u0(initials, newu0, t0)
-    newp = repack(initials)
+    if eltype(initials) != eltype(newu0)
+        initials = DiffEqBase.promote_u0(initials, newu0, t0)
+        newp = repack(initials)
+    end
 
     allsyms = all_symbols(sys)
     for (k, v) in u0
