@@ -669,6 +669,9 @@ function SciMLBase.late_binding_update_u0_p(
             initials = DiffEqBase.promote_u0(initials, newu0, t0)
             newp = repack(initials)
         end
+        if length(newu0) != length(unknowns(sys))
+            throw(ArgumentError("Expected `newu0` to be of same length as unknowns ($(length(unknowns(sys)))). Got $(typeof(newu0)) of length $(length(newu0))"))
+        end
         setp(sys, Initial.(unknowns(sys)))(newp, newu0)
         return newu0, newp
     end
