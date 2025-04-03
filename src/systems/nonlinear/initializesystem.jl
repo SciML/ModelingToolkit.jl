@@ -661,6 +661,7 @@ function SciMLBase.late_binding_update_u0_p(
         # if `p` is not provided or is symbolic
         p === missing || eltype(p) <: Pair || return newu0, newp
         newu0 === nothing && return newu0, newp
+        all(is_parameter(sys, Initial(x)) for x in unknowns(sys)) || return newu0, newp
         newp = p === missing ? copy(newp) : newp
         initials, repack, alias = SciMLStructures.canonicalize(
             SciMLStructures.Initials(), newp)
