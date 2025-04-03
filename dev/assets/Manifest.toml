@@ -787,9 +787,9 @@ version = "1.8.0"
 
 [[deps.DynamicalSystemsBase]]
 deps = ["ForwardDiff", "LinearAlgebra", "OrdinaryDiffEqTsit5", "Reexport", "Roots", "SciMLBase", "SparseArrays", "StateSpaceSets", "Statistics", "SymbolicIndexingInterface"]
-git-tree-sha1 = "accb73870a5c0e8d49b51d7bdfa89cfb50ce5148"
+git-tree-sha1 = "fe3a7586545e5e1bb1af4de840cff53395e225fa"
 uuid = "6e36e845-645a-534a-86f2-f5d4aa5a06b4"
-version = "3.13.3"
+version = "3.14.0"
 weakdeps = ["StochasticDiffEq"]
 
     [deps.DynamicalSystemsBase.extensions]
