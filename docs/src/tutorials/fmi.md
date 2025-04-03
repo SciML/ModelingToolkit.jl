@@ -172,7 +172,7 @@ end
 
 ```@repl fmi
 @named adder = ModelingToolkit.FMIComponent(
-    Val(2); fmu, type = :ME, reinitializealg = SciMLBase.BrownFullBasicInit());
+    Val(2); fmu, type = :ME, reinitializealg = BrownFullBasicInit());
 isinput(adder.a)
 isinput(adder.b)
 isoutput(adder.out)
@@ -216,7 +216,7 @@ fmu = loadFMU(
     type = :CS)
 @named adder = ModelingToolkit.FMIComponent(
     Val(2); fmu, type = :CS, communication_step_size = 1e-3,
-    reinitializealg = SciMLBase.BrownFullBasicInit())
+    reinitializealg = BrownFullBasicInit())
 @mtkbuild sys = ODESystem(
     [adder.a ~ a, adder.b ~ b, D(a) ~ t,
         D(b) ~ adder.out + adder.c, c^2 ~ adder.out + adder.value],
