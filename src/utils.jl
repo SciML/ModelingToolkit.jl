@@ -735,6 +735,23 @@ function check_scope_depth(scope, depth)
 end
 
 """
+    $(TYPEDSIGNATURES)
+
+Return the expected depth of the given `SymScope` from the root system.
+"""
+function expected_scope_depth(scope)
+    if scope isa LocalScope
+        return 0
+    elseif scope isa ParentScope
+        return expected_scope_depth(scope.parent) + 1
+    elseif scope isa DelayParentScope
+        return expected_scope_depth(scope.parent) + scope.N + 1
+    elseif scope isa GlobalScope
+        return -1
+    end
+end
+
+"""
 Find all the symbolic constants of some equations or terms and return them as a vector.
 """
 function collect_constants(x)
