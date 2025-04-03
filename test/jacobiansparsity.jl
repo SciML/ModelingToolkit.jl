@@ -3,15 +3,15 @@ using OrdinaryDiffEq, ModelingToolkit, SparseArrays
 N = 3
 xyd_brusselator = range(0, stop = 1, length = N)
 brusselator_f(x, y, t) = (((x - 0.3)^2 + (y - 0.6)^2) <= 0.1^2) * (t >= 1.1) * 5.0
-limit(a, N) = ModelingToolkit.ifelse(a == N + 1, 1, ModelingToolkit.ifelse(a == 0, N, a))
+lim(a, N) = ModelingToolkit.ifelse(a == N + 1, 1, ModelingToolkit.ifelse(a == 0, N, a))
 function brusselator_2d_loop(du, u, p, t)
     A, B, alpha, dx = p
     alpha = alpha / dx^2
     @inbounds for I in CartesianIndices((N, N))
         i, j = Tuple(I)
         x, y = xyd_brusselator[I[1]], xyd_brusselator[I[2]]
-        ip1, im1, jp1, jm1 = limit(i + 1, N), limit(i - 1, N), limit(j + 1, N),
-        limit(j - 1, N)
+        ip1, im1, jp1, jm1 = lim(i + 1, N), lim(i - 1, N), lim(j + 1, N),
+        lim(j - 1, N)
         du[i, j, 1] = alpha * (u[im1, j, 1] + u[ip1, j, 1] + u[i, jp1, 1] + u[i, jm1, 1] -
                        4u[i, j, 1]) +
                       B + u[i, j, 1]^2 * u[i, j, 2] - (A + 1) * u[i, j, 1] +
@@ -84,6 +84,7 @@ prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
 @test eltype(prob.f.jac_prototype) == Float32
 
 @testset "W matrix sparsity" begin
+    t = ModelingToolkit.t_nounits
     @parameters g
     @variables x(t) y(t) [state_priority = 10] λ(t)
     eqs = [D(D(x)) ~ λ * x
