@@ -922,7 +922,7 @@ for prop in [:eqs
              :is_scalar_noise
              :isscheduled
              :costs
-             :coalesce]
+             :consolidate]
     fname_get = Symbol(:get_, prop)
     fname_has = Symbol(:has_, prop)
     @eval begin

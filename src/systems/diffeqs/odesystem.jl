@@ -54,7 +54,7 @@ struct ODESystem <: AbstractODESystem
     """A set of expressions defining the costs of the system for optimal control."""
     costs::Vector
     """Takes the cost vector and returns a scalar for optimization."""
-    coalesce::Union{Nothing, Function}
+    consolidate::Union{Nothing, Function}
     """
     Time-derivative matrix. Note: this field will not be defined until
     [`calculate_tgrad`](@ref) is called on the system.
@@ -210,7 +210,7 @@ struct ODESystem <: AbstractODESystem
 
     function ODESystem(
             tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls,
-            observed, constraints, costs, coalesce, tgrad,
+            observed, constraints, costs, consolidate, tgrad,
             jac, ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses,
             torn_matching, initializesystem, initialization_eqs, schedule,
             connector_type, preface, cevents,
@@ -234,7 +234,7 @@ struct ODESystem <: AbstractODESystem
             check_units(u, deqs)
         end
         new(tag, deqs, iv, dvs, ps, tspan, var_to_name,
-            ctrls, observed, constraints, costs, coalesce, tgrad, jac,
+            ctrls, observed, constraints, costs, consolidate, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults, guesses, torn_matching,
             initializesystem, initialization_eqs, schedule, connector_type, preface,
             cevents, devents, parameter_dependencies, assertions, metadata,
@@ -249,7 +249,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         observed = Equation[],
         constraintsystem = nothing,
         costs = Num[],
-        coalesce = nothing,
+        consolidate = nothing,
         systems = ODESystem[],
         tspan = nothing,
         name = nothing,
@@ -334,15 +334,15 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     end
     costs = wrap.(costs)
 
-    if length(costs) > 1 && isnothing(coalesce)
-        error("Must specify a coalesce function for the costs vector.")
+    if length(costs) > 1 && isnothing(consolidate)
+        error("Must specify a consolidation function for the costs vector.")
     end
 
     assertions = Dict{BasicSymbolic, Any}(unwrap(k) => v for (k, v) in assertions)
 
     ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed,
-        constraintsystem, costs, coalesce, tgrad, jac,
+        constraintsystem, costs, consolidate, tgrad, jac,
         ctrl_jac, Wfact, Wfact_t, name, description, systems,
         defaults, guesses, nothing, initializesystem,
         initialization_eqs, schedule, connector_type, preface, cont_callbacks,
@@ -421,7 +421,7 @@ function Base.:(==)(sys1::ODESystem, sys2::ODESystem)
         _eq_unordered(continuous_events(sys1), continuous_events(sys2)) &&
         _eq_unordered(discrete_events(sys1), discrete_events(sys2)) &&
         all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2))) &&
-        isequal(get_constraintsystem(sys1), get_constraintssystem(sys2)) &&
+        isequal(get_constraintsystem(sys1), get_constraintsystem(sys2)) &&
         _eq_unordered(get_costs(sys1), get_costs(sys2))
 end
 
@@ -770,7 +770,7 @@ function process_constraint_system(
     end
 
     # Validate the states.
-    validate_vars_and_find_ps!(coststs, costps, sts, iv)
+    validate_vars_and_find_ps!(constraintsts, constraintps, sts, iv)
 
     ConstraintsSystem(
         constraints, collect(constraintsts), collect(constraintps); name = consname)
@@ -830,7 +830,7 @@ Generate a function that takes a solution object and computes the cost function 
 """
 function generate_cost_function(sys::ODESystem, kwargs...)
     costs = get_costs(sys)
-    coalesce = get_coalesce(sys)
+    consolidate = get_consolidate(sys)
     iv = get_iv(sys)
 
     ps = parameters(sys; initial_parameters = false)
@@ -853,6 +853,6 @@ function generate_cost_function(sys::ODESystem, kwargs...)
     fs = build_function_wrapper(sys, costs, sol, _p..., t; output_type = Array, kwargs...)
     vc_oop, vc_iip = eval_or_rgf.(fs)
 
-    cost(sol, p, t) = coalesce(vc_oop(sol, p, t))
+    cost(sol, p, t) = consolidate(vc_oop(sol, p, t))
     return cost
 end
