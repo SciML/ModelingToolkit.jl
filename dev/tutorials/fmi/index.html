@@ -361,8 +361,8 @@ t: 23-element Vector{Float64}:
  0.35269441444276967
  0.5996609006045067
  0.5996609006045067
- 0.797499162883619
- 0.797499162883619
+ 0.7974991218086636
+ 0.7974991218086636
  1.0
  1.0
 u: 23-element Vector{Vector{Float64}}:
@@ -380,12 +380,12 @@ u: 23-element Vector{Vector{Float64}}:
  [1.0173990198294076, 2.3131380863021587, 2.863377337118342, 2.7074963892884947]
  [1.0621966749895644, 3.882751080300773, 3.8767560782872312, 2.990810665192263]
  [1.0621966749895644, 3.882751080300773, 3.8767560782872312, 2.990810665192263]
- [1.1797965978569052, 7.19228603805808, 5.985802155158694, 3.517417157132777]
- [1.1797965978569052, 7.19228603805808, 5.985802155158694, 3.517417157132777]
- [1.3180024574000389, 11.026804114134993, 8.40930411689905, 4.042887237224245]
- [1.3180024574000389, 11.026804114134993, 8.40930411689905, 4.042887237224245]
- [1.5000000000000049, 16.505550563566594, 11.855536157549961, 4.691041237917896]
- [1.5000000000000049, 16.505550563566594, 11.855536157549961, 4.691041237917896]</code></pre><p>CoSimulation FMUs follow a nearly identical process. Since CoSimulation FMUs operate using callbacks, after triggering the callbacks and altering the discrete state the algebraic equations may no longer be satisfied. To resolve for the values of algebraic variables, we use the <code>reinitializealg</code> keyword of <code>FMIComponent</code>. This is a DAE initialization algorithm to use at the end of every callback. Since CoSimulation FMUs are not directly involved in the RHS of the system - instead operating through callbacks - we can use a solver with automatic differentiation.</p><pre><code class="language-julia hljs">fmu = loadFMU(
+ [1.1797965978569052, 7.19228603805808, 5.985802155158694, 3.517417157158069]
+ [1.1797965978569052, 7.19228603805808, 5.985802155158694, 3.517417157158069]
+ [1.3180024246427957, 11.026803179511106, 8.409303527686838, 4.0428871175628665]
+ [1.3180024246427957, 11.026803179511106, 8.409303527686838, 4.0428871175628665]
+ [1.5000000000000016, 16.505550563598145, 11.855536157581135, 4.691041237977434]
+ [1.5000000000000016, 16.505550563598145, 11.855536157581135, 4.691041237977434]</code></pre><p>CoSimulation FMUs follow a nearly identical process. Since CoSimulation FMUs operate using callbacks, after triggering the callbacks and altering the discrete state the algebraic equations may no longer be satisfied. To resolve for the values of algebraic variables, we use the <code>reinitializealg</code> keyword of <code>FMIComponent</code>. This is a DAE initialization algorithm to use at the end of every callback. Since CoSimulation FMUs are not directly involved in the RHS of the system - instead operating through callbacks - we can use a solver with automatic differentiation.</p><pre><code class="language-julia hljs">fmu = loadFMU(
     joinpath(@__DIR__, &quot;..&quot;, &quot;..&quot;, &quot;..&quot;, &quot;test&quot;, &quot;fmi&quot;, &quot;fmus&quot;, &quot;SimpleAdder.fmu&quot;);
     type = :CS)
 @named adder = ModelingToolkit.FMIComponent(
@@ -441,4 +441,4 @@ u: 2004-element Vector{Vector{Float64}}:
  [1.498001999999985, 16.420855218475776, 4.681757919680873]
  [1.499000499999985, 16.45258983225982, 4.681757919678864]
  [1.499000499999985, 16.45258983225982, 4.685252429942133]
- [1.4999999999999851, 16.484377130747994, 4.68525242994012]</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../linear_analysis/">« Linear Analysis</a><a class="docs-footer-nextpage" href="../../examples/higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.10.1 on <span class="colophon-date" title="Thursday 3 April 2025 13:57">Thursday 3 April 2025</span>. Using Julia version 1.10.9.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ [1.4999999999999851, 16.484377130747994, 4.68525242994012]</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../linear_analysis/">« Linear Analysis</a><a class="docs-footer-nextpage" href="../../examples/higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.10.1 on <span class="colophon-date" title="Thursday 3 April 2025 17:44">Thursday 3 April 2025</span>. Using Julia version 1.10.9.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
