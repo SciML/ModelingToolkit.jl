@@ -24,7 +24,8 @@ using SciMLStructures: Tunable
         (odesys,), [x, y, t, ParameterIndex(Tunable(), 1), :x, :y]) ==
           [nothing, nothing, nothing, ParameterIndex(Tunable(), 1), nothing, nothing]
     @test isequal(
-        Set(parameter_symbols(odesys)), Set([a, b, Initial(x), Initial(y), Initial(xy)]))
+        Set(parameter_symbols(odesys)), Set([a, b, Initial(x), Initial(y), Initial(xy),
+            Initial(D(x)), Initial(D(y)), Initial(D(xy))]))
     @test all(is_independent_variable.((odesys,), [t, :t]))
     @test all(.!is_independent_variable.((odesys,), [x, y, a, :x, :y, :a]))
     @test isequal(independent_variable_symbols(odesys), [t])
