@@ -1930,7 +1930,9 @@ function toexpr(sys::AbstractSystem)
     end
 
     eqs_name = push_eqs!(stmt, full_equations(sys), var2name)
-    defs_name = push_defaults!(stmt, defaults(sys), var2name)
+    filtered_defs = filter(
+        kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), defaults(sys))
+    defs_name = push_defaults!(stmt, filtered_defs, var2name)
     obs_name = push_eqs!(stmt, obs, var2name)
 
     if sys isa ODESystem
