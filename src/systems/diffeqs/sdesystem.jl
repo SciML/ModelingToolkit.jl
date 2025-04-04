@@ -739,10 +739,12 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = unknowns(sys),
     end
 
     M = calculate_massmatrix(sys)
+    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0', M)
+
     if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
         jac_prototype = similar(calculate_jacobian(sys; sparse), uElType)
-        W_prototype = similar(jac_prototype .+ M, uElType)
+        W_prototype = similar(jac_prototype + M, uElType)
     else
         jac_prototype = nothing
         W_prototype = nothing
@@ -758,7 +760,6 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = unknowns(sys),
         _Wfact, _Wfact_t = :nothing, :nothing
     end
 
-    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0', M)
 
     ex = quote
         f = $f
