@@ -535,7 +535,7 @@ recursively searches through all subsystems of `sys`, increasing the depth if it
 """
 function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Differential)
     if has_eqs(sys)
-        for eq in get_eqs(sys)
+        for eq in equations(sys)
             eqtype_supports_collect_vars(eq) || continue
             if eq isa Equation
                 eq.lhs isa Union{Symbolic, Number} || continue
@@ -544,7 +544,7 @@ function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Dif
         end
     end
     if has_parameter_dependencies(sys)
-        for eq in get_parameter_dependencies(sys)
+        for eq in parameter_dependencies(sys)
             if eq isa Pair
                 collect_vars!(unknowns, parameters, eq, iv; depth, op)
             else
@@ -553,17 +553,13 @@ function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Dif
         end
     end
     if has_constraints(sys)
-        for eq in get_constraints(sys)
+        for eq in constraints(sys)
             eqtype_supports_collect_vars(eq) || continue
             collect_vars!(unknowns, parameters, eq, iv; depth, op)
         end
     end
     if has_op(sys)
-        collect_vars!(unknowns, parameters, get_op(sys), iv; depth, op)
-    end
-    newdepth = depth == -1 ? depth : depth + 1
-    for ssys in get_systems(sys)
-        collect_scoped_vars!(unknowns, parameters, ssys, iv; depth = newdepth, op)
+        collect_vars!(unknowns, parameters, objective(sys), iv; depth, op)
     end
 end
 
@@ -608,6 +604,7 @@ end
 function collect_var!(unknowns, parameters, var, iv; depth = 0)
     isequal(var, iv) && return nothing
     check_scope_depth(getmetadata(var, SymScope, LocalScope()), depth) || return nothing
+    var = setmetadata(var, SymScope, LocalScope())
     if iscalledparameter(var)
         callable = getcalledparameter(var)
         push!(parameters, callable)
@@ -636,7 +633,7 @@ function check_scope_depth(scope, depth)
     elseif scope isa ParentScope
         return depth > 0 && check_scope_depth(scope.parent, depth - 1)
     elseif scope isa DelayParentScope
-        return depth >= scope.N && check_scope_depth(scope.parent, depth - scope.N)
+        return depth >= scope.N && check_scope_depth(scope.parent, depth - scope.N - 1)
     elseif scope isa GlobalScope
         return depth == -1
     end
