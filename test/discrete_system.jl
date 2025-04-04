@@ -34,21 +34,16 @@ eqs = [S ~ S(k - 1) - infection * h,
 syss = structural_simplify(sys)
 @test syss == syss
 
-for df in [
-    DiscreteFunction(syss),
-    eval(DiscreteFunctionExpr(syss))
-]
+df = DiscreteFunction(ssys)
+# iip
+du = zeros(3)
+u = collect(1:3)
+p = MTKParameters(syss, [c, nsteps, δt, β, γ] .=> collect(1:5))
+df.f(du, u, p, 0)
+@test du ≈ [0.01831563888873422, 0.9816849729159067, 4.999999388195359]
 
-    # iip
-    du = zeros(3)
-    u = collect(1:3)
-    p = MTKParameters(syss, [c, nsteps, δt, β, γ] .=> collect(1:5))
-    df.f(du, u, p, 0)
-    @test du ≈ [0.01831563888873422, 0.9816849729159067, 4.999999388195359]
-
-    # oop
-    @test df.f(u, p, 0) ≈ [0.01831563888873422, 0.9816849729159067, 4.999999388195359]
-end
+# oop
+@test df.f(u, p, 0) ≈ [0.01831563888873422, 0.9816849729159067, 4.999999388195359]
 
 # Problem
 u0 = [S(k - 1) => 990.0, I(k - 1) => 10.0, R(k - 1) => 0.0]

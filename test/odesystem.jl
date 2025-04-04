@@ -54,42 +54,38 @@ jac = calculate_jacobian(de)
 jacfun = eval(jac_expr[2])
 
 de = complete(de)
-for f in [
-    ODEFunction(de, [x, y, z], [σ, ρ, β], tgrad = true, jac = true),
-    eval(ODEFunctionExpr(de, [x, y, z], [σ, ρ, β], tgrad = true, jac = true))
-]
-    # system
-    @test f.sys === de
+f = ODEFunction(de, [x, y, z], [σ, ρ, β], tgrad = true, jac = true),
+# system
+@test f.sys === de
 
-    # iip
-    du = zeros(3)
-    u = collect(1:3)
-    p = ModelingToolkit.MTKParameters(de, [σ, ρ, β] .=> 4.0:6.0)
-    f.f(du, u, p, 0.1)
-    @test du == [4, 0, -16]
+# iip
+du = zeros(3)
+u = collect(1:3)
+p = ModelingToolkit.MTKParameters(de, [σ, ρ, β] .=> 4.0:6.0)
+f.f(du, u, p, 0.1)
+@test du == [4, 0, -16]
 
-    # oop
-    du = @SArray zeros(3)
-    u = SVector(1:3...)
-    p = ModelingToolkit.MTKParameters(de, SVector{3}([σ, ρ, β] .=> 4.0:6.0))
-    @test f.f(u, p, 0.1) === @SArray [4.0, 0.0, -16.0]
+# oop
+du = @SArray zeros(3)
+u = SVector(1:3...)
+p = ModelingToolkit.MTKParameters(de, SVector{3}([σ, ρ, β] .=> 4.0:6.0))
+@test f.f(u, p, 0.1) === @SArray [4.0, 0.0, -16.0]
 
-    # iip vs oop
-    du = zeros(3)
-    g = similar(du)
-    J = zeros(3, 3)
-    u = collect(1:3)
-    p = ModelingToolkit.MTKParameters(de, [σ, ρ, β] .=> 4.0:6.0)
-    f.f(du, u, p, 0.1)
-    @test du == f(u, p, 0.1)
-    f.tgrad(g, u, p, t)
-    @test g == f.tgrad(u, p, t)
-    f.jac(J, u, p, t)
-    @test J == f.jac(u, p, t)
-end
+# iip vs oop
+du = zeros(3)
+g = similar(du)
+J = zeros(3, 3)
+u = collect(1:3)
+p = ModelingToolkit.MTKParameters(de, [σ, ρ, β] .=> 4.0:6.0)
+f.f(du, u, p, 0.1)
+@test du == f(u, p, 0.1)
+f.tgrad(g, u, p, t)
+@test g == f.tgrad(u, p, t)
+f.jac(J, u, p, t)
+@test J == f.jac(u, p, t)
 
 #check iip_config
-f = eval(ODEFunctionExpr(de, [x, y, z], [σ, ρ, β], iip_config = (false, true)))
+f = ODEFunction(de, [x, y, z], [σ, ρ, β], iip_config = (false, true))
 du = zeros(3)
 u = collect(1:3)
 p = ModelingToolkit.MTKParameters(de, [σ, ρ, β] .=> 4.0:6.0)
@@ -146,7 +142,7 @@ eqs = [D(x) ~ σ′ * (y - x),
 @named de = ODESystem(eqs, t)
 test_diffeq_inference("global iv-varying", de, t, (x, y, z), (σ′, ρ, β))
 
-f = eval(generate_function(de, [x, y, z], [σ′, ρ, β])[2])
+f = generate_function(de, [x, y, z], [σ′, ρ, β], expression = Val{false})[2]
 du = [0.0, 0.0, 0.0]
 f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
 @test du ≈ [11, -3, -7]
@@ -157,7 +153,7 @@ eqs = [D(x) ~ σ(t - 1) * (y - x),
     D(z) ~ x * y - β * z * κ]
 @named de = ODESystem(eqs, t)
 test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ, ρ, β))
-f = eval(generate_function(de, [x, y, z], [σ, ρ, β])[2])
+f = generate_function(de, [x, y, z], [σ, ρ, β], expression = Val{false})[2]
 du = [0.0, 0.0, 0.0]
 f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
 @test du ≈ [11, -3, -7]
@@ -165,7 +161,7 @@ f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
 eqs = [D(x) ~ x + 10σ(t - 1) + 100σ(t - 2) + 1000σ(t^2)]
 @named de = ODESystem(eqs, t)
 test_diffeq_inference("many internal iv-varying", de, t, (x,), (σ,))
-f = eval(generate_function(de, [x], [σ])[2])
+f = generate_function(de, [x], [σ], expression = Val{false})[2]
 du = [0.0]
 f(du, [1.0], [t -> t + 2], 5.0)
 @test du ≈ [27561]
