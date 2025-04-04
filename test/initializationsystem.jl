@@ -216,7 +216,7 @@ end
     end
 end
 
-@mtkmodel System begin
+@mtkmodel HydraulicSystem begin
     @components begin
         res₁ = Orifice(p′ = 300e5)
         res₂ = Orifice(p′ = 0)
@@ -234,7 +234,7 @@ end
     end
 end
 
-@mtkbuild sys = System()
+@mtkbuild sys = HydraulicSystem()
 initprob = ModelingToolkit.InitializationProblem(sys, 0.0)
 conditions = getfield.(equations(initprob.f.sys), :rhs)
 
