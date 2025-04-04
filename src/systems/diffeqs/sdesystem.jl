@@ -760,7 +760,6 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = unknowns(sys),
         _Wfact, _Wfact_t = :nothing, :nothing
     end
 
-
     ex = quote
         f = $f
         g = $g
