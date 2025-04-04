@@ -642,20 +642,16 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
         _Wfact, _Wfact_t = nothing, nothing
     end
 
+    M = calculate_massmatrix(sys)
     if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
-        if jac
-            jac_prototype = similar(calculate_jacobian(sys; sparse), uElType)
-        else
-            jac_prototype = similar(jacobian_sparsity(sys), uElType)
-        end
-        W_prototype = similar(W_sparsity(sys), uElType)
+        jac_prototype = similar(calculate_jacobian(sys; sparse), uElType)
+        W_prototype = similar(jac_prototype .+ M, uElType)
     else
         jac_prototype = nothing
         W_prototype = nothing
     end
 
-    M = calculate_massmatrix(sys)
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0', M)
 
     observedfun = ObservedFunctionCache(
@@ -742,15 +738,14 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = unknowns(sys),
         _jac = :nothing
     end
 
-    jac_prototype = if sparse
+    M = calculate_massmatrix(sys)
+    if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
-        if jac
-            similar(calculate_jacobian(sys, sparse = sparse), uElType)
-        else
-            similar(jacobian_sparsity(sys), uElType)
-        end
+        jac_prototype = similar(calculate_jacobian(sys; sparse), uElType)
+        W_prototype = similar(jac_prototype .+ M, uElType)
     else
-        nothing
+        jac_prototype = nothing
+        W_prototype = nothing
     end
 
     if Wfact
@@ -762,8 +757,6 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = unknowns(sys),
     else
         _Wfact, _Wfact_t = :nothing, :nothing
     end
-
-    M = calculate_massmatrix(sys)
 
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0', M)
 

@@ -1,4 +1,4 @@
-using ModelingToolkit, SparseArrays#, OrdinaryDiffEq
+using ModelingToolkit, SparseArrays, OrdinaryDiffEq
 
 N = 3
 xyd_brusselator = range(0, stop = 1, length = N)
@@ -100,6 +100,7 @@ prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
     W_prototype = ModelingToolkit.W_sparsity(pend)
     @test nnz(W_prototype) == nnz(jac_prototype) + 2
 
+    # jac_prototype should be the same as W_prototype
     @test findnz(prob.f.jac_prototype)[1:2] == findnz(W_prototype)[1:2]
 
     u = zeros(5)
