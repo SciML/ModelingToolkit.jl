@@ -381,12 +381,12 @@ let
     @variables x1(t) x2(t) x3(t) x4(t) x5(t)
     x2 = ParentScope(x2)
     x3 = ParentScope(ParentScope(x3))
-    x4 = DelayParentScope(x4, 2)
+    x4 = DelayParentScope(x4)
     x5 = GlobalScope(x5)
     @parameters p1 p2 p3 p4 p5
     p2 = ParentScope(p2)
     p3 = ParentScope(ParentScope(p3))
-    p4 = DelayParentScope(p4, 2)
+    p4 = DelayParentScope(p4)
     p5 = GlobalScope(p5)
 
     j1 = ConstantRateJump(p1, [x1 ~ x1 + 1])
