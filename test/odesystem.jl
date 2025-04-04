@@ -54,7 +54,7 @@ jac = calculate_jacobian(de)
 jacfun = eval(jac_expr[2])
 
 de = complete(de)
-f = ODEFunction(de, [x, y, z], [σ, ρ, β], tgrad = true, jac = true),
+f = ODEFunction(de, [x, y, z], [σ, ρ, β], tgrad = true, jac = true)
 # system
 @test f.sys === de
 
