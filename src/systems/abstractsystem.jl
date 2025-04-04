@@ -717,6 +717,12 @@ function add_initialization_parameters(sys::AbstractSystem)
             push!(all_initialvars, x)
         end
     end
+
+    # add derivatives of all variables for steady-state initial conditions
+    if is_time_dependent(sys) && !(sys isa AbstractDiscreteSystem)
+        D = Differential(get_iv(sys))
+        union!(all_initialvars, [D(v) for v in all_initialvars if iscall(v)])
+    end
     for eq in parameter_dependencies(sys)
         is_variable_floatingpoint(eq.lhs) || continue
         push!(all_initialvars, eq.lhs)
@@ -1924,7 +1930,9 @@ function toexpr(sys::AbstractSystem)
     end
 
     eqs_name = push_eqs!(stmt, full_equations(sys), var2name)
-    defs_name = push_defaults!(stmt, defaults(sys), var2name)
+    filtered_defs = filter(
+        kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), defaults(sys))
+    defs_name = push_defaults!(stmt, filtered_defs, var2name)
     obs_name = push_eqs!(stmt, obs, var2name)
 
     if sys isa ODESystem

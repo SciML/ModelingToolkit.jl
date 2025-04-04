@@ -406,30 +406,35 @@ sol = solve(prob, Tsit5())
 @test sol.u[1] == [1.0]
 
 # Steady state initialization
+@testset "Steady state initialization" begin
+    @parameters σ ρ β
+    @variables x(t) y(t) z(t)
 
-@parameters σ ρ β
-@variables x(t) y(t) z(t)
+    eqs = [D(D(x)) ~ σ * (y - x),
+        D(y) ~ x * (ρ - z) - y,
+        D(z) ~ x * y - β * z]
 
-eqs = [D(D(x)) ~ σ * (y - x),
-    D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y - β * z]
+    @named sys = ODESystem(eqs, t)
+    sys = structural_simplify(sys)
 
-@named sys = ODESystem(eqs, t)
-sys = structural_simplify(sys)
+    u0 = [D(x) => 2.0,
+        x => 1.0,
+        D(y) => 0.0,
+        z => 0.0]
 
-u0 = [D(x) => 2.0,
-    x => 1.0,
-    D(y) => 0.0,
-    z => 0.0]
+    p = [σ => 28.0,
+        ρ => 10.0,
+        β => 8 / 3]
 
-p = [σ => 28.0,
-    ρ => 10.0,
-    β => 8 / 3]
+    tspan = (0.0, 0.2)
+    prob_mtk = ODEProblem(sys, u0, tspan, p)
+    sol = solve(prob_mtk, Tsit5())
+    @test sol[x * (ρ - z) - y][1] == 0.0
 
-tspan = (0.0, 0.2)
-prob_mtk = ODEProblem(sys, u0, tspan, p)
-sol = solve(prob_mtk, Tsit5())
-@test sol[x * (ρ - z) - y][1] == 0.0
+    prob_mtk.ps[Initial(D(y))] = 1.0
+    sol = solve(prob_mtk, Tsit5())
+    @test sol[x * (ρ - z) - y][1] == 1.0
+end
 
 @variables x(t) y(t) z(t)
 @parameters α=1.5 β=1.0 γ=3.0 δ=1.0
