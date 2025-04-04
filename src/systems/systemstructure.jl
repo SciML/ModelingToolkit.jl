@@ -254,44 +254,60 @@ function Base.push!(ev::EquationsView, eq)
     push!(ev.ts.extra_eqs, eq)
 end
 
-function is_time_dependent_parameter(p, iv)
-    return iv !== nothing && isparameter(p) && iscall(p) &&
-           (operation(p) === getindex && is_time_dependent_parameter(arguments(p)[1], iv) ||
+function is_time_dependent_parameter(p, allps, iv)
+    return iv !== nothing && p in allps && iscall(p) &&
+           (operation(p) === getindex && is_time_dependent_parameter(arguments(p)[1], allps, iv) ||
             (args = arguments(p); length(args)) == 1 && isequal(only(args), iv))
 end
 
+function symbolic_contains(var, set)
+    var in set || symbolic_type(var) == ArraySymbolic() && Symbolics.shape(var) != Symbolics.Unknown() && all(i -> var[i] in set, eachindex(var))
+end
+
 function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
+    # flatten system
     sys = flatten(sys)
     ivs = independent_variables(sys)
     iv = length(ivs) == 1 ? ivs[1] : nothing
-    # scalarize array equations, without scalarizing arguments to registered functions
-    eqs = flatten_equations(copy(equations(sys)))
+    # flatten array equations
+    eqs = flatten_equations(equations(sys))
     neqs = length(eqs)
-    dervaridxs = OrderedSet{Int}()
-    var2idx = Dict{Any, Int}()
-    symbolic_incidence = []
-    fullvars = []
     param_derivative_map = Dict{BasicSymbolic, Any}()
-    var_counter = Ref(0)
-    var_types = VariableType[]
-    addvar! = let fullvars = fullvars, var_counter = var_counter, var_types = var_types
+    # * Scalarize unknowns
+    dvs = Set{BasicSymbolic}()
+    fullvars = BasicSymbolic[]
+    for x in unknowns(sys)
+        push!(dvs, x)
+        xx = Symbolics.scalarize(x)
+        if xx isa AbstractArray
+            union!(dvs, xx)
+            append!(fullvars, xx)
+        else
+            push!(fullvars, xx)
+        end
+    end
+    ps = Set{BasicSymbolic}()
+    for x in parameters(sys)
+        push!(ps, x)
+        xx = Symbolics.scalarize(x)
+        xx isa AbstractArray && union!(dvs, x)
+    end
+    var2idx = Dict{BasicSymbolic, Int}(v => k for (k, v) in enumerate(fullvars))
+    addvar! = let fullvars = fullvars, dvs = dvs, var2idx = var2idx
         var -> get!(var2idx, var) do
+            push!(dvs, var)
             push!(fullvars, var)
-            push!(var_types, getvariabletype(var))
-            var_counter[] += 1
+            return length(fullvars)
         end
     end
 
-    vars = OrderedSet()
-    varsvec = []
+    # build symbolic incidence
+    symbolic_incidence = Vector{BasicSymbolic}[]
+    varsbuf = Set()
     eqs_to_retain = trues(length(eqs))
-    for (i, eq′) in enumerate(eqs)
-        if eq′.lhs isa Connection
-            check ? error("$(nameof(sys)) has unexpanded `connect` statements") :
-            return nothing
-        end
+    for (i, eq) in enumerate(eqs)
         if iscall(eq′.lhs) && (op = operation(eq′.lhs)) isa Differential &&
-           isequal(op.x, iv) && is_time_dependent_parameter(only(arguments(eq′.lhs)), iv)
+           isequal(op.x, iv) && is_time_dependent_parameter(only(arguments(eq′.lhs)), ps, iv)
             # parameter derivatives are opted out by specifying `D(p) ~ missing`, but
             # we want to store `nothing` in the map because that means `fast_substitute`
             # will ignore the rule. We will this identify the presence of `eq′.lhs` in
@@ -301,80 +317,71 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
             # change the equation if the RHS is `missing` so the rest of this loop works
             eq′ = eq′.lhs ~ coalesce(eq′.rhs, 0.0)
         end
-        if _iszero(eq′.lhs)
-            rhs = quick_cancel ? quick_cancel_expr(eq′.rhs) : eq′.rhs
-            eq = eq′
-        else
-            lhs = quick_cancel ? quick_cancel_expr(eq′.lhs) : eq′.lhs
-            rhs = quick_cancel ? quick_cancel_expr(eq′.rhs) : eq′.rhs
-            eq = 0 ~ rhs - lhs
+        rhs = quick_cancel ? quick_cancel_expr(eq.rhs) : eq.rhs
+        if !_iszero(eq.lhs)
+            lhs = quick_cancel ? quick_cancel_expr(eq.lhs) : eq.lhs
+            eq = eqs[i] = 0 ~ rhs - lhs
         end
-        vars!(vars, eq.rhs, op = Symbolics.Operator)
-        for v in vars
-            _var, _ = var_from_nested_derivative(v)
-            any(isequal(_var), ivs) && continue
-            if isparameter(_var) ||
-               (iscall(_var) && isparameter(operation(_var)) || isconstant(_var))
-                if is_time_dependent_parameter(_var, iv) &&
-                   !haskey(param_derivative_map, Differential(iv)(_var))
+        empty!(varsbuf)
+        vars!(varsbuf, eq; op = Symbolics.Operator)
+        incidence = Set{BasicSymbolic}()
+        for v in varsbuf
+            # FIXME: This check still needs to rely on metadata
+            isconstant(v) && continue
+            vtype = getvariabletype(v)
+            # additionally track brownians in fullvars
+            # TODO: When uniting system types, track brownians in their own field
+            if vtype == BROWNIAN
+                i = addvar!(v)
+                push!(incidence, v)
+            end
+
+            if symbolic_contains(v, ps)
+                if is_time_dependent_parameter(v, ps, iv) && !haskey(param_derivative_map, Differential(iv)(_var))
                     # Parameter derivatives default to zero - they stay constant
                     # between callbacks
                     param_derivative_map[Differential(iv)(_var)] = 0.0
                 end
                 continue
             end
-            v = scalarize(v)
-            if v isa AbstractArray
-                append!(varsvec, v)
-            else
-                push!(varsvec, v)
-            end
-        end
-        isalgeq = true
-        unknownvars = []
-        for var in varsvec
-            ModelingToolkit.isdelay(var, iv) && continue
-            set_incidence = true
-            @label ANOTHER_VAR
-            _var, _ = var_from_nested_derivative(var)
-            any(isequal(_var), ivs) && continue
-            if isparameter(_var) ||
-               (iscall(_var) && isparameter(operation(_var)) || isconstant(_var))
-                continue
-            end
-            varidx = addvar!(var)
-            set_incidence && push!(unknownvars, var)
 
-            dvar = var
-            idx = varidx
-            while isdifferential(dvar)
-                if !(idx in dervaridxs)
-                    push!(dervaridxs, idx)
+            if !symbolic_contains(v, dvs)
+                isvalid = iscall(v) && operation(v) isa Union{Shift, Sample, Hold}
+                v′ = v
+                while !isvalid && iscall(v′) && operation(v′) isa Union{Differential, Shift}
+                    v′ = arguments(v)[1]
+                    if v′ in dvs || getmetadata(v′, SymScope, LocalScope()) isa GlobalScope
+                        isvalid = true
+                        break
+                    end
                 end
-                isalgeq = false
-                dvar = arguments(dvar)[1]
-                idx = addvar!(dvar)
+                if !isvalid
+                    throw(ArgumentError("$v is present in the system but $v′ is not an unknown."))
+                end
+
+                addvar!(v)
+                if iscall(v) && operation(v) isa Symbolics.Operator && !isdifferential(v) && (it = input_timedomain(v)) !== nothing
+                    v′ = only(arguments(v))
+                    addvar!(setmetadata(v′, VariableTimeDomain, it))
+                end
             end
 
-            dvar = var
-            idx = varidx
-
-            if iscall(var) && operation(var) isa Symbolics.Operator &&
-               !isdifferential(var) && (it = input_timedomain(var)) !== nothing
-                set_incidence = false
-                var = only(arguments(var))
-                var = setmetadata(var, VariableTimeDomain, it)
-                @goto ANOTHER_VAR
+            if symbolic_type(v) == ArraySymbolic()
+                union!(incidence, collect(v))
+            else
+                push!(incidence, v)
             end
         end
-        push!(symbolic_incidence, copy(unknownvars))
-        empty!(unknownvars)
-        empty!(vars)
-        empty!(varsvec)
-        if isalgeq
-            eqs[i] = eq
-        else
-            eqs[i] = eqs[i].lhs ~ rhs
+
+        push!(symbolic_incidence, collect(incidence))
+    end
+
+    dervaridxs = Int[]
+    for (i, v) in enumerate(fullvars)
+        while isdifferential(v)
+            push!(dervaridxs, i)
+            v = arguments(v)[1]
+            i = addvar!(v)
         end
     end
     eqs = eqs[eqs_to_retain]
@@ -389,6 +396,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
         symbolic_incidence = symbolic_incidence[sortidxs]
     end
 
+    # Handle shifts - find lowest shift and add intermediates with derivative edges
     ### Handle discrete variables
     lowest_shift = Dict()
     for var in fullvars
@@ -428,6 +436,9 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
             end
         end
     end
+
+    var_types = Vector{VariableType}(getvariabletype.(fullvars))
+
     # sort `fullvars` such that the mass matrix is as diagonal as possible.
     dervaridxs = collect(dervaridxs)
     sorted_fullvars = OrderedSet(fullvars[dervaridxs])
@@ -451,6 +462,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
     var2idx = Dict(fullvars .=> eachindex(fullvars))
     dervaridxs = 1:length(dervaridxs)
 
+    # build `var_to_diff`
     nvars = length(fullvars)
     diffvars = []
     var_to_diff = DiffGraph(nvars, true)
@@ -462,6 +474,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
         var_to_diff[diffvaridx] = dervaridx
     end
 
+    # build incidence graph
     graph = BipartiteGraph(neqs, nvars, Val(false))
     for (ie, vars) in enumerate(symbolic_incidence), v in vars
         jv = var2idx[v]
@@ -469,6 +482,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
     end
 
     @set! sys.eqs = eqs
+    @set! sys.unknowns = [v for (i, v) in enumerate(fullvars) if var_types[i] != BROWNIAN]
 
     eq_to_diff = DiffGraph(nsrcs(graph))
 
@@ -730,4 +744,20 @@ function _structural_simplify!(state::TearingState; simplify = false,
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)
 
     ModelingToolkit.invalidate_cache!(sys)
+end
+
+struct DifferentiatedVariableNotUnknownError <: Exception
+    differentiated
+    undifferentiated
+end
+
+function Base.showerror(io::IO, err::DifferentiatedVariableNotUnknownError)
+    undiff = err.undifferentiated
+    diff = err.differentiated
+    print(io, "Variable $undiff occurs differentiated as $diff but is not an unknown of the system.")
+    scope = getmetadata(undiff, SymScope, LocalScope())
+    depth = expected_scope_depth(scope)
+    if depth > 0
+        print(io, "\nVariable $undiff expects $depth more levels in the hierarchy to be an unknown.")
+    end
 end
