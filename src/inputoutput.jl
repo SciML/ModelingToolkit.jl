@@ -319,7 +319,7 @@ function inputs_to_parameters!(state::TransformationState, inputsyms)
 
     @set! sys.ps = [ps; new_parameters]
     @set! state.sys = sys
-    @set! state.fullvars = new_fullvars
+    @set! state.fullvars = Vector{BasicSymbolic}(new_fullvars)
     @set! state.structure = structure
     return state
 end
