@@ -648,14 +648,14 @@ function (f::Initial)(x)
     iscall(x) && operation(x) isa Initial && return x
     result = if symbolic_type(x) == ArraySymbolic()
         # create an array for `Initial(array)`
-        Symbolics.array_term(f, toparam(x))
+        Symbolics.array_term(f, x)
     elseif iscall(x) && operation(x) == getindex
         # instead of `Initial(x[1])` create `Initial(x)[1]`
         # which allows parameter indexing to handle this case automatically.
         arr = arguments(x)[1]
-        term(getindex, f(toparam(arr)), arguments(x)[2:end]...)
+        term(getindex, f(arr), arguments(x)[2:end]...)
     else
-        term(f, toparam(x))
+        term(f, x)
     end
     # the result should be a parameter
     result = toparam(result)
