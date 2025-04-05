@@ -745,6 +745,11 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
               Consider a BVProblem instead.")
     end
 
+    if !isempty(get_costs(sys))
+        error("An ODESystem with costs cannot be solved using a regular ODEProblem.
+              Solvers for optimal control problems are forthcoming.")
+    end
+
     f, u0, p = process_SciMLProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
         check_length, warn_initialize_determined, eval_expression, eval_module, kwargs...)
@@ -852,6 +857,11 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
     end
     !isnothing(callback) && error("BVP solvers do not support callbacks.")
 
+    if !isempty(get_costs(sys))
+        error("An ODESystem with costs cannot be solved using a regular DAEProblem.
+              Solvers for optimal control problems are forthcoming.")
+    end
+
     has_alg_eqs(sys) &&
         error("The BVProblem constructor currently does not support ODESystems with algebraic equations.") # Remove this when the BVDAE solvers get updated, the codegen should work when it does.
 
@@ -952,6 +962,11 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
         check_length = true, eval_expression = false, eval_module = @__MODULE__, kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEProblem`")
+    end
+
+    if !isempty(get_costs(sys))
+        error("An ODESystem with costs cannot be solved using a regular DAEProblem.
+              Solvers for optimal control problems are forthcoming.")
     end
     f, du0, u0, p = process_SciMLProblem(DAEFunction{iip}, sys, u0map, parammap;
         implicit_dae = true, du0map = du0map, check_length,
