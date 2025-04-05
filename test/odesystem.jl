@@ -214,11 +214,11 @@ eqs = [D(x) ~ -A * x,
 @named de = ODESystem(eqs, t)
 @test begin
     local f, du
-    f = eval(generate_function(de, [x, y], [A, B, C])[2])
+    f = generate_function(de, [x, y], [A, B, C], expression = Val{false})[2]
     du = [0.0, 0.0]
     f(du, [1.0, 2.0], [1, 2, 3], 0.0)
     du ≈ [-1, -1 / 3]
-    f = eval(generate_function(de, [x, y], [A, B, C])[1])
+    f = generate_function(de, [x, y], [A, B, C], expression = Val{false})[1]
     du ≈ f([1.0, 2.0], [1, 2, 3], 0.0)
 end
 
