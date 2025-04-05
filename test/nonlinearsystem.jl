@@ -30,7 +30,7 @@ eqs = [0 ~ σ * (y - x) * h,
 @test eval(toexpr(ns)) == ns
 test_nlsys_inference("standard", ns, (x, y, z), (σ, ρ, β))
 @test begin
-    f = eval(generate_function(ns, [x, y, z], [σ, ρ, β])[2])
+    f = generate_function(ns, [x, y, z], [σ, ρ, β], expression = Val{false})[2]
     du = [0.0, 0.0, 0.0]
     f(du, [1, 2, 3], [1, 2, 3])
     du ≈ [1, -3, -7]
