@@ -294,9 +294,13 @@ function jacobian_dae_sparsity(sys::AbstractODESystem)
 end
 
 function W_sparsity(sys::AbstractODESystem) 
-    jac_sparsity = jacobian_sparsity(sys)
+    if has_tearing_state(sys)
+        jac_sparsity = jacobian_sparsity(sys)
+    else
+        jac = calculate_jacobian(sys; sparse = true)
+        jac_sparsity = sparse((!iszero).(jac))
+    end
     (n, n) = size(jac_sparsity)
-
     M = calculate_massmatrix(sys)
     M_sparsity = M isa UniformScaling ? sparse(I(n)) : sparse((!iszero).(M))
     jac_sparsity .|| M_sparsity
@@ -408,14 +412,8 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
 
     if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
-        if jac
-            jac_prototype = similar(calculate_jacobian(sys; sparse), uElType)
-        else
-            jac_prototype = similar(jacobian_sparsity(sys), uElType)
-        end
         W_prototype = similar(W_sparsity(sys), uElType)
     else
-        jac_prototype = nothing
         W_prototype = nothing
     end
 
@@ -427,9 +425,8 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         tgrad = _tgrad === nothing ? nothing : _tgrad,
         mass_matrix = _M,
         jac_prototype = W_prototype,
-        W_prototype = W_prototype,
         observed = observedfun,
-        sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
+        sparsity = sparsity ? W_sparsity(sys) : nothing,
         analytic = analytic,
         initialization_data)
 end
