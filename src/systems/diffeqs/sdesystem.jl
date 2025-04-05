@@ -593,6 +593,7 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
         u0 = nothing;
         version = nothing, tgrad = false, sparse = false,
         jac = false, Wfact = false, eval_expression = false,
+        sparsity = false, analytic = nothing,
         eval_module = @__MODULE__,
         checkbounds = false, initialization_data = nothing,
         cse = true, kwargs...) where {iip, specialize}
@@ -642,6 +643,13 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
     end
 
     M = calculate_massmatrix(sys)
+    if sparse
+        uElType = u0 === nothing ? Float64 : eltype(u0)
+        W_prototype = similar(W_sparsity(sys), uElType)
+    else
+        W_prototype = nothing
+    end
+
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0', M)
 
     observedfun = ObservedFunctionCache(
@@ -651,10 +659,14 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
         tgrad = _tgrad === nothing ? nothing : _tgrad,
+        mass_matrix = _M,
+        jac_prototype = W_prototype,
+        observed = observedfun,
+        sparsity = sparsity ? W_sparsity(sys) : nothing,
+        analytic = analytic,
         Wfact = _Wfact === nothing ? nothing : _Wfact,
         Wfact_t = _Wfact_t === nothing ? nothing : _Wfact_t,
-        mass_matrix = _M, initialization_data,
-        observed = observedfun)
+        initialization_data)
 end
 
 """
@@ -724,6 +736,18 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = unknowns(sys),
         _jac = :nothing
     end
 
+    M = calculate_massmatrix(sys)
+    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0', M)
+
+    if sparse
+        uElType = u0 === nothing ? Float64 : eltype(u0)
+        jac_prototype = similar(calculate_jacobian(sys; sparse), uElType)
+        W_prototype = similar(jac_prototype + M, uElType)
+    else
+        jac_prototype = nothing
+        W_prototype = nothing
+    end
+
     if Wfact
         tmp_Wfact, tmp_Wfact_t = generate_factorized_W(
             sys, dvs, ps; expression = Val{true},
@@ -734,20 +758,18 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = unknowns(sys),
         _Wfact, _Wfact_t = :nothing, :nothing
     end
 
-    M = calculate_massmatrix(sys)
-
-    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0', M)
-
     ex = quote
         f = $f
         g = $g
         tgrad = $_tgrad
         jac = $_jac
+        jac_prototype = $jac_prototype
         Wfact = $_Wfact
         Wfact_t = $_Wfact_t
         M = $_M
         SDEFunction{$iip}(f, g,
             jac = jac,
+            jac_prototype = jac_prototype,
             tgrad = tgrad,
             Wfact = Wfact,
             Wfact_t = Wfact_t,
