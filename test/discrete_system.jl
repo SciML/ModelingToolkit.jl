@@ -34,7 +34,7 @@ eqs = [S ~ S(k - 1) - infection * h,
 syss = structural_simplify(sys)
 @test syss == syss
 
-df = DiscreteFunction(ssys)
+df = DiscreteFunction(syss)
 # iip
 du = zeros(3)
 u = collect(1:3)
