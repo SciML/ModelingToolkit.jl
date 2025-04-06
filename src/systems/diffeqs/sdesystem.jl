@@ -741,10 +741,8 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = unknowns(sys),
 
     if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
-        jac_prototype = similar(calculate_jacobian(sys; sparse), uElType)
-        W_prototype = similar(jac_prototype + M, uElType)
+        W_prototype = similar(W_sparsity(sys), uElType)
     else
-        jac_prototype = nothing
         W_prototype = nothing
     end
 
@@ -763,13 +761,13 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = unknowns(sys),
         g = $g
         tgrad = $_tgrad
         jac = $_jac
-        jac_prototype = $jac_prototype
+        W_prototype = $W_prototype
         Wfact = $_Wfact
         Wfact_t = $_Wfact_t
         M = $_M
         SDEFunction{$iip}(f, g,
             jac = jac,
-            jac_prototype = jac_prototype,
+            jac_prototype = W_prototype,
             tgrad = tgrad,
             Wfact = Wfact,
             Wfact_t = Wfact_t,
