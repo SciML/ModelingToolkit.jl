@@ -164,6 +164,7 @@ struct SDESystem <: AbstractODESystem
     """
     is_dde::Bool
     isscheduled::Bool
+    tearing_state::Any
 
     function SDESystem(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed,
             tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults,
@@ -173,7 +174,8 @@ struct SDESystem <: AbstractODESystem
             metadata = nothing, gui_metadata = nothing, namespacing = true,
             complete = false, index_cache = nothing, parent = nothing, is_scalar_noise = false,
             is_dde = false,
-            isscheduled = false;
+            isscheduled = false,
+            tearing_state = nothing;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_independent_variables([iv])
@@ -198,7 +200,7 @@ struct SDESystem <: AbstractODESystem
             ctrl_jac, Wfact, Wfact_t, name, description, systems,
             defaults, guesses, initializesystem, initialization_eqs, connector_type, cevents,
             devents, parameter_dependencies, assertions, metadata, gui_metadata, namespacing,
-            complete, index_cache, parent, is_scalar_noise, is_dde, isscheduled)
+            complete, index_cache, parent, is_scalar_noise, is_dde, isscheduled, tearing_state)
     end
 end
 

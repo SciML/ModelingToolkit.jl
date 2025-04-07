@@ -73,6 +73,15 @@ function calculate_jacobian(sys::AbstractODESystem;
 
     if sparse
         jac = sparsejacobian(rhs, dvs, simplify = simplify)
+        W_s = W_sparsity(sys)
+        (Is, Js, Vs) = findnz(W_s)
+        # Add nonzeros of W as non-structural zeros of the Jacobian (to ensure equal results for oop and iip Jacobian.)
+        for (i, j) in zip(Is, Js)
+            iszero(jac[i, j]) && begin
+                jac[i, j] = 1
+                jac[i, j] = 0
+            end
+        end
     else
         jac = jacobian(rhs, dvs, simplify = simplify)
     end
@@ -294,12 +303,7 @@ function jacobian_dae_sparsity(sys::AbstractODESystem)
 end
 
 function W_sparsity(sys::AbstractODESystem) 
-    if has_tearing_state(sys)
-        jac_sparsity = jacobian_sparsity(sys)
-    else
-        jac = calculate_jacobian(sys; sparse = true)
-        jac_sparsity = SparseMatrixCSC{Bool, Int64}((!iszero).(jac))
-    end
+    jac_sparsity = jacobian_sparsity(sys)
     (n, n) = size(jac_sparsity)
     M = calculate_massmatrix(sys)
     M_sparsity = M isa UniformScaling ? sparse(I(n)) : SparseMatrixCSC{Bool, Int64}((!iszero).(M))

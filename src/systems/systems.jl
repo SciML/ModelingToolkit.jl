@@ -155,7 +155,7 @@ function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = fal
             get_iv(ode_sys), unknowns(ode_sys), parameters(ode_sys);
             name = nameof(ode_sys), is_scalar_noise, observed = observed(ode_sys), defaults = defaults(sys),
             parameter_dependencies = parameter_dependencies(sys), assertions = assertions(sys),
-            guesses = guesses(sys), initialization_eqs = initialization_equations(sys))
+            guesses = guesses(sys), initialization_eqs = initialization_equations(sys), tearing_state = get_tearing_state(ode_sys))
     end
 end
 
