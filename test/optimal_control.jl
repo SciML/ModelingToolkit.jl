@@ -290,7 +290,8 @@ end
     @mtkbuild lksys = ODESystem(eqs, t; costs, consolidate)
     @test_throws ErrorException @mtkbuild lksys2 = ODESystem(eqs, t; costs)
 
-    prob = ODEProblem(lksys, u0map, tspan, parammap)
+    @test_throws ErrorException ODEProblem(lksys, u0map, tspan, parammap)
+    prob = ODEProblem(lksys, u0map, tspan, parammap; allow_cost = true)
     sol = solve(prob, Tsit5())
     costfn = ModelingToolkit.generate_cost_function(lksys)
     _t = tspan[2]
@@ -303,7 +304,7 @@ end
     @mtkbuild lksys = ODESystem(eqs, t; costs, consolidate)
     @test t_c ∈ Set(parameters(lksys))
     push!(parammap, t_c => 0.56)
-    prob = ODEProblem(lksys, u0map, tspan, parammap)
+    prob = ODEProblem(lksys, u0map, tspan, parammap; allow_cost = true)
     sol = solve(prob, Tsit5())
     costfn = ModelingToolkit.generate_cost_function(lksys)
     @test costfn(sol, prob.p, _t) ≈ log(sol(0.56)[2] + sol(0.)[1]) - sol(0.4)[1]^2
