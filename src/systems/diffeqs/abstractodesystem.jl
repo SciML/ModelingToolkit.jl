@@ -697,6 +697,7 @@ end
 ```julia
 DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
                            parammap = DiffEqBase.NullParameters();
+                           allow_cost = false,
                            version = nothing, tgrad = false,
                            jac = false,
                            checkbounds = false, sparse = false,
@@ -730,6 +731,7 @@ end
 function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = [],
         tspan = get_tspan(sys),
         parammap = DiffEqBase.NullParameters();
+        allow_cost = false,
         callback = nothing,
         check_length = true,
         warn_initialize_determined = true,
@@ -743,6 +745,12 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     if !isnothing(get_constraintsystem(sys))
         error("An ODESystem with constraints cannot be used to construct a regular ODEProblem. 
               Consider a BVProblem instead.")
+    end
+
+    if !isempty(get_costs(sys)) && !allow_cost
+        error("ODEProblem will not optimize solutions of ODESystems that have associated cost functions. 
+              Solvers for optimal control problems are forthcoming. In order to bypass this error (e.g. 
+              to check the cost of a regular solution), pass `allow_cost` = true into the constructor.")
     end
 
     f, u0, p = process_SciMLProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
@@ -796,21 +804,19 @@ If an ODESystem without `constraints` is specified, it will be treated as an ini
 
 ```julia
     @parameters g t_c = 0.5
-    @variables x(..) y(t) [state_priority = 10] λ(t)
+    @variables x(..) y(t) λ(t)
     eqs = [D(D(x(t))) ~ λ * x(t)
            D(D(y)) ~ λ * y - g
            x(t)^2 + y^2 ~ 1]
     cstr = [x(0.5) ~ 1]
-    @named cstrs = ConstraintsSystem(cstr, t)
-    @mtkbuild pend = ODESystem(eqs, t)
+    @mtkbuild pend = ODESystem(eqs, t; constraints = cstrs)
 
     tspan = (0.0, 1.5)
     u0map = [x(t) => 0.6, y => 0.8]
     parammap = [g => 1]
     guesses = [λ => 1]
-    constraints = [x(0.5) ~ 1]
 
-    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap; constraints, guesses, check_length = false)
+    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap; guesses, check_length = false)
 ```
 
 If the `ODESystem` has algebraic equations, like `x(t)^2 + y(t)^2`, the resulting 
@@ -839,6 +845,7 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
         tspan = get_tspan(sys),
         parammap = DiffEqBase.NullParameters();
         guesses = Dict(),
+        allow_cost = false,
         version = nothing, tgrad = false,
         callback = nothing,
         check_length = true,
@@ -851,6 +858,12 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `BVProblem`")
     end
     !isnothing(callback) && error("BVP solvers do not support callbacks.")
+
+    if !isempty(get_costs(sys)) && !allow_cost
+        error("BVProblem will not optimize solutions of ODESystems that have associated cost functions.
+              Solvers for optimal control problems are forthcoming. In order to bypass this error (e.g.
+              to check the cost of a regular solution), pass `allow_cost` = true into the constructor.")
+    end
 
     has_alg_eqs(sys) &&
         error("The BVProblem constructor currently does not support ODESystems with algebraic equations.") # Remove this when the BVDAE solvers get updated, the codegen should work when it does.
@@ -924,7 +937,7 @@ function generate_function_bc(sys::ODESystem, u0, u0_idxs, tspan; kwargs...)
     exprs = vcat(init_conds, cons)
     _p = reorder_parameters(sys, ps)
 
-    build_function_wrapper(sys, exprs, sol, _p..., t; output_type = Array, kwargs...)
+    build_function_wrapper(sys, exprs, sol, _p..., iv; output_type = Array, kwargs...)
 end
 
 """
@@ -952,11 +965,19 @@ end
 
 function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
         parammap = DiffEqBase.NullParameters();
+        allow_cost = false,
         warn_initialize_determined = true,
         check_length = true, eval_expression = false, eval_module = @__MODULE__, kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEProblem`.")
     end
+
+    if !isempty(get_costs(sys)) && !allow_cost
+        error("DAEProblem will not optimize solutions of ODESystems that have associated cost functions. 
+              Solvers for optimal control problems are forthcoming. In order to bypass this error (e.g. 
+              to check the cost of a regular solution), pass `allow_cost` = true into the constructor.")
+    end
+
     f, du0, u0, p = process_SciMLProblem(DAEFunction{iip}, sys, u0map, parammap;
         implicit_dae = true, du0map = du0map, check_length,
         t = tspan !== nothing ? tspan[1] : tspan,
