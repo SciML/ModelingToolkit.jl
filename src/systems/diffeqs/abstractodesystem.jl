@@ -298,12 +298,12 @@ function W_sparsity(sys::AbstractODESystem)
         jac_sparsity = jacobian_sparsity(sys)
     else
         jac = calculate_jacobian(sys; sparse = true)
-        jac_sparsity = sparse((!iszero).(jac))
+        jac_sparsity = SparseMatrixCSC{Bool, Int64}((!iszero).(jac))
     end
     (n, n) = size(jac_sparsity)
     M = calculate_massmatrix(sys)
-    M_sparsity = M isa UniformScaling ? sparse(I(n)) : sparse((!iszero).(M))
-    jac_sparsity .|| M_sparsity
+    M_sparsity = M isa UniformScaling ? sparse(I(n)) : SparseMatrixCSC{Bool, Int64}((!iszero).(M))
+    jac_sparsity .| M_sparsity
 end
 
 function isautonomous(sys::AbstractODESystem)
