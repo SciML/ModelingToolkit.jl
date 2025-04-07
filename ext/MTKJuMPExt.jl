@@ -8,9 +8,9 @@ struct JuMPControlProblem{uType, tType, isinplace, P, F, K} <:
        f::F
        u0::uType
        tspan::tType
-       p
-       model
-       kwargs
+       p::P
+       model::Model
+       kwargs::K
 end
 
 """
@@ -28,7 +28,7 @@ The constraints are:
 - The set of user constraints passed to the ODESystem via `constraints`
 - The solver constraints that encode the time-stepping used by the solver
 """
-function JuMPControlProblem(sys::ODESystem, u0map, tspan, pmap; dt = error("dt must be provided for JuMPProblem."), solver = :Tsit5)
+function JuMPControlProblem(sys::ODESystem, u0map, tspan, pmap; dt = error("dt must be provided for JuMPControlProblem."), guesses, eval_expression, eval_module)
     ts = tspan[1]
     te = tspan[2]
     steps = ts:dt:te
@@ -37,7 +37,7 @@ function JuMPControlProblem(sys::ODESystem, u0map, tspan, pmap; dt = error("dt m
 
     if !isnothing(constraintsys)
         (length(constraints(constraintsys)) + length(u0map) > length(sts)) &&
-            @warn "The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) exceeds the total number of states. The BVP solvers will default to doing a nonlinear least-squares optimization."
+            @warn "The JuMPControlProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) exceeds the total number of states. The solvers will default to doing a nonlinear least-squares optimization."
     end
 
     model = InfiniteModel()
@@ -52,9 +52,12 @@ function JuMPControlProblem(sys::ODESystem, u0map, tspan, pmap; dt = error("dt m
 
     add_jump_cost_function!(model, sys)
     add_user_constraints!(model, sys)
-    add_solve_constraints!(model)
 
-    JuMPControlProblem{iip}(f, u0, tspan, p, model; kwargs...)
+    stidxmap = Dict([v => i for (i, v) in enumerate(sts)])
+    u0_idxs = has_alg_eqs(sys) ? collect(1:length(sts)) : [stidxmap[k] for (k, v) in u0map]
+    add_initial_constraints!(model, u0, u0_idxs, tspan)
+
+    JuMPControlProblem{iip}(f, u0, tspan, p, model, kwargs...)
 end
 
 function add_jump_cost_function!(model, sys)
@@ -114,11 +117,16 @@ function add_user_constraints!(model, sys, u0map)
             @constraint(model, user[i], cons.lhs - cons.rhs ≤ 0)
         end
     end
-
-    # Add initial constraints.
 end
 
-function add_solve_constraints!(prob, talbeau, f, tsteps)
+function add_initial_constraints!(model, u0, u0_idxs, tspan)
+    ts = tspan[1]
+    @constraint(model, init_u0_idx[i in u0_idxs], U[i](ts) == u0[i])
+end
+
+is_explicit(tableau) = tableau isa DiffEqDevTools.ExplicitRKTableau
+
+function add_solve_constraints!(prob, tableau, f, tsteps)
     A = tableau.A
     α = tableau.α
     c = tableau.c
@@ -126,31 +134,30 @@ function add_solve_constraints!(prob, talbeau, f, tsteps)
     p = prob.p
     dt = step(tsteps)
 
+    U = model[:U]
     if is_explicit(tableau)
         K = Any[]
-        for t in tsteps
+        for τ in tsteps
             for (i, h) in enumerate(c)
                 ΔU = sum([A[i, j] * K[j] for j in 1:i-1])
-                Kₙ = f(U + ΔU*dt, p, t + h*dt) 
+                Kₙ = f(U + ΔU*dt, p, τ + h*dt)
                 push!(K, Kₙ)
             end
-            @constraint(model, U(t) + dot(α, K) == U(t + dt))
+            @constraint(model, U(τ) + dot(α, K) == U(τ + dt))
             empty!(K)
         end
     else
         @variable(model, K[1:length(a)], Infinite(t), start = tsteps[1])
-        for t in tsteps
-            ΔUs = A * K(t)
+        for τ in tsteps
+            ΔUs = A * K(τ)
             for (i, h) in enumerate(c)
                 ΔU = ΔUs[i]
-                @constraint(model, K[i](t) == f(U + ΔU*dt, p, t + h*dt))
+                @constraint(model, K[i](τ) == f(U(τ) + ΔU*dt, p, τ + h*dt))
             end
-            @constraint(model, U(t) + dot(α, K(t)) == U(t + dt))
+            @constraint(model, U(τ) + dot(α, K(τ)) == U(τ + dt))
         end
     end
 end
-
-is_explicit(tableau) = tableau isa DiffEqDevTools.ExplicitRKTableau
 
 """
 """
@@ -167,16 +174,16 @@ name of the solver, e.g. :Tsitouras5 rather than Tsit5.
 function solve(prob::JuMPProblem, jump_solver, ode_solver::Symbol)
     model = prob.model
     f = prob.f
-    tableau_getter = Symbol(:construct, solver)
+    tableau_getter = Symbol(:construct, ode_solver)
     @eval tableau = $tableau_getter()
     ts = prob.tspan[1]:dt:prob.tspan[2]
     add_solve_constraints!(model, ts, tableau, f)
 
-    set_optimizer(model, solver)
+    set_optimizer(model, jump_solver)
     optimize!(model)
 
     if is_solved_and_feasible(model)
-        sol = DiffEqBase.build_solution(prob, ode_solver, ts, value(U))
+        sol = DiffEqBase.build_solution(prob, ode_solver, ts, value.(U))
         JuMPControlSolution(model, sol)
     end
 end
