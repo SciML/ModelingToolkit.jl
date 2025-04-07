@@ -943,9 +943,8 @@ Generates a DAEProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 
 Note: Solvers for DAEProblems like DFBDF, DImplicitEuler, DABDF2 are 
-generally slower than the ones for ODEProblems. If possible, it is 
-recommended to formulate your problem in terms of an ODEProblem and 
-use the corresponding ODE Solvers.
+generally slower than the ones for ODEProblems. We recommend trying 
+ODEProblem and its solvers for your problem first.
 """
 function DiffEqBase.DAEProblem(sys::AbstractODESystem, args...; kwargs...)
     DAEProblem{true}(sys, args...; kwargs...)
