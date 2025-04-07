@@ -307,5 +307,5 @@ end
     prob = ODEProblem(lksys, u0map, tspan, parammap; allow_cost = true)
     sol = solve(prob, Tsit5())
     costfn = ModelingToolkit.generate_cost_function(lksys)
-    @test costfn(sol, prob.p, _t) ≈ log(sol(0.56)[2] + sol(0.)[1]) - sol(0.4)[1]^2
+    @test costfn(sol, prob.p, _t) ≈ log(sol(0.56)[2] + sol(0.0)[1]) - sol(0.4)[1]^2
 end
