@@ -236,3 +236,19 @@ end
     prob2 = remake(prob; p = p_new)
     @test prob2.ps[interp] == spline2
 end
+
+@testset "Issue#3523: don't substitute inside initial in `build_operating_point!`" begin
+    @variables (X(t))[1:2]
+    @parameters p[1:2]
+    eqs = [
+        0 ~ p[1] - X[1],
+        0 ~ p[2] - X[2]
+    ]
+    @named nlsys = NonlinearSystem(eqs)
+    nlsys = complete(nlsys)
+
+    # Creates the `NonlinearProblem`.
+    u0 = [X => [1.0, 2.0]]
+    ps = [p => [4.0, 5.0]]
+    @test_nowarn NonlinearProblem(nlsys, u0, ps)
+end
