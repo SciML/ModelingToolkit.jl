@@ -3,18 +3,18 @@ using ModelingToolkit
 using JuMP, InfiniteOpt
 using DiffEqDevTools, DiffEqBase
 
-struct JuMPProblem{uType, tType, isinplace, P, F, K} <:
+struct JuMPControlProblem{uType, tType, isinplace, P, F, K} <:
        AbstractODEProblem{uType, tType, isinplace}
        f::F
        u0::uType
-       tspan
+       tspan::tType
        p
        model
        kwargs
 end
 
 """
-    JuMPProblem(sys::ODESystem, u0, tspan, p; dt)
+    JuMPControlProblem(sys::ODESystem, u0, tspan, p; dt)
 
 Convert an ODESystem representing an optimal control system into a JuMP model
 for solving using optimization. Must provide `dt` for determining the length 
@@ -28,7 +28,7 @@ The constraints are:
 - The set of user constraints passed to the ODESystem via `constraints`
 - The solver constraints that encode the time-stepping used by the solver
 """
-function JuMPProblem(sys::ODESystem, u0map, tspan, pmap; dt = error("dt must be provided for JuMPProblem."), solver = :Tsit5)
+function JuMPControlProblem(sys::ODESystem, u0map, tspan, pmap; dt = error("dt must be provided for JuMPProblem."), solver = :Tsit5)
     ts = tspan[1]
     te = tspan[2]
     steps = ts:dt:te
@@ -54,7 +54,7 @@ function JuMPProblem(sys::ODESystem, u0map, tspan, pmap; dt = error("dt must be 
     add_user_constraints!(model, sys)
     add_solve_constraints!(model)
 
-    JuMPProblem{iip}(f, u0, tspan, p, model; kwargs...)
+    JuMPControlProblem{iip}(f, u0, tspan, p, model; kwargs...)
 end
 
 function add_jump_cost_function!(model, sys)
@@ -118,20 +118,67 @@ function add_user_constraints!(model, sys, u0map)
     # Add initial constraints.
 end
 
-function add_solve_constraints!(model, tsteps, solver)
-    tableau = fetch_tableau(solver)
+function add_solve_constraints!(prob, talbeau, f, tsteps)
+    A = tableau.A
+    α = tableau.α
+    c = tableau.c
+    model = prob.model
+    p = prob.p
+    dt = step(tsteps)
 
-    for (i, t) in collect(enumerate(tsteps))
+    if is_explicit(tableau)
+        K = Any[]
+        for t in tsteps
+            for (i, h) in enumerate(c)
+                ΔU = sum([A[i, j] * K[j] for j in 1:i-1])
+                Kₙ = f(U + ΔU*dt, p, t + h*dt) 
+                push!(K, Kₙ)
+            end
+            @constraint(model, U(t) + dot(α, K) == U(t + dt))
+            empty!(K)
+        end
+    else
+        @variable(model, K[1:length(a)], Infinite(t), start = tsteps[1])
+        for t in tsteps
+            ΔUs = A * K(t)
+            for (i, h) in enumerate(c)
+                ΔU = ΔUs[i]
+                @constraint(model, K[i](t) == f(U + ΔU*dt, p, t + h*dt))
+            end
+            @constraint(model, U(t) + dot(α, K(t)) == U(t + dt))
+        end
     end
 end
 
+is_explicit(tableau) = tableau isa DiffEqDevTools.ExplicitRKTableau
+
 """
-Solve JuMPProblem. Takes in a symbol representing the solver.
 """
-function solve(prob::JuMPProblem, solver_sym::Symbol)
+struct JuMPControlSolution
+    model
+    sol::ODESolution
+end
+
+"""
+Solve JuMPProblem. Takes in a symbol representing the solver. Acceptable solvers may be found at https://docs.sciml.ai/DiffEqDevDocs/stable/internals/tableaus/.
+Note that the symbol may be different than the typical
+name of the solver, e.g. :Tsitouras5 rather than Tsit5.
+"""
+function solve(prob::JuMPProblem, jump_solver, ode_solver::Symbol)
     model = prob.model
+    f = prob.f
     tableau_getter = Symbol(:construct, solver)
     @eval tableau = $tableau_getter()
-    add_solve_constraints!(model, tableau)
+    ts = prob.tspan[1]:dt:prob.tspan[2]
+    add_solve_constraints!(model, ts, tableau, f)
+
+    set_optimizer(model, solver)
+    optimize!(model)
+
+    if is_solved_and_feasible(model)
+        sol = DiffEqBase.build_solution(prob, ode_solver, ts, value(U))
+        JuMPControlSolution(model, sol)
+    end
 end
+
 end
