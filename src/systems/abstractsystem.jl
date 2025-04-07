@@ -1207,6 +1207,8 @@ end
 Apply `DelayParentScope` to `sym`, with a delay of `N` and `parent` being `LocalScope`.
 """
 function DelayParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}}, N)
+    Base.depwarn(
+        "`DelayParentScope` is deprecated and will be removed soon", :DelayParentScope)
     apply_to_variables(sym) do sym
         if iscall(sym) && operation(sym) == getindex
             args = arguments(sym)
