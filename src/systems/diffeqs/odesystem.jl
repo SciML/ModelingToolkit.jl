@@ -355,7 +355,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     if length(costs) > 1 && isnothing(consolidate)
         error("Must specify a consolidation function for the costs vector.")
     elseif isnothing(consolidate)
-        consolidate(u) = u[1]
+        consolidate = u -> u[1]
     end
 
     assertions = Dict{BasicSymbolic, Any}(unwrap(k) => v for (k, v) in assertions)
