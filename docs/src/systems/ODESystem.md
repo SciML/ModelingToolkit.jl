@@ -8,21 +8,26 @@ ODESystem
 
 ## Composition and Accessor Functions
 
-  - `get_eqs(sys)` or `equations(sys)`: The equations that define the ODE.
-  - `get_unknowns(sys)` or `unknowns(sys)`: The set of unknowns in the ODE.
-  - `get_ps(sys)` or `parameters(sys)`: The parameters of the ODE.
-  - `get_iv(sys)`: The independent variable of the ODE.
-  - `get_u0_p(sys, u0map, parammap)` Numeric arrays for the initial condition and parameters given `var => value` maps.
-  - `continuous_events(sys)`: The set of continuous events in the ODE.
-  - `discrete_events(sys)`: The set of discrete events in the ODE.
-  - `alg_equations(sys)`: The algebraic equations (i.e. that does not contain a differential) that defines the ODE.
-  - `get_alg_eqs(sys)`: The algebraic equations (i.e. that does not contain a differential) that defines the ODE. Only returns equations of the current-level system.
-  - `diff_equations(sys)`: The differential equations (i.e. that contain a differential) that defines the ODE.
-  - `get_diff_eqs(sys)`: The differential equations (i.e. that contain a differential) that defines the ODE. Only returns equations of the current-level system.
-  - `has_alg_equations(sys)`: Returns `true` if the ODE contains any algebraic equations (i.e. that does not contain a differential).
-  - `has_alg_eqs(sys)`: Returns `true` if the ODE contains any algebraic equations (i.e. that does not contain a differential). Only considers the current-level system.
-  - `has_diff_equations(sys)`: Returns `true` if the ODE contains any differential equations (i.e. that does contain a differential).
-  - `has_diff_eqs(sys)`: Returns `true` if the ODE contains any differential equations (i.e. that does contain a differential). Only considers the current-level system.
+```@docs
+get_eqs
+equations
+get_unknowns
+unknowns
+get_ps
+parameters
+get_iv
+get_u0_p
+continuous_events
+discrete_events
+alg_equations
+get_alg_eqs
+diff_equations
+get_diff_eqs
+has_alg_equations
+has_alg_eqs
+has_diff_equations
+has_diff_eqs
+
 
 ## Transformations
 
