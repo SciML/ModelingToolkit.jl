@@ -5,7 +5,7 @@ using DiffEqDevTools, DiffEqBase, SciMLBase
 using LinearAlgebra
 const MTK = ModelingToolkit
 
-struct JuMPControlProblem{uType, tType, P, F, K}
+struct JuMPControlProblem{uType, tType, isinplace, P, F, K} <: SciMLBase.AbstractODEProblem{uType, tType, isinplace}
        f::F
        u0::uType
        tspan::tType
@@ -14,7 +14,7 @@ struct JuMPControlProblem{uType, tType, P, F, K}
        kwargs::K
 
        function JuMPControlProblem(f, u0, tspan, p, model; kwargs...) 
-           new{typeof(u0), typeof(tspan), typeof(p), typeof(f), typeof(kwargs)}(f, u0, tspan, p, model, kwargs)
+           new{typeof(u0), typeof(tspan), SciMLBase.isinplace(f), typeof(p), typeof(f), typeof(kwargs)}(f, u0, tspan, p, model, kwargs)
        end
 end
 
@@ -50,9 +50,9 @@ function MTK.JuMPControlProblem(sys::ODESystem, u0map, tspan, pmap; dt = error("
         t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
 
     model = InfiniteModel()
-    @infinite_parameter(model, t in [ts, te], num_supports = length(steps), derivative_method = OrthogonalCollocation(2))
-    @variable(model, U[1:length(states)], Infinite(t), start = ts)
-    @variable(model, V[1:length(ctrls)], Infinite(t), start = ts)
+    @infinite_parameter(model, t in [ts, te], num_supports = length(steps))
+    @variable(model, U[i = 1:length(states)], Infinite(t))
+    @variable(model, V[1:length(ctrls)], Infinite(t))
 
     add_jump_cost_function!(model, sys)
     add_user_constraints!(model, sys)
@@ -136,7 +136,8 @@ end
 
 function add_initial_constraints!(model, u0, u0_idxs, tspan)
     ts = tspan[1]
-    @constraint(model, init_u0_idx[i in u0_idxs], model[:U][i](ts) == u0[i])
+    U = model[:U]
+    @constraint(model, initial[i in u0_idxs], U[i](ts) == u0[i])
 end
 
 is_explicit(tableau) = tableau isa DiffEqDevTools.ExplicitRKTableau
@@ -148,6 +149,7 @@ function add_solve_constraints!(prob, tableau)
     model = prob.model
     f = prob.f
     p = prob.p
+    t = model[:t]
     tsteps = supports(model[:t])
     pop!(tsteps)
     dt = tsteps[2] - tsteps[1]
@@ -163,21 +165,21 @@ function add_solve_constraints!(prob, tableau)
                 Kₙ = f(Uₙ, p, τ + h*dt)
                 push!(K, Kₙ)
             end
-            ΔU = sum([α[i] * K[i] for i in 1:length(α)])
-            @constraint(model, [n = 1:nᵤ], U[n](τ) + ΔU[n] == U[n](τ + dt))
+            ΔU = dt*sum([α[i] * K[i] for i in 1:length(α)])
+            @constraint(model, [n = 1:nᵤ], U[n](τ) + ΔU[n] == U[n](τ + dt), base_name = "solve_time_$τ")
             empty!(K)
         end
     else
-        @variable(model, K[1:length(a), 1:nᵤ], Infinite(t), start = tsteps[1])
+        @variable(model, K[1:length(α), 1:nᵤ], Infinite(t), start = tsteps[1])
         for τ in tsteps
-            ΔUs = [A * K(τ)]
+            ΔUs = A * K
             for (i, h) in enumerate(c)
-                ΔU = ΔUs[i]
-                Uₙ = [U[j](τ) + ΔU[j](τ)*dt for j in 1:nᵤ]
-                @constraint(model, K[i](τ) == f(Uₙ, p, τ + h*dt))
+                ΔU = ΔUs[i, :]
+                Uₙ = [U[j] + ΔU[j]*dt for j in 1:nᵤ]
+                @constraint(model, [j in 1:nᵤ], K[i, j] == f(Uₙ, p, τ + h*dt)[j], DomainRestrictions(t => τ), base_name = "solve_K($τ)")
             end
-            ΔU = sum([α[i] * K[i] for i in 1:length(α)])
-            @constraint(model, U(τ) + dot(α, K(τ)) == U(τ + dt))
+            ΔU = dt*sum([α[i] * K[i, :] for i in 1:length(α)])
+            @constraint(model, [n = 1:nᵤ], U[n] + ΔU[n] == U[n](τ + dt), DomainRestrictions(t => τ), base_name = "solve_U($τ)")
         end
     end
 end
@@ -194,25 +196,46 @@ Solve JuMPControlProblem. Arguments:
 - prob: a JumpControlProblem
 - jump_solver: a LP solver such as HiGHS
 - ode_solver: Takes in a symbol representing the solver. Acceptable solvers may be found at https://docs.sciml.ai/DiffEqDevDocs/stable/internals/tableaus/. Note that the symbol may be different than the typical name of the solver, e.g. :Tsitouras5 rather than Tsit5.
+
+Returns a JuMPControlSolution, which contains both the model and the ODE solution.
 """
 function DiffEqBase.solve(prob::JuMPControlProblem, jump_solver, ode_solver::Symbol)
     model = prob.model
     tableau_getter = Symbol(:construct, ode_solver)
     @eval tableau = $tableau_getter()
     ts = supports(model[:t])
+
+    # Unregister current solver constraints
+    for con in all_constraints(model)
+        if occursin("solve", JuMP.name(con))
+            unregister(model, Symbol(JuMP.name(con)))
+            delete(model, con)
+        end
+    end
+    for var in all_variables(model)
+        @show JuMP.name(var)
+        if occursin("K", JuMP.name(var))
+            unregister(model, Symbol(JuMP.name(var)))
+            delete(model, var)
+        end
+    end
     add_solve_constraints!(prob, tableau)
 
     set_optimizer(model, jump_solver)
     optimize!(model)
 
-    if is_solved_and_feasible(model)
-        sol = DiffEqBase.build_solution(prob, ode_solver, ts, value.(U))
-        JuMPControlSolution(model, sol)
-    else
-        sol = DiffEqBase.build_solution(prob, ode_solver, ts, value.(U))
+    tstatus = termination_status(model)
+    pstatus = primal_status(model)
+    !has_values(model) && error("Model not solvable; please report this to github.com/SciML/ModelingToolkit.jl.")
+
+    U_vals = value.(model[:U])
+    U_vals = [[U_vals[i][j] for i in 1:length(U_vals)] for j in 1:length(ts)]
+    sol = DiffEqBase.build_solution(prob, ode_solver, ts, U_vals)
+
+    if !(pstatus === FEASIBLE_POINT && (tstatus === OPTIMAL || tstatus === LOCALLY_SOLVED || tstatus === ALMOST_OPTIMAL || tstatus === ALMOST_LOCALLY_SOLVED))
         sol = SciMLBase.solution_new_retcode(sol, SciMLBase.ReturnCode.ConvergenceFailure)
-        JuMPControlSolution(model, sol)
     end
+    JuMPControlSolution(model, sol)
 end
 
 end
