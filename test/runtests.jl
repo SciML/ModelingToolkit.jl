@@ -141,5 +141,6 @@ end
         @safetestset "LabelledArrays Test" include("labelledarrays.jl")
         @safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl")
         @safetestset "InfiniteOpt Extension Test" include("extensions/test_infiniteopt.jl")
+        @safetestset "JuMPControl Extension Test" include("extensions/jump_control.jl")
     end
 end
