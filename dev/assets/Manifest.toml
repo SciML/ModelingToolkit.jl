@@ -617,9 +617,9 @@ version = "6.167.2"
 
 [[deps.DiffEqCallbacks]]
 deps = ["ConcreteStructs", "DataStructures", "DiffEqBase", "DifferentiationInterface", "Functors", "LinearAlgebra", "Markdown", "RecipesBase", "RecursiveArrayTools", "SciMLBase", "StaticArraysCore"]
-git-tree-sha1 = "c4966e57a993a181b6d613cf0d267c46fe49139d"
+git-tree-sha1 = "10481b5d8e046df5280cf081117c8058a7ce7376"
 uuid = "459566f4-90b8-5000-8ac3-15dfb0a30def"
-version = "4.3.0"
+version = "4.4.0"
 
 [[deps.DiffEqNoiseProcess]]
 deps = ["DiffEqBase", "Distributions", "GPUArraysCore", "LinearAlgebra", "Markdown", "Optim", "PoissonRandom", "QuadGK", "Random", "Random123", "RandomNumbers", "RecipesBase", "RecursiveArrayTools", "ResettableStacks", "SciMLBase", "StaticArraysCore", "Statistics"]
