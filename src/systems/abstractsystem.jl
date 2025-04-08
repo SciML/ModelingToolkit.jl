@@ -1085,6 +1085,7 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = does_namespacing(
 
     if has_eqs(sys)
         for eq in get_eqs(sys)
+            eq isa Equation || continue
             if eq.lhs isa AnalysisPoint && nameof(eq.rhs) == name
                 return namespace ? renamespace(sys, eq.rhs) : eq.rhs
             end
@@ -1122,9 +1123,25 @@ function _apply_to_variables(f::F, ex) where {F}
         metadata(ex))
 end
 
+"""
+Variable metadata key which contains information about scoping/namespacing of the
+variable in a hierarchical system.
+"""
 abstract type SymScope end
 
+"""
+    $(TYPEDEF)
+
+The default scope of a variable. It belongs to the system whose equations it is involved
+in and is namespaced by every level of the hierarchy.
+"""
 struct LocalScope <: SymScope end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Apply `LocalScope` to `sym`.
+"""
 function LocalScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
     apply_to_variables(sym) do sym
         if iscall(sym) && operation(sym) === getindex
@@ -1138,9 +1155,25 @@ function LocalScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
     end
 end
 
+"""
+    $(TYPEDEF)
+
+Denotes that the variable does not belong to the system whose equations it is involved
+in. It is not namespaced by this system. In the immediate parent of this system, the
+scope of this variable is given by `parent`.
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
 struct ParentScope <: SymScope
     parent::SymScope
 end
+"""
+    $(TYPEDSIGNATURES)
+
+Apply `ParentScope` to `sym`, with `parent` being `LocalScope`.
+"""
 function ParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
     apply_to_variables(sym) do sym
         if iscall(sym) && operation(sym) === getindex
@@ -1156,11 +1189,34 @@ function ParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
     end
 end
 
+"""
+    $(TYPEDEF)
+
+Denotes that a variable belongs to a system that is at least `N + 1` levels up in the
+hierarchy from the system whose equations it is involved in. It is namespaced by the
+first `N` parents and not namespaced by the `N+1`th parent in the hierarchy. The scope
+of the variable after this point is given by `parent`.
+
+In other words, this scope delays applying `ParentScope` by `N` levels, and applies
+`LocalScope` in the meantime.
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
 struct DelayParentScope <: SymScope
     parent::SymScope
     N::Int
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Apply `DelayParentScope` to `sym`, with a delay of `N` and `parent` being `LocalScope`.
+"""
 function DelayParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}}, N)
+    Base.depwarn(
+        "`DelayParentScope` is deprecated and will be removed soon", :DelayParentScope)
     apply_to_variables(sym) do sym
         if iscall(sym) && operation(sym) == getindex
             args = arguments(sym)
@@ -1174,9 +1230,29 @@ function DelayParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}}, N)
         end
     end
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Apply `DelayParentScope` to `sym`, with a delay of `1` and `parent` being `LocalScope`.
+"""
 DelayParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}}) = DelayParentScope(sym, 1)
 
+"""
+    $(TYPEDEF)
+
+Denotes that a variable belongs to the root system in the hierarchy, regardless of which
+equations of subsystems in the hierarchy it is involved in. Variables with this scope
+are never namespaced and only added to the unknowns/parameters of a system when calling
+`complete` or `structural_simplify`.
+"""
 struct GlobalScope <: SymScope end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Apply `GlobalScope` to `sym`.
+"""
 function GlobalScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
     apply_to_variables(sym) do sym
         if iscall(sym) && operation(sym) == getindex
