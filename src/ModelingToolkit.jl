@@ -348,4 +348,7 @@ export AnalysisPoint, get_sensitivity_function, get_comp_sensitivity_function,
        open_loop
 function FMIComponent end
 
+function JuMPControlProblem end
+export JuMPControlProblem
+
 end # module
