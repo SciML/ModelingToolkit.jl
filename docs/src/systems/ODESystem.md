@@ -9,6 +9,7 @@ ODESystem
 ## Composition and Accessor Functions
 
 ```@docs
+canonical = false here
 get_eqs
 equations
 get_unknowns
