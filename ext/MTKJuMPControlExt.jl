@@ -33,7 +33,7 @@ The constraints are:
 - The set of user constraints passed to the ODESystem via `constraints`
 - The solver constraints that encode the time-stepping used by the solver
 """
-function MTK.JuMPControlProblem(sys::ODESystem, u0map, tspan, pmap; dt = error("dt must be provided for JuMPControlProblem."), kwargs...)
+function MTK.JuMPControlProblem(sys::ODESystem, u0map, tspan, pmap; dt = error("dt must be provided for JuMPControlProblem."), guesses = Dict(), kwargs...)
     ts = tspan[1]
     te = tspan[2]
     steps = ts:dt:te
@@ -42,11 +42,12 @@ function MTK.JuMPControlProblem(sys::ODESystem, u0map, tspan, pmap; dt = error("
     constraintsys = MTK.get_constraintsystem(sys)
 
     if !isnothing(constraintsys)
-        (length(constraints(constraintsys)) + length(u0map) > length(sts)) &&
+        (length(constraints(constraintsys)) + length(u0map) > length(states)) &&
             @warn "The JuMPControlProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) exceeds the total number of states. The solvers will default to doing a nonlinear least-squares optimization."
     end
 
-    f, u0, p = MTK.process_SciMLProblem(ODEFunction, sys, u0map, pmap;
+    _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
+    f, u0, p = MTK.process_SciMLProblem(ODEFunction, sys, _u0map, pmap;
         t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
 
     model = InfiniteModel()
@@ -67,7 +68,7 @@ end
 function add_jump_cost_function!(model, sys)
     jcosts = MTK.get_costs(sys)
     consolidate = MTK.get_consolidate(sys)
-    if isnothing(consolidate)
+    if isnothing(jcosts)
         @objective(model, Min, 0)
         return
     end
@@ -81,7 +82,7 @@ function add_jump_cost_function!(model, sys)
         t = only(arguments(st))
         idx = stidxmap[x(iv)]
         subval = isequal(t, iv) ? model[:U][idx] : model[:U][idx](t)
-        jcosts = Symbolics.substitute(jcosts, Dict(x(t) => subval))
+        jcosts = map(c -> Symbolics.substitute(c, Dict(x(t) => subval)), jcosts)
     end
     
     for ct in controls(sys)
@@ -89,30 +90,27 @@ function add_jump_cost_function!(model, sys)
         t = only(arguments(ct))
         idx = cidxmap[p(iv)]
         subval = isequal(t, iv) ? model[:V][idx] : model[:V][idx](t)
-        jcosts = Symbolics.substitute(jcosts, Dict(x(t) => subval))
+        jcosts = map(c -> Symbolics.substitute(c, Dict(p(t) => subval)), jcosts)
     end
     
     @objective(model, Min, consolidate(jcosts))
 end
 
 function add_user_constraints!(model, sys)
-    jconstraints = if !(csys = MTK.get_constraintsystem(sys) isa Nothing)
-        MTK.get_constraints(csys)
-    else
-        nothing
-    end
-    isnothing(jconstraints) && return nothing
+    conssys = MTK.get_constraintsystem(sys)
+    jconstraints = isnothing(conssys) ? nothing : MTK.get_constraints(conssys)
+    (isnothing(jconstraints) || isempty(jconstraints)) && return nothing
 
     iv = MTK.get_iv(sys)
     stidxmap = Dict([v => i for (i, v) in enumerate(unknowns(sys))])
     cidxmap = Dict([v => i for (i, v) in enumerate(controls(sys))])
 
-    for st in unknowns(sys)
+    for st in unknowns(conssys)
         x = operation(st)
         t = only(arguments(st))
         idx = stidxmap[x(iv)]
         subval = isequal(t, iv) ? model[:U][idx] : model[:U][idx](t)
-        jconstraints = Symbolics.substitute(jconstraints, Dict(x(t) => subval))
+        jconstraints = map(c -> Symbolics.substitute(c, Dict(x(t) => subval)), jconstraints)
     end
 
     for ct in controls(sys)
@@ -120,16 +118,16 @@ function add_user_constraints!(model, sys)
         t = only(arguments(ct))
         idx = cidxmap[p(iv)]
         subval = isequal(t, iv) ? model[:V][idx] : model[:V][idx](t)
-        jconstraints = Symbolics.substitute(jconstraints, Dict(p(t) => subval))
+        jconstraints = map(c -> Symbolics.substitute(jconstraints, Dict(p(t) => subval)), jconstriants)
     end
 
     for (i, cons) in enumerate(jconstraints)
         if cons isa Equation
-            @constraint(model, user[i], cons.lhs - cons.rhs == 0)
+            @constraint(model, cons.lhs - cons.rhs == 0, base_name = "user[$i]")
         elseif cons.relational_op === Symbolics.geq 
-            @constraint(model, user[i], cons.lhs - cons.rhs ≥ 0)
+            @constraint(model, cons.lhs - cons.rhs ≥ 0, base_name = "user[$i]")
         else
-            @constraint(model, user[i], cons.lhs - cons.rhs ≤ 0)
+            @constraint(model, cons.lhs - cons.rhs ≤ 0, base_name = "user[$i]")
         end
     end
 end
@@ -189,6 +187,7 @@ end
 struct JuMPControlSolution
     model::InfiniteModel
     sol::ODESolution
+    input_sol::Union{Nothing, ODESolution}
 end
 
 """
@@ -213,7 +212,6 @@ function DiffEqBase.solve(prob::JuMPControlProblem, jump_solver, ode_solver::Sym
         end
     end
     for var in all_variables(model)
-        @show JuMP.name(var)
         if occursin("K", JuMP.name(var))
             unregister(model, Symbol(JuMP.name(var)))
             delete(model, var)
@@ -232,10 +230,19 @@ function DiffEqBase.solve(prob::JuMPControlProblem, jump_solver, ode_solver::Sym
     U_vals = [[U_vals[i][j] for i in 1:length(U_vals)] for j in 1:length(ts)]
     sol = DiffEqBase.build_solution(prob, ode_solver, ts, U_vals)
 
+    input_sol = nothing
+    if !isempty(model[:V])
+        V_vals = value.(model[:V])
+        V_vals = [[V_vals[i][j] for i in 1:length(V_vals)] for j in 1:length(ts)]
+        input_sol = DiffEqBase.build_solution(prob, ode_solver, ts, V_vals)
+    end
+
     if !(pstatus === FEASIBLE_POINT && (tstatus === OPTIMAL || tstatus === LOCALLY_SOLVED || tstatus === ALMOST_OPTIMAL || tstatus === ALMOST_LOCALLY_SOLVED))
         sol = SciMLBase.solution_new_retcode(sol, SciMLBase.ReturnCode.ConvergenceFailure)
+        !isnothing(input_sol) && (input_sol = SciMLBase.solution_new_retcode(input_sol, SciMLBase.ReturnCode.ConvergenceFailure))
     end
-    JuMPControlSolution(model, sol)
+
+    JuMPControlSolution(model, sol, input_sol)
 end
 
 end
