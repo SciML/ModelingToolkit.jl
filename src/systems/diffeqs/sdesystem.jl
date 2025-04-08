@@ -164,6 +164,7 @@ struct SDESystem <: AbstractODESystem
     """
     is_dde::Bool
     isscheduled::Bool
+    tearing_state::Any
 
     function SDESystem(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed,
             tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, description, systems, defaults,
@@ -173,7 +174,8 @@ struct SDESystem <: AbstractODESystem
             metadata = nothing, gui_metadata = nothing, namespacing = true,
             complete = false, index_cache = nothing, parent = nothing, is_scalar_noise = false,
             is_dde = false,
-            isscheduled = false;
+            isscheduled = false,
+            tearing_state = nothing;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_independent_variables([iv])
@@ -198,7 +200,7 @@ struct SDESystem <: AbstractODESystem
             ctrl_jac, Wfact, Wfact_t, name, description, systems,
             defaults, guesses, initializesystem, initialization_eqs, connector_type, cevents,
             devents, parameter_dependencies, assertions, metadata, gui_metadata, namespacing,
-            complete, index_cache, parent, is_scalar_noise, is_dde, isscheduled)
+            complete, index_cache, parent, is_scalar_noise, is_dde, isscheduled, tearing_state)
     end
 end
 
@@ -593,6 +595,7 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
         u0 = nothing;
         version = nothing, tgrad = false, sparse = false,
         jac = false, Wfact = false, eval_expression = false,
+        sparsity = false, analytic = nothing,
         eval_module = @__MODULE__,
         checkbounds = false, initialization_data = nothing,
         cse = true, kwargs...) where {iip, specialize}
@@ -642,6 +645,13 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
     end
 
     M = calculate_massmatrix(sys)
+    if sparse
+        uElType = u0 === nothing ? Float64 : eltype(u0)
+        W_prototype = similar(W_sparsity(sys), uElType)
+    else
+        W_prototype = nothing
+    end
+
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0', M)
 
     observedfun = ObservedFunctionCache(
@@ -651,10 +661,14 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
         tgrad = _tgrad === nothing ? nothing : _tgrad,
+        mass_matrix = _M,
+        jac_prototype = W_prototype,
+        observed = observedfun,
+        sparsity = sparsity ? W_sparsity(sys) : nothing,
+        analytic = analytic,
         Wfact = _Wfact === nothing ? nothing : _Wfact,
         Wfact_t = _Wfact_t === nothing ? nothing : _Wfact_t,
-        mass_matrix = _M, initialization_data,
-        observed = observedfun)
+        initialization_data)
 end
 
 """
@@ -724,6 +738,16 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = unknowns(sys),
         _jac = :nothing
     end
 
+    M = calculate_massmatrix(sys)
+    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0', M)
+
+    if sparse
+        uElType = u0 === nothing ? Float64 : eltype(u0)
+        W_prototype = similar(W_sparsity(sys), uElType)
+    else
+        W_prototype = nothing
+    end
+
     if Wfact
         tmp_Wfact, tmp_Wfact_t = generate_factorized_W(
             sys, dvs, ps; expression = Val{true},
@@ -734,20 +758,18 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = unknowns(sys),
         _Wfact, _Wfact_t = :nothing, :nothing
     end
 
-    M = calculate_massmatrix(sys)
-
-    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0', M)
-
     ex = quote
         f = $f
         g = $g
         tgrad = $_tgrad
         jac = $_jac
+        W_prototype = $W_prototype
         Wfact = $_Wfact
         Wfact_t = $_Wfact_t
         M = $_M
         SDEFunction{$iip}(f, g,
             jac = jac,
+            jac_prototype = W_prototype,
             tgrad = tgrad,
             Wfact = Wfact,
             Wfact_t = Wfact_t,
