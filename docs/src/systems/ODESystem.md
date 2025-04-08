@@ -9,6 +9,7 @@ ODESystem
 ## Composition and Accessor Functions
 
 ```@docs
+
 canonical = false here
 get_eqs
 equations
@@ -29,7 +30,7 @@ has_alg_eqs
 has_diff_equations
 has_diff_eqs
 
-
+```
 ## Transformations
 
 ```@docs
