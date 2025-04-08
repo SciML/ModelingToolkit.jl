@@ -381,6 +381,12 @@ function TearingState(sys; quick_cancel = false, check = true)
     neqs = length(eqs)
     symbolic_incidence = symbolic_incidence[eqs_to_retain]
 
+    # sort equations lexicographically to reduce simplification issues
+    # depending on order due to NP-completeness of tearing.
+    sortidxs = Base.sortperm(eqs, by = string)
+    eqs = eqs[sortidxs]
+    symbolic_incidence = symbolic_incidence[sortidxs]
+
     ### Handle discrete variables
     lowest_shift = Dict()
     for var in fullvars
