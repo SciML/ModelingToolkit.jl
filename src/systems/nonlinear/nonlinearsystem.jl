@@ -277,8 +277,13 @@ function calculate_jacobian(sys::NonlinearSystem; sparse = false, simplify = fal
 
     if sparse
         jac = sparsejacobian(rhs, vals, simplify = simplify)
+        (Is, Js, Vs) = findnz(jac)
+        for (i, j) in zip(Is, Js)
+            jac[i, j] = remove_denominators(jac[i, j])
+        end
     else
         jac = jacobian(rhs, vals, simplify = simplify)
+        jac = remove_denominators.(jac)
     end
     get_jac(sys)[] = jac, (sparse, simplify)
     return jac
@@ -318,7 +323,8 @@ function generate_function(
         sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(
             sys; initial_parameters = true);
         scalar = false, kwargs...)
-    rhss = [deq.rhs for deq in equations(sys)]
+    rhss = [deq.rhs for deq in full_equations(sys; allow_singular = true)]
+    rhss = remove_denominators.(rhss)
     dvs′ = value.(dvs)
     if scalar
         rhss = only(rhss)
