@@ -710,9 +710,7 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
     else
         input_idxs = 0:-1 # Empty range
     end
-    # use `false` for alias elimination since it doesn't really care about `allow_alebraic`
-    # anyway
-    _allow_algebraic = something(allow_algebraic, false)
+    _allow_algebraic = something(allow_algebraic, true)
     sys, mm = ModelingToolkit.alias_elimination!(
         state; allow_symbolic, allow_algebraic = _allow_algebraic, kwargs...)
     if check_consistency
