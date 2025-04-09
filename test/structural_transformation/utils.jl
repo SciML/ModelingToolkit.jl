@@ -121,7 +121,7 @@ end
         @named sys = ODESystem(
             [D(x) ~ z[1] + z[2] + foo(z)[1], y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t)
 
-        sys1 = structural_simplify(sys; cse_hack = false)
+        sys1 = structural_simplify(sys)
         @test length(observed(sys1)) == 6
         @test !any(observed(sys1)) do eq
             iscall(eq.rhs) &&
@@ -142,7 +142,7 @@ end
         @named sys = ODESystem(
             [D(x) ~ z[1] + z[2] + foo(z)[1] + w, y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t)
 
-        sys1 = structural_simplify(sys; cse_hack = false, fully_determined = false)
+        sys1 = structural_simplify(sys; fully_determined = false)
         @test length(observed(sys1)) == 6
         @test !any(observed(sys1)) do eq
             iscall(eq.rhs) &&
