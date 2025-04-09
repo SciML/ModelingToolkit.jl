@@ -1299,3 +1299,16 @@ function var_in_varlist(var, varlist::AbstractSet, iv)
            # delayed variables
            (isdelay(var, iv) && var_in_varlist(operation(var)(iv), varlist, iv))
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Transform `expr` to have a common denominator and remove it.
+"""
+function remove_denominators(expr)
+    expr = simplify_fractions(expr)
+    if iscall(expr) && operation(expr) == (/)
+        expr = first(arguments(expr))
+    end
+    return expr
+end
