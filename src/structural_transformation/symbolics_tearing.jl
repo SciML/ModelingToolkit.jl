@@ -104,7 +104,7 @@ These equations matches generated numerical code.
 
 See also [`equations`](@ref) and [`ModelingToolkit.get_eqs`](@ref).
 """
-function full_equations(sys::AbstractSystem; simplify = false)
+function full_equations(sys::AbstractSystem; simplify = false, allow_singular = false)
     empty_substitutions(sys) && return equations(sys)
     substitutions = get_substitutions(sys)
     substitutions.subed_eqs === nothing || return substitutions.subed_eqs
@@ -119,7 +119,7 @@ function full_equations(sys::AbstractSystem; simplify = false)
                 eq = 0 ~ eq.rhs - eq.lhs
             end
             rhs = tearing_sub(eq.rhs, solved, simplify)
-            if rhs isa Symbolic
+            if rhs isa Symbolic || allow_singular
                 return 0 ~ rhs
             else # a number
                 error("tearing failed because the system is singular")
