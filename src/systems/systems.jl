@@ -25,19 +25,20 @@ topological sort of the observed equations in `sys`.
 ### Optional Keyword Arguments:
 + When `simplify=true`, the `simplify` function will be applied during the tearing
   process.
-+ `allow_symbolic=false`, `allow_algebraic=true`, `allow_parameter=true`, and
++ `allow_symbolic=false`, `allow_algebraic=nothing`, `allow_parameter=true`, and
   `conservative=false` limit the coefficient types during tearing. In particular,
   `conservative=true` limits tearing to only solve for trivial linear systems where
   the coefficient has the absolute value of ``1``. `allow_symbolic` allows arbitrary
   symbolic coefficients. If it is false, `allow_algebraic` allows symbolic coefficients
   involving only algebraic variables and parameters. Otherwise, `allow_parameter` only
-  allows coefficients containing parameters.
+  allows coefficients containing parameters. `allow_algebraic` defaults to
+  `fully_determined` if `nothing`.
 + `fully_determined=true` controls whether or not an error will be thrown if the number
   of equations don't match the number of inputs, outputs, and equations.
 """
 function structural_simplify(
         sys::AbstractSystem, io = nothing; additional_passes = [], simplify = false, split = true,
-        allow_symbolic = false, allow_algebraic = true, allow_parameter = true, conservative = false,
+        allow_symbolic = false, allow_algebraic = nothing, allow_parameter = true, conservative = false,
         fully_determined = true, kwargs...)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
     newsys′ = __structural_simplify(sys, io; simplify, allow_symbolic, allow_algebraic,

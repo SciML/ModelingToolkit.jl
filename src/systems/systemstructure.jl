@@ -693,7 +693,7 @@ end
 
 function _structural_simplify!(state::TearingState, io; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = false,
-        dummy_derivative = true, allow_symbolic = false,
+        dummy_derivative = true, allow_symbolic = false, allow_algebraic = nothing,
         kwargs...)
     if fully_determined isa Bool
         check_consistency &= fully_determined
@@ -710,10 +710,17 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
     else
         input_idxs = 0:-1 # Empty range
     end
-    sys, mm = ModelingToolkit.alias_elimination!(state; allow_symbolic, kwargs...)
+    # use `false` for alias elimination since it doesn't really care about `allow_alebraic`
+    # anyway
+    _allow_algebraic = something(allow_algebraic, false)
+    sys, mm = ModelingToolkit.alias_elimination!(
+        state; allow_symbolic, allow_algebraic = _allow_algebraic, kwargs...)
     if check_consistency
         fully_determined = ModelingToolkit.check_consistency(
             state, orig_inputs; nothrow = fully_determined === nothing)
+    end
+    if allow_algebraic === nothing
+        allow_algebraic = fully_determined
     end
     if fully_determined && dummy_derivative
         sys = ModelingToolkit.dummy_derivative(
