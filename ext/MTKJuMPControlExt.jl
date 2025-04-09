@@ -5,7 +5,9 @@ using DiffEqDevTools, DiffEqBase, SciMLBase
 using LinearAlgebra
 const MTK = ModelingToolkit
 
-struct JuMPControlProblem{uType, tType, isinplace, P, F, K} <: SciMLBase.AbstractODEProblem{uType, tType, isinplace}
+abstract type AbstractOptimalControlProblem{uType, tType, isinplace} <: SciMLBase.AbstractODEProblem{uType, tType, isinplace} end
+
+struct JuMPControlProblem{uType, tType, isinplace, P, F, K} <: AbstractOptimalControlProblem{uType, tType, isinplace}
        f::F
        u0::uType
        tspan::tType
@@ -14,6 +16,19 @@ struct JuMPControlProblem{uType, tType, isinplace, P, F, K} <: SciMLBase.Abstrac
        kwargs::K
 
        function JuMPControlProblem(f, u0, tspan, p, model; kwargs...) 
+           new{typeof(u0), typeof(tspan), SciMLBase.isinplace(f), typeof(p), typeof(f), typeof(kwargs)}(f, u0, tspan, p, model, kwargs)
+       end
+end
+
+struct InfiniteOptControlProblem{uType, tType, isinplace, P, F, K} <: SciMLBase.AbstractODEProblem{uType, tType, isinplace}
+       f::F
+       u0::uType
+       tspan::tType
+       p::P
+       model::InfiniteModel
+       kwargs::K
+
+       function InfiniteOptControlProblem(f, u0, tspan, p, model; kwargs...) 
            new{typeof(u0), typeof(tspan), SciMLBase.isinplace(f), typeof(p), typeof(f), typeof(kwargs)}(f, u0, tspan, p, model, kwargs)
        end
 end
@@ -34,24 +49,52 @@ The constraints are:
 - The solver constraints that encode the time-stepping used by the solver
 """
 function MTK.JuMPControlProblem(sys::ODESystem, u0map, tspan, pmap; dt = error("dt must be provided for JuMPControlProblem."), guesses = Dict(), kwargs...)
-    ts = tspan[1]
-    te = tspan[2]
-    steps = ts:dt:te
-    ctrls = controls(sys)
-    states = unknowns(sys)
     constraintsys = MTK.get_constraintsystem(sys)
-
     if !isnothing(constraintsys)
         (length(constraints(constraintsys)) + length(u0map) > length(states)) &&
-            @warn "The JuMPControlProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) exceeds the total number of states. The solvers will default to doing a nonlinear least-squares optimization."
+            @warn "The control problem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) exceeds the total number of states. The solvers will default to doing a nonlinear least-squares optimization."
+    end
+
+    _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
+    f, u0, p = MTK.process_SciMLProblem(ODEFunction, sys, _u0map, pmap;
+        t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
+    model = init_model(sys, tspan[1]:dt:tspan[2], u0map)
+
+    JuMPControlProblem(f, u0, tspan, p, model, kwargs...)
+end
+
+"""
+    InfiniteOptControlProblem(sys::ODESystem, u0map, tspan, pmap; dt)
+
+Convert an ODESystem representing an optimal control system into a InfiniteOpt model
+for solving using optimization. Must provide `dt` for determining the length 
+of the interpolation arrays.
+
+Related to `JuMPControlProblem`, but directly adds the differential equations
+of the system as derivative constraints, rather than using a solver tableau.
+"""
+function MTK.InfiniteOptControlProblem(sys::ODESystem, u0map, tspan, pmap; dt = error("dt must be provided for InfiniteOptControlProblem."), guesses = Dict(), kwargs...)
+    constraintsys = MTK.get_constraintsystem(sys)
+    if !isnothing(constraintsys)
+        (length(constraints(constraintsys)) + length(u0map) > length(unknowns(sys))) &&
+            @warn "The control problem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) exceeds the total number of states. The solvers will default to doing a nonlinear least-squares optimization."
     end
 
     _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
     f, u0, p = MTK.process_SciMLProblem(ODEFunction, sys, _u0map, pmap;
         t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
 
+    model = init_model(sys, tspan[1]:dt:tspan[2], u0map)
+    add_infopt_solve_constraints!(model, sys, pmap)
+    InfiniteOptControlProblem(f, u0, tspan, p, model, kwargs...)
+end
+
+function init_model(sys, tsteps, u0map)
+    ctrls = controls(sys)
+    states = unknowns(sys)
+
     model = InfiniteModel()
-    @infinite_parameter(model, t in [ts, te], num_supports = length(steps))
+    @infinite_parameter(model, t in [tsteps[1], tsteps[end]], num_supports = length(tsteps))
     @variable(model, U[i = 1:length(states)], Infinite(t))
     @variable(model, V[1:length(ctrls)], Infinite(t))
 
@@ -61,8 +104,6 @@ function MTK.JuMPControlProblem(sys::ODESystem, u0map, tspan, pmap; dt = error("
     stidxmap = Dict([v => i for (i, v) in enumerate(states)])
     u0_idxs = has_alg_eqs(sys) ? collect(1:length(states)) : [stidxmap[k] for (k, v) in u0map]
     add_initial_constraints!(model, u0, u0_idxs, tspan)
-
-    JuMPControlProblem(f, u0, tspan, p, model, kwargs...)
 end
 
 function add_jump_cost_function!(model, sys)
@@ -140,7 +181,29 @@ end
 
 is_explicit(tableau) = tableau isa DiffEqDevTools.ExplicitRKTableau
 
-function add_solve_constraints!(prob, tableau)
+function add_infopt_solve_constraints!(model, sys, pmap)
+    iv = get_iv(sys)
+    t = model[:t]
+    U = model[:U]
+    V = model[:V]
+
+    stmap = Dict([v => U[i] for (i, v) in enumerate(unknowns(sys))])
+    ctrlmap = Dict([v => V[i] for (i, v) in enumerate(controls(sys))])
+    submap = merge(stmap, ctrlmap, pmap)
+
+    @register_symbolic _D(x) = ∂(x, t)
+    # Differential equations
+    diff_eqs = diff_equations(sys)
+    diff_eqs = map(e -> Symbolics.substitute(e, submap, Differential(iv) => _D), diff_eqs)
+    @constraint(model, D[i = 1:length(diff_eqs)], diff_eqs[i].lhs == diff_eqs[i].rhs)
+
+    # Algebraic equations
+    alg_eqs = alg_equations(sys)
+    alg_eqs = map(e -> Symbolics.substitute(e, submap), alg_eqs)
+    @constraint(model, A[i = 1:length(alg_eqs)], alg_eqs[i].lhs == alg_eqs[i].rhs)
+end
+
+function add_jump_solve_constraints!(prob, tableau)
     A = tableau.A
     α = tableau.α
     c = tableau.c
@@ -202,7 +265,6 @@ function DiffEqBase.solve(prob::JuMPControlProblem, jump_solver, ode_solver::Sym
     model = prob.model
     tableau_getter = Symbol(:construct, ode_solver)
     @eval tableau = $tableau_getter()
-    ts = supports(model[:t])
 
     # Unregister current solver constraints
     for con in all_constraints(model)
@@ -218,7 +280,19 @@ function DiffEqBase.solve(prob::JuMPControlProblem, jump_solver, ode_solver::Sym
         end
     end
     add_solve_constraints!(prob, tableau)
+    _solve(prob, jump_solver, ode_solver)
+end
 
+"""
+`derivative_method` kwarg refers to the method used by InfiniteOpt to compute derivatives. The list of possible options can be found at https://infiniteopt.github.io/InfiniteOpt.jl/stable/guide/derivative/. Defaults to FiniteDifference(Backward()).
+"""
+function DiffEqBase.solve(prob::InfiniteOptControlProblem, jump_solver; derivative_method = InfiniteOpt.FiniteDifference(Backward()))
+    set_derivative_method(prob.model[:t], derivative_method)
+    _solve(prob, jump_solver, derivative_method)
+end
+
+function _solve(prob::AbstractOptimalControlProblem, jump_solver, solver)
+    model = prob.model
     set_optimizer(model, jump_solver)
     optimize!(model)
 
@@ -226,15 +300,16 @@ function DiffEqBase.solve(prob::JuMPControlProblem, jump_solver, ode_solver::Sym
     pstatus = primal_status(model)
     !has_values(model) && error("Model not solvable; please report this to github.com/SciML/ModelingToolkit.jl.")
 
+    ts = supports(model[:t])
     U_vals = value.(model[:U])
     U_vals = [[U_vals[i][j] for i in 1:length(U_vals)] for j in 1:length(ts)]
-    sol = DiffEqBase.build_solution(prob, ode_solver, ts, U_vals)
+    sol = DiffEqBase.build_solution(prob, solver, ts, U_vals)
 
     input_sol = nothing
     if !isempty(model[:V])
         V_vals = value.(model[:V])
         V_vals = [[V_vals[i][j] for i in 1:length(V_vals)] for j in 1:length(ts)]
-        input_sol = DiffEqBase.build_solution(prob, ode_solver, ts, V_vals)
+        input_sol = DiffEqBase.build_solution(prob, solver, ts, V_vals)
     end
 
     if !(pstatus === FEASIBLE_POINT && (tstatus === OPTIMAL || tstatus === LOCALLY_SOLVED || tstatus === ALMOST_OPTIMAL || tstatus === ALMOST_LOCALLY_SOLVED))
