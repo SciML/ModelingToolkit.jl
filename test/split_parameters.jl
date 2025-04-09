@@ -285,7 +285,7 @@ end
         end
     end
 
-    @mtkmodel System begin
+    @mtkmodel ApexSystem begin
         @components begin
             subsys = SubSystem()
         end
@@ -300,7 +300,7 @@ end
         end
     end
 
-    @named sys = System()
+    @named sys = ApexSystem()
     sysref = complete(sys)
     sys2 = complete(sys; split = true, flatten = false)
     ps = Set(full_parameters(sys2))
