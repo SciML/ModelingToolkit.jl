@@ -259,7 +259,8 @@ Solve JuMPControlProblem. Arguments:
 
 Returns a JuMPControlSolution, which contains both the model and the ODE solution.
 """
-function DiffEqBase.solve(prob::JuMPControlProblem, jump_solver, ode_solver::Symbol; silent = false)
+function DiffEqBase.solve(
+        prob::JuMPControlProblem, jump_solver, ode_solver::Symbol; silent = false)
     model = prob.model
     tableau_getter = Symbol(:construct, ode_solver)
     @eval tableau = $tableau_getter()
