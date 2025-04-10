@@ -149,17 +149,17 @@ function assert_jac_length_header(sys)
     end
 end
 
-function generate_W(sys::AbstractODESystem, γ = 1., dvs = unknowns(sys),
-        ps = parameters(sys; initial_parameters = true); 
+function generate_W(sys::AbstractODESystem, γ = 1.0, dvs = unknowns(sys),
+        ps = parameters(sys; initial_parameters = true);
         simplify = false, sparse = false, kwargs...)
     @variables ˍ₋gamma
     M = calculate_massmatrix(sys; simplify)
     sparse && (M = SparseArrays.sparse(M))
     J = calculate_jacobian(sys; simplify, sparse, dvs)
-    W = ˍ₋gamma*M + J
+    W = ˍ₋gamma * M + J
 
     p = reorder_parameters(sys, ps)
-    return build_function_wrapper(sys, W, 
+    return build_function_wrapper(sys, W,
         dvs,
         p...,
         ˍ₋gamma,
@@ -304,11 +304,12 @@ function jacobian_dae_sparsity(sys::AbstractODESystem)
     J1 + J2
 end
 
-function W_sparsity(sys::AbstractODESystem) 
+function W_sparsity(sys::AbstractODESystem)
     jac_sparsity = jacobian_sparsity(sys)
     (n, n) = size(jac_sparsity)
     M = calculate_massmatrix(sys)
-    M_sparsity = M isa UniformScaling ? sparse(I(n)) : SparseMatrixCSC{Bool, Int64}((!iszero).(M))
+    M_sparsity = M isa UniformScaling ? sparse(I(n)) :
+                 SparseMatrixCSC{Bool, Int64}((!iszero).(M))
     jac_sparsity .| M_sparsity
 end
 
