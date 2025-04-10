@@ -141,10 +141,12 @@ end
 
 function assert_jac_length_header(sys)
     W = W_sparsity(sys)
-    identity, expr -> Func([expr.args...], [], LiteralExpr(quote
-        @assert $(findnz)($(expr.args[1]))[1:2] == $(findnz)($W)[1:2]
-        $(expr.body)
-    end))
+    identity,
+    function add_header(expr)
+        Func(expr.args, [], expr.body,
+            [:(@assert $(SymbolicUtils.Code.toexpr(term(findnz, expr.args[1])))[1:2] ==
+                       $(findnz(W)[1:2]))])
+    end
 end
 
 function generate_W(sys::AbstractODESystem, γ = 1., dvs = unknowns(sys),
