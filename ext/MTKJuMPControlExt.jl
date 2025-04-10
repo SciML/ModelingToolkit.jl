@@ -5,32 +5,37 @@ using DiffEqDevTools, DiffEqBase, SciMLBase
 using LinearAlgebra
 const MTK = ModelingToolkit
 
-abstract type AbstractOptimalControlProblem{uType, tType, isinplace} <: SciMLBase.AbstractODEProblem{uType, tType, isinplace} end
+abstract type AbstractOptimalControlProblem{uType, tType, isinplace} <:
+              SciMLBase.AbstractODEProblem{uType, tType, isinplace} end
 
-struct JuMPControlProblem{uType, tType, isinplace, P, F, K} <: AbstractOptimalControlProblem{uType, tType, isinplace}
-       f::F
-       u0::uType
-       tspan::tType
-       p::P
-       model::InfiniteModel
-       kwargs::K
+struct JuMPControlProblem{uType, tType, isinplace, P, F, K} <:
+       AbstractOptimalControlProblem{uType, tType, isinplace}
+    f::F
+    u0::uType
+    tspan::tType
+    p::P
+    model::InfiniteModel
+    kwargs::K
 
-       function JuMPControlProblem(f, u0, tspan, p, model; kwargs...) 
-           new{typeof(u0), typeof(tspan), SciMLBase.isinplace(f), typeof(p), typeof(f), typeof(kwargs)}(f, u0, tspan, p, model, kwargs)
-       end
+    function JuMPControlProblem(f, u0, tspan, p, model; kwargs...)
+        new{typeof(u0), typeof(tspan), SciMLBase.isinplace(f),
+            typeof(p), typeof(f), typeof(kwargs)}(f, u0, tspan, p, model, kwargs)
+    end
 end
 
-struct InfiniteOptControlProblem{uType, tType, isinplace, P, F, K} <: AbstractOptimalControlProblem{uType, tType, isinplace}
-       f::F
-       u0::uType
-       tspan::tType
-       p::P
-       model::InfiniteModel
-       kwargs::K
+struct InfiniteOptControlProblem{uType, tType, isinplace, P, F, K} <:
+       AbstractOptimalControlProblem{uType, tType, isinplace}
+    f::F
+    u0::uType
+    tspan::tType
+    p::P
+    model::InfiniteModel
+    kwargs::K
 
-       function InfiniteOptControlProblem(f, u0, tspan, p, model; kwargs...) 
-           new{typeof(u0), typeof(tspan), SciMLBase.isinplace(f), typeof(p), typeof(f), typeof(kwargs)}(f, u0, tspan, p, model, kwargs)
-       end
+    function InfiniteOptControlProblem(f, u0, tspan, p, model; kwargs...)
+        new{typeof(u0), typeof(tspan), SciMLBase.isinplace(f),
+            typeof(p), typeof(f), typeof(kwargs)}(f, u0, tspan, p, model, kwargs)
+    end
 end
 
 """
@@ -48,7 +53,9 @@ The constraints are:
 - The set of user constraints passed to the ODESystem via `constraints`
 - The solver constraints that encode the time-stepping used by the solver
 """
-function MTK.JuMPControlProblem(sys::ODESystem, u0map, tspan, pmap; dt = error("dt must be provided for JuMPControlProblem."), guesses = Dict(), kwargs...)
+function MTK.JuMPControlProblem(sys::ODESystem, u0map, tspan, pmap;
+        dt = error("dt must be provided for JuMPControlProblem."),
+        guesses = Dict(), kwargs...)
     _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
     f, u0, p = MTK.process_SciMLProblem(ODEFunction, sys, _u0map, pmap;
         t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
@@ -67,7 +74,9 @@ of the interpolation arrays.
 Related to `JuMPControlProblem`, but directly adds the differential equations
 of the system as derivative constraints, rather than using a solver tableau.
 """
-function MTK.InfiniteOptControlProblem(sys::ODESystem, u0map, tspan, pmap; dt = error("dt must be provided for InfiniteOptControlProblem."), guesses = Dict(), kwargs...)
+function MTK.InfiniteOptControlProblem(sys::ODESystem, u0map, tspan, pmap;
+        dt = error("dt must be provided for InfiniteOptControlProblem."),
+        guesses = Dict(), kwargs...)
     _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
     f, u0, p = MTK.process_SciMLProblem(ODEFunction, sys, _u0map, pmap;
         t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
@@ -87,7 +96,7 @@ function init_model(sys, tsteps, u0map, u0)
     ctrls = controls(sys)
     states = unknowns(sys)
     model = InfiniteModel()
-    @infinite_parameter(model, t in [tsteps[1], tsteps[end]], num_supports = length(tsteps))
+    @infinite_parameter(model, t in [tsteps[1], tsteps[end]], num_supports=length(tsteps))
     @variable(model, U[i = 1:length(states)], Infinite(t))
     @variable(model, V[1:length(ctrls)], Infinite(t))
 
@@ -95,7 +104,8 @@ function init_model(sys, tsteps, u0map, u0)
     add_user_constraints!(model, sys)
 
     stidxmap = Dict([v => i for (i, v) in enumerate(states)])
-    u0_idxs = has_alg_eqs(sys) ? collect(1:length(states)) : [stidxmap[k] for (k, v) in u0map]
+    u0_idxs = has_alg_eqs(sys) ? collect(1:length(states)) :
+              [stidxmap[k] for (k, v) in u0map]
     add_initial_constraints!(model, u0, u0_idxs, tsteps[1])
     return model
 end
@@ -119,7 +129,7 @@ function add_jump_cost_function!(model, sys)
         subval = isequal(t, iv) ? model[:U][idx] : model[:U][idx](t)
         jcosts = map(c -> Symbolics.substitute(c, Dict(x(t) => subval)), jcosts)
     end
-    
+
     for ct in controls(sys)
         p = operation(ct)
         t = only(arguments(ct))
@@ -127,7 +137,7 @@ function add_jump_cost_function!(model, sys)
         subval = isequal(t, iv) ? model[:V][idx] : model[:V][idx](t)
         jcosts = map(c -> Symbolics.substitute(c, Dict(p(t) => subval)), jcosts)
     end
-    
+
     @objective(model, Min, consolidate(jcosts))
 end
 
@@ -153,23 +163,24 @@ function add_user_constraints!(model, sys)
         t = only(arguments(ct))
         idx = cidxmap[p(iv)]
         subval = isequal(t, iv) ? model[:V][idx] : model[:V][idx](t)
-        jconstraints = map(c -> Symbolics.substitute(jconstraints, Dict(p(t) => subval)), jconstriants)
+        jconstraints = map(
+            c -> Symbolics.substitute(jconstraints, Dict(p(t) => subval)), jconstriants)
     end
 
     for (i, cons) in enumerate(jconstraints)
         if cons isa Equation
-            @constraint(model, cons.lhs - cons.rhs == 0, base_name = "user[$i]")
-        elseif cons.relational_op === Symbolics.geq 
-            @constraint(model, cons.lhs - cons.rhs ≥ 0, base_name = "user[$i]")
+            @constraint(model, cons.lhs - cons.rhs==0, base_name="user[$i]")
+        elseif cons.relational_op === Symbolics.geq
+            @constraint(model, cons.lhs - cons.rhs≥0, base_name="user[$i]")
         else
-            @constraint(model, cons.lhs - cons.rhs ≤ 0, base_name = "user[$i]")
+            @constraint(model, cons.lhs - cons.rhs≤0, base_name="user[$i]")
         end
     end
 end
 
 function add_initial_constraints!(model, u0, u0_idxs, ts)
     U = model[:U]
-    @constraint(model, initial[i in u0_idxs], U[i](ts) == u0[i])
+    @constraint(model, initial[i in u0_idxs], U[i](ts)==u0[i])
 end
 
 is_explicit(tableau) = tableau isa DiffEqDevTools.ExplicitRKTableau
@@ -193,12 +204,12 @@ function add_infopt_solve_constraints!(model, sys, pmap)
         diff_eqs = map(e -> Symbolics.substitute(e, submap), diff_eqs)
         diff_eqs = map(e -> Symbolics.substitute(e, diffsubmap), diff_eqs)
     end
-    @constraint(model, D[i = 1:length(diff_eqs)], diff_eqs[i].lhs == diff_eqs[i].rhs)
+    @constraint(model, D[i = 1:length(diff_eqs)], diff_eqs[i].lhs==diff_eqs[i].rhs)
 
     # Algebraic equations
     alg_eqs = alg_equations(sys)
     alg_eqs = map(e -> Symbolics.substitute(e, submap), alg_eqs)
-    @constraint(model, A[i = 1:length(alg_eqs)], alg_eqs[i].lhs == alg_eqs[i].rhs)
+    @constraint(model, A[i = 1:length(alg_eqs)], alg_eqs[i].lhs==alg_eqs[i].rhs)
 end
 
 function add_jump_solve_constraints!(prob, tableau)
@@ -219,26 +230,29 @@ function add_jump_solve_constraints!(prob, tableau)
         K = Any[]
         for τ in tsteps
             for (i, h) in enumerate(c)
-                ΔU = sum([A[i, j] * K[j] for j in 1:i-1], init = zeros(nᵤ))
-                Uₙ = [U[i](τ) + ΔU[i]*dt for i in 1:nᵤ]
-                Kₙ = f(Uₙ, p, τ + h*dt)
+                ΔU = sum([A[i, j] * K[j] for j in 1:(i - 1)], init = zeros(nᵤ))
+                Uₙ = [U[i](τ) + ΔU[i] * dt for i in 1:nᵤ]
+                Kₙ = f(Uₙ, p, τ + h * dt)
                 push!(K, Kₙ)
             end
-            ΔU = dt*sum([α[i] * K[i] for i in 1:length(α)])
-            @constraint(model, [n = 1:nᵤ], U[n](τ) + ΔU[n] == U[n](τ + dt), base_name = "solve_time_$τ")
+            ΔU = dt * sum([α[i] * K[i] for i in 1:length(α)])
+            @constraint(model, [n = 1:nᵤ], U[n](τ) + ΔU[n]==U[n](τ + dt),
+                base_name="solve_time_$τ")
             empty!(K)
         end
     else
-        @variable(model, K[1:length(α), 1:nᵤ], Infinite(t), start = tsteps[1])
+        @variable(model, K[1:length(α), 1:nᵤ], Infinite(t), start=tsteps[1])
         for τ in tsteps
             ΔUs = A * K
             for (i, h) in enumerate(c)
                 ΔU = ΔUs[i, :]
-                Uₙ = [U[j] + ΔU[j]*dt for j in 1:nᵤ]
-                @constraint(model, [j in 1:nᵤ], K[i, j] == f(Uₙ, p, τ + h*dt)[j], DomainRestrictions(t => τ), base_name = "solve_K($τ)")
+                Uₙ = [U[j] + ΔU[j] * dt for j in 1:nᵤ]
+                @constraint(model, [j in 1:nᵤ], K[i, j]==f(Uₙ, p, τ + h * dt)[j],
+                    DomainRestrictions(t => τ), base_name="solve_K($τ)")
             end
-            ΔU = dt*sum([α[i] * K[i, :] for i in 1:length(α)])
-            @constraint(model, [n = 1:nᵤ], U[n] + ΔU[n] == U[n](τ + dt), DomainRestrictions(t => τ), base_name = "solve_U($τ)")
+            ΔU = dt * sum([α[i] * K[i, :] for i in 1:length(α)])
+            @constraint(model, [n = 1:nᵤ], U[n] + ΔU[n]==U[n](τ + dt),
+                DomainRestrictions(t => τ), base_name="solve_U($τ)")
         end
     end
 end
@@ -271,7 +285,7 @@ function DiffEqBase.solve(prob::JuMPControlProblem, jump_solver, ode_solver::Sym
             delete(model, con)
         end
     end
-    unregister(model, :K) 
+    unregister(model, :K)
     for var in all_variables(model)
         if occursin("K", JuMP.name(var))
             delete(model, var)
@@ -284,7 +298,8 @@ end
 """
 `derivative_method` kwarg refers to the method used by InfiniteOpt to compute derivatives. The list of possible options can be found at https://infiniteopt.github.io/InfiniteOpt.jl/stable/guide/derivative/. Defaults to FiniteDifference(Backward()).
 """
-function DiffEqBase.solve(prob::InfiniteOptControlProblem, jump_solver; derivative_method = InfiniteOpt.FiniteDifference(Backward()))
+function DiffEqBase.solve(prob::InfiniteOptControlProblem, jump_solver;
+        derivative_method = InfiniteOpt.FiniteDifference(Backward()))
     set_derivative_method(prob.model[:t], derivative_method)
     _solve(prob, jump_solver, derivative_method)
 end
@@ -296,7 +311,8 @@ function _solve(prob::AbstractOptimalControlProblem, jump_solver, solver)
 
     tstatus = termination_status(model)
     pstatus = primal_status(model)
-    !has_values(model) && error("Model not solvable; please report this to github.com/SciML/ModelingToolkit.jl.")
+    !has_values(model) &&
+        error("Model not solvable; please report this to github.com/SciML/ModelingToolkit.jl.")
 
     ts = supports(model[:t])
     U_vals = value.(model[:U])
@@ -310,9 +326,12 @@ function _solve(prob::AbstractOptimalControlProblem, jump_solver, solver)
         input_sol = DiffEqBase.build_solution(prob, solver, ts, V_vals)
     end
 
-    if !(pstatus === FEASIBLE_POINT && (tstatus === OPTIMAL || tstatus === LOCALLY_SOLVED || tstatus === ALMOST_OPTIMAL || tstatus === ALMOST_LOCALLY_SOLVED))
+    if !(pstatus === FEASIBLE_POINT &&
+         (tstatus === OPTIMAL || tstatus === LOCALLY_SOLVED || tstatus === ALMOST_OPTIMAL ||
+          tstatus === ALMOST_LOCALLY_SOLVED))
         sol = SciMLBase.solution_new_retcode(sol, SciMLBase.ReturnCode.ConvergenceFailure)
-        !isnothing(input_sol) && (input_sol = SciMLBase.solution_new_retcode(input_sol, SciMLBase.ReturnCode.ConvergenceFailure))
+        !isnothing(input_sol) && (input_sol = SciMLBase.solution_new_retcode(
+            input_sol, SciMLBase.ReturnCode.ConvergenceFailure))
     end
 
     JuMPControlSolution(model, sol, input_sol)
