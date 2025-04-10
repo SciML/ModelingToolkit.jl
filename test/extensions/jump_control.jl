@@ -31,12 +31,12 @@ const M = ModelingToolkit
     @test jsol.sol.u ≈ osol.u
 
     # Implicit method.
-    jsol2 = @btime solve($jprob, Ipopt.Optimizer, :ImplicitEuler) # 63.031 ms, 26.49 MiB
+    jsol2 = @btime solve($jprob, Ipopt.Optimizer, :ImplicitEuler, silent = true) # 63.031 ms, 26.49 MiB
     osol2 = @btime solve($oprob, ImplicitEuler(), dt = 0.01, adaptive = false) # 129.375 μs, 61.91 KiB
     @test ≈(jsol2.sol.u, osol2.u, rtol = 0.001)
     iprob = InfiniteOptControlProblem(sys, u0map, tspan, parammap, dt = 0.01)
     isol = @btime solve(
-        $iprob, Ipopt.Optimizer, derivative_method = FiniteDifference(Backward())) # 11.540 ms, 4.00 MiB
+        $iprob, Ipopt.Optimizer, derivative_method = FiniteDifference(Backward()), silent = true) # 11.540 ms, 4.00 MiB
 
     # With a constraint
     u0map = Pair[]
@@ -46,7 +46,7 @@ const M = ModelingToolkit
 
     jprob = JuMPControlProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
     @test num_constraints(jprob.model) == 2
-    jsol = @btime solve($jprob, Ipopt.Optimizer, :Tsitouras5) # 12.190 s, 9.68 GiB
+    jsol = @btime solve($jprob, Ipopt.Optimizer, :Tsitouras5, silent = true) # 12.190 s, 9.68 GiB
     sol = jsol.sol
     @test sol(0.6)[1] ≈ 3.5
     @test sol(0.3)[1] ≈ 7.0
@@ -54,7 +54,7 @@ const M = ModelingToolkit
     iprob = InfiniteOptControlProblem(
         lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
     isol = @btime solve(
-        $iprob, Ipopt.Optimizer, derivative_method = OrthogonalCollocation(3)) # 48.564 ms, 9.58 MiB
+        $iprob, Ipopt.Optimizer, derivative_method = OrthogonalCollocation(3), silent = true) # 48.564 ms, 9.58 MiB
     sol = isol.sol
     @test sol(0.6)[1] ≈ 3.5
     @test sol(0.3)[1] ≈ 7.0
