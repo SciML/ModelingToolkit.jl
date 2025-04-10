@@ -1,12 +1,9 @@
 module MTKJuMPControlExt
 using ModelingToolkit
 using JuMP, InfiniteOpt
-using DiffEqDevTools, DiffEqBase, SciMLBase
+using DiffEqDevTools, DiffEqBase
 using LinearAlgebra
 const MTK = ModelingToolkit
-
-abstract type AbstractOptimalControlProblem{uType, tType, isinplace} <:
-              SciMLBase.AbstractODEProblem{uType, tType, isinplace} end
 
 struct JuMPControlProblem{uType, tType, isinplace, P, F, K} <:
        AbstractOptimalControlProblem{uType, tType, isinplace}
@@ -56,6 +53,7 @@ The constraints are:
 function MTK.JuMPControlProblem(sys::ODESystem, u0map, tspan, pmap;
         dt = error("dt must be provided for JuMPControlProblem."),
         guesses = Dict(), kwargs...)
+    MTK.warn_overdetermined(sys, u0map)
     _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
     f, u0, p = MTK.process_SciMLProblem(ODEFunction, sys, _u0map, pmap;
         t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
@@ -77,6 +75,7 @@ of the system as derivative constraints, rather than using a solver tableau.
 function MTK.InfiniteOptControlProblem(sys::ODESystem, u0map, tspan, pmap;
         dt = error("dt must be provided for InfiniteOptControlProblem."),
         guesses = Dict(), kwargs...)
+    MTK.warn_overdetermined(sys, u0map)
     _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
     f, u0, p = MTK.process_SciMLProblem(ODEFunction, sys, _u0map, pmap;
         t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
@@ -87,12 +86,6 @@ function MTK.InfiniteOptControlProblem(sys::ODESystem, u0map, tspan, pmap;
 end
 
 function init_model(sys, tsteps, u0map, u0)
-    constraintsys = MTK.get_constraintsystem(sys)
-    if !isnothing(constraintsys)
-        (length(constraints(constraintsys)) + length(u0map) > length(unknowns(sys))) &&
-            @warn "The control problem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) exceeds the total number of states. The solvers will default to doing a nonlinear least-squares optimization."
-    end
-
     ctrls = controls(sys)
     states = unknowns(sys)
     model = InfiniteModel()
@@ -110,7 +103,7 @@ function init_model(sys, tsteps, u0map, u0)
     return model
 end
 
-function add_jump_cost_function!(model, sys)
+function add_jump_cost_function!(model::InfiniteModel, sys)
     jcosts = MTK.get_costs(sys)
     consolidate = MTK.get_consolidate(sys)
     if isnothing(jcosts) || isempty(jcosts)
@@ -141,7 +134,7 @@ function add_jump_cost_function!(model, sys)
     @objective(model, Min, consolidate(jcosts))
 end
 
-function add_user_constraints!(model, sys)
+function add_user_constraints!(model::InfiniteModel, sys)
     conssys = MTK.get_constraintsystem(sys)
     jconstraints = isnothing(conssys) ? nothing : MTK.get_constraints(conssys)
     (isnothing(jconstraints) || isempty(jconstraints)) && return nothing
@@ -178,14 +171,14 @@ function add_user_constraints!(model, sys)
     end
 end
 
-function add_initial_constraints!(model, u0, u0_idxs, ts)
+function add_initial_constraints!(model::InfiniteModel, u0, u0_idxs, ts)
     U = model[:U]
     @constraint(model, initial[i in u0_idxs], U[i](ts)==u0[i])
 end
 
 is_explicit(tableau) = tableau isa DiffEqDevTools.ExplicitRKTableau
 
-function add_infopt_solve_constraints!(model, sys, pmap)
+function add_infopt_solve_constraints!(model::InfiniteModel, sys, pmap)
     iv = MTK.get_iv(sys)
     t = model[:t]
     U = model[:U]
@@ -258,14 +251,6 @@ function add_jump_solve_constraints!(prob, tableau)
 end
 
 """
-"""
-struct JuMPControlSolution
-    model::InfiniteModel
-    sol::ODESolution
-    input_sol::Union{Nothing, ODESolution}
-end
-
-"""
 Solve JuMPControlProblem. Arguments:
 - prob: a JumpControlProblem
 - jump_solver: a LP solver such as HiGHS
@@ -334,7 +319,7 @@ function _solve(prob::AbstractOptimalControlProblem, jump_solver, solver)
             input_sol, SciMLBase.ReturnCode.ConvergenceFailure))
     end
 
-    JuMPControlSolution(model, sol, input_sol)
+    OptimalControlSolution(model, sol, input_sol)
 end
 
 end
