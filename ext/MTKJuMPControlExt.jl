@@ -255,13 +255,15 @@ Solve JuMPControlProblem. Arguments:
 - prob: a JumpControlProblem
 - jump_solver: a LP solver such as HiGHS
 - ode_solver: Takes in a symbol representing the solver. Acceptable solvers may be found at https://docs.sciml.ai/DiffEqDevDocs/stable/internals/tableaus/. Note that the symbol may be different than the typical name of the solver, e.g. :Tsitouras5 rather than Tsit5.
+- silent: set the model silent (suppress model output)
 
 Returns a JuMPControlSolution, which contains both the model and the ODE solution.
 """
-function DiffEqBase.solve(prob::JuMPControlProblem, jump_solver, ode_solver::Symbol)
+function DiffEqBase.solve(prob::JuMPControlProblem, jump_solver, ode_solver::Symbol; silent = false)
     model = prob.model
     tableau_getter = Symbol(:construct, ode_solver)
     @eval tableau = $tableau_getter()
+    silent && set_silent(model)
 
     # Unregister current solver constraints
     for con in all_constraints(model)
@@ -285,6 +287,7 @@ end
 """
 function DiffEqBase.solve(prob::InfiniteOptControlProblem, jump_solver;
         derivative_method = InfiniteOpt.FiniteDifference(Backward()))
+    silent && set_silent(model)
     set_derivative_method(prob.model[:t], derivative_method)
     _solve(prob, jump_solver, derivative_method)
 end
