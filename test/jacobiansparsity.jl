@@ -116,3 +116,22 @@ prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
     @test W!(similar(W_prototype, Float64), u, p, γ, t) ==
           0.1 * M + jac!(similar(W_prototype, Float64), u, p, t)
 end
+
+@testset "Issue#3556: Numerical accuracy" begin
+    t = ModelingToolkit.t_nounits
+    D = ModelingToolkit.D_nounits
+    @parameters g
+    @variables x(t) y(t) [state_priority = 10] λ(t)
+    eqs = [D(D(x)) ~ λ * x
+           D(D(y)) ~ λ * y - g
+           x^2 + y^2 ~ 1]
+    @mtkbuild pend = ODESystem(eqs, t)
+    prob = ODEProblem(pend, [x => 0.0, D(x) => 1.0], (0.0, 1.0), [g => 1.0];
+        guesses = [y => 1.0, λ => 1.0], jac = true, sparse = true)
+    J = deepcopy(prob.f.jac_prototype)
+    prob.f.jac(J, prob.u0, prob.p, 1.0)
+    # this currently works but may not continue to do so
+    # see https://github.com/SciML/ModelingToolkit.jl/pull/3556#issuecomment-2792664039
+    @test J == prob.f.jac(prob.u0, prob.p, 1.0)
+    @test J ≈ prob.f.jac(prob.u0, prob.p, 1.0)
+end
