@@ -1011,3 +1011,17 @@ end
         @test any(isequal(u), vars)
     end
 end
+
+@testset "Pass kwargs to ODESystem" begin
+    @mtkmodel UnitFailure begin
+        @variables begin
+            x(t), [unit = u"V"]
+            y(t), [unit = u"A"]
+        end
+        @equations begin
+            x ~ y
+        end
+    end
+    @test_throws ModelingToolkit.ValidationError UnitFailure(name = :uf)
+    UnitFailure(name = :uf, checks = false) # no error with passed kwarg
+end
