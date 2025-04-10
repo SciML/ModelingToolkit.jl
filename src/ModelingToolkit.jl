@@ -348,5 +348,7 @@ function FMIComponent end
 
 function JuMPControlProblem end
 export JuMPControlProblem
+function InfiniteOptControlProblem end
+export InfiniteOptControlProblem
 
 end # module
