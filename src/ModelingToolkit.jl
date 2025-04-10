@@ -303,7 +303,8 @@ export structural_simplify, expand_connections, linearize, linearization_functio
        LinearizationProblem
 export solve
 
-export calculate_jacobian, generate_jacobian, generate_function, generate_custom_function, generate_W
+export calculate_jacobian, generate_jacobian, generate_function, generate_custom_function,
+       generate_W
 export calculate_control_jacobian, generate_control_jacobian
 export calculate_tgrad, generate_tgrad
 export calculate_gradient, generate_gradient
@@ -345,5 +346,10 @@ export AnalysisPoint, get_sensitivity_function, get_comp_sensitivity_function,
        get_looptransfer_function, get_sensitivity, get_comp_sensitivity, get_looptransfer,
        open_loop
 function FMIComponent end
+
+include("systems/optimal_control_interface.jl")
+export AbstractOptimalControlProblem, JuMPControlProblem, InfiniteOptControlProblem,
+       PyomoControlProblem, CasADiControlProblem
+export OptimalControlSolution
 
 end # module

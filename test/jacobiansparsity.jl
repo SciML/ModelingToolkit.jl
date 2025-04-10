@@ -74,7 +74,7 @@ f = DiffEqBase.ODEFunction(sys, u0 = nothing, sparse = true, jac = false)
 # test when u0 is not Float64
 u0 = similar(init_brusselator_2d(xyd_brusselator), Float32)
 prob_ode_brusselator_2d = ODEProblem(brusselator_2d_loop,
-                                     u0, (0.0, 11.5), p)
+    u0, (0.0, 11.5), p)
 sys = complete(modelingtoolkitize(prob_ode_brusselator_2d))
 
 prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = false)
@@ -94,7 +94,8 @@ prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
     @mtkbuild pend = ODESystem(eqs, t)
 
     u0 = [x => 1, y => 0]
-    prob = ODEProblem(pend, u0, (0, 11.5), [g => 1], guesses = [λ => 1], sparse = true, jac = true)
+    prob = ODEProblem(
+        pend, u0, (0, 11.5), [g => 1], guesses = [λ => 1], sparse = true, jac = true)
     jac, jac! = generate_jacobian(pend; expression = Val{false}, sparse = true)
     jac_prototype = ModelingToolkit.jacobian_sparsity(pend)
     W_prototype = ModelingToolkit.W_sparsity(pend)
@@ -109,8 +110,9 @@ prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
     @test_throws AssertionError jac!(similar(jac_prototype, Float64), u, p, t)
 
     W, W! = generate_W(pend; expression = Val{false}, sparse = true)
-    γ = .1
+    γ = 0.1
     M = sparse(calculate_massmatrix(pend))
     @test_throws AssertionError W!(similar(jac_prototype, Float64), u, p, γ, t)
-    @test W!(similar(W_prototype, Float64), u, p, γ, t) == 0.1 * M + jac!(similar(W_prototype, Float64), u, p, t)
+    @test W!(similar(W_prototype, Float64), u, p, γ, t) ==
+          0.1 * M + jac!(similar(W_prototype, Float64), u, p, t)
 end
