@@ -348,9 +348,8 @@ export AnalysisPoint, get_sensitivity_function, get_comp_sensitivity_function,
        open_loop
 function FMIComponent end
 
-function JuMPControlProblem end
-export JuMPControlProblem
-function InfiniteOptControlProblem end
-export InfiniteOptControlProblem
+include("src/systems/optimal_control_interface.jl")
+export JuMPControlProblem, InfiniteOptControlProblem, PyomoControlProblem, CasADiControlProblem
+export OptimalControlSolution
 
 end # module
