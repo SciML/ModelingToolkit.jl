@@ -32,6 +32,8 @@ const M = ModelingToolkit
     jsol2 = solve(jprob, Ipopt.Optimizer, :ImplicitEuler)
     osol2 = solve(oprob, ImplicitEuler(), dt = 0.01, adaptive = false)
     @test ≈(jsol2.sol.u, osol2.u, rtol = 0.001)
+    iprob = InfiniteOptControlProblem(sys, u0map, tspan, parammap, dt = 0.01)
+    isol = solve(iprob, Ipopt.Optimizer, derivative_method = FiniteDifference(Backward()))
 
     # With a constraint
     u0map = Pair[]
