@@ -286,7 +286,9 @@ transformation.
 function make_differential_denominators_unsolvable!(
         structure::SystemStructure, additional_algevars = (); allow_algebraic)
     for ((eqi, vari), denoms) in structure.denominators
-        if allow_algebraic && all(i -> isalgvar(structure, i) || i in additional_algevars, denoms)
+        if allow_algebraic &&
+           all(i -> isalgvar(structure, i) || i in additional_algevars, denoms) ||
+           !has_edge(structure.solvable_graph, BipartiteEdge(eqi, vari))
             continue
         end
         rem_edge!(structure.solvable_graph, eqi, vari)
