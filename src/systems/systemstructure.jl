@@ -722,18 +722,23 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
     end
     if fully_determined && dummy_derivative
         sys = ModelingToolkit.dummy_derivative(
-            sys, state; simplify, mm, check_consistency, allow_symbolic, kwargs...)
+            sys, state; simplify, mm, check_consistency,
+            allow_symbolic, allow_algebraic, kwargs...)
     elseif fully_determined
-        var_eq_matching = pantelides!(state; finalize = false, kwargs...)
-        StructuralTransformations.make_differential_denominators_unsolvable!(state.structure)
+        var_eq_matching = pantelides!(state; finalize = false, allow_algebraic, kwargs...)
+        StructuralTransformations.make_differential_denominators_unsolvable!(
+            state.structure; allow_algebraic)
         sys = pantelides_reassemble(state, var_eq_matching)
         state = TearingState(sys)
-        sys, mm = ModelingToolkit.alias_elimination!(state; allow_symbolic, kwargs...)
+        sys, mm = ModelingToolkit.alias_elimination!(
+            state; allow_symbolic, allow_algebraic, kwargs...)
         sys = ModelingToolkit.dummy_derivative(
-            sys, state; simplify, mm, check_consistency, allow_symbolic, kwargs...)
+            sys, state; simplify, mm, check_consistency,
+            allow_symbolic, allow_algebraic, kwargs...)
     else
         sys = ModelingToolkit.tearing(
-            sys, state; simplify, mm, check_consistency, allow_symbolic, kwargs...)
+            sys, state; simplify, mm, check_consistency,
+            allow_symbolic, allow_algebraic, kwargs...)
     end
     fullunknowns = [map(eq -> eq.lhs, observed(sys)); unknowns(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)

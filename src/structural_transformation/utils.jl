@@ -284,9 +284,11 @@ differential variables that should be considered as algebraic for the purpose of
 transformation.
 """
 function make_differential_denominators_unsolvable!(
-        structure::SystemStructure, additional_algevars = ())
+        structure::SystemStructure, additional_algevars = (); allow_algebraic)
     for ((eqi, vari), denoms) in structure.denominators
-        all(i -> isalgvar(structure, i) || i in additional_algevars, denoms) && continue
+        if allow_algebraic && all(i -> isalgvar(structure, i) || i in additional_algevars, denoms)
+            continue
+        end
         rem_edge!(structure.solvable_graph, eqi, vari)
     end
 end

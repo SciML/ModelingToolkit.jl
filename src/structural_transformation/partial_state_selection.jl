@@ -170,13 +170,14 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
 end
 
 function dummy_derivative_graph!(state::TransformationState, jac = nothing;
-        state_priority = nothing, log = Val(false), allow_symbolic = false, kwargs...)
+        state_priority = nothing, log = Val(false), allow_symbolic = false, allow_algebraic = true, kwargs...)
     state.structure.solvable_graph === nothing &&
-        find_solvables!(state; allow_symbolic, kwargs...)
+        find_solvables!(state; allow_symbolic, allow_algebraic, kwargs...)
     complete!(state.structure)
-    var_eq_matching = complete(pantelides!(state; allow_symbolic, kwargs...))
+    var_eq_matching = complete(pantelides!(
+        state; allow_symbolic, allow_algebraic, kwargs...))
     dummy_derivative_graph!(
-        state.structure, var_eq_matching, jac, state_priority, log; allow_symbolic)
+        state.structure, var_eq_matching, jac, state_priority, log; allow_symbolic, allow_algebraic)
 end
 
 struct DummyDerivativeSummary
@@ -186,7 +187,8 @@ end
 
 function dummy_derivative_graph!(
         structure::SystemStructure, var_eq_matching, jac = nothing,
-        state_priority = nothing, ::Val{log} = Val(false); allow_symbolic = false) where {log}
+        state_priority = nothing, ::Val{log} = Val(false); allow_symbolic = false,
+        allow_algebraic = true) where {log}
     @unpack eq_to_diff, var_to_diff, graph = structure
     diff_to_eq = invview(eq_to_diff)
     diff_to_var = invview(var_to_diff)
@@ -345,7 +347,8 @@ function dummy_derivative_graph!(
     end
 
     dummy_derivatives_set = BitSet(dummy_derivatives)
-    make_differential_denominators_unsolvable!(structure, dummy_derivatives_set)
+    make_differential_denominators_unsolvable!(
+        structure, dummy_derivatives_set; allow_algebraic)
 
     ret = tearing_with_dummy_derivatives(structure, dummy_derivatives_set)
     if log

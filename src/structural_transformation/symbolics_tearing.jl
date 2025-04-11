@@ -926,7 +926,8 @@ end
 function tearing(state::TearingState; kwargs...)
     state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
     complete!(state.structure)
-    make_differential_denominators_unsolvable!(state.structure)
+    make_differential_denominators_unsolvable!(
+        state.structure; allow_algebraic = get(kwargs, :allow_algebraic, true))
     tearing_with_dummy_derivatives(state.structure, ())
 end
 
@@ -939,7 +940,7 @@ instead, which calls this function internally.
 """
 function tearing(sys::AbstractSystem, state = TearingState(sys); mm = nothing,
         simplify = false, array_hack = true, kwargs...)
-    var_eq_matching, full_var_eq_matching = tearing(state)
+    var_eq_matching, full_var_eq_matching = tearing(state; kwargs...)
     invalidate_cache!(tearing_reassemble(
         state, var_eq_matching, full_var_eq_matching; mm, simplify, array_hack))
 end
