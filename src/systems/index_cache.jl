@@ -11,13 +11,24 @@ end
 struct Nonnumeric <: SciMLStructures.AbstractPortion end
 const NONNUMERIC_PORTION = Nonnumeric()
 
-struct ParameterIndex{P, I}
+struct ParameterIndex{P, B, I}
     portion::P
     idx::I
     validate_size::Bool
 end
 
-ParameterIndex(portion, idx) = ParameterIndex(portion, idx, false)
+function ParameterIndex(portion, idx, val = false)
+    ParameterIndex{typeof(portion), idx[1], typeof(idx)}(portion, idx, val)
+end
+function ParameterIndex(portion::Union{SciMLStructures.Tunable, SciMLStructures.Initials},
+        idx, val = false)
+    ParameterIndex{typeof(portion), idx, typeof(idx)}(portion, idx, val)
+end
+function ParameterIndex(portion::Union{SciMLStructures.Tunable, SciMLStructures.Initials},
+        idx::AbstractArray, val = false)
+    idx = Origin(first.(axes(idx)))(SArray{Tuple{size(idx)...}}(idx))
+    ParameterIndex{typeof(portion), idx, typeof(idx)}(portion, idx, val)
+end
 ParameterIndex(p::ParameterIndex) = ParameterIndex(p.portion, p.idx, false)
 
 struct DiscreteIndex

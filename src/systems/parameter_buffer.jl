@@ -496,6 +496,72 @@ end
 function SymbolicIndexingInterface.remake_buffer(indp, oldbuf::MTKParameters, idxs, vals)
     _remake_buffer(indp, oldbuf, idxs, vals)
 end
+
+# For type-inference when using `SII.setp_oop`
+@generated function _remake_buffer(
+        indp, oldbuf::MTKParameters{T, I, D, C, N, H}, idxs::Tuple{Vararg{ParameterIndex}},
+        vals::Union{AbstractArray, Tuple}; validate = true) where {T, I, D, C, N, H}
+    valtype(i) = vals <: AbstractArray ? eltype(vals) : fieldtype(vals, i)
+    tunablesT = eltype(T)
+    for (i, idxT) in enumerate(fieldtypes(idxs))
+        idxT <: ParameterIndex{SciMLStructures.Tunable} || continue
+        tunablesT = promote_type(tunablesT, valtype(i))
+    end
+    initialsT = eltype(I)
+    for (i, idxT) in enumerate(fieldtypes(idxs))
+        idxT <: ParameterIndex{SciMLStructures.Initials} || continue
+        initialsT = promote_type(initialsT, valtype(i))
+    end
+    discretesT = ntuple(Val(fieldcount(D))) do i
+        bufT = eltype(fieldtype(D, i))
+        for (j, idxT) in enumerate(fieldtypes(idxs))
+            idxT <: ParameterIndex{SciMLStructures.Discrete, i} || continue
+            bufT = promote_type(bufT, valtype(i))
+        end
+        bufT
+    end
+    constantsT = ntuple(Val(fieldcount(C))) do i
+        bufT = eltype(fieldtype(C, i))
+        for (j, idxT) in enumerate(fieldtypes(idxs))
+            idxT <: ParameterIndex{SciMLStructures.Constants, i} || continue
+            bufT = promote_type(bufT, valtype(i))
+        end
+        bufT
+    end
+    nonnumericT = ntuple(Val(fieldcount(N))) do i
+        bufT = eltype(fieldtype(N, i))
+        for (j, idxT) in enumerate(fieldtypes(idxs))
+            idxT <: ParameterIndex{Nonnumeric, i} || continue
+            bufT = promote_type(bufT, valtype(i))
+        end
+        bufT
+    end
+
+    expr = quote
+        tunables = $similar(oldbuf.tunable, $tunablesT)
+        copyto!(tunables, oldbuf.tunable)
+        initials = $similar(oldbuf.initials, $initialsT)
+        copyto!(initials, oldbuf.initials)
+        discretes = $(Expr(:tuple,
+            (:($similar(oldbuf.discrete[$i], $(discretesT[i]))) for i in 1:length(discretesT))...))
+        $((:($copyto!(discretes[$i], oldbuf.discrete[$i])) for i in 1:length(discretesT))...)
+        constants = $(Expr(:tuple,
+            (:($similar(oldbuf.constant[$i], $(constantsT[i]))) for i in 1:length(constantsT))...))
+        $((:($copyto!(constants[$i], oldbuf.constant[$i])) for i in 1:length(constantsT))...)
+        nonnumerics = $(Expr(:tuple,
+            (:($similar(oldbuf.nonnumeric[$i], $(nonnumericT[i]))) for i in 1:length(nonnumericT))...))
+        $((:($copyto!(nonnumerics[$i], oldbuf.nonnumeric[$i])) for i in 1:length(nonnumericT))...)
+        newbuf = MTKParameters(
+            tunables, initials, discretes, constants, nonnumerics, copy.(oldbuf.caches))
+    end
+    for i in 1:fieldcount(idxs)
+        push!(expr.args, :($setindex!(newbuf, vals[$i], idxs[$i])))
+    end
+    push!(expr.args, :(return newbuf))
+
+    return expr
+end
+
 function _remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true)
     newbuf = @set oldbuf.tunable = similar(oldbuf.tunable, Any)
     @set! newbuf.initials = similar(oldbuf.initials, Any)
