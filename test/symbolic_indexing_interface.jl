@@ -17,9 +17,9 @@ using SciMLStructures: Tunable
     @test all(is_parameter.((odesys,), [a, b, ParameterIndex(Tunable(), 1), :a, :b]))
     @test all(.!is_parameter.((odesys,), [x, y, t, 3, 0, :x, :y]))
     @test parameter_index(odesys, a) == parameter_index(odesys, :a)
-    @test parameter_index(odesys, a) isa ParameterIndex{Tunable, Int}
+    @test parameter_index(odesys, a) isa ParameterIndex{Tunable, A, Int} where {A}
     @test parameter_index(odesys, b) == parameter_index(odesys, :b)
-    @test parameter_index(odesys, b) isa ParameterIndex{Tunable, Int}
+    @test parameter_index(odesys, b) isa ParameterIndex{Tunable, A, Int} where {A}
     @test parameter_index.(
         (odesys,), [x, y, t, ParameterIndex(Tunable(), 1), :x, :y]) ==
           [nothing, nothing, nothing, ParameterIndex(Tunable(), 1), nothing, nothing]
