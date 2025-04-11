@@ -17,8 +17,18 @@ struct ParameterIndex{P, B, I}
     validate_size::Bool
 end
 
-ParameterIndex(portion, idx, val = false) = ParameterIndex{typeof(portion), idx[1], typeof(idx)}(portion, idx, val)
-ParameterIndex(portion::Union{SciMLStructures.Tunable, SciMLStructures.Initials}, idx, val = false) = ParameterIndex{typeof(portion), idx, typeof(idx)}(portion, idx, val)
+function ParameterIndex(portion, idx, val = false)
+    ParameterIndex{typeof(portion), idx[1], typeof(idx)}(portion, idx, val)
+end
+function ParameterIndex(portion::Union{SciMLStructures.Tunable, SciMLStructures.Initials},
+        idx, val = false)
+    ParameterIndex{typeof(portion), idx, typeof(idx)}(portion, idx, val)
+end
+function ParameterIndex(portion::Union{SciMLStructures.Tunable, SciMLStructures.Initials},
+        idx::AbstractArray, val = false)
+    idx = Origin(first.(axes(idx)))(SArray{Tuple{size(idx)...}}(idx))
+    ParameterIndex{typeof(portion), idx, typeof(idx)}(portion, idx, val)
+end
 ParameterIndex(p::ParameterIndex) = ParameterIndex(p.portion, p.idx, false)
 
 struct DiscreteIndex
