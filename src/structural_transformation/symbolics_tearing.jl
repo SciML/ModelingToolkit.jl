@@ -925,8 +925,8 @@ end
 
 function tearing(state::TearingState; kwargs...)
     state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
-    make_differential_denominators_unsolvable!(state.structure)
     complete!(state.structure)
+    make_differential_denominators_unsolvable!(state.structure)
     tearing_with_dummy_derivatives(state.structure, ())
 end
 
