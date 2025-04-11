@@ -27,7 +27,7 @@ Type:		0</code></pre><p>Following are the variables in the FMU (both states and 
  Name: &#39;der(mass.v)&#39; (reference: 587202561)
  Name: &#39;mass.a&#39; (reference: 587202561)</code></pre><p>Next, <a href="@ref"><code>FMIComponent</code></a> is used to import the FMU as an MTK component. We provide the FMI major version as a <code>Val</code> to the constructor, along with the loaded FMU and the type as keyword arguments.</p><pre><code class="language-julia hljs">@named model = ModelingToolkit.FMIComponent(Val(2); fmu, type = :ME)</code></pre><p class="math-container">\[ \begin{align}
 \mathtt{mass\_\_vˍt}\left( t \right) &amp;= \mathtt{mass\_\_a}\left( t \right) \\
-\mathtt{mass\_\_sˍt}\left( t \right) &amp;= \mathtt{wrapper}\left( \left[
+\mathtt{mass\_\_sˍt}\left( t \right) &amp;= \mathtt{wrapper}\_{1}\left( \left[
 \begin{array}{c}
 \mathtt{mass\_\_s}\left( t \right) \\
 \mathtt{mass\_\_v}\left( t \right) \\
@@ -45,8 +45,8 @@ Type:		0</code></pre><p>Following are the variables in the FMU (both states and 
 \mathtt{spring\_\_c} \\
 \mathtt{mass\_v0} \\
 \end{array}
-\right], t \right)_{1} \\
-\mathtt{mass\_\_a}\left( t \right) &amp;= \mathtt{wrapper}\left( \left[
+\right], t \right) \\
+\mathtt{mass\_\_a}\left( t \right) &amp;= \mathtt{wrapper}\_{2}\left( \left[
 \begin{array}{c}
 \mathtt{mass\_\_s}\left( t \right) \\
 \mathtt{mass\_\_v}\left( t \right) \\
@@ -64,13 +64,13 @@ Type:		0</code></pre><p>Following are the variables in the FMU (both states and 
 \mathtt{spring\_\_c} \\
 \mathtt{mass\_v0} \\
 \end{array}
-\right], t \right)_{2} \\
+\right], t \right) \\
 \frac{\mathrm{d} \mathtt{mass\_\_s}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{mass\_\_sˍt}\left( t \right) \\
 \frac{\mathrm{d} \mathtt{mass\_\_v}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{mass\_\_a}\left( t \right)
 \end{align}
  \]</p><p>Note how hierarchical names in the FMU (e.g. <code>mass.m</code> or <code>spring.f</code>) are turned into flattened names, with <code>__</code> being the namespace separator (<code>mass__m</code> and <code>spring__f</code>).</p><div class="admonition is-info"><header class="admonition-header">Note</header><div class="admonition-body"><p>Eventually we plan to reconstruct a hierarchical system structure mirroring the one indicated by the variables in the FMU. This would allow accessing the above mentioned variables as <code>model.mass.m</code> and <code>model.spring.f</code> instead of <code>model.mass__m</code> and <code>model.spring__f</code> respectively.</p></div></div><p>Derivative variables such as <code>der(mass.v)</code> use the dummy derivative notation, and are hence transformed into a form similar to <code>mass__vˍt</code>. However, they can still be referred to as <code>D(model.mass__v)</code>.</p><pre><code class="language-julia hljs">equations(model)</code></pre><p class="math-container">\[ \begin{align}
 \mathtt{mass\_\_vˍt}\left( t \right) &amp;= \mathtt{mass\_\_a}\left( t \right) \\
-\mathtt{mass\_\_sˍt}\left( t \right) &amp;= \mathtt{wrapper}\left( \left[
+\mathtt{mass\_\_sˍt}\left( t \right) &amp;= \mathtt{wrapper}\_{1}\left( \left[
 \begin{array}{c}
 \mathtt{mass\_\_s}\left( t \right) \\
 \mathtt{mass\_\_v}\left( t \right) \\
@@ -88,8 +88,8 @@ Type:		0</code></pre><p>Following are the variables in the FMU (both states and 
 \mathtt{spring\_\_c} \\
 \mathtt{mass\_v0} \\
 \end{array}
-\right], t \right)_{1} \\
-\mathtt{mass\_\_a}\left( t \right) &amp;= \mathtt{wrapper}\left( \left[
+\right], t \right) \\
+\mathtt{mass\_\_a}\left( t \right) &amp;= \mathtt{wrapper}\_{2}\left( \left[
 \begin{array}{c}
 \mathtt{mass\_\_s}\left( t \right) \\
 \mathtt{mass\_\_v}\left( t \right) \\
@@ -107,7 +107,7 @@ Type:		0</code></pre><p>Following are the variables in the FMU (both states and 
 \mathtt{spring\_\_c} \\
 \mathtt{mass\_v0} \\
 \end{array}
-\right], t \right)_{2} \\
+\right], t \right) \\
 \frac{\mathrm{d} \mathtt{mass\_\_s}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{mass\_\_sˍt}\left( t \right) \\
 \frac{\mathrm{d} \mathtt{mass\_\_v}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{mass\_\_a}\left( t \right)
 \end{align}
@@ -441,4 +441,4 @@ u: 2004-element Vector{Vector{Float64}}:
  [1.498001999999985, 16.420855218475776, 4.681757919680873]
  [1.499000499999985, 16.45258983225982, 4.681757919678864]
  [1.499000499999985, 16.45258983225982, 4.685252429942133]
- [1.4999999999999851, 16.484377130747994, 4.68525242994012]</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../linear_analysis/">« Linear Analysis</a><a class="docs-footer-nextpage" href="../../examples/higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.10.1 on <span class="colophon-date" title="Wednesday 9 April 2025 09:14">Wednesday 9 April 2025</span>. Using Julia version 1.10.9.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ [1.4999999999999851, 16.484377130747994, 4.68525242994012]</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../linear_analysis/">« Linear Analysis</a><a class="docs-footer-nextpage" href="../../examples/higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.10.1 on <span class="colophon-date" title="Friday 11 April 2025 13:10">Friday 11 April 2025</span>. Using Julia version 1.10.9.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
