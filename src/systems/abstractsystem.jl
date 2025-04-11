@@ -1449,11 +1449,17 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Get the parameters of the system `sys` and its subsystems.
+Get the standard parameters of the system `sys` and its subsystems.
 
-See also [`@parameters`](@ref) and [`ModelingToolkit.get_ps`](@ref).
+# Keyword arguments
+
+- `initial_parameters`: Whether to include parameters for initial values of variables in the initialization system.
+- `dependent_parameters`: Whether to include parameters that are determined by parameter dependencies.
+
+See also [`full_parameters`](@ref) and [`ModelingToolkit.get_ps`](@ref).
 """
-function parameters(sys::AbstractSystem; initial_parameters = false)
+function parameters(
+        sys::AbstractSystem; initial_parameters = false, dependent_parameters = false)
     ps = get_ps(sys)
     if ps == SciMLBase.NullParameters()
         return []
@@ -1462,12 +1468,15 @@ function parameters(sys::AbstractSystem; initial_parameters = false)
         ps = first.(ps)
     end
     systems = get_systems(sys)
-    result = unique(isempty(systems) ? ps :
-                    [ps; reduce(vcat, namespace_parameters.(systems))])
+    ps = unique(isempty(systems) ? ps :
+                [ps; reduce(vcat, namespace_parameters.(systems))])
     if !initial_parameters && !is_initializesystem(sys)
-        filter!(x -> !iscall(x) || !isa(operation(x), Initial), result)
+        filter!(x -> !iscall(x) || !isa(operation(x), Initial), ps)
     end
-    return result
+    if dependent_parameters
+        ps = vcat(ps, ModelingToolkit.dependent_parameters(sys))
+    end
+    return ps
 end
 
 function dependent_parameters(sys::AbstractSystem)
@@ -1506,8 +1515,15 @@ function parameter_dependencies(sys::AbstractSystem)
     return vcat(namespaced_deps, pdeps)
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Get all parameters of the system `sys` and its subsystems, including initial values and dependent parameters.
+
+See also [`parameters`](@ref) and [`ModelingToolkit.get_ps`](@ref).
+"""
 function full_parameters(sys::AbstractSystem)
-    vcat(parameters(sys; initial_parameters = true), dependent_parameters(sys))
+    return parameters(sys; initial_parameters = true, dependent_parameters = true)
 end
 
 """
