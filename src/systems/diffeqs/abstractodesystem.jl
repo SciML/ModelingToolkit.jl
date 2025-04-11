@@ -82,8 +82,14 @@ function calculate_jacobian(sys::AbstractODESystem;
                 jac[i, j] = 0
             end
         end
+
+        (Is, Js, Vs) = findnz(jac)
+        for (i, j) in zip(Is, Js)
+            jac[i, j] = remove_denominators(jac[i, j])
+        end
     else
         jac = jacobian(rhs, dvs, simplify = simplify)
+        jac = remove_denominators.(jac)
     end
 
     if isequal(dvs, unknowns(sys))
@@ -141,23 +147,25 @@ end
 
 function assert_jac_length_header(sys)
     W = W_sparsity(sys)
-    identity, expr -> Func([expr.args...], [], LiteralExpr(quote
-        @assert $(findnz)($(expr.args[1]))[1:2] == $(findnz)($W)[1:2]
-        $(expr.body)
-    end))
+    identity,
+    expr -> Func([expr.args...], [],
+        LiteralExpr(quote
+            @assert $(findnz)($(expr.args[1]))[1:2] == $(findnz)($W)[1:2]
+            $(expr.body)
+        end))
 end
 
-function generate_W(sys::AbstractODESystem, γ = 1., dvs = unknowns(sys),
-        ps = parameters(sys; initial_parameters = true); 
+function generate_W(sys::AbstractODESystem, γ = 1.0, dvs = unknowns(sys),
+        ps = parameters(sys; initial_parameters = true);
         simplify = false, sparse = false, kwargs...)
     @variables ˍ₋gamma
     M = calculate_massmatrix(sys; simplify)
     sparse && (M = SparseArrays.sparse(M))
     J = calculate_jacobian(sys; simplify, sparse, dvs)
-    W = ˍ₋gamma*M + J
+    W = ˍ₋gamma * M + J
 
     p = reorder_parameters(sys, ps)
-    return build_function_wrapper(sys, W, 
+    return build_function_wrapper(sys, W,
         dvs,
         p...,
         ˍ₋gamma,
@@ -198,12 +206,17 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
                nothing,
         isdde = false,
         kwargs...)
-    eqs = [eq for eq in equations(sys)]
-    if !implicit_dae
+    eqs = full_equations(sys)
+    if implicit_dae
+        rhss = [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs]
+        rhss = remove_denominators.(rhss)
+    else
         check_operator_variables(eqs, Differential)
         check_lhs(eqs, Differential, Set(dvs))
+        alge_idxs = is_alg_equation.(eqs)
+        rhss = [eq.rhs for eq in eqs]
+        rhss[alge_idxs] .= remove_denominators.(rhss[alge_idxs])
     end
-
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
            [eq.rhs for eq in eqs]
 
@@ -302,11 +315,12 @@ function jacobian_dae_sparsity(sys::AbstractODESystem)
     J1 + J2
 end
 
-function W_sparsity(sys::AbstractODESystem) 
+function W_sparsity(sys::AbstractODESystem)
     jac_sparsity = jacobian_sparsity(sys)
     (n, n) = size(jac_sparsity)
     M = calculate_massmatrix(sys)
-    M_sparsity = M isa UniformScaling ? sparse(I(n)) : SparseMatrixCSC{Bool, Int64}((!iszero).(M))
+    M_sparsity = M isa UniformScaling ? sparse(I(n)) :
+                 SparseMatrixCSC{Bool, Int64}((!iszero).(M))
     jac_sparsity .| M_sparsity
 end
 

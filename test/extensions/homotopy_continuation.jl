@@ -33,7 +33,7 @@ end
     eqs = [0 ~ x^2 + y^2 + 2x * y
            0 ~ x^2 + 4x + 4
            0 ~ y * z + 4x^2]
-    @mtkbuild sys = NonlinearSystem(eqs)
+    @mtkbuild sys=NonlinearSystem(eqs) allow_algebraic=false
     u0 = [x => 1.0, y => 1.0, z => 1.0]
     prob = HomotopyContinuationProblem(sys, u0)
     @test prob isa NonlinearProblem
@@ -60,7 +60,7 @@ end
            0 ~ x^2 + 4x + q
            0 ~ y * z + 4x^2 + wrapper(r)]
 
-    @mtkbuild sys = NonlinearSystem(eqs)
+    @mtkbuild sys=NonlinearSystem(eqs) allow_algebraic=false
     prob = HomotopyContinuationProblem(sys, [x => 1.0, y => 1.0, z => 1.0],
         [p => 2.0, q => 4, r => Wrapper([1.0 1.0; 0.0 0.0])])
     @test prob.ps[p] == 2.0
@@ -78,7 +78,7 @@ end
     @parameters p[1:3]
     _x = collect(x)
     eqs = collect(0 .~ vec(sum(_x * _x'; dims = 2)) + collect(p))
-    @mtkbuild sys = NonlinearSystem(eqs)
+    @mtkbuild sys=NonlinearSystem(eqs) allow_algebraic=false
     prob = HomotopyContinuationProblem(sys, [x => ones(3)], [p => 1:3])
     @test prob[x] == ones(3)
     @test prob[p + x] == [2, 3, 4]

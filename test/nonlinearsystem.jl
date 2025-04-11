@@ -300,8 +300,7 @@ sys = structural_simplify(ns; conservative = true)
     ps = [σ => 10.0, ρ => 26.0, β => 8 / 3]
     @mtkbuild ns = NonlinearSystem(eqs)
 
-    @test isequal(calculate_jacobian(ns), [(-1 - z + ρ)*σ -x*σ
-                                           2x*(-z + ρ) -β-(x^2)])
+    @test isequal(calculate_jacobian(ns), [2x;;])
     # solve without analytical jacobian
     prob = NonlinearProblem(ns, guesses, ps)
     sol = solve(prob, NewtonRaphson())
@@ -375,7 +374,7 @@ end
     end
 
     @variables y
-    @mtkbuild sys = NonlinearSystem([0 ~ x * x - p * x + p, 0 ~ x * y + p])
+    @mtkbuild sys=NonlinearSystem([0 ~ x * x - p * x + p, 0 ~ x * y + p]) allow_algebraic=false
     @test_throws ["single equation", "unknown"] IntervalNonlinearProblem(sys, (0.0, 1.0))
     @test_throws ["single equation", "unknown"] IntervalNonlinearFunction(sys, (0.0, 1.0))
     @test_throws ["single equation", "unknown"] IntervalNonlinearProblemExpr(

@@ -769,7 +769,7 @@ end
         eqs = [0 ~ σ * (y - x),
             0 ~ x * (ρ - z) - y,
             0 ~ x * y - β * z]
-        @mtkbuild ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
+        @mtkbuild ns=NonlinearSystem(eqs, [x, y, z], [σ, ρ, β]) allow_algebraic=false
 
         prob = NonlinearProblem(ns, [])
         @test prob.f.initialization_data.update_initializeprob! === nothing
@@ -806,7 +806,7 @@ end
         eqs = [0 ~ p * (y - x),
             0 ~ x * (q - z) - y,
             0 ~ x * y - c * z]
-        @mtkbuild sys = NonlinearSystem(eqs; initialization_eqs = [p^2 + q^2 + 2p * q ~ 0])
+        @mtkbuild sys=NonlinearSystem(eqs; initialization_eqs = [p^2 + q^2 + 2p * q ~ 0]) allow_algebraic=false
         # @mtkbuild sys = NonlinearSystem(
         #     [p * x^2 + q * y^3 ~ 0, x - q ~ 0]; defaults = [q => missing],
         #     guesses = [q => 1.0], initialization_eqs = [p^2 + q^2 + 2p * q ~ 0])

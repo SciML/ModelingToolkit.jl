@@ -206,9 +206,9 @@ end
 ### Structural and symbolic utilities
 ###
 
-function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = nothing;
+function find_eq_solvables!(state::TearingState, ieq::Int, to_rm = Int[], coeffs = nothing;
         may_be_zero = false,
-        allow_symbolic = false, allow_parameter = true,
+        allow_symbolic = false, allow_parameter = true, allow_algebraic = true,
         conservative = false,
         kwargs...)
     fullvars = state.fullvars
@@ -218,6 +218,7 @@ function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = no
     all_int_vars = true
     coeffs === nothing || empty!(coeffs)
     empty!(to_rm)
+    varsbuf = Set()
     for j in 𝑠neighbors(graph, ieq)
         var = fullvars[j]
         isirreducible(var) && (all_int_vars = false; continue)
@@ -229,13 +230,18 @@ function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = no
         if a isa Symbolic
             all_int_vars = false
             if !allow_symbolic
-                if allow_parameter
-                    all(
-                        x -> ModelingToolkit.isparameter(x) || ModelingToolkit.isconstant(x),
-                        vars(a)) || continue
-                else
+                allow_parameter || allow_algebraic || continue
+                empty!(varsbuf)
+                vars!(varsbuf, a)
+                denomvars = Int[]
+                for v in varsbuf
+                    idx = findfirst(isequal(v), fullvars)
+                    idx === nothing || push!(denomvars, idx)
+                end
+                if !allow_algebraic && !isempty(denomvars)
                     continue
                 end
+                state.structure.denominators[ieq => j] = denomvars
             end
             add_edge!(solvable_graph, ieq, j)
             continue
@@ -267,6 +273,26 @@ function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = no
         rem_edge!(graph, ieq, j)
     end
     all_int_vars, term
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Remove edges in `structure.solvable_graph` that require differential variables in the
+denominator to solve. `additional_algevars` is a collection of integers corresponding to
+differential variables that should be considered as algebraic for the purpose of this
+transformation.
+"""
+function make_differential_denominators_unsolvable!(
+        structure::SystemStructure, additional_algevars = (); allow_algebraic)
+    for ((eqi, vari), denoms) in structure.denominators
+        if allow_algebraic &&
+           all(i -> isalgvar(structure, i) || i in additional_algevars, denoms) ||
+           !has_edge(structure.solvable_graph, BipartiteEdge(eqi, vari))
+            continue
+        end
+        rem_edge!(structure.solvable_graph, eqi, vari)
+    end
 end
 
 function find_solvables!(state::TearingState; kwargs...)

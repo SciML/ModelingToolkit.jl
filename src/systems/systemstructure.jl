@@ -149,8 +149,16 @@ Base.@kwdef mutable struct SystemStructure
     # or as `torn` to assert that tearing has run.
     """Graph that connects equations to variables that appear in them."""
     graph::BipartiteGraph{Int, Nothing}
-    """Graph that connects equations to the variable they will be solved for during simplification."""
+    """
+    Graph that connects equations to the variables that they can be analytically solved
+    for.
+    """
     solvable_graph::Union{BipartiteGraph{Int, Nothing}, Nothing}
+    """
+    Dict mapping `eq => var` edges in `solvable_graph` to the variables that occur in the
+    denominator when `eq` is analytically solved for `var`.
+    """
+    denominators::Dict{Pair{Int, Int}, Vector{Int}}
     """Variable types (brownian, variable, parameter) in the system."""
     var_types::Union{Vector{VariableType}, Nothing}
     """Whether the system is discrete."""
@@ -160,7 +168,7 @@ end
 function Base.copy(structure::SystemStructure)
     var_types = structure.var_types === nothing ? nothing : copy(structure.var_types)
     SystemStructure(copy(structure.var_to_diff), copy(structure.eq_to_diff),
-        copy(structure.graph), copy(structure.solvable_graph),
+        copy(structure.graph), copy(structure.solvable_graph), copy(structure.denominators),
         var_types, structure.only_discrete)
 end
 
@@ -437,7 +445,7 @@ function TearingState(sys; quick_cancel = false, check = true)
 
     ts = TearingState(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
-            complete(graph), nothing, var_types, sys isa AbstractDiscreteSystem),
+            complete(graph), nothing, Dict(), var_types, sys isa AbstractDiscreteSystem),
         Any[])
     if sys isa DiscreteSystem
         ts = shift_discrete_system(ts)
@@ -685,7 +693,7 @@ end
 
 function _structural_simplify!(state::TearingState, io; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = false,
-        dummy_derivative = true,
+        dummy_derivative = true, allow_symbolic = false, allow_algebraic = nothing,
         kwargs...)
     if fully_determined isa Bool
         check_consistency &= fully_determined
@@ -702,24 +710,35 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
     else
         input_idxs = 0:-1 # Empty range
     end
-    sys, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
+    _allow_algebraic = something(allow_algebraic, true)
+    sys, mm = ModelingToolkit.alias_elimination!(
+        state; allow_symbolic, allow_algebraic = _allow_algebraic, kwargs...)
     if check_consistency
         fully_determined = ModelingToolkit.check_consistency(
             state, orig_inputs; nothrow = fully_determined === nothing)
     end
+    if allow_algebraic === nothing
+        allow_algebraic = fully_determined
+    end
     if fully_determined && dummy_derivative
         sys = ModelingToolkit.dummy_derivative(
-            sys, state; simplify, mm, check_consistency, kwargs...)
+            sys, state; simplify, mm, check_consistency,
+            allow_symbolic, allow_algebraic, kwargs...)
     elseif fully_determined
-        var_eq_matching = pantelides!(state; finalize = false, kwargs...)
+        var_eq_matching = pantelides!(state; finalize = false, allow_algebraic, kwargs...)
+        StructuralTransformations.make_differential_denominators_unsolvable!(
+            state.structure; allow_algebraic)
         sys = pantelides_reassemble(state, var_eq_matching)
         state = TearingState(sys)
-        sys, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
+        sys, mm = ModelingToolkit.alias_elimination!(
+            state; allow_symbolic, allow_algebraic, kwargs...)
         sys = ModelingToolkit.dummy_derivative(
-            sys, state; simplify, mm, check_consistency, kwargs...)
+            sys, state; simplify, mm, check_consistency,
+            allow_symbolic, allow_algebraic, kwargs...)
     else
         sys = ModelingToolkit.tearing(
-            sys, state; simplify, mm, check_consistency, kwargs...)
+            sys, state; simplify, mm, check_consistency,
+            allow_symbolic, allow_algebraic, kwargs...)
     end
     fullunknowns = [map(eq -> eq.lhs, observed(sys)); unknowns(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)
