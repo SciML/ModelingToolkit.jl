@@ -1496,7 +1496,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
         @warn errmsg
     end
 
-    uninit = setdiff(unknowns(sys), [unknowns(isys); getfield.(observed(isys), :lhs)])
+    uninit = setdiff(unknowns(sys), [unknowns(isys); observeds(isys)])
 
     # TODO: throw on uninitialized arrays
     filter!(x -> !(x isa Symbolics.Arr), uninit)
@@ -1548,10 +1548,10 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
         symbolic_type(val) == NotSymbolic() || continue
         u0T = promote_type(u0T, typeof(val))
     end
-    for eq in observed(isys)
+    for sym in observeds(isys)
         # ignore HACK-ed observed equations
-        symbolic_type(eq.lhs) == ArraySymbolic() && continue
-        val = fixpoint_sub(eq.lhs, fullmap)
+        symbolic_type(sym) == ArraySymbolic() && continue
+        val = fixpoint_sub(sym, fullmap)
         symbolic_type(val) == NotSymbolic() || continue
         u0T = promote_type(u0T, typeof(val))
     end
