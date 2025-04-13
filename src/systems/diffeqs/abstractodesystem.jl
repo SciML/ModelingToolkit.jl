@@ -11,21 +11,6 @@ differential equations.
 """
 is_dde(sys::AbstractSystem) = has_is_dde(sys) && get_is_dde(sys)
 
-function _check_if_dde(eqs, iv, subsystems)
-    is_dde = any(ModelingToolkit.is_dde, subsystems)
-    if !is_dde
-        vs = Set()
-        for eq in eqs
-            vars!(vs, eq)
-            is_dde = any(vs) do sym
-                isdelay(unwrap(sym), iv)
-            end
-            is_dde && break
-        end
-    end
-    return is_dde
-end
-
 function filter_kwargs(kwargs)
     kwargs = Dict(kwargs)
     for key in keys(kwargs)

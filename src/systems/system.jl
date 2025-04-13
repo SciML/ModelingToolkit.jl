@@ -257,6 +257,29 @@ function is_discrete_system(sys::System)
     any(eq -> isoperator(eq.lhs, Shift), equations(sys))
 end
 
+"""
+    is_dde(sys::System)
+
+Return a boolean indicating whether a system represents a set of delay
+differential equations.
+"""
+is_dde(sys::System) = has_is_dde(sys) && get_is_dde(sys)
+
+function _check_if_dde(eqs, iv, subsystems)
+    is_dde = any(ModelingToolkit.is_dde, subsystems)
+    if !is_dde
+        vs = Set()
+        for eq in eqs
+            vars!(vs, eq)
+            is_dde = any(vs) do sym
+                isdelay(unwrap(sym), iv)
+            end
+            is_dde && break
+        end
+    end
+    return is_dde
+end
+
 struct IllFormedNoiseEquationsError <: Exception
     noise_eqs_rows::Int
     eqs_length::Int
