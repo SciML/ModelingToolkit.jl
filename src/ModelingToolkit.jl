@@ -163,6 +163,7 @@ include("systems/imperative_affect.jl")
 include("systems/callbacks.jl")
 include("systems/system.jl")
 include("systems/codegen_utils.jl")
+include("systems/codegen.jl")
 include("systems/problem_utils.jl")
 include("linearization.jl")
 
