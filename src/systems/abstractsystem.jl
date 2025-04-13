@@ -430,7 +430,7 @@ function has_observed_with_lhs(sys, sym)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         return haskey(ic.observed_syms_to_timeseries, sym)
     else
-        return any(isequal(sym), [eq.lhs for eq in observed(sys)])
+        return any(isequal(sym), observables(sys))
     end
 end
 
@@ -489,7 +489,7 @@ function _all_ts_idxs!(ts_idxs, ::ScalarSymbolic, sys, sym::Symbol)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         return _all_ts_idxs!(ts_idxs, sys, ic.symbol_to_variable[sym])
     elseif is_variable(sys, sym) || is_independent_variable(sys, sym) ||
-           any(isequal(sym), [getname(eq.lhs) for eq in observed(sys)])
+           any(isequal(sym), getname.(observables(sys)))
         push!(ts_idxs, ContinuousTimeseries())
     elseif is_timeseries_parameter(sys, sym)
         push!(ts_idxs, timeseries_parameter_index(sys, s).timeseries_idx)
@@ -579,7 +579,7 @@ SymbolicIndexingInterface.constant_structure(::AbstractSystem) = true
 
 function SymbolicIndexingInterface.all_variable_symbols(sys::AbstractSystem)
     syms = variable_symbols(sys)
-    obs = getproperty.(observed(sys), :lhs)
+    obs = observables(sys)
     return isempty(obs) ? syms : vcat(syms, obs)
 end
 
@@ -1411,6 +1411,7 @@ _nonum(@nospecialize x) = x isa Num ? x.val : x
 $(TYPEDSIGNATURES)
 
 Get the unknown variables of the system `sys` and its subsystems.
+These must be explicitly solved for, unlike `observables(sys)`.
 
 See also [`ModelingToolkit.get_unknowns`](@ref).
 """
@@ -1677,6 +1678,14 @@ function controls(sys::AbstractSystem)
     isempty(systems) ? ctrls : [ctrls; reduce(vcat, namespace_controls.(systems))]
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Get the observed equations of the system `sys` and its subsystems.
+These can be expressed in terms of `unknowns(sys)`, and do not have to be explicitly solved for.
+
+See also [`observables`](@ref) and [`ModelingToolkit.get_observed()`](@ref).
+"""
 function observed(sys::AbstractSystem)
     obs = get_observed(sys)
     systems = get_systems(sys)
@@ -1684,6 +1693,19 @@ function observed(sys::AbstractSystem)
      reduce(vcat,
          (map(o -> namespace_equation(o, s), observed(s)) for s in systems),
          init = Equation[])]
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Get the observed variables of the system `sys` and its subsystems.
+These can be expressed in terms of `unknowns(sys)`, and do not have to be explicitly solved for.
+It is equivalent to all left hand sides of `observed(sys)`.
+
+See also [`observed`](@ref).
+"""
+function observables(sys::AbstractSystem)
+    return map(eq -> eq.lhs, observed(sys))
 end
 
 Base.@deprecate default_u0(x) defaults(x) false

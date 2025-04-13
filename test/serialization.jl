@@ -31,7 +31,7 @@ sys = include_string(@__MODULE__, str)
 
 # check answer
 ss = structural_simplify(rc_model)
-all_obs = [o.lhs for o in observed(ss)]
+all_obs = observables(ss)
 prob = ODEProblem(ss, [capacitor.v => 0.0], (0, 0.1))
 sol = solve(prob, ImplicitEuler())
 

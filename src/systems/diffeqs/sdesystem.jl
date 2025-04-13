@@ -48,7 +48,7 @@ struct SDESystem <: AbstractODESystem
     var_to_name::Any
     """Control parameters (some subset of `ps`)."""
     ctrls::Vector
-    """Observed variables."""
+    """Observed equations."""
     observed::Vector{Equation}
     """
     Time-derivative matrix. Note: this field will not be defined until
