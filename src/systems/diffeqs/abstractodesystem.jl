@@ -124,16 +124,6 @@ function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
         kwargs...)
 end
 
-function assert_jac_length_header(sys)
-    W = W_sparsity(sys)
-    identity,
-    function add_header(expr)
-        Func(expr.args, [], expr.body,
-            [:(@assert $(SymbolicUtils.Code.toexpr(term(findnz, expr.args[1])))[1:2] ==
-                       $(findnz(W)[1:2]))])
-    end
-end
-
 function generate_W(sys::AbstractODESystem, γ = 1.0, dvs = unknowns(sys),
         ps = parameters(sys; initial_parameters = true);
         simplify = false, sparse = false, kwargs...)
