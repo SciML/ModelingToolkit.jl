@@ -256,6 +256,17 @@ function gather_array_params(ps)
     return new_ps
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Check if a system is a (possibly implicit) discrete system. Hybrid systems are turned into
+callbacks, so checking if any LHS is shifted is sufficient. If a variable is shifted in
+the input equations there _will_ be a `Shift` equation in the simplified system.
+"""
+function is_discrete_system(sys::System)
+    any(eq -> isoperator(eq.lhs, Shift), equations(sys))
+end
+
 struct IllFormedNoiseEquationsError <: Exception
     noise_eqs_rows::Int
     eqs_length::Int
