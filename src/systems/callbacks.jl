@@ -598,8 +598,8 @@ Notes
 """
 function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
         expression = Val{true}, eval_expression = false, eval_module = @__MODULE__, kwargs...)
-    u = map(x -> time_varying_as_func(value(x), sys), dvs)
-    p = map.(x -> time_varying_as_func(value(x), sys), reorder_parameters(sys, ps))
+    u = map(value, dvs)
+    p = map.(value, reorder_parameters(sys, ps))
     t = get_iv(sys)
     condit = condition(cb)
     cs = collect_constants(condit)
@@ -685,8 +685,8 @@ function compile_affect(eqs::Vector{Equation}, cb, sys, dvs, ps; outputidxs = no
         _ps = ps
         ps = reorder_parameters(sys, ps)
         if checkvars
-            u = map(x -> time_varying_as_func(value(x), sys), dvs)
-            p = map.(x -> time_varying_as_func(value(x), sys), ps)
+            u = map(value, dvs)
+            p = map.(value, ps)
         else
             u = dvs
             p = ps

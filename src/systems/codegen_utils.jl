@@ -179,17 +179,6 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
 
     args = ntuple(Val(length(args))) do i
         arg = args[i]
-        # for time-dependent systems, all arguments are passed through `time_varying_as_func`
-        # TODO: This is legacy behavior and a candidate for removal in v10 since we have callable
-        # parameters now.
-        if is_time_dependent(sys)
-            arg = if symbolic_type(arg) == NotSymbolic()
-                arg isa AbstractArray ?
-                map(x -> time_varying_as_func(unwrap(x), sys), arg) : arg
-            else
-                time_varying_as_func(unwrap(arg), sys)
-            end
-        end
         # Make sure to use the proper names for arguments
         if symbolic_type(arg) == NotSymbolic() && arg isa AbstractArray
             DestructuredArgs(arg, generated_argument_name(i); create_bindings)
