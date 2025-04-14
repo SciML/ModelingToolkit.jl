@@ -75,9 +75,13 @@ struct System <: AbstractSystem
     end
 end
 
+function default_consolidate(costs, subcosts)
+    return sum(costs; init = 0.0) + sum(subcosts; init = 0.0)
+end
+
 function System(eqs, iv, dvs, ps, brownians = [];
         constraints = Union{Equation, Inequality}[], noise_eqs = nothing, jumps = [],
-        costs = [], consolidate = nothing,
+        costs = BasicSymbolic[], consolidate = default_consolidate,
         observed = Equation[], parameter_dependencies = Equation[], defaults = Dict(),
         guesses = Dict(), systems = System[], initialization_eqs = Equation[],
         continuous_events = SymbolicContinuousCallback[], discrete_events = SymbolicDiscreteCallback[],
