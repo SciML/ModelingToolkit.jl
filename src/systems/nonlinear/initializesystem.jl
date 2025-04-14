@@ -11,7 +11,7 @@ function generate_initializesystem(sys::AbstractTimeDependentSystem;
         default_dd_guess = Bool(0),
         algebraic_only = false,
         check_units = true, check_defguess = false,
-        name = nameof(sys), extra_metadata = (;), kwargs...)
+        name = nameof(sys), kwargs...)
     eqs = equations(sys)
     if !(eqs isa Vector{Equation})
         eqs = Equation[x for x in eqs if x isa Equation]
@@ -167,7 +167,7 @@ function generate_initializesystem(sys::AbstractTimeIndependentSystem;
         guesses = Dict(),
         algebraic_only = false,
         check_units = true, check_defguess = false,
-        name = nameof(sys), extra_metadata = (;), kwargs...)
+        name = nameof(sys), kwargs...)
     eqs = equations(sys)
     trueobs, eqs = unhack_observed(observed(sys), eqs)
     vars = unique([unknowns(sys); getfield.(trueobs, :lhs)])
@@ -430,64 +430,6 @@ function _has_delays(sys::AbstractSystem, ex, banned)
         return true
     end
     return any(x -> _has_delays(sys, x, banned), args)
-end
-
-struct ReconstructInitializeprob
-    getter::Any
-    setter::Any
-end
-
-function ReconstructInitializeprob(
-        srcsys::AbstractSystem, dstsys::AbstractSystem)
-    syms = reduce(
-        vcat, reorder_parameters(dstsys, parameters(dstsys));
-        init = [])
-    getter = getu(srcsys, syms)
-    setter = setp_oop(dstsys, syms)
-    return ReconstructInitializeprob(getter, setter)
-end
-
-function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
-    newp = rip.setter(dstvalp, rip.getter(srcvalp))
-    if state_values(dstvalp) === nothing
-        return nothing, newp
-    end
-    srcu0 = state_values(srcvalp)
-    T = srcu0 === nothing || isempty(srcu0) ? Union{} : eltype(srcu0)
-    if parameter_values(dstvalp) isa MTKParameters
-        if !isempty(newp.tunable)
-            T = promote_type(eltype(newp.tunable), T)
-        end
-    elseif !isempty(newp)
-        T = promote_type(eltype(newp), T)
-    end
-    if T == eltype(state_values(dstvalp))
-        u0 = state_values(dstvalp)
-    elseif T != Union{}
-        u0 = T.(state_values(dstvalp))
-    end
-    buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Tunable(), newp)
-    if eltype(buf) != T
-        newbuf = similar(buf, T)
-        copyto!(newbuf, buf)
-        newp = repack(newbuf)
-    end
-    buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Initials(), newp)
-    if eltype(buf) != T
-        newbuf = similar(buf, T)
-        copyto!(newbuf, buf)
-        newp = repack(newbuf)
-    end
-    return u0, newp
-end
-
-struct InitializationSystemMetadata
-    u0map::Dict{Any, Any}
-    pmap::Dict{Any, Any}
-    additional_guesses::Dict{Any, Any}
-    additional_initialization_eqs::Vector{Equation}
-    extra_metadata::NamedTuple
-    oop_reconstruct_u0_p::Union{Nothing, ReconstructInitializeprob}
 end
 
 function get_possibly_array_fallback_singletons(varmap, p)
