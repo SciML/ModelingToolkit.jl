@@ -244,7 +244,9 @@ Get the independent variable(s) of the system `sys`.
 See also [`@independent_variables`](@ref) and [`ModelingToolkit.get_iv`](@ref).
 """
 function independent_variables(sys::AbstractSystem)
-    @warn "Please declare ($(typeof(sys))) as a subtype of `AbstractTimeDependentSystem`, `AbstractTimeIndependentSystem` or `AbstractMultivariateSystem`."
+    if !(sys isa System)
+        @warn "Please declare ($(typeof(sys))) as a subtype of `AbstractTimeDependentSystem`, `AbstractTimeIndependentSystem` or `AbstractMultivariateSystem`."
+    end
     if isdefined(sys, :iv)
         return [getfield(sys, :iv)]
     elseif isdefined(sys, :ivs)
