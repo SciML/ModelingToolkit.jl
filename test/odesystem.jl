@@ -9,6 +9,7 @@ using SymbolicUtils: issym
 using ForwardDiff
 using ModelingToolkit: value
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using Symbolics: unwrap
 
 # Define some variables
 @parameters σ ρ β
@@ -1729,4 +1730,27 @@ end
         sys, [x + 1, x + 2, x + t], return_inplace = true, expression = true)
     @test obsfn_expr_oop isa Expr
     @test obsfn_expr_iip isa Expr
+end
+
+@testset "`@named` always wraps in `ParentScope`" begin
+    function SysA(; name, var1)
+        @variables x(t)
+        scope = ModelingToolkit.getmetadata(unwrap(var1), ModelingToolkit.SymScope, nothing)
+        @test scope isa ParentScope
+        @test scope.parent isa ParentScope
+        @test scope.parent.parent isa LocalScope
+        return ODESystem(D(x) ~ var1, t; name)
+    end
+    function SysB(; name, var1)
+        @variables x(t)
+        @named subsys = SysA(; var1)
+        return ODESystem(D(x) ~ x, t; systems = [subsys], name)
+    end
+    function SysC(; name)
+        @variables x(t)
+        @named subsys = SysB(; var1 = x)
+        return ODESystem(D(x) ~ x, t; systems = [subsys], name)
+    end
+    @mtkbuild sys = SysC()
+    @test length(unknowns(sys)) == 3
 end
