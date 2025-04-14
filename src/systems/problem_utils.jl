@@ -986,6 +986,49 @@ function SciMLBase.detect_cycles(sys::AbstractSystem, varmap::Dict{Any, Any}, va
     return !isempty(cycles)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Macro for writing problem/function constructors. Expects a function definition with type
+parameters for `iip` and `specialize`. Generates fallbacks with
+`specialize = SciMLBase.FullSpecialize` and `iip = true`.
+"""
+macro fallback_iip_specialize(ex)
+    @assert Meta.isexpr(ex, :function)
+    fnname, body = ex.args
+    @assert Meta.isexpr(fnname, :where)
+    fnname_call, where_args... = fnname.args
+    @assert length(where_args) == 2
+    iiparg, specarg = where_args
+
+    @assert Meta.isexpr(fnname_call, :call)
+    fnname_curly, args... = fnname_call.args
+    args = map(args) do arg
+        Meta.isexpr(arg, :kw) && return arg.args[1]
+        return arg
+    end
+
+    @assert Meta.isexpr(fnname_curly, :curly)
+    fnname_name, curly_args... = fnname_curly.args
+    @assert curly_args == where_args
+
+    callexpr_iip = Expr(
+        :call, Expr(:curly, fnname_name, curly_args[1], SciMLBase.FullSpecialize), args...)
+    fnname_iip = Expr(:curly, fnname_name, curly_args[1])
+    fncall_iip = Expr(:call, fnname_iip, args...)
+    fnwhere_iip = Expr(:where, fncall_iip, where_args[1])
+    fn_iip = Expr(:function, fnwhere_iip, callexpr_iip)
+
+    callexpr_base = Expr(:call, Expr(:curly, fnname_name, true), args...)
+    fncall_base = Expr(:call, fnname_name, args...)
+    fn_base = Expr(:function, fncall_base, callexpr_base)
+    return quote
+        $fn_base
+        $fn_iip
+        Base.@__doc__ $ex
+    end
+end
+
 ##############
 # Legacy functions for backward compatibility
 ##############
