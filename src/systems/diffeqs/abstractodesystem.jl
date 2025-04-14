@@ -1457,12 +1457,12 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
     elseif isempty(u0map) && get_initializesystem(sys) === nothing
         isys = generate_initializesystem(
             sys; initialization_eqs, check_units, pmap = parammap,
-            guesses, extra_metadata = (; use_scc), algebraic_only)
+            guesses, algebraic_only)
         simplify_system = true
     else
         isys = generate_initializesystem(
             sys; u0map, initialization_eqs, check_units,
-            pmap = parammap, guesses, extra_metadata = (; use_scc), algebraic_only)
+            pmap = parammap, guesses, algebraic_only)
         simplify_system = true
     end
 
@@ -1475,12 +1475,6 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
 
     if simplify_system
         isys = structural_simplify(isys; fully_determined)
-    end
-
-    meta = get_metadata(isys)
-    if meta isa InitializationSystemMetadata
-        @set! isys.metadata.oop_reconstruct_u0_p = ReconstructInitializeprob(
-            sys, isys)
     end
 
     ts = get_tearing_state(isys)
