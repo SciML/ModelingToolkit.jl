@@ -876,11 +876,14 @@ end
 
 for prop in [:eqs
              :tag
-             :noiseeqs
+             :noiseeqs # TODO: remove
+             :noise_eqs
              :iv
              :unknowns
              :ps
              :tspan
+             :brownians
+             :jumps
              :name
              :description
              :var_to_name
