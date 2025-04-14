@@ -135,16 +135,14 @@ sys.y = u * 1.1
 In a hierarchical system, variables of the subsystem get namespaced by the name of the system they are in. This prevents naming clashes, but also enforces that every unknown and parameter is local to the subsystem it is used in. In some cases it might be desirable to have variables and parameters that are shared between subsystems, or even global. This can be accomplished as follows.
 
 ```julia
-@parameters a b c d e f
+@parameters a b c d
 
 # a is a local variable
 b = ParentScope(b) # b is a variable that belongs to one level up in the hierarchy
 c = ParentScope(ParentScope(c)) # ParentScope can be nested
-d = DelayParentScope(d) # skips one level before applying ParentScope
-e = DelayParentScope(e, 2) # second argument allows skipping N levels
-f = GlobalScope(f)
+d = GlobalScope(d)
 
-p = [a, b, c, d, e, f]
+p = [a, b, c, d]
 
 level0 = ODESystem(Equation[], t, [], p; name = :level0)
 level1 = ODESystem(Equation[], t, [], []; name = :level1) ∘ level0
@@ -152,25 +150,19 @@ parameters(level1)
 #level0₊a
 #b
 #c
-#level0₊d
-#level0₊e
-#f
+#d
 level2 = ODESystem(Equation[], t, [], []; name = :level2) ∘ level1
 parameters(level2)
 #level1₊level0₊a
 #level1₊b
 #c
-#level0₊d
-#level1₊level0₊e
-#f
+#d
 level3 = ODESystem(Equation[], t, [], []; name = :level3) ∘ level2
 parameters(level3)
 #level2₊level1₊level0₊a
 #level2₊level1₊b
 #level2₊c
-#level2₊level0₊d
-#level1₊level0₊e
-#f
+#d
 ```
 
 ## Structural Simplify

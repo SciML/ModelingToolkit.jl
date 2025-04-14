@@ -1192,55 +1192,6 @@ end
 """
     $(TYPEDEF)
 
-Denotes that a variable belongs to a system that is at least `N + 1` levels up in the
-hierarchy from the system whose equations it is involved in. It is namespaced by the
-first `N` parents and not namespaced by the `N+1`th parent in the hierarchy. The scope
-of the variable after this point is given by `parent`.
-
-In other words, this scope delays applying `ParentScope` by `N` levels, and applies
-`LocalScope` in the meantime.
-
-# Fields
-
-$(TYPEDFIELDS)
-"""
-struct DelayParentScope <: SymScope
-    parent::SymScope
-    N::Int
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Apply `DelayParentScope` to `sym`, with a delay of `N` and `parent` being `LocalScope`.
-"""
-function DelayParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}}, N)
-    Base.depwarn(
-        "`DelayParentScope` is deprecated and will be removed soon", :DelayParentScope)
-    apply_to_variables(sym) do sym
-        if iscall(sym) && operation(sym) == getindex
-            args = arguments(sym)
-            a1 = setmetadata(args[1], SymScope,
-                DelayParentScope(getmetadata(value(args[1]), SymScope, LocalScope()), N))
-            maketerm(typeof(sym), operation(sym), [a1, args[2:end]...],
-                metadata(sym))
-        else
-            setmetadata(sym, SymScope,
-                DelayParentScope(getmetadata(value(sym), SymScope, LocalScope()), N))
-        end
-    end
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Apply `DelayParentScope` to `sym`, with a delay of `1` and `parent` being `LocalScope`.
-"""
-DelayParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}}) = DelayParentScope(sym, 1)
-
-"""
-    $(TYPEDEF)
-
 Denotes that a variable belongs to the root system in the hierarchy, regardless of which
 equations of subsystems in the hierarchy it is involved in. Variables with this scope
 are never namespaced and only added to the unknowns/parameters of a system when calling
@@ -1290,15 +1241,6 @@ function renamespace(sys, x)
                 rename(x, renamespace(getname(sys), getname(x)))::T
             elseif scope isa ParentScope
                 setmetadata(x, SymScope, scope.parent)::T
-            elseif scope isa DelayParentScope
-                if scope.N > 0
-                    x = setmetadata(x, SymScope,
-                        DelayParentScope(scope.parent, scope.N - 1))
-                    rename(x, renamespace(getname(sys), getname(x)))::T
-                else
-                    #rename(x, renamespace(getname(sys), getname(x)))
-                    setmetadata(x, SymScope, scope.parent)::T
-                end
             else # GlobalScope
                 x::T
             end

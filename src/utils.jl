@@ -632,8 +632,6 @@ function check_scope_depth(scope, depth)
         return depth == 0
     elseif scope isa ParentScope
         return depth > 0 && check_scope_depth(scope.parent, depth - 1)
-    elseif scope isa DelayParentScope
-        return depth >= scope.N && check_scope_depth(scope.parent, depth - scope.N - 1)
     elseif scope isa GlobalScope
         return depth == -1
     end
