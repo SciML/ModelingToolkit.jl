@@ -378,22 +378,20 @@ end
 
 # scoping tests
 let
-    @variables x1(t) x2(t) x3(t) x4(t) x5(t)
+    @variables x1(t) x2(t) x3(t) x4(t)
     x2 = ParentScope(x2)
     x3 = ParentScope(ParentScope(x3))
-    x4 = DelayParentScope(x4)
-    x5 = GlobalScope(x5)
-    @parameters p1 p2 p3 p4 p5
+    x4 = GlobalScope(x4)
+    @parameters p1 p2 p3 p4
     p2 = ParentScope(p2)
     p3 = ParentScope(ParentScope(p3))
-    p4 = DelayParentScope(p4)
-    p5 = GlobalScope(p5)
+    p4 = GlobalScope(p4)
 
     j1 = ConstantRateJump(p1, [x1 ~ x1 + 1])
     j2 = MassActionJump(p2, [x2 => 1], [x3 => -1])
     j3 = VariableRateJump(p3, [x3 ~ x3 + 1, x4 ~ x4 + 1])
-    j4 = MassActionJump(p4 * p5, [x1 => 1, x5 => 1], [x1 => -1, x5 => -1, x2 => 1])
-    @named js = JumpSystem([j1, j2, j3, j4], t, [x1, x2, x3, x4, x5], [p1, p2, p3, p4, p5])
+    j4 = MassActionJump(p4 * p4, [x1 => 1, x4 => 1], [x1 => -1, x4 => -1, x2 => 1])
+    @named js = JumpSystem([j1, j2, j3, j4], t, [x1, x2, x3, x4], [p1, p2, p3, p4])
 
     us = Set()
     ps = Set()
@@ -414,13 +412,13 @@ let
 
     empty!.((us, ps))
     MT.collect_scoped_vars!(us, ps, js, iv; depth = 2)
-    @test issetequal(us, [x3, x4])
-    @test issetequal(ps, [p3, p4])
+    @test issetequal(us, [x3])
+    @test issetequal(ps, [p3])
 
     empty!.((us, ps))
     MT.collect_scoped_vars!(us, ps, js, iv; depth = -1)
-    @test issetequal(us, [x5])
-    @test issetequal(ps, [p5])
+    @test issetequal(us, [x4])
+    @test issetequal(ps, [p4])
 end
 
 # PDMP test
