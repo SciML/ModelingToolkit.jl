@@ -1496,3 +1496,13 @@ end
     @test integ3.u ≈ [2.0, 3.0]
     @test integ3.ps[c1] ≈ 2.0
 end
+
+# https://github.com/SciML/SciMLBase.jl/issues/985
+@testset "Type-stability of `remake`" begin
+    @parameters α=1 β=1 γ=1 δ=1
+    @variables x(t)=1 y(t)=1
+    eqs = [D(x) ~ α * x - β * x * y, D(y) ~ -δ * y + γ * x * y]
+    @named sys = ODESystem(eqs, t)
+    prob = ODEProblem(complete(sys), [], (0.0, 1))
+    @inferred remake(prob; u0 = 2 .* prob.u0, p = prob.p)
+end
