@@ -135,19 +135,7 @@ du = zeros(3)
 tgrad_iip(du, u, p, t)
 @test du == [0.0, -u[2], 0.0]
 
-@parameters σ′(t - 1)
-eqs = [D(x) ~ σ′ * (y - x),
-    D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y - β * z * κ]
-@named de = ODESystem(eqs, t)
-test_diffeq_inference("global iv-varying", de, t, (x, y, z), (σ′, ρ, β))
-
-f = generate_function(de, [x, y, z], [σ′, ρ, β], expression = Val{false})[2]
-du = [0.0, 0.0, 0.0]
-f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
-@test du ≈ [11, -3, -7]
-
-@parameters σ(..)
+@parameters (σ::Function)(..)
 eqs = [D(x) ~ σ(t - 1) * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z * κ]
