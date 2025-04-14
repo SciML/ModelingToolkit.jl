@@ -261,6 +261,8 @@ function is_discrete_system(sys::System)
     any(eq -> isoperator(eq.lhs, Shift), equations(sys))
 end
 
+SymbolicIndexingInterface.is_time_dependent(sys::System) = get_iv(sys) !== nothing
+
 """
     is_dde(sys::System)
 
