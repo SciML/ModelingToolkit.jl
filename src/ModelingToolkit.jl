@@ -166,6 +166,7 @@ include("systems/problem_utils.jl")
 include("linearization.jl")
 
 include("problems/compatibility.jl")
+include("problems/odeproblem.jl")
 include("systems/optimization/modelingtoolkitize.jl")
 
 include("systems/nonlinear/homotopy_continuation.jl")
