@@ -22,8 +22,6 @@ function activate_downstream_env()
     Pkg.instantiate()
 end
 
-pkg"add ModelingToolkitStandardLibrary#mtk-v10"
-
 @time begin
     if GROUP == "All" || GROUP == "InterfaceI"
         @testset "InterfaceI" begin
