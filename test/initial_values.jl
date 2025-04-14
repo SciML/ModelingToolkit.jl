@@ -252,3 +252,16 @@ end
     ps = [p => [4.0, 5.0]]
     @test_nowarn NonlinearProblem(nlsys, u0, ps)
 end
+
+@testset "Issue#3553: Retain `Float32` initial values" begin
+    @parameters p d
+    @variables X(t)
+    eqs = [D(X) ~ p - d * X]
+    @mtkbuild osys = ODESystem(eqs, t)
+    u0 = [X => 1.0f0]
+    ps = [p => 1.0f0, d => 2.0f0]
+    oprob = ODEProblem(osys, u0, (0.0f0, 1.0f0), ps)
+    sol = solve(oprob)
+    @test eltype(oprob.u0) == Float32
+    @test eltype(eltype(sol.u)) == Float32
+end
