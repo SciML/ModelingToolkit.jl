@@ -1231,6 +1231,97 @@ function SciMLBase.detect_cycles(sys::AbstractSystem, varmap::Dict{Any, Any}, va
     return !isempty(cycles)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Macro for writing problem/function constructors. Expects a function definition with type
+parameters for `iip` and `specialize`. Generates fallbacks with
+`specialize = SciMLBase.FullSpecialize` and `iip = true`.
+"""
+macro fallback_iip_specialize(ex)
+    @assert Meta.isexpr(ex, :function)
+    # fnname is ODEProblem{iip, spec}(args...) where {iip, spec}
+    # body is function body
+    fnname, body = ex.args
+    @assert Meta.isexpr(fnname, :where)
+    # fnname_call is ODEProblem{iip, spec}(args...)
+    # where_args are `iip, spec`
+    fnname_call, where_args... = fnname.args
+    @assert length(where_args) == 2
+    iiparg, specarg = where_args
+
+    @assert Meta.isexpr(fnname_call, :call)
+    # fnname_curly is ODEProblem{iip, spec}
+    fnname_curly, args... = fnname_call.args
+    # the function should have keyword arguments
+    @assert Meta.isexpr(args[1], :parameters)
+
+    # arguments to call with
+    call_args = map(args) do arg
+        # keyword args are in `Expr(:parameters)` so any `Expr(:kw)` here
+        # are optional positional arguments. Analyze `:(f(a, b = 1; k = 1, l...))`
+        # to understand
+        Meta.isexpr(arg, :kw) && return arg.args[1]
+        return arg
+    end
+    call_kwargs = map(call_args[1].args) do arg
+        Meta.isexpr(arg, :...) && return arg
+        @assert Meta.isexpr(arg, :kw)
+        return Expr(:kw, arg.args[1], arg.args[1])
+    end
+    call_args[1] = Expr(:parameters, call_kwargs...)
+
+    @assert Meta.isexpr(fnname_curly, :curly)
+    # fnname_name is `ODEProblem`
+    # curly_args is `iip, spec`
+    fnname_name, curly_args... = fnname_curly.args
+    @assert curly_args == where_args
+
+    # callexpr_iip is `ODEProblem{iip, FullSpecialize}(call_args...)`
+    callexpr_iip = Expr(
+        :call, Expr(:curly, fnname_name, curly_args[1], SciMLBase.FullSpecialize), call_args...)
+    # `ODEProblem{iip}`
+    fnname_iip = Expr(:curly, fnname_name, curly_args[1])
+    # `ODEProblem{iip}(args...)`
+    fncall_iip = Expr(:call, fnname_iip, args...)
+    # ODEProblem{iip}(args...) where {iip}
+    fnwhere_iip = Expr(:where, fncall_iip, where_args[1])
+    fn_iip = Expr(:function, fnwhere_iip, callexpr_iip)
+
+    # `ODEProblem{true}(call_args...)`
+    callexpr_base = Expr(:call, Expr(:curly, fnname_name, true), call_args...)
+    # `ODEProblem(args...)`
+    fncall_base = Expr(:call, fnname_name, args...)
+    fn_base = Expr(:function, fncall_base, callexpr_base)
+
+    # Handle case when this is a problem constructor and `u0map` is a `StaticArray`,
+    # where `iip` should default to `false`.
+    fn_sarr = nothing
+    if occursin("Problem", string(fnname_name))
+        # args should at least contain an argument for the `u0map`
+        @assert length(args) > 3
+        u0_arg = args[3]
+        # should not have a type-annotation
+        @assert !Meta.isexpr(u0_arg, :(::))
+        if Meta.isexpr(u0_arg, :kw)
+            argname, default = u0_arg.args
+            u0_arg = Expr(:kw, Expr(:(::), argname, StaticArray), default)
+        else
+            u0_arg = Expr(:(::), u0_arg, StaticArray)
+        end
+
+        callexpr_sarr = Expr(:call, Expr(:curly, fnname_name, false), call_args...)
+        fncall_sarr = Expr(:call, fnname_name, args[1], args[2], u0_arg, args[4:end]...)
+        fn_sarr = Expr(:function, fncall_sarr, callexpr_sarr)
+    end
+    return quote
+        $fn_base
+        $fn_sarr
+        $fn_iip
+        Base.@__doc__ $ex
+    end |> esc
+end
+
 ##############
 # Legacy functions for backward compatibility
 ##############
