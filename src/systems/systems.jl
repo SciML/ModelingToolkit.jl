@@ -1,8 +1,3 @@
-function System(eqs::AbstractVector{<:Equation}, iv, args...; name = nothing,
-        kw...)
-    ODESystem(eqs, iv, args...; name, kw..., checks = false)
-end
-
 const REPEATED_SIMPLIFICATION_MESSAGE = "Structural simplification cannot be applied to a completed system. Double simplification is not allowed."
 
 struct RepeatedStructuralSimplificationError <: Exception end
