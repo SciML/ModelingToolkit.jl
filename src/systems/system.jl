@@ -296,6 +296,24 @@ function _check_if_dde(eqs, iv, subsystems)
     return is_dde
 end
 
+"""
+    $(TYPEDSIGNATURES)
+"""
+function check_complete(sys::System, obj)
+    iscomplete(sys) || throw(SystemNotCompleteError(obj))
+end
+
+struct SystemNotCompleteError <: Exception
+    obj::Any
+end
+
+function Base.showerror(io::IO, err::SystemNotCompleteError)
+    print(io, """
+    A completed system is required. Call `complete` or `structural_simplify` on the \
+    system before creating a `$(err.obj)`.
+    """)
+end
+
 struct IllFormedNoiseEquationsError <: Exception
     noise_eqs_rows::Int
     eqs_length::Int
