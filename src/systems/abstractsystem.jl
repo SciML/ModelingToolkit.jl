@@ -1791,20 +1791,6 @@ function isaffine(sys::AbstractSystem)
     all(isaffine(r, unknowns(sys)) for r in rhs)
 end
 
-function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
-    # if something is not x(t) (the current unknown)
-    # but is `x(t-1)` or something like that, pass in `x` as a callable function rather
-    # than pass in a value in place of x(t).
-    #
-    # This is done by just making `x` the argument of the function.
-    if iscall(x) &&
-       issym(operation(x)) &&
-       !(length(arguments(x)) == 1 && isequal(arguments(x)[1], get_iv(sys)))
-        return operation(x)
-    end
-    return x
-end
-
 """
 $(SIGNATURES)
 

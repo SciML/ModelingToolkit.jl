@@ -220,7 +220,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
         inputs = setdiff(inputs, disturbance_inputs)
         # ps = [ps; disturbance_inputs]
     end
-    inputs = map(x -> time_varying_as_func(value(x), sys), inputs)
+    inputs = map(value, inputs)
     disturbance_inputs = unwrap.(disturbance_inputs)
 
     eqs = [eq for eq in full_equations(sys)]
