@@ -623,6 +623,138 @@ end
 """
     $(TYPEDEF)
 
+A callable struct used to reconstruct the `u0` and `p` of the initialization problem
+with promoted types.
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
+struct ReconstructInitializeprob{G}
+    """
+    A function which when called on the original problem returns the parameter object of
+    the initialization problem.
+    """
+    getter::G
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given an index provider `indp` and a vector of symbols `syms` return a type-stable getter
+function by splitting `syms` into contiguous buffers where the getter of each buffer
+is type-stable and constructing a function that calls and concatenates the results.
+"""
+function concrete_getu(indp, syms::AbstractVector)
+    # a list of contiguous buffer
+    split_syms = [Any[syms[1]]]
+    # the type of the getter of the last buffer
+    current = typeof(getu(indp, syms[1]))
+    for sym in syms[2:end]
+        getter = getu(indp, sym)
+        if typeof(getter) != current
+            # if types don't match, build a new buffer
+            push!(split_syms, [])
+            current = typeof(getter)
+        end
+        push!(split_syms[end], sym)
+    end
+    split_syms = Tuple(split_syms)
+    # the getter is now type-stable, and we can vcat it to get the full buffer
+    return Base.Fix1(reduce, vcat) ∘ getu(indp, split_syms)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Construct a `ReconstructInitializeprob` which reconstructs the `u0` and `p` of `dstsys`
+with values from `srcsys`.
+"""
+function ReconstructInitializeprob(
+        srcsys::AbstractSystem, dstsys::AbstractSystem)
+    @assert is_initializesystem(dstsys)
+    if is_split(dstsys)
+        # if we call `getu` on this (and it were able to handle empty tuples) we get the
+        # fields of `MTKParameters` except caches.
+        syms = reorder_parameters(dstsys, parameters(dstsys); flatten = false)
+        # `dstsys` is an initialization system, do basically everything is a tunable
+        # and tunables are a mix of different types in `srcsys`. No initials. Constants
+        # are going to be constants in `srcsys`, as are `nonnumeric`.
+
+        # `syms[1]` is always the tunables because `srcsys` will have initials.
+        tunable_syms = syms[1]
+        tunable_getter = concrete_getu(srcsys, tunable_syms)
+        rest_getters = map(Base.tail(Base.tail(syms))) do buf
+            if buf == ()
+                return Returns(())
+            else
+                return getu(srcsys, buf)
+            end
+        end
+        getters = (tunable_getter, Returns(SizedVector{0, Float64}()), rest_getters...)
+        getter = let getters = getters
+            function _getter(valp)
+                MTKParameters(getters[1](valp), getters[2](valp), getters[3](valp),
+                    getters[4](valp), getters[5](valp), ())
+            end
+        end
+    else
+        syms = parameters(dstsys)
+        getter = concrete_getu(srcsys, syms)
+    end
+    return ReconstructInitializeprob(getter)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Copy values from `srcvalp` to `dstvalp`. Returns the new `u0` and `p`.
+"""
+function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
+    # copy parameters
+    newp = rip.getter(srcvalp)
+    # no `u0`, so no type-promotion
+    if state_values(dstvalp) === nothing
+        return nothing, newp
+    end
+    # the `eltype` of the `u0` of the source
+    srcu0 = state_values(srcvalp)
+    T = srcu0 === nothing ? Union{} : eltype(srcu0)
+    # promote with the tunable eltype
+    if parameter_values(dstvalp) isa MTKParameters
+        if !isempty(newp.tunable)
+            T = promote_type(eltype(newp.tunable), T)
+        end
+    elseif !isempty(newp)
+        T = promote_type(eltype(newp), T)
+    end
+    # and the eltype of the destination u0
+    if T == eltype(state_values(dstvalp))
+        u0 = state_values(dstvalp)
+    elseif T != Union{}
+        u0 = T.(state_values(dstvalp))
+    end
+    # apply the promotion to tunables portion
+    buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Tunable(), newp)
+    if eltype(buf) != T
+        # only do a copy if the eltype doesn't match
+        newbuf = similar(buf, T)
+        copyto!(newbuf, buf)
+        newp = repack(newbuf)
+    end
+    # and initials portion
+    buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Initials(), newp)
+    if eltype(buf) != T
+        newbuf = similar(buf, T)
+        copyto!(newbuf, buf)
+        newp = repack(newbuf)
+    end
+    return u0, newp
+end
+
+"""
+    $(TYPEDEF)
+
 Metadata attached to `OverrideInitData` used in `remake` hooks for handling initialization
 properly.
 
