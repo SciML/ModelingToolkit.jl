@@ -502,7 +502,7 @@ function reorder_parameters(
     end
 end
 
-function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
+function reorder_parameters(ic::IndexCache, ps; drop_missing = false, flatten = true)
     isempty(ps) && return ()
     param_buf = if ic.tunable_buffer_size.length == 0
         ()
@@ -555,20 +555,37 @@ function reorder_parameters(ic::IndexCache, ps; drop_missing = false)
         end
     end
 
-    result = broadcast.(
-        unwrap, (
-            param_buf..., initials_buf..., disc_buf..., const_buf..., nonnumeric_buf...))
+    param_buf = broadcast.(unwrap, param_buf)
+    initials_buf = broadcast.(unwrap, initials_buf)
+    disc_buf = broadcast.(unwrap, disc_buf)
+    const_buf = broadcast.(unwrap, const_buf)
+    nonnumeric_buf = broadcast.(unwrap, nonnumeric_buf)
+
     if drop_missing
-        result = map(result) do buf
-            filter(buf) do sym
-                return !isequal(sym, unwrap(variable(:DEF)))
-            end
+        filterer = !isequal(unwrap(variable(:DEF)))
+        param_buf = filter.(filterer, param_buf)
+        initials_buf = filter.(filterer, initials_buf)
+        disc_buf = filter.(filterer, disc_buf)
+        const_buf = filter.(filterer, const_buf)
+        nonnumeric_buf = filter.(filterer, nonnumeric_buf)
+    end
+
+    if flatten
+        result = (
+            param_buf..., initials_buf..., disc_buf..., const_buf..., nonnumeric_buf...)
+        if all(isempty, result)
+            return ()
         end
+        return result
+    else
+        if isempty(param_buf)
+            param_buf = ((),)
+        end
+        if isempty(initials_buf)
+            initials_buf = ((),)
+        end
+        return (param_buf..., initials_buf..., disc_buf, const_buf, nonnumeric_buf)
     end
-    if all(isempty, result)
-        return ()
-    end
-    return result
 end
 
 # Given a parameter index, find the index of the buffer it is in when
