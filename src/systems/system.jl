@@ -296,6 +296,27 @@ function _check_if_dde(eqs, iv, subsystems)
     return is_dde
 end
 
+function flatten(sys::System, noeqs = false)
+    systems = get_systems(sys)
+    isempty(systems) && return sys
+
+    return System(noeqs ? Equation[] : equations(sys), get_iv(sys), unknowns(sys),
+        parameters(sys; initial_parameters = true), brownians(sys);
+        jumps = jumps(sys), constraints = constraints(sys), costs = cost(sys),
+        consolidate = default_consolidate, observed = observed(sys),
+        parameter_dependencies = parameter_dependencies(sys), defaults = defaults(sys),
+        guesses = guesses(sys), continuous_events = continuous_events(sys),
+        discrete_events = discrete_events(sys), assertions = assertions(sys),
+        is_dde = is_dde(sys), tstops = symbolic_tstops(sys),
+        ignored_connections = ignored_connections(sys),
+        initialization_eqs = initialization_equations(sys),
+        # without this, any defaults/guesses obtained from metadata that were
+        # later removed by the user will be re-added. Right now, we just want to
+        # retain `defaults(sys)` as-is.
+        discover_from_metadata = false,
+        description = description(sys), name = nameof(sys))
+end
+
 """
     $(TYPEDSIGNATURES)
 """
