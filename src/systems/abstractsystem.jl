@@ -1301,6 +1301,28 @@ function namespace_equation(eq::Equation,
     (_lhs ~ _rhs)::Equation
 end
 
+function namespace_jump(j::ConstantRateJump, sys)
+    return ConstantRateJump(namespace_expr(j.rate, sys), namespace_expr(j.affect!, sys))
+end
+
+function namespace_jump(j::VariableRateJump, sys)
+    return VariableRateJump(namespace_expr(j.rate, sys), namespace_expr(j.affect!, sys))
+end
+
+function namespace_jump(j::MassActionJump, sys)
+    return MassActionJump(namespace_expr(j.scaled_rates, sys),
+        [namespace_expr(k, sys) => namespace_expr(v, sys) for (k, v) in j.reactant_stoch],
+        [namespace_expr(k, sys) => namespace_expr(v, sys) for (k, v) in j.net_stoch])
+end
+
+function namespace_jumps(sys::AbstractSystem)
+    return [namespace_jump(j, sys) for j in get_jumps(sys)]
+end
+
+function namespace_brownians(sys::AbstractSystem)
+    return [renamespace(sys, b) for b in brownians(sys)]
+end
+
 function namespace_assignment(eq::Assignment, sys)
     _lhs = namespace_expr(eq.lhs, sys)
     _rhs = namespace_expr(eq.rhs, sys)
@@ -1732,6 +1754,35 @@ function equations_toplevel(sys::AbstractSystem)
         return equations_toplevel(parent)
     end
     return get_eqs(sys)
+end
+
+function jumps(sys::AbstractSystem)
+    js = get_jumps(sys)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return js
+    end
+    return [js; reduce(vcat, namespace_jumps.(systems); init = [])]
+end
+
+function brownians(sys::AbstractSystem)
+    bs = get_brownians(sys)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return bs
+    end
+    return [bs; reduce(vcat, namespace_brownians.(systems); init = [])]
+end
+
+function cost(sys::AbstractSystem)
+    cs = get_costs(sys)
+    consolidate = get_consolidate(sys)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return consolidate(cs, Float64[])
+    end
+    subcosts = [namespace_expr(cost(subsys), subsys) for subsys in systems]
+    return consolidate(cs, subcosts)
 end
 
 """
