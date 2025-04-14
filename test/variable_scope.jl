@@ -51,13 +51,11 @@ end
 @test renamed([:foo :bar :baz], c) == Symbol("foo₊c")
 @test renamed([:foo :bar :baz], d) == :d
 
-@parameters a b c d e f
+@parameters a b c d
 p = [a
      ParentScope(b)
      ParentScope(ParentScope(c))
-     DelayParentScope(d)
-     DelayParentScope(e, 2)
-     GlobalScope(f)]
+     GlobalScope(d)]
 
 level0 = ODESystem(Equation[], t, [], p; name = :level0)
 level1 = ODESystem(Equation[], t, [], []; name = :level1) ∘ level0
@@ -69,9 +67,7 @@ ps = ModelingToolkit.getname.(parameters(level3))
 @test isequal(ps[1], :level2₊level1₊level0₊a)
 @test isequal(ps[2], :level2₊level1₊b)
 @test isequal(ps[3], :level2₊c)
-@test isequal(ps[4], :level2₊level0₊d)
-@test isequal(ps[5], :level1₊level0₊e)
-@test isequal(ps[6], :f)
+@test isequal(ps[4], :d)
 
 # Issue@2252
 # Tests from PR#2354
@@ -102,40 +98,36 @@ defs = ModelingToolkit.defaults(bar)
 @test defs[bar.p] == 2
 @test isequal(defs[bar.foo.p], bar.p)
 
-# Issue#3101
-@variables x1(t) x2(t) x3(t) x4(t) x5(t)
-x2 = ParentScope(x2)
-x3 = ParentScope(ParentScope(x3))
-x4 = DelayParentScope(x4)
-x5 = GlobalScope(x5)
-@parameters p1 p2 p3 p4 p5
-p2 = ParentScope(p2)
-p3 = ParentScope(ParentScope(p3))
-p4 = DelayParentScope(p4)
-p5 = GlobalScope(p5)
+@testset "Issue#3101" begin
+    @variables x1(t) x2(t) x3(t) x4(t)
+    x2 = ParentScope(x2)
+    x3 = ParentScope(ParentScope(x3))
+    x4 = GlobalScope(x4)
+    @parameters p1 p2 p3 p4
+    p2 = ParentScope(p2)
+    p3 = ParentScope(ParentScope(p3))
+    p4 = GlobalScope(p4)
 
-@named sys1 = ODESystem([D(x1) ~ p1, D(x2) ~ p2, D(x3) ~ p3, D(x4) ~ p4, D(x5) ~ p5], t)
-@test isequal(x1, only(unknowns(sys1)))
-@test isequal(p1, only(parameters(sys1)))
-@named sys2 = ODESystem(Equation[], t; systems = [sys1])
-@test length(unknowns(sys2)) == 2
-@test any(isequal(x2), unknowns(sys2))
-@test length(parameters(sys2)) == 2
-@test any(isequal(p2), parameters(sys2))
-@named sys3 = ODESystem(Equation[], t)
-sys3 = sys3 ∘ sys2
-@test length(unknowns(sys3)) == 4
-@test any(isequal(x3), unknowns(sys3))
-@test any(isequal(ModelingToolkit.renamespace(sys1, x4)), unknowns(sys3))
-@test length(parameters(sys3)) == 4
-@test any(isequal(p3), parameters(sys3))
-@test any(isequal(ModelingToolkit.renamespace(sys1, p4)), parameters(sys3))
-sys4 = complete(sys3)
-@test length(unknowns(sys3)) == 4
-@test length(parameters(sys4)) == 5
-@test any(isequal(p5), parameters(sys4))
-sys5 = structural_simplify(sys3)
-@test length(unknowns(sys5)) == 5
-@test any(isequal(x5), unknowns(sys5))
-@test length(parameters(sys5)) == 5
-@test any(isequal(p5), parameters(sys5))
+    @named sys1 = ODESystem([D(x1) ~ p1, D(x2) ~ p2, D(x3) ~ p3, D(x4) ~ p4], t)
+    @test isequal(x1, only(unknowns(sys1)))
+    @test isequal(p1, only(parameters(sys1)))
+    @named sys2 = ODESystem(Equation[], t; systems = [sys1])
+    @test length(unknowns(sys2)) == 2
+    @test any(isequal(x2), unknowns(sys2))
+    @test length(parameters(sys2)) == 2
+    @test any(isequal(p2), parameters(sys2))
+    @named sys3 = ODESystem(Equation[], t)
+    sys3 = sys3 ∘ sys2
+    @test length(unknowns(sys3)) == 3
+    @test any(isequal(x3), unknowns(sys3))
+    @test length(parameters(sys3)) == 3
+    @test any(isequal(p3), parameters(sys3))
+    sys4 = complete(sys3)
+    @test length(unknowns(sys4)) == 3
+    @test length(parameters(sys4)) == 4
+    sys5 = structural_simplify(sys3)
+    @test length(unknowns(sys5)) == 4
+    @test any(isequal(x4), unknowns(sys5))
+    @test length(parameters(sys5)) == 4
+    @test any(isequal(p4), parameters(sys5))
+end
