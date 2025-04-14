@@ -143,9 +143,7 @@ function generate_initializesystem(sys::AbstractTimeDependentSystem;
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
-    meta = InitializationSystemMetadata(
-        anydict(u0map), anydict(pmap), additional_guesses,
-        additional_initialization_eqs, extra_metadata, nothing)
+
     return NonlinearSystem(eqs_ics,
         vars,
         pars;
@@ -153,7 +151,7 @@ function generate_initializesystem(sys::AbstractTimeDependentSystem;
         checks = check_units,
         parameter_dependencies = new_parameter_deps,
         name,
-        metadata = meta,
+        is_initializesystem = true,
         kwargs...)
 end
 
@@ -244,9 +242,7 @@ function generate_initializesystem(sys::AbstractTimeIndependentSystem;
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
-    meta = InitializationSystemMetadata(
-        anydict(u0map), anydict(pmap), additional_guesses,
-        additional_initialization_eqs, extra_metadata, nothing)
+
     return NonlinearSystem(eqs_ics,
         vars,
         pars;
@@ -254,7 +250,7 @@ function generate_initializesystem(sys::AbstractTimeIndependentSystem;
         checks = check_units,
         parameter_dependencies = new_parameter_deps,
         name,
-        metadata = meta,
+        is_initializesystem = true,
         kwargs...)
 end
 
@@ -714,7 +710,7 @@ end
 Check if the given system is an initialization system.
 """
 function is_initializesystem(sys::AbstractSystem)
-    sys isa NonlinearSystem && get_metadata(sys) isa InitializationSystemMetadata
+    has_is_initializesystem(sys) && get_is_initializesystem(sys)
 end
 
 """

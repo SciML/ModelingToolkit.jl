@@ -87,6 +87,10 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     """
     gui_metadata::Union{Nothing, GUIMetadata}
     """
+    Whether this is an initialization system.
+    """
+    is_initializesystem::Bool
+    """
     Cache for intermediate tearing state.
     """
     tearing_state::Any
@@ -116,6 +120,7 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
             tag, eqs, unknowns, ps, var_to_name, observed, jac, name, description,
             systems, defaults, guesses, initializesystem, initialization_eqs, connector_type,
             parameter_dependencies = Equation[], metadata = nothing, gui_metadata = nothing,
+            is_initializesystem = false,
             tearing_state = nothing, substitutions = nothing, namespacing = true,
             complete = false, index_cache = nothing, parent = nothing,
             isscheduled = false; checks::Union{Bool, Int} = true)
@@ -126,7 +131,8 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
         end
         new(tag, eqs, unknowns, ps, var_to_name, observed, jac, name, description,
             systems, defaults, guesses, initializesystem, initialization_eqs,
-            connector_type, parameter_dependencies, metadata, gui_metadata, tearing_state,
+            connector_type, parameter_dependencies, metadata, gui_metadata,
+            is_initializesystem, tearing_state,
             substitutions, namespacing, complete, index_cache, parent, isscheduled)
     end
 end
@@ -148,7 +154,8 @@ function NonlinearSystem(eqs, unknowns, ps;
         checks = true,
         parameter_dependencies = Equation[],
         metadata = nothing,
-        gui_metadata = nothing)
+        gui_metadata = nothing,
+        is_initializesystem = false)
     continuous_events === nothing || isempty(continuous_events) ||
         throw(ArgumentError("NonlinearSystem does not accept `continuous_events`, you provided $continuous_events"))
     discrete_events === nothing || isempty(discrete_events) ||
@@ -196,7 +203,7 @@ function NonlinearSystem(eqs, unknowns, ps;
     NonlinearSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         eqs, dvs′, ps′, var_to_name, observed, jac, name, description, systems, defaults,
         guesses, initializesystem, initialization_eqs, connector_type, parameter_dependencies,
-        metadata, gui_metadata, checks = checks)
+        metadata, gui_metadata, is_initializesystem, checks = checks)
 end
 
 function NonlinearSystem(eqs; kwargs...)
