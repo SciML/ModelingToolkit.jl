@@ -737,7 +737,7 @@ function add_initialization_parameters(sys::AbstractSystem)
         else
             defs[ivar] = collect(ivar)
             for scal_ivar in defs[ivar]
-                defs[scal_ivar] = zero(Float16)
+                defs[scal_ivar] = false
             end
         end
     end
