@@ -1,9 +1,17 @@
+function generate_initializesystem(sys::AbstractSystem; kwargs...)
+    if is_time_dependent(sys)
+        generate_initializesystem_timevarying(sys; kwargs...)
+    else
+        generate_initializesystem_timeindependent(sys; kwargs...)
+    end
+end
+
 """
 $(TYPEDSIGNATURES)
 
 Generate `NonlinearSystem` which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
 """
-function generate_initializesystem(sys::AbstractTimeDependentSystem;
+function generate_initializesystem_timevarying(sys::AbstractSystem;
         u0map = Dict(),
         pmap = Dict(),
         initialization_eqs = [],
@@ -160,7 +168,7 @@ $(TYPEDSIGNATURES)
 
 Generate `NonlinearSystem` which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
 """
-function generate_initializesystem(sys::AbstractTimeIndependentSystem;
+function generate_initializesystem_timeindependent(sys::AbstractSystem;
         u0map = Dict(),
         pmap = Dict(),
         initialization_eqs = [],
