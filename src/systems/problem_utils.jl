@@ -896,6 +896,16 @@ function process_SciMLProblem(
         du0 = nothing
     end
 
+    if build_initializeprob
+        t0 = t
+        if is_time_dependent(sys) && t0 === nothing
+            t0 = zero(floatT)
+        end
+        initialization_data = SciMLBase.remake_initialization_data(
+            kwargs.initialization_data, kwargs, u0, t0, p, u0, p)
+        kwargs = merge(kwargs,)
+    end
+
     f = constructor(sys, dvs, ps, u0; p = p,
         eval_expression = eval_expression,
         eval_module = eval_module,
