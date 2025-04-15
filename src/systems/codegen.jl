@@ -222,6 +222,20 @@ function generate_dae_jacobian(sys::System, dvs = unknowns(sys),
     return GeneratedFunctionWrapper{(3, 5, is_split(sys))}(f_oop, f_iip)
 end
 
+function generate_history(sys::System, u0; expression = Val{true},
+        eval_expression = false, eval_module = @__MODULE__, kwargs...)
+    p = reorder_parameters(sys)
+    res = build_function_wrapper(sys, u0, p..., get_iv(sys); expression = Val{true},
+        expression_module = eval_module, p_start = 1, p_end = length(p),
+        similarto = typeof(u0), wrap_delays = false, kwargs...)
+
+    if expression == Val{true}
+        return res
+    end
+    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
+    return GeneratedFunctionWrapper{(1, 2, is_split(sys))}(f_oop, f_iip)
+end
+
 function calculate_massmatrix(sys::System; simplify = false)
     eqs = [eq for eq in equations(sys)]
     M = zeros(length(eqs), length(eqs))
