@@ -110,6 +110,74 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Check if the variable `var` is a delayed variable, where `iv` is the independent
+variable.
+"""
+function isdelay(var, iv)
+    iv === nothing && return false
+    isvariable(var) || return false
+    isparameter(var) && return false
+    if iscall(var) && !ModelingToolkit.isoperator(var, Symbolics.Operator)
+        args = arguments(var)
+        length(args) == 1 || return false
+        isequal(args[1], iv) || return true
+    end
+    return false
+end
+
+"""
+The argument of generated functions corresponding to the history function.
+"""
+const DDE_HISTORY_FUN = Sym{Symbolics.FnType{Tuple{Any, <:Real}, Vector{Real}}}(:___history___)
+
+"""
+    $(TYPEDSIGNATURES)
+
+Turn delayed unknowns in `eqs` into calls to `DDE_HISTORY_FUNCTION`.
+
+# Arguments
+
+- `sys`: The system of DDEs.
+- `eqs`: The equations to convert.
+
+# Keyword Arguments
+
+- `param_arg`: The name of the variable containing the parameter object.
+"""
+function delay_to_function(
+        sys::AbstractSystem, eqs = full_equations(sys); param_arg = MTKPARAMETERS_ARG)
+    delay_to_function(eqs,
+        get_iv(sys),
+        Dict{Any, Int}(operation(s) => i for (i, s) in enumerate(unknowns(sys))),
+        parameters(sys),
+        DDE_HISTORY_FUN; param_arg)
+end
+function delay_to_function(eqs::Vector, iv, sts, ps, h; param_arg = MTKPARAMETERS_ARG)
+    delay_to_function.(eqs, (iv,), (sts,), (ps,), (h,); param_arg)
+end
+function delay_to_function(eq::Equation, iv, sts, ps, h; param_arg = MTKPARAMETERS_ARG)
+    delay_to_function(eq.lhs, iv, sts, ps, h; param_arg) ~ delay_to_function(
+        eq.rhs, iv, sts, ps, h; param_arg)
+end
+function delay_to_function(expr, iv, sts, ps, h; param_arg = MTKPARAMETERS_ARG)
+    if isdelay(expr, iv)
+        v = operation(expr)
+        time = arguments(expr)[1]
+        idx = sts[v]
+        return term(getindex, h(param_arg, time), idx, type = Real)
+    elseif iscall(expr)
+        return maketerm(typeof(expr),
+            operation(expr),
+            map(x -> delay_to_function(x, iv, sts, ps, h; param_arg), arguments(expr)),
+            metadata(expr))
+    else
+        return expr
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 A wrapper around `build_function` which performs the necessary transformations for
 code generation of all types of systems. `expr` is the expression returned from the
 generated functions, and `args` are the arguments.
@@ -159,11 +227,11 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
     obs = filter(filter_observed, observed(sys))
     # turn delayed unknowns into calls to the history function
     if wrap_delays
-        history_arg = is_split(sys) ? MTKPARAMETERS_ARG : generated_argument_name(p_start)
+        param_arg = is_split(sys) ? MTKPARAMETERS_ARG : generated_argument_name(p_start)
         obs = map(obs) do eq
-            delay_to_function(sys, eq; history_arg)
+            delay_to_function(sys, eq; param_arg)
         end
-        expr = delay_to_function(sys, expr; history_arg)
+        expr = delay_to_function(sys, expr; param_arg)
         # add extra argument
         args = (args[1:(p_start - 1)]..., DDE_HISTORY_FUN, args[p_start:end]...)
         p_start += 1
