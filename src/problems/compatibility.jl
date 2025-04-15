@@ -1,0 +1,79 @@
+"""
+    function check_compatible_system(T::Type, sys::System)
+
+Check if `sys` can be used to construct a problem/function of type `T`.
+"""
+function check_compatible_system end
+
+struct SystemCompatibilityError <: Exception
+    msg::String
+end
+
+function Base.showerror(io::IO, err::SystemCompatibilityError)
+    println(io, err.msg)
+    println(io)
+    print(io, "To disable this check, pass `check_compatibility = false`.")
+end
+
+function check_time_dependent(sys::System, T)
+    if !is_time_dependent(sys)
+        throw(SystemCompatibilityError("""
+        `$T` requires a time-dependent system.
+        """))
+    end
+end
+
+function check_is_dde(sys::System)
+    altT = get_noise_eqs(sys) === nothing ? ODEProblem : SDEProblem
+    if !is_dde(sys)
+        throw(SystemCompatibilityError("""
+        The system does not have delays. Consider an `$altT` instead.
+        """))
+    end
+end
+
+function check_not_dde(sys::System)
+    altT = get_noise_eqs(sys) === nothing ? DDEProblem : SDDEProblem
+    if is_dde(sys)
+        throw(SystemCompatibilityError("""
+        The system has delays. Consider a `$altT` instead.
+        """))
+    end
+end
+
+function check_no_cost(sys::System, T)
+    cost = ModelingToolkit.cost(sys)
+    if !_iszero(cost)
+        throw(SystemCompatibilityError("""
+        `$T` will not optimize solutions of systems that have associated cost \
+        functions. Solvers for optimal control problems are forthcoming.
+        """))
+    end
+end
+
+function check_no_constraints(sys::System, T)
+    if !isempty(constraints(sys))
+        throw(SystemCompatibilityError("""
+        A system with constraints cannot be used to construct a `$T`.
+        """))
+    end
+end
+
+function check_no_jumps(sys::System, T)
+    if !isempty(jumps(sys))
+        throw(SystemCompatibilityError("""
+        A system with jumps cannot be used to construct a `$T`. Consider a \
+        `JumpProblem` instead.
+        """))
+    end
+end
+
+function check_no_noise(sys::System, T)
+    altT = is_dde(sys) ? SDDEProblem : SDEProblem
+    if get_noise_eqs(sys) !== nothing
+        throw(SystemCompatibilityError("""
+        A system with noise cannot be used to construct a `$T`. Consider an \
+        `$altT` instead.
+        """))
+    end
+end

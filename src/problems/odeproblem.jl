@@ -73,41 +73,10 @@ end
 end
 
 function check_compatible_system(T::Union{Type{ODEFunction}, Type{ODEProblem}}, sys::System)
-    if !is_time_dependent(sys)
-        throw(SystemCompatibilityError("""
-        `$T` requires a time-dependent system.
-        """))
-    end
-
-    cost = get_costs(sys)
-    if cost isa Vector && !isempty(cost) ||
-       cost isa Union{BasicSymbolic, Real} && !_iszero(cost)
-        throw(SystemCompatibilityError("""
-        `$T` will not optimize solutions of systems that have associated cost \
-        functions. Solvers for optimal control problems are forthcoming. In order to \
-        bypass this error (e.g. to check the cost of a regular solution), pass \
-        `allow_cost = true` into the constructor.
-        """))
-    end
-
-    if !isempty(constraints(sys))
-        throw(SystemCompatibilityError("""
-        A system with constraints cannot be used to construct an `$T`. Consider a \
-        `BVProblem` instead.
-        """))
-    end
-
-    if !isempty(jumps(sys))
-        throw(SystemCompatibilityError("""
-            A system with jumps cannot be used to construct an `$T`. Consider a \
-            `JumpProblem` instead.
-        """))
-    end
-
-    if get_noise_eqs(sys) !== nothing
-        throw(SystemCompatibilityError("""
-            A system with jumps cannot be used to construct an `$T`. Consider an \
-            `SDEProblem` instead.
-        """))
-    end
+    check_time_dependent(sys, T)
+    check_not_dde(sys, T)
+    check_no_cost(sys, T)
+    check_no_constraints(sys, T)
+    check_no_jumps(sys, T)
+    check_no_noise(sys, T)
 end
