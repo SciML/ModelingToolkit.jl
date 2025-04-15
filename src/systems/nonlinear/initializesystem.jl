@@ -649,7 +649,8 @@ function SciMLBase.remake_initialization_data(
     kws = maybe_build_initialization_problem(
         sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns;
         use_scc, initialization_eqs, allow_incomplete = true)
-    return get(kws, :initialization_data, nothing)
+
+    return SciMLBase.remake_initialization_data(sys, kws, newu0, t0, newp, newu0, newp)
 end
 
 function SciMLBase.late_binding_update_u0_p(
