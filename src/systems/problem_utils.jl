@@ -631,11 +631,12 @@ All other keyword arguments are forwarded to `InitializationProblem`.
 """
 function maybe_build_initialization_problem(
         sys::AbstractSystem, op::AbstractDict, u0map, pmap, t, defs,
-        guesses, missing_unknowns; implicit_dae = false, u0_constructor = identity, kwargs...)
+        guesses, missing_unknowns; implicit_dae = false,
+        u0_constructor = identity, floatT = Float64, kwargs...)
     guesses = merge(ModelingToolkit.guesses(sys), todict(guesses))
 
     if t === nothing && is_time_dependent(sys)
-        t = 0.0
+        t = zero(floatT)
     end
 
     initializeprob = ModelingToolkit.InitializationProblem{true, SciMLBase.FullSpecialize}(
@@ -675,7 +676,7 @@ function maybe_build_initialization_problem(
         get(op, p, missing) === missing || continue
         p = unwrap(p)
         stype = symtype(p)
-        op[p] = get_temporary_value(p)
+        op[p] = get_temporary_value(p, floatT)
         if iscall(p) && operation(p) === getindex
             arrp = arguments(p)[1]
             op[arrp] = collect(arrp)
@@ -684,7 +685,7 @@ function maybe_build_initialization_problem(
 
     if is_time_dependent(sys)
         for v in missing_unknowns
-            op[v] = zero_var(v)
+            op[v] = get_temporary_value(v, floatT)
         end
         empty!(missing_unknowns)
     end
@@ -798,12 +799,26 @@ function process_SciMLProblem(
     op, missing_unknowns, missing_pars = build_operating_point!(sys,
         u0map, pmap, defs, cmap, dvs, ps)
 
+    floatT = Bool
+    for (k, v) in op
+        symbolic_type(v) == NotSymbolic() || continue
+        is_array_of_symbolics(v) && continue
+
+        if v isa AbstractArray
+            isconcretetype(eltype(v)) || continue
+            floatT = promote_type(floatT, eltype(v))
+        elseif v isa Real && isconcretetype(v)
+            floatT = promote_type(floatT, typeof(v))
+        end
+    end
+    floatT = float(floatT)
+
     if !is_time_dependent(sys) || is_initializesystem(sys)
         add_observed_equations!(u0map, obs)
     end
     if u0_constructor === identity && u0Type <: StaticArray
         u0_constructor = vals -> SymbolicUtils.Code.create_array(
-            u0Type, eltype(vals), Val(1), Val(length(vals)), vals...)
+            u0Type, floatT, Val(1), Val(length(vals)), vals...)
     end
     if build_initializeprob
         kws = maybe_build_initialization_problem(
@@ -813,7 +828,7 @@ function process_SciMLProblem(
             warn_cyclic_dependency, check_units = check_initialization_units,
             circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
             force_time_independent = force_initialization_time_independent, algebraic_only, allow_incomplete,
-            u0_constructor)
+            u0_constructor, floatT)
 
         kwargs = merge(kwargs, kws)
     end
@@ -841,7 +856,7 @@ function process_SciMLProblem(
     evaluate_varmap!(op, dvs; limit = substitution_limit)
 
     u0 = better_varmap_to_vars(
-        op, dvs; tofloat,
+        op, dvs; tofloat, floatT,
         container_type = u0Type, allow_symbolic = symbolic_u0, is_initializeprob)
 
     if u0 !== nothing
@@ -865,7 +880,7 @@ function process_SciMLProblem(
     end
     evaluate_varmap!(op, ps; limit = substitution_limit)
     if is_split(sys)
-        p = MTKParameters(sys, op)
+        p = MTKParameters(sys, op; floatT = floatT)
     else
         p = better_varmap_to_vars(op, ps; tofloat, container_type = pType)
     end
