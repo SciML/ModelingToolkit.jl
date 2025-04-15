@@ -978,7 +978,7 @@ function get_u0_p(sys,
         u0map = Dict(u0map)
     end
     if u0map isa Dict
-        allobs = Set(getproperty.(observed(sys), :lhs))
+        allobs = Set(observeds(sys))
         if any(in(allobs), keys(u0map))
             u0s_in_obs = filter(in(allobs), keys(u0map))
             @warn "Observed variables cannot be assigned initial values. Initial values for $u0s_in_obs will be ignored."

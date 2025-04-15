@@ -31,7 +31,7 @@ struct OptimizationSystem <: AbstractOptimizationSystem
     ps::Vector
     """Array variables."""
     var_to_name::Any
-    """Observed variables."""
+    """Observed equations."""
     observed::Vector{Equation}
     """List of constraint equations of the system."""
     constraints::Vector{Union{Equation, Inequality}}
