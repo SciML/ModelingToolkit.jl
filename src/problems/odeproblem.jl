@@ -63,25 +63,13 @@ end
     check_compatibility && check_compatible_system(ODEProblem, sys)
 
     f, u0, p = process_SciMLProblem(ODEFunction{iip, spec}, sys, u0map, parammap;
-        t = tspan !== nothing ? tspan[1] : tspan,
-        check_length, eval_expression, eval_module, kwargs...)
-    cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
+        t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
+        eval_module, check_compatibility, kwargs...)
 
-    kwargs = filter_kwargs(kwargs)
-
-    kwargs1 = (;)
-    if cbs !== nothing
-        kwargs1 = merge(kwargs1, (callback = cbs,))
-    end
-
-    tstops = SymbolicTstops(sys; eval_expression, eval_module)
-    if tstops !== nothing
-        kwargs1 = merge(kwargs1, (; tstops))
-    end
-
+    kwargs = process_kwargs(sys; callback, eval_expression, eval_module, kwargs...)
     # Call `remake` so it runs initialization if it is trivial
     return remake(ODEProblem{iip}(
-        f, u0, tspan, p, StandardODEProblem(); kwargs1..., kwargs...))
+        f, u0, tspan, p, StandardODEProblem(); kwargs...))
 end
 
 function check_compatible_system(T::Union{Type{ODEFunction}, Type{ODEProblem}}, sys::System)
