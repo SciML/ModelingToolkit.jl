@@ -641,6 +641,22 @@ function maybe_build_initialization_problem(
 
     initializeprob = ModelingToolkit.InitializationProblem{true, SciMLBase.FullSpecialize}(
         sys, t, u0map, pmap; guesses, kwargs...)
+    if state_values(initializeprob) !== nothing
+        initializeprob = remake(initializeprob; u0 = floatT.(state_values(initializeprob)))
+    end
+    initp = parameter_values(initializeprob)
+    if is_split(sys)
+        buffer, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), initp)
+        initp = repack(floatT.(buffer))
+        buffer, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Initials(), initp)
+        initp = repack(floatT.(buffer))
+    elseif initp isa AbstractArray
+        initp′ = similar(initp, floatT)
+        copyto!(initp′, initp)
+        initp = initp′
+    end
+    initializeprob = remake(initializeprob; p = initp)
+
     meta = get_metadata(initializeprob.f.sys)
 
     if is_time_dependent(sys)
@@ -800,15 +816,19 @@ function process_SciMLProblem(
         u0map, pmap, defs, cmap, dvs, ps)
 
     floatT = Bool
-    for (k, v) in op
-        symbolic_type(v) == NotSymbolic() || continue
-        is_array_of_symbolics(v) && continue
+    if u0Type <: AbstractArray && isconcretetype(eltype(u0Type)) && eltype(u0Type) <: Real
+        floatT = eltype(u0Type)
+    else
+        for (k, v) in op
+            symbolic_type(v) == NotSymbolic() || continue
+            is_array_of_symbolics(v) && continue
 
-        if v isa AbstractArray
-            isconcretetype(eltype(v)) || continue
-            floatT = promote_type(floatT, eltype(v))
-        elseif v isa Real && isconcretetype(v)
-            floatT = promote_type(floatT, typeof(v))
+            if v isa AbstractArray
+                isconcretetype(eltype(v)) || continue
+                floatT = promote_type(floatT, eltype(v))
+            elseif v isa Real && isconcretetype(v)
+                floatT = promote_type(floatT, typeof(v))
+            end
         end
     end
     floatT = float(floatT)
