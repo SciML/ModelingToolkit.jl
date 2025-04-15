@@ -286,15 +286,3 @@ function isautonomous(sys::System)
     tgrad = calculate_tgrad(sys; simplify = true)
     all(iszero, tgrad)
 end
-
-function check_compatible_system end
-
-struct SystemCompatibilityError <: Exception
-    msg::String
-end
-
-function Base.showerror(io::IO, err::SystemCompatibilityError)
-    println(io, err.msg)
-    println(io)
-    print(io, "To disable this check, pass `check_compatibility = false`.")
-end
