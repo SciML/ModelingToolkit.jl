@@ -817,7 +817,7 @@ function process_SciMLProblem(
         u0map, pmap, defs, cmap, dvs, ps)
 
     floatT = Bool
-    if u0Type <: AbstractArray && isconcretetype(eltype(u0Type)) && eltype(u0Type) <: Real
+    if u0Type <: AbstractArray && eltype(u0Type) <: Real
         floatT = eltype(u0Type)
     else
         for (k, v) in op
@@ -825,9 +825,8 @@ function process_SciMLProblem(
             is_array_of_symbolics(v) && continue
 
             if v isa AbstractArray
-                isconcretetype(eltype(v)) || continue
                 floatT = promote_type(floatT, eltype(v))
-            elseif v isa Real && isconcretetype(v)
+            elseif v isa Real
                 floatT = promote_type(floatT, typeof(v))
             end
         end
