@@ -535,12 +535,12 @@ function (f::UpdateInitializeprob)(initializeprob, prob)
     f.setvals(initializeprob, f.getvals(prob))
 end
 
-function get_temporary_value(p)
+function get_temporary_value(p, floatT = Float64)
     stype = symtype(unwrap(p))
     return if stype == Real
-        zero(Float64)
+        zero(floatT)
     elseif stype <: AbstractArray{Real}
-        zeros(Float64, size(p))
+        zeros(floatT, size(p))
     elseif stype <: Real
         zero(stype)
     elseif stype <: AbstractArray
