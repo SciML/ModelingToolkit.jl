@@ -8,7 +8,7 @@ function generate_initializesystem(sys::AbstractTimeDependentSystem;
         pmap = Dict(),
         initialization_eqs = [],
         guesses = Dict(),
-        default_dd_guess = 0.0,
+        default_dd_guess = Bool(0),
         algebraic_only = false,
         check_units = true, check_defguess = false,
         name = nameof(sys), extra_metadata = (;), kwargs...)
