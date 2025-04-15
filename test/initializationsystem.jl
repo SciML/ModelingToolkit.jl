@@ -1505,4 +1505,5 @@ end
     @named sys = ODESystem(eqs, t)
     prob = ODEProblem(complete(sys), [], (0.0, 1))
     @inferred remake(prob; u0 = 2 .* prob.u0, p = prob.p)
+    @inferred solve(prob)
 end
