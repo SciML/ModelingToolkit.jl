@@ -200,50 +200,6 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
     end
 end
 
-function isdelay(var, iv)
-    iv === nothing && return false
-    isvariable(var) || return false
-    isparameter(var) && return false
-    if iscall(var) && !ModelingToolkit.isoperator(var, Symbolics.Operator)
-        args = arguments(var)
-        length(args) == 1 || return false
-        isequal(args[1], iv) || return true
-    end
-    return false
-end
-const DDE_HISTORY_FUN = Sym{Symbolics.FnType{Tuple{Any, <:Real}, Vector{Real}}}(:___history___)
-const DEFAULT_PARAMS_ARG = Sym{Any}(:ˍ₋arg3)
-function delay_to_function(
-        sys::AbstractODESystem, eqs = full_equations(sys); history_arg = DEFAULT_PARAMS_ARG)
-    delay_to_function(eqs,
-        get_iv(sys),
-        Dict{Any, Int}(operation(s) => i for (i, s) in enumerate(unknowns(sys))),
-        parameters(sys),
-        DDE_HISTORY_FUN; history_arg)
-end
-function delay_to_function(eqs::Vector, iv, sts, ps, h; history_arg = DEFAULT_PARAMS_ARG)
-    delay_to_function.(eqs, (iv,), (sts,), (ps,), (h,); history_arg)
-end
-function delay_to_function(eq::Equation, iv, sts, ps, h; history_arg = DEFAULT_PARAMS_ARG)
-    delay_to_function(eq.lhs, iv, sts, ps, h; history_arg) ~ delay_to_function(
-        eq.rhs, iv, sts, ps, h; history_arg)
-end
-function delay_to_function(expr, iv, sts, ps, h; history_arg = DEFAULT_PARAMS_ARG)
-    if isdelay(expr, iv)
-        v = operation(expr)
-        time = arguments(expr)[1]
-        idx = sts[v]
-        return term(getindex, h(history_arg, time), idx, type = Real) # BIG BIG HACK
-    elseif iscall(expr)
-        return maketerm(typeof(expr),
-            operation(expr),
-            map(x -> delay_to_function(x, iv, sts, ps, h; history_arg), arguments(expr)),
-            metadata(expr))
-    else
-        return expr
-    end
-end
-
 function calculate_massmatrix(sys::AbstractODESystem; simplify = false)
     eqs = [eq for eq in equations(sys)]
     M = zeros(length(eqs), length(eqs))
