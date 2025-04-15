@@ -343,7 +343,7 @@ Keyword arguments:
 - `is_initializeprob, guesses`: Used to determine whether the system is missing guesses.
 """
 function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
-        tofloat = true, container_type = Array, floatT = Float64,
+        tofloat = true, container_type = Array, floatT = Nothing,
         toterm = default_toterm, promotetoconcrete = nothing, check = true,
         allow_symbolic = false, is_initializeprob = false)
     isempty(vars) && return nothing
@@ -366,8 +366,9 @@ function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
             is_initializeprob ? throw(MissingGuessError(missingsyms, missingvals)) :
             throw(UnexpectedSymbolicValueInVarmap(missingsyms[1], missingvals[1]))
         end
-
-        vals = floatT.(vals)
+        if tofloat && !(floatT == Nothing)
+            vals = floatT.(vals)
+        end
     end
 
     if container_type <: Union{AbstractDict, Tuple, Nothing, SciMLBase.NullParameters}
