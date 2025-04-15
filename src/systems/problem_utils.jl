@@ -695,8 +695,10 @@ function ReconstructInitializeprob(
         getters = (tunable_getter, Returns(SizedVector{0, Float64}()), rest_getters...)
         getter = let getters = getters
             function _getter(valp, initprob)
+                oldcache = parameter_values(initprob).caches
                 MTKParameters(getters[1](valp), getters[2](valp), getters[3](valp),
-                    getters[4](valp), getters[5](valp), copy.(parameter_values(initprob).caches))
+                    getters[4](valp), getters[5](valp), oldcache isa Tuple{} ? () :
+                                                        copy.(oldcache))
             end
         end
     else
