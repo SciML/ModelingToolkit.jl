@@ -1,6 +1,6 @@
 symconvert(::Type{Symbolics.Struct{T}}, x) where {T} = convert(T, x)
 symconvert(::Type{T}, x) where {T} = convert(T, x)
-symconvert(::Type{Real}, x::Integer) = convert(Float64, x)
+symconvert(::Type{Real}, x::Integer) = x
 symconvert(::Type{V}, x) where {V <: AbstractArray} = convert(V, symconvert.(eltype(V), x))
 
 struct MTKParameters{T, I, D, C, N, H}
