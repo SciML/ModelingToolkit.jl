@@ -250,25 +250,6 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Return the appropriate zero value for a symbolic variable representing a number or array of
-numbers. Sized array symbolics return a zero-filled array of matching size. Unsized array
-symbolics return an empty array of the appropriate `eltype`.
-"""
-function zero_var(x::Symbolic{T}) where {V <: Number, T <: Union{V, AbstractArray{V}}}
-    if Symbolics.isarraysymbolic(x)
-        if is_sized_array_symbolic(x)
-            return zeros(eltype(T), size(x))
-        else
-            return T[]
-        end
-    else
-        return zero(T)
-    end
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
 Add equations `eqs` to `varmap`. Assumes each element in `eqs` maps a single symbolic
 variable to an expression representing its value. In case `varmap` already contains an
 entry for `eq.lhs`, insert the reverse mapping if `eq.rhs` is not a number.
