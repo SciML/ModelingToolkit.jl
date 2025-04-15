@@ -28,7 +28,7 @@ the default behavior).
 """
 function MTKParameters(
         sys::AbstractSystem, p, u0 = Dict(); tofloat = false,
-        t0 = nothing, substitution_limit = 1000)
+        t0 = nothing, substitution_limit = 1000, floatT = nothing)
     ic = if has_index_cache(sys) && get_index_cache(sys) !== nothing
         get_index_cache(sys)
     else
@@ -110,6 +110,9 @@ function MTKParameters(
         end
         if ctype <: FnType
             ctype = fntype_to_function_type(ctype)
+        end
+        if ctype == Real && floatT !== nothing
+            ctype = floatT
         end
         val = symconvert(ctype, val)
         done = set_value(sym, val)
