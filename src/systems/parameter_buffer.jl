@@ -1,5 +1,5 @@
 symconvert(::Type{Symbolics.Struct{T}}, x) where {T} = convert(T, x)
-symconvert(::Type{T}, x) where {T} = convert(T, x)
+symconvert(::Type{T}, x::V) where {T, V} = convert(promote_type(T, V), x)
 symconvert(::Type{Real}, x::Integer) = convert(Float16, x)
 symconvert(::Type{V}, x) where {V <: AbstractArray} = convert(V, symconvert.(eltype(V), x))
 
