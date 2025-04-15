@@ -9,11 +9,9 @@
 
     dvs = unknowns(sys)
     ps = parameters(sys)
-    f_gen = generate_rhs(sys, dvs, ps; expression = Val{true},
-        expression_module = eval_module, checkbounds = checkbounds, cse,
+    f = generate_rhs(sys, dvs, ps; expression = Val{false},
+        eval_expression, eval_module, checkbounds = checkbounds, cse,
         kwargs...)
-    f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
-    f = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(f_oop, f_iip)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
@@ -23,26 +21,15 @@
     end
 
     if tgrad
-        tgrad_gen = generate_tgrad(sys, dvs, ps;
-            simplify = simplify,
-            expression = Val{true},
-            expression_module = eval_module, cse,
-            checkbounds = checkbounds, kwargs...)
-        tgrad_oop, tgrad_iip = eval_or_rgf.(tgrad_gen; eval_expression, eval_module)
-        _tgrad = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(tgrad_oop, tgrad_iip)
+        _tgrad = generate_tgrad(sys, dvs, ps; expression = Val{false},
+            simplify, cse, eval_expression, eval_module, checkbounds, kwargs...)
     else
         _tgrad = nothing
     end
 
     if jac
-        jac_gen = generate_jacobian(sys, dvs, ps;
-            simplify = simplify, sparse = sparse,
-            expression = Val{true},
-            expression_module = eval_module, cse,
-            checkbounds = checkbounds, kwargs...)
-        jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
-
-        _jac = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(jac_oop, jac_iip)
+        _jac = generate_jacobian(sys, dvs, ps; expression = Val{false},
+            simplify, sparse, cse, eval_expression, eval_module, checkbounds, kwargs...)
     else
         _jac = nothing
     end
