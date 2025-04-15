@@ -240,6 +240,16 @@ function calculate_massmatrix(sys::System; simplify = false)
     M == I ? I : M
 end
 
+function concrete_massmatrix(M; sparse = false, u0 = nothing)
+    if sparse && !(u0 === nothing || M === I)
+        SparseArrays.sparse(M)
+    elseif u0 === nothing || M === I
+        M
+    else
+        ArrayInterface.restructure(u0 .* u0', M)
+    end
+end
+
 function jacobian_sparsity(sys::System)
     sparsity = torn_system_jacobian_sparsity(sys)
     sparsity === nothing || return sparsity
@@ -264,6 +274,12 @@ function W_sparsity(sys::System)
     M_sparsity = M isa UniformScaling ? sparse(I(n)) :
                  SparseMatrixCSC{Bool, Int64}((!iszero).(M))
     jac_sparsity .| M_sparsity
+end
+
+function calculate_W_prototype(W_sparsity; u0 = nothing, sparse = false)
+    sparse || return nothing
+    uElType = u0 === nothing ? Float64 : eltype(u0)
+    return similar(W_sparsity, uElType)
 end
 
 function isautonomous(sys::System)

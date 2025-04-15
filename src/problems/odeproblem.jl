@@ -35,24 +35,13 @@
     end
 
     M = calculate_massmatrix(sys)
-
-    _M = if sparse && !(u0 === nothing || M === I)
-        SparseArrays.sparse(M)
-    elseif u0 === nothing || M === I
-        M
-    else
-        ArrayInterface.restructure(u0 .* u0', M)
-    end
+    _M = concrete_massmatrix(M; sparse, u0)
 
     observedfun = ObservedFunctionCache(
         sys; steady_state, eval_expression, eval_module, checkbounds, cse)
 
-    if sparse
-        uElType = u0 === nothing ? Float64 : eltype(u0)
-        W_prototype = similar(W_sparsity(sys), uElType)
-    else
-        W_prototype = nothing
-    end
+    _W_sparsity = W_sparsity(sys)
+    W_prototype = calculate_W_prototype(_W_sparsity; u0, sparse)
 
     ODEFunction{iip, spec}(f;
         sys = sys,
@@ -61,7 +50,7 @@
         mass_matrix = _M,
         jac_prototype = W_prototype,
         observed = observedfun,
-        sparsity = sparsity ? W_sparsity(sys) : nothing,
+        sparsity = sparsity ? _W_sparsity : nothing,
         analytic = analytic,
         initialization_data)
 end
