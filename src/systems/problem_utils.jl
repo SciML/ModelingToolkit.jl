@@ -632,8 +632,9 @@ $(TYPEDFIELDS)
 """
 struct ReconstructInitializeprob{G}
     """
-    A function which when called on the original problem returns the parameter object of
-    the initialization problem.
+    A function which when given the original problem and initialization problem, returns
+    the parameter object of the initialization problem with values copied from the
+    original.
     """
     getter::G
 end
@@ -693,14 +694,18 @@ function ReconstructInitializeprob(
         end
         getters = (tunable_getter, Returns(SizedVector{0, Float64}()), rest_getters...)
         getter = let getters = getters
-            function _getter(valp)
+            function _getter(valp, initprob)
                 MTKParameters(getters[1](valp), getters[2](valp), getters[3](valp),
-                    getters[4](valp), getters[5](valp), ())
+                    getters[4](valp), getters[5](valp), copy.(parameter_values(initprob).caches))
             end
         end
     else
         syms = parameters(dstsys)
-        getter = concrete_getu(srcsys, syms)
+        getter = let inner = concrete_getu(srcsys, syms)
+            function _getter2(valp, initprob)
+                inner(valp)
+            end
+        end
     end
     return ReconstructInitializeprob(getter)
 end
@@ -712,7 +717,7 @@ Copy values from `srcvalp` to `dstvalp`. Returns the new `u0` and `p`.
 """
 function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
     # copy parameters
-    newp = rip.getter(srcvalp)
+    newp = rip.getter(srcvalp, dstvalp)
     # no `u0`, so no type-promotion
     if state_values(dstvalp) === nothing
         return nothing, newp
