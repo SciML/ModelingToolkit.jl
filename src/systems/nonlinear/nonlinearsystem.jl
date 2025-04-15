@@ -557,7 +557,9 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         check_length, kwargs...)
     pt = something(get_metadata(sys), StandardNonlinearProblem())
     # Call `remake` so it runs initialization if it is trivial
-    return remake(NonlinearProblem{iip}(f, u0, p, pt; filter_kwargs(kwargs)...))
+    # Pass `u0` and `p` to run `ReconstructInitializeprob` which will promote
+    # u0 and p of initializeprob
+    return remake(NonlinearProblem{iip}(f, u0, p, pt; filter_kwargs(kwargs)...); u0, p)
 end
 
 function DiffEqBase.NonlinearProblem(sys::AbstractODESystem, args...; kwargs...)
@@ -591,7 +593,10 @@ function DiffEqBase.NonlinearLeastSquaresProblem{iip}(sys::NonlinearSystem, u0ma
         check_length, kwargs...)
     pt = something(get_metadata(sys), StandardNonlinearProblem())
     # Call `remake` so it runs initialization if it is trivial
-    return remake(NonlinearLeastSquaresProblem{iip}(f, u0, p; filter_kwargs(kwargs)...))
+    # Pass `u0` and `p` to run `ReconstructInitializeprob` which will promote
+    # u0 and p of initializeprob
+    return remake(
+        NonlinearLeastSquaresProblem{iip}(f, u0, p; filter_kwargs(kwargs)...); u0, p)
 end
 
 const TypeT = Union{DataType, UnionAll}

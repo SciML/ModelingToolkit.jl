@@ -818,8 +818,13 @@ function DiffEqBase.SDEProblem{iip, specialize}(
     kwargs = filter_kwargs(kwargs)
 
     # Call `remake` so it runs initialization if it is trivial
-    return remake(SDEProblem{iip}(f, u0, tspan, p; callback = cbs, noise,
-        noise_rate_prototype = noise_rate_prototype, kwargs...))
+    # Pass `u0` and `p` to run `ReconstructInitializeprob` which will promote
+    # u0 and p of initializeprob
+    return remake(
+        SDEProblem{iip}(f, u0, tspan, p; callback = cbs, noise,
+            noise_rate_prototype = noise_rate_prototype, kwargs...);
+        u0,
+        p)
 end
 
 function DiffEqBase.SDEProblem(sys::ODESystem, args...; kwargs...)

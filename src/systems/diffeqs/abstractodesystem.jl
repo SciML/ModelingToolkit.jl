@@ -817,7 +817,9 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     end
 
     # Call `remake` so it runs initialization if it is trivial
-    return remake(ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...))
+    # Pass `u0` and `p` to run `ReconstructInitializeprob` which will promote
+    # u0 and p of initializeprob
+    return remake(ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...); u0, p)
 end
 get_callback(prob::ODEProblem) = prob.kwargs[:callback]
 
@@ -1040,9 +1042,14 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
     end
 
     # Call `remake` so it runs initialization if it is trivial
-    return remake(DAEProblem{iip}(
-        f, du0, u0, tspan, p; differential_vars = differential_vars,
-        kwargs..., kwargs1...))
+    # Pass `u0` and `p` to run `ReconstructInitializeprob` which will promote
+    # u0 and p of initializeprob
+    return remake(
+        DAEProblem{iip}(
+            f, du0, u0, tspan, p; differential_vars = differential_vars,
+            kwargs..., kwargs1...);
+        u0,
+        p)
 end
 
 function generate_history(sys::AbstractODESystem, u0; expression = Val{false}, kwargs...)
@@ -1088,7 +1095,9 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         kwargs1 = merge(kwargs1, (callback = cbs,))
     end
     # Call `remake` so it runs initialization if it is trivial
-    return remake(DDEProblem{iip}(f, u0, h, tspan, p; kwargs1..., kwargs...))
+    # Pass `u0` and `p` to run `ReconstructInitializeprob` which will promote
+    # u0 and p of initializeprob
+    return remake(DDEProblem{iip}(f, u0, h, tspan, p; kwargs1..., kwargs...); u0, p)
 end
 
 function DiffEqBase.SDDEProblem(sys::AbstractODESystem, args...; kwargs...)
@@ -1139,9 +1148,14 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         noise_rate_prototype = zeros(eltype(u0), size(noiseeqs))
     end
     # Call `remake` so it runs initialization if it is trivial
-    return remake(SDDEProblem{iip}(f, f.g, u0, h, tspan, p;
-        noise_rate_prototype =
-        noise_rate_prototype, kwargs1..., kwargs...))
+    # Pass `u0` and `p` to run `ReconstructInitializeprob` which will promote
+    # u0 and p of initializeprob
+    return remake(
+        SDDEProblem{iip}(f, f.g, u0, h, tspan, p;
+            noise_rate_prototype =
+            noise_rate_prototype, kwargs1..., kwargs...);
+        u0,
+        p)
 end
 
 """
