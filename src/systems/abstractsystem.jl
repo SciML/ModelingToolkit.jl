@@ -1465,7 +1465,11 @@ function parameters(sys::AbstractSystem; initial_parameters = false)
     result = unique(isempty(systems) ? ps :
                     [ps; reduce(vcat, namespace_parameters.(systems))])
     if !initial_parameters && !is_initializesystem(sys)
-        filter!(x -> !iscall(x) || !isa(operation(x), Initial), result)
+        filter!(result) do sym
+            return !(isoperator(sym, Initial) ||
+                     iscall(sym) && operation(sym) == getindex &&
+                     isoperator(arguments(sym)[1], Initial))
+        end
     end
     return result
 end
