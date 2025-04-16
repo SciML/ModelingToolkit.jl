@@ -733,11 +733,11 @@ function add_initialization_parameters(sys::AbstractSystem)
     defs = copy(get_defaults(sys))
     for ivar in initials
         if symbolic_type(ivar) == ScalarSymbolic()
-            defs[ivar] = zero_var(ivar)
+            defs[ivar] = false
         else
             defs[ivar] = collect(ivar)
             for scal_ivar in defs[ivar]
-                defs[scal_ivar] = zero_var(scal_ivar)
+                defs[scal_ivar] = false
             end
         end
     end

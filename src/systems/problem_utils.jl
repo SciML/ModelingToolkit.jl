@@ -250,25 +250,6 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Return the appropriate zero value for a symbolic variable representing a number or array of
-numbers. Sized array symbolics return a zero-filled array of matching size. Unsized array
-symbolics return an empty array of the appropriate `eltype`.
-"""
-function zero_var(x::Symbolic{T}) where {V <: Number, T <: Union{V, AbstractArray{V}}}
-    if Symbolics.isarraysymbolic(x)
-        if is_sized_array_symbolic(x)
-            return zeros(eltype(T), size(x))
-        else
-            return T[]
-        end
-    else
-        return zero(T)
-    end
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
 Add equations `eqs` to `varmap`. Assumes each element in `eqs` maps a single symbolic
 variable to an expression representing its value. In case `varmap` already contains an
 entry for `eq.lhs`, insert the reverse mapping if `eq.rhs` is not a number.
@@ -362,7 +343,7 @@ Keyword arguments:
 - `is_initializeprob, guesses`: Used to determine whether the system is missing guesses.
 """
 function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
-        tofloat = true, container_type = Array,
+        tofloat = true, container_type = Array, floatT = Nothing,
         toterm = default_toterm, promotetoconcrete = nothing, check = true,
         allow_symbolic = false, is_initializeprob = false)
     isempty(vars) && return nothing
@@ -384,6 +365,9 @@ function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
         if !isempty(missingsyms)
             is_initializeprob ? throw(MissingGuessError(missingsyms, missingvals)) :
             throw(UnexpectedSymbolicValueInVarmap(missingsyms[1], missingvals[1]))
+        end
+        if tofloat && !(floatT == Nothing)
+            vals = floatT.(vals)
         end
     end
 
@@ -533,12 +517,12 @@ function (f::UpdateInitializeprob)(initializeprob, prob)
     f.setvals(initializeprob, f.getvals(prob))
 end
 
-function get_temporary_value(p)
+function get_temporary_value(p, floatT = Float64)
     stype = symtype(unwrap(p))
     return if stype == Real
-        zero(Float64)
+        zero(floatT)
     elseif stype <: AbstractArray{Real}
-        zeros(Float64, size(p))
+        zeros(floatT, size(p))
     elseif stype <: Real
         zero(stype)
     elseif stype <: AbstractArray
@@ -648,15 +632,32 @@ All other keyword arguments are forwarded to `InitializationProblem`.
 """
 function maybe_build_initialization_problem(
         sys::AbstractSystem, op::AbstractDict, u0map, pmap, t, defs,
-        guesses, missing_unknowns; implicit_dae = false, u0_constructor = identity, kwargs...)
+        guesses, missing_unknowns; implicit_dae = false,
+        u0_constructor = identity, floatT = Float64, kwargs...)
     guesses = merge(ModelingToolkit.guesses(sys), todict(guesses))
 
     if t === nothing && is_time_dependent(sys)
-        t = 0.0
+        t = zero(floatT)
     end
 
     initializeprob = ModelingToolkit.InitializationProblem{true, SciMLBase.FullSpecialize}(
         sys, t, u0map, pmap; guesses, kwargs...)
+    if state_values(initializeprob) !== nothing
+        initializeprob = remake(initializeprob; u0 = floatT.(state_values(initializeprob)))
+    end
+    initp = parameter_values(initializeprob)
+    if is_split(sys)
+        buffer, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), initp)
+        initp = repack(floatT.(buffer))
+        buffer, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Initials(), initp)
+        initp = repack(floatT.(buffer))
+    elseif initp isa AbstractArray
+        initp′ = similar(initp, floatT)
+        copyto!(initp′, initp)
+        initp = initp′
+    end
+    initializeprob = remake(initializeprob; p = initp)
+
     meta = get_metadata(initializeprob.f.sys)
 
     if is_time_dependent(sys)
@@ -692,7 +693,7 @@ function maybe_build_initialization_problem(
         get(op, p, missing) === missing || continue
         p = unwrap(p)
         stype = symtype(p)
-        op[p] = get_temporary_value(p)
+        op[p] = get_temporary_value(p, floatT)
         if iscall(p) && operation(p) === getindex
             arrp = arguments(p)[1]
             op[arrp] = collect(arrp)
@@ -701,7 +702,7 @@ function maybe_build_initialization_problem(
 
     if is_time_dependent(sys)
         for v in missing_unknowns
-            op[v] = zero_var(v)
+            op[v] = get_temporary_value(v, floatT)
         end
         empty!(missing_unknowns)
     end
@@ -710,6 +711,26 @@ function maybe_build_initialization_problem(
         initialization_data = SciMLBase.OverrideInitData(
             initializeprob, update_initializeprob!, initializeprobmap,
             initializeprobpmap))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Calculate the floating point type to use from the given `varmap` by looking at variables
+with a constant value.
+"""
+function float_type_from_varmap(varmap, floatT = Bool)
+    for (k, v) in varmap
+        symbolic_type(v) == NotSymbolic() || continue
+        is_array_of_symbolics(v) && continue
+
+        if v isa AbstractArray
+            floatT = promote_type(floatT, eltype(v))
+        elseif v isa Real
+            floatT = promote_type(floatT, typeof(v))
+        end
+    end
+    return float(floatT)
 end
 
 """
@@ -815,12 +836,19 @@ function process_SciMLProblem(
     op, missing_unknowns, missing_pars = build_operating_point!(sys,
         u0map, pmap, defs, cmap, dvs, ps)
 
+    floatT = Bool
+    if u0Type <: AbstractArray && eltype(u0Type) <: Real
+        floatT = float(eltype(u0Type))
+    else
+        floatT = float_type_from_varmap(op, floatT)
+    end
+
     if !is_time_dependent(sys) || is_initializesystem(sys)
         add_observed_equations!(u0map, obs)
     end
     if u0_constructor === identity && u0Type <: StaticArray
         u0_constructor = vals -> SymbolicUtils.Code.create_array(
-            u0Type, eltype(vals), Val(1), Val(length(vals)), vals...)
+            u0Type, floatT, Val(1), Val(length(vals)), vals...)
     end
     if build_initializeprob
         kws = maybe_build_initialization_problem(
@@ -830,7 +858,7 @@ function process_SciMLProblem(
             warn_cyclic_dependency, check_units = check_initialization_units,
             circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
             force_time_independent = force_initialization_time_independent, algebraic_only, allow_incomplete,
-            u0_constructor)
+            u0_constructor, floatT)
 
         kwargs = merge(kwargs, kws)
     end
@@ -858,7 +886,7 @@ function process_SciMLProblem(
     evaluate_varmap!(op, dvs; limit = substitution_limit)
 
     u0 = better_varmap_to_vars(
-        op, dvs; tofloat,
+        op, dvs; tofloat, floatT,
         container_type = u0Type, allow_symbolic = symbolic_u0, is_initializeprob)
 
     if u0 !== nothing
@@ -882,7 +910,7 @@ function process_SciMLProblem(
     end
     evaluate_varmap!(op, ps; limit = substitution_limit)
     if is_split(sys)
-        p = MTKParameters(sys, op)
+        p = MTKParameters(sys, op; floatT = floatT)
     else
         p = better_varmap_to_vars(op, ps; tofloat, container_type = pType)
     end
@@ -896,6 +924,16 @@ function process_SciMLProblem(
         kwargs = merge(kwargs, (; ddvs))
     else
         du0 = nothing
+    end
+
+    if build_initializeprob
+        t0 = t
+        if is_time_dependent(sys) && t0 === nothing
+            t0 = zero(floatT)
+        end
+        initialization_data = SciMLBase.remake_initialization_data(
+            kwargs.initialization_data, kwargs, u0, t0, p, u0, p)
+        kwargs = merge(kwargs,)
     end
 
     f = constructor(sys, dvs, ps, u0; p = p,

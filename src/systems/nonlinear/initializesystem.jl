@@ -8,7 +8,7 @@ function generate_initializesystem(sys::AbstractTimeDependentSystem;
         pmap = Dict(),
         initialization_eqs = [],
         guesses = Dict(),
-        default_dd_guess = 0.0,
+        default_dd_guess = Bool(0),
         algebraic_only = false,
         check_units = true, check_defguess = false,
         name = nameof(sys), extra_metadata = (;), kwargs...)
@@ -646,10 +646,12 @@ function SciMLBase.remake_initialization_data(
 
     op, missing_unknowns, missing_pars = build_operating_point!(sys,
         u0map, pmap, defs, cmap, dvs, ps)
+    floatT = float_type_from_varmap(op)
     kws = maybe_build_initialization_problem(
         sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns;
-        use_scc, initialization_eqs, allow_incomplete = true)
-    return get(kws, :initialization_data, nothing)
+        use_scc, initialization_eqs, floatT, allow_incomplete = true)
+
+    return SciMLBase.remake_initialization_data(sys, kws, newu0, t0, newp, newu0, newp)
 end
 
 function SciMLBase.late_binding_update_u0_p(

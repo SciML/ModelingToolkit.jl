@@ -1,6 +1,6 @@
 symconvert(::Type{Symbolics.Struct{T}}, x) where {T} = convert(T, x)
-symconvert(::Type{T}, x) where {T} = convert(T, x)
-symconvert(::Type{Real}, x::Integer) = convert(Float64, x)
+symconvert(::Type{T}, x::V) where {T, V} = convert(promote_type(T, V), x)
+symconvert(::Type{Real}, x::Integer) = convert(Float16, x)
 symconvert(::Type{V}, x) where {V <: AbstractArray} = convert(V, symconvert.(eltype(V), x))
 
 struct MTKParameters{T, I, D, C, N, H}
@@ -28,7 +28,7 @@ the default behavior).
 """
 function MTKParameters(
         sys::AbstractSystem, p, u0 = Dict(); tofloat = false,
-        t0 = nothing, substitution_limit = 1000)
+        t0 = nothing, substitution_limit = 1000, floatT = nothing)
     ic = if has_index_cache(sys) && get_index_cache(sys) !== nothing
         get_index_cache(sys)
     else
@@ -54,6 +54,10 @@ function MTKParameters(
 
     if t0 !== nothing
         op[get_iv(sys)] = t0
+    end
+
+    if floatT === nothing
+        floatT = float(float_type_from_varmap(op))
     end
 
     isempty(missing_pars) || throw(MissingParametersError(collect(missing_pars)))
@@ -110,6 +114,9 @@ function MTKParameters(
         end
         if ctype <: FnType
             ctype = fntype_to_function_type(ctype)
+        end
+        if ctype == Real && floatT !== nothing
+            ctype = floatT
         end
         val = symconvert(ctype, val)
         done = set_value(sym, val)

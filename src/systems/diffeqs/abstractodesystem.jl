@@ -1541,32 +1541,6 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
     filter_missing_values!(parammap)
     u0map = merge(ModelingToolkit.guesses(sys), todict(guesses), u0map)
 
-    fullmap = merge(u0map, parammap)
-    u0T = Union{}
-    for sym in unknowns(isys)
-        val = fixpoint_sub(sym, fullmap)
-        symbolic_type(val) == NotSymbolic() || continue
-        u0T = promote_type(u0T, typeof(val))
-    end
-    for eq in observed(isys)
-        # ignore HACK-ed observed equations
-        symbolic_type(eq.lhs) == ArraySymbolic() && continue
-        val = fixpoint_sub(eq.lhs, fullmap)
-        symbolic_type(val) == NotSymbolic() || continue
-        u0T = promote_type(u0T, typeof(val))
-    end
-    if u0T != Union{}
-        u0T = eltype(u0T)
-        u0map = Dict(k => if v === nothing
-                         nothing
-                     elseif symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)
-                         v isa AbstractArray ? u0T.(v) : u0T(v)
-                     else
-                         v
-                     end
-        for (k, v) in u0map)
-    end
-
     TProb = if neqs == nunknown && isempty(unassigned_vars)
         if use_scc && neqs > 0
             if is_split(isys)
