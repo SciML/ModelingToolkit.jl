@@ -696,7 +696,7 @@ end
 
 supports_initialization(sys::AbstractSystem) = true
 
-function add_initialization_parameters(sys::AbstractSystem)
+function add_initialization_parameters(sys::AbstractSystem; split = true)
     @assert !has_systems(sys) || isempty(get_systems(sys))
     supports_initialization(sys) || return sys
     is_initializesystem(sys) && return sys
@@ -711,7 +711,7 @@ function add_initialization_parameters(sys::AbstractSystem)
     obs, eqs = unhack_observed(observed(sys), eqs)
     for x in Iterators.flatten((unknowns(sys), Iterators.map(eq -> eq.lhs, obs)))
         x = unwrap(x)
-        if iscall(x) && operation(x) == getindex
+        if iscall(x) && operation(x) == getindex && split
             push!(all_initialvars, arguments(x)[1])
         else
             push!(all_initialvars, x)
@@ -788,7 +788,7 @@ function complete(
         end
         sys = newsys
         if add_initial_parameters
-            sys = add_initialization_parameters(sys)
+            sys = add_initialization_parameters(sys; split)
         end
     end
     if split && has_index_cache(sys)
