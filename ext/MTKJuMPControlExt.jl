@@ -55,8 +55,11 @@ function MTK.JuMPControlProblem(sys::ODESystem, u0map, tspan, pmap;
         guesses = Dict(), kwargs...)
     MTK.warn_overdetermined(sys, u0map)
     _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
+    @show _u0map
     f, u0, p = MTK.process_SciMLProblem(ODEFunction, sys, _u0map, pmap;
         t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
+
+    (f_i, f_o) = generate_control_function(sys)
     model = init_model(sys, tspan[1]:dt:tspan[2], u0map, u0)
 
     JuMPControlProblem(f, u0, tspan, p, model, kwargs...)
@@ -86,13 +89,14 @@ function MTK.InfiniteOptControlProblem(sys::ODESystem, u0map, tspan, pmap;
 end
 
 function init_model(sys, tsteps, u0map, u0)
-    ctrls = controls(sys)
+    ctrls = MTK.unbound_inputs(sys)
     states = unknowns(sys)
     model = InfiniteModel()
     @infinite_parameter(model, t in [tsteps[1], tsteps[end]], num_supports=length(tsteps))
     @variable(model, U[i = 1:length(states)], Infinite(t))
     @variable(model, V[1:length(ctrls)], Infinite(t))
 
+    set_bounds!(model, sys)
     add_jump_cost_function!(model, sys)
     add_user_constraints!(model, sys)
 
@@ -101,6 +105,22 @@ function init_model(sys, tsteps, u0map, u0)
               [stidxmap[k] for (k, v) in u0map]
     add_initial_constraints!(model, u0, u0_idxs, tsteps[1])
     return model
+end
+
+function set_bounds!(model, sys)
+    U = model[:U]
+    for (i, u) in enumerate(unknowns(sys))
+        lo, hi = MTK.getbounds(u)
+        set_lower_bound(U[i], lo)
+        set_upper_bound(U[i], hi)
+    end
+
+    V = model[:V]
+    for (i, v) in enumerate(MTK.unbound_inputs(sys))
+        lo, hi = MTK.getbounds(v)
+        set_lower_bound(V[i], lo)
+        set_upper_bound(V[i], hi)
+    end
 end
 
 function add_jump_cost_function!(model::InfiniteModel, sys)
@@ -113,7 +133,7 @@ function add_jump_cost_function!(model::InfiniteModel, sys)
     iv = MTK.get_iv(sys)
 
     stidxmap = Dict([v => i for (i, v) in enumerate(unknowns(sys))])
-    cidxmap = Dict([v => i for (i, v) in enumerate(controls(sys))])
+    cidxmap = Dict([v => i for (i, v) in enumerate(MTK.unbound_inputs(sys))])
 
     for st in unknowns(sys)
         x = operation(st)
@@ -123,7 +143,7 @@ function add_jump_cost_function!(model::InfiniteModel, sys)
         jcosts = map(c -> Symbolics.substitute(c, Dict(x(t) => subval)), jcosts)
     end
 
-    for ct in controls(sys)
+    for ct in MTK.unbound_inputs(sys)
         p = operation(ct)
         t = only(arguments(ct))
         idx = cidxmap[p(iv)]
@@ -141,7 +161,7 @@ function add_user_constraints!(model::InfiniteModel, sys)
 
     iv = MTK.get_iv(sys)
     stidxmap = Dict([v => i for (i, v) in enumerate(unknowns(sys))])
-    cidxmap = Dict([v => i for (i, v) in enumerate(controls(sys))])
+    cidxmap = Dict([v => i for (i, v) in enumerate(MTK.unbound_inputs(sys))])
 
     for st in unknowns(conssys)
         x = operation(st)
@@ -151,7 +171,7 @@ function add_user_constraints!(model::InfiniteModel, sys)
         jconstraints = map(c -> Symbolics.substitute(c, Dict(x(t) => subval)), jconstraints)
     end
 
-    for ct in controls(sys)
+    for ct in MTK.unbound_inputs(sys)
         p = operation(ct)
         t = only(arguments(ct))
         idx = cidxmap[p(iv)]
@@ -185,9 +205,8 @@ function add_infopt_solve_constraints!(model::InfiniteModel, sys, pmap)
     V = model[:V]
 
     stmap = Dict([v => U[i] for (i, v) in enumerate(unknowns(sys))])
-    ctrlmap = Dict([v => V[i] for (i, v) in enumerate(controls(sys))])
+    ctrlmap = Dict([v => V[i] for (i, v) in enumerate(MTK.unbound_inputs(sys))])
     submap = merge(stmap, ctrlmap, Dict(pmap))
-    @show submap
 
     # Differential equations
     diff_eqs = diff_equations(sys)
