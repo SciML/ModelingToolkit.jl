@@ -10,7 +10,8 @@ Generate the RHS function for the `equations` of a `System`.
 """
 function generate_rhs(sys::System, dvs = unknowns(sys),
         ps = parameters(sys; initial_parameters = true); implicit_dae = false,
-        scalar = false, kwargs...)
+        scalar = false, expression = Val{true}, eval_expression = false,
+        eval_module = @__MODULE__, kwargs...)
     eqs = equations(sys)
     obs = observed(sys)
     u = dvs
@@ -65,7 +66,20 @@ function generate_rhs(sys::System, dvs = unknowns(sys),
         p_start += 1
     end
 
-    build_function_wrapper(sys, rhss, args...; p_start, extra_assignments, kwargs...)
+    res = build_function_wrapper(sys, rhss, args...; p_start, extra_assignments,
+        expression = Val{true}, expression_module = eval_module, kwargs...)
+    if expression == Val{true}
+        return res
+    end
+
+    if res isa Tuple
+        f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
+    else
+        f_oop = eval_or_rgf(res; eval_expression, eval_module)
+        f_iip = nothing
+    end
+    return GeneratedFunctionWrapper{(p_start, length(args) - length(p) + 1, is_split(sys))}(
+        f_oop, f_iip)
 end
 
 function calculate_tgrad(sys::System; simplify = false)
@@ -111,14 +125,21 @@ end
 
 function generate_jacobian(sys::System, dvs = unknowns(sys),
         ps = parameters(sys; initial_parameters = true);
-        simplify = false, sparse = false, kwargs...)
+        simplify = false, sparse = false, eval_expression = false,
+        eval_module = @__MODULE__, expression = Val{true}, kwargs...)
     jac = calculate_jacobian(sys; simplify, sparse, dvs)
     p = reorder_parameters(sys, ps)
     t = get_iv(sys)
     if t !== nothing
         wrap_code = sparse ? assert_jac_length_header(sys) : (identity, identity)
     end
-    return build_function_wrapper(sys, jac, dvs, p..., t; wrap_code, kwargs...)
+    res = build_function_wrapper(sys, jac, dvs, p..., t; wrap_code, expression = Val{true},
+        expression_module = eval_module, kwargs...)
+    if expression == Val{true}
+        return res
+    end
+    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
+    return GeneratedFunctionWrapper{(2, 3, is_split(sys))}(f_oop, f_iip)
 end
 
 function assert_jac_length_header(sys)
@@ -134,21 +155,31 @@ end
 function generate_tgrad(
         sys::System, dvs = unknowns(sys), ps = parameters(
             sys; initial_parameters = true);
-        simplify = false, kwargs...)
+        simplify = false, eval_expression = false, eval_module = @__MODULE__,
+        expression = Val{true}, kwargs...)
     tgrad = calculate_tgrad(sys, simplify = simplify)
     p = reorder_parameters(sys, ps)
-    return build_function_wrapper(sys, tgrad,
+    res = build_function_wrapper(sys, tgrad,
         dvs,
         p...,
         get_iv(sys);
+        expression = Val{true},
+        expression_module = eval_module,
         kwargs...)
+
+    if expression == Val{true}
+        return res
+    end
+    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
+    return GeneratedFunctionWrapper{(2, 3, is_split(sys))}(f_oop, f_iip)
 end
 
 const W_GAMMA = only(@variables ˍ₋gamma)
 
 function generate_W(sys::System, γ = 1.0, dvs = unknowns(sys),
         ps = parameters(sys; initial_parameters = true);
-        simplify = false, sparse = false, kwargs...)
+        simplify = false, sparse = false, expression = Val{true},
+        eval_expression = false, eval_module = @__MODULE__, kwargs...)
     M = calculate_massmatrix(sys; simplify)
     if sparse
         M = SparseArrays.sparse(M)
@@ -161,12 +192,18 @@ function generate_W(sys::System, γ = 1.0, dvs = unknowns(sys),
     end
 
     p = reorder_parameters(sys, ps)
-    return build_function_wrapper(sys, W, dvs, p..., W_GAMMA, t; wrap_code,
+    res = build_function_wrapper(sys, W, dvs, p..., W_GAMMA, t; wrap_code,
         p_end = 1 + length(p), kwargs...)
+    if expression == Val{true}
+        return res
+    end
+    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
+    return GeneratedFunctionWrapper{(2, 4, is_split(sys))}(f_oop, f_iip)
 end
 
 function generate_dae_jacobian(sys::System, dvs = unknowns(sys),
         ps = parameters(sys; initial_parameters = true); simplify = false, sparse = false,
+        expression = Val{true}, eval_expression = false, eval_module = @__MODULE__,
         kwargs...)
     jac_u = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
     t = get_iv(sys)
@@ -176,8 +213,13 @@ function generate_dae_jacobian(sys::System, dvs = unknowns(sys),
     dvs = unknowns(sys)
     jac = W_GAMMA * jac_du + jac_u
     p = reorder_parameters(sys, ps)
-    return build_function_wrapper(sys, jac, derivatives, dvs, p..., W_GAMMA, t;
+    res = build_function_wrapper(sys, jac, derivatives, dvs, p..., W_GAMMA, t;
         p_start = 3, p_end = 2 + length(p), kwargs...)
+    if expression == Val{true}
+        return res
+    end
+    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
+    return GeneratedFunctionWrapper{(3, 5, is_split(sys))}(f_oop, f_iip)
 end
 
 function calculate_massmatrix(sys::System; simplify = false)
