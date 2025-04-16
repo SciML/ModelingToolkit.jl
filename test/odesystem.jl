@@ -1305,7 +1305,7 @@ end
     ps = zeros(8)
     setp(sys2, x)(ps, 2ones(2))
     setp(sys2, p)(ps, 2ones(2, 2))
-    @test_nowarn fn2(ones(4), 2ones(6), 4.0)
+    @test_nowarn fn2(ones(4), 2ones(14), 4.0)
 end
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/2969
@@ -1416,7 +1416,7 @@ end
     obsfn = ModelingToolkit.build_explicit_observed_function(
         sys1, u + x + p[1:2]; inputs = [x...])
 
-    @test obsfn(ones(2), 2ones(2), 3ones(4), 4.0) == 6ones(2)
+    @test obsfn(ones(2), 2ones(2), 3ones(12), 4.0) == 6ones(2)
 end
 
 @testset "Passing `nothing` to `u0`" begin
