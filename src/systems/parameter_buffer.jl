@@ -506,7 +506,7 @@ end
     # fallback to non-generated method if values aren't type-stable
     if vals <: AbstractArray && !isconcretetype(eltype(vals))
         return quote
-            $_remake_buffer(indp, oldbuf, collect(idxs), vals; validate)
+            $__remake_buffer(indp, oldbuf, collect(idxs), vals; validate)
         end
     end
 
@@ -605,6 +605,10 @@ end
 end
 
 function _remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true)
+    return __remake_buffer(indp, oldbuf, idxs, vals; validate)
+end
+
+function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true)
     newbuf = @set oldbuf.tunable = similar(oldbuf.tunable, Any)
     @set! newbuf.initials = similar(oldbuf.initials, Any)
     @set! newbuf.discrete = Tuple(similar(buf, Any) for buf in newbuf.discrete)
