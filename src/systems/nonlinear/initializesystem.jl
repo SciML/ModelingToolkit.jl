@@ -629,6 +629,7 @@ end
 function SciMLBase.late_binding_update_u0_p(
         prob, sys::AbstractSystem, u0, p, t0, newu0, newp)
     supports_initialization(sys) || return newu0, newp
+    prob isa IntervalNonlinearProblem && return newu0, newp
 
     initdata = prob.f.initialization_data
     meta = initdata === nothing ? nothing : initdata.metadata
