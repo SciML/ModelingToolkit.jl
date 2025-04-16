@@ -86,6 +86,8 @@ end
     end
 
     # Double integrator
+    t = M.t_nounits
+    D = M.D_nounits
     @variables x(..) [bounds = (0., 0.25)] v(..)
     @variables u(t) [bounds = (-1., 1.), input = true]
     constr = [v(1.0) ~ 0.0]
@@ -106,8 +108,8 @@ end
     # Cart-pole system
 
     # Bee example (from Lawrence Evans' notes)
-    M.@variables w(..) q(..) 
-    M.@parameters α(t) [bounds = [0, 1]] b c μ s ν
+    @variables w(..) q(..) 
+    @parameters α(t) [bounds = [0, 1]] b c μ s ν
 
     tspan = (0, 4)
     eqs = [D(w(t)) ~ -μ*w(t) + b*s*α*w(t),

@@ -208,7 +208,9 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
         inputs = [inputs; disturbance_inputs]
     end
 
-    sys, _ = io_preprocessing(sys, inputs, []; simplify, kwargs...)
+    if !iscomplete(sys)
+        sys, _ = io_preprocessing(sys, inputs, []; simplify, kwargs...)
+    end
 
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
@@ -250,9 +252,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     f = build_function_wrapper(sys, rhss, args...; p_start = 3 + implicit_dae,
         p_end = length(p) + 2 + implicit_dae)
     f = eval_or_rgf.(f; eval_expression, eval_module)
-    f = GeneratedFunctionWrapper{(
-        3 + implicit_dae, length(args) - length(p) + 1, is_split(sys))}(f...)
-    f = f, f
+    f = GeneratedFunctionWrapper{(3, length(args) - length(p) + 1, is_split(sys))}(f...)
     ps = setdiff(parameters(sys), inputs, disturbance_inputs)
     (; f, dvs, ps, io_sys = sys)
 end
