@@ -56,6 +56,10 @@ function MTKParameters(
         op[get_iv(sys)] = t0
     end
 
+    if floatT === nothing
+        floatT = float(float_type_from_varmap(op))
+    end
+
     isempty(missing_pars) || throw(MissingParametersError(collect(missing_pars)))
     evaluate_varmap!(op, ps; limit = substitution_limit)
 
