@@ -1,26 +1,27 @@
 using ModelingToolkit
-using JuMP, InfiniteOpt
+import JuMP, InfiniteOpt
 using DiffEqDevTools, DiffEqBase
 using SimpleDiffEq
 using OrdinaryDiffEqSDIRK
 using Ipopt
 using BenchmarkTools
+using CairoMakie
 const M = ModelingToolkit
 
 @testset "ODE Solution, no cost" begin
     # Test solving without anything attached.
     @parameters α=1.5 β=1.0 γ=3.0 δ=1.0
-    M.@variables x(..) y(..)
+    @variables x(..) y(..)
     t = M.t_nounits
     D = M.D_nounits
 
     eqs = [D(x(t)) ~ α * x(t) - β * x(t) * y(t),
         D(y(t)) ~ -γ * y(t) + δ * x(t) * y(t)]
 
+    @mtkbuild sys = ODESystem(eqs, t)
     tspan = (0.0, 1.0)
     u0map = [x(t) => 4.0, y(t) => 2.0]
     parammap = [α => 1.5, β => 1.0, γ => 3.0, δ => 1.0]
-    @mtkbuild sys = ODESystem(eqs, t)
 
     # Test explicit method.
     jprob = JuMPControlProblem(sys, u0map, tspan, parammap, dt = 0.01)
@@ -58,27 +59,70 @@ const M = ModelingToolkit
     sol = isol.sol
     @test sol(0.6)[1] ≈ 3.5
     @test sol(0.3)[1] ≈ 7.0
+
+    # Test whole-interval constraints
+    constr = [x(t) > 3, y(t) > 4]
+    @mtkbuild lksys = ODESystem(eqs, t; constraints = constr)
+    iprob = InfiniteOptControlProblem(
+        lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
+    isol = @btime solve(
+        $iprob, Ipopt.Optimizer, derivative_method = OrthogonalCollocation(3), silent = true) # 48.564 ms, 9.58 MiB
+    sol = isol.sol
+    @test all(u -> u .> [3, 4], sol.u)
+
+    jprob = JuMPControlProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
+    jsol = @btime solve($jprob, Ipopt.Optimizer, :RadauIA3, silent = true) # 12.190 s, 9.68 GiB
+    sol = jsol.sol
+    @test all(u -> u .> [3, 4], sol.u)
 end
 
-#@testset "Optimal control: bees" begin
-#    # Example from Lawrence Evans' notes
-#    M.@variables w(..) q(..) 
-#    M.@parameters α(t) [bounds = [0, 1]] b c μ s ν
-#
-#    tspan = (0, 4)
-#    eqs = [D(w(t)) ~ -μ*w(t) + b*s*α*w(t),
-#           D(q(t)) ~ -ν*q(t) + c*(1 - α)*s*w(t)]
-#    costs = [-q(tspan[2])]
-#   
-#    @mtkbuild beesys = ODESystem(eqs, t; costs)
-#    u0map = [w(0) => 40, q(0) => 2]
-#    pmap = [b => 1, c => 1, μ => 1, s => 1, ν => 1]
-#
-#    jprob = JuMPControlProblem(beesys, u0map, tspan, pmap)
-#    jsol = solve(jprob, Ipopt.Optimizer, :Tsitouras5)
-#    control_sol = jsol.control_sol
-#    # Bang-bang control
-#end
+@testset "Linear systems" begin
+    function is_bangbang(input_sol, lbounds, ubounds)
+        bangbang = true
+        for v in 1:length(input_sol.u[1])
+            all(i -> i[v] ≈ bounds[v] || i[v] ≈ bounds[u], input_sol.u) || (bangbang = false)
+        end
+        bangbang
+    end
+
+    # Double integrator
+    @variables x(..) [bounds = (0., 0.25)] v(..)
+    @variables u(t) [bounds = (-1., 1.), input = true]
+    constr = [v(1.0) ~ 0.0]
+    cost = [-x(1.0)] # Optimize the final distance.
+    @named block = ODESystem([D(x(t)) ~ v(t), D(v(t)) ~ u], t)
+    block, input_idxs = structural_simplify(block, ([u],[]))
+
+    u0map = [x(t) => 0., v(t) => 0.]
+    tspan = (0., 1.)
+    parammap = [u => 0.]
+    jprob = JuMPControlProblem(block, u0map, tspan, parammap; dt = 0.01)
+    jsol = solve(jprob, Ipopt.Optimizer, :Verner8)
+    # Linear systems have bang-bang controls
+    @test is_bangbang(jsol.input_sol, [-1.], [1.])
+    # Test reached final position.
+    @test jsol.sol.u[end][1] ≈ 0.25
+
+    # Cart-pole system
+
+    # Bee example (from Lawrence Evans' notes)
+    M.@variables w(..) q(..) 
+    M.@parameters α(t) [bounds = [0, 1]] b c μ s ν
+
+    tspan = (0, 4)
+    eqs = [D(w(t)) ~ -μ*w(t) + b*s*α*w(t),
+           D(q(t)) ~ -ν*q(t) + c*(1 - α)*s*w(t)]
+    costs = [-q(tspan[2])]
+   
+    @mtkbuild beesys = ODESystem(eqs, t; costs)
+    u0map = [w(0) => 40, q(0) => 2]
+    pmap = [b => 1, c => 1, μ => 1, s => 1, ν => 1]
+
+    jprob = JuMPControlProblem(beesys, u0map, tspan, pmap)
+    jsol = solve(jprob, Ipopt.Optimizer, :Tsitouras5)
+    control_sol = jsol.control_sol
+    # Bang-bang control
+end
 #
 #@testset "Constrained optimal control problems" begin
 #end

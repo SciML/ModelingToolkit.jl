@@ -19,3 +19,9 @@ function warn_overdetermined(sys, u0map)
             @warn "The control problem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) exceeds the total number of states. The solvers will default to doing a nonlinear least-squares optimization."
     end
 end
+
+"""
+IntegralNorm. When applied to an expression.
+"""
+struct IntegralNorm end
+
