@@ -15,7 +15,7 @@ struct JuMPControlProblem{uType, tType, isinplace, P, F, K} <:
     kwargs::K
 
     function JuMPControlProblem(f, u0, tspan, p, model; kwargs...)
-        new{typeof(u0), typeof(tspan), SciMLBase.isinplace(f),
+        new{typeof(u0), typeof(tspan), SciMLBase.isinplace(f, 5),
             typeof(p), typeof(f), typeof(kwargs)}(f, u0, tspan, p, model, kwargs)
     end
 end
@@ -55,13 +55,10 @@ function MTK.JuMPControlProblem(sys::ODESystem, u0map, tspan, pmap;
         guesses = Dict(), kwargs...)
     MTK.warn_overdetermined(sys, u0map)
     _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
-    @show _u0map
-    f, u0, p = MTK.process_SciMLProblem(ODEFunction, sys, _u0map, pmap;
+    f, u0, p = MTK.process_SciMLProblem(ControlFunction, sys, _u0map, pmap;
         t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
 
-    (f_i, f_o) = generate_control_function(sys)
     model = init_model(sys, tspan[1]:dt:tspan[2], u0map, u0)
-
     JuMPControlProblem(f, u0, tspan, p, model, kwargs...)
 end
 
@@ -80,7 +77,7 @@ function MTK.InfiniteOptControlProblem(sys::ODESystem, u0map, tspan, pmap;
         guesses = Dict(), kwargs...)
     MTK.warn_overdetermined(sys, u0map)
     _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
-    f, u0, p = MTK.process_SciMLProblem(ODEFunction, sys, _u0map, pmap;
+    f, u0, p = MTK.process_SciMLProblem(ControlFunction, sys, _u0map, pmap;
         t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
 
     model = init_model(sys, tspan[1]:dt:tspan[2], u0map, u0)
@@ -237,14 +234,17 @@ function add_jump_solve_constraints!(prob, tableau)
     dt = tsteps[2] - tsteps[1]
 
     U = model[:U]
+    V = model[:V]
     nᵤ = length(U)
+    nᵥ = length(V)
     if is_explicit(tableau)
         K = Any[]
         for τ in tsteps
             for (i, h) in enumerate(c)
                 ΔU = sum([A[i, j] * K[j] for j in 1:(i - 1)], init = zeros(nᵤ))
                 Uₙ = [U[i](τ) + ΔU[i] * dt for i in 1:nᵤ]
-                Kₙ = f(Uₙ, p, τ + h * dt)
+                Vₙ = [V[i](τ) for i in 1:nᵥ]
+                Kₙ = f(Uₙ, Vₙ, p, τ + h * dt)
                 push!(K, Kₙ)
             end
             ΔU = dt * sum([α[i] * K[i] for i in 1:length(α)])
@@ -259,7 +259,7 @@ function add_jump_solve_constraints!(prob, tableau)
             for (i, h) in enumerate(c)
                 ΔU = ΔUs[i, :]
                 Uₙ = [U[j] + ΔU[j] * dt for j in 1:nᵤ]
-                @constraint(model, [j in 1:nᵤ], K[i, j]==f(Uₙ, p, τ + h * dt)[j],
+                @constraint(model, [j in 1:nᵤ], K[i, j]==f(Uₙ, V, p, τ + h * dt)[j],
                     DomainRestrictions(t => τ), base_name="solve_K($τ)")
             end
             ΔU = dt * sum([α[i] * K[i, :] for i in 1:length(α)])
