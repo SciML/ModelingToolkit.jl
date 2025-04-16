@@ -91,6 +91,27 @@ end
 @test getp(sys, f)(newps) isa Matrix{UInt}
 @test getp(sys, g)(newps) isa Vector{Float32}
 
+@testset "Type-stability of `remake_buffer`" begin
+    prob = ODEProblem(sys, [], (0.0, 1.0), ivs)
+
+    idxs = (a, c, d, e, f, g, h)
+    vals = (1.0, 2.0, 3, ones(3), ones(Int, 3, 3), ones(2), "a")
+
+    setter = setsym_oop(prob, idxs)
+    @test_nowarn @inferred setter(prob, vals)
+    @test_throws ErrorException @inferred setter(prob, collect(vals))
+
+    idxs = (a, c, e...)
+    vals = Float16[1.0, 2.0, 3.0, 4.0, 5.0]
+    setter = setsym_oop(prob, idxs)
+    @test_nowarn @inferred setter(prob, vals)
+
+    idxs = [a, e]
+    vals = (Float16(1.0), ForwardDiff.Dual{Nothing, Float16, 0}[1.0, 2.0, 3.0])
+    setter = setsym_oop(prob, idxs)
+    @test_nowarn @inferred setter(prob, vals)
+end
+
 ps = MTKParameters(sys, ivs)
 function loss(value, sys, ps)
     @test value isa ForwardDiff.Dual
