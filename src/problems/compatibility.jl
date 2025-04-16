@@ -23,6 +23,14 @@ function check_time_dependent(sys::System, T)
     end
 end
 
+function check_time_independent(sys::System, T)
+    if is_time_dependent(sys)
+        throw(SystemCompatibilityError("""
+        `$T` requires a time-independent system.
+        """))
+    end
+end
+
 function check_is_dde(sys::System)
     altT = get_noise_eqs(sys) === nothing ? ODEProblem : SDEProblem
     if !is_dde(sys)

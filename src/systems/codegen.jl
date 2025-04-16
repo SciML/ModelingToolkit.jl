@@ -143,7 +143,9 @@ function generate_jacobian(sys::System, dvs = unknowns(sys),
     jac = calculate_jacobian(sys; simplify, sparse, dvs)
     p = reorder_parameters(sys, ps)
     t = get_iv(sys)
-    if t !== nothing
+    if t === nothing
+        wrap_code = (identity, identity)
+    else
         wrap_code = sparse ? assert_jac_length_header(sys) : (identity, identity)
     end
     res = build_function_wrapper(sys, jac, dvs, p..., t; wrap_code, expression = Val{true},
