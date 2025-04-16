@@ -716,6 +716,26 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Calculate the floating point type to use from the given `varmap` by looking at variables
+with a constant value.
+"""
+function float_type_from_varmap(varmap, floatT = Bool)
+    for (k, v) in varmap
+        symbolic_type(v) == NotSymbolic() || continue
+        is_array_of_symbolics(v) && continue
+
+        if v isa AbstractArray
+            floatT = promote_type(floatT, eltype(v))
+        elseif v isa Real
+            floatT = promote_type(floatT, typeof(v))
+        end
+    end
+    return float(floatT)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Return the SciMLFunction created via calling `constructor`, the initial conditions `u0`
 and parameter object `p` given the system `sys`, and user-provided initial values `u0map`
 and `pmap`. `u0map` and `pmap` are converted into variable maps via [`to_varmap`](@ref).
@@ -818,20 +838,10 @@ function process_SciMLProblem(
 
     floatT = Bool
     if u0Type <: AbstractArray && eltype(u0Type) <: Real
-        floatT = eltype(u0Type)
+        floatT = float(eltype(u0Type))
     else
-        for (k, v) in op
-            symbolic_type(v) == NotSymbolic() || continue
-            is_array_of_symbolics(v) && continue
-
-            if v isa AbstractArray
-                floatT = promote_type(floatT, eltype(v))
-            elseif v isa Real
-                floatT = promote_type(floatT, typeof(v))
-            end
-        end
+        floatT = float_type_from_varmap(op, floatT)
     end
-    floatT = float(floatT)
 
     if !is_time_dependent(sys) || is_initializesystem(sys)
         add_observed_equations!(u0map, obs)
