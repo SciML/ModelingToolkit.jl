@@ -82,6 +82,19 @@ function generate_rhs(sys::System, dvs = unknowns(sys),
         f_oop, f_iip)
 end
 
+function generate_diffusion_function(sys::System, dvs = unknowns(sys),
+        ps = parameters(sys; initial_parameters = true); expression = Val{true}, eval_expression = false,
+        eval_module = @__MODULE__, kwargs...)
+    eqs = get_noise_eqs(sys)
+    p = reorder_parameters(sys, ps)
+    res = build_function_wrapper(sys, eqs, dvs, p..., get_iv(sys); kwargs...)
+    if expression == Val{true}
+        return res
+    end
+    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
+    return GeneratedFunctionWrapper{(2, 3, is_split(sys))}(f_oop, f_iip)
+end
+
 function calculate_tgrad(sys::System; simplify = false)
     # We need to remove explicit time dependence on the unknown because when we
     # have `u(t) * t` we want to have the tgrad to be `u(t)` instead of `u'(t) *

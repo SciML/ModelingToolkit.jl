@@ -79,3 +79,13 @@ function check_no_noise(sys::System, T)
         """))
     end
 end
+
+function check_has_noise(sys::System, T)
+    altT = is_dde(sys) ? DDEProblem : ODEProblem
+    if get_noise_eqs(sys) === nothing
+        throw(SystemCompatibilityError("""
+        A system without noise cannot be used to construct a `$T`. Consider an \
+        `$altT` instead.
+        """))
+    end
+end
