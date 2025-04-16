@@ -646,9 +646,10 @@ function SciMLBase.remake_initialization_data(
 
     op, missing_unknowns, missing_pars = build_operating_point!(sys,
         u0map, pmap, defs, cmap, dvs, ps)
+    floatT = float_type_from_varmap(op)
     kws = maybe_build_initialization_problem(
         sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns;
-        use_scc, initialization_eqs, allow_incomplete = true)
+        use_scc, initialization_eqs, floatT, allow_incomplete = true)
 
     return SciMLBase.remake_initialization_data(sys, kws, newu0, t0, newp, newu0, newp)
 end
