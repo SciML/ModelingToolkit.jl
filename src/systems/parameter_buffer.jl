@@ -499,40 +499,76 @@ end
 
 # For type-inference when using `SII.setp_oop`
 @generated function _remake_buffer(
-        indp, oldbuf::MTKParameters{T, I, D, C, N, H}, idxs::Tuple{Vararg{ParameterIndex}},
-        vals::Union{AbstractArray, Tuple}; validate = true) where {T, I, D, C, N, H}
-    valtype(i) = vals <: AbstractArray ? eltype(vals) : fieldtype(vals, i)
+        indp, oldbuf::MTKParameters{T, I, D, C, N, H},
+        idxs::Union{Tuple{Vararg{ParameterIndex}}, AbstractArray{<:ParameterIndex{P}}},
+        vals::Union{AbstractArray, Tuple}; validate = true) where {T, I, D, C, N, H, P}
+
+    # fallback to non-generated method if values aren't type-stable
+    if vals <: AbstractArray && !isconcretetype(eltype(vals))
+        return quote
+            $_remake_buffer(indp, oldbuf, collect(idxs), vals; validate)
+        end
+    end
+
+    # given an index in idxs/vals and the current `eltype` of the buffer,
+    # return the promoted eltype of the buffer
+    function promote_valtype(i, valT)
+        # tuples have distinct types, arrays have a common eltype
+        valT′ = vals <: AbstractArray ? eltype(vals) : fieldtype(vals, i)
+        # if the buffer is a scalarized buffer but the variable is an array
+        # e.g. an array tunable, take the eltype
+        if valT′ <: AbstractArray && !(valT <: AbstractArray)
+            valT′ = eltype(valT′)
+        end
+        return promote_type(valT, valT′)
+    end
+
+    # types of the idxs
+    idxtypes = if idxs <: AbstractArray
+        # if both are arrays, there is only one possible type to check
+        if vals <: AbstractArray
+            (eltype(idxs),)
+        else
+            # if `vals` is a tuple, we repeat `eltype(idxs)` to check against
+            # every possible type of the buffer
+            ntuple(Returns(eltype(idxs)), Val(fieldcount(vals)))
+        end
+    else
+        # `idxs` is a tuple, so we check against all buffers
+        fieldtypes(idxs)
+    end
+    # promote types
     tunablesT = eltype(T)
-    for (i, idxT) in enumerate(fieldtypes(idxs))
+    for (i, idxT) in enumerate(idxtypes)
         idxT <: ParameterIndex{SciMLStructures.Tunable} || continue
-        tunablesT = promote_type(tunablesT, valtype(i))
+        tunablesT = promote_valtype(i, tunablesT)
     end
     initialsT = eltype(I)
-    for (i, idxT) in enumerate(fieldtypes(idxs))
+    for (i, idxT) in enumerate(idxtypes)
         idxT <: ParameterIndex{SciMLStructures.Initials} || continue
-        initialsT = promote_type(initialsT, valtype(i))
+        initialsT = promote_valtype(i, initialsT)
     end
     discretesT = ntuple(Val(fieldcount(D))) do i
         bufT = eltype(fieldtype(D, i))
-        for (j, idxT) in enumerate(fieldtypes(idxs))
+        for (j, idxT) in enumerate(idxtypes)
             idxT <: ParameterIndex{SciMLStructures.Discrete, i} || continue
-            bufT = promote_type(bufT, valtype(i))
+            bufT = promote_valtype(i, bufT)
         end
         bufT
     end
     constantsT = ntuple(Val(fieldcount(C))) do i
         bufT = eltype(fieldtype(C, i))
-        for (j, idxT) in enumerate(fieldtypes(idxs))
+        for (j, idxT) in enumerate(idxtypes)
             idxT <: ParameterIndex{SciMLStructures.Constants, i} || continue
-            bufT = promote_type(bufT, valtype(i))
+            bufT = promote_valtype(i, bufT)
         end
         bufT
     end
     nonnumericT = ntuple(Val(fieldcount(N))) do i
         bufT = eltype(fieldtype(N, i))
-        for (j, idxT) in enumerate(fieldtypes(idxs))
+        for (j, idxT) in enumerate(idxtypes)
             idxT <: ParameterIndex{Nonnumeric, i} || continue
-            bufT = promote_type(bufT, valtype(i))
+            bufT = promote_valtype(i, bufT)
         end
         bufT
     end
@@ -554,8 +590,14 @@ end
         newbuf = MTKParameters(
             tunables, initials, discretes, constants, nonnumerics, copy.(oldbuf.caches))
     end
-    for i in 1:fieldcount(idxs)
-        push!(expr.args, :($setindex!(newbuf, vals[$i], idxs[$i])))
+    if idxs <: AbstractArray
+        push!(expr.args, :(for (idx, val) in zip(idxs, vals)
+            $setindex!(newbuf, val, idx)
+        end))
+    else
+        for i in 1:fieldcount(idxs)
+            push!(expr.args, :($setindex!(newbuf, vals[$i], idxs[$i])))
+        end
     end
     push!(expr.args, :(return newbuf))
 
