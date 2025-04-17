@@ -317,3 +317,55 @@ function isautonomous(sys::System)
     tgrad = calculate_tgrad(sys; simplify = true)
     all(iszero, tgrad)
 end
+
+function get_bv_solution_symbol(ns)
+    only(@variables BV_SOLUTION(..)[1:ns])
+end
+
+function get_constraint_unknown_subs!(subs::Dict, cons::Vector, stidxmap::Dict, iv, sol)
+    vs = vars(cons)
+    for v in vs
+        iscall(v) || continue
+        op = operation(v)
+        args = arguments(v)
+        issym(op) && length(args) == 1 || continue
+        newv = op(iv)
+        haskey(stidxmap, newv) || continue
+        subs[v] = sol(args[1])[stidxmap[newv]]
+    end
+end
+
+function generate_boundary_conditions(sys::System, u0, u0_idxs, t0; expression = Val{true},
+        eval_expression = false, eval_module = @__MODULE__, kwargs...)
+    iv = get_iv(sys)
+    sts = unknowns(sys)
+    ps = parameters(sys)
+    np = length(ps)
+    ns = length(sts)
+    stidxmap = Dict([v => i for (i, v) in enumerate(sts)])
+    pidxmap = Dict([v => i for (i, v) in enumerate(ps)])
+
+    sol = get_bv_solution_symbol(ns)
+
+    cons = [con.lhs - con.rhs for con in constraints(sys)]
+    conssubs = Dict()
+    get_constraint_unknown_subs!(conssubs, cons, stidxmap, iv, sol)
+    cons = map(x -> fast_substitute(x, conssubs), cons)
+
+    init_conds = Any[]
+    for i in u0_idxs
+        expr = sol(t0)[i] - u0[i]
+        push!(init_conds, expr)
+    end
+
+    exprs = vcat(init_conds, cons)
+    _p = reorder_parameters(sys, ps)
+
+    res = build_function_wrapper(sys, exprs, sol, _p..., iv; output_type = Array, kwargs...)
+    if expression == Val{true}
+        return res
+    end
+
+    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
+    return GeneratedFunctionWrapper{(2, 3, is_split(sys))}(f_oop, f_iip)
+end
