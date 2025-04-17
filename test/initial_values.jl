@@ -265,3 +265,19 @@ end
     @test eltype(oprob.u0) == Float32
     @test eltype(eltype(sol.u)) == Float32
 end
+
+@testset "Array initials and scalar parameters with `split = false`" begin
+    @variables x(t)[1:2]
+    @parameters p
+    @mtkbuild sys=ODESystem([D(x[1]) ~ x[1], D(x[2]) ~ x[2] + p], t) split=false
+    ps = Set(parameters(sys; initial_parameters = true))
+    @test length(ps) == 5
+    for i in 1:2
+        @test Initial(x[i]) in ps
+        @test Initial(D(x[i])) in ps
+    end
+    @test p in ps
+    prob = ODEProblem(sys, [x => ones(2)], (0.0, 1.0), [p => 1.0])
+    @test prob.p isa Vector{Float64}
+    @test length(prob.p) == 5
+end
