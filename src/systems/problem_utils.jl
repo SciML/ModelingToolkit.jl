@@ -911,6 +911,10 @@ struct InitializationMetadata{R <: ReconstructInitializeprob, GUU, SIU}
     """
     use_scc::Bool
     """
+    Whether the initialization uses the independent variable.
+    """
+    time_dependent_init::Bool
+    """
     `ReconstructInitializeprob` for this initialization problem.
     """
     oop_reconstruct_u0_p::R
@@ -1015,7 +1019,8 @@ All other keyword arguments are forwarded to `InitializationProblem`.
 """
 function maybe_build_initialization_problem(
         sys::AbstractSystem, iip, op::AbstractDict, u0map, pmap, t, defs,
-        guesses, missing_unknowns; implicit_dae = false, u0_constructor = identity,
+        guesses, missing_unknowns; implicit_dae = false,
+        time_dependent_init = is_time_dependent(sys), u0_constructor = identity,
         p_constructor = identity, floatT = Float64, initialization_eqs = [],
         use_scc = true, kwargs...)
     guesses = merge(ModelingToolkit.guesses(sys), todict(guesses))
@@ -1025,7 +1030,7 @@ function maybe_build_initialization_problem(
     end
 
     initializeprob = ModelingToolkit.InitializationProblem{iip}(
-        sys, t, u0map, pmap; guesses, initialization_eqs,
+        sys, t, u0map, pmap; guesses, time_dependent_init, initialization_eqs,
         use_scc, u0_constructor, p_constructor, kwargs...)
     if state_values(initializeprob) !== nothing
         _u0 = state_values(initializeprob)
@@ -1060,11 +1065,15 @@ function maybe_build_initialization_problem(
     end
     meta = InitializationMetadata(
         u0map, pmap, guesses, Vector{Equation}(initialization_eqs),
-        use_scc, ReconstructInitializeprob(
+        use_scc, time_dependent_init,
+        ReconstructInitializeprob(
             sys, initializeprob.f.sys; u0_constructor, p_constructor),
         get_initial_unknowns, SetInitialUnknowns(sys))
 
-    if is_time_dependent(sys)
+    if time_dependent_init === nothing
+        time_dependent_init = is_time_dependent(sys)
+    end
+    if time_dependent_init
         all_init_syms = Set(all_symbols(initializeprob))
         solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
         initializeprobmap = u0_constructor ∘ getu(initializeprob, solved_unknowns)
@@ -1101,7 +1110,7 @@ function maybe_build_initialization_problem(
         end
     end
 
-    if is_time_dependent(sys)
+    if time_dependent_init
         for v in missing_unknowns
             op[v] = getu(initializeprob, v)(initializeprob)
         end
@@ -1221,7 +1230,7 @@ function process_SciMLProblem(
         check_length = true, symbolic_u0 = false, warn_cyclic_dependency = false,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10,
-        substitution_limit = 100, use_scc = true,
+        substitution_limit = 100, use_scc = true, time_dependent_init = is_time_dependent(sys),
         force_initialization_time_independent = false, algebraic_only = false,
         allow_incomplete = false, is_initializeprob = false, kwargs...)
     dvs = unknowns(sys)
@@ -1282,7 +1291,7 @@ function process_SciMLProblem(
             warn_cyclic_dependency, check_units = check_initialization_units,
             circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
             force_time_independent = force_initialization_time_independent, algebraic_only, allow_incomplete,
-            u0_constructor, p_constructor, floatT)
+            u0_constructor, p_constructor, floatT, time_dependent_init)
 
         kwargs = merge(kwargs, kws)
     end
