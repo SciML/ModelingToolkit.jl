@@ -77,10 +77,10 @@ const M = ModelingToolkit
 end
 
 @testset "Linear systems" begin
-    function is_bangbang(input_sol, lbounds, ubounds)
+    function is_bangbang(input_sol, lbounds, ubounds, rtol = 1e-4)
         bangbang = true
-        for v in 1:length(input_sol.u[1])
-            all(i -> i[v] ≈ bounds[v] || i[v] ≈ bounds[u], input_sol.u) || (bangbang = false)
+        for v in 1:length(input_sol.u[1]) - 1
+            all(i -> ≈(i[v], bounds[v]; rtol) || ≈(i[v], bounds[u]; rtol), input_sol.u) || (bangbang = false)
         end
         bangbang
     end
@@ -91,8 +91,8 @@ end
     @variables x(..) [bounds = (0., 0.25)] v(..)
     @variables u(t) [bounds = (-1., 1.), input = true]
     constr = [v(1.0) ~ 0.0]
-    cost = [-x(1.0)] # Optimize the final distance.
-    @named block = ODESystem([D(x(t)) ~ v(t), D(v(t)) ~ u], t)
+    cost = [-x(1.0)] # Maximize the final distance.
+    @named block = ODESystem([D(x(t)) ~ v(t), D(v(t)) ~ u], t; costs = cost, constraints = constr)
     block, input_idxs = structural_simplify(block, ([u],[]))
 
     u0map = [x(t) => 0., v(t) => 0.]
@@ -103,28 +103,85 @@ end
     # Linear systems have bang-bang controls
     @test is_bangbang(jsol.input_sol, [-1.], [1.])
     # Test reached final position.
-    @test jsol.sol.u[end][1] ≈ 0.25
+    @test ≈(jsol.sol.u[end][1], 0.25, rtol = 1e-5)
 
-    # Cart-pole system
+    iprob = InfiniteOptControlProblem(block, u0map, tspan, parammap; dt = 0.01)
+    isol = solve(iprob, Ipopt.Optimizer; silent = true)
+    @test is_bangbang(isol.input_sol, [-1.], [1.])
+    @test ≈(isol.sol.u[end][1], 0.25, rtol = 1e-5)
 
-    # Bee example (from Lawrence Evans' notes)
-    @variables w(..) q(..) 
-    @parameters α(t) [bounds = [0, 1]] b c μ s ν
+    ###################
+    ### Bee example ###
+    ###################
+    # From Lawrence Evans' notes
+    @variables w(..) q(..) α(t) [input = true, bounds = (0, 1)]
+    @parameters b c μ s ν
 
     tspan = (0, 4)
     eqs = [D(w(t)) ~ -μ*w(t) + b*s*α*w(t),
            D(q(t)) ~ -ν*q(t) + c*(1 - α)*s*w(t)]
     costs = [-q(tspan[2])]
    
-    @mtkbuild beesys = ODESystem(eqs, t; costs)
-    u0map = [w(0) => 40, q(0) => 2]
-    pmap = [b => 1, c => 1, μ => 1, s => 1, ν => 1]
+    @named beesys = ODESystem(eqs, t; costs)
+    beesys, input_idxs = structural_simplify(beesys, ([α],[]))
+    u0map = [w(t) => 40, q(t) => 2]
+    pmap = [b => 1, c => 1, μ => 1, s => 1, ν => 1, α => 1]
 
-    jprob = JuMPControlProblem(beesys, u0map, tspan, pmap)
+    jprob = JuMPControlProblem(beesys, u0map, tspan, pmap, dt = 0.01)
     jsol = solve(jprob, Ipopt.Optimizer, :Tsitouras5)
-    control_sol = jsol.control_sol
-    # Bang-bang control
+    @test is_bangbang(jsol.input_sol, [0.], [1.])
+    iprob = InfiniteOptControlProblem(beesys, u0map, tspan, pmap, dt = 0.01)
+    isol = solve(jprob, Ipopt.Optimizer, :Tsitouras5)
+    @test is_bangbang(isol.input_sol, [0.], [1.])
 end
-#
+
+@testset "Rocket launch" begin
+    t = M.t_nounits
+    D = M.D_nounits
+
+    @variables h(..) v(..) m(..) T(..) [input = true, bounds = (0, tₘ)]
+    @parameters h_c m₀ h₀ g₀ D_c c Tₘ
+    @parameters tf
+    drag(h, v) = D_c * v^2 * exp(-h_c * (h - h₀) / h₀)
+    gravity(h) = g₀ * (h₀ / h)
+
+    eqs = [D(h(t)) ~ v(t), 
+           D(v(t)) ~ (T(t) - drag(h(t), v(t))) / m(t) - gravity(t),
+           D(m(t)) ~ -T(t) / c]
+
+    costs = [-h(tf)]
+    constraints = [T(tf) ~ 0]
+    @named rocket = ODESystem(eqs, t; costs, constraints)
+    @test tf ∈ Set(parameters(rocket))
+
+    u0map = [h(t) => h₀, m(t) => m₀, v(t) => 0]
+    pmap = [g₀ => 1, m₀ => 1.0, h_c => 500, c => 0.5*√(g₀*h₀), D_C => 0.5 * 620 * m₀/g₀, Tₘ => 3.5*g₀*m₀]
+    jprob = JuMPControlProblem(rocket, u0map, (0, tf), pmap)
+    jsol = solve(jprob, Ipopt.Optimizer, :RadauIA3)
+    @test jsol.sol.u[end][1] ≈ 1.012
+end
+
+@testset "Free final time problem" begin
+    t = M.t_nounits
+    D = M.D_nounits
+
+    @variables x(..) u(..) [input = true, bounds = (0,1)]
+    @parameters tf
+    eqs = [D(x(t)) ~ -2 + 0.5*u]
+
+    # Integral cost function
+    costs = [∫(x-u), x(tf)]
+    consolidate(u) = u[1] + u[2]
+    jprob = JuMPControlProblem(rocket, u0map, (0, tf), pmap)
+    jsol = solve(jprob, Ipopt.Optimizer, :RadauIA3)
+    @test jsol.sol.t[end] ≈ 10.0
+    iprob = InfiniteOptControlProblem(rocket, u0map, (0, tf), pmap)
+    isol = solve(iprob, Ipopt.Optimizer, :RadauIA3)
+    @test isol.sol.t[end] ≈ 10.0
+end
+
+@testset "Cart-pole problem" begin
+end
+
 #@testset "Constrained optimal control problems" begin
 #end
