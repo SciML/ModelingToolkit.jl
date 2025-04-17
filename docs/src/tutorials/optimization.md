@@ -1,4 +1,4 @@
-# Modeling Optimization Problems
+# [Modeling Optimization Problems](@id optimization)
 
 ModelingToolkit.jl is not only useful for generating initial value problems (`ODEProblem`).
 The package can also build optimization systems.
