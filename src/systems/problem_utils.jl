@@ -633,7 +633,8 @@ All other keyword arguments are forwarded to `InitializationProblem`.
 function maybe_build_initialization_problem(
         sys::AbstractSystem, op::AbstractDict, u0map, pmap, t, defs,
         guesses, missing_unknowns; implicit_dae = false,
-        u0_constructor = identity, floatT = Float64, kwargs...)
+        time_dependent_init = is_time_dependent(sys), u0_constructor = identity,
+        floatT = Float64, kwargs...)
     guesses = merge(ModelingToolkit.guesses(sys), todict(guesses))
 
     if t === nothing && is_time_dependent(sys)
@@ -641,7 +642,7 @@ function maybe_build_initialization_problem(
     end
 
     initializeprob = ModelingToolkit.InitializationProblem{true, SciMLBase.FullSpecialize}(
-        sys, t, u0map, pmap; guesses, kwargs...)
+        sys, t, u0map, pmap; guesses, time_dependent_init, kwargs...)
     if state_values(initializeprob) !== nothing
         initializeprob = remake(initializeprob; u0 = floatT.(state_values(initializeprob)))
     end
@@ -660,7 +661,10 @@ function maybe_build_initialization_problem(
 
     meta = get_metadata(initializeprob.f.sys)
 
-    if is_time_dependent(sys)
+    if time_dependent_init === nothing
+        time_dependent_init = is_time_dependent(sys)
+    end
+    if time_dependent_init
         all_init_syms = Set(all_symbols(initializeprob))
         solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
         initializeprobmap = u0_constructor ∘ getu(initializeprob, solved_unknowns)
@@ -700,7 +704,7 @@ function maybe_build_initialization_problem(
         end
     end
 
-    if is_time_dependent(sys)
+    if time_dependent_init
         for v in missing_unknowns
             op[v] = get_temporary_value(v, floatT)
         end
@@ -803,7 +807,7 @@ function process_SciMLProblem(
         symbolic_u0 = false, warn_cyclic_dependency = false,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10,
-        substitution_limit = 100, use_scc = true,
+        substitution_limit = 100, use_scc = true, time_dependent_init = is_time_dependent(sys),
         force_initialization_time_independent = false, algebraic_only = false,
         allow_incomplete = false, is_initializeprob = false, kwargs...)
     dvs = unknowns(sys)
@@ -858,7 +862,7 @@ function process_SciMLProblem(
             warn_cyclic_dependency, check_units = check_initialization_units,
             circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
             force_time_independent = force_initialization_time_independent, algebraic_only, allow_incomplete,
-            u0_constructor, floatT)
+            u0_constructor, floatT, time_dependent_init)
 
         kwargs = merge(kwargs, kws)
     end
