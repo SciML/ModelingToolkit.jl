@@ -82,6 +82,7 @@ function check_compatible_system(T::Union{Type{SDEFunction}, Type{SDEProblem}}, 
     check_no_constraints(sys, T)
     check_no_jumps(sys, T)
     check_has_noise(sys, T)
+    check_is_continuous(sys, T)
 end
 
 function calculate_noise_and_rate_prototype(sys::System, u0; sparsenoise = false)

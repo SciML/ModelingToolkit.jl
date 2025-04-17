@@ -107,6 +107,15 @@ function check_is_discrete(sys::System, T)
     end
 end
 
+function check_is_continuous(sys::System, T)
+    altT = has_alg_equations(sys) ? ImplicitDiscreteProblem : DiscreteProblem
+    if is_discrete_system(sys)
+        throw(SystemCompatibilityError("""
+        A discrete system cannot be used to construct a `$T`. Consider a `$altT` instead.
+        """))
+    end
+end
+
 function check_is_explicit(sys::System, T, altT)
     if has_alg_equations(sys)
         throw(SystemCompatibilityError("""
