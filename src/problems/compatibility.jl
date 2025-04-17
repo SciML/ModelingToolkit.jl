@@ -69,6 +69,15 @@ function check_no_constraints(sys::System, T)
     end
 end
 
+function check_has_constraints(sys::System, T)
+    if isempty(constraints(sys))
+        throw(SystemCompatibilityError("""
+        A system without constraints cannot be used to construct a `$T`. Consider an \
+        `ODEProblem` instead.
+        """))
+    end
+end
+
 function check_no_jumps(sys::System, T)
     if !isempty(jumps(sys))
         throw(SystemCompatibilityError("""
