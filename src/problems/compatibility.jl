@@ -121,3 +121,11 @@ function check_is_explicit(sys::System, T, altT)
         """))
     end
 end
+
+function check_is_implicit(sys::System, T, altT)
+    if !has_alg_equations(sys)
+        throw(SystemCompatibilityError("""
+        `$T` expects an implicit system. Consider a `$altT` instead.
+        """))
+    end
+end
