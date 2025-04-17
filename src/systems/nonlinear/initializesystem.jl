@@ -11,7 +11,7 @@ function generate_initializesystem(sys::AbstractTimeDependentSystem;
         default_dd_guess = Bool(0),
         algebraic_only = false,
         check_units = true, check_defguess = false,
-        name = nameof(sys), extra_metadata = (;), kwargs...)
+        name = nameof(sys), kwargs...)
     eqs = equations(sys)
     if !(eqs isa Vector{Equation})
         eqs = Equation[x for x in eqs if x isa Equation]
@@ -143,9 +143,7 @@ function generate_initializesystem(sys::AbstractTimeDependentSystem;
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
-    meta = InitializationSystemMetadata(
-        anydict(u0map), anydict(pmap), additional_guesses,
-        additional_initialization_eqs, extra_metadata, nothing)
+
     return NonlinearSystem(eqs_ics,
         vars,
         pars;
@@ -153,7 +151,7 @@ function generate_initializesystem(sys::AbstractTimeDependentSystem;
         checks = check_units,
         parameter_dependencies = new_parameter_deps,
         name,
-        metadata = meta,
+        is_initializesystem = true,
         kwargs...)
 end
 
@@ -169,7 +167,7 @@ function generate_initializesystem(sys::AbstractTimeIndependentSystem;
         guesses = Dict(),
         algebraic_only = false,
         check_units = true, check_defguess = false,
-        name = nameof(sys), extra_metadata = (;), kwargs...)
+        name = nameof(sys), kwargs...)
     eqs = equations(sys)
     trueobs, eqs = unhack_observed(observed(sys), eqs)
     vars = unique([unknowns(sys); getfield.(trueobs, :lhs)])
@@ -244,9 +242,7 @@ function generate_initializesystem(sys::AbstractTimeIndependentSystem;
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
-    meta = InitializationSystemMetadata(
-        anydict(u0map), anydict(pmap), additional_guesses,
-        additional_initialization_eqs, extra_metadata, nothing)
+
     return NonlinearSystem(eqs_ics,
         vars,
         pars;
@@ -254,7 +250,7 @@ function generate_initializesystem(sys::AbstractTimeIndependentSystem;
         checks = check_units,
         parameter_dependencies = new_parameter_deps,
         name,
-        metadata = meta,
+        is_initializesystem = true,
         kwargs...)
 end
 
@@ -436,64 +432,6 @@ function _has_delays(sys::AbstractSystem, ex, banned)
     return any(x -> _has_delays(sys, x, banned), args)
 end
 
-struct ReconstructInitializeprob
-    getter::Any
-    setter::Any
-end
-
-function ReconstructInitializeprob(
-        srcsys::AbstractSystem, dstsys::AbstractSystem)
-    syms = reduce(
-        vcat, reorder_parameters(dstsys, parameters(dstsys));
-        init = [])
-    getter = getu(srcsys, syms)
-    setter = setp_oop(dstsys, syms)
-    return ReconstructInitializeprob(getter, setter)
-end
-
-function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
-    newp = rip.setter(dstvalp, rip.getter(srcvalp))
-    if state_values(dstvalp) === nothing
-        return nothing, newp
-    end
-    srcu0 = state_values(srcvalp)
-    T = srcu0 === nothing || isempty(srcu0) ? Union{} : eltype(srcu0)
-    if parameter_values(dstvalp) isa MTKParameters
-        if !isempty(newp.tunable)
-            T = promote_type(eltype(newp.tunable), T)
-        end
-    elseif !isempty(newp)
-        T = promote_type(eltype(newp), T)
-    end
-    if T == eltype(state_values(dstvalp))
-        u0 = state_values(dstvalp)
-    elseif T != Union{}
-        u0 = T.(state_values(dstvalp))
-    end
-    buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Tunable(), newp)
-    if eltype(buf) != T
-        newbuf = similar(buf, T)
-        copyto!(newbuf, buf)
-        newp = repack(newbuf)
-    end
-    buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Initials(), newp)
-    if eltype(buf) != T
-        newbuf = similar(buf, T)
-        copyto!(newbuf, buf)
-        newp = repack(newbuf)
-    end
-    return u0, newp
-end
-
-struct InitializationSystemMetadata
-    u0map::Dict{Any, Any}
-    pmap::Dict{Any, Any}
-    additional_guesses::Dict{Any, Any}
-    additional_initialization_eqs::Vector{Equation}
-    extra_metadata::NamedTuple
-    oop_reconstruct_u0_p::Union{Nothing, ReconstructInitializeprob}
-end
-
 function get_possibly_array_fallback_singletons(varmap, p)
     if haskey(varmap, p)
         return varmap[p]
@@ -543,22 +481,19 @@ function SciMLBase.remake_initialization_data(
     if u0 === missing && p === missing
         return odefn.initialization_data
     end
+
+    oldinitdata = odefn.initialization_data
+
     if !(eltype(u0) <: Pair) && !(eltype(p) <: Pair)
-        oldinitdata = odefn.initialization_data
         oldinitdata === nothing && return nothing
 
         oldinitprob = oldinitdata.initializeprob
         oldinitprob === nothing && return nothing
-        if !SciMLBase.has_sys(oldinitprob.f) || !(oldinitprob.f.sys isa NonlinearSystem)
-            return oldinitdata
-        end
-        oldinitsys = oldinitprob.f.sys
-        meta = get_metadata(oldinitsys)
-        if meta isa InitializationSystemMetadata && meta.oop_reconstruct_u0_p !== nothing
-            reconstruct_fn = meta.oop_reconstruct_u0_p
-        else
-            reconstruct_fn = ReconstructInitializeprob(sys, oldinitsys)
-        end
+
+        meta = oldinitdata.metadata
+        meta isa InitializationMetadata || return oldinitdata
+
+        reconstruct_fn = meta.oop_reconstruct_u0_p
         # the history function doesn't matter because `reconstruct_fn` is only going to
         # update the values of parameters, which aren't time dependent. The reason it
         # is called is because `Initial` parameters are calculated from the corresponding
@@ -569,16 +504,15 @@ function SciMLBase.remake_initialization_data(
         if oldinitprob.f.resid_prototype === nothing
             newf = oldinitprob.f
         else
-            newf = NonlinearFunction{
-                SciMLBase.isinplace(oldinitprob.f), SciMLBase.specialization(oldinitprob.f)}(
-                oldinitprob.f;
+            newf = remake(oldinitprob.f;
                 resid_prototype = calculate_resid_prototype(
                     length(oldinitprob.f.resid_prototype), new_initu0, new_initp))
         end
         initprob = remake(oldinitprob; f = newf, u0 = new_initu0, p = new_initp)
         return SciMLBase.OverrideInitData(initprob, oldinitdata.update_initializeprob!,
-            oldinitdata.initializeprobmap, oldinitdata.initializeprobpmap)
+            oldinitdata.initializeprobmap, oldinitdata.initializeprobpmap; metadata = oldinitdata.metadata)
     end
+
     dvs = unknowns(sys)
     ps = parameters(sys)
     u0map = to_varmap(u0, dvs)
@@ -592,16 +526,13 @@ function SciMLBase.remake_initialization_data(
     use_scc = true
     initialization_eqs = Equation[]
 
-    if SciMLBase.has_initializeprob(odefn)
-        oldsys = odefn.initialization_data.initializeprob.f.sys
-        meta = get_metadata(oldsys)
-        if meta isa InitializationSystemMetadata
-            u0map = merge(meta.u0map, u0map)
-            pmap = merge(meta.pmap, pmap)
-            merge!(guesses, meta.additional_guesses)
-            use_scc = get(meta.extra_metadata, :use_scc, true)
-            initialization_eqs = meta.additional_initialization_eqs
-        end
+    if oldinitdata !== nothing && oldinitdata.metadata isa InitializationMetadata
+        meta = oldinitdata.metadata
+        u0map = merge(meta.u0map, u0map)
+        pmap = merge(meta.pmap, pmap)
+        merge!(guesses, meta.guesses)
+        use_scc = meta.use_scc
+        initialization_eqs = meta.additional_initialization_eqs
     else
         # there is no initializeprob, so the original problem construction
         # had no solvable parameters and had the differential variables
@@ -662,8 +593,11 @@ function SciMLBase.late_binding_update_u0_p(
     if !(eltype(u0) <: Pair)
         # if `p` is not provided or is symbolic
         p === missing || eltype(p) <: Pair || return newu0, newp
-        newu0 === nothing && return newu0, newp
-        all(is_parameter(sys, Initial(x)) for x in unknowns(sys)) || return newu0, newp
+        (newu0 === nothing || isempty(newu0)) && return newu0, newp
+        initdata = prob.f.initialization_data
+        initdata === nothing && return newu0, newp
+        meta = initdata.metadata
+        meta isa InitializationMetadata || return newu0, newp
         newp = p === missing ? copy(newp) : newp
         initials, repack, alias = SciMLStructures.canonicalize(
             SciMLStructures.Initials(), newp)
@@ -671,10 +605,10 @@ function SciMLBase.late_binding_update_u0_p(
             initials = DiffEqBase.promote_u0(initials, newu0, t0)
             newp = repack(initials)
         end
-        if length(newu0) != length(unknowns(sys))
-            throw(ArgumentError("Expected `newu0` to be of same length as unknowns ($(length(unknowns(sys)))). Got $(typeof(newu0)) of length $(length(newu0))"))
+        if length(newu0) != length(prob.u0)
+            throw(ArgumentError("Expected `newu0` to be of same length as unknowns ($(length(prob.u0))). Got $(typeof(newu0)) of length $(length(newu0))"))
         end
-        setp(sys, Initial.(unknowns(sys)))(newp, newu0)
+        meta.set_initial_unknowns!(newp, newu0)
         return newu0, newp
     end
 
@@ -714,7 +648,7 @@ end
 Check if the given system is an initialization system.
 """
 function is_initializesystem(sys::AbstractSystem)
-    sys isa NonlinearSystem && get_metadata(sys) isa InitializationSystemMetadata
+    has_is_initializesystem(sys) && get_is_initializesystem(sys)
 end
 
 """

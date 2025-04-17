@@ -915,6 +915,7 @@ for prop in [:eqs
              :substitutions
              :metadata
              :gui_metadata
+             :is_initializesystem
              :discrete_subsystems
              :parameter_dependencies
              :assertions
