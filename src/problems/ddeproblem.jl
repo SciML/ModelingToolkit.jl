@@ -69,4 +69,5 @@ function check_compatible_system(T::Union{Type{DDEFunction}, Type{DDEProblem}}, 
     check_no_constraints(sys, T)
     check_no_jumps(sys, T)
     check_no_noise(sys, T)
+    check_is_continuous(sys, T)
 end
