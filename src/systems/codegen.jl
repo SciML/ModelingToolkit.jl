@@ -41,8 +41,10 @@ function generate_rhs(sys::System, dvs = unknowns(sys),
         end
         ddvs = map(D, dvs)
     else
-        check_operator_variables(eqs, Differential)
-        check_lhs(eqs, Differential, Set(dvs))
+        if !is_discrete_system(sys)
+            check_operator_variables(eqs, Differential)
+            check_lhs(eqs, Differential, Set(dvs))
+        end
         rhss = [eq.rhs for eq in eqs]
     end
 

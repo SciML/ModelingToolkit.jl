@@ -97,3 +97,20 @@ function check_has_noise(sys::System, T)
         """))
     end
 end
+
+function check_is_discrete(sys::System, T)
+    if !is_discrete_system(sys)
+        throw(SystemCompatibilityError("""
+        `$T` expects a discrete system. Consider an `ODEProblem` instead. If your system \
+        is discrete, ensure `structural_simplify` has been run on it.
+        """))
+    end
+end
+
+function check_is_explicit(sys::System, T, altT)
+    if has_alg_equations(sys)
+        throw(SystemCompatibilityError("""
+        `$T` expects an explicit system. Consider a `$altT` instead.
+        """))
+    end
+end
