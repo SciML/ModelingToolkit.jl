@@ -134,9 +134,15 @@ function SciMLBase.ControlFunction{false}(sys::AbstractODESystem, args...;
 end
 
 """
-IntegralNorm. When applied to an expression.
+IntegralNorm. When applied to an expression in a cost
+function, assumes that the integration variable is the
+iv of the system, and assumes that the bounds are the
+tspan.
+Equivalent to Integral(t in tspan) in Symbolics.
 """
-struct IntegralNorm end
+struct ∫ <: Symbolics.Operator end
+∫(x) = ∫()(x)
+Base.show(io::IO, x::∫) = print(io, "∫")
 
 """
 $(SIGNATURES)

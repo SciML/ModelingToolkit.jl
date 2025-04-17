@@ -58,7 +58,7 @@ function MTK.JuMPControlProblem(sys::ODESystem, u0map, tspan, pmap;
     f, u0, p = MTK.process_SciMLProblem(ControlFunction, sys, _u0map, pmap;
         t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
 
-    model = init_model(sys, tspan[1]:dt:tspan[2], u0map, u0)
+    model = init_model(sys, tspan[1]:dt:tspan[2], u0map, pmap, u0)
     JuMPControlProblem(f, u0, tspan, p, model, kwargs...)
 end
 
@@ -80,22 +80,23 @@ function MTK.InfiniteOptControlProblem(sys::ODESystem, u0map, tspan, pmap;
     f, u0, p = MTK.process_SciMLProblem(ControlFunction, sys, _u0map, pmap;
         t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
 
-    model = init_model(sys, tspan[1]:dt:tspan[2], u0map, u0)
+    model = init_model(sys, tspan[1]:dt:tspan[2], u0map, pmap, u0)
     add_infopt_solve_constraints!(model, sys, pmap)
     InfiniteOptControlProblem(f, u0, tspan, p, model, kwargs...)
 end
 
-function init_model(sys, tsteps, u0map, u0)
+function init_model(sys, tsteps, u0map, pmap, u0)
     ctrls = MTK.unbound_inputs(sys)
     states = unknowns(sys)
     model = InfiniteModel()
+
     @infinite_parameter(model, t in [tsteps[1], tsteps[end]], num_supports=length(tsteps))
     @variable(model, U[i = 1:length(states)], Infinite(t))
     @variable(model, V[1:length(ctrls)], Infinite(t))
 
     set_bounds!(model, sys)
-    add_jump_cost_function!(model, sys)
-    add_user_constraints!(model, sys)
+    add_jump_cost_function!(model, sys, (tsteps[1], tsteps[2]), pmap)
+    add_user_constraints!(model, sys, pmap)
 
     stidxmap = Dict([v => i for (i, v) in enumerate(states)])
     u0_idxs = has_alg_eqs(sys) ? collect(1:length(states)) :
@@ -120,63 +121,35 @@ function set_bounds!(model, sys)
     end
 end
 
-function add_jump_cost_function!(model::InfiniteModel, sys)
+function add_jump_cost_function!(model::InfiniteModel, sys, tspan, pmap)
     jcosts = MTK.get_costs(sys)
     consolidate = MTK.get_consolidate(sys)
     if isnothing(jcosts) || isempty(jcosts)
         @objective(model, Min, 0)
         return
     end
+    jcosts = substitute_jump_vars(model, sys, pmap, jcosts)
+
+    # Substitute integral
     iv = MTK.get_iv(sys)
-
-    stidxmap = Dict([v => i for (i, v) in enumerate(unknowns(sys))])
-    cidxmap = Dict([v => i for (i, v) in enumerate(MTK.unbound_inputs(sys))])
-
-    for st in unknowns(sys)
-        x = operation(st)
-        t = only(arguments(st))
-        idx = stidxmap[x(iv)]
-        subval = isequal(t, iv) ? model[:U][idx] : model[:U][idx](t)
-        jcosts = map(c -> Symbolics.substitute(c, Dict(x(t) => subval)), jcosts)
+    jcosts = map(c -> Symbolics.substitute(c, ∫ => Symbolics.Integral(iv in tspan)), jcosts)
+    intmap = Dict()
+    
+    for int in MTK.collect_applied_operators(jcosts, Symbolics.Integral)
+        arg = only(arguments(MTK.value(int)))
+        lower_bound, upper_bound = (int.domain.domain.left, int.domain.domain.right)
+        intmap[int] = InfiniteOpt.∫(arg, iv; lower_bound, upper_bound)
     end
-
-    for ct in MTK.unbound_inputs(sys)
-        p = operation(ct)
-        t = only(arguments(ct))
-        idx = cidxmap[p(iv)]
-        subval = isequal(t, iv) ? model[:V][idx] : model[:V][idx](t)
-        jcosts = map(c -> Symbolics.substitute(c, Dict(p(t) => subval)), jcosts)
-    end
-
+    jcosts = map(c -> Symbolics.substitute(c, intmap), jcosts)
     @objective(model, Min, consolidate(jcosts))
 end
 
-function add_user_constraints!(model::InfiniteModel, sys)
+function add_user_constraints!(model::InfiniteModel, sys, pmap)
     conssys = MTK.get_constraintsystem(sys)
     jconstraints = isnothing(conssys) ? nothing : MTK.get_constraints(conssys)
     (isnothing(jconstraints) || isempty(jconstraints)) && return nothing
 
-    iv = MTK.get_iv(sys)
-    stidxmap = Dict([v => i for (i, v) in enumerate(unknowns(sys))])
-    cidxmap = Dict([v => i for (i, v) in enumerate(MTK.unbound_inputs(sys))])
-
-    for st in unknowns(conssys)
-        x = operation(st)
-        t = only(arguments(st))
-        idx = stidxmap[x(iv)]
-        subval = isequal(t, iv) ? model[:U][idx] : model[:U][idx](t)
-        jconstraints = map(c -> Symbolics.substitute(c, Dict(x(t) => subval)), jconstraints)
-    end
-
-    for ct in MTK.unbound_inputs(sys)
-        p = operation(ct)
-        t = only(arguments(ct))
-        idx = cidxmap[p(iv)]
-        subval = isequal(t, iv) ? model[:V][idx] : model[:V][idx](t)
-        jconstraints = map(
-            c -> Symbolics.substitute(jconstraints, Dict(p(t) => subval)), jconstriants)
-    end
-
+    jconstraints = substitute_jump_vars(model, sys, pmap, jconstraints)
     for (i, cons) in enumerate(jconstraints)
         if cons isa Equation
             @constraint(model, cons.lhs - cons.rhs==0, base_name="user[$i]")
@@ -193,31 +166,41 @@ function add_initial_constraints!(model::InfiniteModel, u0, u0_idxs, ts)
     @constraint(model, initial[i in u0_idxs], U[i](ts)==u0[i])
 end
 
+function substitute_jump_vars(model, sys, pmap, exprs)
+    iv = MTK.get_iv(sys)
+    sts = unknowns(sys)
+    cts = MTK.unbound_inputs(sys)
+    U = model[:U]
+    V = model[:V]
+    # for variables like x(t)
+    whole_interval_map = Dict([[v => U[i] for (i, v) in enumerate(sts)]; [v => V[i] for (i, v) in enumerate(cts)]])
+    exprs = map(c -> Symbolics.substitute(c, whole_interval_map), exprs)
+
+    # for variables like x(1.0)
+    x_ops = [MTK.operation(MTK.unwrap(st)) for st in sts]
+    c_ops = [MTK.operation(MTK.unwrap(ct)) for ct in cts]
+    fixed_t_map = Dict([[x_ops[i] => U[i] for i in 1:length(U)]; [c_ops[i] => V[i] for i in 1:length(V)]])
+    exprs = map(c -> Symbolics.substitute(c, fixed_t_map), exprs)
+
+    exprs = map(c -> Symbolics.substitute(c, Dict(pmap)), exprs)
+    exprs
+end
+
 is_explicit(tableau) = tableau isa DiffEqDevTools.ExplicitRKTableau
 
 function add_infopt_solve_constraints!(model::InfiniteModel, sys, pmap)
-    iv = MTK.get_iv(sys)
-    t = model[:t]
-    U = model[:U]
-    V = model[:V]
-
-    stmap = Dict([v => U[i] for (i, v) in enumerate(unknowns(sys))])
-    ctrlmap = Dict([v => V[i] for (i, v) in enumerate(MTK.unbound_inputs(sys))])
-    submap = merge(stmap, ctrlmap, Dict(pmap))
-
     # Differential equations
-    diff_eqs = diff_equations(sys)
-    D = Differential(iv)
+    U = model[:U]
+    t = model[:t]
+    D = Differential(MTK.get_iv(sys))
     diffsubmap = Dict([D(U[i]) => ∂(U[i], t) for i in 1:length(U)])
-    for u in unknowns(sys)
-        diff_eqs = map(e -> Symbolics.substitute(e, submap), diff_eqs)
-        diff_eqs = map(e -> Symbolics.substitute(e, diffsubmap), diff_eqs)
-    end
+
+    diff_eqs = substitute_jump_vars(model, sys, pmap, diff_equations(sys))
+    diff_eqs = map(e -> Symbolics.substitute(e, diffsubmap), diff_eqs)
     @constraint(model, D[i = 1:length(diff_eqs)], diff_eqs[i].lhs==diff_eqs[i].rhs)
 
     # Algebraic equations
-    alg_eqs = alg_equations(sys)
-    alg_eqs = map(e -> Symbolics.substitute(e, submap), alg_eqs)
+    alg_eqs = substitute_jump_vars(model, sys, pmap, alg_equations(sys))
     @constraint(model, A[i = 1:length(alg_eqs)], alg_eqs[i].lhs==alg_eqs[i].rhs)
 end
 
@@ -306,9 +289,10 @@ end
 `derivative_method` kwarg refers to the method used by InfiniteOpt to compute derivatives. The list of possible options can be found at https://infiniteopt.github.io/InfiniteOpt.jl/stable/guide/derivative/. Defaults to FiniteDifference(Backward()).
 """
 function DiffEqBase.solve(prob::InfiniteOptControlProblem, jump_solver;
-        derivative_method = InfiniteOpt.FiniteDifference(Backward()))
+        derivative_method = InfiniteOpt.FiniteDifference(Backward()), silent = false)
+    model = prob.model
     silent && set_silent(model)
-    set_derivative_method(prob.model[:t], derivative_method)
+    set_derivative_method(model[:t], derivative_method)
     _solve(prob, jump_solver, derivative_method)
 end
 

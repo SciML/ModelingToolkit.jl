@@ -872,7 +872,6 @@ function maybe_build_initialization_problem(
         t = zero(floatT)
     end
 
-    @show u0map
     initializeprob = ModelingToolkit.InitializationProblem{true, SciMLBase.FullSpecialize}(
         sys, t, u0map, pmap; guesses, initialization_eqs, use_scc, kwargs...)
     if state_values(initializeprob) !== nothing
