@@ -1,5 +1,6 @@
-function generate_initializesystem(sys::AbstractSystem; kwargs...)
-    if is_time_dependent(sys)
+function generate_initializesystem(
+        sys::AbstractSystem; time_dependent_init = is_time_dependent(sys), kwargs...)
+    if time_dependent_init
         generate_initializesystem_timevarying(sys; kwargs...)
     else
         generate_initializesystem_timeindependent(sys; kwargs...)
@@ -545,6 +546,7 @@ function SciMLBase.remake_initialization_data(
         merge!(guesses, meta.guesses)
         use_scc = meta.use_scc
         initialization_eqs = meta.additional_initialization_eqs
+        time_dependent_init = meta.time_dependent_init
     else
         # there is no initializeprob, so the original problem construction
         # had no solvable parameters and had the differential variables
@@ -591,7 +593,7 @@ function SciMLBase.remake_initialization_data(
         u0map, pmap, defs, cmap, dvs, ps)
     floatT = float_type_from_varmap(op)
     kws = maybe_build_initialization_problem(
-        sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns;
+        sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns; time_dependent_init,
         use_scc, initialization_eqs, floatT, allow_incomplete = true)
 
     return SciMLBase.remake_initialization_data(sys, kws, newu0, t0, newp, newu0, newp)
