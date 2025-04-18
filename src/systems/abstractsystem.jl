@@ -115,17 +115,6 @@ function generate_jacobian end
 
 """
 ```julia
-generate_factorized_W(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
-                      expression = Val{true}; sparse = false, kwargs...)
-```
-
-Generates a function for the factorized W matrix of a system. Extra arguments control
-the arguments to the internal [`build_function`](@ref) call.
-"""
-function generate_factorized_W end
-
-"""
-```julia
 generate_hessian(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
                  expression = Val{true}; sparse = false, kwargs...)
 ```
@@ -244,7 +233,9 @@ Get the independent variable(s) of the system `sys`.
 See also [`@independent_variables`](@ref) and [`ModelingToolkit.get_iv`](@ref).
 """
 function independent_variables(sys::AbstractSystem)
-    @warn "Please declare ($(typeof(sys))) as a subtype of `AbstractTimeDependentSystem`, `AbstractTimeIndependentSystem` or `AbstractMultivariateSystem`."
+    if !(sys isa System)
+        @warn "Please declare ($(typeof(sys))) as a subtype of `AbstractTimeDependentSystem`, `AbstractTimeIndependentSystem` or `AbstractMultivariateSystem`."
+    end
     if isdefined(sys, :iv)
         return [getfield(sys, :iv)]
     elseif isdefined(sys, :ivs)
@@ -876,11 +867,14 @@ end
 
 for prop in [:eqs
              :tag
-             :noiseeqs
+             :noiseeqs # TODO: remove
+             :noise_eqs
              :iv
              :unknowns
              :ps
              :tspan
+             :brownians
+             :jumps
              :name
              :description
              :var_to_name
@@ -1294,7 +1288,29 @@ function namespace_equation(eq::Equation,
         ivs = independent_variables(sys))
     _lhs = namespace_expr(eq.lhs, sys, n; ivs)
     _rhs = namespace_expr(eq.rhs, sys, n; ivs)
-    (_lhs ~ _rhs)::Equation
+    (_lhs ~ _rhs)
+end
+
+function namespace_jump(j::ConstantRateJump, sys)
+    return ConstantRateJump(namespace_expr(j.rate, sys), namespace_expr(j.affect!, sys))
+end
+
+function namespace_jump(j::VariableRateJump, sys)
+    return VariableRateJump(namespace_expr(j.rate, sys), namespace_expr(j.affect!, sys))
+end
+
+function namespace_jump(j::MassActionJump, sys)
+    return MassActionJump(namespace_expr(j.scaled_rates, sys),
+        [namespace_expr(k, sys) => namespace_expr(v, sys) for (k, v) in j.reactant_stoch],
+        [namespace_expr(k, sys) => namespace_expr(v, sys) for (k, v) in j.net_stoch])
+end
+
+function namespace_jumps(sys::AbstractSystem)
+    return [namespace_jump(j, sys) for j in get_jumps(sys)]
+end
+
+function namespace_brownians(sys::AbstractSystem)
+    return [renamespace(sys, b) for b in brownians(sys)]
 end
 
 function namespace_assignment(eq::Assignment, sys)
@@ -1706,6 +1722,35 @@ function equations_toplevel(sys::AbstractSystem)
         return equations_toplevel(parent)
     end
     return get_eqs(sys)
+end
+
+function jumps(sys::AbstractSystem)
+    js = get_jumps(sys)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return js
+    end
+    return [js; reduce(vcat, namespace_jumps.(systems); init = [])]
+end
+
+function brownians(sys::AbstractSystem)
+    bs = get_brownians(sys)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return bs
+    end
+    return [bs; reduce(vcat, namespace_brownians.(systems); init = [])]
+end
+
+function cost(sys::AbstractSystem)
+    cs = get_costs(sys)
+    consolidate = get_consolidate(sys)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return consolidate(cs, Float64[])
+    end
+    subcosts = [namespace_expr(cost(subsys), subsys) for subsys in systems]
+    return consolidate(cs, subcosts)
 end
 
 """

@@ -633,7 +633,8 @@ All other keyword arguments are forwarded to `InitializationProblem`.
 function maybe_build_initialization_problem(
         sys::AbstractSystem, op::AbstractDict, u0map, pmap, t, defs,
         guesses, missing_unknowns; implicit_dae = false,
-        u0_constructor = identity, floatT = Float64, kwargs...)
+        time_dependent_init = is_time_dependent(sys), u0_constructor = identity,
+        floatT = Float64, kwargs...)
     guesses = merge(ModelingToolkit.guesses(sys), todict(guesses))
 
     if t === nothing && is_time_dependent(sys)
@@ -641,7 +642,7 @@ function maybe_build_initialization_problem(
     end
 
     initializeprob = ModelingToolkit.InitializationProblem{true, SciMLBase.FullSpecialize}(
-        sys, t, u0map, pmap; guesses, kwargs...)
+        sys, t, u0map, pmap; guesses, time_dependent_init, kwargs...)
     if state_values(initializeprob) !== nothing
         initializeprob = remake(initializeprob; u0 = floatT.(state_values(initializeprob)))
     end
@@ -660,7 +661,10 @@ function maybe_build_initialization_problem(
 
     meta = get_metadata(initializeprob.f.sys)
 
-    if is_time_dependent(sys)
+    if time_dependent_init === nothing
+        time_dependent_init = is_time_dependent(sys)
+    end
+    if time_dependent_init
         all_init_syms = Set(all_symbols(initializeprob))
         solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
         initializeprobmap = u0_constructor ∘ getu(initializeprob, solved_unknowns)
@@ -700,7 +704,7 @@ function maybe_build_initialization_problem(
         end
     end
 
-    if is_time_dependent(sys)
+    if time_dependent_init
         for v in missing_unknowns
             op[v] = get_temporary_value(v, floatT)
         end
@@ -803,7 +807,7 @@ function process_SciMLProblem(
         symbolic_u0 = false, warn_cyclic_dependency = false,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10,
-        substitution_limit = 100, use_scc = true,
+        substitution_limit = 100, use_scc = true, time_dependent_init = is_time_dependent(sys),
         force_initialization_time_independent = false, algebraic_only = false,
         allow_incomplete = false, is_initializeprob = false, kwargs...)
     dvs = unknowns(sys)
@@ -858,7 +862,7 @@ function process_SciMLProblem(
             warn_cyclic_dependency, check_units = check_initialization_units,
             circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
             force_time_independent = force_initialization_time_independent, algebraic_only, allow_incomplete,
-            u0_constructor, floatT)
+            u0_constructor, floatT, time_dependent_init)
 
         kwargs = merge(kwargs, kws)
     end
@@ -984,6 +988,69 @@ function SciMLBase.detect_cycles(sys::AbstractSystem, varmap::Dict{Any, Any}, va
     vars = map(unwrap, vars)
     cycles = check_substitution_cycles(varmap, vars)
     return !isempty(cycles)
+end
+
+function process_kwargs(sys::System; callback = nothing, eval_expression = false,
+        eval_module = @__MODULE__, kwargs...)
+    kwargs = filter_kwargs(kwargs)
+    kwargs1 = (;)
+
+    if is_time_dependent(sys)
+        cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
+        if cbs !== nothing
+            kwargs1 = merge(kwargs1, (callback = cbs,))
+        end
+
+        tstops = SymbolicTstops(sys; eval_expression, eval_module)
+        if tstops !== nothing
+            kwargs1 = merge(kwargs1, (; tstops))
+        end
+    end
+
+    return merge(kwargs1, kwargs)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Macro for writing problem/function constructors. Expects a function definition with type
+parameters for `iip` and `specialize`. Generates fallbacks with
+`specialize = SciMLBase.FullSpecialize` and `iip = true`.
+"""
+macro fallback_iip_specialize(ex)
+    @assert Meta.isexpr(ex, :function)
+    fnname, body = ex.args
+    @assert Meta.isexpr(fnname, :where)
+    fnname_call, where_args... = fnname.args
+    @assert length(where_args) == 2
+    iiparg, specarg = where_args
+
+    @assert Meta.isexpr(fnname_call, :call)
+    fnname_curly, args... = fnname_call.args
+    args = map(args) do arg
+        Meta.isexpr(arg, :kw) && return arg.args[1]
+        return arg
+    end
+
+    @assert Meta.isexpr(fnname_curly, :curly)
+    fnname_name, curly_args... = fnname_curly.args
+    @assert curly_args == where_args
+
+    callexpr_iip = Expr(
+        :call, Expr(:curly, fnname_name, curly_args[1], SciMLBase.FullSpecialize), args...)
+    fnname_iip = Expr(:curly, fnname_name, curly_args[1])
+    fncall_iip = Expr(:call, fnname_iip, args...)
+    fnwhere_iip = Expr(:where, fncall_iip, where_args[1])
+    fn_iip = Expr(:function, fnwhere_iip, callexpr_iip)
+
+    callexpr_base = Expr(:call, Expr(:curly, fnname_name, true), args...)
+    fncall_base = Expr(:call, fnname_name, args...)
+    fn_base = Expr(:function, fncall_base, callexpr_base)
+    return quote
+        $fn_base
+        $fn_iip
+        Base.@__doc__ $ex
+    end
 end
 
 ##############

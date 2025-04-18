@@ -1,9 +1,18 @@
+function generate_initializesystem(
+        sys::AbstractSystem; time_dependent_init = is_time_dependent(sys), kwargs...)
+    if time_dependent_init
+        generate_initializesystem_timevarying(sys; kwargs...)
+    else
+        generate_initializesystem_timeindependent(sys; kwargs...)
+    end
+end
+
 """
 $(TYPEDSIGNATURES)
 
 Generate `NonlinearSystem` which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
 """
-function generate_initializesystem(sys::AbstractTimeDependentSystem;
+function generate_initializesystem_timevarying(sys::AbstractSystem;
         u0map = Dict(),
         pmap = Dict(),
         initialization_eqs = [],
@@ -145,7 +154,7 @@ function generate_initializesystem(sys::AbstractTimeDependentSystem;
     end
     meta = InitializationSystemMetadata(
         anydict(u0map), anydict(pmap), additional_guesses,
-        additional_initialization_eqs, extra_metadata, nothing)
+        additional_initialization_eqs, extra_metadata, nothing, true)
     return NonlinearSystem(eqs_ics,
         vars,
         pars;
@@ -162,7 +171,7 @@ $(TYPEDSIGNATURES)
 
 Generate `NonlinearSystem` which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
 """
-function generate_initializesystem(sys::AbstractTimeIndependentSystem;
+function generate_initializesystem_timeindependent(sys::AbstractSystem;
         u0map = Dict(),
         pmap = Dict(),
         initialization_eqs = [],
@@ -246,7 +255,7 @@ function generate_initializesystem(sys::AbstractTimeIndependentSystem;
     end
     meta = InitializationSystemMetadata(
         anydict(u0map), anydict(pmap), additional_guesses,
-        additional_initialization_eqs, extra_metadata, nothing)
+        additional_initialization_eqs, extra_metadata, nothing, false)
     return NonlinearSystem(eqs_ics,
         vars,
         pars;
@@ -492,6 +501,7 @@ struct InitializationSystemMetadata
     additional_initialization_eqs::Vector{Equation}
     extra_metadata::NamedTuple
     oop_reconstruct_u0_p::Union{Nothing, ReconstructInitializeprob}
+    time_dependent_init::Bool
 end
 
 function get_possibly_array_fallback_singletons(varmap, p)
@@ -601,6 +611,7 @@ function SciMLBase.remake_initialization_data(
             merge!(guesses, meta.additional_guesses)
             use_scc = get(meta.extra_metadata, :use_scc, true)
             initialization_eqs = meta.additional_initialization_eqs
+            time_dependent_init = meta.time_dependent_init
         end
     else
         # there is no initializeprob, so the original problem construction
@@ -648,7 +659,7 @@ function SciMLBase.remake_initialization_data(
         u0map, pmap, defs, cmap, dvs, ps)
     floatT = float_type_from_varmap(op)
     kws = maybe_build_initialization_problem(
-        sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns;
+        sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns; time_dependent_init,
         use_scc, initialization_eqs, floatT, allow_incomplete = true)
 
     return SciMLBase.remake_initialization_data(sys, kws, newu0, t0, newp, newu0, newp)
@@ -657,6 +668,7 @@ end
 function SciMLBase.late_binding_update_u0_p(
         prob, sys::AbstractSystem, u0, p, t0, newu0, newp)
     supports_initialization(sys) || return newu0, newp
+    prob isa IntervalNonlinearProblem && return newu0, newp
     u0 === missing && return newu0, (p === missing ? copy(newp) : newp)
     # non-symbolic u0 updates initials...
     if !(eltype(u0) <: Pair)

@@ -11,21 +11,6 @@ differential equations.
 """
 is_dde(sys::AbstractSystem) = has_is_dde(sys) && get_is_dde(sys)
 
-function _check_if_dde(eqs, iv, subsystems)
-    is_dde = any(ModelingToolkit.is_dde, subsystems)
-    if !is_dde
-        vs = Set()
-        for eq in eqs
-            vars!(vs, eq)
-            is_dde = any(vs) do sym
-                isdelay(unwrap(sym), iv)
-            end
-            is_dde && break
-        end
-    end
-    return is_dde
-end
-
 function filter_kwargs(kwargs)
     kwargs = Dict(kwargs)
     for key in keys(kwargs)
@@ -139,16 +124,6 @@ function generate_jacobian(sys::AbstractODESystem, dvs = unknowns(sys),
         kwargs...)
 end
 
-function assert_jac_length_header(sys)
-    W = W_sparsity(sys)
-    identity,
-    function add_header(expr)
-        Func(expr.args, [], expr.body,
-            [:(@assert $(SymbolicUtils.Code.toexpr(term(findnz, expr.args[1])))[1:2] ==
-                       $(findnz(W)[1:2]))])
-    end
-end
-
 function generate_W(sys::AbstractODESystem, γ = 1.0, dvs = unknowns(sys),
         ps = parameters(sys; initial_parameters = true);
         simplify = false, sparse = false, kwargs...)
@@ -222,50 +197,6 @@ function generate_function(sys::AbstractODESystem, dvs = unknowns(sys),
         build_function_wrapper(sys, rhss, ddvs, u, p..., t; p_start = 3, kwargs...)
     else
         build_function_wrapper(sys, rhss, u, p..., t; kwargs...)
-    end
-end
-
-function isdelay(var, iv)
-    iv === nothing && return false
-    isvariable(var) || return false
-    isparameter(var) && return false
-    if iscall(var) && !ModelingToolkit.isoperator(var, Symbolics.Operator)
-        args = arguments(var)
-        length(args) == 1 || return false
-        isequal(args[1], iv) || return true
-    end
-    return false
-end
-const DDE_HISTORY_FUN = Sym{Symbolics.FnType{Tuple{Any, <:Real}, Vector{Real}}}(:___history___)
-const DEFAULT_PARAMS_ARG = Sym{Any}(:ˍ₋arg3)
-function delay_to_function(
-        sys::AbstractODESystem, eqs = full_equations(sys); history_arg = DEFAULT_PARAMS_ARG)
-    delay_to_function(eqs,
-        get_iv(sys),
-        Dict{Any, Int}(operation(s) => i for (i, s) in enumerate(unknowns(sys))),
-        parameters(sys),
-        DDE_HISTORY_FUN; history_arg)
-end
-function delay_to_function(eqs::Vector, iv, sts, ps, h; history_arg = DEFAULT_PARAMS_ARG)
-    delay_to_function.(eqs, (iv,), (sts,), (ps,), (h,); history_arg)
-end
-function delay_to_function(eq::Equation, iv, sts, ps, h; history_arg = DEFAULT_PARAMS_ARG)
-    delay_to_function(eq.lhs, iv, sts, ps, h; history_arg) ~ delay_to_function(
-        eq.rhs, iv, sts, ps, h; history_arg)
-end
-function delay_to_function(expr, iv, sts, ps, h; history_arg = DEFAULT_PARAMS_ARG)
-    if isdelay(expr, iv)
-        v = operation(expr)
-        time = arguments(expr)[1]
-        idx = sts[v]
-        return term(getindex, h(history_arg, time), idx, type = Real) # BIG BIG HACK
-    elseif iscall(expr)
-        return maketerm(typeof(expr),
-            operation(expr),
-            map(x -> delay_to_function(x, iv, sts, ps, h; history_arg), arguments(expr)),
-            metadata(expr))
-    else
-        return expr
     end
 end
 
@@ -1447,6 +1378,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
         allow_incomplete = false,
         force_time_independent = false,
         algebraic_only = false,
+        time_dependent_init = is_time_dependent(sys),
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
@@ -1461,7 +1393,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
         simplify_system = true
     else
         isys = generate_initializesystem(
-            sys; u0map, initialization_eqs, check_units,
+            sys; u0map, initialization_eqs, check_units, time_dependent_init,
             pmap = parammap, guesses, extra_metadata = (; use_scc), algebraic_only)
         simplify_system = true
     end
@@ -1500,7 +1432,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
 
     # TODO: throw on uninitialized arrays
     filter!(x -> !(x isa Symbolics.Arr), uninit)
-    if is_time_dependent(sys) && !isempty(uninit)
+    if time_dependent_init && !isempty(uninit)
         allow_incomplete || throw(IncompleteInitializationError(uninit))
         # for incomplete initialization, we will add the missing variables as parameters.
         # they will be updated by `update_initializeprob!` and `initializeprobmap` will
