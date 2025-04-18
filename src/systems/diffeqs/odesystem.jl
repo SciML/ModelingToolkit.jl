@@ -815,7 +815,7 @@ function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
                 arg isa AbstractFloat ||
                 throw(ArgumentError("Invalid argument specified for variable $var. The argument of the variable should be either $iv, a parameter, or a value specifying the time that the constraint holds."))
 
-            isparameter(arg) && push!(auxps, arg)
+            (isparameter(arg) && !isequal(arg, iv)) && push!(auxps, arg)
         else
             var ∈ sts &&
                 @warn "Variable $var has no argument. It will be interpreted as $var($iv), and the constraint will apply to the entire interval."

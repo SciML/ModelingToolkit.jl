@@ -352,5 +352,6 @@ include("systems/optimal_control_interface.jl")
 export AbstractOptimalControlProblem, JuMPControlProblem, InfiniteOptControlProblem,
        PyomoControlProblem, CasADiControlProblem
 export OptimalControlSolution
+export ∫
 
 end # module

@@ -250,7 +250,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
         args = (ddvs, args...)
     end
     f = build_function_wrapper(sys, rhss, args...; p_start = 3 + implicit_dae,
-        p_end = length(p) + 2 + implicit_dae)
+        p_end = length(p) + 2 + implicit_dae, kwargs...)
     f = eval_or_rgf.(f; eval_expression, eval_module)
     f = GeneratedFunctionWrapper{(3, length(args) - length(p) + 1, is_split(sys))}(f...)
     ps = setdiff(parameters(sys), inputs, disturbance_inputs)

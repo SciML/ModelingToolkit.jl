@@ -7,6 +7,15 @@ struct OptimalControlSolution
     input_sol::Union{Nothing, ODESolution}
 end
 
+function Base.show(io::IO, sol::OptimalControlSolution)
+    println("retcode: ", sol.sol.retcode, "\n")
+
+    println("Optimal control solution for following model:\n")
+    show(sol.model)
+
+    print("\n\nPlease query the model using sol.model, the solution trajectory for the system using sol.sol, or the solution trajectory for the controllers using sol.input_sol.")
+end
+
 function JuMPControlProblem end
 function InfiniteOptControlProblem end
 function CasADiControlProblem end
@@ -44,7 +53,7 @@ function SciMLBase.ControlFunction{iip, specialize}(sys::ODESystem,
         cse = true,
         kwargs...) where {iip, specialize}
 
-    (f), _, _ = generate_control_function(sys, inputs, disturbance_inputs; eval_expression = true, eval_module, cse, kwargs...)
+    (f), _, _ = generate_control_function(sys, inputs, disturbance_inputs; eval_module, cse, kwargs...)
 
     if tgrad
         tgrad_gen = generate_tgrad(sys, dvs, ps;
@@ -134,7 +143,7 @@ function SciMLBase.ControlFunction{false}(sys::AbstractODESystem, args...;
 end
 
 """
-IntegralNorm. When applied to an expression in a cost
+Integral operator. When applied to an expression in a cost
 function, assumes that the integration variable is the
 iv of the system, and assumes that the bounds are the
 tspan.
@@ -143,17 +152,46 @@ Equivalent to Integral(t in tspan) in Symbolics.
 struct ∫ <: Symbolics.Operator end
 ∫(x) = ∫()(x)
 Base.show(io::IO, x::∫) = print(io, "∫")
+Base.nameof(::∫) = :∫
 
-"""
-$(SIGNATURES)
-
-Define one or more inputs.
-
-See also [`@independent_variables`](@ref), [`@variables`](@ref) and [`@constants`](@ref).
-"""
-macro inputs(xs...)
-    Symbolics._parse_vars(:inputs,
-        Real,
-        xs,
-        toparam) |> esc
+function (I::∫)(x)
+    Term{symtype(x)}(I, Any[x])
 end
+
+function (I::∫)(x::Num)
+    v = value(x)
+    Num(I(v))
+end
+
+SymbolicUtils.promote_symtype(::Int, t) = t
+
+# returns the JuMP timespan, the number of steps, and whether it is a free time problem.
+function process_tspan(tspan, dt, steps)
+    is_free_time = false
+    if isnothing(dt) && isnothing(steps)
+        error("Must provide either the dt or the number of intervals to the collocation solvers (JuMP, InfiniteOpt, CasADi).")
+    elseif symbolic_type(tspan[1]) === ScalarSymbolic() || symbolic_type(tspan[2]) === ScalarSymbolic()
+        isnothing(steps) && error("Free final time problems require specifying the number of steps, rather than dt.")
+        isnothing(dt) || @warn "Specified dt for free final time problem. This will be ignored; dt will be determined by the number of timesteps."
+
+        return steps, true
+    else
+        isnothing(steps) || @warn "Specified number of steps for problem with concrete tspan. This will be ignored; number of steps will be determined by dt."
+
+        return length(tspan[1]:dt:tspan[2]), false 
+    end
+end
+
+#"""
+#$(SIGNATURES)
+#
+#Define one or more inputs.
+#
+#See also [`@independent_variables`](@ref), [`@variables`](@ref) and [`@constants`](@ref).
+#"""
+#macro inputs(xs...)
+#    Symbolics._parse_vars(:inputs,
+#        Real,
+#        xs,
+#        toparam) |> esc
+#end
