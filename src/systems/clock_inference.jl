@@ -1,7 +1,11 @@
 struct ClockInference{S}
+    """Tearing state."""
     ts::S
+    """The time domain (discrete clock, continuous) of each equation."""
     eq_domain::Vector{TimeDomain}
+    """The output time domain (discrete clock, continuous) of each variable."""
     var_domain::Vector{TimeDomain}
+    """The set of variables with concrete domains."""
     inferred::BitSet
 end
 
@@ -67,6 +71,9 @@ function substitute_sample_time(ex, dt)
     end
 end
 
+"""
+Update the equation-to-time domain mapping by inferring the time domain from the variables.
+"""
 function infer_clocks!(ci::ClockInference)
     @unpack ts, eq_domain, var_domain, inferred = ci
     @unpack var_to_diff, graph = ts.structure
@@ -132,6 +139,9 @@ function is_time_domain_conversion(v)
         input_timedomain(o) != output_timedomain(o)
 end
 
+"""
+For multi-clock systems, create a separate system for each clock in the system, along with associated equations. Return the updated tearing state, and the sets of clocked variables associated with each time domain.
+"""
 function split_system(ci::ClockInference{S}) where {S}
     @unpack ts, eq_domain, var_domain, inferred = ci
     fullvars = get_fullvars(ts)
@@ -143,11 +153,14 @@ function split_system(ci::ClockInference{S}) where {S}
     cid_to_eq = Vector{Int}[]
     var_to_cid = Vector{Int}(undef, ndsts(graph))
     cid_to_var = Vector{Int}[]
+    # cid_counter = number of clocks
     cid_counter = Ref(0)
     for (i, d) in enumerate(eq_domain)
         cid = let cid_counter = cid_counter, id_to_clock = id_to_clock,
             continuous_id = continuous_id
 
+            # Fill the clock_to_id dict as you go,
+            # ContinuousClock() => 1, ...
             get!(clock_to_id, d) do
                 cid = (cid_counter[] += 1)
                 push!(id_to_clock, d)
