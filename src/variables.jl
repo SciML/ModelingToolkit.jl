@@ -332,6 +332,11 @@ function hasbounds(x)
     any(isfinite.(b[1]) .|| isfinite.(b[2]))
 end
 
+function setbounds(x::Num, bounds)
+    (lb, ub) = bounds
+    setmetadata(x, VariableBounds, (lb, ub))
+end
+
 ## Disturbance =================================================================
 struct VariableDisturbance end
 Symbolics.option_to_metadata_type(::Val{:disturbance}) = VariableDisturbance
