@@ -26,13 +26,16 @@ topological sort of the observed equations in `sys`.
 + `fully_determined=true` controls whether or not an error will be thrown if the number of equations don't match the number of inputs, outputs, and equations.
 + `sort_eqs=true` controls whether equations are sorted lexicographically before simplification or not.
 """
-function structural_simplify(
-        sys::AbstractSystem, io = nothing; additional_passes = [], simplify = false, split = true,
+function mtkbuild(
+        sys::AbstractSystem; additional_passes = [], simplify = false, split = true,
         allow_symbolic = false, allow_parameter = true, conservative = false, fully_determined = true,
+        inputs = nothing, outputs = nothing,
+        disturbance_inputs = nothing,
         kwargs...)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
-    newsys′ = __structural_simplify(sys, io; simplify,
+    newsys′ = __structural_simplify(sys; simplify,
         allow_symbolic, allow_parameter, conservative, fully_determined,
+        inputs, outputs, disturbance_inputs,
         kwargs...)
     if newsys′ isa Tuple
         @assert length(newsys′) == 2
@@ -70,8 +73,9 @@ function __structural_simplify(sys::SDESystem, args...; kwargs...)
     return __structural_simplify(ODESystem(sys), args...; kwargs...)
 end
 
-function __structural_simplify(
-        sys::AbstractSystem, io = nothing; simplify = false, sort_eqs = true,
+function __structural_simplify(sys::AbstractSystem; simplify = false,
+        inputs = nothing, outputs = nothing,
+        disturbance_inputs = nothing,
         kwargs...)
     sys = expand_connections(sys)
     state = TearingState(sys; sort_eqs)
@@ -90,7 +94,7 @@ function __structural_simplify(
         end
     end
     if isempty(brown_vars)
-        return structural_simplify!(state, io; simplify, kwargs...)
+        return structural_simplify!(state; simplify, inputs, outputs, disturbance_inputs, kwargs...)
     else
         Is = Int[]
         Js = Int[]
@@ -123,7 +127,7 @@ function __structural_simplify(
                               if !iszero(new_idxs[i]) &&
                                  invview(var_to_diff)[i] === nothing]
         # TODO: IO is not handled.
-        ode_sys = structural_simplify(sys, io; simplify, kwargs...)
+        ode_sys = structural_simplify(sys; simplify, inputs, outputs, disturbance_inputs, kwargs...)
         eqs = equations(ode_sys)
         sorted_g_rows = zeros(Num, length(eqs), size(g, 2))
         for (i, eq) in enumerate(eqs)
