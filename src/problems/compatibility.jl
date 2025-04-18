@@ -59,6 +59,15 @@ function check_no_cost(sys::System, T)
     end
 end
 
+function check_has_cost(sys::System, T)
+    cost = ModelingToolkit.cost(sys)
+    if _iszero(cost)
+        throw(SystemCompatibilityError("""
+        A system without cost cannot be used to construct a `$T`.
+        """))
+    end
+end
+
 function check_no_constraints(sys::System, T)
     if !isempty(constraints(sys))
         throw(SystemCompatibilityError("""
@@ -135,6 +144,15 @@ function check_is_implicit(sys::System, T, altT)
     if !has_alg_equations(sys)
         throw(SystemCompatibilityError("""
         `$T` expects an implicit system. Consider a `$altT` instead.
+        """))
+    end
+end
+
+function check_no_equations(sys::System, T)
+    if !isempty(equations(sys))
+        throw(SystemCompatibilityError("""
+        A system with equations cannot be used to construct a `$T`. Consider turning the
+        equations into constraints instead.
         """))
     end
 end
