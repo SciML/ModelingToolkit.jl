@@ -3,7 +3,7 @@ using JuMP, InfiniteOpt
 using DiffEqDevTools, DiffEqBase
 using SimpleDiffEq
 using OrdinaryDiffEqSDIRK
-using Ipopt 
+using Ipopt
 using BenchmarkTools
 const M = ModelingToolkit
 
@@ -11,7 +11,8 @@ const M = ModelingToolkit
     # Test solving without anything attached.
     @parameters α=1.5 β=1.0 γ=3.0 δ=1.0
     M.@variables x(..) y(..)
-    t = M.t_nounits; D = M.D_nounits
+    t = M.t_nounits
+    D = M.D_nounits
 
     eqs = [D(x(t)) ~ α * x(t) - β * x(t) * y(t),
         D(y(t)) ~ -γ * y(t) + δ * x(t) * y(t)]
@@ -34,7 +35,8 @@ const M = ModelingToolkit
     osol2 = @btime solve($oprob, ImplicitEuler(), dt = 0.01, adaptive = false) # 129.375 μs, 61.91 KiB
     @test ≈(jsol2.sol.u, osol2.u, rtol = 0.001)
     iprob = InfiniteOptControlProblem(sys, u0map, tspan, parammap, dt = 0.01)
-    isol = @btime solve($iprob, Ipopt.Optimizer, derivative_method = FiniteDifference(Backward())) # 11.540 ms, 4.00 MiB
+    isol = @btime solve(
+        $iprob, Ipopt.Optimizer, derivative_method = FiniteDifference(Backward())) # 11.540 ms, 4.00 MiB
 
     # With a constraint
     u0map = Pair[]
@@ -49,8 +51,10 @@ const M = ModelingToolkit
     @test sol(0.6)[1] ≈ 3.5
     @test sol(0.3)[1] ≈ 7.0
 
-    iprob = InfiniteOptControlProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
-    isol = @btime solve($iprob, Ipopt.Optimizer, derivative_method = OrthogonalCollocation(3)) # 48.564 ms, 9.58 MiB
+    iprob = InfiniteOptControlProblem(
+        lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
+    isol = @btime solve(
+        $iprob, Ipopt.Optimizer, derivative_method = OrthogonalCollocation(3)) # 48.564 ms, 9.58 MiB
     sol = isol.sol
     @test sol(0.6)[1] ≈ 3.5
     @test sol(0.3)[1] ≈ 7.0
