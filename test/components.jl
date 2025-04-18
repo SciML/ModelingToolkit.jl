@@ -109,7 +109,7 @@ function rc_component(; name, R = 1, C = 1)
     @named p = Pin()
     @named n = Pin()
     @named resistor = Resistor(R = R) # test parent scope default of @named
-    @named capacitor = Capacitor(C = ParentScope(C))
+    @named capacitor = Capacitor(C = C)
     eqs = [connect(p, resistor.p);
            connect(resistor.n, capacitor.p);
            connect(capacitor.n, n)]

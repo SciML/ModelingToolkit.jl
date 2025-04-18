@@ -296,7 +296,7 @@ export PDESystem
 export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
 export Term, Sym
-export SymScope, LocalScope, ParentScope, DelayParentScope, GlobalScope
+export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variable, equations, controls, observed, full_equations
 export initialization_equations, guesses, defaults, parameter_dependencies, hierarchy
 export structural_simplify, expand_connections, linearize, linearization_function,

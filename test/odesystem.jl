@@ -9,6 +9,7 @@ using SymbolicUtils: issym
 using ForwardDiff
 using ModelingToolkit: value
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using Symbolics: unwrap
 
 # Define some variables
 @parameters σ ρ β
@@ -135,19 +136,7 @@ du = zeros(3)
 tgrad_iip(du, u, p, t)
 @test du == [0.0, -u[2], 0.0]
 
-@parameters σ′(t - 1)
-eqs = [D(x) ~ σ′ * (y - x),
-    D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y - β * z * κ]
-@named de = ODESystem(eqs, t)
-test_diffeq_inference("global iv-varying", de, t, (x, y, z), (σ′, ρ, β))
-
-f = generate_function(de, [x, y, z], [σ′, ρ, β], expression = Val{false})[2]
-du = [0.0, 0.0, 0.0]
-f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
-@test du ≈ [11, -3, -7]
-
-@parameters σ(..)
+@parameters (σ::Function)(..)
 eqs = [D(x) ~ σ(t - 1) * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z * κ]
@@ -1731,4 +1720,27 @@ end
         sys, [x + 1, x + 2, x + t], return_inplace = true, expression = true)
     @test obsfn_expr_oop isa Expr
     @test obsfn_expr_iip isa Expr
+end
+
+@testset "`@named` always wraps in `ParentScope`" begin
+    function SysA(; name, var1)
+        @variables x(t)
+        scope = ModelingToolkit.getmetadata(unwrap(var1), ModelingToolkit.SymScope, nothing)
+        @test scope isa ParentScope
+        @test scope.parent isa ParentScope
+        @test scope.parent.parent isa LocalScope
+        return ODESystem(D(x) ~ var1, t; name)
+    end
+    function SysB(; name, var1)
+        @variables x(t)
+        @named subsys = SysA(; var1)
+        return ODESystem(D(x) ~ x, t; systems = [subsys], name)
+    end
+    function SysC(; name)
+        @variables x(t)
+        @named subsys = SysB(; var1 = x)
+        return ODESystem(D(x) ~ x, t; systems = [subsys], name)
+    end
+    @mtkbuild sys = SysC()
+    @test length(unknowns(sys)) == 3
 end
