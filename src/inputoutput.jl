@@ -179,9 +179,6 @@ The return values also include the chosen state-realization (the remaining unkno
 
 If `disturbance_inputs` is an array of variables, the generated dynamics function will preserve any state and dynamics associated with disturbance inputs, but the disturbance inputs themselves will (by default) not be included as inputs to the generated function. The use case for this is to generate dynamics for state observers that estimate the influence of unmeasured disturbances, and thus require unknown variables for the disturbance model, but without disturbance inputs since the disturbances are not available for measurement. To add an input argument corresponding to the disturbance inputs, either include the disturbance inputs among the control inputs, or set `disturbance_argument=true`, in which case an additional input argument `w` is added to the generated function `(x,u,p,t,w)->rhs`.
 
-!!! note "Un-simplified system"
-    This function expects `sys` to be un-simplified, i.e., `structural_simplify` or `@mtkbuild` should not be called on the system before passing it into this function. `generate_control_function` calls a special version of `structural_simplify` internally.
-
 # Example
 
 ```
@@ -201,15 +198,15 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
         eval_expression = false,
         eval_module = @__MODULE__,
         kwargs...)
-    isempty(inputs) && @warn("No unbound inputs were found in system.")
 
+    # Remove this when the ControlFunction gets merged.
+    if !iscomplete(sys) 
+        error("A completed `ODESystem` is required. Call `complete` or `structural_simplify` on the system before creating the control function.")
+    end
+    isempty(inputs) && @warn("No unbound inputs were found in system.")
     if disturbance_inputs !== nothing
         # add to inputs for the purposes of io processing
         inputs = [inputs; disturbance_inputs]
-    end
-
-    if !iscomplete(sys)
-        sys, _ = io_preprocessing(sys, inputs, []; simplify, kwargs...)
     end
 
     dvs = unknowns(sys)
@@ -257,8 +254,11 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     (; f, dvs, ps, io_sys = sys)
 end
 
-function inputs_to_parameters!(state::TransformationState, io)
-    check_bound = io === nothing
+"""
+Turn input variables into parameters of the system.
+"""
+function inputs_to_parameters!(state::TransformationState, inputsyms)
+    check_bound = inputsyms === nothing
     @unpack structure, fullvars, sys = state
     @unpack var_to_diff, graph, solvable_graph = structure
     @assert solvable_graph === nothing
