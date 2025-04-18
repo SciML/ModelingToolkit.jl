@@ -369,3 +369,122 @@ function generate_boundary_conditions(sys::System, u0, u0_idxs, t0; expression =
     f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
     return GeneratedFunctionWrapper{(2, 3, is_split(sys))}(f_oop, f_iip)
 end
+
+function generate_cost(sys::System; expression = Val{true}, eval_expression = false,
+        eval_module = @__MODULE__, kwargs...)
+    obj = cost(sys)
+    dvs = unknowns(sys)
+    ps = reorder_parameters(sys)
+    res = build_function_wrapper(sys, obj, dvs, ps...; expression = Val{true}, kwargs...)
+    if expression == Val{true}
+        return res
+    end
+    f_oop = eval_or_rgf(res; eval_expression, eval_module)
+    return GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, nothing)
+end
+
+function generate_cost_gradient(
+        sys::System; expression = Val{true}, eval_expression = false,
+        eval_module = @__MODULE__, simplify = false, kwargs...)
+    obj = cost(sys)
+    dvs = unknowns(sys)
+    ps = reorder_parameters(sys)
+    exprs = Symbolics.gradient(obj, dvs; simplify)
+    res = build_function_wrapper(sys, exprs, dvs, ps...; expression = Val{true}, kwargs...)
+    if expression == Val{true}
+        return res
+    end
+    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
+    return GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, f_iip)
+end
+
+function generate_cost_hessian(
+        sys::System; expression = Val{true}, eval_expression = false,
+        eval_module = @__MODULE__, simplify = false,
+        sparse = false, return_sparsity = false, kwargs...)
+    obj = cost(sys)
+    dvs = unknowns(sys)
+    ps = reorder_parameters(sys)
+    sparsity = nothing
+    if sparse
+        exprs = Symbolics.sparsehessian(obj, dvs; simplify)::AbstractSparseArray
+        sparsity = similar(exprs, Float64)
+    else
+        exprs = Symbolics.hessian(obj, dvs; simplify)
+    end
+    res = build_function_wrapper(sys, exprs, dvs, ps...; expression = Val{true}, kwargs...)
+    if expression == Val{true}
+        return return_sparsity ? (res, sparsity) : res
+    end
+    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
+    fn = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, f_iip)
+    return return_sparsity ? (fn, sparsity) : fn
+end
+
+function canonical_constraints(sys::System)
+    return map(constraints(sys)) do cstr
+        Symbolics.canonical_form(cstr).lhs
+    end
+end
+
+function generate_cons(sys::System; expression = Val{true}, eval_expression = false,
+        eval_module = @__MODULE__, kwargs...)
+    cons = canonical_constraints(sys)
+    dvs = unknowns(sys)
+    ps = reorder_parameters(sys)
+    res = build_function_wrapper(sys, cons, dvs, ps...; expression = Val{true}, kwargs...)
+    if expression == Val{true}
+        return res
+    end
+    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
+    fn = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, f_iip)
+    return fn
+end
+
+function generate_constraint_jacobian(
+        sys::System; expression = Val{true}, eval_expression = false,
+        eval_module = @__MODULE__, return_sparsity = false,
+        simplify = false, sparse = false, kwargs...)
+    cons = canonical_constraints(sys)
+    dvs = unknowns(sys)
+    ps = reorder_parameters(sys)
+    sparsity = nothing
+    if sparse
+        jac = Symbolics.sparsejacobian(cons, dvs; simplify)::AbstractSparseArray
+        sparsity = similar(jac, Float64)
+    else
+        jac = Symbolics.jacobian(cons, dvs; simplify)
+    end
+    res = build_function_wrapper(sys, jac, dvs, ps...; expression = Val{true}, kwargs...)
+    if expression == Val{true}
+        return return_sparsity ? (res, sparsity) : res
+    end
+    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
+    fn = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, f_iip)
+    return return_sparsity ? (fn, sparsity) : fn
+end
+
+function generate_constraint_hessian(
+        sys::System; expression = Val{true}, eval_expression = false,
+        eval_module = @__MODULE__, return_sparsity = false,
+        simplify = false, sparse = false, kwargs...)
+    cons = canonical_constraints(sys)
+    dvs = unknowns(sys)
+    ps = reorder_parameters(sys)
+    sparsity = nothing
+    if sparse
+        hess = map(cons) do cstr
+            Symbolics.sparsehessian(cstr, dvs; simplify)::AbstractSparseArray
+        end
+        sparsity = similar.(hess, Float64)
+    else
+        hess = [Symbolics.hessian(cstr, dvs; simplify) for cstr in cons]
+    end
+    res = build_function_wrapper(sys, hess, dvs, ps...; expression = Val{true}, kwargs...)
+    if expression == Val{true}
+        return return_sparsity ? (res, sparsity) : res
+    end
+    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
+    fn = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, f_iip)
+    return return_sparsity ? (fn, sparsity) : fn
+end
