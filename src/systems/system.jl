@@ -76,6 +76,9 @@ struct System <: AbstractSystem
 end
 
 function default_consolidate(costs, subcosts)
+    if !(costs isa Union{AbstractArray, Symbolic{<:AbstractArray}})
+        costs = (costs,)
+    end
     return sum(costs; init = 0.0) + sum(subcosts; init = 0.0)
 end
 
