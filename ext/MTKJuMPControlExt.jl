@@ -102,7 +102,7 @@ function init_model(sys, tspan, steps, u0map, pmap, u0; is_free_t = false)
 
     if is_free_t
         (ts_sym, te_sym) = tspan
-        @variable(model, tf, start = pmap[te_sym])
+        @variable(model, tf, start=pmap[te_sym])
         hasbounds(te_sym) && begin
             lo, hi = getbounds(te_sym)
             set_lower_bound(tf, lo)
@@ -112,11 +112,11 @@ function init_model(sys, tspan, steps, u0map, pmap, u0; is_free_t = false)
         pmap[te_sym] = 1
         tspan = (0, 1)
     end
-        
-    @infinite_parameter(model, t in [tspan[1], tspan[2]], num_supports = steps)
-    @variable(model, U[i = 1:length(states)], Infinite(t), start = u0[i])
+
+    @infinite_parameter(model, t in [tspan[1], tspan[2]], num_supports=steps)
+    @variable(model, U[i = 1:length(states)], Infinite(t), start=u0[i])
     c0 = [pmap[c] for c in ctrls]
-    @variable(model, V[i = 1:length(ctrls)], Infinite(t), start = c0[i])
+    @variable(model, V[i = 1:length(ctrls)], Infinite(t), start=c0[i])
 
     set_jump_bounds!(model, sys, pmap)
     add_jump_cost_function!(model, sys, (tspan[1], tspan[2]), pmap; is_free_t)
@@ -161,7 +161,8 @@ function add_jump_cost_function!(model::InfiniteModel, sys, tspan, pmap; is_free
 
     # Substitute integral
     iv = MTK.get_iv(sys)
-    jcosts = map(c -> Symbolics.substitute(c, MTK.∫() => Symbolics.Integral(iv in tspan)), jcosts)
+    jcosts = map(
+        c -> Symbolics.substitute(c, MTK.∫() => Symbolics.Integral(iv in tspan)), jcosts)
 
     intmap = Dict()
     for int in MTK.collect_applied_operators(jcosts, Symbolics.Integral)
@@ -183,7 +184,8 @@ function add_user_constraints!(model::InfiniteModel, sys, pmap; is_free_t = fals
         for u in MTK.get_unknowns(conssys)
             x = MTK.operation(u)
             t = only(arguments(u))
-            MTK.symbolic_type(t) === NotSymbolic() && error("Provided specific time constraint in a free final time problem. This is not supported by the JuMP/InfiniteOpt collocation solvers. The offending variable is $u.")
+            MTK.symbolic_type(t) === NotSymbolic() &&
+                error("Provided specific time constraint in a free final time problem. This is not supported by the JuMP/InfiniteOpt collocation solvers. The offending variable is $u.")
         end
     end
 
@@ -211,13 +213,15 @@ function substitute_jump_vars(model, sys, pmap, exprs)
     U = model[:U]
     V = model[:V]
     # for variables like x(t)
-    whole_interval_map = Dict([[v => U[i] for (i, v) in enumerate(sts)]; [v => V[i] for (i, v) in enumerate(cts)]])
+    whole_interval_map = Dict([[v => U[i] for (i, v) in enumerate(sts)];
+                               [v => V[i] for (i, v) in enumerate(cts)]])
     exprs = map(c -> Symbolics.substitute(c, whole_interval_map), exprs)
 
     # for variables like x(1.0)
     x_ops = [MTK.operation(MTK.unwrap(st)) for st in sts]
     c_ops = [MTK.operation(MTK.unwrap(ct)) for ct in cts]
-    fixed_t_map = Dict([[x_ops[i] => U[i] for i in 1:length(U)]; [c_ops[i] => V[i] for i in 1:length(V)]])
+    fixed_t_map = Dict([[x_ops[i] => U[i] for i in 1:length(U)];
+                        [c_ops[i] => V[i] for i in 1:length(V)]])
     exprs = map(c -> Symbolics.substitute(c, fixed_t_map), exprs)
 
     exprs = map(c -> Symbolics.substitute(c, Dict(pmap)), exprs)
@@ -236,11 +240,11 @@ function add_infopt_solve_constraints!(model::InfiniteModel, sys, pmap; is_free_
 
     diff_eqs = substitute_jump_vars(model, sys, pmap, diff_equations(sys))
     diff_eqs = map(e -> Symbolics.substitute(e, diffsubmap), diff_eqs)
-    @constraint(model, D[i = 1:length(diff_eqs)], diff_eqs[i].lhs == tₛ * diff_eqs[i].rhs)
+    @constraint(model, D[i = 1:length(diff_eqs)], diff_eqs[i].lhs==tₛ * diff_eqs[i].rhs)
 
     # Algebraic equations
     alg_eqs = substitute_jump_vars(model, sys, pmap, alg_equations(sys))
-    @constraint(model, A[i = 1:length(alg_eqs)], alg_eqs[i].lhs == alg_eqs[i].rhs)
+    @constraint(model, A[i = 1:length(alg_eqs)], alg_eqs[i].lhs==alg_eqs[i].rhs)
 end
 
 function add_jump_solve_constraints!(prob, tableau; is_free_t = false)
@@ -283,11 +287,11 @@ function add_jump_solve_constraints!(prob, tableau; is_free_t = false)
             for (i, h) in enumerate(c)
                 ΔU = @view ΔUs[i, :]
                 Uₙ = U + ΔU * dt
-                @constraint(model, [j = 1:nᵤ], K[i, j](τ) == tₛ * f(Uₙ, V, p, τ + h * dt)[j],
-                            DomainRestrictions(t => τ + h*dt), base_name="solve_K($τ)")
+                @constraint(model, [j = 1:nᵤ], K[i, j](τ)==tₛ * f(Uₙ, V, p, τ + h * dt)[j],
+                    DomainRestrictions(t => τ + h * dt), base_name="solve_K($τ)")
             end
-            @constraint(model, [n = 1:nᵤ], U[n](τ) + ΔU_tot[n] == U[n](τ + dt),
-                        DomainRestrictions(t => τ), base_name="solve_U($τ)")
+            @constraint(model, [n = 1:nᵤ], U[n](τ) + ΔU_tot[n]==U[n](τ + dt),
+                DomainRestrictions(t => τ), base_name="solve_U($τ)")
         end
     end
 end

@@ -79,8 +79,9 @@ end
 @testset "Linear systems" begin
     function is_bangbang(input_sol, lbounds, ubounds, rtol = 1e-4)
         bangbang = true
-        for v in 1:length(input_sol.u[1]) - 1
-            all(i -> ≈(i[v], bounds[v]; rtol) || ≈(i[v], bounds[u]; rtol), input_sol.u) || (bangbang = false)
+        for v in 1:(length(input_sol.u[1]) - 1)
+            all(i -> ≈(i[v], bounds[v]; rtol) || ≈(i[v], bounds[u]; rtol), input_sol.u) ||
+                (bangbang = false)
         end
         bangbang
     end
@@ -88,26 +89,27 @@ end
     # Double integrator
     t = M.t_nounits
     D = M.D_nounits
-    @variables x(..) [bounds = (0., 0.25)] v(..)
-    @variables u(t) [bounds = (-1., 1.), input = true]
+    @variables x(..) [bounds = (0.0, 0.25)] v(..)
+    @variables u(t) [bounds = (-1.0, 1.0), input = true]
     constr = [v(1.0) ~ 0.0]
     cost = [-x(1.0)] # Maximize the final distance.
-    @named block = ODESystem([D(x(t)) ~ v(t), D(v(t)) ~ u], t; costs = cost, constraints = constr)
-    block, input_idxs = structural_simplify(block, ([u],[]))
+    @named block = ODESystem(
+        [D(x(t)) ~ v(t), D(v(t)) ~ u], t; costs = cost, constraints = constr)
+    block, input_idxs = structural_simplify(block, ([u], []))
 
-    u0map = [x(t) => 0., v(t) => 0.]
-    tspan = (0., 1.)
-    parammap = [u => 0.]
+    u0map = [x(t) => 0.0, v(t) => 0.0]
+    tspan = (0.0, 1.0)
+    parammap = [u => 0.0]
     jprob = JuMPControlProblem(block, u0map, tspan, parammap; dt = 0.01)
     jsol = solve(jprob, Ipopt.Optimizer, :Verner8)
     # Linear systems have bang-bang controls
-    @test is_bangbang(jsol.input_sol, [-1.], [1.])
+    @test is_bangbang(jsol.input_sol, [-1.0], [1.0])
     # Test reached final position.
     @test ≈(jsol.sol.u[end][1], 0.25, rtol = 1e-5)
 
     iprob = InfiniteOptControlProblem(block, u0map, tspan, parammap; dt = 0.01)
     isol = solve(iprob, Ipopt.Optimizer; silent = true)
-    @test is_bangbang(isol.input_sol, [-1.], [1.])
+    @test is_bangbang(isol.input_sol, [-1.0], [1.0])
     @test ≈(isol.sol.u[end][1], 0.25, rtol = 1e-5)
 
     ###################
@@ -118,21 +120,21 @@ end
     @parameters b c μ s ν
 
     tspan = (0, 4)
-    eqs = [D(w(t)) ~ -μ*w(t) + b*s*α*w(t),
-           D(q(t)) ~ -ν*q(t) + c*(1 - α)*s*w(t)]
+    eqs = [D(w(t)) ~ -μ * w(t) + b * s * α * w(t),
+        D(q(t)) ~ -ν * q(t) + c * (1 - α) * s * w(t)]
     costs = [-q(tspan[2])]
-   
+
     @named beesys = ODESystem(eqs, t; costs)
-    beesys, input_idxs = structural_simplify(beesys, ([α],[]))
+    beesys, input_idxs = structural_simplify(beesys, ([α], []))
     u0map = [w(t) => 40, q(t) => 2]
     pmap = [b => 1, c => 1, μ => 1, s => 1, ν => 1, α => 1]
 
     jprob = JuMPControlProblem(beesys, u0map, tspan, pmap, dt = 0.01)
     jsol = solve(jprob, Ipopt.Optimizer, :Tsitouras5)
-    @test is_bangbang(jsol.input_sol, [0.], [1.])
+    @test is_bangbang(jsol.input_sol, [0.0], [1.0])
     iprob = InfiniteOptControlProblem(beesys, u0map, tspan, pmap, dt = 0.01)
     isol = solve(jprob, Ipopt.Optimizer, :Tsitouras5)
-    @test is_bangbang(isol.input_sol, [0.], [1.])
+    @test is_bangbang(isol.input_sol, [0.0], [1.0])
 end
 
 @testset "Rocket launch" begin
@@ -144,18 +146,20 @@ end
     drag(h, v) = D_c * v^2 * exp(-h_c * (h - h₀) / h₀)
     gravity(h) = g₀ * (h₀ / h)
 
-    eqs = [D(h(t)) ~ v(t), 
-           D(v(t)) ~ (T(t) - drag(h(t), v(t))) / m(t) - gravity(h(t)),
-           D(m(t)) ~ -T(t) / c]
+    eqs = [D(h(t)) ~ v(t),
+        D(v(t)) ~ (T(t) - drag(h(t), v(t))) / m(t) - gravity(h(t)),
+        D(m(t)) ~ -T(t) / c]
 
-    (ts, te) = (0., 0.2)
+    (ts, te) = (0.0, 0.2)
     costs = [-h(te)]
     constraints = [T(te) ~ 0]
     @named rocket = ODESystem(eqs, t; costs, constraints)
     rocket, input_idxs = structural_simplify(rocket, ([T(t)], []))
 
     u0map = [h(t) => h₀, m(t) => m₀, v(t) => 0]
-    pmap = [g₀ => 1, m₀ => 1.0, h_c => 500, c => 0.5*√(g₀*h₀), D_c => 0.5 * 620 * m₀/g₀, Tₘ => 3.5*g₀*m₀, T(t) => 0., h₀ => 1, m_c => 0.6]
+    pmap = [
+        g₀ => 1, m₀ => 1.0, h_c => 500, c => 0.5 * √(g₀ * h₀), D_c => 0.5 * 620 * m₀ / g₀,
+        Tₘ => 3.5 * g₀ * m₀, T(t) => 0.0, h₀ => 1, m_c => 0.6]
     jprob = JuMPControlProblem(rocket, u0map, (ts, te), pmap; dt = 0.005, cse = false)
     jsol = solve(jprob, Ipopt.Optimizer, :RadauIA3)
     @test jsol.sol.u[end][1] > 1.012
@@ -165,17 +169,17 @@ end
     t = M.t_nounits
     D = M.D_nounits
 
-    @variables x(..) u(..) [input = true, bounds = (0,1)]
+    @variables x(..) u(..) [input = true, bounds = (0, 1)]
     @parameters tf
-    eqs = [D(x(t)) ~ -2 + 0.5*u(t)]
+    eqs = [D(x(t)) ~ -2 + 0.5 * u(t)]
     # Integral cost function
-    costs = [-∫(x(t)-u(t)), -x(tf)]
+    costs = [-∫(x(t) - u(t)), -x(tf)]
     consolidate(u) = u[1] + u[2]
     @named rocket = ODESystem(eqs, t; costs, consolidate)
     rocket, input_idxs = structural_simplify(rocket, ([u(t)], []))
 
     u0map = [x(t) => 17.5]
-    pmap = [u(t) => 0., tf => 8]
+    pmap = [u(t) => 0.0, tf => 8]
     jprob = JuMPControlProblem(rocket, u0map, (0, tf), pmap; steps = 201)
     jsol = solve(jprob, Ipopt.Optimizer, :Tsitouras5)
     @test isapprox(jsol.sol.t[end], 10.0, rtol = 1e-3)

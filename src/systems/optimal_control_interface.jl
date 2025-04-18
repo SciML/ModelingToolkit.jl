@@ -39,7 +39,7 @@ function SciMLBase.ControlFunction{iip, specialize}(sys::ODESystem,
         inputs = unbound_inputs(sys),
         disturbance_inputs = disturbances(sys);
         version = nothing, tgrad = false,
-        jac = false, controljac = false, 
+        jac = false, controljac = false,
         p = nothing, t = nothing,
         eval_expression = false,
         sparse = false, simplify = false,
@@ -52,8 +52,8 @@ function SciMLBase.ControlFunction{iip, specialize}(sys::ODESystem,
         initialization_data = nothing,
         cse = true,
         kwargs...) where {iip, specialize}
-
-    (f), _, _ = generate_control_function(sys, inputs, disturbance_inputs; eval_module, cse, kwargs...)
+    (f), _, _ = generate_control_function(
+        sys, inputs, disturbance_inputs; eval_module, cse, kwargs...)
 
     if tgrad
         tgrad_gen = generate_tgrad(sys, dvs, ps;
@@ -113,7 +113,7 @@ function SciMLBase.ControlFunction{iip, specialize}(sys::ODESystem,
         W_prototype = nothing
         controljac_prototype = nothing
     end
-    
+
     ControlFunction{iip, specialize}(f;
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
@@ -170,15 +170,19 @@ function process_tspan(tspan, dt, steps)
     is_free_time = false
     if isnothing(dt) && isnothing(steps)
         error("Must provide either the dt or the number of intervals to the collocation solvers (JuMP, InfiniteOpt, CasADi).")
-    elseif symbolic_type(tspan[1]) === ScalarSymbolic() || symbolic_type(tspan[2]) === ScalarSymbolic()
-        isnothing(steps) && error("Free final time problems require specifying the number of steps, rather than dt.")
-        isnothing(dt) || @warn "Specified dt for free final time problem. This will be ignored; dt will be determined by the number of timesteps."
+    elseif symbolic_type(tspan[1]) === ScalarSymbolic() ||
+           symbolic_type(tspan[2]) === ScalarSymbolic()
+        isnothing(steps) &&
+            error("Free final time problems require specifying the number of steps, rather than dt.")
+        isnothing(dt) ||
+            @warn "Specified dt for free final time problem. This will be ignored; dt will be determined by the number of timesteps."
 
         return steps, true
     else
-        isnothing(steps) || @warn "Specified number of steps for problem with concrete tspan. This will be ignored; number of steps will be determined by dt."
+        isnothing(steps) ||
+            @warn "Specified number of steps for problem with concrete tspan. This will be ignored; number of steps will be determined by dt."
 
-        return length(tspan[1]:dt:tspan[2]), false 
+        return length(tspan[1]:dt:tspan[2]), false
     end
 end
 
