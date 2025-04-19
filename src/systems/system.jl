@@ -317,6 +317,12 @@ function flatten(sys::System, noeqs = false)
         description = description(sys), name = nameof(sys))
 end
 
+has_massactionjumps(js::System) = any(x -> x isa MassActionJump, jumps(js))
+has_constantratejumps(js::System) = any(x -> x isa ConstantRateJump, jumps(js))
+has_variableratejumps(js::System) = any(x -> x isa VariableRateJump, jumps(js))
+# TODO: do we need this? it's kind of weird to keep
+has_equations(js::System) = !isempty(equations(js))
+
 """
     $(TYPEDSIGNATURES)
 """

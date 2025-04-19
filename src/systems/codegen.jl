@@ -507,3 +507,59 @@ function generate_constraint_hessian(
     fn = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, f_iip)
     return return_sparsity ? (fn, sparsity) : fn
 end
+
+# modifies the expression representing an affect function to
+# call reset_aggregated_jumps!(integrator).
+# assumes iip
+function _reset_aggregator!(expr, integrator)
+    @assert Meta.isexpr(expr, :function)
+    body = expr.args[end]
+    body = quote
+        $body
+        $reset_aggregated_jumps!($integrator)
+    end
+    expr.args[end] = body
+    return nothing
+end
+
+function generate_rate_function(js::System, rate)
+    p = reorder_parameters(js)
+    build_function_wrapper(js, rate, unknowns(js), p...,
+        get_iv(js),
+        expression = Val{true})
+end
+
+function generate_affect_function(js::System, affect, outputidxs)
+    compile_affect(
+        affect, nothing, js, unknowns(js), parameters(js); outputidxs = outputidxs,
+        expression = Val{true}, checkvars = false)
+end
+
+function assemble_vrj(
+        js, vrj, unknowntoid; eval_expression = false, eval_module = @__MODULE__)
+    rate = eval_or_rgf(generate_rate_function(js, vrj.rate); eval_expression, eval_module)
+    rate = GeneratedFunctionWrapper{(2, 3, is_split(js))}(rate, nothing)
+    outputvars = (value(affect.lhs) for affect in vrj.affect!)
+    outputidxs = [unknowntoid[var] for var in outputvars]
+    affect = eval_or_rgf(generate_affect_function(js, vrj.affect!, outputidxs);
+        eval_expression, eval_module)
+    VariableRateJump(rate, affect; save_positions = vrj.save_positions)
+end
+
+function assemble_crj(
+        js, crj, unknowntoid; eval_expression = false, eval_module = @__MODULE__)
+    rate = eval_or_rgf(generate_rate_function(js, crj.rate); eval_expression, eval_module)
+    rate = GeneratedFunctionWrapper{(2, 3, is_split(js))}(rate, nothing)
+    outputvars = (value(affect.lhs) for affect in crj.affect!)
+    outputidxs = [unknowntoid[var] for var in outputvars]
+    affect = eval_or_rgf(generate_affect_function(js, crj.affect!, outputidxs);
+        eval_expression, eval_module)
+    ConstantRateJump(rate, affect)
+end
+
+# assemble a numeric MassActionJump from a MT symbolics MassActionJumps
+function assemble_maj(majv::Vector{U}, unknowntoid, pmapper) where {U <: MassActionJump}
+    rs = [numericrstoich(maj.reactant_stoch, unknowntoid) for maj in majv]
+    ns = [numericnstoich(maj.net_stoch, unknowntoid) for maj in majv]
+    MassActionJump(rs, ns; param_mapper = pmapper, nocopy = true)
+end

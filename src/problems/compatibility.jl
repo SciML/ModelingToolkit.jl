@@ -94,6 +94,12 @@ function check_no_jumps(sys::System, T)
     end
 end
 
+function check_has_jumps(sys::System, T)
+    if isempty(jumps(sys))
+        throw(SystemCompatibilityError("`$T` requires a system with jumps."))
+    end
+end
+
 function check_no_noise(sys::System, T)
     altT = is_dde(sys) ? SDDEProblem : SDEProblem
     if get_noise_eqs(sys) !== nothing

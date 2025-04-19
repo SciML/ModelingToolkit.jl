@@ -1,19 +1,5 @@
 const JumpType = Union{VariableRateJump, ConstantRateJump, MassActionJump}
 
-# modifies the expression representing an affect function to
-# call reset_aggregated_jumps!(integrator).
-# assumes iip
-function _reset_aggregator!(expr, integrator)
-    @assert Meta.isexpr(expr, :function)
-    body = expr.args[end]
-    body = quote
-        $body
-        $reset_aggregated_jumps!($integrator)
-    end
-    expr.args[end] = body
-    return nothing
-end
-
 """
 $(TYPEDEF)
 
@@ -240,29 +226,6 @@ function JumpSystem(eqs, iv, unknowns, ps;
         parameter_dependencies, metadata, gui_metadata, checks = checks)
 end
 
-##### MTK dispatches for JumpSystems #####
-eqtype_supports_collect_vars(j::MassActionJump) = true
-function collect_vars!(unknowns, parameters, j::MassActionJump, iv; depth = 0,
-        op = Differential)
-    collect_vars!(unknowns, parameters, j.scaled_rates, iv; depth, op)
-    for field in (j.reactant_stoch, j.net_stoch)
-        for el in field
-            collect_vars!(unknowns, parameters, el, iv; depth, op)
-        end
-    end
-    return nothing
-end
-
-eqtype_supports_collect_vars(j::Union{ConstantRateJump, VariableRateJump}) = true
-function collect_vars!(unknowns, parameters, j::Union{ConstantRateJump, VariableRateJump},
-        iv; depth = 0, op = Differential)
-    collect_vars!(unknowns, parameters, j.rate, iv; depth, op)
-    for eq in j.affect!
-        (eq isa Equation) && collect_vars!(unknowns, parameters, eq, iv; depth, op)
-    end
-    return nothing
-end
-
 ##########################################
 
 has_massactionjumps(js::JumpSystem) = !isempty(equations(js).x[1])
@@ -293,17 +256,6 @@ function generate_affect_function(js::JumpSystem, affect, outputidxs)
         expression = Val{true}, checkvars = false)
 end
 
-function assemble_vrj(
-        js, vrj, unknowntoid; eval_expression = false, eval_module = @__MODULE__)
-    rate = eval_or_rgf(generate_rate_function(js, vrj.rate); eval_expression, eval_module)
-    rate = GeneratedFunctionWrapper{(2, 3, is_split(js))}(rate, nothing)
-    outputvars = (value(affect.lhs) for affect in vrj.affect!)
-    outputidxs = [unknowntoid[var] for var in outputvars]
-    affect = eval_or_rgf(generate_affect_function(js, vrj.affect!, outputidxs);
-        eval_expression, eval_module)
-    VariableRateJump(rate, affect; save_positions = vrj.save_positions)
-end
-
 function assemble_vrj_expr(js, vrj, unknowntoid)
     rate = generate_rate_function(js, vrj.rate)
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
@@ -315,17 +267,6 @@ function assemble_vrj_expr(js, vrj, unknowntoid)
         affect = $affect
         VariableRateJump(rate, affect)
     end
-end
-
-function assemble_crj(
-        js, crj, unknowntoid; eval_expression = false, eval_module = @__MODULE__)
-    rate = eval_or_rgf(generate_rate_function(js, crj.rate); eval_expression, eval_module)
-    rate = GeneratedFunctionWrapper{(2, 3, is_split(js))}(rate, nothing)
-    outputvars = (value(affect.lhs) for affect in crj.affect!)
-    outputidxs = [unknowntoid[var] for var in outputvars]
-    affect = eval_or_rgf(generate_affect_function(js, crj.affect!, outputidxs);
-        eval_expression, eval_module)
-    ConstantRateJump(rate, affect)
 end
 
 function assemble_crj_expr(js, crj, unknowntoid)
@@ -364,13 +305,6 @@ function numericnstoich(mtrs::Vector{Pair{V, W}}, unknowntoid) where {V, W}
         push!(ns, unknowntoid[spec] => stoich)
     end
     sort!(ns)
-end
-
-# assemble a numeric MassActionJump from a MT symbolics MassActionJumps
-function assemble_maj(majv::Vector{U}, unknowntoid, pmapper) where {U <: MassActionJump}
-    rs = [numericrstoich(maj.reactant_stoch, unknowntoid) for maj in majv]
-    ns = [numericnstoich(maj.net_stoch, unknowntoid) for maj in majv]
-    MassActionJump(rs, ns; param_mapper = pmapper, nocopy = true)
 end
 
 """
@@ -582,78 +516,6 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob,
         callback = cbs, kwargs...)
 end
 
-### Functions to determine which unknowns a jump depends on
-function get_variables!(dep, jump::Union{ConstantRateJump, VariableRateJump}, variables)
-    jr = value(jump.rate)
-    (jr isa Symbolic) && get_variables!(dep, jr, variables)
-    dep
-end
-
-function get_variables!(dep, jump::MassActionJump, variables)
-    sr = value(jump.scaled_rates)
-    (sr isa Symbolic) && get_variables!(dep, sr, variables)
-    for varasop in jump.reactant_stoch
-        any(isequal(varasop[1]), variables) && push!(dep, varasop[1])
-    end
-    dep
-end
-
-### Functions to determine which unknowns are modified by a given jump
-function modified_unknowns!(munknowns, jump::Union{ConstantRateJump, VariableRateJump}, sts)
-    for eq in jump.affect!
-        st = eq.lhs
-        any(isequal(st), sts) && push!(munknowns, st)
-    end
-    munknowns
-end
-
-function modified_unknowns!(munknowns, jump::MassActionJump, sts)
-    for (unknown, stoich) in jump.net_stoch
-        any(isequal(unknown), sts) && push!(munknowns, unknown)
-    end
-    munknowns
-end
-
-###################### parameter mapper ###########################
-struct JumpSysMajParamMapper{U, V, W}
-    paramexprs::U     # the parameter expressions to use for each jump rate constant
-    sympars::V        # parameters(sys) from the underlying JumpSystem
-    subdict::Any           # mapping from an element of parameters(sys) to its current numerical value
-end
-
-function JumpSysMajParamMapper(js::JumpSystem, p; jseqs = nothing, rateconsttype = Float64)
-    eqs = (jseqs === nothing) ? equations(js) : jseqs
-    paramexprs = [maj.scaled_rates for maj in eqs.x[1]]
-    psyms = reduce(vcat, reorder_parameters(js); init = [])
-    paramdict = Dict(value(k) => value(v) for (k, v) in zip(psyms, vcat(p...)))
-    JumpSysMajParamMapper{typeof(paramexprs), typeof(psyms), rateconsttype}(paramexprs,
-        psyms,
-        paramdict)
-end
-
-function updateparams!(ratemap::JumpSysMajParamMapper{U, V, W},
-        params) where {U <: AbstractArray, V <: AbstractArray, W}
-    for (i, p) in enumerate(params)
-        sympar = ratemap.sympars[i]
-        ratemap.subdict[sympar] = p
-    end
-    nothing
-end
-
-function updateparams!(ratemap::JumpSysMajParamMapper{U, V, W},
-        params::MTKParameters) where {U <: AbstractArray, V <: AbstractArray, W}
-    for (i, p) in enumerate(ArrayPartition(params...))
-        sympar = ratemap.sympars[i]
-        ratemap.subdict[sympar] = p
-    end
-    nothing
-end
-
-function updateparams!(::JumpSysMajParamMapper{U, V, W},
-        params::Nothing) where {U <: AbstractArray, V <: AbstractArray, W}
-    nothing
-end
-
 # create the initial parameter vector for use in a MassActionJump
 function (ratemap::JumpSysMajParamMapper{
         U,
@@ -664,21 +526,6 @@ function (ratemap::JumpSysMajParamMapper{
     updateparams!(ratemap, params)
     [convert(W, value(substitute(paramexpr, ratemap.subdict)))
      for paramexpr in ratemap.paramexprs]
-end
-
-# update a maj with parameter vectors
-function (ratemap::JumpSysMajParamMapper{U, V, W})(maj::MassActionJump, newparams;
-        scale_rates,
-        kwargs...) where {U <: AbstractArray,
-        V <: AbstractArray, W}
-    updateparams!(ratemap, newparams)
-    for i in 1:get_num_majumps(maj)
-        maj.scaled_rates[i] = convert(W,
-            value(substitute(ratemap.paramexprs[i],
-                ratemap.subdict)))
-    end
-    scale_rates && JumpProcesses.scalerates!(maj.scaled_rates, maj.reactant_stoch)
-    nothing
 end
 
 supports_initialization(::JumpSystem) = false
