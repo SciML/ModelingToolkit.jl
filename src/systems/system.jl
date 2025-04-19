@@ -38,6 +38,7 @@ struct System <: AbstractSystem
     ignored_connections::Union{
         Nothing, Tuple{Vector{IgnoredAnalysisPoint}, Vector{IgnoredAnalysisPoint}}}
     parent::Union{Nothing, System}
+    isscheduled::Bool
 
     function System(
             tag, eqs, noise_eqs, jumps, constraints, costs, consolidate, unknowns, ps,
@@ -47,7 +48,7 @@ struct System <: AbstractSystem
             metadata = nothing, gui_metadata = nothing,
             is_dde = false, tstops = [], tearing_state = nothing, namespacing = true,
             complete = false, index_cache = nothing, ignored_connections = nothing,
-            parent = nothing; checks::Union{Bool, Int} = true)
+            parent = nothing, isscheduled = false; checks::Union{Bool, Int} = true)
         if (checks == true || (checks & CheckComponents) > 0) && iv !== nothing
             check_independent_variables([iv])
             check_variables(unknowns, iv)
@@ -71,7 +72,7 @@ struct System <: AbstractSystem
             guesses, systems, initialization_eqs, continuous_events, discrete_events,
             connector_type, assertions, metadata, gui_metadata, is_dde,
             tstops, tearing_state, namespacing, complete, index_cache, ignored_connections,
-            parent)
+            parent, isscheduled)
     end
 end
 
