@@ -399,6 +399,31 @@ has_variableratejumps(js::System) = any(x -> x isa VariableRateJump, jumps(js))
 # TODO: do we need this? it's kind of weird to keep
 has_equations(js::System) = !isempty(equations(js))
 
+# TODO: hash out the semantics of this
+function Base.:(==)(sys1::System, sys2::System)
+    sys1 === sys2 && return true
+    iv1 = get_iv(sys1)
+    iv2 = get_iv(sys2)
+    isequal(iv1, iv2) &&
+        isequal(nameof(sys1), nameof(sys2)) &&
+        _eq_unordered(get_eqs(sys1), get_eqs(sys2)) &&
+        _eq_unordered(get_noise_eqs(sys1), get_noise_eqs(sys2)) &&
+        _eq_unordered(get_jumps(sys1), get_jumps(sys2)) &&
+        _eq_unordered(get_constraints(sys1), get_constraints(sys2)) &&
+        _eq_unordered(get_costs(sys1), get_costs(sys2)) &&
+        _eq_unordered(get_unknowns(sys1), get_unknowns(sys2)) &&
+        _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
+        _eq_unordered(get_brownians(sys1), get_brownians(sys2)) &&
+        _eq_unordered(get_observed(sys1), get_observed(sys2)) &&
+        _eq_unordered(get_parameter_dependencies(sys1), get_parameter_dependencies(sys2)) &&
+        _eq_unordered(get_continuous_events(sys1), get_continuous_events(sys2)) &&
+        _eq_unordered(get_discrete_events(sys1), get_discrete_events(sys2)) &&
+        get_assertions(sys1) == get_assertions(sys2) &&
+        get_is_dde(sys1) == get_is_dde(sys2) &&
+        get_tstops(sys1) == get_tstops(sys2) &&
+        all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
+end
+
 """
     $(TYPEDSIGNATURES)
 """
