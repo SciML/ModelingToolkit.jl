@@ -390,3 +390,8 @@ function Base.showerror(io::IO, err::EventsInTimeIndependentSystemError)
     $(err.devents) 
     """)
 end
+
+function supports_initialization(sys::System)
+    return isempty(jumps(sys)) && _iszero(cost(sys)) &&
+           isempty(constraints(sys))
+end
