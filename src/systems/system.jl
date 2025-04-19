@@ -170,9 +170,10 @@ function System(eqs, iv; kwargs...)
         collect_vars!(allunknowns, ps, eq, iv)
     end
 
-    for eq in get(kwargs, :constraints, Equation[])
-        collect_vars!(allunknowns, ps, eq, iv)
-    end
+    cstrs = get(kwargs, :constraints, Equation[])
+    cstrunknowns, cstrps = process_constraint_system(cstrs, allunknowns, ps, iv)
+    union!(allunknowns, cstrunknowns)
+    union!(ps, cstrps)
 
     for ssys in get(kwargs, :systems, System[])
         collect_scoped_vars!(allunknowns, ps, ssys, iv)
@@ -180,7 +181,9 @@ function System(eqs, iv; kwargs...)
 
     costs = get(kwargs, :costs, nothing)
     if costs !== nothing
-        collect_vars!(allunknowns, ps, costs, iv)
+        costunknowns, costps = process_costs(costs, allunknowns, ps, iv)
+        union!(allunknowns, costunknowns)
+        union!(ps, costps)
     end
 
     for v in allunknowns
@@ -259,6 +262,78 @@ function gather_array_params(ps)
         end
     end
     return new_ps
+end
+
+"""
+Process variables in constraints of the (ODE) System.
+"""
+function process_constraint_system(
+        constraints::Vector{Equation}, sts, ps, iv; consname = :cons)
+    isempty(constraints) && return Set(), Set()
+
+    constraintsts = OrderedSet()
+    constraintps = OrderedSet()
+    for cons in constraints
+        collect_vars!(constraintsts, constraintps, cons, iv)
+        union!(constraintsts, collect_applied_operators(cons, Differential))
+    end
+
+    # Validate the states.
+    validate_vars_and_find_ps!(constraintsts, constraintps, sts, iv)
+
+    return constraintsts, constraintps
+end
+
+"""
+Process the costs for the constraint system.
+"""
+function process_costs(costs::Vector, sts, ps, iv)
+    coststs = OrderedSet()
+    costps = OrderedSet()
+    for cost in costs
+        collect_vars!(coststs, costps, cost, iv)
+    end
+
+    validate_vars_and_find_ps!(coststs, costps, sts, iv)
+    coststs, costps
+end
+
+"""
+Validate that all the variables in an auxiliary system of the (ODE) System (constraint or costs) are 
+well-formed states or parameters.
+ - Callable/delay variables (e.g. of the form x(0.6) should be unknowns of the system (and have one arg, etc.)
+ - Callable/delay parameters should be parameters of the system
+
+Return the set of additional parameters found in the system, e.g. in x(p) ~ 3 then p should be added as a 
+parameter of the system.
+"""
+function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
+    sts = sysvars
+
+    for var in auxvars
+        if !iscall(var)
+            occursin(iv, var) && (var ∈ sts ||
+             throw(ArgumentError("Time-dependent variable $var is not an unknown of the system.")))
+        elseif length(arguments(var)) > 1
+            throw(ArgumentError("Too many arguments for variable $var."))
+        elseif length(arguments(var)) == 1
+            if iscall(var) && operation(var) isa Differential
+                var = only(arguments(var))
+            end
+            arg = only(arguments(var))
+            operation(var)(iv) ∈ sts ||
+                throw(ArgumentError("Variable $var is not a variable of the ODESystem. Called variables must be variables of the ODESystem."))
+
+            isequal(arg, iv) || isparameter(arg) || arg isa Integer ||
+                arg isa AbstractFloat ||
+                throw(ArgumentError("Invalid argument specified for variable $var. The argument of the variable should be either $iv, a parameter, or a value specifying the time that the constraint holds."))
+
+            isparameter(arg) && !isequal(arg, iv) && push!(auxps, arg)
+        else
+            var ∈ sts &&
+                @warn "Variable $var has no argument. It will be interpreted as $var($iv), and the constraint will apply to the entire interval."
+        end
+    end
 end
 
 """
