@@ -67,12 +67,37 @@ end
         f, u0, p, StandardNonlinearProblem(); kwargs...))
 end
 
+@fallback_iip_specialize function SciMLBase.NonlinearLeastSquaresProblem{iip, spec}(
+        sys::System, u0map, parammap = DiffEqBase.NullParameters(); check_length = false,
+        check_compatibility = true, kwargs...) where {iip, spec}
+    check_complete(sys, NonlinearLeastSquaresProblem)
+    check_compatibility && check_compatible_system(NonlinearLeastSquaresProblem, sys)
+
+    f, u0, p = process_SciMLProblem(NonlinearFunction{iip}, sys, u0map, parammap;
+        check_length, kwargs...)
+
+    kwargs = process_kwargs(sys; kwargs...)
+    # Call `remake` so it runs initialization if it is trivial
+    return remake(NonlinearLeastSquaresProblem{iip}(f, u0, p; kwargs...))
+end
+
 function check_compatible_system(
-        T::Union{Type{NonlinearFunction}, Type{NonlinearProblem}}, sys::System)
+        T::Union{Type{NonlinearFunction}, Type{NonlinearProblem},
+            Type{NonlinearLeastSquaresProblem}}, sys::System)
     check_time_independent(sys, T)
     check_not_dde(sys)
     check_no_cost(sys, T)
     check_no_constraints(sys, T)
     check_no_jumps(sys, T)
     check_no_noise(sys, T)
+end
+
+function calculate_resid_prototype(N, u0, p)
+    u0ElType = u0 === nothing ? Float64 : eltype(u0)
+    if SciMLStructures.isscimlstructure(p)
+        u0ElType = promote_type(
+            eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]),
+            u0ElType)
+    end
+    return zeros(u0ElType, N)
 end
