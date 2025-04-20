@@ -158,6 +158,33 @@ function __structural_simplify(sys::AbstractSystem; simplify = false,
     end
 end
 
+function __num_isdiag_noise(mat)
+    for i in axes(mat, 1)
+        nnz = 0
+        for j in axes(mat, 2)
+            if !isequal(mat[i, j], 0)
+                nnz += 1
+            end
+        end
+        if nnz > 1
+            return (false)
+        end
+    end
+    true
+end
+
+function __get_num_diag_noise(mat)
+    map(axes(mat, 1)) do i
+        for j in axes(mat, 2)
+            mij = mat[i, j]
+            if !isequal(mij, 0)
+                return mij
+            end
+        end
+        0
+    end
+end
+
 """
     $(TYPEDSIGNATURES)
 
