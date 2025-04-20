@@ -38,6 +38,7 @@ struct System <: AbstractSystem
     ignored_connections::Union{
         Nothing, Tuple{Vector{IgnoredAnalysisPoint}, Vector{IgnoredAnalysisPoint}}}
     parent::Union{Nothing, System}
+    is_initializesystem::Bool
     isscheduled::Bool
 
     function System(
@@ -48,7 +49,15 @@ struct System <: AbstractSystem
             metadata = nothing, gui_metadata = nothing,
             is_dde = false, tstops = [], tearing_state = nothing, namespacing = true,
             complete = false, index_cache = nothing, ignored_connections = nothing,
-            parent = nothing, isscheduled = false; checks::Union{Bool, Int} = true)
+            parent = nothing, is_initializesystem = false, isscheduled = false;
+            checks::Union{Bool, Int} = true)
+
+        if is_initializesystem && iv !== nothing
+            throw(ArgumentError("""
+            Expected initialization system to be time-independent. Found independent
+            variable $iv.
+            """))
+        end
         if (checks == true || (checks & CheckComponents) > 0) && iv !== nothing
             check_independent_variables([iv])
             check_variables(unknowns, iv)
@@ -89,7 +98,8 @@ function System(eqs, iv, dvs, ps, brownians = [];
         connector_type = nothing, assertions = Dict{BasicSymbolic, String}(),
         metadata = nothing, gui_metadata = nothing, is_dde = nothing, tstops = [],
         tearing_state = nothing, ignored_connections = nothing, parent = nothing,
-        description = "", name = nothing, discover_from_metadata = true, checks = true)
+        description = "", name = nothing, discover_from_metadata = true, is_initializesystem = false,
+        checks = true)
     name === nothing && throw(NoNameError())
 
     iv = unwrap(iv)
@@ -151,7 +161,7 @@ function System(eqs, iv, dvs, ps, brownians = [];
         costs, consolidate, dvs, ps, brownians, iv, observed, parameter_dependencies,
         var_to_name, name, description, defaults, guesses, systems, initialization_eqs,
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
-        tstops, tearing_state, true, false, nothing, ignored_connections, parent; checks)
+        tstops, tearing_state, true, false, nothing, ignored_connections, parent, is_initializesystem; checks)
 end
 
 function System(eqs, iv; kwargs...)
