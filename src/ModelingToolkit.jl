@@ -169,7 +169,6 @@ include("systems/optimization/constraints_system.jl")
 include("systems/optimization/optimizationsystem.jl")
 include("systems/optimization/modelingtoolkitize.jl")
 
-include("systems/nonlinear/nonlinearsystem.jl")
 include("systems/diffeqs/abstractodesystem.jl")
 include("systems/nonlinear/homotopy_continuation.jl")
 include("systems/nonlinear/modelingtoolkitize.jl")
@@ -275,7 +274,7 @@ export IntervalNonlinearProblem, IntervalNonlinearProblemExpr
 export OptimizationProblem, OptimizationProblemExpr, constraints
 export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem
-export NonlinearSystem, OptimizationSystem, ConstraintsSystem
+export OptimizationSystem, ConstraintsSystem
 export alias_elimination, flatten
 export connect, domain_connect, @connector, Connection, AnalysisPoint, Flow, Stream,
        instream
