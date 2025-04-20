@@ -169,7 +169,6 @@ include("systems/optimization/modelingtoolkitize.jl")
 
 include("systems/nonlinear/nonlinearsystem.jl")
 include("systems/nonlinear/homotopy_continuation.jl")
-include("systems/diffeqs/sdesystem.jl")
 include("systems/diffeqs/abstractodesystem.jl")
 include("systems/nonlinear/modelingtoolkitize.jl")
 include("systems/nonlinear/initializesystem.jl")
@@ -264,7 +263,7 @@ export AbstractTimeDependentSystem,
 export ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system,
        add_accumulations, System
 export DAEFunctionExpr, DAEProblemExpr
-export SDESystem, SDEFunction, SDEFunctionExpr, SDEProblemExpr
+export SDEFunction, SDEFunctionExpr, SDEProblemExpr
 export SystemStructure
 export DiscreteSystem, DiscreteProblem, DiscreteFunction, DiscreteFunctionExpr
 export ImplicitDiscreteSystem, ImplicitDiscreteProblem, ImplicitDiscreteFunction,
