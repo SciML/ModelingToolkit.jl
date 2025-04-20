@@ -1311,3 +1311,34 @@ function var_in_varlist(var, varlist::AbstractSet, iv)
            # delayed variables
            (isdelay(var, iv) && var_in_varlist(operation(var)(iv), varlist, iv))
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Check if `a` and `b` contain identical elements, regardless of order. This is not
+equivalent to `issetequal` because the latter does not account for identical elements that
+have different multiplicities in `a` and `b`.
+"""
+function _eq_unordered(a::AbstractArray, b::AbstractArray)
+    # a and b may be multidimensional
+    # e.g. comparing noiseeqs of SDESystem
+    a = vec(a)
+    b = vec(b)
+    length(a) === length(b) || return false
+    n = length(a)
+    idxs = Set(1:n)
+    for x in a
+        idx = findfirst(isequal(x), b)
+        # loop since there might be multiple identical entries in a/b
+        # and while we might have already matched the first there could
+        # be a second that is equal to x
+        while idx !== nothing && !(idx in idxs)
+            idx = findnext(isequal(x), b, idx + 1)
+        end
+        idx === nothing && return false
+        delete!(idxs, idx)
+    end
+    return true
+end
+
+_eq_unordered(a, b) = isequal(a, b)
