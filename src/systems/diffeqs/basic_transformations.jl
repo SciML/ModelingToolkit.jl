@@ -234,3 +234,178 @@ function change_independent_variable(
     end
     return transform(sys)
 end
+
+"""
+$(TYPEDSIGNATURES)
+
+Choose correction_factor=-1//2 (1//2) to convert Ito -> Stratonovich (Stratonovich->Ito).
+"""
+function stochastic_integral_transform(sys::System, correction_factor)
+    if !isempty(get_systems(sys))
+        throw(ArgumentError("The system must be flattened."))
+    end
+    if get_noise_eqs(sys) === nothing
+        throw(ArgumentError("""
+        `$stochastic_integral_transform` expects a system with noise_eqs. If your \
+        noise is specified using brownian variables, consider calling \
+        `structural_simplify`.
+        """))
+    end
+    name = nameof(sys)
+    noise_eqs = get_noise_eqs(sys)
+    eqs = equations(sys)
+    dvs = unknowns(sys)
+    ps = parameters(sys)
+    # use the general interface
+    if noise_eqs isa Vector
+        _eqs = reduce(vcat, [eqs[i].lhs ~ noise_eqs[i] for i in eachindex(dvs)])
+        de = System(_eqs, get_iv(sys), dvs, ps, name = name, checks = false)
+
+        jac = calculate_jacobian(de, sparse = false, simplify = false)
+        ∇σσ′ = simplify.(jac * noise_eqs)
+    else
+        dimunknowns, m = size(noise_eqs)
+        _eqs = reduce(vcat, [eqs[i].lhs ~ noise_eqs[i] for i in eachindex(dvs)])
+        de = System(_eqs, get_iv(sys), dvs, ps, name = name, checks = false)
+
+        jac = calculate_jacobian(de, sparse = false, simplify = false)
+        ∇σσ′ = simplify.(jac * noise_eqs[:, 1])
+        for k in 2:m
+            __eqs = reduce(vcat,
+                [eqs[i].lhs ~ noise_eqs[Int(i + (k - 1) * dimunknowns)]
+                 for i in eachindex(dvs)])
+            de = System(__eqs, get_iv(sys), dvs, dvs, name = name, checks = false)
+
+            jac = calculate_jacobian(de, sparse = false, simplify = false)
+            ∇σσ′ = ∇σσ′ + simplify.(jac * noise_eqs[:, k])
+        end
+    end
+    deqs = reduce(vcat,
+        [eqs[i].lhs ~ eqs[i].rhs + correction_factor * ∇σσ′[i] for i in eachindex(dvs)])
+
+    # reduce(vcat, [1]) == 1 for some reason
+    if deqs isa Equation
+        deqs = [deqs]
+    end
+    return @set sys.eqs = deqs
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Measure transformation method that allows for a reduction in the variance of an estimator `Exp(g(X_t))`.
+Input:  Original SDE system and symbolic function `u(t,x)` with scalar output that
+        defines the adjustable parameters `d` in the Girsanov transformation. Optional: initial
+        condition for `θ0`.
+Output: Modified SDESystem with additional component `θ_t` and initial value `θ0`, as well as
+        the weight `θ_t/θ0` as observed equation, such that the estimator `Exp(g(X_t)θ_t/θ0)`
+        has a smaller variance.
+
+Reference:
+Kloeden, P. E., Platen, E., & Schurz, H. (2012). Numerical solution of SDE through computer
+experiments. Springer Science & Business Media.
+
+# Example
+
+```julia
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@parameters α β
+@variables x(t) y(t) z(t)
+
+eqs = [D(x) ~ α*x]
+noiseeqs = [β*x]
+
+@named de = SDESystem(eqs,noiseeqs,t,[x],[α,β])
+
+# define u (user choice)
+u = x
+θ0 = 0.1
+g(x) = x[1]^2
+demod = ModelingToolkit.Girsanov_transform(de, u; θ0=0.1)
+
+u0modmap = [
+    x => x0
+]
+
+parammap = [
+    α => 1.5,
+    β => 1.0
+]
+
+probmod = SDEProblem(complete(demod),u0modmap,(0.0,1.0),parammap)
+ensemble_probmod = EnsembleProblem(probmod;
+          output_func = (sol,i) -> (g(sol[x,end])*sol[demod.weight,end],false),
+          )
+
+simmod = solve(ensemble_probmod,EM(),dt=dt,trajectories=numtraj)
+```
+
+"""
+function Girsanov_transform(sys::System, u; θ0 = 1.0)
+    name = nameof(sys)
+
+    # register new variable θ corresponding to 1D correction process θ(t)
+    t = get_iv(sys)
+    D = Differential(t)
+    @variables θ(t), weight(t)
+
+    # determine the adjustable parameters `d` given `u`
+    # gradient of u with respect to unknowns
+    grad = Symbolics.gradient(u, unknowns(sys))
+
+    noiseeqs = copy(get_noise_eqs(sys))
+    if noiseeqs isa Vector
+        d = simplify.(-(noiseeqs .* grad) / u)
+        drift_correction = noiseeqs .* d
+    else
+        d = simplify.(-noiseeqs * grad / u)
+        drift_correction = noiseeqs * d
+    end
+
+    eqs = equations(sys)
+    dvs = unknowns(sys)
+    # transformation adds additional unknowns θ: newX = (X,θ)
+    # drift function for unknowns is modified
+    # θ has zero drift
+    deqs = reduce(
+        vcat, [eqs[i].lhs ~ eqs[i].rhs - drift_correction[i] for i in eachindex(dvs)])
+    if deqs isa Equation
+        deqs = [deqs]
+    end
+    deqsθ = D(θ) ~ 0
+    push!(deqs, deqsθ)
+
+    # diffusion matrix is of size d x m (d unknowns, m noise), with diagonal noise represented as a d-dimensional vector
+    # for diagonal noise processes with m>1, the noise process will become non-diagonal; extra unknown component but no new noise process.
+    # new diffusion matrix is of size d+1 x M
+    # diffusion for state is unchanged
+
+    noiseqsθ = θ * d
+
+    if noiseeqs isa Vector
+        m = size(noiseeqs)
+        if m == 1
+            push!(noiseeqs, noiseqsθ)
+        else
+            noiseeqs = [Array(Diagonal(wrap.(noiseeqs))); noiseqsθ']
+        end
+    else
+        noiseeqs = [Array(noiseeqs); noiseqsθ']
+    end
+
+    unknown_vars = [dvs; θ]
+
+    # return modified SDE System
+    @set! sys.eqs = deqs
+    @set! sys.noise_eqs = noiseeqs
+    @set! sys.unknowns = unknown_vars
+    get_defaults(sys)[θ] = θ0
+    obs = observed(sys)
+    @set! sys.observed = [weight ~ θ / θ0; obs]
+    if get_parent(sys) !== nothing
+        @set! sys.parent.unknowns = [get_unknowns(get_parent(sys)); [θ, weight]]
+    end
+    return sys
+end
