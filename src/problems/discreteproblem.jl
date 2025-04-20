@@ -59,3 +59,31 @@ function check_compatible_system(
     check_is_discrete(sys, T)
     check_is_explicit(sys, T, ImplicitDiscreteProblem)
 end
+
+function shift_u0map_forward(sys::System, u0map, defs)
+    iv = get_iv(sys)
+    updated = AnyDict()
+    for k in collect(keys(u0map))
+        v = u0map[k]
+        if !((op = operation(k)) isa Shift)
+            isnothing(getunshifted(k)) &&
+                error("Initial conditions must be for the past state of the unknowns. Instead of providing the condition for $k, provide the condition for $(Shift(iv, -1)(k)).")
+
+            updated[Shift(iv, 1)(k)] = v
+        elseif op.steps > 0
+            error("Initial conditions must be for the past state of the unknowns. Instead of providing the condition for $k, provide the condition for $(Shift(iv, -1)(only(arguments(k)))).")
+        else
+            updated[Shift(iv, op.steps + 1)(only(arguments(k)))] = v
+        end
+    end
+    for var in unknowns(sys)
+        op = operation(var)
+        root = getunshifted(var)
+        shift = getshift(var)
+        isnothing(root) && continue
+        (haskey(updated, Shift(iv, shift)(root)) || haskey(updated, var)) && continue
+        haskey(defs, root) || error("Initial condition for $var not provided.")
+        updated[var] = defs[root]
+    end
+    return updated
+end
