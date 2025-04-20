@@ -151,6 +151,18 @@ function (ratemap::JumpSysMajParamMapper{U, V, W})(maj::MassActionJump, newparam
     nothing
 end
 
+# create the initial parameter vector for use in a MassActionJump
+function (ratemap::JumpSysMajParamMapper{
+        U,
+        V,
+        W
+})(params) where {U <: AbstractArray,
+        V <: AbstractArray, W}
+    updateparams!(ratemap, params)
+    [convert(W, value(substitute(paramexpr, ratemap.subdict)))
+     for paramexpr in ratemap.paramexprs]
+end
+
 ##### MTK dispatches for Symbolic jumps #####
 eqtype_supports_collect_vars(j::MassActionJump) = true
 function collect_vars!(unknowns, parameters, j::MassActionJump, iv; depth = 0,
