@@ -54,7 +54,7 @@ function SCCNonlinearFunction{iip}(
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
     f = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, f_iip)
 
-    subsys = NonlinearSystem(_eqs, _dvs, ps; observed = _obs,
+    subsys = System(_eqs, _dvs, ps; observed = _obs,
         parameter_dependencies = parameter_dependencies(sys), name = nameof(sys))
     if get_index_cache(sys) !== nothing
         @set! subsys.index_cache = subset_unknowns_observed(
@@ -65,15 +65,15 @@ function SCCNonlinearFunction{iip}(
     return NonlinearFunction{iip}(f; sys = subsys)
 end
 
-function SciMLBase.SCCNonlinearProblem(sys::NonlinearSystem, args...; kwargs...)
+function SciMLBase.SCCNonlinearProblem(sys::System, args...; kwargs...)
     SCCNonlinearProblem{true}(sys, args...; kwargs...)
 end
 
-function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
+function SciMLBase.SCCNonlinearProblem{iip}(sys::System, u0map,
         parammap = SciMLBase.NullParameters(); eval_expression = false, eval_module = @__MODULE__,
         cse = true, kwargs...) where {iip}
     if !iscomplete(sys) || get_tearing_state(sys) === nothing
-        error("A simplified `NonlinearSystem` is required. Call `structural_simplify` on the system before creating an `SCCNonlinearProblem`.")
+        error("A simplified `System` is required. Call `structural_simplify` on the system before creating an `SCCNonlinearProblem`.")
     end
 
     if !is_split(sys)

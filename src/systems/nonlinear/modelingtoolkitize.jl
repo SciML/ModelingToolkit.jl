@@ -1,7 +1,7 @@
 """
 $(TYPEDSIGNATURES)
 
-Generate `NonlinearSystem`, dependent variables, and parameters from an `NonlinearProblem`.
+Generate `System`, dependent variables, and parameters from an `NonlinearProblem`.
 """
 function modelingtoolkitize(
         prob::Union{NonlinearProblem, NonlinearLeastSquaresProblem};
@@ -76,7 +76,7 @@ function modelingtoolkitize(
         Dict()
     end
 
-    de = NonlinearSystem(eqs, sts, params,
+    de = System(eqs, sts, params,
         defaults = merge(default_u0, default_p);
         name = gensym(:MTKizedNonlinProb),
         kwargs...)
