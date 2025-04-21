@@ -699,7 +699,7 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
     end
 
     # add derivatives of all variables for steady-state initial conditions
-    if is_time_dependent(sys) && !(sys isa AbstractDiscreteSystem)
+    if is_time_dependent(sys) && !is_discrete_system(sys)
         D = Differential(get_iv(sys))
         union!(all_initialvars, [D(v) for v in all_initialvars if iscall(v)])
     end

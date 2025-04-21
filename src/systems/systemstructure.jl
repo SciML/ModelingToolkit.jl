@@ -474,11 +474,9 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
 
     ts = TearingState(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
-            complete(graph), nothing, var_types, sys isa AbstractDiscreteSystem),
+            complete(graph), nothing, var_types, false),
         Any[], param_derivative_map)
-    if sys isa DiscreteSystem
-        ts = shift_discrete_system(ts)
-    end
+
     return ts
 end
 
@@ -681,6 +679,10 @@ function structural_simplify!(state::TearingState; simplify = false,
             """))
         end
     end
+    if continuous_id == 1 && any(Base.Fix2(isoperator, Shift), state.fullvars)
+        state.structure.only_discrete = true
+    end
+
     sys = _structural_simplify!(state; simplify, check_consistency,
         inputs, outputs, disturbance_inputs,
         fully_determined, kwargs...)
