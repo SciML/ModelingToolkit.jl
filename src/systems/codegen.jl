@@ -625,7 +625,7 @@ The signatures will be of the form `g(...)` with arguments:
 - `unknowns` if `param_only` is `false`
 - `inputs` if `inputs` is an array of symbolic inputs that should be available in `ts` 
 - `p...` unconditionally; note that in the case of `MTKParameters` more than one parameters argument may be present, so it must be splatted
-- `t` if the system is time-dependent; for example `NonlinearSystem` will not have `t`
+- `t` if the system is time-dependent; for example systems of nonlinear equations will not have `t`
 
 For example, a function `g(op, unknowns, p..., inputs, t)` will be the in-place function generated if `return_inplace` is true, `ts` is a vector, 
 an array of inputs `inputs` is given, and `param_only` is false for a time-dependent system.
