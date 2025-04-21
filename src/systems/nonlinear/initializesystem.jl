@@ -90,6 +90,7 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
             end
         end
     else
+        # TODO: Check if this is still necessary
         # 2) System doesn't have a schedule, so dummy derivatives don't exist/aren't handled (SDESystem)
         for (k, v) in u0map
             defs[k] = v
