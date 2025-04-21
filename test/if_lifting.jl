@@ -13,9 +13,9 @@ using ModelingToolkit: t_nounits as t, D_nounits as D, IfLifting, no_if_lift
         end
     end
     @named sys = SimpleAbs()
-    ss1 = structural_simplify(sys)
+    ss1 = mtkbuild(sys)
     @test length(equations(ss1)) == 1
-    ss2 = structural_simplify(sys, additional_passes = [IfLifting])
+    ss2 = mtkbuild(sys, additional_passes = [IfLifting])
     @test length(equations(ss2)) == 1
     @test length(parameters(ss2)) == 1
     @test operation(only(equations(ss2)).rhs) === ifelse
@@ -71,7 +71,7 @@ end
     end
 
     @named sys = BigModel()
-    ss = structural_simplify(sys, additional_passes = [IfLifting])
+    ss = mtkbuild(sys, additional_passes = [IfLifting])
 
     ps = parameters(ss)
     @test length(ps) == 9

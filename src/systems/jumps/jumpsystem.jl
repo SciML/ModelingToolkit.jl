@@ -401,7 +401,7 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
         cse = true,
         kwargs...)
     if !iscomplete(sys)
-        error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
+        error("A completed `JumpSystem` is required. Call `complete` or `mtkbuild` on the system before creating a `DiscreteProblem`")
     end
 
     if has_equations(sys) || (!isempty(continuous_events(sys)))
@@ -446,7 +446,7 @@ function DiscreteProblemExpr{iip}(sys::JumpSystem, u0map, tspan::Union{Tuple, No
         parammap = DiffEqBase.NullParameters();
         kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblemExpr`")
+        error("A completed `JumpSystem` is required. Call `complete` or `mtkbuild` on the system before creating a `DiscreteProblemExpr`")
     end
 
     _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
@@ -492,7 +492,7 @@ function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothi
         eval_module = @__MODULE__, cse = true,
         kwargs...)
     if !iscomplete(sys)
-        error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblem`")
+        error("A completed `JumpSystem` is required. Call `complete` or `mtkbuild` on the system before creating a `DiscreteProblem`")
     end
 
     # forward everything to be an ODESystem but the jumps and discrete events
@@ -535,7 +535,7 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob,
         aggregator = JumpProcesses.NullAggregator(); callback = nothing,
         eval_expression = false, eval_module = @__MODULE__, kwargs...)
     if !iscomplete(js)
-        error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `JumpProblem`")
+        error("A completed `JumpSystem` is required. Call `complete` or `mtkbuild` on the system before creating a `JumpProblem`")
     end
     unknowntoid = Dict(value(unknown) => i for (i, unknown) in enumerate(unknowns(js)))
     eqs = equations(js)

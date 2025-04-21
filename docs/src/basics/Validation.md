@@ -112,7 +112,7 @@ ps = @parameters s=-1 [unit = u"cm"] c=c [unit = u"cm"]
 eqs = [D(a) ~ dummycomplex(c, s);]
 sys = ODESystem(
     eqs, t, [sts...;], [ps...;], name = :sys, checks = ~ModelingToolkit.CheckUnits)
-sys_simple = structural_simplify(sys)
+sys_simple = mtkbuild(sys)
 ```
 
 ## `DynamicQuantities` Literals

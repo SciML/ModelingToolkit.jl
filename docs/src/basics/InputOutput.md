@@ -28,10 +28,6 @@ ModelingToolkit can generate the dynamics of a system, the function ``M\dot x = 
 
 This function takes a vector of variables that are to be considered inputs, i.e., part of the vector ``u``. Alongside returning the function ``f``, [`ModelingToolkit.generate_control_function`](@ref) also returns the chosen state realization of the system after simplification. This vector specifies the order of the state variables ``x``, while the user-specified vector `u` specifies the order of the input variables ``u``.
 
-!!! note "Un-simplified system"
-    
-    This function expects `sys` to be un-simplified, i.e., `structural_simplify` or `@mtkbuild` should not be called on the system before passing it into this function. `generate_control_function` calls a special version of `structural_simplify` internally.
-
 ### Example:
 
 The following example implements a simple first-order system with an input `u` and state `x`. The function `f` is generated using `generate_control_function`, and the function `f` is then tested with random input and state values.

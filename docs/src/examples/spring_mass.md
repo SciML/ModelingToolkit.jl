@@ -45,7 +45,7 @@ eqs = [connect_spring(spring, mass.pos, center)
 
 @named _model = ODESystem(eqs, t, [spring.x; spring.dir; mass.pos], [])
 @named model = compose(_model, mass, spring)
-sys = structural_simplify(model)
+sys = mtkbuild(model)
 
 prob = ODEProblem(sys, [], (0.0, 3.0))
 sol = solve(prob, Rosenbrock23())
@@ -153,10 +153,10 @@ parameters(model)
 
 ### Simplifying and solving this system
 
-This system can be solved directly as a DAE using [one of the DAE solvers from DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/solvers/dae_solve/). However, we can symbolically simplify the system first beforehand. Running `structural_simplify` eliminates unnecessary variables from the model to give the leanest numerical representation of the system.
+This system can be solved directly as a DAE using [one of the DAE solvers from DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/solvers/dae_solve/). However, we can symbolically simplify the system first beforehand. Running `mtkbuild` eliminates unnecessary variables from the model to give the leanest numerical representation of the system.
 
 ```@example component
-sys = structural_simplify(model)
+sys = mtkbuild(model)
 equations(sys)
 ```
 
@@ -177,7 +177,7 @@ sol = solve(prob, Rosenbrock23())
 plot(sol)
 ```
 
-What if we want the timeseries of a different variable? That information is not lost! Instead, `structural_simplify` simply changes unknown variables into `observed` variables.
+What if we want the timeseries of a different variable? That information is not lost! Instead, `mtkbuild` simply changes unknown variables into `observed` variables.
 
 ```@example component
 observed(sys)

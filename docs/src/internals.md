@@ -18,7 +18,7 @@ and are then used to generate the `observed` equation found in the
 variable when necessary. In this sense, there is an equivalence between
 observables and the variable elimination system.
 
-The procedure for variable elimination inside [`structural_simplify`](@ref) is
+The procedure for variable elimination inside [`mtkbuild`](@ref) is
 
  1. [`ModelingToolkit.initialize_system_structure`](@ref).
  2. [`ModelingToolkit.alias_elimination`](@ref). This step moves equations into `observed(sys)`.

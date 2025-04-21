@@ -364,7 +364,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         cse = true,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEFunction`")
+        error("A completed system is required. Call `complete` or `mtkbuild` on the system before creating an `ODEFunction`")
     end
     f_gen = generate_function(sys, dvs, ps; expression = Val{true},
         expression_module = eval_module, checkbounds = checkbounds, cse,
@@ -469,7 +469,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         cse = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEFunction`")
+        error("A completed system is required. Call `complete` or `mtkbuild` on the system before creating a `DAEFunction`")
     end
     f_gen = generate_function(sys, dvs, ps; implicit_dae = true,
         expression = Val{true}, cse,
@@ -529,7 +529,7 @@ function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys)
         cse = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `DDEFunction`")
+        error("A completed system is required. Call `complete` or `mtkbuild` on the system before creating an `DDEFunction`")
     end
     f_gen = generate_function(sys, dvs, ps; isdde = true,
         expression = Val{true},
@@ -554,7 +554,7 @@ function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = unknowns(sys
         cse = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `SDDEFunction`")
+        error("A completed system is required. Call `complete` or `mtkbuild` on the system before creating an `SDDEFunction`")
     end
     f_gen = generate_function(sys, dvs, ps; isdde = true,
         expression = Val{true},
@@ -598,7 +598,7 @@ function ODEFunctionExpr{iip, specialize}(sys::AbstractODESystem, dvs = unknowns
         observedfun_exp = nothing,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEFunctionExpr`")
+        error("A completed system is required. Call `complete` or `mtkbuild` on the system before creating an `ODEFunctionExpr`")
     end
     f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
 
@@ -688,7 +688,7 @@ function DAEFunctionExpr{iip}(sys::AbstractODESystem, dvs = unknowns(sys),
         sparse = false, simplify = false,
         kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `DAEFunctionExpr`")
+        error("A completed system is required. Call `complete` or `mtkbuild` on the system before creating an `DAEFunctionExpr`")
     end
     f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true},
         implicit_dae = true, kwargs...)
@@ -784,7 +784,7 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
         eval_module = @__MODULE__,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
+        error("A completed system is required. Call `complete` or `mtkbuild` on the system before creating an `ODEProblem`")
     end
 
     if !isnothing(get_constraintsystem(sys))
@@ -900,7 +900,7 @@ function SciMLBase.BVProblem{iip, specialize}(sys::AbstractODESystem, u0map = []
         cse = true,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `BVProblem`")
+        error("A completed system is required. Call `complete` or `mtkbuild` on the system before creating an `BVProblem`")
     end
     !isnothing(callback) && error("BVP solvers do not support callbacks.")
 
@@ -1014,7 +1014,7 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
         warn_initialize_determined = true,
         check_length = true, eval_expression = false, eval_module = @__MODULE__, kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEProblem`.")
+        error("A completed system is required. Call `complete` or `mtkbuild` on the system before creating a `DAEProblem`.")
     end
 
     if !isempty(get_costs(sys)) && !allow_cost
@@ -1066,7 +1066,7 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         cse = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DDEProblem`")
+        error("A completed system is required. Call `complete` or `mtkbuild` on the system before creating a `DDEProblem`")
     end
     f, u0, p = process_SciMLProblem(DDEFunction{iip}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
@@ -1106,7 +1106,7 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         cse = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `SDDEProblem`")
+        error("A completed system is required. Call `complete` or `mtkbuild` on the system before creating a `SDDEProblem`")
     end
     f, u0, p = process_SciMLProblem(SDDEFunction{iip}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
@@ -1167,7 +1167,7 @@ function ODEProblemExpr{iip}(sys::AbstractODESystem, u0map, tspan,
         parammap = DiffEqBase.NullParameters(); check_length = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `ODEProblemExpr`")
+        error("A completed system is required. Call `complete` or `mtkbuild` on the system before creating a `ODEProblemExpr`")
     end
     f, u0, p = process_SciMLProblem(
         ODEFunctionExpr{iip}, sys, u0map, parammap; check_length,
@@ -1214,7 +1214,7 @@ function DAEProblemExpr{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
         parammap = DiffEqBase.NullParameters(); check_length = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `DAEProblemExpr`")
+        error("A completed system is required. Call `complete` or `mtkbuild` on the system before creating a `DAEProblemExpr`")
     end
     f, du0, u0, p = process_SciMLProblem(DAEFunctionExpr{iip}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
@@ -1266,7 +1266,7 @@ function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem, u0map,
         parammap = SciMLBase.NullParameters();
         check_length = true, kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `SteadyStateProblem`")
+        error("A completed system is required. Call `complete` or `mtkbuild` on the system before creating a `SteadyStateProblem`")
     end
     f, u0, p = process_SciMLProblem(ODEFunction{iip}, sys, u0map, parammap;
         steady_state = true,
@@ -1298,7 +1298,7 @@ function SteadyStateProblemExpr{iip}(sys::AbstractODESystem, u0map,
         check_length = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating a `SteadyStateProblemExpr`")
+        error("A completed system is required. Call `complete` or `mtkbuild` on the system before creating a `SteadyStateProblemExpr`")
     end
     f, u0, p = process_SciMLProblem(ODEFunctionExpr{iip}, sys, u0map, parammap;
         steady_state = true,
@@ -1449,7 +1449,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
         algebraic_only = false,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
+        error("A completed system is required. Call `complete` or `mtkbuild` on the system before creating an `ODEProblem`")
     end
     if isempty(u0map) && get_initializesystem(sys) !== nothing
         isys = get_initializesystem(sys; initialization_eqs, check_units)
@@ -1474,7 +1474,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
     end
 
     if simplify_system
-        isys = structural_simplify(isys; fully_determined)
+        isys = mtkbuild(isys; fully_determined)
     end
 
     ts = get_tearing_state(isys)

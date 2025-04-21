@@ -67,7 +67,7 @@ sys = ODESystem(eqs, t, systems = [P, C], name = :hej)
 nonamespace_sys = toggle_namespacing(nested_sys, false)
 
 @testset "simplifies and solves" begin
-    ssys = structural_simplify(sys)
+    ssys = mtkbuild(sys)
     prob = ODEProblem(ssys, [P.x => 1], (0, 10))
     sol = solve(prob, Rodas5())
     @test norm(sol.u[1]) >= 1

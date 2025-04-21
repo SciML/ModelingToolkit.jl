@@ -596,7 +596,7 @@ eqs = [D(x) ~ σ * (y - x) + x * β,
     D(y) ~ x * (ρ - z) - y + y * β + x * η,
     D(z) ~ x * y - β * z + (x * z) * β]
 @named sys1 = System(eqs, tt)
-sys1 = structural_simplify(sys1)
+sys1 = mtkbuild(sys1)
 
 drift_eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
@@ -794,13 +794,13 @@ end
            input ~ 0.0]
 
     sys = System(eqs, t, sts, ps; name = :name)
-    sys = structural_simplify(sys)
+    sys = mtkbuild(sys)
     @test ModelingToolkit.get_noiseeqs(sys) ≈ [1.0]
     prob = SDEProblem(sys, [], (0.0, 1.0), [])
     @test_nowarn solve(prob, RKMil())
 end
 
-@testset "Observed variables retained after `structural_simplify`" begin
+@testset "Observed variables retained after `mtkbuild`" begin
     @variables x(t) y(t) z(t)
     @brownian a
     @mtkbuild sys = System([D(x) ~ x + a, D(y) ~ y + a, z ~ x + y], t)
@@ -859,7 +859,7 @@ end
     end
 end
 
-@testset "`structural_simplify(::SDESystem)`" begin
+@testset "`mtkbuild(::SDESystem)`" begin
     @variables x(t) y(t)
     @mtkbuild sys = SDESystem(
         [D(x) ~ x, y ~ 2x], [x, 0], t, [x, y], []; is_scalar_noise = true)
@@ -947,7 +947,7 @@ end
     @test ssys1 !== ssys2
 end
 
-@testset "Error when constructing SDESystem without `structural_simplify`" begin
+@testset "Error when constructing SDESystem without `mtkbuild`" begin
     @parameters σ ρ β
     @variables x(tt) y(tt) z(tt)
     @brownian a
@@ -961,8 +961,8 @@ end
     u0map = [x => 1.0, y => 0.0, z => 0.0]
     parammap = [σ => 10.0, β => 26.0, ρ => 2.33]
 
-    @test_throws ErrorException("SDESystem constructed by defining Brownian variables with @brownian must be simplified by calling `structural_simplify` before a SDEProblem can be constructed.") SDEProblem(
+    @test_throws ErrorException("SDESystem constructed by defining Brownian variables with @brownian must be simplified by calling `mtkbuild` before a SDEProblem can be constructed.") SDEProblem(
         de, u0map, (0.0, 100.0), parammap)
-    de = structural_simplify(de)
+    de = mtkbuild(de)
     @test SDEProblem(de, u0map, (0.0, 100.0), parammap) isa SDEProblem
 end

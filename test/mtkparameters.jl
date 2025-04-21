@@ -170,7 +170,7 @@ function level1()
     eqs = [D(x) ~ p1 * x - p2 * x * y
            D(y) ~ -p3 * y + p4 * x * y]
 
-    sys = structural_simplify(complete(ODESystem(
+    sys = mtkbuild(complete(ODESystem(
         eqs, t, tspan = (0, 3.0), name = :sys, parameter_dependencies = [y0 => 2p4])))
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys)
 end
@@ -184,7 +184,7 @@ function level2()
     eqs = [D(x) ~ p1 * x - p23[1] * x * y
            D(y) ~ -p23[2] * y + p4 * x * y]
 
-    sys = structural_simplify(complete(ODESystem(
+    sys = mtkbuild(complete(ODESystem(
         eqs, t, tspan = (0, 3.0), name = :sys, parameter_dependencies = [y0 => 2p4])))
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys)
 end
@@ -198,7 +198,7 @@ function level3()
     eqs = [D(x) ~ p1 * x - p23[1] * x * y
            D(y) ~ -p23[2] * y + p4 * x * y]
 
-    sys = structural_simplify(complete(ODESystem(
+    sys = mtkbuild(complete(ODESystem(
         eqs, t, tspan = (0, 3.0), name = :sys, parameter_dependencies = [y0 => 2p4])))
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys)
 end

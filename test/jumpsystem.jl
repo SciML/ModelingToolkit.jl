@@ -269,7 +269,7 @@ dp4 = DiscreteProblem(js4, u0, tspan)
 @test_nowarn jp3 = JumpProblem(js3, dp3, Direct())
 @test_nowarn jp4 = JumpProblem(js4, dp4, Direct())
 
-# Ensure `structural_simplify` (and `@mtkbuild`) works on JumpSystem (by doing nothing)
+# Ensure `mtkbuild` (and `@mtkbuild`) works on JumpSystem (by doing nothing)
 # Issue#2558
 @parameters k
 @variables X(t)

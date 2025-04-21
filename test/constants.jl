@@ -17,12 +17,12 @@ sol = solve(prob, Tsit5())
 newsys = MT.eliminate_constants(sys)
 @test isequal(equations(newsys), [D(x) ~ 1])
 
-# Test structural_simplify substitutions & observed values
+# Test mtkbuild substitutions & observed values
 eqs = [D(x) ~ 1,
     w ~ a]
 @named sys = ODESystem(eqs, t)
 # Now eliminate the constants first
-simp = structural_simplify(sys)
+simp = mtkbuild(sys)
 @test equations(simp) == [D(x) ~ 1.0]
 
 #Constant with units
@@ -34,7 +34,7 @@ UMT.get_unit(β)
 D = Differential(t)
 eqs = [D(x) ~ β]
 @named sys = ODESystem(eqs, t)
-simp = structural_simplify(sys)
+simp = mtkbuild(sys)
 
 @test isempty(MT.collect_constants(nothing))
 

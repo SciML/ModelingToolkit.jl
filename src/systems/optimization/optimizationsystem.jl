@@ -303,7 +303,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         checks = true, cse = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed `OptimizationSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `OptimizationProblem`")
+        error("A completed `OptimizationSystem` is required. Call `complete` or `mtkbuild` on the system before creating a `OptimizationProblem`")
     end
     if haskey(kwargs, :lcons) || haskey(kwargs, :ucons)
         Base.depwarn(
@@ -544,7 +544,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
         eval_expression = false, eval_module = @__MODULE__,
         kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed `OptimizationSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `OptimizationProblemExpr`")
+        error("A completed `OptimizationSystem` is required. Call `complete` or `mtkbuild` on the system before creating a `OptimizationProblemExpr`")
     end
     if haskey(kwargs, :lcons) || haskey(kwargs, :ucons)
         Base.depwarn(
@@ -726,7 +726,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
     end
 end
 
-function structural_simplify(sys::OptimizationSystem; split = true, kwargs...)
+function mtkbuild(sys::OptimizationSystem; split = true, kwargs...)
     sys = flatten(sys)
     cons = constraints(sys)
     econs = Equation[]
@@ -739,7 +739,7 @@ function structural_simplify(sys::OptimizationSystem; split = true, kwargs...)
         end
     end
     nlsys = NonlinearSystem(econs, unknowns(sys), parameters(sys); name = :___tmp_nlsystem)
-    snlsys = structural_simplify(nlsys; fully_determined = false, kwargs...)
+    snlsys = mtkbuild(nlsys; fully_determined = false, kwargs...)
     obs = observed(snlsys)
     subs = Dict(eq.lhs => eq.rhs for eq in observed(snlsys))
     seqs = equations(snlsys)

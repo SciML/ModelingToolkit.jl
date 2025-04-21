@@ -386,7 +386,7 @@ sys_simp = structural_simplify(sys, inputs = m_inputs, outputs = m_outputs)
     ],
     t,
     systems = [int, gain, c, fb])
-sys = structural_simplify(model)
+sys = mtkbuild(model)
 @test length(unknowns(sys)) == length(equations(sys)) == 1
 
 ## Disturbance models when plant has multiple inputs

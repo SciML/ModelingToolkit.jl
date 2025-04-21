@@ -16,7 +16,7 @@ NonlinearSystem
 ## Transformations
 
 ```@docs; canonical=false
-structural_simplify
+mtkbuild
 alias_elimination
 tearing
 ```

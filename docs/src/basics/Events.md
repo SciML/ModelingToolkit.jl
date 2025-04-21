@@ -472,7 +472,7 @@ to the system.
 ```@example events
 @named sys = ODESystem(
     eqs, t, [temp], params; continuous_events = [furnace_disable, furnace_enable])
-ss = structural_simplify(sys)
+ss = mtkbuild(sys)
 prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 10.0))
 sol = solve(prob, Tsit5())
 plot(sol)
@@ -585,7 +585,7 @@ We can now simulate the encoder.
 ```@example events
 @named sys = ODESystem(
     eqs, t, [theta, omega], params; continuous_events = [qAevt, qBevt])
-ss = structural_simplify(sys)
+ss = mtkbuild(sys)
 prob = ODEProblem(ss, [theta => 0.0], (0.0, pi))
 sol = solve(prob, Tsit5(); dtmax = 0.01)
 sol.ps[cnt]

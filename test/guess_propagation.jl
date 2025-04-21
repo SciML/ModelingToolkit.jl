@@ -11,7 +11,7 @@ eqs = [D(x) ~ 1
 initialization_eqs = [1 ~ exp(1 + x)]
 
 @named sys = ODESystem(eqs, t; initialization_eqs)
-sys = complete(structural_simplify(sys))
+sys = complete(mtkbuild(sys))
 tspan = (0.0, 0.2)
 prob = ODEProblem(sys, [], tspan, [])
 
@@ -28,7 +28,7 @@ eqs = [D(x) ~ 1
 initialization_eqs = [1 ~ exp(1 + x)]
 
 @named sys = ODESystem(eqs, t; initialization_eqs)
-sys = complete(structural_simplify(sys))
+sys = complete(mtkbuild(sys))
 tspan = (0.0, 0.2)
 prob = ODEProblem(sys, [], tspan, [])
 
@@ -46,7 +46,7 @@ eqs = [D(x) ~ a]
 initialization_eqs = [1 ~ exp(1 + x)]
 
 @named sys = ODESystem(eqs, t; initialization_eqs)
-sys = complete(structural_simplify(sys))
+sys = complete(mtkbuild(sys))
 
 tspan = (0.0, 0.2)
 prob = ODEProblem(sys, [], tspan, [])
@@ -66,7 +66,7 @@ eqs = [D(x) ~ a,
 initialization_eqs = [1 ~ exp(1 + x)]
 
 @named sys = ODESystem(eqs, t; initialization_eqs)
-sys = complete(structural_simplify(sys))
+sys = complete(mtkbuild(sys))
 
 tspan = (0.0, 0.2)
 prob = ODEProblem(sys, [], tspan, [])

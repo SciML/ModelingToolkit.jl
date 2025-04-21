@@ -28,7 +28,7 @@ are similarly undocumented. Following is the list of behaviors that should be re
   - `setindex!(::MTKParameters, value, ::ParameterIndex)` can be used to set the value of a
     parameter with the given index.
   - `parameter_values(sys, sym)` will return a `ParameterIndex` object if `sys` has been
-    `complete`d (through `structural_simplify`, `complete` or `@mtkbuild`).
+    `complete`d (through `mtkbuild`, `complete` or `@mtkbuild`).
   - `copy(::MTKParameters)` is defined and duplicates the parameter object, including the
     memory used by the underlying buffers.
 
@@ -194,7 +194,7 @@ p, replace, alias = SciMLStructures.canonicalize(Tunable(), prob.p)
 
 # ERROR: ArgumentError: SymbolicUtils.BasicSymbolic{Real}[xˍt(t)] are missing from the variable map.
 
-This error can come up after running `structural_simplify` on a system that generates dummy derivatives (i.e. variables with `ˍt`).  For example, here even though all the variables are defined with initial values, the `ODEProblem` generation will throw an error that defaults are missing from the variable map.
+This error can come up after running `mtkbuild` on a system that generates dummy derivatives (i.e. variables with `ˍt`).  For example, here even though all the variables are defined with initial values, the `ODEProblem` generation will throw an error that defaults are missing from the variable map.
 
 ```julia
 using ModelingToolkit
@@ -206,7 +206,7 @@ eqs = [x1 + x2 + 1 ~ 0
        x1 + D(x3) + x4 + 3 ~ 0
        2 * D(D(x1)) + D(D(x2)) + D(D(x3)) + D(x4) + 4 ~ 0]
 @named sys = ODESystem(eqs, t)
-sys = structural_simplify(sys)
+sys = mtkbuild(sys)
 prob = ODEProblem(sys, [], (0, 1))
 ```
 
