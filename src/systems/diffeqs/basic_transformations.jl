@@ -21,7 +21,7 @@ using ModelingToolkit, OrdinaryDiffEq
 @variables x(t) y(t)
 D = Differential(t)
 eqs = [D(x) ~ α*x - β*x*y, D(y) ~ -δ*y + γ*x*y]
-@named sys = ODESystem(eqs, t)
+@named sys = System(eqs, t)
 
 sys2 = liouville_transform(sys)
 sys2 = complete(sys2)
@@ -40,14 +40,14 @@ Optimal Transport Approach
 Abhishek Halder, Kooktae Lee, and Raktim Bhattacharya
 https://abhishekhalder.bitbucket.io/F16ACC2013Final.pdf
 """
-function liouville_transform(sys::AbstractODESystem; kwargs...)
+function liouville_transform(sys::System; kwargs...)
     t = get_iv(sys)
     @variables trJ
-    D = ModelingToolkit.Differential(t)
+    D = Differential(t)
     neweq = D(trJ) ~ trJ * -tr(calculate_jacobian(sys))
     neweqs = [equations(sys); neweq]
     vars = [unknowns(sys); trJ]
-    ODESystem(
+    System(
         neweqs, t, vars, parameters(sys);
         checks = false, name = nameof(sys), kwargs...
     )
@@ -55,7 +55,7 @@ end
 
 """
     change_independent_variable(
-        sys::AbstractODESystem, iv, eqs = [];
+        sys::System, iv, eqs = [];
         add_old_diff = false, simplify = true, fold = false
     )
 
@@ -95,7 +95,7 @@ By changing the independent variable, it can be reformulated for vertical positi
 ```julia
 julia> @variables x(t) y(t);
 
-julia> @named M = ODESystem([D(D(y)) ~ -9.81, D(D(x)) ~ 0.0], t);
+julia> @named M = System([D(D(y)) ~ -9.81, D(D(x)) ~ 0.0], t);
 
 julia> M = change_independent_variable(M, x);
 
@@ -109,7 +109,7 @@ julia> unknowns(M)
 ```
 """
 function change_independent_variable(
-        sys::AbstractODESystem, iv, eqs = [];
+        sys::System, iv, eqs = [];
         add_old_diff = false, simplify = true, fold = false
 )
     iv2_of_iv1 = unwrap(iv) # e.g. u(t)
@@ -201,7 +201,7 @@ function change_independent_variable(
     end
 
     # Use the utility function to transform everything in the system!
-    function transform(sys::AbstractODESystem)
+    function transform(sys::System)
         systems = map(transform, get_systems(sys)) # recurse through subsystems
         # transform equations and connections
         systems_map = Dict(get_name(s) => s for s in systems)

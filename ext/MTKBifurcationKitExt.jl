@@ -23,7 +23,7 @@ struct ObservableRecordFromSolution{S, T}
     # A Vector of pairs (Symbolic => value) with the default values of all system variables and parameters.
     subs_vals::T
 
-    function ObservableRecordFromSolution(nsys::NonlinearSystem,
+    function ObservableRecordFromSolution(nsys::System,
             plot_var,
             bif_idx,
             u0_vals,
@@ -82,7 +82,7 @@ end
 ### Creates BifurcationProblem Overloads ###
 
 # When input is a NonlinearSystem.
-function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem,
+function BifurcationKit.BifurcationProblem(nsys::System,
         u0_bif,
         ps,
         bif_par,
@@ -92,7 +92,7 @@ function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem,
         jac = true,
         kwargs...)
     if !ModelingToolkit.iscomplete(nsys)
-        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `BifurcationProblem`")
+        error("A completed `System` is required. Call `complete` or `structural_simplify` on the system before creating a `BifurcationProblem`")
     end
     @set! nsys.index_cache = nothing # force usage of a parameter vector instead of `MTKParameters`
     # Creates F and J functions.
@@ -144,11 +144,11 @@ function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem,
 end
 
 # When input is a ODESystem.
-function BifurcationKit.BifurcationProblem(osys::ODESystem, args...; kwargs...)
+function BifurcationKit.BifurcationProblem(osys::System, args...; kwargs...)
     if !ModelingToolkit.iscomplete(osys)
         error("A completed `ODESystem` is required. Call `complete` or `structural_simplify` on the system before creating a `BifurcationProblem`")
     end
-    nsys = NonlinearSystem([0 ~ eq.rhs for eq in full_equations(osys)],
+    nsys = System([0 ~ eq.rhs for eq in full_equations(osys)],
         unknowns(osys),
         parameters(osys);
         observed = observed(osys),
