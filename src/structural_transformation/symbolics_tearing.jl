@@ -1018,7 +1018,7 @@ end
     tearing(sys; simplify=false)
 
 Tear the nonlinear equations in system. When `simplify=true`, we simplify the
-new residual equations after tearing. End users are encouraged to call [`structural_simplify`](@ref)
+new residual equations after tearing. End users are encouraged to call [`mtkbuild`](@ref)
 instead, which calls this function internally.
 """
 function tearing(sys::AbstractSystem, state = TearingState(sys); mm = nothing,

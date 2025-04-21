@@ -17,7 +17,7 @@ JumpSystem
 ## Transformations
 
 ```@docs; canonical=false
-structural_simplify
+mtkbuild
 ```
 
 ## Analyses

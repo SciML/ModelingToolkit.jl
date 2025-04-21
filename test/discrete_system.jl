@@ -31,7 +31,7 @@ eqs = [S ~ S(k - 1) - infection * h,
 
 # System
 @named sys = DiscreteSystem(eqs, t, [S, I, R], [c, nsteps, δt, β, γ])
-syss = structural_simplify(sys)
+syss = mtkbuild(sys)
 @test syss == syss
 
 df = DiscreteFunction(syss)
@@ -254,7 +254,7 @@ end
 @variables x(t) y(t)
 k = ShiftIndex(t)
 @named sys = DiscreteSystem([x ~ x^2 + y^2, y ~ x(k - 1) + y(k - 1)], t)
-@test_throws ["algebraic equations", "ImplicitDiscreteSystem"] structural_simplify(sys)
+@test_throws ["algebraic equations", "ImplicitDiscreteSystem"] mtkbuild(sys)
 
 @testset "Passing `nothing` to `u0`" begin
     @variables x(t) = 1

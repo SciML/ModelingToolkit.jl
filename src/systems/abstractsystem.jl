@@ -157,7 +157,7 @@ may be subsetted using `dvs` and `ps`. All `kwargs` are passed to the internal
 [`build_function`](@ref) call. The returned function can be called as `f(u, p, t)` or
 `f(du, u, p, t)` for time-dependent systems and `f(u, p)` or `f(du, u, p)` for
 time-independent systems. If `split=true` (the default) was passed to [`complete`](@ref),
-[`structural_simplify`](@ref) or [`@mtkbuild`](@ref), `p` is expected to be an `MTKParameters`
+[`mtkbuild`](@ref) or [`@mtkbuild`](@ref), `p` is expected to be an `MTKParameters`
 object.
 """
 function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys),
@@ -165,7 +165,7 @@ function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys
         expression = Val{true}, eval_expression = false, eval_module = @__MODULE__,
         cachesyms::Tuple = (), kwargs...)
     if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system.")
+        error("A completed system is required. Call `complete` or `mtkbuild` on the system.")
     end
     p = (reorder_parameters(sys, unwrap.(ps))..., cachesyms...)
     isscalar = !(exprs isa AbstractArray)
@@ -771,7 +771,7 @@ function complete(
     newparams = OrderedSet()
     iv = has_iv(sys) ? get_iv(sys) : nothing
     collect_scoped_vars!(newunknowns, newparams, sys, iv; depth = -1)
-    # don't update unknowns to not disturb `structural_simplify` order
+    # don't update unknowns to not disturb `mtkbuild` order
     # `GlobalScope`d unknowns will be picked up and added there
     @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
 
@@ -1196,7 +1196,7 @@ end
 Denotes that a variable belongs to the root system in the hierarchy, regardless of which
 equations of subsystems in the hierarchy it is involved in. Variables with this scope
 are never namespaced and only added to the unknowns/parameters of a system when calling
-`complete` or `structural_simplify`.
+`complete` or `mtkbuild`.
 """
 struct GlobalScope <: SymScope end
 
@@ -2416,7 +2416,7 @@ macro mtkbuild(exprs...)
     else
         kwargs = (Expr(:parameters, kwargs...),)
     end
-    call_expr = Expr(:call, structural_simplify, kwargs..., name)
+    call_expr = Expr(:call, mtkbuild, kwargs..., name)
     esc(quote
         $named_expr
         $name = $call_expr
@@ -2455,7 +2455,7 @@ function debug_system(
         functions = Set(functions) # more efficient "in" lookup
     end
     if has_systems(sys) && !isempty(get_systems(sys))
-        error("debug_system(sys) only works on systems with no sub-systems! Consider flattening it with flatten(sys) or structural_simplify(sys) first.")
+        error("debug_system(sys) only works on systems with no sub-systems! Consider flattening it with flatten(sys) or mtkbuild(sys) first.")
     end
     if has_eqs(sys)
         eqs = debug_sub.(equations(sys), Ref(functions); kw...)
@@ -2552,10 +2552,10 @@ end
 
 function check_array_equations_unknowns(eqs, dvs)
     if any(eq -> eq isa Equation && Symbolics.isarraysymbolic(eq.lhs), eqs)
-        throw(ArgumentError("The system has array equations. Call `structural_simplify` to handle such equations or scalarize them manually."))
+        throw(ArgumentError("The system has array equations. Call `mtkbuild` to handle such equations or scalarize them manually."))
     end
     if any(x -> Symbolics.isarraysymbolic(x), dvs)
-        throw(ArgumentError("The system has array unknowns. Call `structural_simplify` to handle this or scalarize them manually."))
+        throw(ArgumentError("The system has array unknowns. Call `mtkbuild` to handle this or scalarize them manually."))
     end
 end
 

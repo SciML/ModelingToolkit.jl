@@ -129,7 +129,7 @@ s1 = compose(
     ODESystem(Equation[], t, [], [], name = :s1,
         discrete_events = 1.0 => (affect4!, [resistor.v], [], [], ctx)),
     resistor)
-s2 = structural_simplify(s1)
+s2 = mtkbuild(s1)
 prob = ODEProblem(s2, [resistor.v => 10.0], (0, 2.01))
 sol = solve(prob, Tsit5())
 @test ctx[1] == 2
@@ -148,7 +148,7 @@ end
     ])
 rc_model = compose(rc_model, [resistor, capacitor, source, ground])
 
-sys = structural_simplify(rc_model)
+sys = mtkbuild(rc_model)
 u0 = [capacitor.v => 0.0
       capacitor.p.i => 0.0
       resistor.v => 0.0]
@@ -187,7 +187,7 @@ rc_eqs2 = [connect(source.p, resistor.p)
 @named rc_model2 = ODESystem(rc_eqs2, t)
 rc_model2 = compose(rc_model2, [resistor, capacitor2, source, ground])
 
-sys2 = structural_simplify(rc_model2)
+sys2 = mtkbuild(rc_model2)
 u0 = [capacitor2.v => 0.0
       capacitor2.p.i => 0.0
       resistor.v => 0.0]
@@ -276,7 +276,7 @@ end
         [y ~ zr] => (bb_affect!, [v], [], [], nothing)
     ])
 
-bb_sys = structural_simplify(bb_model)
+bb_sys = mtkbuild(bb_model)
 @test only(ModelingToolkit.affects(ModelingToolkit.continuous_events(bb_sys))) isa
       ModelingToolkit.FunctionalAffect
 

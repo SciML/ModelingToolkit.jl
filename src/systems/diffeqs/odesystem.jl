@@ -579,7 +579,7 @@ function build_explicit_observed_function(sys, ts;
     if inputs === nothing
         inputs = ()
     else
-        ps = setdiff(ps, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
+        ps = setdiff(ps, inputs) # Inputs have been converted to parameters, remove those from the parameter list
         inputs = (inputs,)
     end
     if disturbance_inputs !== nothing
@@ -662,7 +662,7 @@ end
 
 # We have a stand-alone function to convert a `NonlinearSystem` or `ODESystem`
 # to an `ODESystem` to connect systems, and we later can reply on
-# `structural_simplify` to convert `ODESystem`s to `NonlinearSystem`s.
+# `mtkbuild` to convert `ODESystem`s to `NonlinearSystem`s.
 """
 $(TYPEDSIGNATURES)
 

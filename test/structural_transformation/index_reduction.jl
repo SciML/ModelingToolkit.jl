@@ -133,7 +133,7 @@ let pss_pendulum = partial_state_selection(pendulum)
     @test_broken length(equations(pss_pendulum)) == 3
 end
 
-let sys = structural_simplify(pendulum2)
+let sys = mtkbuild(pendulum2)
     @test length(equations(sys)) == 5
     @test length(unknowns(sys)) == 5
 
@@ -160,7 +160,7 @@ let
            D(D(y)) ~ λ * y - g
            x^2 + y^2 ~ 1]
     @named pend = ODESystem(eqs, t)
-    sys = complete(structural_simplify(pend; dummy_derivative = false))
+    sys = complete(mtkbuild(pend; dummy_derivative = false))
     prob = ODEProblem(
         sys, [x => 1, y => 0, D(x) => 0.0], (0.0, 10.0), [g => 1], guesses = [λ => 0.0])
     sol = solve(prob, Rodas5P())

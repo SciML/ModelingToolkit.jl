@@ -42,9 +42,9 @@ end
 completed_rc_model = complete(rc_model)
 @test isequal(completed_rc_model.resistor.n.i, resistor.n.i)
 @test ModelingToolkit.n_expanded_connection_equations(capacitor) == 2
-@test length(equations(structural_simplify(rc_model, allow_parameter = false))) == 2
-sys = structural_simplify(rc_model)
-@test_throws ModelingToolkit.RepeatedStructuralSimplificationError structural_simplify(sys)
+@test length(equations(mtkbuild(rc_model, allow_parameter = false))) == 2
+sys = mtkbuild(rc_model)
+@test_throws ModelingToolkit.RepeatedStructuralSimplificationError mtkbuild(sys)
 @test length(equations(sys)) == 1
 check_contract(sys)
 @test !isempty(ModelingToolkit.defaults(sys))
@@ -69,7 +69,7 @@ let
     @named _rc_model = ODESystem(rc_eqs, t)
     @named rc_model = compose(_rc_model,
         [resistor, capacitor, source, ground])
-    sys = structural_simplify(rc_model)
+    sys = mtkbuild(rc_model)
     u0 = [
         capacitor.v => 0.0
     ]
@@ -93,7 +93,7 @@ let
     @named _rc_model2 = ODESystem(rc_eqs2, t)
     @named rc_model2 = compose(_rc_model2,
         [resistor, resistor2, capacitor, source, ground])
-    sys2 = structural_simplify(rc_model2)
+    sys2 = mtkbuild(rc_model2)
     prob2 = ODEProblem(sys2, [source.p.i => 0.0], (0, 10.0), guesses = u0)
     sol2 = solve(prob2, Rosenbrock23())
     @test sol2[source.p.i] ≈ sol2[rc_model2.source.p.i] ≈ -sol2[capacitor.i]
@@ -127,7 +127,7 @@ eqs = [connect(source.p, rc_comp.p)
 @named sys_inner_outer = compose(sys′, [ground, source, rc_comp])
 @test_nowarn show(IOBuffer(), MIME"text/plain"(), sys_inner_outer)
 expand_connections(sys_inner_outer, debug = true)
-sys_inner_outer = structural_simplify(sys_inner_outer)
+sys_inner_outer = mtkbuild(sys_inner_outer)
 @test !isempty(ModelingToolkit.defaults(sys_inner_outer))
 u0 = [rc_comp.capacitor.v => 0.0]
 prob = ODEProblem(sys_inner_outer, u0, (0, 10.0), sparse = true)
@@ -150,7 +150,7 @@ sol = solve(prob, Tsit5())
 #plot(sol)
 
 include("../examples/serial_inductor.jl")
-sys = structural_simplify(ll_model)
+sys = mtkbuild(ll_model)
 @test length(equations(sys)) == 2
 u0 = unknowns(sys) .=> 0
 @test_nowarn ODEProblem(
@@ -159,7 +159,7 @@ prob = DAEProblem(sys, D.(unknowns(sys)) .=> 0, [], (0, 0.5), guesses = u0)
 sol = solve(prob, DFBDF())
 @test sol.retcode == SciMLBase.ReturnCode.Success
 
-sys2 = structural_simplify(ll2_model)
+sys2 = mtkbuild(ll2_model)
 @test length(equations(sys2)) == 3
 u0 = unknowns(sys) .=> 0
 prob = ODEProblem(sys, u0, (0, 10.0))
@@ -233,7 +233,7 @@ function Circuit(; name)
 end
 
 @named foo = Circuit()
-@test structural_simplify(foo) isa ModelingToolkit.AbstractSystem
+@test mtkbuild(foo) isa ModelingToolkit.AbstractSystem
 
 # BLT tests
 using LinearAlgebra
@@ -289,7 +289,7 @@ rc_eqs = [connect(capacitor.n, resistor.p)
 @named _rc_model = ODESystem(rc_eqs, t)
 @named rc_model = compose(_rc_model,
     [resistor, capacitor, ground])
-sys = structural_simplify(rc_model)
+sys = mtkbuild(rc_model)
 prob = ODEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Tsit5())
 
@@ -334,7 +334,7 @@ end
     end
 
     @named outer = Outer()
-    simp = structural_simplify(outer)
+    simp = mtkbuild(outer)
 
     @test sort(propertynames(outer)) == [:inner, :t, :x]
     @test propertynames(simp) == propertynames(outer)
@@ -351,7 +351,7 @@ end
     @test_throws ArgumentError outer.inner₊p
 end
 
-@testset "`getproperty` on `structural_simplify(complete(sys))`" begin
+@testset "`getproperty` on `mtkbuild(complete(sys))`" begin
     @mtkmodel Foo begin
         @variables begin
             x(t)
@@ -367,7 +367,7 @@ end
     end
     @named bar = Bar()
     cbar = complete(bar)
-    ss = structural_simplify(cbar)
+    ss = mtkbuild(cbar)
     @test isequal(cbar.foo.x, ss.foo.x)
 end
 

@@ -1,5 +1,5 @@
 """
-    lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; initialize = true, initialization_solver_alg = TrustRegion(), kwargs...)
+    lin_fun = linearization_function(sys::AbstractSystem, inputs, outputs; initialize = true, initialization_solver_alg = TrustRegion(), kwargs...)
 
 Return a function that linearizes the system `sys`. The function [`linearize`](@ref) provides a higher-level and easier to use interface.
 
@@ -15,7 +15,7 @@ y &= h(x, z, u)
 
 where `x` are differential unknown variables, `z` algebraic variables, `u` inputs and `y` outputs. To obtain a linear statespace representation, see [`linearize`](@ref). The input argument `variables` is a vector defining the operating point, corresponding to `unknowns(simplified_sys)` and `p` is a vector corresponding to the parameters of `simplified_sys`. Note: all variables in `inputs` have been converted to parameters in `simplified_sys`.
 
-The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The unknowns of this system also indicate the order of the unknowns that holds for the linearized matrices.
+The `simplified_sys` has undergone [`mtkbuild`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The unknowns of this system also indicate the order of the unknowns that holds for the linearized matrices.
 
 # Arguments:
 
@@ -29,8 +29,8 @@ The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occ
 
 See also [`linearize`](@ref) which provides a higher-level interface.
 """
-function linearization_function(sys::AbstractSystem, inputs,
-        outputs;
+function linearization_function(sys::AbstractSystem, inputs = unbound_inputs(sys),
+        outputs = unbound_outputs(sys);
         initialize = true,
         initializealg = nothing,
         initialization_abstol = 1e-5,
@@ -45,6 +45,9 @@ function linearization_function(sys::AbstractSystem, inputs,
         guesses = Dict(),
         warn_empty_op = true,
         kwargs...)
+    if !iscomplete(sys)
+        error("A completed `ODESystem` is required. Call `complete` or `mtkbuild` on the system before creating the linearization.")
+    end
     op = Dict(op)
     if isempty(op) && warn_empty_op
         @warn "An empty operating point was passed to `linearization_function`. An operating point containing the variables that will be changed in `linearize` should be provided. Disable this warning by passing `warn_empty_op = false`."
@@ -481,10 +484,13 @@ y &= h(x, z, u)
 ```
 where `x` are differential unknown variables, `z` algebraic variables, `u` inputs and `y` outputs.
 """
-function linearize_symbolic(sys::AbstractSystem, inputs,
-        outputs; allow_input_derivatives = false,
+function linearize_symbolic(sys::AbstractSystem, inputs = unbound_inputs(sys),
+        outputs = unbound_outputs(sys); allow_input_derivatives = false,
         eval_expression = false, eval_module = @__MODULE__,
         kwargs...)
+    if !iscomplete(sys)
+        error("A completed `ODESystem` is required. Call `complete` or `mtkbuild` on the system before creating the linearization.")
+    end
     diff_idxs, alge_idxs = eq_idxs(sys)
     sts = unknowns(sys)
     t = get_iv(sys)
@@ -543,7 +549,7 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
         end
     end
 
-    (; A, B, C, D, f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u), sys
+    (; A, B, C, D, f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u)
 end
 
 function markio!(state, orig_inputs, inputs, outputs; check = true)
@@ -710,17 +716,17 @@ function linearize(sys, lin_fun::LinearizationFunction; t = 0.0,
     return solve(prob; allow_input_derivatives)
 end
 
-function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
+function linearize(sys, inputs = unbound_inputs(sys), outputs = unbound_outputs(sys); op = Dict(), t = 0.0,
         allow_input_derivatives = false,
         zero_dummy_der = false,
         kwargs...)
-    lin_fun, ssys = linearization_function(sys,
+    lin_fun = linearization_function(sys,
         inputs,
         outputs;
         zero_dummy_der,
         op,
         kwargs...)
-    linearize(ssys, lin_fun; op, t, allow_input_derivatives), ssys
+    linearize(sys, lin_fun; op, t, allow_input_derivatives)
 end
 
 """

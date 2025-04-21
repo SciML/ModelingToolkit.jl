@@ -29,7 +29,7 @@ p = [9.8, 1]
 tspan = (0, 10.0)
 pendulum_prob = ODEProblem(pendulum_fun!, u0, tspan, p)
 traced_sys = modelingtoolkitize(pendulum_prob)
-pendulum_sys = structural_simplify(dae_index_lowering(traced_sys))
+pendulum_sys = mtkbuild(dae_index_lowering(traced_sys))
 prob = ODEProblem(pendulum_sys, [], tspan)
 sol = solve(prob, Rodas5P(), abstol = 1e-8, reltol = 1e-8)
 plot(sol, idxs = unknowns(traced_sys))
@@ -157,7 +157,7 @@ numerical solver. Let's try that out:
 
 ```@example indexred
 traced_sys = modelingtoolkitize(pendulum_prob)
-pendulum_sys = structural_simplify(dae_index_lowering(traced_sys))
+pendulum_sys = mtkbuild(dae_index_lowering(traced_sys))
 prob = ODEProblem(pendulum_sys, Pair[], tspan)
 sol = solve(prob, Rodas5P())
 

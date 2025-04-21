@@ -159,7 +159,7 @@ function check_lhs(eq::Equation, op, dvs::Set)
     v = unwrap(eq.lhs)
     _iszero(v) && return
     (operation(v) isa op && only(arguments(v)) in dvs) && return
-    error("$v is not a valid LHS. Please run structural_simplify before simulation.")
+    error("$v is not a valid LHS. Please run mtkbuild before simulation.")
 end
 check_lhs(eqs, op, dvs::Set) =
     for eq in eqs
@@ -323,7 +323,7 @@ Throw error when difference/derivative operation occurs in the R.H.S.
         optext = "derivative"
     end
     msg = "The $optext variable must be isolated to the left-hand " *
-          "side of the equation like `$opvar ~ ...`. You may want to use `structural_simplify` or the DAE form.\nGot $eq."
+          "side of the equation like `$opvar ~ ...`. You may want to use `mtkbuild` or the DAE form.\nGot $eq."
     throw(InvalidSystemException(msg))
 end
 
@@ -359,10 +359,10 @@ function check_operator_variables(eqs, op::T) where {T}
             is_tmp_fine = iszero(nd)
         end
         is_tmp_fine ||
-            error("The LHS cannot contain nondifferentiated variables. Please run `structural_simplify` or use the DAE form.\nGot $eq")
+            error("The LHS cannot contain nondifferentiated variables. Please run `mtkbuild` or use the DAE form.\nGot $eq")
         for v in tmp
             v in ops &&
-                error("The LHS operator must be unique. Please run `structural_simplify` or use the DAE form. $v appears in LHS more than once.")
+                error("The LHS operator must be unique. Please run `mtkbuild` or use the DAE form. $v appears in LHS more than once.")
             push!(ops, v)
         end
         empty!(tmp)

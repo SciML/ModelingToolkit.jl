@@ -13,11 +13,12 @@ eqs = [u ~ kp * (r - y)
        y ~ x]
 
 @named sys = ODESystem(eqs, t)
+sys = mtkbuild(sys, inputs = [r], outputs = [y])
 
-lsys, ssys = linearize(sys, [r], [y])
+lsys = linearize(sys, [r], [y])
 lprob = LinearizationProblem(sys, [r], [y])
 lsys2 = solve(lprob)
-lsys3, _ = linearize(sys, [r], [y]; autodiff = AutoFiniteDiff())
+lsys3 = linearize(sys, [r], [y]; autodiff = AutoFiniteDiff())
 
 @test lsys.A[] == lsys2.A[] == lsys3.A[] == -2
 @test lsys.B[] == lsys2.B[] == lsys3.B[] == 1
@@ -86,11 +87,12 @@ connections = [f.y ~ c.r # filtered reference to controller reference
                p.y ~ c.y]
 
 @named cl = ODESystem(connections, t, systems = [f, c, p])
+cl = mtkbuild(cl, inputs = [f.u], outputs = [p.x])
 
-lsys0, ssys = linearize(cl, [f.u], [p.x])
+lsys0, ssys = linearize(cl)
 desired_order = [f.x, p.x]
 lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
-lsys1, ssys = linearize(cl, [f.u], [p.x]; autodiff = AutoFiniteDiff())
+lsys1, ssys = linearize(cl; autodiff = AutoFiniteDiff())
 lsys2 = ModelingToolkit.reorder_unknowns(lsys1, unknowns(ssys), desired_order)
 
 @test lsys.A == lsys2.A == [-2 0; 1 -2]
@@ -199,7 +201,7 @@ lsys, ssys = linearize(sat, [u], [y])
 # @test substitute(lsyss.D, ModelingToolkit.defaults(sat)) == lsys.D
 
 # outside the linear region the derivative is 0
-lsys, ssys = linearize(sat, [u], [y]; op = Dict(u => 2))
+lsys = linearize(sat, [u], [y]; op = Dict(u => 2))
 @test isempty(lsys.A) # there are no differential variables in this system
 @test isempty(lsys.B)
 @test isempty(lsys.C)
@@ -265,8 +267,9 @@ closed_loop = ODESystem(connections, t, systems = [model, pid, filt, sensor, r, 
         filt.x => 0.0,
         filt.xd => 0.0
     ])
+closed_loop = mtkbuild(closed_loop, inputs = :r, outputs = :y)
 
-@test_nowarn linearize(closed_loop, :r, :y; warn_empty_op = false)
+@test_nowarn linearize(closed_loop; warn_empty_op = false)
 
 # https://discourse.julialang.org/t/mtk-change-in-linearize/115760/3
 @mtkmodel Tank_noi begin
@@ -296,6 +299,7 @@ end
 
 @named tank_noi = Tank_noi()
 @unpack md_i, h, m = tank_noi
+tank_noi = mtkbuild(tank_noi, inputs = [md_i], outputs = [h])
 m_ss = 2.4000000003229878
 @test_nowarn linearize(tank_noi, [md_i], [h]; op = Dict(m => m_ss, md_i => 2))
 
@@ -304,13 +308,14 @@ m_ss = 2.4000000003229878
 @parameters p = 1.0
 eqs = [D(x) ~ p * u, x ~ y]
 @named sys = ODESystem(eqs, t)
+sys = mtkbuild(sys, inputs = [u])
 
-matrices1, _ = linearize(sys, [u], []; op = Dict(x => 2.0))
-matrices2, _ = linearize(sys, [u], []; op = Dict(y => 2.0))
+matrices1 = linearize(sys; op = Dict(x => 2.0))
+matrices2 = linearize(sys; op = Dict(y => 2.0))
 @test matrices1 == matrices2
 
 # Ensure parameter values passed as `Dict` are respected
-linfun, _ = linearization_function(sys, [u], []; op = Dict(x => 2.0))
+linfun = linearization_function(sys, [u], []; op = Dict(x => 2.0))
 matrices = linfun([1.0], Dict(p => 3.0), 1.0)
 # this would be 1 if the parameter value isn't respected
 @test matrices.f_u[] == 3.0
@@ -326,7 +331,7 @@ end
     @parameters p
     eqs = [0 ~ x * log(y) - p]
     @named sys = ODESystem(eqs, t; defaults = [p => 1.0])
-    sys = complete(sys)
+    sys = mtkbuild(sys, inputs = [x])
     @test_throws ModelingToolkit.MissingVariablesError linearize(
         sys, [x], []; op = Dict(x => 1.0), allow_input_derivatives = true)
     @test_nowarn linearize(
@@ -337,6 +342,7 @@ end
 @testset "Symbolic values for parameters in `linearize`" begin
     @named tank_noi = Tank_noi()
     @unpack md_i, h, m, ρ, A, K = tank_noi
+    tank_noi = mtkbuild(tank_noi, inputs = [md_i], outputs = [h])
     m_ss = 2.4000000003229878
     @test_nowarn linearize(
         tank_noi, [md_i], [h]; op = Dict(m => m_ss, md_i => 2, ρ => A / K, A => 5))
@@ -345,6 +351,7 @@ end
 @testset "Warn on empty operating point" begin
     @named tank_noi = Tank_noi()
     @unpack md_i, h, m = tank_noi
+    tank_noi = mtkbuild(tank_noi, inputs = [md_i], outputs = [h])
     m_ss = 2.4000000003229878
     @test_warn ["empty operating point", "warn_empty_op"] linearize(
         tank_noi, [md_i], [h]; p = [md_i => 1.0])
