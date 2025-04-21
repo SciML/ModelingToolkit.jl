@@ -604,17 +604,6 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Mark a system as scheduled. It is only intended in compiler internals. A system
-is scheduled after tearing based simplifications where equations are converted
-into assignments.
-"""
-function schedule(sys::AbstractSystem)
-    has_schedule(sys) ? sys : (@set! sys.isscheduled = true)
-end
-
-"""
-$(TYPEDSIGNATURES)
-
 If a system is scheduled, then changing its equations, variables, and
 parameters is no longer legal.
 """
