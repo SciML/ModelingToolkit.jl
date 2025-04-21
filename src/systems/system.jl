@@ -1,3 +1,14 @@
+struct Schedule{V <: BipartiteGraphs.Matching}
+    """
+    Maximal matching of variables to equations calculated during structural simplification.
+    """
+    var_eq_matching::V
+    """
+    Mapping of `Differential`s of variables to corresponding derivative expressions.
+    """
+    dummy_sub::Dict{Any, Any}
+end
+
 struct System <: AbstractSystem
     tag::UInt
     eqs::Vector{Equation}
@@ -40,6 +51,7 @@ struct System <: AbstractSystem
     parent::Union{Nothing, System}
     is_initializesystem::Bool
     isscheduled::Bool
+    schedule::Union{Schedule, Nothing}
 
     function System(
             tag, eqs, noise_eqs, jumps, constraints, costs, consolidate, unknowns, ps,
@@ -49,8 +61,8 @@ struct System <: AbstractSystem
             metadata = nothing, gui_metadata = nothing,
             is_dde = false, tstops = [], tearing_state = nothing, namespacing = true,
             complete = false, index_cache = nothing, ignored_connections = nothing,
-            parent = nothing, is_initializesystem = false, isscheduled = false;
-            checks::Union{Bool, Int} = true)
+            parent = nothing, is_initializesystem = false, isscheduled = false,
+            schedule = nothing; checks::Union{Bool, Int} = true)
 
         if is_initializesystem && iv !== nothing
             throw(ArgumentError("""
@@ -81,7 +93,7 @@ struct System <: AbstractSystem
             guesses, systems, initialization_eqs, continuous_events, discrete_events,
             connector_type, assertions, metadata, gui_metadata, is_dde,
             tstops, tearing_state, namespacing, complete, index_cache, ignored_connections,
-            parent, isscheduled)
+            parent, is_initializesystem, isscheduled, schedule)
     end
 end
 
@@ -332,7 +344,7 @@ function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
             end
             arg = only(arguments(var))
             operation(var)(iv) ∈ sts ||
-                throw(ArgumentError("Variable $var is not a variable of the ODESystem. Called variables must be variables of the ODESystem."))
+                throw(ArgumentError("Variable $var is not a variable of the System. Called variables must be variables of the System."))
 
             isequal(arg, iv) || isparameter(arg) || arg isa Integer ||
                 arg isa AbstractFloat ||
@@ -360,12 +372,12 @@ end
 SymbolicIndexingInterface.is_time_dependent(sys::System) = get_iv(sys) !== nothing
 
 """
-    is_dde(sys::System)
+    is_dde(sys::AbstractSystem)
 
 Return a boolean indicating whether a system represents a set of delay
 differential equations.
 """
-is_dde(sys::System) = has_is_dde(sys) && get_is_dde(sys)
+is_dde(sys::AbstractSystem) = has_is_dde(sys) && get_is_dde(sys)
 
 function _check_if_dde(eqs, iv, subsystems)
     is_dde = any(ModelingToolkit.is_dde, subsystems)
