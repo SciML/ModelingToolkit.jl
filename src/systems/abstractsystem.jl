@@ -2693,11 +2693,9 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
         name = name, description = description, gui_metadata = gui_metadata)
 
     # collect fields specific to some system types
-    if basesys isa ODESystem
-        ieqs = union(get_initialization_eqs(basesys), get_initialization_eqs(sys))
-        guesses = merge(get_guesses(basesys), get_guesses(sys)) # prefer `sys`
-        kwargs = merge(kwargs, (initialization_eqs = ieqs, guesses = guesses))
-    end
+    ieqs = union(get_initialization_eqs(basesys), get_initialization_eqs(sys))
+    guesses = merge(get_guesses(basesys), get_guesses(sys)) # prefer `sys`
+    kwargs = merge(kwargs, (initialization_eqs = ieqs, guesses = guesses))
 
     if has_assertions(basesys)
         kwargs = merge(
