@@ -39,9 +39,9 @@ struct InfiniteOptDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
 end
 
 """
-    JuMPDynamicOptProblem(sys::ODESystem, u0, tspan, p; dt)
+    JuMPDynamicOptProblem(sys::System, u0, tspan, p; dt)
 
-Convert an ODESystem representing an optimal control system into a JuMP model
+Convert a System representing an optimal control system into a JuMP model
 for solving using optimization. Must provide either `dt`, the timestep between collocation 
 points (which, along with the timespan, determines the number of points), or directly 
 provide the number of points as `steps`.
@@ -51,10 +51,10 @@ The optimization variables:
 - a vector-of-vectors V representing the controls as an interpolation array
 
 The constraints are:
-- The set of user constraints passed to the ODESystem via `constraints`
+- The set of user constraints passed to the System via `constraints`
 - The solver constraints that encode the time-stepping used by the solver
 """
-function MTK.JuMPDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
+function MTK.JuMPDynamicOptProblem(sys::System, u0map, tspan, pmap;
         dt = nothing,
         steps = nothing,
         guesses = Dict(), kwargs...)
@@ -71,16 +71,16 @@ function MTK.JuMPDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
 end
 
 """
-    InfiniteOptDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap; dt)
+    InfiniteOptDynamicOptProblem(sys::System, u0map, tspan, pmap; dt)
 
-Convert an ODESystem representing an optimal control system into a InfiniteOpt model
+Convert System representing an optimal control system into a InfiniteOpt model
 for solving using optimization. Must provide `dt` for determining the length 
 of the interpolation arrays.
 
 Related to `JuMPDynamicOptProblem`, but directly adds the differential equations
 of the system as derivative constraints, rather than using a solver tableau.
 """
-function MTK.InfiniteOptDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
+function MTK.InfiniteOptDynamicOptProblem(sys::System, u0map, tspan, pmap;
         dt = nothing,
         steps = nothing,
         guesses = Dict(), kwargs...)

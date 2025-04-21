@@ -1673,7 +1673,7 @@ function defaults(sys::AbstractSystem)
     # `mapfoldr` is really important!!! We should prefer the base model for
     # defaults, because people write:
     #
-    # `compose(ODESystem(...; defaults=defs), ...)`
+    # `compose(System(...; defaults=defs), ...)`
     #
     # Thus, right associativity is required and crucial for correctness.
     isempty(systems) ? defs : mapfoldr(namespace_defaults, merge, systems; init = defs)
@@ -2869,7 +2869,7 @@ using ModelingToolkit: t, D
 
 @parameters p = 1.0, [description = "My parameter", tunable = false] q = 2.0, [description = "Other parameter"]
 @variables x(t) = 3.0 [unit = u"m"]
-@named sys = ODESystem(Equation[], t, [x], [p, q])
+@named sys = System(Equation[], t, [x], [p, q])
 ModelingToolkit.dump_parameters(sys)
 ```
 
@@ -2910,7 +2910,7 @@ using ModelingToolkit: t, D
 
 @parameters p = 1.0, [description = "My parameter", tunable = false] q = 2.0, [description = "Other parameter"]
 @variables x(t) = 3.0 [unit = u"m"]
-@named sys = ODESystem(Equation[], t, [x], [p, q])
+@named sys = System(Equation[], t, [x], [p, q])
 ModelingToolkit.dump_unknowns(sys)
 ```
 
@@ -3088,7 +3088,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys = ODESystem([eq1, eq2], t)
+@named osys = System([eq1, eq2], t)
 
 alg_equations(osys) # returns `[0 ~ p - d*X(t)]`.
 """
@@ -3107,7 +3107,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys = ODESystem([eq1, eq2], t)
+@named osys = System([eq1, eq2], t)
 
 diff_equations(osys) # returns `[Differential(t)(X(t)) ~ p - d*X(t)]`.
 """
@@ -3127,8 +3127,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys1 = ODESystem([eq1], t)
-@named osys2 = ODESystem([eq2], t)
+@named osys1 = System([eq1], t)
+@named osys2 = System([eq2], t)
 
 has_alg_equations(osys1) # returns `false`.
 has_alg_equations(osys2) # returns `true`.
@@ -3149,8 +3149,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys1 = ODESystem([eq1], t)
-@named osys2 = ODESystem([eq2], t)
+@named osys1 = System([eq1], t)
+@named osys2 = System([eq2], t)
 
 has_diff_equations(osys1) # returns `true`.
 has_diff_equations(osys2) # returns `false`.
@@ -3172,9 +3172,9 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys1 = ODESystem([eq1], t)
-@named osys2 = ODESystem([eq2], t)
-osys12 = compose(osys1, [osys2])
+@named osys1 = ([eq1], t)
+@named osys2 = ([eq2], t)
+osys12 = compose(sys1, [osys2])
 osys21 = compose(osys2, [osys1])
 
 get_alg_eqs(osys12) # returns `Equation[]`.
@@ -3197,8 +3197,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys1 = ODESystem([eq1], t)
-@named osys2 = ODESystem([eq2], t)
+@named osys1 = tem([eq1], t)
+@named osys2 = tem([eq2], t)
 osys12 = compose(osys1, [osys2])
 osys21 = compose(osys2, [osys1])
 
@@ -3222,8 +3222,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys1 = ODESystem([eq1], t)
-@named osys2 = ODESystem([eq2], t)
+@named osys1 = System([eq1], t)
+@named osys2 = System([eq2], t)
 osys12 = compose(osys1, [osys2])
 osys21 = compose(osys2, [osys1])
 
@@ -3248,8 +3248,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys1 = ODESystem([eq1], t)
-@named osys2 = ODESystem([eq2], t)
+@named osys1 = tem([eq1], t)
+@named osys2 = tem([eq2], t)
 osys12 = compose(osys1, [osys2])
 osys21 = compose(osys2, [osys1])
 

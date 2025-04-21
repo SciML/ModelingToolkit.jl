@@ -1208,7 +1208,8 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Find all the unknowns and parameters from the equations of a SDESystem or ODESystem. Return re-ordered equations, differential variables, all variables, and parameters.
+Find all the unknowns and parameters from the equations of a System. Return re-ordered
+equations, differential variables, all variables, and parameters.
 """
 function process_equations(eqs, iv)
     if eltype(eqs) <: AbstractVector
@@ -1244,7 +1245,7 @@ function process_equations(eqs, iv)
             diffvar, _ = var_from_nested_derivative(eq.lhs)
             if check_scope_depth(getmetadata(diffvar, SymScope, LocalScope()), 0)
                 isequal(iv, iv_from_nested_derivative(eq.lhs)) ||
-                    throw(ArgumentError("An ODESystem can only have one independent variable."))
+                    throw(ArgumentError("A system of differential equations can only have one independent variable."))
                 diffvar in diffvars &&
                     throw(ArgumentError("The differential variable $diffvar is not unique in the system of equations."))
                 !has_diffvar_type(diffvar) &&

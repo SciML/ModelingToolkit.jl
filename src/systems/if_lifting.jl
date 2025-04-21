@@ -411,7 +411,10 @@ Lifting proceeds through the following process:
 * rewrite comparisons to be of the form eqn [op] 0; subtract the RHS from the LHS 
 * replace comparisons with generated parameters; for each comparison eqn [op] 0, generate an event (dependent on op) that sets the parameter
 """
-function IfLifting(sys::ODESystem)
+function IfLifting(sys::System)
+    if !is_time_dependent(sys)
+        throw(ArgumentError("IfLifting is only supported for time-dependent systems."))
+    end
     cw = CondRewriter(get_iv(sys))
 
     eqs = copy(equations(sys))

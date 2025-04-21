@@ -42,7 +42,7 @@ function structural_simplify(
     for pass in additional_passes
         newsys = pass(newsys)
     end
-    if newsys isa ODESystem || has_parent(newsys)
+    if has_parent(newsys)
         @set! newsys.parent = complete(sys; split = false, flatten = false)
     end
     newsys = complete(newsys; split)
@@ -56,10 +56,6 @@ end
 
 function __structural_simplify(sys::JumpSystem, args...; kwargs...)
     return sys
-end
-
-function __structural_simplify(sys::SDESystem, args...; kwargs...)
-    return __structural_simplify(ODESystem(sys), args...; kwargs...)
 end
 
 function __structural_simplify(sys::AbstractSystem; simplify = false,

@@ -19,7 +19,7 @@ The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occ
 
 # Arguments:
 
-  - `sys`: An [`ODESystem`](@ref). This function will automatically apply simplification passes on `sys` and return the resulting `simplified_sys`.
+  - `sys`: A [`System`](@ref) of ODEs. This function will automatically apply simplification passes on `sys` and return the resulting `simplified_sys`.
   - `inputs`: A vector of variables that indicate the inputs of the linearized input-output model.
   - `outputs`: A vector of variables that indicate the outputs of the linearized input-output model.
   - `simplify`: Apply simplification in tearing.
@@ -671,7 +671,7 @@ function plant(; name)
     @variables u(t)=0 y(t)=0
     eqs = [D(x) ~ -x + u
            y ~ x]
-    ODESystem(eqs, t; name = name)
+    System(eqs, t; name = name)
 end
 
 function ref_filt(; name)
@@ -679,7 +679,7 @@ function ref_filt(; name)
     @variables u(t)=0 [input = true]
     eqs = [D(x) ~ -2 * x + u
            y ~ x]
-    ODESystem(eqs, t, name = name)
+    System(eqs, t, name = name)
 end
 
 function controller(kp; name)
@@ -688,7 +688,7 @@ function controller(kp; name)
     eqs = [
         u ~ kp * (r - y),
     ]
-    ODESystem(eqs, t; name = name)
+    System(eqs, t; name = name)
 end
 
 @named f = ref_filt()
@@ -699,7 +699,7 @@ connections = [f.y ~ c.r # filtered reference to controller reference
                c.u ~ p.u # controller output to plant input
                p.y ~ c.y]
 
-@named cl = ODESystem(connections, t, systems = [f, c, p])
+@named cl = System(connections, t, systems = [f, c, p])
 
 lsys0, ssys = linearize(cl, [f.u], [p.x])
 desired_order = [f.x, p.x]

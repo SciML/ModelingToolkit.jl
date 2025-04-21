@@ -1,7 +1,7 @@
 """
 $(TYPEDSIGNATURES)
 
-Generate `ODESystem`, dependent variables, and parameters from an `ODEProblem`.
+Generate `System`, dependent variables, and parameters from an `ODEProblem`.
 """
 function modelingtoolkitize(
         prob::DiffEqBase.ODEProblem; u_names = nothing, p_names = nothing, kwargs...)
@@ -95,7 +95,7 @@ function modelingtoolkitize(
     end
     filter!(x -> !iscall(x) || !(operation(x) isa Initial), params)
     filter!(x -> !iscall(x[1]) || !(operation(x[1]) isa Initial), default_p)
-    de = ODESystem(eqs, t, sts, params,
+    de = System(eqs, t, sts, params,
         defaults = merge(default_u0, default_p);
         name = gensym(:MTKizedODE),
         tspan = prob.tspan,
