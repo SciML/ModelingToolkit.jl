@@ -1512,3 +1512,24 @@ end
     @inferred remake(prob; u0 = 2 .* prob.u0, p = prob.p)
     @inferred solve(prob)
 end
+
+@testset "Issue#3570: `Initial`s are copied to `u0` if `u0` not provided to `remake`" begin
+    @parameters g
+    @variables x(t) [state_priority = 10] y(t) λ(t)
+    eqs = [D(D(x)) ~ λ * x
+           D(D(y)) ~ λ * y - g
+           x^2 + y^2 ~ 1]
+    @mtkbuild pend = ODESystem(eqs, t)
+
+    prob = ODEProblem(
+        pend, [x => (√2 / 2)], (0.0, 1.5), [g => 1], guesses = [λ => 1, y => √2 / 2])
+    sol = solve(prob)
+
+    setter = setsym_oop(prob, [Initial(x)])
+    (u0, p) = setter(prob, [0.8])
+
+    new_prob = remake(prob; p, initializealg = BrownFullBasicInit())
+    @test new_prob[x] ≈ 0.8
+    new_sol = solve(new_prob)
+    @test new_sol[x, 1] ≈ 0.8
+end

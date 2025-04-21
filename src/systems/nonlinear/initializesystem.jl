@@ -593,6 +593,18 @@ function SciMLBase.late_binding_update_u0_p(
         prob, sys::AbstractSystem, u0, p, t0, newu0, newp)
     supports_initialization(sys) || return newu0, newp
     u0 === missing && return newu0, (p === missing ? copy(newp) : newp)
+    # If the user passes `p` to `remake` but not `u0` and `u0` isn't empty,
+    # and if the system supports initialization (so it has initial parameters),
+    # and if the initialization solves for `u0`,
+    # THEN copy the values of `Initial`s to `newu0`.
+    if u0 === missing && newu0 !== nothing && p !== missing && supports_initialization(sys) && prob.f.initialization_data !== nothing && prob.f.initialization_data.initializeprobmap !== nothing
+        if ArrayInterface.ismutable(newu0)
+            copyto!(newu0, getu(sys, Initial.(unknowns(sys)))(newp))
+        else
+            T = StaticArrays.similar_type(newu0)
+            newu0 = T(getu(sys, Initial.(unknowns(sys)))(newp))
+        end
+    end
     # non-symbolic u0 updates initials...
     if !(eltype(u0) <: Pair)
         # if `p` is not provided or is symbolic
