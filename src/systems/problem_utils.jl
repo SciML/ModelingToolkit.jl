@@ -1254,6 +1254,47 @@ function process_kwargs(sys::System; callback = nothing, eval_expression = false
     return merge(kwargs1, kwargs)
 end
 
+function filter_kwargs(kwargs)
+    kwargs = Dict(kwargs)
+    for key in keys(kwargs)
+        key in DiffEqBase.allowedkeywords || delete!(kwargs, key)
+    end
+    pairs(NamedTuple(kwargs))
+end
+
+struct SymbolicTstops{F}
+    fn::F
+end
+
+function (st::SymbolicTstops)(p, tspan)
+    unique!(sort!(reduce(vcat, st.fn(p, tspan...))))
+end
+
+function SymbolicTstops(
+        sys::AbstractSystem; eval_expression = false, eval_module = @__MODULE__)
+    tstops = symbolic_tstops(sys)
+    isempty(tstops) && return nothing
+    t0 = gensym(:t0)
+    t1 = gensym(:t1)
+    tstops = map(tstops) do val
+        if is_array_of_symbolics(val) || val isa AbstractArray
+            collect(val)
+        else
+            term(:, t0, unwrap(val), t1; type = AbstractArray{Real})
+        end
+    end
+    rps = reorder_parameters(sys)
+    tstops, _ = build_function_wrapper(sys, tstops,
+        rps...,
+        t0,
+        t1;
+        expression = Val{true},
+        p_start = 1, p_end = length(rps), add_observed = false, force_SA = true)
+    tstops = eval_or_rgf(tstops; eval_expression, eval_module)
+    tstops = GeneratedFunctionWrapper{(1, 3, is_split(sys))}(tstops, nothing)
+    return SymbolicTstops(tstops)
+end
+
 """
     $(TYPEDSIGNATURES)
 
