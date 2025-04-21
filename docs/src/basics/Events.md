@@ -25,7 +25,7 @@ the event occurs). These can both be specified symbolically, but a more [general
 functional affect](@ref func_affects) representation is also allowed, as described
 below.
 
-## Symbolic Callback Semantics (changed in V10)
+## Symbolic Callback Semantics
 
 In callbacks, there is a distinction between values of the unknowns and parameters
 *before* the callback, and the desired values *after* the callback. In MTK, this
