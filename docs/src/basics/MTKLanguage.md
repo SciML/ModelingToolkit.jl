@@ -16,8 +16,9 @@ equations.
 ### [Defining components with `@mtkmodel`](@id mtkmodel)
 
 `@mtkmodel` is a convenience macro to define components. It returns
-`ModelingToolkit.Model`, which includes a constructor that returns the ODESystem, a
-`structure` dictionary with metadata, and flag `isconnector` which is set to `false`.
+`ModelingToolkit.Model`, which includes a system constructor (`ODESystem` by
+default), a `structure` dictionary with metadata, and flag `isconnector` which is
+set to `false`.
 
 ### What can an MTK-Model definition have?
 
@@ -26,7 +27,7 @@ equations.
   - `@description`: for describing the whole system with a human-readable string
   - `@components`: for listing sub-components of the system
   - `@constants`: for declaring constants
-  - `@defaults`: for passing `defaults` to ODESystem
+  - `@defaults`: for passing `defaults` to the system
   - `@equations`: for the list of equations
   - `@extend`: for extending a base system and unpacking its unknowns
   - `@icon` : for embedding the model icon
@@ -196,7 +197,7 @@ getdefault(model_c3.model_a.k_array[2])
 #### `@defaults` begin block
 
   - Default values can be passed as pairs.
-  - This is equivalent to passing `defaults` argument to `ODESystem`.
+  - This is equivalent to passing `defaults` argument to the system.
 
 #### `@continuous_events` begin block
 
@@ -256,6 +257,32 @@ end
 
   - Any other Julia operations can be included with dedicated begin blocks.
 
+### Setting the type of system:
+
+By default `@mtkmodel` returns an ODESystem. Different types of system can be
+defined with the following syntax:
+
+```
+@mtkmodel ModelName::SystemType begin
+    ...
+end
+
+```
+
+Example:
+
+```@example mtkmodel-example
+@mtkmodel Float2Bool::DiscreteSystem begin
+    @variables begin
+        u(t)::Float64
+        y(t)::Bool
+    end
+    @equations begin
+        y ~ u != 0
+    end
+end
+```
+
 ## Connectors
 
 Connectors are special models that can be used to connect different components together.
@@ -270,7 +297,7 @@ MTK provides 3 distinct connectors:
 ### [Defining connectors with `@connector`](@id connector)
 
 `@connector` returns `ModelingToolkit.Model`. It includes a constructor that returns
-a connector ODESystem, a `structure` dictionary with metadata, and flag `isconnector`
+a connector system (`ODESystem` by default), a `structure` dictionary with metadata, and flag `isconnector`
 which is set to `true`.
 
 A simple connector can be defined with syntax similar to following example:
@@ -498,7 +525,7 @@ end
 
 ## Build structurally simplified models:
 
-`@mtkbuild` builds an instance of a component and returns a structurally simplied `ODESystem`.
+`@mtkbuild` builds an instance of a component and returns a structurally simplied system.
 
 ```julia
 @mtkbuild sys = CustomModel()

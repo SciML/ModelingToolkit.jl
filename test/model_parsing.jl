@@ -1011,3 +1011,18 @@ end
         @test any(isequal(u), vars)
     end
 end
+
+@testset "Specify the type of system" begin
+    @mtkmodel Float2Bool::DiscreteSystem begin
+        @variables begin
+            u(t)::Float64
+            y(t)::Bool
+        end
+        @equations begin
+            y ~ u != 0
+        end
+    end
+
+    @named sys = Float2Bool()
+    @test typeof(sys) == DiscreteSystem
+end
