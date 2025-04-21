@@ -72,8 +72,7 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
 
     push!(exprs.args, :(variables = []))
     push!(exprs.args, :(parameters = []))
-    # We build `System` by default; vectors can't be created for `System` as it is
-    # a function.
+    # We build `System` by default
     push!(exprs.args, :(systems = ModelingToolkit.AbstractSystem[]))
     push!(exprs.args, :(equations = Union{Equation, Vector{Equation}}[]))
     push!(exprs.args, :(defaults = Dict{Num, Union{Number, Symbol, Function}}()))
