@@ -297,7 +297,7 @@ Measure transformation method that allows for a reduction in the variance of an 
 Input:  Original SDE system and symbolic function `u(t,x)` with scalar output that
         defines the adjustable parameters `d` in the Girsanov transformation. Optional: initial
         condition for `θ0`.
-Output: Modified SDESystem with additional component `θ_t` and initial value `θ0`, as well as
+Output: Modified SDE System with additional component `θ_t` and initial value `θ0`, as well as
         the weight `θ_t/θ0` as observed equation, such that the estimator `Exp(g(X_t)θ_t/θ0)`
         has a smaller variance.
 
@@ -317,7 +317,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 eqs = [D(x) ~ α*x]
 noiseeqs = [β*x]
 
-@named de = SDESystem(eqs,noiseeqs,t,[x],[α,β])
+@named de = System(eqs,t,[x],[α,β]; noise_eqs = noiseeqs)
 
 # define u (user choice)
 u = x

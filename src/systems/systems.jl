@@ -145,8 +145,8 @@ function __structural_simplify(sys::AbstractSystem; simplify = false,
         end
 
         noise_eqs = StructuralTransformations.tearing_substitute_expr(ode_sys, noise_eqs)
-        ssys = SDESystem(Vector{Equation}(full_equations(ode_sys)), noise_eqs,
-            get_iv(ode_sys), unknowns(ode_sys), parameters(ode_sys);
+        ssys = System(Vector{Equation}(full_equations(ode_sys)),
+            get_iv(ode_sys), unknowns(ode_sys), parameters(ode_sys); noise_eqs,
             name = nameof(ode_sys), is_scalar_noise, observed = observed(ode_sys), defaults = defaults(sys),
             parameter_dependencies = parameter_dependencies(sys), assertions = assertions(sys),
             guesses = guesses(sys), initialization_eqs = initialization_equations(sys),
