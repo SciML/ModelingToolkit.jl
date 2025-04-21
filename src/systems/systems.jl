@@ -71,6 +71,11 @@ function __structural_simplify(sys::AbstractSystem; simplify = false,
         disturbance_inputs = Any[],
         sort_eqs = true,
         kwargs...)
+    # TODO: convert noise_eqs to brownians for simplification
+    if has_noise_eqs(sys) && get_noise_eqs(sys) !== nothing
+        throw(ArgumentError("Cannot simplify systems with `noise_eqs`"))
+    end
+
     sys = expand_connections(sys)
     state = TearingState(sys; sort_eqs)
 
