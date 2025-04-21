@@ -46,11 +46,13 @@ If the `System` has algebraic equations, like `x(t)^2 + y(t)^2`, the resulting
 @fallback_iip_specialize function SciMLBase.BVProblem{iip, spec}(
         sys::System, u0map, tspan, parammap = SciMLBase.NullParameters();
         check_compatibility = true, cse = true, checkbounds = false, eval_expression = false,
-        eval_module = @__MODULE__, guesses = Dict(), kwargs...) where {iip, spec}
+        eval_module = @__MODULE__, guesses = Dict(), callback = nothing, kwargs...) where {
+        iip, spec}
     check_complete(sys, BVProblem)
     check_compatibility && check_compatible_system(BVProblem, sys)
+    isnothing(callback) || error("BVP solvers do not support callbacks.")
 
-    # ODESystems without algebraic equations should use both fixed values + guesses
+    # Systems without algebraic equations should use both fixed values + guesses
     # for initialization.
     _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
     fode, u0, p = process_SciMLProblem(
@@ -63,16 +65,25 @@ If the `System` has algebraic equations, like `x(t)^2 + y(t)^2`, the resulting
     u0_idxs = has_alg_eqs(sys) ? collect(1:length(dvs)) : [stidxmap[k] for (k, v) in u0map]
     fbc = generate_boundary_conditions(
         sys, u0, u0_idxs, tspan; expression = Val{false}, cse, checkbounds)
+
+    if (length(constraints(sys)) + length(u0map) > length(dvs))
+        @warn "The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) exceeds the total number of states. The BVP solvers will default to doing a nonlinear least-squares optimization."
+    end
+
     kwargs = process_kwargs(sys; kwargs...)
     # Call `remake` so it runs initialization if it is trivial
     return remake(BVProblem{iip}(fode, fbc, u0, tspan[1], p; kwargs...))
 end
 
-function check_compatible_system(T::Union{Type{BVPFunction}, Type{BVProblem}}, sys::System)
+function check_compatible_system(T::Type{BVProblem}, sys::System)
     check_time_dependent(sys, T)
     check_not_dde(sys)
     check_no_cost(sys, T)
     check_no_jumps(sys, T)
     check_no_noise(sys, T)
     check_is_continuous(sys, T)
+
+    if !isempty(discrete_events(sys)) || !isempty(continuous_events(sys))
+        throw(SystemCompatibilityError("BVP solvers do not support events."))
+    end
 end
