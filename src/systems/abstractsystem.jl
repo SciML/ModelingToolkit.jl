@@ -1785,6 +1785,30 @@ function cost(sys::AbstractSystem)
     return consolidate(cs, subcosts)
 end
 
+namespace_constraint(eq::Equation, sys) = namespace_equation(eq, sys)
+
+namespace_constraint(ineq::Inequality, sys) = namespace_inequality(ineq, sys)
+
+function namespace_inequality(ineq::Inequality, sys, n = nameof(sys))
+    _lhs = namespace_expr(ineq.lhs, sys, n)
+    _rhs = namespace_expr(ineq.rhs, sys, n)
+    Inequality(_lhs,
+        _rhs,
+        ineq.relational_op)
+end
+
+function namespace_constraints(sys)
+    cstrs = constraints(sys)
+    isempty(cstrs) && return Vector{Union{Equation, Inequality}}(undef, 0)
+    map(cstr -> namespace_constraint(cstr, sys), cstrs)
+end
+
+function constraints(sys)
+    cs = get_constraints(sys)
+    systems = get_systems(sys)
+    isempty(systems) ? cs : [cs; reduce(vcat, namespace_constraints.(systems))]
+end
+
 """
 $(TYPEDSIGNATURES)
 
