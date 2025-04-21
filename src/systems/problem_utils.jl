@@ -1173,12 +1173,11 @@ Initial values provided in terms of other variables will be symbolically evaluat
 type of the containers (if parameters are not in an `MTKParameters` object). `Dict`s will be
 turned into `Array`s.
 
-If `sys isa ODESystem`, this will also build the initialization problem and related objects
-and pass them to the SciMLFunction as keyword arguments.
+This will also build the initialization problem and related objects and pass them to the
+SciMLFunction as keyword arguments.
 
 Keyword arguments:
-- `build_initializeprob`: If `false`, avoids building the initialization problem for an
-  `ODESystem`.
+- `build_initializeprob`: If `false`, avoids building the initialization problem.
 - `t`: The initial time of the `ODEProblem`. If this is not provided, the initialization
   problem cannot be built.
 - `implicit_dae`: Also build a mapping of derivatives of states to values for implicit DAEs,
