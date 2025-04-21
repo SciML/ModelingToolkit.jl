@@ -2037,20 +2037,17 @@ function toexpr(sys::AbstractSystem)
     defs_name = push_defaults!(stmt, filtered_defs, var2name)
     obs_name = push_eqs!(stmt, obs, var2name)
 
-    if sys isa ODESystem
-        iv = get_iv(sys)
+    iv = get_iv(sys)
+    if iv === nothing
+        ivname = nothing
+    else
         ivname = gensym(:iv)
         push!(stmt, :($ivname = (@variables $(getname(iv)))[1]))
-        push!(stmt,
-            :($ODESystem($eqs_name, $ivname, $stsname, $psname; defaults = $defs_name,
-                observed = $obs_name,
-                name = $name, checks = false)))
-    elseif sys isa NonlinearSystem
-        push!(stmt,
-            :($NonlinearSystem($eqs_name, $stsname, $psname; defaults = $defs_name,
-                observed = $obs_name,
-                name = $name, checks = false)))
     end
+    push!(stmt,
+        :($System($eqs_name, $ivname, $stsname, $psname; defaults = $defs_name,
+            observed = $obs_name,
+            name = $name, checks = false)))
 
     expr = :(let
         $expr
