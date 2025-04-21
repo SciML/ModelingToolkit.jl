@@ -756,11 +756,13 @@ function update_simplified_system!(
     @set! sys.substitutions = Substitutions(subeqs, deps)
 
     # Only makes sense for time-dependent
-    # TODO: generalize to SDE
-    if sys isa ODESystem
+    if ModelingToolkit.has_schedule(sys)
         @set! sys.schedule = Schedule(var_eq_matching, dummy_sub)
     end
-    sys = schedule(sys)
+    if ModelingToolkit.has_isscheduled(sys)
+        @set! sys.isscheduled = true
+    end
+    return sys
 end
 
 """
