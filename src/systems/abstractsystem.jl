@@ -1990,8 +1990,8 @@ function push_eqs!(stmt, eqs, var2name)
     return eqs_name
 end
 
-function push_defaults!(stmt, defs, var2name)
-    defs_name = gensym(:defs)
+function push_defaults!(stmt, defs, var2name; name = :defs)
+    defs_name = gensym(name)
     defs_expr = Expr(:call, Dict)
     defs_blk = Expr(:(=), defs_name, defs_expr)
     for d in defs
@@ -2039,23 +2039,23 @@ function toexpr(sys::AbstractSystem)
     eqs_name = push_eqs!(stmt, full_equations(sys), var2name)
     filtered_defs = filter(
         kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), defaults(sys))
+    filtered_guesses = filter(
+        kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), guesses(sys))
     defs_name = push_defaults!(stmt, filtered_defs, var2name)
+    guesses_name = push_defaults!(stmt, filtered_guesses, var2name; name = :guesses)
     obs_name = push_eqs!(stmt, obs, var2name)
 
-    if sys isa ODESystem
-        iv = get_iv(sys)
+    iv = get_iv(sys)
+    if iv === nothing
+        ivname = nothing
+    else
         ivname = gensym(:iv)
         push!(stmt, :($ivname = (@variables $(getname(iv)))[1]))
-        push!(stmt,
-            :($ODESystem($eqs_name, $ivname, $stsname, $psname; defaults = $defs_name,
-                observed = $obs_name,
-                name = $name, checks = false)))
-    elseif sys isa NonlinearSystem
-        push!(stmt,
-            :($NonlinearSystem($eqs_name, $stsname, $psname; defaults = $defs_name,
-                observed = $obs_name,
-                name = $name, checks = false)))
     end
+    push!(stmt,
+        :($System($eqs_name, $ivname, $stsname, $psname; defaults = $defs_name,
+            guesses = $guesses_name, observed = $obs_name,
+            name = $name, checks = false)))
 
     expr = :(let
         $expr
