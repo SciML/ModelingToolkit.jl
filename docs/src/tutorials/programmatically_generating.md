@@ -47,7 +47,7 @@ eqs = [D(x) ~ (h - x) / τ] # create an array of equations
 
 # Perform the standard transformations and mark the model complete
 # Note: Complete models cannot be subsystems of other models!
-fol = structural_simplify(model)
+fol = mtkbuild(model)
 prob = ODEProblem(fol, [], (0.0, 10.0), [])
 using OrdinaryDiffEq
 sol = solve(prob)

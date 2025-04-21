@@ -121,7 +121,7 @@ using OrdinaryDiffEq
 D = Differential(t)
 @named subsys = convert_system(ODESystem, lorenz1, t)
 @named sys = ODESystem([D(subsys.x) ~ subsys.x + subsys.x], t, systems = [subsys])
-sys = structural_simplify(sys)
+sys = mtkbuild(sys)
 u0 = [subsys.x => 1, subsys.z => 2.0, subsys.y => 1.0]
 prob = ODEProblem(sys, u0, (0, 1.0), [subsys.σ => 1, subsys.ρ => 2, subsys.β => 3])
 sol = solve(prob, FBDF(), reltol = 1e-7, abstol = 1e-7)
@@ -198,7 +198,7 @@ eq = [v1 ~ sin(2pi * t * h)
       v2 ~ i2
       i1 ~ i2]
 @named sys = ODESystem(eq, t)
-@test length(equations(structural_simplify(sys))) == 0
+@test length(equations(mtkbuild(sys))) == 0
 
 @testset "Issue: 1504" begin
     @variables u[1:4]
@@ -257,7 +257,7 @@ end
     @named ns = NonlinearSystem(eqs, [x, y, z], [])
     ns = complete(ns)
     vs = [unknowns(ns); parameters(ns)]
-    ss_mtk = structural_simplify(ns)
+    ss_mtk = mtkbuild(ns)
     prob = NonlinearProblem(ss_mtk, vs .=> 1.0)
     sol = solve(prob)
     @test_nowarn sol[unknowns(ns)]
@@ -277,16 +277,16 @@ sys = @test_nowarn NonlinearSystem(alg_eqs; name = :name)
 @parameters u3 u4
 eqs = [u3 ~ u1 + u2, u4 ~ 2 * (u1 + u2), u3 + u4 ~ 3 * (u1 + u2)]
 @named ns = NonlinearSystem(eqs, [u1, u2], [u3, u4])
-sys = structural_simplify(ns; fully_determined = false)
+sys = mtkbuild(ns; fully_determined = false)
 @test length(unknowns(sys)) == 1
 
 # Conservative
 @variables X(t)
 alg_eqs = [1 ~ 2X]
 @named ns = NonlinearSystem(alg_eqs)
-sys = structural_simplify(ns)
+sys = mtkbuild(ns)
 @test length(equations(sys)) == 0
-sys = structural_simplify(ns; conservative = true)
+sys = mtkbuild(ns; conservative = true)
 @test length(equations(sys)) == 1
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/2858
@@ -338,7 +338,7 @@ end
          -1 1/2 -1]
     b = [1, -2, 0]
     @named sys = NonlinearSystem(A * x ~ b, [x], [])
-    sys = structural_simplify(sys)
+    sys = mtkbuild(sys)
     prob = NonlinearProblem(sys, unknowns(sys) .=> 0.0)
     sol = solve(prob)
     @test all(sol[x] .≈ A \ b)
@@ -349,8 +349,8 @@ end
     @parameters p
     @named sys = NonlinearSystem([x ~ 1, x^2 - p ~ 0])
     for sys in [
-        structural_simplify(sys, fully_determined = false),
-        structural_simplify(sys, fully_determined = false, split = false)
+        mtkbuild(sys, fully_determined = false),
+        mtkbuild(sys, fully_determined = false, split = false)
     ]
         @test length(equations(sys)) == 1
         @test length(unknowns(sys)) == 0
@@ -424,7 +424,7 @@ end
     @test ModelingToolkit.iscomplete(nlsys)
     @test ModelingToolkit.is_split(nlsys)
 
-    sys3 = structural_simplify(sys)
+    sys3 = mtkbuild(sys)
     nlsys = NonlinearSystem(sys3)
     @test length(equations(nlsys)) == length(ModelingToolkit.observed(nlsys)) == 1
 

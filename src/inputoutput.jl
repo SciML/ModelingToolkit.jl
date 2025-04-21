@@ -201,7 +201,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
 
     # Remove this when the ControlFunction gets merged.
     if !iscomplete(sys) 
-        error("A completed `ODESystem` is required. Call `complete` or `structural_simplify` on the system before creating the control function.")
+        error("A completed `ODESystem` is required. Call `complete` or `mtkbuild` on the system before creating the control function.")
     end
     isempty(inputs) && @warn("No unbound inputs were found in system.")
     if disturbance_inputs !== nothing

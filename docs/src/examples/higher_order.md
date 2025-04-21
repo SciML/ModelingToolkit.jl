@@ -4,7 +4,7 @@ ModelingToolkit has a system for transformations of mathematical
 systems. These transformations allow for symbolically changing
 the representation of the model to problems that are easier to
 numerically solve. One simple to demonstrate transformation, is
-`structural_simplify`, which does a lot of tricks, one being the
+`mtkbuild`, which does a lot of tricks, one being the
 transformation that turns an Nth order ODE into N
 coupled 1st order ODEs.
 
@@ -43,7 +43,7 @@ and this syntax extends to `N`-th order. Also, we can use `*` or `∘` to compos
 `Differential`s, like `Differential(t) * Differential(x)`.
 
 Now let's transform this into the `ODESystem` of first order components.
-We do this by calling `structural_simplify`:
+We do this by calling `mtkbuild`:
 
 Now we can directly numerically solve the lowered system. Note that,
 following the original problem, the solution requires knowing the

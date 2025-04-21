@@ -170,7 +170,7 @@ end
     # (https://github.com/SciML/ModelingToolkit.jl/pull/2978)
     @inferred ModelingToolkit.parameter_dependencies(sys1)
 
-    sys = structural_simplify(sys1)
+    sys = mtkbuild(sys1)
 
     prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob)
@@ -192,7 +192,7 @@ end
     eqs = [D(y) ~ i(t) + p]
     @named model = ODESystem(eqs, t, [y], [p, i];
         parameter_dependencies = [i ~ CallableFoo(p)])
-    sys = structural_simplify(model)
+    sys = mtkbuild(model)
 
     prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob, Tsit5())

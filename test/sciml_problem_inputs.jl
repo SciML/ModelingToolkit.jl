@@ -37,7 +37,7 @@ begin
         MassActionJump(k2, [Z => 1], [Y => 1, Z => -1])
     ]
 
-    # Create systems (without structural_simplify, since that might modify systems to affect intended tests).
+    # Create systems (without mtkbuild, since that might modify systems to affect intended tests).
     osys = complete(ODESystem(diff_eqs, t; name = :osys))
     ssys = complete(SDESystem(
         diff_eqs, noise_eqs, t, [X, Y, Z], [kp, kd, k1, k2]; name = :ssys))

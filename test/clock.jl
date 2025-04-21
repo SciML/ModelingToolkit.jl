@@ -65,10 +65,10 @@ By inference:
 ci, varmap = infer_clocks(sys)
 eqmap = ci.eq_domain
 tss, inputs, continuous_id = ModelingToolkit.split_system(deepcopy(ci))
-sss, = ModelingToolkit._structural_simplify!(
+sss, = ModelingToolkit._mtkbuild!(
     deepcopy(tss[continuous_id]), (inputs[continuous_id], ()))
 @test equations(sss) == [D(x) ~ u - x]
-sss, = ModelingToolkit._structural_simplify!(deepcopy(tss[1]), (inputs[1], ()))
+sss, = ModelingToolkit._mtkbuild!(deepcopy(tss[1]), (inputs[1], ()))
 @test isempty(equations(sss))
 d = Clock(dt)
 k = ShiftIndex(d)
@@ -115,7 +115,7 @@ eqs = [yd ~ Sample(dt)(y)
        D(x) ~ -x + u
        y ~ x]
 @named sys = ODESystem(eqs, t)
-@test_throws ModelingToolkit.HybridSystemNotSupportedException ss=structural_simplify(sys);
+@test_throws ModelingToolkit.HybridSystemNotSupportedException ss=mtkbuild(sys);
 
 @test_skip begin
     Tf = 1.0
@@ -128,7 +128,7 @@ eqs = [yd ~ Sample(dt)(y)
         [kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0]) # recreate problem to empty saved values
     sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 
-    ss_nosplit = structural_simplify(sys; split = false)
+    ss_nosplit = mtkbuild(sys; split = false)
     prob_nosplit = ODEProblem(ss_nosplit, [x => 0.1], (0.0, Tf),
         [kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0])
     int = init(prob_nosplit, Tsit5(); kwargshandle = KeywordArgSilent)
@@ -294,8 +294,8 @@ eqs = [yd ~ Sample(dt)(y)
     @test varmap[y] == ContinuousClock()
     @test varmap[u] == ContinuousClock()
 
-    ss = structural_simplify(cl)
-    ss_nosplit = structural_simplify(cl; split = false)
+    ss = mtkbuild(cl)
+    ss_nosplit = mtkbuild(cl; split = false)
 
     if VERSION >= v"1.7"
         prob = ODEProblem(ss, [x => 0.0], (0.0, 1.0), [kp => 1.0])
@@ -426,7 +426,7 @@ eqs = [yd ~ Sample(dt)(y)
     @test varmap[_model.feedback.output.u] == d
     @test varmap[_model.feedback.input2.u] == d
 
-    ssys = structural_simplify(model)
+    ssys = mtkbuild(model)
 
     Tf = 0.2
     timevec = 0:(d.dt):Tf

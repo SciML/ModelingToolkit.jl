@@ -125,7 +125,7 @@ defs = ModelingToolkit.defaults(bar)
     sys4 = complete(sys3)
     @test length(unknowns(sys4)) == 3
     @test length(parameters(sys4)) == 4
-    sys5 = structural_simplify(sys3)
+    sys5 = mtkbuild(sys3)
     @test length(unknowns(sys5)) == 4
     @test any(isequal(x4), unknowns(sys5))
     @test length(parameters(sys5)) == 4

@@ -24,7 +24,7 @@ function quick_cancel_expr(expr)
             kws...))(expr)
 end
 
-export SystemStructure, TransformationState, TearingState, structural_simplify!
+export SystemStructure, TransformationState, TearingState, structural_simplification!
 export isdiffvar, isdervar, isalgvar, isdiffeq, algeqs, is_only_discrete
 export dervars_range, diffvars_range, algvars_range
 export DiffGraph, complete!
@@ -657,7 +657,7 @@ function Base.show(io::IO, mime::MIME"text/plain", ms::MatchedSystemStructure)
     printstyled(io, " SelectedState")
 end
 
-function structural_simplify!(state::TearingState; simplify = false,
+function structural_simplification!(state::TearingState; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = true,
         inputs = nothing, outputs = nothing, 
         disturbance_inputs = nothing,
@@ -670,7 +670,7 @@ function structural_simplify!(state::TearingState; simplify = false,
             Dict(default_toterm.(state.fullvars) .=> ci.var_domain))
         tss, clocked_inputs, continuous_id, id_to_clock = ModelingToolkit.split_system(ci)
         cont_inputs = [inputs; clocked_inputs[continuous_id]]
-        sys = _structural_simplify!(tss[continuous_id]; simplify,
+        sys = _structural_simplification!(tss[continuous_id]; simplify,
             check_consistency, fully_determined,
             cont_inputs, outputs, disturbance_inputs,
             kwargs...)
@@ -689,7 +689,7 @@ function structural_simplify!(state::TearingState; simplify = false,
                     continue
                 end
                 disc_inputs = [inputs; clocked_inputs[i]]
-                ss, = _structural_simplify!(state; simplify, check_consistency,
+                ss, = _structural_simplification!(state; simplify, check_consistency,
                     disc_inputs, outputs, disturbance_inputs,
                     fully_determined, kwargs...)
                 append!(appended_parameters, inputs[i], unknowns(ss))
@@ -707,14 +707,14 @@ function structural_simplify!(state::TearingState; simplify = false,
               for sym in get_ps(sys)]
         @set! sys.ps = ps
     else
-        sys = _structural_simplify!(state; simplify, check_consistency,
+        sys = _structural_simplification!(state; simplify, check_consistency,
             inputs, outputs, disturbance_inputs,
             fully_determined, kwargs...)
     end
     return sys
 end
 
-function _structural_simplify!(state::TearingState; simplify = false,
+function _structural_simplification!(state::TearingState; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = false,
         dummy_derivative = true,
         inputs = nothing, outputs = nothing,
