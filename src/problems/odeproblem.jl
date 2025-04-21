@@ -72,8 +72,39 @@ end
         f, u0, tspan, p, StandardODEProblem(); kwargs...))
 end
 
+"""
+```julia
+SciMLBase.SteadyStateProblem(sys::System, u0map,
+                             parammap = DiffEqBase.NullParameters();
+                             version = nothing, tgrad = false,
+                             jac = false,
+                             checkbounds = false, sparse = false,
+                             linenumbers = true, parallel = SerialForm(),
+                             kwargs...) where {iip}
+```
+
+Generates an SteadyStateProblem from a `System` of ODEs and allows for automatically
+symbolically calculating numerical enhancements.
+"""
+@fallback_iip_specialize function DiffEqBase.SteadyStateProblem{iip, spec}(
+        sys::System, u0map,
+        parammap = SciMLBase.NullParameters(); check_length = true,
+        check_compatibility = true, kwargs...) where {iip, spec}
+    check_complete(sys, SteadyStateProblem)
+    check_compatibility && check_compatible_system(SteadyStateProblem, sys)
+
+    f, u0, p = process_SciMLProblem(ODEFunction{iip}, sys, u0map, parammap;
+        steady_state = true, check_length, check_compatibility,
+        force_initialization_time_independent = true, kwargs...)
+
+    kwargs = process_kwargs(sys; kwargs...)
+    # Call `remake` so it runs initialization if it is trivial
+    remake(SteadyStateProblem{iip}(f, u0, p; kwargs...))
+end
+
 function check_compatible_system(
-        T::Union{Type{ODEFunction}, Type{ODEProblem}, Type{DAEFunction}, Type{DAEProblem}},
+        T::Union{Type{ODEFunction}, Type{ODEProblem}, Type{DAEFunction},
+            Type{DAEProblem}, Type{SteadyStateProblem}},
         sys::System)
     check_time_dependent(sys, T)
     check_not_dde(sys)
