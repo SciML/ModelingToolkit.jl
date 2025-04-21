@@ -54,10 +54,6 @@ function structural_simplify(
     end
 end
 
-function __structural_simplify(sys::JumpSystem, args...; kwargs...)
-    return sys
-end
-
 function __structural_simplify(sys::AbstractSystem; simplify = false,
         inputs = Any[], outputs = Any[],
         disturbance_inputs = Any[],
