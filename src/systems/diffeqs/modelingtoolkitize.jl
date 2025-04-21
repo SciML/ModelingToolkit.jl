@@ -226,7 +226,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Generate `SDESystem`, dependent variables, and parameters from an `SDEProblem`.
+Generate `System`, dependent variables, and parameters from an `SDEProblem`.
 """
 function modelingtoolkitize(prob::DiffEqBase.SDEProblem; kwargs...)
     prob.f isa DiffEqBase.AbstractParameterizedFunction &&
@@ -293,7 +293,7 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem; kwargs...)
         Dict()
     end
 
-    de = SDESystem(deqs, neqs, t, sts, params;
+    de = System(deqs, t, sts, params; noise_eqs = neqs,
         name = gensym(:MTKizedSDE),
         tspan = prob.tspan,
         defaults = merge(default_u0, default_p),

@@ -1314,7 +1314,7 @@ have different multiplicities in `a` and `b`.
 """
 function _eq_unordered(a::AbstractArray, b::AbstractArray)
     # a and b may be multidimensional
-    # e.g. comparing noiseeqs of SDESystem
+    # e.g. comparing noiseeqs of SDEs
     a = vec(a)
     b = vec(b)
     length(a) === length(b) || return false
