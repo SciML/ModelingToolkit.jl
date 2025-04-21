@@ -2796,7 +2796,7 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
         # post-walk to avoid infinite recursion
         @set! sys.systems = map(Base.Fix2(substitute, dict), systems)
         something(get(rules, nameof(sys), nothing), sys)
-    elseif sys isa ODESystem
+    elseif sys isa System
         rules = todict(map(r -> Symbolics.unwrap(r[1]) => Symbolics.unwrap(r[2]),
             collect(rules)))
         eqs = fast_substitute(get_eqs(sys), rules)
@@ -2805,9 +2805,15 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
         for (k, v) in get_defaults(sys))
         guess = Dict(fast_substitute(k, rules) => fast_substitute(v, rules)
         for (k, v) in get_guesses(sys))
+        noise_eqs = fast_substitute(get_noise_eqs(sys), rules)
+        costs = fast_substitute(get_costs(sys), rules)
+        observed = fast_substitute(get_observed(sys), rules)
+        initialization_eqs = fast_substitute(get_initialization_eqs(sys), rules)
+        cstrs = fast_substitute(get_constraints(sys), rules)
         subsys = map(s -> substitute(s, rules), get_systems(sys))
-        ODESystem(eqs, get_iv(sys); name = nameof(sys), defaults = defs,
-            guesses = guess, parameter_dependencies = pdeps, systems = subsys)
+        System(eqs, get_iv(sys); name = nameof(sys), defaults = defs,
+            guesses = guess, parameter_dependencies = pdeps, systems = subsys, noise_eqs,
+            observed, initialization_eqs, constraints = cstrs)
     else
         error("substituting symbols is not supported for $(typeof(sys))")
     end
