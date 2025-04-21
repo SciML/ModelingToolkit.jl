@@ -1,5 +1,5 @@
 """
-    lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false, initialize = true, initialization_solver_alg = TrustRegion(), kwargs...)
+    lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; initialize = true, initialization_solver_alg = TrustRegion(), kwargs...)
 
 Return a function that linearizes the system `sys`. The function [`linearize`](@ref) provides a higher-level and easier to use interface.
 
@@ -22,7 +22,6 @@ The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occ
   - `sys`: An [`ODESystem`](@ref). This function will automatically apply simplification passes on `sys` and return the resulting `simplified_sys`.
   - `inputs`: A vector of variables that indicate the inputs of the linearized input-output model.
   - `outputs`: A vector of variables that indicate the outputs of the linearized input-output model.
-  - `simplify`: Apply simplification in tearing.
   - `initialize`: If true, a check is performed to ensure that the operating point is consistent (satisfies algebraic equations). If the op is not consistent, initialization is performed.
   - `initialization_solver_alg`: A NonlinearSolve algorithm to use for solving for a feasible set of state and algebraic variables that satisfies the specified operating point.
   - `autodiff`: An `ADType` supported by DifferentiationInterface.jl to use for calculating the necessary jacobians. Defaults to using `AutoForwardDiff()`
@@ -31,7 +30,7 @@ The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occ
 See also [`linearize`](@ref) which provides a higher-level interface.
 """
 function linearization_function(sys::AbstractSystem, inputs,
-        outputs; simplify = false,
+        outputs;
         initialize = true,
         initializealg = nothing,
         initialization_abstol = 1e-5,
@@ -129,7 +128,19 @@ function linearization_function(sys::AbstractSystem, inputs,
         diff_idxs, alge_idxs, inputs, length(unknowns(sys)),
         prob, h, u0 === nothing ? nothing : similar(u0), uf_jac, h_jac, pf_jac,
         hp_jac, initializealg, initialization_kwargs)
-    return lin_fun, sys
+    return lin_fun
+end
+
+function eq_idxs(sys::AbstractSystem)
+    eqs = equations(sys)
+    alg_start_idx = findfirst(!isdiffeq, eqs)
+    if alg_start_idx === nothing
+        alg_start_idx = length(eqs) + 1
+    end
+    diff_idxs = 1:(alg_start_idx - 1)
+    alge_idxs = alg_start_idx:length(eqs)
+
+    diff_idxs, alge_idxs
 end
 
 """
@@ -472,7 +483,7 @@ function CommonSolve.solve(prob::LinearizationProblem; allow_input_derivatives =
 end
 
 """
-    (; A, B, C, D), simplified_sys = linearize_symbolic(sys::AbstractSystem, inputs, outputs; simplify = false, allow_input_derivatives = false, kwargs...)
+    (; A, B, C, D), simplified_sys = linearize_symbolic(sys::AbstractSystem, inputs, outputs; allow_input_derivatives = false, kwargs...)
 
 Similar to [`linearize`](@ref), but returns symbolic matrices `A,B,C,D` rather than numeric. While `linearize` uses ForwardDiff to perform the linearization, this function uses `Symbolics.jacobian`.
 
@@ -490,7 +501,7 @@ y &= h(x, z, u)
 where `x` are differential unknown variables, `z` algebraic variables, `u` inputs and `y` outputs.
 """
 function linearize_symbolic(sys::AbstractSystem, inputs,
-        outputs; simplify = false, allow_input_derivatives = false,
+        outputs; allow_input_derivatives = false,
         eval_expression = false, eval_module = @__MODULE__,
         kwargs...)
     sys = structural_simplify(sys; inputs, outputs, simplify, kwargs...)

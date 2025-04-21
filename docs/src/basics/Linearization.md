@@ -15,7 +15,7 @@ y &= Cx + Du
 \end{aligned}
 ```
 
-The `linearize` function expects the user to specify the inputs ``u`` and the outputs ``y`` using the syntax shown in the example below. The system model is *not* supposed to be simplified before calling `linearize`:
+The `linearize` function expects the user to specify the inputs ``u`` and the outputs ``y`` using the syntax shown in the example below.
 
 ## Example
 
@@ -29,7 +29,7 @@ eqs = [u ~ kp * (r - y) # P controller
        D(x) ~ -x + u    # First-order plant
        y ~ x]           # Output equation
 
-@named sys = ODESystem(eqs, t) # Do not call @mtkbuild when linearizing
+@mtkbuild sys = ODESystem(eqs, t) # Do not call @mtkbuild when linearizing
 matrices, simplified_sys = linearize(sys, [r], [y]) # Linearize from r to y
 matrices
 ```
@@ -44,10 +44,6 @@ using ModelingToolkit: inputs, outputs
 !!! note "Inputs must be unconnected"
     
     The model above has 4 variables but only three equations, there is no equation specifying the value of `r` since `r` is an input. This means that only unbalanced models can be linearized, or in other words, models that are balanced and can be simulated _cannot_ be linearized. To learn more about this, see [How to linearize a ModelingToolkit model (YouTube)](https://www.youtube.com/watch?v=-XOux-2XDGI&t=395s). Also see [ModelingToolkitStandardLibrary: Linear analysis](https://docs.sciml.ai/ModelingToolkit/stable/tutorials/linear_analysis/) for utilities that make linearization of completed models easier.
-
-!!! note "Un-simplified system"
-    
-    Linearization expects `sys` to be un-simplified, i.e., `structural_simplify` or `@mtkbuild` should not be called on the system before linearizing.
 
 ## Operating point
 
@@ -79,14 +75,15 @@ eqs = [D(x) ~ v
        y.u ~ x]
 
 @named duffing = ODESystem(eqs, t, systems = [y, u], defaults = [u.u => 0])
+duffing = structural_simplify(duffing, inputs = [u.u], outputs = [y.u])
 
 # pass a constant value for `x`, since it is the variable we will change in operating points
-linfun, simplified_sys = linearization_function(duffing, [u.u], [y.u]; op = Dict(x => NaN));
+linfun = linearization_function(duffing, [u.u], [y.u]; op = Dict(x => NaN));
 
-println(linearize(simplified_sys, linfun; op = Dict(x => 1.0)))
-println(linearize(simplified_sys, linfun; op = Dict(x => 0.0)))
+println(linearize(duffing, linfun; op = Dict(x => 1.0)))
+println(linearize(duffing, linfun; op = Dict(x => 0.0)))
 
-@time linearize(simplified_sys, linfun; op = Dict(x => 0.0))
+@time linearize(duffing, linfun; op = Dict(x => 0.0))
 
 nothing # hide
 ```
