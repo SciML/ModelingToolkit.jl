@@ -51,7 +51,7 @@ is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
 Generate the control function f(x, u, p, t) from the ODESystem. 
 Input variables are automatically inferred but can be manually specified.
 """
-function SciMLBase.ODEInputFunction{iip, specialize}(sys::ODESystem,
+function SciMLBase.ODEInputFunction{iip, specialize}(sys::System,
         dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing,
         inputs = unbound_inputs(sys),
@@ -147,16 +147,16 @@ function SciMLBase.ODEInputFunction{iip, specialize}(sys::ODESystem,
         initialization_data)
 end
 
-function SciMLBase.ODEInputFunction(sys::AbstractODESystem, args...; kwargs...)
+function SciMLBase.ODEInputFunction(sys::System, args...; kwargs...)
     ODEInputFunction{true}(sys, args...; kwargs...)
 end
 
-function SciMLBase.ODEInputFunction{true}(sys::AbstractODESystem, args...;
+function SciMLBase.ODEInputFunction{true}(sys::System, args...;
         kwargs...)
     ODEInputFunction{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
 end
 
-function SciMLBase.ODEInputFunction{false}(sys::AbstractODESystem, args...;
+function SciMLBase.ODEInputFunction{false}(sys::System, args...;
         kwargs...)
     ODEInputFunction{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
