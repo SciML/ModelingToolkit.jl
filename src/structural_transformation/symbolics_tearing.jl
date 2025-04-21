@@ -40,7 +40,7 @@ function var_derivative_graph!(s::SystemStructure, v::Int)
     return var_diff
 end
 
-function var_derivative!(ts::TearingState{ODESystem}, v::Int)
+function var_derivative!(ts::TearingState, v::Int)
     s = ts.structure
     var_diff = var_derivative_graph!(s, v)
     sys = ts.sys
@@ -58,7 +58,7 @@ function eq_derivative_graph!(s::SystemStructure, eq::Int)
     return eq_diff
 end
 
-function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int; kwargs...)
+function eq_derivative!(ts::TearingState, ieq::Int; kwargs...)
     s = ts.structure
 
     eq_diff = eq_derivative_graph!(s, ieq)

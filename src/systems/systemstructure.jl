@@ -9,7 +9,7 @@ import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           independent_variables, SparseMatrixCLIL, AbstractSystem,
                           equations, isirreducible, input_timedomain, TimeDomain,
                           InferredTimeDomain,
-                          VariableType, getvariabletype, has_equations, ODESystem
+                          VariableType, getvariabletype, has_equations, System
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
 using Graphs
