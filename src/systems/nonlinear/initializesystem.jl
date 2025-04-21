@@ -10,7 +10,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Generate `NonlinearSystem` which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
+Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
 """
 function generate_initializesystem_timevarying(sys::AbstractSystem;
         u0map = Dict(),
@@ -153,8 +153,7 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
-
-    return NonlinearSystem(eqs_ics,
+    return System(eqs_ics,
         vars,
         pars;
         defaults = defs,
@@ -168,7 +167,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Generate `NonlinearSystem` which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
+Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
 """
 function generate_initializesystem_timeindependent(sys::AbstractSystem;
         u0map = Dict(),
@@ -252,8 +251,7 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
-
-    return NonlinearSystem(eqs_ics,
+    return System(eqs_ics,
         vars,
         pars;
         defaults = defs,
