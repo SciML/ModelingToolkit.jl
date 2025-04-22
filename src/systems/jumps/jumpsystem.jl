@@ -212,10 +212,10 @@ function JumpSystem(eqs, iv, unknowns, ps;
         end
     end
 
-    disc_callbacks = to_cb_vector(SymbolicDiscreteCallback.(
-        discrete_events; iv = iv, warn_no_algebraic = false))
-    cont_callbacks = to_cb_vector(SymbolicContinuousCallback.(
-        continuous_events; iv = iv, warn_no_algebraic = false))
+    cont_callbacks = to_cb_vector(continuous_events; CB_TYPE = SymbolicContinuousCallback,
+        iv = iv, warn_no_algebraic = false)
+    disc_callbacks = to_cb_vector(discrete_events; CB_TYPE = SymbolicDiscreteCallback,
+        iv = iv, warn_no_algebraic = false)
 
     JumpSystem{typeof(ap)}(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         ap, iv′, us′, ps′, var_to_name, observed, name, description, systems,
