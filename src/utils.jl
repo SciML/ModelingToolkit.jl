@@ -1355,3 +1355,5 @@ function flatten_equations(eqs::Vector{Equation})
         end
     end
 end
+
+const JumpType = Union{VariableRateJump, ConstantRateJump, MassActionJump}
