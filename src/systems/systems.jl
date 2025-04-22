@@ -33,6 +33,10 @@ function structural_simplify(
         disturbance_inputs = Any[],
         kwargs...)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
+    if inputs isa Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}}
+        sys, inputs, outputs = ap_preprocessing(sys, inputs, outputs, kwargs...)
+    end
+
     newsys′ = __structural_simplification(sys; simplify,
         allow_symbolic, allow_parameter, conservative, fully_determined,
         inputs, outputs, disturbance_inputs,
