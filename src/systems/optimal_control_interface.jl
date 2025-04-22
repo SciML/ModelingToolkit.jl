@@ -33,7 +33,7 @@ end
 Generate the control function f(x, u, p, t) from the ODESystem. 
 Input variables are automatically inferred but can be manually specified.
 """
-function SciMLBase.ControlFunction{iip, specialize}(sys::ODESystem,
+function SciMLBase.ODEInputFunction{iip, specialize}(sys::ODESystem,
         dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing,
         inputs = unbound_inputs(sys),
@@ -114,7 +114,7 @@ function SciMLBase.ControlFunction{iip, specialize}(sys::ODESystem,
         controljac_prototype = nothing
     end
 
-    ControlFunction{iip, specialize}(f;
+    ODEInputFunction{iip, specialize}(f;
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
         controljac = _cjac === nothing ? nothing : _cjac,
@@ -128,18 +128,18 @@ function SciMLBase.ControlFunction{iip, specialize}(sys::ODESystem,
         initialization_data)
 end
 
-function SciMLBase.ControlFunction(sys::AbstractODESystem, args...; kwargs...)
-    ControlFunction{true}(sys, args...; kwargs...)
+function SciMLBase.ODEInputFunction(sys::AbstractODESystem, args...; kwargs...)
+    ODEInputFunction{true}(sys, args...; kwargs...)
 end
 
-function SciMLBase.ControlFunction{true}(sys::AbstractODESystem, args...;
+function SciMLBase.ODEInputFunction{true}(sys::AbstractODESystem, args...;
         kwargs...)
-    ControlFunction{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
+    ODEInputFunction{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
 end
 
-function SciMLBase.ControlFunction{false}(sys::AbstractODESystem, args...;
+function SciMLBase.ODEInputFunction{false}(sys::AbstractODESystem, args...;
         kwargs...)
-    ControlFunction{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
+    ODEInputFunction{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
 """
