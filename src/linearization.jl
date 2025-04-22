@@ -46,7 +46,7 @@ function linearization_function(sys::AbstractSystem, inputs = inputs(sys),
         warn_empty_op = true,
         kwargs...)
     if !iscomplete(sys)
-        sys = structural_simplify(sys; inputs, outputs)
+        error("A simplified `ODESystem` is required. Call `structural_simplify` on the system with the inputs and outputs before creating the linearization function.")
     end
     op = Dict(op)
     if isempty(op) && warn_empty_op

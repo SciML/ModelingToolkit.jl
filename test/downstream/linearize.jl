@@ -33,7 +33,7 @@ lsys = linearize(sys2)
 @test lsys.C[] == 0
 @test lsys.D[] == 1
 
-lsys = linearize(sys, r, r) # Test allow scalars
+lsys = linearize(sys2, r, r) # Test allow scalars
 
 @test lsys.A[] == -2
 @test lsys.B[] == 1
@@ -270,7 +270,8 @@ closed_loop = ODESystem(connections, t, systems = [model, pid, filt, sensor, r, 
         filt.xd => 0.0
     ])
 
-@test_nowarn linearize(closed_loop, :r, :y; warn_empty_op = false)
+closed_loop = structural_simplify(closed_loop, inputs = :r, outputs = :y)
+linearize(closed_loop; warn_empty_op = false)
 
 # https://discourse.julialang.org/t/mtk-change-in-linearize/115760/3
 @mtkmodel Tank_noi begin
@@ -300,6 +301,7 @@ end
 
 @named tank_noi = Tank_noi()
 @unpack md_i, h, m = tank_noi
+tank_noi = structural_simplify(tank_noi, inputs = [md_i], outputs = [h])
 m_ss = 2.4000000003229878
 @test_nowarn linearize(tank_noi, [md_i], [h]; op = Dict(m => m_ss, md_i => 2))
 
@@ -308,6 +310,7 @@ m_ss = 2.4000000003229878
 @parameters p = 1.0
 eqs = [D(x) ~ p * u, x ~ y]
 @named sys = ODESystem(eqs, t)
+sys = structural_simplify(sys, inputs = [u])
 
 matrices1 = linearize(sys, [u], []; op = Dict(x => 2.0))
 matrices2 = linearize(sys, [u], []; op = Dict(y => 2.0))
