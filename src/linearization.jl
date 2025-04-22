@@ -46,7 +46,7 @@ function linearization_function(sys::AbstractSystem, inputs = unbound_inputs(sys
         warn_empty_op = true,
         kwargs...)
     if !iscomplete(sys)
-        error("A completed `ODESystem` is required. Call `complete` or `mtkbuild` on the system before creating the linearization.")
+        sys = mtkbuild(sys; inputs, outputs)
     end
     op = Dict(op)
     if isempty(op) && warn_empty_op
