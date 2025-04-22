@@ -33,7 +33,7 @@ function mtkbuild(
         disturbance_inputs = Any[],
         kwargs...)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
-    newsys′ = __structural_simplification(sys; simplify,
+    newsys′ = __structural_simplify(sys; simplify,
         allow_symbolic, allow_parameter, conservative, fully_determined,
         inputs, outputs, disturbance_inputs,
         kwargs...)
@@ -65,12 +65,12 @@ function mtkbuild(
     end
 end
 
-function __structural_simplification(sys::JumpSystem, args...; kwargs...)
+function __structural_simplify(sys::JumpSystem, args...; kwargs...)
     return sys
 end
 
-function __structural_simplification(sys::SDESystem, args...; kwargs...)
-    return __structural_simplification(ODESystem(sys), args...; kwargs...)
+function __structural_simplify(sys::SDESystem, args...; kwargs...)
+    return __structural_simplify(ODESystem(sys), args...; kwargs...)
 end
 
 function __structural_simplification(sys::AbstractSystem; simplify = false,
@@ -94,7 +94,7 @@ function __structural_simplification(sys::AbstractSystem; simplify = false,
         end
     end
     if isempty(brown_vars)
-        return structural_simplification!(state; simplify, inputs, outputs, disturbance_inputs, kwargs...)
+        return structural_simplify!(state; simplify, inputs, outputs, disturbance_inputs, kwargs...)
     else
         Is = Int[]
         Js = Int[]
@@ -127,7 +127,7 @@ function __structural_simplification(sys::AbstractSystem; simplify = false,
                               if !iszero(new_idxs[i]) &&
                                  invview(var_to_diff)[i] === nothing]
         # TODO: IO is not handled.
-        ode_sys = structural_simplification(sys; simplify, inputs, outputs, disturbance_inputs, kwargs...)
+        ode_sys = structural_simplify(sys; simplify, inputs, outputs, disturbance_inputs, kwargs...)
         eqs = equations(ode_sys)
         sorted_g_rows = zeros(Num, length(eqs), size(g, 2))
         for (i, eq) in enumerate(eqs)
@@ -170,7 +170,7 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Given a system that has been simplified via `mtkbuild`, return a `Dict` mapping
+Given a system that has been simplified via `structural_simplify`, return a `Dict` mapping
 variables of the system to equations that are used to solve for them. This includes
 observed variables.
 
@@ -186,7 +186,7 @@ function map_variables_to_equations(sys::AbstractSystem; rename_dummy_derivative
     end
     ts = get_tearing_state(sys)
     if ts === nothing
-        throw(ArgumentError("`map_variables_to_equations` requires a simplified system. Call `mtkbuild` on the system before calling this function."))
+        throw(ArgumentError("`map_variables_to_equations` requires a simplified system. Call `structural_simplify` on the system before calling this function."))
     end
 
     dummy_sub = Dict()

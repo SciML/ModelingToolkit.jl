@@ -330,7 +330,7 @@ function SciMLBase.ImplicitDiscreteProblem(
         kwargs...
 )
     if !iscomplete(sys)
-        error("A completed `ImplicitDiscreteSystem` is required. Call `complete` or `mtkbuild` on the system before creating a `ImplicitDiscreteProblem`.")
+        error("A completed `ImplicitDiscreteSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `ImplicitDiscreteProblem`.")
     end
     dvs = unknowns(sys)
     ps = parameters(sys)
@@ -372,7 +372,7 @@ function SciMLBase.ImplicitDiscreteFunction{iip, specialize}(
         analytic = nothing, cse = true,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
-        error("A completed `ImplicitDiscreteSystem` is required. Call `complete` or `mtkbuild` on the system before creating a `ImplicitDiscreteProblem`")
+        error("A completed `ImplicitDiscreteSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `ImplicitDiscreteProblem`")
     end
     f_gen = generate_function(sys, dvs, ps; expression = Val{true},
         expression_module = eval_module, cse, kwargs...)

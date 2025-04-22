@@ -74,7 +74,7 @@ Any extra equations `eqs` involving the new and old independent variables will b
 # Usage before structural simplification
 
 The variable change must take place before structural simplification.
-In following calls to `mtkbuild`, consider passing `allow_symbolic = true` to avoid undesired constraint equations between between dummy variables.
+In following calls to `structural_simplify`, consider passing `allow_symbolic = true` to avoid undesired constraint equations between between dummy variables.
 
 # Usage with non-autonomous systems
 
@@ -99,7 +99,7 @@ julia> @named M = ODESystem([D(D(y)) ~ -9.81, D(D(x)) ~ 0.0], t);
 
 julia> M = change_independent_variable(M, x);
 
-julia> M = mtkbuild(M; allow_symbolic = true);
+julia> M = structural_simplify(M; allow_symbolic = true);
 
 julia> unknowns(M)
 3-element Vector{SymbolicUtils.BasicSymbolic{Real}}:

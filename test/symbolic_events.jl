@@ -445,7 +445,7 @@ affect = [v ~ -v]
 
 @test getfield(ball, :continuous_events)[] ==
       SymbolicContinuousCallback(Equation[x ~ 0], Equation[v ~ -v])
-ball = mtkbuild(ball)
+ball = structural_simplify(ball)
 
 @test length(ModelingToolkit.continuous_events(ball)) == 1
 
@@ -468,8 +468,8 @@ continuous_events = [[x ~ 0] => [vx ~ -vx]
      D(vy) ~ -0.01vy], t; continuous_events)
 
 _ball = ball
-ball = mtkbuild(_ball)
-ball_nosplit = mtkbuild(_ball; split = false)
+ball = structural_simplify(_ball)
+ball_nosplit = structural_simplify(_ball; split = false)
 
 tspan = (0.0, 5.0)
 prob = ODEProblem(ball, Pair[], tspan)
@@ -511,8 +511,8 @@ continuous_events = [
                          D(vx) ~ -1
                          D(vy) ~ 0], t; continuous_events)
 
-ball_nosplit = mtkbuild(ball)
-ball = mtkbuild(ball)
+ball_nosplit = structural_simplify(ball)
+ball = structural_simplify(ball)
 
 tspan = (0.0, 5.0)
 prob = ODEProblem(ball, Pair[], tspan)
@@ -537,7 +537,7 @@ eq = [vs ~ sin(2pi * t)
       D(vmeasured) ~ 0.0]
 ev = [sin(20pi * t) ~ 0.0] => [vmeasured ~ v]
 @named sys = ODESystem(eq, t, continuous_events = ev)
-sys = mtkbuild(sys)
+sys = structural_simplify(sys)
 prob = ODEProblem(sys, zeros(2), (0.0, 5.1))
 sol = solve(prob, Tsit5())
 @test all(minimum((0:0.05:5) .- sol.t', dims = 2) .< 0.0001) # test that the solver stepped every 0.05s as dictated by event
@@ -584,7 +584,7 @@ function Model(u, d = 0)
     @named model = compose(_model, mass1, mass2, sd)
 end
 model = Model(sin(30t))
-sys = mtkbuild(model)
+sys = structural_simplify(model)
 @test isempty(ModelingToolkit.continuous_events(sys))
 
 let
@@ -823,7 +823,7 @@ let
     eqs = [oscce.F ~ 0]
     @named eqs_sys = ODESystem(eqs, t)
     @named oneosc_ce = compose(eqs_sys, oscce)
-    oneosc_ce_simpl = mtkbuild(oneosc_ce)
+    oneosc_ce_simpl = structural_simplify(oneosc_ce)
 
     prob = ODEProblem(oneosc_ce_simpl, [], (0.0, 2.0), [])
     sol = solve(prob, Tsit5(), saveat = 0.1)
@@ -845,7 +845,7 @@ end
     evt2 = ModelingToolkit.SymbolicContinuousCallback(
         [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2))
     @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
-    trigsys_ss = mtkbuild(trigsys)
+    trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
     sol = solve(prob, Tsit5())
     required_crossings_c1 = [π / 2, 3 * π / 2]
@@ -867,7 +867,7 @@ end
         [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2p);
         affect_neg = (record_crossings, [c2 => :v], [], [], cr2n))
     @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
-    trigsys_ss = mtkbuild(trigsys)
+    trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
     sol = solve(prob, Tsit5(); dtmax = 0.01)
     c1_pc = filter((<=)(0) ∘ sin, required_crossings_c1)
@@ -891,7 +891,7 @@ end
     evt2 = ModelingToolkit.SymbolicContinuousCallback(
         [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2p); affect_neg = nothing)
     @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
-    trigsys_ss = mtkbuild(trigsys)
+    trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
     sol = solve(prob, Tsit5(); dtmax = 0.01)
     @test maximum(abs.(c1_pc .- first.(cr1p))) < 1e-5
@@ -910,7 +910,7 @@ end
         [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2p);
         affect_neg = (record_crossings, [c2 => :v], [], [], cr2n))
     @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
-    trigsys_ss = mtkbuild(trigsys)
+    trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
     sol = solve(prob, Tsit5(); dtmax = 0.01)
     c1_pc = filter((<=)(0) ∘ sin, required_crossings_c1)
@@ -934,7 +934,7 @@ end
         [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2);
         rootfind = SciMLBase.RightRootFind)
     @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
-    trigsys_ss = mtkbuild(trigsys)
+    trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
     sol = solve(prob, Tsit5(); dtmax = 0.01)
     required_crossings_c1 = [π / 2, 3 * π / 2]
@@ -954,7 +954,7 @@ end
         [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2);
         rootfind = SciMLBase.RightRootFind)
     @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
-    trigsys_ss = mtkbuild(trigsys)
+    trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
     sol = solve(prob, Tsit5())
     @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1e-4
@@ -972,7 +972,7 @@ end
         [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2);
         rootfind = SciMLBase.RightRootFind)
     @named trigsys = ODESystem(eqs, t; continuous_events = [evt2, evt1])
-    trigsys_ss = mtkbuild(trigsys)
+    trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
     sol = solve(prob, Tsit5())
     @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1e-4
@@ -1102,7 +1102,7 @@ end
         end)
     @named sys = ODESystem(
         eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
-    ss = mtkbuild(sys)
+    ss = structural_simplify(sys)
     prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
     sol = solve(prob, Tsit5(); dtmax = 0.01)
     @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
@@ -1122,7 +1122,7 @@ end
         end)
     @named sys = ODESystem(
         eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
-    ss = mtkbuild(sys)
+    ss = structural_simplify(sys)
     prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
     sol = solve(prob, Tsit5(); dtmax = 0.01)
     @test all(sol[temp][sol.t .> 1.0] .<= 0.79) && all(sol[temp][sol.t .> 1.0] .>= 0.49)
@@ -1143,7 +1143,7 @@ end
             @set! x.furnace_on = false
         end)
     @named sys = ODESystem(eqs, t, [temp], params; continuous_events = [furnace_off])
-    ss = mtkbuild(sys)
+    ss = structural_simplify(sys)
     @test_logs (:warn,
         "The symbols Any[:furnace_on] are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value.") prob=ODEProblem(
         ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
@@ -1160,7 +1160,7 @@ end
         end)
     @named sys = ODESystem(
         eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
-    ss = mtkbuild(sys)
+    ss = structural_simplify(sys)
     @test_throws "refers to missing variable(s)" prob=ODEProblem(
         ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
 
@@ -1173,7 +1173,7 @@ end
         end)
     @named sys = ODESystem(
         eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
-    ss = mtkbuild(sys)
+    ss = structural_simplify(sys)
     @test_throws "refers to missing variable(s)" prob=ODEProblem(
         ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
 
@@ -1185,7 +1185,7 @@ end
         end)
     @named sys = ODESystem(
         eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
-    ss = mtkbuild(sys)
+    ss = structural_simplify(sys)
     prob = ODEProblem(
         ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
     @test_throws "Tried to write back to" solve(prob, Tsit5())
@@ -1245,7 +1245,7 @@ end
         end; rootfind = SciMLBase.RightRootFind)
     @named sys = ODESystem(
         eqs, t, [theta, omega], params; continuous_events = [qAevt, qBevt])
-    ss = mtkbuild(sys)
+    ss = structural_simplify(sys)
     prob = ODEProblem(ss, [theta => 1e-5], (0.0, pi))
     sol = solve(prob, Tsit5(); dtmax = 0.01)
     @test getp(sol, cnt)(sol) == 198 # we get 2 pulses per phase cycle (cos 0 crossing) and we go to 100 cycles; we miss a few due to the initial state
@@ -1415,13 +1415,13 @@ end
     @named wd1 = weird1(0.021)
     @named wd2 = weird2(0.021)
 
-    sys1 = mtkbuild(ODESystem([], t; name = :parent,
+    sys1 = structural_simplify(ODESystem([], t; name = :parent,
         discrete_events = [0.01 => ModelingToolkit.ImperativeAffect(
             modified = (; θs = reduce(vcat, [[wd1.θ]])), ctx = [1]) do m, o, c, i
             @set! m.θs[1] = c[] += 1
         end],
         systems = [wd1]))
-    sys2 = mtkbuild(ODESystem([], t; name = :parent,
+    sys2 = structural_simplify(ODESystem([], t; name = :parent,
         discrete_events = [0.01 => ModelingToolkit.ImperativeAffect(
             modified = (; θs = reduce(vcat, [[wd2.θ]])), ctx = [1]) do m, o, c, i
             @set! m.θs[1] = c[] += 1

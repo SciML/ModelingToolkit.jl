@@ -600,7 +600,7 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
         checkbounds = false, initialization_data = nothing,
         cse = true, kwargs...) where {iip, specialize}
     if !iscomplete(sys)
-        error("A completed `SDESystem` is required. Call `complete` or `mtkbuild` on the system before creating an `SDEFunction`")
+        error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEFunction`")
     end
     dvs = scalarize.(dvs)
 
@@ -720,7 +720,7 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = unknowns(sys),
         sparse = false, linenumbers = false,
         kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed `SDESystem` is required. Call `complete` or `mtkbuild` on the system before creating an `SDEFunctionExpr`")
+        error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEFunctionExpr`")
     end
     idx = iip ? 2 : 1
     f = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)[idx]
@@ -788,7 +788,7 @@ function DiffEqBase.SDEProblem{iip, specialize}(
         sparsenoise = nothing, check_length = true,
         callback = nothing, kwargs...) where {iip, specialize}
     if !iscomplete(sys)
-        error("A completed `SDESystem` is required. Call `complete` or `mtkbuild` on the system before creating an `SDEProblem`")
+        error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEProblem`")
     end
 
     f, u0, p = process_SciMLProblem(
@@ -824,7 +824,7 @@ end
 
 function DiffEqBase.SDEProblem(sys::ODESystem, args...; kwargs...)
     if any(ModelingToolkit.isbrownian, unknowns(sys))
-        error("SDESystem constructed by defining Brownian variables with @brownian must be simplified by calling `mtkbuild` before a SDEProblem can be constructed.")
+        error("SDESystem constructed by defining Brownian variables with @brownian must be simplified by calling `structural_simplify` before a SDEProblem can be constructed.")
     else
         error("Cannot construct SDEProblem from a normal ODESystem.")
     end
@@ -886,7 +886,7 @@ function SDEProblemExpr{iip}(sys::SDESystem, u0map, tspan,
         sparsenoise = nothing, check_length = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed `SDESystem` is required. Call `complete` or `mtkbuild` on the system before creating an `SDEProblemExpr`")
+        error("A completed `SDESystem` is required. Call `complete` or `structural_simplify` on the system before creating an `SDEProblemExpr`")
     end
     f, u0, p = process_SciMLProblem(
         SDEFunctionExpr{iip}, sys, u0map, parammap; check_length,

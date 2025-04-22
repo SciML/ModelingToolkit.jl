@@ -380,7 +380,7 @@ with observables, those observables are too treated as initial equations. We can
 resulting simplified system via the command:
 
 ```@example init
-isys = mtkbuild(isys; fully_determined = false)
+isys = structural_simplify(isys; fully_determined = false)
 ```
 
 Note `fully_determined=false` allows for the simplification to occur when the number of equations
@@ -392,7 +392,7 @@ isys = ModelingToolkit.generate_initializesystem(
 ```
 
 ```@example init
-isys = mtkbuild(isys; fully_determined = false)
+isys = structural_simplify(isys; fully_determined = false)
 ```
 
 ```@example init
@@ -504,7 +504,7 @@ eqs = [D(x) ~ α * x - β * x * y
        z ~ x + y]
 
 @named sys = ODESystem(eqs, t)
-simpsys = mtkbuild(sys)
+simpsys = structural_simplify(sys)
 tspan = (0.0, 10.0)
 ```
 

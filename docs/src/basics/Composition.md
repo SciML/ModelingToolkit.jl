@@ -42,7 +42,7 @@ equations(connected)
 # Differential(t)(decay1₊x(t)) ~ decay1₊f(t) - (decay1₊a*(decay1₊x(t)))
 # Differential(t)(decay2₊x(t)) ~ decay2₊f(t) - (decay2₊a*(decay2₊x(t)))
 
-simplified_sys = mtkbuild(connected)
+simplified_sys = structural_simplify(connected)
 
 equations(simplified_sys)
 ```
@@ -84,7 +84,7 @@ example, let's say there is a variable `x` in `unknowns` and a variable
 `x` in `subsys`. We can declare that these two variables are the same
 by specifying their equality: `x ~ subsys.x` in the `eqs` for `sys`.
 This algebraic relationship can then be simplified by transformations
-like `mtkbuild` which will be described later.
+like `structural_simplify` which will be described later.
 
 ### Numerics with Composed Models
 
@@ -169,7 +169,7 @@ parameters(level3)
 
 In many cases, the nicest way to build a model may leave a lot of
 unnecessary variables. Thus one may want to remove these equations
-before numerically solving. The `mtkbuild` function removes
+before numerically solving. The `structural_simplify` function removes
 these trivial equality relationships and trivial singularity equations,
 i.e. equations which result in `0~0` expressions, in over-specified systems.
 
@@ -227,7 +227,7 @@ values. The user of this model can then solve this model simply by
 specifying the values at the highest level:
 
 ```@example compose
-sireqn_simple = mtkbuild(sir)
+sireqn_simple = structural_simplify(sir)
 
 equations(sireqn_simple)
 ```
@@ -251,7 +251,7 @@ sol[reqn.R]
 ## Tearing Problem Construction
 
 Some system types (specifically `NonlinearSystem`) can be further
-reduced if `mtkbuild` has already been applied to them. This is done
+reduced if `structural_simplify` has already been applied to them. This is done
 by using the alternative problem constructors (`BlockNonlinearProblem`).
 In these cases, the constructor uses the knowledge of the
 strongly connected components calculated during the process of simplification

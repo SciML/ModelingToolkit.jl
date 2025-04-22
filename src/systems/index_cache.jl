@@ -653,10 +653,10 @@ See also: [`MTKParameters`](@ref), [`tunable_parameters`](@ref), [`reorder_dimen
 function reorder_dimension_by_tunables!(
         dest::AbstractArray, sys::AbstractSystem, arr::AbstractArray, syms; dim = 1)
     if !iscomplete(sys)
-        throw(ArgumentError("A completed system is required. Call `complete` or `mtkbuild` on the system."))
+        throw(ArgumentError("A completed system is required. Call `complete` or `structural_simplify` on the system."))
     end
     if !has_index_cache(sys) || (ic = get_index_cache(sys)) === nothing
-        throw(ArgumentError("The system does not have an index cache. Call `complete` or `mtkbuild` on the system with `split = true`."))
+        throw(ArgumentError("The system does not have an index cache. Call `complete` or `structural_simplify` on the system with `split = true`."))
     end
     if size(dest) != size(arr)
         throw(ArgumentError("Source and destination arrays must have the same size. Got source array with size $(size(arr)) and destination with size $(size(dest))."))
