@@ -416,7 +416,7 @@ Construct a `LinearizationProblem` for linearizing the system `sys` with the giv
 All other keyword arguments are forwarded to `linearization_function`.
 """
 function LinearizationProblem(sys::AbstractSystem, inputs, outputs; t = 0.0, kwargs...)
-    linfun, _ = linearization_function(sys, inputs, outputs; kwargs...)
+    linfun = linearization_function(sys, inputs, outputs; kwargs...)
     return LinearizationProblem(linfun, t)
 end
 
@@ -799,7 +799,7 @@ Permute the state representation of `sys` obtained from [`linearize`](@ref) so t
 Example:
 
 ```
-lsys, ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u])
+lsys = linearize(pid, [reference.u, measurement.u], [ctr_output.u])
 desired_order = [int.x, der.x] # Unknowns that are present in unknowns(ssys)
 lsys = ModelingToolkit.reorder_unknowns(lsys, unknowns(ssys), desired_order)
 ```

@@ -596,9 +596,13 @@ Add an input without an additional output variable.
 PerturbOutput(ap::AnalysisPoint) = PerturbOutput(ap, false)
 
 function apply_transformation(tf::PerturbOutput, sys::AbstractSystem)
+    @show "ok"
+    @show tf.ap
     modify_nested_subsystem(sys, tf.ap) do ap_sys
         # get analysis point
+        @show tf.ap
         ap_idx = analysis_point_index(ap_sys, tf.ap)
+        @show ap_idx
         ap_idx === nothing &&
             error("Analysis point $(nameof(tf.ap)) not found in system $(nameof(sys)).")
         # modified equations
