@@ -38,6 +38,8 @@ jobs:
           - {user: SciML, repo: MethodOfLines.jl, group: 2D_Diffusion}
           - {user: SciML, repo: MethodOfLines.jl, group: DAE}
           - {user: SciML, repo: ModelingToolkitNeuralNets.jl, group: All}
+
+          - {user: Neuroblox, repo: Neuroblox.jl, group: NNPDE}
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v1
