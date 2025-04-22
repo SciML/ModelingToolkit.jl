@@ -386,7 +386,7 @@ end
     @named sys = System([x * y^2 ~ y + p2]; parameter_dependencies = [p2 ~ 2p1])
     @test is_parameter(sys, p1)
     k = ShiftIndex(t)
-    @named sys = DiscreteSystem(
+    @named sys = System(
         [x(k - 1) ~ x(k) + y(k) + p2], t; parameter_dependencies = [p2 ~ 2p1])
     @test is_parameter(sys, p1)
 end
