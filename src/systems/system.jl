@@ -593,6 +593,18 @@ function JumpSystem(jumps, iv, dvs, ps; kwargs...)
     return System(eqs, iv, dvs, ps; jumps, kwargs...)
 end
 
+function SDESystem(eqs::Vector{Equation}, noise, iv; kwargs...)
+    return System(eqs, iv; noise_eqs = noise, kwargs...)
+end
+
+function SDESystem(eqs::Vector{Equation}, noise, iv, dvs, ps; kwargs...)
+    return System(eqs, iv, dvs, ps; noise_eqs = noise, kwargs...)
+end
+
+function SDESystem(sys::System, noise; kwargs...)
+    SDESystem(equations(sys), noise, get_iv(sys); kwargs...)
+end
+
 struct SystemNotCompleteError <: Exception
     obj::Any
 end

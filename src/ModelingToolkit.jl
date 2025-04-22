@@ -268,7 +268,7 @@ export AbstractTimeDependentSystem,
        AbstractMultivariateSystem
 
 export ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system,
-       System, OptimizationSystem, JumpSystem
+       System, OptimizationSystem, JumpSystem, SDESystem
 export DAEFunctionExpr, DAEProblemExpr
 export SDEFunction, SDEFunctionExpr, SDEProblemExpr
 export SystemStructure
