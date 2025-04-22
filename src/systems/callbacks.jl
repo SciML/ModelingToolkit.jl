@@ -57,7 +57,7 @@ end
 
 struct AffectSystem
     """The internal implicit discrete system whose equations are solved to obtain values after the affect."""
-    system::ImplicitDiscreteSystem
+    system::AbstractSystem
     """Unknowns of the parent ODESystem whose values are modified or accessed by the affect."""
     unknowns::Vector
     """Parameters of the parent ODESystem whose values are accessed by the affect."""
@@ -307,7 +307,7 @@ function make_affect(affect::Vector{Equation}; discrete_parameters = Any[],
     affect = Symbolics.fast_substitute(affect, subs)
     alg_eqs = Symbolics.fast_substitute(alg_eqs, subs)
 
-    @named affectsys = ImplicitDiscreteSystem(
+    @named affectsys = System(
         vcat(affect, alg_eqs), iv, collect(union(_dvs, discretes)),
         collect(union(pre_params, sys_params)))
     affectsys = structural_simplify(affectsys; fully_determined = nothing)
