@@ -68,6 +68,20 @@ function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int; kwargs...)
     eq = 0 ~ fast_substitute(
         ModelingToolkit.derivative(
             eq.rhs - eq.lhs, get_iv(sys); throw_no_derivative = true), ts.param_derivative_map)
+
+    vs = ModelingToolkit.vars(eq.rhs)
+    for v in vs
+        # parameters with unknown derivatives have a value of `nothing` in the map,
+        # so use `missing` as the default.
+        get(ts.param_derivative_map, v, missing) === nothing || continue
+        _original_eq = equations(ts)[ieq]
+        error("""
+        Encountered derivative of discrete variable `$(only(arguments(v)))` when \
+        differentiating equation `$(_original_eq)`. This may indicate a model error or a \
+        missing equation of the form `$v ~ ...` that defines this derivative.
+        """)
+    end
+
     push!(equations(ts), eq)
     # Analyze the new equation and update the graph/solvable_graph
     # First, copy the previous incidence and add the derivative terms.

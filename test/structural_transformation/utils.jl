@@ -302,7 +302,28 @@ end
         return ODESystem(eqs, t, vars, params; systems, name)
     end
 
-    @mtkbuild sys = FilteredInput()
+    @component function FilteredInputFix(; name, x0 = 0, T = 0.1)
+        params = @parameters begin
+            k(t) = x0
+            T = T
+        end
+        vars = @variables begin
+            x(t) = k
+            dx(t) = 0
+            ddx(t)
+        end
+        systems = []
+        eqs = [D(x) ~ dx
+               D(dx) ~ ddx
+               dx ~ (k - x) / T
+               D(k) ~ 0]
+        return ODESystem(eqs, t, vars, params; systems, name)
+    end
+
+    @named sys = FilteredInput()
+    @test_throws ["derivative of discrete variable", "k(t)"] structural_simplify(sys)
+
+    @mtkbuild sys = FilteredInputFix()
     vs = Set()
     for eq in equations(sys)
         ModelingToolkit.vars!(vs, eq)
