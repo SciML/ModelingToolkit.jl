@@ -426,7 +426,7 @@ struct SymbolicDiscreteCallback <: AbstractCallback
     reinitializealg::SciMLBase.DAEInitializationAlgorithm
 
     function SymbolicDiscreteCallback(
-            condition::Union{Number, Vector{<:Number}}, affect = nothing;
+            condition::Union{Symbolic{Bool}, Number, Vector{<:Number}}, affect = nothing;
             initialize = nothing, finalize = nothing,
             reinitializealg = nothing, kwargs...)
         c = is_timed_condition(condition) ? condition : value(scalarize(condition))
@@ -468,10 +468,17 @@ function is_timed_condition(condition::T) where {T}
     end
 end
 
-to_cb_vector(cbs::Vector{<:AbstractCallback}) = cbs
-to_cb_vector(cbs::Vector) = Vector{AbstractCallback}(cbs)
-to_cb_vector(cbs::Nothing) = AbstractCallback[]
-to_cb_vector(cb::AbstractCallback) = [cb]
+to_cb_vector(cbs::Vector{<:AbstractCallback}; kwargs...) = cbs
+to_cb_vector(cbs::Union{Nothing, Vector{Nothing}}; kwargs...) = AbstractCallback[]
+to_cb_vector(cb::AbstractCallback; kwargs...) = [cb]
+function to_cb_vector(cbs; CB_TYPE = SymbolicContinuousCallback, kwargs...)
+    if cbs isa Pair
+        @show cbs
+        [CB_TYPE(cbs; kwargs...)]
+    else
+        Vector{CB_TYPE}([CB_TYPE(cb; kwargs...) for cb in cbs])
+    end
+end
 
 ############################################
 ########## Namespacing Utilities ###########
@@ -906,10 +913,10 @@ function compile_equational_affect(
 
         u_up, u_up! = build_function_wrapper(sys, (@view rhss[is_u]), dvs, _ps..., t;
             wrap_code = add_integrator_header(sys, integ, :u),
-            expression = Val{false}, outputidxs = u_idxs, wrap_mtkparameters)
+            expression = Val{false}, outputidxs = u_idxs, wrap_mtkparameters, cse = false)
         p_up, p_up! = build_function_wrapper(sys, (@view rhss[is_p]), dvs, _ps..., t;
             wrap_code = add_integrator_header(sys, integ, :p),
-            expression = Val{false}, outputidxs = p_idxs, wrap_mtkparameters)
+            expression = Val{false}, outputidxs = p_idxs, wrap_mtkparameters, cse = false)
 
         return function explicit_affect!(integ)
             isempty(dvs_to_update) || u_up!(integ)
@@ -934,7 +941,10 @@ function compile_equational_affect(
                 end
                 affprob = ImplicitDiscreteProblem(affsys, u0, (integ.t, integ.t), pmap;
                     build_initializeprob = false, check_length = false)
+                @show pmap
+                @show u0
                 affsol = init(affprob, IDSolve())
+                @show affsol
                 (check_error(affsol) === ReturnCode.InitialFailure) &&
                     throw(UnsolvableCallbackError(all_equations(aff)))
                 for u in dvs_to_update
