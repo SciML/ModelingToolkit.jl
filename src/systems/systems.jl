@@ -29,8 +29,8 @@ topological sort of the observed equations in `sys`.
 function structural_simplify(
         sys::AbstractSystem; additional_passes = [], simplify = false, split = true,
         allow_symbolic = false, allow_parameter = true, conservative = false, fully_determined = true,
-        inputs = nothing, outputs = nothing,
-        disturbance_inputs = nothing,
+        inputs = Any[], outputs = Any[],
+        disturbance_inputs = Any[],
         kwargs...)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
     newsys′ = __structural_simplify(sys; simplify,
