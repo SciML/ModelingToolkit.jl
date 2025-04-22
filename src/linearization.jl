@@ -126,7 +126,7 @@ function linearization_function(sys::AbstractSystem, inputs,
     end
 
     lin_fun = LinearizationFunction(
-        diff_idxs, alge_idxs, length(unknowns(sys)),
+        diff_idxs, alge_idxs, inputs, length(unknowns(sys)),
         prob, h, u0 === nothing ? nothing : similar(u0), uf_jac, h_jac, pf_jac,
         hp_jac, initializealg, initialization_kwargs)
     return lin_fun, sys
