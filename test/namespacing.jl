@@ -84,7 +84,7 @@ end
     @variables x(t)
     @parameters p
     k = ShiftIndex(t)
-    sys = ImplicitDiscreteSystem([x(k) ~ p + x(k - 1) * x(k)], t; name = :inner)
+    sys = System([x(k) ~ p + x(k - 1) * x(k)], t; name = :inner)
     @test !iscomplete(sys)
     @test does_namespacing(sys)
 
@@ -103,7 +103,7 @@ end
     @test isequal(p, nsys.p)
     @test !isequal(p, sys.p)
 
-    @test_throws ["namespacing", "inner"] ImplicitDiscreteSystem(
+    @test_throws ["namespacing", "inner"] System(
         Equation[], t; systems = [nsys], name = :a)
 end
 
