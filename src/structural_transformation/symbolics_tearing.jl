@@ -150,7 +150,7 @@ end
 function tearing_substitution(sys::AbstractSystem; kwargs...)
     neweqs = full_equations(sys::AbstractSystem; kwargs...)
     @set! sys.eqs = neweqs
-    @set! sys.substitutions = nothing
+    # @set! sys.substitutions = nothing
     @set! sys.schedule = nothing
 end
 
@@ -753,7 +753,7 @@ function update_simplified_system!(
 
     @set! sys.eqs = neweqs
     @set! sys.observed = obs
-    @set! sys.substitutions = Substitutions(subeqs, deps)
+    # @set! sys.substitutions = Substitutions(subeqs, deps)
 
     # Only makes sense for time-dependent
     if ModelingToolkit.has_schedule(sys)
