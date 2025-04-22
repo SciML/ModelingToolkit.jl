@@ -256,7 +256,8 @@ end
 
 function is_time_dependent_parameter(p, iv)
     return iv !== nothing && isparameter(p) && iscall(p) &&
-           (args = arguments(p); length(args)) == 1 && isequal(only(args), iv)
+           (operation(p) === getindex && is_time_dependent_parameter(arguments(p)[1], iv) ||
+            (args = arguments(p); length(args)) == 1 && isequal(only(args), iv))
 end
 
 function TearingState(sys; quick_cancel = false, check = true)
