@@ -344,8 +344,8 @@ end
     end
     k = ShiftIndex(t)
     @testset "DiscreteSystem" begin
-        @named inner = DiscreteSystem([x(k) ~ x(k - 1) + x(k - 2)], t, [x], [])
-        @named outer = DiscreteSystem([y(k) ~ y(k - 1) + y(k - 2)], t, [x, y],
+        @named inner = System([x(k) ~ x(k - 1) + x(k - 2)], t, [x], [])
+        @named outer = System([y(k) ~ y(k - 1) + y(k - 2)], t, [x, y],
             []; systems = [inner], metadata = "test")
         @test ModelingToolkit.get_metadata(outer) == "test"
         sys = complete(outer)
