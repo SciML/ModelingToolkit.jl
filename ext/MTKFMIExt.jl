@@ -249,15 +249,21 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
             FMI3CSFunctor(state_value_references, output_value_references)
         end
         @parameters (functor::(typeof(_functor)))(..)[1:(length(__mtk_internal_u) + length(__mtk_internal_o))] = _functor
-        # for co-simulation, we need to ensure the output buffer is solved for
-        # during initialization
-        for (i, x) in enumerate(collect(__mtk_internal_o))
-            push!(initialization_eqs,
-                x ~ functor(
-                    wrapper, __mtk_internal_u, __mtk_internal_x, __mtk_internal_p, t)[i])
-        end
 
         diffeqs = Equation[]
+        for (i, x) in enumerate(collect(__mtk_internal_o))
+            # for co-simulation, we need to ensure the output buffer is solved for
+            # during initialization
+            push!(initialization_eqs,
+                x ~ functor(
+                    wrapper, (__mtk_internal_u), __mtk_internal_x, __mtk_internal_p, t)[i])
+
+            # also add equations for output derivatives
+            push!(diffeqs,
+                D(x) ~ term(
+                    getOutputDerivative, functor, wrapper, i, 1, collect(__mtk_internal_u),
+                    __mtk_internal_x, __mtk_internal_p, t; type = Real))
+        end
 
         # use `ImperativeAffect` for instance management here
         cb_observed = (; inputs = __mtk_internal_x, params = copy(params),
@@ -739,6 +745,15 @@ struct FMI2CSFunctor
     The value references of output variables in the FMU.
     """
     output_value_references::Vector{FMI.fmi2ValueReference}
+    """
+    Simply a buffer to store the order of output derivative required from
+    `getRealOutputderivatives` and avoid unnecessary allocations.
+    """
+    output_derivative_order_buffer::Vector{FMI.fmi2Integer}
+end
+
+function FMI2CSFunctor(svref, ovref)
+    FMI2CSFunctor(svref, ovref, FMI.fmi2Integer[1])
 end
 
 function (fn::FMI2CSFunctor)(wrapper::FMI2InstanceWrapper, states, inputs, params, t)
@@ -762,6 +777,41 @@ end
     size = (length(states) + length(fn.output_value_references),)
     eltype = eltype(states)
     ndims = 1
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Calculate the `order` order derivative of the `var`th output of the FMU.
+"""
+function getOutputDerivative(fn::FMI2CSFunctor, wrapper::FMI2InstanceWrapper, var::Int,
+        order::FMI.fmi2Integer, states, inputs, params, t)
+    states = states isa SubArray ? copy(states) : states
+    inputs = inputs isa SubArray ? copy(inputs) : inputs
+    params = params isa SubArray ? copy(params) : params
+    instance = get_instance_CS!(wrapper, states, inputs, params, t)
+    fn.output_derivative_order_buffer[] = order
+    return FMI.fmi2GetRealOutputDerivatives(
+        instance, fn.output_value_references[var], fn.output_derivative_order_buffer)
+end
+
+# @register_symbolic getOutputDerivative(fn::FMI2CSFunctor, w::FMI2InstanceWrapper, var::Int, order::FMI.fmi2Integer, states::Vector{<:Real}, inputs::Vector{<:Real}, params::Vector{<:Real}, t::Real)
+
+# HACK-ish for allowing higher order output derivatives
+# The first `D(output)` will result in a `getOutputDerivatives` expression.
+# Subsequent differentiations of this expression will expand to
+# `Σ_{i = 1:8} Differential(args[i])(getOutputDerivative(args...)) * D(args[i])`
+# using the chain rule. `i = 1:4` are not time-dependent (or real). We define
+# the derivatives for `i = 5:7` to be zero, and the derivative for `i = 8` (w.r.t `t`)
+# to be the same `getOutputDerivative` call but with the order increased. This results
+# in `D(output) = getOutputDerivative(fn, w, var, order + 1, states, inputs, params, t) * 1`
+# which is exactly what we want.
+for i in 1:7
+    @eval Symbolics.derivative(::typeof(getOutputDerivative), args::NTuple{8, Any}, ::Val{$i}) = 0
+end
+function Symbolics.derivative(::typeof(getOutputDerivative), args::NTuple{8, Any}, ::Val{8})
+    term(getOutputDerivative, args[1], args[2], args[3],
+        args[4] + 1, args[5], args[6], args[7], args[8])
 end
 
 """
@@ -848,6 +898,15 @@ struct FMI3CSFunctor
     The value references of output variables in the FMU.
     """
     output_value_references::Vector{FMI.fmi3ValueReference}
+    """
+    Simply a buffer to store the order of output derivative required from
+    `getRealOutputderivatives` and avoid unnecessary allocations.
+    """
+    output_derivative_order_buffer::Vector{FMI.fmi3Int32}
+end
+
+function FMI3CSFunctor(svref, ovref)
+    FMI3CSFunctor(svref, ovref, FMI.fmi3Int32[1])
 end
 
 function (fn::FMI3CSFunctor)(wrapper::FMI3InstanceWrapper, states, inputs, params, t)
@@ -870,6 +929,24 @@ end
     eltype = eltype(states)
     ndims = 1
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Calculate the `order` order derivative of the `var`th output of the FMU.
+"""
+function getOutputDerivative(fn::FMI3CSFunctor, wrapper::FMI3InstanceWrapper, var::Int,
+        order::FMI.fmi3Int32, states, inputs, params, t)
+    states = states isa SubArray ? copy(states) : states
+    inputs = inputs isa SubArray ? copy(inputs) : inputs
+    params = params isa SubArray ? copy(params) : params
+    instance = get_instance_CS!(wrapper, states, inputs, params, t)
+    fn.output_derivative_order_buffer[] = order
+    return FMI.fmi3GetOutputDerivatives(
+        instance, fn.output_value_references[var], fn.output_derivative_order_buffer)
+end
+
+# @register_symbolic getOutputDerivative(fn::FMI3CSFunctor, w::FMI3InstanceWrapper, var::Int, order::FMI.fmi3Int32, states::Vector{<:Real}, inputs::Vector{<:Real}, params::Vector{<:Real}, t::Real) false
 
 """
     $(TYPEDSIGNATURES)
