@@ -425,7 +425,50 @@ has_variableratejumps(js::System) = any(x -> x isa VariableRateJump, jumps(js))
 # TODO: do we need this? it's kind of weird to keep
 has_equations(js::System) = !isempty(equations(js))
 
-# TODO: hash out the semantics of this
+function noise_equations_equal(sys1::System, sys2::System)
+    neqs1 = get_noise_eqs(sys1)
+    neqs2 = get_noise_eqs(sys2)
+    if neqs1 === nothing && neqs2 === nothing
+        return true
+    elseif neqs1 === nothing || neqs2 === nothing
+        return false
+    end
+    ndims(neqs1) == ndims(neqs2) || return false
+
+    eqs1 = get_eqs(sys1)
+    eqs2 = get_eqs(sys2)
+
+    # get the permutation vector of `eqs2` in terms of `eqs1`
+    # eqs1_used tracks the elements of `eqs1` already used in the permutation
+    eqs1_used = falses(length(eqs1))
+    # the permutation of `eqs1` that gives `eqs2`
+    eqs2_perm = Int[]
+    for eq in eqs2
+        # find the first unused element of `eqs1` equal to `eq`
+        idx = findfirst(i -> isequal(eq, eqs1[i]) && !eqs1_used[i], eachindex(eqs1))
+        # none found, so noise equations are not equal
+        idx === nothing && return false
+        push!(eqs2_perm, idx)
+    end
+
+    if neqs1 isa Vector
+        return isequal(@view(neqs1[eqs2_perm]), neqs2)
+    else
+        return isequal(@view(neqs1[eqs2_perm, :]), neqs2)
+    end
+end
+
+function ignored_connections_equal(sys1::System, sys2::System)
+    ic1 = get_ignored_connections(sys1)
+    ic2 = get_ignored_connections(sys2)
+    if ic1 === nothing && ic2 === nothing
+        return true
+    elseif ic1 === nothing || ic2 === nothing
+        return false
+    end
+    return _eq_unordered(ic1[1], ic2[1]) && _eq_unordered(ic1[2], ic2[2])
+end
+
 function Base.:(==)(sys1::System, sys2::System)
     sys1 === sys2 && return true
     iv1 = get_iv(sys1)
@@ -433,21 +476,88 @@ function Base.:(==)(sys1::System, sys2::System)
     isequal(iv1, iv2) &&
         isequal(nameof(sys1), nameof(sys2)) &&
         _eq_unordered(get_eqs(sys1), get_eqs(sys2)) &&
-        _eq_unordered(get_noise_eqs(sys1), get_noise_eqs(sys2)) &&
+        noise_equations_equal(sys1, sys2) &&
         _eq_unordered(get_jumps(sys1), get_jumps(sys2)) &&
         _eq_unordered(get_constraints(sys1), get_constraints(sys2)) &&
         _eq_unordered(get_costs(sys1), get_costs(sys2)) &&
+        isequal(get_consolidate(sys1), get_consolidate(sys2)) &&
         _eq_unordered(get_unknowns(sys1), get_unknowns(sys2)) &&
         _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
         _eq_unordered(get_brownians(sys1), get_brownians(sys2)) &&
         _eq_unordered(get_observed(sys1), get_observed(sys2)) &&
         _eq_unordered(get_parameter_dependencies(sys1), get_parameter_dependencies(sys2)) &&
+        isequal(get_description(sys1), get_description(sys2)) &&
+        isequal(get_defaults(sys1), get_defaults(sys2)) &&
+        isequal(get_guesses(sys1), get_guesses(sys2)) &&
+        _eq_unordered(get_initialization_eqs(sys1), get_initialization_eqs(sys2)) &&
         _eq_unordered(get_continuous_events(sys1), get_continuous_events(sys2)) &&
         _eq_unordered(get_discrete_events(sys1), get_discrete_events(sys2)) &&
-        get_assertions(sys1) == get_assertions(sys2) &&
+        isequal(get_connector_type(sys1), get_connector_type(sys2)) &&
+        isequal(get_assertions(sys1), get_assertions(sys2)) &&
+        isequal(get_metadata(sys1), get_metadata(sys2)) &&
+        isequal(get_gui_metadata(sys1), get_gui_metadata(sys2)) &&
         get_is_dde(sys1) == get_is_dde(sys2) &&
-        get_tstops(sys1) == get_tstops(sys2) &&
+        _eq_unordered(get_tstops(sys1), get_tstops(sys2)) &&
+        # not comparing tearing states because checking if they're equal up to ordering
+        # is difficult
+        get_namespacing(sys1) == get_namespacing(sys2) &&
+        get_complete(sys1) == get_complete(sys2) &&
+        ignored_connections_equal(sys1, sys2) &&
+        get_parent(sys1) == get_parent(sys2) &&
+        get_isscheduled(sys1) == get_isscheduled(sys2) &&
         all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
+end
+
+function Base.hash(sys::System, h::UInt)
+    h = hash(nameof(sys), h)
+    h = hash(get_iv(sys), h)
+    # be considerate of things compared using `_eq_unordered` in `==`
+    eqs = get_eqs(sys)
+    eq_sortperm = sortperm(eqs; by = string)
+    h = hash(@view(eqs[eq_sortperm]), h)
+    neqs = get_noise_eqs(sys)
+    if neqs === nothing
+        h = hash(nothing, h)
+    elseif neqs isa Vector
+        h = hash(@view(neqs[eq_sortperm]), h)
+    else
+        h = hash(@view(neqs[eq_sortperm, :]), h)
+    end
+    h = hash(Set(get_jumps(sys)), h)
+    h = hash(Set(get_constraints(sys)), h)
+    h = hash(Set(get_costs(sys)), h)
+    h = hash(get_consolidate(sys), h)
+    h = hash(Set(get_unknowns(sys)), h)
+    h = hash(Set(get_ps(sys)), h)
+    h = hash(Set(get_brownians(sys)), h)
+    h = hash(Set(get_observed(sys)), h)
+    h = hash(Set(get_parameter_dependencies(sys)), h)
+    h = hash(get_description(sys), h)
+    h = hash(get_defaults(sys), h)
+    h = hash(get_guesses(sys), h)
+    h = hash(Set(get_initialization_eqs(sys)), h)
+    h = hash(Set(get_continuous_events(sys)), h)
+    h = hash(Set(get_discrete_events(sys)), h)
+    h = hash(get_connector_type(sys), h)
+    h = hash(get_assertions(sys), h)
+    h = hash(get_metadata(sys), h)
+    h = hash(get_gui_metadata(sys), h)
+    h = hash(get_is_dde(sys), h)
+    h = hash(Set(get_tstops(sys)), h)
+    h = hash(Set(getfield(sys, :namespacing)), h)
+    h = hash(Set(getfield(sys, :complete)), h)
+    ics = get_ignored_connections(sys)
+    if ics === nothing
+        h = hash(ics, h)
+    else
+        h = hash(Set(ics[1]), hash(Set(ics[2]), h), h)
+    end
+    h = hash(get_parent(sys), h)
+    h = hash(get_isscheduled(sys), h)
+    for s in get_systems(sys)
+        h = hash(s, h)
+    end
+    return h
 end
 
 """
