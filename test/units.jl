@@ -108,7 +108,7 @@ System(eqs, t, name = :sys)
 eqs = [
     0 ~ a * x
 ]
-@named nls = NonlinearSystem(eqs, [x], [a])
+@named nls = System(eqs, [x], [a])
 
 # SDE test w/ noise vector
 @independent_variables t [unit = u"ms"]
@@ -151,12 +151,12 @@ sys_simple = structural_simplify(sys)
 @parameters v [unit = u"m/s"] r [unit = u"m"^3 / u"s"] t [unit = u"s"]
 eqs = [V ~ r * t,
     V ~ L^3]
-@named sys = NonlinearSystem(eqs, [V, L], [t, r])
+@named sys = System(eqs, [V, L], [t, r])
 sys_simple = structural_simplify(sys)
 
 eqs = [L ~ v * t,
     V ~ L^3]
-@named sys = NonlinearSystem(eqs, [V, L], [t, r])
+@named sys = System(eqs, [V, L], [t, r])
 sys_simple = structural_simplify(sys)
 
 #Jump System

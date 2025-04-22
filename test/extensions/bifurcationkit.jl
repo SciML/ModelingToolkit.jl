@@ -8,7 +8,7 @@ let
     @parameters μ α
     eqs = [0 ~ μ * x - x^3 + α * y,
         0 ~ -y]
-    @named nsys = NonlinearSystem(eqs, [x, y], [μ, α])
+    @named nsys = System(eqs, [x, y], [μ, α])
     nsys = complete(nsys)
     # Creates BifurcationProblem 
     bif_par = μ
@@ -103,7 +103,7 @@ let
     eqs = [0 ~ μ - x^3 + 2x^2,
         0 ~ p * μ - y,
         0 ~ y - z]
-    @named nsys = NonlinearSystem(eqs, [x, y, z], [μ, p])
+    @named nsys = System(eqs, [x, y, z], [μ, p])
     nsys = structural_simplify(nsys)
 
     # Creates BifurcationProblem.

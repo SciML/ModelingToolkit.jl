@@ -110,7 +110,7 @@ end
 @testset "NonlinearSystem" begin
     @variables x
     @parameters p
-    sys = NonlinearSystem([x ~ p * x^2 + 1]; name = :inner)
+    sys = System([x ~ p * x^2 + 1]; name = :inner)
     @test !iscomplete(sys)
     @test does_namespacing(sys)
 
@@ -129,7 +129,7 @@ end
     @test isequal(p, nsys.p)
     @test !isequal(p, sys.p)
 
-    @test_throws ["namespacing", "inner"] NonlinearSystem(
+    @test_throws ["namespacing", "inner"] System(
         Equation[]; systems = [nsys], name = :a)
 end
 
