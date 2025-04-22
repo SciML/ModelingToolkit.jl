@@ -155,7 +155,7 @@ eqs = [D(S) ~ k1 - k1 * S - k2 * S * I - k1 * k2 / (1 + t) * S,
     D(I) ~ k2 * S * I,
     D(R) ~ -k2 * S^2 * R / 2 + k1 * I + k1 * k2 * S / (1 + t)]
 noiseeqs = [S, I, R]
-@named os = ODESystem(eqs, t, [S, I, R], [k1, k2])
+@named os = System(eqs, t, [S, I, R], [k1, k2])
 deps = equation_dependencies(os)
 S = value(S);
 I = value(I);

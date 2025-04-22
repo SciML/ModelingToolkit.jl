@@ -375,7 +375,7 @@ sys = modelingtoolkitize(prob)
         @testset "ODE" begin
             @variables x(t)=1.0 y(t)=2.0
             @parameters p=3.0 q=4.0
-            @mtkbuild sys = ODESystem([D(x) ~ p * y, D(y) ~ q * x], t)
+            @mtkbuild sys = System([D(x) ~ p * y, D(y) ~ q * x], t)
             prob1 = ODEProblem(sys, [], (0.0, 5.0))
             newsys = complete(modelingtoolkitize(prob1))
             @test is_variable(newsys, newsys.x)

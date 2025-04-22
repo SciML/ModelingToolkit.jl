@@ -57,10 +57,10 @@ p = [a
      ParentScope(ParentScope(c))
      GlobalScope(d)]
 
-level0 = ODESystem(Equation[], t, [], p; name = :level0)
-level1 = ODESystem(Equation[], t, [], []; name = :level1) ∘ level0
-level2 = ODESystem(Equation[], t, [], []; name = :level2) ∘ level1
-level3 = ODESystem(Equation[], t, [], []; name = :level3) ∘ level2
+level0 = System(Equation[], t, [], p; name = :level0)
+level1 = System(Equation[], t, [], []; name = :level1) ∘ level0
+level2 = System(Equation[], t, [], []; name = :level2) ∘ level1
+level3 = System(Equation[], t, [], []; name = :level3) ∘ level2
 
 ps = ModelingToolkit.getname.(parameters(level3))
 
@@ -73,8 +73,8 @@ ps = ModelingToolkit.getname.(parameters(level3))
 # Tests from PR#2354
 @parameters xx[1:2]
 arr_p = [ParentScope(xx[1]), xx[2]]
-arr0 = ODESystem(Equation[], t, [], arr_p; name = :arr0)
-arr1 = ODESystem(Equation[], t, [], []; name = :arr1) ∘ arr0
+arr0 = System(Equation[], t, [], arr_p; name = :arr0)
+arr1 = System(Equation[], t, [], []; name = :arr1) ∘ arr0
 arr_ps = ModelingToolkit.getname.(parameters(arr1))
 @test isequal(arr_ps[1], Symbol("xx"))
 @test isequal(arr_ps[2], Symbol("arr0₊xx"))
@@ -82,13 +82,13 @@ arr_ps = ModelingToolkit.getname.(parameters(arr1))
 function Foo(; name, p = 1)
     @parameters p = p
     @variables x(t)
-    return ODESystem(D(x) ~ p, t; name)
+    return System(D(x) ~ p, t; name)
 end
 function Bar(; name, p = 2)
     @parameters p = p
     @variables x(t)
     @named foo = Foo(; p)
-    return ODESystem(D(x) ~ p + t, t; systems = [foo], name)
+    return System(D(x) ~ p + t, t; systems = [foo], name)
 end
 @named bar = Bar()
 bar = complete(bar)
@@ -108,15 +108,15 @@ defs = ModelingToolkit.defaults(bar)
     p3 = ParentScope(ParentScope(p3))
     p4 = GlobalScope(p4)
 
-    @named sys1 = ODESystem([D(x1) ~ p1, D(x2) ~ p2, D(x3) ~ p3, D(x4) ~ p4], t)
+    @named sys1 = System([D(x1) ~ p1, D(x2) ~ p2, D(x3) ~ p3, D(x4) ~ p4], t)
     @test isequal(x1, only(unknowns(sys1)))
     @test isequal(p1, only(parameters(sys1)))
-    @named sys2 = ODESystem(Equation[], t; systems = [sys1])
+    @named sys2 = System(Equation[], t; systems = [sys1])
     @test length(unknowns(sys2)) == 2
     @test any(isequal(x2), unknowns(sys2))
     @test length(parameters(sys2)) == 2
     @test any(isequal(p2), parameters(sys2))
-    @named sys3 = ODESystem(Equation[], t)
+    @named sys3 = System(Equation[], t)
     sys3 = sys3 ∘ sys2
     @test length(unknowns(sys3)) == 3
     @test any(isequal(x3), unknowns(sys3))

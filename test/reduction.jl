@@ -28,7 +28,7 @@ eqs = [D(x) ~ σ * (y - x)
        0 ~ a + z
        u ~ z + a]
 
-lorenz1 = ODESystem(eqs, t, name = :lorenz1)
+lorenz1 = System(eqs, t, name = :lorenz1)
 
 lorenz1_aliased = structural_simplify(lorenz1)
 io = IOBuffer();
@@ -53,13 +53,13 @@ eqs1 = [
     u ~ x + y - z
 ]
 
-lorenz = name -> ODESystem(eqs1, t, name = name)
+lorenz = name -> System(eqs1, t, name = name)
 lorenz1 = lorenz(:lorenz1)
 state = TearingState(lorenz1)
 @test isempty(setdiff(state.fullvars, [D(x), F, y, x, D(y), u, z, D(z)]))
 lorenz2 = lorenz(:lorenz2)
 
-@named connected = ODESystem(
+@named connected = System(
     [s ~ a + lorenz1.x
      lorenz2.y ~ s
      lorenz1.u ~ lorenz2.F
@@ -125,13 +125,13 @@ prob2 = SteadyStateProblem(reduced_system, u0, pp)
 let
     @variables x(t) u(t) y(t)
     @parameters a b c d
-    ol = ODESystem([D(x) ~ a * x + b * u; y ~ c * x + d * u], t, name = :ol)
+    ol = System([D(x) ~ a * x + b * u; y ~ c * x + d * u], t, name = :ol)
     @variables u_c(t) y_c(t)
     @parameters k_P
-    pc = ODESystem(Equation[u_c ~ k_P * y_c], t, name = :pc)
+    pc = System(Equation[u_c ~ k_P * y_c], t, name = :pc)
     connections = [pc.u_c ~ ol.u
                    pc.y_c ~ ol.y]
-    @named connected = ODESystem(connections, t, systems = [ol, pc])
+    @named connected = System(connections, t, systems = [ol, pc])
     @test equations(connected) isa Vector{Equation}
     reduced_sys = structural_simplify(connected)
     ref_eqs = [D(ol.x) ~ ol.a * ol.x + ol.b * ol.u
@@ -142,7 +142,7 @@ end
 # issue #889
 let
     @variables x(t)
-    @named sys = ODESystem([0 ~ D(x) + x], t, [x], [])
+    @named sys = System([0 ~ D(x) + x], t, [x], [])
     #@test_throws ModelingToolkit.InvalidSystemException ODEProblem(sys, [1.0], (0, 10.0))
     sys = structural_simplify(sys)
     #@test_nowarn ODEProblem(sys, [1.0], (0, 10.0))
@@ -188,7 +188,7 @@ eqs = [D(E) ~ k₋₁ * C - k₁ * E * S
        D(P) ~ k₂ * C
        E₀ ~ E + C]
 
-@named sys = ODESystem(eqs, t, [E, C, S, P], [k₁, k₂, k₋₁, E₀])
+@named sys = System(eqs, t, [E, C, S, P], [k₁, k₂, k₋₁, E₀])
 @test_throws ModelingToolkit.ExtraEquationsSystemException structural_simplify(sys)
 
 # Example 5 from Pantelides' original paper
@@ -197,7 +197,7 @@ sts = collect(@variables x(t) u1(t) u2(t))
 eqs = [0 ~ x + sin(u1 + u2)
        D(x) ~ x + y1
        cos(x) ~ sin(y2)]
-@named sys = ODESystem(eqs, t, sts, params)
+@named sys = System(eqs, t, sts, params)
 @test_throws ModelingToolkit.InvalidSystemException structural_simplify(sys)
 
 # issue #963
@@ -214,7 +214,7 @@ eq = [v47 ~ v1
       0 ~ i74 + i75 - i64
       0 ~ i64 + i71]
 
-@named sys0 = ODESystem(eq, t)
+@named sys0 = System(eq, t)
 sys = structural_simplify(sys0)
 @test length(equations(sys)) == 1
 eq = equations(tearing_substitution(sys))[1]
@@ -232,7 +232,7 @@ eqs = [D(x) ~ σ * (y - x)
        0 ~ a + z
        u ~ z + a]
 
-lorenz1 = ODESystem(eqs, t, name = :lorenz1)
+lorenz1 = System(eqs, t, name = :lorenz1)
 lorenz1_reduced = structural_simplify(lorenz1, inputs = [z], outputs = [])
 @test z in Set(parameters(lorenz1_reduced))
 
@@ -241,7 +241,7 @@ vars = @variables x(t) y(t) z(t)
 eqs = [D(x) ~ x
        D(y) ~ y
        D(z) ~ t]
-@named model = ODESystem(eqs, t)
+@named model = System(eqs, t)
 sys = structural_simplify(model)
 Js = ModelingToolkit.jacobian_sparsity(sys)
 @test size(Js) == (3, 3)
@@ -252,29 +252,29 @@ vars = @variables a(t) w(t) phi(t)
 eqs = [a ~ D(w)
        w ~ D(phi)
        w ~ sin(t)]
-@named sys = ODESystem(eqs, t, vars, [])
+@named sys = System(eqs, t, vars, [])
 ss = alias_elimination(sys)
 @test isempty(observed(ss))
 
 @variables x(t) y(t)
-@named sys = ODESystem([D(x) ~ 1 - x,
+@named sys = System([D(x) ~ 1 - x,
         D(y) + D(x) ~ 0], t)
 new_sys = alias_elimination(sys)
 @test isempty(observed(new_sys))
 
-@named sys = ODESystem([D(x) ~ x,
+@named sys = System([D(x) ~ x,
         D(y) + D(x) ~ 0], t)
 new_sys = alias_elimination(sys)
 @test isempty(observed(new_sys))
 
-@named sys = ODESystem([D(x) ~ 1 - x,
+@named sys = System([D(x) ~ 1 - x,
         y + D(x) ~ 0], t)
 new_sys = alias_elimination(sys)
 @test isempty(observed(new_sys))
 
 eqs = [x ~ 0
        D(x) ~ x + y]
-@named sys = ODESystem(eqs, t, [x, y], [])
+@named sys = System(eqs, t, [x, y], [])
 ss = structural_simplify(sys)
 @test isempty(equations(ss))
 @test sort(string.(observed(ss))) == ["x(t) ~ 0.0"
@@ -282,7 +282,7 @@ ss = structural_simplify(sys)
                                       "y(t) ~ xˍt(t) - x(t)"]
 
 eqs = [D(D(x)) ~ -x]
-@named sys = ODESystem(eqs, t, [x], [])
+@named sys = System(eqs, t, [x], [])
 ss = alias_elimination(sys)
 @test length(equations(ss)) == length(unknowns(ss)) == 1
 ss = structural_simplify(sys)

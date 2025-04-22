@@ -232,9 +232,9 @@ end
 
     @testset "Different indepvar" begin
         @independent_variables tt
-        @named empty = ODESystem(Equation[], t)
-        @named outer = ODESystem(Equation[], t; systems = [empty])
-        @named empty = ODESystem(Equation[], tt)
+        @named empty = System(Equation[], t)
+        @named outer = System(Equation[], t; systems = [empty])
+        @named empty = System(Equation[], tt)
         @test_throws ["independent variable"] substitute_component(
             outer, outer.empty => empty)
     end

@@ -147,7 +147,7 @@ using ModelingToolkit, OrdinaryDiffEq, BenchmarkTools
 eqs = [D(x) ~ z * h
        0 ~ x - y
        0 ~ sin(z) + y - p * t]
-@named daesys = ODESystem(eqs, t)
+@named daesys = System(eqs, t)
 newdaesys = structural_simplify(daesys)
 @test equations(newdaesys) == [D(x) ~ z; 0 ~ y + sin(z) - p * t]
 @test equations(tearing_substitution(newdaesys)) == [D(x) ~ z; 0 ~ x + sin(z) - p * t]
@@ -164,7 +164,7 @@ prob.f(du, u, pr, tt)
 @test du≈[u[2], u[1] + sin(u[2]) - pr * tt] atol=1e-5
 
 # test the initial guess is respected
-@named sys = ODESystem(eqs, t, defaults = Dict(z => NaN))
+@named sys = System(eqs, t, defaults = Dict(z => NaN))
 infprob = ODEProblem(structural_simplify(sys), [x => 1.0], (0, 1.0), [p => 0.2])
 infprob.f(du, infprob.u0, pr, tt)
 @test any(isnan, du)
@@ -177,7 +177,7 @@ function Translational_Mass(; name, m = 1.0)
     eqs = [D(s) ~ v
            D(v) ~ a
            m * a ~ 0.0]
-    ODESystem(eqs, t, sts, ps; name = name)
+    System(eqs, t, sts, ps; name = name)
 end
 
 m = 1.0
@@ -185,7 +185,7 @@ m = 1.0
 
 ms_eqs = []
 
-@named _ms_model = ODESystem(ms_eqs, t)
+@named _ms_model = System(ms_eqs, t)
 @named ms_model = compose(_ms_model,
     [mass])
 

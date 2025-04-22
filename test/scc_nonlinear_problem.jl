@@ -219,7 +219,7 @@ import ModelingToolkitStandardLibrary.Hydraulic.IsothermalCompressible as IC
                f ~ p * area
                m ~ rho * x * area]
 
-        return ODESystem(eqs, t, vars, pars; name, systems)
+        return System(eqs, t, vars, pars; name, systems)
     end
 
     systems = @named begin
@@ -248,7 +248,7 @@ import ModelingToolkitStandardLibrary.Hydraulic.IsothermalCompressible as IC
     initialization_eqs = [mass.s ~ 0.0
                           mass.v ~ 0.0]
 
-    @mtkbuild sys = ODESystem(eqs, t, [], []; systems, initialization_eqs)
+    @mtkbuild sys = System(eqs, t, [], []; systems, initialization_eqs)
     prob = ODEProblem(sys, [], (0, 5))
     sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)

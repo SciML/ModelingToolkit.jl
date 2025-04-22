@@ -59,7 +59,7 @@ vars = @variables(begin
 end)
 der = Differential(t)
 eqs = [der(x) ~ x]
-@named sys = ODESystem(eqs, t, vars, [x0])
+@named sys = System(eqs, t, vars, [x0])
 sys = complete(sys)
 pars = [
     x0 => 10.0

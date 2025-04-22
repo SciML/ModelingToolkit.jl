@@ -4,7 +4,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D, ASSERTION_LOG_VARIABLE
 
 @variables x(t)
 @brownian a
-@named inner_ode = ODESystem(D(x) ~ -sqrt(x), t; assertions = [(x > 0) => "ohno"])
+@named inner_ode = System(D(x) ~ -sqrt(x), t; assertions = [(x > 0) => "ohno"])
 @named inner_sde = System([D(x) ~ -sqrt(x) + a], t; assertions = [(x > 0) => "ohno"])
 sys_ode = structural_simplify(inner_ode)
 sys_sde = structural_simplify(inner_sde)
@@ -36,7 +36,7 @@ end
 
 @testset "Hierarchical system" begin
     @testset "$(typeof(inner))" for (ctor, Problem, inner, alg) in [
-        (ODESystem, ODEProblem, inner_ode, Tsit5()),
+        (System, ODEProblem, inner_ode, Tsit5()),
         (System, SDEProblem, inner_sde, ImplicitEM())]
         @mtkbuild outer = ctor(Equation[], t; systems = [inner])
         dsys = debug_system(outer; functions = [])

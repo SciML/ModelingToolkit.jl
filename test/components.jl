@@ -75,7 +75,7 @@ end
         eqs = [connect(p, resistor.p);
                connect(resistor.n, capacitor.p);
                connect(capacitor.n, n)]
-        @named sys = ODESystem(eqs, t, [], [R, C])
+        @named sys = System(eqs, t, [], [R, C])
         compose(sys, [p, n, resistor, capacitor]; name = name)
     end
 
@@ -87,7 +87,7 @@ end
            connect(source.p, rc_comp.p)
            connect(source.n, rc_comp.n)
            connect(source.n, ground.g)]
-    @named sys′ = ODESystem(eqs, t)
+    @named sys′ = System(eqs, t)
     @named sys_inner_outer = compose(sys′, [ground, shape, source, rc_comp])
     @test_nowarn show(IOBuffer(), MIME"text/plain"(), sys_inner_outer)
     expand_connections(sys_inner_outer, debug = true)
@@ -131,16 +131,16 @@ end
 
 @testset "Compose/extend" begin
     @variables x1(t) x2(t) x3(t) x4(t)
-    @named sys1_inner = ODESystem([D(x1) ~ x1], t)
-    @named sys1_partial = compose(ODESystem([D(x2) ~ x2], t; name = :foo), sys1_inner)
-    @named sys1 = extend(ODESystem([D(x3) ~ x3], t; name = :foo), sys1_partial)
-    @named sys2 = compose(ODESystem([D(x4) ~ x4], t; name = :foo), sys1)
+    @named sys1_inner = System([D(x1) ~ x1], t)
+    @named sys1_partial = compose(System([D(x2) ~ x2], t; name = :foo), sys1_inner)
+    @named sys1 = extend(System([D(x3) ~ x3], t; name = :foo), sys1_partial)
+    @named sys2 = compose(System([D(x4) ~ x4], t; name = :foo), sys1)
     @test_nowarn sys2.sys1.sys1_inner.x1 # test the correct nesting
 
     # compose tests
     function record_fun(; name)
         pars = @parameters a=10 b=100
-        ODESystem(Equation[], t, [], pars; name)
+        System(Equation[], t, [], pars; name)
     end
 
     function first_model(; name)
@@ -150,7 +150,7 @@ end
         defs[foo.a] = 3
         defs[foo.b] = 300
         pars = @parameters x=2 y=20
-        compose(ODESystem(Equation[], t, [], pars; name, defaults = defs), foo)
+        compose(System(Equation[], t, [], pars; name, defaults = defs), foo)
     end
     @named goo = first_model()
     @unpack foo = goo
@@ -165,7 +165,7 @@ function Load(; name)
     @named resistor = Resistor(R = R)
     eqs = [connect(p, resistor.p);
            connect(resistor.n, n)]
-    @named sys = ODESystem(eqs, t)
+    @named sys = System(eqs, t)
     compose(sys, [p, n, resistor]; name = name)
 end
 
@@ -176,7 +176,7 @@ function Circuit(; name)
     @named resistor = Resistor(R = R)
     eqs = [connect(load.p, ground.g);
            connect(resistor.p, ground.g)]
-    @named sys = ODESystem(eqs, t)
+    @named sys = System(eqs, t)
     compose(sys, [ground, resistor, load]; name = name)
 end
 
@@ -196,7 +196,7 @@ end
                   connect(capacitor.n, source.n, ground.g)
                   connect(resistor.heat_port, heat_capacitor.port)]
 
-        compose(ODESystem(rc_eqs, t, name = Symbol(name, i)),
+        compose(System(rc_eqs, t, name = Symbol(name, i)),
             [resistor, capacitor, source, ground, heat_capacitor])
     end
     V = 2.0
@@ -214,7 +214,7 @@ end
         D(E) ~ sum(((i, sys),) -> getproperty(sys, Symbol(:resistor, i)).heat_port.Q_flow,
         enumerate(rc_systems))
     ]
-    @named _big_rc = ODESystem(eqs, t, [E], [])
+    @named _big_rc = System(eqs, t, [E], [])
     @named big_rc = compose(_big_rc, rc_systems)
     ts = TearingState(expand_connections(big_rc))
     # this is block upper triangular, so `istriu` needs a little leeway
@@ -230,7 +230,7 @@ end
         eqs = [
             v ~ i * R
         ]
-        extend(ODESystem(eqs, t, [], []; name = name), oneport)
+        extend(System(eqs, t, [], []; name = name), oneport)
     end
     capacitor = Capacitor(; name = :c1, C = 1.0)
     resistor = FixedResistor(; name = :r1)
@@ -239,7 +239,7 @@ end
               connect(resistor.n, capacitor.p)
               connect(capacitor.n, ground.g)]
 
-    @named _rc_model = ODESystem(rc_eqs, t)
+    @named _rc_model = System(rc_eqs, t)
     @named rc_model = compose(_rc_model,
         [resistor, capacitor, ground])
     sys = structural_simplify(rc_model)
@@ -254,7 +254,7 @@ end
     @connector function Pin1(; name)
         @independent_variables t
         sts = @variables v(t)=1.0 i(t)=1.0
-        ODESystem(Equation[], t, sts, []; name = name)
+        System(Equation[], t, sts, []; name = name)
     end
     @test string(Base.doc(Pin1)) == "Hey there, Pin1!\n"
 
@@ -264,7 +264,7 @@ end
     @component function Pin2(; name)
         @independent_variables t
         sts = @variables v(t)=1.0 i(t)=1.0
-        ODESystem(Equation[], t, sts, []; name = name)
+        System(Equation[], t, sts, []; name = name)
     end
     @test string(Base.doc(Pin2)) == "Hey there, Pin2!\n"
 end
@@ -328,8 +328,8 @@ end
 @testset "Issue#3275: Metadata retained on `complete`" begin
     @variables x(t) y(t)
     @testset "ODESystem" begin
-        @named inner = ODESystem(D(x) ~ x, t)
-        @named outer = ODESystem(D(y) ~ y, t; systems = [inner], metadata = "test")
+        @named inner = System(D(x) ~ x, t)
+        @named outer = System(D(y) ~ y, t; systems = [inner], metadata = "test")
         @test ModelingToolkit.get_metadata(outer) == "test"
         sys = complete(outer)
         @test ModelingToolkit.get_metadata(sys) == "test"

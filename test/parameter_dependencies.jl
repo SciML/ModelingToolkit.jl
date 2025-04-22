@@ -9,7 +9,7 @@ using SciMLStructures: canonicalize, Tunable, replace, replace!
 using SymbolicIndexingInterface
 using NonlinearSolve
 
-@testset "ODESystem with callbacks" begin
+@testset "System with callbacks" begin
     @parameters p1=1.0 p2
     @variables x(t)
     cb1 = [x ~ 2.0] => [p1 ~ 2.0] # triggers at t=-2+√6
@@ -19,7 +19,7 @@ using NonlinearSolve
     cb2 = [x ~ 4.0] => (affect1!, [], [p1, p2], [p1]) # triggers at t=-2+√7
     cb3 = [1.0] => [p1 ~ 5.0]
 
-    @mtkbuild sys = ODESystem(
+    @mtkbuild sys = System(
         [D(x) ~ p1 * t + p2],
         t;
         parameter_dependencies = [p2 => 2p1],
@@ -53,7 +53,7 @@ end
     @parameters p1[1:2]=[1.0, 2.0] p2[1:2]=[0.0, 0.0]
     @variables x(t) = 0
 
-    @named sys = ODESystem(
+    @named sys = System(
         [D(x) ~ sum(p1) * t + sum(p2)],
         t;
         parameter_dependencies = [p2 => 2p1]
@@ -72,11 +72,11 @@ end
     @parameters p1=1.0 p2=1.0
     @variables x(t) = 0
 
-    @mtkbuild sys1 = ODESystem(
+    @mtkbuild sys1 = System(
         [D(x) ~ p1 * t + p2],
         t
     )
-    @named sys2 = ODESystem(
+    @named sys2 = System(
         [],
         t;
         parameter_dependencies = [p2 => 2p1]
@@ -93,7 +93,7 @@ end
     @parameters p1=1.0 p2=1.0
     @variables x(t) = 0
 
-    @named sys = ODESystem(
+    @named sys = System(
         [D(x) ~ p1 * t + p2],
         t;
         parameter_dependencies = [p2 => 2p1]
@@ -107,7 +107,7 @@ end
     @parameters p1[1:2]=[1.0, 2.0] p2[1:2]=[0.0, 0.0]
     @variables x(t) = 0
 
-    @named sys = ODESystem(
+    @named sys = System(
         [D(x) ~ sum(p1) * t + sum(p2)],
         t;
         parameter_dependencies = [p2 => 2p1]
@@ -121,16 +121,16 @@ end
     @parameters p1=1.0 p2=2.0
     @variables x(t) = 0
 
-    @named sys1 = ODESystem(
+    @named sys1 = System(
         [D(x) ~ p1 * t + p2],
         t
     )
-    @named sys2 = ODESystem(
+    @named sys2 = System(
         [D(x) ~ p1 * t - p2],
         t;
         parameter_dependencies = [p2 => 2p1]
     )
-    sys = complete(ODESystem([], t, systems = [sys1, sys2], name = :sys))
+    sys = complete(System([], t, systems = [sys1, sys2], name = :sys))
 
     prob = ODEProblem(sys)
     v1 = sys.sys2.p2
@@ -158,12 +158,12 @@ end
         @parameters p2
         @variables x(t) = 1.0
         eqs = [D(x) ~ p2]
-        ODESystem(eqs, t, [x], [p2]; name)
+        System(eqs, t, [x], [p2]; name)
     end
 
     @parameters p1 = 1.0
     parameter_dependencies = [sys2.p2 ~ p1 * 2.0]
-    sys1 = ODESystem(
+    sys1 = System(
         Equation[], t, [], [p1]; parameter_dependencies, name = :sys1, systems = [sys2])
 
     # ensure that parameter_dependencies is type stable
@@ -190,7 +190,7 @@ end
     @parameters p=2 (i::CallableFoo)(..)
 
     eqs = [D(y) ~ i(t) + p]
-    @named model = ODESystem(eqs, t, [y], [p, i];
+    @named model = System(eqs, t, [y], [p, i];
         parameter_dependencies = [i ~ CallableFoo(p)])
     sys = structural_simplify(model)
 
@@ -214,7 +214,7 @@ end
            D(x) ~ -x + u
            y ~ x
            z(k) ~ z(k - 2) + yd(k - 2)]
-    @test_throws ModelingToolkit.HybridSystemNotSupportedException @mtkbuild sys = ODESystem(
+    @test_throws ModelingToolkit.HybridSystemNotSupportedException @mtkbuild sys = System(
         eqs, t; parameter_dependencies = [kq => 2kp])
 
     @test_skip begin
@@ -224,7 +224,7 @@ end
              yd(k - 2) => 2.0])
         @test_nowarn solve(prob, Tsit5())
 
-        @mtkbuild sys = ODESystem(eqs, t; parameter_dependencies = [kq => 2kp],
+        @mtkbuild sys = System(eqs, t; parameter_dependencies = [kq => 2kp],
             discrete_events = [[0.5] => [kp ~ 2.0]])
         prob = ODEProblem(sys, [x => 0.0, y => 0.0], (0.0, Tf),
             [kp => 1.0; z(k - 1) => 3.0; yd(k - 1) => 0.0; z(k - 2) => 4.0;
@@ -256,7 +256,7 @@ end
         0.1 * y,
         0.1 * z]
 
-    @named sys = ODESystem(eqs, t)
+    @named sys = System(eqs, t)
     @named sdesys = SDESystem(sys, noiseeqs; parameter_dependencies = [ρ => 2σ])
     sdesys = complete(sdesys)
     @test !(ρ in Set(parameters(sdesys)))
@@ -267,7 +267,7 @@ end
     @test prob.ps[ρ] == 2prob.ps[σ]
     @test_nowarn solve(prob, SRIW1())
 
-    @named sys = ODESystem(eqs, t)
+    @named sys = System(eqs, t)
     @named sdesys = SDESystem(sys, noiseeqs; parameter_dependencies = [ρ => 2σ],
         discrete_events = [[10.0] => [σ ~ 15.0]])
     sdesys = complete(sdesys)
@@ -346,7 +346,7 @@ end
     cb2 = [x ~ 4.0] => (affect1!, [], [p1, p2], [p1]) # triggers at t=-2+√7
     cb3 = [1.0] => [p1 ~ 5.0]
 
-    @mtkbuild sys = ODESystem(
+    @mtkbuild sys = System(
         [D(x) ~ p1 * t + p2],
         t;
         parameter_dependencies = [p2 => 2p1]
@@ -377,7 +377,7 @@ end
 @testset "Discovery of parameters from dependencies" begin
     @parameters p1 p2
     @variables x(t) y(t)
-    @named sys = ODESystem([D(x) ~ y + p2], t; parameter_dependencies = [p2 ~ 2p1])
+    @named sys = System([D(x) ~ y + p2], t; parameter_dependencies = [p2 ~ 2p1])
     @test is_parameter(sys, p1)
     @named sys = NonlinearSystem([x * y^2 ~ y + p2]; parameter_dependencies = [p2 ~ 2p1])
     @test is_parameter(sys, p1)

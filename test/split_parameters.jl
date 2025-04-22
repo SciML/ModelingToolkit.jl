@@ -68,7 +68,7 @@ function Sampled(; name, interp = Interpolator(Float64[], 0.0))
         output.u ~ get_value(interpolator, t)
     ]
 
-    return ODESystem(eqs, t, vars, [interpolator]; name, systems)
+    return System(eqs, t, vars, [interpolator]; name, systems)
 end
 
 vars = @variables y(t) dy(t) ddy(t)
@@ -80,7 +80,7 @@ eqs = [y ~ src.output.u
        D(dy) ~ ddy
        connect(src.output, int.input)]
 
-@named sys = ODESystem(eqs, t, vars, []; systems = [int, src])
+@named sys = System(eqs, t, vars, []; systems = [int, src])
 s = complete(sys)
 sys = structural_simplify(sys)
 prob = ODEProblem(
@@ -107,7 +107,7 @@ eqs = [D(y) ~ dy * a
        D(dy) ~ ddy * b
        ddy ~ sin(t) * c]
 
-@named model = ODESystem(eqs, t, vars, pars)
+@named model = System(eqs, t, vars, pars)
 sys = structural_simplify(model; split = false)
 
 tspan = (0.0, t_end)
@@ -134,7 +134,7 @@ using ModelingToolkit: connect
 
 "A wrapper function to make symbolic indexing easier"
 function wr(sys)
-    ODESystem(Equation[], ModelingToolkit.get_iv(sys), systems = [sys], name = :a_wrapper)
+    System(Equation[], ModelingToolkit.get_iv(sys), systems = [sys], name = :a_wrapper)
 end
 indexof(sym, syms) = findfirst(isequal(sym), syms)
 
@@ -156,11 +156,11 @@ function SystemModel(u = nothing; name = :model)
            connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
     if u !== nothing
         push!(eqs, connect(torque.tau, u.output))
-        return @named model = ODESystem(eqs,
+        return @named model = System(eqs,
             t;
             systems = [torque, inertia1, inertia2, spring, damper, u])
     end
-    ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
+    System(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
         name, guesses = [spring.flange_a.phi => 0.0])
 end
 
@@ -186,7 +186,7 @@ L = randn(1, 4) # Post-multiply by `C` to get the correct input to the controlle
 #     @named input = RealInput(; nin = nin)
 #     @named output = RealOutput(; nout = nout)
 #     eqs = [output.u[i] ~ sum(K[i, j] * input.u[j] for j in 1:nin) for i in 1:nout]
-#     compose(ODESystem(eqs, t, [], []; name = name), [input, output])
+#     compose(System(eqs, t, [], []; name = name), [input, output])
 # end
 
 @named state_feedback = MatrixGain(K = -L) # Build negative feedback into the feedback matrix
@@ -196,7 +196,7 @@ connections = [[state_feedback.input.u[i] ~ model_outputs[i] for i in 1:4]
                connect(d.output, :d, add.input1)
                connect(add.input2, state_feedback.output)
                connect(add.output, :u, model.torque.tau)]
-@named closed_loop = ODESystem(connections, t, systems = [model, state_feedback, add, d])
+@named closed_loop = System(connections, t, systems = [model, state_feedback, add, d])
 S = get_sensitivity(closed_loop, :u)
 
 @testset "Indexing MTKParameters with ParameterIndex" begin
@@ -236,7 +236,7 @@ end
         (::Foo)(x) = 3x
         @variables x(t)
         @parameters fn(::Real) = _f1
-        @mtkbuild sys = ODESystem(D(x) ~ fn(t), t)
+        @mtkbuild sys = System(D(x) ~ fn(t), t)
         @test is_parameter(sys, fn)
         @test ModelingToolkit.defaults(sys)[fn] == _f1
 
@@ -260,7 +260,7 @@ end
         interp = LinearInterpolation(ts .^ 2, ts; extrapolate = true)
         @variables x(t)
         @parameters (fn::typeof(interp))(..)
-        @mtkbuild sys = ODESystem(D(x) ~ fn(x), t)
+        @mtkbuild sys = System(D(x) ~ fn(x), t)
         @test is_parameter(sys, fn)
         getter = getp(sys, fn)
         prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [fn => interp])

@@ -3,7 +3,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @variables x(t)
 
-@named sys = ODESystem([D(x) ~ -0.5 * x], t, defaults = Dict(x => 1.0))
+@named sys = System([D(x) ~ -0.5 * x], t, defaults = Dict(x => 1.0))
 sys = complete(sys)
 for prob in [
     eval(ModelingToolkit.ODEProblem{false}(sys, nothing, nothing,
@@ -37,7 +37,7 @@ all_obs = observables(ss)
 prob = ODEProblem(ss, [capacitor.v => 0.0], (0, 0.1))
 sol = solve(prob, ImplicitEuler())
 
-## Check ODESystem with Observables ----------
+## Check System with Observables ----------
 ss_exp = ModelingToolkit.toexpr(ss)
 ss_ = complete(eval(ss_exp))
 prob_ = ODEProblem(ss_, [capacitor.v => 0.0], (0, 0.1))

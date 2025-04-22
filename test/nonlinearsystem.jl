@@ -119,14 +119,14 @@ lorenz2 = lorenz(:lorenz2)
 using OrdinaryDiffEq
 @independent_variables t
 D = Differential(t)
-@named subsys = convert_system(ODESystem, lorenz1, t)
-@named sys = ODESystem([D(subsys.x) ~ subsys.x + subsys.x], t, systems = [subsys])
+@named subsys = convert_system(System, lorenz1, t)
+@named sys = System([D(subsys.x) ~ subsys.x + subsys.x], t, systems = [subsys])
 sys = structural_simplify(sys)
 u0 = [subsys.x => 1, subsys.z => 2.0, subsys.y => 1.0]
 prob = ODEProblem(sys, u0, (0, 1.0), [subsys.σ => 1, subsys.ρ => 2, subsys.β => 3])
 sol = solve(prob, FBDF(), reltol = 1e-7, abstol = 1e-7)
 @test sol[subsys.x] + sol[subsys.y] - sol[subsys.z]≈sol[subsys.u] atol=1e-7
-@test_throws ArgumentError convert_system(ODESystem, sys, t)
+@test_throws ArgumentError convert_system(System, sys, t)
 
 @parameters σ ρ β
 @variables x y z
@@ -197,7 +197,7 @@ eq = [v1 ~ sin(2pi * t * h)
       v1 - v2 ~ i1
       v2 ~ i2
       i1 ~ i2]
-@named sys = ODESystem(eq, t)
+@named sys = System(eq, t)
 @test length(equations(structural_simplify(sys))) == 0
 
 @testset "Issue: 1504" begin
@@ -393,10 +393,10 @@ end
     @test is_parameter(sys, p)
 end
 
-@testset "Can convert from `ODESystem`" begin
+@testset "Can convert from `System`" begin
     @variables x(t) y(t)
     @parameters p q r
-    @named sys = ODESystem([D(x) ~ p * x^3 + q, 0 ~ -y + q * x - r], t;
+    @named sys = System([D(x) ~ p * x^3 + q, 0 ~ -y + q * x - r], t;
         defaults = [x => 1.0, p => missing], guesses = [p => 1.0],
         initialization_eqs = [p^3 + q^3 ~ 4r], parameter_dependencies = [r ~ 3p])
     nlsys = NonlinearSystem(sys)
@@ -435,7 +435,7 @@ end
     @test sol.ps[p^3 + q^3]≈sol.ps[4r] atol=1e-10
 
     @testset "Differential inside expression also substituted" begin
-        @named sys = ODESystem([0 ~ y * D(x) + x^2 - p, 0 ~ x * D(y) + y * p], t)
+        @named sys = System([0 ~ y * D(x) + x^2 - p, 0 ~ x * D(y) + y * p], t)
         nlsys = NonlinearSystem(sys)
         vs = ModelingToolkit.vars(equations(nlsys))
         @test !in(D(x), vs)
