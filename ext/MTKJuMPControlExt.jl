@@ -40,8 +40,9 @@ end
     JuMPControlProblem(sys::ODESystem, u0, tspan, p; dt)
 
 Convert an ODESystem representing an optimal control system into a JuMP model
-for solving using optimization. Must provide `dt` for determining the length 
-of the interpolation arrays.
+for solving using optimization. Must provide either `dt`, the timestep between collocation 
+points (which, along with the timespan, determines the number of points), or directly 
+provide the number of points as `nsteps`.
 
 The optimization variables:
 - a vector-of-vectors U representing the unknowns as an interpolation array

@@ -6,6 +6,7 @@ using OrdinaryDiffEqSDIRK
 using Ipopt
 using BenchmarkTools
 using CairoMakie
+using DataInterpolations
 const M = ModelingToolkit
 
 @testset "ODE Solution, no cost" begin
@@ -76,21 +77,26 @@ const M = ModelingToolkit
     @test all(u -> u .> [3, 4], sol.u)
 end
 
-@testset "Linear systems" begin
-    function is_bangbang(input_sol, lbounds, ubounds, rtol = 1e-4)
-        bangbang = true
-        for v in 1:(length(input_sol.u[1]) - 1)
-            all(i -> ≈(i[v], bounds[v]; rtol) || ≈(i[v], bounds[u]; rtol), input_sol.u) ||
-                (bangbang = false)
-        end
-        bangbang
+function is_bangbang(input_sol, lbounds, ubounds, rtol = 1e-4)
+    for v in 1:(length(input_sol.u[1]) - 1)
+        all(i -> ≈(i[v], bounds[v]; rtol) || ≈(i[v], bounds[u]; rtol), input_sol.u) ||
+            return false
     end
+    true
+end
 
+function ctrl_to_spline(inputsol, splineType)
+    us = reduce(vcat, inputsol.u)
+    ts = reduce(vcat, inputsol.t)
+    splineType(us, ts)
+end
+
+@testset "Linear systems" begin
     # Double integrator
     t = M.t_nounits
     D = M.D_nounits
     @variables x(..) [bounds = (0.0, 0.25)] v(..)
-    @variables u(t) [bounds = (-1.0, 1.0), input = true]
+    @variables u(..) [bounds = (-1.0, 1.0), input = true]
     constr = [v(1.0) ~ 0.0]
     cost = [-x(1.0)] # Maximize the final distance.
     @named block = ODESystem(
@@ -99,18 +105,27 @@ end
 
     u0map = [x(t) => 0.0, v(t) => 0.0]
     tspan = (0.0, 1.0)
-    parammap = [u => 0.0]
+    parammap = [u(t) => 0.0]
     jprob = JuMPControlProblem(block, u0map, tspan, parammap; dt = 0.01)
     jsol = solve(jprob, Ipopt.Optimizer, :Verner8)
     # Linear systems have bang-bang controls
     @test is_bangbang(jsol.input_sol, [-1.0], [1.0])
     # Test reached final position.
     @test ≈(jsol.sol.u[end][1], 0.25, rtol = 1e-5)
+    # Test dynamics
+    @parameters (u_interp::LinearInterpolation)(..)
+    block_ode = ODESystem([D(x(t)) ~ v(t), D(v(t)) ~ u_interp(t)], t)
+    spline = ctrl_to_spline(jsol.input_sol, LinearInterpolation)
+    oprob = ODEProblem(block, u0map, tspan, [u_interp => spline])
+    osol = solve(oprob, Vern8())
+    @test jsol.sol.u ≈ osol.u
 
     iprob = InfiniteOptControlProblem(block, u0map, tspan, parammap; dt = 0.01)
     isol = solve(iprob, Ipopt.Optimizer; silent = true)
     @test is_bangbang(isol.input_sol, [-1.0], [1.0])
     @test ≈(isol.sol.u[end][1], 0.25, rtol = 1e-5)
+    osol = solve(oprob, ImplicitEuler())
+    @test isol.sol.u ≈ osol.u
 
     ###################
     ### Bee example ###
@@ -133,8 +148,16 @@ end
     jsol = solve(jprob, Ipopt.Optimizer, :Tsitouras5)
     @test is_bangbang(jsol.input_sol, [0.0], [1.0])
     iprob = InfiniteOptControlProblem(beesys, u0map, tspan, pmap, dt = 0.01)
-    isol = solve(jprob, Ipopt.Optimizer, :Tsitouras5)
+    isol = solve(iprob, Ipopt.Optimizer; silent = true)
     @test is_bangbang(isol.input_sol, [0.0], [1.0])
+
+    @parameters (α_interp::LinearInterpolation)(..)
+    eqs = [D(w(t)) ~ -μ * w(t) + b * s * α_interp(t) * w(t),
+           D(q(t)) ~ -ν * q(t) + c * (1 - α_interp(t)) * s * w(t)]
+    beesys_ode = ODESystem(eqs, t)
+    oprob = ODEProblem(beesys_ode, u0map, tspan, [α_interp => ctrl_to_spline(jsol.input_sol, LinearInterpolation)])
+    osol = solve(oprob, Tsit5())
+    @test osol.u ≈ jsol.sol.u
 end
 
 @testset "Rocket launch" begin
@@ -163,6 +186,17 @@ end
     jprob = JuMPControlProblem(rocket, u0map, (ts, te), pmap; dt = 0.005, cse = false)
     jsol = solve(jprob, Ipopt.Optimizer, :RadauIA3)
     @test jsol.sol.u[end][1] > 1.012
+    
+    # Test solution
+    @parameters (T_interp::CubicSpline)(..)
+    eqs = [D(h(t)) ~ v(t),
+        D(v(t)) ~ (T_interp(t) - drag(h(t), v(t))) / m(t) - gravity(h(t)),
+        D(m(t)) ~ -T_interp(t) / c]
+    rocket_ode = ODESystem(eqs, t)
+    interpmap = Dict(T_interp => ctrl_to_spline(jsol.inputsol, CubicSpline))
+    oprob = ODEProblem(rocket_ode, u0map, tspan, merge(pmap, interpmap))
+    osol = solve(oprob, RadauIA3())
+    @test jsol.sol.u ≈ osol.u
 end
 
 @testset "Free final time problem" begin
@@ -187,6 +221,12 @@ end
     iprob = InfiniteOptControlProblem(rocket, u0map, (0, tf), pmap; steps = 200)
     isol = solve(iprob, Ipopt.Optimizer)
     @test isapprox(isol.sol.t[end], 10.0, rtol = 1e-3)
+end
+
+using JuliaSimCompiler
+using Multibody.PlanarMechanics
+
+@testset "Cart-pole problem" begin
 end
 
 #@testset "Constrained optimal control problems" begin
