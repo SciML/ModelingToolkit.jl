@@ -104,7 +104,7 @@ prob = ODEProblem(sys, [], (0.0, 1.0), [A1 => 0.3])
         System(Equation[], t, [x, y], [p]; defaults = [y => nothing], name = :osys),
         SDESystem(Equation[], [], t, [x, y], [p]; defaults = [y => nothing], name = :ssys),
         JumpSystem(Equation[], t, [x, y], [p]; defaults = [y => nothing], name = :jsys),
-        NonlinearSystem(Equation[], [x, y], [p]; defaults = [y => nothing], name = :nsys),
+        System(Equation[], [x, y], [p]; defaults = [y => nothing], name = :nsys),
         OptimizationSystem(
             Equation[], [x, y], [p]; defaults = [y => nothing], name = :optsys),
         ConstraintsSystem(
@@ -245,7 +245,7 @@ end
         0 ~ p[1] - X[1],
         0 ~ p[2] - X[2]
     ]
-    @named nlsys = NonlinearSystem(eqs)
+    @named nlsys = System(eqs)
     nlsys = complete(nlsys)
 
     # Creates the `NonlinearProblem`.

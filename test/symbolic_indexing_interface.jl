@@ -109,7 +109,7 @@ end
     eqs = [0 ~ σ * (y - x),
         0 ~ x * (ρ - z) - y,
         0 ~ x * y - β * z]
-    @named ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
+    @named ns = System(eqs, [x, y, z], [σ, ρ, β])
     ns = complete(ns)
     @test SymbolicIndexingInterface.supports_tuple_observed(ns)
     @test !is_time_dependent(ns)
