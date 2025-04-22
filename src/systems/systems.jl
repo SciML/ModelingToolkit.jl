@@ -29,8 +29,8 @@ topological sort of the observed equations in `sys`.
 function mtkbuild(
         sys::AbstractSystem; additional_passes = [], simplify = false, split = true,
         allow_symbolic = false, allow_parameter = true, conservative = false, fully_determined = true,
-        inputs = nothing, outputs = nothing,
-        disturbance_inputs = nothing,
+        inputs = Any[], outputs = Any[],
+        disturbance_inputs = Any[],
         kwargs...)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
     newsys′ = __structural_simplification(sys; simplify,
@@ -74,8 +74,8 @@ function __structural_simplification(sys::SDESystem, args...; kwargs...)
 end
 
 function __structural_simplification(sys::AbstractSystem; simplify = false,
-        inputs = nothing, outputs = nothing,
-        disturbance_inputs = nothing,
+        inputs = Any[], outputs = Any[],
+        disturbance_inputs = Any[],
         kwargs...)
     sys = expand_connections(sys)
     state = TearingState(sys; sort_eqs)

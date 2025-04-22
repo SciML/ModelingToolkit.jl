@@ -659,8 +659,8 @@ end
 
 function structural_simplification!(state::TearingState; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = true,
-        inputs = nothing, outputs = nothing, 
-        disturbance_inputs = nothing,
+        inputs = Any[], outputs = Any[], 
+        disturbance_inputs = Any[],
         kwargs...)
 
     if state.sys isa ODESystem
@@ -672,7 +672,7 @@ function structural_simplification!(state::TearingState; simplify = false,
         cont_inputs = [inputs; clocked_inputs[continuous_id]]
         sys = _structural_simplification!(tss[continuous_id]; simplify,
             check_consistency, fully_determined,
-            cont_inputs, outputs, disturbance_inputs,
+            inputs = cont_inputs, outputs, disturbance_inputs,
             kwargs...)
         if length(tss) > 1
             if continuous_id > 0
@@ -690,7 +690,7 @@ function structural_simplification!(state::TearingState; simplify = false,
                 end
                 disc_inputs = [inputs; clocked_inputs[i]]
                 ss, = _structural_simplification!(state; simplify, check_consistency,
-                    disc_inputs, outputs, disturbance_inputs,
+                    inputs = disc_inputs, outputs, disturbance_inputs,
                     fully_determined, kwargs...)
                 append!(appended_parameters, inputs[i], unknowns(ss))
                 discrete_subsystems[i] = ss
@@ -717,8 +717,8 @@ end
 function _structural_simplification!(state::TearingState; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = false,
         dummy_derivative = true,
-        inputs = nothing, outputs = nothing,
-        disturbance_inputs = nothing,
+        inputs = Any[], outputs = Any[],
+        disturbance_inputs = Any[],
         kwargs...)
     if fully_determined isa Bool
         check_consistency &= fully_determined

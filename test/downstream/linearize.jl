@@ -25,14 +25,14 @@ lsys3 = linearize(sys, [r], [y]; autodiff = AutoFiniteDiff())
 @test lsys.C[] == lsys2.C[] == lsys3.C[] == 1
 @test lsys.D[] == lsys2.D[] == lsys3.D[] == 0
 
-lsys, ssys = linearize(sys, [r], [r])
+lsys = linearize(sys, [r], [r])
 
 @test lsys.A[] == -2
 @test lsys.B[] == 1
 @test lsys.C[] == 0
 @test lsys.D[] == 1
 
-lsys, ssys = linearize(sys, r, r) # Test allow scalars
+lsys = linearize(sys, r, r) # Test allow scalars
 
 @test lsys.A[] == -2
 @test lsys.B[] == 1
@@ -89,11 +89,11 @@ connections = [f.y ~ c.r # filtered reference to controller reference
 @named cl = ODESystem(connections, t, systems = [f, c, p])
 cl = mtkbuild(cl, inputs = [f.u], outputs = [p.x])
 
-lsys0, ssys = linearize(cl)
+lsys0 = linearize(cl, [f.u], [p.x])
 desired_order = [f.x, p.x]
-lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
-lsys1, ssys = linearize(cl; autodiff = AutoFiniteDiff())
-lsys2 = ModelingToolkit.reorder_unknowns(lsys1, unknowns(ssys), desired_order)
+lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(cl), desired_order)
+lsys1 = linearize(cl, [f.u], [p.x]; autodiff = AutoFiniteDiff())
+lsys2 = ModelingToolkit.reorder_unknowns(lsys1, unknowns(cl), desired_order)
 
 @test lsys.A == lsys2.A == [-2 0; 1 -2]
 @test lsys.B == lsys2.B == reshape([1, 0], 2, 1)
@@ -101,7 +101,7 @@ lsys2 = ModelingToolkit.reorder_unknowns(lsys1, unknowns(ssys), desired_order)
 @test lsys.D[] == lsys2.D[] == 0
 
 ## Symbolic linearization
-lsyss, _ = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
+lsyss = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 
 @test ModelingToolkit.fixpoint_sub(lsyss.A, ModelingToolkit.defaults(cl)) == lsys.A
 @test ModelingToolkit.fixpoint_sub(lsyss.B, ModelingToolkit.defaults(cl)) == lsys.B
@@ -116,11 +116,12 @@ Nd = 10
 @named pid = LimPID(; k, Ti, Td, Nd)
 
 @unpack reference, measurement, ctr_output = pid
-lsys0, ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u];
+pid = mtkbuild(pid, inputs = [reference.u, measurement.u], outputs = [ctr_output.u])
+lsys0 = linearize(pid, [reference.u, measurement.u], [ctr_output.u];
     op = Dict(reference.u => 0.0, measurement.u => 0.0))
 @unpack int, der = pid
 desired_order = [int.x, der.x]
-lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
+lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(pid), desired_order)
 
 @test lsys.A == [0 0; 0 -10]
 @test lsys.B == [2 -2; 10 -10]
@@ -150,12 +151,12 @@ lsys = ModelingToolkit.reorder_unknowns(lsys, desired_order, reverse(desired_ord
 
 ## Test that there is a warning when input is misspecified
 if VERSION >= v"1.8"
-    @test_throws "Some specified inputs were not found" linearize(pid,
+    @test_throws "Some parameters are missing from the variable map." linearize(pid,
         [
             pid.reference.u,
             pid.measurement.u
         ], [ctr_output.u])
-    @test_throws "Some specified outputs were not found" linearize(pid,
+    @test_throws "Some parameters are missing from the variable map." linearize(pid,
         [
             reference.u,
             measurement.u
@@ -186,15 +187,16 @@ function saturation(; y_max, y_min = y_max > 0 ? -y_max : -Inf, name)
     ODESystem(eqs, t, name = name)
 end
 @named sat = saturation(; y_max = 1)
+sat = mtkbuild(sat, inputs = [u], outputs = [y])
 # inside the linear region, the function is identity
 @unpack u, y = sat
-lsys, ssys = linearize(sat, [u], [y])
+lsys = linearize(sat, [u], [y])
 @test isempty(lsys.A) # there are no differential variables in this system
 @test isempty(lsys.B)
 @test isempty(lsys.C)
 @test lsys.D[] == 1
 
-@test_skip lsyss, _ = ModelingToolkit.linearize_symbolic(sat, [u], [y]) # Code gen replaces ifelse with if statements causing symbolic evaluation to fail
+@test_skip lsyss = ModelingToolkit.linearize_symbolic(sat, [u], [y]) # Code gen replaces ifelse with if statements causing symbolic evaluation to fail
 # @test substitute(lsyss.A, ModelingToolkit.defaults(sat)) == lsys.A
 # @test substitute(lsyss.B, ModelingToolkit.defaults(sat)) == lsys.B
 # @test substitute(lsyss.C, ModelingToolkit.defaults(sat)) == lsys.C
@@ -267,9 +269,9 @@ closed_loop = ODESystem(connections, t, systems = [model, pid, filt, sensor, r, 
         filt.x => 0.0,
         filt.xd => 0.0
     ])
-closed_loop = mtkbuild(closed_loop, inputs = :r, outputs = :y)
+closed_loop = mtkbuild(closed_loop)
 
-@test_nowarn linearize(closed_loop; warn_empty_op = false)
+@test_nowarn linearize(closed_loop, :r, :y; warn_empty_op = false)
 
 # https://discourse.julialang.org/t/mtk-change-in-linearize/115760/3
 @mtkmodel Tank_noi begin
