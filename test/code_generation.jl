@@ -70,7 +70,7 @@ end
         @parameters p[1:2] (f::Function)(..)
         @named sys = ODESystem(
             [D(x[0]) ~ p[1] * x[0] + x[2], D(x[1]) ~ p[2] * f(x) + x[2]], t)
-        sys, = mtkbuild(sys, ([x[2]], []))
+        sys, = structural_simplify(sys, ([x[2]], []))
         @test is_parameter(sys, x[2])
         prob = ODEProblem(sys, [x[0] => 1.0, x[1] => 1.0], (0.0, 1.0),
             [p => ones(2), f => sum, x[2] => 2.0])

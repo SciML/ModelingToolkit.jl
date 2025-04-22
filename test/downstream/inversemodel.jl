@@ -110,7 +110,7 @@ end
     end
 end;
 @named model = InverseControlledTank()
-ssys = mtkbuild(model)
+ssys = structural_simplify(model)
 cm = complete(model)
 
 op = Dict(

@@ -22,9 +22,9 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     eqs = 0 .~ eqs
     @named model = NonlinearSystem(eqs)
     @test_throws ["simplified", "required"] SCCNonlinearProblem(model, [])
-    _model = mtkbuild(model; split = false)
+    _model = structural_simplify(model; split = false)
     @test_throws ["not compatible"] SCCNonlinearProblem(_model, [])
-    model = mtkbuild(model)
+    model = structural_simplify(model)
     prob = NonlinearProblem(model, [u => zeros(8)])
     sccprob = SCCNonlinearProblem(model, [u => zeros(8)])
     sol1 = solve(prob, NewtonRaphson())

@@ -7,10 +7,10 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables xx(t) some_input(t) [input = true]
 eqs = [D(xx) ~ some_input]
 @named model = ODESystem(eqs, t)
-@test_throws ExtraVariablesSystemException mtkbuild(model, ((), ()))
+@test_throws ExtraVariablesSystemException structural_simplify(model, ((), ()))
 if VERSION >= v"1.8"
     err = "In particular, the unset input(s) are:\n some_input(t)"
-    @test_throws err mtkbuild(model, ((), ()))
+    @test_throws err structural_simplify(model, ((), ()))
 end
 
 # Test input handling
@@ -50,7 +50,7 @@ end
 @test !is_bound(sys31, sys1.v[2])
 
 # simplification turns input variables into parameters
-ssys, _ = mtkbuild(sys, ([u], []))
+ssys, _ = structural_simplify(sys, ([u], []))
 @test ModelingToolkit.isparameter(unbound_inputs(ssys)[])
 @test !is_bound(ssys, u)
 @test u ∈ Set(unbound_inputs(ssys))
@@ -88,7 +88,7 @@ fsys4 = flatten(sys4)
 @variables x(t) y(t) [output = true]
 @test isoutput(y)
 @named sys = ODESystem([D(x) ~ -x, y ~ x], t) # both y and x are unbound
-syss = mtkbuild(sys) # This makes y an observed variable
+syss = structural_simplify(sys) # This makes y an observed variable
 
 @named sys2 = ODESystem([D(x) ~ -sys.x, y ~ sys.y], t, systems = [sys])
 
@@ -106,7 +106,7 @@ syss = mtkbuild(sys) # This makes y an observed variable
 @test isequal(unbound_outputs(sys2), [y])
 @test isequal(bound_outputs(sys2), [sys.y])
 
-syss = mtkbuild(sys2)
+syss = structural_simplify(sys2)
 
 @test !is_bound(syss, y)
 @test !is_bound(syss, x)
@@ -281,7 +281,7 @@ i = findfirst(isequal(u[1]), out)
 @variables x(t) u(t) [input = true]
 eqs = [D(x) ~ u]
 @named sys = ODESystem(eqs, t)
-@test_nowarn mtkbuild(sys, ([u], []))
+@test_nowarn structural_simplify(sys, ([u], []))
 
 #=
 ## Disturbance input handling
@@ -366,7 +366,7 @@ eqs = [D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃ + u1
 @named sys = ODESystem(eqs, t)
 m_inputs = [u[1], u[2]]
 m_outputs = [y₂]
-sys_simp, input_idxs = mtkbuild(sys, (; inputs = m_inputs, outputs = m_outputs))
+sys_simp, input_idxs = structural_simplify(sys, (; inputs = m_inputs, outputs = m_outputs))
 @test isequal(unknowns(sys_simp), collect(x[1:2]))
 @test length(input_idxs) == 2
 
@@ -384,12 +384,12 @@ sys_simp, input_idxs = mtkbuild(sys, (; inputs = m_inputs, outputs = m_outputs))
     ],
     t,
     systems = [int, gain, c, fb])
-sys = mtkbuild(model)
+sys = structural_simplify(model)
 @test length(unknowns(sys)) == length(equations(sys)) == 1
 
 ## Disturbance models when plant has multiple inputs
 using ModelingToolkit, LinearAlgebra
-using ModelingToolkit: DisturbanceModel, get_iv, get_disturbance_system
+using ModelingToolkit: DisturbanceModel, io_preprocessing, get_iv, get_disturbance_system
 using ModelingToolkitStandardLibrary.Blocks
 A, C = [randn(2, 2) for i in 1:2]
 B = [1.0 0; 0 1.0]

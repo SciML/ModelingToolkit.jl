@@ -33,7 +33,7 @@ sde = SDESystem(ode, noiseeqs)
 ## Transformations
 
 ```@docs; canonical=false
-mtkbuild
+structural_simplify
 alias_elimination
 ```
 

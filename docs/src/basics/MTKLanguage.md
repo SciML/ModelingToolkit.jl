@@ -535,10 +535,10 @@ This is equivalent to:
 
 ```julia
 @named model = CustomModel()
-sys = mtkbuild(model)
+sys = structural_simplify(model)
 ```
 
-Pass keyword arguments to `mtkbuild` using the following syntax:
+Pass keyword arguments to `structural_simplify` using the following syntax:
 
 ```julia
 @mtkbuild sys=CustomModel() fully_determined=false
@@ -548,5 +548,5 @@ This is equivalent to:
 
 ```julia
 @named model = CustomModel()
-sys = mtkbuild(model; fully_determined = false)
+sys = structural_simplify(model; fully_determined = false)
 ```
