@@ -163,7 +163,7 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
     (f_oop, f_ip), x_sym, p_sym, io_sys = generate_control_function(
             sys::AbstractODESystem,
             inputs             = unbound_inputs(sys),
-            disturbance_inputs = nothing;
+            disturbance_inputs = Any[];
             implicit_dae       = false,
             simplify           = false,
         )
@@ -289,7 +289,7 @@ function inputs_to_parameters!(state::TransformationState, inputsyms)
             push!(new_fullvars, v)
         end
     end
-    ninputs == 0 && return (state, 1:0)
+    ninputs == 0 && return state
 
     nvars = ndsts(graph) - ninputs
     new_graph = BipartiteGraph(nsrcs(graph), nvars, Val(false))
@@ -318,14 +318,13 @@ function inputs_to_parameters!(state::TransformationState, inputsyms)
     @set! sys.unknowns = setdiff(unknowns(sys), keys(input_to_parameters))
     ps = parameters(sys)
 
-    if io !== nothing
-        inputs, = io
+    if inputsyms !== nothing
         # Change order of new parameters to correspond to user-provided order in argument `inputs`
         d = Dict{Any, Int}()
         for (i, inp) in enumerate(new_parameters)
             d[inp] = i
         end
-        permutation = [d[i] for i in inputs]
+        permutation = [d[i] for i in inputsyms]
         new_parameters = new_parameters[permutation]
     end
 
@@ -334,8 +333,7 @@ function inputs_to_parameters!(state::TransformationState, inputsyms)
     @set! state.sys = sys
     @set! state.fullvars = new_fullvars
     @set! state.structure = structure
-    base_params = length(ps)
-    return state, (base_params + 1):(base_params + length(new_parameters)) # (1:length(new_parameters)) .+ base_params
+    return state
 end
 
 """
@@ -361,7 +359,7 @@ function get_disturbance_system(dist::DisturbanceModel{<:ODESystem})
 end
 
 """
-    (f_oop, f_ip), augmented_sys, dvs, p = add_input_disturbance(sys, dist::DisturbanceModel, inputs = nothing)
+    (f_oop, f_ip), augmented_sys, dvs, p = add_input_disturbance(sys, dist::DisturbanceModel, inputs = Any[])
 
 Add a model of an unmeasured disturbance to `sys`. The disturbance model is an instance of [`DisturbanceModel`](@ref).
 
@@ -410,7 +408,7 @@ model_outputs = [model.inertia1.w, model.inertia2.w, model.inertia1.phi, model.i
 
 `f_oop` will have an extra state corresponding to the integrator in the disturbance model. This state will not be affected by any input, but will affect the dynamics from where it enters, in this case it will affect additively from `model.torque.tau.u`.
 """
-function add_input_disturbance(sys, dist::DisturbanceModel, inputs = nothing; kwargs...)
+function add_input_disturbance(sys, dist::DisturbanceModel, inputs = Any[]; kwargs...)
     t = get_iv(sys)
     @variables d(t)=0 [disturbance = true]
     @variables u(t)=0 [input = true] # New system input
