@@ -46,7 +46,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         warn_empty_op = true,
         kwargs...)
     if !iscomplete(sys)
-        sys = mtkbuild(sys; inputs, outputs)
+        sys = structural_simplify(sys; inputs, outputs)
     end
     op = Dict(op)
     if isempty(op) && warn_empty_op

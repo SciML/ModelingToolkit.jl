@@ -26,7 +26,7 @@ topological sort of the observed equations in `sys`.
 + `fully_determined=true` controls whether or not an error will be thrown if the number of equations don't match the number of inputs, outputs, and equations.
 + `sort_eqs=true` controls whether equations are sorted lexicographically before simplification or not.
 """
-function mtkbuild(
+function structural_simplify(
         sys::AbstractSystem; additional_passes = [], simplify = false, split = true,
         allow_symbolic = false, allow_parameter = true, conservative = false, fully_determined = true,
         inputs = Any[], outputs = Any[],

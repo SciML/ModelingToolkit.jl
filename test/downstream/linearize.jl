@@ -114,7 +114,7 @@ Nd = 10
 @named pid = LimPID(; k, Ti, Td, Nd)
 
 @unpack reference, measurement, ctr_output = pid
-pid = mtkbuild(pid, inputs = [reference.u, measurement.u], outputs = [ctr_output.u])
+pid = structural_simplify(pid, inputs = [reference.u, measurement.u], outputs = [ctr_output.u])
 lsys0 = linearize(pid, [reference.u, measurement.u], [ctr_output.u];
     op = Dict(reference.u => 0.0, measurement.u => 0.0))
 @unpack int, der = pid
@@ -185,7 +185,7 @@ function saturation(; y_max, y_min = y_max > 0 ? -y_max : -Inf, name)
     ODESystem(eqs, t, name = name)
 end
 @named sat = saturation(; y_max = 1)
-sat = mtkbuild(sat, inputs = [u], outputs = [y])
+sat = structural_simplify(sat, inputs = [u], outputs = [y])
 # inside the linear region, the function is identity
 @unpack u, y = sat
 lsys = linearize(sat, [u], [y])
