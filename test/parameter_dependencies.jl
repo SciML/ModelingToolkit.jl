@@ -328,7 +328,7 @@ end
     @parameters p1=1.0 p2=1.0
     @variables x(t)
     eqs = [0 ~ p1 * x * exp(x) + p2]
-    @mtkbuild sys = NonlinearSystem(eqs; parameter_dependencies = [p2 => 2p1])
+    @mtkbuild sys = System(eqs; parameter_dependencies = [p2 => 2p1])
     @test isequal(only(parameters(sys)), p1)
     @test Set(full_parameters(sys)) == Set([p1, p2, Initial(p2), Initial(x)])
     prob = NonlinearProblem(sys, [x => 1.0])
@@ -383,7 +383,7 @@ end
     @variables x(t) y(t)
     @named sys = System([D(x) ~ y + p2], t; parameter_dependencies = [p2 ~ 2p1])
     @test is_parameter(sys, p1)
-    @named sys = NonlinearSystem([x * y^2 ~ y + p2]; parameter_dependencies = [p2 ~ 2p1])
+    @named sys = System([x * y^2 ~ y + p2]; parameter_dependencies = [p2 ~ 2p1])
     @test is_parameter(sys, p1)
     k = ShiftIndex(t)
     @named sys = DiscreteSystem(

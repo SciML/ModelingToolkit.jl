@@ -184,7 +184,7 @@ s_eqdeps = [[1], [2], [3]]
 eqs = [0 ~ σ * (y - x),
     0 ~ ρ - y,
     0 ~ y - β * z]
-@named ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
+@named ns = System(eqs, [x, y, z], [σ, ρ, β])
 deps = equation_dependencies(ns)
 eq_sdeps = [[x, y], [y], [y, z]]
 @test all(i -> isequal(Set(deps[i]), Set(value.(eq_sdeps[i]))), 1:length(deps))
