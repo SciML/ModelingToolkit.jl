@@ -29,8 +29,8 @@ The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occ
 
 See also [`linearize`](@ref) which provides a higher-level interface.
 """
-function linearization_function(sys::AbstractSystem, inputs,
-        outputs;
+function linearization_function(sys::AbstractSystem, inputs = inputs(sys),
+        outputs = outputs(sys);
         initialize = true,
         initializealg = nothing,
         initialization_abstol = 1e-5,
@@ -396,7 +396,7 @@ Construct a `LinearizationProblem` for linearizing the system `sys` with the giv
 
 All other keyword arguments are forwarded to `linearization_function`.
 """
-function LinearizationProblem(sys::AbstractSystem, inputs, outputs; t = 0.0, kwargs...)
+function LinearizationProblem(sys::AbstractSystem, inputs = inputs(sys), outputs = outputs(sys); t = 0.0, kwargs...)
     linfun = linearization_function(sys, inputs, outputs; kwargs...)
     return LinearizationProblem(linfun, t)
 end
@@ -484,8 +484,8 @@ y &= h(x, z, u)
 ```
 where `x` are differential unknown variables, `z` algebraic variables, `u` inputs and `y` outputs.
 """
-function linearize_symbolic(sys::AbstractSystem, inputs,
-        outputs; allow_input_derivatives = false,
+function linearize_symbolic(sys::AbstractSystem, inputs = inputs(sys),
+        outputs = outputs(sys); allow_input_derivatives = false,
         eval_expression = false, eval_module = @__MODULE__,
         kwargs...)
     diff_idxs, alge_idxs = eq_idxs(sys)
@@ -546,7 +546,7 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
         end
     end
 
-    (; A, B, C, D, f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u), sys
+    (; A, B, C, D, f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u)
 end
 
 function markio!(state, orig_inputs, inputs, outputs; check = true)
@@ -713,17 +713,17 @@ function linearize(sys, lin_fun::LinearizationFunction; t = 0.0,
     return solve(prob; allow_input_derivatives)
 end
 
-function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
+function linearize(sys, inputs = inputs(sys), outputs = outputs(sys); op = Dict(), t = 0.0,
         allow_input_derivatives = false,
         zero_dummy_der = false,
         kwargs...)
-    lin_fun, ssys = linearization_function(sys,
+    lin_fun = linearization_function(sys,
         inputs,
         outputs;
         zero_dummy_der,
         op,
         kwargs...)
-    linearize(ssys, lin_fun; op, t, allow_input_derivatives), ssys
+    linearize(sys, lin_fun; op, t, allow_input_derivatives)
 end
 
 """

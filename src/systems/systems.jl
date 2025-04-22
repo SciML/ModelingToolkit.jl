@@ -33,7 +33,7 @@ function structural_simplify(
         disturbance_inputs = Any[],
         kwargs...)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
-    newsys′ = __structural_simplify(sys; simplify,
+    newsys′ = __structural_simplification(sys; simplify,
         allow_symbolic, allow_parameter, conservative, fully_determined,
         inputs, outputs, disturbance_inputs,
         kwargs...)
@@ -65,12 +65,12 @@ function structural_simplify(
     end
 end
 
-function __structural_simplify(sys::JumpSystem, args...; kwargs...)
+function __structural_simplification(sys::JumpSystem, args...; kwargs...)
     return sys
 end
 
-function __structural_simplify(sys::SDESystem, args...; kwargs...)
-    return __structural_simplify(ODESystem(sys), args...; kwargs...)
+function __structural_simplification(sys::SDESystem, args...; kwargs...)
+    return __structural_simplification(ODESystem(sys), args...; kwargs...)
 end
 
 function __structural_simplification(sys::AbstractSystem; simplify = false,
