@@ -391,7 +391,7 @@ sys = modelingtoolkitize(prob)
         @testset "Nonlinear" begin
             @variables x=1.0 y=2.0
             @parameters p=3.0 q=4.0
-            @mtkbuild nlsys = NonlinearSystem([0 ~ p * y^2 + x, 0 ~ x + exp(x) * q])
+            @mtkbuild nlsys = System([0 ~ p * y^2 + x, 0 ~ x + exp(x) * q])
             prob1 = NonlinearProblem(nlsys, [])
             newsys = complete(modelingtoolkitize(prob1))
             @test is_variable(newsys, newsys.x)

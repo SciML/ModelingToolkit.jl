@@ -22,11 +22,11 @@ eqs = [0 ~ a
        0 ~ b
        0 ~ c
        0 ~ d]
-@named sub4 = NonlinearSystem(eqs, [a, b, c, d], [])
-@named sub3 = NonlinearSystem(eqs, [a, b, c, d], [])
-@named sub2 = NonlinearSystem([], [], [], systems = [sub3, sub4])
-@named sub1 = NonlinearSystem([], [], [], systems = [sub2])
-@named sys = NonlinearSystem([], [], [], systems = [sub1])
+@named sub4 = System(eqs, [a, b, c, d], [])
+@named sub3 = System(eqs, [a, b, c, d], [])
+@named sub2 = System([], [], [], systems = [sub3, sub4])
+@named sub1 = System([], [], [], systems = [sub2])
+@named sys = System([], [], [], systems = [sub1])
 
 names = ModelingToolkit.getname.(unknowns(sys))
 @test :d in names
@@ -35,8 +35,8 @@ names = ModelingToolkit.getname.(unknowns(sys))
 @test Symbol("sub1₊sub2₊sub3₊a") in names
 @test Symbol("sub1₊sub2₊sub4₊a") in names
 
-@named foo = NonlinearSystem(eqs, [a, b, c, d], [])
-@named bar = NonlinearSystem(eqs, [a, b, c, d], [])
+@named foo = System(eqs, [a, b, c, d], [])
+@named bar = System(eqs, [a, b, c, d], [])
 @test ModelingToolkit.getname(ModelingToolkit.namespace_expr(
     ModelingToolkit.namespace_expr(b,
         foo),

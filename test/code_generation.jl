@@ -31,7 +31,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     @test fn5(u0, p, 1.0) == 1.0
 
     @variables x y[1:3]
-    sys = complete(NonlinearSystem(Equation[], [x; y], [p1, p2, p3, p4]; name = :sys))
+    sys = complete(System(Equation[], [x; y], [p1, p2, p3, p4]; name = :sys))
     p = MTKParameters(sys, [])
 
     fn1 = generate_custom_function(sys, x + y[1] + p1 + p2[1] + p3; expression = Val(false))

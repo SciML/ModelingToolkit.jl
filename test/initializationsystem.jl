@@ -769,7 +769,7 @@ end
         eqs = [0 ~ σ * (y - x),
             0 ~ x * (ρ - z) - y,
             0 ~ x * y - β * z]
-        @mtkbuild ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
+        @mtkbuild ns = System(eqs, [x, y, z], [σ, ρ, β])
 
         prob = NonlinearProblem(ns, [])
         @test prob.f.initialization_data.update_initializeprob! === nothing
@@ -810,7 +810,7 @@ end
         # https://github.com/SciML/NonlinearSolve.jl/issues/586
         eqs = [0 ~ -c * z + (q - z) * (x^2)
                0 ~ p * (-x + (q - z) * x)]
-        @named sys = NonlinearSystem(eqs; initialization_eqs = [p^2 + q^2 + 2p * q ~ 0])
+        @named sys = System(eqs; initialization_eqs = [p^2 + q^2 + 2p * q ~ 0])
         sys = complete(sys)
         # @mtkbuild sys = NonlinearSystem(
         #     [p * x^2 + q * y^3 ~ 0, x - q ~ 0]; defaults = [q => missing],
@@ -1420,7 +1420,7 @@ end
     end
     @testset "$Problem" for Problem in [NonlinearProblem, NonlinearLeastSquaresProblem]
         @parameters p1 p2
-        @mtkbuild sys = NonlinearSystem([x^2 + y^2 ~ p1, (x - 1)^2 + (y - 1)^2 ~ p2];
+        @mtkbuild sys = System([x^2 + y^2 ~ p1, (x - 1)^2 + (y - 1)^2 ~ p2];
             parameter_dependencies = [p2 ~ 2p1],
             guesses = [p1 => 0.0], defaults = [p1 => missing])
         prob = Problem(sys, [x => 1.0, y => 1.0], [p2 => 6.0])
@@ -1439,7 +1439,7 @@ end
     initialization_eqs = [
         X2 ~ Γ[1] - X1
     ]
-    @mtkbuild nlsys = NonlinearSystem(eqs, [X1, X2], [k1, k2, Γ]; initialization_eqs)
+    @mtkbuild nlsys = System(eqs, [X1, X2], [k1, k2, Γ]; initialization_eqs)
 
     @testset "throws if initialization_eqs contain unknowns" begin
         u0 = [X1 => 1.0, X2 => 2.0]
@@ -1452,7 +1452,7 @@ end
     initialization_eqs = [
         Initial(X2) ~ Γ[1] - Initial(X1)
     ]
-    @mtkbuild nlsys = NonlinearSystem(eqs, [X1, X2], [k1, k2, Γ]; initialization_eqs)
+    @mtkbuild nlsys = System(eqs, [X1, X2], [k1, k2, Γ]; initialization_eqs)
 
     @testset "solves initialization" begin
         u0 = [X1 => 1.0, X2 => 2.0]

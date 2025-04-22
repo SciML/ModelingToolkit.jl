@@ -275,7 +275,7 @@ end
     end
     @testset "`NonlinearSystem`" begin
         @variables x y z
-        @mtkbuild sys = NonlinearSystem([x^2 ~ 2y^2 + 1, sin(z) ~ y, z^3 + 4z + 1 ~ 0])
+        @mtkbuild sys = System([x^2 ~ 2y^2 + 1, sin(z) ~ y, z^3 + 4z + 1 ~ 0])
         mapping = map_variables_to_equations(sys)
         @test mapping[x] == (0 ~ 2y^2 + 1 - x^2)
         @test mapping[y] == (y ~ sin(z))

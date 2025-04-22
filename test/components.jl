@@ -335,8 +335,8 @@ end
         @test ModelingToolkit.get_metadata(sys) == "test"
     end
     @testset "NonlinearSystem" begin
-        @named inner = NonlinearSystem([0 ~ x^2 + 4x + 4], [x], [])
-        @named outer = NonlinearSystem(
+        @named inner = System([0 ~ x^2 + 4x + 4], [x], [])
+        @named outer = System(
             [0 ~ x^3 - y^3], [x, y], []; systems = [inner], metadata = "test")
         @test ModelingToolkit.get_metadata(outer) == "test"
         sys = complete(outer)

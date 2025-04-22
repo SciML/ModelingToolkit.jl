@@ -18,7 +18,7 @@ eqs = [
     0 ~ u4 - hypot(u2, u3),
     0 ~ u5 - hypot(u4, u1)
 ]
-@named sys = NonlinearSystem(eqs, [u1, u2, u3, u4, u5], [])
+@named sys = System(eqs, [u1, u2, u3, u4, u5], [])
 state = TearingState(sys)
 StructuralTransformations.find_solvables!(state)
 
@@ -133,7 +133,7 @@ eqs = [
     0 ~ z + y,
     0 ~ x + z
 ]
-@named nlsys = NonlinearSystem(eqs, [x, y, z], [])
+@named nlsys = System(eqs, [x, y, z], [])
 
 newsys = tearing(nlsys)
 @test length(equations(newsys)) <= 1

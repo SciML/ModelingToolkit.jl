@@ -154,7 +154,7 @@ end
 eqs = [u1 ~ u2
        u3 ~ u1 + u2 + p
        u3 ~ hypot(u1, u2) * p]
-@named sys = NonlinearSystem(eqs, [u1, u2, u3], [p])
+@named sys = System(eqs, [u1, u2, u3], [p])
 reducedsys = structural_simplify(sys)
 @test length(observed(reducedsys)) == 2
 
@@ -174,7 +174,7 @@ N = 5
 @variables xs[1:N]
 A = reshape(1:(N^2), N, N)
 eqs = xs ~ A * xs
-@named sys′ = NonlinearSystem(eqs, [xs], [])
+@named sys′ = System(eqs, [xs], [])
 sys = structural_simplify(sys′)
 @test length(equations(sys)) == 3 && length(observed(sys)) == 2
 
