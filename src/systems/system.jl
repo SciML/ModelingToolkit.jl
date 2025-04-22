@@ -567,6 +567,32 @@ function check_complete(sys::System, obj)
     iscomplete(sys) || throw(SystemNotCompleteError(obj))
 end
 
+########
+# Utility constructors
+########
+
+function OptimizationSystem(cost; kwargs...)
+    return System(Equation[]; costs = [cost], kwargs...)
+end
+
+function OptimizationSystem(cost, dvs, ps; kwargs...)
+    return System(Equation[], nothing, dvs, ps; costs = [cost], kwargs...)
+end
+
+function JumpSystem(jumps, iv; kwargs...)
+    mask = isa.(jumps, Equation)
+    eqs = Vector{Equation}(jumps[mask])
+    jumps = jumps[.!mask]
+    return System(eqs, iv; jumps, kwargs...)
+end
+
+function JumpSystem(jumps, iv, dvs, ps; kwargs...)
+    mask = isa.(jumps, Equation)
+    eqs = Vector{Equation}(jumps[mask])
+    jumps = jumps[.!mask]
+    return System(eqs, iv, dvs, ps; jumps, kwargs...)
+end
+
 struct SystemNotCompleteError <: Exception
     obj::Any
 end
