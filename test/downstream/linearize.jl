@@ -13,18 +13,20 @@ eqs = [u ~ kp * (r - y)
        y ~ x]
 
 @named sys = ODESystem(eqs, t)
+sys1 = structural_simplify(sys, inputs = [r], outputs = [y])
 
-lsys, ssys = linearize(sys, [r], [y])
-lprob = LinearizationProblem(sys, [r], [y])
+lsys = linearize(sys1)
+lprob = LinearizationProblem(sys1)
 lsys2 = solve(lprob)
-lsys3, _ = linearize(sys, [r], [y]; autodiff = AutoFiniteDiff())
+lsys3 = linearize(sys1; autodiff = AutoFiniteDiff())
 
 @test lsys.A[] == lsys2.A[] == lsys3.A[] == -2
 @test lsys.B[] == lsys2.B[] == lsys3.B[] == 1
 @test lsys.C[] == lsys2.C[] == lsys3.C[] == 1
 @test lsys.D[] == lsys2.D[] == lsys3.D[] == 0
 
-lsys = linearize(sys, [r], [r])
+sys2 = structural_simplify(sys, inputs = [r], outputs = [r])
+lsys = linearize(sys2)
 
 @test lsys.A[] == -2
 @test lsys.B[] == 1
@@ -86,8 +88,9 @@ connections = [f.y ~ c.r # filtered reference to controller reference
                p.y ~ c.y]
 
 @named cl = ODESystem(connections, t, systems = [f, c, p])
+cl = structural_simplify(cl, inputs = [f.u], outputs = [p.x])
 
-lsys0 = linearize(cl, [f.u], [p.x])
+lsys0 = linearize(cl)
 desired_order = [f.x, p.x]
 lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(cl), desired_order)
 lsys1 = linearize(cl, [f.u], [p.x]; autodiff = AutoFiniteDiff())
@@ -99,7 +102,7 @@ lsys2 = ModelingToolkit.reorder_unknowns(lsys1, unknowns(cl), desired_order)
 @test lsys.D[] == lsys2.D[] == 0
 
 ## Symbolic linearization
-lsyss = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
+lsyss = ModelingToolkit.linearize_symbolic(cl)
 
 @test ModelingToolkit.fixpoint_sub(lsyss.A, ModelingToolkit.defaults(cl)) == lsys.A
 @test ModelingToolkit.fixpoint_sub(lsyss.B, ModelingToolkit.defaults(cl)) == lsys.B
@@ -114,12 +117,11 @@ Nd = 10
 @named pid = LimPID(; k, Ti, Td, Nd)
 
 @unpack reference, measurement, ctr_output = pid
-pid = structural_simplify(pid, inputs = [reference.u, measurement.u], outputs = [ctr_output.u])
-lsys0 = linearize(pid, [reference.u, measurement.u], [ctr_output.u];
-    op = Dict(reference.u => 0.0, measurement.u => 0.0))
-@unpack int, der = pid
+pid_s = structural_simplify(pid, inputs = [reference.u, measurement.u], outputs = [ctr_output.u])
+lsys0 = linearize(pid_s; op = Dict(reference.u => 0.0, measurement.u => 0.0))
+@unpack int, der = pid_s
 desired_order = [int.x, der.x]
-lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(pid), desired_order)
+lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(pid_s), desired_order)
 
 @test lsys.A == [0 0; 0 -10]
 @test lsys.B == [2 -2; 10 -10]
@@ -149,17 +151,17 @@ lsys = ModelingToolkit.reorder_unknowns(lsys, desired_order, reverse(desired_ord
 
 ## Test that there is a warning when input is misspecified
 if VERSION >= v"1.8"
-    @test_throws "Some parameters are missing from the variable map." linearize(pid,
+    @test_throws "Some specified inputs were not found in system. The following variables were not found " structural_simplify(pid, inputs = 
         [
             pid.reference.u,
             pid.measurement.u
-        ], [ctr_output.u])
-    @test_throws "Some parameters are missing from the variable map." linearize(pid,
-        [
+           ], outputs = [ctr_output.u])
+    @test_throws "Some specified outputs were not found in system." structural_simplify(pid,
+        inputs = [
             reference.u,
             measurement.u
         ],
-        [pid.ctr_output.u])
+        outputs = [pid.ctr_output.u])
 else # v1.6 does not have the feature to match error message
     @test_throws ErrorException linearize(pid,
         [
@@ -201,7 +203,7 @@ lsys = linearize(sat, [u], [y])
 # @test substitute(lsyss.D, ModelingToolkit.defaults(sat)) == lsys.D
 
 # outside the linear region the derivative is 0
-lsys, ssys = linearize(sat, [u], [y]; op = Dict(u => 2))
+lsys = linearize(sat, [u], [y]; op = Dict(u => 2))
 @test isempty(lsys.A) # there are no differential variables in this system
 @test isempty(lsys.B)
 @test isempty(lsys.C)
@@ -307,12 +309,12 @@ m_ss = 2.4000000003229878
 eqs = [D(x) ~ p * u, x ~ y]
 @named sys = ODESystem(eqs, t)
 
-matrices1, _ = linearize(sys, [u], []; op = Dict(x => 2.0))
-matrices2, _ = linearize(sys, [u], []; op = Dict(y => 2.0))
+matrices1 = linearize(sys, [u], []; op = Dict(x => 2.0))
+matrices2 = linearize(sys, [u], []; op = Dict(y => 2.0))
 @test matrices1 == matrices2
 
 # Ensure parameter values passed as `Dict` are respected
-linfun, _ = linearization_function(sys, [u], []; op = Dict(x => 2.0))
+linfun = linearization_function(sys, [u], []; op = Dict(x => 2.0))
 matrices = linfun([1.0], Dict(p => 3.0), 1.0)
 # this would be 1 if the parameter value isn't respected
 @test matrices.f_u[] == 3.0
@@ -328,26 +330,28 @@ end
     @parameters p
     eqs = [0 ~ x * log(y) - p]
     @named sys = ODESystem(eqs, t; defaults = [p => 1.0])
-    sys = complete(sys)
+    sys = structural_simplify(sys, inputs = [x])
     @test_throws ModelingToolkit.MissingVariablesError linearize(
-        sys, [x], []; op = Dict(x => 1.0), allow_input_derivatives = true)
+        sys; op = Dict(x => 1.0), allow_input_derivatives = true)
     @test_nowarn linearize(
-        sys, [x], []; op = Dict(x => 1.0), guesses = Dict(y => 1.0),
+        sys; op = Dict(x => 1.0), guesses = Dict(y => 1.0),
         allow_input_derivatives = true)
 end
 
 @testset "Symbolic values for parameters in `linearize`" begin
     @named tank_noi = Tank_noi()
     @unpack md_i, h, m, ρ, A, K = tank_noi
+    tank_noi = structural_simplify(tank_noi, inputs = [md_i], outputs = [h])
     m_ss = 2.4000000003229878
     @test_nowarn linearize(
-        tank_noi, [md_i], [h]; op = Dict(m => m_ss, md_i => 2, ρ => A / K, A => 5))
+        tank_noi; op = Dict(m => m_ss, md_i => 2, ρ => A / K, A => 5))
 end
 
 @testset "Warn on empty operating point" begin
     @named tank_noi = Tank_noi()
     @unpack md_i, h, m = tank_noi
+    tank_noi = structural_simplify(tank_noi, inputs = [md_i], outputs = [h])
     m_ss = 2.4000000003229878
     @test_warn ["empty operating point", "warn_empty_op"] linearize(
-        tank_noi, [md_i], [h]; p = [md_i => 1.0])
+        tank_noi; p = [md_i => 1.0])
 end
