@@ -1328,6 +1328,8 @@ function _eq_unordered(a::AbstractArray, b::AbstractArray)
     return true
 end
 
+_eq_unordered(a, b) = isequal(a, b)
+
 """
     $(TYPEDSIGNATURES)
 
