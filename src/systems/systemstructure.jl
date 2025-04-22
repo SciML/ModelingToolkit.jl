@@ -659,8 +659,8 @@ end
 
 function structural_simplify!(state::TearingState; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = true,
-        inputs = nothing, outputs = nothing, 
-        disturbance_inputs = nothing,
+        inputs = Any[], outputs = Any[],
+        disturbance_inputs = Any[],
         kwargs...)
     if state.sys isa ODESystem
         ci = ModelingToolkit.ClockInference(state)
@@ -671,7 +671,7 @@ function structural_simplify!(state::TearingState; simplify = false,
         cont_inputs = [inputs; clocked_inputs[continuous_id]]
         sys = _structural_simplify!(tss[continuous_id]; simplify,
             check_consistency, fully_determined,
-            cont_inputs, outputs, disturbance_inputs,
+            inputs = cont_inputs, outputs, disturbance_inputs,
             kwargs...)
         if length(tss) > 1
             if continuous_id > 0
@@ -716,8 +716,8 @@ end
 function _structural_simplify!(state::TearingState; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = false,
         dummy_derivative = true,
-        inputs = nothing, outputs = nothing,
-        disturbance_inputs = nothing,
+        inputs = Any[], outputs = Any[],
+        disturbance_inputs = Any[],
         kwargs...)
     if fully_determined isa Bool
         check_consistency &= fully_determined
