@@ -101,7 +101,7 @@ function default_consolidate(costs, subcosts)
     return sum(costs; init = 0.0) + sum(subcosts; init = 0.0)
 end
 
-function System(eqs, iv, dvs, ps, brownians = [];
+function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         constraints = Union{Equation, Inequality}[], noise_eqs = nothing, jumps = [],
         costs = BasicSymbolic[], consolidate = default_consolidate,
         observed = Equation[], parameter_dependencies = Equation[], defaults = Dict(),
@@ -176,7 +176,11 @@ function System(eqs, iv, dvs, ps, brownians = [];
         tstops, tearing_state, true, false, nothing, ignored_connections, parent, is_initializesystem; checks)
 end
 
-function System(eqs, iv; kwargs...)
+function System(eqs::Vector{Equation}, dvs, ps; kwargs...)
+    System(eqs, nothing, dvs, ps; kwargs...)
+end
+
+function System(eqs::Vector{Equation}, iv; kwargs...)
     iv === nothing && return System(eqs; kwargs...)
     diffvars, allunknowns, ps, eqs = process_equations(eqs, iv)
     brownians = Set()
@@ -232,7 +236,7 @@ function System(eqs, iv; kwargs...)
         collect(new_ps), brownians; kwargs...)
 end
 
-function System(eqs; kwargs...)
+function System(eqs::Vector{Equation}; kwargs...)
     eqs = collect(eqs)
 
     allunknowns = OrderedSet()
