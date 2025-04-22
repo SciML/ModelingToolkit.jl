@@ -2,7 +2,7 @@ using ModelingToolkit, OrdinaryDiffEq, Test
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 sts = @variables x1(t) x2(t) x3(t) x4(t)
-params = @parameters u1(t) u2(t) u3(t) u4(t)
+params = @parameters u1 u2 u3 u4
 eqs = [x1 + x2 + u1 ~ 0
        x1 + x2 + x3 + u2 ~ 0
        x1 + D(x3) + x4 + u3 ~ 0
