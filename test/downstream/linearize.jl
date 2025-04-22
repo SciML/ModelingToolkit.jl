@@ -269,7 +269,6 @@ closed_loop = ODESystem(connections, t, systems = [model, pid, filt, sensor, r, 
         filt.x => 0.0,
         filt.xd => 0.0
     ])
-closed_loop = mtkbuild(closed_loop)
 
 @test_nowarn linearize(closed_loop, :r, :y; warn_empty_op = false)
 
