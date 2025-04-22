@@ -75,7 +75,7 @@ eqs = [D(x) ~ v
        y.u ~ x]
 
 @named duffing = ODESystem(eqs, t, systems = [y, u], defaults = [u.u => 0])
-duffing = mtkbuild(duffing, inputs = [u.u], outputs = [y.u])
+duffing = structural_simplify(duffing, inputs = [u.u], outputs = [y.u])
 
 # pass a constant value for `x`, since it is the variable we will change in operating points
 linfun = linearization_function(duffing, [u.u], [y.u]; op = Dict(x => NaN));

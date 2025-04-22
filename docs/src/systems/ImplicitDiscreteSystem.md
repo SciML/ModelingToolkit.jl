@@ -17,7 +17,7 @@ ImplicitDiscreteSystem
 ## Transformations
 
 ```@docs; canonical=false
-mtkbuild
+structural_simplify
 ```
 
 ## Problem Constructors

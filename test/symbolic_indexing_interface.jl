@@ -220,7 +220,7 @@ end
     @variables x(t) y(t) z(t)
     @parameters a
     @named sys = ODESystem([D(x) ~ a * x, y ~ 2x, z ~ 0.0], t)
-    sys = mtkbuild(sys, split = false)
+    sys = structural_simplify(sys, split = false)
     for sym in [x, y, z, x + y, x + a, y / x]
         @test only(get_all_timeseries_indexes(sys, sym)) == ContinuousTimeseries()
     end

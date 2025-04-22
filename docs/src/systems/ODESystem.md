@@ -27,7 +27,7 @@ ODESystem
 ## Transformations
 
 ```@docs
-mtkbuild
+structural_simplify
 ode_order_lowering
 dae_index_lowering
 change_independent_variable

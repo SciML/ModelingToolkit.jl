@@ -476,7 +476,7 @@ end
 let
     @variables x(t)[1:3, 1:3]
     @named sys = ODESystem(D.(x) .~ x, t)
-    @test_nowarn mtkbuild(sys)
+    @test_nowarn structural_simplify(sys)
 end
 
 # Array vars
@@ -487,7 +487,7 @@ ps = @parameters p[1:3] = [1, 2, 3]
 eqs = [collect(D.(x) .~ x)
        D(y) ~ norm(collect(x)) * y - x[1]]
 @named sys = ODESystem(eqs, t, sts, ps)
-sys = mtkbuild(sys)
+sys = structural_simplify(sys)
 @test isequal(@nonamespace(sys.x), x)
 @test isequal(@nonamespace(sys.y), y)
 @test isequal(@nonamespace(sys.p), p)
@@ -659,7 +659,7 @@ let
            D(x[2]) ~ -x[1] - 0.5 * x[2] + k
            y ~ 0.9 * x[1] + x[2]]
     @named sys = ODESystem(eqs, t, vcat(x, [y]), [k], defaults = Dict(x .=> 0))
-    sys = mtkbuild(sys)
+    sys = structural_simplify(sys)
 
     u0 = [0.5, 0]
     du0 = 0 .* copy(u0)
@@ -741,7 +741,7 @@ let
            0 ~ q / C - R * F]
 
     @named sys = ODESystem(eqs, t)
-    @test length(equations(mtkbuild(sys))) == 2
+    @test length(equations(structural_simplify(sys))) == 2
 end
 
 let
@@ -776,12 +776,12 @@ let
     @named sys1 = ODESystem(eqs, t)
     @named sys2 = ODESystem(eqs2, t)
     @named sys3 = ODESystem(eqs3, t)
-    ssys3 = mtkbuild(sys3)
+    ssys3 = structural_simplify(sys3)
     @named sys4 = ODESystem(eqs4, t)
 
     @test ModelingToolkit.isisomorphic(sys1, sys2)
     @test !ModelingToolkit.isisomorphic(sys1, sys3)
-    @test ModelingToolkit.isisomorphic(sys1, ssys3) # I don't call mtkbuild in isisomorphic
+    @test ModelingToolkit.isisomorphic(sys1, ssys3) # I don't call structural_simplify in isisomorphic
     @test !ModelingToolkit.isisomorphic(sys1, sys4)
 
     # 1281
@@ -799,7 +799,7 @@ let
            spm ~ 0
            sph ~ a]
     @named sys = ODESystem(eqs, t, vars, pars)
-    @test_throws ModelingToolkit.ExtraEquationsSystemException mtkbuild(sys)
+    @test_throws ModelingToolkit.ExtraEquationsSystemException structural_simplify(sys)
 end
 
 # 1561
@@ -823,9 +823,9 @@ let
     ps = []
 
     @named sys = ODESystem(eqs, t, u, ps)
-    @test_nowarn simpsys = mtkbuild(sys)
+    @test_nowarn simpsys = structural_simplify(sys)
 
-    sys = mtkbuild(sys)
+    sys = structural_simplify(sys)
 
     u0 = ModelingToolkit.missing_variable_defaults(sys)
     u0_expected = Pair[s => 0.0 for s in unknowns(sys)]
@@ -911,7 +911,7 @@ let
     @named connected = ODESystem(connections, t)
     @named sys_con = compose(connected, sys, ctrl)
 
-    sys_simp = mtkbuild(sys_con)
+    sys_simp = structural_simplify(sys_con)
     true_eqs = [D(sys.x) ~ sys.v
                 D(sys.v) ~ ctrl.kv * sys.v + ctrl.kx * sys.x]
     @test issetequal(full_equations(sys_simp), true_eqs)
@@ -922,7 +922,7 @@ let
     @variables y(t) = 1
     @parameters pp = -1
     @named sys4 = ODESystem([D(x) ~ -y; D(y) ~ 1 + pp * y + x], t)
-    sys4s = mtkbuild(sys4)
+    sys4s = structural_simplify(sys4)
     prob = ODEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
     @test string.(unknowns(prob.f.sys)) == ["x(t)", "y(t)"]
     @test string.(parameters(prob.f.sys)) == ["pp"]
@@ -961,7 +961,7 @@ let
     @parameters pp = -1
     der = Differential(t)
     @named sys4 = ODESystem([der(x) ~ -y; der(y) ~ 1 + pp * y + x], t)
-    sys4s = mtkbuild(sys4)
+    sys4s = structural_simplify(sys4)
     prob = ODEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
     @test !isnothing(prob.f.sys)
 end
@@ -997,7 +997,7 @@ let # Issue https://github.com/SciML/ModelingToolkit.jl/issues/2322
 
     sys = ODESystem(eqs, t; name = :kjshdf)
 
-    sys_simp = mtkbuild(sys)
+    sys_simp = structural_simplify(sys)
 
     @test a ∈ keys(ModelingToolkit.defaults(sys_simp))
 
@@ -1138,7 +1138,7 @@ orig_vars = unknowns(sys)
 @named outer = ODESystem(
     [D(y) ~ sys.x + t, 0 ~ t + y - sys.x * y], t, [y], []; systems = [sys])
 @test ModelingToolkit.guesses(outer)[sys.x] == 1.0
-outer = mtkbuild(outer)
+outer = structural_simplify(outer)
 @test ModelingToolkit.get_guesses(outer)[sys.x] == 1.0
 prob = ODEProblem(outer, [outer.y => 2.0], (0.0, 10.0))
 int = init(prob, Rodas4())
@@ -1174,7 +1174,7 @@ end
 @testset "Non-1-indexed variable array (issue #2670)" begin
     @variables x(t)[0:1] # 0-indexed variable array
     @named sys = ODESystem([x[0] ~ 0.0, D(x[1]) ~ x[0]], t, [x], [])
-    @test_nowarn sys = mtkbuild(sys)
+    @test_nowarn sys = structural_simplify(sys)
     @test equations(sys) == [D(x[1]) ~ 0.0]
 end
 
@@ -1188,7 +1188,7 @@ end
 @testset "ForwardDiff through ODEProblem constructor" begin
     @parameters P
     @variables x(t)
-    sys = mtkbuild(ODESystem([D(x) ~ P], t, [x], [P]; name = :sys))
+    sys = structural_simplify(ODESystem([D(x) ~ P], t, [x], [P]; name = :sys))
 
     function x_at_1(P)
         prob = ODEProblem(sys, [x => P], (0.0, 1.0), [sys.P => P])
@@ -1201,7 +1201,7 @@ end
 @testset "Inplace observed functions" begin
     @parameters P
     @variables x(t)
-    sys = mtkbuild(ODESystem([D(x) ~ P], t, [x], [P]; name = :sys))
+    sys = structural_simplify(ODESystem([D(x) ~ P], t, [x], [P]; name = :sys))
     obsfn = ModelingToolkit.build_explicit_observed_function(
         sys, [x + 1, x + P, x + t], return_inplace = true)[2]
     ps = ModelingToolkit.MTKParameters(sys, [P => 2.0])
@@ -1238,7 +1238,7 @@ end
     initialization_eqs = [x ~ T]
     guesses = [x => 0.0]
     @named sys2 = ODESystem(eqs, T; initialization_eqs, guesses)
-    prob2 = ODEProblem(mtkbuild(sys2), [], (1.0, 2.0), [])
+    prob2 = ODEProblem(structural_simplify(sys2), [], (1.0, 2.0), [])
     sol2 = solve(prob2)
     @test all(sol2[x] .== 1.0)
 end
@@ -1263,7 +1263,7 @@ end
     eqs = [D(x) ~ 0, y ~ x, D(z) ~ 0]
     defaults = [x => 1, z => y]
     @named sys = ODESystem(eqs, t; defaults)
-    ssys = mtkbuild(sys)
+    ssys = structural_simplify(sys)
     prob = ODEProblem(ssys, [], (0.0, 1.0), [])
     @test prob[x] == prob[y] == prob[z] == 1.0
 
@@ -1272,7 +1272,7 @@ end
     eqs = [D(x) ~ 0, y ~ y0 / x, D(z) ~ y]
     defaults = [y0 => 1, x => 1, z => y]
     @named sys = ODESystem(eqs, t; defaults)
-    ssys = mtkbuild(sys)
+    ssys = structural_simplify(sys)
     prob = ODEProblem(ssys, [], (0.0, 1.0), [])
     @test prob[x] == prob[y] == prob[z] == 1.0
 end
@@ -1371,10 +1371,10 @@ end
     @named outersys = ODESystem(
         [D(innersys.y) ~ innersys.y + p4], t; parameter_dependencies = [p4 ~ 3p3],
         defaults = [p3 => 3.0, p4 => 9.0], guesses = [p4 => 10.0], systems = [innersys])
-    @test_nowarn mtkbuild(outersys)
+    @test_nowarn structural_simplify(outersys)
     @parameters p5
     sys2 = substitute(outersys, [p4 => p5])
-    @test_nowarn mtkbuild(sys2)
+    @test_nowarn structural_simplify(sys2)
     @test length(equations(sys2)) == 2
     @test length(parameters(sys2)) == 2
     @test length(full_parameters(sys2)) == 4
@@ -1434,7 +1434,7 @@ end
                 @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
             else
                 @test_throws [
-                    r"array (equations|unknowns)", "mtkbuild", "scalarize"] ODEProblem(
+                    r"array (equations|unknowns)", "structural_simplify", "scalarize"] ODEProblem(
                     sys, [], (0.0, 1.0))
             end
         end
@@ -1447,7 +1447,7 @@ end
                 @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
             else
                 @test_throws [
-                    r"array (equations|unknowns)", "mtkbuild", "scalarize"] ODEProblem(
+                    r"array (equations|unknowns)", "structural_simplify", "scalarize"] ODEProblem(
                     sys, [], (0.0, 1.0))
             end
         end
@@ -1630,7 +1630,7 @@ end
     @test lowered_vars == expected_vars
 end
 
-@testset "dae_order_lowering test with mtkbuild" begin
+@testset "dae_order_lowering test with structural_simplify" begin
     @variables x(t) y(t) z(t)
     @parameters M b k
     eqs = [
@@ -1645,7 +1645,7 @@ end
     default_p = [M => 1.0, b => 1.0, k => 1.0]
     @named dae_sys = ODESystem(eqs, t, [x, y, z], ps; defaults = [default_u0; default_p])
 
-    simplified_dae_sys = mtkbuild(dae_sys)
+    simplified_dae_sys = structural_simplify(dae_sys)
 
     lowered_dae_sys = dae_order_lowering(simplified_dae_sys)
     lowered_dae_sys = complete(lowered_dae_sys)

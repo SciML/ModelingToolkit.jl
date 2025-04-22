@@ -76,7 +76,7 @@ initialization semantics.
 We can simulate this model like any other ModelingToolkit system.
 
 ```@repl fmi
-sys = mtkbuild(model)
+sys = structural_simplify(model)
 prob = ODEProblem(sys, [sys.mass__s => 0.5, sys.mass__v => 0.0], (0.0, 5.0))
 sol = solve(prob, Tsit5())
 ```
@@ -104,11 +104,11 @@ constant until the next time the callback triggers. The periodic interval must b
 `communication_step_size` keyword argument. A smaller step size typically leads to less error but is
 more computationally expensive.
 
-This model alone does not have any differential variables, and calling `mtkbuild` will lead
+This model alone does not have any differential variables, and calling `structural_simplify` will lead
 to an `ODESystem` with no unknowns.
 
 ```@example fmi
-mtkbuild(inner)
+structural_simplify(inner)
 ```
 
 Simulating this model will cause the OrdinaryDiffEq integrator to immediately finish, and will not

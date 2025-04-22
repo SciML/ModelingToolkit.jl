@@ -323,7 +323,7 @@ plot(sol)
 By default, this plots only the unknown variables that had to be solved for.
 However, what if we wanted to plot the timeseries of a different variable? Do
 not worry, that information was not thrown away! Instead, transformations
-like `mtkbuild` simply change unknown variables into observables which are
+like `structural_simplify` simply change unknown variables into observables which are
 defined by `observed` equations.
 
 ```@example acausal

@@ -118,7 +118,7 @@ let
 
     @named system = System(L = 10)
     @unpack supply_pipe, return_pipe = system
-    sys = mtkbuild(system)
+    sys = structural_simplify(system)
     u0 = [
         sys.supply_pipe.v => 0.1, sys.return_pipe.v => 0.1, D(supply_pipe.v) => 0.0,
         D(return_pipe.fluid_port_a.m) => 0.0,
@@ -169,7 +169,7 @@ let
 
     @named trans = ODESystem(eqs, t)
 
-    sys = mtkbuild(trans)
+    sys = structural_simplify(trans)
 
     n = 3
     u = 0 * ones(n)
@@ -274,7 +274,7 @@ let
 
     # solution -------------------------------------------------------------------
     @named catapult = ODESystem(eqs, t, vars, params, defaults = defs)
-    sys = mtkbuild(catapult)
+    sys = structural_simplify(catapult)
     prob = ODEProblem(sys, [], (0.0, 0.1), [l_2f => 0.55, damp => 1e7]; jac = true)
     @test solve(prob, Rodas4()).retcode == ReturnCode.Success
 end

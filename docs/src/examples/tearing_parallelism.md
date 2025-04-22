@@ -1,7 +1,7 @@
 # Exposing More Parallelism By Tearing Algebraic Equations in ODESystems
 
 Sometimes it can be very non-trivial to parallelize a system. In this tutorial,
-we will demonstrate how to make use of `mtkbuild` to expose more
+we will demonstrate how to make use of `structural_simplify` to expose more
 parallelism in the solution process and parallelize the resulting simulation.
 
 ## The Component Library
@@ -122,7 +122,7 @@ Now let's say we want to expose a bit more parallelism via running tearing.
 How do we do that?
 
 ```@example tearing
-sys = mtkbuild(big_rc)
+sys = structural_simplify(big_rc)
 ```
 
 Done, that's it. There's no more to it.
@@ -175,5 +175,5 @@ so this is better than trying to do it by hand.
 
 After performing this, you can construct the `ODEProblem` and set
 `parallel_form` to use the exposed parallelism in multithreaded function
-constructions, but this showcases why `mtkbuild` is so important
+constructions, but this showcases why `structural_simplify` is so important
 to that process.

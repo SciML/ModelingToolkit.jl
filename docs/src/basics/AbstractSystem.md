@@ -152,7 +152,7 @@ a lower level in the system.
 ## Namespacing
 
 By default, unsimplified systems will namespace variables accessed via `getproperty`.
-Systems created via `@mtkbuild`, or ones passed through `mtkbuild` or
+Systems created via `@mtkbuild`, or ones passed through `structural_simplify` or
 `complete` will not perform this namespacing. However, all of these processes modify
 the system in a variety of ways. To toggle namespacing without transforming any other
 property of the system, use `toggle_namespacing`.

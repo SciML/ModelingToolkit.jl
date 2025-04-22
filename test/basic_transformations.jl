@@ -50,8 +50,8 @@ end
     M1 = ODESystem(eqs, t; initialization_eqs, name = :M)
     M2 = change_independent_variable(M1, s)
 
-    M1 = mtkbuild(M1; allow_symbolic = true)
-    M2 = mtkbuild(M2; allow_symbolic = true)
+    M1 = structural_simplify(M1; allow_symbolic = true)
+    M2 = structural_simplify(M2; allow_symbolic = true)
     prob1 = ODEProblem(M1, [M1.s => 1.0], (1.0, 4.0), [])
     prob2 = ODEProblem(M2, [], (1.0, 2.0), [])
     sol1 = solve(prob1, Tsit5(); reltol = 1e-10, abstol = 1e-10)
@@ -100,9 +100,9 @@ end
     extraeqs = [Differential(M2.a)(b) ~ exp(-b), M2.a ~ exp(b)]
     M3 = change_independent_variable(M2, b, extraeqs)
 
-    M1 = mtkbuild(M1)
-    M2 = mtkbuild(M2; allow_symbolic = true)
-    M3 = mtkbuild(M3; allow_symbolic = true)
+    M1 = structural_simplify(M1)
+    M2 = structural_simplify(M2; allow_symbolic = true)
+    M3 = structural_simplify(M3; allow_symbolic = true)
     @test length(unknowns(M3)) == length(unknowns(M2)) == length(unknowns(M1)) - 1
 end
 
@@ -120,7 +120,7 @@ end
     @parameters g=9.81 v # gravitational acceleration and constant horizontal velocity
     Mt = ODESystem([D(D(y)) ~ -g, D(x) ~ v], t; name = :M) # gives (x, y) as function of t, ...
     Mx = change_independent_variable(Mt, x; add_old_diff = true) # ... but we want y as a function of x
-    Mx = mtkbuild(Mx; allow_symbolic = true)
+    Mx = structural_simplify(Mx; allow_symbolic = true)
     Dx = Differential(Mx.x)
     u0 = [Mx.y => 0.0, Dx(Mx.y) => 1.0, Mx.t => 0.0]
     p = [v => 10.0]
@@ -134,7 +134,7 @@ end
     @parameters g = 9.81 # gravitational acceleration
     Mt = ODESystem([D(D(y)) ~ -g, D(D(x)) ~ 0], t; name = :M) # gives (x, y) as function of t, ...
     Mx = change_independent_variable(Mt, x; add_old_diff = true) # ... but we want y as a function of x
-    Mx = mtkbuild(Mx; allow_symbolic = true)
+    Mx = structural_simplify(Mx; allow_symbolic = true)
     Dx = Differential(Mx.x)
     u0 = [Mx.y => 0.0, Dx(Mx.y) => 1.0, Mx.t => 0.0, Mx.xˍt => 10.0]
     prob = ODEProblem(Mx, u0, (0.0, 20.0), []) # 1 = dy/dx = (dy/dt)/(dx/dt) means equal initial horizontal and vertical velocities
@@ -152,7 +152,7 @@ end
     ]
     M1 = ODESystem(eqs, t; name = :M)
     M2 = change_independent_variable(M1, x; add_old_diff = true)
-    @test_nowarn mtkbuild(M2)
+    @test_nowarn structural_simplify(M2)
 
     # Compare to pen-and-paper result
     @variables x xˍt(x) xˍt(x) y(x) t(x)
@@ -198,7 +198,7 @@ end
     ])
 
     _f = LinearInterpolation([1.0, 1.0], [-100.0, +100.0]) # constant value 1
-    M2s = mtkbuild(M2; allow_symbolic = true)
+    M2s = structural_simplify(M2; allow_symbolic = true)
     prob = ODEProblem(M2s, [M2s.y => 0.0], (1.0, 4.0), [fc => _f, f => _f])
     sol = solve(prob, Tsit5(); abstol = 1e-5)
     @test isapprox(sol(4.0, idxs = M2.y), 12.0; atol = 1e-5) # Anal solution is D(y) ~ 12 => y(t) ~ 12*t + C => y(x) ~ 12*√(x) + C. With y(x=1)=0 => 12*(√(x)-1), so y(x=4) ~ 12
@@ -207,7 +207,7 @@ end
 @testset "Change independent variable (errors)" begin
     @variables x(t) y z(y) w(t) v(t)
     M = ODESystem([D(x) ~ 1, v ~ x], t; name = :M)
-    Ms = mtkbuild(M)
+    Ms = structural_simplify(M)
     @test_throws "structurally simplified" change_independent_variable(Ms, y)
     @test_throws "not a function of" change_independent_variable(M, y)
     @test_throws "not a function of" change_independent_variable(M, z)

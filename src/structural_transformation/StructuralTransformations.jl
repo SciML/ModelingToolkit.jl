@@ -35,7 +35,7 @@ import ModelingToolkit: var_derivative!, var_derivative_graph!
 using Graphs
 using ModelingToolkit: algeqs, EquationsView,
                        SystemStructure, TransformationState, TearingState,
-                       structural_simplification!,
+                       structural_simplify!,
                        isdiffvar, isdervar, isalgvar, isdiffeq, algeqs, is_only_discrete,
                        dervars_range, diffvars_range, algvars_range,
                        DiffGraph, complete!,

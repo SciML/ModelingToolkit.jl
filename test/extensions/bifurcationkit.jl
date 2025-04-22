@@ -97,14 +97,14 @@ end
 # Checks that default parameter values are accounted for.
 # Checks that observables (that depend on other observables, as in this case) are accounted for.
 let
-    # Creates model, and uses `mtkbuild` to generate observables.
+    # Creates model, and uses `structural_simplify` to generate observables.
     @parameters μ p=2
     @variables x(t) y(t) z(t)
     eqs = [0 ~ μ - x^3 + 2x^2,
         0 ~ p * μ - y,
         0 ~ y - z]
     @named nsys = NonlinearSystem(eqs, [x, y, z], [μ, p])
-    nsys = mtkbuild(nsys)
+    nsys = structural_simplify(nsys)
 
     # Creates BifurcationProblem.
     bif_par = μ

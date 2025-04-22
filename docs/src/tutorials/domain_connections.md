@@ -115,10 +115,10 @@ end
 nothing #hide
 ```
 
-To see how the domain works, we can examine the set parameter values for each of the ports `src.port` and `vol.port`.  First we assemble the system using `mtkbuild()` and then check the default value of `vol.port.ρ`, whichs points to the setter value `fluid₊ρ`.  Likewise, `src.port.ρ`, will also point to the setter value `fluid₊ρ`.  Therefore, there is now only 1 defined density value `fluid₊ρ` which sets the density for the connected network.
+To see how the domain works, we can examine the set parameter values for each of the ports `src.port` and `vol.port`.  First we assemble the system using `structural_simplify()` and then check the default value of `vol.port.ρ`, whichs points to the setter value `fluid₊ρ`.  Likewise, `src.port.ρ`, will also point to the setter value `fluid₊ρ`.  Therefore, there is now only 1 defined density value `fluid₊ρ` which sets the density for the connected network.
 
 ```@repl domain
-sys = mtkbuild(odesys)
+sys = structural_simplify(odesys)
 ModelingToolkit.defaults(sys)[odesys.vol.port.ρ]
 ```
 
@@ -181,7 +181,7 @@ end
 nothing #hide
 ```
 
-After running `mtkbuild()` on `actsys2`, the defaults will show that `act.port_a.ρ` points to `fluid_a₊ρ` and `act.port_b.ρ` points to `fluid_b₊ρ`.  This is a special case, in most cases a hydraulic system will have only 1 fluid, however this simple system has 2 separate domain networks.  Therefore, we can connect a single fluid to both networks.  This does not interfere with the mathematical equations of the system, since no unknown variables are connected.
+After running `structural_simplify()` on `actsys2`, the defaults will show that `act.port_a.ρ` points to `fluid_a₊ρ` and `act.port_b.ρ` points to `fluid_b₊ρ`.  This is a special case, in most cases a hydraulic system will have only 1 fluid, however this simple system has 2 separate domain networks.  Therefore, we can connect a single fluid to both networks.  This does not interfere with the mathematical equations of the system, since no unknown variables are connected.
 
 ```@example domain
 @component function ActuatorSystem1(; name)
@@ -252,7 +252,7 @@ end
 nothing #hide
 ```
 
-When `mtkbuild()` is applied to this system it can be seen that the defaults are missing for `res.port_b` and `vol.port`.
+When `structural_simplify()` is applied to this system it can be seen that the defaults are missing for `res.port_b` and `vol.port`.
 
 ```@repl domain
 ModelingToolkit.defaults(ressys)[ressys.res.port_a.ρ]

@@ -12,7 +12,7 @@
   - All current Modelica compiler implementations are fixed and not extendable
     by the users from the Modelica language itself. For example, the Dymola
     compiler [shares its symbolic processing pipeline](https://www.claytex.com/tech-blog/model-translation-and-symbolic-manipulation/),
-    which is roughly equivalent to the `dae_index_lowering` and `mtkbuild`
+    which is roughly equivalent to the `dae_index_lowering` and `structural_simplify`
     of ModelingToolkit.jl. ModelingToolkit.jl is an open and hackable transformation
     system which allows users to add new non-standard transformations and control
     the order of application.
@@ -90,7 +90,7 @@
     [Dymola symbolic processing pipeline](https://www.claytex.com/tech-blog/model-translation-and-symbolic-manipulation/)
     with some improvements. ModelingToolkit.jl has an open transformation pipeline
     that allows for users to extend and reorder transformation passes, where
-    `mtkbuild` is an adaptation of the Modia.jl-improved alias elimination
+    `structural_simplify` is an adaptation of the Modia.jl-improved alias elimination
     and tearing algorithms.
   - Both Modia and ModelingToolkit generate `DAEProblem` and `ODEProblem` forms for
     solving with [DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/).

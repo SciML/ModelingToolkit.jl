@@ -140,7 +140,7 @@ syslist = ModelingToolkit.get_systems(model)
 @test length(ModelingToolkit.initialization_equations(model)) == 2
 
 u0 = []
-prob = ODEProblem(mtkbuild(model), u0, (0.0, 10.0))
+prob = ODEProblem(structural_simplify(model), u0, (0.0, 10.0))
 sol = solve(prob, Rodas5P())
 @test length(sol.u[end]) == 2
 @test length(equations(prob.f.initializeprob.f.sys)) == 0

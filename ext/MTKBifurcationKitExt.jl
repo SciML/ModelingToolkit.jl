@@ -92,7 +92,7 @@ function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem,
         jac = true,
         kwargs...)
     if !ModelingToolkit.iscomplete(nsys)
-        error("A completed `NonlinearSystem` is required. Call `complete` or `mtkbuild` on the system before creating a `BifurcationProblem`")
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `BifurcationProblem`")
     end
     @set! nsys.index_cache = nothing # force usage of a parameter vector instead of `MTKParameters`
     # Creates F and J functions.
@@ -146,7 +146,7 @@ end
 # When input is a ODESystem.
 function BifurcationKit.BifurcationProblem(osys::ODESystem, args...; kwargs...)
     if !ModelingToolkit.iscomplete(osys)
-        error("A completed `ODESystem` is required. Call `complete` or `mtkbuild` on the system before creating a `BifurcationProblem`")
+        error("A completed `ODESystem` is required. Call `complete` or `structural_simplify` on the system before creating a `BifurcationProblem`")
     end
     nsys = NonlinearSystem([0 ~ eq.rhs for eq in full_equations(osys)],
         unknowns(osys),

@@ -42,7 +42,7 @@ Because our dynamical system is super simple, we will directly make an `ODESyste
 
 ```@example Attractors
 @named modlorenz = ODESystem(eqs, t)
-ssys = mtkbuild(modlorenz)
+ssys = structural_simplify(modlorenz)
 # The timespan given to the problem is irrelevant for DynamicalSystems.jl
 prob = ODEProblem(ssys, [], (0.0, 1.0), [])
 ```

@@ -383,7 +383,7 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
         initialization_data = nothing, cse = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed `NonlinearSystem` is required. Call `complete` or `mtkbuild` on the system before creating a `NonlinearFunction`")
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearFunction`")
     end
     f_gen = generate_function(sys, dvs, ps; expression = Val{true}, cse, kwargs...)
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
@@ -430,7 +430,7 @@ function SciMLBase.IntervalNonlinearFunction(
         p = nothing, eval_expression = false, eval_module = @__MODULE__,
         initialization_data = nothing, kwargs...)
     if !iscomplete(sys)
-        error("A completed `NonlinearSystem` is required. Call `complete` or `mtkbuild` on the system before creating a `IntervalNonlinearFunction`")
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `IntervalNonlinearFunction`")
     end
     if !isone(length(dvs)) || !isone(length(equations(sys)))
         error("`IntervalNonlinearFunction` only supports systems with a single equation and a single unknown.")
@@ -472,7 +472,7 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
         sparse = false, simplify = false,
         kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed `NonlinearSystem` is required. Call `complete` or `mtkbuild` on the system before creating a `NonlinearFunctionExpr`")
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearFunctionExpr`")
     end
     f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
     f = :($(GeneratedFunctionWrapper{(2, 2, is_split(sys))})($f_oop, $f_iip))
@@ -521,7 +521,7 @@ function IntervalNonlinearFunctionExpr(
         sys::NonlinearSystem, dvs = unknowns(sys), ps = parameters(sys),
         u0 = nothing; p = nothing, linenumbers = false, kwargs...)
     if !iscomplete(sys)
-        error("A completed `NonlinearSystem` is required. Call `complete` or `mtkbuild` on the system before creating a `IntervalNonlinearFunctionExpr`")
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `IntervalNonlinearFunctionExpr`")
     end
     if !isone(length(dvs)) || !isone(length(equations(sys)))
         error("`IntervalNonlinearFunctionExpr` only supports systems with a single equation and a single unknown.")
@@ -558,7 +558,7 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         parammap = DiffEqBase.NullParameters();
         check_length = true, kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed `NonlinearSystem` is required. Call `complete` or `mtkbuild` on the system before creating a `NonlinearProblem`")
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearProblem`")
     end
     f, u0, p = process_SciMLProblem(NonlinearFunction{iip}, sys, u0map, parammap;
         check_length, kwargs...)
@@ -592,7 +592,7 @@ function DiffEqBase.NonlinearLeastSquaresProblem{iip}(sys::NonlinearSystem, u0ma
         parammap = DiffEqBase.NullParameters();
         check_length = false, kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed `NonlinearSystem` is required. Call `complete` or `mtkbuild` on the system before creating a `NonlinearLeastSquaresProblem`")
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearLeastSquaresProblem`")
     end
     f, u0, p = process_SciMLProblem(NonlinearFunction{iip}, sys, u0map, parammap;
         check_length, kwargs...)
@@ -676,11 +676,11 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
         parammap = SciMLBase.NullParameters(); eval_expression = false, eval_module = @__MODULE__,
         cse = true, kwargs...) where {iip}
     if !iscomplete(sys) || get_tearing_state(sys) === nothing
-        error("A simplified `NonlinearSystem` is required. Call `mtkbuild` on the system before creating an `SCCNonlinearProblem`.")
+        error("A simplified `NonlinearSystem` is required. Call `structural_simplify` on the system before creating an `SCCNonlinearProblem`.")
     end
 
     if !is_split(sys)
-        error("The system has been simplified with `split = false`. `SCCNonlinearProblem` is not compatible with this system. Pass `split = true` to `mtkbuild` to use `SCCNonlinearProblem`.")
+        error("The system has been simplified with `split = false`. `SCCNonlinearProblem` is not compatible with this system. Pass `split = true` to `structural_simplify` to use `SCCNonlinearProblem`.")
     end
 
     ts = get_tearing_state(sys)
@@ -857,7 +857,7 @@ symbolically calculating numerical enhancements.
 function DiffEqBase.IntervalNonlinearProblem(sys::NonlinearSystem, uspan::NTuple{2},
         parammap = SciMLBase.NullParameters(); kwargs...)
     if !iscomplete(sys)
-        error("A completed `NonlinearSystem` is required. Call `complete` or `mtkbuild` on the system before creating a `IntervalNonlinearProblem`")
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `IntervalNonlinearProblem`")
     end
     if !isone(length(unknowns(sys))) || !isone(length(equations(sys)))
         error("`IntervalNonlinearProblem` only supports with a single equation and a single unknown.")
@@ -893,7 +893,7 @@ function NonlinearProblemExpr{iip}(sys::NonlinearSystem, u0map,
         check_length = true,
         kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed `NonlinearSystem` is required. Call `complete` or `mtkbuild` on the system before creating a `NonlinearProblemExpr`")
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearProblemExpr`")
     end
     f, u0, p = process_SciMLProblem(NonlinearFunctionExpr{iip}, sys, u0map, parammap;
         check_length, kwargs...)
@@ -933,7 +933,7 @@ function NonlinearLeastSquaresProblemExpr{iip}(sys::NonlinearSystem, u0map,
         check_length = false,
         kwargs...) where {iip}
     if !iscomplete(sys)
-        error("A completed `NonlinearSystem` is required. Call `complete` or `mtkbuild` on the system before creating a `NonlinearProblemExpr`")
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearProblemExpr`")
     end
     f, u0, p = process_SciMLProblem(NonlinearFunctionExpr{iip}, sys, u0map, parammap;
         check_length, kwargs...)
@@ -958,7 +958,7 @@ numerical enhancements.
 function IntervalNonlinearProblemExpr(sys::NonlinearSystem, uspan::NTuple{2},
         parammap = SciMLBase.NullParameters(); kwargs...)
     if !iscomplete(sys)
-        error("A completed `NonlinearSystem` is required. Call `complete` or `mtkbuild` on the system before creating a `IntervalNonlinearProblemExpr`")
+        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `IntervalNonlinearProblemExpr`")
     end
     if !isone(length(unknowns(sys))) || !isone(length(equations(sys)))
         error("`IntervalNonlinearProblemExpr` only supports with a single equation and a single unknown.")

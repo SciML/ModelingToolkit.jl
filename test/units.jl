@@ -140,24 +140,24 @@ D = Differential(t)
 eqs = [D(L) ~ v,
     V ~ L^3]
 @named sys = ODESystem(eqs, t)
-sys_simple = mtkbuild(sys)
+sys_simple = structural_simplify(sys)
 
 eqs = [D(V) ~ r,
     V ~ L^3]
 @named sys = ODESystem(eqs, t)
-sys_simple = mtkbuild(sys)
+sys_simple = structural_simplify(sys)
 
 @variables V [unit = u"m"^3] L [unit = u"m"]
 @parameters v [unit = u"m/s"] r [unit = u"m"^3 / u"s"] t [unit = u"s"]
 eqs = [V ~ r * t,
     V ~ L^3]
 @named sys = NonlinearSystem(eqs, [V, L], [t, r])
-sys_simple = mtkbuild(sys)
+sys_simple = structural_simplify(sys)
 
 eqs = [L ~ v * t,
     V ~ L^3]
 @named sys = NonlinearSystem(eqs, [V, L], [t, r])
-sys_simple = mtkbuild(sys)
+sys_simple = structural_simplify(sys)
 
 #Jump System
 @parameters β [unit = u"(mol^2*s)^-1"] γ [unit = u"(mol*s)^-1"] t [unit = u"s"] jumpmol [

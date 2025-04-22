@@ -13,7 +13,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 eqs = [D(u1) ~ -√(u1), D(u2) ~ -√(u2), D(u3) ~ -√(u3)]
 defaults = [u1 => 1.0, u2 => 2.0, u3 => 3.0]
 @named sys = ODESystem(eqs, t; defaults)
-sys = mtkbuild(sys)
+sys = structural_simplify(sys)
 ```
 
 This problem causes the ODE solver to crash:
