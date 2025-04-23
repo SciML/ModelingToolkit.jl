@@ -22,6 +22,12 @@ function activate_downstream_env()
     Pkg.instantiate()
 end
 
+function activate_dynamic_optimization_env()
+    Pkg.activate("dynamic_optimization")
+    Pkg.develop(PackageSpec(path = dirname(@__DIR__)))
+    Pkg.instantiate()
+end
+
 @time begin
     if GROUP == "All" || GROUP == "InterfaceI"
         @testset "InterfaceI" begin
@@ -142,5 +148,10 @@ end
         @safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl")
         @safetestset "InfiniteOpt Extension Test" include("extensions/test_infiniteopt.jl")
         @safetestset "JuMPControl Extension Test" include("extensions/jump_control.jl")
+    end
+
+    if GROUP == "All" || GROUP == "Dynamic Optimization"
+        activate_dynamic_optimization_env()
+        @safetestset "JuMP Collocation Solvers" include("dynamic_optimization/jump_control")
     end
 end

@@ -765,7 +765,9 @@ function process_constraint_system(
     constraintps = OrderedSet()
     for cons in constraints
         collect_vars!(constraintsts, constraintps, cons, iv)
+        union!(constraintsts, collect_applied_operators(cons, Differential))
     end
+    @show constraintsts
 
     # Validate the states.
     validate_vars_and_find_ps!(constraintsts, constraintps, sts, iv)
@@ -807,6 +809,9 @@ function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
         elseif length(arguments(var)) > 1
             throw(ArgumentError("Too many arguments for variable $var."))
         elseif length(arguments(var)) == 1
+            if iscall(var) && operation(var) isa Differential
+                var = only(arguments(var))
+            end
             arg = only(arguments(var))
             operation(var)(iv) ∈ sts ||
                 throw(ArgumentError("Variable $var is not a variable of the ODESystem. Called variables must be variables of the ODESystem."))

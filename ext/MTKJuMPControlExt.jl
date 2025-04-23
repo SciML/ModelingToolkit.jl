@@ -30,7 +30,7 @@ struct InfiniteOptControlProblem{uType, tType, isinplace, P, F, K} <:
     model::InfiniteModel
     kwargs::K
 
-    function InfiniteOptControlProblem(f, u0, tspan, p, model; kwargs...)
+    function InfiniteOptControlProblem(f, u0, tspan, p, model, kwargs...)
         new{typeof(u0), typeof(tspan), SciMLBase.isinplace(f),
             typeof(p), typeof(f), typeof(kwargs)}(f, u0, tspan, p, model, kwargs)
     end
@@ -58,7 +58,7 @@ function MTK.JuMPControlProblem(sys::ODESystem, u0map, tspan, pmap;
         guesses = Dict(), kwargs...)
     MTK.warn_overdetermined(sys, u0map)
     _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
-    f, u0, p = MTK.process_SciMLProblem(ControlFunction, sys, _u0map, pmap;
+    f, u0, p = MTK.process_SciMLProblem(ODEInputFunction, sys, _u0map, pmap;
         t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
 
     pmap = MTK.todict(pmap)
@@ -84,7 +84,7 @@ function MTK.InfiniteOptControlProblem(sys::ODESystem, u0map, tspan, pmap;
         guesses = Dict(), kwargs...)
     MTK.warn_overdetermined(sys, u0map)
     _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
-    f, u0, p = MTK.process_SciMLProblem(ControlFunction, sys, _u0map, pmap;
+    f, u0, p = MTK.process_SciMLProblem(ODEInputFunction, sys, _u0map, pmap;
         t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
 
     pmap = MTK.todict(pmap)
@@ -116,7 +116,7 @@ function init_model(sys, tspan, steps, u0map, pmap, u0; is_free_t = false)
 
     @infinite_parameter(model, t in [tspan[1], tspan[2]], num_supports=steps)
     @variable(model, U[i = 1:length(states)], Infinite(t), start=u0[i])
-    c0 = [pmap[c] for c in ctrls]
+    c0 = MTK.value.([pmap[c] for c in ctrls])
     @variable(model, V[i = 1:length(ctrls)], Infinite(t), start=c0[i])
 
     set_jump_bounds!(model, sys, pmap)
@@ -124,8 +124,9 @@ function init_model(sys, tspan, steps, u0map, pmap, u0; is_free_t = false)
     add_user_constraints!(model, sys, pmap; is_free_t)
 
     stidxmap = Dict([v => i for (i, v) in enumerate(states)])
+    u0map = Dict([MTK.default_toterm(MTK.value(k)) => v for (k, v) in u0map])
     u0_idxs = has_alg_eqs(sys) ? collect(1:length(states)) :
-              [stidxmap[k] for (k, v) in u0map]
+        [stidxmap[MTK.default_toterm(k)] for (k, v) in u0map]
     add_initial_constraints!(model, u0, u0_idxs, tspan[1])
     return model
 end
@@ -190,7 +191,10 @@ function add_user_constraints!(model::InfiniteModel, sys, pmap; is_free_t = fals
         end
     end
 
-    jconstraints = substitute_jump_vars(model, sys, pmap, jconstraints)
+    auxmap = Dict([u => MTK.default_toterm(MTK.value(u)) for u in unknowns(conssys)])
+    jconstraints = substitute_jump_vars(model, sys, pmap, jconstraints; auxmap)
+    
+    # Substitute to-term'd variables
     for (i, cons) in enumerate(jconstraints)
         if cons isa Equation
             @constraint(model, cons.lhs - cons.rhs==0, base_name="user[$i]")
@@ -207,25 +211,28 @@ function add_initial_constraints!(model::InfiniteModel, u0, u0_idxs, ts)
     @constraint(model, initial[i in u0_idxs], U[i](ts)==u0[i])
 end
 
-function substitute_jump_vars(model, sys, pmap, exprs)
+function substitute_jump_vars(model, sys, pmap, exprs; auxmap = Dict())
     iv = MTK.get_iv(sys)
     sts = unknowns(sys)
     cts = MTK.unbound_inputs(sys)
     U = model[:U]
     V = model[:V]
+    exprs = map(c -> Symbolics.fixpoint_sub(c, auxmap), exprs)
+
     # for variables like x(t)
     whole_interval_map = Dict([[v => U[i] for (i, v) in enumerate(sts)];
                                [v => V[i] for (i, v) in enumerate(cts)]])
-    exprs = map(c -> Symbolics.substitute(c, whole_interval_map), exprs)
+    exprs = map(c -> Symbolics.fixpoint_sub(c, whole_interval_map), exprs)
 
     # for variables like x(1.0)
     x_ops = [MTK.operation(MTK.unwrap(st)) for st in sts]
     c_ops = [MTK.operation(MTK.unwrap(ct)) for ct in cts]
     fixed_t_map = Dict([[x_ops[i] => U[i] for i in 1:length(U)];
                         [c_ops[i] => V[i] for i in 1:length(V)]])
-    exprs = map(c -> Symbolics.substitute(c, fixed_t_map), exprs)
 
-    exprs = map(c -> Symbolics.substitute(c, Dict(pmap)), exprs)
+    exprs = map(c -> Symbolics.fixpoint_sub(c, fixed_t_map), exprs)
+
+    exprs = map(c -> Symbolics.fixpoint_sub(c, Dict(pmap)), exprs)
     exprs
 end
 
@@ -255,8 +262,10 @@ function add_jump_solve_constraints!(prob, tableau; is_free_t = false)
     model = prob.model
     f = prob.f
     p = prob.p
+
     t = model[:t]
-    tsteps = supports(model[:t])
+    tsteps = supports(t)
+    tmax = tsteps[end]
     pop!(tsteps)
     tₛ = is_free_t ? model[:tf] : 1
     dt = tsteps[2] - tsteps[1]
@@ -280,6 +289,7 @@ function add_jump_solve_constraints!(prob, tableau; is_free_t = false)
                 base_name="solve_time_$τ")
             empty!(K)
         end
+        @show num_variables(model)
     else
         @variable(model, K[1:length(α), 1:nᵤ], Infinite(t), start=tsteps[1])
         ΔUs = A * K
@@ -288,10 +298,10 @@ function add_jump_solve_constraints!(prob, tableau; is_free_t = false)
             for (i, h) in enumerate(c)
                 ΔU = @view ΔUs[i, :]
                 Uₙ = U + ΔU * dt
-                @constraint(model, [j = 1:nᵤ], K[i, j](τ)==tₛ * f(Uₙ, V, p, τ + h * dt)[j],
-                    DomainRestrictions(t => τ + h * dt), base_name="solve_K($τ)")
+                @constraint(model, [j = 1:nᵤ], K[i, j](τ)==(tₛ * f(Uₙ, V, p, τ + h * dt)[j]),
+                            DomainRestrictions(t => min(τ + h * dt, tmax)), base_name="solve_K($τ)")
             end
-            @constraint(model, [n = 1:nᵤ], U[n](τ) + ΔU_tot[n]==U[n](τ + dt),
+            @constraint(model, [n = 1:nᵤ], U[n](τ) + ΔU_tot[n]==U[n](min(τ + dt, tmax)),
                 DomainRestrictions(t => τ), base_name="solve_U($τ)")
         end
     end
@@ -323,6 +333,7 @@ function DiffEqBase.solve(
     unregister(model, :K)
     for var in all_variables(model)
         if occursin("K", JuMP.name(var))
+            unregister(model, Symbol(JuMP.name(var)))
             delete(model, var)
         end
     end

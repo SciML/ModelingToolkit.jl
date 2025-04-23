@@ -163,6 +163,11 @@ function __structural_simplify(
     end
 end
 
+function toterm_auxsystems(system::ODESystem)
+    constraints = system.constraintsystem.constraints
+
+end
+
 """
     $(TYPEDSIGNATURES)
 

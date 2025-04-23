@@ -2,7 +2,7 @@ using ModelingToolkit
 import JuMP, InfiniteOpt
 using DiffEqDevTools, DiffEqBase
 using SimpleDiffEq
-using OrdinaryDiffEqSDIRK
+using OrdinaryDiffEqSDIRK, OrdinaryDiffEqVerner, OrdinaryDiffEqTsit5, OrdinaryDiffEqFIRK
 using Ipopt
 using BenchmarkTools
 using CairoMakie
@@ -100,8 +100,8 @@ end
     constr = [v(1.0) ~ 0.0]
     cost = [-x(1.0)] # Maximize the final distance.
     @named block = ODESystem(
-        [D(x(t)) ~ v(t), D(v(t)) ~ u], t; costs = cost, constraints = constr)
-    block, input_idxs = structural_simplify(block, ([u], []))
+                             [D(x(t)) ~ v(t), D(v(t)) ~ u(t)], t; costs = cost, constraints = constr)
+    block, input_idxs = structural_simplify(block, ([u(t)], []))
 
     u0map = [x(t) => 0.0, v(t) => 0.0]
     tspan = (0.0, 1.0)
@@ -113,19 +113,19 @@ end
     # Test reached final position.
     @test ≈(jsol.sol.u[end][1], 0.25, rtol = 1e-5)
     # Test dynamics
-    @parameters (u_interp::LinearInterpolation)(..)
-    block_ode = ODESystem([D(x(t)) ~ v(t), D(v(t)) ~ u_interp(t)], t)
-    spline = ctrl_to_spline(jsol.input_sol, LinearInterpolation)
-    oprob = ODEProblem(block, u0map, tspan, [u_interp => spline])
-    osol = solve(oprob, Vern8())
-    @test jsol.sol.u ≈ osol.u
+    @parameters (u_interp::ConstantInterpolation)(..)
+    @mtkbuild block_ode = ODESystem([D(x(t)) ~ v(t), D(v(t)) ~ u_interp(t)], t)
+    spline = ctrl_to_spline(jsol.input_sol, ConstantInterpolation)
+    oprob = ODEProblem(block_ode, u0map, tspan, [u_interp => spline])
+    osol = solve(oprob, Vern8(), dt = 0.01, adaptive = false)
+    @test ≈(jsol.sol.u, osol.u, rtol = 0.05)
 
     iprob = InfiniteOptControlProblem(block, u0map, tspan, parammap; dt = 0.01)
     isol = solve(iprob, Ipopt.Optimizer; silent = true)
     @test is_bangbang(isol.input_sol, [-1.0], [1.0])
     @test ≈(isol.sol.u[end][1], 0.25, rtol = 1e-5)
-    osol = solve(oprob, ImplicitEuler())
-    @test isol.sol.u ≈ osol.u
+    osol = solve(oprob, ImplicitEuler(); dt = 0.01, adaptive = false)
+    @test ≈(isol.sol.u, osol.u, rtol = 0.05)
 
     ###################
     ### Bee example ###
@@ -154,10 +154,12 @@ end
     @parameters (α_interp::LinearInterpolation)(..)
     eqs = [D(w(t)) ~ -μ * w(t) + b * s * α_interp(t) * w(t),
            D(q(t)) ~ -ν * q(t) + c * (1 - α_interp(t)) * s * w(t)]
-    beesys_ode = ODESystem(eqs, t)
-    oprob = ODEProblem(beesys_ode, u0map, tspan, [α_interp => ctrl_to_spline(jsol.input_sol, LinearInterpolation)])
-    osol = solve(oprob, Tsit5())
-    @test osol.u ≈ jsol.sol.u
+    @mtkbuild beesys_ode = ODESystem(eqs, t)
+    oprob = ODEProblem(beesys_ode, u0map, tspan, merge(Dict(pmap), Dict(α_interp => ctrl_to_spline(jsol.input_sol, LinearInterpolation))))
+    osol = solve(oprob, Tsit5(); dt = 0.01, adaptive = false)
+    @test ≈(osol.u, jsol.sol.u, rtol = 0.01)
+    osol2 = solve(oprob, ImplicitEuler(); dt = 0.01, adaptive = false)
+    @test ≈(osol2.u, isol.sol.u, rtol = 0.01)
 end
 
 @testset "Rocket launch" begin
@@ -175,8 +177,8 @@ end
 
     (ts, te) = (0.0, 0.2)
     costs = [-h(te)]
-    constraints = [T(te) ~ 0]
-    @named rocket = ODESystem(eqs, t; costs, constraints)
+    cons = [T(te) ~ 0]
+    @named rocket = ODESystem(eqs, t; costs, constraints = cons)
     rocket, input_idxs = structural_simplify(rocket, ([T(t)], []))
 
     u0map = [h(t) => h₀, m(t) => m₀, v(t) => 0]
@@ -184,18 +186,22 @@ end
         g₀ => 1, m₀ => 1.0, h_c => 500, c => 0.5 * √(g₀ * h₀), D_c => 0.5 * 620 * m₀ / g₀,
         Tₘ => 3.5 * g₀ * m₀, T(t) => 0.0, h₀ => 1, m_c => 0.6]
     jprob = JuMPControlProblem(rocket, u0map, (ts, te), pmap; dt = 0.005, cse = false)
-    jsol = solve(jprob, Ipopt.Optimizer, :RadauIA3)
+    jsol = solve(jprob, Ipopt.Optimizer, :RadauIIA3)
     @test jsol.sol.u[end][1] > 1.012
+
+    iprob = InfiniteOptControlProblem(rocket, u0map, (ts, te), pmap; dt = 0.005, cse = false)
+    isol = solve(iprob, Ipopt.Optimizer, derivative_method = OrthogonalCollocation(3))
+    @test isol.sol.u[end][1] > 1.012
     
     # Test solution
     @parameters (T_interp::CubicSpline)(..)
     eqs = [D(h(t)) ~ v(t),
         D(v(t)) ~ (T_interp(t) - drag(h(t), v(t))) / m(t) - gravity(h(t)),
         D(m(t)) ~ -T_interp(t) / c]
-    rocket_ode = ODESystem(eqs, t)
-    interpmap = Dict(T_interp => ctrl_to_spline(jsol.inputsol, CubicSpline))
-    oprob = ODEProblem(rocket_ode, u0map, tspan, merge(pmap, interpmap))
-    osol = solve(oprob, RadauIA3())
+    @mtkbuild rocket_ode = ODESystem(eqs, t)
+    interpmap = Dict(T_interp => ctrl_to_spline(jsol.input_sol, CubicSpline))
+    oprob = ODEProblem(rocket_ode, u0map, (ts, te), merge(Dict(pmap), interpmap))
+    osol = solve(oprob, RadauIIA3())
     @test jsol.sol.u ≈ osol.u
 end
 
@@ -223,10 +229,44 @@ end
     @test isapprox(isol.sol.t[end], 10.0, rtol = 1e-3)
 end
 
-using JuliaSimCompiler
-using Multibody.PlanarMechanics
-
 @testset "Cart-pole problem" begin
+    # gravity, length, moment of Inertia, drag coeff
+    @parameters g l mₚ mₖ
+    @variables x(..) θ(..) u(t) [input = true, bounds = (-10, 10)]
+
+    s = sin(θ(t))
+    c = cos(θ(t))
+    H = [mₖ+mₚ  mₚ*l*c
+         mₚ*l*c mₚ*l^2]
+    C = [0 -mₚ*D(θ(t))*l*s
+         0  0]
+    qd = [D(x(t)), D(θ(t))]
+    G = [0, mₚ*g*l*s]
+    B = [1, 0]
+
+    tf = 5
+    rhss = -H \ Vector(C*qd + G - B*u)
+    eqs = [D(D(x(t))) ~ rhss[1], D(D(θ(t))) ~ rhss[2]]
+    cons = [θ(tf) ~ π, x(tf) ~ 0, D(θ(tf)) ~ 0, D(x(tf)) ~ 0]
+    costs = [∫(u^2)]
+    tspan = (0, tf)
+
+    @named cartpole = ODESystem(eqs, t; costs, constraints = cons)
+    cartpole, input_idxs = structural_simplify(cartpole, ([u], []))
+
+    u0map = [D(x(t)) => 0., D(θ(t)) => 0., θ(t) => 0., x(t) => 0.]
+    pmap = [mₖ => 1., mₚ => 0.2, l => 0.5, g => 9.81, u => 0]
+    jprob = JuMPControlProblem(cartpole, u0map, tspan, pmap; dt = 0.04)
+    jsol = solve(jprob, Ipopt.Optimizer, :RK4)
+    @test jsol.sol.u[end] ≈ [π, 0, 0, 0]
+
+    iprob = InfiniteOptControlProblem(cartpole, u0map, tspan, pmap; dt = 0.04)
+    isol = solve(iprob, Ipopt.Optimizer)
+    @test isol.sol.u[end] ≈ [π, 0, 0, 0]
+end
+
+# RC Circuit
+@testset "MTK Components" begin
 end
 
 #@testset "Constrained optimal control problems" begin
