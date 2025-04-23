@@ -126,8 +126,8 @@ prob = ODEProblem(ball, Pair[], tspan)
 
 sol = solve(prob, Tsit5())
 @assert 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
-@assert minimum(sol[y]) > -1.5 # check wall conditions
-@assert maximum(sol[y]) < 1.5  # check wall conditions
+@assert minimum(sol[y]) >= -1.5 # check wall conditions
+@assert maximum(sol[y]) <= 1.5  # check wall conditions
 
 tv = sort([LinRange(0, 10, 200); sol.t])
 plot(sol(tv)[y], sol(tv)[x], line_z = tv)
