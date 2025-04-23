@@ -224,7 +224,7 @@ To see full examples that perform state estimation with ModelingToolkit models, 
 Pages = ["disturbance_modeling.md"]
 ```
 
-```@autodocs
+```@autodocs; canonical = false
 Modules = [ModelingToolkit]
 Pages   = ["systems/analysis_points.jl"]
 Order   = [:function, :type]
