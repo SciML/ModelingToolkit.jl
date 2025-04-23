@@ -769,7 +769,7 @@ properly.
 
 $(TYPEDFIELDS)
 """
-struct InitializationMetadata{R <: ReconstructInitializeprob, SIU}
+struct InitializationMetadata{R <: ReconstructInitializeprob, GIU, SIU}
     """
     The `u0map` used to construct the initialization.
     """
@@ -795,6 +795,11 @@ struct InitializationMetadata{R <: ReconstructInitializeprob, SIU}
     `ReconstructInitializeprob` for this initialization problem.
     """
     oop_reconstruct_u0_p::R
+    """
+    A function which takes the parameter object of the problem and returns
+    `Initial.(unknowns(sys))`.
+    """
+    get_initial_unknowns::GIU
     """
     A function which takes the `u0` of the problem and sets
     `Initial.(unknowns(sys))`.
@@ -843,7 +848,7 @@ function maybe_build_initialization_problem(
     meta = InitializationMetadata(
         u0map, pmap, guesses, Vector{Equation}(initialization_eqs),
         use_scc, ReconstructInitializeprob(sys, initializeprob.f.sys),
-        setp(sys, Initial.(unknowns(sys))))
+        getp(sys, Initial.(unknowns(sys))), setp(sys, Initial.(unknowns(sys))))
 
     if is_time_dependent(sys)
         all_init_syms = Set(all_symbols(initializeprob))

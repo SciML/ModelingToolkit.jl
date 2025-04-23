@@ -592,17 +592,26 @@ end
 function SciMLBase.late_binding_update_u0_p(
         prob, sys::AbstractSystem, u0, p, t0, newu0, newp)
     supports_initialization(sys) || return newu0, newp
+
+    initdata = prob.f.initialization_data
+    meta = initdata === nothing ? nothing : initdata.metadata
     # If the user passes `p` to `remake` but not `u0` and `u0` isn't empty,
     # and if the system supports initialization (so it has initial parameters),
     # and if the initialization solves for `u0`,
     # THEN copy the values of `Initial`s to `newu0`.
     if u0 === missing
-        if newu0 !== nothing && p !== missing && supports_initialization(sys) && prob.f.initialization_data !== nothing && prob.f.initialization_data.initializeprobmap !== nothing
+        if newu0 !== nothing && p !== missing && supports_initialization(sys) &&
+           initdata !== nothing && initdata.initializeprobmap !== nothing
+            getter = if meta isa InitializationMetadata
+                meta.get_initial_unknowns
+            else
+                getu(sys, Initial.(unknowns(sys)))
+            end
             if ArrayInterface.ismutable(newu0)
-                copyto!(newu0, getu(sys, Initial.(unknowns(sys)))(newp))
+                copyto!(newu0, getter(newp))
             else
                 T = StaticArrays.similar_type(newu0)
-                newu0 = T(getu(sys, Initial.(unknowns(sys)))(newp))
+                newu0 = T(getter(newp))
             end
         end
         return newu0, newp
@@ -613,7 +622,6 @@ function SciMLBase.late_binding_update_u0_p(
         # if `p` is not provided or is symbolic
         p === missing || eltype(p) <: Pair || return newu0, newp
         (newu0 === nothing || isempty(newu0)) && return newu0, newp
-        initdata = prob.f.initialization_data
         initdata === nothing && return newu0, newp
         meta = initdata.metadata
         meta isa InitializationMetadata || return newu0, newp
