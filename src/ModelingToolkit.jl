@@ -85,8 +85,8 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   substituter, scalarize, getparent, hasderiv, hasdiff
 
 import DiffEqBase: @add_kwonly
-export independent_variables, unknowns, parameters, full_parameters, continuous_events,
-       discrete_events
+export independent_variables, unknowns, observables, parameters, full_parameters,
+       continuous_events, discrete_events
 @reexport using Symbolics
 @reexport using UnPack
 RuntimeGeneratedFunctions.init(@__MODULE__)

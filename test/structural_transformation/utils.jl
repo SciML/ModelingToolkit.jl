@@ -51,8 +51,8 @@ end
         [D(x) ~ z[1] + z[2] + foo(z)[1], y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t)
     @test length(equations(sys)) == 1
     @test length(observed(sys)) == 7
-    @test any(eq -> isequal(eq.lhs, y), observed(sys))
-    @test any(eq -> isequal(eq.lhs, z), observed(sys))
+    @test any(obs -> isequal(obs, y), observables(sys))
+    @test any(obs -> isequal(obs, z), observables(sys))
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [foo => _tmp_fn])
     @test_nowarn prob.f(prob.u0, prob.p, 0.0)
 

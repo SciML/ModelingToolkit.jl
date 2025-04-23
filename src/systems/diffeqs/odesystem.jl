@@ -47,7 +47,7 @@ struct ODESystem <: AbstractODESystem
     var_to_name::Any
     """Control parameters (some subset of `ps`)."""
     ctrls::Vector
-    """Observed variables."""
+    """Observed equations."""
     observed::Vector{Equation}
     """System of constraints that must be satisfied by the solution to the system."""
     constraintsystem::Union{Nothing, ConstraintsSystem}
@@ -532,7 +532,7 @@ function build_explicit_observed_function(sys, ts;
 
     vs = ModelingToolkit.vars(ts; op)
     namespace_subs = Dict()
-    ns_map = Dict{Any, Any}(renamespace(sys, eq.lhs) => eq.lhs for eq in observed(sys))
+    ns_map = Dict{Any, Any}(renamespace(sys, obs) => obs for obs in observables(sys))
     for sym in unknowns(sys)
         ns_map[renamespace(sys, sym)] = sym
         if iscall(sym) && operation(sym) === getindex

@@ -59,7 +59,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     ps::Vector
     """Array variables."""
     var_to_name::Any
-    """Observed variables."""
+    """Observed equations."""
     observed::Vector{Equation}
     """The name of the system."""
     name::Symbol

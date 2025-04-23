@@ -320,6 +320,7 @@ sol = solve(prob)
 plot(sol)
 ```
 
+By default, this plots only the unknown variables that had to be solved for.
 However, what if we wanted to plot the timeseries of a different variable? Do
 not worry, that information was not thrown away! Instead, transformations
 like `structural_simplify` simply change unknown variables into observables which are
@@ -345,4 +346,10 @@ or we can plot the timeseries of the resistor's voltage:
 
 ```@example acausal
 plot(sol, idxs = [rc_model.resistor.v])
+```
+
+Although it may be more confusing than helpful here, we can of course also plot all unknown and observed variables together:
+
+```@example acausal
+plot(sol, idxs = [unknowns(rc_model); observables(rc_model)])
 ```

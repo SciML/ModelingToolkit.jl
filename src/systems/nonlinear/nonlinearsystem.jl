@@ -32,7 +32,7 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     ps::Vector
     """Array variables."""
     var_to_name::Any
-    """Observed variables."""
+    """Observed equations."""
     observed::Vector{Equation}
     """
     Jacobian matrix. Note: this field will not be defined until

@@ -721,7 +721,7 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
         sys = ModelingToolkit.tearing(
             sys, state; simplify, mm, check_consistency, kwargs...)
     end
-    fullunknowns = [map(eq -> eq.lhs, observed(sys)); unknowns(sys)]
+    fullunknowns = [observables(sys); unknowns(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)
 
     ModelingToolkit.invalidate_cache!(sys), input_idxs
