@@ -33,11 +33,7 @@ function structural_simplify(
         disturbance_inputs = Any[],
         kwargs...)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
-    if inputs isa Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}}
-        sys, inputs, outputs = ap_preprocessing(sys, inputs, outputs, kwargs...)
-    end
-
-    newsys′ = __structural_simplification(sys; simplify,
+    newsys′ = __structural_simplify(sys; simplify,
         allow_symbolic, allow_parameter, conservative, fully_determined,
         inputs, outputs, disturbance_inputs,
         kwargs...)
@@ -69,15 +65,15 @@ function structural_simplify(
     end
 end
 
-function __structural_simplification(sys::JumpSystem, args...; kwargs...)
+function __structural_simplify(sys::JumpSystem, args...; kwargs...)
     return sys
 end
 
-function __structural_simplification(sys::SDESystem, args...; kwargs...)
-    return __structural_simplification(ODESystem(sys), args...; kwargs...)
+function __structural_simplify(sys::SDESystem, args...; kwargs...)
+    return __structural_simplify(ODESystem(sys), args...; kwargs...)
 end
 
-function __structural_simplification(sys::AbstractSystem; simplify = false,
+function __structural_simplify(sys::AbstractSystem; simplify = false,
         inputs = Any[], outputs = Any[],
         disturbance_inputs = Any[],
         kwargs...)
