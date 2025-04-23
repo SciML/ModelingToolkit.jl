@@ -621,6 +621,188 @@ function build_operating_point!(sys::AbstractSystem,
 end
 
 """
+    $(TYPEDEF)
+
+A callable struct used to reconstruct the `u0` and `p` of the initialization problem
+with promoted types.
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
+struct ReconstructInitializeprob{G}
+    """
+    A function which when given the original problem and initialization problem, returns
+    the parameter object of the initialization problem with values copied from the
+    original.
+    """
+    getter::G
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given an index provider `indp` and a vector of symbols `syms` return a type-stable getter
+function by splitting `syms` into contiguous buffers where the getter of each buffer
+is type-stable and constructing a function that calls and concatenates the results.
+"""
+function concrete_getu(indp, syms::AbstractVector)
+    # a list of contiguous buffer
+    split_syms = [Any[syms[1]]]
+    # the type of the getter of the last buffer
+    current = typeof(getu(indp, syms[1]))
+    for sym in syms[2:end]
+        getter = getu(indp, sym)
+        if typeof(getter) != current
+            # if types don't match, build a new buffer
+            push!(split_syms, [])
+            current = typeof(getter)
+        end
+        push!(split_syms[end], sym)
+    end
+    split_syms = Tuple(split_syms)
+    # the getter is now type-stable, and we can vcat it to get the full buffer
+    return Base.Fix1(reduce, vcat) ∘ getu(indp, split_syms)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Construct a `ReconstructInitializeprob` which reconstructs the `u0` and `p` of `dstsys`
+with values from `srcsys`.
+"""
+function ReconstructInitializeprob(
+        srcsys::AbstractSystem, dstsys::AbstractSystem)
+    @assert is_initializesystem(dstsys)
+    if is_split(dstsys)
+        # if we call `getu` on this (and it were able to handle empty tuples) we get the
+        # fields of `MTKParameters` except caches.
+        syms = reorder_parameters(dstsys, parameters(dstsys); flatten = false)
+        # `dstsys` is an initialization system, do basically everything is a tunable
+        # and tunables are a mix of different types in `srcsys`. No initials. Constants
+        # are going to be constants in `srcsys`, as are `nonnumeric`.
+
+        # `syms[1]` is always the tunables because `srcsys` will have initials.
+        tunable_syms = syms[1]
+        tunable_getter = concrete_getu(srcsys, tunable_syms)
+        rest_getters = map(Base.tail(Base.tail(syms))) do buf
+            if buf == ()
+                return Returns(())
+            else
+                return getu(srcsys, buf)
+            end
+        end
+        getters = (tunable_getter, Returns(SizedVector{0, Float64}()), rest_getters...)
+        getter = let getters = getters
+            function _getter(valp, initprob)
+                oldcache = parameter_values(initprob).caches
+                MTKParameters(getters[1](valp), getters[2](valp), getters[3](valp),
+                    getters[4](valp), getters[5](valp), oldcache isa Tuple{} ? () :
+                                                        copy.(oldcache))
+            end
+        end
+    else
+        syms = parameters(dstsys)
+        getter = let inner = concrete_getu(srcsys, syms)
+            function _getter2(valp, initprob)
+                inner(valp)
+            end
+        end
+    end
+    return ReconstructInitializeprob(getter)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Copy values from `srcvalp` to `dstvalp`. Returns the new `u0` and `p`.
+"""
+function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
+    # copy parameters
+    newp = rip.getter(srcvalp, dstvalp)
+    # no `u0`, so no type-promotion
+    if state_values(dstvalp) === nothing
+        return nothing, newp
+    end
+    # the `eltype` of the `u0` of the source
+    srcu0 = state_values(srcvalp)
+    T = srcu0 === nothing ? Union{} : eltype(srcu0)
+    # promote with the tunable eltype
+    if parameter_values(dstvalp) isa MTKParameters
+        if !isempty(newp.tunable)
+            T = promote_type(eltype(newp.tunable), T)
+        end
+    elseif !isempty(newp)
+        T = promote_type(eltype(newp), T)
+    end
+    # and the eltype of the destination u0
+    if T == eltype(state_values(dstvalp))
+        u0 = state_values(dstvalp)
+    elseif T != Union{}
+        u0 = T.(state_values(dstvalp))
+    end
+    # apply the promotion to tunables portion
+    buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Tunable(), newp)
+    if eltype(buf) != T
+        # only do a copy if the eltype doesn't match
+        newbuf = similar(buf, T)
+        copyto!(newbuf, buf)
+        newp = repack(newbuf)
+    end
+    # and initials portion
+    buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Initials(), newp)
+    if eltype(buf) != T
+        newbuf = similar(buf, T)
+        copyto!(newbuf, buf)
+        newp = repack(newbuf)
+    end
+    return u0, newp
+end
+
+"""
+    $(TYPEDEF)
+
+Metadata attached to `OverrideInitData` used in `remake` hooks for handling initialization
+properly.
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
+struct InitializationMetadata{R <: ReconstructInitializeprob, SIU}
+    """
+    The `u0map` used to construct the initialization.
+    """
+    u0map::Dict{Any, Any}
+    """
+    The `pmap` used to construct the initialization.
+    """
+    pmap::Dict{Any, Any}
+    """
+    The `guesses` used to construct the initialization.
+    """
+    guesses::Dict{Any, Any}
+    """
+    The `initialization_eqs` in addition to those of the system that were used to construct
+    the initialization.
+    """
+    additional_initialization_eqs::Vector{Equation}
+    """
+    Whether to use `SCCNonlinearProblem` if possible.
+    """
+    use_scc::Bool
+    """
+    `ReconstructInitializeprob` for this initialization problem.
+    """
+    oop_reconstruct_u0_p::R
+    """
+    A function which takes the `u0` of the problem and sets
+    `Initial.(unknowns(sys))`.
+    """
+    set_initial_unknowns!::SIU
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 Build and return the initialization problem and associated data as a `NamedTuple` to be passed
@@ -632,8 +814,8 @@ All other keyword arguments are forwarded to `InitializationProblem`.
 """
 function maybe_build_initialization_problem(
         sys::AbstractSystem, op::AbstractDict, u0map, pmap, t, defs,
-        guesses, missing_unknowns; implicit_dae = false,
-        u0_constructor = identity, floatT = Float64, kwargs...)
+        guesses, missing_unknowns; implicit_dae = false, u0_constructor = identity,
+        floatT = Float64, initialization_eqs = [], use_scc = true, kwargs...)
     guesses = merge(ModelingToolkit.guesses(sys), todict(guesses))
 
     if t === nothing && is_time_dependent(sys)
@@ -641,7 +823,7 @@ function maybe_build_initialization_problem(
     end
 
     initializeprob = ModelingToolkit.InitializationProblem{true, SciMLBase.FullSpecialize}(
-        sys, t, u0map, pmap; guesses, kwargs...)
+        sys, t, u0map, pmap; guesses, initialization_eqs, use_scc, kwargs...)
     if state_values(initializeprob) !== nothing
         initializeprob = remake(initializeprob; u0 = floatT.(state_values(initializeprob)))
     end
@@ -658,7 +840,10 @@ function maybe_build_initialization_problem(
     end
     initializeprob = remake(initializeprob; p = initp)
 
-    meta = get_metadata(initializeprob.f.sys)
+    meta = InitializationMetadata(
+        u0map, pmap, guesses, Vector{Equation}(initialization_eqs),
+        use_scc, ReconstructInitializeprob(sys, initializeprob.f.sys),
+        setp(sys, Initial.(unknowns(sys))))
 
     if is_time_dependent(sys)
         all_init_syms = Set(all_symbols(initializeprob))
@@ -710,7 +895,7 @@ function maybe_build_initialization_problem(
     return (;
         initialization_data = SciMLBase.OverrideInitData(
             initializeprob, update_initializeprob!, initializeprobmap,
-            initializeprobpmap))
+            initializeprobpmap; metadata = meta))
 end
 
 """
