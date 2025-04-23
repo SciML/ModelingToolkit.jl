@@ -1,5 +1,5 @@
 """
-    lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; initialize = true, initialization_solver_alg = TrustRegion(), kwargs...)
+    lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false, initialize = true, initialization_solver_alg = TrustRegion(), kwargs...)
 
 Return a function that linearizes the system `sys`. The function [`linearize`](@ref) provides a higher-level and easier to use interface.
 
@@ -22,6 +22,7 @@ The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occ
   - `sys`: An [`ODESystem`](@ref). This function will automatically apply simplification passes on `sys` and return the resulting `simplified_sys`.
   - `inputs`: A vector of variables that indicate the inputs of the linearized input-output model.
   - `outputs`: A vector of variables that indicate the outputs of the linearized input-output model.
+  - `simplify`: Apply simplification in tearing.
   - `initialize`: If true, a check is performed to ensure that the operating point is consistent (satisfies algebraic equations). If the op is not consistent, initialization is performed.
   - `initialization_solver_alg`: A NonlinearSolve algorithm to use for solving for a feasible set of state and algebraic variables that satisfies the specified operating point.
   - `autodiff`: An `ADType` supported by DifferentiationInterface.jl to use for calculating the necessary jacobians. Defaults to using `AutoForwardDiff()`
@@ -29,8 +30,8 @@ The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occ
 
 See also [`linearize`](@ref) which provides a higher-level interface.
 """
-function linearization_function(sys::AbstractSystem, inputs = inputs(sys),
-        outputs = outputs(sys);
+function linearization_function(sys::AbstractSystem, inputs,
+        outputs; simplify = false,
         initialize = true,
         initializealg = nothing,
         initialization_abstol = 1e-5,
@@ -45,9 +46,6 @@ function linearization_function(sys::AbstractSystem, inputs = inputs(sys),
         guesses = Dict(),
         warn_empty_op = true,
         kwargs...)
-    if !iscomplete(sys)
-        error("A simplified `ODESystem` is required. Call `structural_simplify` on the system with the inputs and outputs before creating the linearization function.")
-    end
     op = Dict(op)
     if isempty(op) && warn_empty_op
         @warn "An empty operating point was passed to `linearization_function`. An operating point containing the variables that will be changed in `linearize` should be provided. Disable this warning by passing `warn_empty_op = false`."
@@ -60,7 +58,15 @@ function linearization_function(sys::AbstractSystem, inputs = inputs(sys),
     outputs = mapreduce(vcat, outputs; init = []) do var
         symbolic_type(var) == ArraySymbolic() ? collect(var) : [var]
     end
-    diff_idxs, alge_idxs = eq_idxs(sys)
+    ssys = structural_simplify(sys; inputs, outputs, simplify, kwargs...)
+    diff_idxs, alge_idxs = eq_idxs(ssys)
+    if zero_dummy_der
+        dummyder = setdiff(unknowns(ssys), unknowns(sys))
+        defs = Dict(x => 0.0 for x in dummyder)
+        @set! ssys.defaults = merge(defs, defaults(ssys))
+        op = merge(defs, op)
+    end
+    sys = ssys
 
     if initializealg === nothing
         initializealg = initialize ? OverrideInit() : NoInit()
@@ -123,7 +129,7 @@ function linearization_function(sys::AbstractSystem, inputs = inputs(sys),
         diff_idxs, alge_idxs, inputs, length(unknowns(sys)),
         prob, h, u0 === nothing ? nothing : similar(u0), uf_jac, h_jac, pf_jac,
         hp_jac, initializealg, initialization_kwargs)
-    return lin_fun
+    return lin_fun, sys
 end
 
 function eq_idxs(sys::AbstractSystem)
@@ -197,7 +203,7 @@ A callable struct which linearizes a system.
 $(TYPEDFIELDS)
 """
 struct LinearizationFunction{
-    DI <: AbstractVector{Int}, AI <: AbstractVector{Int}, II, P <: ODEProblem,
+    DI <: AbstractVector{Int}, AI <: AbstractVector{Int}, I, P <: ODEProblem,
     H, C, J1, J2, J3, J4, IA <: SciMLBase.DAEInitializationAlgorithm, IK}
     """
     The indexes of differential equations in the linearized system.
@@ -211,7 +217,7 @@ struct LinearizationFunction{
     The indexes of parameters in the linearized system which represent
     input variables.
     """
-    inputs::II
+    inputs::I
     """
     The number of unknowns in the linearized system.
     """
@@ -396,8 +402,8 @@ Construct a `LinearizationProblem` for linearizing the system `sys` with the giv
 
 All other keyword arguments are forwarded to `linearization_function`.
 """
-function LinearizationProblem(sys::AbstractSystem, inputs = inputs(sys), outputs = outputs(sys); t = 0.0, kwargs...)
-    linfun = linearization_function(sys, inputs, outputs; kwargs...)
+function LinearizationProblem(sys::AbstractSystem, inputs, outputs; t = 0.0, kwargs...)
+    linfun, _ = linearization_function(sys, inputs, outputs; kwargs...)
     return LinearizationProblem(linfun, t)
 end
 
@@ -467,7 +473,7 @@ function CommonSolve.solve(prob::LinearizationProblem; allow_input_derivatives =
 end
 
 """
-    (; A, B, C, D), simplified_sys = linearize_symbolic(sys::AbstractSystem, inputs, outputs; allow_input_derivatives = false, kwargs...)
+    (; A, B, C, D), simplified_sys = linearize_symbolic(sys::AbstractSystem, inputs, outputs; simplify = false, allow_input_derivatives = false, kwargs...)
 
 Similar to [`linearize`](@ref), but returns symbolic matrices `A,B,C,D` rather than numeric. While `linearize` uses ForwardDiff to perform the linearization, this function uses `Symbolics.jacobian`.
 
@@ -484,10 +490,11 @@ y &= h(x, z, u)
 ```
 where `x` are differential unknown variables, `z` algebraic variables, `u` inputs and `y` outputs.
 """
-function linearize_symbolic(sys::AbstractSystem, inputs = inputs(sys),
-        outputs = outputs(sys); allow_input_derivatives = false,
+function linearize_symbolic(sys::AbstractSystem, inputs,
+        outputs; simplify = false, allow_input_derivatives = false,
         eval_expression = false, eval_module = @__MODULE__,
         kwargs...)
+    sys = structural_simplify(sys; inputs, outputs, simplify, kwargs...)
     diff_idxs, alge_idxs = eq_idxs(sys)
     sts = unknowns(sys)
     t = get_iv(sys)
@@ -546,7 +553,7 @@ function linearize_symbolic(sys::AbstractSystem, inputs = inputs(sys),
         end
     end
 
-    (; A, B, C, D, f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u)
+    (; A, B, C, D, f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u), sys
 end
 
 function markio!(state, orig_inputs, inputs, outputs; check = true)
@@ -713,17 +720,17 @@ function linearize(sys, lin_fun::LinearizationFunction; t = 0.0,
     return solve(prob; allow_input_derivatives)
 end
 
-function linearize(sys, inputs = inputs(sys), outputs = outputs(sys); op = Dict(), t = 0.0,
+function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
         allow_input_derivatives = false,
         zero_dummy_der = false,
         kwargs...)
-    lin_fun = linearization_function(sys,
+    lin_fun, ssys = linearization_function(sys,
         inputs,
         outputs;
         zero_dummy_der,
         op,
         kwargs...)
-    linearize(sys, lin_fun; op, t, allow_input_derivatives)
+    linearize(ssys, lin_fun; op, t, allow_input_derivatives), ssys
 end
 
 """
@@ -761,7 +768,7 @@ Permute the state representation of `sys` obtained from [`linearize`](@ref) so t
 Example:
 
 ```
-lsys = linearize(pid, [reference.u, measurement.u], [ctr_output.u])
+lsys, ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u])
 desired_order = [int.x, der.x] # Unknowns that are present in unknowns(ssys)
 lsys = ModelingToolkit.reorder_unknowns(lsys, unknowns(ssys), desired_order)
 ```
