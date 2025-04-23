@@ -928,7 +928,8 @@ function open_loop(sys, ap::Union{Symbol, AnalysisPoint}; system_modifier = iden
     return system_modifier(sys), vars
 end
 
-function ap_preprocessing(sys::AbstractSystem, inputs::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
+function linearization_function(sys::AbstractSystem,
+        inputs::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
         outputs; loop_openings = [], system_modifier = identity, kwargs...)
     loop_openings = Set(map(nameof, canonicalize_ap(sys, loop_openings)))
     inputs = canonicalize_ap(sys, inputs)
@@ -957,13 +958,6 @@ function ap_preprocessing(sys::AbstractSystem, inputs::Union{Symbol, Vector{Symb
     end
 
     sys = handle_loop_openings(sys, map(AnalysisPoint, collect(loop_openings)))
-    sys, input_vars, output_vars
-end
-
-function linearization_function(sys::AbstractSystem,
-        inputs::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
-        outputs; loop_openings = [], system_modifier = identity, kwargs...)
-    sys, inputs, outputs = ap_preprocessing(sys; inputs, outputs, loop_openings, system_modifier, kwargs...)
     return linearization_function(system_modifier(sys), input_vars, output_vars; kwargs...)
 end
 
