@@ -319,8 +319,8 @@ function Base.copy(p::MTKParameters)
     initials = copy(p.initials)
     discrete = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.discrete)
     constant = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.constant)
-    nonnumeric = copy.(p.nonnumeric)
-    caches = copy.(p.caches)
+    nonnumeric = isempty(p.nonnumeric) ? p.nonnumeric : copy.(p.nonnumeric)
+    caches = isempty(p.caches) ? p.caches : copy.(p.caches)
     return MTKParameters(
         tunable,
         initials,
