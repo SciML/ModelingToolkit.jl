@@ -128,7 +128,7 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     @inline pop_structure_dict!.(
         Ref(dict), [:constants, :defaults, :kwargs, :structural_parameters])
 
-    sys = :($ODESystem($(flatten_equations)(equations), $iv, variables, parameters;
+    sys = :($type($(flatten_equations)(equations), $iv, variables, parameters;
         name, description = $description, systems, gui_metadata = $gui_metadata,
         continuous_events = [$(c_evts...)], discrete_events = [$(d_evts...)],
         defaults))
