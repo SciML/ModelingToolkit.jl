@@ -18,6 +18,11 @@ ivs = Dict(c => 3a, d => 4, e => [5.0, 6.0, 7.0],
 
 ps = MTKParameters(sys, ivs)
 @test_nowarn copy(ps)
+ps_copy = copy(ps)
+ps_field_equals = map(fieldnames(typeof(ps))) do f
+    getfield(ps, f) == getfield(ps_copy, f)
+end
+@test all(ps_field_equals)
 # dependent initialization, also using defaults
 @test getp(sys, a)(ps) == getp(sys, b)(ps) == getp(sys, c)(ps) == 0.0
 @test getp(sys, d)(ps) isa Int
