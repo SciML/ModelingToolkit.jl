@@ -841,7 +841,7 @@ function maybe_build_initialization_problem(
     initializeprob = remake(initializeprob; p = initp)
 
     meta = InitializationMetadata(
-        u0map, pmap, guesses, Equation[get_initialization_eqs(sys); initialization_eqs],
+        u0map, pmap, guesses, Vector{Equation}(initialization_eqs),
         use_scc, ReconstructInitializeprob(sys, initializeprob.f.sys),
         setp(sys, Initial.(unknowns(sys))))
 
