@@ -124,7 +124,6 @@ function __structural_simplify(sys::AbstractSystem; simplify = false,
                               for (i, v) in enumerate(fullvars)
                               if !iszero(new_idxs[i]) &&
                                  invview(var_to_diff)[i] === nothing]
-        # TODO: IO is not handled.
         ode_sys = structural_simplify(sys; simplify, inputs, outputs, disturbance_inputs, kwargs...)
         eqs = equations(ode_sys)
         sorted_g_rows = zeros(Num, length(eqs), size(g, 2))
