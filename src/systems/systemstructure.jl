@@ -292,8 +292,14 @@ function TearingState(sys; quick_cancel = false, check = true)
         end
         if iscall(eq′.lhs) && (op = operation(eq′.lhs)) isa Differential &&
            isequal(op.x, iv) && is_time_dependent_parameter(only(arguments(eq′.lhs)), iv)
-            param_derivative_map[eq′.lhs] = eq′.rhs
+            # parameter derivatives are opted out by specifying `D(p) ~ missing`, but
+            # we want to store `nothing` in the map because that means `fast_substitute`
+            # will ignore the rule. We will this identify the presence of `eq′.lhs` in
+            # the differentiated expression and error.
+            param_derivative_map[eq′.lhs] = coalesce(eq′.rhs, nothing)
             eqs_to_retain[i] = false
+            # change the equation if the RHS is `missing` so the rest of this loop works
+            eq′ = eq′.lhs ~ coalesce(eq′.rhs, 0.0)
         end
         if _iszero(eq′.lhs)
             rhs = quick_cancel ? quick_cancel_expr(eq′.rhs) : eq′.rhs
@@ -311,9 +317,9 @@ function TearingState(sys; quick_cancel = false, check = true)
                (iscall(_var) && isparameter(operation(_var)) || isconstant(_var))
                 if is_time_dependent_parameter(_var, iv) &&
                    !haskey(param_derivative_map, Differential(iv)(_var))
-                    # default to `nothing` since it is ignored during substitution,
-                    # so `D(_var)` is retained in the expression.
-                    param_derivative_map[Differential(iv)(_var)] = nothing
+                    # Parameter derivatives default to zero - they stay constant
+                    # between callbacks
+                    param_derivative_map[Differential(iv)(_var)] = 0.0
                 end
                 continue
             end
