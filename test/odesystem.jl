@@ -927,7 +927,7 @@ let
     sys_simp = structural_simplify(sys_con)
     true_eqs = [D(sys.x) ~ sys.v
                 D(sys.v) ~ ctrl.kv * sys.v + ctrl.kx * sys.x]
-    @test isequal(full_equations(sys_simp), true_eqs)
+    @test issetequal(full_equations(sys_simp), true_eqs)
 end
 
 let

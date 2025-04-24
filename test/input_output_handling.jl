@@ -414,6 +414,8 @@ matrices, ssys = linearize(augmented_sys,
         augmented_sys.d
     ], outs;
     op = [augmented_sys.u => 0.0, augmented_sys.input.u[2] => 0.0, augmented_sys.d => 0.0])
+matrices = ModelingToolkit.reorder_unknowns(
+    matrices, unknowns(ssys), [ssys.x[2], ssys.integrator.x[1], ssys.x[1]])
 @test matrices.A ≈ [A [1; 0]; zeros(1, 2) -0.001]
 @test matrices.B == I
 @test matrices.C == [C zeros(2)]

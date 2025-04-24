@@ -72,8 +72,9 @@ sss, = ModelingToolkit._structural_simplify!(deepcopy(tss[1]), (inputs[1], ()))
 @test isempty(equations(sss))
 d = Clock(dt)
 k = ShiftIndex(d)
-@test observed(sss) == [yd(k + 1) ~ Sample(dt)(y); r(k + 1) ~ 1.0;
-       ud(k + 1) ~ kp * (r(k + 1) - yd(k + 1))]
+@test issetequal(observed(sss),
+    [yd(k + 1) ~ Sample(dt)(y); r(k + 1) ~ 1.0;
+     ud(k + 1) ~ kp * (r(k + 1) - yd(k + 1))])
 
 d = Clock(dt)
 # Note that TearingState reorders the equations
