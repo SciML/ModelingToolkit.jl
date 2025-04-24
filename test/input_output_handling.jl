@@ -391,7 +391,7 @@ sys = structural_simplify(model)
 
 ## Disturbance models when plant has multiple inputs
 using ModelingToolkit, LinearAlgebra
-using ModelingToolkit: DisturbanceModel, io_preprocessing, get_iv, get_disturbance_system
+using ModelingToolkit: DisturbanceModel, get_iv, get_disturbance_system
 using ModelingToolkitStandardLibrary.Blocks
 A, C = [randn(2, 2) for i in 1:2]
 B = [1.0 0; 0 1.0]
