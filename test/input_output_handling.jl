@@ -50,7 +50,7 @@ end
 @test !is_bound(sys31, sys1.v[2])
 
 # simplification turns input variables into parameters
-ssys, _ = structural_simplify(sys, ([u], []))
+ssys = structural_simplify(sys, inputs = [u], outputs = [])
 @test ModelingToolkit.isparameter(unbound_inputs(ssys)[])
 @test !is_bound(ssys, u)
 @test u ∈ Set(unbound_inputs(ssys))
@@ -281,7 +281,7 @@ i = findfirst(isequal(u[1]), out)
 @variables x(t) u(t) [input = true]
 eqs = [D(x) ~ u]
 @named sys = ODESystem(eqs, t)
-@test_nowarn structural_simplify(sys, ([u], []))
+@test_nowarn structural_simplify(sys, inputs = [u], outputs = [])
 
 #=
 ## Disturbance input handling
@@ -366,9 +366,9 @@ eqs = [D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃ + u1
 @named sys = ODESystem(eqs, t)
 m_inputs = [u[1], u[2]]
 m_outputs = [y₂]
-sys_simp, input_idxs = structural_simplify(sys, (; inputs = m_inputs, outputs = m_outputs))
+sys_simp = structural_simplify(sys, inputs = m_inputs, outputs = m_outputs)
 @test isequal(unknowns(sys_simp), collect(x[1:2]))
-@test length(input_idxs) == 2
+@test length(inputs(sys_simp)) == 2
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/1577
 @named c = Constant(; k = 2)
