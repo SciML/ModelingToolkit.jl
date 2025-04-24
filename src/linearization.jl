@@ -561,10 +561,11 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
     (; A, B, C, D, f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u), sys
 end
 
-function markio!(state, orig_inputs, inputs, outputs; check = true)
+function markio!(state, orig_inputs, inputs, outputs, disturbances; check = true)
     fullvars = get_fullvars(state)
     inputset = Dict{Any, Bool}(i => false for i in inputs)
     outputset = Dict{Any, Bool}(o => false for o in outputs)
+    disturbanceset = Dict{Any, Bool}(d => false for d in disturbances)
     for (i, v) in enumerate(fullvars)
         if v in keys(inputset)
             if v in keys(outputset)
@@ -584,6 +585,12 @@ function markio!(state, orig_inputs, inputs, outputs; check = true)
                 push!(orig_inputs, v)
             end
             v = setio(v, false, false)
+            fullvars[i] = v
+        end
+
+        if v in keys(disturbanceset)
+            v = setio(v, true, false)
+            v = setdisturbance(v, true)
             fullvars[i] = v
         end
     end

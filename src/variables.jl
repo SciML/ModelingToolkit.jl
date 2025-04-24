@@ -354,6 +354,8 @@ function isdisturbance(x)
     Symbolics.getmetadata(x, VariableDisturbance, false)
 end
 
+setdisturbance(x, v) = setmetadata(x, VariableDisturbance, v)
+
 function disturbances(sys)
     [filter(isdisturbance, unknowns(sys)); filter(isdisturbance, parameters(sys))]
 end
