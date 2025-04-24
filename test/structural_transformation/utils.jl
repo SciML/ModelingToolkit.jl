@@ -5,6 +5,7 @@ using SparseArrays
 using UnPack
 using ModelingToolkit: t_nounits as t, D_nounits as D, default_toterm
 using Symbolics: unwrap
+using DataInterpolations
 const ST = StructuralTransformations
 
 # Define some variables
@@ -280,5 +281,88 @@ end
         @test mapping[y] == (y ~ sin(z))
         @test mapping[z] == (0 ~ -1 - 4z - z^3)
         @test length(mapping) == 3
+    end
+end
+
+@testset "Issue#3480: Derivatives of time-dependent parameters" begin
+    @component function FilteredInput(; name, x0 = 0, T = 0.1)
+        params = @parameters begin
+            k(t) = x0
+            T = T
+        end
+        vars = @variables begin
+            x(t) = k
+            dx(t) = 0
+            ddx(t)
+        end
+        systems = []
+        eqs = [D(x) ~ dx
+               D(dx) ~ ddx
+               dx ~ (k - x) / T]
+        return ODESystem(eqs, t, vars, params; systems, name)
+    end
+
+    @component function FilteredInputFix(; name, x0 = 0, T = 0.1)
+        params = @parameters begin
+            k(t) = x0
+            T = T
+        end
+        vars = @variables begin
+            x(t) = k
+            dx(t) = 0
+            ddx(t)
+        end
+        systems = []
+        eqs = [D(x) ~ dx
+               D(dx) ~ ddx
+               dx ~ (k - x) / T
+               D(k) ~ 0]
+        return ODESystem(eqs, t, vars, params; systems, name)
+    end
+
+    @named sys = FilteredInput()
+    @test_throws ["derivative of discrete variable", "k(t)"] structural_simplify(sys)
+
+    @mtkbuild sys = FilteredInputFix()
+    vs = Set()
+    for eq in equations(sys)
+        ModelingToolkit.vars!(vs, eq)
+    end
+    for eq in observed(sys)
+        ModelingToolkit.vars!(vs, eq)
+    end
+
+    @test !(D(sys.k) in vs)
+
+    @testset "Called parameter still has derivative" begin
+        @component function FilteredInput2(; name, x0 = 0, T = 0.1)
+            ts = collect(0.0:0.1:10.0)
+            spline = LinearInterpolation(ts .^ 2, ts)
+            params = @parameters begin
+                (k::LinearInterpolation)(..) = spline
+                T = T
+            end
+            vars = @variables begin
+                x(t) = k(t)
+                dx(t) = 0
+                ddx(t)
+            end
+            systems = []
+            eqs = [D(x) ~ dx
+                   D(dx) ~ ddx
+                   dx ~ (k(t) - x) / T]
+            return ODESystem(eqs, t, vars, params; systems, name)
+        end
+
+        @mtkbuild sys = FilteredInput2()
+        vs = Set()
+        for eq in equations(sys)
+            ModelingToolkit.vars!(vs, eq)
+        end
+        for eq in observed(sys)
+            ModelingToolkit.vars!(vs, eq)
+        end
+
+        @test D(sys.k(t)) in vs
     end
 end
