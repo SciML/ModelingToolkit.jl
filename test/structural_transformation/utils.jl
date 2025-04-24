@@ -302,7 +302,25 @@ end
         return ODESystem(eqs, t, vars, params; systems, name)
     end
 
-    @component function FilteredInputFix(; name, x0 = 0, T = 0.1)
+    @component function FilteredInputExplicit(; name, x0 = 0, T = 0.1)
+        params = @parameters begin
+            k(t)[1:1] = [x0]
+            T = T
+        end
+        vars = @variables begin
+            x(t) = k
+            dx(t) = 0
+            ddx(t)
+        end
+        systems = []
+        eqs = [D(x) ~ dx
+               D(dx) ~ ddx
+               D(k[1]) ~ 1.0
+               dx ~ (k[1] - x) / T]
+        return ODESystem(eqs, t, vars, params; systems, name)
+    end
+
+    @component function FilteredInputErr(; name, x0 = 0, T = 0.1)
         params = @parameters begin
             k(t) = x0
             T = T
@@ -316,14 +334,14 @@ end
         eqs = [D(x) ~ dx
                D(dx) ~ ddx
                dx ~ (k - x) / T
-               D(k) ~ 0]
+               D(k) ~ missing]
         return ODESystem(eqs, t, vars, params; systems, name)
     end
 
-    @named sys = FilteredInput()
+    @named sys = FilteredInputErr()
     @test_throws ["derivative of discrete variable", "k(t)"] structural_simplify(sys)
 
-    @mtkbuild sys = FilteredInputFix()
+    @mtkbuild sys = FilteredInput()
     vs = Set()
     for eq in equations(sys)
         ModelingToolkit.vars!(vs, eq)
@@ -333,6 +351,13 @@ end
     end
 
     @test !(D(sys.k) in vs)
+
+    @mtkbuild sys = FilteredInputExplicit()
+    obsfn1 = ModelingToolkit.build_explicit_observed_function(sys, sys.ddx)
+    obsfn2 = ModelingToolkit.build_explicit_observed_function(sys, sys.dx)
+    u = [1.0]
+    p = MTKParameters(sys, [sys.k => [2.0], sys.T => 3.0])
+    @test obsfn1(u, p, 0.0) ≈ (1 - obsfn2(u, p, 0.0)) / 3.0
 
     @testset "Called parameter still has derivative" begin
         @component function FilteredInput2(; name, x0 = 0, T = 0.1)
