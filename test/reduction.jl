@@ -233,7 +233,7 @@ eqs = [D(x) ~ σ * (y - x)
        u ~ z + a]
 
 lorenz1 = ODESystem(eqs, t, name = :lorenz1)
-lorenz1_reduced, _ = structural_simplify(lorenz1, ([z], []))
+lorenz1_reduced, _ = structural_simplify(lorenz1, inputs = [z], outputs = [])
 @test z in Set(parameters(lorenz1_reduced))
 
 # #2064
