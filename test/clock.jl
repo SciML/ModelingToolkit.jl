@@ -65,10 +65,9 @@ By inference:
 ci, varmap = infer_clocks(sys)
 eqmap = ci.eq_domain
 tss, inputs, continuous_id = ModelingToolkit.split_system(deepcopy(ci))
-sss, = ModelingToolkit._structural_simplify!(
-    deepcopy(tss[continuous_id]), (inputs[continuous_id], ()))
+sss = ModelingToolkit._structural_simplify!(deepcopy(tss[continuous_id]), inputs = inputs[continuous_id], outputs = [])
 @test equations(sss) == [D(x) ~ u - x]
-sss, = ModelingToolkit._structural_simplify!(deepcopy(tss[1]), (inputs[1], ()))
+sss = ModelingToolkit._structural_simplify!(deepcopy(tss[1]), inputs = inputs[1], outputs = [])
 @test isempty(equations(sss))
 d = Clock(dt)
 k = ShiftIndex(d)

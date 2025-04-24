@@ -1285,11 +1285,11 @@ end
     @named sys = ODESystem(
         [D(u) ~ (sum(u) + sum(x) + sum(p) + sum(o)) * x, o ~ prod(u) * x],
         t, [u..., x..., o...], [p...])
-    sys1, = structural_simplify(sys, ([x...], []))
+    sys1 = structural_simplify(sys, inputs = [x...], outputs = [])
     fn1, = ModelingToolkit.generate_function(sys1; expression = Val{false})
     ps = MTKParameters(sys1, [x => 2ones(2), p => 3ones(2, 2)])
     @test_nowarn fn1(ones(4), ps, 4.0)
-    sys2, = structural_simplify(sys, ([x...], []); split = false)
+    sys2 = structural_simplify(sys, inputs = [x...], outputs = [], split = false)
     fn2, = ModelingToolkit.generate_function(sys2; expression = Val{false})
     ps = zeros(8)
     setp(sys2, x)(ps, 2ones(2))
@@ -1398,7 +1398,7 @@ end
            o[2] ~ sum(p) * sum(x)]
 
     @named sys = ODESystem(eqs, t, [u..., x..., o], [p...])
-    sys1, = structural_simplify(sys, ([x...], [o...]), split = false)
+    sys1 = structural_simplify(sys, inputs = [x...], outputs = [o...], split = false)
 
     @test_nowarn ModelingToolkit.build_explicit_observed_function(sys1, u; inputs = [x...])
 
