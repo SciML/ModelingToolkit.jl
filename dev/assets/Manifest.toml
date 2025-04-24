@@ -157,9 +157,9 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 
 [[deps.Attractors]]
 deps = ["BlackBoxOptim", "Clustering", "ComplexityMeasures", "Distances", "Distributions", "DynamicalSystemsBase", "LinearAlgebra", "Mmap", "Neighborhood", "Optim", "ProgressMeter", "Random", "Reexport", "StateSpaceSets"]
-git-tree-sha1 = "8b129ed45e49a23554a0eea98063539efc6a73be"
+git-tree-sha1 = "1afbe95a81033ff14a3f5323a851db32333bcab6"
 uuid = "f3fd9213-ca85-4dba-9dfd-7fc91308fec7"
-version = "1.25.0"
+version = "1.26.0"
 weakdeps = ["Makie"]
 
     [deps.Attractors.extensions]
@@ -628,9 +628,9 @@ version = "1.4.4"
 
 [[deps.DiffEqBase]]
 deps = ["ArrayInterface", "ConcreteStructs", "DataStructures", "DocStringExtensions", "EnumX", "EnzymeCore", "FastBroadcast", "FastClosures", "FastPower", "FunctionWrappers", "FunctionWrappersWrappers", "LinearAlgebra", "Logging", "Markdown", "MuladdMacro", "Parameters", "PrecompileTools", "Printf", "RecursiveArrayTools", "Reexport", "SciMLBase", "SciMLOperators", "SciMLStructures", "Setfield", "Static", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface", "TruncatedStacktraces"]
-git-tree-sha1 = "aa2e1ba33d15245205e45ca87f1f9402cd26275c"
+git-tree-sha1 = "c885dd6dd7d233860e2df010b416f63f14da81dd"
 uuid = "2b5f629d-d688-5b77-993f-72d75c75574e"
-version = "6.169.0"
+version = "6.170.0"
 
     [deps.DiffEqBase.extensions]
     DiffEqBaseCUDAExt = "CUDA"
@@ -1440,9 +1440,9 @@ weakdeps = ["DiffRules", "ForwardDiff", "IntervalSets", "RecipesBase"]
     IntervalArithmeticRecipesBaseExt = "RecipesBase"
 
 [[deps.IntervalSets]]
-git-tree-sha1 = "dba9ddf07f77f60450fe5d2e2beb9854d9a49bd0"
+git-tree-sha1 = "5fbb102dcb8b1a858111ae81d56682376130517d"
 uuid = "8197267c-284f-5f27-9208-e0e47529a953"
-version = "0.7.10"
+version = "0.7.11"
 weakdeps = ["Random", "RecipesBase", "Statistics"]
 
     [deps.IntervalSets.extensions]
