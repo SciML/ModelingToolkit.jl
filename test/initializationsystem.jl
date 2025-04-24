@@ -1513,7 +1513,7 @@ end
     @inferred solve(prob)
 end
 
-@testset "Issue#3570: `Initial`s are copied to `u0` if `u0` not provided to `remake`" begin
+@testset "Issue#3570, #3552: `Initial`s are copied to `u0` during `solve`/`init`" begin
     @parameters g
     @variables x(t) [state_priority = 10] y(t) λ(t)
     eqs = [D(D(x)) ~ λ * x
@@ -1525,11 +1525,22 @@ end
         pend, [x => (√2 / 2)], (0.0, 1.5), [g => 1], guesses = [λ => 1, y => √2 / 2])
     sol = solve(prob)
 
-    setter = setsym_oop(prob, [Initial(x)])
-    (u0, p) = setter(prob, [0.8])
+    @testset "`setsym_oop`" begin
+        setter = setsym_oop(prob, [Initial(x)])
+        (u0, p) = setter(prob, [0.8])
+        new_prob = remake(prob; u0, p, initializealg = BrownFullBasicInit())
+        new_sol = solve(new_prob)
+        @test new_sol[x, 1] ≈ 0.8
+        integ = init(new_prob)
+        @test integ[x] ≈ 0.8
+    end
 
-    new_prob = remake(prob; p, initializealg = BrownFullBasicInit())
-    @test new_prob[x] ≈ 0.8
-    new_sol = solve(new_prob)
-    @test new_sol[x, 1] ≈ 0.8
+    @testset "`setsym`" begin
+        @test prob.ps[Initial(x)] ≈ √2 / 2
+        prob.ps[Initial(x)] = 0.8
+        sol = solve(prob; initializealg = BrownFullBasicInit())
+        @test sol[x, 1] ≈ 0.8
+        integ = init(prob; initializealg = BrownFullBasicInit())
+        @test integ[x] ≈ 0.8
+    end
 end

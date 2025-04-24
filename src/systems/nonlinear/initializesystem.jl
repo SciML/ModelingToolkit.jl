@@ -595,27 +595,6 @@ function SciMLBase.late_binding_update_u0_p(
 
     initdata = prob.f.initialization_data
     meta = initdata === nothing ? nothing : initdata.metadata
-    # If the user passes `p` to `remake` but not `u0` and `u0` isn't empty,
-    # and if the system supports initialization (so it has initial parameters),
-    # and if the initialization solves for `u0`,
-    # THEN copy the values of `Initial`s to `newu0`.
-    if u0 === missing
-        if newu0 !== nothing && p !== missing && supports_initialization(sys) &&
-           initdata !== nothing && initdata.initializeprobmap !== nothing
-            getter = if meta isa InitializationMetadata
-                meta.get_initial_unknowns
-            else
-                getu(sys, Initial.(unknowns(sys)))
-            end
-            if ArrayInterface.ismutable(newu0)
-                copyto!(newu0, getter(newp))
-            else
-                T = StaticArrays.similar_type(newu0)
-                newu0 = T(getter(newp))
-            end
-        end
-        return newu0, newp
-    end
 
     # non-symbolic u0 updates initials...
     if !(eltype(u0) <: Pair)
@@ -667,6 +646,40 @@ function SciMLBase.late_binding_update_u0_p(
     end
 
     return newu0, newp
+end
+
+function DiffEqBase.get_updated_symbolic_problem(sys::AbstractSystem, prob; kw...)
+    supports_initialization(sys) || return prob
+    initdata = prob.f.initialization_data
+    initdata === nothing && return prob
+
+    u0 = state_values(prob)
+    u0 === nothing && return prob
+
+    p = parameter_values(prob)
+    t0 = is_time_dependent(prob) ? current_time(prob) : nothing
+    meta = initdata.metadata
+
+    getter = if meta isa InitializationMetadata
+        meta.get_initial_unknowns
+    else
+        getu(sys, Initial.(unknowns(sys)))
+    end
+
+    if p isa MTKParameters
+        buffer = p.initials
+    else
+        buffer = p
+    end
+
+    u0 = DiffEqBase.promote_u0(u0, buffer, t0)
+
+    if ArrayInterface.ismutable(u0)
+        T = typeof(u0)
+    else
+        T = StaticArrays.similar_type(u0)
+    end
+    return remake(prob; u0 = T(getter(p)))
 end
 
 """
