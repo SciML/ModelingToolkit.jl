@@ -551,3 +551,18 @@ end
     sol = solve(jprob, SSAStepper())
     @test eltype(sol[X]) === Int64
 end
+
+@testset "Issue#3571: `remake(::JumpProblem)`" begin
+    @variables X(t)
+    @parameters a b
+    eq = D(X) ~ a
+    rate = b * X
+    affect = [X ~ X - 1]
+    crj = ConstantRateJump(rate, affect)
+    @named jsys = JumpSystem([crj, eq], t, [X], [a, b])
+    jsys = complete(jsys)
+    oprob = ODEProblem(jsys, [:X => 1.0], (0.0, 10.0), [:a => 1.0, :b => 0.5])
+    jprob = JumpProblem(jsys, oprob)
+    jprob2 = remake(jprob; u0 = [:X => 10.0])
+    @test jprob2[X] ≈ 10.0
+end
