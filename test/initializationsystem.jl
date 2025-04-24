@@ -801,12 +801,17 @@ end
         end
 
         @parameters p=2.0 q=missing [guess = 1.0] c=1.0
-        @variables x=1.0 y=2.0 z=3.0
+        @variables x=1.0 z=3.0
 
-        eqs = [0 ~ p * (y - x),
-            0 ~ x * (q - z) - y,
-            0 ~ x * y - c * z]
-        @mtkbuild sys = NonlinearSystem(eqs; initialization_eqs = [p^2 + q^2 + 2p * q ~ 0])
+        # eqs = [0 ~ p * (y - x),
+        #     0 ~ x * (q - z) - y,
+        #     0 ~ x * y - c * z]
+        # specifically written this way due to
+        # https://github.com/SciML/NonlinearSolve.jl/issues/586
+        eqs = [0 ~ -c * z + (q - z) * (x^2)
+               0 ~ p * (-x + (q - z) * x)]
+        @named sys = NonlinearSystem(eqs; initialization_eqs = [p^2 + q^2 + 2p * q ~ 0])
+        sys = complete(sys)
         # @mtkbuild sys = NonlinearSystem(
         #     [p * x^2 + q * y^3 ~ 0, x - q ~ 0]; defaults = [q => missing],
         #     guesses = [q => 1.0], initialization_eqs = [p^2 + q^2 + 2p * q ~ 0])
