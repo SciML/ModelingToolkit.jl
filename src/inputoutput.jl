@@ -259,7 +259,7 @@ end
 """
 Turn input variables into parameters of the system.
 """
-function inputs_to_parameters!(state::TransformationState, inputsyms)
+function inputs_to_parameters!(state::TransformationState, inputsyms; is_disturbance = false)
     check_bound = inputsyms === nothing
     @unpack structure, fullvars, sys = state
     @unpack var_to_diff, graph, solvable_graph = structure
