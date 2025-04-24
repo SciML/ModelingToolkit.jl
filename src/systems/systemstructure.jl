@@ -207,6 +207,7 @@ mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     fullvars::Vector
     structure::SystemStructure
     extra_eqs::Vector
+    param_derivative_map::Dict{BasicSymbolic, Any}
 end
 
 TransformationState(sys::AbstractSystem) = TearingState(sys)
@@ -253,6 +254,12 @@ function Base.push!(ev::EquationsView, eq)
     push!(ev.ts.extra_eqs, eq)
 end
 
+function is_time_dependent_parameter(p, iv)
+    return iv !== nothing && isparameter(p) && iscall(p) &&
+           (operation(p) === getindex && is_time_dependent_parameter(arguments(p)[1], iv) ||
+            (args = arguments(p); length(args)) == 1 && isequal(only(args), iv))
+end
+
 function TearingState(sys; quick_cancel = false, check = true)
     sys = flatten(sys)
     ivs = independent_variables(sys)
@@ -264,6 +271,7 @@ function TearingState(sys; quick_cancel = false, check = true)
     var2idx = Dict{Any, Int}()
     symbolic_incidence = []
     fullvars = []
+    param_derivative_map = Dict{BasicSymbolic, Any}()
     var_counter = Ref(0)
     var_types = VariableType[]
     addvar! = let fullvars = fullvars, var_counter = var_counter, var_types = var_types
@@ -276,10 +284,22 @@ function TearingState(sys; quick_cancel = false, check = true)
 
     vars = OrderedSet()
     varsvec = []
+    eqs_to_retain = trues(length(eqs))
     for (i, eq′) in enumerate(eqs)
         if eq′.lhs isa Connection
             check ? error("$(nameof(sys)) has unexpanded `connect` statements") :
             return nothing
+        end
+        if iscall(eq′.lhs) && (op = operation(eq′.lhs)) isa Differential &&
+           isequal(op.x, iv) && is_time_dependent_parameter(only(arguments(eq′.lhs)), iv)
+            # parameter derivatives are opted out by specifying `D(p) ~ missing`, but
+            # we want to store `nothing` in the map because that means `fast_substitute`
+            # will ignore the rule. We will this identify the presence of `eq′.lhs` in
+            # the differentiated expression and error.
+            param_derivative_map[eq′.lhs] = coalesce(eq′.rhs, nothing)
+            eqs_to_retain[i] = false
+            # change the equation if the RHS is `missing` so the rest of this loop works
+            eq′ = eq′.lhs ~ coalesce(eq′.rhs, 0.0)
         end
         if _iszero(eq′.lhs)
             rhs = quick_cancel ? quick_cancel_expr(eq′.rhs) : eq′.rhs
@@ -295,6 +315,12 @@ function TearingState(sys; quick_cancel = false, check = true)
             any(isequal(_var), ivs) && continue
             if isparameter(_var) ||
                (iscall(_var) && isparameter(operation(_var)) || isconstant(_var))
+                if is_time_dependent_parameter(_var, iv) &&
+                   !haskey(param_derivative_map, Differential(iv)(_var))
+                    # Parameter derivatives default to zero - they stay constant
+                    # between callbacks
+                    param_derivative_map[Differential(iv)(_var)] = 0.0
+                end
                 continue
             end
             v = scalarize(v)
@@ -351,6 +377,9 @@ function TearingState(sys; quick_cancel = false, check = true)
             eqs[i] = eqs[i].lhs ~ rhs
         end
     end
+    eqs = eqs[eqs_to_retain]
+    neqs = length(eqs)
+    symbolic_incidence = symbolic_incidence[eqs_to_retain]
 
     ### Handle discrete variables
     lowest_shift = Dict()
@@ -438,7 +467,7 @@ function TearingState(sys; quick_cancel = false, check = true)
     ts = TearingState(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
             complete(graph), nothing, var_types, sys isa AbstractDiscreteSystem),
-        Any[])
+        Any[], param_derivative_map)
     if sys isa DiscreteSystem
         ts = shift_discrete_system(ts)
     end

@@ -54,6 +54,7 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
             D(eq.lhs)
         end
         rhs = ModelingToolkit.expand_derivatives(D(eq.rhs))
+        rhs = fast_substitute(rhs, state.param_derivative_map)
         substitution_dict = Dict(x.lhs => x.rhs
         for x in out_eqs if x !== nothing && x.lhs isa Symbolic)
         sub_rhs = substitute(rhs, substitution_dict)
