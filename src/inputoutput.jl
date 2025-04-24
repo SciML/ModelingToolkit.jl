@@ -197,10 +197,10 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
         simplify = false,
         eval_expression = false,
         eval_module = @__MODULE__,
+        check_simplified = true,
         kwargs...)
-
     # Remove this when the ControlFunction gets merged.
-    if !iscomplete(sys) 
+    if check_simplified && !iscomplete(sys) 
         error("A completed `ODESystem` is required. Call `complete` or `structural_simplify` on the system before creating the control function.")
     end
     isempty(inputs) && @warn("No unbound inputs were found in system.")
@@ -259,7 +259,7 @@ end
 """
 Turn input variables into parameters of the system.
 """
-function inputs_to_parameters!(state::TransformationState, inputsyms)
+function inputs_to_parameters!(state::TransformationState, inputsyms; is_disturbance = false)
     check_bound = inputsyms === nothing
     @unpack structure, fullvars, sys = state
     @unpack var_to_diff, graph, solvable_graph = structure
@@ -414,7 +414,7 @@ function add_input_disturbance(sys, dist::DisturbanceModel, inputs = Any[]; kwar
     @variables u(t)=0 [input = true] # New system input
     dsys = get_disturbance_system(dist)
 
-    if inputs === nothing
+    if isempty(inputs)
         all_inputs = [u]
     else
         i = findfirst(isequal(dist.input), inputs)
@@ -429,8 +429,9 @@ function add_input_disturbance(sys, dist::DisturbanceModel, inputs = Any[]; kwar
            dist.input ~ u + dsys.output.u[1]]
     augmented_sys = ODESystem(eqs, t, systems = [dsys], name = gensym(:outer))
     augmented_sys = extend(augmented_sys, sys)
+    ssys = structural_simplify(augmented_sys, inputs = all_inputs, disturbance_inputs = [d])
 
-    (f_oop, f_ip), dvs, p, io_sys = generate_control_function(augmented_sys, all_inputs,
-        [d]; kwargs...)
+    (f_oop, f_ip), dvs, p, io_sys = generate_control_function(ssys, all_inputs,
+        [d]; check_simplified = false, kwargs...)
     (f_oop, f_ip), augmented_sys, dvs, p, io_sys
 end
