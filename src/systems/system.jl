@@ -272,6 +272,8 @@ function System(eqs::Vector{Equation}; kwargs...)
     return System(eqs, nothing, collect(allunknowns), collect(new_ps); kwargs...)
 end
 
+System(eq::Equation, args...; kwargs...) = System([eq], args...; kwargs...)
+
 function gather_array_params(ps)
     new_ps = OrderedSet()
     for p in ps
