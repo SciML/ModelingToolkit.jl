@@ -157,9 +157,9 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 
 [[deps.Attractors]]
 deps = ["BlackBoxOptim", "Clustering", "ComplexityMeasures", "Distances", "Distributions", "DynamicalSystemsBase", "LinearAlgebra", "Mmap", "Neighborhood", "Optim", "ProgressMeter", "Random", "Reexport", "StateSpaceSets"]
-git-tree-sha1 = "1afbe95a81033ff14a3f5323a851db32333bcab6"
+git-tree-sha1 = "bc7db2c1f70e1eb65b2570dc0e09cf0ab65ef5d8"
 uuid = "f3fd9213-ca85-4dba-9dfd-7fc91308fec7"
-version = "1.26.0"
+version = "1.26.1"
 weakdeps = ["Makie"]
 
     [deps.Attractors.extensions]
@@ -300,12 +300,6 @@ git-tree-sha1 = "e329286945d0cfc04456972ea732551869af1cfc"
 uuid = "4e9b3aee-d8a1-5a3d-ad8b-7d824db253f0"
 version = "1.0.1+0"
 
-[[deps.CSTParser]]
-deps = ["Tokenize"]
-git-tree-sha1 = "0157e592151e39fa570645e2b2debcdfb8a0f112"
-uuid = "00ebfdb7-1f24-5e51-bd34-a7502290713f"
-version = "3.4.3"
-
 [[deps.Cairo]]
 deps = ["Cairo_jll", "Colors", "Glib_jll", "Graphics", "Libdl", "Pango_jll"]
 git-tree-sha1 = "71aa551c5c33f1a4415867fe06b7844faadb0ae9"
@@ -399,9 +393,9 @@ version = "1.0.2"
 
 [[deps.CommonMark]]
 deps = ["Crayons", "PrecompileTools"]
-git-tree-sha1 = "5fdf00d1979fd4883b44b754fc3423175c9504b4"
+git-tree-sha1 = "776030bc815edb44f59dc58a0a4348e836b85449"
 uuid = "a80b9123-70ca-4bc0-993e-6e3bcb318db6"
-version = "0.8.16"
+version = "0.9.0"
 
 [[deps.CommonSolve]]
 git-tree-sha1 = "0eee5eb66b1cf62cd6ad1b460238e60e4b09400c"
@@ -793,9 +787,9 @@ version = "0.9.4"
 
 [[deps.Documenter]]
 deps = ["ANSIColoredPrinters", "AbstractTrees", "Base64", "CodecZlib", "Dates", "DocStringExtensions", "Downloads", "Git", "IOCapture", "InteractiveUtils", "JSON", "LibGit2", "Logging", "Markdown", "MarkdownAST", "Pkg", "PrecompileTools", "REPL", "RegistryInstances", "SHA", "TOML", "Test", "Unicode"]
-git-tree-sha1 = "9d733459cea04dcf1c41522ec25c31576387be8a"
+git-tree-sha1 = "b7af952d4701252dc45d3b0025693e9cb4dedcd8"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-version = "1.10.1"
+version = "1.10.2"
 
 [[deps.DomainSets]]
 deps = ["CompositeTypes", "IntervalSets", "LinearAlgebra", "Random", "StaticArrays"]
@@ -1524,10 +1518,15 @@ uuid = "aacddb02-875f-59d6-b918-886e6ef4fbf8"
 version = "3.1.1+0"
 
 [[deps.JuliaFormatter]]
-deps = ["CSTParser", "CommonMark", "DataStructures", "Glob", "PrecompileTools", "TOML", "Tokenize"]
-git-tree-sha1 = "59cf7ad64f1b0708a4fa4369879d33bad3239b56"
+deps = ["CommonMark", "Glob", "JuliaSyntax", "PrecompileTools", "TOML"]
+git-tree-sha1 = "56b382cd34b1a80f63211a0b009461915915bf9e"
 uuid = "98e50ef6-434e-11e9-1051-2b60c6c9e899"
-version = "1.0.62"
+version = "2.1.2"
+
+[[deps.JuliaSyntax]]
+git-tree-sha1 = "937da4713526b96ac9a178e2035019d3b78ead4a"
+uuid = "70703baa-626e-46a2-a12c-08ffd08c73b4"
+version = "0.4.10"
 
 [[deps.JumpProcesses]]
 deps = ["ArrayInterface", "DataStructures", "DiffEqBase", "DocStringExtensions", "FunctionWrappers", "Graphs", "LinearAlgebra", "Markdown", "PoissonRandom", "Random", "RandomNumbers", "RecursiveArrayTools", "Reexport", "SciMLBase", "Setfield", "StaticArrays", "SymbolicIndexingInterface", "UnPack"]
@@ -2784,9 +2783,9 @@ version = "0.6.12"
 
 [[deps.RecursiveArrayTools]]
 deps = ["Adapt", "ArrayInterface", "DocStringExtensions", "GPUArraysCore", "IteratorInterfaceExtensions", "LinearAlgebra", "RecipesBase", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface", "Tables"]
-git-tree-sha1 = "ccc40aee102e101031102cfe92e66201720ed124"
+git-tree-sha1 = "2e154f7d7e38db1af0a14ec751aba33360c3bef9"
 uuid = "731186ca-8d62-57ce-b412-fbd966d074cd"
-version = "3.32.1"
+version = "3.33.0"
 
     [deps.RecursiveArrayTools.extensions]
     RecursiveArrayToolsFastBroadcastExt = "FastBroadcast"
@@ -3376,11 +3375,6 @@ version = "0.5.28"
 
     [deps.TimerOutputs.weakdeps]
     FlameGraphs = "08572546-2f56-4bcf-ba4e-bab62c3a3f89"
-
-[[deps.Tokenize]]
-git-tree-sha1 = "468b4685af4abe0e9fd4d7bf495a6554a6276e75"
-uuid = "0796e94c-ce3b-5d07-9a54-7f471281c624"
-version = "0.5.29"
 
 [[deps.TranscodingStreams]]
 git-tree-sha1 = "0c45878dcfdcfa8480052b6ab162cdd138781742"
