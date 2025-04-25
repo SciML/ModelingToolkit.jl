@@ -279,7 +279,6 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
 
     constraintsystem = nothing
     if !isempty(constraints)
-        @show constraints
         constraintsystem = process_constraint_system(constraints, dvs, ps, iv)
         for p in parameters(constraintsystem)
             !in(p, Set(ps)) && push!(ps, p)
@@ -807,7 +806,6 @@ function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
             throw(ArgumentError("Too many arguments for variable $var."))
         elseif length(arguments(var)) == 1
             arg = only(arguments(var))
-            @show sts
             operation(var)(iv) ∈ sts ||
                 throw(ArgumentError("Variable $var is not a variable of the ODESystem. Called variables must be variables of the ODESystem."))
 

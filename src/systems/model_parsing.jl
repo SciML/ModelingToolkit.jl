@@ -617,7 +617,6 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps, c_evts, d_evts,
         cons, costs, dict, mod, arg, kwargs, where_types)
     mname = arg.args[1]
     body = arg.args[end]
-    @show dict
     if mname == Symbol("@description")
         parse_description!(body, dict)
     elseif mname == Symbol("@components")
@@ -1170,7 +1169,6 @@ function parse_constraints!(cons, dict, body)
 end
 
 function parse_costs!(costs, dict, body)
-    @show dict
     dict[:costs] = []
     Base.remove_linenums!(body)
     for arg in body.args
