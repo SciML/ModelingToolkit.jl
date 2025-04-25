@@ -653,20 +653,16 @@ end
 function DiffEqBase.get_updated_symbolic_problem(sys::AbstractSystem, prob; kw...)
     supports_initialization(sys) || return prob
     initdata = prob.f.initialization_data
-    initdata === nothing && return prob
+    initdata isa SciMLBase.OverrideInitData || return prob
+    meta = initdata.metadata
+    meta isa InitializationMetadata || return prob
+    meta.get_updated_u0 === nothing && return prob
 
     u0 = state_values(prob)
     u0 === nothing && return prob
 
     p = parameter_values(prob)
     t0 = is_time_dependent(prob) ? current_time(prob) : nothing
-    meta = initdata.metadata
-
-    getter = if meta isa InitializationMetadata
-        meta.get_initial_unknowns
-    else
-        getu(sys, Initial.(unknowns(sys)))
-    end
 
     if p isa MTKParameters
         buffer = p.initials
@@ -681,7 +677,8 @@ function DiffEqBase.get_updated_symbolic_problem(sys::AbstractSystem, prob; kw..
     else
         T = StaticArrays.similar_type(u0)
     end
-    return remake(prob; u0 = T(getter(p)))
+
+    return remake(prob; u0 = T(meta.get_updated_u0(prob, initdata.initializeprob)))
 end
 
 """

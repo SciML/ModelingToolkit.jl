@@ -769,7 +769,7 @@ properly.
 
 $(TYPEDFIELDS)
 """
-struct InitializationMetadata{R <: ReconstructInitializeprob, GIU, SIU}
+struct InitializationMetadata{R <: ReconstructInitializeprob, GUU, SIU}
     """
     The `u0map` used to construct the initialization.
     """
@@ -796,15 +796,56 @@ struct InitializationMetadata{R <: ReconstructInitializeprob, GIU, SIU}
     """
     oop_reconstruct_u0_p::R
     """
-    A function which takes the parameter object of the problem and returns
-    `Initial.(unknowns(sys))`.
+    A function which takes `(prob, initializeprob)` and return the `u0` to use for the problem.
     """
-    get_initial_unknowns::GIU
+    get_updated_u0::GUU
     """
     A function which takes the `u0` of the problem and sets
     `Initial.(unknowns(sys))`.
     """
     set_initial_unknowns!::SIU
+end
+
+"""
+    $(TYPEDEF)
+
+A callable struct to use as the `get_updated_u0` field of `InitializationMetadata`.
+Returns the value of `Initial.(unknowns(sys))`, except with algebraic variables replaced
+by their guess values in the initialization problem.
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
+struct GetUpdatedU0{GA, GIU}
+    """
+    Mask with length `length(unknowns(sys))` denoting indices of algebraic variables.
+    """
+    algevars::BitVector
+    """
+    Function which returns the values of algebraic variables in `initializeprob`, in the
+    order the algebraic variables occur in `unknowns(sys)`.
+    """
+    get_algevars::GA
+    """
+    Function which returns `Initial.(unknowns(sys))` as a `Vector`.
+    """
+    get_initial_unknowns::GIU
+end
+
+function GetUpdatedU0(sys::AbstractSystem, initsys::AbstractSystem)
+    algevaridxs = BitVector(is_alg_equation.(equations(sys)))
+    algevars = unknowns(sys)[algevaridxs]
+    get_algevars = getu(initsys, algevars)
+    get_initial_unknowns = getu(sys, Initial.(unknowns(sys)))
+    return GetUpdatedU0(algevaridxs, get_algevars, get_initial_unknowns)
+end
+
+function (guu::GetUpdatedU0)(prob, initprob)
+    buffer = guu.get_initial_unknowns(prob)
+    algebuf = view(buffer, guu.algevars)
+    copyto!(algebuf, guu.get_algevars(initprob))
+    return buffer
 end
 
 """
@@ -845,10 +886,15 @@ function maybe_build_initialization_problem(
     end
     initializeprob = remake(initializeprob; p = initp)
 
+    get_initial_unknowns = if is_time_dependent(sys)
+        GetUpdatedU0(sys, initializeprob.f.sys)
+    else
+        nothing
+    end
     meta = InitializationMetadata(
         u0map, pmap, guesses, Vector{Equation}(initialization_eqs),
         use_scc, ReconstructInitializeprob(sys, initializeprob.f.sys),
-        getp(sys, Initial.(unknowns(sys))), setp(sys, Initial.(unknowns(sys))))
+        get_initial_unknowns, setp(sys, Initial.(unknowns(sys))))
 
     if is_time_dependent(sys)
         all_init_syms = Set(all_symbols(initializeprob))
