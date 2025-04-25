@@ -24,9 +24,9 @@ eqs = [0 ~ a
        0 ~ d]
 @named sub4 = System(eqs, [a, b, c, d], [])
 @named sub3 = System(eqs, [a, b, c, d], [])
-@named sub2 = System([], [], [], systems = [sub3, sub4])
-@named sub1 = System([], [], [], systems = [sub2])
-@named sys = System([], [], [], systems = [sub1])
+@named sub2 = System(Equation[], [], [], systems = [sub3, sub4])
+@named sub1 = System(Equation[], [], [], systems = [sub2])
+@named sys = System(Equation[], [], [], systems = [sub1])
 
 names = ModelingToolkit.getname.(unknowns(sys))
 @test :d in names
