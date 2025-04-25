@@ -621,16 +621,30 @@ function Base.showerror(io::IO, err::OperatorIndepvarMismatchError)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Search through `expr` for all symbolic variables present in it. Populate `dvs` with
+unknowns and `ps` with parameters present. `iv` should be the independent variable of the
+system or `nothing` for time-independent systems. Expressions where the operator `isa op`
+go through `validate_operator`.
+
+`depth` is a keyword argument which indicates how many levels down `expr` is from the root
+of the system hierarchy. This is used to resolve scoping operators. The scope of a variable
+can be checked using `check_scope_depth`.
+
+This function should return `nothing`.
+"""
 function collect_vars!(unknowns, parameters, expr, iv; depth = 0, op = Symbolics.Operator)
     if issym(expr)
-        collect_var!(unknowns, parameters, expr, iv; depth)
-    else
-        for var in vars(expr; op)
-            if iscall(var) && operation(var) isa Differential
-                var, _ = var_from_nested_derivative(var)
-            end
-            collect_var!(unknowns, parameters, var, iv; depth)
+        return collect_var!(unknowns, parameters, expr, iv; depth)
+    end
+    for var in vars(expr; op)
+        while iscall(var) && operation(var) isa op
+            validate_operator(operation(var), arguments(var), iv; context = expr)
+            var = arguments(var)[1]
         end
+        collect_var!(unknowns, parameters, var, iv; depth)
     end
     return nothing
 end
