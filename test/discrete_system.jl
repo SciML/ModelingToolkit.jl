@@ -3,7 +3,7 @@
 - https://github.com/epirecipes/sir-julia/blob/master/markdown/function_map/function_map.md
 - https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology#Deterministic_versus_stochastic_epidemic_models
 =#
-using ModelingToolkit, Test
+using ModelingToolkit, SymbolicIndexingInterface, Test
 using ModelingToolkit: t_nounits as t
 using ModelingToolkit: get_metadata, MTKParameters
 
@@ -37,13 +37,15 @@ syss = structural_simplify(sys)
 df = DiscreteFunction(syss)
 # iip
 du = zeros(3)
-u = collect(1:3)
+u = ModelingToolkit.better_varmap_to_vars(Dict([S => 1, I => 2, R => 3]), unknowns(syss))
 p = MTKParameters(syss, [c, nsteps, δt, β, γ] .=> collect(1:5))
 df.f(du, u, p, 0)
-@test du ≈ [0.01831563888873422, 0.9816849729159067, 4.999999388195359]
+reorderer = getu(syss, [S, I, R])
+@test reorderer(du) ≈ [0.01831563888873422, 0.9816849729159067, 4.999999388195359]
 
 # oop
-@test df.f(u, p, 0) ≈ [0.01831563888873422, 0.9816849729159067, 4.999999388195359]
+@test reorderer(df.f(u, p, 0)) ≈
+      [0.01831563888873422, 0.9816849729159067, 4.999999388195359]
 
 # Problem
 u0 = [S(k - 1) => 990.0, I(k - 1) => 10.0, R(k - 1) => 0.0]
@@ -98,12 +100,12 @@ function sir_map!(u_diff, u, p, t)
     end
     nothing
 end;
-u0 = prob_map2.u0;
+u0 = prob_map2[[S, I, R]];
 p = [0.05, 10.0, 0.25, 0.1];
 prob_map = DiscreteProblem(sir_map!, u0, tspan, p);
 sol_map2 = solve(prob_map, FunctionMap());
 
-@test Array(sol_map) ≈ Array(sol_map2)
+@test reduce(hcat, sol_map[[S, I, R]]) ≈ Array(sol_map2)
 
 # Delayed difference equation
 # @variables x(..) y(..) z(t)
@@ -317,9 +319,9 @@ end
 
     import ModelingToolkit: shift2term
     # unknowns(de) = xₜ₋₁, x, zₜ₋₁, xₜ₋₂, z
-    vars = ModelingToolkit.value.(unknowns(de))
-    @test isequal(shift2term(Shift(t, 1)(vars[1])), vars[2])
-    @test isequal(shift2term(Shift(t, 1)(vars[4])), vars[1])
-    @test isequal(shift2term(Shift(t, -1)(vars[5])), vars[3])
-    @test isequal(shift2term(Shift(t, -2)(vars[2])), vars[4])
+    vars = sort(ModelingToolkit.value.(unknowns(de)); by = string)
+    @test isequal(shift2term(Shift(t, 1)(vars[2])), vars[1])
+    @test isequal(shift2term(Shift(t, 1)(vars[3])), vars[2])
+    @test isequal(shift2term(Shift(t, -1)(vars[4])), vars[5])
+    @test isequal(shift2term(Shift(t, -2)(vars[1])), vars[3])
 end

@@ -260,7 +260,7 @@ function is_time_dependent_parameter(p, iv)
             (args = arguments(p); length(args)) == 1 && isequal(only(args), iv))
 end
 
-function TearingState(sys; quick_cancel = false, check = true)
+function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
     sys = flatten(sys)
     ivs = independent_variables(sys)
     iv = length(ivs) == 1 ? ivs[1] : nothing
@@ -380,6 +380,14 @@ function TearingState(sys; quick_cancel = false, check = true)
     eqs = eqs[eqs_to_retain]
     neqs = length(eqs)
     symbolic_incidence = symbolic_incidence[eqs_to_retain]
+
+    if sort_eqs
+        # sort equations lexicographically to reduce simplification issues
+        # depending on order due to NP-completeness of tearing.
+        sortidxs = Base.sortperm(eqs, by = string)
+        eqs = eqs[sortidxs]
+        symbolic_incidence = symbolic_incidence[sortidxs]
+    end
 
     ### Handle discrete variables
     lowest_shift = Dict()

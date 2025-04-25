@@ -59,8 +59,7 @@ u0 = [lorenz1.x => 1.0,
     lorenz1.z => 0.0,
     lorenz2.x => 0.0,
     lorenz2.y => 1.0,
-    lorenz2.z => 0.0,
-    α => 2.0]
+    lorenz2.z => 0.0]
 
 p = [lorenz1.σ => 10.0,
     lorenz1.ρ => 28.0,
@@ -73,5 +72,5 @@ p = [lorenz1.σ => 10.0,
 tspan = (0.0, 100.0)
 prob = ODEProblem(connected, u0, tspan, p)
 sol = solve(prob, Rodas5())
-@test maximum(sol[2, :] + sol[6, :] + 2sol[1, :]) < 1e-12
+@test maximum(sol[lorenz1.x] + sol[lorenz2.y] + 2sol[α]) < 1e-12
 #using Plots; plot(sol,idxs=(:α,Symbol(lorenz1.x),Symbol(lorenz2.y)))

@@ -37,7 +37,7 @@ state = TearingState(pendulum)
 @test StructuralTransformations.maximal_matching(graph, eq -> true,
     v -> var_to_diff[v] === nothing) ==
       map(x -> x == 0 ? StructuralTransformations.unassigned : x,
-    [1, 2, 3, 4, 0, 0, 0, 0, 0])
+    [3, 4, 2, 5, 0, 0, 0, 0, 0])
 
 using ModelingToolkit
 @parameters L g
