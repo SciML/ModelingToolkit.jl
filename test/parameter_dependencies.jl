@@ -59,7 +59,7 @@ end
         t;
         parameter_dependencies = [p2 => 2p1]
     )
-    prob = ODEProblem(complete(sys))
+    prob = ODEProblem(complete(sys), [], (0.0, 1.0))
     setp1! = setp(prob, p1)
     get_p1 = getp(prob, p1)
     get_p2 = getp(prob, p2)
@@ -113,7 +113,7 @@ end
         t;
         parameter_dependencies = [p2 => 2p1]
     )
-    prob = ODEProblem(complete(sys))
+    prob = ODEProblem(complete(sys), [], (0.0, 1.0))
     get_dep = getu(prob, 2p1)
     @test get_dep(prob) == [2.0, 4.0]
 end
