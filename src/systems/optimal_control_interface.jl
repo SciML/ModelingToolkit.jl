@@ -1,13 +1,13 @@
-abstract type AbstractOptimalControlProblem{uType, tType, isinplace} <:
+abstract type AbstractDynamicOptProblem{uType, tType, isinplace} <:
               SciMLBase.AbstractODEProblem{uType, tType, isinplace} end
 
-struct OptimalControlSolution
+struct DynamicOptSolution
     model::Any
     sol::ODESolution
     input_sol::Union{Nothing, ODESolution}
 end
 
-function Base.show(io::IO, sol::OptimalControlSolution)
+function Base.show(io::IO, sol::DynamicOptSolution)
     println("retcode: ", sol.sol.retcode, "\n")
 
     println("Optimal control solution for following model:\n")
@@ -16,10 +16,10 @@ function Base.show(io::IO, sol::OptimalControlSolution)
     print("\n\nPlease query the model using sol.model, the solution trajectory for the system using sol.sol, or the solution trajectory for the controllers using sol.input_sol.")
 end
 
-function JuMPControlProblem end
-function InfiniteOptControlProblem end
-function CasADiControlProblem end
-function PyomoControlProblem end
+function JuMPDynamicOptProblem end
+function InfiniteOptDynamicOptProblem end
+function CasADiDynamicOptProblem end
+function PyomoDynamicOptProblem end
 
 function warn_overdetermined(sys, u0map)
     constraintsys = get_constraintsystem(sys)

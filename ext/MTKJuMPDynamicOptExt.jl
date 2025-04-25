@@ -1,4 +1,4 @@
-module MTKJuMPControlExt
+module MTKJuMPDynamicOptExt
 using ModelingToolkit
 using JuMP, InfiniteOpt
 using DiffEqDevTools, DiffEqBase
@@ -6,8 +6,8 @@ using LinearAlgebra
 using StaticArrays
 const MTK = ModelingToolkit
 
-struct JuMPControlProblem{uType, tType, isinplace, P, F, K} <:
-       AbstractOptimalControlProblem{uType, tType, isinplace}
+struct JuMPDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
+       AbstractDynamicOptProblem{uType, tType, isinplace}
     f::F
     u0::uType
     tspan::tType
@@ -15,14 +15,14 @@ struct JuMPControlProblem{uType, tType, isinplace, P, F, K} <:
     model::InfiniteModel
     kwargs::K
 
-    function JuMPControlProblem(f, u0, tspan, p, model, kwargs...)
+    function JuMPDynamicOptProblem(f, u0, tspan, p, model, kwargs...)
         new{typeof(u0), typeof(tspan), SciMLBase.isinplace(f, 5),
             typeof(p), typeof(f), typeof(kwargs)}(f, u0, tspan, p, model, kwargs)
     end
 end
 
-struct InfiniteOptControlProblem{uType, tType, isinplace, P, F, K} <:
-       AbstractOptimalControlProblem{uType, tType, isinplace}
+struct InfiniteOptDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
+       AbstractDynamicOptProblem{uType, tType, isinplace}
     f::F
     u0::uType
     tspan::tType
@@ -30,14 +30,14 @@ struct InfiniteOptControlProblem{uType, tType, isinplace, P, F, K} <:
     model::InfiniteModel
     kwargs::K
 
-    function InfiniteOptControlProblem(f, u0, tspan, p, model, kwargs...)
+    function InfiniteOptDynamicOptProblem(f, u0, tspan, p, model, kwargs...)
         new{typeof(u0), typeof(tspan), SciMLBase.isinplace(f),
             typeof(p), typeof(f), typeof(kwargs)}(f, u0, tspan, p, model, kwargs)
     end
 end
 
 """
-    JuMPControlProblem(sys::ODESystem, u0, tspan, p; dt)
+    JuMPDynamicOptProblem(sys::ODESystem, u0, tspan, p; dt)
 
 Convert an ODESystem representing an optimal control system into a JuMP model
 for solving using optimization. Must provide either `dt`, the timestep between collocation 
@@ -52,7 +52,7 @@ The constraints are:
 - The set of user constraints passed to the ODESystem via `constraints`
 - The solver constraints that encode the time-stepping used by the solver
 """
-function MTK.JuMPControlProblem(sys::ODESystem, u0map, tspan, pmap;
+function MTK.JuMPDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
         dt = nothing,
         steps = nothing,
         guesses = Dict(), kwargs...)
@@ -65,20 +65,20 @@ function MTK.JuMPControlProblem(sys::ODESystem, u0map, tspan, pmap;
     steps, is_free_t = MTK.process_tspan(tspan, dt, steps)
     model = init_model(sys, tspan, steps, u0map, pmap, u0; is_free_t)
 
-    JuMPControlProblem(f, u0, tspan, p, model, kwargs...)
+    JuMPDynamicOptProblem(f, u0, tspan, p, model, kwargs...)
 end
 
 """
-    InfiniteOptControlProblem(sys::ODESystem, u0map, tspan, pmap; dt)
+    InfiniteOptDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap; dt)
 
 Convert an ODESystem representing an optimal control system into a InfiniteOpt model
 for solving using optimization. Must provide `dt` for determining the length 
 of the interpolation arrays.
 
-Related to `JuMPControlProblem`, but directly adds the differential equations
+Related to `JuMPDynamicOptProblem`, but directly adds the differential equations
 of the system as derivative constraints, rather than using a solver tableau.
 """
-function MTK.InfiniteOptControlProblem(sys::ODESystem, u0map, tspan, pmap;
+function MTK.InfiniteOptDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
         dt = nothing,
         steps = nothing,
         guesses = Dict(), kwargs...)
@@ -92,7 +92,7 @@ function MTK.InfiniteOptControlProblem(sys::ODESystem, u0map, tspan, pmap;
     model = init_model(sys, tspan, steps, u0map, pmap, u0; is_free_t)
 
     add_infopt_solve_constraints!(model, sys, pmap; is_free_t)
-    InfiniteOptControlProblem(f, u0, tspan, p, model, kwargs...)
+    InfiniteOptDynamicOptProblem(f, u0, tspan, p, model, kwargs...)
 end
 
 # Initialize InfiniteOpt model.
@@ -307,16 +307,16 @@ function add_jump_solve_constraints!(prob, tableau; is_free_t = false)
 end
 
 """
-Solve JuMPControlProblem. Arguments:
-- prob: a JumpControlProblem
+Solve JuMPDynamicOptProblem. Arguments:
+- prob: a JumpDynamicOptProblem
 - jump_solver: a LP solver such as HiGHS
 - ode_solver: Takes in a symbol representing the solver. Acceptable solvers may be found at https://docs.sciml.ai/DiffEqDevDocs/stable/internals/tableaus/. Note that the symbol may be different than the typical name of the solver, e.g. :Tsitouras5 rather than Tsit5.
 - silent: set the model silent (suppress model output)
 
-Returns a JuMPControlSolution, which contains both the model and the ODE solution.
+Returns a DynamicOptSolution, which contains both the model and the ODE solution.
 """
 function DiffEqBase.solve(
-        prob::JuMPControlProblem, jump_solver, ode_solver::Symbol; silent = false)
+        prob::JuMPDynamicOptProblem, jump_solver, ode_solver::Symbol; silent = false)
     model = prob.model
     tableau_getter = Symbol(:construct, ode_solver)
     @eval tableau = $tableau_getter()
@@ -343,7 +343,7 @@ end
 """
 `derivative_method` kwarg refers to the method used by InfiniteOpt to compute derivatives. The list of possible options can be found at https://infiniteopt.github.io/InfiniteOpt.jl/stable/guide/derivative/. Defaults to FiniteDifference(Backward()).
 """
-function DiffEqBase.solve(prob::InfiniteOptControlProblem, jump_solver;
+function DiffEqBase.solve(prob::InfiniteOptDynamicOptProblem, jump_solver;
         derivative_method = InfiniteOpt.FiniteDifference(Backward()), silent = false)
     model = prob.model
     silent && set_silent(model)
@@ -351,7 +351,7 @@ function DiffEqBase.solve(prob::InfiniteOptControlProblem, jump_solver;
     _solve(prob, jump_solver, derivative_method)
 end
 
-function _solve(prob::AbstractOptimalControlProblem, jump_solver, solver)
+function _solve(prob::AbstractDynamicOptProblem, jump_solver, solver)
     model = prob.model
     set_optimizer(model, jump_solver)
     optimize!(model)
@@ -382,7 +382,7 @@ function _solve(prob::AbstractOptimalControlProblem, jump_solver, solver)
             input_sol, SciMLBase.ReturnCode.ConvergenceFailure))
     end
 
-    OptimalControlSolution(model, sol, input_sol)
+    DynamicOptSolution(model, sol, input_sol)
 end
 
 end

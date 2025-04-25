@@ -78,7 +78,7 @@ MTKChainRulesCoreExt = "ChainRulesCore"
 MTKDeepDiffsExt = "DeepDiffs"
 MTKFMIExt = "FMI"
 MTKInfiniteOptExt = "InfiniteOpt"
-MTKJuMPControlExt = ["JuMP", "DiffEqDevTools", "InfiniteOpt"]
+MTKJuMPDynamicOptExt = ["JuMP", "DiffEqDevTools", "InfiniteOpt"]
 MTKLabelledArraysExt = "LabelledArrays"
 
 [compat]

@@ -23,7 +23,7 @@ using DataInterpolations
     parammap = [α => 1.5, β => 1.0, γ => 3.0, δ => 1.0]
 
     # Test explicit method.
-    jprob = JuMPControlProblem(sys, u0map, tspan, parammap, dt = 0.01)
+    jprob = JuMPDynamicOptProblem(sys, u0map, tspan, parammap, dt = 0.01)
     @test JuMP.num_constraints(jprob.model) == 2 # initials
     jsol = solve(jprob, Ipopt.Optimizer, :RK4)
     oprob = ODEProblem(sys, u0map, tspan, parammap)
@@ -34,7 +34,7 @@ using DataInterpolations
     jsol2 = solve(jprob, Ipopt.Optimizer, :ImplicitEuler, silent = true) # 63.031 ms, 26.49 MiB
     osol2 = solve(oprob, ImplicitEuler(), dt = 0.01, adaptive = false) # 129.375 μs, 61.91 KiB
     @test ≈(jsol2.sol.u, osol2.u, rtol = 0.001)
-    iprob = InfiniteOptControlProblem(sys, u0map, tspan, parammap, dt = 0.01)
+    iprob = InfiniteOptDynamicOptProblem(sys, u0map, tspan, parammap, dt = 0.01)
     isol = solve(iprob, Ipopt.Optimizer,
         derivative_method = InfiniteOpt.FiniteDifference(InfiniteOpt.Backward()),
         silent = true) # 11.540 ms, 4.00 MiB
@@ -46,13 +46,13 @@ using DataInterpolations
     constr = [x(0.6) ~ 3.5, x(0.3) ~ 7.0]
     @mtkbuild lksys = ODESystem(eqs, t; constraints = constr)
 
-    jprob = JuMPControlProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
+    jprob = JuMPDynamicOptProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
     @test JuMP.num_constraints(jprob.model) == 2
     jsol = solve(jprob, Ipopt.Optimizer, :Tsitouras5, silent = true) # 12.190 s, 9.68 GiB
     @test jsol.sol(0.6)[1] ≈ 3.5
     @test jsol.sol(0.3)[1] ≈ 7.0
 
-    iprob = InfiniteOptControlProblem(
+    iprob = InfiniteOptDynamicOptProblem(
         lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
     isol = solve(iprob, Ipopt.Optimizer,
         derivative_method = InfiniteOpt.OrthogonalCollocation(3), silent = true) # 48.564 ms, 9.58 MiB
@@ -63,13 +63,13 @@ using DataInterpolations
     # Test whole-interval constraints
     constr = [x(t) ≳ 1, y(t) ≳ 1]
     @mtkbuild lksys = ODESystem(eqs, t; constraints = constr)
-    iprob = InfiniteOptControlProblem(
+    iprob = InfiniteOptDynamicOptProblem(
         lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
     isol = solve(iprob, Ipopt.Optimizer,
         derivative_method = InfiniteOpt.OrthogonalCollocation(3), silent = true) # 48.564 ms, 9.58 MiB
     @test all(u -> u > [1, 1], isol.sol.u)
 
-    jprob = JuMPControlProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
+    jprob = JuMPDynamicOptProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
     jsol = solve(jprob, Ipopt.Optimizer, :RadauIA3, silent = true) # 12.190 s, 9.68 GiB
     @test all(u -> u > [1, 1], jsol.sol.u)
 end
@@ -103,7 +103,7 @@ end
     u0map = [x(t) => 0.0, v(t) => 0.0]
     tspan = (0.0, 1.0)
     parammap = [u(t) => 0.0]
-    jprob = JuMPControlProblem(block, u0map, tspan, parammap; dt = 0.01)
+    jprob = JuMPDynamicOptProblem(block, u0map, tspan, parammap; dt = 0.01)
     jsol = solve(jprob, Ipopt.Optimizer, :Verner8)
     # Linear systems have bang-bang controls
     @test is_bangbang(jsol.input_sol, [-1.0], [1.0])
@@ -117,7 +117,7 @@ end
     osol = solve(oprob, Vern8(), dt = 0.01, adaptive = false)
     @test ≈(jsol.sol.u, osol.u, rtol = 0.05)
 
-    iprob = InfiniteOptControlProblem(block, u0map, tspan, parammap; dt = 0.01)
+    iprob = InfiniteOptDynamicOptProblem(block, u0map, tspan, parammap; dt = 0.01)
     isol = solve(iprob, Ipopt.Optimizer; silent = true)
     @test is_bangbang(isol.input_sol, [-1.0], [1.0])
     @test ≈(isol.sol.u[end][1], 0.25, rtol = 1e-5)
@@ -141,10 +141,10 @@ end
     u0map = [w(t) => 40, q(t) => 2]
     pmap = [b => 1, c => 1, μ => 1, s => 1, ν => 1, α => 1]
 
-    jprob = JuMPControlProblem(beesys, u0map, tspan, pmap, dt = 0.01)
+    jprob = JuMPDynamicOptProblem(beesys, u0map, tspan, pmap, dt = 0.01)
     jsol = solve(jprob, Ipopt.Optimizer, :Tsitouras5)
     @test is_bangbang(jsol.input_sol, [0.0], [1.0])
-    iprob = InfiniteOptControlProblem(beesys, u0map, tspan, pmap, dt = 0.01)
+    iprob = InfiniteOptDynamicOptProblem(beesys, u0map, tspan, pmap, dt = 0.01)
     isol = solve(iprob, Ipopt.Optimizer; silent = true)
     @test is_bangbang(isol.input_sol, [0.0], [1.0])
 
@@ -186,11 +186,11 @@ end
     pmap = [
         g₀ => 1, m₀ => 1.0, h_c => 500, c => 0.5 * √(g₀ * h₀), D_c => 0.5 * 620 * m₀ / g₀,
         Tₘ => 3.5 * g₀ * m₀, T(t) => 0.0, h₀ => 1, m_c => 0.6]
-    jprob = JuMPControlProblem(rocket, u0map, (ts, te), pmap; dt = 0.005, cse = false)
+    jprob = JuMPDynamicOptProblem(rocket, u0map, (ts, te), pmap; dt = 0.005, cse = false)
     jsol = solve(jprob, Ipopt.Optimizer, :RadauIIA5, silent = true)
     @test jsol.sol.u[end][1] > 1.012
 
-    iprob = InfiniteOptControlProblem(
+    iprob = InfiniteOptDynamicOptProblem(
         rocket, u0map, (ts, te), pmap; dt = 0.005, cse = false)
     isol = solve(iprob, Ipopt.Optimizer,
         derivative_method = InfiniteOpt.OrthogonalCollocation(3), silent = true)
@@ -223,11 +223,11 @@ end
 
     u0map = [x(t) => 17.5]
     pmap = [u(t) => 0.0, tf => 8]
-    jprob = JuMPControlProblem(rocket, u0map, (0, tf), pmap; steps = 201)
+    jprob = JuMPDynamicOptProblem(rocket, u0map, (0, tf), pmap; steps = 201)
     jsol = solve(jprob, Ipopt.Optimizer, :Tsitouras5)
     @test isapprox(jsol.sol.t[end], 10.0, rtol = 1e-3)
 
-    iprob = InfiniteOptControlProblem(rocket, u0map, (0, tf), pmap; steps = 200)
+    iprob = InfiniteOptDynamicOptProblem(rocket, u0map, (0, tf), pmap; steps = 200)
     isol = solve(iprob, Ipopt.Optimizer)
     @test isapprox(isol.sol.t[end], 10.0, rtol = 1e-3)
 end
@@ -259,11 +259,11 @@ end
 
     u0map = [D(x(t)) => 0.0, D(θ(t)) => 0.0, θ(t) => 0.0, x(t) => 0.0]
     pmap = [mₖ => 1.0, mₚ => 0.2, l => 0.5, g => 9.81, u => 0]
-    jprob = JuMPControlProblem(cartpole, u0map, tspan, pmap; dt = 0.04)
+    jprob = JuMPDynamicOptProblem(cartpole, u0map, tspan, pmap; dt = 0.04)
     jsol = solve(jprob, Ipopt.Optimizer, :RK4)
     @test jsol.sol.u[end] ≈ [π, 0, 0, 0]
 
-    iprob = InfiniteOptControlProblem(cartpole, u0map, tspan, pmap; dt = 0.04)
+    iprob = InfiniteOptDynamicOptProblem(cartpole, u0map, tspan, pmap; dt = 0.04)
     isol = solve(iprob, Ipopt.Optimizer)
     @test isol.sol.u[end] ≈ [π, 0, 0, 0]
 end

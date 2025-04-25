@@ -4,6 +4,7 @@ using Zygote
 using SymbolicIndexingInterface
 using SciMLStructures
 using OrdinaryDiffEqTsit5
+using OrdinaryDiffEqNonlinearSolve
 using NonlinearSolve
 using SciMLSensitivity
 using ForwardDiff
