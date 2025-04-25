@@ -300,8 +300,8 @@ end
     tspan = (0.0, 250.0)
     u₀map = [S => 999, I => 1, R => 0]
     parammap = [γ => 0.01]
-    dprob = DiscreteProblem(js2, u₀map, tspan, parammap)
-    jprob = JumpProblem(js2, dprob, Direct(), save_positions = (false, false), rng = rng)
+    jprob = JumpProblem(js2, u₀map, tspan, parammap; aggregator = Direct(),
+        save_positions = (false, false), rng = rng)
     @test jprob.ps[γ] == 0.01
     @test jprob.ps[β] == 0.0001
     @test_nowarn solve(jprob, SSAStepper())
@@ -310,8 +310,8 @@ end
         [j₁, j₃], t, [S, I, R], [γ]; parameter_dependencies = [β => 0.01γ],
         discrete_events = [[10.0] => [γ ~ 0.02]])
     js2 = complete(js2)
-    dprob = DiscreteProblem(js2, u₀map, tspan, parammap)
-    jprob = JumpProblem(js2, dprob, Direct(), save_positions = (false, false), rng = rng)
+    jprob = JumpProblem(js2, u₀map, tspan, parammap; aggregator = Direct(),
+        save_positions = (false, false), rng = rng)
     integ = init(jprob, SSAStepper())
     @test integ.ps[γ] == 0.01
     @test integ.ps[β] == 0.0001
