@@ -24,9 +24,12 @@ end
 model = complete(model)
 inputs = [model.τ]
 outputs = [model.y]
+
 model = structural_simplify(model; inputs, outputs)
-f, dvs, psym, io_sys = ModelingToolkit.generate_control_function(
+(f_oop, f_ip), dvs, psym, io_sys = ModelingToolkit.generate_control_function(
     model, split = false)
+
+f_obs = ModelingToolkit.build_explicit_observed_function(io_sys, [model.y]; inputs)
 
 f_obs = ModelingToolkit.build_explicit_observed_function(io_sys, outputs; inputs)
 
