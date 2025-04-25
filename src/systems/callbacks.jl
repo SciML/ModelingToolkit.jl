@@ -155,6 +155,9 @@ end
 haspre(eq::Equation) = haspre(eq.lhs) || haspre(eq.rhs)
 haspre(O) = recursive_hasoperator(Pre, O)
 
+function validate_operator(op::Pre, args, iv; context = nothing)
+end
+
 ###############################
 ###### Continuous events ######
 ###############################
