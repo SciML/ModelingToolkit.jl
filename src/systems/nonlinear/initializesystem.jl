@@ -247,7 +247,7 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     # so add scalarized versions as well
     scalarize_varmap!(paramsubs)
 
-    eqs_ics = Symbolics.substitute.(eqs_ics, (paramsubs,))
+    eqs_ics = Vector{Equation}(Symbolics.substitute.(eqs_ics, (paramsubs,)))
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
