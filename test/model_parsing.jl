@@ -1050,7 +1050,7 @@ end
     @named ex = Example()
     ex = complete(ex)
 
-    costs = ModelingToolkit.get_costs(ex) 
+    costs = ModelingToolkit.get_costs(ex)
     constrs = ModelingToolkit.get_constraints(ModelingToolkit.get_constraintsystem(ex))
     @test isequal(costs[1], ex.x + ex.y)
     @test isequal(costs[2], At(1)(ex.y)^2)

@@ -119,7 +119,6 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     push!(exprs.args, :(push!(systems, $(comps...))))
     push!(exprs.args, :(push!(variables, $(vs...))))
 
-
     gui_metadata = isassigned(icon) > 0 ? GUIMetadata(GlobalRef(mod, name), icon[]) :
                    GUIMetadata(GlobalRef(mod, name))
 
@@ -1161,8 +1160,8 @@ function parse_discrete_events!(d_evts, dict, body)
     end
 end
 
-function parse_constraints!(cons, dict, body) 
-    dict[:constraints] = [] 
+function parse_constraints!(cons, dict, body)
+    dict[:constraints] = []
     Base.remove_linenums!(body)
     for arg in body.args
         push!(cons, arg)
@@ -1170,9 +1169,9 @@ function parse_constraints!(cons, dict, body)
     end
 end
 
-function parse_costs!(costs, dict, body) 
+function parse_costs!(costs, dict, body)
     @show dict
-    dict[:costs] = [] 
+    dict[:costs] = []
     Base.remove_linenums!(body)
     for arg in body.args
         push!(costs, arg)

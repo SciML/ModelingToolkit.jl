@@ -173,9 +173,9 @@ end
 
     arr = At(1)(w)
     var = At(1)(w[1])
-    @test arr isa Symbolics.Arr 
+    @test arr isa Symbolics.Arr
     @test var isa Num
-    
+
     @test isequal(At(1)(r), r)
     @test isequal(At(1)(r[2]), r[2])
 

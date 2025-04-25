@@ -616,7 +616,7 @@ getshift(x::Symbolic) = Symbolics.getmetadata(x, VariableShift, 0)
 ###################
 ### Evaluate at ###
 ###################
-struct At <: Symbolics.Operator 
+struct At <: Symbolics.Operator
     t::Union{Symbolic, Number}
 end
 
@@ -636,7 +636,8 @@ function (A::At)(x::Symbolic)
         x = default_toterm(x)
         A(x)
     else
-        length(arguments(x)) !== 1 && error("Variable $x has too many arguments. At can only be applied to one-argument variables.")
+        length(arguments(x)) !== 1 &&
+            error("Variable $x has too many arguments. At can only be applied to one-argument variables.")
         (symbolic_type(only(arguments(x))) !== ScalarSymbolic()) && return x
         return operation(x)(A.t)
     end
