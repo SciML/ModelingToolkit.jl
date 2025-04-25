@@ -22,13 +22,14 @@ using ModelingToolkit: D_nounits as D, t_nounits as t, varmap_to_vars
 end
 @named model = Pendulum()
 model = complete(model)
-
 inputs = [model.τ]
-(f_oop, f_ip), dvs, psym, io_sys = ModelingToolkit.generate_control_function(
-    model, inputs, split = false)
-
 outputs = [model.y]
-f_obs = ModelingToolkit.build_explicit_observed_function(io_sys, outputs; inputs = inputs)
+
+model = structural_simplify(model; inputs, outputs)
+(f_oop, f_ip), dvs, psym, io_sys = ModelingToolkit.generate_control_function(
+    model, split = false)
+
+f_obs = ModelingToolkit.build_explicit_observed_function(io_sys, [model.y]; inputs)
 
 expected_state_order = [model.θ, model.ω]
 permutation = [findfirst(isequal(x), expected_state_order) for x in dvs] # This maps our expected state order to the actual state order
