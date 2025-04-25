@@ -183,7 +183,7 @@ end
 m = 1.0
 @named mass = Translational_Mass(m = m)
 
-ms_eqs = []
+ms_eqs = Equation[]
 
 @named _ms_model = System(ms_eqs, t)
 @named ms_model = compose(_ms_model,
