@@ -100,7 +100,7 @@ let
                D(v) * rho * L ~ (fluid_port_a.p - fluid_port_b.p - dp_z)]
         compose(System(eqs, t, sts, ps; name = name), [fluid_port_a, fluid_port_b])
     end
-    function System(; name, L = 10.0)
+    function HydraulicSystem(; name, L = 10.0)
         @named compensator = Compensator()
         @named source = Source()
         @named substation = Substation()
@@ -116,7 +116,7 @@ let
         compose(System(eqs, t, [], ps; name = name), subs)
     end
 
-    @named system = System(L = 10)
+    @named system = HydraulicSystem(L = 10)
     @unpack supply_pipe, return_pipe = system
     sys = structural_simplify(system)
     u0 = [
