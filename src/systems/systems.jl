@@ -24,6 +24,7 @@ topological sort of the observed equations in `sys`.
 + When `simplify=true`, the `simplify` function will be applied during the tearing process.
 + `allow_symbolic=false`, `allow_parameter=true`, and `conservative=false` limit the coefficient types during tearing. In particular, `conservative=true` limits tearing to only solve for trivial linear systems where the coefficient has the absolute value of ``1``.
 + `fully_determined=true` controls whether or not an error will be thrown if the number of equations don't match the number of inputs, outputs, and equations.
++ `sort_eqs=true` controls whether equations are sorted lexicographically before simplification or not.
 """
 function structural_simplify(
         sys::AbstractSystem, io = nothing; additional_passes = [], simplify = false, split = true,
@@ -69,10 +70,11 @@ function __structural_simplify(sys::SDESystem, args...; kwargs...)
     return __structural_simplify(ODESystem(sys), args...; kwargs...)
 end
 
-function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
+function __structural_simplify(
+        sys::AbstractSystem, io = nothing; simplify = false, sort_eqs = true,
         kwargs...)
     sys = expand_connections(sys)
-    state = TearingState(sys)
+    state = TearingState(sys; sort_eqs)
 
     @unpack structure, fullvars = state
     @unpack graph, var_to_diff, var_types = structure
