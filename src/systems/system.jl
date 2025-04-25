@@ -408,7 +408,7 @@ function flatten(sys::System, noeqs = false)
 
     return System(noeqs ? Equation[] : equations(sys), get_iv(sys), unknowns(sys),
         parameters(sys; initial_parameters = true), brownians(sys);
-        jumps = jumps(sys), constraints = constraints(sys), costs = cost(sys),
+        jumps = jumps(sys), constraints = constraints(sys), costs = [cost(sys)],
         consolidate = default_consolidate, observed = observed(sys),
         parameter_dependencies = parameter_dependencies(sys), defaults = defaults(sys),
         guesses = guesses(sys), continuous_events = continuous_events(sys),
