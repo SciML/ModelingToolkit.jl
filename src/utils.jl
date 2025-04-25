@@ -1111,8 +1111,8 @@ Check if `sym` represents a symbolic floating point number or array of such numb
 function is_variable_floatingpoint(sym)
     sym = unwrap(sym)
     T = symtype(sym)
-    return T == Real || T <: AbstractFloat || T <: AbstractArray{Real} ||
-           T <: AbstractArray{<:AbstractFloat}
+    is_floatingpoint_symtype(T)
+end
 
 """
     $(TYPEDSIGNATURES)
