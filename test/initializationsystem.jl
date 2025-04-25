@@ -1513,7 +1513,7 @@ end
     @inferred solve(prob)
 end
 
-@testset "Issue#3570, #3552: `Initial`s are copied to `u0` during `solve`/`init`" begin
+@testset "Issue#3570, #3552: `Initial`s/guesses are copied to `u0` during `solve`/`init`" begin
     @parameters g
     @variables x(t) [state_priority = 10] y(t) λ(t)
     eqs = [D(D(x)) ~ λ * x
@@ -1522,8 +1522,16 @@ end
     @mtkbuild pend = ODESystem(eqs, t)
 
     prob = ODEProblem(
-        pend, [x => (√2 / 2)], (0.0, 1.5), [g => 1], guesses = [λ => 1, y => √2 / 2])
+        pend, [x => (√2 / 2), D(x) => 0.0], (0.0, 1.5),
+        [g => 1], guesses = [λ => 1, y => √2 / 2])
     sol = solve(prob)
+
+    @testset "Guesses of initialization problem copied to algebraic variables" begin
+        prob.f.initialization_data.initializeprob[λ] = 1.0
+        prob2 = DiffEqBase.get_updated_symbolic_problem(
+            pend, prob; u0 = prob.u0, p = prob.p)
+        @test prob2[λ] ≈ 1.0
+    end
 
     @testset "`setsym_oop`" begin
         setter = setsym_oop(prob, [Initial(x)])
