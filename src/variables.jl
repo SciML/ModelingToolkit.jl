@@ -612,3 +612,42 @@ getunshifted(x::Symbolic) = Symbolics.getmetadata(x, VariableUnshifted, nothing)
 
 getshift(x::Num) = getshift(unwrap(x))
 getshift(x::Symbolic) = Symbolics.getmetadata(x, VariableShift, 0)
+
+###################
+### Evaluate at ###
+###################
+struct At <: Symbolics.Operator 
+    t::Union{Symbolic, Number}
+end
+
+function (A::At)(x::Symbolic)
+    if symbolic_type(x) == NotSymbolic() || !iscall(x)
+        if x isa Symbolics.CallWithMetadata
+            return x(A.t)
+        else
+            return x
+        end
+    end
+
+    if iscall(x) && operation(x) == getindex
+        arr = arguments(x)[1]
+        term(getindex, A(arr), arguments(x)[2:end]...)
+    elseif operation(x) isa Differential
+        x = default_toterm(x)
+        A(x)
+    else
+        length(arguments(x)) !== 1 && error("Variable $x has too many arguments. At can only be applied to one-argument variables.")
+        (symbolic_type(only(arguments(x))) !== ScalarSymbolic()) && return x
+        return operation(x)(A.t)
+    end
+end
+
+function (A::At)(x::Union{Num, Symbolics.Arr})
+    wrap(A(unwrap(x)))
+end
+SymbolicUtils.isbinop(::At) = false
+
+Base.nameof(::At) = :At
+Base.show(io::IO, A::At) = print(io, "At(", A.t, ")")
+Base.:(==)(A1::At, A2::At) = isequal(A1.t, A2.t)
+Base.hash(A::At, u::UInt) = hash(A.t, u)
