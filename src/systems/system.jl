@@ -409,10 +409,15 @@ end
 function flatten(sys::System, noeqs = false)
     systems = get_systems(sys)
     isempty(systems) && return sys
-
+    costs = cost(sys)
+    if _iszero(costs)
+        costs = Union{Real, BasicSymbolic}[]
+    else
+        costs = [costs]
+    end
     return System(noeqs ? Equation[] : equations(sys), get_iv(sys), unknowns(sys),
         parameters(sys; initial_parameters = true), brownians(sys);
-        jumps = jumps(sys), constraints = constraints(sys), costs = [cost(sys)],
+        jumps = jumps(sys), constraints = constraints(sys), costs = costs,
         consolidate = default_consolidate, observed = observed(sys),
         parameter_dependencies = parameter_dependencies(sys), defaults = defaults(sys),
         guesses = guesses(sys), continuous_events = continuous_events(sys),
@@ -508,8 +513,8 @@ function Base.:(==)(sys1::System, sys2::System)
         _eq_unordered(get_tstops(sys1), get_tstops(sys2)) &&
         # not comparing tearing states because checking if they're equal up to ordering
         # is difficult
-        get_namespacing(sys1) == get_namespacing(sys2) &&
-        get_complete(sys1) == get_complete(sys2) &&
+        getfield(sys1, :namespacing) == getfield(sys2, :namespacing) &&
+        getfield(sys1, :complete) == getfield(sys2, :complete) &&
         ignored_connections_equal(sys1, sys2) &&
         get_parent(sys1) == get_parent(sys2) &&
         get_isscheduled(sys1) == get_isscheduled(sys2) &&
