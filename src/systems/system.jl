@@ -238,7 +238,8 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
         end
     end
 
-    return System(eqs, iv, collect(allunknowns), collect(new_ps), brownians; kwargs...)
+    return System(
+        eqs, iv, collect(allunknowns), collect(new_ps), collect(brownians); kwargs...)
 end
 
 function System(eqs::Vector{Equation}; kwargs...)
