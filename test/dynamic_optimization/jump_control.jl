@@ -257,31 +257,3 @@ end
     isol = solve(iprob, Ipopt.Optimizer)
     @test isol.sol.u[end] ≈ [π, 0, 0, 0]
 end
-
-# RC Circuit
-# using ModelingToolkitStandardLibrary.Electrical
-# @testset "MTK Components" begin
-#     @mtkmodel RL begin
-#         @parameters begin
-#             R = 1.0
-#             L = 1.0
-#         end
-#         @components begin
-#             resistor = Resistor(R = R)
-#             inductor = Inductor(L = L)
-#             source = Voltage()
-#             ground = Ground()
-#         end
-#         @equations begin
-#             connect(source.p, resistor.p)
-#             connect(resistor.n, inductor.p)
-#             connect(inductor.n, source.n, ground.g)
-#         end
-#     end
-# 
-#     costs = []
-#     coalesce = sum
-#     @named sys = RL()
-#     sys, _ = structural_simplify(sys, inputs = [sys.source.V.u])
-#     @parameters tf λ i₀
-# end

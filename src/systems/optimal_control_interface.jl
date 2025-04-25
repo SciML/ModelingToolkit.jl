@@ -185,17 +185,3 @@ function process_tspan(tspan, dt, steps)
         return length(tspan[1]:dt:tspan[2]), false
     end
 end
-
-#"""
-#$(SIGNATURES)
-#
-#Define one or more inputs.
-#
-#See also [`@independent_variables`](@ref), [`@variables`](@ref) and [`@constants`](@ref).
-#"""
-#macro inputs(xs...)
-#    Symbolics._parse_vars(:inputs,
-#        Real,
-#        xs,
-#        toparam) |> esc
-#end
