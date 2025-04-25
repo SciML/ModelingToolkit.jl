@@ -128,6 +128,11 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         noise_eqs = unwrap.(noise_eqs)
     end
 
+    costs = unwrap.(costs)
+    if isempty(costs)
+        costs = Union{BasicSymbolic, Real}[]
+    end
+
     parameter_dependencies, ps = process_parameter_dependencies(parameter_dependencies, ps)
     defaults = anydict(defaults)
     guesses = anydict(guesses)
