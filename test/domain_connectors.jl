@@ -123,7 +123,7 @@ function Valve2Port(; p_s_int, p_r_int, p_int, name)
     System(eqs, t, vars, pars; name, systems)
 end
 
-function System(; name)
+function HydraulicSystem(; name)
     vars = []
     pars = []
     systems = @named begin
@@ -142,7 +142,7 @@ function System(; name)
     return System(eqs, t, vars, pars; systems, name)
 end
 
-@named odesys = System()
+@named odesys = HydraulicSystem()
 esys = ModelingToolkit.expand_connections(odesys)
 @test length(equations(esys)) == length(unknowns(esys))
 
