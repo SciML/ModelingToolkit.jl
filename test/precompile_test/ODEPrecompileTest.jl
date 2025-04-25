@@ -15,7 +15,7 @@ function system(; kwargs...)
 
     @named de = System(eqs, t)
     de = complete(de)
-    return ODEFunction(de, [x, y, z], [σ, ρ, β]; kwargs...)
+    return ODEFunction(de; kwargs...)
 end
 
 # Build an ODEFunction as part of the module's precompilation. These cases
