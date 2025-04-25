@@ -182,7 +182,13 @@ end
 
 function System(eqs::Vector{Equation}, iv; kwargs...)
     iv === nothing && return System(eqs; kwargs...)
-    diffvars, allunknowns, ps, eqs = process_equations(eqs, iv)
+
+    allunknowns = Set()
+    ps = Set()
+    for eq in eqs
+        collect_vars!(allunknowns, ps, eq, iv)
+    end
+
     brownians = Set()
     for x in allunknowns
         x = unwrap(x)
@@ -218,7 +224,6 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
     end
 
     new_ps = gather_array_params(ps)
-    algevars = setdiff(allunknowns, diffvars)
 
     noiseeqs = get(kwargs, :noise_eqs, nothing)
     if noiseeqs !== nothing
@@ -232,8 +237,7 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
         end
     end
 
-    return System(eqs, iv, collect(Iterators.flatten((diffvars, algevars))),
-        collect(new_ps), brownians; kwargs...)
+    return System(eqs, iv, collect(allunknowns), collect(new_ps), brownians; kwargs...)
 end
 
 function System(eqs::Vector{Equation}; kwargs...)
