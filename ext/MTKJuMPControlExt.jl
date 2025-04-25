@@ -126,7 +126,7 @@ function init_model(sys, tspan, steps, u0map, pmap, u0; is_free_t = false)
     stidxmap = Dict([v => i for (i, v) in enumerate(states)])
     u0map = Dict([MTK.default_toterm(MTK.value(k)) => v for (k, v) in u0map])
     u0_idxs = has_alg_eqs(sys) ? collect(1:length(states)) :
-        [stidxmap[MTK.default_toterm(k)] for (k, v) in u0map]
+              [stidxmap[MTK.default_toterm(k)] for (k, v) in u0map]
     add_initial_constraints!(model, u0, u0_idxs, tspan[1])
     return model
 end
@@ -193,7 +193,7 @@ function add_user_constraints!(model::InfiniteModel, sys, pmap; is_free_t = fals
 
     auxmap = Dict([u => MTK.default_toterm(MTK.value(u)) for u in unknowns(conssys)])
     jconstraints = substitute_jump_vars(model, sys, pmap, jconstraints; auxmap)
-    
+
     # Substitute to-term'd variables
     for (i, cons) in enumerate(jconstraints)
         if cons isa Equation
@@ -298,7 +298,7 @@ function add_jump_solve_constraints!(prob, tableau; is_free_t = false)
                 ΔU = @view ΔUs[i, :]
                 Uₙ = U + ΔU * h * dt
                 @constraint(model, [j = 1:nᵤ], K[i, j]==(tₛ * f(Uₙ, V, p, τ + h * dt)[j]),
-                            DomainRestrictions(t => τ), base_name="solve_K$i($τ)")
+                    DomainRestrictions(t => τ), base_name="solve_K$i($τ)")
             end
             @constraint(model, [n = 1:nᵤ], U[n](τ) + ΔU_tot[n]==U[n](min(τ + dt, tmax)),
                 DomainRestrictions(t => τ), base_name="solve_U($τ)")

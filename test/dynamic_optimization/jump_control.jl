@@ -35,7 +35,9 @@ using DataInterpolations
     osol2 = solve(oprob, ImplicitEuler(), dt = 0.01, adaptive = false) # 129.375 μs, 61.91 KiB
     @test ≈(jsol2.sol.u, osol2.u, rtol = 0.001)
     iprob = InfiniteOptControlProblem(sys, u0map, tspan, parammap, dt = 0.01)
-    isol = solve(iprob, Ipopt.Optimizer, derivative_method = InfiniteOpt.FiniteDifference(InfiniteOpt.Backward()), silent = true) # 11.540 ms, 4.00 MiB
+    isol = solve(iprob, Ipopt.Optimizer,
+        derivative_method = InfiniteOpt.FiniteDifference(InfiniteOpt.Backward()),
+        silent = true) # 11.540 ms, 4.00 MiB
     @test ≈(jsol2.sol.u, osol2.u, rtol = 0.001)
 
     # With a constraint
@@ -52,7 +54,8 @@ using DataInterpolations
 
     iprob = InfiniteOptControlProblem(
         lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
-    isol = solve(iprob, Ipopt.Optimizer, derivative_method = InfiniteOpt.OrthogonalCollocation(3), silent = true) # 48.564 ms, 9.58 MiB
+    isol = solve(iprob, Ipopt.Optimizer,
+        derivative_method = InfiniteOpt.OrthogonalCollocation(3), silent = true) # 48.564 ms, 9.58 MiB
     sol = isol.sol
     @test sol(0.6)[1] ≈ 3.5
     @test sol(0.3)[1] ≈ 7.0
@@ -62,7 +65,8 @@ using DataInterpolations
     @mtkbuild lksys = ODESystem(eqs, t; constraints = constr)
     iprob = InfiniteOptControlProblem(
         lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
-    isol = solve(iprob, Ipopt.Optimizer, derivative_method = InfiniteOpt.OrthogonalCollocation(3), silent = true) # 48.564 ms, 9.58 MiB
+    isol = solve(iprob, Ipopt.Optimizer,
+        derivative_method = InfiniteOpt.OrthogonalCollocation(3), silent = true) # 48.564 ms, 9.58 MiB
     @test all(u -> u > [1, 1], isol.sol.u)
 
     jprob = JuMPControlProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
@@ -93,7 +97,7 @@ end
     constr = [v(1.0) ~ 0.0]
     cost = [-x(1.0)] # Maximize the final distance.
     @named block = ODESystem(
-                             [D(x(t)) ~ v(t), D(v(t)) ~ u(t)], t; costs = cost, constraints = constr)
+        [D(x(t)) ~ v(t), D(v(t)) ~ u(t)], t; costs = cost, constraints = constr)
     block, input_idxs = structural_simplify(block, ([u(t)], []))
 
     u0map = [x(t) => 0.0, v(t) => 0.0]
@@ -146,9 +150,13 @@ end
 
     @parameters (α_interp::LinearInterpolation)(..)
     eqs = [D(w(t)) ~ -μ * w(t) + b * s * α_interp(t) * w(t),
-           D(q(t)) ~ -ν * q(t) + c * (1 - α_interp(t)) * s * w(t)]
+        D(q(t)) ~ -ν * q(t) + c * (1 - α_interp(t)) * s * w(t)]
     @mtkbuild beesys_ode = ODESystem(eqs, t)
-    oprob = ODEProblem(beesys_ode, u0map, tspan, merge(Dict(pmap), Dict(α_interp => ctrl_to_spline(jsol.input_sol, LinearInterpolation))))
+    oprob = ODEProblem(beesys_ode,
+        u0map,
+        tspan,
+        merge(Dict(pmap),
+            Dict(α_interp => ctrl_to_spline(jsol.input_sol, LinearInterpolation))))
     osol = solve(oprob, Tsit5(); dt = 0.01, adaptive = false)
     @test ≈(osol.u, jsol.sol.u, rtol = 0.01)
     osol2 = solve(oprob, ImplicitEuler(); dt = 0.01, adaptive = false)
@@ -182,10 +190,12 @@ end
     jsol = solve(jprob, Ipopt.Optimizer, :RadauIIA5, silent = true)
     @test jsol.sol.u[end][1] > 1.012
 
-    iprob = InfiniteOptControlProblem(rocket, u0map, (ts, te), pmap; dt = 0.005, cse = false)
-    isol = solve(iprob, Ipopt.Optimizer, derivative_method = InfiniteOpt.OrthogonalCollocation(3), silent = true)
+    iprob = InfiniteOptControlProblem(
+        rocket, u0map, (ts, te), pmap; dt = 0.005, cse = false)
+    isol = solve(iprob, Ipopt.Optimizer,
+        derivative_method = InfiniteOpt.OrthogonalCollocation(3), silent = true)
     @test isol.sol.u[end][1] > 1.012
-    
+
     # Test solution
     @parameters (T_interp::CubicSpline)(..)
     eqs = [D(h(t)) ~ v(t),
@@ -229,16 +239,16 @@ end
 
     s = sin(θ(t))
     c = cos(θ(t))
-    H = [mₖ+mₚ  mₚ*l*c
+    H = [mₖ+mₚ mₚ*l*c
          mₚ*l*c mₚ*l^2]
     C = [0 -mₚ*D(θ(t))*l*s
-         0  0]
+         0 0]
     qd = [D(x(t)), D(θ(t))]
-    G = [0, mₚ*g*l*s]
+    G = [0, mₚ * g * l * s]
     B = [1, 0]
 
     tf = 5
-    rhss = -H \ Vector(C*qd + G - B*u)
+    rhss = -H \ Vector(C * qd + G - B * u)
     eqs = [D(D(x(t))) ~ rhss[1], D(D(θ(t))) ~ rhss[2]]
     cons = [θ(tf) ~ π, x(tf) ~ 0, D(θ(tf)) ~ 0, D(x(tf)) ~ 0]
     costs = [∫(u^2)]
@@ -247,8 +257,8 @@ end
     @named cartpole = ODESystem(eqs, t; costs, constraints = cons)
     cartpole, input_idxs = structural_simplify(cartpole, ([u], []))
 
-    u0map = [D(x(t)) => 0., D(θ(t)) => 0., θ(t) => 0., x(t) => 0.]
-    pmap = [mₖ => 1., mₚ => 0.2, l => 0.5, g => 9.81, u => 0]
+    u0map = [D(x(t)) => 0.0, D(θ(t)) => 0.0, θ(t) => 0.0, x(t) => 0.0]
+    pmap = [mₖ => 1.0, mₚ => 0.2, l => 0.5, g => 9.81, u => 0]
     jprob = JuMPControlProblem(cartpole, u0map, tspan, pmap; dt = 0.04)
     jsol = solve(jprob, Ipopt.Optimizer, :RK4)
     @test jsol.sol.u[end] ≈ [π, 0, 0, 0]
