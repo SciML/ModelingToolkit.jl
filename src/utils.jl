@@ -566,6 +566,61 @@ function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Dif
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Check whether the usage of operator `op` is valid in a system with independent variable
+`iv`. If the system is time-independent, `iv` should be `nothing`. Throw an appropriate
+error if `op` is invalid. `args` are the arguments to `op`.
+
+# Keyword arguments
+
+- `context`: The place where the operator occurs in the system/expression, or any other
+  relevant information. Useful for providing extra information in the error message.
+"""
+function validate_operator(op, args, iv; context = nothing)
+    error("`$validate_operator` is not implemented for operator `$op` in $context.")
+end
+
+function validate_operator(op::Differential, args, iv; context = nothing)
+    isequal(op.x, iv) || throw(OperatorIndepvarMismatchError(op, iv, context))
+    arg = unwrap(only(args))
+    if !is_variable_floatingpoint(arg)
+        throw(ContinuousOperatorDiscreteArgumentError(op, arg, context))
+    end
+end
+
+struct ContinuousOperatorDiscreteArgumentError <: Exception
+    op::Any
+    arg::Any
+    context::Any
+end
+
+function Base.showerror(io::IO, err::ContinuousOperatorDiscreteArgumentError)
+    print(io, """
+    Operator $(err.op) expects continuous arguments, with a `symtype` such as `Number`,
+    `Real`, `Complex` or a subtype of `AbstractFloat`. Found $(err.arg) with a symtype of
+    $(symtype(err.arg))$(err.context === nothing ? "." : "in $(err.context).")
+    """)
+end
+
+struct OperatorIndepvarMismatchError <: Exception
+    op::Any
+    iv::Any
+    context::Any
+end
+
+function Base.showerror(io::IO, err::OperatorIndepvarMismatchError)
+    print(io, """
+    Encountered operator `$(err.op)` which has different independent variable than the \
+    one used in the system `$(err.iv)`.
+    """)
+    if err.context !== nothing
+        println(io)
+        print(io, "Context:\n$(err.context)")
+    end
+end
+
 function collect_vars!(unknowns, parameters, expr, iv; depth = 0, op = Symbolics.Operator)
     if issym(expr)
         collect_var!(unknowns, parameters, expr, iv; depth)
