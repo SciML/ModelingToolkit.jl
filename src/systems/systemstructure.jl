@@ -749,7 +749,10 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
                 deleteat!(additional_passes, discrete_pass_idx)
                 # in the case of a hybrid system, the discrete_compile pass should take the currents of sys.discrete_subsystems
                 # and modifies discrete_subsystems to bea tuple of the io and anything else, while adding or manipulating the rest of sys as needed
-                sys = discrete_compile(sys, tss[[i for i in eachindex(tss) if i != continuous_id]], inputs, ci)
+                discrete_ids = [i for i in eachindex(tss) if i != continuous_id]
+                discrete_partitions = tss[discrete_ids]
+                substitute_sampletime!(discrete_partitions, id_to_clock[discrete_ids])
+                sys = discrete_compile(sys, discrete_partitions, inputs, ci)
             else
                 throw(HybridSystemNotSupportedException("Hybrid continuous-discrete systems are currently not supported with the standard MTK compiler. This system requires JuliaSimCompiler.jl, see https://help.juliahub.com/juliasimcompiler/stable/"))
             end
@@ -808,4 +811,21 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)
 
     ModelingToolkit.invalidate_cache!(sys), input_idxs
+end
+
+"""
+    substitute_sampletime(discrete_partitions, clocks)
+
+Substitutes the `SampleTime()` operators for its value, e.g., `SampleTime()*x(k)` becomes `sampletime(clock(x))*x(k)`
+"""
+function substitute_sampletime!(discrete_partitions, clocks)
+    @show clocks
+    for (part, clock) in zip(discrete_partitions, clocks)
+        @show dt = sampletime(clock)
+        submap = SampleTime() => dt
+        new_eqs = map(part.original_eqs) do eq
+            substitute(eq, submap)
+        end
+        part.original_eqs .= new_eqs
+    end
 end
