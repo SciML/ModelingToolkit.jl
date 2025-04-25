@@ -163,7 +163,7 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
     (f_oop, f_ip), x_sym, p_sym, io_sys = generate_control_function(
             sys::AbstractODESystem,
             inputs             = unbound_inputs(sys),
-            disturbance_inputs = Any[];
+            disturbance_inputs = disturbances(sys);
             implicit_dae       = false,
             simplify           = false,
         )

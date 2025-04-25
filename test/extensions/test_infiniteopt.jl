@@ -24,8 +24,7 @@ end
 model = complete(model)
 inputs = [model.τ]
 outputs = [model.y]
-model, _ = structural_simplify(model, (inputs, outputs))
-
+model = structural_simplify(model; inputs, outputs)
 f, dvs, psym, io_sys = ModelingToolkit.generate_control_function(
     model, split = false)
 
