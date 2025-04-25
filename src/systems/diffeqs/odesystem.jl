@@ -767,7 +767,6 @@ function process_constraint_system(
         collect_vars!(constraintsts, constraintps, cons, iv)
         union!(constraintsts, collect_applied_operators(cons, Differential))
     end
-    @show constraintsts
 
     # Validate the states.
     validate_vars_and_find_ps!(constraintsts, constraintps, sts, iv)

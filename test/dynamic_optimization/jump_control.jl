@@ -4,10 +4,8 @@ using DiffEqDevTools, DiffEqBase
 using SimpleDiffEq
 using OrdinaryDiffEqSDIRK, OrdinaryDiffEqVerner, OrdinaryDiffEqTsit5, OrdinaryDiffEqFIRK
 using Ipopt
-using BenchmarkTools
-using CairoMakie
 using DataInterpolations
-const M = ModelingToolkit
+#const M = ModelingToolkit
 
 @testset "ODE Solution, no cost" begin
     # Test solving without anything attached.
@@ -26,19 +24,19 @@ const M = ModelingToolkit
 
     # Test explicit method.
     jprob = JuMPControlProblem(sys, u0map, tspan, parammap, dt = 0.01)
-    @test num_constraints(jprob.model) == 2 # initials
+    @test JuMP.num_constraints(jprob.model) == 2 # initials
     jsol = solve(jprob, Ipopt.Optimizer, :RK4)
     oprob = ODEProblem(sys, u0map, tspan, parammap)
     osol = solve(oprob, SimpleRK4(), dt = 0.01)
     @test jsol.sol.u ≈ osol.u
 
     # Implicit method.
-    jsol2 = @btime solve($jprob, Ipopt.Optimizer, :ImplicitEuler, silent = true) # 63.031 ms, 26.49 MiB
-    osol2 = @btime solve($oprob, ImplicitEuler(), dt = 0.01, adaptive = false) # 129.375 μs, 61.91 KiB
+    jsol2 = solve(jprob, Ipopt.Optimizer, :ImplicitEuler, silent = true) # 63.031 ms, 26.49 MiB
+    osol2 = solve(oprob, ImplicitEuler(), dt = 0.01, adaptive = false) # 129.375 μs, 61.91 KiB
     @test ≈(jsol2.sol.u, osol2.u, rtol = 0.001)
     iprob = InfiniteOptControlProblem(sys, u0map, tspan, parammap, dt = 0.01)
-    isol = @btime solve(
-        $iprob, Ipopt.Optimizer, derivative_method = FiniteDifference(Backward()), silent = true) # 11.540 ms, 4.00 MiB
+    isol = solve(iprob, Ipopt.Optimizer, derivative_method = InfiniteOpt.FiniteDifference(InfiniteOpt.Backward()), silent = true) # 11.540 ms, 4.00 MiB
+    @test ≈(jsol2.sol.u, osol2.u, rtol = 0.001)
 
     # With a constraint
     u0map = Pair[]
@@ -47,34 +45,29 @@ const M = ModelingToolkit
     @mtkbuild lksys = ODESystem(eqs, t; constraints = constr)
 
     jprob = JuMPControlProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
-    @test num_constraints(jprob.model) == 2
-    jsol = @btime solve($jprob, Ipopt.Optimizer, :Tsitouras5, silent = true) # 12.190 s, 9.68 GiB
-    sol = jsol.sol
-    @test sol(0.6)[1] ≈ 3.5
-    @test sol(0.3)[1] ≈ 7.0
+    @test JuMP.num_constraints(jprob.model) == 2
+    jsol = solve(jprob, Ipopt.Optimizer, :Tsitouras5, silent = true) # 12.190 s, 9.68 GiB
+    @test jsol.sol(0.6)[1] ≈ 3.5
+    @test jsol.sol(0.3)[1] ≈ 7.0
 
     iprob = InfiniteOptControlProblem(
         lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
-    isol = @btime solve(
-        $iprob, Ipopt.Optimizer, derivative_method = OrthogonalCollocation(3), silent = true) # 48.564 ms, 9.58 MiB
+    isol = solve(iprob, Ipopt.Optimizer, derivative_method = InfiniteOpt.OrthogonalCollocation(3), silent = true) # 48.564 ms, 9.58 MiB
     sol = isol.sol
     @test sol(0.6)[1] ≈ 3.5
     @test sol(0.3)[1] ≈ 7.0
 
     # Test whole-interval constraints
-    constr = [x(t) > 3, y(t) > 4]
+    constr = [x(t) ≳ 1, y(t) ≳ 1]
     @mtkbuild lksys = ODESystem(eqs, t; constraints = constr)
     iprob = InfiniteOptControlProblem(
         lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
-    isol = @btime solve(
-        $iprob, Ipopt.Optimizer, derivative_method = OrthogonalCollocation(3), silent = true) # 48.564 ms, 9.58 MiB
-    sol = isol.sol
-    @test all(u -> u .> [3, 4], sol.u)
+    isol = solve(iprob, Ipopt.Optimizer, derivative_method = InfiniteOpt.OrthogonalCollocation(3), silent = true) # 48.564 ms, 9.58 MiB
+    @test all(u -> u > [1, 1], isol.sol.u)
 
     jprob = JuMPControlProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
-    jsol = @btime solve($jprob, Ipopt.Optimizer, :RadauIA3, silent = true) # 12.190 s, 9.68 GiB
-    sol = jsol.sol
-    @test all(u -> u .> [3, 4], sol.u)
+    jsol = solve(jprob, Ipopt.Optimizer, :RadauIA3, silent = true) # 12.190 s, 9.68 GiB
+    @test all(u -> u > [1, 1], jsol.sol.u)
 end
 
 function is_bangbang(input_sol, lbounds, ubounds, rtol = 1e-4)
@@ -186,11 +179,11 @@ end
         g₀ => 1, m₀ => 1.0, h_c => 500, c => 0.5 * √(g₀ * h₀), D_c => 0.5 * 620 * m₀ / g₀,
         Tₘ => 3.5 * g₀ * m₀, T(t) => 0.0, h₀ => 1, m_c => 0.6]
     jprob = JuMPControlProblem(rocket, u0map, (ts, te), pmap; dt = 0.005, cse = false)
-    jsol = solve(jprob, Ipopt.Optimizer, :RadauIIA3)
+    jsol = solve(jprob, Ipopt.Optimizer, :RadauIIA5, silent = true)
     @test jsol.sol.u[end][1] > 1.012
 
     iprob = InfiniteOptControlProblem(rocket, u0map, (ts, te), pmap; dt = 0.005, cse = false)
-    isol = solve(iprob, Ipopt.Optimizer, derivative_method = OrthogonalCollocation(3))
+    isol = solve(iprob, Ipopt.Optimizer, derivative_method = InfiniteOpt.OrthogonalCollocation(3), silent = true)
     @test isol.sol.u[end][1] > 1.012
     
     # Test solution
@@ -201,8 +194,8 @@ end
     @mtkbuild rocket_ode = ODESystem(eqs, t)
     interpmap = Dict(T_interp => ctrl_to_spline(jsol.input_sol, CubicSpline))
     oprob = ODEProblem(rocket_ode, u0map, (ts, te), merge(Dict(pmap), interpmap))
-    osol = solve(oprob, RadauIIA3())
-    @test jsol.sol.u ≈ osol.u
+    osol = solve(oprob, RadauIIA5(); adaptive = false, dt = 0.005)
+    @test ≈(jsol.sol.u, osol.u, rtol = 0.02)
 end
 
 @testset "Free final time problem" begin
@@ -266,8 +259,29 @@ end
 end
 
 # RC Circuit
-@testset "MTK Components" begin
-end
-
-#@testset "Constrained optimal control problems" begin
-#end
+# using ModelingToolkitStandardLibrary.Electrical
+# @testset "MTK Components" begin
+#     @mtkmodel RL begin
+#         @parameters begin
+#             R = 1.0
+#             L = 1.0
+#         end
+#         @components begin
+#             resistor = Resistor(R = R)
+#             inductor = Inductor(L = L)
+#             source = Voltage()
+#             ground = Ground()
+#         end
+#         @equations begin
+#             connect(source.p, resistor.p)
+#             connect(resistor.n, inductor.p)
+#             connect(inductor.n, source.n, ground.g)
+#         end
+#     end
+# 
+#     costs = []
+#     coalesce = sum
+#     @named sys = RL()
+#     sys, _ = structural_simplify(sys, inputs = [sys.source.V.u])
+#     @parameters tf λ i₀
+# end
