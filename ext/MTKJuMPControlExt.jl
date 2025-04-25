@@ -239,16 +239,17 @@ function add_solve_constraints!(prob, tableau)
             @constraint(model, [n = 1:nᵤ], U[n](τ) + ΔU[n] == U[n](τ + dt))
             empty!(K)
         end
-        @show num_variables(model)
     else
-        @variable(model, K[1:length(a), 1:nᵤ], Infinite(t), start = tsteps[1])
+        @variable(model, K[1:length(α), 1:nᵤ], Infinite(t))
+        ΔUs = A * K
+        ΔU_tot = dt * (K' * α)
         for τ in tsteps
             ΔUs = [A * K(τ)]
             for (i, h) in enumerate(c)
                 ΔU = @view ΔUs[i, :]
-                Uₙ = U + ΔU * dt
-                @constraint(model, [j = 1:nᵤ], K[i, j](τ)==(tₛ * f(Uₙ, V, p, τ + h * dt)[j]),
-                            DomainRestrictions(t => min(τ + h * dt, tmax)), base_name="solve_K($τ)")
+                Uₙ = U + ΔU * h * dt
+                @constraint(model, [j = 1:nᵤ], K[i, j]==(tₛ * f(Uₙ, V, p, τ + h * dt)[j]),
+                            DomainRestrictions(t => τ), base_name="solve_K$i($τ)")
             end
             @constraint(model, [n = 1:nᵤ], U[n](τ) + ΔU_tot[n]==U[n](min(τ + dt, tmax)),
                 DomainRestrictions(t => τ), base_name="solve_U($τ)")
