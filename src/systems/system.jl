@@ -19,7 +19,7 @@ struct System <: AbstractSystem
     noise_eqs::Union{Nothing, AbstractVector, AbstractMatrix}
     jumps::Vector{JumpType}
     constraints::Vector{Union{Equation, Inequality}}
-    costs::Vector{<:BasicSymbolic}
+    costs::Vector{<:Union{BasicSymbolic, Real}}
     consolidate::Any
     unknowns::Vector
     ps::Vector
