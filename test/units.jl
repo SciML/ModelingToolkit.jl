@@ -99,7 +99,7 @@ bad_length_eqs = [connect(op, lp)]
 @parameters v[1:3]=[1, 2, 3] [unit = u"m/s"]
 @variables x(t)[1:3] [unit = u"m"]
 D = Differential(t)
-eqs = D.(x) .~ v
+eqs = [D(x) ~ v]
 System(eqs, t, name = :sys)
 
 # Nonlinear system
