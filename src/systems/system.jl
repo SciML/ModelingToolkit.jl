@@ -159,7 +159,7 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
     continuous_events = SymbolicContinuousCallbacks(continuous_events)
     discrete_events = SymbolicDiscreteCallbacks(discrete_events)
 
-    if iv === nothing && !isempty(continuous_events) || !isempty(discrete_events)
+    if iv === nothing && (!isempty(continuous_events) || !isempty(discrete_events))
         throw(EventsInTimeIndependentSystemError(continuous_events, discrete_events))
     end
 
