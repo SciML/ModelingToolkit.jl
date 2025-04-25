@@ -604,6 +604,13 @@ function collect_vars!(unknowns, parameters, p::Pair, iv; depth = 0, op = Differ
     return nothing
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Identify whether `var` belongs to the current system using `depth` and scoping information.
+Add `var` to `unknowns` or `parameters` appropriately, and search through any expressions
+in known metadata of `var` using `collect_vars!`.
+"""
 function collect_var!(unknowns, parameters, var, iv; depth = 0)
     isequal(var, iv) && return nothing
     if Symbolics.iswrapped(var)
