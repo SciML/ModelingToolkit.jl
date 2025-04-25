@@ -2,8 +2,8 @@ function SciMLBase.OptimizationFunction(sys::System, args...; kwargs...)
     return OptimizationFunction{true}(sys, args...; kwargs...)
 end
 
-function SciMLBase.OptimizationFunction{iip}(sys::System,
-        _d = nothing, u0 = nothing, p = nothing; grad = false, hess = false,
+function SciMLBase.OptimizationFunction{iip}(sys::System;
+        u0 = nothing, p = nothing, grad = false, hess = false,
         sparse = false, cons_j = false, cons_h = false, cons_sparse = false,
         linenumbers = true, eval_expression = false, eval_module = @__MODULE__,
         simplify = false, check_compatibility = true, checkbounds = false, cse = true,

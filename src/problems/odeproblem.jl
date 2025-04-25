@@ -1,5 +1,5 @@
 @fallback_iip_specialize function SciMLBase.ODEFunction{iip, spec}(
-        sys::System, _d = nothing, u0 = nothing, p = nothing; tgrad = false, jac = false,
+        sys::System; u0 = nothing, p = nothing, tgrad = false, jac = false,
         t = nothing, eval_expression = false, eval_module = @__MODULE__, sparse = false,
         steady_state = false, checkbounds = false, sparsity = false, analytic = nothing,
         simplify = false, cse = true, initialization_data = nothing,

@@ -1,5 +1,5 @@
 function SciMLBase.IntervalNonlinearFunction(
-        sys::System, _d = nothing, u0 = nothing, p = nothing;
+        sys::System; u0 = nothing, p = nothing,
         eval_expression = false, eval_module = @__MODULE__,
         checkbounds = false, analytic = nothing,
         cse = true, initialization_data = nothing,

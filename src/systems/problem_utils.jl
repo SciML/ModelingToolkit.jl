@@ -1192,7 +1192,7 @@ function process_SciMLProblem(
         kwargs = merge(kwargs,)
     end
 
-    f = constructor(sys, dvs, ps, u0; p = p,
+    f = constructor(sys; u0 = u0, p = p,
         eval_expression = eval_expression,
         eval_module = eval_module,
         kwargs...)

@@ -1,5 +1,5 @@
 @fallback_iip_specialize function SciMLBase.ImplicitDiscreteFunction{iip, spec}(
-        sys::System, _d = nothing, u0 = nothing, p = nothing;
+        sys::System; u0 = nothing, p = nothing,
         t = nothing, eval_expression = false, eval_module = @__MODULE__,
         checkbounds = false, analytic = nothing, simplify = false, cse = true,
         initialization_data = nothing, check_compatibility = true, kwargs...) where {
