@@ -1113,6 +1113,16 @@ function is_variable_floatingpoint(sym)
     T = symtype(sym)
     return T == Real || T <: AbstractFloat || T <: AbstractArray{Real} ||
            T <: AbstractArray{<:AbstractFloat}
+
+"""
+    $(TYPEDSIGNATURES)
+
+Check if `T` is an appropriate symtype for a symbolic variable representing a floating
+point number or array of such numbers.
+"""
+function is_floatingpoint_symtype(T::Type)
+    return T == Real || T == Number || T <: AbstractFloat ||
+           T <: AbstractArray && is_floatingpoint_symtype(eltype(T))
 end
 
 """
