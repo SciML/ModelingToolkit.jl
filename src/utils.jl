@@ -566,7 +566,7 @@ function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Dif
     end
 end
 
-function collect_vars!(unknowns, parameters, expr, iv; depth = 0, op = Differential)
+function collect_vars!(unknowns, parameters, expr, iv; depth = 0, op = Symbolics.Operator)
     if issym(expr)
         collect_var!(unknowns, parameters, expr, iv; depth)
     else
@@ -592,13 +592,14 @@ eqtype_supports_collect_vars(eq::Inequality) = true
 eqtype_supports_collect_vars(eq::Pair) = true
 
 function collect_vars!(unknowns, parameters, eq::Union{Equation, Inequality}, iv;
-        depth = 0, op = Differential)
+        depth = 0, op = Symbolics.Operator)
     collect_vars!(unknowns, parameters, eq.lhs, iv; depth, op)
     collect_vars!(unknowns, parameters, eq.rhs, iv; depth, op)
     return nothing
 end
 
-function collect_vars!(unknowns, parameters, p::Pair, iv; depth = 0, op = Differential)
+function collect_vars!(
+        unknowns, parameters, p::Pair, iv; depth = 0, op = Symbolics.Operator)
     collect_vars!(unknowns, parameters, p[1], iv; depth, op)
     collect_vars!(unknowns, parameters, p[2], iv; depth, op)
     return nothing
