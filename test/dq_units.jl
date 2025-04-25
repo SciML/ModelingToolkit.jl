@@ -72,7 +72,7 @@ good_eqs = [connect(op, op2)]
 # Array variables
 @variables x(t)[1:3] [unit = u"m"]
 @parameters v[1:3]=[1, 2, 3] [unit = u"m/s"]
-eqs = D.(x) .~ v
+eqs = [D(x) ~ v]
 System(eqs, t, name = :sys)
 
 # Nonlinear system
