@@ -149,10 +149,10 @@ sol = solve(prob, Tsit5())
 ## Generate function for an augmented Unscented Kalman Filter =====================
 # temp = open_loop(model_with_disturbance, :d)
 outputs = [P.inertia1.phi, P.inertia2.phi, P.inertia1.w, P.inertia2.w]
-(f_oop1, f_ip), x_sym, p_sym, io_sys = ModelingToolkit.generate_control_function(
+f, x_sym, p_sym, io_sys = ModelingToolkit.generate_control_function(
     model_with_disturbance, [:u], [:d1, :d2, :dy], split = false)
 
-(f_oop2, f_ip2), x_sym, p_sym, io_sys = ModelingToolkit.generate_control_function(
+f, x_sym, p_sym, io_sys = ModelingToolkit.generate_control_function(
     model_with_disturbance, [:u], [:d1, :d2, :dy],
     disturbance_argument = true, split = false)
 
@@ -168,22 +168,22 @@ x0, p = ModelingToolkit.get_u0_p(io_sys, op, op)
 x = zeros(5)
 u = zeros(1)
 d = zeros(3)
-@test f_oop2(x, u, p, t, d) == zeros(5)
+@test f(x, u, p, t, d) == zeros(5)
 @test measurement(x, u, p, 0.0) == [0, 0, 0, 0]
 @test measurement2(x, u, p, 0.0, d) == [0]
 
 # Add to the integrating disturbance input
 d = [1, 0, 0]
-@test sort(f_oop2(x, u, p, 0.0, d)) == [0, 0, 0, 1, 1] # Affects disturbance state and one velocity
+@test sort(f(x, u, p, 0.0, d)) == [0, 0, 0, 1, 1] # Affects disturbance state and one velocity
 @test measurement2(x, u, p, 0.0, d) == [0]
 
 d = [0, 1, 0]
-@test sort(f_oop2(x, u, p, 0.0, d)) == [0, 0, 0, 0, 1] # Affects one velocity
+@test sort(f(x, u, p, 0.0, d)) == [0, 0, 0, 0, 1] # Affects one velocity
 @test measurement(x, u, p, 0.0) == [0, 0, 0, 0]
 @test measurement2(x, u, p, 0.0, d) == [0]
 
 d = [0, 0, 1]
-@test sort(f_oop2(x, u, p, 0.0, d)) == [0, 0, 0, 0, 0] # Affects nothing
+@test sort(f(x, u, p, 0.0, d)) == [0, 0, 0, 0, 0] # Affects nothing
 @test measurement(x, u, p, 0.0) == [0, 0, 0, 0]
 @test measurement2(x, u, p, 0.0, d) == [1] # We have now disturbed the output
 

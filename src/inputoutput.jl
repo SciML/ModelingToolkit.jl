@@ -430,7 +430,7 @@ function add_input_disturbance(sys, dist::DisturbanceModel, inputs = nothing; kw
     augmented_sys = ODESystem(eqs, t, systems = [dsys], name = gensym(:outer))
     augmented_sys = extend(augmented_sys, sys)
 
-    (f_oop, f_ip), dvs, p, io_sys = generate_control_function(augmented_sys, all_inputs,
+    f, dvs, p, io_sys = generate_control_function(augmented_sys, all_inputs,
         [d]; kwargs...)
-    (f_oop, f_ip), augmented_sys, dvs, p, io_sys
+    f, augmented_sys, dvs, p, io_sys
 end

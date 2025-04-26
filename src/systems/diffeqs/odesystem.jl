@@ -803,8 +803,7 @@ function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
 
     for var in auxvars
         if !iscall(var)
-            occursin(iv, var) && (var ∈ sts ||
-             throw(ArgumentError("Time-dependent variable $var is not an unknown of the system.")))
+            var ∈ sts || throw(ArgumentError("Time-independent variable $var is not an unknown of the system."))
         elseif length(arguments(var)) > 1
             throw(ArgumentError("Too many arguments for variable $var."))
         elseif length(arguments(var)) == 1
