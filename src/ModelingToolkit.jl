@@ -351,7 +351,7 @@ function FMIComponent end
 include("systems/optimal_control_interface.jl")
 export AbstractDynamicOptProblem, JuMPDynamicOptProblem, InfiniteOptDynamicOptProblem,
        PyomoDynamicOptProblem, CasADiDynamicOptProblem
-export DynamicOptSolution 
+export DynamicOptSolution
 export ∫
 
 end # module
