@@ -1011,14 +1011,6 @@ function restrict_array_to_union(arr)
     return Array{T, ndims(arr)}(arr)
 end
 
-function eval_or_rgf(expr::Expr; eval_expression = false, eval_module = @__MODULE__)
-    if eval_expression
-        return eval_module.eval(expr)
-    else
-        return drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, expr))
-    end
-end
-
 function _with_unit(f, x, t, args...)
     x = f(x, args...)
     if hasmetadata(x, VariableUnit) && (t isa Symbolic && hasmetadata(t, VariableUnit))
