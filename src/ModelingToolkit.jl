@@ -311,7 +311,7 @@ export structural_simplify, expand_connections, linearize, linearization_functio
 export solve
 export Pre
 
-export calculate_jacobian, generate_jacobian, generate_function, generate_custom_function,
+export calculate_jacobian, generate_jacobian, generate_rhs, generate_custom_function,
        generate_W
 export calculate_control_jacobian, generate_control_jacobian
 export calculate_tgrad, generate_tgrad
