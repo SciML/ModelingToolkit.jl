@@ -132,7 +132,7 @@ generate_function(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys)
 
 Generate a function to evaluate the system's equations.
 """
-function generate_function end
+function generate_rhs end
 
 """
 ```julia
