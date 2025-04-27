@@ -38,8 +38,6 @@ ssort(eqs) = sort(eqs, by = string)
 @test eval(toexpr(de)) == de
 @test hash(deepcopy(de)) == hash(de)
 
-generate_function(de)
-
 function test_diffeq_inference(name, sys, iv, dvs, ps)
     @testset "System construction: $name" begin
         @test isequal(independent_variables(sys)[1], value(iv))
@@ -50,13 +48,12 @@ function test_diffeq_inference(name, sys, iv, dvs, ps)
 end
 
 test_diffeq_inference("standard", de, t, [x, y, z], [ρ, σ, β])
-generate_function(de, [x, y, z], [σ, ρ, β])
 jac_expr = generate_jacobian(de)
 jac = calculate_jacobian(de)
 jacfun = eval(jac_expr[2])
 
 de = complete(de)
-f = ODEFunction(de, [x, y, z], [σ, ρ, β], tgrad = true, jac = true)
+f = ODEFunction(de, tgrad = true, jac = true)
 # system
 @test f.sys === de
 
@@ -87,7 +84,7 @@ f.jac(J, u, p, t)
 @test J == f.jac(u, p, t)
 
 #check iip_config
-f = ODEFunction(de, [x, y, z], [σ, ρ, β], iip_config = (false, true))
+f = ODEFunction(de; iip_config = (false, true))
 du = zeros(3)
 u = collect(1:3)
 p = ModelingToolkit.MTKParameters(de, [σ, ρ, β] .=> 4.0:6.0)
@@ -143,7 +140,7 @@ eqs = [D(x) ~ σ(t - 1) * (y - x),
     D(z) ~ x * y - β * z * κ]
 @named de = System(eqs, t)
 test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ, ρ, β))
-f = generate_function(de, [x, y, z], [σ, ρ, β], expression = Val{false})[2]
+f = generate_rhs(de, [x, y, z], [σ, ρ, β], expression = Val{false})
 du = [0.0, 0.0, 0.0]
 f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
 @test du ≈ [11, -3, -7]
@@ -151,37 +148,36 @@ f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
 eqs = [D(x) ~ x + 10σ(t - 1) + 100σ(t - 2) + 1000σ(t^2)]
 @named de = System(eqs, t)
 test_diffeq_inference("many internal iv-varying", de, t, (x,), (σ,))
-f = generate_function(de, [x], [σ], expression = Val{false})[2]
+f = generate_rhs(de, [x], [σ], expression = Val{false})
 du = [0.0]
 f(du, [1.0], [t -> t + 2], 5.0)
 @test du ≈ [27561]
 
-# Conversion to first-order ODEs #17
-D3 = D^3
-D2 = D^2
-@variables u(t) uˍtt(t) uˍt(t) xˍt(t)
-eqs = [D3(u) ~ 2(D2(u)) + D(u) + D(x) + 1
-       D2(x) ~ D(x) + 2]
-@named de = System(eqs, t)
-de1 = ode_order_lowering(de)
-lowered_eqs = [D(uˍtt) ~ 2uˍtt + uˍt + xˍt + 1
-               D(xˍt) ~ xˍt + 2
-               D(uˍt) ~ uˍtt
-               D(u) ~ uˍt
-               D(x) ~ xˍt]
+@testset "Issue#17: Conversion to first order ODEs" begin
+    D3 = D^3
+    D2 = D^2
+    @variables u(t) uˍtt(t) uˍt(t) xˍt(t)
+    eqs = [D3(u) ~ 2(D2(u)) + D(u) + D(x) + 1
+           D2(x) ~ D(x) + 2]
+    @named de = System(eqs, t)
+    de1 = ode_order_lowering(de)
 
-#@test de1 == System(lowered_eqs)
+    @testset "Issue#219: Ordering of equations in `ode_order_lowering`" begin
+        lowered_eqs = [D(uˍtt) ~ 2uˍtt + uˍt + xˍt + 1
+                       D(xˍt) ~ xˍt + 2
+                       D(uˍt) ~ uˍtt
+                       D(u) ~ uˍt
+                       D(x) ~ xˍt]
+        @test isequal(
+            [ModelingToolkit.var_from_nested_derivative(eq.lhs)[1] for eq in equations(de1)],
+            unknowns(@named lowered = System(lowered_eqs, t)))
+    end
 
-# issue #219
-@test all(isequal.(
-    [ModelingToolkit.var_from_nested_derivative(eq.lhs)[1]
-     for eq in equations(de1)],
-    unknowns(@named lowered = System(lowered_eqs, t))))
-
-test_diffeq_inference("first-order transform", de1, t, [uˍtt, xˍt, uˍt, u, x], [])
-du = zeros(5)
-ODEFunction(complete(de1), [uˍtt, xˍt, uˍt, u, x], [])(du, ones(5), nothing, 0.1)
-@test du == [5.0, 3.0, 1.0, 1.0, 1.0]
+    test_diffeq_inference("first-order transform", de1, t, [uˍtt, xˍt, uˍt, u, x], [])
+    du = zeros(5)
+    ODEFunction(complete(de1))(du, ones(5), nothing, 0.1)
+    @test du == [5.0, 3.0, 1.0, 1.0, 1.0]
+end
 
 # Internal calculations
 @parameters σ
@@ -190,12 +186,11 @@ eqs = [D(x) ~ σ * a,
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z * κ]
 @named de = System(eqs, t)
-generate_function(de, [x, y, z], [σ, ρ, β])
 jac = calculate_jacobian(de)
 @test ModelingToolkit.jacobian_sparsity(de).colptr == sparse(jac).colptr
 @test ModelingToolkit.jacobian_sparsity(de).rowval == sparse(jac).rowval
 
-f = ODEFunction(complete(de), [x, y, z], [σ, ρ, β])
+f = ODEFunction(complete(de))
 
 @parameters A B C
 _x = y / C
@@ -204,11 +199,10 @@ eqs = [D(x) ~ -A * x,
 @named de = System(eqs, t)
 @test begin
     local f, du
-    f = generate_function(de, [x, y], [A, B, C], expression = Val{false})[2]
+    f = generate_rhs(de, [x, y], [A, B, C], expression = Val{false})
     du = [0.0, 0.0]
     f(du, [1.0, 2.0], [1, 2, 3], 0.0)
     du ≈ [-1, -1 / 3]
-    f = generate_function(de, [x, y], [A, B, C], expression = Val{false})[1]
     du ≈ f([1.0, 2.0], [1, 2, 3], 0.0)
 end
 
@@ -1290,11 +1284,11 @@ end
         [D(u) ~ (sum(u) + sum(x) + sum(p) + sum(o)) * x, o ~ prod(u) * x],
         t, [u..., x..., o...], [p...])
     sys1 = structural_simplify(sys, inputs = [x...], outputs = [])
-    fn1, = ModelingToolkit.generate_function(sys1; expression = Val{false})
+    fn1, = ModelingToolkit.generate_rhs(sys1; expression = Val{false})
     ps = MTKParameters(sys1, [x => 2ones(2), p => 3ones(2, 2)])
     @test_nowarn fn1(ones(4), ps, 4.0)
     sys2 = structural_simplify(sys, inputs = [x...], outputs = [], split = false)
-    fn2, = ModelingToolkit.generate_function(sys2; expression = Val{false})
+    fn2, = ModelingToolkit.generate_rhs(sys2; expression = Val{false})
     ps = zeros(8)
     setp(sys2, x)(ps, 2ones(2))
     setp(sys2, p)(ps, 2ones(2, 2))
