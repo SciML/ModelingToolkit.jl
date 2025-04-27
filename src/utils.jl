@@ -840,9 +840,6 @@ function get_cmap(sys, exprs = nothing)
     has_op(sys) && push!(buffer, get_op(sys))
     has_constraints(sys) && append!(buffer, get_constraints(sys))
     cs = collect_constants(buffer) #ctrls? what else?
-    if !empty_substitutions(sys)
-        cs = [cs; collect_constants(get_substitutions(sys).subs)]
-    end
     if exprs !== nothing
         cs = [cs; collect_constants(exprs)]
     end
