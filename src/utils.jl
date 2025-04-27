@@ -851,29 +851,6 @@ function get_cmap(sys, exprs = nothing)
     return cmap, cs
 end
 
-function get_substitutions_and_solved_unknowns(sys, exprs = nothing; no_postprocess = false)
-    cmap, cs = get_cmap(sys, exprs)
-    if empty_substitutions(sys) && isempty(cs)
-        sol_states = Code.LazyState()
-        pre = no_postprocess ? (ex -> ex) : get_postprocess_fbody(sys)
-    else # Have to do some work
-        if !empty_substitutions(sys)
-            @unpack subs = get_substitutions(sys)
-        else
-            subs = []
-        end
-        subs = [cmap; subs] # The constants need to go first
-        sol_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
-        if no_postprocess
-            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], ex,
-                false)
-        else
-            process = get_postprocess_fbody(sys)
-            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs],
-                process(ex), false)
-        end
-    end
-    return pre, sol_states
 function empty_substitutions(sys)
     isempty(observed(sys))
 end
