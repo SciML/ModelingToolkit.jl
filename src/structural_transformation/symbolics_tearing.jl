@@ -154,19 +154,6 @@ function tearing_substitution(sys::AbstractSystem; kwargs...)
     @set! sys.schedule = nothing
 end
 
-function tearing_assignments(sys::AbstractSystem)
-    if empty_substitutions(sys)
-        assignments = []
-        deps = Int[]
-        sol_states = Code.LazyState()
-    else
-        @unpack subs, deps = get_substitutions(sys)
-        assignments = [Assignment(eq.lhs, eq.rhs) for eq in subs]
-        sol_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
-    end
-    return assignments, deps, sol_states
-end
-
 function solve_equation(eq, var, simplify)
     rhs = value(symbolic_linear_solve(eq, var; simplify = simplify, check = false))
     occursin(var, rhs) && throw(EquationSolveErrors(eq, var, rhs))
