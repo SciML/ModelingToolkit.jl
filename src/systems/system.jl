@@ -83,8 +83,11 @@ struct System <: AbstractSystem
         end
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(unknowns, ps, iv)
-            check_units(u, eqs)
-            noise_eqs !== nothing && check_units(u, noise_eqs)
+            if noise_eqs === nothing
+                check_units(u, eqs)
+            else
+                check_units(u, eqs, noise_eqs)
+            end
             isempty(constraints) || check_units(u, constraints)
         end
         new(tag, eqs, noise_eqs, jumps, constraints, costs,
