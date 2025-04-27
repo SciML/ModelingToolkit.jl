@@ -234,7 +234,7 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
         collect_vars!(allunknowns, ps, eq, iv)
     end
 
-    cstrs = get(kwargs, :constraints, Equation[])
+    cstrs = Vector{Union{Equation, Inequality}}(get(kwargs, :constraints, []))
     cstrunknowns, cstrps = process_constraint_system(cstrs, allunknowns, ps, iv)
     union!(allunknowns, cstrunknowns)
     union!(ps, cstrps)
@@ -333,7 +333,7 @@ end
 Process variables in constraints of the (ODE) System.
 """
 function process_constraint_system(
-        constraints::Vector{Equation}, sts, ps, iv; consname = :cons)
+        constraints::Vector{Union{Equation, Inequality}}, sts, ps, iv; consname = :cons)
     isempty(constraints) && return Set(), Set()
 
     constraintsts = OrderedSet()
