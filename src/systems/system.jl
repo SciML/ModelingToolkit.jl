@@ -189,11 +189,34 @@ end
 function System(eqs::Vector{Equation}, iv; kwargs...)
     iv === nothing && return System(eqs; kwargs...)
 
-    allunknowns = Set()
+    diffvars = OrderedSet()
+    othervars = OrderedSet()
     ps = Set()
+    diffeqs = Equation[]
+    othereqs = Equation[]
     for eq in eqs
-        collect_vars!(allunknowns, ps, eq, iv)
+        if !(eq.lhs isa Union{Symbolic, Number})
+            push!(othereqs, eq)
+            continue
+        end
+        collect_vars!(othervars, ps, eq, iv)
+        if iscall(eq.lhs) && operation(eq.lhs) isa Differential
+            var, _ = var_from_nested_derivative(eq.lhs)
+            if var in diffvars
+                throw(ArgumentError("""
+                    The differential variable $var is not unique in the system of \
+                    equations.
+                """))
+            end
+            push!(diffvars, var)
+            push!(diffeqs, eq)
+        else
+            push!(othereqs, eq)
+        end
     end
+
+    allunknowns = union(diffvars, othervars)
+    eqs = [diffeqs; othereqs]
 
     brownians = Set()
     for x in allunknowns
