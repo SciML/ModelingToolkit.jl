@@ -265,6 +265,14 @@ function GeneratedFunctionWrapper{P}(foop::O, fiip::I) where {P, O, I}
     GeneratedFunctionWrapper{P, O, I}(foop, fiip)
 end
 
+function GeneratedFunctionWrapper{P}(::Type{Val{true}}, foop, fiip; kwargs...) where {P}
+    :($(GeneratedFunctionWrapper{P})($foop, $fiip))
+end
+
+function GeneratedFunctionWrapper{P}(::Type{Val{false}}, foop, fiip; kws...) where {P}
+    GeneratedFunctionWrapper{P}(eval_or_rgf(foop; kws...), eval_or_rgf(fiip; kws...))
+end
+
 function (gfw::GeneratedFunctionWrapper)(args...)
     _generated_call(gfw, args...)
 end
