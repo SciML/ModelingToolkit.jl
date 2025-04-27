@@ -895,7 +895,6 @@ for prop in [:eqs
              :initialization_eqs
              :schedule
              :tearing_state
-             :substitutions
              :metadata
              :gui_metadata
              :is_initializesystem
