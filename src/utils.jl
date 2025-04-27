@@ -832,12 +832,6 @@ end
 
 isarray(x) = x isa AbstractArray || x isa Symbolics.Arr
 
-function empty_substitutions(sys)
-    has_substitutions(sys) || return true
-    subs = get_substitutions(sys)
-    isnothing(subs) || isempty(subs.deps)
-end
-
 function get_cmap(sys, exprs = nothing)
     #Inject substitutions for constants => values
     buffer = []
@@ -880,6 +874,12 @@ function get_substitutions_and_solved_unknowns(sys, exprs = nothing; no_postproc
         end
     end
     return pre, sol_states
+function empty_substitutions(sys)
+    isempty(observed(sys))
+end
+
+function get_substitutions(sys)
+    Dict([eq.lhs => eq.rhs for eq in observed(sys)])
 end
 
 function mergedefaults(defaults, varmap, vars)
