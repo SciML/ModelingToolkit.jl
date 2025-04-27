@@ -10,7 +10,7 @@ eqs = [D(y[1]) ~ -k[1] * y[1] + k[3] * y[2] * y[3],
 
 @named sys = System(eqs, t, collect(y), [k])
 sys = complete(sys)
-@test_throws ArgumentError System(eqs, y[1])
+@test_throws ModelingToolkit.OperatorIndepvarMismatchError System(eqs, y[1])
 M = calculate_massmatrix(sys)
 @test M isa Diagonal
 @test M == [1 0 0
