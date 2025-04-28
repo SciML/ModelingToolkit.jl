@@ -1,6 +1,6 @@
 @fallback_iip_specialize function SciMLBase.ImplicitDiscreteFunction{iip, spec}(
-        sys::System; u0 = nothing, p = nothing,
-        t = nothing, eval_expression = false, eval_module = @__MODULE__,
+        sys::System; u0 = nothing, p = nothing, t = nothing, eval_expression = false,
+        eval_module = @__MODULE__, expression = Val{false},
         checkbounds = false, analytic = nothing, simplify = false, cse = true,
         initialization_data = nothing, check_compatibility = true, kwargs...) where {
         iip, spec}
@@ -10,7 +10,7 @@
     iv = get_iv(sys)
     dvs = unknowns(sys)
     ps = parameters(sys)
-    f = generate_rhs(sys, dvs, ps; expression = Val{false}, wrap_gfw = Val{true},
+    f = generate_rhs(sys, dvs, ps; expression, wrap_gfw = Val{true},
         implicit_dae = true, eval_expression, eval_module, checkbounds = checkbounds, cse,
         kwargs...)
 
@@ -22,18 +22,22 @@
     end
 
     observedfun = ObservedFunctionCache(
-        sys; steady_state = false, eval_expression, eval_module, checkbounds, cse)
+        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds, cse)
 
-    ImplicitDiscreteFunction{iip, spec}(f;
+    args = (; f)
+    kwargs = (;
         sys = sys,
         observed = observedfun,
         analytic = analytic,
         initialization_data)
+
+    return maybe_codegen_scimlfn(
+        expression, ImplicitDiscreteFunction{iip, spec}, args; kwargs...)
 end
 
 @fallback_iip_specialize function SciMLBase.ImplicitDiscreteProblem{iip, spec}(
         sys::System, u0map, tspan, parammap = SciMLBase.NullParameters();
-        check_compatibility = true, kwargs...) where {iip, spec}
+        check_compatibility = true, expression = Val{false}, kwargs...) where {iip, spec}
     check_complete(sys, ImplicitDiscreteProblem)
     check_compatibility && check_compatible_system(ImplicitDiscreteProblem, sys)
 
@@ -42,11 +46,13 @@ end
     add_toterms!(u0map; replace = true)
     f, u0, p = process_SciMLProblem(
         ImplicitDiscreteFunction{iip, spec}, sys, u0map, parammap;
-        t = tspan !== nothing ? tspan[1] : tspan, check_compatibility, kwargs...)
+        t = tspan !== nothing ? tspan[1] : tspan, check_compatibility,
+        expression, kwargs...)
 
     kwargs = process_kwargs(sys; kwargs...)
-    # Call `remake` so it runs initialization if it is trivial
-    return remake(ImplicitDiscreteProblem{iip}(f, u0, tspan, p; kwargs...))
+    args = (; f, u0, tspan, p)
+    return maybe_codegen_scimlproblem(
+        expression, ImplicitDiscreteProblem{iip}, args; kwargs...)
 end
 
 function check_compatible_system(
