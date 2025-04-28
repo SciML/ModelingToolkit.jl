@@ -151,7 +151,7 @@ function MTKParameters(
     if !isempty(nonnumeric_buffer)
         nonnumeric_buffer = map(nonnumeric_buffer) do buf
             SymbolicUtils.Code.create_array(
-                container_type, nothing, Val(1), Val(length(buf)), buf...)
+                container_type, eltype(buf), Val(1), Val(length(buf)), buf...)
         end
     end
 
