@@ -9,8 +9,8 @@
 
     dvs = unknowns(sys)
     ps = parameters(sys)
-    f = generate_rhs(sys, dvs, ps; expression = Val{false}, implicit_dae = true,
-        eval_expression, eval_module, checkbounds = checkbounds, cse,
+    f = generate_rhs(sys, dvs, ps; expression = Val{false}, wrap_gfw = Val{true},
+        implicit_dae = true, eval_expression, eval_module, checkbounds = checkbounds, cse,
         kwargs...)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
@@ -22,7 +22,8 @@
 
     if jac
         _jac = generate_dae_jacobian(sys, dvs, ps; expression = Val{false},
-            simplify, sparse, cse, eval_expression, eval_module, checkbounds, kwargs...)
+            wrap_gfw = Val{true}, simplify, sparse, cse, eval_expression, eval_module,
+            checkbounds, kwargs...)
     else
         _jac = nothing
     end

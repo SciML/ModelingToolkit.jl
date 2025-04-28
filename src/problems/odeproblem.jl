@@ -9,7 +9,7 @@
 
     dvs = unknowns(sys)
     ps = parameters(sys)
-    f = generate_rhs(sys, dvs, ps; expression = Val{false},
+    f = generate_rhs(sys, dvs, ps; expression = Val{false}, wrap_gfw = Val{true},
         eval_expression, eval_module, checkbounds = checkbounds, cse,
         kwargs...)
 
@@ -21,14 +21,16 @@
     end
 
     if tgrad
-        _tgrad = generate_tgrad(sys, dvs, ps; expression = Val{false},
+        _tgrad = generate_tgrad(
+            sys, dvs, ps; expression = Val{false}, wrap_gfw = Val{true},
             simplify, cse, eval_expression, eval_module, checkbounds, kwargs...)
     else
         _tgrad = nothing
     end
 
     if jac
-        _jac = generate_jacobian(sys, dvs, ps; expression = Val{false},
+        _jac = generate_jacobian(
+            sys, dvs, ps; expression = Val{false}, wrap_gfw = Val{true},
             simplify, sparse, cse, eval_expression, eval_module, checkbounds, kwargs...)
     else
         _jac = nothing

@@ -9,9 +9,8 @@ function SciMLBase.IntervalNonlinearFunction(
 
     dvs = unknowns(sys)
     ps = parameters(sys)
-    f = generate_rhs(sys, dvs, ps; expression = Val{false}, scalar = true,
-        eval_expression, eval_module, checkbounds, cse,
-        kwargs...)
+    f = generate_rhs(sys, dvs, ps; expression = Val{false}, wrap_gfw = Val{true},
+        scalar = true, eval_expression, eval_module, checkbounds, cse, kwargs...)
 
     observedfun = ObservedFunctionCache(
         sys; steady_state = false, eval_expression, eval_module, checkbounds, cse)

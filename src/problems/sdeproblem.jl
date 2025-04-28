@@ -9,11 +9,11 @@
 
     dvs = unknowns(sys)
     ps = parameters(sys)
-    f = generate_rhs(sys, dvs, ps; expression = Val{false},
+    f = generate_rhs(sys, dvs, ps; expression = Val{false}, wrap_gfw = Val{true},
         eval_expression, eval_module, checkbounds = checkbounds, cse,
         kwargs...)
     g = generate_diffusion_function(sys, dvs, ps; expression = Val{false},
-        eval_expression, eval_module, checkbounds, cse, kwargs...)
+        wrap_gfw = Val{true}, eval_expression, eval_module, checkbounds, cse, kwargs...)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
@@ -24,14 +24,16 @@
 
     if tgrad
         _tgrad = generate_tgrad(sys, dvs, ps; expression = Val{false},
-            simplify, cse, eval_expression, eval_module, checkbounds, kwargs...)
+            wrap_gfw = Val{true}, simplify, cse, eval_expression, eval_module, checkbounds,
+            kwargs...)
     else
         _tgrad = nothing
     end
 
     if jac
         _jac = generate_jacobian(sys, dvs, ps; expression = Val{false},
-            simplify, sparse, cse, eval_expression, eval_module, checkbounds, kwargs...)
+            wrap_gfw = Val{true}, simplify, sparse, cse, eval_expression, eval_module,
+            checkbounds, kwargs...)
     else
         _jac = nothing
     end

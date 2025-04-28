@@ -10,8 +10,8 @@ Generate the RHS function for the `equations` of a `System`.
 """
 function generate_rhs(sys::System, dvs = unknowns(sys),
         ps = parameters(sys; initial_parameters = true); implicit_dae = false,
-        scalar = false, expression = Val{true}, eval_expression = false,
-        eval_module = @__MODULE__, kwargs...)
+        scalar = false, expression = Val{true}, wrap_gfw = Val{false},
+        eval_expression = false, eval_module = @__MODULE__, kwargs...)
     eqs = equations(sys)
     obs = observed(sys)
     u = dvs
@@ -70,22 +70,19 @@ function generate_rhs(sys::System, dvs = unknowns(sys),
 
     res = build_function_wrapper(sys, rhss, args...; p_start, extra_assignments,
         expression = Val{true}, expression_module = eval_module, kwargs...)
-    if expression == Val{true}
-        return res
+    nargs = length(args) - length(p) + 1
+    if is_dde(sys)
+        p_start += 1
+        nargs += 1
     end
-
-    if res isa Tuple
-        f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
-    else
-        f_oop = eval_or_rgf(res; eval_expression, eval_module)
-        f_iip = nothing
-    end
-    return GeneratedFunctionWrapper{(p_start, length(args) - length(p) + 1, is_split(sys))}(
-        f_oop, f_iip)
+    return maybe_compile_function(
+        expression, wrap_gfw, (p_start, nargs, is_split(sys)),
+        res; eval_expression, eval_module)
 end
 
 function generate_diffusion_function(sys::System, dvs = unknowns(sys),
-        ps = parameters(sys; initial_parameters = true); expression = Val{true}, eval_expression = false,
+        ps = parameters(sys; initial_parameters = true); expression = Val{true},
+        wrap_gfw = Val{false}, eval_expression = false,
         eval_module = @__MODULE__, kwargs...)
     eqs = get_noise_eqs(sys)
     p = reorder_parameters(sys, ps)
@@ -94,7 +91,14 @@ function generate_diffusion_function(sys::System, dvs = unknowns(sys),
         return res
     end
     f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
-    return GeneratedFunctionWrapper{(2, 3, is_split(sys))}(f_oop, f_iip)
+    p_start = 2
+    nargs = 3
+    if is_dde(sys)
+        p_start += 1
+        nargs += 1
+    end
+    return maybe_compile_function(
+        expression, wrap_gfw, (p_start, nargs, is_split(sys)), res; eval_expression, eval_module)
 end
 
 function calculate_tgrad(sys::System; simplify = false)
@@ -141,7 +145,8 @@ end
 function generate_jacobian(sys::System, dvs = unknowns(sys),
         ps = parameters(sys; initial_parameters = true);
         simplify = false, sparse = false, eval_expression = false,
-        eval_module = @__MODULE__, expression = Val{true}, kwargs...)
+        eval_module = @__MODULE__, expression = Val{true}, wrap_gfw = Val{false},
+        kwargs...)
     jac = calculate_jacobian(sys; simplify, sparse, dvs)
     p = reorder_parameters(sys, ps)
     t = get_iv(sys)
@@ -152,11 +157,8 @@ function generate_jacobian(sys::System, dvs = unknowns(sys),
     end
     res = build_function_wrapper(sys, jac, dvs, p..., t; wrap_code, expression = Val{true},
         expression_module = eval_module, kwargs...)
-    if expression == Val{true}
-        return res
-    end
-    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
-    return GeneratedFunctionWrapper{(2, 3, is_split(sys))}(f_oop, f_iip)
+    return maybe_compile_function(
+        expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module)
 end
 
 function assert_jac_length_header(sys)
@@ -173,7 +175,7 @@ function generate_tgrad(
         sys::System, dvs = unknowns(sys), ps = parameters(
             sys; initial_parameters = true);
         simplify = false, eval_expression = false, eval_module = @__MODULE__,
-        expression = Val{true}, kwargs...)
+        expression = Val{true}, wrap_gfw = Val{false}, kwargs...)
     tgrad = calculate_tgrad(sys, simplify = simplify)
     p = reorder_parameters(sys, ps)
     res = build_function_wrapper(sys, tgrad,
@@ -184,18 +186,15 @@ function generate_tgrad(
         expression_module = eval_module,
         kwargs...)
 
-    if expression == Val{true}
-        return res
-    end
-    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
-    return GeneratedFunctionWrapper{(2, 3, is_split(sys))}(f_oop, f_iip)
+    return maybe_compile_function(
+        expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module)
 end
 
 const W_GAMMA = only(@variables ˍ₋gamma)
 
 function generate_W(sys::System, γ = 1.0, dvs = unknowns(sys),
         ps = parameters(sys; initial_parameters = true);
-        simplify = false, sparse = false, expression = Val{true},
+        simplify = false, sparse = false, expression = Val{true}, wrap_gfw = Val{false},
         eval_expression = false, eval_module = @__MODULE__, kwargs...)
     M = calculate_massmatrix(sys; simplify)
     if sparse
@@ -211,17 +210,14 @@ function generate_W(sys::System, γ = 1.0, dvs = unknowns(sys),
     p = reorder_parameters(sys, ps)
     res = build_function_wrapper(sys, W, dvs, p..., W_GAMMA, t; wrap_code,
         p_end = 1 + length(p), kwargs...)
-    if expression == Val{true}
-        return res
-    end
-    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
-    return GeneratedFunctionWrapper{(2, 4, is_split(sys))}(f_oop, f_iip)
+    return maybe_compile_function(
+        expression, wrap_gfw, (2, 4, is_split(sys)), res; eval_expression, eval_module)
 end
 
 function generate_dae_jacobian(sys::System, dvs = unknowns(sys),
         ps = parameters(sys; initial_parameters = true); simplify = false, sparse = false,
-        expression = Val{true}, eval_expression = false, eval_module = @__MODULE__,
-        kwargs...)
+        expression = Val{true}, wrap_gfw = Val{false}, eval_expression = false,
+        eval_module = @__MODULE__, kwargs...)
     jac_u = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
     t = get_iv(sys)
     derivatives = Differential(t).(unknowns(sys))
@@ -232,25 +228,18 @@ function generate_dae_jacobian(sys::System, dvs = unknowns(sys),
     p = reorder_parameters(sys, ps)
     res = build_function_wrapper(sys, jac, derivatives, dvs, p..., W_GAMMA, t;
         p_start = 3, p_end = 2 + length(p), kwargs...)
-    if expression == Val{true}
-        return res
-    end
-    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
-    return GeneratedFunctionWrapper{(3, 5, is_split(sys))}(f_oop, f_iip)
+    return maybe_compile_function(
+        expression, wrap_gfw, (3, 5, is_split(sys)), res; eval_expression, eval_module)
 end
 
-function generate_history(sys::System, u0; expression = Val{true},
+function generate_history(sys::System, u0; expression = Val{true}, wrap_gfw = Val{false},
         eval_expression = false, eval_module = @__MODULE__, kwargs...)
     p = reorder_parameters(sys)
     res = build_function_wrapper(sys, u0, p..., get_iv(sys); expression = Val{true},
         expression_module = eval_module, p_start = 1, p_end = length(p),
         similarto = typeof(u0), wrap_delays = false, kwargs...)
-
-    if expression == Val{true}
-        return res
-    end
-    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
-    return GeneratedFunctionWrapper{(1, 2, is_split(sys))}(f_oop, f_iip)
+    return maybe_compile_function(
+        expression, wrap_gfw, (1, 2, is_split(sys)), res; eval_expression, eval_module)
 end
 
 function calculate_massmatrix(sys::System; simplify = false)
@@ -336,7 +325,8 @@ function get_constraint_unknown_subs!(subs::Dict, cons::Vector, stidxmap::Dict, 
 end
 
 function generate_boundary_conditions(sys::System, u0, u0_idxs, t0; expression = Val{true},
-        eval_expression = false, eval_module = @__MODULE__, kwargs...)
+        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__,
+        kwargs...)
     iv = get_iv(sys)
     sts = unknowns(sys)
     ps = parameters(sys)
@@ -362,16 +352,12 @@ function generate_boundary_conditions(sys::System, u0, u0_idxs, t0; expression =
     _p = reorder_parameters(sys, ps)
 
     res = build_function_wrapper(sys, exprs, sol, _p..., iv; output_type = Array, kwargs...)
-    if expression == Val{true}
-        return res
-    end
-
-    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
-    return GeneratedFunctionWrapper{(2, 3, is_split(sys))}(f_oop, f_iip)
+    return maybe_compile_function(
+        expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module)
 end
 
-function generate_cost(sys::System; expression = Val{true}, eval_expression = false,
-        eval_module = @__MODULE__, kwargs...)
+function generate_cost(sys::System; expression = Val{true}, wrap_gfw = Val{false},
+        eval_expression = false, eval_module = @__MODULE__, kwargs...)
     obj = cost(sys)
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
@@ -380,7 +366,8 @@ function generate_cost(sys::System; expression = Val{true}, eval_expression = fa
         return res
     end
     f_oop = eval_or_rgf(res; eval_expression, eval_module)
-    return GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, nothing)
+    return maybe_compile_function(
+        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module)
 end
 
 function calculate_cost_gradient(sys::System; simplify = false)
@@ -390,18 +377,15 @@ function calculate_cost_gradient(sys::System; simplify = false)
 end
 
 function generate_cost_gradient(
-        sys::System; expression = Val{true}, eval_expression = false,
-        eval_module = @__MODULE__, simplify = false, kwargs...)
+        sys::System; expression = Val{true}, wrap_gfw = Val{false},
+        eval_expression = false, eval_module = @__MODULE__, simplify = false, kwargs...)
     obj = cost(sys)
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
     exprs = calculate_cost_gradient(sys; simplify)
     res = build_function_wrapper(sys, exprs, dvs, ps...; expression = Val{true}, kwargs...)
-    if expression == Val{true}
-        return res
-    end
-    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
-    return GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, f_iip)
+    return maybe_compile_function(
+        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module)
 end
 
 function calculate_cost_hessian(sys::System; sparse = false, simplify = false)
@@ -420,8 +404,8 @@ function cost_hessian_sparsity(sys::System)
 end
 
 function generate_cost_hessian(
-        sys::System; expression = Val{true}, eval_expression = false,
-        eval_module = @__MODULE__, simplify = false,
+        sys::System; expression = Val{true}, wrap_gfw = Val{false},
+        eval_expression = false, eval_module = @__MODULE__, simplify = false,
         sparse = false, return_sparsity = false, kwargs...)
     obj = cost(sys)
     dvs = unknowns(sys)
@@ -432,12 +416,8 @@ function generate_cost_hessian(
         sparsity = similar(exprs, Float64)
     end
     res = build_function_wrapper(sys, exprs, dvs, ps...; expression = Val{true}, kwargs...)
-    if expression == Val{true}
-        return return_sparsity ? (res, sparsity) : res
-    end
-    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
-    fn = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, f_iip)
-    return return_sparsity ? (fn, sparsity) : fn
+    return maybe_compile_function(
+        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module)
 end
 
 function canonical_constraints(sys::System)
@@ -446,23 +426,19 @@ function canonical_constraints(sys::System)
     end
 end
 
-function generate_cons(sys::System; expression = Val{true}, eval_expression = false,
-        eval_module = @__MODULE__, kwargs...)
+function generate_cons(sys::System; expression = Val{true}, wrap_gfw = Val{false},
+        eval_expression = false, eval_module = @__MODULE__, kwargs...)
     cons = canonical_constraints(sys)
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
     res = build_function_wrapper(sys, cons, dvs, ps...; expression = Val{true}, kwargs...)
-    if expression == Val{true}
-        return res
-    end
-    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
-    fn = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, f_iip)
-    return fn
+    return maybe_compile_function(
+        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module)
 end
 
 function generate_constraint_jacobian(
-        sys::System; expression = Val{true}, eval_expression = false,
-        eval_module = @__MODULE__, return_sparsity = false,
+        sys::System; expression = Val{true}, wrap_gfw = Val{false},
+        eval_expression = false, eval_module = @__MODULE__, return_sparsity = false,
         simplify = false, sparse = false, kwargs...)
     cons = canonical_constraints(sys)
     dvs = unknowns(sys)
@@ -475,17 +451,14 @@ function generate_constraint_jacobian(
         jac = Symbolics.jacobian(cons, dvs; simplify)
     end
     res = build_function_wrapper(sys, jac, dvs, ps...; expression = Val{true}, kwargs...)
-    if expression == Val{true}
-        return return_sparsity ? (res, sparsity) : res
-    end
-    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
-    fn = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, f_iip)
+    fn = maybe_compile_function(
+        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module)
     return return_sparsity ? (fn, sparsity) : fn
 end
 
 function generate_constraint_hessian(
-        sys::System; expression = Val{true}, eval_expression = false,
-        eval_module = @__MODULE__, return_sparsity = false,
+        sys::System; expression = Val{true}, wrap_gfw = Val{false},
+        eval_expression = false, eval_module = @__MODULE__, return_sparsity = false,
         simplify = false, sparse = false, kwargs...)
     cons = canonical_constraints(sys)
     dvs = unknowns(sys)
@@ -500,11 +473,8 @@ function generate_constraint_hessian(
         hess = [Symbolics.hessian(cstr, dvs; simplify) for cstr in cons]
     end
     res = build_function_wrapper(sys, hess, dvs, ps...; expression = Val{true}, kwargs...)
-    if expression == Val{true}
-        return return_sparsity ? (res, sparsity) : res
-    end
-    f_oop, f_iip = eval_or_rgf.(res; eval_expression, eval_module)
-    fn = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, f_iip)
+    fn = maybe_compile_function(
+        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module)
     return return_sparsity ? (fn, sparsity) : fn
 end
 

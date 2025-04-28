@@ -64,7 +64,8 @@ If the `System` has algebraic equations, like `x(t)^2 + y(t)^2`, the resulting
     stidxmap = Dict([v => i for (i, v) in enumerate(dvs)])
     u0_idxs = has_alg_eqs(sys) ? collect(1:length(dvs)) : [stidxmap[k] for (k, v) in u0map]
     fbc = generate_boundary_conditions(
-        sys, u0, u0_idxs, tspan; expression = Val{false}, cse, checkbounds)
+        sys, u0, u0_idxs, tspan; expression = Val{false},
+        wrap_gfw = Val{true}, cse, checkbounds)
 
     if (length(constraints(sys)) + length(u0map) > length(dvs))
         @warn "The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) exceeds the total number of states. The BVP solvers will default to doing a nonlinear least-squares optimization."

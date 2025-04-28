@@ -10,7 +10,7 @@
     dvs = unknowns(sys)
     ps = parameters(sys)
 
-    f = generate_rhs(sys, dvs, ps; expression = Val{false},
+    f = generate_rhs(sys, dvs, ps; expression = Val{false}, wrap_gfw = Val{true},
         eval_expression, eval_module, checkbounds = checkbounds, cse,
         kwargs...)
 

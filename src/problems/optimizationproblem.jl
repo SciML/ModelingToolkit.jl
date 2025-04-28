@@ -14,19 +14,20 @@ function SciMLBase.OptimizationFunction{iip}(sys::System;
     ps = parameters(sys)
     cstr = constraints(sys)
 
-    f = generate_cost(sys; expression = Val{false}, eval_expression,
+    f = generate_cost(sys; expression = Val{false}, wrap_gfw = Val{true}, eval_expression,
         eval_module, checkbounds, cse, kwargs...)
 
     if grad
-        _grad = generate_cost_gradient(sys; expression = Val{false}, eval_expression,
-            eval_module, checkbounds, cse, kwargs...)
+        _grad = generate_cost_gradient(sys; expression = Val{false}, wrap_gfw = Val{true},
+            eval_expression, eval_module, checkbounds, cse, kwargs...)
     else
         _grad = nothing
     end
     if hess
         _hess, hess_prototype = generate_cost_hessian(
-            sys; expression = Val{false}, eval_expression, eval_module,
-            checkbounds, cse, sparse, simplify, return_sparsity = true, kwargs...)
+            sys; expression = Val{false}, wrap_gfw = Val{true}, eval_expression,
+            eval_module, checkbounds, cse, sparse, simplify, return_sparsity = true,
+            kwargs...)
     else
         _hess = hess_prototype = nothing
         if sparse
@@ -37,19 +38,21 @@ function SciMLBase.OptimizationFunction{iip}(sys::System;
         cons = _cons_j = cons_jac_prototype = _cons_h = nothing
         cons_hess_prototype = cons_expr = nothing
     else
-        cons = generate_cons(sys; expression = Val{false}, eval_expression,
-            eval_module, checkbounds, cse, kwargs...)
+        cons = generate_cons(sys; expression = Val{false}, wrap_gfw = Val{true},
+            eval_expression, eval_module, checkbounds, cse, kwargs...)
         if cons_j
             _cons_j, cons_jac_prototype = generate_constraint_jacobian(
-                sys; expression = Val{false}, eval_expression, eval_module, checkbounds,
-                cse, simplify, sparse = cons_sparse, return_sparsity = true, kwargs...)
+                sys; expression = Val{false}, wrap_gfw = Val{true}, eval_expression,
+                eval_module, checkbounds, cse, simplify, sparse = cons_sparse,
+                return_sparsity = true, kwargs...)
         else
             _cons_j = cons_jac_prototype = nothing
         end
         if cons_h
             _cons_h, cons_hess_prototype = generate_constraint_hessian(
-                sys; expression = Val{false}, eval_expression, eval_module, checkbounds,
-                cse, simplify, sparse = cons_sparse, return_sparsity = true, kwargs...)
+                sys; expression = Val{false}, wrap_gfw = Val{true}, eval_expression,
+                eval_module, checkbounds, cse, simplify, sparse = cons_sparse,
+                return_sparsity = true, kwargs...)
         else
             _cons_h = cons_hess_prototype = nothing
         end

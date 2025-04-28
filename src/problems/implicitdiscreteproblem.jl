@@ -10,8 +10,8 @@
     iv = get_iv(sys)
     dvs = unknowns(sys)
     ps = parameters(sys)
-    f = generate_rhs(sys, dvs, ps; expression = Val{false}, implicit_dae = true,
-        eval_expression, eval_module, checkbounds = checkbounds, cse,
+    f = generate_rhs(sys, dvs, ps; expression = Val{false}, wrap_gfw = Val{true},
+        implicit_dae = true, eval_expression, eval_module, checkbounds = checkbounds, cse,
         kwargs...)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip

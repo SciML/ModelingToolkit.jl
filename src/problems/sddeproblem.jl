@@ -10,11 +10,11 @@
     dvs = unknowns(sys)
     ps = parameters(sys)
 
-    f = generate_rhs(sys, dvs, ps; expression = Val{false},
+    f = generate_rhs(sys, dvs, ps; expression = Val{false}, wrap_gfw = Val{true},
         eval_expression, eval_module, checkbounds = checkbounds, cse,
         kwargs...)
     g = generate_diffusion_function(sys, dvs, ps; expression = Val{false},
-        eval_expression, eval_module, checkbounds, cse, kwargs...)
+        wrap_gfw = Val{true}, eval_expression, eval_module, checkbounds, cse, kwargs...)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing

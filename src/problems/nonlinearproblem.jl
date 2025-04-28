@@ -9,7 +9,7 @@
 
     dvs = unknowns(sys)
     ps = parameters(sys)
-    f = generate_rhs(sys, dvs, ps; expression = Val{false},
+    f = generate_rhs(sys, dvs, ps; expression = Val{false}, wrap_gfw = Val{true},
         eval_expression, eval_module, checkbounds = checkbounds, cse,
         kwargs...)
 
@@ -22,7 +22,8 @@
 
     if jac
         _jac = generate_jacobian(sys, dvs, ps; expression = Val{false},
-            simplify, sparse, cse, eval_expression, eval_module, checkbounds, kwargs...)
+            wrap_gfw = Val{true}, simplify, sparse, cse, eval_expression, eval_module,
+            checkbounds, kwargs...)
     else
         _jac = nothing
     end
