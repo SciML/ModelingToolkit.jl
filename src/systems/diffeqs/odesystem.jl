@@ -401,7 +401,7 @@ function ODESystem(eqs, iv; kwargs...)
     algevars = setdiff(allunknowns, diffvars)
 
     return ODESystem(eqs, iv, collect(Iterators.flatten((diffvars, algevars))),
-        collect(new_ps); constraintsystem, costs, kwargs...)
+        collect(new_ps); kwargs...)
 end
 
 # NOTE: equality does not check cached Jacobian

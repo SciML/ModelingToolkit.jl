@@ -641,7 +641,7 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps, c_evts, d_evts,
         isassigned(icon) && error("This model has more than one icon.")
         parse_icon!(body, dict, icon, mod)
     elseif mname == Symbol("@defaults")
-        parse_system_defaults!(exprs, dict, body)
+        parse_system_defaults!(exprs, arg, dict)
     elseif mname == Symbol("@constraints")
         parse_costs!(cons, dict, body)
     elseif mname == Symbol("@costs")
