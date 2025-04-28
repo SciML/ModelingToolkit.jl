@@ -132,14 +132,13 @@ function linearization_function(sys::AbstractSystem, inputs,
     return lin_fun, sys
 end
 
+"""
+Return the set of indexes of differential equations and algebraic equations in the simplified system.
+"""
 function eq_idxs(sys::AbstractSystem)
     eqs = equations(sys)
-    alg_start_idx = findfirst(!isdiffeq, eqs)
-    if alg_start_idx === nothing
-        alg_start_idx = length(eqs) + 1
-    end
-    diff_idxs = 1:(alg_start_idx - 1)
-    alge_idxs = alg_start_idx:length(eqs)
+    alge_idxs = findall(!isdiffeq, eqs)
+    diff_idxs = setdiff(1:length(eqs), alge_idxs)
 
     diff_idxs, alge_idxs
 end
@@ -561,6 +560,9 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
     (; A, B, C, D, f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u), sys
 end
 
+"""
+Modify the variable metadata of system variables to indicate which ones are inputs, outputs, and disturbances. Needed for `inputs`, `outputs`, `disturbances`, `unbound_inputs`, `unbound_outputs` to return the proper subsets.
+"""
 function markio!(state, orig_inputs, inputs, outputs, disturbances; check = true)
     fullvars = get_fullvars(state)
     inputset = Dict{Any, Bool}(i => false for i in inputs)
@@ -591,6 +593,7 @@ function markio!(state, orig_inputs, inputs, outputs, disturbances; check = true
         if v in keys(disturbanceset)
             v = setio(v, true, false)
             v = setdisturbance(v, true)
+            disturbanceset[v] = true
             fullvars[i] = v
         end
     end
@@ -601,11 +604,16 @@ function markio!(state, orig_inputs, inputs, outputs, disturbances; check = true
                 "Some specified inputs were not found in system. The following variables were not found ",
                 ikeys)
         end
-    end
-    check && (all(values(outputset)) ||
-     error(
-        "Some specified outputs were not found in system. The following Dict indicates the found variables ",
+        dkeys = keys(filter(!last, disturbanceset))
+        if !isempty(dkeys)
+            error(
+                "Specified disturbance inputs were not found in system. The following variables were not found ",
+                ikeys)
+        end
+        (all(values(outputset)) || error(
+            "Some specified outputs were not found in system. The following Dict indicates the found variables ",
         outputset))
+    end
     state, orig_inputs
 end
 
