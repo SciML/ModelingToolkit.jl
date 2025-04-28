@@ -28,7 +28,11 @@ the default behavior).
 """
 function MTKParameters(
         sys::AbstractSystem, p, u0 = Dict(); tofloat = false,
-        t0 = nothing, substitution_limit = 1000, floatT = nothing)
+        t0 = nothing, substitution_limit = 1000, floatT = nothing,
+        container_type = Vector)
+    if !(container_type <: AbstractArray)
+        container_type = Array
+    end
     ic = if has_index_cache(sys) && get_index_cache(sys) !== nothing
         get_index_cache(sys)
     else
@@ -133,18 +137,23 @@ function MTKParameters(
             end
         end
     end
-    tunable_buffer = narrow_buffer_type(tunable_buffer)
+    tunable_buffer = narrow_buffer_type(tunable_buffer; container_type)
     if isempty(tunable_buffer)
         tunable_buffer = SizedVector{0, Float64}()
     end
-    initials_buffer = narrow_buffer_type(initials_buffer)
+    initials_buffer = narrow_buffer_type(initials_buffer; container_type)
     if isempty(initials_buffer)
         initials_buffer = SizedVector{0, Float64}()
     end
-    disc_buffer = narrow_buffer_type.(disc_buffer)
-    const_buffer = narrow_buffer_type.(const_buffer)
+    disc_buffer = narrow_buffer_type.(disc_buffer; container_type)
+    const_buffer = narrow_buffer_type.(const_buffer; container_type)
     # Don't narrow nonnumeric types
-    nonnumeric_buffer = nonnumeric_buffer
+    if !isempty(nonnumeric_buffer)
+        nonnumeric_buffer = map(nonnumeric_buffer) do buf
+            SymbolicUtils.Code.create_array(
+                container_type, nothing, Val(1), Val(length(buf)), buf...)
+        end
+    end
 
     mtkps = MTKParameters{
         typeof(tunable_buffer), typeof(initials_buffer), typeof(disc_buffer),
@@ -160,21 +169,44 @@ function rebuild_with_caches(p::MTKParameters, cache_templates::BufferTemplate..
     @set p.caches = buffers
 end
 
-function narrow_buffer_type(buffer::AbstractArray)
+function narrow_buffer_type(buffer::AbstractArray; container_type = typeof(buffer))
     type = Union{}
     for x in buffer
         type = promote_type(type, typeof(x))
     end
-    return convert.(type, buffer)
+    return SymbolicUtils.Code.create_array(
+        container_type, type, Val(ndims(buffer)), Val(length(buffer)), buffer...)
 end
 
-function narrow_buffer_type(buffer::AbstractArray{<:AbstractArray})
-    buffer = narrow_buffer_type.(buffer)
+function narrow_buffer_type(
+        buffer::AbstractArray{<:AbstractArray}; container_type = typeof(buffer))
+    type = Union{}
+    for arr in buffer
+        for x in arr
+            type = promote_type(type, typeof(x))
+        end
+    end
+    buffer = map(buffer) do buf
+        SymbolicUtils.Code.create_array(
+            container_type, type, Val(ndims(buf)), Val(size(buf)), buf...)
+    end
+    return SymbolicUtils.Code.create_array(
+        container_type, nothing, Val(ndims(buffer)), Val(size(buffer)), buffer...)
+end
+
+function narrow_buffer_type(buffer::BlockedArray; container_type = typeof(parent(buffer)))
     type = Union{}
     for x in buffer
-        type = promote_type(type, eltype(x))
+        type = promote_type(type, typeof(x))
     end
-    return broadcast.(convert, type, buffer)
+    tmp = SymbolicUtils.Code.create_array(
+        container_type, type, Val(ndims(buffer)), Val(size(buffer)), buffer...)
+    blocks = ntuple(Val(ndims(buffer))) do i
+        bsizes = blocksizes(buffer, i)
+        SymbolicUtils.Code.create_array(
+            container_type, Int, Val(1), Val(length(bsizes)), bsizes...)
+    end
+    return BlockedArray(tmp, blocks...)
 end
 
 function buffer_to_arraypartition(buf)

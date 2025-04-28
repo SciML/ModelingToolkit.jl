@@ -1155,7 +1155,7 @@ function process_SciMLProblem(
     end
     evaluate_varmap!(op, ps; limit = substitution_limit)
     if is_split(sys)
-        p = MTKParameters(sys, op; floatT = floatT)
+        p = MTKParameters(sys, op; floatT = floatT, container_type = pType)
     else
         p = better_varmap_to_vars(op, ps; tofloat, container_type = pType)
     end

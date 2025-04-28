@@ -2,6 +2,7 @@ using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D, get_u0
 using OrdinaryDiffEq
 using DataInterpolations
+using StaticArrays
 using SymbolicIndexingInterface: getu
 
 @variables x(t)[1:3]=[1.0, 2.0, 3.0] y(t) z(t)[1:2]
@@ -308,4 +309,29 @@ end
         warn_initialize_determined = false)
     @test prob[w2] ≈ -1.0
     @test prob.ps[β] ≈ 8 / 3
+end
+
+@testset "MTKParameters uses given `pType` for inner buffers" begin
+    @parameters σ ρ β
+    @variables x(t) y(t) z(t)
+
+    eqs = [D(D(x)) ~ σ * (y - x),
+        D(y) ~ x * (ρ - z) - y,
+        D(z) ~ x * y - β * z]
+
+    @mtkbuild sys = ODESystem(eqs, t)
+
+    u0 = SA[D(x) => 2.0f0,
+        x => 1.0f0,
+        y => 0.0f0,
+        z => 0.0f0]
+
+    p = SA[σ => 28.0f0,
+        ρ => 10.0f0,
+        β => 8.0f0 / 3]
+
+    tspan = (0.0f0, 100.0f0)
+    prob = ODEProblem(sys, u0, tspan, p)
+    @test prob.p.tunable isa SVector
+    @test prob.p.initials isa SVector
 end
