@@ -5,7 +5,7 @@ using SimpleDiffEq
 using OrdinaryDiffEqSDIRK, OrdinaryDiffEqVerner, OrdinaryDiffEqTsit5, OrdinaryDiffEqFIRK
 using Ipopt
 using DataInterpolations
-#const M = ModelingToolkit
+const M = ModelingToolkit
 
 @testset "ODE Solution, no cost" begin
     # Test solving without anything attached.
@@ -108,7 +108,7 @@ end
     # Linear systems have bang-bang controls
     @test is_bangbang(jsol.input_sol, [-1.0], [1.0])
     # Test reached final position.
-    @test ≈(jsol.sol.u[end][1], 0.25, rtol = 1e-5)
+    @test ≈(jsol.sol.u[end][2], 0.25, rtol = 1e-5)
     # Test dynamics
     @parameters (u_interp::ConstantInterpolation)(..)
     @mtkbuild block_ode = ODESystem([D(x(t)) ~ v(t), D(v(t)) ~ u_interp(t)], t)
@@ -120,7 +120,7 @@ end
     iprob = InfiniteOptDynamicOptProblem(block, u0map, tspan, parammap; dt = 0.01)
     isol = solve(iprob, Ipopt.Optimizer; silent = true)
     @test is_bangbang(isol.input_sol, [-1.0], [1.0])
-    @test ≈(isol.sol.u[end][1], 0.25, rtol = 1e-5)
+    @test ≈(isol.sol.u[end][2], 0.25, rtol = 1e-5)
     osol = solve(oprob, ImplicitEuler(); dt = 0.01, adaptive = false)
     @test ≈(isol.sol.u, osol.u, rtol = 0.05)
 
@@ -233,6 +233,8 @@ end
 end
 
 @testset "Cart-pole problem" begin
+    t = M.t_nounits
+    D = M.D_nounits
     # gravity, length, moment of Inertia, drag coeff
     @parameters g l mₚ mₖ
     @variables x(..) θ(..) u(t) [input = true, bounds = (-10, 10)]
