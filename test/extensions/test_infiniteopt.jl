@@ -22,13 +22,14 @@ using ModelingToolkit: D_nounits as D, t_nounits as t, varmap_to_vars
 end
 @named model = Pendulum()
 model = complete(model)
-
 inputs = [model.τ]
-(f_oop, f_ip), dvs, psym, io_sys = ModelingToolkit.generate_control_function(
-    model, inputs, split = false)
-
 outputs = [model.y]
-f_obs = ModelingToolkit.build_explicit_observed_function(io_sys, outputs; inputs = inputs)
+model, _ = structural_simplify(model, (inputs, outputs))
+
+f, dvs, psym, io_sys = ModelingToolkit.generate_control_function(
+    model, split = false)
+
+f_obs = ModelingToolkit.build_explicit_observed_function(io_sys, outputs; inputs)
 
 expected_state_order = [model.θ, model.ω]
 permutation = [findfirst(isequal(x), expected_state_order) for x in dvs] # This maps our expected state order to the actual state order
@@ -64,7 +65,7 @@ InfiniteOpt.@variables(m,
 # Trace the dynamics
 x0, p = ModelingToolkit.get_u0_p(io_sys, [model.θ => 0, model.ω => 0], [model.L => L])
 
-xp = f_oop(x, u, p, τ)
+xp = f(x, u, p, τ)
 cp = f_obs(x, u, p, τ) # Test that it's possible to trace through an observed function
 
 @objective(m, Min, tf)
