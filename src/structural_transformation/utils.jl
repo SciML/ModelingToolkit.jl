@@ -96,7 +96,6 @@ function check_consistency(state::TransformationState, orig_inputs; nothrow = fa
     fullvars = get_fullvars(state)
     neqs = n_concrete_eqs(state)
     @unpack graph, var_to_diff = state.structure
-    @show equations(state.sys)
     highest_vars = computed_highest_diff_variables(complete!(state.structure))
     n_highest_vars = 0
     for (v, h) in enumerate(highest_vars)
