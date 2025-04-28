@@ -132,14 +132,13 @@ function linearization_function(sys::AbstractSystem, inputs,
     return lin_fun, sys
 end
 
+"""
+Return the set of indexes of differential equations and algebraic equations in the simplified system.
+"""
 function eq_idxs(sys::AbstractSystem)
     eqs = equations(sys)
-    alg_start_idx = findfirst(!isdiffeq, eqs)
-    if alg_start_idx === nothing
-        alg_start_idx = length(eqs) + 1
-    end
-    diff_idxs = 1:(alg_start_idx - 1)
-    alge_idxs = alg_start_idx:length(eqs)
+    alge_idxs = findall(!isdiffeq, eqs)
+    diff_idxs = setdiff(1:length(eqs), alge_idxs)
 
     diff_idxs, alge_idxs
 end
