@@ -7,25 +7,25 @@ function SciMLBase.OptimizationFunction{iip}(sys::System;
         sparse = false, cons_j = false, cons_h = false, cons_sparse = false,
         linenumbers = true, eval_expression = false, eval_module = @__MODULE__,
         simplify = false, check_compatibility = true, checkbounds = false, cse = true,
-        kwargs...) where {iip}
+        expression = Val{false}, kwargs...) where {iip}
     check_complete(sys, OptimizationFunction)
     check_compatibility && check_compatible_system(OptimizationFunction, sys)
     dvs = unknowns(sys)
     ps = parameters(sys)
     cstr = constraints(sys)
 
-    f = generate_cost(sys; expression = Val{false}, wrap_gfw = Val{true}, eval_expression,
+    f = generate_cost(sys; expression, wrap_gfw = Val{true}, eval_expression,
         eval_module, checkbounds, cse, kwargs...)
 
     if grad
-        _grad = generate_cost_gradient(sys; expression = Val{false}, wrap_gfw = Val{true},
+        _grad = generate_cost_gradient(sys; expression, wrap_gfw = Val{true},
             eval_expression, eval_module, checkbounds, cse, kwargs...)
     else
         _grad = nothing
     end
     if hess
         _hess, hess_prototype = generate_cost_hessian(
-            sys; expression = Val{false}, wrap_gfw = Val{true}, eval_expression,
+            sys; expression, wrap_gfw = Val{true}, eval_expression,
             eval_module, checkbounds, cse, sparse, simplify, return_sparsity = true,
             kwargs...)
     else
@@ -38,11 +38,11 @@ function SciMLBase.OptimizationFunction{iip}(sys::System;
         cons = _cons_j = cons_jac_prototype = _cons_h = nothing
         cons_hess_prototype = cons_expr = nothing
     else
-        cons = generate_cons(sys; expression = Val{false}, wrap_gfw = Val{true},
+        cons = generate_cons(sys; expression, wrap_gfw = Val{true},
             eval_expression, eval_module, checkbounds, cse, kwargs...)
         if cons_j
             _cons_j, cons_jac_prototype = generate_constraint_jacobian(
-                sys; expression = Val{false}, wrap_gfw = Val{true}, eval_expression,
+                sys; expression, wrap_gfw = Val{true}, eval_expression,
                 eval_module, checkbounds, cse, simplify, sparse = cons_sparse,
                 return_sparsity = true, kwargs...)
         else
@@ -50,7 +50,7 @@ function SciMLBase.OptimizationFunction{iip}(sys::System;
         end
         if cons_h
             _cons_h, cons_hess_prototype = generate_constraint_hessian(
-                sys; expression = Val{false}, wrap_gfw = Val{true}, eval_expression,
+                sys; expression, wrap_gfw = Val{true}, eval_expression,
                 eval_module, checkbounds, cse, simplify, sparse = cons_sparse,
                 return_sparsity = true, kwargs...)
         else
@@ -61,9 +61,11 @@ function SciMLBase.OptimizationFunction{iip}(sys::System;
 
     obj_expr = subs_constants(cost(sys))
 
-    observedfun = ObservedFunctionCache(sys; eval_expression, eval_module, checkbounds, cse)
+    observedfun = ObservedFunctionCache(
+        sys; expression, eval_expression, eval_module, checkbounds, cse)
 
-    return OptimizationFunction{iip}(f, SciMLBase.NoAD();
+    args = (; f, ad = SciMLBase.NoAD())
+    kwargs = (;
         sys = sys,
         grad = _grad,
         hess = _hess,
@@ -76,6 +78,8 @@ function SciMLBase.OptimizationFunction{iip}(sys::System;
         cons_expr = cons_expr,
         expr = obj_expr,
         observed = observedfun)
+
+    return maybe_codegen_scimlfn(expression, OptimizationFunction{iip}, args; kwargs...)
 end
 
 function SciMLBase.OptimizationProblem(sys::System, args...; kwargs...)
@@ -83,13 +87,14 @@ function SciMLBase.OptimizationProblem(sys::System, args...; kwargs...)
 end
 
 function SciMLBase.OptimizationProblem{iip}(
-        sys::System, u0map, parammap = SciMLBase.NullParameters(); lb = nothing, ub = nothing,
-        check_compatibility = true, kwargs...) where {iip}
+        sys::System, u0map, parammap = SciMLBase.NullParameters(); lb = nothing,
+        ub = nothing, check_compatibility = true, expression = Val{false},
+        kwargs...) where {iip}
     check_complete(sys, OptimizationProblem)
     check_compatibility && check_compatible_system(OptimizationProblem, sys)
 
     f, u0, p = process_SciMLProblem(OptimizationFunction{iip}, sys, u0map, parammap;
-        check_compatibility, tofloat = false, check_length = false, kwargs...)
+        check_compatibility, tofloat = false, check_length = false, expression, kwargs...)
 
     dvs = unknowns(sys)
     int = symtype.(unwrap.(dvs)) .<: Integer
@@ -128,8 +133,9 @@ function SciMLBase.OptimizationProblem{iip}(
     end
 
     kwargs = process_kwargs(sys; kwargs...)
-    # Call `remake` so it runs initialization if it is trivial
-    return remake(OptimizationProblem{iip}(f, u0, p; lb, ub, int, lcons, ucons, kwargs...))
+    kwargs = (; lb, ub, int, lcons, ucons, kwargs...)
+    args = (; f, u0, p)
+    return maybe_codegen_scimlproblem(expression, OptimizationProblem{iip}, args; kwargs...)
 end
 
 function check_compatible_system(
