@@ -3,13 +3,13 @@
         t = nothing, eval_expression = false, eval_module = @__MODULE__, sparse = false,
         steady_state = false, checkbounds = false, sparsity = false, analytic = nothing,
         simplify = false, cse = true, initialization_data = nothing,
-        check_compatibility = true, kwargs...) where {iip, spec}
+        expression = Val{false}, check_compatibility = true, kwargs...) where {iip, spec}
     check_complete(sys, DAEFunction)
     check_compatibility && check_compatible_system(DAEFunction, sys)
 
     dvs = unknowns(sys)
     ps = parameters(sys)
-    f = generate_rhs(sys, dvs, ps; expression = Val{false}, wrap_gfw = Val{true},
+    f = generate_rhs(sys, dvs, ps; expression, wrap_gfw = Val{true},
         implicit_dae = true, eval_expression, eval_module, checkbounds = checkbounds, cse,
         kwargs...)
 
@@ -17,11 +17,15 @@
         if u0 === nothing || p === nothing || t === nothing
             error("u0, p, and t must be specified for FunctionWrapperSpecialize on ODEFunction.")
         end
-        f = SciMLBase.wrapfun_iip(f, (u0, u0, p, t))
+        if expression == Val{true}
+            f = :($(SciMLBase.wrapfun_iip)($f, ($u0, $u0, $u0, $p, $t)))
+        else
+            f = SciMLBase.wrapfun_iip(f, (u0, u0, u0, p, t))
+        end
     end
 
     if jac
-        _jac = generate_dae_jacobian(sys, dvs, ps; expression = Val{false},
+        _jac = generate_dae_jacobian(sys, dvs, ps; expression,
             wrap_gfw = Val{true}, simplify, sparse, cse, eval_expression, eval_module,
             checkbounds, kwargs...)
     else
@@ -29,7 +33,7 @@
     end
 
     observedfun = ObservedFunctionCache(
-        sys; steady_state, eval_expression, eval_module, checkbounds, cse)
+        sys; expression, steady_state, eval_expression, eval_module, checkbounds, cse)
 
     jac_prototype = if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
@@ -45,33 +49,39 @@
         nothing
     end
 
-    DAEFunction{iip, spec}(f;
+    kwargs = (;
         sys = sys,
         jac = _jac,
         jac_prototype = jac_prototype,
         observed = observedfun,
         analytic = analytic,
         initialization_data)
+    args = (; f)
+
+    return maybe_codegen_scimlfn(expression, DAEFunction{iip, spec}, args; kwargs...)
 end
 
 @fallback_iip_specialize function SciMLBase.DAEProblem{iip, spec}(
         sys::System, du0map, u0map, tspan, parammap = SciMLBase.NullParameters();
         callback = nothing, check_length = true, eval_expression = false,
-        eval_module = @__MODULE__, check_compatibility = true, kwargs...) where {iip, spec}
+        eval_module = @__MODULE__, check_compatibility = true,
+        expression = Val{false}, kwargs...) where {iip, spec}
     check_complete(sys, DAEProblem)
     check_compatibility && check_compatible_system(DAEProblem, sys)
 
     f, du0, u0, p = process_SciMLProblem(DAEFunction{iip, spec}, sys, u0map, parammap;
         du0map, t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
-        eval_module, check_compatibility, implicit_dae = true, kwargs...)
+        eval_module, check_compatibility, implicit_dae = true, expression, kwargs...)
 
-    kwargs = process_kwargs(sys; callback, eval_expression, eval_module, kwargs...)
+    kwargs = process_kwargs(sys; expression, callback, eval_expression, eval_module,
+        kwargs...)
 
     diffvars = collect_differential_variables(sys)
     sts = unknowns(sys)
     differential_vars = map(Base.Fix2(in, diffvars), sts)
 
-    # Call `remake` so it runs initialization if it is trivial
-    return remake(DAEProblem{iip}(
-        f, du0, u0, tspan, p; differential_vars, kwargs...))
+    args = (; f, du0, u0, tspan, p)
+    kwargs = (; differential_vars, kwargs...)
+
+    return maybe_codegen_scimlproblem(expression, DAEProblem{iip}, args; kwargs...)
 end
