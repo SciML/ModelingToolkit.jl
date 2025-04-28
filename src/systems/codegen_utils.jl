@@ -310,3 +310,37 @@ end
         return :($f($(fargs...)))
     end
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Optionally compile a method and optionally wrap it in a `GeneratedFunctionWrapper` on the
+basis of `expression` `wrap_gfw`, both of type `Union{Type{Val{true}}, Type{Val{false}}}`.
+`gfw_args` is the first type parameter of `GeneratedFunctionWrapper`. `f` is a tuple of
+function expressions of the form `(oop, iip)` or a single out-of-place function expression.
+Keyword arguments are forwarded to `eval_or_rgf`.
+"""
+function maybe_compile_function(expression, wrap_gfw::Type{Val{true}},
+        gfw_args::Tuple{Int, Int, Bool}, f::NTuple{2, Expr}; kwargs...)
+    GeneratedFunctionWrapper{gfw_args}(expression, f...; kwargs...)
+end
+
+function maybe_compile_function(expression::Type{Val{false}}, wrap_gfw::Type{Val{false}},
+        gfw_args::Tuple{Int, Int, Bool}, f::NTuple{2, Expr}; kwargs...)
+    eval_or_rgf.(f; kwargs...)
+end
+
+function maybe_compile_function(expression::Type{Val{true}}, wrap_gfw::Type{Val{false}},
+        gfw_args::Tuple{Int, Int, Bool}, f::Union{Expr, NTuple{2, Expr}}; kwargs...)
+    return f
+end
+
+function maybe_compile_function(expression, wrap_gfw::Type{Val{true}},
+        gfw_args::Tuple{Int, Int, Bool}, f::Expr; kwargs...)
+    GeneratedFunctionWrapper{gfw_args}(expression, f, nothing; kwargs...)
+end
+
+function maybe_compile_function(expression::Type{Val{false}}, wrap_gfw::Type{Val{false}},
+        gfw_args::Tuple{Int, Int, Bool}, f::Expr; kwargs...)
+    eval_or_rgf(f; kwargs...)
+end
