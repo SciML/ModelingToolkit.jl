@@ -3,7 +3,7 @@ This file implements and tests a typical workflow for state estimation with dist
 The primary subject of the tests is the analysis-point features and the
 analysis-point specific method for `generate_control_function`.
 =#
-using ModelingToolkit, OrdinaryDiffEq, LinearAlgebra, Test
+using ModelingToolkit, OrdinaryDiffEqTsit5, LinearAlgebra, Test
 using ModelingToolkitStandardLibrary.Mechanical.Rotational
 using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkit: connect
