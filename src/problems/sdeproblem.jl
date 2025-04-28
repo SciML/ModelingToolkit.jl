@@ -3,27 +3,31 @@
         t = nothing, eval_expression = false, eval_module = @__MODULE__, sparse = false,
         steady_state = false, checkbounds = false, sparsity = false, analytic = nothing,
         simplify = false, cse = true, initialization_data = nothing,
-        check_compatibility = true, kwargs...) where {iip, spec}
+        check_compatibility = true, expression = Val{false}, kwargs...) where {iip, spec}
     check_complete(sys, SDEFunction)
     check_compatibility && check_compatible_system(SDEFunction, sys)
 
     dvs = unknowns(sys)
     ps = parameters(sys)
-    f = generate_rhs(sys, dvs, ps; expression = Val{false}, wrap_gfw = Val{true},
+    f = generate_rhs(sys, dvs, ps; expression, wrap_gfw = Val{true},
         eval_expression, eval_module, checkbounds = checkbounds, cse,
         kwargs...)
-    g = generate_diffusion_function(sys, dvs, ps; expression = Val{false},
+    g = generate_diffusion_function(sys, dvs, ps; expression,
         wrap_gfw = Val{true}, eval_expression, eval_module, checkbounds, cse, kwargs...)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
-            error("u0, p, and t must be specified for FunctionWrapperSpecialize on ODEFunction.")
+            error("u0, p, and t must be specified for FunctionWrapperSpecialize on SDEFunction.")
         end
-        f = SciMLBase.wrapfun_iip(f, (u0, u0, p, t))
+        if expression == Val{true}
+            f = :($(SciMLBase.wrapfun_iip)($f, ($u0, $u0, $p, $t)))
+        else
+            f = SciMLBase.wrapfun_iip(f, (u0, u0, p, t))
+        end
     end
 
     if tgrad
-        _tgrad = generate_tgrad(sys, dvs, ps; expression = Val{false},
+        _tgrad = generate_tgrad(sys, dvs, ps; expression,
             wrap_gfw = Val{true}, simplify, cse, eval_expression, eval_module, checkbounds,
             kwargs...)
     else
@@ -31,7 +35,7 @@
     end
 
     if jac
-        _jac = generate_jacobian(sys, dvs, ps; expression = Val{false},
+        _jac = generate_jacobian(sys, dvs, ps; expression,
             wrap_gfw = Val{true}, simplify, sparse, cse, eval_expression, eval_module,
             checkbounds, kwargs...)
     else
@@ -42,12 +46,12 @@
     _M = concrete_massmatrix(M; sparse, u0)
 
     observedfun = ObservedFunctionCache(
-        sys; steady_state, eval_expression, eval_module, checkbounds, cse)
+        sys; expression, steady_state, eval_expression, eval_module, checkbounds, cse)
 
     _W_sparsity = W_sparsity(sys)
     W_prototype = calculate_W_prototype(_W_sparsity; u0, sparse)
 
-    SDEFunction{iip, spec}(f, g;
+    kwargs = (;
         sys = sys,
         jac = _jac,
         tgrad = _tgrad,
@@ -57,24 +61,31 @@
         sparsity = sparsity ? _W_sparsity : nothing,
         analytic = analytic,
         initialization_data)
+    args = (; f, g)
+
+    return maybe_codegen_scimlfn(expression, SDEFunction{iip, spec}, args; kwargs...)
 end
 
 @fallback_iip_specialize function SciMLBase.SDEProblem{iip, spec}(
         sys::System, u0map, tspan, parammap = SciMLBase.NullParameters();
         callback = nothing, check_length = true, eval_expression = false,
         eval_module = @__MODULE__, check_compatibility = true, sparse = false,
-        sparsenoise = sparse, kwargs...) where {iip, spec}
+        sparsenoise = sparse, expression = Val{false}, kwargs...) where {iip, spec}
     check_complete(sys, SDEProblem)
     check_compatibility && check_compatible_system(SDEProblem, sys)
 
     f, u0, p = process_SciMLProblem(SDEFunction{iip, spec}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
-        eval_module, check_compatibility, sparse, kwargs...)
+        eval_module, check_compatibility, sparse, expression, kwargs...)
 
     noise, noise_rate_prototype = calculate_noise_and_rate_prototype(sys, u0; sparsenoise)
-    kwargs = process_kwargs(sys; callback, eval_expression, eval_module, kwargs...)
-    # Call `remake` so it runs initialization if it is trivial
-    return remake(SDEProblem{iip}(f, u0, tspan, p; noise, noise_rate_prototype, kwargs...))
+    kwargs = process_kwargs(sys; expression, callback, eval_expression, eval_module,
+        kwargs...)
+
+    args = (; f, u0, tspan, p)
+    kwargs = (; noise, noise_rate_prototype, kwargs...)
+
+    return maybe_codegen_scimlproblem(expression, SDEProblem{iip}, args; kwargs...)
 end
 
 function check_compatible_system(T::Union{Type{SDEFunction}, Type{SDEProblem}}, sys::System)
