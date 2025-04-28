@@ -834,10 +834,13 @@ struct GetUpdatedU0{GA, GIU}
 end
 
 function GetUpdatedU0(sys::AbstractSystem, initsys::AbstractSystem)
-    algevaridxs = BitVector(is_alg_equation.(equations(sys)))
-    algevars = unknowns(sys)[algevaridxs]
+    dvs = unknowns(sys)
+    eqs = equations(sys)
+    algevaridxs = BitVector(is_alg_equation.(eqs))
+    append!(algevaridxs, falses(length(dvs) - length(eqs)))
+    algevars = dvs[algevaridxs]
     get_algevars = getu(initsys, algevars)
-    get_initial_unknowns = getu(sys, Initial.(unknowns(sys)))
+    get_initial_unknowns = getu(sys, Initial.(dvs))
     return GetUpdatedU0(algevaridxs, get_algevars, get_initial_unknowns)
 end
 
