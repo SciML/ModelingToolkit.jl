@@ -3,13 +3,13 @@
         eval_expression = false, eval_module = @__MODULE__, sparse = false,
         checkbounds = false, sparsity = false, analytic = nothing,
         simplify = false, cse = true, initialization_data = nothing,
-        check_compatibility = true, kwargs...) where {iip, spec}
+        check_compatibility = true, expression = Val{false}, kwargs...) where {iip, spec}
     check_complete(sys, NonlinearFunction)
     check_compatibility && check_compatible_system(NonlinearFunction, sys)
 
     dvs = unknowns(sys)
     ps = parameters(sys)
-    f = generate_rhs(sys, dvs, ps; expression = Val{false}, wrap_gfw = Val{true},
+    f = generate_rhs(sys, dvs, ps; expression, wrap_gfw = Val{true},
         eval_expression, eval_module, checkbounds = checkbounds, cse,
         kwargs...)
 
@@ -17,11 +17,15 @@
         if u0 === nothing || p === nothing
             error("u0, and p must be specified for FunctionWrapperSpecialize on NonlinearFunction.")
         end
-        f = SciMLBase.wrapfun_iip(f, (u0, u0, p))
+        if expression == Val{true}
+            f = :($(SciMLBase.wrapfun_iip)($f, ($u0, $u0, $p)))
+        else
+            f = SciMLBase.wrapfun_iip(f, (u0, u0, p))
+        end
     end
 
     if jac
-        _jac = generate_jacobian(sys, dvs, ps; expression = Val{false},
+        _jac = generate_jacobian(sys, dvs, ps; expression,
             wrap_gfw = Val{true}, simplify, sparse, cse, eval_expression, eval_module,
             checkbounds, kwargs...)
     else
@@ -29,7 +33,8 @@
     end
 
     observedfun = ObservedFunctionCache(
-        sys; steady_state = false, eval_expression, eval_module, checkbounds, cse)
+        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds,
+        cse)
 
     if length(dvs) == length(equations(sys))
         resid_prototype = nothing
@@ -43,7 +48,7 @@
         jac_prototype = nothing
     end
 
-    NonlinearFunction{iip, spec}(f;
+    kwargs = (;
         sys = sys,
         jac = _jac,
         observed = observedfun,
@@ -51,35 +56,40 @@
         jac_prototype,
         resid_prototype,
         initialization_data)
+    args = (; f)
+
+    return maybe_codegen_scimlfn(expression, NonlinearFunction{iip, spec}, args; kwargs...)
 end
 
 @fallback_iip_specialize function SciMLBase.NonlinearProblem{iip, spec}(
-        sys::System, u0map, parammap = SciMLBase.NullParameters();
+        sys::System, u0map, parammap = SciMLBase.NullParameters(); expression = Val{false},
         check_length = true, check_compatibility = true, kwargs...) where {iip, spec}
     check_complete(sys, NonlinearProblem)
     check_compatibility && check_compatible_system(NonlinearProblem, sys)
 
     f, u0, p = process_SciMLProblem(NonlinearFunction{iip, spec}, sys, u0map, parammap;
-        check_length, check_compatibility, kwargs...)
+        check_length, check_compatibility, expression, kwargs...)
 
     kwargs = process_kwargs(sys; kwargs...)
-    # Call `remake` so it runs initialization if it is trivial
-    return remake(NonlinearProblem{iip}(
-        f, u0, p, StandardNonlinearProblem(); kwargs...))
+    args = (; f, u0, p, ptype = StandardNonlinearProblem())
+
+    return maybe_codegen_scimlproblem(expression, NonlinearProblem{iip}, args; kwargs...)
 end
 
 @fallback_iip_specialize function SciMLBase.NonlinearLeastSquaresProblem{iip, spec}(
         sys::System, u0map, parammap = DiffEqBase.NullParameters(); check_length = false,
-        check_compatibility = true, kwargs...) where {iip, spec}
+        check_compatibility = true, expression = Val{false}, kwargs...) where {iip, spec}
     check_complete(sys, NonlinearLeastSquaresProblem)
     check_compatibility && check_compatible_system(NonlinearLeastSquaresProblem, sys)
 
     f, u0, p = process_SciMLProblem(NonlinearFunction{iip}, sys, u0map, parammap;
-        check_length, kwargs...)
+        check_length, expression, kwargs...)
 
     kwargs = process_kwargs(sys; kwargs...)
-    # Call `remake` so it runs initialization if it is trivial
-    return remake(NonlinearLeastSquaresProblem{iip}(f, u0, p; kwargs...))
+    args = (; f, u0, p)
+
+    return maybe_codegen_scimlproblem(
+        expression, NonlinearLeastSquaresProblem{iip}, args; kwargs...)
 end
 
 function check_compatible_system(
