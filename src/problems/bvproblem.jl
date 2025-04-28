@@ -45,9 +45,10 @@ If the `System` has algebraic equations, like `x(t)^2 + y(t)^2`, the resulting
 """
 @fallback_iip_specialize function SciMLBase.BVProblem{iip, spec}(
         sys::System, u0map, tspan, parammap = SciMLBase.NullParameters();
-        check_compatibility = true, cse = true, checkbounds = false, eval_expression = false,
-        eval_module = @__MODULE__, guesses = Dict(), callback = nothing, kwargs...) where {
-        iip, spec}
+        check_compatibility = true, cse = true,
+        checkbounds = false, eval_expression = false, eval_module = @__MODULE__,
+        expression = Val{false}, guesses = Dict(), callback = nothing,
+        kwargs...) where {iip, spec}
     check_complete(sys, BVProblem)
     check_compatibility && check_compatible_system(BVProblem, sys)
     isnothing(callback) || error("BVP solvers do not support callbacks.")
@@ -55,10 +56,11 @@ If the `System` has algebraic equations, like `x(t)^2 + y(t)^2`, the resulting
     # Systems without algebraic equations should use both fixed values + guesses
     # for initialization.
     _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
+
     fode, u0, p = process_SciMLProblem(
         ODEFunction{iip, spec}, sys, _u0map, parammap; guesses,
-        t = tspan !== nothing ? tspan[1] : tspan, check_compatibility = false, cse, checkbounds,
-        time_dependent_init = false, kwargs...)
+        t = tspan !== nothing ? tspan[1] : tspan, check_compatibility = false, cse,
+        checkbounds, time_dependent_init = false, expression, kwargs...)
 
     dvs = unknowns(sys)
     stidxmap = Dict([v => i for (i, v) in enumerate(dvs)])
@@ -71,9 +73,10 @@ If the `System` has algebraic equations, like `x(t)^2 + y(t)^2`, the resulting
         @warn "The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) exceeds the total number of states. The BVP solvers will default to doing a nonlinear least-squares optimization."
     end
 
-    kwargs = process_kwargs(sys; kwargs...)
-    # Call `remake` so it runs initialization if it is trivial
-    return remake(BVProblem{iip}(fode, fbc, u0, tspan[1], p; kwargs...))
+    kwargs = process_kwargs(sys; expression, kwargs...)
+    args = (; fode, fbc, u0, tspan, p)
+
+    return maybe_codegen_scimlproblem(expression, BVProblem{iip}, args; kwargs...)
 end
 
 function check_compatible_system(T::Type{BVProblem}, sys::System)
