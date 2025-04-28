@@ -1458,7 +1458,8 @@ function (st::SymbolicTstops)(p, tspan)
 end
 
 function SymbolicTstops(
-        sys::AbstractSystem; eval_expression = false, eval_module = @__MODULE__)
+        sys::AbstractSystem; expression = Val{false}, eval_expression = false,
+        eval_module = @__MODULE__)
     tstops = symbolic_tstops(sys)
     isempty(tstops) && return nothing
     t0 = gensym(:t0)
@@ -1477,9 +1478,14 @@ function SymbolicTstops(
         t1;
         expression = Val{true},
         p_start = 1, p_end = length(rps), add_observed = false, force_SA = true)
-    tstops = eval_or_rgf(tstops; eval_expression, eval_module)
-    tstops = GeneratedFunctionWrapper{(1, 3, is_split(sys))}(tstops, nothing)
-    return SymbolicTstops(tstops)
+    tstops = GeneratedFunctionWrapper{(1, 3, is_split(sys))}(
+        expression, tstops, nothing; eval_expression, eval_module)
+
+    if expression == Val{true}
+        return :($SymbolicTstops($tstops))
+    else
+        return SymbolicTstops(tstops)
+    end
 end
 
 """

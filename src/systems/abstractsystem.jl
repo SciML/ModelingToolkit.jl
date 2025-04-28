@@ -1887,10 +1887,15 @@ struct ObservedFunctionCache{S}
 end
 
 function ObservedFunctionCache(
-        sys; steady_state = false, eval_expression = false,
+        sys; expression = Val{false}, steady_state = false, eval_expression = false,
         eval_module = @__MODULE__, checkbounds = true, cse = true)
-    return ObservedFunctionCache(
-        sys, Dict(), steady_state, eval_expression, eval_module, checkbounds, cse)
+    if expression == Val{true}
+        :($ObservedFunctionCache($sys, Dict(), $steady_state, $eval_expression,
+            $eval_module, $checkbounds, $cse))
+    else
+        ObservedFunctionCache(
+            sys, Dict(), steady_state, eval_expression, eval_module, checkbounds, cse)
+    end
 end
 
 # This is hit because ensemble problems do a deepcopy
