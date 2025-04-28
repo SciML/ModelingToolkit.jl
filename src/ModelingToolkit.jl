@@ -142,6 +142,7 @@ function var_derivative_graph! end
 include("bipartite_graph.jl")
 using .BipartiteGraphs
 
+export At
 include("variables.jl")
 include("parameters.jl")
 include("independent_variables.jl")
