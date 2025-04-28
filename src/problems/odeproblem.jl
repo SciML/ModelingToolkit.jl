@@ -2,14 +2,14 @@
         sys::System; u0 = nothing, p = nothing, tgrad = false, jac = false,
         t = nothing, eval_expression = false, eval_module = @__MODULE__, sparse = false,
         steady_state = false, checkbounds = false, sparsity = false, analytic = nothing,
-        simplify = false, cse = true, initialization_data = nothing,
+        simplify = false, cse = true, initialization_data = nothing, expression = Val{false},
         check_compatibility = true, kwargs...) where {iip, spec}
     check_complete(sys, ODEFunction)
     check_compatibility && check_compatible_system(ODEFunction, sys)
 
     dvs = unknowns(sys)
     ps = parameters(sys)
-    f = generate_rhs(sys, dvs, ps; expression = Val{false}, wrap_gfw = Val{true},
+    f = generate_rhs(sys, dvs, ps; expression, wrap_gfw = Val{true},
         eval_expression, eval_module, checkbounds = checkbounds, cse,
         kwargs...)
 
@@ -17,12 +17,16 @@
         if u0 === nothing || p === nothing || t === nothing
             error("u0, p, and t must be specified for FunctionWrapperSpecialize on ODEFunction.")
         end
-        f = SciMLBase.wrapfun_iip(f, (u0, u0, p, t))
+        if expression == Val{true}
+            f = :($(SciMLBase.wrapfun_iip)($f, ($u0, $u0, $p, $t)))
+        else
+            f = SciMLBase.wrapfun_iip(f, (u0, u0, p, t))
+        end
     end
 
     if tgrad
         _tgrad = generate_tgrad(
-            sys, dvs, ps; expression = Val{false}, wrap_gfw = Val{true},
+            sys, dvs, ps; expression, wrap_gfw = Val{true},
             simplify, cse, eval_expression, eval_module, checkbounds, kwargs...)
     else
         _tgrad = nothing
@@ -30,7 +34,7 @@
 
     if jac
         _jac = generate_jacobian(
-            sys, dvs, ps; expression = Val{false}, wrap_gfw = Val{true},
+            sys, dvs, ps; expression, wrap_gfw = Val{true},
             simplify, sparse, cse, eval_expression, eval_module, checkbounds, kwargs...)
     else
         _jac = nothing
@@ -40,12 +44,13 @@
     _M = concrete_massmatrix(M; sparse, u0)
 
     observedfun = ObservedFunctionCache(
-        sys; steady_state, eval_expression, eval_module, checkbounds, cse)
+        sys; expression, steady_state, eval_expression, eval_module, checkbounds, cse)
 
     _W_sparsity = W_sparsity(sys)
     W_prototype = calculate_W_prototype(_W_sparsity; u0, sparse)
 
-    ODEFunction{iip, spec}(f;
+    args = (; f)
+    kwargs = (;
         sys = sys,
         jac = _jac,
         tgrad = _tgrad,
@@ -55,23 +60,27 @@
         sparsity = sparsity ? _W_sparsity : nothing,
         analytic = analytic,
         initialization_data)
+
+    maybe_codegen_scimlfn(expression, ODEFunction{iip, spec}, args; kwargs...)
 end
 
 @fallback_iip_specialize function SciMLBase.ODEProblem{iip, spec}(
         sys::System, u0map, tspan, parammap = SciMLBase.NullParameters();
         callback = nothing, check_length = true, eval_expression = false,
-        eval_module = @__MODULE__, check_compatibility = true, kwargs...) where {iip, spec}
+        expression = Val{false}, eval_module = @__MODULE__, check_compatibility = true,
+        kwargs...) where {iip, spec}
     check_complete(sys, ODEProblem)
     check_compatibility && check_compatible_system(ODEProblem, sys)
 
     f, u0, p = process_SciMLProblem(ODEFunction{iip, spec}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
-        eval_module, check_compatibility, kwargs...)
+        eval_module, expression, check_compatibility, kwargs...)
 
-    kwargs = process_kwargs(sys; callback, eval_expression, eval_module, kwargs...)
-    # Call `remake` so it runs initialization if it is trivial
-    return remake(ODEProblem{iip}(
-        f, u0, tspan, p, StandardODEProblem(); kwargs...))
+    kwargs = process_kwargs(
+        sys; expression, callback, eval_expression, eval_module, kwargs...)
+
+    args = (; f, u0, tspan, p, ptype = StandardODEProblem())
+    maybe_codegen_scimlproblem(expression, ODEProblem{iip}, args; kwargs...)
 end
 
 """

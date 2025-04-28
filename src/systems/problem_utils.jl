@@ -1377,7 +1377,7 @@ macro fallback_iip_specialize(ex)
     # Handle case when this is a problem constructor and `u0map` is a `StaticArray`,
     # where `iip` should default to `false`.
     fn_sarr = nothing
-    if endswith(string(fnname_name), "Problem")
+    if occursin("Problem", string(fnname_name))
         # args should at least contain an argument for the `u0map`
         @assert length(args) > 3
         u0_arg = args[3]
