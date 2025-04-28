@@ -724,7 +724,8 @@ function _structural_simplify!(state::TearingState; simplify = false,
     else
         check_consistency = true
     end
-    has_io = inputs !== nothing || outputs !== nothing
+    has_io = !isempty(inputs) || !isempty(outputs) !== nothing ||
+             !isempty(disturbance_inputs)
     orig_inputs = Set()
     if has_io
         ModelingToolkit.markio!(state, orig_inputs, inputs, outputs, disturbance_inputs)
