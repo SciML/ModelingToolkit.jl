@@ -74,6 +74,7 @@ end
 function __structural_simplify(sys::AbstractSystem; simplify = false,
         inputs = Any[], outputs = Any[],
         disturbance_inputs = Any[],
+        sort_eqs = true,
         kwargs...)
     sys = expand_connections(sys)
     state = TearingState(sys; sort_eqs)

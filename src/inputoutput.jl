@@ -259,7 +259,7 @@ end
 """
 Turn input variables into parameters of the system.
 """
-function inputs_to_parameters!(state::TransformationState, inputsyms; is_disturbance = false)
+function inputs_to_parameters!(state::TransformationState, inputsyms)
     check_bound = inputsyms === nothing
     @unpack structure, fullvars, sys = state
     @unpack var_to_diff, graph, solvable_graph = structure
@@ -318,18 +318,7 @@ function inputs_to_parameters!(state::TransformationState, inputsyms; is_disturb
     @set! sys.unknowns = setdiff(unknowns(sys), keys(input_to_parameters))
     ps = parameters(sys)
 
-    if inputsyms !== nothing
-        # Change order of new parameters to correspond to user-provided order in argument `inputs`
-        d = Dict{Any, Int}()
-        for (i, inp) in enumerate(new_parameters)
-            d[inp] = i
-        end
-        permutation = [d[i] for i in inputsyms]
-        new_parameters = new_parameters[permutation]
-    end
-
     @set! sys.ps = [ps; new_parameters]
-
     @set! state.sys = sys
     @set! state.fullvars = new_fullvars
     @set! state.structure = structure
@@ -432,6 +421,6 @@ function add_input_disturbance(sys, dist::DisturbanceModel, inputs = Any[]; kwar
     ssys = structural_simplify(augmented_sys, inputs = all_inputs, disturbance_inputs = [d])
 
     (f_oop, f_ip), dvs, p, io_sys = generate_control_function(ssys, all_inputs,
-        [d]; check_simplified = false, kwargs...)
+        [d]; kwargs...)
     (f_oop, f_ip), augmented_sys, dvs, p, io_sys
 end
