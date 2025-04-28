@@ -1581,6 +1581,100 @@ macro fallback_iip_specialize(ex)
     end |> esc
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Turn key-value pairs in `kws` into assignments and appent them to `block.args`. `head` is
+the head of the `Expr` used to create the assignment. `filter` is a function that takes the
+key and returns whether or not to include it in the assignments.
+"""
+function namedtuple_to_assignments!(
+        block, kws::NamedTuple; head = :(=), filter = Returns(true))
+    for (k, v) in pairs(kws)
+        filter(k) || continue
+        push!(block.args, Expr(head, k, v))
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Build an expression that constructs SciMLFunction `T`. `args` is a `NamedTuple` mapping
+names of positional arguments to `T` to their (expression) values. `kwargs` are parsed
+as keyword arguments to the constructor.
+"""
+function build_scimlfn_expr(T, args::NamedTuple; kwargs...)
+    kwargs = NamedTuple(kwargs)
+    let_args = Expr(:block)
+    namedtuple_to_assignments!(let_args, args)
+
+    kwexpr = Expr(:parameters)
+    # don't include initialization data in the generated expression
+    filter = !isequal(:initialization_data)
+    namedtuple_to_assignments!(let_args, kwargs; filter = filter)
+    namedtuple_to_assignments!(kwexpr, kwargs; head = :kw, filter)
+    let_body = Expr(:call, T, kwexpr, keys(args)...)
+    return Expr(:let, let_args, let_body)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Build an expression that constructs SciMLProblem `T`. `args` is a `NamedTuple` mapping
+names of positional arguments to `T` to their (expression) values. `kwargs` are parsed
+as keyword arguments to the constructor.
+"""
+function build_scimlproblem_expr(T, args::NamedTuple; kwargs...)
+    kwargs = NamedTuple(kwargs)
+    let_args = Expr(:block)
+    namedtuple_to_assignments!(let_args, args)
+
+    kwexpr = Expr(:parameters)
+    namedtuple_to_assignments!(let_args, kwargs)
+    namedtuple_to_assignments!(kwexpr, kwargs; head = :kw)
+    let_body = Expr(:call, remake, Expr(:call, T, kwexpr, keys(args)...))
+    return Expr(:let, let_args, let_body)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return an expression constructing SciMLFunction `T` with positional arguments `args`
+and keywords `kwargs`.
+"""
+function maybe_codegen_scimlfn(::Type{Val{true}}, T, args::NamedTuple; kwargs...)
+    build_scimlfn_expr(T, args; kwargs...)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Construct SciMLFunction `T` with positional arguments `args` and keywords `kwargs`.
+"""
+function maybe_codegen_scimlfn(::Type{Val{false}}, T, args::NamedTuple; kwargs...)
+    T(args...; kwargs...)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return an expression constructing SciMLProblem `T` with positional arguments `args`
+and keywords `kwargs`.
+"""
+function maybe_codegen_scimlproblem(::Type{Val{true}}, T, args::NamedTuple; kwargs...)
+    build_scimlproblem_expr(T, args; kwargs...)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Construct SciMLProblem `T` with positional arguments `args` and keywords `kwargs`.
+"""
+function maybe_codegen_scimlproblem(::Type{Val{false}}, T, args::NamedTuple; kwargs...)
+    # Call `remake` so it runs initialization if it is trivial
+    remake(T(args...; kwargs...))
+end
+
 ##############
 # Legacy functions for backward compatibility
 ##############
