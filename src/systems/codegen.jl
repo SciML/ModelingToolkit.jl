@@ -119,7 +119,7 @@ end
 function calculate_jacobian(sys::System;
         sparse = false, simplify = false, dvs = unknowns(sys))
     obs = Dict(eq.lhs => eq.rhs for eq in observed(sys))
-    rhs = map(eq -> fixpoint_sub(eq.rhs, obs), equations(sys))
+    rhs = map(eq -> fixpoint_sub(eq.rhs - eq.lhs, obs), equations(sys))
 
     if sparse
         jac = sparsejacobian(rhs, dvs; simplify)
