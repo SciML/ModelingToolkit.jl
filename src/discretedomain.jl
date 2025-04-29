@@ -146,6 +146,11 @@ function validate_operator(op::Sample, args, iv; context = nothing)
     if !is_variable_floatingpoint(arg)
         throw(ContinuousOperatorDiscreteArgumentError(op, arg, context))
     end
+    if isparameter(arg)
+        throw(ArgumentError("""
+        Expected argument of $op to be an unknown, found $arg which is a parameter.
+        """))
+    end
 end
 
 """
