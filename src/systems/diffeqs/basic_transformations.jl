@@ -409,3 +409,41 @@ function Girsanov_transform(sys::System, u; θ0 = 1.0)
     end
     return sys
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Add accumulation variables for `vars`. For every unknown `x` in `vars`, add
+`D(accumulation_x) ~ x` as an equation.
+"""
+function add_accumulations(sys::System, vars = unknowns(sys))
+    avars = [rename(v, Symbol(:accumulation_, getname(v))) for v in vars]
+    return add_accumulations(sys, avars .=> vars)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Add accumulation variables for `vars`. `vars` is a vector of pairs in the form
+of
+
+```julia
+[cumulative_var1 => x + y, cumulative_var2 => x^2]
+```
+Then, cumulative variables `cumulative_var1` and `cumulative_var2` that computes
+the cumulative `x + y` and `x^2` would be added to `sys`.
+
+All accumulation variables have a default of zero.
+"""
+function add_accumulations(sys::System, vars::Vector{<:Pair})
+    eqs = get_eqs(sys)
+    avars = map(first, vars)
+    if (ints = intersect(avars, unknowns(sys)); !isempty(ints))
+        error("$ints already exist in the system!")
+    end
+    D = Differential(get_iv(sys))
+    @set! sys.eqs = [eqs; Equation[D(a) ~ v[2] for (a, v) in zip(avars, vars)]]
+    @set! sys.unknowns = [get_unknowns(sys); avars]
+    @set! sys.defaults = merge(get_defaults(sys), Dict(a => 0.0 for a in avars))
+    return sys
+end
