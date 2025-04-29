@@ -22,43 +22,43 @@ affect_neg = [x ~ 1]
     e = SymbolicContinuousCallback(eqs[])
     @test e isa SymbolicContinuousCallback
     @test isequal(equations(e), eqs)
-    @test e.affect == nothing
-    @test e.affect_neg == nothing
+    @test e.affect === nothing
+    @test e.affect_neg === nothing
     @test e.rootfind == SciMLBase.LeftRootFind
 
     e = SymbolicContinuousCallback(eqs)
     @test e isa SymbolicContinuousCallback
     @test isequal(equations(e), eqs)
-    @test e.affect == nothing
-    @test e.affect_neg == nothing
+    @test e.affect === nothing
+    @test e.affect_neg === nothing
     @test e.rootfind == SciMLBase.LeftRootFind
 
     e = SymbolicContinuousCallback(eqs, nothing)
     @test e isa SymbolicContinuousCallback
     @test isequal(equations(e), eqs)
-    @test e.affect == nothing
-    @test e.affect_neg == nothing
+    @test e.affect === nothing
+    @test e.affect_neg === nothing
     @test e.rootfind == SciMLBase.LeftRootFind
 
     e = SymbolicContinuousCallback(eqs[], nothing)
     @test e isa SymbolicContinuousCallback
     @test isequal(equations(e), eqs)
-    @test e.affect == nothing
-    @test e.affect_neg == nothing
+    @test e.affect === nothing
+    @test e.affect_neg === nothing
     @test e.rootfind == SciMLBase.LeftRootFind
 
     e = SymbolicContinuousCallback(eqs => nothing)
     @test e isa SymbolicContinuousCallback
     @test isequal(equations(e), eqs)
-    @test e.affect == nothing
-    @test e.affect_neg == nothing
+    @test e.affect === nothing
+    @test e.affect_neg === nothing
     @test e.rootfind == SciMLBase.LeftRootFind
 
     e = SymbolicContinuousCallback(eqs[] => nothing)
     @test e isa SymbolicContinuousCallback
     @test isequal(equations(e), eqs)
-    @test e.affect == nothing
-    @test e.affect_neg == nothing
+    @test e.affect === nothing
+    @test e.affect_neg === nothing
     @test e.rootfind == SciMLBase.LeftRootFind
 
     ## With affect
