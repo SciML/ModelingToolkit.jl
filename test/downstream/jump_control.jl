@@ -193,7 +193,7 @@ end
     iprob = InfiniteOptDynamicOptProblem(
         rocket, u0map, (ts, te), pmap; dt = 0.001, cse = false)
     isol = solve(iprob, Ipopt.Optimizer,
-                 derivative_method = InfiniteOpt.OrthogonalCollocation(3), silent = true)
+        derivative_method = InfiniteOpt.OrthogonalCollocation(3), silent = true)
     @test isol.sol.u[end][1] > 1.012
 
     # Test solution
@@ -245,7 +245,7 @@ end
     @named block = ODESystem(
         [D(x(t)) ~ v(t), D(v(t)) ~ u(t)], t; costs = cost, constraints = constr)
     block, input_idxs = structural_simplify(block, ([u(t)], []))
-    
+
     u0map = [x(t) => 1.0, v(t) => 0.0]
     tspan = (0.0, tf)
     parammap = [u(t) => 0.0, tf => 1.0]

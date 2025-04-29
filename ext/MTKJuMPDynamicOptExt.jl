@@ -103,7 +103,8 @@ function init_model(sys, tspan, steps, u0map, pmap, u0; is_free_t = false)
 
     if is_free_t
         (ts_sym, te_sym) = tspan
-        MTK.symbolic_type(ts_sym) !== MTK.NotSymbolic() && error("Free initial time problems are not currently supported.")
+        MTK.symbolic_type(ts_sym) !== MTK.NotSymbolic() &&
+            error("Free initial time problems are not currently supported.")
         @variable(model, tf, start=pmap[te_sym])
         set_lower_bound(tf, ts_sym)
         hasbounds(te_sym) && begin
@@ -236,7 +237,8 @@ function substitute_jump_vars(model, sys, pmap, exprs; auxmap = Dict(), is_free_
     exprs = map(c -> Symbolics.fixpoint_sub(c, Dict(pmap)), exprs)
     if is_free_t
         tf = model[:tf]
-        free_t_map = Dict([[x(tf) => U[i](1) for (i, x) in enumerate(x_ops)]; [c(tf) => V[i](1) for (i, c) in enumerate(c_ops)]])
+        free_t_map = Dict([[x(tf) => U[i](1) for (i, x) in enumerate(x_ops)];
+                           [c(tf) => V[i](1) for (i, c) in enumerate(c_ops)]])
         exprs = map(c -> Symbolics.fixpoint_sub(c, free_t_map), exprs)
     end
 
