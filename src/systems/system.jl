@@ -48,6 +48,7 @@ struct System <: AbstractSystem
     index_cache::Union{Nothing, IndexCache}
     ignored_connections::Union{
         Nothing, Tuple{Vector{IgnoredAnalysisPoint}, Vector{IgnoredAnalysisPoint}}}
+    preface::Any
     parent::Union{Nothing, System}
     initializesystem::Union{Nothing, System}
     is_initializesystem::Bool
@@ -62,8 +63,9 @@ struct System <: AbstractSystem
             metadata = nothing, gui_metadata = nothing,
             is_dde = false, tstops = [], tearing_state = nothing, namespacing = true,
             complete = false, index_cache = nothing, ignored_connections = nothing,
-            parent = nothing, initializesystem = nothing, is_initializesystem = false,
-            isscheduled = false, schedule = nothing; checks::Union{Bool, Int} = true)
+            preface = nothing, parent = nothing, initializesystem = nothing,
+            is_initializesystem = false, isscheduled = false, schedule = nothing;
+            checks::Union{Bool, Int} = true)
         if is_initializesystem && iv !== nothing
             throw(ArgumentError("""
             Expected initialization system to be time-independent. Found independent
@@ -96,7 +98,7 @@ struct System <: AbstractSystem
             guesses, systems, initialization_eqs, continuous_events, discrete_events,
             connector_type, assertions, metadata, gui_metadata, is_dde,
             tstops, tearing_state, namespacing, complete, index_cache, ignored_connections,
-            parent, initializesystem, is_initializesystem, isscheduled, schedule)
+            preface, parent, initializesystem, is_initializesystem, isscheduled, schedule)
     end
 end
 
@@ -114,7 +116,8 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         metadata = nothing, gui_metadata = nothing, is_dde = nothing, tstops = [],
         tearing_state = nothing, ignored_connections = nothing, parent = nothing,
         description = "", name = nothing, discover_from_metadata = true,
-        initializesystem = nothing, is_initializesystem = false, checks = true)
+        initializesystem = nothing, is_initializesystem = false, preface = [],
+        checks = true)
     name === nothing && throw(NoNameError())
 
     iv = unwrap(iv)
@@ -181,7 +184,7 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         costs, consolidate, dvs, ps, brownians, iv, observed, parameter_dependencies,
         var_to_name, name, description, defaults, guesses, systems, initialization_eqs,
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
-        tstops, tearing_state, true, false, nothing, ignored_connections, parent,
+        tstops, tearing_state, true, false, nothing, ignored_connections, preface, parent,
         initializesystem, is_initializesystem; checks)
 end
 
