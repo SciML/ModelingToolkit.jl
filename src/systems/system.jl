@@ -17,7 +17,7 @@ struct System <: AbstractSystem
     # matrix - generic form
     # column matrix - scalar noise
     noise_eqs::Union{Nothing, AbstractVector, AbstractMatrix}
-    jumps::Vector{Any}
+    jumps::Vector{JumpType}
     constraints::Vector{Union{Equation, Inequality}}
     costs::Vector{<:Union{BasicSymbolic, Real}}
     consolidate::Any
@@ -72,6 +72,7 @@ struct System <: AbstractSystem
             variable $iv.
             """))
         end
+        jumps = Vector{JumpType}(jumps)
         if (checks == true || (checks & CheckComponents) > 0) && iv !== nothing
             check_independent_variables([iv])
             check_variables(unknowns, iv)

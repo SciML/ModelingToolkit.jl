@@ -51,9 +51,9 @@
     p = (prob.p isa DiffEqBase.NullParameters || prob.p === nothing) ? Num[] : prob.p
 
     majpmapper = JumpSysMajParamMapper(sys, p; jseqs = js, rateconsttype = invttype)
-    _majs = filter(x -> x isa MassActionJump, js)
-    _crjs = filter(x -> x isa ConstantRateJump, js)
-    vrjs = filter(x -> x isa VariableRateJump, js)
+    _majs = Vector{MassActionJump}(filter(x -> x isa MassActionJump, js))
+    _crjs = Vector{ConstantRateJump}(filter(x -> x isa ConstantRateJump, js))
+    vrjs = Vector{VariableRateJump}(filter(x -> x isa VariableRateJump, js))
     majs = isempty(_majs) ? nothing : assemble_maj(_majs, unknowntoid, majpmapper)
     crjs = ConstantRateJump[assemble_crj(sys, j, unknowntoid; eval_expression, eval_module)
                             for j in _crjs]
