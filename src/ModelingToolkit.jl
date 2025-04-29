@@ -184,6 +184,7 @@ include("problems/bvproblem.jl")
 
 include("modelingtoolkitize/common.jl")
 include("modelingtoolkitize/odeproblem.jl")
+include("modelingtoolkitize/sdeproblem.jl")
 
 include("systems/optimization/modelingtoolkitize.jl")
 
