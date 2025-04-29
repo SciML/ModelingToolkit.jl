@@ -711,7 +711,7 @@ function compile_affect(eqs::Vector{Equation}, cb, sys, dvs, ps; outputidxs = no
     end
 end
 
-function generate_rootfinding_callback(sys::AbstractTimeDependentSystem,
+function generate_rootfinding_callback(sys::AbstractSystem,
         dvs = unknowns(sys), ps = parameters(sys; initial_parameters = true); kwargs...)
     cbs = continuous_events(sys)
     isempty(cbs) && return nothing
@@ -722,7 +722,7 @@ Generate a single rootfinding callback; this happens if there is only one equati
 generate_rootfinding_callback and thus we can produce a ContinuousCallback instead of a VectorContinuousCallback.
 """
 function generate_single_rootfinding_callback(
-        eq, cb, sys::AbstractTimeDependentSystem, dvs = unknowns(sys),
+        eq, cb, sys::AbstractSystem, dvs = unknowns(sys),
         ps = parameters(sys; initial_parameters = true); kwargs...)
     if !isequal(eq.lhs, 0)
         eq = 0 ~ eq.lhs - eq.rhs
@@ -765,7 +765,7 @@ function generate_single_rootfinding_callback(
 end
 
 function generate_vector_rootfinding_callback(
-        cbs, sys::AbstractTimeDependentSystem, dvs = unknowns(sys),
+        cbs, sys::AbstractSystem, dvs = unknowns(sys),
         ps = parameters(sys; initial_parameters = true); rootfind = SciMLBase.RightRootFind,
         reinitialization = SciMLBase.CheckInit(), kwargs...)
     eqs = map(cb -> flatten_equations(cb.eqs), cbs)
@@ -866,7 +866,7 @@ end
 """
 Compile a single continuous callback affect function(s).
 """
-function compile_affect_fn(cb, sys::AbstractTimeDependentSystem, dvs, ps, kwargs)
+function compile_affect_fn(cb, sys::AbstractSystem, dvs, ps, kwargs)
     eq_aff = affects(cb)
     eq_neg_aff = affect_negs(cb)
     affect = compile_affect(eq_aff, cb, sys, dvs, ps; expression = Val{false}, kwargs...)
@@ -890,8 +890,11 @@ function compile_affect_fn(cb, sys::AbstractTimeDependentSystem, dvs, ps, kwargs
     (affect = affect, affect_neg = affect_neg, initialize = initialize, finalize = finalize)
 end
 
-function generate_rootfinding_callback(cbs, sys::AbstractTimeDependentSystem,
+function generate_rootfinding_callback(cbs, sys::AbstractSystem,
         dvs = unknowns(sys), ps = parameters(sys; initial_parameters = true); kwargs...)
+    if !is_time_dependent(sys)
+        throw(MethodError(generate_rootfinding_callback, (cbs, sys, dvs, ps)))
+    end
     eqs = map(cb -> flatten_equations(cb.eqs), cbs)
     num_eqs = length.(eqs)
     total_eqs = sum(num_eqs)
