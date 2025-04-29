@@ -416,8 +416,10 @@ function generate_cost_hessian(
         sparsity = similar(exprs, Float64)
     end
     res = build_function_wrapper(sys, exprs, dvs, ps...; expression = Val{true}, kwargs...)
-    return maybe_compile_function(
+    fn = maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module)
+
+    return return_sparsity ? (fn, sparsity) : fn
 end
 
 function canonical_constraints(sys::System)
