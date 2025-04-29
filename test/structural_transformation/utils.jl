@@ -191,11 +191,6 @@ end
 end
 
 @testset "`map_variables_to_equations`" begin
-    @testset "Not supported for systems without `.tearing_state`" begin
-        @variables x
-        @mtkbuild sys = OptimizationSystem(x^2)
-        @test_throws ArgumentError map_variables_to_equations(sys)
-    end
     @testset "Requires simplified system" begin
         @variables x(t) y(t)
         @named sys = System([D(x) ~ x, y ~ 2x], t)
@@ -299,7 +294,7 @@ end
         eqs = [D(x) ~ dx
                D(dx) ~ ddx
                dx ~ (k - x) / T]
-        return ODESystem(eqs, t, vars, params; systems, name)
+        return System(eqs, t, vars, params; systems, name)
     end
 
     @component function FilteredInputExplicit(; name, x0 = 0, T = 0.1)
@@ -317,7 +312,7 @@ end
                D(dx) ~ ddx
                D(k[1]) ~ 1.0
                dx ~ (k[1] - x) / T]
-        return ODESystem(eqs, t, vars, params; systems, name)
+        return System(eqs, t, vars, params; systems, name)
     end
 
     @component function FilteredInputErr(; name, x0 = 0, T = 0.1)
@@ -335,7 +330,7 @@ end
                D(dx) ~ ddx
                dx ~ (k - x) / T
                D(k) ~ missing]
-        return ODESystem(eqs, t, vars, params; systems, name)
+        return System(eqs, t, vars, params; systems, name)
     end
 
     @named sys = FilteredInputErr()
@@ -376,7 +371,7 @@ end
             eqs = [D(x) ~ dx
                    D(dx) ~ ddx
                    dx ~ (k(t) - x) / T]
-            return ODESystem(eqs, t, vars, params; systems, name)
+            return System(eqs, t, vars, params; systems, name)
         end
 
         @mtkbuild sys = FilteredInput2()
