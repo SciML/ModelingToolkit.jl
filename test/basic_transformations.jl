@@ -231,3 +231,25 @@ end
     # compare to analytical solution (x(t) = v*t, y(t) = v*t - g*t^2/2)
     @test all(isapprox.(sol[Mx.y], sol[Mx.x - g * (Mx.t_units)^2 / 2]; atol = 1e-10))
 end
+
+@testset "`add_accumulations`" begin
+    @parameters a
+    @variables x(t) y(t) z(t)
+    @named sys = System([D(x) ~ y, 0 ~ x + z, 0 ~ x - y], t, [z, y, x], [])
+    asys = add_accumulations(sys)
+    @variables accumulation_x(t) accumulation_y(t) accumulation_z(t)
+    eqs = [0 ~ x + z
+           0 ~ x - y
+           D(accumulation_x) ~ x
+           D(accumulation_y) ~ y
+           D(accumulation_z) ~ z
+           D(x) ~ y]
+    @test issetequal(equations(asys), eqs)
+    @variables ac(t)
+    asys = add_accumulations(sys, [ac => (x + y)^2])
+    eqs = [0 ~ x + z
+           0 ~ x - y
+           D(ac) ~ (x + y)^2
+           D(x) ~ y]
+    @test issetequal(equations(asys), eqs)
+end
