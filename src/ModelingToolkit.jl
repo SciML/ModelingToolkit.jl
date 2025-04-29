@@ -179,6 +179,9 @@ include("problems/initializationproblem.jl")
 include("problems/jumpproblem.jl")
 include("problems/optimizationproblem.jl")
 
+include("modelingtoolkitize/common.jl")
+include("modelingtoolkitize/odeproblem.jl")
+
 include("systems/optimization/modelingtoolkitize.jl")
 
 include("systems/nonlinear/homotopy_continuation.jl")
