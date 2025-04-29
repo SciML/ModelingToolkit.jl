@@ -253,7 +253,6 @@ prob = ODEProblem(ode_prob_dict, u0, (0.0, 1.0), params)
 sys = modelingtoolkitize(prob)
 @test [ModelingToolkit.defaults(sys)[s] for s in unknowns(sys)] == u0
 @test [ModelingToolkit.defaults(sys)[s] for s in parameters(sys)] == [10, 20]
-@test ModelingToolkit.has_tspan(sys)
 
 @parameters sig=10 rho=28.0 beta=8 / 3
 @variables x(t)=100 y(t)=1.0 z(t)=1
@@ -266,10 +265,9 @@ noiseeqs = [0.1 * x,
     0.1 * y,
     0.1 * z]
 
-@named sys = SDESystem(eqs, noiseeqs, t, [x, y, z], [sig, rho, beta]; tspan = (0, 1000.0))
-prob = SDEProblem(complete(sys))
+@named sys = SDESystem(eqs, noiseeqs, t, [x, y, z], [sig, rho, beta])
+prob = SDEProblem(complete(sys), nothing, (0.0, 1.0))
 sys = modelingtoolkitize(prob)
-@test ModelingToolkit.has_tspan(sys)
 
 @testset "Explicit variable names" begin
     function fn(du, u, p::NamedTuple, t)
