@@ -173,7 +173,7 @@ function process_tspan(tspan, dt, steps)
     elseif symbolic_type(tspan[1]) === ScalarSymbolic() ||
            symbolic_type(tspan[2]) === ScalarSymbolic()
         isnothing(steps) &&
-            error("Free final time problems require specifying the number of steps, rather than dt.")
+            error("Free final time problems require specifying the number of steps using the keyword arg `steps`, rather than dt.")
         isnothing(dt) ||
             @warn "Specified dt for free final time problem. This will be ignored; dt will be determined by the number of timesteps."
 

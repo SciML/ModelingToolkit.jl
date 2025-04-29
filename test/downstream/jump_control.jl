@@ -178,7 +178,7 @@ end
 
     (ts, te) = (0.0, 0.2)
     costs = [-h(te)]
-    cons = [T(te) ~ 0]
+    cons = [T(te) ~ 0, m(te) ~ m_c]
     @named rocket = ODESystem(eqs, t; costs, constraints = cons)
     rocket, input_idxs = structural_simplify(rocket, ([T(t)], []))
 
@@ -186,14 +186,14 @@ end
     pmap = [
         g₀ => 1, m₀ => 1.0, h_c => 500, c => 0.5 * √(g₀ * h₀), D_c => 0.5 * 620 * m₀ / g₀,
         Tₘ => 3.5 * g₀ * m₀, T(t) => 0.0, h₀ => 1, m_c => 0.6]
-    jprob = JuMPDynamicOptProblem(rocket, u0map, (ts, te), pmap; dt = 0.005, cse = false)
+    jprob = JuMPDynamicOptProblem(rocket, u0map, (ts, te), pmap; dt = 0.001, cse = false)
     jsol = solve(jprob, Ipopt.Optimizer, :RadauIIA5, silent = true)
     @test jsol.sol.u[end][1] > 1.012
 
     iprob = InfiniteOptDynamicOptProblem(
-        rocket, u0map, (ts, te), pmap; dt = 0.005, cse = false)
+        rocket, u0map, (ts, te), pmap; dt = 0.001, cse = false)
     isol = solve(iprob, Ipopt.Optimizer,
-        derivative_method = InfiniteOpt.OrthogonalCollocation(3), silent = true)
+                 derivative_method = InfiniteOpt.OrthogonalCollocation(3), silent = true)
     @test isol.sol.u[end][1] > 1.012
 
     # Test solution
@@ -204,11 +204,16 @@ end
     @mtkbuild rocket_ode = ODESystem(eqs, t)
     interpmap = Dict(T_interp => ctrl_to_spline(jsol.input_sol, CubicSpline))
     oprob = ODEProblem(rocket_ode, u0map, (ts, te), merge(Dict(pmap), interpmap))
-    osol = solve(oprob, RadauIIA5(); adaptive = false, dt = 0.005)
+    osol = solve(oprob, RadauIIA5(); adaptive = false, dt = 0.001)
     @test ≈(jsol.sol.u, osol.u, rtol = 0.02)
+
+    interpmap1 = Dict(T_interp => ctrl_to_spline(isol.input_sol, CubicSpline))
+    oprob1 = ODEProblem(rocket_ode, u0map, (ts, te), merge(Dict(pmap), interpmap1))
+    osol1 = solve(oprob1, RadauIIA5(); adaptive = false, dt = 0.001)
+    @test ≈(isol.sol.u, osol1.u, rtol = 0.02)
 end
 
-@testset "Free final time problem" begin
+@testset "Free final time problems" begin
     t = M.t_nounits
     D = M.D_nounits
 
@@ -230,6 +235,27 @@ end
     iprob = InfiniteOptDynamicOptProblem(rocket, u0map, (0, tf), pmap; steps = 200)
     isol = solve(iprob, Ipopt.Optimizer)
     @test isapprox(isol.sol.t[end], 10.0, rtol = 1e-3)
+
+    @variables x(..) v(..)
+    @variables u(..) [bounds = (-1.0, 1.0), input = true]
+    @parameters tf
+    constr = [v(tf) ~ 0, x(tf) ~ 0]
+    cost = [tf] # Minimize time
+
+    @named block = ODESystem(
+        [D(x(t)) ~ v(t), D(v(t)) ~ u(t)], t; costs = cost, constraints = constr)
+    block, input_idxs = structural_simplify(block, ([u(t)], []))
+    
+    u0map = [x(t) => 1.0, v(t) => 0.0]
+    tspan = (0.0, tf)
+    parammap = [u(t) => 0.0, tf => 1.0]
+    jprob = JuMPDynamicOptProblem(block, u0map, tspan, parammap; steps = 51)
+    jsol = solve(jprob, Ipopt.Optimizer, :Verner8, silent = true)
+    @test isapprox(jsol.sol.t[end], 2.0, atol = 1e-5)
+
+    iprob = InfiniteOptDynamicOptProblem(block, u0map, tspan, parammap; steps = 51)
+    isol = solve(iprob, Ipopt.Optimizer, silent = true)
+    @test isapprox(isol.sol.t[end], 2.0, atol = 1e-5)
 end
 
 @testset "Cart-pole problem" begin
