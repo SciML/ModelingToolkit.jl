@@ -91,6 +91,9 @@ struct System <: AbstractSystem
             else
                 check_units(u, eqs, noise_eqs)
             end
+            if iv !== nothing
+                check_units(u, jumps, iv)
+            end
             isempty(constraints) || check_units(u, constraints)
         end
         new(tag, eqs, noise_eqs, jumps, constraints, costs,
