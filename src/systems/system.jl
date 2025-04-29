@@ -457,6 +457,10 @@ function flatten(sys::System, noeqs = false)
     else
         costs = [costs]
     end
+    # We don't include `ignored_connections` in the flattened system, because
+    # connection expansion inherently requires the hierarchy structure. If the system
+    # is being flattened, then we no longer want to expand connections (or have already
+    # done so) and thus don't care about `ignored_connections`.
     return System(noeqs ? Equation[] : equations(sys), get_iv(sys), unknowns(sys),
         parameters(sys; initial_parameters = true), brownians(sys);
         jumps = jumps(sys), constraints = constraints(sys), costs = costs,
@@ -465,12 +469,11 @@ function flatten(sys::System, noeqs = false)
         guesses = guesses(sys), continuous_events = continuous_events(sys),
         discrete_events = discrete_events(sys), assertions = assertions(sys),
         is_dde = is_dde(sys), tstops = symbolic_tstops(sys),
-        ignored_connections = ignored_connections(sys),
         initialization_eqs = initialization_equations(sys),
         # without this, any defaults/guesses obtained from metadata that were
         # later removed by the user will be re-added. Right now, we just want to
         # retain `defaults(sys)` as-is.
-        discover_from_metadata = false,
+        discover_from_metadata = false, metadata = get_metadata(sys),
         description = description(sys), name = nameof(sys))
 end
 
