@@ -982,7 +982,7 @@ end
     end
 end
 
-rename(x, name) = @set x.name = name
+Symbolics.rename(x::AbstractSystem, name) = @set x.name = name
 
 function Base.propertynames(sys::AbstractSystem; private = false)
     if private
@@ -2305,6 +2305,10 @@ function _named_idxs(name::Symbol, idxs, call; extra_args = "")
         end, $idxs))
 end
 
+function setname(x, name)
+    @set x.name = name
+end
+
 function single_named_expr(expr)
     name, call = split_assign(expr)
     if Meta.isexpr(name, :ref)
@@ -2313,7 +2317,7 @@ function single_named_expr(expr)
         var = gensym(name)
         ex = quote
             $var = $(_named(name, call))
-            $name = map(i -> $rename($var, Symbol($(Meta.quot(name)), :_, i)), $idxs)
+            $name = map(i -> $setname($var, Symbol($(Meta.quot(name)), :_, i)), $idxs)
         end
         ex
     else
