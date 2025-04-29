@@ -1533,6 +1533,17 @@ end
         @test prob2[λ] ≈ 1.0
     end
 
+    @testset "Initial values for algebraic variables are retained" begin
+        prob2 = ODEProblem(
+            pend, [x => (√2 / 2), D(y) => 0.0], (0.0, 1.5),
+            [g => 1], guesses = [λ => 1, y => √2 / 2])
+        sol = solve(prob)
+        @test SciMLBase.successful_retcode(sol)
+        prob3 = DiffEqBase.get_updated_symbolic_problem(
+            pend, prob2; u0 = prob2.u0, p = prob2.p)
+        @test prob3[D(y)] ≈ 0.0
+    end
+
     @testset "`setsym_oop`" begin
         setter = setsym_oop(prob, [Initial(x)])
         (u0, p) = setter(prob, [0.8])

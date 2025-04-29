@@ -810,44 +810,45 @@ end
     $(TYPEDEF)
 
 A callable struct to use as the `get_updated_u0` field of `InitializationMetadata`.
-Returns the value of `Initial.(unknowns(sys))`, except with algebraic variables replaced
-by their guess values in the initialization problem.
+Returns the value to use for the `u0` of the problem. 
 
 # Fields
 
 $(TYPEDFIELDS)
 """
-struct GetUpdatedU0{GA, GIU}
+struct GetUpdatedU0{GG, GIU}
     """
-    Mask with length `length(unknowns(sys))` denoting indices of algebraic variables.
+    Mask with length `length(unknowns(sys))` denoting indices of variables which should
+    take the guess value from `initializeprob`.
     """
-    algevars::BitVector
+    guessvars::BitVector
     """
-    Function which returns the values of algebraic variables in `initializeprob`, in the
-    order the algebraic variables occur in `unknowns(sys)`.
+    Function which returns the values of variables in `initializeprob` for which
+    `guessvars` is `true`, in the order they occur in `unknowns(sys)`.
     """
-    get_algevars::GA
+    get_guessvars::GG
     """
     Function which returns `Initial.(unknowns(sys))` as a `Vector`.
     """
     get_initial_unknowns::GIU
 end
 
-function GetUpdatedU0(sys::AbstractSystem, initsys::AbstractSystem)
+function GetUpdatedU0(sys::AbstractSystem, initsys::AbstractSystem, op::AbstractDict)
     dvs = unknowns(sys)
     eqs = equations(sys)
-    algevaridxs = BitVector(is_alg_equation.(eqs))
-    append!(algevaridxs, falses(length(dvs) - length(eqs)))
-    algevars = dvs[algevaridxs]
-    get_algevars = getu(initsys, algevars)
+    guessvars = trues(length(dvs))
+    for (i, var) in enumerate(dvs)
+        guessvars[i] = !isequal(get(op, var, nothing), Initial(var))
+    end
+    get_guessvars = getu(initsys, dvs[guessvars])
     get_initial_unknowns = getu(sys, Initial.(dvs))
-    return GetUpdatedU0(algevaridxs, get_algevars, get_initial_unknowns)
+    return GetUpdatedU0(guessvars, get_guessvars, get_initial_unknowns)
 end
 
 function (guu::GetUpdatedU0)(prob, initprob)
     buffer = guu.get_initial_unknowns(prob)
-    algebuf = view(buffer, guu.algevars)
-    copyto!(algebuf, guu.get_algevars(initprob))
+    algebuf = view(buffer, guu.guessvars)
+    copyto!(algebuf, guu.get_guessvars(initprob))
     return buffer
 end
 
@@ -890,7 +891,7 @@ function maybe_build_initialization_problem(
     initializeprob = remake(initializeprob; p = initp)
 
     get_initial_unknowns = if is_time_dependent(sys)
-        GetUpdatedU0(sys, initializeprob.f.sys)
+        GetUpdatedU0(sys, initializeprob.f.sys, op)
     else
         nothing
     end
