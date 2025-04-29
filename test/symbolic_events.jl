@@ -2,7 +2,6 @@ using ModelingToolkit, OrdinaryDiffEq, StochasticDiffEq, JumpProcesses, Test
 using SciMLStructures: canonicalize, Discrete
 using ModelingToolkit: SymbolicContinuousCallback,
                        SymbolicContinuousCallbacks, NULL_AFFECT,
-                       get_callback,
                        t_nounits as t,
                        D_nounits as D
 using StableRNGs
@@ -10,6 +9,10 @@ import SciMLBase
 using SymbolicIndexingInterface
 using Setfield
 rng = StableRNG(12345)
+
+function get_callback(prob)
+    prob.kwargs[:callback]
+end
 
 @variables x(t) = 0
 
@@ -747,8 +750,7 @@ let rng = rng
     function testsol(jsys, u0, p, tspan; tstops = Float64[], paramtotest = nothing,
             N = 40000, kwargs...)
         jsys = complete(jsys)
-        dprob = DiscreteProblem(jsys, u0, tspan, p)
-        jprob = JumpProblem(jsys, dprob, Direct(); kwargs...)
+        jprob = JumpProblem(jsys, u0, tspan, p; aggregator = Direct(), kwargs...)
         sol = solve(jprob, SSAStepper(); tstops = tstops)
         @test (sol(1.000000000001)[1] - sol(0.99999999999)[1]) == 1
         paramtotest === nothing || (@test sol.ps[paramtotest] == 1.0)
@@ -1415,13 +1417,13 @@ end
     @named wd1 = weird1(0.021)
     @named wd2 = weird2(0.021)
 
-    sys1 = structural_simplify(System([], t; name = :parent,
+    sys1 = structural_simplify(System(Equation[], t; name = :parent,
         discrete_events = [0.01 => ModelingToolkit.ImperativeAffect(
             modified = (; θs = reduce(vcat, [[wd1.θ]])), ctx = [1]) do m, o, c, i
             @set! m.θs[1] = c[] += 1
         end],
         systems = [wd1]))
-    sys2 = structural_simplify(System([], t; name = :parent,
+    sys2 = structural_simplify(System(Equation[], t; name = :parent,
         discrete_events = [0.01 => ModelingToolkit.ImperativeAffect(
             modified = (; θs = reduce(vcat, [[wd2.θ]])), ctx = [1]) do m, o, c, i
             @set! m.θs[1] = c[] += 1
