@@ -218,7 +218,11 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
                     equations.
                 """))
             end
-            push!(diffvars, var)
+            # this check ensures var is correctly scoped, since `collect_vars!` won't pick
+            # it up if it belongs to an ancestor system.
+            if var in othervars
+                push!(diffvars, var)
+            end
             push!(diffeqs, eq)
         else
             push!(othereqs, eq)
