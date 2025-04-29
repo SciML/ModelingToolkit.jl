@@ -76,14 +76,22 @@ k = ShiftIndex(d)
     [yd(k + 1) ~ Sample(dt)(y); r(k + 1) ~ 1.0;
      ud(k + 1) ~ kp * (r(k + 1) - yd(k + 1))])
 
+canonical_eqs = map(eqs) do eq
+    if iscall(eq.lhs) && operation(eq.lhs) isa Differential
+        return eq
+    else
+        return 0 ~ eq.rhs - eq.lhs
+    end
+end
+eqs_idxs = findfirst.(isequal.(canonical_eqs), (equations(ci.ts),))
 d = Clock(dt)
 # Note that TearingState reorders the equations
-@test eqmap[1] == ContinuousClock()
-@test eqmap[2] == d
-@test eqmap[3] == d
-@test eqmap[4] == d
-@test eqmap[5] == ContinuousClock()
-@test eqmap[6] == ContinuousClock()
+@test eqmap[eqs_idxs[1]] == d
+@test eqmap[eqs_idxs[2]] == d
+@test eqmap[eqs_idxs[3]] == d
+@test eqmap[eqs_idxs[4]] == ContinuousClock()
+@test eqmap[eqs_idxs[5]] == ContinuousClock()
+@test eqmap[eqs_idxs[6]] == ContinuousClock()
 
 @test varmap[yd] == d
 @test varmap[ud] == d
