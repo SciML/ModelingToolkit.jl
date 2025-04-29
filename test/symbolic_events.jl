@@ -789,7 +789,7 @@ end
     @test sign.(cos.(required_crossings_c1 .- 1e-6)) == sign.(last.(cr1))
     @test sign.(cos.(3 * (required_crossings_c2 .+ 1e-6))) == sign.(last.(cr2))
 end
-#
+
 @testset "Discrete event reinitialization (#3142)" begin
     @connector LiquidPort begin
         p(t)::Float64, [description = "Set pressure in bar",
