@@ -33,7 +33,7 @@ tspan = (0.0, 100.0)
 
 sys = complete(sys)
 prob = ODEProblem(sys, u0, tspan, p, jac = true)
-probexpr = ODEProblemExpr(sys, u0, tspan, p, jac = true)
+probexpr = ODEProblem(sys, u0, tspan, p; jac = true, expression = Val{true})
 sol = solve(prob, Tsit5())
 solexpr = solve(eval(prob), Tsit5())
 @test all(x -> x == 0, Array(sol - solexpr))
