@@ -589,26 +589,41 @@ function SciMLBase.remake_initialization_data(
     return SciMLBase.remake_initialization_data(sys, kws, newu0, t0, newp, newu0, newp)
 end
 
+function promote_u0_p(u0, p::MTKParameters, t0)
+    u0 = DiffEqBase.promote_u0(u0, p.tunable, t0)
+    u0 = DiffEqBase.promote_u0(u0, p.initials, t0)
+
+    tunables = DiffEqBase.promote_u0(p.tunable, u0, t0)
+    initials = DiffEqBase.promote_u0(p.initials, u0, t0)
+    p = SciMLStructures.replace(SciMLStructures.Tunable(), p, tunables)
+    p = SciMLStructures.replace(SciMLStructures.Initials(), p, initials)
+
+    return u0, p
+end
+
+function promote_u0_p(u0, p::AbstractArray, t0)
+    return DiffEqBase.promote_u0(u0, p, t0), DiffEqBase.promote_u0(p, u0, t0)
+end
+
 function SciMLBase.late_binding_update_u0_p(
         prob, sys::AbstractSystem, u0, p, t0, newu0, newp)
     supports_initialization(sys) || return newu0, newp
-    u0 === missing && return newu0, (p === missing ? copy(newp) : newp)
+
+    initdata = prob.f.initialization_data
+    meta = initdata === nothing ? nothing : initdata.metadata
+
+    newu0, newp = promote_u0_p(newu0, newp, t0)
+
     # non-symbolic u0 updates initials...
     if !(eltype(u0) <: Pair)
         # if `p` is not provided or is symbolic
         p === missing || eltype(p) <: Pair || return newu0, newp
         (newu0 === nothing || isempty(newu0)) && return newu0, newp
-        initdata = prob.f.initialization_data
         initdata === nothing && return newu0, newp
         meta = initdata.metadata
         meta isa InitializationMetadata || return newu0, newp
         newp = p === missing ? copy(newp) : newp
-        initials, repack, alias = SciMLStructures.canonicalize(
-            SciMLStructures.Initials(), newp)
-        if eltype(initials) != eltype(newu0)
-            initials = DiffEqBase.promote_u0(initials, newu0, t0)
-            newp = repack(initials)
-        end
+
         if length(newu0) != length(prob.u0)
             throw(ArgumentError("Expected `newu0` to be of same length as unknowns ($(length(prob.u0))). Got $(typeof(newu0)) of length $(length(newu0))"))
         end
@@ -617,17 +632,6 @@ function SciMLBase.late_binding_update_u0_p(
     end
 
     newp = p === missing ? copy(newp) : newp
-    newu0 = DiffEqBase.promote_u0(newu0, newp, t0)
-    tunables, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Tunable(), newp)
-    if eltype(tunables) != eltype(newu0)
-        tunables = DiffEqBase.promote_u0(tunables, newu0, t0)
-        newp = repack(tunables)
-    end
-    initials, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Initials(), newp)
-    if eltype(initials) != eltype(newu0)
-        initials = DiffEqBase.promote_u0(initials, newu0, t0)
-        newp = repack(initials)
-    end
 
     allsyms = all_symbols(sys)
     for (k, v) in u0
@@ -644,6 +648,37 @@ function SciMLBase.late_binding_update_u0_p(
     end
 
     return newu0, newp
+end
+
+function DiffEqBase.get_updated_symbolic_problem(sys::AbstractSystem, prob; kw...)
+    supports_initialization(sys) || return prob
+    initdata = prob.f.initialization_data
+    initdata isa SciMLBase.OverrideInitData || return prob
+    meta = initdata.metadata
+    meta isa InitializationMetadata || return prob
+    meta.get_updated_u0 === nothing && return prob
+
+    u0 = state_values(prob)
+    u0 === nothing && return prob
+
+    p = parameter_values(prob)
+    t0 = is_time_dependent(prob) ? current_time(prob) : nothing
+
+    if p isa MTKParameters
+        buffer = p.initials
+    else
+        buffer = p
+    end
+
+    u0 = DiffEqBase.promote_u0(u0, buffer, t0)
+
+    if ArrayInterface.ismutable(u0)
+        T = typeof(u0)
+    else
+        T = StaticArrays.similar_type(u0)
+    end
+
+    return remake(prob; u0 = T(meta.get_updated_u0(prob, initdata.initializeprob)))
 end
 
 """

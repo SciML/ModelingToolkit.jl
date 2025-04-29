@@ -1512,3 +1512,54 @@ end
     @inferred remake(prob; u0 = 2 .* prob.u0, p = prob.p)
     @inferred solve(prob)
 end
+
+@testset "Issue#3570, #3552: `Initial`s/guesses are copied to `u0` during `solve`/`init`" begin
+    @parameters g
+    @variables x(t) [state_priority = 10] y(t) λ(t)
+    eqs = [D(D(x)) ~ λ * x
+           D(D(y)) ~ λ * y - g
+           x^2 + y^2 ~ 1]
+    @mtkbuild pend = ODESystem(eqs, t)
+
+    prob = ODEProblem(
+        pend, [x => (√2 / 2), D(x) => 0.0], (0.0, 1.5),
+        [g => 1], guesses = [λ => 1, y => √2 / 2])
+    sol = solve(prob)
+
+    @testset "Guesses of initialization problem copied to algebraic variables" begin
+        prob.f.initialization_data.initializeprob[λ] = 1.0
+        prob2 = DiffEqBase.get_updated_symbolic_problem(
+            pend, prob; u0 = prob.u0, p = prob.p)
+        @test prob2[λ] ≈ 1.0
+    end
+
+    @testset "Initial values for algebraic variables are retained" begin
+        prob2 = ODEProblem(
+            pend, [x => (√2 / 2), D(y) => 0.0], (0.0, 1.5),
+            [g => 1], guesses = [λ => 1, y => √2 / 2])
+        sol = solve(prob)
+        @test SciMLBase.successful_retcode(sol)
+        prob3 = DiffEqBase.get_updated_symbolic_problem(
+            pend, prob2; u0 = prob2.u0, p = prob2.p)
+        @test prob3[D(y)] ≈ 0.0
+    end
+
+    @testset "`setsym_oop`" begin
+        setter = setsym_oop(prob, [Initial(x)])
+        (u0, p) = setter(prob, [0.8])
+        new_prob = remake(prob; u0, p, initializealg = BrownFullBasicInit())
+        new_sol = solve(new_prob)
+        @test new_sol[x, 1] ≈ 0.8
+        integ = init(new_prob)
+        @test integ[x] ≈ 0.8
+    end
+
+    @testset "`setsym`" begin
+        @test prob.ps[Initial(x)] ≈ √2 / 2
+        prob.ps[Initial(x)] = 0.8
+        sol = solve(prob; initializealg = BrownFullBasicInit())
+        @test sol[x, 1] ≈ 0.8
+        integ = init(prob; initializealg = BrownFullBasicInit())
+        @test integ[x] ≈ 0.8
+    end
+end

@@ -769,7 +769,7 @@ properly.
 
 $(TYPEDFIELDS)
 """
-struct InitializationMetadata{R <: ReconstructInitializeprob, SIU}
+struct InitializationMetadata{R <: ReconstructInitializeprob, GUU, SIU}
     """
     The `u0map` used to construct the initialization.
     """
@@ -796,10 +796,60 @@ struct InitializationMetadata{R <: ReconstructInitializeprob, SIU}
     """
     oop_reconstruct_u0_p::R
     """
+    A function which takes `(prob, initializeprob)` and return the `u0` to use for the problem.
+    """
+    get_updated_u0::GUU
+    """
     A function which takes the `u0` of the problem and sets
     `Initial.(unknowns(sys))`.
     """
     set_initial_unknowns!::SIU
+end
+
+"""
+    $(TYPEDEF)
+
+A callable struct to use as the `get_updated_u0` field of `InitializationMetadata`.
+Returns the value to use for the `u0` of the problem. 
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
+struct GetUpdatedU0{GG, GIU}
+    """
+    Mask with length `length(unknowns(sys))` denoting indices of variables which should
+    take the guess value from `initializeprob`.
+    """
+    guessvars::BitVector
+    """
+    Function which returns the values of variables in `initializeprob` for which
+    `guessvars` is `true`, in the order they occur in `unknowns(sys)`.
+    """
+    get_guessvars::GG
+    """
+    Function which returns `Initial.(unknowns(sys))` as a `Vector`.
+    """
+    get_initial_unknowns::GIU
+end
+
+function GetUpdatedU0(sys::AbstractSystem, initsys::AbstractSystem, op::AbstractDict)
+    dvs = unknowns(sys)
+    eqs = equations(sys)
+    guessvars = trues(length(dvs))
+    for (i, var) in enumerate(dvs)
+        guessvars[i] = !isequal(get(op, var, nothing), Initial(var))
+    end
+    get_guessvars = getu(initsys, dvs[guessvars])
+    get_initial_unknowns = getu(sys, Initial.(dvs))
+    return GetUpdatedU0(guessvars, get_guessvars, get_initial_unknowns)
+end
+
+function (guu::GetUpdatedU0)(prob, initprob)
+    buffer = guu.get_initial_unknowns(prob)
+    algebuf = view(buffer, guu.guessvars)
+    copyto!(algebuf, guu.get_guessvars(initprob))
+    return buffer
 end
 
 """
@@ -840,10 +890,15 @@ function maybe_build_initialization_problem(
     end
     initializeprob = remake(initializeprob; p = initp)
 
+    get_initial_unknowns = if is_time_dependent(sys)
+        GetUpdatedU0(sys, initializeprob.f.sys, op)
+    else
+        nothing
+    end
     meta = InitializationMetadata(
         u0map, pmap, guesses, Vector{Equation}(initialization_eqs),
         use_scc, ReconstructInitializeprob(sys, initializeprob.f.sys),
-        setp(sys, Initial.(unknowns(sys))))
+        get_initial_unknowns, setp(sys, Initial.(unknowns(sys))))
 
     if is_time_dependent(sys)
         all_init_syms = Set(all_symbols(initializeprob))
