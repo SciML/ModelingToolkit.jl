@@ -185,7 +185,6 @@ include("systems/nonlinear/homotopy_continuation.jl")
 include("systems/nonlinear/modelingtoolkitize.jl")
 include("systems/nonlinear/initializesystem.jl")
 include("systems/diffeqs/first_order_transform.jl")
-include("systems/diffeqs/modelingtoolkitize.jl")
 include("systems/diffeqs/basic_transformations.jl")
 
 include("systems/pde/pdesystem.jl")
