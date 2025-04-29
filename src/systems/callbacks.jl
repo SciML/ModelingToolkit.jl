@@ -887,7 +887,7 @@ Compile an affect defined by a set of equations. Systems with algebraic equation
 function compile_equational_affect(
         aff::Union{AffectSystem, Vector{Equation}}, sys; reset_jumps = false, kwargs...)
     if aff isa AbstractVector
-        aff = make_affect(aff; iv = get_iv(sys), warn_no_algebraic = false)
+        aff = make_affect(aff; iv = get_iv(sys), alg_eqs = alg_equations(sys), warn_no_algebraic = false)
     end
     affsys = system(aff)
     ps_to_update = discretes(aff)
@@ -925,7 +925,7 @@ function compile_equational_affect(
             wrap_code = add_integrator_header(sys, integ, :p),
             expression = Val{false}, outputidxs = p_idxs, wrap_mtkparameters, cse = false)
 
-        return let dvs_to_update = dvs_to_update, ps_to_update = ps_to_update, reset_jump = reset_jump, u_up! = u_up!, p_up! = p_up!
+        return let dvs_to_update = dvs_to_update, ps_to_update = ps_to_update, reset_jumps = reset_jumps, u_up! = u_up!, p_up! = p_up!
             function explicit_affect!(integ)
                 isempty(dvs_to_update) || u_up!(integ)
                 isempty(ps_to_update) || p_up!(integ)
@@ -936,28 +936,31 @@ function compile_equational_affect(
         return let dvs_to_update = dvs_to_update, aff_map = aff_map, sys_map = sys_map,
             affsys = affsys, ps_to_update = ps_to_update, aff = aff, sys = sys
             
-            affu_getters = [getsym(affsys, u) for u in unknowns(affsys)]
-            affp_getters = [getsym(affsys, unPre(p)) for p in parameters(affsys)]
+            dvs_to_access = unknowns(affsys)
+            ps_to_access = parameters(affsys)
+
+            u_getters = [getsym(sys, aff_map[u]) for u in dvs_to_access]
+            p_getters = [getsym(sys, unPre(p)) for p in ps_to_access]
             u_setters = [setsym(sys, u) for u in dvs_to_update]
             p_setters = [setsym(sys, p) for p in ps_to_update]
-            solu_getters = [getsym(affsys, sys_map[u]) for u in dvs_to_update]
-            solp_getters = [getsym(affsys, sys_map[p]) for p in ps_to_update]
+            affu_getters = [getsym(affsys, sys_map[u]) for u in dvs_to_update]
+            affp_getters = [getsym(affsys, sys_map[p]) for p in ps_to_update]
 
-            affprob = ImplicitDiscreteProblem(affsys, u0map, (integ.t, integ.t), pmap;
+            affprob = ImplicitDiscreteProblem(affsys, [dv => 0 for dv in dvs_to_access], (0, 0), [p => 0 for p in ps_to_access];
                 build_initializeprob = false, check_length = false)
 
             function implicit_affect!(integ)
-                pmap = [p => getp(integ) for (p, getp) in zip(parameters(affsys), p_getters)]
-                u0map = [u => getu(integ) for (u, getu) in zip(unknowns(affsys), u_getters)]
-                affprob = remake(affprob, u0 = u0map, p = pmap)
+                pmap = Pair[p => getp(integ) for (p, getp) in zip(ps_to_access, p_getters)]
+                u0map = Pair[u => getu(integ) for (u, getu) in zip(dvs_to_access, u_getters)]
+                affprob = remake(affprob, u0 = u0map, p = pmap, tspan = (integ.t, integ.t))
                 affsol = init(affprob, IDSolve())
                 (check_error(affsol) === ReturnCode.InitialFailure) &&
                     throw(UnsolvableCallbackError(all_equations(aff)))
 
-                for (setu!, getu) in zip(u_setters, solu_getters)
+                for (setu!, getu) in zip(u_setters, affu_getters)
                     setu!(integ, getu(affsol))
                 end
-                for (setp!, getp) in zip(p_setters, solp_getters)
+                for (setp!, getp) in zip(p_setters, affp_getters)
                     setp!(integ, getp(affsol))
                 end
             end
