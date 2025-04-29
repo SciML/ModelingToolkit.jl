@@ -75,6 +75,10 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     Type of the system.
     """
     connector_type::Any
+    """
+    A `Vector{SymbolicContinuousCallback}` that model events.
+    The integrator will use root finding to guarantee that it steps at each zero crossing.
+    """
     continuous_events::Vector{SymbolicContinuousCallback}
     """
     A `Vector{SymbolicDiscreteCallback}` that models events. Symbolic

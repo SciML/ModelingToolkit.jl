@@ -56,9 +56,13 @@ function has_functional_affect(cb)
 end
 
 struct AffectSystem
+    """The internal implicit discrete system whose equations are solved to obtain values after the affect."""
     system::ImplicitDiscreteSystem
+    """Unknowns of the parent ODESystem whose values are modified or accessed by the affect."""
     unknowns::Vector
+    """Parameters of the parent ODESystem whose values are accessed by the affect."""
     parameters::Vector
+    """Parameters of the parent ODESystem whose values are modified by the affect."""
     discretes::Vector
     """Maps the symbols of unknowns/observed in the ImplicitDiscreteSystem to its corresponding unknown/parameter in the parent system."""
     aff_to_sys::Dict
@@ -226,10 +230,12 @@ struct SymbolicContinuousCallback <: AbstractCallback
         conditions = (conditions isa AbstractVector) ? conditions : [conditions]
 
         if isnothing(reinitializealg)
-            any(a -> (a isa FunctionalAffect || a isa ImperativeAffect),
-                [affect, affect_neg, initialize, finalize]) ?
-            reinitializealg = SciMLBase.CheckInit() :
-            reinitializealg = SciMLBase.NoInit()
+            if any(a -> (a isa FunctionalAffect || a isa ImperativeAffect),
+                [affect, affect_neg, initialize, finalize])
+                reinitializealg = SciMLBase.CheckInit()
+            else
+                reinitializealg = SciMLBase.NoInit()
+            end
         end
 
         new(conditions, make_affect(affect; kwargs...),
@@ -261,8 +267,6 @@ make_affect(affect::Affect; kwargs...) = affect
 function make_affect(affect::Vector{Equation}; discrete_parameters = Any[],
         iv = nothing, alg_eqs::Vector{Equation} = Equation[], warn_no_algebraic = true, kwargs...)
     isempty(affect) && return nothing
-    isempty(alg_eqs) && warn_no_algebraic &&
-        @warn "No algebraic equations were found for the callback defined by $(join(affect, ", ")). If the system has no algebraic equations, this can be disregarded. Otherwise pass in `alg_eqs` to the SymbolicContinuousCallback constructor."
     if isnothing(iv)
         iv = t_nounits
         @warn "No independent variable specified. Defaulting to t_nounits."
@@ -304,7 +308,7 @@ function make_affect(affect::Vector{Equation}; discrete_parameters = Any[],
     @named affectsys = ImplicitDiscreteSystem(
         vcat(affect, alg_eqs), iv, collect(union(_dvs, discretes)),
         collect(union(pre_params, sys_params)))
-    affectsys = structural_simplify(affectsys; fully_determined = false)
+    affectsys = structural_simplify(affectsys; fully_determined = nothing)
     # get accessed parameters p from Pre(p) in the callback parameters
     accessed_params = filter(isparameter, map(unPre, collect(pre_params)))
     union!(accessed_params, sys_params)
@@ -415,7 +419,7 @@ The condition can be one of:
 - eqs::Vector{Symbolic} - events trigger when the condition evaluates to true
 
 Arguments: 
-- iv: The independent variable of the system. This must be specified if the independent variable appaers in one of the equations explicitly, as in x ~ t + 1.
+- iv: The independent variable of the system. This must be specified if the independent variable appears in one of the equations explicitly, as in x ~ t + 1.
 - alg_eqs: Algebraic equations of the system that must be satisfied after the callback occurs.
 """
 struct SymbolicDiscreteCallback <: AbstractCallback
@@ -473,7 +477,6 @@ to_cb_vector(cbs::Union{Nothing, Vector{Nothing}}; kwargs...) = AbstractCallback
 to_cb_vector(cb::AbstractCallback; kwargs...) = [cb]
 function to_cb_vector(cbs; CB_TYPE = SymbolicContinuousCallback, kwargs...)
     if cbs isa Pair
-        @show cbs
         [CB_TYPE(cbs; kwargs...)]
     else
         Vector{CB_TYPE}([CB_TYPE(cb; kwargs...) for cb in cbs])
@@ -741,13 +744,17 @@ function generate_callback(cbs::Vector{SymbolicContinuousCallback}, sys; kwargs.
         [fill(i, num_eqs[i]) for i in eachindex(affects)])
     eqs = reduce(vcat, eqs)
 
-    affect = function (integ, idx)
-        affects[eq2affect[idx]](integ)
+    affect = let eq2affect = eq2affect, affects = affects
+        function (integ, idx)
+            affects[eq2affect[idx]](integ)
+        end
     end
-    affect_neg = function (integ, idx)
-        f = affect_negs[eq2affect[idx]]
-        isnothing(f) && return
-        f(integ)
+    affect_neg = let eq2affect = eq2affect, affect_negs = affect_negs
+        function (integ, idx)
+            f = affect_negs[eq2affect[idx]]
+            isnothing(f) && return
+            f(integ)
+        end
     end
     initialize = wrap_vector_optional_affect(inits, SciMLBase.INITIALIZE_DEFAULT)
     finalize = wrap_vector_optional_affect(finals, SciMLBase.FINALIZE_DEFAULT)
@@ -832,10 +839,10 @@ function compile_affect(
 end
 
 function wrap_save_discretes(f, save_idxs)
-    let save_idxs = save_idxs
+    let save_idxs = save_idxs, f = f
         if f === SciMLBase.INITIALIZE_DEFAULT
             (c, u, t, i) -> begin
-                isnothing(f) || f(c, u, t, i)
+                f(c, u, t, i)
                 for idx in save_idxs
                     SciMLBase.save_discretes!(i, idx)
                 end
@@ -918,40 +925,40 @@ function compile_equational_affect(
             wrap_code = add_integrator_header(sys, integ, :p),
             expression = Val{false}, outputidxs = p_idxs, wrap_mtkparameters, cse = false)
 
-        return function explicit_affect!(integ)
-            isempty(dvs_to_update) || u_up!(integ)
-            isempty(ps_to_update) || p_up!(integ)
-            reset_jumps && reset_aggregated_jumps!(integ)
+        return let dvs_to_update = dvs_to_update, ps_to_update = ps_to_update, reset_jump = reset_jump, u_up! = u_up!, p_up! = p_up!
+            function explicit_affect!(integ)
+                isempty(dvs_to_update) || u_up!(integ)
+                isempty(ps_to_update) || p_up!(integ)
+                reset_jumps && reset_aggregated_jumps!(integ)
+            end
         end
     else
         return let dvs_to_update = dvs_to_update, aff_map = aff_map, sys_map = sys_map,
-            affsys = affsys, ps_to_update = ps_to_update, aff = aff
+            affsys = affsys, ps_to_update = ps_to_update, aff = aff, sys = sys
+            
+            affu_getters = [getsym(affsys, u) for u in unknowns(affsys)]
+            affp_getters = [getsym(affsys, unPre(p)) for p in parameters(affsys)]
+            u_setters = [setsym(sys, u) for u in dvs_to_update]
+            p_setters = [setsym(sys, p) for p in ps_to_update]
+            solu_getters = [getsym(affsys, sys_map[u]) for u in dvs_to_update]
+            solp_getters = [getsym(affsys, sys_map[p]) for p in ps_to_update]
+
+            affprob = ImplicitDiscreteProblem(affsys, u0map, (integ.t, integ.t), pmap;
+                build_initializeprob = false, check_length = false)
 
             function implicit_affect!(integ)
-                pmap = Pair[]
-                for pre_p in parameters(affsys)
-                    p = unPre(pre_p)
-                    pval = isparameter(p) ? integ.ps[p] : integ[p]
-                    push!(pmap, pre_p => pval)
-                end
-                u0 = Pair[]
-                for u in unknowns(affsys)
-                    uval = isparameter(aff_map[u]) ? integ.ps[aff_map[u]] : integ[u]
-                    push!(u0, u => uval)
-                end
-                affprob = ImplicitDiscreteProblem(affsys, u0, (integ.t, integ.t), pmap;
-                    build_initializeprob = false, check_length = false)
-                @show pmap
-                @show u0
+                pmap = [p => getp(integ) for (p, getp) in zip(parameters(affsys), p_getters)]
+                u0map = [u => getu(integ) for (u, getu) in zip(unknowns(affsys), u_getters)]
+                affprob = remake(affprob, u0 = u0map, p = pmap)
                 affsol = init(affprob, IDSolve())
-                @show affsol
                 (check_error(affsol) === ReturnCode.InitialFailure) &&
                     throw(UnsolvableCallbackError(all_equations(aff)))
-                for u in dvs_to_update
-                    integ[u] = affsol[sys_map[u]]
+
+                for (setu!, getu) in zip(u_setters, solu_getters)
+                    setu!(integ, getu(affsol))
                 end
-                for p in ps_to_update
-                    integ.ps[p] = affsol[sys_map[p]]
+                for (setp!, getp) in zip(p_setters, solp_getters)
+                    setp!(integ, getp(affsol))
                 end
             end
         end
