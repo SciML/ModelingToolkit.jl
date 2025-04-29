@@ -299,7 +299,7 @@ function shift_u0map_forward(sys::ImplicitDiscreteSystem, u0map, defs)
         v = u0map[k]
         if !((op = operation(k)) isa Shift)
             isnothing(getunshifted(k)) &&
-                @warn "Initial condition given in term of current state of the unknown. If `build_initializeprob = false`, this may be overriden by the implicit discrete solver."
+                @warn "Initial condition given in term of current state of the unknown. If `build_initializeprob = false`, this may be overridden by the implicit discrete solver."
 
             updated[k] = v
         elseif op.steps > 0
