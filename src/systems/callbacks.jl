@@ -887,7 +887,8 @@ Compile an affect defined by a set of equations. Systems with algebraic equation
 function compile_equational_affect(
         aff::Union{AffectSystem, Vector{Equation}}, sys; reset_jumps = false, kwargs...)
     if aff isa AbstractVector
-        aff = make_affect(aff; iv = get_iv(sys), alg_eqs = alg_equations(sys), warn_no_algebraic = false)
+        aff = make_affect(
+            aff; iv = get_iv(sys), alg_eqs = alg_equations(sys), warn_no_algebraic = false)
     end
     affsys = system(aff)
     ps_to_update = discretes(aff)
@@ -925,7 +926,9 @@ function compile_equational_affect(
             wrap_code = add_integrator_header(sys, integ, :p),
             expression = Val{false}, outputidxs = p_idxs, wrap_mtkparameters, cse = false)
 
-        return let dvs_to_update = dvs_to_update, ps_to_update = ps_to_update, reset_jumps = reset_jumps, u_up! = u_up!, p_up! = p_up!
+        return let dvs_to_update = dvs_to_update, ps_to_update = ps_to_update,
+            reset_jumps = reset_jumps, u_up! = u_up!, p_up! = p_up!
+
             function explicit_affect!(integ)
                 isempty(dvs_to_update) || u_up!(integ)
                 isempty(ps_to_update) || p_up!(integ)
@@ -935,7 +938,7 @@ function compile_equational_affect(
     else
         return let dvs_to_update = dvs_to_update, aff_map = aff_map, sys_map = sys_map,
             affsys = affsys, ps_to_update = ps_to_update, aff = aff, sys = sys
-            
+
             dvs_to_access = unknowns(affsys)
             ps_to_access = parameters(affsys)
 
@@ -946,12 +949,14 @@ function compile_equational_affect(
             affu_getters = [getsym(affsys, sys_map[u]) for u in dvs_to_update]
             affp_getters = [getsym(affsys, sys_map[p]) for p in ps_to_update]
 
-            affprob = ImplicitDiscreteProblem(affsys, [dv => 0 for dv in dvs_to_access], (0, 0), [p => 0 for p in ps_to_access];
+            affprob = ImplicitDiscreteProblem(affsys, [dv => 0 for dv in dvs_to_access],
+                (0, 0), [p => 0 for p in ps_to_access];
                 build_initializeprob = false, check_length = false)
 
             function implicit_affect!(integ)
                 pmap = Pair[p => getp(integ) for (p, getp) in zip(ps_to_access, p_getters)]
-                u0map = Pair[u => getu(integ) for (u, getu) in zip(dvs_to_access, u_getters)]
+                u0map = Pair[u => getu(integ)
+                             for (u, getu) in zip(dvs_to_access, u_getters)]
                 affprob = remake(affprob, u0 = u0map, p = pmap, tspan = (integ.t, integ.t))
                 affsol = init(affprob, IDSolve())
                 (check_error(affsol) === ReturnCode.InitialFailure) &&
