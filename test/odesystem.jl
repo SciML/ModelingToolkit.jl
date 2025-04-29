@@ -93,29 +93,29 @@ f.f(du, u, p, 0.1)
 @test_throws ArgumentError f.f(u, p, 0.1)
 
 #check iip
-f = eval(ODEFunctionExpr(de, [x, y, z], [σ, ρ, β]))
-f2 = ODEFunction(de, [x, y, z], [σ, ρ, β])
+f = eval(ODEFunction(de; expression = Val{true}))
+f2 = ODEFunction(de)
 @test SciMLBase.isinplace(f) === SciMLBase.isinplace(f2)
 @test SciMLBase.specialization(f) === SciMLBase.specialization(f2)
 for iip in (true, false)
-    f = eval(ODEFunctionExpr{iip}(de, [x, y, z], [σ, ρ, β]))
-    f2 = ODEFunction{iip}(de, [x, y, z], [σ, ρ, β])
+    f = eval(ODEFunction{iip}(de; expression = Val{true}))
+    f2 = ODEFunction{iip}(de)
     @test SciMLBase.isinplace(f) === SciMLBase.isinplace(f2) === iip
     @test SciMLBase.specialization(f) === SciMLBase.specialization(f2)
 
     for specialize in (SciMLBase.AutoSpecialize, SciMLBase.FullSpecialize)
-        f = eval(ODEFunctionExpr{iip, specialize}(de, [x, y, z], [σ, ρ, β]))
-        f2 = ODEFunction{iip, specialize}(de, [x, y, z], [σ, ρ, β])
+        f = eval(ODEFunction{iip, specialize}(de; expression = Val{true}))
+        f2 = ODEFunction{iip, specialize}(de)
         @test SciMLBase.isinplace(f) === SciMLBase.isinplace(f2) === iip
         @test SciMLBase.specialization(f) === SciMLBase.specialization(f2) === specialize
     end
 end
 
 #check sparsity
-f = eval(ODEFunctionExpr(de, [x, y, z], [σ, ρ, β], sparsity = true))
+f = eval(ODEFunction(de, sparsity = true, expression = Val{true}))
 @test f.sparsity == ModelingToolkit.jacobian_sparsity(de)
 
-f = eval(ODEFunctionExpr(de, [x, y, z], [σ, ρ, β], sparsity = false))
+f = eval(ODEFunction(de, sparsity = false, expression = Val{true}))
 @test isnothing(f.sparsity)
 
 eqs = [D(x) ~ σ * (y - x),
@@ -138,9 +138,9 @@ tgrad_iip(du, u, p, t)
 eqs = [D(x) ~ σ(t - 1) * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z * κ]
-@named de = System(eqs, t)
+@named de = System(eqs, t, [x, y, z], [σ, ρ, β])
 test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ, ρ, β))
-f = generate_rhs(de, [x, y, z], [σ, ρ, β], expression = Val{false})
+f = generate_rhs(de, expression = Val{false}, wrap_gfw = Val{true})
 du = [0.0, 0.0, 0.0]
 f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
 @test du ≈ [11, -3, -7]
@@ -148,7 +148,7 @@ f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
 eqs = [D(x) ~ x + 10σ(t - 1) + 100σ(t - 2) + 1000σ(t^2)]
 @named de = System(eqs, t)
 test_diffeq_inference("many internal iv-varying", de, t, (x,), (σ,))
-f = generate_rhs(de, [x], [σ], expression = Val{false})
+f = generate_rhs(de, [x], [σ], expression = Val{false}, wrap_gfw = Val{true})
 du = [0.0]
 f(du, [1.0], [t -> t + 2], 5.0)
 @test du ≈ [27561]
@@ -199,7 +199,7 @@ eqs = [D(x) ~ -A * x,
 @named de = System(eqs, t)
 @test begin
     local f, du
-    f = generate_rhs(de, [x, y], [A, B, C], expression = Val{false})
+    f = generate_rhs(de, [x, y], [A, B, C], expression = Val{false}, wrap_gfw = Val{true})
     du = [0.0, 0.0]
     f(du, [1.0, 2.0], [1, 2, 3], 0.0)
     du ≈ [-1, -1 / 3]
@@ -295,7 +295,7 @@ sol_dpmap = solve(prob_dpmap, Rodas5())
 
     sys = makecombinedsys()
     @unpack sys1, b = sys
-    prob = ODEProblem(sys, Pair[])
+    prob = ODEProblem(sys, Pair[], (0.0, 1.0))
     prob_new = SciMLBase.remake(prob, p = Dict(sys1.a => 3.0, b => 4.0),
         u0 = Dict(sys1.x => 1.0))
     @test prob_new.p isa MTKParameters
@@ -322,7 +322,7 @@ du0 = [D(y₁) => -0.04
        D(y₂) => 0.04
        D(y₃) => 0.0]
 prob4 = DAEProblem(sys, du0, u0, tspan, p2)
-prob5 = eval(DAEProblemExpr(sys, du0, u0, tspan, p2))
+prob5 = eval(DAEProblem(sys, du0, u0, tspan, p2; expression = Val{true}))
 for prob in [prob4, prob5]
     local sol
     @test prob.differential_vars == [true, true, false]
@@ -336,42 +336,27 @@ eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x - β * y,
     x + z ~ y]
 @named sys = System(eqs, t)
-@test all(isequal.(unknowns(sys), [x, y, z]))
-@test all(isequal.(parameters(sys), [σ, β]))
+@test issetequal(unknowns(sys), [x, y, z])
+@test issetequal(parameters(sys), [σ, β])
 @test equations(sys) == eqs
 @test ModelingToolkit.isautonomous(sys)
 
-# issue 701
-using ModelingToolkit
-@parameters a
-@variables x(t)
-@named sys = System([D(x) ~ a], t)
-@test issym(equations(sys)[1].rhs)
+@testset "Issue#701: `collect_vars!` handles non-call symbolics" begin
+    @parameters a
+    @variables x(t)
+    @named sys = System([D(x) ~ a], t)
+    @test issym(equations(sys)[1].rhs)
+end
 
-# issue 708
-@parameters a
-@variables x(t) y(t) z(t)
-@named sys = System([D(x) ~ y, 0 ~ x + z, 0 ~ x - y], t, [z, y, x], [])
-asys = add_accumulations(sys)
-@variables accumulation_x(t) accumulation_y(t) accumulation_z(t)
-eqs = [0 ~ x + z
-       0 ~ x - y
-       D(accumulation_x) ~ x
-       D(accumulation_y) ~ y
-       D(accumulation_z) ~ z
-       D(x) ~ y]
-@test ssort(equations(asys)) == ssort(eqs)
-@variables ac(t)
-asys = add_accumulations(sys, [ac => (x + y)^2])
-eqs = [0 ~ x + z
-       0 ~ x - y
-       D(ac) ~ (x + y)^2
-       D(x) ~ y]
-@test ssort(equations(asys)) == ssort(eqs)
+@testset "Issue#708" begin
+    @parameters a
+    @variables x(t) y(t) z(t)
+    @named sys = System([D(x) ~ y, 0 ~ x + z, 0 ~ x - y], t, [z, y, x], [])
 
-sys2 = ode_order_lowering(sys)
-M = ModelingToolkit.calculate_massmatrix(sys2)
-@test M == Diagonal([1, 0, 0])
+    sys2 = ode_order_lowering(sys)
+    M = ModelingToolkit.calculate_massmatrix(sys2)
+    @test M == Diagonal([1, 0, 0])
+end
 
 # issue #609
 @variables x1(t) x2(t)
@@ -404,7 +389,8 @@ eq = D(x) ~ r * x
         sys1 = makesys(:sys1)
         sys2 = makesys(:sys1)
 
-        @test_throws ArgumentError System([sys2.f ~ sys1.x, D(sys1.f) ~ 0], t,
+        @test_throws ModelingToolkit.NonUniqueSubsystemsError System(
+            [sys2.f ~ sys1.x, D(sys1.f) ~ 0], t,
             systems = [sys1, sys2], name = :foo)
     end
     issue808()
@@ -436,14 +422,14 @@ eqs = [D(D(x)) ~ -b / M * D(x) - k / M * x]
 ps = [M, b, k]
 default_u0 = [D(x) => 0.0, x => 10.0]
 default_p = [M => 1.0, b => 1.0, k => 1.0]
-@named sys = System(eqs, t, [x], ps; defaults = [default_u0; default_p], tspan)
+@named sys = System(eqs, t, [x], ps; defaults = [default_u0; default_p])
 sys = ode_order_lowering(sys)
 sys = complete(sys)
-prob = ODEProblem(sys)
+prob = ODEProblem(sys, nothing, tspan)
 sol = solve(prob, Tsit5())
 @test sol.t[end] == tspan[end]
 @test sum(abs, sol.u[end]) < 1
-prob = ODEProblem{false}(sys; u0_constructor = x -> SVector(x...))
+prob = ODEProblem{false}(sys, nothing, tspan; u0_constructor = x -> SVector(x...))
 @test prob.u0 isa SVector
 
 # check_eqs_u0 kwarg test
@@ -454,23 +440,9 @@ sys = complete(sys)
 @test_throws ArgumentError ODEProblem(sys, [1.0, 1.0], (0.0, 1.0))
 @test_nowarn ODEProblem(sys, [1.0, 1.0], (0.0, 1.0), check_length = false)
 
-# check inputs
-let
-    @parameters k d
-    @variables x(t) ẋ(t) f(t) [input = true]
-
-    eqs = [D(x) ~ ẋ, D(ẋ) ~ f - k * x - d * ẋ]
-    @named sys = System(eqs, t, [x, ẋ], [f, d, k])
-    sys = structural_simplify(sys; inputs = [f])
-
-    @test isequal(calculate_control_jacobian(sys),
-        reshape(Num[0, 1], 2, 1))
-end
-
-# issue 1109
-let
+@testset "Issue#1109" begin
     @variables x(t)[1:3, 1:3]
-    @named sys = System(D.(x) .~ x, t)
+    @named sys = System(D(x) ~ x, t)
     @test_nowarn structural_simplify(sys)
 end
 
@@ -737,51 +709,6 @@ let
 
     @named sys = System(eqs, t)
     @test length(equations(structural_simplify(sys))) == 2
-end
-
-let
-    eq_to_lhs(eq) = eq.lhs - eq.rhs ~ 0
-    eqs_to_lhs(eqs) = eq_to_lhs.(eqs)
-
-    @parameters σ=10 ρ=28 β=8 / 3 sigma rho beta
-    @variables x(t)=1 y(t)=0 z(t)=0 x2(t)=1 y2(t)=0 z2(t)=0 u(t)[1:3]
-
-    eqs = [D(x) ~ σ * (y - x),
-        D(y) ~ x * (ρ - z) - y,
-        D(z) ~ x * y - β * z]
-
-    eqs2 = [
-        D(y2) ~ x2 * (rho - z2) - y2,
-        D(x2) ~ sigma * (y2 - x2),
-        D(z2) ~ x2 * y2 - beta * z2
-    ]
-
-    # array u
-    eqs3 = [D(u[1]) ~ sigma * (u[2] - u[1]),
-        D(u[2]) ~ u[1] * (rho - u[3]) - u[2],
-        D(u[3]) ~ u[1] * u[2] - beta * u[3]]
-    eqs3 = eqs_to_lhs(eqs3)
-
-    eqs4 = [
-        D(y2) ~ x2 * (rho - z2) - y2,
-        D(x2) ~ sigma * (y2 - x2),
-        D(z2) ~ y2 - beta * z2 # missing x2 term
-    ]
-
-    @named sys1 = System(eqs, t)
-    @named sys2 = System(eqs2, t)
-    @named sys3 = System(eqs3, t)
-    ssys3 = structural_simplify(sys3)
-    @named sys4 = System(eqs4, t)
-
-    @test ModelingToolkit.isisomorphic(sys1, sys2)
-    @test !ModelingToolkit.isisomorphic(sys1, sys3)
-    @test ModelingToolkit.isisomorphic(sys1, ssys3) # I don't call structural_simplify in isisomorphic
-    @test !ModelingToolkit.isisomorphic(sys1, sys4)
-
-    # 1281
-    iv2 = only(independent_variables(sys2))
-    @test isequal(only(independent_variables(convert_system(System, sys1, iv2))), iv2)
 end
 
 let
@@ -1572,14 +1499,16 @@ end
     @parameters p d
     @variables X(t)::Int64
     eq = D(X) ~ p - d * X
-    @test_throws ArgumentError @mtkbuild osys = System([eq], t)
+    @test_throws ModelingToolkit.ContinuousOperatorDiscreteArgumentError @mtkbuild osys = System(
+        [eq], t)
     @variables Y(t)[1:3]::String
     eq = D(Y) ~ [p, p, p]
-    @test_throws ArgumentError @mtkbuild osys = System([eq], t)
+    @test_throws ModelingToolkit.ContinuousOperatorDiscreteArgumentError @mtkbuild osys = System(
+        [eq], t)
 
     @variables X(t)::Complex
-    eq = D(X) ~ p - d * X
-    @test_nowarn @named osys = System([eq], t)
+    eqs = D(X) ~ p - d * X
+    @test_nowarn @named osys = System(eqs, t)
 end
 
 # Test `isequal`
@@ -1662,7 +1591,8 @@ end
     @test sol.t[end] == tspan[end]
     @test sum(abs, sol.u[end]) < 1
 
-    prob = ODEProblem{false}(lowered_dae_sys; u0_constructor = x -> SVector(x...))
+    prob = ODEProblem{false}(
+        lowered_dae_sys, nothing, tspan; u0_constructor = x -> SVector(x...))
     @test prob.u0 isa SVector
 end
 
@@ -1710,7 +1640,7 @@ end
     eqs = D(x(t)) ~ mat * x(t)
     cons = [x(3) ~ [2, 3, 3, 5, 4]]
     @mtkbuild ode = System(D(x(t)) ~ mat * x(t), t; constraints = cons)
-    @test length(constraints(ModelingToolkit.get_constraintsystem(ode))) == 5
+    @test length(constraints(ode)) == 1
 end
 
 @testset "`build_explicit_observed_function` with `expression = true` returns `Expr`" begin
