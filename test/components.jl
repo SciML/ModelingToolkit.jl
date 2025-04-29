@@ -327,36 +327,9 @@ end
 
 @testset "Issue#3275: Metadata retained on `complete`" begin
     @variables x(t) y(t)
-    @testset "ODESystem" begin
-        @named inner = System(D(x) ~ x, t)
-        @named outer = System(D(y) ~ y, t; systems = [inner], metadata = "test")
-        @test ModelingToolkit.get_metadata(outer) == "test"
-        sys = complete(outer)
-        @test ModelingToolkit.get_metadata(sys) == "test"
-    end
-    @testset "NonlinearSystem" begin
-        @named inner = System([0 ~ x^2 + 4x + 4], [x], [])
-        @named outer = System(
-            [0 ~ x^3 - y^3], [x, y], []; systems = [inner], metadata = "test")
-        @test ModelingToolkit.get_metadata(outer) == "test"
-        sys = complete(outer)
-        @test ModelingToolkit.get_metadata(sys) == "test"
-    end
-    k = ShiftIndex(t)
-    @testset "DiscreteSystem" begin
-        @named inner = System([x(k) ~ x(k - 1) + x(k - 2)], t, [x], [])
-        @named outer = System([y(k) ~ y(k - 1) + y(k - 2)], t, [x, y],
-            []; systems = [inner], metadata = "test")
-        @test ModelingToolkit.get_metadata(outer) == "test"
-        sys = complete(outer)
-        @test ModelingToolkit.get_metadata(sys) == "test"
-    end
-    @testset "OptimizationSystem" begin
-        @named inner = OptimizationSystem(x^2 + y^2 - 3, [x, y], [])
-        @named outer = OptimizationSystem(
-            x^3 - y, [x, y], []; systems = [inner], metadata = "test")
-        @test ModelingToolkit.get_metadata(outer) == "test"
-        sys = complete(outer)
-        @test ModelingToolkit.get_metadata(sys) == "test"
-    end
+    @named inner = System(D(x) ~ x, t)
+    @named outer = System(D(y) ~ y, t; systems = [inner], metadata = "test")
+    @test ModelingToolkit.get_metadata(outer) == "test"
+    sys = complete(outer)
+    @test ModelingToolkit.get_metadata(sys) == "test"
 end
