@@ -78,14 +78,14 @@ end
         t
     )
     @named sys2 = System(
-        [],
+        Equation[],
         t;
         parameter_dependencies = [p2 => 2p1]
     )
     sys = extend(sys2, sys1)
     @test !(p2 in Set(parameters(sys)))
     @test p2 in Set(full_parameters(sys))
-    prob = ODEProblem(complete(sys))
+    prob = ODEProblem(complete(sys), nothing, (0.0, 1.0))
     get_dep = getu(prob, 2p2)
     @test get_dep(prob) == 4
 end
@@ -99,7 +99,7 @@ end
         t;
         parameter_dependencies = [p2 => 2p1]
     )
-    prob = ODEProblem(complete(sys))
+    prob = ODEProblem(complete(sys), nothing, (0.0, 1.0))
     get_dep = getu(prob, 2p2)
     @test get_dep(prob) == 4
 end
@@ -131,9 +131,9 @@ end
         t;
         parameter_dependencies = [p2 => 2p1]
     )
-    sys = complete(System([], t, systems = [sys1, sys2], name = :sys))
+    sys = complete(System(Equation[], t, systems = [sys1, sys2], name = :sys))
 
-    prob = ODEProblem(sys)
+    prob = ODEProblem(sys, [], (0.0, 1.0))
     v1 = sys.sys2.p2
     v2 = 2 * v1
     @test is_observed(prob, v1)
