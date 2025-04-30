@@ -886,7 +886,7 @@ function compile_equational_affect(
         aff::Union{AffectSystem, Vector{Equation}}, sys; reset_jumps = false, kwargs...)
     if aff isa AbstractVector
         aff = make_affect(
-            aff; iv = get_iv(sys), alg_eqs = alg_equations(sys), warn_no_algebraic = false)
+            aff; iv = get_iv(sys), warn_no_algebraic = false)
     end
     affsys = system(aff)
     ps_to_update = discretes(aff)
