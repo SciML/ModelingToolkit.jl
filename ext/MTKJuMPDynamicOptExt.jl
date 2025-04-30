@@ -265,12 +265,8 @@ function add_infopt_solve_constraints!(model::InfiniteModel, sys, pmap; is_free_
     diffsubmap = Dict([D(U[i]) => ∂(U[i], t) for i in 1:length(U)])
     tₛ = is_free_t ? model[:tf] : 1
 
-    @show diff_equations(sys)
-    @show pmap
     diff_eqs = substitute_jump_vars(model, sys, pmap, diff_equations(sys))
-    @show diff_eqs
     diff_eqs = map(e -> Symbolics.substitute(e, diffsubmap), diff_eqs)
-    @show diff_eqs
     @constraint(model, D[i = 1:length(diff_eqs)], diff_eqs[i].lhs==tₛ * diff_eqs[i].rhs)
 
     # Algebraic equations
