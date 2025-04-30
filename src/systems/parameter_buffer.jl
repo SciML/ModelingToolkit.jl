@@ -31,7 +31,10 @@ function MTKParameters(
         t0 = nothing, substitution_limit = 1000, floatT = nothing,
         container_type = Vector)
     if !(container_type <: AbstractArray)
-        container_type = Array
+        throw(ArgumentError("""
+        `container_type` for `MTKParameters` must be a subtype of `AbstractArray`. Found \
+        $container_type.
+        """))
     end
     ic = if has_index_cache(sys) && get_index_cache(sys) !== nothing
         get_index_cache(sys)
