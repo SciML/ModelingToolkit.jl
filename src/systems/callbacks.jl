@@ -956,7 +956,8 @@ function compile_equational_affect(
             function implicit_affect!(integ)
                 new_us = u_getter(integ)
                 new_ps = p_getter(integ)
-                affprob = remake(affprob, u0 = new_us, p = new_ps, tspan = (integ.t, integ.t))
+                affprob = remake(
+                    affprob, u0 = new_us, p = new_ps, tspan = (integ.t, integ.t))
                 affsol = init(affprob, IDSolve())
                 (check_error(affsol) === ReturnCode.InitialFailure) &&
                     throw(UnsolvableCallbackError(all_equations(aff)))

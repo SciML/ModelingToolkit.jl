@@ -270,7 +270,8 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
     Wfact = RefValue(EMPTY_JAC)
     Wfact_t = RefValue(EMPTY_JAC)
 
-    cont_callbacks, disc_callbacks = create_symbolic_events(continuous_events, discrete_events, deqs, iv)
+    cont_callbacks, disc_callbacks = create_symbolic_events(
+        continuous_events, discrete_events, deqs, iv)
 
     if is_dde === nothing
         is_dde = _check_if_dde(deqs, iv′, systems)
