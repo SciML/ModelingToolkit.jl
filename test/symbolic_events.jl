@@ -638,8 +638,8 @@ end
     sol = solve(prob, Tsit5(), saveat = 0.1)
 
     @test typeof(oneosc_ce_simpl) == ODESystem
-    @test sol[1, 6] < 1.0 # test whether x(t) decreases over time
-    @test sol[1, 18] > 0.5 # test whether event happened
+    @test sol(0.5, idxs = oscce.x) < 1.0 # test whether x(t) decreases over time
+    @test sol(1.5, idxs = oscce.x) > 0.5 # test whether event happened
 end
 
 @testset "Additional SymbolicContinuousCallback options" begin

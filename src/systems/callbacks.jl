@@ -283,7 +283,7 @@ function make_affect(affect::Vector{Equation}; discrete_parameters = Any[],
     for eq in affect
         if !haspre(eq) && !(symbolic_type(eq.rhs) === NotSymbolic() ||
              symbolic_type(eq.lhs) === NotSymbolic())
-            @warn "Affect equation $eq has no `Pre` operator. As such it will be interpreted as an algebraic equation to be satisfied after the callback. If you intended to use the value of a variable x before the affect, use Pre(x)."
+            @warn "Affect equation $eq has no `Pre` operator. As such it will be interpreted as an algebraic equation to be satisfied after the callback. If you intended to use the value of a variable x before the affect, use Pre(x). Errors may be thrown if there is no `Pre` and algebraic equations are unsatisfiable, such as X ~ X + 1."
         end
         collect_vars!(dvs, params, eq, iv; op = Pre)
         diffvs = collect_applied_operators(eq, Differential)
