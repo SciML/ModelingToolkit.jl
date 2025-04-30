@@ -556,7 +556,7 @@ end
     @parameters a b
     eq = D(X) ~ a
     rate = b * X
-    affect = [X ~ X - 1]
+    affect = [X ~ Pre(X) - 1]
     crj = ConstantRateJump(rate, affect)
     @named jsys = JumpSystem([crj, eq], t, [X], [a, b])
     jsys = complete(jsys)
