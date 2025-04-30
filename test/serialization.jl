@@ -22,12 +22,14 @@ for prob in [
     run(`$(Base.julia_cmd()) -e $(_cmd)`)
 end
 
-include("../examples/rc_model.jl")
+include("common/rc_model.jl")
+@unpack capacitor = rc_model
 io = IOBuffer()
-write(io, rc_model)
+write(io, expand_connections(rc_model))
 str = String(take!(io))
+
 sys = include_string(@__MODULE__, str)
-@test sys == flatten(rc_model) # this actually kind of works, but the variables would have different identities.
+@test sys == expand_connections(rc_model) # this actually kind of works, but the variables would have different identities.
 
 # check answer
 ss = structural_simplify(rc_model)

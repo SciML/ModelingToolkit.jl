@@ -1,6 +1,6 @@
 using ModelingToolkit, AbstractTrees, Test
 
-include("../examples/rc_model.jl")
+include("common/rc_model.jl")
 
 io = IOBuffer()
 print_tree(io, rc_model)
@@ -12,9 +12,12 @@ str = """rc_model
       ├─ capacitor
       │  ├─ p
       │  └─ n
+      ├─ shape
+      │  └─ output
       ├─ source
       │  ├─ p
-      │  └─ n
+      │  ├─ n
+      │  └─ V
       └─ ground
          └─ g
       """
