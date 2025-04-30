@@ -336,13 +336,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         throw(ArgumentError("System names must be unique."))
     end
 
-    alg_eqs = filter(eq -> eq.lhs isa Union{Symbolic, Number} && !is_diff_equation(eq),
-        deqs)
-    cont_callbacks = to_cb_vector(continuous_events; CB_TYPE = SymbolicContinuousCallback,
-        iv = iv, alg_eqs = alg_eqs, warn_no_algebraic = false)
-    disc_callbacks = to_cb_vector(discrete_events; CB_TYPE = SymbolicDiscreteCallback,
-        iv = iv, alg_eqs = alg_eqs, warn_no_algebraic = false)
-
+    cont_callbacks, disc_callbacks = create_symbolic_events(
+        continuous_events, discrete_events, deqs, iv)
     if is_dde === nothing
         is_dde = _check_if_dde(deqs, iv′, systems)
     end

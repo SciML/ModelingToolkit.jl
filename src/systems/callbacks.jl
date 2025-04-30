@@ -940,32 +940,28 @@ function compile_equational_affect(
             dvs_to_access = unknowns(affsys)
             ps_to_access = parameters(affsys)
 
-            u_getters = [getsym(sys, aff_map[u]) for u in dvs_to_access]
-            p_getters = [getsym(sys, unPre(p)) for p in ps_to_access]
-            u_setters = [setsym(sys, u) for u in dvs_to_update]
-            p_setters = [setsym(sys, p) for p in ps_to_update]
-            affu_getters = [getsym(affsys, sys_map[u]) for u in dvs_to_update]
-            affp_getters = [getsym(affsys, sys_map[p]) for p in ps_to_update]
+            u_getter = getsym(sys, [aff_map[u] for u in dvs_to_access])
+            p_getter = getsym(sys, [unPre(p) for p in ps_to_access])
+            u_setter! = setsym(sys, dvs_to_update)
+            p_setter! = setsym(sys, ps_to_update)
+            affu_getter = getsym(affsys, [sys_map[u] for u in dvs_to_update])
+            affp_getter = getsym(affsys, [sys_map[p] for p in ps_to_update])
 
             affprob = ImplicitDiscreteProblem(affsys, [dv => 0 for dv in dvs_to_access],
                 (0, 0), [p => 0 for p in ps_to_access];
                 build_initializeprob = false, check_length = false)
 
             function implicit_affect!(integ)
-                pmap = Pair[p => getp(integ) for (p, getp) in zip(ps_to_access, p_getters)]
-                u0map = Pair[u => getu(integ)
-                             for (u, getu) in zip(dvs_to_access, u_getters)]
-                affprob = remake(affprob, u0 = u0map, p = pmap, tspan = (integ.t, integ.t))
+                new_us = u_getter(integ)
+                new_ps = p_getter(integ)
+                affprob = remake(
+                    affprob, u0 = new_us, p = new_ps, tspan = (integ.t, integ.t))
                 affsol = init(affprob, IDSolve())
                 (check_error(affsol) === ReturnCode.InitialFailure) &&
                     throw(UnsolvableCallbackError(all_equations(aff)))
 
-                for (setu!, getu) in zip(u_setters, affu_getters)
-                    setu!(integ, getu(affsol))
-                end
-                for (setp!, getp) in zip(p_setters, affp_getters)
-                    setp!(integ, getp(affsol))
-                end
+                u_setter!(integ, affu_getter(affsol))
+                p_setter!(integ, affp_getter(affsol))
             end
         end
     end
@@ -1077,4 +1073,17 @@ function continuous_events_toplevel(sys::AbstractSystem)
         return continuous_events_toplevel(parent)
     end
     return get_continuous_events(sys)
+end
+
+"""
+Process the symbolic events of a system.
+"""
+function create_symbolic_events(cont_events, disc_events, sys_eqs, iv)
+    alg_eqs = filter(eq -> eq.lhs isa Union{Symbolic, Number} && !is_diff_equation(eq),
+        sys_eqs)
+    cont_callbacks = to_cb_vector(cont_events; CB_TYPE = SymbolicContinuousCallback,
+        iv = iv, alg_eqs = alg_eqs, warn_no_algebraic = false)
+    disc_callbacks = to_cb_vector(disc_events; CB_TYPE = SymbolicDiscreteCallback,
+        iv = iv, alg_eqs = alg_eqs, warn_no_algebraic = false)
+    cont_callbacks, disc_callbacks
 end
