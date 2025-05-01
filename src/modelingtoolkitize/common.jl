@@ -39,6 +39,10 @@ function define_vars(u, t)
     [_defvaridx(:x, i)(t) for i in eachindex(u)]
 end
 
+function define_vars(u, ::Nothing)
+    [variable(:x, i) for i in eachindex(u)]
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -53,13 +57,21 @@ function construct_vars(prob, t, u_names = nothing)
     if u_names !== nothing
         # explicitly provided names
         varnames_length_check(state_values(prob), u_names; is_unknowns = true)
-        _vars = [_defvar(name)(t) for name in u_names]
+        if t === nothing
+            _vars = [variable(name) for name in u_names]
+        else
+            _vars = [_defvar(name)(t) for name in u_names]
+        end
     elseif SciMLBase.has_sys(prob.f)
         # get names from the system
         varnames = getname.(variable_symbols(prob.f.sys))
         varidxs = variable_index.((prob.f.sys,), varnames)
         invpermute!(varnames, varidxs)
-        _vars = [_defvar(name)(t) for name in varnames]
+        if t === nothing
+            _vars = [variable(name) for name in varnames]
+        else
+            _vars = [_defvar(name)(t) for name in varnames]
+        end
     else
         # auto-generate names
         _vars = define_vars(state_values(prob), t)
