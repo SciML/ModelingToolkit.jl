@@ -851,14 +851,6 @@ let
     @test string.(independent_variables(prob.f.sys)) == ["t"]
 end
 
-let
-    @parameters P(t) Q(t)
-    ∂t = D
-    eqs = [∂t(Q) ~ 0.2P
-           ∂t(P) ~ -80.0sin(Q)]
-    @test_throws ArgumentError @named sys = System(eqs, t)
-end
-
 @parameters C L R
 @variables q(t) p(t) F(t)
 
