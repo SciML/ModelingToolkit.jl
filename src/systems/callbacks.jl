@@ -944,8 +944,8 @@ function compile_equational_affect(
 
             affu_getter = getsym(sys, dvs_to_access)
             affp_getter = getsym(sys, ps_to_access)
-            affu_setter! = setsym(sys, unknowns(affsys))
-            affp_setter! = setsym(sys, parameters(affsys))
+            affu_setter! = setsym(affsys, unknowns(affsys))
+            affp_setter! = setsym(affsys, parameters(affsys))
             u_setter! = setsym(sys, dvs_to_update)
             p_setter! = setsym(sys, ps_to_update)
             u_getter = getsym(affsys, [sys_map[u] for u in dvs_to_update])
@@ -957,7 +957,7 @@ function compile_equational_affect(
 
             function implicit_affect!(integ)
                 new_u0 = affu_getter(integ)
-                affu_setter!(affporb, new_u0)
+                affu_setter!(affprob, new_u0)
                 new_ps = affp_getter(integ)
                 affp_setter!(affprob, new_ps)
 
