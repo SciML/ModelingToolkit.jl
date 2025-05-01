@@ -101,10 +101,22 @@ end
 
 namespace_affects(af::ImperativeAffect, s) = namespace_affect(af, s)
 function namespace_affect(affect::ImperativeAffect, s)
+    rmn = []
+    for modded in modified(affect)
+        if modded isa AbstractArray
+            res = []
+            for m in modded
+                push!(res, renamespace(s, m))
+            end
+            push!(rmn, res)
+        else 
+            push!(rmn, renamespace(s, modded))
+        end
+    end
     ImperativeAffect(func(affect),
         namespace_expr.(observed(affect), (s,)),
         observed_syms(affect),
-        renamespace.((s,), modified(affect)),
+        rmn,
         modified_syms(affect),
         context(affect),
         affect.skip_checks)
