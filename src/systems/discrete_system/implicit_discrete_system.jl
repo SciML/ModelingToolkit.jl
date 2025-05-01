@@ -384,6 +384,8 @@ function SciMLBase.ImplicitDiscreteFunction{iip, specialize}(
     else
         resid_prototype = calculate_resid_prototype(length(equations(sys)), u0, p)
     end
+    out = zeros(length(dvs))
+    u = zeros(length(dvs)) 
 
     if specialize === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
