@@ -346,14 +346,18 @@ end
 Given a problem `prob`, the symbolic unknowns and params and the independent variable,
 trace through `prob.f` and return the resultant expression.
 """
-function trace_rhs(prob, vars, params, t)
+function trace_rhs(prob, vars, params, t; prototype = nothing)
     args = (vars, params)
     if t !== nothing
         args = (args..., t)
     end
     # trace prob.f to get equation RHS
     if SciMLBase.isinplace(prob.f)
-        rhs = ArrayInterface.restructure(prob.u0, similar(vars, Num))
+        if prototype === nothing
+            rhs = ArrayInterface.restructure(prob.u0, similar(vars, Num))
+        else
+            rhs = similar(prototype, Num)
+        end
         fill!(rhs, 0)
         if prob.f isa SciMLBase.AbstractSciMLFunction &&
            prob.f.f isa FunctionWrappersWrappers.FunctionWrappersWrapper
