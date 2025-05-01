@@ -283,7 +283,7 @@ function make_affect(affect::Vector{Equation}; discrete_parameters = Any[],
     for eq in affect
         if !haspre(eq) && !(symbolic_type(eq.rhs) === NotSymbolic() ||
              symbolic_type(eq.lhs) === NotSymbolic())
-            @warn "Affect equation $eq has no `Pre` operator. As such it will be interpreted as an algebraic equation to be satisfied after the callback. If you intended to use the value of a variable x before the affect, use Pre(x). Errors may be thrown if there is no `Pre` and algebraic equations are unsatisfiable, such as X ~ X + 1."
+            @warn "Affect equation $eq has no `Pre` operator. As such it will be interpreted as an algebraic equation to be satisfied after the callback. If you intended to use the value of a variable x before the affect, use Pre(x). Errors may be thrown if there is no `Pre` and the algebraic equation is unsatisfiable, such as X ~ X + 1."
         end
         collect_vars!(dvs, params, eq, iv; op = Pre)
         diffvs = collect_applied_operators(eq, Differential)
@@ -937,31 +937,36 @@ function compile_equational_affect(
         return let dvs_to_update = dvs_to_update, aff_map = aff_map, sys_map = sys_map,
             affsys = affsys, ps_to_update = ps_to_update, aff = aff, sys = sys
 
-            dvs_to_access = unknowns(affsys)
-            ps_to_access = parameters(affsys)
+            dvs_to_access = [aff_map[u] for u in unknowns(affsys)]
+            ps_to_access = [unPre(p) for p in parameters(affsys)]
 
-            u_getter = getsym(sys, [aff_map[u] for u in dvs_to_access])
-            p_getter = getsym(sys, [unPre(p) for p in ps_to_access])
+            affu_getter = getsym(sys, dvs_to_access)
+            affp_getter = getsym(sys, ps_to_access)
+            affu_setter! = setsym(affsys, unknowns(affsys))
+            affp_setter! = setsym(affsys, parameters(affsys))
             u_setter! = setsym(sys, dvs_to_update)
             p_setter! = setsym(sys, ps_to_update)
-            affu_getter = getsym(affsys, [sys_map[u] for u in dvs_to_update])
-            affp_getter = getsym(affsys, [sys_map[p] for p in ps_to_update])
+            u_getter = getsym(affsys, [sys_map[u] for u in dvs_to_update])
+            p_getter = getsym(affsys, [sys_map[p] for p in ps_to_update])
 
-            affprob = ImplicitDiscreteProblem(affsys, [dv => 0 for dv in dvs_to_access],
-                (0, 0), [p => 0 for p in ps_to_access];
+            affprob = ImplicitDiscreteProblem(affsys, [dv => 0 for dv in unknowns(affsys)],
+                                              (0, 0), [p => 0. for p in parameters(affsys)];
                 build_initializeprob = false, check_length = false)
 
             function implicit_affect!(integ)
-                new_us = u_getter(integ)
-                new_ps = p_getter(integ)
+                new_u0 = affu_getter(integ)
+                affu_setter!(affprob, new_u0)
+                new_ps = affp_getter(integ)
+                affp_setter!(affprob, new_ps)
+
                 affprob = remake(
-                    affprob, u0 = new_us, p = new_ps, tspan = (integ.t, integ.t))
+                    affprob, tspan = (integ.t, integ.t))
                 affsol = init(affprob, IDSolve())
                 (check_error(affsol) === ReturnCode.InitialFailure) &&
                     throw(UnsolvableCallbackError(all_equations(aff)))
 
-                u_setter!(integ, affu_getter(affsol))
-                p_setter!(integ, affp_getter(affsol))
+                u_setter!(integ, u_getter(affsol))
+                p_setter!(integ, p_getter(affsol))
             end
         end
     end
