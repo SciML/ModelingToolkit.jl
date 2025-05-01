@@ -185,8 +185,7 @@ include("problems/bvproblem.jl")
 include("modelingtoolkitize/common.jl")
 include("modelingtoolkitize/odeproblem.jl")
 include("modelingtoolkitize/sdeproblem.jl")
-
-include("systems/optimization/modelingtoolkitize.jl")
+include("modelingtoolkitize/optimizationproblem.jl")
 
 include("systems/nonlinear/homotopy_continuation.jl")
 include("systems/nonlinear/modelingtoolkitize.jl")
