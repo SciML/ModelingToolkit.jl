@@ -109,7 +109,7 @@ function namespace_affect(affect::ImperativeAffect, s)
                 push!(res, renamespace(s, m))
             end
             push!(rmn, res)
-        else 
+        else
             push!(rmn, renamespace(s, modded))
         end
     end
