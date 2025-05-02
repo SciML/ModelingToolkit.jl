@@ -126,10 +126,23 @@ function change_independent_variable(
     # Set up intermediate and final variables for the transformation
     iv1name = nameof(iv1) # e.g. :t
     iv2name = nameof(operation(iv2_of_iv1)) # e.g. :u
-    iv2, = @independent_variables $iv2name # e.g. u
-    iv1_of_iv2, = GlobalScope.(@variables $iv1name(iv2)) # inverse, e.g. t(u), global because iv1 has no namespacing in sys
     D1 = Differential(iv1) # e.g. d/d(t)
-    div2_of_iv1 = GlobalScope(default_toterm(D1(iv2_of_iv1))) # e.g. uˍt(t)
+
+    # construct new terms, e.g:
+    #   iv2 -> u
+    #   iv1_of_iv2 -> t(u), (inverse, global because iv1 has no namespacing in sys)
+    #   div2_of_iv1 -> uˍt(t)
+    iv2_unit = getmetadata(iv2_of_iv1, VariableUnit, nothing)
+    if isnothing(iv2_unit)
+        iv2, = @independent_variables $iv2name
+        iv1_of_iv2, = GlobalScope.(@variables $iv1name(iv2))
+        div2_of_iv1 = GlobalScope(default_toterm(D1(iv2_of_iv1)))
+    else
+        iv2, = @independent_variables $iv2name [unit = iv2_unit]
+        iv1_of_iv2, = GlobalScope.(@variables $iv1name(iv2) [unit = get_unit(iv1)])
+        div2_of_iv1 = GlobalScope(diff2term_with_unit(D1(iv2_of_iv1), iv1))
+    end
+
     div2_of_iv2 = substitute(div2_of_iv1, iv1 => iv2) # e.g. uˍt(u)
     div2_of_iv2_of_iv1 = substitute(div2_of_iv2, iv2 => iv2_of_iv1) # e.g. uˍt(u(t))
 

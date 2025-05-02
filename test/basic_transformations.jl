@@ -1,4 +1,4 @@
-using ModelingToolkit, OrdinaryDiffEq, DataInterpolations, Test
+using ModelingToolkit, OrdinaryDiffEq, DataInterpolations, DynamicQuantities, Test
 
 @independent_variables t
 D = Differential(t)
@@ -214,4 +214,20 @@ end
     @variables x(..) # require explicit argument
     M = ODESystem([D(x(t)) ~ x(t - 1)], t; name = :M)
     @test_throws "DDE" change_independent_variable(M, x(t))
+end
+
+@testset "Change independent variable w/ units (free fall with 2nd order horizontal equation)" begin
+    @independent_variables t_units [unit = u"s"]
+    D_units = Differential(t_units)
+    @variables x(t_units) [unit = u"m"] y(t_units) [unit = u"m"]
+    @parameters g = 9.81 [unit = u"m * s^-2"] # gravitational acceleration
+    Mt = ODESystem([D_units(D_units(y)) ~ -g, D_units(D_units(x)) ~ 0], t_units; name = :M) # gives (x, y) as function of t, ...
+    Mx = change_independent_variable(Mt, x; add_old_diff = true) # ... but we want y as a function of x
+    Mx = structural_simplify(Mx; allow_symbolic = true)
+    Dx = Differential(Mx.x)
+    u0 = [Mx.y => 0.0, Dx(Mx.y) => 1.0, Mx.t_units => 0.0, Mx.xˍt_units => 10.0]
+    prob = ODEProblem(Mx, u0, (0.0, 20.0), []) # 1 = dy/dx = (dy/dt)/(dx/dt) means equal initial horizontal and vertical velocities
+    sol = solve(prob, Tsit5(); reltol = 1e-5)
+    # compare to analytical solution (x(t) = v*t, y(t) = v*t - g*t^2/2)
+    @test all(isapprox.(sol[Mx.y], sol[Mx.x - g * (Mx.t_units)^2 / 2]; atol = 1e-10))
 end
