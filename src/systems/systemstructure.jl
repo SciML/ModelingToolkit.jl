@@ -659,10 +659,9 @@ end
 
 function structural_simplify!(state::TearingState; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = true,
-        inputs = Any[], outputs = Any[], 
+        inputs = Any[], outputs = Any[],
         disturbance_inputs = Any[],
         kwargs...)
-
     if state.sys isa ODESystem
         ci = ModelingToolkit.ClockInference(state)
         ci = ModelingToolkit.infer_clocks!(ci)
@@ -725,7 +724,8 @@ function _structural_simplify!(state::TearingState; simplify = false,
     else
         check_consistency = true
     end
-    has_io = !isempty(inputs) || !isempty(outputs) !== nothing || !isempty(disturbance_inputs)
+    has_io = !isempty(inputs) || !isempty(outputs) !== nothing ||
+             !isempty(disturbance_inputs)
     orig_inputs = Set()
     if has_io
         ModelingToolkit.markio!(state, orig_inputs, inputs, outputs, disturbance_inputs)

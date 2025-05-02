@@ -93,7 +93,8 @@ function __structural_simplify(sys::AbstractSystem; simplify = false,
         end
     end
     if isempty(brown_vars)
-        return structural_simplify!(state; simplify, inputs, outputs, disturbance_inputs, kwargs...)
+        return structural_simplify!(
+            state; simplify, inputs, outputs, disturbance_inputs, kwargs...)
     else
         Is = Int[]
         Js = Int[]
@@ -125,7 +126,8 @@ function __structural_simplify(sys::AbstractSystem; simplify = false,
                               for (i, v) in enumerate(fullvars)
                               if !iszero(new_idxs[i]) &&
                                  invview(var_to_diff)[i] === nothing]
-        ode_sys = structural_simplify(sys; simplify, inputs, outputs, disturbance_inputs, kwargs...)
+        ode_sys = structural_simplify(
+            sys; simplify, inputs, outputs, disturbance_inputs, kwargs...)
         eqs = equations(ode_sys)
         sorted_g_rows = zeros(Num, length(eqs), size(g, 2))
         for (i, eq) in enumerate(eqs)

@@ -200,7 +200,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
         check_simplified = true,
         kwargs...)
     # Remove this when the ControlFunction gets merged.
-    if check_simplified && !iscomplete(sys) 
+    if check_simplified && !iscomplete(sys)
         error("A completed `ODESystem` is required. Call `complete` or `structural_simplify` on the system before creating the control function.")
     end
     isempty(inputs) && @warn("No unbound inputs were found in system.")
