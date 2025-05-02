@@ -60,6 +60,9 @@ function __structural_simplify(sys::AbstractSystem; simplify = false,
     if has_noise_eqs(sys) && get_noise_eqs(sys) !== nothing
         sys = noise_to_brownians(sys; names = :αₘₜₖ)
     end
+    if isempty(equations(sys)) && !is_time_dependent(sys) && !_iszero(cost(sys))
+        return simplify_optimization_system(sys; kwargs..., sort_eqs, simplify)
+    end
 
     sys = expand_connections(sys)
     state = TearingState(sys; sort_eqs)
@@ -150,6 +153,49 @@ function __structural_simplify(sys::AbstractSystem; simplify = false,
             continuous_events = continuous_events(sys),
             discrete_events = discrete_events(sys))
     end
+end
+
+function simplify_optimization_system(sys::System; split = true, kwargs...)
+    sys = flatten(sys)
+    cons = constraints(sys)
+    econs = Equation[]
+    icons = similar(cons, 0)
+    for e in cons
+        if e isa Equation
+            push!(econs, e)
+        else
+            push!(icons, e)
+        end
+    end
+    irreducible_subs = Dict()
+    dvs = mapreduce(Symbolics.scalarize, vcat, unknowns(sys))
+    if !(dvs isa Array)
+        dvs = [dvs]
+    end
+    for i in eachindex(dvs)
+        var = dvs[i]
+        if hasbounds(var)
+            irreducible_subs[var] = irrvar = setirreducible(var, true)
+            dvs[i] = irrvar
+        end
+    end
+    econs = fast_substitute.(econs, (irreducible_subs,))
+    nlsys = System(econs, dvs, parameters(sys); name = :___tmp_nlsystem)
+    snlsys = structural_simplify(nlsys; kwargs..., fully_determined = false)
+    obs = observed(snlsys)
+    subs = Dict(eq.lhs => eq.rhs for eq in observed(snlsys))
+    seqs = equations(snlsys)
+    cons_simplified = similar(cons, length(icons) + length(seqs))
+    for (i, eq) in enumerate(Iterators.flatten((seqs, icons)))
+        cons_simplified[i] = fixpoint_sub(eq, subs)
+    end
+    newsts = setdiff(dvs, keys(subs))
+    @set! sys.constraints = cons_simplified
+    @set! sys.observed = [observed(sys); obs]
+    newcost = fixpoint_sub.(get_costs(sys), (subs,))
+    @set! sys.costs = newcost
+    @set! sys.unknowns = newsts
+    return sys
 end
 
 function __num_isdiag_noise(mat)
