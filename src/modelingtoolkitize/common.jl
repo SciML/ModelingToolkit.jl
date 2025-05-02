@@ -72,6 +72,14 @@ function construct_vars(prob, t, u_names = nothing)
         else
             _vars = [_defvar(name)(t) for name in varnames]
         end
+        if prob.f.sys isa System
+            for (i, sym) in enumerate(variable_symbols(prob.f.sys))
+                if hasbounds(sym)
+                    _vars[i] = Symbolics.setmetadata(
+                        _vars[i], VariableBounds, getbounds(sym))
+                end
+            end
+        end
     else
         # auto-generate names
         _vars = define_vars(state_values(prob), t)
