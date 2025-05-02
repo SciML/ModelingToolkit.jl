@@ -164,23 +164,23 @@ end
     @variables x(t) v(..) w(t)[1:3]
     @parameters y z(u, t) r[1:3]
 
-    @test At(1)(x) isa Num
-    @test isequal(At(1)(y), y)
-    @test_throws ErrorException At(1)(z)
-    @test isequal(At(1)(v), v(1))
-    @test isequal(At(1)(v(t)), v(1))
-    @test isequal(At(1)(v(2)), v(2))
+    @test EvalAt(1)(x) isa Num
+    @test isequal(EvalAt(1)(y), y)
+    @test_throws ErrorException EvalAt(1)(z)
+    @test isequal(EvalAt(1)(v), v(1))
+    @test isequal(EvalAt(1)(v(t)), v(1))
+    @test isequal(EvalAt(1)(v(2)), v(2))
 
-    arr = At(1)(w)
-    var = At(1)(w[1])
+    arr = EvalAt(1)(w)
+    var = EvalAt(1)(w[1])
     @test arr isa Symbolics.Arr
     @test var isa Num
 
-    @test isequal(At(1)(r), r)
-    @test isequal(At(1)(r[2]), r[2])
+    @test isequal(EvalAt(1)(r), r)
+    @test isequal(EvalAt(1)(r[2]), r[2])
 
     _x = ModelingToolkit.unwrap(x)
-    @test At(1)(_x) isa Symbolics.BasicSymbolic
-    @test only(arguments(At(1)(_x))) == 1
-    @test At(1)(D(x)) isa Num
+    @test EvalAt(1)(_x) isa Symbolics.BasicSymbolic
+    @test only(arguments(EvalAt(1)(_x))) == 1
+    @test EvalAt(1)(D(x)) isa Num
 end

@@ -1037,12 +1037,12 @@ end
             x ~ y
         end
         @constraints begin
-            At(0.3)(x) ~ 3
+            EvalAt(0.3)(x) ~ 3
             y ≲ 4
         end
         @costs begin
             x + y
-            At(1)(y)^2
+            EvalAt(1)(y)^2
         end
         @consolidate f(u) = u[1]^2 + log(u[2])
     end
@@ -1053,8 +1053,8 @@ end
     costs = ModelingToolkit.get_costs(ex)
     constrs = ModelingToolkit.get_constraints(ModelingToolkit.get_constraintsystem(ex))
     @test isequal(costs[1], ex.x + ex.y)
-    @test isequal(costs[2], At(1)(ex.y)^2)
-    @test isequal(constrs[1], -3 + At(0.3)(ex.x) ~ 0)
+    @test isequal(costs[2], EvalAt(1)(ex.y)^2)
+    @test isequal(constrs[1], -3 + EvalAt(0.3)(ex.x) ~ 0)
     @test isequal(constrs[2], -4 + ex.y ≲ 0)
     @test ModelingToolkit.get_consolidate(ex)([1, 2]) ≈ 1 + log(2)
 end

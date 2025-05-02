@@ -616,11 +616,11 @@ getshift(x::Symbolic) = Symbolics.getmetadata(x, VariableShift, 0)
 ###################
 ### Evaluate at ###
 ###################
-struct At <: Symbolics.Operator
+struct EvalAt <: Symbolics.Operator
     t::Union{Symbolic, Number}
 end
 
-function (A::At)(x::Symbolic)
+function (A::EvalAt)(x::Symbolic)
     if symbolic_type(x) == NotSymbolic() || !iscall(x)
         if x isa Symbolics.CallWithMetadata
             return x(A.t)
@@ -637,18 +637,18 @@ function (A::At)(x::Symbolic)
         A(x)
     else
         length(arguments(x)) !== 1 &&
-            error("Variable $x has too many arguments. At can only be applied to one-argument variables.")
+            error("Variable $x has too many arguments. EvalAt can only be applied to one-argument variables.")
         (symbolic_type(only(arguments(x))) !== ScalarSymbolic()) && return x
         return operation(x)(A.t)
     end
 end
 
-function (A::At)(x::Union{Num, Symbolics.Arr})
+function (A::EvalAt)(x::Union{Num, Symbolics.Arr})
     wrap(A(unwrap(x)))
 end
-SymbolicUtils.isbinop(::At) = false
+SymbolicUtils.isbinop(::EvalAt) = false
 
-Base.nameof(::At) = :At
-Base.show(io::IO, A::At) = print(io, "At(", A.t, ")")
-Base.:(==)(A1::At, A2::At) = isequal(A1.t, A2.t)
-Base.hash(A::At, u::UInt) = hash(A.t, u)
+Base.nameof(::EvalAt) = :EvalAt
+Base.show(io::IO, A::EvalAt) = print(io, "EvalAt(", A.t, ")")
+Base.:(==)(A1::EvalAt, A2::EvalAt) = isequal(A1.t, A2.t)
+Base.hash(A::EvalAt, u::UInt) = hash(A.t, u)
