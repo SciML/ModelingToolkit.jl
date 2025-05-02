@@ -662,7 +662,6 @@ function structural_simplify!(state::TearingState; simplify = false,
         inputs = Any[], outputs = Any[],
         disturbance_inputs = Any[],
         kwargs...)
-
     if state.sys isa ODESystem
         ci = ModelingToolkit.ClockInference(state)
         ci = ModelingToolkit.infer_clocks!(ci)
