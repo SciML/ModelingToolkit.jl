@@ -637,6 +637,14 @@ function OptimizationSystem(cost, dvs, ps; kwargs...)
     return System(Equation[], nothing, dvs, ps; costs = [cost], kwargs...)
 end
 
+function OptimizationSystem(cost::Array; kwargs...)
+    return System(Equation[]; costs = vec(cost), kwargs...)
+end
+
+function OptimizationSystem(cost::Array, dvs, ps; kwargs...)
+    return System(Equation[], nothing, dvs, ps; costs = vec(cost), kwargs...)
+end
+
 function JumpSystem(jumps, iv; kwargs...)
     mask = isa.(jumps, Equation)
     eqs = Vector{Equation}(jumps[mask])
