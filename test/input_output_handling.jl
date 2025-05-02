@@ -202,7 +202,8 @@ end
 
         @named sys = ODESystem(eqs, t)
         sys = structural_simplify(sys, inputs = [u], disturbance_inputs = [d])
-        f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys; simplify, split, disturbance_argument = true)
+        f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(
+            sys; simplify, split, disturbance_argument = true)
 
         @test isequal(dvs[], x)
         @test isempty(ps)
