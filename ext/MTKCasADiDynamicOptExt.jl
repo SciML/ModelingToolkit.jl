@@ -20,17 +20,32 @@ struct CasADiDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
     end
 end
 
+# Default linear interpolation for MX objects, likely to change down the line when we support interpolation with the collocation polynomial.
+struct MXLinearInterpolation
+    u::MX
+    t::Vector{Float64}
+    dt::Float64
+end
+
 struct CasADiModel
     opti::Opti
-    U::AbstractInterpolation
-    V::AbstractInterpolation
+    U::MXLinearInterpolation
+    V::MXLinearInterpolation
     tₛ::Union{Number, MX}
+end
+
+function (M::MXLinearInterpolation)(τ) 
+    nt = (τ - M.t) / M.dt
+    i = 1 + floor(Int, nt)
+    Δ = nt - i + 1
+
+    (i > length(M.t) || i < 1) && error("Cannot extrapolate past the tspan.")
+    M.u[i] + Δ*(M.u[i + 1] - M.u[i])
 end
 
 function MTK.CasADiDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
         dt = nothing,
         steps = nothing,
-        interpolation_method::AbstractInterpolation = LinearInterpolation,
         guesses = Dict(), kwargs...) 
     MTK.warn_overdetermined(sys, u0map)
     _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
@@ -39,10 +54,10 @@ function MTK.CasADiDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
 
     pmap = Dict{Any, Any}(pmap)
     steps, is_free_t = MTK.process_tspan(tspan, dt, steps)
-    model = init_model()
+    model = init_model(sys, tspan, steps, u0map, pmap, u0; is_free_t)
 end
 
-function init_model(sys, tspan, steps, u0map, pmap, u0; is_free_t = false, interp_type::AbstractInterpolation)
+function init_model(sys, tspan, steps, u0map, pmap, u0; is_free_t = false)
     ctrls = MTK.unbound_inputs(sys)
     states = unknowns(sys)
     opti = CasADi.Opti()
@@ -61,8 +76,8 @@ function init_model(sys, tspan, steps, u0map, pmap, u0; is_free_t = false, inter
     U = CasADi.variable!(opti, length(states), steps)
     V = CasADi.variable!(opti, length(ctrls), steps)
 
-    U_interp = interp_type(Matrix(U), tsteps)
-    V_interp = interp_type(Matrix(V), tsteps)
+    U_interp = MXLinearInterpolation(U, tsteps, tsteps[2]-tsteps[1])
+    V_interp = MXLinearInterpolation(V, tsteps, tsteps[2]-tsteps[1])
 
     CasADiModel(opti, U_interp, V_interp, tₛ)
 end
@@ -220,9 +235,8 @@ function add_solve_constraints!(prob, tableau; is_free_t)
     end
 end
 
-
 """
-    solve(prob::CasADiDynamicOptProblem, casadi_solver, ode_solver; plugin_options, solver_options) 
+    solve(prob::CasADiDynamicOptProblem, casadi_solver, ode_solver; plugin_options, solver_options, silent)
 
 `plugin_options` and `solver_options` get propagated to the Opti object in CasADi.
 """
@@ -247,7 +261,6 @@ function DiffEqBase.solve(prob::CasADiDynamicOptProblem, solver::Union{String, S
     catch ErrorException
         value_getter = x -> CasADi.debug_value(opti, x)
         failed = true
-        continue
     end
 
     ts = value_getter(tₛ) * U.t
@@ -270,5 +283,4 @@ function DiffEqBase.solve(prob::CasADiDynamicOptProblem, solver::Union{String, S
 
     DynamicOptSolution(cmodel, sol, input_sol)
 end
-
 end
