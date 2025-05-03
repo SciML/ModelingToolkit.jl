@@ -220,7 +220,7 @@ end
     @parameters tf
     eqs = [D(x(t)) ~ -2 + 0.5 * u(t)]
     # Integral cost function
-    costs = [-∫(x(t) - u(t)), -x(tf)]
+    costs = [-Symbolics.Integral(t in (0, tf))(x(t) - u(t)), -x(tf)]
     consolidate(u) = u[1] + u[2]
     @named rocket = ODESystem(eqs, t; costs, consolidate)
     rocket, input_idxs = structural_simplify(rocket, ([u(t)], []))

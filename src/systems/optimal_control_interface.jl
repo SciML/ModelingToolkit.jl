@@ -18,8 +18,6 @@ end
 
 function JuMPDynamicOptProblem end
 function InfiniteOptDynamicOptProblem end
-function CasADiDynamicOptProblem end
-function PyomoDynamicOptProblem end
 
 function warn_overdetermined(sys, u0map)
     constraintsys = get_constraintsystem(sys)
@@ -141,29 +139,6 @@ function SciMLBase.ODEInputFunction{false}(sys::AbstractODESystem, args...;
         kwargs...)
     ODEInputFunction{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
-
-"""
-Integral operator. When applied to an expression in a cost
-function, assumes that the integration variable is the
-iv of the system, and assumes that the bounds are the
-tspan.
-Equivalent to Integral(t in tspan) in Symbolics.
-"""
-struct ∫ <: Symbolics.Operator end
-∫(x) = ∫()(x)
-Base.show(io::IO, x::∫) = print(io, "∫")
-Base.nameof(::∫) = :∫
-
-function (I::∫)(x)
-    Term{symtype(x)}(I, Any[x])
-end
-
-function (I::∫)(x::Num)
-    v = value(x)
-    Num(I(v))
-end
-
-SymbolicUtils.promote_symtype(::Int, t) = t
 
 # returns the JuMP timespan, the number of steps, and whether it is a free time problem.
 function process_tspan(tspan, dt, steps)

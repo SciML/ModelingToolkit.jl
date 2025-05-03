@@ -175,14 +175,13 @@ function add_jump_cost_function!(model::InfiniteModel, sys, tspan, pmap; is_free
 
     # Substitute integral
     iv = MTK.get_iv(sys)
-    jcosts = map(
-        c -> Symbolics.substitute(c, MTK.∫() => Symbolics.Integral(iv in tspan)), jcosts)
 
     intmap = Dict()
     for int in MTK.collect_applied_operators(jcosts, Symbolics.Integral)
         op = MTK.operation(int)
         arg = only(arguments(MTK.value(int)))
         lo, hi = (op.domain.domain.left, op.domain.domain.right)
+        hi = haskey(pmap, hi) ? 1 : hi
         intmap[int] = tₛ * InfiniteOpt.∫(arg, model[:t], lo, hi)
     end
     jcosts = map(c -> Symbolics.substitute(c, intmap), jcosts)
@@ -326,6 +325,23 @@ function add_jump_solve_constraints!(prob, tableau; is_free_t = false)
 end
 
 """
+Default ODE Tableau: RadauIIA5
+"""
+function constructDefault(T::Type = Float64)
+    sq6 = sqrt(6)
+    A = [11 // 45-7sq6 / 360 37 // 225-169sq6 / 1800 -2 // 225+sq6 / 75
+         37 // 225+169sq6 / 1800 11 // 45+7sq6 / 360 -2 // 225-sq6 / 75
+         4 // 9-sq6 / 36 4 // 9+sq6 / 36 1//9]
+    c = [2 // 5 - sq6 / 10; 2 / 5 + sq6 / 10; 1]
+    α = [4 // 9 - sq6 / 36; 4 // 9 + sq6 / 36; 1 // 9]
+    A = map(T, A)
+    α = map(T, α)
+    c = map(T, c)
+    
+    (; A = A, α = α, c = c)
+end
+
+"""
 Solve JuMPDynamicOptProblem. Arguments:
 - prob: a JumpDynamicOptProblem
 - jump_solver: a LP solver such as HiGHS
@@ -335,7 +351,7 @@ Solve JuMPDynamicOptProblem. Arguments:
 Returns a DynamicOptSolution, which contains both the model and the ODE solution.
 """
 function DiffEqBase.solve(
-        prob::JuMPDynamicOptProblem, jump_solver, ode_solver::Symbol; silent = false)
+        prob::JuMPDynamicOptProblem, jump_solver, ode_solver::Symbol = :Default; silent = false)
     model = prob.model
     tableau_getter = Symbol(:construct, ode_solver)
     @eval tableau = $tableau_getter()

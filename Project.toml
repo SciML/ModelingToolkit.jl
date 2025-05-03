@@ -66,7 +66,6 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 BifurcationKit = "0f109fa4-8a5d-4b75-95aa-f515264e7665"
 ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 DeepDiffs = "ab62b9b5-e342-54a8-a765-a90f495de1a6"
-DiffEqDevTools = "f3b72e0c-5b89-59e1-b016-84e28bfd966d"
 FMI = "14a09403-18e3-468f-ad8a-74f8dda2d9ac"
 InfiniteOpt = "20393b10-9daf-11e9-18c9-8db751c92c57"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
@@ -78,7 +77,7 @@ MTKChainRulesCoreExt = "ChainRulesCore"
 MTKDeepDiffsExt = "DeepDiffs"
 MTKFMIExt = "FMI"
 MTKInfiniteOptExt = "InfiniteOpt"
-MTKJuMPDynamicOptExt = ["JuMP", "DiffEqDevTools", "InfiniteOpt"]
+MTKJuMPDynamicOptExt = ["JuMP", "InfiniteOpt"]
 MTKLabelledArraysExt = "LabelledArrays"
 
 [compat]
