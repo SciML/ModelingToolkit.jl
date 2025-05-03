@@ -1,4 +1,5 @@
 using ModelingToolkit
+@show @__MODULE__
 import JuMP, InfiniteOpt
 using DiffEqDevTools, DiffEqBase
 using SimpleDiffEq
@@ -278,7 +279,7 @@ end
     rhss = -H \ Vector(C * qd + G - B * u)
     eqs = [D(D(x(t))) ~ rhss[1], D(D(θ(t))) ~ rhss[2]]
     cons = [θ(tf) ~ π, x(tf) ~ 0, D(θ(tf)) ~ 0, D(x(tf)) ~ 0]
-    costs = [∫(u^2)]
+    costs = [Symbolics.Integral(t in (0, tf))(u^2)]
     tspan = (0, tf)
 
     @named cartpole = ODESystem(eqs, t; costs, constraints = cons)
