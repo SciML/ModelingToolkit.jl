@@ -68,7 +68,6 @@ ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 DeepDiffs = "ab62b9b5-e342-54a8-a765-a90f495de1a6"
 FMI = "14a09403-18e3-468f-ad8a-74f8dda2d9ac"
 InfiniteOpt = "20393b10-9daf-11e9-18c9-8db751c92c57"
-JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 LabelledArrays = "2ee39098-c373-598a-b85f-a56591580800"
 
 [extensions]
@@ -77,7 +76,6 @@ MTKChainRulesCoreExt = "ChainRulesCore"
 MTKDeepDiffsExt = "DeepDiffs"
 MTKFMIExt = "FMI"
 MTKInfiniteOptExt = "InfiniteOpt"
-MTKJuMPDynamicOptExt = ["JuMP", "InfiniteOpt"]
 MTKLabelledArraysExt = "LabelledArrays"
 
 [compat]
@@ -99,7 +97,6 @@ DeepDiffs = "1"
 DelayDiffEq = "5.50"
 DiffEqBase = "6.170.1"
 DiffEqCallbacks = "2.16, 3, 4"
-DiffEqDevTools = "2.48.0"
 DiffEqNoiseProcess = "5"
 DiffRules = "0.1, 1.0"
 DifferentiationInterface = "0.6.47"
