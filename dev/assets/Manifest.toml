@@ -442,9 +442,9 @@ version = "3.8.0"
 
 [[deps.ComponentArrays]]
 deps = ["Adapt", "ArrayInterface", "ChainRulesCore", "ConstructionBase", "Functors", "LinearAlgebra", "StaticArrayInterface", "StaticArraysCore"]
-git-tree-sha1 = "9b870f26eb31f7dfc7e5c2678d4be23a04aea702"
+git-tree-sha1 = "1ad20b11ee13c672a502bd1dbb5c10a52ab92492"
 uuid = "b0b7db55-cfe3-40fc-9ded-d10e2dbeff66"
-version = "0.15.26"
+version = "0.15.27"
 
     [deps.ComponentArrays.extensions]
     ComponentArraysGPUArraysExt = "GPUArrays"
