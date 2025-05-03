@@ -1,10 +1,10 @@
 module MTKCasADiDynamicOptExt
 using ModelingToolkit
 using CasADi
-using DiffEqDevTools, DiffEqBase
+using DiffEqBase
 using DataInterpolations
 using UnPack
-const MTK = MOdelingToolkit
+const MTK = ModelingToolkit
 
 struct CasADiDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
        AbstractDynamicOptProblem{uType, tType, isinplace}
@@ -221,17 +221,22 @@ function add_solve_constraints!(prob, tableau; is_free_t)
     end
 end
 
-is_explicit(tableau) = tableau isa DiffEqDevTools.ExplicitRKTableau
 
 """
     solve(prob::CasADiDynamicOptProblem, casadi_solver, ode_solver; plugin_options, solver_options) 
 
 `plugin_options` and `solver_options` get propagated to the Opti object in CasADi.
 """
-function DiffEqBase.solve(prob::CasADiDynamicOptProblem, solver::Union{String, Symbol}, ode_solver::Union{String, Symbol}; plugin_options::Dict = Dict(), solver_options::Dict = Dict(), silent = false)
+function DiffEqBase.solve(prob::CasADiDynamicOptProblem, solver::Union{String, Symbol}, ode_solver::Symbol = :Default; plugin_options::Dict = Dict(), solver_options::Dict = Dict(), silent = false)
     model = prob.model
     opti = model.opti
 
+    if ode_solver == :Default
+        tableau = MTK.constructDefault()
+    else
+        tableau_getter = Symbol(:construct, ode_solver)
+        tableau = @eval Main.tableau_getter()
+    end
     solver!(opti, solver, plugin_options, solver_options)
     add_casadi_solve_constraints!(prob, tableau)
     solver!(cmodel, "$solver", plugin_options, solver_options)

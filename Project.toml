@@ -77,7 +77,7 @@ LabelledArrays = "2ee39098-c373-598a-b85f-a56591580800"
 
 [extensions]
 MTKBifurcationKitExt = "BifurcationKit"
-MTKCasADiDynamicOptExt = ["CasADi", "DataInterpolations", "DiffEqDevTools"]
+MTKCasADiDynamicOptExt = ["CasADi", "DataInterpolations"]
 MTKChainRulesCoreExt = "ChainRulesCore"
 MTKDeepDiffsExt = "DeepDiffs"
 MTKFMIExt = "FMI"
