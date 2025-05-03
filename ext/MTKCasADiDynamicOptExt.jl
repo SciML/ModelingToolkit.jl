@@ -2,7 +2,6 @@ module MTKCasADiDynamicOptExt
 using ModelingToolkit
 using CasADi
 using DiffEqBase
-using DataInterpolations
 using UnPack
 const MTK = ModelingToolkit
 
