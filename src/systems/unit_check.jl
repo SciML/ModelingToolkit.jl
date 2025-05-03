@@ -272,7 +272,7 @@ function validate(jumps::ArrayPartition{<:Union{Any, Vector{<:JumpType}}}, t::Sy
     all([validate(jumps.x[idx], t, info = labels[idx]) for idx in 1:3])
 end
 
-function validate(eq::Equation; info::String = "")
+function validate(eq::Union{Inequality, Equation}; info::String = "")
     if typeof(eq.lhs) == Connection
         _validate(eq.rhs; info)
     else

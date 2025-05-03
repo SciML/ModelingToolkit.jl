@@ -65,6 +65,8 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     ps, sps, vs, = [], [], []
     c_evts = []
     d_evts = []
+    cons = []
+    costs = []
     kwargs = OrderedCollections.OrderedSet()
     where_types = Union{Symbol, Expr}[]
 
@@ -80,7 +82,7 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     for arg in expr.args
         if arg.head == :macrocall
             parse_model!(exprs.args, comps, ext, eqs, icon, vs, ps,
-                sps, c_evts, d_evts, dict, mod, arg, kwargs, where_types)
+                sps, c_evts, d_evts, cons, costs, dict, mod, arg, kwargs, where_types)
         elseif arg.head == :block
             push!(exprs.args, arg)
         elseif arg.head == :if
@@ -120,13 +122,15 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     gui_metadata = isassigned(icon) > 0 ? GUIMetadata(GlobalRef(mod, name), icon[]) :
                    GUIMetadata(GlobalRef(mod, name))
 
+    consolidate = get(dict, :consolidate, nothing)
     description = get(dict, :description, "")
 
     @inline pop_structure_dict!.(
         Ref(dict), [:constants, :defaults, :kwargs, :structural_parameters])
 
     sys = :($type($(flatten_equations)(equations), $iv, variables, parameters;
-        name, description = $description, systems, gui_metadata = $gui_metadata, defaults))
+        name, description = $description, systems, gui_metadata = $gui_metadata, defaults,
+        costs = [$(costs...)], constraints = [$(cons...)], consolidate = $consolidate))
 
     if length(ext) == 0
         push!(exprs.args, :(var"#___sys___" = $sys))
@@ -610,7 +614,7 @@ function get_var(mod::Module, b)
 end
 
 function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps, c_evts, d_evts,
-        dict, mod, arg, kwargs, where_types)
+        cons, costs, dict, mod, arg, kwargs, where_types)
     mname = arg.args[1]
     body = arg.args[end]
     if mname == Symbol("@description")
@@ -638,6 +642,12 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps, c_evts, d_evts,
         parse_icon!(body, dict, icon, mod)
     elseif mname == Symbol("@defaults")
         parse_system_defaults!(exprs, arg, dict)
+    elseif mname == Symbol("@constraints")
+        parse_costs!(cons, dict, body)
+    elseif mname == Symbol("@costs")
+        parse_constraints!(costs, dict, body)
+    elseif mname == Symbol("@consolidate")
+        parse_consolidate!(body, dict)
     else
         error("$mname is not handled.")
     end
@@ -1146,6 +1156,32 @@ function parse_discrete_events!(d_evts, dict, body)
     for arg in body.args
         push!(d_evts, arg)
         push!(dict[:discrete_events], readable_code.(d_evts)...)
+    end
+end
+
+function parse_constraints!(cons, dict, body)
+    dict[:constraints] = []
+    Base.remove_linenums!(body)
+    for arg in body.args
+        push!(cons, arg)
+        push!(dict[:constraints], readable_code.(cons)...)
+    end
+end
+
+function parse_costs!(costs, dict, body)
+    dict[:costs] = []
+    Base.remove_linenums!(body)
+    for arg in body.args
+        push!(costs, arg)
+        push!(dict[:costs], readable_code.(costs)...)
+    end
+end
+
+function parse_consolidate!(body, dict)
+    if !(occursin("->", string(body)) || occursin("=", string(body)))
+        error("Consolidate must be a function definition.")
+    else
+        dict[:consolidate] = body
     end
 end
 

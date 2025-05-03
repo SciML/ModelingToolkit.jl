@@ -121,7 +121,7 @@ struct DiscreteSystem <: AbstractDiscreteSystem
             tearing_state = nothing, substitutions = nothing, namespacing = true,
             complete = false, index_cache = nothing, parent = nothing,
             isscheduled = false;
-            checks::Union{Bool, Int} = true)
+            checks::Union{Bool, Int} = true, kwargs...)
         if checks == true || (checks & CheckComponents) > 0
             check_independent_variables([iv])
             check_variables(dvs, iv)
@@ -199,7 +199,7 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
     DiscreteSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
         eqs, iv′, dvs′, ps′, tspan, var_to_name, observed, name, description, systems,
         defaults, guesses, initializesystem, initialization_eqs, preface, connector_type,
-        parameter_dependencies, metadata, gui_metadata, kwargs...)
+        parameter_dependencies, metadata, gui_metadata)
 end
 
 function DiscreteSystem(eqs, iv; kwargs...)

@@ -247,7 +247,7 @@ end
 function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         controls = Num[],
         observed = Equation[],
-        constraintsystem = nothing,
+        constraints = Any[],
         costs = Num[],
         consolidate = nothing,
         systems = ODESystem[],
@@ -276,11 +276,29 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
+
+    constraintsystem = nothing
+    if !isempty(constraints)
+        constraintsystem = process_constraint_system(constraints, dvs, ps, iv)
+        for p in parameters(constraintsystem)
+            !in(p, Set(ps)) && push!(ps, p)
+        end
+    end
+
+    if !isempty(costs)
+        coststs, costps = process_costs(costs, dvs, ps, iv)
+        for p in costps
+            !in(p, Set(ps)) && push!(ps, p)
+        end
+    end
+    costs = wrap.(costs)
+
     iv′ = value(iv)
     ps′ = value.(ps)
     ctrl′ = value.(controls)
     dvs′ = value.(dvs)
     dvs′ = filter(x -> !isdelay(x, iv), dvs′)
+
     parameter_dependencies, ps′ = process_parameter_dependencies(
         parameter_dependencies, ps′)
     if !(isempty(default_u0) && isempty(default_p))
@@ -350,7 +368,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         metadata, gui_metadata, is_dde, tstops, checks = checks)
 end
 
-function ODESystem(eqs, iv; constraints = Equation[], costs = Num[], kwargs...)
+function ODESystem(eqs, iv; kwargs...)
     diffvars, allunknowns, ps, eqs = process_equations(eqs, iv)
 
     for eq in get(kwargs, :parameter_dependencies, Equation[])
@@ -382,30 +400,8 @@ function ODESystem(eqs, iv; constraints = Equation[], costs = Num[], kwargs...)
     end
     algevars = setdiff(allunknowns, diffvars)
 
-    consvars = OrderedSet()
-    constraintsystem = nothing
-    if !isempty(constraints)
-        constraintsystem = process_constraint_system(constraints, allunknowns, new_ps, iv)
-        for st in get_unknowns(constraintsystem)
-            iscall(st) ?
-            !in(operation(st)(iv), allunknowns) && push!(consvars, st) :
-            !in(st, allunknowns) && push!(consvars, st)
-        end
-        for p in parameters(constraintsystem)
-            !in(p, new_ps) && push!(new_ps, p)
-        end
-    end
-
-    if !isempty(costs)
-        coststs, costps = process_costs(costs, allunknowns, new_ps, iv)
-        for p in costps
-            !in(p, new_ps) && push!(new_ps, p)
-        end
-    end
-    costs = wrap.(costs)
-
-    return ODESystem(eqs, iv, collect(Iterators.flatten((diffvars, algevars, consvars))),
-        collect(new_ps); constraintsystem, costs, kwargs...)
+    return ODESystem(eqs, iv, collect(Iterators.flatten((diffvars, algevars))),
+        collect(new_ps); kwargs...)
 end
 
 # NOTE: equality does not check cached Jacobian
@@ -760,7 +756,7 @@ end
 Build the constraint system for the ODESystem.
 """
 function process_constraint_system(
-        constraints::Vector{Equation}, sts, ps, iv; consname = :cons)
+        constraints::Vector, sts, ps, iv; consname = :cons)
     isempty(constraints) && return nothing
 
     constraintsts = OrderedSet()
@@ -800,7 +796,7 @@ Return the set of additional parameters found in the system, e.g. in x(p) ~ 3 th
 parameter of the system.
 """
 function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
-    sts = sysvars
+    sts = Set(sysvars)
 
     for var in auxvars
         if !iscall(var)
