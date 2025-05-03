@@ -1,4 +1,6 @@
 using ModelingToolkit, Test, OrdinaryDiffEq
+using ModelingToolkitStandardLibrary.Electrical
+using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @constants h=1 zr=0
@@ -134,19 +136,21 @@ prob = ODEProblem(s2, [resistor.v => 10.0], (0, 2.01))
 sol = solve(prob, Tsit5())
 @test ctx[1] == 2
 
-include("../examples/rc_model.jl")
+include("common/rc_model.jl")
 
 function affect5!(integ, u, p, ctx)
     @test integ.u[u.capacitor₊v] ≈ 0.3
     integ.ps[p.C] *= 200
 end
 
-@named rc_model = ODESystem(rc_eqs, t,
+@unpack capacitor = rc_model
+@named event_sys = ODESystem(Equation[], t;
     continuous_events = [
         [capacitor.v ~ 0.3] => (affect5!, [capacitor.v],
         [capacitor.C => :C], [capacitor.C], nothing)
     ])
-rc_model = compose(rc_model, [resistor, capacitor, source, ground])
+rc_model = extend(rc_model, event_sys)
+# rc_model = compose(rc_model, [resistor, capacitor, source, ground])
 
 sys = structural_simplify(rc_model)
 u0 = [capacitor.v => 0.0
@@ -177,15 +181,23 @@ function Capacitor2(; name, C = 1.0)
         oneport)
 end
 
-@named capacitor2 = Capacitor2(C = C)
+@named begin
+    capacitor2 = Capacitor2(C = 1.0)
+    resistor = Resistor(R = 1.0)
+    capacitor = Capacitor(C = 1.0)
+    shape = Constant(k = 1.0)
+    source = Voltage()
+    ground = Ground()
+end
 
-rc_eqs2 = [connect(source.p, resistor.p)
+rc_eqs2 = [connect(shape.output, source.V)
+           connect(source.p, resistor.p)
            connect(resistor.n, capacitor2.p)
            connect(capacitor2.n, source.n)
            connect(capacitor2.n, ground.g)]
 
 @named rc_model2 = ODESystem(rc_eqs2, t)
-rc_model2 = compose(rc_model2, [resistor, capacitor2, source, ground])
+rc_model2 = compose(rc_model2, [resistor, capacitor2, shape, source, ground])
 
 sys2 = structural_simplify(rc_model2)
 u0 = [capacitor2.v => 0.0

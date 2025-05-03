@@ -1,8 +1,9 @@
 using Test
 using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 import ModelingToolkit: ExtraVariablesSystemException, ExtraEquationsSystemException
 
-include("../examples/electrical_components.jl")
+using ModelingToolkitStandardLibrary.Electrical
 
 function UnderdefinedConstantVoltage(; name, V = 1.0)
     val = V
