@@ -328,23 +328,6 @@ function add_jump_solve_constraints!(prob, tableau; is_free_t = false)
 end
 
 """
-Default ODE Tableau: RadauIIA5
-"""
-function constructDefault(T::Type = Float64)
-    sq6 = sqrt(6)
-    A = [11 // 45-7sq6 / 360 37 // 225-169sq6 / 1800 -2 // 225+sq6 / 75
-         37 // 225+169sq6 / 1800 11 // 45+7sq6 / 360 -2 // 225-sq6 / 75
-         4 // 9-sq6 / 36 4 // 9+sq6 / 36 1//9]
-    c = [2 // 5 - sq6 / 10; 2 / 5 + sq6 / 10; 1]
-    α = [4 // 9 - sq6 / 36; 4 // 9 + sq6 / 36; 1 // 9]
-    A = map(T, A)
-    α = map(T, α)
-    c = map(T, c)
-
-    DiffEqBase.ImplicitRKTableau(A, c, α, 5)
-end
-
-"""
 Solve JuMPDynamicOptProblem. Arguments:
 - prob: a JumpDynamicOptProblem
 - jump_solver: a LP solver such as HiGHS
