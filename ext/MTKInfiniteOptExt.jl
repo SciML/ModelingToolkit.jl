@@ -360,7 +360,7 @@ function DiffEqBase.solve(
     if ode_solver == :Default
         @eval tableau = $tableau_getter()
     else
-        @eval tableau = Main.$tableau_getter()
+        @eval tableau = @__MODULE__.$tableau_getter()
     end
     silent && set_silent(model)
 
