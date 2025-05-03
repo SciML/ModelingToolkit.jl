@@ -183,13 +183,8 @@ function add_jump_cost_function!(model::InfiniteModel, sys, tspan, pmap; is_free
         op = MTK.operation(int)
         arg = only(arguments(MTK.value(int)))
         lo, hi = (op.domain.domain.left, op.domain.domain.right)
-        @show hi
-        @show pmap
-        @show haskey(pmap, hi)
-        hi = haskey(pmap, hi) ? 1 : hi
-        @show hi
-        @show typeof(arg)
-        @show typeof(lo)
+        lo = MTK.value(lo)
+        hi = haskey(pmap, hi) ? 1 : MTK.value(hi)
         intmap[int] = tₛ * InfiniteOpt.∫(arg, model[:t], lo, hi)
     end
     jcosts = map(c -> Symbolics.substitute(c, intmap), jcosts)
@@ -262,7 +257,7 @@ function substitute_jump_vars(model, sys, pmap, exprs; auxmap = Dict(), is_free_
     exprs
 end
 
-is_explicit(tableau) = tableau isa DiffEqDevTools.ExplicitRKTableau
+is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
 
 function add_infopt_solve_constraints!(model::InfiniteModel, sys, pmap; is_free_t = false)
     # Differential equations
@@ -346,7 +341,7 @@ function constructDefault(T::Type = Float64)
     α = map(T, α)
     c = map(T, c)
     
-    (; A = A, α = α, c = c)
+    DiffEqBase.ImplicitRKTableau(A, c, α, 5)
 end
 
 """
@@ -362,7 +357,11 @@ function DiffEqBase.solve(
         prob::JuMPDynamicOptProblem, jump_solver, ode_solver::Symbol = :Default; silent = false)
     model = prob.model
     tableau_getter = Symbol(:construct, ode_solver)
-    @eval tableau = $tableau_getter()
+    if ode_solver == :Default
+        @eval tableau = $tableau_getter()
+    else
+        @eval tableau = Main.$tableau_getter()
+    end
     silent && set_silent(model)
 
     # Unregister current solver constraints
