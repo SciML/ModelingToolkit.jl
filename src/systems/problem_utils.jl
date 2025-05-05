@@ -1085,6 +1085,22 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Calculate the `resid_prototype` for a `NonlinearFunction` with `N` equations and the
+provided `u0` and `p`.
+"""
+function calculate_resid_prototype(N::Int, u0, p)
+    u0ElType = u0 === nothing ? Float64 : eltype(u0)
+    if SciMLStructures.isscimlstructure(p)
+        u0ElType = promote_type(
+            eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]),
+            u0ElType)
+    end
+    return zeros(u0ElType, N)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Return the SciMLFunction created via calling `constructor`, the initial conditions `u0`
 and parameter object `p` given the system `sys`, and user-provided initial values `u0map`
 and `pmap`. `u0map` and `pmap` are converted into variable maps via [`to_varmap`](@ref).
@@ -1293,7 +1309,14 @@ function process_SciMLProblem(
         end
         initialization_data = SciMLBase.remake_initialization_data(
             kwargs.initialization_data, kwargs, u0, t0, p, u0, p)
-        kwargs = merge(kwargs,)
+        kwargs = merge(kwargs, (; initialization_data))
+    end
+
+    if constructor <: NonlinearFunction && length(dvs) != length(eqs)
+        kwargs = merge(kwargs,
+            (;
+                resid_prototype = u0_constructor(calculate_resid_prototype(
+                    length(eqs), u0, p))))
     end
 
     f = constructor(sys, dvs, ps, u0; p = p,
