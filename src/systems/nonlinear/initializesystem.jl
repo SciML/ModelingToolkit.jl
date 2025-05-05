@@ -581,11 +581,21 @@ function SciMLBase.remake_initialization_data(
     op, missing_unknowns, missing_pars = build_operating_point!(sys,
         u0map, pmap, defs, cmap, dvs, ps)
     floatT = float_type_from_varmap(op)
+    u0_constructor = p_constructor = identity
+    if newu0 isa StaticArray
+        u0_constructor = vals -> SymbolicUtils.Code.create_array(
+            typeof(newu0), floatT, Val(1), Val(length(vals)), vals...)
+    end
+    if newp isa StaticArray || newp isa MTKParameters && newp.initials isa StaticArray
+        p_constructor = vals -> SymbolicUtils.Code.create_array(
+            typeof(newp.initials), floatT, Val(1), Val(length(vals)), vals...)
+    end
     kws = maybe_build_initialization_problem(
-        sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns;
-        use_scc, initialization_eqs, floatT, allow_incomplete = true)
+        sys, SciMLBase.isinplace(odefn), op, u0map, pmap, t0, defs, guesses, missing_unknowns;
+        use_scc, initialization_eqs, floatT, u0_constructor, p_constructor, allow_incomplete = true)
 
-    return SciMLBase.remake_initialization_data(sys, kws, newu0, t0, newp, newu0, newp)
+    odefn = remake(odefn; kws...)
+    return SciMLBase.remake_initialization_data(sys, odefn, newu0, t0, newp, newu0, newp)
 end
 
 function promote_u0_p(u0, p::MTKParameters, t0)
