@@ -1599,3 +1599,15 @@ end
     @test SciMLBase.successful_retcode(sol)
     @test sol.u[1] ≈ new_u0
 end
+
+@testset "Initialization system retains `split` kwarg of parent" begin
+    @parameters g
+    @variables x(t) y(t) [state_priority = 10] λ(t)
+    eqs = [D(D(x)) ~ λ * x
+           D(D(y)) ~ λ * y - g
+           x^2 + y^2 ~ 1]
+    @mtkbuild pend=ODESystem(eqs, t) split=false
+    prob = ODEProblem(pend, [x => 1.0, D(x) => 0.0], (0.0, 1.0),
+        [g => 1.0]; guesses = [y => 1.0, λ => 1.0])
+    @test !ModelingToolkit.is_split(prob.f.initialization_data.initializeprob.f.sys)
+end
