@@ -348,20 +348,15 @@ end
 Solve JuMPDynamicOptProblem. Arguments:
 - prob: a JumpDynamicOptProblem
 - jump_solver: a LP solver such as HiGHS
-- ode_solver: Takes in a symbol representing the solver. Acceptable solvers may be found at https://docs.sciml.ai/DiffEqDevDocs/stable/internals/tableaus/. Note that the symbol may be different than the typical name of the solver, e.g. :Tsitouras5 rather than Tsit5.
+- tableau_getter: Takes in a function to fetch a tableau. Tableau loaders look like `constructRK4` and may be found at https://docs.sciml.ai/DiffEqDevDocs/stable/internals/tableaus/. If this argument is not passed in, the solver will default to Radau second order.
 - silent: set the model silent (suppress model output)
 
 Returns a DynamicOptSolution, which contains both the model and the ODE solution.
 """
 function DiffEqBase.solve(
-        prob::JuMPDynamicOptProblem, jump_solver, ode_solver::Symbol = :Default; silent = false)
+        prob::JuMPDynamicOptProblem, jump_solver, tableau_getter = constructDefault; silent = false)
     model = prob.model
-    tableau_getter = Symbol(:construct, ode_solver)
-    if ode_solver == :Default
-        @eval tableau = $tableau_getter()
-    else
-        @eval tableau = @__MODULE__.$tableau_getter()
-    end
+    tableau = tableau_getter()
     silent && set_silent(model)
 
     # Unregister current solver constraints
@@ -379,7 +374,7 @@ function DiffEqBase.solve(
         end
     end
     add_jump_solve_constraints!(prob, tableau; is_free_t = haskey(model, :tf))
-    _solve(prob, jump_solver, ode_solver)
+    _solve(prob, jump_solver, tableau_getter)
 end
 
 """
