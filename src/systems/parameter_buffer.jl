@@ -29,7 +29,7 @@ the default behavior).
 function MTKParameters(
         sys::AbstractSystem, p, u0 = Dict(); tofloat = false,
         t0 = nothing, substitution_limit = 1000, floatT = nothing,
-        container_type = Vector)
+        container_type = Vector, p_constructor = identity)
     if !(container_type <: AbstractArray)
         throw(ArgumentError("""
         `container_type` for `MTKParameters` must be a subtype of `AbstractArray`. Found \
@@ -140,21 +140,21 @@ function MTKParameters(
             end
         end
     end
-    tunable_buffer = narrow_buffer_type(tunable_buffer; container_type)
+    tunable_buffer = p_constructor(narrow_buffer_type(tunable_buffer; container_type))
     if isempty(tunable_buffer)
         tunable_buffer = SizedVector{0, Float64}()
     end
-    initials_buffer = narrow_buffer_type(initials_buffer; container_type)
+    initials_buffer = p_constructor(narrow_buffer_type(initials_buffer; container_type))
     if isempty(initials_buffer)
         initials_buffer = SizedVector{0, Float64}()
     end
-    disc_buffer = narrow_buffer_type.(disc_buffer; container_type)
-    const_buffer = narrow_buffer_type.(const_buffer; container_type)
+    disc_buffer = p_constructor.(narrow_buffer_type.(disc_buffer; container_type))
+    const_buffer = p_constructor.(narrow_buffer_type.(const_buffer; container_type))
     # Don't narrow nonnumeric types
     if !isempty(nonnumeric_buffer)
         nonnumeric_buffer = map(nonnumeric_buffer) do buf
-            SymbolicUtils.Code.create_array(
-                container_type, eltype(buf), Val(1), Val(length(buf)), buf...)
+            p_constructor(SymbolicUtils.Code.create_array(
+                container_type, eltype(buf), Val(1), Val(length(buf)), buf...))
         end
     end
 
