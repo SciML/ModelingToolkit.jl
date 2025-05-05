@@ -1187,7 +1187,7 @@ function process_SciMLProblem(
         u0map, pmap, defs, cmap, dvs, ps)
 
     floatT = Bool
-    if u0Type <: AbstractArray && eltype(u0Type) <: Real
+    if u0Type <: AbstractArray && eltype(u0Type) <: Real && eltype(u0Type) != Union{}
         floatT = float(eltype(u0Type))
     else
         floatT = float_type_from_varmap(op, floatT)
