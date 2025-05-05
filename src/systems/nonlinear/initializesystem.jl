@@ -640,8 +640,8 @@ function SciMLBase.late_binding_update_u0_p(
         return newu0, newp
     end
 
-    newp = p === missing ? copy(newp) : newp
-
+    syms = []
+    vals = []
     allsyms = all_symbols(sys)
     for (k, v) in u0
         v === nothing && continue
@@ -653,9 +653,11 @@ function SciMLBase.late_binding_update_u0_p(
             k = k2
         end
         is_parameter(sys, Initial(k)) || continue
-        setp(sys, Initial(k))(newp, v)
+        push!(syms, Initial(k))
+        push!(vals, v)
     end
 
+    newp = setp_oop(sys, syms)(newp, vals)
     return newu0, newp
 end
 
