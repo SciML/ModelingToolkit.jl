@@ -1016,6 +1016,7 @@ Keyword arguments:
 - `tofloat`, `is_initializeprob`: Passed to [`better_varmap_to_vars`](@ref) for building `u0` (and possibly `p`).
 - `u0_constructor`: A function to apply to the `u0` value returned from `better_varmap_to_vars`
   to construct the final `u0` value.
+- `p_constructor`: A function to apply to each array buffer created when constructing the parameter object.
 - `du0map`: A map of derivatives to values. See `implicit_dae`.
 - `check_length`: Whether to check the number of equations along with number of unknowns and
   length of `u0` vector for consistency. If `false`, do not check with equations. This is
@@ -1044,8 +1045,8 @@ function process_SciMLProblem(
         warn_initialize_determined = true, initialization_eqs = [],
         eval_expression = false, eval_module = @__MODULE__, fully_determined = nothing,
         check_initialization_units = false, tofloat = true,
-        u0_constructor = identity, du0map = nothing, check_length = true,
-        symbolic_u0 = false, warn_cyclic_dependency = false,
+        u0_constructor = identity, p_constructor = identity, du0map = nothing,
+        check_length = true, symbolic_u0 = false, warn_cyclic_dependency = false,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10,
         substitution_limit = 100, use_scc = true,
@@ -1095,6 +1096,11 @@ function process_SciMLProblem(
         u0_constructor = vals -> SymbolicUtils.Code.create_array(
             u0Type, floatT, Val(1), Val(length(vals)), vals...)
     end
+    if p_constructor === identity && pType <: StaticArray
+        p_constructor = vals -> SymbolicUtils.Code.create_array(
+            pType, floatT, Val(1), Val(length(vals)), vals...)
+    end
+
     if build_initializeprob
         kws = maybe_build_initialization_problem(
             sys, op, u0map, pmap, t, defs, guesses, missing_unknowns;
@@ -1159,9 +1165,9 @@ function process_SciMLProblem(
         if !(pType <: AbstractArray)
             pType = Array
         end
-        p = MTKParameters(sys, op; floatT = floatT, container_type = pType)
+        p = MTKParameters(sys, op; floatT = floatT, container_type = pType, p_constructor)
     else
-        p = better_varmap_to_vars(op, ps; tofloat, container_type = pType)
+        p = p_constructor(better_varmap_to_vars(op, ps; tofloat, container_type = pType))
     end
 
     if implicit_dae && du0map !== nothing

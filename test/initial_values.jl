@@ -335,3 +335,31 @@ end
     @test prob.p.tunable isa SVector
     @test prob.p.initials isa SVector
 end
+
+@testset "`p_constructor` keyword argument" begin
+    @parameters σ ρ β
+    @variables x(t) y(t) z(t)
+
+    eqs = [D(D(x)) ~ σ * (y - x),
+        D(y) ~ x * (ρ - z) - y,
+        D(z) ~ x * y - β * z]
+
+    @mtkbuild sys = ODESystem(eqs, t)
+
+    u0 = [D(x) => 2.0f0,
+        x => 1.0f0,
+        y => 0.0f0,
+        z => 0.0f0]
+
+    p = [σ => 28.0f0,
+        ρ => 10.0f0,
+        β => 8.0f0 / 3]
+    u0_constructor = p_constructor = vals -> SVector{length(vals)}(vals...)
+    prob = ODEProblem(sys, u0, tspan, p; u0_constructor, p_constructor)
+    @test prob.p.tunable isa SVector
+    @test prob.p.initials isa SVector
+
+    @mtkbuild sys=ODESystem(eqs, t) split=false
+    prob = ODEProblem(sys, u0, tspan, p; u0_constructor, p_constructor)
+    @test prob.p isa SVector
+end
