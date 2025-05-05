@@ -982,6 +982,7 @@ function generate_function_bc(sys::ODESystem, u0, u0_idxs, tspan; kwargs...)
     exprs = vcat(init_conds, cons)
     _p = reorder_parameters(sys, ps)
 
+    @show exprs
     build_function_wrapper(sys, exprs, sol, _p..., iv; output_type = Array, kwargs...)
 end
 
