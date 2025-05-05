@@ -637,8 +637,9 @@ end
         nonnumerics = $(Expr(:tuple,
             (:($similar(oldbuf.nonnumeric[$i], $(nonnumericT[i]))) for i in 1:length(nonnumericT))...))
         $((:($copyto!(nonnumerics[$i], oldbuf.nonnumeric[$i])) for i in 1:length(nonnumericT))...)
+        caches = copy.(oldbuf.caches)
         newbuf = MTKParameters(
-            tunables, initials, discretes, constants, nonnumerics, copy.(oldbuf.caches))
+            tunables, initials, discretes, constants, nonnumerics, caches)
     end
     if idxs <: AbstractArray
         push!(expr.args, :(for (idx, val) in zip(idxs, vals)
@@ -648,6 +649,22 @@ end
         for i in 1:fieldcount(idxs)
             push!(expr.args, :($setindex!(newbuf, vals[$i], idxs[$i])))
         end
+    end
+    if !ArrayInterface.ismutable(oldbuf)
+        push!(expr.args, :(tunables = $similar_type($T, $tunablesT)(tunables)))
+        push!(expr.args, :(initials = $similar_type($I, $initialsT)(initials)))
+        push!(expr.args,
+            :(discretes = $(Expr(:tuple,
+                (:($similar_type($(fieldtype(D, i)), $(discretesT[i]))(discretes[$i])) for i in 1:length(discretesT))...))))
+        push!(expr.args,
+            :(constants = $(Expr(:tuple,
+                (:($similar_type($(fieldtype(C, i)), $(constantsT[i]))(constants[$i])) for i in 1:length(constantsT))...))))
+        push!(expr.args,
+            :(nonnumerics = $(Expr(:tuple,
+                (:($similar_type($(fieldtype(C, i)), $(nonnumericT[i]))(nonnumerics[$i])) for i in 1:length(nonnumericT))...))))
+        push!(expr.args,
+            :(newbuf = MTKParameters(
+                tunables, initials, discretes, constants, nonnumerics, caches)))
     end
     push!(expr.args, :(return newbuf))
 
@@ -748,6 +765,19 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
         oldbuf.constant, newbuf.constant)
     @set! newbuf.nonnumeric = narrow_buffer_type_and_fallback_undefs.(
         oldbuf.nonnumeric, newbuf.nonnumeric)
+    if !ArrayInterface.ismutable(oldbuf)
+        @set! newbuf.tunable = similar_type(oldbuf.tunable, eltype(newbuf.tunable))(newbuf.tunable)
+        @set! newbuf.initials = similar_type(oldbuf.initials, eltype(newbuf.initials))(newbuf.initials)
+        @set! newbuf.discrete = ntuple(Val(length(newbuf.discrete))) do i
+            similar_type.(oldbuf.discrete[i], eltype(newbuf.discrete[i]))(newbuf.discrete[i])
+        end
+        @set! newbuf.constant = ntuple(Val(length(newbuf.constant))) do i
+            similar_type.(oldbuf.constant[i], eltype(newbuf.constant[i]))(newbuf.constant[i])
+        end
+        @set! newbuf.nonnumeric = ntuple(Val(length(newbuf.nonnumeric))) do i
+            similar_type.(oldbuf.nonnumeric[i], eltype(newbuf.nonnumeric[i]))(newbuf.nonnumeric[i])
+        end
+    end
     return newbuf
 end
 
