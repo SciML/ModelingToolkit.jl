@@ -513,8 +513,7 @@ function SciMLBase.remake_initialization_data(
                     length(oldinitprob.f.resid_prototype), new_initu0, new_initp))
         end
         initprob = remake(oldinitprob; f = newf, u0 = new_initu0, p = new_initp)
-        return SciMLBase.OverrideInitData(initprob, oldinitdata.update_initializeprob!,
-            oldinitdata.initializeprobmap, oldinitdata.initializeprobpmap; metadata = oldinitdata.metadata)
+        return @set oldinitdata.initializeprob = initprob
     end
 
     dvs = unknowns(sys)
@@ -627,7 +626,7 @@ function SciMLBase.late_binding_update_u0_p(
         if length(newu0) != length(prob.u0)
             throw(ArgumentError("Expected `newu0` to be of same length as unknowns ($(length(prob.u0))). Got $(typeof(newu0)) of length $(length(newu0))"))
         end
-        meta.set_initial_unknowns!(newp, newu0)
+        newp = meta.set_initial_unknowns!(newp, newu0)
         return newu0, newp
     end
 

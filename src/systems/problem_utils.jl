@@ -491,32 +491,6 @@ function scalarize_varmap!(varmap::AbstractDict)
     return varmap
 end
 
-struct GetUpdatedMTKParameters{G, S}
-    # `getu` functor which gets parameters that are unknowns during initialization
-    getpunknowns::G
-    # `setu` functor which returns a modified MTKParameters using those parameters
-    setpunknowns::S
-end
-
-function (f::GetUpdatedMTKParameters)(prob, initializesol)
-    p = parameter_values(prob)
-    p === nothing && return nothing
-    mtkp = copy(p)
-    f.setpunknowns(mtkp, f.getpunknowns(initializesol))
-    mtkp
-end
-
-struct UpdateInitializeprob{G, S}
-    # `getu` functor which gets all values from prob
-    getvals::G
-    # `setu` functor which updates initializeprob with values
-    setvals::S
-end
-
-function (f::UpdateInitializeprob)(initializeprob, prob)
-    f.setvals(initializeprob, f.getvals(prob))
-end
-
 function get_temporary_value(p, floatT = Float64)
     stype = symtype(unwrap(p))
     return if stype == Real
@@ -672,45 +646,86 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Given a source system `srcsys` and destination system `dstsys`, return a function that
+takes a value provider of `srcsys` and a value provider of `dstsys` and returns the
+`MTKParameters` object of the latter with values from the former.
+
+# Keyword Arguments
+- `initials`: Whether to include the `Initial` parameters of `dstsys` among the values
+  to be transferred.
+- `p_constructor`: The `p_constructor` argument to `process_SciMLProblem`.
+"""
+function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::AbstractSystem;
+        initials = false, unwrap_initials = false, p_constructor = identity)
+    # if we call `getu` on this (and it were able to handle empty tuples) we get the
+    # fields of `MTKParameters` except caches.
+    syms = reorder_parameters(
+        dstsys, parameters(dstsys; initial_parameters = initials); flatten = false)
+    # `dstsys` is an initialization system, do basically everything is a tunable
+    # and tunables are a mix of different types in `srcsys`. No initials. Constants
+    # are going to be constants in `srcsys`, as are `nonnumeric`.
+
+    # `syms[1]` is always the tunables because `srcsys` will have initials.
+    tunable_syms = syms[1]
+    tunable_getter = p_constructor ∘ concrete_getu(srcsys, tunable_syms)
+    rest_getters = map(Base.tail(Base.tail(syms))) do buf
+        if buf == ()
+            return Returns(())
+        else
+            return Base.Fix1(broadcast, p_constructor) ∘ getu(srcsys, buf)
+        end
+    end
+    initials_getter = if initials
+        initsyms = Vector{Any}(syms[2])
+        allsyms = Set(all_symbols(srcsys))
+        if unwrap_initials
+            for i in eachindex(initsyms)
+                sym = initsyms[i]
+                innersym = if operation(sym) === getindex
+                    sym, idxs... = arguments(sym)
+                    only(arguments(sym))[idxs...]
+                else
+                    only(arguments(sym))
+                end
+                if innersym in allsyms
+                    initsyms[i] = innersym
+                end
+            end
+        end
+        p_constructor ∘ concrete_getu(srcsys, initsyms)
+    else
+        Returns(SizedVector{0, Float64}())
+    end
+    getters = (tunable_getter, initials_getter, rest_getters...)
+    getter = let getters = getters
+        function _getter(valp, initprob)
+            oldcache = parameter_values(initprob).caches
+            MTKParameters(getters[1](valp), getters[2](valp), getters[3](valp),
+                getters[4](valp), getters[5](valp), oldcache isa Tuple{} ? () :
+                                                    copy.(oldcache))
+        end
+    end
+
+    return getter
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Construct a `ReconstructInitializeprob` which reconstructs the `u0` and `p` of `dstsys`
 with values from `srcsys`.
 """
 function ReconstructInitializeprob(
-        srcsys::AbstractSystem, dstsys::AbstractSystem)
+        srcsys::AbstractSystem, dstsys::AbstractSystem; u0_constructor = identity, p_constructor = identity)
     @assert is_initializesystem(dstsys)
-    ugetter = getu(srcsys, unknowns(dstsys))
+    ugetter = u0_constructor ∘ getu(srcsys, unknowns(dstsys))
     if is_split(dstsys)
-        # if we call `getu` on this (and it were able to handle empty tuples) we get the
-        # fields of `MTKParameters` except caches.
-        syms = reorder_parameters(dstsys, parameters(dstsys); flatten = false)
-        # `dstsys` is an initialization system, do basically everything is a tunable
-        # and tunables are a mix of different types in `srcsys`. No initials. Constants
-        # are going to be constants in `srcsys`, as are `nonnumeric`.
-
-        # `syms[1]` is always the tunables because `srcsys` will have initials.
-        tunable_syms = syms[1]
-        tunable_getter = concrete_getu(srcsys, tunable_syms)
-        rest_getters = map(Base.tail(Base.tail(syms))) do buf
-            if buf == ()
-                return Returns(())
-            else
-                return getu(srcsys, buf)
-            end
-        end
-        getters = (tunable_getter, Returns(SizedVector{0, Float64}()), rest_getters...)
-        pgetter = let getters = getters
-            function _getter(valp, initprob)
-                oldcache = parameter_values(initprob).caches
-                MTKParameters(getters[1](valp), getters[2](valp), getters[3](valp),
-                    getters[4](valp), getters[5](valp), oldcache isa Tuple{} ? () :
-                                                        copy.(oldcache))
-            end
-        end
+        pgetter = get_mtkparameters_reconstructor(srcsys, dstsys; p_constructor)
     else
         syms = parameters(dstsys)
-        pgetter = let inner = concrete_getu(srcsys, syms)
+        pgetter = let inner = concrete_getu(srcsys, syms), p_constructor = p_constructor
             function _getter2(valp, initprob)
-                inner(valp)
+                p_constructor(inner(valp))
             end
         end
     end
@@ -764,6 +779,54 @@ function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
 end
 
 """
+    $(TYPEDSIGNATURES)
+
+Given `sys` and its corresponding initialization system `initsys`, return the
+`initializeprobpmap` function in `OverrideInitData` for the systems.
+"""
+function construct_initializeprobpmap(
+        sys::AbstractSystem, initsys::AbstractSystem; p_constructor = identity)
+    @assert is_initializesystem(initsys)
+    if is_split(sys)
+        return let getter = get_mtkparameters_reconstructor(
+                initsys, sys; initials = true, p_constructor)
+            function initprobpmap_split(prob, initsol)
+                getter(initsol, prob)
+            end
+        end
+    else
+        return let getter = getu(initsys, parameters(sys; initial_parameters = true)),
+            p_constructor = p_constructor
+
+            function initprobpmap_nosplit(prob, initsol)
+                return p_constructor(getter(initsol))
+            end
+        end
+    end
+end
+
+function get_scimlfn(valp)
+    valp isa SciMLBase.AbstractSciMLFunction && return valp
+    if hasmethod(symbolic_container, Tuple{typeof(valp)}) &&
+       (sc = symbolic_container(valp)) !== valp
+        return get_scimlfn(sc)
+    end
+    throw(ArgumentError("SciMLFunction not found. This should never happen."))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+A function to be used as `update_initializeprob!` in `OverrideInitData`. Requires
+`is_update_oop = Val{true}` to be passed to `update_initializeprob!`.
+"""
+function update_initializeprob!(initprob, prob)
+    p = get_scimlfn(prob).initialization_data.metadata.oop_reconstruct_u0_p.getter(
+        prob, initprob)
+    return remake(initprob; p)
+end
+
+"""
     $(TYPEDEF)
 
 Metadata attached to `OverrideInitData` used in `remake` hooks for handling initialization
@@ -804,8 +867,8 @@ struct InitializationMetadata{R <: ReconstructInitializeprob, GUU, SIU}
     """
     get_updated_u0::GUU
     """
-    A function which takes the `u0` of the problem and sets
-    `Initial.(unknowns(sys))`.
+    A function which takes parameter object and `u0` of the problem and sets
+    `Initial.(unknowns(sys))` in the former, returning the updated parameter object.
     """
     set_initial_unknowns!::SIU
 end
@@ -854,6 +917,38 @@ function (guu::GetUpdatedU0)(prob, initprob)
     algebuf = view(buffer, guu.guessvars)
     copyto!(algebuf, guu.get_guessvars(initprob))
     return buffer
+end
+
+struct SetInitialUnknowns{S}
+    setter!::S
+end
+
+function SetInitialUnknowns(sys::AbstractSystem)
+    return SetInitialUnknowns(setu(sys, Initial.(unknowns(sys))))
+end
+
+function (siu::SetInitialUnknowns)(p::MTKParameters, u0)
+    if ArrayInterface.ismutable(p.initials)
+        siu.setter!(p, u0)
+    else
+        originalT = similar_type(p.initials)
+        @set! p.initials = MVector{length(p.initials), eltype(p.initials)}(p.initials)
+        siu.setter!(p, u0)
+        @set! p.initials = originalT(p.initials)
+    end
+    return p
+end
+
+function (siu::SetInitialUnknowns)(p::Vector, u0)
+    if ArrayInterface.ismutable(p)
+        siu.setter!(p, u0)
+    else
+        originalT = similar_type(p)
+        p = MVector{length(p), eltype(p)}(p)
+        siu.setter!(p, u0)
+        p = originalT(p)
+    end
+    return p
 end
 
 """
@@ -913,8 +1008,9 @@ function maybe_build_initialization_problem(
     end
     meta = InitializationMetadata(
         u0map, pmap, guesses, Vector{Equation}(initialization_eqs),
-        use_scc, ReconstructInitializeprob(sys, initializeprob.f.sys),
-        get_initial_unknowns, setp(sys, Initial.(unknowns(sys))))
+        use_scc, ReconstructInitializeprob(
+            sys, initializeprob.f.sys; u0_constructor, p_constructor),
+        get_initial_unknowns, SetInitialUnknowns(sys))
 
     if is_time_dependent(sys)
         all_init_syms = Set(all_symbols(initializeprob))
@@ -930,11 +1026,8 @@ function maybe_build_initialization_problem(
     if initializeprobmap === nothing && isempty(punknowns)
         initializeprobpmap = nothing
     else
-        allsyms = all_symbols(initializeprob)
-        initdvs = filter(x -> any(isequal(x), allsyms), unknowns(sys))
-        getpunknowns = getu(initializeprob, [punknowns; initdvs])
-        setpunknowns = setp(sys, [punknowns; Initial.(initdvs)])
-        initializeprobpmap = GetUpdatedMTKParameters(getpunknowns, setpunknowns)
+        initializeprobpmap = construct_initializeprobpmap(
+            sys, initializeprob.f.sys; p_constructor)
     end
 
     reqd_syms = parameter_symbols(initializeprob)
@@ -942,8 +1035,7 @@ function maybe_build_initialization_problem(
     if initializeprobmap === nothing && initializeprobpmap === nothing
         update_initializeprob! = nothing
     else
-        update_initializeprob! = UpdateInitializeprob(
-            getu(sys, reqd_syms), setu(initializeprob, reqd_syms))
+        update_initializeprob! = ModelingToolkit.update_initializeprob!
     end
 
     for p in punknowns
@@ -967,7 +1059,7 @@ function maybe_build_initialization_problem(
     return (;
         initialization_data = SciMLBase.OverrideInitData(
             initializeprob, update_initializeprob!, initializeprobmap,
-            initializeprobpmap; metadata = meta))
+            initializeprobpmap; metadata = meta, is_update_oop = Val{true}))
 end
 
 """
