@@ -345,16 +345,6 @@ function hessian_sparsity(sys::NonlinearSystem)
          unknowns(sys)) for eq in equations(sys)]
 end
 
-function calculate_resid_prototype(N, u0, p)
-    u0ElType = u0 === nothing ? Float64 : eltype(u0)
-    if SciMLStructures.isscimlstructure(p)
-        u0ElType = promote_type(
-            eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]),
-            u0ElType)
-    end
-    return zeros(u0ElType, N)
-end
-
 """
 ```julia
 SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
@@ -381,6 +371,7 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
         eval_module = @__MODULE__,
         sparse = false, simplify = false,
         initialization_data = nothing, cse = true,
+        resid_prototype = nothing,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearFunction`")
@@ -401,12 +392,6 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
 
     observedfun = ObservedFunctionCache(
         sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false), cse)
-
-    if length(dvs) == length(equations(sys))
-        resid_prototype = nothing
-    else
-        resid_prototype = calculate_resid_prototype(length(equations(sys)), u0, p)
-    end
 
     NonlinearFunction{iip}(f;
         sys = sys,
