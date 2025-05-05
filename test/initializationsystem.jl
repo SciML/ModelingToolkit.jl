@@ -1,6 +1,6 @@
 using ModelingToolkit, OrdinaryDiffEq, NonlinearSolve, Test
 using StochasticDiffEq, DelayDiffEq, StochasticDelayDiffEq, JumpProcesses
-using ForwardDiff
+using ForwardDiff, StaticArrays
 using SymbolicIndexingInterface, SciMLStructures
 using SciMLStructures: Tunable
 using ModelingToolkit: t_nounits as t, D_nounits as D, observed
@@ -594,22 +594,36 @@ end
     @parameters p q
     @brownian a b
     x = _x(t)
-
+    sarray_ctor = splat(SVector)
     # `System` constructor creates appropriate type with mtkbuild
     # `Problem` and `alg` create the problem to test and allow calling `init` with
     # the correct solver.
     # `rhss` allows adding terms to the end of equations (only 2 equations allowed) to influence
     # the system type (brownian vars to turn it into an SDE).
-    @testset "$Problem with $(SciMLBase.parameterless_type(alg))" for (System, Problem, alg, rhss) in [
-        (ModelingToolkit.System, ODEProblem, Tsit5(), zeros(2)),
-        (ModelingToolkit.System, SDEProblem, ImplicitEM(), [a, b]),
-        (ModelingToolkit.System, DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
-        (ModelingToolkit.System, SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b])
-    ]
+    @testset "$Problem with $(SciMLBase.parameterless_type(alg)) and $ctor ctor" for ((System, Problem, alg, rhss), (ctor, expectedT)) in Iterators.product(
+        [
+            (ModelingToolkit.System, ODEProblem, Tsit5(), zeros(2)),
+            (ModelingToolkit.System, SDEProblem, ImplicitEM(), [a, b]),
+            (ModelingToolkit.System, DDEProblem,
+                MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
+            (ModelingToolkit.System, SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b])
+        ],
+        [(identity, Any), (sarray_ctor, SVector)])
+        u0_constructor = p_constructor = ctor
+        if ctor !== identity
+            Problem = Problem{false}
+        end
         function test_parameter(prob, sym, val)
             if prob.u0 !== nothing
+                @test prob.u0 isa expectedT
                 @test init(prob, alg).ps[sym] ≈ val
             end
+            @test prob.p.tunable isa expectedT
+            initprob = prob.f.initialization_data.initializeprob
+            if state_values(initprob) !== nothing
+                @test state_values(initprob) isa expectedT
+            end
+            @test parameter_values(initprob).tunable isa expectedT
             @test solve(prob, alg).ps[sym] ≈ val
         end
         function test_initializesystem(sys, u0map, pmap, p, equation)
@@ -626,64 +640,64 @@ end
         @mtkbuild sys = System(
             [D(x) ~ x * q + rhss[1], D(y) ~ y * p + rhss[2]], t; defaults = [p => missing], guesses = [p => 1.0])
         pmap[p] = 2q
-        prob = Problem(sys, u0map, (0.0, 1.0), pmap)
+        prob = Problem(sys, u0map, (0.0, 1.0), pmap; u0_constructor, p_constructor)
         test_parameter(prob, p, 2.0)
         prob2 = remake(prob; u0 = u0map, p = pmap)
-        prob2.ps[p] = 0.0
+        prob2 = remake(prob2; p = setp_oop(prob2, p)(prob2, 0.0))
         test_parameter(prob2, p, 2.0)
         # `missing` default, provided guess
         @mtkbuild sys = System(
             [D(x) ~ x + rhss[1], p ~ x + y + rhss[2]], t; defaults = [p => missing], guesses = [p => 0.0])
-        prob = Problem(sys, u0map, (0.0, 1.0))
+        prob = Problem(sys, u0map, (0.0, 1.0); u0_constructor, p_constructor)
         test_parameter(prob, p, 2.0)
         test_initializesystem(sys, u0map, pmap, p, 0 ~ p - x - y)
         prob2 = remake(prob; u0 = u0map)
-        prob2.ps[p] = 0.0
+        prob2 = remake(prob2; p = setp_oop(prob2, p)(prob2, 0.0))
         test_parameter(prob2, p, 2.0)
 
         # `missing` to Problem, equation from default
         @mtkbuild sys = System(
             [D(x) ~ x * q + rhss[1], D(y) ~ y * p + rhss[2]], t; defaults = [p => 2q], guesses = [p => 1.0])
         pmap[p] = missing
-        prob = Problem(sys, u0map, (0.0, 1.0), pmap)
+        prob = Problem(sys, u0map, (0.0, 1.0), pmap; u0_constructor, p_constructor)
         test_parameter(prob, p, 2.0)
         test_initializesystem(sys, u0map, pmap, p, 0 ~ 2q - p)
         prob2 = remake(prob; u0 = u0map, p = pmap)
-        prob2.ps[p] = 0.0
+        prob2 = remake(prob2; p = setp_oop(prob2, p)(prob2, 0.0))
         test_parameter(prob2, p, 2.0)
         # `missing` to Problem, provided guess
         @mtkbuild sys = System(
             [D(x) ~ x + rhss[1], p ~ x + y + rhss[2]], t; guesses = [p => 0.0])
-        prob = Problem(sys, u0map, (0.0, 1.0), pmap)
+        prob = Problem(sys, u0map, (0.0, 1.0), pmap; u0_constructor, p_constructor)
         test_parameter(prob, p, 2.0)
         test_initializesystem(sys, u0map, pmap, p, 0 ~ x + y - p)
         prob2 = remake(prob; u0 = u0map, p = pmap)
-        prob2.ps[p] = 0.0
+        prob2 = remake(prob2; p = setp_oop(prob2, p)(prob2, 0.0))
         test_parameter(prob2, p, 2.0)
 
         # No `missing`, default and guess
         @mtkbuild sys = System(
             [D(x) ~ x * q + rhss[1], D(y) ~ y * p + rhss[2]], t; defaults = [p => 2q], guesses = [p => 0.0])
         delete!(pmap, p)
-        prob = Problem(sys, u0map, (0.0, 1.0), pmap)
+        prob = Problem(sys, u0map, (0.0, 1.0), pmap; u0_constructor, p_constructor)
         test_parameter(prob, p, 2.0)
         test_initializesystem(sys, u0map, pmap, p, 0 ~ 2q - p)
         prob2 = remake(prob; u0 = u0map, p = pmap)
-        prob2.ps[p] = 0.0
+        prob2 = remake(prob2; p = setp_oop(prob2, p)(prob2, 0.0))
         test_parameter(prob2, p, 2.0)
 
         # Default overridden by Problem, guess provided
         @mtkbuild sys = System(
             [D(x) ~ q * x + rhss[1], D(y) ~ y * p + rhss[2]], t; defaults = [p => 2q], guesses = [p => 1.0])
         _pmap = merge(pmap, Dict(p => q))
-        prob = Problem(sys, u0map, (0.0, 1.0), _pmap)
+        prob = Problem(sys, u0map, (0.0, 1.0), _pmap; u0_constructor, p_constructor)
         test_parameter(prob, p, _pmap[q])
         test_initializesystem(sys, u0map, _pmap, p, 0 ~ q - p)
         # Problem dependent value with guess, no `missing`
         @mtkbuild sys = System(
             [D(x) ~ y * q + p + rhss[1], D(y) ~ x * p + q + rhss[2]], t; guesses = [p => 0.0])
         _pmap = merge(pmap, Dict(p => 3q))
-        prob = Problem(sys, u0map, (0.0, 1.0), _pmap)
+        prob = Problem(sys, u0map, (0.0, 1.0), _pmap; u0_constructor, p_constructor)
         test_parameter(prob, p, 3pmap[q])
 
         # Should not be solved for:
@@ -691,7 +705,7 @@ end
         @mtkbuild sys = System(
             [D(x) ~ q * x + rhss[1], D(y) ~ y * p + rhss[2]], t; defaults = [p => 2q], guesses = [p => 1.0])
         _pmap = merge(pmap, Dict(p => 1.0))
-        prob = Problem(sys, u0map, (0.0, 1.0), _pmap)
+        prob = Problem(sys, u0map, (0.0, 1.0), _pmap; u0_constructor, p_constructor)
         @test prob.ps[p] ≈ 1.0
         initsys = prob.f.initialization_data.initializeprob.f.sys
         @test is_parameter(initsys, p)
@@ -700,7 +714,7 @@ end
         @parameters r::Int s::Int
         @mtkbuild sys = System(
             [D(x) ~ s * x + rhss[1], D(y) ~ y * r + rhss[2]], t; defaults = [s => 2r], guesses = [s => 1.0])
-        prob = Problem(sys, u0map, (0.0, 1.0), [r => 1])
+        prob = Problem(sys, u0map, (0.0, 1.0), [r => 1]; u0_constructor, p_constructor)
         @test prob.ps[r] == 1
         @test prob.ps[s] == 2
         initsys = prob.f.initialization_data.initializeprob.f.sys
@@ -714,7 +728,7 @@ end
 
         # Unsatisfiable initialization
         prob = Problem(sys, [x => 1.0, y => 1.0], (0.0, 1.0),
-            [p => 2.0]; initialization_eqs = [x^2 + y^2 ~ 3])
+            [p => 2.0]; initialization_eqs = [x^2 + y^2 ~ 3], u0_constructor, p_constructor)
         @test prob.f.initialization_data !== nothing
         @test solve(prob, alg).retcode == ReturnCode.InitialFailure
         cache = init(prob, alg)
@@ -791,8 +805,17 @@ end
 
     prob_alg_combinations = zip(
         [NonlinearProblem, NonlinearLeastSquaresProblem], [nl_algs, nlls_algs])
-    @testset "Parameter initialization" begin
+    sarray_ctor = splat(SVector)
+    @testset "Parameter initialization with ctor $ctor" for (ctor, expectedT) in [
+        (identity, Any),
+        (sarray_ctor, SVector)
+    ]
+        u0_constructor = p_constructor = ctor
         function test_parameter(prob, alg, param, val)
+            if prob.u0 !== nothing
+                @test prob.u0 isa expectedT
+            end
+            @test prob.p.tunable isa expectedT
             integ = init(prob, alg)
             @test integ.ps[param]≈val rtol=1e-5
             # some algorithms are a little temperamental
@@ -818,7 +841,10 @@ end
         #     guesses = [q => 1.0], initialization_eqs = [p^2 + q^2 + 2p * q ~ 0])
 
         for (probT, algs) in prob_alg_combinations
-            prob = probT(sys, [])
+            if ctor != identity
+                probT = probT{false}
+            end
+            prob = probT(sys, []; u0_constructor, p_constructor)
             @test prob.f.initialization_data !== nothing
             @test prob.f.initialization_data.initializeprobmap === nothing
             for alg in algs
@@ -826,11 +852,11 @@ end
             end
 
             # `update_initializeprob!` works
-            prob.ps[p] = -2.0
+            prob = remake(prob; p = setp_oop(prob, p)(prob, -2.0))
             for alg in algs
                 test_parameter(prob, alg, q, 2.0)
             end
-            prob.ps[p] = 2.0
+            prob = remake(prob; p = setp_oop(prob, p)(prob, 2.0))
 
             # `remake` works
             prob2 = remake(prob; p = [p => -2.0])
