@@ -869,7 +869,8 @@ All other keyword arguments are forwarded to `InitializationProblem`.
 function maybe_build_initialization_problem(
         sys::AbstractSystem, op::AbstractDict, u0map, pmap, t, defs,
         guesses, missing_unknowns; implicit_dae = false, u0_constructor = identity,
-        floatT = Float64, initialization_eqs = [], use_scc = true, kwargs...)
+        p_constructor = identity, floatT = Float64, initialization_eqs = [],
+        use_scc = true, kwargs...)
     guesses = merge(ModelingToolkit.guesses(sys), todict(guesses))
 
     if t === nothing && is_time_dependent(sys)
@@ -877,7 +878,8 @@ function maybe_build_initialization_problem(
     end
 
     initializeprob = ModelingToolkit.InitializationProblem{true, SciMLBase.FullSpecialize}(
-        sys, t, u0map, pmap; guesses, initialization_eqs, use_scc, kwargs...)
+        sys, t, u0map, pmap; guesses, initialization_eqs,
+        use_scc, u0_constructor, p_constructor, kwargs...)
     if state_values(initializeprob) !== nothing
         initializeprob = remake(initializeprob; u0 = floatT.(state_values(initializeprob)))
     end
@@ -1109,7 +1111,7 @@ function process_SciMLProblem(
             warn_cyclic_dependency, check_units = check_initialization_units,
             circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
             force_time_independent = force_initialization_time_independent, algebraic_only, allow_incomplete,
-            u0_constructor, floatT)
+            u0_constructor, p_constructor, floatT)
 
         kwargs = merge(kwargs, kws)
     end
