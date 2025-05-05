@@ -59,7 +59,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     """
     The internal systems. These are required to have unique names.
     """
-    systems::Vector
+    systems::Vector{Any}
     """
     A vector of explicit symbolic expressions for the analytic solutions of each
     dependent variable. e.g. `analytic = [u(t, x) ~ a*sin(c*t) * cos(k*x)]`.
