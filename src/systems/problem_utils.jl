@@ -881,7 +881,13 @@ function maybe_build_initialization_problem(
         sys, t, u0map, pmap; guesses, initialization_eqs,
         use_scc, u0_constructor, p_constructor, kwargs...)
     if state_values(initializeprob) !== nothing
-        initializeprob = remake(initializeprob; u0 = floatT.(state_values(initializeprob)))
+        _u0 = state_values(initializeprob)
+        if ArrayInterface.ismutable(_u0)
+            _u0 = floatT.(_u0)
+        else
+            _u0 = similar_type(_u0, floatT)(_u0)
+        end
+        initializeprob = remake(initializeprob; u0 = _u0)
     end
     initp = parameter_values(initializeprob)
     if is_split(sys)
@@ -890,9 +896,13 @@ function maybe_build_initialization_problem(
         buffer, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Initials(), initp)
         initp = repack(floatT.(buffer))
     elseif initp isa AbstractArray
-        initp′ = similar(initp, floatT)
-        copyto!(initp′, initp)
-        initp = initp′
+        if ArrayInterface.ismutable(initp)
+            initp′ = similar(initp, floatT)
+            copyto!(initp′, initp)
+            initp = initp′
+        else
+            initp = similar_type(initp, floatT)(initp)
+        end
     end
     initializeprob = remake(initializeprob; p = initp)
 
