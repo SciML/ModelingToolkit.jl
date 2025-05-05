@@ -131,10 +131,7 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     sys = :($type($(flatten_equations)(equations), $iv, variables, parameters;
         name, description = $description, systems, gui_metadata = $gui_metadata,
         continuous_events = [$(c_evts...)], discrete_events = [$(d_evts...)],
-        defaults))
-    sys = :($type($(flatten_equations)(equations), $iv, variables, parameters;
-        name, description = $description, systems, gui_metadata = $gui_metadata, defaults,
-        costs = [$(costs...)], constraints = [$(cons...)], consolidate = $consolidate))
+        defaults, costs = [$(costs...)], constraints = [$(cons...)], consolidate = $consolidate))
 
     if length(ext) == 0
         push!(exprs.args, :(var"#___sys___" = $sys))
