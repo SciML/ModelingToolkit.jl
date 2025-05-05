@@ -3,7 +3,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D, get_u0
 using OrdinaryDiffEq
 using DataInterpolations
 using StaticArrays
-using SymbolicIndexingInterface: getu
+using SymbolicIndexingInterface
 
 @variables x(t)[1:3]=[1.0, 2.0, 3.0] y(t) z(t)[1:2]
 
@@ -337,29 +337,28 @@ end
 end
 
 @testset "`p_constructor` keyword argument" begin
-    @parameters σ ρ β
-    @variables x(t) y(t) z(t)
+    @parameters g = 1.0
+    @variables x(t) y(t) [state_priority = 10, guess = 1.0] λ(t) [guess = 1.0]
+    eqs = [D(D(x)) ~ λ * x
+           D(D(y)) ~ λ * y - g
+           x^2 + y^2 ~ 1]
+    @mtkbuild pend = ODESystem(eqs, t)
 
-    eqs = [D(D(x)) ~ σ * (y - x),
-        D(y) ~ x * (ρ - z) - y,
-        D(z) ~ x * y - β * z]
-
-    @mtkbuild sys = ODESystem(eqs, t)
-
-    u0 = [D(x) => 2.0f0,
-        x => 1.0f0,
-        y => 0.0f0,
-        z => 0.0f0]
-
-    p = [σ => 28.0f0,
-        ρ => 10.0f0,
-        β => 8.0f0 / 3]
+    u0 = [x => 1.0, D(x) => 0.0]
     u0_constructor = p_constructor = vals -> SVector{length(vals)}(vals...)
-    prob = ODEProblem(sys, u0, tspan, p; u0_constructor, p_constructor)
+    tspan = (0.0, 5.0)
+    prob = ODEProblem(pend, u0, tspan; u0_constructor, p_constructor)
+    @test prob.u0 isa SVector
     @test prob.p.tunable isa SVector
     @test prob.p.initials isa SVector
+    initdata = prob.f.initialization_data
+    @test state_values(initdata.initializeprob) isa SVector
+    @test parameter_values(initdata.initializeprob).tunable isa SVector
 
-    @mtkbuild sys=ODESystem(eqs, t) split=false
-    prob = ODEProblem(sys, u0, tspan, p; u0_constructor, p_constructor)
+    @mtkbuild pend=ODESystem(eqs, t) split=false
+    prob = ODEProblem(pend, u0, tspan; u0_constructor, p_constructor)
     @test prob.p isa SVector
+    initdata = prob.f.initialization_data
+    @test state_values(initdata.initializeprob) isa SVector
+    @test parameter_values(initdata.initializeprob) isa SVector
 end
