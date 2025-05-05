@@ -408,7 +408,7 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
         error("The passed in JumpSystem contains `Equation`s or continuous events, please use a problem type that supports these features, such as ODEProblem.")
     end
 
-    _f, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
+    _f, u0, p = process_SciMLProblem(EmptySciMLFunction{true}, sys, u0map, parammap;
         t = tspan === nothing ? nothing : tspan[1], tofloat = false, check_length = false, build_initializeprob = false, cse)
     f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
 
@@ -449,7 +449,7 @@ function DiscreteProblemExpr{iip}(sys::JumpSystem, u0map, tspan::Union{Tuple, No
         error("A completed `JumpSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `DiscreteProblemExpr`")
     end
 
-    _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
+    _, u0, p = process_SciMLProblem(EmptySciMLFunction{iip}, sys, u0map, parammap;
         t = tspan === nothing ? nothing : tspan[1], tofloat = false, check_length = false)
     # identity function to make syms works
     quote
@@ -506,7 +506,7 @@ function DiffEqBase.ODEProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothi
         return ODEProblem(osys, u0map, tspan, parammap; check_length = false,
             build_initializeprob = false, kwargs...)
     else
-        _, u0, p = process_SciMLProblem(EmptySciMLFunction, sys, u0map, parammap;
+        _, u0, p = process_SciMLProblem(EmptySciMLFunction{true}, sys, u0map, parammap;
             t = tspan === nothing ? nothing : tspan[1], tofloat = false,
             check_length = false, build_initializeprob = false, cse)
         f = (du, u, p, t) -> (du .= 0; nothing)
