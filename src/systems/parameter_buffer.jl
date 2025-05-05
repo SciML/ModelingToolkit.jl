@@ -366,6 +366,14 @@ function Base.copy(p::MTKParameters)
     )
 end
 
+function ArrayInterface.ismutable(::Type{MTKParameters{
+        T, I, D, C, N, H}}) where {T, I, D, C, N, H}
+    ArrayInterface.ismutable(T) || ArrayInterface.ismutable(I) ||
+        any(ArrayInterface.ismutable, fieldtypes(D)) ||
+        any(ArrayInterface.ismutable, fieldtypes(C)) ||
+        any(ArrayInterface.ismutable, fieldtypes(N))
+end
+
 function SymbolicIndexingInterface.parameter_values(p::MTKParameters, pind::ParameterIndex)
     _ducktyped_parameter_values(p, pind)
 end
