@@ -1611,3 +1611,16 @@ end
         [g => 1.0]; guesses = [y => 1.0, λ => 1.0])
     @test !ModelingToolkit.is_split(prob.f.initialization_data.initializeprob.f.sys)
 end
+
+@testset "`InitializationProblem` retains `iip` of parent" begin
+    @parameters g
+    @variables x(t) y(t) [state_priority = 10] λ(t)
+    eqs = [D(D(x)) ~ λ * x
+           D(D(y)) ~ λ * y - g
+           x^2 + y^2 ~ 1]
+    @mtkbuild pend = ODESystem(eqs, t)
+    prob = ODEProblem(pend, SA[x => 1.0, D(x) => 0.0], (0.0, 1.0),
+        SA[g => 1.0]; guesses = [y => 1.0, λ => 1.0])
+    @test !SciMLBase.isinplace(prob)
+    @test !SciMLBase.isinplace(prob.f.initialization_data.initializeprob)
+end
