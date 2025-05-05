@@ -835,7 +835,9 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
 
     subprobs = []
     for (f, vscc) in zip(nlfuns, var_sccs)
-        prob = NonlinearProblem(f, u0[vscc], p)
+        _u0 = SymbolicUtils.Code.create_array(
+            typeof(u0), eltype(u0), Val(1), Val(length(vscc)), u0[vscc]...)
+        prob = NonlinearProblem{iip}(f, _u0, p)
         push!(subprobs, prob)
     end
 
