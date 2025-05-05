@@ -1563,3 +1563,38 @@ end
         @test integ[x] ≈ 0.8
     end
 end
+
+@testset "Initialization copies solved `u0` to `p`" begin
+    @parameters σ ρ β A[1:3]
+    @variables x(t) y(t) z(t) w(t) w2(t)
+    eqs = [D(D(x)) ~ σ * (y - x),
+        D(y) ~ x * (ρ - z) - y,
+        D(z) ~ x * y - β * z,
+        w ~ x + y + z + 2 * β,
+        0 ~ x^2 + y^2 - w2^2
+    ]
+
+    @mtkbuild sys = ODESystem(eqs, t)
+
+    u0 = [D(x) => 2.0,
+        x => 1.0,
+        y => 0.0,
+        z => 0.0]
+
+    p = [σ => 28.0,
+        ρ => 10.0,
+        β => 8 / 3]
+
+    tspan = (0.0, 100.0)
+    getter = getsym(sys, Initial.(unknowns(sys)))
+    prob = ODEProblem(sys, u0, tspan, p; guesses = [w2 => 3.0])
+    new_u0, new_p, _ = SciMLBase.get_initial_values(
+        prob, prob, prob.f, SciMLBase.OverrideInit(), Val(true);
+        nlsolve_alg = NewtonRaphson(), abstol = 1e-6, reltol = 1e-3)
+    @test getter(prob) != getter(new_p)
+    @test getter(new_p) == new_u0
+    _prob = remake(prob, u0 = new_u0, p = new_p)
+    sol = solve(_prob; initializealg = CheckInit())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol.u[1] ≈ new_u0
+end
