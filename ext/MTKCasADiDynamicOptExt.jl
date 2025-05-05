@@ -43,6 +43,22 @@ function (M::MXLinearInterpolation)(τ)
     M.u[i] + Δ*(M.u[i + 1] - M.u[i])
 end
 
+"""
+    CasADiDynamicOptProblem(sys::ODESystem, u0, tspan, p; dt, steps)
+
+Convert an ODESystem representing an optimal control system into a CasADi model
+for solving using optimization. Must provide either `dt`, the timestep between collocation 
+points (which, along with the timespan, determines the number of points), or directly 
+provide the number of points as `steps`.
+
+The optimization variables:
+- a vector-of-vectors U representing the unknowns as an interpolation array
+- a vector-of-vectors V representing the controls as an interpolation array
+
+The constraints are:
+- The set of user constraints passed to the ODESystem via `constraints`
+- The solver constraints that encode the time-stepping used by the solver
+"""
 function MTK.CasADiDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
         dt = nothing,
         steps = nothing,
@@ -240,16 +256,11 @@ end
 
 `plugin_options` and `solver_options` get propagated to the Opti object in CasADi.
 """
-function DiffEqBase.solve(prob::CasADiDynamicOptProblem, solver::Union{String, Symbol}, ode_solver::Symbol = :Default; plugin_options::Dict = Dict(), solver_options::Dict = Dict(), silent = false)
+function DiffEqBase.solve(prob::CasADiDynamicOptProblem, solver::Union{String, Symbol}, tableau_getter = constructDefault; plugin_options::Dict = Dict(), solver_options::Dict = Dict(), silent = false)
     model = prob.model
+    tableau = tableau_getter()
     opti = model.opti
 
-    if ode_solver == :Default
-        tableau = MTK.constructDefault()
-    else
-        tableau_getter = Symbol(:construct, ode_solver)
-        tableau = @eval Main.tableau_getter()
-    end
     solver!(opti, solver, plugin_options, solver_options)
     add_casadi_solve_constraints!(prob, tableau)
     solver!(cmodel, "$solver", plugin_options, solver_options)
@@ -266,13 +277,13 @@ function DiffEqBase.solve(prob::CasADiDynamicOptProblem, solver::Union{String, S
     ts = value_getter(tₛ) * U.t
     U_vals = value_getter(U)
     U_vals = [[U_vals[i][j] for i in 1:length(U_vals)] for j in 1:length(ts)]
-    sol = DiffEqBase.build_solution(prob, ode_solver, ts, U_vals)
+    sol = DiffEqBase.build_solution(prob, tableau_getter, ts, U_vals)
 
     input_sol = nothing
     if !isempty(V)
         V_vals = value_getter(V)
         V_vals = [[V_vals[i][j] for i in 1:length(V_vals)] for j in 1:length(ts)]
-        input_sol = DiffEqBase.build_solution(prob, ode_solver, ts, V_vals)
+        input_sol = DiffEqBase.build_solution(prob, tableau_getter, ts, V_vals)
     end
 
     if failed
