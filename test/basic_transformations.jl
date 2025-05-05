@@ -220,7 +220,7 @@ end
     @independent_variables t_units [unit = u"s"]
     D_units = Differential(t_units)
     @variables x(t_units) [unit = u"m"] y(t_units) [unit = u"m"]
-    @parameters g = 9.81 [unit = u"m * s^-2"] # gravitational acceleration
+    @parameters g=9.81 [unit = u"m * s^-2"] # gravitational acceleration
     Mt = ODESystem([D_units(D_units(y)) ~ -g, D_units(D_units(x)) ~ 0], t_units; name = :M) # gives (x, y) as function of t, ...
     Mx = change_independent_variable(Mt, x; add_old_diff = true) # ... but we want y as a function of x
     Mx = structural_simplify(Mx; allow_symbolic = true)
