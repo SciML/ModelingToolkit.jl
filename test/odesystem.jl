@@ -472,14 +472,12 @@ sys = complete(sys)
 
 # check inputs
 let
-    @parameters f k d
-    @variables x(t) ẋ(t)
-    δ = D
+    @parameters k d
+    @variables x(t) ẋ(t) f(t) [input = true]
 
-    eqs = [δ(x) ~ ẋ, δ(ẋ) ~ f - k * x - d * ẋ]
-    @named sys = ODESystem(eqs, t, [x, ẋ], [f, d, k]; controls = [f])
-
-    calculate_control_jacobian(sys)
+    eqs = [D(x) ~ ẋ, D(ẋ) ~ f - k * x - d * ẋ]
+    @named sys = ODESystem(eqs, t, [x, ẋ], [d, k])
+    sys, _ = structural_simplify(sys, ([f], []))
 
     @test isequal(calculate_control_jacobian(sys),
         reshape(Num[0, 1], 2, 1))

@@ -1,4 +1,4 @@
-using ModelingToolkit, OrdinaryDiffEq, LinearAlgebra, ControlSystemsBase
+using ModelingToolkit, OrdinaryDiffEqRosenbrock, LinearAlgebra, ControlSystemsBase
 using ModelingToolkitStandardLibrary.Mechanical.Rotational
 using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkit: connect, t_nounits as t, D_nounits as D

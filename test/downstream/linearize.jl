@@ -206,7 +206,7 @@ lsys, ssys = linearize(sat, [u], [y]; op = Dict(u => 2))
 @test lsys.D[] == 0
 
 # Test case when unknowns in system do not have equations in initialization system
-using ModelingToolkit, OrdinaryDiffEq, LinearAlgebra
+using ModelingToolkit, LinearAlgebra
 using ModelingToolkitStandardLibrary.Mechanical.Rotational
 using ModelingToolkitStandardLibrary.Blocks: Add, Sine, PID, SecondOrder, Step, RealOutput
 using ModelingToolkit: connect

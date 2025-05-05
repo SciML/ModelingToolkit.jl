@@ -101,7 +101,7 @@ function calculate_control_jacobian(sys::AbstractODESystem;
     end
 
     rhs = [eq.rhs for eq in full_equations(sys)]
-    ctrls = controls(sys)
+    ctrls = unbound_inputs(sys)
 
     if sparse
         jac = sparsejacobian(rhs, ctrls, simplify = simplify)

@@ -3,7 +3,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 using Zygote
 using SymbolicIndexingInterface
 using SciMLStructures
-using OrdinaryDiffEq
+using OrdinaryDiffEqTsit5
+using OrdinaryDiffEqNonlinearSolve
 using NonlinearSolve
 using SciMLSensitivity
 using ForwardDiff
