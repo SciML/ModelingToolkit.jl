@@ -867,7 +867,7 @@ denotes whether the `SciMLProblem` being constructed is in implicit DAE form (`D
 All other keyword arguments are forwarded to `InitializationProblem`.
 """
 function maybe_build_initialization_problem(
-        sys::AbstractSystem, op::AbstractDict, u0map, pmap, t, defs,
+        sys::AbstractSystem, iip, op::AbstractDict, u0map, pmap, t, defs,
         guesses, missing_unknowns; implicit_dae = false, u0_constructor = identity,
         p_constructor = identity, floatT = Float64, initialization_eqs = [],
         use_scc = true, kwargs...)
@@ -877,7 +877,7 @@ function maybe_build_initialization_problem(
         t = zero(floatT)
     end
 
-    initializeprob = ModelingToolkit.InitializationProblem{true, SciMLBase.FullSpecialize}(
+    initializeprob = ModelingToolkit.InitializationProblem{iip}(
         sys, t, u0map, pmap; guesses, initialization_eqs,
         use_scc, u0_constructor, p_constructor, kwargs...)
     if state_values(initializeprob) !== nothing
@@ -1105,7 +1105,8 @@ function process_SciMLProblem(
 
     if build_initializeprob
         kws = maybe_build_initialization_problem(
-            sys, op, u0map, pmap, t, defs, guesses, missing_unknowns;
+            sys, constructor <: SciMLBase.AbstractSciMLFunction{true},
+            op, u0map, pmap, t, defs, guesses, missing_unknowns;
             implicit_dae, warn_initialize_determined, initialization_eqs,
             eval_expression, eval_module, fully_determined,
             warn_cyclic_dependency, check_units = check_initialization_units,
