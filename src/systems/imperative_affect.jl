@@ -103,7 +103,7 @@ namespace_affects(af::ImperativeAffect, s) = namespace_affect(af, s)
 function namespace_affect(affect::ImperativeAffect, s)
     rmn = []
     for modded in modified(affect)
-        if modded isa AbstractArray
+        if symbolic_type(modded) == NotSymbolic() && modded isa AbstractArray
             res = []
             for m in modded
                 push!(res, renamespace(s, m))
