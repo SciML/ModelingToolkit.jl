@@ -938,8 +938,7 @@ function maybe_build_initialization_problem(
         is_parameter_solvable(p, pmap, defs, guesses) || continue
         get(op, p, missing) === missing || continue
         p = unwrap(p)
-        stype = symtype(p)
-        op[p] = get_temporary_value(p, floatT)
+        op[p] = getu(initializeprob, p)(initializeprob)
         if iscall(p) && operation(p) === getindex
             arrp = arguments(p)[1]
             op[arrp] = collect(arrp)
@@ -948,7 +947,7 @@ function maybe_build_initialization_problem(
 
     if is_time_dependent(sys)
         for v in missing_unknowns
-            op[v] = get_temporary_value(v, floatT)
+            op[v] = getu(initializeprob, v)(initializeprob)
         end
         empty!(missing_unknowns)
     end
