@@ -3,7 +3,15 @@ using ModelingToolkit
 using CasADi
 using DiffEqBase
 using UnPack
+using NaNMath
 const MTK = ModelingToolkit
+
+# NaNMath
+for ff in [acos, log1p, acosh, log2, asin, tan, atanh, cos, log, sin, log10, sqrt]
+    f = nameof(ff)
+    # These need to be defined so that JuMP can trace through functions built by Symbolics
+    @eval NaNMath.$f(x::CasadiSymbolicObject) = Base.$f(x)
+end
 
 # Default linear interpolation for MX objects, likely to change down the line when we support interpolation with the collocation polynomial.
 struct MXLinearInterpolation
@@ -40,7 +48,11 @@ function (M::MXLinearInterpolation)(τ)
     Δ = nt - i + 1
 
     (i > length(M.t) || i < 1) && error("Cannot extrapolate past the tspan.")
-    M.u[:, i] + Δ*(M.u[:, i + 1] - M.u[:, i])
+    if i < length(M.t)
+        M.u[:, i] + Δ*(M.u[:, i + 1] - M.u[:, i])
+    else
+        M.u[:, i]
+    end
 end
 
 """
@@ -83,8 +95,16 @@ function init_model(sys, tspan, steps, u0map, pmap, u0; is_free_t = false)
     if is_free_t
         (ts_sym, te_sym) = tspan
         MTK.symbolic_type(ts_sym) !== MTK.NotSymbolic() &&
-            error("Free initial time problems are not currently supported.")
+            error("Free initial time problems are not currently supported in CasADiDynamicOptProblem.")
         tₛ = variable!(opti)
+        set_initial!(opti, tₛ, pmap[te_sym])
+        subject_to!(opti, tₛ >= ts_sym)
+        hasbounds(te_sym) && begin
+            lo, hi = getbounds(te_sym)
+            subject_to!(opti, tₛ >= lo)
+            subject_to!(opti, tₛ >= hi)
+        end
+        pmap[te_sym] = tₛ 
         tsteps = LinRange(0, 1, steps)
     else
         tₛ = MX(1)
@@ -93,14 +113,21 @@ function init_model(sys, tspan, steps, u0map, pmap, u0; is_free_t = false)
     
     U = CasADi.variable!(opti, length(states), steps)
     V = CasADi.variable!(opti, length(ctrls), steps)
+    set_initial!(opti, U, DM(repeat(u0, 1, steps)))
+    c0 = MTK.value.([pmap[c] for c in ctrls])
+    set_initial!(opti, V, DM(repeat(c0, 1, steps)))
+
     U_interp = MXLinearInterpolation(U, tsteps, tsteps[2]-tsteps[1])
     V_interp = MXLinearInterpolation(V, tsteps, tsteps[2]-tsteps[1])
+    for (i, ct) in enumerate(ctrls)
+        pmap[ct] = V[i, :]
+    end
 
     model = CasADiModel(opti, U_interp, V_interp, tₛ)
 
     set_casadi_bounds!(model, sys, pmap)
-    add_cost_function!(model, sys, (tspan[1], tspan[2]), pmap)
-    add_user_constraints!(model, sys, pmap; is_free_t)
+    add_cost_function!(model, sys, tspan, pmap; is_free_t)
+    add_user_constraints!(model, sys, tspan, pmap; is_free_t)
 
     stidxmap = Dict([v => i for (i, v) in enumerate(states)])
     u0map = Dict([MTK.default_toterm(MTK.value(k)) => v for (k, v) in u0map])
@@ -116,13 +143,15 @@ function set_casadi_bounds!(model, sys, pmap)
     for (i, u) in enumerate(unknowns(sys))
         if MTK.hasbounds(u)
             lo, hi = MTK.getbounds(u)
-            subject_to!(opti, lo <= U[i, :] <= hi)
+            subject_to!(opti, Symbolics.fixpoint_sub(lo, pmap) <= U.u[i, :])
+            subject_to!(opti, U.u[i, :] <= Symbolics.fixpoint_sub(hi, pmap))
         end
     end
     for (i, v) in enumerate(MTK.unbound_inputs(sys))
         if MTK.hasbounds(v)
             lo, hi = MTK.getbounds(v)
-            subject_to!(opti, lo <= V[i, :] <= hi)
+            subject_to!(opti, Symbolics.fixpoint_sub(lo, pmap) <= V.u[i, :])
+            subject_to!(opti, V.u[i, :] <= Symbolics.fixpoint_sub(hi, pmap))
         end
     end
 end
@@ -134,7 +163,7 @@ function add_initial_constraints!(model::CasADiModel, u0, u0_idxs)
     end
 end
 
-function add_user_constraints!(model::CasADiModel, sys, pmap; is_free_t = false)
+function add_user_constraints!(model::CasADiModel, sys, tspan, pmap; is_free_t)
     @unpack opti, U, V, tₛ = model
 
     iv = MTK.get_iv(sys)
@@ -143,18 +172,29 @@ function add_user_constraints!(model::CasADiModel, sys, pmap; is_free_t = false)
     (isnothing(jconstraints) || isempty(jconstraints)) && return nothing
 
     stidxmap = Dict([v => i for (i, v) in enumerate(unknowns(sys))])
+    ctidxmap = Dict([v => i for (i, v) in enumerate(MTK.unbound_inputs(sys))])
     cons_unknowns = map(MTK.default_toterm, unknowns(conssys))
-    for st in cons_unknowns
-        x = MTK.operation(st)
-        t = only(MTK.arguments(st))
-        idx = stidxmap[x(iv)]
-        @show t
-        MTK.symbolic_type(t) === MTK.NotSymbolic() || continue
-        jconstraints = map(c -> Symbolics.substitute(c, Dict(x(t) => U(t)[idx])), jconstraints)
-    end
-    jconstraints = substitute_casadi_vars(model, sys, pmap, jconstraints)
 
+    auxmap = Dict([u => MTK.default_toterm(MTK.value(u)) for u in unknowns(conssys)])
+    jconstraints = substitute_casadi_vars(model, sys, pmap, jconstraints; is_free_t, auxmap)
+    # Manually substitute fixed-t variables
     for (i, cons) in enumerate(jconstraints)
+        consvars = MTK.vars(cons)
+        for st in consvars
+            MTK.iscall(st) || continue
+            x = MTK.operation(st)
+            t = only(MTK.arguments(st))
+            MTK.symbolic_type(t) === MTK.NotSymbolic() || continue
+            if haskey(stidxmap, x(iv)) 
+                idx = stidxmap[x(iv)] 
+                cv = U
+            else
+                idx = ctidxmap[x(iv)]
+                cv = V
+            end
+            cons = Symbolics.substitute(cons, Dict(x(t) => cv(t)[idx]))
+        end
+
         if cons isa Equation
             subject_to!(opti, cons.lhs - cons.rhs==0)
         elseif cons.relational_op === Symbolics.geq
@@ -165,29 +205,38 @@ function add_user_constraints!(model::CasADiModel, sys, pmap; is_free_t = false)
     end
 end
 
-function add_cost_function!(model::CasADiModel, sys, tspan, pmap)
+function add_cost_function!(model::CasADiModel, sys, tspan, pmap; is_free_t)
     @unpack opti, U, V, tₛ = model
-    jcosts = MTK.get_costs(sys)
+    jcosts = copy(MTK.get_costs(sys))
     consolidate = MTK.get_consolidate(sys)
-
     if isnothing(jcosts) || isempty(jcosts)
         minimize!(opti, MX(0))
         return
     end
-    stidxmap = Dict([v => i for (i, v) in enumerate(sts)])
-    pidxmap = Dict([v => i for (i, v) in enumerate(ps)])
 
+    iv = MTK.get_iv(sys)
+    stidxmap = Dict([v => i for (i, v) in enumerate(unknowns(sys))])
+    ctidxmap = Dict([v => i for (i, v) in enumerate(MTK.unbound_inputs(sys))])
+
+    jcosts = substitute_casadi_vars(model, sys, pmap, jcosts; is_free_t)
+    # Substitute fixed-time variables.
     for i in 1:length(jcosts)
-        vars = vars(jcosts[i])
-        for st in vars
+        costvars = MTK.vars(jcosts[i])
+        for st in costvars
+            MTK.iscall(st) || continue
             x = operation(st)
             t = only(arguments(st))
-            t isa Union{Num, MTK.Symbolic} && continue
-            idx = stidxmap[x(iv)]
-            jcosts[i] = Symbolics.substitute(jcosts[i], Dict(x(t) => U(t)[idx]))
+            MTK.symbolic_type(t) === MTK.NotSymbolic() || continue
+            if haskey(stidxmap, x(iv)) 
+                idx = stidxmap[x(iv)] 
+                cv = U
+            else
+                idx = ctidxmap[x(iv)]
+                cv = V
+            end
+            jcosts[i] = Symbolics.substitute(jcosts[i], Dict(x(t) => cv(t)[idx]))
         end
     end
-    jcosts = substitute_casadi_vars(model::CasADiModel, sys, pmap, jcosts; auxmap)
 
     dt = U.t[2] - U.t[1]
     intmap = Dict()
@@ -195,15 +244,17 @@ function add_cost_function!(model::CasADiModel, sys, tspan, pmap)
         op = MTK.operation(int)
         arg = only(arguments(MTK.value(int)))
         lo, hi = (op.domain.domain.left, op.domain.domain.right)
-        (lo, hi) !== tspan && error("Non-whole interval bounds for integrals are not currently supported.")
+        !isequal((lo, hi), tspan) && error("Non-whole interval bounds for integrals are not currently supported for CasADiDynamicOptProblem.")
+        # Approximate integral as sum.
         intmap[int] = dt * tₛ * sum(arg)
     end
     jcosts = map(c -> Symbolics.substitute(c, intmap), jcosts)
-    minimize!(opti, consolidate(jcosts))
+    jcosts = MTK.value.(jcosts)
+    minimize!(opti, MX(MTK.value(consolidate(jcosts))))
 end
 
-function substitute_casadi_vars(model::CasADiModel, sys, pmap, exprs; auxmap = Dict())
-    @unpack opti, U, V = model
+function substitute_casadi_vars(model::CasADiModel, sys, pmap, exprs; auxmap::Dict = Dict(), is_free_t)
+    @unpack opti, U, V, tₛ = model
     iv = MTK.get_iv(sys)
     sts = unknowns(sys)
     cts = MTK.unbound_inputs(sys)
@@ -213,6 +264,13 @@ function substitute_casadi_vars(model::CasADiModel, sys, pmap, exprs; auxmap = D
 
     exprs = map(c -> Symbolics.fixpoint_sub(c, auxmap), exprs)
     exprs = map(c -> Symbolics.fixpoint_sub(c, Dict(pmap)), exprs)
+    # tf means different things in different contexts; a [tf] in a cost function
+    # should be tₛ, while a x(tf) should translate to x[1]
+    if is_free_t
+        free_t_map = Dict([[x(tₛ) => U.u[i, end] for (i, x) in enumerate(x_ops)];
+                           [c(tₛ) => V.u[i, end] for (i, c) in enumerate(c_ops)]])
+        exprs = map(c -> Symbolics.fixpoint_sub(c, free_t_map), exprs)
+    end
 
     # for variables like x(t)
     whole_interval_map = Dict([[v => U.u[i, :] for (i, v) in enumerate(sts)];
@@ -221,7 +279,7 @@ function substitute_casadi_vars(model::CasADiModel, sys, pmap, exprs; auxmap = D
     exprs
 end
 
-function add_solve_constraints(prob, tableau; is_free_t = false)
+function add_solve_constraints(prob, tableau)
     @unpack A, α, c = tableau
     @unpack model, f, p = prob 
     @unpack opti, U, V, tₛ = model
@@ -283,6 +341,7 @@ function DiffEqBase.solve(prob::CasADiDynamicOptProblem, solver::Union{String, S
 
     failed = false
     value_getter = nothing
+    sol = nothing
     try
         sol = CasADi.solve!(opti)
         value_getter = x -> CasADi.value(sol, x)
@@ -293,22 +352,24 @@ function DiffEqBase.solve(prob::CasADiDynamicOptProblem, solver::Union{String, S
 
     ts = value_getter(tₛ) * U.t
     U_vals = value_getter(U.u)
+    size(U_vals, 2) == 1 && (U_vals = U_vals')
     U_vals = [[U_vals[i, j] for i in 1:size(U_vals, 1)] for j in 1:length(ts)]
-    sol = DiffEqBase.build_solution(prob, tableau_getter, ts, U_vals)
+    ode_sol = DiffEqBase.build_solution(prob, tableau_getter, ts, U_vals)
 
     input_sol = nothing
     if prod(size(V.u)) != 0
         V_vals = value_getter(V.u)
+        size(V_vals, 2) == 1 && (V_vals = V_vals')
         V_vals = [[V_vals[i, j] for i in 1:size(V_vals, 1)] for j in 1:length(ts)]
         input_sol = DiffEqBase.build_solution(prob, tableau_getter, ts, V_vals)
     end
 
     if failed
-        sol = SciMLBase.solution_new_retcode(sol, SciMLBase.ReturnCode.ConvergenceFailure)
+        ode_sol = SciMLBase.solution_new_retcode(ode_sol, SciMLBase.ReturnCode.ConvergenceFailure)
         !isnothing(input_sol) && (input_sol = SciMLBase.solution_new_retcode(
             input_sol, SciMLBase.ReturnCode.ConvergenceFailure))
     end
 
-    DynamicOptSolution(model, sol, input_sol)
+    DynamicOptSolution(model, ode_sol, input_sol)
 end
 end

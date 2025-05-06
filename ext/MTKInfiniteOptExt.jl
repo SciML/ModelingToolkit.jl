@@ -173,6 +173,7 @@ function add_jump_cost_function!(model::InfiniteModel, sys, tspan, pmap; is_free
         return
     end
     jcosts = substitute_jump_vars(model, sys, pmap, jcosts; is_free_t)
+    @show jcosts
     tₛ = is_free_t ? model[:tf] : 1
 
     # Substitute integral
