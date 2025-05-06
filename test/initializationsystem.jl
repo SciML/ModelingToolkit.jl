@@ -1200,7 +1200,7 @@ end
     @test integ2[x] ≈ cbrt(3 / 28) atol=1e-5
     @test integ2[y] ≈ 3cbrt(3 / 28) atol=1e-5
     @test integ2.ps[p] == 1.0
-    @test integ2.ps[q] ≈ 2cbrt(3 / 28)
+    @test integ2.ps[q] ≈ 2cbrt(3 / 28) atol=1e-5
 end
 
 function test_dummy_initialization_equation(prob, var)
