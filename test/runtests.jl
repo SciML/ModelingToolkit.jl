@@ -90,7 +90,7 @@ end
             @safetestset "SCCNonlinearProblem Test" include("scc_nonlinear_problem.jl")
             @safetestset "PDE Construction Test" include("pdesystem.jl")
             @safetestset "JumpSystem Test" include("jumpsystem.jl")
-            @safetestset "Optimal Control + Constraints Tests" include("optimal_control.jl")
+            @safetestset "Optimal Control + Constraints Tests" include("bvproblem.jl")
             @safetestset "print_tree" include("print_tree.jl")
             @safetestset "Constraints Test" include("constraints.jl")
             @safetestset "IfLifting Test" include("if_lifting.jl")
