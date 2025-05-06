@@ -2116,6 +2116,8 @@ function n_expanded_connection_equations(sys::AbstractSystem)
     nextras = n_outer_stream_variables + length(ceqs) + n_variable_connect_eqs
 end
 
+Base.show(io::IO, sys::AbstractSystem; kws...) = show(io, MIME"text/plain"(), sys; kws...)
+
 function Base.show(
         io::IO, mime::MIME"text/plain", sys::AbstractSystem; hint = true, bold = true)
     limit = get(io, :limit, false) # if output should be limited,
