@@ -39,9 +39,13 @@ SymbolicUtils.isbinop(::Shift) = false
 
 function (D::Shift)(x, allow_zero = false)
     !allow_zero && D.steps == 0 && return x
-    Term{symtype(x)}(D, Any[x])
+    if Symbolics.isarraysymbolic(x)
+        Symbolics.array_term(D, x)
+    else
+        term(D, x)
+    end
 end
-function (D::Shift)(x::Num, allow_zero = false)
+function (D::Shift)(x::Union{Num, Symbolics.Arr}, allow_zero = false)
     !allow_zero && D.steps == 0 && return x
     vt = value(x)
     if iscall(vt)
@@ -52,11 +56,11 @@ function (D::Shift)(x::Num, allow_zero = false)
             if D.t === nothing || isequal(D.t, op.t)
                 arg = arguments(vt)[1]
                 newsteps = D.steps + op.steps
-                return Num(newsteps == 0 ? arg : Shift(D.t, newsteps)(arg))
+                return wrap(newsteps == 0 ? arg : Shift(D.t, newsteps)(arg))
             end
         end
     end
-    Num(D(vt, allow_zero))
+    wrap(D(vt, allow_zero))
 end
 SymbolicUtils.promote_symtype(::Shift, t) = t
 
@@ -202,11 +206,19 @@ function (xn::Num)(k::ShiftIndex)
     x = value(xn)
     # Verify that the independent variables of k and x match and that the expression doesn't have multiple variables
     vars = Symbolics.get_variables(x)
-    length(vars) == 1 ||
+    if length(vars) != 1
         error("Cannot shift a multivariate expression $x. Either create a new unknown and shift this, or shift the individual variables in the expression.")
-    args = Symbolics.arguments(vars[]) # args should be one element vector with the t in x(t)
-    length(args) == 1 ||
+    end
+    var = only(vars)
+    if !iscall(var)
+        throw(ArgumentError("Cannot shift time-independent variable $var"))
+    end
+    if operation(var) == getindex
+        var = first(arguments(var))
+    end
+    if length(arguments(var)) != 1
         error("Cannot shift an expression with multiple independent variables $x.")
+    end
 
     # d, _ = propagate_time_domain(xn)
     # if d != clock # this is only required if the variable has another clock
@@ -214,6 +226,34 @@ function (xn::Num)(k::ShiftIndex)
     # end
     # QUESTION: should we return a variable with time domain set to k.clock?
     xn = setmetadata(xn, VariableTimeDomain, k.clock)
+    if steps == 0
+        return xn # x(k) needs no shift operator if the step of k is 0
+    end
+    Shift(t, steps)(xn) # a shift of k steps
+end
+
+function (xn::Symbolics.Arr)(k::ShiftIndex)
+    @unpack clock, steps = k
+    x = value(xn)
+    # Verify that the independent variables of k and x match and that the expression doesn't have multiple variables
+    vars = ModelingToolkit.vars(x)
+    if length(vars) != 1
+        error("Cannot shift a multivariate expression $x. Either create a new unknown and shift this, or shift the individual variables in the expression.")
+    end
+    var = only(vars)
+    if !iscall(var)
+        throw(ArgumentError("Cannot shift time-independent variable $var"))
+    end
+    if length(arguments(var)) != 1
+        error("Cannot shift an expression with multiple independent variables $x.")
+    end
+
+    # d, _ = propagate_time_domain(xn)
+    # if d != clock # this is only required if the variable has another clock
+    #     xn = Sample(t, clock)(xn)
+    # end
+    # QUESTION: should we return a variable with time domain set to k.clock?
+    xn = wrap(setmetadata(unwrap(xn), VariableTimeDomain, k.clock))
     if steps == 0
         return xn # x(k) needs no shift operator if the step of k is 0
     end

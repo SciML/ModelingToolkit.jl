@@ -130,6 +130,9 @@ function check_parameters(ps, iv)
 end
 
 function is_delay_var(iv, var)
+    if Symbolics.isarraysymbolic(var)
+        return is_delay_var(iv, first(collect(var)))
+    end
     args = nothing
     try
         args = arguments(var)

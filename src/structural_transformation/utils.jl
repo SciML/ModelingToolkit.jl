@@ -471,6 +471,13 @@ function shift2term(var)
     op = operation(var)
     iv = op.t
     arg = only(arguments(var))
+    if operation(arg) === getindex
+        idxs = arguments(arg)[2:end]
+        newvar = shift2term(op(first(arguments(arg))))[idxs...]
+        unshifted = ModelingToolkit.getunshifted(newvar)[idxs...]
+        newvar = setmetadata(newvar, ModelingToolkit.VariableUnshifted, unshifted)
+        return newvar
+    end
     is_lowered = !isnothing(ModelingToolkit.getunshifted(arg))
 
     backshift = is_lowered ? op.steps + ModelingToolkit.getshift(arg) : op.steps

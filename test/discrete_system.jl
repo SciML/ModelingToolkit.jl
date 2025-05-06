@@ -325,3 +325,21 @@ end
     @test isequal(shift2term(Shift(t, -1)(vars[4])), vars[5])
     @test isequal(shift2term(Shift(t, -2)(vars[1])), vars[3])
 end
+
+@testset "Shifted array variables" begin
+    @variables x(t)[1:2] y(t)[1:2]
+    k = ShiftIndex(t)
+    eqs = [
+        x(k) ~ x(k - 1) + x(k - 2),
+        y[1](k) ~ y[1](k - 1) + y[1](k - 2),
+        y[2](k) ~ y[2](k - 1) + y[2](k - 2)
+    ]
+    @mtkbuild sys = DiscreteSystem(eqs, t)
+    prob = DiscreteProblem(sys,
+        [x(k - 1) => ones(2), x(k - 2) => zeros(2), y[1](k - 1) => 1.0,
+            y[1](k - 2) => 0.0, y[2](k - 1) => 1.0, y[2](k - 2) => 0.0],
+        (0, 4))
+    @test all(isone, prob.u0)
+    sol = solve(prob, FunctionMap())
+    @test sol[[x..., y...], end] == 8ones(4)
+end
