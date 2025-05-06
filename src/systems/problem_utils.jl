@@ -630,13 +630,17 @@ with promoted types.
 
 $(TYPEDFIELDS)
 """
-struct ReconstructInitializeprob{G}
+struct ReconstructInitializeprob{GP, GU}
     """
     A function which when given the original problem and initialization problem, returns
     the parameter object of the initialization problem with values copied from the
     original.
     """
-    getter::G
+    pgetter::GP
+    """
+    Given the original problem, return the `u0` of the initialization problem.
+    """
+    ugetter::GU
 end
 
 """
@@ -674,6 +678,7 @@ with values from `srcsys`.
 function ReconstructInitializeprob(
         srcsys::AbstractSystem, dstsys::AbstractSystem)
     @assert is_initializesystem(dstsys)
+    ugetter = getu(srcsys, unknowns(dstsys))
     if is_split(dstsys)
         # if we call `getu` on this (and it were able to handle empty tuples) we get the
         # fields of `MTKParameters` except caches.
@@ -693,7 +698,7 @@ function ReconstructInitializeprob(
             end
         end
         getters = (tunable_getter, Returns(SizedVector{0, Float64}()), rest_getters...)
-        getter = let getters = getters
+        pgetter = let getters = getters
             function _getter(valp, initprob)
                 oldcache = parameter_values(initprob).caches
                 MTKParameters(getters[1](valp), getters[2](valp), getters[3](valp),
@@ -703,13 +708,13 @@ function ReconstructInitializeprob(
         end
     else
         syms = parameters(dstsys)
-        getter = let inner = concrete_getu(srcsys, syms)
+        pgetter = let inner = concrete_getu(srcsys, syms)
             function _getter2(valp, initprob)
                 inner(valp)
             end
         end
     end
-    return ReconstructInitializeprob(getter)
+    return ReconstructInitializeprob(pgetter, ugetter)
 end
 
 """
@@ -719,7 +724,7 @@ Copy values from `srcvalp` to `dstvalp`. Returns the new `u0` and `p`.
 """
 function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
     # copy parameters
-    newp = rip.getter(srcvalp, dstvalp)
+    newp = rip.pgetter(srcvalp, dstvalp)
     # no `u0`, so no type-promotion
     if state_values(dstvalp) === nothing
         return nothing, newp
@@ -735,11 +740,10 @@ function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
     elseif !isempty(newp)
         T = promote_type(eltype(newp), T)
     end
+    u0 = rip.ugetter(srcvalp)
     # and the eltype of the destination u0
-    if T == eltype(state_values(dstvalp))
-        u0 = state_values(dstvalp)
-    elseif T != Union{}
-        u0 = T.(state_values(dstvalp))
+    if T != eltype(u0) && T != Union{}
+        u0 = T.(u0)
     end
     # apply the promotion to tunables portion
     buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Tunable(), newp)
@@ -911,11 +915,13 @@ function maybe_build_initialization_problem(
     punknowns = [p
                  for p in all_variable_symbols(initializeprob)
                  if is_parameter(sys, p)]
-    if isempty(punknowns)
+    if initializeprobmap === nothing && isempty(punknowns)
         initializeprobpmap = nothing
     else
-        getpunknowns = getu(initializeprob, punknowns)
-        setpunknowns = setp(sys, punknowns)
+        allsyms = all_symbols(initializeprob)
+        initdvs = filter(x -> any(isequal(x), allsyms), unknowns(sys))
+        getpunknowns = getu(initializeprob, [punknowns; initdvs])
+        setpunknowns = setp(sys, [punknowns; Initial.(initdvs)])
         initializeprobpmap = GetUpdatedMTKParameters(getpunknowns, setpunknowns)
     end
 
