@@ -9,16 +9,6 @@ using CasADi
 
 const M = ModelingToolkit
 
-probtypes = [JuMPDynamicOptProblem, InfiniteOptDynamicOptProblem, CasADiDynamicOptProblem]
-solvers = [Ipopt.Optimizer, Ipopt.Optimizer, "opti"]
-
-function test_dynamic_opt_probs(tableaus, true_sol, args...; kwargs...)
-    for (probtype, solver, tableau) in zip(probtypes, solvers tableaus)
-        prob = probtype(args...; kwargs...)
-        sol = solve(prob, solver, tableau, silent = true)
-    end
-end
-
 @testset "ODE Solution, no cost" begin
     # Test solving without anything attached.
     @parameters α=1.5 β=1.0 γ=3.0 δ=1.0
@@ -41,7 +31,7 @@ end
     oprob = ODEProblem(sys, u0map, tspan, parammap)
     osol = solve(oprob, SimpleRK4(), dt = 0.01)
     cprob = CasADiDynamicOptProblem(sys, u0map, tspan, parammap, dt = 0.01)
-    csol = solve(oprob, "ipopt", constructRK4)
+    csol = solve(cprob, "ipopt", constructRK4)
     @test jsol.sol.u ≈ osol.u
     @test csol.sol.u ≈ osol.u
 
@@ -54,7 +44,7 @@ end
     isol = solve(iprob, Ipopt.Optimizer,
         derivative_method = InfiniteOpt.FiniteDifference(InfiniteOpt.Backward()),
         silent = true) # 11.540 ms, 4.00 MiB
-    @test ≈(isol2.sol.u, osol2.u, rtol = 0.001)
+    @test ≈(isol.sol.u, osol2.u, rtol = 0.001)
     csol2 = solve(cprob, "ipopt", constructImplicitEuler, silent = true)
     @test ≈(csol2.sol.u, osol2.u, rtol = 0.001)
 

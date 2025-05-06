@@ -115,7 +115,7 @@ function init_model(sys, tspan, steps, u0map, pmap, u0; is_free_t = false)
     V = CasADi.variable!(opti, length(ctrls), steps)
     set_initial!(opti, U, DM(repeat(u0, 1, steps)))
     c0 = MTK.value.([pmap[c] for c in ctrls])
-    set_initial!(opti, V, DM(repeat(c0, 1, steps)))
+    !isempty(c0) && set_initial!(opti, V, DM(repeat(c0, 1, steps)))
 
     U_interp = MXLinearInterpolation(U, tsteps, tsteps[2]-tsteps[1])
     V_interp = MXLinearInterpolation(V, tsteps, tsteps[2]-tsteps[1])
@@ -337,6 +337,7 @@ function DiffEqBase.solve(prob::CasADiDynamicOptProblem, solver::Union{String, S
     @unpack opti, U, V, tₛ = model
 
     opti = add_solve_constraints(prob, tableau)
+    silent && solver_options["print_level"] = 0
     solver!(opti, "$solver", plugin_options, solver_options)
 
     failed = false

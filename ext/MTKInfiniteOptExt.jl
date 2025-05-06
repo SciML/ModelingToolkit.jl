@@ -173,7 +173,6 @@ function add_jump_cost_function!(model::InfiniteModel, sys, tspan, pmap; is_free
         return
     end
     jcosts = substitute_jump_vars(model, sys, pmap, jcosts; is_free_t)
-    @show jcosts
     tₛ = is_free_t ? model[:tf] : 1
 
     # Substitute integral
@@ -338,7 +337,7 @@ Solve JuMPDynamicOptProblem. Arguments:
 Returns a DynamicOptSolution, which contains both the model and the ODE solution.
 """
 function DiffEqBase.solve(
-        prob::JuMPDynamicOptProblem, jump_solver, tableau_getter = constructDefault; silent = false)
+        prob::JuMPDynamicOptProblem, jump_solver, tableau_getter = MTK.constructDefault; silent = false)
     model = prob.model
     tableau = tableau_getter()
     silent && set_silent(model)
