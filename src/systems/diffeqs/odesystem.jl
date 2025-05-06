@@ -739,8 +739,6 @@ function add_accumulations(sys::ODESystem, vars::Vector{<:Pair})
     @set! sys.defaults = merge(get_defaults(sys), Dict(a => 0.0 for a in avars))
 end
 
-Base.show(io::IO, sys::ODESystem; kws...) = show(io, MIME"text/plain"(), sys; kws...)
-
 function Base.show(io::IO, mime::MIME"text/plain", sys::ODESystem; hint = true, bold = true)
     # Print general AbstractSystem information
     invoke(Base.show, Tuple{typeof(io), typeof(mime), AbstractSystem},
