@@ -1194,13 +1194,13 @@ end
     @test integ[x] ≈ 1 / cbrt(3)
     @test integ[y] ≈ 2 / cbrt(3)
     @test integ.ps[p] == 1.0
-    @test integ.ps[q] ≈ 3 / cbrt(3) atol=1e-5
+    @test integ.ps[q]≈3 / cbrt(3) atol=1e-5
     prob2 = remake(prob; u0 = [y => 3x], p = [q => 2x])
     integ2 = init(prob2)
-    @test integ2[x] ≈ cbrt(3 / 28) atol=1e-5
-    @test integ2[y] ≈ 3cbrt(3 / 28) atol=1e-5
+    @test integ2[x]≈cbrt(3 / 28) atol=1e-5
+    @test integ2[y]≈3cbrt(3 / 28) atol=1e-5
     @test integ2.ps[p] == 1.0
-    @test integ2.ps[q] ≈ 2cbrt(3 / 28) atol=1e-5
+    @test integ2.ps[q]≈2cbrt(3 / 28) atol=1e-5
 end
 
 function test_dummy_initialization_equation(prob, var)
