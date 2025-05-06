@@ -1186,10 +1186,10 @@ end
     @mtkbuild sys = ODESystem([D(x) ~ x * p + q, x^3 + y^3 ~ 3], t)
     prob = ODEProblem(
         sys, [], (0.0, 1.0), [p => 1.0]; guesses = [x => 1.0, y => 1.0, q => 1.0])
-    @test prob[x] == 0.0
-    @test prob[y] == 0.0
+    @test prob[x] == 1.0
+    @test prob[y] == 2.0
     @test prob.ps[p] == 1.0
-    @test prob.ps[q] == 0.0
+    @test prob.ps[q] == 3.0
     integ = init(prob)
     @test integ[x] ≈ 1 / cbrt(3)
     @test integ[y] ≈ 2 / cbrt(3)
