@@ -337,7 +337,7 @@ function DiffEqBase.solve(prob::CasADiDynamicOptProblem, solver::Union{String, S
     @unpack opti, U, V, tₛ = model
 
     opti = add_solve_constraints(prob, tableau)
-    silent && solver_options["print_level"] = 0
+    silent && (solver_options["print_level"] = 0)
     solver!(opti, "$solver", plugin_options, solver_options)
 
     failed = false
