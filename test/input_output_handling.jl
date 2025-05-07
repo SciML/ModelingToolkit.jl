@@ -450,7 +450,7 @@ end
     @mtkbuild sys = ODESystem(eqs, t, [x], [])
 
     f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys)
-    @test f[1]([0.5], nothing, MTKParameters(io_sys, []), 0.0) ≈ [1.0]
+    @test f([0.5], nothing, MTKParameters(io_sys, []), 0.0) ≈ [1.0]
 end
 
 @testset "With callable symbolic" begin
