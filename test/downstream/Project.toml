@@ -16,3 +16,4 @@ SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
 
 [compat]
 ModelingToolkitStandardLibrary = "2.19"
+CasADi = "1.0.3"
