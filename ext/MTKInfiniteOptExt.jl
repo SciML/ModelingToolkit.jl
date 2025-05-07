@@ -257,8 +257,6 @@ function substitute_jump_vars(model, sys, pmap, exprs; auxmap = Dict(), is_free_
     exprs
 end
 
-is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
-
 function add_infopt_solve_constraints!(model::InfiniteModel, sys, pmap; is_free_t = false)
     # Differential equations
     U = model[:U]
@@ -295,7 +293,7 @@ function add_jump_solve_constraints!(prob, tableau; is_free_t = false)
     V = model[:V]
     nᵤ = length(U)
     nᵥ = length(V)
-    if is_explicit(tableau)
+    if MTK.is_explicit(tableau)
         K = Any[]
         for τ in tsteps
             for (i, h) in enumerate(c)
