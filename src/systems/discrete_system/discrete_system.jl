@@ -319,6 +319,7 @@ function SciMLBase.DiscreteProblem(
     iv = get_iv(sys)
 
     u0map = to_varmap(u0map, dvs)
+    scalarize_varmap!(u0map)
     u0map = shift_u0map_forward(sys, u0map, defaults(sys))
     f, u0, p = process_SciMLProblem(
         DiscreteFunction, sys, u0map, parammap; eval_expression, eval_module, build_initializeprob = false)
