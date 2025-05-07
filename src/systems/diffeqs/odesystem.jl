@@ -354,6 +354,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
 
     if length(costs) > 1 && isnothing(consolidate)
         error("Must specify a consolidation function for the costs vector.")
+    elseif length(costs) == 1 && isnothing(consolidate)
+        consolidate = u -> u[1]
     end
 
     assertions = Dict{BasicSymbolic, Any}(unwrap(k) => v for (k, v) in assertions)
@@ -763,6 +765,7 @@ function process_constraint_system(
     constraintps = OrderedSet()
     for cons in constraints
         collect_vars!(constraintsts, constraintps, cons, iv)
+        union!(constraintsts, collect_applied_operators(cons, Differential))
     end
 
     # Validate the states.
@@ -800,11 +803,14 @@ function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
 
     for var in auxvars
         if !iscall(var)
-            occursin(iv, var) && (var ∈ sts ||
-             throw(ArgumentError("Time-dependent variable $var is not an unknown of the system.")))
+            var ∈ sts ||
+                throw(ArgumentError("Time-independent variable $var is not an unknown of the system."))
         elseif length(arguments(var)) > 1
             throw(ArgumentError("Too many arguments for variable $var."))
         elseif length(arguments(var)) == 1
+            if iscall(var) && operation(var) isa Differential
+                var = only(arguments(var))
+            end
             arg = only(arguments(var))
             operation(var)(iv) ∈ sts ||
                 throw(ArgumentError("Variable $var is not a variable of the ODESystem. Called variables must be variables of the ODESystem."))
@@ -813,7 +819,7 @@ function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
                 arg isa AbstractFloat ||
                 throw(ArgumentError("Invalid argument specified for variable $var. The argument of the variable should be either $iv, a parameter, or a value specifying the time that the constraint holds."))
 
-            isparameter(arg) && push!(auxps, arg)
+            (isparameter(arg) && !isequal(arg, iv)) && push!(auxps, arg)
         else
             var ∈ sts &&
                 @warn "Variable $var has no argument. It will be interpreted as $var($iv), and the constraint will apply to the entire interval."

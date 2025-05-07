@@ -595,11 +595,10 @@ Notes
     If  set to `Val{false}` a `RuntimeGeneratedFunction` will be returned.
   - `kwargs` are passed through to `Symbolics.build_function`.
 """
-function compile_condition(
-        cbs::Union{AbstractCallback, Vector{<:AbstractCallback}}, sys, dvs, ps;
-        expression = Val{false}, eval_expression = false, eval_module = @__MODULE__, kwargs...)
-    u = map(x -> time_varying_as_func(value(x), sys), dvs)
-    p = map.(x -> time_varying_as_func(value(x), sys), reorder_parameters(sys, ps))
+function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
+        expression = Val{true}, eval_expression = false, eval_module = @__MODULE__, kwargs...)
+    u = map(value, dvs)
+    p = map.(value, reorder_parameters(sys, ps))
     t = get_iv(sys)
     condit = conditions(cbs)
     cs = collect_constants(condit)

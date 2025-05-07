@@ -87,10 +87,10 @@ connections = [f.y ~ c.r # filtered reference to controller reference
 
 @named cl = ODESystem(connections, t, systems = [f, c, p])
 
-lsys0, ssys = linearize(cl, [f.u], [p.x])
+lsys0, ssys = linearize(cl)
 desired_order = [f.x, p.x]
 lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
-lsys1, ssys = linearize(cl, [f.u], [p.x]; autodiff = AutoFiniteDiff())
+lsys1, ssys = linearize(cl; autodiff = AutoFiniteDiff())
 lsys2 = ModelingToolkit.reorder_unknowns(lsys1, unknowns(ssys), desired_order)
 
 @test lsys.A == lsys2.A == [-2 0; 1 -2]
@@ -206,7 +206,7 @@ lsys, ssys = linearize(sat, [u], [y]; op = Dict(u => 2))
 @test lsys.D[] == 0
 
 # Test case when unknowns in system do not have equations in initialization system
-using ModelingToolkit, OrdinaryDiffEq, LinearAlgebra
+using ModelingToolkit, LinearAlgebra
 using ModelingToolkitStandardLibrary.Mechanical.Rotational
 using ModelingToolkitStandardLibrary.Blocks: Add, Sine, PID, SecondOrder, Step, RealOutput
 using ModelingToolkit: connect
@@ -266,7 +266,7 @@ closed_loop = ODESystem(connections, t, systems = [model, pid, filt, sensor, r, 
         filt.xd => 0.0
     ])
 
-@test_nowarn linearize(closed_loop, :r, :y; warn_empty_op = false)
+@test_nowarn linearize(closed_loop; warn_empty_op = false)
 
 # https://discourse.julialang.org/t/mtk-change-in-linearize/115760/3
 @mtkmodel Tank_noi begin

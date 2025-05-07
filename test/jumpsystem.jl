@@ -391,8 +391,8 @@ let
     j1 = ConstantRateJump(p1, [x1 ~ Pre(x1) + 1])
     j2 = MassActionJump(p2, [x2 => 1], [x3 => -1])
     j3 = VariableRateJump(p3, [x3 ~ Pre(x3) + 1, x4 ~ Pre(x4) + 1])
-    j4 = MassActionJump(p4 * p5, [x1 => 1, x5 => 1], [x1 => -1, x5 => -1, x2 => 1])
-    @named js = JumpSystem([j1, j2, j3, j4], t, [x1, x2, x3, x4, x5], [p1, p2, p3, p4, p5])
+    j4 = MassActionJump(p4 * p4, [x1 => 1, x4 => 1], [x1 => -1, x4 => -1, x2 => 1])
+    @named js = JumpSystem([j1, j2, j3, j4], t, [x1, x2, x3, x4], [p1, p2, p3, p4])
 
     us = Set()
     ps = Set()

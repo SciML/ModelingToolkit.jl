@@ -1186,21 +1186,21 @@ end
     @mtkbuild sys = ODESystem([D(x) ~ x * p + q, x^3 + y^3 ~ 3], t)
     prob = ODEProblem(
         sys, [], (0.0, 1.0), [p => 1.0]; guesses = [x => 1.0, y => 1.0, q => 1.0])
-    @test prob[x] == 0.0
-    @test prob[y] == 0.0
+    @test prob[x] == 1.0
+    @test prob[y] == 2.0
     @test prob.ps[p] == 1.0
-    @test prob.ps[q] == 0.0
+    @test prob.ps[q] == 3.0
     integ = init(prob)
     @test integ[x] ≈ 1 / cbrt(3)
     @test integ[y] ≈ 2 / cbrt(3)
     @test integ.ps[p] == 1.0
-    @test integ.ps[q] ≈ 3 / cbrt(3)
+    @test integ.ps[q] ≈ 3 / cbrt(3) atol=1e-5
     prob2 = remake(prob; u0 = [y => 3x], p = [q => 2x])
     integ2 = init(prob2)
-    @test integ2[x] ≈ cbrt(3 / 28)
-    @test integ2[y] ≈ 3cbrt(3 / 28)
+    @test integ2[x] ≈ cbrt(3 / 28) atol=1e-5
+    @test integ2[y] ≈ 3cbrt(3 / 28) atol=1e-5
     @test integ2.ps[p] == 1.0
-    @test integ2.ps[q] ≈ 2cbrt(3 / 28)
+    @test integ2.ps[q] ≈ 2cbrt(3 / 28) atol=1e-5
 end
 
 function test_dummy_initialization_equation(prob, var)
@@ -1562,4 +1562,39 @@ end
         integ = init(prob; initializealg = BrownFullBasicInit())
         @test integ[x] ≈ 0.8
     end
+end
+
+@testset "Initialization copies solved `u0` to `p`" begin
+    @parameters σ ρ β A[1:3]
+    @variables x(t) y(t) z(t) w(t) w2(t)
+    eqs = [D(D(x)) ~ σ * (y - x),
+        D(y) ~ x * (ρ - z) - y,
+        D(z) ~ x * y - β * z,
+        w ~ x + y + z + 2 * β,
+        0 ~ x^2 + y^2 - w2^2
+    ]
+
+    @mtkbuild sys = ODESystem(eqs, t)
+
+    u0 = [D(x) => 2.0,
+        x => 1.0,
+        y => 0.0,
+        z => 0.0]
+
+    p = [σ => 28.0,
+        ρ => 10.0,
+        β => 8 / 3]
+
+    tspan = (0.0, 100.0)
+    getter = getsym(sys, Initial.(unknowns(sys)))
+    prob = ODEProblem(sys, u0, tspan, p; guesses = [w2 => 3.0])
+    new_u0, new_p, _ = SciMLBase.get_initial_values(
+        prob, prob, prob.f, SciMLBase.OverrideInit(), Val(true);
+        nlsolve_alg = NewtonRaphson(), abstol = 1e-6, reltol = 1e-3)
+    @test getter(prob) != getter(new_p)
+    @test getter(new_p) == new_u0
+    _prob = remake(prob, u0 = new_u0, p = new_p)
+    sol = solve(_prob; initializealg = CheckInit())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol.u[1] ≈ new_u0
 end

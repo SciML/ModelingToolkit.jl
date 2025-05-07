@@ -688,7 +688,7 @@ function structural_simplify!(state::TearingState; simplify = false,
                     continue
                 end
                 disc_inputs = [inputs; clocked_inputs[i]]
-                ss, = _structural_simplification!(state; simplify, check_consistency,
+                ss, = _structural_simplify!(state; simplify, check_consistency,
                     inputs = disc_inputs, outputs, disturbance_inputs,
                     fully_determined, kwargs...)
                 append!(appended_parameters, inputs[i], unknowns(ss))

@@ -90,7 +90,7 @@ end
             @safetestset "SCCNonlinearProblem Test" include("scc_nonlinear_problem.jl")
             @safetestset "PDE Construction Test" include("pdesystem.jl")
             @safetestset "JumpSystem Test" include("jumpsystem.jl")
-            @safetestset "Optimal Control + Constraints Tests" include("optimal_control.jl")
+            @safetestset "Optimal Control + Constraints Tests" include("bvproblem.jl")
             @safetestset "print_tree" include("print_tree.jl")
             @safetestset "Constraints Test" include("constraints.jl")
             @safetestset "IfLifting Test" include("if_lifting.jl")
@@ -122,6 +122,7 @@ end
 
     if GROUP == "All" || GROUP == "Downstream"
         activate_downstream_env()
+        @safetestset "JuMP Collocation Solvers" include("downstream/jump_control.jl")
         @safetestset "Linearization Tests" include("downstream/linearize.jl")
         @safetestset "Linearization Dummy Derivative Tests" include("downstream/linearization_dd.jl")
         @safetestset "Inverse Models Test" include("downstream/inversemodel.jl")

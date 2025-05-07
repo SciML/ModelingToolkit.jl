@@ -174,7 +174,7 @@ end
         p = [rand()]
         x = [rand()]
         u = [rand()]
-        @test f[1](x, u, p, 1) ≈ -x + u
+        @test f(x, u, p, 1) ≈ -x + u
 
         # With disturbance inputs
         @variables x(t)=0 u(t)=0 [input = true] d(t)=0
@@ -192,7 +192,7 @@ end
         p = [rand()]
         x = [rand()]
         u = [rand()]
-        @test f[1](x, u, p, 1) ≈ -x + u
+        @test f(x, u, p, 1) ≈ -x + u
 
         ## With added d argument
         @variables x(t)=0 u(t)=0 [input = true] d(t)=0
@@ -212,7 +212,7 @@ end
         x = [rand()]
         u = [rand()]
         d = [rand()]
-        @test f[1](x, u, p, t, d) ≈ -x + u + [d[]^2]
+        @test f(x, u, p, t, d) ≈ -x + u + [d[]^2]
     end
 end
 
@@ -275,7 +275,7 @@ x = ModelingToolkit.varmap_to_vars(
     merge(ModelingToolkit.defaults(model),
         Dict(D.(unknowns(model)) .=> 0.0)), dvs)
 u = [rand()]
-out = f[1](x, u, p, 1)
+out = f(x, u, p, 1)
 i = findfirst(isequal(u[1]), out)
 @test i isa Int
 @test iszero(out[[1:(i - 1); (i + 1):end]])
@@ -335,7 +335,7 @@ model_outputs = [model.inertia1.w, model.inertia2.w, model.inertia1.phi, model.i
 @named dmodel = Blocks.StateSpace([0.0], [1.0], [1.0], [0.0]) # An integrating disturbance
 
 @named dist = ModelingToolkit.DisturbanceModel(model.torque.tau.u, dmodel)
-(f_oop, f_ip), outersys, dvs, p, io_sys = ModelingToolkit.add_input_disturbance(model, dist)
+f, outersys, dvs, p, io_sys = ModelingToolkit.add_input_disturbance(model, dist)
 
 @unpack u, d = outersys
 matrices, ssys = linearize(outersys, [u, d], model_outputs)
@@ -350,8 +350,8 @@ x0 = randn(5)
 x1 = copy(x0) + x_add # add disturbance state perturbation
 u = randn(1)
 pn = MTKParameters(io_sys, [])
-xp0 = f_oop(x0, u, pn, 0)
-xp1 = f_oop(x1, u, pn, 0)
+xp0 = f(x0, u, pn, 0)
+xp1 = f(x1, u, pn, 0)
 
 @test xp0 ≈ matrices.A * x0 + matrices.B * [u; 0]
 @test xp1 ≈ matrices.A * x1 + matrices.B * [u; 0]
@@ -404,7 +404,7 @@ outs = collect(complete(model).output.u)
 disturbed_input = ins[1]
 @named dist_integ = DisturbanceModel(disturbed_input, integrator)
 
-(f_oop, f_ip), augmented_sys, dvs, p = ModelingToolkit.add_input_disturbance(model,
+f, augmented_sys, dvs, p = ModelingToolkit.add_input_disturbance(model,
     dist_integ,
     ins)
 
@@ -450,7 +450,7 @@ end
     @mtkbuild sys = ODESystem(eqs, t, [x], [])
 
     f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys)
-    @test f[1]([0.5], nothing, MTKParameters(io_sys, []), 0.0) ≈ [1.0]
+    @test f([0.5], nothing, MTKParameters(io_sys, []), 0.0) ≈ [1.0]
 end
 
 @testset "With callable symbolic" begin
@@ -463,5 +463,5 @@ end
     p = MTKParameters(io_sys, [])
     u = [1.0]
     x = [1.0]
-    @test_nowarn f[1](x, u, p, 0.0)
+    @test_nowarn f(x, u, p, 0.0)
 end
