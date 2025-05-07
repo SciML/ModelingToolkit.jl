@@ -70,7 +70,7 @@ Now we can test the generated function `f` with random input and state values
 p = [1]
 x = [rand()]
 u = [rand()]
-@test f[1](x, u, p, 1) ≈ -p[] * (x + u) # Test that the function computes what we expect D(x) = -k*(x + u)
+@test f(x, u, p, 1) ≈ -p[] * (x + u) # Test that the function computes what we expect D(x) = -k*(x + u)
 ```
 
 ## Generating an output function, ``g``
