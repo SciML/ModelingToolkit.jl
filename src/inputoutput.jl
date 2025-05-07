@@ -160,7 +160,7 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
 # Build control function
 
 """
-    (f_oop, f_ip), x_sym, p_sym, io_sys = generate_control_function(
+    f, x_sym, p_sym, io_sys = generate_control_function(
             sys::AbstractODESystem,
             inputs             = unbound_inputs(sys),
             disturbance_inputs = nothing;
@@ -168,8 +168,9 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
             simplify           = false,
         )
 
-For a system `sys` with inputs (as determined by [`unbound_inputs`](@ref) or user specified), generate a function with additional input argument `in`
+For a system `sys` with inputs (as determined by [`unbound_inputs`](@ref) or user specified), generate a function with additional input argument `u`
 
+The returned function `f` can be called in the out-of-place or in-place form:
 ```
 f_oop : (x,u,p,t)      -> rhs
 f_ip  : (xout,x,u,p,t) -> nothing
@@ -190,7 +191,7 @@ f, x_sym, ps = generate_control_function(sys, expression=Val{false}, simplify=fa
 p = varmap_to_vars(defaults(sys), ps)
 x = varmap_to_vars(defaults(sys), x_sym)
 t = 0
-f[1](x, inputs, p, t)
+f(x, inputs, p, t)
 ```
 """
 function generate_control_function(sys::AbstractODESystem, inputs = unbound_inputs(sys),

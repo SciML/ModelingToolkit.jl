@@ -184,7 +184,7 @@ disturbance_inputs = [ssys.d1, ssys.d2]
 P = ssys.system_model
 outputs = [P.inertia1.phi, P.inertia2.phi, P.inertia1.w, P.inertia2.w]
 
-(f_oop, f_ip), x_sym, p_sym, io_sys = ModelingToolkit.generate_control_function(
+f, x_sym, p_sym, io_sys = ModelingToolkit.generate_control_function(
     model_with_disturbance, inputs, disturbance_inputs; disturbance_argument = true)
 
 g = ModelingToolkit.build_explicit_observed_function(
@@ -195,12 +195,12 @@ x0, _ = ModelingToolkit.get_u0_p(io_sys, op, op)
 p = MTKParameters(io_sys, op)
 u = zeros(1) # Control input
 w = zeros(length(disturbance_inputs)) # Disturbance input
-@test f_oop(x0, u, p, t, w) == zeros(5)
+@test f(x0, u, p, t, w) == zeros(5)
 @test g(x0, u, p, 0.0) == [0, 0, 0, 0]
 
 # Non-zero disturbance inputs should result in non-zero state derivatives. We call `sort` since we do not generally know the order of the state variables
 w = [1.0, 2.0]
-@test sort(f_oop(x0, u, p, t, w)) == [0, 0, 0, 1, 2]
+@test sort(f(x0, u, p, t, w)) == [0, 0, 0, 1, 2]
 ```
 
 ## Input signal library
