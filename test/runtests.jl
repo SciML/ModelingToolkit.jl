@@ -122,7 +122,6 @@ end
 
     if GROUP == "All" || GROUP == "Downstream"
         activate_downstream_env()
-        @safetestset "JuMP Collocation Solvers" include("downstream/jump_control.jl")
         @safetestset "Linearization Tests" include("downstream/linearize.jl")
         @safetestset "Linearization Dummy Derivative Tests" include("downstream/linearization_dd.jl")
         @safetestset "Inverse Models Test" include("downstream/inversemodel.jl")
@@ -137,6 +136,7 @@ end
 
     if GROUP == "All" || GROUP == "Extensions"
         activate_extensions_env()
+        @safetestset "JuMP Collocation Solvers" include("extensions/jump_control.jl")
         @safetestset "HomotopyContinuation Extension Test" include("extensions/homotopy_continuation.jl")
         @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
         @safetestset "LabelledArrays Test" include("labelledarrays.jl")
