@@ -121,7 +121,7 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     gui_metadata = isassigned(icon) > 0 ? GUIMetadata(GlobalRef(mod, name), icon[]) :
                    GUIMetadata(GlobalRef(mod, name))
 
-    consolidate = get(dict, :consolidate, nothing)
+    consolidate = get(dict, :consolidate, default_consolidate)
     description = get(dict, :description, "")
 
     @inline pop_structure_dict!.(
