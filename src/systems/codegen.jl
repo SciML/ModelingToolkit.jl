@@ -480,6 +480,31 @@ function generate_constraint_hessian(
     return return_sparsity ? (fn, sparsity) : fn
 end
 
+function calculate_control_jacobian(sys::AbstractSystem;
+        sparse = false, simplify = false)
+    rhs = [eq.rhs for eq in full_equations(sys)]
+    ctrls = unbound_inputs(sys)
+
+    if sparse
+        jac = sparsejacobian(rhs, ctrls, simplify = simplify)
+    else
+        jac = jacobian(rhs, ctrls, simplify = simplify)
+    end
+
+    return jac
+end
+
+function generate_control_jacobian(sys::AbstractSystem, dvs = unknowns(sys),
+        ps = parameters(sys; initial_parameters = true);
+        expression = Val{true}, wrap_gfw = Val{false}, eval_expression = false,
+        eval_module = @__MODULE__, simplify = false, sparse = false, kwargs...)
+    jac = calculate_control_jacobian(sys; simplify = simplify, sparse = sparse)
+    p = reorder_parameters(sys, ps)
+    res = build_function_wrapper(sys, jac, dvs, p..., get_iv(sys); kwargs...)
+    return maybe_compile_function(
+        expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module)
+end
+
 # modifies the expression representing an affect function to
 # call reset_aggregated_jumps!(integrator).
 # assumes iip
