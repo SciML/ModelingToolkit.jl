@@ -618,7 +618,7 @@ function compile_condition(
         condit, u, p..., t; expression,
         kwargs...)
 
-    if expression == Val{true}
+    if expression == Val{false}
         fs = eval_or_rgf.(fs; eval_expression, eval_module)
     end
     f_oop, f_iip = is_discrete(cbs) ? (fs, nothing) : fs # no iip function for discrete condition.
