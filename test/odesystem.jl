@@ -466,7 +466,7 @@ let
 
     eqs = [D(x) ~ ẋ, D(ẋ) ~ f - k * x - d * ẋ]
     @named sys = ODESystem(eqs, t, [x, ẋ], [d, k])
-    sys, _ = structural_simplify(sys, ([f], []))
+    sys = structural_simplify(sys; inputs = [f])
 
     @test isequal(calculate_control_jacobian(sys),
         reshape(Num[0, 1], 2, 1))
