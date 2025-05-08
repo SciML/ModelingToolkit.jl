@@ -1,5 +1,4 @@
 [deps]
-CasADi = "c49709b8-5c63-11e9-2fb2-69db5844192f"
 ControlSystemsMTK = "687d7614-c7e5-45fc-bfc3-9ee385575c88"
 DataInterpolations = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -16,4 +15,3 @@ SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
 
 [compat]
 ModelingToolkitStandardLibrary = "2.19"
-CasADi = "1.0.5"
