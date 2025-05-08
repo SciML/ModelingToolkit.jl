@@ -188,12 +188,13 @@ sol = solve(jprob, SSAStepper());
 @testset "Combined system name collisions" begin
     sys1 = JumpSystem([maj1, maj2], t, [S], [β, γ], name = :sys1)
     sys2 = JumpSystem([maj1, maj2], t, [S], [β, γ], name = :sys1)
-    @test_throws ArgumentError JumpSystem([sys1.γ ~ sys2.γ], t, [], [],
+    @test_throws ModelingToolkit.NonUniqueSubsystemsError JumpSystem(
+        [sys1.γ ~ sys2.γ], t, [], [],
         systems = [sys1, sys2], name = :foo)
 end
 
 # test if param mapper is setup correctly for callbacks
-let
+@testset "Parammapper with callbacks" begin
     @parameters k1 k2 k3
     @variables A(t) B(t)
     maj1 = MassActionJump(k1 * k3, [0 => 1], [A => -1, B => 1])
@@ -220,15 +221,17 @@ let
 end
 
 # observed variable handling
-@variables OBS(t)
-@named js5 = JumpSystem([maj1, maj2], t, [S], [β, γ]; observed = [OBS ~ 2 * S * h])
-OBS2 = OBS
-@test isequal(OBS2, @nonamespace js5.OBS)
-@unpack OBS = js5
-@test isequal(OBS2, OBS)
+@testset "Observed handling tests" begin
+    @variables OBS(t)
+    @named js5 = JumpSystem([maj1, maj2], t, [S], [β, γ]; observed = [OBS ~ 2 * S * h])
+    OBS2 = OBS
+    @test isequal(OBS2, @nonamespace js5.OBS)
+    @unpack OBS = js5
+    @test isequal(OBS2, OBS)
+end
 
 # test to make sure dep graphs are correct
-let
+@testset "Dependency graph tests" begin
     # A + 2X --> 3X
     # 3X --> A + 2X
     # B --> X
@@ -239,8 +242,8 @@ let
         MassActionJump(1.0, [B => 1], [B => -1, X => 1]),
         MassActionJump(1.0, [X => 1], [B => 1, X => -1])]
     @named js = JumpSystem(jumps, t, [A, X, B], [])
-    jdeps = asgraph(js)
-    vdeps = variable_dependencies(js)
+    jdeps = asgraph(js; eqs = MT.jumps(js))
+    vdeps = variable_dependencies(js; eqs = MT.jumps(js))
     vtoj = jdeps.badjlist
     @test vtoj == [[1], [1, 2, 4], [3]]
     jtov = vdeps.badjlist
@@ -284,7 +287,7 @@ j1 = ConstantRateJump(k, [X ~ Pre(X) - 1])
 @test_nowarn @mtkbuild js1 = JumpSystem([j1], t, [X], [k])
 
 # test correct autosolver is selected, which implies appropriate dep graphs are available
-let
+@testset "Autosolver test" begin
     @parameters k
     @variables X(t)
     rate = k
@@ -302,7 +305,7 @@ let
 end
 
 # basic VariableRateJump test
-let
+@testset "VRJ test" begin
     N = 1000  # number of simulations for testing solve accuracy
     Random.seed!(rng, 1111)
     @variables A(t) B(t) C(t)
@@ -310,7 +313,7 @@ let
     vrj = VariableRateJump(k * (sin(t) + 1), [A ~ Pre(A) + 1, C ~ Pre(C) + 2])
     js = complete(JumpSystem([vrj], t, [A, C], [k]; name = :js, observed = [B ~ C * A]))
     jprob = JumpProblem(
-        js, [A => 0, C => 0], (0.0, 10.0), [k => 1.0]; aggregtor = Direct(), rng)
+        js, [A => 0, C => 0], (0.0, 10.0), [k => 1.0]; aggregator = Direct(), rng)
     @test jprob.prob isa ODEProblem
     sol = solve(jprob, Tsit5())
 
@@ -346,7 +349,7 @@ let
 end
 
 # collect_vars! tests for jumps
-let
+@testset "`collect_vars!` for jumps" begin
     @variables x1(t) x2(t) x3(t) x4(t) x5(t)
     @parameters p1 p2 p3 p4 p5
     j1 = ConstantRateJump(p1, [x1 ~ Pre(x1) + 1])
@@ -381,7 +384,7 @@ let
 end
 
 # scoping tests
-let
+@testset "Scoping tests" begin
     @variables x1(t) x2(t) x3(t) x4(t)
     x2 = ParentScope(x2)
     x3 = ParentScope(ParentScope(x3))
@@ -426,7 +429,7 @@ let
 end
 
 # PDMP test
-let
+@testset "PDMP test" begin
     seed = 1111
     Random.seed!(rng, seed)
     @variables X(t) Y(t)
@@ -467,7 +470,7 @@ let
 end
 
 # that mixes ODEs and jump types, and then contin events
-let
+@testset "ODEs + Jumps + Continuous events" begin
     seed = 1111
     Random.seed!(rng, seed)
     @variables X(t) Y(t)
@@ -482,7 +485,7 @@ let
     u0map = [X => p.X₀, Y => p.Y₀]
     pmap = [α => p.α, β => p.β]
     tspan = (0.0, 20.0)
-    jprob = JumpProblem(jsys, u0, tspan, pmap; rng, save_positions = (false, false))
+    jprob = JumpProblem(jsys, u0map, tspan, pmap; rng, save_positions = (false, false))
     times = range(0.0, tspan[2], length = 100)
     Nsims = 4000
     Xv = zeros(length(times))
@@ -520,7 +523,7 @@ let
         continuous_events = cevents)
     jsys = complete(jsys)
     tspan = (0.0, 200.0)
-    jprob = JumpProblem(jsys, u0, tspan, pmap; rng, save_positions = (false, false))
+    jprob = JumpProblem(jsys, u0map, tspan, pmap; rng, save_positions = (false, false))
     Xsamp = 0.0
     Nsims = 4000
     for n in 1:Nsims
@@ -560,8 +563,7 @@ end
     crj = ConstantRateJump(rate, affect)
     @named jsys = JumpSystem([crj, eq], t, [X], [a, b])
     jsys = complete(jsys)
-    oprob = ODEProblem(jsys, [:X => 1.0], (0.0, 10.0), [:a => 1.0, :b => 0.5])
-    jprob = JumpProblem(jsys, oprob)
+    jprob = JumpProblem(jsys, [:X => 1.0], (0.0, 10.0), [:a => 1.0, :b => 0.5])
     jprob2 = remake(jprob; u0 = [:X => 10.0])
     @test jprob2[X] ≈ 10.0
 end
