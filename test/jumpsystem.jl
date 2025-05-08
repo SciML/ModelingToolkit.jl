@@ -187,7 +187,8 @@ sol = solve(jprob, SSAStepper());
 @testset "Combined system name collisions" begin
     sys1 = JumpSystem([maj1, maj2], t, [S], [β, γ], name = :sys1)
     sys2 = JumpSystem([maj1, maj2], t, [S], [β, γ], name = :sys1)
-    @test_throws ArgumentError JumpSystem([sys1.γ ~ sys2.γ], t, [], [],
+    @test_throws ModelingToolkit.NonUniqueSubsystemsError JumpSystem(
+        [sys1.γ ~ sys2.γ], t, [], [],
         systems = [sys1, sys2], name = :foo)
 end
 
@@ -238,8 +239,8 @@ let
         MassActionJump(1.0, [B => 1], [B => -1, X => 1]),
         MassActionJump(1.0, [X => 1], [B => 1, X => -1])]
     @named js = JumpSystem(jumps, t, [A, X, B], [])
-    jdeps = asgraph(js)
-    vdeps = variable_dependencies(js)
+    jdeps = asgraph(js; eqs = MT.jumps(js))
+    vdeps = variable_dependencies(js; eqs = MT.jumps(js))
     vtoj = jdeps.badjlist
     @test vtoj == [[1], [1, 2, 4], [3]]
     jtov = vdeps.badjlist
@@ -309,7 +310,7 @@ let
     vrj = VariableRateJump(k * (sin(t) + 1), [A ~ A + 1, C ~ C + 2])
     js = complete(JumpSystem([vrj], t, [A, C], [k]; name = :js, observed = [B ~ C * A]))
     jprob = JumpProblem(
-        js, [A => 0, C => 0], (0.0, 10.0), [k => 1.0]; aggregtor = Direct(), rng)
+        js, [A => 0, C => 0], (0.0, 10.0), [k => 1.0]; aggregator = Direct(), rng)
     @test jprob.prob isa ODEProblem
     sol = solve(jprob, Tsit5())
 
