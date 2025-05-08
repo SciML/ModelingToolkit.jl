@@ -216,10 +216,11 @@ function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs.
             upd_vals = user_affect(upd_component_array, obs_component_array, ctx, integ)
 
             # write the new values back to the integrator
-            _generated_writeback(integ, upd_funs, upd_vals)
-
-            for idx in save_idxs
-                SciMLBase.save_discretes!(integ, idx)
+            if !isnothing(upd_vals)
+                _generated_writeback(integ, upd_funs, upd_vals)
+                for idx in save_idxs
+                    SciMLBase.save_discretes!(integ, idx)
+                end
             end
         end
     end

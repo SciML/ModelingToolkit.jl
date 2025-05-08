@@ -1484,3 +1484,27 @@ end
     prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob, Tsit5())
 end
+
+@testset "ImperativeAffect skips writing back when nothing is returned" begin
+    @mtkmodel ImperativeAffectTupleMWE begin
+        @parameters begin
+            y(t) = 1.0
+        end
+        @variables begin
+            x(t) = 0.0
+        end
+        @equations begin
+            D(x) ~ y
+        end
+        @continuous_events begin
+            (x ~ 0.5) => ModelingToolkit.ImperativeAffect(
+                observed = (; mypars = (x, 2 * x)), modified = (; y)) do m, o, c, i
+                return nothing
+            end
+        end
+    end
+    @mtkbuild sys = ImperativeAffectTupleMWE()
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    sol = solve(prob, Tsit5())
+    @test length(sol[sys.y]) == 1
+end
