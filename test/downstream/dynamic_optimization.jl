@@ -7,6 +7,7 @@ using Ipopt
 using DataInterpolations
 using CasADi
 
+import DiffEqBase: solve
 const M = ModelingToolkit
 
 @testset "ODE Solution, no cost" begin
