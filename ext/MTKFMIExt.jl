@@ -776,8 +776,8 @@ the value being the output vector if the FMU has output variables. `o` should co
 
 Initializes the FMU. Only for use with CoSimulation FMUs.
 """
-function fmiCSInitialize!(m, o, ctx, integrator)
-    functor::FMI2CSFunctor, dt = ctx
+function fmiCSInitialize!(m, o, ctx::Tuple{FMI2CSFunctor, Vararg}, integrator)
+    functor, dt = ctx
     states = isdefined(m, :states) ? m.states : ()
     inputs = o.inputs
     params = o.params
@@ -806,8 +806,8 @@ periodically to communicte with the CoSimulation FMU. Has the same requirements 
 `fmiCSInitialize!` for `m` and `o`, with the addition that `o` should have a key
 `:dt` with the value being the communication step size.
 """
-function fmiCSStep!(m, o, ctx, integrator)
-    functor::FMI2CSFunctor, dt = ctx
+function fmiCSStep!(m, o, ctx::Tuple{FMI2CSFunctor, Vararg}, integrator)
+    functor, dt = ctx
     wrapper = o.wrapper
     states = isdefined(m, :states) ? m.states : ()
     inputs = o.inputs
@@ -876,8 +876,8 @@ end
 """
     $(TYPEDSIGNATURES)
 """
-function fmiCSInitialize!(m, o, ctx, integrator)
-    functor::FMI3CSFunctor, dt = ctx
+function fmiCSInitialize!(m, o, ctx::Tuple{FMI3CSFunctor, Vararg}, integrator)
+    functor, dt = ctx
     states = isdefined(m, :states) ? m.states : ()
     inputs = o.inputs
     params = o.params
@@ -901,8 +901,8 @@ end
 """
     $(TYPEDSIGNATURES)
 """
-function fmiCSStep!(m, o, ctx, integrator)
-    functor::FMI3CSFunctor, dt = ctx
+function fmiCSStep!(m, o, ctx::Tuple{FMI3CSFunctor, Vararg}, integrator)
+    functor, dt = ctx
     wrapper = o.wrapper
     states = isdefined(m, :states) ? m.states : ()
     inputs = o.inputs
