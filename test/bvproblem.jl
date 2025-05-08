@@ -285,26 +285,28 @@ end
     u0map = [x(t) => 4.0, y(t) => 2.0]
     parammap = [α => 7.5, β => 4, γ => 8.0, δ => 5.0]
     costs = [x(0.6), x(0.3)^2]
-    consolidate(u) = (u[1] + 3)^2 + u[2]
+    consolidate(u, sub) = (u[1] + 3)^2 + u[2] + sum(sub; init = 0)
     @mtkbuild lksys = System(eqs, t; costs, consolidate)
-    @test_throws ErrorException @mtkbuild lksys2 = System(eqs, t; costs)
 
-    @test_throws ErrorException ODEProblem(lksys, u0map, tspan, parammap)
-    prob = ODEProblem(lksys, u0map, tspan, parammap; allow_cost = true)
+    @test_throws ModelingToolkit.SystemCompatibilityError ODEProblem(
+        lksys, u0map, tspan, parammap)
+    prob = ODEProblem(lksys, u0map, tspan, parammap; check_compatibility = false)
     sol = solve(prob, Tsit5())
-    costfn = ModelingToolkit.generate_cost_function(lksys)
+    costfn = ModelingToolkit.generate_cost(
+        lksys; expression = Val{false}, wrap_gfw = Val{true})
     _t = tspan[2]
     @test costfn(sol, prob.p, _t) ≈ (sol(0.6)[1] + 3)^2 + sol(0.3)[1]^2
 
     ### With a parameter
     @parameters t_c
     costs = [y(t_c) + x(0.0), x(0.4)^2]
-    consolidate(u) = log(u[1]) - u[2]
+    consolidate(u, sub) = log(u[1]) - u[2] + sum(sub; init = 0)
     @mtkbuild lksys = System(eqs, t; costs, consolidate)
     @test t_c ∈ Set(parameters(lksys))
     push!(parammap, t_c => 0.56)
-    prob = ODEProblem(lksys, u0map, tspan, parammap; allow_cost = true)
+    prob = ODEProblem(lksys, u0map, tspan, parammap; check_compatibility = false)
     sol = solve(prob, Tsit5())
-    costfn = ModelingToolkit.generate_cost_function(lksys)
+    costfn = ModelingToolkit.generate_cost(
+        lksys; expression = Val{false}, wrap_gfw = Val{true})
     @test costfn(sol, prob.p, _t) ≈ log(sol(0.56)[2] + sol(0.0)[1]) - sol(0.4)[1]^2
 end
