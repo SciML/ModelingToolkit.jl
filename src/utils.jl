@@ -546,6 +546,12 @@ function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Dif
             collect_vars!(unknowns, parameters, eq, iv; depth, op)
         end
     end
+    if has_jumps(sys)
+        for eq in jumps(sys)
+            eqtype_supports_collect_vars(eq) || continue
+            collect_vars!(unknowns, parameters, eq, iv; depth, op)
+        end
+    end
     if has_parameter_dependencies(sys)
         for eq in parameter_dependencies(sys)
             if eq isa Pair
