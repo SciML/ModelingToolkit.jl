@@ -1050,7 +1050,8 @@ Keyword arguments:
 All other keyword arguments are passed as-is to `constructor`.
 """
 function process_SciMLProblem(
-        constructor, sys::AbstractSystem, u0map, pmap; build_initializeprob = true,
+        constructor, sys::AbstractSystem, u0map, pmap;
+        build_initializeprob = supports_initialization(sys),
         implicit_dae = false, t = nothing, guesses = AnyDict(),
         warn_initialize_determined = true, initialization_eqs = [],
         eval_expression = false, eval_module = @__MODULE__, fully_determined = nothing,
