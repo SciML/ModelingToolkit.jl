@@ -586,18 +586,11 @@ Base.isempty(cb::AbstractCallback) = isempty(cb.conditions)
     compile_condition(cb::AbstractCallback, sys, dvs, ps; expression, kwargs...)
 
 Returns a function `condition(u,t,integrator)`, condition(out,u,t,integrator)` returning the `condition(cb)`.
-
-Notes
-
-  - `expression = Val{true}`, causes the generated function to be returned as an expression.
-    If  set to `Val{false}` a `RuntimeGeneratedFunction` will be returned.
-  - `kwargs` are passed through to `Symbolics.build_function`.
 """
-function compile_condition(
-        cbs::Union{AbstractCallback, Vector{<:AbstractCallback}}, sys, dvs, ps;
-        expression = Val{false}, eval_expression = false, eval_module = @__MODULE__, kwargs...)
-    u = map(x -> time_varying_as_func(value(x), sys), dvs)
-    p = map.(x -> time_varying_as_func(value(x), sys), reorder_parameters(sys, ps))
+function compile_condition(cbs::Union{AbstractCallback, Vector{<:AbstractCallback}}, sys, dvs, ps;
+        eval_expression = false, eval_module = @__MODULE__, kwargs...)
+    u = map(value, dvs)
+    p = map.(value, reorder_parameters(sys, ps))
     t = get_iv(sys)
     condit = conditions(cbs)
     cs = collect_constants(condit)
@@ -612,14 +605,8 @@ function compile_condition(
                  [condit.lhs - condit.rhs]
     end
 
-    fs = build_function_wrapper(sys,
-        condit, u, p..., t; expression,
-        kwargs...)
-
-    if expression == Val{false}
-        fs = eval_or_rgf.(fs; eval_expression, eval_module)
-    end
-    f_oop, f_iip = is_discrete(cbs) ? (fs, nothing) : fs # no iip function for discrete condition.
+    fs = build_function_wrapper(sys, condit, u, p..., t; kwargs..., expression = Val{false}, cse = false)
+    (f_oop, f_iip) = is_discrete(cbs) ? (fs, nothing) : fs
 
     cond = if cbs isa AbstractVector
         (out, u, t, integ) -> f_iip(out, u, parameter_values(integ), t)
@@ -627,7 +614,7 @@ function compile_condition(
         (u, t, integ) -> f_oop(u, parameter_values(integ), t)
     else
         function (u, t, integ)
-            if DiffEqBase.isinplace(integ.sol.prob)
+            if DiffEqBase.isinplace(SciMLBase.get_sol(integ).prob)
                 tmp, = DiffEqBase.get_tmp_cache(integ)
                 f_iip(tmp, u, parameter_values(integ), t)
                 tmp[1]
@@ -807,13 +794,6 @@ Returns a function that takes an integrator as argument and modifies the state w
 affect. The generated function has the signature `affect!(integrator)`.
 
 Notes
-
-  - `expression = Val{true}`, causes the generated function to be returned as an expression.
-    If set to `Val{false}` a `RuntimeGeneratedFunction` will be returned.
-  - `outputidxs`, a vector of indices of the output variables which should correspond to
-    `unknowns(sys)`. If provided, checks that the LHS of affect equations are variables are
-    dropped, i.e. it is assumed these indices are correct and affect equations are
-    well-formed.
   - `kwargs` are passed through to `Symbolics.build_function`.
 """
 function compile_affect(
