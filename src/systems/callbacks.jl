@@ -970,6 +970,14 @@ end
     end)
 end
 
+@generated function _generated_readback(integ, getters::NamedTuple{NS1, <:Tuple}) where {NS1}
+    getter_exprs = []
+    for name in NS1
+        push!(getter_exprs, :($name = getters.$name(integ)))
+    end
+    return :((; $(getter_exprs...)))
+end
+
 function check_assignable(sys, sym)
     if symbolic_type(sym) == ScalarSymbolic()
         is_variable(sys, sym) || is_parameter(sys, sym)
