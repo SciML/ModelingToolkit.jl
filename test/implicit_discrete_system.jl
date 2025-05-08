@@ -28,7 +28,8 @@ rng = StableRNG(22525)
     @test prob.u0 == [1.0, 1.0]
     @variables x(t)
     @mtkbuild sys = System([x(k) ~ x(k) * x(k - 1) - 3], t)
-    @test_throws ErrorException prob=ImplicitDiscreteProblem(sys, [], tspan)
+    @test_throws ModelingToolkit.MissingVariablesError prob=ImplicitDiscreteProblem(
+        sys, [], tspan)
 end
 
 @testset "System with algebraic equations" begin
@@ -64,12 +65,14 @@ end
         x + y + z ~ 2]
     @mtkbuild sys = System(eqs, t)
     @test length(unknowns(sys)) == length(equations(sys)) == 3
-    @test occursin("var\"y(t)\"", string(ImplicitDiscreteFunctionExpr(sys)))
+    @test occursin(
+        "var\"y(t)\"", string(ImplicitDiscreteFunction(sys; expression = Val{true})))
 
     # Shifted observable that appears in algebraic equation is properly handled.
     eqs = [z(k) ~ x(k) + sin(x(k)),
         y(k) ~ x(k - 1) + x(k - 2),
         z(k) * x(k) ~ 3]
     @mtkbuild sys = System(eqs, t)
-    @test occursin("var\"Shift(t, 1)(z(t))\"", string(ImplicitDiscreteFunctionExpr(sys)))
+    @test occursin("var\"Shift(t, 1)(z(t))\"",
+        string(ImplicitDiscreteFunction(sys; expression = Val{true})))
 end
