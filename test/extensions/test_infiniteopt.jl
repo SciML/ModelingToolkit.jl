@@ -65,7 +65,7 @@ InfiniteOpt.@variables(m,
 # Trace the dynamics
 x0, p = ModelingToolkit.get_u0_p(io_sys, [model.θ => 0, model.ω => 0], [model.L => L])
 
-xp = f(x, u, p, τ)
+xp = f[1](x, u, p, τ)
 cp = f_obs(x, u, p, τ) # Test that it's possible to trace through an observed function
 
 @objective(m, Min, tf)

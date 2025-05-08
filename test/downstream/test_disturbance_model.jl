@@ -168,22 +168,22 @@ x0, p = ModelingToolkit.get_u0_p(io_sys, op, op)
 x = zeros(5)
 u = zeros(1)
 d = zeros(3)
-@test f(x, u, p, t, d) == zeros(5)
+@test f[1](x, u, p, t, d) == zeros(5)
 @test measurement(x, u, p, 0.0) == [0, 0, 0, 0]
 @test measurement2(x, u, p, 0.0, d) == [0]
 
 # Add to the integrating disturbance input
 d = [1, 0, 0]
-@test sort(f(x, u, p, 0.0, d)) == [0, 0, 0, 1, 1] # Affects disturbance state and one velocity
+@test sort(f[1](x, u, p, 0.0, d)) == [0, 0, 0, 1, 1] # Affects disturbance state and one velocity
 @test measurement2(x, u, p, 0.0, d) == [0]
 
 d = [0, 1, 0]
-@test sort(f(x, u, p, 0.0, d)) == [0, 0, 0, 0, 1] # Affects one velocity
+@test sort(f[1](x, u, p, 0.0, d)) == [0, 0, 0, 0, 1] # Affects one velocity
 @test measurement(x, u, p, 0.0) == [0, 0, 0, 0]
 @test measurement2(x, u, p, 0.0, d) == [0]
 
 d = [0, 0, 1]
-@test sort(f(x, u, p, 0.0, d)) == [0, 0, 0, 0, 0] # Affects nothing
+@test sort(f[1](x, u, p, 0.0, d)) == [0, 0, 0, 0, 0] # Affects nothing
 @test measurement(x, u, p, 0.0) == [0, 0, 0, 0]
 @test measurement2(x, u, p, 0.0, d) == [1] # We have now disturbed the output
 

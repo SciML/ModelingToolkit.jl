@@ -160,7 +160,7 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
 # Build control function
 
 """
-    f, x_sym, p_sym, io_sys = generate_control_function(
+    (f_oop, f_ip), x_sym, p_sym, io_sys = generate_control_function(
             sys::AbstractODESystem,
             inputs             = unbound_inputs(sys),
             disturbance_inputs = nothing;
@@ -168,9 +168,9 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
             simplify           = false,
         )
 
-For a system `sys` with inputs (as determined by [`unbound_inputs`](@ref) or user specified), generate a function with additional input argument `u`
+For a system `sys` with inputs (as determined by [`unbound_inputs`](@ref) or user specified), generate functions with additional input argument `u`
 
-The returned function `f` can be called in the out-of-place or in-place form:
+The returned functions are the out-of-place (`f_oop`) and in-place (`f_ip`) forms:
 ```
 f_oop : (x,u,p,t)      -> rhs
 f_ip  : (xout,x,u,p,t) -> nothing
@@ -191,7 +191,7 @@ f, x_sym, ps = generate_control_function(sys, expression=Val{false}, simplify=fa
 p = varmap_to_vars(defaults(sys), ps)
 x = varmap_to_vars(defaults(sys), x_sym)
 t = 0
-f(x, inputs, p, t)
+f[1](x, inputs, p, t)
 ```
 """
 function generate_control_function(sys::AbstractODESystem, inputs = unbound_inputs(sys),
@@ -253,9 +253,10 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     f = build_function_wrapper(sys, rhss, args...; p_start = 3 + implicit_dae,
         p_end = length(p) + 2 + implicit_dae, kwargs...)
     f = eval_or_rgf.(f; eval_expression, eval_module)
-    f = GeneratedFunctionWrapper{(3, length(args) - length(p) + 1, is_split(sys))}(f...)
+    f = GeneratedFunctionWrapper{(
+        3 + implicit_dae, length(args) - length(p) + 1, is_split(sys))}(f...)
     ps = setdiff(parameters(sys), inputs, disturbance_inputs)
-    (; f, dvs, ps, io_sys = sys)
+    (; f = (f, f), dvs, ps, io_sys = sys)
 end
 
 function inputs_to_parameters!(state::TransformationState, io)

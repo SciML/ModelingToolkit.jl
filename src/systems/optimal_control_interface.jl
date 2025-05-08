@@ -52,6 +52,7 @@ function SciMLBase.ODEInputFunction{iip, specialize}(sys::ODESystem,
         kwargs...) where {iip, specialize}
     f, _, _ = generate_control_function(
         sys, inputs, disturbance_inputs; eval_module, cse, kwargs...)
+    f = f[1]
 
     if tgrad
         tgrad_gen = generate_tgrad(sys, dvs, ps;
