@@ -1461,3 +1461,26 @@ end
     sys = structural_simplify(sys)
     sol = solve(ODEProblem(sys, [], (0.0, 1.0)), Tsit5())
 end
+
+@testset "Tuples in ImperativeAffect arguments" begin
+    @mtkmodel ImperativeAffectTupleMWE begin
+        @parameters begin
+            y(t) = 1.0
+        end
+        @variables begin
+            x(t) = 0.0
+        end
+        @equations begin
+            D(x) ~ y
+        end
+        @continuous_events begin
+            (x ~ 0.5) => ModelingToolkit.ImperativeAffect(
+                observed = (; mypars = (x, 2 * x)), modified = (; y)) do m, o, c, i
+                return (; y = 2 * o.mypars[1] + o.mypars[2])
+            end
+        end
+    end
+    @mtkbuild sys = ImperativeAffectTupleMWE()
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    sol = solve(prob, Tsit5())
+end

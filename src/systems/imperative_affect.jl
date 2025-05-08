@@ -189,18 +189,13 @@ function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs.
         else
             zeros(sz)
         end
-    obs_fun = build_explicit_observed_function(
-        sys, Symbolics.scalarize.(obs_exprs);
-        mkarray = (es, _) -> MakeTuple(es))
-    obs_sym_tuple = (obs_syms...,)
+    geto_funs = NamedTuple{(obs_syms...,)}((getsym.((sys,), obs_exprs)...,))
 
     # okay so now to generate the stuff to assign it back into the system
+    getm_funs = NamedTuple{(mod_syms...,)}((getsym.((sys,), mod_exprs)...,))
+
     mod_pairs = mod_exprs .=> mod_syms
     mod_names = (mod_syms...,)
-    mod_og_val_fun = build_explicit_observed_function(
-        sys, Symbolics.scalarize.(first.(mod_pairs));
-        mkarray = (es, _) -> MakeTuple(es))
-
     upd_funs = NamedTuple{mod_names}((setu.((sys,), first.(mod_pairs))...,))
 
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
@@ -212,12 +207,10 @@ function compile_user_affect(affect::ImperativeAffect, cb, sys, dvs, ps; kwargs.
     let user_affect = func(affect), ctx = context(affect)
         function (integ)
             # update the to-be-mutated values; this ensures that if you do a no-op then nothing happens
-            modvals = mod_og_val_fun(integ.u, integ.p, integ.t)
-            upd_component_array = NamedTuple{mod_names}(modvals)
+            upd_component_array = _generated_readback(integ, getm_funs)
 
             # update the observed values
-            obs_component_array = NamedTuple{obs_sym_tuple}(obs_fun(
-                integ.u, integ.p, integ.t))
+            obs_component_array = _generated_readback(integ, geto_funs)
 
             # let the user do their thing
             upd_vals = user_affect(upd_component_array, obs_component_array, ctx, integ)
