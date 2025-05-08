@@ -173,7 +173,7 @@ end
         p = [rand()]
         x = [rand()]
         u = [rand()]
-        @test f(x, u, p, 1) ≈ -x + u
+        @test f[1](x, u, p, 1) ≈ -x + u
 
         # With disturbance inputs
         @variables x(t)=0 u(t)=0 [input = true] d(t)=0
@@ -191,7 +191,7 @@ end
         p = [rand()]
         x = [rand()]
         u = [rand()]
-        @test f(x, u, p, 1) ≈ -x + u
+        @test f[1](x, u, p, 1) ≈ -x + u
 
         ## With added d argument
         @variables x(t)=0 u(t)=0 [input = true] d(t)=0
@@ -210,7 +210,7 @@ end
         x = [rand()]
         u = [rand()]
         d = [rand()]
-        @test f(x, u, p, t, d) ≈ -x + u + [d[]^2]
+        @test f[1](x, u, p, t, d) ≈ -x + u + [d[]^2]
     end
 end
 
@@ -273,7 +273,7 @@ x = ModelingToolkit.varmap_to_vars(
     merge(ModelingToolkit.defaults(model),
         Dict(D.(unknowns(model)) .=> 0.0)), dvs)
 u = [rand()]
-out = f(x, u, p, 1)
+out = f[1](x, u, p, 1)
 i = findfirst(isequal(u[1]), out)
 @test i isa Int
 @test iszero(out[[1:(i - 1); (i + 1):end]])
@@ -348,8 +348,8 @@ x0 = randn(5)
 x1 = copy(x0) + x_add # add disturbance state perturbation
 u = randn(1)
 pn = MTKParameters(io_sys, [])
-xp0 = f(x0, u, pn, 0)
-xp1 = f(x1, u, pn, 0)
+xp0 = f[1](x0, u, pn, 0)
+xp1 = f[1](x1, u, pn, 0)
 
 @test xp0 ≈ matrices.A * x0 + matrices.B * [u; 0]
 @test xp1 ≈ matrices.A * x1 + matrices.B * [u; 0]
@@ -447,7 +447,7 @@ end
     @named sys = ODESystem(eqs, t, [x], [])
 
     f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys, simplify = true)
-    @test f([0.5], nothing, MTKParameters(io_sys, []), 0.0) ≈ [1.0]
+    @test f[1]([0.5], nothing, MTKParameters(io_sys, []), 0.0) ≈ [1.0]
 end
 
 @testset "With callable symbolic" begin
@@ -459,5 +459,5 @@ end
     p = MTKParameters(io_sys, [])
     u = [1.0]
     x = [1.0]
-    @test_nowarn f(x, u, p, 0.0)
+    @test_nowarn f[1](x, u, p, 0.0)
 end
