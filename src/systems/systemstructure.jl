@@ -526,6 +526,37 @@ function shift_discrete_system(ts::TearingState)
     return ts
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+For each variable in `ts.fullvars` which does not have a derivative in `ts.fullvars`
+and is not the derivative of a variable in `ts.fullvars`, add its derivative to `ts`.
+Returns the indexes of added differential variables.
+"""
+function add_missing_differentials!(ts::TearingState)
+    sys = ts.sys
+    D = Differential(get_iv(sys))
+    newvars = Int[]
+    for (i, v) in enumerate(ts.fullvars)
+        # ignore variables that have a derivative...
+        ts.structure.var_to_diff[i] === nothing || continue
+        # or are the derivative
+        invview(ts.structure.var_to_diff)[i] === nothing || continue
+        # add to fullvars
+        push!(ts.fullvars, D(v))
+        push!(newvars, length(ts.fullvars))
+        # update diffgraph
+        add_vertex!(ts.structure.var_to_diff)
+        add_edge!(ts.structure.var_to_diff, i, length(ts.fullvars))
+        # update bipartite graphs
+        add_vertex!(ts.structure.graph, DST)
+        if ts.structure.solvable_graph !== nothing
+            add_vertex!(ts.structure.solvable_graph, DST)
+        end
+    end
+    return newvars
+end
+
 using .BipartiteGraphs: Label, BipartiteAdjacencyList
 struct SystemStructurePrintMatrix <:
        AbstractMatrix{Union{Label, BipartiteAdjacencyList}}
@@ -723,6 +754,7 @@ end
 function _structural_simplify!(state::TearingState, io; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = false,
         dummy_derivative = true,
+        to_index_zero = false,
         kwargs...)
     if fully_determined isa Bool
         check_consistency &= fully_determined
@@ -746,9 +778,14 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
     end
     if fully_determined && dummy_derivative
         sys = ModelingToolkit.dummy_derivative(
-            sys, state; simplify, mm, check_consistency, kwargs...)
+            sys, state; simplify, mm, check_consistency, to_index_zero, kwargs...)
     elseif fully_determined
-        var_eq_matching = pantelides!(state; finalize = false, kwargs...)
+        if to_index_zero
+            newvars = add_missing_differentials!(state)
+        else
+            newvars = ()
+        end
+        var_eq_matching = pantelides!(state; finalize = false, whitelisted_vars = newvars, kwargs...)
         sys = pantelides_reassemble(state, var_eq_matching)
         state = TearingState(sys)
         sys, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
