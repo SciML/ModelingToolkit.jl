@@ -348,8 +348,8 @@ x0 = randn(5)
 x1 = copy(x0) + x_add # add disturbance state perturbation
 u = randn(1)
 pn = MTKParameters(io_sys, [])
-xp0 = f(x0, u, pn, 0)
-xp1 = f(x1, u, pn, 0)
+xp0 = f[1](x0, u, pn, 0)
+xp1 = f[1](x1, u, pn, 0)
 
 @test xp0 ≈ matrices.A * x0 + matrices.B * [u; 0]
 @test xp1 ≈ matrices.A * x1 + matrices.B * [u; 0]
@@ -459,5 +459,5 @@ end
     p = MTKParameters(io_sys, [])
     u = [1.0]
     x = [1.0]
-    @test_nowarn f(x, u, p, 0.0)
+    @test_nowarn f[1](x, u, p, 0.0)
 end
