@@ -236,7 +236,7 @@ function independent_variables(sys::AbstractSystem)
     if !(sys isa System)
         @warn "Please declare ($(typeof(sys))) as a subtype of `AbstractTimeDependentSystem`, `AbstractTimeIndependentSystem` or `AbstractMultivariateSystem`."
     end
-    if isdefined(sys, :iv)
+    if isdefined(sys, :iv) && getfield(sys, :iv) !== nothing
         return [getfield(sys, :iv)]
     elseif isdefined(sys, :ivs)
         return getfield(sys, :ivs)
