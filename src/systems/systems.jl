@@ -60,6 +60,9 @@ function __structural_simplify(sys::AbstractSystem; simplify = false,
     if has_noise_eqs(sys) && get_noise_eqs(sys) !== nothing
         sys = noise_to_brownians(sys; names = :αₘₜₖ)
     end
+    if !isempty(jumps(sys))
+        return sys
+    end
     if isempty(equations(sys)) && !is_time_dependent(sys) && !_iszero(cost(sys))
         return simplify_optimization_system(sys; kwargs..., sort_eqs, simplify)
     end
