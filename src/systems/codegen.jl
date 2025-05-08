@@ -398,13 +398,29 @@ function generate_cost(sys::System; expression = Val{true}, wrap_gfw = Val{false
     obj = cost(sys)
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
-    res = build_function_wrapper(sys, obj, dvs, ps...; expression = Val{true}, kwargs...)
+
+    if is_time_dependent(sys)
+        wrap_delays = true
+        p_start = 1
+        p_end = length(ps)
+        args = (ps..., get_iv(sys))
+        nargs = 3
+    else
+        wrap_delays = false
+        p_start = 2
+        p_end = length(ps) + 1
+        args = (dvs, ps...)
+        nargs = 2
+    end
+    res = build_function_wrapper(
+        sys, obj, args...; expression = Val{true}, p_start, p_end, wrap_delays,
+        histfn = (p, t) -> BVP_SOLUTION(t), histfn_symbolic = BVP_SOLUTION, kwargs...)
     if expression == Val{true}
         return res
     end
     f_oop = eval_or_rgf(res; eval_expression, eval_module)
     return maybe_compile_function(
-        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module)
+        expression, wrap_gfw, (2, nargs, is_split(sys)), res; eval_expression, eval_module)
 end
 
 function calculate_cost_gradient(sys::System; simplify = false)
