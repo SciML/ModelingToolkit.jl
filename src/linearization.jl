@@ -144,17 +144,6 @@ function eq_idxs(sys::AbstractSystem)
 end
 
 """
-Return the set of indexes of differential equations and algebraic equations in the simplified system.
-"""
-function eq_idxs(sys::AbstractSystem)
-    eqs = equations(sys)
-    alge_idxs = findall(!isdiffeq, eqs)
-    diff_idxs = setdiff(1:length(eqs), alge_idxs)
-
-    diff_idxs, alge_idxs
-end
-
-"""
     $(TYPEDEF)
 
 Callable struct which stores a function and its prepared `DI.jacobian`. Calling with the
