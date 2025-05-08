@@ -129,6 +129,7 @@ end
 The argument of generated functions corresponding to the history function.
 """
 const DDE_HISTORY_FUN = Sym{Symbolics.FnType{Tuple{Any, <:Real}, Vector{Real}}}(:___history___)
+const BVP_SOLUTION = Sym{Symbolics.FnType{Tuple{<:Real}, Vector{Real}}}(:__sol__)
 
 """
     $(TYPEDSIGNATURES)
@@ -143,14 +144,15 @@ Turn delayed unknowns in `eqs` into calls to `DDE_HISTORY_FUNCTION`.
 # Keyword Arguments
 
 - `param_arg`: The name of the variable containing the parameter object.
+- `histfn`: The history function to use for codegen, called as `histfn(p, t)`
 """
 function delay_to_function(
-        sys::AbstractSystem, eqs = full_equations(sys); param_arg = MTKPARAMETERS_ARG)
+        sys::AbstractSystem, eqs = full_equations(sys); param_arg = MTKPARAMETERS_ARG, histfn = DDE_HISTORY_FUN)
     delay_to_function(eqs,
         get_iv(sys),
         Dict{Any, Int}(operation(s) => i for (i, s) in enumerate(unknowns(sys))),
         parameters(sys),
-        DDE_HISTORY_FUN; param_arg)
+        histfn; param_arg)
 end
 function delay_to_function(eqs::Vector, iv, sts, ps, h; param_arg = MTKPARAMETERS_ARG)
     delay_to_function.(eqs, (iv,), (sts,), (ps,), (h,); param_arg)
@@ -191,6 +193,10 @@ generated functions, and `args` are the arguments.
 - `wrap_delays`: Whether to transform delayed unknowns of `sys` present in `expr` into
   calls to a history function. The history function is added to the list of arguments
   right before parameters, at the index `p_start`.
+- `histfn`: The history function to use for transforming delayed terms. For any delayed
+  term `x(expr)`, this is called as `histfn(p, expr)` where `p` is the parameter object.
+- `histfn_symbolic`: The symbolic history function variable to add as an argument to the
+  generated function.
 - `wrap_code`: Forwarded to `build_function`.
 - `add_observed`: Whether to add assignment statements for observed equations in the
   generated code.
@@ -218,7 +224,7 @@ All other keyword arguments are forwarded to `build_function`.
 """
 function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
         p_end = is_time_dependent(sys) ? length(args) - 1 : length(args),
-        wrap_delays = is_dde(sys), wrap_code = identity,
+        wrap_delays = is_dde(sys), histfn = DDE_HISTORY_FUN, histfn_symbolic = histfn, wrap_code = identity,
         add_observed = true, filter_observed = Returns(true),
         create_bindings = false, output_type = nothing, mkarray = nothing,
         wrap_mtkparameters = true, extra_assignments = Assignment[], cse = true, kwargs...)
@@ -229,11 +235,11 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
     if wrap_delays
         param_arg = is_split(sys) ? MTKPARAMETERS_ARG : generated_argument_name(p_start)
         obs = map(obs) do eq
-            delay_to_function(sys, eq; param_arg)
+            delay_to_function(sys, eq; param_arg, histfn)
         end
-        expr = delay_to_function(sys, expr; param_arg)
+        expr = delay_to_function(sys, expr; param_arg, histfn)
         # add extra argument
-        args = (args[1:(p_start - 1)]..., DDE_HISTORY_FUN, args[p_start:end]...)
+        args = (args[1:(p_start - 1)]..., histfn_symbolic, args[p_start:end]...)
         p_start += 1
         p_end += 1
     end
