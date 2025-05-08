@@ -201,6 +201,25 @@ function generate_tgrad(
         expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module)
 end
 
+function calculate_hessian(sys::System; simplify = false, sparse = false)
+    rhs = [eq.rhs - eq.lhs for eq in full_equations(sys)]
+    dvs = unknowns(sys)
+    if sparse
+        hess = map(rhs) do expr
+            Symbolics.sparsehessian(expr, dvs; simplify)::AbstractSparseArray
+        end
+    else
+        hess = [Symbolics.hessian(expr, dvs; simplify) for expr in rhs]
+    end
+
+    return hess
+end
+
+function Symbolics.hessian_sparsity(sys::System)
+    hess = calculate_hessian(sys; sparse = true)
+    return similar.(hess, Float64)
+end
+
 const W_GAMMA = only(@variables ˍ₋gamma)
 
 function generate_W(sys::System, γ = 1.0, dvs = unknowns(sys),
