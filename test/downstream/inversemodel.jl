@@ -2,6 +2,7 @@ using ModelingToolkit
 using ModelingToolkitStandardLibrary
 using ModelingToolkitStandardLibrary.Blocks
 using OrdinaryDiffEqRosenbrock
+using OrdinaryDiffEqNonlinearSolve
 using SymbolicIndexingInterface
 using Test
 using ControlSystemsMTK: tf, ss, get_named_sensitivity, get_named_comp_sensitivity
