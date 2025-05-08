@@ -2120,9 +2120,9 @@ version = "4.8.0"
 
 [[deps.NonlinearSolveBase]]
 deps = ["ADTypes", "Adapt", "ArrayInterface", "CommonSolve", "Compat", "ConcreteStructs", "DifferentiationInterface", "EnzymeCore", "FastClosures", "LinearAlgebra", "Markdown", "MaybeInplace", "Preferences", "Printf", "RecursiveArrayTools", "SciMLBase", "SciMLJacobianOperators", "SciMLOperators", "StaticArraysCore", "SymbolicIndexingInterface", "TimerOutputs"]
-git-tree-sha1 = "edfa90b9b46fc841b6f03106d9e1a054816f4f1d"
+git-tree-sha1 = "686fd9d0d455171e3530d3540cff94bb01222823"
 uuid = "be0214bd-f91f-a760-ac4e-3421ce2b2da0"
-version = "1.6.0"
+version = "1.7.0"
 
     [deps.NonlinearSolveBase.extensions]
     NonlinearSolveBaseBandedMatricesExt = "BandedMatrices"
@@ -2144,15 +2144,15 @@ version = "1.6.0"
 
 [[deps.NonlinearSolveFirstOrder]]
 deps = ["ADTypes", "ArrayInterface", "CommonSolve", "ConcreteStructs", "DiffEqBase", "FiniteDiff", "ForwardDiff", "LineSearch", "LinearAlgebra", "LinearSolve", "MaybeInplace", "NonlinearSolveBase", "PrecompileTools", "Reexport", "SciMLBase", "SciMLJacobianOperators", "Setfield", "StaticArraysCore"]
-git-tree-sha1 = "3a559775faab057f7824036c0bc5f30c74b00d1b"
+git-tree-sha1 = "9c8cd0a986518ba317af263549b48e34ac8f776d"
 uuid = "5959db7a-ea39-4486-b5fe-2dd0bf03d60d"
-version = "1.4.0"
+version = "1.5.0"
 
 [[deps.NonlinearSolveQuasiNewton]]
 deps = ["ArrayInterface", "CommonSolve", "ConcreteStructs", "DiffEqBase", "LinearAlgebra", "LinearSolve", "MaybeInplace", "NonlinearSolveBase", "PrecompileTools", "Reexport", "SciMLBase", "SciMLOperators", "StaticArraysCore"]
-git-tree-sha1 = "290d60e3e097eed44e0aba00643995a47284746b"
+git-tree-sha1 = "eafb327f5c2d9f1ac890aa2b9fbe05a1bd7e4dc8"
 uuid = "9a2c21bd-3a47-402d-9113-8faf9a0ee114"
-version = "1.3.0"
+version = "1.4.0"
 weakdeps = ["ForwardDiff"]
 
     [deps.NonlinearSolveQuasiNewton.extensions]
@@ -2957,15 +2957,15 @@ version = "2.87.0"
 
 [[deps.SciMLJacobianOperators]]
 deps = ["ADTypes", "ArrayInterface", "ConcreteStructs", "ConstructionBase", "DifferentiationInterface", "FastClosures", "LinearAlgebra", "SciMLBase", "SciMLOperators"]
-git-tree-sha1 = "6e9d280334839fe405fdab2a1268f2969c9d3eeb"
+git-tree-sha1 = "1e2033bdf0792aa2a2f21de8e9378197f13386ec"
 uuid = "19f34311-ddf3-4b8b-af20-060888a46c0e"
-version = "0.1.3"
+version = "0.1.4"
 
 [[deps.SciMLOperators]]
 deps = ["Accessors", "ArrayInterface", "DocStringExtensions", "LinearAlgebra", "MacroTools"]
-git-tree-sha1 = "05bab217b1f4b504f5a605fe02bc0e9fb92ccf02"
+git-tree-sha1 = "1c4b7f6c3e14e6de0af66e66b86d525cae10ecb4"
 uuid = "c0aeaf25-5076-4817-a8d5-81caf7dfa961"
-version = "0.3.14"
+version = "0.3.13"
 weakdeps = ["SparseArrays", "StaticArraysCore"]
 
     [deps.SciMLOperators.extensions]
