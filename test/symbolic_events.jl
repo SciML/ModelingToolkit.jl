@@ -1486,7 +1486,7 @@ end
 end
 
 @testset "ImperativeAffect skips writing back when nothing is returned" begin
-    @mtkmodel ImperativeAffectTupleMWE begin
+    @mtkmodel ImperativeAffectWriteNothingMWE begin
         @parameters begin
             y(t) = 1.0
         end
@@ -1503,7 +1503,7 @@ end
             end
         end
     end
-    @mtkbuild sys = ImperativeAffectTupleMWE()
+    @mtkbuild sys = ImperativeAffectWriteNothingMWE()
     prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob, Tsit5())
     @test length(sol[sys.y]) == 1
