@@ -26,7 +26,7 @@ The NamedTuple returned from `f` includes the values to be written back to the s
 
 Where we use Setfield to copy the tuple `m` with a new value for `x`, then return the modified value of `m`. All values updated by the tuple must have names originally declared in
 `modified`; a runtime error will be produced if a value is written that does not appear in `modified`. The user can dynamically decide not to write a value back by not including it
-in the returned tuple, in which case the associated field will not be updated.
+in the returned tuple, in which case the associated field will not be updated. To avoid writing back, either return `nothing` or an empty named tuple.
 """
 @kwdef struct ImperativeAffect
     f::Any
