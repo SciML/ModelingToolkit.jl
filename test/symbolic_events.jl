@@ -2,7 +2,6 @@ using ModelingToolkit, OrdinaryDiffEq, StochasticDiffEq, JumpProcesses, Test
 using SciMLStructures: canonicalize, Discrete
 using ModelingToolkit: SymbolicContinuousCallback,
                        SymbolicContinuousCallbacks, NULL_AFFECT,
-                       get_callback,
                        t_nounits as t,
                        D_nounits as D
 using StableRNGs
@@ -10,6 +9,10 @@ import SciMLBase
 using SymbolicIndexingInterface
 using Setfield
 rng = StableRNG(12345)
+
+function get_callback(prob)
+    prob.kwargs[:callback]
+end
 
 @variables x(t) = 0
 
@@ -343,14 +346,14 @@ end
 
 ##
 
-@named sys = ODESystem(eqs, t, continuous_events = [x ~ 1])
+@named sys = System(eqs, t, continuous_events = [x ~ 1])
 @test getfield(sys, :continuous_events)[] ==
       SymbolicContinuousCallback(Equation[x ~ 1], NULL_AFFECT)
 @test isequal(equations(getfield(sys, :continuous_events))[], x ~ 1)
 fsys = flatten(sys)
 @test isequal(equations(getfield(fsys, :continuous_events))[], x ~ 1)
 
-@named sys2 = ODESystem([D(x) ~ 1], t, continuous_events = [x ~ 2], systems = [sys])
+@named sys2 = System([D(x) ~ 1], t, continuous_events = [x ~ 2], systems = [sys])
 @test getfield(sys2, :continuous_events)[] ==
       SymbolicContinuousCallback(Equation[x ~ 2], NULL_AFFECT)
 @test all(ModelingToolkit.continuous_events(sys2) .== [
@@ -426,7 +429,7 @@ sol = solve(prob, Tsit5(); abstol = 1e-14, reltol = 1e-14)
 @test minimum(t -> abs(t - 1), sol.t) < 1e-10 # test that the solver stepped at the first root
 @test minimum(t -> abs(t - 2), sol.t) < 1e-10 # test that the solver stepped at the second root
 
-@named sys = ODESystem(eqs, t, continuous_events = [x ~ 1, x ~ 2]) # two root eqs using the same unknown
+@named sys = System(eqs, t, continuous_events = [x ~ 1, x ~ 2]) # two root eqs using the same unknown
 sys = complete(sys)
 prob = ODEProblem(sys, Pair[], (0.0, 3.0))
 @test get_callback(prob) isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
@@ -440,8 +443,8 @@ sol = solve(prob, Tsit5(); abstol = 1e-14, reltol = 1e-14)
 root_eqs = [x ~ 0]
 affect = [v ~ -v]
 
-@named ball = ODESystem([D(x) ~ v
-                         D(v) ~ -9.8], t, continuous_events = root_eqs => affect)
+@named ball = System([D(x) ~ v
+                      D(v) ~ -9.8], t, continuous_events = root_eqs => affect)
 
 @test getfield(ball, :continuous_events)[] ==
       SymbolicContinuousCallback(Equation[x ~ 0], Equation[v ~ -v])
@@ -461,7 +464,7 @@ sol = solve(prob, Tsit5())
 continuous_events = [[x ~ 0] => [vx ~ -vx]
                      [y ~ -1.5, y ~ 1.5] => [vy ~ -vy]]
 
-@named ball = ODESystem(
+@named ball = System(
     [D(x) ~ vx
      D(y) ~ vy
      D(vx) ~ -9.8
@@ -506,10 +509,10 @@ continuous_events = [
     [x ~ 0] => [vx ~ -vx, vy ~ -vy]
 ]
 
-@named ball = ODESystem([D(x) ~ vx
-                         D(y) ~ vy
-                         D(vx) ~ -1
-                         D(vy) ~ 0], t; continuous_events)
+@named ball = System([D(x) ~ vx
+                      D(y) ~ vy
+                      D(vx) ~ -1
+                      D(vy) ~ 0], t; continuous_events)
 
 ball_nosplit = structural_simplify(ball)
 ball = structural_simplify(ball)
@@ -536,7 +539,7 @@ eq = [vs ~ sin(2pi * t)
       D(v) ~ vs - v
       D(vmeasured) ~ 0.0]
 ev = [sin(20pi * t) ~ 0.0] => [vmeasured ~ v]
-@named sys = ODESystem(eq, t, continuous_events = ev)
+@named sys = System(eq, t, continuous_events = ev)
 sys = structural_simplify(sys)
 prob = ODEProblem(sys, zeros(2), (0.0, 5.1))
 sol = solve(prob, Tsit5())
@@ -553,22 +556,22 @@ function Mass(; name, m = 1.0, p = 0, v = 0)
     ps = @parameters m = m
     sts = @variables pos(t)=p vel(t)=v
     eqs = Dₜ(pos) ~ vel
-    ODESystem(eqs, t, [pos, vel], ps; name)
+    System(eqs, t, [pos, vel], ps; name)
 end
 function Spring(; name, k = 1e4)
     ps = @parameters k = k
     @variables x(t) = 0 # Spring deflection
-    ODESystem(Equation[], t, [x], ps; name)
+    System(Equation[], t, [x], ps; name)
 end
 function Damper(; name, c = 10)
     ps = @parameters c = c
     @variables vel(t) = 0
-    ODESystem(Equation[], t, [vel], ps; name)
+    System(Equation[], t, [vel], ps; name)
 end
 function SpringDamper(; name, k = false, c = false)
     spring = Spring(; name = :spring, k)
     damper = Damper(; name = :damper, c)
-    compose(ODESystem(Equation[], t; name),
+    compose(System(Equation[], t; name),
         spring, damper)
 end
 connect_sd(sd, m1, m2) = [sd.spring.x ~ m1.pos - m2.pos, sd.damper.vel ~ m1.vel - m2.vel]
@@ -580,7 +583,7 @@ function Model(u, d = 0)
     eqs = [connect_sd(sd, mass1, mass2)
            Dₜ(mass1.vel) ~ (sd_force(sd) + u) / mass1.m
            Dₜ(mass2.vel) ~ (-sd_force(sd) + d) / mass2.m]
-    @named _model = ODESystem(eqs, t; observed = [y ~ mass2.pos])
+    @named _model = System(eqs, t; observed = [y ~ mass2.pos])
     @named model = compose(_model, mass1, mass2, sd)
 end
 model = Model(sin(30t))
@@ -610,7 +613,7 @@ let
 
     ∂ₜ = D
     eqs = [∂ₜ(A) ~ -k * A]
-    @named osys = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2])
+    @named osys = System(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2])
     u0 = [A => 1.0]
     p = [k => 0.0, t1 => 1.0, t2 => 2.0]
     tspan = (0.0, 4.0)
@@ -619,7 +622,7 @@ let
     cond1a = (t == t1)
     affect1a = [A ~ A + 1, B ~ A]
     cb1a = cond1a => affect1a
-    @named osys1 = ODESystem(eqs, t, [A, B], [k, t1, t2], discrete_events = [cb1a, cb2])
+    @named osys1 = System(eqs, t, [A, B], [k, t1, t2], discrete_events = [cb1a, cb2])
     u0′ = [A => 1.0, B => 0.0]
     sol = testsol(
         osys1, u0′, p, tspan; tstops = [1.0, 2.0], check_length = false, paramtotest = k)
@@ -628,11 +631,11 @@ let
     # same as above - but with set-time event syntax
     cb1‵ = [1.0] => affect1 # needs to be a Vector for the event to happen only once
     cb2‵ = [2.0] => affect2
-    @named osys‵ = ODESystem(eqs, t, [A], [k], discrete_events = [cb1‵, cb2‵])
+    @named osys‵ = System(eqs, t, [A], [k], discrete_events = [cb1‵, cb2‵])
     testsol(osys‵, u0, p, tspan; paramtotest = k)
 
     # mixing discrete affects
-    @named osys3 = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵])
+    @named osys3 = System(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵])
     testsol(osys3, u0, p, tspan; tstops = [1.0], paramtotest = k)
 
     # mixing with a func affect
@@ -641,22 +644,22 @@ let
         nothing
     end
     cb2‵‵ = [2.0] => (affect!, [], [k], [k], nothing)
-    @named osys4 = ODESystem(eqs, t, [A], [k, t1], discrete_events = [cb1, cb2‵‵])
+    @named osys4 = System(eqs, t, [A], [k, t1], discrete_events = [cb1, cb2‵‵])
     oprob4 = ODEProblem(complete(osys4), u0, tspan, p)
     testsol(osys4, u0, p, tspan; tstops = [1.0], paramtotest = k)
 
     # mixing with symbolic condition in the func affect
     cb2‵‵‵ = (t == t2) => (affect!, [], [k], [k], nothing)
-    @named osys5 = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵‵‵])
+    @named osys5 = System(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵‵‵])
     testsol(osys5, u0, p, tspan; tstops = [1.0, 2.0])
-    @named osys6 = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb2‵‵‵, cb1])
+    @named osys6 = System(eqs, t, [A], [k, t1, t2], discrete_events = [cb2‵‵‵, cb1])
     testsol(osys6, u0, p, tspan; tstops = [1.0, 2.0], paramtotest = k)
 
     # mix a continuous event too
     cond3 = A ~ 0.1
     affect3 = [k ~ 0.0]
     cb3 = cond3 => affect3
-    @named osys7 = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵‵‵],
+    @named osys7 = System(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵‵‵],
         continuous_events = [cb3])
     sol = testsol(osys7, u0, p, (0.0, 10.0); tstops = [1.0, 2.0])
     @test isapprox(sol(10.0)[1], 0.1; atol = 1e-10, rtol = 1e-10)
@@ -747,8 +750,7 @@ let rng = rng
     function testsol(jsys, u0, p, tspan; tstops = Float64[], paramtotest = nothing,
             N = 40000, kwargs...)
         jsys = complete(jsys)
-        dprob = DiscreteProblem(jsys, u0, tspan, p)
-        jprob = JumpProblem(jsys, dprob, Direct(); kwargs...)
+        jprob = JumpProblem(jsys, u0, tspan, p; aggregator = Direct(), kwargs...)
         sol = solve(jprob, SSAStepper(); tstops = tstops)
         @test (sol(1.000000000001)[1] - sol(0.99999999999)[1]) == 1
         paramtotest === nothing || (@test sol.ps[paramtotest] == 1.0)
@@ -816,19 +818,19 @@ let
         ps = @parameters k=k Θ=0.5
         eqs = [D(x) ~ v, D(v) ~ -k * x + F]
         ev = [x ~ Θ] => [x ~ 1.0, v ~ 0.0]
-        ODESystem(eqs, t, sts, ps, continuous_events = [ev]; name)
+        System(eqs, t, sts, ps, continuous_events = [ev]; name)
     end
 
     @named oscce = oscillator_ce()
     eqs = [oscce.F ~ 0]
-    @named eqs_sys = ODESystem(eqs, t)
+    @named eqs_sys = System(eqs, t)
     @named oneosc_ce = compose(eqs_sys, oscce)
     oneosc_ce_simpl = structural_simplify(oneosc_ce)
 
     prob = ODEProblem(oneosc_ce_simpl, [], (0.0, 2.0), [])
     sol = solve(prob, Tsit5(), saveat = 0.1)
 
-    @test typeof(oneosc_ce_simpl) == ODESystem
+    @test typeof(oneosc_ce_simpl) == System
     @test sol[oscce.x, 6] < 1.0 # test whether x(t) decreases over time
     @test sol[oscce.x, 18] > 0.5 # test whether event happened
 end
@@ -844,7 +846,7 @@ end
         [c1 ~ 0], (record_crossings, [c1 => :v], [], [], cr1))
     evt2 = ModelingToolkit.SymbolicContinuousCallback(
         [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2))
-    @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
+    @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
     sol = solve(prob, Tsit5())
@@ -866,7 +868,7 @@ end
     evt2 = ModelingToolkit.SymbolicContinuousCallback(
         [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2p);
         affect_neg = (record_crossings, [c2 => :v], [], [], cr2n))
-    @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
+    @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
     sol = solve(prob, Tsit5(); dtmax = 0.01)
@@ -890,7 +892,7 @@ end
         [c1 ~ 0], (record_crossings, [c1 => :v], [], [], cr1p); affect_neg = nothing)
     evt2 = ModelingToolkit.SymbolicContinuousCallback(
         [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2p); affect_neg = nothing)
-    @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
+    @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
     sol = solve(prob, Tsit5(); dtmax = 0.01)
@@ -909,7 +911,7 @@ end
     evt2 = ModelingToolkit.SymbolicContinuousCallback(
         [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2p);
         affect_neg = (record_crossings, [c2 => :v], [], [], cr2n))
-    @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
+    @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
     sol = solve(prob, Tsit5(); dtmax = 0.01)
@@ -933,7 +935,7 @@ end
     evt2 = ModelingToolkit.SymbolicContinuousCallback(
         [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2);
         rootfind = SciMLBase.RightRootFind)
-    @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
+    @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
     sol = solve(prob, Tsit5(); dtmax = 0.01)
@@ -953,7 +955,7 @@ end
     evt2 = ModelingToolkit.SymbolicContinuousCallback(
         [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2);
         rootfind = SciMLBase.RightRootFind)
-    @named trigsys = ODESystem(eqs, t; continuous_events = [evt1, evt2])
+    @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
     sol = solve(prob, Tsit5())
@@ -971,7 +973,7 @@ end
     evt2 = ModelingToolkit.SymbolicContinuousCallback(
         [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2);
         rootfind = SciMLBase.RightRootFind)
-    @named trigsys = ODESystem(eqs, t; continuous_events = [evt2, evt1])
+    @named trigsys = System(eqs, t; continuous_events = [evt2, evt1])
     trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
     sol = solve(prob, Tsit5())
@@ -1073,7 +1075,7 @@ end
     cb2 = [x ~ 0.5] => (save_affect!, [], [b], [b], nothing)
     cb3 = 1.0 => [c ~ t]
 
-    @mtkbuild sys = ODESystem(D(x) ~ cos(t), t, [x], [a, b, c];
+    @mtkbuild sys = System(D(x) ~ cos(t), t, [x], [a, b, c];
         continuous_events = [cb1, cb2], discrete_events = [cb3])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2pi), [a => 1.0, b => 2.0, c => 0.0])
     @test sort(canonicalize(Discrete(), prob.p)[1]) == [0.0, 1.0, 2.0]
@@ -1100,7 +1102,7 @@ end
         ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, i, c
             @set! x.furnace_on = true
         end)
-    @named sys = ODESystem(
+    @named sys = System(
         eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
     ss = structural_simplify(sys)
     prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
@@ -1120,7 +1122,7 @@ end
         ModelingToolkit.ImperativeAffect(modified = (; furnace_on)) do x, o, c, i
             @set! x.furnace_on = true
         end)
-    @named sys = ODESystem(
+    @named sys = System(
         eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
     ss = structural_simplify(sys)
     prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
@@ -1142,7 +1144,7 @@ end
             modified = (; furnace_on), observed = (; furnace_on)) do x, o, c, i
             @set! x.furnace_on = false
         end)
-    @named sys = ODESystem(eqs, t, [temp], params; continuous_events = [furnace_off])
+    @named sys = System(eqs, t, [temp], params; continuous_events = [furnace_off])
     ss = structural_simplify(sys)
     @test_logs (:warn,
         "The symbols Any[:furnace_on] are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value.") prob=ODEProblem(
@@ -1158,7 +1160,7 @@ end
             modified = (; furnace_on, tempsq), observed = (; furnace_on)) do x, o, c, i
             @set! x.furnace_on = false
         end)
-    @named sys = ODESystem(
+    @named sys = System(
         eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
     ss = structural_simplify(sys)
     @test_throws "refers to missing variable(s)" prob=ODEProblem(
@@ -1171,7 +1173,7 @@ end
             observed = (; furnace_on, not_actually_here)) do x, o, c, i
             @set! x.furnace_on = false
         end)
-    @named sys = ODESystem(
+    @named sys = System(
         eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
     ss = structural_simplify(sys)
     @test_throws "refers to missing variable(s)" prob=ODEProblem(
@@ -1183,7 +1185,7 @@ end
             observed = (; furnace_on)) do x, o, c, i
             return (; fictional2 = false)
         end)
-    @named sys = ODESystem(
+    @named sys = System(
         eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
     ss = structural_simplify(sys)
     prob = ODEProblem(
@@ -1243,7 +1245,7 @@ end
             @set! x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
             x
         end; rootfind = SciMLBase.RightRootFind)
-    @named sys = ODESystem(
+    @named sys = System(
         eqs, t, [theta, omega], params; continuous_events = [qAevt, qBevt])
     ss = structural_simplify(sys)
     prob = ODEProblem(ss, [theta => 1e-5], (0.0, pi))
@@ -1258,7 +1260,7 @@ end
         f = (i, u, p, c) -> seen = true, sts = [], pars = [], discretes = [])
     cb1 = ModelingToolkit.SymbolicContinuousCallback(
         [x ~ 0], Equation[], initialize = [x ~ 1.5], finalize = f)
-    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; continuous_events = [cb1])
+    @mtkbuild sys = System(D(x) ~ -1, t, [x], []; continuous_events = [cb1])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
     sol = solve(prob, Tsit5(); dtmax = 0.01)
     @test sol[x][1] ≈ 1.0
@@ -1279,7 +1281,7 @@ end
         f = (i, u, p, c) -> finaled = true, sts = [], pars = [], discretes = [])
     cb2 = ModelingToolkit.SymbolicContinuousCallback(
         [x ~ 0.1], Equation[], initialize = a, finalize = b)
-    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; continuous_events = [cb1, cb2])
+    @mtkbuild sys = System(D(x) ~ -1, t, [x], []; continuous_events = [cb1, cb2])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
     sol = solve(prob, Tsit5())
     @test sol[x][1] ≈ 1.0
@@ -1293,7 +1295,7 @@ end
     finaled = false
     cb3 = ModelingToolkit.SymbolicDiscreteCallback(
         1.0, [x ~ 2], initialize = a, finalize = b)
-    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    @mtkbuild sys = System(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
     sol = solve(prob, Tsit5())
     @test inited == true
@@ -1306,7 +1308,7 @@ end
     inited = false
     finaled = false
     cb3 = ModelingToolkit.SymbolicDiscreteCallback(1.0, f, initialize = a, finalize = b)
-    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    @mtkbuild sys = System(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
     sol = solve(prob, Tsit5())
     @test seen == true
@@ -1317,7 +1319,7 @@ end
     inited = false
     finaled = false
     cb3 = ModelingToolkit.SymbolicDiscreteCallback([1.0], f, initialize = a, finalize = b)
-    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    @mtkbuild sys = System(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
     sol = solve(prob, Tsit5())
     @test seen == true
@@ -1330,7 +1332,7 @@ end
     finaled = false
     cb3 = ModelingToolkit.SymbolicDiscreteCallback(
         t == 1.0, f, initialize = a, finalize = b)
-    @mtkbuild sys = ODESystem(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    @mtkbuild sys = System(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
     sol = solve(prob, Tsit5(); tstops = 1.0)
     @test seen == true
@@ -1342,17 +1344,17 @@ end
     @variables x(t) [irreducible = true] y(t) [irreducible = true]
     eqs = [x ~ y, D(x) ~ -1]
     cb = [x ~ 0.0] => [x ~ 0, y ~ 1]
-    @mtkbuild pend = ODESystem(eqs, t; continuous_events = [cb])
+    @mtkbuild pend = System(eqs, t; continuous_events = [cb])
     prob = ODEProblem(pend, [x => 1], (0.0, 3.0), guesses = [y => x])
     @test_throws "DAE initialization failed" solve(prob, Rodas5())
 
     cb = [x ~ 0.0] => [y ~ 1]
-    @mtkbuild pend = ODESystem(eqs, t; continuous_events = [cb])
+    @mtkbuild pend = System(eqs, t; continuous_events = [cb])
     prob = ODEProblem(pend, [x => 1], (0.0, 3.0), guesses = [y => x])
     @test_broken !SciMLBase.successful_retcode(solve(prob, Rodas5()))
 
     cb = [x ~ 0.0] => [x ~ 1, y ~ 1]
-    @mtkbuild pend = ODESystem(eqs, t; continuous_events = [cb])
+    @mtkbuild pend = System(eqs, t; continuous_events = [cb])
     prob = ODEProblem(pend, [x => 1], (0.0, 3.0), guesses = [y => x])
     @test all(≈(0.0; atol = 1e-9), solve(prob, Rodas5())[[x, y]][end])
 end
@@ -1395,7 +1397,7 @@ end
             @set! m.x = 0.0
             return m
         end
-        return ODESystem(eqs, t, vars, params; name = name,
+        return System(eqs, t, vars, params; name = name,
             continuous_events = [[x ~ max_time] => reset])
     end
 
@@ -1409,19 +1411,19 @@ end
         eqs = reduce(vcat, Symbolics.scalarize.([
             D(x) ~ 1.0
         ]))
-        return ODESystem(eqs, t, vars, params; name = name) # note no event
+        return System(eqs, t, vars, params; name = name) # note no event
     end
 
     @named wd1 = weird1(0.021)
     @named wd2 = weird2(0.021)
 
-    sys1 = structural_simplify(ODESystem([], t; name = :parent,
+    sys1 = structural_simplify(System(Equation[], t; name = :parent,
         discrete_events = [0.01 => ModelingToolkit.ImperativeAffect(
             modified = (; θs = reduce(vcat, [[wd1.θ]])), ctx = [1]) do m, o, c, i
             @set! m.θs[1] = c[] += 1
         end],
         systems = [wd1]))
-    sys2 = structural_simplify(ODESystem([], t; name = :parent,
+    sys2 = structural_simplify(System(Equation[], t; name = :parent,
         discrete_events = [0.01 => ModelingToolkit.ImperativeAffect(
             modified = (; θs = reduce(vcat, [[wd2.θ]])), ctx = [1]) do m, o, c, i
             @set! m.θs[1] = c[] += 1

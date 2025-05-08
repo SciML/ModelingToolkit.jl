@@ -36,7 +36,7 @@ sol1 = solve(prob1, IDA(linear_solver = :KLU))
 eqs = [D(u1) ~ p1 * u1 - u1 * u2,
     D(u2) ~ u1 * u2 - p2 * u2]
 
-@named sys = ODESystem(eqs, t)
+@named sys = System(eqs, t)
 
 u0 = [u1 => 1.0,
     u2 => 1.0]

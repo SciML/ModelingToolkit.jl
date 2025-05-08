@@ -40,7 +40,7 @@ function var_derivative_graph!(s::SystemStructure, v::Int)
     return var_diff
 end
 
-function var_derivative!(ts::TearingState{ODESystem}, v::Int)
+function var_derivative!(ts::TearingState, v::Int)
     s = ts.structure
     var_diff = var_derivative_graph!(s, v)
     sys = ts.sys
@@ -58,7 +58,7 @@ function eq_derivative_graph!(s::SystemStructure, eq::Int)
     return eq_diff
 end
 
-function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int; kwargs...)
+function eq_derivative!(ts::TearingState, ieq::Int; kwargs...)
     s = ts.structure
 
     eq_diff = eq_derivative_graph!(s, ieq)
@@ -107,9 +107,7 @@ end
 function tearing_substitute_expr(sys::AbstractSystem, expr; simplify = false)
     empty_substitutions(sys) && return expr
     substitutions = get_substitutions(sys)
-    @unpack subs = substitutions
-    solved = Dict(eq.lhs => eq.rhs for eq in subs)
-    return tearing_sub(expr, solved, simplify)
+    return tearing_sub(expr, substitutions, simplify)
 end
 
 """
@@ -121,20 +119,17 @@ These equations matches generated numerical code.
 See also [`equations`](@ref) and [`ModelingToolkit.get_eqs`](@ref).
 """
 function full_equations(sys::AbstractSystem; simplify = false)
-    empty_substitutions(sys) && return equations(sys)
-    substitutions = get_substitutions(sys)
-    substitutions.subed_eqs === nothing || return substitutions.subed_eqs
-    @unpack subs = substitutions
-    solved = Dict(eq.lhs => eq.rhs for eq in subs)
+    isempty(observed(sys)) && return equations(sys)
+    subs = Dict([eq.lhs => eq.rhs for eq in observed(sys)])
     neweqs = map(equations(sys)) do eq
         if iscall(eq.lhs) && operation(eq.lhs) isa Union{Shift, Differential}
-            return tearing_sub(eq.lhs, solved, simplify) ~ tearing_sub(eq.rhs, solved,
+            return tearing_sub(eq.lhs, subs, simplify) ~ tearing_sub(eq.rhs, subs,
                 simplify)
         else
             if !(eq.lhs isa Number && eq.lhs == 0)
                 eq = 0 ~ eq.rhs - eq.lhs
             end
-            rhs = tearing_sub(eq.rhs, solved, simplify)
+            rhs = tearing_sub(eq.rhs, subs, simplify)
             if rhs isa Symbolic
                 return 0 ~ rhs
             else # a number
@@ -143,28 +138,14 @@ function full_equations(sys::AbstractSystem; simplify = false)
         end
         eq
     end
-    substitutions.subed_eqs = neweqs
     return neweqs
 end
 
 function tearing_substitution(sys::AbstractSystem; kwargs...)
     neweqs = full_equations(sys::AbstractSystem; kwargs...)
     @set! sys.eqs = neweqs
-    @set! sys.substitutions = nothing
+    # @set! sys.substitutions = nothing
     @set! sys.schedule = nothing
-end
-
-function tearing_assignments(sys::AbstractSystem)
-    if empty_substitutions(sys)
-        assignments = []
-        deps = Int[]
-        sol_states = Code.LazyState()
-    else
-        @unpack subs, deps = get_substitutions(sys)
-        assignments = [Assignment(eq.lhs, eq.rhs) for eq in subs]
-        sol_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
-    end
-    return assignments, deps, sol_states
 end
 
 function solve_equation(eq, var, simplify)
@@ -753,14 +734,16 @@ function update_simplified_system!(
 
     @set! sys.eqs = neweqs
     @set! sys.observed = obs
-    @set! sys.substitutions = Substitutions(subeqs, deps)
+    # @set! sys.substitutions = Substitutions(subeqs, deps)
 
     # Only makes sense for time-dependent
-    # TODO: generalize to SDE
-    if sys isa ODESystem
+    if ModelingToolkit.has_schedule(sys)
         @set! sys.schedule = Schedule(var_eq_matching, dummy_sub)
     end
-    sys = schedule(sys)
+    if ModelingToolkit.has_isscheduled(sys)
+        @set! sys.isscheduled = true
+    end
+    return sys
 end
 
 """

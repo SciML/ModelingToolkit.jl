@@ -1,10 +1,10 @@
 """
 $(TYPEDSIGNATURES)
 
-Takes a Nth order ODESystem and returns a new ODESystem written in first order
+Takes a Nth order System and returns a new System written in first order
 form by defining new variables which represent the N-1 derivatives.
 """
-function ode_order_lowering(sys::ODESystem)
+function ode_order_lowering(sys::System)
     iv = get_iv(sys)
     eqs_lowered, new_vars = ode_order_lowering(equations(sys), iv, unknowns(sys))
     @set! sys.eqs = eqs_lowered
@@ -12,7 +12,7 @@ function ode_order_lowering(sys::ODESystem)
     return sys
 end
 
-function dae_order_lowering(sys::ODESystem)
+function dae_order_lowering(sys::System)
     iv = get_iv(sys)
     eqs_lowered, new_vars = dae_order_lowering(equations(sys), iv, unknowns(sys))
     @set! sys.eqs = eqs_lowered

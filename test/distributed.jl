@@ -13,7 +13,7 @@ addprocs(2)
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-@everywhere @named de = ODESystem(eqs, t)
+@everywhere @named de = System(eqs, t)
 @everywhere de = complete(de)
 
 @everywhere u0 = [19.0, 20.0, 50.0]
