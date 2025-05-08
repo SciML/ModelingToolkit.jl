@@ -99,18 +99,8 @@ prob = ODEProblem(sys, [], (0.0, 1.0), [A1 => 0.3])
 @testset "default=nothing is skipped" begin
     @parameters p = nothing
     @variables x(t)=nothing y(t)
-    for sys in [
-        System(Equation[], t, [x, y], [p]; defaults = [y => nothing], name = :osys),
-        SDESystem(Equation[], [], t, [x, y], [p]; defaults = [y => nothing], name = :ssys),
-        JumpSystem(Equation[], t, [x, y], [p]; defaults = [y => nothing], name = :jsys),
-        System(Equation[], [x, y], [p]; defaults = [y => nothing], name = :nsys),
-        OptimizationSystem(
-            Equation[], [x, y], [p]; defaults = [y => nothing], name = :optsys),
-        ConstraintsSystem(
-            Equation[], [x, y], [p]; defaults = [y => nothing], name = :conssys)
-    ]
-        @test isempty(ModelingToolkit.defaults(sys))
-    end
+    @named sys = System(Equation[], t, [x, y], [p]; defaults = [y => nothing])
+    @test isempty(ModelingToolkit.defaults(sys))
 end
 
 # Using indepvar in initialization
