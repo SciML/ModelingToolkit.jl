@@ -111,8 +111,8 @@ function (cw::CondRewriter)(expr, dep)
         # and ELSE branch is true
         # similarly for expression being false
         return (ifelse(rw_cond, rw_conda, rw_condb),
-            implies(ctrue, truea) | implies(cfalse, trueb),
-            implies(ctrue, falsea) | implies(cfalse, falseb))
+            ctrue & truea | cfalse & trueb,
+            ctrue & falsea | cfalse & falseb)
     elseif operation(expr) == Base.:(!) # NOT of expression
         (a,) = arguments(expr)
         (rw, ctrue, cfalse) = cw(a, dep)
