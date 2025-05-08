@@ -607,7 +607,7 @@ function compile_condition(cbs::Union{AbstractCallback, Vector{<:AbstractCallbac
                  [condit.lhs - condit.rhs]
     end
 
-    fs = build_function_wrapper(sys, condit, u, p..., t; kwargs..., expression = Val{false})
+    fs = build_function_wrapper(sys, condit, u, p..., t; kwargs..., expression = Val{false}, cse = false)
     (f_oop, f_iip) = is_discrete(cbs) ? (fs, nothing) : fs
 
     cond = if cbs isa AbstractVector
