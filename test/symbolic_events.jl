@@ -1305,3 +1305,30 @@ end
     sol = solve(prob, FBDF())
     @test prob.ps[g] == sol.ps[g]
 end
+
+@testset "Array parameter updates of parent components in ImperativeEffect" begin
+    function child(vals; name, max_time = 0.1)
+        vars = @variables begin
+            x(t) = 0.0
+        end
+        eqs = reduce(vcat, Symbolics.scalarize.([
+            D(x) ~ 1.0
+        ]))
+        reset = ModelingToolkit.ImperativeAffect(
+            modified = (; vals = Symbolics.scalarize(ParentScope.(vals)), x)) do m, o, _, i
+            @set! m.vals = m.vals .+ 1
+            @set! m.x = 0.0
+            return m
+        end
+        return ODESystem(eqs, t, vars, []; name = name,
+            continuous_events = [[x ~ max_time] => reset])
+    end
+    shared_pars = @parameters begin
+        vals(t)[1:2] = 0.0
+    end
+
+    @named sys = ODESystem(Equation[], t, [], Symbolics.scalarize(vals);
+        systems = [child(vals; name = :child)])
+    sys = structural_simplify(sys)
+    sol = solve(ODEProblem(sys, [], (0.0, 1.0)), Tsit5())
+end
