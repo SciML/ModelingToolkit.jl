@@ -218,6 +218,7 @@ function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = no
     all_int_vars = true
     coeffs === nothing || empty!(coeffs)
     empty!(to_rm)
+
     for j in 𝑠neighbors(graph, ieq)
         var = fullvars[j]
         isirreducible(var) && (all_int_vars = false; continue)
@@ -550,6 +551,7 @@ end
 function _distribute_shift(expr, shift)
     if iscall(expr)
         op = operation(expr)
+        (op isa Pre || op isa Initial) && return expr
         args = arguments(expr)
 
         if ModelingToolkit.isvariable(expr)

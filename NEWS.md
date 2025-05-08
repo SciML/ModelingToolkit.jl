@@ -1,3 +1,22 @@
+# ModelingToolkit v10 Release Notes
+
+### Callbacks
+
+Callback semantics have changed.
+
+  - There is a new `Pre` operator that is used to specify which values are before the callback.
+    For example, the affect `A ~ A + 1` should now be written as `A ~ Pre(A) + 1`. This is
+    **required** to be specified - `A ~ A + 1` will now be interpreted as an equation to be
+    satisfied after the callback (and will thus error since it is unsatisfiable).
+
+  - All parameters that are changed by a callback must be declared as discrete parameters to
+    the callback constructor, using the `discrete_parameters` keyword argument.
+
+```julia
+event = SymbolicDiscreteCallback(
+    [t == 1] => [p ~ Pre(p) + 1], discrete_parameters = [p])
+```
+
 # ModelingToolkit v9 Release Notes
 
 ### Upgrade guide

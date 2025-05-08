@@ -958,7 +958,6 @@ function linearization_function(sys::AbstractSystem,
     end
 
     sys = handle_loop_openings(sys, map(AnalysisPoint, collect(loop_openings)))
-
     return linearization_function(system_modifier(sys), input_vars, output_vars; kwargs...)
 end
 

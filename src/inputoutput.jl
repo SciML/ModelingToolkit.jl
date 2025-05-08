@@ -418,7 +418,7 @@ function add_input_disturbance(sys, dist::DisturbanceModel, inputs = Any[]; kwar
     augmented_sys = extend(augmented_sys, sys)
     ssys = structural_simplify(augmented_sys, inputs = all_inputs, disturbance_inputs = [d])
 
-    f, dvs, p, io_sys = generate_control_function(ssys, all_inputs,
+    (f_oop, f_ip), dvs, p, io_sys = generate_control_function(ssys, all_inputs,
         [d]; kwargs...)
-    f, augmented_sys, dvs, p, io_sys
+    (f_oop, f_ip), augmented_sys, dvs, p, io_sys
 end

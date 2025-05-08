@@ -1,5 +1,6 @@
 using ModelingToolkit, SymbolicIndexingInterface, SciMLBase
-using ModelingToolkit: t_nounits as t, D_nounits as D, ParameterIndex
+using ModelingToolkit: t_nounits as t, D_nounits as D, ParameterIndex,
+                       SymbolicContinuousCallback
 using SciMLStructures: Tunable
 
 @testset "ODESystem" begin
@@ -230,7 +231,8 @@ end
 @testset "`timeseries_parameter_index` on unwrapped scalarized timeseries parameter" begin
     @variables x(t)[1:2]
     @parameters p(t)[1:2, 1:2]
-    ev = [x[1] ~ 2.0] => [p ~ -ones(2, 2)]
+    ev = SymbolicContinuousCallback(
+        [x[1] ~ 2.0] => [p ~ -ones(2, 2)], discrete_parameters = [p])
     @mtkbuild sys = ODESystem(D(x) ~ p * x, t; continuous_events = [ev])
     p = ModelingToolkit.unwrap(p)
     @test timeseries_parameter_index(sys, p) === ParameterTimeseriesIndex(1, (1, 1))
