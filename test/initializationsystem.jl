@@ -600,11 +600,11 @@ end
     # the correct solver.
     # `rhss` allows adding terms to the end of equations (only 2 equations allowed) to influence
     # the system type (brownian vars to turn it into an SDE).
-    @testset "$Problem with $(SciMLBase.parameterless_type(alg))" for (System, Problem, alg, rhss) in [
-        (ModelingToolkit.System, ODEProblem, Tsit5(), zeros(2)),
-        (ModelingToolkit.System, SDEProblem, ImplicitEM(), [a, b]),
-        (ModelingToolkit.System, DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
-        (ModelingToolkit.System, SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b])
+    @testset "$Problem with $(SciMLBase.parameterless_type(alg))" for (Problem, alg, rhss) in [
+        (ODEProblem, Tsit5(), zeros(2)),
+        (SDEProblem, ImplicitEM(), [a, b]),
+        (DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
+        (SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b])
     ]
         function test_parameter(prob, sym, val)
             if prob.u0 !== nothing
@@ -612,11 +612,10 @@ end
             end
             @test solve(prob, alg).ps[sym] ≈ val
         end
-        function test_initializesystem(sys, u0map, pmap, p, equation)
-            isys = ModelingToolkit.generate_initializesystem(
-                sys; u0map, pmap, guesses = ModelingToolkit.guesses(sys))
-            @test is_variable(isys, p)
-            @test equation in equations(isys) || (0 ~ -equation.rhs) in equations(isys)
+        function test_initializesystem(prob, p, equation)
+            isys = prob.f.initialization_data.initializeprob.f.sys
+            @test is_variable(isys, p) || ModelingToolkit.has_observed_with_lhs(isys, p)
+            @test equation in [equations(isys); observed(isys)]
         end
 
         u0map = Dict(x => 1.0, y => 1.0)
@@ -636,7 +635,7 @@ end
             [D(x) ~ x + rhss[1], p ~ x + y + rhss[2]], t; defaults = [p => missing], guesses = [p => 0.0])
         prob = Problem(sys, u0map, (0.0, 1.0))
         test_parameter(prob, p, 2.0)
-        test_initializesystem(sys, u0map, pmap, p, 0 ~ p - x - y)
+        test_initializesystem(prob, p, p ~ x + y)
         prob2 = remake(prob; u0 = u0map)
         prob2.ps[p] = 0.0
         test_parameter(prob2, p, 2.0)
@@ -647,7 +646,7 @@ end
         pmap[p] = missing
         prob = Problem(sys, u0map, (0.0, 1.0), pmap)
         test_parameter(prob, p, 2.0)
-        test_initializesystem(sys, u0map, pmap, p, 0 ~ 2q - p)
+        test_initializesystem(prob, p, p ~ 2q)
         prob2 = remake(prob; u0 = u0map, p = pmap)
         prob2.ps[p] = 0.0
         test_parameter(prob2, p, 2.0)
@@ -656,7 +655,7 @@ end
             [D(x) ~ x + rhss[1], p ~ x + y + rhss[2]], t; guesses = [p => 0.0])
         prob = Problem(sys, u0map, (0.0, 1.0), pmap)
         test_parameter(prob, p, 2.0)
-        test_initializesystem(sys, u0map, pmap, p, 0 ~ x + y - p)
+        test_initializesystem(prob, p, p ~ x + y)
         prob2 = remake(prob; u0 = u0map, p = pmap)
         prob2.ps[p] = 0.0
         test_parameter(prob2, p, 2.0)
@@ -667,7 +666,7 @@ end
         delete!(pmap, p)
         prob = Problem(sys, u0map, (0.0, 1.0), pmap)
         test_parameter(prob, p, 2.0)
-        test_initializesystem(sys, u0map, pmap, p, 0 ~ 2q - p)
+        test_initializesystem(prob, p, p ~ 2q)
         prob2 = remake(prob; u0 = u0map, p = pmap)
         prob2.ps[p] = 0.0
         test_parameter(prob2, p, 2.0)
@@ -678,7 +677,7 @@ end
         _pmap = merge(pmap, Dict(p => q))
         prob = Problem(sys, u0map, (0.0, 1.0), _pmap)
         test_parameter(prob, p, _pmap[q])
-        test_initializesystem(sys, u0map, _pmap, p, 0 ~ q - p)
+        test_initializesystem(prob, p, p ~ q)
         # Problem dependent value with guess, no `missing`
         @mtkbuild sys = System(
             [D(x) ~ y * q + p + rhss[1], D(y) ~ x * p + q + rhss[2]], t; guesses = [p => 0.0])
@@ -911,11 +910,11 @@ end
     @brownian a b
     x = _x(t)
 
-    @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (System, Problem, alg, rhss) in [
-        (ModelingToolkit.System, ODEProblem, Tsit5(), zeros(2)),
-        (ModelingToolkit.System, SDEProblem, ImplicitEM(), [a, b]),
-        (ModelingToolkit.System, DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
-        (ModelingToolkit.System, SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b])
+    @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (Problem, alg, rhss) in [
+        (ODEProblem, Tsit5(), zeros(2)),
+        (SDEProblem, ImplicitEM(), [a, b]),
+        (DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
+        (SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b])
     ]
         @mtkbuild sys = System(
             [D(x) ~ x + rhss[1], p ~ x + y + rhss[2]], t; defaults = [p => missing], guesses = [
@@ -1301,13 +1300,8 @@ end
 
     u0s = [I => 1, R => 0]
     ps = [S0 => 999, β => 0.01, γ => 0.001]
-    dprob = DiscreteProblem(js, u0s, (0.0, 10.0), ps)
-    @test_broken dprob.f.initialization_data !== nothing
-    sol = solve(dprob, FunctionMap())
-    @test sol[S, 1] ≈ 999
-    @test SciMLBase.successful_retcode(sol)
 
-    jprob = JumpProblem(js, dprob)
+    jprob = JumpProblem(js, u0s, (0.0, 10.0), ps)
     sol = solve(jprob, SSAStepper())
     @test sol[S, 1] ≈ 999
     @test SciMLBase.successful_retcode(sol)
