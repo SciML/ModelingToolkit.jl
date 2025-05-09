@@ -270,7 +270,8 @@ function flatten(sys::ImplicitDiscreteSystem, noeqs = false)
 end
 
 function generate_function(
-        sys::ImplicitDiscreteSystem, dvs = unknowns(sys), ps = parameters(sys); wrap_code = identity, kwargs...)
+        sys::ImplicitDiscreteSystem, dvs = unknowns(sys), ps = parameters(sys);
+        wrap_code = identity, cachesyms::Tuple = (), kwargs...)
     iv = get_iv(sys)
     # Algebraic equations get shifted forward 1, to match with differential equations
     exprs = map(equations(sys)) do eq
@@ -286,8 +287,9 @@ function generate_function(
 
     u_next = map(Shift(iv, 1), dvs)
     u = dvs
+    p = (reorder_parameters(sys, unwrap.(ps))..., cachesyms...)
     build_function_wrapper(
-        sys, exprs, u_next, u, ps..., iv; p_start = 3, extra_assignments, kwargs...)
+        sys, exprs, u_next, u, p..., iv; p_start = 3, extra_assignments, kwargs...)
 end
 
 function shift_u0map_forward(sys::ImplicitDiscreteSystem, u0map, defs)
