@@ -94,7 +94,8 @@ we will create a model from a CoSimulation FMU.
 ```@example fmi
 fmu = loadFMU("SpringPendulum1D", "Dymola", "2023x", "3.0"; type = :CS)
 @named inner = ModelingToolkit.FMIComponent(
-    Val(3); fmu, communication_step_size = 0.001, type = :CS)
+    Val(3); fmu, communication_step_size = 0.001, type = :CS,
+    reinitializealg = BrownFullBasicInit())
 ```
 
 This FMU has fewer equations, partly due to missing aliasing variables and partly due to being a CS FMU.
@@ -170,7 +171,8 @@ end
 `a` and `b` are inputs, `c` is a state, and `out` and `out2` are outputs of the component.
 
 ```@repl fmi
-@named adder = ModelingToolkit.FMIComponent(Val(2); fmu, type = :ME);
+@named adder = ModelingToolkit.FMIComponent(
+    Val(2); fmu, type = :ME, reinitializealg = BrownFullBasicInit());
 isinput(adder.a)
 isinput(adder.b)
 isoutput(adder.out)

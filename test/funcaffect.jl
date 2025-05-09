@@ -26,8 +26,7 @@ cb1 = ModelingToolkit.SymbolicDiscreteCallback(t == zr, (affect1!, [], [], [], [
 @test cb == cb1
 @test ModelingToolkit.SymbolicDiscreteCallback(cb) === cb # passthrough
 @test hash(cb) == hash(cb1)
-ModelingToolkit.generate_discrete_callback(cb, sys, ModelingToolkit.get_variables(sys),
-    ModelingToolkit.get_ps(sys));
+ModelingToolkit.generate_callback(cb, sys);
 
 cb = ModelingToolkit.SymbolicContinuousCallback([t ~ zr],
     (f = affect1!, sts = [], pars = [], discretes = [],
@@ -48,7 +47,7 @@ sys1 = ODESystem(eqs, t, [u], [], name = :sys,
 de = ModelingToolkit.get_discrete_events(sys1)
 @test length(de) == 1
 de = de[1]
-@test ModelingToolkit.condition(de) == [4.0]
+@test ModelingToolkit.conditions(de) == [4.0]
 @test ModelingToolkit.has_functional_affect(de)
 
 sys2 = ODESystem(eqs, t, [u], [], name = :sys,

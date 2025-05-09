@@ -516,18 +516,6 @@ function collect_applied_operators(x, op)
     end
 end
 
-function find_derivatives!(vars, expr::Equation, f = identity)
-    (find_derivatives!(vars, expr.lhs, f); find_derivatives!(vars, expr.rhs, f); vars)
-end
-function find_derivatives!(vars, expr, f)
-    !iscall(O) && return vars
-    operation(O) isa Differential && push!(vars, f(O))
-    for arg in arguments(O)
-        vars!(vars, arg)
-    end
-    return vars
-end
-
 """
     $(TYPEDSIGNATURES)
 
@@ -606,6 +594,7 @@ end
 
 function collect_var!(unknowns, parameters, var, iv; depth = 0)
     isequal(var, iv) && return nothing
+    var = unwrap(var)
     check_scope_depth(getmetadata(var, SymScope, LocalScope()), depth) || return nothing
     var = setmetadata(var, SymScope, LocalScope())
     if iscalledparameter(var)
