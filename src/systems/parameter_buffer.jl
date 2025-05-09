@@ -28,7 +28,14 @@ the default behavior).
 """
 function MTKParameters(
         sys::AbstractSystem, p, u0 = Dict(); tofloat = false,
-        t0 = nothing, substitution_limit = 1000, floatT = nothing)
+        t0 = nothing, substitution_limit = 1000, floatT = nothing,
+        container_type = Vector, p_constructor = identity)
+    if !(container_type <: AbstractArray)
+        throw(ArgumentError("""
+        `container_type` for `MTKParameters` must be a subtype of `AbstractArray`. Found \
+        $container_type.
+        """))
+    end
     ic = if has_index_cache(sys) && get_index_cache(sys) !== nothing
         get_index_cache(sys)
     else
@@ -133,18 +140,23 @@ function MTKParameters(
             end
         end
     end
-    tunable_buffer = narrow_buffer_type(tunable_buffer)
+    tunable_buffer = p_constructor(narrow_buffer_type(tunable_buffer; container_type))
     if isempty(tunable_buffer)
         tunable_buffer = SizedVector{0, Float64}()
     end
-    initials_buffer = narrow_buffer_type(initials_buffer)
+    initials_buffer = p_constructor(narrow_buffer_type(initials_buffer; container_type))
     if isempty(initials_buffer)
         initials_buffer = SizedVector{0, Float64}()
     end
-    disc_buffer = narrow_buffer_type.(disc_buffer)
-    const_buffer = narrow_buffer_type.(const_buffer)
+    disc_buffer = p_constructor.(narrow_buffer_type.(disc_buffer; container_type))
+    const_buffer = p_constructor.(narrow_buffer_type.(const_buffer; container_type))
     # Don't narrow nonnumeric types
-    nonnumeric_buffer = nonnumeric_buffer
+    if !isempty(nonnumeric_buffer)
+        nonnumeric_buffer = map(nonnumeric_buffer) do buf
+            p_constructor(SymbolicUtils.Code.create_array(
+                container_type, eltype(buf), Val(1), Val(length(buf)), buf...))
+        end
+    end
 
     mtkps = MTKParameters{
         typeof(tunable_buffer), typeof(initials_buffer), typeof(disc_buffer),
@@ -160,21 +172,44 @@ function rebuild_with_caches(p::MTKParameters, cache_templates::BufferTemplate..
     @set p.caches = buffers
 end
 
-function narrow_buffer_type(buffer::AbstractArray)
+function narrow_buffer_type(buffer::AbstractArray; container_type = typeof(buffer))
     type = Union{}
     for x in buffer
         type = promote_type(type, typeof(x))
     end
-    return convert.(type, buffer)
+    return SymbolicUtils.Code.create_array(
+        container_type, type, Val(ndims(buffer)), Val(length(buffer)), buffer...)
 end
 
-function narrow_buffer_type(buffer::AbstractArray{<:AbstractArray})
-    buffer = narrow_buffer_type.(buffer)
+function narrow_buffer_type(
+        buffer::AbstractArray{<:AbstractArray}; container_type = typeof(buffer))
+    type = Union{}
+    for arr in buffer
+        for x in arr
+            type = promote_type(type, typeof(x))
+        end
+    end
+    buffer = map(buffer) do buf
+        SymbolicUtils.Code.create_array(
+            container_type, type, Val(ndims(buf)), Val(size(buf)), buf...)
+    end
+    return SymbolicUtils.Code.create_array(
+        container_type, nothing, Val(ndims(buffer)), Val(size(buffer)), buffer...)
+end
+
+function narrow_buffer_type(buffer::BlockedArray; container_type = typeof(parent(buffer)))
     type = Union{}
     for x in buffer
-        type = promote_type(type, eltype(x))
+        type = promote_type(type, typeof(x))
     end
-    return broadcast.(convert, type, buffer)
+    tmp = SymbolicUtils.Code.create_array(
+        container_type, type, Val(ndims(buffer)), Val(size(buffer)), buffer...)
+    blocks = ntuple(Val(ndims(buffer))) do i
+        bsizes = blocksizes(buffer, i)
+        SymbolicUtils.Code.create_array(
+            container_type, Int, Val(1), Val(length(bsizes)), bsizes...)
+    end
+    return BlockedArray(tmp, blocks...)
 end
 
 function buffer_to_arraypartition(buf)
@@ -329,6 +364,14 @@ function Base.copy(p::MTKParameters)
         nonnumeric,
         caches
     )
+end
+
+function ArrayInterface.ismutable(::Type{MTKParameters{
+        T, I, D, C, N, H}}) where {T, I, D, C, N, H}
+    ArrayInterface.ismutable(T) || ArrayInterface.ismutable(I) ||
+        any(ArrayInterface.ismutable, fieldtypes(D)) ||
+        any(ArrayInterface.ismutable, fieldtypes(C)) ||
+        any(ArrayInterface.ismutable, fieldtypes(N))
 end
 
 function SymbolicIndexingInterface.parameter_values(p::MTKParameters, pind::ParameterIndex)
@@ -594,8 +637,9 @@ end
         nonnumerics = $(Expr(:tuple,
             (:($similar(oldbuf.nonnumeric[$i], $(nonnumericT[i]))) for i in 1:length(nonnumericT))...))
         $((:($copyto!(nonnumerics[$i], oldbuf.nonnumeric[$i])) for i in 1:length(nonnumericT))...)
+        caches = copy.(oldbuf.caches)
         newbuf = MTKParameters(
-            tunables, initials, discretes, constants, nonnumerics, copy.(oldbuf.caches))
+            tunables, initials, discretes, constants, nonnumerics, caches)
     end
     if idxs <: AbstractArray
         push!(expr.args, :(for (idx, val) in zip(idxs, vals)
@@ -605,6 +649,22 @@ end
         for i in 1:fieldcount(idxs)
             push!(expr.args, :($setindex!(newbuf, vals[$i], idxs[$i])))
         end
+    end
+    if !ArrayInterface.ismutable(oldbuf)
+        push!(expr.args, :(tunables = $similar_type($T, $tunablesT)(tunables)))
+        push!(expr.args, :(initials = $similar_type($I, $initialsT)(initials)))
+        push!(expr.args,
+            :(discretes = $(Expr(:tuple,
+                (:($similar_type($(fieldtype(D, i)), $(discretesT[i]))(discretes[$i])) for i in 1:length(discretesT))...))))
+        push!(expr.args,
+            :(constants = $(Expr(:tuple,
+                (:($similar_type($(fieldtype(C, i)), $(constantsT[i]))(constants[$i])) for i in 1:length(constantsT))...))))
+        push!(expr.args,
+            :(nonnumerics = $(Expr(:tuple,
+                (:($similar_type($(fieldtype(C, i)), $(nonnumericT[i]))(nonnumerics[$i])) for i in 1:length(nonnumericT))...))))
+        push!(expr.args,
+            :(newbuf = MTKParameters(
+                tunables, initials, discretes, constants, nonnumerics, caches)))
     end
     push!(expr.args, :(return newbuf))
 
@@ -705,6 +765,19 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
         oldbuf.constant, newbuf.constant)
     @set! newbuf.nonnumeric = narrow_buffer_type_and_fallback_undefs.(
         oldbuf.nonnumeric, newbuf.nonnumeric)
+    if !ArrayInterface.ismutable(oldbuf)
+        @set! newbuf.tunable = similar_type(oldbuf.tunable, eltype(newbuf.tunable))(newbuf.tunable)
+        @set! newbuf.initials = similar_type(oldbuf.initials, eltype(newbuf.initials))(newbuf.initials)
+        @set! newbuf.discrete = ntuple(Val(length(newbuf.discrete))) do i
+            similar_type.(oldbuf.discrete[i], eltype(newbuf.discrete[i]))(newbuf.discrete[i])
+        end
+        @set! newbuf.constant = ntuple(Val(length(newbuf.constant))) do i
+            similar_type.(oldbuf.constant[i], eltype(newbuf.constant[i]))(newbuf.constant[i])
+        end
+        @set! newbuf.nonnumeric = ntuple(Val(length(newbuf.nonnumeric))) do i
+            similar_type.(oldbuf.nonnumeric[i], eltype(newbuf.nonnumeric[i]))(newbuf.nonnumeric[i])
+        end
+    end
     return newbuf
 end
 
