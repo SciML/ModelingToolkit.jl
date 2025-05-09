@@ -273,6 +273,8 @@ function make_affect(affect::Vector{Equation}; discrete_parameters = Any[],
     end
 
     discrete_parameters isa AbstractVector || (discrete_parameters = [discrete_parameters])
+    discrete_parameters = unwrap.(discrete_parameters)
+
     for p in discrete_parameters
         occursin(unwrap(iv), unwrap(p)) ||
             error("Non-time dependent parameter $p passed in as a discrete. Must be declared as @parameters $p(t).")
