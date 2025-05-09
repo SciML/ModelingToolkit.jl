@@ -652,7 +652,15 @@ function DiffEqBase.SDEFunction{iip, specialize}(sys::SDESystem, dvs = unknowns(
         W_prototype = nothing
     end
 
-    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0', M)
+    _M = if sparse && !(u0 === nothing || M === I)
+        SparseArrays.sparse(M)
+    elseif u0 === nothing || M === I
+        M
+    elseif M isa Diagonal
+        Diagonal(ArrayInterface.restructure(u0, diag(M)))
+    else
+        ArrayInterface.restructure(u0 .* u0', M)
+    end
 
     observedfun = ObservedFunctionCache(
         sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false), cse)

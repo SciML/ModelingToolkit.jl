@@ -284,6 +284,9 @@ function calculate_massmatrix(sys::AbstractODESystem; simplify = false)
     end
     M = simplify ? ModelingToolkit.simplify.(M) : M
     # M should only contain concrete numbers
+    if isdiag(M)
+        M = Diagonal(M)
+    end
     M == I ? I : M
 end
 
@@ -410,6 +413,8 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem,
         SparseArrays.sparse(M)
     elseif u0 === nothing || M === I
         M
+    elseif M isa Diagonal
+        Diagonal(ArrayInterface.restructure(u0, diag(M)))
     else
         ArrayInterface.restructure(u0 .* u0', M)
     end
