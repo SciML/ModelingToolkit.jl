@@ -43,10 +43,6 @@ function structural_simplify(
     end
     if newsys isa DiscreteSystem &&
        any(eq -> symbolic_type(eq.lhs) == NotSymbolic(), equations(newsys))
-        error("""
-            Encountered algebraic equations when simplifying discrete system. Please construct \
-            an ImplicitDiscreteSystem instead.
-        """)
     end
     for pass in additional_passes
         newsys = pass(newsys)
