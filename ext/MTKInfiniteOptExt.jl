@@ -257,8 +257,6 @@ function substitute_jump_vars(model, sys, pmap, exprs; auxmap = Dict(), is_free_
     exprs
 end
 
-is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
-
 function add_infopt_solve_constraints!(model::InfiniteModel, sys, pmap; is_free_t = false)
     # Differential equations
     U = model[:U]
@@ -295,7 +293,7 @@ function add_jump_solve_constraints!(prob, tableau; is_free_t = false)
     V = model[:V]
     nᵤ = length(U)
     nᵥ = length(V)
-    if is_explicit(tableau)
+    if MTK.is_explicit(tableau)
         K = Any[]
         for τ in tsteps
             for (i, h) in enumerate(c)
@@ -328,23 +326,6 @@ function add_jump_solve_constraints!(prob, tableau; is_free_t = false)
 end
 
 """
-Default ODE Tableau: RadauIIA5
-"""
-function constructDefault(T::Type = Float64)
-    sq6 = sqrt(6)
-    A = [11 // 45-7sq6 / 360 37 // 225-169sq6 / 1800 -2 // 225+sq6 / 75
-         37 // 225+169sq6 / 1800 11 // 45+7sq6 / 360 -2 // 225-sq6 / 75
-         4 // 9-sq6 / 36 4 // 9+sq6 / 36 1//9]
-    c = [2 // 5 - sq6 / 10; 2 / 5 + sq6 / 10; 1]
-    α = [4 // 9 - sq6 / 36; 4 // 9 + sq6 / 36; 1 // 9]
-    A = map(T, A)
-    α = map(T, α)
-    c = map(T, c)
-
-    DiffEqBase.ImplicitRKTableau(A, c, α, 5)
-end
-
-"""
 Solve JuMPDynamicOptProblem. Arguments:
 - prob: a JumpDynamicOptProblem
 - jump_solver: a LP solver such as HiGHS
@@ -354,7 +335,7 @@ Solve JuMPDynamicOptProblem. Arguments:
 Returns a DynamicOptSolution, which contains both the model and the ODE solution.
 """
 function DiffEqBase.solve(
-        prob::JuMPDynamicOptProblem, jump_solver, tableau_getter = constructDefault; silent = false)
+        prob::JuMPDynamicOptProblem, jump_solver, tableau_getter = MTK.constructDefault; silent = false)
     model = prob.model
     tableau = tableau_getter()
     silent && set_silent(model)

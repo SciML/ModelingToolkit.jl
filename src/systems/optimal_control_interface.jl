@@ -18,6 +18,7 @@ end
 
 function JuMPDynamicOptProblem end
 function InfiniteOptDynamicOptProblem end
+function CasADiDynamicOptProblem end
 
 function warn_overdetermined(sys, u0map)
     constraintsys = get_constraintsystem(sys)
@@ -26,6 +27,25 @@ function warn_overdetermined(sys, u0map)
             @warn "The control problem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) exceeds the total number of states. The solvers will default to doing a nonlinear least-squares optimization."
     end
 end
+
+"""
+Default ODE Tableau: RadauIIA5
+"""
+function constructDefault(T::Type = Float64)
+    sq6 = sqrt(6)
+    A = [11 // 45-7sq6 / 360 37 // 225-169sq6 / 1800 -2 // 225+sq6 / 75
+         37 // 225+169sq6 / 1800 11 // 45+7sq6 / 360 -2 // 225-sq6 / 75
+         4 // 9-sq6 / 36 4 // 9+sq6 / 36 1//9]
+    c = [2 // 5 - sq6 / 10; 2 / 5 + sq6 / 10; 1]
+    α = [4 // 9 - sq6 / 36; 4 // 9 + sq6 / 36; 1 // 9]
+    A = map(T, A)
+    α = map(T, α)
+    c = map(T, c)
+    
+    DiffEqBase.ImplicitRKTableau(A, c, α, 5)
+end
+
+is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
 
 """
 Generate the control function f(x, u, p, t) from the ODESystem. 

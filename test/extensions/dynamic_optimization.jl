@@ -5,6 +5,9 @@ using SimpleDiffEq
 using OrdinaryDiffEqSDIRK, OrdinaryDiffEqVerner, OrdinaryDiffEqTsit5, OrdinaryDiffEqFIRK
 using Ipopt
 using DataInterpolations
+using CasADi
+
+import DiffEqBase: solve
 const M = ModelingToolkit
 
 @testset "ODE Solution, no cost" begin
@@ -28,17 +31,23 @@ const M = ModelingToolkit
     jsol = solve(jprob, Ipopt.Optimizer, constructRK4, silent = true)
     oprob = ODEProblem(sys, u0map, tspan, parammap)
     osol = solve(oprob, SimpleRK4(), dt = 0.01)
+    cprob = CasADiDynamicOptProblem(sys, u0map, tspan, parammap, dt = 0.01)
+    csol = solve(cprob, "ipopt", constructRK4)
     @test jsol.sol.u ≈ osol.u
+    @test csol.sol.u ≈ osol.u
 
     # Implicit method.
     jsol2 = solve(jprob, Ipopt.Optimizer, constructImplicitEuler, silent = true) # 63.031 ms, 26.49 MiB
     osol2 = solve(oprob, ImplicitEuler(), dt = 0.01, adaptive = false) # 129.375 μs, 61.91 KiB
+    jsol2 = solve(jprob, Ipopt.Optimizer, constructImplicitEuler, silent = true) # 63.031 ms, 26.49 MiB
     @test ≈(jsol2.sol.u, osol2.u, rtol = 0.001)
     iprob = InfiniteOptDynamicOptProblem(sys, u0map, tspan, parammap, dt = 0.01)
     isol = solve(iprob, Ipopt.Optimizer,
         derivative_method = InfiniteOpt.FiniteDifference(InfiniteOpt.Backward()),
         silent = true) # 11.540 ms, 4.00 MiB
-    @test ≈(jsol2.sol.u, osol2.u, rtol = 0.001)
+    @test ≈(isol.sol.u, osol2.u, rtol = 0.001)
+    csol2 = solve(cprob, "ipopt", constructImplicitEuler, silent = true)
+    @test ≈(csol2.sol.u, osol2.u, rtol = 0.001)
 
     # With a constraint
     u0map = Pair[]
@@ -51,6 +60,11 @@ const M = ModelingToolkit
     jsol = solve(jprob, Ipopt.Optimizer, constructTsitouras5, silent = true) # 12.190 s, 9.68 GiB
     @test jsol.sol(0.6)[1] ≈ 3.5
     @test jsol.sol(0.3)[1] ≈ 7.0
+
+    cprob = CasADiDynamicOptProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
+    csol = solve(cprob, "ipopt", constructTsitouras5, silent = true)
+    @test csol.sol(0.6)[1] ≈ 3.5
+    @test csol.sol(0.3)[1] ≈ 7.0
 
     iprob = InfiniteOptDynamicOptProblem(
         lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
@@ -66,12 +80,16 @@ const M = ModelingToolkit
     iprob = InfiniteOptDynamicOptProblem(
         lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
     isol = solve(iprob, Ipopt.Optimizer,
-        derivative_method = InfiniteOpt.OrthogonalCollocation(3), silent = true) # 48.564 ms, 9.58 MiB
+        derivative_method = InfiniteOpt.OrthogonalCollocation(3), silent = true)
     @test all(u -> u > [1, 1], isol.sol.u)
 
     jprob = JuMPDynamicOptProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
     jsol = solve(jprob, Ipopt.Optimizer, constructRadauIA3, silent = true) # 12.190 s, 9.68 GiB
     @test all(u -> u > [1, 1], jsol.sol.u)
+
+    cprob = CasADiDynamicOptProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
+    csol = solve(cprob, "ipopt", constructRadauIA3, silent = true)
+    @test all(u -> u > [1, 1], csol.sol.u)
 end
 
 function is_bangbang(input_sol, lbounds, ubounds, rtol = 1e-4)
@@ -109,6 +127,14 @@ end
     @test is_bangbang(jsol.input_sol, [-1.0], [1.0])
     # Test reached final position.
     @test ≈(jsol.sol.u[end][2], 0.25, rtol = 1e-5)
+
+    cprob = CasADiDynamicOptProblem(block, u0map, tspan, parammap; dt = 0.01)
+    csol = solve(cprob, "ipopt", constructVerner8, silent = true)
+    # Linear systems have bang-bang controls
+    @test is_bangbang(csol.input_sol, [-1.0], [1.0])
+    # Test reached final position.
+    @test ≈(csol.sol.u[end][2], 0.25, rtol = 1e-5)
+
     # Test dynamics
     @parameters (u_interp::ConstantInterpolation)(..)
     @mtkbuild block_ode = ODESystem([D(x(t)) ~ v(t), D(v(t)) ~ u_interp(t)], t)
@@ -116,6 +142,7 @@ end
     oprob = ODEProblem(block_ode, u0map, tspan, [u_interp => spline])
     osol = solve(oprob, Vern8(), dt = 0.01, adaptive = false)
     @test ≈(jsol.sol.u, osol.u, rtol = 0.05)
+    @test ≈(csol.sol.u, osol.u, rtol = 0.05)
 
     iprob = InfiniteOptDynamicOptProblem(block, u0map, tspan, parammap; dt = 0.01)
     isol = solve(iprob, Ipopt.Optimizer; silent = true)
@@ -147,6 +174,9 @@ end
     iprob = InfiniteOptDynamicOptProblem(beesys, u0map, tspan, pmap, dt = 0.01)
     isol = solve(iprob, Ipopt.Optimizer; silent = true)
     @test is_bangbang(isol.input_sol, [0.0], [1.0])
+    cprob = CasADiDynamicOptProblem(beesys, u0map, tspan, pmap; dt = 0.01)
+    csol = solve(cprob, "ipopt", constructTsitouras5, silent = true)
+    @test is_bangbang(csol.input_sol, [0.0], [1.0])
 
     @parameters (α_interp::LinearInterpolation)(..)
     eqs = [D(w(t)) ~ -μ * w(t) + b * s * α_interp(t) * w(t),
@@ -159,6 +189,7 @@ end
             Dict(α_interp => ctrl_to_spline(jsol.input_sol, LinearInterpolation))))
     osol = solve(oprob, Tsit5(); dt = 0.01, adaptive = false)
     @test ≈(osol.u, jsol.sol.u, rtol = 0.01)
+    @test ≈(osol.u, csol.sol.u, rtol = 0.01)
     osol2 = solve(oprob, ImplicitEuler(); dt = 0.01, adaptive = false)
     @test ≈(osol2.u, isol.sol.u, rtol = 0.01)
 end
@@ -189,6 +220,10 @@ end
     jprob = JuMPDynamicOptProblem(rocket, u0map, (ts, te), pmap; dt = 0.001, cse = false)
     jsol = solve(jprob, Ipopt.Optimizer, constructRadauIIA5, silent = true)
     @test jsol.sol.u[end][1] > 1.012
+    
+    cprob = CasADiDynamicOptProblem(rocket, u0map, (ts, te), pmap; dt = 0.001, cse = false)
+    csol = solve(cprob, "ipopt"; silent = true)
+    @test csol.sol.u[end][1] > 1.012
 
     iprob = InfiniteOptDynamicOptProblem(
         rocket, u0map, (ts, te), pmap; dt = 0.001)
@@ -205,6 +240,7 @@ end
     oprob = ODEProblem(rocket_ode, u0map, (ts, te), merge(Dict(pmap), interpmap))
     osol = solve(oprob, RadauIIA5(); adaptive = false, dt = 0.001)
     @test ≈(jsol.sol.u, osol.u, rtol = 0.02)
+    @test ≈(csol.sol.u, osol.u, rtol = 0.02)
 
     interpmap1 = Dict(T_interp => ctrl_to_spline(isol.input_sol, CubicSpline))
     oprob1 = ODEProblem(rocket_ode, u0map, (ts, te), merge(Dict(pmap), interpmap1))
@@ -231,6 +267,10 @@ end
     jsol = solve(jprob, Ipopt.Optimizer, constructTsitouras5, silent = true)
     @test isapprox(jsol.sol.t[end], 10.0, rtol = 1e-3)
 
+    cprob = CasADiDynamicOptProblem(rocket, u0map, (0, tf), pmap; steps = 201)
+    csol = solve(cprob, "ipopt", constructTsitouras5, silent = true)
+    @test isapprox(csol.sol.t[end], 10.0, rtol = 1e-3)
+
     iprob = InfiniteOptDynamicOptProblem(rocket, u0map, (0, tf), pmap; steps = 200)
     isol = solve(iprob, Ipopt.Optimizer, silent = true)
     @test isapprox(isol.sol.t[end], 10.0, rtol = 1e-3)
@@ -251,6 +291,10 @@ end
     jprob = JuMPDynamicOptProblem(block, u0map, tspan, parammap; steps = 51)
     jsol = solve(jprob, Ipopt.Optimizer, constructVerner8, silent = true)
     @test isapprox(jsol.sol.t[end], 2.0, atol = 1e-5)
+
+    cprob = CasADiDynamicOptProblem(block, u0map, (0, tf), parammap; steps = 51)
+    csol = solve(cprob, "ipopt", constructVerner8, silent = true)
+    @test isapprox(csol.sol.t[end], 2.0, atol = 1e-5)
 
     iprob = InfiniteOptDynamicOptProblem(block, u0map, tspan, parammap; steps = 51)
     isol = solve(iprob, Ipopt.Optimizer, silent = true)
@@ -289,6 +333,10 @@ end
     jprob = JuMPDynamicOptProblem(cartpole, u0map, tspan, pmap; dt = 0.04)
     jsol = solve(jprob, Ipopt.Optimizer, constructRK4, silent = true)
     @test jsol.sol.u[end] ≈ [π, 0, 0, 0]
+
+    cprob = CasADiDynamicOptProblem(cartpole, u0map, tspan, pmap; dt = 0.04)
+    csol = solve(cprob, "ipopt", constructRK4, silent = true)
+    @test csol.sol.u[end] ≈ [π, 0, 0, 0]
 
     iprob = InfiniteOptDynamicOptProblem(cartpole, u0map, tspan, pmap; dt = 0.04)
     isol = solve(iprob, Ipopt.Optimizer, silent = true)
