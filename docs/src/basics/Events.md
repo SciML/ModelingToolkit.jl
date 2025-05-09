@@ -25,6 +25,67 @@ the event occurs). These can both be specified symbolically, but a more [general
 functional affect](@ref func_affects) representation is also allowed, as described
 below.
 
+## Symbolic Callback Semantics
+
+In callbacks, there is a distinction between values of the unknowns and parameters
+*before* the callback, and the desired values *after* the callback. In MTK, this
+is provided by the `Pre` operator. For example, if we would like to add 1 to an
+unknown `x` in a callback, the equation would look like the following:
+
+```julia
+x ~ Pre(x) + 1
+```
+
+Non `Pre`-d values will be interpreted as values *after* the callback. As such,
+writing
+
+```julia
+x ~ x + 1
+```
+
+will be interpreted as an algebraic equation to be satisfied after the callback.
+Since this equation obviously cannot be satisfied, an error will result.
+
+Callbacks must maintain the consistency of DAEs, meaning that they must satisfy
+all the algebraic equations of the system after their update. However, the affect
+equations often do not fully specify which unknowns/parameters should be modified
+to maintain consistency. To make this clear, MTK uses the following rules:
+
+ 1. All unknowns are treated as modifiable by the callback. In order to enforce that an unknown `x` remains the same, one can add `x ~ Pre(x)` to the affect equations.
+ 2. All parameters are treated as un-modifiable, *unless* they are declared as `discrete_parameters` to the callback. In order to be a discrete parameter, the parameter must be time-dependent (the terminology *discretes* here means [discrete variables](@ref save_discretes)).
+
+For example, consider the following system.
+
+```julia
+@variables x(t) y(t)
+@parameters p(t)
+@mtkbuild sys = ODESystem([x * y ~ p, D(x) ~ 0], t)
+event = [t == 1] => [x ~ Pre(x) + 1]
+```
+
+By default what will happen is that `x` will increase by 1, `p` will remain constant,
+and `y` will change in order to compensate the increase in `x`. But what if we
+wanted to keep `y` constant and change `p` instead? We could use the callback
+constructor as follows:
+
+```julia
+event = SymbolicDiscreteCallback(
+    [t == 1] => [x ~ Pre(x) + 1, y ~ Pre(y)], discrete_parameters = [p])
+```
+
+This way, we enforce that `y` will remain the same, and `p` will change.
+
+!!! warning
+    
+    Symbolic affects come with the guarantee that the state after the callback
+    will be consistent. However, when using [general functional affects](@ref func_affects)
+    or [imperative affects](@ref imp_affects) one must be more careful. In
+    particular, one can pass in `reinitializealg` as a keyword arg to the
+    callback constructor to re-initialize the system. This will default to
+    `SciMLBase.NoInit()` in the case of symbolic affects and `SciMLBase.CheckInit()`
+    in the case of functional affects. This keyword should *not* be provided
+    if the affect is purely symbolic.
+
 ## Continuous Events
 
 The basic purely symbolic continuous event interface to encode *one* continuous
