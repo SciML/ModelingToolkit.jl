@@ -9,6 +9,7 @@ using SymbolicUtils: issym
 using ForwardDiff
 using ModelingToolkit: value
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using Symbolics: unwrap
 
 # Define some variables
 @parameters σ ρ β
@@ -135,19 +136,7 @@ du = zeros(3)
 tgrad_iip(du, u, p, t)
 @test du == [0.0, -u[2], 0.0]
 
-@parameters σ′(t - 1)
-eqs = [D(x) ~ σ′ * (y - x),
-    D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y - β * z * κ]
-@named de = ODESystem(eqs, t)
-test_diffeq_inference("global iv-varying", de, t, (x, y, z), (σ′, ρ, β))
-
-f = generate_function(de, [x, y, z], [σ′, ρ, β], expression = Val{false})[2]
-du = [0.0, 0.0, 0.0]
-f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
-@test du ≈ [11, -3, -7]
-
-@parameters σ(..)
+@parameters (σ::Function)(..)
 eqs = [D(x) ~ σ(t - 1) * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z * κ]
@@ -477,7 +466,7 @@ let
 
     eqs = [D(x) ~ ẋ, D(ẋ) ~ f - k * x - d * ẋ]
     @named sys = ODESystem(eqs, t, [x, ẋ], [d, k])
-    sys, _ = structural_simplify(sys, ([f], []))
+    sys = structural_simplify(sys; inputs = [f])
 
     @test isequal(calculate_control_jacobian(sys),
         reshape(Num[0, 1], 2, 1))
@@ -1294,11 +1283,11 @@ end
     @named sys = ODESystem(
         [D(u) ~ (sum(u) + sum(x) + sum(p) + sum(o)) * x, o ~ prod(u) * x],
         t, [u..., x..., o...], [p...])
-    sys1, = structural_simplify(sys, ([x...], []))
+    sys1 = structural_simplify(sys, inputs = [x...], outputs = [])
     fn1, = ModelingToolkit.generate_function(sys1; expression = Val{false})
     ps = MTKParameters(sys1, [x => 2ones(2), p => 3ones(2, 2)])
     @test_nowarn fn1(ones(4), ps, 4.0)
-    sys2, = structural_simplify(sys, ([x...], []); split = false)
+    sys2 = structural_simplify(sys, inputs = [x...], outputs = [], split = false)
     fn2, = ModelingToolkit.generate_function(sys2; expression = Val{false})
     ps = zeros(8)
     setp(sys2, x)(ps, 2ones(2))
@@ -1407,7 +1396,7 @@ end
            o[2] ~ sum(p) * sum(x)]
 
     @named sys = ODESystem(eqs, t, [u..., x..., o], [p...])
-    sys1, = structural_simplify(sys, ([x...], [o...]), split = false)
+    sys1 = structural_simplify(sys, inputs = [x...], outputs = [o...], split = false)
 
     @test_nowarn ModelingToolkit.build_explicit_observed_function(sys1, u; inputs = [x...])
 
@@ -1729,4 +1718,27 @@ end
         sys, [x + 1, x + 2, x + t], return_inplace = true, expression = true)
     @test obsfn_expr_oop isa Expr
     @test obsfn_expr_iip isa Expr
+end
+
+@testset "`@named` always wraps in `ParentScope`" begin
+    function SysA(; name, var1)
+        @variables x(t)
+        scope = ModelingToolkit.getmetadata(unwrap(var1), ModelingToolkit.SymScope, nothing)
+        @test scope isa ParentScope
+        @test scope.parent isa ParentScope
+        @test scope.parent.parent isa LocalScope
+        return ODESystem(D(x) ~ var1, t; name)
+    end
+    function SysB(; name, var1)
+        @variables x(t)
+        @named subsys = SysA(; var1)
+        return ODESystem(D(x) ~ x, t; systems = [subsys], name)
+    end
+    function SysC(; name)
+        @variables x(t)
+        @named subsys = SysB(; var1 = x)
+        return ODESystem(D(x) ~ x, t; systems = [subsys], name)
+    end
+    @mtkbuild sys = SysC()
+    @test length(unknowns(sys)) == 3
 end

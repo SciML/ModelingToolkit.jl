@@ -7,10 +7,10 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables xx(t) some_input(t) [input = true]
 eqs = [D(xx) ~ some_input]
 @named model = ODESystem(eqs, t)
-@test_throws ExtraVariablesSystemException structural_simplify(model, ((), ()))
+@test_throws ExtraVariablesSystemException structural_simplify(model)
 if VERSION >= v"1.8"
     err = "In particular, the unset input(s) are:\n some_input(t)"
-    @test_throws err structural_simplify(model, ((), ()))
+    @test_throws err structural_simplify(model)
 end
 
 # Test input handling
@@ -50,7 +50,7 @@ end
 @test !is_bound(sys31, sys1.v[2])
 
 # simplification turns input variables into parameters
-ssys, _ = structural_simplify(sys, ([u], []))
+ssys = structural_simplify(sys, inputs = [u], outputs = [])
 @test ModelingToolkit.isparameter(unbound_inputs(ssys)[])
 @test !is_bound(ssys, u)
 @test u ∈ Set(unbound_inputs(ssys))
@@ -88,7 +88,7 @@ fsys4 = flatten(sys4)
 @variables x(t) y(t) [output = true]
 @test isoutput(y)
 @named sys = ODESystem([D(x) ~ -x, y ~ x], t) # both y and x are unbound
-syss = structural_simplify(sys) # This makes y an observed variable
+syss = structural_simplify(sys, outputs = [y]) # This makes y an observed variable
 
 @named sys2 = ODESystem([D(x) ~ -sys.x, y ~ sys.y], t, systems = [sys])
 
@@ -106,7 +106,7 @@ syss = structural_simplify(sys) # This makes y an observed variable
 @test isequal(unbound_outputs(sys2), [y])
 @test isequal(bound_outputs(sys2), [sys.y])
 
-syss = structural_simplify(sys2)
+syss = structural_simplify(sys2, outputs = [sys.y])
 
 @test !is_bound(syss, y)
 @test !is_bound(syss, x)
@@ -165,6 +165,7 @@ end
         ]
 
         @named sys = ODESystem(eqs, t)
+        sys = structural_simplify(sys, inputs = [u])
         f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys; simplify, split)
 
         @test isequal(dvs[], x)
@@ -182,8 +183,8 @@ end
         ]
 
         @named sys = ODESystem(eqs, t)
-        f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(
-            sys, [u], [d]; simplify, split)
+        sys = structural_simplify(sys, inputs = [u], disturbance_inputs = [d])
+        f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys; simplify, split)
 
         @test isequal(dvs[], x)
         @test isempty(ps)
@@ -200,8 +201,9 @@ end
         ]
 
         @named sys = ODESystem(eqs, t)
+        sys = structural_simplify(sys, inputs = [u], disturbance_inputs = [d])
         f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(
-            sys, [u], [d]; simplify, split, disturbance_argument = true)
+            sys; simplify, split, disturbance_argument = true)
 
         @test isequal(dvs[], x)
         @test isempty(ps)
@@ -265,9 +267,9 @@ eqs = [connect_sd(sd, mass1, mass2)
 @named _model = ODESystem(eqs, t)
 @named model = compose(_model, mass1, mass2, sd);
 
+model = structural_simplify(model, inputs = [u])
 f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(model, simplify = true)
 @test length(dvs) == 4
-@test length(ps) == length(parameters(model))
 p = MTKParameters(io_sys, [io_sys.u => NaN])
 x = ModelingToolkit.varmap_to_vars(
     merge(ModelingToolkit.defaults(model),
@@ -281,7 +283,7 @@ i = findfirst(isequal(u[1]), out)
 @variables x(t) u(t) [input = true]
 eqs = [D(x) ~ u]
 @named sys = ODESystem(eqs, t)
-@test_nowarn structural_simplify(sys, ([u], []))
+@test_nowarn structural_simplify(sys, inputs = [u], outputs = [])
 
 #=
 ## Disturbance input handling
@@ -366,9 +368,9 @@ eqs = [D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃ + u1
 @named sys = ODESystem(eqs, t)
 m_inputs = [u[1], u[2]]
 m_outputs = [y₂]
-sys_simp, input_idxs = structural_simplify(sys, (; inputs = m_inputs, outputs = m_outputs))
+sys_simp = structural_simplify(sys, inputs = m_inputs, outputs = m_outputs)
 @test isequal(unknowns(sys_simp), collect(x[1:2]))
-@test length(input_idxs) == 2
+@test length(inputs(sys_simp)) == 2
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/1577
 @named c = Constant(; k = 2)
@@ -389,7 +391,7 @@ sys = structural_simplify(model)
 
 ## Disturbance models when plant has multiple inputs
 using ModelingToolkit, LinearAlgebra
-using ModelingToolkit: DisturbanceModel, io_preprocessing, get_iv, get_disturbance_system
+using ModelingToolkit: DisturbanceModel, get_iv, get_disturbance_system
 using ModelingToolkitStandardLibrary.Blocks
 A, C = [randn(2, 2) for i in 1:2]
 B = [1.0 0; 0 1.0]
@@ -433,6 +435,7 @@ matrices = ModelingToolkit.reorder_unknowns(
     ]
 
     @named sys = ODESystem(eqs, t)
+    sys = structural_simplify(sys, inputs = [u])
     (; io_sys,) = ModelingToolkit.generate_control_function(sys, simplify = true)
     obsfn = ModelingToolkit.build_explicit_observed_function(
         io_sys, [x + u * t]; inputs = [u])
@@ -444,9 +447,9 @@ end
     @constants c = 2.0
     @variables x(t)
     eqs = [D(x) ~ c * x]
-    @named sys = ODESystem(eqs, t, [x], [])
+    @mtkbuild sys = ODESystem(eqs, t, [x], [])
 
-    f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys, simplify = true)
+    f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys)
     @test f[1]([0.5], nothing, MTKParameters(io_sys, []), 0.0) ≈ [1.0]
 end
 
@@ -455,7 +458,8 @@ end
     @parameters p(::Real) = (x -> 2x)
     eqs = [D(x) ~ -x + p(u)]
     @named sys = ODESystem(eqs, t)
-    f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys, simplify = true)
+    sys = structural_simplify(sys, inputs = [u])
+    f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys)
     p = MTKParameters(io_sys, [])
     u = [1.0]
     x = [1.0]
