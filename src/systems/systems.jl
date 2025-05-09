@@ -157,9 +157,9 @@ function __structural_simplify(sys::AbstractSystem; simplify = false,
             get_iv(ode_sys), unknowns(ode_sys), parameters(ode_sys);
             name = nameof(ode_sys), is_scalar_noise, observed = observed(ode_sys), defaults = defaults(sys),
             parameter_dependencies = parameter_dependencies(sys), assertions = assertions(sys),
-            guesses = guesses(sys), initialization_eqs = initialization_equations(sys))
-        @set! ssys.tearing_state = get_tearing_state(ode_sys)
-        return ssys
+            guesses = guesses(sys), initialization_eqs = initialization_equations(sys),
+            continuous_events = continuous_events(sys),
+            discrete_events = discrete_events(sys))
     end
 end
 
