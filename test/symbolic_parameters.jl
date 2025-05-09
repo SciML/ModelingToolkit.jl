@@ -28,7 +28,7 @@ resolved = ModelingToolkit.varmap_to_vars(Dict(), parameters(ns),
 
 prob = NonlinearProblem(complete(ns), [u => 1.0], Pair[])
 @test prob.u0 == [1.0, 1.1, 0.9]
-@show sol = solve(prob, NewtonRaphson())
+sol = solve(prob, NewtonRaphson())
 
 @variables a
 @parameters b
@@ -43,12 +43,12 @@ res = ModelingToolkit.varmap_to_vars(Dict(), parameters(top),
 top = complete(top)
 prob = NonlinearProblem(top, [unknowns(ns, u) => 1.0, a => 1.0], [])
 @test prob.u0 == [1.0, 0.5, 1.1, 0.9]
-@show sol = solve(prob, NewtonRaphson())
+sol = solve(prob, NewtonRaphson())
 
 # test NullParameters+defaults
 prob = NonlinearProblem(top, [unknowns(ns, u) => 1.0, a => 1.0])
 @test prob.u0 == [1.0, 0.5, 1.1, 0.9]
-@show sol = solve(prob, NewtonRaphson())
+sol = solve(prob, NewtonRaphson())
 
 # test initial conditions and parameters at the problem level
 pars = @parameters(begin

@@ -10,7 +10,8 @@ using JET
 @parameters a b c(t) d::Integer e[1:3] f[1:3, 1:3]::Int g::Vector{AbstractFloat} h::String
 @named sys = ODESystem(
     Equation[], t, [], [a, c, d, e, f, g, h], parameter_dependencies = [b ~ 2a],
-    continuous_events = [[a ~ 0] => [c ~ 0]], defaults = Dict(a => 0.0))
+    continuous_events = [ModelingToolkit.SymbolicContinuousCallback(
+        [a ~ 0] => [c ~ 0], discrete_parameters = c)], defaults = Dict(a => 0.0))
 sys = complete(sys)
 
 ivs = Dict(c => 3a, d => 4, e => [5.0, 6.0, 7.0],
