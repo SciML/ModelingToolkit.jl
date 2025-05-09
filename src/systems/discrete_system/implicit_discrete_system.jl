@@ -379,6 +379,12 @@ function SciMLBase.ImplicitDiscreteFunction{iip, specialize}(
     f(u_next, u, p, t) = f_oop(u_next, u, p, t)
     f(resid, u_next, u, p, t) = f_iip(resid, u_next, u, p, t)
 
+    if length(dvs) == length(equations(sys))
+        resid_prototype = nothing
+    else
+        resid_prototype = calculate_resid_prototype(length(equations(sys)), u0, p)
+    end
+
     if specialize === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
             error("u0, p, and t must be specified for FunctionWrapperSpecialize on ImplicitDiscreteFunction.")
@@ -393,6 +399,7 @@ function SciMLBase.ImplicitDiscreteFunction{iip, specialize}(
         sys = sys,
         observed = observedfun,
         analytic = analytic,
+        resid_prototype = resid_prototype,
         kwargs...)
 end
 
