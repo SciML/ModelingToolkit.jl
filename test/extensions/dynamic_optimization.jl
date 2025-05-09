@@ -328,7 +328,7 @@ end
     tspan = (0, tf)
 
     @named cartpole = ODESystem(eqs, t; costs, constraints = cons)
-    cartpole, input_idxs = structural_simplify(cartpole; inputs = [u])
+    cartpole = structural_simplify(cartpole; inputs = [u])
 
     u0map = [D(x(t)) => 0.0, D(θ(t)) => 0.0, θ(t) => 0.0, x(t) => 0.0]
     pmap = [mₖ => 1.0, mₚ => 0.2, l => 0.5, g => 9.81, u => 0]
