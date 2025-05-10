@@ -231,3 +231,31 @@ end
     # compare to analytical solution (x(t) = v*t, y(t) = v*t - g*t^2/2)
     @test all(isapprox.(sol[Mx.y], sol[Mx.x - g * (Mx.t_units)^2 / 2]; atol = 1e-10))
 end
+
+@testset "Change independent variable, no equations" begin
+    # make this "look" like the standard library RealInput
+    @mtkmodel Input begin
+        @variables begin
+            u(t)
+        end
+    end
+    @named input_sys = Input()
+    input_sys = complete(input_sys)
+    # test no failures
+    @test change_independent_variable(input_sys, input_sys.u) isa ODESystem
+
+    @mtkmodel NestedInput begin
+        @components begin
+            in = Input()
+        end
+        @variables begin
+            x(t)
+        end
+        @equations begin
+            D(x) ~ in.u
+        end
+    end
+    @named nested_input_sys = NestedInput()
+    nested_input_sys = complete(nested_input_sys; flatten = false)
+    @test change_independent_variable(nested_input_sys, nested_input_sys.x) isa ODESystem
+end

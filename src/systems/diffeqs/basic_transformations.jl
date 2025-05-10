@@ -155,7 +155,7 @@ function change_independent_variable(
 
     # Create a utility that performs the chain rule on an expression, followed by insertion of the new independent variable:
     # e.g. (d/dt)(f(t)) -> (d/dt)(f(u(t))) -> df(u(t))/du(t) * du(t)/dt -> df(u)/du * uˍt(u)
-    function transform(ex)
+    function transform(ex::T) where {T}
         # 1) Replace the argument of every function; e.g. f(t) -> f(u(t))
         for var in vars(ex; op = Nothing) # loop over all variables in expression (op = Nothing prevents interpreting "D(f(t))" as one big variable)
             is_function_of_iv1 = iscall(var) && isequal(only(arguments(var)), iv1) # of the form f(t)?
@@ -175,7 +175,7 @@ function change_independent_variable(
         # 3) Set new independent variable
         ex = substitute(ex, iv2_of_iv1 => iv2; fold) # set e.g. u(t) -> u everywhere
         ex = substitute(ex, iv1 => iv1_of_iv2; fold) # set e.g. t -> t(u) everywhere
-        return ex
+        return ex::T
     end
 
     # Use the utility function to transform everything in the system!
