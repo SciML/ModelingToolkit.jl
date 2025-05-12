@@ -158,7 +158,7 @@ function change_independent_variable(
     function transform(ex::T) where {T}
         # 1) Replace the argument of every function; e.g. f(t) -> f(u(t))
         for var in vars(ex; op = Nothing) # loop over all variables in expression (op = Nothing prevents interpreting "D(f(t))" as one big variable)
-            is_function_of_iv1 = iscall(var) && isequal(first(arguments(var)), iv1) # of the form f(t)?
+            is_function_of_iv1 = iscall(var) && isequal(only(arguments(var)), iv1) # of the form f(t)?
             if is_function_of_iv1 && !isequal(var, iv2_of_iv1) # prevent e.g. u(t) -> u(u(t))
                 var_of_iv1 = var # e.g. f(t)
                 var_of_iv2_of_iv1 = substitute(var_of_iv1, iv1 => iv2_of_iv1) # e.g. f(u(t))
