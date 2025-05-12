@@ -153,13 +153,25 @@ function change_independent_variable(
     @set! sys.eqs = [get_eqs(sys); eqs] # add extra equations we derived
     @set! sys.unknowns = [get_unknowns(sys); [iv1, div2_of_iv1]] # add new variables, will be transformed to e.g. t(u) and uˍt(u)
 
+    # A utility function that returns whether var (e.g. f(t)) is a function of iv (e.g. t)
+    function is_function_of(var, iv)
+        # Peel off outer calls to find the argument of the function of
+        if iscall(var) && operation(var) === getindex # handle array variables
+            var = arguments(var)[1] # (f(t))[1] -> f(t)
+        end
+        if iscall(var)
+            var = only(arguments(var)) # e.g. f(t) -> t
+            return isequal(var, iv)
+        end
+        return false
+    end
+
     # Create a utility that performs the chain rule on an expression, followed by insertion of the new independent variable:
     # e.g. (d/dt)(f(t)) -> (d/dt)(f(u(t))) -> df(u(t))/du(t) * du(t)/dt -> df(u)/du * uˍt(u)
     function transform(ex::T) where {T}
         # 1) Replace the argument of every function; e.g. f(t) -> f(u(t))
         for var in vars(ex; op = Nothing) # loop over all variables in expression (op = Nothing prevents interpreting "D(f(t))" as one big variable)
-            is_function_of_iv1 = iscall(var) && isequal(only(arguments(var)), iv1) # of the form f(t)?
-            if is_function_of_iv1 && !isequal(var, iv2_of_iv1) # prevent e.g. u(t) -> u(u(t))
+            if is_function_of(var, iv1) && !isequal(var, iv2_of_iv1) # of the form f(t)? but prevent e.g. u(t) -> u(u(t))
                 var_of_iv1 = var # e.g. f(t)
                 var_of_iv2_of_iv1 = substitute(var_of_iv1, iv1 => iv2_of_iv1) # e.g. f(u(t))
                 ex = substitute(ex, var_of_iv1 => var_of_iv2_of_iv1; fold)
