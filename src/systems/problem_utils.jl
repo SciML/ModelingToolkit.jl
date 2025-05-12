@@ -1312,7 +1312,7 @@ function process_SciMLProblem(
             t0 = zero(floatT)
         end
         initialization_data = SciMLBase.remake_initialization_data(
-            kwargs.initialization_data, kwargs, u0, t0, p, u0, p)
+            sys, kwargs, u0, t0, p, u0, p)
         kwargs = merge(kwargs, (; initialization_data))
     end
 
