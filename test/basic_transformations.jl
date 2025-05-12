@@ -287,3 +287,20 @@ end
     @test all(isapprox.(sol[ss.t], sol[ss.y]; atol = 1e-10))
     @test all(sol[ss.x][2:end] .< sol[ss.x][1])
 end
+
+@testset "Change independent variable with array variables" begin
+    @variables x(t) y(t) z(t)[1:2]
+    eqs = [
+        D(x) ~ 2,
+        z ~ ModelingToolkit.scalarize.([sin(y), cos(y)]),
+        D(y) ~ z[1]^2 + z[2]^2
+    ]
+    @named sys = ODESystem(eqs, t)
+    sys = complete(sys)
+    new_sys = change_independent_variable(sys, sys.x; add_old_diff = true)
+    ss_new_sys = structural_simplify(new_sys; allow_symbolic = true)
+    u0 = [new_sys.y => 0.5, new_sys.t => 0.0]
+    prob = ODEProblem(ss_new_sys, u0, (0.0, 0.5), [])
+    sol = solve(prob, Tsit5(); reltol = 1e-5)
+    @test sol[new_sys.y][end] ≈ 0.75
+end
