@@ -285,7 +285,7 @@ function (linfun::LinearizationFunction)(u, p, t)
         linfun.num_states == length(u) ||
             error("Number of unknown variables ($(linfun.num_states)) does not match the number of input unknowns ($(length(u)))")
         integ_cache = (linfun.caches,)
-        integ = MockIntegrator{true}(u, p, t, integ_cache, nothing)
+        integ = MockIntegrator{true}(u, p, t, fun, integ_cache, nothing)
         u, p, success = SciMLBase.get_initial_values(
             linfun.prob, integ, fun, linfun.initializealg, Val(true);
             linfun.initialize_kwargs...)
@@ -325,7 +325,7 @@ Mock `DEIntegrator` to allow using `CheckInit` without having to create a new in
 
 $(TYPEDFIELDS)
 """
-struct MockIntegrator{iip, U, P, T, C, O} <: SciMLBase.DEIntegrator{Nothing, iip, U, T}
+struct MockIntegrator{iip, U, P, T, F, C, O} <: SciMLBase.DEIntegrator{Nothing, iip, U, T}
     """
     The state vector.
     """
@@ -339,6 +339,10 @@ struct MockIntegrator{iip, U, P, T, C, O} <: SciMLBase.DEIntegrator{Nothing, iip
     """
     t::T
     """
+    The wrapped `SciMLFunction`.
+    """
+    f::F
+    """
     The integrator cache.
     """
     cache::C
@@ -348,8 +352,9 @@ struct MockIntegrator{iip, U, P, T, C, O} <: SciMLBase.DEIntegrator{Nothing, iip
     opts::O
 end
 
-function MockIntegrator{iip}(u::U, p::P, t::T, cache::C, opts::O) where {iip, U, P, T, C, O}
-    return MockIntegrator{iip, U, P, T, C, O}(u, p, t, cache, opts)
+function MockIntegrator{iip}(
+        u::U, p::P, t::T, f::F, cache::C, opts::O) where {iip, U, P, T, F, C, O}
+    return MockIntegrator{iip, U, P, T, F, C, O}(u, p, t, f, cache, opts)
 end
 
 SymbolicIndexingInterface.state_values(integ::MockIntegrator) = integ.u
