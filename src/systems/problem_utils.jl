@@ -822,7 +822,7 @@ end
     $(TYPEDSIGNATURES)
 
 A function to be used as `update_initializeprob!` in `OverrideInitData`. Requires
-`is_update_oop = Val{true}` to be passed to `update_initializeprob!`.
+`is_update_oop = Val(true)` to be passed to `update_initializeprob!`.
 """
 function update_initializeprob!(initprob, prob)
     p = get_scimlfn(prob).initialization_data.metadata.oop_reconstruct_u0_p.getter(
@@ -1063,7 +1063,7 @@ function maybe_build_initialization_problem(
     return (;
         initialization_data = SciMLBase.OverrideInitData(
             initializeprob, update_initializeprob!, initializeprobmap,
-            initializeprobpmap; metadata = meta, is_update_oop = Val{true}))
+            initializeprobpmap; metadata = meta, is_update_oop = Val(true)))
 end
 
 """
