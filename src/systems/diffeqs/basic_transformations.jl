@@ -178,9 +178,22 @@ function change_independent_variable(
         return ex::T
     end
 
+    # overload to specifically handle equations, which can be an equation or a connection
+    function transform(eq::Equation, systems_map)
+        if eq.rhs isa Connection
+            eq = connect((systems_map[nameof(s)] for s in eq.rhs.systems)...)
+        else
+            eq = transform(eq)
+        end
+        return eq::Equation
+    end
+
     # Use the utility function to transform everything in the system!
     function transform(sys::AbstractODESystem)
-        eqs = map(transform, get_eqs(sys))
+        systems = map(transform, get_systems(sys)) # recurse through subsystems
+        # transform equations and connections
+        systems_map = Dict(get_name(s) => s for s in systems)
+        eqs = map(eq -> transform(eq, systems_map)::Equation, get_eqs(sys))
         unknowns = map(transform, get_unknowns(sys))
         unknowns = filter(var -> !isequal(var, iv2), unknowns) # remove e.g. u
         ps = map(transform, get_ps(sys))
@@ -191,19 +204,19 @@ function change_independent_variable(
         defaults = Dict(transform(var) => transform(val)
         for (var, val) in get_defaults(sys))
         guesses = Dict(transform(var) => transform(val) for (var, val) in get_guesses(sys))
+        connector_type = get_connector_type(sys)
         assertions = Dict(transform(ass) => msg for (ass, msg) in get_assertions(sys))
-        systems = get_systems(sys) # save before reconstructing system
         wascomplete = iscomplete(sys) # save before reconstructing system
         sys = typeof(sys)( # recreate system with transformed fields
             eqs, iv2, unknowns, ps; observed, initialization_eqs,
-            parameter_dependencies, defaults, guesses,
+            parameter_dependencies, defaults, guesses, connector_type,
             assertions, name = nameof(sys), description = description(sys)
         )
-        systems = map(transform, systems) # recurse through subsystems
         sys = compose(sys, systems) # rebuild hierarchical system
         if wascomplete
             wasflat = isempty(systems)
-            sys = complete(sys; flatten = wasflat) # complete output if input was complete
+            wassplit = is_split(sys)
+            sys = complete(sys; split = wassplit, flatten = wasflat) # complete output if input was complete
         end
         return sys
     end
