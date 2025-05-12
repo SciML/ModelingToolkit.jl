@@ -438,9 +438,12 @@ struct SymbolicDiscreteCallback <: AbstractCallback
         c = is_timed_condition(condition) ? condition : value(scalarize(condition))
 
         if isnothing(reinitializealg)
-            reinitializealg = SciMLBase.CheckInit()
-        else
-            reinitializealg = SciMLBase.NoInit()
+            if any(a -> (a isa FunctionalAffect || a isa ImperativeAffect),
+                [affect, initialize, finalize])
+                reinitializealg = SciMLBase.CheckInit()
+            else
+                reinitializealg = SciMLBase.NoInit()
+            end
         end
         new(c, make_affect(affect; kwargs...),
             make_affect(initialize; kwargs...),
