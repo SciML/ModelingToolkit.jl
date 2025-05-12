@@ -29,8 +29,8 @@ daesolvers = [Ascher2, Ascher4, Ascher6]
 
     for solver in solvers
         sol = solve(bvp, solver(), dt = 0.01)
-        @test_broken isapprox(sol.u[end], osol.u[end]; atol = 0.01)
-        @test_broken sol.u[1] == [1.0, 2.0]
+        @test isapprox(sol.u[end], osol.u[end]; atol = 0.01)
+        @test sol.u[1] == [1.0, 2.0]
     end
 
     # Test out of place
@@ -39,8 +39,8 @@ daesolvers = [Ascher2, Ascher4, Ascher6]
 
     for solver in solvers
         sol = solve(bvp2, solver(), dt = 0.01)
-        @test_broken isapprox(sol.u[end], osol.u[end]; atol = 0.01)
-        @test_broken sol.u[1] == [1.0, 2.0]
+        @test isapprox(sol.u[end], osol.u[end]; atol = 0.01)
+        @test sol.u[1] == [1.0, 2.0]
     end
 end
 

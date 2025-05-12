@@ -61,7 +61,8 @@ const M = ModelingToolkit
     @test jsol.sol(0.6)[1] ≈ 3.5
     @test jsol.sol(0.3)[1] ≈ 7.0
 
-    cprob = CasADiDynamicOptProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
+    cprob = CasADiDynamicOptProblem(
+        lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
     csol = solve(cprob, "ipopt", constructTsitouras5, silent = true)
     @test csol.sol(0.6)[1] ≈ 3.5
     @test csol.sol(0.3)[1] ≈ 7.0
@@ -87,7 +88,8 @@ const M = ModelingToolkit
     jsol = solve(jprob, Ipopt.Optimizer, constructRadauIA3, silent = true) # 12.190 s, 9.68 GiB
     @test all(u -> u > [1, 1], jsol.sol.u)
 
-    cprob = CasADiDynamicOptProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
+    cprob = CasADiDynamicOptProblem(
+        lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
     csol = solve(cprob, "ipopt", constructRadauIA3, silent = true)
     @test all(u -> u > [1, 1], csol.sol.u)
 end
@@ -220,7 +222,7 @@ end
     jprob = JuMPDynamicOptProblem(rocket, u0map, (ts, te), pmap; dt = 0.001, cse = false)
     jsol = solve(jprob, Ipopt.Optimizer, constructRadauIIA5, silent = true)
     @test jsol.sol.u[end][1] > 1.012
-    
+
     cprob = CasADiDynamicOptProblem(rocket, u0map, (ts, te), pmap; dt = 0.001, cse = false)
     csol = solve(cprob, "ipopt"; silent = true)
     @test csol.sol.u[end][1] > 1.012
