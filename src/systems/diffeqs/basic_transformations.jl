@@ -53,17 +53,6 @@ function liouville_transform(sys::AbstractODESystem; kwargs...)
     )
 end
 
-function split_eqs_connections(eqs_in::Vector{<:Equation})
-    eqs = Equation[]
-    cons = Equation[]
-
-    for eq in eqs_in
-        eq.lhs isa Connection ? push!(cons, eq) : push!(eqs, eq)
-    end
-
-    return eqs, cons
-end
-
 """
     change_independent_variable(
         sys::AbstractODESystem, iv, eqs = [];
