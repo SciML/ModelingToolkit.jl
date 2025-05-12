@@ -219,6 +219,8 @@ function change_independent_variable(
         connector_type = get_connector_type(sys)
         assertions = Dict(transform(ass) => msg for (ass, msg) in get_assertions(sys))
         wascomplete = iscomplete(sys) # save before reconstructing system
+        wassplit = is_split(sys)
+        wasflat = isempty(systems)
         sys = typeof(sys)( # recreate system with transformed fields
             eqs, iv2, unknowns, ps; observed, initialization_eqs,
             parameter_dependencies, defaults, guesses, connector_type,
@@ -226,8 +228,6 @@ function change_independent_variable(
         )
         sys = compose(sys, systems) # rebuild hierarchical system
         if wascomplete
-            wasflat = isempty(systems)
-            wassplit = is_split(sys)
             sys = complete(sys; split = wassplit, flatten = wasflat) # complete output if input was complete
         end
         return sys
