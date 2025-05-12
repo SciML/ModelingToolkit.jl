@@ -178,7 +178,7 @@ function change_independent_variable(
         return ex::T
     end
 
-    # overload to specifically handle equations, which can be an equation of a connection
+    # overload to specifically handle equations, which can be an equation or a connection
     function transform(eq::Equation, systems_map)
         if eq.rhs isa Connection
             eq = connect((systems_map[nameof(s)] for s in eq.rhs.systems)...)
