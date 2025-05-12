@@ -53,6 +53,17 @@ function liouville_transform(sys::AbstractODESystem; kwargs...)
     )
 end
 
+function split_eqs_connections(eqs_in::Vector{<:Equation})
+    eqs = Equation[]
+    cons = Equation[]
+
+    for eq in eqs_in
+        eq.lhs isa Connection ? push!(cons, eq) : push!(eqs, eq)
+    end
+
+    return eqs, cons
+end
+
 """
     change_independent_variable(
         sys::AbstractODESystem, iv, eqs = [];
@@ -158,7 +169,7 @@ function change_independent_variable(
     function transform(ex::T) where {T}
         # 1) Replace the argument of every function; e.g. f(t) -> f(u(t))
         for var in vars(ex; op = Nothing) # loop over all variables in expression (op = Nothing prevents interpreting "D(f(t))" as one big variable)
-            is_function_of_iv1 = iscall(var) && isequal(only(arguments(var)), iv1) # of the form f(t)?
+            is_function_of_iv1 = iscall(var) && isequal(first(arguments(var)), iv1) # of the form f(t)?
             if is_function_of_iv1 && !isequal(var, iv2_of_iv1) # prevent e.g. u(t) -> u(u(t))
                 var_of_iv1 = var # e.g. f(t)
                 var_of_iv2_of_iv1 = substitute(var_of_iv1, iv1 => iv2_of_iv1) # e.g. f(u(t))
@@ -178,9 +189,22 @@ function change_independent_variable(
         return ex::T
     end
 
+    # overload to specifically handle equations, which can be an equation of a connection
+    function transform(eq::Equation, systems_map)
+        if eq.rhs isa Connection
+            eq = connect((systems_map[nameof(s)] for s in eq.rhs.systems)...)
+        else
+            eq = transform(eq)
+        end
+        return eq::Equation
+    end
+
     # Use the utility function to transform everything in the system!
     function transform(sys::AbstractODESystem)
-        eqs = map(transform, get_eqs(sys))
+        systems = map(transform, get_systems(sys)) # recurse through subsystems
+        # transform equations and connections
+        systems_map = Dict(get_name(s) => s for s in systems)
+        eqs = map(eq -> transform(eq, systems_map)::Equation, get_eqs(sys))
         unknowns = map(transform, get_unknowns(sys))
         unknowns = filter(var -> !isequal(var, iv2), unknowns) # remove e.g. u
         ps = map(transform, get_ps(sys))
@@ -191,19 +215,19 @@ function change_independent_variable(
         defaults = Dict(transform(var) => transform(val)
         for (var, val) in get_defaults(sys))
         guesses = Dict(transform(var) => transform(val) for (var, val) in get_guesses(sys))
+        connector_type = get_connector_type(sys)
         assertions = Dict(transform(ass) => msg for (ass, msg) in get_assertions(sys))
-        systems = get_systems(sys) # save before reconstructing system
         wascomplete = iscomplete(sys) # save before reconstructing system
         sys = typeof(sys)( # recreate system with transformed fields
             eqs, iv2, unknowns, ps; observed, initialization_eqs,
-            parameter_dependencies, defaults, guesses,
+            parameter_dependencies, defaults, guesses, connector_type,
             assertions, name = nameof(sys), description = description(sys)
         )
-        systems = map(transform, systems) # recurse through subsystems
         sys = compose(sys, systems) # rebuild hierarchical system
         if wascomplete
             wasflat = isempty(systems)
-            sys = complete(sys; flatten = wasflat) # complete output if input was complete
+            wassplit = is_split(sys)
+            sys = complete(sys; split = wassplit, flatten = wasflat) # complete output if input was complete
         end
         return sys
     end

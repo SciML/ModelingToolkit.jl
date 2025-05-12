@@ -1,4 +1,5 @@
 using ModelingToolkit, OrdinaryDiffEq, DataInterpolations, DynamicQuantities, Test
+using ModelingToolkitStandardLibrary.Blocks: RealInput, RealOutput
 
 @independent_variables t
 D = Differential(t)
@@ -258,4 +259,31 @@ end
     @named nested_input_sys = NestedInput()
     nested_input_sys = complete(nested_input_sys; flatten = false)
     @test change_independent_variable(nested_input_sys, nested_input_sys.x) isa ODESystem
+end
+
+@testset "Change of variables, connections" begin
+    @mtkmodel ConnectSys begin
+        @components begin
+            in = RealInput()
+            out = RealOutput()
+        end
+        @variables begin
+            x(t)
+            y(t)
+        end
+        @equations begin
+            connect(in, out)
+            in.u ~ x
+            D(x) ~ -out.u
+            D(y) ~ 1
+        end
+    end
+    @named sys = ConnectSys()
+    sys = complete(sys; flatten = false)
+    new_sys = change_independent_variable(sys, sys.y; add_old_diff = true)
+    ss = structural_simplify(new_sys; allow_symbolic = true)
+    prob = ODEProblem(ss, [ss.t => 0.0, ss.x => 1.0], (0.0, 1.0))
+    sol = solve(prob, Tsit5(); reltol = 1e-5)
+    @test all(isapprox.(sol[ss.t], sol[ss.y]; atol = 1e-10))
+    @test all(sol[ss.x][2:end] .< sol[ss.x][1])
 end
