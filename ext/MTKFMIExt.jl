@@ -238,7 +238,7 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
         finalize_affect = MTK.FunctionalAffect(fmiFinalize!, [], [wrapper], [])
         step_affect = MTK.FunctionalAffect(Returns(nothing), [], [], [])
         instance_management_callback = MTK.SymbolicDiscreteCallback(
-            (t != t - 1), step_affect; finalize = finalize_affect, reinitializealg)
+            (t == t - 1), step_affect; finalize = finalize_affect, reinitializealg = SciMLBase.NoInit())
 
         push!(params, wrapper)
         append!(observed, der_observed)
