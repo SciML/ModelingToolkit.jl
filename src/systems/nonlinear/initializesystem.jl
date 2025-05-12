@@ -601,7 +601,7 @@ function promote_u0_p(u0, p::MTKParameters, t0)
     return u0, p
 end
 
-function promote_u0_p(u0, p::AbstractArray, t0)
+function promote_u0_p(u0, p, t0)
     return DiffEqBase.promote_u0(u0, p, t0), DiffEqBase.promote_u0(p, u0, t0)
 end
 
