@@ -349,7 +349,8 @@ export AnalysisPoint, get_sensitivity_function, get_comp_sensitivity_function,
 function FMIComponent end
 
 include("systems/optimal_control_interface.jl")
-export AbstractDynamicOptProblem, JuMPDynamicOptProblem, InfiniteOptDynamicOptProblem, CasADiDynamicOptProblem
+export AbstractDynamicOptProblem, JuMPDynamicOptProblem, InfiniteOptDynamicOptProblem,
+       CasADiDynamicOptProblem
 export DynamicOptSolution
 
 end # module
