@@ -176,8 +176,6 @@ include("systems/diffeqs/first_order_transform.jl")
 include("systems/diffeqs/modelingtoolkitize.jl")
 include("systems/diffeqs/basic_transformations.jl")
 
-include("systems/jumps/jumpsystem.jl")
-
 include("systems/pde/pdesystem.jl")
 
 include("systems/sparsematrixclil.jl")
@@ -265,7 +263,6 @@ export SystemStructure
 export DiscreteProblem, DiscreteFunction, DiscreteFunctionExpr
 export ImplicitDiscreteProblem, ImplicitDiscreteFunction,
        ImplicitDiscreteFunctionExpr
-export JumpSystem
 export ODEProblem, SDEProblem
 export NonlinearFunction, NonlinearFunctionExpr
 export NonlinearProblem, NonlinearProblemExpr
