@@ -447,3 +447,57 @@ function add_accumulations(sys::System, vars::Vector{<:Pair})
     @set! sys.defaults = merge(get_defaults(sys), Dict(a => 0.0 for a in avars))
     return sys
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given a system with noise in the form of noise equation (`get_noise_eqs(sys) !== nothing`)
+return an equivalent system which represents the noise using brownian variables.
+
+# Keyword Arguments
+
+- `names`: The name(s) to use for the brownian variables. If this is a `Symbol`, variables
+  with the given name and successive numeric `_i` suffixes will be used. If a `Vector`,
+  this must have appropriate length for the noise equations of the system. The
+  corresponding number of brownian variables are created with the given names.
+"""
+function noise_to_brownians(sys::System; names::Union{Symbol, Vector{Symbol}} = :α)
+    neqs = get_noise_eqs(sys)
+    if neqs === nothing
+        throw(ArgumentError("Expected a system with `noise_eqs`."))
+    end
+    if !isempty(get_systems(sys))
+        throw(ArgumentError("The system must be flattened."))
+    end
+    # vector means diagonal noise
+    nbrownians = ndims(neqs) == 1 ? length(neqs) : size(neqs, 2)
+    if names isa Symbol
+        names = [Symbol(names, :_, i) for i in 1:nbrownians]
+    end
+    if length(names) != nbrownians
+        throw(ArgumentError("""
+        The system has $nbrownians brownian variables. Received $(length(names)) names \
+        for the brownian variables. Provide $nbrownians names or a single `Symbol` to use \
+        an array variable of the appropriately length.
+        """))
+    end
+    brownvars = map(names) do name
+        only(@brownian $name)
+    end
+
+    terms = if ndims(neqs) == 1
+        neqs .* brownvars
+    else
+        neqs * brownvars
+    end
+
+    eqs = map(get_eqs(sys), terms) do eq, term
+        eq.lhs ~ eq.rhs + term
+    end
+
+    @set! sys.eqs = eqs
+    @set! sys.brownians = brownvars
+    @set! sys.noise_eqs = nothing
+
+    return sys
+end
