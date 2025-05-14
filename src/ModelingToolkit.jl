@@ -216,11 +216,6 @@ include("inputoutput.jl")
 
 include("adjoints.jl")
 
-for S in subtypes(ModelingToolkit.AbstractSystem)
-    S = nameof(S)
-    @eval convert_system(::Type{<:$S}, sys::$S) = sys
-end
-
 const t_nounits = let
     only(@independent_variables t)
 end
@@ -274,8 +269,8 @@ export AbstractTimeDependentSystem,
        AbstractTimeIndependentSystem,
        AbstractMultivariateSystem
 
-export ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system,
-       System, OptimizationSystem, JumpSystem, SDESystem
+export ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system_indepvar,
+       System, OptimizationSystem, JumpSystem, SDESystem, NonlinearSystem
 export DAEFunctionExpr, DAEProblemExpr
 export SDEFunction, SDEFunctionExpr, SDEProblemExpr
 export SystemStructure
