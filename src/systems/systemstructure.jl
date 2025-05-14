@@ -936,7 +936,9 @@ function mtkcompile!(state::TearingState; simplify = false,
             deleteat!(additional_passes, discrete_pass_idx)
             # in the case of a hybrid system, the discrete_compile pass should take the currents of sys.discrete_subsystems
             # and modifies discrete_subsystems to bea tuple of the io and anything else, while adding or manipulating the rest of sys as needed
-            return discrete_compile(sys, tss[[i for i in eachindex(tss) if i != continuous_id]], clocked_inputs, ci)
+            return discrete_compile(
+                sys, tss[[i for i in eachindex(tss) if i != continuous_id]],
+                clocked_inputs, ci, id_to_clock)
         end
         throw(HybridSystemNotSupportedException("""
         Hybrid continuous-discrete systems are currently not supported with \
