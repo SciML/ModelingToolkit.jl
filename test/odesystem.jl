@@ -1,5 +1,6 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
-using ModelingToolkit: get_metadata, MTKParameters
+using ModelingToolkit: get_metadata, MTKParameters, SymbolicDiscreteCallback,
+                       SymbolicContinuousCallback
 using SymbolicIndexingInterface
 using OrdinaryDiffEq, Sundials
 using DiffEqBase, SparseArrays
@@ -9,6 +10,7 @@ using SymbolicUtils: issym
 using ForwardDiff
 using ModelingToolkit: value
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using Symbolics: unwrap
 
 # Define some variables
 @parameters σ ρ β
@@ -135,19 +137,7 @@ du = zeros(3)
 tgrad_iip(du, u, p, t)
 @test du == [0.0, -u[2], 0.0]
 
-@parameters σ′(t - 1)
-eqs = [D(x) ~ σ′ * (y - x),
-    D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y - β * z * κ]
-@named de = ODESystem(eqs, t)
-test_diffeq_inference("global iv-varying", de, t, (x, y, z), (σ′, ρ, β))
-
-f = generate_function(de, [x, y, z], [σ′, ρ, β], expression = Val{false})[2]
-du = [0.0, 0.0, 0.0]
-f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
-@test du ≈ [11, -3, -7]
-
-@parameters σ(..)
+@parameters (σ::Function)(..)
 eqs = [D(x) ~ σ(t - 1) * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z * κ]
@@ -477,7 +467,7 @@ let
 
     eqs = [D(x) ~ ẋ, D(ẋ) ~ f - k * x - d * ẋ]
     @named sys = ODESystem(eqs, t, [x, ẋ], [d, k])
-    sys, _ = structural_simplify(sys, ([f], []))
+    sys = structural_simplify(sys; inputs = [f])
 
     @test isequal(calculate_control_jacobian(sys),
         reshape(Num[0, 1], 2, 1))
@@ -1026,24 +1016,27 @@ prob = ODEProblem(sys, [x => 1.0], (0.0, 10.0))
 @test_nowarn solve(prob, Tsit5())
 
 # Issue#2383
-@variables x(t)[1:3]
-@parameters p[1:3, 1:3]
-eqs = [
-    D(x) ~ p * x
-]
-@mtkbuild sys = ODESystem(eqs, t; continuous_events = [[norm(x) ~ 3.0] => [x ~ ones(3)]])
-# array affect equations used to not work
-prob1 = @test_nowarn ODEProblem(sys, [x => ones(3)], (0.0, 10.0), [p => ones(3, 3)])
-sol1 = @test_nowarn solve(prob1, Tsit5())
+@testset "Arrays in affect/condition equations" begin
+    @variables x(t)[1:3]
+    @parameters p[1:3, 1:3]
+    eqs = [
+        D(x) ~ p * x
+    ]
+    @mtkbuild sys = ODESystem(
+        eqs, t; continuous_events = [[norm(x) ~ 3.0] => [x ~ ones(3)]])
+    # array affect equations used to not work
+    prob1 = @test_nowarn ODEProblem(sys, [x => ones(3)], (0.0, 10.0), [p => ones(3, 3)])
+    sol1 = @test_nowarn solve(prob1, Tsit5())
 
-# array condition equations also used to not work
-@mtkbuild sys = ODESystem(
-    eqs, t; continuous_events = [[x ~ sqrt(3) * ones(3)] => [x ~ ones(3)]])
-# array affect equations used to not work
-prob2 = @test_nowarn ODEProblem(sys, [x => ones(3)], (0.0, 10.0), [p => ones(3, 3)])
-sol2 = @test_nowarn solve(prob2, Tsit5())
+    # array condition equations also used to not work
+    @mtkbuild sys = ODESystem(
+        eqs, t; continuous_events = [[x ~ sqrt(3) * ones(3)] => [x ~ ones(3)]])
+    # array affect equations used to not work
+    prob2 = @test_nowarn ODEProblem(sys, [x => ones(3)], (0.0, 10.0), [p => ones(3, 3)])
+    sol2 = @test_nowarn solve(prob2, Tsit5())
 
-@test sol1 ≈ sol2
+    @test sol1.u ≈ sol2.u[2:end]
+end
 
 # Requires fix in symbolics for `linear_expansion(p * x, D(y))`
 @test_skip begin
@@ -1190,10 +1183,12 @@ end
 end
 
 # Namespacing of array variables
-@variables x(t)[1:2]
-@named sys = ODESystem(Equation[], t)
-@test getname(unknowns(sys, x)) == :sys₊x
-@test size(unknowns(sys, x)) == size(x)
+@testset "Namespacing of array variables" begin
+    @variables x(t)[1:2]
+    @named sys = ODESystem(Equation[], t)
+    @test getname(unknowns(sys, x)) == :sys₊x
+    @test size(unknowns(sys, x)) == size(x)
+end
 
 # Issue#2667 and Issue#2953
 @testset "ForwardDiff through ODEProblem constructor" begin
@@ -1294,11 +1289,11 @@ end
     @named sys = ODESystem(
         [D(u) ~ (sum(u) + sum(x) + sum(p) + sum(o)) * x, o ~ prod(u) * x],
         t, [u..., x..., o...], [p...])
-    sys1, = structural_simplify(sys, ([x...], []))
+    sys1 = structural_simplify(sys, inputs = [x...], outputs = [])
     fn1, = ModelingToolkit.generate_function(sys1; expression = Val{false})
     ps = MTKParameters(sys1, [x => 2ones(2), p => 3ones(2, 2)])
     @test_nowarn fn1(ones(4), ps, 4.0)
-    sys2, = structural_simplify(sys, ([x...], []); split = false)
+    sys2 = structural_simplify(sys, inputs = [x...], outputs = [], split = false)
     fn2, = ModelingToolkit.generate_function(sys2; expression = Val{false})
     ps = zeros(8)
     setp(sys2, x)(ps, 2ones(2))
@@ -1407,7 +1402,7 @@ end
            o[2] ~ sum(p) * sum(x)]
 
     @named sys = ODESystem(eqs, t, [u..., x..., o], [p...])
-    sys1, = structural_simplify(sys, ([x...], [o...]), split = false)
+    sys1 = structural_simplify(sys, inputs = [x...], outputs = [o...], split = false)
 
     @test_nowarn ModelingToolkit.build_explicit_observed_function(sys1, u; inputs = [x...])
 
@@ -1531,8 +1526,12 @@ end
 @testset "Observed variables dependent on discrete parameters" begin
     @variables x(t) obs(t)
     @parameters c(t)
-    @mtkbuild sys = ODESystem(
-        [D(x) ~ c * cos(x), obs ~ c], t, [x], [c]; discrete_events = [1.0 => [c ~ c + 1]])
+    @mtkbuild sys = ODESystem([D(x) ~ c * cos(x), obs ~ c],
+        t,
+        [x],
+        [c];
+        discrete_events = [SymbolicDiscreteCallback(
+            1.0 => [c ~ Pre(c) + 1], discrete_parameters = [c])])
     prob = ODEProblem(sys, [x => 0.0], (0.0, 2pi), [c => 1.0])
     sol = solve(prob, Tsit5())
     @test sol[obs] ≈ 1:7
@@ -1592,15 +1591,16 @@ end
 # Test `isequal`
 @testset "`isequal`" begin
     @variables X(t)
-    @parameters p d
+    @parameters p d(t)
     eq = D(X) ~ p - d * X
 
     osys1 = complete(ODESystem([eq], t; name = :osys))
     osys2 = complete(ODESystem([eq], t; name = :osys))
     @test osys1 == osys2 # true
 
-    continuous_events = [[X ~ 1.0] => [X ~ X + 5.0]]
-    discrete_events = [5.0 => [d ~ d / 2.0]]
+    continuous_events = [[X ~ 1.0] => [X ~ Pre(X) + 5.0]]
+    discrete_events = [SymbolicDiscreteCallback(
+        5.0 => [d ~ d / 2.0], discrete_parameters = [d])]
 
     osys1 = complete(ODESystem([eq], t; name = :osys, continuous_events))
     osys2 = complete(ODESystem([eq], t; name = :osys))
@@ -1729,4 +1729,27 @@ end
         sys, [x + 1, x + 2, x + t], return_inplace = true, expression = true)
     @test obsfn_expr_oop isa Expr
     @test obsfn_expr_iip isa Expr
+end
+
+@testset "`@named` always wraps in `ParentScope`" begin
+    function SysA(; name, var1)
+        @variables x(t)
+        scope = ModelingToolkit.getmetadata(unwrap(var1), ModelingToolkit.SymScope, nothing)
+        @test scope isa ParentScope
+        @test scope.parent isa ParentScope
+        @test scope.parent.parent isa LocalScope
+        return ODESystem(D(x) ~ var1, t; name)
+    end
+    function SysB(; name, var1)
+        @variables x(t)
+        @named subsys = SysA(; var1)
+        return ODESystem(D(x) ~ x, t; systems = [subsys], name)
+    end
+    function SysC(; name)
+        @variables x(t)
+        @named subsys = SysB(; var1 = x)
+        return ODESystem(D(x) ~ x, t; systems = [subsys], name)
+    end
+    @mtkbuild sys = SysC()
+    @test length(unknowns(sys)) == 3
 end

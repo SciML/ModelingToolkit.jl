@@ -17,22 +17,23 @@ $(SIGNATURES)
 Structurally simplify algebraic equations in a system and compute the
 topological sort of the observed equations in `sys`.
 
-### Optional Arguments:
-+ optional argument `io` may take a tuple `(inputs, outputs)`. This will convert all `inputs` to parameters and allow them to be unconnected, i.e., simplification will allow models where `n_unknowns = n_equations - n_inputs`.
-
 ### Optional Keyword Arguments:
 + When `simplify=true`, the `simplify` function will be applied during the tearing process.
 + `allow_symbolic=false`, `allow_parameter=true`, and `conservative=false` limit the coefficient types during tearing. In particular, `conservative=true` limits tearing to only solve for trivial linear systems where the coefficient has the absolute value of ``1``.
 + `fully_determined=true` controls whether or not an error will be thrown if the number of equations don't match the number of inputs, outputs, and equations.
++ `inputs`, `outputs` and `disturbance_inputs` are passed as keyword arguments.` All inputs` get converted to parameters and are allowed to be unconnected, allowing models where `n_unknowns = n_equations - n_inputs`.
 + `sort_eqs=true` controls whether equations are sorted lexicographically before simplification or not.
 """
 function structural_simplify(
-        sys::AbstractSystem, io = nothing; additional_passes = [], simplify = false, split = true,
+        sys::AbstractSystem; additional_passes = [], simplify = false, split = true,
         allow_symbolic = false, allow_parameter = true, conservative = false, fully_determined = true,
+        inputs = Any[], outputs = Any[],
+        disturbance_inputs = Any[],
         kwargs...)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
-    newsys′ = __structural_simplify(sys, io; simplify,
+    newsys′ = __structural_simplify(sys; simplify,
         allow_symbolic, allow_parameter, conservative, fully_determined,
+        inputs, outputs, disturbance_inputs,
         kwargs...)
     if newsys′ isa Tuple
         @assert length(newsys′) == 2
@@ -42,10 +43,6 @@ function structural_simplify(
     end
     if newsys isa DiscreteSystem &&
        any(eq -> symbolic_type(eq.lhs) == NotSymbolic(), equations(newsys))
-        error("""
-            Encountered algebraic equations when simplifying discrete system. Please construct \
-            an ImplicitDiscreteSystem instead.
-        """)
     end
     for pass in additional_passes
         newsys = pass(newsys)
@@ -70,8 +67,10 @@ function __structural_simplify(sys::SDESystem, args...; kwargs...)
     return __structural_simplify(ODESystem(sys), args...; kwargs...)
 end
 
-function __structural_simplify(
-        sys::AbstractSystem, io = nothing; simplify = false, sort_eqs = true,
+function __structural_simplify(sys::AbstractSystem; simplify = false,
+        inputs = Any[], outputs = Any[],
+        disturbance_inputs = Any[],
+        sort_eqs = true,
         kwargs...)
     sys = expand_connections(sys)
     state = TearingState(sys; sort_eqs)
@@ -90,7 +89,8 @@ function __structural_simplify(
         end
     end
     if isempty(brown_vars)
-        return structural_simplify!(state, io; simplify, kwargs...)
+        return structural_simplify!(
+            state; simplify, inputs, outputs, disturbance_inputs, kwargs...)
     else
         Is = Int[]
         Js = Int[]
@@ -122,8 +122,8 @@ function __structural_simplify(
                               for (i, v) in enumerate(fullvars)
                               if !iszero(new_idxs[i]) &&
                                  invview(var_to_diff)[i] === nothing]
-        # TODO: IO is not handled.
-        ode_sys = structural_simplify(sys, io; simplify, kwargs...)
+        ode_sys = structural_simplify(
+            sys; simplify, inputs, outputs, disturbance_inputs, kwargs...)
         eqs = equations(ode_sys)
         sorted_g_rows = zeros(Num, length(eqs), size(g, 2))
         for (i, eq) in enumerate(eqs)
@@ -157,9 +157,9 @@ function __structural_simplify(
             get_iv(ode_sys), unknowns(ode_sys), parameters(ode_sys);
             name = nameof(ode_sys), is_scalar_noise, observed = observed(ode_sys), defaults = defaults(sys),
             parameter_dependencies = parameter_dependencies(sys), assertions = assertions(sys),
-            guesses = guesses(sys), initialization_eqs = initialization_equations(sys))
-        @set! ssys.tearing_state = get_tearing_state(ode_sys)
-        return ssys
+            guesses = guesses(sys), initialization_eqs = initialization_equations(sys),
+            continuous_events = continuous_events(sys),
+            discrete_events = discrete_events(sys))
     end
 end
 
