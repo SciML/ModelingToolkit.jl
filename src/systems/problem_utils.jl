@@ -1421,6 +1421,26 @@ function SciMLBase.detect_cycles(sys::AbstractSystem, varmap::Dict{Any, Any}, va
     return !isempty(cycles)
 end
 
+function process_kwargs(sys::System; callback = nothing, eval_expression = false,
+        eval_module = @__MODULE__, kwargs...)
+    kwargs = filter_kwargs(kwargs)
+    kwargs1 = (;)
+
+    if is_time_dependent(sys)
+        cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
+        if cbs !== nothing
+            kwargs1 = merge(kwargs1, (callback = cbs,))
+        end
+
+        tstops = SymbolicTstops(sys; eval_expression, eval_module)
+        if tstops !== nothing
+            kwargs1 = merge(kwargs1, (; tstops))
+        end
+    end
+
+    return merge(kwargs1, kwargs)
+end
+
 """
     $(TYPEDSIGNATURES)
 
