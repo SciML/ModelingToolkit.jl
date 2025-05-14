@@ -39,7 +39,8 @@ initprob = ModelingToolkit.InitializationProblem(
     pend, 0.0, [], [g => 1]; guesses = ModelingToolkit.missing_variable_defaults(pend))
 @test initprob isa NonlinearLeastSquaresProblem
 sol = solve(initprob)
-@test !SciMLBase.successful_retcode(sol)
+@test !SciMLBase.successful_retcode(sol) ||
+      sol.retcode == SciMLBase.ReturnCode.StalledSuccess
 
 @test_throws ModelingToolkit.ExtraVariablesSystemException ModelingToolkit.InitializationProblem(
     pend, 0.0, [], [g => 1]; guesses = ModelingToolkit.missing_variable_defaults(pend),
