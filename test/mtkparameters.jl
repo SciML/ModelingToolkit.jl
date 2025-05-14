@@ -172,8 +172,8 @@ function level1()
            D(y) ~ -p3 * y + p4 * x * y]
 
     sys = structural_simplify(complete(System(
-        eqs, t, tspan = (0, 3.0), name = :sys, parameter_dependencies = [y0 => 2p4])))
-    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys)
+        eqs, t, name = :sys, parameter_dependencies = [y0 => 2p4])))
+    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [], (0.0, 3.0))
 end
 
 # scalar and vector parameters
@@ -186,8 +186,8 @@ function level2()
            D(y) ~ -p23[2] * y + p4 * x * y]
 
     sys = structural_simplify(complete(System(
-        eqs, t, tspan = (0, 3.0), name = :sys, parameter_dependencies = [y0 => 2p4])))
-    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys)
+        eqs, t, name = :sys, parameter_dependencies = [y0 => 2p4])))
+    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [], (0.0, 3.0))
 end
 
 # scalar and vector parameters with different scalar types
@@ -200,8 +200,8 @@ function level3()
            D(y) ~ -p23[2] * y + p4 * x * y]
 
     sys = structural_simplify(complete(System(
-        eqs, t, tspan = (0, 3.0), name = :sys, parameter_dependencies = [y0 => 2p4])))
-    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys)
+        eqs, t, name = :sys, parameter_dependencies = [y0 => 2p4])))
+    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [], (0.0, 3.0))
 end
 
 @testset "level$i" for (i, prob) in enumerate([level1(), level2(), level3()])
