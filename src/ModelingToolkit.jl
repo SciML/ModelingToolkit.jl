@@ -160,6 +160,8 @@ include("systems/model_parsing.jl")
 include("systems/connectors.jl")
 include("systems/analysis_points.jl")
 include("systems/imperative_affect.jl")
+include("systems/callbacks.jl")
+include("systems/system.jl")
 include("systems/codegen_utils.jl")
 include("systems/problem_utils.jl")
 include("linearization.jl")
@@ -255,7 +257,7 @@ export AbstractTimeDependentSystem,
        AbstractMultivariateSystem
 
 export ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system,
-       add_accumulations, System
+       System, OptimizationSystem, JumpSystem, SDESystem
 export DAEFunctionExpr, DAEProblemExpr
 export SDEFunction, SDEFunctionExpr, SDEProblemExpr
 export SystemStructure
