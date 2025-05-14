@@ -34,7 +34,7 @@ const FMU_DIR = joinpath(@__DIR__, "fmus")
         @named inner = MTK.FMIComponent(
             Val(2); fmu, communication_step_size = 1e-5, type = :CS)
         @variables x(t) = 1.0
-        @mtkbuild sys = ODESystem([D(x) ~ x], t; systems = [inner])
+        @mtkbuild sys = System([D(x) ~ x], t; systems = [inner])
         test_no_inputs_outputs(sys)
 
         prob = ODEProblem{true, SciMLBase.FullSpecialize}(
@@ -68,7 +68,7 @@ const FMU_DIR = joinpath(@__DIR__, "fmus")
         @named inner = MTK.FMIComponent(
             Val(3); fmu, communication_step_size = 1e-5, type = :CS)
         @variables x(t) = 1.0
-        @mtkbuild sys = ODESystem([D(x) ~ x], t; systems = [inner])
+        @mtkbuild sys = System([D(x) ~ x], t; systems = [inner])
         test_no_inputs_outputs(sys)
 
         prob = ODEProblem{true, SciMLBase.FullSpecialize}(
@@ -120,7 +120,7 @@ end
 @testset "IO Model" begin
     function build_simple_adder(adder)
         @variables a(t) b(t) c(t) [guess = 1.0]
-        @mtkbuild sys = ODESystem(
+        @mtkbuild sys = System(
             [adder.a ~ a, adder.b ~ b, D(a) ~ t,
                 D(b) ~ adder.out + adder.c, c^2 ~ adder.out + adder.value],
             t;
@@ -176,7 +176,7 @@ end
 
     function build_sspace_model(sspace)
         @variables u(t)=1.0 x(t)=1.0 y(t) [guess = 1.0]
-        @mtkbuild sys = ODESystem(
+        @mtkbuild sys = System(
             [sspace.u ~ u, D(u) ~ t, D(x) ~ sspace.x + sspace.y, y^2 ~ sspace.y + sspace.x], t;
             systems = [sspace]
         )
@@ -229,7 +229,7 @@ end
 @testset "FMUs in a loop" begin
     function build_looped_adders(adder1, adder2)
         @variables x(t) = 1
-        @mtkbuild sys = ODESystem(
+        @mtkbuild sys = System(
             [D(x) ~ x, adder1.a ~ adder2.out2,
                 adder2.a ~ adder1.out2, adder1.b ~ 1.0, adder2.b ~ 2.0],
             t;
@@ -274,7 +274,7 @@ end
 
     function build_looped_sspace(sspace1, sspace2)
         @variables x(t) = 1
-        @mtkbuild sys = ODESystem([D(x) ~ x, sspace1.u ~ sspace2.x, sspace2.u ~ sspace1.y],
+        @mtkbuild sys = System([D(x) ~ x, sspace1.u ~ sspace2.x, sspace2.u ~ sspace1.y],
             t; systems = [sspace1, sspace2])
         prob = ODEProblem(sys, [sspace1.x => 1.0, sspace2.x => 1.0], (0.0, 1.0))
         return sys, prob

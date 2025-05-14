@@ -12,14 +12,14 @@ using Symbolics: NAMESPACE_SEPARATOR
     ap = AnalysisPoint(:plant_input)
     eqs = [connect(P.output, C.input)
            connect(C.output, ap, P.input)]
-    sys_ap = ODESystem(eqs, t, systems = [P, C], name = :hej)
+    sys_ap = System(eqs, t, systems = [P, C], name = :hej)
     sys_ap2 = @test_nowarn expand_connections(sys_ap)
 
     @test all(eq -> !(eq.lhs isa AnalysisPoint), equations(sys_ap2))
 
     eqs = [connect(P.output, C.input)
            connect(C.output, P.input)]
-    sys_normal = ODESystem(eqs, t, systems = [P, C], name = :hej)
+    sys_normal = System(eqs, t, systems = [P, C], name = :hej)
     sys_normal2 = @test_nowarn expand_connections(sys_normal)
 
     @test isequal(sys_ap2, sys_normal2)
@@ -41,10 +41,10 @@ end
     @named C = Gain(; k = -1)
 
     eqs = [connect(P.output, C.input), connect(C.output, :plant_input, P.input)]
-    sys_ap = ODESystem(eqs, t, systems = [P, C], name = :hej)
+    sys_ap = System(eqs, t, systems = [P, C], name = :hej)
     ap2 = @test_nowarn sys_ap.plant_input
     @test nameof(ap2) == Symbol(join(["hej", "plant_input"], NAMESPACE_SEPARATOR))
-    @named sys = ODESystem(Equation[], t; systems = [sys_ap])
+    @named sys = System(Equation[], t; systems = [sys_ap])
     ap3 = @test_nowarn sys.hej.plant_input
     @test nameof(ap3) == Symbol(join(["sys", "hej", "plant_input"], NAMESPACE_SEPARATOR))
     csys = complete(sys)
@@ -62,8 +62,8 @@ end
 
 ap = AnalysisPoint(:plant_input)
 eqs = [connect(P.output, C.input), connect(C.output, ap, P.input)]
-sys = ODESystem(eqs, t, systems = [P, C], name = :hej)
-@named nested_sys = ODESystem(Equation[], t; systems = [sys])
+sys = System(eqs, t, systems = [P, C], name = :hej)
+@named nested_sys = System(Equation[], t; systems = [sys])
 nonamespace_sys = toggle_namespacing(nested_sys, false)
 
 @testset "simplifies and solves" begin
@@ -132,8 +132,8 @@ end
 
 eqs = [connect(P.output, :plant_output, C.input)
        connect(C.output, :plant_input, P.input)]
-sys = ODESystem(eqs, t, systems = [P, C], name = :hej)
-@named nested_sys = ODESystem(Equation[], t; systems = [sys])
+sys = System(eqs, t, systems = [P, C], name = :hej)
+@named nested_sys = System(Equation[], t; systems = [sys])
 
 test_cases = [
     ("inner", sys, sys.plant_input),

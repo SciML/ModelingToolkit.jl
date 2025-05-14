@@ -65,7 +65,7 @@ begin
     Fss = ss(Ftf)
     # Create an MTK-compatible constructor 
     function RefFilter(; name)
-        sys = ODESystem(Fss; name)
+        sys = System(Fss; name)
         "Compute initial state that yields y0 as output"
         empty!(ModelingToolkit.get_defaults(sys))
         return sys
