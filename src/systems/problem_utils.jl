@@ -37,7 +37,8 @@ the old value should be removed.
 """
 function add_toterms!(varmap::AbstractDict; toterm = default_toterm, replace = false)
     for k in collect(keys(varmap))
-        ttk = toterm(k)
+        ttk = toterm(unwrap(k))
+        haskey(varmap, ttk) && continue
         varmap[ttk] = varmap[k]
         !isequal(k, ttk) && replace && delete!(varmap, k)
     end
