@@ -32,11 +32,14 @@ is_split(sys::AbstractSystem) = has_index_cache(sys) && get_index_cache(sys) !==
 """
     $(TYPEDSIGNATURES)
 
-Given a variable-value mapping, add mappings for the `toterm` of each of the keys.
+Given a variable-value mapping, add mappings for the `toterm` of each of the keys. `replace` controls whether
+the old value should be removed.
 """
-function add_toterms!(varmap::AbstractDict; toterm = default_toterm)
+function add_toterms!(varmap::AbstractDict; toterm = default_toterm, replace = false)
     for k in collect(keys(varmap))
-        varmap[toterm(k)] = varmap[k]
+        ttk = toterm(k)
+        varmap[ttk] = varmap[k]
+        !isequal(k, ttk) && replace && delete!(varmap, k)
     end
     return nothing
 end
@@ -46,9 +49,9 @@ end
 
 Out-of-place version of [`add_toterms!`](@ref).
 """
-function add_toterms(varmap::AbstractDict; toterm = default_toterm)
+function add_toterms(varmap::AbstractDict; kwargs...)
     cp = copy(varmap)
-    add_toterms!(cp; toterm)
+    add_toterms!(cp; kwargs...)
     return cp
 end
 
