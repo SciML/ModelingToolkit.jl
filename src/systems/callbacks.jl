@@ -895,7 +895,8 @@ end
 Compile an affect defined by a set of equations. Systems with algebraic equations will solve implicit discrete problems to obtain their next state. Systems without will generate functions that perform explicit updates.
 """
 function compile_equational_affect(
-        aff::Union{AffectSystem, Vector{Equation}}, sys; reset_jumps = false, kwargs...)
+        aff::Union{AffectSystem, Vector{Equation}}, sys; reset_jumps = false,
+        eval_expression = false, eval_module = @__MODULE__, kwargs...)
     if aff isa AbstractVector
         aff = make_affect(
             aff; iv = get_iv(sys), warn_no_algebraic = false)
@@ -930,11 +931,13 @@ function compile_equational_affect(
         integ = gensym(:MTKIntegrator)
 
         u_up, u_up! = build_function_wrapper(sys, (@view rhss[is_u]), dvs, _ps..., t;
-            wrap_code = add_integrator_header(sys, integ, :u),
-            expression = Val{false}, outputidxs = u_idxs, wrap_mtkparameters, cse = false)
+            wrap_code = add_integrator_header(sys, integ, :u), expression = Val{false},
+            outputidxs = u_idxs, wrap_mtkparameters, cse = false, eval_expression,
+            eval_module)
         p_up, p_up! = build_function_wrapper(sys, (@view rhss[is_p]), dvs, _ps..., t;
-            wrap_code = add_integrator_header(sys, integ, :p),
-            expression = Val{false}, outputidxs = p_idxs, wrap_mtkparameters, cse = false)
+            wrap_code = add_integrator_header(sys, integ, :p), expression = Val{false},
+            outputidxs = p_idxs, wrap_mtkparameters, cse = false, eval_expression,
+            eval_module)
 
         return let dvs_to_update = dvs_to_update, ps_to_update = ps_to_update,
             reset_jumps = reset_jumps, u_up! = u_up!, p_up! = p_up!
@@ -963,7 +966,8 @@ function compile_equational_affect(
 
             affprob = ImplicitDiscreteProblem(affsys, [dv => 0 for dv in unknowns(affsys)],
                 (0, 0), [p => 0.0 for p in parameters(affsys)];
-                build_initializeprob = false, check_length = false)
+                build_initializeprob = false, check_length = false, eval_expression,
+                eval_module, check_compatibility = false)
 
             function implicit_affect!(integ)
                 new_u0 = affu_getter(integ)
