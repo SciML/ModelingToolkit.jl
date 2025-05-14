@@ -1342,3 +1342,31 @@ function _eq_unordered(a::AbstractArray, b::AbstractArray)
 end
 
 _eq_unordered(a, b) = isequal(a, b)
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given a list of equations where some may be array equations, flatten the array equations
+without scalarizing occurrences of array variables and return the new list of equations.
+"""
+function flatten_equations(eqs::Vector{Equation})
+    mapreduce(vcat, eqs; init = Equation[]) do eq
+        islhsarr = eq.lhs isa AbstractArray || Symbolics.isarraysymbolic(eq.lhs)
+        isrhsarr = eq.rhs isa AbstractArray || Symbolics.isarraysymbolic(eq.rhs)
+        if islhsarr || isrhsarr
+            islhsarr && isrhsarr ||
+                error("""
+                LHS ($(eq.lhs)) and RHS ($(eq.rhs)) must either both be array expressions \
+                or both scalar
+                """)
+            size(eq.lhs) == size(eq.rhs) ||
+                error("""
+                Size of LHS ($(eq.lhs)) and RHS ($(eq.rhs)) must match: got \
+                $(size(eq.lhs)) and $(size(eq.rhs))
+                """)
+            return vec(collect(eq.lhs) .~ collect(eq.rhs))
+        else
+            eq
+        end
+    end
+end
