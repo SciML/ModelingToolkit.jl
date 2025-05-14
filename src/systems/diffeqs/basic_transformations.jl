@@ -501,3 +501,74 @@ function noise_to_brownians(sys::System; names::Union{Symbol, Vector{Symbol}} = 
 
     return sys
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Function which takes a system `sys` and an independent variable `t` and changes the
+independent variable of `sys` to `t`. This is different from
+[`change_independent_variable`](@ref) since this function only does a symbolic substitution
+of the independent variable. `sys` must not be a reduced system (`observed(sys)` must be
+empty). If `sys` is time-independent, this can be used to turn it into a time-dependent
+system.
+
+# Keyword arguments
+
+- `name`: The name of the returned system.
+"""
+function convert_system_indepvar(sys::System, t; name = nameof(sys))
+    isempty(observed(sys)) ||
+        throw(ArgumentError("""
+        `convert_system_indepvar` cannot handle reduced model (i.e. observed(sys) is non-\
+        empty).
+        """))
+    t = value(t)
+    varmap = Dict()
+    sts = unknowns(sys)
+    newsts = similar(sts, Any)
+    for (i, s) in enumerate(sts)
+        if iscall(s)
+            args = arguments(s)
+            length(args) == 1 ||
+                throw(InvalidSystemException("Illegal unknown: $s. The unknown can have at most one argument like `x(t)`."))
+            arg = args[1]
+            if isequal(arg, t)
+                newsts[i] = s
+                continue
+            end
+            ns = maketerm(typeof(s), operation(s), Any[t],
+                SymbolicUtils.metadata(s))
+            newsts[i] = ns
+            varmap[s] = ns
+        else
+            ns = variable(getname(s); T = FnType)(t)
+            newsts[i] = ns
+            varmap[s] = ns
+        end
+    end
+    sub = Base.Fix2(substitute, varmap)
+    if is_time_dependent(sys)
+        iv = only(independent_variables(sys))
+        sub.x[iv] = t # otherwise the Differentials aren't fixed
+    end
+    neweqs = map(sub, equations(sys))
+    defs = Dict(sub(k) => sub(v) for (k, v) in defaults(sys))
+    neqs = get_noise_eqs(sys)
+    if neqs !== nothing
+        neqs = map(sub, neqs)
+    end
+    cstrs = map(sub, get_constraints(sys))
+    costs = Vector{Union{Real, BasicSymbolic}}(map(sub, get_costs(sys)))
+    @set! sys.eqs = neweqs
+    @set! sys.iv = t
+    @set! sys.unknowns = newsts
+    @set! sys.defaults = defs
+    @set! sys.name = name
+    @set! sys.noise_eqs = neqs
+    @set! sys.constraints = cstrs
+    @set! sys.costs = costs
+
+    var_to_name = Dict(k => get(varmap, v, v) for (k, v) in get_var_to_name(sys))
+    @set! sys.var_to_name = var_to_name
+    return sys
+end
