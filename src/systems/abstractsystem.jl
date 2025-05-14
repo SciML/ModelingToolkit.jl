@@ -2579,23 +2579,6 @@ end
 ###
 ### Inheritance & composition
 ###
-function Base.hash(sys::AbstractSystem, s::UInt)
-    s = hash(nameof(sys), s)
-    s = foldr(hash, get_systems(sys), init = s)
-    s = foldr(hash, get_unknowns(sys), init = s)
-    s = foldr(hash, get_ps(sys), init = s)
-    if sys isa OptimizationSystem
-        s = hash(get_op(sys), s)
-    else
-        s = foldr(hash, get_eqs(sys), init = s)
-    end
-    s = foldr(hash, get_observed(sys), init = s)
-    s = foldr(hash, get_continuous_events(sys), init = s)
-    s = foldr(hash, get_discrete_events(sys), init = s)
-    s = hash(independent_variables(sys), s)
-    return s
-end
-
 """
 $(TYPEDSIGNATURES)
 
