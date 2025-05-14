@@ -352,6 +352,8 @@ function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
         allow_symbolic = false, is_initializeprob = false)
     isempty(vars) && return nothing
 
+    varmap = recursive_unwrap(varmap)
+    add_toterms!(varmap; toterm)
     if check
         missing_vars = missingvars(varmap, vars; toterm)
         isempty(missing_vars) || throw(MissingVariablesError(missing_vars))
