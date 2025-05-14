@@ -18,7 +18,7 @@ eqs = [D(x) ~ w,
     D(w) ~ T * x,
     D(z) ~ T * y - g,
     0 ~ x^2 + y^2 - L^2]
-pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name = :pendulum)
+pendulum = System(eqs, t, [x, y, w, z, T], [L, g], name = :pendulum)
 state = TearingState(pendulum)
 StructuralTransformations.find_solvables!(state)
 sss = state.structure
@@ -48,7 +48,7 @@ end
     @variables x(t) y(t)[1:2] z(t)[1:2]
     @parameters foo(::AbstractVector)[1:2]
     _tmp_fn(x) = 2x
-    @mtkbuild sys = ODESystem(
+    @mtkbuild sys = System(
         [D(x) ~ z[1] + z[2] + foo(z)[1], y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t)
     @test length(equations(sys)) == 1
     @test length(observed(sys)) == 7
@@ -74,7 +74,7 @@ end
         val[] += 1
         return [x, 2x]
     end
-    @mtkbuild sys = ODESystem([D(x) ~ y[1] + y[2], y ~ foo(x)], t)
+    @mtkbuild sys = System([D(x) ~ y[1] + y[2], y ~ foo(x)], t)
     @test length(equations(sys)) == 1
     @test length(observed(sys)) == 4
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [foo => _tmp_fn2])
@@ -93,7 +93,7 @@ end
     @testset "CSE hack in equations(sys)" begin
         val[] = 0
         @variables z(t)[1:2]
-        @mtkbuild sys = ODESystem(
+        @mtkbuild sys = System(
             [D(y) ~ foo(x), D(x) ~ sum(y), zeros(2) ~ foo(prod(z))], t)
         @test length(equations(sys)) == 5
         @test length(observed(sys)) == 2
@@ -119,7 +119,7 @@ end
         @variables x(t) y(t)[1:2] z(t)[1:2]
         @parameters foo(::AbstractVector)[1:2]
         _tmp_fn(x) = 2x
-        @named sys = ODESystem(
+        @named sys = System(
             [D(x) ~ z[1] + z[2] + foo(z)[1], y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t)
 
         sys1 = structural_simplify(sys; cse_hack = false)
@@ -140,7 +140,7 @@ end
         @variables x(t) y(t)[1:2] z(t)[1:2] w(t)
         @parameters foo(::AbstractVector)[1:2]
         _tmp_fn(x) = 2x
-        @named sys = ODESystem(
+        @named sys = System(
             [D(x) ~ z[1] + z[2] + foo(z)[1] + w, y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t)
 
         sys1 = structural_simplify(sys; cse_hack = false, fully_determined = false)
@@ -160,7 +160,7 @@ end
 
 @testset "additional passes" begin
     @variables x(t) y(t)
-    @named sys = ODESystem([D(x) ~ x, y ~ x + t], t)
+    @named sys = System([D(x) ~ x, y ~ x + t], t)
     value = Ref(0)
     pass(sys; kwargs...) = (value[] += 1; return sys)
     structural_simplify(sys; additional_passes = [pass])
@@ -198,13 +198,13 @@ end
     end
     @testset "Requires simplified system" begin
         @variables x(t) y(t)
-        @named sys = ODESystem([D(x) ~ x, y ~ 2x], t)
+        @named sys = System([D(x) ~ x, y ~ 2x], t)
         sys = complete(sys)
         @test_throws ArgumentError map_variables_to_equations(sys)
     end
     @testset "`ODESystem`" begin
         @variables x(t) y(t) z(t)
-        @mtkbuild sys = ODESystem([D(x) ~ 2x + y, y ~ x + z, z^3 + x^3 ~ 12], t)
+        @mtkbuild sys = System([D(x) ~ 2x + y, y ~ x + z, z^3 + x^3 ~ 12], t)
         mapping = map_variables_to_equations(sys)
         @test mapping[x] == (D(x) ~ 2x + y)
         @test mapping[y] == (y ~ x + z)
@@ -217,7 +217,7 @@ end
             eqs = [D(D(x)) ~ λ * x
                    D(D(y)) ~ λ * y - g
                    x^2 + y^2 ~ 1]
-            @mtkbuild sys = ODESystem(eqs, t)
+            @mtkbuild sys = System(eqs, t)
             mapping = map_variables_to_equations(sys)
 
             yt = default_toterm(unwrap(D(y)))

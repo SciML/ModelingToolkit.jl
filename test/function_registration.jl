@@ -17,7 +17,7 @@ end
 @register_symbolic do_something(a)
 
 eq = Dt(u) ~ do_something(x) + MyModule.do_something(x)
-@named sys = ODESystem([eq], t, [u], [x])
+@named sys = System([eq], t, [u], [x])
 sys = complete(sys)
 fun = ODEFunction(sys)
 
@@ -40,7 +40,7 @@ end
 @register_symbolic do_something_2(a)
 
 eq = Dt(u) ~ do_something_2(x) + MyNestedModule.do_something_2(x)
-@named sys = ODESystem([eq], t, [u], [x])
+@named sys = System([eq], t, [u], [x])
 sys = complete(sys)
 fun = ODEFunction(sys)
 
@@ -62,7 +62,7 @@ end
 @register_symbolic do_something_3(a)
 
 eq = Dt(u) ~ do_something_3(x) + (@__MODULE__).do_something_3(x)
-@named sys = ODESystem([eq], t, [u], [x])
+@named sys = System([eq], t, [u], [x])
 sys = complete(sys)
 fun = ODEFunction(sys)
 
@@ -99,7 +99,7 @@ function build_ode()
     @parameters x
     @variables u(t)
     eq = Dt(u) ~ do_something_4(x) + (@__MODULE__).do_something_4(x)
-    @named sys = ODESystem([eq], t, [u], [x])
+    @named sys = System([eq], t, [u], [x])
     sys = complete(sys)
     fun = ODEFunction(sys, eval_expression = false)
 end

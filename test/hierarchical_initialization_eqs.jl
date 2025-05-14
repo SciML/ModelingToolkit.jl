@@ -24,7 +24,7 @@ A simple linear resistor model
            p.i + n.i ~ 0
            # Ohm's Law
            v ~ i * R]
-    return ODESystem(eqs, t, vars, params; systems, name)
+    return System(eqs, t, vars, params; systems, name)
 end
 @connector Pin begin
     v(t)
@@ -46,7 +46,7 @@ end
            i ~ p.i
            p.i + n.i ~ 0
            v ~ V]
-    return ODESystem(eqs, t, vars, params; systems, name)
+    return System(eqs, t, vars, params; systems, name)
 end
 
 @component function Capacitor(; name, C = 1.0)
@@ -68,7 +68,7 @@ end
            i ~ p.i
            p.i + n.i ~ 0
            C * D(v) ~ i]
-    return ODESystem(eqs, t, vars, params; systems, name, initialization_eqs)
+    return System(eqs, t, vars, params; systems, name, initialization_eqs)
 end
 
 @component function Ground(; name)
@@ -78,7 +78,7 @@ end
     eqs = [
         g.v ~ 0
     ]
-    return ODESystem(eqs, t, [], []; systems, name)
+    return System(eqs, t, [], []; systems, name)
 end
 
 @component function Inductor(; name, L = 1.0)
@@ -97,7 +97,7 @@ end
            i ~ p.i
            p.i + n.i ~ 0
            L * D(i) ~ v]
-    return ODESystem(eqs, t, vars, params; systems, name)
+    return System(eqs, t, vars, params; systems, name)
 end
 
 """
@@ -118,7 +118,7 @@ HTML as well.
     eqs = [connect(source.p, inductor.n)
            connect(inductor.p, resistor.p, capacitor.p)
            connect(resistor.n, ground.g, capacitor.n, source.n)]
-    return ODESystem(eqs, t, [], []; systems, name, initialization_eqs)
+    return System(eqs, t, [], []; systems, name, initialization_eqs)
 end
 """Run model RLCModel from 0 to 10"""
 function simple()

@@ -8,7 +8,7 @@ using ForwardDiff
 using JET
 
 @parameters a b c(t) d::Integer e[1:3] f[1:3, 1:3]::Int g::Vector{AbstractFloat} h::String
-@named sys = ODESystem(
+@named sys = System(
     Equation[], t, [], [a, c, d, e, f, g, h], parameter_dependencies = [b ~ 2a],
     continuous_events = [ModelingToolkit.SymbolicContinuousCallback(
         [a ~ 0] => [c ~ 0], discrete_parameters = c)], defaults = Dict(a => 0.0))
@@ -140,7 +140,7 @@ end
 @parameters p::Vector{Float64}
 @variables X(t)
 eq = D(X) ~ p[1] - p[2] * X
-@mtkbuild osys = ODESystem([eq], t)
+@mtkbuild osys = System([eq], t)
 
 u0 = [X => 1.0]
 ps = [p => [2.0, 0.1]]
@@ -149,7 +149,7 @@ p = MTKParameters(osys, ps, u0)
 
 # Ensure partial update promotes the buffer
 @parameters p q r
-@named sys = ODESystem(Equation[], t, [], [p, q, r])
+@named sys = System(Equation[], t, [], [p, q, r])
 sys = complete(sys)
 ps = MTKParameters(sys, [p => 1.0, q => 2.0, r => 3.0])
 newps = remake_buffer(sys, ps, (p,), (1.0f0,))
@@ -160,7 +160,7 @@ newps = remake_buffer(sys, ps, (p,), (1.0f0,))
 @parameters p d
 @variables X(t)
 eqs = [D(X) ~ p - d * X]
-@mtkbuild sys = ODESystem(eqs, t)
+@mtkbuild sys = System(eqs, t)
 
 u0 = [X => 1.0]
 tspan = (0.0, 100.0)
@@ -180,7 +180,7 @@ function level1()
     eqs = [D(x) ~ p1 * x - p2 * x * y
            D(y) ~ -p3 * y + p4 * x * y]
 
-    sys = structural_simplify(complete(ODESystem(
+    sys = structural_simplify(complete(System(
         eqs, t, tspan = (0, 3.0), name = :sys, parameter_dependencies = [y0 => 2p4])))
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys)
 end
@@ -194,7 +194,7 @@ function level2()
     eqs = [D(x) ~ p1 * x - p23[1] * x * y
            D(y) ~ -p23[2] * y + p4 * x * y]
 
-    sys = structural_simplify(complete(ODESystem(
+    sys = structural_simplify(complete(System(
         eqs, t, tspan = (0, 3.0), name = :sys, parameter_dependencies = [y0 => 2p4])))
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys)
 end
@@ -208,7 +208,7 @@ function level3()
     eqs = [D(x) ~ p1 * x - p23[1] * x * y
            D(y) ~ -p23[2] * y + p4 * x * y]
 
-    sys = structural_simplify(complete(ODESystem(
+    sys = structural_simplify(complete(System(
         eqs, t, tspan = (0, 3.0), name = :sys, parameter_dependencies = [y0 => 2p4])))
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys)
 end
@@ -248,7 +248,7 @@ end
 @variables x(t) y(t)
 eqs = [D(x) ~ (α - β * y) * x
        D(y) ~ (δ * x - γ) * y]
-@mtkbuild odesys = ODESystem(eqs, t)
+@mtkbuild odesys = System(eqs, t)
 odeprob = ODEProblem(
     odesys, [x => 1.0, y => 1.0], (0.0, 10.0), [α => 1.5, β => 1.0, γ => 3.0, δ => 1.0])
 tunables, _... = canonicalize(Tunable(), odeprob.p)
@@ -273,7 +273,7 @@ VVDual = Vector{<:Vector{<:ForwardDiff.Dual}}
     end
 
     @parameters a b::Int c::Vector{Float64} d[1:2, 1:2]::Int e::Foo{Int} f::Foo
-    @named sys = ODESystem(Equation[], t, [], [a, b, c, d, e, f])
+    @named sys = System(Equation[], t, [], [a, b, c, d, e, f])
     sys = complete(sys)
     ps = MTKParameters(sys,
         Dict(a => 1.0, b => 2, c => 3ones(2),
@@ -311,7 +311,7 @@ end
 
 @testset "Error on missing parameter defaults" begin
     @parameters a b c
-    @named sys = ODESystem(Equation[], t, [], [a, b]; defaults = Dict(b => 2c))
+    @named sys = System(Equation[], t, [], [a, b]; defaults = Dict(b => 2c))
     sys = complete(sys)
     @test_throws ["Could not evaluate", "b", "Missing", "2c"] MTKParameters(sys, [a => 1.0])
 end
@@ -323,7 +323,7 @@ end
         D(V[1]) ~ k[1] - k[2] * V[1],
         D(V[2]) ~ k[3] - k[4] * V[2]
     ]
-    @mtkbuild osys_scal = ODESystem(eqs, t, [V[1], V[2]], [k[1], k[2], k[3], k[4]])
+    @mtkbuild osys_scal = System(eqs, t, [V[1], V[2]], [k[1], k[2], k[3], k[4]])
 
     u0 = [V => [10.0, 20.0]]
     ps_vec = [k => [2.0, 3.0, 4.0, 5.0]]

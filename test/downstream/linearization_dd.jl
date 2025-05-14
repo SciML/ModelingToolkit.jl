@@ -24,7 +24,7 @@ eqs = [connect(link1.TX1, cart.flange)
        connect(cart.flange, force.flange)
        connect(link1.TY1, fixed.flange)]
 
-@named model = ODESystem(eqs, t, [], []; systems = [link1, cart, force, fixed])
+@named model = System(eqs, t, [], []; systems = [link1, cart, force, fixed])
 lin_outputs = [cart.s, cart.v, link1.A, link1.dA]
 lin_inputs = [force.f.u]
 

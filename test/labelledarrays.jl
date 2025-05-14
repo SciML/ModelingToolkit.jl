@@ -12,7 +12,7 @@ eqs = [D(x) ~ σ * (y - x),
     D(y) ~ t * x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-@named de = ODESystem(eqs, t)
+@named de = System(eqs, t)
 de = complete(de)
 ff = ODEFunction(de, [x, y, z], [σ, ρ, β], jac = true)
 

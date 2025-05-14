@@ -17,8 +17,8 @@ noiseeqs = [0.1 * x,
     0.1 * y,
     0.1 * z]
 
-# ODESystem -> SDESystem shorthand constructor
-@named sys = ODESystem(eqs, tt, [x, y, z], [σ, ρ, β])
+# System -> SDESystem shorthand constructor
+@named sys = System(eqs, tt, [x, y, z], [σ, ρ, β])
 @test SDESystem(sys, noiseeqs, name = :foo) isa SDESystem
 
 @named de = SDESystem(eqs, noiseeqs, tt, [x, y, z], [σ, ρ, β], tspan = (0.0, 10.0))
@@ -510,7 +510,7 @@ noiseeqs = [0.1 * x]
     @test observed(de) == [weight ~ x * 10]
     @test sol[weight] == 10 * sol[x]
 
-    @named ode = ODESystem(eqs, tt, [x], [α, β], observed = [weight ~ x * 10])
+    @named ode = System(eqs, tt, [x], [α, β], observed = [weight ~ x * 10])
     ode = complete(ode)
     odeprob = ODEProblem(ode, u0map, (0.0, 1.0), parammap)
     solode = solve(odeprob, Tsit5())
@@ -810,13 +810,13 @@ end
     @test prob[z] ≈ 2.0
 end
 
-@testset "SDESystem to ODESystem" begin
+@testset "SDESystem to System" begin
     @variables x(t) y(t) z(t)
     @testset "Scalar noise" begin
         @named sys = SDESystem([D(x) ~ x, D(y) ~ y, z ~ x + y], [x, y, 3],
             t, [x, y, z], [], is_scalar_noise = true)
-        odesys = ODESystem(sys)
-        @test odesys isa ODESystem
+        odesys = System(sys)
+        @test odesys isa System
         vs = ModelingToolkit.vars(equations(odesys))
         nbrownian = count(
             v -> ModelingToolkit.getvariabletype(v) == ModelingToolkit.BROWNIAN, vs)
@@ -830,8 +830,8 @@ end
     @testset "Non-scalar vector noise" begin
         @named sys = SDESystem([D(x) ~ x, D(y) ~ y, z ~ x + y], [x, y, 0],
             t, [x, y, z], [], is_scalar_noise = false)
-        odesys = ODESystem(sys)
-        @test odesys isa ODESystem
+        odesys = System(sys)
+        @test odesys isa System
         vs = ModelingToolkit.vars(equations(odesys))
         nbrownian = count(
             v -> ModelingToolkit.getvariabletype(v) == ModelingToolkit.BROWNIAN, vs)
@@ -847,8 +847,8 @@ end
                     2y 2z 2x
                     z+1 x+1 y+1]
         @named sys = SDESystem([D(x) ~ x, D(y) ~ y, D(z) ~ z], noiseeqs, t, [x, y, z], [])
-        odesys = ODESystem(sys)
-        @test odesys isa ODESystem
+        odesys = System(sys)
+        @test odesys isa System
         vs = ModelingToolkit.vars(equations(odesys))
         nbrownian = count(
             v -> ModelingToolkit.getvariabletype(v) == ModelingToolkit.BROWNIAN, vs)
@@ -892,7 +892,7 @@ end
         0.1 * y,
         0.1 * z]
 
-    @named sys = ODESystem(eqs, tt, [x, y, z], [σ, ρ, β])
+    @named sys = System(eqs, tt, [x, y, z], [σ, ρ, β])
 
     @named de = SDESystem(eqs, noiseeqs, tt, [x, y, z], [σ, ρ, β], tspan = (0.0, 10.0))
     de = complete(de)

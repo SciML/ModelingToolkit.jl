@@ -123,7 +123,7 @@ Dₜ = Differential(t)
 @parameters k2 [tunable = false]
 eqs = [Dₜ(x) ~ (-k2 * x + k * u) / T
        y ~ x]
-sys = ODESystem(eqs, t, name = :tunable_first_order)
+sys = System(eqs, t, name = :tunable_first_order)
 unk_meta = ModelingToolkit.dump_unknowns(sys)
 @test length(unk_meta) == 3
 @test all(iszero, meta.default for meta in unk_meta)
@@ -169,14 +169,14 @@ sp = Set(p)
 @independent_variables t
 @variables u(t) [description = "A short description of u"]
 @parameters p [description = "A description of p"]
-@named sys = ODESystem([u ~ p], t)
+@named sys = System([u ~ p], t)
 
 @test_nowarn show(stdout, "text/plain", sys)
 
 # Defaults, guesses overridden by system, parameter dependencies
 @variables x(t)=1.0 y(t) [guess = 1.0]
 @parameters p=2.0 q
-@named sys = ODESystem(Equation[], t, [x, y], [p]; defaults = Dict(x => 2.0, p => 3.0),
+@named sys = System(Equation[], t, [x, y], [p]; defaults = Dict(x => 2.0, p => 3.0),
     guesses = Dict(y => 2.0), parameter_dependencies = [q => 2p])
 unks_meta = ModelingToolkit.dump_unknowns(sys)
 unks_meta = Dict([ModelingToolkit.getname(meta.var) => meta for meta in unks_meta])

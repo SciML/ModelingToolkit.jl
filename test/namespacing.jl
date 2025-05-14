@@ -1,10 +1,10 @@
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D, iscomplete, does_namespacing
 
-@testset "ODESystem" begin
+@testset "System" begin
     @variables x(t)
     @parameters p
-    sys = ODESystem(D(x) ~ p * x, t; name = :inner)
+    sys = System(D(x) ~ p * x, t; name = :inner)
     @test !iscomplete(sys)
     @test does_namespacing(sys)
 
@@ -23,7 +23,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D, iscomplete, does_namespac
     @test isequal(p, nsys.p)
     @test !isequal(p, sys.p)
 
-    @test_throws ["namespacing", "inner"] ODESystem(
+    @test_throws ["namespacing", "inner"] System(
         Equation[], t; systems = [nsys], name = :a)
 end
 

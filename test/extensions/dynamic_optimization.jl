@@ -20,7 +20,7 @@ const M = ModelingToolkit
     eqs = [D(x(t)) ~ α * x(t) - β * x(t) * y(t),
         D(y(t)) ~ -γ * y(t) + δ * x(t) * y(t)]
 
-    @mtkbuild sys = ODESystem(eqs, t)
+    @mtkbuild sys = System(eqs, t)
     tspan = (0.0, 1.0)
     u0map = [x(t) => 4.0, y(t) => 2.0]
     parammap = [α => 1.5, β => 1.0, γ => 3.0, δ => 1.0]
@@ -53,7 +53,7 @@ const M = ModelingToolkit
     u0map = Pair[]
     guess = [x(t) => 4.0, y(t) => 2.0]
     constr = [x(0.6) ~ 3.5, x(0.3) ~ 7.0]
-    @mtkbuild lksys = ODESystem(eqs, t; constraints = constr)
+    @mtkbuild lksys = System(eqs, t; constraints = constr)
 
     jprob = JuMPDynamicOptProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
     @test JuMP.num_constraints(jprob.model) == 2
@@ -77,7 +77,7 @@ const M = ModelingToolkit
 
     # Test whole-interval constraints
     constr = [x(t) ≳ 1, y(t) ≳ 1]
-    @mtkbuild lksys = ODESystem(eqs, t; constraints = constr)
+    @mtkbuild lksys = System(eqs, t; constraints = constr)
     iprob = InfiniteOptDynamicOptProblem(
         lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
     isol = solve(iprob, Ipopt.Optimizer,
@@ -116,7 +116,7 @@ end
     @variables u(..) [bounds = (-1.0, 1.0), input = true]
     constr = [v(1.0) ~ 0.0]
     cost = [-x(1.0)] # Maximize the final distance.
-    @named block = ODESystem(
+    @named block = System(
         [D(x(t)) ~ v(t), D(v(t)) ~ u(t)], t; costs = cost, constraints = constr)
     block = structural_simplify(block; inputs = [u(t)])
 
@@ -139,7 +139,7 @@ end
 
     # Test dynamics
     @parameters (u_interp::ConstantInterpolation)(..)
-    @mtkbuild block_ode = ODESystem([D(x(t)) ~ v(t), D(v(t)) ~ u_interp(t)], t)
+    @mtkbuild block_ode = System([D(x(t)) ~ v(t), D(v(t)) ~ u_interp(t)], t)
     spline = ctrl_to_spline(jsol.input_sol, ConstantInterpolation)
     oprob = ODEProblem(block_ode, u0map, tspan, [u_interp => spline])
     osol = solve(oprob, Vern8(), dt = 0.01, adaptive = false)
@@ -165,7 +165,7 @@ end
         D(q(t)) ~ -ν * q(t) + c * (1 - α) * s * w(t)]
     costs = [-q(tspan[2])]
 
-    @named beesys = ODESystem(eqs, t; costs)
+    @named beesys = System(eqs, t; costs)
     beesys = structural_simplify(beesys; inputs = [α])
     u0map = [w(t) => 40, q(t) => 2]
     pmap = [b => 1, c => 1, μ => 1, s => 1, ν => 1, α => 1]
@@ -183,7 +183,7 @@ end
     @parameters (α_interp::LinearInterpolation)(..)
     eqs = [D(w(t)) ~ -μ * w(t) + b * s * α_interp(t) * w(t),
         D(q(t)) ~ -ν * q(t) + c * (1 - α_interp(t)) * s * w(t)]
-    @mtkbuild beesys_ode = ODESystem(eqs, t)
+    @mtkbuild beesys_ode = System(eqs, t)
     oprob = ODEProblem(beesys_ode,
         u0map,
         tspan,
@@ -212,7 +212,7 @@ end
     (ts, te) = (0.0, 0.2)
     costs = [-h(te)]
     cons = [T(te) ~ 0, m(te) ~ m_c]
-    @named rocket = ODESystem(eqs, t; costs, constraints = cons)
+    @named rocket = System(eqs, t; costs, constraints = cons)
     rocket = structural_simplify(rocket; inputs = [T(t)])
 
     u0map = [h(t) => h₀, m(t) => m₀, v(t) => 0]
@@ -237,7 +237,7 @@ end
     eqs = [D(h(t)) ~ v(t),
         D(v(t)) ~ (T_interp(t) - drag(h(t), v(t))) / m(t) - gravity(h(t)),
         D(m(t)) ~ -T_interp(t) / c]
-    @mtkbuild rocket_ode = ODESystem(eqs, t)
+    @mtkbuild rocket_ode = System(eqs, t)
     interpmap = Dict(T_interp => ctrl_to_spline(jsol.input_sol, CubicSpline))
     oprob = ODEProblem(rocket_ode, u0map, (ts, te), merge(Dict(pmap), interpmap))
     osol = solve(oprob, RadauIIA5(); adaptive = false, dt = 0.001)
@@ -260,7 +260,7 @@ end
     # Integral cost function
     costs = [-Symbolics.Integral(t in (0, tf))(x(t) - u(t)), -x(tf)]
     consolidate(u) = u[1] + u[2]
-    @named rocket = ODESystem(eqs, t; costs, consolidate)
+    @named rocket = System(eqs, t; costs, consolidate)
     rocket = structural_simplify(rocket; inputs = [u(t)])
 
     u0map = [x(t) => 17.5]
@@ -283,7 +283,7 @@ end
     constr = [v(tf) ~ 0, x(tf) ~ 0]
     cost = [tf] # Minimize time
 
-    @named block = ODESystem(
+    @named block = System(
         [D(x(t)) ~ v(t), D(v(t)) ~ u(t)], t; costs = cost, constraints = constr)
     block = structural_simplify(block, inputs = [u(t)])
 
@@ -327,7 +327,7 @@ end
     costs = [Symbolics.Integral(t in (0, tf))(u^2)]
     tspan = (0, tf)
 
-    @named cartpole = ODESystem(eqs, t; costs, constraints = cons)
+    @named cartpole = System(eqs, t; costs, constraints = cons)
     cartpole = structural_simplify(cartpole; inputs = [u])
 
     u0map = [D(x(t)) => 0.0, D(θ(t)) => 0.0, θ(t) => 0.0, x(t) => 0.0]
