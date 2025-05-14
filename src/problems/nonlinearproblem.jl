@@ -1,0 +1,90 @@
+@fallback_iip_specialize function SciMLBase.NonlinearFunction{iip, spec}(
+        sys::System; u0 = nothing, p = nothing, jac = false,
+        eval_expression = false, eval_module = @__MODULE__, sparse = false,
+        checkbounds = false, sparsity = false, analytic = nothing,
+        simplify = false, cse = true, initialization_data = nothing,
+        check_compatibility = true, expression = Val{false}, kwargs...) where {iip, spec}
+    check_complete(sys, NonlinearFunction)
+    check_compatibility && check_compatible_system(NonlinearFunction, sys)
+
+    dvs = unknowns(sys)
+    ps = parameters(sys)
+    f = generate_rhs(sys, dvs, ps; expression, wrap_gfw = Val{true},
+        eval_expression, eval_module, checkbounds = checkbounds, cse,
+        kwargs...)
+
+    if spec === SciMLBase.FunctionWrapperSpecialize && iip
+        if u0 === nothing || p === nothing
+            error("u0, and p must be specified for FunctionWrapperSpecialize on NonlinearFunction.")
+        end
+        if expression == Val{true}
+            f = :($(SciMLBase.wrapfun_iip)($f, ($u0, $u0, $p)))
+        else
+            f = SciMLBase.wrapfun_iip(f, (u0, u0, p))
+        end
+    end
+
+    if jac
+        _jac = generate_jacobian(sys; expression,
+            wrap_gfw = Val{true}, simplify, sparse, cse, eval_expression, eval_module,
+            checkbounds, kwargs...)
+    else
+        _jac = nothing
+    end
+
+    observedfun = ObservedFunctionCache(
+        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds,
+        cse)
+
+    if length(dvs) == length(equations(sys))
+        resid_prototype = nothing
+    else
+        resid_prototype = calculate_resid_prototype(length(equations(sys)), u0, p)
+    end
+
+    if sparse
+        jac_prototype = similar(calculate_jacobian(sys; sparse), eltype(u0))
+    else
+        jac_prototype = nothing
+    end
+
+    kwargs = (;
+        sys = sys,
+        jac = _jac,
+        observed = observedfun,
+        analytic = analytic,
+        jac_prototype,
+        resid_prototype,
+        initialization_data)
+    args = (; f)
+
+    return maybe_codegen_scimlfn(expression, NonlinearFunction{iip, spec}, args; kwargs...)
+end
+
+@fallback_iip_specialize function SciMLBase.NonlinearProblem{iip, spec}(
+        sys::System, u0map, parammap = SciMLBase.NullParameters(); expression = Val{false},
+        check_length = true, check_compatibility = true, kwargs...) where {iip, spec}
+    check_complete(sys, NonlinearProblem)
+    if is_time_dependent(sys)
+        sys = NonlinearSystem(sys)
+    end
+    check_compatibility && check_compatible_system(NonlinearProblem, sys)
+
+    f, u0, p = process_SciMLProblem(NonlinearFunction{iip, spec}, sys, u0map, parammap;
+        check_length, check_compatibility, expression, kwargs...)
+
+    kwargs = process_kwargs(sys; kwargs...)
+    args = (; f, u0, p, ptype = StandardNonlinearProblem())
+
+    return maybe_codegen_scimlproblem(expression, NonlinearProblem{iip}, args; kwargs...)
+end
+
+function check_compatible_system(
+        T::Union{Type{NonlinearFunction}, Type{NonlinearProblem}}, sys::System)
+    check_time_independent(sys, T)
+    check_not_dde(sys)
+    check_no_cost(sys, T)
+    check_no_constraints(sys, T)
+    check_no_jumps(sys, T)
+    check_no_noise(sys, T)
+end
