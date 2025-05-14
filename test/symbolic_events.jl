@@ -238,11 +238,11 @@ end
     cb = ModelingToolkit.generate_continuous_callbacks(sys)
     cond = cb.condition
     out = [0.0]
-    cond.f_iip(out, [0], p0, t0)
+    cond.f(out, [0], p0, t0)
     @test out[] ≈ -1 # signature is u,p,t
-    cond.f_iip(out, [1], p0, t0)
+    cond.f(out, [1], p0, t0)
     @test out[] ≈ 0  # signature is u,p,t
-    cond.f_iip(out, [2], p0, t0)
+    cond.f(out, [2], p0, t0)
     @test out[] ≈ 1  # signature is u,p,t
 
     prob = ODEProblem(sys, Pair[], (0.0, 2.0))
@@ -270,20 +270,20 @@ end
     cond = cb.condition
     out = [0.0, 0.0]
     # the root to find is 2
-    cond.f_iip(out, [0, 0], p0, t0)
+    cond.f(out, [0, 0], p0, t0)
     @test out[1] ≈ -2 # signature is u,p,t
-    cond.f_iip(out, [1, 0], p0, t0)
+    cond.f(out, [1, 0], p0, t0)
     @test out[1] ≈ -1  # signature is u,p,t
-    cond.f_iip(out, [2, 0], p0, t0) # this should return 0
+    cond.f(out, [2, 0], p0, t0) # this should return 0
     @test out[1] ≈ 0  # signature is u,p,t
 
     # the root to find is 1
     out = [0.0, 0.0]
-    cond.f_iip(out, [0, 0], p0, t0)
+    cond.f(out, [0, 0], p0, t0)
     @test out[2] ≈ -1 # signature is u,p,t
-    cond.f_iip(out, [0, 1], p0, t0) # this should return 0
+    cond.f(out, [0, 1], p0, t0) # this should return 0
     @test out[2] ≈ 0  # signature is u,p,t
-    cond.f_iip(out, [0, 2], p0, t0)
+    cond.f(out, [0, 2], p0, t0)
     @test out[2] ≈ 1  # signature is u,p,t
 
     sol = solve(prob, Tsit5())
@@ -351,7 +351,7 @@ end
     out = [0.0, 0.0, 0.0]
     p0 = 0.0
     t0 = 0.0
-    cond.f_iip(out, [0, 0, 0, 0], p0, t0)
+    cond.f(out, [0, 0, 0, 0], p0, t0)
     @test out ≈ [0, 1.5, -1.5]
 
     sol = solve(prob, Tsit5())
