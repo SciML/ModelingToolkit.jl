@@ -168,6 +168,7 @@ include("linearization.jl")
 include("problems/compatibility.jl")
 include("problems/odeproblem.jl")
 include("problems/ddeproblem.jl")
+include("problems/daeproblem.jl")
 include("systems/optimization/modelingtoolkitize.jl")
 
 include("systems/nonlinear/homotopy_continuation.jl")
