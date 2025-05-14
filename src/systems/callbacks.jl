@@ -596,6 +596,33 @@ Base.isempty(cb::AbstractCallback) = isempty(cb.conditions)
 ####################################
 ####### Compilation functions ######
 ####################################
+
+struct CompiledCondition{IsDiscrete, F}
+    f::F
+end
+
+function CompiledCondition{ID}(f::F) where {ID, F}
+    return CompiledCondition{ID, F}(f)
+end
+
+function (cc::CompiledCondition)(out, u, t, integ)
+    cc.f(out, u, parameter_values(integ), t)
+end
+
+function (cc::CompiledCondition{false})(u, t, integ)
+    if DiffEqBase.isinplace(SciMLBase.get_sol(integ).prob)
+        tmp, = DiffEqBase.get_tmp_cache(integ)
+        cc.f(tmp, u, parameter_values(integ), t)
+        tmp[1]
+    else
+        cc.f(u, parameter_values(integ), t)
+    end
+end
+
+function (cc::CompiledCondition{true})(u, t, integ)
+    cc.f(u, parameter_values(integ), t)
+end
+
 """
     compile_condition(cb::AbstractCallback, sys, dvs, ps; expression, kwargs...)
 
@@ -615,30 +642,19 @@ function compile_condition(
     end
 
     if !is_discrete(cbs)
-        condit = reduce(vcat, flatten_equations(condit))
+        condit = reduce(vcat, flatten_equations(Vector{Equation}(condit)))
         condit = condit isa AbstractVector ? [c.lhs - c.rhs for c in condit] :
                  [condit.lhs - condit.rhs]
     end
 
     fs = build_function_wrapper(
-        sys, condit, u, p..., t; kwargs..., expression = Val{false}, cse = false)
-    (f_oop, f_iip) = is_discrete(cbs) ? (fs, nothing) : fs
-
-    cond = if cbs isa AbstractVector
-        (out, u, t, integ) -> f_iip(out, u, parameter_values(integ), t)
-    elseif is_discrete(cbs)
-        (u, t, integ) -> f_oop(u, parameter_values(integ), t)
-    else
-        function (u, t, integ)
-            if DiffEqBase.isinplace(SciMLBase.get_sol(integ).prob)
-                tmp, = DiffEqBase.get_tmp_cache(integ)
-                f_iip(tmp, u, parameter_values(integ), t)
-                tmp[1]
-            else
-                f_oop(u, parameter_values(integ), t)
-            end
-        end
+        sys, condit, u, p..., t; kwargs..., cse = false)
+    if is_discrete(cbs)
+        fs = (fs, nothing)
     end
+    fs = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(
+        Val{false}, fs...; eval_expression, eval_module)
+    return CompiledCondition{is_discrete(cbs)}(fs)
 end
 
 """
