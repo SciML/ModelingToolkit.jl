@@ -30,7 +30,7 @@ eqs = [0 ~ σ * (y - x) * h,
 @test eval(toexpr(ns)) == ns
 test_nlsys_inference("standard", ns, (x, y, z), (σ, ρ, β))
 @test begin
-    f = generate_function(ns, [x, y, z], [σ, ρ, β], expression = Val{false})[2]
+    f = generate_rhs(ns, [x, y, z], [σ, ρ, β], expression = Val{false})[2]
     du = [0.0, 0.0, 0.0]
     f(du, [1, 2, 3], [1, 2, 3])
     du ≈ [1, -3, -7]
@@ -57,9 +57,6 @@ jac = calculate_jacobian(ns)
     @test canonequal(jac[3, 2], x)
     @test canonequal(jac[3, 3], -1 * β)
 end
-nlsys_func = generate_function(ns, [x, y, z], [σ, ρ, β])
-jac_func = generate_jacobian(ns)
-f = @eval eval(nlsys_func)
 
 # Intermediate calculations
 a = y - x
@@ -69,7 +66,7 @@ eqs = [0 ~ σ * a * h,
     0 ~ x * y - β * z]
 @named ns = System(eqs, [x, y, z], [σ, ρ, β])
 ns = complete(ns)
-nlsys_func = generate_function(ns, [x, y, z], [σ, ρ, β])
+nlsys_func = generate_rhs(ns, [x, y, z], [σ, ρ, β])
 nf = NonlinearFunction(ns)
 jac = calculate_jacobian(ns)
 
@@ -119,14 +116,14 @@ lorenz2 = lorenz(:lorenz2)
 using OrdinaryDiffEq
 @independent_variables t
 D = Differential(t)
-@named subsys = convert_system(System, lorenz1, t)
+@named subsys = convert_system_indepvar(lorenz1, t)
 @named sys = System([D(subsys.x) ~ subsys.x + subsys.x], t, systems = [subsys])
 sys = structural_simplify(sys)
 u0 = [subsys.x => 1, subsys.z => 2.0, subsys.y => 1.0]
 prob = ODEProblem(sys, u0, (0, 1.0), [subsys.σ => 1, subsys.ρ => 2, subsys.β => 3])
 sol = solve(prob, FBDF(), reltol = 1e-7, abstol = 1e-7)
 @test sol[subsys.x] + sol[subsys.y] - sol[subsys.z]≈sol[subsys.u] atol=1e-7
-@test_throws ArgumentError convert_system(System, sys, t)
+@test_throws ArgumentError convert_system_indepvar(sys, t)
 
 @parameters σ ρ β
 @variables x y z
@@ -152,7 +149,8 @@ np = NonlinearProblem(
     function issue819()
         sys1 = makesys(:sys1)
         sys2 = makesys(:sys1)
-        @test_throws ArgumentError System([sys2.f ~ sys1.x, sys1.f ~ 0], [], [],
+        @test_throws ModelingToolkit.NonUniqueSubsystemsError System(
+            [sys2.f ~ sys1.x, sys1.f ~ 0], [], [],
             systems = [sys1, sys2], name = :foo)
     end
     issue819()
@@ -199,23 +197,6 @@ eq = [v1 ~ sin(2pi * t * h)
       i1 ~ i2]
 @named sys = System(eq, t)
 @test length(equations(structural_simplify(sys))) == 0
-
-@testset "Issue: 1504" begin
-    @variables u[1:4]
-
-    eqs = [u[1] ~ 1,
-        u[2] ~ 1,
-        u[3] ~ 1,
-        u[4] ~ h]
-
-    sys = System(eqs, collect(u[1:4]), Num[], defaults = Dict([]), name = :test)
-    sys = complete(sys)
-    prob = NonlinearProblem(sys, ones(length(unknowns(sys))))
-
-    sol = NonlinearSolve.solve(prob, NewtonRaphson())
-
-    @test sol[u] ≈ ones(4)
-end
 
 @variables x(t)
 @parameters a
@@ -371,17 +352,18 @@ end
         prob = IntervalNonlinearProblem(sys, (0.0, 2.0), [p => 1.0])
         sol = @test_nowarn solve(prob, ITP())
         @test SciMLBase.successful_retcode(sol)
-        @test_nowarn IntervalNonlinearProblemExpr(sys, (0.0, 2.0), [p => 1.0])
+        @test_nowarn IntervalNonlinearProblem(
+            sys, (0.0, 2.0), [p => 1.0]; expression = Val{true})
     end
 
     @variables y
     @mtkbuild sys = System([0 ~ x * x - p * x + p, 0 ~ x * y + p])
-    @test_throws ["single equation", "unknown"] IntervalNonlinearProblem(sys, (0.0, 1.0))
-    @test_throws ["single equation", "unknown"] IntervalNonlinearFunction(sys, (0.0, 1.0))
-    @test_throws ["single equation", "unknown"] IntervalNonlinearProblemExpr(
-        sys, (0.0, 1.0))
-    @test_throws ["single equation", "unknown"] IntervalNonlinearFunctionExpr(
-        sys, (0.0, 1.0))
+    @test_throws ["single unknown"] IntervalNonlinearProblem(sys, (0.0, 1.0))
+    @test_throws ["single unknown"] IntervalNonlinearFunction(sys)
+    @test_throws ["single unknown"] IntervalNonlinearProblem(
+        sys, (0.0, 1.0); expression = Val{true})
+    @test_throws ["single unknown"] IntervalNonlinearFunction(
+        sys; expression = Val{true})
 end
 
 @testset "Vector parameter used unscalarized and partially scalarized" begin
