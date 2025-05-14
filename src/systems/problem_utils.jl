@@ -1184,7 +1184,7 @@ function process_SciMLProblem(
         kwargs = merge(kwargs,)
     end
 
-    f = constructor(sys, dvs, ps, u0; p = p,
+    f = constructor(sys; u0 = u0, p = p,
         eval_expression = eval_expression,
         eval_module = eval_module,
         kwargs...)
@@ -1234,18 +1234,20 @@ function SciMLBase.detect_cycles(sys::AbstractSystem, varmap::Dict{Any, Any}, va
     return !isempty(cycles)
 end
 
-function process_kwargs(sys::System; callback = nothing, eval_expression = false,
-        eval_module = @__MODULE__, kwargs...)
+function process_kwargs(sys::System; expression = Val{false}, callback = nothing,
+        eval_expression = false, eval_module = @__MODULE__, kwargs...)
     kwargs = filter_kwargs(kwargs)
     kwargs1 = (;)
 
     if is_time_dependent(sys)
-        cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
-        if cbs !== nothing
-            kwargs1 = merge(kwargs1, (callback = cbs,))
+        if expression == Val{false}
+            cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
+            if cbs !== nothing
+                kwargs1 = merge(kwargs1, (callback = cbs,))
+            end
         end
 
-        tstops = SymbolicTstops(sys; eval_expression, eval_module)
+        tstops = SymbolicTstops(sys; expression, eval_expression, eval_module)
         if tstops !== nothing
             kwargs1 = merge(kwargs1, (; tstops))
         end
