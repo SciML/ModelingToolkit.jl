@@ -176,6 +176,7 @@ include("problems/intervalnonlinearproblem.jl")
 include("problems/implicitdiscreteproblem.jl")
 include("problems/discreteproblem.jl")
 include("problems/optimizationproblem.jl")
+include("problems/jumpproblem.jl")
 include("systems/optimization/modelingtoolkitize.jl")
 
 include("systems/nonlinear/homotopy_continuation.jl")
