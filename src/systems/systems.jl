@@ -134,7 +134,7 @@ function __structural_simplify(sys::AbstractSystem; simplify = false,
         if sorted_g_rows isa AbstractMatrix && size(sorted_g_rows, 2) == 1
             # If there's only one brownian variable referenced across all the equations,
             # we get a Nx1 matrix of noise equations, which is a special case known as scalar noise
-            noise_eqs = sorted_g_rows[:, 1]
+            noise_eqs = reshape(sorted_g_rows[:, 1], (:, 1))
             is_scalar_noise = true
         elseif __num_isdiag_noise(sorted_g_rows)
             # If each column of the noise matrix has either 0 or 1 non-zero entry, then this is "diagonal noise".
