@@ -181,6 +181,7 @@ include("problems/optimizationproblem.jl")
 include("problems/jumpproblem.jl")
 include("problems/initializationproblem.jl")
 include("problems/sccnonlinearproblem.jl")
+include("problems/bvproblem.jl")
 include("systems/optimization/modelingtoolkitize.jl")
 
 include("systems/nonlinear/homotopy_continuation.jl")
