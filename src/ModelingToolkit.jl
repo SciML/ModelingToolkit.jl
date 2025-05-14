@@ -173,6 +173,7 @@ include("problems/ddeproblem.jl")
 include("problems/daeproblem.jl")
 include("problems/sdeproblem.jl")
 include("problems/sddeproblem.jl")
+include("problems/nonlinearproblem.jl")
 include("systems/optimization/modelingtoolkitize.jl")
 
 include("systems/nonlinear/homotopy_continuation.jl")
