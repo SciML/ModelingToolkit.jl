@@ -56,7 +56,7 @@ end
             ρ
             β
         end
-        sys = ODESystem(
+        sys = System(
             [D(D(x)) ~ σ * (y - x)
              D(y) ~ x * (ρ - z) - y
              D(z) ~ x * y - β * z], iv; name)
@@ -68,12 +68,12 @@ end
         @parameters begin
             p[1:2, 1:2]
         end
-        sys = ODESystem([D(D(x)) ~ p * x], iv; name)
+        sys = System([D(D(x)) ~ p * x], iv; name)
     end
     function Outer(; name)
         @named 😄 = Lorenz()
         @named arr = ArrSys()
-        sys = ODESystem(Equation[], iv; name, systems = [😄, arr])
+        sys = System(Equation[], iv; name, systems = [😄, arr])
     end
 
     @mtkbuild sys = Outer()

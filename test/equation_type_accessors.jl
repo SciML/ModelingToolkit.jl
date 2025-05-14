@@ -44,9 +44,9 @@ eqs2 = [X + Y + c ~ b * X^(X + Z + a)
 eqs3 = [D(X) ~ sqrt(X + b) + sqrt(Z + c)
         2Z * (Z + Y) ~ D(Y) * log(a)
         D(Z) + c * X ~ b / (X + Y^d) + D(Z)]
-@named osys1 = ODESystem(eqs1, t)
-@named osys2 = ODESystem(eqs2, t)
-@named osys3 = ODESystem(eqs3, t)
+@named osys1 = System(eqs1, t)
+@named osys2 = System(eqs2, t)
+@named osys3 = System(eqs3, t)
 
 # Test `has...` for non-composed systems. 
 @test has_alg_equations(osys1)

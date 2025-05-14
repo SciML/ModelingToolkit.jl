@@ -71,7 +71,7 @@ lsys = named_ss(
 # If we now want to add a disturbance model, we cannot do that since we have already connected a constant to the disturbance input, we thus create a new wrapper model with inputs
 
 s = tf("s")
-dist(; name) = ODESystem(1 / s; name)
+dist(; name) = System(1 / s; name)
 
 @mtkmodel SystemModelWithDisturbanceModel begin
     @components begin
@@ -106,7 +106,7 @@ sol = solve(prob, Tsit5())
 ## 
 # Now we only have an integrating disturbance affecting inertia1, what if we want both integrating and direct Gaussian? We'd need a "PI controller" disturbancemodel. If we add the disturbance model (s+1)/s we get the integrating and non-integrating noises being correlated which is fine, it reduces the dimensions of the sigma point by 1.
 
-dist3(; name) = ODESystem(ss(1 + 10 / s, balance = false); name)
+dist3(; name) = System(ss(1 + 10 / s, balance = false); name)
 
 @mtkmodel SystemModelWithDisturbanceModel begin
     @components begin
