@@ -83,9 +83,11 @@ end
     maybe_codegen_scimlproblem(expression, ODEProblem{iip}, args; kwargs...)
 end
 
-function check_compatible_system(T::Union{Type{ODEFunction}, Type{ODEProblem}}, sys::System)
+function check_compatible_system(
+        T::Union{Type{ODEFunction}, Type{ODEProblem}, Type{DAEFunction}, Type{DAEProblem}},
+        sys::System)
     check_time_dependent(sys, T)
-    check_not_dde(sys, T)
+    check_not_dde(sys)
     check_no_cost(sys, T)
     check_no_constraints(sys, T)
     check_no_jumps(sys, T)
