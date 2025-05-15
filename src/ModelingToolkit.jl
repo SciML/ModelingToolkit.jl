@@ -62,6 +62,8 @@ import BlockArrays: BlockArray, BlockedArray, Block, blocksize, blocksizes, bloc
 using OffsetArrays: Origin
 import CommonSolve
 import EnumX
+import ChainRulesCore
+import ChainRulesCore: Tangent, ZeroTangent, NoTangent, zero_tangent, unthunk
 
 using RuntimeGeneratedFunctions
 using RuntimeGeneratedFunctions: drop_expr
@@ -203,6 +205,8 @@ include("structural_transformation/StructuralTransformations.jl")
 
 @reexport using .StructuralTransformations
 include("inputoutput.jl")
+
+include("adjoints.jl")
 
 for S in subtypes(ModelingToolkit.AbstractSystem)
     S = nameof(S)
