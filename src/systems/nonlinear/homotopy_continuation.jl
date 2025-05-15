@@ -45,81 +45,33 @@ function display_reason(reason::NonPolynomialReason.T, sym)
     end
 end
 
-"""
-    $(TYPEDEF)
-
-Information about an expression about its polynomial nature.
-"""
-mutable struct PolynomialData
-    """
-    A list of all non-polynomial terms in the expression.
-    """
-    non_polynomial_terms::Vector{BasicSymbolic}
-    """
-    Corresponding to `non_polynomial_terms`, a list of reasons why they are
-    not polynomial.
-    """
-    reasons::Vector{NonPolynomialReason.T}
-    """
-    Whether the polynomial contains parametric exponents of unknowns.
-    """
-    has_parametric_exponent::Bool
-end
-
-PolynomialData() = PolynomialData(BasicSymbolic[], NonPolynomialReason.T[], false)
-
 abstract type PolynomialTransformationError <: Exception end
 
-struct MultivarTerm <: PolynomialTransformationError
-    term::Any
-    vars::Any
+struct UnmatchedUnknowns <: PolynomialTransformationError
+    unmatched::Vector{BasicSymbolic}
 end
 
-function Base.showerror(io::IO, err::MultivarTerm)
+function Base.showerror(io::IO, err::UnmatchedUnknowns)
     println(io,
-        "Cannot convert system to polynomial: Found term $(err.term) which is a function of multiple unknowns $(err.vars).")
+        "Cannot convert system to polynomial: could not find terms to solve for unknowns $(err.unmatched).")
 end
 
-struct MultipleTermsOfSameVar <: PolynomialTransformationError
-    terms::Any
-    var::Any
+struct UnmatchedTerms <: PolynomialTransformationError
+    unmatched::Vector{BasicSymbolic}
 end
 
-function Base.showerror(io::IO, err::MultipleTermsOfSameVar)
-    println(io,
-        "Cannot convert system to polynomial: Found multiple non-polynomial terms $(err.terms) involving the same unknown $(err.var).")
+function Base.showerror(io::IO, err::UnmatchedTerms)
+    println(io, "Cannot convert system to polynomial: too many non-polynomial terms in system. Unmatched terms are $(err.unmatched).")
 end
 
-struct SymbolicSolveFailure <: PolynomialTransformationError
-    term::Any
-    var::Any
-end
-
-function Base.showerror(io::IO, err::SymbolicSolveFailure)
-    println(io,
-        "Cannot convert system to polynomial: Unable to symbolically solve $(err.term) for $(err.var).")
-end
-
-struct NemoNotLoaded <: PolynomialTransformationError end
-
-function Base.showerror(io::IO, err::NemoNotLoaded)
-    println(io,
-        "ModelingToolkit may be able to solve this system as a polynomial system if `Nemo` is loaded. Run `import Nemo` and try again.")
-end
-
-struct VariablesAsPolyAndNonPoly <: PolynomialTransformationError
-    vars::Any
-end
-
-function Base.showerror(io::IO, err::VariablesAsPolyAndNonPoly)
-    println(io,
-        "Cannot convert convert system to polynomial: Variables $(err.vars) occur in both polynomial and non-polynomial terms in the system.")
+function no_nemo_warning()
+    @warn "ModelingToolkit may be able to symbolically solve some non-polynomial terms in this system for all roots if `Nemo` is loaded. Run `import Nemo` and try again to enable this functionality and possibly obtain additional roots."
 end
 
 struct NotPolynomialError <: Exception
     transformation_err::Union{PolynomialTransformationError, Nothing}
     eq::Vector{Equation}
-    data::Vector{PolynomialData}
+    data::Vector{Any} # PolynomialData but then I have to put that struct above this
 end
 
 function Base.showerror(io::IO, err::NotPolynomialError)
@@ -138,6 +90,34 @@ function Base.showerror(io::IO, err::NotPolynomialError)
     end
 end
 
+"""
+    $(TYPEDEF)
+
+Information about an expression about its polynomial nature.
+"""
+mutable struct PolynomialData
+    """
+    A list of the variables in the expression being searched that occur outside of
+    any non-polynomial terms.
+    """
+    solo_terms::Set{BasicSymbolic}
+    """
+    A list of all non-polynomial terms in the expression.
+    """
+    non_polynomial_terms::Vector{BasicSymbolic}
+    """
+    Corresponding to `non_polynomial_terms`, a list of reasons why they are
+    not polynomial.
+    """
+    reasons::Vector{NonPolynomialReason.T}
+    """
+    Whether the polynomial contains parametric exponents of unknowns.
+    """
+    has_parametric_exponent::Bool
+end
+
+PolynomialData() = PolynomialData(Set{BasicSymbolic}(), BasicSymbolic[], NonPolynomialReason.T[], false)
+
 function is_polynomial!(data, y, wrt)
     process_polynomial!(data, y, wrt)
     isempty(data.reasons)
@@ -152,9 +132,12 @@ writing said information to `data`.
 function process_polynomial!(data::PolynomialData, x, wrt)
     x = unwrap(x)
     symbolic_type(x) == NotSymbolic() && return true
-    iscall(x) || return true
     contains_variable(x, wrt) || return true
-    any(isequal(x), wrt) && return true
+    if any(isequal(x), wrt)
+        push!(data.solo_terms, x)
+        return true
+    end
+    iscall(x) || return true
 
     if operation(x) in (*, +, -, /)
         # `map` because `all` will early exit, but we want to search
@@ -211,25 +194,42 @@ end
 """
     $(TYPEDEF)
 
+Information for how to solve for unknowns involved in non-symbolically-solvable
+non-polynomial terms to turn the system into a polynomial. Used in
+`PolynomialTransformation`.
+"""
+struct NonlinearSolveTransformation
+    """
+    The system which solves for the unknowns of the parent system.
+    """
+    sys::NonlinearSystem
+    """
+    The input variables to this system representing solutions of non-polynomial terms.
+    """
+    inputvars::Vector{BasicSymbolic}
+end
+
+"""
+    $(TYPEDEF)
+
 Information representing how to transform a `NonlinearSystem` into a polynomial
 system.
 """
 struct PolynomialTransformation
     """
-    Substitutions mapping non-polynomial terms to temporary unknowns. The system
-    is a polynomial in the new unknowns. Currently, each non-polynomial term is a
-    function of a single unknown of the original system.
+    The stages in which to recover the solution in terms of the original unknowns, in
+    order.
+    """
+    solve_stages::Vector{Any}
+    """
+    The (previous) stages each stage depends on.
+    """
+    stage_dependencies::Vector{Vector{Int}}
+    """
+    Mapping from terms to new unknowns they are replaced by. The system is a
+    polynomial in the new unknowns.
     """
     substitution_rules::Dict{BasicSymbolic, BasicSymbolic}
-    """
-    A vector of expressions involving unknowns of the transformed system, mapping
-    back to solutions of the original system.
-    """
-    all_solutions::Vector{Vector{BasicSymbolic}}
-    """
-    The new unknowns of the transformed system.
-    """
-    new_dvs::Vector{BasicSymbolic}
     """
     The polynomial data for each equation.
     """
@@ -262,76 +262,135 @@ function PolynomialTransformation(sys::NonlinearSystem)
         d -> d.non_polynomial_terms, vcat, polydata; init = BasicSymbolic[])
     unique!(all_non_poly_terms)
 
-    # each variable can only be replaced by one non-polynomial expression involving
-    # that variable. Keep track of this mapping.
-    var_to_nonpoly = Dict{BasicSymbolic, PolynomialTransformationData}()
+    all_solo_vars = mapreduce(d -> d.solo_terms, union, polydata; init = Set{BasicSymbolic}())
 
-    is_poly = true
-    transformation_err = nothing
-    for t in all_non_poly_terms
-        # if the term involves multiple unknowns, we can't invert it
-        dvs_in_term = map(x -> occursin(x, t), dvs)
-        if count(dvs_in_term) > 1
-            transformation_err = MultivarTerm(t, dvs[dvs_in_term])
-            is_poly = false
-            break
-        end
-        # we already have a substitution solving for `var`
-        var = dvs[findfirst(dvs_in_term)]
-        if haskey(var_to_nonpoly, var) && !isequal(var_to_nonpoly[var].term, t)
-            transformation_err = MultipleTermsOfSameVar([t, var_to_nonpoly[var].term], var)
-            is_poly = false
-            break
-        end
-        # we want to solve `term - new_var` for `var`
-        new_var = gensym(Symbol(var))
-        new_var = unwrap(only(@variables $new_var))
-        invterm = Symbolics.ia_solve(
-            t - new_var, var; complex_roots = false, periodic_roots = false, warns = false)
-        # if we can't invert it, quit
-        if invterm === nothing || isempty(invterm)
-            transformation_err = SymbolicSolveFailure(t, var)
-            is_poly = false
-            break
-        end
-        # `ia_solve` returns lazy terms i.e. `asin(1.0)` instead of `pi/2`
-        # this just evaluates the constant expressions
-        invterm = Symbolics.substitute.(invterm, (Dict(),))
-        # RootsOf implies Symbolics couldn't solve the inner polynomial because
-        # `Nemo` wasn't loaded.
-        if any(x -> iscall(x) && operation(x) == Symbolics.RootsOf, invterm)
-            transformation_err = NemoNotLoaded()
-            is_poly = false
-            break
-        end
-        var_to_nonpoly[var] = PolynomialTransformationData(new_var, t, invterm)
+    # Graph matches variables to candidates for unknowns of the polynomial system that
+    # they occur in. These unknowns can be solo variables that appear outside of
+    # non-polynomial terms in the system, or non-polynomials.
+    graph = BipartiteGraph(length(dvs), 0)
+    # all solo variables are candidates for unknowns
+    graph_srcs = dvs
+    graph_dsts = BasicSymbolic[]
+    for (i, var) in enumerate(dvs)
+        var in all_solo_vars || continue
+        push!(graph_dsts, var)
+        vert = add_vertex!(graph, DST)
+        add_edge!(graph, i, vert)
     end
+
+    # buffer to prevent reallocations
+    dvs_in_term = Set()
+    # for efficient queries
+    dvs_to_src = Dict(graph_srcs .=> eachindex(graph_srcs))
+    # build out graph with other non-polynomial terms
+    for t in all_non_poly_terms
+        empty!(dvs_in_term)
+        vars!(dvs_in_term, t)
+        intersect!(dvs_in_term, dvs)
+        push!(graph_dsts, t)
+        vert = add_vertex!(graph, DST)
+        for var in dvs_in_term
+            add_edge!(graph, dvs_to_src[var], vert)
+        end
+    end
+
+    # Match variables to the candidate unknown we'll use to solve for them.
+    # This is a poor man's version of `structural_simplify`, but if we create
+    # and simplify a `NonlinearSystem` it makes doing symbolic solving more
+    # annoying.
+    matching = BipartiteGraphs.complete(maximal_matching(graph))
+    inv_matching = invview(matching)
+    # matching is from destination to source vertices
+    unassigned_dsts = filter(i -> matching[i] == unassigned, 𝑠vertices(graph))
+    unassigned_srcs = filter(i -> inv_matching[i] == unassigned, 𝑑vertices(graph))
 
     # return the error instead of throwing it, so the user can choose what to do
     # without having to catch the exception
-    if !is_poly
-        return NotPolynomialError(transformation_err, eqs, polydata)
+    if !isempty(unassigned_srcs)
+        return NotPolynomialError(UnmatchedUnknowns(graph_srcs[unassigned_srcs]), eqs, polydata)
+    end
+    if !isempty(unassigned_dsts)
+        return NotPolynomialError(UnmatchedTerms(graph_dsts[unassigned_dsts]), eqs, polydata)
     end
 
-    subrules = Dict{BasicSymbolic, BasicSymbolic}()
-    # corresponding to each unknown in `dvs`, the list of its possible solutions
-    # in terms of the new unknown.
-    combinations = Vector{BasicSymbolic}[]
-    new_dvs = BasicSymbolic[]
-    for x in dvs
-        if haskey(var_to_nonpoly, x)
-            _data = var_to_nonpoly[x]
-            # map term to new unknown
-            subrules[_data.term] = _data.new_var
-            push!(combinations, _data.inv_term)
-            push!(new_dvs, _data.new_var)
-        else
-            push!(combinations, BasicSymbolic[x])
-            push!(new_dvs, x)
+    # At this point, the matching is perfect. Find the SCCs so we know
+    # which terms to solve for which variables.
+    digraph = DiCMOBiGraph{false}(graph, matching)
+    var_sccs = Graphs.strongly_connected_components(digraph)
+    foreach(sort!, var_sccs)
+    # construct a condensation graph of the SCCs so we can topologically sort them
+    scc_graph = MatchedCondensationGraph(digraph, var_sccs)
+    toporder = topological_sort(scc_graph)
+    var_sccs = var_sccs[toporder]
+    # get the corresponding terms
+    term_sccs = map(var_sccs) do scc
+        map(scc) do src
+            inv_matching[src]
         end
     end
-    all_solutions = vec(collect.(collect(Iterators.product(combinations...))))
-    return PolynomialTransformation(subrules, all_solutions, new_dvs, polydata)
+
+    # keep track of which previous SCCs each SCC depends on
+    dependencies = Vector{Int}[]
+    # the method to solve each stage
+    solve_stages = []
+    # mapping from terms to the new unknowns they are replaced by
+    subrules = Dict{BasicSymbolic, BasicSymbolic}()
+    # if we've already emitted the no nemo warning
+    warned_no_nemo = false
+    for (i, (vscc, tscc)) in enumerate(zip(var_sccs, term_sccs))
+        # dependencies are simply outneighbors
+        push!(dependencies, collect(Graphs.outneighbors(scc_graph, i)))
+
+        # whether the SCC is solvable with a single variable
+        single_scc_solvable = length(vscc) == 1
+        # for single-variable SCCs, we use `ia_solve`
+        if single_scc_solvable
+            varidx = vscc[]
+            termidx = tscc[]
+            var = graph_srcs[varidx]
+            t = graph_dsts[termidx]
+            # Create a new variable and representing the non-polynomial term...
+            new_var = unwrap(similar_variable(var, Symbol(var)))
+            # ...and solve for `var` in terms of this new variable.
+            invterm = Symbolics.ia_solve(t - new_var, var; complex_roots = false, periodic_roots = false, warns = false)
+            # `ia_solve` returns lazy terms i.e. `asin(1.0)` instead of `pi/2`
+            # this just evaluates the constant expressions
+            invterm = Symbolics.substitute.(invterm, (Dict(),))
+            # if `ia_solve` returns `nothing`, the broadcast above turns it into `(nothing,)`
+            if invterm === (nothing,) || isempty(invterm)
+                # if we can't invert it, quit
+                single_scc_solvable = false
+            elseif any(x -> iscall(x) && operation(x) == Symbolics.RootsOf, invterm)
+                # RootsOf implies Symbolics couldn't solve the inner polynomial because
+                # `Nemo` wasn't loaded.
+                warned_no_nemo || no_nemo_warning()
+                warned_no_nemo = true
+                single_scc_solvable = false
+            else
+                subrules[t] = new_var
+                push!(solve_stages, PolynomialTransformationData(new_var, t, invterm))
+            end
+        end
+
+        # the SCC was solved with a single variable
+        single_scc_solvable && continue
+
+        # Solve using a `NonlinearSolve`.
+        vars = graph_srcs[vscc]
+        ts = graph_dsts[tscc]
+        # the new variables are inputs to the system, so they're parameters
+        new_vars = map(vars) do var
+            toparam.(unwrap.(similar_variable(var, Symbol(var))))
+        end
+        eqs = collect(0 .~ (ts .- new_vars))
+        scc_sys = complete(NonlinearSystem(eqs; name = Symbol(:scc_, i)))
+        push!(solve_stages, NonlinearSolveTransformation(scc_sys, new_vars))
+        for (new_var, t) in zip(new_vars, ts)
+            subrules[t] = new_var
+        end
+    end
+
+    return PolynomialTransformation(solve_stages, dependencies, subrules, polydata)
 end
 
 """
@@ -344,6 +403,15 @@ in the equations, to rule out invalid roots.
 struct PolynomialTransformationResult
     sys::NonlinearSystem
     denominators::Vector{BasicSymbolic}
+    """
+    The stages in which to recover the solution in terms of the original unknowns, in
+    order.
+    """
+    solve_stages::Vector{Any}
+    """
+    The (previous) stages each stage depends on.
+    """
+    stage_dependencies::Vector{Vector{Int}}
 end
 
 """
@@ -359,22 +427,13 @@ function transform_system(sys::NonlinearSystem, transformation::PolynomialTransf
     dvs = unknowns(sys)
     eqs = full_equations(sys)
     polydata = transformation.polydata
-    new_dvs = transformation.new_dvs
-    all_solutions = transformation.all_solutions
+    new_dvs = collect(values(subrules))
 
     eqs2 = Equation[]
     denoms = BasicSymbolic[]
     for eq in eqs
         t = eq.rhs - eq.lhs
         t = Symbolics.fixpoint_sub(t, subrules; maxiters = length(dvs))
-        # the substituted variable occurs outside the substituted term
-        poly_and_nonpoly = map(dvs) do x
-            all(!isequal(x), new_dvs) && occursin(x, t)
-        end
-        if any(poly_and_nonpoly)
-            return NotPolynomialError(
-                VariablesAsPolyAndNonPoly(dvs[poly_and_nonpoly]), eqs, polydata)
-        end
         num, den = handle_rational_polynomials(t, new_dvs; fraction_cancel_fn)
         # make factors different elements, otherwise the nonzero factors artificially
         # inflate the error of the zero factor.
@@ -395,7 +454,7 @@ function transform_system(sys::NonlinearSystem, transformation::PolynomialTransf
     # remove observed equations to avoid adding them in codegen
     @set! sys2.observed = Equation[]
     @set! sys2.substitutions = nothing
-    return PolynomialTransformationResult(sys2, denoms)
+    return PolynomialTransformationResult(sys2, denoms, transformation.solve_stages, transformation.stage_dependencies)
 end
 
 """
