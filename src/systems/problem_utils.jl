@@ -842,8 +842,8 @@ A function to be used as `update_initializeprob!` in `OverrideInitData`. Require
 `is_update_oop = Val(true)` to be passed to `update_initializeprob!`.
 """
 function update_initializeprob!(initprob, prob)
-    p = get_scimlfn(prob).initialization_data.metadata.oop_reconstruct_u0_p.pgetter(
-        prob, initprob)
+    pgetter = ChainRulesCore.@ignore_derivatives get_scimlfn(prob).initialization_data.metadata.oop_reconstruct_u0_p.pgetter
+    p = pgetter(prob, initprob)
     return remake(initprob; p)
 end
 
