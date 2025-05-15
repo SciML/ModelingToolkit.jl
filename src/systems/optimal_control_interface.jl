@@ -21,9 +21,9 @@ function InfiniteOptDynamicOptProblem end
 function CasADiDynamicOptProblem end
 
 function warn_overdetermined(sys, u0map)
-    constraintsys = get_constraintsystem(sys)
-    if !isnothing(constraintsys)
-        (length(constraints(constraintsys)) + length(u0map) > length(unknowns(sys))) &&
+    cstrs = constraints(sys)
+    if !isempty(cstrs)
+        (length(cstrs) + length(u0map) > length(unknowns(sys))) &&
             @warn "The control problem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) exceeds the total number of states. The solvers will default to doing a nonlinear least-squares optimization."
     end
 end
