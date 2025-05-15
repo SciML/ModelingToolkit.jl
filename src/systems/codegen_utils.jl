@@ -115,6 +115,9 @@ variable.
 """
 function isdelay(var, iv)
     iv === nothing && return false
+    if iscall(var) && ModelingToolkit.isoperator(var, Differential)
+        return isdelay(arguments(var)[1], iv)
+    end
     isvariable(var) || return false
     isparameter(var) && return false
     if iscall(var) && !ModelingToolkit.isoperator(var, Symbolics.Operator)
