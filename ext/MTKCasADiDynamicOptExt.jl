@@ -90,6 +90,11 @@ function MTK.CasADiDynamicOptProblem(sys::System, u0map, tspan, pmap;
     CasADiDynamicOptProblem(f, u0, tspan, p, model, kwargs...)
 end
 
+MTK.generate_U(model, dims) = 1
+MTK.generate_V(model, dims) = 1
+MTK.generate_timescale(model, dims) = 1
+MTK.generate_internal_model(::Type{CasADiModel}) = CasADi.opti()
+
 function init_model(sys, tspan, steps, u0map, pmap, u0; is_free_t = false)
     ctrls = MTK.unbound_inputs(sys)
     states = unknowns(sys)
