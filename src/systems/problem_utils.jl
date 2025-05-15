@@ -672,13 +672,6 @@ function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::Abstrac
     else
         p_constructor ∘ concrete_getu(srcsys, tunable_syms)
     end
-    rest_getters = map(Base.tail(Base.tail(syms))) do buf
-        if buf == ()
-            return Returns(())
-        else
-            return Base.Fix1(broadcast, p_constructor) ∘ getu(srcsys, buf)
-        end
-    end
     initials_getter = if initials && !isempty(syms[2])
         initsyms = Vector{Any}(syms[2])
         allsyms = Set(all_symbols(srcsys))
@@ -700,7 +693,29 @@ function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::Abstrac
     else
         Returns(SizedVector{0, Float64}())
     end
-    getters = (tunable_getter, initials_getter, rest_getters...)
+    discs_getter = if isempty(syms[3])
+        Returns(())
+    else
+        ic = get_index_cache(dstsys)
+        blockarrsizes = Tuple(map(ic.discrete_buffer_sizes) do bufsizes
+            map(x -> x.length, bufsizes)
+        end)
+        # discretes need to be blocked arrays
+        # the `getu` returns a tuple of arrays corresponding to `p.discretes`
+        # `Base.Fix1(...)` applies `p_constructor` to each of the arrays in the tuple
+        # `Base.Fix2(...)` does `BlockedArray.(tuple_of_arrs, blockarrsizes)` returning a
+        # tuple of `BlockedArray`s
+        Base.Fix2(Broadcast.BroadcastFunction(BlockedArray), blockarrsizes) ∘
+        Base.Fix1(broadcast, p_constructor) ∘ getu(srcsys, syms[3])
+    end
+    rest_getters = map(Base.tail(Base.tail(Base.tail(syms)))) do buf
+        if buf == ()
+            return Returns(())
+        else
+            return Base.Fix1(broadcast, p_constructor) ∘ getu(srcsys, buf)
+        end
+    end
+    getters = (tunable_getter, initials_getter, discs_getter, rest_getters...)
     getter = let getters = getters
         function _getter(valp, initprob)
             oldcache = parameter_values(initprob).caches
@@ -772,12 +787,14 @@ function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
         copyto!(newbuf, buf)
         newp = repack(newbuf)
     end
-    # and initials portion
-    buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Initials(), newp)
-    if eltype(buf) != T
-        newbuf = similar(buf, T)
-        copyto!(newbuf, buf)
-        newp = repack(newbuf)
+    if newp isa MTKParameters
+        # and initials portion
+        buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Initials(), newp)
+        if eltype(buf) != T
+            newbuf = similar(buf, T)
+            copyto!(newbuf, buf)
+            newp = repack(newbuf)
+        end
     end
     return u0, newp
 end
@@ -793,7 +810,7 @@ function construct_initializeprobpmap(
     @assert is_initializesystem(initsys)
     if is_split(sys)
         return let getter = get_mtkparameters_reconstructor(
-                initsys, sys; initials = true, p_constructor)
+                initsys, sys; initials = true, unwrap_initials = true, p_constructor)
             function initprobpmap_split(prob, initsol)
                 getter(initsol, prob)
             end
