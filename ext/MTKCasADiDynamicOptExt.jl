@@ -56,9 +56,9 @@ function (M::MXLinearInterpolation)(τ)
 end
 
 """
-    CasADiDynamicOptProblem(sys::ODESystem, u0, tspan, p; dt, steps)
+    CasADiDynamicOptProblem(sys::System, u0, tspan, p; dt, steps)
 
-Convert an ODESystem representing an optimal control system into a CasADi model
+Convert an System representing an optimal control system into a CasADi model
 for solving using optimization. Must provide either `dt`, the timestep between collocation 
 points (which, along with the timespan, determines the number of points), or directly 
 provide the number of points as `steps`.
@@ -68,10 +68,10 @@ The optimization variables:
 - a vector-of-vectors V representing the controls as an interpolation array
 
 The constraints are:
-- The set of user constraints passed to the ODESystem via `constraints`
+- The set of user constraints passed to the System via `constraints`
 - The solver constraints that encode the time-stepping used by the solver
 """
-function MTK.CasADiDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
+function MTK.CasADiDynamicOptProblem(sys::System, u0map, tspan, pmap;
         dt = nothing,
         steps = nothing,
         guesses = Dict(), kwargs...)
@@ -80,7 +80,8 @@ function MTK.CasADiDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
     f, u0, p = MTK.process_SciMLProblem(ODEInputFunction, sys, _u0map, pmap;
         t = tspan !== nothing ? tspan[1] : tspan, output_type = MX, kwargs...)
 
-    pmap = Dict{Any, Any}(pmap)
+    pmap = MTK.recursive_unwrap(MTK.AnyDict(pmap))
+    MTK.evaluate_varmap!(pmap, keys(pmap))
     steps, is_free_t = MTK.process_tspan(tspan, dt, steps)
     model = init_model(sys, tspan, steps, u0map, pmap, u0; is_free_t)
 
@@ -143,15 +144,15 @@ function set_casadi_bounds!(model, sys, pmap)
     for (i, u) in enumerate(unknowns(sys))
         if MTK.hasbounds(u)
             lo, hi = MTK.getbounds(u)
-            subject_to!(opti, Symbolics.fixpoint_sub(lo, pmap) <= U.u[i, :])
-            subject_to!(opti, U.u[i, :] <= Symbolics.fixpoint_sub(hi, pmap))
+            subject_to!(opti, Symbolics.fast_substitute(lo, pmap) <= U.u[i, :])
+            subject_to!(opti, U.u[i, :] <= Symbolics.fast_substitute(hi, pmap))
         end
     end
     for (i, v) in enumerate(MTK.unbound_inputs(sys))
         if MTK.hasbounds(v)
             lo, hi = MTK.getbounds(v)
-            subject_to!(opti, Symbolics.fixpoint_sub(lo, pmap) <= V.u[i, :])
-            subject_to!(opti, V.u[i, :] <= Symbolics.fixpoint_sub(hi, pmap))
+            subject_to!(opti, Symbolics.fast_substitute(lo, pmap) <= V.u[i, :])
+            subject_to!(opti, V.u[i, :] <= Symbolics.fast_substitute(hi, pmap))
         end
     end
 end
@@ -167,15 +168,15 @@ function add_user_constraints!(model::CasADiModel, sys, tspan, pmap; is_free_t)
     @unpack opti, U, V, tₛ = model
 
     iv = MTK.get_iv(sys)
-    conssys = MTK.get_constraintsystem(sys)
-    jconstraints = isnothing(conssys) ? nothing : MTK.get_constraints(conssys)
+    jconstraints = MTK.get_constraints(sys)
     (isnothing(jconstraints) || isempty(jconstraints)) && return nothing
 
     stidxmap = Dict([v => i for (i, v) in enumerate(unknowns(sys))])
     ctidxmap = Dict([v => i for (i, v) in enumerate(MTK.unbound_inputs(sys))])
-    cons_unknowns = map(MTK.default_toterm, unknowns(conssys))
+    cons_dvs, cons_ps = MTK.process_constraint_system(
+        jconstraints, Set(unknowns(sys)), parameters(sys), iv; validate = false)
 
-    auxmap = Dict([u => MTK.default_toterm(MTK.value(u)) for u in unknowns(conssys)])
+    auxmap = Dict([u => MTK.default_toterm(MTK.value(u)) for u in cons_dvs])
     jconstraints = substitute_casadi_vars(model, sys, pmap, jconstraints; is_free_t, auxmap)
     # Manually substitute fixed-t variables
     for (i, cons) in enumerate(jconstraints)
@@ -207,9 +208,8 @@ end
 
 function add_cost_function!(model::CasADiModel, sys, tspan, pmap; is_free_t)
     @unpack opti, U, V, tₛ = model
-    jcosts = copy(MTK.get_costs(sys))
-    consolidate = MTK.get_consolidate(sys)
-    if isnothing(jcosts) || isempty(jcosts)
+    jcosts = cost(sys)
+    if Symbolics._iszero(jcosts)
         minimize!(opti, MX(0))
         return
     end
@@ -218,24 +218,22 @@ function add_cost_function!(model::CasADiModel, sys, tspan, pmap; is_free_t)
     stidxmap = Dict([v => i for (i, v) in enumerate(unknowns(sys))])
     ctidxmap = Dict([v => i for (i, v) in enumerate(MTK.unbound_inputs(sys))])
 
-    jcosts = substitute_casadi_vars(model, sys, pmap, jcosts; is_free_t)
+    jcosts = substitute_casadi_vars(model, sys, pmap, [jcosts]; is_free_t)[1]
     # Substitute fixed-time variables.
-    for i in 1:length(jcosts)
-        costvars = MTK.vars(jcosts[i])
-        for st in costvars
-            MTK.iscall(st) || continue
-            x = operation(st)
-            t = only(arguments(st))
-            MTK.symbolic_type(t) === MTK.NotSymbolic() || continue
-            if haskey(stidxmap, x(iv))
-                idx = stidxmap[x(iv)]
-                cv = U
-            else
-                idx = ctidxmap[x(iv)]
-                cv = V
-            end
-            jcosts[i] = Symbolics.substitute(jcosts[i], Dict(x(t) => cv(t)[idx]))
+    costvars = MTK.vars(jcosts)
+    for st in costvars
+        MTK.iscall(st) || continue
+        x = operation(st)
+        t = only(arguments(st))
+        MTK.symbolic_type(t) === MTK.NotSymbolic() || continue
+        if haskey(stidxmap, x(iv))
+            idx = stidxmap[x(iv)]
+            cv = U
+        else
+            idx = ctidxmap[x(iv)]
+            cv = V
         end
+        jcosts = Symbolics.substitute(jcosts, Dict(x(t) => cv(t)[idx]))
     end
 
     dt = U.t[2] - U.t[1]
@@ -249,9 +247,9 @@ function add_cost_function!(model::CasADiModel, sys, tspan, pmap; is_free_t)
         # Approximate integral as sum.
         intmap[int] = dt * tₛ * sum(arg)
     end
-    jcosts = map(c -> Symbolics.substitute(c, intmap), jcosts)
-    jcosts = MTK.value.(jcosts)
-    minimize!(opti, MX(MTK.value(consolidate(jcosts))))
+    jcosts = Symbolics.substitute(jcosts, intmap)
+    jcosts = MTK.value(jcosts)
+    minimize!(opti, MX(jcosts))
 end
 
 function substitute_casadi_vars(
@@ -264,20 +262,20 @@ function substitute_casadi_vars(
     x_ops = [MTK.operation(MTK.unwrap(st)) for st in sts]
     c_ops = [MTK.operation(MTK.unwrap(ct)) for ct in cts]
 
-    exprs = map(c -> Symbolics.fixpoint_sub(c, auxmap), exprs)
-    exprs = map(c -> Symbolics.fixpoint_sub(c, Dict(pmap)), exprs)
+    exprs = map(c -> Symbolics.fast_substitute(c, auxmap), exprs)
+    exprs = map(c -> Symbolics.fast_substitute(c, Dict(pmap)), exprs)
     # tf means different things in different contexts; a [tf] in a cost function
     # should be tₛ, while a x(tf) should translate to x[1]
     if is_free_t
         free_t_map = Dict([[x(tₛ) => U.u[i, end] for (i, x) in enumerate(x_ops)];
                            [c(tₛ) => V.u[i, end] for (i, c) in enumerate(c_ops)]])
-        exprs = map(c -> Symbolics.fixpoint_sub(c, free_t_map), exprs)
+        exprs = map(c -> Symbolics.fast_substitute(c, free_t_map), exprs)
     end
 
     # for variables like x(t)
     whole_interval_map = Dict([[v => U.u[i, :] for (i, v) in enumerate(sts)];
                                [v => V.u[i, :] for (i, v) in enumerate(cts)]])
-    exprs = map(c -> Symbolics.fixpoint_sub(c, whole_interval_map), exprs)
+    exprs = map(c -> Symbolics.fast_substitute(c, whole_interval_map), exprs)
     exprs
 end
 
