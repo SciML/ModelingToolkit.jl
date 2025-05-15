@@ -55,6 +55,6 @@ eqs = [D(x) ~ (1 + cos(t)) / (1 + 2 * x)]
 ap = AnalysisPoint(:plant_input)
 eqs = [connect(P.output, C.input)
        connect(C.output, ap, P.input)]
-sys_ap = ODESystem(eqs, t, systems = [P, C], name = :hej)
+sys_ap = System(eqs, t, systems = [P, C], name = :hej)
 
 @test_reference "latexify/50.tex" latexify(sys_ap)

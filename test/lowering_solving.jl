@@ -8,14 +8,14 @@ eqs = [D(D(x)) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-@named sys′ = ODESystem(eqs, t)
+@named sys′ = System(eqs, t)
 sys = ode_order_lowering(sys′)
 
 eqs2 = [0 ~ x * y - k,
     D(D(x)) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
-@named sys2 = ODESystem(eqs2, t, [x, y, z, k], parameters(sys′))
+@named sys2 = System(eqs2, t, [x, y, z, k], parameters(sys′))
 sys2 = ode_order_lowering(sys2)
 # test equation/variable ordering
 ModelingToolkit.calculate_massmatrix(sys2) == Diagonal([1, 1, 1, 1, 0])
@@ -33,7 +33,7 @@ tspan = (0.0, 100.0)
 
 sys = complete(sys)
 prob = ODEProblem(sys, u0, tspan, p, jac = true)
-probexpr = ODEProblemExpr(sys, u0, tspan, p, jac = true)
+probexpr = ODEProblem(sys, u0, tspan, p; jac = true, expression = Val{true})
 sol = solve(prob, Tsit5())
 solexpr = solve(eval(prob), Tsit5())
 @test all(x -> x == 0, Array(sol - solexpr))
@@ -46,13 +46,13 @@ eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-lorenz1 = ODESystem(eqs, t, name = :lorenz1)
-lorenz2 = ODESystem(eqs, t, name = :lorenz2)
+lorenz1 = System(eqs, t, name = :lorenz1)
+lorenz2 = System(eqs, t, name = :lorenz2)
 
 @variables α(t)
 @parameters γ
 connections = [0 ~ lorenz1.x + lorenz2.y + α * γ]
-@named connected = ODESystem(connections, t, [α], [γ], systems = [lorenz1, lorenz2])
+@named connected = System(connections, t, [α], [γ], systems = [lorenz1, lorenz2])
 connected = complete(connected)
 u0 = [lorenz1.x => 1.0,
     lorenz1.y => 0.0,

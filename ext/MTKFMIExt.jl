@@ -289,7 +289,7 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
     end
 
     eqs = [observed; diffeqs]
-    return ODESystem(eqs, t, states, params; parameter_dependencies, defaults = defs,
+    return System(eqs, t, states, params; parameter_dependencies, defaults = defs,
         discrete_events = [instance_management_callback], name, initialization_eqs)
 end
 

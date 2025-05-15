@@ -3,13 +3,13 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @variables x(t)
 
-@named sys = ODESystem([D(x) ~ -0.5 * x], t, defaults = Dict(x => 1.0))
+@named sys = System([D(x) ~ -0.5 * x], t, defaults = Dict(x => 1.0))
 sys = complete(sys)
 for prob in [
     eval(ModelingToolkit.ODEProblem{false}(sys, nothing, nothing,
         SciMLBase.NullParameters())),
-    eval(ModelingToolkit.ODEProblemExpr{false}(sys, nothing, nothing,
-        SciMLBase.NullParameters()))
+    eval(ModelingToolkit.ODEProblem{false}(sys, nothing, nothing,
+        SciMLBase.NullParameters(); expression = Val{true}))
 ]
     _fn = tempname()
 
@@ -37,7 +37,7 @@ all_obs = observables(ss)
 prob = ODEProblem(ss, [capacitor.v => 0.0], (0, 0.1))
 sol = solve(prob, ImplicitEuler())
 
-## Check ODESystem with Observables ----------
+## Check System with Observables ----------
 ss_exp = ModelingToolkit.toexpr(ss)
 ss_ = complete(eval(ss_exp))
 prob_ = ODEProblem(ss_, [capacitor.v => 0.0], (0, 0.1))
@@ -47,26 +47,8 @@ sol_ = solve(prob_, ImplicitEuler())
 ## Check ODEProblemExpr with Observables -----------
 
 # build the observable function expression
-obs_exps = []
-for var in all_obs
-    f = ModelingToolkit.build_explicit_observed_function(ss, var; expression = true)
-    sym = ModelingToolkit.getname(var) |> string
-    ex = :(if name == Symbol($sym)
-        return $f(u0, p, t)
-    end)
-    push!(obs_exps, ex)
-end
-# observedfun expression for ODEFunctionExpr
-observedfun_exp = :(function obs(var, u0, p, t)
-    if var isa AbstractArray
-        return obs.(var, (u0,), (p,), (t,))
-    end
-    name = ModelingToolkit.getname(var)
-    $(obs_exps...)
-end)
-
 # ODEProblemExpr with observedfun_exp included
-probexpr = ODEProblemExpr{true}(ss, [capacitor.v => 0.0], (0, 0.1); observedfun_exp);
+probexpr = ODEProblem{true}(ss, [capacitor.v => 0.0], (0, 0.1); expr = Val{true});
 prob_obs = eval(probexpr)
 sol_obs = solve(prob_obs, ImplicitEuler())
 @show all_obs

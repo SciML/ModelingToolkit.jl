@@ -11,7 +11,7 @@ using SymbolicUtils.Rewriters
 using SymbolicUtils: maketerm, iscall
 
 using ModelingToolkit
-using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Differential,
+using ModelingToolkit: System, AbstractSystem, var_from_nested_derivative, Differential,
                        unknowns, equations, vars, Symbolic, diff2term_with_unit,
                        shift2term_with_unit, value,
                        operation, arguments, Sym, Term, simplify, symbolic_linear_solve,
@@ -57,11 +57,11 @@ using DocStringExtensions
 
 export tearing, partial_state_selection, dae_index_lowering, check_consistency
 export dummy_derivative
-export build_torn_function, build_observed_function, ODAEProblem
+export build_observed_function, ODAEProblem
 export sorted_incidence_matrix,
        pantelides!, pantelides_reassemble, tearing_reassemble, find_solvables!,
        linear_subsys_adjmat!
-export tearing_assignments, tearing_substitution
+export tearing_substitution
 export torn_system_jacobian_sparsity
 export full_equations
 export but_ordered_incidence, lowest_order_variable_mask, highest_order_variable_mask

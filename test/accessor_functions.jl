@@ -56,13 +56,13 @@ let
     ]
     cevs = [[t ~ 1.0] => [Y ~ Pre(Y) + 2.0]]
     devs = [(t == 2.0) => [Y ~ Pre(Y) + 2.0]]
-    @named sys_bot = ODESystem(
+    @named sys_bot = System(
         eqs_bot, t; systems = [], continuous_events = cevs, discrete_events = devs)
-    @named sys_mid2 = ODESystem(
+    @named sys_mid2 = System(
         eqs_mid2, t; systems = [], continuous_events = cevs, discrete_events = devs)
-    @named sys_mid1 = ODESystem(
+    @named sys_mid1 = System(
         eqs_mid1, t; systems = [sys_bot], continuous_events = cevs, discrete_events = devs)
-    @named sys_top = ODESystem(eqs_top, t; systems = [sys_mid1, sys_mid2],
+    @named sys_top = System(eqs_top, t; systems = [sys_mid1, sys_mid2],
         continuous_events = cevs, discrete_events = devs)
     sys_bot_comp = complete(sys_bot)
     sys_mid2_comp = complete(sys_mid2)

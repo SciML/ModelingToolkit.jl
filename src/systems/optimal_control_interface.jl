@@ -21,9 +21,9 @@ function InfiniteOptDynamicOptProblem end
 function CasADiDynamicOptProblem end
 
 function warn_overdetermined(sys, u0map)
-    constraintsys = get_constraintsystem(sys)
-    if !isnothing(constraintsys)
-        (length(constraints(constraintsys)) + length(u0map) > length(unknowns(sys))) &&
+    cstrs = constraints(sys)
+    if !isempty(cstrs)
+        (length(cstrs) + length(u0map) > length(unknowns(sys))) &&
             @warn "The control problem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) exceeds the total number of states. The solvers will default to doing a nonlinear least-squares optimization."
     end
 end
@@ -51,7 +51,7 @@ is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
 Generate the control function f(x, u, p, t) from the ODESystem. 
 Input variables are automatically inferred but can be manually specified.
 """
-function SciMLBase.ODEInputFunction{iip, specialize}(sys::ODESystem,
+function SciMLBase.ODEInputFunction{iip, specialize}(sys::System,
         dvs = unknowns(sys),
         ps = parameters(sys), u0 = nothing,
         inputs = unbound_inputs(sys),
@@ -147,16 +147,16 @@ function SciMLBase.ODEInputFunction{iip, specialize}(sys::ODESystem,
         initialization_data)
 end
 
-function SciMLBase.ODEInputFunction(sys::AbstractODESystem, args...; kwargs...)
+function SciMLBase.ODEInputFunction(sys::System, args...; kwargs...)
     ODEInputFunction{true}(sys, args...; kwargs...)
 end
 
-function SciMLBase.ODEInputFunction{true}(sys::AbstractODESystem, args...;
+function SciMLBase.ODEInputFunction{true}(sys::System, args...;
         kwargs...)
     ODEInputFunction{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
 end
 
-function SciMLBase.ODEInputFunction{false}(sys::AbstractODESystem, args...;
+function SciMLBase.ODEInputFunction{false}(sys::System, args...;
         kwargs...)
     ODEInputFunction{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
