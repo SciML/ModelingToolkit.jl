@@ -1,17 +1,11 @@
-module MTKChainRulesCoreExt
-
-import ModelingToolkit as MTK
-import ChainRulesCore
-import ChainRulesCore: Tangent, ZeroTangent, NoTangent, zero_tangent, unthunk
-
-function ChainRulesCore.rrule(::Type{MTK.MTKParameters}, tunables, args...)
+function ChainRulesCore.rrule(::Type{MTKParameters}, tunables, args...)
     function mtp_pullback(dt)
         dt = unthunk(dt)
         dtunables = dt isa AbstractArray ? dt : dt.tunable
         (NoTangent(), dtunables[1:length(tunables)],
             ntuple(_ -> NoTangent(), length(args))...)
     end
-    MTK.MTKParameters(tunables, args...), mtp_pullback
+    MTKParameters(tunables, args...), mtp_pullback
 end
 
 function subset_idxs(idxs, portion, template)
@@ -70,23 +64,23 @@ function selected_tangents(
 end
 
 function ChainRulesCore.rrule(
-        ::typeof(MTK.remake_buffer), indp, oldbuf::MTK.MTKParameters, idxs, vals)
+        ::typeof(remake_buffer), indp, oldbuf::MTKParameters, idxs, vals)
     if idxs isa AbstractSet
         idxs = collect(idxs)
     end
     idxs = map(idxs) do i
-        i isa MTK.ParameterIndex ? i : MTK.parameter_index(indp, i)
+        i isa ParameterIndex ? i : parameter_index(indp, i)
     end
-    newbuf = MTK.remake_buffer(indp, oldbuf, idxs, vals)
+    newbuf = remake_buffer(indp, oldbuf, idxs, vals)
     tunable_idxs = reduce(
-        vcat, (idx.idx for idx in idxs if idx.portion isa MTK.SciMLStructures.Tunable);
+        vcat, (idx.idx for idx in idxs if idx.portion isa SciMLStructures.Tunable);
         init = Union{Int, AbstractVector{Int}}[])
     initials_idxs = reduce(
-        vcat, (idx.idx for idx in idxs if idx.portion isa MTK.SciMLStructures.Initials);
+        vcat, (idx.idx for idx in idxs if idx.portion isa SciMLStructures.Initials);
         init = Union{Int, AbstractVector{Int}}[])
-    disc_idxs = subset_idxs(idxs, MTK.SciMLStructures.Discrete(), oldbuf.discrete)
-    const_idxs = subset_idxs(idxs, MTK.SciMLStructures.Constants(), oldbuf.constant)
-    nn_idxs = subset_idxs(idxs, MTK.NONNUMERIC_PORTION, oldbuf.nonnumeric)
+    disc_idxs = subset_idxs(idxs, SciMLStructures.Discrete(), oldbuf.discrete)
+    const_idxs = subset_idxs(idxs, SciMLStructures.Constants(), oldbuf.constant)
+    nn_idxs = subset_idxs(idxs, NONNUMERIC_PORTION, oldbuf.nonnumeric)
 
     pullback = let idxs = idxs
         function remake_buffer_pullback(buf′)
@@ -102,13 +96,11 @@ function ChainRulesCore.rrule(
             oldbuf′ = Tangent{typeof(oldbuf)}(;
                 tunable, initials, discrete, constant, nonnumeric)
             idxs′ = NoTangent()
-            vals′ = map(i -> MTK._ducktyped_parameter_values(buf′, i), idxs)
+            vals′ = map(i -> _ducktyped_parameter_values(buf′, i), idxs)
             return f′, indp′, oldbuf′, idxs′, vals′
         end
     end
     newbuf, pullback
 end
 
-ChainRulesCore.@non_differentiable Base.getproperty(sys::MTK.AbstractSystem, x::Symbol)
-
-end
+ChainRulesCore.@non_differentiable Base.getproperty(sys::AbstractSystem, x::Symbol)
