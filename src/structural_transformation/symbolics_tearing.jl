@@ -1047,7 +1047,13 @@ Perform index reduction and use the dummy derivative technique to ensure that
 the system is balanced.
 """
 function dummy_derivative(sys, state = TearingState(sys); simplify = false,
-        mm = nothing, cse_hack = true, array_hack = true, kwargs...)
+        mm = nothing, cse_hack = true, array_hack = true, to_index_zero = false, kwargs...)
+    if to_index_zero
+        newvars = ModelingToolkit.add_missing_differentials!(state)
+    else
+        newvars = ()
+    end
+    
     jac = let state = state
         (eqs, vars) -> begin
             symeqs = EquationsView(state)[eqs]
@@ -1069,7 +1075,7 @@ function dummy_derivative(sys, state = TearingState(sys); simplify = false,
             p
         end
     end
-    var_eq_matching = dummy_derivative_graph!(state, jac; state_priority,
+    var_eq_matching = dummy_derivative_graph!(state, jac; state_priority, whitelisted_vars = newvars,
         kwargs...)
     tearing_reassemble(state, var_eq_matching; simplify, mm, cse_hack, array_hack)
 end
