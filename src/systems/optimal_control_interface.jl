@@ -1,6 +1,8 @@
 abstract type AbstractDynamicOptProblem{uType, tType, isinplace} <:
               SciMLBase.AbstractODEProblem{uType, tType, isinplace} end
 
+abstract type AbstractCollocation end
+
 struct DynamicOptSolution
     model::Any
     sol::ODESolution
@@ -147,4 +149,149 @@ function process_tspan(tspan, dt, steps)
 
         return length(tspan[1]:dt:tspan[2]), false
     end
+end
+
+function process_DynamicOptProblem(prob_type::AbstractDynamicOptProblem, model_type, sys::ODESystem, u0map, tspan, pmap;
+    dt = nothing,
+    steps = nothing,
+    guesses = Dict(), kwargs...)
+
+    MTK.warn_overdetermined(sys, u0map)
+    _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
+    f, u0, p = MTK.process_SciMLProblem(ODEInputFunction, sys, _u0map, pmap;
+        t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
+
+    stidxmap = Dict([v => i for (i, v) in enumerate(states)])
+    u0map = Dict([MTK.default_toterm(MTK.value(k)) => v for (k, v) in u0map])
+    u0_idxs = has_alg_eqs(sys) ? collect(1:length(states)) :
+              [stidxmap[MTK.default_toterm(k)] for (k, v) in u0map]
+    pmap = Dict{Any, Any}(pmap)
+    steps, is_free_t = MTK.process_tspan(tspan, dt, steps)
+
+    ctrls = MTK.unbound_inputs(sys)
+    states = unknowns(sys)
+
+    model = generate_internal_model(model_type)
+    U = generate_U(model, u0)
+    V = generate_V()
+    tₛ = generate_timescale()
+    fullmodel = model_type(model, U, V, tₛ)
+
+    set_variable_bounds!(fullmodel, sys, pmap)
+    add_cost_function!(fullmodel, sys, tspan, pmap; is_free_t)
+    add_user_constraints!(fullmodel, sys, tspan, pmap; is_free_t)
+    add_initial_constraints!(fullmodel, u0, u0_idxs)
+
+    prob_type(f, u0, tspan, p, fullmodel, kwargs...)
+end
+
+function add_cost_function!()
+    jcosts = copy(MTK.get_costs(sys))
+    consolidate = MTK.get_consolidate(sys)
+    if isnothing(jcosts) || isempty(jcosts)
+        minimize!(opti, MX(0))
+        return
+    end
+
+    jcosts = substitute_model_vars(model, sys, pmap, jcosts; is_free_t)
+    jcosts = substitute_free_final_vars(model, sys, pmap, jcosts; is_free_t)
+    jcosts = substitute_fixed_t_vars(model, sys, pmap, jcosts; is_free_t)
+    jcosts = substitute_integral()
+end
+
+function add_user_constraints!()
+    conssys = MTK.get_constraintsystem(sys)
+    jconstraints = isnothing(conssys) ? nothing : MTK.get_constraints(conssys)
+    (isnothing(jconstraints) || isempty(jconstraints)) && return nothing
+
+    auxmap = Dict([u => MTK.default_toterm(MTK.value(u)) for u in unknowns(conssys)])
+    jconstraints = substitute_model_vars(model, sys, pmap, jconstraints; auxmap, is_free_t)
+
+    for c in jconstraints
+        if cons isa Equation
+            add_constraint!()
+        elseif cons.relational_op === Symbolics.geq
+            add_constraint!()
+        else
+            add_constraint!()
+        end
+    end
+end
+
+function generate_U end
+function generate_V end
+function generate_timescale end
+
+function add_initial_constraints! end
+function add_constraint! end
+
+function add_collocation_solve_constraints!(prob, tableau)
+    nᵤ = size(U.u, 1)
+    nᵥ = size(V.u, 1)
+
+    if is_explicit(tableau)
+        K = MX[]
+        for k in 1:(length(tsteps) - 1)
+            τ = tsteps[k]
+            for (i, h) in enumerate(c)
+                ΔU = sum([A[i, j] * K[j] for j in 1:(i - 1)], init = MX(zeros(nᵤ)))
+                Uₙ = U.u[:, k] + ΔU * dt
+                Vₙ = V.u[:, k]
+                Kₙ = tₛ * f(Uₙ, Vₙ, p, τ + h * dt) # scale the time
+                push!(K, Kₙ)
+            end
+            ΔU = dt * sum([α[i] * K[i] for i in 1:length(α)])
+            subject_to!(solver_opti, U.u[:, k] + ΔU == U.u[:, k + 1])
+            empty!(K)
+        end
+    else
+        for k in 1:(length(tsteps) - 1)
+            τ = tsteps[k]
+            # Kᵢ = generate_K()
+            Kᵢ = variable!(solver_opti, nᵤ, length(α))
+            ΔUs = A * Kᵢ' # the stepsize at each stage of the implicit method
+            for (i, h) in enumerate(c)
+                ΔU = ΔUs[i, :]'
+                Uₙ = U.u[:, k] + ΔU * dt
+                Vₙ = V.u[:, k]
+                subject_to!(solver_opti, Kᵢ[:, i] == tₛ * f(Uₙ, Vₙ, p, τ + h * dt))
+            end
+            ΔU_tot = dt * (Kᵢ * α)
+            subject_to!(solver_opti, U.u[:, k] + ΔU_tot == U.u[:, k + 1])
+        end
+    end
+end
+
+function add_equational_solve_constraints!()
+    diff_eqs = substitute_differentials()
+    add_constraint!()
+
+    alg_eqs = substitute_model_vars()
+    add_constraint!()
+end
+
+"""
+Add the solve constraints, set the solver (Ipopt, e.g.)
+"""
+function prepare_solver end
+
+function DiffEqBase.solve(prob::AbstractDynamicOptProblem, solver::AbstractCollocation)
+    #add_solve_constraints!(prob, solver)
+    solver = prepare_solver(prob, solver)
+    sol = solve_prob(prob, solver)
+    
+    ts = get_t_values(sol)
+    Us = get_U_values(sol)
+    Vs = get_V_values(sol)
+
+    ode_sol = DiffEqBase.build_solution(prob, solver, ts, Us)
+    input_sol = DiffEqBase.build_solution(prob, solver, ts, Vs)
+
+    if successful_solve(model) 
+        ode_sol = SciMLBase.solution_new_retcode(
+            ode_sol, SciMLBase.ReturnCode.ConvergenceFailure)
+        !isnothing(input_sol) && (input_sol = SciMLBase.solution_new_retcode(
+            input_sol, SciMLBase.ReturnCode.ConvergenceFailure))
+    end
+    DynamicOptSolution(model, ode_sol, input_sol)
 end
