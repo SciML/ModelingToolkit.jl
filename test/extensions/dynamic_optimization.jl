@@ -259,7 +259,7 @@ end
     eqs = [D(x(t)) ~ -2 + 0.5 * u(t)]
     # Integral cost function
     costs = [-Symbolics.Integral(t in (0, tf))(x(t) - u(t)), -x(tf)]
-    consolidate(u) = u[1] + u[2]
+    consolidate(u, sub) = u[1] + u[2] + sum(sub)
     @named rocket = System(eqs, t; costs, consolidate)
     rocket = structural_simplify(rocket; inputs = [u(t)])
 
