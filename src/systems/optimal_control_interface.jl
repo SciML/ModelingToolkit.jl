@@ -22,6 +22,10 @@ function JuMPDynamicOptProblem end
 function InfiniteOptDynamicOptProblem end
 function CasADiDynamicOptProblem end
 
+function JuMPCollocation end
+function InfiniteOptCollocation end
+function CasADiCollocation end
+
 function warn_overdetermined(sys, u0map)
     cstrs = constraints(sys)
     if !isempty(cstrs)
@@ -133,6 +137,9 @@ end
 # returns the JuMP timespan, the number of steps, and whether it is a free time problem.
 function process_tspan(tspan, dt, steps)
     is_free_time = false
+    symbolic_type(tspan[1]) !== NotSymbolic() &&
+        error("Free initial time problems are not currently supported by the collocation solvers.")
+
     if isnothing(dt) && isnothing(steps)
         error("Must provide either the dt or the number of intervals to the collocation solvers (JuMP, InfiniteOpt, CasADi).")
     elseif symbolic_type(tspan[1]) === ScalarSymbolic() ||
@@ -142,16 +149,19 @@ function process_tspan(tspan, dt, steps)
         isnothing(dt) ||
             @warn "Specified dt for free final time problem. This will be ignored; dt will be determined by the number of timesteps."
 
-        return steps, true
+        return (0, 1), steps, true
     else
         isnothing(steps) ||
             @warn "Specified number of steps for problem with concrete tspan. This will be ignored; number of steps will be determined by dt."
 
-        return length(tspan[1]:dt:tspan[2]), false
+        return tspan, length(tspan[1]:dt:tspan[2]), false
     end
 end
 
-function process_DynamicOptProblem(prob_type::AbstractDynamicOptProblem, model_type, sys::ODESystem, u0map, tspan, pmap;
+##########################
+### MODEL CONSTRUCTION ###
+##########################
+function process_DynamicOptProblem(prob_type::Type{<:AbstractDynamicOptProblem}, model_type, sys::ODESystem, u0map, tspan, pmap;
     dt = nothing,
     steps = nothing,
     guesses = Dict(), kwargs...)
@@ -166,128 +176,135 @@ function process_DynamicOptProblem(prob_type::AbstractDynamicOptProblem, model_t
     u0_idxs = has_alg_eqs(sys) ? collect(1:length(states)) :
               [stidxmap[MTK.default_toterm(k)] for (k, v) in u0map]
     pmap = Dict{Any, Any}(pmap)
-    steps, is_free_t = MTK.process_tspan(tspan, dt, steps)
+    model_tspan, steps, is_free_t = MTK.process_tspan(tspan, dt, steps)
 
     ctrls = MTK.unbound_inputs(sys)
     states = unknowns(sys)
+    c0 = MTK.value.([pmap[c] for c in ctrls])
 
     model = generate_internal_model(model_type)
-    U = generate_U(model, u0)
-    V = generate_V()
-    tₛ = generate_timescale()
-    fullmodel = model_type(model, U, V, tₛ)
+    generate_time_variable!(model, model_tspan, steps)
+    U = generate_state_variable!(model, u0, length(states), length(steps))
+    V = generate_input_variable!(model, c0, length(ctrls), length(steps))
+    tₛ = generate_timescale!(model, get(pmap, tspan[2], tspan[2]), is_free_t)
+    fullmodel = model_type(model, U, V, tₛ, is_free_t)
 
-    set_variable_bounds!(fullmodel, sys, pmap)
-    add_cost_function!(fullmodel, sys, tspan, pmap; is_free_t)
-    add_user_constraints!(fullmodel, sys, tspan, pmap; is_free_t)
-    add_initial_constraints!(fullmodel, u0, u0_idxs)
+    set_variable_bounds!(fullmodel, sys, pmap, tspan[2])
+    add_cost_function!(fullmodel, sys, tspan, pmap)
+    add_user_constraints!(fullmodel, sys, tspan, pmap)
+    add_initial_constraints!(fullmodel, u0, u0_idxs, model_tspan[1])
 
     prob_type(f, u0, tspan, p, fullmodel, kwargs...)
 end
 
-function add_cost_function!()
+function generate_internal_model end
+function generate_state_variable! end
+function generate_input_variable! end
+function generate_timescale! end
+function set_variable_bounds! end
+function add_initial_constraints! end
+function add_constraint! end
+is_free_final(model) = model.is_free_final 
+
+function add_cost_function!(model, sys, tspan, pmap)
     jcosts = copy(MTK.get_costs(sys))
     consolidate = MTK.get_consolidate(sys)
     if isnothing(jcosts) || isempty(jcosts)
-        minimize!(opti, MX(0))
+        set_objective!(model, 0)
         return
     end
-
-    jcosts = substitute_model_vars(model, sys, pmap, jcosts; is_free_t)
-    jcosts = substitute_free_final_vars(model, sys, pmap, jcosts; is_free_t)
-    jcosts = substitute_fixed_t_vars(model, sys, pmap, jcosts; is_free_t)
-    jcosts = substitute_integral()
+    jcosts = substitute_model_vars(model, sys, jcosts; tf = tspan[2])
+    jcosts = substitute_params(pmap, jcosts)
+    jcosts = substitute_integral(model, jcosts)
+    set_objective!(model, consolidate(jcosts))
 end
 
-function add_user_constraints!()
+function add_user_constraints!(model, sys, tspan, pmap)
     conssys = MTK.get_constraintsystem(sys)
     jconstraints = isnothing(conssys) ? nothing : MTK.get_constraints(conssys)
     (isnothing(jconstraints) || isempty(jconstraints)) && return nothing
+    consvars = MTK.get_unknowns(conssys)
+    is_free_final(model) && check_constraint_vars(consvars)
 
-    auxmap = Dict([u => MTK.default_toterm(MTK.value(u)) for u in unknowns(conssys)])
-    jconstraints = substitute_model_vars(model, sys, pmap, jconstraints; auxmap, is_free_t)
+    jconstraints = substitute_model_vars(model, sys, jcosts; tf = tspan[2])
+    jconstraints = substitute_toterm(consvars, jconstraints)
+    jconstraints = substitute_params(pmap, jconstraints)
 
     for c in jconstraints
         if cons isa Equation
-            add_constraint!()
+            add_constraint!(model, c.lhs - c.rhs == 0)
         elseif cons.relational_op === Symbolics.geq
-            add_constraint!()
+            add_constraint!(model, c.lhs - c.rhs ≥ 0)
         else
-            add_constraint!()
+            add_constraint!(model, c.lhs - c.rhs ≤ 0)
         end
     end
 end
 
-function generate_U end
-function generate_V end
-function generate_timescale end
+function add_equational_constraints!(model, sys, tspan)
+    model = model.model
+    diff_eqs = substitute_model_vars(model, sys, diff_equations(sys); tf = tspan[2])
+    diff_eqs = substitute_differentials(model, sys, diff_eqs)
+    for eq in diff_eqs
+        add_constraint!(model, eq.lhs == eq.rhs * model.tₛ)
+    end
 
-function add_initial_constraints! end
-function add_constraint! end
+    alg_eqs = substitute_model_vars(model, sys, alg_equations(sys); tf = tspan[2])
+    for eq in alg_eqs
+        add_constraint!(model, eq.lhs == eq.rhs * model.tₛ)
+    end
+end
 
-function add_collocation_solve_constraints!(prob, tableau)
-    nᵤ = size(U.u, 1)
-    nᵥ = size(V.u, 1)
+function set_objective! end
+"""Substitute variables like x(1.5) with the corresponding model variables."""
+function substitute_model_vars end
+function substitute_integral end
+function substitute_differentials end
 
-    if is_explicit(tableau)
-        K = MX[]
-        for k in 1:(length(tsteps) - 1)
-            τ = tsteps[k]
-            for (i, h) in enumerate(c)
-                ΔU = sum([A[i, j] * K[j] for j in 1:(i - 1)], init = MX(zeros(nᵤ)))
-                Uₙ = U.u[:, k] + ΔU * dt
-                Vₙ = V.u[:, k]
-                Kₙ = tₛ * f(Uₙ, Vₙ, p, τ + h * dt) # scale the time
-                push!(K, Kₙ)
-            end
-            ΔU = dt * sum([α[i] * K[i] for i in 1:length(α)])
-            subject_to!(solver_opti, U.u[:, k] + ΔU == U.u[:, k + 1])
-            empty!(K)
-        end
-    else
-        for k in 1:(length(tsteps) - 1)
-            τ = tsteps[k]
-            # Kᵢ = generate_K()
-            Kᵢ = variable!(solver_opti, nᵤ, length(α))
-            ΔUs = A * Kᵢ' # the stepsize at each stage of the implicit method
-            for (i, h) in enumerate(c)
-                ΔU = ΔUs[i, :]'
-                Uₙ = U.u[:, k] + ΔU * dt
-                Vₙ = V.u[:, k]
-                subject_to!(solver_opti, Kᵢ[:, i] == tₛ * f(Uₙ, Vₙ, p, τ + h * dt))
-            end
-            ΔU_tot = dt * (Kᵢ * α)
-            subject_to!(solver_opti, U.u[:, k] + ΔU_tot == U.u[:, k + 1])
+function substitute_toterm(vars, exprs)
+    toterm_map = Dict([u => MTK.default_toterm(MTK.value(u)) for u in vars])
+    exprs = map(c -> Symbolics.fast_substitute(c, toterm_map), exprs)
+end
+
+function substitute_params(pmap, exprs)
+    exprs = map(c -> Symbolics.fast_substitute(c, Dict(pmap)), exprs)
+end
+
+function check_constraint_vars(vars)
+    for u in vars
+        x = operation(u)
+        t = only(arguments(u))
+        if (symbolic_type(t) === NotSymbolic())
+            error("Provided specific time constraint in a free final time problem. This is not supported by the collocation solvers at the moment. The offending variable is $u. Specific-time user constraints can only be specified at the end of the timespan.")
         end
     end
 end
 
-function add_equational_solve_constraints!()
-    diff_eqs = substitute_differentials()
-    add_constraint!()
-
-    alg_eqs = substitute_model_vars()
-    add_constraint!()
-end
-
+########################
+### SOLVER UTILITIES ###
+########################
 """
-Add the solve constraints, set the solver (Ipopt, e.g.)
+Add the solve constraints, set the solver (Ipopt, e.g.) and solver options.
 """
-function prepare_solver end
+function prepare_solver! end
+function optimize_model! end
+function get_t_values end
+function get_U_values end
+function get_V_values end
+function successful_solve end
 
-function DiffEqBase.solve(prob::AbstractDynamicOptProblem, solver::AbstractCollocation)
-    #add_solve_constraints!(prob, solver)
-    solver = prepare_solver(prob, solver)
-    sol = solve_prob(prob, solver)
+function DiffEqBase.solve(prob::AbstractDynamicOptProblem, solver::AbstractCollocation; verbose = false, kwargs...)
+    solver = prepare_solver!(prob, solver)
+    model = optimize_model!(prob, solver)
     
-    ts = get_t_values(sol)
-    Us = get_U_values(sol)
-    Vs = get_V_values(sol)
+    ts = get_t_values(model)
+    Us = get_U_values(model)
+    Vs = get_V_values(model)
 
     ode_sol = DiffEqBase.build_solution(prob, solver, ts, Us)
-    input_sol = DiffEqBase.build_solution(prob, solver, ts, Vs)
+    input_sol = isnothing(Vs) ? nothing : DiffEqBase.build_solution(prob, solver, ts, Vs)
 
-    if successful_solve(model) 
+    if !successful_solve(model) 
         ode_sol = SciMLBase.solution_new_retcode(
             ode_sol, SciMLBase.ReturnCode.ConvergenceFailure)
         !isnothing(input_sol) && (input_sol = SciMLBase.solution_new_retcode(

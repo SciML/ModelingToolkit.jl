@@ -1,5 +1,5 @@
 using ModelingToolkit
-import JuMP, InfiniteOpt
+import InfiniteOpt
 using DiffEqDevTools, DiffEqBase
 using SimpleDiffEq
 using OrdinaryDiffEqSDIRK, OrdinaryDiffEqVerner, OrdinaryDiffEqTsit5, OrdinaryDiffEqFIRK
@@ -27,7 +27,7 @@ const M = ModelingToolkit
 
     # Test explicit method.
     jprob = JuMPDynamicOptProblem(sys, u0map, tspan, parammap, dt = 0.01)
-    @test JuMP.num_constraints(jprob.model) == 2 # initials
+    @test InfiniteOpt.num_constraints(jprob.model) == 2 # initials
     jsol = solve(jprob, Ipopt.Optimizer, constructRK4, silent = true)
     oprob = ODEProblem(sys, [u0map; parammap], tspan)
     osol = solve(oprob, SimpleRK4(), dt = 0.01)
@@ -56,7 +56,7 @@ const M = ModelingToolkit
     @mtkcompile lksys = System(eqs, t; constraints = constr)
 
     jprob = JuMPDynamicOptProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
-    @test JuMP.num_constraints(jprob.model) == 2
+    @test InfiniteOpt.num_constraints(jprob.model) == 2
     jsol = solve(jprob, Ipopt.Optimizer, constructTsitouras5, silent = true) # 12.190 s, 9.68 GiB
     @test jsol.sol(0.6; idxs = x(t)) ≈ 3.5
     @test jsol.sol(0.3; idxs = x(t)) ≈ 7.0
