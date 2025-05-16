@@ -495,6 +495,8 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
     !linenumbers ? Base.remove_linenums!(ex) : ex
 end
 
+struct IntervalNonlinearFunctionExpr end
+
 """
 $(TYPEDSIGNATURES)
 
