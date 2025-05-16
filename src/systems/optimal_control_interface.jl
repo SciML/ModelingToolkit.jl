@@ -198,23 +198,25 @@ function process_DynamicOptProblem(prob_type::Type{<:AbstractDynamicOptProblem},
     dt = nothing,
     steps = nothing,
     guesses = Dict(), kwargs...)
-
-    MTK.warn_overdetermined(sys, u0map)
-    _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
-    f, u0, p = MTK.process_SciMLProblem(ODEInputFunction, sys, _u0map, pmap;
-        t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
-
-    stidxmap = Dict([v => i for (i, v) in enumerate(states)])
-    u0map = Dict([MTK.default_toterm(MTK.value(k)) => v for (k, v) in u0map])
-    u0_idxs = has_alg_eqs(sys) ? collect(1:length(states)) :
-              [stidxmap[MTK.default_toterm(k)] for (k, v) in u0map]
-    pmap = Dict{Any, Any}(pmap)
-    model_tspan, steps, is_free_t = MTK.process_tspan(tspan, dt, steps)
-
-    ctrls = MTK.unbound_inputs(sys)
+    warn_overdetermined(sys, u0map)
+    ctrls = unbound_inputs(sys)
     states = unknowns(sys)
-    c0 = MTK.value.([pmap[c] for c in ctrls])
 
+    _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
+    stidxmap = Dict([v => i for (i, v) in enumerate(states)])
+    u0map = Dict([default_toterm(value(k)) => v for (k, v) in u0map])
+    u0_idxs = has_alg_eqs(sys) ? collect(1:length(states)) :
+              [stidxmap[default_toterm(k)] for (k, v) in u0map]
+
+    f, u0, p = process_SciMLProblem(ODEInputFunction, sys, _u0map, pmap;
+        t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
+    model_tspan, steps, is_free_t = process_tspan(tspan, dt, steps)
+
+    pmap = recursive_unwrap(AnyDict(pmap))
+    evaluate_varmap!(pmap, keys(pmap))
+    c0 = value.([pmap[c] for c in ctrls])
+
+    tsteps = LinRange(model_tspan[1], model_tspan[2], steps)
     model = generate_internal_model(model_type)
     generate_time_variable!(model, model_tspan, steps)
     U = generate_state_variable!(model, u0, length(states), length(steps))
@@ -230,6 +232,7 @@ function process_DynamicOptProblem(prob_type::Type{<:AbstractDynamicOptProblem},
     prob_type(f, u0, tspan, p, fullmodel, kwargs...)
 end
 
+function generate_time_variable! end
 function generate_internal_model end
 function generate_state_variable! end
 function generate_input_variable! end
@@ -240,8 +243,8 @@ function add_constraint! end
 is_free_final(model) = model.is_free_final 
 
 function add_cost_function!(model, sys, tspan, pmap)
-    jcosts = copy(MTK.get_costs(sys))
-    consolidate = MTK.get_consolidate(sys)
+    jcosts = copy(get_costs(sys))
+    consolidate = get_consolidate(sys)
     if isnothing(jcosts) || isempty(jcosts)
         set_objective!(model, 0)
         return
@@ -253,24 +256,19 @@ function add_cost_function!(model, sys, tspan, pmap)
 end
 
 function add_user_constraints!(model, sys, tspan, pmap)
-    conssys = MTK.get_constraintsystem(sys)
-    jconstraints = isnothing(conssys) ? nothing : MTK.get_constraints(conssys)
+    conssys = get_constraintsystem(sys)
+    jconstraints = isnothing(conssys) ? nothing : get_constraints(conssys)
     (isnothing(jconstraints) || isempty(jconstraints)) && return nothing
-    consvars = MTK.get_unknowns(conssys)
+    consvars = get_unknowns(conssys)
     is_free_final(model) && check_constraint_vars(consvars)
 
-    jconstraints = substitute_model_vars(model, sys, jcosts; tf = tspan[2])
     jconstraints = substitute_toterm(consvars, jconstraints)
     jconstraints = substitute_params(pmap, jconstraints)
+    jconstraints = substitute_model_vars(model, sys, jconstraints; tf = tspan[2])
 
     for c in jconstraints
-        if cons isa Equation
-            add_constraint!(model, c.lhs - c.rhs == 0)
-        elseif cons.relational_op === Symbolics.geq
-            add_constraint!(model, c.lhs - c.rhs ≥ 0)
-        else
-            add_constraint!(model, c.lhs - c.rhs ≤ 0)
-        end
+        @show c
+        add_constraint!(model, c)
     end
 end
 
@@ -279,12 +277,12 @@ function add_equational_constraints!(model, sys, tspan)
     diff_eqs = substitute_model_vars(model, sys, diff_equations(sys); tf = tspan[2])
     diff_eqs = substitute_differentials(model, sys, diff_eqs)
     for eq in diff_eqs
-        add_constraint!(model, eq.lhs == eq.rhs * model.tₛ)
+        add_constraint!(model, eq.lhs ~ eq.rhs * model.tₛ)
     end
 
     alg_eqs = substitute_model_vars(model, sys, alg_equations(sys); tf = tspan[2])
     for eq in alg_eqs
-        add_constraint!(model, eq.lhs == eq.rhs * model.tₛ)
+        add_constraint!(model, eq.lhs ~ eq.rhs * model.tₛ)
     end
 end
 
@@ -295,7 +293,7 @@ function substitute_integral end
 function substitute_differentials end
 
 function substitute_toterm(vars, exprs)
-    toterm_map = Dict([u => MTK.default_toterm(MTK.value(u)) for u in vars])
+    toterm_map = Dict([u => default_toterm(value(u)) for u in vars])
     exprs = map(c -> Symbolics.fast_substitute(c, toterm_map), exprs)
 end
 
@@ -326,18 +324,24 @@ function get_U_values end
 function get_V_values end
 function successful_solve end
 
+"""
+    solve(prob::AbstractDynamicOptProblem, solver::AbstractCollocation; verbose = false, kwargs...)
+
+- kwargs are used for other options. For example, the `plugin_options` and `solver_options` will propagated to the Opti object in CasADi.
+"""
 function DiffEqBase.solve(prob::AbstractDynamicOptProblem, solver::AbstractCollocation; verbose = false, kwargs...)
-    solver = prepare_solver!(prob, solver)
+    solver = prepare_solver!(prob, solver; verbose, kwargs...)
     model = optimize_model!(prob, solver)
     
     ts = get_t_values(model)
     Us = get_U_values(model)
     Vs = get_V_values(model)
+    is_free_final(model) && (ts .+ tspan[1])
 
     ode_sol = DiffEqBase.build_solution(prob, solver, ts, Us)
     input_sol = isnothing(Vs) ? nothing : DiffEqBase.build_solution(prob, solver, ts, Vs)
 
-    if !successful_solve(model) 
+    if !successful_solve(model)
         ode_sol = SciMLBase.solution_new_retcode(
             ode_sol, SciMLBase.ReturnCode.ConvergenceFailure)
         !isnothing(input_sol) && (input_sol = SciMLBase.solution_new_retcode(
