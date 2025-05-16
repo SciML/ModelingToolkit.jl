@@ -25,6 +25,7 @@ struct CasADiModel
     U::MXLinearInterpolation
     V::MXLinearInterpolation
     tₛ::MX
+    is_free_final::Bool
 end
 
 struct CasADiDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
@@ -90,10 +91,10 @@ function MTK.CasADiDynamicOptProblem(sys::System, u0map, tspan, pmap;
     CasADiDynamicOptProblem(f, u0, tspan, p, model, kwargs...)
 end
 
-MTK.generate_U(model, dims) = 1
-MTK.generate_V(model, dims) = 1
-MTK.generate_timescale(model, dims) = 1
 MTK.generate_internal_model(::Type{CasADiModel}) = CasADi.opti()
+MTK.generate_state_variable(model, u0, ns, nt)
+MTK.generate_input_variable(model, c0, nc, nt) = 1
+MTK.generate_timescale(model, dims) = 1
 
 function init_model(sys, tspan, steps, u0map, pmap, u0; is_free_t = false)
     ctrls = MTK.unbound_inputs(sys)
@@ -317,7 +318,7 @@ function add_solve_constraints(prob, tableau)
         for k in 1:(length(tsteps) - 1)
             τ = tsteps[k]
             Kᵢ = variable!(solver_opti, nᵤ, length(α))
-            ΔUs = A * Kᵢ' # the stepsize at each stage of the implicit method
+            ΔUs = A * Kᵢ'
             for (i, h) in enumerate(c)
                 ΔU = ΔUs[i, :]'
                 Uₙ = U.u[:, k] + ΔU * dt
