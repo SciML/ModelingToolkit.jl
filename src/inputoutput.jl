@@ -161,7 +161,7 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
 
 """
     (f_oop, f_ip), x_sym, p_sym, io_sys = generate_control_function(
-            sys::AbstractODESystem,
+            sys::System,
             inputs             = unbound_inputs(sys),
             disturbance_inputs = disturbances(sys);
             implicit_dae       = false,
@@ -191,7 +191,7 @@ t = 0
 f[1](x, inputs, p, t)
 ```
 """
-function generate_control_function(sys::AbstractODESystem, inputs = unbound_inputs(sys),
+function generate_control_function(sys::AbstractSystem, inputs = unbound_inputs(sys),
         disturbance_inputs = disturbances(sys);
         disturbance_argument = false,
         implicit_dae = false,
@@ -333,7 +333,7 @@ The structure represents a model of a disturbance, along with the input variable
 # Fields:
 
   - `input`: The variable affected by the disturbance.
-  - `model::M`: A model of the disturbance. This is typically an `ODESystem`, but type that implements [`ModelingToolkit.get_disturbance_system`](@ref)`(dist::DisturbanceModel) -> ::ODESystem` is supported.
+  - `model::M`: A model of the disturbance. This is typically a `System`, but type that implements [`ModelingToolkit.get_disturbance_system`](@ref)`(dist::DisturbanceModel) -> ::System` is supported.
 """
 struct DisturbanceModel{M}
     input::Any
@@ -343,7 +343,7 @@ end
 DisturbanceModel(input, model; name) = DisturbanceModel(input, model, name)
 
 # Point of overloading for libraries, e.g., to be able to support disturbance models from ControlSystemsBase
-function get_disturbance_system(dist::DisturbanceModel{<:ODESystem})
+function get_disturbance_system(dist::DisturbanceModel{System})
     dist.model
 end
 
@@ -384,7 +384,7 @@ c = 10   # Damping coefficient
 eqs = [connect(torque.flange, inertia1.flange_a)
        connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
        connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
-model = ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
+model = System(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
                   name = :model)
 model = complete(model)
 model_outputs = [model.inertia1.w, model.inertia2.w, model.inertia1.phi, model.inertia2.phi]
@@ -416,7 +416,7 @@ function add_input_disturbance(sys, dist::DisturbanceModel, inputs = Any[]; kwar
 
     eqs = [dsys.input.u[1] ~ d
            dist.input ~ u + dsys.output.u[1]]
-    augmented_sys = ODESystem(eqs, t, systems = [dsys], name = gensym(:outer))
+    augmented_sys = System(eqs, t, systems = [dsys], name = gensym(:outer))
     augmented_sys = extend(augmented_sys, sys)
     ssys = structural_simplify(augmented_sys, inputs = all_inputs, disturbance_inputs = [d])
 

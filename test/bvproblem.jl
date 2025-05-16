@@ -20,7 +20,7 @@ daesolvers = [Ascher2, Ascher4, Ascher6]
     parammap = [α => 7.5, β => 4, γ => 8.0, δ => 5.0]
     tspan = (0.0, 10.0)
 
-    @mtkbuild lotkavolterra = ODESystem(eqs, t)
+    @mtkbuild lotkavolterra = System(eqs, t)
     op = ODEProblem(lotkavolterra, u0map, tspan, parammap)
     osol = solve(op, Vern9())
 
@@ -52,7 +52,7 @@ end
     eqs = [D(θ) ~ θ_t
            D(θ_t) ~ -(g / L) * sin(θ)]
 
-    @mtkbuild pend = ODESystem(eqs, t)
+    @mtkbuild pend = System(eqs, t)
 
     u0map = [θ => π / 2, θ_t => π / 2]
     parammap = [:L => 1.0, :g => 9.81]
@@ -80,7 +80,7 @@ end
 end
 
 ##################################################################
-### ODESystem with constraint equations, DAEs with constraints ###
+### System with constraint equations, DAEs with constraints ###
 ##################################################################
 
 # Test generation of boundary condition function using `generate_function_bc`. Compare solutions to manually written boundary conditions
@@ -91,7 +91,7 @@ end
         D(y(t)) ~ -γ * y(t) + δ * x(t) * y(t)]
 
     tspan = (0.0, 1.0)
-    @mtkbuild lksys = ODESystem(eqs, t)
+    @mtkbuild lksys = System(eqs, t)
 
     function lotkavolterra!(du, u, p, t)
         du[1] = p[1] * u[1] - p[2] * u[1] * u[2]
@@ -104,7 +104,7 @@ end
 
     # Test with a constraint.
     constr = [y(0.5) ~ 2.0]
-    @mtkbuild lksys = ODESystem(eqs, t; constraints = constr)
+    @mtkbuild lksys = System(eqs, t; constraints = constr)
 
     function bc!(resid, u, p, t)
         resid[1] = u(0.0)[1] - 1.0
@@ -165,7 +165,7 @@ function test_solvers(
     end
 end
 
-# Simple ODESystem with BVP constraints.
+# Simple System with BVP constraints.
 @testset "ODE with constraints" begin
     @parameters α=1.5 β=1.0 γ=3.0 δ=1.0
     @variables x(..) y(..)
@@ -177,7 +177,7 @@ end
     tspan = (0.0, 1.0)
     guess = [x(t) => 4.0, y(t) => 2.0]
     constr = [x(0.6) ~ 3.5, x(0.3) ~ 7.0]
-    @mtkbuild lksys = ODESystem(eqs, t; constraints = constr)
+    @mtkbuild lksys = System(eqs, t; constraints = constr)
 
     bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(
         lksys, u0map, tspan; guesses = guess)
@@ -185,13 +185,13 @@ end
 
     # Testing that more complicated constraints give correct solutions.
     constr = [y(0.2) + x(0.8) ~ 3.0, y(0.3) ~ 2.0]
-    @mtkbuild lksys = ODESystem(eqs, t; constraints = constr)
+    @mtkbuild lksys = System(eqs, t; constraints = constr)
     bvp = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(
         lksys, u0map, tspan; guesses = guess)
     test_solvers(solvers, bvp, u0map, constr; dt = 0.05)
 
     constr = [α * β - x(0.6) ~ 0.0, y(0.2) ~ 3.0]
-    @mtkbuild lksys = ODESystem(eqs, t; constraints = constr)
+    @mtkbuild lksys = System(eqs, t; constraints = constr)
     bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(
         lksys, u0map, tspan; guesses = guess)
     test_solvers(solvers, bvp, u0map, constr)
@@ -205,7 +205,7 @@ end
 #     eqs = [D(D(x)) ~ λ * x
 #            D(D(y)) ~ λ * y - g
 #            x^2 + y^2 ~ 1]
-#     @mtkbuild pend = ODESystem(eqs, t)
+#     @mtkbuild pend = System(eqs, t)
 # 
 #     tspan = (0.0, 1.5)
 #     u0map = [x => 1, y => 0]
@@ -243,7 +243,7 @@ end
 #            D(D(y)) ~ λ * y - g
 #            x(t)^2 + y^2 ~ 1]
 #     constr = [x(0.5) ~ 1]
-#     @mtkbuild pend = ODESystem(eqs, t; constr)
+#     @mtkbuild pend = System(eqs, t; constr)
 # 
 #     tspan = (0.0, 1.5)
 #     u0map = [x(t) => 0.6, y => 0.8]
@@ -262,13 +262,13 @@ end
 # 
 #     constr = [x(0.5) ~ 1, 
 #                    x(0.3)^3 + y(0.6)^2 ~ 0.5]
-#     @mtkbuild pend = ODESystem(eqs, t; constr)
+#     @mtkbuild pend = System(eqs, t; constr)
 #     bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap; guesses, check_length = false)
 #     test_solvers(daesolvers, bvp, u0map, constr, get_alg_eqs(pend))
 # 
 #     constr = [x(0.4) * g ~ y(0.2),
 #                    y(0.7) ~ 0.3]
-#     @mtkbuild pend = ODESystem(eqs, t; constr)
+#     @mtkbuild pend = System(eqs, t; constr)
 #     bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap; guesses, check_length = false)
 #     test_solvers(daesolvers, bvp, u0map, constr, get_alg_eqs(pend))
 # end
@@ -285,26 +285,28 @@ end
     u0map = [x(t) => 4.0, y(t) => 2.0]
     parammap = [α => 7.5, β => 4, γ => 8.0, δ => 5.0]
     costs = [x(0.6), x(0.3)^2]
-    consolidate(u) = (u[1] + 3)^2 + u[2]
-    @mtkbuild lksys = ODESystem(eqs, t; costs, consolidate)
-    @test_throws ErrorException @mtkbuild lksys2 = ODESystem(eqs, t; costs)
+    consolidate(u, sub) = (u[1] + 3)^2 + u[2] + sum(sub; init = 0)
+    @mtkbuild lksys = System(eqs, t; costs, consolidate)
 
-    @test_throws ErrorException ODEProblem(lksys, u0map, tspan, parammap)
-    prob = ODEProblem(lksys, u0map, tspan, parammap; allow_cost = true)
+    @test_throws ModelingToolkit.SystemCompatibilityError ODEProblem(
+        lksys, u0map, tspan, parammap)
+    prob = ODEProblem(lksys, u0map, tspan, parammap; check_compatibility = false)
     sol = solve(prob, Tsit5())
-    costfn = ModelingToolkit.generate_cost_function(lksys)
+    costfn = ModelingToolkit.generate_cost(
+        lksys; expression = Val{false}, wrap_gfw = Val{true})
     _t = tspan[2]
     @test costfn(sol, prob.p, _t) ≈ (sol(0.6)[1] + 3)^2 + sol(0.3)[1]^2
 
     ### With a parameter
     @parameters t_c
     costs = [y(t_c) + x(0.0), x(0.4)^2]
-    consolidate(u) = log(u[1]) - u[2]
-    @mtkbuild lksys = ODESystem(eqs, t; costs, consolidate)
+    consolidate(u, sub) = log(u[1]) - u[2] + sum(sub; init = 0)
+    @mtkbuild lksys = System(eqs, t; costs, consolidate)
     @test t_c ∈ Set(parameters(lksys))
     push!(parammap, t_c => 0.56)
-    prob = ODEProblem(lksys, u0map, tspan, parammap; allow_cost = true)
+    prob = ODEProblem(lksys, u0map, tspan, parammap; check_compatibility = false)
     sol = solve(prob, Tsit5())
-    costfn = ModelingToolkit.generate_cost_function(lksys)
+    costfn = ModelingToolkit.generate_cost(
+        lksys; expression = Val{false}, wrap_gfw = Val{true})
     @test costfn(sol, prob.p, _t) ≈ log(sol(0.56)[2] + sol(0.0)[1]) - sol(0.4)[1]^2
 end

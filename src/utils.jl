@@ -546,6 +546,12 @@ function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Dif
             collect_vars!(unknowns, parameters, eq, iv; depth, op)
         end
     end
+    if has_jumps(sys)
+        for eq in jumps(sys)
+            eqtype_supports_collect_vars(eq) || continue
+            collect_vars!(unknowns, parameters, eq, iv; depth, op)
+        end
+    end
     if has_parameter_dependencies(sys)
         for eq in parameter_dependencies(sys)
             if eq isa Pair
@@ -566,16 +572,85 @@ function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Dif
     end
 end
 
-function collect_vars!(unknowns, parameters, expr, iv; depth = 0, op = Differential)
+"""
+    $(TYPEDSIGNATURES)
+
+Check whether the usage of operator `op` is valid in a system with independent variable
+`iv`. If the system is time-independent, `iv` should be `nothing`. Throw an appropriate
+error if `op` is invalid. `args` are the arguments to `op`.
+
+# Keyword arguments
+
+- `context`: The place where the operator occurs in the system/expression, or any other
+  relevant information. Useful for providing extra information in the error message.
+"""
+function validate_operator(op, args, iv; context = nothing)
+    error("`$validate_operator` is not implemented for operator `$op` in $context.")
+end
+
+function validate_operator(op::Differential, args, iv; context = nothing)
+    isequal(op.x, iv) || throw(OperatorIndepvarMismatchError(op, iv, context))
+    arg = unwrap(only(args))
+    if !is_variable_floatingpoint(arg)
+        throw(ContinuousOperatorDiscreteArgumentError(op, arg, context))
+    end
+end
+
+struct ContinuousOperatorDiscreteArgumentError <: Exception
+    op::Any
+    arg::Any
+    context::Any
+end
+
+function Base.showerror(io::IO, err::ContinuousOperatorDiscreteArgumentError)
+    print(io, """
+    Operator $(err.op) expects continuous arguments, with a `symtype` such as `Number`,
+    `Real`, `Complex` or a subtype of `AbstractFloat`. Found $(err.arg) with a symtype of
+    $(symtype(err.arg))$(err.context === nothing ? "." : "in $(err.context).")
+    """)
+end
+
+struct OperatorIndepvarMismatchError <: Exception
+    op::Any
+    iv::Any
+    context::Any
+end
+
+function Base.showerror(io::IO, err::OperatorIndepvarMismatchError)
+    print(io, """
+    Encountered operator `$(err.op)` which has different independent variable than the \
+    one used in the system `$(err.iv)`.
+    """)
+    if err.context !== nothing
+        println(io)
+        print(io, "Context:\n$(err.context)")
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Search through `expr` for all symbolic variables present in it. Populate `dvs` with
+unknowns and `ps` with parameters present. `iv` should be the independent variable of the
+system or `nothing` for time-independent systems. Expressions where the operator `isa op`
+go through `validate_operator`.
+
+`depth` is a keyword argument which indicates how many levels down `expr` is from the root
+of the system hierarchy. This is used to resolve scoping operators. The scope of a variable
+can be checked using `check_scope_depth`.
+
+This function should return `nothing`.
+"""
+function collect_vars!(unknowns, parameters, expr, iv; depth = 0, op = Symbolics.Operator)
     if issym(expr)
-        collect_var!(unknowns, parameters, expr, iv; depth)
-    else
-        for var in vars(expr; op)
-            if iscall(var) && operation(var) isa Differential
-                var, _ = var_from_nested_derivative(var)
-            end
-            collect_var!(unknowns, parameters, var, iv; depth)
+        return collect_var!(unknowns, parameters, expr, iv; depth)
+    end
+    for var in vars(expr; op)
+        while iscall(var) && operation(var) isa op
+            validate_operator(operation(var), arguments(var), iv; context = expr)
+            var = arguments(var)[1]
         end
+        collect_var!(unknowns, parameters, var, iv; depth)
     end
     return nothing
 end
@@ -592,18 +667,26 @@ eqtype_supports_collect_vars(eq::Inequality) = true
 eqtype_supports_collect_vars(eq::Pair) = true
 
 function collect_vars!(unknowns, parameters, eq::Union{Equation, Inequality}, iv;
-        depth = 0, op = Differential)
+        depth = 0, op = Symbolics.Operator)
     collect_vars!(unknowns, parameters, eq.lhs, iv; depth, op)
     collect_vars!(unknowns, parameters, eq.rhs, iv; depth, op)
     return nothing
 end
 
-function collect_vars!(unknowns, parameters, p::Pair, iv; depth = 0, op = Differential)
+function collect_vars!(
+        unknowns, parameters, p::Pair, iv; depth = 0, op = Symbolics.Operator)
     collect_vars!(unknowns, parameters, p[1], iv; depth, op)
     collect_vars!(unknowns, parameters, p[2], iv; depth, op)
     return nothing
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Identify whether `var` belongs to the current system using `depth` and scoping information.
+Add `var` to `unknowns` or `parameters` appropriately, and search through any expressions
+in known metadata of `var` using `collect_vars!`.
+"""
 function collect_var!(unknowns, parameters, var, iv; depth = 0)
     isequal(var, iv) && return nothing
     if Symbolics.iswrapped(var)
@@ -755,12 +838,6 @@ end
 
 isarray(x) = x isa AbstractArray || x isa Symbolics.Arr
 
-function empty_substitutions(sys)
-    has_substitutions(sys) || return true
-    subs = get_substitutions(sys)
-    isnothing(subs) || isempty(subs.deps)
-end
-
 function get_cmap(sys, exprs = nothing)
     #Inject substitutions for constants => values
     buffer = []
@@ -769,9 +846,6 @@ function get_cmap(sys, exprs = nothing)
     has_op(sys) && push!(buffer, get_op(sys))
     has_constraints(sys) && append!(buffer, get_constraints(sys))
     cs = collect_constants(buffer) #ctrls? what else?
-    if !empty_substitutions(sys)
-        cs = [cs; collect_constants(get_substitutions(sys).subs)]
-    end
     if exprs !== nothing
         cs = [cs; collect_constants(exprs)]
     end
@@ -780,29 +854,12 @@ function get_cmap(sys, exprs = nothing)
     return cmap, cs
 end
 
-function get_substitutions_and_solved_unknowns(sys, exprs = nothing; no_postprocess = false)
-    cmap, cs = get_cmap(sys, exprs)
-    if empty_substitutions(sys) && isempty(cs)
-        sol_states = Code.LazyState()
-        pre = no_postprocess ? (ex -> ex) : get_postprocess_fbody(sys)
-    else # Have to do some work
-        if !empty_substitutions(sys)
-            @unpack subs = get_substitutions(sys)
-        else
-            subs = []
-        end
-        subs = [cmap; subs] # The constants need to go first
-        sol_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
-        if no_postprocess
-            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], ex,
-                false)
-        else
-            process = get_postprocess_fbody(sys)
-            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs],
-                process(ex), false)
-        end
-    end
-    return pre, sol_states
+function empty_substitutions(sys)
+    isempty(observed(sys))
+end
+
+function get_substitutions(sys)
+    Dict([eq.lhs => eq.rhs for eq in observed(sys)])
 end
 
 function mergedefaults(defaults, varmap, vars)
@@ -1011,14 +1068,6 @@ function restrict_array_to_union(arr)
     return Array{T, ndims(arr)}(arr)
 end
 
-function eval_or_rgf(expr::Expr; eval_expression = false, eval_module = @__MODULE__)
-    if eval_expression
-        return eval_module.eval(expr)
-    else
-        return drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, expr))
-    end
-end
-
 function _with_unit(f, x, t, args...)
     x = f(x, args...)
     if hasmetadata(x, VariableUnit) && (t isa Symbolic && hasmetadata(t, VariableUnit))
@@ -1042,8 +1091,18 @@ Check if `sym` represents a symbolic floating point number or array of such numb
 function is_variable_floatingpoint(sym)
     sym = unwrap(sym)
     T = symtype(sym)
-    return T == Real || T <: AbstractFloat || T <: AbstractArray{Real} ||
-           T <: AbstractArray{<:AbstractFloat}
+    is_floatingpoint_symtype(T)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Check if `T` is an appropriate symtype for a symbolic variable representing a floating
+point number or array of such numbers.
+"""
+function is_floatingpoint_symtype(T::Type)
+    return T == Real || T == Number || T <: AbstractFloat ||
+           T <: AbstractArray && is_floatingpoint_symtype(eltype(T))
 end
 
 """
@@ -1213,61 +1272,6 @@ function guesses_from_metadata!(guesses, vars)
     end
 end
 
-"""
-    $(TYPEDSIGNATURES)
-
-Find all the unknowns and parameters from the equations of a SDESystem or ODESystem. Return re-ordered equations, differential variables, all variables, and parameters.
-"""
-function process_equations(eqs, iv)
-    if eltype(eqs) <: AbstractVector
-        eqs = reduce(vcat, eqs)
-    end
-    eqs = collect(eqs)
-
-    diffvars = OrderedSet()
-    allunknowns = OrderedSet()
-    ps = OrderedSet()
-
-    # NOTE: this assumes that the order of algebraic equations doesn't matter
-    # reorder equations such that it is in the form of `diffeq, algeeq`
-    diffeq = Equation[]
-    algeeq = Equation[]
-    # initial loop for finding `iv`
-    if iv === nothing
-        for eq in eqs
-            if !(eq.lhs isa Number) # assume eq.lhs is either Differential or Number
-                iv = iv_from_nested_derivative(eq.lhs)
-                break
-            end
-        end
-    end
-    iv = value(iv)
-    iv === nothing && throw(ArgumentError("Please pass in independent variables."))
-
-    compressed_eqs = Equation[] # equations that need to be expanded later, like `connect(a, b)`
-    for eq in eqs
-        eq.lhs isa Union{Symbolic, Number} || (push!(compressed_eqs, eq); continue)
-        collect_vars!(allunknowns, ps, eq, iv)
-        if isdiffeq(eq)
-            diffvar, _ = var_from_nested_derivative(eq.lhs)
-            if check_scope_depth(getmetadata(diffvar, SymScope, LocalScope()), 0)
-                isequal(iv, iv_from_nested_derivative(eq.lhs)) ||
-                    throw(ArgumentError("An ODESystem can only have one independent variable."))
-                diffvar in diffvars &&
-                    throw(ArgumentError("The differential variable $diffvar is not unique in the system of equations."))
-                !has_diffvar_type(diffvar) &&
-                    throw(ArgumentError("Differential variable $diffvar has type $(symtype(diffvar)). Differential variables should be of a continuous, non-concrete number type: Real, Complex, AbstractFloat, or Number."))
-                push!(diffvars, diffvar)
-            end
-            push!(diffeq, eq)
-        else
-            push!(algeeq, eq)
-        end
-    end
-
-    diffvars, allunknowns, ps, Equation[diffeq; algeeq; compressed_eqs]
-end
-
 function has_diffvar_type(diffvar)
     st = symtype(diffvar)
     st === Real || eltype(st) === Real || st === Complex || eltype(st) === Complex ||
@@ -1311,3 +1315,64 @@ function var_in_varlist(var, varlist::AbstractSet, iv)
            # delayed variables
            (isdelay(var, iv) && var_in_varlist(operation(var)(iv), varlist, iv))
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Check if `a` and `b` contain identical elements, regardless of order. This is not
+equivalent to `issetequal` because the latter does not account for identical elements that
+have different multiplicities in `a` and `b`.
+"""
+function _eq_unordered(a::AbstractArray, b::AbstractArray)
+    # a and b may be multidimensional
+    # e.g. comparing noiseeqs of SDEs
+    a = vec(a)
+    b = vec(b)
+    length(a) === length(b) || return false
+    n = length(a)
+    idxs = Set(1:n)
+    for x in a
+        idx = findfirst(isequal(x), b)
+        # loop since there might be multiple identical entries in a/b
+        # and while we might have already matched the first there could
+        # be a second that is equal to x
+        while idx !== nothing && !(idx in idxs)
+            idx = findnext(isequal(x), b, idx + 1)
+        end
+        idx === nothing && return false
+        delete!(idxs, idx)
+    end
+    return true
+end
+
+_eq_unordered(a, b) = isequal(a, b)
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given a list of equations where some may be array equations, flatten the array equations
+without scalarizing occurrences of array variables and return the new list of equations.
+"""
+function flatten_equations(eqs::Vector{Equation})
+    mapreduce(vcat, eqs; init = Equation[]) do eq
+        islhsarr = eq.lhs isa AbstractArray || Symbolics.isarraysymbolic(eq.lhs)
+        isrhsarr = eq.rhs isa AbstractArray || Symbolics.isarraysymbolic(eq.rhs)
+        if islhsarr || isrhsarr
+            islhsarr && isrhsarr ||
+                error("""
+                LHS ($(eq.lhs)) and RHS ($(eq.rhs)) must either both be array expressions \
+                or both scalar
+                """)
+            size(eq.lhs) == size(eq.rhs) ||
+                error("""
+                Size of LHS ($(eq.lhs)) and RHS ($(eq.rhs)) must match: got \
+                $(size(eq.lhs)) and $(size(eq.rhs))
+                """)
+            return vec(collect(eq.lhs) .~ collect(eq.rhs))
+        else
+            eq
+        end
+    end
+end
+
+const JumpType = Union{VariableRateJump, ConstantRateJump, MassActionJump}

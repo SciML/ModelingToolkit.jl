@@ -20,7 +20,7 @@ u0 = [
     y => σ, # default u0 from default p
     z => u - 0.1
 ]
-ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β], name = :ns, defaults = [par; u0])
+ns = System(eqs, [x, y, z], [σ, ρ, β], name = :ns, defaults = [par; u0])
 ns.y = u * 1.1
 resolved = ModelingToolkit.varmap_to_vars(Dict(), parameters(ns),
     defaults = ModelingToolkit.defaults(ns))
@@ -32,7 +32,7 @@ sol = solve(prob, NewtonRaphson())
 
 @variables a
 @parameters b
-top = NonlinearSystem([0 ~ -a + ns.x + b], [a], [b], systems = [ns], name = :top)
+top = System([0 ~ -a + ns.x + b], [a], [b], systems = [ns], name = :top)
 top.b = ns.σ * 0.5
 top.ns.x = u * 0.5
 
@@ -59,7 +59,7 @@ vars = @variables(begin
 end)
 der = Differential(t)
 eqs = [der(x) ~ x]
-@named sys = ODESystem(eqs, t, vars, [x0])
+@named sys = System(eqs, t, vars, [x0])
 sys = complete(sys)
 pars = [
     x0 => 10.0

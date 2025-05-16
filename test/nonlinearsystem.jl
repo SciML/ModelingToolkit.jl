@@ -26,11 +26,11 @@ end
 eqs = [0 ~ σ * (y - x) * h,
     0 ~ x * (ρ - z) - y,
     0 ~ x * y - β * z]
-@named ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β], defaults = Dict(x => 2))
+@named ns = System(eqs, [x, y, z], [σ, ρ, β], defaults = Dict(x => 2))
 @test eval(toexpr(ns)) == ns
 test_nlsys_inference("standard", ns, (x, y, z), (σ, ρ, β))
 @test begin
-    f = generate_function(ns, [x, y, z], [σ, ρ, β], expression = Val{false})[2]
+    f = generate_rhs(ns, [x, y, z], [σ, ρ, β], expression = Val{false})[2]
     du = [0.0, 0.0, 0.0]
     f(du, [1, 2, 3], [1, 2, 3])
     du ≈ [1, -3, -7]
@@ -44,7 +44,7 @@ end
 eqs = [0 ~ σ * (y - x),
     y ~ x * (ρ - z),
     β * z ~ x * y]
-@named ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
+@named ns = System(eqs, [x, y, z], [σ, ρ, β])
 jac = calculate_jacobian(ns)
 @testset "nlsys jacobian" begin
     @test canonequal(jac[1, 1], σ * -1)
@@ -57,9 +57,6 @@ jac = calculate_jacobian(ns)
     @test canonequal(jac[3, 2], x)
     @test canonequal(jac[3, 3], -1 * β)
 end
-nlsys_func = generate_function(ns, [x, y, z], [σ, ρ, β])
-jac_func = generate_jacobian(ns)
-f = @eval eval(nlsys_func)
 
 # Intermediate calculations
 a = y - x
@@ -67,9 +64,9 @@ a = y - x
 eqs = [0 ~ σ * a * h,
     0 ~ x * (ρ - z) - y,
     0 ~ x * y - β * z]
-@named ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
+@named ns = System(eqs, [x, y, z], [σ, ρ, β])
 ns = complete(ns)
-nlsys_func = generate_function(ns, [x, y, z], [σ, ρ, β])
+nlsys_func = generate_rhs(ns, [x, y, z], [σ, ρ, β])
 nf = NonlinearFunction(ns)
 jac = calculate_jacobian(ns)
 
@@ -102,11 +99,11 @@ eqs1 = [
     0 ~ x + y - z - u
 ]
 
-lorenz = name -> NonlinearSystem(eqs1, [x, y, z, u, F], [σ, ρ, β], name = name)
+lorenz = name -> System(eqs1, [x, y, z, u, F], [σ, ρ, β], name = name)
 lorenz1 = lorenz(:lorenz1)
 @test_throws ArgumentError NonlinearProblem(complete(lorenz1), zeros(5), zeros(3))
 lorenz2 = lorenz(:lorenz2)
-@named connected = NonlinearSystem(
+@named connected = System(
     [s ~ a + lorenz1.x
      lorenz2.y ~ s * h
      lorenz1.F ~ lorenz2.u
@@ -119,14 +116,14 @@ lorenz2 = lorenz(:lorenz2)
 using OrdinaryDiffEq
 @independent_variables t
 D = Differential(t)
-@named subsys = convert_system(ODESystem, lorenz1, t)
-@named sys = ODESystem([D(subsys.x) ~ subsys.x + subsys.x], t, systems = [subsys])
+@named subsys = convert_system_indepvar(lorenz1, t)
+@named sys = System([D(subsys.x) ~ subsys.x + subsys.x], t, systems = [subsys])
 sys = structural_simplify(sys)
 u0 = [subsys.x => 1, subsys.z => 2.0, subsys.y => 1.0]
 prob = ODEProblem(sys, u0, (0, 1.0), [subsys.σ => 1, subsys.ρ => 2, subsys.β => 3])
 sol = solve(prob, FBDF(), reltol = 1e-7, abstol = 1e-7)
 @test sol[subsys.x] + sol[subsys.y] - sol[subsys.z]≈sol[subsys.u] atol=1e-7
-@test_throws ArgumentError convert_system(ODESystem, sys, t)
+@test_throws ArgumentError convert_system_indepvar(sys, t)
 
 @parameters σ ρ β
 @variables x y z
@@ -135,7 +132,7 @@ sol = solve(prob, FBDF(), reltol = 1e-7, abstol = 1e-7)
 eqs = [0 ~ σ * (y - x),
     0 ~ x * (ρ - z) - y,
     0 ~ x * y - β * z * h]
-@named ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
+@named ns = System(eqs, [x, y, z], [σ, ρ, β])
 np = NonlinearProblem(
     complete(ns), [0, 0, 0], [σ => 1, ρ => 2, β => 3], jac = true, sparse = true)
 @test calculate_jacobian(ns, sparse = true) isa SparseMatrixCSC
@@ -146,13 +143,14 @@ np = NonlinearProblem(
         @parameters a
         @variables x f
 
-        NonlinearSystem([0 ~ -a * x + f], [x, f], [a]; name)
+        System([0 ~ -a * x + f], [x, f], [a]; name)
     end
 
     function issue819()
         sys1 = makesys(:sys1)
         sys2 = makesys(:sys1)
-        @test_throws ArgumentError NonlinearSystem([sys2.f ~ sys1.x, sys1.f ~ 0], [], [],
+        @test_throws ModelingToolkit.NonUniqueSubsystemsError System(
+            [sys2.f ~ sys1.x, sys1.f ~ 0], [], [],
             systems = [sys1, sys2], name = :foo)
     end
     issue819()
@@ -169,8 +167,8 @@ end
         0 ~ b * y
     ]
 
-    @named sys1 = NonlinearSystem(eqs1, [x], [a])
-    @named sys2 = NonlinearSystem(eqs2, [y], [b])
+    @named sys1 = System(eqs1, [x], [a])
+    @named sys2 = System(eqs2, [y], [b])
     @named sys3 = extend(sys1, sys2)
 
     @test isequal(union(Set(parameters(sys1)), Set(parameters(sys2))),
@@ -183,7 +181,7 @@ end
 @independent_variables t
 @parameters τ
 @variables x(t) RHS(t)
-@named fol = NonlinearSystem([0 ~ (1 - x * h) / τ], [x], [τ];
+@named fol = System([0 ~ (1 - x * h) / τ], [x], [τ];
     observed = [RHS ~ (1 - x) / τ])
 @test isequal(RHS, @nonamespace fol.RHS)
 RHS2 = RHS
@@ -197,32 +195,15 @@ eq = [v1 ~ sin(2pi * t * h)
       v1 - v2 ~ i1
       v2 ~ i2
       i1 ~ i2]
-@named sys = ODESystem(eq, t)
+@named sys = System(eq, t)
 @test length(equations(structural_simplify(sys))) == 0
-
-@testset "Issue: 1504" begin
-    @variables u[1:4]
-
-    eqs = [u[1] ~ 1,
-        u[2] ~ 1,
-        u[3] ~ 1,
-        u[4] ~ h]
-
-    sys = NonlinearSystem(eqs, collect(u[1:4]), Num[], defaults = Dict([]), name = :test)
-    sys = complete(sys)
-    prob = NonlinearProblem(sys, ones(length(unknowns(sys))))
-
-    sol = NonlinearSolve.solve(prob, NewtonRaphson())
-
-    @test sol[u] ≈ ones(4)
-end
 
 @variables x(t)
 @parameters a
 eqs = [0 ~ a * x]
 
 testdict = Dict([:test => 1])
-@named sys = NonlinearSystem(eqs, [x], [a], metadata = testdict)
+@named sys = System(eqs, [x], [a], metadata = testdict)
 @test get_metadata(sys) == testdict
 
 @testset "Remake" begin
@@ -233,7 +214,7 @@ testdict = Dict([:test => 1])
     eqs = [0 ~ a * (y - x) * h,
         0 ~ x * (b - z) - y,
         0 ~ x * y - c * z]
-    @named sys = NonlinearSystem(eqs, [x, y, z], [a, b, c], defaults = Dict(x => 2.0))
+    @named sys = System(eqs, [x, y, z], [a, b, c], defaults = Dict(x => 2.0))
     sys = complete(sys)
     prob = NonlinearProblem(sys, ones(length(unknowns(sys))))
 
@@ -254,7 +235,7 @@ end
     eqs = [0 ~ x + sin(y),
         0 ~ z - cos(x),
         0 ~ x * y]
-    @named ns = NonlinearSystem(eqs, [x, y, z], [])
+    @named ns = System(eqs, [x, y, z], [])
     ns = complete(ns)
     vs = [unknowns(ns); parameters(ns)]
     ss_mtk = structural_simplify(ns)
@@ -268,7 +249,7 @@ end
 @variables X(t)
 alg_eqs = [0 ~ p - d * X]
 
-sys = @test_nowarn NonlinearSystem(alg_eqs; name = :name)
+sys = @test_nowarn System(alg_eqs; name = :name)
 @test isequal(only(unknowns(sys)), X)
 @test all(isequal.(parameters(sys), [p, d]))
 
@@ -276,14 +257,14 @@ sys = @test_nowarn NonlinearSystem(alg_eqs; name = :name)
 @variables u1 u2
 @parameters u3 u4
 eqs = [u3 ~ u1 + u2, u4 ~ 2 * (u1 + u2), u3 + u4 ~ 3 * (u1 + u2)]
-@named ns = NonlinearSystem(eqs, [u1, u2], [u3, u4])
+@named ns = System(eqs, [u1, u2], [u3, u4])
 sys = structural_simplify(ns; fully_determined = false)
 @test length(unknowns(sys)) == 1
 
 # Conservative
 @variables X(t)
 alg_eqs = [1 ~ 2X]
-@named ns = NonlinearSystem(alg_eqs)
+@named ns = System(alg_eqs)
 sys = structural_simplify(ns)
 @test length(equations(sys)) == 0
 sys = structural_simplify(ns; conservative = true)
@@ -298,7 +279,7 @@ sys = structural_simplify(ns; conservative = true)
            0 ~ x * y - β * z]
     guesses = [x => 1.0, z => 0.0]
     ps = [σ => 10.0, ρ => 26.0, β => 8 / 3]
-    @mtkbuild ns = NonlinearSystem(eqs)
+    @mtkbuild ns = System(eqs)
 
     @test isequal(calculate_jacobian(ns), [(-1 - z + ρ)*σ -x*σ
                                            2x*(-z + ρ) -β-(x^2)])
@@ -315,7 +296,7 @@ sys = structural_simplify(ns; conservative = true)
     # system that contains a chain of observed variables when simplified
     @variables x y z
     eqs = [0 ~ x^2 + 2z + y, z ~ y, y ~ x] # analytical solution x = y = z = 0 or -3
-    @mtkbuild ns = NonlinearSystem(eqs) # solve for y with observed chain z -> x -> y
+    @mtkbuild ns = System(eqs) # solve for y with observed chain z -> x -> y
     @test isequal(expand.(calculate_jacobian(ns)), [3 // 2 + y;;])
     @test isequal(calculate_hessian(ns), [[1;;]])
     prob = NonlinearProblem(ns, unknowns(ns) .=> -4.0) # give guess < -3 to reach -3
@@ -325,7 +306,7 @@ end
 
 @testset "Passing `nothing` to `u0`" begin
     @variables x = 1
-    @mtkbuild sys = NonlinearSystem([0 ~ x^2 - x^3 + 3])
+    @mtkbuild sys = System([0 ~ x^2 - x^3 + 3])
     prob = @test_nowarn NonlinearProblem(sys, nothing)
     @test_nowarn solve(prob)
 end
@@ -337,7 +318,7 @@ end
          2 -2 4
          -1 1/2 -1]
     b = [1, -2, 0]
-    @named sys = NonlinearSystem(A * x ~ b, [x], [])
+    @named sys = System(A * x ~ b, [x], [])
     sys = structural_simplify(sys)
     prob = NonlinearProblem(sys, unknowns(sys) .=> 0.0)
     sol = solve(prob)
@@ -347,7 +328,7 @@ end
 @testset "resid_prototype when system has no unknowns and an equation" begin
     @variables x
     @parameters p
-    @named sys = NonlinearSystem([x ~ 1, x^2 - p ~ 0])
+    @named sys = System([x ~ 1, x^2 - p ~ 0])
     for sys in [
         structural_simplify(sys, fully_determined = false),
         structural_simplify(sys, fully_determined = false, split = false)
@@ -365,38 +346,39 @@ end
 @testset "IntervalNonlinearProblem" begin
     @variables x
     @parameters p
-    @named nlsys = NonlinearSystem([0 ~ x * x - p])
+    @named nlsys = System([0 ~ x * x - p])
 
     for sys in [complete(nlsys), complete(nlsys; split = false)]
         prob = IntervalNonlinearProblem(sys, (0.0, 2.0), [p => 1.0])
         sol = @test_nowarn solve(prob, ITP())
         @test SciMLBase.successful_retcode(sol)
-        @test_nowarn IntervalNonlinearProblemExpr(sys, (0.0, 2.0), [p => 1.0])
+        @test_nowarn IntervalNonlinearProblem(
+            sys, (0.0, 2.0), [p => 1.0]; expression = Val{true})
     end
 
     @variables y
-    @mtkbuild sys = NonlinearSystem([0 ~ x * x - p * x + p, 0 ~ x * y + p])
-    @test_throws ["single equation", "unknown"] IntervalNonlinearProblem(sys, (0.0, 1.0))
-    @test_throws ["single equation", "unknown"] IntervalNonlinearFunction(sys, (0.0, 1.0))
-    @test_throws ["single equation", "unknown"] IntervalNonlinearProblemExpr(
-        sys, (0.0, 1.0))
-    @test_throws ["single equation", "unknown"] IntervalNonlinearFunctionExpr(
-        sys, (0.0, 1.0))
+    @mtkbuild sys = System([0 ~ x * x - p * x + p, 0 ~ x * y + p])
+    @test_throws ["single unknown"] IntervalNonlinearProblem(sys, (0.0, 1.0))
+    @test_throws ["single unknown"] IntervalNonlinearFunction(sys)
+    @test_throws ["single unknown"] IntervalNonlinearProblem(
+        sys, (0.0, 1.0); expression = Val{true})
+    @test_throws ["single unknown"] IntervalNonlinearFunction(
+        sys; expression = Val{true})
 end
 
 @testset "Vector parameter used unscalarized and partially scalarized" begin
     @variables x y
     @parameters p[1:2] (f::Function)(..)
 
-    @mtkbuild sys = NonlinearSystem([x^2 - p[1]^2 ~ 0, y^2 ~ f(p)])
+    @mtkbuild sys = System([x^2 - p[1]^2 ~ 0, y^2 ~ f(p)])
     @test !any(isequal(p[1]), parameters(sys))
     @test is_parameter(sys, p)
 end
 
-@testset "Can convert from `ODESystem`" begin
+@testset "Can convert from `System`" begin
     @variables x(t) y(t)
     @parameters p q r
-    @named sys = ODESystem([D(x) ~ p * x^3 + q, 0 ~ -y + q * x - r], t;
+    @named sys = System([D(x) ~ p * x^3 + q, 0 ~ -y + q * x - r], t;
         defaults = [x => 1.0, p => missing], guesses = [p => 1.0],
         initialization_eqs = [p^3 + q^3 ~ 4r], parameter_dependencies = [r ~ 3p])
     nlsys = NonlinearSystem(sys)
@@ -435,7 +417,7 @@ end
     @test sol.ps[p^3 + q^3]≈sol.ps[4r] atol=1e-10
 
     @testset "Differential inside expression also substituted" begin
-        @named sys = ODESystem([0 ~ y * D(x) + x^2 - p, 0 ~ x * D(y) + y * p], t)
+        @named sys = System([0 ~ y * D(x) + x^2 - p, 0 ~ x * D(y) + y * p], t)
         nlsys = NonlinearSystem(sys)
         vs = ModelingToolkit.vars(equations(nlsys))
         @test !in(D(x), vs)

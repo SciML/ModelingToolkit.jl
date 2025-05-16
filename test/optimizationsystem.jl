@@ -22,14 +22,14 @@ using ModelingToolkit: get_metadata
     unknowns(combinedsys)
     parameters(combinedsys)
 
-    calculate_gradient(combinedsys)
-    calculate_hessian(combinedsys)
-    generate_function(combinedsys)
-    generate_gradient(combinedsys)
-    generate_hessian(combinedsys)
-    hess_sparsity = ModelingToolkit.hessian_sparsity(sys1)
+    calculate_cost_gradient(combinedsys)
+    calculate_cost_hessian(combinedsys)
+    generate_cost(combinedsys)
+    generate_cost_gradient(combinedsys)
+    generate_cost_hessian(combinedsys)
+    hess_sparsity = ModelingToolkit.cost_hessian_sparsity(sys1)
     sparse_prob = OptimizationProblem(complete(sys1),
-        [x, y],
+        [x => 1, y => 1],
         [a => 0.0, b => 0.0],
         grad = true,
         sparse = true)
@@ -158,7 +158,7 @@ end
         constraints = [sys1.x + sys2.y ~ 2], checks = false))
     prob = OptimizationProblem(sys, [0.0, 0.0])
     @test isequal(constraints(sys), vcat(sys1.x + sys2.y ~ 2, sys1.x ~ 1, sys2.y ~ 1))
-    @test isequal(equations(sys), (sys1.x - sys1.a)^2 + (sys2.y - 1 / 2)^2)
+    @test isequal(cost(sys), (sys1.x - sys1.a)^2 + (sys2.y - 1 / 2)^2)
     @test isequal(unknowns(sys), [sys1.x, sys2.y])
 
     prob_ = remake(prob, u0 = [1.0, 0.0], p = [2.0])
@@ -177,7 +177,7 @@ end
     @named sys3 = OptimizationSystem(x3, [x3], [], systems = [sys2])
     @named sys4 = OptimizationSystem(x4, [x4], [], systems = [sys3])
 
-    @test isequal(equations(sys4), sys3.sys2.sys1.x1 + sys3.sys2.x2 + sys3.x3 + x4)
+    @test isequal(cost(sys4), sys3.sys2.sys1.x1 + sys3.sys2.x2 + sys3.x3 + x4)
 end
 
 @testset "time dependent var" begin
@@ -299,14 +299,6 @@ end
     loss = (a - x)^2 + b * (y - x^2)^2
     @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = [x^2 + y^2 ≲ 0.0])
     sys = complete(sys)
-    @test_throws Any OptimizationProblem(sys,
-        [x => 0.0, y => 0.0],
-        [a => 1.0, b => 100.0],
-        lcons = [0.0])
-    @test_throws Any OptimizationProblem(sys,
-        [x => 0.0, y => 0.0],
-        [a => 1.0, b => 100.0],
-        ucons = [0.0])
 
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0])
     @test prob.f.expr isa Symbolics.Symbolic
