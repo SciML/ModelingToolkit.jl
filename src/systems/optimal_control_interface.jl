@@ -219,8 +219,8 @@ function process_DynamicOptProblem(prob_type::Type{<:AbstractDynamicOptProblem},
     tsteps = LinRange(model_tspan[1], model_tspan[2], steps)
     model = generate_internal_model(model_type)
     generate_time_variable!(model, model_tspan, steps)
-    U = generate_state_variable!(model, u0, length(states), length(steps))
-    V = generate_input_variable!(model, c0, length(ctrls), length(steps))
+    U = generate_state_variable!(model, u0, length(states), tsteps)
+    V = generate_input_variable!(model, c0, length(ctrls), tsteps)
     tₛ = generate_timescale!(model, get(pmap, tspan[2], tspan[2]), is_free_t)
     fullmodel = model_type(model, U, V, tₛ, is_free_t)
 
@@ -249,9 +249,9 @@ function add_cost_function!(model, sys, tspan, pmap)
         set_objective!(model, 0)
         return
     end
-    jcosts = substitute_model_vars(model, sys, jcosts; tf = tspan[2])
+    jcosts = substitute_model_vars(model, sys, jcosts, tspan)
     jcosts = substitute_params(pmap, jcosts)
-    jcosts = substitute_integral(model, jcosts)
+    jcosts = substitute_integral(model, jcosts, tspan)
     set_objective!(model, consolidate(jcosts))
 end
 
@@ -263,24 +263,24 @@ function add_user_constraints!(model, sys, tspan, pmap)
     is_free_final(model) && check_constraint_vars(consvars)
 
     jconstraints = substitute_toterm(consvars, jconstraints)
+    jconstraints = substitute_model_vars(model, sys, jconstraints, tspan)
     jconstraints = substitute_params(pmap, jconstraints)
-    jconstraints = substitute_model_vars(model, sys, jconstraints; tf = tspan[2])
 
     for c in jconstraints
-        @show c
         add_constraint!(model, c)
     end
 end
 
-function add_equational_constraints!(model, sys, tspan)
-    model = model.model
-    diff_eqs = substitute_model_vars(model, sys, diff_equations(sys); tf = tspan[2])
+function add_equational_constraints!(model, sys, pmap, tspan)
+    diff_eqs = substitute_model_vars(model, sys, diff_equations(sys), tspan)
+    diff_eqs = substitute_params(pmap, diff_eqs)
     diff_eqs = substitute_differentials(model, sys, diff_eqs)
     for eq in diff_eqs
         add_constraint!(model, eq.lhs ~ eq.rhs * model.tₛ)
     end
 
-    alg_eqs = substitute_model_vars(model, sys, alg_equations(sys); tf = tspan[2])
+    alg_eqs = substitute_model_vars(model, sys, alg_equations(sys), tspan)
+    alg_eqs = substitute_params(pmap, alg_eqs)
     for eq in alg_eqs
         add_constraint!(model, eq.lhs ~ eq.rhs * model.tₛ)
     end
@@ -289,6 +289,12 @@ end
 function set_objective! end
 """Substitute variables like x(1.5) with the corresponding model variables."""
 function substitute_model_vars end
+"""
+Substitute integrals. For an integral from (ts, te):
+- Free final time problems should transcribe this to (0, 1) in the case that (ts, te) is the original timespan. Free final time problems cannot handle partial timespans.
+- CasADi cannot handle partial timespans, even for non-free-final time problems.
+time problems and unchanged otherwise.
+"""
 function substitute_integral end
 function substitute_differentials end
 
@@ -298,7 +304,7 @@ function substitute_toterm(vars, exprs)
 end
 
 function substitute_params(pmap, exprs)
-    exprs = map(c -> Symbolics.fast_substitute(c, Dict(pmap)), exprs)
+    exprs = map(c -> Symbolics.fixpoint_sub(c, Dict(pmap)), exprs)
 end
 
 function check_constraint_vars(vars)
@@ -315,10 +321,9 @@ end
 ### SOLVER UTILITIES ###
 ########################
 """
-Add the solve constraints, set the solver (Ipopt, e.g.) and solver options.
+Add the solve constraints, set the solver (Ipopt, e.g.) and solver options, optimize the model.
 """
-function prepare_solver! end
-function optimize_model! end
+function prepare_and_optimize! end
 function get_t_values end
 function get_U_values end
 function get_V_values end
@@ -330,22 +335,21 @@ function successful_solve end
 - kwargs are used for other options. For example, the `plugin_options` and `solver_options` will propagated to the Opti object in CasADi.
 """
 function DiffEqBase.solve(prob::AbstractDynamicOptProblem, solver::AbstractCollocation; verbose = false, kwargs...)
-    solver = prepare_solver!(prob, solver; verbose, kwargs...)
-    model = optimize_model!(prob, solver)
+    prepare_and_optimize!(prob, solver; verbose, kwargs...)
     
-    ts = get_t_values(model)
-    Us = get_U_values(model)
-    Vs = get_V_values(model)
-    is_free_final(model) && (ts .+ tspan[1])
+    ts = get_t_values(prob.model)
+    Us = get_U_values(prob.model)
+    Vs = get_V_values(prob.model)
+    is_free_final(prob.model) && (ts .+ prob.tspan[1])
 
     ode_sol = DiffEqBase.build_solution(prob, solver, ts, Us)
     input_sol = isnothing(Vs) ? nothing : DiffEqBase.build_solution(prob, solver, ts, Vs)
 
-    if !successful_solve(model)
+    if !successful_solve(prob.model)
         ode_sol = SciMLBase.solution_new_retcode(
             ode_sol, SciMLBase.ReturnCode.ConvergenceFailure)
         !isnothing(input_sol) && (input_sol = SciMLBase.solution_new_retcode(
             input_sol, SciMLBase.ReturnCode.ConvergenceFailure))
     end
-    DynamicOptSolution(model, ode_sol, input_sol)
+    DynamicOptSolution(prob.model.model, ode_sol, input_sol)
 end

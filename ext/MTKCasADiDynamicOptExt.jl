@@ -18,12 +18,17 @@ struct MXLinearInterpolation
     dt::Float64
 end
 
-struct CasADiModel
-    opti::Opti
+mutable struct CasADiModel
+    model::Opti
     U::MXLinearInterpolation
     V::MXLinearInterpolation
     tₛ::MX
     is_free_final::Bool
+    solver_opti::Union{Nothing, Opti}
+
+    function CasADiModel(opti, U, V, tₛ, is_free_final, solver_opti = nothing)
+        new(opti, U, V, tₛ, is_free_final, solver_opti)
+    end
 end
 
 struct CasADiDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
@@ -74,24 +79,27 @@ function MTK.CasADiDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
         dt = nothing,
         steps = nothing,
         guesses = Dict(), kwargs...)
-    process_DynamicOptProblem(CasADiDynamicOptProblem, CasADiModel, sys, u0map, tspan, pmap; dt, steps, guesses, kwargs...)
+    MTK.process_DynamicOptProblem(CasADiDynamicOptProblem, CasADiModel, sys, u0map, tspan, pmap; dt, steps, guesses, kwargs...)
 end
 
-MTK.generate_internal_model(::Type{CasADiModel}) = CasADi.opti()
+MTK.generate_internal_model(::Type{CasADiModel}) = CasADi.Opti()
+MTK.generate_time_variable!(opti::Opti, args...) = nothing
 
-function MTK.generate_state_variable(model::Opti, u0, ns, nt, tsteps)
+function MTK.generate_state_variable!(model::Opti, u0, ns, tsteps)
+    nt = length(tsteps)
     U = CasADi.variable!(model, ns, nt)
-    set_initial!(opti, U, DM(repeat(u0, 1, steps)))
+    set_initial!(model, U, DM(repeat(u0, 1, nt)))
     MXLinearInterpolation(U, tsteps, tsteps[2] - tsteps[1])
 end
 
-function MTK.generate_input_variable(model::Opti, c0, nc, nt, tsteps)
+function MTK.generate_input_variable!(model::Opti, c0, nc, tsteps)
+    nt = length(tsteps)
     V = CasADi.variable!(model, nc, nt)
-    !isempty(c0) && set_initial!(opti, V, DM(repeat(c0, 1, steps)))
+    !isempty(c0) && set_initial!(model, V, DM(repeat(c0, 1, nt)))
     MXLinearInterpolation(V, tsteps, tsteps[2] - tsteps[1])
 end
 
-function MTK.generate_timescale(model::Opti, guess, is_free_t)
+function MTK.generate_timescale!(model::Opti, guess, is_free_t)
     if is_free_t
         tₛ = variable!(model)
         set_initial!(model, tₛ, guess)
@@ -102,78 +110,73 @@ function MTK.generate_timescale(model::Opti, guess, is_free_t)
     end
 end
 
-function MTK.add_constraint!(model::CasADiModel, expr)
-    @unpack opti = model
-    if cons isa Equation
-        subject_to!(opti, expr.lhs - expr.rhs == 0)
-    elseif cons.relational_op === Symbolics.geq
-        subject_to!(opti, expr.lhs - expr.rhs ≥ 0)
+function MTK.add_constraint!(m::CasADiModel, expr)
+    if expr isa Equation
+        subject_to!(m.model, expr.lhs - expr.rhs == 0)
+    elseif expr.relational_op === Symbolics.geq
+        subject_to!(m.model, expr.lhs - expr.rhs ≥ 0)
     else
-        subject_to!(opti, expr.lhs - expr.rhs ≤ 0)
+        subject_to!(m.model, expr.lhs - expr.rhs ≤ 0)
     end
 end
-MTK.set_objective!(model::CasADiModel, expr) = minimize!(model.opti, MX(expr))
+MTK.set_objective!(m::CasADiModel, expr) = minimize!(m.model, MX(expr))
 
-function MTK.set_variable_bounds!(model, sys, pmap, tf)
-    @unpack opti, U, V = model
+function MTK.set_variable_bounds!(m::CasADiModel, sys, pmap, tf)
+    @unpack model, U, tₛ, V = m
     for (i, u) in enumerate(unknowns(sys))
         if MTK.hasbounds(u)
             lo, hi = MTK.getbounds(u)
-            subject_to!(opti, Symbolics.fixpoint_sub(lo, pmap) <= U.u[i, :])
-            subject_to!(opti, U.u[i, :] <= Symbolics.fixpoint_sub(hi, pmap))
+            subject_to!(model, Symbolics.fixpoint_sub(lo, pmap) <= U.u[i, :])
+            subject_to!(model, U.u[i, :] <= Symbolics.fixpoint_sub(hi, pmap))
         end
     end
     for (i, v) in enumerate(MTK.unbound_inputs(sys))
         if MTK.hasbounds(v)
             lo, hi = MTK.getbounds(v)
-            subject_to!(opti, Symbolics.fixpoint_sub(lo, pmap) <= V.u[i, :])
-            subject_to!(opti, V.u[i, :] <= Symbolics.fixpoint_sub(hi, pmap))
+            subject_to!(model, Symbolics.fixpoint_sub(lo, pmap) <= V.u[i, :])
+            subject_to!(model, V.u[i, :] <= Symbolics.fixpoint_sub(hi, pmap))
         end
     end
     if MTK.symbolic_type(tf) === MTK.ScalarSymbolic() && hasbounds(tf)
         lo, hi = MTK.getbounds(tf)
-        subject_to!(opti, model.tₛ >= lo)
-        subject_to!(opti, model.tₛ <= hi)
+        subject_to!(model, tₛ >= lo)
+        subject_to!(model, tₛ <= hi)
     end
 end
 
-function MTK.add_initial_constraints!(model::CasADiModel, u0, u0_idxs)
-    @unpack opti, U = model
+function MTK.add_initial_constraints!(m::CasADiModel, u0, u0_idxs, args...)
+    @unpack model, U = m
     for i in u0_idxs
-        subject_to!(opti, U.u[i, 1] == u0[i])
+        subject_to!(model, U.u[i, 1] == u0[i])
     end
 end
 
-function MTK.substitute_model_vars(
-        model::CasADiModel, sys, pmap, exprs; auxmap::Dict = Dict(), is_free_t)
-    @unpack opti, U, V, tₛ = model
+function MTK.substitute_model_vars(m::CasADiModel, sys, exprs, tspan)
+    @unpack model, U, V, tₛ = m
     iv = MTK.get_iv(sys)
     sts = unknowns(sys)
     cts = MTK.unbound_inputs(sys)
-
     x_ops = [MTK.operation(MTK.unwrap(st)) for st in sts]
     c_ops = [MTK.operation(MTK.unwrap(ct)) for ct in cts]
-
-    exprs = map(c -> Symbolics.fast_substitute(c, auxmap), exprs)
-    exprs = map(c -> Symbolics.fast_substitute(c, Dict(pmap)), exprs)
-    # tf means different things in different contexts; a [tf] in a cost function
-    # should be tₛ, while a x(tf) should translate to x[1]
-    if is_free_t
-        free_t_map = Dict([[x(tₛ) => U.u[i, end] for (i, x) in enumerate(x_ops)];
-                           [c(tₛ) => V.u[i, end] for (i, c) in enumerate(c_ops)]])
+    (ti, tf) = tspan
+    if MTK.is_free_final(m)
+        _tf = tₛ + ti
+        exprs = map(c -> Symbolics.fast_substitute(c, Dict(tf => _tf)), exprs)
+        free_t_map = Dict([[x(_tf) => U.u[i, end] for (i, x) in enumerate(x_ops)];
+                           [c(_tf) => V.u[i, end] for (i, c) in enumerate(c_ops)]])
         exprs = map(c -> Symbolics.fast_substitute(c, free_t_map), exprs)
     end
 
-    exprs = substitute_fixed_t_vars(exprs)
-
-    # for variables like x(t)
+    exprs = substitute_fixed_t_vars(m, sys, exprs)
     whole_interval_map = Dict([[v => U.u[i, :] for (i, v) in enumerate(sts)];
                                [v => V.u[i, :] for (i, v) in enumerate(cts)]])
     exprs = map(c -> Symbolics.fast_substitute(c, whole_interval_map), exprs)
-    exprs
 end
 
-function substitute_fixed_t_vars(exprs)
+function substitute_fixed_t_vars(model::CasADiModel, sys, exprs)
+    stidxmap = Dict([v => i for (i, v) in enumerate(unknowns(sys))])
+    ctidxmap = Dict([v => i for (i, v) in enumerate(MTK.unbound_inputs(sys))])
+    iv = MTK.get_iv(sys)
     for i in 1:length(exprs)
         subvars = MTK.vars(exprs[i])
         for st in subvars 
@@ -183,26 +186,27 @@ function substitute_fixed_t_vars(exprs)
             MTK.symbolic_type(t) === MTK.NotSymbolic() || continue
             if haskey(stidxmap, x(iv))
                 idx = stidxmap[x(iv)]
-                cv = U
+                cv = model.U
             else
                 idx = ctidxmap[x(iv)]
-                cv = V
+                cv = model.V
             end
             exprs[i] = Symbolics.fast_substitute(exprs[i], Dict(x(t) => cv(t)[idx]))
         end
     end
+    exprs
 end
 
-MTK.substitute_differentials(model::CasADiModel, exprs, args...) = exprs
+MTK.substitute_differentials(model::CasADiModel, sys, eqs) = exprs
 
-function MTK.substitute_integral(model::CasADiModel, exprs)
-    @unpack U, opti = model
+function MTK.substitute_integral(m::CasADiModel, exprs, tspan)
+    @unpack U, model, tₛ = m
     dt = U.t[2] - U.t[1]
     intmap = Dict()
     for int in MTK.collect_applied_operators(exprs, Symbolics.Integral)
         op = MTK.operation(int)
         arg = only(arguments(MTK.value(int)))
-        lo, hi = (op.domain.domain.left, op.domain.domain.right)
+        lo, hi = MTK.value.((op.domain.domain.left, op.domain.domain.right))
         !isequal((lo, hi), tspan) &&
             error("Non-whole interval bounds for integrals are not currently supported for CasADiDynamicOptProblem.")
         # Approximate integral as sum.
@@ -212,11 +216,11 @@ function MTK.substitute_integral(model::CasADiModel, exprs)
     exprs = MTK.value.(exprs)
 end
 
-function add_solve_constraints!(prob, tableau)
+function add_solve_constraints!(prob::CasADiDynamicOptProblem, tableau)
     @unpack A, α, c = tableau
     @unpack model, f, p = prob
-    @unpack opti, U, V, tₛ = model
-    solver_opti = copy(opti)
+    @unpack model, U, V, tₛ = model
+    solver_opti = copy(model)
 
     tsteps = U.t
     dt = tsteps[2] - tsteps[1]
@@ -257,29 +261,56 @@ function add_solve_constraints!(prob, tableau)
     solver_opti
 end
 
-function MTK.prepare_solver()
-    opti = add_solve_constraints(prob, tableau)
-    solver!(opti, "$solver", plugin_options, solver_options)
+"""
+CasADi Collocation solver.
+- solver: an optimization solver such as Ipopt. Should be given as a string or symbol in all lowercase, e.g. "ipopt"
+- tableau: An ODE RK tableau. Load a tableau by calling a function like `constructRK4` and may be found at https://docs.sciml.ai/DiffEqDevDocs/stable/internals/tableaus/. If this argument is not passed in, the solver will default to Radau second order.
+"""
+struct CasADiCollocation <: AbstractCollocation
+    solver::Union{String, Symbol}
+    tableau::DiffEqBase.ODERKTableau
 end
-function MTK.get_U_values()
-    U_vals = value_getter(U.u)
-    size(U_vals, 2) == 1 && (U_vals = U_vals')
-    U_vals = [[U_vals[i, j] for i in 1:size(U_vals, 1)] for j in 1:length(ts)]
-end
-function MTK.get_V_values()
-end
-function MTK.get_t_values()
-    ts = value_getter(tₛ) * U.t
+MTK.CasADiCollocation(solver, tableau = MTK.constructDefault()) = CasADiCollocation(solver, tableau)
+
+function MTK.prepare_and_optimize!(prob::CasADiDynamicOptProblem, solver::CasADiCollocation; verbose = false, solver_options = Dict(), plugin_options = Dict(), kwargs...)
+    solver_opti = add_solve_constraints!(prob, solver.tableau)
+    verbose || (solver_options["print_level"] = 0)
+    solver!(solver_opti, "$(solver.solver)", plugin_options, solver_options)
+    try
+        CasADi.solve!(solver_opti)
+    catch ErrorException
+    end
+    prob.model.solver_opti = solver_opti
 end
 
-function MTK.optimize_model!()
-    try
-        sol = CasADi.solve!(opti)
-        value_getter = x -> CasADi.value(sol, x)
-    catch ErrorException
-        value_getter = x -> CasADi.debug_value(opti, x)
-        failed = true
+function MTK.get_U_values(model::CasADiModel)
+    value_getter = MTK.successful_solve(model) ? CasADi.debug_value : CasADi.value
+    (nu, nt) = size(model.U.u)
+    U_vals = value_getter(model.solver_opti, model.U.u)
+    size(U_vals, 2) == 1 && (U_vals = U_vals')
+    U_vals = [[U_vals[i, j] for i in 1:nu] for j in 1:nt]
+end
+
+function MTK.get_V_values(model::CasADiModel)
+    value_getter = MTK.successful_solve(model) ? CasADi.debug_value : CasADi.value
+    (nu, nt) = size(model.V.u)
+    if nu*nt != 0
+        V_vals = value_getter(model.solver_opti, model.V.u)
+        size(V_vals, 2) == 1 && (V_vals = V_vals')
+        V_vals = [[V_vals[i, j] for i in 1:nu] for j in 1:nt]
+    else
+        nothing
     end
 end
-MTK.successful_solve() = true
+
+function MTK.get_t_values(model::CasADiModel)
+    value_getter = MTK.successful_solve(model) ? CasADi.debug_value : CasADi.value
+    ts = value_getter(model.solver_opti, model.tₛ) .* model.U.t
+end
+
+function MTK.successful_solve(m::CasADiModel) 
+    isnothing(m.solver_opti) && return false
+    retcode = CasADi.return_status(m.solver_opti)
+    retcode == "Solve_Succeeded" || retcode == "Solved_To_Acceptable_Level"
+end
 end

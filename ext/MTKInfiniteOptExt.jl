@@ -49,8 +49,8 @@ end
 
 MTK.generate_internal_model(m::Type{InfiniteOptModel}) = InfiniteModel()
 MTK.generate_time_variable!(m::InfiniteModel, tspan, steps) = @infinite_parameter(m, t in [tspan[1], tspan[2]], num_supports = steps)
-MTK.generate_state_variable!(m::InfiniteModel, u0::Vector, ns, nt) = @variable(m, U[i = 1:ns], Infinite(m[:t]), start=u0[i])
-MTK.generate_input_variable!(m::InfiniteModel, c0, nc, nt) = @variable(m, V[i = 1:nc], Infinite(m[:t]), start=c0[i])
+MTK.generate_state_variable!(m::InfiniteModel, u0::Vector, ns, ts) = @variable(m, U[i = 1:ns], Infinite(m[:t]), start=u0[i])
+MTK.generate_input_variable!(m::InfiniteModel, c0, nc, ts) = @variable(m, V[i = 1:nc], Infinite(m[:t]), start=c0[i])
 
 function MTK.generate_timescale!(m::InfiniteModel, guess, is_free_t)
     @variable(m, tₛ ≥ 0, start = guess)
@@ -65,9 +65,9 @@ function MTK.add_constraint!(m::InfiniteOptModel, expr::Union{Equation, Inequali
     if expr isa Equation
         @constraint(m.model, expr.lhs - expr.rhs == 0)
     elseif expr.relational_op === Symbolics.geq
-        @constraint(m.model, expr.lhs - eq.rhs ≥ 0)
+        @constraint(m.model, expr.lhs - expr.rhs ≥ 0)
     else
-        @constraint(m.model, expr.lhs - eq.rhs ≤ 0)
+        @constraint(m.model, expr.lhs - expr.rhs ≤ 0)
     end
 end
 MTK.set_objective!(m::InfiniteOptModel, expr) = @objective(m.model, Min, expr)
@@ -109,10 +109,12 @@ function MTK.InfiniteOptDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
         dt = nothing,
         steps = nothing,
         guesses = Dict(), kwargs...)
-    MTK.process_DynamicOptProblem(InfiniteOptDynamicOptProblem, InfiniteOptModel, sys, u0map, tspan, pmap; dt, steps, guesses, kwargs...)
+    prob = MTK.process_DynamicOptProblem(InfiniteOptDynamicOptProblem, InfiniteOptModel, sys, u0map, tspan, pmap; dt, steps, guesses, kwargs...)
+    MTK.add_equational_constraints!(prob.model, sys, pmap, tspan)
+    prob
 end
 
-function MTK.set_variable_bounds!(model, sys, pmap, tf)
+function MTK.set_variable_bounds!(model::InfiniteOptModel, sys, pmap, tf)
     for (i, u) in enumerate(unknowns(sys))
         if MTK.hasbounds(u)
             lo, hi = MTK.getbounds(u)
@@ -136,24 +138,27 @@ function MTK.set_variable_bounds!(model, sys, pmap, tf)
     end
 end
 
-function MTK.substitute_integral(model, exprs)
+function MTK.substitute_integral(model, exprs, tspan)
     intmap = Dict()
     for int in MTK.collect_applied_operators(exprs, Symbolics.Integral)
         op = MTK.operation(int)
         arg = only(arguments(MTK.value(int)))
         lo, hi = MTK.value.((op.domain.domain.left, op.domain.domain.right))
-        hi = (MTK.symbolic_type(hi) === MTK.ScalarSymbolic()) ? 1 : hi
+        if MTK.is_free_final(model) && isequal((lo, hi), tspan)
+            (lo, hi) = (0, 1)
+        elseif MTK.is_free_final(model)
+            error("Free final time problems cannot handle partial timespans.")
+        end
         intmap[int] = model.tₛ * InfiniteOpt.∫(arg, model.model[:t], lo, hi)
     end
     exprs = map(c -> Symbolics.substitute(c, intmap), exprs)
 end
 
 function MTK.add_initial_constraints!(m::InfiniteOptModel, u0, u0_idxs, ts)
-    @show m.U
     @constraint(m.model, initial[i in u0_idxs], m.U[i](ts)==u0[i])
 end
 
-function MTK.substitute_model_vars(model, sys, exprs; tf = nothing)
+function MTK.substitute_model_vars(model::InfiniteOptModel, sys, exprs, tspan)
     whole_interval_map = Dict([[v => model.U[i] for (i, v) in enumerate(unknowns(sys))];
                                [v => model.V[i] for (i, v) in enumerate(MTK.unbound_inputs(sys))]])
     exprs = map(c -> Symbolics.fast_substitute(c, whole_interval_map), exprs)
@@ -161,9 +166,12 @@ function MTK.substitute_model_vars(model, sys, exprs; tf = nothing)
     x_ops = [MTK.operation(MTK.unwrap(st)) for st in unknowns(sys)]
     c_ops = [MTK.operation(MTK.unwrap(ct)) for ct in MTK.unbound_inputs(sys)]
 
+    (ti, tf) = tspan
     if MTK.symbolic_type(tf) === MTK.ScalarSymbolic()
-        free_t_map = Dict([[x(tf) => model.U[i](1) for (i, x) in enumerate(x_ops)];
-                           [c(tf) => model.V[i](1) for (i, c) in enumerate(c_ops)]])
+        _tf = model.tₛ + ti
+        exprs = map(c -> Symbolics.fast_substitute(c, Dict(tf => _tf)), exprs)
+        free_t_map = Dict([[x(_tf) => model.U[i](1) for (i, x) in enumerate(x_ops)];
+                           [c(_tf) => model.V[i](1) for (i, c) in enumerate(c_ops)]])
         exprs = map(c -> Symbolics.fast_substitute(c, free_t_map), exprs)
     end
 
@@ -173,18 +181,19 @@ function MTK.substitute_model_vars(model, sys, exprs; tf = nothing)
     exprs = map(c -> Symbolics.fast_substitute(c, fixed_t_map), exprs)
 end
 
-function MTK.substitute_differentials(model::InfiniteOptModel, eqs)
+function MTK.substitute_differentials(model::InfiniteOptModel, sys, eqs)
     U = model.U
     t = model.model[:t]
     D = Differential(MTK.get_iv(sys))
     diffsubmap = Dict([D(U[i]) => ∂(U[i], t) for i in 1:length(U)])
-    map(e -> Symbolics.substitute(e, diffsubmap), diff_eqs)
+    map(e -> Symbolics.substitute(e, diffsubmap), eqs)
 end
 
 function add_solve_constraints!(prob::JuMPDynamicOptProblem, tableau)
     @unpack A, α, c = tableau
     @unpack model, f, p = prob
-    tsteps = supports(model.model[:t])
+    t = model.model[:t]
+    tsteps = supports(t)
     dt = tsteps[2] - tsteps[1]
 
     tₛ = model.tₛ
@@ -208,7 +217,7 @@ function add_solve_constraints!(prob::JuMPDynamicOptProblem, tableau)
             empty!(K)
         end
     else
-        @variable(model, K[1:length(α), 1:nᵤ], Infinite(t))
+        @variable(model.model, K[1:length(α), 1:nᵤ], Infinite(t))
         ΔUs = A * K
         ΔU_tot = dt * (K' * α)
         for τ in tsteps[1:end-1]
@@ -228,8 +237,6 @@ end
 JuMP Collocation solver.
 - solver: a optimization solver such as Ipopt
 - tableau: An ODE RK tableau. Load a tableau by calling a function like `constructRK4` and may be found at https://docs.sciml.ai/DiffEqDevDocs/stable/internals/tableaus/. If this argument is not passed in, the solver will default to Radau second order.
-
-Returns a DynamicOptSolution, which contains both the model and the ODE solution.
 """
 struct JuMPCollocation <: AbstractCollocation
     solver::Any
@@ -240,7 +247,7 @@ MTK.JuMPCollocation(solver, tableau = MTK.constructDefault()) = JuMPCollocation(
 """
 InfiniteOpt Collocation solver.
 - solver: an optimization solver such as Ipopt
-- `derivative_method` kwarg refers to the method used by InfiniteOpt to compute derivatives. The list of possible options can be found at https://infiniteopt.github.io/InfiniteOpt.jl/stable/guide/derivative/. Defaults to FiniteDifference(Backward()).
+- `derivative_method`: the method used by InfiniteOpt to compute derivatives. The list of possible options can be found at https://infiniteopt.github.io/InfiniteOpt.jl/stable/guide/derivative/. Defaults to FiniteDifference(Backward()).
 """
 struct InfiniteOptCollocation <: AbstractCollocation
     solver::Any
@@ -248,7 +255,7 @@ struct InfiniteOptCollocation <: AbstractCollocation
 end
 MTK.InfiniteOptCollocation(solver, derivative_method = InfiniteOpt.FiniteDifference(InfiniteOpt.Backward())) = InfiniteOptCollocation(solver, derivative_method)
 
-function MTK.prepare_solver!(prob::JuMPDynamicOptProblem, solver::JuMPCollocation; verbose = false, kwargs...)
+function MTK.prepare_and_optimize!(prob::JuMPDynamicOptProblem, solver::JuMPCollocation; verbose = false, kwargs...)
     model = prob.model.model
     verbose || set_silent(model)
     # Unregister current solver constraints
@@ -267,19 +274,15 @@ function MTK.prepare_solver!(prob::JuMPDynamicOptProblem, solver::JuMPCollocatio
     end
     add_solve_constraints!(prob, solver.tableau)
     set_optimizer(model, solver.solver)
+    optimize!(model)
 end
 
-function MTK.prepare_solver!(prob::InfiniteOptDynamicOptProblem, solver::InfiniteOptCollocation; verbose = false, kwargs...)
+function MTK.prepare_and_optimize!(prob::InfiniteOptDynamicOptProblem, solver::InfiniteOptCollocation; verbose = false, kwargs...)
     model = prob.model.model
     verbose || set_silent(model)
-    add_equational_constraints!(model, prob.f.sys, prob.tspan)
     set_derivative_method(model[:t], solver.derivative_method)
     set_optimizer(model, solver.solver)
-end
-
-function MTK.optimize_model!(prob::Union{InfiniteOptDynamicOptProblem, JuMPDynamicOptProblem}, solver) 
-    optimize!(prob.model.model)
-    prob.model
+    optimize!(model)
 end
 
 function MTK.get_V_values(m::InfiniteOptModel)
@@ -296,7 +299,7 @@ function MTK.get_U_values(m::InfiniteOptModel)
     U_vals = value.(m.U)
     U_vals = [[U_vals[i][j] for i in 1:length(U_vals)] for j in 1:nt]
 end
-MTK.get_t_values(model) = model.tₛ * supports(model.model[:t])
+MTK.get_t_values(model) = value(model.tₛ) * supports(model.model[:t])
 
 function MTK.successful_solve(m::InfiniteOptModel)
     model = m.model
