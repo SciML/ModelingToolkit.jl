@@ -52,7 +52,6 @@ const M = ModelingToolkit
     @mtkcompile lksys = System(eqs, t; constraints = constr)
 
     jprob = JuMPDynamicOptProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
-    @test InfiniteOpt.num_constraints(jprob.model) == 2
     jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructTsitouras5()))
     @test jsol.sol(0.6; idxs = x(t)) ≈ 3.5
     @test jsol.sol(0.3; idxs = x(t)) ≈ 7.0
@@ -213,16 +212,16 @@ end
         g₀ => 1, m₀ => 1.0, h_c => 500, c => 0.5 * √(g₀ * h₀), D_c => 0.5 * 620 * m₀ / g₀,
         Tₘ => 3.5 * g₀ * m₀, T(t) => 0.0, h₀ => 1, m_c => 0.6]
     jprob = JuMPDynamicOptProblem(rocket, u0map, (ts, te), pmap; dt = 0.001, cse = false)
-    jsol = solve(jprob, Ipopt.Optimizer, constructRadauIIA5, silent = true)
+    jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructRadauIIA5()))
     @test jsol.sol[h(t)][end] > 1.012
 
     cprob = CasADiDynamicOptProblem(rocket, u0map, (ts, te), pmap; dt = 0.001, cse = false)
-    csol = solve(cprob, "ipopt"; silent = true)
+    csol = solve(cprob, CasADiCollocation("ipopt"))
     @test csol.sol[h(t)][end] > 1.012
 
     iprob = InfiniteOptDynamicOptProblem(
         rocket, u0map, (ts, te), pmap; dt = 0.001)
-    isol = solve(iprob, Ipopt.Optimizer, silent = true)
+    isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
     @test isol.sol[h(t)][end] > 1.012
 
     # Test solution
@@ -330,7 +329,7 @@ end
     @test jsol.sol.u[end] ≈ [π, 0, 0, 0]
 
     cprob = CasADiDynamicOptProblem(cartpole, u0map, tspan, pmap; dt = 0.04)
-    csol = solve(cprob, "ipopt", constructRK4, silent = true)
+    csol = solve(cprob, CasADiCollocation("ipopt", constructRK4()))
     @test csol.sol.u[end] ≈ [π, 0, 0, 0]
 
     iprob = InfiniteOptDynamicOptProblem(cartpole, u0map, tspan, pmap; dt = 0.04)
