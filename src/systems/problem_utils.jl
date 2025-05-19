@@ -532,15 +532,15 @@ end
     $(TYPEDSIGNATURES)
 
 Construct the operating point of the system from the user-provided `u0map` and `pmap`, system
-defaults `defs`, constant equations `cmap` (from `get_cmap(sys)`), unknowns `dvs` and
-parameters `ps`. Return the operating point as a dictionary, the list of unknowns for which
-no values can be determined, and the list of parameters for which no values can be determined.
+defaults `defs`, unknowns `dvs` and parameters `ps`. Return the operating point as a dictionary,
+the list of unknowns for which no values can be determined, and the list of parameters for which
+no values can be determined.
 
 Also updates `u0map` and `pmap` in-place to contain all the initial conditions in `op`, split
 by unknowns and parameters respectively.
 """
 function build_operating_point!(sys::AbstractSystem,
-        u0map::AbstractDict, pmap::AbstractDict, defs::AbstractDict, cmap, dvs, ps)
+        u0map::AbstractDict, pmap::AbstractDict, defs::AbstractDict, dvs, ps)
     op = add_toterms(u0map)
     missing_unknowns = add_fallbacks!(op, dvs, defs)
     for (k, v) in defs
@@ -552,9 +552,6 @@ function build_operating_point!(sys::AbstractSystem,
     merge!(op, pmap)
     missing_pars = add_fallbacks!(op, ps, defs)
     filter_missing_values!(op; missing_values = missing_pars)
-    for eq in cmap
-        op[eq.lhs] = eq.rhs
-    end
 
     filter!(kvp -> kvp[2] === nothing, u0map)
     filter!(kvp -> kvp[2] === nothing, pmap)
@@ -1254,7 +1251,6 @@ function process_SciMLProblem(
     check_inputmap_keys(sys, u0map, pmap)
 
     defs = add_toterms(recursive_unwrap(defaults(sys)))
-    cmap, cs = get_cmap(sys)
     kwargs = NamedTuple(kwargs)
 
     if eltype(eqs) <: Equation
@@ -1264,7 +1260,7 @@ function process_SciMLProblem(
     end
 
     op, missing_unknowns, missing_pars = build_operating_point!(sys,
-        u0map, pmap, defs, cmap, dvs, ps)
+        u0map, pmap, defs, dvs, ps)
 
     floatT = Bool
     if u0Type <: AbstractArray && eltype(u0Type) <: Real && eltype(u0Type) != Union{}

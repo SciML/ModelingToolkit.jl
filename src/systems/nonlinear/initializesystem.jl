@@ -533,7 +533,6 @@ function SciMLBase.remake_initialization_data(
     symbols_to_symbolics!(sys, pmap)
     guesses = Dict()
     defs = defaults(sys)
-    cmap, cs = get_cmap(sys)
     use_scc = true
     initialization_eqs = Equation[]
 
@@ -588,7 +587,7 @@ function SciMLBase.remake_initialization_data(
     filter_missing_values!(pmap)
 
     op, missing_unknowns, missing_pars = build_operating_point!(sys,
-        u0map, pmap, defs, cmap, dvs, ps)
+        u0map, pmap, defs, dvs, ps)
     floatT = float_type_from_varmap(op)
     u0_constructor = p_constructor = identity
     if newu0 isa StaticArray

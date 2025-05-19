@@ -56,10 +56,10 @@ function SciMLBase.OptimizationFunction{iip}(sys::System;
         else
             _cons_h = cons_hess_prototype = nothing
         end
-        cons_expr = subs_constants(cstr)
+        cons_expr = cstr
     end
 
-    obj_expr = subs_constants(cost(sys))
+    obj_expr = cost(sys)
 
     observedfun = ObservedFunctionCache(
         sys; expression, eval_expression, eval_module, checkbounds, cse)

@@ -45,13 +45,12 @@ function MTKParameters(
     p = to_varmap(p, ps)
     symbols_to_symbolics!(sys, p)
     defs = add_toterms(recursive_unwrap(defaults(sys)))
-    cmap, cs = get_cmap(sys)
 
     is_time_dependent(sys) && add_observed!(sys, u0)
     add_parameter_dependencies!(sys, p)
 
     op, missing_unknowns, missing_pars = build_operating_point!(sys,
-        u0, p, defs, cmap, dvs, ps)
+        u0, p, defs, dvs, ps)
 
     if t0 !== nothing
         op[get_iv(sys)] = t0
