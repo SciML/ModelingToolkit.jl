@@ -282,7 +282,7 @@ function bb_affect!(integ, u, p, ctx)
     integ.u[u.v] = -integ.u[u.v]
 end
 
-@named bb_model = System(bb_eqs, t, sts, par,
+@named bb_model = System(bb_eqs, t, sts, [par; zr],
     continuous_events = [
         [y ~ zr] => (bb_affect!, [v], [], [], nothing)
     ])

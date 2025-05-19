@@ -27,7 +27,7 @@ ModelingToolkit.toexpr.(eqs)[1]
 @named de = System(eqs, t; defaults = Dict(x => 1))
 subed = substitute(de, [σ => k])
 ssort(eqs) = sort(eqs, by = string)
-@test isequal(ssort(parameters(subed)), [k, β, ρ])
+@test isequal(ssort(parameters(subed)), [k, β, κ, ρ])
 @test isequal(equations(subed),
     [D(x) ~ k * (y - x)
      D(y) ~ (ρ - z) * x - y
@@ -47,7 +47,7 @@ function test_diffeq_inference(name, sys, iv, dvs, ps)
     end
 end
 
-test_diffeq_inference("standard", de, t, [x, y, z], [ρ, σ, β])
+test_diffeq_inference("standard", de, t, [x, y, z], [ρ, σ, β, κ])
 jac_expr = generate_jacobian(de)
 jac = calculate_jacobian(de)
 jacfun = eval(jac_expr[2])
@@ -138,11 +138,11 @@ tgrad_iip(du, u, p, t)
 eqs = [D(x) ~ σ(t - 1) * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z * κ]
-@named de = System(eqs, t, [x, y, z], [σ, ρ, β])
-test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ, ρ, β))
+@named de = System(eqs, t, [x, y, z], [σ, ρ, β, κ])
+test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ, ρ, β, κ))
 f = generate_rhs(de, expression = Val{false}, wrap_gfw = Val{true})
 du = [0.0, 0.0, 0.0]
-f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
+f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3, 1], 5.0)
 @test du ≈ [11, -3, -7]
 
 eqs = [D(x) ~ x + 10σ(t - 1) + 100σ(t - 2) + 1000σ(t^2)]
@@ -1202,7 +1202,8 @@ end
     prob = ODEProblem(sys, u0, (0.0, 1.0), p)
 
     # evaluate
-    u0_v, p_v, _ = ModelingToolkit.get_u0_p(sys, u0, p)
+    u0_v = prob.u0
+    p_v = prob.p
     @test prob.f(u0_v, p_v, 0.0) == [c_b, c_a]
 end
 
