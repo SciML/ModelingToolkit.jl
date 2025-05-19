@@ -243,8 +243,51 @@ function add_cost_function!(model, sys, tspan, pmap)
     jcosts = substitute_model_vars(model, sys, jcosts, tspan)
     jcosts = substitute_params(pmap, jcosts)
     jcosts = substitute_integral(model, jcosts, tspan)
+
     set_objective!(model, consolidate(jcosts))
 end
+
+"""
+Substitute integrals. For an integral from (ts, te):
+- Free final time problems should transcribe this to (0, 1) in the case that (ts, te) is the original timespan. Free final time problems cannot handle partial timespans.
+- CasADi cannot handle partial timespans, even for non-free-final time problems.
+time problems and unchanged otherwise.
+"""
+function substitute_integral(model, exprs, tspan)
+    intmap = Dict()
+    for int in MTK.collect_applied_operators(exprs, Symbolics.Integral)
+        op = MTK.operation(int)
+        arg = only(arguments(MTK.value(int)))
+        lo, hi = MTK.value.((op.domain.domain.left, op.domain.domain.right))
+        lo, hi = process_integral_bounds(model, (lo, hi), tspan)
+        intmap[int] = lowered_integral(model, expr, lo, hi)
+    end
+    expr = map(c -> Symbolics.substitute(c, intmap), expr)
+    expr = value.(expr)
+end
+
+"""Substitute variables like x(1.5) with the corresponding model variables."""
+function substitute_model_vars(model, sys, exprs)
+    x_ops = [MTK.operation(MTK.unwrap(st)) for st in unknowns(sys)]
+    c_ops = [MTK.operation(MTK.unwrap(ct)) for ct in MTK.unbound_inputs(sys)]
+
+    exprs = map(c -> Symbolics.fast_substitute(c, fixed_t_map(model, x_ops, c_ops, exprs)), exprs)
+    exprs = map(c -> Symbolics.fast_substitute(c, whole_t_map(model, sys)), exprs)
+
+    (ti, tf) = tspan
+    if MTK.symbolic_type(tf) === MTK.ScalarSymbolic()
+        _tf = model.tₛ + ti
+        exprs = map(c -> Symbolics.fast_substitute(c, Dict(tf => _tf)), exprs)
+        exprs = map(c -> Symbolics.fast_substitute(c, free_t_map(model, _tf, x_ops, c_ops)), exprs)
+    end
+end
+
+function process_integral_bounds end
+function lowered_integral end
+function lowered_derivative end
+function free_t_map end
+function fixed_t_map end
+function whole_t_map end
 
 function add_user_constraints!(model, sys, tspan, pmap)
     conssys = get_constraintsystem(sys)
@@ -265,7 +308,7 @@ end
 function add_equational_constraints!(model, sys, pmap, tspan)
     diff_eqs = substitute_model_vars(model, sys, diff_equations(sys), tspan)
     diff_eqs = substitute_params(pmap, diff_eqs)
-    diff_eqs = substitute_differentials(model, sys, diff_eqs)
+    diff_eqs = substitute_differentials(model, sys, diff_eqs, tspan)
     for eq in diff_eqs
         add_constraint!(model, eq.lhs ~ eq.rhs * model.tₛ)
     end
@@ -278,16 +321,12 @@ function add_equational_constraints!(model, sys, pmap, tspan)
 end
 
 function set_objective! end
-"""Substitute variables like x(1.5) with the corresponding model variables."""
-function substitute_model_vars end
-"""
-Substitute integrals. For an integral from (ts, te):
-- Free final time problems should transcribe this to (0, 1) in the case that (ts, te) is the original timespan. Free final time problems cannot handle partial timespans.
-- CasADi cannot handle partial timespans, even for non-free-final time problems.
-time problems and unchanged otherwise.
-"""
-function substitute_integral end
-function substitute_differentials end
+
+function substitute_differentials(model, sys, eqs)
+    D = Differential(MTK.get_iv(sys))
+    diffsubmap = Dict([D(model.U[i]) => lowered_derivative(model, i) for i in 1:length(U)])
+    diff_eqs = map(c -> Symbolics.substitute(c, diffsubmap), diff_eqs)
+end
 
 function substitute_toterm(vars, exprs)
     toterm_map = Dict([u => default_toterm(value(u)) for u in vars])

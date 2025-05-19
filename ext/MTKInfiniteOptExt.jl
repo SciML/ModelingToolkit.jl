@@ -48,7 +48,7 @@ struct InfiniteOptDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
 end
 
 MTK.generate_internal_model(m::Type{InfiniteOptModel}) = InfiniteModel()
-MTK.generate_time_variable!(m::InfiniteModel, tspan, steps) = @infinite_parameter(m, t in [tspan[1], tspan[2]], num_supports = steps)
+MTK.generate_time_variable!(m::InfiniteModel, tspan, steps) = @infinite_parameter(m, t in [tspan[1], tspan[2]], num_supports = length(tsteps))
 MTK.generate_state_variable!(m::InfiniteModel, u0::Vector, ns, ts) = @variable(m, U[i = 1:ns], Infinite(m[:t]), start=u0[i])
 MTK.generate_input_variable!(m::InfiniteModel, c0, nc, ts) = @variable(m, V[i = 1:nc], Infinite(m[:t]), start=c0[i])
 
@@ -114,55 +114,39 @@ function MTK.InfiniteOptDynamicOptProblem(sys::System, u0map, tspan, pmap;
     prob
 end
 
-function MTK.substitute_integral(model, exprs, tspan)
-    intmap = Dict()
-    for int in MTK.collect_applied_operators(exprs, Symbolics.Integral)
-        op = MTK.operation(int)
-        arg = only(arguments(MTK.value(int)))
-        lo, hi = MTK.value.((op.domain.domain.left, op.domain.domain.right))
-        if MTK.is_free_final(model) && isequal((lo, hi), tspan)
-            (lo, hi) = (0, 1)
-        elseif MTK.is_free_final(model)
-            error("Free final time problems cannot handle partial timespans.")
-        end
-        intmap[int] = model.tₛ * InfiniteOpt.∫(arg, model.model[:t], lo, hi)
+MTK.lowered_integral(model, expr, lo, hi) = model.tₛ * InfiniteOpt.∫(arg, model.model[:t], lo, hi)
+
+function MTK.process_integral_bounds(model, integral_span, tspan)
+    if MTK.is_free_final(model) && isequal(integral_span, tspan)
+        integral_span = (0, 1)
+    elseif MTK.is_free_final(model)
+        error("Free final time problems cannot handle partial timespans.")
+    else
+        integral_span
     end
-    exprs = map(c -> Symbolics.substitute(c, intmap), exprs)
 end
 
 function MTK.add_initial_constraints!(m::InfiniteOptModel, u0, u0_idxs, ts)
-    @constraint(m.model, initial[i in u0_idxs], m.U[i](ts)==u0[i])
+    for i in u0_idxs
+        fix(m.U[i], u0[i], force = true)
+    end
 end
 
-function MTK.substitute_model_vars(model::InfiniteOptModel, sys, exprs, tspan)
+MTK.lowered_derivative(model, i) = ∂(model.U[i], model.model[:t])
+
+function MTK.fixed_t_map(model::InfiniteOptModel, x_ops, c_ops, exprs)
+    Dict([[x_ops[i] => model.U[i] for i in 1:length(model.U)];
+         [c_ops[i] => model.V[i] for i in 1:length(model.V)]])
+end
+
+function MTK.free_t_map(model::InfiniteOptModel, tf, x_ops, c_ops)
+    Dict([[x(tf) => model.U[i](1) for (i, x) in enumerate(x_ops)];
+        [c(tf) => model.V[i](1) for (i, c) in enumerate(c_ops)]])
+end
+
+function MTK.whole_t_map(model::InfiniteOptModel, sys)
     whole_interval_map = Dict([[v => model.U[i] for (i, v) in enumerate(unknowns(sys))];
                                [v => model.V[i] for (i, v) in enumerate(MTK.unbound_inputs(sys))]])
-    exprs = map(c -> Symbolics.fast_substitute(c, whole_interval_map), exprs)
-
-    x_ops = [MTK.operation(MTK.unwrap(st)) for st in unknowns(sys)]
-    c_ops = [MTK.operation(MTK.unwrap(ct)) for ct in MTK.unbound_inputs(sys)]
-
-    (ti, tf) = tspan
-    if MTK.symbolic_type(tf) === MTK.ScalarSymbolic()
-        _tf = model.tₛ + ti
-        exprs = map(c -> Symbolics.fast_substitute(c, Dict(tf => _tf)), exprs)
-        free_t_map = Dict([[x(_tf) => model.U[i](1) for (i, x) in enumerate(x_ops)];
-                           [c(_tf) => model.V[i](1) for (i, c) in enumerate(c_ops)]])
-        exprs = map(c -> Symbolics.fast_substitute(c, free_t_map), exprs)
-    end
-
-    # for variables like x(1.0)
-    fixed_t_map = Dict([[x_ops[i] => model.U[i] for i in 1:length(model.U)];
-                        [c_ops[i] => model.V[i] for i in 1:length(model.V)]])
-    exprs = map(c -> Symbolics.fast_substitute(c, fixed_t_map), exprs)
-end
-
-function MTK.substitute_differentials(model::InfiniteOptModel, sys, eqs)
-    U = model.U
-    t = model.model[:t]
-    D = Differential(MTK.get_iv(sys))
-    diffsubmap = Dict([D(U[i]) => ∂(U[i], t) for i in 1:length(U)])
-    map(e -> Symbolics.substitute(e, diffsubmap), eqs)
 end
 
 function add_solve_constraints!(prob::JuMPDynamicOptProblem, tableau)

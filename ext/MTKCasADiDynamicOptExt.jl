@@ -130,32 +130,20 @@ function MTK.add_initial_constraints!(m::CasADiModel, u0, u0_idxs, args...)
     end
 end
 
-function MTK.substitute_model_vars(m::CasADiModel, sys, exprs, tspan)
-    @unpack model, U, V, tₛ = m
-    iv = MTK.get_iv(sys)
-    sts = unknowns(sys)
-    cts = MTK.unbound_inputs(sys)
-    x_ops = [MTK.operation(MTK.unwrap(st)) for st in sts]
-    c_ops = [MTK.operation(MTK.unwrap(ct)) for ct in cts]
-    (ti, tf) = tspan
-    if MTK.is_free_final(m)
-        _tf = tₛ + ti
-        exprs = map(c -> Symbolics.fast_substitute(c, Dict(tf => _tf)), exprs)
-        free_t_map = Dict([[x(_tf) => U.u[i, end] for (i, x) in enumerate(x_ops)];
-                           [c(_tf) => V.u[i, end] for (i, c) in enumerate(c_ops)]])
-        exprs = map(c -> Symbolics.fast_substitute(c, free_t_map), exprs)
-    end
-
-    exprs = substitute_fixed_t_vars(m, sys, exprs)
-    whole_interval_map = Dict([[v => U.u[i, :] for (i, v) in enumerate(sts)];
-                               [v => V.u[i, :] for (i, v) in enumerate(cts)]])
-    exprs = map(c -> Symbolics.fast_substitute(c, whole_interval_map), exprs)
+function free_t_map(model, tf, x_ops, c_ops)
+    Dict([[x(tf) => model.U.u[i, end] for (i, x) in enumerate(x_ops)];
+        [c(tf) => model.V.u[i, end] for (i, c) in enumerate(c_ops)]])
 end
 
-function substitute_fixed_t_vars(model::CasADiModel, sys, exprs)
-    stidxmap = Dict([v => i for (i, v) in enumerate(unknowns(sys))])
-    ctidxmap = Dict([v => i for (i, v) in enumerate(MTK.unbound_inputs(sys))])
-    iv = MTK.get_iv(sys)
+function whole_t_map(model, sys)
+    Dict([[v => model.U.u[i, :] for (i, v) in enumerate(unknowns(sys))];
+          [v => model.V.u[i, :] for (i, v) in enumerate(MTK.unbound_inputs(sys))]])
+
+end
+
+function fixed_t_map(model::CasADiModel, x_ops, c_ops, exprs)
+    stidxmap = Dict([v => i for (i, v) in x_ops])
+    ctidxmap = Dict([v => i for (i, v) in c_ops])
     for i in 1:length(exprs)
         subvars = MTK.vars(exprs[i])
         for st in subvars 
@@ -163,11 +151,11 @@ function substitute_fixed_t_vars(model::CasADiModel, sys, exprs)
             x = operation(st)
             t = only(arguments(st))
             MTK.symbolic_type(t) === MTK.NotSymbolic() || continue
-            if haskey(stidxmap, x(iv))
-                idx = stidxmap[x(iv)]
+            if haskey(stidxmap, x)
+                idx = stidxmap[x]
                 cv = model.U
             else
-                idx = ctidxmap[x(iv)]
+                idx = ctidxmap[x]
                 cv = model.V
             end
             exprs[i] = Symbolics.fast_substitute(exprs[i], Dict(x(t) => cv(t)[idx]))
@@ -177,24 +165,7 @@ function substitute_fixed_t_vars(model::CasADiModel, sys, exprs)
     exprs
 end
 
-MTK.substitute_differentials(model::CasADiModel, sys, eqs) = exprs
-
-function MTK.substitute_integral(m::CasADiModel, exprs, tspan)
-    @unpack U, model, tₛ = m
-    dt = U.t[2] - U.t[1]
-    intmap = Dict()
-    for int in MTK.collect_applied_operators(exprs, Symbolics.Integral)
-        op = MTK.operation(int)
-        arg = only(arguments(MTK.value(int)))
-        lo, hi = MTK.value.((op.domain.domain.left, op.domain.domain.right))
-        !isequal((lo, hi), tspan) &&
-            error("Non-whole interval bounds for integrals are not currently supported for CasADiDynamicOptProblem.")
-        # Approximate integral as sum.
-        intmap[int] = dt * tₛ * sum(arg)
-    end
-    exprs = map(c -> Symbolics.substitute(c, intmap), exprs)
-    exprs = MTK.value.(exprs)
-end
+MTK.lowered_integral(model, expr, args...) = model.tₛ * (model.U.t[2] - model.U.t[1]) * expr
 
 function add_solve_constraints!(prob::CasADiDynamicOptProblem, tableau)
     @unpack A, α, c = tableau
