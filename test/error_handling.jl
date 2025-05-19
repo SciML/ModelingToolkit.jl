@@ -27,7 +27,7 @@ function OverdefinedConstantVoltage(; name, V = 1.0, I = 1.0)
            # Overdefine p.i and n.i
            n.i ~ I
            p.i ~ I]
-    System(eqs, t, [], [V], systems = [p, n], defaults = Dict(V => val, I => val2),
+    System(eqs, t, [], [V, I], systems = [p, n], defaults = Dict(V => val, I => val2),
         name = name)
 end
 
