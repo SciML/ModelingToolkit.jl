@@ -98,7 +98,7 @@ prob_sa = SDDEProblem(
 
 function oscillator(; name, k = 1.0, τ = 0.01)
     @parameters k=k τ=τ
-    @variables x(..)=0.1 y(t)=0.1 jcn(t)=0.0 delx(t)
+    @variables x(..)=0.1 y(t)=0.1 jcn(t) delx(t)
     eqs = [D(x(t)) ~ y,
         D(y) ~ -k * x(t - τ) + jcn,
         delx ~ x(t - τ)]
