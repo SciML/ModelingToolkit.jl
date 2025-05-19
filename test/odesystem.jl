@@ -1390,7 +1390,7 @@ end
     @parameters c(t)
     @mtkbuild sys = System([D(x) ~ c * cos(x), obs ~ c],
         t,
-        [x],
+        [x, obs],
         [c];
         discrete_events = [SymbolicDiscreteCallback(
             1.0 => [c ~ Pre(c) + 1], discrete_parameters = [c])])
