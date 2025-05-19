@@ -708,7 +708,7 @@ function collect_var!(unknowns, parameters, var, iv; depth = 0)
         collect_vars!(unknowns, parameters, arguments(var), iv)
     elseif isparameter(var) || (iscall(var) && isparameter(operation(var)))
         push!(parameters, var)
-    elseif !isconstant(var)
+    else
         push!(unknowns, var)
     end
     # Add also any parameters that appear only as defaults in the var
@@ -735,90 +735,6 @@ function check_scope_depth(scope, depth)
 end
 
 """
-Find all the symbolic constants of some equations or terms and return them as a vector.
-"""
-function collect_constants(x)
-    constants = BasicSymbolic[]
-    collect_constants!(constants, x)
-    return constants
-end
-
-collect_constants!(::Any, ::Symbol) = nothing
-
-function collect_constants!(constants, arr::AbstractArray)
-    for el in arr
-        collect_constants!(constants, el)
-    end
-end
-
-function collect_constants!(constants, eq::Equation)
-    collect_constants!(constants, eq.lhs)
-    collect_constants!(constants, eq.rhs)
-end
-
-function collect_constants!(constants, eq::Inequality)
-    collect_constants!(constants, eq.lhs)
-    collect_constants!(constants, eq.rhs)
-end
-
-collect_constants!(constants, x::Num) = collect_constants!(constants, unwrap(x))
-collect_constants!(constants, x::Real) = nothing
-collect_constants(n::Nothing) = BasicSymbolic[]
-
-function collect_constants!(constants, expr::Symbolic)
-    if issym(expr) && isconstant(expr)
-        push!(constants, expr)
-    else
-        evars = vars(expr)
-        if length(evars) == 1 && isequal(only(evars), expr)
-            return nothing #avoid infinite recursion for vars(x(t)) == [x(t)]
-        else
-            for var in evars
-                collect_constants!(constants, var)
-            end
-        end
-    end
-end
-
-function collect_constants!(constants, expr::Union{ConstantRateJump, VariableRateJump})
-    collect_constants!(constants, expr.rate)
-    collect_constants!(constants, expr.affect!)
-end
-
-function collect_constants!(constants, ::MassActionJump)
-    return constants
-end
-
-"""
-Replace symbolic constants with their literal values
-"""
-function eliminate_constants(eqs, cs)
-    cmap = Dict(x => getdefault(x) for x in cs)
-    return substitute(eqs, cmap)
-end
-
-"""
-Create a function preface containing assignments of default values to constants.
-"""
-function get_preprocess_constants(eqs)
-    cs = collect_constants(eqs)
-    pre = ex -> Let(Assignment[Assignment(x, getdefault(x)) for x in cs],
-        ex, false)
-    return pre
-end
-
-function get_postprocess_fbody(sys)
-    if has_preface(sys) && (pre = preface(sys); pre !== nothing)
-        pre_ = let pre = pre
-            ex -> Let(pre, ex, false)
-        end
-    else
-        pre_ = ex -> ex
-    end
-    return pre_
-end
-
-"""
 $(SIGNATURES)
 
 find duplicates in an iterable object.
@@ -837,22 +753,6 @@ function find_duplicates(xs, ::Val{Ret} = Val(false)) where {Ret}
 end
 
 isarray(x) = x isa AbstractArray || x isa Symbolics.Arr
-
-function get_cmap(sys, exprs = nothing)
-    #Inject substitutions for constants => values
-    buffer = []
-    has_eqs(sys) && append!(buffer, collect(get_eqs(sys)))
-    has_observed(sys) && append!(buffer, collect(get_observed(sys)))
-    has_op(sys) && push!(buffer, get_op(sys))
-    has_constraints(sys) && append!(buffer, get_constraints(sys))
-    cs = collect_constants(buffer) #ctrls? what else?
-    if exprs !== nothing
-        cs = [cs; collect_constants(exprs)]
-    end
-    # Swap constants for their values
-    cmap = map(x -> x ~ getdefault(x), cs)
-    return cmap, cs
-end
 
 function empty_substitutions(sys)
     isempty(observed(sys))
@@ -1041,21 +941,6 @@ function Base.iterate(it::StatefulBFS, queue = (eltype(it)[(0, it.t)]))
         push!(queue, (nextlv, c))
     end
     return (lv, t), queue
-end
-
-function fold_constants(ex)
-    if iscall(ex)
-        maketerm(typeof(ex), operation(ex), map(fold_constants, arguments(ex)),
-            metadata(ex))
-    elseif issym(ex) && isconstant(ex)
-        if (unit = getmetadata(ex, VariableUnit, nothing); unit !== nothing)
-            ex # we cannot fold constant with units
-        else
-            getdefault(ex)
-        end
-    else
-        ex
-    end
 end
 
 normalize_to_differential(s) = s

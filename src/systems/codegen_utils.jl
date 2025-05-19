@@ -247,15 +247,7 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
         p_end += 1
     end
     pdeps = parameter_dependencies(sys)
-    # get the constants to add to the code
-    cmap, _ = get_cmap(sys)
-    extra_constants = collect_constants(expr)
-    filter!(extra_constants) do c
-        !any(x -> isequal(c, x.lhs), cmap)
-    end
-    for c in extra_constants
-        push!(cmap, c ~ getdefault(c))
-    end
+
     # only get the necessary observed equations, avoiding extra computation
     if add_observed && !isempty(obs)
         obsidxs = observed_equations_used_by(sys, expr; obs)
@@ -270,7 +262,7 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
     # assignments for reconstructing scalarized array symbolics
     assignments = array_variable_assignments(args...)
 
-    for eq in Iterators.flatten((cmap, pdeps[pdepidxs], obs[obsidxs]))
+    for eq in Iterators.flatten((pdeps[pdepidxs], obs[obsidxs]))
         push!(assignments, eq.lhs ← eq.rhs)
     end
     append!(assignments, extra_assignments)

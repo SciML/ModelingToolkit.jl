@@ -222,7 +222,7 @@ function generate_control_function(sys::AbstractSystem, inputs = unbound_inputs(
     disturbance_inputs = unwrap.(disturbance_inputs)
 
     eqs = [eq for eq in full_equations(sys)]
-    eqs = map(subs_constants, eqs)
+
     if disturbance_inputs !== nothing && !disturbance_argument
         # Set all disturbance *inputs* to zero (we just want to keep the disturbance state)
         subs = Dict(disturbance_inputs .=> 0)
@@ -237,7 +237,6 @@ function generate_control_function(sys::AbstractSystem, inputs = unbound_inputs(
     p = reorder_parameters(sys, ps)
     t = get_iv(sys)
 
-    # pre = has_difference ? (ex -> ex) : get_postprocess_fbody(sys)
     if disturbance_argument
         args = (dvs, inputs, p..., t, disturbance_inputs)
     else

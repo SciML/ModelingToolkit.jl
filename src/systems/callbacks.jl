@@ -635,11 +635,6 @@ function compile_condition(
     p = map.(value, reorder_parameters(sys, ps))
     t = get_iv(sys)
     condit = conditions(cbs)
-    cs = collect_constants(condit)
-    if !isempty(cs)
-        cmap = map(x -> x => getdefault(x), cs)
-        condit = substitute(condit, Dict(cmap))
-    end
 
     if !is_discrete(cbs)
         condit = reduce(vcat, flatten_equations(Vector{Equation}(condit)))

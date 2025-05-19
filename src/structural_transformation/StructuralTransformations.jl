@@ -21,7 +21,7 @@ using ModelingToolkit: System, AbstractSystem, var_from_nested_derivative, Diffe
                        has_tearing_state, defaults, InvalidSystemException,
                        ExtraEquationsSystemException,
                        ExtraVariablesSystemException,
-                       get_postprocess_fbody, vars!,
+                       vars!,
                        IncrementalCycleTracker, add_edge_checked!, topological_sort,
                        invalidate_cache!, Substitutions, get_or_construct_tearing_state,
                        filter_kwargs, lower_varname_with_unit,
