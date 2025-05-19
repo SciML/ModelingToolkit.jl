@@ -58,11 +58,9 @@ graph2vars(graph) = map(is -> Set(map(i -> int2var[i], is)), graph.fadjlist)
                                      Set([u4])
                                      Set([u5])]
 
-state = TearingState(tearing(sys))
-let sss = state.structure
-    @unpack graph = sss
-    @test graph2vars(graph) == [Set([u1, u2, u5])]
-end
+newsys = tearing(sys)
+@test length(equations(newsys)) == 1
+@test issetequal(ModelingToolkit.vars(equations(newsys)), [u1, u4, u5])
 
 # Before:
 #      u1  u2  u3  u4  u5
