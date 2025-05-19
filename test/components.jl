@@ -197,7 +197,7 @@ end
                   connect(resistor.heat_port, heat_capacitor.port)]
 
         compose(System(rc_eqs, t, name = Symbol(name, i)),
-            [resistor, capacitor, source, ground, heat_capacitor])
+            [resistor, capacitor, source, ground, shape, heat_capacitor])
     end
     V = 2.0
     @named shape = Constant(k = V)
