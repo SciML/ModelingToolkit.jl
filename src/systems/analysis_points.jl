@@ -950,7 +950,7 @@ function linearization_function(sys::AbstractSystem,
         if output isa AnalysisPoint
             sys, (output_var,) = apply_transformation(AddVariable(output), sys)
             sys, (input_var,) = apply_transformation(GetInput(output), sys)
-            push!(get_eqs(sys), output_var ~ input_var)
+            @set! sys.eqs = [get_eqs(sys); output_var ~ input_var]
         else
             output_var = output
         end
