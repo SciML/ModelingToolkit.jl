@@ -1,4 +1,5 @@
 using ModelingToolkit, DiffEqBase, JumpProcesses, Test, LinearAlgebra
+using SymbolicIndexingInterface
 using Random, StableRNGs, NonlinearSolve
 using OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D
@@ -17,7 +18,7 @@ rate₂ = γ * I + t
 affect₂ = [I ~ Pre(I) - 1, R ~ Pre(R) + 1]
 j₁ = ConstantRateJump(rate₁, affect₁)
 j₂ = VariableRateJump(rate₂, affect₂)
-@named js = JumpSystem([j₁, j₂], t, [S, I, R], [β, γ])
+@named js = JumpSystem([j₁, j₂], t, [S, I, R], [β, γ, h])
 unknowntoid = Dict(MT.value(unknown) => i for (i, unknown) in enumerate(unknowns(js)))
 mtjump1 = MT.assemble_crj(js, j₁, unknowntoid)
 mtjump2 = MT.assemble_vrj(js, j₂, unknowntoid)
@@ -38,7 +39,7 @@ jump2 = VariableRateJump(rate2, affect2!)
 
 # test crjs
 u = [100, 9, 5]
-p = (0.1 / 1000, 0.01)
+p = (0.1 / 1000, 0.01, 1)
 tf = 1.0
 mutable struct TestInt{U, V, T}
     u::U
@@ -62,15 +63,15 @@ jump2.affect!(integrator)
 rate₃ = γ * I * h
 affect₃ = [I ~ Pre(I) * h - 1, R ~ Pre(R) + 1]
 j₃ = ConstantRateJump(rate₃, affect₃)
-@named js2 = JumpSystem([j₁, j₃], t, [S, I, R], [β, γ])
+@named js2 = JumpSystem([j₁, j₃], t, [S, I, R], [β, γ, h])
 js2 = complete(js2)
 u₀ = [999, 1, 0];
-p = (0.1 / 1000, 0.01);
 tspan = (0.0, 250.0);
 u₀map = [S => 999, I => 1, R => 0]
 parammap = [β => 0.1 / 1000, γ => 0.01]
 jprob = JumpProblem(js2, u₀map, tspan, parammap; aggregator = Direct(),
     save_positions = (false, false), rng)
+p = parameter_values(jprob)
 @test jprob.prob isa DiscreteProblem
 Nsims = 30000
 function getmean(jprob, Nsims; use_stepper = true)
@@ -90,7 +91,7 @@ mb = getmean(jprobb, Nsims; use_stepper = false)
 
 @variables S2(t)
 obs = [S2 ~ 2 * S]
-@named js2b = JumpSystem([j₁, j₃], t, [S, I, R], [β, γ], observed = obs)
+@named js2b = JumpSystem([j₁, j₃], t, [S, I, R], [β, γ, h], observed = obs)
 js2b = complete(js2b)
 jprob = JumpProblem(js2b, u₀map, tspan, parammap; aggregator = Direct(),
     save_positions = (false, false), rng)
@@ -110,6 +111,8 @@ jump2 = ConstantRateJump(rate2, affect2!)
 mtjumps = jprob.discrete_jump_aggregation
 @test abs(mtjumps.rates[1](u, p, tf) - jump1.rate(u, p, tf)) < 10 * eps()
 @test abs(mtjumps.rates[2](u, p, tf) - jump2.rate(u, p, tf)) < 10 * eps()
+
+ModelingToolkit.@set! mtintegrator.p = (mtintegrator.p, (1,))
 mtjumps.affects![1](mtintegrator)
 jump1.affect!(integrator)
 @test all(integrator.u .== mtintegrator.u)

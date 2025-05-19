@@ -511,7 +511,7 @@ using ModelingToolkit: getdefault, scalarize
 
     @test eval(ModelWithComponentArray.structure[:parameters][:r][:unit]) ==
           eval(u"Ω")
-    @test lastindex(parameters(model_with_component_array)) == 3
+    @test lastindex(parameters(model_with_component_array)) == 4
 
     # Test the constant `k`. Manually k's value should be kept in sync here
     # and the ModelParsingPrecompile.

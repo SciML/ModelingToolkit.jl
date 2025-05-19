@@ -30,7 +30,7 @@ eqs = [S ~ S(k - 1) - infection * h,
     R ~ R(k - 1) + recovery]
 
 # System
-@named sys = System(eqs, t, [S, I, R], [c, nsteps, δt, β, γ])
+@named sys = System(eqs, t, [S, I, R], [c, nsteps, δt, β, γ, h])
 syss = structural_simplify(sys)
 @test syss == syss
 

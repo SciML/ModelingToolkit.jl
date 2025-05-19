@@ -18,7 +18,7 @@ eqs = [
     0 ~ u4 - hypot(u2, u3),
     0 ~ u5 - hypot(u4, u1)
 ]
-@named sys = System(eqs, [u1, u2, u3, u4, u5], [])
+@named sys = System(eqs, [u1, u2, u3, u4, u5], [h])
 state = TearingState(sys)
 StructuralTransformations.find_solvables!(state)
 
@@ -149,19 +149,17 @@ eqs = [D(x) ~ z * h
        0 ~ sin(z) + y - p * t]
 @named daesys = System(eqs, t)
 newdaesys = structural_simplify(daesys)
-@test equations(newdaesys) == [D(x) ~ z; 0 ~ y + sin(z) - p * t]
-@test equations(tearing_substitution(newdaesys)) == [D(x) ~ z; 0 ~ x + sin(z) - p * t]
+@test equations(newdaesys) == [D(x) ~ h * z; 0 ~ y + sin(z) - p * t]
+@test equations(tearing_substitution(newdaesys)) == [D(x) ~ h * z; 0 ~ x + sin(z) - p * t]
 @test isequal(unknowns(newdaesys), [x, z])
-@test isequal(unknowns(newdaesys), [x, z])
-@test_deprecated ODAEProblem(newdaesys, [x => 1.0, z => -0.5π], (0, 1.0), [p => 0.2])
 prob = ODEProblem(newdaesys, [x => 1.0, z => -0.5π], (0, 1.0), [p => 0.2])
 du = [0.0, 0.0];
 u = [1.0, -0.5π];
-pr = 0.2;
+pr = prob.p;
 tt = 0.1;
 @test (@ballocated $(prob.f)($du, $u, $pr, $tt)) == 0
 prob.f(du, u, pr, tt)
-@test du≈[u[2], u[1] + sin(u[2]) - pr * tt] atol=1e-5
+@test du≈[u[2], u[1] + sin(u[2]) - prob.ps[p] * tt] atol=1e-5
 
 # test the initial guess is respected
 @named sys = System(eqs, t, defaults = Dict(z => NaN))
