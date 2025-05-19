@@ -240,6 +240,30 @@ function generate_timescale! end
 function set_variable_bounds! end
 function add_initial_constraints! end
 function add_constraint! end
+
+function set_variable_bounds!(m, sys, pmap, tf)
+    @unpack model, U, V, tₛ = m
+    for (i, u) in enumerate(unknowns(sys))
+        if hasbounds(u)
+            lo, hi = getbounds(u)
+            add_constraint!(m, U[i] ≳ Symbolics.fixpoint_sub(lo, pmap))
+            add_constraint!(m, U[i] ≲ Symbolics.fixpoint_sub(hi, pmap))
+        end
+    end
+    for (i, v) in enumerate(unbound_inputs(sys))
+        if hasbounds(v)
+            lo, hi = getbounds(v)
+            add_constraint!(m, V[i] ≳ Symbolics.fixpoint_sub(lo, pmap))
+            add_constraint!(m, V[i] ≲ Symbolics.fixpoint_sub(hi, pmap))
+        end
+    end
+    if symbolic_type(tf) === ScalarSymbolic() && hasbounds(tf)
+        lo, hi = getbounds(tf)
+        set_lower_bound(tₛ, Symbolics.fixpoint_sub(lo, pmap))
+        set_upper_bound(tₛ, Symbolics.fixpoint_sub(hi, pmap))
+    end
+end
+
 is_free_final(model) = model.is_free_final 
 
 function add_cost_function!(model, sys, tspan, pmap)
@@ -337,19 +361,19 @@ function successful_solve end
 function DiffEqBase.solve(prob::AbstractDynamicOptProblem, solver::AbstractCollocation; verbose = false, kwargs...)
     prepare_and_optimize!(prob, solver; verbose, kwargs...)
     
-    ts = get_t_values(prob.model)
-    Us = get_U_values(prob.model)
-    Vs = get_V_values(prob.model)
-    is_free_final(prob.model) && (ts .+ prob.tspan[1])
+    ts = get_t_values(prob.wrapped_model)
+    Us = get_U_values(prob.wrapped_model)
+    Vs = get_V_values(prob.wrapped_model)
+    is_free_final(prob.wrapped_model) && (ts .+ prob.tspan[1])
 
     ode_sol = DiffEqBase.build_solution(prob, solver, ts, Us)
     input_sol = isnothing(Vs) ? nothing : DiffEqBase.build_solution(prob, solver, ts, Vs)
 
-    if !successful_solve(prob.model)
+    if !successful_solve(prob.wrapped_model)
         ode_sol = SciMLBase.solution_new_retcode(
             ode_sol, SciMLBase.ReturnCode.ConvergenceFailure)
         !isnothing(input_sol) && (input_sol = SciMLBase.solution_new_retcode(
             input_sol, SciMLBase.ReturnCode.ConvergenceFailure))
     end
-    DynamicOptSolution(prob.model.model, ode_sol, input_sol)
+    DynamicOptSolution(prob.wrapped_model.model, ode_sol, input_sol)
 end

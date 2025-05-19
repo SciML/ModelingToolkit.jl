@@ -23,7 +23,7 @@ struct JuMPDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
     u0::uType
     tspan::tType
     p::P
-    model::InfiniteOptModel
+    wrapped_model::InfiniteOptModel
     kwargs::K
 
     function JuMPDynamicOptProblem(f, u0, tspan, p, model, kwargs...)
@@ -38,7 +38,7 @@ struct InfiniteOptDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
     u0::uType
     tspan::tType
     p::P
-    model::InfiniteOptModel
+    wrapped_model::InfiniteOptModel
     kwargs::K
 
     function InfiniteOptDynamicOptProblem(f, u0, tspan, p, model, kwargs...)
@@ -110,32 +110,8 @@ function MTK.InfiniteOptDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
         steps = nothing,
         guesses = Dict(), kwargs...)
     prob = MTK.process_DynamicOptProblem(InfiniteOptDynamicOptProblem, InfiniteOptModel, sys, u0map, tspan, pmap; dt, steps, guesses, kwargs...)
-    MTK.add_equational_constraints!(prob.model, sys, pmap, tspan)
+    MTK.add_equational_constraints!(prob.wrapped_model, sys, pmap, tspan)
     prob
-end
-
-function MTK.set_variable_bounds!(model::InfiniteOptModel, sys, pmap, tf)
-    for (i, u) in enumerate(unknowns(sys))
-        if MTK.hasbounds(u)
-            lo, hi = MTK.getbounds(u)
-            set_lower_bound(model.U[i], Symbolics.fixpoint_sub(lo, pmap))
-            set_upper_bound(model.U[i], Symbolics.fixpoint_sub(hi, pmap))
-        end
-    end
-
-    for (i, v) in enumerate(MTK.unbound_inputs(sys))
-        if MTK.hasbounds(v)
-            lo, hi = MTK.getbounds(v)
-            set_lower_bound(model.V[i], Symbolics.fixpoint_sub(lo, pmap))
-            set_upper_bound(model.V[i], Symbolics.fixpoint_sub(hi, pmap))
-        end
-    end
-
-    if MTK.symbolic_type(tf) === MTK.ScalarSymbolic() && hasbounds(tf)
-        lo, hi = MTK.getbounds(tf)
-        set_lower_bound(model.tₛ, lo)
-        set_upper_bound(model.tₛ, hi)
-    end
 end
 
 function MTK.substitute_integral(model, exprs, tspan)
@@ -191,14 +167,12 @@ end
 
 function add_solve_constraints!(prob::JuMPDynamicOptProblem, tableau)
     @unpack A, α, c = tableau
-    @unpack model, f, p = prob
-    t = model.model[:t]
+    @unpack wrapped_model, f, p = prob
+    @unpack tₛ, U, V, model = wrapped_model
+    t = model[:t]
     tsteps = supports(t)
     dt = tsteps[2] - tsteps[1]
 
-    tₛ = model.tₛ
-    U = model.U
-    V = model.V
     nᵤ = length(U)
     nᵥ = length(V)
     if MTK.is_explicit(tableau)
@@ -212,22 +186,22 @@ function add_solve_constraints!(prob::JuMPDynamicOptProblem, tableau)
                 push!(K, Kₙ)
             end
             ΔU = dt * sum([α[i] * K[i] for i in 1:length(α)])
-            @constraint(model.model, [n = 1:nᵤ], U[n](τ) + ΔU[n]==U[n](τ + dt),
+            @constraint(model, [n = 1:nᵤ], U[n](τ) + ΔU[n]==U[n](τ + dt),
                 base_name="solve_time_$τ")
             empty!(K)
         end
     else
-        @variable(model.model, K[1:length(α), 1:nᵤ], Infinite(t))
+        K = @variable(model, K[1:length(α), 1:nᵤ], Infinite(model[:t]))
         ΔUs = A * K
         ΔU_tot = dt * (K' * α)
         for τ in tsteps[1:end-1]
             for (i, h) in enumerate(c)
                 ΔU = @view ΔUs[i, :]
-                Uₙ = U + ΔU * h * dt
-                @constraint(model.model, [j = 1:nᵤ], K[i, j]==(tₛ * f(Uₙ, V, p, τ + h * dt)[j]),
+                Uₙ = U + ΔU * dt
+                @constraint(model, [j = 1:nᵤ], K[i, j]==(tₛ * f(Uₙ, V, p, τ + h * dt)[j]),
                     DomainRestrictions(t => τ), base_name="solve_K$i($τ)")
             end
-            @constraint(model.model, [n = 1:nᵤ], U[n](τ) + ΔU_tot[n]==U[n](min(τ + dt, tsteps[end])),
+            @constraint(model, [n = 1:nᵤ], U[n](τ) + ΔU_tot[n]==U[n](min(τ + dt, tsteps[end])),
                 DomainRestrictions(t => τ), base_name="solve_U($τ)")
         end
     end
@@ -256,7 +230,7 @@ end
 MTK.InfiniteOptCollocation(solver, derivative_method = InfiniteOpt.FiniteDifference(InfiniteOpt.Backward())) = InfiniteOptCollocation(solver, derivative_method)
 
 function MTK.prepare_and_optimize!(prob::JuMPDynamicOptProblem, solver::JuMPCollocation; verbose = false, kwargs...)
-    model = prob.model.model
+    model = prob.wrapped_model.model
     verbose || set_silent(model)
     # Unregister current solver constraints
     for con in all_constraints(model)
@@ -278,7 +252,7 @@ function MTK.prepare_and_optimize!(prob::JuMPDynamicOptProblem, solver::JuMPColl
 end
 
 function MTK.prepare_and_optimize!(prob::InfiniteOptDynamicOptProblem, solver::InfiniteOptCollocation; verbose = false, kwargs...)
-    model = prob.model.model
+    model = prob.wrapped_model.model
     verbose || set_silent(model)
     set_derivative_method(model[:t], solver.derivative_method)
     set_optimizer(model, solver.solver)

@@ -17,6 +17,7 @@ struct MXLinearInterpolation
     t::Vector{Float64}
     dt::Float64
 end
+Base.getindex(m::MXLinearInterpolation, i...) = length(i) == length(size(m.u)) ? m.u[i...] : m.u[i..., :]
 
 mutable struct CasADiModel
     model::Opti
@@ -37,7 +38,7 @@ struct CasADiDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
     u0::uType
     tspan::tType
     p::P
-    model::CasADiModel
+    wrapped_model::CasADiModel
     kwargs::K
 
     function CasADiDynamicOptProblem(f, u0, tspan, p, model, kwargs...)
@@ -52,10 +53,11 @@ function (M::MXLinearInterpolation)(τ)
     Δ = nt - i + 1
 
     (i > length(M.t) || i < 1) && error("Cannot extrapolate past the tspan.")
+    colons = ntuple(_ -> (:), length(size(M.u)) - 1)
     if i < length(M.t)
-        M.u[:, i] + Δ * (M.u[:, i + 1] - M.u[:, i])
+        M.u[colons..., i] + Δ*(M.u[colons..., i+1] - M.u[colons..., i])
     else
-        M.u[:, i]
+        M.u[colons..., i]
     end
 end
 
@@ -120,29 +122,6 @@ function MTK.add_constraint!(m::CasADiModel, expr)
     end
 end
 MTK.set_objective!(m::CasADiModel, expr) = minimize!(m.model, MX(expr))
-
-function MTK.set_variable_bounds!(m::CasADiModel, sys, pmap, tf)
-    @unpack model, U, tₛ, V = m
-    for (i, u) in enumerate(unknowns(sys))
-        if MTK.hasbounds(u)
-            lo, hi = MTK.getbounds(u)
-            subject_to!(model, Symbolics.fixpoint_sub(lo, pmap) <= U.u[i, :])
-            subject_to!(model, U.u[i, :] <= Symbolics.fixpoint_sub(hi, pmap))
-        end
-    end
-    for (i, v) in enumerate(MTK.unbound_inputs(sys))
-        if MTK.hasbounds(v)
-            lo, hi = MTK.getbounds(v)
-            subject_to!(model, Symbolics.fixpoint_sub(lo, pmap) <= V.u[i, :])
-            subject_to!(model, V.u[i, :] <= Symbolics.fixpoint_sub(hi, pmap))
-        end
-    end
-    if MTK.symbolic_type(tf) === MTK.ScalarSymbolic() && hasbounds(tf)
-        lo, hi = MTK.getbounds(tf)
-        subject_to!(model, tₛ >= lo)
-        subject_to!(model, tₛ <= hi)
-    end
-end
 
 function MTK.add_initial_constraints!(m::CasADiModel, u0, u0_idxs, args...)
     @unpack model, U = m
@@ -218,8 +197,8 @@ end
 
 function add_solve_constraints!(prob::CasADiDynamicOptProblem, tableau)
     @unpack A, α, c = tableau
-    @unpack model, f, p = prob
-    @unpack model, U, V, tₛ = model
+    @unpack wrapped_model, f, p = prob
+    @unpack model, U, V, tₛ = wrapped_model
     solver_opti = copy(model)
 
     tsteps = U.t
@@ -280,7 +259,7 @@ function MTK.prepare_and_optimize!(prob::CasADiDynamicOptProblem, solver::CasADi
         CasADi.solve!(solver_opti)
     catch ErrorException
     end
-    prob.model.solver_opti = solver_opti
+    prob.wrapped_model.solver_opti = solver_opti
 end
 
 function MTK.get_U_values(model::CasADiModel)
