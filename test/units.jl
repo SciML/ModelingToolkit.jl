@@ -156,7 +156,7 @@ sys_simple = structural_simplify(sys)
 
 eqs = [L ~ v * t,
     V ~ L^3]
-@named sys = System(eqs, [V, L], [t, r])
+@named sys = System(eqs, [V, L], [v, t, r])
 sys_simple = structural_simplify(sys)
 
 #Jump System
