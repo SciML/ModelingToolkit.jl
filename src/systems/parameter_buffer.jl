@@ -198,6 +198,9 @@ function narrow_buffer_type(
 end
 
 function narrow_buffer_type(buffer::BlockedArray; container_type = typeof(parent(buffer)))
+    if eltype(buffer) <: AbstractArray
+        buffer = narrow_buffer_type.(buffer; container_type)
+    end
     type = Union{}
     for x in buffer
         type = promote_type(type, typeof(x))
