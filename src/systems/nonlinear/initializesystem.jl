@@ -602,10 +602,14 @@ function promote_u0_p(u0, p::MTKParameters, t0)
     u0 = DiffEqBase.promote_u0(u0, p.tunable, t0)
     u0 = DiffEqBase.promote_u0(u0, p.initials, t0)
 
-    tunables = DiffEqBase.promote_u0(p.tunable, u0, t0)
-    initials = DiffEqBase.promote_u0(p.initials, u0, t0)
-    p = SciMLStructures.replace(SciMLStructures.Tunable(), p, tunables)
-    p = SciMLStructures.replace(SciMLStructures.Initials(), p, initials)
+    if !isempty(p.tunable)
+        tunables = DiffEqBase.promote_u0(p.tunable, u0, t0)
+        p = SciMLStructures.replace(SciMLStructures.Tunable(), p, tunables)
+    end
+    if !isempty(p.initials)
+        initials = DiffEqBase.promote_u0(p.initials, u0, t0)
+        p = SciMLStructures.replace(SciMLStructures.Initials(), p, initials)
+    end
 
     return u0, p
 end
