@@ -860,12 +860,9 @@ function cse_and_array_hacks(sys, obs, subeqs, unknowns, neweqs; cse = true, arr
     # map of array observed variable (unscalarized) to number of its
     # scalarized terms that appear in observed equations
     arr_obs_occurrences = Dict()
-    # to check if array variables occur in unscalarized form anywhere
-    all_vars = Set()
     for (i, eq) in enumerate(obs)
         lhs = eq.lhs
         rhs = eq.rhs
-        vars!(all_vars, rhs)
 
         # HACK 1
         if cse && is_getindexed_array(rhs)
@@ -920,7 +917,6 @@ function cse_and_array_hacks(sys, obs, subeqs, unknowns, neweqs; cse = true, arr
                     tempvar; T = Symbolics.symtype(rhs_arr)))
                 tempvar = setmetadata(
                     tempvar, Symbolics.ArrayShapeCtx, Symbolics.shape(rhs_arr))
-                vars!(all_vars, rhs_arr)
                 tempeq = tempvar ~ rhs_arr
                 rhs_to_tempvar[rhs_arr] = tempvar
                 push!(obs, tempeq)
@@ -946,18 +942,10 @@ function cse_and_array_hacks(sys, obs, subeqs, unknowns, neweqs; cse = true, arr
         cnt == 0 && continue
         arr_obs_occurrences[arg1] = cnt + 1
     end
-    for eq in neweqs
-        vars!(all_vars, eq.rhs)
-    end
 
-    # also count unscalarized variables used in callbacks
-    for ev in Iterators.flatten((continuous_events(sys), discrete_events(sys)))
-        vars!(all_vars, ev)
-    end
     obs_arr_eqs = Equation[]
     for (arrvar, cnt) in arr_obs_occurrences
         cnt == length(arrvar) || continue
-        arrvar in all_vars || continue
         # firstindex returns 1 for multidimensional array symbolics
         firstind = first(eachindex(arrvar))
         scal = [arrvar[i] for i in eachindex(arrvar)]
