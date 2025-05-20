@@ -1077,5 +1077,6 @@ end
 end
 
 @testset "Model can be defined even without `using MTK` (#3640)" begin
-    @test NoUsingMTK.MyModel(; name=:foo) isa ModelingToolkit.AbstractSystem  # just test that it ran fine
+    # Just test that it runs without error
+    @test NoUsingMTK.MyModel(; name=:foo) isa ModelingToolkit.AbstractSystem
 end
