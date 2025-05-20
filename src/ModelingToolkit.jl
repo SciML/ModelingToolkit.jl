@@ -190,7 +190,6 @@ include("modelingtoolkitize/nonlinearproblem.jl")
 
 include("systems/nonlinear/homotopy_continuation.jl")
 include("systems/nonlinear/initializesystem.jl")
-include("systems/diffeqs/first_order_transform.jl")
 include("systems/diffeqs/basic_transformations.jl")
 
 include("systems/pde/pdesystem.jl")
@@ -295,9 +294,8 @@ export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbanc
        tunable_parameters, isirreducible, getdescription, hasdescription,
        hasunit, getunit, hasconnect, getconnect,
        hasmisc, getmisc, state_priority
-export ode_order_lowering, dae_order_lowering, liouville_transform,
-       change_independent_variable, substitute_component, add_accumulations,
-       noise_to_brownians
+export liouville_transform, change_independent_variable, substitute_component,
+       add_accumulations, noise_to_brownians
 export PDESystem
 export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
