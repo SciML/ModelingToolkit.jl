@@ -228,9 +228,15 @@ function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = no
             all_int_vars = false
             if !allow_symbolic
                 if allow_parameter
-                    all(
-                        x -> ModelingToolkit.isparameter(x),
-                        vars(a)) || continue
+                    # if any of the variables in `a` are present in fullvars (taking into account arrays)
+                    if any(
+                        v -> any(isequal(v), fullvars) ||
+                            symbolic_type(v) == ArraySymbolic() &&
+                                Symbolics.shape(v) != Symbolics.Unknown() &&
+                                any(x -> any(isequal(x), fullvars), collect(v)),
+                        vars(a))
+                        continue
+                    end
                 else
                     continue
                 end
