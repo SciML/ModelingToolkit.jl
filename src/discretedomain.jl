@@ -7,6 +7,8 @@ SymbolicUtils.promote_symtype(::Type{<:SampleTime}, t...) = Real
 Base.nameof(::SampleTime) = :SampleTime
 SymbolicUtils.isbinop(::SampleTime) = false
 
+function validate_operator(op::SampleTime, args, iv; context = nothing) end
+
 # Shift
 
 """
@@ -72,6 +74,13 @@ Base.hash(D::Shift, u::UInt) = hash(D.steps, hash(D.t, xor(u, 0x055640d6d952f101
 Base.:^(D::Shift, n::Integer) = Shift(D.t, D.steps * n)
 Base.literal_pow(f::typeof(^), D::Shift, ::Val{n}) where {n} = Shift(D.t, D.steps * n)
 
+function validate_operator(op::Shift, args, iv; context = nothing)
+    isequal(op.t, iv) || throw(OperatorIndepvarMismatchError(op, iv, context))
+    op.steps <= 0 || error("""
+    Only non-positive shifts are allowed. Found shift of $(op.steps) in $context.
+    """)
+end
+
 hasshift(eq::Equation) = hasshift(eq.lhs) || hasshift(eq.rhs)
 
 """
@@ -132,6 +141,18 @@ Base.show(io::IO, D::Sample) = print(io, "Sample(", D.clock, ")")
 Base.:(==)(D1::Sample, D2::Sample) = isequal(D1.clock, D2.clock)
 Base.hash(D::Sample, u::UInt) = hash(D.clock, xor(u, 0x055640d6d952f101))
 
+function validate_operator(op::Sample, args, iv; context = nothing)
+    arg = unwrap(only(args))
+    if !is_variable_floatingpoint(arg)
+        throw(ContinuousOperatorDiscreteArgumentError(op, arg, context))
+    end
+    if isparameter(arg)
+        throw(ArgumentError("""
+        Expected argument of $op to be an unknown, found $arg which is a parameter.
+        """))
+    end
+end
+
 """
     hassample(O)
 
@@ -159,6 +180,11 @@ Base.nameof(::Hold) = :Hold
 SymbolicUtils.isbinop(::Hold) = false
 
 Hold(x) = Hold()(x)
+
+function validate_operator(op::Hold, args, iv; context = nothing)
+    # TODO: maybe validate `VariableTimeDomain`?
+    return nothing
+end
 
 """
     hashold(O)

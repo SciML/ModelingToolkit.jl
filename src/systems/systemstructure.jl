@@ -9,7 +9,7 @@ import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           independent_variables, SparseMatrixCLIL, AbstractSystem,
                           equations, isirreducible, input_timedomain, TimeDomain,
                           InferredTimeDomain,
-                          VariableType, getvariabletype, has_equations, ODESystem
+                          VariableType, getvariabletype, has_equations, System
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
 using Graphs
@@ -474,11 +474,9 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
 
     ts = TearingState(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
-            complete(graph), nothing, var_types, sys isa AbstractDiscreteSystem),
+            complete(graph), nothing, var_types, false),
         Any[], param_derivative_map)
-    if sys isa DiscreteSystem
-        ts = shift_discrete_system(ts)
-    end
+
     return ts
 end
 
@@ -662,54 +660,32 @@ function structural_simplify!(state::TearingState; simplify = false,
         inputs = Any[], outputs = Any[],
         disturbance_inputs = Any[],
         kwargs...)
-    if state.sys isa ODESystem
-        ci = ModelingToolkit.ClockInference(state)
-        ci = ModelingToolkit.infer_clocks!(ci)
-        time_domains = merge(Dict(state.fullvars .=> ci.var_domain),
-            Dict(default_toterm.(state.fullvars) .=> ci.var_domain))
-        tss, clocked_inputs, continuous_id, id_to_clock = ModelingToolkit.split_system(ci)
-        cont_inputs = [inputs; clocked_inputs[continuous_id]]
-        sys = _structural_simplify!(tss[continuous_id]; simplify,
-            check_consistency, fully_determined,
-            inputs = cont_inputs, outputs, disturbance_inputs,
-            kwargs...)
-        if length(tss) > 1
-            if continuous_id > 0
-                throw(HybridSystemNotSupportedException("Hybrid continuous-discrete systems are currently not supported with the standard MTK compiler. This system requires JuliaSimCompiler.jl, see https://help.juliahub.com/juliasimcompiler/stable/"))
-            end
-            # TODO: rename it to something else
-            discrete_subsystems = Vector{ODESystem}(undef, length(tss))
-            # Note that the appended_parameters must agree with
-            # `generate_discrete_affect`!
-            appended_parameters = parameters(sys)
-            for (i, state) in enumerate(tss)
-                if i == continuous_id
-                    discrete_subsystems[i] = sys
-                    continue
-                end
-                disc_inputs = [inputs; clocked_inputs[i]]
-                ss, = _structural_simplify!(state; simplify, check_consistency,
-                    inputs = disc_inputs, outputs, disturbance_inputs,
-                    fully_determined, kwargs...)
-                append!(appended_parameters, inputs[i], unknowns(ss))
-                discrete_subsystems[i] = ss
-            end
-            @set! sys.discrete_subsystems = discrete_subsystems, inputs, continuous_id,
-            id_to_clock
-            @set! sys.ps = appended_parameters
-            @set! sys.defaults = merge(ModelingToolkit.defaults(sys),
-                Dict(v => 0.0 for v in Iterators.flatten(inputs)))
+    ci = ModelingToolkit.ClockInference(state)
+    ci = ModelingToolkit.infer_clocks!(ci)
+    time_domains = merge(Dict(state.fullvars .=> ci.var_domain),
+        Dict(default_toterm.(state.fullvars) .=> ci.var_domain))
+    tss, clocked_inputs, continuous_id, id_to_clock = ModelingToolkit.split_system(ci)
+    if length(tss) > 1
+        if continuous_id == 0
+            throw(HybridSystemNotSupportedException("""
+            Discrete systems with multiple clocks are not supported with the standard \
+            MTK compiler.
+            """))
+        else
+            throw(HybridSystemNotSupportedException("""
+            Hybrid continuous-discrete systems are currently not supported with \
+            the standard MTK compiler. This system requires JuliaSimCompiler.jl, \
+            see https://help.juliahub.com/juliasimcompiler/stable/
+            """))
         end
-        ps = [sym isa CallWithMetadata ? sym :
-              setmetadata(
-                  sym, VariableTimeDomain, get(time_domains, sym, ContinuousClock()))
-              for sym in get_ps(sys)]
-        @set! sys.ps = ps
-    else
-        sys = _structural_simplify!(state; simplify, check_consistency,
-            inputs, outputs, disturbance_inputs,
-            fully_determined, kwargs...)
     end
+    if continuous_id == 1 && any(Base.Fix2(isoperator, Shift), state.fullvars)
+        state.structure.only_discrete = true
+    end
+
+    sys = _structural_simplify!(state; simplify, check_consistency,
+        inputs, outputs, disturbance_inputs,
+        fully_determined, kwargs...)
     return sys
 end
 

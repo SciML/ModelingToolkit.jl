@@ -57,7 +57,7 @@ end
 
 struct AffectSystem
     """The internal implicit discrete system whose equations are solved to obtain values after the affect."""
-    system::ImplicitDiscreteSystem
+    system::AbstractSystem
     """Unknowns of the parent ODESystem whose values are modified or accessed by the affect."""
     unknowns::Vector
     """Parameters of the parent ODESystem whose values are accessed by the affect."""
@@ -154,6 +154,9 @@ function (p::Pre)(x)
 end
 haspre(eq::Equation) = haspre(eq.lhs) || haspre(eq.rhs)
 haspre(O) = recursive_hasoperator(Pre, O)
+
+function validate_operator(op::Pre, args, iv; context = nothing)
+end
 
 ###############################
 ###### Continuous events ######
@@ -282,12 +285,17 @@ function make_affect(affect::Vector{Equation}; discrete_parameters = Any[],
 
     dvs = OrderedSet()
     params = OrderedSet()
+    _varsbuf = Set()
     for eq in affect
         if !haspre(eq) && !(symbolic_type(eq.rhs) === NotSymbolic() ||
              symbolic_type(eq.lhs) === NotSymbolic())
             @warn "Affect equation $eq has no `Pre` operator. As such it will be interpreted as an algebraic equation to be satisfied after the callback. If you intended to use the value of a variable x before the affect, use Pre(x). Errors may be thrown if there is no `Pre` and the algebraic equation is unsatisfiable, such as X ~ X + 1."
         end
         collect_vars!(dvs, params, eq, iv; op = Pre)
+        empty!(_varsbuf)
+        vars!(_varsbuf, eq; op = Pre)
+        filter!(x -> iscall(x) && operation(x) isa Pre, _varsbuf)
+        union!(params, _varsbuf)
         diffvs = collect_applied_operators(eq, Differential)
         union!(dvs, diffvs)
     end
@@ -307,7 +315,7 @@ function make_affect(affect::Vector{Equation}; discrete_parameters = Any[],
     affect = Symbolics.fast_substitute(affect, subs)
     alg_eqs = Symbolics.fast_substitute(alg_eqs, subs)
 
-    @named affectsys = ImplicitDiscreteSystem(
+    @named affectsys = System(
         vcat(affect, alg_eqs), iv, collect(union(_dvs, discretes)),
         collect(union(pre_params, sys_params)))
     affectsys = structural_simplify(affectsys; fully_determined = nothing)
@@ -588,6 +596,33 @@ Base.isempty(cb::AbstractCallback) = isempty(cb.conditions)
 ####################################
 ####### Compilation functions ######
 ####################################
+
+struct CompiledCondition{IsDiscrete, F}
+    f::F
+end
+
+function CompiledCondition{ID}(f::F) where {ID, F}
+    return CompiledCondition{ID, F}(f)
+end
+
+function (cc::CompiledCondition)(out, u, t, integ)
+    cc.f(out, u, parameter_values(integ), t)
+end
+
+function (cc::CompiledCondition{false})(u, t, integ)
+    if DiffEqBase.isinplace(SciMLBase.get_sol(integ).prob)
+        tmp, = DiffEqBase.get_tmp_cache(integ)
+        cc.f(tmp, u, parameter_values(integ), t)
+        tmp[1]
+    else
+        cc.f(u, parameter_values(integ), t)
+    end
+end
+
+function (cc::CompiledCondition{true})(u, t, integ)
+    cc.f(u, parameter_values(integ), t)
+end
+
 """
     compile_condition(cb::AbstractCallback, sys, dvs, ps; expression, kwargs...)
 
@@ -607,30 +642,19 @@ function compile_condition(
     end
 
     if !is_discrete(cbs)
-        condit = reduce(vcat, flatten_equations(condit))
+        condit = reduce(vcat, flatten_equations(Vector{Equation}(condit)))
         condit = condit isa AbstractVector ? [c.lhs - c.rhs for c in condit] :
                  [condit.lhs - condit.rhs]
     end
 
     fs = build_function_wrapper(
-        sys, condit, u, p..., t; kwargs..., expression = Val{false}, cse = false)
-    (f_oop, f_iip) = is_discrete(cbs) ? (fs, nothing) : fs
-
-    cond = if cbs isa AbstractVector
-        (out, u, t, integ) -> f_iip(out, u, parameter_values(integ), t)
-    elseif is_discrete(cbs)
-        (u, t, integ) -> f_oop(u, parameter_values(integ), t)
-    else
-        function (u, t, integ)
-            if DiffEqBase.isinplace(SciMLBase.get_sol(integ).prob)
-                tmp, = DiffEqBase.get_tmp_cache(integ)
-                f_iip(tmp, u, parameter_values(integ), t)
-                tmp[1]
-            else
-                f_oop(u, parameter_values(integ), t)
-            end
-        end
+        sys, condit, u, p..., t; kwargs..., cse = false)
+    if is_discrete(cbs)
+        fs = (fs, nothing)
     end
+    fs = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(
+        Val{false}, fs...; eval_expression, eval_module)
+    return CompiledCondition{is_discrete(cbs)}(fs)
 end
 
 """
@@ -871,7 +895,8 @@ end
 Compile an affect defined by a set of equations. Systems with algebraic equations will solve implicit discrete problems to obtain their next state. Systems without will generate functions that perform explicit updates.
 """
 function compile_equational_affect(
-        aff::Union{AffectSystem, Vector{Equation}}, sys; reset_jumps = false, kwargs...)
+        aff::Union{AffectSystem, Vector{Equation}}, sys; reset_jumps = false,
+        eval_expression = false, eval_module = @__MODULE__, kwargs...)
     if aff isa AbstractVector
         aff = make_affect(
             aff; iv = get_iv(sys), warn_no_algebraic = false)
@@ -906,11 +931,13 @@ function compile_equational_affect(
         integ = gensym(:MTKIntegrator)
 
         u_up, u_up! = build_function_wrapper(sys, (@view rhss[is_u]), dvs, _ps..., t;
-            wrap_code = add_integrator_header(sys, integ, :u),
-            expression = Val{false}, outputidxs = u_idxs, wrap_mtkparameters, cse = false)
+            wrap_code = add_integrator_header(sys, integ, :u), expression = Val{false},
+            outputidxs = u_idxs, wrap_mtkparameters, cse = false, eval_expression,
+            eval_module)
         p_up, p_up! = build_function_wrapper(sys, (@view rhss[is_p]), dvs, _ps..., t;
-            wrap_code = add_integrator_header(sys, integ, :p),
-            expression = Val{false}, outputidxs = p_idxs, wrap_mtkparameters, cse = false)
+            wrap_code = add_integrator_header(sys, integ, :p), expression = Val{false},
+            outputidxs = p_idxs, wrap_mtkparameters, cse = false, eval_expression,
+            eval_module)
 
         return let dvs_to_update = dvs_to_update, ps_to_update = ps_to_update,
             reset_jumps = reset_jumps, u_up! = u_up!, p_up! = p_up!
@@ -939,7 +966,8 @@ function compile_equational_affect(
 
             affprob = ImplicitDiscreteProblem(affsys, [dv => 0 for dv in unknowns(affsys)],
                 (0, 0), [p => 0.0 for p in parameters(affsys)];
-                build_initializeprob = false, check_length = false)
+                build_initializeprob = false, check_length = false, eval_expression,
+                eval_module, check_compatibility = false)
 
             function implicit_affect!(integ)
                 new_u0 = affu_getter(integ)

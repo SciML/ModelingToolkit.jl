@@ -6,13 +6,13 @@ using SymbolicIndexingInterface: getu
 
 @variables x(t)[1:3]=[1.0, 2.0, 3.0] y(t) z(t)[1:2]
 
-@mtkbuild sys=ODESystem([D(x) ~ t * x], t) simplify=false
+@mtkbuild sys=System([D(x) ~ t * x], t) simplify=false
 @test get_u0(sys, [])[1] == [1.0, 2.0, 3.0]
 @test get_u0(sys, [x => [2.0, 3.0, 4.0]])[1] == [2.0, 3.0, 4.0]
 @test get_u0(sys, [x[1] => 2.0, x[2] => 3.0, x[3] => 4.0])[1] == [2.0, 3.0, 4.0]
 @test get_u0(sys, [2.0, 3.0, 4.0])[1] == [2.0, 3.0, 4.0]
 
-@mtkbuild sys=ODESystem([
+@mtkbuild sys=System([
         D(x) ~ 3x,
         D(y) ~ t,
         D(z[1]) ~ z[2] + t,
@@ -55,7 +55,7 @@ vals = ModelingToolkit.varmap_to_vars(var_vals, desired_values; defaults = defau
 @parameters k1 k2 Γ[1:1]=X1 + X2
 eq = D(X1) ~ -k1 * X1 + k2 * (-X1 + Γ[1])
 obs = X2 ~ Γ[1] - X1
-@mtkbuild osys_m = ODESystem([eq], t, [X1], [k1, k2, Γ[1]]; observed = [X2 ~ Γ[1] - X1])
+@mtkbuild osys_m = System([eq], t, [X1], [k1, k2, Γ[1]]; observed = [X2 ~ Γ[1] - X1])
 
 # Creates ODEProblem.
 u0 = [X1 => 1.0, X2 => 2.0]
@@ -76,14 +76,14 @@ target_varmap = Dict(p => ones(3), q => 2ones(3), q[1] => 2.0, q[2] => 2.0, q[3]
 # Issue#1283
 @variables z(t)[1:2, 1:2]
 eqs = [D(D(z)) ~ ones(2, 2)]
-@mtkbuild sys = ODESystem(eqs, t)
+@mtkbuild sys = System(eqs, t)
 @test_nowarn ODEProblem(sys, [z => zeros(2, 2), D(z) => ones(2, 2)], (0.0, 10.0))
 
 # Initialization with defaults involving parameters that are not part of the system
 # Issue#2817
 @parameters A1 A2 B1 B2
 @variables x1(t) x2(t)
-@mtkbuild sys = ODESystem(
+@mtkbuild sys = System(
     [
         x1 ~ B1,
         x2 ~ B2
@@ -99,32 +99,22 @@ prob = ODEProblem(sys, [], (0.0, 1.0), [A1 => 0.3])
 @testset "default=nothing is skipped" begin
     @parameters p = nothing
     @variables x(t)=nothing y(t)
-    for sys in [
-        ODESystem(Equation[], t, [x, y], [p]; defaults = [y => nothing], name = :osys),
-        SDESystem(Equation[], [], t, [x, y], [p]; defaults = [y => nothing], name = :ssys),
-        JumpSystem(Equation[], t, [x, y], [p]; defaults = [y => nothing], name = :jsys),
-        NonlinearSystem(Equation[], [x, y], [p]; defaults = [y => nothing], name = :nsys),
-        OptimizationSystem(
-            Equation[], [x, y], [p]; defaults = [y => nothing], name = :optsys),
-        ConstraintsSystem(
-            Equation[], [x, y], [p]; defaults = [y => nothing], name = :conssys)
-    ]
-        @test isempty(ModelingToolkit.defaults(sys))
-    end
+    @named sys = System(Equation[], t, [x, y], [p]; defaults = [y => nothing])
+    @test isempty(ModelingToolkit.defaults(sys))
 end
 
 # Using indepvar in initialization
 # Issue#2799
 @variables x(t)
 @parameters p
-@mtkbuild sys = ODESystem([D(x) ~ p], t; defaults = [x => t, p => 2t])
+@mtkbuild sys = System([D(x) ~ p], t; defaults = [x => t, p => 2t])
 prob = ODEProblem(sys, [], (1.0, 2.0), [])
 @test prob[x] == 1.0
 @test prob.ps[p] == 2.0
 
 @testset "Array of symbolics is unwrapped" begin
     @variables x(t)[1:2] y(t)
-    @mtkbuild sys = ODESystem([D(x) ~ x, D(y) ~ t], t; defaults = [x => [y, 3.0]])
+    @mtkbuild sys = System([D(x) ~ x, D(y) ~ t], t; defaults = [x => [y, 3.0]])
     prob = ODEProblem(sys, [y => 1.0], (0.0, 1.0))
     @test eltype(prob.u0) <: Float64
     prob = ODEProblem(sys, [x => [y, 4.0], y => 2.0], (0.0, 1.0))
@@ -134,7 +124,7 @@ end
 @testset "split=false systems with all parameter defaults" begin
     @variables x(t) = 1.0
     @parameters p=1.0 q=2.0 r=3.0
-    @mtkbuild sys=ODESystem(D(x) ~ p * x + q * t + r, t) split=false
+    @mtkbuild sys=System(D(x) ~ p * x + q * t + r, t) split=false
     prob = @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
     @test prob.p isa Vector{Float64}
 end
@@ -146,7 +136,7 @@ end
         y ~ ifelse(t < c1, 0.0, (-c1 + t)^(c3))]
     sps = [x, y]
     ps = [c1, c2, c3]
-    @mtkbuild osys = ODESystem(eqs, t, sps, ps)
+    @mtkbuild osys = System(eqs, t, sps, ps)
     u0map = [x => 1.0]
     pmap = [c1 => 5.0, c2 => 1.0, c3 => 1.2]
     oprob = ODEProblem(osys, u0map, (0.0, 10.0), pmap)
@@ -154,7 +144,7 @@ end
 
 @testset "Cyclic dependency checking and substitution limits" begin
     @variables x(t) y(t)
-    @mtkbuild sys = ODESystem(
+    @mtkbuild sys = System(
         [D(x) ~ x, D(y) ~ y], t; initialization_eqs = [x ~ 2y + 3, y ~ 2x],
         guesses = [x => 2y, y => 2x])
     @test_warn ["Cycle", "unknowns", "x", "y"] try
@@ -165,7 +155,7 @@ end
         sys, [x => 2y + 1, y => 2x], (0.0, 1.0); build_initializeprob = false)
 
     @parameters p q
-    @mtkbuild sys = ODESystem(
+    @mtkbuild sys = System(
         [D(x) ~ x * p, D(y) ~ y * q], t; guesses = [p => 1.0, q => 2.0])
     # "unknowns" because they are initialization unknowns
     @test_warn ["Cycle", "unknowns", "p", "q"] try
@@ -180,7 +170,7 @@ end
 @testset "`add_fallbacks!` checks scalarized array parameters correctly" begin
     @variables x(t)[1:2]
     @parameters p[1:2, 1:2]
-    @mtkbuild sys = ODESystem(D(x) ~ p * x, t)
+    @mtkbuild sys = System(D(x) ~ p * x, t)
     # used to throw a `MethodError` complaining about `getindex(::Nothing, ::CartesianIndex{2})`
     @test_throws ModelingToolkit.MissingParametersError ODEProblem(
         sys, [x => ones(2)], (0.0, 1.0))
@@ -194,7 +184,7 @@ end
         y[1] ~ x[3],
         y[2] ~ x[4]
     ]
-    @mtkbuild sys = ODESystem(eqs, t; defaults = [x => vcat(ones(2), y), y => x[1:2] ./ 2])
+    @mtkbuild sys = System(eqs, t; defaults = [x => vcat(ones(2), y), y => x[1:2] ./ 2])
     prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
@@ -207,7 +197,7 @@ end
     eqs = [D(D(x)) ~ λ * x
            D(D(y)) ~ λ * y - g
            x^2 + y^2 ~ 1]
-    @mtkbuild pend = ODESystem(eqs, t)
+    @mtkbuild pend = System(eqs, t)
 
     @test_throws ModelingToolkit.MissingGuessError ODEProblem(
         pend, [x => 1], (0, 1), [g => 1], guesses = [y => λ, λ => y + 1])
@@ -216,7 +206,7 @@ end
     # Throw multiple if multiple are missing
     @variables a(t) b(t) c(t) d(t) e(t)
     eqs = [D(a) ~ b, D(b) ~ c, D(c) ~ d, D(d) ~ e, D(e) ~ 1]
-    @mtkbuild sys = ODESystem(eqs, t)
+    @mtkbuild sys = System(eqs, t)
     @test_throws ["a(t)", "c(t)"] ODEProblem(
         sys, [e => 2, a => b, b => a + 1, c => d, d => c + 1], (0, 1))
 end
@@ -228,7 +218,7 @@ end
     @variables x(t)
     @parameters (interp::Tspline)(..)
 
-    @mtkbuild sys = ODESystem(D(x) ~ interp(t), t)
+    @mtkbuild sys = System(D(x) ~ interp(t), t)
 
     prob = ODEProblem(sys, [x => 0.0], (0.0, 1.0), [interp => spline])
     spline2 = LinearInterpolation(ts .^ 2, ts .^ 2)
@@ -244,7 +234,7 @@ end
         0 ~ p[1] - X[1],
         0 ~ p[2] - X[2]
     ]
-    @named nlsys = NonlinearSystem(eqs)
+    @named nlsys = System(eqs)
     nlsys = complete(nlsys)
 
     # Creates the `NonlinearProblem`.
@@ -257,7 +247,7 @@ end
     @parameters p d
     @variables X(t)
     eqs = [D(X) ~ p - d * X]
-    @mtkbuild osys = ODESystem(eqs, t)
+    @mtkbuild osys = System(eqs, t)
     u0 = [X => 1.0f0]
     ps = [p => 1.0f0, d => 2.0f0]
     oprob = ODEProblem(osys, u0, (0.0f0, 1.0f0), ps)
@@ -269,7 +259,7 @@ end
 @testset "Array initials and scalar parameters with `split = false`" begin
     @variables x(t)[1:2]
     @parameters p
-    @mtkbuild sys=ODESystem([D(x[1]) ~ x[1], D(x[2]) ~ x[2] + p], t) split=false
+    @mtkbuild sys=System([D(x[1]) ~ x[1], D(x[2]) ~ x[2] + p], t) split=false
     ps = Set(parameters(sys; initial_parameters = true))
     @test length(ps) == 5
     for i in 1:2
@@ -293,7 +283,7 @@ end
         0 ~ x^2 + y^2 - w2^2
     ]
 
-    @mtkbuild sys = ODESystem(eqs, t)
+    @mtkbuild sys = System(eqs, t)
 
     u0 = [D(x) => 2.0,
         x => 1.0,

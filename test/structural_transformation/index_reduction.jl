@@ -12,7 +12,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 eqs2 = [D(D(x)) ~ T * x,
     D(D(y)) ~ T * y - g,
     0 ~ x^2 + y^2 - L^2]
-pendulum2 = ODESystem(eqs2, t, [x, y, T], [L, g], name = :pendulum)
+pendulum2 = System(eqs2, t, [x, y, T], [L, g], name = :pendulum)
 lowered_sys = ModelingToolkit.ode_order_lowering(pendulum2)
 
 lowered_eqs = [D(xˍt) ~ T * x,
@@ -20,7 +20,7 @@ lowered_eqs = [D(xˍt) ~ T * x,
     D(x) ~ xˍt,
     D(y) ~ yˍt,
     0 ~ x^2 + y^2 - L^2]
-@test ODESystem(lowered_eqs, t, [xˍt, yˍt, x, y, T], [L, g], name = :pendulum) ==
+@test System(lowered_eqs, t, [xˍt, yˍt, x, y, T], [L, g], name = :pendulum) ==
       lowered_sys
 @test isequal(equations(lowered_sys), lowered_eqs)
 
@@ -30,7 +30,7 @@ eqs = [D(x) ~ w,
     D(w) ~ T * x,
     D(z) ~ T * y - g,
     0 ~ x^2 + y^2 - L^2]
-pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name = :pendulum)
+pendulum = System(eqs, t, [x, y, w, z, T], [L, g], name = :pendulum)
 
 state = TearingState(pendulum)
 @unpack graph, var_to_diff = state.structure
@@ -57,7 +57,7 @@ idx1_pendulum = [D(x) ~ w,
     # 2x*D(D(x)) + 2*D(x)*D(x) + 2y*D(D(y)) + 2*D(y)*D(y) and
     # substitute the rhs
     0 ~ 2x * (T * x) + 2 * xˍt * xˍt + 2y * (T * y - g) + 2 * yˍt * yˍt]
-@named idx1_pendulum = ODESystem(idx1_pendulum, t, [x, y, w, z, xˍt, yˍt, T], [L, g])
+@named idx1_pendulum = System(idx1_pendulum, t, [x, y, w, z, xˍt, yˍt, T], [L, g])
 first_order_idx1_pendulum = complete(ode_order_lowering(idx1_pendulum))
 
 using OrdinaryDiffEq
@@ -90,7 +90,7 @@ sol = solve(prob_auto, Rodas5());
 eqs2 = [D(D(x)) ~ T * x,
     D(D(y)) ~ T * y - g,
     0 ~ x^2 + y^2 - L^2]
-pendulum2 = ODESystem(eqs2, t, [x, y, T], [L, g], name = :pendulum)
+pendulum2 = System(eqs2, t, [x, y, T], [L, g], name = :pendulum)
 
 # Turn into a first order differential equation system
 first_order_sys = ModelingToolkit.ode_order_lowering(pendulum2)
@@ -126,7 +126,7 @@ eqs = [D(x) ~ w,
     D(w) ~ T * x,
     D(z) ~ T * y - g,
     0 ~ x^2 + y^2 - L^2]
-pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name = :pendulum)
+pendulum = System(eqs, t, [x, y, w, z, T], [L, g], name = :pendulum)
 
 let pss_pendulum = partial_state_selection(pendulum)
     # This currently selects `T` rather than `x` at top level. Needs tearing priorities to fix.
@@ -159,7 +159,7 @@ let
     eqs = [D(D(x)) ~ λ * x
            D(D(y)) ~ λ * y - g
            x^2 + y^2 ~ 1]
-    @named pend = ODESystem(eqs, t)
+    @named pend = System(eqs, t)
     sys = complete(structural_simplify(pend; dummy_derivative = false))
     prob = ODEProblem(
         sys, [x => 1, y => 0, D(x) => 0.0], (0.0, 10.0), [g => 1], guesses = [λ => 0.0])

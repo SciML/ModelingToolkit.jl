@@ -6,7 +6,7 @@ function ModelingToolkit.define_vars(u::Union{SLArray, LArray}, t)
     [ModelingToolkit._defvar(x)(t) for x in LabelledArrays.symnames(typeof(u))]
 end
 
-function ModelingToolkit.define_params(p::Union{SLArray, LArray}, names = nothing)
+function ModelingToolkit.define_params(p::Union{SLArray, LArray}, t, names = nothing)
     if names === nothing
         [toparam(variable(x)) for x in LabelledArrays.symnames(typeof(p))]
     else

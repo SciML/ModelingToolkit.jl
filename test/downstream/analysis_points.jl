@@ -22,7 +22,7 @@ import ControlSystemsBase as CS
                connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
         if u !== nothing
             push!(eqs, connect(torque.tau, u.output))
-            return ODESystem(eqs, t;
+            return System(eqs, t;
                 systems = [
                     torque,
                     inertia1,
@@ -33,7 +33,7 @@ import ControlSystemsBase as CS
                 ],
                 name)
         end
-        ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
+        System(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
     end
 
     @named r = Step(start_time = 0)
@@ -50,7 +50,7 @@ import ControlSystemsBase as CS
                    connect(sensor.phi, :y, er.input2)
                    connect(er.output, :e, pid.err_input)]
 
-    closed_loop = ODESystem(connections, t, systems = [model, pid, filt, sensor, r, er],
+    closed_loop = System(connections, t, systems = [model, pid, filt, sensor, r, er],
         name = :closed_loop, defaults = [
             model.inertia1.phi => 0.0,
             model.inertia2.phi => 0.0,
@@ -89,7 +89,7 @@ end
            connect(add.output, C.input)
            connect(C.output, P.input)]
 
-    sys_inner = ODESystem(eqs, t, systems = [P, C, add], name = :inner)
+    sys_inner = System(eqs, t, systems = [P, C, add], name = :inner)
 
     @named r = Constant(k = 1)
     @named F = FirstOrder(k = 1, T = 3)
@@ -98,7 +98,7 @@ end
            connect(sys_inner.P.output, sys_inner.add.input2)
            connect(sys_inner.C.output, :plant_input, sys_inner.P.input)
            connect(F.output, sys_inner.add.input1)]
-    sys_outer = ODESystem(eqs, t, systems = [F, sys_inner, r], name = :outer)
+    sys_outer = System(eqs, t, systems = [F, sys_inner, r], name = :outer)
 
     # test first that the structural_simplify works correctly
     ssys = structural_simplify(sys_outer)
@@ -125,7 +125,7 @@ end
            connect(add.output, C.input)
            connect(C.output.u, P.input.u)]
 
-    sys_inner = ODESystem(eqs, t, systems = [P, C, add], name = :inner)
+    sys_inner = System(eqs, t, systems = [P, C, add], name = :inner)
 
     @named r = Constant(k = 1)
     @named F = FirstOrder(k = 1, T = 3)
@@ -134,7 +134,7 @@ end
            connect(sys_inner.P.output.u, sys_inner.add.input2.u)
            connect(sys_inner.C.output.u, :plant_input, sys_inner.P.input.u)
            connect(F.output, sys_inner.add.input1)]
-    sys_outer = ODESystem(eqs, t, systems = [F, sys_inner, r], name = :outer)
+    sys_outer = System(eqs, t, systems = [F, sys_inner, r], name = :outer)
 
     # test first that the structural_simplify works correctly
     ssys = structural_simplify(sys_outer)
@@ -161,7 +161,7 @@ end
            connect(add.output, C.input)
            connect(C.output, P.input)]
 
-    sys_inner = ODESystem(eqs, t, systems = [P, C, add], name = :inner)
+    sys_inner = System(eqs, t, systems = [P, C, add], name = :inner)
 
     @named r = Constant(k = 1)
     @named F = FirstOrder(k = 1, T = 3)
@@ -170,7 +170,7 @@ end
            connect(sys_inner.P.output, sys_inner.add.input2)
            connect(sys_inner.C.output.u, :plant_input, sys_inner.P.input.u)
            connect(F.output, sys_inner.add.input1)]
-    sys_outer = ODESystem(eqs, t, systems = [F, sys_inner, r], name = :outer)
+    sys_outer = System(eqs, t, systems = [F, sys_inner, r], name = :outer)
 
     # test first that the structural_simplify works correctly
     ssys = structural_simplify(sys_outer)
@@ -192,7 +192,7 @@ end
     @named P_inner = FirstOrder(k = 1, T = 1)
     @named feedback = Feedback()
     @named ref = Step()
-    @named sys_inner = ODESystem(
+    @named sys_inner = System(
         [connect(P_inner.output, :y, feedback.input2)
          connect(feedback.output, :u, P_inner.input)
          connect(ref.output, :r, feedback.input1)],
@@ -208,7 +208,7 @@ end
 
     Sinner = sminreal(ss(get_sensitivity(sys_inner, :u)[1]...))
 
-    @named sys_inner = ODESystem(
+    @named sys_inner = System(
         [connect(P_inner.output, :y, feedback.input2)
          connect(feedback.output, :u, P_inner.input)],
         t,
@@ -216,7 +216,7 @@ end
 
     @named P_outer = FirstOrder(k = rand(), T = rand())
 
-    @named sys_outer = ODESystem(
+    @named sys_outer = System(
         [connect(sys_inner.P_inner.output, :y2, P_outer.input)
          connect(P_outer.output, :u2, sys_inner.feedback.input1)],
         t,
@@ -249,7 +249,7 @@ end
 
     eqs = [connect(P.output, :plant_output, K.input)
            connect(K.output, :plant_input, P.input)]
-    sys = ODESystem(eqs, t, systems = [P, K], name = :hej)
+    sys = System(eqs, t, systems = [P, K], name = :hej)
 
     matrices, _ = get_sensitivity(sys, :plant_input)
     S = CS.feedback(I(2), Kss * Pss, pos_feedback = true)
@@ -281,14 +281,14 @@ end
            connect(add.output, C.input)
            connect(C.output, :plant_input, P.input)]
 
-    sys_inner = ODESystem(eqs, t, systems = [P, C, add], name = :inner)
+    sys_inner = System(eqs, t, systems = [P, C, add], name = :inner)
 
     @named r = Constant(k = 1)
     @named F = FirstOrder(k = 1, T = 3)
 
     eqs = [connect(r.output, F.input)
            connect(F.output, sys_inner.add.input1)]
-    sys_outer = ODESystem(eqs, t, systems = [F, sys_inner, r], name = :outer)
+    sys_outer = System(eqs, t, systems = [F, sys_inner, r], name = :outer)
 
     matrices, _ = get_sensitivity(
         sys_outer, [sys_outer.inner.plant_input, sys_outer.inner.plant_output])
@@ -352,13 +352,13 @@ function normal_test_system()
                   connect(F1.output, add.input1)
                   connect(F2.output, add.input2)
                   connect(add.output, back.input2)]
-    @named normal_inner = ODESystem(eqs_normal, t; systems = [F1, F2, add, back])
+    @named normal_inner = System(eqs_normal, t; systems = [F1, F2, add, back])
 
     @named step = Step()
     eqs2_normal = [
         connect(step.output, normal_inner.back.input1)
     ]
-    @named sys_normal = ODESystem(eqs2_normal, t; systems = [normal_inner, step])
+    @named sys_normal = System(eqs2_normal, t; systems = [normal_inner, step])
 end
 
 sys_normal = normal_test_system()
@@ -377,12 +377,12 @@ matrices_normal, _ = get_sensitivity(sys_normal, sys_normal.normal_inner.ap)
            connect(F1.output, add.input1)
            connect(F2.output, add.input2)
            connect(add.output, back.input2)]
-    @named inner = ODESystem(eqs, t; systems = [F1, F2, add, back])
+    @named inner = System(eqs, t; systems = [F1, F2, add, back])
 
     @named step = Step()
     eqs2 = [connect(step.output, inner.back.input1)
             connect(inner.back.output, :ap, inner.F1.input)]
-    @named sys = ODESystem(eqs2, t; systems = [inner, step])
+    @named sys = System(eqs2, t; systems = [inner, step])
 
     prob = ODEProblem(structural_simplify(sys), [], (0.0, 10.0))
     @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
@@ -401,12 +401,12 @@ end
            connect(F1.output, add.input1)
            connect(F2.output, add.input2)
            connect(add.output, back.input2)]
-    @named inner = ODESystem(eqs, t; systems = [F1, F2, add, back])
+    @named inner = System(eqs, t; systems = [F1, F2, add, back])
 
     @named step = Step()
     eqs2 = [connect(step.output, inner.back.input1)
             connect(inner.back.output.u, :ap, inner.F1.input.u)]
-    @named sys = ODESystem(eqs2, t; systems = [inner, step])
+    @named sys = System(eqs2, t; systems = [inner, step])
 
     prob = ODEProblem(structural_simplify(sys), [], (0.0, 10.0))
     @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
@@ -425,12 +425,12 @@ end
            connect(F1.output, add.input1)
            connect(F2.output, add.input2)
            connect(add.output, back.input2)]
-    @named inner = ODESystem(eqs, t; systems = [F1, F2, add, back])
+    @named inner = System(eqs, t; systems = [F1, F2, add, back])
 
     @named step = Step()
     eqs2 = [connect(step.output, inner.back.input1)
             connect(inner.back.output.u, :ap, inner.F1.input.u)]
-    @named sys = ODESystem(eqs2, t; systems = [inner, step])
+    @named sys = System(eqs2, t; systems = [inner, step])
 
     prob = ODEProblem(structural_simplify(sys), [], (0.0, 10.0))
     @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
@@ -459,10 +459,10 @@ end
                connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
         if u !== nothing
             push!(eqs, connect(torque.tau, u.output))
-            return @named model = ODESystem(
+            return @named model = System(
                 eqs, t; systems = [torque, inertia1, inertia2, spring, damper, u])
         end
-        ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
+        System(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
     end
 
     @named r = Step(start_time = 1)
@@ -481,7 +481,7 @@ end
                    connect(add.output, :u, model.torque.tau) # Name connection u to form an analysis point
                    connect(model.inertia1.flange_b, sensor.flange)
                    connect(sensor.phi, :y, pid.measurement)]
-    closed_loop = ODESystem(connections, t,
+    closed_loop = System(connections, t,
         systems = [model, inverse_model, pid, filt, sensor, inverse_sensor, r, add],
         name = :closed_loop)
     # just ensure the system simplifies

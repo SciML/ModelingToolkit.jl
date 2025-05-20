@@ -32,11 +32,15 @@ is_split(sys::AbstractSystem) = has_index_cache(sys) && get_index_cache(sys) !==
 """
     $(TYPEDSIGNATURES)
 
-Given a variable-value mapping, add mappings for the `toterm` of each of the keys.
+Given a variable-value mapping, add mappings for the `toterm` of each of the keys. `replace` controls whether
+the old value should be removed.
 """
-function add_toterms!(varmap::AbstractDict; toterm = default_toterm)
+function add_toterms!(varmap::AbstractDict; toterm = default_toterm, replace = false)
     for k in collect(keys(varmap))
-        varmap[toterm(k)] = varmap[k]
+        ttk = toterm(unwrap(k))
+        haskey(varmap, ttk) && continue
+        varmap[ttk] = varmap[k]
+        !isequal(k, ttk) && replace && delete!(varmap, k)
     end
     return nothing
 end
@@ -46,9 +50,9 @@ end
 
 Out-of-place version of [`add_toterms!`](@ref).
 """
-function add_toterms(varmap::AbstractDict; toterm = default_toterm)
+function add_toterms(varmap::AbstractDict; kwargs...)
     cp = copy(varmap)
-    add_toterms!(cp; toterm)
+    add_toterms!(cp; kwargs...)
     return cp
 end
 
@@ -348,6 +352,8 @@ function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
         allow_symbolic = false, is_initializeprob = false)
     isempty(vars) && return nothing
 
+    varmap = recursive_unwrap(varmap)
+    add_toterms!(varmap; toterm)
     if check
         missing_vars = missingvars(varmap, vars; toterm)
         isempty(missing_vars) || throw(MissingVariablesError(missing_vars))
@@ -796,6 +802,10 @@ struct InitializationMetadata{R <: ReconstructInitializeprob, GUU, SIU}
     """
     use_scc::Bool
     """
+    Whether the initialization uses the independent variable.
+    """
+    time_dependent_init::Bool
+    """
     `ReconstructInitializeprob` for this initialization problem.
     """
     oop_reconstruct_u0_p::R
@@ -868,7 +878,8 @@ All other keyword arguments are forwarded to `InitializationProblem`.
 """
 function maybe_build_initialization_problem(
         sys::AbstractSystem, op::AbstractDict, u0map, pmap, t, defs,
-        guesses, missing_unknowns; implicit_dae = false, u0_constructor = identity,
+        guesses, missing_unknowns; implicit_dae = false,
+        time_dependent_init = is_time_dependent(sys), u0_constructor = identity,
         floatT = Float64, initialization_eqs = [], use_scc = true, kwargs...)
     guesses = merge(ModelingToolkit.guesses(sys), todict(guesses))
 
@@ -877,7 +888,8 @@ function maybe_build_initialization_problem(
     end
 
     initializeprob = ModelingToolkit.InitializationProblem{true, SciMLBase.FullSpecialize}(
-        sys, t, u0map, pmap; guesses, initialization_eqs, use_scc, kwargs...)
+        sys, t, u0map, pmap; guesses, time_dependent_init, initialization_eqs, use_scc,
+        kwargs...)
     if state_values(initializeprob) !== nothing
         initializeprob = remake(initializeprob; u0 = floatT.(state_values(initializeprob)))
     end
@@ -901,10 +913,13 @@ function maybe_build_initialization_problem(
     end
     meta = InitializationMetadata(
         u0map, pmap, guesses, Vector{Equation}(initialization_eqs),
-        use_scc, ReconstructInitializeprob(sys, initializeprob.f.sys),
+        use_scc, time_dependent_init, ReconstructInitializeprob(sys, initializeprob.f.sys),
         get_initial_unknowns, setp(sys, Initial.(unknowns(sys))))
 
-    if is_time_dependent(sys)
+    if time_dependent_init === nothing
+        time_dependent_init = is_time_dependent(sys)
+    end
+    if time_dependent_init
         all_init_syms = Set(all_symbols(initializeprob))
         solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
         initializeprobmap = u0_constructor ∘ getu(initializeprob, solved_unknowns)
@@ -945,7 +960,7 @@ function maybe_build_initialization_problem(
         end
     end
 
-    if is_time_dependent(sys)
+    if time_dependent_init
         for v in missing_unknowns
             op[v] = getu(initializeprob, v)(initializeprob)
         end
@@ -992,12 +1007,11 @@ Initial values provided in terms of other variables will be symbolically evaluat
 type of the containers (if parameters are not in an `MTKParameters` object). `Dict`s will be
 turned into `Array`s.
 
-If `sys isa ODESystem`, this will also build the initialization problem and related objects
-and pass them to the SciMLFunction as keyword arguments.
+This will also build the initialization problem and related objects and pass them to the
+SciMLFunction as keyword arguments.
 
 Keyword arguments:
-- `build_initializeprob`: If `false`, avoids building the initialization problem for an
-  `ODESystem`.
+- `build_initializeprob`: If `false`, avoids building the initialization problem.
 - `t`: The initial time of the `ODEProblem`. If this is not provided, the initialization
   problem cannot be built.
 - `implicit_dae`: Also build a mapping of derivatives of states to values for implicit DAEs,
@@ -1039,7 +1053,8 @@ Keyword arguments:
 All other keyword arguments are passed as-is to `constructor`.
 """
 function process_SciMLProblem(
-        constructor, sys::AbstractSystem, u0map, pmap; build_initializeprob = true,
+        constructor, sys::AbstractSystem, u0map, pmap;
+        build_initializeprob = supports_initialization(sys),
         implicit_dae = false, t = nothing, guesses = AnyDict(),
         warn_initialize_determined = true, initialization_eqs = [],
         eval_expression = false, eval_module = @__MODULE__, fully_determined = nothing,
@@ -1048,7 +1063,7 @@ function process_SciMLProblem(
         symbolic_u0 = false, warn_cyclic_dependency = false,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10,
-        substitution_limit = 100, use_scc = true,
+        substitution_limit = 100, use_scc = true, time_dependent_init = is_time_dependent(sys),
         force_initialization_time_independent = false, algebraic_only = false,
         allow_incomplete = false, is_initializeprob = false, kwargs...)
     dvs = unknowns(sys)
@@ -1103,7 +1118,7 @@ function process_SciMLProblem(
             warn_cyclic_dependency, check_units = check_initialization_units,
             circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
             force_time_independent = force_initialization_time_independent, algebraic_only, allow_incomplete,
-            u0_constructor, floatT)
+            u0_constructor, floatT, time_dependent_init)
 
         kwargs = merge(kwargs, kws)
     end
@@ -1181,7 +1196,7 @@ function process_SciMLProblem(
         kwargs = merge(kwargs,)
     end
 
-    f = constructor(sys, dvs, ps, u0; p = p,
+    f = constructor(sys; u0 = u0, p = p,
         eval_expression = eval_expression,
         eval_module = eval_module,
         kwargs...)
@@ -1229,6 +1244,260 @@ function SciMLBase.detect_cycles(sys::AbstractSystem, varmap::Dict{Any, Any}, va
     vars = map(unwrap, vars)
     cycles = check_substitution_cycles(varmap, vars)
     return !isempty(cycles)
+end
+
+function process_kwargs(sys::System; expression = Val{false}, callback = nothing,
+        eval_expression = false, eval_module = @__MODULE__, kwargs...)
+    kwargs = filter_kwargs(kwargs)
+    kwargs1 = (;)
+
+    if is_time_dependent(sys)
+        if expression == Val{false}
+            cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
+            if cbs !== nothing
+                kwargs1 = merge(kwargs1, (callback = cbs,))
+            end
+        end
+
+        tstops = SymbolicTstops(sys; expression, eval_expression, eval_module)
+        if tstops !== nothing
+            kwargs1 = merge(kwargs1, (; tstops))
+        end
+    end
+
+    return merge(kwargs1, kwargs)
+end
+
+function filter_kwargs(kwargs)
+    kwargs = Dict(kwargs)
+    for key in keys(kwargs)
+        key in DiffEqBase.allowedkeywords || delete!(kwargs, key)
+    end
+    pairs(NamedTuple(kwargs))
+end
+
+struct SymbolicTstops{F}
+    fn::F
+end
+
+function (st::SymbolicTstops)(p, tspan)
+    unique!(sort!(reduce(vcat, st.fn(p, tspan...))))
+end
+
+function SymbolicTstops(
+        sys::AbstractSystem; expression = Val{false}, eval_expression = false,
+        eval_module = @__MODULE__)
+    tstops = symbolic_tstops(sys)
+    isempty(tstops) && return nothing
+    t0 = gensym(:t0)
+    t1 = gensym(:t1)
+    tstops = map(tstops) do val
+        if is_array_of_symbolics(val) || val isa AbstractArray
+            collect(val)
+        else
+            term(:, t0, unwrap(val), t1; type = AbstractArray{Real})
+        end
+    end
+    rps = reorder_parameters(sys)
+    tstops, _ = build_function_wrapper(sys, tstops,
+        rps...,
+        t0,
+        t1;
+        expression = Val{true},
+        p_start = 1, p_end = length(rps), add_observed = false, force_SA = true)
+    tstops = GeneratedFunctionWrapper{(1, 3, is_split(sys))}(
+        expression, tstops, nothing; eval_expression, eval_module)
+
+    if expression == Val{true}
+        return :($SymbolicTstops($tstops))
+    else
+        return SymbolicTstops(tstops)
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Macro for writing problem/function constructors. Expects a function definition with type
+parameters for `iip` and `specialize`. Generates fallbacks with
+`specialize = SciMLBase.FullSpecialize` and `iip = true`.
+"""
+macro fallback_iip_specialize(ex)
+    @assert Meta.isexpr(ex, :function)
+    # fnname is ODEProblem{iip, spec}(args...) where {iip, spec}
+    # body is function body
+    fnname, body = ex.args
+    @assert Meta.isexpr(fnname, :where)
+    # fnname_call is ODEProblem{iip, spec}(args...)
+    # where_args are `iip, spec`
+    fnname_call, where_args... = fnname.args
+    @assert length(where_args) == 2
+    iiparg, specarg = where_args
+
+    @assert Meta.isexpr(fnname_call, :call)
+    # fnname_curly is ODEProblem{iip, spec}
+    fnname_curly, args... = fnname_call.args
+    # the function should have keyword arguments
+    @assert Meta.isexpr(args[1], :parameters)
+
+    # arguments to call with
+    call_args = map(args) do arg
+        # keyword args are in `Expr(:parameters)` so any `Expr(:kw)` here
+        # are optional positional arguments. Analyze `:(f(a, b = 1; k = 1, l...))`
+        # to understand
+        Meta.isexpr(arg, :kw) && return arg.args[1]
+        return arg
+    end
+    call_kwargs = map(call_args[1].args) do arg
+        Meta.isexpr(arg, :...) && return arg
+        @assert Meta.isexpr(arg, :kw)
+        return Expr(:kw, arg.args[1], arg.args[1])
+    end
+    call_args[1] = Expr(:parameters, call_kwargs...)
+
+    @assert Meta.isexpr(fnname_curly, :curly)
+    # fnname_name is `ODEProblem`
+    # curly_args is `iip, spec`
+    fnname_name, curly_args... = fnname_curly.args
+    @assert curly_args == where_args
+
+    # callexpr_iip is `ODEProblem{iip, FullSpecialize}(call_args...)`
+    callexpr_iip = Expr(
+        :call, Expr(:curly, fnname_name, curly_args[1], SciMLBase.FullSpecialize), call_args...)
+    # `ODEProblem{iip}`
+    fnname_iip = Expr(:curly, fnname_name, curly_args[1])
+    # `ODEProblem{iip}(args...)`
+    fncall_iip = Expr(:call, fnname_iip, args...)
+    # ODEProblem{iip}(args...) where {iip}
+    fnwhere_iip = Expr(:where, fncall_iip, where_args[1])
+    fn_iip = Expr(:function, fnwhere_iip, callexpr_iip)
+
+    # `ODEProblem{true}(call_args...)`
+    callexpr_base = Expr(:call, Expr(:curly, fnname_name, true), call_args...)
+    # `ODEProblem(args...)`
+    fncall_base = Expr(:call, fnname_name, args...)
+    fn_base = Expr(:function, fncall_base, callexpr_base)
+
+    # Handle case when this is a problem constructor and `u0map` is a `StaticArray`,
+    # where `iip` should default to `false`.
+    fn_sarr = nothing
+    if occursin("Problem", string(fnname_name))
+        # args should at least contain an argument for the `u0map`
+        @assert length(args) > 3
+        u0_arg = args[3]
+        # should not have a type-annotation
+        @assert !Meta.isexpr(u0_arg, :(::))
+        if Meta.isexpr(u0_arg, :kw)
+            argname, default = u0_arg.args
+            u0_arg = Expr(:kw, Expr(:(::), argname, StaticArray), default)
+        else
+            u0_arg = Expr(:(::), u0_arg, StaticArray)
+        end
+
+        callexpr_sarr = Expr(:call, Expr(:curly, fnname_name, false), call_args...)
+        fncall_sarr = Expr(:call, fnname_name, args[1], args[2], u0_arg, args[4:end]...)
+        fn_sarr = Expr(:function, fncall_sarr, callexpr_sarr)
+    end
+    return quote
+        $fn_base
+        $fn_sarr
+        $fn_iip
+        Base.@__doc__ $ex
+    end |> esc
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Turn key-value pairs in `kws` into assignments and appent them to `block.args`. `head` is
+the head of the `Expr` used to create the assignment. `filter` is a function that takes the
+key and returns whether or not to include it in the assignments.
+"""
+function namedtuple_to_assignments!(
+        block, kws::NamedTuple; head = :(=), filter = Returns(true))
+    for (k, v) in pairs(kws)
+        filter(k) || continue
+        push!(block.args, Expr(head, k, v))
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Build an expression that constructs SciMLFunction `T`. `args` is a `NamedTuple` mapping
+names of positional arguments to `T` to their (expression) values. `kwargs` are parsed
+as keyword arguments to the constructor.
+"""
+function build_scimlfn_expr(T, args::NamedTuple; kwargs...)
+    kwargs = NamedTuple(kwargs)
+    let_args = Expr(:block)
+    namedtuple_to_assignments!(let_args, args)
+
+    kwexpr = Expr(:parameters)
+    # don't include initialization data in the generated expression
+    filter = !isequal(:initialization_data)
+    namedtuple_to_assignments!(let_args, kwargs; filter = filter)
+    namedtuple_to_assignments!(kwexpr, kwargs; head = :kw, filter)
+    let_body = Expr(:call, T, kwexpr, keys(args)...)
+    return Expr(:let, let_args, let_body)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Build an expression that constructs SciMLProblem `T`. `args` is a `NamedTuple` mapping
+names of positional arguments to `T` to their (expression) values. `kwargs` are parsed
+as keyword arguments to the constructor.
+"""
+function build_scimlproblem_expr(T, args::NamedTuple; kwargs...)
+    kwargs = NamedTuple(kwargs)
+    let_args = Expr(:block)
+    namedtuple_to_assignments!(let_args, args)
+
+    kwexpr = Expr(:parameters)
+    namedtuple_to_assignments!(let_args, kwargs)
+    namedtuple_to_assignments!(kwexpr, kwargs; head = :kw)
+    let_body = Expr(:call, remake, Expr(:call, T, kwexpr, keys(args)...))
+    return Expr(:let, let_args, let_body)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return an expression constructing SciMLFunction `T` with positional arguments `args`
+and keywords `kwargs`.
+"""
+function maybe_codegen_scimlfn(::Type{Val{true}}, T, args::NamedTuple; kwargs...)
+    build_scimlfn_expr(T, args; kwargs...)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Construct SciMLFunction `T` with positional arguments `args` and keywords `kwargs`.
+"""
+function maybe_codegen_scimlfn(::Type{Val{false}}, T, args::NamedTuple; kwargs...)
+    T(args...; kwargs...)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return an expression constructing SciMLProblem `T` with positional arguments `args`
+and keywords `kwargs`.
+"""
+function maybe_codegen_scimlproblem(::Type{Val{true}}, T, args::NamedTuple; kwargs...)
+    build_scimlproblem_expr(T, args; kwargs...)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Construct SciMLProblem `T` with positional arguments `args` and keywords `kwargs`.
+"""
+function maybe_codegen_scimlproblem(::Type{Val{false}}, T, args::NamedTuple; kwargs...)
+    # Call `remake` so it runs initialization if it is trivial
+    remake(T(args...; kwargs...))
 end
 
 ##############
