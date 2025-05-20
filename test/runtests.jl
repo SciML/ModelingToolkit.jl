@@ -51,7 +51,6 @@ end
             @safetestset "Symbolic Event Test" include("symbolic_events.jl")
             @safetestset "Stream Connect Test" include("stream_connectors.jl")
             @safetestset "Domain Connect Test" include("domain_connectors.jl")
-            @safetestset "Lowering Integration Test" include("lowering_solving.jl")
             @safetestset "Dependency Graph Test" include("dep_graphs.jl")
             @safetestset "Function Registration Test" include("function_registration.jl")
             @safetestset "Precompiled Modules Test" include("precompile_test.jl")

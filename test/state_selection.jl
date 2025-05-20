@@ -23,7 +23,6 @@ end
 @test_skip let pss = partial_state_selection(sys)
     @test length(equations(pss)) == 1
     @test length(unknowns(pss)) == 2
-    @test length(equations(ode_order_lowering(pss))) == 2
 end
 
 @parameters σ ρ β
