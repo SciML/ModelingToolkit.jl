@@ -72,40 +72,14 @@ function MTK.add_constraint!(m::InfiniteOptModel, expr::Union{Equation, Inequali
 end
 MTK.set_objective!(m::InfiniteOptModel, expr) = @objective(m.model, Min, expr)
 
-"""
-    JuMPDynamicOptProblem(sys::System, u0, tspan, p; dt)
-
-Convert a System representing an optimal control system into a JuMP model
-for solving using optimization. Must provide either `dt`, the timestep between collocation 
-points (which, along with the timespan, determines the number of points), or directly 
-provide the number of points as `steps`.
-
-The optimization variables:
-- a vector-of-vectors U representing the unknowns as an interpolation array
-- a vector-of-vectors V representing the controls as an interpolation array
-
-The constraints are:
-- The set of user constraints passed to the System via `constraints`
-- The solver constraints that encode the time-stepping used by the solver
-"""
-function MTK.JuMPDynamicOptProblem(sys::System, u0map, tspan, pmap;
+function MTK.JuMPDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
         dt = nothing,
         steps = nothing,
         guesses = Dict(), kwargs...)
     MTK.process_DynamicOptProblem(JuMPDynamicOptProblem, InfiniteOptModel, sys, u0map, tspan, pmap; dt, steps, guesses, kwargs...)
 end
 
-"""
-    InfiniteOptDynamicOptProblem(sys::System, u0map, tspan, pmap; dt)
-
-Convert System representing an optimal control system into a InfiniteOpt model
-for solving using optimization. Must provide `dt` for determining the length 
-of the interpolation arrays.
-
-Related to `JuMPDynamicOptProblem`, but directly adds the differential equations
-of the system as derivative constraints, rather than using a solver tableau.
-"""
-function MTK.InfiniteOptDynamicOptProblem(sys::System, u0map, tspan, pmap;
+function MTK.InfiniteOptDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
         dt = nothing,
         steps = nothing,
         guesses = Dict(), kwargs...)
@@ -115,6 +89,7 @@ function MTK.InfiniteOptDynamicOptProblem(sys::System, u0map, tspan, pmap;
 end
 
 MTK.lowered_integral(model, expr, lo, hi) = model.tₛ * InfiniteOpt.∫(arg, model.model[:t], lo, hi)
+MTK.lowered_derivative(model, i) = ∂(model.U[i], model.model[:t])
 
 function MTK.process_integral_bounds(model, integral_span, tspan)
     if MTK.is_free_final(model) && isequal(integral_span, tspan)
@@ -131,8 +106,6 @@ function MTK.add_initial_constraints!(m::InfiniteOptModel, u0, u0_idxs, ts)
         fix(m.U[i], u0[i], force = true)
     end
 end
-
-MTK.lowered_derivative(model, i) = ∂(model.U[i], model.model[:t])
 
 function MTK.fixed_t_map(model::InfiniteOptModel, x_ops, c_ops, exprs)
     Dict([[x_ops[i] => model.U[i] for i in 1:length(model.U)];
@@ -191,22 +164,12 @@ function add_solve_constraints!(prob::JuMPDynamicOptProblem, tableau)
     end
 end
 
-"""
-JuMP Collocation solver.
-- solver: a optimization solver such as Ipopt
-- tableau: An ODE RK tableau. Load a tableau by calling a function like `constructRK4` and may be found at https://docs.sciml.ai/DiffEqDevDocs/stable/internals/tableaus/. If this argument is not passed in, the solver will default to Radau second order.
-"""
 struct JuMPCollocation <: AbstractCollocation
     solver::Any
     tableau::DiffEqBase.ODERKTableau
 end
 MTK.JuMPCollocation(solver, tableau = MTK.constructDefault()) = JuMPCollocation(solver, tableau)
 
-"""
-InfiniteOpt Collocation solver.
-- solver: an optimization solver such as Ipopt
-- `derivative_method`: the method used by InfiniteOpt to compute derivatives. The list of possible options can be found at https://infiniteopt.github.io/InfiniteOpt.jl/stable/guide/derivative/. Defaults to FiniteDifference(Backward()).
-"""
 struct InfiniteOptCollocation <: AbstractCollocation
     solver::Any
     derivative_method::InfiniteOpt.AbstractDerivativeMethod

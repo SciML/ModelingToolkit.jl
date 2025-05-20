@@ -18,13 +18,78 @@ function Base.show(io::IO, sol::DynamicOptSolution)
     print("\n\nPlease query the model using sol.model, the solution trajectory for the system using sol.sol, or the solution trajectory for the controllers using sol.input_sol.")
 end
 
-function JuMPDynamicOptProblem end
-function InfiniteOptDynamicOptProblem end
-function CasADiDynamicOptProblem end
+"""
+    JuMPDynamicOptProblem(sys::ODESystem, u0, tspan, p; dt, steps, guesses, kwargs...)
 
+Convert an ODESystem representing an optimal control system into a JuMP model
+for solving using optimization. Must provide either `dt`, the timestep between collocation 
+points (which, along with the timespan, determines the number of points), or directly 
+provide the number of points as `steps`.
+
+To construct the problem, please load InfiniteOpt along with ModelingToolkit.
+"""
+function JuMPDynamicOptProblem end
+"""
+    InfiniteOptDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap; dt)
+
+Convert an ODESystem representing an optimal control system into a InfiniteOpt model
+for solving using optimization. Must provide `dt` for determining the length 
+of the interpolation arrays.
+
+Related to `JuMPDynamicOptProblem`, but directly adds the differential equations
+of the system as derivative constraints, rather than using a solver tableau.
+
+To construct the problem, please load InfiniteOpt along with ModelingToolkit.
+"""
+function InfiniteOptDynamicOptProblem end
+"""
+    CasADiDynamicOptProblem(sys::ODESystem, u0, tspan, p; dt, steps, guesses, kwargs...)
+
+Convert an ODESystem representing an optimal control system into a CasADi model
+for solving using optimization. Must provide either `dt`, the timestep between collocation 
+points (which, along with the timespan, determines the number of points), or directly 
+provide the number of points as `steps`.
+
+To construct the problem, please load CasADi along with ModelingToolkit.
+"""
+function CasADiDynamicOptProblem end
+"""
+    PyomoDynamicOptProblem(sys::ODESystem, u0, tspan, p; dt, steps)
+
+Convert an ODESystem representing an optimal control system into a Pyomo model
+for solving using optimization. Must provide either `dt`, the timestep between collocation 
+points (which, along with the timespan, determines the number of points), or directly 
+provide the number of points as `steps`.
+
+To construct the problem, please load Pyomo along with ModelingToolkit.
+"""
+function PyomoDynamicOptProblem end
+
+### Collocations
+"""
+JuMP Collocation solver.
+- solver: a optimization solver such as Ipopt
+- tableau: An ODE RK tableau. Load a tableau by calling a function like `constructRK4` and may be found at https://docs.sciml.ai/DiffEqDevDocs/stable/internals/tableaus/. If this argument is not passed in, the solver will default to Radau second order.
+"""
 function JuMPCollocation end
+"""
+InfiniteOpt Collocation solver.
+- solver: an optimization solver such as Ipopt
+- `derivative_method`: the method used by InfiniteOpt to compute derivatives. The list of possible options can be found at https://infiniteopt.github.io/InfiniteOpt.jl/stable/guide/derivative/. Defaults to FiniteDifference(Backward()).
+"""
 function InfiniteOptCollocation end
+"""
+CasADi Collocation solver.
+- solver: an optimization solver such as Ipopt. Should be given as a string or symbol in all lowercase, e.g. "ipopt"
+- tableau: An ODE RK tableau. Load a tableau by calling a function like `constructRK4` and may be found at https://docs.sciml.ai/DiffEqDevDocs/stable/internals/tableaus/. If this argument is not passed in, the solver will default to Radau second order.
+"""
 function CasADiCollocation end
+"""
+Pyomo Collocation solver.
+- solver: an optimization solver such as Ipopt. Should be given as a string or symbol in all lowercase, e.g. "ipopt"
+- derivative_method: a derivative method from Pyomo. The choices here are ForwardEuler, BackwardEuler, MidpointEuler, LagrangeRadau, or LagrangeLegendre. The last two should additionally have a number indicating the number of collocation points per timestep, e.g. PyomoCollocation("ipopt", LagrangeRadau(3)). Defaults to LagrangeRadau(5).
+"""
+function PyomoCollocation end
 
 function warn_overdetermined(sys, u0map)
     cstrs = constraints(sys)
@@ -243,7 +308,6 @@ function add_cost_function!(model, sys, tspan, pmap)
     jcosts = substitute_model_vars(model, sys, jcosts, tspan)
     jcosts = substitute_params(pmap, jcosts)
     jcosts = substitute_integral(model, jcosts, tspan)
-
     set_objective!(model, consolidate(jcosts))
 end
 
@@ -316,7 +380,7 @@ function add_equational_constraints!(model, sys, pmap, tspan)
     alg_eqs = substitute_model_vars(model, sys, alg_equations(sys), tspan)
     alg_eqs = substitute_params(pmap, alg_eqs)
     for eq in alg_eqs
-        add_constraint!(model, eq.lhs ~ eq.rhs * model.tₛ)
+        add_constraint!(model, eq.lhs ~ eq.rhs)
     end
 end
 
