@@ -1058,3 +1058,24 @@ end
     @test isequal(constrs[2], -4 + ex.y ≲ 0)
     @test ModelingToolkit.get_consolidate(ex)([1, 2]) ≈ 1 + log(2)
 end
+
+module NoUsingMTK  # From #3640
+using ModelingToolkit: @mtkmodel, @variables, @parameters, t_nounits as t
+
+@mtkmodel MyModel begin
+    @variables begin
+        x(t)
+        y(t)
+    end
+    @parameters begin
+        a
+    end
+    @equations begin
+        y ~ a * x
+    end
+end
+end
+
+@testset "Model can be defined even without `using MTK` (#3640)" begin
+    @test NoUsingMTK.MyModel(; name=:foo) isa ModelingToolkit.AbstractSystem  # just test that it ran fine
+end
