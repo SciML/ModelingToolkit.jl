@@ -6,6 +6,7 @@ using UnPack
 using ModelingToolkit: t_nounits as t, D_nounits as D, default_toterm
 using Symbolics: unwrap
 using DataInterpolations
+using OrdinaryDiffEq, NonlinearSolve, StochasticDiffEq
 const ST = StructuralTransformations
 
 # Define some variables
@@ -384,5 +385,54 @@ end
         end
 
         @test D(sys.k(t)) in vs
+    end
+end
+
+@testset "Don't rely on metadata" begin
+    @testset "ODESystem" begin
+        @variables x(t) p
+        @parameters y(t) q
+        @mtkbuild sys = System([D(x) ~ x * q, x^2 + y^2 ~ p], t, [x, y],
+            [p, q]; initialization_eqs = [p + q ~ 3],
+            defaults = [p => missing], guesses = [p => 1.0, y => 1.0])
+        @test length(equations(sys)) == 2
+        @test length(parameters(sys)) == 2
+        prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [q => 2.0])
+        integ = init(prob, Rodas5P(); abstol = 1e-10, reltol = 1e-8)
+        @test integ.ps[p]≈1.0 atol=1e-6
+        @test integ[y]≈0.0 atol=1e-5
+    end
+
+    @testset "NonlinearSystem" begin
+        @variables x p
+        @parameters y q
+        @mtkbuild sys = System([0 ~ p * x + y, x^3 + y^3 ~ q], [x, y],
+            [p, q]; initialization_eqs = [p ~ q + 1],
+            guesses = [p => 1.0], defaults = [p => missing])
+        @test length(equations(sys)) == length(unknowns(sys)) == 1
+        @test length(observed(sys)) == 1
+        @test observed(sys)[1].lhs in Set([x, y])
+        @test length(parameters(sys)) == 2
+        prob = NonlinearProblem(sys, [x => 1.0, y => 1.0], [q => 1.0])
+        integ = init(prob, NewtonRaphson())
+        @test prob.ps[p] ≈ 2.0
+    end
+
+    @testset "SDESystem" begin
+        @variables x(t) p a
+        @parameters y(t) q b
+        @brownian c
+        @mtkbuild sys = System([D(x) ~ x + q * a, D(y) ~ y + p * b + c], t, [x, y],
+            [p, q], [a, b, c]; initialization_eqs = [p + q ~ 4],
+            guesses = [p => 1.0], defaults = [p => missing])
+        @test length(equations(sys)) == 2
+        @test issetequal(unknowns(sys), [x, y])
+        @test issetequal(parameters(sys), [p, q])
+        @test isempty(brownians(sys))
+        neqs = ModelingToolkit.get_noise_eqs(sys)
+        @test issetequal(sum.(eachrow(neqs)), [q, 1 + p])
+        prob = SDEProblem(sys, [x => 1.0, y => 1.0], (0.0, 1.0), [q => 1.0])
+        integ = init(prob, ImplicitEM())
+        @test integ.ps[p] ≈ 3.0
     end
 end
