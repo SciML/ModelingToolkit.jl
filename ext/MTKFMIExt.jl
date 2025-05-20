@@ -261,7 +261,7 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
 
         # use `ImperativeAffect` for instance management here
         cb_observed = (; inputs = __mtk_internal_x, params = copy(params),
-            t, wrapper, dt = communication_step_size)
+            t, wrapper)
         cb_modified = (;)
         # modify the outputs if present
         if symbolic_type(__mtk_internal_o) != NotSymbolic()
@@ -272,11 +272,12 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
             cb_modified = (cb_modified..., states = __mtk_internal_u)
         end
         initialize_affect = MTK.ImperativeAffect(fmiCSInitialize!; observed = cb_observed,
-            modified = cb_modified, ctx = _functor)
+            modified = cb_modified, ctx = (_functor, communication_step_size))
         finalize_affect = MTK.FunctionalAffect(fmiFinalize!, [], [wrapper], [])
         # the callback affect performs the stepping
         step_affect = MTK.ImperativeAffect(
-            fmiCSStep!; observed = cb_observed, modified = cb_modified, ctx = _functor)
+            fmiCSStep!; observed = cb_observed, modified = cb_modified,
+            ctx = (_functor, communication_step_size))
         instance_management_callback = MTK.SymbolicDiscreteCallback(
             communication_step_size, step_affect; initialize = initialize_affect,
             finalize = finalize_affect, reinitializealg = reinitializealg
@@ -775,7 +776,8 @@ the value being the output vector if the FMU has output variables. `o` should co
 
 Initializes the FMU. Only for use with CoSimulation FMUs.
 """
-function fmiCSInitialize!(m, o, ctx::FMI2CSFunctor, integrator)
+function fmiCSInitialize!(m, o, ctx::Tuple{FMI2CSFunctor, Vararg}, integrator)
+    functor, dt = ctx
     states = isdefined(m, :states) ? m.states : ()
     inputs = o.inputs
     params = o.params
@@ -787,10 +789,10 @@ function fmiCSInitialize!(m, o, ctx::FMI2CSFunctor, integrator)
 
     instance = get_instance_CS!(wrapper, states, inputs, params, t)
     if isdefined(m, :states)
-        @statuscheck FMI.fmi2GetReal!(instance, ctx.state_value_references, m.states)
+        @statuscheck FMI.fmi2GetReal!(instance, functor.state_value_references, m.states)
     end
     if isdefined(m, :outputs)
-        @statuscheck FMI.fmi2GetReal!(instance, ctx.output_value_references, m.outputs)
+        @statuscheck FMI.fmi2GetReal!(instance, functor.output_value_references, m.outputs)
     end
 
     return m
@@ -804,13 +806,13 @@ periodically to communicte with the CoSimulation FMU. Has the same requirements 
 `fmiCSInitialize!` for `m` and `o`, with the addition that `o` should have a key
 `:dt` with the value being the communication step size.
 """
-function fmiCSStep!(m, o, ctx::FMI2CSFunctor, integrator)
+function fmiCSStep!(m, o, ctx::Tuple{FMI2CSFunctor, Vararg}, integrator)
+    functor, dt = ctx
     wrapper = o.wrapper
     states = isdefined(m, :states) ? m.states : ()
     inputs = o.inputs
     params = o.params
     t = o.t
-    dt = o.dt
 
     instance = get_instance_CS!(wrapper, states, inputs, params, integrator.t)
     if !isempty(inputs)
@@ -820,10 +822,10 @@ function fmiCSStep!(m, o, ctx::FMI2CSFunctor, integrator)
     @statuscheck FMI.fmi2DoStep(instance, integrator.t - dt, dt, FMI.fmi2True)
 
     if isdefined(m, :states)
-        @statuscheck FMI.fmi2GetReal!(instance, ctx.state_value_references, m.states)
+        @statuscheck FMI.fmi2GetReal!(instance, functor.state_value_references, m.states)
     end
     if isdefined(m, :outputs)
-        @statuscheck FMI.fmi2GetReal!(instance, ctx.output_value_references, m.outputs)
+        @statuscheck FMI.fmi2GetReal!(instance, functor.output_value_references, m.outputs)
     end
 
     return m
@@ -874,7 +876,8 @@ end
 """
     $(TYPEDSIGNATURES)
 """
-function fmiCSInitialize!(m, o, ctx::FMI3CSFunctor, integrator)
+function fmiCSInitialize!(m, o, ctx::Tuple{FMI3CSFunctor, Vararg}, integrator)
+    functor, dt = ctx
     states = isdefined(m, :states) ? m.states : ()
     inputs = o.inputs
     params = o.params
@@ -885,10 +888,11 @@ function fmiCSInitialize!(m, o, ctx::FMI3CSFunctor, integrator)
     end
     instance = get_instance_CS!(wrapper, states, inputs, params, t)
     if isdefined(m, :states)
-        @statuscheck FMI.fmi3GetFloat64!(instance, ctx.state_value_references, m.states)
+        @statuscheck FMI.fmi3GetFloat64!(instance, functor.state_value_references, m.states)
     end
     if isdefined(m, :outputs)
-        @statuscheck FMI.fmi3GetFloat64!(instance, ctx.output_value_references, m.outputs)
+        @statuscheck FMI.fmi3GetFloat64!(
+            instance, functor.output_value_references, m.outputs)
     end
 
     return m
@@ -897,13 +901,13 @@ end
 """
     $(TYPEDSIGNATURES)
 """
-function fmiCSStep!(m, o, ctx::FMI3CSFunctor, integrator)
+function fmiCSStep!(m, o, ctx::Tuple{FMI3CSFunctor, Vararg}, integrator)
+    functor, dt = ctx
     wrapper = o.wrapper
     states = isdefined(m, :states) ? m.states : ()
     inputs = o.inputs
     params = o.params
     t = o.t
-    dt = o.dt
 
     instance = get_instance_CS!(wrapper, states, inputs, params, integrator.t)
     if !isempty(inputs)
@@ -921,10 +925,11 @@ function fmiCSStep!(m, o, ctx::FMI3CSFunctor, integrator)
     @assert earlyReturn[] == FMI.fmi3False
 
     if isdefined(m, :states)
-        @statuscheck FMI.fmi3GetFloat64!(instance, ctx.state_value_references, m.states)
+        @statuscheck FMI.fmi3GetFloat64!(instance, functor.state_value_references, m.states)
     end
     if isdefined(m, :outputs)
-        @statuscheck FMI.fmi3GetFloat64!(instance, ctx.output_value_references, m.outputs)
+        @statuscheck FMI.fmi3GetFloat64!(
+            instance, functor.output_value_references, m.outputs)
     end
 
     return m
