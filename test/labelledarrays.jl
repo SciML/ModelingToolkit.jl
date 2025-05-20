@@ -14,7 +14,7 @@ eqs = [D(x) ~ σ * (y - x),
 
 @named de = System(eqs, t)
 de = complete(de)
-ff = ODEFunction(de, [x, y, z], [σ, ρ, β], jac = true)
+ff = ODEFunction(de; jac = true)
 
 a = @SVector [1.0, 2.0, 3.0]
 b = SLVector(x = 1.0, y = 2.0, z = 3.0)
