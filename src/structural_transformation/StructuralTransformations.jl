@@ -40,6 +40,7 @@ using ModelingToolkit: algeqs, EquationsView,
                        dervars_range, diffvars_range, algvars_range,
                        DiffGraph, complete!,
                        get_fullvars, system_subset
+using SymbolicIndexingInterface: symbolic_type, ArraySymbolic
 
 using ModelingToolkit.DiffEqBase
 using ModelingToolkit.StaticArrays
