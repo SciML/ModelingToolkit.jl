@@ -138,9 +138,9 @@ end
         activate_extensions_env()
         @safetestset "Dynamic Optimization Collocation Solvers" include("extensions/dynamic_optimization.jl")
         @safetestset "HomotopyContinuation Extension Test" include("extensions/homotopy_continuation.jl")
-        @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
         @safetestset "LabelledArrays Test" include("labelledarrays.jl")
         @safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl")
         @safetestset "InfiniteOpt Extension Test" include("extensions/test_infiniteopt.jl")
+        @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
     end
 end
