@@ -233,8 +233,7 @@ end
     L(t), [unit = u"m"]
     L_out(t), [unit = u"1"]
 end
-@test to_m in ModelingToolkit.vars(ModelingToolkit.fold_constants(Symbolics.unwrap(L_out *
-                                                                                   -to_m)))
+@test to_m in ModelingToolkit.vars(Symbolics.unwrap(L_out * -to_m))
 
 # test units for registered functions
 let

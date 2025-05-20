@@ -2540,18 +2540,6 @@ function debug_system(
     return sys
 end
 
-function eliminate_constants(sys::AbstractSystem)
-    if has_eqs(sys)
-        eqs = get_eqs(sys)
-        eq_cs = collect_constants(eqs)
-        if !isempty(eq_cs)
-            new_eqs = eliminate_constants(eqs, eq_cs)
-            @set! sys.eqs = new_eqs
-        end
-    end
-    return sys
-end
-
 @latexrecipe function f(sys::AbstractSystem)
     return latexify(equations(sys))
 end

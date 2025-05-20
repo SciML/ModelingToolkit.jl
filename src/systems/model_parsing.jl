@@ -53,7 +53,6 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     end
     exprs = Expr(:block)
     dict = Dict{Symbol, Any}(
-        :constants => Dict{Symbol, Dict}(),
         :defaults => Dict{Symbol, Any}(),
         :kwargs => Dict{Symbol, Dict}(),
         :structural_parameters => Dict{Symbol, Dict}()
@@ -125,7 +124,7 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     description = get(dict, :description, "")
 
     @inline pop_structure_dict!.(
-        Ref(dict), [:constants, :defaults, :kwargs, :structural_parameters])
+        Ref(dict), [:defaults, :kwargs, :structural_parameters])
 
     sys = :($type($(flatten_equations)(equations), $iv, variables, parameters;
         name, description = $description, systems, gui_metadata = $gui_metadata,
@@ -320,6 +319,10 @@ Base.@nospecializeinfer function parse_variable_def!(
                 Meta.isexpr(a, :call) && assert_unique_independent_var(dict, a.args[end])
                 var = :($varname = $first(@parameters ($a[$(indices...)]::$type = $varval),
                 $meta_val))
+            elseif varclass == :constants
+                Meta.isexpr(a, :call) && assert_unique_independent_var(dict, a.args[end])
+                var = :($varname = $first(@constants ($a[$(indices...)]::$type = $varval),
+                $meta_val))
             else
                 Meta.isexpr(a, :call) ||
                     throw("$a is not a variable of the independent variable")
@@ -351,6 +354,12 @@ Base.@nospecializeinfer function parse_variable_def!(
                     var = :($varname = $varname === $NO_VALUE ? $val : $varname;
                     $varname = $first(@parameters ($a[$(indices...)]::$type = $varval),
                     $(def_n_meta...)))
+                elseif varclass == :constants
+                    Meta.isexpr(a, :call) &&
+                        assert_unique_independent_var(dict, a.args[end])
+                    var = :($varname = $varname === $NO_VALUE ? $val : $varname;
+                    $varname = $first(@constants ($a[$(indices...)]::$type = $varval),
+                    $(def_n_meta...)))
                 else
                     Meta.isexpr(a, :call) ||
                         throw("$a is not a variable of the independent variable")
@@ -366,6 +375,11 @@ Base.@nospecializeinfer function parse_variable_def!(
                         assert_unique_independent_var(dict, a.args[end])
                     var = :($varname = $varname === $NO_VALUE ? $def_n_meta : $varname;
                     $varname = $first(@parameters $a[$(indices...)]::$type = $varname))
+                elseif varclass == :constants
+                    Meta.isexpr(a, :call) &&
+                        assert_unique_independent_var(dict, a.args[end])
+                    var = :($varname = $varname === $NO_VALUE ? $def_n_meta : $varname;
+                    $varname = $first(@constants $a[$(indices...)]::$type = $varname))
                 else
                     Meta.isexpr(a, :call) ||
                         throw("$a is not a variable of the independent variable")
@@ -393,6 +407,9 @@ Base.@nospecializeinfer function parse_variable_def!(
             if varclass == :parameters
                 Meta.isexpr(a, :call) && assert_unique_independent_var(dict, a.args[end])
                 var = :($varname = $first(@parameters $a[$(indices...)]::$type = $varname))
+            elseif varclass == :constants
+                Meta.isexpr(a, :call) && assert_unique_independent_var(dict, a.args[end])
+                var = :($varname = $first(@constants $a[$(indices...)]::$type = $varname))
             elseif varclass == :variables
                 Meta.isexpr(a, :call) ||
                     throw("$a is not a variable of the independent variable")
@@ -453,6 +470,8 @@ function generate_var(a, varclass; type = Real)
     var = Symbolics.variable(a; T = type)
     if varclass == :parameters
         var = toparam(var)
+    elseif varclass == :constants
+        var = toconstant(var)
     elseif varclass == :independent_variables
         var = toiv(var)
     end
@@ -513,6 +532,8 @@ function generate_var!(dict, a, b, varclass, mod;
     end
     if varclass == :parameters
         var = toparam(var)
+    elseif varclass == :constants
+        var = toconstant(var)
     end
     var
 end
@@ -622,7 +643,7 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps, c_evts, d_evts,
     elseif mname == Symbol("@equations")
         parse_equations!(exprs, eqs, dict, body)
     elseif mname == Symbol("@constants")
-        parse_constants!(exprs, dict, body, mod)
+        parse_variables!(exprs, ps, dict, mod, body, :constants, kwargs, where_types)
     elseif mname == Symbol("@continuous_events")
         parse_continuous_events!(c_evts, dict, body)
     elseif mname == Symbol("@discrete_events")
@@ -640,49 +661,6 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps, c_evts, d_evts,
         parse_consolidate!(body, dict)
     else
         error("$mname is not handled.")
-    end
-end
-
-function parse_constants!(exprs, dict, body, mod)
-    Base.remove_linenums!(body)
-    for arg in body.args
-        MLStyle.@match arg begin
-            Expr(:(=), Expr(:(::), a, type), Expr(:tuple, b, metadata)) || Expr(:(=), Expr(:(::), a, type), b) => begin
-                type = getfield(mod, type)
-                b = _type_check!(get_var(mod, b), a, type, :constants)
-                push!(exprs,
-                    :($(Symbolics._parse_vars(
-                        :constants, type, [:($a = $b), metadata], toconstant))))
-                dict[:constants][a] = Dict(:value => b, :type => type)
-                if @isdefined metadata
-                    for data in metadata.args
-                        dict[:constants][a][data.args[1]] = data.args[2]
-                    end
-                end
-            end
-            Expr(:(=), a, Expr(:tuple, b, metadata)) => begin
-                push!(exprs,
-                    :($(Symbolics._parse_vars(
-                        :constants, Real, [:($a = $b), metadata], toconstant))))
-                dict[:constants][a] = Dict{Symbol, Any}(:value => get_var(mod, b))
-                for data in metadata.args
-                    dict[:constants][a][data.args[1]] = data.args[2]
-                end
-            end
-            Expr(:(=), a, b) => begin
-                push!(exprs,
-                    :($(Symbolics._parse_vars(
-                        :constants, Real, [:($a = $b)], toconstant))))
-                dict[:constants][a] = Dict(:value => get_var(mod, b))
-            end
-            _ => error("""Malformed constant definition `$arg`. Please use the following syntax:
-                ```
-                @constants begin
-                    var = value, [description = "This is an example constant."]
-                end
-                ```
-            """)
-        end
     end
 end
 
@@ -950,6 +928,7 @@ function handle_conditional_vars!(
         arg, conditional_branch, mod, varclass, kwargs, where_types)
     conditional_dict = Dict(:kwargs => Dict(),
         :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}()],
+        :constants => Any[Dict{Symbol, Dict{Symbol, Any}}()],
         :variables => Any[Dict{Symbol, Dict{Symbol, Any}}()])
     for _arg in arg.args
         name, ex = parse_variable_arg(
@@ -964,7 +943,7 @@ function prune_conditional_dict!(conditional_tuple::Tuple)
     prune_conditional_dict!.(collect(conditional_tuple))
 end
 function prune_conditional_dict!(conditional_dict::Dict)
-    for k in [:parameters, :variables]
+    for k in [:parameters, :variables, :constants]
         length(conditional_dict[k]) == 1 && isempty(first(conditional_dict[k])) &&
             delete!(conditional_dict, k)
     end
@@ -981,7 +960,7 @@ end
 
 function get_conditional_dict!(conditional_dict::Dict, conditional_y_tuple::Dict)
     merge!(conditional_dict[:kwargs], conditional_y_tuple[:kwargs])
-    for key in [:parameters, :variables]
+    for key in [:parameters, :variables, :constants]
         merge!(conditional_dict[key][1], conditional_y_tuple[key][1])
     end
     conditional_dict
@@ -1000,6 +979,7 @@ function push_conditional_dict!(dict, condition, conditional_dict,
     end
     conditional_y_dict = Dict(:kwargs => Dict(),
         :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}()],
+        :constants => Any[Dict{Symbol, Dict{Symbol, Any}}()],
         :variables => Any[Dict{Symbol, Dict{Symbol, Any}}()])
     get_conditional_dict!(conditional_y_dict, conditional_y_tuple)
 

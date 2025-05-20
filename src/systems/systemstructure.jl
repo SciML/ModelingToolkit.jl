@@ -5,7 +5,7 @@ using SymbolicUtils: quick_cancel, maketerm
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           value, InvalidSystemException, isdifferential, _iszero,
-                          isparameter, isconstant,
+                          isparameter,
                           independent_variables, SparseMatrixCLIL, AbstractSystem,
                           equations, isirreducible, input_timedomain, TimeDomain,
                           InferredTimeDomain,
@@ -314,7 +314,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
             _var, _ = var_from_nested_derivative(v)
             any(isequal(_var), ivs) && continue
             if isparameter(_var) ||
-               (iscall(_var) && isparameter(operation(_var)) || isconstant(_var))
+               (iscall(_var) && isparameter(operation(_var)))
                 if is_time_dependent_parameter(_var, iv) &&
                    !haskey(param_derivative_map, Differential(iv)(_var))
                     # Parameter derivatives default to zero - they stay constant
@@ -339,7 +339,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
             _var, _ = var_from_nested_derivative(var)
             any(isequal(_var), ivs) && continue
             if isparameter(_var) ||
-               (iscall(_var) && isparameter(operation(_var)) || isconstant(_var))
+               (iscall(_var) && isparameter(operation(_var)))
                 continue
             end
             varidx = addvar!(var)

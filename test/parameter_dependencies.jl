@@ -296,9 +296,9 @@ end
     j₁ = ConstantRateJump(rate₁, affect₁)
     j₃ = ConstantRateJump(rate₃, affect₃)
     @named js2 = JumpSystem(
-        [j₃], t, [S, I, R], [γ]; parameter_dependencies = [β => 0.01γ])
-    @test isequal(only(parameters(js2)), γ)
-    @test Set(full_parameters(js2)) == Set([γ, β])
+        [j₃], t, [S, I, R], [γ, h]; parameter_dependencies = [β => 0.01γ])
+    @test issetequal(parameters(js2), [γ, h])
+    @test Set(full_parameters(js2)) == Set([γ, β, h])
     js2 = complete(js2)
     tspan = (0.0, 250.0)
     u₀map = [S => 999, I => 1, R => 0]
@@ -310,7 +310,7 @@ end
     @test_nowarn solve(jprob, SSAStepper())
 
     @named js2 = JumpSystem(
-        [j₁, j₃], t, [S, I, R], [γ]; parameter_dependencies = [β => 0.01γ],
+        [j₁, j₃], t, [S, I, R], [γ, h]; parameter_dependencies = [β => 0.01γ],
         discrete_events = [SymbolicDiscreteCallback(
             [10.0] => [γ ~ 0.02], discrete_parameters = [γ])])
     js2 = complete(js2)

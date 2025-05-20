@@ -230,7 +230,7 @@ end
         eqs = [
             v ~ i * R
         ]
-        extend(System(eqs, t, [], []; name = name), oneport)
+        extend(System(eqs, t, [], [R]; name = name), oneport)
     end
     capacitor = Capacitor(; name = :c1, C = 1.0)
     resistor = FixedResistor(; name = :r1)

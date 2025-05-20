@@ -26,13 +26,13 @@ end
 eqs = [0 ~ σ * (y - x) * h,
     0 ~ x * (ρ - z) - y,
     0 ~ x * y - β * z]
-@named ns = System(eqs, [x, y, z], [σ, ρ, β], defaults = Dict(x => 2))
+@named ns = System(eqs, [x, y, z], [σ, ρ, β, h], defaults = Dict(x => 2))
 @test eval(toexpr(ns)) == ns
-test_nlsys_inference("standard", ns, (x, y, z), (σ, ρ, β))
+test_nlsys_inference("standard", ns, (x, y, z), (σ, ρ, β, h))
 @test begin
-    f = generate_rhs(ns, [x, y, z], [σ, ρ, β], expression = Val{false})[2]
+    f = generate_rhs(ns, [x, y, z], [σ, ρ, β, h], expression = Val{false})[2]
     du = [0.0, 0.0, 0.0]
-    f(du, [1, 2, 3], [1, 2, 3])
+    f(du, [1, 2, 3], [1, 2, 3, 1])
     du ≈ [1, -3, -7]
 end
 
@@ -64,9 +64,9 @@ a = y - x
 eqs = [0 ~ σ * a * h,
     0 ~ x * (ρ - z) - y,
     0 ~ x * y - β * z]
-@named ns = System(eqs, [x, y, z], [σ, ρ, β])
+@named ns = System(eqs, [x, y, z], [σ, ρ, β, h])
 ns = complete(ns)
-nlsys_func = generate_rhs(ns, [x, y, z], [σ, ρ, β])
+nlsys_func = generate_rhs(ns, [x, y, z], [σ, ρ, β, h])
 nf = NonlinearFunction(ns)
 jac = calculate_jacobian(ns)
 
@@ -99,7 +99,7 @@ eqs1 = [
     0 ~ x + y - z - u
 ]
 
-lorenz = name -> System(eqs1, [x, y, z, u, F], [σ, ρ, β], name = name)
+lorenz = name -> System(eqs1, [x, y, z, u, F], [σ, ρ, β, h], name = name)
 lorenz1 = lorenz(:lorenz1)
 @test_throws ArgumentError NonlinearProblem(complete(lorenz1), zeros(5), zeros(3))
 lorenz2 = lorenz(:lorenz2)
@@ -132,7 +132,7 @@ sol = solve(prob, FBDF(), reltol = 1e-7, abstol = 1e-7)
 eqs = [0 ~ σ * (y - x),
     0 ~ x * (ρ - z) - y,
     0 ~ x * y - β * z * h]
-@named ns = System(eqs, [x, y, z], [σ, ρ, β])
+@named ns = System(eqs, [x, y, z], [σ, ρ, β, h])
 np = NonlinearProblem(
     complete(ns), [0, 0, 0], [σ => 1, ρ => 2, β => 3], jac = true, sparse = true)
 @test calculate_jacobian(ns, sparse = true) isa SparseMatrixCSC
@@ -214,7 +214,7 @@ testdict = Dict([:test => 1])
     eqs = [0 ~ a * (y - x) * h,
         0 ~ x * (b - z) - y,
         0 ~ x * y - c * z]
-    @named sys = System(eqs, [x, y, z], [a, b, c], defaults = Dict(x => 2.0))
+    @named sys = System(eqs, [x, y, z], [a, b, c, h], defaults = Dict(x => 2.0))
     sys = complete(sys)
     prob = NonlinearProblem(sys, ones(length(unknowns(sys))))
 
