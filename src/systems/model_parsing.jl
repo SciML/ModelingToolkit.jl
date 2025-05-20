@@ -42,8 +42,9 @@ function flatten_equations(eqs::Vector{Union{Equation, Vector{Equation}}})
 end
 
 function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
+    MTK = ModelingToolkit
     if fullname isa Symbol
-        name, type = fullname, :System
+        name, type = fullname, :($MTK.System)
     else
         if fullname.head == :(::)
             name, type = fullname.args
@@ -74,9 +75,9 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     push!(exprs.args, :(parameters = []))
     # We build `System` by default; vectors can't be created for `System` as it is
     # a function.
-    push!(exprs.args, :(systems = ModelingToolkit.AbstractSystem[]))
-    push!(exprs.args, :(equations = Union{Equation, Vector{Equation}}[]))
-    push!(exprs.args, :(defaults = Dict{Num, Union{Number, Symbol, Function}}()))
+    push!(exprs.args, :(systems = $MTK.AbstractSystem[]))
+    push!(exprs.args, :(equations = Union{$MTK.Equation, Vector{$MTK.Equation}}[]))
+    push!(exprs.args, :(defaults = Dict{$MTK.Num, Union{Number, Symbol, Function}}()))
 
     Base.remove_linenums!(expr)
     for arg in expr.args
