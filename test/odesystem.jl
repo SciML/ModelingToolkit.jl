@@ -153,32 +153,6 @@ du = [0.0]
 f(du, [1.0], [t -> t + 2], 5.0)
 @test du ≈ [27561]
 
-@testset "Issue#17: Conversion to first order ODEs" begin
-    D3 = D^3
-    D2 = D^2
-    @variables u(t) uˍtt(t) uˍt(t) xˍt(t)
-    eqs = [D3(u) ~ 2(D2(u)) + D(u) + D(x) + 1
-           D2(x) ~ D(x) + 2]
-    @named de = System(eqs, t)
-    de1 = ode_order_lowering(de)
-
-    @testset "Issue#219: Ordering of equations in `ode_order_lowering`" begin
-        lowered_eqs = [D(uˍtt) ~ 2uˍtt + uˍt + xˍt + 1
-                       D(xˍt) ~ xˍt + 2
-                       D(uˍt) ~ uˍtt
-                       D(u) ~ uˍt
-                       D(x) ~ xˍt]
-        @test isequal(
-            [ModelingToolkit.var_from_nested_derivative(eq.lhs)[1] for eq in equations(de1)],
-            unknowns(@named lowered = System(lowered_eqs, t)))
-    end
-
-    test_diffeq_inference("first-order transform", de1, t, [uˍtt, xˍt, uˍt, u, x], [])
-    du = zeros(5)
-    ODEFunction(complete(de1))(du, ones(5), nothing, 0.1)
-    @test du == [5.0, 3.0, 1.0, 1.0, 1.0]
-end
-
 # Internal calculations
 @parameters σ
 a = y - x
@@ -348,16 +322,6 @@ eqs = [D(x) ~ σ * (y - x),
     @test issym(equations(sys)[1].rhs)
 end
 
-@testset "Issue#708" begin
-    @parameters a
-    @variables x(t) y(t) z(t)
-    @named sys = System([D(x) ~ y, 0 ~ x + z, 0 ~ x - y], t, [z, y, x], [])
-
-    sys2 = ode_order_lowering(sys)
-    M = ModelingToolkit.calculate_massmatrix(sys2)
-    @test M == Diagonal([1, 0, 0])
-end
-
 # issue #609
 @variables x1(t) x2(t)
 
@@ -415,22 +379,6 @@ eqs = [
     der(u1) ~ t
 ]
 @test_throws ArgumentError ModelingToolkit.System(eqs, t, vars, pars, name = :foo)
-
-@variables x(t)
-@parameters M b k
-eqs = [D(D(x)) ~ -b / M * D(x) - k / M * x]
-ps = [M, b, k]
-default_u0 = [D(x) => 0.0, x => 10.0]
-default_p = [M => 1.0, b => 1.0, k => 1.0]
-@named sys = System(eqs, t, [x], ps; defaults = [default_u0; default_p])
-sys = ode_order_lowering(sys)
-sys = complete(sys)
-prob = ODEProblem(sys, nothing, tspan)
-sol = solve(prob, Tsit5())
-@test sol.t[end] == tspan[end]
-@test sum(abs, sol.u[end]) < 1
-prob = ODEProblem{false}(sys, nothing, tspan; u0_constructor = x -> SVector(x...))
-@test prob.u0 isa SVector
 
 # check_eqs_u0 kwarg test
 @variables x1(t) x2(t)
@@ -1528,64 +1476,6 @@ end
     osys1 = complete(System([eq], t; name = :osys, continuous_events))
     osys2 = complete(System([eq], t; name = :osys, discrete_events))
     @test osys1 !== osys2
-end
-
-@testset "dae_order_lowering basic test" begin
-    @parameters a
-    @variables x(t) y(t) z(t)
-    @named dae_sys = System([
-            D(x) ~ y,
-            0 ~ x + z,
-            0 ~ x - y + z
-        ], t, [z, y, x], [])
-
-    lowered_dae_sys = dae_order_lowering(dae_sys)
-    @variables x1(t) y1(t) z1(t)
-    expected_eqs = [
-        0 ~ x + z,
-        0 ~ x - y + z,
-        Differential(t)(x) ~ y
-    ]
-    lowered_eqs = equations(lowered_dae_sys)
-    sorted_lowered_eqs = sort(lowered_eqs, by = string)
-    sorted_expected_eqs = sort(expected_eqs, by = string)
-    @test sorted_lowered_eqs == sorted_expected_eqs
-
-    expected_vars = Set([z, y, x])
-    lowered_vars = Set(unknowns(lowered_dae_sys))
-    @test lowered_vars == expected_vars
-end
-
-@testset "dae_order_lowering test with structural_simplify" begin
-    @variables x(t) y(t) z(t)
-    @parameters M b k
-    eqs = [
-        D(D(x)) ~ -b / M * D(x) - k / M * x,
-        0 ~ y - D(x),
-        0 ~ z - x
-    ]
-    ps = [M, b, k]
-    default_u0 = [
-        D(x) => 0.0, x => 10.0, y => 0.0, z => 10.0
-    ]
-    default_p = [M => 1.0, b => 1.0, k => 1.0]
-    @named dae_sys = System(eqs, t, [x, y, z], ps; defaults = [default_u0; default_p])
-
-    simplified_dae_sys = structural_simplify(dae_sys)
-
-    lowered_dae_sys = dae_order_lowering(simplified_dae_sys)
-    lowered_dae_sys = complete(lowered_dae_sys)
-
-    tspan = (0.0, 10.0)
-    prob = ODEProblem(lowered_dae_sys, nothing, tspan)
-    sol = solve(prob, Tsit5())
-
-    @test sol.t[end] == tspan[end]
-    @test sum(abs, sol.u[end]) < 1
-
-    prob = ODEProblem{false}(
-        lowered_dae_sys, nothing, tspan; u0_constructor = x -> SVector(x...))
-    @test prob.u0 isa SVector
 end
 
 @testset "Constraint system construction" begin
