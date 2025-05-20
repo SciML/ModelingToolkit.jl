@@ -5,6 +5,7 @@ module MTKBifurcationKitExt
 # Imports
 using ModelingToolkit, Setfield
 import BifurcationKit
+using SymbolicIndexingInterface: is_time_dependent
 
 ### Observable Plotting Handling ###
 
@@ -94,6 +95,14 @@ function BifurcationKit.BifurcationProblem(nsys::System,
     if !ModelingToolkit.iscomplete(nsys)
         error("A completed `System` is required. Call `complete` or `structural_simplify` on the system before creating a `BifurcationProblem`")
     end
+    if is_time_dependent(nsys)
+        nsys = System([0 ~ eq.rhs for eq in full_equations(nsys)],
+            unknowns(nsys),
+            parameters(nsys);
+            observed = observed(nsys),
+            name = nameof(nsys))
+        nsys = complete(nsys)
+    end
     @set! nsys.index_cache = nothing # force usage of a parameter vector instead of `MTKParameters`
     # Creates F and J functions.
     ofun = NonlinearFunction(nsys; jac = jac)
@@ -141,19 +150,6 @@ function BifurcationKit.BifurcationProblem(nsys::System,
         J = J,
         inplace = true,
         kwargs...)
-end
-
-# When input is a ODESystem.
-function BifurcationKit.BifurcationProblem(osys::System, args...; kwargs...)
-    if !ModelingToolkit.iscomplete(osys)
-        error("A completed `ODESystem` is required. Call `complete` or `structural_simplify` on the system before creating a `BifurcationProblem`")
-    end
-    nsys = System([0 ~ eq.rhs for eq in full_equations(osys)],
-        unknowns(osys),
-        parameters(osys);
-        observed = observed(osys),
-        name = nameof(osys))
-    return BifurcationKit.BifurcationProblem(complete(nsys), args...; kwargs...)
 end
 
 end # module
