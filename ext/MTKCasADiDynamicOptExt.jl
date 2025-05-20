@@ -61,23 +61,7 @@ function (M::MXLinearInterpolation)(τ)
     end
 end
 
-"""
-    CasADiDynamicOptProblem(sys::System, u0, tspan, p; dt, steps)
-
-Convert an System representing an optimal control system into a CasADi model
-for solving using optimization. Must provide either `dt`, the timestep between collocation 
-points (which, along with the timespan, determines the number of points), or directly 
-provide the number of points as `steps`.
-
-The optimization variables:
-- a vector-of-vectors U representing the unknowns as an interpolation array
-- a vector-of-vectors V representing the controls as an interpolation array
-
-The constraints are:
-- The set of user constraints passed to the System via `constraints`
-- The solver constraints that encode the time-stepping used by the solver
-"""
-function MTK.CasADiDynamicOptProblem(sys::System, u0map, tspan, pmap;
+function MTK.CasADiDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
         dt = nothing,
         steps = nothing,
         guesses = Dict(), kwargs...)
@@ -212,15 +196,11 @@ function add_solve_constraints!(prob::CasADiDynamicOptProblem, tableau)
     solver_opti
 end
 
-"""
-CasADi Collocation solver.
-- solver: an optimization solver such as Ipopt. Should be given as a string or symbol in all lowercase, e.g. "ipopt"
-- tableau: An ODE RK tableau. Load a tableau by calling a function like `constructRK4` and may be found at https://docs.sciml.ai/DiffEqDevDocs/stable/internals/tableaus/. If this argument is not passed in, the solver will default to Radau second order.
-"""
 struct CasADiCollocation <: AbstractCollocation
     solver::Union{String, Symbol}
     tableau::DiffEqBase.ODERKTableau
 end
+
 MTK.CasADiCollocation(solver, tableau = MTK.constructDefault()) = CasADiCollocation(solver, tableau)
 
 function MTK.prepare_and_optimize!(prob::CasADiDynamicOptProblem, solver::CasADiCollocation; verbose = false, solver_options = Dict(), plugin_options = Dict(), kwargs...)
