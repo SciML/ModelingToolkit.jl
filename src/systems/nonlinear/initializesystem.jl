@@ -214,7 +214,15 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     initialization_eqs = filter(initialization_eqs) do eq
         empty!(vs)
         vars!(vs, eq; op = Initial)
-        non_params = filter(!isparameter, vs)
+        allpars = full_parameters(sys)
+        for p in allpars
+            if symbolic_type(p) == ArraySymbolic() &&
+               Symbolics.shape(p) != Symbolics.Unknown()
+                append!(allpars, Symbolics.scalarize(p))
+            end
+        end
+        allpars = Set(allpars)
+        non_params = filter(!in(allpars), vs)
         # error if non-parameters are present in the initialization equations
         if !isempty(non_params)
             throw(UnknownsInTimeIndependentInitializationError(eq, non_params))
