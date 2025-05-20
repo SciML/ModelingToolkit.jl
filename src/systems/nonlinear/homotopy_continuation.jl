@@ -394,7 +394,6 @@ function transform_system(sys::System, transformation::PolynomialTransformation;
     @set! sys2.unknowns = new_dvs
     # remove observed equations to avoid adding them in codegen
     @set! sys2.observed = Equation[]
-    @set! sys2.substitutions = nothing
     return PolynomialTransformationResult(sys2, denoms)
 end
 
