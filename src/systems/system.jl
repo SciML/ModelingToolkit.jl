@@ -107,7 +107,9 @@ struct System <: AbstractSystem
 end
 
 function default_consolidate(costs, subcosts)
-    return sum(costs; init = 0.0) + sum(subcosts; init = 0.0)
+    # `reduce` instead of `sum` because the rrule for `sum` doesn't
+    # handle the `init` kwarg.
+    return reduce(+, costs; init = 0.0) + reduce(+, subcosts; init = 0.0)
 end
 
 function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
