@@ -197,13 +197,6 @@ end
 
 const MTKPARAMETERS_ARG = Sym{Vector{Vector}}(:___mtkparameters___)
 
-mutable struct Substitutions
-    subs::Vector{Equation}
-    deps::Vector{Vector{Int}}
-    subed_eqs::Union{Nothing, Vector{Equation}}
-end
-Substitutions(subs, deps) = Substitutions(subs, deps, nothing)
-
 Base.nameof(sys::AbstractSystem) = getfield(sys, :name)
 description(sys::AbstractSystem) = has_description(sys) ? get_description(sys) : ""
 

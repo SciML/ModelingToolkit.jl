@@ -23,7 +23,6 @@ using ModelingToolkit: System, AbstractSystem, var_from_nested_derivative, Diffe
                        ExtraVariablesSystemException,
                        vars!,
                        IncrementalCycleTracker, add_edge_checked!, topological_sort,
-                       invalidate_cache!, Substitutions, get_or_construct_tearing_state,
                        filter_kwargs, lower_varname_with_unit,
                        lower_shift_varname_with_unit, setio, SparseMatrixCLIL,
                        get_fullvars, has_equations, observed,
