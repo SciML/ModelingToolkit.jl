@@ -73,7 +73,7 @@ function linearization_function(sys::AbstractSystem, inputs,
     end
 
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(
-        sys, op, (nothing, nothing), p; allow_incomplete = true,
+        sys, merge(op, anydict(p)), (nothing, nothing); allow_incomplete = true,
         algebraic_only = true, guesses)
     u0 = state_values(prob)
 
