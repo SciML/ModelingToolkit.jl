@@ -36,7 +36,7 @@ syss = mtkcompile(sys)
 df = DiscreteFunction(syss)
 # iip
 du = zeros(3)
-u = ModelingToolkit.better_varmap_to_vars(
+u = ModelingToolkit.varmap_to_vars(
     Dict([S(k - 1) => 1, I(k - 1) => 2, R(k - 1) => 3]), unknowns(syss))
 p = MTKParameters(syss, [c, nsteps, δt, β, γ] .=> collect(1:5))
 df.f(du, u, p, 0)
