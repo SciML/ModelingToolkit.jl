@@ -833,7 +833,6 @@ end
 
 for prop in [:eqs
              :tag
-             :noiseeqs # TODO: remove
              :noise_eqs
              :iv
              :unknowns
@@ -844,30 +843,17 @@ for prop in [:eqs
              :name
              :description
              :var_to_name
-             :ctrls
              :defaults
              :guesses
              :observed
-             :tgrad
-             :jac
-             :ctrl_jac
-             :Wfact
-             :Wfact_t
              :systems
-             :structure
-             :op
              :constraints
-             :constraintsystem
-             :controls
-             :loss
              :bcs
              :domain
              :ivs
              :dvs
              :connector_type
-             :connections
              :preface
-             :torn_matching
              :initializesystem
              :initialization_eqs
              :schedule
@@ -875,17 +861,13 @@ for prop in [:eqs
              :metadata
              :gui_metadata
              :is_initializesystem
-             :discrete_subsystems
              :parameter_dependencies
              :assertions
-             :solved_unknowns
-             :split_idxs
              :ignored_connections
              :parent
              :is_dde
              :tstops
              :index_cache
-             :is_scalar_noise
              :isscheduled
              :costs
              :consolidate]

@@ -561,9 +561,6 @@ function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Dif
             collect_vars!(unknowns, parameters, eq, iv; depth, op)
         end
     end
-    if has_op(sys)
-        collect_vars!(unknowns, parameters, objective(sys), iv; depth, op)
-    end
 end
 
 """
