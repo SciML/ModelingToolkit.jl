@@ -27,7 +27,7 @@ This requires that `complete` has been called on the system (usually via
 the default behavior).
 """
 function MTKParameters(
-        sys::AbstractSystem, p, u0 = Dict(); tofloat = false,
+        sys::AbstractSystem, op; tofloat = false,
         t0 = nothing, substitution_limit = 1000, floatT = nothing,
         p_constructor = identity)
     ic = if has_index_cache(sys) && get_index_cache(sys) !== nothing
@@ -40,17 +40,17 @@ function MTKParameters(
 
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
-    u0 = to_varmap(u0, dvs)
-    symbols_to_symbolics!(sys, u0)
-    p = to_varmap(p, ps)
-    symbols_to_symbolics!(sys, p)
+    op = to_varmap(op, ps)
+    symbols_to_symbolics!(sys, op)
     defs = add_toterms(recursive_unwrap(defaults(sys)))
 
-    is_time_dependent(sys) && add_observed!(sys, u0)
-    add_parameter_dependencies!(sys, p)
+    is_time_dependent(sys) && add_observed!(sys, op)
+    add_parameter_dependencies!(sys, op)
 
-    op, missing_unknowns, missing_pars = build_operating_point!(sys,
-        u0, p, defs, dvs, ps)
+    u0map = anydict()
+    pmap = anydict()
+    missing_unknowns, missing_pars = build_operating_point!(sys, op,
+        u0map, pmap, defs, dvs, ps)
 
     if t0 !== nothing
         op[get_iv(sys)] = t0

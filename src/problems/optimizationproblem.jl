@@ -87,13 +87,13 @@ function SciMLBase.OptimizationProblem(sys::System, args...; kwargs...)
 end
 
 function SciMLBase.OptimizationProblem{iip}(
-        sys::System, u0map, parammap = SciMLBase.NullParameters(); lb = nothing,
+        sys::System, op; lb = nothing,
         ub = nothing, check_compatibility = true, expression = Val{false},
         kwargs...) where {iip}
     check_complete(sys, OptimizationProblem)
     check_compatibility && check_compatible_system(OptimizationProblem, sys)
 
-    f, u0, p = process_SciMLProblem(OptimizationFunction{iip}, sys, u0map, parammap;
+    f, u0, p = process_SciMLProblem(OptimizationFunction{iip}, sys, op;
         check_compatibility, tofloat = false, check_length = false, expression, kwargs...)
 
     dvs = unknowns(sys)
@@ -114,7 +114,7 @@ function SciMLBase.OptimizationProblem{iip}(
     end
 
     ps = parameters(sys)
-    defs = merge(defaults(sys), to_varmap(parammap, ps), to_varmap(u0map, dvs))
+    defs = merge(defaults(sys), to_varmap(op, dvs))
     lb = varmap_to_vars(dvs .=> lb, dvs; defaults = defs, tofloat = false)
     ub = varmap_to_vars(dvs .=> ub, dvs; defaults = defs, tofloat = false)
 

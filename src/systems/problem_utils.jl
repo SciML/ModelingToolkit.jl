@@ -540,8 +540,8 @@ Also updates `u0map` and `pmap` in-place to contain all the initial conditions i
 by unknowns and parameters respectively.
 """
 function build_operating_point!(sys::AbstractSystem,
-        u0map::AbstractDict, pmap::AbstractDict, defs::AbstractDict, dvs, ps)
-    op = add_toterms(u0map)
+        op::AbstractDict, u0map::AbstractDict, pmap::AbstractDict, defs::AbstractDict, dvs, ps)
+    add_toterms!(op)
     missing_unknowns = add_fallbacks!(op, dvs, defs)
     for (k, v) in defs
         haskey(op, k) && continue
@@ -594,7 +594,7 @@ function build_operating_point!(sys::AbstractSystem,
         pmap[k] = v
     end
 
-    return op, missing_unknowns, missing_pars
+    return missing_unknowns, missing_pars
 end
 
 """
@@ -1180,8 +1180,8 @@ Keyword arguments:
 - `build_initializeprob`: If `false`, avoids building the initialization problem.
 - `t`: The initial time of the `ODEProblem`. If this is not provided, the initialization
   problem cannot be built.
-- `implicit_dae`: Also build a mapping of derivatives of states to values for implicit DAEs,
-  using `du0map`. Changes the return value of this function to `(f, du0, u0, p)` instead of
+- `implicit_dae`: Also build a mapping of derivatives of states to values for implicit DAEs.
+  Changes the return value of this function to `(f, du0, u0, p)` instead of
   `(f, u0, p)`.
 - `guesses`: The guesses for variables in the system, used as initial values for the
   initialization problem.
@@ -1197,7 +1197,6 @@ Keyword arguments:
 - `u0_constructor`: A function to apply to the `u0` value returned from `better_varmap_to_vars`
   to construct the final `u0` value.
 - `p_constructor`: A function to apply to each array buffer created when constructing the parameter object.
-- `du0map`: A map of derivatives to values. See `implicit_dae`.
 - `check_length`: Whether to check the number of equations along with number of unknowns and
   length of `u0` vector for consistency. If `false`, do not check with equations. This is
   forwarded to `check_eqs_u0`
@@ -1220,13 +1219,13 @@ Keyword arguments:
 All other keyword arguments are passed as-is to `constructor`.
 """
 function process_SciMLProblem(
-        constructor, sys::AbstractSystem, u0map, pmap;
+        constructor, sys::AbstractSystem, op;
         build_initializeprob = supports_initialization(sys),
         implicit_dae = false, t = nothing, guesses = AnyDict(),
         warn_initialize_determined = true, initialization_eqs = [],
         eval_expression = false, eval_module = @__MODULE__, fully_determined = nothing,
         check_initialization_units = false, tofloat = true,
-        u0_constructor = identity, p_constructor = identity, du0map = nothing,
+        u0_constructor = identity, p_constructor = identity,
         check_length = true, symbolic_u0 = false, warn_cyclic_dependency = false,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10,
@@ -1240,15 +1239,12 @@ function process_SciMLProblem(
 
     check_array_equations_unknowns(eqs, dvs)
 
-    u0Type = typeof(u0map)
-    pType = typeof(pmap)
+    u0Type = pType = typeof(op)
 
-    u0map = to_varmap(u0map, dvs)
-    symbols_to_symbolics!(sys, u0map)
-    pmap = to_varmap(pmap, parameters(sys))
-    symbols_to_symbolics!(sys, pmap)
+    op = to_varmap(op, dvs)
+    symbols_to_symbolics!(sys, op)
 
-    check_inputmap_keys(sys, u0map, pmap)
+    check_inputmap_keys(sys, op)
 
     defs = add_toterms(recursive_unwrap(defaults(sys)))
     kwargs = NamedTuple(kwargs)
@@ -1259,7 +1255,9 @@ function process_SciMLProblem(
         obs, _ = unhack_observed(observed(sys), Equation[x for x in eqs if x isa Equation])
     end
 
-    op, missing_unknowns, missing_pars = build_operating_point!(sys,
+    u0map = anydict()
+    pmap = anydict()
+    missing_unknowns, missing_pars = build_operating_point!(sys, op,
         u0map, pmap, defs, dvs, ps)
 
     floatT = Bool
@@ -1351,10 +1349,8 @@ function process_SciMLProblem(
         p = p_constructor(better_varmap_to_vars(op, ps; tofloat, container_type = pType))
     end
 
-    if implicit_dae && du0map !== nothing
+    if implicit_dae
         ddvs = map(Differential(iv), dvs)
-        du0map = to_varmap(du0map, ddvs)
-        merge!(op, du0map)
         du0 = varmap_to_vars(op, ddvs; toterm = identity,
             tofloat)
         kwargs = merge(kwargs, (; ddvs))
@@ -1388,22 +1384,17 @@ end
 
 # Check that the keys of a u0map or pmap are valid
 # (i.e. are symbolic keys, and are defined for the system.)
-function check_inputmap_keys(sys, u0map, pmap)
+function check_inputmap_keys(sys, op)
     badvarkeys = Any[]
-    for k in keys(u0map)
+    for k in keys(op)
         if symbolic_type(k) === NotSymbolic()
             push!(badvarkeys, k)
         end
     end
 
-    badparamkeys = Any[]
-    for k in keys(pmap)
-        if symbolic_type(k) === NotSymbolic()
-            push!(badparamkeys, k)
-        end
+    if !isempty(badvarkeys)
+        throw(InvalidKeyError(collect(badvarkeys)))
     end
-    (isempty(badvarkeys) && isempty(badparamkeys)) ||
-        throw(InvalidKeyError(collect(badvarkeys), collect(badparamkeys)))
 end
 
 const BAD_KEY_MESSAGE = """
@@ -1413,13 +1404,11 @@ const BAD_KEY_MESSAGE = """
 
 struct InvalidKeyError <: Exception
     vars::Any
-    params::Any
 end
 
 function Base.showerror(io::IO, e::InvalidKeyError)
     println(io, BAD_KEY_MESSAGE)
-    println(io, "u0map: $(join(e.vars, ", "))")
-    println(io, "pmap: $(join(e.params, ", "))")
+    println(io, join(e.vars, ", "))
 end
 
 function SciMLBase.detect_cycles(sys::AbstractSystem, varmap::Dict{Any, Any}, vars)
@@ -1566,7 +1555,7 @@ macro fallback_iip_specialize(ex)
     fn_sarr = nothing
     if occursin("Problem", string(fnname_name))
         # args should at least contain an argument for the `u0map`
-        @assert length(args) > 3
+        @assert length(args) > 2
         u0_arg = args[3]
         # should not have a type-annotation
         @assert !Meta.isexpr(u0_arg, :(::))

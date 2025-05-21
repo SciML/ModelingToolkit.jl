@@ -42,14 +42,14 @@
 end
 
 @fallback_iip_specialize function SciMLBase.DDEProblem{iip, spec}(
-        sys::System, u0map, tspan, parammap = SciMLBase.NullParameters();
+        sys::System, op, tspan;
         callback = nothing, check_length = true, cse = true, checkbounds = false,
         eval_expression = false, eval_module = @__MODULE__, check_compatibility = true,
         u0_constructor = identity, expression = Val{false}, kwargs...) where {iip, spec}
     check_complete(sys, DDEProblem)
     check_compatibility && check_compatible_system(DDEProblem, sys)
 
-    f, u0, p = process_SciMLProblem(DDEFunction{iip, spec}, sys, u0map, parammap;
+    f, u0, p = process_SciMLProblem(DDEFunction{iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, check_length, cse, checkbounds,
         eval_expression, eval_module, check_compatibility, symbolic_u0 = true,
         expression, u0_constructor, kwargs...)

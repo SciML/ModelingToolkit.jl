@@ -39,7 +39,7 @@
 end
 
 @fallback_iip_specialize function SciMLBase.DiscreteProblem{iip, spec}(
-        sys::System, u0map, tspan, parammap = SciMLBase.NullParameters();
+        sys::System, op, tspan;
         check_compatibility = true, expression = Val{false}, kwargs...) where {iip, spec}
     check_complete(sys, DiscreteProblem)
     check_compatibility && check_compatible_system(DiscreteProblem, sys)
@@ -47,7 +47,7 @@ end
     dvs = unknowns(sys)
     u0map = to_varmap(u0map, dvs)
     add_toterms!(u0map; replace = true)
-    f, u0, p = process_SciMLProblem(DiscreteFunction{iip, spec}, sys, u0map, parammap;
+    f, u0, p = process_SciMLProblem(DiscreteFunction{iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, check_compatibility, expression,
         kwargs...)
 

@@ -594,7 +594,11 @@ function SciMLBase.remake_initialization_data(
     filter_missing_values!(u0map)
     filter_missing_values!(pmap)
 
-    op, missing_unknowns, missing_pars = build_operating_point!(sys,
+    merge!(u0map, pmap)
+    op = u0map
+    u0map = anydict()
+    pmap = anydict()
+    missing_unknowns, missing_pars = build_operating_point!(sys, op,
         u0map, pmap, defs, dvs, ps)
     floatT = float_type_from_varmap(op)
     u0_constructor = p_constructor = identity

@@ -33,7 +33,9 @@ function SciMLBase.IntervalNonlinearProblem(
     check_compatibility && check_compatible_system(IntervalNonlinearProblem, sys)
 
     u0map = unknowns(sys) .=> uspan[1]
-    f, u0, p = process_SciMLProblem(IntervalNonlinearFunction, sys, u0map, parammap;
+    op = anydict([unknowns(sys)[1] => uspan[1]])
+    merge!(op, to_varmap(parammap, parameters(sys)))
+    f, u0, p = process_SciMLProblem(IntervalNonlinearFunction, sys, op;
         check_compatibility, expression, kwargs...)
 
     kwargs = process_kwargs(sys; kwargs...)

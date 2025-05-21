@@ -65,14 +65,14 @@
 end
 
 @fallback_iip_specialize function SciMLBase.ODEProblem{iip, spec}(
-        sys::System, u0map, tspan, parammap = SciMLBase.NullParameters();
+        sys::System, op, tspan;
         callback = nothing, check_length = true, eval_expression = false,
         expression = Val{false}, eval_module = @__MODULE__, check_compatibility = true,
         kwargs...) where {iip, spec}
     check_complete(sys, ODEProblem)
     check_compatibility && check_compatible_system(ODEProblem, sys)
 
-    f, u0, p = process_SciMLProblem(ODEFunction{iip, spec}, sys, u0map, parammap;
+    f, u0, p = process_SciMLProblem(ODEFunction{iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
         eval_module, expression, check_compatibility, kwargs...)
 
@@ -98,12 +98,12 @@ Generates an SteadyStateProblem from a `System` of ODEs and allows for automatic
 symbolically calculating numerical enhancements.
 """
 @fallback_iip_specialize function DiffEqBase.SteadyStateProblem{iip, spec}(
-        sys::System, u0map, parammap; check_length = true, check_compatibility = true,
+        sys::System, op; check_length = true, check_compatibility = true,
         expression = Val{false}, kwargs...) where {iip, spec}
     check_complete(sys, SteadyStateProblem)
     check_compatibility && check_compatible_system(SteadyStateProblem, sys)
 
-    f, u0, p = process_SciMLProblem(ODEFunction{iip}, sys, u0map, parammap;
+    f, u0, p = process_SciMLProblem(ODEFunction{iip}, sys, op;
         steady_state = true, check_length, check_compatibility, expression,
         force_initialization_time_independent = true, kwargs...)
 

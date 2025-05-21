@@ -119,7 +119,7 @@ initial conditions for the given DAE.
 
     filter_missing_values!(u0map)
     filter_missing_values!(parammap)
-    u0map = merge(ModelingToolkit.guesses(sys), todict(guesses), u0map)
+    op = merge(ModelingToolkit.guesses(sys), todict(guesses), u0map, parammap)
 
     TProb = if neqs == nunknown && isempty(unassigned_vars)
         if use_scc && neqs > 0
@@ -135,8 +135,7 @@ initial conditions for the given DAE.
     else
         NonlinearLeastSquaresProblem
     end
-    TProb{iip}(isys, u0map, parammap; kwargs...,
-        build_initializeprob = false, is_initializeprob = true)
+    TProb{iip}(isys, op; kwargs..., build_initializeprob = false, is_initializeprob = true)
 end
 
 const INCOMPLETE_INITIALIZATION_MESSAGE = """

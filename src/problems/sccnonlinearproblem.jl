@@ -69,9 +69,8 @@ function SciMLBase.SCCNonlinearProblem(sys::System, args...; kwargs...)
     SCCNonlinearProblem{true}(sys, args...; kwargs...)
 end
 
-function SciMLBase.SCCNonlinearProblem{iip}(sys::System, u0map,
-        parammap = SciMLBase.NullParameters(); eval_expression = false, eval_module = @__MODULE__,
-        cse = true, kwargs...) where {iip}
+function SciMLBase.SCCNonlinearProblem{iip}(sys::System, op; eval_expression = false,
+        eval_module = @__MODULE__, cse = true, kwargs...) where {iip}
     if !iscomplete(sys) || get_tearing_state(sys) === nothing
         error("A simplified `System` is required. Call `mtkcompile` on the system before creating an `SCCNonlinearProblem`.")
     end
@@ -85,7 +84,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::System, u0map,
 
     if length(var_sccs) == 1
         return NonlinearProblem{iip}(
-            sys, u0map, parammap; eval_expression, eval_module, kwargs...)
+            sys, op; eval_expression, eval_module, kwargs...)
     end
 
     condensed_graph = MatchedCondensationGraph(
@@ -102,7 +101,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::System, u0map,
     obs = observed(sys)
 
     _, u0, p = process_SciMLProblem(
-        EmptySciMLFunction{iip}, sys, u0map, parammap; eval_expression, eval_module, kwargs...)
+        EmptySciMLFunction{iip}, sys, op; eval_expression, eval_module, kwargs...)
 
     explicitfuns = []
     nlfuns = []
