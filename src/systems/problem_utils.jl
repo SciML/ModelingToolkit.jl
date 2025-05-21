@@ -988,7 +988,7 @@ function (siu::SetInitialUnknowns)(p::MTKParameters, u0)
     return p
 end
 
-function (siu::SetInitialUnknowns)(p::Vector, u0)
+function (siu::SetInitialUnknowns)(p::AbstractVector, u0)
     if ArrayInterface.ismutable(p)
         siu.setter!(p, u0)
     else
