@@ -1,9 +1,18 @@
+function generate_initializesystem(
+        sys::AbstractSystem; time_dependent_init = is_time_dependent(sys), kwargs...)
+    if time_dependent_init
+        generate_initializesystem_timevarying(sys; kwargs...)
+    else
+        generate_initializesystem_timeindependent(sys; kwargs...)
+    end
+end
+
 """
 $(TYPEDSIGNATURES)
 
-Generate `NonlinearSystem` which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
+Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
 """
-function generate_initializesystem(sys::AbstractTimeDependentSystem;
+function generate_initializesystem_timevarying(sys::AbstractSystem;
         u0map = Dict(),
         pmap = Dict(),
         initialization_eqs = [],
@@ -81,6 +90,7 @@ function generate_initializesystem(sys::AbstractTimeDependentSystem;
             end
         end
     else
+        # TODO: Check if this is still necessary
         # 2) System doesn't have a schedule, so dummy derivatives don't exist/aren't handled (SDESystem)
         for (k, v) in u0map
             defs[k] = v
@@ -143,8 +153,7 @@ function generate_initializesystem(sys::AbstractTimeDependentSystem;
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
-
-    return NonlinearSystem(eqs_ics,
+    return System(eqs_ics,
         vars,
         pars;
         defaults = defs,
@@ -158,9 +167,9 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Generate `NonlinearSystem` which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
+Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
 """
-function generate_initializesystem(sys::AbstractTimeIndependentSystem;
+function generate_initializesystem_timeindependent(sys::AbstractSystem;
         u0map = Dict(),
         pmap = Dict(),
         initialization_eqs = [],
@@ -205,7 +214,15 @@ function generate_initializesystem(sys::AbstractTimeIndependentSystem;
     initialization_eqs = filter(initialization_eqs) do eq
         empty!(vs)
         vars!(vs, eq; op = Initial)
-        non_params = filter(!isparameter, vs)
+        allpars = full_parameters(sys)
+        for p in allpars
+            if symbolic_type(p) == ArraySymbolic() &&
+               Symbolics.shape(p) != Symbolics.Unknown()
+                append!(allpars, Symbolics.scalarize(p))
+            end
+        end
+        allpars = Set(allpars)
+        non_params = filter(!in(allpars), vs)
         # error if non-parameters are present in the initialization equations
         if !isempty(non_params)
             throw(UnknownsInTimeIndependentInitializationError(eq, non_params))
@@ -238,12 +255,11 @@ function generate_initializesystem(sys::AbstractTimeIndependentSystem;
     # so add scalarized versions as well
     scalarize_varmap!(paramsubs)
 
-    eqs_ics = Symbolics.substitute.(eqs_ics, (paramsubs,))
+    eqs_ics = Vector{Equation}(Symbolics.substitute.(eqs_ics, (paramsubs,)))
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
-
-    return NonlinearSystem(eqs_ics,
+    return System(eqs_ics,
         vars,
         pars;
         defaults = defs,
@@ -525,7 +541,6 @@ function SciMLBase.remake_initialization_data(
     symbols_to_symbolics!(sys, pmap)
     guesses = Dict()
     defs = defaults(sys)
-    cmap, cs = get_cmap(sys)
     use_scc = true
     initialization_eqs = Equation[]
 
@@ -536,6 +551,7 @@ function SciMLBase.remake_initialization_data(
         merge!(guesses, meta.guesses)
         use_scc = meta.use_scc
         initialization_eqs = meta.additional_initialization_eqs
+        time_dependent_init = meta.time_dependent_init
     else
         # there is no initializeprob, so the original problem construction
         # had no solvable parameters and had the differential variables
@@ -579,7 +595,7 @@ function SciMLBase.remake_initialization_data(
     filter_missing_values!(pmap)
 
     op, missing_unknowns, missing_pars = build_operating_point!(sys,
-        u0map, pmap, defs, cmap, dvs, ps)
+        u0map, pmap, defs, dvs, ps)
     floatT = float_type_from_varmap(op)
     u0_constructor = p_constructor = identity
     if newu0 isa StaticArray
@@ -591,8 +607,9 @@ function SciMLBase.remake_initialization_data(
             typeof(newp.initials), floatT, Val(1), Val(length(vals)), vals...)
     end
     kws = maybe_build_initialization_problem(
-        sys, SciMLBase.isinplace(odefn), op, u0map, pmap, t0, defs, guesses, missing_unknowns;
-        use_scc, initialization_eqs, floatT, u0_constructor, p_constructor, allow_incomplete = true)
+        sys, SciMLBase.isinplace(odefn), op, u0map, pmap, t0, defs, guesses,
+        missing_unknowns; time_dependent_init, use_scc, initialization_eqs, floatT,
+        u0_constructor, p_constructor, allow_incomplete = true)
 
     odefn = remake(odefn; kws...)
     return SciMLBase.remake_initialization_data(sys, odefn, newu0, t0, newp, newu0, newp)
@@ -621,6 +638,7 @@ end
 function SciMLBase.late_binding_update_u0_p(
         prob, sys::AbstractSystem, u0, p, t0, newu0, newp)
     supports_initialization(sys) || return newu0, newp
+    prob isa IntervalNonlinearProblem && return newu0, newp
 
     initdata = prob.f.initialization_data
     meta = initdata === nothing ? nothing : initdata.metadata

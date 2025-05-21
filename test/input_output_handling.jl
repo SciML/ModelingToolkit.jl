@@ -6,25 +6,25 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @variables xx(t) some_input(t) [input = true]
 eqs = [D(xx) ~ some_input]
-@named model = ODESystem(eqs, t)
-@test_throws ExtraVariablesSystemException structural_simplify(model, ((), ()))
+@named model = System(eqs, t)
+@test_throws ExtraVariablesSystemException structural_simplify(model)
 if VERSION >= v"1.8"
     err = "In particular, the unset input(s) are:\n some_input(t)"
-    @test_throws err structural_simplify(model, ((), ()))
+    @test_throws err structural_simplify(model)
 end
 
 # Test input handling
 @variables x(t) u(t) [input = true] v(t)[1:2] [input = true]
 @test isinput(u)
 
-@named sys = ODESystem([D(x) ~ -x + u], t) # both u and x are unbound
-@named sys1 = ODESystem([D(x) ~ -x + v[1] + v[2]], t) # both v and x are unbound
-@named sys2 = ODESystem([D(x) ~ -sys.x], t, systems = [sys]) # this binds sys.x in the context of sys2, sys2.x is still unbound
-@named sys21 = ODESystem([D(x) ~ -sys1.x], t, systems = [sys1]) # this binds sys.x in the context of sys2, sys2.x is still unbound
-@named sys3 = ODESystem([D(x) ~ -sys.x + sys.u], t, systems = [sys]) # This binds both sys.x and sys.u
-@named sys31 = ODESystem([D(x) ~ -sys1.x + sys1.v[1]], t, systems = [sys1]) # This binds both sys.x and sys1.v[1]
+@named sys = System([D(x) ~ -x + u], t) # both u and x are unbound
+@named sys1 = System([D(x) ~ -x + v[1] + v[2]], t) # both v and x are unbound
+@named sys2 = System([D(x) ~ -sys.x], t, systems = [sys]) # this binds sys.x in the context of sys2, sys2.x is still unbound
+@named sys21 = System([D(x) ~ -sys1.x], t, systems = [sys1]) # this binds sys.x in the context of sys2, sys2.x is still unbound
+@named sys3 = System([D(x) ~ -sys.x + sys.u], t, systems = [sys]) # This binds both sys.x and sys.u
+@named sys31 = System([D(x) ~ -sys1.x + sys1.v[1]], t, systems = [sys1]) # This binds both sys.x and sys1.v[1]
 
-@named sys4 = ODESystem([D(x) ~ -sys.x, u ~ sys.u], t, systems = [sys]) # This binds both sys.x and sys3.u, this system is one layer deeper than the previous. u is directly forwarded to sys.u, and in this case sys.u is bound while u is not
+@named sys4 = System([D(x) ~ -sys.x, u ~ sys.u], t, systems = [sys]) # This binds both sys.x and sys3.u, this system is one layer deeper than the previous. u is directly forwarded to sys.u, and in this case sys.u is bound while u is not
 
 @test has_var(x ~ 1, x)
 @test has_var(1 ~ x, x)
@@ -50,7 +50,7 @@ end
 @test !is_bound(sys31, sys1.v[2])
 
 # simplification turns input variables into parameters
-ssys, _ = structural_simplify(sys, ([u], []))
+ssys = structural_simplify(sys, inputs = [u], outputs = [])
 @test ModelingToolkit.isparameter(unbound_inputs(ssys)[])
 @test !is_bound(ssys, u)
 @test u ∈ Set(unbound_inputs(ssys))
@@ -87,10 +87,10 @@ fsys4 = flatten(sys4)
 # Test output handling
 @variables x(t) y(t) [output = true]
 @test isoutput(y)
-@named sys = ODESystem([D(x) ~ -x, y ~ x], t) # both y and x are unbound
-syss = structural_simplify(sys) # This makes y an observed variable
+@named sys = System([D(x) ~ -x, y ~ x], t) # both y and x are unbound
+syss = structural_simplify(sys, outputs = [y]) # This makes y an observed variable
 
-@named sys2 = ODESystem([D(x) ~ -sys.x, y ~ sys.y], t, systems = [sys])
+@named sys2 = System([D(x) ~ -sys.x, y ~ sys.y], t, systems = [sys])
 
 @test !is_bound(sys, y)
 @test !is_bound(sys, x)
@@ -106,7 +106,7 @@ syss = structural_simplify(sys) # This makes y an observed variable
 @test isequal(unbound_outputs(sys2), [y])
 @test isequal(bound_outputs(sys2), [sys.y])
 
-syss = structural_simplify(sys2)
+syss = structural_simplify(sys2, outputs = [sys.y])
 
 @test !is_bound(syss, y)
 @test !is_bound(syss, x)
@@ -127,7 +127,7 @@ eqs = [connect(torque.flange, inertia1.flange_a)
        connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
        connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
        y ~ inertia2.w + torque.tau.u]
-model = ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
+model = System(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
     name = :name, guesses = [spring.flange_a.phi => 0.0])
 model_outputs = [inertia1.w, inertia2.w, inertia1.phi, inertia2.phi]
 model_inputs = [torque.tau.u]
@@ -164,7 +164,8 @@ end
             D(x) ~ -x + u
         ]
 
-        @named sys = ODESystem(eqs, t)
+        @named sys = System(eqs, t)
+        sys = structural_simplify(sys, inputs = [u])
         f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys; simplify, split)
 
         @test isequal(dvs[], x)
@@ -181,9 +182,9 @@ end
             D(x) ~ -x + u + d^2
         ]
 
-        @named sys = ODESystem(eqs, t)
-        f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(
-            sys, [u], [d]; simplify, split)
+        @named sys = System(eqs, t)
+        sys = structural_simplify(sys, inputs = [u], disturbance_inputs = [d])
+        f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys; simplify, split)
 
         @test isequal(dvs[], x)
         @test isempty(ps)
@@ -199,9 +200,10 @@ end
             D(x) ~ -x + u + d^2
         ]
 
-        @named sys = ODESystem(eqs, t)
+        @named sys = System(eqs, t)
+        sys = structural_simplify(sys, inputs = [u], disturbance_inputs = [d])
         f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(
-            sys, [u], [d]; simplify, split, disturbance_argument = true)
+            sys; simplify, split, disturbance_argument = true)
 
         @test isequal(dvs[], x)
         @test isempty(ps)
@@ -224,25 +226,25 @@ function Mass(; name, m = 1.0, p = 0, v = 0)
     sts = @variables pos(t)=p vel(t)=v
     eqs = [D(pos) ~ vel
            y ~ pos]
-    ODESystem(eqs, t, [pos, vel, y], ps; name)
+    System(eqs, t, [pos, vel, y], ps; name)
 end
 
 function MySpring(; name, k = 1e4)
     ps = @parameters k = k
     @variables x(t) = 0 # Spring deflection
-    ODESystem(Equation[], t, [x], ps; name)
+    System(Equation[], t, [x], ps; name)
 end
 
 function MyDamper(; name, c = 10)
     ps = @parameters c = c
     @variables vel(t) = 0
-    ODESystem(Equation[], t, [vel], ps; name)
+    System(Equation[], t, [vel], ps; name)
 end
 
 function SpringDamper(; name, k = false, c = false)
     spring = MySpring(; name = :spring, k)
     damper = MyDamper(; name = :damper, c)
-    compose(ODESystem(Equation[], t; name),
+    compose(System(Equation[], t; name),
         spring, damper)
 end
 
@@ -262,12 +264,12 @@ c = 10
 eqs = [connect_sd(sd, mass1, mass2)
        D(mass1.vel) ~ (sd_force(sd) + u) / mass1.m
        D(mass2.vel) ~ (-sd_force(sd)) / mass2.m]
-@named _model = ODESystem(eqs, t)
+@named _model = System(eqs, t)
 @named model = compose(_model, mass1, mass2, sd);
 
+model = structural_simplify(model, inputs = [u])
 f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(model, simplify = true)
 @test length(dvs) == 4
-@test length(ps) == length(parameters(model))
 p = MTKParameters(io_sys, [io_sys.u => NaN])
 x = ModelingToolkit.varmap_to_vars(
     merge(ModelingToolkit.defaults(model),
@@ -280,8 +282,8 @@ i = findfirst(isequal(u[1]), out)
 
 @variables x(t) u(t) [input = true]
 eqs = [D(x) ~ u]
-@named sys = ODESystem(eqs, t)
-@test_nowarn structural_simplify(sys, ([u], []))
+@named sys = System(eqs, t)
+@test_nowarn structural_simplify(sys, inputs = [u], outputs = [])
 
 #=
 ## Disturbance input handling
@@ -312,7 +314,7 @@ function SystemModel(u = nothing; name = :model)
            connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
     if u !== nothing
         push!(eqs, connect(torque.tau, u.output))
-        return @named model = ODESystem(eqs, t;
+        return @named model = System(eqs, t;
             systems = [
                 torque,
                 inertia1,
@@ -322,7 +324,7 @@ function SystemModel(u = nothing; name = :model)
                 u
             ])
     end
-    ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
+    System(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
         name, guesses = [spring.flange_a.phi => 0.0])
 end
 
@@ -363,19 +365,19 @@ eqs = [D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃ + u1
        D(y₂) ~ k₁ * y₁ - k₃ * y₂ * y₃ - k₂ * y₂^2 + u2
        y₁ + y₂ + y₃ ~ 1]
 
-@named sys = ODESystem(eqs, t)
+@named sys = System(eqs, t)
 m_inputs = [u[1], u[2]]
 m_outputs = [y₂]
-sys_simp, input_idxs = structural_simplify(sys, (; inputs = m_inputs, outputs = m_outputs))
+sys_simp = structural_simplify(sys, inputs = m_inputs, outputs = m_outputs)
 @test isequal(unknowns(sys_simp), collect(x[1:2]))
-@test length(input_idxs) == 2
+@test length(inputs(sys_simp)) == 2
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/1577
 @named c = Constant(; k = 2)
 @named gain = Gain(1;)
 @named int = Integrator(; k = 1)
 @named fb = Feedback(;)
-@named model = ODESystem(
+@named model = System(
     [
         connect(c.output, fb.input1),
         connect(fb.input2, int.output),
@@ -389,7 +391,7 @@ sys = structural_simplify(model)
 
 ## Disturbance models when plant has multiple inputs
 using ModelingToolkit, LinearAlgebra
-using ModelingToolkit: DisturbanceModel, io_preprocessing, get_iv, get_disturbance_system
+using ModelingToolkit: DisturbanceModel, get_iv, get_disturbance_system
 using ModelingToolkitStandardLibrary.Blocks
 A, C = [randn(2, 2) for i in 1:2]
 B = [1.0 0; 0 1.0]
@@ -432,7 +434,8 @@ matrices = ModelingToolkit.reorder_unknowns(
         D(x) ~ -x + u
     ]
 
-    @named sys = ODESystem(eqs, t)
+    @named sys = System(eqs, t)
+    sys = structural_simplify(sys, inputs = [u])
     (; io_sys,) = ModelingToolkit.generate_control_function(sys, simplify = true)
     obsfn = ModelingToolkit.build_explicit_observed_function(
         io_sys, [x + u * t]; inputs = [u])
@@ -444,9 +447,9 @@ end
     @constants c = 2.0
     @variables x(t)
     eqs = [D(x) ~ c * x]
-    @named sys = ODESystem(eqs, t, [x], [])
+    @mtkbuild sys = System(eqs, t, [x], [c])
 
-    f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys, simplify = true)
+    f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys)
     @test f[1]([0.5], nothing, MTKParameters(io_sys, []), 0.0) ≈ [1.0]
 end
 
@@ -454,8 +457,9 @@ end
     @variables x(t)=0 u(t)=0 [input = true]
     @parameters p(::Real) = (x -> 2x)
     eqs = [D(x) ~ -x + p(u)]
-    @named sys = ODESystem(eqs, t)
-    f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys, simplify = true)
+    @named sys = System(eqs, t)
+    sys = structural_simplify(sys, inputs = [u])
+    f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys)
     p = MTKParameters(io_sys, [])
     u = [1.0]
     x = [1.0]

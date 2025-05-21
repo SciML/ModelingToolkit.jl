@@ -224,15 +224,19 @@ function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = no
         a, b, islinear = linear_expansion(term, var)
         a, b = unwrap(a), unwrap(b)
         islinear || (all_int_vars = false; continue)
-        a = ModelingToolkit.fold_constants(a)
-        b = ModelingToolkit.fold_constants(b)
         if a isa Symbolic
             all_int_vars = false
             if !allow_symbolic
                 if allow_parameter
-                    all(
-                        x -> ModelingToolkit.isparameter(x) || ModelingToolkit.isconstant(x),
-                        vars(a)) || continue
+                    # if any of the variables in `a` are present in fullvars (taking into account arrays)
+                    if any(
+                        v -> any(isequal(v), fullvars) ||
+                            symbolic_type(v) == ArraySymbolic() &&
+                                Symbolics.shape(v) != Symbolics.Unknown() &&
+                                any(x -> any(isequal(x), fullvars), collect(v)),
+                        vars(a))
+                        continue
+                    end
                 else
                     continue
                 end
@@ -557,6 +561,7 @@ end
 function _distribute_shift(expr, shift)
     if iscall(expr)
         op = operation(expr)
+        (op isa Pre || op isa Initial) && return expr
         args = arguments(expr)
 
         if ModelingToolkit.isvariable(expr)

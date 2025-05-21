@@ -115,17 +115,6 @@ function generate_jacobian end
 
 """
 ```julia
-generate_factorized_W(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
-                      expression = Val{true}; sparse = false, kwargs...)
-```
-
-Generates a function for the factorized W matrix of a system. Extra arguments control
-the arguments to the internal [`build_function`](@ref) call.
-"""
-function generate_factorized_W end
-
-"""
-```julia
 generate_hessian(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
                  expression = Val{true}; sparse = false, kwargs...)
 ```
@@ -143,7 +132,7 @@ generate_function(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys)
 
 Generate a function to evaluate the system's equations.
 """
-function generate_function end
+function generate_rhs end
 
 """
 ```julia
@@ -244,8 +233,10 @@ Get the independent variable(s) of the system `sys`.
 See also [`@independent_variables`](@ref) and [`ModelingToolkit.get_iv`](@ref).
 """
 function independent_variables(sys::AbstractSystem)
-    @warn "Please declare ($(typeof(sys))) as a subtype of `AbstractTimeDependentSystem`, `AbstractTimeIndependentSystem` or `AbstractMultivariateSystem`."
-    if isdefined(sys, :iv)
+    if !(sys isa System)
+        @warn "Please declare ($(typeof(sys))) as a subtype of `AbstractTimeDependentSystem`, `AbstractTimeIndependentSystem` or `AbstractMultivariateSystem`."
+    end
+    if isdefined(sys, :iv) && getfield(sys, :iv) !== nothing
         return [getfield(sys, :iv)]
     elseif isdefined(sys, :ivs)
         return getfield(sys, :ivs)
@@ -613,17 +604,6 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Mark a system as scheduled. It is only intended in compiler internals. A system
-is scheduled after tearing based simplifications where equations are converted
-into assignments.
-"""
-function schedule(sys::AbstractSystem)
-    has_schedule(sys) ? sys : (@set! sys.isscheduled = true)
-end
-
-"""
-$(TYPEDSIGNATURES)
-
 If a system is scheduled, then changing its equations, variables, and
 parameters is no longer legal.
 """
@@ -668,14 +648,14 @@ function (f::Initial)(x)
     iscall(x) && operation(x) isa Initial && return x
     result = if symbolic_type(x) == ArraySymbolic()
         # create an array for `Initial(array)`
-        Symbolics.array_term(f, toparam(x))
+        Symbolics.array_term(f, x)
     elseif iscall(x) && operation(x) == getindex
         # instead of `Initial(x[1])` create `Initial(x)[1]`
         # which allows parameter indexing to handle this case automatically.
         arr = arguments(x)[1]
-        term(getindex, f(toparam(arr)), arguments(x)[2:end]...)
+        term(getindex, f(arr), arguments(x)[2:end]...)
     else
-        term(f, toparam(x))
+        term(f, x)
     end
     # the result should be a parameter
     result = toparam(result)
@@ -719,7 +699,7 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
     end
 
     # add derivatives of all variables for steady-state initial conditions
-    if is_time_dependent(sys) && !(sys isa AbstractDiscreteSystem)
+    if is_time_dependent(sys) && !is_discrete_system(sys)
         D = Differential(get_iv(sys))
         union!(all_initialvars, [D(v) for v in all_initialvars if iscall(v)])
     end
@@ -876,11 +856,14 @@ end
 
 for prop in [:eqs
              :tag
-             :noiseeqs
+             :noiseeqs # TODO: remove
+             :noise_eqs
              :iv
              :unknowns
              :ps
              :tspan
+             :brownians
+             :jumps
              :name
              :description
              :var_to_name
@@ -912,7 +895,6 @@ for prop in [:eqs
              :initialization_eqs
              :schedule
              :tearing_state
-             :substitutions
              :metadata
              :gui_metadata
              :is_initializesystem
@@ -1000,7 +982,7 @@ end
     end
 end
 
-rename(x, name) = @set x.name = name
+Symbolics.rename(x::AbstractSystem, name) = @set x.name = name
 
 function Base.propertynames(sys::AbstractSystem; private = false)
     if private
@@ -1193,55 +1175,6 @@ end
 """
     $(TYPEDEF)
 
-Denotes that a variable belongs to a system that is at least `N + 1` levels up in the
-hierarchy from the system whose equations it is involved in. It is namespaced by the
-first `N` parents and not namespaced by the `N+1`th parent in the hierarchy. The scope
-of the variable after this point is given by `parent`.
-
-In other words, this scope delays applying `ParentScope` by `N` levels, and applies
-`LocalScope` in the meantime.
-
-# Fields
-
-$(TYPEDFIELDS)
-"""
-struct DelayParentScope <: SymScope
-    parent::SymScope
-    N::Int
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Apply `DelayParentScope` to `sym`, with a delay of `N` and `parent` being `LocalScope`.
-"""
-function DelayParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}}, N)
-    Base.depwarn(
-        "`DelayParentScope` is deprecated and will be removed soon", :DelayParentScope)
-    apply_to_variables(sym) do sym
-        if iscall(sym) && operation(sym) == getindex
-            args = arguments(sym)
-            a1 = setmetadata(args[1], SymScope,
-                DelayParentScope(getmetadata(value(args[1]), SymScope, LocalScope()), N))
-            maketerm(typeof(sym), operation(sym), [a1, args[2:end]...],
-                metadata(sym))
-        else
-            setmetadata(sym, SymScope,
-                DelayParentScope(getmetadata(value(sym), SymScope, LocalScope()), N))
-        end
-    end
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Apply `DelayParentScope` to `sym`, with a delay of `1` and `parent` being `LocalScope`.
-"""
-DelayParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}}) = DelayParentScope(sym, 1)
-
-"""
-    $(TYPEDEF)
-
 Denotes that a variable belongs to the root system in the hierarchy, regardless of which
 equations of subsystems in the hierarchy it is involved in. Variables with this scope
 are never namespaced and only added to the unknowns/parameters of a system when calling
@@ -1291,15 +1224,6 @@ function renamespace(sys, x)
                 rename(x, renamespace(getname(sys), getname(x)))::T
             elseif scope isa ParentScope
                 setmetadata(x, SymScope, scope.parent)::T
-            elseif scope isa DelayParentScope
-                if scope.N > 0
-                    x = setmetadata(x, SymScope,
-                        DelayParentScope(scope.parent, scope.N - 1))
-                    rename(x, renamespace(getname(sys), getname(x)))::T
-                else
-                    #rename(x, renamespace(getname(sys), getname(x)))
-                    setmetadata(x, SymScope, scope.parent)::T
-                end
             else # GlobalScope
                 x::T
             end
@@ -1354,6 +1278,28 @@ function namespace_equation(eq::Equation,
     _lhs = namespace_expr(eq.lhs, sys, n; ivs)
     _rhs = namespace_expr(eq.rhs, sys, n; ivs)
     (_lhs ~ _rhs)::Equation
+end
+
+function namespace_jump(j::ConstantRateJump, sys)
+    return ConstantRateJump(namespace_expr(j.rate, sys), namespace_expr(j.affect!, sys))
+end
+
+function namespace_jump(j::VariableRateJump, sys)
+    return VariableRateJump(namespace_expr(j.rate, sys), namespace_expr(j.affect!, sys))
+end
+
+function namespace_jump(j::MassActionJump, sys)
+    return MassActionJump(namespace_expr(j.scaled_rates, sys),
+        [namespace_expr(k, sys) => namespace_expr(v, sys) for (k, v) in j.reactant_stoch],
+        [namespace_expr(k, sys) => namespace_expr(v, sys) for (k, v) in j.net_stoch])
+end
+
+function namespace_jumps(sys::AbstractSystem)
+    return [namespace_jump(j, sys) for j in get_jumps(sys)]
+end
+
+function namespace_brownians(sys::AbstractSystem)
+    return [renamespace(sys, b) for b in brownians(sys)]
 end
 
 function namespace_assignment(eq::Assignment, sys)
@@ -1726,7 +1672,7 @@ function defaults(sys::AbstractSystem)
     # `mapfoldr` is really important!!! We should prefer the base model for
     # defaults, because people write:
     #
-    # `compose(ODESystem(...; defaults=defs), ...)`
+    # `compose(System(...; defaults=defs), ...)`
     #
     # Thus, right associativity is required and crucial for correctness.
     isempty(systems) ? defs : mapfoldr(namespace_defaults, merge, systems; init = defs)
@@ -1789,6 +1735,59 @@ function equations_toplevel(sys::AbstractSystem)
     return get_eqs(sys)
 end
 
+function jumps(sys::AbstractSystem)
+    js = get_jumps(sys)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return js
+    end
+    return [js; reduce(vcat, namespace_jumps.(systems); init = [])]
+end
+
+function brownians(sys::AbstractSystem)
+    bs = get_brownians(sys)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return bs
+    end
+    return [bs; reduce(vcat, namespace_brownians.(systems); init = [])]
+end
+
+function cost(sys::AbstractSystem)
+    cs = get_costs(sys)
+    consolidate = get_consolidate(sys)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return consolidate(cs, Float64[])
+    end
+    subcosts = [namespace_expr(cost(subsys), subsys) for subsys in systems]
+    return consolidate(cs, subcosts)
+end
+
+namespace_constraint(eq::Equation, sys) = namespace_equation(eq, sys)
+
+namespace_constraint(ineq::Inequality, sys) = namespace_inequality(ineq, sys)
+
+function namespace_inequality(ineq::Inequality, sys, n = nameof(sys))
+    _lhs = namespace_expr(ineq.lhs, sys, n)
+    _rhs = namespace_expr(ineq.rhs, sys, n)
+    Inequality(_lhs,
+        _rhs,
+        ineq.relational_op)
+end
+
+function namespace_constraints(sys)
+    cstrs = constraints(sys)
+    isempty(cstrs) && return Vector{Union{Equation, Inequality}}(undef, 0)
+    map(cstr -> namespace_constraint(cstr, sys), cstrs)
+end
+
+function constraints(sys)
+    cs = get_constraints(sys)
+    systems = get_systems(sys)
+    isempty(systems) ? cs : [cs; reduce(vcat, namespace_constraints.(systems))]
+end
+
 """
 $(TYPEDSIGNATURES)
 
@@ -1849,20 +1848,6 @@ function isaffine(sys::AbstractSystem)
     all(isaffine(r, unknowns(sys)) for r in rhs)
 end
 
-function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
-    # if something is not x(t) (the current unknown)
-    # but is `x(t-1)` or something like that, pass in `x` as a callable function rather
-    # than pass in a value in place of x(t).
-    #
-    # This is done by just making `x` the argument of the function.
-    if iscall(x) &&
-       issym(operation(x)) &&
-       !(length(arguments(x)) == 1 && isequal(arguments(x)[1], get_iv(sys)))
-        return operation(x)
-    end
-    return x
-end
-
 """
 $(SIGNATURES)
 
@@ -1890,10 +1875,15 @@ struct ObservedFunctionCache{S}
 end
 
 function ObservedFunctionCache(
-        sys; steady_state = false, eval_expression = false,
+        sys; expression = Val{false}, steady_state = false, eval_expression = false,
         eval_module = @__MODULE__, checkbounds = true, cse = true)
-    return ObservedFunctionCache(
-        sys, Dict(), steady_state, eval_expression, eval_module, checkbounds, cse)
+    if expression == Val{true}
+        :($ObservedFunctionCache($sys, Dict(), $steady_state, $eval_expression,
+            $eval_module, $checkbounds, $cse))
+    else
+        ObservedFunctionCache(
+            sys, Dict(), steady_state, eval_expression, eval_module, checkbounds, cse)
+    end
 end
 
 # This is hit because ensemble problems do a deepcopy
@@ -1988,8 +1978,8 @@ function push_eqs!(stmt, eqs, var2name)
     return eqs_name
 end
 
-function push_defaults!(stmt, defs, var2name)
-    defs_name = gensym(:defs)
+function push_defaults!(stmt, defs, var2name; name = :defs)
+    defs_name = gensym(name)
     defs_expr = Expr(:call, Dict)
     defs_blk = Expr(:(=), defs_name, defs_expr)
     for d in defs
@@ -2037,23 +2027,23 @@ function toexpr(sys::AbstractSystem)
     eqs_name = push_eqs!(stmt, full_equations(sys), var2name)
     filtered_defs = filter(
         kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), defaults(sys))
+    filtered_guesses = filter(
+        kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), guesses(sys))
     defs_name = push_defaults!(stmt, filtered_defs, var2name)
+    guesses_name = push_defaults!(stmt, filtered_guesses, var2name; name = :guesses)
     obs_name = push_eqs!(stmt, obs, var2name)
 
-    if sys isa ODESystem
-        iv = get_iv(sys)
+    iv = get_iv(sys)
+    if iv === nothing
+        ivname = nothing
+    else
         ivname = gensym(:iv)
         push!(stmt, :($ivname = (@variables $(getname(iv)))[1]))
-        push!(stmt,
-            :($ODESystem($eqs_name, $ivname, $stsname, $psname; defaults = $defs_name,
-                observed = $obs_name,
-                name = $name, checks = false)))
-    elseif sys isa NonlinearSystem
-        push!(stmt,
-            :($NonlinearSystem($eqs_name, $stsname, $psname; defaults = $defs_name,
-                observed = $obs_name,
-                name = $name, checks = false)))
     end
+    push!(stmt,
+        :($System($eqs_name, $ivname, $stsname, $psname; defaults = $defs_name,
+            guesses = $guesses_name, observed = $obs_name,
+            name = $name, checks = false)))
 
     expr = :(let
         $expr
@@ -2315,6 +2305,10 @@ function _named_idxs(name::Symbol, idxs, call; extra_args = "")
         end, $idxs))
 end
 
+function setname(x, name)
+    @set x.name = name
+end
+
 function single_named_expr(expr)
     name, call = split_assign(expr)
     if Meta.isexpr(name, :ref)
@@ -2323,7 +2317,7 @@ function single_named_expr(expr)
         var = gensym(name)
         ex = quote
             $var = $(_named(name, call))
-            $name = map(i -> $rename($var, Symbol($(Meta.quot(name)), :_, i)), $idxs)
+            $name = map(i -> $setname($var, Symbol($(Meta.quot(name)), :_, i)), $idxs)
         end
         ex
     else
@@ -2400,11 +2394,7 @@ function default_to_parentscope(v)
     uv = unwrap(v)
     uv isa Symbolic || return v
     apply_to_variables(v) do sym
-        if !hasmetadata(uv, SymScope)
-            ParentScope(sym)
-        else
-            sym
-        end
+        ParentScope(sym)
     end
 end
 
@@ -2550,33 +2540,6 @@ function debug_system(
     return sys
 end
 
-function eliminate_constants(sys::AbstractSystem)
-    if has_eqs(sys)
-        eqs = get_eqs(sys)
-        eq_cs = collect_constants(eqs)
-        if !isempty(eq_cs)
-            new_eqs = eliminate_constants(eqs, eq_cs)
-            @set! sys.eqs = new_eqs
-        end
-    end
-    return sys
-end
-
-function io_preprocessing(sys::AbstractSystem, inputs,
-        outputs; simplify = false, kwargs...)
-    sys, input_idxs = structural_simplify(sys, (inputs, outputs); simplify, kwargs...)
-
-    eqs = equations(sys)
-    alg_start_idx = findfirst(!isdiffeq, eqs)
-    if alg_start_idx === nothing
-        alg_start_idx = length(eqs) + 1
-    end
-    diff_idxs = 1:(alg_start_idx - 1)
-    alge_idxs = alg_start_idx:length(eqs)
-
-    sys, diff_idxs, alge_idxs, input_idxs
-end
-
 @latexrecipe function f(sys::AbstractSystem)
     return latexify(equations(sys))
 end
@@ -2670,23 +2633,6 @@ end
 ###
 ### Inheritance & composition
 ###
-function Base.hash(sys::AbstractSystem, s::UInt)
-    s = hash(nameof(sys), s)
-    s = foldr(hash, get_systems(sys), init = s)
-    s = foldr(hash, get_unknowns(sys), init = s)
-    s = foldr(hash, get_ps(sys), init = s)
-    if sys isa OptimizationSystem
-        s = hash(get_op(sys), s)
-    else
-        s = foldr(hash, get_eqs(sys), init = s)
-    end
-    s = foldr(hash, get_observed(sys), init = s)
-    s = foldr(hash, get_continuous_events(sys), init = s)
-    s = foldr(hash, get_discrete_events(sys), init = s)
-    s = hash(independent_variables(sys), s)
-    return s
-end
-
 """
 $(TYPEDSIGNATURES)
 
@@ -2727,11 +2673,9 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
         name = name, description = description, gui_metadata = gui_metadata)
 
     # collect fields specific to some system types
-    if basesys isa ODESystem
-        ieqs = union(get_initialization_eqs(basesys), get_initialization_eqs(sys))
-        guesses = merge(get_guesses(basesys), get_guesses(sys)) # prefer `sys`
-        kwargs = merge(kwargs, (initialization_eqs = ieqs, guesses = guesses))
-    end
+    ieqs = union(get_initialization_eqs(basesys), get_initialization_eqs(sys))
+    guesses = merge(get_guesses(basesys), get_guesses(sys)) # prefer `sys`
+    kwargs = merge(kwargs, (initialization_eqs = ieqs, guesses = guesses))
 
     if has_assertions(basesys)
         kwargs = merge(
@@ -2832,7 +2776,7 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
         # post-walk to avoid infinite recursion
         @set! sys.systems = map(Base.Fix2(substitute, dict), systems)
         something(get(rules, nameof(sys), nothing), sys)
-    elseif sys isa ODESystem
+    elseif sys isa System
         rules = todict(map(r -> Symbolics.unwrap(r[1]) => Symbolics.unwrap(r[2]),
             collect(rules)))
         eqs = fast_substitute(get_eqs(sys), rules)
@@ -2841,9 +2785,15 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
         for (k, v) in get_defaults(sys))
         guess = Dict(fast_substitute(k, rules) => fast_substitute(v, rules)
         for (k, v) in get_guesses(sys))
+        noise_eqs = fast_substitute(get_noise_eqs(sys), rules)
+        costs = fast_substitute(get_costs(sys), rules)
+        observed = fast_substitute(get_observed(sys), rules)
+        initialization_eqs = fast_substitute(get_initialization_eqs(sys), rules)
+        cstrs = fast_substitute(get_constraints(sys), rules)
         subsys = map(s -> substitute(s, rules), get_systems(sys))
-        ODESystem(eqs, get_iv(sys); name = nameof(sys), defaults = defs,
-            guesses = guess, parameter_dependencies = pdeps, systems = subsys)
+        System(eqs, get_iv(sys); name = nameof(sys), defaults = defs,
+            guesses = guess, parameter_dependencies = pdeps, systems = subsys, noise_eqs,
+            observed, initialization_eqs, constraints = cstrs)
     else
         error("substituting symbols is not supported for $(typeof(sys))")
     end
@@ -2910,7 +2860,7 @@ using ModelingToolkit: t, D
 
 @parameters p = 1.0, [description = "My parameter", tunable = false] q = 2.0, [description = "Other parameter"]
 @variables x(t) = 3.0 [unit = u"m"]
-@named sys = ODESystem(Equation[], t, [x], [p, q])
+@named sys = System(Equation[], t, [x], [p, q])
 ModelingToolkit.dump_parameters(sys)
 ```
 
@@ -2951,7 +2901,7 @@ using ModelingToolkit: t, D
 
 @parameters p = 1.0, [description = "My parameter", tunable = false] q = 2.0, [description = "Other parameter"]
 @variables x(t) = 3.0 [unit = u"m"]
-@named sys = ODESystem(Equation[], t, [x], [p, q])
+@named sys = System(Equation[], t, [x], [p, q])
 ModelingToolkit.dump_unknowns(sys)
 ```
 
@@ -3085,9 +3035,9 @@ is_diff_equation(eq2) # false
 """
 function is_diff_equation(eq)
     (eq isa Equation) || (return false)
-    isdefined(eq, :lhs) && hasnode(is_derivative, wrap(eq.lhs)) &&
+    isdefined(eq, :lhs) && recursive_hasoperator(Union{Differential, Shift}, eq.lhs) &&
         (return true)
-    isdefined(eq, :rhs) && hasnode(is_derivative, wrap(eq.rhs)) &&
+    isdefined(eq, :rhs) && recursive_hasoperator(Union{Differential, Shift}, eq.rhs) &&
         (return true)
     return false
 end
@@ -3129,7 +3079,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys = ODESystem([eq1, eq2], t)
+@named osys = System([eq1, eq2], t)
 
 alg_equations(osys) # returns `[0 ~ p - d*X(t)]`.
 """
@@ -3148,7 +3098,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys = ODESystem([eq1, eq2], t)
+@named osys = System([eq1, eq2], t)
 
 diff_equations(osys) # returns `[Differential(t)(X(t)) ~ p - d*X(t)]`.
 """
@@ -3168,8 +3118,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys1 = ODESystem([eq1], t)
-@named osys2 = ODESystem([eq2], t)
+@named osys1 = System([eq1], t)
+@named osys2 = System([eq2], t)
 
 has_alg_equations(osys1) # returns `false`.
 has_alg_equations(osys2) # returns `true`.
@@ -3190,8 +3140,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys1 = ODESystem([eq1], t)
-@named osys2 = ODESystem([eq2], t)
+@named osys1 = System([eq1], t)
+@named osys2 = System([eq2], t)
 
 has_diff_equations(osys1) # returns `true`.
 has_diff_equations(osys2) # returns `false`.
@@ -3213,9 +3163,9 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys1 = ODESystem([eq1], t)
-@named osys2 = ODESystem([eq2], t)
-osys12 = compose(osys1, [osys2])
+@named osys1 = ([eq1], t)
+@named osys2 = ([eq2], t)
+osys12 = compose(sys1, [osys2])
 osys21 = compose(osys2, [osys1])
 
 get_alg_eqs(osys12) # returns `Equation[]`.
@@ -3238,8 +3188,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys1 = ODESystem([eq1], t)
-@named osys2 = ODESystem([eq2], t)
+@named osys1 = tem([eq1], t)
+@named osys2 = tem([eq2], t)
 osys12 = compose(osys1, [osys2])
 osys21 = compose(osys2, [osys1])
 
@@ -3263,8 +3213,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys1 = ODESystem([eq1], t)
-@named osys2 = ODESystem([eq2], t)
+@named osys1 = System([eq1], t)
+@named osys2 = System([eq2], t)
 osys12 = compose(osys1, [osys2])
 osys21 = compose(osys2, [osys1])
 
@@ -3289,8 +3239,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys1 = ODESystem([eq1], t)
-@named osys2 = ODESystem([eq2], t)
+@named osys1 = tem([eq1], t)
+@named osys2 = tem([eq2], t)
 osys12 = compose(osys1, [osys2])
 osys21 = compose(osys2, [osys1])
 

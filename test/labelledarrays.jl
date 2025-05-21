@@ -12,9 +12,9 @@ eqs = [D(x) ~ σ * (y - x),
     D(y) ~ t * x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-@named de = ODESystem(eqs, t)
+@named de = System(eqs, t)
 de = complete(de)
-ff = ODEFunction(de, [x, y, z], [σ, ρ, β], jac = true)
+ff = ODEFunction(de; jac = true)
 
 a = @SVector [1.0, 2.0, 3.0]
 b = SLVector(x = 1.0, y = 2.0, z = 3.0)

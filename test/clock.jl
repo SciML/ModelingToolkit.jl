@@ -22,7 +22,7 @@ eqs = [yd ~ Sample(dt)(y)
        u ~ Hold(ud)
        D(x) ~ -x + u
        y ~ x]
-@named sys = ODESystem(eqs, t)
+@named sys = System(eqs, t)
 # compute equation and variables' time domains
 #TODO: test linearize
 
@@ -65,10 +65,11 @@ By inference:
 ci, varmap = infer_clocks(sys)
 eqmap = ci.eq_domain
 tss, inputs, continuous_id = ModelingToolkit.split_system(deepcopy(ci))
-sss, = ModelingToolkit._structural_simplify!(
-    deepcopy(tss[continuous_id]), (inputs[continuous_id], ()))
+sss = ModelingToolkit._structural_simplify!(
+    deepcopy(tss[continuous_id]), inputs = inputs[continuous_id], outputs = [])
 @test equations(sss) == [D(x) ~ u - x]
-sss, = ModelingToolkit._structural_simplify!(deepcopy(tss[1]), (inputs[1], ()))
+sss = ModelingToolkit._structural_simplify!(
+    deepcopy(tss[1]), inputs = inputs[1], outputs = [])
 @test isempty(equations(sss))
 d = Clock(dt)
 k = ShiftIndex(d)
@@ -114,7 +115,7 @@ eqs = [yd ~ Sample(dt)(y)
        u ~ Hold(ud)
        D(x) ~ -x + u
        y ~ x]
-@named sys = ODESystem(eqs, t)
+@named sys = System(eqs, t)
 @test_throws ModelingToolkit.HybridSystemNotSupportedException ss=structural_simplify(sys);
 
 @test_skip begin
@@ -189,7 +190,7 @@ eqs = [yd ~ Sample(dt)(y)
            u ~ Hold(ud1) + Hold(ud2)
            D(x) ~ -x + u
            y ~ x]
-    @named sys = ODESystem(eqs, t)
+    @named sys = System(eqs, t)
     ci, varmap = infer_clocks(sys)
 
     d = Clock(dt)
@@ -217,7 +218,7 @@ eqs = [yd ~ Sample(dt)(y)
         @variables x(t)=1 u(t)=0 y(t)=0
         eqs = [D(x) ~ -x + u
                y ~ x]
-        ODESystem(eqs, t; name = name)
+        System(eqs, t; name = name)
     end
 
     function filt(; name)
@@ -225,7 +226,7 @@ eqs = [yd ~ Sample(dt)(y)
         a = 1 / exp(dt)
         eqs = [x ~ a * x(k - 1) + (1 - a) * u(k - 1)
                y ~ x]
-        ODESystem(eqs, t, name = name)
+        System(eqs, t, name = name)
     end
 
     function controller(kp; name)
@@ -233,7 +234,7 @@ eqs = [yd ~ Sample(dt)(y)
         @parameters kp = kp
         eqs = [yd ~ Sample(y)
                ud ~ kp * (r - yd)]
-        ODESystem(eqs, t; name = name)
+        System(eqs, t; name = name)
     end
 
     @named f = filt()
@@ -245,7 +246,7 @@ eqs = [yd ~ Sample(dt)(y)
                    Hold(c.ud) ~ p.u # controller output to plant input
                    p.y ~ c.y]
 
-    @named cl = ODESystem(connections, t, systems = [f, c, p])
+    @named cl = System(connections, t, systems = [f, c, p])
 
     ci, varmap = infer_clocks(cl)
 
@@ -280,7 +281,7 @@ eqs = [yd ~ Sample(dt)(y)
            D(x) ~ -x + u
            y ~ x]
 
-    @named cl = ODESystem(eqs, t)
+    @named cl = System(eqs, t)
 
     d = Clock(dt)
     d2 = Clock(dt2)
@@ -528,7 +529,7 @@ eqs = [yd ~ Sample(dt)(y)
     @variables x(t)=1.0 y(t)=1.0
     eqs = [D(y) ~ Hold(x)
            x ~ x(k - 1) + x(k - 2)]
-    @mtkbuild sys = ODESystem(eqs, t)
+    @mtkbuild sys = System(eqs, t)
     prob = ODEProblem(sys, [], (0.0, 10.0))
     int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
     @test int.ps[x] == 2.0

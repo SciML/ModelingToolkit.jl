@@ -8,7 +8,7 @@ D = Differential(t)
     @parameters α β γ δ
     @variables x(t) y(t)
     eqs = [D(x) ~ α * x - β * x * y, D(y) ~ -δ * y + γ * x * y]
-    @named sys = ODESystem(eqs, t)
+    @named sys = System(eqs, t)
     sys = complete(sys)
 
     u0 = [x => 1.0, y => 1.0]
@@ -29,7 +29,7 @@ end
 @testset "Change independent variable (trivial)" begin
     @variables x(t) y(t)
     eqs1 = [D(D(x)) ~ D(x) + x, D(y) ~ 1]
-    M1 = ODESystem(eqs1, t; name = :M)
+    M1 = System(eqs1, t; name = :M)
     M2 = change_independent_variable(M1, y)
     @variables y x(y) yˍt(y)
     Dy = Differential(y)
@@ -48,7 +48,7 @@ end
         D(s) ~ 1 / (2 * s)
     ]
     initialization_eqs = [x ~ 1.0, y ~ 1.0, D(y) ~ 0.0]
-    M1 = ODESystem(eqs, t; initialization_eqs, name = :M)
+    M1 = System(eqs, t; initialization_eqs, name = :M)
     M2 = change_independent_variable(M1, s)
 
     M1 = structural_simplify(M1; allow_symbolic = true)
@@ -68,7 +68,7 @@ end
     D = Differential(t)
     @variables a(t) ȧ(t) Ω(t) ϕ(t)
     a, ȧ = GlobalScope.([a, ȧ])
-    species(w; kw...) = ODESystem([D(Ω) ~ -3(1 + w) * D(a) / a * Ω], t, [Ω], []; kw...)
+    species(w; kw...) = System([D(Ω) ~ -3(1 + w) * D(a) / a * Ω], t, [Ω], []; kw...)
     @named r = species(1 // 3)
     @named m = species(0)
     @named Λ = species(-1)
@@ -78,7 +78,7 @@ end
         ȧ ~ √(Ω) * a^2,
         D(D(ϕ)) ~ -3 * D(a) / a * D(ϕ)
     ]
-    M1 = ODESystem(eqs, t, [Ω, a, ȧ, ϕ], []; name = :M)
+    M1 = System(eqs, t, [Ω, a, ȧ, ϕ], []; name = :M)
     M1 = compose(M1, r, m, Λ)
 
     # Apply in two steps, where derivatives are defined at each step: first t -> a, then a -> b
@@ -109,7 +109,7 @@ end
 
 @testset "Change independent variable (simple)" begin
     @variables x(t) y1(t) # y(t)[1:1] # TODO: use array variables y(t)[1:2] when fixed: https://github.com/JuliaSymbolics/Symbolics.jl/issues/1383
-    Mt = ODESystem([D(x) ~ 2 * x, D(y1) ~ y1], t; name = :M)
+    Mt = System([D(x) ~ 2 * x, D(y1) ~ y1], t; name = :M)
     Mx = change_independent_variable(Mt, x)
     @variables x xˍt(x) xˍtt(x) y1(x) # y(x)[1:1] # TODO: array variables
     Dx = Differential(x)
@@ -119,7 +119,7 @@ end
 @testset "Change independent variable (free fall with 1st order horizontal equation)" begin
     @variables x(t) y(t)
     @parameters g=9.81 v # gravitational acceleration and constant horizontal velocity
-    Mt = ODESystem([D(D(y)) ~ -g, D(x) ~ v], t; name = :M) # gives (x, y) as function of t, ...
+    Mt = System([D(D(y)) ~ -g, D(x) ~ v], t; name = :M) # gives (x, y) as function of t, ...
     Mx = change_independent_variable(Mt, x; add_old_diff = true) # ... but we want y as a function of x
     Mx = structural_simplify(Mx; allow_symbolic = true)
     Dx = Differential(Mx.x)
@@ -133,7 +133,7 @@ end
 @testset "Change independent variable (free fall with 2nd order horizontal equation)" begin
     @variables x(t) y(t)
     @parameters g = 9.81 # gravitational acceleration
-    Mt = ODESystem([D(D(y)) ~ -g, D(D(x)) ~ 0], t; name = :M) # gives (x, y) as function of t, ...
+    Mt = System([D(D(y)) ~ -g, D(D(x)) ~ 0], t; name = :M) # gives (x, y) as function of t, ...
     Mx = change_independent_variable(Mt, x; add_old_diff = true) # ... but we want y as a function of x
     Mx = structural_simplify(Mx; allow_symbolic = true)
     Dx = Differential(Mx.x)
@@ -151,7 +151,7 @@ end
         (D^3)(y) ~ D(x)^2 + (D^2)(y^2) |> expand_derivatives,
         D(x)^2 + D(y)^2 ~ x^4 + y^5 + t^6
     ]
-    M1 = ODESystem(eqs, t; name = :M)
+    M1 = System(eqs, t; name = :M)
     M2 = change_independent_variable(M1, x; add_old_diff = true)
     @test_nowarn structural_simplify(M2)
 
@@ -185,7 +185,7 @@ end
         D(x) ~ 2t,
         D(y) ~ 1fc(t) + 2fc(x) + 3fc(y) + 1callme(f, t) + 2callme(f, x) + 3callme(f, y)
     ]
-    M1 = ODESystem(eqs, t; name = :M)
+    M1 = System(eqs, t; name = :M)
 
     # Ensure that interpolations are called with the same variables
     M2 = change_independent_variable(M1, x, [t ~ √(x)])
@@ -207,13 +207,13 @@ end
 
 @testset "Change independent variable (errors)" begin
     @variables x(t) y z(y) w(t) v(t)
-    M = ODESystem([D(x) ~ 1, v ~ x], t; name = :M)
+    M = System([D(x) ~ 1, v ~ x], t; name = :M)
     Ms = structural_simplify(M)
     @test_throws "structurally simplified" change_independent_variable(Ms, y)
     @test_throws "not a function of" change_independent_variable(M, y)
     @test_throws "not a function of" change_independent_variable(M, z)
     @variables x(..) # require explicit argument
-    M = ODESystem([D(x(t)) ~ x(t - 1)], t; name = :M)
+    M = System([D(x(t)) ~ x(t - 1)], t; name = :M)
     @test_throws "DDE" change_independent_variable(M, x(t))
 end
 
@@ -222,7 +222,7 @@ end
     D_units = Differential(t_units)
     @variables x(t_units) [unit = u"m"] y(t_units) [unit = u"m"]
     @parameters g=9.81 [unit = u"m * s^-2"] # gravitational acceleration
-    Mt = ODESystem([D_units(D_units(y)) ~ -g, D_units(D_units(x)) ~ 0], t_units; name = :M) # gives (x, y) as function of t, ...
+    Mt = System([D_units(D_units(y)) ~ -g, D_units(D_units(x)) ~ 0], t_units; name = :M) # gives (x, y) as function of t, ...
     Mx = change_independent_variable(Mt, x; add_old_diff = true) # ... but we want y as a function of x
     Mx = structural_simplify(Mx; allow_symbolic = true)
     Dx = Differential(Mx.x)
@@ -243,7 +243,7 @@ end
     @named input_sys = Input()
     input_sys = complete(input_sys)
     # test no failures
-    @test change_independent_variable(input_sys, input_sys.u) isa ODESystem
+    @test change_independent_variable(input_sys, input_sys.u) isa System
 
     @mtkmodel NestedInput begin
         @components begin
@@ -258,7 +258,7 @@ end
     end
     @named nested_input_sys = NestedInput()
     nested_input_sys = complete(nested_input_sys; flatten = false)
-    @test change_independent_variable(nested_input_sys, nested_input_sys.x) isa ODESystem
+    @test change_independent_variable(nested_input_sys, nested_input_sys.x) isa System
 end
 
 @testset "Change of variables, connections" begin
@@ -295,7 +295,7 @@ end
         z ~ ModelingToolkit.scalarize.([sin(y), cos(y)]),
         D(y) ~ z[1]^2 + z[2]^2
     ]
-    @named sys = ODESystem(eqs, t)
+    @named sys = System(eqs, t)
     sys = complete(sys)
     new_sys = change_independent_variable(sys, sys.x; add_old_diff = true)
     ss_new_sys = structural_simplify(new_sys; allow_symbolic = true)
@@ -303,4 +303,26 @@ end
     prob = ODEProblem(ss_new_sys, u0, (0.0, 0.5), [])
     sol = solve(prob, Tsit5(); reltol = 1e-5)
     @test sol[new_sys.y][end] ≈ 0.75
+end
+
+@testset "`add_accumulations`" begin
+    @parameters a
+    @variables x(t) y(t) z(t)
+    @named sys = System([D(x) ~ y, 0 ~ x + z, 0 ~ x - y], t, [z, y, x], [])
+    asys = add_accumulations(sys)
+    @variables accumulation_x(t) accumulation_y(t) accumulation_z(t)
+    eqs = [0 ~ x + z
+           0 ~ x - y
+           D(accumulation_x) ~ x
+           D(accumulation_y) ~ y
+           D(accumulation_z) ~ z
+           D(x) ~ y]
+    @test issetequal(equations(asys), eqs)
+    @variables ac(t)
+    asys = add_accumulations(sys, [ac => (x + y)^2])
+    eqs = [0 ~ x + z
+           0 ~ x - y
+           D(ac) ~ (x + y)^2
+           D(x) ~ y]
+    @test issetequal(equations(asys), eqs)
 end

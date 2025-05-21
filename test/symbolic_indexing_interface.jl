@@ -1,12 +1,13 @@
 using ModelingToolkit, SymbolicIndexingInterface, SciMLBase
-using ModelingToolkit: t_nounits as t, D_nounits as D, ParameterIndex
+using ModelingToolkit: t_nounits as t, D_nounits as D, ParameterIndex,
+                       SymbolicContinuousCallback
 using SciMLStructures: Tunable
 
-@testset "ODESystem" begin
+@testset "System" begin
     @parameters a b
     @variables x(t)=1.0 y(t)=2.0 xy(t)
     eqs = [D(x) ~ a * y + t, D(y) ~ b * t]
-    @named odesys = ODESystem(eqs, t, [x, y], [a, b]; observed = [xy ~ x + y])
+    @named odesys = System(eqs, t, [x, y], [a, b]; observed = [xy ~ x + y])
     odesys = complete(odesys)
     @test SymbolicIndexingInterface.supports_tuple_observed(odesys)
     @test all(is_variable.((odesys,), [x, y, 1, 2, :x, :y]))
@@ -44,7 +45,7 @@ using SciMLStructures: Tunable
     @test getter(prob) isa Tuple
     @test_nowarn @inferred getter(prob)
 
-    @named odesys = ODESystem(
+    @named odesys = System(
         eqs, t, [x, y], [a, b]; defaults = [xy => 3.0], observed = [xy ~ x + y])
     odesys = complete(odesys)
     @test default_values(odesys)[xy] == 3.0
@@ -77,7 +78,7 @@ end
 #            D(x) ~ -x + u
 #            y ~ x]
 
-#     @mtkbuild cl = ODESystem(eqs, t)
+#     @mtkbuild cl = System(eqs, t)
 #     partition1_params = [Hold(ud1), Sample(t, dt)(y), ud1, yd1]
 #     partition2_params = [Hold(ud2), Sample(t, dt2)(y), ud2, yd2]
 #     @test all(
@@ -108,7 +109,7 @@ end
     eqs = [0 ~ σ * (y - x),
         0 ~ x * (ρ - z) - y,
         0 ~ x * y - β * z]
-    @named ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
+    @named ns = System(eqs, [x, y, z], [σ, ρ, β])
     ns = complete(ns)
     @test SymbolicIndexingInterface.supports_tuple_observed(ns)
     @test !is_time_dependent(ns)
@@ -178,26 +179,23 @@ end
     @test isequal(parameters(pdesys), [h])
 end
 
-# Issue#2767
-using ModelingToolkit
-using ModelingToolkit: t_nounits as t, D_nounits as D
-using SymbolicIndexingInterface
+@testset "Issue#2767" begin
+    @parameters p1[1:2]=[1.0, 2.0] p2[1:2]=[0.0, 0.0]
+    @variables x(t) = 0
 
-@parameters p1[1:2]=[1.0, 2.0] p2[1:2]=[0.0, 0.0]
-@variables x(t) = 0
-
-@named sys = ODESystem(
-    [D(x) ~ sum(p1) * t + sum(p2)],
-    t;
-)
-prob = ODEProblem(complete(sys))
-get_dep = @test_nowarn getu(prob, 2p1)
-@test get_dep(prob) == [2.0, 4.0]
+    @named sys = System(
+        [D(x) ~ sum(p1) * t + sum(p2)],
+        t;
+    )
+    prob = ODEProblem(complete(sys), [], (0.0, 1.0))
+    get_dep = @test_nowarn getu(prob, 2p1)
+    @test get_dep(prob) == [2.0, 4.0]
+end
 
 @testset "Observed functions with variables as `Symbol`s" begin
     @variables x(t) y(t) z(t)[1:2]
     @parameters p1 p2[1:2, 1:2]
-    @mtkbuild sys = ODESystem([D(x) ~ x * t + p1, y ~ 2x, D(z) ~ p2 * z], t)
+    @mtkbuild sys = System([D(x) ~ x * t + p1, y ~ 2x, D(z) ~ p2 * z], t)
     prob = ODEProblem(
         sys, [x => 1.0, z => ones(2)], (0.0, 1.0), [p1 => 2.0, p2 => ones(2, 2)])
     @test getu(prob, x)(prob) == getu(prob, :x)(prob)
@@ -210,7 +208,7 @@ end
 @testset "Parameter dependencies as symbols" begin
     @variables x(t) = 1.0
     @parameters a=1 b
-    @named model = ODESystem(D(x) ~ x + a - b, t, parameter_dependencies = [b ~ a + 1])
+    @named model = System(D(x) ~ x + a - b, t, parameter_dependencies = [b ~ a + 1])
     sys = complete(model)
     prob = ODEProblem(sys, [], (0.0, 1.0))
     @test prob.ps[b] == prob.ps[:b]
@@ -219,7 +217,7 @@ end
 @testset "`get_all_timeseries_indexes` with non-split systems" begin
     @variables x(t) y(t) z(t)
     @parameters a
-    @named sys = ODESystem([D(x) ~ a * x, y ~ 2x, z ~ 0.0], t)
+    @named sys = System([D(x) ~ a * x, y ~ 2x, z ~ 0.0], t)
     sys = structural_simplify(sys, split = false)
     for sym in [x, y, z, x + y, x + a, y / x]
         @test only(get_all_timeseries_indexes(sys, sym)) == ContinuousTimeseries()
@@ -230,8 +228,9 @@ end
 @testset "`timeseries_parameter_index` on unwrapped scalarized timeseries parameter" begin
     @variables x(t)[1:2]
     @parameters p(t)[1:2, 1:2]
-    ev = [x[1] ~ 2.0] => [p ~ -ones(2, 2)]
-    @mtkbuild sys = ODESystem(D(x) ~ p * x, t; continuous_events = [ev])
+    ev = SymbolicContinuousCallback(
+        [x[1] ~ 2.0] => [p ~ -ones(2, 2)], discrete_parameters = [p])
+    @mtkbuild sys = System(D(x) ~ p * x, t; continuous_events = [ev])
     p = ModelingToolkit.unwrap(p)
     @test timeseries_parameter_index(sys, p) === ParameterTimeseriesIndex(1, (1, 1))
     @test timeseries_parameter_index(sys, p[1, 1]) ===

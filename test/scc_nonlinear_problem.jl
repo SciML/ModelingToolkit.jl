@@ -21,7 +21,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     eqs = Any[0 for _ in 1:8]
     f!(eqs, u, nothing)
     eqs = 0 .~ eqs
-    @named model = NonlinearSystem(eqs)
+    @named model = System(eqs)
     @test_throws ["simplified", "required"] SCCNonlinearProblem(model, [])
     _model = structural_simplify(model; split = false)
     @test_throws ["not compatible"] SCCNonlinearProblem(_model, [])
@@ -85,7 +85,7 @@ end
     @variables u[1:5] [irreducible = true]
     @parameters p1[1:6] p2
     eqs = 0 .~ collect(nlf(u, (u0, (p1, p2))))
-    @mtkbuild sys = NonlinearSystem(eqs, [u], [p1, p2])
+    @mtkbuild sys = System(eqs, [u], [p1, p2])
     sccprob = SCCNonlinearProblem(sys, [u => u0], [p1 => p[1], p2 => p[2][]])
     sccsol = solve(sccprob, SimpleNewtonRaphson(); abstol = 1e-9)
     @test SciMLBase.successful_retcode(sccsol)
@@ -141,7 +141,7 @@ end
     eqs = 0 .~ eqs
     subrules = Dict(Symbolics.unwrap(D(y[i])) => ((y[i] - u0[i]) / dt) for i in 1:8)
     eqs = substitute.(eqs, (subrules,))
-    @mtkbuild sys = NonlinearSystem(eqs)
+    @mtkbuild sys = System(eqs)
     prob = NonlinearProblem(sys, [y => u0], [t => t0])
     sol = solve(prob, NewtonRaphson(); abstol = 1e-12)
 
@@ -159,10 +159,10 @@ end
         x + y
     end
     @register_symbolic func(x, y)
-    @mtkbuild sys = NonlinearSystem([0 ~ x[1]^3 + x[2]^3 - 5
-                                     0 ~ sin(x[1] - x[2]) - 0.5
-                                     0 ~ func(x[1], x[2]) * exp(x[3]) - x[4]^3 - 5
-                                     0 ~ func(x[1], x[2]) * exp(x[4]) - x[3]^3 - 4])
+    @mtkbuild sys = System([0 ~ x[1]^3 + x[2]^3 - 5
+                            0 ~ sin(x[1] - x[2]) - 0.5
+                            0 ~ func(x[1], x[2]) * exp(x[3]) - x[4]^3 - 5
+                            0 ~ func(x[1], x[2]) * exp(x[4]) - x[3]^3 - 4])
     sccprob = SCCNonlinearProblem(sys, [])
     sccsol = solve(sccprob, NewtonRaphson())
     @test SciMLBase.successful_retcode(sccsol)
@@ -226,7 +226,7 @@ import ModelingToolkitStandardLibrary.Hydraulic.IsothermalCompressible as IC
                f ~ p * area
                m ~ rho * x * area]
 
-        return ODESystem(eqs, t, vars, pars; name, systems)
+        return System(eqs, t, vars, pars; name, systems)
     end
 
     systems = @named begin
@@ -255,7 +255,7 @@ import ModelingToolkitStandardLibrary.Hydraulic.IsothermalCompressible as IC
     initialization_eqs = [mass.s ~ 0.0
                           mass.v ~ 0.0]
 
-    @mtkbuild sys = ODESystem(eqs, t, [], []; systems, initialization_eqs)
+    @mtkbuild sys = System(eqs, t, [], []; systems, initialization_eqs)
     prob = ODEProblem(sys, [], (0, 5))
     sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
@@ -264,7 +264,7 @@ end
 @testset "Array variables split across SCCs" begin
     @variables x[1:3]
     @parameters (f::Function)(..)
-    @mtkbuild sys = NonlinearSystem([
+    @mtkbuild sys = System([
         0 ~ x[1]^2 - 9, x[2] ~ 2x[1], 0 ~ x[3]^2 - x[1]^2 + f(x)])
     prob = SCCNonlinearProblem(sys, [x => ones(3)], [f => sum])
     sol = solve(prob, NewtonRaphson())
@@ -274,7 +274,7 @@ end
 @testset "SCCNonlinearProblem retains parameter order" begin
     @variables x y z
     @parameters σ β ρ
-    @mtkbuild fullsys = NonlinearSystem(
+    @mtkbuild fullsys = System(
         [0 ~ x^3 * β + y^3 * ρ - σ, 0 ~ x^2 + 2x * y + y^2, 0 ~ z^2 - 4z + 4],
         [x, y, z], [σ, β, ρ])
 
@@ -294,7 +294,7 @@ end
     @variables x y
     @parameters p[1:2] (f::Function)(..)
 
-    @mtkbuild sys = NonlinearSystem([x^2 - p[1]^2 ~ 0, y^2 ~ f(p)])
+    @mtkbuild sys = System([x^2 - p[1]^2 ~ 0, y^2 ~ f(p)])
     prob = SCCNonlinearProblem(sys, [x => 1.0, y => 1.0], [p => ones(2), f => sum])
     @test_nowarn solve(prob, NewtonRaphson())
 end

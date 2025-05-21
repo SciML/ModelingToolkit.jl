@@ -31,7 +31,7 @@ t = ModelingToolkit.get_iv(P)
 
 eqs = [connect(P.output, C.input)
        connect(C.output, :plant_input, P.input)]
-sys = ODESystem(eqs, t, systems = [P, C], name = :feedback_system)
+sys = System(eqs, t, systems = [P, C], name = :feedback_system)
 
 matrices_S, _ = get_sensitivity(sys, :plant_input) # Compute the matrices of a state-space representation of the (input) sensitivity function.
 matrices_T, _ = get_comp_sensitivity(sys, :plant_input)
@@ -950,7 +950,7 @@ function linearization_function(sys::AbstractSystem,
         if output isa AnalysisPoint
             sys, (output_var,) = apply_transformation(AddVariable(output), sys)
             sys, (input_var,) = apply_transformation(GetInput(output), sys)
-            push!(get_eqs(sys), output_var ~ input_var)
+            @set! sys.eqs = [get_eqs(sys); output_var ~ input_var]
         else
             output_var = output
         end
@@ -1007,12 +1007,12 @@ See also [`get_sensitivity`](@ref), [`get_comp_sensitivity`](@ref), [`open_loop`
 # 
 
 """
-    generate_control_function(sys::ModelingToolkit.AbstractODESystem, input_ap_name::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}}, dist_ap_name::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}}; system_modifier = identity, kwargs)
+    generate_control_function(sys::ModelingToolkit.AbstractSystem, input_ap_name::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}}, dist_ap_name::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}}; system_modifier = identity, kwargs)
 
 When called with analysis points as input arguments, we assume that all analysis points corresponds to connections that should be opened (broken). The use case for this is to get rid of input signal blocks, such as `Step` or `Sine`, since these are useful for simulation but are not needed when using the plant model in a controller or state estimator.
 """
 function generate_control_function(
-        sys::ModelingToolkit.AbstractODESystem, input_ap_name::Union{
+        sys::ModelingToolkit.AbstractSystem, input_ap_name::Union{
             Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
         dist_ap_name::Union{
             Nothing, Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}} = nothing;

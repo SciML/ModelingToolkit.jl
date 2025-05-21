@@ -484,7 +484,7 @@ using ModelingToolkit: D_nounits
             [x ~ 1.5] => [x ~ 5, y ~ 1]
         end
         @discrete_events begin
-            (t == 1.5) => [x ~ x + 5, z ~ 2]
+            (t == 1.5) => [x ~ Pre(x) + 5, z ~ 2]
         end
     end
 
@@ -511,7 +511,7 @@ using ModelingToolkit: getdefault, scalarize
 
     @test eval(ModelWithComponentArray.structure[:parameters][:r][:unit]) ==
           eval(u"Ω")
-    @test lastindex(parameters(model_with_component_array)) == 3
+    @test lastindex(parameters(model_with_component_array)) == 4
 
     # Test the constant `k`. Manually k's value should be kept in sync here
     # and the ModelParsingPrecompile.
@@ -1012,21 +1012,6 @@ end
     end
 end
 
-@testset "Specify the type of system" begin
-    @mtkmodel Float2Bool::DiscreteSystem begin
-        @variables begin
-            u(t)::Float64
-            y(t)::Bool
-        end
-        @equations begin
-            y ~ u != 0
-        end
-    end
-
-    @named sys = Float2Bool()
-    @test typeof(sys) == DiscreteSystem
-end
-
 @testset "Constraints, costs, consolidate" begin
     @mtkmodel Example begin
         @variables begin
@@ -1044,17 +1029,17 @@ end
             x + y
             EvalAt(1)(y)^2
         end
-        @consolidate f(u) = u[1]^2 + log(u[2])
+        @consolidate f(u, sub) = u[1]^2 + log(u[2]) + sum(sub; init = 0)
     end
 
     @named ex = Example()
     ex = complete(ex)
 
     costs = ModelingToolkit.get_costs(ex)
-    constrs = ModelingToolkit.get_constraints(ModelingToolkit.get_constraintsystem(ex))
+    constrs = ModelingToolkit.get_constraints(ex)
     @test isequal(costs[1], ex.x + ex.y)
     @test isequal(costs[2], EvalAt(1)(ex.y)^2)
-    @test isequal(constrs[1], -3 + EvalAt(0.3)(ex.x) ~ 0)
-    @test isequal(constrs[2], -4 + ex.y ≲ 0)
-    @test ModelingToolkit.get_consolidate(ex)([1, 2]) ≈ 1 + log(2)
+    @test isequal(constrs[1], EvalAt(0.3)(ex.x) ~ 3)
+    @test isequal(constrs[2], ex.y ≲ 4)
+    @test ModelingToolkit.get_consolidate(ex)([1, 2], [3, 4]) ≈ 8 + log(2)
 end

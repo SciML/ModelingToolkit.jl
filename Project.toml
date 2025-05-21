@@ -1,7 +1,7 @@
 name = "ModelingToolkit"
 uuid = "961ee093-0014-501f-94e3-6117800e7a78"
 authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
-version = "9.80.1"
+version = "10.0.0"
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
@@ -31,6 +31,7 @@ ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 FunctionWrappers = "069b7b12-0de2-55c6-9aab-29f3d0a68a2e"
 FunctionWrappersWrappers = "77dc65aa-8811-40c2-897b-53d922fa7daf"
 Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
+ImplicitDiscreteSolve = "3263718b-31ed-49cf-8a0f-35a466e8af96"
 InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 JuliaFormatter = "98e50ef6-434e-11e9-1051-2b60c6c9e899"
 JumpProcesses = "ccbc3e58-028d-4f4c-8cd5-9ae44345cda5"
@@ -43,6 +44,7 @@ NaNMath = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 NonlinearSolve = "8913a72c-1f9b-4ce2-8d82-65094dcecaec"
 OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
 OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
+OrdinaryDiffEqCore = "bbf590c4-e513-4bbe-9b18-05decba2e5d8"
 PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 RecursiveArrayTools = "731186ca-8d62-57ce-b412-fbd966d074cd"
 Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
@@ -87,7 +89,7 @@ BifurcationKit = "0.4"
 BlockArrays = "1.1"
 BoundaryValueDiffEqAscher = "1.6.0"
 BoundaryValueDiffEqMIRK = "1.7.0"
-CasADi = "1.0.6"
+CasADi = "1.0.7"
 ChainRulesCore = "1"
 Combinatorics = "1"
 CommonSolve = "0.2.4"
@@ -115,6 +117,7 @@ ForwardDiff = "0.10.3"
 FunctionWrappers = "1.1"
 FunctionWrappersWrappers = "0.1"
 Graphs = "1.5.2"
+ImplicitDiscreteSolve = "0.1.2"
 InfiniteOpt = "0.5"
 InteractiveUtils = "1"
 JuliaFormatter = "1.0.47, 2"
@@ -176,6 +179,7 @@ Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 ModelingToolkitStandardLibrary = "16a59e39-deab-5bd0-87e4-056b12336739"
 NonlinearSolve = "8913a72c-1f9b-4ce2-8d82-65094dcecaec"
 Optimization = "7f7a1694-90dd-40f0-9382-eb1efda571ba"
+OptimizationBase = "bca83a33-5cc9-4baa-983d-23429ab6bcbb"
 OptimizationMOI = "fd9f6733-72f4-499f-8506-86b2bdd0dea1"
 OptimizationOptimJL = "36348300-93cb-4f02-beb5-3c3902f8871e"
 OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
@@ -195,5 +199,10 @@ StochasticDiffEq = "789caeaf-c7a9-5a7d-9973-96adeb23e2a0"
 Sundials = "c3572dad-4567-51f8-b174-8c6c989267f4"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
+[sources]
+ModelingToolkitStandardLibrary = { url = "https://github.com/SciML/ModelingToolkitStandardLibrary.jl/", rev = "mtk-v10" }
+OptimizationBase = { url = "https://github.com/AayushSabharwal/OptimizationBase.jl", rev = "as/mtk-v10" }
+OptimizationMOI = { url = "https://github.com/AayushSabharwal/Optimization.jl", subdir = "lib/OptimizationMOI", rev = "as/mtk-v10" }
+
 [targets]
-test = ["AmplNLWriter", "BenchmarkTools", "BoundaryValueDiffEqMIRK", "BoundaryValueDiffEqAscher", "ControlSystemsBase", "DataInterpolations", "DelayDiffEq", "NonlinearSolve", "ForwardDiff", "Ipopt", "Ipopt_jll", "ModelingToolkitStandardLibrary", "Optimization", "OptimizationOptimJL", "OptimizationMOI", "OrdinaryDiffEq", "OrdinaryDiffEqCore", "OrdinaryDiffEqDefault", "REPL", "Random", "ReferenceTests", "SafeTestsets", "StableRNGs", "Statistics", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials", "StochasticDelayDiffEq", "Pkg", "JET", "OrdinaryDiffEqNonlinearSolve", "Logging"]
+test = ["AmplNLWriter", "BenchmarkTools", "BoundaryValueDiffEqMIRK", "BoundaryValueDiffEqAscher", "ControlSystemsBase", "DataInterpolations", "DelayDiffEq", "NonlinearSolve", "ForwardDiff", "Ipopt", "Ipopt_jll", "ModelingToolkitStandardLibrary", "Optimization", "OptimizationOptimJL", "OptimizationMOI", "OrdinaryDiffEq", "OrdinaryDiffEqCore", "OrdinaryDiffEqDefault", "REPL", "Random", "ReferenceTests", "SafeTestsets", "StableRNGs", "Statistics", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials", "StochasticDelayDiffEq", "Pkg", "JET", "OrdinaryDiffEqNonlinearSolve", "Logging", "OptimizationBase"]

@@ -21,7 +21,7 @@ using ModelingToolkit, OrdinaryDiffEq
 @variables x(t) y(t)
 D = Differential(t)
 eqs = [D(x) ~ α*x - β*x*y, D(y) ~ -δ*y + γ*x*y]
-@named sys = ODESystem(eqs, t)
+@named sys = System(eqs, t)
 
 sys2 = liouville_transform(sys)
 sys2 = complete(sys2)
@@ -40,14 +40,14 @@ Optimal Transport Approach
 Abhishek Halder, Kooktae Lee, and Raktim Bhattacharya
 https://abhishekhalder.bitbucket.io/F16ACC2013Final.pdf
 """
-function liouville_transform(sys::AbstractODESystem; kwargs...)
+function liouville_transform(sys::System; kwargs...)
     t = get_iv(sys)
     @variables trJ
-    D = ModelingToolkit.Differential(t)
+    D = Differential(t)
     neweq = D(trJ) ~ trJ * -tr(calculate_jacobian(sys))
     neweqs = [equations(sys); neweq]
     vars = [unknowns(sys); trJ]
-    ODESystem(
+    System(
         neweqs, t, vars, parameters(sys);
         checks = false, name = nameof(sys), kwargs...
     )
@@ -55,7 +55,7 @@ end
 
 """
     change_independent_variable(
-        sys::AbstractODESystem, iv, eqs = [];
+        sys::System, iv, eqs = [];
         add_old_diff = false, simplify = true, fold = false
     )
 
@@ -95,7 +95,7 @@ By changing the independent variable, it can be reformulated for vertical positi
 ```julia
 julia> @variables x(t) y(t);
 
-julia> @named M = ODESystem([D(D(y)) ~ -9.81, D(D(x)) ~ 0.0], t);
+julia> @named M = System([D(D(y)) ~ -9.81, D(D(x)) ~ 0.0], t);
 
 julia> M = change_independent_variable(M, x);
 
@@ -109,7 +109,7 @@ julia> unknowns(M)
 ```
 """
 function change_independent_variable(
-        sys::AbstractODESystem, iv, eqs = [];
+        sys::System, iv, eqs = [];
         add_old_diff = false, simplify = true, fold = false
 )
     iv2_of_iv1 = unwrap(iv) # e.g. u(t)
@@ -201,7 +201,7 @@ function change_independent_variable(
     end
 
     # Use the utility function to transform everything in the system!
-    function transform(sys::AbstractODESystem)
+    function transform(sys::System)
         systems = map(transform, get_systems(sys)) # recurse through subsystems
         # transform equations and connections
         systems_map = Dict(get_name(s) => s for s in systems)
@@ -233,4 +233,342 @@ function change_independent_variable(
         return sys
     end
     return transform(sys)
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Choose correction_factor=-1//2 (1//2) to convert Ito -> Stratonovich (Stratonovich->Ito).
+"""
+function stochastic_integral_transform(sys::System, correction_factor)
+    if !isempty(get_systems(sys))
+        throw(ArgumentError("The system must be flattened."))
+    end
+    if get_noise_eqs(sys) === nothing
+        throw(ArgumentError("""
+        `$stochastic_integral_transform` expects a system with noise_eqs. If your \
+        noise is specified using brownian variables, consider calling \
+        `structural_simplify`.
+        """))
+    end
+    name = nameof(sys)
+    noise_eqs = get_noise_eqs(sys)
+    eqs = equations(sys)
+    dvs = unknowns(sys)
+    ps = parameters(sys)
+    # use the general interface
+    if noise_eqs isa Vector
+        _eqs = reduce(vcat, [eqs[i].lhs ~ noise_eqs[i] for i in eachindex(dvs)])
+        de = System(_eqs, get_iv(sys), dvs, ps, name = name, checks = false)
+
+        jac = calculate_jacobian(de, sparse = false, simplify = false)
+        ∇σσ′ = simplify.(jac * noise_eqs)
+    else
+        dimunknowns, m = size(noise_eqs)
+        _eqs = reduce(vcat, [eqs[i].lhs ~ noise_eqs[i] for i in eachindex(dvs)])
+        de = System(_eqs, get_iv(sys), dvs, ps, name = name, checks = false)
+
+        jac = calculate_jacobian(de, sparse = false, simplify = false)
+        ∇σσ′ = simplify.(jac * noise_eqs[:, 1])
+        for k in 2:m
+            __eqs = reduce(vcat,
+                [eqs[i].lhs ~ noise_eqs[Int(i + (k - 1) * dimunknowns)]
+                 for i in eachindex(dvs)])
+            de = System(__eqs, get_iv(sys), dvs, dvs, name = name, checks = false)
+
+            jac = calculate_jacobian(de, sparse = false, simplify = false)
+            ∇σσ′ = ∇σσ′ + simplify.(jac * noise_eqs[:, k])
+        end
+    end
+    deqs = reduce(vcat,
+        [eqs[i].lhs ~ eqs[i].rhs + correction_factor * ∇σσ′[i] for i in eachindex(dvs)])
+
+    # reduce(vcat, [1]) == 1 for some reason
+    if deqs isa Equation
+        deqs = [deqs]
+    end
+    return @set sys.eqs = deqs
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Measure transformation method that allows for a reduction in the variance of an estimator `Exp(g(X_t))`.
+Input:  Original SDE system and symbolic function `u(t,x)` with scalar output that
+        defines the adjustable parameters `d` in the Girsanov transformation. Optional: initial
+        condition for `θ0`.
+Output: Modified SDE System with additional component `θ_t` and initial value `θ0`, as well as
+        the weight `θ_t/θ0` as observed equation, such that the estimator `Exp(g(X_t)θ_t/θ0)`
+        has a smaller variance.
+
+Reference:
+Kloeden, P. E., Platen, E., & Schurz, H. (2012). Numerical solution of SDE through computer
+experiments. Springer Science & Business Media.
+
+# Example
+
+```julia
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@parameters α β
+@variables x(t) y(t) z(t)
+
+eqs = [D(x) ~ α*x]
+noiseeqs = [β*x]
+
+@named de = System(eqs,t,[x],[α,β]; noise_eqs = noiseeqs)
+
+# define u (user choice)
+u = x
+θ0 = 0.1
+g(x) = x[1]^2
+demod = ModelingToolkit.Girsanov_transform(de, u; θ0=0.1)
+
+u0modmap = [
+    x => x0
+]
+
+parammap = [
+    α => 1.5,
+    β => 1.0
+]
+
+probmod = SDEProblem(complete(demod),u0modmap,(0.0,1.0),parammap)
+ensemble_probmod = EnsembleProblem(probmod;
+          output_func = (sol,i) -> (g(sol[x,end])*sol[demod.weight,end],false),
+          )
+
+simmod = solve(ensemble_probmod,EM(),dt=dt,trajectories=numtraj)
+```
+
+"""
+function Girsanov_transform(sys::System, u; θ0 = 1.0)
+    name = nameof(sys)
+
+    # register new variable θ corresponding to 1D correction process θ(t)
+    t = get_iv(sys)
+    D = Differential(t)
+    @variables θ(t), weight(t)
+
+    # determine the adjustable parameters `d` given `u`
+    # gradient of u with respect to unknowns
+    grad = Symbolics.gradient(u, unknowns(sys))
+
+    noiseeqs = copy(get_noise_eqs(sys))
+    if noiseeqs isa Vector
+        d = simplify.(-(noiseeqs .* grad) / u)
+        drift_correction = noiseeqs .* d
+    else
+        d = simplify.(-noiseeqs * grad / u)
+        drift_correction = noiseeqs * d
+    end
+
+    eqs = equations(sys)
+    dvs = unknowns(sys)
+    # transformation adds additional unknowns θ: newX = (X,θ)
+    # drift function for unknowns is modified
+    # θ has zero drift
+    deqs = reduce(
+        vcat, [eqs[i].lhs ~ eqs[i].rhs - drift_correction[i] for i in eachindex(dvs)])
+    if deqs isa Equation
+        deqs = [deqs]
+    end
+    deqsθ = D(θ) ~ 0
+    push!(deqs, deqsθ)
+
+    # diffusion matrix is of size d x m (d unknowns, m noise), with diagonal noise represented as a d-dimensional vector
+    # for diagonal noise processes with m>1, the noise process will become non-diagonal; extra unknown component but no new noise process.
+    # new diffusion matrix is of size d+1 x M
+    # diffusion for state is unchanged
+
+    noiseqsθ = θ * d
+
+    if noiseeqs isa Vector
+        m = size(noiseeqs)
+        if m == 1
+            push!(noiseeqs, noiseqsθ)
+        else
+            noiseeqs = [Array(Diagonal(wrap.(noiseeqs))); noiseqsθ']
+        end
+    else
+        noiseeqs = [Array(noiseeqs); noiseqsθ']
+    end
+
+    unknown_vars = [dvs; θ]
+
+    # return modified SDE System
+    @set! sys.eqs = deqs
+    @set! sys.noise_eqs = noiseeqs
+    @set! sys.unknowns = unknown_vars
+    get_defaults(sys)[θ] = θ0
+    obs = observed(sys)
+    @set! sys.observed = [weight ~ θ / θ0; obs]
+    if get_parent(sys) !== nothing
+        @set! sys.parent.unknowns = [get_unknowns(get_parent(sys)); [θ, weight]]
+    end
+    return sys
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Add accumulation variables for `vars`. For every unknown `x` in `vars`, add
+`D(accumulation_x) ~ x` as an equation.
+"""
+function add_accumulations(sys::System, vars = unknowns(sys))
+    avars = [rename(v, Symbol(:accumulation_, getname(v))) for v in vars]
+    return add_accumulations(sys, avars .=> vars)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Add accumulation variables for `vars`. `vars` is a vector of pairs in the form
+of
+
+```julia
+[cumulative_var1 => x + y, cumulative_var2 => x^2]
+```
+Then, cumulative variables `cumulative_var1` and `cumulative_var2` that computes
+the cumulative `x + y` and `x^2` would be added to `sys`.
+
+All accumulation variables have a default of zero.
+"""
+function add_accumulations(sys::System, vars::Vector{<:Pair})
+    eqs = get_eqs(sys)
+    avars = map(first, vars)
+    if (ints = intersect(avars, unknowns(sys)); !isempty(ints))
+        error("$ints already exist in the system!")
+    end
+    D = Differential(get_iv(sys))
+    @set! sys.eqs = [eqs; Equation[D(a) ~ v[2] for (a, v) in zip(avars, vars)]]
+    @set! sys.unknowns = [get_unknowns(sys); avars]
+    @set! sys.defaults = merge(get_defaults(sys), Dict(a => 0.0 for a in avars))
+    return sys
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given a system with noise in the form of noise equation (`get_noise_eqs(sys) !== nothing`)
+return an equivalent system which represents the noise using brownian variables.
+
+# Keyword Arguments
+
+- `names`: The name(s) to use for the brownian variables. If this is a `Symbol`, variables
+  with the given name and successive numeric `_i` suffixes will be used. If a `Vector`,
+  this must have appropriate length for the noise equations of the system. The
+  corresponding number of brownian variables are created with the given names.
+"""
+function noise_to_brownians(sys::System; names::Union{Symbol, Vector{Symbol}} = :α)
+    neqs = get_noise_eqs(sys)
+    if neqs === nothing
+        throw(ArgumentError("Expected a system with `noise_eqs`."))
+    end
+    if !isempty(get_systems(sys))
+        throw(ArgumentError("The system must be flattened."))
+    end
+    # vector means diagonal noise
+    nbrownians = ndims(neqs) == 1 ? length(neqs) : size(neqs, 2)
+    if names isa Symbol
+        names = [Symbol(names, :_, i) for i in 1:nbrownians]
+    end
+    if length(names) != nbrownians
+        throw(ArgumentError("""
+        The system has $nbrownians brownian variables. Received $(length(names)) names \
+        for the brownian variables. Provide $nbrownians names or a single `Symbol` to use \
+        an array variable of the appropriately length.
+        """))
+    end
+    brownvars = map(names) do name
+        unwrap(only(@brownian $name))
+    end
+
+    terms = if ndims(neqs) == 1
+        neqs .* brownvars
+    else
+        neqs * brownvars
+    end
+
+    eqs = map(get_eqs(sys), terms) do eq, term
+        eq.lhs ~ eq.rhs + term
+    end
+
+    @set! sys.eqs = eqs
+    @set! sys.brownians = brownvars
+    @set! sys.noise_eqs = nothing
+
+    return sys
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Function which takes a system `sys` and an independent variable `t` and changes the
+independent variable of `sys` to `t`. This is different from
+[`change_independent_variable`](@ref) since this function only does a symbolic substitution
+of the independent variable. `sys` must not be a reduced system (`observed(sys)` must be
+empty). If `sys` is time-independent, this can be used to turn it into a time-dependent
+system.
+
+# Keyword arguments
+
+- `name`: The name of the returned system.
+"""
+function convert_system_indepvar(sys::System, t; name = nameof(sys))
+    isempty(observed(sys)) ||
+        throw(ArgumentError("""
+        `convert_system_indepvar` cannot handle reduced model (i.e. observed(sys) is non-\
+        empty).
+        """))
+    t = value(t)
+    varmap = Dict()
+    sts = unknowns(sys)
+    newsts = similar(sts, Any)
+    for (i, s) in enumerate(sts)
+        if iscall(s)
+            args = arguments(s)
+            length(args) == 1 ||
+                throw(InvalidSystemException("Illegal unknown: $s. The unknown can have at most one argument like `x(t)`."))
+            arg = args[1]
+            if isequal(arg, t)
+                newsts[i] = s
+                continue
+            end
+            ns = maketerm(typeof(s), operation(s), Any[t],
+                SymbolicUtils.metadata(s))
+            newsts[i] = ns
+            varmap[s] = ns
+        else
+            ns = variable(getname(s); T = FnType)(t)
+            newsts[i] = ns
+            varmap[s] = ns
+        end
+    end
+    sub = Base.Fix2(substitute, varmap)
+    if is_time_dependent(sys)
+        iv = only(independent_variables(sys))
+        sub.x[iv] = t # otherwise the Differentials aren't fixed
+    end
+    neweqs = map(sub, equations(sys))
+    defs = Dict(sub(k) => sub(v) for (k, v) in defaults(sys))
+    neqs = get_noise_eqs(sys)
+    if neqs !== nothing
+        neqs = map(sub, neqs)
+    end
+    cstrs = map(sub, get_constraints(sys))
+    costs = Vector{Union{Real, BasicSymbolic}}(map(sub, get_costs(sys)))
+    @set! sys.eqs = neweqs
+    @set! sys.iv = t
+    @set! sys.unknowns = newsts
+    @set! sys.defaults = defs
+    @set! sys.name = name
+    @set! sys.noise_eqs = neqs
+    @set! sys.constraints = cstrs
+    @set! sys.costs = costs
+
+    var_to_name = Dict(k => get(varmap, v, v) for (k, v) in get_var_to_name(sys))
+    @set! sys.var_to_name = var_to_name
+    return sys
 end

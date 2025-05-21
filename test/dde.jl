@@ -86,7 +86,7 @@ eqs = [D(x(t)) ~ a * x(t) + b * x(t - τ) + c + (α * x(t) + γ) * η, delx ~ x(
 @test ModelingToolkit.is_dde(sys)
 @test !is_markovian(sys)
 @test equations(sys) == [D(x(t)) ~ a * x(t) + b * x(t - τ) + c]
-@test isequal(ModelingToolkit.get_noiseeqs(sys), [α * x(t) + γ])
+@test isequal(ModelingToolkit.get_noise_eqs(sys), [α * x(t) + γ;;])
 prob_mtk = SDDEProblem(sys, [x(t) => 1.0 + t], tspan; constant_lags = (τ,));
 @test_nowarn sol_mtk = solve(prob_mtk, RKMil(), seed = 100)
 
@@ -98,7 +98,7 @@ prob_sa = SDDEProblem(
 
 function oscillator(; name, k = 1.0, τ = 0.01)
     @parameters k=k τ=τ
-    @variables x(..)=0.1 y(t)=0.1 jcn(t)=0.0 delx(t)
+    @variables x(..)=0.1 y(t)=0.1 jcn(t) delx(t)
     eqs = [D(x(t)) ~ y,
         D(y) ~ -k * x(t - τ) + jcn,
         delx ~ x(t - τ)]

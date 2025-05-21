@@ -54,6 +54,7 @@ import Moshi
 using Moshi.Data: @data
 using NonlinearSolve
 import SCCNonlinearSolve
+using ImplicitDiscreteSolve
 using Reexport
 using RecursiveArrayTools
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
@@ -129,10 +130,8 @@ TODO
 abstract type AbstractSystem end
 abstract type AbstractTimeDependentSystem <: AbstractSystem end
 abstract type AbstractTimeIndependentSystem <: AbstractSystem end
-abstract type AbstractODESystem <: AbstractTimeDependentSystem end
 abstract type AbstractMultivariateSystem <: AbstractSystem end
 abstract type AbstractOptimizationSystem <: AbstractTimeIndependentSystem end
-abstract type AbstractDiscreteSystem <: AbstractTimeDependentSystem end
 
 function independent_variable end
 
@@ -161,29 +160,37 @@ include("systems/connectors.jl")
 include("systems/analysis_points.jl")
 include("systems/imperative_affect.jl")
 include("systems/callbacks.jl")
+include("systems/system.jl")
 include("systems/codegen_utils.jl")
+include("systems/codegen.jl")
 include("systems/problem_utils.jl")
 include("linearization.jl")
 
-include("systems/optimization/constraints_system.jl")
-include("systems/optimization/optimizationsystem.jl")
-include("systems/optimization/modelingtoolkitize.jl")
+include("problems/compatibility.jl")
+include("problems/odeproblem.jl")
+include("problems/ddeproblem.jl")
+include("problems/daeproblem.jl")
+include("problems/sdeproblem.jl")
+include("problems/sddeproblem.jl")
+include("problems/nonlinearproblem.jl")
+include("problems/intervalnonlinearproblem.jl")
+include("problems/implicitdiscreteproblem.jl")
+include("problems/discreteproblem.jl")
+include("problems/optimizationproblem.jl")
+include("problems/jumpproblem.jl")
+include("problems/initializationproblem.jl")
+include("problems/sccnonlinearproblem.jl")
+include("problems/bvproblem.jl")
 
-include("systems/nonlinear/nonlinearsystem.jl")
+include("modelingtoolkitize/common.jl")
+include("modelingtoolkitize/odeproblem.jl")
+include("modelingtoolkitize/sdeproblem.jl")
+include("modelingtoolkitize/optimizationproblem.jl")
+include("modelingtoolkitize/nonlinearproblem.jl")
+
 include("systems/nonlinear/homotopy_continuation.jl")
-include("systems/diffeqs/odesystem.jl")
-include("systems/diffeqs/sdesystem.jl")
-include("systems/diffeqs/abstractodesystem.jl")
-include("systems/nonlinear/modelingtoolkitize.jl")
 include("systems/nonlinear/initializesystem.jl")
-include("systems/diffeqs/first_order_transform.jl")
-include("systems/diffeqs/modelingtoolkitize.jl")
 include("systems/diffeqs/basic_transformations.jl")
-
-include("systems/discrete_system/discrete_system.jl")
-include("systems/discrete_system/implicit_discrete_system.jl")
-
-include("systems/jumps/jumpsystem.jl")
 
 include("systems/pde/pdesystem.jl")
 
@@ -208,11 +215,6 @@ include("inputoutput.jl")
 
 include("adjoints.jl")
 
-for S in subtypes(ModelingToolkit.AbstractSystem)
-    S = nameof(S)
-    @eval convert_system(::Type{<:$S}, sys::$S) = sys
-end
-
 const t_nounits = let
     only(@independent_variables t)
 end
@@ -230,7 +232,7 @@ const D = Differential(t)
 PrecompileTools.@compile_workload begin
     using ModelingToolkit
     @variables x(ModelingToolkit.t_nounits)
-    @named sys = ODESystem([ModelingToolkit.D_nounits(x) ~ -x], ModelingToolkit.t_nounits)
+    @named sys = System([ModelingToolkit.D_nounits(x) ~ -x], ModelingToolkit.t_nounits)
     prob = ODEProblem(structural_simplify(sys), [x => 30.0], (0, 100), [], jac = true)
     @mtkmodel __testmod__ begin
         @constants begin
@@ -266,16 +268,14 @@ export AbstractTimeDependentSystem,
        AbstractTimeIndependentSystem,
        AbstractMultivariateSystem
 
-export ODESystem,
-       ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system,
-       add_accumulations, System
+export ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system_indepvar,
+       System, OptimizationSystem, JumpSystem, SDESystem, NonlinearSystem
 export DAEFunctionExpr, DAEProblemExpr
-export SDESystem, SDEFunction, SDEFunctionExpr, SDEProblemExpr
+export SDEFunction, SDEFunctionExpr, SDEProblemExpr
 export SystemStructure
-export DiscreteSystem, DiscreteProblem, DiscreteFunction, DiscreteFunctionExpr
-export ImplicitDiscreteSystem, ImplicitDiscreteProblem, ImplicitDiscreteFunction,
+export DiscreteProblem, DiscreteFunction, DiscreteFunctionExpr
+export ImplicitDiscreteProblem, ImplicitDiscreteFunction,
        ImplicitDiscreteFunctionExpr
-export JumpSystem
 export ODEProblem, SDEProblem
 export NonlinearFunction, NonlinearFunctionExpr
 export NonlinearProblem, NonlinearProblemExpr
@@ -284,7 +284,6 @@ export IntervalNonlinearProblem, IntervalNonlinearProblemExpr
 export OptimizationProblem, OptimizationProblemExpr, constraints
 export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem
-export NonlinearSystem, OptimizationSystem, ConstraintsSystem
 export alias_elimination, flatten
 export connect, domain_connect, @connector, Connection, AnalysisPoint, Flow, Stream,
        instream
@@ -295,26 +294,28 @@ export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbanc
        tunable_parameters, isirreducible, getdescription, hasdescription,
        hasunit, getunit, hasconnect, getconnect,
        hasmisc, getmisc, state_priority
-export ode_order_lowering, dae_order_lowering, liouville_transform,
-       change_independent_variable, substitute_component
+export liouville_transform, change_independent_variable, substitute_component,
+       add_accumulations, noise_to_brownians
 export PDESystem
 export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
 export Term, Sym
-export SymScope, LocalScope, ParentScope, DelayParentScope, GlobalScope
-export independent_variable, equations, controls, observed, full_equations
+export SymScope, LocalScope, ParentScope, GlobalScope
+export independent_variable, equations, controls, observed, full_equations, jumps, cost,
+       brownians
 export initialization_equations, guesses, defaults, parameter_dependencies, hierarchy
 export structural_simplify, expand_connections, linearize, linearization_function,
        LinearizationProblem
 export solve
+export Pre
 
-export calculate_jacobian, generate_jacobian, generate_function, generate_custom_function,
-       generate_W
+export calculate_jacobian, generate_jacobian, generate_rhs, generate_custom_function,
+       generate_W, calculate_hessian
 export calculate_control_jacobian, generate_control_jacobian
 export calculate_tgrad, generate_tgrad
-export calculate_gradient, generate_gradient
+export generate_cost, calculate_cost_gradient, generate_cost_gradient
 export calculate_factorized_W, generate_factorized_W
-export calculate_hessian, generate_hessian
+export calculate_cost_hessian, generate_cost_hessian
 export calculate_massmatrix, generate_diffusion_function
 export stochastic_integral_transform
 export TearingState

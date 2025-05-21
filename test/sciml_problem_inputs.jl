@@ -38,11 +38,11 @@ begin
     ]
 
     # Create systems (without structural_simplify, since that might modify systems to affect intended tests).
-    osys = complete(ODESystem(diff_eqs, t; name = :osys))
+    osys = complete(System(diff_eqs, t; name = :osys))
     ssys = complete(SDESystem(
         diff_eqs, noise_eqs, t, [X, Y, Z], [kp, kd, k1, k2]; name = :ssys))
     jsys = complete(JumpSystem(jumps, t, [X, Y, Z], [kp, kd, k1, k2]; name = :jsys))
-    nsys = complete(NonlinearSystem(alg_eqs; name = :nsys))
+    nsys = complete(System(alg_eqs; name = :nsys))
 
     u0_alts = [
         # Vectors not providing default values.

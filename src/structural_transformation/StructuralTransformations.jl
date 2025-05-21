@@ -11,7 +11,7 @@ using SymbolicUtils.Rewriters
 using SymbolicUtils: maketerm, iscall
 
 using ModelingToolkit
-using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Differential,
+using ModelingToolkit: System, AbstractSystem, var_from_nested_derivative, Differential,
                        unknowns, equations, vars, Symbolic, diff2term_with_unit,
                        shift2term_with_unit, value,
                        operation, arguments, Sym, Term, simplify, symbolic_linear_solve,
@@ -21,7 +21,7 @@ using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Di
                        has_tearing_state, defaults, InvalidSystemException,
                        ExtraEquationsSystemException,
                        ExtraVariablesSystemException,
-                       get_postprocess_fbody, vars!,
+                       vars!,
                        IncrementalCycleTracker, add_edge_checked!, topological_sort,
                        invalidate_cache!, Substitutions, get_or_construct_tearing_state,
                        filter_kwargs, lower_varname_with_unit,
@@ -40,6 +40,7 @@ using ModelingToolkit: algeqs, EquationsView,
                        dervars_range, diffvars_range, algvars_range,
                        DiffGraph, complete!,
                        get_fullvars, system_subset
+using SymbolicIndexingInterface: symbolic_type, ArraySymbolic
 
 using ModelingToolkit.DiffEqBase
 using ModelingToolkit.StaticArrays
@@ -57,11 +58,11 @@ using DocStringExtensions
 
 export tearing, partial_state_selection, dae_index_lowering, check_consistency
 export dummy_derivative
-export build_torn_function, build_observed_function, ODAEProblem
+export build_observed_function, ODAEProblem
 export sorted_incidence_matrix,
        pantelides!, pantelides_reassemble, tearing_reassemble, find_solvables!,
        linear_subsys_adjmat!
-export tearing_assignments, tearing_substitution
+export tearing_substitution
 export torn_system_jacobian_sparsity
 export full_equations
 export but_ordered_incidence, lowest_order_variable_mask, highest_order_variable_mask

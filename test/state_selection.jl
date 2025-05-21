@@ -7,7 +7,7 @@ eqs = [x1 + x2 + u1 ~ 0
        x1 + x2 + x3 + u2 ~ 0
        x1 + D(x3) + x4 + u3 ~ 0
        2 * D(D(x1)) + D(D(x2)) + D(D(x3)) + D(x4) + u4 ~ 0]
-@named sys = ODESystem(eqs, t)
+@named sys = System(eqs, t)
 
 let dd = dummy_derivative(sys)
     has_dx1 = has_dx2 = false
@@ -23,7 +23,6 @@ end
 @test_skip let pss = partial_state_selection(sys)
     @test length(equations(pss)) == 1
     @test length(unknowns(pss)) == 2
-    @test length(equations(ode_order_lowering(pss))) == 2
 end
 
 @parameters σ ρ β
@@ -35,7 +34,7 @@ eqs = [D(x) ~ σ * (y - x)
        0 ~ a + z
        u ~ z + a]
 
-lorenz1 = ODESystem(eqs, t, name = :lorenz1)
+lorenz1 = System(eqs, t, name = :lorenz1)
 let al1 = alias_elimination(lorenz1)
     let lss = partial_state_selection(al1)
         @test length(equations(lss)) == 2
@@ -47,13 +46,13 @@ let
     @connector function Fluid_port(; name, p = 101325.0, m = 0.0, T = 293.15)
         sts = @variables p(t) [guess = p] m(t) [guess = m, connect = Flow] T(t) [
             guess = T, connect = Stream]
-        ODESystem(Equation[], t, sts, []; name = name)
+        System(Equation[], t, sts, []; name = name)
     end
 
     #this one is for latter
     @connector function Heat_port(; name, Q = 0.0, T = 293.15)
         sts = @variables T(t) [guess = T] Q(t) [guess = Q, connect = Flow]
-        ODESystem(Equation[], t, sts, []; name = name)
+        System(Equation[], t, sts, []; name = name)
     end
 
     # like ground but for fluid systems (fluid_port.m is expected to be zero in closed loop)
@@ -62,7 +61,7 @@ let
         ps = @parameters p=p T_back=T_back
         eqs = [fluid_port.p ~ p
                fluid_port.T ~ T_back]
-        compose(ODESystem(eqs, t, [], ps; name = name), fluid_port)
+        compose(System(eqs, t, [], ps; name = name), fluid_port)
     end
 
     function Source(; name, delta_p = 100, T_feed = 293.15)
@@ -73,7 +72,7 @@ let
                supply_port.p ~ return_port.p + delta_p
                supply_port.T ~ instream(supply_port.T)
                return_port.T ~ T_feed]
-        compose(ODESystem(eqs, t, [], ps; name = name), [supply_port, return_port])
+        compose(System(eqs, t, [], ps; name = name), [supply_port, return_port])
     end
 
     function Substation(; name, T_return = 343.15)
@@ -84,7 +83,7 @@ let
                supply_port.p ~ return_port.p # zero pressure loss for now
                supply_port.T ~ instream(supply_port.T)
                return_port.T ~ T_return]
-        compose(ODESystem(eqs, t, [], ps; name = name), [supply_port, return_port])
+        compose(System(eqs, t, [], ps; name = name), [supply_port, return_port])
     end
 
     function Pipe(; name, L = 1000, d = 0.1, N = 100, rho = 1000, f = 1)
@@ -98,9 +97,9 @@ let
                v * pi * d^2 / 4 * rho ~ fluid_port_a.m
                dp_z ~ abs(v) * v * 0.5 * rho * L / d * f  # pressure loss
                D(v) * rho * L ~ (fluid_port_a.p - fluid_port_b.p - dp_z)]
-        compose(ODESystem(eqs, t, sts, ps; name = name), [fluid_port_a, fluid_port_b])
+        compose(System(eqs, t, sts, ps; name = name), [fluid_port_a, fluid_port_b])
     end
-    function System(; name, L = 10.0)
+    function HydraulicSystem(; name, L = 10.0)
         @named compensator = Compensator()
         @named source = Source()
         @named substation = Substation()
@@ -113,10 +112,10 @@ let
                connect(supply_pipe.fluid_port_b, substation.supply_port)
                connect(substation.return_port, return_pipe.fluid_port_b)
                connect(return_pipe.fluid_port_a, source.return_port)]
-        compose(ODESystem(eqs, t, [], ps; name = name), subs)
+        compose(System(eqs, t, [], ps; name = name), subs)
     end
 
-    @named system = System(L = 10)
+    @named system = HydraulicSystem(L = 10)
     @unpack supply_pipe, return_pipe = system
     sys = structural_simplify(system)
     u0 = [
@@ -167,7 +166,7 @@ let
            D(rho_2) ~ (mo_1 - mo_3) / dx
            D(mo_2) ~ (Ek_1 - Ek_3 + p_1 - p_2) / dx - f / 2 / pipe_D * u_2 * u_2]
 
-    @named trans = ODESystem(eqs, t)
+    @named trans = System(eqs, t)
 
     sys = structural_simplify(trans)
 
@@ -273,7 +272,7 @@ let
     # ----------------------------------------------------------------------------
 
     # solution -------------------------------------------------------------------
-    @named catapult = ODESystem(eqs, t, vars, params, defaults = defs)
+    @named catapult = System(eqs, t, vars, params, defaults = defs)
     sys = structural_simplify(catapult)
     prob = ODEProblem(sys, [], (0.0, 0.1), [l_2f => 0.55, damp => 1e7]; jac = true)
     @test solve(prob, Rodas4()).retcode == ReturnCode.Success

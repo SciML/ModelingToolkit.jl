@@ -11,7 +11,7 @@ using DynamicQuantities
 eqs = [D(D(x)) ~ λ * x
        D(D(y)) ~ λ * y - g
        x^2 + y^2 ~ 1]
-@mtkbuild pend = ODESystem(eqs, t)
+@mtkbuild pend = System(eqs, t)
 
 initprob = ModelingToolkit.InitializationProblem(pend, 0.0, [], [g => 1];
     guesses = [ModelingToolkit.missing_variable_defaults(pend); x => 1; y => 0.2])
@@ -348,7 +348,7 @@ eqs = [D(D(x)) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-@mtkbuild sys = ODESystem(eqs, t)
+@mtkbuild sys = System(eqs, t)
 
 u0 = [D(x) => 2.0,
     y => 0.0,
@@ -375,7 +375,7 @@ function System2(; name)
     end
     eqs = [D(dx) ~ ddx
            0 ~ ddx + dx + 1]
-    return ODESystem(eqs, t, vars, []; name)
+    return System(eqs, t, vars, []; name)
 end
 
 @mtkbuild sys = System2()
@@ -397,7 +397,7 @@ function System3(; name)
     initialization_eqs = [
         ddx ~ -2
     ]
-    return ODESystem(eqs, t, vars, []; name, initialization_eqs)
+    return System(eqs, t, vars, []; name, initialization_eqs)
 end
 
 @mtkbuild sys = System3()
@@ -415,7 +415,7 @@ sol = solve(prob, Tsit5())
         D(y) ~ x * (ρ - z) - y,
         D(z) ~ x * y - β * z]
 
-    @named sys = ODESystem(eqs, t)
+    @named sys = System(eqs, t)
     sys = structural_simplify(sys)
 
     u0 = [D(x) => 2.0,
@@ -444,7 +444,7 @@ eqs = [D(x) ~ α * x - β * x * y
        D(y) ~ -γ * y + δ * x * y
        z ~ x + y]
 
-@named sys = ODESystem(eqs, t)
+@named sys = System(eqs, t)
 simpsys = structural_simplify(sys)
 tspan = (0.0, 10.0)
 
@@ -472,7 +472,7 @@ sol = solve(prob, Tsit5())
 eqs = [D(D(x)) ~ λ * x
        D(D(y)) ~ λ * y - g
        x^2 + y^2 ~ 1]
-@mtkbuild pend = ODESystem(eqs, t)
+@mtkbuild pend = System(eqs, t)
 
 prob = ODEProblem(pend, [x => 1], (0.0, 1.5), [g => 1],
     guesses = [λ => 0, y => 1], initialization_eqs = [y ~ 1])
@@ -484,8 +484,8 @@ sys = structural_simplify(unsimp; fully_determined = false)
 # Extend two systems with initialization equations and guesses
 # https://github.com/SciML/ModelingToolkit.jl/issues/2845
 @variables x(t) y(t)
-@named sysx = ODESystem([D(x) ~ 0], t; initialization_eqs = [x ~ 1])
-@named sysy = ODESystem([D(y) ~ 0], t; initialization_eqs = [y^2 ~ 2], guesses = [y => 1])
+@named sysx = System([D(x) ~ 0], t; initialization_eqs = [x ~ 1])
+@named sysy = System([D(y) ~ 0], t; initialization_eqs = [y^2 ~ 2], guesses = [y => 1])
 sys = extend(sysx, sysy)
 @test length(equations(generate_initializesystem(sys))) == 2
 @test length(ModelingToolkit.guesses(sys)) == 1
@@ -493,7 +493,7 @@ sys = extend(sysx, sysy)
 # https://github.com/SciML/ModelingToolkit.jl/issues/2873
 @testset "Error on missing defaults" begin
     @variables x(t) y(t)
-    @named sys = ODESystem([x^2 + y^2 ~ 25, D(x) ~ 1], t)
+    @named sys = System([x^2 + y^2 ~ 25, D(x) ~ 1], t)
     ssys = structural_simplify(sys)
     @test_throws ModelingToolkit.MissingVariablesError ODEProblem(
         ssys, [x => 3], (0, 1), []) # y should have a guess
@@ -505,7 +505,7 @@ end
 
     # system 1 should solve to x = 1
     ics1 = [x => 1]
-    sys1 = ODESystem([D(x) ~ 0], t; defaults = ics1, name = :sys1) |> structural_simplify
+    sys1 = System([D(x) ~ 0], t; defaults = ics1, name = :sys1) |> structural_simplify
     prob1 = ODEProblem(sys1, [], (0.0, 1.0), [])
     sol1 = solve(prob1, Tsit5())
     @test all(sol1[x] .== 1)
@@ -513,7 +513,7 @@ end
     # system 2 should solve to x = y = 2
     sys2 = extend(
         sys1,
-        ODESystem([D(y) ~ 0], t; initialization_eqs = [y ~ 2], name = :sys2)
+        System([D(y) ~ 0], t; initialization_eqs = [y ~ 2], name = :sys2)
     ) |> structural_simplify
     ics2 = unknowns(sys1) .=> 2 # should be equivalent to "ics2 = [x => 2]"
     prob2 = ODEProblem(sys2, ics2, (0.0, 1.0), []; fully_determined = true)
@@ -524,12 +524,12 @@ end
 # https://github.com/SciML/ModelingToolkit.jl/issues/3029
 @testset "Derivatives in initialization equations" begin
     @variables x(t)
-    sys = ODESystem(
+    sys = System(
         [D(D(x)) ~ 0], t; initialization_eqs = [x ~ 0, D(x) ~ 1], name = :sys) |>
           structural_simplify
     @test_nowarn ODEProblem(sys, [], (0.0, 1.0), [])
 
-    sys = ODESystem(
+    sys = System(
         [D(D(x)) ~ 0], t; initialization_eqs = [x ~ 0, D(D(x)) ~ 0], name = :sys) |>
           structural_simplify
     @test_nowarn ODEProblem(sys, [D(x) => 1.0], (0.0, 1.0), [])
@@ -539,7 +539,7 @@ end
 @testset "Derivatives in initialization guesses" begin
     for sign in [-1.0, +1.0]
         @variables x(t)
-        sys = ODESystem(
+        sys = System(
             [D(D(x)) ~ 0], t;
             initialization_eqs = [D(x)^2 ~ 1, x ~ 0], guesses = [D(x) => sign], name = :sys
         ) |> structural_simplify
@@ -556,8 +556,8 @@ eqs_1st_order = [D(Y) + Y - ω ~ 0,
     X + k1 ~ Y + k2]
 eqs_2nd_order = [D(D(Y)) + 2ω * D(Y) + (ω^2) * Y ~ 0,
     X + k1 ~ Y + k2]
-@mtkbuild sys_1st_order = ODESystem(eqs_1st_order, t)
-@mtkbuild sys_2nd_order = ODESystem(eqs_2nd_order, t)
+@mtkbuild sys_1st_order = System(eqs_1st_order, t)
+@mtkbuild sys_2nd_order = System(eqs_2nd_order, t)
 
 u0_1st_order_1 = [X => 1.0, Y => 2.0]
 u0_1st_order_2 = [Y => 2.0]
@@ -582,7 +582,7 @@ sol = solve(oprob_2nd_order_2, Rosenbrock23()) # retcode: Success
 
 @testset "Vector in initial conditions" begin
     @variables x(t)[1:5] y(t)[1:5]
-    @named sys = ODESystem([D(x) ~ x, D(y) ~ y], t; initialization_eqs = [y ~ -x])
+    @named sys = System([D(x) ~ x, D(y) ~ y], t; initialization_eqs = [y ~ -x])
     sys = structural_simplify(sys)
     prob = ODEProblem(sys, [sys.x => ones(5)], (0.0, 1.0), [])
     sol = solve(prob, Tsit5(), reltol = 1e-4)
@@ -600,13 +600,12 @@ end
     # the correct solver.
     # `rhss` allows adding terms to the end of equations (only 2 equations allowed) to influence
     # the system type (brownian vars to turn it into an SDE).
-    @testset "$Problem with $(SciMLBase.parameterless_type(alg)) and $ctor ctor" for ((System, Problem, alg, rhss), (ctor, expectedT)) in Iterators.product(
+    @testset "$Problem with $(SciMLBase.parameterless_type(alg)) and $ctor ctor" for ((Problem, alg, rhss), (ctor, expectedT)) in Iterators.product(
         [
-            (ModelingToolkit.System, ODEProblem, Tsit5(), zeros(2)),
-            (ModelingToolkit.System, SDEProblem, ImplicitEM(), [a, b]),
-            (ModelingToolkit.System, DDEProblem,
-                MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
-            (ModelingToolkit.System, SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b])
+            (ODEProblem, Tsit5(), zeros(2)),
+            (SDEProblem, ImplicitEM(), [a, b]),
+            (DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
+            (SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b])
         ],
         [(identity, Any), (sarray_ctor, SVector)])
         u0_constructor = p_constructor = ctor
@@ -626,11 +625,10 @@ end
             @test parameter_values(initprob).tunable isa expectedT
             @test solve(prob, alg).ps[sym] ≈ val
         end
-        function test_initializesystem(sys, u0map, pmap, p, equation)
-            isys = ModelingToolkit.generate_initializesystem(
-                sys; u0map, pmap, guesses = ModelingToolkit.guesses(sys))
-            @test is_variable(isys, p)
-            @test equation in equations(isys) || (0 ~ -equation.rhs) in equations(isys)
+        function test_initializesystem(prob, p, equation)
+            isys = prob.f.initialization_data.initializeprob.f.sys
+            @test is_variable(isys, p) || ModelingToolkit.has_observed_with_lhs(isys, p)
+            @test equation in [equations(isys); observed(isys)]
         end
 
         u0map = Dict(x => 1.0, y => 1.0)
@@ -650,7 +648,7 @@ end
             [D(x) ~ x + rhss[1], p ~ x + y + rhss[2]], t; defaults = [p => missing], guesses = [p => 0.0])
         prob = Problem(sys, u0map, (0.0, 1.0); u0_constructor, p_constructor)
         test_parameter(prob, p, 2.0)
-        test_initializesystem(sys, u0map, pmap, p, 0 ~ p - x - y)
+        test_initializesystem(prob, p, p ~ x + y)
         prob2 = remake(prob; u0 = u0map)
         prob2 = remake(prob2; p = setp_oop(prob2, p)(prob2, 0.0))
         test_parameter(prob2, p, 2.0)
@@ -661,7 +659,7 @@ end
         pmap[p] = missing
         prob = Problem(sys, u0map, (0.0, 1.0), pmap; u0_constructor, p_constructor)
         test_parameter(prob, p, 2.0)
-        test_initializesystem(sys, u0map, pmap, p, 0 ~ 2q - p)
+        test_initializesystem(prob, p, p ~ 2q)
         prob2 = remake(prob; u0 = u0map, p = pmap)
         prob2 = remake(prob2; p = setp_oop(prob2, p)(prob2, 0.0))
         test_parameter(prob2, p, 2.0)
@@ -670,7 +668,7 @@ end
             [D(x) ~ x + rhss[1], p ~ x + y + rhss[2]], t; guesses = [p => 0.0])
         prob = Problem(sys, u0map, (0.0, 1.0), pmap; u0_constructor, p_constructor)
         test_parameter(prob, p, 2.0)
-        test_initializesystem(sys, u0map, pmap, p, 0 ~ x + y - p)
+        test_initializesystem(prob, p, p ~ x + y)
         prob2 = remake(prob; u0 = u0map, p = pmap)
         prob2 = remake(prob2; p = setp_oop(prob2, p)(prob2, 0.0))
         test_parameter(prob2, p, 2.0)
@@ -681,7 +679,7 @@ end
         delete!(pmap, p)
         prob = Problem(sys, u0map, (0.0, 1.0), pmap; u0_constructor, p_constructor)
         test_parameter(prob, p, 2.0)
-        test_initializesystem(sys, u0map, pmap, p, 0 ~ 2q - p)
+        test_initializesystem(prob, p, p ~ 2q)
         prob2 = remake(prob; u0 = u0map, p = pmap)
         prob2 = remake(prob2; p = setp_oop(prob2, p)(prob2, 0.0))
         test_parameter(prob2, p, 2.0)
@@ -692,7 +690,7 @@ end
         _pmap = merge(pmap, Dict(p => q))
         prob = Problem(sys, u0map, (0.0, 1.0), _pmap; u0_constructor, p_constructor)
         test_parameter(prob, p, _pmap[q])
-        test_initializesystem(sys, u0map, _pmap, p, 0 ~ q - p)
+        test_initializesystem(prob, p, p ~ q)
         # Problem dependent value with guess, no `missing`
         @mtkbuild sys = System(
             [D(x) ~ y * q + p + rhss[1], D(y) ~ x * p + q + rhss[2]], t; guesses = [p => 0.0])
@@ -738,7 +736,7 @@ end
     @testset "Null system" begin
         @variables x(t) y(t) s(t)
         @parameters x0 y0
-        @mtkbuild sys = ODESystem([x ~ x0, y ~ y0, s ~ x + y], t; guesses = [y0 => 0.0])
+        @mtkbuild sys = System([x ~ x0, y ~ y0, s ~ x + y], t; guesses = [y0 => 0.0])
         prob = ODEProblem(sys, [s => 1.0], (0.0, 1.0), [x0 => 0.3, y0 => missing])
         # trivial initialization run immediately
         @test prob.ps[y0] ≈ 0.7
@@ -758,7 +756,7 @@ end
     @named gravity = Force()
     @named constant = Constant(; k = 9.81)
     @named damper = TM.Damper(; d = 0.1)
-    @mtkbuild sys = ODESystem(
+    @mtkbuild sys = System(
         [connect(fixed.flange, spring.flange_a), connect(spring.flange_b, mass.flange_a),
             connect(mass.flange_a, gravity.flange), connect(constant.output, gravity.f),
             connect(fixed.flange, damper.flange_a), connect(damper.flange_b, mass.flange_a)],
@@ -784,7 +782,7 @@ end
         eqs = [0 ~ σ * (y - x),
             0 ~ x * (ρ - z) - y,
             0 ~ x * y - β * z]
-        @mtkbuild ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
+        @mtkbuild ns = System(eqs, [x, y, z], [σ, ρ, β])
 
         prob = NonlinearProblem(ns, [])
         @test prob.f.initialization_data.update_initializeprob! === nothing
@@ -834,7 +832,7 @@ end
         # https://github.com/SciML/NonlinearSolve.jl/issues/586
         eqs = [0 ~ -c * z + (q - z) * (x^2)
                0 ~ p * (-x + (q - z) * x)]
-        @named sys = NonlinearSystem(eqs; initialization_eqs = [p^2 + q^2 + 2p * q ~ 0])
+        @named sys = System(eqs; initialization_eqs = [p^2 + q^2 + 2p * q ~ 0])
         sys = complete(sys)
         # @mtkbuild sys = NonlinearSystem(
         #     [p * x^2 + q * y^3 ~ 0, x - q ~ 0]; defaults = [q => missing],
@@ -937,11 +935,11 @@ end
     @brownian a b
     x = _x(t)
 
-    @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (System, Problem, alg, rhss) in [
-        (ModelingToolkit.System, ODEProblem, Tsit5(), zeros(2)),
-        (ModelingToolkit.System, SDEProblem, ImplicitEM(), [a, b]),
-        (ModelingToolkit.System, DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
-        (ModelingToolkit.System, SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b])
+    @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (Problem, alg, rhss) in [
+        (ODEProblem, Tsit5(), zeros(2)),
+        (SDEProblem, ImplicitEM(), [a, b]),
+        (DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
+        (SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b])
     ]
         @mtkbuild sys = System(
             [D(x) ~ x + rhss[1], p ~ x + y + rhss[2]], t; defaults = [p => missing], guesses = [
@@ -1062,7 +1060,7 @@ end
 @testset "Nonnumeric parameter dependencies are retained" begin
     @variables x(t) y(t)
     @parameters foo(::Real, ::Real) p
-    @mtkbuild sys = ODESystem([D(x) ~ t, 0 ~ foo(x, y)], t;
+    @mtkbuild sys = System([D(x) ~ t, 0 ~ foo(x, y)], t;
         parameter_dependencies = [foo ~ Multiplier(p, 2p)], guesses = [y => -1.0])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [p => 1.0])
     integ = init(prob, Rosenbrock23())
@@ -1071,7 +1069,7 @@ end
 
 @testset "Use observed equations for guesses of observed variables" begin
     @variables x(t) y(t) [state_priority = 100]
-    @mtkbuild sys = ODESystem(
+    @mtkbuild sys = System(
         [D(x) ~ x + t, y ~ 2x + 1], t; initialization_eqs = [x^3 + y^3 ~ 1])
     isys = ModelingToolkit.generate_initializesystem(sys)
     @test isequal(defaults(isys)[y], 2x + 1)
@@ -1079,14 +1077,14 @@ end
 
 @testset "Create initializeprob when unknown has dependent value" begin
     @variables x(t) y(t)
-    @mtkbuild sys = ODESystem([D(x) ~ x, D(y) ~ t * y], t; defaults = [x => 2y])
+    @mtkbuild sys = System([D(x) ~ x, D(y) ~ t * y], t; defaults = [x => 2y])
     prob = ODEProblem(sys, [y => 1.0], (0.0, 1.0))
     @test prob.f.initializeprob !== nothing
     integ = init(prob)
     @test integ[x] ≈ 2.0
 
     @variables x(t)[1:2] y(t)
-    @mtkbuild sys = ODESystem([D(x) ~ x, D(y) ~ t], t; defaults = [x => [y, 3.0]])
+    @mtkbuild sys = System([D(x) ~ x, D(y) ~ t], t; defaults = [x => [y, 3.0]])
     prob = ODEProblem(sys, [y => 1.0], (0.0, 1.0))
     @test prob.f.initializeprob !== nothing
     integ = init(prob)
@@ -1101,7 +1099,7 @@ end
     eqs = [D(D(x)) ~ λ * x
            D(D(y)) ~ λ * y - g
            x^2 + y^2 ~ L]
-    @mtkbuild pend = ODESystem(eqs, t)
+    @mtkbuild pend = System(eqs, t)
 
     prob = ODEProblem(pend, [x => 1, y => 0], (0.0, 1.5), [g => 1],
         guesses = ModelingToolkit.missing_variable_defaults(pend))
@@ -1152,7 +1150,7 @@ end
                        connect(L1.n, emf.p)
                        connect(emf.n, source.n, ground.g)]
 
-        @named model = ODESystem(connections, t,
+        @named model = System(connections, t,
             systems = [
                 ground,
                 ref,
@@ -1185,7 +1183,7 @@ end
     eqs = [D(D(x)) ~ λ * x
            D(D(y)) ~ λ * y - g
            x^2 + y^2 ~ 1]
-    @mtkbuild pend = ODESystem(eqs, t)
+    @mtkbuild pend = System(eqs, t)
     @test_warn ["structurally singular", "initialization", "Guess", "heuristic"] ODEProblem(
         pend, [x => 1, y => 0], (0.0, 1.5), [g => 1], guesses = [λ => 1])
 end
@@ -1193,7 +1191,7 @@ end
 @testset "DAEProblem initialization" begin
     @variables x(t) [guess = 1.0] y(t) [guess = 1.0]
     @parameters p=missing [guess = 1.0] q=missing [guess = 1.0]
-    @mtkbuild sys = ODESystem(
+    @mtkbuild sys = System(
         [D(x) ~ p * y + q * t, x^3 + y^3 ~ 5], t; initialization_eqs = [p^2 + q^3 ~ 3])
 
     # FIXME: solve for du0
@@ -1210,7 +1208,7 @@ end
 @testset "Guesses provided to `ODEProblem` are used in `remake`" begin
     @variables x(t) y(t)=2x
     @parameters p q=3x
-    @mtkbuild sys = ODESystem([D(x) ~ x * p + q, x^3 + y^3 ~ 3], t)
+    @mtkbuild sys = System([D(x) ~ x * p + q, x^3 + y^3 ~ 3], t)
     prob = ODEProblem(
         sys, [], (0.0, 1.0), [p => 1.0]; guesses = [x => 1.0, y => 1.0, q => 1.0])
     @test prob[x] == 1.0
@@ -1240,7 +1238,7 @@ end
 @testset "Remake problem with no initializeprob" begin
     @variables x(t) [guess = 1.0] y(t) [guess = 1.0]
     @parameters p [guess = 1.0] q [guess = 1.0]
-    @mtkbuild sys = ODESystem(
+    @mtkbuild sys = System(
         [D(x) ~ p * x + q * y, y ~ 2x], t; parameter_dependencies = [q ~ 2p])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [p => 1.0])
     test_dummy_initialization_equation(prob, x)
@@ -1261,7 +1259,7 @@ end
 @testset "Variables provided as symbols" begin
     @variables x(t) [guess = 1.0] y(t) [guess = 1.0]
     @parameters p [guess = 1.0] q [guess = 1.0]
-    @mtkbuild sys = ODESystem(
+    @mtkbuild sys = System(
         [D(x) ~ p * x + q * y, y ~ 2x], t; parameter_dependencies = [q ~ 2p])
     prob = ODEProblem(sys, [:x => 1.0], (0.0, 1.0), [p => 1.0])
     test_dummy_initialization_equation(prob, x)
@@ -1275,7 +1273,7 @@ end
 @testset "Issue#3246: type promotion with parameter dependent initialization_eqs" begin
     @variables x(t)=1 y(t)=1
     @parameters a = 1
-    @named sys = ODESystem([D(x) ~ 0, D(y) ~ x + a], t; initialization_eqs = [y ~ a])
+    @named sys = System([D(x) ~ 0, D(y) ~ x + a], t; initialization_eqs = [y ~ a])
 
     ssys = structural_simplify(sys)
     prob = ODEProblem(ssys, [], (0, 1), [])
@@ -1296,7 +1294,7 @@ end
         D(X) ~ p - d * X,
         D(Y) ~ p - d * Y
     ]
-    @mtkbuild osys = ODESystem(eqs, t)
+    @mtkbuild osys = System(eqs, t)
 
     # Make problem.
     u0_vals = [X => 4, Y => 5.0]
@@ -1317,9 +1315,9 @@ end
     @parameters β γ S0
     @variables S(t)=S0 I(t) R(t)
     rate₁ = β * S * I
-    affect₁ = [S ~ S - 1, I ~ I + 1]
+    affect₁ = [S ~ Pre(S) - 1, I ~ Pre(I) + 1]
     rate₂ = γ * I
-    affect₂ = [I ~ I - 1, R ~ R + 1]
+    affect₂ = [I ~ Pre(I) - 1, R ~ Pre(R) + 1]
     j₁ = ConstantRateJump(rate₁, affect₁)
     j₂ = ConstantRateJump(rate₂, affect₂)
     j₃ = MassActionJump(2 * β + γ, [R => 1], [S => 1, R => -1])
@@ -1327,13 +1325,8 @@ end
 
     u0s = [I => 1, R => 0]
     ps = [S0 => 999, β => 0.01, γ => 0.001]
-    dprob = DiscreteProblem(js, u0s, (0.0, 10.0), ps)
-    @test_broken dprob.f.initialization_data !== nothing
-    sol = solve(dprob, FunctionMap())
-    @test sol[S, 1] ≈ 999
-    @test SciMLBase.successful_retcode(sol)
 
-    jprob = JumpProblem(js, dprob)
+    jprob = JumpProblem(js, u0s, (0.0, 10.0), ps)
     sol = solve(jprob, SSAStepper())
     @test sol[S, 1] ≈ 999
     @test SciMLBase.successful_retcode(sol)
@@ -1342,7 +1335,7 @@ end
 @testset "Solvable array parameters with scalarized guesses" begin
     @variables x(t)
     @parameters p[1:2] q
-    @mtkbuild sys = ODESystem(
+    @mtkbuild sys = System(
         D(x) ~ p[1] + p[2] + q, t; defaults = [p[1] => q, p[2] => 2q],
         guesses = [p[1] => q, p[2] => 2q])
     @test ModelingToolkit.is_parameter_solvable(p, Dict(), defaults(sys), guesses(sys))
@@ -1356,7 +1349,7 @@ end
 @testset "Issue#3318: Mutating `Initial` parameters works" begin
     @variables x(t) y(t)[1:2] [guess = ones(2)]
     @parameters p[1:2, 1:2]
-    @mtkbuild sys = ODESystem(
+    @mtkbuild sys = System(
         [D(x) ~ x, D(y) ~ p * y], t; initialization_eqs = [x^2 + y[1]^2 + y[2]^2 ~ 4])
     prob = ODEProblem(sys, [x => 1.0, y[1] => 1], (0.0, 1.0), [p => 2ones(2, 2)])
     integ = init(prob, Tsit5())
@@ -1375,8 +1368,8 @@ end
 @testset "Issue#3342" begin
     @variables x(t) y(t)
     stop!(integrator, _, _, _) = terminate!(integrator)
-    @named sys = ODESystem([D(x) ~ 1.0
-                            D(y) ~ 1.0], t; initialization_eqs = [
+    @named sys = System([D(x) ~ 1.0
+                         D(y) ~ 1.0], t; initialization_eqs = [
             y ~ 0.0
         ],
         continuous_events = [
@@ -1397,7 +1390,7 @@ end
 
 @testset "Issue#3330: Initialization for unsimplified systems" begin
     @variables x(t) [guess = 1.0]
-    @mtkbuild sys = ODESystem(D(x) ~ x, t; initialization_eqs = [x^2 ~ 4])
+    @mtkbuild sys = System(D(x) ~ x, t; initialization_eqs = [x^2 ~ 4])
     prob = ODEProblem(sys, [], (0.0, 1.0))
     @test prob.f.initialization_data !== nothing
 end
@@ -1405,7 +1398,7 @@ end
 @testset "`ReconstructInitializeprob` with `nothing` state" begin
     @parameters p
     @variables x(t)
-    @mtkbuild sys = ODESystem(x ~ p * t, t)
+    @mtkbuild sys = System(x ~ p * t, t)
     prob = @test_nowarn ODEProblem(sys, [], (0.0, 1.0), [p => 1.0])
     @test_nowarn remake(prob, p = [p => 1.0])
     @test_nowarn remake(prob, p = [p => ForwardDiff.Dual(1.0)])
@@ -1419,7 +1412,7 @@ end
         D(X1) ~ k1 * (Γ[1] - X1) - k2 * X1
     ]
     obs = [X2 ~ Γ[1] - X1]
-    @mtkbuild osys = ODESystem(eqs, t, [X1, X2], [k1, k2, Γ]; observed = obs)
+    @mtkbuild osys = System(eqs, t, [X1, X2], [k1, k2, Γ]; observed = obs)
     u0 = [X1 => 1.0, X2 => 2.0]
     ps = [k1 => 0.1, k2 => 0.2]
 
@@ -1447,7 +1440,7 @@ end
     end
     @testset "$Problem" for Problem in [NonlinearProblem, NonlinearLeastSquaresProblem]
         @parameters p1 p2
-        @mtkbuild sys = NonlinearSystem([x^2 + y^2 ~ p1, (x - 1)^2 + (y - 1)^2 ~ p2];
+        @mtkbuild sys = System([x^2 + y^2 ~ p1, (x - 1)^2 + (y - 1)^2 ~ p2];
             parameter_dependencies = [p2 ~ 2p1],
             guesses = [p1 => 0.0], defaults = [p1 => missing])
         prob = Problem(sys, [x => 1.0, y => 1.0], [p2 => 6.0])
@@ -1466,7 +1459,7 @@ end
     initialization_eqs = [
         X2 ~ Γ[1] - X1
     ]
-    @mtkbuild nlsys = NonlinearSystem(eqs, [X1, X2], [k1, k2, Γ]; initialization_eqs)
+    @mtkbuild nlsys = System(eqs, [X1, X2], [k1, k2, Γ]; initialization_eqs)
 
     @testset "throws if initialization_eqs contain unknowns" begin
         u0 = [X1 => 1.0, X2 => 2.0]
@@ -1479,7 +1472,7 @@ end
     initialization_eqs = [
         Initial(X2) ~ Γ[1] - Initial(X1)
     ]
-    @mtkbuild nlsys = NonlinearSystem(eqs, [X1, X2], [k1, k2, Γ]; initialization_eqs)
+    @mtkbuild nlsys = System(eqs, [X1, X2], [k1, k2, Γ]; initialization_eqs)
 
     @testset "solves initialization" begin
         u0 = [X1 => 1.0, X2 => 2.0]
@@ -1517,7 +1510,7 @@ end
 @testset "Issue#3504: Update initials when `remake` called with non-symbolic `u0`" begin
     @variables x(t) y(t)
     @parameters c1 c2
-    @mtkbuild sys = ODESystem([D(x) ~ -c1 * x + c2 * y, D(y) ~ c1 * x - c2 * y], t)
+    @mtkbuild sys = System([D(x) ~ -c1 * x + c2 * y, D(y) ~ c1 * x - c2 * y], t)
     prob1 = ODEProblem(sys, [1.0, 2.0], (0.0, 1.0), [c1 => 1.0, c2 => 2.0])
     prob2 = remake(prob1, u0 = [2.0, 3.0])
     prob3 = remake(prob1, u0 = [2.0, 3.0], p = [c1 => 2.0])
@@ -1534,7 +1527,7 @@ end
     @parameters α=1 β=1 γ=1 δ=1
     @variables x(t)=1 y(t)=1
     eqs = [D(x) ~ α * x - β * x * y, D(y) ~ -δ * y + γ * x * y]
-    @named sys = ODESystem(eqs, t)
+    @named sys = System(eqs, t)
     prob = ODEProblem(complete(sys), [], (0.0, 1))
     @inferred remake(prob; u0 = 2 .* prob.u0, p = prob.p)
     @inferred solve(prob)
@@ -1546,7 +1539,7 @@ end
     eqs = [D(D(x)) ~ λ * x
            D(D(y)) ~ λ * y - g
            x^2 + y^2 ~ 1]
-    @mtkbuild pend = ODESystem(eqs, t)
+    @mtkbuild pend = System(eqs, t)
 
     prob = ODEProblem(
         pend, [x => (√2 / 2), D(x) => 0.0], (0.0, 1.5),
@@ -1601,7 +1594,7 @@ end
         0 ~ x^2 + y^2 - w2^2
     ]
 
-    @mtkbuild sys = ODESystem(eqs, t)
+    @mtkbuild sys = System(eqs, t)
 
     u0 = [D(x) => 2.0,
         x => 1.0,
@@ -1632,7 +1625,7 @@ end
     eqs = [D(D(x)) ~ λ * x
            D(D(y)) ~ λ * y - g
            x^2 + y^2 ~ 1]
-    @mtkbuild pend=ODESystem(eqs, t) split=false
+    @mtkbuild pend=System(eqs, t) split=false
     prob = ODEProblem(pend, [x => 1.0, D(x) => 0.0], (0.0, 1.0),
         [g => 1.0]; guesses = [y => 1.0, λ => 1.0])
     @test !ModelingToolkit.is_split(prob.f.initialization_data.initializeprob.f.sys)
@@ -1644,7 +1637,7 @@ end
     eqs = [D(D(x)) ~ λ * x
            D(D(y)) ~ λ * y - g
            x^2 + y^2 ~ 1]
-    @mtkbuild pend = ODESystem(eqs, t)
+    @mtkbuild pend = System(eqs, t)
     prob = ODEProblem(pend, SA[x => 1.0, D(x) => 0.0], (0.0, 1.0),
         SA[g => 1.0]; guesses = [y => 1.0, λ => 1.0])
     @test !SciMLBase.isinplace(prob)

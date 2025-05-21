@@ -40,12 +40,12 @@ end
 
     eqs = [connect(P.output.u, C.input.u)
            connect(C.output.u, P.input.u)]
-    sys1 = ODESystem(eqs, t, systems = [P, C], name = :hej)
+    sys1 = System(eqs, t, systems = [P, C], name = :hej)
     sys = expand_connections(sys1)
     @test any(isequal(P.output.u ~ C.input.u), equations(sys))
     @test any(isequal(C.output.u ~ P.input.u), equations(sys))
 
-    @named sysouter = ODESystem(Equation[], t; systems = [sys1])
+    @named sysouter = System(Equation[], t; systems = [sys1])
     sys = expand_connections(sysouter)
     @test any(isequal(sys1.P.output.u ~ sys1.C.input.u), equations(sys))
     @test any(isequal(sys1.C.output.u ~ sys1.P.input.u), equations(sys))
@@ -57,8 +57,8 @@ end
 
     ap = AnalysisPoint(:plant_input)
     eqs = [connect(P.output, C.input), connect(C.output.u, ap, P.input.u)]
-    sys = ODESystem(eqs, t, systems = [P, C], name = :hej)
-    @named nested_sys = ODESystem(Equation[], t; systems = [sys])
+    sys = System(eqs, t, systems = [P, C], name = :hej)
+    @named nested_sys = System(Equation[], t; systems = [sys])
 
     test_cases = [
         ("inner", sys, sys.plant_input),

@@ -5,7 +5,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     @variables x(t) y(t)[1:3]
     @parameters p1=1.0 p2[1:3]=[1.0, 2.0, 3.0] p3::Int=1 p4::Bool=false
 
-    sys = complete(ODESystem(Equation[], t, [x; y], [p1, p2, p3, p4]; name = :sys))
+    sys = complete(System(Equation[], t, [x; y], [p1, p2, p3, p4]; name = :sys))
     u0 = [1.0, 2.0, 3.0, 4.0]
     p = ModelingToolkit.MTKParameters(sys, [])
 
@@ -31,7 +31,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     @test fn5(u0, p, 1.0) == 1.0
 
     @variables x y[1:3]
-    sys = complete(NonlinearSystem(Equation[], [x; y], [p1, p2, p3, p4]; name = :sys))
+    sys = complete(System(Equation[], [x; y], [p1, p2, p3, p4]; name = :sys))
     p = MTKParameters(sys, [])
 
     fn1 = generate_custom_function(sys, x + y[1] + p1 + p2[1] + p3; expression = Val(false))
@@ -58,7 +58,7 @@ end
 @testset "Non-standard array variables" begin
     @variables x(t)
     @parameters p[0:2] (f::Function)(..)
-    @mtkbuild sys = ODESystem(D(x) ~ p[0] * x + p[1] * t + p[2] + f(p), t)
+    @mtkbuild sys = System(D(x) ~ p[0] * x + p[1] * t + p[2] + f(p), t)
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [p => [1.0, 2.0, 3.0], f => sum])
     @test prob.ps[p] == [1.0, 2.0, 3.0]
     @test prob.ps[p[0]] == 1.0
@@ -68,9 +68,9 @@ end
     @testset "Array split across buffers" begin
         @variables x(t)[0:2]
         @parameters p[1:2] (f::Function)(..)
-        @named sys = ODESystem(
+        @named sys = System(
             [D(x[0]) ~ p[1] * x[0] + x[2], D(x[1]) ~ p[2] * f(x) + x[2]], t)
-        sys, = structural_simplify(sys, ([x[2]], []))
+        sys = structural_simplify(sys, inputs = [x[2]], outputs = [])
         @test is_parameter(sys, x[2])
         prob = ODEProblem(sys, [x[0] => 1.0, x[1] => 1.0], (0.0, 1.0),
             [p => ones(2), f => sum, x[2] => 2.0])

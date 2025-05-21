@@ -19,7 +19,7 @@ The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occ
 
 # Arguments:
 
-  - `sys`: An [`ODESystem`](@ref). This function will automatically apply simplification passes on `sys` and return the resulting `simplified_sys`.
+  - `sys`: A [`System`](@ref) of ODEs. This function will automatically apply simplification passes on `sys` and return the resulting `simplified_sys`.
   - `inputs`: A vector of variables that indicate the inputs of the linearized input-output model.
   - `outputs`: A vector of variables that indicate the outputs of the linearized input-output model.
   - `simplify`: Apply simplification in tearing.
@@ -58,9 +58,8 @@ function linearization_function(sys::AbstractSystem, inputs,
     outputs = mapreduce(vcat, outputs; init = []) do var
         symbolic_type(var) == ArraySymbolic() ? collect(var) : [var]
     end
-    ssys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs;
-        simplify,
-        kwargs...)
+    ssys = structural_simplify(sys; inputs, outputs, simplify, kwargs...)
+    diff_idxs, alge_idxs = eq_idxs(ssys)
     if zero_dummy_der
         dummyder = setdiff(unknowns(ssys), unknowns(sys))
         defs = Dict(x => 0.0 for x in dummyder)
@@ -87,9 +86,9 @@ function linearization_function(sys::AbstractSystem, inputs,
 
     p = parameter_values(prob)
     t0 = current_time(prob)
-    inputvals = [p[idx] for idx in input_idxs]
+    inputvals = [prob.ps[i] for i in inputs]
 
-    hp_fun = let fun = h, setter = setp_oop(sys, input_idxs)
+    hp_fun = let fun = h, setter = setp_oop(sys, inputs)
         function hpf(du, input, u, p, t)
             p = setter(p, input)
             fun(du, u, p, t)
@@ -113,7 +112,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         # observed function is a `GeneratedFunctionWrapper` with iip component
         h_jac = PreparedJacobian{true}(h, similar(prob.u0, size(outputs)), autodiff,
             prob.u0, DI.Constant(p), DI.Constant(t0))
-        pf_fun = let fun = prob.f, setter = setp_oop(sys, input_idxs)
+        pf_fun = let fun = prob.f, setter = setp_oop(sys, inputs)
             function pff(du, input, u, p, t)
                 p = setter(p, input)
                 SciMLBase.ParamJacobianWrapper(fun, t, u)(du, p)
@@ -127,10 +126,21 @@ function linearization_function(sys::AbstractSystem, inputs,
     end
 
     lin_fun = LinearizationFunction(
-        diff_idxs, alge_idxs, input_idxs, length(unknowns(sys)),
+        diff_idxs, alge_idxs, inputs, length(unknowns(sys)),
         prob, h, u0 === nothing ? nothing : similar(u0), uf_jac, h_jac, pf_jac,
         hp_jac, initializealg, initialization_kwargs)
     return lin_fun, sys
+end
+
+"""
+Return the set of indexes of differential equations and algebraic equations in the simplified system.
+"""
+function eq_idxs(sys::AbstractSystem)
+    eqs = equations(sys)
+    alge_idxs = findall(!isdiffeq, eqs)
+    diff_idxs = setdiff(1:length(eqs), alge_idxs)
+
+    diff_idxs, alge_idxs
 end
 
 """
@@ -192,7 +202,7 @@ A callable struct which linearizes a system.
 $(TYPEDFIELDS)
 """
 struct LinearizationFunction{
-    DI <: AbstractVector{Int}, AI <: AbstractVector{Int}, II, P <: ODEProblem,
+    DI <: AbstractVector{Int}, AI <: AbstractVector{Int}, I, P <: ODEProblem,
     H, C, J1, J2, J3, J4, IA <: SciMLBase.DAEInitializationAlgorithm, IK}
     """
     The indexes of differential equations in the linearized system.
@@ -206,7 +216,7 @@ struct LinearizationFunction{
     The indexes of parameters in the linearized system which represent
     input variables.
     """
-    input_idxs::II
+    inputs::I
     """
     The number of unknowns in the linearized system.
     """
@@ -281,6 +291,7 @@ function (linfun::LinearizationFunction)(u, p, t)
     end
 
     fun = linfun.prob.f
+    input_vals = [linfun.prob.ps[i] for i in linfun.inputs]
     if u !== nothing # Handle systems without unknowns
         linfun.num_states == length(u) ||
             error("Number of unknown variables ($(linfun.num_states)) does not match the number of input unknowns ($(length(u)))")
@@ -294,15 +305,15 @@ function (linfun::LinearizationFunction)(u, p, t)
         end
         fg_xz = linfun.uf_jac(u, DI.Constant(p), DI.Constant(t))
         h_xz = linfun.h_jac(u, DI.Constant(p), DI.Constant(t))
-        fg_u = linfun.pf_jac([p[idx] for idx in linfun.input_idxs],
+        fg_u = linfun.pf_jac(input_vals,
             DI.Constant(u), DI.Constant(p), DI.Constant(t))
     else
         linfun.num_states == 0 ||
             error("Number of unknown variables (0) does not match the number of input unknowns ($(length(u)))")
         fg_xz = zeros(0, 0)
-        h_xz = fg_u = zeros(0, length(linfun.input_idxs))
+        h_xz = fg_u = zeros(0, length(linfun.inputs))
     end
-    h_u = linfun.hp_jac([p[idx] for idx in linfun.input_idxs],
+    h_u = linfun.hp_jac(input_vals,
         DI.Constant(u), DI.Constant(p), DI.Constant(t))
     (f_x = fg_xz[linfun.diff_idxs, linfun.diff_idxs],
         f_z = fg_xz[linfun.diff_idxs, linfun.alge_idxs],
@@ -487,9 +498,8 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
         outputs; simplify = false, allow_input_derivatives = false,
         eval_expression = false, eval_module = @__MODULE__,
         kwargs...)
-    sys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(
-        sys, inputs, outputs; simplify,
-        kwargs...)
+    sys = structural_simplify(sys; inputs, outputs, simplify, kwargs...)
+    diff_idxs, alge_idxs = eq_idxs(sys)
     sts = unknowns(sys)
     t = get_iv(sys)
     ps = parameters(sys; initial_parameters = true)
@@ -550,10 +560,14 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
     (; A, B, C, D, f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u), sys
 end
 
-function markio!(state, orig_inputs, inputs, outputs; check = true)
+"""
+Modify the variable metadata of system variables to indicate which ones are inputs, outputs, and disturbances. Needed for `inputs`, `outputs`, `disturbances`, `unbound_inputs`, `unbound_outputs` to return the proper subsets.
+"""
+function markio!(state, orig_inputs, inputs, outputs, disturbances; check = true)
     fullvars = get_fullvars(state)
     inputset = Dict{Any, Bool}(i => false for i in inputs)
     outputset = Dict{Any, Bool}(o => false for o in outputs)
+    disturbanceset = Dict{Any, Bool}(d => false for d in disturbances)
     for (i, v) in enumerate(fullvars)
         if v in keys(inputset)
             if v in keys(outputset)
@@ -575,6 +589,13 @@ function markio!(state, orig_inputs, inputs, outputs; check = true)
             v = setio(v, false, false)
             fullvars[i] = v
         end
+
+        if v in keys(disturbanceset)
+            v = setio(v, true, false)
+            v = setdisturbance(v, true)
+            disturbanceset[v] = true
+            fullvars[i] = v
+        end
     end
     if check
         ikeys = keys(filter(!last, inputset))
@@ -583,11 +604,16 @@ function markio!(state, orig_inputs, inputs, outputs; check = true)
                 "Some specified inputs were not found in system. The following variables were not found ",
                 ikeys)
         end
-    end
-    check && (all(values(outputset)) ||
-     error(
-        "Some specified outputs were not found in system. The following Dict indicates the found variables ",
+        dkeys = keys(filter(!last, disturbanceset))
+        if !isempty(dkeys)
+            error(
+                "Specified disturbance inputs were not found in system. The following variables were not found ",
+                ikeys)
+        end
+        (all(values(outputset)) || error(
+            "Some specified outputs were not found in system. The following Dict indicates the found variables ",
         outputset))
+    end
     state, orig_inputs
 end
 
@@ -645,7 +671,7 @@ function plant(; name)
     @variables u(t)=0 y(t)=0
     eqs = [D(x) ~ -x + u
            y ~ x]
-    ODESystem(eqs, t; name = name)
+    System(eqs, t; name = name)
 end
 
 function ref_filt(; name)
@@ -653,7 +679,7 @@ function ref_filt(; name)
     @variables u(t)=0 [input = true]
     eqs = [D(x) ~ -2 * x + u
            y ~ x]
-    ODESystem(eqs, t, name = name)
+    System(eqs, t, name = name)
 end
 
 function controller(kp; name)
@@ -662,7 +688,7 @@ function controller(kp; name)
     eqs = [
         u ~ kp * (r - y),
     ]
-    ODESystem(eqs, t; name = name)
+    System(eqs, t; name = name)
 end
 
 @named f = ref_filt()
@@ -673,7 +699,7 @@ connections = [f.y ~ c.r # filtered reference to controller reference
                c.u ~ p.u # controller output to plant input
                p.y ~ c.y]
 
-@named cl = ODESystem(connections, t, systems = [f, c, p])
+@named cl = System(connections, t, systems = [f, c, p])
 
 lsys0, ssys = linearize(cl, [f.u], [p.x])
 desired_order = [f.x, p.x]

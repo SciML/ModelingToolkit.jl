@@ -39,9 +39,9 @@ struct InfiniteOptDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
 end
 
 """
-    JuMPDynamicOptProblem(sys::ODESystem, u0, tspan, p; dt)
+    JuMPDynamicOptProblem(sys::System, u0, tspan, p; dt)
 
-Convert an ODESystem representing an optimal control system into a JuMP model
+Convert a System representing an optimal control system into a JuMP model
 for solving using optimization. Must provide either `dt`, the timestep between collocation 
 points (which, along with the timespan, determines the number of points), or directly 
 provide the number of points as `steps`.
@@ -51,10 +51,10 @@ The optimization variables:
 - a vector-of-vectors V representing the controls as an interpolation array
 
 The constraints are:
-- The set of user constraints passed to the ODESystem via `constraints`
+- The set of user constraints passed to the System via `constraints`
 - The solver constraints that encode the time-stepping used by the solver
 """
-function MTK.JuMPDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
+function MTK.JuMPDynamicOptProblem(sys::System, u0map, tspan, pmap;
         dt = nothing,
         steps = nothing,
         guesses = Dict(), kwargs...)
@@ -63,7 +63,8 @@ function MTK.JuMPDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
     f, u0, p = MTK.process_SciMLProblem(ODEInputFunction, sys, _u0map, pmap;
         t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
 
-    pmap = Dict{Any, Any}(pmap)
+    pmap = MTK.recursive_unwrap(MTK.AnyDict(pmap))
+    MTK.evaluate_varmap!(pmap, keys(pmap))
     steps, is_free_t = MTK.process_tspan(tspan, dt, steps)
     model = init_model(sys, tspan, steps, u0map, pmap, u0; is_free_t)
 
@@ -71,16 +72,16 @@ function MTK.JuMPDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
 end
 
 """
-    InfiniteOptDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap; dt)
+    InfiniteOptDynamicOptProblem(sys::System, u0map, tspan, pmap; dt)
 
-Convert an ODESystem representing an optimal control system into a InfiniteOpt model
+Convert System representing an optimal control system into a InfiniteOpt model
 for solving using optimization. Must provide `dt` for determining the length 
 of the interpolation arrays.
 
 Related to `JuMPDynamicOptProblem`, but directly adds the differential equations
 of the system as derivative constraints, rather than using a solver tableau.
 """
-function MTK.InfiniteOptDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
+function MTK.InfiniteOptDynamicOptProblem(sys::System, u0map, tspan, pmap;
         dt = nothing,
         steps = nothing,
         guesses = Dict(), kwargs...)
@@ -89,7 +90,8 @@ function MTK.InfiniteOptDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
     f, u0, p = MTK.process_SciMLProblem(ODEInputFunction, sys, _u0map, pmap;
         t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
 
-    pmap = Dict{Any, Any}(pmap)
+    pmap = MTK.recursive_unwrap(MTK.AnyDict(pmap))
+    MTK.evaluate_varmap!(pmap, keys(pmap))
     steps, is_free_t = MTK.process_tspan(tspan, dt, steps)
     model = init_model(sys, tspan, steps, u0map, pmap, u0; is_free_t)
 
@@ -150,8 +152,8 @@ function set_jump_bounds!(model, sys, pmap)
     for (i, u) in enumerate(unknowns(sys))
         if MTK.hasbounds(u)
             lo, hi = MTK.getbounds(u)
-            set_lower_bound(U[i], Symbolics.fixpoint_sub(lo, pmap))
-            set_upper_bound(U[i], Symbolics.fixpoint_sub(hi, pmap))
+            set_lower_bound(U[i], Symbolics.fast_substitute(lo, pmap))
+            set_upper_bound(U[i], Symbolics.fast_substitute(hi, pmap))
         end
     end
 
@@ -159,20 +161,19 @@ function set_jump_bounds!(model, sys, pmap)
     for (i, v) in enumerate(MTK.unbound_inputs(sys))
         if MTK.hasbounds(v)
             lo, hi = MTK.getbounds(v)
-            set_lower_bound(V[i], Symbolics.fixpoint_sub(lo, pmap))
-            set_upper_bound(V[i], Symbolics.fixpoint_sub(hi, pmap))
+            set_lower_bound(V[i], Symbolics.fast_substitute(lo, pmap))
+            set_upper_bound(V[i], Symbolics.fast_substitute(hi, pmap))
         end
     end
 end
 
 function add_jump_cost_function!(model::InfiniteModel, sys, tspan, pmap; is_free_t = false)
-    jcosts = MTK.get_costs(sys)
-    consolidate = MTK.get_consolidate(sys)
-    if isnothing(jcosts) || isempty(jcosts)
+    jcosts = cost(sys)
+    if Symbolics._iszero(jcosts)
         @objective(model, Min, 0)
         return
     end
-    jcosts = substitute_jump_vars(model, sys, pmap, jcosts; is_free_t)
+    jcosts = substitute_jump_vars(model, sys, pmap, [jcosts]; is_free_t)[1]
     tₛ = is_free_t ? model[:tf] : 1
 
     # Substitute integral
@@ -187,17 +188,18 @@ function add_jump_cost_function!(model::InfiniteModel, sys, tspan, pmap; is_free
         hi = haskey(pmap, hi) ? 1 : MTK.value(hi)
         intmap[int] = tₛ * InfiniteOpt.∫(arg, model[:t], lo, hi)
     end
-    jcosts = map(c -> Symbolics.substitute(c, intmap), jcosts)
-    @objective(model, Min, consolidate(jcosts))
+    jcosts = Symbolics.substitute(jcosts, intmap)
+    @objective(model, Min, MTK.value(jcosts))
 end
 
 function add_user_constraints!(model::InfiniteModel, sys, pmap; is_free_t = false)
-    conssys = MTK.get_constraintsystem(sys)
-    jconstraints = isnothing(conssys) ? nothing : MTK.get_constraints(conssys)
+    jconstraints = MTK.get_constraints(sys)
     (isnothing(jconstraints) || isempty(jconstraints)) && return nothing
+    cons_dvs, cons_ps = MTK.process_constraint_system(
+        jconstraints, Set(unknowns(sys)), parameters(sys), MTK.get_iv(sys); validate = false)
 
     if is_free_t
-        for u in MTK.get_unknowns(conssys)
+        for u in cons_dvs
             x = MTK.operation(u)
             t = only(arguments(u))
             if (MTK.symbolic_type(t) === MTK.NotSymbolic())
@@ -206,7 +208,7 @@ function add_user_constraints!(model::InfiniteModel, sys, pmap; is_free_t = fals
         end
     end
 
-    auxmap = Dict([u => MTK.default_toterm(MTK.value(u)) for u in unknowns(conssys)])
+    auxmap = Dict([u => MTK.default_toterm(MTK.value(u)) for u in cons_dvs])
     jconstraints = substitute_jump_vars(model, sys, pmap, jconstraints; auxmap, is_free_t)
 
     # Substitute to-term'd variables
@@ -235,25 +237,25 @@ function substitute_jump_vars(model, sys, pmap, exprs; auxmap = Dict(), is_free_
     x_ops = [MTK.operation(MTK.unwrap(st)) for st in sts]
     c_ops = [MTK.operation(MTK.unwrap(ct)) for ct in cts]
 
-    exprs = map(c -> Symbolics.fixpoint_sub(c, auxmap), exprs)
-    exprs = map(c -> Symbolics.fixpoint_sub(c, Dict(pmap)), exprs)
+    exprs = map(c -> Symbolics.fast_substitute(c, auxmap), exprs)
+    exprs = map(c -> Symbolics.fast_substitute(c, Dict(pmap)), exprs)
     if is_free_t
         tf = model[:tf]
         free_t_map = Dict([[x(tf) => U[i](1) for (i, x) in enumerate(x_ops)];
                            [c(tf) => V[i](1) for (i, c) in enumerate(c_ops)]])
-        exprs = map(c -> Symbolics.fixpoint_sub(c, free_t_map), exprs)
+        exprs = map(c -> Symbolics.fast_substitute(c, free_t_map), exprs)
     end
 
     # for variables like x(t)
     whole_interval_map = Dict([[v => U[i] for (i, v) in enumerate(sts)];
                                [v => V[i] for (i, v) in enumerate(cts)]])
-    exprs = map(c -> Symbolics.fixpoint_sub(c, whole_interval_map), exprs)
+    exprs = map(c -> Symbolics.fast_substitute(c, whole_interval_map), exprs)
 
     # for variables like x(1.0)
     fixed_t_map = Dict([[x_ops[i] => U[i] for i in 1:length(U)];
                         [c_ops[i] => V[i] for i in 1:length(V)]])
 
-    exprs = map(c -> Symbolics.fixpoint_sub(c, fixed_t_map), exprs)
+    exprs = map(c -> Symbolics.fast_substitute(c, fixed_t_map), exprs)
     exprs
 end
 

@@ -1,8 +1,3 @@
-function System(eqs::AbstractVector{<:Equation}, iv, args...; name = nothing,
-        kw...)
-    ODESystem(eqs, iv, args...; name, kw..., checks = false)
-end
-
 const REPEATED_SIMPLIFICATION_MESSAGE = "Structural simplification cannot be applied to a completed system. Double simplification is not allowed."
 
 struct RepeatedStructuralSimplificationError <: Exception end
@@ -17,22 +12,23 @@ $(SIGNATURES)
 Structurally simplify algebraic equations in a system and compute the
 topological sort of the observed equations in `sys`.
 
-### Optional Arguments:
-+ optional argument `io` may take a tuple `(inputs, outputs)`. This will convert all `inputs` to parameters and allow them to be unconnected, i.e., simplification will allow models where `n_unknowns = n_equations - n_inputs`.
-
 ### Optional Keyword Arguments:
 + When `simplify=true`, the `simplify` function will be applied during the tearing process.
 + `allow_symbolic=false`, `allow_parameter=true`, and `conservative=false` limit the coefficient types during tearing. In particular, `conservative=true` limits tearing to only solve for trivial linear systems where the coefficient has the absolute value of ``1``.
 + `fully_determined=true` controls whether or not an error will be thrown if the number of equations don't match the number of inputs, outputs, and equations.
++ `inputs`, `outputs` and `disturbance_inputs` are passed as keyword arguments.` All inputs` get converted to parameters and are allowed to be unconnected, allowing models where `n_unknowns = n_equations - n_inputs`.
 + `sort_eqs=true` controls whether equations are sorted lexicographically before simplification or not.
 """
 function structural_simplify(
-        sys::AbstractSystem, io = nothing; additional_passes = [], simplify = false, split = true,
+        sys::AbstractSystem; additional_passes = [], simplify = false, split = true,
         allow_symbolic = false, allow_parameter = true, conservative = false, fully_determined = true,
+        inputs = Any[], outputs = Any[],
+        disturbance_inputs = Any[],
         kwargs...)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
-    newsys′ = __structural_simplify(sys, io; simplify,
+    newsys′ = __structural_simplify(sys; simplify,
         allow_symbolic, allow_parameter, conservative, fully_determined,
+        inputs, outputs, disturbance_inputs,
         kwargs...)
     if newsys′ isa Tuple
         @assert length(newsys′) == 2
@@ -40,17 +36,10 @@ function structural_simplify(
     else
         newsys = newsys′
     end
-    if newsys isa DiscreteSystem &&
-       any(eq -> symbolic_type(eq.lhs) == NotSymbolic(), equations(newsys))
-        error("""
-            Encountered algebraic equations when simplifying discrete system. Please construct \
-            an ImplicitDiscreteSystem instead.
-        """)
-    end
     for pass in additional_passes
         newsys = pass(newsys)
     end
-    if newsys isa ODESystem || has_parent(newsys)
+    if has_parent(newsys)
         @set! newsys.parent = complete(sys; split = false, flatten = false)
     end
     newsys = complete(newsys; split)
@@ -62,17 +51,22 @@ function structural_simplify(
     end
 end
 
-function __structural_simplify(sys::JumpSystem, args...; kwargs...)
-    return sys
-end
-
-function __structural_simplify(sys::SDESystem, args...; kwargs...)
-    return __structural_simplify(ODESystem(sys), args...; kwargs...)
-end
-
-function __structural_simplify(
-        sys::AbstractSystem, io = nothing; simplify = false, sort_eqs = true,
+function __structural_simplify(sys::AbstractSystem; simplify = false,
+        inputs = Any[], outputs = Any[],
+        disturbance_inputs = Any[],
+        sort_eqs = true,
         kwargs...)
+    # TODO: convert noise_eqs to brownians for simplification
+    if has_noise_eqs(sys) && get_noise_eqs(sys) !== nothing
+        sys = noise_to_brownians(sys; names = :αₘₜₖ)
+    end
+    if !isempty(jumps(sys))
+        return sys
+    end
+    if isempty(equations(sys)) && !is_time_dependent(sys) && !_iszero(cost(sys))
+        return simplify_optimization_system(sys; kwargs..., sort_eqs, simplify)
+    end
+
     sys = expand_connections(sys)
     state = TearingState(sys; sort_eqs)
 
@@ -90,7 +84,8 @@ function __structural_simplify(
         end
     end
     if isempty(brown_vars)
-        return structural_simplify!(state, io; simplify, kwargs...)
+        return structural_simplify!(
+            state; simplify, inputs, outputs, disturbance_inputs, kwargs...)
     else
         Is = Int[]
         Js = Int[]
@@ -122,8 +117,8 @@ function __structural_simplify(
                               for (i, v) in enumerate(fullvars)
                               if !iszero(new_idxs[i]) &&
                                  invview(var_to_diff)[i] === nothing]
-        # TODO: IO is not handled.
-        ode_sys = structural_simplify(sys, io; simplify, kwargs...)
+        ode_sys = structural_simplify(
+            sys; simplify, inputs, outputs, disturbance_inputs, kwargs...)
         eqs = equations(ode_sys)
         sorted_g_rows = zeros(Num, length(eqs), size(g, 2))
         for (i, eq) in enumerate(eqs)
@@ -139,7 +134,7 @@ function __structural_simplify(
         if sorted_g_rows isa AbstractMatrix && size(sorted_g_rows, 2) == 1
             # If there's only one brownian variable referenced across all the equations,
             # we get a Nx1 matrix of noise equations, which is a special case known as scalar noise
-            noise_eqs = sorted_g_rows[:, 1]
+            noise_eqs = reshape(sorted_g_rows[:, 1], (:, 1))
             is_scalar_noise = true
         elseif __num_isdiag_noise(sorted_g_rows)
             # If each column of the noise matrix has either 0 or 1 non-zero entry, then this is "diagonal noise".
@@ -153,13 +148,83 @@ function __structural_simplify(
         end
 
         noise_eqs = StructuralTransformations.tearing_substitute_expr(ode_sys, noise_eqs)
-        ssys = SDESystem(Vector{Equation}(full_equations(ode_sys)), noise_eqs,
-            get_iv(ode_sys), unknowns(ode_sys), parameters(ode_sys);
-            name = nameof(ode_sys), is_scalar_noise, observed = observed(ode_sys), defaults = defaults(sys),
+        ssys = System(Vector{Equation}(full_equations(ode_sys)),
+            get_iv(ode_sys), unknowns(ode_sys), parameters(ode_sys); noise_eqs,
+            name = nameof(ode_sys), observed = observed(ode_sys), defaults = defaults(sys),
             parameter_dependencies = parameter_dependencies(sys), assertions = assertions(sys),
-            guesses = guesses(sys), initialization_eqs = initialization_equations(sys))
-        @set! ssys.tearing_state = get_tearing_state(ode_sys)
-        return ssys
+            guesses = guesses(sys), initialization_eqs = initialization_equations(sys),
+            continuous_events = continuous_events(sys),
+            discrete_events = discrete_events(sys))
+    end
+end
+
+function simplify_optimization_system(sys::System; split = true, kwargs...)
+    sys = flatten(sys)
+    cons = constraints(sys)
+    econs = Equation[]
+    icons = similar(cons, 0)
+    for e in cons
+        if e isa Equation
+            push!(econs, e)
+        else
+            push!(icons, e)
+        end
+    end
+    irreducible_subs = Dict()
+    dvs = mapreduce(Symbolics.scalarize, vcat, unknowns(sys))
+    if !(dvs isa Array)
+        dvs = [dvs]
+    end
+    for i in eachindex(dvs)
+        var = dvs[i]
+        if hasbounds(var)
+            irreducible_subs[var] = irrvar = setirreducible(var, true)
+            dvs[i] = irrvar
+        end
+    end
+    econs = fast_substitute.(econs, (irreducible_subs,))
+    nlsys = System(econs, dvs, parameters(sys); name = :___tmp_nlsystem)
+    snlsys = structural_simplify(nlsys; kwargs..., fully_determined = false)
+    obs = observed(snlsys)
+    subs = Dict(eq.lhs => eq.rhs for eq in observed(snlsys))
+    seqs = equations(snlsys)
+    cons_simplified = similar(cons, length(icons) + length(seqs))
+    for (i, eq) in enumerate(Iterators.flatten((seqs, icons)))
+        cons_simplified[i] = fixpoint_sub(eq, subs)
+    end
+    newsts = setdiff(dvs, keys(subs))
+    @set! sys.constraints = cons_simplified
+    @set! sys.observed = [observed(sys); obs]
+    newcost = fixpoint_sub.(get_costs(sys), (subs,))
+    @set! sys.costs = newcost
+    @set! sys.unknowns = newsts
+    return sys
+end
+
+function __num_isdiag_noise(mat)
+    for i in axes(mat, 1)
+        nnz = 0
+        for j in axes(mat, 2)
+            if !isequal(mat[i, j], 0)
+                nnz += 1
+            end
+        end
+        if nnz > 1
+            return (false)
+        end
+    end
+    true
+end
+
+function __get_num_diag_noise(mat)
+    map(axes(mat, 1)) do i
+        for j in axes(mat, 2)
+            mij = mat[i, j]
+            if !isequal(mij, 0)
+                return mij
+            end
+        end
+        0
     end
 end
 

@@ -12,7 +12,7 @@ eqs = [u ~ kp * (r - y)
        D(x) ~ -x + u
        y ~ x]
 
-@named sys = ODESystem(eqs, t)
+@named sys = System(eqs, t)
 
 lsys, ssys = linearize(sys, [r], [y])
 lprob = LinearizationProblem(sys, [r], [y])
@@ -56,7 +56,7 @@ function plant(; name)
     D = Differential(t)
     eqs = [D(x) ~ -x + u
            y ~ x]
-    ODESystem(eqs, t; name = name)
+    System(eqs, t; name = name)
 end
 
 function filt_(; name)
@@ -65,7 +65,7 @@ function filt_(; name)
     D = Differential(t)
     eqs = [D(x) ~ -2 * x + u
            y ~ x]
-    ODESystem(eqs, t, name = name)
+    System(eqs, t, name = name)
 end
 
 function controller(kp; name)
@@ -74,7 +74,7 @@ function controller(kp; name)
     eqs = [
         u ~ kp * (r - y)
     ]
-    ODESystem(eqs, t; name = name)
+    System(eqs, t; name = name)
 end
 
 @named f = filt_()
@@ -85,12 +85,12 @@ connections = [f.y ~ c.r # filtered reference to controller reference
                c.u ~ p.u # controller output to plant input
                p.y ~ c.y]
 
-@named cl = ODESystem(connections, t, systems = [f, c, p])
+@named cl = System(connections, t, systems = [f, c, p])
 
-lsys0, ssys = linearize(cl, [f.u], [p.x])
+lsys0, ssys = linearize(cl)
 desired_order = [f.x, p.x]
 lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
-lsys1, ssys = linearize(cl, [f.u], [p.x]; autodiff = AutoFiniteDiff())
+lsys1, ssys = linearize(cl; autodiff = AutoFiniteDiff())
 lsys2 = ModelingToolkit.reorder_unknowns(lsys1, unknowns(ssys), desired_order)
 
 @test lsys.A == lsys2.A == [-2 0; 1 -2]
@@ -181,7 +181,7 @@ function saturation(; y_max, y_min = y_max > 0 ? -y_max : -Inf, name)
     # The equation below is equivalent to y ~ clamp(u, y_min, y_max)
         y ~ ie(u > y_max, y_max, ie((y_min < u) & (u < y_max), u, y_min))
     ]
-    ODESystem(eqs, t, name = name)
+    System(eqs, t, name = name)
 end
 @named sat = saturation(; y_max = 1)
 # inside the linear region, the function is identity
@@ -228,7 +228,7 @@ function SystemModel(u = nothing; name = :model)
            connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
     if u !== nothing
         push!(eqs, connect(torque.tau, u.output))
-        return ODESystem(eqs, t;
+        return System(eqs, t;
             systems = [
                 torque,
                 inertia1,
@@ -239,7 +239,7 @@ function SystemModel(u = nothing; name = :model)
             ],
             name)
     end
-    ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
+    System(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
 end
 
 @named r = Step(start_time = 0)
@@ -256,7 +256,7 @@ connections = [connect(r.output, :r, filt.input)
                connect(sensor.phi, :y, er.input2)
                connect(er.output, :e, pid.err_input)]
 
-closed_loop = ODESystem(connections, t, systems = [model, pid, filt, sensor, r, er],
+closed_loop = System(connections, t, systems = [model, pid, filt, sensor, r, er],
     name = :closed_loop, defaults = [
         model.inertia1.phi => 0.0,
         model.inertia2.phi => 0.0,
@@ -266,7 +266,7 @@ closed_loop = ODESystem(connections, t, systems = [model, pid, filt, sensor, r, 
         filt.xd => 0.0
     ])
 
-@test_nowarn linearize(closed_loop, :r, :y; warn_empty_op = false)
+@test_nowarn linearize(closed_loop; warn_empty_op = false)
 
 # https://discourse.julialang.org/t/mtk-change-in-linearize/115760/3
 @mtkmodel Tank_noi begin
@@ -303,7 +303,7 @@ m_ss = 2.4000000003229878
 @variables x(t) y(t) u(t)=1.0
 @parameters p = 1.0
 eqs = [D(x) ~ p * u, x ~ y]
-@named sys = ODESystem(eqs, t)
+@named sys = System(eqs, t)
 
 matrices1, _ = linearize(sys, [u], []; op = Dict(x => 2.0))
 matrices2, _ = linearize(sys, [u], []; op = Dict(y => 2.0))
@@ -325,7 +325,7 @@ end
     @variables x(t) y(t)
     @parameters p
     eqs = [0 ~ x * log(y) - p]
-    @named sys = ODESystem(eqs, t; defaults = [p => 1.0])
+    @named sys = System(eqs, t; defaults = [p => 1.0])
     sys = complete(sys)
     @test_throws ModelingToolkit.MissingVariablesError linearize(
         sys, [x], []; op = Dict(x => 1.0), allow_input_derivatives = true)

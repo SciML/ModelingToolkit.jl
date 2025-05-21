@@ -211,7 +211,7 @@ end
 """
     $(TYPEDEF)
 
-Information representing how to transform a `NonlinearSystem` into a polynomial
+Information representing how to transform a `System` into a polynomial
 system.
 """
 struct PolynomialTransformation
@@ -236,7 +236,7 @@ struct PolynomialTransformation
     polydata::Vector{PolynomialData}
 end
 
-function PolynomialTransformation(sys::NonlinearSystem)
+function PolynomialTransformation(sys::System)
     # we need to consider `full_equations` because observed also should be
     # polynomials (if used in equations) and we don't know if observed is used
     # in denominator.
@@ -342,7 +342,7 @@ using the appropriate `PolynomialTransformation`. Also contains the denominators
 in the equations, to rule out invalid roots.
 """
 struct PolynomialTransformationResult
-    sys::NonlinearSystem
+    sys::System
     denominators::Vector{BasicSymbolic}
 end
 
@@ -353,7 +353,7 @@ Transform the system `sys` with `transformation` and return a
 `PolynomialTransformationResult`, or a `NotPolynomialError` if the system cannot
 be transformed.
 """
-function transform_system(sys::NonlinearSystem, transformation::PolynomialTransformation;
+function transform_system(sys::System, transformation::PolynomialTransformation;
         fraction_cancel_fn = simplify_fractions)
     subrules = transformation.substitution_rules
     dvs = unknowns(sys)
@@ -394,7 +394,6 @@ function transform_system(sys::NonlinearSystem, transformation::PolynomialTransf
     @set! sys2.unknowns = new_dvs
     # remove observed equations to avoid adding them in codegen
     @set! sys2.observed = Equation[]
-    @set! sys2.substitutions = nothing
     return PolynomialTransformationResult(sys2, denoms)
 end
 
@@ -473,26 +472,26 @@ function handle_rational_polynomials(x, wrt; fraction_cancel_fn = simplify_fract
     return num, den
 end
 
-function SciMLBase.HomotopyNonlinearFunction(sys::NonlinearSystem, args...; kwargs...)
+function SciMLBase.HomotopyNonlinearFunction(sys::System, args...; kwargs...)
     ODEFunction{true}(sys, args...; kwargs...)
 end
 
-function SciMLBase.HomotopyNonlinearFunction{true}(sys::NonlinearSystem, args...;
+function SciMLBase.HomotopyNonlinearFunction{true}(sys::System, args...;
         kwargs...)
     ODEFunction{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
 end
 
-function SciMLBase.HomotopyNonlinearFunction{false}(sys::NonlinearSystem, args...;
+function SciMLBase.HomotopyNonlinearFunction{false}(sys::System, args...;
         kwargs...)
     ODEFunction{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
 function SciMLBase.HomotopyNonlinearFunction{iip, specialize}(
-        sys::NonlinearSystem, args...; eval_expression = false, eval_module = @__MODULE__,
+        sys::System, args...; eval_expression = false, eval_module = @__MODULE__,
         p = nothing, fraction_cancel_fn = SymbolicUtils.simplify_fractions, cse = true,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
-        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `HomotopyContinuationFunction`")
+        error("A completed `System` is required. Call `complete` or `structural_simplify` on the system before creating a `HomotopyContinuationFunction`")
     end
     transformation = PolynomialTransformation(sys)
     if transformation isa NotPolynomialError
@@ -529,11 +528,11 @@ end
 
 struct HomotopyContinuationProblem{iip, specialization} end
 
-function HomotopyContinuationProblem(sys::NonlinearSystem, args...; kwargs...)
+function HomotopyContinuationProblem(sys::System, args...; kwargs...)
     HomotopyContinuationProblem{true}(sys, args...; kwargs...)
 end
 
-function HomotopyContinuationProblem(sys::NonlinearSystem, t,
+function HomotopyContinuationProblem(sys::System, t,
         u0map::StaticArray,
         args...;
         kwargs...)
@@ -541,19 +540,19 @@ function HomotopyContinuationProblem(sys::NonlinearSystem, t,
         sys, t, u0map, args...; kwargs...)
 end
 
-function HomotopyContinuationProblem{true}(sys::NonlinearSystem, args...; kwargs...)
+function HomotopyContinuationProblem{true}(sys::System, args...; kwargs...)
     HomotopyContinuationProblem{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
 end
 
-function HomotopyContinuationProblem{false}(sys::NonlinearSystem, args...; kwargs...)
+function HomotopyContinuationProblem{false}(sys::System, args...; kwargs...)
     HomotopyContinuationProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
 function HomotopyContinuationProblem{iip, spec}(
-        sys::NonlinearSystem, u0map, pmap = SciMLBase.NullParameters();
+        sys::System, u0map, pmap = SciMLBase.NullParameters();
         kwargs...) where {iip, spec}
     if !iscomplete(sys)
-        error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `HomotopyContinuationProblem`")
+        error("A completed `System` is required. Call `complete` or `structural_simplify` on the system before creating a `HomotopyContinuationProblem`")
     end
     f, u0, p = process_SciMLProblem(
         HomotopyNonlinearFunction{iip, spec}, sys, u0map, pmap; kwargs...)

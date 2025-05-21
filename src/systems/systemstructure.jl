@@ -5,11 +5,11 @@ using SymbolicUtils: quick_cancel, maketerm
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           value, InvalidSystemException, isdifferential, _iszero,
-                          isparameter, isconstant,
+                          isparameter,
                           independent_variables, SparseMatrixCLIL, AbstractSystem,
                           equations, isirreducible, input_timedomain, TimeDomain,
                           InferredTimeDomain,
-                          VariableType, getvariabletype, has_equations, ODESystem
+                          VariableType, getvariabletype, has_equations, System
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
 using Graphs
@@ -204,7 +204,7 @@ mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     """The system of equations."""
     sys::T
     """The set of variables of the system."""
-    fullvars::Vector
+    fullvars::Vector{BasicSymbolic}
     structure::SystemStructure
     extra_eqs::Vector
     param_derivative_map::Dict{BasicSymbolic, Any}
@@ -254,127 +254,163 @@ function Base.push!(ev::EquationsView, eq)
     push!(ev.ts.extra_eqs, eq)
 end
 
-function is_time_dependent_parameter(p, iv)
-    return iv !== nothing && isparameter(p) && iscall(p) &&
-           (operation(p) === getindex && is_time_dependent_parameter(arguments(p)[1], iv) ||
+function is_time_dependent_parameter(p, allps, iv)
+    return iv !== nothing && p in allps && iscall(p) &&
+           (operation(p) === getindex &&
+            is_time_dependent_parameter(arguments(p)[1], allps, iv) ||
             (args = arguments(p); length(args)) == 1 && isequal(only(args), iv))
 end
 
+function symbolic_contains(var, set)
+    var in set ||
+        symbolic_type(var) == ArraySymbolic() &&
+            Symbolics.shape(var) != Symbolics.Unknown() &&
+            all(x -> x in set, Symbolics.scalarize(var))
+end
+
 function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
+    # flatten system
     sys = flatten(sys)
     ivs = independent_variables(sys)
     iv = length(ivs) == 1 ? ivs[1] : nothing
-    # scalarize array equations, without scalarizing arguments to registered functions
-    eqs = flatten_equations(copy(equations(sys)))
+    # flatten array equations
+    eqs = flatten_equations(equations(sys))
     neqs = length(eqs)
-    dervaridxs = OrderedSet{Int}()
-    var2idx = Dict{Any, Int}()
-    symbolic_incidence = []
-    fullvars = []
     param_derivative_map = Dict{BasicSymbolic, Any}()
-    var_counter = Ref(0)
+    # * Scalarize unknowns
+    dvs = Set{BasicSymbolic}()
+    fullvars = BasicSymbolic[]
+    for x in unknowns(sys)
+        push!(dvs, x)
+        xx = Symbolics.scalarize(x)
+        if xx isa AbstractArray
+            union!(dvs, xx)
+        end
+    end
+    ps = Set{Symbolic}()
+    for x in full_parameters(sys)
+        push!(ps, x)
+        if symbolic_type(x) == ArraySymbolic() && Symbolics.shape(x) != Symbolics.Unknown()
+            xx = Symbolics.scalarize(x)
+            union!(ps, xx)
+        end
+    end
+    browns = Set{BasicSymbolic}()
+    for x in brownians(sys)
+        push!(browns, x)
+        xx = Symbolics.scalarize(x)
+        if xx isa AbstractArray
+            union!(browns, xx)
+        end
+    end
+    var2idx = Dict{BasicSymbolic, Int}()
     var_types = VariableType[]
-    addvar! = let fullvars = fullvars, var_counter = var_counter, var_types = var_types
-        var -> get!(var2idx, var) do
+    addvar! = let fullvars = fullvars, dvs = dvs, var2idx = var2idx, var_types = var_types
+        (var, vtype) -> get!(var2idx, var) do
+            push!(dvs, var)
             push!(fullvars, var)
-            push!(var_types, getvariabletype(var))
-            var_counter[] += 1
+            push!(var_types, vtype)
+            return length(fullvars)
         end
     end
 
-    vars = OrderedSet()
-    varsvec = []
+    # build symbolic incidence
+    symbolic_incidence = Vector{BasicSymbolic}[]
+    varsbuf = Set()
     eqs_to_retain = trues(length(eqs))
-    for (i, eq′) in enumerate(eqs)
-        if eq′.lhs isa Connection
-            check ? error("$(nameof(sys)) has unexpanded `connect` statements") :
-            return nothing
-        end
-        if iscall(eq′.lhs) && (op = operation(eq′.lhs)) isa Differential &&
-           isequal(op.x, iv) && is_time_dependent_parameter(only(arguments(eq′.lhs)), iv)
+    for (i, eq) in enumerate(eqs)
+        if iscall(eq.lhs) && (op = operation(eq.lhs)) isa Differential &&
+           isequal(op.x, iv) && is_time_dependent_parameter(only(arguments(eq.lhs)), ps, iv)
             # parameter derivatives are opted out by specifying `D(p) ~ missing`, but
             # we want to store `nothing` in the map because that means `fast_substitute`
             # will ignore the rule. We will this identify the presence of `eq′.lhs` in
             # the differentiated expression and error.
-            param_derivative_map[eq′.lhs] = coalesce(eq′.rhs, nothing)
+            param_derivative_map[eq.lhs] = coalesce(eq.rhs, nothing)
             eqs_to_retain[i] = false
             # change the equation if the RHS is `missing` so the rest of this loop works
-            eq′ = eq′.lhs ~ coalesce(eq′.rhs, 0.0)
+            eq = 0.0 ~ coalesce(eq.rhs, 0.0)
         end
-        if _iszero(eq′.lhs)
-            rhs = quick_cancel ? quick_cancel_expr(eq′.rhs) : eq′.rhs
-            eq = eq′
-        else
-            lhs = quick_cancel ? quick_cancel_expr(eq′.lhs) : eq′.lhs
-            rhs = quick_cancel ? quick_cancel_expr(eq′.rhs) : eq′.rhs
+        rhs = quick_cancel ? quick_cancel_expr(eq.rhs) : eq.rhs
+        if !_iszero(eq.lhs)
+            lhs = quick_cancel ? quick_cancel_expr(eq.lhs) : eq.lhs
             eq = 0 ~ rhs - lhs
         end
-        vars!(vars, eq.rhs, op = Symbolics.Operator)
-        for v in vars
-            _var, _ = var_from_nested_derivative(v)
-            any(isequal(_var), ivs) && continue
-            if isparameter(_var) ||
-               (iscall(_var) && isparameter(operation(_var)) || isconstant(_var))
-                if is_time_dependent_parameter(_var, iv) &&
-                   !haskey(param_derivative_map, Differential(iv)(_var))
+        empty!(varsbuf)
+        vars!(varsbuf, eq; op = Symbolics.Operator)
+        incidence = Set{BasicSymbolic}()
+        isalgeq = true
+        for v in varsbuf
+            # additionally track brownians in fullvars
+            if v in browns
+                addvar!(v, BROWNIAN)
+                push!(incidence, v)
+            end
+
+            # TODO: Can we handle this without `isparameter`?
+            if symbolic_contains(v, ps) ||
+               getmetadata(v, SymScope, LocalScope()) isa GlobalScope && isparameter(v)
+                if is_time_dependent_parameter(v, ps, iv) &&
+                   !haskey(param_derivative_map, Differential(iv)(v))
                     # Parameter derivatives default to zero - they stay constant
                     # between callbacks
-                    param_derivative_map[Differential(iv)(_var)] = 0.0
+                    param_derivative_map[Differential(iv)(v)] = 0.0
                 end
                 continue
             end
-            v = scalarize(v)
-            if v isa AbstractArray
-                append!(varsvec, v)
+
+            isequal(v, iv) && continue
+            isdelay(v, iv) && continue
+
+            if !symbolic_contains(v, dvs)
+                isvalid = iscall(v) && operation(v) isa Union{Shift, Sample, Hold}
+                v′ = v
+                while !isvalid && iscall(v′) && operation(v′) isa Union{Differential, Shift}
+                    v′ = arguments(v′)[1]
+                    if v′ in dvs || getmetadata(v′, SymScope, LocalScope()) isa GlobalScope
+                        isvalid = true
+                        break
+                    end
+                end
+                if !isvalid
+                    throw(ArgumentError("$v is present in the system but $v′ is not an unknown."))
+                end
+
+                addvar!(v, VARIABLE)
+                if iscall(v) && operation(v) isa Symbolics.Operator && !isdifferential(v) &&
+                   (it = input_timedomain(v)) !== nothing
+                    v′ = only(arguments(v))
+                    addvar!(setmetadata(v′, VariableTimeDomain, it), VARIABLE)
+                end
+            end
+
+            isalgeq &= !isdifferential(v)
+
+            if symbolic_type(v) == ArraySymbolic()
+                vv = collect(v)
+                union!(incidence, vv)
+                map(vv) do vi
+                    addvar!(vi, VARIABLE)
+                end
             else
-                push!(varsvec, v)
+                push!(incidence, v)
+                addvar!(v, VARIABLE)
             end
         end
-        isalgeq = true
-        unknownvars = []
-        for var in varsvec
-            ModelingToolkit.isdelay(var, iv) && continue
-            set_incidence = true
-            @label ANOTHER_VAR
-            _var, _ = var_from_nested_derivative(var)
-            any(isequal(_var), ivs) && continue
-            if isparameter(_var) ||
-               (iscall(_var) && isparameter(operation(_var)) || isconstant(_var))
-                continue
-            end
-            varidx = addvar!(var)
-            set_incidence && push!(unknownvars, var)
 
-            dvar = var
-            idx = varidx
-            while isdifferential(dvar)
-                if !(idx in dervaridxs)
-                    push!(dervaridxs, idx)
-                end
-                isalgeq = false
-                dvar = arguments(dvar)[1]
-                idx = addvar!(dvar)
-            end
-
-            dvar = var
-            idx = varidx
-
-            if iscall(var) && operation(var) isa Symbolics.Operator &&
-               !isdifferential(var) && (it = input_timedomain(var)) !== nothing
-                set_incidence = false
-                var = only(arguments(var))
-                var = setmetadata(var, VariableTimeDomain, it)
-                @goto ANOTHER_VAR
-            end
-        end
-        push!(symbolic_incidence, copy(unknownvars))
-        empty!(unknownvars)
-        empty!(vars)
-        empty!(varsvec)
         if isalgeq
             eqs[i] = eq
         else
             eqs[i] = eqs[i].lhs ~ rhs
+        end
+        push!(symbolic_incidence, collect(incidence))
+    end
+
+    dervaridxs = OrderedSet{Int}()
+    for (i, v) in enumerate(fullvars)
+        while isdifferential(v)
+            push!(dervaridxs, i)
+            v = arguments(v)[1]
+            i = addvar!(v, VARIABLE)
         end
     end
     eqs = eqs[eqs_to_retain]
@@ -389,6 +425,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
         symbolic_incidence = symbolic_incidence[sortidxs]
     end
 
+    # Handle shifts - find lowest shift and add intermediates with derivative edges
     ### Handle discrete variables
     lowest_shift = Dict()
     for var in fullvars
@@ -422,12 +459,13 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
         for s in (steps - 1):-1:(lshift + 1)
             sf = Shift(tt, s)
             dvar = sf(v)
-            idx = addvar!(dvar)
+            idx = addvar!(dvar, VARIABLE)
             if !(idx in dervaridxs)
                 push!(dervaridxs, idx)
             end
         end
     end
+
     # sort `fullvars` such that the mass matrix is as diagonal as possible.
     dervaridxs = collect(dervaridxs)
     sorted_fullvars = OrderedSet(fullvars[dervaridxs])
@@ -451,6 +489,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
     var2idx = Dict(fullvars .=> eachindex(fullvars))
     dervaridxs = 1:length(dervaridxs)
 
+    # build `var_to_diff`
     nvars = length(fullvars)
     diffvars = []
     var_to_diff = DiffGraph(nvars, true)
@@ -462,6 +501,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
         var_to_diff[diffvaridx] = dervaridx
     end
 
+    # build incidence graph
     graph = BipartiteGraph(neqs, nvars, Val(false))
     for (ie, vars) in enumerate(symbolic_incidence), v in vars
         jv = var2idx[v]
@@ -474,11 +514,9 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
 
     ts = TearingState(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
-            complete(graph), nothing, var_types, sys isa AbstractDiscreteSystem),
+            complete(graph), nothing, var_types, false),
         Any[], param_derivative_map)
-    if sys isa DiscreteSystem
-        ts = shift_discrete_system(ts)
-    end
+
     return ts
 end
 
@@ -657,87 +695,57 @@ function Base.show(io::IO, mime::MIME"text/plain", ms::MatchedSystemStructure)
     printstyled(io, " SelectedState")
 end
 
-# TODO: clean up
-function merge_io(io, inputs)
-    isempty(inputs) && return io
-    if io === nothing
-        io = (inputs, [])
-    else
-        io = ([inputs; io[1]], io[2])
-    end
-    return io
-end
-
-function structural_simplify!(state::TearingState, io = nothing; simplify = false,
+function structural_simplify!(state::TearingState; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = true,
+        inputs = Any[], outputs = Any[],
+        disturbance_inputs = Any[],
         kwargs...)
-    if state.sys isa ODESystem
-        ci = ModelingToolkit.ClockInference(state)
-        ci = ModelingToolkit.infer_clocks!(ci)
-        time_domains = merge(Dict(state.fullvars .=> ci.var_domain),
-            Dict(default_toterm.(state.fullvars) .=> ci.var_domain))
-        tss, inputs, continuous_id, id_to_clock = ModelingToolkit.split_system(ci)
-        cont_io = merge_io(io, inputs[continuous_id])
-        sys, input_idxs = _structural_simplify!(tss[continuous_id], cont_io; simplify,
-            check_consistency, fully_determined,
-            kwargs...)
-        if length(tss) > 1
-            if continuous_id > 0
-                throw(HybridSystemNotSupportedException("Hybrid continuous-discrete systems are currently not supported with the standard MTK compiler. This system requires JuliaSimCompiler.jl, see https://help.juliahub.com/juliasimcompiler/stable/"))
-            end
-            # TODO: rename it to something else
-            discrete_subsystems = Vector{ODESystem}(undef, length(tss))
-            # Note that the appended_parameters must agree with
-            # `generate_discrete_affect`!
-            appended_parameters = parameters(sys)
-            for (i, state) in enumerate(tss)
-                if i == continuous_id
-                    discrete_subsystems[i] = sys
-                    continue
-                end
-                dist_io = merge_io(io, inputs[i])
-                ss, = _structural_simplify!(state, dist_io; simplify, check_consistency,
-                    fully_determined, kwargs...)
-                append!(appended_parameters, inputs[i], unknowns(ss))
-                discrete_subsystems[i] = ss
-            end
-            @set! sys.discrete_subsystems = discrete_subsystems, inputs, continuous_id,
-            id_to_clock
-            @set! sys.ps = appended_parameters
-            @set! sys.defaults = merge(ModelingToolkit.defaults(sys),
-                Dict(v => 0.0 for v in Iterators.flatten(inputs)))
+    ci = ModelingToolkit.ClockInference(state)
+    ci = ModelingToolkit.infer_clocks!(ci)
+    time_domains = merge(Dict(state.fullvars .=> ci.var_domain),
+        Dict(default_toterm.(state.fullvars) .=> ci.var_domain))
+    tss, clocked_inputs, continuous_id, id_to_clock = ModelingToolkit.split_system(ci)
+    if length(tss) > 1
+        if continuous_id == 0
+            throw(HybridSystemNotSupportedException("""
+            Discrete systems with multiple clocks are not supported with the standard \
+            MTK compiler.
+            """))
+        else
+            throw(HybridSystemNotSupportedException("""
+            Hybrid continuous-discrete systems are currently not supported with \
+            the standard MTK compiler. This system requires JuliaSimCompiler.jl, \
+            see https://help.juliahub.com/juliasimcompiler/stable/
+            """))
         end
-        ps = [sym isa CallWithMetadata ? sym :
-              setmetadata(
-                  sym, VariableTimeDomain, get(time_domains, sym, ContinuousClock()))
-              for sym in get_ps(sys)]
-        @set! sys.ps = ps
-    else
-        sys, input_idxs = _structural_simplify!(state, io; simplify, check_consistency,
-            fully_determined, kwargs...)
     end
-    has_io = io !== nothing
-    return has_io ? (sys, input_idxs) : sys
+    if continuous_id == 1 && any(Base.Fix2(isoperator, Shift), state.fullvars)
+        state.structure.only_discrete = true
+    end
+
+    sys = _structural_simplify!(state; simplify, check_consistency,
+        inputs, outputs, disturbance_inputs,
+        fully_determined, kwargs...)
+    return sys
 end
 
-function _structural_simplify!(state::TearingState, io; simplify = false,
+function _structural_simplify!(state::TearingState; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = false,
         dummy_derivative = true,
+        inputs = Any[], outputs = Any[],
+        disturbance_inputs = Any[],
         kwargs...)
     if fully_determined isa Bool
         check_consistency &= fully_determined
     else
         check_consistency = true
     end
-    has_io = io !== nothing
+    has_io = !isempty(inputs) || !isempty(outputs) !== nothing ||
+             !isempty(disturbance_inputs)
     orig_inputs = Set()
     if has_io
-        ModelingToolkit.markio!(state, orig_inputs, io...)
-    end
-    if io !== nothing
-        state, input_idxs = ModelingToolkit.inputs_to_parameters!(state, io)
-    else
-        input_idxs = 0:-1 # Empty range
+        ModelingToolkit.markio!(state, orig_inputs, inputs, outputs, disturbance_inputs)
+        state = ModelingToolkit.inputs_to_parameters!(state, [inputs; disturbance_inputs])
     end
     sys, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
     if check_consistency
@@ -761,5 +769,23 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
     fullunknowns = [observables(sys); unknowns(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)
 
-    ModelingToolkit.invalidate_cache!(sys), input_idxs
+    ModelingToolkit.invalidate_cache!(sys)
+end
+
+struct DifferentiatedVariableNotUnknownError <: Exception
+    differentiated::Any
+    undifferentiated::Any
+end
+
+function Base.showerror(io::IO, err::DifferentiatedVariableNotUnknownError)
+    undiff = err.undifferentiated
+    diff = err.differentiated
+    print(io,
+        "Variable $undiff occurs differentiated as $diff but is not an unknown of the system.")
+    scope = getmetadata(undiff, SymScope, LocalScope())
+    depth = expected_scope_depth(scope)
+    if depth > 0
+        print(io,
+            "\nVariable $undiff expects $depth more levels in the hierarchy to be an unknown.")
+    end
 end

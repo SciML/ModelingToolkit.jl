@@ -21,7 +21,7 @@ u0 = [x => zeros(3),
 ps = [p => zeros(3, 3),
     q => 1.0]
 tspan = (0.0, 10.0)
-@mtkbuild sys = ODESystem(eqs, t)
+@mtkbuild sys = System(eqs, t)
 prob = ODEProblem(sys, u0, tspan, ps)
 sol = solve(prob, Tsit5())
 
@@ -37,7 +37,7 @@ end
 @testset "Issue#2997" begin
     pars = @parameters y0 mh Tγ0 Th0 h ργ0
     vars = @variables x(t)
-    @named sys = ODESystem([D(x) ~ y0],
+    @named sys = System([D(x) ~ y0],
         t,
         vars,
         pars;
@@ -58,9 +58,10 @@ end
 end
 
 @parameters a b[1:3] c(t) d::Integer e[1:3] f[1:3, 1:3]::Int g::Vector{AbstractFloat} h::String
-@named sys = ODESystem(
+@named sys = System(
     Equation[], t, [], [a, b, c, d, e, f, g, h],
-    continuous_events = [[a ~ 0] => [c ~ 0]])
+    continuous_events = [ModelingToolkit.SymbolicContinuousCallback(
+        [a ~ 0] => [c ~ 0], discrete_parameters = c)])
 sys = complete(sys)
 
 ivs = Dict(c => 3a, b => ones(3), a => 1.0, d => 4, e => [5.0, 6.0, 7.0],
@@ -111,7 +112,7 @@ fwd, back = ChainRulesCore.rrule(remake_buffer, sys, ps, idxs, vals)
     @variables y(t)
     eqs = [D(D(y)) ~ -9.81]
     initialization_eqs = [y^2 ~ 0] # initialize y = 0 in a way that builds an initialization problem
-    @named sys = ODESystem(eqs, t; initialization_eqs)
+    @named sys = System(eqs, t; initialization_eqs)
     sys = structural_simplify(sys)
 
     # Find initial throw velocity that reaches exactly 10 m after 1 s
@@ -128,7 +129,7 @@ end
 
 @testset "`sys.var` is non-differentiable" begin
     @variables x(t)
-    @mtkbuild sys = ODESystem(D(x) ~ x, t)
+    @mtkbuild sys = System(D(x) ~ x, t)
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
 
     grad = Zygote.gradient(prob) do prob
