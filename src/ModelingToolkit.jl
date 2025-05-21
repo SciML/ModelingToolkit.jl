@@ -128,10 +128,6 @@ $(TYPEDEF)
 TODO
 """
 abstract type AbstractSystem end
-abstract type AbstractTimeDependentSystem <: AbstractSystem end
-abstract type AbstractTimeIndependentSystem <: AbstractSystem end
-abstract type AbstractMultivariateSystem <: AbstractSystem end
-abstract type AbstractOptimizationSystem <: AbstractTimeIndependentSystem end
 
 function independent_variable end
 
@@ -150,7 +146,6 @@ include("independent_variables.jl")
 include("constants.jl")
 
 include("utils.jl")
-include("domains.jl")
 
 include("systems/index_cache.jl")
 include("systems/parameter_buffer.jl")
@@ -265,25 +260,19 @@ PrecompileTools.@compile_workload begin
     end
 end
 
-export AbstractTimeDependentSystem,
-       AbstractTimeIndependentSystem,
-       AbstractMultivariateSystem
-
-export ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system_indepvar,
+export ODEFunction, convert_system_indepvar,
        System, OptimizationSystem, JumpSystem, SDESystem, NonlinearSystem
-export DAEFunctionExpr, DAEProblemExpr
-export SDEFunction, SDEFunctionExpr, SDEProblemExpr
+export SDEFunction
 export SystemStructure
-export DiscreteProblem, DiscreteFunction, DiscreteFunctionExpr
-export ImplicitDiscreteProblem, ImplicitDiscreteFunction,
-       ImplicitDiscreteFunctionExpr
+export DiscreteProblem, DiscreteFunction
+export ImplicitDiscreteProblem, ImplicitDiscreteFunction
 export ODEProblem, SDEProblem
-export NonlinearFunction, NonlinearFunctionExpr
-export NonlinearProblem, NonlinearProblemExpr
-export IntervalNonlinearFunction, IntervalNonlinearFunctionExpr
-export IntervalNonlinearProblem, IntervalNonlinearProblemExpr
-export OptimizationProblem, OptimizationProblemExpr, constraints
-export SteadyStateProblem, SteadyStateProblemExpr
+export NonlinearFunction
+export NonlinearProblem
+export IntervalNonlinearFunction
+export IntervalNonlinearProblem
+export OptimizationProblem, constraints
+export SteadyStateProblem
 export JumpProblem
 export alias_elimination, flatten
 export connect, domain_connect, @connector, Connection, AnalysisPoint, Flow, Stream,
@@ -315,7 +304,7 @@ export calculate_jacobian, generate_jacobian, generate_rhs, generate_custom_func
 export calculate_control_jacobian, generate_control_jacobian
 export calculate_tgrad, generate_tgrad
 export generate_cost, calculate_cost_gradient, generate_cost_gradient
-export calculate_factorized_W, generate_factorized_W
+export calculate_factorized_W
 export calculate_cost_hessian, generate_cost_hessian
 export calculate_massmatrix, generate_diffusion_function
 export stochastic_integral_transform

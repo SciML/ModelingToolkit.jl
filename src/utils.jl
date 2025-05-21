@@ -60,8 +60,6 @@ macro showarr(x)
     end
 end
 
-@deprecate substitute_expr!(expr, s) substitute(expr, s)
-
 function todict(d)
     eltype(d) <: Pair || throw(ArgumentError("The variable-value mapping must be a Dict."))
     d isa Dict ? d : Dict(d)

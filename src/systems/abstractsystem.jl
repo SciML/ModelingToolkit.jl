@@ -207,24 +207,6 @@ Substitutions(subs, deps) = Substitutions(subs, deps, nothing)
 Base.nameof(sys::AbstractSystem) = getfield(sys, :name)
 description(sys::AbstractSystem) = has_description(sys) ? get_description(sys) : ""
 
-#Deprecated
-function independent_variable(sys::AbstractSystem)
-    Base.depwarn(
-        "`independent_variable` is deprecated. Use `get_iv` or `independent_variables` instead.",
-        :independent_variable)
-    isdefined(sys, :iv) ? getfield(sys, :iv) : nothing
-end
-
-function independent_variables(sys::AbstractTimeDependentSystem)
-    return [getfield(sys, :iv)]
-end
-
-independent_variables(::AbstractTimeIndependentSystem) = []
-
-function independent_variables(sys::AbstractMultivariateSystem)
-    return getfield(sys, :ivs)
-end
-
 """
 $(TYPEDSIGNATURES)
 
@@ -233,9 +215,6 @@ Get the independent variable(s) of the system `sys`.
 See also [`@independent_variables`](@ref) and [`ModelingToolkit.get_iv`](@ref).
 """
 function independent_variables(sys::AbstractSystem)
-    if !(sys isa System)
-        @warn "Please declare ($(typeof(sys))) as a subtype of `AbstractTimeDependentSystem`, `AbstractTimeIndependentSystem` or `AbstractMultivariateSystem`."
-    end
     if isdefined(sys, :iv) && getfield(sys, :iv) !== nothing
         return [getfield(sys, :iv)]
     elseif isdefined(sys, :ivs)
@@ -308,8 +287,6 @@ function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym::Symb
     end
     return nothing
 end
-
-SymbolicIndexingInterface.variable_symbols(sys::AbstractMultivariateSystem) = sys.dvs
 
 function SymbolicIndexingInterface.variable_symbols(sys::AbstractSystem)
     return solved_unknowns(sys)
@@ -560,9 +537,6 @@ function SymbolicIndexingInterface.default_values(sys::AbstractSystem)
         defaults(sys)
     )
 end
-
-SymbolicIndexingInterface.is_time_dependent(::AbstractTimeDependentSystem) = true
-SymbolicIndexingInterface.is_time_dependent(::AbstractTimeIndependentSystem) = false
 
 SymbolicIndexingInterface.is_markovian(sys::AbstractSystem) = !is_dde(sys)
 
@@ -1644,9 +1618,6 @@ See also [`observed`](@ref).
 function observables(sys::AbstractSystem)
     return map(eq -> eq.lhs, observed(sys))
 end
-
-Base.@deprecate default_u0(x) defaults(x) false
-Base.@deprecate default_p(x) defaults(x) false
 
 """
 $(TYPEDSIGNATURES)
