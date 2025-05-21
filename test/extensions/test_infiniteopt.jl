@@ -62,7 +62,8 @@ InfiniteOpt.@variables(m,
     end)
 
 # Trace the dynamics
-x0, p = ModelingToolkit.get_u0_p(io_sys, [model.θ => 0, model.ω => 0], [model.L => L])
+x0 = ModelingToolkit.get_u0(io_sys, [model.θ => 0, model.ω => 0])
+p = ModelingToolkit.get_p(io_sys, [model.L => L]; split = false, buffer_eltype = Any)
 
 xp = f[1](x, u, p, τ)
 cp = f_obs(x, u, p, τ) # Test that it's possible to trace through an observed function
