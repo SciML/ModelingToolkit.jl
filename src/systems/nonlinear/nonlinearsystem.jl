@@ -753,6 +753,9 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
             k = unwrap(k)
             v = unwrap(v)
             T = symtype(k)
+            while T isa Union
+                T = promote_type(T.a, T.b)
+            end
             buf = get!(() -> Any[], cachevars, T)
             push!(buf, v)
             buf = get!(() -> Any[], cacheexprs, T)
