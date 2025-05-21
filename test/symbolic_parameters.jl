@@ -22,8 +22,7 @@ u0 = [
 ]
 ns = System(eqs, [x, y, z], [σ, ρ, β], name = :ns, defaults = [par; u0])
 ModelingToolkit.get_defaults(ns)[y] = u * 1.1
-resolved = ModelingToolkit.varmap_to_vars(Dict(), parameters(ns),
-    defaults = ModelingToolkit.defaults(ns))
+resolved = ModelingToolkit.varmap_to_vars(defaults(ns), parameters(ns))
 @test resolved == [1, 0.1 + 1, (0.1 + 1) * 1.1]
 
 prob = NonlinearProblem(complete(ns), [u => 1.0])
@@ -36,8 +35,7 @@ top = System([0 ~ -a + ns.x + b], [a], [b], systems = [ns], name = :top)
 ModelingToolkit.get_defaults(top)[b] = ns.σ * 0.5
 ModelingToolkit.get_defaults(top)[ns.x] = unknowns(ns, u) * 0.5
 
-res = ModelingToolkit.varmap_to_vars(Dict(), parameters(top),
-    defaults = ModelingToolkit.defaults(top))
+res = ModelingToolkit.varmap_to_vars(defaults(top), parameters(top))
 @test res == [0.5, 1, 0.1 + 1, (0.1 + 1) * 1.1]
 
 top = complete(top)

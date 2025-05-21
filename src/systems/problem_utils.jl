@@ -1215,11 +1215,11 @@ Keyword arguments:
 - `fully_determined`: Override whether the initialization system is fully determined.
 - `check_initialization_units`: Enable or disable unit checks when constructing the
   initialization problem.
-- `tofloat`: Passed to [`better_varmap_to_vars`](@ref) when building the parameter vector of
+- `tofloat`: Passed to [`varmap_to_vars`](@ref) when building the parameter vector of
   a non-split system.
 - `u0_eltype`: The `eltype` of the `u0` vector. If `nothing`, finds the promoted floating point
   type from `op`.
-- `u0_constructor`: A function to apply to the `u0` value returned from `better_varmap_to_vars`
+- `u0_constructor`: A function to apply to the `u0` value returned from `varmap_to_vars`
   to construct the final `u0` value.
 - `p_constructor`: A function to apply to each array buffer created when constructing the parameter object.
 - `check_length`: Whether to check the number of equations along with number of unknowns and
@@ -1340,11 +1340,10 @@ function process_SciMLProblem(
             @warn "Cycles in unknowns:\n$msg"
         end
     end
-    evaluate_varmap!(op, dvs; limit = substitution_limit)
 
-    u0 = better_varmap_to_vars(
-        op, dvs; buffer_eltype = u0_eltype,
-        container_type = u0Type, allow_symbolic = symbolic_u0, is_initializeprob)
+    u0 = varmap_to_vars(
+        op, dvs; buffer_eltype = u0_eltype, container_type = u0Type,
+        allow_symbolic = symbolic_u0, is_initializeprob, substitution_limit)
 
     if u0 !== nothing
         u0 = u0_constructor(u0)
@@ -1365,7 +1364,7 @@ function process_SciMLProblem(
             @warn "Cycles in parameters:\n$msg"
         end
     end
-    evaluate_varmap!(op, ps; limit = substitution_limit)
+
     if is_split(sys)
         # `pType` is usually `Dict` when the user passes key-value pairs.
         if !(pType <: AbstractArray)
@@ -1373,7 +1372,7 @@ function process_SciMLProblem(
         end
         p = MTKParameters(sys, op; floatT = floatT, p_constructor)
     else
-        p = p_constructor(better_varmap_to_vars(op, ps; tofloat, container_type = pType))
+        p = p_constructor(varmap_to_vars(op, ps; tofloat, container_type = pType))
     end
 
     if implicit_dae

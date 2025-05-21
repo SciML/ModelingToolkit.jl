@@ -649,7 +649,8 @@ end
 # 1561
 let
     vars = @variables x y
-    arr = ModelingToolkit.varmap_to_vars([x => 0.0, y => [0.0, 1.0]], vars) #error
+    arr = ModelingToolkit.varmap_to_vars(
+        Dict([x => 0.0, y => [0.0, 1.0]]), vars; use_union = true) #error
     sol = Union{Float64, Vector{Float64}}[0.0, [0.0, 1.0]]
     @test arr == sol
     @test typeof(arr) == typeof(sol)
