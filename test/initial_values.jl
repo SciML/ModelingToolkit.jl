@@ -8,10 +8,10 @@ using SymbolicIndexingInterface
 @variables x(t)[1:3]=[1.0, 2.0, 3.0] y(t) z(t)[1:2]
 
 @mtkcompile sys=System([D(x) ~ t * x], t) simplify=false
-@test get_u0(sys, [])[1] == [1.0, 2.0, 3.0]
-@test get_u0(sys, [x => [2.0, 3.0, 4.0]])[1] == [2.0, 3.0, 4.0]
-@test get_u0(sys, [x[1] => 2.0, x[2] => 3.0, x[3] => 4.0])[1] == [2.0, 3.0, 4.0]
-@test get_u0(sys, [2.0, 3.0, 4.0])[1] == [2.0, 3.0, 4.0]
+@test get_u0(sys, []) == [1.0, 2.0, 3.0]
+@test get_u0(sys, [x => [2.0, 3.0, 4.0]]) == [2.0, 3.0, 4.0]
+@test get_u0(sys, [x[1] => 2.0, x[2] => 3.0, x[3] => 4.0]) == [2.0, 3.0, 4.0]
+@test get_u0(sys, [2.0, 3.0, 4.0]) == [2.0, 3.0, 4.0]
 
 @mtkcompile sys=System([
         D(x) ~ 3x,
@@ -22,19 +22,19 @@ using SymbolicIndexingInterface
 
 @test_throws ModelingToolkit.MissingVariablesError get_u0(sys, [])
 getter = getu(sys, [x..., y, z...])
-@test getter(get_u0(sys, [y => 4.0, z => [5.0, 6.0]])[1]) == collect(1.0:6.0)
-@test getter(get_u0(sys, [y => 4.0, z => [3y, 4y]])[1]) == [1.0, 2.0, 3.0, 4.0, 12.0, 16.0]
-@test getter(get_u0(sys, [y => 3.0, z[1] => 3y, z[2] => 2x[1]])[1]) ==
+@test getter(get_u0(sys, [y => 4.0, z => [5.0, 6.0]])) == collect(1.0:6.0)
+@test getter(get_u0(sys, [y => 4.0, z => [3y, 4y]])) == [1.0, 2.0, 3.0, 4.0, 12.0, 16.0]
+@test getter(get_u0(sys, [y => 3.0, z[1] => 3y, z[2] => 2x[1]])) ==
       [1.0, 2.0, 3.0, 3.0, 9.0, 2.0]
 
 @variables w(t)
 @parameters p1 p2
 
-@test getter(get_u0(sys, [y => 2p1, z => [3y, 2p2]], [p1 => 5.0, p2 => 6.0])[1]) ==
+@test getter(get_u0(sys, [y => 2p1, z => [3y, 2p2], p1 => 5.0, p2 => 6.0])) ==
       [1.0, 2.0, 3.0, 10.0, 30.0, 12.0]
 @test_throws Any getter(get_u0(sys, [y => 2w, w => 3.0, z[1] => 2p1, z[2] => 3p2]))
 @test getter(get_u0(
-    sys, [y => 2w, w => 3.0, z[1] => 2p1, z[2] => 3p2], [p1 => 3.0, p2 => 4.0])[1]) ==
+    sys, [y => 2w, w => 3.0, z[1] => 2p1, z[2] => 3p2, p1 => 3.0, p2 => 4.0])) ==
       [1.0, 2.0, 3.0, 6.0, 6.0, 12.0]
 
 # Issue#2566
@@ -47,7 +47,7 @@ u_vals = [X => 3.0]
 var_vals = [p1 => 1.0, p2 => 2.0, X => 3.0]
 desired_values = [p1, p2, p3]
 defaults = Dict([p3 => X])
-vals = ModelingToolkit.varmap_to_vars(var_vals, desired_values; defaults = defaults)
+vals = ModelingToolkit.varmap_to_vars(merge(defaults, Dict(var_vals)), desired_values)
 @test vals == [1.0, 2.0, 3.0]
 
 # Issue#2565

@@ -164,7 +164,8 @@ measurement2 = ModelingToolkit.build_explicit_observed_function(
     disturbance_argument = true)
 
 op = ModelingToolkit.inputs(io_sys) .=> 0
-x0, p = ModelingToolkit.get_u0_p(io_sys, op, op)
+x0 = ModelingToolkit.get_u0(io_sys, op)
+p = ModelingToolkit.get_p(io_sys, op)
 x = zeros(5)
 u = zeros(1)
 d = zeros(3)
