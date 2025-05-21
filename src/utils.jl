@@ -204,6 +204,12 @@ function check_equations(eqs, iv)
         isequal(single_iv, iv) ||
             throw(ArgumentError("Differential w.r.t. variable ($single_iv) other than the independent variable ($iv) are not allowed."))
     end
+
+    for eq in eqs
+        vars, pars = collect_vars(eq, iv)
+        isempty(vars) && !isempty(pars) &&
+            throw(ArgumentError("Equation $eq contains only parameters, but relationships between parameters should be specified with defaults or parameter_dependencies."))
+    end
 end
 
 """

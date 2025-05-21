@@ -446,6 +446,12 @@ eqs = [
 ]
 @test_throws ArgumentError ModelingToolkit.ODESystem(eqs, t, vars, pars, name = :foo)
 
+# equations without variables are forbidden
+# https://github.com/SciML/ModelingToolkit.jl/issues/2727
+@parameters p q
+@test_throws ArgumentError ODESystem([p ~ q], t; name = :foo)
+@test_throws ArgumentError ODESystem([p ~ 1], t; name = :foo)
+
 @variables x(t)
 @parameters M b k
 eqs = [D(D(x)) ~ -b / M * D(x) - k / M * x]
