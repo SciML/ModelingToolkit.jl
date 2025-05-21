@@ -2792,8 +2792,8 @@ ModelingToolkit.dump_unknowns(sys)
 See also: [`ModelingToolkit.dump_variable_metadata`](@ref), [`ModelingToolkit.dump_parameters`](@ref)
 """
 function dump_unknowns(sys::AbstractSystem)
-    defs = varmap_with_toterm(defaults(sys))
-    gs = varmap_with_toterm(guesses(sys))
+    defs = add_toterms(defaults(sys))
+    gs = add_toterms(guesses(sys))
     map(dump_variable_metadata.(unknowns(sys))) do meta
         if haskey(defs, meta.var)
             meta = merge(meta, (; default = defs[meta.var]))
