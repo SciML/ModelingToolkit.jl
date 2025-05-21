@@ -366,7 +366,7 @@ Keyword arguments:
 - `substitution_limit`: The maximum number of times to recursively substitute `varmap` into
   itself to get a numeric value for each variable in `vars`.
 """
-function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
+function varmap_to_vars(varmap::AbstractDict, vars::Vector;
         tofloat = true, use_union = false, container_type = Array, buffer_eltype = Nothing,
         toterm = default_toterm, check = true, allow_symbolic = false,
         is_initializeprob = false, substitution_limit = 100)
