@@ -482,7 +482,7 @@ function noise_to_brownians(sys::System; names::Union{Symbol, Vector{Symbol}} = 
         """))
     end
     brownvars = map(names) do name
-        only(@brownian $name)
+        unwrap(only(@brownian $name))
     end
 
     terms = if ndims(neqs) == 1
