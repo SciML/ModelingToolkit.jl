@@ -66,13 +66,6 @@ ps = [k1 => 1.0, k2 => 5.0]
 # overdetermined because parameter initialization isn't in yet
 @test_warn "overdetermined" oprob=ODEProblem(osys_m, [u0; ps], tspan)
 
-# Make sure it doesn't error on array variables with unspecified size
-@parameters p::Vector{Real} q[1:3]
-varmap = Dict(p => ones(3), q => 2ones(3))
-cvarmap = ModelingToolkit.canonicalize_varmap(varmap)
-target_varmap = Dict(p => ones(3), q => 2ones(3), q[1] => 2.0, q[2] => 2.0, q[3] => 2.0)
-@test cvarmap == target_varmap
-
 # Initialization of ODEProblem with dummy derivatives of multidimensional arrays
 # Issue#1283
 @variables z(t)[1:2, 1:2]

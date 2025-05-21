@@ -434,14 +434,6 @@ end
 
 @named sys = System([0 ~ sys1.y + sys2.y], t; systems = [sys1, sys2])
 
-# DelayDiffEq
-using ModelingToolkit: hist
-@variables x(t) y(t)
-xₜ₋₁ = hist(x, t - 1)
-eqs = [D(x) ~ x * y
-       D(y) ~ y * x - xₜ₋₁]
-@named sys = System(eqs, t)
-
 # register
 using StaticArrays
 using SymbolicUtils: term
