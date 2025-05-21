@@ -28,7 +28,7 @@ Where we use Setfield to copy the tuple `m` with a new value for `x`, then retur
 `modified`; a runtime error will be produced if a value is written that does not appear in `modified`. The user can dynamically decide not to write a value back by not including it
 in the returned tuple, in which case the associated field will not be updated.
 """
-@kwdef struct ImperativeAffect
+struct ImperativeAffect
     f::Any
     obs::Vector
     obs_syms::Vector{Symbol}
@@ -62,6 +62,9 @@ function ImperativeAffect(
         f, modified::NamedTuple, observed::NamedTuple, ctx; skip_checks = false)
     ImperativeAffect(
         f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
+end
+function ImperativeAffect(; f, kwargs...)
+    ImperativeAffect(f; kwargs...)
 end
 
 function Base.show(io::IO, mfa::ImperativeAffect)

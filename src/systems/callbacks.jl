@@ -1,58 +1,7 @@
 abstract type AbstractCallback end
 
-struct FunctionalAffect
-    f::Any
-    sts::Vector
-    sts_syms::Vector{Symbol}
-    pars::Vector
-    pars_syms::Vector{Symbol}
-    discretes::Vector
-    ctx::Any
-end
-
-function FunctionalAffect(f, sts, pars, discretes, ctx = nothing)
-    # sts & pars contain either pairs: resistor.R => R, or Syms: R
-    vs = [x isa Pair ? x.first : x for x in sts]
-    vs_syms = Symbol[x isa Pair ? Symbol(x.second) : getname(x) for x in sts]
-    length(vs_syms) == length(unique(vs_syms)) || error("Variables are not unique")
-
-    ps = [x isa Pair ? x.first : x for x in pars]
-    ps_syms = Symbol[x isa Pair ? Symbol(x.second) : getname(x) for x in pars]
-    length(ps_syms) == length(unique(ps_syms)) || error("Parameters are not unique")
-
-    FunctionalAffect(f, vs, vs_syms, ps, ps_syms, discretes, ctx)
-end
-
-function FunctionalAffect(; f, sts, pars, discretes, ctx = nothing)
-    FunctionalAffect(f, sts, pars, discretes, ctx)
-end
-
-func(a::FunctionalAffect) = a.f
-context(a::FunctionalAffect) = a.ctx
-parameters(a::FunctionalAffect) = a.pars
-parameters_syms(a::FunctionalAffect) = a.pars_syms
-unknowns(a::FunctionalAffect) = a.sts
-unknowns_syms(a::FunctionalAffect) = a.sts_syms
-discretes(a::FunctionalAffect) = a.discretes
-
-function Base.:(==)(a1::FunctionalAffect, a2::FunctionalAffect)
-    isequal(a1.f, a2.f) && isequal(a1.sts, a2.sts) && isequal(a1.pars, a2.pars) &&
-        isequal(a1.sts_syms, a2.sts_syms) && isequal(a1.pars_syms, a2.pars_syms) &&
-        isequal(a1.ctx, a2.ctx)
-end
-
-function Base.hash(a::FunctionalAffect, s::UInt)
-    s = hash(a.f, s)
-    s = hash(a.sts, s)
-    s = hash(a.sts_syms, s)
-    s = hash(a.pars, s)
-    s = hash(a.pars_syms, s)
-    s = hash(a.discretes, s)
-    hash(a.ctx, s)
-end
-
 function has_functional_affect(cb)
-    (affects(cb) isa FunctionalAffect || affects(cb) isa ImperativeAffect)
+    affects(cb) isa ImperativeAffect
 end
 
 struct AffectSystem
@@ -97,7 +46,7 @@ function Base.hash(a::AffectSystem, s::UInt)
     hash(aff_to_sys(a), s)
 end
 
-function vars!(vars, aff::Union{FunctionalAffect, AffectSystem}; op = Differential)
+function vars!(vars, aff::AffectSystem; op = Differential)
     for var in Iterators.flatten((unknowns(aff), parameters(aff), discretes(aff)))
         vars!(vars, var)
     end
@@ -161,7 +110,7 @@ end
 ###############################
 ###### Continuous events ######
 ###############################
-const Affect = Union{AffectSystem, FunctionalAffect, ImperativeAffect}
+const Affect = Union{AffectSystem, ImperativeAffect}
 
 """
     SymbolicContinuousCallback(eqs::Vector{Equation}, affect = nothing, iv = nothing; 
@@ -233,7 +182,7 @@ struct SymbolicContinuousCallback <: AbstractCallback
         conditions = (conditions isa AbstractVector) ? conditions : [conditions]
 
         if isnothing(reinitializealg)
-            if any(a -> (a isa FunctionalAffect || a isa ImperativeAffect),
+            if any(a -> a isa ImperativeAffect,
                 [affect, affect_neg, initialize, finalize])
                 reinitializealg = SciMLBase.CheckInit()
             else
@@ -263,8 +212,8 @@ function SymbolicContinuousCallback(cb::Tuple, args...; kwargs...)
 end
 
 make_affect(affect::Nothing; kwargs...) = nothing
-make_affect(affect::Tuple; kwargs...) = FunctionalAffect(affect...)
-make_affect(affect::NamedTuple; kwargs...) = FunctionalAffect(; affect...)
+make_affect(affect::Tuple; kwargs...) = ImperativeAffect(affect...)
+make_affect(affect::NamedTuple; kwargs...) = ImperativeAffect(; affect...)
 make_affect(affect::Affect; kwargs...) = affect
 
 function make_affect(affect::Vector{Equation}; discrete_parameters = Any[],
@@ -446,7 +395,7 @@ struct SymbolicDiscreteCallback <: AbstractCallback
         c = is_timed_condition(condition) ? condition : value(scalarize(condition))
 
         if isnothing(reinitializealg)
-            if any(a -> (a isa FunctionalAffect || a isa ImperativeAffect),
+            if any(a -> a isa ImperativeAffect,
                 [affect, initialize, finalize])
                 reinitializealg = SciMLBase.CheckInit()
             else
@@ -498,16 +447,6 @@ end
 ############################################
 ########## Namespacing Utilities ###########
 ############################################
-function namespace_affects(affect::FunctionalAffect, s)
-    FunctionalAffect(func(affect),
-        renamespace.((s,), unknowns(affect)),
-        unknowns_syms(affect),
-        renamespace.((s,), parameters(affect)),
-        parameters_syms(affect),
-        renamespace.((s,), discretes(affect)),
-        context(affect))
-end
-
 function namespace_affects(affect::AffectSystem, s)
     AffectSystem(renamespace(s, system(affect)),
         renamespace.((s,), unknowns(affect)),
@@ -650,36 +589,6 @@ function compile_condition(
     fs = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(
         Val{false}, fs...; eval_expression, eval_module)
     return CompiledCondition{is_discrete(cbs)}(fs)
-end
-
-"""
-Compile user-defined functional affect.
-"""
-function compile_functional_affect(affect::FunctionalAffect, sys; kwargs...)
-    dvs = unknowns(sys)
-    ps = parameters(sys)
-    dvs_ind = Dict(reverse(en) for en in enumerate(dvs))
-    v_inds = map(sym -> dvs_ind[sym], unknowns(affect))
-
-    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        p_inds = [(pind = parameter_index(sys, sym)) === nothing ? sym : pind
-                  for sym in parameters(affect)]
-    else
-        ps_ind = Dict(reverse(en) for en in enumerate(ps))
-        p_inds = map(sym -> get(ps_ind, sym, sym), parameters(affect))
-    end
-    # HACK: filter out eliminated symbols. Not clear this is the right thing to do
-    # (MTK should keep these symbols)
-    u = filter(x -> !isnothing(x[2]), collect(zip(unknowns_syms(affect), v_inds))) |>
-        NamedTuple
-    p = filter(x -> !isnothing(x[2]), collect(zip(parameters_syms(affect), p_inds))) |>
-        NamedTuple
-
-    let u = u, p = p, user_affect = func(affect), ctx = context(affect)
-        (integ) -> begin
-            user_affect(integ, u, p, ctx)
-        end
-    end
 end
 
 is_discrete(cb::AbstractCallback) = cb isa SymbolicDiscreteCallback
@@ -837,7 +746,7 @@ function compile_affect(
     elseif aff isa AffectSystem
         f = compile_equational_affect(aff, sys; kwargs...)
         wrap_save_discretes(f, save_idxs)
-    elseif aff isa FunctionalAffect || aff isa ImperativeAffect
+    elseif aff isa ImperativeAffect
         f = compile_functional_affect(aff, sys; kwargs...)
         wrap_save_discretes(f, save_idxs)
     end

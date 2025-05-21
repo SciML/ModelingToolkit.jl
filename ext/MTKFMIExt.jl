@@ -235,8 +235,8 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
 
         # instance management callback which deallocates the instance when
         # necessary and notifies the FMU of completed integrator steps
-        finalize_affect = MTK.FunctionalAffect(fmiFinalize!, [], [wrapper], [])
-        step_affect = MTK.FunctionalAffect(Returns(nothing), [], [], [])
+        finalize_affect = MTK.ImperativeAffect(fmiFinalize!; observed = (; wrapper))
+        step_affect = MTK.ImperativeAffect(Returns((;)))
         instance_management_callback = MTK.SymbolicDiscreteCallback(
             (t == t - 1), step_affect; finalize = finalize_affect, reinitializealg = SciMLBase.NoInit())
 
@@ -273,7 +273,7 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
         end
         initialize_affect = MTK.ImperativeAffect(fmiCSInitialize!; observed = cb_observed,
             modified = cb_modified, ctx = _functor)
-        finalize_affect = MTK.FunctionalAffect(fmiFinalize!, [], [wrapper], [])
+        finalize_affect = MTK.ImperativeAffect(fmiFinalize!; observed = (; wrapper))
         # the callback affect performs the stepping
         step_affect = MTK.ImperativeAffect(
             fmiCSStep!; observed = cb_observed, modified = cb_modified, ctx = _functor)
@@ -708,15 +708,15 @@ end
 """
     $(TYPEDSIGNATURES)
 
-An affect function for use inside a `FunctionalAffect`. This should be triggered at the
+An affect function for use inside an `ImperativeAffect`. This should be triggered at the
 end of the solve, regardless of whether it succeeded or failed. Expects `p` to be a
 1-length array containing the index of the instance wrapper (`FMI2InstanceWrapper` or
 `FMI3InstanceWrapper`) in the parameter object.
 """
-function fmiFinalize!(integrator, u, p, ctx)
-    wrapper_idx = p[1]
-    wrapper = integrator.ps[wrapper_idx]
+function fmiFinalize!(m, o, ctx, integrator)
+    wrapper = o.wrapper
     reset_instance!(wrapper)
+    return (;)
 end
 
 """
