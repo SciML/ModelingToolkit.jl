@@ -108,7 +108,7 @@ lorenz2 = lorenz(:lorenz2)
      lorenz2.y ~ s * h
      lorenz1.F ~ lorenz2.u
      lorenz2.F ~ lorenz1.u],
-    [s, a], [],
+    [s, a], [h],
     systems = [lorenz1, lorenz2])
 @test_nowarn alias_elimination(connected)
 
