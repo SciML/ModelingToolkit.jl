@@ -644,6 +644,32 @@ function concrete_getu(indp, syms::AbstractVector)
 end
 
 """
+    $(TYPEDEF)
+
+A callable struct which applies `p_constructor` to possibly nested arrays. It also
+ensures that views (including nested ones) are concretized.
+"""
+struct PConstructorApplicator{F}
+    p_constructor::F
+end
+
+function (pca::PConstructorApplicator)(x::AbstractArray)
+    pca.p_constructor(x)
+end
+
+function (pca::PConstructorApplicator{typeof(identity)})(x::SubArray)
+    collect(x)
+end
+
+function (pca::PConstructorApplicator{typeof(identity)})(x::SubArray{<:AbstractArray})
+    collect(pca.(x))
+end
+
+function (pca::PConstructorApplicator)(x::AbstractArray{<:AbstractArray})
+    pca.p_constructor(pca.(x))
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 Given a source system `srcsys` and destination system `dstsys`, return a function that
@@ -657,6 +683,7 @@ takes a value provider of `srcsys` and a value provider of `dstsys` and returns 
 """
 function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::AbstractSystem;
         initials = false, unwrap_initials = false, p_constructor = identity)
+    p_constructor = PConstructorApplicator(p_constructor)
     # if we call `getu` on this (and it were able to handle empty tuples) we get the
     # fields of `MTKParameters` except caches.
     syms = reorder_parameters(
@@ -698,7 +725,7 @@ function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::Abstrac
     else
         ic = get_index_cache(dstsys)
         blockarrsizes = Tuple(map(ic.discrete_buffer_sizes) do bufsizes
-            map(x -> x.length, bufsizes)
+            p_constructor(map(x -> x.length, bufsizes))
         end)
         # discretes need to be blocked arrays
         # the `getu` returns a tuple of arrays corresponding to `p.discretes`
@@ -706,7 +733,8 @@ function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::Abstrac
         # `Base.Fix2(...)` does `BlockedArray.(tuple_of_arrs, blockarrsizes)` returning a
         # tuple of `BlockedArray`s
         Base.Fix2(Broadcast.BroadcastFunction(BlockedArray), blockarrsizes) ∘
-        Base.Fix1(broadcast, p_constructor) ∘ getu(srcsys, syms[3])
+        Base.Fix1(broadcast, p_constructor) ∘
+        getu(srcsys, syms[3])
     end
     rest_getters = map(Base.tail(Base.tail(Base.tail(syms)))) do buf
         if buf == ()
@@ -1307,7 +1335,7 @@ function process_SciMLProblem(
         if !(pType <: AbstractArray)
             pType = Array
         end
-        p = MTKParameters(sys, op; floatT = floatT, container_type = pType, p_constructor)
+        p = MTKParameters(sys, op; floatT = floatT, p_constructor)
     else
         p = p_constructor(better_varmap_to_vars(op, ps; tofloat, container_type = pType))
     end
