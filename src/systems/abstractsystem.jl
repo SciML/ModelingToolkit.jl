@@ -282,7 +282,7 @@ function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym::Symb
 end
 
 function SymbolicIndexingInterface.variable_symbols(sys::AbstractSystem)
-    return solved_unknowns(sys)
+    return unknowns(sys)
 end
 
 function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
@@ -1165,7 +1165,6 @@ end
 
 namespace_variables(sys::AbstractSystem) = unknowns(sys, unknowns(sys))
 namespace_parameters(sys::AbstractSystem) = parameters(sys, parameters(sys))
-namespace_controls(sys::AbstractSystem) = controls(sys, controls(sys))
 
 function namespace_defaults(sys)
     defs = defaults(sys)
@@ -1547,12 +1546,6 @@ end
 # required in `src/connectors.jl:437`
 parameters(_) = []
 
-function controls(sys::AbstractSystem)
-    ctrls = get_ctrls(sys)
-    systems = get_systems(sys)
-    isempty(systems) ? ctrls : [ctrls; reduce(vcat, namespace_controls.(systems))]
-end
-
 """
 $(TYPEDSIGNATURES)
 
@@ -1773,19 +1766,6 @@ function isaffine(sys::AbstractSystem)
     all(isaffine(r, unknowns(sys)) for r in rhs)
 end
 
-"""
-$(SIGNATURES)
-
-Return a list of actual unknowns needed to be solved by solvers.
-"""
-function solved_unknowns(sys::AbstractSystem)
-    sts = unknowns(sys)
-    if has_solved_unknowns(sys)
-        sts = something(get_solved_unknowns(sys), sts)
-    end
-    return sts
-end
-
 ###
 ### System utils
 ###
@@ -1978,18 +1958,6 @@ end
 
 Base.write(io::IO, sys::AbstractSystem) = write(io, readable_code(toexpr(sys)))
 
-function get_or_construct_tearing_state(sys)
-    if has_tearing_state(sys)
-        state = get_tearing_state(sys)
-        if state === nothing
-            state = TearingState(sys)
-        end
-    else
-        state = nothing
-    end
-    state
-end
-
 """
     n_expanded_connection_equations(sys::AbstractSystem)
 
@@ -2123,15 +2091,6 @@ function Base.show(
     nobs > 0 && hint && print(io, " see observed($name)")
 
     return nothing
-end
-
-function Graphs.incidence_matrix(sys)
-    if has_torn_matching(sys) && has_tearing_state(sys)
-        state = get_tearing_state(sys)
-        incidence_matrix(state.structure.graph, Num(Sym{Real}(:×)))
-    else
-        return nothing
-    end
 end
 
 function split_assign(expr)
