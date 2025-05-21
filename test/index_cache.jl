@@ -98,15 +98,17 @@ mutable struct ParamTest
 end
 (pt::ParamTest)(x) = pt.y - x
 @testset "Issue#3215: Callable discrete parameter" begin
-    function update_affect!(integ, u, p, ctx)
-        integ.p[p.p_1].y = integ.t
+    function update_affect!(mod, obs, ctx, integ)
+        p_1 = mod.p_1
+        p_1.y = integ.t
+        return (; p_1)
     end
 
     tp1 = typeof(ParamTest(1))
     @parameters (p_1::tp1)(..) = ParamTest(1)
     @variables x(ModelingToolkit.t_nounits) = 0
 
-    event1 = [1.0, 2, 3] => (update_affect!, [], [p_1], [p_1], nothing)
+    event1 = [1.0, 2, 3] => (f = update_affect!, modified = (; p_1))
 
     @named sys = System([
             ModelingToolkit.D_nounits(x) ~ p_1(x)

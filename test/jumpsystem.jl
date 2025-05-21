@@ -516,12 +516,12 @@ end
     @test all(abs.(Xv .- Xact) .<= 0.05 .* Xv)
     @test all(abs.(Yv .- Yact) .<= 0.05 .* Yv)
 
-    function affect!(integ, u, p, ctx)
+    function affect!(mod, obs, ctx, integ)
         savevalues!(integ, true)
         terminate!(integ)
-        nothing
+        (;)
     end
-    cevents = [t ~ 0.2] => (affect!, [], [], [], nothing)
+    cevents = [t ~ 0.2] => (; f = affect!)
     @named jsys = JumpSystem([maj, crj, vrj, eqs[1]], t, [X, Y], [α, β];
         continuous_events = cevents)
     jsys = complete(jsys)

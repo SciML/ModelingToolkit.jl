@@ -1367,13 +1367,13 @@ end
 
 @testset "Issue#3342" begin
     @variables x(t) y(t)
-    stop!(integrator, _, _, _) = terminate!(integrator)
+    stop!(mod, obs, ctx, integrator) = (terminate!(integrator); return (;))
     @named sys = System([D(x) ~ 1.0
                          D(y) ~ 1.0], t; initialization_eqs = [
             y ~ 0.0
         ],
         continuous_events = [
-            [y ~ 0.5] => (stop!, [y], [], [], nothing)
+            [y ~ 0.5] => (; f = stop!)
         ])
     sys = structural_simplify(sys)
     prob0 = ODEProblem(sys, [x => NaN], (0.0, 1.0), [])
