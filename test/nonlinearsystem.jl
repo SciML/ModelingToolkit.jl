@@ -80,15 +80,14 @@ sH = calculate_hessian(ns)
 @test getfield.(ModelingToolkit.hessian_sparsity(ns), :rowval) ==
       getfield.(sparse.(sH), :rowval)
 
-prob = NonlinearProblem(ns, ones(3), [σ => 1.0, ρ => 1.0, β => 1.0])
+prob = NonlinearProblem(ns, [x => 1.0, y => 1.0, z => 1.0, σ => 1.0, ρ => 1.0, β => 1.0])
 @test prob.f.sys === ns
 sol = solve(prob, NewtonRaphson())
 @test sol.u[1] ≈ sol.u[2]
 
-prob = NonlinearProblem(ns, ones(3), [σ => 1.0, ρ => 1.0, β => 1.0], jac = true)
+prob = NonlinearProblem(
+    ns, [x => 1.0, y => 1.0, z => 1.0, σ => 1.0, ρ => 1.0, β => 1.0], jac = true)
 @test_nowarn solve(prob, NewtonRaphson())
-
-@test_throws ArgumentError NonlinearProblem(ns, ones(4), [σ => 1.0, ρ => 1.0, β => 1.0])
 
 @variables u F s a
 eqs1 = [
@@ -100,7 +99,7 @@ eqs1 = [
 
 lorenz = name -> System(eqs1, [x, y, z, u, F], [σ, ρ, β, h], name = name)
 lorenz1 = lorenz(:lorenz1)
-@test_throws ArgumentError NonlinearProblem(complete(lorenz1), zeros(5), zeros(3))
+@test_throws ArgumentError NonlinearProblem(complete(lorenz1), zeros(4))
 lorenz2 = lorenz(:lorenz2)
 @named connected = System(
     [s ~ a + lorenz1.x
@@ -119,7 +118,7 @@ D = Differential(t)
 @named sys = System([D(subsys.x) ~ subsys.x + subsys.x], t, systems = [subsys])
 sys = mtkcompile(sys)
 u0 = [subsys.x => 1, subsys.z => 2.0, subsys.y => 1.0]
-prob = ODEProblem(sys, u0, (0, 1.0), [subsys.σ => 1, subsys.ρ => 2, subsys.β => 3])
+prob = ODEProblem(sys, [u0; [subsys.σ => 1, subsys.ρ => 2, subsys.β => 3]], (0, 1.0))
 sol = solve(prob, FBDF(), reltol = 1e-7, abstol = 1e-7)
 @test sol[subsys.x] + sol[subsys.y] - sol[subsys.z]≈sol[subsys.u] atol=1e-7
 @test_throws ArgumentError convert_system_indepvar(sys, t)
@@ -133,7 +132,7 @@ eqs = [0 ~ σ * (y - x),
     0 ~ x * y - β * z * h]
 @named ns = System(eqs, [x, y, z], [σ, ρ, β, h])
 np = NonlinearProblem(
-    complete(ns), [0, 0, 0], [σ => 1, ρ => 2, β => 3], jac = true, sparse = true)
+    complete(ns), [x => 0, y => 0, z => 0, σ => 1, ρ => 2, β => 3], jac = true, sparse = true)
 @test calculate_jacobian(ns, sparse = true) isa SparseMatrixCSC
 
 # issue #819
@@ -275,12 +274,12 @@ sys = mtkcompile(ns; conservative = true)
     @test isequal(calculate_jacobian(ns), [(-1 - z + ρ)*σ -x*σ
                                            2x*(-z + ρ) -β-(x^2)])
     # solve without analytical jacobian
-    prob = NonlinearProblem(ns, guesses, ps)
+    prob = NonlinearProblem(ns, [guesses; ps])
     sol = solve(prob, NewtonRaphson())
     @test sol.retcode == ReturnCode.Success
 
     # solve with analytical jacobian
-    prob = NonlinearProblem(ns, guesses, ps, jac = true)
+    prob = NonlinearProblem(ns, [guesses; ps], jac = true)
     sol = solve(prob, NewtonRaphson())
     @test sol.retcode == ReturnCode.Success
 
@@ -327,7 +326,7 @@ end
         @test length(equations(sys)) == 1
         @test length(unknowns(sys)) == 0
         T = typeof(ForwardDiff.Dual(1.0))
-        prob = NonlinearProblem(sys, [], [p => ForwardDiff.Dual(1.0)]; check_length = false)
+        prob = NonlinearProblem(sys, [p => ForwardDiff.Dual(1.0)]; check_length = false)
         @test prob.f(Float64[], prob.p) isa Vector{T}
         @test prob.f.resid_prototype isa Vector{T}
         @test_nowarn solve(prob)

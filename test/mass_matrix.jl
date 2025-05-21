@@ -17,12 +17,10 @@ M = calculate_massmatrix(sys)
             0 1 0
             0 0 0]
 
-prob_mm = ODEProblem(sys, [y => [1.0, 0.0, 0.0]], (0.0, 1e5),
-    [k => [0.04, 3e7, 1e4]])
+prob_mm = ODEProblem(sys, [y => [1.0, 0.0, 0.0], k => [0.04, 3e7, 1e4]], (0.0, 1e5))
 @test prob_mm.f.mass_matrix isa Diagonal{Float64, Vector{Float64}}
 sol = solve(prob_mm, Rodas5(), reltol = 1e-8, abstol = 1e-8)
-prob_mm = ODEProblem(sys, SA[y => [1.0, 0.0, 0.0]], (0.0, 1e5),
-    [k => [0.04, 3e7, 1e4]])
+prob_mm = ODEProblem(sys, SA[y => [1.0, 0.0, 0.0], k => [0.04, 3e7, 1e4]], (0.0, 1e5))
 @test prob_mm.f.mass_matrix isa Diagonal{Float64, SVector{3, Float64}}
 
 function rober(du, u, p, t)
@@ -57,8 +55,8 @@ eqs = [D(y[1]) ~ y[1], D(y[2]) ~ y[2], D(y[3]) ~ y[3]]
     @named sys = System(eqs, t, collect(y), [k])
     @named sys = SDESystem(sys, [1, 1, 0])
     sys = complete(sys)
-    prob = SDEProblem(sys, [y => [1.0, 0.0, 0.0]], (0.0, 1e5), [k => [0.04, 3e7, 1e4]])
+    prob = SDEProblem(sys, [y => [1.0, 0.0, 0.0], k => [0.04, 3e7, 1e4]], (0.0, 1e5))
     @test prob.f.mass_matrix isa Diagonal{Float64, Vector{Float64}}
-    prob = SDEProblem(sys, SA[y => [1.0, 0.0, 0.0]], (0.0, 1e5), [k => [0.04, 3e7, 1e4]])
+    prob = SDEProblem(sys, SA[y => [1.0, 0.0, 0.0], k => [0.04, 3e7, 1e4]], (0.0, 1e5))
     @test prob.f.mass_matrix isa Diagonal{Float64, SVector{3, Float64}}
 end

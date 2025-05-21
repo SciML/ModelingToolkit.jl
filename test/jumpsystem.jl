@@ -69,7 +69,7 @@ u₀ = [999, 1, 0];
 tspan = (0.0, 250.0);
 u₀map = [S => 999, I => 1, R => 0]
 parammap = [β => 0.1 / 1000, γ => 0.01]
-jprob = JumpProblem(js2, u₀map, tspan, parammap; aggregator = Direct(),
+jprob = JumpProblem(js2, [u₀map; parammap], tspan; aggregator = Direct(),
     save_positions = (false, false), rng)
 p = parameter_values(jprob)
 @test jprob.prob isa DiscreteProblem
@@ -85,7 +85,7 @@ end
 m = getmean(jprob, Nsims)
 
 # test auto-alg selection works
-jprobb = JumpProblem(js2, u₀map, tspan, parammap; save_positions = (false, false), rng)
+jprobb = JumpProblem(js2, [u₀map; parammap], tspan; save_positions = (false, false), rng)
 mb = getmean(jprobb, Nsims; use_stepper = false)
 @test abs(m - mb) / m < 0.01
 
@@ -93,14 +93,14 @@ mb = getmean(jprobb, Nsims; use_stepper = false)
 obs = [S2 ~ 2 * S]
 @named js2b = JumpSystem([j₁, j₃], t, [S, I, R], [β, γ, h], observed = obs)
 js2b = complete(js2b)
-jprob = JumpProblem(js2b, u₀map, tspan, parammap; aggregator = Direct(),
+jprob = JumpProblem(js2b, [u₀map; parammap], tspan; aggregator = Direct(),
     save_positions = (false, false), rng)
 @test jprob.prob isa DiscreteProblem
 sol = solve(jprob, SSAStepper(); saveat = tspan[2] / 10)
 @test all(2 .* sol[S] .== sol[S2])
 
 # test save_positions is working
-jprob = JumpProblem(js2, u₀map, tspan, parammap; aggregator = Direct(),
+jprob = JumpProblem(js2, [u₀map; parammap], tspan; aggregator = Direct(),
     save_positions = (false, false), rng)
 sol = solve(jprob, SSAStepper(); saveat = 1.0)
 @test all((sol.t) .== collect(0.0:tspan[2]))
@@ -149,7 +149,7 @@ maj1 = MassActionJump(2 * β / 2, [S => 1, I => 1], [S => -1, I => 1])
 maj2 = MassActionJump(γ, [I => 1], [I => -1, R => 1])
 @named js3 = JumpSystem([maj1, maj2], t, [S, I, R], [β, γ])
 js3 = complete(js3)
-jprob = JumpProblem(js3, u₀map, tspan, parammap; aggregator = Direct(), rng)
+jprob = JumpProblem(js3, [u₀map; parammap], tspan; aggregator = Direct(), rng)
 @test jprob.prob isa DiscreteProblem
 m3 = getmean(jprob, Nsims)
 @test abs(m - m3) / m < 0.01
@@ -157,11 +157,11 @@ m3 = getmean(jprob, Nsims)
 # maj jump test with various dep graphs
 @named js3b = JumpSystem([maj1, maj2], t, [S, I, R], [β, γ])
 js3b = complete(js3b)
-jprobb = JumpProblem(js3b, u₀map, tspan, parammap; aggregator = NRM(), rng)
+jprobb = JumpProblem(js3b, [u₀map; parammap], tspan; aggregator = NRM(), rng)
 @test jprobb.prob isa DiscreteProblem
 m4 = getmean(jprobb, Nsims)
 @test abs(m - m4) / m < 0.01
-jprobc = JumpProblem(js3b, u₀map, tspan, parammap; aggregator = RSSA(), rng)
+jprobc = JumpProblem(js3b, [u₀map; parammap], tspan; aggregator = RSSA(), rng)
 @test jprobc.prob isa DiscreteProblem
 m4 = getmean(jprobc, Nsims)
 @test abs(m - m4) / m < 0.01
@@ -172,7 +172,7 @@ maj2 = MassActionJump(γ, [S => 1], [S => -1])
 @named js4 = JumpSystem([maj1, maj2], t, [S], [β, γ])
 js4 = complete(js4)
 jprob = JumpProblem(
-    js4, [S => 999], (0, 1000.0), [β => 100.0, γ => 0.01]; aggregator = Direct(), rng)
+    js4, [S => 999, β => 100.0, γ => 0.01], (0, 1000.0); aggregator = Direct(), rng)
 @test jprob.prob isa DiscreteProblem
 m4 = getmean(jprob, Nsims)
 @test abs(m4 - 2.0 / 0.01) * 0.01 / 2.0 < 0.01
@@ -183,7 +183,7 @@ maj2 = MassActionJump(γ, [S => 2], [S => -1])
 @named js4 = JumpSystem([maj1, maj2], t, [S], [β, γ])
 js4 = complete(js4)
 jprob = JumpProblem(
-    js4, [S => 999], (0, 1000.0), [β => 100.0, γ => 0.01]; aggregator = Direct(), rng)
+    js4, [S => 999, β => 100.0, γ => 0.01], (0, 1000.0); aggregator = Direct(), rng)
 @test jprob.prob isa DiscreteProblem
 sol = solve(jprob, SSAStepper());
 
@@ -208,7 +208,7 @@ end
     u₀ = [A => 100, B => 0]
     tspan = (0.0, 2000.0)
     jprob = JumpProblem(
-        js5, u₀, tspan, p; aggregator = Direct(), save_positions = (false, false), rng)
+        js5, [u₀; p], tspan; aggregator = Direct(), save_positions = (false, false), rng)
     @test jprob.prob isa DiscreteProblem
     @test all(jprob.massaction_jump.scaled_rates .== [1.0, 0.0])
 
@@ -274,9 +274,9 @@ u0 = [X => 10]
 tspan = (0.0, 1.0)
 ps = [k => 1.0]
 
-@test_nowarn jp1 = JumpProblem(js1, u0, tspan, ps; aggregator = Direct())
+@test_nowarn jp1 = JumpProblem(js1, [u0; ps], tspan; aggregator = Direct())
 @test_nowarn jp2 = JumpProblem(js2, u0, tspan; aggregator = Direct())
-@test_nowarn jp3 = JumpProblem(js3, u0, tspan, ps; aggregator = Direct())
+@test_nowarn jp3 = JumpProblem(js3, [u0; ps], tspan; aggregator = Direct())
 @test_nowarn jp4 = JumpProblem(js4, u0, tspan; aggregator = Direct())
 
 # Ensure `mtkcompile` (and `@mtkcompile`) works on JumpSystem (by doing nothing)
@@ -302,7 +302,7 @@ j1 = ConstantRateJump(k, [X ~ Pre(X) - 1])
     for (N, algtype) in zip(Nv, algtypes)
         @named jsys = JumpSystem([deepcopy(j1) for _ in 1:N], t, [X], [k])
         jsys = complete(jsys)
-        jprob = JumpProblem(jsys, [X => 10], (0.0, 10.0), [k => 1])
+        jprob = JumpProblem(jsys, [X => 10, k => 1], (0.0, 10.0))
         @test jprob.aggregator isa algtype
     end
 end
@@ -316,7 +316,7 @@ end
     vrj = VariableRateJump(k * (sin(t) + 1), [A ~ Pre(A) + 1, C ~ Pre(C) + 2])
     js = complete(JumpSystem([vrj], t, [A, C], [k]; name = :js, observed = [B ~ C * A]))
     jprob = JumpProblem(
-        js, [A => 0, C => 0], (0.0, 10.0), [k => 1.0]; aggregator = Direct(), rng)
+        js, [A => 0, C => 0, k => 1], (0.0, 10.0); aggregator = Direct(), rng)
     @test jprob.prob isa ODEProblem
     sol = solve(jprob, Tsit5())
 
@@ -449,7 +449,7 @@ end
     k2val = 20.0
     p = [k1 => k1val, k2 => k2val]
     tspan = (0.0, 10.0)
-    jprob = JumpProblem(jsys, u0, tspan, p; rng, save_positions = (false, false))
+    jprob = JumpProblem(jsys, [u0; p], tspan; rng, save_positions = (false, false))
 
     times = range(0.0, tspan[2], length = 100)
     Nsims = 4000
@@ -488,7 +488,7 @@ end
     u0map = [X => p.X₀, Y => p.Y₀]
     pmap = [α => p.α, β => p.β]
     tspan = (0.0, 20.0)
-    jprob = JumpProblem(jsys, u0map, tspan, pmap; rng, save_positions = (false, false))
+    jprob = JumpProblem(jsys, [u0map; pmap], tspan; rng, save_positions = (false, false))
     times = range(0.0, tspan[2], length = 100)
     Nsims = 4000
     Xv = zeros(length(times))
@@ -526,7 +526,7 @@ end
         continuous_events = cevents)
     jsys = complete(jsys)
     tspan = (0.0, 200.0)
-    jprob = JumpProblem(jsys, u0map, tspan, pmap; rng, save_positions = (false, false))
+    jprob = JumpProblem(jsys, [u0map; pmap], tspan; rng, save_positions = (false, false))
     Xsamp = 0.0
     Nsims = 4000
     for n in 1:Nsims
@@ -552,7 +552,7 @@ end
     # Works.
     @mtkcompile js = JumpSystem([j1, j2], t, [X], [p, d])
     jprob = JumpProblem(
-        js, [X => 15], (0.0, 10.0), [p => 2.0, d => 0.5]; aggregator = Direct())
+        js, [X => 15, p => 2.0, d => 0.5], (0.0, 10.0); aggregator = Direct())
     sol = solve(jprob, SSAStepper())
     @test eltype(sol[X]) === Int64
 end
@@ -566,7 +566,7 @@ end
     crj = ConstantRateJump(rate, affect)
     @named jsys = JumpSystem([crj, eq], t, [X], [a, b])
     jsys = complete(jsys)
-    jprob = JumpProblem(jsys, [:X => 1.0], (0.0, 10.0), [:a => 1.0, :b => 0.5])
+    jprob = JumpProblem(jsys, [:X => 1.0, :a => 1.0, :b => 0.5], (0.0, 10.0))
     jprob2 = remake(jprob; u0 = [:X => 10.0])
     @test jprob2[X] ≈ 10.0
 end

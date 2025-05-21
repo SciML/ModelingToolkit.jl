@@ -127,8 +127,9 @@ end
             systems = [adder])
         # c will be solved for by initialization
         # this tests that initialization also works with FMUs
-        prob = ODEProblem(sys, [sys.adder.c => 2.0, sys.a => 1.0, sys.b => 1.0],
-            (0.0, 1.0), [sys.adder.value => 2.0])
+        prob = ODEProblem(
+            sys, [sys.adder.c => 2.0, sys.a => 1.0, sys.b => 1.0, sys.adder.value => 2.0],
+            (0.0, 1.0))
         return sys, prob
     end
 
@@ -182,7 +183,7 @@ end
         )
 
         prob = ODEProblem(
-            sys, [sys.sspace.x => 1.0], (0.0, 1.0), [sys.sspace.A => 2.0]; use_scc = false)
+            sys, [sys.sspace.x => 1.0, sys.sspace.A => 2.0], (0.0, 1.0); use_scc = false)
         return sys, prob
     end
 

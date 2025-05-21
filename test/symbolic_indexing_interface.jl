@@ -37,7 +37,7 @@ using SciMLStructures: Tunable
     @test default_values(odesys)[y] == 2.0
     @test isequal(default_values(odesys)[xy], x + y)
 
-    prob = ODEProblem(odesys, [], (0.0, 1.0), [a => 1.0, b => 2.0])
+    prob = ODEProblem(odesys, [a => 1.0, b => 2.0], (0.0, 1.0))
     getter = getu(odesys, (x + 1, x + 2))
     @test getter(prob) isa Tuple
     @test_nowarn @inferred getter(prob)
@@ -122,7 +122,7 @@ end
     @test pobs(ps) == [3.0, 5.0]
 
     prob = NonlinearProblem(
-        ns, [x => 1.0, y => 2.0, z => 3.0], [σ => 1.0, ρ => 2.0, β => 3.0])
+        ns, [x => 1.0, y => 2.0, z => 3.0, σ => 1.0, ρ => 2.0, β => 3.0])
     getter = getu(ns, (x + 1, x + 2))
     @test getter(prob) isa Tuple
     @test_nowarn @inferred getter(prob)
@@ -197,7 +197,7 @@ end
     @parameters p1 p2[1:2, 1:2]
     @mtkcompile sys = System([D(x) ~ x * t + p1, y ~ 2x, D(z) ~ p2 * z], t)
     prob = ODEProblem(
-        sys, [x => 1.0, z => ones(2)], (0.0, 1.0), [p1 => 2.0, p2 => ones(2, 2)])
+        sys, [x => 1.0, z => ones(2), p1 => 2.0, p2 => ones(2, 2)], (0.0, 1.0))
     @test getu(prob, x)(prob) == getu(prob, :x)(prob)
     @test getu(prob, [x, y])(prob) == getu(prob, [:x, :y])(prob)
     @test getu(prob, z)(prob) == getu(prob, :z)(prob)

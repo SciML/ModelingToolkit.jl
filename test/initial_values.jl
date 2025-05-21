@@ -64,7 +64,7 @@ tspan = (0.0, 1.0)
 ps = [k1 => 1.0, k2 => 5.0]
 # Broken since we need both X1 and X2 to initialize Γ but this makes the initialization system
 # overdetermined because parameter initialization isn't in yet
-@test_warn "overdetermined" oprob=ODEProblem(osys_m, u0, tspan, ps)
+@test_warn "overdetermined" oprob=ODEProblem(osys_m, [u0; ps], tspan)
 
 # Make sure it doesn't error on array variables with unspecified size
 @parameters p::Vector{Real} q[1:3]
@@ -93,7 +93,7 @@ eqs = [D(D(z)) ~ ones(2, 2)]
         B1 => A1,
         B2 => A2
     ])
-prob = ODEProblem(sys, [], (0.0, 1.0), [A1 => 0.3])
+prob = ODEProblem(sys, [A1 => 0.3], (0.0, 1.0))
 @test prob.ps[B1] == 0.3
 @test prob.ps[B2] == 0.7
 
@@ -109,7 +109,7 @@ end
 @variables x(t)
 @parameters p
 @mtkcompile sys = System([D(x) ~ p], t; defaults = [x => t, p => 2t])
-prob = ODEProblem(sys, [], (1.0, 2.0), [])
+prob = ODEProblem(sys, [], (1.0, 2.0))
 @test prob[x] == 1.0
 @test prob.ps[p] == 2.0
 
@@ -140,7 +140,7 @@ end
     @mtkcompile osys = System(eqs, t, sps, ps)
     u0map = [x => 1.0]
     pmap = [c1 => 5.0, c2 => 1.0, c3 => 1.2]
-    oprob = ODEProblem(osys, u0map, (0.0, 10.0), pmap)
+    oprob = ODEProblem(osys, [u0map; pmap], (0.0, 10.0))
 end
 
 @testset "Cyclic dependency checking and substitution limits" begin
@@ -160,12 +160,12 @@ end
         [D(x) ~ x * p, D(y) ~ y * q], t; guesses = [p => 1.0, q => 2.0])
     # "unknowns" because they are initialization unknowns
     @test_warn ["Cycle", "unknowns", "p", "q"] try
-        ODEProblem(sys, [x => 1, y => 2], (0.0, 1.0),
-            [p => 2q, q => 3p]; warn_cyclic_dependency = true)
+        ODEProblem(sys, [x => 1, y => 2, p => 2q, q => 3p],
+            (0.0, 1.0); warn_cyclic_dependency = true)
     catch
     end
     @test_throws ModelingToolkit.MissingGuessError ODEProblem(
-        sys, [x => 1, y => 2], (0.0, 1.0), [p => 2q, q => 3p])
+        sys, [x => 1, y => 2, p => 2q, q => 3p], (0.0, 1.0))
 end
 
 @testset "`add_fallbacks!` checks scalarized array parameters correctly" begin
@@ -201,8 +201,8 @@ end
     @mtkcompile pend = System(eqs, t)
 
     @test_throws ModelingToolkit.MissingGuessError ODEProblem(
-        pend, [x => 1], (0, 1), [g => 1], guesses = [y => λ, λ => y + 1])
-    ODEProblem(pend, [x => 1], (0, 1), [g => 1], guesses = [y => λ, λ => 0.5])
+        pend, [x => 1, g => 1], (0, 1), guesses = [y => λ, λ => y + 1])
+    ODEProblem(pend, [x => 1, g => 1], (0, 1), guesses = [y => λ, λ => 0.5])
 
     # Throw multiple if multiple are missing
     @variables a(t) b(t) c(t) d(t) e(t)
@@ -221,7 +221,7 @@ end
 
     @mtkcompile sys = System(D(x) ~ interp(t), t)
 
-    prob = ODEProblem(sys, [x => 0.0], (0.0, 1.0), [interp => spline])
+    prob = ODEProblem(sys, [x => 0.0, interp => spline], (0.0, 1.0))
     spline2 = LinearInterpolation(ts .^ 2, ts .^ 2)
     p_new = [interp => spline2]
     prob2 = remake(prob; p = p_new)
@@ -241,7 +241,7 @@ end
     # Creates the `NonlinearProblem`.
     u0 = [X => [1.0, 2.0]]
     ps = [p => [4.0, 5.0]]
-    @test_nowarn NonlinearProblem(nlsys, u0, ps)
+    @test_nowarn NonlinearProblem(nlsys, [u0; ps])
 end
 
 @testset "Issue#3553: Retain `Float32` initial values" begin
@@ -251,7 +251,7 @@ end
     @mtkcompile osys = System(eqs, t)
     u0 = [X => 1.0f0]
     ps = [p => 1.0f0, d => 2.0f0]
-    oprob = ODEProblem(osys, u0, (0.0f0, 1.0f0), ps)
+    oprob = ODEProblem(osys, [u0; ps], (0.0f0, 1.0f0))
     sol = solve(oprob)
     @test eltype(oprob.u0) == Float32
     @test eltype(eltype(sol.u)) == Float32
@@ -268,7 +268,7 @@ end
         @test Initial(D(x[i])) in ps
     end
     @test p in ps
-    prob = ODEProblem(sys, [x => ones(2)], (0.0, 1.0), [p => 1.0])
+    prob = ODEProblem(sys, [x => ones(2), p => 1.0], (0.0, 1.0))
     @test prob.p isa Vector{Float64}
     @test length(prob.p) == 5
 end
@@ -295,7 +295,7 @@ end
         ρ => 10.0]
 
     tspan = (0.0, 100.0)
-    prob = ODEProblem(sys, u0, tspan, p, jac = true, guesses = [w2 => -1.0],
+    prob = ODEProblem(sys, [u0; p], tspan, jac = true, guesses = [w2 => -1.0],
         warn_initialize_determined = false)
     @test prob[w2] ≈ -1.0
     @test prob.ps[β] ≈ 8 / 3
@@ -321,7 +321,7 @@ end
         β => 8.0f0 / 3]
 
     tspan = (0.0f0, 100.0f0)
-    prob = ODEProblem(sys, u0, tspan, p)
+    prob = ODEProblem(sys, [u0; p], tspan)
     @test prob.p.tunable isa SVector
     @test prob.p.initials isa SVector
 end

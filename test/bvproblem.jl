@@ -21,11 +21,11 @@ daesolvers = [Ascher2, Ascher4, Ascher6]
     tspan = (0.0, 10.0)
 
     @mtkcompile lotkavolterra = System(eqs, t)
-    op = ODEProblem(lotkavolterra, u0map, tspan, parammap)
+    op = ODEProblem(lotkavolterra, [u0map; parammap], tspan)
     osol = solve(op, Vern9())
 
     bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(
-        lotkavolterra, u0map, tspan, parammap)
+        lotkavolterra, [u0map; parammap], tspan)
 
     for solver in solvers
         sol = solve(bvp, solver(), dt = 0.01)
@@ -35,7 +35,7 @@ daesolvers = [Ascher2, Ascher4, Ascher6]
 
     # Test out of place
     bvp2 = SciMLBase.BVProblem{false, SciMLBase.AutoSpecialize}(
-        lotkavolterra, u0map, tspan, parammap)
+        lotkavolterra, [u0map; parammap], tspan)
 
     for solver in solvers
         sol = solve(bvp2, solver(), dt = 0.01)
@@ -58,10 +58,11 @@ end
     parammap = [:L => 1.0, :g => 9.81]
     tspan = (0.0, 6.0)
 
-    op = ODEProblem(pend, u0map, tspan, parammap)
+    op = ODEProblem(pend, [u0map; parammap], tspan)
     osol = solve(op, Vern9())
 
-    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap)
+    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(
+        pend, [u0map; parammap], tspan)
     for solver in solvers
         sol = solve(bvp, solver(), dt = 0.01)
         @test isapprox(sol.u[end], osol.u[end]; atol = 0.01)
@@ -70,7 +71,7 @@ end
 
     # Test out-of-place
     bvp2 = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(
-        pend, u0map, tspan, parammap)
+        pend, [u0map; parammap], tspan)
 
     for solver in solvers
         sol = solve(bvp2, solver(), dt = 0.01)
@@ -289,8 +290,8 @@ end
     @mtkcompile lksys = System(eqs, t; costs, consolidate)
 
     @test_throws ModelingToolkit.SystemCompatibilityError ODEProblem(
-        lksys, u0map, tspan, parammap)
-    prob = ODEProblem(lksys, u0map, tspan, parammap; check_compatibility = false)
+        lksys, [u0map; parammap], tspan)
+    prob = ODEProblem(lksys, [u0map; parammap], tspan; check_compatibility = false)
     sol = solve(prob, Tsit5())
     costfn = ModelingToolkit.generate_cost(
         lksys; expression = Val{false}, wrap_gfw = Val{true})
@@ -304,7 +305,7 @@ end
     @mtkcompile lksys = System(eqs, t; costs, consolidate)
     @test t_c ∈ Set(parameters(lksys))
     push!(parammap, t_c => 0.56)
-    prob = ODEProblem(lksys, u0map, tspan, parammap; check_compatibility = false)
+    prob = ODEProblem(lksys, [u0map; parammap], tspan; check_compatibility = false)
     sol = solve(prob, Tsit5())
     costfn = ModelingToolkit.generate_cost(
         lksys; expression = Val{false}, wrap_gfw = Val{true})

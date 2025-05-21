@@ -28,8 +28,7 @@ using ModelingToolkit, SparseArrays, Test, Optimization, OptimizationOptimJL,
     generate_cost_hessian(combinedsys)
     hess_sparsity = ModelingToolkit.cost_hessian_sparsity(sys1)
     sparse_prob = OptimizationProblem(complete(sys1),
-        [x => 1, y => 1],
-        [a => 0.0, b => 0.0],
+        [x => 1, y => 1, a => 0.0, b => 0.0],
         grad = true,
         sparse = true)
     @test sparse_prob.f.hess_prototype.rowval == hess_sparsity.rowval
@@ -46,7 +45,8 @@ using ModelingToolkit, SparseArrays, Test, Optimization, OptimizationOptimJL,
          sys2.b => 9.0
          β => 10.0]
 
-    prob = OptimizationProblem(combinedsys, u0, p, grad = true, hess = true, cons_j = true,
+    prob = OptimizationProblem(
+        combinedsys, [u0; p], grad = true, hess = true, cons_j = true,
         cons_h = true)
     @test prob.f.sys === combinedsys
     sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
@@ -62,7 +62,7 @@ end
     ]
     @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = cons)
     sys = complete(sys)
-    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 1.0],
+    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, a => 1.0, b => 1.0],
         grad = true, hess = true, cons_j = true, cons_h = true)
     @test prob.f.sys === sys
     sol = solve(prob, IPNewton())
@@ -70,7 +70,7 @@ end
     sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
     @test sol.objective < 1.0
 
-    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 1.0],
+    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, a => 1.0, b => 1.0],
         grad = false, hess = false, cons_j = false, cons_h = false)
     sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
     @test_skip sol.objective < 1.0
@@ -85,7 +85,7 @@ end
             z^2 + y^2 ≲ 1.0]
     @named sys = OptimizationSystem(loss, [x, y, z], [a, b], constraints = cons)
     sys = mtkcompile(sys)
-    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, z => 0.0], [a => 1.0, b => 1.0],
+    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, z => 0.0, a => 1.0, b => 1.0],
         grad = true, hess = true, cons_j = true, cons_h = true)
     sol = solve(prob, IPNewton())
     @test sol.objective < 1.0
@@ -96,7 +96,7 @@ end
     @test sol.u≈[0.808, -0.064] atol=1e-3
     @test sol[x]^2 + sol[y]^2 ≈ 1.0
 
-    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, z => 0.0], [a => 1.0, b => 1.0],
+    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, z => 0.0, a => 1.0, b => 1.0],
         grad = false, hess = false, cons_j = false, cons_h = false)
     sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
     @test_skip sol.objective < 1.0
@@ -208,7 +208,8 @@ end
          sys2.b => 9.0
          β => 10.0]
 
-    prob = OptimizationProblem(combinedsys, u0, p, grad = true, hess = true, cons_j = true,
+    prob = OptimizationProblem(
+        combinedsys, [u0; p], grad = true, hess = true, cons_j = true,
         cons_h = true)
     @test prob.f.sys === combinedsys
     @test_broken SciMLBase.successful_retcode(solve(prob,
@@ -235,7 +236,7 @@ end
             x[1]^2 + x[2]^2 ≲ 2.0
         ])
 
-    prob = OptimizationProblem(complete(sys), [x[1] => 2.0, x[2] => 0.0], [], grad = true,
+    prob = OptimizationProblem(complete(sys), [x[1] => 2.0, x[2] => 0.0], grad = true,
         hess = true, cons_j = true, cons_h = true)
     sol = Optimization.solve(prob, Ipopt.Optimizer(); print_level = 0)
     @test sol.u ≈ [1, 0]
@@ -249,7 +250,7 @@ end
     @parameters a b
     loss = (a - x)^2 + b * (y - x^2)^2
     @named sys = OptimizationSystem(loss, [x, y], [a, b, c])
-    prob = OptimizationProblem(complete(sys), [x => 0.0, y => 0.0], [a => 1.0, b => 100.0])
+    prob = OptimizationProblem(complete(sys), [x => 0.0, y => 0.0, a => 1.0, b => 100.0])
     @test prob.lb == [-Inf, 0.0]
     @test prob.ub == [Inf, Inf]
 end
@@ -267,11 +268,11 @@ end
         name = :sys1,
         constraints = cons))
 
-    prob1 = OptimizationProblem(sys1, [x₁ => 0.0, x₂ => 0.0], [α₁ => 1.0, α₂ => 100.0],
+    prob1 = OptimizationProblem(sys1, [x₁ => 0.0, x₂ => 0.0, α₁ => 1.0, α₂ => 100.0],
         grad = true, hess = true, cons_j = true, cons_h = true)
 
     sys2 = complete(modelingtoolkitize(prob1))
-    prob2 = OptimizationProblem(sys2, [x₁ => 0.0, x₂ => 0.0], [α₁ => 1.0, α₂ => 100.0],
+    prob2 = OptimizationProblem(sys2, [x₁ => 0.0, x₂ => 0.0, α₁ => 1.0, α₂ => 100.0],
         grad = true, hess = true, cons_j = true, cons_h = true)
 
     sol1 = Optimization.solve(prob1, Ipopt.Optimizer())
@@ -287,7 +288,7 @@ end
     @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = [x^2 + y^2 ≲ 0.0])
     sys = complete(sys)
 
-    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0])
+    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, a => 1.0, b => 100.0])
     @test prob.f.expr isa Symbolics.Symbolic
     @test all(prob.f.cons_expr[i].lhs isa Symbolics.Symbolic
     for i in 1:length(prob.f.cons_expr))
@@ -300,7 +301,7 @@ end
     cons2 = [x^2 + y^2 ~ 0, y * sin(x) - x ~ 0]
     sys = complete(OptimizationSystem(
         loss, [x, y], [a, b], name = :sys2, constraints = cons2))
-    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0],
+    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, a => 1.0, b => 100.0],
         grad = true, hess = true, cons_j = true, cons_h = true)
 
     G1 = Array{Float64}(undef, 2)
@@ -354,7 +355,7 @@ end
     @parameters p f(::Real)
     @mtkcompile sys = OptimizationSystem(
         x^2 + f(x) * p, [x], [f, p]; constraints = [2.0 ≲ f(x) + p])
-    prob = OptimizationProblem(sys, [x => 1.0], [p => 1.0, f => (x -> 2x)])
+    prob = OptimizationProblem(sys, [x => 1.0, p => 1.0, f => (x -> 2x)])
     @test abs(prob.f.cons(prob.u0, prob.p)[1]) ≈ 1.0
 end
 

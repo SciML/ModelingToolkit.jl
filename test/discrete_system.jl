@@ -51,7 +51,7 @@ reorderer = getu(syss, [S, I, R])
 u0 = [S(k - 1) => 990.0, I(k - 1) => 10.0, R(k - 1) => 0.0]
 p = [β => 0.05, c => 10.0, γ => 0.25, δt => 0.1, nsteps => 400]
 tspan = (0.0, ModelingToolkit.value(substitute(nsteps, p))) # value function (from Symbolics) is used to convert a Num to Float64
-prob_map = DiscreteProblem(syss, u0, tspan, p)
+prob_map = DiscreteProblem(syss, [u0; p], tspan)
 @test prob_map.f.sys === syss
 
 # Solution

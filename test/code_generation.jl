@@ -59,7 +59,7 @@ end
     @variables x(t)
     @parameters p[0:2] (f::Function)(..)
     @mtkcompile sys = System(D(x) ~ p[0] * x + p[1] * t + p[2] + f(p), t)
-    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [p => [1.0, 2.0, 3.0], f => sum])
+    prob = ODEProblem(sys, [x => 1.0, p => [1.0, 2.0, 3.0], f => sum], (0.0, 1.0))
     @test prob.ps[p] == [1.0, 2.0, 3.0]
     @test prob.ps[p[0]] == 1.0
     sol = solve(prob, Tsit5())
@@ -72,8 +72,9 @@ end
             [D(x[0]) ~ p[1] * x[0] + x[2], D(x[1]) ~ p[2] * f(x) + x[2]], t)
         sys = mtkcompile(sys, inputs = [x[2]], outputs = [])
         @test is_parameter(sys, x[2])
-        prob = ODEProblem(sys, [x[0] => 1.0, x[1] => 1.0], (0.0, 1.0),
-            [p => ones(2), f => sum, x[2] => 2.0])
+        prob = ODEProblem(
+            sys, [x[0] => 1.0, x[1] => 1.0, x[2] => 2.0, p => ones(2), f => sum],
+            (0.0, 1.0))
         sol = solve(prob, Tsit5())
         @test SciMLBase.successful_retcode(sol)
     end

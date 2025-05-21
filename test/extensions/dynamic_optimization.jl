@@ -29,7 +29,7 @@ const M = ModelingToolkit
     jprob = JuMPDynamicOptProblem(sys, u0map, tspan, parammap, dt = 0.01)
     @test JuMP.num_constraints(jprob.model) == 2 # initials
     jsol = solve(jprob, Ipopt.Optimizer, constructRK4, silent = true)
-    oprob = ODEProblem(sys, u0map, tspan, parammap)
+    oprob = ODEProblem(sys, [u0map; parammap], tspan)
     osol = solve(oprob, SimpleRK4(), dt = 0.01)
     cprob = CasADiDynamicOptProblem(sys, u0map, tspan, parammap, dt = 0.01)
     csol = solve(cprob, "ipopt", constructRK4)
@@ -141,7 +141,7 @@ end
     @parameters (u_interp::ConstantInterpolation)(..)
     @mtkcompile block_ode = System([D(x(t)) ~ v(t), D(v(t)) ~ u_interp(t)], t)
     spline = ctrl_to_spline(jsol.input_sol, ConstantInterpolation)
-    oprob = ODEProblem(block_ode, u0map, tspan, [u_interp => spline])
+    oprob = ODEProblem(block_ode, [u0map; [u_interp => spline]], tspan)
     osol = solve(oprob, Vern8(), dt = 0.01, adaptive = false)
     @test ≈(jsol.sol.u, osol.u, rtol = 0.05)
     @test ≈(csol.sol.u, osol.u, rtol = 0.05)
@@ -185,10 +185,9 @@ end
         D(q(t)) ~ -ν * q(t) + c * (1 - α_interp(t)) * s * w(t)]
     @mtkcompile beesys_ode = System(eqs, t)
     oprob = ODEProblem(beesys_ode,
-        u0map,
-        tspan,
-        merge(Dict(pmap),
-            Dict(α_interp => ctrl_to_spline(jsol.input_sol, LinearInterpolation))))
+        merge(Dict(u0map), Dict(pmap),
+            Dict(α_interp => ctrl_to_spline(jsol.input_sol, LinearInterpolation))),
+        tspan)
     osol = solve(oprob, Tsit5(); dt = 0.01, adaptive = false)
     @test ≈(osol.u, jsol.sol.u, rtol = 0.01)
     @test ≈(osol.u, csol.sol.u, rtol = 0.01)
@@ -239,13 +238,13 @@ end
         D(m(t)) ~ -T_interp(t) / c]
     @mtkcompile rocket_ode = System(eqs, t)
     interpmap = Dict(T_interp => ctrl_to_spline(jsol.input_sol, CubicSpline))
-    oprob = ODEProblem(rocket_ode, u0map, (ts, te), merge(Dict(pmap), interpmap))
+    oprob = ODEProblem(rocket_ode, merge(Dict(u0map), Dict(pmap), interpmap), (ts, te))
     osol = solve(oprob, RadauIIA5(); adaptive = false, dt = 0.001)
     @test ≈(jsol.sol.u, osol.u, rtol = 0.02)
     @test ≈(csol.sol.u, osol.u, rtol = 0.02)
 
     interpmap1 = Dict(T_interp => ctrl_to_spline(isol.input_sol, CubicSpline))
-    oprob1 = ODEProblem(rocket_ode, u0map, (ts, te), merge(Dict(pmap), interpmap1))
+    oprob1 = ODEProblem(rocket_ode, merge(Dict(u0map), Dict(pmap), interpmap1), (ts, te))
     osol1 = solve(oprob1, ImplicitEuler(); adaptive = false, dt = 0.001)
     @test ≈(isol.sol.u, osol1.u, rtol = 0.01)
 end

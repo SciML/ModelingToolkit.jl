@@ -216,7 +216,7 @@ end
     p = [pend.g => 1.0, pend.L => 1.0]
     guess = [pend.λ => 0.0]
     @test prob = ODEProblem(
-        pend, u0, (0.0, 1.0), p; guesses = guess, check_units = false) isa Any
+        pend, [u0; p], (0.0, 1.0); guesses = guess, check_units = false) isa Any
 end
 
 @parameters p [unit = u"L/s"] d [unit = u"s^(-1)"]

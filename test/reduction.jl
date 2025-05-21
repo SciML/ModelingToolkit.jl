@@ -115,10 +115,10 @@ u0 = [lorenz1.x => 1.0
       lorenz2.x => 1.0
       lorenz2.y => 0.0
       lorenz2.z => 0.0]
-prob1 = ODEProblem(reduced_system, u0, (0.0, 100.0), pp)
+prob1 = ODEProblem(reduced_system, [u0; pp], (0.0, 100.0))
 solve(prob1, Rodas5())
 
-prob2 = SteadyStateProblem(reduced_system, u0, pp)
+prob2 = SteadyStateProblem(reduced_system, [u0; pp])
 @test prob2.f.observed(lorenz2.u, prob2.u0, prob2.p) === 1.0
 
 # issue #724 and #716
@@ -160,7 +160,7 @@ reducedsys = mtkcompile(sys)
 
 u0 = [u2 => 1]
 pp = [2]
-nlprob = NonlinearProblem(reducedsys, u0, [p => pp[1]])
+nlprob = NonlinearProblem(reducedsys, [u0; [p => pp[1]]])
 reducedsol = solve(nlprob, NewtonRaphson())
 residual = fill(100.0, length(unknowns(reducedsys)))
 nlprob.f(residual, reducedsol.u, pp)

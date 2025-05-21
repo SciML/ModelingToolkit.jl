@@ -33,7 +33,7 @@ using NonlinearSolve
     @test prob.ps[p1] == 1.0
     @test prob.ps[p2] == 2.0
     @test SciMLBase.successful_retcode(solve(prob, Tsit5()))
-    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.5), [p1 => 1.0], jac = true)
+    prob = ODEProblem(sys, [x => 1.0, p1 => 1.0], (0.0, 1.5), jac = true)
     @test prob.ps[p1] == 1.0
     @test prob.ps[p2] == 2.0
     integ = init(prob, Tsit5())
@@ -220,23 +220,26 @@ end
 
     @test_skip begin
         Tf = 1.0
-        prob = ODEProblem(sys, [x => 0.0, y => 0.0], (0.0, Tf),
-            [kp => 1.0; z(k - 1) => 3.0; yd(k - 1) => 0.0; z(k - 2) => 4.0;
-             yd(k - 2) => 2.0])
+        prob = ODEProblem(sys,
+            [x => 0.0, y => 0.0, kp => 1.0, z(k - 1) => 3.0,
+                yd(k - 1) => 0.0, z(k - 2) => 4.0, yd(k - 2) => 2.0],
+            (0.0, Tf))
         @test_nowarn solve(prob, Tsit5())
 
         @mtkcompile sys = System(eqs, t; parameter_dependencies = [kq => 2kp],
             discrete_events = [SymbolicDiscreteCallback(
                 [0.5] => [kp ~ 2.0], discrete_parameters = [kp])])
-        prob = ODEProblem(sys, [x => 0.0, y => 0.0], (0.0, Tf),
-            [kp => 1.0; z(k - 1) => 3.0; yd(k - 1) => 0.0; z(k - 2) => 4.0;
-             yd(k - 2) => 2.0])
+        prob = ODEProblem(sys,
+            [x => 0.0, y => 0.0, kp => 1.0, z(k - 1) => 3.0,
+                yd(k - 1) => 0.0, z(k - 2) => 4.0, yd(k - 2) => 2.0],
+            (0.0, Tf))
         @test prob.ps[kp] == 1.0
         @test prob.ps[kq] == 2.0
         @test_nowarn solve(prob, Tsit5())
-        prob = ODEProblem(sys, [x => 0.0, y => 0.0], (0.0, Tf),
-            [kp => 1.0; z(k - 1) => 3.0; yd(k - 1) => 0.0; z(k - 2) => 4.0;
-             yd(k - 2) => 2.0])
+        prob = ODEProblem(sys,
+            [x => 0.0, y => 0.0, kp => 1.0, z(k - 1) => 3.0,
+                yd(k - 1) => 0.0, z(k - 2) => 4.0, yd(k - 2) => 2.0],
+            (0.0, Tf))
         integ = init(prob, Tsit5())
         @test integ.ps[kp] == 1.0
         @test integ.ps[kq] == 2.0
@@ -265,7 +268,7 @@ end
     @test ρ in Set(full_parameters(sdesys))
 
     prob = SDEProblem(
-        sdesys, [x => 1.0, y => 0.0, z => 0.0], (0.0, 100.0), [σ => 10.0, β => 2.33])
+        sdesys, [x => 1.0, y => 0.0, z => 0.0, σ => 10.0, β => 2.33], (0.0, 100.0))
     @test prob.ps[ρ] == 2prob.ps[σ]
     @test_nowarn solve(prob, SRIW1())
 
@@ -275,7 +278,7 @@ end
             [10.0] => [σ ~ 15.0], discrete_parameters = [σ])])
     sdesys = complete(sdesys)
     prob = SDEProblem(
-        sdesys, [x => 1.0, y => 0.0, z => 0.0], (0.0, 100.0), [σ => 10.0, β => 2.33])
+        sdesys, [x => 1.0, y => 0.0, z => 0.0, σ => 10.0, β => 2.33], (0.0, 100.0))
     integ = init(prob, SRIW1())
     @test integ.ps[σ] == 10.0
     @test integ.ps[ρ] == 20.0
@@ -303,7 +306,7 @@ end
     tspan = (0.0, 250.0)
     u₀map = [S => 999, I => 1, R => 0]
     parammap = [γ => 0.01]
-    jprob = JumpProblem(js2, u₀map, tspan, parammap; aggregator = Direct(),
+    jprob = JumpProblem(js2, [u₀map; parammap], tspan; aggregator = Direct(),
         save_positions = (false, false), rng = rng)
     @test jprob.ps[γ] == 0.01
     @test jprob.ps[β] == 0.0001
@@ -314,7 +317,7 @@ end
         discrete_events = [SymbolicDiscreteCallback(
             [10.0] => [γ ~ 0.02], discrete_parameters = [γ])])
     js2 = complete(js2)
-    jprob = JumpProblem(js2, u₀map, tspan, parammap; aggregator = Direct(),
+    jprob = JumpProblem(js2, [u₀map; parammap], tspan; aggregator = Direct(),
         save_positions = (false, false), rng = rng)
     integ = init(jprob, SSAStepper())
     @test integ.ps[γ] == 0.01
@@ -335,7 +338,7 @@ end
     @test prob.ps[p1] == 1.0
     @test prob.ps[p2] == 2.0
     @test_nowarn solve(prob, NewtonRaphson())
-    prob = NonlinearProblem(sys, [x => 1.0], [p1 => 2.0])
+    prob = NonlinearProblem(sys, [x => 1.0, p1 => 2.0])
     @test prob.ps[p1] == 2.0
     @test prob.ps[p2] == 4.0
 end
@@ -355,7 +358,7 @@ end
         t;
         parameter_dependencies = [p2 => 2p1]
     )
-    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.5), [p1 => 1.0], jac = true)
+    prob = ODEProblem(sys, [x => 1.0, p1 => 1.0], (0.0, 1.5), jac = true)
     prob.ps[p1] = 3.0
     @test prob.ps[p1] == 3.0
     @test prob.ps[p2] == 6.0
