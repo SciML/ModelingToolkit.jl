@@ -386,7 +386,12 @@ function SymbolicIndexingInterface.parameter_observed(sys::AbstractSystem, sym)
     return build_explicit_observed_function(sys, sym; param_only = true)
 end
 
-function has_observed_with_lhs(sys, sym)
+"""
+    $(TYPEDSIGNATURES)
+
+Check if the system `sys` contains an observed equation with LHS `sym`.
+"""
+function has_observed_with_lhs(sys::AbstractSystem, sym)
     has_observed(sys) || return false
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         return haskey(ic.observed_syms_to_timeseries, sym)
@@ -395,6 +400,11 @@ function has_observed_with_lhs(sys, sym)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Check if the system `sys` contains a parameter dependency equation with LHS `sym`.
+"""
 function has_parameter_dependency_with_lhs(sys, sym)
     has_parameter_dependencies(sys) || return false
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
