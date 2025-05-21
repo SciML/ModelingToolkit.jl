@@ -1,8 +1,8 @@
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D, MTKParameters
-using SymbolicIndexingInterface
+using SymbolicIndexingInterface, StaticArrays
 using SciMLStructures: SciMLStructures, canonicalize, Tunable, Discrete, Constants
-using BlockArrays: BlockedArray, Block
+using BlockArrays: BlockedArray, BlockedVector, Block
 using OrdinaryDiffEq
 using ForwardDiff
 using JET
@@ -26,6 +26,15 @@ end
 # dependent initialization, also using defaults
 @test getp(sys, a)(ps) == getp(sys, b)(ps) == getp(sys, c)(ps) == 0.0
 @test getp(sys, d)(ps) isa Int
+
+@testset "`p_constructor`" begin
+    ps2 = MTKParameters(sys, ivs; p_constructor = x -> SArray{Tuple{size(x)...}}(x))
+    @test ps2.tunable isa SVector
+    @test ps2.initials isa SVector
+    @test ps2.discrete isa Tuple{<:BlockedVector{Float64, <:SVector}}
+    @test ps2.constant isa Tuple{<:SVector, <:SVector, <:SVector{1, <:SMatrix}}
+    @test ps2.nonnumeric isa Tuple{<:SVector}
+end
 
 ivs[a] = 1.0
 ps = MTKParameters(sys, ivs)

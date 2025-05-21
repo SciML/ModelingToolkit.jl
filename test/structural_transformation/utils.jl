@@ -76,7 +76,7 @@ end
     end
     @mtkbuild sys = ODESystem([D(x) ~ y[1] + y[2], y ~ foo(x)], t)
     @test length(equations(sys)) == 1
-    @test length(observed(sys)) == 3
+    @test length(observed(sys)) == 4
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [foo => _tmp_fn2])
     val[] = 0
     @test_nowarn prob.f(prob.u0, prob.p, 0.0)

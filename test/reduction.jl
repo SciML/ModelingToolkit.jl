@@ -176,7 +176,7 @@ A = reshape(1:(N^2), N, N)
 eqs = xs ~ A * xs
 @named sys′ = NonlinearSystem(eqs, [xs], [])
 sys = structural_simplify(sys′)
-@test length(equations(sys)) == 3 && length(observed(sys)) == 2
+@test length(equations(sys)) == 3 && length(observed(sys)) == 3
 
 # issue 958
 @parameters k₁ k₂ k₋₁ E₀

@@ -442,3 +442,19 @@ end
         @test !in(D(y), vs)
     end
 end
+
+@testset "oop `NonlinearLeastSquaresProblem` with `u0 === nothing`" begin
+    @variables x y
+    @named sys = NonlinearSystem([0 ~ x - y], [], []; observed = [x ~ 1.0, y ~ 1.0])
+    prob = NonlinearLeastSquaresProblem{false}(complete(sys), nothing)
+    sol = solve(prob)
+    resid = sol.resid
+    @test resid == [0.0]
+    @test resid isa Vector
+    prob = NonlinearLeastSquaresProblem{false}(
+        complete(sys), nothing; u0_constructor = splat(SVector))
+    sol = solve(prob)
+    resid = sol.resid
+    @test resid == [0.0]
+    @test resid isa SVector
+end

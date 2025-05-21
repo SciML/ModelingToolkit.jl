@@ -1479,7 +1479,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
     end
 
     if simplify_system
-        isys = structural_simplify(isys; fully_determined)
+        isys = structural_simplify(isys; fully_determined, split = is_split(sys))
     end
 
     ts = get_tearing_state(isys)
@@ -1554,6 +1554,6 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
     else
         NonlinearLeastSquaresProblem
     end
-    TProb(isys, u0map, parammap; kwargs...,
+    TProb{iip}(isys, u0map, parammap; kwargs...,
         build_initializeprob = false, is_initializeprob = true)
 end

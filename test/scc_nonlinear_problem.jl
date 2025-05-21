@@ -2,6 +2,7 @@ using ModelingToolkit
 using NonlinearSolve, SCCNonlinearSolve
 using OrdinaryDiffEq
 using SciMLBase, Symbolics
+using StaticArrays
 using LinearAlgebra, Test
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
@@ -32,6 +33,12 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     @test SciMLBase.successful_retcode(sol1)
     @test SciMLBase.successful_retcode(sol2)
     @test sol1[u] ≈ sol2[u]
+
+    sccprob = SCCNonlinearProblem{false}(model, SA[u => zeros(8)])
+    for prob in sccprob.probs
+        @test prob.u0 isa SVector
+        @test !SciMLBase.isinplace(prob)
+    end
 end
 
 @testset "With parameters" begin

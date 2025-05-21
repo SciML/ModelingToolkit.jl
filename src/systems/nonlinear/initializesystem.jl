@@ -513,8 +513,7 @@ function SciMLBase.remake_initialization_data(
                     length(oldinitprob.f.resid_prototype), new_initu0, new_initp))
         end
         initprob = remake(oldinitprob; f = newf, u0 = new_initu0, p = new_initp)
-        return SciMLBase.OverrideInitData(initprob, oldinitdata.update_initializeprob!,
-            oldinitdata.initializeprobmap, oldinitdata.initializeprobpmap; metadata = oldinitdata.metadata)
+        return @set oldinitdata.initializeprob = initprob
     end
 
     dvs = unknowns(sys)
@@ -582,21 +581,35 @@ function SciMLBase.remake_initialization_data(
     op, missing_unknowns, missing_pars = build_operating_point!(sys,
         u0map, pmap, defs, cmap, dvs, ps)
     floatT = float_type_from_varmap(op)
+    u0_constructor = p_constructor = identity
+    if newu0 isa StaticArray
+        u0_constructor = vals -> SymbolicUtils.Code.create_array(
+            typeof(newu0), floatT, Val(1), Val(length(vals)), vals...)
+    end
+    if newp isa StaticArray || newp isa MTKParameters && newp.initials isa StaticArray
+        p_constructor = vals -> SymbolicUtils.Code.create_array(
+            typeof(newp.initials), floatT, Val(1), Val(length(vals)), vals...)
+    end
     kws = maybe_build_initialization_problem(
-        sys, op, u0map, pmap, t0, defs, guesses, missing_unknowns;
-        use_scc, initialization_eqs, floatT, allow_incomplete = true)
+        sys, SciMLBase.isinplace(odefn), op, u0map, pmap, t0, defs, guesses, missing_unknowns;
+        use_scc, initialization_eqs, floatT, u0_constructor, p_constructor, allow_incomplete = true)
 
-    return SciMLBase.remake_initialization_data(sys, kws, newu0, t0, newp, newu0, newp)
+    odefn = remake(odefn; kws...)
+    return SciMLBase.remake_initialization_data(sys, odefn, newu0, t0, newp, newu0, newp)
 end
 
 function promote_u0_p(u0, p::MTKParameters, t0)
     u0 = DiffEqBase.promote_u0(u0, p.tunable, t0)
     u0 = DiffEqBase.promote_u0(u0, p.initials, t0)
 
-    tunables = DiffEqBase.promote_u0(p.tunable, u0, t0)
-    initials = DiffEqBase.promote_u0(p.initials, u0, t0)
-    p = SciMLStructures.replace(SciMLStructures.Tunable(), p, tunables)
-    p = SciMLStructures.replace(SciMLStructures.Initials(), p, initials)
+    if !isempty(p.tunable)
+        tunables = DiffEqBase.promote_u0(p.tunable, u0, t0)
+        p = SciMLStructures.replace(SciMLStructures.Tunable(), p, tunables)
+    end
+    if !isempty(p.initials)
+        initials = DiffEqBase.promote_u0(p.initials, u0, t0)
+        p = SciMLStructures.replace(SciMLStructures.Initials(), p, initials)
+    end
 
     return u0, p
 end
@@ -627,12 +640,12 @@ function SciMLBase.late_binding_update_u0_p(
         if length(newu0) != length(prob.u0)
             throw(ArgumentError("Expected `newu0` to be of same length as unknowns ($(length(prob.u0))). Got $(typeof(newu0)) of length $(length(newu0))"))
         end
-        meta.set_initial_unknowns!(newp, newu0)
+        newp = meta.set_initial_unknowns!(newp, newu0)
         return newu0, newp
     end
 
-    newp = p === missing ? copy(newp) : newp
-
+    syms = []
+    vals = []
     allsyms = all_symbols(sys)
     for (k, v) in u0
         v === nothing && continue
@@ -644,9 +657,11 @@ function SciMLBase.late_binding_update_u0_p(
             k = k2
         end
         is_parameter(sys, Initial(k)) || continue
-        setp(sys, Initial(k))(newp, v)
+        push!(syms, Initial(k))
+        push!(vals, v)
     end
 
+    newp = setp_oop(sys, syms)(newp, vals)
     return newu0, newp
 end
 

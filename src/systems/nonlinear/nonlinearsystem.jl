@@ -345,16 +345,6 @@ function hessian_sparsity(sys::NonlinearSystem)
          unknowns(sys)) for eq in equations(sys)]
 end
 
-function calculate_resid_prototype(N, u0, p)
-    u0ElType = u0 === nothing ? Float64 : eltype(u0)
-    if SciMLStructures.isscimlstructure(p)
-        u0ElType = promote_type(
-            eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]),
-            u0ElType)
-    end
-    return zeros(u0ElType, N)
-end
-
 """
 ```julia
 SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
@@ -381,6 +371,7 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
         eval_module = @__MODULE__,
         sparse = false, simplify = false,
         initialization_data = nothing, cse = true,
+        resid_prototype = nothing,
         kwargs...) where {iip}
     if !iscomplete(sys)
         error("A completed `NonlinearSystem` is required. Call `complete` or `structural_simplify` on the system before creating a `NonlinearFunction`")
@@ -401,12 +392,6 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = unknowns(s
 
     observedfun = ObservedFunctionCache(
         sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false), cse)
-
-    if length(dvs) == length(equations(sys))
-        resid_prototype = nothing
-    else
-        resid_prototype = calculate_resid_prototype(length(equations(sys)), u0, p)
-    end
 
     NonlinearFunction{iip}(f;
         sys = sys,
@@ -509,6 +494,8 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = unknowns(sys),
     end
     !linenumbers ? Base.remove_linenums!(ex) : ex
 end
+
+struct IntervalNonlinearFunctionExpr end
 
 """
 $(TYPEDSIGNATURES)
@@ -705,7 +692,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
     obs = observed(sys)
 
     _, u0, p = process_SciMLProblem(
-        EmptySciMLFunction, sys, u0map, parammap; eval_expression, eval_module, kwargs...)
+        EmptySciMLFunction{iip}, sys, u0map, parammap; eval_expression, eval_module, kwargs...)
 
     explicitfuns = []
     nlfuns = []
@@ -835,7 +822,9 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::NonlinearSystem, u0map,
 
     subprobs = []
     for (f, vscc) in zip(nlfuns, var_sccs)
-        prob = NonlinearProblem(f, u0[vscc], p)
+        _u0 = SymbolicUtils.Code.create_array(
+            typeof(u0), eltype(u0), Val(1), Val(length(vscc)), u0[vscc]...)
+        prob = NonlinearProblem{iip}(f, _u0, p)
         push!(subprobs, prob)
     end
 

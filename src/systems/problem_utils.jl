@@ -491,32 +491,6 @@ function scalarize_varmap!(varmap::AbstractDict)
     return varmap
 end
 
-struct GetUpdatedMTKParameters{G, S}
-    # `getu` functor which gets parameters that are unknowns during initialization
-    getpunknowns::G
-    # `setu` functor which returns a modified MTKParameters using those parameters
-    setpunknowns::S
-end
-
-function (f::GetUpdatedMTKParameters)(prob, initializesol)
-    p = parameter_values(prob)
-    p === nothing && return nothing
-    mtkp = copy(p)
-    f.setpunknowns(mtkp, f.getpunknowns(initializesol))
-    mtkp
-end
-
-struct UpdateInitializeprob{G, S}
-    # `getu` functor which gets all values from prob
-    getvals::G
-    # `setu` functor which updates initializeprob with values
-    setvals::S
-end
-
-function (f::UpdateInitializeprob)(initializeprob, prob)
-    f.setvals(initializeprob, f.getvals(prob))
-end
-
 function get_temporary_value(p, floatT = Float64)
     stype = symtype(unwrap(p))
     return if stype == Real
@@ -539,13 +513,13 @@ A simple utility meant to be used as the `constructor` passed to `process_SciMLP
 case constructing a SciMLFunction is not required. The arguments passed to it are available
 in the `args` field, and the keyword arguments in the `kwargs` field.
 """
-struct EmptySciMLFunction{A, K}
+struct EmptySciMLFunction{iip, A, K} <: SciMLBase.AbstractSciMLFunction{iip}
     args::A
     kwargs::K
 end
 
-function EmptySciMLFunction(args...; kwargs...)
-    return EmptySciMLFunction{typeof(args), typeof(kwargs)}(args, kwargs)
+function EmptySciMLFunction{iip}(args...; kwargs...) where {iip}
+    return EmptySciMLFunction{iip, typeof(args), typeof(kwargs)}(args, kwargs)
 end
 
 """
@@ -670,47 +644,135 @@ function concrete_getu(indp, syms::AbstractVector)
 end
 
 """
+    $(TYPEDEF)
+
+A callable struct which applies `p_constructor` to possibly nested arrays. It also
+ensures that views (including nested ones) are concretized.
+"""
+struct PConstructorApplicator{F}
+    p_constructor::F
+end
+
+function (pca::PConstructorApplicator)(x::AbstractArray)
+    pca.p_constructor(x)
+end
+
+function (pca::PConstructorApplicator{typeof(identity)})(x::SubArray)
+    collect(x)
+end
+
+function (pca::PConstructorApplicator{typeof(identity)})(x::SubArray{<:AbstractArray})
+    collect(pca.(x))
+end
+
+function (pca::PConstructorApplicator)(x::AbstractArray{<:AbstractArray})
+    pca.p_constructor(pca.(x))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given a source system `srcsys` and destination system `dstsys`, return a function that
+takes a value provider of `srcsys` and a value provider of `dstsys` and returns the
+`MTKParameters` object of the latter with values from the former.
+
+# Keyword Arguments
+- `initials`: Whether to include the `Initial` parameters of `dstsys` among the values
+  to be transferred.
+- `p_constructor`: The `p_constructor` argument to `process_SciMLProblem`.
+"""
+function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::AbstractSystem;
+        initials = false, unwrap_initials = false, p_constructor = identity)
+    p_constructor = PConstructorApplicator(p_constructor)
+    # if we call `getu` on this (and it were able to handle empty tuples) we get the
+    # fields of `MTKParameters` except caches.
+    syms = reorder_parameters(
+        dstsys, parameters(dstsys; initial_parameters = initials); flatten = false)
+    # `dstsys` is an initialization system, do basically everything is a tunable
+    # and tunables are a mix of different types in `srcsys`. No initials. Constants
+    # are going to be constants in `srcsys`, as are `nonnumeric`.
+
+    # `syms[1]` is always the tunables because `srcsys` will have initials.
+    tunable_syms = syms[1]
+    tunable_getter = if isempty(tunable_syms)
+        Returns(SizedVector{0, Float64}())
+    else
+        p_constructor ∘ concrete_getu(srcsys, tunable_syms)
+    end
+    initials_getter = if initials && !isempty(syms[2])
+        initsyms = Vector{Any}(syms[2])
+        allsyms = Set(all_symbols(srcsys))
+        if unwrap_initials
+            for i in eachindex(initsyms)
+                sym = initsyms[i]
+                innersym = if operation(sym) === getindex
+                    sym, idxs... = arguments(sym)
+                    only(arguments(sym))[idxs...]
+                else
+                    only(arguments(sym))
+                end
+                if innersym in allsyms
+                    initsyms[i] = innersym
+                end
+            end
+        end
+        p_constructor ∘ concrete_getu(srcsys, initsyms)
+    else
+        Returns(SizedVector{0, Float64}())
+    end
+    discs_getter = if isempty(syms[3])
+        Returns(())
+    else
+        ic = get_index_cache(dstsys)
+        blockarrsizes = Tuple(map(ic.discrete_buffer_sizes) do bufsizes
+            p_constructor(map(x -> x.length, bufsizes))
+        end)
+        # discretes need to be blocked arrays
+        # the `getu` returns a tuple of arrays corresponding to `p.discretes`
+        # `Base.Fix1(...)` applies `p_constructor` to each of the arrays in the tuple
+        # `Base.Fix2(...)` does `BlockedArray.(tuple_of_arrs, blockarrsizes)` returning a
+        # tuple of `BlockedArray`s
+        Base.Fix2(Broadcast.BroadcastFunction(BlockedArray), blockarrsizes) ∘
+        Base.Fix1(broadcast, p_constructor) ∘
+        getu(srcsys, syms[3])
+    end
+    rest_getters = map(Base.tail(Base.tail(Base.tail(syms)))) do buf
+        if buf == ()
+            return Returns(())
+        else
+            return Base.Fix1(broadcast, p_constructor) ∘ getu(srcsys, buf)
+        end
+    end
+    getters = (tunable_getter, initials_getter, discs_getter, rest_getters...)
+    getter = let getters = getters
+        function _getter(valp, initprob)
+            oldcache = parameter_values(initprob).caches
+            MTKParameters(getters[1](valp), getters[2](valp), getters[3](valp),
+                getters[4](valp), getters[5](valp), oldcache isa Tuple{} ? () :
+                                                    copy.(oldcache))
+        end
+    end
+
+    return getter
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 Construct a `ReconstructInitializeprob` which reconstructs the `u0` and `p` of `dstsys`
 with values from `srcsys`.
 """
 function ReconstructInitializeprob(
-        srcsys::AbstractSystem, dstsys::AbstractSystem)
+        srcsys::AbstractSystem, dstsys::AbstractSystem; u0_constructor = identity, p_constructor = identity)
     @assert is_initializesystem(dstsys)
-    ugetter = getu(srcsys, unknowns(dstsys))
+    ugetter = u0_constructor ∘ getu(srcsys, unknowns(dstsys))
     if is_split(dstsys)
-        # if we call `getu` on this (and it were able to handle empty tuples) we get the
-        # fields of `MTKParameters` except caches.
-        syms = reorder_parameters(dstsys, parameters(dstsys); flatten = false)
-        # `dstsys` is an initialization system, do basically everything is a tunable
-        # and tunables are a mix of different types in `srcsys`. No initials. Constants
-        # are going to be constants in `srcsys`, as are `nonnumeric`.
-
-        # `syms[1]` is always the tunables because `srcsys` will have initials.
-        tunable_syms = syms[1]
-        tunable_getter = concrete_getu(srcsys, tunable_syms)
-        rest_getters = map(Base.tail(Base.tail(syms))) do buf
-            if buf == ()
-                return Returns(())
-            else
-                return getu(srcsys, buf)
-            end
-        end
-        getters = (tunable_getter, Returns(SizedVector{0, Float64}()), rest_getters...)
-        pgetter = let getters = getters
-            function _getter(valp, initprob)
-                oldcache = parameter_values(initprob).caches
-                MTKParameters(getters[1](valp), getters[2](valp), getters[3](valp),
-                    getters[4](valp), getters[5](valp), oldcache isa Tuple{} ? () :
-                                                        copy.(oldcache))
-            end
-        end
+        pgetter = get_mtkparameters_reconstructor(srcsys, dstsys; p_constructor)
     else
         syms = parameters(dstsys)
-        pgetter = let inner = concrete_getu(srcsys, syms)
+        pgetter = let inner = concrete_getu(srcsys, syms), p_constructor = p_constructor
             function _getter2(valp, initprob)
-                inner(valp)
+                p_constructor(inner(valp))
             end
         end
     end
@@ -753,14 +815,64 @@ function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
         copyto!(newbuf, buf)
         newp = repack(newbuf)
     end
-    # and initials portion
-    buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Initials(), newp)
-    if eltype(buf) != T
-        newbuf = similar(buf, T)
-        copyto!(newbuf, buf)
-        newp = repack(newbuf)
+    if newp isa MTKParameters
+        # and initials portion
+        buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Initials(), newp)
+        if eltype(buf) != T
+            newbuf = similar(buf, T)
+            copyto!(newbuf, buf)
+            newp = repack(newbuf)
+        end
     end
     return u0, newp
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given `sys` and its corresponding initialization system `initsys`, return the
+`initializeprobpmap` function in `OverrideInitData` for the systems.
+"""
+function construct_initializeprobpmap(
+        sys::AbstractSystem, initsys::AbstractSystem; p_constructor = identity)
+    @assert is_initializesystem(initsys)
+    if is_split(sys)
+        return let getter = get_mtkparameters_reconstructor(
+                initsys, sys; initials = true, unwrap_initials = true, p_constructor)
+            function initprobpmap_split(prob, initsol)
+                getter(initsol, prob)
+            end
+        end
+    else
+        return let getter = getu(initsys, parameters(sys; initial_parameters = true)),
+            p_constructor = p_constructor
+
+            function initprobpmap_nosplit(prob, initsol)
+                return p_constructor(getter(initsol))
+            end
+        end
+    end
+end
+
+function get_scimlfn(valp)
+    valp isa SciMLBase.AbstractSciMLFunction && return valp
+    if hasmethod(symbolic_container, Tuple{typeof(valp)}) &&
+       (sc = symbolic_container(valp)) !== valp
+        return get_scimlfn(sc)
+    end
+    throw(ArgumentError("SciMLFunction not found. This should never happen."))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+A function to be used as `update_initializeprob!` in `OverrideInitData`. Requires
+`is_update_oop = Val(true)` to be passed to `update_initializeprob!`.
+"""
+function update_initializeprob!(initprob, prob)
+    pgetter = ChainRulesCore.@ignore_derivatives get_scimlfn(prob).initialization_data.metadata.oop_reconstruct_u0_p.pgetter
+    p = pgetter(prob, initprob)
+    return remake(initprob; p)
 end
 
 """
@@ -804,8 +916,8 @@ struct InitializationMetadata{R <: ReconstructInitializeprob, GUU, SIU}
     """
     get_updated_u0::GUU
     """
-    A function which takes the `u0` of the problem and sets
-    `Initial.(unknowns(sys))`.
+    A function which takes parameter object and `u0` of the problem and sets
+    `Initial.(unknowns(sys))` in the former, returning the updated parameter object.
     """
     set_initial_unknowns!::SIU
 end
@@ -856,6 +968,38 @@ function (guu::GetUpdatedU0)(prob, initprob)
     return buffer
 end
 
+struct SetInitialUnknowns{S}
+    setter!::S
+end
+
+function SetInitialUnknowns(sys::AbstractSystem)
+    return SetInitialUnknowns(setu(sys, Initial.(unknowns(sys))))
+end
+
+function (siu::SetInitialUnknowns)(p::MTKParameters, u0)
+    if ArrayInterface.ismutable(p.initials)
+        siu.setter!(p, u0)
+    else
+        originalT = similar_type(p.initials)
+        @set! p.initials = MVector{length(p.initials), eltype(p.initials)}(p.initials)
+        siu.setter!(p, u0)
+        @set! p.initials = originalT(p.initials)
+    end
+    return p
+end
+
+function (siu::SetInitialUnknowns)(p::Vector, u0)
+    if ArrayInterface.ismutable(p)
+        siu.setter!(p, u0)
+    else
+        originalT = similar_type(p)
+        p = MVector{length(p), eltype(p)}(p)
+        siu.setter!(p, u0)
+        p = originalT(p)
+    end
+    return p
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -867,19 +1011,27 @@ denotes whether the `SciMLProblem` being constructed is in implicit DAE form (`D
 All other keyword arguments are forwarded to `InitializationProblem`.
 """
 function maybe_build_initialization_problem(
-        sys::AbstractSystem, op::AbstractDict, u0map, pmap, t, defs,
+        sys::AbstractSystem, iip, op::AbstractDict, u0map, pmap, t, defs,
         guesses, missing_unknowns; implicit_dae = false, u0_constructor = identity,
-        floatT = Float64, initialization_eqs = [], use_scc = true, kwargs...)
+        p_constructor = identity, floatT = Float64, initialization_eqs = [],
+        use_scc = true, kwargs...)
     guesses = merge(ModelingToolkit.guesses(sys), todict(guesses))
 
     if t === nothing && is_time_dependent(sys)
         t = zero(floatT)
     end
 
-    initializeprob = ModelingToolkit.InitializationProblem{true, SciMLBase.FullSpecialize}(
-        sys, t, u0map, pmap; guesses, initialization_eqs, use_scc, kwargs...)
+    initializeprob = ModelingToolkit.InitializationProblem{iip}(
+        sys, t, u0map, pmap; guesses, initialization_eqs,
+        use_scc, u0_constructor, p_constructor, kwargs...)
     if state_values(initializeprob) !== nothing
-        initializeprob = remake(initializeprob; u0 = floatT.(state_values(initializeprob)))
+        _u0 = state_values(initializeprob)
+        if ArrayInterface.ismutable(_u0)
+            _u0 = floatT.(_u0)
+        else
+            _u0 = similar_type(_u0, floatT)(_u0)
+        end
+        initializeprob = remake(initializeprob; u0 = _u0)
     end
     initp = parameter_values(initializeprob)
     if is_split(sys)
@@ -888,9 +1040,13 @@ function maybe_build_initialization_problem(
         buffer, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Initials(), initp)
         initp = repack(floatT.(buffer))
     elseif initp isa AbstractArray
-        initp′ = similar(initp, floatT)
-        copyto!(initp′, initp)
-        initp = initp′
+        if ArrayInterface.ismutable(initp)
+            initp′ = similar(initp, floatT)
+            copyto!(initp′, initp)
+            initp = initp′
+        else
+            initp = similar_type(initp, floatT)(initp)
+        end
     end
     initializeprob = remake(initializeprob; p = initp)
 
@@ -901,8 +1057,9 @@ function maybe_build_initialization_problem(
     end
     meta = InitializationMetadata(
         u0map, pmap, guesses, Vector{Equation}(initialization_eqs),
-        use_scc, ReconstructInitializeprob(sys, initializeprob.f.sys),
-        get_initial_unknowns, setp(sys, Initial.(unknowns(sys))))
+        use_scc, ReconstructInitializeprob(
+            sys, initializeprob.f.sys; u0_constructor, p_constructor),
+        get_initial_unknowns, SetInitialUnknowns(sys))
 
     if is_time_dependent(sys)
         all_init_syms = Set(all_symbols(initializeprob))
@@ -918,11 +1075,8 @@ function maybe_build_initialization_problem(
     if initializeprobmap === nothing && isempty(punknowns)
         initializeprobpmap = nothing
     else
-        allsyms = all_symbols(initializeprob)
-        initdvs = filter(x -> any(isequal(x), allsyms), unknowns(sys))
-        getpunknowns = getu(initializeprob, [punknowns; initdvs])
-        setpunknowns = setp(sys, [punknowns; Initial.(initdvs)])
-        initializeprobpmap = GetUpdatedMTKParameters(getpunknowns, setpunknowns)
+        initializeprobpmap = construct_initializeprobpmap(
+            sys, initializeprob.f.sys; p_constructor)
     end
 
     reqd_syms = parameter_symbols(initializeprob)
@@ -930,8 +1084,7 @@ function maybe_build_initialization_problem(
     if initializeprobmap === nothing && initializeprobpmap === nothing
         update_initializeprob! = nothing
     else
-        update_initializeprob! = UpdateInitializeprob(
-            getu(sys, reqd_syms), setu(initializeprob, reqd_syms))
+        update_initializeprob! = ModelingToolkit.update_initializeprob!
     end
 
     for p in punknowns
@@ -955,7 +1108,7 @@ function maybe_build_initialization_problem(
     return (;
         initialization_data = SciMLBase.OverrideInitData(
             initializeprob, update_initializeprob!, initializeprobmap,
-            initializeprobpmap; metadata = meta))
+            initializeprobpmap; metadata = meta, is_update_oop = Val(true)))
 end
 
 """
@@ -976,6 +1129,22 @@ function float_type_from_varmap(varmap, floatT = Bool)
         end
     end
     return float(floatT)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Calculate the `resid_prototype` for a `NonlinearFunction` with `N` equations and the
+provided `u0` and `p`.
+"""
+function calculate_resid_prototype(N::Int, u0, p)
+    u0ElType = u0 === nothing ? Float64 : eltype(u0)
+    if SciMLStructures.isscimlstructure(p)
+        u0ElType = promote_type(
+            eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]),
+            u0ElType)
+    end
+    return zeros(u0ElType, N)
 end
 
 """
@@ -1016,6 +1185,7 @@ Keyword arguments:
 - `tofloat`, `is_initializeprob`: Passed to [`better_varmap_to_vars`](@ref) for building `u0` (and possibly `p`).
 - `u0_constructor`: A function to apply to the `u0` value returned from `better_varmap_to_vars`
   to construct the final `u0` value.
+- `p_constructor`: A function to apply to each array buffer created when constructing the parameter object.
 - `du0map`: A map of derivatives to values. See `implicit_dae`.
 - `check_length`: Whether to check the number of equations along with number of unknowns and
   length of `u0` vector for consistency. If `false`, do not check with equations. This is
@@ -1044,8 +1214,8 @@ function process_SciMLProblem(
         warn_initialize_determined = true, initialization_eqs = [],
         eval_expression = false, eval_module = @__MODULE__, fully_determined = nothing,
         check_initialization_units = false, tofloat = true,
-        u0_constructor = identity, du0map = nothing, check_length = true,
-        symbolic_u0 = false, warn_cyclic_dependency = false,
+        u0_constructor = identity, p_constructor = identity, du0map = nothing,
+        check_length = true, symbolic_u0 = false, warn_cyclic_dependency = false,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10,
         substitution_limit = 100, use_scc = true,
@@ -1082,7 +1252,7 @@ function process_SciMLProblem(
         u0map, pmap, defs, cmap, dvs, ps)
 
     floatT = Bool
-    if u0Type <: AbstractArray && eltype(u0Type) <: Real
+    if u0Type <: AbstractArray && eltype(u0Type) <: Real && eltype(u0Type) != Union{}
         floatT = float(eltype(u0Type))
     else
         floatT = float_type_from_varmap(op, floatT)
@@ -1095,15 +1265,21 @@ function process_SciMLProblem(
         u0_constructor = vals -> SymbolicUtils.Code.create_array(
             u0Type, floatT, Val(1), Val(length(vals)), vals...)
     end
+    if p_constructor === identity && pType <: StaticArray
+        p_constructor = vals -> SymbolicUtils.Code.create_array(
+            pType, floatT, Val(1), Val(length(vals)), vals...)
+    end
+
     if build_initializeprob
         kws = maybe_build_initialization_problem(
-            sys, op, u0map, pmap, t, defs, guesses, missing_unknowns;
+            sys, constructor <: SciMLBase.AbstractSciMLFunction{true},
+            op, u0map, pmap, t, defs, guesses, missing_unknowns;
             implicit_dae, warn_initialize_determined, initialization_eqs,
             eval_expression, eval_module, fully_determined,
             warn_cyclic_dependency, check_units = check_initialization_units,
             circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
             force_time_independent = force_initialization_time_independent, algebraic_only, allow_incomplete,
-            u0_constructor, floatT)
+            u0_constructor, p_constructor, floatT)
 
         kwargs = merge(kwargs, kws)
     end
@@ -1155,9 +1331,13 @@ function process_SciMLProblem(
     end
     evaluate_varmap!(op, ps; limit = substitution_limit)
     if is_split(sys)
-        p = MTKParameters(sys, op; floatT = floatT)
+        # `pType` is usually `Dict` when the user passes key-value pairs.
+        if !(pType <: AbstractArray)
+            pType = Array
+        end
+        p = MTKParameters(sys, op; floatT = floatT, p_constructor)
     else
-        p = better_varmap_to_vars(op, ps; tofloat, container_type = pType)
+        p = p_constructor(better_varmap_to_vars(op, ps; tofloat, container_type = pType))
     end
 
     if implicit_dae && du0map !== nothing
@@ -1177,8 +1357,15 @@ function process_SciMLProblem(
             t0 = zero(floatT)
         end
         initialization_data = SciMLBase.remake_initialization_data(
-            kwargs.initialization_data, kwargs, u0, t0, p, u0, p)
-        kwargs = merge(kwargs,)
+            sys, kwargs, u0, t0, p, u0, p)
+        kwargs = merge(kwargs, (; initialization_data))
+    end
+
+    if constructor <: NonlinearFunction && length(dvs) != length(eqs)
+        kwargs = merge(kwargs,
+            (;
+                resid_prototype = u0_constructor(calculate_resid_prototype(
+                    length(eqs), u0, p))))
     end
 
     f = constructor(sys, dvs, ps, u0; p = p,
