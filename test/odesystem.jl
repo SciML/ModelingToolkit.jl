@@ -1730,3 +1730,28 @@ end
     @test obsfn_expr_oop isa Expr
     @test obsfn_expr_iip isa Expr
 end
+
+@testset "Solve with `split=false` static arrays" begin
+    @parameters σ ρ β
+    @variables x(t) y(t) z(t)
+
+    eqs = [D(D(x)) ~ σ * (y - x),
+        D(y) ~ x * (ρ - z) - y,
+        D(z) ~ x * y - β * z]
+
+    @mtkbuild sys=ODESystem(eqs, t) split=false
+
+    u0 = SA[D(x) => 2.0f0,
+        x => 1.0f0,
+        y => 0.0f0,
+        z => 0.0f0]
+
+    p = SA[σ => 28.0f0,
+        ρ => 10.0f0,
+        β => 8.0f0 / 3.0f0]
+
+    tspan = (0.0f0, 100.0f0)
+    prob = ODEProblem{false}(sys, u0, tspan, p)
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+end
