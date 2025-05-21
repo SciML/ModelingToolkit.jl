@@ -902,9 +902,10 @@ function compile_equational_affect(
     aff_map = aff_to_sys(aff)
     sys_map = Dict([v => k for (k, v) in aff_map])
 
+    obseqs, eqs = unhack_observed(observed(affsys), equations(affsys))
     if isempty(equations(affsys))
         update_eqs = Symbolics.fast_substitute(
-            observed(affsys), Dict([p => unPre(p) for p in parameters(affsys)]))
+            obseqs, Dict([p => unPre(p) for p in parameters(affsys)]))
         rhss = map(x -> x.rhs, update_eqs)
         lhss = map(x -> aff_map[x.lhs], update_eqs)
         is_p = [lhs ∈ Set(ps_to_update) for lhs in lhss]
