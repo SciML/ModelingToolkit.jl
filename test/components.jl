@@ -8,6 +8,7 @@ using ModelingToolkitStandardLibrary.Electrical
 using ModelingToolkitStandardLibrary.Blocks
 using LinearAlgebra
 using ModelingToolkitStandardLibrary.Thermal
+using SymbolicUtils: getmetadata
 include("common/rc_model.jl")
 
 @testset "Basics" begin
@@ -328,8 +329,8 @@ end
 @testset "Issue#3275: Metadata retained on `complete`" begin
     @variables x(t) y(t)
     @named inner = System(D(x) ~ x, t)
-    @named outer = System(D(y) ~ y, t; systems = [inner], metadata = "test")
-    @test ModelingToolkit.get_metadata(outer) == "test"
+    @named outer = System(D(y) ~ y, t; systems = [inner], metadata = [Int => "test"])
+    @test getmetadata(outer, Int, nothing) == "test"
     sys = complete(outer)
-    @test ModelingToolkit.get_metadata(sys) == "test"
+    @test getmetadata(sys, Int, nothing) == "test"
 end

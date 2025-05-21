@@ -5,7 +5,6 @@
 =#
 using ModelingToolkit, SymbolicIndexingInterface, Test
 using ModelingToolkit: t_nounits as t
-using ModelingToolkit: get_metadata, MTKParameters
 
 # Make sure positive shifts error
 @variables x(t)
@@ -204,11 +203,6 @@ RHS2 = RHS
 #     sol = solve(prob, FunctionMap(); dt = dt)
 #     @test c[1] + 1 == length(sol)
 # end
-
-@variables x(t) y(t)
-testdict = Dict([:test => 1])
-@named sys = System([x(k + 1) ~ 1.0], t, [x], []; metadata = testdict)
-@test get_metadata(sys) == testdict
 
 @variables x(t) y(t) u(t)
 eqs = [u ~ 1

@@ -1,5 +1,4 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
-using ModelingToolkit: get_metadata
 using DiffEqBase, SparseArrays
 using Test
 using NonlinearSolve
@@ -197,14 +196,6 @@ eq = [v1 ~ sin(2pi * t * h)
       i1 ~ i2]
 @named sys = System(eq, t)
 @test length(equations(structural_simplify(sys))) == 0
-
-@variables x(t)
-@parameters a
-eqs = [0 ~ a * x]
-
-testdict = Dict([:test => 1])
-@named sys = System(eqs, [x], [a], metadata = testdict)
-@test get_metadata(sys) == testdict
 
 @testset "Remake" begin
     @parameters a=1.0 b=1.0 c=1.0

@@ -799,16 +799,6 @@ let
     @test string.(independent_variables(prob.f.sys)) == ["t"]
 end
 
-@parameters C L R
-@variables q(t) p(t) F(t)
-
-eqs = [D(q) ~ -p / L - F
-       D(p) ~ q / C
-       0 ~ q / C - R * F]
-testdict = Dict([:name => "test"])
-@named sys = System(eqs, t, metadata = testdict)
-@test get_metadata(sys) == testdict
-
 @variables P(t)=NaN Q(t)=NaN
 eqs = [D(Q) ~ 1 / sin(P), D(P) ~ log(-cos(Q))]
 @named sys = System(eqs, t, [P, Q], [])
@@ -1112,16 +1102,23 @@ end
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/2502
 @testset "Extend systems with a field that can be nothing" begin
-    A = Dict(:a => 1)
-    B = Dict(:b => 2)
+    A = Dict(Int => 1)
+    B = Dict(String => 2)
     @named A1 = System(Equation[], t, [], [])
     @named B1 = System(Equation[], t, [], [])
     @named A2 = System(Equation[], t, [], []; metadata = A)
     @named B2 = System(Equation[], t, [], []; metadata = B)
-    @test ModelingToolkit.get_metadata(extend(A1, B1)) == nothing
-    @test ModelingToolkit.get_metadata(extend(A1, B2)) == B
-    @test ModelingToolkit.get_metadata(extend(A2, B1)) == A
-    @test Set(ModelingToolkit.get_metadata(extend(A2, B2))) == Set(A ∪ B)
+    @test isempty(ModelingToolkit.get_metadata(extend(A1, B1)))
+    meta = ModelingToolkit.get_metadata(extend(A1, B2))
+    @test length(meta) == 1
+    @test meta[String] == 2
+    meta = ModelingToolkit.get_metadata(extend(A2, B1))
+    @test length(meta) == 1
+    @test meta[Int] == 1
+    meta = ModelingToolkit.get_metadata(extend(A2, B2))
+    @test length(meta) == 2
+    @test meta[Int] == 1
+    @test meta[String] == 2
 end
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/2859
