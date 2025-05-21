@@ -11,7 +11,11 @@ end
 
 get_iv(D::Differential) = D.x
 
+"""
+    $(TYPEDSIGNATURES)
 
+Turn `x(t)` into `x`
+"""
 function detime_dvs(op)
     if !iscall(op)
         op
@@ -23,6 +27,11 @@ function detime_dvs(op)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Reverse `detime_dvs` for the given `dvs` using independent variable `iv`.
+"""
 function retime_dvs(op, dvs, iv)
     issym(op) && return Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(op))(iv)
     iscall(op) ?
