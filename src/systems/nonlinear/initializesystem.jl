@@ -65,6 +65,13 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
         function process_u0map_with_dummysubs(y, x)
             y = get(schedule.dummy_sub, y, y)
             y = fixpoint_sub(y, diffmap)
+            # FIXME: DAEs provide initial conditions that require reducing the system
+            # to index zero. If `isdifferential(y)`, an initial condition was given for an
+            # algebraic variable, so ignore it. Otherwise, the initialization system
+            # gets a `D(y) ~ ...` equation and errors. This is the same behavior as v9.
+            if isdifferential(y)
+                return
+            end
             # If we have `D(x) ~ x` and provide [D(x) => x, x => 1.0] to `u0map`, then
             # without this condition `defs` would get `x => x` instead of retaining
             # `x => 1.0`.
