@@ -1,6 +1,8 @@
 abstract type AbstractDynamicOptProblem{uType, tType, isinplace} <:
               SciMLBase.AbstractODEProblem{uType, tType, isinplace} end
 
+abstract type AbstractCollocation end
+
 struct DynamicOptSolution
     model::Any
     sol::ODESolution
@@ -19,6 +21,10 @@ end
 function JuMPDynamicOptProblem end
 function InfiniteOptDynamicOptProblem end
 function CasADiDynamicOptProblem end
+
+function JuMPCollocation end
+function InfiniteOptCollocation end
+function CasADiCollocation end
 
 function warn_overdetermined(sys, u0map)
     constraintsys = get_constraintsystem(sys)
@@ -164,6 +170,9 @@ end
 # returns the JuMP timespan, the number of steps, and whether it is a free time problem.
 function process_tspan(tspan, dt, steps)
     is_free_time = false
+    symbolic_type(tspan[1]) !== NotSymbolic() &&
+        error("Free initial time problems are not currently supported by the collocation solvers.")
+
     if isnothing(dt) && isnothing(steps)
         error("Must provide either the dt or the number of intervals to the collocation solvers (JuMP, InfiniteOpt, CasADi).")
     elseif symbolic_type(tspan[1]) === ScalarSymbolic() ||
@@ -173,11 +182,198 @@ function process_tspan(tspan, dt, steps)
         isnothing(dt) ||
             @warn "Specified dt for free final time problem. This will be ignored; dt will be determined by the number of timesteps."
 
-        return steps, true
+        return (0, 1), steps, true
     else
         isnothing(steps) ||
             @warn "Specified number of steps for problem with concrete tspan. This will be ignored; number of steps will be determined by dt."
 
-        return length(tspan[1]:dt:tspan[2]), false
+        return tspan, length(tspan[1]:dt:tspan[2]), false
     end
+end
+
+##########################
+### MODEL CONSTRUCTION ###
+##########################
+function process_DynamicOptProblem(prob_type::Type{<:AbstractDynamicOptProblem}, model_type, sys::ODESystem, u0map, tspan, pmap;
+    dt = nothing,
+    steps = nothing,
+    guesses = Dict(), kwargs...)
+    warn_overdetermined(sys, u0map)
+    ctrls = unbound_inputs(sys)
+    states = unknowns(sys)
+
+    _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
+    stidxmap = Dict([v => i for (i, v) in enumerate(states)])
+    u0map = Dict([default_toterm(value(k)) => v for (k, v) in u0map])
+    u0_idxs = has_alg_eqs(sys) ? collect(1:length(states)) :
+              [stidxmap[default_toterm(k)] for (k, v) in u0map]
+
+    f, u0, p = process_SciMLProblem(ODEInputFunction, sys, _u0map, pmap;
+        t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
+    model_tspan, steps, is_free_t = process_tspan(tspan, dt, steps)
+
+    pmap = recursive_unwrap(AnyDict(pmap))
+    evaluate_varmap!(pmap, keys(pmap))
+    c0 = value.([pmap[c] for c in ctrls])
+
+    tsteps = LinRange(model_tspan[1], model_tspan[2], steps)
+    model = generate_internal_model(model_type)
+    generate_time_variable!(model, model_tspan, steps)
+    U = generate_state_variable!(model, u0, length(states), tsteps)
+    V = generate_input_variable!(model, c0, length(ctrls), tsteps)
+    tₛ = generate_timescale!(model, get(pmap, tspan[2], tspan[2]), is_free_t)
+    fullmodel = model_type(model, U, V, tₛ, is_free_t)
+
+    set_variable_bounds!(fullmodel, sys, pmap, tspan[2])
+    add_cost_function!(fullmodel, sys, tspan, pmap)
+    add_user_constraints!(fullmodel, sys, tspan, pmap)
+    add_initial_constraints!(fullmodel, u0, u0_idxs, model_tspan[1])
+
+    prob_type(f, u0, tspan, p, fullmodel, kwargs...)
+end
+
+function generate_time_variable! end
+function generate_internal_model end
+function generate_state_variable! end
+function generate_input_variable! end
+function generate_timescale! end
+function set_variable_bounds! end
+function add_initial_constraints! end
+function add_constraint! end
+
+function set_variable_bounds!(m, sys, pmap, tf)
+    @unpack model, U, V, tₛ = m
+    for (i, u) in enumerate(unknowns(sys))
+        if hasbounds(u)
+            lo, hi = getbounds(u)
+            add_constraint!(m, U[i] ≳ Symbolics.fixpoint_sub(lo, pmap))
+            add_constraint!(m, U[i] ≲ Symbolics.fixpoint_sub(hi, pmap))
+        end
+    end
+    for (i, v) in enumerate(unbound_inputs(sys))
+        if hasbounds(v)
+            lo, hi = getbounds(v)
+            add_constraint!(m, V[i] ≳ Symbolics.fixpoint_sub(lo, pmap))
+            add_constraint!(m, V[i] ≲ Symbolics.fixpoint_sub(hi, pmap))
+        end
+    end
+    if symbolic_type(tf) === ScalarSymbolic() && hasbounds(tf)
+        lo, hi = getbounds(tf)
+        set_lower_bound(tₛ, Symbolics.fixpoint_sub(lo, pmap))
+        set_upper_bound(tₛ, Symbolics.fixpoint_sub(hi, pmap))
+    end
+end
+
+is_free_final(model) = model.is_free_final 
+
+function add_cost_function!(model, sys, tspan, pmap)
+    jcosts = copy(get_costs(sys))
+    consolidate = get_consolidate(sys)
+    if isnothing(jcosts) || isempty(jcosts)
+        set_objective!(model, 0)
+        return
+    end
+    jcosts = substitute_model_vars(model, sys, jcosts, tspan)
+    jcosts = substitute_params(pmap, jcosts)
+    jcosts = substitute_integral(model, jcosts, tspan)
+    set_objective!(model, consolidate(jcosts))
+end
+
+function add_user_constraints!(model, sys, tspan, pmap)
+    conssys = get_constraintsystem(sys)
+    jconstraints = isnothing(conssys) ? nothing : get_constraints(conssys)
+    (isnothing(jconstraints) || isempty(jconstraints)) && return nothing
+    consvars = get_unknowns(conssys)
+    is_free_final(model) && check_constraint_vars(consvars)
+
+    jconstraints = substitute_toterm(consvars, jconstraints)
+    jconstraints = substitute_model_vars(model, sys, jconstraints, tspan)
+    jconstraints = substitute_params(pmap, jconstraints)
+
+    for c in jconstraints
+        add_constraint!(model, c)
+    end
+end
+
+function add_equational_constraints!(model, sys, pmap, tspan)
+    diff_eqs = substitute_model_vars(model, sys, diff_equations(sys), tspan)
+    diff_eqs = substitute_params(pmap, diff_eqs)
+    diff_eqs = substitute_differentials(model, sys, diff_eqs)
+    for eq in diff_eqs
+        add_constraint!(model, eq.lhs ~ eq.rhs * model.tₛ)
+    end
+
+    alg_eqs = substitute_model_vars(model, sys, alg_equations(sys), tspan)
+    alg_eqs = substitute_params(pmap, alg_eqs)
+    for eq in alg_eqs
+        add_constraint!(model, eq.lhs ~ eq.rhs * model.tₛ)
+    end
+end
+
+function set_objective! end
+"""Substitute variables like x(1.5) with the corresponding model variables."""
+function substitute_model_vars end
+"""
+Substitute integrals. For an integral from (ts, te):
+- Free final time problems should transcribe this to (0, 1) in the case that (ts, te) is the original timespan. Free final time problems cannot handle partial timespans.
+- CasADi cannot handle partial timespans, even for non-free-final time problems.
+time problems and unchanged otherwise.
+"""
+function substitute_integral end
+function substitute_differentials end
+
+function substitute_toterm(vars, exprs)
+    toterm_map = Dict([u => default_toterm(value(u)) for u in vars])
+    exprs = map(c -> Symbolics.fast_substitute(c, toterm_map), exprs)
+end
+
+function substitute_params(pmap, exprs)
+    exprs = map(c -> Symbolics.fixpoint_sub(c, Dict(pmap)), exprs)
+end
+
+function check_constraint_vars(vars)
+    for u in vars
+        x = operation(u)
+        t = only(arguments(u))
+        if (symbolic_type(t) === NotSymbolic())
+            error("Provided specific time constraint in a free final time problem. This is not supported by the collocation solvers at the moment. The offending variable is $u. Specific-time user constraints can only be specified at the end of the timespan.")
+        end
+    end
+end
+
+########################
+### SOLVER UTILITIES ###
+########################
+"""
+Add the solve constraints, set the solver (Ipopt, e.g.) and solver options, optimize the model.
+"""
+function prepare_and_optimize! end
+function get_t_values end
+function get_U_values end
+function get_V_values end
+function successful_solve end
+
+"""
+    solve(prob::AbstractDynamicOptProblem, solver::AbstractCollocation; verbose = false, kwargs...)
+
+- kwargs are used for other options. For example, the `plugin_options` and `solver_options` will propagated to the Opti object in CasADi.
+"""
+function DiffEqBase.solve(prob::AbstractDynamicOptProblem, solver::AbstractCollocation; verbose = false, kwargs...)
+    prepare_and_optimize!(prob, solver; verbose, kwargs...)
+    
+    ts = get_t_values(prob.wrapped_model)
+    Us = get_U_values(prob.wrapped_model)
+    Vs = get_V_values(prob.wrapped_model)
+    is_free_final(prob.wrapped_model) && (ts .+ prob.tspan[1])
+
+    ode_sol = DiffEqBase.build_solution(prob, solver, ts, Us)
+    input_sol = isnothing(Vs) ? nothing : DiffEqBase.build_solution(prob, solver, ts, Vs)
+
+    if !successful_solve(prob.wrapped_model)
+        ode_sol = SciMLBase.solution_new_retcode(
+            ode_sol, SciMLBase.ReturnCode.ConvergenceFailure)
+        !isnothing(input_sol) && (input_sol = SciMLBase.solution_new_retcode(
+            input_sol, SciMLBase.ReturnCode.ConvergenceFailure))
+    end
+    DynamicOptSolution(prob.wrapped_model.model, ode_sol, input_sol)
 end
