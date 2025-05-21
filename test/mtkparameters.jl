@@ -27,8 +27,8 @@ end
 @test getp(sys, a)(ps) == getp(sys, b)(ps) == getp(sys, c)(ps) == 0.0
 @test getp(sys, d)(ps) isa Int
 
-@testset "`container_type`" begin
-    ps2 = MTKParameters(sys, ivs; container_type = SVector)
+@testset "`p_constructor`" begin
+    ps2 = MTKParameters(sys, ivs; p_constructor = x -> SArray{Tuple{size(x)...}}(x))
     @test ps2.tunable isa SVector
     @test ps2.initials isa SVector
     @test ps2.discrete isa Tuple{<:BlockedVector{Float64, <:SVector}}
