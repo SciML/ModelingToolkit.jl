@@ -792,12 +792,12 @@ end
         [input = true]
     end
     ps = @parameters a = 2
-    @brownian η
+    browns = @brownian η
 
     eqs = [D(x) ~ -a * x + (input + 1) * η
            input ~ 0.0]
 
-    sys = System(eqs, t, sts, ps; name = :name)
+    sys = System(eqs, t, sts, ps, browns; name = :name)
     sys = structural_simplify(sys)
     @test ModelingToolkit.get_noise_eqs(sys) ≈ [1.0]
     prob = SDEProblem(sys, [], (0.0, 1.0), [])
