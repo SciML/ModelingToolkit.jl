@@ -328,11 +328,26 @@ function Base.showerror(io::IO, err::MissingGuessError)
         In order to resolve this, please provide additional numeric guesses so that the chain can be resolved to assign numeric values to each variable.            """)
 end
 
+const MISSING_VARIABLES_MESSAGE = """
+                                Initial condition underdefined. Some are missing from the variable map.
+                                Please provide a default (`u0`), initialization equation, or guess
+                                for the following variables:
+                                """
+
+struct MissingVariablesError <: Exception
+    vars::Any
+end
+
+function Base.showerror(io::IO, e::MissingVariablesError)
+    println(io, MISSING_VARIABLES_MESSAGE)
+    println(io, join(e.vars, ", "))
+end
+
 """
     $(TYPEDSIGNATURES)
 
 Return an array of values where the `i`th element corresponds to the value of `vars[i]`
-in `varmap`. Does not perform symbolic substitution in the values of `varmap`.
+in `varmap`. Will mutate `varmap` by symbolically substituting it into itself.
 
 Keyword arguments:
 - `container_type`: The type of the returned container.
@@ -348,11 +363,13 @@ Keyword arguments:
 - `check`: Whether to check if all of `vars` are keys of `varmap`.
 - `is_initializeprob`: Whether an initialization problem is being constructed. Used for
   better error messages.
+- `substitution_limit`: The maximum number of times to recursively substitute `varmap` into
+  itself to get a numeric value for each variable in `vars`.
 """
 function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
         tofloat = true, use_union = false, container_type = Array, buffer_eltype = Nothing,
         toterm = default_toterm, check = true, allow_symbolic = false,
-        is_initializeprob = false)
+        is_initializeprob = false, substitution_limit = 100)
     isempty(vars) && return nothing
 
     varmap = recursive_unwrap(varmap)
@@ -369,6 +386,7 @@ function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
             end
         end
     end
+    evaluate_varmap!(varmap, vars; limit = substitution_limit)
     vals = map(x -> varmap[x], vars)
     if !allow_symbolic
         missingsyms = Any[]
