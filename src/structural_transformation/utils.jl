@@ -439,23 +439,6 @@ function torn_system_jacobian_sparsity(sys)
 end
 
 ###
-### Nonlinear equation(s) solving
-###
-
-@noinline function nlsolve_failure(rc)
-    error("The nonlinear solver failed with the return code $rc.")
-end
-
-function numerical_nlsolve(f, u0, p)
-    prob = NonlinearProblem{false}(f, u0, p)
-    sol = solve(prob, SimpleNewtonRaphson())
-    rc = sol.retcode
-    (rc == ReturnCode.Success) || nlsolve_failure(rc)
-    # TODO: robust initial guess, better debugging info, and residual check
-    sol.u
-end
-
-###
 ### Misc
 ###
 
