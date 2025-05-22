@@ -1193,11 +1193,12 @@ end
     @variables x(t) [guess = 1.0] y(t) [guess = 1.0]
     @parameters p=missing [guess = 1.0] q=missing [guess = 1.0]
     @mtkcompile sys = System(
-        [D(x) ~ p * y + q * t, x^3 + y^3 ~ 5], t; initialization_eqs = [p^2 + q^3 ~ 3])
+        [D(x) ~ p * y + q, x^3 + y^3 ~ 5], t; initialization_eqs = [p^2 + q^3 ~ 3])
 
     # FIXME: solve for du0
     prob = DAEProblem(
-        sys, [D(x) => cbrt(4), D(y) => -1 / cbrt(4), x => 1.0, p => 1.0], (0.0, 1.0))
+        sys, [D(x) => cbrt(4) + cbrt(2), D(y) => -1 / cbrt(4), x => 1.0, p => 1.0], (
+            0.0, 1.0))
 
     integ = init(prob, DImplicitEuler())
     @test integ[x] ≈ 1.0
