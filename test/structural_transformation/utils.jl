@@ -436,3 +436,10 @@ end
         @test integ.ps[p] ≈ 3.0
     end
 end
+
+@testset "Deprecated `structural_simplify` and `@mtkbuild`" begin
+    @variables x(t)
+    @test_deprecated @mtkbuild sys = System([D(x) ~ x], t)
+    @named sys = System([D(x) ~ x], t)
+    @test_deprecated structural_simplify(sys)
+end

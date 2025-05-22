@@ -214,6 +214,7 @@ include("structural_transformation/StructuralTransformations.jl")
 include("inputoutput.jl")
 
 include("adjoints.jl")
+include("deprecations.jl")
 
 const t_nounits = let
     only(@independent_variables t)
@@ -288,7 +289,7 @@ export alias_elimination, flatten
 export connect, domain_connect, @connector, Connection, AnalysisPoint, Flow, Stream,
        instream
 export initial_state, transition, activeState, entry, ticksInState, timeInState
-export @component, @mtkmodel, @mtkcompile
+export @component, @mtkmodel, @mtkcompile, @mtkbuild
 export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbance,
        istunable, getdist, hasdist,
        tunable_parameters, isirreducible, getdescription, hasdescription,
@@ -305,7 +306,7 @@ export independent_variable, equations, controls, observed, full_equations, jump
        brownians
 export initialization_equations, guesses, defaults, parameter_dependencies, hierarchy
 export mtkcompile, expand_connections, linearize, linearization_function,
-       LinearizationProblem
+       LinearizationProblem, structural_simplify
 export solve
 export Pre
 
