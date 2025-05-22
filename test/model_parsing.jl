@@ -977,7 +977,7 @@ end
 
 @testset "Multiple extend statements" begin
     @named multiple_extend = MultipleExtend()
-    @test collect(nameof.(multiple_extend.systems)) == [:inmodel_b, :inmodel]
+    @test collect(nameof.(get_systems(multiple_extend))) == [:inmodel_b, :inmodel]
     @test MultipleExtend.structure[:extend][1] == [:inmodel, :b, :inmodel_b]
     @test tosymbol.(parameters(multiple_extend)) == [:b, :inmodel_b₊p, :inmodel₊p]
 end

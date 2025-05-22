@@ -21,7 +21,7 @@ u0 = [
     z => u - 0.1
 ]
 ns = System(eqs, [x, y, z], [σ, ρ, β], name = :ns, defaults = [par; u0])
-ns.y = u * 1.1
+ModelingToolkit.get_defaults(ns)[y] = u * 1.1
 resolved = ModelingToolkit.varmap_to_vars(Dict(), parameters(ns),
     defaults = ModelingToolkit.defaults(ns))
 @test resolved == [1, 0.1 + 1, (0.1 + 1) * 1.1]
@@ -33,8 +33,8 @@ sol = solve(prob, NewtonRaphson())
 @variables a
 @parameters b
 top = System([0 ~ -a + ns.x + b], [a], [b], systems = [ns], name = :top)
-top.b = ns.σ * 0.5
-top.ns.x = u * 0.5
+ModelingToolkit.get_defaults(top)[b] = ns.σ * 0.5
+ModelingToolkit.get_defaults(top)[ns.x] = unknowns(ns, u) * 0.5
 
 res = ModelingToolkit.varmap_to_vars(Dict(), parameters(top),
     defaults = ModelingToolkit.defaults(top))
