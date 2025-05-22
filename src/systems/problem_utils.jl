@@ -1364,7 +1364,7 @@ function process_SciMLProblem(
 
     if implicit_dae
         ddvs = map(Differential(iv), dvs)
-        du0 = varmap_to_vars(op, ddvs; toterm = identity,
+        du0 = varmap_to_vars(op, ddvs; toterm = default_toterm,
             tofloat)
         kwargs = merge(kwargs, (; ddvs))
     else
