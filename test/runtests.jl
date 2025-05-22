@@ -57,7 +57,6 @@ end
             @safetestset "DAE Jacobians Test" include("dae_jacobian.jl")
             @safetestset "Jacobian Sparsity" include("jacobiansparsity.jl")
             @safetestset "Modelingtoolkitize Test" include("modelingtoolkitize.jl")
-            @safetestset "FuncAffect Test" include("funcaffect.jl")
             @safetestset "Constants Test" include("constants.jl")
             @safetestset "Parameter Dependency Test" include("parameter_dependencies.jl")
             @safetestset "Equation Type Accessors Test" include("equation_type_accessors.jl")

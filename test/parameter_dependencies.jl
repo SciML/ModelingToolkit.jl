@@ -14,10 +14,10 @@ using NonlinearSolve
     @parameters p1(t)=1.0 p2
     @variables x(t)
     cb1 = SymbolicContinuousCallback([x ~ 2.0] => [p1 ~ 2.0], discrete_parameters = [p1]) # triggers at t=-2+√6
-    function affect1!(integ, u, p, ctx)
-        integ.ps[p[1]] = integ.ps[p[2]]
+    function affect1!(mod, obs, ctx, integ)
+        return (; p1 = obs.p2)
     end
-    cb2 = [x ~ 4.0] => (affect1!, [], [p1, p2], [p1]) # triggers at t=-2+√7
+    cb2 = [x ~ 4.0] => (f = affect1!, observed = (; p2), modified = (; p1)) # triggers at t=-2+√7
     cb3 = SymbolicDiscreteCallback([1.0] => [p1 ~ 5.0], discrete_parameters = [p1])
 
     @mtkbuild sys = System(

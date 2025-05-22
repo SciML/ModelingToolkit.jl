@@ -514,11 +514,10 @@ end
     testsol(ssys3, SDEProblem, RI5, u0, p, tspan; tstops = [1.0], paramtotest = k)
 
     # mixing with a func affect
-    function affect!(integrator, u, p, ctx)
-        integrator.ps[p.k] = 1.0
-        nothing
+    function affect!(mod, obs, ctx, integ)
+        return (; k = 1.0)
     end
-    cb2‵‵ = [2.0] => (affect!, [], [k], [k], nothing)
+    cb2‵‵ = [2.0] => (f = affect!, modified = (; k))
     @named osys4 = System(eqs, t, [A], [k, t1], discrete_events = [cb1, cb2‵‵])
     @named ssys4 = SDESystem(eqs, [0.0], t, [A], [k, t1],
         discrete_events = [cb1, cb2‵‵])
@@ -527,7 +526,7 @@ end
     testsol(ssys4, SDEProblem, RI5, u0, p, tspan; tstops = [1.0], paramtotest = k)
 
     # mixing with symbolic condition in the func affect
-    cb2‵‵‵ = (t == t2) => (affect!, [], [k], [k], nothing)
+    cb2‵‵‵ = (t == t2) => (f = affect!, modified = (; k))
     @named osys5 = System(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵‵‵])
     @named ssys5 = SDESystem(eqs, [0.0], t, [A], [k, t1, t2],
         discrete_events = [cb1, cb2‵‵‵])
@@ -605,17 +604,15 @@ end
     testsol(jsys3, u0, p, tspan; tstops = [1.0], rng, paramtotest = k)
 
     # mixing with a func affect
-    function affect!(integrator, u, p, ctx)
-        integrator.ps[p.k] = 1.0
-        reset_aggregated_jumps!(integrator)
-        nothing
+    function affect!(mod, obs, ctx, integrator)
+        return (; k = 1.0)
     end
-    cb2‵‵ = [2.0] => (affect!, [], [k], [k], nothing)
+    cb2‵‵ = [2.0] => (f = affect!, modified = (; k))
     @named jsys4 = JumpSystem(eqs, t, [A], [k, t1], discrete_events = [cb1, cb2‵‵])
     testsol(jsys4, u0, p, tspan; tstops = [1.0], rng, paramtotest = k)
 
     # mixing with symbolic condition in the func affect
-    cb2‵‵‵ = (t == t2) => (affect!, [], [k], [k], nothing)
+    cb2‵‵‵ = (t == t2) => (f = affect!, modified = (; k))
     @named jsys5 = JumpSystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵‵‵])
     testsol(jsys5, u0, p, tspan; tstops = [1.0, 2.0], rng, paramtotest = k)
     @named jsys6 = JumpSystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb2‵‵‵, cb1])
@@ -649,13 +646,16 @@ end
     # baseline affect (pos + neg + left root find)
     @variables c1(t)=1.0 c2(t)=1.0 # c1 = cos(t), c2 = cos(3t)
     eqs = [D(c1) ~ -sin(t); D(c2) ~ -3 * sin(3 * t)]
-    record_crossings(i, u, _, c) = push!(c, i.t => i.u[u.v])
+    function record_crossings(mod, obs, ctx, integ)
+        push!(ctx, integ.t => obs.v)
+        return (;)
+    end
     cr1 = []
     cr2 = []
     evt1 = ModelingToolkit.SymbolicContinuousCallback(
-        [c1 ~ 0], (record_crossings, [c1 => :v], [], [], cr1))
+        [c1 ~ 0], (f = record_crossings, observed = (; v = c1), ctx = cr1))
     evt2 = ModelingToolkit.SymbolicContinuousCallback(
-        [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2))
+        [c2 ~ 0], (f = record_crossings, observed = (; v = c2), ctx = cr2))
     @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
@@ -673,11 +673,11 @@ end
     cr1n = []
     cr2n = []
     evt1 = ModelingToolkit.SymbolicContinuousCallback(
-        [c1 ~ 0], (record_crossings, [c1 => :v], [], [], cr1p);
-        affect_neg = (record_crossings, [c1 => :v], [], [], cr1n))
+        [c1 ~ 0], (f = record_crossings, observed = (; v = c1), ctx = cr1p);
+        affect_neg = (f = record_crossings, observed = (; v = c1), ctx = cr1n))
     evt2 = ModelingToolkit.SymbolicContinuousCallback(
-        [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2p);
-        affect_neg = (record_crossings, [c2 => :v], [], [], cr2n))
+        [c2 ~ 0], (f = record_crossings, observed = (; v = c2), ctx = cr2p);
+        affect_neg = (f = record_crossings, observed = (; v = c2), ctx = cr2n))
     @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
@@ -699,9 +699,9 @@ end
     cr1p = []
     cr2p = []
     evt1 = ModelingToolkit.SymbolicContinuousCallback(
-        [c1 ~ 0], (record_crossings, [c1 => :v], [], [], cr1p); affect_neg = nothing)
+        [c1 ~ 0], (f = record_crossings, observed = (; v = c1), ctx = cr1p); affect_neg = nothing)
     evt2 = ModelingToolkit.SymbolicContinuousCallback(
-        [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2p); affect_neg = nothing)
+        [c2 ~ 0], (f = record_crossings, observed = (; v = c2), ctx = cr2p); affect_neg = nothing)
     @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
@@ -717,10 +717,10 @@ end
     cr1n = []
     cr2n = []
     evt1 = ModelingToolkit.SymbolicContinuousCallback(
-        [c1 ~ 0], (record_crossings, [c1 => :v], [], [], cr1p); affect_neg = nothing)
+        [c1 ~ 0], (f = record_crossings, observed = (; v = c1), ctx = cr1p); affect_neg = nothing)
     evt2 = ModelingToolkit.SymbolicContinuousCallback(
-        [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2p);
-        affect_neg = (record_crossings, [c2 => :v], [], [], cr2n))
+        [c2 ~ 0], (f = record_crossings, observed = (; v = c2), ctx = cr2p);
+        affect_neg = (f = record_crossings, observed = (; v = c2), ctx = cr2n))
     @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = structural_simplify(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
@@ -740,10 +740,10 @@ end
     cr1 = []
     cr2 = []
     evt1 = ModelingToolkit.SymbolicContinuousCallback(
-        [c1 ~ 0], (record_crossings, [c1 => :v], [], [], cr1);
+        [c1 ~ 0], (f = record_crossings, observed = (; v = c1), ctx = cr1);
         rootfind = SciMLBase.RightRootFind)
     evt2 = ModelingToolkit.SymbolicContinuousCallback(
-        [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2);
+        [c2 ~ 0], (f = record_crossings, observed = (; v = c2), ctx = cr2);
         rootfind = SciMLBase.RightRootFind)
     @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = structural_simplify(trigsys)
@@ -760,10 +760,10 @@ end
     cr1 = []
     cr2 = []
     evt1 = ModelingToolkit.SymbolicContinuousCallback(
-        [c1 ~ 0], (record_crossings, [c1 => :v], [], [], cr1);
+        [c1 ~ 0], (f = record_crossings, observed = (; v = c1), ctx = cr1);
         rootfind = SciMLBase.LeftRootFind)
     evt2 = ModelingToolkit.SymbolicContinuousCallback(
-        [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2);
+        [c2 ~ 0], (f = record_crossings, observed = (; v = c2), ctx = cr2);
         rootfind = SciMLBase.RightRootFind)
     @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = structural_simplify(trigsys)
@@ -778,10 +778,10 @@ end
     cr1 = []
     cr2 = []
     evt1 = ModelingToolkit.SymbolicContinuousCallback(
-        [c1 ~ 0], (record_crossings, [c1 => :v], [], [], cr1);
+        [c1 ~ 0], (f = record_crossings, observed = (; v = c1), ctx = cr1);
         rootfind = SciMLBase.LeftRootFind)
     evt2 = ModelingToolkit.SymbolicContinuousCallback(
-        [c2 ~ 0], (record_crossings, [c2 => :v], [], [], cr2);
+        [c2 ~ 0], (f = record_crossings, observed = (; v = c2), ctx = cr2);
         rootfind = SciMLBase.RightRootFind)
     @named trigsys = System(eqs, t; continuous_events = [evt2, evt1])
     trigsys_ss = structural_simplify(trigsys)
@@ -879,10 +879,10 @@ end
     @variables x(t)
     @parameters a(t) b(t) c(t)
     cb1 = SymbolicContinuousCallback([x ~ 1.0] => [a ~ -Pre(a)], discrete_parameters = [a])
-    function save_affect!(integ, u, p, ctx)
-        integ.ps[p.b] = 5.0
+    function save_affect!(mod, obs, ctx, integ)
+        return (; b = 5.0)
     end
-    cb2 = [x ~ 0.5] => (save_affect!, [], [b], [b], nothing)
+    cb2 = [x ~ 0.5] => (f = save_affect!, modified = (; b))
     cb3 = SymbolicDiscreteCallback(1.0 => [c ~ t], discrete_parameters = [c])
 
     @mtkbuild sys = System(D(x) ~ cos(t), t, [x], [a, b, c];
@@ -1067,8 +1067,7 @@ end
 @testset "Initialization" begin
     @variables x(t)
     seen = false
-    f = ModelingToolkit.FunctionalAffect(
-        f = (i, u, p, c) -> seen = true, sts = [], pars = [], discretes = [])
+    f = ModelingToolkit.ImperativeAffect(f = (m, o, ctx, int) -> (seen = true; return (;)))
     cb1 = ModelingToolkit.SymbolicContinuousCallback(
         [x ~ 0], nothing, initialize = [x ~ 1.5], finalize = f)
     @mtkbuild sys = System(D(x) ~ -1, t, [x], []; continuous_events = [cb1])
@@ -1080,16 +1079,13 @@ end
 
     @variables x(t)
     seen = false
-    f = ModelingToolkit.FunctionalAffect(
-        f = (i, u, p, c) -> seen = true, sts = [], pars = [], discretes = [])
+    f = ModelingToolkit.ImperativeAffect(f = (m, o, ctx, int) -> (seen = true; return (;)))
     cb1 = ModelingToolkit.SymbolicContinuousCallback(
         [x ~ 0], nothing, initialize = [x ~ 1.5], finalize = f)
     inited = false
     finaled = false
-    a = ModelingToolkit.FunctionalAffect(
-        f = (i, u, p, c) -> inited = true, sts = [], pars = [], discretes = [])
-    b = ModelingToolkit.FunctionalAffect(
-        f = (i, u, p, c) -> finaled = true, sts = [], pars = [], discretes = [])
+    a = ModelingToolkit.ImperativeAffect(f = (m, o, ctx, int) -> (inited = true; return (;)))
+    b = ModelingToolkit.ImperativeAffect(f = (m, o, ctx, int) -> (finaled = true; return (;)))
     cb2 = ModelingToolkit.SymbolicContinuousCallback(
         [x ~ 0.1], nothing, initialize = a, finalize = b)
     @mtkbuild sys = System(D(x) ~ -1, t, [x], []; continuous_events = [cb1, cb2])
