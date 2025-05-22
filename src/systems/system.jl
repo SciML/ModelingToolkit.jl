@@ -9,6 +9,8 @@ struct Schedule{V <: BipartiteGraphs.Matching}
     dummy_sub::Dict{Any, Any}
 end
 
+const MetadataT = Base.ImmutableDict{DataType, Any}
+
 struct System <: AbstractSystem
     tag::UInt
     eqs::Vector{Equation}
@@ -38,7 +40,7 @@ struct System <: AbstractSystem
     discrete_events::Vector{SymbolicDiscreteCallback}
     connector_type::Any
     assertions::Dict{BasicSymbolic, String}
-    metadata::Any
+    metadata::MetadataT
     gui_metadata::Any # ?
     is_dde::Bool
     tstops::Vector{Any}
@@ -60,7 +62,7 @@ struct System <: AbstractSystem
             brownians, iv, observed, parameter_dependencies, var_to_name, name, description,
             defaults, guesses, systems, initialization_eqs, continuous_events, discrete_events,
             connector_type, assertions = Dict{BasicSymbolic, String}(),
-            metadata = nothing, gui_metadata = nothing,
+            metadata = MetadataT(), gui_metadata = nothing,
             is_dde = false, tstops = [], tearing_state = nothing, namespacing = true,
             complete = false, index_cache = nothing, ignored_connections = nothing,
             preface = nothing, parent = nothing, initializesystem = nothing,
@@ -119,8 +121,9 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         guesses = Dict(), systems = System[], initialization_eqs = Equation[],
         continuous_events = SymbolicContinuousCallback[], discrete_events = SymbolicDiscreteCallback[],
         connector_type = nothing, assertions = Dict{BasicSymbolic, String}(),
-        metadata = nothing, gui_metadata = nothing, is_dde = nothing, tstops = [],
-        tearing_state = nothing, ignored_connections = nothing, parent = nothing,
+        metadata = MetadataT(), gui_metadata = nothing,
+        is_dde = nothing, tstops = [], tearing_state = nothing,
+        ignored_connections = nothing, parent = nothing,
         description = "", name = nothing, discover_from_metadata = true,
         initializesystem = nothing, is_initializesystem = false, preface = [],
         checks = true)
@@ -185,6 +188,17 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
 
     assertions = Dict{BasicSymbolic, String}(unwrap(k) => v for (k, v) in assertions)
 
+    if isempty(metadata)
+        metadata = MetadataT()
+    elseif metadata isa MetadataT
+        metadata = metadata
+    else
+        meta = MetadataT()
+        for kvp in metadata
+            meta = Base.ImmutableDict(meta, kvp)
+        end
+        metadata = meta
+    end
     System(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)), eqs, noise_eqs, jumps, constraints,
         costs, consolidate, dvs, ps, brownians, iv, observed, parameter_dependencies,
         var_to_name, name, description, defaults, guesses, systems, initialization_eqs,
@@ -619,6 +633,17 @@ function Base.hash(sys::System, h::UInt)
         h = hash(s, h)
     end
     return h
+end
+
+function SymbolicUtils.getmetadata(sys::AbstractSystem, k::DataType, default)
+    meta = get_metadata(sys)
+    return get(meta, k, default)
+end
+
+function SymbolicUtils.setmetadata(sys::AbstractSystem, k::DataType, v)
+    meta = get_metadata(sys)
+    meta = Base.ImmutableDict(meta, k => v)::MetadataT
+    @set sys.metadata = meta
 end
 
 """

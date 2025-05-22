@@ -298,19 +298,19 @@ end
     error("Different types of connectors are in one connection statement: <$(map(nameof, ss))>")
 end
 
+abstract type IsFrame end
+
 "Return true if the system is a 3D multibody frame, otherwise return false."
 function isframe(sys)
-    (has_metadata(sys) && (md = get_metadata(sys)) isa Dict) || return false
-    get(md, :frame, false)
+    getmetadata(sys, IsFrame, false)
 end
+
+abstract type FrameOrientation end
 
 "Return orientation object of a multibody frame."
 function ori(sys)
-    @assert has_metadata(sys)
-    md = get_metadata(sys)
-    if md isa Dict && (O = get(md, :orientation, nothing)) !== nothing
-        return O
-    else
+    val = getmetadata(sys, FrameOrientation, nothing)
+    if val === nothing
         error("System $(sys.name) does not have an orientation object.")
     end
 end
