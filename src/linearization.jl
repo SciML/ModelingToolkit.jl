@@ -612,7 +612,7 @@ function markio!(state, orig_inputs, inputs, outputs, disturbances; check = true
         end
         (all(values(outputset)) || error(
             "Some specified outputs were not found in system. The following Dict indicates the found variables ",
-        outputset))
+            outputset))
     end
     state, orig_inputs
 end
