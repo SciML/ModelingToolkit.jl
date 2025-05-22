@@ -855,7 +855,8 @@ function compile_equational_affect(
         end
     else
         return let dvs_to_update = dvs_to_update, aff_map = aff_map, sys_map = sys_map,
-            affsys = affsys, ps_to_update = ps_to_update, aff = aff, sys = sys
+            affsys = affsys, ps_to_update = ps_to_update, aff = aff, sys = sys,
+            reset_jumps = reset_jumps
 
             dvs_to_access = [aff_map[u] for u in unknowns(affsys)]
             ps_to_access = [unPre(p) for p in parameters(affsys)]
@@ -888,6 +889,8 @@ function compile_equational_affect(
 
                 u_setter!(integ, u_getter(affsol))
                 p_setter!(integ, p_getter(affsol))
+
+                reset_jumps && reset_aggregated_jumps!(integ)
             end
         end
     end
