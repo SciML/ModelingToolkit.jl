@@ -899,6 +899,13 @@ end
 
 has_equations(::AbstractSystem) = true
 
+"""
+    $(TYPEDSIGNATURES)
+
+Invalidate cached jacobians, etc.
+"""
+invalidate_cache!(sys::AbstractSystem) = sys
+
 function Setfield.get(obj::AbstractSystem, ::Setfield.PropertyLens{field}) where {field}
     getfield(obj, field)
 end
