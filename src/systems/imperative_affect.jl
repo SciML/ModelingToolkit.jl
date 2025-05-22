@@ -167,7 +167,8 @@ function check_assignable(sys, sym)
     end
 end
 
-function compile_functional_affect(affect::ImperativeAffect, sys; kwargs...)
+function compile_functional_affect(
+        affect::ImperativeAffect, sys; reset_jumps = false, kwargs...)
     #=
     Implementation sketch:
         generate observed function (oop), should save to a component array under obs_syms
@@ -247,7 +248,7 @@ function compile_functional_affect(affect::ImperativeAffect, sys; kwargs...)
 
     upd_funs = NamedTuple{mod_names}((setu.((sys,), first.(mod_pairs))...,))
 
-    let user_affect = func(affect), ctx = context(affect)
+    let user_affect = func(affect), ctx = context(affect), reset_jumps = reset_jumps
         @inline function (integ)
             # update the to-be-mutated values; this ensures that if you do a no-op then nothing happens
             modvals = mod_og_val_fun(integ.u, integ.p, integ.t)
@@ -262,6 +263,8 @@ function compile_functional_affect(affect::ImperativeAffect, sys; kwargs...)
 
             # write the new values back to the integrator
             _generated_writeback(integ, upd_funs, upd_vals)
+
+            reset_jumps && reset_aggregated_jumps!(integ)
         end
     end
 end
