@@ -135,6 +135,8 @@ setirreducible(x, v::Bool) = setmetadata(x, VariableIrreducible, v)
 state_priority(x::Union{Num, Symbolics.Arr}) = state_priority(unwrap(x))
 state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))::Float64
 
+normalize_to_differential(x) = x
+
 function default_toterm(x)
     if iscall(x) && (op = operation(x)) isa Operator
         if !(op isa Differential)
