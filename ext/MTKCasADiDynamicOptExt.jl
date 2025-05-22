@@ -105,6 +105,7 @@ function MTK.add_constraint!(m::CasADiModel, expr)
         subject_to!(m.model, expr.lhs - expr.rhs ≤ 0)
     end
 end
+
 MTK.set_objective!(m::CasADiModel, expr) = minimize!(m.model, MX(expr))
 
 function MTK.add_initial_constraints!(m::CasADiModel, u0, u0_idxs, args...)
@@ -114,42 +115,12 @@ function MTK.add_initial_constraints!(m::CasADiModel, u0, u0_idxs, args...)
     end
 end
 
-function free_t_map(model, tf, x_ops, c_ops)
-    Dict([[x(tf) => model.U.u[i, end] for (i, x) in enumerate(x_ops)];
-        [c(tf) => model.V.u[i, end] for (i, c) in enumerate(c_ops)]])
+function MTK.lowered_var(m::CasADiModel, uv, i, t)
+    X = getfield(m, uv)
+    t isa Union{Num, Symbolics.Symbolic} ? X.u[i, :] : X(t)[i]
 end
 
-function whole_t_map(model, sys)
-    Dict([[v => model.U.u[i, :] for (i, v) in enumerate(unknowns(sys))];
-          [v => model.V.u[i, :] for (i, v) in enumerate(MTK.unbound_inputs(sys))]])
-
-end
-
-function fixed_t_map(model::CasADiModel, x_ops, c_ops, exprs)
-    stidxmap = Dict([v => i for (i, v) in x_ops])
-    ctidxmap = Dict([v => i for (i, v) in c_ops])
-    for i in 1:length(exprs)
-        subvars = MTK.vars(exprs[i])
-        for st in subvars 
-            MTK.iscall(st) || continue
-            x = operation(st)
-            t = only(arguments(st))
-            MTK.symbolic_type(t) === MTK.NotSymbolic() || continue
-            if haskey(stidxmap, x)
-                idx = stidxmap[x]
-                cv = model.U
-            else
-                idx = ctidxmap[x]
-                cv = model.V
-            end
-            exprs[i] = Symbolics.fast_substitute(exprs[i], Dict(x(t) => cv(t)[idx]))
-        end
-        jcosts = Symbolics.substitute(jcosts, Dict(x(t) => cv(t)[idx]))
-    end
-    exprs
-end
-
-MTK.lowered_integral(model, expr, args...) = model.tₛ * (model.U.t[2] - model.U.t[1]) * expr
+MTK.lowered_integral(model::CasADiModel, expr, args...) = model.tₛ * (model.U.t[2] - model.U.t[1]) * sum(expr)
 
 function add_solve_constraints!(prob::CasADiDynamicOptProblem, tableau)
     @unpack A, α, c = tableau

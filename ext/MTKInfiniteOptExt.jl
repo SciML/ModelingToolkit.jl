@@ -48,7 +48,7 @@ struct InfiniteOptDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
 end
 
 MTK.generate_internal_model(m::Type{InfiniteOptModel}) = InfiniteModel()
-MTK.generate_time_variable!(m::InfiniteModel, tspan, steps) = @infinite_parameter(m, t in [tspan[1], tspan[2]], num_supports = length(tsteps))
+MTK.generate_time_variable!(m::InfiniteModel, tspan, tsteps) = @infinite_parameter(m, t in [tspan[1], tspan[2]], num_supports = length(tsteps))
 MTK.generate_state_variable!(m::InfiniteModel, u0::Vector, ns, ts) = @variable(m, U[i = 1:ns], Infinite(m[:t]), start=u0[i])
 MTK.generate_input_variable!(m::InfiniteModel, c0, nc, ts) = @variable(m, V[i = 1:nc], Infinite(m[:t]), start=c0[i])
 
@@ -88,8 +88,8 @@ function MTK.InfiniteOptDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
     prob
 end
 
-MTK.lowered_integral(model, expr, lo, hi) = model.tₛ * InfiniteOpt.∫(arg, model.model[:t], lo, hi)
-MTK.lowered_derivative(model, i) = ∂(model.U[i], model.model[:t])
+MTK.lowered_integral(model::InfiniteOptModel, expr, lo, hi) = model.tₛ * InfiniteOpt.∫(expr, model.model[:t], lo, hi)
+MTK.lowered_derivative(model::InfiniteOptModel, i) = ∂(model.U[i], model.model[:t])
 
 function MTK.process_integral_bounds(model, integral_span, tspan)
     if MTK.is_free_final(model) && isequal(integral_span, tspan)
@@ -103,23 +103,13 @@ end
 
 function MTK.add_initial_constraints!(m::InfiniteOptModel, u0, u0_idxs, ts)
     for i in u0_idxs
-        fix(m.U[i], u0[i], force = true)
+        fix(m.U[i](0), u0[i], force = true)
     end
 end
 
-function MTK.fixed_t_map(model::InfiniteOptModel, x_ops, c_ops, exprs)
-    Dict([[x_ops[i] => model.U[i] for i in 1:length(model.U)];
-         [c_ops[i] => model.V[i] for i in 1:length(model.V)]])
-end
-
-function MTK.free_t_map(model::InfiniteOptModel, tf, x_ops, c_ops)
-    Dict([[x(tf) => model.U[i](1) for (i, x) in enumerate(x_ops)];
-        [c(tf) => model.V[i](1) for (i, c) in enumerate(c_ops)]])
-end
-
-function MTK.whole_t_map(model::InfiniteOptModel, sys)
-    whole_interval_map = Dict([[v => model.U[i] for (i, v) in enumerate(unknowns(sys))];
-                               [v => model.V[i] for (i, v) in enumerate(MTK.unbound_inputs(sys))]])
+function MTK.lowered_var(m::InfiniteOptModel, uv, i, t)
+    X = getfield(m, uv)
+    t isa Union{Num, Symbolics.Symbolic} ? X[i] : X[i](t)
 end
 
 function add_solve_constraints!(prob::JuMPDynamicOptProblem, tableau)
