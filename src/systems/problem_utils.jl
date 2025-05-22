@@ -335,28 +335,39 @@ Return an array of values where the `i`th element corresponds to the value of `v
 in `varmap`. Does not perform symbolic substitution in the values of `varmap`.
 
 Keyword arguments:
-- `tofloat`: Convert values to floating point numbers using `float`.
-- `container_type`: The type of container to use for the values.
-- `toterm`: The `toterm` method to use for converting symbolics.
-- `promotetoconcrete`: whether the promote to a concrete buffer (respecting
-  `tofloat`). Defaults to `container_type <: AbstractArray`.
-- `check`: Error if any variables in `vars` do not have a mapping in `varmap`. Uses
-  [`missingvars`](@ref) to perform the check.
-- `allow_symbolic` allows the returned array to contain symbolic values. If this is `true`,
-  `promotetoconcrete` is set to `false`.
-- `is_initializeprob, guesses`: Used to determine whether the system is missing guesses.
+- `container_type`: The type of the returned container.
+- `allow_symbolic`: Whether the returned container of values can have symbolic expressions.
+- `buffer_eltype`: The `eltype` of the returned container if `!allow_symbolic`. If
+  `Nothing`, automatically promotes the values in the container to a common `eltype`.
+- `tofloat`: Whether to promote values to floating point numbers if
+  `buffer_eltype == Nothing`.
+- `use_union`: Whether to allow using a `Union` as the `eltype` if
+  `buffer_eltype == Nothing`.
+- `toterm`: The `toterm` function for canonicalizing keys of `varmap`. A value of `nothing`
+  disables this process.
+- `check`: Whether to check if all of `vars` are keys of `varmap`.
+- `is_initializeprob`: Whether an initialization problem is being constructed. Used for
+  better error messages.
 """
 function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
-        tofloat = true, container_type = Array, floatT = Nothing,
-        toterm = default_toterm, promotetoconcrete = nothing, check = true,
-        allow_symbolic = false, is_initializeprob = false)
+        tofloat = true, use_union = false, container_type = Array, buffer_eltype = Nothing,
+        toterm = default_toterm, check = true, allow_symbolic = false,
+        is_initializeprob = false)
     isempty(vars) && return nothing
 
     varmap = recursive_unwrap(varmap)
-    add_toterms!(varmap; toterm)
+    if toterm !== nothing
+        add_toterms!(varmap; toterm)
+    end
     if check
         missing_vars = missingvars(varmap, vars; toterm)
-        isempty(missing_vars) || throw(MissingVariablesError(missing_vars))
+        if !isempty(missing_vars)
+            if is_initializeprob
+                throw(MissingGuessError(collect(missing_vars), collect(missing_vars)))
+            else
+                throw(MissingVariablesError(missing_vars))
+            end
+        end
     end
     vals = map(x -> varmap[x], vars)
     if !allow_symbolic
@@ -372,18 +383,15 @@ function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
             is_initializeprob ? throw(MissingGuessError(missingsyms, missingvals)) :
             throw(UnexpectedSymbolicValueInVarmap(missingsyms[1], missingvals[1]))
         end
-        if tofloat && !(floatT == Nothing)
-            vals = floatT.(vals)
+        if buffer_eltype == Nothing
+            vals = promote_to_concrete(vals; tofloat, use_union)
+        else
+            vals = buffer_eltype.(vals)
         end
     end
 
-    if container_type <: Union{AbstractDict, Tuple, Nothing, SciMLBase.NullParameters}
+    if container_type <: Union{AbstractDict, Nothing, SciMLBase.NullParameters}
         container_type = Array
-    end
-
-    promotetoconcrete === nothing && (promotetoconcrete = container_type <: AbstractArray)
-    if promotetoconcrete && !allow_symbolic
-        vals = promote_to_concrete(vals; tofloat = tofloat, use_union = false)
     end
 
     if isempty(vals)
