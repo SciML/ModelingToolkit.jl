@@ -45,7 +45,7 @@ const M = ModelingToolkit
     csol2 = solve(cprob, CasADiCollocation("ipopt", constructImplicitEuler()))
     @test ≈(csol2.sol.u, osol2.u, rtol = 0.001)
     pprob = PyomoDynamicOptProblem(sys, u0map, tspan, parammap, dt = 0.01)
-    psol = solve(cprob, PyomoCollocation("ipopt", BackwardEuler()))
+    psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
     @test psol.sol.u ≈ osol2.u
 
     # With a constraint
@@ -118,7 +118,7 @@ end
     # Double integrator
     t = M.t_nounits
     D = M.D_nounits
-    @variables x(..) [bounds = (0.0, 0.25)] v(..)
+    @variables x(..) v(..)
     @variables u(..) [bounds = (-1.0, 1.0), input = true]
     constr = [v(1.0) ~ 0.0]
     cost = [-x(1.0)] # Maximize the final distance.
@@ -130,7 +130,7 @@ end
     tspan = (0.0, 1.0)
     parammap = [u(t) => 0.0]
     jprob = JuMPDynamicOptProblem(block, u0map, tspan, parammap; dt = 0.01)
-    jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructVerner8()))
+    jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructVerner8()), verbose = true)
     # Linear systems have bang-bang controls
     @test is_bangbang(jsol.input_sol, [-1.0], [1.0])
     # Test reached final position.

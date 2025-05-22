@@ -250,7 +250,7 @@ function process_DynamicOptProblem(prob_type::Type{<:AbstractDynamicOptProblem},
 
     tsteps = LinRange(model_tspan[1], model_tspan[2], steps)
     model = generate_internal_model(model_type)
-    generate_time_variable!(model, model_tspan, steps)
+    generate_time_variable!(model, model_tspan, tsteps)
     U = generate_state_variable!(model, u0, length(states), tsteps)
     V = generate_input_variable!(model, c0, length(ctrls), tsteps)
     tₛ = generate_timescale!(model, get(pmap, tspan[2], tspan[2]), is_free_t)
@@ -269,24 +269,26 @@ function generate_internal_model end
 function generate_state_variable! end
 function generate_input_variable! end
 function generate_timescale! end
-function set_variable_bounds! end
 function add_initial_constraints! end
 function add_constraint! end
 
 function set_variable_bounds!(m, sys, pmap, tf)
     @unpack model, U, V, tₛ = m
+    t = get_iv(sys)
     for (i, u) in enumerate(unknowns(sys))
+        var = lowered_var(m, :U, i, t)
         if hasbounds(u)
             lo, hi = getbounds(u)
-            add_constraint!(m, U[i] ≳ Symbolics.fixpoint_sub(lo, pmap))
-            add_constraint!(m, U[i] ≲ Symbolics.fixpoint_sub(hi, pmap))
+            add_constraint!(m, var ≳ Symbolics.fixpoint_sub(lo, pmap))
+            add_constraint!(m, var ≲ Symbolics.fixpoint_sub(hi, pmap))
         end
     end
     for (i, v) in enumerate(unbound_inputs(sys))
+        var = lowered_var(m, :V, i, t)
         if hasbounds(v)
             lo, hi = getbounds(v)
-            add_constraint!(m, V[i] ≳ Symbolics.fixpoint_sub(lo, pmap))
-            add_constraint!(m, V[i] ≲ Symbolics.fixpoint_sub(hi, pmap))
+            add_constraint!(m, var ≳ Symbolics.fixpoint_sub(lo, pmap))
+            add_constraint!(m, var ≲ Symbolics.fixpoint_sub(hi, pmap))
         end
     end
     if symbolic_type(tf) === ScalarSymbolic() && hasbounds(tf)
@@ -319,39 +321,58 @@ time problems and unchanged otherwise.
 """
 function substitute_integral(model, exprs, tspan)
     intmap = Dict()
-    for int in MTK.collect_applied_operators(exprs, Symbolics.Integral)
-        op = MTK.operation(int)
-        arg = only(arguments(MTK.value(int)))
-        lo, hi = MTK.value.((op.domain.domain.left, op.domain.domain.right))
+    for int in collect_applied_operators(exprs, Symbolics.Integral)
+        op = operation(int)
+        arg = only(arguments(value(int)))
+        lo, hi = value.((op.domain.domain.left, op.domain.domain.right))
         lo, hi = process_integral_bounds(model, (lo, hi), tspan)
-        intmap[int] = lowered_integral(model, expr, lo, hi)
+        intmap[int] = lowered_integral(model, arg, lo, hi)
     end
-    expr = map(c -> Symbolics.substitute(c, intmap), expr)
-    expr = value.(expr)
+    exprs = map(c -> Symbolics.substitute(c, intmap), exprs)
+    value.(exprs)
 end
 
-"""Substitute variables like x(1.5) with the corresponding model variables."""
-function substitute_model_vars(model, sys, exprs)
-    x_ops = [MTK.operation(MTK.unwrap(st)) for st in unknowns(sys)]
-    c_ops = [MTK.operation(MTK.unwrap(ct)) for ct in MTK.unbound_inputs(sys)]
+"""Substitute variables like x(1.5), x(t), etc. with the corresponding model variables."""
+function substitute_model_vars(model, sys, exprs, tspan)
+    x_ops = [operation(unwrap(st)) for st in unknowns(sys)]
+    c_ops = [operation(unwrap(ct)) for ct in unbound_inputs(sys)]
+    t = get_iv(sys)
 
-    exprs = map(c -> Symbolics.fast_substitute(c, fixed_t_map(model, x_ops, c_ops, exprs)), exprs)
-    exprs = map(c -> Symbolics.fast_substitute(c, whole_t_map(model, sys)), exprs)
+    exprs = map(c -> Symbolics.fast_substitute(c, whole_t_map(model, t, x_ops, c_ops)), exprs)
+    exprs = map(c -> Symbolics.fast_substitute(c, fixed_t_map(model, x_ops, c_ops)), exprs)
 
     (ti, tf) = tspan
-    if MTK.symbolic_type(tf) === MTK.ScalarSymbolic()
+    if symbolic_type(tf) === ScalarSymbolic()
         _tf = model.tₛ + ti
         exprs = map(c -> Symbolics.fast_substitute(c, Dict(tf => _tf)), exprs)
         exprs = map(c -> Symbolics.fast_substitute(c, free_t_map(model, _tf, x_ops, c_ops)), exprs)
     end
+    exprs
+end
+
+"""Mappings for variables that depend on the final time parameter, x(tf)."""
+function free_t_map(m, tf, x_ops, c_ops)
+    Dict([[x(tf) => lowered_var(m, :U, i, 1) for (i, x) in enumerate(x_ops)];
+          [c(tf) => lowered_var(m, :V, i, 1) for (i, c) in enumerate(c_ops)]])
+end
+
+"""Mappings for variables that cover the whole timespan, x(t)."""
+function whole_t_map(m, t, x_ops, c_ops)
+    Dict([[v(t) => lowered_var(m, :U, i, t) for (i, v) in enumerate(x_ops)];
+          [v(t) => lowered_var(m, :V, i, t) for (i, v) in enumerate(c_ops)]])
+end
+
+"""Mappings for variables that cover the whole timespan, x(t)."""
+function fixed_t_map(m, x_ops, c_ops)
+    Dict([[v => (t -> lowered_var(m, :U, i, t)) for (i, v) in enumerate(x_ops)];
+          [v => (t -> lowered_var(m, :V, i, t)) for (i, v) in enumerate(c_ops)]])
 end
 
 function process_integral_bounds end
 function lowered_integral end
 function lowered_derivative end
-function free_t_map end
+function lowered_var end
 function fixed_t_map end
-function whole_t_map end
 
 function add_user_constraints!(model, sys, tspan, pmap)
     conssys = get_constraintsystem(sys)
@@ -372,7 +393,7 @@ end
 function add_equational_constraints!(model, sys, pmap, tspan)
     diff_eqs = substitute_model_vars(model, sys, diff_equations(sys), tspan)
     diff_eqs = substitute_params(pmap, diff_eqs)
-    diff_eqs = substitute_differentials(model, sys, diff_eqs, tspan)
+    diff_eqs = substitute_differentials(model, sys, diff_eqs)
     for eq in diff_eqs
         add_constraint!(model, eq.lhs ~ eq.rhs * model.tₛ)
     end
@@ -387,9 +408,10 @@ end
 function set_objective! end
 
 function substitute_differentials(model, sys, eqs)
-    D = Differential(MTK.get_iv(sys))
-    diffsubmap = Dict([D(model.U[i]) => lowered_derivative(model, i) for i in 1:length(U)])
-    diff_eqs = map(c -> Symbolics.substitute(c, diffsubmap), diff_eqs)
+    t = get_iv(sys)
+    D = Differential(t)
+    diffsubmap = Dict([D(lowered_var(model, :U, i, t)) => lowered_derivative(model, i) for i in 1:length(unknowns(sys))])
+    map(c -> Symbolics.substitute(c, diffsubmap), eqs)
 end
 
 function substitute_toterm(vars, exprs)
