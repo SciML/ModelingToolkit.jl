@@ -352,8 +352,14 @@ function but_ordered_incidence(ts::TearingState, varmask = highest_order_variabl
     mm[[var_eq_matching[v] for v in vordering if var_eq_matching[v] isa Int], vordering], bb
 end
 
-# debugging use
-function reordered_matrix(sys, torn_matching)
+"""
+    $(TYPEDSIGNATURES)
+
+Given a system `sys` and torn variable-equation matching `torn_matching`, return the sparse
+incidence matrix of the system with SCCs grouped together, and each SCC sorted to contain
+the analytically solved equations/variables before the unsolved ones.
+"""
+function reordered_matrix(sys::System, torn_matching)
     s = TearingState(sys)
     complete!(s.structure)
     @unpack graph = s.structure
