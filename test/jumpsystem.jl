@@ -552,7 +552,7 @@ end
     # Works.
     @mtkcompile js = JumpSystem([j1, j2], t, [X], [p, d])
     jprob = JumpProblem(
-        js, [X => 15, p => 2.0, d => 0.5], (0.0, 10.0); aggregator = Direct())
+        js, [X => 15, p => 2.0, d => 0.5], (0.0, 10.0); aggregator = Direct(), u0_eltype = Int)
     sol = solve(jprob, SSAStepper())
     @test eltype(sol[X]) === Int64
 end
