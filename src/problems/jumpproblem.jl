@@ -23,8 +23,8 @@
                 kwargs...)
         else
             _, u0, p = process_SciMLProblem(EmptySciMLFunction{iip}, sys, op;
-                t = tspan === nothing ? nothing : tspan[1], tofloat = false,
-                check_length = false, build_initializeprob = false)
+                t = tspan === nothing ? nothing : tspan[1],
+                check_length = false, build_initializeprob = false, kwargs...)
             observedfun = ObservedFunctionCache(sys; eval_expression, eval_module,
                 checkbounds, cse)
             f = (du, u, p, t) -> (du .= 0; nothing)
@@ -33,7 +33,7 @@
         end
     else
         _f, u0, p = process_SciMLProblem(EmptySciMLFunction{iip}, sys, op;
-            t = tspan === nothing ? nothing : tspan[1], tofloat = false, check_length = false, build_initializeprob = false, cse)
+            t = tspan === nothing ? nothing : tspan[1], check_length = false, build_initializeprob = false, cse, kwargs...)
         f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
 
         observedfun = ObservedFunctionCache(
