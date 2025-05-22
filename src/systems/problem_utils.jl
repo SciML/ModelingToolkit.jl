@@ -1201,7 +1201,10 @@ Keyword arguments:
 - `fully_determined`: Override whether the initialization system is fully determined.
 - `check_initialization_units`: Enable or disable unit checks when constructing the
   initialization problem.
-- `tofloat`, `is_initializeprob`: Passed to [`better_varmap_to_vars`](@ref) for building `u0` (and possibly `p`).
+- `tofloat`: Passed to [`better_varmap_to_vars`](@ref) when building the parameter vector of
+  a non-split system.
+- `u0_eltype`: The `eltype` of the `u0` vector. If `nothing`, finds the promoted floating point
+  type from `op`.
 - `u0_constructor`: A function to apply to the `u0` value returned from `better_varmap_to_vars`
   to construct the final `u0` value.
 - `p_constructor`: A function to apply to each array buffer created when constructing the parameter object.
@@ -1232,7 +1235,7 @@ function process_SciMLProblem(
         implicit_dae = false, t = nothing, guesses = AnyDict(),
         warn_initialize_determined = true, initialization_eqs = [],
         eval_expression = false, eval_module = @__MODULE__, fully_determined = nothing,
-        check_initialization_units = false, tofloat = true,
+        check_initialization_units = false, u0_eltype = nothing, tofloat = true,
         u0_constructor = identity, p_constructor = identity,
         check_length = true, symbolic_u0 = false, warn_cyclic_dependency = false,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
@@ -1274,6 +1277,8 @@ function process_SciMLProblem(
     else
         floatT = float_type_from_varmap(op, floatT)
     end
+
+    u0_eltype = something(u0_eltype, floatT)
 
     if !is_time_dependent(sys) || is_initializesystem(sys)
         add_observed_equations!(u0map, obs)
@@ -1324,7 +1329,7 @@ function process_SciMLProblem(
     evaluate_varmap!(op, dvs; limit = substitution_limit)
 
     u0 = better_varmap_to_vars(
-        op, dvs; tofloat, floatT,
+        op, dvs; buffer_eltype = u0_eltype,
         container_type = u0Type, allow_symbolic = symbolic_u0, is_initializeprob)
 
     if u0 !== nothing
