@@ -1019,12 +1019,7 @@ function Base.getproperty(
 end
 function getvar(sys::AbstractSystem, name::Symbol; namespace = does_namespacing(sys))
     systems = get_systems(sys)
-    if isdefined(sys, name)
-        Base.depwarn(
-            "`sys.name` like `sys.$name` is deprecated. Use getters like `get_$name` instead.",
-            "sys.$name")
-        return getfield(sys, name)
-    elseif !isempty(systems)
+    if !isempty(systems)
         i = findfirst(x -> nameof(x) == name, systems)
         if i !== nothing
             return namespace ? renamespace(sys, systems[i]) : systems[i]
