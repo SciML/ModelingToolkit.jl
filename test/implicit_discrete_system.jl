@@ -28,7 +28,7 @@ rng = StableRNG(22525)
     @test prob.u0 == [1.0, 1.0]
     @variables x(t)
     @mtkcompile sys = System([x(k) ~ x(k) * x(k - 1) - 3], t)
-    @test_throws ModelingToolkit.MissingVariablesError prob=ImplicitDiscreteProblem(
+    @test_throws ModelingToolkit.MissingGuessError prob=ImplicitDiscreteProblem(
         sys, [], tspan)
 end
 

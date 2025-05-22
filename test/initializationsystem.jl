@@ -495,7 +495,7 @@ sys = extend(sysx, sysy)
     @variables x(t) y(t)
     @named sys = System([x^2 + y^2 ~ 25, D(x) ~ 1], t)
     ssys = mtkcompile(sys)
-    @test_throws ModelingToolkit.MissingVariablesError ODEProblem(
+    @test_throws ModelingToolkit.MissingGuessError ODEProblem(
         ssys, [x => 3], (0, 1)) # y should have a guess
 end
 
