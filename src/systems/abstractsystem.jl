@@ -1074,19 +1074,14 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = does_namespacing(
 end
 
 function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
-    # We use this weird syntax because `parameters` and `unknowns` calls are
-    # potentially expensive.
-    if (params = parameters(sys);
-    idx = findfirst(s -> getname(s) == prop, params);
-    idx !== nothing)
-        get_defaults(sys)[params[idx]] = value(val)
-    elseif (sts = unknowns(sys);
-    idx = findfirst(s -> getname(s) == prop, sts);
-    idx !== nothing)
-        get_defaults(sys)[sts[idx]] = value(val)
-    else
-        setfield!(sys, prop, val)
-    end
+    error("""
+    `setproperty!` on systems is invalid. Systems are immutable data structures, and \
+    modifications to fields should be made by constructing a new system. This can be done \
+    easily using packages such as Setfield.jl.
+
+    If you are looking for the old behavior of updating the default of a variable via \
+    `setproperty!`, this should now be done by mutating `ModelingToolkit.get_defaults(sys)`.
+    """)
 end
 
 apply_to_variables(f::F, ex) where {F} = _apply_to_variables(f, ex)
