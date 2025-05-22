@@ -119,11 +119,11 @@ eqs = [osc1.jcn ~ osc2.delx,
 @test ModelingToolkit.is_dde(coupledOsc2)
 @test !is_markovian(coupledOsc2)
 for coupledOsc in [coupledOsc, coupledOsc2]
-    local sys = structural_simplify(coupledOsc)
+    local sys = mtkcompile(coupledOsc)
     @test length(equations(sys)) == 4
     @test length(unknowns(sys)) == 4
 end
-sys = structural_simplify(coupledOsc)
+sys = mtkcompile(coupledOsc)
 prob = DDEProblem(sys, [], (0.0, 10.0); constant_lags = [sys.osc1.τ, sys.osc2.τ])
 sol = solve(prob, MethodOfSteps(Tsit5()))
 obsfn = ModelingToolkit.build_explicit_observed_function(
@@ -178,7 +178,7 @@ end
     eqs = [D(x(t)) ~ -w * x(t - τ)]
 
     @named sys = System(eqs, t)
-    sys = structural_simplify(sys)
+    sys = mtkcompile(sys)
 
     prob = DDEProblem(sys,
         [],
@@ -191,7 +191,7 @@ end
     @brownian r
     eqs = [D(x(t)) ~ -w * x(t - τ) + r]
     @named sys = System(eqs, t)
-    sys = structural_simplify(sys)
+    sys = mtkcompile(sys)
     prob = SDDEProblem(sys,
         [],
         (0.0, 10.0),

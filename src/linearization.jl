@@ -15,7 +15,7 @@ y &= h(x, z, u)
 
 where `x` are differential unknown variables, `z` algebraic variables, `u` inputs and `y` outputs. To obtain a linear statespace representation, see [`linearize`](@ref). The input argument `variables` is a vector defining the operating point, corresponding to `unknowns(simplified_sys)` and `p` is a vector corresponding to the parameters of `simplified_sys`. Note: all variables in `inputs` have been converted to parameters in `simplified_sys`.
 
-The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The unknowns of this system also indicate the order of the unknowns that holds for the linearized matrices.
+The `simplified_sys` has undergone [`mtkcompile`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The unknowns of this system also indicate the order of the unknowns that holds for the linearized matrices.
 
 # Arguments:
 
@@ -58,7 +58,7 @@ function linearization_function(sys::AbstractSystem, inputs,
     outputs = mapreduce(vcat, outputs; init = []) do var
         symbolic_type(var) == ArraySymbolic() ? collect(var) : [var]
     end
-    ssys = structural_simplify(sys; inputs, outputs, simplify, kwargs...)
+    ssys = mtkcompile(sys; inputs, outputs, simplify, kwargs...)
     diff_idxs, alge_idxs = eq_idxs(ssys)
     if zero_dummy_der
         dummyder = setdiff(unknowns(ssys), unknowns(sys))
@@ -498,7 +498,7 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
         outputs; simplify = false, allow_input_derivatives = false,
         eval_expression = false, eval_module = @__MODULE__,
         kwargs...)
-    sys = structural_simplify(sys; inputs, outputs, simplify, kwargs...)
+    sys = mtkcompile(sys; inputs, outputs, simplify, kwargs...)
     diff_idxs, alge_idxs = eq_idxs(sys)
     sts = unknowns(sys)
     t = get_iv(sys)

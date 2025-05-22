@@ -438,7 +438,7 @@ prob = NonlinearLeastSquaresProblem(
     NonlinearFunction(nlls!, resid_prototype = zeros(3)), u0)
 sys = modelingtoolkitize(prob)
 @test length(equations(sys)) == 3
-@test length(equations(structural_simplify(sys; fully_determined = false))) == 0
+@test length(equations(mtkcompile(sys; fully_determined = false))) == 0
 
 @testset "`modelingtoolkitize(::SDEProblem)` sets defaults" begin
     function sdeg!(du, u, p, t)

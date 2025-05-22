@@ -30,7 +30,7 @@ eqs = [S ~ S(k - 1) - infection * h,
 
 # System
 @named sys = System(eqs, t, [S, I, R], [c, nsteps, δt, β, γ, h])
-syss = structural_simplify(sys)
+syss = mtkcompile(sys)
 @test syss == syss
 
 df = DiscreteFunction(syss)

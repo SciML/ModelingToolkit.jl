@@ -6,8 +6,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D, ASSERTION_LOG_VARIABLE
 @brownian a
 @named inner_ode = System(D(x) ~ -sqrt(x), t; assertions = [(x > 0) => "ohno"])
 @named inner_sde = System([D(x) ~ -10sqrt(x) + 0.01a], t; assertions = [(x > 0) => "ohno"])
-sys_ode = structural_simplify(inner_ode)
-sys_sde = structural_simplify(inner_sde)
+sys_ode = mtkcompile(inner_ode)
+sys_sde = mtkcompile(inner_sde)
 SEED = 42
 
 @testset "assertions are present in generated `f`" begin

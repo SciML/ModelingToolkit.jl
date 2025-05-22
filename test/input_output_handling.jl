@@ -7,10 +7,10 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables xx(t) some_input(t) [input = true]
 eqs = [D(xx) ~ some_input]
 @named model = System(eqs, t)
-@test_throws ExtraVariablesSystemException structural_simplify(model)
+@test_throws ExtraVariablesSystemException mtkcompile(model)
 if VERSION >= v"1.8"
     err = "In particular, the unset input(s) are:\n some_input(t)"
-    @test_throws err structural_simplify(model)
+    @test_throws err mtkcompile(model)
 end
 
 # Test input handling
@@ -50,7 +50,7 @@ end
 @test !is_bound(sys31, sys1.v[2])
 
 # simplification turns input variables into parameters
-ssys = structural_simplify(sys, inputs = [u], outputs = [])
+ssys = mtkcompile(sys, inputs = [u], outputs = [])
 @test ModelingToolkit.isparameter(unbound_inputs(ssys)[])
 @test !is_bound(ssys, u)
 @test u ∈ Set(unbound_inputs(ssys))
@@ -88,7 +88,7 @@ fsys4 = flatten(sys4)
 @variables x(t) y(t) [output = true]
 @test isoutput(y)
 @named sys = System([D(x) ~ -x, y ~ x], t) # both y and x are unbound
-syss = structural_simplify(sys, outputs = [y]) # This makes y an observed variable
+syss = mtkcompile(sys, outputs = [y]) # This makes y an observed variable
 
 @named sys2 = System([D(x) ~ -sys.x, y ~ sys.y], t, systems = [sys])
 
@@ -106,7 +106,7 @@ syss = structural_simplify(sys, outputs = [y]) # This makes y an observed variab
 @test isequal(unbound_outputs(sys2), [y])
 @test isequal(bound_outputs(sys2), [sys.y])
 
-syss = structural_simplify(sys2, outputs = [sys.y])
+syss = mtkcompile(sys2, outputs = [sys.y])
 
 @test !is_bound(syss, y)
 @test !is_bound(syss, x)
@@ -165,7 +165,7 @@ end
         ]
 
         @named sys = System(eqs, t)
-        sys = structural_simplify(sys, inputs = [u])
+        sys = mtkcompile(sys, inputs = [u])
         f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys; simplify, split)
 
         @test isequal(dvs[], x)
@@ -183,7 +183,7 @@ end
         ]
 
         @named sys = System(eqs, t)
-        sys = structural_simplify(sys, inputs = [u], disturbance_inputs = [d])
+        sys = mtkcompile(sys, inputs = [u], disturbance_inputs = [d])
         f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys; simplify, split)
 
         @test isequal(dvs[], x)
@@ -201,7 +201,7 @@ end
         ]
 
         @named sys = System(eqs, t)
-        sys = structural_simplify(sys, inputs = [u], disturbance_inputs = [d])
+        sys = mtkcompile(sys, inputs = [u], disturbance_inputs = [d])
         f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(
             sys; simplify, split, disturbance_argument = true)
 
@@ -267,7 +267,7 @@ eqs = [connect_sd(sd, mass1, mass2)
 @named _model = System(eqs, t)
 @named model = compose(_model, mass1, mass2, sd);
 
-model = structural_simplify(model, inputs = [u])
+model = mtkcompile(model, inputs = [u])
 f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(model, simplify = true)
 @test length(dvs) == 4
 p = MTKParameters(io_sys, [io_sys.u => NaN])
@@ -283,7 +283,7 @@ i = findfirst(isequal(u[1]), out)
 @variables x(t) u(t) [input = true]
 eqs = [D(x) ~ u]
 @named sys = System(eqs, t)
-@test_nowarn structural_simplify(sys, inputs = [u], outputs = [])
+@test_nowarn mtkcompile(sys, inputs = [u], outputs = [])
 
 #=
 ## Disturbance input handling
@@ -368,7 +368,7 @@ eqs = [D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃ + u1
 @named sys = System(eqs, t)
 m_inputs = [u[1], u[2]]
 m_outputs = [y₂]
-sys_simp = structural_simplify(sys, inputs = m_inputs, outputs = m_outputs)
+sys_simp = mtkcompile(sys, inputs = m_inputs, outputs = m_outputs)
 @test isequal(unknowns(sys_simp), collect(x[1:2]))
 @test length(inputs(sys_simp)) == 2
 
@@ -386,7 +386,7 @@ sys_simp = structural_simplify(sys, inputs = m_inputs, outputs = m_outputs)
     ],
     t,
     systems = [int, gain, c, fb])
-sys = structural_simplify(model)
+sys = mtkcompile(model)
 @test length(unknowns(sys)) == length(equations(sys)) == 1
 
 ## Disturbance models when plant has multiple inputs
@@ -435,7 +435,7 @@ matrices = ModelingToolkit.reorder_unknowns(
     ]
 
     @named sys = System(eqs, t)
-    sys = structural_simplify(sys, inputs = [u])
+    sys = mtkcompile(sys, inputs = [u])
     (; io_sys,) = ModelingToolkit.generate_control_function(sys, simplify = true)
     obsfn = ModelingToolkit.build_explicit_observed_function(
         io_sys, [x + u * t]; inputs = [u])
@@ -458,7 +458,7 @@ end
     @parameters p(::Real) = (x -> 2x)
     eqs = [D(x) ~ -x + p(u)]
     @named sys = System(eqs, t)
-    sys = structural_simplify(sys, inputs = [u])
+    sys = mtkcompile(sys, inputs = [u])
     f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys)
     p = MTKParameters(io_sys, [])
     u = [1.0]

@@ -60,7 +60,7 @@ import ControlSystemsBase as CS
             filt.xd => 0.0
         ])
 
-    sys = structural_simplify(closed_loop)
+    sys = mtkcompile(closed_loop)
     prob = ODEProblem(sys, unknowns(sys) .=> 0.0, (0.0, 4.0))
     sol = solve(prob, Rodas5P(), reltol = 1e-6, abstol = 1e-9)
 
@@ -100,8 +100,8 @@ end
            connect(F.output, sys_inner.add.input1)]
     sys_outer = System(eqs, t, systems = [F, sys_inner, r], name = :outer)
 
-    # test first that the structural_simplify works correctly
-    ssys = structural_simplify(sys_outer)
+    # test first that the mtkcompile works correctly
+    ssys = mtkcompile(sys_outer)
     prob = ODEProblem(ssys, Pair[], (0, 10))
     @test_nowarn solve(prob, Rodas5())
 
@@ -136,8 +136,8 @@ end
            connect(F.output, sys_inner.add.input1)]
     sys_outer = System(eqs, t, systems = [F, sys_inner, r], name = :outer)
 
-    # test first that the structural_simplify works correctly
-    ssys = structural_simplify(sys_outer)
+    # test first that the mtkcompile works correctly
+    ssys = mtkcompile(sys_outer)
     prob = ODEProblem(ssys, Pair[], (0, 10))
     @test_nowarn solve(prob, Rodas5())
 
@@ -172,8 +172,8 @@ end
            connect(F.output, sys_inner.add.input1)]
     sys_outer = System(eqs, t, systems = [F, sys_inner, r], name = :outer)
 
-    # test first that the structural_simplify works correctly
-    ssys = structural_simplify(sys_outer)
+    # test first that the mtkcompile works correctly
+    ssys = mtkcompile(sys_outer)
     prob = ODEProblem(ssys, Pair[], (0, 10))
     @test_nowarn solve(prob, Rodas5())
 
@@ -363,7 +363,7 @@ end
 
 sys_normal = normal_test_system()
 
-prob = ODEProblem(structural_simplify(sys_normal), [], (0.0, 10.0))
+prob = ODEProblem(mtkcompile(sys_normal), [], (0.0, 10.0))
 @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
 matrices_normal, _ = get_sensitivity(sys_normal, sys_normal.normal_inner.ap)
 
@@ -384,7 +384,7 @@ matrices_normal, _ = get_sensitivity(sys_normal, sys_normal.normal_inner.ap)
             connect(inner.back.output, :ap, inner.F1.input)]
     @named sys = System(eqs2, t; systems = [inner, step])
 
-    prob = ODEProblem(structural_simplify(sys), [], (0.0, 10.0))
+    prob = ODEProblem(mtkcompile(sys), [], (0.0, 10.0))
     @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
 
     matrices, _ = get_sensitivity(sys, sys.ap)
@@ -408,7 +408,7 @@ end
             connect(inner.back.output.u, :ap, inner.F1.input.u)]
     @named sys = System(eqs2, t; systems = [inner, step])
 
-    prob = ODEProblem(structural_simplify(sys), [], (0.0, 10.0))
+    prob = ODEProblem(mtkcompile(sys), [], (0.0, 10.0))
     @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
 
     matrices, _ = get_sensitivity(sys, sys.ap)
@@ -432,7 +432,7 @@ end
             connect(inner.back.output.u, :ap, inner.F1.input.u)]
     @named sys = System(eqs2, t; systems = [inner, step])
 
-    prob = ODEProblem(structural_simplify(sys), [], (0.0, 10.0))
+    prob = ODEProblem(mtkcompile(sys), [], (0.0, 10.0))
     @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
 
     matrices, _ = get_sensitivity(sys, sys.ap)

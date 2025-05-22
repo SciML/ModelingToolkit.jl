@@ -82,7 +82,7 @@ eqs = [y ~ src.output.u
 
 @named sys = System(eqs, t, vars, []; systems = [int, src])
 s = complete(sys)
-sys = structural_simplify(sys)
+sys = mtkcompile(sys)
 prob = ODEProblem(
     sys, [], (0.0, t_end), [s.src.interpolator => Interpolator(x, dt)];
     tofloat = false)
@@ -108,7 +108,7 @@ eqs = [D(y) ~ dy * a
        ddy ~ sin(t) * c]
 
 @named model = System(eqs, t, vars, pars)
-sys = structural_simplify(model; split = false)
+sys = mtkcompile(model; split = false)
 
 tspan = (0.0, t_end)
 prob = ODEProblem(sys, [], tspan, []; build_initializeprob = false)

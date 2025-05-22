@@ -19,14 +19,14 @@ topological sort of the observed equations in `sys`.
 + `inputs`, `outputs` and `disturbance_inputs` are passed as keyword arguments.` All inputs` get converted to parameters and are allowed to be unconnected, allowing models where `n_unknowns = n_equations - n_inputs`.
 + `sort_eqs=true` controls whether equations are sorted lexicographically before simplification or not.
 """
-function structural_simplify(
+function mtkcompile(
         sys::AbstractSystem; additional_passes = [], simplify = false, split = true,
         allow_symbolic = false, allow_parameter = true, conservative = false, fully_determined = true,
         inputs = Any[], outputs = Any[],
         disturbance_inputs = Any[],
         kwargs...)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
-    newsys′ = __structural_simplify(sys; simplify,
+    newsys′ = __mtkcompile(sys; simplify,
         allow_symbolic, allow_parameter, conservative, fully_determined,
         inputs, outputs, disturbance_inputs,
         kwargs...)
@@ -51,7 +51,7 @@ function structural_simplify(
     end
 end
 
-function __structural_simplify(sys::AbstractSystem; simplify = false,
+function __mtkcompile(sys::AbstractSystem; simplify = false,
         inputs = Any[], outputs = Any[],
         disturbance_inputs = Any[],
         sort_eqs = true,
@@ -84,7 +84,7 @@ function __structural_simplify(sys::AbstractSystem; simplify = false,
         end
     end
     if isempty(brown_vars)
-        return structural_simplify!(
+        return mtkcompile!(
             state; simplify, inputs, outputs, disturbance_inputs, kwargs...)
     else
         Is = Int[]
@@ -117,7 +117,7 @@ function __structural_simplify(sys::AbstractSystem; simplify = false,
                               for (i, v) in enumerate(fullvars)
                               if !iszero(new_idxs[i]) &&
                                  invview(var_to_diff)[i] === nothing]
-        ode_sys = structural_simplify(
+        ode_sys = mtkcompile(
             sys; simplify, inputs, outputs, disturbance_inputs, kwargs...)
         eqs = equations(ode_sys)
         sorted_g_rows = zeros(Num, length(eqs), size(g, 2))
@@ -184,7 +184,7 @@ function simplify_optimization_system(sys::System; split = true, kwargs...)
     end
     econs = fast_substitute.(econs, (irreducible_subs,))
     nlsys = System(econs, dvs, parameters(sys); name = :___tmp_nlsystem)
-    snlsys = structural_simplify(nlsys; kwargs..., fully_determined = false)
+    snlsys = mtkcompile(nlsys; kwargs..., fully_determined = false)
     obs = observed(snlsys)
     subs = Dict(eq.lhs => eq.rhs for eq in observed(snlsys))
     seqs = equations(snlsys)
@@ -231,7 +231,7 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Given a system that has been simplified via `structural_simplify`, return a `Dict` mapping
+Given a system that has been simplified via `mtkcompile`, return a `Dict` mapping
 variables of the system to equations that are used to solve for them. This includes
 observed variables.
 
@@ -247,7 +247,7 @@ function map_variables_to_equations(sys::AbstractSystem; rename_dummy_derivative
     end
     ts = get_tearing_state(sys)
     if ts === nothing
-        throw(ArgumentError("`map_variables_to_equations` requires a simplified system. Call `structural_simplify` on the system before calling this function."))
+        throw(ArgumentError("`map_variables_to_equations` requires a simplified system. Call `mtkcompile` on the system before calling this function."))
     end
 
     dummy_sub = Dict()

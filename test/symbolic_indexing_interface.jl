@@ -218,7 +218,7 @@ end
     @variables x(t) y(t) z(t)
     @parameters a
     @named sys = System([D(x) ~ a * x, y ~ 2x, z ~ 0.0], t)
-    sys = structural_simplify(sys, split = false)
+    sys = mtkcompile(sys, split = false)
     for sym in [x, y, z, x + y, x + a, y / x]
         @test only(get_all_timeseries_indexes(sys, sym)) == ContinuousTimeseries()
     end

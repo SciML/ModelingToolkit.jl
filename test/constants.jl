@@ -15,12 +15,12 @@ eqs = [D(x) ~ a]
 prob = ODEProblem(complete(sys), [0], [0.0, 1.0], [])
 sol = solve(prob, Tsit5())
 
-# Test structural_simplify substitutions & observed values
+# Test mtkcompile substitutions & observed values
 eqs = [D(x) ~ 1,
     w ~ a]
 @named sys = System(eqs, t)
 # Now eliminate the constants first
-simp = structural_simplify(sys)
+simp = mtkcompile(sys)
 @test equations(simp) == [D(x) ~ 1.0]
 
 #Constant with units
@@ -33,7 +33,7 @@ UMT.get_unit(β)
 D = Differential(t)
 eqs = [D(x) ~ β]
 @named sys = System(eqs, t)
-simp = structural_simplify(sys)
+simp = mtkcompile(sys)
 
 @testset "Issue#3044" begin
     @constants h

@@ -233,7 +233,7 @@ PrecompileTools.@compile_workload begin
     using ModelingToolkit
     @variables x(ModelingToolkit.t_nounits)
     @named sys = System([ModelingToolkit.D_nounits(x) ~ -x], ModelingToolkit.t_nounits)
-    prob = ODEProblem(structural_simplify(sys), [x => 30.0], (0, 100), [], jac = true)
+    prob = ODEProblem(mtkcompile(sys), [x => 30.0], (0, 100), [], jac = true)
     @mtkmodel __testmod__ begin
         @constants begin
             c = 1.0
@@ -304,7 +304,7 @@ export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variable, equations, controls, observed, full_equations, jumps, cost,
        brownians
 export initialization_equations, guesses, defaults, parameter_dependencies, hierarchy
-export structural_simplify, expand_connections, linearize, linearization_function,
+export mtkcompile, expand_connections, linearize, linearization_function,
        LinearizationProblem
 export solve
 export Pre

@@ -30,7 +30,7 @@ eqs = [D(x) ~ σ * (y - x)
 
 lorenz1 = System(eqs, t, name = :lorenz1)
 
-lorenz1_aliased = structural_simplify(lorenz1)
+lorenz1_aliased = mtkcompile(lorenz1)
 io = IOBuffer();
 show(io, MIME("text/plain"), lorenz1_aliased);
 str = String(take!(io));
@@ -74,8 +74,8 @@ __x = x
 
 # Reduced Flattened System
 
-reduced_system = structural_simplify(connected)
-reduced_system2 = structural_simplify(tearing_substitution(structural_simplify(tearing_substitution(structural_simplify(connected)))))
+reduced_system = mtkcompile(connected)
+reduced_system2 = mtkcompile(tearing_substitution(mtkcompile(tearing_substitution(mtkcompile(connected)))))
 
 @test isempty(setdiff(unknowns(reduced_system), unknowns(reduced_system2)))
 @test isequal(equations(tearing_substitution(reduced_system)), equations(reduced_system2))
@@ -133,7 +133,7 @@ let
                    pc.y_c ~ ol.y]
     @named connected = System(connections, t, systems = [ol, pc])
     @test equations(connected) isa Vector{Equation}
-    reduced_sys = structural_simplify(connected)
+    reduced_sys = mtkcompile(connected)
     ref_eqs = [D(ol.x) ~ ol.a * ol.x + ol.b * ol.u
                0 ~ pc.k_P * ol.y - ol.u]
     #@test ref_eqs == equations(reduced_sys)
@@ -144,7 +144,7 @@ let
     @variables x(t)
     @named sys = System([0 ~ D(x) + x], t, [x], [])
     #@test_throws ModelingToolkit.InvalidSystemException ODEProblem(sys, [1.0], (0, 10.0))
-    sys = structural_simplify(sys)
+    sys = mtkcompile(sys)
     #@test_nowarn ODEProblem(sys, [1.0], (0, 10.0))
 end
 
@@ -155,7 +155,7 @@ eqs = [u1 ~ u2
        u3 ~ u1 + u2 + p
        u3 ~ hypot(u1, u2) * p]
 @named sys = System(eqs, [u1, u2, u3], [p])
-reducedsys = structural_simplify(sys)
+reducedsys = mtkcompile(sys)
 @test length(observed(reducedsys)) == 2
 
 u0 = [u2 => 1]
@@ -175,7 +175,7 @@ N = 5
 A = reshape(1:(N^2), N, N)
 eqs = xs ~ A * xs
 @named sys′ = System(eqs, [xs], [])
-sys = structural_simplify(sys′)
+sys = mtkcompile(sys′)
 @test length(equations(sys)) == 3 && length(observed(sys)) == 3
 
 # issue 958
@@ -189,7 +189,7 @@ eqs = [D(E) ~ k₋₁ * C - k₁ * E * S
        E₀ ~ E + C]
 
 @named sys = System(eqs, t, [E, C, S, P], [k₁, k₂, k₋₁, E₀])
-@test_throws ModelingToolkit.ExtraEquationsSystemException structural_simplify(sys)
+@test_throws ModelingToolkit.ExtraEquationsSystemException mtkcompile(sys)
 
 # Example 5 from Pantelides' original paper
 params = collect(@parameters y1(t) y2(t))
@@ -198,7 +198,7 @@ eqs = [0 ~ x + sin(u1 + u2)
        D(x) ~ x + y1
        cos(x) ~ sin(y2)]
 @named sys = System(eqs, t, sts, params)
-@test_throws ModelingToolkit.InvalidSystemException structural_simplify(sys)
+@test_throws ModelingToolkit.InvalidSystemException mtkcompile(sys)
 
 # issue #963
 @variables v47(t) v57(t) v66(t) v25(t) i74(t) i75(t) i64(t) i71(t) v1(t) v2(t)
@@ -215,7 +215,7 @@ eq = [v47 ~ v1
       0 ~ i64 + i71]
 
 @named sys0 = System(eq, t)
-sys = structural_simplify(sys0)
+sys = mtkcompile(sys0)
 @test length(equations(sys)) == 1
 eq = equations(tearing_substitution(sys))[1]
 vv = only(unknowns(sys))
@@ -233,7 +233,7 @@ eqs = [D(x) ~ σ * (y - x)
        u ~ z + a]
 
 lorenz1 = System(eqs, t, name = :lorenz1)
-lorenz1_reduced = structural_simplify(lorenz1, inputs = [z], outputs = [])
+lorenz1_reduced = mtkcompile(lorenz1, inputs = [z], outputs = [])
 @test z in Set(parameters(lorenz1_reduced))
 
 # #2064
@@ -242,7 +242,7 @@ eqs = [D(x) ~ x
        D(y) ~ y
        D(z) ~ t]
 @named model = System(eqs, t)
-sys = structural_simplify(model)
+sys = mtkcompile(model)
 Js = ModelingToolkit.jacobian_sparsity(sys)
 @test size(Js) == (3, 3)
 @test Js == Diagonal([1, 1, 0])
@@ -275,7 +275,7 @@ new_sys = alias_elimination(sys)
 eqs = [x ~ 0
        D(x) ~ x + y]
 @named sys = System(eqs, t, [x, y], [])
-ss = structural_simplify(sys)
+ss = mtkcompile(sys)
 @test isempty(equations(ss))
 @test sort(string.(observed(ss))) == ["x(t) ~ 0.0"
                                       "xˍt(t) ~ 0.0"
@@ -285,5 +285,5 @@ eqs = [D(D(x)) ~ -x]
 @named sys = System(eqs, t, [x], [])
 ss = alias_elimination(sys)
 @test length(equations(ss)) == length(unknowns(ss)) == 1
-ss = structural_simplify(sys)
+ss = mtkcompile(sys)
 @test length(equations(ss)) == length(unknowns(ss)) == 2

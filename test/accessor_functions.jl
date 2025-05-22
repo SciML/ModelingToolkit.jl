@@ -68,10 +68,10 @@ let
     sys_mid2_comp = complete(sys_mid2)
     sys_mid1_comp = complete(sys_mid1)
     sys_top_comp = complete(sys_top)
-    sys_bot_ss = structural_simplify(sys_bot)
-    sys_mid2_ss = structural_simplify(sys_mid2)
-    sys_mid1_ss = structural_simplify(sys_mid1)
-    sys_top_ss = structural_simplify(sys_top)
+    sys_bot_ss = mtkcompile(sys_bot)
+    sys_mid2_ss = mtkcompile(sys_mid2)
+    sys_mid1_ss = mtkcompile(sys_mid1)
+    sys_top_ss = mtkcompile(sys_top)
 
     # Checks `parameters1.
     @test all_sets_equal(parameters.([sys_bot, sys_bot_comp, sys_bot_ss])..., [d, p_bot])
@@ -98,7 +98,7 @@ let
     @test all(sym_issubset(parameters_toplevel(sys), get_ps(sys))
     for sys in [sys_bot, sys_mid2, sys_mid1, sys_top])
 
-    # Checks `unknowns`. O(t) is eliminated by `structural_simplify` and
+    # Checks `unknowns`. O(t) is eliminated by `mtkcompile` and
     # must be considered separately.
     @test all_sets_equal(unknowns.([sys_bot, sys_bot_comp])..., [O, Y, X_bot])
     @test all_sets_equal(unknowns.([sys_bot_ss])..., [Y, X_bot])

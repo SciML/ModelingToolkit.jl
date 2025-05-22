@@ -279,7 +279,7 @@ ps = [k => 1.0]
 @test_nowarn jp3 = JumpProblem(js3, u0, tspan, ps; aggregator = Direct())
 @test_nowarn jp4 = JumpProblem(js4, u0, tspan; aggregator = Direct())
 
-# Ensure `structural_simplify` (and `@mtkcompile`) works on JumpSystem (by doing nothing)
+# Ensure `mtkcompile` (and `@mtkcompile`) works on JumpSystem (by doing nothing)
 # Issue#2558
 @parameters k
 @variables X(t)

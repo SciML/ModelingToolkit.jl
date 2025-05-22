@@ -113,24 +113,24 @@ noiseeqs = [0.1us"W" 0.1us"W"
 eqs = [D(L) ~ v,
     V ~ L^3]
 @named sys = System(eqs, t)
-sys_simple = structural_simplify(sys)
+sys_simple = mtkcompile(sys)
 
 eqs = [D(V) ~ r,
     V ~ L^3]
 @named sys = System(eqs, t)
-sys_simple = structural_simplify(sys)
+sys_simple = mtkcompile(sys)
 
 @variables V [unit = u"m"^3] L [unit = u"m"]
 @parameters v [unit = u"m/s"] r [unit = u"m"^3 / u"s"]
 eqs = [V ~ r * t,
     V ~ L^3]
 @named sys = System(eqs, [V, L], [t, r])
-sys_simple = structural_simplify(sys)
+sys_simple = mtkcompile(sys)
 
 eqs = [L ~ v * t,
     V ~ L^3]
 @named sys = System(eqs, [V, L], [t, r, v])
-sys_simple = structural_simplify(sys)
+sys_simple = mtkcompile(sys)
 
 #Jump System
 @parameters β [unit = u"(mol^2*s)^-1"] γ [unit = u"(mol*s)^-1"] jumpmol [

@@ -59,8 +59,8 @@ end
 
     @named reference = RC()
 
-    sys1 = structural_simplify(rcsys)
-    sys2 = structural_simplify(reference)
+    sys1 = mtkcompile(rcsys)
+    sys2 = mtkcompile(reference)
     @test isequal(unknowns(sys1), unknowns(sys2))
     @test isequal(equations(sys1), equations(sys2))
 

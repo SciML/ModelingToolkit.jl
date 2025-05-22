@@ -84,7 +84,7 @@ end
             z ~ y - x^2
             z^2 + y^2 ≲ 1.0]
     @named sys = OptimizationSystem(loss, [x, y, z], [a, b], constraints = cons)
-    sys = structural_simplify(sys)
+    sys = mtkcompile(sys)
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, z => 0.0], [a => 1.0, b => 1.0],
         grad = true, hess = true, cons_j = true, cons_h = true)
     sol = solve(prob, IPNewton())

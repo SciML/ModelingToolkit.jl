@@ -123,14 +123,14 @@ end
         @named sys = System(
             [D(x) ~ z[1] + z[2] + foo(z)[1], y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t)
 
-        sys1 = structural_simplify(sys; cse_hack = false)
+        sys1 = mtkcompile(sys; cse_hack = false)
         @test length(observed(sys1)) == 6
         @test !any(observed(sys1)) do eq
             iscall(eq.rhs) &&
                 operation(eq.rhs) == StructuralTransformations.getindex_wrapper
         end
 
-        sys2 = structural_simplify(sys; array_hack = false)
+        sys2 = mtkcompile(sys; array_hack = false)
         @test length(observed(sys2)) == 5
         @test !any(observed(sys2)) do eq
             iscall(eq.rhs) && operation(eq.rhs) == StructuralTransformations.change_origin
@@ -144,14 +144,14 @@ end
         @named sys = System(
             [D(x) ~ z[1] + z[2] + foo(z)[1] + w, y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t)
 
-        sys1 = structural_simplify(sys; cse_hack = false, fully_determined = false)
+        sys1 = mtkcompile(sys; cse_hack = false, fully_determined = false)
         @test length(observed(sys1)) == 6
         @test !any(observed(sys1)) do eq
             iscall(eq.rhs) &&
                 operation(eq.rhs) == StructuralTransformations.getindex_wrapper
         end
 
-        sys2 = structural_simplify(sys; array_hack = false, fully_determined = false)
+        sys2 = mtkcompile(sys; array_hack = false, fully_determined = false)
         @test length(observed(sys2)) == 5
         @test !any(observed(sys2)) do eq
             iscall(eq.rhs) && operation(eq.rhs) == StructuralTransformations.change_origin
@@ -164,7 +164,7 @@ end
     @named sys = System([D(x) ~ x, y ~ x + t], t)
     value = Ref(0)
     pass(sys; kwargs...) = (value[] += 1; return sys)
-    structural_simplify(sys; additional_passes = [pass])
+    mtkcompile(sys; additional_passes = [pass])
     @test value[] == 1
 end
 
@@ -335,7 +335,7 @@ end
     end
 
     @named sys = FilteredInputErr()
-    @test_throws ["derivative of discrete variable", "k(t)"] structural_simplify(sys)
+    @test_throws ["derivative of discrete variable", "k(t)"] mtkcompile(sys)
 
     @mtkcompile sys = FilteredInput()
     vs = Set()

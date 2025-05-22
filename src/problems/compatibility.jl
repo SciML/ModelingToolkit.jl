@@ -120,7 +120,7 @@ function check_has_noise(sys::System, T)
         if !isempty(brownians(sys))
             msg = """
             Systems constructed by defining Brownian variables with `@brownian` must be \
-            simplified by calling `structural_simplify` before a `$T` can be constructed.
+            simplified by calling `mtkcompile` before a `$T` can be constructed.
             """
         end
         throw(SystemCompatibilityError(msg))
@@ -131,7 +131,7 @@ function check_is_discrete(sys::System, T)
     if !is_discrete_system(sys)
         throw(SystemCompatibilityError("""
         `$T` expects a discrete system. Consider an `ODEProblem` instead. If your system \
-        is discrete, ensure `structural_simplify` has been run on it.
+        is discrete, ensure `mtkcompile` has been run on it.
         """))
     end
 end

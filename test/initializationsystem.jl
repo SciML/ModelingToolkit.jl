@@ -416,7 +416,7 @@ sol = solve(prob, Tsit5())
         D(z) ~ x * y - β * z]
 
     @named sys = System(eqs, t)
-    sys = structural_simplify(sys)
+    sys = mtkcompile(sys)
 
     u0 = [D(x) => 2.0,
         x => 1.0,
@@ -445,7 +445,7 @@ eqs = [D(x) ~ α * x - β * x * y
        z ~ x + y]
 
 @named sys = System(eqs, t)
-simpsys = structural_simplify(sys)
+simpsys = mtkcompile(sys)
 tspan = (0.0, 10.0)
 
 prob = ODEProblem(simpsys, [D(x) => 0.0, y => 0.0], tspan, guesses = [x => 0.0])
@@ -478,7 +478,7 @@ prob = ODEProblem(pend, [x => 1], (0.0, 1.5), [g => 1],
     guesses = [λ => 0, y => 1], initialization_eqs = [y ~ 1])
 
 unsimp = generate_initializesystem(pend; u0map = [x => 1], initialization_eqs = [y ~ 1])
-sys = structural_simplify(unsimp; fully_determined = false)
+sys = mtkcompile(unsimp; fully_determined = false)
 @test length(equations(sys)) in (3, 4) # could be either depending on tearing
 
 # Extend two systems with initialization equations and guesses
@@ -494,7 +494,7 @@ sys = extend(sysx, sysy)
 @testset "Error on missing defaults" begin
     @variables x(t) y(t)
     @named sys = System([x^2 + y^2 ~ 25, D(x) ~ 1], t)
-    ssys = structural_simplify(sys)
+    ssys = mtkcompile(sys)
     @test_throws ModelingToolkit.MissingVariablesError ODEProblem(
         ssys, [x => 3], (0, 1), []) # y should have a guess
 end
@@ -505,7 +505,7 @@ end
 
     # system 1 should solve to x = 1
     ics1 = [x => 1]
-    sys1 = System([D(x) ~ 0], t; defaults = ics1, name = :sys1) |> structural_simplify
+    sys1 = System([D(x) ~ 0], t; defaults = ics1, name = :sys1) |> mtkcompile
     prob1 = ODEProblem(sys1, [], (0.0, 1.0), [])
     sol1 = solve(prob1, Tsit5())
     @test all(sol1[x] .== 1)
@@ -514,7 +514,7 @@ end
     sys2 = extend(
         sys1,
         System([D(y) ~ 0], t; initialization_eqs = [y ~ 2], name = :sys2)
-    ) |> structural_simplify
+    ) |> mtkcompile
     ics2 = unknowns(sys1) .=> 2 # should be equivalent to "ics2 = [x => 2]"
     prob2 = ODEProblem(sys2, ics2, (0.0, 1.0), []; fully_determined = true)
     sol2 = solve(prob2, Tsit5())
@@ -526,12 +526,12 @@ end
     @variables x(t)
     sys = System(
         [D(D(x)) ~ 0], t; initialization_eqs = [x ~ 0, D(x) ~ 1], name = :sys) |>
-          structural_simplify
+          mtkcompile
     @test_nowarn ODEProblem(sys, [], (0.0, 1.0), [])
 
     sys = System(
         [D(D(x)) ~ 0], t; initialization_eqs = [x ~ 0, D(D(x)) ~ 0], name = :sys) |>
-          structural_simplify
+          mtkcompile
     @test_nowarn ODEProblem(sys, [D(x) => 1.0], (0.0, 1.0), [])
 end
 
@@ -542,7 +542,7 @@ end
         sys = System(
             [D(D(x)) ~ 0], t;
             initialization_eqs = [D(x)^2 ~ 1, x ~ 0], guesses = [D(x) => sign], name = :sys
-        ) |> structural_simplify
+        ) |> mtkcompile
         prob = ODEProblem(sys, [], (0.0, 1.0), [])
         sol = solve(prob, Tsit5())
         @test sol(1.0, idxs = sys.x) ≈ sign # system with D(x(0)) = ±1 should solve to x(1) = ±1
@@ -583,7 +583,7 @@ sol = solve(oprob_2nd_order_2, Rosenbrock23()) # retcode: Success
 @testset "Vector in initial conditions" begin
     @variables x(t)[1:5] y(t)[1:5]
     @named sys = System([D(x) ~ x, D(y) ~ y], t; initialization_eqs = [y ~ -x])
-    sys = structural_simplify(sys)
+    sys = mtkcompile(sys)
     prob = ODEProblem(sys, [sys.x => ones(5)], (0.0, 1.0), [])
     sol = solve(prob, Tsit5(), reltol = 1e-4)
     @test all(sol(1.0, idxs = sys.x) .≈ +exp(1)) && all(sol(1.0, idxs = sys.y) .≈ -exp(1))
@@ -1170,7 +1170,7 @@ end
     end
 
     model = dc_motor()
-    sys = structural_simplify(model)
+    sys = mtkcompile(model)
 
     prob = ODEProblem(sys, [sys.L1.i => 0.0], (0, 6.0))
 
@@ -1275,7 +1275,7 @@ end
     @parameters a = 1
     @named sys = System([D(x) ~ 0, D(y) ~ x + a], t; initialization_eqs = [y ~ a])
 
-    ssys = structural_simplify(sys)
+    ssys = mtkcompile(sys)
     prob = ODEProblem(ssys, [], (0, 1), [])
 
     @test SciMLBase.successful_retcode(solve(prob))
@@ -1375,7 +1375,7 @@ end
         continuous_events = [
             [y ~ 0.5] => (; f = stop!)
         ])
-    sys = structural_simplify(sys)
+    sys = mtkcompile(sys)
     prob0 = ODEProblem(sys, [x => NaN], (0.0, 1.0), [])
 
     # final_x(x0) is equivalent to x0 + 0.5

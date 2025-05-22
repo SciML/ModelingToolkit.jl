@@ -118,7 +118,7 @@ end
     cost = [-x(1.0)] # Maximize the final distance.
     @named block = System(
         [D(x(t)) ~ v(t), D(v(t)) ~ u(t)], t; costs = cost, constraints = constr)
-    block = structural_simplify(block; inputs = [u(t)])
+    block = mtkcompile(block; inputs = [u(t)])
 
     u0map = [x(t) => 0.0, v(t) => 0.0]
     tspan = (0.0, 1.0)
@@ -166,7 +166,7 @@ end
     costs = [-q(tspan[2])]
 
     @named beesys = System(eqs, t; costs)
-    beesys = structural_simplify(beesys; inputs = [α])
+    beesys = mtkcompile(beesys; inputs = [α])
     u0map = [w(t) => 40, q(t) => 2]
     pmap = [b => 1, c => 1, μ => 1, s => 1, ν => 1, α => 1]
 
@@ -213,7 +213,7 @@ end
     costs = [-h(te)]
     cons = [T(te) ~ 0, m(te) ~ m_c]
     @named rocket = System(eqs, t; costs, constraints = cons)
-    rocket = structural_simplify(rocket; inputs = [T(t)])
+    rocket = mtkcompile(rocket; inputs = [T(t)])
 
     u0map = [h(t) => h₀, m(t) => m₀, v(t) => 0]
     pmap = [
@@ -261,7 +261,7 @@ end
     costs = [-Symbolics.Integral(t in (0, tf))(x(t) - u(t)), -x(tf)]
     consolidate(u, sub) = u[1] + u[2] + sum(sub)
     @named rocket = System(eqs, t; costs, consolidate)
-    rocket = structural_simplify(rocket; inputs = [u(t)])
+    rocket = mtkcompile(rocket; inputs = [u(t)])
 
     u0map = [x(t) => 17.5]
     pmap = [u(t) => 0.0, tf => 8]
@@ -285,7 +285,7 @@ end
 
     @named block = System(
         [D(x(t)) ~ v(t), D(v(t)) ~ u(t)], t; costs = cost, constraints = constr)
-    block = structural_simplify(block, inputs = [u(t)])
+    block = mtkcompile(block, inputs = [u(t)])
 
     u0map = [x(t) => 1.0, v(t) => 0.0]
     tspan = (0.0, tf)
@@ -328,7 +328,7 @@ end
     tspan = (0, tf)
 
     @named cartpole = System(eqs, t; costs, constraints = cons)
-    cartpole = structural_simplify(cartpole; inputs = [u])
+    cartpole = mtkcompile(cartpole; inputs = [u])
 
     u0map = [D(x(t)) => 0.0, D(θ(t)) => 0.0, θ(t) => 0.0, x(t) => 0.0]
     pmap = [mₖ => 1.0, mₚ => 0.2, l => 0.5, g => 9.81, u => 0]

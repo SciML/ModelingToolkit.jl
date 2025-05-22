@@ -146,7 +146,7 @@ eqs = [D(x) ~ z * h
        0 ~ x - y
        0 ~ sin(z) + y - p * t]
 @named daesys = System(eqs, t)
-newdaesys = structural_simplify(daesys)
+newdaesys = mtkcompile(daesys)
 @test equations(newdaesys) == [D(x) ~ h * z; 0 ~ y + sin(z) - p * t]
 @test equations(tearing_substitution(newdaesys)) == [D(x) ~ h * z; 0 ~ x + sin(z) - p * t]
 @test isequal(unknowns(newdaesys), [x, z])
@@ -161,7 +161,7 @@ prob.f(du, u, pr, tt)
 
 # test the initial guess is respected
 @named sys = System(eqs, t, defaults = Dict(z => NaN))
-infprob = ODEProblem(structural_simplify(sys), [x => 1.0], (0, 1.0), [p => 0.2])
+infprob = ODEProblem(mtkcompile(sys), [x => 1.0], (0, 1.0), [p => 0.2])
 infprob.f(du, infprob.u0, pr, tt)
 @test any(isnan, du)
 
@@ -192,7 +192,7 @@ calculate_tgrad(ms_model)
 u0 = [mass.s => 0.0
       mass.v => 1.0]
 
-sys = structural_simplify(ms_model)
+sys = mtkcompile(ms_model)
 # @test ModelingToolkit.get_jac(sys)[] === ModelingToolkit.EMPTY_JAC
 # @test ModelingToolkit.get_tgrad(sys)[] === ModelingToolkit.EMPTY_TGRAD
 prob_complex = ODEProblem(sys, u0, (0, 1.0))

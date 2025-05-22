@@ -35,7 +35,7 @@ initial conditions for the given DAE.
         time_dependent_init = is_time_dependent(sys),
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system before creating an `ODEProblem`")
+        error("A completed system is required. Call `complete` or `mtkcompile` on the system before creating an `ODEProblem`")
     end
     if isempty(u0map) && get_initializesystem(sys) !== nothing
         isys = get_initializesystem(sys; initialization_eqs, check_units)
@@ -60,7 +60,7 @@ initial conditions for the given DAE.
     end
 
     if simplify_system
-        isys = structural_simplify(isys; fully_determined, split = is_split(sys))
+        isys = mtkcompile(isys; fully_determined, split = is_split(sys))
     end
 
     ts = get_tearing_state(isys)

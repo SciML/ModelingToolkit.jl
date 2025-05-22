@@ -597,7 +597,7 @@ eqs = [D(x) ~ σ * (y - x) + x * β,
     D(y) ~ x * (ρ - z) - y + y * β + x * η,
     D(z) ~ x * y - β * z + (x * z) * β]
 @named sys1 = System(eqs, tt)
-sys1 = structural_simplify(sys1)
+sys1 = mtkcompile(sys1)
 
 drift_eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
@@ -798,13 +798,13 @@ end
            input ~ 0.0]
 
     sys = System(eqs, t, sts, ps, browns; name = :name)
-    sys = structural_simplify(sys)
+    sys = mtkcompile(sys)
     @test ModelingToolkit.get_noise_eqs(sys) ≈ [1.0]
     prob = SDEProblem(sys, [], (0.0, 1.0), [])
     @test_nowarn solve(prob, RKMil())
 end
 
-@testset "Observed variables retained after `structural_simplify`" begin
+@testset "Observed variables retained after `mtkcompile`" begin
     @variables x(t) y(t) z(t)
     @brownian a
     @mtkcompile sys = System([D(x) ~ x + a, D(y) ~ y + a, z ~ x + y], t)
@@ -860,7 +860,7 @@ end
     end
 end
 
-@testset "`structural_simplify(::SDESystem)`" begin
+@testset "`mtkcompile(::SDESystem)`" begin
     @variables x(t) y(t)
     @mtkcompile sys = SDESystem(
         [D(x) ~ x, y ~ 2x], [x, 0], t, [x, y], [])
@@ -949,7 +949,7 @@ end
     @test ssys1 !== ssys2
 end
 
-@testset "Error when constructing SDEProblem without `structural_simplify`" begin
+@testset "Error when constructing SDEProblem without `mtkcompile`" begin
     @parameters σ ρ β
     @variables x(tt) y(tt) z(tt)
     @brownian a
@@ -963,8 +963,8 @@ end
     u0map = [x => 1.0, y => 0.0, z => 0.0]
     parammap = [σ => 10.0, β => 26.0, ρ => 2.33]
 
-    @test_throws ["Brownian", "structural_simplify"] SDEProblem(
+    @test_throws ["Brownian", "mtkcompile"] SDEProblem(
         de, u0map, (0.0, 100.0), parammap)
-    de = structural_simplify(de)
+    de = mtkcompile(de)
     @test SDEProblem(de, u0map, (0.0, 100.0), parammap) isa SDEProblem
 end

@@ -32,7 +32,7 @@ sys = include_string(@__MODULE__, str)
 @test sys == expand_connections(rc_model) # this actually kind of works, but the variables would have different identities.
 
 # check answer
-ss = structural_simplify(rc_model)
+ss = mtkcompile(rc_model)
 all_obs = observables(ss)
 prob = ODEProblem(ss, [capacitor.v => 0.0], (0, 0.1))
 sol = solve(prob, ImplicitEuler())
