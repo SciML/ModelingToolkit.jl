@@ -30,7 +30,7 @@ If a `System` without `constraints` is specified, it will be treated as an initi
            D(D(y)) ~ λ * y - g
            x(t)^2 + y^2 ~ 1]
     cstr = [x(0.5) ~ 1]
-    @mtkbuild pend = System(eqs, t; constraints = cstrs)
+    @mtkcompile pend = System(eqs, t; constraints = cstrs)
 
     tspan = (0.0, 1.5)
     u0map = [x(t) => 0.6, y => 0.8]

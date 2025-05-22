@@ -288,7 +288,7 @@ export alias_elimination, flatten
 export connect, domain_connect, @connector, Connection, AnalysisPoint, Flow, Stream,
        instream
 export initial_state, transition, activeState, entry, ticksInState, timeInState
-export @component, @mtkmodel, @mtkbuild
+export @component, @mtkmodel, @mtkcompile
 export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbance,
        istunable, getdist, hasdist,
        tunable_parameters, isirreducible, getdescription, hasdescription,

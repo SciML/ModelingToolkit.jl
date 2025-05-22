@@ -76,7 +76,7 @@ end
         sys = System(Equation[], iv; name, systems = [😄, arr])
     end
 
-    @mtkbuild sys = Outer()
+    @mtkcompile sys = Outer()
     for (str, var) in [
         # unicode system, scalar variable
         ("😄.x", sys.😄.x),

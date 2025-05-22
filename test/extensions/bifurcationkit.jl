@@ -149,7 +149,7 @@ let
         end
     end
 
-    @mtkbuild fol = FOL()
+    @mtkcompile fol = FOL()
 
     par = [fol.τ => 0.0]
     u0 = [fol.x => -1.0]

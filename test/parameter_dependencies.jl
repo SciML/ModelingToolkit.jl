@@ -20,7 +20,7 @@ using NonlinearSolve
     cb2 = [x ~ 4.0] => (f = affect1!, observed = (; p2), modified = (; p1)) # triggers at t=-2+√7
     cb3 = SymbolicDiscreteCallback([1.0] => [p1 ~ 5.0], discrete_parameters = [p1])
 
-    @mtkbuild sys = System(
+    @mtkcompile sys = System(
         [D(x) ~ p1 * t + p2],
         t;
         parameter_dependencies = [p2 => 2p1],
@@ -73,7 +73,7 @@ end
     @parameters p1=1.0 p2=1.0
     @variables x(t) = 0
 
-    @mtkbuild sys1 = System(
+    @mtkcompile sys1 = System(
         [D(x) ~ p1 * t + p2],
         t
     )
@@ -215,7 +215,7 @@ end
            D(x) ~ -x + u
            y ~ x
            z(k) ~ z(k - 2) + yd(k - 2)]
-    @test_throws ModelingToolkit.HybridSystemNotSupportedException @mtkbuild sys = System(
+    @test_throws ModelingToolkit.HybridSystemNotSupportedException @mtkcompile sys = System(
         eqs, t; parameter_dependencies = [kq => 2kp])
 
     @test_skip begin
@@ -225,7 +225,7 @@ end
              yd(k - 2) => 2.0])
         @test_nowarn solve(prob, Tsit5())
 
-        @mtkbuild sys = System(eqs, t; parameter_dependencies = [kq => 2kp],
+        @mtkcompile sys = System(eqs, t; parameter_dependencies = [kq => 2kp],
             discrete_events = [SymbolicDiscreteCallback(
                 [0.5] => [kp ~ 2.0], discrete_parameters = [kp])])
         prob = ODEProblem(sys, [x => 0.0, y => 0.0], (0.0, Tf),
@@ -328,7 +328,7 @@ end
     @parameters p1=1.0 p2=1.0
     @variables x(t)
     eqs = [0 ~ p1 * x * exp(x) + p2]
-    @mtkbuild sys = System(eqs; parameter_dependencies = [p2 => 2p1])
+    @mtkcompile sys = System(eqs; parameter_dependencies = [p2 => 2p1])
     @test isequal(only(parameters(sys)), p1)
     @test Set(full_parameters(sys)) == Set([p1, p2, Initial(p2), Initial(x)])
     prob = NonlinearProblem(sys, [x => 1.0])
@@ -350,7 +350,7 @@ end
     cb2 = [x ~ 4.0] => (affect1!, [], [p1, p2], [p1]) # triggers at t=-2+√7
     cb3 = [1.0] => [p1 ~ 5.0]
 
-    @mtkbuild sys = System(
+    @mtkcompile sys = System(
         [D(x) ~ p1 * t + p2],
         t;
         parameter_dependencies = [p2 => 2p1]

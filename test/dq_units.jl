@@ -211,7 +211,7 @@ end
             x^2 + y^2 ~ L^2
         end
     end
-    @mtkbuild pend = PendulumUnits()
+    @mtkcompile pend = PendulumUnits()
     u0 = [pend.x => 1.0, pend.y => 0.0]
     p = [pend.g => 1.0, pend.L => 1.0]
     guess = [pend.λ => 0.0]
@@ -279,7 +279,7 @@ using DynamicQuantities
     end
 end
 
-@mtkbuild pend = UnitsExample()
+@mtkcompile pend = UnitsExample()
 @test ModelingToolkit.get_unit.(filter(x -> occursin("ˍt", string(x)), unknowns(pend))) ==
       [u"m/s", u"m/s"]
 end

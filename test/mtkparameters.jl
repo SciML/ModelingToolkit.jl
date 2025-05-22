@@ -140,7 +140,7 @@ end
 @parameters p::Vector{Float64}
 @variables X(t)
 eq = D(X) ~ p[1] - p[2] * X
-@mtkbuild osys = System([eq], t)
+@mtkcompile osys = System([eq], t)
 
 u0 = [X => 1.0]
 ps = [p => [2.0, 0.1]]
@@ -160,7 +160,7 @@ newps = remake_buffer(sys, ps, (p,), (1.0f0,))
 @parameters p d
 @variables X(t)
 eqs = [D(X) ~ p - d * X]
-@mtkbuild sys = System(eqs, t)
+@mtkcompile sys = System(eqs, t)
 
 u0 = [X => 1.0]
 tspan = (0.0, 100.0)
@@ -248,7 +248,7 @@ end
 @variables x(t) y(t)
 eqs = [D(x) ~ (α - β * y) * x
        D(y) ~ (δ * x - γ) * y]
-@mtkbuild odesys = System(eqs, t)
+@mtkcompile odesys = System(eqs, t)
 odeprob = ODEProblem(
     odesys, [x => 1.0, y => 1.0], (0.0, 10.0), [α => 1.5, β => 1.0, γ => 3.0, δ => 1.0])
 tunables, _... = canonicalize(Tunable(), odeprob.p)
@@ -323,7 +323,7 @@ end
         D(V[1]) ~ k[1] - k[2] * V[1],
         D(V[2]) ~ k[3] - k[4] * V[2]
     ]
-    @mtkbuild osys_scal = System(eqs, t, [V[1], V[2]], [k[1], k[2], k[3], k[4]])
+    @mtkcompile osys_scal = System(eqs, t, [V[1], V[2]], [k[1], k[2], k[3], k[4]])
 
     u0 = [V => [10.0, 20.0]]
     ps_vec = [k => [2.0, 3.0, 4.0, 5.0]]

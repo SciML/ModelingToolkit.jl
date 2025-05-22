@@ -17,7 +17,7 @@ const FMU_DIR = joinpath(@__DIR__, "fmus")
     end
     @testset "v2, ME" begin
         fmu = loadFMU("SpringPendulum1D", "Dymola", "2022x"; type = :ME)
-        @mtkbuild sys = MTK.FMIComponent(Val(2); fmu, type = :ME)
+        @mtkcompile sys = MTK.FMIComponent(Val(2); fmu, type = :ME)
         test_no_inputs_outputs(sys)
         prob = ODEProblem{true, SciMLBase.FullSpecialize}(
             sys, [sys.mass__s => 0.5, sys.mass__v => 0.0], (0.0, 8.0))
@@ -34,7 +34,7 @@ const FMU_DIR = joinpath(@__DIR__, "fmus")
         @named inner = MTK.FMIComponent(
             Val(2); fmu, communication_step_size = 1e-5, type = :CS)
         @variables x(t) = 1.0
-        @mtkbuild sys = System([D(x) ~ x], t; systems = [inner])
+        @mtkcompile sys = System([D(x) ~ x], t; systems = [inner])
         test_no_inputs_outputs(sys)
 
         prob = ODEProblem{true, SciMLBase.FullSpecialize}(
@@ -51,7 +51,7 @@ const FMU_DIR = joinpath(@__DIR__, "fmus")
         fmu, (0.0, 8.0); saveat = 0.0:0.1:8.0, recordValues = ["mass.s", "mass.v"])
     @testset "v3, ME" begin
         fmu = loadFMU("SpringPendulum1D", "Dymola", "2023x", "3.0"; type = :ME)
-        @mtkbuild sys = MTK.FMIComponent(Val(3); fmu, type = :ME)
+        @mtkcompile sys = MTK.FMIComponent(Val(3); fmu, type = :ME)
         test_no_inputs_outputs(sys)
         prob = ODEProblem{true, SciMLBase.FullSpecialize}(
             sys, [sys.mass__s => 0.5, sys.mass__v => 0.0], (0.0, 8.0))
@@ -68,7 +68,7 @@ const FMU_DIR = joinpath(@__DIR__, "fmus")
         @named inner = MTK.FMIComponent(
             Val(3); fmu, communication_step_size = 1e-5, type = :CS)
         @variables x(t) = 1.0
-        @mtkbuild sys = System([D(x) ~ x], t; systems = [inner])
+        @mtkcompile sys = System([D(x) ~ x], t; systems = [inner])
         test_no_inputs_outputs(sys)
 
         prob = ODEProblem{true, SciMLBase.FullSpecialize}(
@@ -120,7 +120,7 @@ end
 @testset "IO Model" begin
     function build_simple_adder(adder)
         @variables a(t) b(t) c(t) [guess = 1.0]
-        @mtkbuild sys = System(
+        @mtkcompile sys = System(
             [adder.a ~ a, adder.b ~ b, D(a) ~ t,
                 D(b) ~ adder.out + adder.c, c^2 ~ adder.out + adder.value],
             t;
@@ -176,7 +176,7 @@ end
 
     function build_sspace_model(sspace)
         @variables u(t)=1.0 x(t)=1.0 y(t) [guess = 1.0]
-        @mtkbuild sys = System(
+        @mtkcompile sys = System(
             [sspace.u ~ u, D(u) ~ t, D(x) ~ sspace.x + sspace.y, y^2 ~ sspace.y + sspace.x], t;
             systems = [sspace]
         )
@@ -229,7 +229,7 @@ end
 @testset "FMUs in a loop" begin
     function build_looped_adders(adder1, adder2)
         @variables x(t) = 1
-        @mtkbuild sys = System(
+        @mtkcompile sys = System(
             [D(x) ~ x, adder1.a ~ adder2.out2,
                 adder2.a ~ adder1.out2, adder1.b ~ 1.0, adder2.b ~ 2.0],
             t;
@@ -274,7 +274,7 @@ end
 
     function build_looped_sspace(sspace1, sspace2)
         @variables x(t) = 1
-        @mtkbuild sys = System([D(x) ~ x, sspace1.u ~ sspace2.x, sspace2.u ~ sspace1.y],
+        @mtkcompile sys = System([D(x) ~ x, sspace1.u ~ sspace2.x, sspace2.u ~ sspace1.y],
             t; systems = [sspace1, sspace2])
         prob = ODEProblem(sys, [sspace1.x => 1.0, sspace2.x => 1.0], (0.0, 1.0))
         return sys, prob

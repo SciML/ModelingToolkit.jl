@@ -21,7 +21,7 @@ u0 = [x => zeros(3),
 ps = [p => zeros(3, 3),
     q => 1.0]
 tspan = (0.0, 10.0)
-@mtkbuild sys = System(eqs, t)
+@mtkcompile sys = System(eqs, t)
 prob = ODEProblem(sys, u0, tspan, ps)
 sol = solve(prob, Tsit5())
 
@@ -129,7 +129,7 @@ end
 
 @testset "`sys.var` is non-differentiable" begin
     @variables x(t)
-    @mtkbuild sys = System(D(x) ~ x, t)
+    @mtkcompile sys = System(D(x) ~ x, t)
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
 
     grad = Zygote.gradient(prob) do prob

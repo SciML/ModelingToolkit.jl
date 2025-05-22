@@ -122,7 +122,7 @@ HTML as well.
 end
 """Run model RLCModel from 0 to 10"""
 function simple()
-    @mtkbuild model = RLCModel()
+    @mtkcompile model = RLCModel()
     u0 = []
     prob = ODEProblem(model, u0, (0.0, 10.0))
     sol = solve(prob)

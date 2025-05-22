@@ -78,7 +78,7 @@ end
 #            D(x) ~ -x + u
 #            y ~ x]
 
-#     @mtkbuild cl = System(eqs, t)
+#     @mtkcompile cl = System(eqs, t)
 #     partition1_params = [Hold(ud1), Sample(t, dt)(y), ud1, yd1]
 #     partition2_params = [Hold(ud2), Sample(t, dt2)(y), ud2, yd2]
 #     @test all(
@@ -195,7 +195,7 @@ end
 @testset "Observed functions with variables as `Symbol`s" begin
     @variables x(t) y(t) z(t)[1:2]
     @parameters p1 p2[1:2, 1:2]
-    @mtkbuild sys = System([D(x) ~ x * t + p1, y ~ 2x, D(z) ~ p2 * z], t)
+    @mtkcompile sys = System([D(x) ~ x * t + p1, y ~ 2x, D(z) ~ p2 * z], t)
     prob = ODEProblem(
         sys, [x => 1.0, z => ones(2)], (0.0, 1.0), [p1 => 2.0, p2 => ones(2, 2)])
     @test getu(prob, x)(prob) == getu(prob, :x)(prob)
@@ -230,7 +230,7 @@ end
     @parameters p(t)[1:2, 1:2]
     ev = SymbolicContinuousCallback(
         [x[1] ~ 2.0] => [p ~ -ones(2, 2)], discrete_parameters = [p])
-    @mtkbuild sys = System(D(x) ~ p * x, t; continuous_events = [ev])
+    @mtkcompile sys = System(D(x) ~ p * x, t; continuous_events = [ev])
     p = ModelingToolkit.unwrap(p)
     @test timeseries_parameter_index(sys, p) === ParameterTimeseriesIndex(1, (1, 1))
     @test timeseries_parameter_index(sys, p[1, 1]) ===

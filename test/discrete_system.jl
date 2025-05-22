@@ -9,7 +9,7 @@ using ModelingToolkit: t_nounits as t
 # Make sure positive shifts error
 @variables x(t)
 k = ShiftIndex(t)
-@test_throws ErrorException @mtkbuild sys = System([x(k + 1) ~ x + x(k - 1)], t)
+@test_throws ErrorException @mtkcompile sys = System([x(k + 1) ~ x + x(k - 1)], t)
 
 @inline function rate_to_proportion(r, t)
     1 - exp(-r * t)
@@ -72,7 +72,7 @@ eqs2 = [S ~ S(k - 1) - infection2,
     R ~ R(k - 1) + recovery2,
     R2 ~ R]
 
-@mtkbuild sys = System(
+@mtkcompile sys = System(
     eqs2, t, [S, I, R, R2], [c, nsteps, δt, β, γ]; controls = [β, γ], tspan)
 @test ModelingToolkit.defaults(sys) != Dict()
 
@@ -198,7 +198,7 @@ RHS2 = RHS
 #         Δ(us[i]) ~ dummy_identity(buffer[i], us[i])
 #     end
 
-#     @mtkbuild sys = System(eqs, t, us, ps; defaults = defs, preface = preface)
+#     @mtkcompile sys = System(eqs, t, us, ps; defaults = defs, preface = preface)
 #     prob = DiscreteProblem(sys, [], (0.0, 1.0))
 #     sol = solve(prob, FunctionMap(); dt = dt)
 #     @test c[1] + 1 == length(sol)
@@ -208,7 +208,7 @@ RHS2 = RHS
 eqs = [u ~ 1
        x ~ x(k - 1) + u
        y ~ x + u]
-@mtkbuild de = System(eqs, t)
+@mtkcompile de = System(eqs, t)
 prob = DiscreteProblem(de, [x(k - 1) => 0.0], (0, 10))
 sol = solve(prob, FunctionMap())
 
@@ -243,7 +243,7 @@ function System(; name, buffer)
     System(eqs, t, vars, pars; systems = [y_sys], name = name)
 end
 
-@test_nowarn @mtkbuild sys = System(; buffer = ones(10))
+@test_nowarn @mtkcompile sys = System(; buffer = ones(10))
 
 # Ensure discrete systems with algebraic equations throw
 @variables x(t) y(t)
@@ -253,7 +253,7 @@ k = ShiftIndex(t)
 @testset "Passing `nothing` to `u0`" begin
     @variables x(t) = 1
     k = ShiftIndex()
-    @mtkbuild sys = System([x(k) ~ x(k - 1) + 1], t)
+    @mtkcompile sys = System([x(k) ~ x(k - 1) + 1], t)
     prob = @test_nowarn DiscreteProblem(sys, nothing, (0.0, 1.0))
     @test_nowarn solve(prob, FunctionMap())
 end
@@ -261,7 +261,7 @@ end
 @testset "Initialization" begin
     # test that default values apply to the entire history
     @variables x(t) = 1.0
-    @mtkbuild de = System([x ~ x(k - 1) + x(k - 2)], t)
+    @mtkcompile de = System([x ~ x(k - 1) + x(k - 2)], t)
     prob = DiscreteProblem(de, [], (0, 10))
     @test prob[x] == 2.0
     @test prob[x(k - 1)] == 1.0
@@ -284,14 +284,14 @@ end
 
     # Test missing initial throws error
     @variables x(t)
-    @mtkbuild de = System([x ~ x(k - 1) + x(k - 2) * x(k - 3)], t)
+    @mtkcompile de = System([x ~ x(k - 1) + x(k - 2) * x(k - 3)], t)
     @test_throws ErrorException prob=DiscreteProblem(de, [x(k - 3) => 2.0], (0, 10))
     @test_throws ErrorException prob=DiscreteProblem(
         de, [x(k - 3) => 2.0, x(k - 1) => 3.0], (0, 10))
 
     # Test non-assigned initials are given default value
     @variables x(t) = 2.0
-    @mtkbuild de = System([x ~ x(k - 1) + x(k - 2) * x(k - 3)], t)
+    @mtkcompile de = System([x ~ x(k - 1) + x(k - 2) * x(k - 3)], t)
     prob = DiscreteProblem(de, [x(k - 3) => 12.0], (0, 10))
     @test prob[x] == 26.0
     @test prob[x(k - 1)] == 2.0
@@ -301,7 +301,7 @@ end
     @variables xₜ₋₂(t) zₜ₋₁(t) z(t)
     eqs = [x ~ x(k - 1) + z(k - 2),
         z ~ x(k - 2) * x(k - 3) - z(k - 1)^2]
-    @mtkbuild de = System(eqs, t)
+    @mtkcompile de = System(eqs, t)
     u0 = [x(k - 1) => 3,
         xₜ₋₂(k - 1) => 4,
         x(k - 2) => 1,
@@ -328,7 +328,7 @@ end
         y[1](k) ~ y[1](k - 1) + y[1](k - 2),
         y[2](k) ~ y[2](k - 1) + y[2](k - 2)
     ]
-    @mtkbuild sys = System(eqs, t)
+    @mtkcompile sys = System(eqs, t)
     prob = DiscreteProblem(sys,
         [x(k - 1) => ones(2), x(k - 2) => zeros(2), y[1](k - 1) => 1.0,
             y[1](k - 2) => 0.0, y[2](k - 1) => 1.0, y[2](k - 2) => 0.0],

@@ -373,7 +373,7 @@ sys = modelingtoolkitize(prob)
         @testset "ODE" begin
             @variables x(t)=1.0 y(t)=2.0
             @parameters p=3.0 q=4.0
-            @mtkbuild sys = System([D(x) ~ p * y, D(y) ~ q * x], t)
+            @mtkcompile sys = System([D(x) ~ p * y, D(y) ~ q * x], t)
             prob1 = ODEProblem(sys, [], (0.0, 5.0))
             newsys = complete(modelingtoolkitize(prob1))
             @test is_variable(newsys, newsys.x)
@@ -389,7 +389,7 @@ sys = modelingtoolkitize(prob)
         @testset "Nonlinear" begin
             @variables x=1.0 y=2.0
             @parameters p=3.0 q=4.0
-            @mtkbuild nlsys = System([0 ~ p * y^2 + x, 0 ~ x + exp(x) * q])
+            @mtkcompile nlsys = System([0 ~ p * y^2 + x, 0 ~ x + exp(x) * q])
             prob1 = NonlinearProblem(nlsys, [])
             newsys = complete(modelingtoolkitize(prob1))
             @test is_variable(newsys, newsys.x)
@@ -409,7 +409,7 @@ sys = modelingtoolkitize(prob)
             end
             @parameters p=3.0 q=4.0
             loss = (p - x)^2 + q * (y - x^2)^2
-            @mtkbuild optsys = OptimizationSystem(loss, [x, y], [p, q])
+            @mtkcompile optsys = OptimizationSystem(loss, [x, y], [p, q])
             prob1 = OptimizationProblem(optsys, [], grad = true, hess = true)
             newsys = complete(modelingtoolkitize(prob1))
             @test is_variable(newsys, newsys.x)

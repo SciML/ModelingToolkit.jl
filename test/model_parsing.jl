@@ -152,7 +152,7 @@ end
 C_val = 20u"F"
 R_val = 20u"Ω"
 res__R = 100u"Ω"
-@mtkbuild rc = RC(; C_val, R_val, resistor.R = res__R)
+@mtkcompile rc = RC(; C_val, R_val, resistor.R = res__R)
 prob = ODEProblem(rc, [], (0, 1e9))
 sol = solve(prob)
 defs = ModelingToolkit.defaults(rc)
@@ -488,7 +488,7 @@ using ModelingToolkit: D_nounits
         end
     end
 
-    @mtkbuild model = M()
+    @mtkcompile model = M()
     u0 = [model.x => 10, model.y => 0, model.z => 0]
 
     prob = ODEProblem(model, u0, (0, 5.0))

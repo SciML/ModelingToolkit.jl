@@ -518,7 +518,7 @@ eqs = [yd ~ Sample(dt)(y)
         end
     end
 
-    @mtkbuild model = FirstOrderWithStepCounter()
+    @mtkcompile model = FirstOrderWithStepCounter()
     prob = ODEProblem(model, [], (0.0, 10.0))
     sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 
@@ -529,7 +529,7 @@ eqs = [yd ~ Sample(dt)(y)
     @variables x(t)=1.0 y(t)=1.0
     eqs = [D(y) ~ Hold(x)
            x ~ x(k - 1) + x(k - 2)]
-    @mtkbuild sys = System(eqs, t)
+    @mtkcompile sys = System(eqs, t)
     prob = ODEProblem(sys, [], (0.0, 10.0))
     int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
     @test int.ps[x] == 2.0

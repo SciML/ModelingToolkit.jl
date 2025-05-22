@@ -80,7 +80,7 @@ sol = solve(prob.f.initializeprob; show_trace = Val(true))
 @parameters x0
 @variables x(t)
 @variables y(t) = x
-@mtkbuild sys = System([x ~ x0, D(y) ~ x], t)
+@mtkcompile sys = System([x ~ x0, D(y) ~ x], t)
 prob = ODEProblem(sys, [], (0.0, 1.0), [x0 => 1.0])
 @test prob[x] == 1.0
 @test prob[y] == 1.0
@@ -88,7 +88,7 @@ prob = ODEProblem(sys, [], (0.0, 1.0), [x0 => 1.0])
 @parameters x0
 @variables x(t)
 @variables y(t) = x0
-@mtkbuild sys = System([x ~ x0, D(y) ~ x], t)
+@mtkcompile sys = System([x ~ x0, D(y) ~ x], t)
 prob = ODEProblem(sys, [], (0.0, 1.0), [x0 => 1.0])
 @test prob[x] == 1.0
 @test prob[y] == 1.0
@@ -96,7 +96,7 @@ prob = ODEProblem(sys, [], (0.0, 1.0), [x0 => 1.0])
 @parameters x0
 @variables x(t)
 @variables y(t) = x0
-@mtkbuild sys = System([x ~ y, D(y) ~ x], t)
+@mtkcompile sys = System([x ~ y, D(y) ~ x], t)
 prob = ODEProblem(sys, [], (0.0, 1.0), [x0 => 1.0])
 @test prob[x] == 1.0
 @test prob[y] == 1.0
@@ -104,7 +104,7 @@ prob = ODEProblem(sys, [], (0.0, 1.0), [x0 => 1.0])
 @parameters x0
 @variables x(t) = x0
 @variables y(t) = x
-@mtkbuild sys = System([x ~ y, D(y) ~ x], t)
+@mtkcompile sys = System([x ~ y, D(y) ~ x], t)
 prob = ODEProblem(sys, [], (0.0, 1.0), [x0 => 1.0])
 @test prob[x] == 1.0
 @test prob[y] == 1.0

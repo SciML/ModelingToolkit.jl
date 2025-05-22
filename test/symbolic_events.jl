@@ -867,7 +867,7 @@ end
     end
 
     # Test Simulation
-    @mtkbuild sys = TestSystem()
+    @mtkcompile sys = TestSystem()
 
     # Test Simulation
     prob = ODEProblem(sys, [], (0.0, 150.0))
@@ -885,7 +885,7 @@ end
     cb2 = [x ~ 0.5] => (f = save_affect!, modified = (; b))
     cb3 = SymbolicDiscreteCallback(1.0 => [c ~ t], discrete_parameters = [c])
 
-    @mtkbuild sys = System(D(x) ~ cos(t), t, [x], [a, b, c];
+    @mtkcompile sys = System(D(x) ~ cos(t), t, [x], [a, b, c];
         continuous_events = [cb1, cb2], discrete_events = [cb3])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2pi), [a => 1.0, b => 2.0, c => 0.0])
     @test sort(canonicalize(Discrete(), prob.p)[1]) == [0.0, 1.0, 2.0]
@@ -1070,7 +1070,7 @@ end
     f = ModelingToolkit.ImperativeAffect(f = (m, o, ctx, int) -> (seen = true; return (;)))
     cb1 = ModelingToolkit.SymbolicContinuousCallback(
         [x ~ 0], nothing, initialize = [x ~ 1.5], finalize = f)
-    @mtkbuild sys = System(D(x) ~ -1, t, [x], []; continuous_events = [cb1])
+    @mtkcompile sys = System(D(x) ~ -1, t, [x], []; continuous_events = [cb1])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
     sol = solve(prob, Tsit5(); dtmax = 0.01)
     @test sol[x][1] ≈ 1.0
@@ -1088,7 +1088,7 @@ end
     b = ModelingToolkit.ImperativeAffect(f = (m, o, ctx, int) -> (finaled = true; return (;)))
     cb2 = ModelingToolkit.SymbolicContinuousCallback(
         [x ~ 0.1], nothing, initialize = a, finalize = b)
-    @mtkbuild sys = System(D(x) ~ -1, t, [x], []; continuous_events = [cb1, cb2])
+    @mtkcompile sys = System(D(x) ~ -1, t, [x], []; continuous_events = [cb1, cb2])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
     sol = solve(prob, Tsit5())
     @test sol[x][1] ≈ 1.0
@@ -1102,7 +1102,7 @@ end
     finaled = false
     cb3 = ModelingToolkit.SymbolicDiscreteCallback(
         1.0, [x ~ 2], initialize = a, finalize = b)
-    @mtkbuild sys = System(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    @mtkcompile sys = System(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
     sol = solve(prob, Tsit5())
     @test inited == true
@@ -1115,7 +1115,7 @@ end
     inited = false
     finaled = false
     cb3 = ModelingToolkit.SymbolicDiscreteCallback(1.0, f, initialize = a, finalize = b)
-    @mtkbuild sys = System(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    @mtkcompile sys = System(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
     sol = solve(prob, Tsit5())
     @test seen == true
@@ -1126,7 +1126,7 @@ end
     inited = false
     finaled = false
     cb3 = ModelingToolkit.SymbolicDiscreteCallback([1.0], f, initialize = a, finalize = b)
-    @mtkbuild sys = System(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    @mtkcompile sys = System(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
     sol = solve(prob, Tsit5())
     @test seen == true
@@ -1139,7 +1139,7 @@ end
     finaled = false
     cb3 = ModelingToolkit.SymbolicDiscreteCallback(
         t == 1.0, f, initialize = a, finalize = b)
-    @mtkbuild sys = System(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
+    @mtkcompile sys = System(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2), [])
     sol = solve(prob, Tsit5(); tstops = 1.0)
     @test seen == true
@@ -1151,17 +1151,17 @@ end
     @variables x(t) [irreducible = true] y(t) [irreducible = true]
     eqs = [x ~ y, D(x) ~ -1]
     cb = [x ~ 0.0] => [x ~ 0, y ~ 1]
-    @mtkbuild pend = System(eqs, t; continuous_events = [cb])
+    @mtkcompile pend = System(eqs, t; continuous_events = [cb])
     prob = ODEProblem(pend, [x => 1], (0.0, 3.0), guesses = [y => x])
     @test_broken !SciMLBase.successful_retcode(solve(prob, Rodas5()))
 
     cb = [x ~ 0.0] => [y ~ 1]
-    @mtkbuild pend = System(eqs, t; continuous_events = [cb])
+    @mtkcompile pend = System(eqs, t; continuous_events = [cb])
     prob = ODEProblem(pend, [x => 1], (0.0, 3.0), guesses = [y => x])
     @test_broken !SciMLBase.successful_retcode(solve(prob, Rodas5()))
 
     cb = [x ~ 0.0] => [x ~ 1, y ~ 1]
-    @mtkbuild pend = System(eqs, t; continuous_events = [cb])
+    @mtkcompile pend = System(eqs, t; continuous_events = [cb])
     prob = ODEProblem(pend, [x => 1], (0.0, 3.0), guesses = [y => x])
     @test all(≈(0.0; atol = 1e-9), solve(prob, Rodas5())[[x, y]][end])
 end
@@ -1182,7 +1182,7 @@ end
             (t == 1.0) => [k ~ 1.0], [discrete_parameters = k]
         end
     end
-    @mtkbuild decay = DECAY()
+    @mtkcompile decay = DECAY()
     prob = ODEProblem(decay, [], (0.0, 10.0), [])
     @test_nowarn solve(prob, Tsit5(), tstops = [1.0])
 end
@@ -1252,7 +1252,7 @@ end
            D(D(y)) ~ λ * y - g
            x^2 + y^2 ~ 1]
     c_evt = [t ~ 5.0] => [x ~ Pre(x) + 0.1]
-    @mtkbuild pend = System(eqs, t, continuous_events = c_evt)
+    @mtkcompile pend = System(eqs, t, continuous_events = c_evt)
     prob = ODEProblem(pend, [x => -1, y => 0], (0.0, 10.0), [g => 1], guesses = [λ => 1])
     sol = solve(prob, FBDF())
     @test ≈(sol(5.000001, idxs = x) - sol(4.999999, idxs = x), 0.1, rtol = 1e-4)
@@ -1260,7 +1260,7 @@ end
 
     # Implicit affect with Pre
     c_evt = [t ~ 5.0] => [x ~ Pre(x) + y^2]
-    @mtkbuild pend = System(eqs, t, continuous_events = c_evt)
+    @mtkcompile pend = System(eqs, t, continuous_events = c_evt)
     prob = ODEProblem(pend, [x => 1, y => 0], (0.0, 10.0), [g => 1], guesses = [λ => 1])
     sol = solve(prob, FBDF())
     @test ≈(sol(5.000001, idxs = y)^2 + sol(4.999999, idxs = x),
@@ -1269,7 +1269,7 @@ end
 
     # Impossible affect errors
     c_evt = [t ~ 5.0] => [x ~ Pre(x) + 2]
-    @mtkbuild pend = System(eqs, t, continuous_events = c_evt)
+    @mtkcompile pend = System(eqs, t, continuous_events = c_evt)
     prob = ODEProblem(pend, [x => 1, y => 0], (0.0, 10.0), [g => 1], guesses = [λ => 1])
     @test_throws UnsolvableCallbackError sol=solve(prob, FBDF())
 
@@ -1280,7 +1280,7 @@ end
            x^2 + y^2 ~ 1]
     c_evt = SymbolicContinuousCallback(
         [t ~ 5.0], [x ~ Pre(x) + 0.1, g ~ Pre(g) + 1], discrete_parameters = [g], iv = t)
-    @mtkbuild pend = System(eqs, t, continuous_events = c_evt)
+    @mtkcompile pend = System(eqs, t, continuous_events = c_evt)
     prob = ODEProblem(pend, [x => 1, y => 0], (0.0, 10.0), [g => 1], guesses = [λ => 1])
     sol = solve(prob, FBDF())
     @test sol.ps[g] ≈ [1, 2]
@@ -1290,7 +1290,7 @@ end
     eqs = [y ~ g^2, D(x) ~ x]
     c_evt = SymbolicContinuousCallback(
         [t ~ 5.0], [x ~ Pre(x) + 1, g ~ Pre(g) + 1], discrete_parameters = [g], iv = t)
-    @mtkbuild sys = System(eqs, t, continuous_events = c_evt)
+    @mtkcompile sys = System(eqs, t, continuous_events = c_evt)
     prob = ODEProblem(sys, [x => 1.0], (0.0, 10.0), [g => 2])
     sol = solve(prob, FBDF())
     @test sol.ps[g] ≈ [2.0, 3.0]
@@ -1299,7 +1299,7 @@ end
 
     # Parameters that don't appear in affects should not be mutated.
     c_evt = [t ~ 5.0] => [x ~ Pre(x) + 1]
-    @mtkbuild sys = System(eqs, t, continuous_events = c_evt)
+    @mtkcompile sys = System(eqs, t, continuous_events = c_evt)
     prob = ODEProblem(sys, [x => 0.5], (0.0, 10.0), [g => 2], guesses = [y => 0])
     sol = solve(prob, FBDF())
     @test prob.ps[g] == sol.ps[g]

@@ -236,7 +236,7 @@ end
         (::Foo)(x) = 3x
         @variables x(t)
         @parameters fn(::Real) = _f1
-        @mtkbuild sys = System(D(x) ~ fn(t), t)
+        @mtkcompile sys = System(D(x) ~ fn(t), t)
         @test is_parameter(sys, fn)
         @test ModelingToolkit.defaults(sys)[fn] == _f1
 
@@ -260,7 +260,7 @@ end
         interp = LinearInterpolation(ts .^ 2, ts; extrapolate = true)
         @variables x(t)
         @parameters (fn::typeof(interp))(..)
-        @mtkbuild sys = System(D(x) ~ fn(x), t)
+        @mtkcompile sys = System(D(x) ~ fn(x), t)
         @test is_parameter(sys, fn)
         getter = getp(sys, fn)
         prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [fn => interp])

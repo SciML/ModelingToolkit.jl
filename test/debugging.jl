@@ -42,7 +42,7 @@ end
         (System, ODEProblem, inner_ode, Tsit5()),
         (System, SDEProblem, inner_sde, ImplicitEM())]
         kwargs = Problem == SDEProblem ? (; seed = SEED) : (;)
-        @mtkbuild outer = ctor(Equation[], t; systems = [inner])
+        @mtkcompile outer = ctor(Equation[], t; systems = [inner])
         dsys = debug_system(outer; functions = [])
         @test is_parameter(dsys, ASSERTION_LOG_VARIABLE)
         prob = Problem(dsys, [inner.x => 0.1], (0.0, 5.0); kwargs...)

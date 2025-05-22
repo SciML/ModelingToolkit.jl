@@ -20,7 +20,7 @@ const M = ModelingToolkit
     eqs = [D(x(t)) ~ α * x(t) - β * x(t) * y(t),
         D(y(t)) ~ -γ * y(t) + δ * x(t) * y(t)]
 
-    @mtkbuild sys = System(eqs, t)
+    @mtkcompile sys = System(eqs, t)
     tspan = (0.0, 1.0)
     u0map = [x(t) => 4.0, y(t) => 2.0]
     parammap = [α => 1.5, β => 1.0, γ => 3.0, δ => 1.0]
@@ -53,7 +53,7 @@ const M = ModelingToolkit
     u0map = Pair[]
     guess = [x(t) => 4.0, y(t) => 2.0]
     constr = [x(0.6) ~ 3.5, x(0.3) ~ 7.0]
-    @mtkbuild lksys = System(eqs, t; constraints = constr)
+    @mtkcompile lksys = System(eqs, t; constraints = constr)
 
     jprob = JuMPDynamicOptProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
     @test JuMP.num_constraints(jprob.model) == 2
@@ -77,7 +77,7 @@ const M = ModelingToolkit
 
     # Test whole-interval constraints
     constr = [x(t) ≳ 1, y(t) ≳ 1]
-    @mtkbuild lksys = System(eqs, t; constraints = constr)
+    @mtkcompile lksys = System(eqs, t; constraints = constr)
     iprob = InfiniteOptDynamicOptProblem(
         lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
     isol = solve(iprob, Ipopt.Optimizer,
@@ -139,7 +139,7 @@ end
 
     # Test dynamics
     @parameters (u_interp::ConstantInterpolation)(..)
-    @mtkbuild block_ode = System([D(x(t)) ~ v(t), D(v(t)) ~ u_interp(t)], t)
+    @mtkcompile block_ode = System([D(x(t)) ~ v(t), D(v(t)) ~ u_interp(t)], t)
     spline = ctrl_to_spline(jsol.input_sol, ConstantInterpolation)
     oprob = ODEProblem(block_ode, u0map, tspan, [u_interp => spline])
     osol = solve(oprob, Vern8(), dt = 0.01, adaptive = false)
@@ -183,7 +183,7 @@ end
     @parameters (α_interp::LinearInterpolation)(..)
     eqs = [D(w(t)) ~ -μ * w(t) + b * s * α_interp(t) * w(t),
         D(q(t)) ~ -ν * q(t) + c * (1 - α_interp(t)) * s * w(t)]
-    @mtkbuild beesys_ode = System(eqs, t)
+    @mtkcompile beesys_ode = System(eqs, t)
     oprob = ODEProblem(beesys_ode,
         u0map,
         tspan,
@@ -237,7 +237,7 @@ end
     eqs = [D(h(t)) ~ v(t),
         D(v(t)) ~ (T_interp(t) - drag(h(t), v(t))) / m(t) - gravity(h(t)),
         D(m(t)) ~ -T_interp(t) / c]
-    @mtkbuild rocket_ode = System(eqs, t)
+    @mtkcompile rocket_ode = System(eqs, t)
     interpmap = Dict(T_interp => ctrl_to_spline(jsol.input_sol, CubicSpline))
     oprob = ODEProblem(rocket_ode, u0map, (ts, te), merge(Dict(pmap), interpmap))
     osol = solve(oprob, RadauIIA5(); adaptive = false, dt = 0.001)

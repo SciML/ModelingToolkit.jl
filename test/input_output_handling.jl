@@ -447,7 +447,7 @@ end
     @constants c = 2.0
     @variables x(t)
     eqs = [D(x) ~ c * x]
-    @mtkbuild sys = System(eqs, t, [x], [c])
+    @mtkcompile sys = System(eqs, t, [x], [c])
 
     f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys)
     @test f[1]([0.5], nothing, MTKParameters(io_sys, []), 0.0) ≈ [1.0]

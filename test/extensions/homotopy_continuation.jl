@@ -33,7 +33,7 @@ end
     eqs = [0 ~ x^2 + y^2 + 2x * y
            0 ~ x^2 + 4x + 4
            0 ~ y * z + 4x^2]
-    @mtkbuild sys = System(eqs)
+    @mtkcompile sys = System(eqs)
     u0 = [x => 1.0, y => 1.0, z => 1.0]
     prob = HomotopyContinuationProblem(sys, u0)
     @test prob isa NonlinearProblem
@@ -60,7 +60,7 @@ end
            0 ~ x^2 + 4x + q
            0 ~ y * z + 4x^2 + wrapper(r)]
 
-    @mtkbuild sys = System(eqs)
+    @mtkcompile sys = System(eqs)
     prob = HomotopyContinuationProblem(sys, [x => 1.0, y => 1.0, z => 1.0],
         [p => 2.0, q => 4, r => Wrapper([1.0 1.0; 0.0 0.0])])
     @test prob.ps[p] == 2.0
@@ -78,7 +78,7 @@ end
     @parameters p[1:3]
     _x = collect(x)
     eqs = collect(0 .~ vec(sum(_x * _x'; dims = 2)) + collect(p))
-    @mtkbuild sys = System(eqs)
+    @mtkcompile sys = System(eqs)
     prob = HomotopyContinuationProblem(sys, [x => ones(3)], [p => 1:3])
     @test prob[x] == ones(3)
     @test prob[p + x] == [2, 3, 4]
@@ -93,7 +93,7 @@ end
 @testset "Parametric exponents" begin
     @variables x = 1.0
     @parameters n::Integer = 4
-    @mtkbuild sys = System([x^n + x^2 - 1 ~ 0])
+    @mtkcompile sys = System([x^n + x^2 - 1 ~ 0])
     prob = HomotopyContinuationProblem(sys, [])
     sol = solve(prob, singlerootalg)
     test_single_root(sol)
@@ -103,34 +103,34 @@ end
 
 @testset "Polynomial check and warnings" begin
     @variables x = 1.0
-    @mtkbuild sys = System([x^1.5 + x^2 - 1 ~ 0])
+    @mtkcompile sys = System([x^1.5 + x^2 - 1 ~ 0])
     @test_throws ["Cannot convert", "Unable", "symbolically solve",
         "Exponent", "not an integer", "not a polynomial"] HomotopyContinuationProblem(
         sys, [])
 
-    @mtkbuild sys = System([x^x - x ~ 0])
+    @mtkcompile sys = System([x^x - x ~ 0])
     @test_throws ["Cannot convert", "Unable", "symbolically solve",
         "Exponent", "unknowns", "not a polynomial"] HomotopyContinuationProblem(
         sys, [])
-    @mtkbuild sys = System([((x^2) / sin(x))^2 + x ~ 0])
+    @mtkcompile sys = System([((x^2) / sin(x))^2 + x ~ 0])
     @test_throws ["Cannot convert", "both polynomial", "non-polynomial",
         "recognized", "sin", "not a polynomial"] HomotopyContinuationProblem(
         sys, [])
 
     @variables y = 2.0
-    @mtkbuild sys = System([x^2 + y^2 + 2 ~ 0, y ~ sin(x)])
+    @mtkcompile sys = System([x^2 + y^2 + 2 ~ 0, y ~ sin(x)])
     @test_throws ["Cannot convert", "recognized", "sin", "not a polynomial"] HomotopyContinuationProblem(
         sys, [])
 
-    @mtkbuild sys = System([x^2 + y^2 - 2 ~ 0, sin(x + y) ~ 0])
+    @mtkcompile sys = System([x^2 + y^2 - 2 ~ 0, sin(x + y) ~ 0])
     @test_throws ["Cannot convert", "function of multiple unknowns"] HomotopyContinuationProblem(
         sys, [])
 
-    @mtkbuild sys = System([sin(x)^2 + 1 ~ 0, cos(y) - cos(x) - 1 ~ 0])
+    @mtkcompile sys = System([sin(x)^2 + 1 ~ 0, cos(y) - cos(x) - 1 ~ 0])
     @test_throws ["Cannot convert", "multiple non-polynomial terms", "same unknown"] HomotopyContinuationProblem(
         sys, [])
 
-    @mtkbuild sys = System([sin(x^2)^2 + sin(x^2) - 1 ~ 0])
+    @mtkcompile sys = System([sin(x^2)^2 + sin(x^2) - 1 ~ 0])
     @test_throws ["import Nemo"] HomotopyContinuationProblem(sys, [])
 end
 
@@ -138,7 +138,7 @@ import Nemo
 
 @testset "With Nemo" begin
     @variables x = 2.0
-    @mtkbuild sys = System([sin(x^2)^2 + sin(x^2) - 1 ~ 0])
+    @mtkcompile sys = System([sin(x^2)^2 + sin(x^2) - 1 ~ 0])
     prob = HomotopyContinuationProblem(sys, [])
     @test prob[1] ≈ 2.0
     # singlerootalg doesn't converge
@@ -151,8 +151,8 @@ end
     @variables x=0.25 y=0.125
     a = sin(x^2 - 4x + 1)
     b = cos(3log(y) + 4)
-    @mtkbuild sys = System([(a^2 - 5a * b + 6b^2) / (a - 0.25) ~ 0
-                            (a^2 - 0.75a + 0.125) ~ 0])
+    @mtkcompile sys = System([(a^2 - 5a * b + 6b^2) / (a - 0.25) ~ 0
+                              (a^2 - 0.75a + 0.125) ~ 0])
     prob = HomotopyContinuationProblem(sys, [])
     @test prob[x] ≈ 0.25
     @test prob[y] ≈ 0.125
@@ -165,7 +165,7 @@ end
 @testset "Rational functions" begin
     @variables x=2.0 y=2.0
     @parameters n = 5
-    @mtkbuild sys = System([
+    @mtkcompile sys = System([
         0 ~ (x^2 - n * x + 6) * (x - 1) / (x - 2) / (x - 3)
     ])
     prob = HomotopyContinuationProblem(sys, [])
@@ -209,7 +209,7 @@ end
 
     @testset "Rational function in observed" begin
         @variables x=1 y=1
-        @mtkbuild sys = System([x^2 + y^2 - 2x - 2 ~ 0, y ~ (x - 1) / (x - 2)])
+        @mtkcompile sys = System([x^2 + y^2 - 2x - 2 ~ 0, y ~ (x - 1) / (x - 2)])
         prob = HomotopyContinuationProblem(sys, [])
         @test any(prob.f.denominator([2.0], parameter_values(prob)) .≈ 0.0)
         @test SciMLBase.successful_retcode(solve(prob, singlerootalg))
@@ -217,7 +217,7 @@ end
 
     @testset "Rational function forced to common denominators" begin
         @variables x = 1
-        @mtkbuild sys = System([0 ~ 1 / (1 + x) - x])
+        @mtkcompile sys = System([0 ~ 1 / (1 + x) - x])
         prob = HomotopyContinuationProblem(sys, [])
         @test any(prob.f.denominator([-1.0], parameter_values(prob)) .≈ 0.0)
         sol = solve(prob, singlerootalg)
@@ -228,7 +228,7 @@ end
 
 @testset "Non-polynomial observed not used in equations" begin
     @variables x=1 y
-    @mtkbuild sys = System([x^2 - 2 ~ 0, y ~ sin(x)])
+    @mtkcompile sys = System([x^2 - 2 ~ 0, y ~ sin(x)])
     prob = HomotopyContinuationProblem(sys, [])
     sol = @test_nowarn solve(prob, singlerootalg)
     @test sol[x] ≈ √2.0

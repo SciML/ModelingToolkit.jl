@@ -58,7 +58,7 @@ end
 @testset "Non-standard array variables" begin
     @variables x(t)
     @parameters p[0:2] (f::Function)(..)
-    @mtkbuild sys = System(D(x) ~ p[0] * x + p[1] * t + p[2] + f(p), t)
+    @mtkcompile sys = System(D(x) ~ p[0] * x + p[1] * t + p[2] + f(p), t)
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [p => [1.0, 2.0, 3.0], f => sum])
     @test prob.ps[p] == [1.0, 2.0, 3.0]
     @test prob.ps[p[0]] == 1.0

@@ -23,7 +23,7 @@ dependent systems. It is only required if the symbolic expressions also use the 
 variable of the system.
 
 This requires that `complete` has been called on the system (usually via
-`structural_simplify` or `@mtkbuild`) and the keyword `split = true` was passed (which is
+`structural_simplify` or `@mtkcompile`) and the keyword `split = true` was passed (which is
 the default behavior).
 """
 function MTKParameters(

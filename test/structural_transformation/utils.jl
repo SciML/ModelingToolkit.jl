@@ -49,7 +49,7 @@ end
     @variables x(t) y(t)[1:2] z(t)[1:2]
     @parameters foo(::AbstractVector)[1:2]
     _tmp_fn(x) = 2x
-    @mtkbuild sys = System(
+    @mtkcompile sys = System(
         [D(x) ~ z[1] + z[2] + foo(z)[1], y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t)
     @test length(equations(sys)) == 1
     @test length(observed(sys)) == 7
@@ -75,7 +75,7 @@ end
         val[] += 1
         return [x, 2x]
     end
-    @mtkbuild sys = System([D(x) ~ y[1] + y[2], y ~ foo(x)], t)
+    @mtkcompile sys = System([D(x) ~ y[1] + y[2], y ~ foo(x)], t)
     @test length(equations(sys)) == 1
     @test length(observed(sys)) == 4
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [foo => _tmp_fn2])
@@ -94,7 +94,7 @@ end
     @testset "CSE hack in equations(sys)" begin
         val[] = 0
         @variables z(t)[1:2]
-        @mtkbuild sys = System(
+        @mtkcompile sys = System(
             [D(y) ~ foo(x), D(x) ~ sum(y), zeros(2) ~ foo(prod(z))], t)
         @test length(equations(sys)) == 5
         @test length(observed(sys)) == 2
@@ -200,7 +200,7 @@ end
     end
     @testset "`ODESystem`" begin
         @variables x(t) y(t) z(t)
-        @mtkbuild sys = System([D(x) ~ 2x + y, y ~ x + z, z^3 + x^3 ~ 12], t)
+        @mtkcompile sys = System([D(x) ~ 2x + y, y ~ x + z, z^3 + x^3 ~ 12], t)
         mapping = map_variables_to_equations(sys)
         @test mapping[x] == (D(x) ~ 2x + y)
         @test mapping[y] == (y ~ x + z)
@@ -213,7 +213,7 @@ end
             eqs = [D(D(x)) ~ λ * x
                    D(D(y)) ~ λ * y - g
                    x^2 + y^2 ~ 1]
-            @mtkbuild sys = System(eqs, t)
+            @mtkcompile sys = System(eqs, t)
             mapping = map_variables_to_equations(sys)
 
             yt = default_toterm(unwrap(D(y)))
@@ -254,7 +254,7 @@ end
             eqs = [osc1.jcn ~ osc2.delx,
                 osc2.jcn ~ osc1.delx]
             @named coupledOsc = System(eqs, t)
-            @mtkbuild sys = compose(coupledOsc, systems)
+            @mtkcompile sys = compose(coupledOsc, systems)
             mapping = map_variables_to_equations(sys)
             x1 = operation(unwrap(osc1.x))
             x2 = operation(unwrap(osc2.x))
@@ -271,7 +271,7 @@ end
     end
     @testset "`NonlinearSystem`" begin
         @variables x y z
-        @mtkbuild sys = System([x^2 ~ 2y^2 + 1, sin(z) ~ y, z^3 + 4z + 1 ~ 0])
+        @mtkcompile sys = System([x^2 ~ 2y^2 + 1, sin(z) ~ y, z^3 + 4z + 1 ~ 0])
         mapping = map_variables_to_equations(sys)
         @test mapping[x] == (0 ~ 2y^2 + 1 - x^2)
         @test mapping[y] == (y ~ sin(z))
@@ -337,7 +337,7 @@ end
     @named sys = FilteredInputErr()
     @test_throws ["derivative of discrete variable", "k(t)"] structural_simplify(sys)
 
-    @mtkbuild sys = FilteredInput()
+    @mtkcompile sys = FilteredInput()
     vs = Set()
     for eq in equations(sys)
         ModelingToolkit.vars!(vs, eq)
@@ -348,7 +348,7 @@ end
 
     @test !(D(sys.k) in vs)
 
-    @mtkbuild sys = FilteredInputExplicit()
+    @mtkcompile sys = FilteredInputExplicit()
     obsfn1 = ModelingToolkit.build_explicit_observed_function(sys, sys.ddx)
     obsfn2 = ModelingToolkit.build_explicit_observed_function(sys, sys.dx)
     u = [1.0]
@@ -375,7 +375,7 @@ end
             return System(eqs, t, vars, params; systems, name)
         end
 
-        @mtkbuild sys = FilteredInput2()
+        @mtkcompile sys = FilteredInput2()
         vs = Set()
         for eq in equations(sys)
             ModelingToolkit.vars!(vs, eq)
@@ -392,7 +392,7 @@ end
     @testset "ODESystem" begin
         @variables x(t) p
         @parameters y(t) q
-        @mtkbuild sys = System([D(x) ~ x * q, x^2 + y^2 ~ p], t, [x, y],
+        @mtkcompile sys = System([D(x) ~ x * q, x^2 + y^2 ~ p], t, [x, y],
             [p, q]; initialization_eqs = [p + q ~ 3],
             defaults = [p => missing], guesses = [p => 1.0, y => 1.0])
         @test length(equations(sys)) == 2
@@ -406,7 +406,7 @@ end
     @testset "NonlinearSystem" begin
         @variables x p
         @parameters y q
-        @mtkbuild sys = System([0 ~ p * x + y, x^3 + y^3 ~ q], [x, y],
+        @mtkcompile sys = System([0 ~ p * x + y, x^3 + y^3 ~ q], [x, y],
             [p, q]; initialization_eqs = [p ~ q + 1],
             guesses = [p => 1.0], defaults = [p => missing])
         @test length(equations(sys)) == length(unknowns(sys)) == 1
@@ -422,7 +422,7 @@ end
         @variables x(t) p a
         @parameters y(t) q b
         @brownian c
-        @mtkbuild sys = System([D(x) ~ x + q * a, D(y) ~ y + p * b + c], t, [x, y],
+        @mtkcompile sys = System([D(x) ~ x + q * a, D(y) ~ y + p * b + c], t, [x, y],
             [p, q], [a, b, c]; initialization_eqs = [p + q ~ 4],
             guesses = [p => 1.0], defaults = [p => missing])
         @test length(equations(sys)) == 2

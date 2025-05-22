@@ -270,7 +270,7 @@ sys = structural_simplify(ns; conservative = true)
            0 ~ x * y - β * z]
     guesses = [x => 1.0, z => 0.0]
     ps = [σ => 10.0, ρ => 26.0, β => 8 / 3]
-    @mtkbuild ns = System(eqs)
+    @mtkcompile ns = System(eqs)
 
     @test isequal(calculate_jacobian(ns), [(-1 - z + ρ)*σ -x*σ
                                            2x*(-z + ρ) -β-(x^2)])
@@ -287,7 +287,7 @@ sys = structural_simplify(ns; conservative = true)
     # system that contains a chain of observed variables when simplified
     @variables x y z
     eqs = [0 ~ x^2 + 2z + y, z ~ y, y ~ x] # analytical solution x = y = z = 0 or -3
-    @mtkbuild ns = System(eqs) # solve for y with observed chain z -> y -> x
+    @mtkcompile ns = System(eqs) # solve for y with observed chain z -> y -> x
     @test isequal(expand.(calculate_jacobian(ns)), [-3 // 2 - x;;])
     @test isequal(calculate_hessian(ns), [[-1;;]])
     prob = NonlinearProblem(ns, unknowns(ns) .=> -4.0) # give guess < -3 to reach -3
@@ -297,7 +297,7 @@ end
 
 @testset "Passing `nothing` to `u0`" begin
     @variables x = 1
-    @mtkbuild sys = System([0 ~ x^2 - x^3 + 3])
+    @mtkcompile sys = System([0 ~ x^2 - x^3 + 3])
     prob = @test_nowarn NonlinearProblem(sys, nothing)
     @test_nowarn solve(prob)
 end
@@ -348,7 +348,7 @@ end
     end
 
     @variables y
-    @mtkbuild sys = System([0 ~ x * x - p * x + p, 0 ~ x * y + p])
+    @mtkcompile sys = System([0 ~ x * x - p * x + p, 0 ~ x * y + p])
     @test_throws ["single unknown"] IntervalNonlinearProblem(sys, (0.0, 1.0))
     @test_throws ["single unknown"] IntervalNonlinearFunction(sys)
     @test_throws ["single unknown"] IntervalNonlinearProblem(
@@ -361,7 +361,7 @@ end
     @variables x y
     @parameters p[1:2] (f::Function)(..)
 
-    @mtkbuild sys = System([x^2 - p[1]^2 ~ 0, y^2 ~ f(p)])
+    @mtkcompile sys = System([x^2 - p[1]^2 ~ 0, y^2 ~ f(p)])
     @test !any(isequal(p[1]), parameters(sys))
     @test is_parameter(sys, p)
 end

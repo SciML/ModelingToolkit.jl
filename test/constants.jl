@@ -41,7 +41,7 @@ simp = structural_simplify(sys)
     @variables x(MT.t_nounits) = h
     eqs = [MT.D_nounits(x) ~ (h - x) / τ]
 
-    @mtkbuild fol_model = System(eqs, MT.t_nounits)
+    @mtkcompile fol_model = System(eqs, MT.t_nounits)
 
     prob = ODEProblem(fol_model, [], (0.0, 10.0), [h => 1])
     @test prob[x] ≈ 1
