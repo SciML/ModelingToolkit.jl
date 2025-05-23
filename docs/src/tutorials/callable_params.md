@@ -2,7 +2,7 @@
 
 ModelingToolkit.jl allows creating parameters that represent functions to be called. This
 is especially useful for including interpolants and/or lookup tables inside ODEs. In this
-tutorial we will create an `ODESystem` which employs callable parameters to interpolate data
+tutorial we will create an `System` which employs callable parameters to interpolate data
 inside an ODE and go over the various syntax options and their implications.
 
 ## Callable parameter syntax
@@ -69,7 +69,7 @@ Tspline = typeof(spline)
 @variables x(t)
 @parameters (interp::Tspline)(..)
 
-@mtkbuild sys = ODESystem(D(x) ~ interp(t), t)
+@mtkcompile sys = System(D(x) ~ interp(t), t)
 ```
 
 The derivative of `x` is obtained via an interpolation from DataInterpolations.jl. Note
@@ -77,7 +77,7 @@ the parameter syntax. The `(..)` marks the parameter as callable. `(interp::Tspl
 indicates that the parameter is of type `Tspline`.
 
 ```@example callable
-prob = ODEProblem(sys, [x => 0.0], (0.0, 1.0), [interp => spline])
+prob = ODEProblem(sys, [x => 0.0, interp => spline], (0.0, 1.0))
 solve(prob)
 ```
 
@@ -85,7 +85,7 @@ Note that the the following will not work:
 
 ```julia
 ODEProblem(
-    sys; [x => 0.0], (0.0, 1.0), [interp => LinearInterpolation(0.0:0.1:1.0, 0.0:0.1:1.0)])
+    sys; [x => 0.0, interp => LinearInterpolation(0.0:0.1:1.0, 0.0:0.1:1.0)], (0.0, 1.0))
 ```
 
 Since the type of the spline doesn't match.

@@ -29,7 +29,7 @@ eqs = [u ~ kp * (r - y) # P controller
        D(x) ~ -x + u    # First-order plant
        y ~ x]           # Output equation
 
-@named sys = ODESystem(eqs, t) # Do not call @mtkbuild when linearizing
+@named sys = ODESystem(eqs, t) # Do not call @mtkcompile when linearizing
 matrices, simplified_sys = linearize(sys, [r], [y]) # Linearize from r to y
 matrices
 ```
@@ -47,7 +47,7 @@ using ModelingToolkit: inputs, outputs
 
 !!! note "Un-simplified system"
     
-    Linearization expects `sys` to be un-simplified, i.e., `structural_simplify` or `@mtkbuild` should not be called on the system before linearizing.
+    Linearization expects `sys` to be un-simplified, i.e., `mtkcompile` or `@mtkcompile` should not be called on the system before linearizing.
 
 ## Operating point
 

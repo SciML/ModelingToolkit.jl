@@ -4,7 +4,7 @@ Ordinary differential equations are commonly used for modeling real-world proces
 
 We will start by illustrating **local identifiability** in which a parameter is known up to _finitely many values_, and then proceed to determining **global identifiability**, that is, which parameters can be identified _uniquely_.
 
-The package has a standalone data structure for ordinary differential equations, but is also compatible with `ODESystem` type from `ModelingToolkit.jl`.
+The package has a standalone data structure for ordinary differential equations, but is also compatible with `System` type from `ModelingToolkit.jl`.
 
 ## Local Identifiability
 
@@ -22,7 +22,7 @@ y_2 = x_5\end{cases}$$
 
 This model describes the biohydrogenation[^1] process[^2] with unknown initial conditions.
 
-### Using the `ODESystem` object
+### Using the `System` object
 
 To define the ode system in Julia, we use `ModelingToolkit.jl`.
 
@@ -61,7 +61,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 end
 
 # define the system
-@mtkbuild de = Biohydrogenation()
+@mtkcompile de = Biohydrogenation()
 ```
 
 After that, we are ready to check the system for local identifiability:
@@ -179,7 +179,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     end
 end
 
-@mtkbuild ode = GoodwinOscillator()
+@mtkcompile ode = GoodwinOscillator()
 
 # check only 2 parameters
 to_check = [ode.b, ode.c]

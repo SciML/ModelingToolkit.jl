@@ -1,7 +1,7 @@
 # Exposing More Parallelism By Tearing Algebraic Equations in ODESystems
 
 Sometimes it can be very non-trivial to parallelize a system. In this tutorial,
-we will demonstrate how to make use of `structural_simplify` to expose more
+we will demonstrate how to make use of `mtkcompile` to expose more
 parallelism in the solution process and parallelize the resulting simulation.
 
 ## The Component Library
@@ -16,13 +16,13 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 # Basic electric components
 @connector function Pin(; name)
     @variables v(t)=1.0 i(t)=1.0 [connect = Flow]
-    ODESystem(Equation[], t, [v, i], [], name = name)
+    System(Equation[], t, [v, i], [], name = name)
 end
 
 function Ground(; name)
     @named g = Pin()
     eqs = [g.v ~ 0]
-    compose(ODESystem(eqs, t, [], [], name = name), g)
+    compose(System(eqs, t, [], [], name = name), g)
 end
 
 function ConstantVoltage(; name, V = 1.0)
@@ -32,12 +32,12 @@ function ConstantVoltage(; name, V = 1.0)
     @parameters V = V
     eqs = [V ~ p.v - n.v
            0 ~ p.i + n.i]
-    compose(ODESystem(eqs, t, [], [V], name = name), p, n)
+    compose(System(eqs, t, [], [V], name = name), p, n)
 end
 
 @connector function HeatPort(; name)
     @variables T(t)=293.15 Q_flow(t)=0.0 [connect = Flow]
-    ODESystem(Equation[], t, [T, Q_flow], [], name = name)
+    System(Equation[], t, [T, Q_flow], [], name = name)
 end
 
 function HeatingResistor(; name, R = 1.0, TAmbient = 293.15, alpha = 1.0)
@@ -51,7 +51,7 @@ function HeatingResistor(; name, R = 1.0, TAmbient = 293.15, alpha = 1.0)
            h.Q_flow ~ -v * p.i # -LossPower
            v ~ p.v - n.v
            0 ~ p.i + n.i]
-    compose(ODESystem(eqs, t, [v, RTherm], [R, TAmbient, alpha],
+    compose(System(eqs, t, [v, RTherm], [R, TAmbient, alpha],
             name = name), p, n, h)
 end
 
@@ -62,7 +62,7 @@ function HeatCapacitor(; name, rho = 8050, V = 1, cp = 460, TAmbient = 293.15)
     eqs = [
         D(h.T) ~ h.Q_flow / C
     ]
-    compose(ODESystem(eqs, t, [], [rho, V, cp],
+    compose(System(eqs, t, [], [rho, V, cp],
             name = name), h)
 end
 
@@ -74,7 +74,7 @@ function Capacitor(; name, C = 1.0)
     eqs = [v ~ p.v - n.v
            0 ~ p.i + n.i
            D(v) ~ p.i / C]
-    compose(ODESystem(eqs, t, [v], [C],
+    compose(System(eqs, t, [v], [C],
             name = name), p, n)
 end
 
@@ -88,7 +88,7 @@ function parallel_rc_model(i; name, source, ground, R, C)
               connect(capacitor.n, source.n, ground.g)
               connect(resistor.h, heat_capacitor.h)]
 
-    compose(ODESystem(rc_eqs, t, name = Symbol(name, i)),
+    compose(System(rc_eqs, t, name = Symbol(name, i)),
         [resistor, capacitor, source, ground, heat_capacitor])
 end
 ```
@@ -114,7 +114,7 @@ eqs = [
     D(E) ~ sum(((i, sys),) -> getproperty(sys, Symbol(:resistor, i)).h.Q_flow,
     enumerate(rc_systems))
 ]
-@named _big_rc = ODESystem(eqs, t, [E], [])
+@named _big_rc = System(eqs, t, [E], [])
 @named big_rc = compose(_big_rc, rc_systems)
 ```
 
@@ -122,7 +122,7 @@ Now let's say we want to expose a bit more parallelism via running tearing.
 How do we do that?
 
 ```@example tearing
-sys = structural_simplify(big_rc)
+sys = mtkcompile(big_rc)
 ```
 
 Done, that's it. There's no more to it.
@@ -175,5 +175,5 @@ so this is better than trying to do it by hand.
 
 After performing this, you can construct the `ODEProblem` and set
 `parallel_form` to use the exposed parallelism in multithreaded function
-constructions, but this showcases why `structural_simplify` is so important
+constructions, but this showcases why `mtkcompile` is so important
 to that process.

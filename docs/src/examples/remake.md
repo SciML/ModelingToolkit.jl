@@ -14,7 +14,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables x(t) y(t)
 eqs = [D(x) ~ (α - β * y) * x
        D(y) ~ (δ * x - γ) * y]
-@mtkbuild odesys = ODESystem(eqs, t)
+@mtkcompile odesys = System(eqs, t)
 ```
 
 To create the "data" for optimization, we will solve the system with a known set of
@@ -24,7 +24,7 @@ parameters.
 using OrdinaryDiffEq
 
 odeprob = ODEProblem(
-    odesys, [x => 1.0, y => 1.0], (0.0, 10.0), [α => 1.5, β => 1.0, γ => 3.0, δ => 1.0])
+    odesys, [x => 1.0, y => 1.0, α => 1.5, β => 1.0, γ => 3.0, δ => 1.0], (0.0, 10.0))
 timesteps = 0.0:0.1:10.0
 sol = solve(odeprob, Tsit5(); saveat = timesteps)
 data = Array(sol)

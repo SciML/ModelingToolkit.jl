@@ -4,7 +4,7 @@ ModelingToolkit has a system for transformations of mathematical
 systems. These transformations allow for symbolically changing
 the representation of the model to problems that are easier to
 numerically solve. One simple to demonstrate transformation, is
-`structural_simplify`, which does a lot of tricks, one being the
+`mtkcompile`, which does a lot of tricks, one being the
 transformation that turns an Nth order ODE into N
 coupled 1st order ODEs.
 
@@ -32,7 +32,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
         D(z) ~ x * y - β * z
     end
 end
-@mtkbuild sys = SECOND_ORDER()
+@mtkcompile sys = SECOND_ORDER()
 ```
 
 The second order ODE has been automatically transformed to two first order ODEs.
@@ -43,7 +43,7 @@ and this syntax extends to `N`-th order. Also, we can use `*` or `∘` to compos
 `Differential`s, like `Differential(t) * Differential(x)`.
 
 Now let's transform this into the `ODESystem` of first order components.
-We do this by calling `structural_simplify`:
+We do this by calling `mtkcompile`:
 
 Now we can directly numerically solve the lowered system. Note that,
 following the original problem, the solution requires knowing the
@@ -54,7 +54,7 @@ but we still have to provide a value for the latter.
 ```@example orderlowering
 u0 = [D(sys.x) => 2.0]
 tspan = (0.0, 100.0)
-prob = ODEProblem(sys, u0, tspan, [], jac = true)
+prob = ODEProblem(sys, u0, tspan, jac = true)
 sol = solve(prob, Tsit5())
 using Plots
 plot(sol, idxs = (sys.x, sys.y))
