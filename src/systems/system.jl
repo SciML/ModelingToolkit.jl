@@ -11,50 +11,237 @@ end
 
 const MetadataT = Base.ImmutableDict{DataType, Any}
 
+"""
+    $(TYPEDEF)
+
+A symbolic representation of a numerical system to be solved. This is a recursive
+tree-like data structure - each system can contain additional subsystems. As such,
+it implements the `AbstractTrees.jl` interface to enable exploring the hierarchical
+structure.
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
 struct System <: AbstractSystem
+    """
+    $INTERNAL_FIELD_WARNING
+    A unique integer tag for the system.
+    """
     tag::UInt
+    """
+    The equations of the system.
+    """
     eqs::Vector{Equation}
     # nothing - no noise
     # vector - diagonal noise
     # matrix - generic form
     # column matrix - scalar noise
+    """
+    The noise terms for each equation of the system. This field is only used for flattened
+    systems. To represent noise in a hierarchical system, use brownians. In a system with
+    `N` equations and `K` independent brownian variables, this should be an `N x K`
+    matrix. In the special case where `N == K` and each equation has independent noise,
+    this noise matrix is diagonal. Diagonal noise can be specified by providing an `N`
+    length vector. If this field is `nothing`, the system does not have noise.
+    """
     noise_eqs::Union{Nothing, AbstractVector, AbstractMatrix}
+    """
+    Jumps associated with the system. Each jump can be a `VariableRateJump`,
+    `ConstantRateJump` or `MassActionJump`. See `JumpProcesses.jl` for more information.
+    """
     jumps::Vector{JumpType}
+    """
+    The constraints of the system. This can be used to represent the constraints in an
+    optimal-control problem or boundary-value differential equation, or the constraints
+    in a constrained optimization.
+    """
     constraints::Vector{Union{Equation, Inequality}}
+    """
+    The costs of the system. This can be the cost in an optimal-control problem, or the
+    loss of an optimization problem. Scalar loss values must also be provided as a single-
+    element vector.
+    """
     costs::Vector{<:Union{BasicSymbolic, Real}}
+    """
+    A function which combines costs into a scalar value. This should take two arguments,
+    the `costs` of this system and the consolidated costs of all subsystems in the order
+    they are present in the `systems` field. It should return a scalar cost that combines
+    all of the individual values. This defaults to a function that simply sums all cost
+    values.
+    """
     consolidate::Any
+    """
+    The variables being solved for by this system. For example, in a differential equation
+    system, this contains the dependent variables.
+    """
     unknowns::Vector
+    """
+    The parameters of the system. Parameters can either be variables that parameterize the
+    problem being solved for (e.g. the spring constant of a mass-spring system) or
+    additional unknowns not part of the main dynamics of the system (e.g. discrete/clocked
+    variables in a hybrid ODE).
+    """
     ps::Vector
+    """
+    The brownian variables of the system, created via `@brownians`. Each brownian variable
+    represents an independent noise. A system with brownians cannot be simulated directly.
+    It needs to be compiled using `mtkcompile` into `noise_eqs`.
+    """
     brownians::Vector
+    """
+    The independent variable for a time-dependent system, or `nothing` for a time-independent
+    system.
+    """
     iv::Union{Nothing, BasicSymbolic{Real}}
+    """
+    Equations that compute variables of a system that have been eliminated from the set of
+    unknowns by `mtkcompile`. More generally, this contains all variables that can be
+    computed from the unknowns and parameters and do not need to be solved for. Such
+    variables are termed as "observables". Each equation must be of the form
+    `observable ~ expression` and observables cannot appear on the LHS of multiple
+    equations. Equations must be sorted such that every observable appears on
+    the left hand side of an equation before it appears on the right hand side of any other
+    equation.
+    """
     observed::Vector{Equation}
     parameter_dependencies::Vector{Equation}
+    """
+    $INTERNAL_FIELD_WARNING
+    A mapping from the name of a variable to the actual symbolic variable in the system.
+    This is used to enable `getproperty` syntax to access variables of a system.
+    """
     var_to_name::Dict{Symbol, Any}
+    """
+    The name of the system.
+    """
     name::Symbol
+    """
+    An optional description for the system.
+    """
     description::String
+    """
+    Default values that variables (unknowns/observables/parameters) should take when
+    constructing a numerical problem from the system. These values can be overridden
+    by initial values provided to the problem constructor. Defaults of parent systems
+    take priority over those in child systems.
+    """
     defaults::Dict
+    """
+    Guess values for variables of a system that are solved for during initialization.
+    """
     guesses::Dict
+    """
+    A list of subsystems of this system. Used for hierarchically building models.
+    """
     systems::Vector{System}
+    """
+    Equations that must be satisfied during initialization of the numerical problem created
+    from this system. For time-dependent systems, these equations are not valid after the
+    initial time.
+    """
     initialization_eqs::Vector{Equation}
+    """
+    Symbolic representation of continuous events in a dynamical system. See
+    [`SymbolicContinuousCallback`](@ref).
+    """
     continuous_events::Vector{SymbolicContinuousCallback}
+    """
+    Symbolic representation of discrete events in a dynamica system. See
+    [`SymbolicDiscreteCallback`](@ref).
+    """
     discrete_events::Vector{SymbolicDiscreteCallback}
+    """
+    $INTERNAL_FIELD_WARNING
+    If this system is a connector, the type of connector it is.
+    """
     connector_type::Any
+    """
+    A map from expressions that must be through throughout the solution process to an
+    associated error message. By default these assertions cause the generated code to
+    output `NaN`s if violated, but can be made to error using `debug_system`.
+    """
     assertions::Dict{BasicSymbolic, String}
+    """
+    The metadata associated with this system, as a `Base.ImmutableDict`. This follows
+    the same interface as SymbolicUtils.jl. Metadata can be queried and updated using
+    `SymbolicUtils.getmetadata` and `SymbolicUtils.setmetadata` respectively.
+    """
     metadata::MetadataT
+    """
+    $INTERNAL_FIELD_WARNING
+    Metadata added by the `@mtkmodel` macro.
+    """
     gui_metadata::Any # ?
+    """
+    Whether the system contains delay terms. This is inferred from the equations, but
+    can also be provided explicitly.
+    """
     is_dde::Bool
+    """
+    Extra time points for the integrator to stop at. These can be numeric values,
+    or expressions of parameters and time.
+    """
     tstops::Vector{Any}
+    """
+    The `TearingState` of the system post-simplification with `mtkcompile`.
+    """
     tearing_state::Any
+    """
+    Whether the system namespaces variables accessed via `getproperty`. `complete`d systems
+    do not namespace, but this flag can be toggled independently of `complete` using
+    `toggle_namespacing`.
+    """
     namespacing::Bool
+    """
+    Whether the system is marked as "complete". Completed systems cannot be used as
+    subsystems.
+    """
     complete::Bool
+    """
+    $INTERNAL_FIELD_WARNING
+    For systems simplified or completed with `split = true` (the default) this contains an
+    `IndexCache` which aids in symbolic indexing. If this field is `nothing`, the system is
+    either not completed, or completed with `split = false`.
+    """
     index_cache::Union{Nothing, IndexCache}
+    """
+    $INTERNAL_FIELD_WARNING
+    Connections that should be ignored because they were removed by an analysis point
+    transformation. The first element of the tuple contains all such "standard" connections
+    (ones between connector systems) and the second contains all such causal variable
+    connections.
+    """
     ignored_connections::Union{
         Nothing, Tuple{Vector{IgnoredAnalysisPoint}, Vector{IgnoredAnalysisPoint}}}
+    """
+    `SymbolicUtils.Code.Assignment`s to prepend to all code generated from this system.
+    """
     preface::Any
+    """
+    After simplification with `mtkcompile`, this field contains the unsimplified system
+    with the hierarchical structure. There may be multiple levels of `parent`s. The root
+    parent is used for accessing variables via `getproperty` syntax.
+    """
     parent::Union{Nothing, System}
+    """
+    A custom initialization system to use if no initial conditions are provided for the
+    unknowns or observables of this system.
+    """
     initializesystem::Union{Nothing, System}
+    """
+    Whether the current system is an initialization system.
+    """
     is_initializesystem::Bool
+    """
+    $INTERNAL_FIELD_WARNING
+    Whether the system has been simplified by `mtkcompile`.
+    """
     isscheduled::Bool
+    """
+    $INTERNAL_FIELD_WARNING
+    The `Schedule` containing additional information about the simplified system.
+    """
     schedule::Union{Schedule, Nothing}
 
     function System(
