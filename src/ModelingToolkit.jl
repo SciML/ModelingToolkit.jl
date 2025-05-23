@@ -122,6 +122,16 @@ for fun in [:toexpr]
     end
 end
 
+const INTERNAL_FIELD_WARNING = """
+This field is internal API. It may be removed or changed without notice in a non-breaking \
+release. Usage of this field is not advised.
+"""
+
+const INTERNAL_ARGS_WARNING = """
+The following arguments are internal API. They may be removed or changed without notice \
+in a non-breaking release. Usage of these arguments is not advised.
+"""
+
 """
 $(TYPEDEF)
 
