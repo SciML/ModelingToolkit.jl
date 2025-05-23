@@ -1,4 +1,4 @@
-# Parameter Identifiability in ODE Models
+# [Parameter Identifiability in ODE Models](@id identifiability)
 
 Ordinary differential equations are commonly used for modeling real-world processes. The problem of parameter identifiability is one of the key design challenges for mathematical models. A parameter is said to be _identifiable_ if one can recover its value from experimental data. _Structural_ identifiability is a theoretical property of a model that answers this question. In this tutorial, we will show how to use `StructuralIdentifiability.jl` with `ModelingToolkit.jl` to assess identifiability of parameters in ODE models. The theory behind `StructuralIdentifiability.jl` is presented in paper [^4].
 
