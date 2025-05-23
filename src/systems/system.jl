@@ -899,6 +899,13 @@ function check_complete(sys::System, obj)
     iscomplete(sys) || throw(SystemNotCompleteError(obj))
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Convert a time-dependent system `sys` to a time-independent system of nonlinear
+equations that solve for the steady state of the system where `D(x)` is zero for
+each continuous variable `x`.
+"""
 function NonlinearSystem(sys::System)
     if !is_time_dependent(sys)
         throw(ArgumentError("`NonlinearSystem` constructor expects a time-dependent `System`"))
@@ -924,6 +931,11 @@ end
 # Utility constructors
 ########
 
+"""
+    $(METHODLIST)
+
+Construct a [`System`](@ref) to solve an optimization problem with the given scalar cost.
+"""
 function OptimizationSystem(cost; kwargs...)
     return System(Equation[]; costs = [cost], kwargs...)
 end
@@ -940,6 +952,11 @@ function OptimizationSystem(cost::Array, dvs, ps; kwargs...)
     return System(Equation[], nothing, dvs, ps; costs = vec(cost), kwargs...)
 end
 
+"""
+    $(METHODLIST)
+
+Construct a [`System`](@ref) to solve a system of jump equations.
+"""
 function JumpSystem(jumps, iv; kwargs...)
     mask = isa.(jumps, Equation)
     eqs = Vector{Equation}(jumps[mask])
@@ -954,6 +971,11 @@ function JumpSystem(jumps, iv, dvs, ps; kwargs...)
     return System(eqs, iv, dvs, ps; jumps, kwargs...)
 end
 
+"""
+    $(METHODLIST)
+
+Construct a system of equations with associated noise terms.
+"""
 function SDESystem(eqs::Vector{Equation}, noise, iv; is_scalar_noise = false, kwargs...)
     if is_scalar_noise
         if !(noise isa Vector)
