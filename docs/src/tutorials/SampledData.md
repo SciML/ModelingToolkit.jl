@@ -155,10 +155,9 @@ k = ShiftIndex(clock)
 
 function plant(; name)
     @variables x(t)=1 u(t)=0 y(t)=0
-    D = Differential(t)
     eqs = [D(x) ~ -x + u
            y ~ x]
-    ODESystem(eqs, t; name = name)
+    System(eqs, t; name = name)
 end
 
 function filt(; name) # Reference filter
@@ -166,7 +165,7 @@ function filt(; name) # Reference filter
     a = 1 / exp(dt)
     eqs = [x(k) ~ a * x(k - 1) + (1 - a) * u(k)
            y ~ x]
-    ODESystem(eqs, t, name = name)
+    System(eqs, t, name = name)
 end
 
 function controller(kp; name)
@@ -174,7 +173,7 @@ function controller(kp; name)
     @parameters kp = kp
     eqs = [yd ~ Sample(y)
            ud ~ kp * (r - yd)]
-    ODESystem(eqs, t; name = name)
+    System(eqs, t; name = name)
 end
 
 @named f = filt()
@@ -187,7 +186,7 @@ connections = [r ~ sin(t)          # reference signal
                Hold(c.ud) ~ p.u    # controller output to plant input (zero-order-hold)
                p.y ~ c.y]          # plant output to controller feedback
 
-@named cl = ODESystem(connections, t, systems = [f, c, p])
+@named cl = System(connections, t, systems = [f, c, p])
 ```
 
 ```@docs
