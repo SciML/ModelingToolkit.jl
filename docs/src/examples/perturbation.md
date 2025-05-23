@@ -43,7 +43,7 @@ eqs_pert = taylor_coeff(eq_pert, ϵ, 0:2)
 These are the ODEs we want to solve. Now construct an `ODESystem`, which automatically inserts dummy derivatives for the velocities:
 
 ```@example perturbation
-@mtkbuild sys = ODESystem(eqs_pert, t)
+@mtkcompile sys = System(eqs_pert, t)
 ```
 
 To solve the `ODESystem`, we generate an `ODEProblem` with initial conditions $x(0) = 0$, and $ẋ(0) = 1$, and solve it:
@@ -87,7 +87,7 @@ We follow the same steps as in the previous example to construct the `ODESystem`
 ```@example perturbation
 eq_pert = substitute(eq, x => x_series)
 eqs_pert = taylor_coeff(eq_pert, ϵ, 0:2)
-@mtkbuild sys = ODESystem(eqs_pert, t)
+@mtkcompile sys = System(eqs_pert, t)
 ```
 
 We solve and plot it as in the previous example, and compare the solution with $ϵ=0.1$ to the exact solution $x(t, ϵ) = e^{-ϵ t} \sin(\sqrt{(1-ϵ^2)}\,t) / \sqrt{1-ϵ^2}$ of the unperturbed equation:

@@ -54,7 +54,7 @@ prob = ODEProblem(brusselator_2d_loop, u0, (0.0, 11.5), p)
 Now let's use `modelingtoolkitize` to generate the symbolic version:
 
 ```@example sparsejac
-@mtkbuild sys = modelingtoolkitize(prob);
+@mtkcompile sys = modelingtoolkitize(prob);
 nothing # hide
 ```
 
