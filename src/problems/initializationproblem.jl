@@ -2,8 +2,7 @@ struct InitializationProblem{iip, specialization} end
 
 """
 ```julia
-InitializationProblem{iip}(sys::AbstractSystem, t, u0map,
-                           parammap = DiffEqBase.NullParameters();
+InitializationProblem{iip}(sys::AbstractSystem, t, op;
                            version = nothing, tgrad = false,
                            jac = false,
                            checkbounds = false, sparse = false,
@@ -20,8 +19,7 @@ initial conditions for the given DAE.
 """
 @fallback_iip_specialize function InitializationProblem{iip, specialize}(
         sys::AbstractSystem,
-        t, u0map = [],
-        parammap = DiffEqBase.NullParameters();
+        t, op = Dict();
         guesses = [],
         check_length = true,
         warn_initialize_determined = true,
@@ -37,18 +35,24 @@ initial conditions for the given DAE.
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `mtkcompile` on the system before creating an `ODEProblem`")
     end
-    if isempty(u0map) && get_initializesystem(sys) !== nothing
+    has_u0_ics = false
+    op = copy(anydict(op))
+    for k in keys(op)
+        has_u0_ics |= is_variable(sys, k) || isdifferential(k) ||
+                      symbolic_type(k) == ArraySymbolic() &&
+                      is_sized_array_symbolic(k) && is_variable(sys, first(collect(k)))
+    end
+    if !has_u0_ics && get_initializesystem(sys) !== nothing
         isys = get_initializesystem(sys; initialization_eqs, check_units)
         simplify_system = false
-    elseif isempty(u0map) && get_initializesystem(sys) === nothing
+    elseif !has_u0_ics && get_initializesystem(sys) === nothing
         isys = generate_initializesystem(
-            sys; initialization_eqs, check_units, pmap = parammap,
-            guesses, algebraic_only)
+            sys; initialization_eqs, check_units, op, guesses, algebraic_only)
         simplify_system = true
     else
         isys = generate_initializesystem(
-            sys; u0map, initialization_eqs, check_units, time_dependent_init,
-            pmap = parammap, guesses, algebraic_only)
+            sys; op, initialization_eqs, check_units, time_dependent_init,
+            guesses, algebraic_only)
         simplify_system = true
     end
 
@@ -106,20 +110,17 @@ initial conditions for the given DAE.
         @warn "Initialization system is underdetermined. $neqs equations for $nunknown unknowns. Initialization will default to using least squares. $(scc_message)To suppress this warning pass warn_initialize_determined = false. To make this warning into an error, pass fully_determined = true"
     end
 
-    parammap = recursive_unwrap(anydict(parammap))
     if t !== nothing
-        parammap[get_iv(sys)] = t
+        op[get_iv(sys)] = t
     end
-    filter!(kvp -> kvp[2] !== missing, parammap)
+    filter!(kvp -> kvp[2] !== missing, op)
 
-    u0map = to_varmap(u0map, unknowns(sys))
     if isempty(guesses)
         guesses = Dict()
     end
 
-    filter_missing_values!(u0map)
-    filter_missing_values!(parammap)
-    u0map = merge(ModelingToolkit.guesses(sys), todict(guesses), u0map)
+    filter_missing_values!(op)
+    op = merge(ModelingToolkit.guesses(sys), todict(guesses), op)
 
     TProb = if neqs == nunknown && isempty(unassigned_vars)
         if use_scc && neqs > 0
@@ -135,8 +136,7 @@ initial conditions for the given DAE.
     else
         NonlinearLeastSquaresProblem
     end
-    TProb{iip}(isys, u0map, parammap; kwargs...,
-        build_initializeprob = false, is_initializeprob = true)
+    TProb{iip}(isys, op; kwargs..., build_initializeprob = false, is_initializeprob = true)
 end
 
 const INCOMPLETE_INITIALIZATION_MESSAGE = """

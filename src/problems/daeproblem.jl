@@ -62,15 +62,15 @@
 end
 
 @fallback_iip_specialize function SciMLBase.DAEProblem{iip, spec}(
-        sys::System, du0map, u0map, tspan, parammap = SciMLBase.NullParameters();
+        sys::System, op, tspan;
         callback = nothing, check_length = true, eval_expression = false,
         eval_module = @__MODULE__, check_compatibility = true,
         expression = Val{false}, kwargs...) where {iip, spec}
     check_complete(sys, DAEProblem)
     check_compatibility && check_compatible_system(DAEProblem, sys)
 
-    f, du0, u0, p = process_SciMLProblem(DAEFunction{iip, spec}, sys, u0map, parammap;
-        du0map, t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
+    f, du0, u0, p = process_SciMLProblem(DAEFunction{iip, spec}, sys, op;
+        t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
         eval_module, check_compatibility, implicit_dae = true, expression, kwargs...)
 
     kwargs = process_kwargs(sys; expression, callback, eval_expression, eval_module,

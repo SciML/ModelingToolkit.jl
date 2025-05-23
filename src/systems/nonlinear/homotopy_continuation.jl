@@ -549,13 +549,13 @@ function HomotopyContinuationProblem{false}(sys::System, args...; kwargs...)
 end
 
 function HomotopyContinuationProblem{iip, spec}(
-        sys::System, u0map, pmap = SciMLBase.NullParameters();
+        sys::System, op;
         kwargs...) where {iip, spec}
     if !iscomplete(sys)
         error("A completed `System` is required. Call `complete` or `mtkcompile` on the system before creating a `HomotopyContinuationProblem`")
     end
     f, u0, p = process_SciMLProblem(
-        HomotopyNonlinearFunction{iip, spec}, sys, u0map, pmap; kwargs...)
+        HomotopyNonlinearFunction{iip, spec}, sys, op; kwargs...)
 
     kwargs = filter_kwargs(kwargs)
     return NonlinearProblem{iip}(f, u0, p; kwargs...)

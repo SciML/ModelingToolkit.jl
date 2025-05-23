@@ -43,12 +43,12 @@ u0 = [u1 => 1.0,
 
 tspan = (0.0, 10.0)
 
-du0 = [0.5, -2.0]
+du0 = [D(u1) => 0.5, D(u2) => -2.0]
 
 p = [p1 => 1.5,
     p2 => 3.0]
 
-prob = DAEProblem(complete(sys), du0, u0, tspan, p, jac = true, sparse = true)
+prob = DAEProblem(complete(sys), [du0; u0; p], tspan, jac = true, sparse = true)
 sol = solve(prob, IDA(linear_solver = :KLU))
 
 @test maximum(sol - sol1) < 1e-12

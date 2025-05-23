@@ -53,16 +53,14 @@ let sys = mtkcompile(pendulum2)
     @test length(equations(sys)) == 5
     @test length(unknowns(sys)) == 5
 
-    u0 = [
+    ivs = [
         x => sqrt(2) / 2,
-        y => sqrt(2) / 2
-    ]
-    p = [
+        y => sqrt(2) / 2,
         L => 1.0,
         g => 9.8
     ]
 
-    prob_auto = ODEProblem(sys, u0, (0.0, 0.5), p, guesses = [T => 0.0])
+    prob_auto = ODEProblem(sys, ivs, (0.0, 0.5), guesses = [T => 0.0])
     sol = solve(prob_auto, FBDF())
     @test sol.retcode == ReturnCode.Success
     @test norm(sol[x] .^ 2 + sol[y] .^ 2 .- 1) < 1e-2
@@ -78,7 +76,7 @@ let
     @named pend = System(eqs, t)
     sys = complete(mtkcompile(pend; dummy_derivative = false))
     prob = ODEProblem(
-        sys, [x => 1, y => 0, D(x) => 0.0], (0.0, 10.0), [g => 1], guesses = [λ => 0.0])
+        sys, [x => 1, y => 0, D(x) => 0.0, g => 1], (0.0, 10.0), guesses = [λ => 0.0])
     sol = solve(prob, Rodas5P())
     @test SciMLBase.successful_retcode(sol)
     @test sol[x^2 + y^2][end] < 1.1

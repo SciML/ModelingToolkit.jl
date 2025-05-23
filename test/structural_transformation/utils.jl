@@ -55,7 +55,7 @@ end
     @test length(observed(sys)) == 7
     @test any(obs -> isequal(obs, y), observables(sys))
     @test any(obs -> isequal(obs, z), observables(sys))
-    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [foo => _tmp_fn])
+    prob = ODEProblem(sys, [x => 1.0, foo => _tmp_fn], (0.0, 1.0))
     @test_nowarn prob.f(prob.u0, prob.p, 0.0)
 
     isys = ModelingToolkit.generate_initializesystem(sys)
@@ -78,7 +78,7 @@ end
     @mtkcompile sys = System([D(x) ~ y[1] + y[2], y ~ foo(x)], t)
     @test length(equations(sys)) == 1
     @test length(observed(sys)) == 4
-    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [foo => _tmp_fn2])
+    prob = ODEProblem(sys, [x => 1.0, foo => _tmp_fn2], (0.0, 1.0))
     val[] = 0
     @test_nowarn prob.f(prob.u0, prob.p, 0.0)
     @test val[] == 1
@@ -99,7 +99,7 @@ end
         @test length(equations(sys)) == 5
         @test length(observed(sys)) == 2
         prob = ODEProblem(
-            sys, [y => ones(2), z => 2ones(2), x => 3.0], (0.0, 1.0), [foo => _tmp_fn2])
+            sys, [y => ones(2), z => 2ones(2), x => 3.0, foo => _tmp_fn2], (0.0, 1.0))
         val[] = 0
         @test_nowarn prob.f(prob.u0, prob.p, 0.0)
         @test val[] == 2
@@ -397,7 +397,7 @@ end
             defaults = [p => missing], guesses = [p => 1.0, y => 1.0])
         @test length(equations(sys)) == 2
         @test length(parameters(sys)) == 2
-        prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [q => 2.0])
+        prob = ODEProblem(sys, [x => 1.0, q => 2.0], (0.0, 1.0))
         integ = init(prob, Rodas5P(); abstol = 1e-10, reltol = 1e-8)
         @test integ.ps[p]≈1.0 atol=1e-6
         @test integ[y]≈0.0 atol=1e-5
@@ -413,7 +413,7 @@ end
         @test length(observed(sys)) == 1
         @test observed(sys)[1].lhs in Set([x, y])
         @test length(parameters(sys)) == 2
-        prob = NonlinearProblem(sys, [x => 1.0, y => 1.0], [q => 1.0])
+        prob = NonlinearProblem(sys, [x => 1.0, y => 1.0, q => 1.0])
         integ = init(prob, NewtonRaphson())
         @test prob.ps[p] ≈ 2.0
     end
@@ -431,13 +431,13 @@ end
         @test isempty(brownians(sys))
         neqs = ModelingToolkit.get_noise_eqs(sys)
         @test issetequal(sum.(eachrow(neqs)), [q, 1 + p])
-        prob = SDEProblem(sys, [x => 1.0, y => 1.0], (0.0, 1.0), [q => 1.0])
+        prob = SDEProblem(sys, [x => 1.0, y => 1.0, q => 1.0], (0.0, 1.0))
         integ = init(prob, ImplicitEM())
         @test integ.ps[p] ≈ 3.0
     end
 end
 
-@testset "Deprecated `structural_simplify` and `@mtkbuild`" begin
+@testset "Deprecated `mtkcompile` and `@mtkcompile`" begin
     @variables x(t)
     @test_deprecated @mtkbuild sys = System([D(x) ~ x], t)
     @named sys = System([D(x) ~ x], t)

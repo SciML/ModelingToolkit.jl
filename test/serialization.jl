@@ -6,10 +6,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @named sys = System([D(x) ~ -0.5 * x], t, defaults = Dict(x => 1.0))
 sys = complete(sys)
 for prob in [
-    eval(ModelingToolkit.ODEProblem{false}(sys, nothing, nothing,
-        SciMLBase.NullParameters())),
-    eval(ModelingToolkit.ODEProblem{false}(sys, nothing, nothing,
-        SciMLBase.NullParameters(); expression = Val{true}))
+    eval(ModelingToolkit.ODEProblem{false}(sys, nothing, nothing)),
+    eval(ModelingToolkit.ODEProblem{false}(sys, nothing, nothing; expression = Val{true}))
 ]
     _fn = tempname()
 

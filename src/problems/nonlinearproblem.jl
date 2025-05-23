@@ -57,7 +57,7 @@
 end
 
 @fallback_iip_specialize function SciMLBase.NonlinearProblem{iip, spec}(
-        sys::System, u0map, parammap = SciMLBase.NullParameters(); expression = Val{false},
+        sys::System, op; expression = Val{false},
         check_length = true, check_compatibility = true, kwargs...) where {iip, spec}
     check_complete(sys, NonlinearProblem)
     if is_time_dependent(sys)
@@ -65,7 +65,7 @@ end
     end
     check_compatibility && check_compatible_system(NonlinearProblem, sys)
 
-    f, u0, p = process_SciMLProblem(NonlinearFunction{iip, spec}, sys, u0map, parammap;
+    f, u0, p = process_SciMLProblem(NonlinearFunction{iip, spec}, sys, op;
         check_length, check_compatibility, expression, kwargs...)
 
     kwargs = process_kwargs(sys; kwargs...)
@@ -75,12 +75,12 @@ end
 end
 
 @fallback_iip_specialize function SciMLBase.NonlinearLeastSquaresProblem{iip, spec}(
-        sys::System, u0map, parammap = DiffEqBase.NullParameters(); check_length = false,
+        sys::System, op; check_length = false,
         check_compatibility = true, expression = Val{false}, kwargs...) where {iip, spec}
     check_complete(sys, NonlinearLeastSquaresProblem)
     check_compatibility && check_compatible_system(NonlinearLeastSquaresProblem, sys)
 
-    f, u0, p = process_SciMLProblem(NonlinearFunction{iip}, sys, u0map, parammap;
+    f, u0, p = process_SciMLProblem(NonlinearFunction{iip}, sys, op;
         check_length, expression, kwargs...)
 
     kwargs = process_kwargs(sys; kwargs...)

@@ -84,7 +84,7 @@ eqs = [y ~ src.output.u
 s = complete(sys)
 sys = mtkcompile(sys)
 prob = ODEProblem(
-    sys, [], (0.0, t_end), [s.src.interpolator => Interpolator(x, dt)];
+    sys, [s.src.interpolator => Interpolator(x, dt)], (0.0, t_end);
     tofloat = false)
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
@@ -111,7 +111,7 @@ eqs = [D(y) ~ dy * a
 sys = mtkcompile(model; split = false)
 
 tspan = (0.0, t_end)
-prob = ODEProblem(sys, [], tspan, []; build_initializeprob = false)
+prob = ODEProblem(sys, [], tspan; build_initializeprob = false)
 
 @test prob.p isa Vector{Float64}
 sol = solve(prob, ImplicitEuler());
@@ -120,7 +120,7 @@ sol = solve(prob, ImplicitEuler());
 # ------------------------ Mixed Type Conserved
 
 prob = ODEProblem(
-    sys, [], tspan, []; tofloat = false, build_initializeprob = false)
+    sys, [], tspan; tofloat = false, build_initializeprob = false)
 
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
@@ -248,7 +248,7 @@ end
         sol = solve(prob, Tsit5(); abstol = 1e-10, reltol = 1e-10)
         @test sol.u[end][] ≈ 2.0
 
-        prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [fn => Foo()])
+        prob = ODEProblem(sys, [x => 1.0, fn => Foo()], (0.0, 1.0))
         @inferred getter(prob)
         @inferred Vector{<:Real} prob.f(prob.u0, prob.p, prob.tspan[1])
         sol = solve(prob; abstol = 1e-10, reltol = 1e-10)
@@ -263,7 +263,7 @@ end
         @mtkcompile sys = System(D(x) ~ fn(x), t)
         @test is_parameter(sys, fn)
         getter = getp(sys, fn)
-        prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [fn => interp])
+        prob = ODEProblem(sys, [x => 1.0, fn => interp], (0.0, 1.0))
         @inferred getter(prob)
         @inferred prob.f(prob.u0, prob.p, prob.tspan[1])
         @test_nowarn sol = solve(prob, Tsit5())

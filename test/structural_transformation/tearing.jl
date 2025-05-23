@@ -150,7 +150,7 @@ newdaesys = mtkcompile(daesys)
 @test equations(newdaesys) == [D(x) ~ h * z; 0 ~ y + sin(z) - p * t]
 @test equations(tearing_substitution(newdaesys)) == [D(x) ~ h * z; 0 ~ x + sin(z) - p * t]
 @test isequal(unknowns(newdaesys), [x, z])
-prob = ODEProblem(newdaesys, [x => 1.0, z => -0.5π], (0, 1.0), [p => 0.2])
+prob = ODEProblem(newdaesys, [x => 1.0, z => -0.5π, p => 0.2], (0, 1.0))
 du = [0.0, 0.0];
 u = [1.0, -0.5π];
 pr = prob.p;
@@ -161,7 +161,7 @@ prob.f(du, u, pr, tt)
 
 # test the initial guess is respected
 @named sys = System(eqs, t, defaults = Dict(z => NaN))
-infprob = ODEProblem(mtkcompile(sys), [x => 1.0], (0, 1.0), [p => 0.2])
+infprob = ODEProblem(mtkcompile(sys), [x => 1.0, p => 0.2], (0, 1.0))
 infprob.f(du, infprob.u0, pr, tt)
 @test any(isnan, du)
 

@@ -1,5 +1,5 @@
 @fallback_iip_specialize function JumpProcesses.JumpProblem{iip, spec}(
-        sys::System, u0map, tspan::Union{Tuple, Nothing}, pmap = SciMLBase.NullParameters();
+        sys::System, op, tspan::Union{Tuple, Nothing};
         check_compatibility = true, eval_expression = false, eval_module = @__MODULE__,
         checkbounds = false, cse = true, aggregator = JumpProcesses.NullAggregator(),
         callback = nothing, rng = nothing, kwargs...) where {iip, spec}
@@ -13,18 +13,18 @@
     if (has_vrjs || has_eqs)
         if has_eqs && has_noise
             prob = SDEProblem{iip, spec}(
-                sys, u0map, tspan, pmap; check_compatibility = false,
+                sys, op, tspan; check_compatibility = false,
                 build_initializeprob = false, checkbounds, cse, check_length = false,
                 kwargs...)
         elseif has_eqs
             prob = ODEProblem{iip, spec}(
-                sys, u0map, tspan, pmap; check_compatibility = false,
+                sys, op, tspan; check_compatibility = false,
                 build_initializeprob = false, checkbounds, cse, check_length = false,
                 kwargs...)
         else
-            _, u0, p = process_SciMLProblem(EmptySciMLFunction{iip}, sys, u0map, pmap;
-                t = tspan === nothing ? nothing : tspan[1], tofloat = false,
-                check_length = false, build_initializeprob = false)
+            _, u0, p = process_SciMLProblem(EmptySciMLFunction{iip}, sys, op;
+                t = tspan === nothing ? nothing : tspan[1],
+                check_length = false, build_initializeprob = false, kwargs...)
             observedfun = ObservedFunctionCache(sys; eval_expression, eval_module,
                 checkbounds, cse)
             f = (du, u, p, t) -> (du .= 0; nothing)
@@ -32,8 +32,8 @@
             prob = ODEProblem{true}(df, u0, tspan, p; kwargs...)
         end
     else
-        _f, u0, p = process_SciMLProblem(EmptySciMLFunction{iip}, sys, u0map, pmap;
-            t = tspan === nothing ? nothing : tspan[1], tofloat = false, check_length = false, build_initializeprob = false, cse)
+        _f, u0, p = process_SciMLProblem(EmptySciMLFunction{iip}, sys, op;
+            t = tspan === nothing ? nothing : tspan[1], check_length = false, build_initializeprob = false, cse, kwargs...)
         f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
 
         observedfun = ObservedFunctionCache(

@@ -217,15 +217,15 @@ push!(u0, y₂ => 0.0)
 push!(u0, y₃ => 0.0)
 p = [k₁ => 0.04,
     k₃ => 1e4]
-p2 = (k₁ => 0.04,
+p2 = [k₁ => 0.04,
     k₂ => 3e7,
-    k₃ => 1e4)
+    k₃ => 1e4]
 tspan = (0.0, 100000.0)
-prob1 = ODEProblem(sys, u0, tspan, p)
+prob1 = ODEProblem(sys, [u0; p], tspan)
 @test prob1.f.sys == sys
-prob12 = ODEProblem(sys, u0, tspan, [k₁ => 0.04, k₂ => 3e7, k₃ => 1e4])
-prob13 = ODEProblem(sys, u0, tspan, (k₁ => 0.04, k₂ => 3e7, k₃ => 1e4))
-prob14 = ODEProblem(sys, u0, tspan, p2)
+prob12 = ODEProblem(sys, [u0; [k₁ => 0.04, k₂ => 3e7, k₃ => 1e4]], tspan)
+prob13 = ODEProblem(sys, [u0; [k₁ => 0.04, k₂ => 3e7, k₃ => 1e4]], tspan)
+prob14 = ODEProblem(sys, [u0; p2], tspan)
 for p in [prob1, prob14]
     @test p.p isa MTKParameters
     p.ps[k₁] ≈ 0.04
@@ -280,12 +280,12 @@ sol_dpmap = solve(prob_dpmap, Rodas5())
 end
 
 # test kwargs
-prob2 = ODEProblem(sys, u0, tspan, p, jac = true)
-prob3 = ODEProblem(sys, u0, tspan, p, jac = true, sparse = true) #SparseMatrixCSC need to handle
+prob2 = ODEProblem(sys, [u0; p], tspan, jac = true)
+prob3 = ODEProblem(sys, [u0; p], tspan, jac = true, sparse = true) #SparseMatrixCSC need to handle
 @test prob3.f.jac_prototype isa SparseMatrixCSC
-prob3 = ODEProblem(sys, u0, tspan, p, jac = true, sparsity = true)
+prob3 = ODEProblem(sys, [u0; p], tspan, jac = true, sparsity = true)
 @test prob3.f.sparsity isa SparseMatrixCSC
-@test_throws ArgumentError ODEProblem(sys, zeros(5), tspan, p)
+@test_throws ArgumentError ODEProblem(sys, zeros(5), tspan)
 for (prob, atol) in [(prob1, 1e-12), (prob2, 1e-12), (prob3, 1e-12)]
     local sol
     sol = solve(prob, Rodas5())
@@ -295,8 +295,8 @@ end
 du0 = [D(y₁) => -0.04
        D(y₂) => 0.04
        D(y₃) => 0.0]
-prob4 = DAEProblem(sys, du0, u0, tspan, p2)
-prob5 = eval(DAEProblem(sys, du0, u0, tspan, p2; expression = Val{true}))
+prob4 = DAEProblem(sys, [du0; u0; p2], tspan)
+prob5 = eval(DAEProblem(sys, [du0; u0; p2], tspan; expression = Val{true}))
 for prob in [prob4, prob5]
     local sol
     @test prob.differential_vars == [true, true, false]
@@ -470,7 +470,7 @@ eqs = [D(x) ~ foo(x, ms); D(ms) ~ bar(ms, p)]
 @named emptysys = System(Equation[], t)
 @mtkcompile outersys = compose(emptysys, sys)
 prob = ODEProblem(
-    outersys, [sys.x => 1.0, sys.ms => 1:3], (0.0, 1.0), [sys.p => ones(3, 3)])
+    outersys, [sys.x => 1.0, sys.ms => 1:3, sys.p => ones(3, 3)], (0.0, 1.0))
 @test_nowarn solve(prob, Tsit5())
 obsfn = ModelingToolkit.build_explicit_observed_function(
     outersys, bar(3outersys.sys.ms, 3outersys.sys.p))
@@ -576,18 +576,18 @@ let
     @named sys = System(eqs, t, vcat(x, [y]), [k], defaults = Dict(x .=> 0))
     sys = mtkcompile(sys)
 
-    u0 = [0.5, 0]
-    du0 = 0 .* copy(u0)
-    prob = DAEProblem(sys, du0, u0, (0, 50))
-    @test prob.u0 ≈ u0
-    @test prob.du0 ≈ du0
+    u0 = unknowns(sys) .=> [0.5, 0]
+    du0 = D.(unknowns(sys)) .=> 0.0
+    prob = DAEProblem(sys, [du0; u0], (0, 50))
+    @test prob.u0 ≈ [0.5, 0.0]
+    @test prob.du0 ≈ [0.0, 0.0]
     @test prob.p isa MTKParameters
     @test prob.ps[k] ≈ 1
     sol = solve(prob, IDA())
     @test sol[y] ≈ 0.9 * sol[x[1]] + sol[x[2]]
     @test isapprox(sol[x[1]][end], 1, atol = 1e-3)
 
-    prob = DAEProblem(sys, [D(y) => 0, D(x[1]) => 0, D(x[2]) => 0], Pair[x[1] => 0.5],
+    prob = DAEProblem(sys, [D(y) => 0, D(x[1]) => 0, D(x[2]) => 0, x[1] => 0.5],
         (0, 50))
     @test prob.u0 ≈ [0.5, 0]
     @test prob.du0 ≈ [0, 0]
@@ -596,8 +596,8 @@ let
     sol = solve(prob, IDA())
     @test isapprox(sol[x[1]][end], 1, atol = 1e-3)
 
-    prob = DAEProblem(sys, [D(y) => 0, D(x[1]) => 0, D(x[2]) => 0], Pair[x[1] => 0.5],
-        (0, 50), [k => 2])
+    prob = DAEProblem(sys, [D(y) => 0, D(x[1]) => 0, D(x[2]) => 0, x[1] => 0.5, k => 2],
+        (0, 50))
     @test prob.u0 ≈ [0.5, 0]
     @test prob.du0 ≈ [0, 0]
     @test prob.p isa MTKParameters
@@ -607,7 +607,7 @@ let
 
     # no initial conditions for D(x[1]) and D(x[2]) provided
     @test_throws ModelingToolkit.MissingVariablesError prob=DAEProblem(
-        sys, Pair[], Pair[], (0, 50))
+        sys, Pair[], (0, 50))
 
     prob = ODEProblem(sys, Pair[x[1] => 0], (0, 50))
     sol = solve(prob, Rosenbrock23())
@@ -621,30 +621,12 @@ let
     eqs = [D(A) ~ -k1 * k2 * A]
     @named sys = System(eqs, t)
     sys = complete(sys)
-    u0map = [A => 1.0]
-    pmap = (k1 => 1.0, k2 => 1)
+    ivmap = [A => 1.0, k1 => 1.0, k2 => 1.0]
     tspan = (0.0, 1.0)
-    prob = ODEProblem(sys, u0map, tspan, pmap; tofloat = false)
+    prob = ODEProblem(sys, ivmap, tspan; tofloat = false)
     @test prob.p isa MTKParameters
     @test prob.ps[k1] ≈ 1.0
     @test prob.ps[k2] == 1 && prob.ps[k2] isa Int
-
-    prob = ODEProblem(sys, u0map, tspan, pmap)
-    @test vcat(prob.p...) isa Vector{Float64}
-
-    pmap = [k1 => 1, k2 => 1]
-    tspan = (0.0, 1.0)
-    prob = ODEProblem(sys, u0map, tspan, pmap)
-    @test eltype(vcat(prob.p...)) === Float64
-
-    prob = ODEProblem(sys, u0map, tspan, pmap)
-    @test vcat(prob.p...) isa Vector{Float64}
-
-    # No longer supported, Tuple used instead
-    # pmap = Pair{Any, Union{Int, Float64}}[k1 => 1, k2 => 1.0]
-    # tspan = (0.0, 1.0)
-    # prob = ODEProblem(sys, u0map, tspan, pmap)
-    # @test eltype(prob.p) === Union{Float64, Int}
 end
 
 let
@@ -715,7 +697,7 @@ let
     eqs = [D(A) ~ -k * A]
     @named osys = System(eqs, t)
     osys = complete(osys)
-    oprob = ODEProblem(osys, [A => 1.0], (0.0, 10.0), [k => 1.0]; check_length = false)
+    oprob = ODEProblem(osys, [A => 1.0, k => 1.0], (0.0, 10.0); check_length = false)
     @test_nowarn sol = solve(oprob, Tsit5())
 end
 
@@ -876,14 +858,14 @@ prob = ODEProblem(sys, [x => 1.0], (0.0, 10.0))
     @mtkcompile sys = System(
         eqs, t; continuous_events = [[norm(x) ~ 3.0] => [x ~ ones(3)]])
     # array affect equations used to not work
-    prob1 = @test_nowarn ODEProblem(sys, [x => ones(3)], (0.0, 10.0), [p => ones(3, 3)])
+    prob1 = @test_nowarn ODEProblem(sys, [x => ones(3), p => ones(3, 3)], (0.0, 10.0))
     sol1 = @test_nowarn solve(prob1, Tsit5())
 
     # array condition equations also used to not work
     @mtkcompile sys = System(
         eqs, t; continuous_events = [[x ~ sqrt(3) * ones(3)] => [x ~ ones(3)]])
     # array affect equations used to not work
-    prob2 = @test_nowarn ODEProblem(sys, [x => ones(3)], (0.0, 10.0), [p => ones(3, 3)])
+    prob2 = @test_nowarn ODEProblem(sys, [x => ones(3), p => ones(3, 3)], (0.0, 10.0))
     sol2 = @test_nowarn solve(prob2, Tsit5())
 
     @test sol1.u ≈ sol2.u[2:end]
@@ -894,7 +876,7 @@ end
     @variables x(t)[1:3] y(t)
     @parameters p[1:3, 1:3]
     @test_nowarn @mtkcompile sys = System([D(x) ~ p * x, D(y) ~ x' * p * x], t)
-    @test_nowarn ODEProblem(sys, [x => ones(3), y => 2], (0.0, 10.0), [p => ones(3, 3)])
+    @test_nowarn ODEProblem(sys, [x => ones(3), y => 2, p => ones(3, 3)], (0.0, 10.0))
 end
 
 @parameters g L
@@ -907,7 +889,7 @@ eqs = [D(D(q₁)) ~ -λ * q₁,
 
 @named pend = System(eqs, t)
 @test_nowarn generate_initializesystem(
-    pend, u0map = [q₁ => 1.0, q₂ => 0.0], guesses = [λ => 1])
+    pend; op = [q₁ => 1.0, q₂ => 0.0], guesses = [λ => 1])
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/2618
 @parameters σ ρ β
@@ -928,9 +910,9 @@ p = [σ => 28.0,
     ρ => 10.0,
     β => 8 / 3]
 
-prob = SteadyStateProblem(sys, u0, p)
+prob = SteadyStateProblem(sys, [u0; p])
 @test prob isa SteadyStateProblem
-prob = SteadyStateProblem(ODEProblem(sys, u0, (0.0, 10.0), p))
+prob = SteadyStateProblem(ODEProblem(sys, [u0; p], (0.0, 10.0)))
 @test prob isa SteadyStateProblem
 
 # Issue#2344
@@ -1048,7 +1030,7 @@ end
     sys = mtkcompile(System([D(x) ~ P], t, [x], [P]; name = :sys))
 
     function x_at_1(P)
-        prob = ODEProblem(sys, [x => P], (0.0, 1.0), [sys.P => P])
+        prob = ODEProblem(sys, [x => P, sys.P => P], (0.0, 1.0))
         return solve(prob, Tsit5())(1.0)
     end
 
@@ -1095,7 +1077,7 @@ end
     initialization_eqs = [x ~ T]
     guesses = [x => 0.0]
     @named sys2 = System(eqs, T; initialization_eqs, guesses)
-    prob2 = ODEProblem(mtkcompile(sys2), [], (1.0, 2.0), [])
+    prob2 = ODEProblem(mtkcompile(sys2), [], (1.0, 2.0))
     sol2 = solve(prob2)
     @test all(sol2[x] .== 1.0)
 end
@@ -1128,7 +1110,7 @@ end
     defaults = [x => 1, z => y]
     @named sys = System(eqs, t; defaults)
     ssys = mtkcompile(sys)
-    prob = ODEProblem(ssys, [], (0.0, 1.0), [])
+    prob = ODEProblem(ssys, [], (0.0, 1.0))
     @test prob[x] == prob[y] == prob[z] == 1.0
 
     @parameters y0
@@ -1137,7 +1119,7 @@ end
     defaults = [y0 => 1, x => 1, z => y]
     @named sys = System(eqs, t; defaults)
     ssys = mtkcompile(sys)
-    prob = ODEProblem(ssys, [], (0.0, 1.0), [])
+    prob = ODEProblem(ssys, [], (0.0, 1.0))
     @test prob[x] == prob[y] == prob[z] == 1.0
 end
 
@@ -1196,7 +1178,7 @@ end
 
     u0 = [sys.y => -1.0, sys.modela.x => -1.0]
     p = defaults(sys)
-    prob = ODEProblem(sys, u0, (0.0, 1.0), p)
+    prob = ODEProblem(sys, merge(p, Dict(u0)), (0.0, 1.0))
 
     # evaluate
     u0_v = prob.u0
@@ -1336,7 +1318,7 @@ end
     @variables x(t)
     @parameters p[1:2] q
     @mtkcompile sys = System(D(x) ~ sum(p) * x + q * t, t)
-    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [p => ones(2), q => 2])
+    prob = ODEProblem(sys, [x => 1.0, p => ones(2), q => 2], (0.0, 1.0))
     obsfn = ModelingToolkit.build_explicit_observed_function(
         sys, [p..., q], return_inplace = true)[2]
     buf = zeros(3)
@@ -1391,7 +1373,7 @@ end
         [c];
         discrete_events = [SymbolicDiscreteCallback(
             1.0 => [c ~ Pre(c) + 1], discrete_parameters = [c])])
-    prob = ODEProblem(sys, [x => 0.0], (0.0, 2pi), [c => 1.0])
+    prob = ODEProblem(sys, [x => 0.0, c => 1.0], (0.0, 2pi))
     sol = solve(prob, Tsit5())
     @test sol[obs] ≈ 1:7
 end
@@ -1400,7 +1382,7 @@ end
     @variables x(t)=1.0 y(t) [guess = 1.0]
     @parameters p[1:2] = [1.0, 2.0]
     @mtkcompile sys = System([D(x) ~ x, y^2 ~ x + sum(p)], t)
-    prob = DAEProblem(sys, [D(x) => x, D(y) => D(x) / 2y], [], (0.0, 1.0))
+    prob = DAEProblem(sys, [D(x) => x, D(y) => D(x) / 2y], (0.0, 1.0))
     sol = solve(prob, DFBDF(), abstol = 1e-8, reltol = 1e-8)
     @test sol[x]≈sol[y^2 - sum(p)] atol=1e-5
 end
@@ -1423,7 +1405,7 @@ end
     @mtkcompile sys = System([D(x) ~ p * x + q * t + sum(r), y^3 ~ 2x + 1],
         t; tstops = [0.5p, [0.1, 0.2], [p + 2q], r])
     prob = DAEProblem(
-        sys, [D(y) => 2D(x) / 3y^2, D(x) => p * x + q * t + sum(r)], [], (0.0, 5.0))
+        sys, [D(y) => 2D(x) / 3y^2, D(x) => p * x + q * t + sum(r)], (0.0, 5.0))
     sol = solve(prob, DImplicitEuler())
     expected_tstops = unique!(sort!(vcat(0.0:0.075:5.0, 0.1, 0.2, 0.65, 0.35, 0.45)))
     @test all(x -> any(isapprox(x, atol = 1e-6), sol.t), expected_tstops)
@@ -1555,7 +1537,7 @@ end
         β => 8.0f0 / 3.0f0]
 
     tspan = (0.0f0, 100.0f0)
-    prob = ODEProblem{false}(sys, u0, tspan, p)
+    prob = ODEProblem{false}(sys, [u0; p], tspan)
     sol = solve(prob, Tsit5())
     @test SciMLBase.successful_retcode(sol)
 end

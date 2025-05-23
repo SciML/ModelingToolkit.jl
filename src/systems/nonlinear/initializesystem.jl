@@ -13,8 +13,7 @@ $(TYPEDSIGNATURES)
 Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
 """
 function generate_initializesystem_timevarying(sys::AbstractSystem;
-        u0map = Dict(),
-        pmap = Dict(),
+        op = Dict(),
         initialization_eqs = [],
         guesses = Dict(),
         default_dd_guess = Bool(0),
@@ -40,8 +39,16 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     idxs_diff = isdiffeq.(eqs)
 
     # PREPROCESSING
-    u0map = copy(anydict(u0map))
-    pmap = anydict(pmap)
+    op = anydict(op)
+    u0map = anydict()
+    pmap = anydict()
+    build_operating_point!(sys, op, u0map, pmap, defs, unknowns(sys),
+        parameters(sys; initial_parameters = true))
+    for (k, v) in op
+        if has_parameter_dependency_with_lhs(sys, k) && is_variable_floatingpoint(k)
+            pmap[k] = v
+        end
+    end
     initsys_preprocessing!(u0map, defs)
 
     # 1) Use algebraic equations of system as initialization constraints
@@ -65,6 +72,13 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
         function process_u0map_with_dummysubs(y, x)
             y = get(schedule.dummy_sub, y, y)
             y = fixpoint_sub(y, diffmap)
+            # FIXME: DAEs provide initial conditions that require reducing the system
+            # to index zero. If `isdifferential(y)`, an initial condition was given for an
+            # algebraic variable, so ignore it. Otherwise, the initialization system
+            # gets a `D(y) ~ ...` equation and errors. This is the same behavior as v9.
+            if isdifferential(y)
+                return
+            end
             # If we have `D(x) ~ x` and provide [D(x) => x, x => 1.0] to `u0map`, then
             # without this condition `defs` would get `x => x` instead of retaining
             # `x => 1.0`.
@@ -170,8 +184,7 @@ $(TYPEDSIGNATURES)
 Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
 """
 function generate_initializesystem_timeindependent(sys::AbstractSystem;
-        u0map = Dict(),
-        pmap = Dict(),
+        op = Dict(),
         initialization_eqs = [],
         guesses = Dict(),
         algebraic_only = false,
@@ -189,8 +202,16 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     guesses = merge(get_guesses(sys), additional_guesses)
 
     # PREPROCESSING
-    u0map = copy(anydict(u0map))
-    pmap = anydict(pmap)
+    op = anydict(op)
+    u0map = anydict()
+    pmap = anydict()
+    build_operating_point!(sys, op, u0map, pmap, defs, unknowns(sys),
+        parameters(sys; initial_parameters = true))
+    for (k, v) in op
+        if has_parameter_dependency_with_lhs(sys, k) && is_variable_floatingpoint(k)
+            pmap[k] = v
+        end
+    end
     initsys_preprocessing!(u0map, defs)
 
     # Calculate valid `Initial` parameters. These are unknowns for
@@ -543,11 +564,11 @@ function SciMLBase.remake_initialization_data(
     defs = defaults(sys)
     use_scc = true
     initialization_eqs = Equation[]
+    op = anydict()
 
     if oldinitdata !== nothing && oldinitdata.metadata isa InitializationMetadata
         meta = oldinitdata.metadata
-        u0map = merge(meta.u0map, u0map)
-        pmap = merge(meta.pmap, pmap)
+        op = copy(meta.op)
         merge!(guesses, meta.guesses)
         use_scc = meta.use_scc
         initialization_eqs = meta.additional_initialization_eqs
@@ -591,10 +612,12 @@ function SciMLBase.remake_initialization_data(
     if t0 === nothing && is_time_dependent(sys)
         t0 = 0.0
     end
-    filter_missing_values!(u0map)
-    filter_missing_values!(pmap)
+    merge!(op, u0map, pmap)
+    filter_missing_values!(op)
 
-    op, missing_unknowns, missing_pars = build_operating_point!(sys,
+    u0map = anydict()
+    pmap = anydict()
+    missing_unknowns, missing_pars = build_operating_point!(sys, op,
         u0map, pmap, defs, dvs, ps)
     floatT = float_type_from_varmap(op)
     u0_constructor = p_constructor = identity
@@ -607,7 +630,7 @@ function SciMLBase.remake_initialization_data(
             typeof(newp.initials), floatT, Val(1), Val(length(vals)), vals...)
     end
     kws = maybe_build_initialization_problem(
-        sys, SciMLBase.isinplace(odefn), op, u0map, pmap, t0, defs, guesses,
+        sys, SciMLBase.isinplace(odefn), op, t0, defs, guesses,
         missing_unknowns; time_dependent_init, use_scc, initialization_eqs, floatT,
         u0_constructor, p_constructor, allow_incomplete = true)
 

@@ -119,15 +119,16 @@ include("common/serial_inductor.jl")
     u0 = unknowns(sys) .=> 0
     @test_nowarn ODEProblem(
         sys, [], (0, 10.0), guesses = u0, warn_initialize_determined = false)
-    prob = DAEProblem(sys, D.(unknowns(sys)) .=> 0, [], (0, 0.5), guesses = u0)
+    prob = DAEProblem(sys, D.(unknowns(sys)) .=> 0, (0, 0.5), guesses = u0)
     sol = solve(prob, DFBDF())
     @test sol.retcode == SciMLBase.ReturnCode.Success
 
     sys2 = mtkcompile(ll2_model)
     @test length(equations(sys2)) == 3
-    u0 = unknowns(sys) .=> 0
+    u0 = [sys.inductor2.i => 0]
     prob = ODEProblem(sys, u0, (0, 10.0))
-    @test_nowarn sol = solve(prob, FBDF())
+    sol = solve(prob, FBDF())
+    @test SciMLBase.successful_retcode(sol)
 end
 
 @testset "Compose/extend" begin

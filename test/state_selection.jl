@@ -122,9 +122,9 @@ let
         sys.supply_pipe.v => 0.1, sys.return_pipe.v => 0.1, D(supply_pipe.v) => 0.0,
         D(return_pipe.fluid_port_a.m) => 0.0,
         D(supply_pipe.fluid_port_a.m) => 0.0]
-    prob1 = ODEProblem(sys, [], (0.0, 10.0), [], guesses = u0)
-    prob2 = ODEProblem(sys, [], (0.0, 10.0), [], guesses = u0)
-    prob3 = DAEProblem(sys, D.(unknowns(sys)) .=> 0.0, [], (0.0, 10.0), guesses = u0)
+    prob1 = ODEProblem(sys, [], (0.0, 10.0), guesses = u0)
+    prob2 = ODEProblem(sys, [], (0.0, 10.0), guesses = u0)
+    prob3 = DAEProblem(sys, D.(unknowns(sys)) .=> 0.0, (0.0, 10.0), guesses = u0)
     @test solve(prob1, FBDF()).retcode == ReturnCode.Success
     #@test solve(prob2, FBDF()).retcode == ReturnCode.Success
     @test solve(prob3, DFBDF()).retcode == ReturnCode.Success
@@ -274,6 +274,6 @@ let
     # solution -------------------------------------------------------------------
     @named catapult = System(eqs, t, vars, params, defaults = defs)
     sys = mtkcompile(catapult)
-    prob = ODEProblem(sys, [], (0.0, 0.1), [l_2f => 0.55, damp => 1e7]; jac = true)
+    prob = ODEProblem(sys, [l_2f => 0.55, damp => 1e7], (0.0, 0.1); jac = true)
     @test solve(prob, Rodas4()).retcode == ReturnCode.Success
 end

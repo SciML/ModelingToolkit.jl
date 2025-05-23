@@ -14,14 +14,14 @@ D = Differential(t)
     u0 = [x => 1.0, y => 1.0]
     p = [α => 1.5, β => 1.0, δ => 3.0, γ => 1.0]
     tspan = (0.0, 10.0)
-    prob = ODEProblem(sys, u0, tspan, p)
+    prob = ODEProblem(sys, [u0; p], tspan)
     sol = solve(prob, Tsit5())
 
     sys2 = liouville_transform(sys)
     sys2 = complete(sys2)
 
     u0 = [x => 1.0, y => 1.0, sys2.trJ => 1.0]
-    prob = ODEProblem(sys2, u0, tspan, p, jac = true)
+    prob = ODEProblem(sys2, [u0; p], tspan, jac = true)
     sol = solve(prob, Tsit5())
     @test sol[end, end] ≈ 1.0742818931017244
 end
@@ -53,8 +53,8 @@ end
 
     M1 = mtkcompile(M1; allow_symbolic = true)
     M2 = mtkcompile(M2; allow_symbolic = true)
-    prob1 = ODEProblem(M1, [M1.s => 1.0], (1.0, 4.0), [])
-    prob2 = ODEProblem(M2, [], (1.0, 2.0), [])
+    prob1 = ODEProblem(M1, [M1.s => 1.0], (1.0, 4.0))
+    prob2 = ODEProblem(M2, [], (1.0, 2.0))
     sol1 = solve(prob1, Tsit5(); reltol = 1e-10, abstol = 1e-10)
     sol2 = solve(prob2, Tsit5(); reltol = 1e-10, abstol = 1e-10)
     ts = range(0.0, 1.0, length = 50)
@@ -125,7 +125,7 @@ end
     Dx = Differential(Mx.x)
     u0 = [Mx.y => 0.0, Dx(Mx.y) => 1.0, Mx.t => 0.0]
     p = [v => 10.0]
-    prob = ODEProblem(Mx, u0, (0.0, 20.0), p) # 1 = dy/dx = (dy/dt)/(dx/dt) means equal initial horizontal and vertical velocities
+    prob = ODEProblem(Mx, [u0; p], (0.0, 20.0)) # 1 = dy/dx = (dy/dt)/(dx/dt) means equal initial horizontal and vertical velocities
     sol = solve(prob, Tsit5(); reltol = 1e-5)
     @test all(isapprox.(sol[Mx.y], sol[Mx.x - g * (Mx.t)^2 / 2]; atol = 1e-10)) # compare to analytical solution (x(t) = v*t, y(t) = v*t - g*t^2/2)
 end
@@ -138,7 +138,7 @@ end
     Mx = mtkcompile(Mx; allow_symbolic = true)
     Dx = Differential(Mx.x)
     u0 = [Mx.y => 0.0, Dx(Mx.y) => 1.0, Mx.t => 0.0, Mx.xˍt => 10.0]
-    prob = ODEProblem(Mx, u0, (0.0, 20.0), []) # 1 = dy/dx = (dy/dt)/(dx/dt) means equal initial horizontal and vertical velocities
+    prob = ODEProblem(Mx, u0, (0.0, 20.0)) # 1 = dy/dx = (dy/dt)/(dx/dt) means equal initial horizontal and vertical velocities
     sol = solve(prob, Tsit5(); reltol = 1e-5)
     @test all(isapprox.(sol[Mx.y], sol[Mx.x - g * (Mx.t)^2 / 2]; atol = 1e-10)) # compare to analytical solution (x(t) = v*t, y(t) = v*t - g*t^2/2)
 end
@@ -200,7 +200,7 @@ end
 
     _f = LinearInterpolation([1.0, 1.0], [-100.0, +100.0]) # constant value 1
     M2s = mtkcompile(M2; allow_symbolic = true)
-    prob = ODEProblem(M2s, [M2s.y => 0.0], (1.0, 4.0), [fc => _f, f => _f])
+    prob = ODEProblem(M2s, [M2s.y => 0.0, fc => _f, f => _f], (1.0, 4.0))
     sol = solve(prob, Tsit5(); abstol = 1e-5)
     @test isapprox(sol(4.0, idxs = M2.y), 12.0; atol = 1e-5) # Anal solution is D(y) ~ 12 => y(t) ~ 12*t + C => y(x) ~ 12*√(x) + C. With y(x=1)=0 => 12*(√(x)-1), so y(x=4) ~ 12
 end
@@ -227,7 +227,7 @@ end
     Mx = mtkcompile(Mx; allow_symbolic = true)
     Dx = Differential(Mx.x)
     u0 = [Mx.y => 0.0, Dx(Mx.y) => 1.0, Mx.t_units => 0.0, Mx.xˍt_units => 10.0]
-    prob = ODEProblem(Mx, u0, (0.0, 20.0), []) # 1 = dy/dx = (dy/dt)/(dx/dt) means equal initial horizontal and vertical velocities
+    prob = ODEProblem(Mx, u0, (0.0, 20.0)) # 1 = dy/dx = (dy/dt)/(dx/dt) means equal initial horizontal and vertical velocities
     sol = solve(prob, Tsit5(); reltol = 1e-5)
     # compare to analytical solution (x(t) = v*t, y(t) = v*t - g*t^2/2)
     @test all(isapprox.(sol[Mx.y], sol[Mx.x - g * (Mx.t_units)^2 / 2]; atol = 1e-10))
@@ -300,7 +300,7 @@ end
     new_sys = change_independent_variable(sys, sys.x; add_old_diff = true)
     ss_new_sys = mtkcompile(new_sys; allow_symbolic = true)
     u0 = [new_sys.y => 0.5, new_sys.t => 0.0]
-    prob = ODEProblem(ss_new_sys, u0, (0.0, 0.5), [])
+    prob = ODEProblem(ss_new_sys, u0, (0.0, 0.5))
     sol = solve(prob, Tsit5(); reltol = 1e-5)
     @test sol[new_sys.y][end] ≈ 0.75
 end

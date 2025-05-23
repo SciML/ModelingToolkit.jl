@@ -234,7 +234,7 @@ PrecompileTools.@compile_workload begin
     using ModelingToolkit
     @variables x(ModelingToolkit.t_nounits)
     @named sys = System([ModelingToolkit.D_nounits(x) ~ -x], ModelingToolkit.t_nounits)
-    prob = ODEProblem(mtkcompile(sys), [x => 30.0], (0, 100), [], jac = true)
+    prob = ODEProblem(mtkcompile(sys), [x => 30.0], (0, 100), jac = true)
     @mtkmodel __testmod__ begin
         @constants begin
             c = 1.0

@@ -12,7 +12,7 @@ UMT = ModelingToolkit.UnitfulUnitCheck
 D = Differential(t)
 eqs = [D(x) ~ a]
 @named sys = System(eqs, t)
-prob = ODEProblem(complete(sys), [0], [0.0, 1.0], [])
+prob = ODEProblem(complete(sys), [0], [0.0, 1.0])
 sol = solve(prob, Tsit5())
 
 # Test mtkcompile substitutions & observed values
@@ -43,7 +43,7 @@ simp = mtkcompile(sys)
 
     @mtkcompile fol_model = System(eqs, MT.t_nounits)
 
-    prob = ODEProblem(fol_model, [], (0.0, 10.0), [h => 1])
+    prob = ODEProblem(fol_model, [h => 1], (0.0, 10.0))
     @test prob[x] ≈ 1
     @test prob.ps[τ] ≈ 0.5
 end

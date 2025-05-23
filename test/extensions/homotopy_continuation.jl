@@ -61,8 +61,8 @@ end
            0 ~ y * z + 4x^2 + wrapper(r)]
 
     @mtkcompile sys = System(eqs)
-    prob = HomotopyContinuationProblem(sys, [x => 1.0, y => 1.0, z => 1.0],
-        [p => 2.0, q => 4, r => Wrapper([1.0 1.0; 0.0 0.0])])
+    prob = HomotopyContinuationProblem(sys,
+        [x => 1.0, y => 1.0, z => 1.0, p => 2.0, q => 4, r => Wrapper([1.0 1.0; 0.0 0.0])])
     @test prob.ps[p] == 2.0
     @test prob.ps[q] == 4
     @test prob.ps[r].x == [1.0 1.0; 0.0 0.0]
@@ -79,7 +79,7 @@ end
     _x = collect(x)
     eqs = collect(0 .~ vec(sum(_x * _x'; dims = 2)) + collect(p))
     @mtkcompile sys = System(eqs)
-    prob = HomotopyContinuationProblem(sys, [x => ones(3)], [p => 1:3])
+    prob = HomotopyContinuationProblem(sys, [x => ones(3), p => 1:3])
     @test prob[x] == ones(3)
     @test prob[p + x] == [2, 3, 4]
     prob[x] = 2ones(3)

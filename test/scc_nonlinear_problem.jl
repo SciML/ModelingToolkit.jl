@@ -86,7 +86,7 @@ end
     @parameters p1[1:6] p2
     eqs = 0 .~ collect(nlf(u, (u0, (p1, p2))))
     @mtkcompile sys = System(eqs, [u], [p1, p2])
-    sccprob = SCCNonlinearProblem(sys, [u => u0], [p1 => p[1], p2 => p[2][]])
+    sccprob = SCCNonlinearProblem(sys, [u => u0, p1 => p[1], p2 => p[2][]])
     sccsol = solve(sccprob, SimpleNewtonRaphson(); abstol = 1e-9)
     @test SciMLBase.successful_retcode(sccsol)
     @test norm(sccsol.resid) < norm(sol.resid)
@@ -142,10 +142,10 @@ end
     subrules = Dict(Symbolics.unwrap(D(y[i])) => ((y[i] - u0[i]) / dt) for i in 1:8)
     eqs = substitute.(eqs, (subrules,))
     @mtkcompile sys = System(eqs)
-    prob = NonlinearProblem(sys, [y => u0], [t => t0])
+    prob = NonlinearProblem(sys, [y => u0, t => t0])
     sol = solve(prob, NewtonRaphson(); abstol = 1e-12)
 
-    sccprob = SCCNonlinearProblem(sys, [y => u0], [t => t0])
+    sccprob = SCCNonlinearProblem(sys, [y => u0, t => t0])
     sccsol = solve(sccprob, NewtonRaphson(); abstol = 1e-12)
 
     @test sol.u≈sccsol.u atol=1e-10
@@ -266,7 +266,7 @@ end
     @parameters (f::Function)(..)
     @mtkcompile sys = System([
         0 ~ x[1]^2 - 9, x[2] ~ 2x[1], 0 ~ x[3]^2 - x[1]^2 + f(x)])
-    prob = SCCNonlinearProblem(sys, [x => ones(3)], [f => sum])
+    prob = SCCNonlinearProblem(sys, [x => ones(3), f => sum])
     sol = solve(prob, NewtonRaphson())
     @test SciMLBase.successful_retcode(sol)
 end
@@ -286,7 +286,7 @@ end
         ρ => 10.0,
         β => 8 / 3]
 
-    sccprob = SCCNonlinearProblem(fullsys, u0, p)
+    sccprob = SCCNonlinearProblem(fullsys, [u0; p])
     @test isequal(parameters(fullsys), parameters(sccprob.f.sys))
 end
 
@@ -295,6 +295,6 @@ end
     @parameters p[1:2] (f::Function)(..)
 
     @mtkcompile sys = System([x^2 - p[1]^2 ~ 0, y^2 ~ f(p)])
-    prob = SCCNonlinearProblem(sys, [x => 1.0, y => 1.0], [p => ones(2), f => sum])
+    prob = SCCNonlinearProblem(sys, [x => 1.0, y => 1.0, p => ones(2), f => sum])
     @test_nowarn solve(prob, NewtonRaphson())
 end

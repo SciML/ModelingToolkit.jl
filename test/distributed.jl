@@ -16,10 +16,10 @@ addprocs(2)
 @everywhere @named de = System(eqs, t)
 @everywhere de = complete(de)
 
-@everywhere u0 = [19.0, 20.0, 50.0]
-@everywhere params = [16.0, 45.92, 4]
+@everywhere u0 = unknowns(de) .=> [19.0, 20.0, 50.0]
+@everywhere params = parameters(de) .=> [16.0, 45.92, 4]
 
-@everywhere ode_prob = ODEProblem(de, u0, (0.0, 10.0), params)
+@everywhere ode_prob = ODEProblem(de, [u0; params], (0.0, 10.0))
 
 @everywhere begin
     using OrdinaryDiffEq

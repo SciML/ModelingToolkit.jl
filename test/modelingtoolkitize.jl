@@ -57,7 +57,8 @@ p = [1.0, 100.0]
 prob = OptimizationProblem(rosenbrock, x0, p)
 sys = complete(modelingtoolkitize(prob)) # symbolicitize me captain!
 
-prob = OptimizationProblem(sys, x0, p, grad = true, hess = true)
+prob = OptimizationProblem(
+    sys, [unknowns(sys) .=> x0; parameters(sys) .=> p], grad = true, hess = true)
 sol = solve(prob, NelderMead())
 @test sol.objective < 1e-8
 
@@ -155,7 +156,7 @@ problem = ODEProblem(SIRD_ac!, ℬ, 𝒯, 𝒫)
 
 problem = ODEProblem(SIRD_ac!, ℬ, 𝒯, 𝒫)
 sys = complete(modelingtoolkitize(problem))
-fast_problem = ODEProblem(sys, ℬ, 𝒯, parameters(sys) .=> 𝒫)
+fast_problem = ODEProblem(sys, [unknowns(sys) .=> ℬ; parameters(sys) .=> 𝒫], 𝒯)
 @time solution = solve(fast_problem, Tsit5(), saveat = 1:final_time)
 
 ## Issue #778

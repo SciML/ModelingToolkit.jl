@@ -27,11 +27,14 @@ f = eval(generate_diffusion_function(de)[1])
 @test f(ones(3), rand(3), nothing) == 0.1ones(3)
 
 f = SDEFunction(de)
-prob = SDEProblem(de, [1.0, 0.0, 0.0], (0.0, 100.0), [10.0, 26.0, 2.33])
+prob = SDEProblem(
+    de, [unknowns(de) .=> [1.0, 0.0, 0.0]; parameters(de) .=> [10.0, 26.0, 2.33]],
+    (0.0, 100.0))
 sol = solve(prob, SRIW1(), seed = 1)
 
-probexpr = SDEProblem(de, [1.0, 0.0, 0.0], (0.0, 100.0),
-    [10.0, 26.0, 2.33])
+probexpr = SDEProblem(
+    de, [unknowns(de) .=> [1.0, 0.0, 0.0]; parameters(de) .=> [10.0, 26.0, 2.33]],
+    (0.0, 100.0))
 solexpr = solve(eval(probexpr), SRIW1(), seed = 1)
 
 @test all(x -> x == 0, Array(sol - solexpr))
@@ -54,8 +57,8 @@ f(du, [1, 2, 3.0], p, nothing)
              0.1 0.01*2 0.02*1*3
              0.2 0.3 0.01*3]
 
-prob = SDEProblem(de, [1.0, 0.0, 0.0], (0.0, 100.0), (σ => 10.0, ρ => 26.0, β => 2.33),
-    noise_rate_prototype = zeros(3, 3))
+prob = SDEProblem(de, [x => 1.0, y => 0.0, z => 0.0, σ => 10.0, ρ => 26.0, β => 2.33],
+    (0.0, 100.0), noise_rate_prototype = zeros(3, 3))
 sol = solve(prob, EM(), dt = 0.001)
 
 u0map = [
@@ -70,13 +73,13 @@ parammap = [
     ρ => 2.33
 ]
 
-prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
+prob = SDEProblem(de, [u0map; parammap], (0.0, 100.0))
 @test prob.f.sys === de
 @test size(prob.noise_rate_prototype) == (3, 3)
 @test prob.noise_rate_prototype isa Matrix
 sol = solve(prob, EM(), dt = 0.001)
 
-prob = SDEProblem(de, u0map, (0.0, 100.0), parammap, sparsenoise = true)
+prob = SDEProblem(de, [u0map; parammap], (0.0, 100.0), sparsenoise = true)
 @test size(prob.noise_rate_prototype) == (3, 3)
 @test prob.noise_rate_prototype isa SparseMatrixCSC
 sol = solve(prob, EM(), dt = 0.001)
@@ -506,14 +509,14 @@ noiseeqs = [0.1 * x]
 
     @named de = SDESystem(eqs, noiseeqs, tt, [x], [α, β], observed = [weight ~ x * 10])
     de = complete(de)
-    prob = SDEProblem(de, u0map, (0.0, 1.0), parammap)
+    prob = SDEProblem(de, [u0map; parammap], (0.0, 1.0))
     sol = solve(prob, EM(), dt = dt)
     @test observed(de) == [weight ~ x * 10]
     @test sol[weight] == 10 * sol[x]
 
     @named ode = System(eqs, tt, [x], [α, β], observed = [weight ~ x * 10])
     ode = complete(ode)
-    odeprob = ODEProblem(ode, u0map, (0.0, 1.0), parammap)
+    odeprob = ODEProblem(ode, [u0map; parammap], (0.0, 1.0))
     solode = solve(odeprob, Tsit5())
     @test observed(ode) == [weight ~ x * 10]
     @test solode[weight] == 10 * solode[x]
@@ -545,7 +548,7 @@ end
         β => 1.0
     ]
 
-    prob = SDEProblem(de, u0map, (0.0, 1.0), parammap)
+    prob = SDEProblem(de, [u0map; parammap], (0.0, 1.0))
 
     function prob_func(prob, i, repeat)
         remake(prob, seed = seeds[i])
@@ -567,7 +570,7 @@ end
     u = x
     demod = complete(ModelingToolkit.Girsanov_transform(de, u; θ0 = 0.1))
 
-    probmod = SDEProblem(demod, u0map, (0.0, 1.0), parammap)
+    probmod = SDEProblem(demod, [u0map; parammap], (0.0, 1.0))
 
     ensemble_probmod = EnsembleProblem(probmod;
         output_func = (sol, i) -> (g(sol[x, end]) *
@@ -613,8 +616,8 @@ sys2 = complete(sys2)
 @set! sys2.parent = nothing
 @test sys1 == sys2
 
-prob = SDEProblem(sys1, sts .=> [1.0, 0.0, 0.0],
-    (0.0, 100.0), ps .=> (10.0, 26.0))
+prob = SDEProblem(sys1, [sts .=> [1.0, 0.0, 0.0]; ps .=> [10.0, 26.0]],
+    (0.0, 100.0))
 solve(prob, LambaEulerHeun(), seed = 1)
 
 # Test ill-formed due to more equations than states in noise equations
@@ -640,7 +643,7 @@ eqs = [D(x) ~ p - d * x + a * sqrt(p)]
 u0 = @SVector[x => 10.0]
 tspan = (0.0, 10.0)
 ps = @SVector[p => 5.0, d => 0.5]
-sprob = SDEProblem(sys, u0, tspan, ps)
+sprob = SDEProblem(sys, [u0; ps], tspan)
 @test !isinplace(sprob)
 @test !isinplace(sprob.f)
 @test_nowarn solve(sprob, ImplicitEM())
@@ -654,7 +657,7 @@ eqs = [D(x) ~ p - d * x + a * sqrt(p)
 u0 = @SVector[x => 10.0, y => 20.0]
 tspan = (0.0, 10.0)
 ps = @SVector[p => 5.0, d => 0.5]
-sprob = SDEProblem(sys, u0, tspan, ps)
+sprob = SDEProblem(sys, [u0; ps], tspan)
 @test sprob.f.g(sprob.u0, sprob.p, sprob.tspan[1]) isa SVector{2, Float64}
 @test_nowarn solve(sprob, ImplicitEM())
 
@@ -679,7 +682,7 @@ let
         β => 26.0,
         ρ => 2.33
     ]
-    prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
+    prob = SDEProblem(de, [u0map; parammap], (0.0, 100.0))
     # TODO: re-enable this when we support scalar noise
     @test solve(prob, SOSRI()).retcode == ReturnCode.Success
 end
@@ -691,7 +694,7 @@ let # test to make sure that scalar noise always receive the same kicks
         D(y) ~ a]
 
     @mtkcompile de = System(eqs, t)
-    prob = SDEProblem(de, [x => 0, y => 0], (0.0, 10.0), [])
+    prob = SDEProblem(de, [x => 0, y => 0], (0.0, 10.0))
     sol = solve(prob, SOSRI())
     @test sol.u[end][1] == sol.u[end][2]
 end
@@ -718,7 +721,7 @@ let # test that diagonal noise is correctly handled
         ρ => 2.33
     ]
 
-    prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
+    prob = SDEProblem(de, [u0map; parammap], (0.0, 100.0))
     # SOSRI only works for diagonal and scalar noise
     @test solve(prob, SOSRI()).retcode == ReturnCode.Success
 end
@@ -744,7 +747,7 @@ end
         ρ => 2.33
     ]
 
-    prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
+    prob = SDEProblem(de, [u0map; parammap], (0.0, 100.0))
     # SOSRI only works for diagonal and scalar noise
     @test_throws ErrorException solve(prob, SOSRI()).retcode==ReturnCode.Success
     # ImplicitEM does work for non-diagonal noise
@@ -773,7 +776,7 @@ end
         ρ => 2.33
     ]
 
-    prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
+    prob = SDEProblem(de, [u0map; parammap], (0.0, 100.0))
     @test solve(prob, SOSRI()).retcode == ReturnCode.Success
 end
 
@@ -800,7 +803,7 @@ end
     sys = System(eqs, t, sts, ps, browns; name = :name)
     sys = mtkcompile(sys)
     @test ModelingToolkit.get_noise_eqs(sys) ≈ [1.0]
-    prob = SDEProblem(sys, [], (0.0, 1.0), [])
+    prob = SDEProblem(sys, [], (0.0, 1.0))
     @test_nowarn solve(prob, RKMil())
 end
 
@@ -964,7 +967,7 @@ end
     parammap = [σ => 10.0, β => 26.0, ρ => 2.33]
 
     @test_throws ["Brownian", "mtkcompile"] SDEProblem(
-        de, u0map, (0.0, 100.0), parammap)
+        de, [u0map; parammap], (0.0, 100.0))
     de = mtkcompile(de)
-    @test SDEProblem(de, u0map, (0.0, 100.0), parammap) isa SDEProblem
+    @test SDEProblem(de, [u0map; parammap], (0.0, 100.0)) isa SDEProblem
 end

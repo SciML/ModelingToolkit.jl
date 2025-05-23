@@ -120,22 +120,22 @@ eqs = [yd ~ Sample(dt)(y)
 
 @test_skip begin
     Tf = 1.0
-    prob = ODEProblem(ss, [x => 0.1], (0.0, Tf),
-        [kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0])
+    prob = ODEProblem(
+        ss, [x => 0.1, kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0], (0.0, Tf))
     # create integrator so callback is evaluated at t=0 and we can test correct param values
     int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
     @test sort(vcat(int.p...)) == [0.1, 1.0, 2.1, 2.1, 2.1] # yd, kp, ud(k-1), ud, Hold(ud)
-    prob = ODEProblem(ss, [x => 0.1], (0.0, Tf),
-        [kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0]) # recreate problem to empty saved values
+    prob = ODEProblem(
+        ss, [x => 0.1, kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0], (0.0, Tf)) # recreate problem to empty saved values
     sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 
     ss_nosplit = mtkcompile(sys; split = false)
-    prob_nosplit = ODEProblem(ss_nosplit, [x => 0.1], (0.0, Tf),
-        [kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0])
+    prob_nosplit = ODEProblem(
+        ss_nosplit, [x => 0.1, kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0], (0.0, Tf))
     int = init(prob_nosplit, Tsit5(); kwargshandle = KeywordArgSilent)
     @test sort(int.p) == [0.1, 1.0, 2.1, 2.1, 2.1] # yd, kp, ud(k-1), ud, Hold(ud)
-    prob_nosplit = ODEProblem(ss_nosplit, [x => 0.1], (0.0, Tf),
-        [kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0]) # recreate problem to empty saved values
+    prob_nosplit = ODEProblem(
+        ss_nosplit, [x => 0.1, kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0], (0.0, Tf)) # recreate problem to empty saved values
     sol_nosplit = solve(prob_nosplit, Tsit5(), kwargshandle = KeywordArgSilent)
     # For all inputs in parameters, just initialize them to 0.0, and then set them
     # in the callback.
@@ -299,8 +299,8 @@ eqs = [yd ~ Sample(dt)(y)
     ss_nosplit = mtkcompile(cl; split = false)
 
     if VERSION >= v"1.7"
-        prob = ODEProblem(ss, [x => 0.0], (0.0, 1.0), [kp => 1.0])
-        prob_nosplit = ODEProblem(ss_nosplit, [x => 0.0], (0.0, 1.0), [kp => 1.0])
+        prob = ODEProblem(ss, [x => 0.0, kp => 1.0], (0.0, 1.0))
+        prob_nosplit = ODEProblem(ss_nosplit, [x => 0.0, kp => 1.0], (0.0, 1.0))
         sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
         sol_nosplit = solve(prob_nosplit, Tsit5(), kwargshandle = KeywordArgSilent)
 
@@ -535,8 +535,8 @@ eqs = [yd ~ Sample(dt)(y)
     @test int.ps[x] == 2.0
     @test int.ps[x(k - 1)] == 1.0
 
-    @test_throws ErrorException ODEProblem(sys, [], (0.0, 10.0), [x => 2.0])
-    prob = ODEProblem(sys, [], (0.0, 10.0), [x(k - 1) => 2.0])
+    @test_throws ErrorException ODEProblem(sys, [x => 2.0], (0.0, 10.0))
+    prob = ODEProblem(sys, [x(k - 1) => 2.0], (0.0, 10.0))
     int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
     @test int.ps[x] == 3.0
     @test int.ps[x(k - 1)] == 2.0

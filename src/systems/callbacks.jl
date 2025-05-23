@@ -870,8 +870,9 @@ function compile_equational_affect(
             u_getter = getsym(affsys, [sys_map[u] for u in dvs_to_update])
             p_getter = getsym(affsys, [sys_map[p] for p in ps_to_update])
 
-            affprob = ImplicitDiscreteProblem(affsys, [dv => 0 for dv in unknowns(affsys)],
-                (0, 0), [p => 0.0 for p in parameters(affsys)];
+            affprob = ImplicitDiscreteProblem(
+                affsys, Pair[unknowns(affsys) .=> 0; parameters(affsys) .=> 0],
+                (0, 0);
                 build_initializeprob = false, check_length = false, eval_expression,
                 eval_module, check_compatibility = false)
 

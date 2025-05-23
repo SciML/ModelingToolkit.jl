@@ -107,7 +107,7 @@ end
 @test getp(sys, g)(newps) isa Vector{Float32}
 
 @testset "Type-stability of `remake_buffer`" begin
-    prob = ODEProblem(sys, [], (0.0, 1.0), ivs)
+    prob = ODEProblem(sys, ivs, (0.0, 1.0))
 
     idxs = (a, c, d, e, f, g, h)
     vals = (1.0, 2.0, 3, ones(3), ones(Int, 3, 3), ones(2), "a")
@@ -144,7 +144,7 @@ eq = D(X) ~ p[1] - p[2] * X
 
 u0 = [X => 1.0]
 ps = [p => [2.0, 0.1]]
-p = MTKParameters(osys, ps, u0)
+p = MTKParameters(osys, [ps; u0])
 @test p.tunable == [2.0, 0.1]
 
 # Ensure partial update promotes the buffer
@@ -166,8 +166,8 @@ u0 = [X => 1.0]
 tspan = (0.0, 100.0)
 ps = [p => 1.0] # Value for `d` is missing
 
-@test_throws ModelingToolkit.MissingParametersError ODEProblem(sys, u0, tspan, ps)
-@test_nowarn ODEProblem(sys, u0, tspan, [ps..., d => 1.0])
+@test_throws ModelingToolkit.MissingParametersError ODEProblem(sys, [u0; ps], tspan)
+@test_nowarn ODEProblem(sys, [u0; ps; [d => 1.0]], tspan)
 
 # JET tests
 
@@ -250,7 +250,7 @@ eqs = [D(x) ~ (α - β * y) * x
        D(y) ~ (δ * x - γ) * y]
 @mtkcompile odesys = System(eqs, t)
 odeprob = ODEProblem(
-    odesys, [x => 1.0, y => 1.0], (0.0, 10.0), [α => 1.5, β => 1.0, γ => 3.0, δ => 1.0])
+    odesys, [x => 1.0, y => 1.0, α => 1.5, β => 1.0, γ => 3.0, δ => 1.0], (0.0, 10.0))
 tunables, _... = canonicalize(Tunable(), odeprob.p)
 @test tunables isa AbstractVector{Float64}
 
@@ -328,7 +328,7 @@ end
     u0 = [V => [10.0, 20.0]]
     ps_vec = [k => [2.0, 3.0, 4.0, 5.0]]
     ps_scal = [k[1] => 1.0, k[2] => 2.0, k[3] => 3.0, k[4] => 4.0]
-    oprob_scal_scal = ODEProblem(osys_scal, u0, 1.0, ps_scal)
+    oprob_scal_scal = ODEProblem(osys_scal, [u0; ps_scal], 1.0)
     newoprob = remake(oprob_scal_scal; p = ps_vec, build_initializeprob = false)
     @test newoprob.ps[k] == [2.0, 3.0, 4.0, 5.0]
 end

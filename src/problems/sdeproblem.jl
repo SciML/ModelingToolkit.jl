@@ -67,14 +67,14 @@
 end
 
 @fallback_iip_specialize function SciMLBase.SDEProblem{iip, spec}(
-        sys::System, u0map, tspan, parammap = SciMLBase.NullParameters();
+        sys::System, op, tspan;
         callback = nothing, check_length = true, eval_expression = false,
         eval_module = @__MODULE__, check_compatibility = true, sparse = false,
         sparsenoise = sparse, expression = Val{false}, kwargs...) where {iip, spec}
     check_complete(sys, SDEProblem)
     check_compatibility && check_compatible_system(SDEProblem, sys)
 
-    f, u0, p = process_SciMLProblem(SDEFunction{iip, spec}, sys, u0map, parammap;
+    f, u0, p = process_SciMLProblem(SDEFunction{iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
         eval_module, check_compatibility, sparse, expression, kwargs...)
 

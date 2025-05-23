@@ -95,7 +95,7 @@ prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
 
     u0 = [x => 1, y => 0]
     prob = ODEProblem(
-        pend, u0, (0, 11.5), [g => 1], guesses = [λ => 1], sparse = true, jac = true)
+        pend, [u0; [g => 1]], (0, 11.5), guesses = [λ => 1], sparse = true, jac = true)
     jac, jac! = generate_jacobian(pend; expression = Val{false}, sparse = true)
     jac_prototype = ModelingToolkit.jacobian_sparsity(pend)
     W_prototype = ModelingToolkit.W_sparsity(pend)
@@ -126,7 +126,7 @@ end
            D(D(y)) ~ λ * y - g
            x^2 + y^2 ~ 1]
     @mtkcompile pend = System(eqs, t)
-    prob = ODEProblem(pend, [x => 0.0, D(x) => 1.0], (0.0, 1.0), [g => 1.0];
+    prob = ODEProblem(pend, [x => 0.0, D(x) => 1.0, g => 1.0], (0.0, 1.0);
         guesses = [y => 1.0, λ => 1.0], jac = true, sparse = true)
     J = deepcopy(prob.f.jac_prototype)
     prob.f.jac(J, prob.u0, prob.p, 1.0)

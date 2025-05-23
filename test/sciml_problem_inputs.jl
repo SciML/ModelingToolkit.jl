@@ -103,7 +103,7 @@ end
 # Perform ODE simulations (singular and ensemble).
 let
     # Creates normal and ensemble problems.
-    base_oprob = ODEProblem(osys, u0_alts[1], tspan, p_alts[1])
+    base_oprob = ODEProblem(osys, [u0_alts[1]; p_alts[1]], tspan)
     base_sol = solve(base_oprob, Tsit5(); saveat = 1.0)
     base_eprob = EnsembleProblem(base_oprob)
     base_esol = solve(base_eprob, Tsit5(); trajectories = 2, saveat = 1.0)
@@ -120,7 +120,7 @@ end
 
 # Solves a nonlinear problem (EnsembleProblems are not possible for these).
 let
-    base_nlprob = NonlinearProblem(nsys, u0_alts[1], p_alts[1])
+    base_nlprob = NonlinearProblem(nsys, [u0_alts[1]; p_alts[1]])
     base_sol = solve(base_nlprob, NewtonRaphson())
     # Solves problems for all input types, checking that identical solutions are found.
     for u0 in u0_alts, p in p_alts
@@ -132,7 +132,7 @@ end
 # Perform steady state simulations (singular and ensemble).
 let
     # Creates normal and ensemble problems.
-    base_ssprob = SteadyStateProblem(osys, u0_alts[1], p_alts[1])
+    base_ssprob = SteadyStateProblem(osys, [u0_alts[1]; p_alts[1]])
     base_sol = solve(base_ssprob, DynamicSS(Tsit5()))
     base_eprob = EnsembleProblem(base_ssprob)
     base_esol = solve(base_eprob, DynamicSS(Tsit5()); trajectories = 2)

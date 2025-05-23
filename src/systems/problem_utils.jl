@@ -335,28 +335,39 @@ Return an array of values where the `i`th element corresponds to the value of `v
 in `varmap`. Does not perform symbolic substitution in the values of `varmap`.
 
 Keyword arguments:
-- `tofloat`: Convert values to floating point numbers using `float`.
-- `container_type`: The type of container to use for the values.
-- `toterm`: The `toterm` method to use for converting symbolics.
-- `promotetoconcrete`: whether the promote to a concrete buffer (respecting
-  `tofloat`). Defaults to `container_type <: AbstractArray`.
-- `check`: Error if any variables in `vars` do not have a mapping in `varmap`. Uses
-  [`missingvars`](@ref) to perform the check.
-- `allow_symbolic` allows the returned array to contain symbolic values. If this is `true`,
-  `promotetoconcrete` is set to `false`.
-- `is_initializeprob, guesses`: Used to determine whether the system is missing guesses.
+- `container_type`: The type of the returned container.
+- `allow_symbolic`: Whether the returned container of values can have symbolic expressions.
+- `buffer_eltype`: The `eltype` of the returned container if `!allow_symbolic`. If
+  `Nothing`, automatically promotes the values in the container to a common `eltype`.
+- `tofloat`: Whether to promote values to floating point numbers if
+  `buffer_eltype == Nothing`.
+- `use_union`: Whether to allow using a `Union` as the `eltype` if
+  `buffer_eltype == Nothing`.
+- `toterm`: The `toterm` function for canonicalizing keys of `varmap`. A value of `nothing`
+  disables this process.
+- `check`: Whether to check if all of `vars` are keys of `varmap`.
+- `is_initializeprob`: Whether an initialization problem is being constructed. Used for
+  better error messages.
 """
 function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
-        tofloat = true, container_type = Array, floatT = Nothing,
-        toterm = default_toterm, promotetoconcrete = nothing, check = true,
-        allow_symbolic = false, is_initializeprob = false)
+        tofloat = true, use_union = false, container_type = Array, buffer_eltype = Nothing,
+        toterm = default_toterm, check = true, allow_symbolic = false,
+        is_initializeprob = false)
     isempty(vars) && return nothing
 
     varmap = recursive_unwrap(varmap)
-    add_toterms!(varmap; toterm)
+    if toterm !== nothing
+        add_toterms!(varmap; toterm)
+    end
     if check
         missing_vars = missingvars(varmap, vars; toterm)
-        isempty(missing_vars) || throw(MissingVariablesError(missing_vars))
+        if !isempty(missing_vars)
+            if is_initializeprob
+                throw(MissingGuessError(collect(missing_vars), collect(missing_vars)))
+            else
+                throw(MissingVariablesError(missing_vars))
+            end
+        end
     end
     vals = map(x -> varmap[x], vars)
     if !allow_symbolic
@@ -372,18 +383,15 @@ function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
             is_initializeprob ? throw(MissingGuessError(missingsyms, missingvals)) :
             throw(UnexpectedSymbolicValueInVarmap(missingsyms[1], missingvals[1]))
         end
-        if tofloat && !(floatT == Nothing)
-            vals = floatT.(vals)
+        if buffer_eltype == Nothing
+            vals = promote_to_concrete(vals; tofloat, use_union)
+        else
+            vals = buffer_eltype.(vals)
         end
     end
 
-    if container_type <: Union{AbstractDict, Tuple, Nothing, SciMLBase.NullParameters}
+    if container_type <: Union{AbstractDict, Nothing, SciMLBase.NullParameters}
         container_type = Array
-    end
-
-    promotetoconcrete === nothing && (promotetoconcrete = container_type <: AbstractArray)
-    if promotetoconcrete && !allow_symbolic
-        vals = promote_to_concrete(vals; tofloat = tofloat, use_union = false)
     end
 
     if isempty(vals)
@@ -540,8 +548,8 @@ Also updates `u0map` and `pmap` in-place to contain all the initial conditions i
 by unknowns and parameters respectively.
 """
 function build_operating_point!(sys::AbstractSystem,
-        u0map::AbstractDict, pmap::AbstractDict, defs::AbstractDict, dvs, ps)
-    op = add_toterms(u0map)
+        op::AbstractDict, u0map::AbstractDict, pmap::AbstractDict, defs::AbstractDict, dvs, ps)
+    add_toterms!(op)
     missing_unknowns = add_fallbacks!(op, dvs, defs)
     for (k, v) in defs
         haskey(op, k) && continue
@@ -594,7 +602,7 @@ function build_operating_point!(sys::AbstractSystem,
         pmap[k] = v
     end
 
-    return op, missing_unknowns, missing_pars
+    return missing_unknowns, missing_pars
 end
 
 """
@@ -890,13 +898,9 @@ $(TYPEDFIELDS)
 """
 struct InitializationMetadata{R <: ReconstructInitializeprob, GUU, SIU}
     """
-    The `u0map` used to construct the initialization.
+    The operating point used to construct the initialization.
     """
-    u0map::Dict{Any, Any}
-    """
-    The `pmap` used to construct the initialization.
-    """
-    pmap::Dict{Any, Any}
+    op::Dict{Any, Any}
     """
     The `guesses` used to construct the initialization.
     """
@@ -1011,14 +1015,14 @@ end
     $(TYPEDSIGNATURES)
 
 Build and return the initialization problem and associated data as a `NamedTuple` to be passed
-to the `SciMLFunction` constructor. Requires the system `sys`, operating point `op`,
-user-provided `u0map` and `pmap`, initial time `t`, system defaults `defs`, user-provided
-`guesses`, and list of unknowns which don't have a value in `op`. The keyword `implicit_dae`
-denotes whether the `SciMLProblem` being constructed is in implicit DAE form (`DAEProblem`).
-All other keyword arguments are forwarded to `InitializationProblem`.
+to the `SciMLFunction` constructor. Requires the system `sys`, operating point `op`, initial
+time `t`, system defaults `defs`, user-provided `guesses`, and list of unknowns which don't
+have a value in `op`. The keyword `implicit_dae` denotes whether the `SciMLProblem` being
+constructed is in implicit DAE form (`DAEProblem`). All other keyword arguments are forwarded
+to `InitializationProblem`.
 """
 function maybe_build_initialization_problem(
-        sys::AbstractSystem, iip, op::AbstractDict, u0map, pmap, t, defs,
+        sys::AbstractSystem, iip, op::AbstractDict, t, defs,
         guesses, missing_unknowns; implicit_dae = false,
         time_dependent_init = is_time_dependent(sys), u0_constructor = identity,
         p_constructor = identity, floatT = Float64, initialization_eqs = [],
@@ -1030,7 +1034,7 @@ function maybe_build_initialization_problem(
     end
 
     initializeprob = ModelingToolkit.InitializationProblem{iip}(
-        sys, t, u0map, pmap; guesses, time_dependent_init, initialization_eqs,
+        sys, t, op; guesses, time_dependent_init, initialization_eqs,
         use_scc, u0_constructor, p_constructor, kwargs...)
     if state_values(initializeprob) !== nothing
         _u0 = state_values(initializeprob)
@@ -1064,7 +1068,7 @@ function maybe_build_initialization_problem(
         nothing
     end
     meta = InitializationMetadata(
-        u0map, pmap, guesses, Vector{Equation}(initialization_eqs),
+        copy(op), copy(guesses), Vector{Equation}(initialization_eqs),
         use_scc, time_dependent_init,
         ReconstructInitializeprob(
             sys, initializeprob.f.sys; u0_constructor, p_constructor),
@@ -1100,7 +1104,7 @@ function maybe_build_initialization_problem(
     end
 
     for p in punknowns
-        is_parameter_solvable(p, pmap, defs, guesses) || continue
+        is_parameter_solvable(p, op, defs, guesses) || continue
         get(op, p, missing) === missing || continue
         p = unwrap(p)
         op[p] = getu(initializeprob, p)(initializeprob)
@@ -1180,8 +1184,8 @@ Keyword arguments:
 - `build_initializeprob`: If `false`, avoids building the initialization problem.
 - `t`: The initial time of the `ODEProblem`. If this is not provided, the initialization
   problem cannot be built.
-- `implicit_dae`: Also build a mapping of derivatives of states to values for implicit DAEs,
-  using `du0map`. Changes the return value of this function to `(f, du0, u0, p)` instead of
+- `implicit_dae`: Also build a mapping of derivatives of states to values for implicit DAEs.
+  Changes the return value of this function to `(f, du0, u0, p)` instead of
   `(f, u0, p)`.
 - `guesses`: The guesses for variables in the system, used as initial values for the
   initialization problem.
@@ -1193,11 +1197,13 @@ Keyword arguments:
 - `fully_determined`: Override whether the initialization system is fully determined.
 - `check_initialization_units`: Enable or disable unit checks when constructing the
   initialization problem.
-- `tofloat`, `is_initializeprob`: Passed to [`better_varmap_to_vars`](@ref) for building `u0` (and possibly `p`).
+- `tofloat`: Passed to [`better_varmap_to_vars`](@ref) when building the parameter vector of
+  a non-split system.
+- `u0_eltype`: The `eltype` of the `u0` vector. If `nothing`, finds the promoted floating point
+  type from `op`.
 - `u0_constructor`: A function to apply to the `u0` value returned from `better_varmap_to_vars`
   to construct the final `u0` value.
 - `p_constructor`: A function to apply to each array buffer created when constructing the parameter object.
-- `du0map`: A map of derivatives to values. See `implicit_dae`.
 - `check_length`: Whether to check the number of equations along with number of unknowns and
   length of `u0` vector for consistency. If `false`, do not check with equations. This is
   forwarded to `check_eqs_u0`
@@ -1220,13 +1226,13 @@ Keyword arguments:
 All other keyword arguments are passed as-is to `constructor`.
 """
 function process_SciMLProblem(
-        constructor, sys::AbstractSystem, u0map, pmap;
+        constructor, sys::AbstractSystem, op;
         build_initializeprob = supports_initialization(sys),
         implicit_dae = false, t = nothing, guesses = AnyDict(),
         warn_initialize_determined = true, initialization_eqs = [],
         eval_expression = false, eval_module = @__MODULE__, fully_determined = nothing,
-        check_initialization_units = false, tofloat = true,
-        u0_constructor = identity, p_constructor = identity, du0map = nothing,
+        check_initialization_units = false, u0_eltype = nothing, tofloat = true,
+        u0_constructor = identity, p_constructor = identity,
         check_length = true, symbolic_u0 = false, warn_cyclic_dependency = false,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10,
@@ -1240,15 +1246,12 @@ function process_SciMLProblem(
 
     check_array_equations_unknowns(eqs, dvs)
 
-    u0Type = typeof(u0map)
-    pType = typeof(pmap)
+    u0Type = pType = typeof(op)
 
-    u0map = to_varmap(u0map, dvs)
-    symbols_to_symbolics!(sys, u0map)
-    pmap = to_varmap(pmap, parameters(sys))
-    symbols_to_symbolics!(sys, pmap)
+    op = to_varmap(op, dvs)
+    symbols_to_symbolics!(sys, op)
 
-    check_inputmap_keys(sys, u0map, pmap)
+    check_inputmap_keys(sys, op)
 
     defs = add_toterms(recursive_unwrap(defaults(sys)))
     kwargs = NamedTuple(kwargs)
@@ -1259,7 +1262,9 @@ function process_SciMLProblem(
         obs, _ = unhack_observed(observed(sys), Equation[x for x in eqs if x isa Equation])
     end
 
-    op, missing_unknowns, missing_pars = build_operating_point!(sys,
+    u0map = anydict()
+    pmap = anydict()
+    missing_unknowns, missing_pars = build_operating_point!(sys, op,
         u0map, pmap, defs, dvs, ps)
 
     floatT = Bool
@@ -1269,8 +1274,10 @@ function process_SciMLProblem(
         floatT = float_type_from_varmap(op, floatT)
     end
 
+    u0_eltype = something(u0_eltype, floatT)
+
     if !is_time_dependent(sys) || is_initializesystem(sys)
-        add_observed_equations!(u0map, obs)
+        add_observed_equations!(op, obs)
     end
     if u0_constructor === identity && u0Type <: StaticArray
         u0_constructor = vals -> SymbolicUtils.Code.create_array(
@@ -1284,7 +1291,7 @@ function process_SciMLProblem(
     if build_initializeprob
         kws = maybe_build_initialization_problem(
             sys, constructor <: SciMLBase.AbstractSciMLFunction{true},
-            op, u0map, pmap, t, defs, guesses, missing_unknowns;
+            op, t, defs, guesses, missing_unknowns;
             implicit_dae, warn_initialize_determined, initialization_eqs,
             eval_expression, eval_module, fully_determined,
             warn_cyclic_dependency, check_units = check_initialization_units,
@@ -1318,7 +1325,7 @@ function process_SciMLProblem(
     evaluate_varmap!(op, dvs; limit = substitution_limit)
 
     u0 = better_varmap_to_vars(
-        op, dvs; tofloat, floatT,
+        op, dvs; buffer_eltype = u0_eltype,
         container_type = u0Type, allow_symbolic = symbolic_u0, is_initializeprob)
 
     if u0 !== nothing
@@ -1351,11 +1358,9 @@ function process_SciMLProblem(
         p = p_constructor(better_varmap_to_vars(op, ps; tofloat, container_type = pType))
     end
 
-    if implicit_dae && du0map !== nothing
+    if implicit_dae
         ddvs = map(Differential(iv), dvs)
-        du0map = to_varmap(du0map, ddvs)
-        merge!(op, du0map)
-        du0 = varmap_to_vars(op, ddvs; toterm = identity,
+        du0 = varmap_to_vars(op, ddvs; toterm = default_toterm,
             tofloat)
         kwargs = merge(kwargs, (; ddvs))
     else
@@ -1388,22 +1393,17 @@ end
 
 # Check that the keys of a u0map or pmap are valid
 # (i.e. are symbolic keys, and are defined for the system.)
-function check_inputmap_keys(sys, u0map, pmap)
+function check_inputmap_keys(sys, op)
     badvarkeys = Any[]
-    for k in keys(u0map)
+    for k in keys(op)
         if symbolic_type(k) === NotSymbolic()
             push!(badvarkeys, k)
         end
     end
 
-    badparamkeys = Any[]
-    for k in keys(pmap)
-        if symbolic_type(k) === NotSymbolic()
-            push!(badparamkeys, k)
-        end
+    if !isempty(badvarkeys)
+        throw(InvalidKeyError(collect(badvarkeys)))
     end
-    (isempty(badvarkeys) && isempty(badparamkeys)) ||
-        throw(InvalidKeyError(collect(badvarkeys), collect(badparamkeys)))
 end
 
 const BAD_KEY_MESSAGE = """
@@ -1413,13 +1413,11 @@ const BAD_KEY_MESSAGE = """
 
 struct InvalidKeyError <: Exception
     vars::Any
-    params::Any
 end
 
 function Base.showerror(io::IO, e::InvalidKeyError)
     println(io, BAD_KEY_MESSAGE)
-    println(io, "u0map: $(join(e.vars, ", "))")
-    println(io, "pmap: $(join(e.params, ", "))")
+    println(io, join(e.vars, ", "))
 end
 
 function SciMLBase.detect_cycles(sys::AbstractSystem, varmap::Dict{Any, Any}, vars)
@@ -1566,7 +1564,7 @@ macro fallback_iip_specialize(ex)
     fn_sarr = nothing
     if occursin("Problem", string(fnname_name))
         # args should at least contain an argument for the `u0map`
-        @assert length(args) > 3
+        @assert length(args) > 2
         u0_arg = args[3]
         # should not have a type-annotation
         @assert !Meta.isexpr(u0_arg, :(::))
