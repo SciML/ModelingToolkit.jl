@@ -693,6 +693,12 @@ function _check_if_dde(eqs, iv, subsystems)
     return is_dde
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Flatten the hierarchical structure of a system, collecting all equations, unknowns, etc.
+into one top-level system after namespacing appropriately.
+"""
 function flatten(sys::System, noeqs = false)
     systems = get_systems(sys)
     isempty(systems) && return sys
@@ -863,11 +869,23 @@ function Base.hash(sys::System, h::UInt)
     return h
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Get the metadata associated with key `k` in system `sys` or `default` if it does not exist.
+"""
 function SymbolicUtils.getmetadata(sys::AbstractSystem, k::DataType, default)
     meta = get_metadata(sys)
     return get(meta, k, default)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Set the metadata associated with key `k` in system `sys` to value `v`. This is an
+out-of-place operation, and will return a shallow copy of `sys` with the appropriate
+metadata values.
+"""
 function SymbolicUtils.setmetadata(sys::AbstractSystem, k::DataType, v)
     meta = get_metadata(sys)
     meta = Base.ImmutableDict(meta, k => v)::MetadataT
