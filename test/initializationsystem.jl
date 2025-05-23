@@ -13,7 +13,7 @@ eqs = [D(D(x)) ~ λ * x
        x^2 + y^2 ~ 1]
 @mtkcompile pend = System(eqs, t)
 
-initprob = ModelingToolkit.InitializationProblem(pend, 0.0, [], [g => 1];
+initprob = ModelingToolkit.InitializationProblem(pend, 0.0, [g => 1];
     guesses = [ModelingToolkit.missing_variable_defaults(pend); x => 1; y => 0.2])
 conditions = getfield.(equations(initprob.f.sys), :rhs)
 
@@ -23,11 +23,11 @@ sol = solve(initprob)
 @test maximum(abs.(sol[conditions])) < 1e-14
 
 @test_throws ModelingToolkit.ExtraVariablesSystemException ModelingToolkit.InitializationProblem(
-    pend, 0.0, [], [g => 1];
+    pend, 0.0, [g => 1];
     guesses = [ModelingToolkit.missing_variable_defaults(pend); x => 1; y => 0.2],
     fully_determined = true)
 
-initprob = ModelingToolkit.InitializationProblem(pend, 0.0, [x => 1, y => 0], [g => 1];
+initprob = ModelingToolkit.InitializationProblem(pend, 0.0, [x => 1, y => 0, g => 1];
     guesses = ModelingToolkit.missing_variable_defaults(pend))
 @test initprob isa NonlinearLeastSquaresProblem
 sol = solve(initprob)
@@ -36,14 +36,14 @@ sol = solve(initprob)
 @test maximum(abs.(sol[conditions])) < 1e-14
 
 initprob = ModelingToolkit.InitializationProblem(
-    pend, 0.0, [], [g => 1]; guesses = ModelingToolkit.missing_variable_defaults(pend))
+    pend, 0.0, [g => 1]; guesses = ModelingToolkit.missing_variable_defaults(pend))
 @test initprob isa NonlinearLeastSquaresProblem
 sol = solve(initprob)
 @test !SciMLBase.successful_retcode(sol) ||
       sol.retcode == SciMLBase.ReturnCode.StalledSuccess
 
 @test_throws ModelingToolkit.ExtraVariablesSystemException ModelingToolkit.InitializationProblem(
-    pend, 0.0, [], [g => 1]; guesses = ModelingToolkit.missing_variable_defaults(pend),
+    pend, 0.0, [g => 1]; guesses = ModelingToolkit.missing_variable_defaults(pend),
     fully_determined = true)
 
 prob = ODEProblem(pend, [x => 1, y => 0, g => 1], (0.0, 1.5),
@@ -477,7 +477,7 @@ eqs = [D(D(x)) ~ λ * x
 prob = ODEProblem(pend, [x => 1, g => 1], (0.0, 1.5),
     guesses = [λ => 0, y => 1], initialization_eqs = [y ~ 1])
 
-unsimp = generate_initializesystem(pend; u0map = [x => 1], initialization_eqs = [y ~ 1])
+unsimp = generate_initializesystem(pend; op = [x => 1], initialization_eqs = [y ~ 1])
 sys = mtkcompile(unsimp; fully_determined = false)
 @test length(equations(sys)) in (3, 4) # could be either depending on tearing
 

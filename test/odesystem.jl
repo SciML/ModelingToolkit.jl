@@ -889,7 +889,7 @@ eqs = [D(D(q₁)) ~ -λ * q₁,
 
 @named pend = System(eqs, t)
 @test_nowarn generate_initializesystem(
-    pend, u0map = [q₁ => 1.0, q₂ => 0.0], guesses = [λ => 1])
+    pend; op = [q₁ => 1.0, q₂ => 0.0], guesses = [λ => 1])
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/2618
 @parameters σ ρ β
