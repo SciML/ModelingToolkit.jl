@@ -1,4 +1,4 @@
-# [ModelingToolkit Language: Modeling with `@mtkmodel`, `@connectors` and `@mtkbuild`](@id mtk_language)
+# [ModelingToolkit Language: Modeling with `@mtkmodel`, `@connectors` and `@mtkcompile`](@id mtk_language)
 
 ## MTK Model
 
@@ -150,7 +150,7 @@ end
   - Whenever a parameter or variable has initial value, for example `v(t) = 0.0`, a symbolic variable named `v` with initial value 0.0 and a keyword argument `v`, with default value `nothing` are created. <br> This way, users can optionally pass new value of `v` while creating a component.
 
 ```julia
-julia> @mtkbuild model_c1 = ModelC(; v = 2.0);
+julia> @mtkcompile model_c1 = ModelC(; v = 2.0);
 
 julia> ModelingToolkit.getdefault(model_c1.v)
 2.0
@@ -182,7 +182,7 @@ One or more partial systems can be extended in a higher system with `@extend` st
 ```@example mtkmodel-example
 using ModelingToolkit: getdefault
 
-@mtkbuild model_c3 = ModelC(; model_a.k_array = [1.0, 2.0])
+@mtkcompile model_c3 = ModelC(; model_a.k_array = [1.0, 2.0])
 
 getdefault(model_c3.model_a.k_array[1])
 # 1.0
@@ -529,28 +529,28 @@ end
 
 ## Build structurally simplified models:
 
-`@mtkbuild` builds an instance of a component and returns a structurally simplied system.
+`@mtkcompile` builds an instance of a component and returns a structurally simplied system.
 
 ```julia
-@mtkbuild sys = CustomModel()
+@mtkcompile sys = CustomModel()
 ```
 
 This is equivalent to:
 
 ```julia
 @named model = CustomModel()
-sys = structural_simplify(model)
+sys = mtkcompile(model)
 ```
 
-Pass keyword arguments to `structural_simplify` using the following syntax:
+Pass keyword arguments to `mtkcompile` using the following syntax:
 
 ```julia
-@mtkbuild sys=CustomModel() fully_determined=false
+@mtkcompile sys=CustomModel() fully_determined=false
 ```
 
 This is equivalent to:
 
 ```julia
 @named model = CustomModel()
-sys = structural_simplify(model; fully_determined = false)
+sys = mtkcompile(model; fully_determined = false)
 ```
