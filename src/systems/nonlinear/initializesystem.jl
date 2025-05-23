@@ -13,8 +13,7 @@ $(TYPEDSIGNATURES)
 Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
 """
 function generate_initializesystem_timevarying(sys::AbstractSystem;
-        u0map = Dict(),
-        pmap = Dict(),
+        op = Dict(),
         initialization_eqs = [],
         guesses = Dict(),
         default_dd_guess = Bool(0),
@@ -40,8 +39,16 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     idxs_diff = isdiffeq.(eqs)
 
     # PREPROCESSING
-    u0map = copy(anydict(u0map))
-    pmap = anydict(pmap)
+    op = anydict(op)
+    u0map = anydict()
+    pmap = anydict()
+    build_operating_point!(sys, op, u0map, pmap, defs, unknowns(sys),
+        parameters(sys; initial_parameters = true))
+    for (k, v) in op
+        if has_parameter_dependency_with_lhs(sys, k) && is_variable_floatingpoint(k)
+            pmap[k] = v
+        end
+    end
     initsys_preprocessing!(u0map, defs)
 
     # 1) Use algebraic equations of system as initialization constraints
@@ -177,8 +184,7 @@ $(TYPEDSIGNATURES)
 Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
 """
 function generate_initializesystem_timeindependent(sys::AbstractSystem;
-        u0map = Dict(),
-        pmap = Dict(),
+        op = Dict(),
         initialization_eqs = [],
         guesses = Dict(),
         algebraic_only = false,
@@ -196,8 +202,16 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     guesses = merge(get_guesses(sys), additional_guesses)
 
     # PREPROCESSING
-    u0map = copy(anydict(u0map))
-    pmap = anydict(pmap)
+    op = anydict(op)
+    u0map = anydict()
+    pmap = anydict()
+    build_operating_point!(sys, op, u0map, pmap, defs, unknowns(sys),
+        parameters(sys; initial_parameters = true))
+    for (k, v) in op
+        if has_parameter_dependency_with_lhs(sys, k) && is_variable_floatingpoint(k)
+            pmap[k] = v
+        end
+    end
     initsys_preprocessing!(u0map, defs)
 
     # Calculate valid `Initial` parameters. These are unknowns for
